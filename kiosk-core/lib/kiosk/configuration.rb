@@ -1,0 +1,60 @@
+# frozen_string_literal: true
+
+module Kiosk
+  # Holds host-application choices: which user model, which IdP adapters,
+  # which GUC namespace, role vocabulary, issuer URL.
+  #
+  # Filled via `Kiosk.configure { |c| ... }`. Sensible defaults for a
+  # greenfield Rails app with the bundled agent-IdP and a stub user model.
+  class Configuration
+    # Provider's user model class name as a String — resolved at request time
+    # by kiosk-server, not eagerly, to avoid load-order issues.
+    attr_accessor :user_model
+
+    # Type of `users.id` — :uuid (default), :bigint, :integer, or :text.
+    attr_accessor :user_id_type
+
+    # Column name on `users` that holds the principal id. Default :id.
+    attr_accessor :user_id_column
+
+    # User-IdP adapter instance — consumes the provider's principal
+    # authentication. The principal may be a human, synthetic placeholder,
+    # service account, team / org, or parent agent (see spec §6.1).
+    # Default nil; `kiosk:install` wires one based on detected stack
+    # (Devise / Clerk / Auth0 / generic OIDC / etc.).
+    attr_accessor :user_idp
+
+    # Agent-IdP adapter instance — mints / verifies agent tokens.
+    # Default nil here; `kiosk-server` defaults to `DefaultAgentIdp`.
+    attr_accessor :agent_idp
+
+    # Postgres GUC namespace (see {Kiosk::GUC}). Default "app".
+    attr_accessor :guc_namespace
+
+    # Fixed set of role names the provider supports.
+    # E.g. `%i[customer master support]`. Never include `:admin`
+    # (see spec §7.1.X — job-titled roles beat privilege-titled ones).
+    attr_accessor :roles
+
+    # Canonical issuer URL — used in JWT `iss` claim and AP2 mandate `iss`.
+    # MUST equal `kiosk.issuer` advertised in `/.well-known/kiosk.json`.
+    attr_accessor :issuer
+
+    def initialize
+      @user_model     = nil
+      @user_id_type   = :uuid
+      @user_id_column = :id
+      @user_idp       = nil
+      @agent_idp      = nil
+      @guc_namespace  = GUC::DEFAULT_NAMESPACE
+      @roles          = []
+      @issuer         = nil
+    end
+
+    # Full GUC name for one of the four well-known suffix names.
+    # Convenience over {Kiosk::GUC.for}(guc_namespace, name).
+    def guc(name)
+      GUC.for(guc_namespace, name)
+    end
+  end
+end

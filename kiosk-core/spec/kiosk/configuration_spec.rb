@@ -1,0 +1,86 @@
+# frozen_string_literal: true
+
+RSpec.describe Kiosk::Configuration do
+  describe "defaults" do
+    subject(:config) { described_class.new }
+
+    it "defaults user_id_type to :uuid" do
+      expect(config.user_id_type).to eq(:uuid)
+    end
+
+    it "defaults user_id_column to :id" do
+      expect(config.user_id_column).to eq(:id)
+    end
+
+    it "defaults guc_namespace to 'app'" do
+      expect(config.guc_namespace).to eq("app")
+    end
+
+    it "defaults roles to empty array" do
+      expect(config.roles).to eq([])
+    end
+
+    it "leaves user_model nil (resolved at runtime by kiosk-server)" do
+      expect(config.user_model).to be_nil
+    end
+
+    it "leaves issuer nil (provider must set)" do
+      expect(config.issuer).to be_nil
+    end
+
+    it "leaves user_idp nil (resolved by kiosk:install based on detected stack)" do
+      expect(config.user_idp).to be_nil
+    end
+
+    it "leaves agent_idp nil (kiosk-server defaults to DefaultAgentIdp)" do
+      expect(config.agent_idp).to be_nil
+    end
+  end
+
+  describe "#guc" do
+    it "composes a full GUC name using the configured namespace" do
+      config = described_class.new
+      expect(config.guc(Kiosk::GUC::USER_ID)).to eq("app.current_user_id")
+    end
+
+    it "reflects an override of guc_namespace" do
+      config = described_class.new
+      config.guc_namespace = "kiosk"
+      expect(config.guc(Kiosk::GUC::USER_ID)).to eq("kiosk.current_user_id")
+    end
+  end
+end
+
+RSpec.describe Kiosk do
+  describe ".configure" do
+    it "yields the configuration to the block" do
+      yielded = nil
+      described_class.configure { |c| yielded = c }
+      expect(yielded).to be_a(Kiosk::Configuration)
+    end
+
+    it "persists configuration changes" do
+      described_class.configure do |c|
+        c.issuer = "https://acme.example"
+        c.roles  = %i[customer support]
+      end
+
+      expect(described_class.configuration.issuer).to eq("https://acme.example")
+      expect(described_class.configuration.roles).to  eq(%i[customer support])
+    end
+
+    it "returns the same configuration instance on repeated reads" do
+      a = described_class.configuration
+      b = described_class.configuration
+      expect(a).to equal(b)
+    end
+  end
+
+  describe ".reset!" do
+    it "replaces configuration with a fresh default instance" do
+      described_class.configure { |c| c.issuer = "https://acme.example" }
+      described_class.reset!
+      expect(described_class.configuration.issuer).to be_nil
+    end
+  end
+end

@@ -1,0 +1,174 @@
+# frozen_string_literal: true
+
+module Kiosk
+  module Server
+    # Pure SQL generators for the four canonical Kiosk migrations.
+    # See implementation plan §3 — migrations 001-004:
+    #
+    #   001 create_kiosk_schema          → schema + four current_*() helpers
+    #   002 create_kiosk_identity_tables → agents, agent_tokens, agent_mappings
+    #   003 create_kiosk_actions_log     → kiosk.actions, kiosk.action_log
+    #   004 create_kiosk_reservations    → kiosk.reservations
+    #
+    # Pure functions: no database connection, no Rails dependency. Output
+    # is SQL strings the host migration framework (`ActiveRecord::Migration#execute`)
+    # runs. `kiosk:install` (separate generator, not yet built) will copy
+    # ActiveRecord::Migration class files into the host's `db/migrate/` that
+    # invoke these.
+    module SchemaDefinitions
+      module_function
+
+      # ─── 001 create_kiosk_schema ───────────────────────────────────────
+
+      # CREATE SCHEMA + four `<schema>.current_*()` STABLE helpers, typed
+      # against the provider's user-id type. See spec §6.3.
+      def helper_functions_sql(schema: nil, guc_namespace: nil, user_id_type: nil)
+        schema       ||= Kiosk.configuration.schema
+        guc_namespace ||= Kiosk.configuration.guc_namespace
+        user_id_type  ||= Kiosk.configuration.user_id_type
+        cast = user_id_cast(user_id_type)
+
+        <<~SQL.strip
+          CREATE SCHEMA IF NOT EXISTS "#{schema}";
+
+          CREATE OR REPLACE FUNCTION "#{schema}".current_user_id() RETURNS #{cast} LANGUAGE sql STABLE AS $$
+            SELECT NULLIF(current_setting('#{guc_namespace}.current_user_id', true), '')::#{cast}
+          $$;
+
+          CREATE OR REPLACE FUNCTION "#{schema}".current_role() RETURNS text LANGUAGE sql STABLE AS $$
+            SELECT NULLIF(current_setting('#{guc_namespace}.current_role', true), '')
+          $$;
+
+          CREATE OR REPLACE FUNCTION "#{schema}".current_actor() RETURNS text LANGUAGE sql STABLE AS $$
+            SELECT NULLIF(current_setting('#{guc_namespace}.current_actor', true), '')
+          $$;
+
+          CREATE OR REPLACE FUNCTION "#{schema}".current_agent_id() RETURNS uuid LANGUAGE sql STABLE AS $$
+            SELECT NULLIF(current_setting('#{guc_namespace}.current_agent_id', true), '')::uuid
+          $$;
+        SQL
+      end
+
+      # ─── 002 create_kiosk_identity_tables ──────────────────────────────
+
+      # `agents` — credential per (user × agent host); `agent_tokens` —
+      # issued tokens for revocation; `agent_mappings` — external IdP
+      # subject ↔ local `agent_id` mapping. See spec §6.1, §6.4, §6.5.
+      def identity_tables_sql(schema: nil, user_id_type: nil, user_table: "users")
+        schema      ||= Kiosk.configuration.schema
+        user_id_type ||= Kiosk.configuration.user_id_type
+        col_type = user_id_cast(user_id_type)
+
+        <<~SQL.strip
+          CREATE TABLE "#{schema}".agents (
+            id              uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+            user_id         #{col_type} NOT NULL REFERENCES "#{user_table}"(id) ON DELETE CASCADE,
+            name            text NOT NULL,
+            allowed_roles   text[] NOT NULL DEFAULT '{}'::text[],
+            public_key      text,
+            notification_pubkey text,
+            created_at      timestamptz NOT NULL DEFAULT now(),
+            revoked_at      timestamptz
+          );
+          CREATE INDEX idx_agents_user_id ON "#{schema}".agents (user_id) WHERE revoked_at IS NULL;
+
+          CREATE TABLE "#{schema}".agent_tokens (
+            id          uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+            agent_id    uuid NOT NULL REFERENCES "#{schema}".agents(id) ON DELETE CASCADE,
+            token_hash  text NOT NULL,
+            issued_at   timestamptz NOT NULL DEFAULT now(),
+            expires_at  timestamptz NOT NULL,
+            revoked_at  timestamptz
+          );
+          CREATE INDEX idx_agent_tokens_agent_id ON "#{schema}".agent_tokens (agent_id);
+          CREATE UNIQUE INDEX idx_agent_tokens_hash ON "#{schema}".agent_tokens (token_hash);
+
+          CREATE TABLE "#{schema}".agent_mappings (
+            provider     text NOT NULL,
+            external_id  text NOT NULL,
+            agent_id     uuid NOT NULL REFERENCES "#{schema}".agents(id) ON DELETE CASCADE,
+            PRIMARY KEY (provider, external_id)
+          );
+        SQL
+      end
+
+      # ─── 003 create_kiosk_actions_log ──────────────────────────────────
+
+      # `kiosk.actions` registers known Action names; `kiosk.action_log`
+      # records each invocation with the principal+agent+role. RLS-enabled
+      # by the calling migration so users see only their own.
+      def actions_log_sql(schema: nil, user_id_type: nil)
+        schema      ||= Kiosk.configuration.schema
+        user_id_type ||= Kiosk.configuration.user_id_type
+        col_type = user_id_cast(user_id_type)
+
+        <<~SQL.strip
+          CREATE TABLE "#{schema}".actions (
+            name         text PRIMARY KEY,
+            description  text,
+            created_at   timestamptz NOT NULL DEFAULT now()
+          );
+
+          CREATE TABLE "#{schema}".action_log (
+            id            uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+            action_name   text NOT NULL REFERENCES "#{schema}".actions(name),
+            user_id       #{col_type} NOT NULL,
+            agent_id      uuid,
+            role          text NOT NULL,
+            actor         text NOT NULL,
+            args          jsonb NOT NULL DEFAULT '{}'::jsonb,
+            result_status text NOT NULL,
+            error_class   text,
+            error_message text,
+            invoked_at    timestamptz NOT NULL DEFAULT now()
+          );
+          CREATE INDEX idx_action_log_user_id   ON "#{schema}".action_log (user_id, invoked_at DESC);
+          CREATE INDEX idx_action_log_agent_id  ON "#{schema}".action_log (agent_id, invoked_at DESC) WHERE agent_id IS NOT NULL;
+        SQL
+      end
+
+      # ─── 004 create_kiosk_reservations ─────────────────────────────────
+
+      # Atomic reserve-then-pay primitive. TTL row in `kiosk.reservations`
+      # holds inventory while AP2 mandate trail completes; expiry releases
+      # automatically. See spec §5.5.
+      def reservations_sql(schema: nil, user_id_type: nil)
+        schema      ||= Kiosk.configuration.schema
+        user_id_type ||= Kiosk.configuration.user_id_type
+        col_type = user_id_cast(user_id_type)
+
+        <<~SQL.strip
+          CREATE TABLE "#{schema}".reservations (
+            id            uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+            user_id       #{col_type} NOT NULL,
+            agent_id      uuid,
+            resource_kind text NOT NULL,
+            resource_id   text NOT NULL,
+            args          jsonb NOT NULL DEFAULT '{}'::jsonb,
+            reserved_at   timestamptz NOT NULL DEFAULT now(),
+            expires_at    timestamptz NOT NULL,
+            released_at   timestamptz,
+            CONSTRAINT reservations_unique_active
+              UNIQUE (resource_kind, resource_id, released_at)
+              DEFERRABLE INITIALLY DEFERRED
+          );
+          CREATE INDEX idx_reservations_user_id  ON "#{schema}".reservations (user_id);
+          CREATE INDEX idx_reservations_expiry   ON "#{schema}".reservations (expires_at) WHERE released_at IS NULL;
+        SQL
+      end
+
+      # ─── helpers ───────────────────────────────────────────────────────
+
+      def user_id_cast(user_id_type)
+        case user_id_type.to_sym
+        when :uuid               then "uuid"
+        when :bigint, :integer   then user_id_type.to_s
+        when :text               then "text"
+        else
+          raise ArgumentError,
+                "user_id_type must be one of :uuid, :bigint, :integer, :text — got #{user_id_type.inspect}"
+        end
+      end
+    end
+  end
+end

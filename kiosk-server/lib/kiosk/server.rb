@@ -13,21 +13,33 @@ require "kiosk/server/headers"
 require "kiosk/server/headers_middleware"
 require "kiosk/server/well_known"
 require "kiosk/server/schema_definitions"
+require "kiosk/server/errors"
+require "kiosk/server/result"
+require "kiosk/server/session_context"
+require "kiosk/server/actions"
+require "kiosk/server/executor"
 
 # Optional Rails engine — only defines itself if Rails::Engine is loaded.
 require "kiosk/server/engine"
 
+# Conditionally loaded — only defines ExecController when ActionController::API
+# is available (i.e., a Rails host). Safe to require in plain Ruby contexts.
+require "kiosk/server/exec_controller"
+
 module Kiosk
   module Server
-    # No top-level methods yet. The pieces are:
+    # Pieces shipped in this gem:
     #
     #   - {Kiosk::Server::WellKnown}        — builds /.well-known/kiosk.json
     #   - {Kiosk::Server::Headers}          — composes the three response headers
     #   - {Kiosk::Server::HeadersMiddleware}— Rack middleware that injects them
     #   - {Kiosk::Server::SchemaDefinitions}— SQL for migrations 001-004
-    #   - {Kiosk::Server::Engine}           — Rails engine (if Rails is loaded)
-    #
-    # Controllers (`/kiosk/exec`, OAuth, agent registration) + the
-    # Executor land in a follow-up release.
+    #   - {Kiosk::Server::Errors}           — exception hierarchy + envelope serialisation
+    #   - {Kiosk::Server::Result}           — success envelope value type
+    #   - {Kiosk::Server::SessionContext}   — transaction + four SET LOCAL GUCs
+    #   - {Kiosk::Server::Actions}          — minimal Action registry (full DSL later)
+    #   - {Kiosk::Server::Executor}         — six-verb dispatch (sql/run working; pay/schema/help/events stubbed)
+    #   - {Kiosk::Server::ExecController}   — Rails controller wrapping Executor (only when Rails loaded)
+    #   - {Kiosk::Server::Engine}           — Rails engine (only when Rails loaded)
   end
 end

@@ -1,0 +1,48 @@
+# frozen_string_literal: true
+
+# Kiosk configuration for this application.
+#
+# See https://kiosk.tech and the kiosk-server README for the full option
+# surface. Defaults here reflect the values the install generator was
+# invoked with — uncomment and adjust as needed.
+
+Kiosk.configure do |c|
+  # ─── Principal (user) wiring ─────────────────────────────────────────
+  # Provider's user model class name as a String — resolved at request
+  # time by kiosk-server, not eagerly, to avoid load-order issues.
+  c.user_model     = "<%= options[:user_table].classify %>"
+
+  # Type of users.id — :uuid (default), :bigint, :integer, or :text.
+  c.user_id_type   = :<%= options[:user_id_type] %>
+
+  # Column on `users` that holds the principal id. Default :id.
+  c.user_id_column = :id
+
+  # ─── Postgres surface ────────────────────────────────────────────────
+  # GUC namespace used in RLS policies and SET LOCAL statements.
+  # Default "app" — change if your primary backend already uses app.*.
+  # c.guc_namespace = "<%= options[:guc_namespace] %>"
+
+  # Postgres schema for Kiosk helper functions and tables.
+  # c.schema = "<%= options[:schema] %>"
+
+  # Database roles (provider creates these — Kiosk does not).
+  # c.app_role    = "app_role"      # runtime role with NOBYPASSRLS
+  # c.system_role = "system_role"   # privileged role; owns RLS-enabled tables
+
+  # ─── Wire surface ────────────────────────────────────────────────────
+  # Issuer URL — MUST match `kiosk.issuer` in /.well-known/kiosk.json.
+  # c.issuer = "https://<your-host>"
+
+  # Role vocabulary providers' RLS policies branch on. Never include
+  # `:admin` — prefer job-titled roles like `:support`, `:master`.
+  # c.roles = %i[customer]
+
+  # Owner block surfaced in /.well-known/kiosk.json.
+  # c.owner = { name: "Your Company", support: "support@example.com" }
+
+  # ─── Pluggable identity adapters ─────────────────────────────────────
+  # Configure when the corresponding adapter gem is installed.
+  # c.user_idp  = Kiosk::UserIdentityProviders::Devise.new
+  # c.agent_idp = Kiosk::AgentIdentityProviders::DefaultAgentIdp.new
+end

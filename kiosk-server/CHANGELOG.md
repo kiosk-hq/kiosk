@@ -22,6 +22,9 @@ All notable changes follow [Keep a Changelog](https://keepachangelog.com/en/1.1.
   - `Kiosk::Server::Executor` — six-verb dispatch (`sql`, `run`, `pay`, `schema`, `help`, `events`); `sql` + `run` fully working against any conforming connection; `pay`/`schema`/`help`/`events` raise `NotImplementedError` pointing at the follow-up release that adds them.
   - `Kiosk::Server::ExecController` — Rails controller (conditionally defined when `ActionController::API` is loaded); resolves identity via configured `agent_idp` then `user_idp`, parses JSON body, calls `Executor`, serialises envelope with HTTP status + Kiosk headers.
 
+- **Install generator** (follow-up addition within Unreleased):
+  - `Kiosk::Generators::InstallGenerator` — `bin/rails g kiosk:install` produces `config/initializers/kiosk.rb` and the four canonical migrations (`create_kiosk_schema`, `create_kiosk_identity_tables`, `create_kiosk_actions_log`, `create_kiosk_reservations`); each migration is a thin wrapper that calls into `Kiosk::Server::SchemaDefinitions` so SQL regenerates against the current `Kiosk.configuration` at `db:migrate` time. Class options: `--user-table`, `--user-id-type`, `--schema`, `--guc-namespace`. Adds `railties ~> 8.1` as a development dependency.
+
 ### Out of scope for first release
 
 - OAuth 2.1 surface (token/authorize/revoke/introspect endpoints) — follow-up.
@@ -29,7 +32,6 @@ All notable changes follow [Keep a Changelog](https://keepachangelog.com/en/1.1.
 - `pay` verb implementation (lands with `kiosk-pay-stripe`, M4).
 - `schema` / `help` verbs (need Postgres introspection of catalog + COMMENT ON).
 - `events` verb (NDJSON streaming per §5.8).
-- `bin/rails g kiosk:install` generator — follow-up.
 - `rake kiosk:doctor` — follow-up.
 - Full Rails-engine integration tests (requires booting a host app) — follow-up.
 - Satellite-mode connection-pool plumbing per spec §7.7 (currently `ExecController#connection_for` uses `ActiveRecord::Base.connection`).

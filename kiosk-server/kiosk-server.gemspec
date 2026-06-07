@@ -35,7 +35,11 @@ Gem::Specification.new do |spec|
   spec.add_dependency "kiosk-core", "~> 0.0"
   spec.add_dependency "kiosk-rls",  "~> 0.0"
 
-  spec.add_development_dependency "rspec", "~> 3.13"
-  spec.add_development_dependency "rake",  "~> 13.2"
-  spec.add_development_dependency "rack",  "~> 3.0"
+  spec.add_development_dependency "rspec",    "~> 3.13"
+  spec.add_development_dependency "rake",     "~> 13.2"
+  spec.add_development_dependency "rack",     "~> 3.0"
+  # Needed by spec/generators — `Rails::Generators::Base` + Thor shell.
+  # Host apps already have Rails loaded; we only require it for the
+  # install-generator unit tests.
+  spec.add_development_dependency "railties", "~> 8.1"
 end

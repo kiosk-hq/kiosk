@@ -1,0 +1,6 @@
+source "https://rubygems.org"
+
+gemspec
+
+# Local-development override — kiosk-core hasn't shipped to RubyGems yet.
+gem "kiosk-core", path: "../kiosk-core"

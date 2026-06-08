@@ -1,0 +1,83 @@
+# Kiosk OSS — end-to-end test
+
+Reproducible end-to-end test of the Kiosk OSS gems. The same script (`run.sh`) runs locally and in CI.
+
+## What it verifies
+
+- The `kiosk:install` Rails generator produces working migrations
+- `kiosk-server` Rails engine boots inside a fresh app
+- `/.well-known/kiosk.json` discovery endpoint returns a valid document
+- Response headers (`Kiosk-Server-Version`, `Kiosk-API-Version`, `Kiosk-Min-Client`) are injected on `/kiosk/*`
+- `POST /kiosk/exec` accepts JSON requests and dispatches through `Kiosk::Server::Executor`
+- The `sql` verb returns rows
+- The `run` verb dispatches to registered Actions
+- Error envelopes have the right shape and HTTP status (`BadRequest` → 400, `NotFound` → 404, `Unauthenticated` → 401)
+- `SET LOCAL` GUCs flow correctly: the registered Action reads `kiosk.current_user_id()` and writes the row with that user_id
+
+## What it does NOT verify (deferred)
+
+- **RLS isolation between users.** RLS enforcement requires satellite-mode role separation per spec §7.6 — the runtime role must have `NOBYPASSRLS` and must NOT own the tables. v0.1 alpha uses a single role (`app_role` granted to the connecting user), and Postgres superusers / table owners bypass RLS. The script asserts the wire path works; isolation lands when role separation ships in kiosk-server.
+- **OAuth flow.** The e2e uses a `StubIdp` that parses `Authorization: Bearer agent:u-<uuid>:a-<id>:r-<role>` tokens. Real OAuth 2.1 + PKCE / Device Grant ships in a follow-up release.
+- **AP2 mandate trail.** The `pay` verb is not yet implemented (lands with `kiosk-pay-stripe` at M4).
+- **`schema` / `help` / `events` verbs** — all stubbed (`NotImplementedError`).
+- **Multi-agent revocation** flows.
+- **Live LLM agent integration** — that's the `kiosk-agent-test` companion gem's job.
+
+## Prerequisites
+
+- **Ruby 4.0+** with Bundler
+- **PostgreSQL** reachable (default: `localhost` with the running user as superuser; e.g. `brew services start postgresql`)
+- **`rails` gem** — the script installs it automatically if missing
+- **`curl`** and **`jq`** on the PATH
+
+## Run locally
+
+```bash
+cd /path/to/kiosk-hq/kiosk        # or your local oss clone
+./e2e/run.sh
+```
+
+The script:
+
+1. Creates a temp dir + fresh Rails app via `rails new -d postgresql --skip-test --api`
+2. Patches the Gemfile to point at sibling kiosk gem paths
+3. `bundle install`
+4. Stages the `User` model migration (UUID PK)
+5. Runs `bin/rails g kiosk:install --user-id-type=uuid` (the kiosk-server generator)
+6. Stages the demo migration (`salons` + `appointments` with `enable_rls_on`)
+7. Stages models, seeds, stub IdP, initializer, routes
+8. `rails db:create db:migrate db:seed`
+9. Starts `rails s` on port 3001 in the background
+10. Runs `assistant.sh` — a series of `curl + jq` calls that assert on the responses
+11. Tears down (kills server, drops DB, removes temp dir)
+
+Output is colour-coded `✓` / `✗` per assertion; exits non-zero on any failure.
+
+## Configure
+
+| Env var | Default | What it does |
+|---|---|---|
+| `KIOSK_OSS` | auto-detected from script path | Path to the `oss/` root (sibling-gem path overrides resolve from here) |
+| `PGHOST` | `localhost` | Postgres host for the generated `database.yml` |
+| `SERVER_PORT` | `3001` | Port for the in-test Rails server |
+
+## CI
+
+`.github/workflows/e2e.yml` invokes the same script after standard Ruby + Postgres setup. The CI service-postgres user is a superuser, same as a typical local Homebrew setup — no role-separation differences.
+
+## File layout
+
+```
+e2e/
+├── run.sh                                  # main script
+├── assistant.sh                            # the mock AI assistant
+├── README.md                               # this file
+└── fixtures/                               # files copied into the generated app
+    ├── create_users.rb                     # provider's user table (UUID PK)
+    ├── create_salons_and_appointments.rb   # demo schema + enable_rls_on
+    ├── user.rb, salon.rb, appointment.rb   # ActiveRecord models
+    ├── seeds.rb                            # 2 users (Alice + Bob), 1 salon
+    ├── stub_idp.rb                         # Bearer-token-parsing agent IdP
+    ├── initializer_kiosk.rb                # Kiosk.configure + registered Action
+    └── routes.rb                           # mounts /kiosk/exec + /.well-known/kiosk.json
+```

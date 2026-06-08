@@ -27,8 +27,8 @@ RSpec.describe Kiosk::Server::Executor do
 
       # 4 SET LOCAL + 1 SELECT
       expect(connection.executed_sql.size).to eq(5)
-      expect(connection.executed_sql[0]).to start_with("SET LOCAL app.current_user_id")
-      expect(connection.executed_sql[3]).to start_with("SET LOCAL app.current_agent_id")
+      expect(connection.executed_sql[0]).to start_with(%(SET LOCAL "app"."current_user_id"))
+      expect(connection.executed_sql[3]).to start_with(%(SET LOCAL "app"."current_agent_id"))
       expect(connection.executed_sql[4]).to eq("SELECT 1")
       expect(connection.in_transaction?).to be(false) # closed after call
     end

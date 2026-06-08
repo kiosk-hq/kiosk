@@ -58,7 +58,12 @@ if defined?(::ActionController::API)
         end
 
         def parse_body!
-          raw = request.body.read
+          # `request.raw_post` is Rails-safe — works even if a prior
+          # middleware (Rails' ParamsWrapper, for example) has already
+          # consumed the body stream. We deliberately bypass `params`
+          # because Executor wants the unwrapped wire shape, not the
+          # controller-name-wrapped form ActionController::API materialises.
+          raw = request.raw_post
           return {} if raw.nil? || raw.empty?
 
           parsed = JSON.parse(raw, symbolize_names: true)

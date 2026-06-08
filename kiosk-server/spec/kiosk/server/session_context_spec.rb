@@ -21,11 +21,13 @@ RSpec.describe Kiosk::Server::SessionContext do
         identity:   build_identity(actor: "agent", user_id: "u-1", role: "customer", agent_id: "a-1"),
       ) { }
 
+      # Each dot-segment is quoted — `current_role` collides with the
+      # PostgreSQL reserved keyword without quoting.
       expect(connection.executed_sql).to eq([
-        "SET LOCAL app.current_user_id = 'u-1'",
-        "SET LOCAL app.current_role = 'customer'",
-        "SET LOCAL app.current_actor = 'agent'",
-        "SET LOCAL app.current_agent_id = 'a-1'",
+        %(SET LOCAL "app"."current_user_id" = 'u-1'),
+        %(SET LOCAL "app"."current_role" = 'customer'),
+        %(SET LOCAL "app"."current_actor" = 'agent'),
+        %(SET LOCAL "app"."current_agent_id" = 'a-1'),
       ])
     end
 
@@ -36,9 +38,9 @@ RSpec.describe Kiosk::Server::SessionContext do
       ) { }
 
       expect(connection.executed_sql).to eq([
-        "SET LOCAL app.current_user_id = 'u-1'",
-        "SET LOCAL app.current_role = 'customer'",
-        "SET LOCAL app.current_actor = 'human'",
+        %(SET LOCAL "app"."current_user_id" = 'u-1'),
+        %(SET LOCAL "app"."current_role" = 'customer'),
+        %(SET LOCAL "app"."current_actor" = 'human'),
       ])
     end
 
@@ -49,7 +51,7 @@ RSpec.describe Kiosk::Server::SessionContext do
         identity:   build_identity(actor: "agent"),
       ) { }
 
-      expect(connection.executed_sql.first).to eq("SET LOCAL kiosk.current_user_id = 'u-1'")
+      expect(connection.executed_sql.first).to eq(%(SET LOCAL "kiosk"."current_user_id" = 'u-1'))
     end
 
     it "escapes single-quotes in identity values" do

@@ -25,6 +25,10 @@ All notable changes follow [Keep a Changelog](https://keepachangelog.com/en/1.1.
 - **Install generator** (follow-up addition within Unreleased):
   - `Kiosk::Generators::InstallGenerator` — `bin/rails g kiosk:install` produces `config/initializers/kiosk.rb` and the four canonical migrations (`create_kiosk_schema`, `create_kiosk_identity_tables`, `create_kiosk_actions_log`, `create_kiosk_reservations`); each migration is a thin wrapper that calls into `Kiosk::Server::SchemaDefinitions` so SQL regenerates against the current `Kiosk.configuration` at `db:migrate` time. Class options: `--user-table`, `--user-id-type`, `--schema`, `--guc-namespace`. Adds `railties ~> 8.1` as a development dependency.
 
+- **Fixes uncovered by the first end-to-end run** (within Unreleased):
+  - `SessionContext` now quotes each dot-segment of the GUC name in `SET LOCAL`. Required because `current_role` is a PostgreSQL reserved keyword; unquoted `SET LOCAL app.current_role = '…'` is a syntax error. Quoting is safe across all GUC names.
+  - `ExecController#parse_body!` now reads `request.raw_post` instead of `request.body.read`. The latter returns empty when a prior middleware (Rails' `ParamsWrapper` with `--api`-style controllers) has already consumed the body stream; `raw_post` is Rails-safe.
+
 ### Out of scope for first release
 
 - OAuth 2.1 surface (token/authorize/revoke/introspect endpoints) — follow-up.

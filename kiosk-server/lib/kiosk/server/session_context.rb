@@ -55,7 +55,16 @@ module Kiosk
       end
 
       def guc_sql(name, value)
-        "SET LOCAL #{name} = #{quote_literal(value.to_s)}"
+        "SET LOCAL #{quote_ident(name)} = #{quote_literal(value.to_s)}"
+      end
+
+      # Quote each dot-segment of the GUC name. Required because
+      # `current_role` is a PostgreSQL reserved keyword (SQL-standard
+      # function); without quoting, `SET LOCAL app.current_role = '…'`
+      # parses as a syntax error. Quoting each segment is safe across all
+      # GUC names whether they collide with keywords or not.
+      def quote_ident(name)
+        name.to_s.split(".").map { |part| %("#{part.gsub('"', '""')}") }.join(".")
       end
 
       def quote_literal(value)

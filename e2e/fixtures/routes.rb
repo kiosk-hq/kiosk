@@ -4,7 +4,8 @@ Rails.application.routes.draw do
   # Kiosk wire surface (controllers shipped by kiosk-server).
   # In a follow-up release these will be mounted via the engine's own
   # routes drawer; for v0.1 alpha we wire them manually here.
-  post "/kiosk/exec", to: "kiosk/server/exec#exec"
+  post "/kiosk/exec",                 to: "kiosk/server/exec#exec"
+  get  "/kiosk/.well-known/jwks.json", to: "kiosk/server/jwks#show"
 
   # /.well-known/kiosk.json discovery endpoint — built on the fly from
   # Kiosk.configuration. Inlined here since kiosk-server doesn't yet

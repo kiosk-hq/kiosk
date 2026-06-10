@@ -136,6 +136,25 @@ status=$(curl -sS -o /dev/null -w "%{http_code}" -X POST "$SERVER_URL/kiosk/exec
   -d '{"command":"sql","body":{"sql":"SELECT 1"}}')
 assert "garbage token → 401"       "$status" "401"
 
+# ─── JWKS endpoint ──────────────────────────────────────────────────────
+#
+# /kiosk/.well-known/jwks.json publishes the RSA public key that signs
+# JWTs issued by the bundled IdP and OAuth surface (spec §3.5, §6.2).
+
+printf "\n\033[1m=== /kiosk/.well-known/jwks.json ===\033[0m\n"
+
+jwks=$(curl -sf "$SERVER_URL/kiosk/.well-known/jwks.json")
+assert "jwks: keys[] present"          "$(echo "$jwks" | jq -r '.keys | length')"          "1"
+assert "jwks: kty=RSA"                 "$(echo "$jwks" | jq -r '.keys[0].kty')"            "RSA"
+assert "jwks: use=sig"                 "$(echo "$jwks" | jq -r '.keys[0].use')"            "sig"
+assert "jwks: alg=RS256"               "$(echo "$jwks" | jq -r '.keys[0].alg')"            "RS256"
+assert "jwks: kid present"             "$(echo "$jwks" | jq -r '.keys[0].kid | length > 0')" "true"
+assert "jwks: n (modulus) present"     "$(echo "$jwks" | jq -r '.keys[0].n | length > 0')"   "true"
+assert "jwks: e (exponent) present"    "$(echo "$jwks" | jq -r '.keys[0].e | length > 0')"   "true"
+# Never leak private parameters.
+assert "jwks: no private d field"      "$(echo "$jwks" | jq -r '.keys[0] | has("d")')"      "false"
+assert "jwks: no private p field"      "$(echo "$jwks" | jq -r '.keys[0] | has("p")')"      "false"
+
 # ─── kiosk-cli end-to-end ───────────────────────────────────────────────
 #
 # Re-run a subset of the assertions above through the POSIX shell `kiosk`

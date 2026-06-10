@@ -34,6 +34,15 @@ All notable changes follow [Keep a Changelog](https://keepachangelog.com/en/1.1.
   - `Kiosk::Server::Jwks.build(keys: [...])` — pure-Ruby JWKS document builder per RFC 7517. Multi-key shape supports key rotation overlap windows.
   - `Kiosk::Server::ConfigurationExtension#signing_key` — lazy default resolves in this order: explicit setter value, `KIOSK_SIGNING_KEY_PEM` env var, or freshly-generated 2048-bit RSA. Setter accepts a `SigningKey` instance or a PEM string. `Kiosk.reset!` drops the configured key.
 
+- **JWT issue + verify** (within Unreleased; second piece of the §6.7 OAuth surface):
+  - `Kiosk::Server::JwtIssuer.issue(claims:, audience:, ...)` — RS256-signed token with `iat`/`nbf`/`exp`/`iss`/`aud`/`jti` set automatically. JWS header carries `kid` so verifiers can pick the right key during rotation overlap. Default lifetime one hour; caller can override.
+  - `Kiosk::Server::JwtIssuer.verify(token:, jwks:, audience:, ...)` — validates signature + lifetime + audience (+ optional issuer) against a JWKS. Returns symbol-keyed claims on success. Raises typed errors: `ExpiredError`, `AudienceError`, `SignatureError`, `InvalidError`.
+  - `jwks:` argument accepts a Hash (`{ keys: [...] }`), an Array of `SigningKey`, or a single `SigningKey` — verifier-side ergonomics for the common cases (self-issued, multi-key rotation, single foreign key).
+  - Adds `jwt ~> 2.8` dependency (MIT, no transitive deps).
+
+- **JWKS endpoint controller** (within Unreleased; third piece of the §6.7 OAuth surface):
+  - `Kiosk::Server::JwksController` — `GET <mount>/.well-known/jwks.json`. Serves `Kiosk::Server::Jwks.build(keys: [Kiosk.configuration.signing_key])`. Conditionally defined (only when `ActionController::API` is loaded). Adds Kiosk response headers via `Headers.add_to`.
+
 ### Out of scope for first release
 
 - OAuth 2.1 surface (token/authorize/revoke/introspect endpoints) — follow-up.

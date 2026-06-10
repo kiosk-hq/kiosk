@@ -29,6 +29,11 @@ All notable changes follow [Keep a Changelog](https://keepachangelog.com/en/1.1.
   - `SessionContext` now quotes each dot-segment of the GUC name in `SET LOCAL`. Required because `current_role` is a PostgreSQL reserved keyword; unquoted `SET LOCAL app.current_role = '…'` is a syntax error. Quoting is safe across all GUC names.
   - `ExecController#parse_body!` now reads `request.raw_post` instead of `request.body.read`. The latter returns empty when a prior middleware (Rails' `ParamsWrapper` with `--api`-style controllers) has already consumed the body stream; `raw_post` is Rails-safe.
 
+- **JWKS foundation** (within Unreleased; first piece of the §6.7 OAuth surface):
+  - `Kiosk::Server::SigningKey` — RSA keypair value object. `.generate` for fresh keys, `.from_pem` for loaded keys, `#kid` as the RFC 7638 thumbprint, `#to_jwk` for JWKS-publish shape. Enforces 2048-bit minimum; rejects non-RSA inputs; never leaks private parameters via `#to_jwk`.
+  - `Kiosk::Server::Jwks.build(keys: [...])` — pure-Ruby JWKS document builder per RFC 7517. Multi-key shape supports key rotation overlap windows.
+  - `Kiosk::Server::ConfigurationExtension#signing_key` — lazy default resolves in this order: explicit setter value, `KIOSK_SIGNING_KEY_PEM` env var, or freshly-generated 2048-bit RSA. Setter accepts a `SigningKey` instance or a PEM string. `Kiosk.reset!` drops the configured key.
+
 ### Out of scope for first release
 
 - OAuth 2.1 surface (token/authorize/revoke/introspect endpoints) — follow-up.

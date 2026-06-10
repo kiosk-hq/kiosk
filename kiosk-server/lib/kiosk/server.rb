@@ -8,6 +8,8 @@ require "kiosk"
 require "kiosk/rls"
 
 require "kiosk/server/version"
+require "kiosk/server/signing_key"
+require "kiosk/server/jwks"
 require "kiosk/server/configuration_extension"
 require "kiosk/server/headers"
 require "kiosk/server/headers_middleware"
@@ -31,6 +33,8 @@ module Kiosk
     # Pieces shipped in this gem:
     #
     #   - {Kiosk::Server::WellKnown}        — builds /.well-known/kiosk.json
+    #   - {Kiosk::Server::SigningKey}       — RSA keypair value object (§6.2)
+    #   - {Kiosk::Server::Jwks}             — JWKS document builder (RFC 7517)
     #   - {Kiosk::Server::Headers}          — composes the three response headers
     #   - {Kiosk::Server::HeadersMiddleware}— Rack middleware that injects them
     #   - {Kiosk::Server::SchemaDefinitions}— SQL for migrations 001-004

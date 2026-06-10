@@ -42,6 +42,45 @@ module Kiosk
       def min_client
         @min_client ||= Kiosk::Protocol::MIN_CLIENT
       end
+
+      # RSA signing key used by the OAuth 2.1 surface (§6.7) and the
+      # bundled IdP (§6.2) to issue JWTs.
+      #
+      # Resolution order:
+      #   1. explicit value set via `Kiosk.configure { |c| c.signing_key = ... }`
+      #      (accepts a {Kiosk::Server::SigningKey} or a PEM string)
+      #   2. PEM from the `KIOSK_SIGNING_KEY_PEM` env var (production path)
+      #   3. fresh in-memory RSA 2048 keypair (dev path — every process
+      #      restart issues new tokens, which is fine for local development
+      #      but never for production)
+      #
+      # @return [Kiosk::Server::SigningKey]
+      def signing_key
+        @signing_key ||= default_signing_key
+      end
+
+      def signing_key=(value)
+        @signing_key = case value
+                       when Kiosk::Server::SigningKey
+                         value
+                       when String
+                         Kiosk::Server::SigningKey.from_pem(value)
+                       when nil
+                         nil
+                       else
+                         raise ArgumentError,
+                           "signing_key must be a SigningKey or PEM string, got #{value.class}"
+                       end
+      end
+
+      private
+
+      def default_signing_key
+        pem = ENV["KIOSK_SIGNING_KEY_PEM"]
+        return Kiosk::Server::SigningKey.from_pem(pem) if pem && !pem.empty?
+
+        Kiosk::Server::SigningKey.generate
+      end
     end
   end
 end

@@ -136,6 +136,78 @@ status=$(curl -sS -o /dev/null -w "%{http_code}" -X POST "$SERVER_URL/kiosk/exec
   -d '{"command":"sql","body":{"sql":"SELECT 1"}}')
 assert "garbage token → 401"       "$status" "401"
 
+# ─── kiosk-cli end-to-end ───────────────────────────────────────────────
+#
+# Re-run a subset of the assertions above through the POSIX shell `kiosk`
+# binary instead of raw curl. Proves the CLI's wire shape matches the
+# server's wire shape — and that exit codes map to error envelopes per
+# spec §5.2.
+
+printf "\n\033[1m=== via kiosk-cli ===\033[0m\n"
+
+SCRIPT_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
+KIOSK_BIN="$SCRIPT_DIR/../kiosk-cli/bin/kiosk"
+
+if [ ! -x "$KIOSK_BIN" ]; then
+  printf "  \033[1;33m⚠\033[0m kiosk-cli not found at %s — skipping CLI assertions\n" "$KIOSK_BIN"
+else
+  # Token resolution via the per-host env var. The host normalises to
+  # `127_0_0_1_3001`, so the matching env-var name is
+  # KIOSK_TOKEN_127_0_0_1_3001.
+  export KIOSK_TOKEN_127_0_0_1_3001="$ALICE_AGENT_TOKEN"
+
+  # well-known via the CLI
+  wk=$("$KIOSK_BIN" "$SERVER_URL" well-known)
+  assert "cli: well-known kiosk.version"   "$(echo "$wk" | jq -r '.kiosk.version')"    "1.0"
+  assert "cli: well-known kiosk.endpoint"  "$(echo "$wk" | jq -r '.kiosk.endpoint')"   "$SERVER_URL/kiosk"
+
+  # sql verb via the CLI
+  r=$("$KIOSK_BIN" "$SERVER_URL" sql "SELECT id, name FROM salons ORDER BY id")
+  assert "cli: sql ok=true"                "$(echo "$r" | jq -r '.ok')"                "true"
+  assert "cli: sql kind=rows"              "$(echo "$r" | jq -r '.kind')"              "rows"
+  assert "cli: sql salon name"             "$(echo "$r" | jq -r '.rows[0].name')"      "Sweepy on Park"
+
+  # run verb via the CLI with k=v args
+  salon_id=$(echo "$r" | jq -r '.rows[0].id')
+  r=$("$KIOSK_BIN" "$SERVER_URL" run book_appointment \
+        "salon_id=$salon_id" "slot=2026-06-15T15:00:00Z")
+  assert "cli: run ok=true"                "$(echo "$r" | jq -r '.ok')"                "true"
+  assert "cli: run kind=value"             "$(echo "$r" | jq -r '.kind')"              "value"
+  assert "cli: run salon_id echoed"        "$(echo "$r" | jq -r '.value.salon_id')"    "$salon_id"
+
+  # The assertions below check non-zero exit codes; `set -e` would
+  # otherwise abort the script before $? is captured. Disable it locally.
+  set +e
+
+  # exit-code mapping: unknown action → not_found (code 2)
+  "$KIOSK_BIN" "$SERVER_URL" run nope >/dev/null 2>&1
+  rc=$?
+  assert "cli: unknown action → exit 2"    "$rc" "2"
+
+  # exit-code mapping: bad verb (command) → bad_request (code 2)
+  # We can't trigger bad_request from a known CLI verb directly — every CLI
+  # verb produces a valid command. So this assertion stays at HTTP-level
+  # (covered by the curl block above).
+
+  # exit-code mapping: bad token → unauthenticated (code 3)
+  KIOSK_TOKEN_127_0_0_1_3001=garbage \
+    "$KIOSK_BIN" "$SERVER_URL" sql "SELECT 1" >/dev/null 2>&1
+  rc=$?
+  assert "cli: garbage token → exit 3"     "$rc" "3"
+
+  # Token resolution: with NO env var set and no ~/.kiosk/credentials,
+  # the CLI should exit 3 once it tries to talk to /exec.
+  (
+    unset KIOSK_TOKEN KIOSK_TOKEN_127_0_0_1_3001
+    HOME=$(mktemp -d)
+    "$KIOSK_BIN" "$SERVER_URL" sql "SELECT 1" >/dev/null 2>&1
+  )
+  rc=$?
+  assert "cli: no token → exit 3"          "$rc" "3"
+
+  set -e
+fi
+
 # ─── summary ────────────────────────────────────────────────────────────
 
 printf "\n\033[1m=== summary ===\033[0m\n"

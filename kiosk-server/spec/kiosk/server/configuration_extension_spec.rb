@@ -60,4 +60,56 @@ RSpec.describe Kiosk::Server::ConfigurationExtension do
       expect(Kiosk.configuration.system_role).to  eq("system_role")
     end
   end
+
+  describe "signing_key" do
+    # RSA generation is ~100ms; cache one for the whole context.
+    let(:rsa)         { OpenSSL::PKey::RSA.generate(2048) }
+    let(:signing_key) { Kiosk::Server::SigningKey.new(rsa) }
+
+    around do |example|
+      original = ENV.delete("KIOSK_SIGNING_KEY_PEM")
+      example.run
+    ensure
+      ENV["KIOSK_SIGNING_KEY_PEM"] = original if original
+    end
+
+    it "lazy-generates a fresh SigningKey when nothing is configured" do
+      expect(Kiosk.configuration.signing_key).to be_a(Kiosk::Server::SigningKey)
+      expect(Kiosk.configuration.signing_key).to be_private
+    end
+
+    it "memoises the generated key across accesses" do
+      first  = Kiosk.configuration.signing_key
+      second = Kiosk.configuration.signing_key
+      expect(second).to equal(first)
+    end
+
+    it "accepts a SigningKey instance via the setter" do
+      Kiosk.configure { |c| c.signing_key = signing_key }
+      expect(Kiosk.configuration.signing_key).to equal(signing_key)
+    end
+
+    it "accepts a PEM string via the setter" do
+      Kiosk.configure { |c| c.signing_key = rsa.to_pem }
+      expect(Kiosk.configuration.signing_key.kid).to eq(signing_key.kid)
+    end
+
+    it "rejects an unrecognised type" do
+      expect {
+        Kiosk.configure { |c| c.signing_key = 42 }
+      }.to raise_error(ArgumentError, /SigningKey or PEM string/)
+    end
+
+    it "honours KIOSK_SIGNING_KEY_PEM env var for default resolution" do
+      ENV["KIOSK_SIGNING_KEY_PEM"] = rsa.to_pem
+      Kiosk.reset!
+      expect(Kiosk.configuration.signing_key.kid).to eq(signing_key.kid)
+    end
+
+    it "Kiosk.reset! drops any configured key" do
+      Kiosk.configure { |c| c.signing_key = signing_key }
+      Kiosk.reset!
+      expect(Kiosk.configuration.signing_key).not_to equal(signing_key)
+    end
+  end
 end

@@ -10,6 +10,7 @@ require "kiosk/rls"
 require "kiosk/server/version"
 require "kiosk/server/signing_key"
 require "kiosk/server/jwks"
+require "kiosk/server/jwt_issuer"
 require "kiosk/server/configuration_extension"
 require "kiosk/server/headers"
 require "kiosk/server/headers_middleware"
@@ -24,9 +25,11 @@ require "kiosk/server/executor"
 # Optional Rails engine — only defines itself if Rails::Engine is loaded.
 require "kiosk/server/engine"
 
-# Conditionally loaded — only defines ExecController when ActionController::API
-# is available (i.e., a Rails host). Safe to require in plain Ruby contexts.
+# Conditionally loaded — only defines ExecController + JwksController
+# when ActionController::API is available (i.e., a Rails host). Safe to
+# require in plain Ruby contexts.
 require "kiosk/server/exec_controller"
+require "kiosk/server/jwks_controller"
 
 module Kiosk
   module Server
@@ -35,6 +38,7 @@ module Kiosk
     #   - {Kiosk::Server::WellKnown}        — builds /.well-known/kiosk.json
     #   - {Kiosk::Server::SigningKey}       — RSA keypair value object (§6.2)
     #   - {Kiosk::Server::Jwks}             — JWKS document builder (RFC 7517)
+    #   - {Kiosk::Server::JwtIssuer}        — RS256 sign / verify (§6.2, §6.7)
     #   - {Kiosk::Server::Headers}          — composes the three response headers
     #   - {Kiosk::Server::HeadersMiddleware}— Rack middleware that injects them
     #   - {Kiosk::Server::SchemaDefinitions}— SQL for migrations 001-004
@@ -44,6 +48,7 @@ module Kiosk
     #   - {Kiosk::Server::Actions}          — minimal Action registry (full DSL later)
     #   - {Kiosk::Server::Executor}         — six-verb dispatch (sql/run working; pay/schema/help/events stubbed)
     #   - {Kiosk::Server::ExecController}   — Rails controller wrapping Executor (only when Rails loaded)
+    #   - {Kiosk::Server::JwksController}   — Rails controller serving /.well-known/jwks.json (only when Rails loaded)
     #   - {Kiosk::Server::Engine}           — Rails engine (only when Rails loaded)
   end
 end

@@ -152,6 +152,7 @@ cp "$FIXTURES/appointment.rb"        app/models/appointment.rb
 cp "$FIXTURES/seeds.rb"              db/seeds.rb
 mkdir -p lib
 cp "$FIXTURES/stub_idp.rb"           lib/stub_idp.rb
+cp "$FIXTURES/jwt_or_stub_idp.rb"    lib/jwt_or_stub_idp.rb
 cp "$FIXTURES/initializer_kiosk.rb"  config/initializers/kiosk.rb
 cp "$FIXTURES/routes.rb"             config/routes.rb
 

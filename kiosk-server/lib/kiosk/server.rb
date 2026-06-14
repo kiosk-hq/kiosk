@@ -13,6 +13,7 @@ require "kiosk/server/jwks"
 require "kiosk/server/jwt_issuer"
 require "kiosk/server/device_authorization"
 require "kiosk/server/device_authorization_stores"
+require "kiosk/server/device_code_grant"
 require "kiosk/server/configuration_extension"
 require "kiosk/server/headers"
 require "kiosk/server/headers_middleware"
@@ -27,11 +28,13 @@ require "kiosk/server/executor"
 # Optional Rails engine — only defines itself if Rails::Engine is loaded.
 require "kiosk/server/engine"
 
-# Conditionally loaded — only defines ExecController + JwksController
-# when ActionController::API is available (i.e., a Rails host). Safe to
-# require in plain Ruby contexts.
+# Conditionally loaded — only defines ExecController + JwksController +
+# OAuth controllers when ActionController::API is available (i.e., a
+# Rails host). Safe to require in plain Ruby contexts.
 require "kiosk/server/exec_controller"
 require "kiosk/server/jwks_controller"
+require "kiosk/server/oauth_device_authorization_controller"
+require "kiosk/server/oauth_token_controller"
 
 module Kiosk
   module Server
@@ -43,6 +46,9 @@ module Kiosk
     #   - {Kiosk::Server::JwtIssuer}        — RS256 sign / verify (§6.2, §6.7)
     #   - {Kiosk::Server::DeviceAuthorization}        — RFC 8628 Device-Grant value object
     #   - {Kiosk::Server::DeviceAuthorizationStores}  — storage adapter (InMemory ships; ActiveRecord follows)
+    #   - {Kiosk::Server::DeviceCodeGrant}            — pure-Ruby service: .start + .exchange
+    #   - {Kiosk::Server::OauthDeviceAuthorizationController} — POST /oauth/device_authorization
+    #   - {Kiosk::Server::OauthTokenController}        — POST /oauth/token (device_code grant)
     #   - {Kiosk::Server::Headers}          — composes the three response headers
     #   - {Kiosk::Server::HeadersMiddleware}— Rack middleware that injects them
     #   - {Kiosk::Server::SchemaDefinitions}— SQL for migrations 001-004

@@ -43,6 +43,13 @@ All notable changes follow [Keep a Changelog](https://keepachangelog.com/en/1.1.
 - **JWKS endpoint controller** (within Unreleased; third piece of the §6.7 OAuth surface):
   - `Kiosk::Server::JwksController` — `GET <mount>/.well-known/jwks.json`. Serves `Kiosk::Server::Jwks.build(keys: [Kiosk.configuration.signing_key])`. Conditionally defined (only when `ActionController::API` is loaded). Adds Kiosk response headers via `Headers.add_to`.
 
+- **Device Authorization Grant foundation (RFC 8628) — Sub-slice 1 of 5** (within Unreleased; fourth piece of the §6.7 OAuth surface; covers spec §6.5 `kiosk login` flow):
+  - `SchemaDefinitions.device_authorizations_sql` — canonical migration 005. Table `kiosk.device_authorizations` with `device_code_hash bytea`, `user_code text`, `client_id`, `requested_role`, `status` (5-value CHECK constraint), `user_id`, `expires_at`, `consumed_at`, `created_at`. Unique index on `device_code_hash`; partial unique index on `user_code WHERE status='pending'`; expiry-scan index on `expires_at`.
+  - `Kiosk::Server::DeviceAuthorization` — `Data`-based value object with the full state machine (`pending → approved | denied → consumed | expired`). Non-destructive transitions via `Data#with`. `.generate(client_id:, requested_role:, expires_in:)` returns `[plain_device_code, da]`; plain code is the only opportunity to read it (persistent form holds only the SHA-256 hash). `user_code` uses 8-char Crockford alphabet (no 0/O/1/I/L/U) for human-friendly typing; `#display_user_code` returns the `XXXX-XXXX` form. `StateError` raised on illegal transitions.
+  - `Kiosk::Server::DeviceAuthorizationStores::Base` + `::InMemory` — pluggable storage adapter. InMemory variant is thread-safe via Mutex; suitable for dev / integration tests / small single-process deployments. ActiveRecord adapter follows in a later release.
+  - `Kiosk.configuration.device_authorization_store` — lazy-default `InMemory`; setter accepts any subclass of `DeviceAuthorizationStores::Base`. `Kiosk.reset!` drops any configured store.
+  - Test coverage: 47 new examples (33 on `DeviceAuthorization` + 14 on stores + config integration). Full kiosk-server suite remains green at 222 examples, 0 failures.
+
 ### Out of scope for first release
 
 - OAuth 2.1 surface (token/authorize/revoke/introspect endpoints) — follow-up.

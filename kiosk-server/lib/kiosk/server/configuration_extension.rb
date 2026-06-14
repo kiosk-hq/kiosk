@@ -73,6 +73,19 @@ module Kiosk
                        end
       end
 
+      # Storage adapter for {Kiosk::Server::DeviceAuthorization} rows
+      # (§6.5 + §6.7 Device-Grant state machine). Lazy-defaults to
+      # {DeviceAuthorizationStores::InMemory} — fine for development +
+      # tests + small single-process deployments. Production Rails apps
+      # set this to the ActiveRecord-backed adapter (lands in a
+      # follow-up release).
+      #
+      # @return [DeviceAuthorizationStores::Base]
+      attr_writer :device_authorization_store
+      def device_authorization_store
+        @device_authorization_store ||= Kiosk::Server::DeviceAuthorizationStores::InMemory.new
+      end
+
       private
 
       def default_signing_key

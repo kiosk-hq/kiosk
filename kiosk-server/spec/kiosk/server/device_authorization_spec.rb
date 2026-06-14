@@ -1,0 +1,209 @@
+# frozen_string_literal: true
+
+require "digest"
+
+RSpec.describe Kiosk::Server::DeviceAuthorization do
+  describe ".generate" do
+    it "returns [plain_device_code, DeviceAuthorization] pair" do
+      plain_code, da = described_class.generate(client_id: "kiosk-cli")
+
+      expect(plain_code).to be_a(String)
+      expect(da).to be_a(described_class)
+    end
+
+    it "starts in :pending status with no user_id and no consumed_at" do
+      _plain, da = described_class.generate(client_id: "kiosk-cli")
+      expect(da).to be_pending
+      expect(da.user_id).to     be_nil
+      expect(da.consumed_at).to be_nil
+    end
+
+    it "persists only the SHA-256 hash of the device_code (not plain)" do
+      plain, da = described_class.generate(client_id: "kiosk-cli")
+      expect(da.device_code_hash).to eq(Digest::SHA256.digest(plain))
+      expect(da.respond_to?(:device_code)).to be(false)
+    end
+
+    it "produces a Crockford-alphabet user_code of length 8 (no 0/O/1/I/L/U)" do
+      _plain, da = described_class.generate(client_id: "kiosk-cli")
+      expect(da.user_code.length).to eq(8)
+      expect(da.user_code).to match(/\A[ABCDEFGHJKMNPQRSTUVWXYZ23456789]+\z/)
+    end
+
+    it "captures the requested role when provided" do
+      _plain, da = described_class.generate(client_id: "kiosk-cli", requested_role: "customer")
+      expect(da.requested_role).to eq("customer")
+    end
+
+    it "accepts a nil requested_role (caller may negotiate later)" do
+      _plain, da = described_class.generate(client_id: "kiosk-cli")
+      expect(da.requested_role).to be_nil
+    end
+
+    it "computes expires_at as now + expires_in" do
+      now = Time.utc(2026, 6, 14, 12, 0, 0)
+      _plain, da = described_class.generate(client_id: "kiosk-cli", expires_in: 600, now: now)
+      expect(da.expires_at).to eq(now + 600)
+    end
+
+    it "defaults expires_in to the canonical 900s (15 min)" do
+      now = Time.now
+      _plain, da = described_class.generate(client_id: "kiosk-cli", now: now)
+      expect(da.expires_at - now).to be_within(1).of(described_class::DEFAULT_EXPIRES_IN)
+    end
+
+    it "rejects empty client_id" do
+      expect { described_class.generate(client_id: "") }
+        .to raise_error(ArgumentError, /client_id/)
+    end
+
+    it "rejects non-positive expires_in" do
+      expect { described_class.generate(client_id: "kiosk-cli", expires_in: 0) }
+        .to raise_error(ArgumentError, /expires_in/)
+      expect { described_class.generate(client_id: "kiosk-cli", expires_in: -1) }
+        .to raise_error(ArgumentError, /expires_in/)
+    end
+
+    it "produces distinct device_codes across calls (CSPRNG sanity)" do
+      codes = 10.times.map { described_class.generate(client_id: "kiosk-cli").first }
+      expect(codes.uniq.size).to eq(10)
+    end
+
+    it "produces distinct user_codes across calls (32^8 collision space)" do
+      codes = 50.times.map { described_class.generate(client_id: "kiosk-cli").last.user_code }
+      expect(codes.uniq.size).to eq(50)
+    end
+  end
+
+  describe ".hash_device_code" do
+    it "matches the hash baked into a generated row" do
+      plain, da = described_class.generate(client_id: "kiosk-cli")
+      expect(described_class.hash_device_code(plain)).to eq(da.device_code_hash)
+    end
+  end
+
+  describe "status validation" do
+    let(:base_attrs) do
+      _plain, da = described_class.generate(client_id: "kiosk-cli")
+      da.to_h
+    end
+
+    it "accepts the five canonical statuses" do
+      described_class::STATUSES.each do |status|
+        expect { described_class.new(**base_attrs.merge(status: status)) }.not_to raise_error
+      end
+    end
+
+    it "rejects any other symbol" do
+      expect { described_class.new(**base_attrs.merge(status: :wat)) }
+        .to raise_error(ArgumentError, /status must be/)
+    end
+  end
+
+  describe "lifecycle transitions" do
+    let(:pending) { described_class.generate(client_id: "kiosk-cli", requested_role: "customer").last }
+    let(:user_id) { "11111111-1111-1111-1111-111111111111" }
+
+    describe "#approve" do
+      it "transitions pending → approved with user_id set" do
+        approved = pending.approve(user_id: user_id)
+        expect(approved).to be_approved
+        expect(approved.user_id).to eq(user_id)
+      end
+
+      it "returns a new instance (immutability)" do
+        approved = pending.approve(user_id: user_id)
+        expect(approved).not_to equal(pending)
+        expect(pending).to be_pending
+      end
+
+      it "rejects approving a non-pending row" do
+        approved = pending.approve(user_id: user_id)
+        expect { approved.approve(user_id: user_id) }
+          .to raise_error(described_class::StateError, /approve.*approved/)
+      end
+
+      it "rejects missing user_id" do
+        expect { pending.approve(user_id: nil) }
+          .to raise_error(ArgumentError, /user_id/)
+      end
+    end
+
+    describe "#deny" do
+      it "transitions pending → denied" do
+        denied = pending.deny
+        expect(denied).to be_denied
+      end
+
+      it "rejects denying a non-pending row" do
+        denied = pending.deny
+        expect { denied.deny }
+          .to raise_error(described_class::StateError, /deny.*denied/)
+      end
+    end
+
+    describe "#consume" do
+      it "transitions approved → consumed with consumed_at set" do
+        approved = pending.approve(user_id: user_id)
+        now      = Time.now
+        consumed = approved.consume(now: now)
+        expect(consumed).to be_consumed
+        expect(consumed.consumed_at).to eq(now)
+      end
+
+      it "rejects consuming a pending row (must be approved first)" do
+        expect { pending.consume }
+          .to raise_error(described_class::StateError, /consume.*pending/)
+      end
+
+      it "rejects consuming an already-consumed row" do
+        consumed = pending.approve(user_id: user_id).consume
+        expect { consumed.consume }
+          .to raise_error(described_class::StateError, /consume.*consumed/)
+      end
+    end
+
+    describe "#expire" do
+      it "transitions pending → expired" do
+        expect(pending.expire).to be_expired
+      end
+
+      it "transitions approved → expired (consumer never showed up)" do
+        approved = pending.approve(user_id: user_id)
+        expect(approved.expire).to be_expired
+      end
+
+      it "rejects expiring a denied or consumed row" do
+        denied = pending.deny
+        expect { denied.expire }.to raise_error(described_class::StateError)
+
+        consumed = pending.approve(user_id: user_id).consume
+        expect { consumed.expire }.to raise_error(described_class::StateError)
+      end
+    end
+  end
+
+  describe "#expired_at_time?" do
+    let(:da) {
+      _plain, da = described_class.generate(client_id: "kiosk-cli", expires_in: 600, now: Time.utc(2026, 6, 14, 12, 0, 0))
+      da
+    }
+
+    it "false when now < expires_at" do
+      expect(da.expired_at_time?(Time.utc(2026, 6, 14, 12, 5, 0))).to be(false)
+    end
+
+    it "true when now >= expires_at" do
+      expect(da.expired_at_time?(Time.utc(2026, 6, 14, 12, 10, 0))).to be(true)
+      expect(da.expired_at_time?(Time.utc(2026, 6, 14, 13, 0, 0))).to be(true)
+    end
+  end
+
+  describe "#display_user_code" do
+    it "formats as XXXX-XXXX for human display" do
+      _plain, da = described_class.generate(client_id: "kiosk-cli")
+      expect(da.display_user_code).to match(/\A[A-Z0-9]{4}-[A-Z0-9]{4}\z/)
+      expect(da.display_user_code.tr("-", "")).to eq(da.user_code)
+    end
+  end
+end

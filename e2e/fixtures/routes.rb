@@ -22,26 +22,55 @@ Rails.application.routes.draw do
 
   # ─── E2e-only test fixtures ──────────────────────────────────────────
   # Simulates user approval / denial at /oauth/device/verify. The real
-  # verification controller (HTML form + consent screen + Devise login)
-  # lands in Device-Grant sub-slice 3; this fixture lets sub-slice-2's
-  # e2e exercise the full polling → approved → JWT chain without a
-  # browser in the loop.
+  # consent-screen UI (Kiosk-branded HTML + Devise current_user) is a
+  # provider responsibility — Kiosk ships the {DeviceVerification}
+  # state-machine helpers; the host's controller wires them up. This
+  # fixture proves the helper works end-to-end without a browser
+  # in the loop.
   if Rails.env.development?
-    post "/kiosk/_test/device_authorization/approve", to: ->(env) {
-      request = Rack::Request.new(env)
-      user_code = request.params["user_code"].to_s.tr("-", "")
-      user_id   = request.params["user_id"].to_s
-
-      store = Kiosk.configuration.device_authorization_store
-      da    = store.find_by_user_code(user_code)
-      if da.nil?
+    handle_verification = ->(decision, user_code, user_id) do
+      begin
+        case decision
+        when "approve"
+          Kiosk::Server::DeviceVerification.approve(user_code: user_code, user_id: user_id)
+          [200, { "content-type" => "application/json" },
+           [JSON.generate(ok: true, status: "approved")]]
+        when "deny"
+          Kiosk::Server::DeviceVerification.deny(user_code: user_code)
+          [200, { "content-type" => "application/json" },
+           [JSON.generate(ok: true, status: "denied")]]
+        else
+          [400, { "content-type" => "application/json" },
+           [JSON.generate(ok: false, error: "decision must be 'approve' or 'deny'")]]
+        end
+      rescue Kiosk::Server::DeviceVerification::CodeNotFoundError => e
         [404, { "content-type" => "application/json" },
-         [JSON.generate(ok: false, error: "user_code not found or already acted on")]]
-      else
-        store.update(da.approve(user_id: user_id))
-        [200, { "content-type" => "application/json" },
-         [JSON.generate(ok: true, status: "approved")]]
+         [JSON.generate(ok: false, error: e.message)]]
+      rescue ArgumentError => e
+        [400, { "content-type" => "application/json" },
+         [JSON.generate(ok: false, error: e.message)]]
       end
+    end
+
+    # Generic verify endpoint — accepts decision=approve|deny.
+    post "/kiosk/_test/device_authorization/verify", to: ->(env) {
+      req = Rack::Request.new(env)
+      handle_verification.call(
+        req.params["decision"].to_s,
+        req.params["user_code"].to_s,
+        req.params["user_id"].to_s,
+      )
+    }
+
+    # Back-compat alias: hard-codes decision=approve. Used by the
+    # sub-slice-2 e2e assertions; remove once those migrate.
+    post "/kiosk/_test/device_authorization/approve", to: ->(env) {
+      req = Rack::Request.new(env)
+      handle_verification.call(
+        "approve",
+        req.params["user_code"].to_s,
+        req.params["user_id"].to_s,
+      )
     }
   end
 end

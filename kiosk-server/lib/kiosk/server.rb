@@ -14,6 +14,7 @@ require "kiosk/server/jwt_issuer"
 require "kiosk/server/device_authorization"
 require "kiosk/server/device_authorization_stores"
 require "kiosk/server/device_code_grant"
+require "kiosk/server/device_verification"
 require "kiosk/server/configuration_extension"
 require "kiosk/server/headers"
 require "kiosk/server/headers_middleware"
@@ -47,6 +48,7 @@ module Kiosk
     #   - {Kiosk::Server::DeviceAuthorization}        — RFC 8628 Device-Grant value object
     #   - {Kiosk::Server::DeviceAuthorizationStores}  — storage adapter (InMemory ships; ActiveRecord follows)
     #   - {Kiosk::Server::DeviceCodeGrant}            — pure-Ruby service: .start + .exchange
+    #   - {Kiosk::Server::DeviceVerification}         — pure-Ruby helpers: .find_pending + .approve + .deny
     #   - {Kiosk::Server::OauthDeviceAuthorizationController} — POST /oauth/device_authorization
     #   - {Kiosk::Server::OauthTokenController}        — POST /oauth/token (device_code grant)
     #   - {Kiosk::Server::Headers}          — composes the three response headers

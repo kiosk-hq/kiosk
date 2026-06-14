@@ -11,6 +11,8 @@ require "kiosk/server/version"
 require "kiosk/server/signing_key"
 require "kiosk/server/jwks"
 require "kiosk/server/jwt_issuer"
+require "kiosk/server/device_authorization"
+require "kiosk/server/device_authorization_stores"
 require "kiosk/server/configuration_extension"
 require "kiosk/server/headers"
 require "kiosk/server/headers_middleware"
@@ -39,6 +41,8 @@ module Kiosk
     #   - {Kiosk::Server::SigningKey}       — RSA keypair value object (§6.2)
     #   - {Kiosk::Server::Jwks}             — JWKS document builder (RFC 7517)
     #   - {Kiosk::Server::JwtIssuer}        — RS256 sign / verify (§6.2, §6.7)
+    #   - {Kiosk::Server::DeviceAuthorization}        — RFC 8628 Device-Grant value object
+    #   - {Kiosk::Server::DeviceAuthorizationStores}  — storage adapter (InMemory ships; ActiveRecord follows)
     #   - {Kiosk::Server::Headers}          — composes the three response headers
     #   - {Kiosk::Server::HeadersMiddleware}— Rack middleware that injects them
     #   - {Kiosk::Server::SchemaDefinitions}— SQL for migrations 001-004

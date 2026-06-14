@@ -2,13 +2,14 @@
 
 module Kiosk
   module Server
-    # Pure SQL generators for the four canonical Kiosk migrations.
-    # See implementation plan §3 — migrations 001-004:
+    # Pure SQL generators for the five canonical Kiosk migrations.
+    # See implementation plan §3 — migrations 001-005:
     #
-    #   001 create_kiosk_schema          → schema + four current_*() helpers
-    #   002 create_kiosk_identity_tables → agents, agent_tokens, agent_mappings
-    #   003 create_kiosk_actions_log     → kiosk.actions, kiosk.action_log
-    #   004 create_kiosk_reservations    → kiosk.reservations
+    #   001 create_kiosk_schema                → schema + four current_*() helpers
+    #   002 create_kiosk_identity_tables       → agents, agent_tokens, agent_mappings
+    #   003 create_kiosk_actions_log           → kiosk.actions, kiosk.action_log
+    #   004 create_kiosk_reservations          → kiosk.reservations
+    #   005 create_kiosk_device_authorizations → kiosk.device_authorizations (RFC 8628 Device Grant)
     #
     # Pure functions: no database connection, no Rails dependency. Output
     # is SQL strings the host migration framework (`ActiveRecord::Migration#execute`)
@@ -154,6 +155,51 @@ module Kiosk
           );
           CREATE INDEX idx_reservations_user_id  ON "#{schema}".reservations (user_id);
           CREATE INDEX idx_reservations_expiry   ON "#{schema}".reservations (expires_at) WHERE released_at IS NULL;
+        SQL
+      end
+
+      # ─── 005 create_kiosk_device_authorizations ───────────────────────
+
+      # RFC 8628 Device Authorization Grant state machine table. One row
+      # per `kiosk login` flow: created on /oauth/device_authorization,
+      # mutated by /oauth/device/verify (approve/deny), consumed by
+      # /oauth/token (device_code grant). See spec §6.5 + §6.7.
+      #
+      # device_code_hash carries SHA-256 of the actual device_code; the
+      # plain code lives only in the response body to the initiating
+      # client and is never persisted server-side. user_code is the
+      # human-displayable short token (Crockford alphabet, 8 chars,
+      # XXXX-XXXX format).
+      def device_authorizations_sql(schema: nil, user_id_type: nil)
+        schema      ||= Kiosk.configuration.schema
+        user_id_type ||= Kiosk.configuration.user_id_type
+        col_type = user_id_cast(user_id_type)
+
+        <<~SQL.strip
+          CREATE TABLE "#{schema}".device_authorizations (
+            id              uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+            device_code_hash bytea NOT NULL,
+            user_code        text  NOT NULL,
+            client_id        text  NOT NULL,
+            requested_role   text,
+            status           text  NOT NULL,
+            user_id          #{col_type},
+            expires_at       timestamptz NOT NULL,
+            consumed_at      timestamptz,
+            created_at       timestamptz NOT NULL DEFAULT now(),
+            CONSTRAINT device_authorizations_status_check
+              CHECK (status IN ('pending', 'approved', 'denied', 'consumed', 'expired'))
+          );
+          CREATE UNIQUE INDEX idx_device_authorizations_code_hash
+            ON "#{schema}".device_authorizations (device_code_hash);
+          -- Only `pending` rows need a unique user_code; approved/consumed
+          -- rows may share codes from past flows without collision.
+          CREATE UNIQUE INDEX idx_device_authorizations_user_code_pending
+            ON "#{schema}".device_authorizations (user_code)
+            WHERE status = 'pending';
+          CREATE INDEX idx_device_authorizations_expiry
+            ON "#{schema}".device_authorizations (expires_at)
+            WHERE status IN ('pending', 'approved');
         SQL
       end
 

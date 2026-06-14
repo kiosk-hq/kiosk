@@ -43,6 +43,21 @@ All notable changes follow [Keep a Changelog](https://keepachangelog.com/en/1.1.
 - **JWKS endpoint controller** (within Unreleased; third piece of the §6.7 OAuth surface):
   - `Kiosk::Server::JwksController` — `GET <mount>/.well-known/jwks.json`. Serves `Kiosk::Server::Jwks.build(keys: [Kiosk.configuration.signing_key])`. Conditionally defined (only when `ActionController::API` is loaded). Adds Kiosk response headers via `Headers.add_to`.
 
+- **M3 — Install generator extended for migration 005** (within Unreleased):
+  - `bin/rails g kiosk:install` now produces five migrations (was four). Added template `create_kiosk_device_authorizations.rb.tt` calling `SchemaDefinitions.device_authorizations_sql` so the host app gets the §6.7 OAuth state-machine table out of the box.
+  - Generator spec extended to assert 5-migration count + new `005 create_kiosk_device_authorizations` context (SQL invocation + #down DROP).
+
+- **M3 — `Kiosk::Server::TestExecutor`** (within Unreleased; closes the journey-test infrastructure stream):
+  - Pure-Ruby executor satisfying the `Kiosk::TestHelpers::Journey` contract (defined in `kiosk-test-support`). Bridges the rspec/minitest matchers to a real ActiveRecord+Postgres connection so providers can write journey tests against actual RLS policies.
+  - `with_identity(identity)` opens an AR transaction, sets the four canonical GUCs via `SessionContext`, yields, **ROLLS BACK unconditionally** — tests stay hermetic across runs. Block return value preserved; exceptions re-raised after rollback. Custom `RollbackMarker` works with both AR (which catches it as a transaction-abort signal) and connection doubles.
+  - `query(sql)` enforces default-deny (raises `NoScopeError` outside any `with_identity`), returns rows with symbolised keys, translates Postgres RLS errors (`row-level security`, `violates row-level`, `permission denied for table`) to `Kiosk::TestHelpers::Errors::RLSDenied`.
+  - `run_action(name, args)` looks up via `Kiosk::Server::Actions`, calls the registered block with current identity.
+  - `pay_action(name, args)` raises `NotImplementedError` (lands with `kiosk-pay-*` in M4).
+  - `seed(table, attrs, count:)` bulk-inserts through `system_connection` (RLS-bypass connection the host configures separately); quotes column/table identifiers and values defensively.
+  - **Not autoloaded by `require "kiosk/server"`** — test-time infrastructure. Users explicitly `require "kiosk/server/test_executor"` in their `spec_helper.rb` / `test_helper.rb`, then wire `Kiosk::TestHelpers.executor = Kiosk::Server::TestExecutor.new`.
+  - Adds `kiosk-test-support` as a development dependency (for error class definitions). Host apps using TestExecutor will have it loaded transitively via `kiosk-rls-rspec` / `kiosk-rls-minitest`.
+  - 27 new test examples cover scope enforcement, identity propagation, hermetic rollback semantics, RLS-error translation, action invocation, seed quoting + value rendering. Full kiosk-server suite: 280 examples, 0 failures (was 251 — added 29).
+
 - **Device Authorization Grant — Sub-slices 4+5 of 5: CLI login + e2e wire** (within Unreleased; closes the §6.7 OAuth Device Grant family):
   - `kiosk-cli` ships `kiosk <host> login` — RFC 8628 client. Initiates /oauth/device_authorization, displays user_code + verification URL, optionally auto-opens browser (`open` / `xdg-open`), polls /oauth/token at server interval with `slow_down` backoff, persists bearer to ~/.kiosk/credentials (chmod 0600) on success.
   - E2e extended (66 total assertions, +5 for the CLI login flow): runs `kiosk <SERVER_URL> login` in background with isolated HOME, captures the user_code from CLI stdout, simulates user approval via the helper-backed test fixture, waits for CLI to finish, asserts exit 0 + token persisted + persisted token successfully authenticates a follow-up /kiosk/exec call.

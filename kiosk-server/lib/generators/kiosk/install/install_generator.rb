@@ -17,6 +17,7 @@ module Kiosk
     #   - db/migrate/<ts+1>_create_kiosk_identity_tables.rb
     #   - db/migrate/<ts+2>_create_kiosk_actions_log.rb
     #   - db/migrate/<ts+3>_create_kiosk_reservations.rb
+    #   - db/migrate/<ts+4>_create_kiosk_device_authorizations.rb
     #
     # Each migration file is a thin wrapper that calls into
     # {Kiosk::Server::SchemaDefinitions} at host-app runtime, so the SQL
@@ -34,7 +35,7 @@ module Kiosk
 
       source_root File.expand_path("templates", __dir__)
 
-      desc "Generate Kiosk initializer and the four base migrations (001-004)."
+      desc "Generate Kiosk initializer and the five base migrations (001-005)."
 
       class_option :user_table,    type: :string, default: "users",
                                    desc: "Provider's user table name"
@@ -81,6 +82,11 @@ module Kiosk
       def create_reservations_migration
         migration_template "create_kiosk_reservations.rb.tt",
                            "db/migrate/create_kiosk_reservations.rb"
+      end
+
+      def create_device_authorizations_migration
+        migration_template "create_kiosk_device_authorizations.rb.tt",
+                           "db/migrate/create_kiosk_device_authorizations.rb"
       end
     end
   end

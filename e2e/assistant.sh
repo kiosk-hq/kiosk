@@ -311,6 +311,86 @@ else
   assert "cli: no token → exit 3"          "$rc" "3"
 
   set -e
+
+  # ─── kiosk login (full Device Grant flow via CLI) ─────────────────────
+  #
+  # End-to-end exercise of the marquee `kiosk login` flow:
+  #   1) CLI invokes /oauth/device_authorization, prints user_code
+  #   2) test harness reads user_code from CLI's stdout
+  #   3) test harness POSTs the /_test/approve fixture (simulates the
+  #      human typing code at /oauth/device/verify and clicking Allow)
+  #   4) CLI's next poll receives the JWT
+  #   5) CLI writes ~/.kiosk/credentials with the token
+  #   6) CLI exits 0
+  #   7) test asserts the persisted token works for /kiosk/exec
+
+  printf "\n\033[1m=== kiosk login (Device Grant CLI flow) ===\033[0m\n"
+
+  LOGIN_HOME=$(mktemp -d)
+  LOGIN_LOG=$(mktemp)
+
+  # CLI runs in background with isolated HOME so the host's real
+  # ~/.kiosk/credentials is untouched. KIOSK_NO_BROWSER skips the
+  # `open` / `xdg-open` auto-launch.
+  (
+    HOME="$LOGIN_HOME" \
+      KIOSK_NO_BROWSER=1 \
+      "$KIOSK_BIN" "$SERVER_URL" login >"$LOGIN_LOG" 2>&1
+    echo $? >"$LOGIN_LOG.rc"
+  ) &
+  LOGIN_PID=$!
+
+  # Wait for the CLI to emit the user_code (XXXX-XXXX shape).
+  CAPTURED_CODE=""
+  for _ in $(seq 1 30); do
+    if [ -s "$LOGIN_LOG" ]; then
+      CAPTURED_CODE=$(grep -oE '[A-Z0-9]{4}-[A-Z0-9]{4}' "$LOGIN_LOG" | head -1 || true)
+      [ -n "$CAPTURED_CODE" ] && break
+    fi
+    sleep 0.5
+  done
+
+  assert "login: CLI emitted user_code" \
+    "$(echo "${CAPTURED_CODE:-}" | grep -cE '^[A-Z0-9]{4}-[A-Z0-9]{4}$' | tr -d ' ')" "1"
+
+  # Simulate user approval at /oauth/device/verify.
+  approve_resp=$(curl -sS -X POST "$SERVER_URL/kiosk/_test/device_authorization/verify" \
+    -H "Content-Type: application/x-www-form-urlencoded" \
+    --data-urlencode "decision=approve" \
+    --data-urlencode "user_code=$CAPTURED_CODE" \
+    --data-urlencode "user_id=$ALICE")
+  assert "login: approval recorded" "$(echo "$approve_resp" | jq -r '.status')" "approved"
+
+  # Wait for the CLI to notice the approval and finish (≤ poll-interval+1).
+  for _ in $(seq 1 30); do
+    kill -0 "$LOGIN_PID" 2>/dev/null || break
+    sleep 1
+  done
+
+  if kill -0 "$LOGIN_PID" 2>/dev/null; then
+    kill "$LOGIN_PID" 2>/dev/null || true
+    fail_login="CLI did not finish within 30s; killed"
+    LOGIN_RC=999
+  else
+    wait "$LOGIN_PID" 2>/dev/null || true
+    LOGIN_RC=$(cat "$LOGIN_LOG.rc" 2>/dev/null || echo "?")
+  fi
+
+  assert "login: CLI exit 0"               "$LOGIN_RC" "0"
+  assert "login: token persisted to ~/.kiosk/credentials" \
+    "$(jq -r --arg h "$SERVER_URL" '.[$h].token != null and (.[$h].token | length > 0)' \
+        "$LOGIN_HOME/.kiosk/credentials" 2>/dev/null)" "true"
+
+  # Verify the persisted token actually works against /kiosk/exec.
+  PERSISTED_TOKEN=$(jq -r --arg h "$SERVER_URL" '.[$h].token' "$LOGIN_HOME/.kiosk/credentials")
+  exec_with_persisted=$(curl -sS -X POST "$SERVER_URL/kiosk/exec" \
+    -H "Authorization: Bearer $PERSISTED_TOKEN" \
+    -H "Content-Type: application/json" \
+    -d '{"command":"sql","body":{"sql":"SELECT 1 AS one"}}')
+  assert "login: persisted token authenticates /kiosk/exec" \
+    "$(echo "$exec_with_persisted" | jq -r '.ok')" "true"
+
+  rm -rf "$LOGIN_HOME" "$LOGIN_LOG" "$LOGIN_LOG.rc"
 fi
 
 # ─── summary ────────────────────────────────────────────────────────────

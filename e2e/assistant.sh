@@ -155,6 +155,92 @@ assert "jwks: e (exponent) present"    "$(echo "$jwks" | jq -r '.keys[0].e | len
 assert "jwks: no private d field"      "$(echo "$jwks" | jq -r '.keys[0] | has("d")')"      "false"
 assert "jwks: no private p field"      "$(echo "$jwks" | jq -r '.keys[0] | has("p")')"      "false"
 
+# ─── OAuth 2.1 Device Authorization Grant (RFC 8628) ───────────────────
+#
+# Full polling-flow exercise:
+#   1) client POSTs /oauth/device_authorization → gets device_code + user_code
+#   2) client polls /oauth/token while pending → authorization_pending
+#   3) test fixture simulates user approval (real flow uses verify HTML form)
+#   4) client polls again → access_token (JWT)
+#   5) JWT used against /kiosk/exec → ExecController authenticates via the
+#      JWT-aware composite IdP, sql call succeeds with the JWT's `sub` user
+
+printf "\n\033[1m=== oauth device_authorization (RFC 8628) ===\033[0m\n"
+
+# Step 1 — initiate device authorization.
+da_resp=$(curl -sS -X POST "$SERVER_URL/kiosk/oauth/device_authorization" \
+  -H "Content-Type: application/x-www-form-urlencoded" \
+  --data-urlencode "client_id=kiosk-cli-e2e" \
+  --data-urlencode "role=customer")
+
+DEVICE_CODE=$(echo "$da_resp" | jq -r '.device_code')
+USER_CODE=$(echo "$da_resp"   | jq -r '.user_code')
+
+assert "device_authorization: device_code present"      "$(echo "$da_resp" | jq -r '.device_code | length > 0')"      "true"
+assert "device_authorization: user_code XXXX-XXXX form" "$(echo "$USER_CODE" | grep -cE '^[A-Z0-9]{4}-[A-Z0-9]{4}$' | tr -d ' ')" "1"
+assert "device_authorization: verification_uri"         "$(echo "$da_resp" | jq -r '.verification_uri')"                "$SERVER_URL/kiosk/oauth/device/verify"
+assert "device_authorization: verification_uri_complete contains code" \
+                                                        "$(echo "$da_resp" | jq -r '.verification_uri_complete')"       "$SERVER_URL/kiosk/oauth/device/verify?user_code=$USER_CODE"
+assert "device_authorization: expires_in=900"           "$(echo "$da_resp" | jq -r '.expires_in')"                      "900"
+assert "device_authorization: interval=5"               "$(echo "$da_resp" | jq -r '.interval')"                        "5"
+
+# Step 2 — poll while pending.
+poll1=$(curl -sS -X POST "$SERVER_URL/kiosk/oauth/token" \
+  -H "Content-Type: application/x-www-form-urlencoded" \
+  --data-urlencode "grant_type=urn:ietf:params:oauth:grant-type:device_code" \
+  --data-urlencode "device_code=$DEVICE_CODE")
+
+assert "token poll (pending): error=authorization_pending" "$(echo "$poll1" | jq -r '.error')" "authorization_pending"
+
+# Step 3 — simulate user approval via test fixture.
+approve=$(curl -sS -X POST "$SERVER_URL/kiosk/_test/device_authorization/approve" \
+  -H "Content-Type: application/x-www-form-urlencoded" \
+  --data-urlencode "user_code=$USER_CODE" \
+  --data-urlencode "user_id=$ALICE")
+
+assert "test fixture: approval recorded"                "$(echo "$approve" | jq -r '.status')" "approved"
+
+# Step 4 — poll after approval → get the JWT.
+poll2=$(curl -sS -X POST "$SERVER_URL/kiosk/oauth/token" \
+  -H "Content-Type: application/x-www-form-urlencoded" \
+  --data-urlencode "grant_type=urn:ietf:params:oauth:grant-type:device_code" \
+  --data-urlencode "device_code=$DEVICE_CODE")
+
+ACCESS_TOKEN=$(echo "$poll2" | jq -r '.access_token')
+assert "token poll (approved): token_type=Bearer"       "$(echo "$poll2" | jq -r '.token_type')"  "Bearer"
+assert "token poll (approved): expires_in=3600"         "$(echo "$poll2" | jq -r '.expires_in')"  "3600"
+assert "token poll (approved): scope=customer"          "$(echo "$poll2" | jq -r '.scope')"       "customer"
+assert "token poll (approved): JWT compact serialised"  "$(echo "$ACCESS_TOKEN" | awk -F. '{print NF-1}')" "2"
+
+# Step 5 — second poll of same device_code returns invalid_grant (consumed).
+poll3=$(curl -sS -X POST "$SERVER_URL/kiosk/oauth/token" \
+  -H "Content-Type: application/x-www-form-urlencoded" \
+  --data-urlencode "grant_type=urn:ietf:params:oauth:grant-type:device_code" \
+  --data-urlencode "device_code=$DEVICE_CODE")
+assert "token poll (replay): error=invalid_grant"       "$(echo "$poll3" | jq -r '.error')"       "invalid_grant"
+
+# Step 6 — use the JWT against /kiosk/exec.
+exec_with_jwt=$(curl -sS -X POST "$SERVER_URL/kiosk/exec" \
+  -H "Authorization: Bearer $ACCESS_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{"command":"sql","body":{"sql":"SELECT id, name FROM salons ORDER BY id"}}')
+assert "exec via OAuth JWT: ok=true"                    "$(echo "$exec_with_jwt" | jq -r '.ok')"             "true"
+assert "exec via OAuth JWT: returns rows"               "$(echo "$exec_with_jwt" | jq -r '.kind')"           "rows"
+assert "exec via OAuth JWT: salon present"              "$(echo "$exec_with_jwt" | jq -r '.rows[0].name')"   "Sweepy on Park"
+
+# Step 7 — bad grant_type → unsupported_grant_type.
+bad_grant=$(curl -sS -X POST "$SERVER_URL/kiosk/oauth/token" \
+  -H "Content-Type: application/x-www-form-urlencoded" \
+  --data-urlencode "grant_type=client_credentials" \
+  --data-urlencode "client_id=x")
+assert "token unsupported grant_type"                   "$(echo "$bad_grant" | jq -r '.error')"   "unsupported_grant_type"
+
+# Step 8 — missing client_id → invalid_request.
+no_client=$(curl -sS -X POST "$SERVER_URL/kiosk/oauth/device_authorization" \
+  -H "Content-Type: application/x-www-form-urlencoded" \
+  --data-urlencode "role=customer")
+assert "device_authorization no client_id: invalid_request" "$(echo "$no_client" | jq -r '.error')" "invalid_request"
+
 # ─── kiosk-cli end-to-end ───────────────────────────────────────────────
 #
 # Re-run a subset of the assertions above through the POSIX shell `kiosk`

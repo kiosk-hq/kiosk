@@ -5,6 +5,7 @@
 # the demo: synthetic users (uuid), stub IdP, one Action registered.
 
 require Rails.root.join("lib/stub_idp")
+require Rails.root.join("lib/jwt_or_stub_idp")
 
 # Inject the RLS DSL into ActiveRecord::Migration so that migrations can
 # call `enable_rls_on TABLE do ... end` directly. The kiosk-rls README
@@ -31,8 +32,11 @@ Kiosk.configure do |c|
   c.roles  = %i[customer]
   c.owner  = { name: "Sweepy E2E Demo", support: "demo@kiosk.tech" }
 
-  c.agent_idp = StubIdp.new
-  # user_idp not needed — StubIdp handles both agent and human channels.
+  # JwtOrStubIdp tries Kiosk-issued JWTs (Device-Grant output) first,
+  # then falls back to StubIdp's bespoke `agent:u-…:a-…:r-…` shape.
+  # One endpoint authenticates both for the e2e suite.
+  c.agent_idp = JwtOrStubIdp.new(stub: StubIdp.new)
+  # user_idp not needed — composite handles both channels.
 end
 
 # Register the demo Action. In production, providers use the full

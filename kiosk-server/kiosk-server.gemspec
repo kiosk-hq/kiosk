@@ -45,4 +45,9 @@ Gem::Specification.new do |spec|
   # Host apps already have Rails loaded; we only require it for the
   # install-generator unit tests.
   spec.add_development_dependency "railties", "~> 8.1"
+  # TestExecutor (lib/kiosk/server/test_executor.rb) implements the
+  # Kiosk::TestHelpers::Journey contract; we need the error classes
+  # at test time. Host apps depending on TestExecutor will have
+  # kiosk-test-support loaded transitively via kiosk-rls-{rspec,minitest}.
+  spec.add_development_dependency "kiosk-test-support", "~> 0.0"
 end

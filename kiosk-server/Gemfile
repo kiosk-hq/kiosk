@@ -3,5 +3,6 @@ source "https://rubygems.org"
 gemspec
 
 # Local-development overrides — sibling gems haven't shipped to RubyGems yet.
-gem "kiosk-core", path: "../kiosk-core"
-gem "kiosk-rls",  path: "../kiosk-rls"
+gem "kiosk-core",         path: "../kiosk-core"
+gem "kiosk-rls",          path: "../kiosk-rls"
+gem "kiosk-test-support", path: "../kiosk-test-support"

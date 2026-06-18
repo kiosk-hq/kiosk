@@ -8,7 +8,7 @@ RSpec.describe Kiosk::Server::DeviceCodeGrant do
 
   before do
     Kiosk.configure do |c|
-      c.issuer                      = "https://sweepy.example/kiosk"
+      c.issuer                      = "https://combette.example/kiosk"
       c.signing_key                 = key
       c.device_authorization_store  = store
     end
@@ -116,7 +116,7 @@ RSpec.describe Kiosk::Server::DeviceCodeGrant do
         claims = Kiosk::Server::JwtIssuer.verify(
           token:    result[:access_token],
           jwks:     key,
-          audience: "https://sweepy.example/kiosk",
+          audience: "https://combette.example/kiosk",
         )
         expect(claims).to include(
           sub:       user_id,
@@ -136,7 +136,7 @@ RSpec.describe Kiosk::Server::DeviceCodeGrant do
         claims = Kiosk::Server::JwtIssuer.verify(
           token:    result[:access_token],
           jwks:     key,
-          audience: "https://sweepy.example/kiosk",
+          audience: "https://combette.example/kiosk",
         )
         expect(claims).not_to include(:role)
       end

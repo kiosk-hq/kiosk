@@ -32,7 +32,7 @@ kiosk --version
 kiosk --help
 ```
 
-`<host>` is the origin (`https://sweepy.example`). The CLI discovers the actual `/exec` endpoint via well-known.
+`<host>` is the origin (`https://combette.example`). The CLI discovers the actual `/exec` endpoint via well-known.
 
 ## Output
 
@@ -55,9 +55,9 @@ Per [design spec §5.2](../docs/superpowers/specs/2026-05-04-kiosk-design.md):
 
 ## Token resolution
 
-1. `KIOSK_TOKEN_<HOST_UPPER>` env var, e.g. `KIOSK_TOKEN_SWEEPY_EXAMPLE`
+1. `KIOSK_TOKEN_<HOST_UPPER>` env var, e.g. `KIOSK_TOKEN_COMBETTE_EXAMPLE`
 2. `KIOSK_TOKEN` env var (any host)
-3. `~/.kiosk/credentials` JSON: `{"https://sweepy.example": {"token": "..."}}`
+3. `~/.kiosk/credentials` JSON: `{"https://combette.example": {"token": "..."}}`
 
 OAuth 2.1 device-grant `kiosk <host> login` lands in M2 follow-up; until then, populate one of the above.
 

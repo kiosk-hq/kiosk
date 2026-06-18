@@ -1,6 +1,6 @@
 # frozen_string_literal: true
 
-# Kiosk-demo (Sweepy-shape) configuration. Concrete values for the
+# Kiosk-demo (Combette-shape) configuration. Concrete values for the
 # salon-booking reference shape: uuid users, JWT-or-stub IdP, one
 # Action registered (book_appointment).
 
@@ -30,7 +30,7 @@ Kiosk.configure do |c|
 
   c.issuer = ENV.fetch("KIOSK_ISSUER", "http://localhost:3001")
   c.roles  = %i[customer]
-  c.owner  = { name: "Sweepy on Park (Kiosk demo)", support: "demo@kiosk.tech" }
+  c.owner  = { name: "Combette on Park (Kiosk demo)", support: "demo@kiosk.tech" }
 
   # JwtOrStubIdp tries Kiosk-issued JWTs (Device-Grant output) first,
   # then falls back to StubIdp's bespoke `agent:u-…:a-…:r-…` shape.

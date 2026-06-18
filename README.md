@@ -18,7 +18,7 @@ Apache-2.0 monorepo for [Kiosk](https://kiosk.tech) — the framework that turns
 | `kiosk-credentials-all` | Multi-region KYC umbrella | planned (M6) |
 | `kiosk-cli` | POSIX-shell CLI binary (`bin/kiosk`) + `install.sh` | alpha (M2) |
 | `kiosk-website` | Landing + docs site source (Astro) | planned (M5-M6) |
-| `kiosk-demo-saas-booking` | Sweepy reference demo — `rake demo` shows the full wire surface in ~30s | alpha (M3) |
+| `kiosk-demo-saas-booking` | Combette reference demo — `rake demo` shows the full wire surface in ~30s | alpha (M3) |
 
 ## Contributing
 

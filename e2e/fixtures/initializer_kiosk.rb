@@ -30,7 +30,7 @@ Kiosk.configure do |c|
 
   c.issuer = ENV.fetch("KIOSK_ISSUER", "http://localhost:3001")
   c.roles  = %i[customer]
-  c.owner  = { name: "Sweepy E2E Demo", support: "demo@kiosk.tech" }
+  c.owner  = { name: "Combette E2E Demo", support: "demo@kiosk.tech" }
 
   # JwtOrStubIdp tries Kiosk-issued JWTs (Device-Grant output) first,
   # then falls back to StubIdp's bespoke `agent:u-…:a-…:r-…` shape.

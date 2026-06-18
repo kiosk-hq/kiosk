@@ -1,6 +1,6 @@
 # frozen_string_literal: true
 
-# Demo-specific schema: a SaaS-booking-shape provider (Sweepy per spec §2.6).
+# Demo-specific schema: a SaaS-booking-shape provider (Combette per spec §2.6).
 #
 # `salons` is open-read (any authenticated principal browses).
 # `appointments` is owner-scoped — RLS keys off `kiosk.current_user_id()`.

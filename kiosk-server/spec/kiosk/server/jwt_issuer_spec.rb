@@ -12,7 +12,7 @@ RSpec.describe Kiosk::Server::JwtIssuer do
   let(:key)        { Kiosk::Server::SigningKey.new(@rsa1) }
   let(:other_key)  { Kiosk::Server::SigningKey.new(@rsa2) }
   let(:jwks)       { Kiosk::Server::Jwks.build(keys: [key]) }
-  let(:issuer)     { "https://sweepy.example/kiosk" }
+  let(:issuer)     { "https://combette.example/kiosk" }
   let(:audience)   { "https://claude.ai/agent/alice" }
 
   before do

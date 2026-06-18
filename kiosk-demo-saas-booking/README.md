@@ -1,4 +1,4 @@
-# Sweepy — Kiosk reference demo
+# Combette — Kiosk reference demo
 
 A salon-booking SaaS, Kiosk-enabled. Demonstrates:
 
@@ -9,7 +9,7 @@ A salon-booking SaaS, Kiosk-enabled. Demonstrates:
 - OAuth 2.1 Device Authorization Grant (RFC 8628) — the `kiosk login` flow
 - A `book_appointment` Action
 
-Sweepy is the canonical reference shape for personal-services SaaS — barbershops, restaurants, gyms, clinics. Same patterns apply.
+Combette is the canonical reference shape for personal-services SaaS — barbershops, restaurants, gyms, clinics. Same patterns apply.
 
 ## Run the demo
 
@@ -45,7 +45,7 @@ After the walkthrough finishes, the server is torn down cleanly. Server logs are
 
 | Path | What's there |
 |---|---|
-| `db/migrate/` | Generator-produced kiosk migrations + the Sweepy schema |
+| `db/migrate/` | Generator-produced kiosk migrations + the Combette schema |
 | `app/models/{user,salon,appointment}.rb` | Three trivial AR models |
 | `config/initializers/kiosk.rb` | `Kiosk.configure` block + the `book_appointment` Action |
 | `lib/stub_idp.rb` | Bespoke synthetic-token IdP for the demo's hard-coded Alice + Bob |

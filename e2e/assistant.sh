@@ -79,7 +79,7 @@ r=$(exec_call "$ALICE_AGENT_TOKEN" '{"command":"sql","body":{"sql":"SELECT id, n
 assert "ok: true"                  "$(echo "$r" | jq -r '.ok')"                    "true"
 assert "kind: rows"                "$(echo "$r" | jq -r '.kind')"                  "rows"
 assert "exactly 1 salon"           "$(echo "$r" | jq -r '.rows | length')"         "1"
-assert "salon name is Sweepy"      "$(echo "$r" | jq -r '.rows[0].name')"          "Sweepy on Park"
+assert "salon name is Combette"      "$(echo "$r" | jq -r '.rows[0].name')"          "Combette on Park"
 
 # ─── run verb (book_appointment Action) ─────────────────────────────────
 
@@ -226,7 +226,7 @@ exec_with_jwt=$(curl -sS -X POST "$SERVER_URL/kiosk/exec" \
   -d '{"command":"sql","body":{"sql":"SELECT id, name FROM salons ORDER BY id"}}')
 assert "exec via OAuth JWT: ok=true"                    "$(echo "$exec_with_jwt" | jq -r '.ok')"             "true"
 assert "exec via OAuth JWT: returns rows"               "$(echo "$exec_with_jwt" | jq -r '.kind')"           "rows"
-assert "exec via OAuth JWT: salon present"              "$(echo "$exec_with_jwt" | jq -r '.rows[0].name')"   "Sweepy on Park"
+assert "exec via OAuth JWT: salon present"              "$(echo "$exec_with_jwt" | jq -r '.rows[0].name')"   "Combette on Park"
 
 # Step 7 — bad grant_type → unsupported_grant_type.
 bad_grant=$(curl -sS -X POST "$SERVER_URL/kiosk/oauth/token" \
@@ -270,7 +270,7 @@ else
   r=$("$KIOSK_BIN" "$SERVER_URL" sql "SELECT id, name FROM salons ORDER BY id")
   assert "cli: sql ok=true"                "$(echo "$r" | jq -r '.ok')"                "true"
   assert "cli: sql kind=rows"              "$(echo "$r" | jq -r '.kind')"              "rows"
-  assert "cli: sql salon name"             "$(echo "$r" | jq -r '.rows[0].name')"      "Sweepy on Park"
+  assert "cli: sql salon name"             "$(echo "$r" | jq -r '.rows[0].name')"      "Combette on Park"
 
   # run verb via the CLI with k=v args
   salon_id=$(echo "$r" | jq -r '.rows[0].id')

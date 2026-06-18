@@ -10,6 +10,6 @@ BOB_ID   = "00000000-0000-0000-0000-000000000002"
 User.find_or_create_by!(id: ALICE_ID)
 User.find_or_create_by!(id: BOB_ID)
 
-Salon.find_or_create_by!(name: "Sweepy on Park")
+Salon.find_or_create_by!(name: "Combette on Park")
 
 puts "Seeded: 2 users (#{ALICE_ID}, #{BOB_ID}), 1 salon (#{Salon.first.name})"

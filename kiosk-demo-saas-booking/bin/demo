@@ -1,0 +1,175 @@
+#!/usr/bin/env bash
+# Kiosk demo walkthrough — a curl-driven tour of the wire surface.
+#
+# Run via `rake demo` (handles DB setup + invokes this script), or
+# directly when the demo DB is already prepared.
+
+set -euo pipefail
+
+PORT="${KIOSK_DEMO_PORT:-3001}"
+SERVER_URL="http://127.0.0.1:$PORT"
+ALICE="00000000-0000-0000-0000-000000000001"
+BOB="00000000-0000-0000-0000-000000000002"
+
+ALICE_TOKEN="agent:u-$ALICE:a-alice-claude:r-customer"
+BOB_TOKEN="agent:u-$BOB:a-bob-chatgpt:r-customer"
+
+heading() { printf "\n\033[1;36m── %s ──\033[0m\n" "$1"; }
+step()    { printf "\n  \033[1;33m▶\033[0m %s\n" "$1"; }
+say()     { printf "  %s\n" "$1"; }
+
+cleanup() {
+  if [[ -n "${SERVER_PID:-}" ]]; then
+    kill "$SERVER_PID" 2>/dev/null || true
+    wait "$SERVER_PID" 2>/dev/null || true
+  fi
+}
+trap cleanup EXIT
+
+require_tool() {
+  command -v "$1" >/dev/null 2>&1 \
+    || { echo "missing: $1 — install it then re-run" >&2; exit 1; }
+}
+require_tool curl
+require_tool jq
+
+# ─── boot ────────────────────────────────────────────────────────────
+
+heading "Starting Sweepy (the demo provider) on port $PORT"
+KIOSK_ISSUER="$SERVER_URL" \
+  bundle exec rails s -p "$PORT" -b 127.0.0.1 -e development \
+  >/tmp/kiosk-demo.log 2>&1 &
+SERVER_PID=$!
+
+for _ in $(seq 1 30); do
+  if curl -sf "$SERVER_URL/.well-known/kiosk.json" >/dev/null 2>&1; then
+    say "✓ Server up at $SERVER_URL"
+    break
+  fi
+  sleep 1
+done
+
+curl -sf "$SERVER_URL/.well-known/kiosk.json" >/dev/null || {
+  echo "server did not become ready — see /tmp/kiosk-demo.log" >&2
+  exit 1
+}
+
+# ─── discovery ───────────────────────────────────────────────────────
+
+heading "Discovery: what is this provider?"
+
+step "GET /.well-known/kiosk.json"
+curl -sf "$SERVER_URL/.well-known/kiosk.json" \
+  | jq '.kiosk | {version, endpoint, issuer, capabilities, owner}'
+
+step "GET <endpoint>/.well-known/jwks.json — public verification keys"
+curl -sf "$SERVER_URL/kiosk/.well-known/jwks.json" \
+  | jq '.keys[0] | {kty, use, alg, kid}'
+
+# ─── authenticated SQL ───────────────────────────────────────────────
+
+heading "Alice's agent reads data through RLS"
+
+step "List salons (publicly visible)"
+curl -sS -X POST "$SERVER_URL/kiosk/exec" \
+  -H "Authorization: Bearer $ALICE_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{"command":"sql","body":{"sql":"SELECT id, name FROM salons"}}' \
+  | jq '.rows'
+
+step "Count appointments visible to Alice (initially 0)"
+curl -sS -X POST "$SERVER_URL/kiosk/exec" \
+  -H "Authorization: Bearer $ALICE_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{"command":"sql","body":{"sql":"SELECT COUNT(*)::int AS n FROM appointments"}}' \
+  | jq '.rows'
+
+# ─── run an Action ───────────────────────────────────────────────────
+
+heading "Alice's agent books an appointment via Action"
+
+SALON_ID=$(curl -sS -X POST "$SERVER_URL/kiosk/exec" \
+  -H "Authorization: Bearer $ALICE_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{"command":"sql","body":{"sql":"SELECT id FROM salons LIMIT 1"}}' \
+  | jq -r '.rows[0].id')
+
+step "run book_appointment for salon $SALON_ID"
+curl -sS -X POST "$SERVER_URL/kiosk/exec" \
+  -H "Authorization: Bearer $ALICE_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d "{\"command\":\"run\",\"body\":{\"name\":\"book_appointment\",\"salon_id\":$SALON_ID,\"slot\":\"2026-07-01T14:00:00Z\"}}" \
+  | jq '.value'
+
+# ─── RLS isolation ───────────────────────────────────────────────────
+
+heading "RLS isolation: Alice and Bob can only see their own"
+
+step "Alice sees her appointment"
+curl -sS -X POST "$SERVER_URL/kiosk/exec" \
+  -H "Authorization: Bearer $ALICE_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{"command":"sql","body":{"sql":"SELECT COUNT(*)::int AS n FROM appointments"}}' \
+  | jq '.rows'
+
+step "Bob sees 0 (same query, different identity)"
+curl -sS -X POST "$SERVER_URL/kiosk/exec" \
+  -H "Authorization: Bearer $BOB_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{"command":"sql","body":{"sql":"SELECT COUNT(*)::int AS n FROM appointments"}}' \
+  | jq '.rows'
+
+# ─── OAuth Device Grant ──────────────────────────────────────────────
+
+heading "OAuth 2.1 Device Authorization Grant (RFC 8628) — the real CLI flow"
+
+step "Initiate /oauth/device_authorization"
+DA=$(curl -sS -X POST "$SERVER_URL/kiosk/oauth/device_authorization" \
+  -H "Content-Type: application/x-www-form-urlencoded" \
+  --data-urlencode "client_id=demo-cli" \
+  --data-urlencode "role=customer")
+
+DEVICE_CODE=$(echo "$DA" | jq -r '.device_code')
+USER_CODE=$(echo "$DA"   | jq -r '.user_code')
+echo "$DA" | jq '. | {user_code, verification_uri, expires_in, interval}'
+
+say ""
+say "→ In a real flow: human opens verification_uri on phone, types user_code,"
+say "  clicks 'Approve' on the provider's branded consent page."
+
+step "Simulate user approval (fixture endpoint stands in for the consent UI)"
+curl -sS -X POST "$SERVER_URL/kiosk/_test/device_authorization/verify" \
+  -H "Content-Type: application/x-www-form-urlencoded" \
+  --data-urlencode "decision=approve" \
+  --data-urlencode "user_code=$USER_CODE" \
+  --data-urlencode "user_id=$ALICE" | jq
+
+step "Poll /oauth/token → CLI receives JWT bearer"
+TOKEN_RESP=$(curl -sS -X POST "$SERVER_URL/kiosk/oauth/token" \
+  -H "Content-Type: application/x-www-form-urlencoded" \
+  --data-urlencode "grant_type=urn:ietf:params:oauth:grant-type:device_code" \
+  --data-urlencode "device_code=$DEVICE_CODE")
+JWT=$(echo "$TOKEN_RESP" | jq -r '.access_token')
+echo "$TOKEN_RESP" | jq '. | {token_type, expires_in, scope}'
+say "JWT (truncated): ${JWT:0:72}…"
+
+step "Use the JWT against /kiosk/exec — same wire shape, OAuth-issued bearer"
+curl -sS -X POST "$SERVER_URL/kiosk/exec" \
+  -H "Authorization: Bearer $JWT" \
+  -H "Content-Type: application/json" \
+  -d '{"command":"sql","body":{"sql":"SELECT id, name FROM salons"}}' \
+  | jq '.rows'
+
+# ─── done ────────────────────────────────────────────────────────────
+
+heading "Demo complete"
+say "Server log:        /tmp/kiosk-demo.log"
+say "DB:                kiosk_demo_development"
+say ""
+say "Try it yourself:"
+say "  install the CLI:  curl -fsSL https://kiosk.tech/kiosk | sh"
+say "  query directly:   kiosk $SERVER_URL sql 'SELECT id, name FROM salons'"
+say "  real OAuth flow:  kiosk $SERVER_URL login"
+say ""
+say "Swap StubIdp for production-shape auth:"
+say "  replace lib/jwt_or_stub_idp.rb with kiosk-user-idp-devise (or your IdP)"

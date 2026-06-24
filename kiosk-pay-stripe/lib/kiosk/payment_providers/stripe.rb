@@ -18,6 +18,7 @@ module Kiosk
         @api_key             = api_key || ENV.fetch("STRIPE_SECRET_KEY", nil)
         @test_payment_method = test_payment_method
         require "stripe"
+        # PoC scope: this sets a PROCESS-GLOBAL Stripe key. Multiple adapter instances with different keys would clobber each other; a future fix uses per-request key options.
         ::Stripe.api_key = @api_key
       end
 
@@ -39,6 +40,7 @@ module Kiosk
         {
           psp_reference:        intent.id,
           settled_amount_cents: intent.amount_received,
+          # NOTE: intent.created is the PaymentIntent creation time — for this synchronous automatic-capture path it is the settlement time to within seconds. A future deferred/manual-capture flow must source the charge timestamp instead.
           settled_at:           Time.at(intent.created).utc,
         }
       end

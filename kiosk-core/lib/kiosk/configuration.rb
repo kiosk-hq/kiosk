@@ -46,15 +46,15 @@ module Kiosk
     attr_accessor :issuer
 
     def initialize
-      @user_model     = nil
-      @user_id_type   = :uuid
-      @user_id_column = :id
-      @user_idp       = nil
-      @agent_idp      = nil
+      @user_model       = nil
+      @user_id_type     = :uuid
+      @user_id_column   = :id
+      @user_idp         = nil
+      @agent_idp        = nil
       @payment_provider = nil
-      @guc_namespace  = GUC::DEFAULT_NAMESPACE
-      @roles          = []
-      @issuer         = nil
+      @guc_namespace    = GUC::DEFAULT_NAMESPACE
+      @roles            = []
+      @issuer           = nil
     end
 
     # Full GUC name for one of the four well-known suffix names.

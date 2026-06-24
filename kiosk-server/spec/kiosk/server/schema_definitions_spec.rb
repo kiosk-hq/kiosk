@@ -115,6 +115,24 @@ RSpec.describe Kiosk::Server::SchemaDefinitions do
     end
   end
 
+  describe ".mandates_sql" do
+    subject(:sql) { described_class.mandates_sql(schema: "kiosk", user_id_type: :uuid) }
+    it "creates the three mandate tables" do
+      expect(sql).to include('CREATE TABLE "kiosk".intent_mandates')
+      expect(sql).to include('CREATE TABLE "kiosk".cart_mandates')
+      expect(sql).to include('CREATE TABLE "kiosk".payment_mandates')
+    end
+    it "links cart→intent and payment→cart by FK" do
+      expect(sql).to include('REFERENCES "kiosk".intent_mandates(id)')
+      expect(sql).to include('REFERENCES "kiosk".cart_mandates(id)')
+    end
+    it "stores money as bigint cents and keeps raw JWS" do
+      expect(sql).to include("cap_amount_cents  bigint")
+      expect(sql).to include("settled_amount_cents bigint")
+      expect(sql.scan("raw_jws").size).to be >= 3
+    end
+  end
+
   describe ".user_id_cast" do
     it "maps :uuid to 'uuid'" do
       expect(described_class.user_id_cast(:uuid)).to eq("uuid")

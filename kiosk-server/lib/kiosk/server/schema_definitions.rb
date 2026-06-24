@@ -203,6 +203,66 @@ module Kiosk
         SQL
       end
 
+      # ─── 006 create_kiosk_mandates ─────────────────────────────────────
+
+      # AP2 mandate trail: `intent_mandates` (spending envelope signed by the
+      # user), `cart_mandates` (agent-assembled cart within the envelope),
+      # `payment_mandates` (PSP settlement receipt). Each row carries its
+      # original JWS so the chain is auditable end-to-end.
+      def mandates_sql(schema: nil, user_id_type: nil)
+        schema       ||= Kiosk.configuration.schema
+        user_id_type ||= Kiosk.configuration.user_id_type
+        col_type = user_id_cast(user_id_type)
+
+        <<~SQL.strip
+          CREATE TABLE "#{schema}".intent_mandates (
+            id                uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+            user_id           #{col_type} NOT NULL,
+            agent_id          uuid NOT NULL,
+            issuer            text NOT NULL,
+            scope             text NOT NULL,
+            cap_amount_cents  bigint NOT NULL,
+            currency          text NOT NULL,
+            expires_at        timestamptz NOT NULL,
+            created_at        timestamptz NOT NULL DEFAULT now(),
+            raw_jws           text NOT NULL
+          );
+          CREATE INDEX idx_intent_mandates_user_id  ON "#{schema}".intent_mandates (user_id);
+          CREATE INDEX idx_intent_mandates_agent_id ON "#{schema}".intent_mandates (agent_id);
+
+          CREATE TABLE "#{schema}".cart_mandates (
+            id                 uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+            intent_mandate_id  uuid NOT NULL REFERENCES "#{schema}".intent_mandates(id) ON DELETE CASCADE,
+            user_id            #{col_type} NOT NULL,
+            agent_id           uuid NOT NULL,
+            issuer             text NOT NULL,
+            line_items         jsonb NOT NULL,
+            total_amount_cents bigint NOT NULL,
+            currency           text NOT NULL,
+            expires_at         timestamptz NOT NULL,
+            created_at         timestamptz NOT NULL DEFAULT now(),
+            raw_jws            text NOT NULL
+          );
+          CREATE INDEX idx_cart_mandates_user_id ON "#{schema}".cart_mandates (user_id);
+          CREATE INDEX idx_cart_mandates_intent  ON "#{schema}".cart_mandates (intent_mandate_id);
+
+          CREATE TABLE "#{schema}".payment_mandates (
+            id                   uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+            cart_mandate_id      uuid NOT NULL REFERENCES "#{schema}".cart_mandates(id) ON DELETE CASCADE,
+            user_id              #{col_type} NOT NULL,
+            agent_id             uuid NOT NULL,
+            issuer               text NOT NULL,
+            psp_reference        text NOT NULL,
+            settled_amount_cents bigint NOT NULL,
+            currency             text NOT NULL,
+            settled_at           timestamptz NOT NULL,
+            raw_jws              text NOT NULL
+          );
+          CREATE INDEX idx_payment_mandates_user_id ON "#{schema}".payment_mandates (user_id);
+          CREATE INDEX idx_payment_mandates_cart    ON "#{schema}".payment_mandates (cart_mandate_id);
+        SQL
+      end
+
       # ─── helpers ───────────────────────────────────────────────────────
 
       def user_id_cast(user_id_type)

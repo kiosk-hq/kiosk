@@ -36,7 +36,7 @@ module Kiosk
 
       source_root File.expand_path("templates", __dir__)
 
-      desc "Generate Kiosk initializer and the six base migrations (001-006)."
+      desc "Generate Kiosk initializer and the seven base migrations (001-007)."
 
       class_option :user_table,    type: :string, default: "users",
                                    desc: "Provider's user table name"
@@ -93,6 +93,11 @@ module Kiosk
       def create_mandates_migration
         migration_template "create_kiosk_mandates.rb.tt",
                            "db/migrate/create_kiosk_mandates.rb"
+      end
+
+      def create_kyc_migration
+        migration_template "add_kyc_verified_at_to_kiosk_agents.rb.tt",
+                           "db/migrate/add_kyc_verified_at_to_kiosk_agents.rb"
       end
     end
   end

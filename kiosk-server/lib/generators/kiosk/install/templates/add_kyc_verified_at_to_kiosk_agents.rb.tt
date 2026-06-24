@@ -1,0 +1,15 @@
+# frozen_string_literal: true
+
+# Migration 007 — add kyc_verified_at to kiosk.agents.
+# A non-NULL value means the agent has submitted a valid KYC attestation.
+class AddKycVerifiedAtToKioskAgents < ActiveRecord::Migration[ActiveRecord::Migration.current_version]
+  def up
+    execute Kiosk::Server::SchemaDefinitions.kyc_verified_at_sql(
+      schema: <%= options[:schema].inspect %>,
+    )
+  end
+
+  def down
+    execute %(ALTER TABLE "<%= options[:schema] %>".agents DROP COLUMN IF EXISTS kyc_verified_at)
+  end
+end

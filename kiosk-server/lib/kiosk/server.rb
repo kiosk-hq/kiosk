@@ -28,6 +28,7 @@ require "kiosk/server/executor"
 require "kiosk/server/agent_identity_providers/default_agent_idp"
 require "kiosk/server/agent_registration"
 require "kiosk/server/proof_of_work"
+require "kiosk/server/kyc_verifier"
 require "kiosk/server/mandate_verifier"
 
 # Optional Rails engine — only defines itself if Rails::Engine is loaded.
@@ -41,6 +42,7 @@ require "kiosk/server/jwks_controller"
 require "kiosk/server/oauth_device_authorization_controller"
 require "kiosk/server/oauth_token_controller"
 require "kiosk/server/agents_registration_controller"
+require "kiosk/server/kyc_attestation_controller"
 
 module Kiosk
   module Server

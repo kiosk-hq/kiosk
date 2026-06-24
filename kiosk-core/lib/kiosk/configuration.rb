@@ -28,6 +28,11 @@ module Kiosk
     # Default nil here; `kiosk-server` defaults to `DefaultAgentIdp`.
     attr_accessor :agent_idp
 
+    # Payment PSP adapter instance — handles authorize / capture / refund of
+    # AP2 mandates (see {Kiosk::PaymentProviders::Base}). Default nil; the
+    # provider selects one per market (kiosk-pay-stripe, kiosk-pay-paddle, …).
+    attr_accessor :payment_provider
+
     # Postgres GUC namespace (see {Kiosk::GUC}). Default "app".
     attr_accessor :guc_namespace
 
@@ -46,6 +51,7 @@ module Kiosk
       @user_id_column = :id
       @user_idp       = nil
       @agent_idp      = nil
+      @payment_provider = nil
       @guc_namespace  = GUC::DEFAULT_NAMESPACE
       @roles          = []
       @issuer         = nil

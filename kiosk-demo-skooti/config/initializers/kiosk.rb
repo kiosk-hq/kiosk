@@ -110,13 +110,19 @@ Kiosk::Server::Actions.register("unlock") do |args|
     raise Kiosk::Server::Errors::BadRequest.new("missing field: reservation_id")
   end
 
-  # ── Gate 1: reservation belongs to the principal (RLS-scoped) ──────────
-  # The SELECT runs under the SET LOCAL GUCs from SessionContext, so RLS
-  # enforces user_id = kiosk.current_user_id(). A missing or foreign row
-  # returns nothing → 403.
+  # ── Gate 1: reservation belongs to the principal (explicit ownership) ──
+  # C1: AND user_id = kiosk.current_user_id() added explicitly so that a
+  # foreign reservation UUID returns nothing even if RLS is inactive.
+  # C3: require status = 'reserved' so a reservation already 'active' (ride
+  # in progress) is rejected here — re-unlock-during-a-ride is a future
+  # feature that needs a ride-session token.
   # The scooter_id FK is read server-side — the client cannot supply it.
   reservation = conn.execute(
-    "SELECT id, scooter_id FROM public.reservations WHERE id = #{conn.quote(reservation_id.to_s)}::uuid LIMIT 1"
+    "SELECT id, scooter_id FROM public.reservations " \
+    "WHERE id = #{conn.quote(reservation_id.to_s)}::uuid " \
+    "AND user_id = kiosk.current_user_id() " \
+    "AND status = 'reserved' " \
+    "LIMIT 1"
   ).first
   raise Kiosk::Server::Errors::Forbidden.new("reservation not found or not yours") if reservation.nil?
 
@@ -142,14 +148,23 @@ Kiosk::Server::Actions.register("unlock") do |args|
     raise Kiosk::Server::Errors::Forbidden.new("agent is not KYC-verified")
   end
 
-  # ── Gate 3: principal has a settled payment mandate ─────────────────────
-  paid = conn.execute(<<~SQL).first
-    SELECT 1 AS ok
-    FROM kiosk.payment_mandates
-    WHERE user_id = kiosk.current_user_id()
-    LIMIT 1
-  SQL
-  raise Kiosk::Server::Errors::Forbidden.new("no settled payment mandate") if paid.nil?
+  # ── Gate 3: settled payment whose cart references THIS reservation ───────
+  # C2: join payment_mandates → cart_mandates and require that line_items
+  # contains the reservation_id of this specific reservation. This prevents
+  # a user from paying for reservation A and unlocking reservation B.
+  # The JSONB literal is built server-side; reservation_id is a UUID string.
+  # to_json on a Ruby Hash produces a valid JSON object; embed it as the
+  # sole element of a JSON array and cast to jsonb for the @> containment check.
+  resv_filter_json = [{ reservation_id: reservation_id.to_s }].to_json
+  paid = conn.execute(
+    "SELECT 1 AS ok " \
+    "FROM kiosk.payment_mandates pm " \
+    "JOIN kiosk.cart_mandates cm ON cm.id = pm.cart_mandate_id " \
+    "WHERE pm.user_id = kiosk.current_user_id() " \
+    "AND cm.line_items @> #{conn.quote(resv_filter_json)}::jsonb " \
+    "LIMIT 1"
+  ).first
+  raise Kiosk::Server::Errors::Forbidden.new("no settled payment mandate for this reservation") if paid.nil?
 
   # ── All gates passed: compute and return the unlock MAC ─────────────────
   # MAC is bound to the server-derived scooter code, not any client-supplied value.

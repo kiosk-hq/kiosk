@@ -73,5 +73,43 @@ RSpec.describe Kiosk::Server::KycVerifier do
       expect { described_class.verify(raw_jws: raw_jws, identity: identity) }
         .to raise_error(Kiosk::Server::Errors::Forbidden, /kyc_public_key/)
     end
+
+    # ─── I1: KYC level check ──────────────────────────────────────────────
+
+    it "I1: raises Errors::Forbidden when level is not 'verified' (e.g. 'pending')" do
+      raw_jws = sign_kyc(valid_payload(level: "pending"))
+      expect { described_class.verify(raw_jws: raw_jws, identity: identity) }
+        .to raise_error(Kiosk::Server::Errors::Forbidden, /kyc level not verified/)
+    end
+
+    it "I1: raises Errors::Forbidden when level is missing entirely" do
+      payload = valid_payload.reject { |k, _| k == :level }
+      raw_jws = sign_kyc(payload)
+      expect { described_class.verify(raw_jws: raw_jws, identity: identity) }
+        .to raise_error(Kiosk::Server::Errors::Forbidden, /kyc level not verified/)
+    end
+
+    # ─── I2: require exp (and iss, sub) claims ────────────────────────────
+
+    it "I2: raises Errors::Forbidden when exp claim is absent" do
+      payload = valid_payload.reject { |k, _| k == :exp }
+      raw_jws = sign_kyc(payload)
+      expect { described_class.verify(raw_jws: raw_jws, identity: identity) }
+        .to raise_error(Kiosk::Server::Errors::Forbidden)
+    end
+
+    it "I2: raises Errors::Forbidden when iss claim is absent" do
+      payload = valid_payload.reject { |k, _| k == :iss }
+      raw_jws = sign_kyc(payload)
+      expect { described_class.verify(raw_jws: raw_jws, identity: identity) }
+        .to raise_error(Kiosk::Server::Errors::Forbidden)
+    end
+
+    it "I2: raises Errors::Forbidden when sub claim is absent" do
+      payload = valid_payload.reject { |k, _| k == :sub }
+      raw_jws = sign_kyc(payload)
+      expect { described_class.verify(raw_jws: raw_jws, identity: identity) }
+        .to raise_error(Kiosk::Server::Errors::Forbidden)
+    end
   end
 end

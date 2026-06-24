@@ -20,6 +20,12 @@ module Kiosk
       # Spec §5.1: the fixed six-verb wire surface.
       VERBS = %i[sql run pay schema help events].freeze
 
+      # Verbs that open their own transaction boundaries because they perform
+      # an irreversible external side effect (a PSP capture) that a DB
+      # ROLLBACK cannot undo. Everything else runs inside one wrapping
+      # SessionContext; these manage their own SessionContext(s) instead.
+      SELF_MANAGED_VERBS = %i[pay].freeze
+
       def self.call(kind:, args:, identity:, connection:)
         new(connection: connection, identity: identity).call(kind: kind, args: args)
       end
@@ -42,8 +48,12 @@ module Kiosk
           )
         end
 
-        SessionContext.open(connection: connection, identity: identity) do
-          dispatch(verb, args)
+        if SELF_MANAGED_VERBS.include?(verb)
+          dispatch(verb, args) # the verb manages its own SessionContext(s)
+        else
+          SessionContext.open(connection: connection, identity: identity) do
+            dispatch(verb, args)
+          end
         end
       end
 
@@ -94,51 +104,111 @@ module Kiosk
 
       # ─── pay ───────────────────────────────────────────────────────────
 
+      # Settles an AP2 cart. `pay` is a SELF_MANAGED_VERB: it owns its
+      # transaction boundaries because the PSP capture in phase 2 is an
+      # irreversible external effect a DB ROLLBACK cannot undo, so it MUST
+      # NOT run inside a wrapping transaction.
+      #
+      # The agent presents the whole trail (intent → cart); we verify and
+      # persist both before charging, so the cart row's intent FK resolves.
+      #
+      # Three phases, capture strictly between two DB transactions:
+      #   P1  verify + persist the mandate trail (RLS-scoped tx). No external
+      #       effect yet.            FAIL ⇒ nothing charged, rows rolled back.
+      #   P2  irreversible PSP capture, OUTSIDE any DB transaction, keyed for
+      #       idempotency by cart.id. FAIL ⇒ trail persisted, no charge; safe
+      #                               to retry (idempotency key).
+      #   P3  record the settlement (fresh RLS-scoped tx).
+      #       FAIL ⇒ charge + trail exist, payment row missing — reconcilable
+      #              from the cart row + idempotency key, never a silent
+      #              double-charge.
       def verb_pay(args)
-        args = symbolize(args)
-        raw  = args[:cart_mandate_jws]
-        raise Errors::BadRequest, "args.cart_mandate_jws required" if raw.nil? || raw.to_s.empty?
+        args        = symbolize(args)
+        raw_intent  = args[:intent_mandate_jws]
+        raw_cart    = args[:cart_mandate_jws]
+        raise Errors::BadRequest, "args.intent_mandate_jws required" if raw_intent.nil? || raw_intent.to_s.empty?
+        raise Errors::BadRequest, "args.cart_mandate_jws required"   if raw_cart.nil?   || raw_cart.to_s.empty?
 
         provider = Kiosk.configuration.payment_provider
         raise Errors::Forbidden, "no payment_provider configured" if provider.nil?
 
-        cart    = MandateVerifier.verify_cart(raw_jws: raw, agent_id: identity.agent_id)
+        # Phase 1 — verify + persist the mandate trail (RLS-scoped tx).
+        cart = nil
+        SessionContext.open(connection: connection, identity: identity) do
+          intent = MandateVerifier.verify_intent(raw_jws: raw_intent, identity: identity)
+          cart   = MandateVerifier.verify_cart(raw_jws: raw_cart, identity: identity, intent: intent)
+          persist_intent_mandate(intent)
+          persist_cart_mandate(cart)
+        end
+
+        # Phase 2 — irreversible external capture. OUTSIDE any DB transaction.
         settled = provider.capture(cart)
-        payment = persist_payment_mandate(cart: cart, settled: settled)
+
+        # Phase 3 — record settlement (fresh RLS-scoped tx).
+        payment_id = nil
+        SessionContext.open(connection: connection, identity: identity) do
+          payment_id = persist_payment_mandate(cart: cart, settled: settled)
+        end
 
         Result.new(kind: :value, payload: {
-          payment_mandate_id:   payment[:id],
+          payment_mandate_id:   payment_id,
           psp_reference:        settled[:psp_reference],
           settled_amount_cents: settled[:settled_amount_cents],
           currency:             cart.currency,
         })
       end
 
-      # Inserts the cart + payment mandate rows under the open SessionContext
-      # (RLS-scoped to the principal). Returns { id: payment_mandate_id }.
-      def persist_payment_mandate(cart:, settled:)
+      # Inserts the intent-mandate row under the open SessionContext
+      # (RLS-scoped). The mandate's own signed id is the PK, so the cart and
+      # payment rows can reference it by id and the trail is auditable
+      # end-to-end. Plain INSERT … RETURNING id (no ON CONFLICT — the PK is
+      # supplied, so the dead ON CONFLICT path is gone). Returns the id.
+      def persist_intent_mandate(intent)
         schema = Kiosk.configuration.schema
-        cart_id = connection.execute(<<~SQL).to_a.first.fetch("id")
+        connection.execute(<<~SQL).to_a.first.fetch("id")
+          INSERT INTO #{schema}.intent_mandates
+            (id, user_id, agent_id, issuer, scope, cap_amount_cents,
+             currency, expires_at, created_at, raw_jws)
+          VALUES (#{q(intent.id)}, #{q(intent.user_id)}, #{q(intent.agent_id)},
+             #{q(intent.issuer)}, #{q(intent.scope)}, #{intent.cap_amount_cents.to_i},
+             #{q(intent.currency)}, now() + interval '1 hour', now(), #{q(intent.raw_jws)})
+          RETURNING id
+        SQL
+      end
+
+      # Inserts the cart-mandate row under the open SessionContext
+      # (RLS-scoped). PK = the cart's signed id; intent_mandate_id references
+      # the intent row persisted in phase 1. Plain INSERT … RETURNING id (no
+      # ON CONFLICT). Returns the id.
+      def persist_cart_mandate(cart)
+        schema = Kiosk.configuration.schema
+        connection.execute(<<~SQL).to_a.first.fetch("id")
           INSERT INTO #{schema}.cart_mandates
             (id, intent_mandate_id, user_id, agent_id, issuer, line_items,
              total_amount_cents, currency, expires_at, created_at, raw_jws)
-          VALUES (gen_random_uuid(), #{q(cart.intent_mandate_id)}, #{q(cart.user_id)},
+          VALUES (#{q(cart.id)}, #{q(cart.intent_mandate_id)}, #{q(cart.user_id)},
              #{q(cart.agent_id)}, #{q(cart.issuer)}, #{q(cart.line_items.to_json)}::jsonb,
              #{cart.total_amount_cents.to_i}, #{q(cart.currency)}, now() + interval '1 hour',
              now(), #{q(cart.raw_jws)})
-          ON CONFLICT DO NOTHING
           RETURNING id
         SQL
-        pay_id = connection.execute(<<~SQL).to_a.first.fetch("id")
+      end
+
+      # Inserts the payment-mandate row under the open SessionContext
+      # (RLS-scoped). cart_mandate_id references the cart row persisted in
+      # phase 1 by its known id, so the FK resolves. Returns the new
+      # payment_mandate id.
+      def persist_payment_mandate(cart:, settled:)
+        schema = Kiosk.configuration.schema
+        connection.execute(<<~SQL).to_a.first.fetch("id")
           INSERT INTO #{schema}.payment_mandates
             (id, cart_mandate_id, user_id, agent_id, issuer, psp_reference,
              settled_amount_cents, currency, settled_at, raw_jws)
-          VALUES (gen_random_uuid(), #{q(cart_id)}, #{q(cart.user_id)}, #{q(cart.agent_id)},
+          VALUES (gen_random_uuid(), #{q(cart.id)}, #{q(cart.user_id)}, #{q(cart.agent_id)},
              #{q(cart.issuer)}, #{q(settled[:psp_reference])}, #{settled[:settled_amount_cents].to_i},
              #{q(cart.currency)}, now(), '')
           RETURNING id
         SQL
-        { id: pay_id }
       end
 
       def q(value) = connection.quote(value)

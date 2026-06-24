@@ -79,9 +79,9 @@ RSpec.describe Kiosk::Generators::InstallGenerator do
   end
 
   describe "migrations" do
-    it "creates exactly the five canonical migrations (001-005)" do
+    it "creates exactly the six canonical migrations (001-006)" do
       invoke!
-      expect(migrations.size).to eq(5)
+      expect(migrations.size).to eq(6)
       basenames = migrations.map { |p| File.basename(p) }
       expect(basenames).to include(
         a_string_ending_with("_create_kiosk_schema.rb"),
@@ -89,14 +89,15 @@ RSpec.describe Kiosk::Generators::InstallGenerator do
         a_string_ending_with("_create_kiosk_actions_log.rb"),
         a_string_ending_with("_create_kiosk_reservations.rb"),
         a_string_ending_with("_create_kiosk_device_authorizations.rb"),
+        a_string_ending_with("_create_kiosk_mandates.rb"),
       )
     end
 
-    it "orders the migration timestamps in 001 → 005 sequence" do
+    it "orders the migration timestamps in 001 → 006 sequence" do
       invoke!
       timestamps = migrations.map { |p| File.basename(p).split("_").first.to_i }
       expect(timestamps).to eq(timestamps.sort)
-      expect(timestamps.uniq.size).to eq(5) # strictly ascending, no collisions
+      expect(timestamps.uniq.size).to eq(6) # strictly ascending, no collisions
     end
 
     describe "001 create_kiosk_schema" do
@@ -202,6 +203,28 @@ RSpec.describe Kiosk::Generators::InstallGenerator do
       it "drops the device_authorizations table in #down" do
         invoke!(%w[--schema=ksk])
         expect(File.read(file)).to include('DROP TABLE IF EXISTS "ksk".device_authorizations')
+      end
+    end
+
+    describe "006 create_kiosk_mandates" do
+      let(:file) { migrations.find { |p| p.end_with?("_create_kiosk_mandates.rb") } }
+
+      it "calls SchemaDefinitions.mandates_sql with the configured args" do
+        invoke!(%w[--schema=ksk --user-id-type=bigint])
+        body = File.read(file)
+        expect(body).to include("Kiosk::Server::SchemaDefinitions.mandates_sql(")
+        expect(body).to include('schema:       "ksk"')
+        expect(body).to include("user_id_type: :bigint")
+      end
+
+      it "drops the three mandate tables in reverse-FK order in #down" do
+        invoke!(%w[--schema=ksk])
+        body = File.read(file)
+        payment_idx = body.index('DROP TABLE IF EXISTS "ksk".payment_mandates')
+        cart_idx    = body.index('DROP TABLE IF EXISTS "ksk".cart_mandates')
+        intent_idx  = body.index('DROP TABLE IF EXISTS "ksk".intent_mandates')
+        expect(payment_idx).to be < cart_idx
+        expect(cart_idx).to be < intent_idx
       end
     end
   end

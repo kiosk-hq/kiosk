@@ -7,12 +7,23 @@ module Kiosk
     module AgentRegistration
       module_function
 
-      def call(name:, public_key_pem:, role:)
-        config = Kiosk.configuration
-        role   = role.to_s
+      def call(name:, public_key_pem:, role:, pow: nil)
+        config     = Kiosk.configuration
+        role       = role.to_s
+        difficulty = config.registration_difficulty
+
         unless config.roles.map(&:to_s).include?(role)
           raise Errors::BadRequest.new("role #{role.inspect} not in configured roles",
                                        hint: "Allowed: #{config.roles.inspect}")
+        end
+
+        if difficulty > 0
+          unless pow && ProofOfWork.valid?(public_key_pem: public_key_pem, pow: pow, difficulty: difficulty)
+            raise Errors::BadRequest.new(
+              "proof-of-work required or invalid",
+              hint: "Compute SHA256(public_key_pem + '.' + pow) with >= #{difficulty} leading zero bits",
+            )
+          end
         end
 
         conn = ActiveRecord::Base.connection

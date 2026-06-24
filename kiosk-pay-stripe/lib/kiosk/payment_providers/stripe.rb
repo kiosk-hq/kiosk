@@ -42,6 +42,28 @@ module Kiosk
           settled_at:           Time.at(intent.created).utc,
         }
       end
+
+      # @param cart_mandate [Kiosk::Mandate::CartMandate]
+      # @return [Hash] { stripe_payment_intent_id:, client_secret:, status: }
+      def authorize(cart_mandate)
+        intent = ::Stripe::PaymentIntent.create(
+          {
+            amount:         cart_mandate.total_amount_cents,
+            currency:       cart_mandate.currency,
+            payment_method: @test_payment_method,
+            confirm:        true,
+            capture_method: "manual",
+            metadata:       { cart_mandate_id: cart_mandate.id },
+          },
+          { idempotency_key: "#{cart_mandate.id}-auth" },
+        )
+
+        {
+          stripe_payment_intent_id: intent.id,
+          client_secret:            intent.client_secret,
+          status:                   intent.status,
+        }
+      end
     end
   end
 end

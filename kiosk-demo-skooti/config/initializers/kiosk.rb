@@ -75,8 +75,8 @@ Kiosk::Server::Actions.register("reserve") do |args|
   raise Kiosk::Server::Errors::BadRequest.new("scooter not found: #{scooter_id}") if scooter.nil?
 
   reservation = conn.execute(<<~SQL).first
-    INSERT INTO public.reservations (user_id, scooter_id, status)
-    VALUES (#{conn.quote(uid)}::uuid, #{conn.quote(scooter_id.to_s)}::integer, 'reserved')
+    INSERT INTO public.reservations (user_id, scooter_id, status, created_at, updated_at)
+    VALUES (#{conn.quote(uid)}::uuid, #{conn.quote(scooter_id.to_s)}::integer, 'reserved', now(), now())
     RETURNING id
   SQL
 

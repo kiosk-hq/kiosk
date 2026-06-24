@@ -28,7 +28,12 @@ module Kiosk
           hint: "Set Kiosk.configuration.kyc_public_key to the KYC provider's RSA public key",
         ) if key.nil?
 
-        payload, = ::JWT.decode(raw_jws, key, true, algorithms: ["RS256"])
+        payload, = ::JWT.decode(
+          raw_jws, key, true,
+          algorithms:       ["RS256"],
+          verify_expiration: true,
+          required_claims:  ["exp", "iss", "sub"],
+        )
         payload  = payload.transform_keys(&:to_sym)
 
         if payload[:iss] != config.kyc_issuer
@@ -45,9 +50,16 @@ module Kiosk
           )
         end
 
+        # I1: require the KYC level to be exactly "verified" (case-sensitive).
+        unless payload[:level] == "verified"
+          raise Errors::Forbidden.new("kyc level not verified")
+        end
+
         payload
       rescue ::JWT::ExpiredSignature
         raise Errors::Forbidden.new("KYC attestation expired")
+      rescue ::JWT::MissingRequiredClaim => e
+        raise Errors::Forbidden.new("KYC attestation missing required claim: #{e.message}")
       rescue ::JWT::DecodeError => e
         raise Errors::Forbidden.new("KYC attestation signature invalid: #{e.message}")
       end

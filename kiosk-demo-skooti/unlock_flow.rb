@@ -10,9 +10,10 @@
 #   bundle exec ruby unlock_flow.rb
 #
 # Optional env:
-#   SKIP_PAY=1    — skip the pay step (unlock should return 403)
-#   SKIP_KYC=1    — skip the KYC step (unlock should return 403)
-#   MASTER_KEY    — HMAC master key (default: "dev-master-key-0001")
+#   SKIP_PAY=1           — skip the pay step (unlock should return 403)
+#   SKIP_KYC=1           — skip the KYC step (unlock should return 403)
+#   REUSE_RESERVATION=<uuid>  — attempt to unlock a pre-existing reservation id (C3/C2 gates)
+#   MASTER_KEY           — HMAC master key (default: "dev-master-key-0001")
 #
 # Prints ONE JSON line on stdout; non-zero exit on unexpected failures.
 
@@ -29,9 +30,10 @@ require "lock_sim"
 
 SERVER = ENV.fetch("SERVER_URL")
 ISSUER = ENV.fetch("KIOSK_ISSUER")
-SKIP_PAY  = ENV.key?("SKIP_PAY")
-SKIP_KYC  = ENV.key?("SKIP_KYC")
-MASTER_KEY = ENV.fetch("MASTER_KEY", "dev-master-key-0001")
+SKIP_PAY           = ENV.key?("SKIP_PAY")
+SKIP_KYC           = ENV.key?("SKIP_KYC")
+REUSE_RESERVATION  = ENV["REUSE_RESERVATION"]  # UUID — unlock an existing reservation (no fresh reserve)
+MASTER_KEY         = ENV.fetch("MASTER_KEY", "dev-master-key-0001")
 
 # ── helpers ─────────────────────────────────────────────────────────────────
 
@@ -105,21 +107,31 @@ unless SKIP_KYC
 end
 
 # ── Step 3: reserve a scooter (seeded scooter code = "SK-001") ──────────────
+# When REUSE_RESERVATION is set, skip the reserve API call and use that UUID
+# directly (used for C3 re-unlock and C2 unpaid-reservation negative tests).
 
-rc_rsv, rsv = post_json(
-  "#{SERVER}/kiosk/exec",
-  { command: "run", body: { name: "reserve", scooter_code: "SK-001" } },
-  { "Authorization" => "Bearer #{token}" },
-)
-abort "reserve failed (#{rc_rsv}): #{JSON.generate(rsv)}" unless rc_rsv == 200
+if REUSE_RESERVATION
+  rc_rsv        = nil  # no fresh reserve call
+  reservation_id = REUSE_RESERVATION
+  scooter_code   = "SK-001"
+  price_per_min  = 15
+  STDERR.puts "  Reusing reservation: id=#{reservation_id}"
+else
+  rc_rsv, rsv = post_json(
+    "#{SERVER}/kiosk/exec",
+    { command: "run", body: { name: "reserve", scooter_code: "SK-001" } },
+    { "Authorization" => "Bearer #{token}" },
+  )
+  abort "reserve failed (#{rc_rsv}): #{JSON.generate(rsv)}" unless rc_rsv == 200
 
-rsv_value      = rsv.fetch("value")
-reservation_id = rsv_value.fetch("reservation_id")
-# The action returns the server-side scooter code (e.g. "SK-001").
-scooter_code   = rsv_value.fetch("scooter_code")
-price_per_min  = rsv_value.fetch("price_per_min_cents")
+  rsv_value      = rsv.fetch("value")
+  reservation_id = rsv_value.fetch("reservation_id")
+  # The action returns the server-side scooter code (e.g. "SK-001").
+  scooter_code   = rsv_value.fetch("scooter_code")
+  price_per_min  = rsv_value.fetch("price_per_min_cents")
 
-STDERR.puts "  Reserved: id=#{reservation_id} scooter=#{scooter_code} price=#{price_per_min}¢/min"
+  STDERR.puts "  Reserved: id=#{reservation_id} scooter=#{scooter_code} price=#{price_per_min}¢/min"
+end
 
 # ── Step 4: pay ──────────────────────────────────────────────────────────────
 
@@ -152,7 +164,7 @@ unless SKIP_PAY
     user_id:            user_id,
     agent_id:           agent_id,
     iss:                ISSUER,
-    line_items:         [{ sku: scooter_code, qty: 1 }],
+    line_items:         [{ sku: scooter_code, qty: 1, reservation_id: reservation_id }],
     total_amount_cents: total_cents,
     currency:           "eur",
     exp:                now + 600,

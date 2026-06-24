@@ -228,6 +228,103 @@ namespace :demo do
       end
     end
 
+    # ── RUN 4: C3 negative gate — re-unlock a reservation already 'active' ─
+    # After the happy path (RUN 1) the reservation is status='active'.
+    # Attempting to unlock it again must return 403 (single-use reservation).
+    puts "\n══ C3 negative gate — re-unlock already-active reservation ══"
+
+    # We need the reservation_id from the happy run.  Re-run the happy flow
+    # but capture only the reservation_id from the JSON output; then try to
+    # unlock THAT id again with a brand-new agent (who has their own payment).
+    # Simpler: within the same server boot, run happy flow to get the id, then
+    # call unlock a second time re-using REUSE_RESERVATION.
+    boot_server.call do
+      # First: obtain a valid reservation_id by running the happy flow once
+      # (this also makes it active, which is what we need).
+      env_happy = {
+        "SERVER_URL"   => server_url,
+        "KIOSK_ISSUER" => kiosk_issuer,
+        "MASTER_KEY"   => master_key,
+      }
+      env_str_happy = env_happy.map { |k, v| "#{k}=#{v}" }.join(" ")
+      raw_happy = `#{env_str_happy} bundle exec ruby #{flow_rb} 2>&1`
+      json_happy = raw_happy.lines.grep(/^\{/).last
+      begin
+        happy_result = JSON.parse(json_happy || raw_happy)
+      rescue JSON::ParserError => e
+        abort "C3 inner happy run did not produce valid JSON: #{e.message}\nOutput:\n#{raw_happy}"
+      end
+      abort "C3 inner happy run unexpectedly failed: #{raw_happy}" unless happy_result["http_unlock"] == 200
+      active_reservation_id = happy_result["reservation_id"]
+      active_user_id        = happy_result["user_id"]
+      active_agent_id       = happy_result["agent_id"]
+      puts "  Active reservation: #{active_reservation_id} (user=#{active_user_id})"
+
+      # Now run unlock_flow.rb again with the SAME reservation_id (already 'active').
+      # Gate 1 will reject it because status != 'reserved'.
+      # We use REUSE_RESERVATION so no new reserve call is made, and also
+      # SKIP_PAY so no new payment is attached (the result would be 403 at
+      # Gate 1 before Gate 3 anyway, but belt-and-suspenders).
+      env_reuse = {
+        "SERVER_URL"        => server_url,
+        "KIOSK_ISSUER"      => kiosk_issuer,
+        "MASTER_KEY"        => master_key,
+        "REUSE_RESERVATION" => active_reservation_id,
+        "SKIP_PAY"          => "1",
+      }
+      env_str_reuse = env_reuse.map { |k, v| "#{k}=#{v}" }.join(" ")
+      raw_reuse = `#{env_str_reuse} bundle exec ruby #{flow_rb} 2>&1`
+      json_reuse = raw_reuse.lines.grep(/^\{/).last
+      stderr_lines = raw_reuse.lines.reject { |l| l.start_with?("{") }
+      puts stderr_lines.join
+      puts json_reuse if json_reuse
+
+      begin
+        reuse_result = JSON.parse(json_reuse || raw_reuse)
+      rescue JSON::ParserError => e
+        abort "C3 re-unlock run did not produce valid JSON: #{e.message}\nOutput:\n#{raw_reuse}"
+      end
+
+      if reuse_result["http_unlock"] == 403
+        puts "  ✓  C3 re-unlock: http_unlock == 403 (reservation already active)"
+      else
+        failures << "c3_relock: http_unlock expected 403, got #{reuse_result["http_unlock"].inspect}"
+        puts "  ✗  C3 re-unlock: http_unlock expected 403, got #{reuse_result["http_unlock"].inspect}"
+      end
+    end
+
+    # ── RUN 5: C2 negative gate — second reservation, no payment for it ───
+    # Make a fresh reservation B (no payment references it), then try to unlock.
+    # Gate 3 must reject with 403 (no payment for THIS reservation).
+    puts "\n══ C2 negative gate — unpaid second reservation ══"
+    boot_server.call do
+      env_c2 = {
+        "SERVER_URL"   => server_url,
+        "KIOSK_ISSUER" => kiosk_issuer,
+        "MASTER_KEY"   => master_key,
+        "SKIP_PAY"     => "1",
+      }
+      env_str_c2 = env_c2.map { |k, v| "#{k}=#{v}" }.join(" ")
+      raw_c2 = `#{env_str_c2} bundle exec ruby #{flow_rb} 2>&1`
+      json_c2 = raw_c2.lines.grep(/^\{/).last
+      stderr_lines = raw_c2.lines.reject { |l| l.start_with?("{") }
+      puts stderr_lines.join
+      puts json_c2 if json_c2
+
+      begin
+        c2_result = JSON.parse(json_c2 || raw_c2)
+      rescue JSON::ParserError => e
+        abort "C2 unpaid-reservation run did not produce valid JSON: #{e.message}\nOutput:\n#{raw_c2}"
+      end
+
+      if c2_result["http_unlock"] == 403
+        puts "  ✓  C2 unpaid-reservation: http_unlock == 403 (no payment for this reservation)"
+      else
+        failures << "c2_unpaid: http_unlock expected 403, got #{c2_result["http_unlock"].inspect}"
+        puts "  ✗  C2 unpaid-reservation: http_unlock expected 403, got #{c2_result["http_unlock"].inspect}"
+      end
+    end
+
     # ── final verdict ─────────────────────────────────────────────────────
     puts "\n── Assertions ──"
     if failures.empty?

@@ -156,7 +156,7 @@ void sha256_final(sha256_ctx_t *ctx, uint8_t out[32])
     /* Zero-pad and append message bit-length (big-endian 64-bit) */
     memset(ctx->buf + ctx->buf_len, 0, 56 - ctx->buf_len);
     /* total_len is in bytes; multiply by 8 for bit count */
-    put_be64(ctx->buf + 56, (ctx->total_len - 1ULL) * 8ULL + 8ULL);
+    put_be64(ctx->buf + 56, ctx->total_len * 8ULL);
     sha256_compress(ctx->state, ctx->buf);
 
     for (i = 0; i < 8; i++)

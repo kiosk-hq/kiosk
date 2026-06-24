@@ -1,0 +1,88 @@
+#!/usr/bin/env bash
+# Kiosk skooti demo walkthrough — a curl-driven tour of the wire surface.
+#
+# Run via `rake demo:walkthrough` (handles DB setup + invokes this script), or
+# directly when the demo DB is already prepared.
+
+set -euo pipefail
+
+PORT="${KIOSK_DEMO_PORT:-3003}"
+SERVER_URL="http://127.0.0.1:$PORT"
+
+# Stable stub token for scooter browse (no human needed — this is the no-auth-human path)
+AGENT_TOKEN="agent:u-00000000-0000-0000-0000-000000000001:a-alice-agent:r-customer"
+
+heading() { printf "\n\033[1;36m── %s ──\033[0m\n" "$1"; }
+step()    { printf "\n  \033[1;33m▶\033[0m %s\n" "$1"; }
+say()     { printf "  %s\n" "$1"; }
+
+cleanup() {
+  if [[ -n "${SERVER_PID:-}" ]]; then
+    kill "$SERVER_PID" 2>/dev/null || true
+    wait "$SERVER_PID" 2>/dev/null || true
+  fi
+}
+trap cleanup EXIT
+
+require_tool() {
+  command -v "$1" >/dev/null 2>&1 \
+    || { echo "missing: $1 — install it then re-run" >&2; exit 1; }
+}
+require_tool curl
+require_tool jq
+
+# ─── boot ────────────────────────────────────────────────────────────
+
+heading "Starting skooti (the demo provider) on port $PORT"
+KIOSK_ISSUER="$SERVER_URL" \
+  bundle exec rails s -p "$PORT" -b 127.0.0.1 -e development \
+  >/tmp/kiosk-skooti-demo.log 2>&1 &
+SERVER_PID=$!
+
+for _ in $(seq 1 30); do
+  if curl -sf "$SERVER_URL/.well-known/kiosk.json" >/dev/null 2>&1; then
+    say "✓ Server up at $SERVER_URL"
+    break
+  fi
+  sleep 1
+done
+
+curl -sf "$SERVER_URL/.well-known/kiosk.json" >/dev/null || {
+  echo "server did not become ready — see /tmp/kiosk-skooti-demo.log" >&2
+  exit 1
+}
+
+# ─── discovery ───────────────────────────────────────────────────────
+
+heading "Discovery: what is this provider?"
+
+step "GET /.well-known/kiosk.json"
+curl -sf "$SERVER_URL/.well-known/kiosk.json" \
+  | jq '.kiosk | {version, endpoint, issuer, capabilities, owner}'
+
+step "GET <endpoint>/.well-known/jwks.json — public verification keys"
+curl -sf "$SERVER_URL/kiosk/.well-known/jwks.json" \
+  | jq '.keys[0] | {kty, use, alg, kid}'
+
+# ─── authenticated SQL ───────────────────────────────────────────────
+
+heading "Agent browses the scooter fleet through RLS"
+
+step "List scooters (publicly visible)"
+curl -sS -X POST "$SERVER_URL/kiosk/exec" \
+  -H "Authorization: Bearer $AGENT_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{"command":"sql","body":{"sql":"SELECT id, code, status, price_per_min_cents FROM scooters"}}' \
+  | jq '.rows'
+
+# ─── done ────────────────────────────────────────────────────────────
+
+heading "Demo complete"
+say "Server log:        /tmp/kiosk-skooti-demo.log"
+say "DB:                kiosk_skooti_development"
+say ""
+say "To add realistic domain resolution:"
+say "  echo \"127.0.0.1 skooti.app\" | sudo tee -a /etc/hosts"
+say "  KIOSK_ISSUER=https://skooti.app KIOSK_DEMO_PORT=443 rake demo:walkthrough"
+say ""
+say "Full unlock chain (B4): see unlock_flow.rb"

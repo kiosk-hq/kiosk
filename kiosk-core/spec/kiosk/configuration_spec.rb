@@ -37,6 +37,20 @@ RSpec.describe Kiosk::Configuration do
     end
   end
 
+  describe "#payment_provider" do
+    before { Kiosk.reset! }
+
+    it "defaults to nil" do
+      expect(Kiosk.configuration.payment_provider).to be_nil
+    end
+
+    it "is configurable via Kiosk.configure" do
+      provider = Object.new
+      Kiosk.configure { |c| c.payment_provider = provider }
+      expect(Kiosk.configuration.payment_provider).to be(provider)
+    end
+  end
+
   describe "#guc" do
     it "composes a full GUC name using the configured namespace" do
       config = described_class.new

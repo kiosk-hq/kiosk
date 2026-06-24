@@ -1,5 +1,6 @@
 # frozen_string_literal: true
 
+# Must precede the adapter require so verify_partial_doubles can see ::Stripe::PaymentIntent at stub time.
 require "stripe"
 require "kiosk/payment_providers/stripe"
 

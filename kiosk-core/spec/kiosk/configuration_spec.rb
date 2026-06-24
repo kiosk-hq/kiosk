@@ -38,8 +38,6 @@ RSpec.describe Kiosk::Configuration do
   end
 
   describe "#payment_provider" do
-    before { Kiosk.reset! }
-
     it "defaults to nil" do
       expect(Kiosk.configuration.payment_provider).to be_nil
     end

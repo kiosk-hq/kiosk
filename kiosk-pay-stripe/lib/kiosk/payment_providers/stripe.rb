@@ -64,6 +64,17 @@ module Kiosk
           status:                   intent.status,
         }
       end
+
+      # @param payment_mandate [Kiosk::Mandate::PaymentMandate]
+      # @param amount_cents [Integer, nil] partial refund; nil = full
+      # @return [Hash] { refund_id: }
+      def refund(payment_mandate, amount_cents = nil)
+        params = { payment_intent: payment_mandate.psp_reference }
+        params[:amount] = amount_cents unless amount_cents.nil?
+
+        refund = ::Stripe::Refund.create(params)
+        { refund_id: refund.id }
+      end
     end
   end
 end

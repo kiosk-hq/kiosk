@@ -153,6 +153,7 @@ cp "$FIXTURES/seeds.rb"              db/seeds.rb
 mkdir -p lib
 cp "$FIXTURES/stub_idp.rb"           lib/stub_idp.rb
 cp "$FIXTURES/jwt_or_stub_idp.rb"    lib/jwt_or_stub_idp.rb
+cp "$FIXTURES/stub_psp.rb"           lib/stub_psp.rb
 cp "$FIXTURES/initializer_kiosk.rb"  config/initializers/kiosk.rb
 cp "$FIXTURES/routes.rb"             config/routes.rb
 
@@ -197,6 +198,10 @@ ok "server up on http://127.0.0.1:$SERVER_PORT"
 
 log "run mock AI-assistant test suite"
 if ! SERVER_URL="http://127.0.0.1:$SERVER_PORT" \
+       APP_DIR="$PWD" \
+       FIXTURES="$FIXTURES" \
+       DB_NAME="$DB_NAME" \
+       KIOSK_ISSUER="$KIOSK_ISSUER" \
        bash "$KIOSK_OSS/e2e/assistant.sh"; then
   log "assistant failed — last 80 lines of server log:"
   tail -80 /tmp/kiosk-e2e-server.log

@@ -6,6 +6,7 @@
 
 require Rails.root.join("lib/stub_idp")
 require Rails.root.join("lib/jwt_or_stub_idp")
+require Rails.root.join("lib/stub_psp")
 
 # Inject the RLS DSL into ActiveRecord::Migration so that migrations can
 # call `enable_rls_on TABLE do ... end` directly. The kiosk-rls README
@@ -37,6 +38,8 @@ Kiosk.configure do |c|
   # One endpoint authenticates both for the e2e suite.
   c.agent_idp = JwtOrStubIdp.new(stub: StubIdp.new)
   # user_idp not needed — composite handles both channels.
+
+  c.payment_provider = StubPsp.new
 end
 
 # Register the demo Action. In production, providers use the full

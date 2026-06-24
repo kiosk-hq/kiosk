@@ -39,6 +39,7 @@ require "kiosk/server/exec_controller"
 require "kiosk/server/jwks_controller"
 require "kiosk/server/oauth_device_authorization_controller"
 require "kiosk/server/oauth_token_controller"
+require "kiosk/server/agents_registration_controller"
 
 module Kiosk
   module Server

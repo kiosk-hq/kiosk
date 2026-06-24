@@ -52,4 +52,9 @@ Rails.application.configure do
 
   # Raise error when a before_action's only/except options reference missing actions.
   config.action_controller.raise_on_missing_callback_actions = true
+
+  # Permit the demo's realistic /etc/hosts domain. Rails 8 HostAuthorization
+  # otherwise 403s any request whose Host header isn't localhost/127.0.0.1,
+  # which blocks `rake demo` when it runs on http://foodelivery.app:3002.
+  config.hosts << "foodelivery.app"
 end

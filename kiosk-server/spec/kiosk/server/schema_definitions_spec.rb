@@ -131,6 +131,29 @@ RSpec.describe Kiosk::Server::SchemaDefinitions do
       expect(sql).to include("settled_amount_cents bigint")
       expect(sql.scan("raw_jws").size).to be >= 3
     end
+
+    it "keeps a server-generated uuid PK on every table (never caller-supplied)" do
+      expect(sql.scan(/\bid +uuid PRIMARY KEY DEFAULT gen_random_uuid\(\)/).size).to eq(3)
+    end
+
+    it "stores the agent-signed mandate id in a separate mandate_id text NOT NULL column on the agent-signed mandates" do
+      # intent + cart are agent-signed and carry a signed id; payment is a
+      # server-side settlement receipt with no agent-signed id, so it has none.
+      expect(sql.scan(/mandate_id +text NOT NULL/).size).to eq(2)
+      payment_table = sql[/CREATE TABLE "kiosk"\.payment_mandates.*?\);/m]
+      # No standalone `mandate_id <type>` column (cart_mandate_id is a FK, not this).
+      expect(payment_table).not_to match(/^\s*mandate_id\s+\w/)
+    end
+
+    it "enforces per-principal uniqueness of the signed id on intent and cart mandates" do
+      expect(sql).to include("UNIQUE (user_id, mandate_id)")
+      # one for intent_mandates, one for cart_mandates
+      expect(sql.scan("UNIQUE (user_id, mandate_id)").size).to eq(2)
+    end
+
+    it "anchors idempotency with one settlement per cart on payment_mandates" do
+      expect(sql).to include("UNIQUE (cart_mandate_id)")
+    end
   end
 
   describe ".user_id_cast" do

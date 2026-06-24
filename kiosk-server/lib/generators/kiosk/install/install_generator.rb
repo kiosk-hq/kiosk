@@ -30,7 +30,7 @@ module Kiosk
     # literally — config drift between generation time and migrate time
     # only matters for fields the operator deliberately overrides).
     #
-    # See spec §9 and implementation-plan §3 (migrations 001-004).
+    # See spec §9 and implementation-plan §3 (migrations 001-006).
     class InstallGenerator < ::Rails::Generators::Base
       include ::Rails::Generators::Migration
 
@@ -48,7 +48,7 @@ module Kiosk
                                    desc: "GUC namespace prefix used in SET LOCAL / RLS policies"
 
       # Rails::Generators::Migration requires a class-level
-      # next_migration_number. We bump a counter so the four migrations
+      # next_migration_number. We bump a counter so the six migrations
       # created in one invocation get strictly-ascending UTC timestamps
       # (otherwise `db/migrate` glob sort is non-deterministic).
       @migration_counter = 0

@@ -35,7 +35,7 @@ module Kiosk
 
         def agent_payment_key(agent_id)
           pem = ActiveRecord::Base.connection.execute(
-            "SELECT public_key FROM #{schema}.agents WHERE id = #{quote(agent_id)}",
+            "SELECT public_key FROM #{schema}.agents WHERE id = #{quote(agent_id)} AND revoked_at IS NULL",
           ).first&.fetch("public_key", nil)
           raise Kiosk::AgentIdentityProviders::InvalidToken, "no key for agent #{agent_id}" if pem.nil?
 
@@ -46,7 +46,7 @@ module Kiosk
 
         def lookup_user_id(agent_id)
           row = ActiveRecord::Base.connection.execute(
-            "SELECT user_id FROM #{schema}.agents WHERE id = #{quote(agent_id)}",
+            "SELECT user_id FROM #{schema}.agents WHERE id = #{quote(agent_id)} AND revoked_at IS NULL",
           ).first
           raise Kiosk::AgentIdentityProviders::InvalidToken, "unknown agent #{agent_id}" if row.nil?
 

@@ -120,12 +120,52 @@ RSpec.describe Kiosk::Server::Executor do
   end
 
   describe "stub verbs (deferred to follow-up release)" do
-    %i[pay schema help events].each do |verb|
+    %i[schema help events].each do |verb|
       it ":#{verb} raises NotImplementedError with a descriptive message" do
         expect {
           described_class.call(kind: verb, args: {}, identity: identity, connection: connection)
         }.to raise_error(NotImplementedError, /follow-up|kiosk-pay/)
       end
+    end
+  end
+
+  describe "verb :pay" do
+    let(:cart) do
+      Kiosk::Mandate::CartMandate.new(
+        id: "cart-1", intent_mandate_id: "intent-1", user_id: "u-1", agent_id: "a-1",
+        issuer: "https://demo.example", line_items: [{ sku: "pizza", qty: 1 }],
+        total_amount_cents: 1599, currency: "eur", expires_at: nil, created_at: nil, raw_jws: "jws",
+      )
+    end
+
+    before do
+      Kiosk.reset!
+      Kiosk.configure { |c| c.issuer = "https://demo.example" }
+      allow(Kiosk::Server::MandateVerifier).to receive(:verify_cart)
+        .with(raw_jws: "jws", agent_id: "a-1").and_return(cart)
+      allow_any_instance_of(described_class).to receive(:persist_payment_mandate).and_return(id: "pm-1")
+      Kiosk.configuration.payment_provider = instance_double(
+        "PSP", capture: { psp_reference: "pi_1", settled_amount_cents: 1599, settled_at: Time.now })
+    end
+
+    it "verifies the cart mandate, captures, and returns the settlement" do
+      result = described_class.call(kind: :pay, args: { cart_mandate_jws: "jws" },
+                                    identity: build_identity(agent_id: "a-1"), connection: connection)
+      expect(result.kind).to eq(:value)
+      expect(result.payload).to include(psp_reference: "pi_1", settled_amount_cents: 1599)
+    end
+
+    it "raises BadRequest when cart_mandate_jws is missing" do
+      expect { described_class.call(kind: :pay, args: {},
+        identity: build_identity(agent_id: "a-1"), connection: connection) }
+        .to raise_error(Kiosk::Server::Errors::BadRequest, /cart_mandate_jws/)
+    end
+
+    it "raises Forbidden when no payment_provider is configured" do
+      Kiosk.configuration.payment_provider = nil
+      expect { described_class.call(kind: :pay, args: { cart_mandate_jws: "jws" },
+        identity: build_identity(agent_id: "a-1"), connection: connection) }
+        .to raise_error(Kiosk::Server::Errors::Forbidden, /payment_provider/)
     end
   end
 end

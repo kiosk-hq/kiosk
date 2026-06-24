@@ -393,6 +393,25 @@ else
   rm -rf "$LOGIN_HOME" "$LOGIN_LOG" "$LOGIN_LOG.rc"
 fi
 
+# ─── no-human AP2 pay flow (register → intent+cart mandate → pay → persist) ───
+printf "\n\033[1m=== no-human register → mandate → pay ===\033[0m\n"
+
+pay_out=$( cd "$APP_DIR" && SERVER_URL="$SERVER_URL" KIOSK_ISSUER="$KIOSK_ISSUER" \
+             bundle exec ruby "$FIXTURES/pay_flow.rb" )
+
+assert "pay: http 200"                "$(echo "$pay_out" | jq -r '.http_code')"                       "200"
+assert "pay: ok=true"                 "$(echo "$pay_out" | jq -r '.response.ok')"                     "true"
+assert "pay: kind=value"              "$(echo "$pay_out" | jq -r '.response.kind')"                   "value"
+assert "pay: psp_reference present"   "$(echo "$pay_out" | jq -r '.response.value.psp_reference | length > 0')" "true"
+assert "pay: settled 1599"            "$(echo "$pay_out" | jq -r '.response.value.settled_amount_cents')" "1599"
+assert "pay: payment_mandate_id"      "$(echo "$pay_out" | jq -r '.response.value.payment_mandate_id | length > 0')" "true"
+
+# The full AP2 trail landed in Postgres — one row each, no human anywhere.
+assert "db: 1 intent_mandate"         "$(psql -X -d "$DB_NAME" -tAc 'SELECT COUNT(*) FROM kiosk.intent_mandates')"   "1"
+assert "db: 1 cart_mandate"           "$(psql -X -d "$DB_NAME" -tAc 'SELECT COUNT(*) FROM kiosk.cart_mandates')"     "1"
+assert "db: 1 payment_mandate"        "$(psql -X -d "$DB_NAME" -tAc 'SELECT COUNT(*) FROM kiosk.payment_mandates')"  "1"
+assert "db: settlement amount 1599"   "$(psql -X -d "$DB_NAME" -tAc 'SELECT settled_amount_cents FROM kiosk.payment_mandates LIMIT 1')" "1599"
+
 # ─── summary ────────────────────────────────────────────────────────────
 
 printf "\n\033[1m=== summary ===\033[0m\n"

@@ -47,11 +47,13 @@ class JwtOrStubIdp < Kiosk::AgentIdentityProviders::Base
       jwks:     [Kiosk.configuration.signing_key],
       audience: Kiosk.configuration.issuer,
     )
+    actor = (claims[:actor] || "human").to_s
     Kiosk::Identity.new(
-      user_id: claims[:sub],
-      role:    claims[:role] || Kiosk.configuration.roles.first.to_s,
-      actor:   "human",
-      claims:  claims,
+      user_id:  claims[:sub],
+      role:     claims[:role] || Kiosk.configuration.roles.first.to_s,
+      actor:    actor,
+      agent_id: (actor == "agent" ? claims[:agent_id] : nil),
+      claims:   claims,
     )
   rescue Kiosk::Server::JwtIssuer::Error
     nil # let the stub IdP try its parse shape

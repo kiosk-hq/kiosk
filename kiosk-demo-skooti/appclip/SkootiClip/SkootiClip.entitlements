@@ -1,0 +1,39 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN"
+  "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<!--
+  SkootiClip.entitlements
+  ───────────────────────
+  Set this file as the "Code Signing Entitlements" for the App Clip
+  target in Xcode → Build Settings → Code Signing → Code Signing Entitlements.
+
+  The key entitlement for App Clips is Associated Domains.
+  Without it the system will NOT launch the Clip when the user taps
+  the NFC tag / App Clip Code — iOS won't trust the association.
+
+  Steps to activate (paid Apple Developer Program required):
+    1. In the Apple Developer portal, enable "Associated Domains"
+       capability on the App ID for the App Clip target
+       (bundle ID: com.YOUR_TEAM.skooti.Clip or similar).
+    2. Add this entitlements file to the App Clip target in Xcode.
+    3. Upload the apple-app-site-association file to skooti.app
+       (see appclip/README.md for the exact JSON shape and hosting notes).
+
+  App Clip Associated Domains format:
+    appclips:<domain>  (NOT "webcredentials:" or "applinks:")
+-->
+<plist version="1.0">
+<dict>
+
+  <!-- Associated Domains — required for NFC / App Clip Code launch -->
+  <key>com.apple.developer.associated-domains</key>
+  <array>
+    <string>appclips:skooti.app</string>
+  </array>
+
+  <!-- App Clip specific entitlement — marks this target as an App Clip -->
+  <key>com.apple.developer.on-demand-install-capable</key>
+  <true/>
+
+</dict>
+</plist>

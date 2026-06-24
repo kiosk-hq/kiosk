@@ -73,6 +73,46 @@ module Kiosk
                        end
       end
 
+      # Minimum leading zero BITS required in the PoW digest at agent
+      # registration (`SHA256(public_key_pem + "." + pow_nonce)`).
+      # Default 0 = disabled (open registration — Plan 2/3 behaviour unchanged).
+      # Providers that gate physical-service access can set e.g. 20.
+      attr_writer :registration_difficulty
+      def registration_difficulty
+        @registration_difficulty ||= 0
+      end
+
+      # Issuer string of the trusted KYC attestation provider.
+      # Must match the `iss` claim of submitted KYC JWS tokens.
+      attr_writer :kyc_issuer
+      def kyc_issuer
+        @kyc_issuer
+      end
+
+      # RSA public key ({OpenSSL::PKey::RSA} or PEM string) of the trusted
+      # KYC provider. Used by {KycVerifier} to verify attestation JWS tokens.
+      def kyc_public_key
+        @kyc_public_key
+      end
+
+      def kyc_public_key=(value)
+        @kyc_public_key = case value
+                          when OpenSSL::PKey::PKey then value
+                          when String              then OpenSSL::PKey::RSA.new(value)
+                          when nil                 then nil
+                          else
+                            raise ArgumentError,
+                              "kyc_public_key must be an OpenSSL::PKey or PEM string, got #{value.class}"
+                          end
+      end
+
+      # Raw bytes master key used by {UnlockAuthority} to derive per-lock
+      # HMAC keys.  Provide as a plain string (binary or hex-decoded bytes).
+      attr_writer :unlock_master_key
+      def unlock_master_key
+        @unlock_master_key
+      end
+
       # Storage adapter for {Kiosk::Server::DeviceAuthorization} rows
       # (§6.5 + §6.7 Device-Grant state machine). Lazy-defaults to
       # {DeviceAuthorizationStores::InMemory} — fine for development +

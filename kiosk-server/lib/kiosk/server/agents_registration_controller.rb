@@ -17,6 +17,7 @@ if defined?(::ActionController::API)
           body   = JSON.parse(request.raw_post, symbolize_names: true)
           result = AgentRegistration.call(
             name: body.fetch(:name), public_key_pem: body.fetch(:public_key), role: body.fetch(:role),
+            pow: body[:pow],
           )
           Kiosk::Server::Headers.add_to(response.headers)
           render json: result, status: :created

@@ -277,6 +277,20 @@ module Kiosk
         SQL
       end
 
+      # ─── 007 add_kyc_verified_at ───────────────────────────────────────
+
+      # Adds `kyc_verified_at timestamptz` to `kiosk.agents`.
+      # Idempotent (ADD COLUMN IF NOT EXISTS) — safe to re-run.
+      # A non-NULL value means the agent has passed KYC attestation.
+      def kyc_verified_at_sql(schema: nil)
+        schema ||= Kiosk.configuration.schema
+
+        <<~SQL.strip
+          ALTER TABLE "#{schema}".agents
+            ADD COLUMN IF NOT EXISTS kyc_verified_at timestamptz;
+        SQL
+      end
+
       # ─── helpers ───────────────────────────────────────────────────────
 
       def user_id_cast(user_id_type)

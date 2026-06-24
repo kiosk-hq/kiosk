@@ -79,9 +79,9 @@ RSpec.describe Kiosk::Generators::InstallGenerator do
   end
 
   describe "migrations" do
-    it "creates exactly the six canonical migrations (001-006)" do
+    it "creates exactly the seven canonical migrations (001-007)" do
       invoke!
-      expect(migrations.size).to eq(6)
+      expect(migrations.size).to eq(7)
       basenames = migrations.map { |p| File.basename(p) }
       expect(basenames).to include(
         a_string_ending_with("_create_kiosk_schema.rb"),
@@ -90,14 +90,15 @@ RSpec.describe Kiosk::Generators::InstallGenerator do
         a_string_ending_with("_create_kiosk_reservations.rb"),
         a_string_ending_with("_create_kiosk_device_authorizations.rb"),
         a_string_ending_with("_create_kiosk_mandates.rb"),
+        a_string_ending_with("_add_kyc_verified_at_to_kiosk_agents.rb"),
       )
     end
 
-    it "orders the migration timestamps in 001 → 006 sequence" do
+    it "orders the migration timestamps in 001 → 007 sequence" do
       invoke!
       timestamps = migrations.map { |p| File.basename(p).split("_").first.to_i }
       expect(timestamps).to eq(timestamps.sort)
-      expect(timestamps.uniq.size).to eq(6) # strictly ascending, no collisions
+      expect(timestamps.uniq.size).to eq(7) # strictly ascending, no collisions
     end
 
     describe "001 create_kiosk_schema" do
@@ -225,6 +226,22 @@ RSpec.describe Kiosk::Generators::InstallGenerator do
         intent_idx  = body.index('DROP TABLE IF EXISTS "ksk".intent_mandates')
         expect(payment_idx).to be < cart_idx
         expect(cart_idx).to be < intent_idx
+      end
+    end
+
+    describe "007 add_kyc_verified_at_to_kiosk_agents" do
+      let(:file) { migrations.find { |p| p.end_with?("_add_kyc_verified_at_to_kiosk_agents.rb") } }
+
+      it "calls SchemaDefinitions.kyc_verified_at_sql with the configured schema" do
+        invoke!(%w[--schema=ksk])
+        body = File.read(file)
+        expect(body).to include("Kiosk::Server::SchemaDefinitions.kyc_verified_at_sql(")
+        expect(body).to include('schema: "ksk"')
+      end
+
+      it "drops the column in #down" do
+        invoke!(%w[--schema=ksk])
+        expect(File.read(file)).to include("DROP COLUMN IF EXISTS kyc_verified_at")
       end
     end
   end

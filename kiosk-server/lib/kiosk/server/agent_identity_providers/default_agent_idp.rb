@@ -42,6 +42,17 @@ module Kiosk
           OpenSSL::PKey::RSA.new(pem)
         end
 
+        # Returns true iff the agent has a non-NULL `kyc_verified_at` timestamp.
+        # Used by the `unlock` Action gate and any other KYC-restricted Action.
+        def kyc_verified?(agent_id)
+          row = ActiveRecord::Base.connection.execute(
+            "SELECT kyc_verified_at FROM #{schema}.agents WHERE id = #{quote(agent_id)} AND revoked_at IS NULL",
+          ).first
+          return false if row.nil?
+
+          !row.fetch("kyc_verified_at", nil).nil?
+        end
+
         private
 
         def lookup_user_id(agent_id)

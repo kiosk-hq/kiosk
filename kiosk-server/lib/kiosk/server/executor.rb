@@ -113,15 +113,17 @@ module Kiosk
       # persist both before charging, so the cart row's intent FK resolves.
       #
       # Three phases, capture strictly between two DB transactions:
-      #   P1  verify + persist the mandate trail (RLS-scoped tx). No external
-      #       effect yet.            FAIL ⇒ nothing charged, rows rolled back.
+      #   P1  verify + persist the mandate trail (GUC-scoped transaction — no
+      #       RLS policy on the mandate tables yet). No external effect yet.
+      #                            FAIL ⇒ nothing charged, rows rolled back.
       #   P2  irreversible PSP capture, OUTSIDE any DB transaction, keyed for
       #       idempotency by cart.id. FAIL ⇒ trail persisted, no charge; safe
       #                               to retry (idempotency key).
-      #   P3  record the settlement (fresh RLS-scoped tx).
-      #       FAIL ⇒ charge + trail exist, payment row missing — reconcilable
-      #              from the cart row + idempotency key, never a silent
-      #              double-charge.
+      #   P3  record the settlement (fresh GUC-scoped transaction).
+      #       FAIL ⇒ charge + trail exist, payment row missing. The cart row +
+      #              Stripe's cart.id-scoped idempotency key make the charge
+      #              recoverable, but NO reconciliation worker exists yet —
+      #              follow-up. Never a silent double-charge.
       def verb_pay(args)
         args        = symbolize(args)
         raw_intent  = args[:intent_mandate_jws]
@@ -132,22 +134,34 @@ module Kiosk
         provider = Kiosk.configuration.payment_provider
         raise Errors::Forbidden, "no payment_provider configured" if provider.nil?
 
-        # Phase 1 — verify + persist the mandate trail (RLS-scoped tx).
+        # Phase 1 — verify + persist the mandate trail (GUC-scoped transaction;
+        # no RLS policy on the mandate tables yet). The persist helpers return
+        # the SERVER-generated uuid PKs, which thread the FK chain. A unique
+        # violation (same signed mandate replayed) rolls the tx back and
+        # propagates here, where it becomes a clean 409 Conflict.
         cart = nil
-        SessionContext.open(connection: connection, identity: identity) do
-          intent = MandateVerifier.verify_intent(raw_jws: raw_intent, identity: identity)
-          cart   = MandateVerifier.verify_cart(raw_jws: raw_cart, identity: identity, intent: intent)
-          persist_intent_mandate(intent)
-          persist_cart_mandate(cart)
+        cart_row = nil
+        begin
+          SessionContext.open(connection: connection, identity: identity) do
+            intent = MandateVerifier.verify_intent(raw_jws: raw_intent, identity: identity)
+            cart   = MandateVerifier.verify_cart(raw_jws: raw_cart, identity: identity, intent: intent)
+            intent_row = persist_intent_mandate(intent)
+            cart_row   = persist_cart_mandate(cart, intent_row_id: intent_row)
+          end
+        rescue StandardError => e
+          raise Errors::Conflict.new("mandate already processed") if unique_violation?(e)
+
+          raise
         end
 
         # Phase 2 — irreversible external capture. OUTSIDE any DB transaction.
         settled = provider.capture(cart)
 
-        # Phase 3 — record settlement (fresh RLS-scoped tx).
+        # Phase 3 — record settlement (fresh GUC-scoped transaction; no RLS
+        # policy on the mandate tables yet).
         payment_id = nil
         SessionContext.open(connection: connection, identity: identity) do
-          payment_id = persist_payment_mandate(cart: cart, settled: settled)
+          payment_id = persist_payment_mandate(cart_row_id: cart_row, cart: cart, settled: settled)
         end
 
         Result.new(kind: :value, payload: {
@@ -159,56 +173,74 @@ module Kiosk
       end
 
       # Inserts the intent-mandate row under the open SessionContext
-      # (RLS-scoped). The mandate's own signed id is the PK, so the cart and
-      # payment rows can reference it by id and the trail is auditable
-      # end-to-end. Plain INSERT … RETURNING id (no ON CONFLICT — the PK is
-      # supplied, so the dead ON CONFLICT path is gone). Returns the id.
+      # (GUC-scoped transaction; no RLS policy on the mandate tables yet). The
+      # PK is SERVER-generated (`gen_random_uuid()` DEFAULT) — never the
+      # agent-supplied id, which lands in `mandate_id` for audit + per-principal
+      # idempotency. Persists the verified `expires_at`. Returns the server id
+      # the cart row references by FK.
       def persist_intent_mandate(intent)
         schema = Kiosk.configuration.schema
         connection.execute(<<~SQL).to_a.first.fetch("id")
           INSERT INTO #{schema}.intent_mandates
-            (id, user_id, agent_id, issuer, scope, cap_amount_cents,
+            (mandate_id, user_id, agent_id, issuer, scope, cap_amount_cents,
              currency, expires_at, created_at, raw_jws)
           VALUES (#{q(intent.id)}, #{q(intent.user_id)}, #{q(intent.agent_id)},
              #{q(intent.issuer)}, #{q(intent.scope)}, #{intent.cap_amount_cents.to_i},
-             #{q(intent.currency)}, now() + interval '1 hour', now(), #{q(intent.raw_jws)})
+             #{q(intent.currency)}, #{q(intent.expires_at)}, now(), #{q(intent.raw_jws)})
           RETURNING id
         SQL
       end
 
-      # Inserts the cart-mandate row under the open SessionContext
-      # (RLS-scoped). PK = the cart's signed id; intent_mandate_id references
-      # the intent row persisted in phase 1. Plain INSERT … RETURNING id (no
-      # ON CONFLICT). Returns the id.
-      def persist_cart_mandate(cart)
+      # Inserts the cart-mandate row under the open SessionContext (GUC-scoped
+      # transaction; no RLS policy on the mandate tables yet). The PK is
+      # SERVER-generated; the agent-signed id lands in `mandate_id`.
+      # `intent_mandate_id` references the SERVER intent id returned by phase 1
+      # (`intent_row_id`), NOT the signed `cart.intent_mandate_id` — the DB FK
+      # uses server ids; the cryptographic intent↔cart binding is checked
+      # separately in MandateVerifier#verify_cart. Persists the verified
+      # `expires_at`. Returns the server id the payment row references by FK.
+      def persist_cart_mandate(cart, intent_row_id:)
         schema = Kiosk.configuration.schema
         connection.execute(<<~SQL).to_a.first.fetch("id")
           INSERT INTO #{schema}.cart_mandates
-            (id, intent_mandate_id, user_id, agent_id, issuer, line_items,
+            (mandate_id, intent_mandate_id, user_id, agent_id, issuer, line_items,
              total_amount_cents, currency, expires_at, created_at, raw_jws)
-          VALUES (#{q(cart.id)}, #{q(cart.intent_mandate_id)}, #{q(cart.user_id)},
+          VALUES (#{q(cart.id)}, #{q(intent_row_id)}, #{q(cart.user_id)},
              #{q(cart.agent_id)}, #{q(cart.issuer)}, #{q(cart.line_items.to_json)}::jsonb,
-             #{cart.total_amount_cents.to_i}, #{q(cart.currency)}, now() + interval '1 hour',
+             #{cart.total_amount_cents.to_i}, #{q(cart.currency)}, #{q(cart.expires_at)},
              now(), #{q(cart.raw_jws)})
           RETURNING id
         SQL
       end
 
       # Inserts the payment-mandate row under the open SessionContext
-      # (RLS-scoped). cart_mandate_id references the cart row persisted in
-      # phase 1 by its known id, so the FK resolves. Returns the new
-      # payment_mandate id.
-      def persist_payment_mandate(cart:, settled:)
+      # (GUC-scoped transaction; no RLS policy on the mandate tables yet). The
+      # PK is SERVER-generated; `cart_mandate_id` references the SERVER cart id
+      # returned by phase 1 (`cart_row_id`), so the FK resolves. This is a
+      # server-side settlement receipt (no agent-signed id), so there is no
+      # `mandate_id`; `UNIQUE (cart_mandate_id)` is its idempotency anchor.
+      # Returns the new payment_mandate server id.
+      def persist_payment_mandate(cart_row_id:, cart:, settled:)
         schema = Kiosk.configuration.schema
         connection.execute(<<~SQL).to_a.first.fetch("id")
           INSERT INTO #{schema}.payment_mandates
-            (id, cart_mandate_id, user_id, agent_id, issuer, psp_reference,
+            (cart_mandate_id, user_id, agent_id, issuer, psp_reference,
              settled_amount_cents, currency, settled_at, raw_jws)
-          VALUES (gen_random_uuid(), #{q(cart.id)}, #{q(cart.user_id)}, #{q(cart.agent_id)},
+          VALUES (#{q(cart_row_id)}, #{q(cart.user_id)}, #{q(cart.agent_id)},
              #{q(cart.issuer)}, #{q(settled[:psp_reference])}, #{settled[:settled_amount_cents].to_i},
              #{q(cart.currency)}, now(), '')
           RETURNING id
         SQL
+      end
+
+      # True when `error` is a DB unique-constraint violation. Matched by class
+      # NAME, not constant: kiosk-server declares no activerecord/pg dependency
+      # (the host Rails app provides them at call time), so naming
+      # ActiveRecord::RecordNotUnique / PG::UniqueViolation directly would raise
+      # NameError in the gem's own unit env. A standard optional-dependency
+      # pattern.
+      def unique_violation?(error)
+        %w[ActiveRecord::RecordNotUnique PG::UniqueViolation].include?(error.class.name)
       end
 
       def q(value) = connection.quote(value)

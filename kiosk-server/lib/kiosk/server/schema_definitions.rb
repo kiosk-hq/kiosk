@@ -2,14 +2,15 @@
 
 module Kiosk
   module Server
-    # Pure SQL generators for the five canonical Kiosk migrations.
-    # See implementation plan §3 — migrations 001-005:
+    # Pure SQL generators for the six canonical Kiosk migrations.
+    # See implementation plan §3 — migrations 001-006:
     #
     #   001 create_kiosk_schema                → schema + four current_*() helpers
     #   002 create_kiosk_identity_tables       → agents, agent_tokens, agent_mappings
     #   003 create_kiosk_actions_log           → kiosk.actions, kiosk.action_log
     #   004 create_kiosk_reservations          → kiosk.reservations
     #   005 create_kiosk_device_authorizations → kiosk.device_authorizations (RFC 8628 Device Grant)
+    #   006 create_kiosk_mandates              → intent_mandates, cart_mandates, payment_mandates (AP2 trail)
     #
     # Pure functions: no database connection, no Rails dependency. Output
     # is SQL strings the host migration framework (`ActiveRecord::Migration#execute`)
@@ -209,6 +210,14 @@ module Kiosk
       # user), `cart_mandates` (agent-assembled cart within the envelope),
       # `payment_mandates` (PSP settlement receipt). Each row carries its
       # original JWS so the chain is auditable end-to-end.
+      #
+      # `id` is a SERVER-generated uuid PK (`gen_random_uuid()`) — never
+      # supplied by the caller, so one principal cannot pre-occupy or block
+      # another's row on these (currently RLS-less) tables. The agent-signed
+      # mandate id lives in `mandate_id text NOT NULL` for audit + idempotency,
+      # made unique PER PRINCIPAL via `UNIQUE (user_id, mandate_id)`. The FK
+      # chain references the SERVER ids; `UNIQUE (cart_mandate_id)` on
+      # payment_mandates anchors one settlement per cart.
       def mandates_sql(schema: nil, user_id_type: nil)
         schema       ||= Kiosk.configuration.schema
         user_id_type ||= Kiosk.configuration.user_id_type
@@ -217,6 +226,7 @@ module Kiosk
         <<~SQL.strip
           CREATE TABLE "#{schema}".intent_mandates (
             id                uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+            mandate_id        text NOT NULL,
             user_id           #{col_type} NOT NULL,
             agent_id          uuid NOT NULL,
             issuer            text NOT NULL,
@@ -225,13 +235,15 @@ module Kiosk
             currency          text NOT NULL,
             expires_at        timestamptz NOT NULL,
             created_at        timestamptz NOT NULL DEFAULT now(),
-            raw_jws           text NOT NULL
+            raw_jws           text NOT NULL,
+            UNIQUE (user_id, mandate_id)
           );
           CREATE INDEX idx_intent_mandates_user_id  ON "#{schema}".intent_mandates (user_id);
           CREATE INDEX idx_intent_mandates_agent_id ON "#{schema}".intent_mandates (agent_id);
 
           CREATE TABLE "#{schema}".cart_mandates (
             id                 uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+            mandate_id         text NOT NULL,
             intent_mandate_id  uuid NOT NULL REFERENCES "#{schema}".intent_mandates(id) ON DELETE CASCADE,
             user_id            #{col_type} NOT NULL,
             agent_id           uuid NOT NULL,
@@ -241,7 +253,8 @@ module Kiosk
             currency           text NOT NULL,
             expires_at         timestamptz NOT NULL,
             created_at         timestamptz NOT NULL DEFAULT now(),
-            raw_jws            text NOT NULL
+            raw_jws            text NOT NULL,
+            UNIQUE (user_id, mandate_id)
           );
           CREATE INDEX idx_cart_mandates_user_id ON "#{schema}".cart_mandates (user_id);
           CREATE INDEX idx_cart_mandates_intent  ON "#{schema}".cart_mandates (intent_mandate_id);
@@ -256,7 +269,8 @@ module Kiosk
             settled_amount_cents bigint NOT NULL,
             currency             text NOT NULL,
             settled_at           timestamptz NOT NULL,
-            raw_jws              text NOT NULL
+            raw_jws              text NOT NULL,
+            UNIQUE (cart_mandate_id)
           );
           CREATE INDEX idx_payment_mandates_user_id ON "#{schema}".payment_mandates (user_id);
           CREATE INDEX idx_payment_mandates_cart    ON "#{schema}".payment_mandates (cart_mandate_id);

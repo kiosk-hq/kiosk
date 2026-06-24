@@ -85,6 +85,15 @@ module Kiosk
         HTTP_STATUS = 404
       end
 
+      # Request collides with existing state — e.g. a mandate already
+      # processed (unique violation on a per-principal signed-id index, the
+      # idempotency anchor). Exit 2, HTTP 409.
+      class Conflict < Base
+        CODE        = "conflict"
+        EXIT_CODE   = 2
+        HTTP_STATUS = 409
+      end
+
       # Rate limit hit. Exit 5.
       class QuotaExceeded < Base
         CODE        = "quota_exceeded"

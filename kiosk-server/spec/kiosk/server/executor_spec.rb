@@ -155,9 +155,14 @@ RSpec.describe Kiosk::Server::Executor do
         .with(raw_jws: "intent-jws", identity: identity).and_return(intent)
       allow(Kiosk::Server::MandateVerifier).to receive(:verify_cart)
         .with(raw_jws: "cart-jws", identity: identity, intent: intent).and_return(cart)
+      # Persist helpers now return SERVER-generated ids (uuid PKs); the verb
+      # threads them through the FK chain.
       allow_any_instance_of(described_class).to receive(:persist_intent_mandate)
+        .and_return("intent-row")
       allow_any_instance_of(described_class).to receive(:persist_cart_mandate)
-      allow_any_instance_of(described_class).to receive(:persist_payment_mandate).and_return("pm-1")
+        .and_return("cart-row")
+      allow_any_instance_of(described_class).to receive(:persist_payment_mandate)
+        .and_return("pm-1")
       Kiosk.configuration.payment_provider = instance_double("PSP", capture: settlement)
     end
 
@@ -170,6 +175,49 @@ RSpec.describe Kiosk::Server::Executor do
         settled_amount_cents: 1599,
         currency:             "eur",
       )
+    end
+
+    it "threads the SERVER-generated intent id into the cart persist (FK chain, not the signed id)" do
+      expect_any_instance_of(described_class).to receive(:persist_cart_mandate)
+        .with(cart, intent_row_id: "intent-row").and_return("cart-row")
+      described_class.call(kind: :pay, args: valid_args, identity: identity, connection: connection)
+    end
+
+    it "threads the SERVER-generated cart id into the payment persist (FK chain)" do
+      expect_any_instance_of(described_class).to receive(:persist_payment_mandate)
+        .with(cart_row_id: "cart-row", cart: cart, settled: settlement).and_return("pm-1")
+      described_class.call(kind: :pay, args: valid_args, identity: identity, connection: connection)
+    end
+
+    # N2: a unique-violation surfacing from phase-1 persistence (same signed
+    # mandate replayed) is a 409 Conflict, not a 500. Matched by class NAME so
+    # the gem needn't load ActiveRecord in its own unit env.
+    it "maps a phase-1 unique violation to Errors::Conflict (409)" do
+      stub_const("ActiveRecord::RecordNotUnique", Class.new(StandardError))
+      allow_any_instance_of(described_class).to receive(:persist_intent_mandate)
+        .and_raise(ActiveRecord::RecordNotUnique.new("dup key"))
+
+      expect { described_class.call(kind: :pay, args: valid_args, identity: identity, connection: connection) }
+        .to raise_error(Kiosk::Server::Errors::Conflict) { |e| expect(e.http_status).to eq(409) }
+    end
+
+    it "lets a non-unique phase-1 error propagate unchanged (not remapped to Conflict)" do
+      allow(Kiosk::Server::MandateVerifier).to receive(:verify_cart)
+        .and_raise(Kiosk::Server::Errors::Forbidden.new("cart exceeds intent cap"))
+
+      expect { described_class.call(kind: :pay, args: valid_args, identity: identity, connection: connection) }
+        .to raise_error(Kiosk::Server::Errors::Forbidden, /cap/)
+    end
+
+    it "does not capture when phase-1 persistence raises a unique violation" do
+      stub_const("ActiveRecord::RecordNotUnique", Class.new(StandardError))
+      allow_any_instance_of(described_class).to receive(:persist_intent_mandate)
+        .and_raise(ActiveRecord::RecordNotUnique.new("dup key"))
+      provider = Kiosk.configuration.payment_provider
+      expect(provider).not_to receive(:capture)
+
+      expect { described_class.call(kind: :pay, args: valid_args, identity: identity, connection: connection) }
+        .to raise_error(Kiosk::Server::Errors::Conflict)
     end
 
     # C2: an irreversible PSP capture must never run inside a DB transaction —

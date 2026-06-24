@@ -20,6 +20,15 @@ RSpec.describe Kiosk::PaymentProviders::Stripe do
     )
   end
 
+  let(:payment_mandate) do
+    Kiosk::Mandate::PaymentMandate.new(
+      id: "pay-1", cart_mandate_id: "cart-1", user_id: "user-1",
+      agent_id: "agent-1", issuer: "https://demo.example",
+      psp_reference: "pi_123", settled_amount_cents: 1599,
+      currency: "eur", settled_at: nil, raw_jws: "jws",
+    )
+  end
+
   describe "#capture" do
     it "creates a confirmed automatic-capture PaymentIntent from the mandate" do
       pi = double("PaymentIntent", id: "pi_123", amount_received: 1599, created: 1_700_000_000)
@@ -61,6 +70,24 @@ RSpec.describe Kiosk::PaymentProviders::Stripe do
       expect(result[:stripe_payment_intent_id]).to eq("pi_hold")
       expect(result[:client_secret]).to eq("cs_1")
       expect(result[:status]).to eq("requires_capture")
+    end
+  end
+
+  describe "#refund" do
+    it "refunds the full amount when amount_cents is nil" do
+      expect(::Stripe::Refund).to receive(:create).with(
+        { payment_intent: "pi_123" },
+      ).and_return(double("Refund", id: "re_1"))
+
+      expect(adapter.refund(payment_mandate)).to eq(refund_id: "re_1")
+    end
+
+    it "refunds a partial amount when given" do
+      expect(::Stripe::Refund).to receive(:create).with(
+        { payment_intent: "pi_123", amount: 500 },
+      ).and_return(double("Refund", id: "re_2"))
+
+      expect(adapter.refund(payment_mandate, 500)).to eq(refund_id: "re_2")
     end
   end
 end

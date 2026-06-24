@@ -104,25 +104,22 @@ unless SKIP_KYC
   STDERR.puts "  KYC verified"
 end
 
-# ── Step 3: reserve a scooter (seeded scooter id = 1) ───────────────────────
-
-scooter_id_int = 1  # seeded by db/seeds.rb as SK-001 with integer PK 1
+# ── Step 3: reserve a scooter (seeded scooter code = "SK-001") ──────────────
 
 rc_rsv, rsv = post_json(
   "#{SERVER}/kiosk/exec",
-  { command: "run", body: { name: "reserve", scooter_id: scooter_id_int } },
+  { command: "run", body: { name: "reserve", scooter_code: "SK-001" } },
   { "Authorization" => "Bearer #{token}" },
 )
 abort "reserve failed (#{rc_rsv}): #{JSON.generate(rsv)}" unless rc_rsv == 200
 
 rsv_value      = rsv.fetch("value")
 reservation_id = rsv_value.fetch("reservation_id")
-# The action returns scooter_id.to_s — which is "1" for the seeded scooter.
-# This is the EXACT string UnlockAuthority uses in the MAC message.
-scooter_id_str = rsv_value.fetch("scooter_id")
+# The action returns the server-side scooter code (e.g. "SK-001").
+scooter_code   = rsv_value.fetch("scooter_code")
 price_per_min  = rsv_value.fetch("price_per_min_cents")
 
-STDERR.puts "  Reserved: id=#{reservation_id} scooter=#{scooter_id_str} price=#{price_per_min}¢/min"
+STDERR.puts "  Reserved: id=#{reservation_id} scooter=#{scooter_code} price=#{price_per_min}¢/min"
 
 # ── Step 4: pay ──────────────────────────────────────────────────────────────
 
@@ -155,7 +152,7 @@ unless SKIP_PAY
     user_id:            user_id,
     agent_id:           agent_id,
     iss:                ISSUER,
-    line_items:         [{ sku: scooter_id_str, qty: 1 }],
+    line_items:         [{ sku: scooter_code, qty: 1 }],
     total_amount_cents: total_cents,
     currency:           "eur",
     exp:                now + 600,
@@ -182,15 +179,17 @@ end
 
 # ── Step 5: instantiate LockSim with the diversified K_lock ─────────────────
 #
-# K_lock = HMAC-SHA256(master_key, scooter_id_str)
-# scooter_id_str is "1" (the integer PK stringified by the reserve Action).
-# This MUST match the string UnlockAuthority.lock_key receives on the server.
+# K_lock = HMAC-SHA256(master_key, scooter_code)
+# scooter_code is "SK-001" — the physical lock identifier the firmware is
+# provisioned with. This MUST match the code the server derives from the
+# reservation and passes to UnlockAuthority.mac.
 
-lock_key = OpenSSL::HMAC.digest("SHA256", MASTER_KEY, scooter_id_str)
-lock     = LockSim.new(scooter_id: scooter_id_str, lock_key: lock_key)
+lock_key = OpenSSL::HMAC.digest("SHA256", MASTER_KEY, "SK-001")
+lock     = LockSim.new(scooter_id: "SK-001", lock_key: lock_key)
 nonce    = lock.issue_nonce
 
 # ── Step 6: unlock ───────────────────────────────────────────────────────────
+# No scooter_id in the request body — the server derives it from the reservation.
 
 rc_unlock, unlock_resp = post_json(
   "#{SERVER}/kiosk/exec",
@@ -198,7 +197,6 @@ rc_unlock, unlock_resp = post_json(
     command: "run",
     body: {
       name:           "unlock",
-      scooter_id:     scooter_id_str,
       nonce:          nonce,
       reservation_id: reservation_id,
     },

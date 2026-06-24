@@ -56,8 +56,8 @@ end
 
 # reserve — create a scooter reservation row for the authenticated user.
 #
-# args: { scooter_id: <uuid or integer> }
-# Returns: { reservation_id:, scooter_id:, price_per_min_cents: }
+# args: { scooter_code: <string, e.g. "SK-001"> }
+# Returns: { reservation_id:, scooter_code:, price_per_min_cents: }
 #
 # Runs inside SessionContext (the Executor wraps `run` in a transaction with
 # the four SET LOCAL GUCs already applied), so kiosk.current_user_id() is live.
@@ -67,44 +67,42 @@ Kiosk::Server::Actions.register("reserve") do |args|
   uid = conn.execute("SELECT kiosk.current_user_id() AS uid").first["uid"]
   raise Kiosk::Server::Errors::Unauthenticated.new("no authenticated user") if uid.nil?
 
-  scooter_id = args.fetch(:scooter_id) { raise Kiosk::Server::Errors::BadRequest.new("missing field: scooter_id") }
+  scooter_code = args.fetch(:scooter_code) { raise Kiosk::Server::Errors::BadRequest.new("missing field: scooter_code") }
 
   scooter = conn.execute(
-    "SELECT id, price_per_min_cents FROM scooters WHERE id = #{conn.quote(scooter_id.to_s)} LIMIT 1"
+    "SELECT id, code, price_per_min_cents FROM scooters WHERE code = #{conn.quote(scooter_code.to_s)} LIMIT 1"
   ).first
-  raise Kiosk::Server::Errors::BadRequest.new("scooter not found: #{scooter_id}") if scooter.nil?
+  raise Kiosk::Server::Errors::BadRequest.new("scooter not found: #{scooter_code}") if scooter.nil?
 
   reservation = conn.execute(<<~SQL).first
     INSERT INTO public.reservations (user_id, scooter_id, status, created_at, updated_at)
-    VALUES (#{conn.quote(uid)}::uuid, #{conn.quote(scooter_id.to_s)}::integer, 'reserved', now(), now())
+    VALUES (#{conn.quote(uid)}::uuid, #{conn.quote(scooter["id"].to_s)}::integer, 'reserved', now(), now())
     RETURNING id
   SQL
 
   {
     reservation_id:      reservation["id"],
-    scooter_id:          scooter_id.to_s,
+    scooter_code:        scooter["code"],
     price_per_min_cents: scooter["price_per_min_cents"],
   }
 end
 
 # unlock — verify gates then issue an HMAC unlock MAC for the scooter lock.
 #
-# args: { scooter_id:, nonce: (hex), reservation_id: }
+# args: { reservation_id:, nonce: (hex) }
+# scooter_id is NOT accepted from the client — it is derived server-side from
+# the reservation row, preventing cross-scooter unlock attacks.
 # Gates (all three must pass, else 403 Forbidden):
 #   1. reservation exists and belongs to the principal (RLS-scoped SELECT)
 #   2. agent is KYC-verified (kyc_verified_at NOT NULL in kiosk.agents)
 #   3. principal has a settled payment mandate
-# Returns: { scooter_id:, mac:, alg: "HMAC-SHA256" }
+# Returns: { scooter_code:, mac:, alg: "HMAC-SHA256" }
 Kiosk::Server::Actions.register("unlock") do |args|
   conn = ActiveRecord::Base.connection
 
-  scooter_id     = args[:scooter_id]
   nonce_hex      = args[:nonce]
   reservation_id = args[:reservation_id]
 
-  if scooter_id.nil? || scooter_id.to_s.empty?
-    raise Kiosk::Server::Errors::BadRequest.new("missing field: scooter_id")
-  end
   if nonce_hex.nil? || nonce_hex.to_s.empty?
     raise Kiosk::Server::Errors::BadRequest.new("missing field: nonce")
   end
@@ -116,10 +114,20 @@ Kiosk::Server::Actions.register("unlock") do |args|
   # The SELECT runs under the SET LOCAL GUCs from SessionContext, so RLS
   # enforces user_id = kiosk.current_user_id(). A missing or foreign row
   # returns nothing → 403.
+  # The scooter_id FK is read server-side — the client cannot supply it.
   reservation = conn.execute(
     "SELECT id, scooter_id FROM public.reservations WHERE id = #{conn.quote(reservation_id.to_s)}::uuid LIMIT 1"
   ).first
   raise Kiosk::Server::Errors::Forbidden.new("reservation not found or not yours") if reservation.nil?
+
+  # Derive the authoritative scooter code from the reservation's FK.
+  # This binds the MAC to the ACTUAL reserved scooter, not a client-supplied value.
+  scooter_row = conn.execute(
+    "SELECT code FROM scooters WHERE id = #{conn.quote(reservation["scooter_id"].to_s)} LIMIT 1"
+  ).first
+  raise Kiosk::Server::Errors::Forbidden.new("scooter not found for reservation") if scooter_row.nil?
+
+  code = scooter_row["code"]
 
   # ── Gate 2: agent is KYC-verified ──────────────────────────────────────
   # kiosk.current_agent_id() reads the app.current_agent_id GUC set by
@@ -144,8 +152,9 @@ Kiosk::Server::Actions.register("unlock") do |args|
   raise Kiosk::Server::Errors::Forbidden.new("no settled payment mandate") if paid.nil?
 
   # ── All gates passed: compute and return the unlock MAC ─────────────────
+  # MAC is bound to the server-derived scooter code, not any client-supplied value.
   mac = Kiosk::Server::UnlockAuthority.mac(
-    scooter_id:     scooter_id.to_s,
+    scooter_id:     code,
     nonce_hex:      nonce_hex.to_s,
     reservation_id: reservation_id.to_s,
   )
@@ -156,8 +165,8 @@ Kiosk::Server::Actions.register("unlock") do |args|
   )
 
   {
-    scooter_id: scooter_id.to_s,
-    mac:        mac,
-    alg:        "HMAC-SHA256",
+    scooter_code: code,
+    mac:          mac,
+    alg:          "HMAC-SHA256",
   }
 end

@@ -92,12 +92,58 @@ module Kiosk
         Result.new(kind: :value, payload: value)
       end
 
-      # ─── stubs — land in follow-up releases ────────────────────────────
+      # ─── pay ───────────────────────────────────────────────────────────
 
-      def verb_pay(_args)
-        raise NotImplementedError,
-              "`pay` verb arrives with kiosk-pay-stripe (M4 in implementation plan)"
+      def verb_pay(args)
+        args = symbolize(args)
+        raw  = args[:cart_mandate_jws]
+        raise Errors::BadRequest, "args.cart_mandate_jws required" if raw.nil? || raw.to_s.empty?
+
+        provider = Kiosk.configuration.payment_provider
+        raise Errors::Forbidden, "no payment_provider configured" if provider.nil?
+
+        cart    = MandateVerifier.verify_cart(raw_jws: raw, agent_id: identity.agent_id)
+        settled = provider.capture(cart)
+        payment = persist_payment_mandate(cart: cart, settled: settled)
+
+        Result.new(kind: :value, payload: {
+          payment_mandate_id:   payment[:id],
+          psp_reference:        settled[:psp_reference],
+          settled_amount_cents: settled[:settled_amount_cents],
+          currency:             cart.currency,
+        })
       end
+
+      # Inserts the cart + payment mandate rows under the open SessionContext
+      # (RLS-scoped to the principal). Returns { id: payment_mandate_id }.
+      def persist_payment_mandate(cart:, settled:)
+        schema = Kiosk.configuration.schema
+        cart_id = connection.execute(<<~SQL).to_a.first.fetch("id")
+          INSERT INTO #{schema}.cart_mandates
+            (id, intent_mandate_id, user_id, agent_id, issuer, line_items,
+             total_amount_cents, currency, expires_at, created_at, raw_jws)
+          VALUES (gen_random_uuid(), #{q(cart.intent_mandate_id)}, #{q(cart.user_id)},
+             #{q(cart.agent_id)}, #{q(cart.issuer)}, #{q(cart.line_items.to_json)}::jsonb,
+             #{cart.total_amount_cents.to_i}, #{q(cart.currency)}, now() + interval '1 hour',
+             now(), #{q(cart.raw_jws)})
+          ON CONFLICT DO NOTHING
+          RETURNING id
+        SQL
+        pay_id = connection.execute(<<~SQL).to_a.first.fetch("id")
+          INSERT INTO #{schema}.payment_mandates
+            (id, cart_mandate_id, user_id, agent_id, issuer, psp_reference,
+             settled_amount_cents, currency, settled_at, raw_jws)
+          VALUES (gen_random_uuid(), #{q(cart_id)}, #{q(cart.user_id)}, #{q(cart.agent_id)},
+             #{q(cart.issuer)}, #{q(settled[:psp_reference])}, #{settled[:settled_amount_cents].to_i},
+             #{q(cart.currency)}, now(), '')
+          RETURNING id
+        SQL
+        { id: pay_id }
+      end
+
+      def q(value) = connection.quote(value)
+
+      # ─── stubs — land in follow-up releases ────────────────────────────
 
       def verb_schema(_args)
         raise NotImplementedError,

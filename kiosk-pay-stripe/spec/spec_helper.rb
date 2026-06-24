@@ -1,5 +1,6 @@
 # frozen_string_literal: true
 
+require "stripe"
 require "kiosk/payment_providers/stripe"
 
 RSpec.configure do |config|

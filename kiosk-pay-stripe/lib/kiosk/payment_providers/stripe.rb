@@ -20,6 +20,28 @@ module Kiosk
         require "stripe"
         ::Stripe.api_key = @api_key
       end
+
+      # @param cart_mandate [Kiosk::Mandate::CartMandate]
+      # @return [Hash] { psp_reference:, settled_amount_cents:, settled_at: }
+      def capture(cart_mandate)
+        intent = ::Stripe::PaymentIntent.create(
+          {
+            amount:         cart_mandate.total_amount_cents,
+            currency:       cart_mandate.currency,
+            payment_method: @test_payment_method,
+            confirm:        true,
+            capture_method: "automatic",
+            metadata:       { cart_mandate_id: cart_mandate.id },
+          },
+          { idempotency_key: "#{cart_mandate.id}-capture" },
+        )
+
+        {
+          psp_reference:        intent.id,
+          settled_amount_cents: intent.amount_received,
+          settled_at:           Time.at(intent.created).utc,
+        }
+      end
     end
   end
 end

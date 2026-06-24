@@ -10,4 +10,35 @@ RSpec.describe Kiosk::PaymentProviders::Stripe do
   it "exposes a VERSION" do
     expect(Kiosk::PaymentProviders::Stripe::VERSION).to match(/\A\d+\.\d+\.\d+\z/)
   end
+
+  let(:cart_mandate) do
+    Kiosk::Mandate::CartMandate.new(
+      id: "cart-1", intent_mandate_id: "intent-1", user_id: "user-1",
+      agent_id: "agent-1", issuer: "https://demo.example",
+      line_items: [{ sku: "pizza", qty: 1 }], total_amount_cents: 1599,
+      currency: "eur", expires_at: nil, created_at: nil, raw_jws: "jws",
+    )
+  end
+
+  describe "#capture" do
+    it "creates a confirmed automatic-capture PaymentIntent from the mandate" do
+      pi = double("PaymentIntent", id: "pi_123", amount_received: 1599, created: 1_700_000_000)
+
+      expect(::Stripe::PaymentIntent).to receive(:create).with(
+        {
+          amount: 1599, currency: "eur",
+          payment_method: "pm_card_visa", confirm: true,
+          capture_method: "automatic",
+          metadata: { cart_mandate_id: "cart-1" },
+        },
+        { idempotency_key: "cart-1-capture" },
+      ).and_return(pi)
+
+      result = adapter.capture(cart_mandate)
+
+      expect(result[:psp_reference]).to eq("pi_123")
+      expect(result[:settled_amount_cents]).to eq(1599)
+      expect(result[:settled_at]).to eq(Time.at(1_700_000_000).utc)
+    end
+  end
 end

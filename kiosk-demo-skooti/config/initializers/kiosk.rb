@@ -75,7 +75,7 @@ Kiosk::Server::Actions.register("reserve") do |args|
   raise Kiosk::Server::Errors::BadRequest.new("scooter not found: #{scooter_id}") if scooter.nil?
 
   reservation = conn.execute(<<~SQL).first
-    INSERT INTO reservations (user_id, scooter_id, status)
+    INSERT INTO public.reservations (user_id, scooter_id, status)
     VALUES (#{conn.quote(uid)}::uuid, #{conn.quote(scooter_id.to_s)}::integer, 'reserved')
     RETURNING id
   SQL
@@ -117,7 +117,7 @@ Kiosk::Server::Actions.register("unlock") do |args|
   # enforces user_id = kiosk.current_user_id(). A missing or foreign row
   # returns nothing → 403.
   reservation = conn.execute(
-    "SELECT id, scooter_id FROM reservations WHERE id = #{conn.quote(reservation_id.to_s)}::uuid LIMIT 1"
+    "SELECT id, scooter_id FROM public.reservations WHERE id = #{conn.quote(reservation_id.to_s)}::uuid LIMIT 1"
   ).first
   raise Kiosk::Server::Errors::Forbidden.new("reservation not found or not yours") if reservation.nil?
 
@@ -152,7 +152,7 @@ Kiosk::Server::Actions.register("unlock") do |args|
 
   # Mark the reservation active.
   conn.execute(
-    "UPDATE reservations SET status = 'active' WHERE id = #{conn.quote(reservation_id.to_s)}::uuid"
+    "UPDATE public.reservations SET status = 'active' WHERE id = #{conn.quote(reservation_id.to_s)}::uuid"
   )
 
   {

@@ -91,7 +91,7 @@ In production these are versioned RubyGems. The `kiosk-pay-stripe` adapter swaps
 rails g kiosk:install
 ```
 
-This emits: the Kiosk schema migration (the `kiosk.*` namespace with agents, sessions, and mandate tables), the six-verb wire surface (`schema`, `help`, `sql`, `run`, `pay`, `explain`) mounted at `/kiosk/exec`, the agent-registration endpoint at `/kiosk/agents/register`, and `/.well-known/kiosk.json`.
+This emits: the Kiosk schema migration (the `kiosk.*` namespace with agents, sessions, and mandate tables), the six-verb wire surface (`sql`, `run`, `pay`, `schema`, `help`, `events`) mounted at `/kiosk/exec`, the agent-registration endpoint at `/kiosk/agents/register`, and `/.well-known/kiosk.json`. Today `sql`, `run`, and `pay` are wired end-to-end; `schema`, `help`, and `events` are stubbed and ship next.
 
 **3. Apply RLS to your own tables**
 
@@ -141,7 +141,7 @@ The stub PSP (`StubPsp`) used in the demo can be swapped for the Stripe adapter 
 
 **What this does not require:** a new user-facing login flow, a new mobile app, an OAuth integration, a webhook endpoint, or any changes to the provider's existing Rails models. The satellite gems add a parallel surface; the existing application is untouched.
 
-**What this enables:** any personal agent that has read `KIOSK.skill.md` — or that discovers the surface via `/.well-known/kiosk.json` and `schema` at runtime — can complete a purchase without the user having an account at the provider and without the user being present. The provider drops its anti-bot wall for sanctioned agent traffic; the anti-bot wall stays in place for everything else.
+**What this enables:** any personal agent that has read `KIOSK.skill.md` — or that discovers the `issuer` and `endpoint` via `/.well-known/kiosk.json` — can complete a purchase without the user having an account at the provider and without the user being present. The provider drops its anti-bot wall for sanctioned agent traffic; the anti-bot wall stays in place for everything else.
 
 ---
 

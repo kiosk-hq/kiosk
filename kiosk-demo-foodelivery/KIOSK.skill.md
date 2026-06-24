@@ -12,7 +12,7 @@ The human says: *"order a Margherita from foodelivery."* The agent does everythi
 GET /.well-known/kiosk.json
 ```
 
-This returns the provider's issuer URL and the capabilities it exposes. Read `issuer` — you will need it for mandate signing. Read the `schema` field (or run `POST /kiosk/exec {command: "schema"}`) to learn the tables and available Actions before doing anything else.
+This returns the provider's `issuer` and `endpoint`. Read `issuer` — you copy it verbatim into the `iss` claim of every mandate you sign (Step 5), and `endpoint` is where you send the calls below. You browse the provider's domain data directly with `sql` (Step 3).
 
 ---
 
@@ -47,9 +47,9 @@ No human is involved. There is no existing account at the provider. The provider
 
 ---
 
-## Step 3 — Browse with `sql` (and `schema` / `help` to learn the surface)
+## Step 3 — Browse with `sql`
 
-Use the `sql` command to read the provider's domain data. Use `schema` first if you are unfamiliar with the surface.
+Use the `sql` command to read the provider's domain data.
 
 ```http
 POST /kiosk/exec
@@ -76,7 +76,7 @@ Row-level security is in effect: `orders` are visible only to the registered pri
 
 ## Step 4 — Act with `run` (e.g. `place_order`)
 
-Use the `run` command to invoke a provider-registered Action. Learn available Actions via `schema` or `help`.
+Use the `run` command to invoke a provider-registered Action. Action names are provider-specific — `foodelivery` exposes `place_order`.
 
 ```http
 POST /kiosk/exec
@@ -188,7 +188,7 @@ Successful response — HTTP 200:
 1. **Generate the keypair once per session; keep the private key.** Mandate verification looks up the public key you registered. If you lose the key, re-register.
 2. **Every mandate must be bound to your registered principal.** `user_id` and `agent_id` in both mandates must match the values returned by `/kiosk/agents/register`.
 3. **`iss` must equal the provider's issuer.** Read it from `/.well-known/kiosk.json` and copy it verbatim into both mandates.
-4. **Start by reading `/.well-known/kiosk.json` and then `schema`.** The schema tells you what tables and Actions are available before you write a single query.
+4. **Start by reading `/.well-known/kiosk.json`.** It gives you the `issuer` (for mandate signing) and the `endpoint` for `/kiosk/exec` before you send a single request.
 5. **The cap must cover the total.** `cap_amount_cents` >= `total_amount_cents`. The cart mandate is rejected if it exceeds the cap.
 6. **`intent_mandate_id` in the cart must reference the intent's `id`.** The server verifies this binding.
 

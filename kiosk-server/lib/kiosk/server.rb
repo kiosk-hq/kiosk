@@ -26,6 +26,7 @@ require "kiosk/server/session_context"
 require "kiosk/server/actions"
 require "kiosk/server/executor"
 require "kiosk/server/agent_identity_providers/default_agent_idp"
+require "kiosk/server/agent_registration"
 
 # Optional Rails engine — only defines itself if Rails::Engine is loaded.
 require "kiosk/server/engine"

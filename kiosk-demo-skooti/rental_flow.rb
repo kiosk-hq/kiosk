@@ -1,0 +1,239 @@
+# frozen_string_literal: true
+
+# Agent-side driver: no-human scooter rental end-to-end (Arch 2 — Ed25519 offline token).
+#
+# Flow: register (PoW) → KYC → reserve → pay → start_rental → LockSim.unlock
+#
+# Usage:
+#   SERVER_URL=http://127.0.0.1:3003 \
+#   KIOSK_ISSUER=http://127.0.0.1:3003 \
+#   bundle exec ruby rental_flow.rb
+#
+# Optional env:
+#   SKIP_PAY=1   — skip the pay step (start_rental should return 403)
+#   SKIP_KYC=1   — skip the KYC step (start_rental should return 403)
+#
+# Prints ONE JSON line on stdout; non-zero exit on unexpected failures.
+
+require "digest"
+require "json"
+require "net/http"
+require "openssl"
+require "securerandom"
+require "uri"
+require "jwt"
+
+$LOAD_PATH.unshift File.expand_path("lib", __dir__)
+require "lock_sim"
+require "dev_unlock_key"
+
+SERVER   = ENV.fetch("SERVER_URL")
+ISSUER   = ENV.fetch("KIOSK_ISSUER")
+SKIP_PAY = ENV.key?("SKIP_PAY")
+SKIP_KYC = ENV.key?("SKIP_KYC")
+
+# ── helpers ─────────────────────────────────────────────────────────────────
+
+def post_json(url, body, headers = {})
+  uri = URI(url)
+  req = Net::HTTP::Post.new(uri, { "Content-Type" => "application/json" }.merge(headers))
+  req.body = JSON.generate(body)
+  res = Net::HTTP.new(uri.host, uri.port).request(req)
+  [res.code.to_i, (JSON.parse(res.body) rescue {})]
+end
+
+# Replicates Kiosk::Server::ProofOfWork.leading_zero_bits exactly.
+def leading_zero_bits(bytes)
+  return 0 if bytes.empty?
+
+  count = 0
+  bytes.each_byte do |b|
+    if b == 0
+      count += 8
+    else
+      bit = 7
+      bit -= 1 while bit >= 0 && b[bit] == 0
+      count += (7 - bit)
+      break
+    end
+  end
+  count
+end
+
+def pow_valid?(pem, pow, difficulty)
+  return true if difficulty <= 0
+
+  digest = Digest::SHA256.digest("#{pem}.#{pow}")
+  leading_zero_bits(digest) >= difficulty
+end
+
+# ── Step 1: generate RSA-2048 keypair + solve PoW (difficulty=20) ───────────
+
+key = OpenSSL::PKey::RSA.generate(2048)
+pem = key.public_key.to_pem
+
+STDERR.puts "  Solving PoW (difficulty=20)..."
+pow = 0
+pow += 1 until pow_valid?(pem, pow.to_s, 20)
+STDERR.puts "  PoW solved: pow=#{pow}"
+
+rc_reg, reg = post_json(
+  "#{SERVER}/kiosk/agents/register",
+  { name: "hermes-scooter", public_key: pem, role: "customer", pow: pow.to_s },
+)
+abort "register failed (#{rc_reg}): #{JSON.generate(reg)}" unless rc_reg == 201
+
+agent_id = reg.fetch("agent_id")
+user_id  = reg.fetch("user_id")
+token    = reg.fetch("access_token")
+
+# ── Step 2: KYC attestation ──────────────────────────────────────────────────
+
+rc_kyc = nil
+unless SKIP_KYC
+  require_relative "lib/stub_kyc"
+  att = StubKyc.attest(user_id: user_id)
+
+  rc_kyc, kyc_resp = post_json(
+    "#{SERVER}/kiosk/agents/kyc",
+    { kyc_jws: att },
+    { "Authorization" => "Bearer #{token}" },
+  )
+  abort "kyc failed (#{rc_kyc}): #{JSON.generate(kyc_resp)}" unless rc_kyc == 200
+  STDERR.puts "  KYC verified"
+end
+
+# ── Step 3: reserve a scooter (seeded scooter code = "SK-001") ──────────────
+
+rc_rsv, rsv = post_json(
+  "#{SERVER}/kiosk/exec",
+  { command: "run", body: { name: "reserve", scooter_code: "SK-001" } },
+  { "Authorization" => "Bearer #{token}" },
+)
+abort "reserve failed (#{rc_rsv}): #{JSON.generate(rsv)}" unless rc_rsv == 200
+
+rsv_value      = rsv.fetch("value")
+reservation_id = rsv_value.fetch("reservation_id")
+scooter_code   = rsv_value.fetch("scooter_code")
+price_per_min  = rsv_value.fetch("price_per_min_cents")
+
+STDERR.puts "  Reserved: id=#{reservation_id} scooter=#{scooter_code} price=#{price_per_min}c/min"
+
+# ── Step 4: pay ──────────────────────────────────────────────────────────────
+
+rc_pay   = nil
+pay_resp = {}
+
+unless SKIP_PAY
+  now         = Time.now.to_i
+  intent_id   = SecureRandom.uuid
+  cart_id     = SecureRandom.uuid
+  cap_cents   = price_per_min * 10 + 100
+  total_cents = price_per_min * 1
+
+  intent_payload = {
+    id:               intent_id,
+    user_id:          user_id,
+    agent_id:         agent_id,
+    iss:              ISSUER,
+    scope:            "mobility",
+    cap_amount_cents: cap_cents,
+    currency:         "eur",
+    exp:              now + 600,
+    iat:              now,
+  }
+
+  cart_payload = {
+    id:                 cart_id,
+    intent_mandate_id:  intent_id,
+    user_id:            user_id,
+    agent_id:           agent_id,
+    iss:                ISSUER,
+    line_items:         [{ sku: scooter_code, qty: 1, reservation_id: reservation_id }],
+    total_amount_cents: total_cents,
+    currency:           "eur",
+    exp:                now + 600,
+    iat:                now,
+  }
+
+  intent_jws = JWT.encode(intent_payload, key, "RS256")
+  cart_jws   = JWT.encode(cart_payload,   key, "RS256")
+
+  rc_pay, pay_resp = post_json(
+    "#{SERVER}/kiosk/exec",
+    {
+      command: "pay",
+      body: {
+        intent_mandate_jws: intent_jws,
+        cart_mandate_jws:   cart_jws,
+      },
+    },
+    { "Authorization" => "Bearer #{token}" },
+  )
+  abort "pay failed (#{rc_pay}): #{JSON.generate(pay_resp)}" unless rc_pay == 200
+  STDERR.puts "  Payment settled: mandate_id=#{pay_resp.dig("value", "payment_mandate_id")}"
+end
+
+# ── Step 5: start_rental — server verifies gates + issues Ed25519 rental token ─
+
+rc_rental, rental_resp = post_json(
+  "#{SERVER}/kiosk/exec",
+  {
+    command: "run",
+    body: {
+      name:           "start_rental",
+      reservation_id: reservation_id,
+    },
+  },
+  { "Authorization" => "Bearer #{token}" },
+)
+
+# ── Step 6: LockSim offline verify ──────────────────────────────────────────
+#
+# The lock is provisioned with skooti's Ed25519 PUBLIC key.
+# We source it from the SAME dev keypair the server signs with (DevUnlockKey),
+# ensuring both sides share the same key without duplicating any bytes.
+
+rental_token = nil
+exp          = nil
+unlocked     = false
+
+if rc_rental == 200
+  rental_value = rental_resp.fetch("value", rental_resp)
+  rental_token = rental_value["rental_token"]
+  exp          = rental_value["exp"]
+  sc           = rental_value["scooter_code"]
+
+  # Provision the lock sim with skooti's public key from DevUnlockKey.
+  # DevUnlockKey.private_key is an OpenSSL Ed25519 private key; read its
+  # public counterpart via public_to_pem → OpenSSL::PKey.read.
+  pub_pem = DevUnlockKey.public_key_pem
+  skooti_pub = OpenSSL::PKey.read(pub_pem)
+
+  lock = LockSim.new(scooter_code: sc, skooti_public_key: skooti_pub)
+  now  = Time.now.to_i
+
+  unlocked = lock.unlock(token: rental_token, now: now)
+
+  STDERR.puts "  start_rental: scooter=#{sc} exp=#{exp} unlocked=#{unlocked}"
+elsif rc_rental == 403
+  STDERR.puts "  start_rental returned 403 (expected for negative gate)."
+else
+  abort "start_rental failed unexpectedly (#{rc_rental}): #{JSON.generate(rental_resp)}"
+end
+
+# ── Step 7: print ONE JSON line ──────────────────────────────────────────────
+
+puts JSON.generate(
+  http_register:    rc_reg,
+  http_kyc:         rc_kyc,
+  http_reserve:     rc_rsv,
+  http_pay:         rc_pay,
+  http_start_rental: rc_rental,
+  user_id:          user_id,
+  agent_id:         agent_id,
+  reservation_id:   reservation_id,
+  rental_token:     rental_token,
+  exp:              exp,
+  unlocked:         unlocked,
+)

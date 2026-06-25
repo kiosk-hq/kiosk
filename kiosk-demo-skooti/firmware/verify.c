@@ -55,13 +55,15 @@ static int b64url_char_to_val(unsigned char c)
  * Parameters:
  *   src     : input base64url string (NOT NUL-terminated necessarily)
  *   src_len : number of input characters
- *   dst     : output buffer (caller ensures enough space: (src_len*3)/4 + 3)
+ *   dst     : output buffer
+ *   dst_cap : capacity of dst in bytes — writes are bounded to [0, dst_cap)
  *   dst_len : on success, set to the number of decoded bytes
  *
- * Returns 1 on success, 0 if any character is invalid.
+ * Returns 1 on success, 0 if any character is invalid or output would exceed
+ * dst_cap (overflow guard — rejects oversized input).
  */
 static int b64url_decode(const char *src, size_t src_len,
-                         uint8_t *dst, size_t *dst_len)
+                         uint8_t *dst, size_t dst_cap, size_t *dst_len)
 {
     size_t i;
     size_t out = 0;
@@ -77,6 +79,7 @@ static int b64url_decode(const char *src, size_t src_len,
 
         if (bits >= 8) {
             bits -= 8;
+            if (out >= dst_cap) return 0; /* overflow guard — reject oversized */
             dst[out++] = (uint8_t)((accum >> bits) & 0xFF);
         }
     }
@@ -165,8 +168,15 @@ int skooti_verify_token(const uint8_t pubkey[32],
 
     if (msg_len == 0 || sig_b64_len == 0) return 0;
 
-    /* --- base64url-decode the sig (must be exactly 64 bytes) --- */
-    if (!b64url_decode(sig_b64, sig_b64_len, sig, &sig_len)) return 0;
+    /* --- early length guard: 64 bytes → 86 base64url chars (no padding).
+     * Allow a tiny slack to 88 for robustness; anything longer can only
+     * decode to > 64 bytes — reject before touching the stack buffer. --- */
+    if (sig_b64_len > 88) return 0;
+
+    /* --- base64url-decode the sig (must be exactly 64 bytes).
+     * Pass sizeof(sig) == 64 so the decoder hard-stops at the buffer edge.
+     * The sig_len != 64 post-check is kept as defense-in-depth. --- */
+    if (!b64url_decode(sig_b64, sig_b64_len, sig, sizeof(sig), &sig_len)) return 0;
     if (sig_len != 64) return 0;
 
     /* --- Ed25519 verify: sig over msg bytes with pubkey --- */

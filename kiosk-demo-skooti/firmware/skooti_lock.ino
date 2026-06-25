@@ -165,8 +165,26 @@ static const uint8_t SKOOTI_PUBKEY[32] = {
  * A fixed-size circular buffer of recently consumed jtis.
  * jti = 32 hex chars + NUL = 33 bytes.
  *
- * TODO (production): persist consumed jtis in NVS so reboots don't reopen
- * the anti-replay window.  Use esp_partition API or Preferences library.
+ * KNOWN RESIDUAL RISKS (must be addressed before real deployment):
+ *
+ * 1. REBOOT REPLAY WINDOW: the cache lives in RAM — a power-cycle or reboot
+ *    clears it, reopening the replay window for all previously consumed jtis
+ *    that are still within their exp window.
+ *
+ * 2. CACHE-EVICTION REPLAY WINDOW: even without a reboot, once >= 16 distinct
+ *    unlock operations have occurred the circular buffer wraps and starts
+ *    evicting old entries.  A jti evicted from the cache can be replayed on
+ *    the same lock as long as its exp has not elapsed.  In a busy-rental
+ *    scenario (≥ 16 unlocks in one token TTL window) this is reachable in
+ *    normal operation without any reboot.
+ *
+ * PRODUCTION REQUIREMENT: persist consumed jtis in NVS (ESP32 non-volatile
+ * storage) across reboots AND retain them for at least max-token-TTL after
+ * consumption, OR implement a server-side jti ledger consulted at unlock
+ * (requires online connectivity at unlock time).  The RAM-only cache is NOT
+ * sufficient for production deployment.
+ *
+ * Use esp_partition API or the Preferences library for NVS persistence.
  * -------------------------------------------------------------------------- */
 #define JTI_CACHE_SIZE 16
 #define JTI_LEN        33   /* 32 hex chars + NUL */
@@ -202,10 +220,35 @@ static void jti_consume(const char *jti)
  *
  * DEMO: returns DEMO_NOW (compile-time constant).
  * PRODUCTION: replace with DS3231 rtc.getEpoch() or time(nullptr) after SNTP.
+ *
+ * CRITICAL PRODUCTION REQUIREMENT — CLOCK MUST HARD-FAIL WHEN UNSYNCED:
+ *
+ * If the clock is dead, unsynced, or returns 0 / boot-epoch (e.g. time()
+ * before any NTP sync on a cold-started ESP32), then now_unix ≈ 0.
+ * skooti_verify_token checks `exp > now_unix`; with now_unix == 0 EVERY
+ * non-expired token passes the expiry check, defeating the exp field
+ * entirely (fail-OPEN).  A stolen token with any future exp would be
+ * accepted forever.
+ *
+ * In production, get_now() MUST return a sentinel that causes
+ * skooti_verify_token to reject ALL tokens when the clock is not yet
+ * reliable.  The safest approach:
+ *
+ *   uint64_t t = (uint64_t)time(nullptr);
+ *   if (t < 1700000000ULL) {
+ *       Serial.println("[CLOCK] unsynced — rejecting all tokens");
+ *       return UINT64_MAX;  // guaranteed > any valid exp → every token fails
+ *   }
+ *   return t;
+ *
+ * UINT64_MAX causes `exp > now_unix` to evaluate as false for every
+ * conceivable exp value, making the lock fail-CLOSED (safe) until the
+ * RTC / SNTP has provided a credible time.  DEMO_NOW is safe because it
+ * is a known-good compile-time constant, not a live clock.
  * -------------------------------------------------------------------------- */
 static uint64_t get_now(void)
 {
-    /* PRODUCTION: return (uint64_t)time(nullptr); */
+    /* PRODUCTION: return (uint64_t)time(nullptr); — see CRITICAL note above */
     return DEMO_NOW;
 }
 

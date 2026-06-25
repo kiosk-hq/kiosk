@@ -76,6 +76,10 @@ extern "C" {
  *   - The Ed25519 verify (orlp/ed25519) is internally constant-time.
  *   - Scooter-code comparison is constant-time (ct_memeq).
  *   - All field accesses are bounds-checked; no OOB on a malformed token.
+ *   - b64url_decode takes a dst_cap argument and hard-stops at the buffer
+ *     boundary; an oversized sig field is rejected before any stack write.
+ *     An early sig_b64_len > 88 guard rejects implausibly long sig fields
+ *     before decoding (64 decoded bytes → 86 base64url chars, ±2 slack).
  *
  * After a return of 1 the caller can retrieve the jti for anti-replay by
  * re-parsing token (split on last '.', split message on '|', field[4]).

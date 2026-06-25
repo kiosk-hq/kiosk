@@ -174,12 +174,64 @@ static void test_flipped_sig(void)
 }
 
 /*
- * Test 5 — malformed / truncated tokens → return 0, no crash
+ * Test 5 — oversized sig field → returns 0, NO CRASH (buffer-overflow regression)
+ *
+ * Security regression: pre-fix, b64url_decode had no destination-capacity bound.
+ * A token whose sig field is ~400 valid base64url characters would decode to ~300
+ * bytes, overflowing sig[64] on the stack with attacker-controlled bytes.
+ * Post-fix: the early sig_b64_len > 88 guard and the dst_cap == 64 bound in
+ * b64url_decode must both reject this cleanly (return 0) without any crash or
+ * ASan report.  Build with -fsanitize=address (make test-asan) to confirm.
+ *
+ * Token constructed as: valid KAT message + "." + 400 'A' characters.
+ * 400 'A' chars are valid base64url (all in [A-Z]) — the old code would try to
+ * write ~300 decoded bytes; the new code stops at 64 and returns 0.
+ */
+static void test_oversized_sig(void)
+{
+    /* Build: "<valid message>." + 400 'A' chars */
+    static const char msg[] =
+        "SK-001|resv-1|1750000000|1750000900|aabbccddeeff00112233445566778899";
+    /* 400 valid base64url 'A' chars decode to 300 bytes — must be rejected */
+    static const char oversized_sig[401] =
+        "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"
+        "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"
+        "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"
+        "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"
+        "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"
+    ; /* 5 * 80 = 400 chars + NUL */
+
+    char token[600];
+    size_t msg_len = strlen(msg);
+    size_t sig_len = strlen(oversized_sig); /* 400 */
+    int result;
+
+    printf("\n[5] Oversized sig field (~400 'A' chars → ~300 decoded bytes)"
+           " → expect 0, no crash/overflow\n");
+
+    if (msg_len + 1 + sig_len + 1 > sizeof(token)) {
+        printf("  SKIP (token too long for local buffer)\n");
+        g_fail++;
+        return;
+    }
+    memcpy(token, msg, msg_len);
+    token[msg_len] = '.';
+    memcpy(token + msg_len + 1, oversized_sig, sig_len);
+    token[msg_len + 1 + sig_len] = '\0';
+
+    printf("  sig field length: %zu chars\n", sig_len);
+    result = skooti_verify_token(SKOOTI_PUBKEY, token, SCOOTER_CODE, NOW_FRESH);
+    printf("  result: %d\n", result);
+    check(result == 0, "oversized sig (400 base64url chars) → 0, no crash");
+}
+
+/*
+ * Test 6 — malformed / truncated tokens → return 0, no crash
  */
 static void test_malformed_tokens(void)
 {
     int result;
-    printf("\n[5] Malformed / truncated tokens → expect 0, no crash\n");
+    printf("\n[6] Malformed / truncated tokens → expect 0, no crash\n");
 
     /* 5a — empty string */
     result = skooti_verify_token(SKOOTI_PUBKEY, "", SCOOTER_CODE, NOW_FRESH);
@@ -226,6 +278,7 @@ int main(void)
     test_expired_token();
     test_wrong_scooter_code();
     test_flipped_sig();
+    test_oversized_sig();
     test_malformed_tokens();
 
     printf("\n=== Results: %d passed, %d failed ===\n", g_pass, g_fail);

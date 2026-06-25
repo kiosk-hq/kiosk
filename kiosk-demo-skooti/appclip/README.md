@@ -204,6 +204,17 @@ NDEF tag using the NFC Tools app on iOS or any NDEF writer.
 The rental token is issued by the server after `pay` / `start_rental` and placed into
 the URL.  For the demo you can write a URL with the test-vector token from Plan 4.2 T1.
 
+> **Note — percent-encode the `rt=` value when writing to a real NFC tag or QR code.**
+> The rental token contains `|` (pipe) characters in the message portion and `.` in the
+> separator.  URL parsers in NFC readers and QR scanners may interpret `|` as a URL
+> delimiter, truncating the token before delivery to iOS.  Encode the token value
+> with standard percent-encoding before writing it to the tag (e.g. `|` → `%7C`).
+> In Swift: `token.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed)`.
+> On the server side (Ruby): `CGI.escape(token)` or `URI.encode_www_form_component(token)`.
+> The App Clip's `AgentHandoff.from(url:)` must decode the value with
+> `URLComponents`/`queryItems` (which handles percent-decoding automatically) rather
+> than a raw string split.
+
 When a user taps the tag with iOS 14+, the system reads the URL, matches it against
 registered App Clips / Associated Domains, and shows the App Clip banner.
 
@@ -229,8 +240,14 @@ The App Clip needs two values:
 `AgentHandoff.from(url:)` reads `scooter=` and `rt=` from URL query params:
 
 ```
-https://skooti.app/unlock?scooter=SK-001&rt=SK-001|resv-1|1750000000|1750000900|aabb….<sig>
+https://skooti.app/unlock?scooter=SK-001&rt=SK-001%7Cresv-1%7C1750000000%7C1750000900%7Caabb%E2%80%A6.<sig>
 ```
+
+> **Note:** the `rt` value **must be percent-encoded** when placed in a real URL
+> (NFC tag, QR code, or push notification).  The `|` separators in the token
+> (`%7C`) and other reserved URL characters can truncate or corrupt the query
+> string if passed raw.  Use `URLComponents.queryItems` / `addingPercentEncoding`
+> on the client and `CGI.escape` / `URI.encode_www_form_component` on the server.
 
 The rental token is short-lived (15-min TTL embedded in `exp`).  Within that window
 the token appearing in a URL is acceptable — it's single-use (jti) and the lock

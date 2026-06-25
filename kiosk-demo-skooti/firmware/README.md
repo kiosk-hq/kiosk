@@ -38,7 +38,7 @@ cd firmware
 make test
 ```
 
-Expected output (10 assertions pass, crosscheck MATCH):
+Expected output (11 assertions pass, crosscheck MATCH):
 
 ```
 --- C host test ---
@@ -46,7 +46,7 @@ Expected output (10 assertions pass, crosscheck MATCH):
 Public key : 8857880d21f87b85872f31aeea8d0024acebb2fdf933b25a479f4f9e80babefd
 Scooter    : SK-001
 ...
-=== Results: 10 passed, 0 failed ===
+=== Results: 11 passed, 0 failed ===
 ALL PASS
 
 --- Ruby <-> C crosscheck ---
@@ -96,6 +96,26 @@ The lock checks `exp > now`.
   - DS3231 RTC: `return (uint64_t)rtc.getEpoch();`
   - ESP32 SNTP: `configTime(0, 0, "pool.ntp.org"); return (uint64_t)time(nullptr);`
   The scooter syncs time once online (WiFi or cellular) and uses it offline.
+
+> **CRITICAL — Unsynced / dead clock must HARD-FAIL (required before deployment)**
+>
+> If `get_now()` returns 0 or a boot-epoch value (e.g. `time()` before any NTP sync),
+> the check `exp > now_unix` passes for **every** token with any future `exp`, defeating
+> the expiry field entirely — fail-OPEN.  A stolen token with a far-future `exp` would
+> be accepted forever.
+>
+> In production, `get_now()` **must** return `UINT64_MAX` (or another guaranteed-past-
+> any-valid-`exp` sentinel) when the clock is unsynced:
+>
+> ```c
+> uint64_t t = (uint64_t)time(nullptr);
+> if (t < 1700000000ULL) return UINT64_MAX;  /* unsynced → fail-CLOSED */
+> return t;
+> ```
+>
+> `UINT64_MAX > any valid exp` → `skooti_verify_token` returns 0 for all tokens until
+> the clock is credible.  The demo's `DEMO_NOW` constant is safe; this is a
+> productionisation note.
 
 ---
 
@@ -155,6 +175,24 @@ arduino-cli upload -p /dev/ttyUSB0 --fqbn esp32:esp32:esp32c3 firmware/
 
 ---
 
+## Anti-replay production requirements
+
+The lock keeps a 16-entry circular RAM cache of consumed jtis (`JTI_CACHE_SIZE = 16`).
+Two replay windows exist that **must** be closed before real deployment:
+
+| Risk | Condition | Mitigation required |
+|------|-----------|---------------------|
+| **Reboot replay** | Power-cycle or reset clears the cache; all previously consumed jtis within their `exp` window become replayable. | Already noted in source. |
+| **Cache-eviction replay** | Once ≥ 16 distinct unlocks have occurred the circular buffer wraps and evicts older entries. An evicted jti can be replayed on the same lock as long as its `exp` has not elapsed — **no reboot required**. In a high-frequency rental scenario (≥ 16 unlocks within one token TTL) this is reachable in normal operation. | Same fix as reboot: NVS or server-side ledger. |
+
+**Production requirement:** persist consumed jtis in ESP32 NVS (via `esp_partition`
+API or the `Preferences` library) and retain each entry for at least the maximum
+token TTL after consumption.  Alternatively, consult a server-side jti ledger at
+unlock time (requires online connectivity at unlock).  The RAM-only cache is a demo
+approximation, not a production control.
+
+---
+
 ## What is and is not proven here
 
 | Claim | Status |
@@ -163,7 +201,8 @@ arduino-cli upload -p /dev/ttyUSB0 --fqbn esp32:esp32:esp32c3 firmware/
 | Expired token (now > exp) rejected | **PROVEN** (`make test` test 2) |
 | Wrong scooter_code rejected | **PROVEN** (`make test` test 3) |
 | Flipped sig byte rejected | **PROVEN** (`make test` test 4) |
-| Malformed / truncated / NULL tokens → 0, no crash | **PROVEN** (`make test` test 5) |
+| Oversized sig field (400 base64url chars) → 0, no stack overflow | **PROVEN** (`make test` test 5; `make test-asan` for ASan confirmation) |
+| Malformed / truncated / NULL tokens → 0, no crash | **PROVEN** (`make test` test 6) |
 | C verifier accepts a freshly Ruby/OpenSSL-signed token | **PROVEN** (`make crosscheck`) |
 | jti one-shot anti-replay in software LockSim | **PROVEN** (T2 rake demo) |
 | BLE GATT advertising + connect + write unlock | **Not yet** — needs board |

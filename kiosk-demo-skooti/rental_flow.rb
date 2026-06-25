@@ -124,11 +124,29 @@ unless SKIP_KYC
   STDERR.puts "  KYC verified"
 end
 
-# ── Step 3: reserve a scooter (seeded scooter code = "SK-001") ──────────────
+# ── Step 3: browse fleet via sanctioned query, then reserve ─────────────────
+#
+# Path C: agents call named queries (never raw SQL). Browse the available
+# fleet first; find SK-001's code, then reserve it.
+
+rc_browse, browse_resp = post_json(
+  "#{SERVER}/kiosk/exec",
+  { command: "query", body: { name: "scooters_available" } },
+  { "Authorization" => "Bearer #{token}" },
+)
+abort "query scooters_available failed (#{rc_browse}): #{JSON.generate(browse_resp)}" unless rc_browse == 200
+
+browse_rows = browse_resp.fetch("rows")
+abort "query scooters_available returned empty rows" if browse_rows.empty?
+
+# Pick the first available scooter (seeded as SK-001).
+target_scooter = browse_rows.first
+target_code    = target_scooter.fetch("code")
+STDERR.puts "  Browsed fleet: #{browse_rows.size} scooter(s) available, picking #{target_code}"
 
 rc_rsv, rsv = post_json(
   "#{SERVER}/kiosk/exec",
-  { command: "run", body: { name: "reserve", scooter_code: "SK-001" } },
+  { command: "run", body: { name: "reserve", scooter_code: target_code } },
   { "Authorization" => "Bearer #{token}" },
 )
 abort "reserve failed (#{rc_rsv}): #{JSON.generate(rsv)}" unless rc_rsv == 200
@@ -246,15 +264,17 @@ end
 # ── Step 7: print ONE JSON line ──────────────────────────────────────────────
 
 puts JSON.generate(
-  http_register:    rc_reg,
-  http_kyc:         rc_kyc,
-  http_reserve:     rc_rsv,
-  http_pay:         rc_pay,
-  http_start_rental: rc_rental,
-  user_id:          user_id,
-  agent_id:         agent_id,
-  reservation_id:   reservation_id,
-  rental_token:     rental_token,
-  exp:              exp,
-  unlocked:         unlocked,
+  http_register:          rc_reg,
+  http_kyc:               rc_kyc,
+  http_browse:            rc_browse,
+  http_reserve:           rc_rsv,
+  http_pay:               rc_pay,
+  http_start_rental:      rc_rental,
+  user_id:                user_id,
+  agent_id:               agent_id,
+  reservation_id:         reservation_id,
+  browse_rows_count:      browse_rows.size,
+  rental_token:           rental_token,
+  exp:                    exp,
+  unlocked:               unlocked,
 )

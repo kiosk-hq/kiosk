@@ -7,7 +7,7 @@ RSpec.describe Kiosk::Server::Executor do
   describe ".call construction" do
     it "raises Unauthenticated when identity is nil" do
       expect {
-        described_class.call(kind: :sql, args: { sql: "SELECT 1" }, identity: nil, connection: connection)
+        described_class.call(kind: :run, args: { name: "ping" }, identity: nil, connection: connection)
       }.to raise_error(Kiosk::Server::Errors::Unauthenticated, /identity/)
     end
 
@@ -15,51 +15,78 @@ RSpec.describe Kiosk::Server::Executor do
       expect {
         described_class.call(kind: :wat, args: {}, identity: identity, connection: connection)
       }.to raise_error(Kiosk::Server::Errors::BadRequest) { |e|
-        expect(e.hint).to include("sql")
+        expect(e.hint).to include("query")
       }
     end
   end
 
   describe "transaction discipline" do
     it "wraps the verb in a single transaction with GUCs set" do
-      connection.next_result = [{ ok: 1 }]
-      described_class.call(kind: :sql, args: { sql: "SELECT 1" }, identity: identity, connection: connection)
+      Kiosk::Server::Queries.register("probe") { |_p| [{ ok: 1 }] }
+      described_class.call(kind: :query, args: { name: "probe" }, identity: identity, connection: connection)
 
-      # 4 SET LOCAL + 1 SELECT
-      expect(connection.executed_sql.size).to eq(5)
+      # 4 SET LOCAL GUCs only (the query block returns rows without hitting connection)
+      expect(connection.executed_sql.size).to eq(4)
       expect(connection.executed_sql[0]).to start_with(%(SET LOCAL "app"."current_user_id"))
       expect(connection.executed_sql[3]).to start_with(%(SET LOCAL "app"."current_agent_id"))
-      expect(connection.executed_sql[4]).to eq("SELECT 1")
       expect(connection.in_transaction?).to be(false) # closed after call
     end
   end
 
-  describe "verb :sql" do
-    it "executes the SQL string and returns :rows Result" do
-      connection.next_result = [{ id: 1, name: "a" }, { id: 2, name: "b" }]
+  describe "verb :query" do
+    before do
+      Kiosk::Server::Queries.register("menu") { |_p| [{ "id" => 1, "name" => "Margherita" }] }
+    end
+
+    it "looks up the query by name and returns :rows Result" do
       result = described_class.call(
-        kind: :sql, args: { sql: "SELECT id, name FROM users" },
+        kind: :query, args: { name: "menu" },
         identity: identity, connection: connection,
       )
 
       expect(result).to be_a(Kiosk::Server::Result)
       expect(result.kind).to    eq(:rows)
-      expect(result.payload).to eq([{ id: 1, name: "a" }, { id: 2, name: "b" }])
+      expect(result.payload).to eq([{ "id" => 1, "name" => "Margherita" }])
     end
 
-    it "accepts the sql arg as a bare String when args isn't a Hash" do
+    it "passes params (args minus name) to the query handler" do
+      Kiosk::Server::Queries.register("items") { |p| [{ filter: p[:category] }] }
       result = described_class.call(
-        kind: :sql, args: "SELECT 1",
+        kind: :query, args: { name: "items", category: "pizza" },
         identity: identity, connection: connection,
       )
-      expect(connection.executed_sql.last).to eq("SELECT 1")
-      expect(result.kind).to eq(:rows)
+      expect(result.payload).to eq([{ filter: "pizza" }])
     end
 
-    it "raises BadRequest when args.sql is missing" do
+    it "raises BadRequest when name is missing" do
       expect {
-        described_class.call(kind: :sql, args: {}, identity: identity, connection: connection)
-      }.to raise_error(Kiosk::Server::Errors::BadRequest, /sql/)
+        described_class.call(kind: :query, args: {}, identity: identity, connection: connection)
+      }.to raise_error(Kiosk::Server::Errors::BadRequest, /name/)
+    end
+
+    it "raises NotFound when the query isn't registered" do
+      expect {
+        described_class.call(kind: :query, args: { name: "missing" },
+                             identity: identity, connection: connection)
+      }.to raise_error(Kiosk::Server::Errors::NotFound)
+    end
+
+    it "lets Kiosk::Server::Errors raised inside the query propagate unchanged" do
+      Kiosk::Server::Queries.register("denied") { raise Kiosk::Server::Errors::RLSDenied, "no" }
+
+      expect {
+        described_class.call(kind: :query, args: { name: "denied" },
+                             identity: identity, connection: connection)
+      }.to raise_error(Kiosk::Server::Errors::RLSDenied)
+    end
+
+    it "wraps StandardError raised inside the query as ActionFailed" do
+      Kiosk::Server::Queries.register("boom") { raise "kaboom" }
+
+      expect {
+        described_class.call(kind: :query, args: { name: "boom" },
+                             identity: identity, connection: connection)
+      }.to raise_error(Kiosk::Server::Errors::ActionFailed, /kaboom/)
     end
   end
 

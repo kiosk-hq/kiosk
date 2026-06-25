@@ -46,6 +46,12 @@ end
 
 # ─── Queries ────────────────────────────────────────────────────────────────
 
+# restaurants — public restaurant catalog. No per-user scoping: all
+# authenticated agents can browse available restaurants.
+Kiosk::Server::Queries.register("restaurants") do |_params|
+  ActiveRecord::Base.connection.execute("SELECT id, name FROM restaurants ORDER BY id").to_a
+end
+
 # menu_by_restaurant — parameterized menu catalog for a named restaurant.
 # The agent supplies :restaurant (the restaurant name); the block builds the
 # query with conn.quote binding — agent input is data, never SQL.

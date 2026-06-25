@@ -8,6 +8,7 @@ require Rails.root.join("lib/stub_idp")
 require Rails.root.join("lib/jwt_or_stub_idp")
 require Rails.root.join("lib/stub_psp")
 require Rails.root.join("lib/stub_kyc")
+require Rails.root.join("lib/dev_unlock_key")
 
 # Inject the RLS DSL into ActiveRecord::Migration so that migrations can
 # call `enable_rls_on TABLE do ... end` directly. The kiosk-rls README
@@ -48,8 +49,9 @@ Kiosk.configure do |c|
   c.kyc_issuer    = "https://kyc.example"
   c.kyc_public_key = StubKyc.public_key
 
-  # Per-lock HMAC key derivation master secret.
-  c.unlock_master_key = ENV.fetch("SKOOTI_MASTER_KEY", "dev-master-key-0001")
+  # Ed25519 rental-token signing key (Arch 2 offline token).
+  # Fixed dev keypair — stable vectors; swap for env-loaded PEM in production.
+  c.unlock_signing_key = DevUnlockKey.private_key
 end
 
 # ─── Actions ────────────────────────────────────────────────────────────────
@@ -87,35 +89,30 @@ Kiosk::Server::Actions.register("reserve") do |args|
   }
 end
 
-# unlock — verify gates then issue an HMAC unlock MAC for the scooter lock.
+# start_rental — verify gates then issue an Ed25519 rental token for the scooter lock.
 #
-# args: { reservation_id:, nonce: (hex) }
-# scooter_id is NOT accepted from the client — it is derived server-side from
+# args: { reservation_id: }
+# scooter_code is NOT accepted from the client — it is derived server-side from
 # the reservation row, preventing cross-scooter unlock attacks.
 # Gates (all three must pass, else 403 Forbidden):
-#   1. reservation exists and belongs to the principal (RLS-scoped SELECT)
+#   1. reservation exists and belongs to the principal AND status = 'reserved'
 #   2. agent is KYC-verified (kyc_verified_at NOT NULL in kiosk.agents)
-#   3. principal has a settled payment mandate
-# Returns: { scooter_code:, mac:, alg: "HMAC-SHA256" }
-Kiosk::Server::Actions.register("unlock") do |args|
+#   3. principal has a settled payment mandate for THIS reservation
+# Returns: { scooter_code:, rental_token:, exp: }
+Kiosk::Server::Actions.register("start_rental") do |args|
   conn = ActiveRecord::Base.connection
 
-  nonce_hex      = args[:nonce]
   reservation_id = args[:reservation_id]
 
-  if nonce_hex.nil? || nonce_hex.to_s.empty?
-    raise Kiosk::Server::Errors::BadRequest.new("missing field: nonce")
-  end
   if reservation_id.nil? || reservation_id.to_s.empty?
     raise Kiosk::Server::Errors::BadRequest.new("missing field: reservation_id")
   end
 
   # ── Gate 1: reservation belongs to the principal (explicit ownership) ──
-  # C1: AND user_id = kiosk.current_user_id() added explicitly so that a
+  # AND user_id = kiosk.current_user_id() added explicitly so that a
   # foreign reservation UUID returns nothing even if RLS is inactive.
-  # C3: require status = 'reserved' so a reservation already 'active' (ride
-  # in progress) is rejected here — re-unlock-during-a-ride is a future
-  # feature that needs a ride-session token.
+  # AND status = 'reserved' so a reservation already 'active' (ride
+  # in progress) is rejected here (C3 class: re-start_rental on active).
   # The scooter_id FK is read server-side — the client cannot supply it.
   reservation = conn.execute(
     "SELECT id, scooter_id FROM public.reservations " \
@@ -127,7 +124,7 @@ Kiosk::Server::Actions.register("unlock") do |args|
   raise Kiosk::Server::Errors::Forbidden.new("reservation not found or not yours") if reservation.nil?
 
   # Derive the authoritative scooter code from the reservation's FK.
-  # This binds the MAC to the ACTUAL reserved scooter, not a client-supplied value.
+  # This binds the token to the ACTUAL reserved scooter, not any client value.
   scooter_row = conn.execute(
     "SELECT code FROM scooters WHERE id = #{conn.quote(reservation["scooter_id"].to_s)} LIMIT 1"
   ).first
@@ -150,11 +147,8 @@ Kiosk::Server::Actions.register("unlock") do |args|
 
   # ── Gate 3: settled payment whose cart references THIS reservation ───────
   # C2: join payment_mandates → cart_mandates and require that line_items
-  # contains the reservation_id of this specific reservation. This prevents
-  # a user from paying for reservation A and unlocking reservation B.
-  # The JSONB literal is built server-side; reservation_id is a UUID string.
-  # to_json on a Ruby Hash produces a valid JSON object; embed it as the
-  # sole element of a JSON array and cast to jsonb for the @> containment check.
+  # contains the reservation_id of this specific reservation. Prevents
+  # paying for reservation A and starting rental B.
   resv_filter_json = [{ reservation_id: reservation_id.to_s }].to_json
   paid = conn.execute(
     "SELECT 1 AS ok " \
@@ -166,12 +160,13 @@ Kiosk::Server::Actions.register("unlock") do |args|
   ).first
   raise Kiosk::Server::Errors::Forbidden.new("no settled payment mandate for this reservation") if paid.nil?
 
-  # ── All gates passed: compute and return the unlock MAC ─────────────────
-  # MAC is bound to the server-derived scooter code, not any client-supplied value.
-  mac = Kiosk::Server::UnlockAuthority.mac(
-    scooter_id:     code,
-    nonce_hex:      nonce_hex.to_s,
+  # ── All gates passed: issue an Ed25519 rental token ─────────────────────
+  # Token is bound to the server-derived scooter code, not any client value.
+  now   = Time.now.to_i
+  token = Kiosk::Server::RentalTokenIssuer.issue(
+    scooter_code:   code,
     reservation_id: reservation_id.to_s,
+    now:            now,
   )
 
   # Mark the reservation active.
@@ -180,8 +175,8 @@ Kiosk::Server::Actions.register("unlock") do |args|
   )
 
   {
-    scooter_code: code,
-    mac:          mac,
-    alg:          "HMAC-SHA256",
+    scooter_code:  code,
+    rental_token:  token,
+    exp:           now + 900,
   }
 end

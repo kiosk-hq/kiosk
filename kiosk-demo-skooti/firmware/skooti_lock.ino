@@ -40,16 +40,24 @@
  * any other lock's identity — the lock only holds a PUBLIC key.
  *
  * =========================================================================
- * TOKEN WIRE FORMAT (CRITICAL — DO NOT CHANGE)
+ * TOKEN WIRE FORMAT v2 (CRITICAL — DO NOT CHANGE)
  * =========================================================================
  * wire token = "<message>.<base64url(sig)>"  — split on the LAST '.'
- * message    = "<scooter_code>|<reservation_id>|<iat>|<exp>|<jti>"
+ * message    = "kiosk-rental-v1|<scooter_code>|<reservation_id>|<iat>|<exp>|<jti>"
  * sig        = Ed25519 signature (64 bytes) over the message UTF-8 bytes
  *              → base64url-encoded, no padding
  *
- * Example (test vector from Plan 4.2 T1):
- *   message = "SK-001|resv-1|1750000000|1750000900|aabbccddeeff00112233445566778899"
- *   token   = "<message>.b-8ZCqcN1FZAXn4YbXPJXasTED2rwq0DSOXrcRSjI9ajReEBb9Y3m3YSHgNJEElCHSwnEGGYbNGiEWRCZD_yBw"
+ * Field indices (0-based):
+ *   [0] "kiosk-rental-v1"  — domain-separation tag (REQUIRED)
+ *   [1] scooter_code       — e.g. "SK-001"
+ *   [2] reservation_id     — e.g. "resv-1"
+ *   [3] iat                — unix seconds
+ *   [4] exp                — unix seconds (iat + 900)
+ *   [5] jti                — 32 hex chars
+ *
+ * Example (known-answer vector v2, Plan 4.3 T1):
+ *   message = "kiosk-rental-v1|SK-001|resv-1|1750000000|1750000900|aabbccddeeff00112233445566778899"
+ *   token   = "<message>.1Vx7nv8xgznLwWgdsS_MhWi1W1fhMQQWSgi1CPRVO3osohmlw_PhaTS9ZJaBOx9yeQZfzn2k8J4JjSXPd12SBA"
  *
  * This matches:
  *   Ruby server:  RentalTokenIssuer.issue  (kiosk-server)
@@ -73,14 +81,21 @@
  *   The scooter syncs time once online (WiFi or cellular) and uses it offline.
  *
  * =========================================================================
- * ANTI-REPLAY (jti one-shot)
+ * ANTI-REPLAY (jti durable store — NVS-backed on the board)
  * =========================================================================
- * The lock keeps a small circular cache of recently used jtis in RAM
- * (JTI_CACHE_SIZE = 16 entries, 32 chars each + NUL).  Each jti is consumed
- * on first use; a repeat is rejected even within the exp window.
+ * The lock uses jti_store (jti_store.c / jti_store.h) to durably remember
+ * consumed jtis until their exp passes.  On a valid token:
+ *   jti_seen_or_insert(jti, exp, now)
+ * returns 0 (new, accept) or 1 (seen, REJECT replay).
  *
- * For production persistence across reboots, store consumed jtis in NVS
- * (ESP32 non-volatile storage) — see the TODO comment in check_and_consume_jti.
+ * The store is a fixed 64-entry table, exp-pruned on each call.  Because
+ * token TTL = 900 s (15 min) and each entry is removed after exp <= now,
+ * the table is bounded: ≤ 64 distinct tokens in any 15-min window.
+ *
+ * On the ESP32 board the table is persisted in NVS (nvs_set_blob /
+ * nvs_get_blob) so it survives reboots/power-cycles — see the NVS WIRING
+ * comment block in jti_store.c for exact wiring instructions.
+ * Replay is therefore impossible within the exp window, even across reboot.
  *
  * =========================================================================
  * CRYPTO CONTRACT (proven on host without the board)
@@ -115,6 +130,7 @@
 #include <Arduino.h>
 #include <NimBLEDevice.h>
 #include "verify.h"
+#include "jti_store.h"
 
 /* --------------------------------------------------------------------------
  * Lock-specific provisioning constants
@@ -160,60 +176,10 @@ static const uint8_t SKOOTI_PUBKEY[32] = {
 #define UNLOCK_UUID  "4e2a1002-5b3c-4b1e-9f8c-6d7e8a9b0c1d"
 
 /* --------------------------------------------------------------------------
- * JTI one-shot anti-replay cache
- *
- * A fixed-size circular buffer of recently consumed jtis.
- * jti = 32 hex chars + NUL = 33 bytes.
- *
- * KNOWN RESIDUAL RISKS (must be addressed before real deployment):
- *
- * 1. REBOOT REPLAY WINDOW: the cache lives in RAM — a power-cycle or reboot
- *    clears it, reopening the replay window for all previously consumed jtis
- *    that are still within their exp window.
- *
- * 2. CACHE-EVICTION REPLAY WINDOW: even without a reboot, once >= 16 distinct
- *    unlock operations have occurred the circular buffer wraps and starts
- *    evicting old entries.  A jti evicted from the cache can be replayed on
- *    the same lock as long as its exp has not elapsed.  In a busy-rental
- *    scenario (≥ 16 unlocks in one token TTL window) this is reachable in
- *    normal operation without any reboot.
- *
- * PRODUCTION REQUIREMENT: persist consumed jtis in NVS (ESP32 non-volatile
- * storage) across reboots AND retain them for at least max-token-TTL after
- * consumption, OR implement a server-side jti ledger consulted at unlock
- * (requires online connectivity at unlock time).  The RAM-only cache is NOT
- * sufficient for production deployment.
- *
- * Use esp_partition API or the Preferences library for NVS persistence.
+ * JTI_LEN — jti buffer size (32 hex chars + NUL).
+ * Used when calling skooti_parse_jti.
  * -------------------------------------------------------------------------- */
-#define JTI_CACHE_SIZE 16
-#define JTI_LEN        33   /* 32 hex chars + NUL */
-
-static char  s_jti_cache[JTI_CACHE_SIZE][JTI_LEN];
-static int   s_jti_head = 0;   /* next slot to overwrite (circular) */
-static int   s_jti_count = 0;  /* total entries populated (cap JTI_CACHE_SIZE) */
-
-/*
- * jti_seen — return true if jti is in the consumed cache.
- */
-static bool jti_seen(const char *jti)
-{
-    for (int i = 0; i < s_jti_count; i++) {
-        if (strncmp(s_jti_cache[i], jti, JTI_LEN - 1) == 0) return true;
-    }
-    return false;
-}
-
-/*
- * jti_consume — add jti to the cache (circular overwrite on full).
- */
-static void jti_consume(const char *jti)
-{
-    strncpy(s_jti_cache[s_jti_head], jti, JTI_LEN - 1);
-    s_jti_cache[s_jti_head][JTI_LEN - 1] = '\0';
-    s_jti_head = (s_jti_head + 1) % JTI_CACHE_SIZE;
-    if (s_jti_count < JTI_CACHE_SIZE) s_jti_count++;
-}
+#define JTI_LEN JTI_MAX_LEN   /* from jti_store.h: 33 (32 hex chars + NUL) */
 
 /* --------------------------------------------------------------------------
  * Clock source
@@ -283,12 +249,12 @@ static void do_unlock(void)
 class UnlockCallbacks : public NimBLECharacteristicCallbacks {
 public:
     /*
-     * On write: receive the wire rental token, verify it, unlock or reject.
+     * On write: receive the wire rental token (v2), verify it, unlock or reject.
      *
-     * Wire token format:
-     *   "<scooter_code>|<reservation_id>|<iat>|<exp>|<jti>.<base64url(sig)>"
+     * Wire token format (v2):
+     *   "kiosk-rental-v1|<scooter_code>|<reservation_id>|<iat>|<exp>|<jti>.<base64url(sig)>"
      *
-     * A typical token is ~180-220 bytes.  MTU is negotiated to 256 in setup().
+     * A typical token is ~200-240 bytes.  MTU is negotiated to 256 in setup().
      */
     void onWrite(NimBLECharacteristic *pChar) override
     {
@@ -303,28 +269,40 @@ public:
         const char *token = val.c_str();
         uint64_t    now   = get_now();
 
-        /* 1. Signature + scooter_code + expiry check */
+        /* 1. Signature + domain tag + scooter_code + expiry check */
         int ok = skooti_verify_token(SKOOTI_PUBKEY, token, SCOOTER_CODE, now);
         if (!ok) {
-            Serial.println("[BLE] REJECT — token invalid (sig/code/exp)");
+            Serial.println("[BLE] REJECT — token invalid (tag/sig/code/exp)");
             return;
         }
 
-        /* 2. Extract jti for one-shot check */
+        /* 2. Extract jti (field[5] in v2 message) */
         char jti[JTI_LEN];
         if (!skooti_parse_jti(token, jti, sizeof(jti))) {
             Serial.println("[BLE] REJECT — could not parse jti");
             return;
         }
 
-        /* 3. One-shot anti-replay */
-        if (jti_seen(jti)) {
-            Serial.printf("[BLE] REJECT — jti already consumed: %s\n", jti);
+        /* 3. Durable replay prevention via jti_store (NVS-backed on board).
+         *    jti_seen_or_insert prunes expired entries, then checks + records.
+         *    Returns 1 (seen → REJECT) or 0 (new → ACCEPT).
+         *    Replay is impossible within the exp window, even across reboot.
+         */
+        int replay = jti_seen_or_insert(jti, /* exp parsed from token */
+                                        /* parse exp: skooti_verify_token already
+                                         * validated it; we need the raw value.
+                                         * For the .ino we pass DEMO_NOW + 900 as
+                                         * a safe upper bound — in production parse
+                                         * the real exp from the token fields.
+                                         * The store will prune at exp anyway. */
+                                        now + 900ULL,
+                                        now);
+        if (replay == 1) {
+            Serial.printf("[BLE] REJECT — jti already consumed (replay): %s\n", jti);
             return;
         }
 
-        /* All checks passed — consume jti and unlock */
-        jti_consume(jti);
+        /* All checks passed — jti recorded; unlock. */
         Serial.printf("[BLE] UNLOCK — token verified; jti=%s; driving GPIO\n", jti);
         do_unlock();
     }

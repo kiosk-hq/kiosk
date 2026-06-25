@@ -4,12 +4,12 @@
  * Compile and run via:  make test
  *
  * This test does NOT require an ESP32 board. It exercises the same
- * ed25519/ + verify.c that skooti_lock.ino will link, proving that the
- * firmware's cryptographic contract matches the Kiosk server (Ruby/OpenSSL)
- * without any hardware.
+ * ed25519/ + verify.c + jti_store.c that skooti_lock.ino will link, proving
+ * that the firmware's cryptographic contract matches the Kiosk server
+ * (Ruby/OpenSSL) without any hardware.
  *
  * =========================================================================
- * KNOWN-ANSWER VECTOR (from Plan 4.2 T1 — DO NOT CHANGE)
+ * KNOWN-ANSWER VECTOR v2 (from Plan 4.3 T1 — DO NOT CHANGE)
  * =========================================================================
  *
  * Dev public key (32 bytes hex):
@@ -22,17 +22,17 @@
  *   exp            = 1750000900
  *   jti            = "aabbccddeeff00112233445566778899"
  *
- * message (signed bytes):
- *   "SK-001|resv-1|1750000000|1750000900|aabbccddeeff00112233445566778899"
+ * message (signed bytes) v2 — with domain-separation tag:
+ *   "kiosk-rental-v1|SK-001|resv-1|1750000000|1750000900|aabbccddeeff00112233445566778899"
  *
  * signature (base64url, no padding):
- *   b-8ZCqcN1FZAXn4YbXPJXasTED2rwq0DSOXrcRSjI9ajReEBb9Y3m3YSHgNJEElC
- *   HSwnEGGYbNGiEWRCZD_yBw
+ *   1Vx7nv8xgznLwWgdsS_MhWi1W1fhMQQWSgi1CPRVO3osohmlw_PhaTS9ZJaBOx9yeQZfzn2k8J4JjSXPd12SBA
  *
  * wire token = "<message>.<sig>"
  */
 
 #include "verify.h"
+#include "jti_store.h"
 #include <stdio.h>
 #include <string.h>
 #include <stdlib.h>
@@ -70,10 +70,11 @@ static const uint8_t SKOOTI_PUBKEY[32] = {
 
 #define SCOOTER_CODE "SK-001"
 
+/* v2 wire token: domain-separation tag + 6 pipe fields */
 #define WIRE_TOKEN \
-    "SK-001|resv-1|1750000000|1750000900|aabbccddeeff00112233445566778899" \
+    "kiosk-rental-v1|SK-001|resv-1|1750000000|1750000900|aabbccddeeff00112233445566778899" \
     "." \
-    "b-8ZCqcN1FZAXn4YbXPJXasTED2rwq0DSOXrcRSjI9ajReEBb9Y3m3YSHgNJEElCHSwnEGGYbNGiEWRCZD_yBw"
+    "1Vx7nv8xgznLwWgdsS_MhWi1W1fhMQQWSgi1CPRVO3osohmlw_PhaTS9ZJaBOx9yeQZfzn2k8J4JjSXPd12SBA"
 
 /* Timestamp inside the validity window (exp=1750000900, now=1750000800) */
 #define NOW_FRESH   ((uint64_t)1750000800ULL)
@@ -189,9 +190,9 @@ static void test_flipped_sig(void)
  */
 static void test_oversized_sig(void)
 {
-    /* Build: "<valid message>." + 400 'A' chars */
+    /* Build: "<valid v2 message>." + 400 'A' chars */
     static const char msg[] =
-        "SK-001|resv-1|1750000000|1750000900|aabbccddeeff00112233445566778899";
+        "kiosk-rental-v1|SK-001|resv-1|1750000000|1750000900|aabbccddeeff00112233445566778899";
     /* 400 valid base64url 'A' chars decode to 300 bytes — must be rejected */
     static const char oversized_sig[401] =
         "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"
@@ -237,21 +238,21 @@ static void test_malformed_tokens(void)
     result = skooti_verify_token(SKOOTI_PUBKEY, "", SCOOTER_CODE, NOW_FRESH);
     check(result == 0, "empty token → 0");
 
-    /* 5b — no dot at all */
+    /* 5b — no dot at all (v2 message without sig portion) */
     result = skooti_verify_token(SKOOTI_PUBKEY,
-        "SK-001|resv-1|1750000000|1750000900|aabbccddeeff00112233445566778899",
+        "kiosk-rental-v1|SK-001|resv-1|1750000000|1750000900|aabbccddeeff00112233445566778899",
         SCOOTER_CODE, NOW_FRESH);
     check(result == 0, "missing dot (no sig) → 0");
 
-    /* 5c — message with fewer than 5 fields */
+    /* 5c — message with fewer than 6 fields (only 2 here) */
     result = skooti_verify_token(SKOOTI_PUBKEY,
-        "SK-001|resv-1.b-8ZCqcN1FZAXn4YbXPJXasTED2rwq0DSOXrcRSjI9aj",
+        "kiosk-rental-v1|SK-001.b-8ZCqcN1FZAXn4YbXPJXasTED2rwq0DSOXrcRSjI9aj",
         SCOOTER_CODE, NOW_FRESH);
     check(result == 0, "only 2 message fields → 0");
 
     /* 5d — sig shorter than 64 decoded bytes */
     result = skooti_verify_token(SKOOTI_PUBKEY,
-        "SK-001|resv-1|1750000000|1750000900|aabbccddeeff00112233445566778899.dG9vc2hvcnQ",
+        "kiosk-rental-v1|SK-001|resv-1|1750000000|1750000900|aabbccddeeff00112233445566778899.dG9vc2hvcnQ",
         SCOOTER_CODE, NOW_FRESH);
     check(result == 0, "too-short sig → 0");
 
@@ -264,13 +265,137 @@ static void test_malformed_tokens(void)
     check(result == 0, "NULL pubkey → 0");
 }
 
+/*
+ * Test 7 — wrong domain-separation tag → returns 0
+ *
+ * A token whose message field[0] is NOT "kiosk-rental-v1" must be rejected
+ * even if the signature over the (wrong-tagged) message is valid.
+ *
+ * Security note: we cannot produce a VALID Ed25519 sig over a wrong-tagged
+ * message using the real private key in a unit test (we do not have it here).
+ * Instead we construct a token with a wrong tag and the valid KAT sig — this
+ * exercises the full path:
+ *   1. The sig does NOT verify (the message bytes differ), so we get 0 via
+ *      the Ed25519 check.  This is correct behaviour.
+ *   2. Alternatively: if sig happened to match (not possible with Ed25519),
+ *      the tag check would also catch it.
+ * Rejecting wrong-tagged tokens is thus guaranteed by either gate.
+ *
+ * The crosscheck (make crosscheck) further proves that only "kiosk-rental-v1"
+ * messages can produce a valid sig with the real key.
+ */
+static void test_wrong_domain_tag(void)
+{
+    int result;
+    printf("\n[7] Token with wrong domain tag (\"kiosk-rental-v0\") → expect 0\n");
+
+    /* Replace "kiosk-rental-v1" with "kiosk-rental-v0" — message bytes differ,
+     * so the Ed25519 sig (from the v1-tagged KAT) cannot verify. */
+    result = skooti_verify_token(SKOOTI_PUBKEY,
+        "kiosk-rental-v0|SK-001|resv-1|1750000000|1750000900|aabbccddeeff00112233445566778899"
+        "."
+        "1Vx7nv8xgznLwWgdsS_MhWi1W1fhMQQWSgi1CPRVO3osohmlw_PhaTS9ZJaBOx9yeQZfzn2k8J4JjSXPd12SBA",
+        SCOOTER_CODE, NOW_FRESH);
+    printf("  result: %d\n", result);
+    check(result == 0, "wrong tag (kiosk-rental-v0) → 0");
+
+    /* Also test a completely arbitrary tag */
+    result = skooti_verify_token(SKOOTI_PUBKEY,
+        "evil|SK-001|resv-1|1750000000|1750000900|aabbccddeeff00112233445566778899"
+        "."
+        "1Vx7nv8xgznLwWgdsS_MhWi1W1fhMQQWSgi1CPRVO3osohmlw_PhaTS9ZJaBOx9yeQZfzn2k8J4JjSXPd12SBA",
+        SCOOTER_CODE, NOW_FRESH);
+    printf("  result: %d\n", result);
+    check(result == 0, "arbitrary tag (\"evil\") → 0");
+}
+
+/*
+ * Test 8 — jti_store: insert, replay detection, expiry pruning, table-full eviction
+ */
+static void test_jti_store(void)
+{
+    int r;
+
+    printf("\n[8] jti_store: insert, replay, prune, table-full eviction\n");
+
+    /* 8a — fresh insert: first time → 0 (new) */
+    jti_store_reset();
+    r = jti_seen_or_insert("aabbccddeeff00112233445566778899", 1750000900ULL, 1750000800ULL);
+    check(r == 0, "jti_store: first insert → 0 (new)");
+
+    /* 8b — replay: same jti, exp > now → 1 (seen, reject) */
+    r = jti_seen_or_insert("aabbccddeeff00112233445566778899", 1750000900ULL, 1750000800ULL);
+    check(r == 1, "jti_store: second insert same jti (exp>now) → 1 (replay rejected)");
+
+    /* 8c — expired entry pruned: insert jti1 with exp <= now → pruned;
+     * re-inserting the same jti1 returns 0 (new, not replay) */
+    jti_store_reset();
+    /* Insert with exp already in the past */
+    r = jti_seen_or_insert("deadbeef00112233445566778899aabb",
+                            1750000000ULL, /* exp */
+                            1750000001ULL  /* now = exp+1 → already expired at insert time */);
+    /* exp <= now at insert: entry accepted (0) but immediately eligible for pruning */
+    check(r == 0, "jti_store: insert expired-at-creation → 0 (stored)");
+
+    /* Now re-insert the same jti with now > exp → entry was pruned; returns 0 again */
+    r = jti_seen_or_insert("deadbeef00112233445566778899aabb",
+                            1750000000ULL,
+                            1750000500ULL  /* now is well past exp */);
+    check(r == 0, "jti_store: expired entry pruned → re-insert → 0 (not replay)");
+
+    /* 8d — table-full: fill JTI_STORE_SIZE slots with distinct jtis, then add one more.
+     * The oldest / smallest-exp entry is evicted; overall call returns 0 (not -1). */
+    jti_store_reset();
+    {
+        int i;
+        char jti_buf[JTI_MAX_LEN];
+        int all_ok = 1;
+        for (i = 0; i < JTI_STORE_SIZE; i++) {
+            /* Generate a distinct 32-char hex jti (zero-padded index) */
+            int j;
+            for (j = 0; j < 32; j++) jti_buf[j] = '0';
+            /* Write decimal index into last 8 chars */
+            {
+                int val = i;
+                int k;
+                for (k = 31; k >= 24 && val > 0; k--) {
+                    jti_buf[k] = '0' + (val % 10);
+                    val /= 10;
+                }
+            }
+            jti_buf[32] = '\0';
+            r = jti_seen_or_insert(jti_buf, (uint64_t)(1750001000 + i), 1750000800ULL);
+            if (r != 0) { all_ok = 0; break; }
+        }
+        check(all_ok, "jti_store: fill 64 slots → all return 0 (new)");
+
+        /* One more — table full, must evict and return 0 (not -1) */
+        r = jti_seen_or_insert("ffffffffffffffffffffffffffffffff",
+                                1750002000ULL, 1750000800ULL);
+        check(r == 0, "jti_store: table-full + evict oldest → 0 (new, not error)");
+    }
+
+    /* 8e — invalid argument: NULL jti → -1 */
+    r = jti_seen_or_insert(NULL, 1750000900ULL, 1750000800ULL);
+    check(r == -1, "jti_store: NULL jti → -1 (invalid arg)");
+
+    /* 8f — invalid argument: empty jti → -1 */
+    r = jti_seen_or_insert("", 1750000900ULL, 1750000800ULL);
+    check(r == -1, "jti_store: empty jti → -1 (invalid arg)");
+
+    /* 8g — invalid argument: jti too long (>= JTI_MAX_LEN chars) → -1 */
+    r = jti_seen_or_insert("aabbccddeeff00112233445566778899X" /* 33 chars */,
+                            1750000900ULL, 1750000800ULL);
+    check(r == -1, "jti_store: jti too long (33 chars) → -1 (invalid arg)");
+}
+
 /* --------------------------------------------------------------------------
  * main
  * -------------------------------------------------------------------------- */
 
 int main(void)
 {
-    printf("=== skooti firmware Ed25519 host test (Arch 2) ===\n");
+    printf("=== skooti firmware Ed25519 host test (Arch 2, token v2) ===\n");
     printf("Public key : 8857880d21f87b85872f31aeea8d0024acebb2fdf933b25a479f4f9e80babefd\n");
     printf("Scooter    : %s\n", SCOOTER_CODE);
 
@@ -280,6 +405,8 @@ int main(void)
     test_flipped_sig();
     test_oversized_sig();
     test_malformed_tokens();
+    test_wrong_domain_tag();
+    test_jti_store();
 
     printf("\n=== Results: %d passed, %d failed ===\n", g_pass, g_fail);
 

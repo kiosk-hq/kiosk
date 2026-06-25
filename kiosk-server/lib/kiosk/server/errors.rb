@@ -107,6 +107,33 @@ module Kiosk
         EXIT_CODE   = 6
         HTTP_STATUS = 500
       end
+
+      # Proof-of-work required — the provider's reputation policy demands a
+      # PoW challenge for this request. The client must solve the challenge and
+      # re-send the request with `pow: {challenge:, nonce:}`. HTTP 402.
+      class PowRequired < Base
+        CODE        = "pow_required"
+        EXIT_CODE   = 2
+        HTTP_STATUS = 402
+
+        attr_reader :challenge
+
+        def initialize(challenge:)
+          super("proof-of-work required")
+          @challenge = challenge
+        end
+
+        # Override: embed the challenge in the error envelope so the client
+        # can solve it without a second round-trip.
+        def to_envelope
+          { ok: false, error: { code: code, message: message, challenge: challenge } }
+        end
+      end
+
+      # Misconfiguration of the Kiosk::Server integration — raised at
+      # gate-call time (not load time) so a misconfigured optional feature
+      # doesn't prevent the server from booting.
+      class ConfigurationError < StandardError; end
     end
   end
 end

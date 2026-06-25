@@ -262,22 +262,64 @@ RSpec.describe Kiosk::Server::PowGate do
       end
     end
 
-    # ── replayed (spent) challenge id → rejected ─────────────────────────────
+    # ── replayed (spent) challenge id → re-challenge (not a penalty) ────────
+    #
+    # An honest client that solved + submitted + was served but LOST the 200
+    # response (timeout / at-least-once HTTP) retries the identical pow. The id
+    # is now spent. The correct response is a fresh challenge (402), NOT a 403
+    # penalty — a replayed valid proof is not a wrong proof.
 
-    describe "replayed challenge id" do
-      it "rejects a second submission with the same challenge id" do
+    describe "replayed challenge id (spent proof — honest retry)" do
+      it "re-issues a fresh challenge (PowRequired / HTTP 402) instead of Forbidden" do
         challenge = issue_challenge_via_gate(command: "query", body: { name: "menu" })
         nonce     = solve_nonce(challenge)
         pow       = { challenge: challenge, nonce: nonce }
 
-        # First submission → :proceed
+        # First submission → accepted
         result = described_class.gate(identity: identity, command: "query", body: { name: "menu" }, pow: pow)
         expect(result).to eq(:proceed)
 
-        # Second submission with same id → rejected
+        # Replay of the same (now-spent) proof → re-challenge, NOT 403
         expect {
           described_class.gate(identity: identity, command: "query", body: { name: "menu" }, pow: pow)
-        }.to raise_error(Kiosk::Server::Errors::Forbidden, /spent/)
+        }.to raise_error(Kiosk::Server::Errors::PowRequired)
+      end
+
+      it "re-challenge carries a well-formed NEW challenge (different id from the spent one)" do
+        challenge = issue_challenge_via_gate(command: "query", body: { name: "menu" })
+        nonce     = solve_nonce(challenge)
+        pow       = { challenge: challenge, nonce: nonce }
+
+        described_class.gate(identity: identity, command: "query", body: { name: "menu" }, pow: pow)
+
+        new_error = catch_error(Kiosk::Server::Errors::PowRequired) do
+          described_class.gate(identity: identity, command: "query", body: { name: "menu" }, pow: pow)
+        end
+
+        new_ch = new_error.challenge
+        expect(new_ch[:id]).not_to   be_nil
+        expect(new_ch[:id]).not_to   eq(challenge[:id])  # fresh id
+        expect(new_ch[:alg]).to      eq("argon2id")
+        expect(new_ch[:exp]).to      be > Time.now.to_i
+      end
+
+      it "does NOT call on_bad_proof (replaying a valid proof is not a wrong proof)" do
+        penalty_calls = []
+        Kiosk.configure { |c| c.on_bad_proof = ->(identity:) { penalty_calls << identity } }
+
+        challenge = issue_challenge_via_gate(command: "query", body: { name: "menu" })
+        nonce     = solve_nonce(challenge)
+        pow       = { challenge: challenge, nonce: nonce }
+
+        described_class.gate(identity: identity, command: "query", body: { name: "menu" }, pow: pow)
+
+        begin
+          described_class.gate(identity: identity, command: "query", body: { name: "menu" }, pow: pow)
+        rescue Kiosk::Server::Errors::PowRequired
+          nil
+        end
+
+        expect(penalty_calls).to be_empty
       end
     end
 

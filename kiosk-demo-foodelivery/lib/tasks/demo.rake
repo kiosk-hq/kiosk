@@ -290,6 +290,123 @@ namespace :demo do
       exit 1
     end
   end
+
+  desc "Boot the server with KIOSK_POW_DEMO=1, run pow_flow.rb (402→solve.py→200 + wrong-nonce→403)."
+  task :pow do
+    # Requirement: python3 with argon2-cffi must be available.
+    # Install with: pip install argon2-cffi
+    python_ok = system("python3 -c 'import argon2' 2>/dev/null")
+    unless python_ok
+      abort "argon2-cffi not found. Install with: pip install argon2-cffi\n" \
+            "Then re-run: bundle exec rake demo:pow"
+    end
+
+    require "resolv"
+
+    port = ENV.fetch("PORT", "3002")
+    log  = "/tmp/kiosk-foodelivery-pow-demo.log"
+
+    host = begin
+      addr = Resolv.getaddress("foodelivery.app") rescue ""
+      addr == "127.0.0.1" ? "foodelivery.app" : "127.0.0.1"
+    end
+
+    server_url   = "http://#{host}:#{port}"
+    kiosk_issuer = server_url
+
+    puts "\n── Starting foodelivery (PoW demo) on #{server_url} ──"
+
+    env_vars = {
+      "KIOSK_ISSUER"   => kiosk_issuer,
+      "KIOSK_POW_DEMO" => "1",
+    }
+    server_pid = spawn(
+      env_vars,
+      "bundle exec rails s -p #{port} -b 127.0.0.1 -e development",
+      out: log, err: log,
+    )
+
+    at_exit do
+      begin
+        Process.kill("TERM", server_pid)
+        Process.wait(server_pid)
+      rescue Errno::ESRCH, Errno::ECHILD
+        nil
+      end
+    end
+
+    # Wait for readiness.
+    require "net/http"
+    require "uri"
+    ready = false
+    30.times do
+      begin
+        res = Net::HTTP.get_response(URI("#{server_url}/.well-known/kiosk.json"))
+        if res.code.to_i == 200
+          ready = true
+          break
+        end
+      rescue Errno::ECONNREFUSED, Errno::EADDRNOTAVAIL, SocketError
+        nil
+      end
+      sleep 1
+    end
+    abort "Server did not become ready — see #{log}" unless ready
+    puts "  Server up at #{server_url} (PoW active)"
+
+    # Run pow_flow.rb.
+    flow_rb = File.expand_path("../../pow_flow.rb", __dir__)
+    puts "\n── Running pow_flow.rb ──"
+    raw = `SERVER_URL=#{server_url} KIOSK_ISSUER=#{kiosk_issuer} bundle exec ruby #{flow_rb} 2>&1`
+    puts raw
+
+    begin
+      result = JSON.parse(raw.lines.grep(/^\{/).last || raw)
+    rescue JSON::ParserError => e
+      abort "pow_flow.rb did not produce valid JSON: #{e.message}\nOutput:\n#{raw}"
+    end
+
+    # ── Assertions ──
+    puts "\n── PoW assertions ──"
+    failures = []
+
+    if result["http_challenge"] == 402
+      puts "  ✓  query challenged: HTTP 402 (pow_required)"
+    else
+      failures << "expected http_challenge=402, got #{result["http_challenge"].inspect}"
+      puts "  ✗  expected HTTP 402, got #{result["http_challenge"].inspect}"
+    end
+
+    if result["served"] == true && result["http_served_after_solve"] == 200
+      puts "  ✓  served after real solve.py: HTTP 200, #{result["menu_rows"]} menu rows"
+    else
+      failures << "expected served=true + http_served_after_solve=200, got #{result.slice("served","http_served_after_solve").inspect}"
+      puts "  ✗  not served after solve: #{result.inspect}"
+    end
+
+    if result["http_wrong_nonce"] == 403
+      puts "  ✓  wrong nonce rejected: HTTP 403"
+    else
+      failures << "expected http_wrong_nonce=403, got #{result["http_wrong_nonce"].inspect}"
+      puts "  ✗  wrong nonce returned #{result["http_wrong_nonce"].inspect}"
+    end
+
+    bpc = result["bad_proof_count"].to_i
+    if bpc >= 1
+      puts "  ✓  on_bad_proof penalized: bad_proof_count=#{bpc}"
+    else
+      failures << "expected bad_proof_count>=1 after wrong nonce, got #{bpc}"
+      puts "  ✗  bad_proof_count=#{bpc} (expected >=1)"
+    end
+
+    if failures.empty?
+      puts "\n  All PoW assertions passed."
+    else
+      puts "\n  FAILED:"
+      failures.each { |f| puts "    - #{f}" }
+      exit 1
+    end
+  end
 end
 
 desc "End-to-end Kiosk demo: setup the DB then run the no-human order end-to-end."

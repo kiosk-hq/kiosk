@@ -128,6 +128,58 @@ module Kiosk
         @device_authorization_store ||= Kiosk::Server::DeviceAuthorizationStores::InMemory.new
       end
 
+      # ── PoW challenge-response gate (R2) ──────────────────────────────────
+
+      # Reputation policy that decides when and how hard to challenge a request.
+      # Default nil = never challenge (zero overhead; existing behaviour unchanged).
+      # Set to a `Kiosk::Reputation::Policy` instance (or any object responding to
+      # `#challenge_for(identity:, verb:, factors:) → {alg:,params:}|nil`).
+      attr_writer :reputation_policy
+      def reputation_policy
+        @reputation_policy
+      end
+
+      # HMAC key used to sign/verify challenges. Required when reputation_policy
+      # is set; a ConfigurationError is raised at gate-call time if it is nil.
+      # In production read from an env var / secrets manager:
+      #   c.pow_secret = ENV.fetch("KIOSK_POW_SECRET")
+      attr_accessor :pow_secret
+
+      # Challenge TTL in seconds. Default 300 (5 minutes).
+      attr_writer :pow_ttl
+      def pow_ttl
+        @pow_ttl ||= 300
+      end
+
+      # Callable `(identity:, verb:) → Kiosk::Reputation::Factors` that the
+      # host supplies to let the policy see reputation context. Default returns
+      # `Factors.empty` (all fields nil) — safe when kiosk-reputation IS loaded
+      # (which it must be when a policy is set). The body is a lambda, so
+      # `Kiosk::Reputation::Factors` is NOT referenced at definition time;
+      # nil-policy apps without kiosk-reputation still boot.
+      attr_writer :reputation_factors
+      def reputation_factors
+        @reputation_factors ||= ->(**) { ::Kiosk::Reputation::Factors.empty }
+      end
+
+      # Callable `(identity:) → void` invoked when a submitted proof is
+      # cryptographically invalid (wrong nonce). The host increments the
+      # principal's `bad_proof_count` here. Default: no-op.
+      attr_writer :on_bad_proof
+      def on_bad_proof
+        @on_bad_proof ||= ->(**) {}
+      end
+
+      # In-process TTL store for spent challenge ids. Override with a
+      # shared-store implementation (e.g. Redis-backed) in multi-process
+      # deployments to prevent replay attacks across processes.
+      #
+      # @return [Kiosk::Server::PowSpentStore, #spent?(id), #mark_spent(id, exp)]
+      attr_writer :pow_spent_store
+      def pow_spent_store
+        @pow_spent_store ||= Kiosk::Server::PowSpentStore.new
+      end
+
       private
 
       def default_signing_key

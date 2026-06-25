@@ -9,6 +9,7 @@ if defined?(::ActionController::API)
   require "kiosk/server/executor"
   require "kiosk/server/errors"
   require "kiosk/server/headers"
+  require "kiosk/server/pow_gate"
 
   module Kiosk
     module Server
@@ -33,9 +34,22 @@ if defined?(::ActionController::API)
           identity = resolve_identity!
           parsed   = parse_body!
 
+          command = parsed[:command] || parsed[:kind]
+          args    = parsed[:body]    || parsed[:args]
+
+          # PoW gate: no-op when reputation_policy is nil (the default).
+          # Raises Errors::PowRequired (402) or Errors::Forbidden (403) on
+          # challenge / bad-proof; returns :proceed otherwise.
+          PowGate.gate(
+            identity: identity,
+            command:  command,
+            body:     args,
+            pow:      parsed[:pow],
+          )
+
           result = Executor.call(
-            kind:       parsed[:command] || parsed[:kind],
-            args:       parsed[:body]    || parsed[:args],
+            kind:       command,
+            args:       args,
             identity:   identity,
             connection: connection_for(identity),
           )

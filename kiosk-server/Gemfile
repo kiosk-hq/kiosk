@@ -6,3 +6,8 @@ gemspec
 gem "kiosk-core",         path: "../kiosk-core"
 gem "kiosk-rls",          path: "../kiosk-rls"
 gem "kiosk-test-support", path: "../kiosk-test-support"
+
+# PoW-gate path deps — available in specs; NOT hard-required in lib code.
+# The host that wires a reputation_policy will have these loaded transitively.
+gem "kiosk-pow",        path: "../kiosk-pow"
+gem "kiosk-reputation", path: "../kiosk-reputation"

@@ -68,10 +68,10 @@ pg_isready -q || fail "postgres not accepting connections (run: brew services st
 
 ok "all prerequisites present"
 
-# Pre-create app_role so the kiosk-rls `enable_rls_on` GRANT statements
-# have a real role to target. NOLOGIN + grant to current user so RLS
-# checks compile but don't actually enforce (role separation per spec
-# §7.6 lands in a follow-up — see e2e/README.md).
+# Pre-create app_role so Kiosk.configure app_role= / system_role= reference
+# a real PG role. NOLOGIN + grant to current user is harmless forward-compat:
+# Path C uses app-layer isolation (named queries), not RLS. Role separation
+# per spec §7.6 lands in a follow-up — see e2e/README.md.
 psql -d postgres -tAc "DO \$\$ BEGIN
   IF NOT EXISTS (SELECT FROM pg_roles WHERE rolname = 'app_role') THEN
     CREATE ROLE app_role NOLOGIN;

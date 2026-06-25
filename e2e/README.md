@@ -9,15 +9,14 @@ Reproducible end-to-end test of the Kiosk OSS gems. The same script (`run.sh`) r
 - `/.well-known/kiosk.json` discovery endpoint returns a valid document
 - Response headers (`Kiosk-Server-Version`, `Kiosk-API-Version`, `Kiosk-Min-Client`) are injected on `/kiosk/*`
 - `POST /kiosk/exec` accepts JSON requests and dispatches through `Kiosk::Server::Executor`
-- The `sql` verb returns rows
+- The `query` verb calls provider-registered named queries (`salons`, `my_appointments`) and returns rows
 - The `run` verb dispatches to registered Actions
 - Error envelopes have the right shape and HTTP status (`BadRequest` → 400, `NotFound` → 404, `Unauthenticated` → 401)
-- `SET LOCAL` GUCs flow correctly: the registered Action reads `kiosk.current_user_id()` and writes the row with that user_id
+- `SET LOCAL` GUCs flow correctly: the `book_appointment` Action reads `kiosk.current_user_id()` and the `my_appointments` query returns only the calling principal's rows (app-layer isolation via `WHERE user_id = kiosk.current_user_id()`)
 
 ## What it does NOT verify (deferred)
 
-- **RLS isolation between users.** RLS enforcement requires satellite-mode role separation per spec §7.6 — the runtime role must have `NOBYPASSRLS` and must NOT own the tables. v0.1 alpha uses a single role (`app_role` granted to the connecting user), and Postgres superusers / table owners bypass RLS. The script asserts the wire path works; isolation lands when role separation ships in kiosk-server.
-- **OAuth flow.** The e2e uses a `StubIdp` that parses `Authorization: Bearer agent:u-<uuid>:a-<id>:r-<role>` tokens. Real OAuth 2.1 + PKCE / Device Grant ships in a follow-up release.
+- **RLS.** Path C removes raw SQL entirely — there is no arbitrary-SQL surface. Per-user isolation is enforced app-layer in registered query definitions (the `WHERE user_id = kiosk.current_user_id()` in `my_appointments`). RLS is optional and not used in this fixture; satellite-mode role separation per spec §7.6 lands in a follow-up. The `app_role` pre-creation in `run.sh` is kept harmless for forward compatibility.
 - **AP2 mandate trail.** The `pay` verb is not yet implemented (lands with `kiosk-pay-stripe` at M4).
 - **`schema` / `help` / `events` verbs** — all stubbed (`NotImplementedError`).
 - **Multi-agent revocation** flows.
@@ -44,7 +43,7 @@ The script:
 3. `bundle install`
 4. Stages the `User` model migration (UUID PK)
 5. Runs `bin/rails g kiosk:install --user-id-type=uuid` (the kiosk-server generator)
-6. Stages the demo migration (`salons` + `appointments` with `enable_rls_on`)
+6. Stages the demo migration (`salons` + `appointments`; RLS not used — app-layer isolation via named queries)
 7. Stages models, seeds, stub IdP, initializer, routes
 8. `rails db:create db:migrate db:seed`
 9. Starts `rails s` on port 3001 in the background

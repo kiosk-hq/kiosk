@@ -78,5 +78,26 @@ crosscheck: $(TARGET)_crosscheck
 $(TARGET)_crosscheck: crosscheck_main.c verify.c $(ED25519_SRCS) $(HDRS)
 	$(CC) $(CFLAGS) -o $@ crosscheck_main.c verify.c $(ED25519_SRCS)
 
+# --------------------------------------------------------------------------
+# make test-asan: compile + run host_test under AddressSanitizer (clang only)
+#
+# Proves the oversized-sig regression case returns 0 with NO overflow report.
+# Requires clang with ASan support (macOS: ships with Xcode Command Line Tools;
+# Linux: apt install clang).  If clang is unavailable, the bounded decoder
+# (dst_cap guard) is the real fix regardless — use `make test` instead.
+# --------------------------------------------------------------------------
+ASAN_TARGET := $(TARGET)_asan
+ASAN_FLAGS  := -std=c99 -Wall -Wextra -O1 -Ied25519 \
+               -fsanitize=address -fno-omit-frame-pointer
+
+$(ASAN_TARGET): $(SRCS) $(HDRS)
+	clang $(ASAN_FLAGS) -o $@ $(SRCS)
+
+test-asan: $(ASAN_TARGET)
+	@echo "--- C host test (AddressSanitizer) ---"
+	@./$(ASAN_TARGET)
+	@echo ""
+	@echo "ASan: no overflow detected (all cases above passed cleanly)"
+
 clean:
-	rm -f $(TARGET) $(TARGET)_crosscheck *.o
+	rm -f $(TARGET) $(TARGET)_crosscheck $(ASAN_TARGET) *.o

@@ -1,10 +1,11 @@
 # frozen_string_literal: true
 
-# Kiosk demo orchestration for kiosk-demo-skooti. Tasks:
+# Kiosk demo orchestration for kiosk-demo-skooti (Arch 2 — Ed25519 offline token).
+# Tasks:
 #
 #   rake demo:setup      idempotent db:drop / create / migrate / seed
-#   rake demo:rideflow   boots the server, runs unlock_flow.rb (no-human full
-#                        unlock chain), asserts happy path + negative gates,
+#   rake demo:rideflow   boots the server, runs rental_flow.rb (no-human full
+#                        rental chain), asserts happy path + all negative gates,
 #                        tears down
 #   rake demo            setup + rideflow (full end-to-end proof)
 #
@@ -21,12 +22,18 @@ namespace :demo do
     sh "bundle exec rails db:drop db:create db:migrate db:seed"
   end
 
-  desc "Boot the server, run unlock_flow.rb end-to-end (happy + negative gates), assert."
+  desc "Boot the server, run rental_flow.rb end-to-end (happy + all negative gates), assert."
   task :rideflow do
     require "resolv"
     require "net/http"
     require "uri"
     require "json"
+    require "openssl"
+    require "base64"
+
+    $LOAD_PATH.unshift File.expand_path("../", __dir__)
+    require "lock_sim"
+    require "dev_unlock_key"
 
     port = ENV.fetch("PORT", "3003")
     log  = "/tmp/kiosk-skooti-demo.log"
@@ -48,9 +55,8 @@ namespace :demo do
 
     server_url   = "http://#{host}:#{port}"
     kiosk_issuer = server_url
-    master_key   = ENV.fetch("MASTER_KEY", "dev-master-key-0001")
     db           = "kiosk_skooti_development"
-    flow_rb      = File.expand_path("../../unlock_flow.rb", __dir__)
+    flow_rb      = File.expand_path("../../rental_flow.rb", __dir__)
 
     failures = []
 
@@ -58,7 +64,7 @@ namespace :demo do
     boot_server = lambda do |&blk|
       File.truncate(log, 0) if File.exist?(log)
       server_pid = spawn(
-        { "KIOSK_ISSUER" => kiosk_issuer, "SKOOTI_MASTER_KEY" => master_key },
+        { "KIOSK_ISSUER" => kiosk_issuer },
         "bundle exec rails s -p #{port} -b 127.0.0.1 -e development",
         out: log, err: log,
       )
@@ -92,236 +98,256 @@ namespace :demo do
       end
     end
 
-    # ── RUN 1: Happy path ─────────────────────────────────────────────────
-    puts "\n══ Happy path ══"
-    boot_server.call do
+    # Helper: run rental_flow.rb with the given env vars; return parsed JSON result.
+    run_flow = lambda do |extra_env = {}|
       env = {
-        "SERVER_URL"       => server_url,
-        "KIOSK_ISSUER"     => kiosk_issuer,
-        "MASTER_KEY"       => master_key,
-      }
-      env_str = env.map { |k, v| "#{k}=#{v}" }.join(" ")
-      raw = `#{env_str} bundle exec ruby #{flow_rb} 2>&1`
-      # Separate JSON line (stdout) from STDERR progress lines.
-      json_line = raw.lines.grep(/^\{/).last
+        "SERVER_URL"   => server_url,
+        "KIOSK_ISSUER" => kiosk_issuer,
+      }.merge(extra_env)
+      env_str = env.map { |k, v| "#{k}=#{v.to_s.shellescape}" }.join(" ")
+      raw = `#{env_str} bundle exec ruby #{flow_rb.shellescape} 2>&1`
+      json_line   = raw.lines.grep(/^\{/).last
       stderr_lines = raw.lines.reject { |l| l.start_with?("{") }
       puts stderr_lines.join
       puts json_line if json_line
 
       begin
-        result = JSON.parse(json_line || raw)
+        JSON.parse(json_line || raw)
       rescue JSON::ParserError => e
-        abort "unlock_flow.rb did not produce valid JSON: #{e.message}\nOutput:\n#{raw}"
+        abort "rental_flow.rb did not produce valid JSON: #{e.message}\nOutput:\n#{raw}"
+      end
+    end
+
+    # ── RUN 1: Happy path ─────────────────────────────────────────────────
+    puts "\n══ RUN 1: Happy path ══"
+    happy_result = nil
+    boot_server.call do
+      happy_result = run_flow.call
+
+      # ── Basic HTTP + lock assertions ────────────────────────────────────
+      if happy_result["http_start_rental"] == 200
+        puts "  OK  http_start_rental == 200"
+      else
+        failures << "happy: http_start_rental expected 200, got #{happy_result["http_start_rental"].inspect}"
+        puts "  FAIL  http_start_rental expected 200, got #{happy_result["http_start_rental"].inspect}"
       end
 
-      if result["http_unlock"] == 200
-        puts "  ✓  http_unlock == 200"
+      if happy_result["unlocked"] == true
+        puts "  OK  unlocked == true"
       else
-        failures << "happy: http_unlock expected 200, got #{result["http_unlock"].inspect}"
-        puts "  ✗  http_unlock expected 200, got #{result["http_unlock"].inspect}"
+        failures << "happy: unlocked expected true, got #{happy_result["unlocked"].inspect}"
+        puts "  FAIL  unlocked — got #{happy_result["unlocked"].inspect}"
       end
 
-      if result["unlocked"] == true
-        puts "  ✓  unlocked == true"
+      rental_token = happy_result["rental_token"]
+      if rental_token && !rental_token.empty?
+        puts "  OK  rental_token present (#{rental_token[0, 30]}...)"
       else
-        failures << "happy: unlocked expected true, got #{result["unlocked"].inspect}"
-        puts "  ✗  unlocked — got #{result["unlocked"].inspect}"
+        failures << "happy: rental_token missing or empty"
+        puts "  FAIL  rental_token missing or empty"
       end
 
-      if result["replay_rejected"] == true
-        puts "  ✓  replay_rejected == true"
+      exp = happy_result["exp"]
+      if exp && exp.to_i > 0
+        puts "  OK  exp present (#{exp})"
       else
-        failures << "happy: replay_rejected expected true, got #{result["replay_rejected"].inspect}"
-        puts "  ✗  replay_rejected — got #{result["replay_rejected"].inspect}"
-      end
-
-      if result["tamper_rejected"] == true
-        puts "  ✓  tamper_rejected == true"
-      else
-        failures << "happy: tamper_rejected expected true, got #{result["tamper_rejected"].inspect}"
-        puts "  ✗  tamper_rejected — got #{result["tamper_rejected"].inspect}"
-      end
-
-      mac = result["mac"]
-      if mac && !mac.empty?
-        puts "  ✓  mac present (#{mac[0, 16]}…)"
-      else
-        failures << "happy: mac missing or empty"
-        puts "  ✗  mac missing or empty"
+        failures << "happy: exp missing or zero"
+        puts "  FAIL  exp missing or zero"
       end
 
       # ── psql assertions ────────────────────────────────────────────────
       res_count = `psql -X -d #{db} -tAc "SELECT COUNT(*) FROM public.reservations WHERE status='active'" 2>&1`.strip
       if res_count.to_i >= 1
-        puts "  ✓  reservations[status=active] >= 1 (got #{res_count})"
+        puts "  OK  reservations[status=active] >= 1 (got #{res_count})"
       else
         failures << "happy: reservations[status=active] expected >= 1, got #{res_count.inspect}"
-        puts "  ✗  reservations[status=active] expected >= 1, got #{res_count.inspect}"
+        puts "  FAIL  reservations[status=active] expected >= 1, got #{res_count.inspect}"
       end
 
       pm_count = `psql -X -d #{db} -tAc 'SELECT COUNT(*) FROM kiosk.payment_mandates' 2>&1`.strip
       if pm_count.to_i >= 1
-        puts "  ✓  kiosk.payment_mandates >= 1 (got #{pm_count})"
+        puts "  OK  kiosk.payment_mandates >= 1 (got #{pm_count})"
       else
         failures << "happy: kiosk.payment_mandates expected >= 1, got #{pm_count.inspect}"
-        puts "  ✗  kiosk.payment_mandates expected >= 1, got #{pm_count.inspect}"
+        puts "  FAIL  kiosk.payment_mandates expected >= 1, got #{pm_count.inspect}"
+      end
+
+      # ── Offline-token negatives (lock-sim level) ─────────────────────────
+      # These run purely in Ruby — no server round-trip needed.
+      if rental_token && !rental_token.empty?
+        puts "\n  -- Offline-token negatives --"
+
+        pub_pem    = DevUnlockKey.public_key_pem
+        skooti_pub = OpenSSL::PKey.read(pub_pem)
+
+        sc  = happy_result.fetch("rental_token") && begin
+          # Extract scooter_code from the token message (field 0).
+          msg = rental_token.split(".").tap { |p| p.pop }.join(".")
+          msg.split("|")[0]
+        end
+        exp_val = happy_result["exp"].to_i
+
+        # N1: expired — call unlock with now = exp + 1
+        lock_n1  = LockSim.new(scooter_code: sc, skooti_public_key: skooti_pub)
+        result_n1 = lock_n1.unlock(token: rental_token, now: exp_val + 1)
+        if result_n1 == false
+          puts "  OK  N1 expired: unlock(now=exp+1) == false"
+        else
+          failures << "offline-neg: N1 expired expected false, got #{result_n1.inspect}"
+          puts "  FAIL  N1 expired: expected false, got #{result_n1.inspect}"
+        end
+
+        # N2: wrong scooter — same token, different scooter_code provisioned
+        lock_n2  = LockSim.new(scooter_code: "SK-999", skooti_public_key: skooti_pub)
+        result_n2 = lock_n2.unlock(token: rental_token, now: Time.now.to_i)
+        if result_n2 == false
+          puts "  OK  N2 wrong-scooter: unlock(SK-999) == false"
+        else
+          failures << "offline-neg: N2 wrong-scooter expected false, got #{result_n2.inspect}"
+          puts "  FAIL  N2 wrong-scooter: expected false, got #{result_n2.inspect}"
+        end
+
+        # N3: forged sig — flip the last character of the sig portion
+        dot_idx    = rental_token.rindex(".")
+        msg_part   = rental_token[0...dot_idx]
+        sig_part   = rental_token[(dot_idx + 1)..]
+        last_char  = sig_part[-1]
+        # Flip between 'A' and 'B' so the base64url decode always produces 64 bytes
+        flipped    = last_char == "A" ? "B" : "A"
+        forged_token = "#{msg_part}.#{sig_part[0..-2]}#{flipped}"
+        lock_n3    = LockSim.new(scooter_code: sc, skooti_public_key: skooti_pub)
+        result_n3  = lock_n3.unlock(token: forged_token, now: Time.now.to_i)
+        if result_n3 == false
+          puts "  OK  N3 forged-sig: unlock(flipped sig) == false"
+        else
+          failures << "offline-neg: N3 forged-sig expected false, got #{result_n3.inspect}"
+          puts "  FAIL  N3 forged-sig: expected false, got #{result_n3.inspect}"
+        end
+
+        # N4: replay jti — unlock the same token twice (second must be false)
+        lock_n4    = LockSim.new(scooter_code: sc, skooti_public_key: skooti_pub)
+        first_try  = lock_n4.unlock(token: rental_token, now: Time.now.to_i)
+        second_try = lock_n4.unlock(token: rental_token, now: Time.now.to_i)
+        if first_try == true && second_try == false
+          puts "  OK  N4 replay-jti: first=true, second=false"
+        else
+          failures << "offline-neg: N4 replay expected first=true/second=false, got first=#{first_try.inspect}/second=#{second_try.inspect}"
+          puts "  FAIL  N4 replay-jti: expected first=true/second=false, got first=#{first_try.inspect}/second=#{second_try.inspect}"
+        end
       end
     end
 
-    # ── RUN 2: Negative gate — no payment ────────────────────────────────
-    puts "\n══ Negative gate — SKIP_PAY ══"
+    # ── RUN 2: Server-gate negative — SKIP_PAY → 403 ─────────────────────
+    puts "\n══ RUN 2: Server-gate negative — SKIP_PAY → 403 ══"
     boot_server.call do
-      env = {
-        "SERVER_URL"       => server_url,
-        "KIOSK_ISSUER"     => kiosk_issuer,
-        "MASTER_KEY"       => master_key,
-        "SKIP_PAY"         => "1",
-      }
-      env_str = env.map { |k, v| "#{k}=#{v}" }.join(" ")
-      raw = `#{env_str} bundle exec ruby #{flow_rb} 2>&1`
-      json_line = raw.lines.grep(/^\{/).last
-      stderr_lines = raw.lines.reject { |l| l.start_with?("{") }
-      puts stderr_lines.join
-      puts json_line if json_line
+      result = run_flow.call("SKIP_PAY" => "1")
 
-      begin
-        result = JSON.parse(json_line || raw)
-      rescue JSON::ParserError => e
-        abort "unlock_flow.rb (SKIP_PAY) did not produce valid JSON: #{e.message}\nOutput:\n#{raw}"
-      end
-
-      if result["http_unlock"] == 403
-        puts "  ✓  SKIP_PAY: http_unlock == 403 (no MAC issued)"
+      if result["http_start_rental"] == 403
+        puts "  OK  SKIP_PAY: http_start_rental == 403"
       else
-        failures << "skip_pay: http_unlock expected 403, got #{result["http_unlock"].inspect}"
-        puts "  ✗  SKIP_PAY: http_unlock expected 403, got #{result["http_unlock"].inspect}"
+        failures << "skip_pay: http_start_rental expected 403, got #{result["http_start_rental"].inspect}"
+        puts "  FAIL  SKIP_PAY: expected 403, got #{result["http_start_rental"].inspect}"
       end
     end
 
-    # ── RUN 3: Negative gate — no KYC ────────────────────────────────────
-    puts "\n══ Negative gate — SKIP_KYC ══"
+    # ── RUN 3: Server-gate negative — SKIP_KYC → 403 ─────────────────────
+    puts "\n══ RUN 3: Server-gate negative — SKIP_KYC → 403 ══"
     boot_server.call do
-      env = {
-        "SERVER_URL"       => server_url,
-        "KIOSK_ISSUER"     => kiosk_issuer,
-        "MASTER_KEY"       => master_key,
-        "SKIP_KYC"         => "1",
-      }
-      env_str = env.map { |k, v| "#{k}=#{v}" }.join(" ")
-      raw = `#{env_str} bundle exec ruby #{flow_rb} 2>&1`
-      json_line = raw.lines.grep(/^\{/).last
-      stderr_lines = raw.lines.reject { |l| l.start_with?("{") }
-      puts stderr_lines.join
-      puts json_line if json_line
+      result = run_flow.call("SKIP_KYC" => "1")
 
-      begin
-        result = JSON.parse(json_line || raw)
-      rescue JSON::ParserError => e
-        abort "unlock_flow.rb (SKIP_KYC) did not produce valid JSON: #{e.message}\nOutput:\n#{raw}"
-      end
-
-      if result["http_unlock"] == 403
-        puts "  ✓  SKIP_KYC: http_unlock == 403 (no MAC issued)"
+      if result["http_start_rental"] == 403
+        puts "  OK  SKIP_KYC: http_start_rental == 403"
       else
-        failures << "skip_kyc: http_unlock expected 403, got #{result["http_unlock"].inspect}"
-        puts "  ✗  SKIP_KYC: http_unlock expected 403, got #{result["http_unlock"].inspect}"
+        failures << "skip_kyc: http_start_rental expected 403, got #{result["http_start_rental"].inspect}"
+        puts "  FAIL  SKIP_KYC: expected 403, got #{result["http_start_rental"].inspect}"
       end
     end
 
-    # ── RUN 4: C3 negative gate — re-unlock a reservation already 'active' ─
-    # After the happy path (RUN 1) the reservation is status='active'.
-    # Attempting to unlock it again must return 403 (single-use reservation).
-    puts "\n══ C3 negative gate — re-unlock already-active reservation ══"
-
-    # We need the reservation_id from the happy run.  Re-run the happy flow
-    # but capture only the reservation_id from the JSON output; then try to
-    # unlock THAT id again with a brand-new agent (who has their own payment).
-    # Simpler: within the same server boot, run happy flow to get the id, then
-    # call unlock a second time re-using REUSE_RESERVATION.
+    # ── RUN 4: C2 — unpaid second reservation → 403 ───────────────────────
+    # A fresh reservation with no payment — Gate 3 must reject.
+    puts "\n══ RUN 4: C2 — unpaid second reservation → 403 ══"
     boot_server.call do
-      # First: obtain a valid reservation_id by running the happy flow once
-      # (this also makes it active, which is what we need).
-      env_happy = {
-        "SERVER_URL"   => server_url,
-        "KIOSK_ISSUER" => kiosk_issuer,
-        "MASTER_KEY"   => master_key,
-      }
-      env_str_happy = env_happy.map { |k, v| "#{k}=#{v}" }.join(" ")
-      raw_happy = `#{env_str_happy} bundle exec ruby #{flow_rb} 2>&1`
-      json_happy = raw_happy.lines.grep(/^\{/).last
-      begin
-        happy_result = JSON.parse(json_happy || raw_happy)
-      rescue JSON::ParserError => e
-        abort "C3 inner happy run did not produce valid JSON: #{e.message}\nOutput:\n#{raw_happy}"
-      end
-      abort "C3 inner happy run unexpectedly failed: #{raw_happy}" unless happy_result["http_unlock"] == 200
-      active_reservation_id = happy_result["reservation_id"]
-      active_user_id        = happy_result["user_id"]
-      active_agent_id       = happy_result["agent_id"]
-      puts "  Active reservation: #{active_reservation_id} (user=#{active_user_id})"
+      result = run_flow.call("SKIP_PAY" => "1")
 
-      # Now run unlock_flow.rb again with the SAME reservation_id (already 'active').
-      # Gate 1 will reject it because status != 'reserved'.
-      # We use REUSE_RESERVATION so no new reserve call is made, and also
-      # SKIP_PAY so no new payment is attached (the result would be 403 at
-      # Gate 1 before Gate 3 anyway, but belt-and-suspenders).
-      env_reuse = {
-        "SERVER_URL"        => server_url,
-        "KIOSK_ISSUER"      => kiosk_issuer,
-        "MASTER_KEY"        => master_key,
-        "REUSE_RESERVATION" => active_reservation_id,
-        "SKIP_PAY"          => "1",
-      }
-      env_str_reuse = env_reuse.map { |k, v| "#{k}=#{v}" }.join(" ")
-      raw_reuse = `#{env_str_reuse} bundle exec ruby #{flow_rb} 2>&1`
-      json_reuse = raw_reuse.lines.grep(/^\{/).last
-      stderr_lines = raw_reuse.lines.reject { |l| l.start_with?("{") }
-      puts stderr_lines.join
-      puts json_reuse if json_reuse
-
-      begin
-        reuse_result = JSON.parse(json_reuse || raw_reuse)
-      rescue JSON::ParserError => e
-        abort "C3 re-unlock run did not produce valid JSON: #{e.message}\nOutput:\n#{raw_reuse}"
-      end
-
-      if reuse_result["http_unlock"] == 403
-        puts "  ✓  C3 re-unlock: http_unlock == 403 (reservation already active)"
+      if result["http_start_rental"] == 403
+        puts "  OK  C2 unpaid-reservation: http_start_rental == 403"
       else
-        failures << "c3_relock: http_unlock expected 403, got #{reuse_result["http_unlock"].inspect}"
-        puts "  ✗  C3 re-unlock: http_unlock expected 403, got #{reuse_result["http_unlock"].inspect}"
+        failures << "c2_unpaid: http_start_rental expected 403, got #{result["http_start_rental"].inspect}"
+        puts "  FAIL  C2 unpaid-reservation: expected 403, got #{result["http_start_rental"].inspect}"
       end
     end
 
-    # ── RUN 5: C2 negative gate — second reservation, no payment for it ───
-    # Make a fresh reservation B (no payment references it), then try to unlock.
-    # Gate 3 must reject with 403 (no payment for THIS reservation).
-    puts "\n══ C2 negative gate — unpaid second reservation ══"
+    # ── RUN 5: C3 — re-start_rental on already-active reservation → 403 ───
+    # Happy run makes the reservation active; second start_rental must fail.
+    puts "\n══ RUN 5: C3 — re-start_rental on active reservation → 403 ══"
     boot_server.call do
-      env_c2 = {
-        "SERVER_URL"   => server_url,
-        "KIOSK_ISSUER" => kiosk_issuer,
-        "MASTER_KEY"   => master_key,
-        "SKIP_PAY"     => "1",
-      }
-      env_str_c2 = env_c2.map { |k, v| "#{k}=#{v}" }.join(" ")
-      raw_c2 = `#{env_str_c2} bundle exec ruby #{flow_rb} 2>&1`
-      json_c2 = raw_c2.lines.grep(/^\{/).last
-      stderr_lines = raw_c2.lines.reject { |l| l.start_with?("{") }
-      puts stderr_lines.join
-      puts json_c2 if json_c2
+      # First run: full happy path to make the reservation active.
+      inner = run_flow.call
+      unless inner["http_start_rental"] == 200
+        abort "C3 inner happy run unexpectedly failed: http_start_rental=#{inner["http_start_rental"]}"
+      end
+      active_reservation_id = inner["reservation_id"]
+      puts "  Active reservation: #{active_reservation_id}"
 
-      begin
-        c2_result = JSON.parse(json_c2 || raw_c2)
-      rescue JSON::ParserError => e
-        abort "C2 unpaid-reservation run did not produce valid JSON: #{e.message}\nOutput:\n#{raw_c2}"
+      # Second run: fresh agent (new register+KYC+pay) but REUSE_RESERVATION
+      # so no new reserve; status='active' → Gate 1 rejects with 403.
+      # We use a separate script invocation so the agent token is fresh.
+      # We pass REUSE_RESERVATION which rental_flow.rb does NOT support natively —
+      # so instead we implement this directly here (no second flow invocation needed):
+      # just call start_rental again with the same reservation_id using a NEW agent.
+      #
+      # Simpler: call the server directly in this Rake task.
+      require "digest"
+      require "net/http"
+      require "openssl"
+      require "securerandom"
+
+      # Re-register a fresh agent.
+      agent_key     = OpenSSL::PKey::RSA.generate(2048)
+      agent_pem     = agent_key.public_key.to_pem
+      difficulty    = 20
+
+      pow = 0
+      pow += 1 until begin
+        d = Digest::SHA256.digest("#{agent_pem}.#{pow}")
+        count = 0
+        d.each_byte do |b|
+          if b == 0; count += 8
+          else; bit = 7; bit -= 1 while bit >= 0 && b[bit] == 0; count += (7 - bit); break
+          end
+        end
+        count >= difficulty
       end
 
-      if c2_result["http_unlock"] == 403
-        puts "  ✓  C2 unpaid-reservation: http_unlock == 403 (no payment for this reservation)"
+      uri = URI("#{server_url}/kiosk/agents/register")
+      req = Net::HTTP::Post.new(uri, "Content-Type" => "application/json")
+      req.body = JSON.generate(name: "hermes-c3", public_key: agent_pem, role: "customer", pow: pow.to_s)
+      reg_resp = Net::HTTP.new(uri.host, uri.port).request(req)
+      reg_data = JSON.parse(reg_resp.body)
+      agent_token = reg_data["access_token"]
+      new_user_id = reg_data["user_id"]
+
+      # KYC the new agent.
+      require_relative "../../lib/stub_kyc"
+      att = StubKyc.attest(user_id: new_user_id)
+      kyc_uri = URI("#{server_url}/kiosk/agents/kyc")
+      kyc_req = Net::HTTP::Post.new(kyc_uri, "Content-Type" => "application/json", "Authorization" => "Bearer #{agent_token}")
+      kyc_req.body = JSON.generate(kyc_jws: att)
+      Net::HTTP.new(kyc_uri.host, kyc_uri.port).request(kyc_req)
+
+      # Attempt start_rental on the ALREADY ACTIVE reservation — Gate 1 rejects.
+      exec_uri = URI("#{server_url}/kiosk/exec")
+      exec_req = Net::HTTP::Post.new(exec_uri, "Content-Type" => "application/json", "Authorization" => "Bearer #{agent_token}")
+      exec_req.body = JSON.generate(command: "run", body: { name: "start_rental", reservation_id: active_reservation_id })
+      exec_res = Net::HTTP.new(exec_uri.host, exec_uri.port).request(exec_req)
+      rc_c3 = exec_res.code.to_i
+
+      if rc_c3 == 403
+        puts "  OK  C3 re-start_rental: http == 403 (reservation already active)"
       else
-        failures << "c2_unpaid: http_unlock expected 403, got #{c2_result["http_unlock"].inspect}"
-        puts "  ✗  C2 unpaid-reservation: http_unlock expected 403, got #{c2_result["http_unlock"].inspect}"
+        failures << "c3_relock: http_start_rental expected 403, got #{rc_c3.inspect}"
+        puts "  FAIL  C3 re-start_rental: expected 403, got #{rc_c3.inspect}"
+        puts "       Response: #{exec_res.body}"
       end
     end
 
@@ -337,5 +363,5 @@ namespace :demo do
   end
 end
 
-desc "End-to-end Kiosk skooti demo: setup the DB then prove the full unlock chain."
+desc "End-to-end Kiosk skooti demo: setup the DB then prove the full rental chain (Arch 2)."
 task demo: ["demo:setup", "demo:rideflow"]

@@ -19,6 +19,7 @@ RSpec.configure do |config|
   config.before(:each) do
     Kiosk.reset!
     Kiosk::Server::Actions.reset!
+    Kiosk::Server::Queries.reset!
   end
 end
 

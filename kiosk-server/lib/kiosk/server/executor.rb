@@ -4,6 +4,7 @@ require "kiosk/server/errors"
 require "kiosk/server/result"
 require "kiosk/server/session_context"
 require "kiosk/server/actions"
+require "kiosk/server/queries"
 
 module Kiosk
   module Server
@@ -18,7 +19,7 @@ module Kiosk
     # the controller so it's testable without Rails.
     class Executor
       # Spec §5.1: the fixed six-verb wire surface.
-      VERBS = %i[sql run pay schema help events].freeze
+      VERBS = %i[query run pay schema help events].freeze
 
       # Verbs that open their own transaction boundaries because they perform
       # an irreversible external side effect (a PSP capture) that a DB
@@ -61,7 +62,7 @@ module Kiosk
 
       def dispatch(verb, args)
         case verb
-        when :sql    then verb_sql(args)
+        when :query  then verb_query(args)
         when :run    then verb_run(args)
         when :pay    then verb_pay(args)
         when :schema then verb_schema(args)
@@ -70,14 +71,23 @@ module Kiosk
         end
       end
 
-      # ─── sql ───────────────────────────────────────────────────────────
+      # ─── query ─────────────────────────────────────────────────────────
 
-      def verb_sql(args)
-        sql = string_arg(args, :sql)
-        raise Errors::BadRequest, "args.sql required" if sql.nil? || sql.empty?
+      def verb_query(args)
+        args = symbolize(args)
+        name = args.delete(:name)
+        raise Errors::BadRequest, "args.name (query) required" if name.nil? || name.to_s.empty?
 
-        rows = connection.execute(sql)
-        Result.new(kind: :rows, payload: rows_to_array(rows))
+        handler = Queries.fetch(name)
+        begin
+          rows = handler.call(args)
+        rescue Errors::Base
+          raise
+        rescue StandardError => e
+          raise Errors::ActionFailed.new("Query #{name.inspect} raised #{e.class}: #{e.message}",
+                                         hint: "See server logs for the backtrace.")
+        end
+        Result.new(kind: :rows, payload: rows)
       end
 
       # ─── run ───────────────────────────────────────────────────────────
@@ -264,25 +274,12 @@ module Kiosk
 
       # ─── helpers ───────────────────────────────────────────────────────
 
-      def string_arg(args, key)
-        return args.to_s if args.is_a?(String)
-
-        h = symbolize(args)
-        h[key]&.to_s
-      end
-
       def symbolize(value)
         case value
         when Hash then value.transform_keys { |k| k.to_sym }
         when nil  then {}
         else value
         end
-      end
-
-      def rows_to_array(rows)
-        # PG::Result responds to #to_a and yields Hash rows. Fake
-        # connections in tests return Array<Hash> directly. Accept both.
-        rows.respond_to?(:to_a) ? rows.to_a : Array(rows)
       end
     end
   end

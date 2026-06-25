@@ -44,18 +44,15 @@ agent_id = reg.fetch("agent_id")
 user_id  = reg.fetch("user_id")
 token    = reg.fetch("access_token")
 
-# ── Step 2: browse — find the Margherita menu item ──────────────────────
+# ── Step 2: browse — find the Margherita menu item via named query ───────
 
 rc, browse = post_json(
   "#{SERVER}/kiosk/exec",
   {
-    command: "sql",
+    command: "query",
     body: {
-      sql: "SELECT mi.id, mi.name, mi.sku, mi.price_cents " \
-           "FROM menu_items mi " \
-           "JOIN restaurants r ON r.id = mi.restaurant_id " \
-           "WHERE r.name = 'Mamma Pizza' " \
-           "ORDER BY mi.id",
+      name:       "menu_by_restaurant",
+      restaurant: "Mamma Pizza",
     },
   },
   { "Authorization" => "Bearer #{token}" },

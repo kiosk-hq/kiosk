@@ -271,13 +271,6 @@ CREATE TABLE public.menu_items (
 
 
 --
--- Name: TABLE menu_items; Type: COMMENT; Schema: public; Owner: -
---
-
-COMMENT ON TABLE public.menu_items IS 'Menu items. Browse-only via the agent surface.';
-
-
---
 -- Name: menu_items_id_seq; Type: SEQUENCE; Schema: public; Owner: -
 --
 
@@ -315,13 +308,6 @@ CREATE TABLE public.orders (
 
 
 --
--- Name: TABLE orders; Type: COMMENT; Schema: public; Owner: -
---
-
-COMMENT ON TABLE public.orders IS 'Customer''s orders. Visible to the user across all of their agents.';
-
-
---
 -- Name: restaurants; Type: TABLE; Schema: public; Owner: -
 --
 
@@ -331,13 +317,6 @@ CREATE TABLE public.restaurants (
     created_at timestamp(6) without time zone NOT NULL,
     updated_at timestamp(6) without time zone NOT NULL
 );
-
-
---
--- Name: TABLE restaurants; Type: COMMENT; Schema: public; Owner: -
---
-
-COMMENT ON TABLE public.restaurants IS 'Restaurant catalogue. Browse-only via the agent surface.';
 
 
 --
@@ -771,52 +750,6 @@ ALTER TABLE ONLY public.orders
 
 ALTER TABLE ONLY public.orders
     ADD CONSTRAINT fk_rails_f868b47f6a FOREIGN KEY (user_id) REFERENCES public.users(id);
-
-
---
--- Name: menu_items; Type: ROW SECURITY; Schema: public; Owner: -
---
-
-ALTER TABLE public.menu_items ENABLE ROW LEVEL SECURITY;
-
---
--- Name: menu_items menu_items_select; Type: POLICY; Schema: public; Owner: -
---
-
-CREATE POLICY menu_items_select ON public.menu_items FOR SELECT USING (true);
-
-
---
--- Name: orders; Type: ROW SECURITY; Schema: public; Owner: -
---
-
-ALTER TABLE public.orders ENABLE ROW LEVEL SECURITY;
-
---
--- Name: orders orders_insert; Type: POLICY; Schema: public; Owner: -
---
-
-CREATE POLICY orders_insert ON public.orders FOR INSERT WITH CHECK (((user_id = kiosk.current_user_id()) AND (kiosk."current_role"() = 'customer'::text)));
-
-
---
--- Name: orders orders_select; Type: POLICY; Schema: public; Owner: -
---
-
-CREATE POLICY orders_select ON public.orders FOR SELECT USING ((user_id = kiosk.current_user_id()));
-
-
---
--- Name: restaurants; Type: ROW SECURITY; Schema: public; Owner: -
---
-
-ALTER TABLE public.restaurants ENABLE ROW LEVEL SECURITY;
-
---
--- Name: restaurants restaurants_select; Type: POLICY; Schema: public; Owner: -
---
-
-CREATE POLICY restaurants_select ON public.restaurants FOR SELECT USING (true);
 
 
 --

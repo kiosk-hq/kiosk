@@ -44,6 +44,40 @@ Kiosk.configure do |c|
   c.payment_provider = StubPsp.new
 end
 
+# ─── Queries ────────────────────────────────────────────────────────────────
+
+# menu_by_restaurant — parameterized menu catalog for a named restaurant.
+# The agent supplies :restaurant (the restaurant name); the block builds the
+# query with conn.quote binding — agent input is data, never SQL.
+# No per-user scoping: all authenticated agents can browse the menu.
+Kiosk::Server::Queries.register("menu_by_restaurant") do |params|
+  name = params.fetch(:restaurant) { raise Kiosk::Server::Errors::BadRequest.new("missing param: restaurant") }
+  conn = ActiveRecord::Base.connection
+  conn.execute(
+    "SELECT mi.id, mi.name, mi.sku, mi.price_cents " \
+    "FROM menu_items mi " \
+    "JOIN restaurants r ON r.id = mi.restaurant_id " \
+    "WHERE r.name = #{conn.quote(name.to_s)} " \
+    "ORDER BY mi.id"
+  ).to_a
+end
+
+# my_orders — per-user order list scoped by the session GUC.
+# The WHERE is provider-controlled; the agent supplies no filter. This
+# demonstrates app-layer per-user isolation without RLS: the principal can
+# only see rows where user_id matches kiosk.current_user_id(), enforced in
+# the query definition itself.
+Kiosk::Server::Queries.register("my_orders") do |_params|
+  ActiveRecord::Base.connection.execute(
+    "SELECT id, restaurant_id, menu_item_id, total_cents, status " \
+    "FROM orders " \
+    "WHERE user_id = kiosk.current_user_id() " \
+    "ORDER BY id"
+  ).to_a
+end
+
+# ─── Actions ────────────────────────────────────────────────────────────────
+
 # Register the demo Action. In production, providers use the full
 # `Kiosk::Action` DSL (post-v0.1); for the e2e a simple registered
 # block is sufficient.

@@ -12,7 +12,7 @@ The human says: *"order a Margherita from foodelivery."* The agent does everythi
 GET /.well-known/kiosk.json
 ```
 
-This returns the provider's `issuer` and `endpoint`. Read `issuer` — you copy it verbatim into the `iss` claim of every mandate you sign (Step 5), and `endpoint` is where you send the calls below. You browse the provider's domain data directly with `sql` (Step 3).
+This returns the provider's `issuer` and `endpoint`. Read `issuer` — you copy it verbatim into the `iss` claim of every mandate you sign (Step 5), and `endpoint` is where you send the calls below. You browse the provider's domain data via provider-registered named `query` calls (Step 3) — you never send SQL.
 
 ---
 
@@ -47,9 +47,9 @@ No human is involved. There is no existing account at the provider. The provider
 
 ---
 
-## Step 3 — Browse with `sql`
+## Step 3 — Browse with `query` (named, parameterized — no SQL)
 
-Use the `sql` command to read the provider's domain data.
+The agent **never sends SQL**. Instead, call a provider-registered named query by name and pass params. The provider controls exactly what is readable. For foodelivery, use `menu_by_restaurant` to browse the menu for a named restaurant.
 
 ```http
 POST /kiosk/exec
@@ -57,20 +57,17 @@ Authorization: Bearer <access_token>
 Content-Type: application/json
 
 {
-  "command": "sql",
+  "command": "query",
   "body": {
-    "sql": "SELECT mi.id, mi.name, mi.sku, mi.price_cents
-            FROM menu_items mi
-            JOIN restaurants r ON r.id = mi.restaurant_id
-            WHERE r.name = 'Mamma Pizza'
-            ORDER BY mi.id"
+    "name":       "menu_by_restaurant",
+    "restaurant": "Mamma Pizza"
   }
 }
 ```
 
 The response is a `rows` array. Pick the item you want — note its `id` and `price_cents`.
 
-Row-level security is in effect: `orders` are visible only to the registered principal. Catalogue tables (`restaurants`, `menu_items`) are public-readable.
+App-layer isolation is in effect: the `my_orders` query scopes to the authenticated principal via `WHERE user_id = kiosk.current_user_id()` — no raw SQL, no RLS required. Catalogue queries (`menu_by_restaurant`) are available to all authenticated agents.
 
 ---
 

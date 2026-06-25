@@ -1,5 +1,12 @@
 # Skooti App Clip — Build & Provisioning Guide
 
+> **Provider-artifact note:** This App Clip is the reference artifact a
+> Kiosk-**adopting provider** builds and signs under **their own** Apple
+> Developer account.  Kiosk itself ships no consumer apps.  For this PoC you
+> stand in as the provider "skooti" using your own (individual) Apple Developer
+> account — nothing here requires publishing to the App Store (a Local
+> Experience suffices for development and demo).
+
 > **Status (2026-06-25):** XcodeGen project generates cleanly; `xcodebuild`
 > compile-check passes (iOS Simulator SDK, no signing).  On-device BLE unlock
 > requires a physical iPhone + paid Apple Developer account + the ESP32-C3 board.

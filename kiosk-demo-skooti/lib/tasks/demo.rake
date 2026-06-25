@@ -181,9 +181,9 @@ namespace :demo do
         skooti_pub = OpenSSL::PKey.read(pub_pem)
 
         sc  = happy_result.fetch("rental_token") && begin
-          # Extract scooter_code from the token message (field 0).
+          # Extract scooter_code from the token message (field 1 in v2; field 0 is the context tag).
           msg = rental_token.split(".").tap { |p| p.pop }.join(".")
-          msg.split("|")[0]
+          msg.split("|")[1]
         end
         exp_val = happy_result["exp"].to_i
 

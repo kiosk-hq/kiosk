@@ -6,19 +6,24 @@ require "securerandom"
 
 module Kiosk
   module Server
-    # Ed25519 offline rental-token authority (Arch 2).
+    # Ed25519 offline rental-token authority (Arch 2, token v2).
     #
     # The scooter verifies the signed rental token itself — no server round-trip
     # at unlock time.  Skooti signs with its Ed25519 private key; the public key
     # is baked into every lock at provisioning time.
     #
     # Canonical token wire format (split on the LAST "."):
-    #   "<scooter_code>|<reservation_id>|<iat>|<exp>|<jti>.<base64url(sig)>"
+    #   "<context_tag>|<scooter_code>|<reservation_id>|<iat>|<exp>|<jti>.<base64url(sig)>"
     #
     # Signed message (UTF-8, exact bytes):
-    #   "<scooter_code>|<reservation_id>|<iat>|<exp>|<jti>"
-    #   where iat/exp are unix seconds as decimal strings,
-    #   and jti = SecureRandom.hex(16)  (32 lowercase hex chars).
+    #   "kiosk-rental-v1|<scooter_code>|<reservation_id>|<iat>|<exp>|<jti>"
+    #   Field 0 is the fixed domain-separation context tag "kiosk-rental-v1".
+    #   The lock accepts a token ONLY if field 0 == CONTEXT_TAG — this prevents
+    #   the signing key from being cross-used to mint anything else a lock would
+    #   accept, and self-documents the token as a rental capability.
+    #   Fields 1-5: scooter_code, reservation_id, iat, exp, jti.
+    #   iat/exp are unix seconds as decimal strings.
+    #   jti = SecureRandom.hex(16)  (32 lowercase hex chars).
     #
     # Signature: Ed25519 over the message bytes (64 bytes, deterministic).
     # Crypto: OpenSSL::PKey Ed25519 — key.sign(nil, message) / key.verify(nil, sig, msg).
@@ -29,6 +34,10 @@ module Kiosk
     #   - firmware/skooti_lock.ino   (T3)
     # DO NOT CHANGE without updating all sites and re-recording the known-answer vector.
     module RentalTokenIssuer
+      # Fixed domain-separation tag prepended to every signed rental-token message.
+      # The lock ONLY accepts a token if field 0 == this tag.
+      CONTEXT_TAG = "kiosk-rental-v1"
+
       class << self
         # Issue a signed rental token.
         #
@@ -44,7 +53,7 @@ module Kiosk
           iat     = now
           exp     = iat + ttl
           jti     = SecureRandom.hex(16)
-          message = "#{scooter_code}|#{reservation_id}|#{iat}|#{exp}|#{jti}"
+          message = "#{CONTEXT_TAG}|#{scooter_code}|#{reservation_id}|#{iat}|#{exp}|#{jti}"
           sig     = key.sign(nil, message)
           "#{message}.#{Base64.urlsafe_encode64(sig, padding: false)}"
         end
@@ -77,9 +86,10 @@ module Kiosk
           return nil unless pub.verify(nil, sig, message)
 
           fields = message.split("|")
-          return nil unless fields.length == 5
+          return nil unless fields.length == 6
+          return nil unless fields[0] == CONTEXT_TAG
 
-          scooter_code, reservation_id, iat_s, exp_s, jti = fields
+          _tag, scooter_code, reservation_id, iat_s, exp_s, jti = fields
 
           iat = Integer(iat_s, 10)
           exp = Integer(exp_s, 10)

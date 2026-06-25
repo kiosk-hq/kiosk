@@ -14,6 +14,27 @@
 #   SKIP_KYC=1   — skip the KYC step (start_rental should return 403)
 #
 # Prints ONE JSON line on stdout; non-zero exit on unexpected failures.
+#
+# ── TWO-TOKEN MODEL ──────────────────────────────────────────────────────────
+#
+# Two distinct tokens are used in this flow — they serve completely different
+# purposes and MUST NOT be confused:
+#
+#   1. Agent token  (RS256 JWT, "Authorization: Bearer <token>")
+#      Authenticates the AI assistant (agent) to the Kiosk API server.
+#      Used ONLY for Kiosk HTTP API calls: register / kyc / reserve / pay /
+#      start_rental. It never leaves the agent↔server channel.
+#
+#   2. Rental token (Ed25519 capability, short-lived, scooter-bound)
+#      Issued by start_rental as an offline, self-verifying unlock credential.
+#      It is signed by the skooti Ed25519 private key; the scooter lock verifies
+#      it using the baked-in public key — NO server round-trip at unlock time.
+#      Properties: domain-separation tag (field 0 = "kiosk-rental-v1"), 15-min
+#      exp, single-use jti (replay-prevented durably by the lock's jti store).
+#      Passed DIRECTLY to the scooter lock (via BLE in production, via LockSim
+#      here). The agent token NEVER reaches the lock.
+#
+# ────────────────────────────────────────────────────────────────────────────
 
 require "digest"
 require "json"

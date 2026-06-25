@@ -18,6 +18,23 @@ RSpec.describe Kiosk::RLS::Emitter do
     end
   end
 
+  describe ".force_rls_sql" do
+    it "emits ALTER TABLE FORCE ROW LEVEL SECURITY" do
+      expect(described_class.force_rls_sql("rentals"))
+        .to eq(%(ALTER TABLE "rentals" FORCE ROW LEVEL SECURITY))
+    end
+
+    it "quotes schema-qualified table names per segment" do
+      expect(described_class.force_rls_sql("public.rentals"))
+        .to eq(%(ALTER TABLE "public"."rentals" FORCE ROW LEVEL SECURITY))
+    end
+
+    it "escapes embedded double-quotes in identifiers" do
+      expect(described_class.force_rls_sql(%(a"b)))
+        .to eq(%(ALTER TABLE "a""b" FORCE ROW LEVEL SECURITY))
+    end
+  end
+
   describe ".grant_table_sql" do
     it "GRANTs the four DML privileges to the runtime role" do
       expect(described_class.grant_table_sql("rentals", "app_role"))
@@ -103,6 +120,7 @@ RSpec.describe Kiosk::RLS::Emitter do
 
       expect(stmts).to eq([
         %(ALTER TABLE "rentals" ENABLE ROW LEVEL SECURITY),
+        %(ALTER TABLE "rentals" FORCE ROW LEVEL SECURITY),
         %(GRANT SELECT, INSERT, UPDATE, DELETE ON "rentals" TO "app_role"),
         %(CREATE POLICY "rentals_select" ON "rentals" FOR SELECT USING (user_id = kiosk.current_user_id())),
         %(CREATE POLICY "rentals_insert" ON "rentals" FOR INSERT WITH CHECK (user_id = kiosk.current_user_id())),
@@ -117,7 +135,7 @@ RSpec.describe Kiosk::RLS::Emitter do
 
       stmts = described_class.statements_for(table)
 
-      expect(stmts[2]).to eq(
+      expect(stmts[3]).to eq(
         %(GRANT USAGE, SELECT ON SEQUENCE "rentals_id_seq" TO "app_role"),
       )
     end

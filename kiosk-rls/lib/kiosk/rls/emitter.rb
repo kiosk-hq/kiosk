@@ -5,9 +5,11 @@ module Kiosk
     # Compiles RLS objects ({Policy}, {Table}) into PostgreSQL DDL statements.
     # Pure functions; no database connection required.
     #
-    # See design spec §7.4 for the canonical sequence `enable_rls_on` emits:
-    # ENABLE ROW LEVEL SECURITY, GRANT table privileges, optional sequence
-    # grants, CREATE POLICY for each declaration, COMMENT ON TABLE.
+    # Canonical sequence emitted by `enable_rls_on`:
+    # ENABLE ROW LEVEL SECURITY, FORCE ROW LEVEL SECURITY, GRANT table
+    # privileges, optional sequence grants, CREATE POLICY for each declaration,
+    # COMMENT ON TABLE.  FORCE is required so RLS applies to the table owner;
+    # without it Postgres exempts the owner and RLS is a no-op.
     module Emitter
       class << self
         # Full emission for a {Table} — returns Array<String> of SQL
@@ -16,6 +18,7 @@ module Kiosk
         def statements_for(table)
           stmts = []
           stmts << enable_rls_sql(table.name)
+          stmts << force_rls_sql(table.name)
           stmts << grant_table_sql(table.name, table.app_role)
           table.sequences.each do |seq|
             stmts << grant_sequence_sql(seq, table.app_role)
@@ -29,6 +32,10 @@ module Kiosk
 
         def enable_rls_sql(table_name)
           %(ALTER TABLE #{quote_ident(table_name)} ENABLE ROW LEVEL SECURITY)
+        end
+
+        def force_rls_sql(table_name)
+          %(ALTER TABLE #{quote_ident(table_name)} FORCE ROW LEVEL SECURITY)
         end
 
         def grant_table_sql(table_name, role)

@@ -65,17 +65,17 @@ printf "\n\033[1m=== response headers ===\033[0m\n"
 headers=$(curl -sS -o /dev/null -D - -X POST "$SERVER_URL/kiosk/exec" \
   -H "Authorization: Bearer $ALICE_AGENT_TOKEN" \
   -H "Content-Type: application/json" \
-  -d '{"command":"sql","body":{"sql":"SELECT 1 AS one"}}')
+  -d '{"command":"query","body":{"name":"salons"}}')
 
 assert "Kiosk-Server-Version present" "$(echo "$headers" | grep -i '^Kiosk-Server-Version:' | wc -l | tr -d ' ')" "1"
 assert "Kiosk-API-Version present"    "$(echo "$headers" | grep -i '^Kiosk-API-Version:'    | wc -l | tr -d ' ')" "1"
 assert "Kiosk-Min-Client present"     "$(echo "$headers" | grep -i '^Kiosk-Min-Client:'     | wc -l | tr -d ' ')" "1"
 
-# ─── sql verb ───────────────────────────────────────────────────────────
+# ─── query verb ─────────────────────────────────────────────────────────
 
-printf "\n\033[1m=== sql verb ===\033[0m\n"
+printf "\n\033[1m=== query verb ===\033[0m\n"
 
-r=$(exec_call "$ALICE_AGENT_TOKEN" '{"command":"sql","body":{"sql":"SELECT id, name FROM salons ORDER BY id"}}')
+r=$(exec_call "$ALICE_AGENT_TOKEN" '{"command":"query","body":{"name":"salons"}}')
 assert "ok: true"                  "$(echo "$r" | jq -r '.ok')"                    "true"
 assert "kind: rows"                "$(echo "$r" | jq -r '.kind')"                  "rows"
 assert "exactly 1 salon"           "$(echo "$r" | jq -r '.rows | length')"         "1"
@@ -86,7 +86,7 @@ assert "salon name is Combette"      "$(echo "$r" | jq -r '.rows[0].name')"     
 printf "\n\033[1m=== run verb — book_appointment ===\033[0m\n"
 
 # Get salon id first.
-salon_id=$(exec_call "$ALICE_AGENT_TOKEN" '{"command":"sql","body":{"sql":"SELECT id FROM salons LIMIT 1"}}' | jq -r '.rows[0].id')
+salon_id=$(exec_call "$ALICE_AGENT_TOKEN" '{"command":"query","body":{"name":"salons"}}' | jq -r '.rows[0].id')
 
 r=$(exec_call "$ALICE_AGENT_TOKEN" "{\"command\":\"run\",\"body\":{\"name\":\"book_appointment\",\"salon_id\":$salon_id,\"slot\":\"2026-06-15T14:00:00Z\"}}")
 assert "ok: true"                  "$(echo "$r" | jq -r '.ok')"                    "true"
@@ -98,8 +98,8 @@ assert "salon_id echoed"           "$(echo "$r" | jq -r ".value.salon_id")"     
 
 printf "\n\033[1m=== verify appointment landed ===\033[0m\n"
 
-r=$(exec_call "$ALICE_AGENT_TOKEN" '{"command":"sql","body":{"sql":"SELECT COUNT(*)::int AS c FROM appointments"}}')
-assert "1 appointment exists"      "$(echo "$r" | jq -r '.rows[0].c')"             "1"
+r=$(exec_call "$ALICE_AGENT_TOKEN" '{"command":"query","body":{"name":"my_appointments"}}')
+assert "1 appointment exists"      "$(echo "$r" | jq -r '.rows | length')"          "1"
 
 # ─── error envelopes ────────────────────────────────────────────────────
 
@@ -126,14 +126,14 @@ assert "unknown action → 404"      "$status" "404"
 # Missing Authorization → Unauthenticated, http 401
 status=$(curl -sS -o /dev/null -w "%{http_code}" -X POST "$SERVER_URL/kiosk/exec" \
   -H "Content-Type: application/json" \
-  -d '{"command":"sql","body":{"sql":"SELECT 1"}}')
+  -d '{"command":"query","body":{"name":"salons"}}')
 assert "no auth → 401"             "$status" "401"
 
 # Stub IdP returns nil for unknown token shape → 401
 status=$(curl -sS -o /dev/null -w "%{http_code}" -X POST "$SERVER_URL/kiosk/exec" \
   -H "Authorization: Bearer garbage" \
   -H "Content-Type: application/json" \
-  -d '{"command":"sql","body":{"sql":"SELECT 1"}}')
+  -d '{"command":"query","body":{"name":"salons"}}')
 assert "garbage token → 401"       "$status" "401"
 
 # ─── JWKS endpoint ──────────────────────────────────────────────────────
@@ -163,7 +163,7 @@ assert "jwks: no private p field"      "$(echo "$jwks" | jq -r '.keys[0] | has("
 #   3) test fixture simulates user approval (real flow uses verify HTML form)
 #   4) client polls again → access_token (JWT)
 #   5) JWT used against /kiosk/exec → ExecController authenticates via the
-#      JWT-aware composite IdP, sql call succeeds with the JWT's `sub` user
+#      JWT-aware composite IdP, query call succeeds with the JWT's `sub` user
 
 printf "\n\033[1m=== oauth device_authorization (RFC 8628) ===\033[0m\n"
 
@@ -223,7 +223,7 @@ assert "token poll (replay): error=invalid_grant"       "$(echo "$poll3" | jq -r
 exec_with_jwt=$(curl -sS -X POST "$SERVER_URL/kiosk/exec" \
   -H "Authorization: Bearer $ACCESS_TOKEN" \
   -H "Content-Type: application/json" \
-  -d '{"command":"sql","body":{"sql":"SELECT id, name FROM salons ORDER BY id"}}')
+  -d '{"command":"query","body":{"name":"salons"}}')
 assert "exec via OAuth JWT: ok=true"                    "$(echo "$exec_with_jwt" | jq -r '.ok')"             "true"
 assert "exec via OAuth JWT: returns rows"               "$(echo "$exec_with_jwt" | jq -r '.kind')"           "rows"
 assert "exec via OAuth JWT: salon present"              "$(echo "$exec_with_jwt" | jq -r '.rows[0].name')"   "Combette on Park"
@@ -266,11 +266,11 @@ else
   assert "cli: well-known kiosk.version"   "$(echo "$wk" | jq -r '.kiosk.version')"    "1.0"
   assert "cli: well-known kiosk.endpoint"  "$(echo "$wk" | jq -r '.kiosk.endpoint')"   "$SERVER_URL/kiosk"
 
-  # sql verb via the CLI
-  r=$("$KIOSK_BIN" "$SERVER_URL" sql "SELECT id, name FROM salons ORDER BY id")
-  assert "cli: sql ok=true"                "$(echo "$r" | jq -r '.ok')"                "true"
-  assert "cli: sql kind=rows"              "$(echo "$r" | jq -r '.kind')"              "rows"
-  assert "cli: sql salon name"             "$(echo "$r" | jq -r '.rows[0].name')"      "Combette on Park"
+  # query verb via the CLI
+  r=$("$KIOSK_BIN" "$SERVER_URL" query salons)
+  assert "cli: query ok=true"              "$(echo "$r" | jq -r '.ok')"                "true"
+  assert "cli: query kind=rows"            "$(echo "$r" | jq -r '.kind')"              "rows"
+  assert "cli: query salon name"           "$(echo "$r" | jq -r '.rows[0].name')"      "Combette on Park"
 
   # run verb via the CLI with k=v args
   salon_id=$(echo "$r" | jq -r '.rows[0].id')
@@ -296,7 +296,7 @@ else
 
   # exit-code mapping: bad token → unauthenticated (code 3)
   KIOSK_TOKEN_127_0_0_1_3001=garbage \
-    "$KIOSK_BIN" "$SERVER_URL" sql "SELECT 1" >/dev/null 2>&1
+    "$KIOSK_BIN" "$SERVER_URL" query salons >/dev/null 2>&1
   rc=$?
   assert "cli: garbage token → exit 3"     "$rc" "3"
 
@@ -305,7 +305,7 @@ else
   (
     unset KIOSK_TOKEN KIOSK_TOKEN_127_0_0_1_3001
     HOME=$(mktemp -d)
-    "$KIOSK_BIN" "$SERVER_URL" sql "SELECT 1" >/dev/null 2>&1
+    "$KIOSK_BIN" "$SERVER_URL" query salons >/dev/null 2>&1
   )
   rc=$?
   assert "cli: no token → exit 3"          "$rc" "3"
@@ -386,7 +386,7 @@ else
   exec_with_persisted=$(curl -sS -X POST "$SERVER_URL/kiosk/exec" \
     -H "Authorization: Bearer $PERSISTED_TOKEN" \
     -H "Content-Type: application/json" \
-    -d '{"command":"sql","body":{"sql":"SELECT 1 AS one"}}')
+    -d '{"command":"query","body":{"name":"salons"}}')
   assert "login: persisted token authenticates /kiosk/exec" \
     "$(echo "$exec_with_persisted" | jq -r '.ok')" "true"
 

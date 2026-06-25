@@ -22,7 +22,7 @@ usage() {
   cat <<EOF >&2
 usage: $PROG <host> login
        $PROG <host> well-known
-       $PROG <host> sql <statement>
+       $PROG <host> query <name> [k=v ...]
        $PROG <host> run <action> [k=v ...]
        $PROG --version | --help
 
@@ -160,6 +160,33 @@ cmd_well_known() {
 cmd_sql() {
   host="$1"; sql="$2"
   body=$(jq -n --arg sql "$sql" '{command:"sql", body:{sql:$sql}}')
+  exec_call "$host" "$body"
+}
+
+# `kiosk <host> query <name> k=v k=v ...` — calls a provider-registered named
+# query. Each k=v becomes a param JSON field (same encoding as `run`).
+# Values that parse as a JSON number are sent as numbers; everything else as
+# a string. Returns {ok, kind:"rows", rows:[...]} on success.
+cmd_query() {
+  host="$1"; name="$2"; shift 2
+  args_json=$(jq -n --arg name "$name" '{name:$name}')
+  for kv; do
+    case "$kv" in
+      *=*)
+        k="${kv%%=*}"
+        v="${kv#*=}"
+        if printf '%s' "$v" | jq -e 'tonumber' >/dev/null 2>&1; then
+          args_json=$(printf '%s' "$args_json" | jq --arg k "$k" --argjson v "$v" '. + {($k): $v}')
+        else
+          args_json=$(printf '%s' "$args_json" | jq --arg k "$k" --arg v "$v" '. + {($k): $v}')
+        fi
+        ;;
+      *)
+        die 2 "expected key=value, got: $kv"
+        ;;
+    esac
+  done
+  body=$(jq -n --argjson args "$args_json" '{command:"query", body:$args}')
   exec_call "$host" "$body"
 }
 
@@ -355,6 +382,10 @@ case "$verb" in
     [ "$#" -ge 1 ] || die 2 "sql: missing statement"
     cmd_sql "$host" "$1"
     ;;
+  query)
+    [ "$#" -ge 1 ] || die 2 "query: missing query name"
+    cmd_query "$host" "$@"
+    ;;
   run)
     [ "$#" -ge 1 ] || die 2 "run: missing action name"
     cmd_run "$host" "$@"
@@ -363,6 +394,6 @@ case "$verb" in
     die 6 "verb '$verb' not yet implemented in this milestone (M2 in progress)"
     ;;
   *)
-    die 2 "unknown verb: $verb (try: login, well-known, sql, run)"
+    die 2 "unknown verb: $verb (try: login, well-known, query, run)"
     ;;
 esac

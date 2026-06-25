@@ -8,12 +8,6 @@ require Rails.root.join("lib/stub_idp")
 require Rails.root.join("lib/jwt_or_stub_idp")
 require Rails.root.join("lib/stub_psp")
 
-# Inject the RLS DSL into ActiveRecord::Migration so that migrations can
-# call `enable_rls_on TABLE do ... end` directly. The kiosk-rls README
-# documents this opt-in; auto-injection from the gem itself lands in a
-# follow-up.
-ActiveRecord::Migration.include(Kiosk::RLS::DSL)
-
 Kiosk.configure do |c|
   c.user_model     = "User"
   c.user_id_type   = :uuid
@@ -22,10 +16,8 @@ Kiosk.configure do |c|
   c.guc_namespace  = "app"
   c.schema         = "kiosk"
 
-  # The Rails connection's role owns the tables AND issues queries (no
-  # role separation in v0.1 alpha). Set app_role to the same role so the
-  # `GRANT TO app_role` statements in `enable_rls_on` are no-ops on a
-  # role that already has all privileges via ownership.
+  # Path C: RLS is optional; no enable_rls_on in this fixture. app_role /
+  # system_role are kept for the `run.sh` pre-creation step (harmless).
   c.app_role    = ENV.fetch("KIOSK_APP_ROLE",    "app_role")
   c.system_role = ENV.fetch("KIOSK_SYSTEM_ROLE", "app_role")
 
@@ -41,6 +33,30 @@ Kiosk.configure do |c|
 
   c.payment_provider = StubPsp.new
 end
+
+# ─── Queries ────────────────────────────────────────────────────────────────
+
+# salons — public catalog. Any authenticated agent can browse.
+# No per-user scoping: the WHERE is provider-controlled and always TRUE.
+Kiosk::Server::Queries.register("salons") do |_params|
+  ActiveRecord::Base.connection.execute(
+    "SELECT id, name FROM salons ORDER BY id"
+  ).to_a
+end
+
+# my_appointments — per-user appointment list scoped by the session GUC.
+# The WHERE is provider-controlled; the agent supplies no user filter.
+# App-layer per-user isolation without RLS: the principal sees only rows
+# where user_id matches kiosk.current_user_id(), enforced in the query.
+Kiosk::Server::Queries.register("my_appointments") do |_params|
+  ActiveRecord::Base.connection.execute(
+    "SELECT id, salon_id, slot FROM appointments " \
+    "WHERE user_id = kiosk.current_user_id() " \
+    "ORDER BY id"
+  ).to_a
+end
+
+# ─── Actions ────────────────────────────────────────────────────────────────
 
 # Register the demo Action. In production, providers use the full
 # `Kiosk::Action` DSL (post-v0.1); for the e2e a simple registered

@@ -1,66 +1,74 @@
-// LockBLE.swift — CoreBluetooth central manager for the SKOOTI lock
+// LockBLE.swift — CoreBluetooth central manager for the SKOOTI lock (Arch 2)
 //
 // BLE contract (must match skooti_lock.ino EXACTLY):
 //
-//   Service UUID:   4e2a1000-5b3c-4b1e-9f8c-6d7e8a9b0c1d
-//   Challenge UUID: 4e2a1001-5b3c-4b1e-9f8c-6d7e8a9b0c1d
-//     Properties:   READ + NOTIFY
-//     Format:       32 ASCII lowercase hex chars (one-shot nonce)
+//   Service UUID:  4e2a1000-5b3c-4b1e-9f8c-6d7e8a9b0c1d
 //
-//   Unlock UUID:    4e2a1002-5b3c-4b1e-9f8c-6d7e8a9b0c1d
-//     Properties:   WRITE (+ WRITE_NR)
-//     Format:       "<reservation_id>|<64-char-mac-hex>"  (ASCII pipe-delimited)
+//   Unlock UUID:   4e2a1002-5b3c-4b1e-9f8c-6d7e8a9b0c1d
+//     Properties:  WRITE (+ WRITE_NR)
+//     Format:      wire rental token (UTF-8 string, up to ~220 bytes)
+//                  "<scooter_code>|<reservation_id>|<iat>|<exp>|<jti>.<base64url(sig)>"
 //
 // Cross-checked against:
-//   firmware/skooti_lock.ino  lines 137-139  (#define SERVICE_UUID / CHALLENGE_UUID / UNLOCK_UUID)
-//   firmware/README.md        BLE service / characteristics table
+//   firmware/skooti_lock.ino  #define SERVICE_UUID / UNLOCK_UUID
+//   firmware/skooti_lock.ino  UnlockCallbacks::onWrite — receives the full wire token
 //
-// The write format "<reservation_id>|<mac_hex>" is cross-checked against:
-//   firmware/skooti_lock.ino  lines 186-188 (UnlockCallbacks::onWrite — pipe split)
+// Arch 2 flow (NO challenge, NO server round-trip):
+//   scan → connect → discover unlock characteristic → write rental token → unlocked
 //
-// Foreground BLE only: App Clips cannot use background BLE (CBCentralManagerOptionRestoreIdentifierKey
-// is unavailable).  The App Clip must stay in the foreground throughout the unlock
-// flow (~5–10 s).  Validate on-device: check the iOS BLE policy for Clips.
+// The rental token arrives in the launch URL rt= param (already in memory as a String).
+// LockBLE receives it via writeToken(rentalToken:) and writes the raw UTF-8 bytes to
+// the unlock characteristic.
+//
+// MTU note: NimBLE on the lock negotiates MTU 256 (NimBLEDevice::setMTU(256)).  A
+// typical wire token is ~180-220 bytes.  CoreBluetooth exposes the negotiated limit
+// via peripheral.maximumWriteValueLength(for: .withResponse); if the token exceeds
+// that limit the write is rejected with "ATT error 0x06" (request not supported for
+// large writes).  In practice iOS negotiates ≥ 185 bytes with a nearby BLE 4.2+
+// peripheral; if you hit this limit split the write into a Prepared Write procedure
+// or reduce scooter_code / reservation_id lengths.
+//
+// Foreground BLE only: App Clips cannot use background BLE
+// (CBCentralManagerOptionRestoreIdentifierKey is unavailable).
+// The App Clip must stay in the foreground throughout the unlock flow (~5–10 s).
 
 import CoreBluetooth
-import Combine
 import Foundation
 
 // ============================================================
 // MARK: — UUIDs (verbatim from skooti_lock.ino)
 // ============================================================
 
-private let kServiceUUID   = CBUUID(string: "4e2a1000-5b3c-4b1e-9f8c-6d7e8a9b0c1d")
-private let kChallengeUUID = CBUUID(string: "4e2a1001-5b3c-4b1e-9f8c-6d7e8a9b0c1d")
-private let kUnlockUUID    = CBUUID(string: "4e2a1002-5b3c-4b1e-9f8c-6d7e8a9b0c1d")
+private let kServiceUUID = CBUUID(string: "4e2a1000-5b3c-4b1e-9f8c-6d7e8a9b0c1d")
+private let kUnlockUUID  = CBUUID(string: "4e2a1002-5b3c-4b1e-9f8c-6d7e8a9b0c1d")
 
 // ============================================================
 // MARK: — LockBLE
 // ============================================================
 
-/// Manages a single BLE connection to a SKOOTI lock.
+/// Manages a single BLE connection to a SKOOTI lock (Arch 2 — offline token).
 ///
 /// Usage:
-///   1. Call `scan(scooterCode:)` — the manager scans for the SKOOTI service.
-///   2. Observe `statePublisher` for UnlockState transitions.
-///   3. On `.readingChallenge` → `.fetchingMAC(nonce:)`, the caller
-///      fetches the MAC from KioskClient and calls `writeUnlock(…)`.
-///   4. On `.writingUnlock` → `.unlocked` the GPIO fires (on the board).
-///
-/// The caller (UnlockViewModel) drives the overall flow; LockBLE only
-/// handles BLE mechanics.
+///   1. Call `scan(scooterCode:)` — the manager scans for the SKOOTI service UUID.
+///   2. Observe `state` (a `@Published` property) for `UnlockState` transitions.
+///   3. Once `state == .writingToken`, the write has been dispatched.
+///      On `.unlocked` the lock has acknowledged the write (CoreBluetooth write-with-
+///      response).  On the hardware the GPIO fires for 3 s if the token verified.
+///      There is no BLE-level success/fail feedback from the firmware — the lock does
+///      not write back a result characteristic.  "Write acknowledged" = "command
+///      delivered"; the user should see the LED / hear the relay within ~1 s.
+///   4. The caller (UnlockViewModel) calls `writeToken(rentalToken:)` once the clip
+///      reaches `.discovered` (characteristics found, ready to write).
 
 @MainActor
 final class LockBLE: NSObject, ObservableObject {
 
     // Current BLE / unlock state, observed by the UI.
     @Published private(set) var state: UnlockState = .idle
-    @Published private(set) var nonce: String?       // set after challenge read
 
     // ── Private BLE objects ───────────────────────────────────
     private var central: CBCentralManager!
     private var peripheral: CBPeripheral?
-    private var challengeChar: CBCharacteristic?
     private var unlockChar: CBCharacteristic?
     private var pendingScooterCode: String?
 
@@ -74,7 +82,7 @@ final class LockBLE: NSObject, ObservableObject {
     // MARK: — Public API
     // ────────────────────────────────────────────────────────────
 
-    /// Begin scanning for a SKOOTI lock advertising service UUID.
+    /// Begin scanning for a SKOOTI lock advertising the service UUID.
     /// The scooterCode is used for logging / future device-name filtering.
     func scan(scooterCode: String) {
         guard state == .idle else { return }
@@ -87,28 +95,37 @@ final class LockBLE: NSObject, ObservableObject {
         // else: wait for centralManagerDidUpdateState callback
     }
 
-    /// Write the unlock payload to the lock's Unlock characteristic.
+    /// Write the rental token to the lock's Unlock characteristic.
     ///
-    /// Call this after receiving the MAC from KioskClient.unlock(…).
+    /// Call this once `state == .discovered`.
     ///
-    /// Format (verbatim from firmware/skooti_lock.ino UnlockCallbacks::onWrite):
-    ///   "<reservation_id>|<64-char-mac-hex>"  (ASCII, pipe-delimited)
-    func writeUnlock(reservationId: String, mac: String) {
+    /// The token is the raw `rt` string from the launch URL:
+    ///   "<scooter_code>|<reservation_id>|<iat>|<exp>|<jti>.<base64url(sig)>"
+    ///
+    /// This is written as UTF-8 bytes — identical to what verify.c and
+    /// LockSim#unlock receive.
+    func writeToken(rentalToken: String) {
         guard let peripheral = peripheral,
               let unlockChar = unlockChar else {
             state = .failed(reason: "BLE peripheral not connected")
             return
         }
 
-        // Build the exact byte string the firmware expects.
-        let payload = "\(reservationId)|\(mac)"
-        guard let data = payload.data(using: .utf8) else {
-            state = .failed(reason: "Failed to encode unlock payload as UTF-8")
+        guard let data = rentalToken.data(using: .utf8) else {
+            state = .failed(reason: "Failed to encode rental token as UTF-8")
             return
         }
 
-        state = .writingUnlock
-        // Use withResponse so CoreBluetooth surfaces any write error.
+        // Sanity-check the negotiated MTU so the caller knows if chunking is needed.
+        let maxWrite = peripheral.maximumWriteValueLength(for: .withResponse)
+        if data.count > maxWrite {
+            state = .failed(reason: "Token (\(data.count) bytes) exceeds negotiated MTU " +
+                            "(\(maxWrite) bytes). Reduce token length or split the write.")
+            return
+        }
+
+        state = .writingToken
+        // Write with response so CoreBluetooth surfaces any ATT error.
         peripheral.writeValue(data, for: unlockChar, type: .withResponse)
     }
 
@@ -156,7 +173,7 @@ extension LockBLE: CBCentralManagerDelegate {
         rssi RSSI: NSNumber
     ) {
         Task { @MainActor in
-            // Stop scanning — we connect to the first SKOOTI peripheral found.
+            // Stop scanning — connect to the first SKOOTI peripheral found.
             central.stopScan()
             self.peripheral = peripheral
             peripheral.delegate = self
@@ -170,7 +187,7 @@ extension LockBLE: CBCentralManagerDelegate {
         didConnect peripheral: CBPeripheral
     ) {
         Task { @MainActor in
-            state = .readingChallenge
+            state = .discovering
             peripheral.discoverServices([kServiceUUID])
         }
     }
@@ -218,7 +235,8 @@ extension LockBLE: CBPeripheralDelegate {
                 state = .failed(reason: "SKOOTI service not found on peripheral")
                 return
             }
-            peripheral.discoverCharacteristics([kChallengeUUID, kUnlockUUID], for: service)
+            // Discover only the unlock characteristic — no challenge in Arch 2.
+            peripheral.discoverCharacteristics([kUnlockUUID], for: service)
         }
     }
 
@@ -233,41 +251,14 @@ extension LockBLE: CBPeripheralDelegate {
                 return
             }
             for char in service.characteristics ?? [] {
-                if char.uuid == kChallengeUUID { challengeChar = char }
-                if char.uuid == kUnlockUUID    { unlockChar = char }
+                if char.uuid == kUnlockUUID { unlockChar = char }
             }
-            guard challengeChar != nil, unlockChar != nil else {
-                state = .failed(reason: "Required characteristics not found")
+            guard unlockChar != nil else {
+                state = .failed(reason: "Unlock characteristic not found on peripheral")
                 return
             }
-            // READ the challenge characteristic → lock generates a fresh nonce.
-            peripheral.readValue(for: challengeChar!)
-        }
-    }
-
-    nonisolated func peripheral(
-        _ peripheral: CBPeripheral,
-        didUpdateValueFor characteristic: CBCharacteristic,
-        error: Error?
-    ) {
-        Task { @MainActor in
-            if characteristic.uuid == kChallengeUUID {
-                if let error = error {
-                    state = .failed(reason: "Challenge read failed: \(error.localizedDescription)")
-                    return
-                }
-                guard let data = characteristic.value,
-                      let hex = String(data: data, encoding: .utf8),
-                      hex.count == 32,
-                      hex.allSatisfy({ $0.isHexDigit }) else {
-                    state = .failed(reason: "Invalid nonce from lock (expected 32 hex chars)")
-                    return
-                }
-                nonce = hex
-                // Transition to fetchingMAC — the ViewModel picks this up
-                // and calls KioskClient.unlock(…) then writeUnlock(…).
-                state = .fetchingMAC(nonce: hex)
-            }
+            // Ready — ViewModel will call writeToken(rentalToken:).
+            state = .discovered
         }
     }
 
@@ -279,14 +270,13 @@ extension LockBLE: CBPeripheralDelegate {
         Task { @MainActor in
             if characteristic.uuid == kUnlockUUID {
                 if let error = error {
-                    state = .failed(reason: "Unlock write failed: \(error.localizedDescription)")
+                    state = .failed(reason: "Token write failed: \(error.localizedDescription)")
                     return
                 }
-                // CoreBluetooth confirms the write was accepted.  On the lock
-                // side the GPIO fires for 3 s if the MAC verified correctly.
-                // There is no BLE-level success/fail response from the firmware
-                // (the lock just drives GPIO); treat a successful write as
-                // "command delivered".
+                // CoreBluetooth confirms the write was accepted by the lock.
+                // On hardware the GPIO fires for 3 s if the token verified correctly.
+                // The firmware does not send a result characteristic back — treat a
+                // successful ATT write as "command delivered".
                 state = .unlocked
             }
         }

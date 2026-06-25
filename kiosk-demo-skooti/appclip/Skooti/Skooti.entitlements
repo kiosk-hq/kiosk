@@ -6,7 +6,5 @@
 	<array>
 		<string>appclips:skooti.app</string>
 	</array>
-	<key>com.apple.developer.on-demand-install-capable</key>
-	<true/>
 </dict>
 </plist>

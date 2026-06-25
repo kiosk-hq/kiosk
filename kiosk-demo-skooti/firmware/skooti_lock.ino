@@ -324,7 +324,19 @@ void setup(void)
     pinMode(LED_GPIO, OUTPUT);
     gpio_lock();   /* ensure locked at boot */
 
-    /* BLE init — negotiate MTU 256 to accommodate ~220-byte tokens */
+    /* BLE init — negotiate MTU 256 to accommodate ~220-byte tokens.
+     *
+     * Device name: "skooti-<SCOOTER_CODE>" (e.g. "skooti-SK-001").
+     * NimBLEDevice::init() sets the GAP device name used in BLE advertising.
+     * The App Clip (LockBLE.swift) filters by this name when multiple scooters
+     * are in range: it connects ONLY to the peripheral named "skooti-<scooterCode>"
+     * parsed from the launch URL.
+     *
+     * The name is included in the scan response (setScanResponse(true) below)
+     * so iOS / CoreBluetooth can read it via CBAdvertisementDataLocalNameKey
+     * without a full connection.  NimBLE also exposes it in the primary
+     * advertisement packet via the Complete Local Name AD type.
+     */
     NimBLEDevice::init("skooti-" SCOOTER_CODE);
     NimBLEDevice::setMTU(256);
 
@@ -343,6 +355,10 @@ void setup(void)
 
     NimBLEAdvertising *pAdv = NimBLEDevice::getAdvertising();
     pAdv->addServiceUUID(SERVICE_UUID);
+    /* setScanResponse(true): iOS reads the scan response to get the full device name.
+     * The App Clip LockBLE.swift matches CBAdvertisementDataLocalNameKey against
+     * "skooti-<scooterCode>" from the launch URL before connecting.
+     * Without scan response the name may be truncated in the primary advert packet. */
     pAdv->setScanResponse(true);
     pAdv->start();
 

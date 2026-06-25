@@ -39,7 +39,7 @@ Kiosk.configure do |c|
   c.roles         = %i[customer master support]
   c.owner         = { name: "Acme Inc.", support: "support@acme.example" }
   # c.mount_path  = "/kiosk"   # default
-  # c.capabilities = %w[sql actions ap2 events]   # default
+  # c.capabilities = %w[query actions ap2 events]   # default
 end
 ```
 

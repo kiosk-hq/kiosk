@@ -25,9 +25,9 @@ kiosk --version
 ## Usage
 
 ```
-kiosk <host> well-known            # GET <host>/.well-known/kiosk.json
-kiosk <host> sql <statement>       # POST exec — command: sql
-kiosk <host> run <action> [k=v ..] # POST exec — command: run
+kiosk <host> well-known               # GET <host>/.well-known/kiosk.json
+kiosk <host> query <name> [k=v ..]   # POST exec — command: query (named query)
+kiosk <host> run <action> [k=v ..]   # POST exec — command: run
 kiosk --version
 kiosk --help
 ```

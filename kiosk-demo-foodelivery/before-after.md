@@ -56,7 +56,7 @@ foodelivery is a Rails 8.1 app that speaks Kiosk. The following is the recorded 
 
 1. **Discover** — `GET /.well-known/kiosk.json` returns the foodelivery issuer and surface.
 2. **Self-register** — generated an RSA-2048 keypair, `POST /kiosk/agents/register {name:"hermes", public_key:<pem>, role:"customer"}` → HTTP 201 → `agent_id`, `user_id`, `access_token`. No existing account. No human login. No OTP. No bot screen.
-3. **Browse** — `POST /kiosk/exec {command:"sql", ...}` queried `menu_items JOIN restaurants` and found the Margherita: `id`, `sku:"margherita"`, `price_cents:1599`.
+3. **Browse** — `POST /kiosk/exec {command:"query", body:{name:"menu_by_restaurant", restaurant:"Mamma Pizza"}}` returned the menu rows; found the Margherita: `id`, `sku:"margherita"`, `price_cents:1599`. No SQL sent — the agent called a provider-registered named query.
 4. **Place order** — `POST /kiosk/exec {command:"run", body:{name:"place_order", menu_item_id:<id>, quantity:1, delivery_address:"1 Test St, Istanbul"}}` → HTTP 200, `total_cents:1599`, `status:"placed"`.
 5. **Pay** — signed an AP2 intent mandate (`cap_amount_cents:1699`, `scope:"food"`, `iss:<issuer>`) and a cart mandate (`total_amount_cents:1599`, `line_items:[{sku:"margherita",qty:1}]`, bound to the intent via `intent_mandate_id`) as RS256 JWS with the registered keypair, then `POST /kiosk/exec {command:"pay", ...}` → `settled_amount_cents:1599`, `ok:true`.
 
@@ -91,20 +91,29 @@ In production these are versioned RubyGems. The `kiosk-pay-stripe` adapter swaps
 rails g kiosk:install
 ```
 
-This emits: the Kiosk schema migration (the `kiosk.*` namespace with agents, sessions, and mandate tables), the six-verb wire surface (`sql`, `run`, `pay`, `schema`, `help`, `events`) mounted at `/kiosk/exec`, the agent-registration endpoint at `/kiosk/agents/register`, and `/.well-known/kiosk.json`. Today `sql`, `run`, and `pay` are wired end-to-end; `schema`, `help`, and `events` are stubbed and ship next.
+This emits: the Kiosk schema migration (the `kiosk.*` namespace with agents, sessions, and mandate tables), the six-verb wire surface (`query`, `run`, `pay`, `schema`, `help`, `events`) mounted at `/kiosk/exec`, the agent-registration endpoint at `/kiosk/agents/register`, and `/.well-known/kiosk.json`. Today `query`, `run`, and `pay` are wired end-to-end; `schema`, `help`, and `events` are stubbed and ship next.
 
-**3. Apply RLS to your own tables**
+Agents call named queries by name (`query` verb) — never raw SQL. The provider registers the queries it wishes to expose; isolation is enforced at the app layer in the query definitions and in Actions, with RLS available as optional defense-in-depth.
 
-In your migration, declare which tables agents can read or write and under what conditions:
+**3. Register named queries (and optionally apply RLS)**
+
+Register the queries you want to expose to agents:
 
 ```ruby
-enable_rls_on :orders do
-  policy :select, using: "user_id = kiosk.current_user_id()"
-  policy :insert, check: "user_id = kiosk.current_user_id() AND kiosk.current_role() = 'customer'"
+Kiosk::Server::Queries.register("menu_by_restaurant") do |args|
+  MenuItem.joins(:restaurant)
+    .where(restaurants: { name: args[:restaurant] })
+    .select(:id, :name, :sku, :price_cents)
+end
+
+Kiosk::Server::Queries.register("my_orders") do |args, identity|
+  Order.where(user_id: identity.user_id)
 end
 ```
 
-Catalogue tables (restaurants, menu items) get `policy :select, using: "TRUE"`. The provider controls exactly what each agent role can see and do.
+Agents call these by name only (`command:"query", body:{name:"menu_by_restaurant", restaurant:"..."}`). They never supply SQL. App-layer isolation lives here: user-scoped queries scope by `identity.user_id` in the block; catalogue queries are open to all authenticated agents.
+
+RLS is available as optional defense-in-depth via `enable_rls_on` — useful if you want a Postgres-level backstop in addition to the app-layer checks above. It is not required for Kiosk's isolation model.
 
 **4. Register a `place_order` Action**
 
@@ -125,7 +134,7 @@ Kiosk::Server::Actions.register("place_order") do |args|
 end
 ```
 
-Actions are plain Ruby blocks. The `kiosk.current_user_id()` Postgres function returns the synthetic principal's ID, enforced by the same RLS that governs direct queries. The action cannot access rows belonging to other users.
+Actions are plain Ruby blocks. The `kiosk.current_user_id()` Postgres function returns the synthetic principal's ID. The action enforces user-scope in the block; it cannot access rows belonging to other users because the app-layer query filters by `uid`.
 
 **5. Wire a payment-provider adapter**
 

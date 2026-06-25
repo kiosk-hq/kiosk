@@ -157,12 +157,6 @@ cmd_well_known() {
   printf '%s' "$body" | jq .
 }
 
-cmd_sql() {
-  host="$1"; sql="$2"
-  body=$(jq -n --arg sql "$sql" '{command:"sql", body:{sql:$sql}}')
-  exec_call "$host" "$body"
-}
-
 # `kiosk <host> query <name> k=v k=v ...` — calls a provider-registered named
 # query. Each k=v becomes a param JSON field (same encoding as `run`).
 # Values that parse as a JSON number are sent as numbers; everything else as
@@ -377,10 +371,6 @@ case "$verb" in
     ;;
   well-known)
     cmd_well_known "$host"
-    ;;
-  sql)
-    [ "$#" -ge 1 ] || die 2 "sql: missing statement"
-    cmd_sql "$host" "$1"
     ;;
   query)
     [ "$#" -ge 1 ] || die 2 "query: missing query name"

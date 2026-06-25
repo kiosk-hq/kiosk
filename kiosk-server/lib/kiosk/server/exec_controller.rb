@@ -17,7 +17,7 @@ if defined?(::ActionController::API)
       #
       # Wire request body (JSON):
       #
-      #   { "command": "sql", "body": { "sql": "SELECT 1" } }
+      #   { "command": "query", "body": { "name": "menu_by_restaurant", "restaurant": "..." } }
       #   { "command": "run", "body": { "name": "ping", "...": "..." } }
       #
       # Wire response (JSON): success per {Result#to_envelope}, error per

@@ -105,7 +105,7 @@ export HOME
 # Here we check the easier inverse: a valid token in env still produces a
 # *network* error (exit 6) against unreachable host, NOT auth (exit 3).
 assert "unreachable host + token → 6" \
-  "$(KIOSK_TOKEN=x exit_of http://localhost:59999 sql 'SELECT 1')" "6"
+  "$(KIOSK_TOKEN=x exit_of http://localhost:59999 query scooters_available)" "6"
 
 HOME="$HOME_BACKUP"
 export HOME

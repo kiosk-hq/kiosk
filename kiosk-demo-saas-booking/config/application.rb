@@ -40,5 +40,10 @@ module KioskDemoSaasBooking
     # Middleware like session, flash, cookies can be added back manually.
     # Skip views, helpers and assets when generating a new resource.
     config.api_only = true
+
+    # Use SQL structure dump so pg_dump captures all schemas (kiosk.*, public.*).
+    # schema.rb only introspects the public schema and silently drops the kiosk
+    # schema tables, causing db:migrate on a fresh DB to skip those migrations.
+    config.active_record.schema_format = :sql
   end
 end

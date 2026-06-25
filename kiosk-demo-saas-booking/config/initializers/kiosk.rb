@@ -7,12 +7,6 @@
 require Rails.root.join("lib/stub_idp")
 require Rails.root.join("lib/jwt_or_stub_idp")
 
-# Inject the RLS DSL into ActiveRecord::Migration so that migrations can
-# call `enable_rls_on TABLE do ... end` directly. The kiosk-rls README
-# documents this opt-in; auto-injection from the gem itself lands in a
-# follow-up.
-ActiveRecord::Migration.include(Kiosk::RLS::DSL)
-
 Kiosk.configure do |c|
   c.user_model     = "User"
   c.user_id_type   = :uuid
@@ -39,6 +33,29 @@ Kiosk.configure do |c|
   c.agent_idp = JwtOrStubIdp.new(stub: StubIdp.new)
   # user_idp not needed — composite handles both channels.
 end
+
+# ─── Queries ────────────────────────────────────────────────────────────────
+
+# salons — full salon catalogue; no per-user scoping, any authenticated
+# principal may browse (mirrors the public SELECT policy previously in RLS).
+Kiosk::Server::Queries.register("salons") do |_params|
+  ActiveRecord::Base.connection.execute(
+    "SELECT id, name FROM salons ORDER BY id"
+  ).to_a
+end
+
+# my_appointments — per-user appointment list scoped by the session GUC.
+# App-layer isolation: the agent supplies no filter; the WHERE is
+# provider-controlled and cannot be bypassed by the caller.
+Kiosk::Server::Queries.register("my_appointments") do |_params|
+  ActiveRecord::Base.connection.execute(
+    "SELECT id, salon_id, slot FROM appointments " \
+    "WHERE user_id = kiosk.current_user_id() " \
+    "ORDER BY id"
+  ).to_a
+end
+
+# ─── Actions ────────────────────────────────────────────────────────────────
 
 # Register the demo Action. In production, providers use the full
 # `Kiosk::Action` DSL (post-v0.1); for the e2e a simple registered

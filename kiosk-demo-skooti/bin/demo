@@ -64,15 +64,15 @@ step "GET <endpoint>/.well-known/jwks.json — public verification keys"
 curl -sf "$SERVER_URL/kiosk/.well-known/jwks.json" \
   | jq '.keys[0] | {kty, use, alg, kid}'
 
-# ─── authenticated SQL ───────────────────────────────────────────────
+# ─── named queries ───────────────────────────────────────────────────
 
-heading "Agent browses the scooter fleet through RLS"
+heading "Agent browses the scooter fleet via named query"
 
-step "List scooters (publicly visible)"
+step "List scooters (publicly visible) — query: scooters_available"
 curl -sS -X POST "$SERVER_URL/kiosk/exec" \
   -H "Authorization: Bearer $AGENT_TOKEN" \
   -H "Content-Type: application/json" \
-  -d '{"command":"sql","body":{"sql":"SELECT id, code, status, price_per_min_cents FROM scooters"}}' \
+  -d '{"command":"query","body":{"name":"scooters_available"}}' \
   | jq '.rows'
 
 # ─── done ────────────────────────────────────────────────────────────

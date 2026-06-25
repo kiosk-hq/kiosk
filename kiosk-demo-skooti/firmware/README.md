@@ -1,26 +1,34 @@
-# skooti firmware — ESP32-C3 BLE scooter lock
+# skooti firmware — ESP32-C3 BLE scooter lock (Arch 2: Ed25519)
 
 This directory contains:
 
 | File | Purpose |
 |------|---------|
 | `skooti_lock.ino` | Arduino-ESP32 firmware (ESP32-C3 + NimBLE-Arduino) |
-| `hmac_sha256.h/c` | Portable SHA-256 + HMAC-SHA256 (C99, no platform deps) |
-| `verify.h/c` | `skooti_verify_unlock()` — shared crypto, links into both the firmware and the host test |
-| `host_test.c` | Host-side crypto proof (runs on Mac/Linux without the board) |
-| `Makefile` | `make test` = C tests + Ruby crosscheck |
+| `verify.h/c` | `skooti_verify_token()` — portable Ed25519 token verify; shared by firmware and host test |
+| `host_test.c` | Host-side crypto proof (runs on Mac/Linux, no board required) |
+| `crosscheck_main.c` | Ruby-signed token → C verify helper (invoked by `make crosscheck`) |
+| `Makefile` | `make test` = C assertions + Ruby↔C crosscheck |
+| `ed25519/` | Vendored orlp/ed25519 (zlib license, public-domain-style) — portable Ed25519 with detached verify |
 
 The crypto is **proven on the host** before flashing.  The BLE flow is
-validated when Phil's ESP32-C3 board arrives.
+validated when the ESP32-C3 board is available.
 
 ---
 
-## Crypto contract (host-provable now)
+## Crypto contract (Arch 2 — offline Ed25519)
 
 ```
-master_key  = "dev-master-key-0001"          # server-only; never in firmware
-K_lock      = HMAC-SHA256(master_key, scooter_code)   # provisioned into lock
-mac         = HMAC-SHA256(K_lock, "scooter_code|nonce_hex|reservation_id")
+skooti_pubkey   = <32 bytes, baked into every lock>
+message         = "scooter_code|reservation_id|iat|exp|jti"
+sig             = Ed25519(private_signing_key, message)   # server-side only
+wire token      = "<message>.<base64url(sig)>"
+
+lock verifies:
+  1. Ed25519-verify(sig, message, skooti_pubkey)
+  2. scooter_code == SCOOTER_CODE
+  3. exp > now
+  4. jti not yet consumed (one-shot, caller checks)
 ```
 
 Run:
@@ -30,22 +38,27 @@ cd firmware
 make test
 ```
 
-Expected output (all 8 assertions pass, crosscheck matches `896eec16...`):
+Expected output (10 assertions pass, crosscheck MATCH):
 
 ```
-=== skooti firmware crypto host test ===
+--- C host test ---
+=== skooti firmware Ed25519 host test (Arch 2) ===
+Public key : 8857880d21f87b85872f31aeea8d0024acebb2fdf933b25a479f4f9e80babefd
+Scooter    : SK-001
 ...
-=== Results: 8 passed, 0 failed ===
+=== Results: 10 passed, 0 failed ===
 ALL PASS
+
 --- Ruby <-> C crosscheck ---
-  Ruby  mac : 896eec16ca0d164293762269f0d34c319a41b4a463bedc2ce11f3269a49e9b1f
-  C     mac : 896eec16ca0d164293762269f0d34c319a41b4a463bedc2ce11f3269a49e9b1f
-  MATCH — C HMAC == Ruby/OpenSSL (server) HMAC
+  Ruby-signed token: SK-001|resv-live|...
+  C verify result: 1
+  MATCH — C verifier accepts Ruby/OpenSSL-signed token ✓
 ```
 
-This proves the firmware's HMAC-SHA256 matches the Kiosk server (Ruby/OpenSSL)
-byte-for-byte.  The `.ino` is NOT compiled on the host (ESP32 toolchain
-required); only `hmac_sha256.c` + `verify.c` are tested here.
+This proves the C Ed25519 verifier correctly verifies tokens signed by the Kiosk
+Ruby server (same RFC 8032 Ed25519 semantics via OpenSSL).  The `.ino` is NOT
+compiled on the host (ESP32 Arduino toolchain required); only `ed25519/` +
+`verify.c` + test helpers are exercised here.
 
 ---
 
@@ -54,18 +67,35 @@ required); only `hmac_sha256.c` + `verify.c` are tested here.
 | | UUID | Properties | Format |
 |--|------|-----------|--------|
 | **Service** | `4e2a1000-5b3c-4b1e-9f8c-6d7e8a9b0c1d` | — | — |
-| **Challenge** | `4e2a1001-5b3c-4b1e-9f8c-6d7e8a9b0c1d` | READ + NOTIFY | 32 ASCII hex chars (one-shot nonce) |
-| **Unlock** | `4e2a1002-5b3c-4b1e-9f8c-6d7e8a9b0c1d` | WRITE + WRITE_NR | `<reservation_id>|<64-char-mac-hex>` |
+| **Unlock** | `4e2a1002-5b3c-4b1e-9f8c-6d7e8a9b0c1d` | WRITE + WRITE_NR | wire rental token (ASCII, ≤ 512 bytes; MTU negotiated to 256) |
 
-### Unlock flow (App Clip → lock)
+### Unlock flow (App Clip → lock, Arch 2)
 
-1. App Clip connects to `skooti-SK-001` BLE peripheral.
-2. App Clip **reads** the Challenge characteristic → receives 32 hex chars (nonce).
-3. App Clip sends nonce + reservation_id to the Kiosk server (`/kiosk/exec {name:"unlock", ...}`).
-4. Server verifies KYC + paid reservation → returns `mac` (64 hex chars).
-5. App Clip **writes** `"<reservation_id>|<mac_hex>"` to the Unlock characteristic.
-6. Lock recomputes `HMAC-SHA256(K_lock, "SK-001|nonce_hex|reservation_id")`, constant-time
-   compares, drives GPIO HIGH for 3 s = unlocked; nonce consumed (replay-safe).
+1. App Clip receives the rental token in the `rt=` URL parameter of its launch link.
+2. App Clip connects to `skooti-SK-001` BLE peripheral.
+3. App Clip **writes** the wire rental token to the Unlock characteristic.
+4. Lock runs `skooti_verify_token(SKOOTI_PUBKEY, token, SCOOTER_CODE, now)`:
+   checks Ed25519 sig, scooter_code match, exp > now.
+5. Lock checks jti not yet consumed (in-RAM circular set; NVS in production).
+6. On all-pass: consumes jti, drives GPIO HIGH for 3 s = unlocked.
+7. On any failure: stays locked; logs reason to Serial.
+
+**No server round-trip at unlock time.**  The token was issued by the server
+at `start_rental` and verified offline by the lock.
+
+---
+
+## Clock requirement
+
+The lock checks `exp > now`.
+
+- **Demo / bench:** `DEMO_NOW` in `skooti_lock.ino` is a compile-time constant.
+  Set it to a value less than the token's `exp` field (test vector: exp=1750000900,
+  DEMO_NOW=1750000800).
+- **Production:** replace the body of `get_now()` in `skooti_lock.ino` with one of:
+  - DS3231 RTC: `return (uint64_t)rtc.getEpoch();`
+  - ESP32 SNTP: `configTime(0, 0, "pool.ntp.org"); return (uint64_t)time(nullptr);`
+  The scooter syncs time once online (WiFi or cellular) and uses it offline.
 
 ---
 
@@ -81,20 +111,16 @@ On XIAO ESP32-C3 the onboard LED is active-LOW on GPIO 8 → set `LED_ACTIVE_HIG
 
 ---
 
-## Provisioning
+## Provisioning (Arch 2)
 
-**Every physical lock is provisioned with its own `K_lock` (32 bytes):**
+Every physical lock is provisioned with:
 
-```ruby
-# server-side, one-time per lock
-K_lock = OpenSSL::HMAC.digest("SHA256", master_key, scooter_code)
-```
+- **`SKOOTI_PUBKEY`** (32 bytes) — the skooti Ed25519 public key, one key for all locks.
+- **`SCOOTER_CODE`** — this lock's own identifier.
 
-The `master_key` **never leaves the server**.  Each lock receives only its own
-`K_lock`, burned into `K_LOCK[]` in `skooti_lock.ino`.
-
-Compromising one lock's `K_lock` does not expose the master key or any other
-lock's key (diversified-key scheme).
+The private signing key **never leaves the server**.  Compromising a lock's
+firmware exposes only the public key (already semi-public) — no signing capability,
+no other lock compromised.
 
 ---
 
@@ -108,8 +134,9 @@ lock's key (diversified-key scheme).
 3. Install **NimBLE-Arduino**:
    - Library Manager → search "NimBLE-Arduino" by h2zero → Install.
 4. Select board: **"ESP32C3 Dev Module"** (or your exact variant).
-5. Open `skooti_lock.ino`, verify `K_LOCK[]` matches your lock's provisioned key.
-6. Upload.  Open Serial Monitor at 115200 baud to see nonce + unlock events.
+5. Open `skooti_lock.ino`, verify `SKOOTI_PUBKEY[]` and `SCOOTER_CODE`.
+6. Adjust `DEMO_NOW` or replace `get_now()` for production clock.
+7. Upload.  Open Serial Monitor at 115200 baud to see unlock events.
 
 ## Flashing — arduino-cli
 
@@ -132,9 +159,13 @@ arduino-cli upload -p /dev/ttyUSB0 --fqbn esp32:esp32:esp32c3 firmware/
 
 | Claim | Status |
 |-------|--------|
-| `HMAC-SHA256(K_lock, "scooter_code|nonce_hex|reservation_id")` in C == Ruby/OpenSSL | **PROVEN** (`make test`) |
-| K_lock derivation `HMAC-SHA256(master_key, scooter_code)` in C matches server | **PROVEN** (`make test` test 6) |
-| One-shot nonce (replay) guard in software LockSim | **PROVEN** (Part B tests) |
-| BLE GATT advertising + connect + read challenge | **Not yet** — needs board |
-| GPIO drives relay on valid MAC | **Not yet** — needs board |
-| App Clip ↔ lock BLE end-to-end | **Not yet** — needs board + Apple account |
+| Ed25519-verify in C accepts the T1 known-answer token vector | **PROVEN** (`make test` test 1) |
+| Expired token (now > exp) rejected | **PROVEN** (`make test` test 2) |
+| Wrong scooter_code rejected | **PROVEN** (`make test` test 3) |
+| Flipped sig byte rejected | **PROVEN** (`make test` test 4) |
+| Malformed / truncated / NULL tokens → 0, no crash | **PROVEN** (`make test` test 5) |
+| C verifier accepts a freshly Ruby/OpenSSL-signed token | **PROVEN** (`make crosscheck`) |
+| jti one-shot anti-replay in software LockSim | **PROVEN** (T2 rake demo) |
+| BLE GATT advertising + connect + write unlock | **Not yet** — needs board |
+| GPIO drives relay on valid token | **Not yet** — needs board |
+| App Clip → lock BLE end-to-end | **Not yet** — needs board + Apple account |

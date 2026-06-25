@@ -1,3 +1,4 @@
 host_test
+host_test_crosscheck
 *.o
 *.d

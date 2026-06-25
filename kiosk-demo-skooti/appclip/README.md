@@ -1,8 +1,8 @@
 # Skooti App Clip — Build & Provisioning Guide
 
-> **Status:** Sources written for Arch 2 (offline Ed25519 token); NOT compiled here
+> **Status:** Sources written for Arch 2 (offline Ed25519 token, v2 — domain-separation tag + durable replay prevention); NOT compiled here
 > (no Xcode / Apple account in the build environment).  Server chain and firmware
-> crypto are proven (Plan 4.2 T1–T3).  On-device BLE and the launch flow are to be
+> crypto are proven (Plan 4.3 T1–T2).  On-device BLE and the launch flow are to be
 > validated by Phil when the board + Apple Developer account are ready.
 
 ---
@@ -24,7 +24,7 @@ NFC tag / App Clip Code
        ├─ Connect + discover unlock char 4e2a1002-…
        ├─ Write rt token (UTF-8) to unlock char  ← no server call
        │
-       └─ Lock verifies offline (Ed25519 + scooter_code + exp + jti)
+       └─ Lock verifies offline (Ed25519 + domain tag + scooter_code + exp + jti)
           GPIO HIGH 3 s → physically unlocked
 ```
 
@@ -36,11 +36,13 @@ The lock verifies it fully offline.
 ### Wire token format (identical across server / lock-sim / firmware / clip)
 
 ```
-<scooter_code>|<reservation_id>|<iat>|<exp>|<jti>.<base64url(Ed25519 sig)>
+kiosk-rental-v1|<scooter_code>|<reservation_id>|<iat>|<exp>|<jti>.<base64url(Ed25519 sig)>
 ```
 
-Split on the **last** `.`; the left side is the signed message; the right side is
-the 64-byte Ed25519 signature, base64url-encoded without padding.
+Split on the **last** `.`; the left side (6 pipe-delimited fields) is the signed
+message; the right side is the 64-byte Ed25519 signature, base64url-encoded without
+padding.  Field 0 (`kiosk-rental-v1`) is a fixed domain-separation tag — the lock
+rejects any token whose field 0 does not exactly match this string.
 
 ---
 
@@ -202,7 +204,7 @@ Write the URL `https://skooti.app/unlock?scooter=SK-001&rt=<rental-token>` to an
 NDEF tag using the NFC Tools app on iOS or any NDEF writer.
 
 The rental token is issued by the server after `pay` / `start_rental` and placed into
-the URL.  For the demo you can write a URL with the test-vector token from Plan 4.2 T1.
+the URL.  For the demo you can write a URL with the test-vector token from Plan 4.3 T1.
 
 > **Note — percent-encode the `rt=` value when writing to a real NFC tag or QR code.**
 > The rental token contains `|` (pipe) characters in the message portion and `.` in the
@@ -240,7 +242,7 @@ The App Clip needs two values:
 `AgentHandoff.from(url:)` reads `scooter=` and `rt=` from URL query params:
 
 ```
-https://skooti.app/unlock?scooter=SK-001&rt=SK-001%7Cresv-1%7C1750000000%7C1750000900%7Caabb%E2%80%A6.<sig>
+https://skooti.app/unlock?scooter=SK-001&rt=kiosk-rental-v1%7CSK-001%7Cresv-1%7C1750000000%7C1750000900%7Caabb%E2%80%A6.<sig>
 ```
 
 > **Note:** the `rt` value **must be percent-encoded** when placed in a real URL
@@ -249,9 +251,11 @@ https://skooti.app/unlock?scooter=SK-001&rt=SK-001%7Cresv-1%7C1750000000%7C17500
 > string if passed raw.  Use `URLComponents.queryItems` / `addingPercentEncoding`
 > on the client and `CGI.escape` / `URI.encode_www_form_component` on the server.
 
-The rental token is short-lived (15-min TTL embedded in `exp`).  Within that window
-the token appearing in a URL is acceptable — it's single-use (jti) and the lock
-rejects it after the first successful write.
+The rental token is short-lived (15-min TTL embedded in `exp`) and single-use: the
+lock records the jti on first use and rejects any subsequent presentation of the
+same token, even across a lock reboot (NVS-backed jti store).  Within that window
+the token appearing in a URL is acceptable — exposure is bounded to one scooter,
+one 15-min window, and one unlock.
 
 **Alternative A — Shared App Group Keychain:**
 The full Skooti app (which ran register → KYC → reserve → pay → start_rental) writes
@@ -288,7 +292,7 @@ Swap only `AgentHandoff.from(url:)` for alternative A or B; no other file change
 **Unlock write** payload: the raw rental token string, UTF-8 encoded, up to ~220 bytes.
 
 ```
-SK-001|resv-abc123|1750000000|1750000900|aabbccddeeff00112233445566778899.<base64url_sig>
+kiosk-rental-v1|SK-001|resv-abc123|1750000000|1750000900|aabbccddeeff00112233445566778899.<base64url_sig>
 ```
 
 The App Clip writes the token with `CBPeripheral.writeValue(_:for:type:.withResponse)`.
@@ -311,8 +315,9 @@ scooter within that window.
 
 | Claim | Status |
 |-------|--------|
-| Server Ed25519 rental-token issue + verify chain (register → KYC → reserve → pay → start_rental) | **PROVEN** (`rake demo`, Plan 4.2 T2) |
-| Firmware Ed25519 offline verify + Ruby↔C interop over shared vectors | **PROVEN** (`make test`, Plan 4.2 T3) |
+| Server Ed25519 rental-token issue + verify chain (register → KYC → reserve → pay → start_rental) | **PROVEN** (`rake demo`, Plan 4.3 T1) |
+| Firmware Ed25519 offline verify (v2: domain tag + 6-field parse) + Ruby↔C interop | **PROVEN** (`make test`, Plan 4.3 T2) |
+| Durable jti replay prevention (jti_store, 64 entries, NVS-wired) — host semantics proven | **PROVEN** (`make test` jti-store tests, Plan 4.3 T2) |
 | App Clip Swift source compiles | **Not yet** — requires Xcode + Apple account |
 | BLE scan → connect → unlock characteristic discover → write token on a real ESP32-C3 | **Not yet** — needs board + on-device build |
 | App Clip Code / NFC launch on iOS | **Not yet** — needs signed build + device |

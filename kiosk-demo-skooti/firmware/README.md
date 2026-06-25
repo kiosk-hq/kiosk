@@ -16,19 +16,24 @@ validated when the ESP32-C3 board is available.
 
 ---
 
-## Crypto contract (Arch 2 — offline Ed25519)
+## Crypto contract (Arch 2 — offline Ed25519, token v2)
 
 ```
 skooti_pubkey   = <32 bytes, baked into every lock>
-message         = "scooter_code|reservation_id|iat|exp|jti"
+message         = "kiosk-rental-v1|scooter_code|reservation_id|iat|exp|jti"
+                   ^^^^^^^^^^^^^^^^^
+                   domain-separation tag (field 0) — lock rejects any token
+                   whose field 0 is not exactly this string
 sig             = Ed25519(private_signing_key, message)   # server-side only
 wire token      = "<message>.<base64url(sig)>"
 
 lock verifies:
   1. Ed25519-verify(sig, message, skooti_pubkey)
-  2. scooter_code == SCOOTER_CODE
-  3. exp > now
-  4. jti not yet consumed (one-shot, caller checks)
+  2. field[0] == "kiosk-rental-v1"  (domain-separation tag, constant-time compare)
+  3. scooter_code (field[1]) == SCOOTER_CODE
+  4. exp (field[4]) > now
+  5. jti not yet consumed — jti_seen_or_insert(jti, exp, now) == 0
+     (NVS-backed durable store; entries retained until exp; survives reboot)
 ```
 
 Run:
@@ -38,7 +43,7 @@ cd firmware
 make test
 ```
 
-Expected output (11 assertions pass, crosscheck MATCH):
+Expected output (23 assertions pass, crosscheck MATCH):
 
 ```
 --- C host test ---
@@ -46,11 +51,11 @@ Expected output (11 assertions pass, crosscheck MATCH):
 Public key : 8857880d21f87b85872f31aeea8d0024acebb2fdf933b25a479f4f9e80babefd
 Scooter    : SK-001
 ...
-=== Results: 11 passed, 0 failed ===
+=== Results: 23 passed, 0 failed ===
 ALL PASS
 
 --- Ruby <-> C crosscheck ---
-  Ruby-signed token: SK-001|resv-live|...
+  Ruby-signed token: kiosk-rental-v1|SK-001|resv-live|...
   C verify result: 1
   MATCH — C verifier accepts Ruby/OpenSSL-signed token ✓
 ```
@@ -75,9 +80,10 @@ compiled on the host (ESP32 Arduino toolchain required); only `ed25519/` +
 2. App Clip connects to `skooti-SK-001` BLE peripheral.
 3. App Clip **writes** the wire rental token to the Unlock characteristic.
 4. Lock runs `skooti_verify_token(SKOOTI_PUBKEY, token, SCOOTER_CODE, now)`:
-   checks Ed25519 sig, scooter_code match, exp > now.
-5. Lock checks jti not yet consumed (in-RAM circular set; NVS in production).
-6. On all-pass: consumes jti, drives GPIO HIGH for 3 s = unlocked.
+   checks Ed25519 sig, domain tag (`kiosk-rental-v1`), scooter_code match, exp > now.
+5. Lock calls `jti_seen_or_insert(jti, exp, now)` — rejects if jti already consumed
+   (durable NVS-backed store; survives reboot; entries retained until their exp).
+6. On all-pass: records jti, drives GPIO HIGH for 3 s = unlocked.
 7. On any failure: stays locked; logs reason to Serial.
 
 **No server round-trip at unlock time.**  The token was issued by the server
@@ -175,21 +181,21 @@ arduino-cli upload -p /dev/ttyUSB0 --fqbn esp32:esp32:esp32c3 firmware/
 
 ---
 
-## Anti-replay production requirements
+## Replay prevention (token v2)
 
-The lock keeps a 16-entry circular RAM cache of consumed jtis (`JTI_CACHE_SIZE = 16`).
-Two replay windows exist that **must** be closed before real deployment:
+The lock uses a durable jti store (`jti_store.c` / `jti_store.h`) that retains each
+consumed jti until its `exp` passes, then prunes it.  This closes both gaps that
+existed in earlier firmware:
 
-| Risk | Condition | Mitigation required |
-|------|-----------|---------------------|
-| **Reboot replay** | Power-cycle or reset clears the cache; all previously consumed jtis within their `exp` window become replayable. | Already noted in source. |
-| **Cache-eviction replay** | Once ≥ 16 distinct unlocks have occurred the circular buffer wraps and evicts older entries. An evicted jti can be replayed on the same lock as long as its `exp` has not elapsed — **no reboot required**. In a high-frequency rental scenario (≥ 16 unlocks within one token TTL) this is reachable in normal operation. | Same fix as reboot: NVS or server-side ledger. |
+| Former risk | Status in v2 |
+|-------------|--------------|
+| **Reboot replay** — a power-cycle cleared the old RAM cache, making consumed jtis replayable within their exp window. | **Closed.** The NVS-backed store (`nvs_set_blob` / `nvs_get_blob`) survives reboots; a consumed jti is remembered until its exp expires regardless of power-cycles. |
+| **Cache-eviction replay** — the old 16-entry circular buffer could be wrapped in normal operation (≥ 16 unlocks within one 15-min window), evicting a still-valid jti. | **Closed.** The store holds 64 entries (`JTI_STORE_SIZE = 64`), prunes expired entries on every call, and — if the table is genuinely full — evicts the entry soonest to expire (minimising replay risk), not a random or oldest entry. |
 
-**Production requirement:** persist consumed jtis in ESP32 NVS (via `esp_partition`
-API or the `Preferences` library) and retain each entry for at least the maximum
-token TTL after consumption.  Alternatively, consult a server-side jti ledger at
-unlock time (requires online connectivity at unlock).  The RAM-only cache is a demo
-approximation, not a production control.
+**Host test:** the in-memory backend is used for `make test` / `make test-asan`; the
+NVS wiring (`nvs_set_blob` / `nvs_get_blob`) is documented in `jti_store.c` and
+activates on the ESP32 board when the NVS calls are uncommented. The host-tested
+semantics are identical to the NVS-backed version.
 
 ---
 
@@ -197,14 +203,16 @@ approximation, not a production control.
 
 | Claim | Status |
 |-------|--------|
-| Ed25519-verify in C accepts the T1 known-answer token vector | **PROVEN** (`make test` test 1) |
-| Expired token (now > exp) rejected | **PROVEN** (`make test` test 2) |
-| Wrong scooter_code rejected | **PROVEN** (`make test` test 3) |
-| Flipped sig byte rejected | **PROVEN** (`make test` test 4) |
-| Oversized sig field (400 base64url chars) → 0, no stack overflow | **PROVEN** (`make test` test 5; `make test-asan` for ASan confirmation) |
-| Malformed / truncated / NULL tokens → 0, no crash | **PROVEN** (`make test` test 6) |
-| C verifier accepts a freshly Ruby/OpenSSL-signed token | **PROVEN** (`make crosscheck`) |
-| jti one-shot anti-replay in software LockSim | **PROVEN** (T2 rake demo) |
+| Ed25519-verify in C accepts the v2 known-answer token vector (with domain tag) | **PROVEN** (`make test`) |
+| Domain-separation tag check — token with wrong/missing tag rejected | **PROVEN** (`make test`) |
+| Expired token (now > exp) rejected | **PROVEN** (`make test`) |
+| Wrong scooter_code rejected | **PROVEN** (`make test`) |
+| Flipped sig byte rejected | **PROVEN** (`make test`) |
+| Oversized sig field (400 base64url chars) → 0, no stack overflow | **PROVEN** (`make test`; `make test-asan` for ASan confirmation) |
+| Malformed / truncated / NULL tokens → 0, no crash | **PROVEN** (`make test`) |
+| C verifier accepts a freshly Ruby/OpenSSL-signed v2 token | **PROVEN** (`make crosscheck`) |
+| jti_store: insert → seen-again → reject; expired entry pruned → re-insert ok | **PROVEN** (`make test` jti-store tests) |
+| Durable replay prevention across reboot (NVS backend, host-tested semantics) | **PROVEN** on host (in-memory backend); NVS wiring documented in `jti_store.c`, activates on board |
 | BLE GATT advertising + connect + write unlock | **Not yet** — needs board |
 | GPIO drives relay on valid token | **Not yet** — needs board |
 | App Clip → lock BLE end-to-end | **Not yet** — needs board + Apple account |

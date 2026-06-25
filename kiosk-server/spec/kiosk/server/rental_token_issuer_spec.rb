@@ -1,8 +1,8 @@
 # frozen_string_literal: true
 
 # Known-answer test vector (firmware host-test fixtures — MUST NOT CHANGE).
-# These are deterministic outputs of RentalTokenIssuer for the fixed inputs
-# below. firmware/host_test.c feeds these exact values to the C verify function.
+# These are deterministic outputs of RentalTokenIssuer (token v2) for the fixed
+# inputs below. firmware/host_test.c feeds these exact values to the C verify function.
 #
 #   dev_private_pem  = DevUnlockKey::DEV_PRIVATE_PEM
 #   scooter_code     = "SK-001"
@@ -10,8 +10,8 @@
 #   now              = 1750000000
 #   jti (stubbed)    = "aabbccddeeff00112233445566778899"
 #
-#   message         : SK-001|resv-1|1750000000|1750000900|aabbccddeeff00112233445566778899
-#   signature b64url: b-8ZCqcN1FZAXn4YbXPJXasTED2rwq0DSOXrcRSjI9ajReEBb9Y3m3YSHgNJEElCHSwnEGGYbNGiEWRCZD_yBw
+#   message         : kiosk-rental-v1|SK-001|resv-1|1750000000|1750000900|aabbccddeeff00112233445566778899
+#   signature b64url: 1Vx7nv8xgznLwWgdsS_MhWi1W1fhMQQWSgi1CPRVO3osohmlw_PhaTS9ZJaBOx9yeQZfzn2k8J4JjSXPd12SBA
 #   pubkey hex      : 8857880d21f87b85872f31aeea8d0024acebb2fdf933b25a479f4f9e80babefd
 
 require "kiosk/server/rental_token_issuer"
@@ -43,19 +43,19 @@ RSpec.describe Kiosk::Server::RentalTokenIssuer do
       )
       parts = token.split(".")
       expect(parts.length).to be >= 2
-      # message = scooter_code|reservation_id|iat|exp|jti — 5 pipe-separated fields
+      # message = kiosk-rental-v1|scooter_code|reservation_id|iat|exp|jti — 6 pipe-separated fields
       message_parts = parts[..-2].join(".").split("|")
-      expect(message_parts.length).to eq(5)
+      expect(message_parts.length).to eq(6)
     end
 
-    it "embeds scooter_code and reservation_id in the message" do
+    it "embeds the context tag, scooter_code and reservation_id in the message" do
       token = described_class.issue(
         scooter_code:   "SK-007",
         reservation_id: "resv-99",
         now:            1_750_000_000,
       )
       message = token.split(".")[..-2].join(".")
-      expect(message).to start_with("SK-007|resv-99|")
+      expect(message).to start_with("kiosk-rental-v1|SK-007|resv-99|")
     end
 
     it "sets iat = now and exp = now + ttl (default 900)" do
@@ -66,8 +66,8 @@ RSpec.describe Kiosk::Server::RentalTokenIssuer do
       )
       message = token.split(".")[..-2].join(".")
       fields  = message.split("|")
-      expect(fields[2].to_i).to eq(1_750_000_000)          # iat
-      expect(fields[3].to_i).to eq(1_750_000_000 + 900)    # exp
+      expect(fields[3].to_i).to eq(1_750_000_000)          # iat (field 3 in v2)
+      expect(fields[4].to_i).to eq(1_750_000_000 + 900)    # exp (field 4 in v2)
     end
 
     it "respects a custom ttl" do
@@ -79,10 +79,10 @@ RSpec.describe Kiosk::Server::RentalTokenIssuer do
       )
       message = token.split(".")[..-2].join(".")
       fields  = message.split("|")
-      expect(fields[3].to_i).to eq(1_750_000_000 + 300)
+      expect(fields[4].to_i).to eq(1_750_000_000 + 300)  # exp is field 4 in v2
     end
 
-    it "includes a 32-char hex jti in the message" do
+    it "includes a 32-char hex jti as the last field in the message" do
       token = described_class.issue(
         scooter_code:   "SK-001",
         reservation_id: "resv-1",
@@ -235,14 +235,16 @@ RSpec.describe Kiosk::Server::RentalTokenIssuer do
     #   - kiosk-demo-skooti lock-sim (T2)
     # Changing them breaks the C cross-check test. Record them verbatim.
     #
+    # Token v2: field 0 is the domain-separation context tag "kiosk-rental-v1".
+    #
     #   dev_private_pem  = DevUnlockKey::DEV_PRIVATE_PEM
     #   scooter_code     = "SK-001"
     #   reservation_id   = "resv-1"
     #   now              = 1750000000
     #   jti (stubbed)    = "aabbccddeeff00112233445566778899"
     #
-    KNOWN_MESSAGE   = "SK-001|resv-1|1750000000|1750000900|aabbccddeeff00112233445566778899"
-    KNOWN_SIG_B64   = "b-8ZCqcN1FZAXn4YbXPJXasTED2rwq0DSOXrcRSjI9ajReEBb9Y3m3YSHgNJEElCHSwnEGGYbNGiEWRCZD_yBw"
+    KNOWN_MESSAGE   = "kiosk-rental-v1|SK-001|resv-1|1750000000|1750000900|aabbccddeeff00112233445566778899"
+    KNOWN_SIG_B64   = "1Vx7nv8xgznLwWgdsS_MhWi1W1fhMQQWSgi1CPRVO3osohmlw_PhaTS9ZJaBOx9yeQZfzn2k8J4JjSXPd12SBA"
     KNOWN_PUBKEY_HEX = "8857880d21f87b85872f31aeea8d0024acebb2fdf933b25a479f4f9e80babefd"
 
     it "produces the exact known message and base64url signature for fixed inputs" do
@@ -272,6 +274,29 @@ RSpec.describe Kiosk::Server::RentalTokenIssuer do
 
     it "returns the known 32-byte pubkey hex" do
       expect(described_class.public_key_raw32_hex).to eq(KNOWN_PUBKEY_HEX)
+    end
+  end
+
+  # ─── DOMAIN SEPARATION — tag check ───────────────────────────────────────
+
+  describe "domain separation — context tag" do
+    it "returns nil when field 0 is not 'kiosk-rental-v1' (tampered tag)" do
+      # Build a valid-signature token with a wrong tag field, then verify rejects it.
+      allow(SecureRandom).to receive(:hex).with(16).and_return("aabbccddeeff00112233445566778899")
+      valid_token = described_class.issue(
+        scooter_code:   "SK-001",
+        reservation_id: "resv-1",
+        now:            1_750_000_000,
+      )
+      # Replace the context tag in the message with something wrong.
+      # The signature will no longer verify — this tests that verify returns nil
+      # for any token that doesn't match the CONTEXT_TAG in field 0.
+      sig_b64 = valid_token.split(".").last
+      message = valid_token.split(".")[..-2].join(".")
+      tampered_message = message.sub("kiosk-rental-v1", "kiosk-rental-v0")
+      tampered_token   = "#{tampered_message}.#{sig_b64}"
+
+      expect(described_class.verify(token: tampered_token, now: 1_750_000_000)).to be_nil
     end
   end
 end

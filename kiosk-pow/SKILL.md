@@ -6,10 +6,24 @@
 
 ## Handling `pow_required`
 
-If any `/kiosk/exec` response is:
+Any `/kiosk/exec` response may be HTTP 402 with this shape:
 
 ```json
-{ "ok": false, "error": { "code": "pow_required", "challenge": { ... } } }
+{
+  "ok": false,
+  "error": {
+    "code": "pow_required",
+    "message": "proof-of-work required",
+    "challenge": {
+      "id":     "<opaque id>",
+      "alg":    "argon2id",
+      "params": { "m": 65536, "t": 1, "p": 1, "d": 6 },
+      "salt":   "<base64-encoded raw salt>",
+      "exp":    1750000600,
+      "sig":    "<HMAC-SHA256 hex>"
+    }
+  }
+}
 ```
 
 **Do this — in order:**
@@ -19,23 +33,49 @@ If any `/kiosk/exec` response is:
    pip install argon2-cffi
    ```
 
-2. Run the shipped solver with the full challenge object:
+2. Run the shipped solver with the full challenge object as a JSON argument:
    ```
-   python3 solve.py '<the challenge JSON>'
+   python3 kiosk-pow/solve.py '<the challenge JSON>'
    ```
-   The solver prints `{"nonce": "<solution>"}`.  It may take a few seconds to a few minutes depending on the difficulty (`d` field).
-
-3. Re-POST the **same original request** with one extra field:
+   The solver reads `challenge["salt"]` and `challenge["params"]` (keys `m`, `t`,
+   `p`, `d`) and iterates nonces until `d` leading zero bits are found. It prints
+   one line to stdout:
    ```json
-   { ...<original request>...,
-     "pow": { "challenge": { ...<challenge verbatim>... }, "nonce": "<solution>" } }
+   {"nonce": "73821"}
    ```
+   This may take a few seconds to a few minutes depending on `d`. Read the
+   `nonce` string from that output.
 
-4. The server will serve the original response.  If it returns `403 Forbidden` with `invalid_proof`, tell the user: **"The provider rejected the proof — my client may be outdated; please contact support."**
+3. Re-POST the **exact same** original request body with a top-level `pow` field added:
+   ```json
+   {
+     "command": "query",
+     "body":    { "name": "menu_by_restaurant", "restaurant": "Mamma Pizza" },
+     "pow": {
+       "challenge": { "id": "...", "alg": "argon2id", "params": { "m": 65536, "t": 1, "p": 1, "d": 6 }, "salt": "...", "exp": 1750000600, "sig": "..." },
+       "nonce":     "73821"
+     }
+   }
+   ```
+   The `challenge` value inside `pow` must be the **verbatim** challenge object
+   from the 402 response — every field, unchanged. `nonce` is the decimal string
+   returned by `solve.py`.
+
+4. The server verifies and serves the original response. If it returns HTTP 403
+   (`invalid proof of work`), do not retry silently — tell the user:
+   **"The provider rejected the proof — my client may be outdated; please contact support."**
 
 **Never:**
-- Try to negotiate the algorithm or parameters down.
-- Solve with a different method (SHA256, etc.) — solve exactly what the `alg` field says.
-- Skip the proof and retry without it.
+- Try to negotiate the algorithm or parameters down. The provider mandates `alg`
+  and `params`. If you cannot solve the demanded `alg`, tell the user:
+  _"This provider requires a proof-of-work algorithm my client cannot handle.
+  Please update me."_
+- Solve with a different algorithm (e.g. SHA256 instead of `argon2id`).
+- Skip the proof and retry without `pow`.
+- Send raw SQL — use named `query` calls with `body.name` + parameters.
 
-`solve.py` is in `kiosk-pow/solve.py` (shipped with the kiosk-pow gem).
+The provider may demand PoW again on subsequent requests at its discretion.
+If you receive another 402, solve and retry again.
+
+`solve.py` is in `kiosk-pow/solve.py` (shipped with the kiosk-pow gem). It
+accepts the challenge JSON as `sys.argv[1]` or on stdin.

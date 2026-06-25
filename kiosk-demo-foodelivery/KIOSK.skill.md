@@ -180,6 +180,27 @@ Successful response — HTTP 200:
 
 ---
 
+## Handling `pow_required`
+
+Any `/kiosk/exec` response may be HTTP 402 with `error.code == "pow_required"`.
+When this happens, solve the challenge and retry — the full protocol is
+documented in `kiosk-pow/SKILL.md`. Summary:
+
+1. Install once: `pip install argon2-cffi`
+2. Solve: `python3 kiosk-pow/solve.py '<challenge-json>'` → reads `{"nonce": "..."}`
+3. Re-POST the **exact same** request body with a top-level `pow` field:
+   ```json
+   { "command": "query",
+     "body":    { "name": "menu_by_restaurant", "restaurant": "Mamma Pizza" },
+     "pow":     { "challenge": { ...verbatim... }, "nonce": "<from solver>" } }
+   ```
+
+Do not negotiate or downgrade the algorithm — solve what the provider demands
+or tell the user to update. The provider may challenge again on any subsequent
+request. The reference solver is `kiosk-pow/solve.py`.
+
+---
+
 ## Rules
 
 1. **Generate the keypair once per session; keep the private key.** Mandate verification looks up the public key you registered. If you lose the key, re-register.

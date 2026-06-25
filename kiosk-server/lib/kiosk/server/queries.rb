@@ -4,9 +4,12 @@ require "kiosk/server/errors"
 
 module Kiosk
   module Server
-    # Registry of read-only named queries. Agents call them by name with params
-    # (never SQL); the registered block runs the actual query with bound params —
-    # this is the sanctioned read surface that replaces raw SQL.
+    # Registry of named queries — the sanctioned read surface that replaces raw
+    # SQL. Agents call them by name with params (never SQL); the registered block
+    # runs the actual query with bound params. "Read-only" is a convention the
+    # provider upholds (the registry does not enforce it), but the agent can only
+    # ever supply a query name + param values — never SQL — so the no-agent-SQL
+    # property holds regardless of what a block does.
     #
     # The block receives the agent-supplied params (a symbolized Hash, with
     # `:name` already stripped by the Executor) and returns rows (Array<Hash>)

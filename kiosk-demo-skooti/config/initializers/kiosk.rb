@@ -2,7 +2,8 @@
 
 # Kiosk-demo (skooti-shape) configuration. Concrete values for the
 # scooter-rental reference shape: uuid users, JWT-or-stub IdP, StubPsp,
-# StubKyc, two Actions registered (reserve, unlock).
+# StubKyc, Actions (reserve, start_rental) + named queries
+# (scooters_available, my_reservations).
 
 require Rails.root.join("lib/stub_idp")
 require Rails.root.join("lib/jwt_or_stub_idp")

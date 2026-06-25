@@ -13,6 +13,7 @@ RSpec.describe Kiosk::RLS::DSL do
 
       expect(host.statements).to eq([
         %(ALTER TABLE "rentals" ENABLE ROW LEVEL SECURITY),
+        %(ALTER TABLE "rentals" FORCE ROW LEVEL SECURITY),
         %(GRANT SELECT, INSERT, UPDATE, DELETE ON "rentals" TO "app_role"),
         %(CREATE POLICY "rentals_select" ON "rentals" FOR SELECT USING (user_id = kiosk.current_user_id())),
         %(CREATE POLICY "rentals_insert" ON "rentals" FOR INSERT WITH CHECK (user_id = kiosk.current_user_id() AND kiosk.current_role() = 'customer')),

@@ -22,9 +22,10 @@ ED25519_SRCS := \
     ed25519/sc.c
 
 # Our sources
-SRCS := verify.c host_test.c $(ED25519_SRCS)
+SRCS := verify.c jti_store.c host_test.c $(ED25519_SRCS)
 
 HDRS := verify.h \
+    jti_store.h \
     ed25519/ed25519.h \
     ed25519/sha512.h \
     ed25519/ge.h \
@@ -64,7 +65,7 @@ crosscheck: $(TARGET)_crosscheck
 	@CROSSCHECK_RESULT=$$(ruby -r openssl -r base64 -e ' \
 	  pem = "-----BEGIN PRIVATE KEY-----\nMC4CAQAwBQYDK2VwBCIEINeFKJGXag/XX62rnmCiS2NKnbvRliRBDuuTbrxQ/n3R\n-----END PRIVATE KEY-----\n"; \
 	  key = OpenSSL::PKey.read(pem); \
-	  msg = "SK-001|resv-live|1750001000|1750001900|deadbeef00112233445566778899aabb"; \
+	  msg = "kiosk-rental-v1|SK-001|resv-live|1750001000|1750001900|deadbeef00112233445566778899aabb"; \
 	  sig = key.sign(nil, msg); \
 	  sig_b64 = Base64.urlsafe_encode64(sig, padding: false); \
 	  puts "#{msg}.#{sig_b64}" \
@@ -90,6 +91,7 @@ ASAN_TARGET := $(TARGET)_asan
 ASAN_FLAGS  := -std=c99 -Wall -Wextra -O1 -Ied25519 \
                -fsanitize=address -fno-omit-frame-pointer
 
+# SRCS already includes jti_store.c (required by host_test.c)
 $(ASAN_TARGET): $(SRCS) $(HDRS)
 	clang $(ASAN_FLAGS) -o $@ $(SRCS)
 

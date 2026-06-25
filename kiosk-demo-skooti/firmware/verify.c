@@ -1,10 +1,22 @@
 /*
- * verify.c — skooti offline rental-token verification (Arch 2, Ed25519)
+ * verify.c — skooti offline rental-token verification (Arch 2, Ed25519, v2)
  *
  * Portable C99.  No BLE, Arduino, or platform-specific dependencies.
  * Compiles on host (clang/gcc) and ESP32-C3 toolchain.
  *
  * See verify.h for the full token wire-format and clock documentation.
+ *
+ * Token v2 wire format:
+ *   message = "kiosk-rental-v1|<scooter_code>|<reservation_id>|<iat>|<exp>|<jti>"
+ *   wire    = "<message>.<base64url(sig)>"
+ *
+ * Field indices (0-based):
+ *   [0] domain tag      "kiosk-rental-v1"
+ *   [1] scooter_code    e.g. "SK-001"
+ *   [2] reservation_id  e.g. "resv-1"
+ *   [3] iat             Unix seconds decimal
+ *   [4] exp             Unix seconds decimal
+ *   [5] jti             32 hex chars
  *
  * Depends on: ed25519/ (vendored orlp/ed25519, zlib license)
  */
@@ -133,9 +145,9 @@ int skooti_verify_token(const uint8_t pubkey[32],
 
     /* Message field parsing */
     const char *msg;
-    /* Fields: scooter_code, reservation_id, iat, exp, jti */
-    const char *field_start[5];
-    size_t      field_len[5];
+    /* Fields v2: [0]=domain_tag [1]=scooter_code [2]=reservation_id [3]=iat [4]=exp [5]=jti */
+    const char *field_start[6];
+    size_t      field_len[6];
     size_t      f;
     const char *p;
     size_t      remaining;
@@ -184,27 +196,28 @@ int skooti_verify_token(const uint8_t pubkey[32],
                         (const unsigned char *)pubkey))
         return 0;
 
-    /* --- Parse the 5 pipe-delimited fields of the message ---
-     * Fields: [0]=scooter_code [1]=reservation_id [2]=iat [3]=exp [4]=jti
-     * We do NOT need iat or reservation_id for the lock checks, but we must
-     * validate that the message has exactly 5 fields and that exp/jti parse.
+    /* --- Parse the 6 pipe-delimited fields of the message (v2) ---
+     * Fields: [0]=domain_tag [1]=scooter_code [2]=reservation_id [3]=iat [4]=exp [5]=jti
+     * We check field[0] (domain tag), field[1] (scooter_code), and field[4] (exp).
+     * We do NOT need iat, reservation_id, or jti here, but we must confirm exactly
+     * 6 fields are present so a v1 (5-field) token is rejected.
      */
     field_idx = 0;
     p         = msg;
     remaining = msg_len;
 
-    for (f = 0; f < 5; f++) {
+    for (f = 0; f < 6; f++) {
         const char *pipe;
         size_t      flen;
 
-        if (f < 4) {
+        if (f < 5) {
             /* Find the next '|' */
             size_t j;
             pipe = NULL;
             for (j = 0; j < remaining; j++) {
                 if (p[j] == '|') { pipe = p + j; break; }
             }
-            if (!pipe) return 0; /* fewer than 5 fields */
+            if (!pipe) return 0; /* fewer than 6 fields */
             flen = (size_t)(pipe - p);
         } else {
             /* Last field: everything remaining */
@@ -217,20 +230,32 @@ int skooti_verify_token(const uint8_t pubkey[32],
         field_len[field_idx]   = flen;
         field_idx++;
 
-        if (f < 4) {
+        if (f < 5) {
             p         = pipe + 1;
             remaining = msg_len - (size_t)(p - msg);
         }
     }
     (void)field_idx; /* suppress unused-variable warning */
 
-    /* --- Gate 1: scooter_code must match this lock's code --- */
-    code_len = strlen(my_scooter_code);
-    if (field_len[0] != code_len) return 0;
-    if (!ct_memeq(field_start[0], my_scooter_code, code_len)) return 0;
+    /* --- Gate 0: domain-separation tag — MUST be "kiosk-rental-v1" ---
+     * Constant-time compare prevents timing oracle on the tag.
+     * A token signed with this key but without the tag (or with a different
+     * tag) is rejected here, before any other claim is acted on.
+     */
+    {
+        static const char DOMAIN_TAG[] = "kiosk-rental-v1";
+        size_t tag_len = sizeof(DOMAIN_TAG) - 1; /* strlen, no NUL */
+        if (field_len[0] != tag_len) return 0;
+        if (!ct_memeq(field_start[0], DOMAIN_TAG, tag_len)) return 0;
+    }
 
-    /* --- Gate 2: exp must be > now_unix --- */
-    if (!parse_uint64(field_start[3], field_len[3], &exp_val)) return 0;
+    /* --- Gate 1: scooter_code (field[1]) must match this lock's code --- */
+    code_len = strlen(my_scooter_code);
+    if (field_len[1] != code_len) return 0;
+    if (!ct_memeq(field_start[1], my_scooter_code, code_len)) return 0;
+
+    /* --- Gate 2: exp (field[4]) must be > now_unix --- */
+    if (!parse_uint64(field_start[4], field_len[4], &exp_val)) return 0;
     if (exp_val <= now_unix) return 0;
 
     /* --- All checks passed --- */
@@ -238,7 +263,11 @@ int skooti_verify_token(const uint8_t pubkey[32],
 }
 
 /* --------------------------------------------------------------------------
- * skooti_parse_jti — extract jti from a verified token (field [4])
+ * skooti_parse_jti — extract jti from a verified token (field [5] in v2)
+ *
+ * v2 message: "kiosk-rental-v1|<scooter_code>|<reservation_id>|<iat>|<exp>|<jti>"
+ * field indices: [0]=tag [1]=scooter_code [2]=reservation_id [3]=iat [4]=exp [5]=jti
+ * We skip the first 5 pipe-delimited fields to reach jti at field[5].
  * -------------------------------------------------------------------------- */
 
 int skooti_parse_jti(const char *token, char *jti_out, size_t jti_out_sz)
@@ -271,8 +300,8 @@ int skooti_parse_jti(const char *token, char *jti_out, size_t jti_out_sz)
     p       = msg;
     remaining = msg_len;
 
-    /* Skip 4 pipe-delimited fields to reach jti (field[4]) */
-    for (f = 0; f < 4; f++) {
+    /* Skip 5 pipe-delimited fields to reach jti (field[5]) */
+    for (f = 0; f < 5; f++) {
         size_t j;
         const char *pipe = NULL;
         for (j = 0; j < remaining; j++) {

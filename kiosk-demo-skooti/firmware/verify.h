@@ -1,5 +1,5 @@
 /*
- * verify.h — skooti BLE lock offline rental-token verification (Arch 2)
+ * verify.h — skooti BLE lock offline rental-token verification (Arch 2, token v2)
  *
  * Shared between:
  *   - skooti_lock.ino  (ESP32-C3 Arduino firmware)
@@ -9,13 +9,22 @@
  * Requires only ed25519/ (vendored orlp/ed25519) + C standard library.
  *
  * =========================================================================
- * TOKEN WIRE FORMAT (Arch 2 — offline Ed25519)
+ * TOKEN WIRE FORMAT v2 (Arch 2 — offline Ed25519, domain-separated)
  * =========================================================================
  *
  *   wire token = "<message>.<base64url(sig)>"
  *
- *   message    = "<scooter_code>|<reservation_id>|<iat>|<exp>|<jti>"
- *                (UTF-8; iat/exp = unix seconds decimal; jti = 32 hex chars)
+ *   message    = "kiosk-rental-v1|<scooter_code>|<reservation_id>|<iat>|<exp>|<jti>"
+ *                (UTF-8; 6 pipe-delimited fields)
+ *                iat/exp = unix seconds decimal; jti = 32 hex chars
+ *
+ *   Field indices (0-based):
+ *     [0] "kiosk-rental-v1"  — domain-separation tag (REQUIRED; checked first)
+ *     [1] scooter_code       — e.g. "SK-001"
+ *     [2] reservation_id     — e.g. "resv-1"
+ *     [3] iat                — issued-at unix seconds
+ *     [4] exp                — expiry unix seconds (iat + 900)
+ *     [5] jti                — 32 hex chars (anti-replay token ID)
  *
  *   sig        = Ed25519 signature over the message bytes (64 bytes)
  *                base64url-encoded, NO padding characters
@@ -23,9 +32,16 @@
  *   Split: find the LAST '.' in the wire token — everything to the left is
  *   the message (signed verbatim), everything to the right is the sig.
  *
- * Example:
- *   message = "SK-001|resv-1|1750000000|1750000900|aabbccddeeff00112233445566778899"
- *   sig     = "b-8ZCqcN1FZAXn4YbXPJXasTED2rwq0DSOXrcRSjI9ajReEBb9Y3m3YSHgNJEElCHSwnEGGYbNGiEWRCZD_yBw"
+ * Example (known-answer vector v2):
+ *   message = "kiosk-rental-v1|SK-001|resv-1|1750000000|1750000900|aabbccddeeff00112233445566778899"
+ *   sig     = "1Vx7nv8xgznLwWgdsS_MhWi1W1fhMQQWSgi1CPRVO3osohmlw_PhaTS9ZJaBOx9yeQZfzn2k8J4JjSXPd12SBA"
+ *
+ * =========================================================================
+ * DOMAIN SEPARATION
+ * =========================================================================
+ * The leading "kiosk-rental-v1" tag ensures this signing key cannot be
+ * cross-used to mint any token a lock would honor for a different purpose.
+ * The lock rejects field[0] != "kiosk-rental-v1" before any other claim.
  *
  * =========================================================================
  * CLOCK REQUIREMENT
@@ -37,9 +53,12 @@
  * =========================================================================
  * ANTI-REPLAY
  * =========================================================================
- * jti one-shot check is performed by the CALLER (lock firmware or lock-sim):
+ * jti durable-replay check is performed by the CALLER (lock firmware or
+ * lock-sim) via jti_store.h:
+ *   jti_seen_or_insert(jti, exp, now)
  * skooti_verify_token() verifies the signature and checks the claims but does
- * NOT maintain the consumed-jti set — that belongs in the caller's NVS/RAM.
+ * NOT maintain the consumed-jti set — that belongs in the caller's jti_store
+ * (NVS-backed on the board; in-memory table for host tests).
  */
 
 #ifndef VERIFY_H
@@ -82,7 +101,7 @@ extern "C" {
  *     before decoding (64 decoded bytes → 86 base64url chars, ±2 slack).
  *
  * After a return of 1 the caller can retrieve the jti for anti-replay by
- * re-parsing token (split on last '.', split message on '|', field[4]).
+ * re-parsing token (split on last '.', split message on '|', field[5]).
  * For convenience skooti_parse_jti() is provided below.
  */
 int skooti_verify_token(const uint8_t pubkey[32],

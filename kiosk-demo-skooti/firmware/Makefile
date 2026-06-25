@@ -1,24 +1,37 @@
-# Makefile — skooti firmware host crypto test
+# Makefile — skooti firmware Ed25519 host crypto test (Arch 2)
 #
 # Targets:
 #   make test        — compile + run C host test + Ruby crosscheck
-#   make crosscheck  — Ruby ↔ C HMAC parity check only
+#   make crosscheck  — Ruby Ed25519 sign → C verify (live key proof)
 #   make build       — compile only (no run)
 #   make clean       — remove build artefacts
 #
-# The .ino is NOT compiled here (requires the ESP32 Arduino toolchain).
+# The .ino is NOT compiled here (requires the ESP32-C3 Arduino toolchain).
 # See README.md for flashing instructions.
 
 CC      ?= cc
-CFLAGS  := -std=c99 -Wall -Wextra -Wpedantic -O2
-SRCS    := hmac_sha256.c verify.c host_test.c
+CFLAGS  := -std=c99 -Wall -Wextra -Wpedantic -O2 -Ied25519
 TARGET  := host_test
 
-# Expected MAC — the C test and the Ruby crosscheck must both produce this.
-EXPECTED_MAC := 896eec16ca0d164293762269f0d34c319a41b4a463bedc2ce11f3269a49e9b1f
+# Ed25519 vendored sources (orlp/ed25519, zlib license)
+ED25519_SRCS := \
+    ed25519/verify.c \
+    ed25519/sha512.c \
+    ed25519/ge.c \
+    ed25519/fe.c \
+    ed25519/sc.c
 
-# K_lock as hex for the Ruby one-liner (= HMAC-SHA256("dev-master-key-0001","SK-001"))
-KLOCK_HEX := d147ea9da6b6957f83e46a58cb3e7aa56e4025497143b0897f68aa05e2fd842a
+# Our sources
+SRCS := verify.c host_test.c $(ED25519_SRCS)
+
+HDRS := verify.h \
+    ed25519/ed25519.h \
+    ed25519/sha512.h \
+    ed25519/ge.h \
+    ed25519/fe.h \
+    ed25519/sc.h \
+    ed25519/fixedint.h \
+    ed25519/precomp_data.h
 
 .PHONY: all build test crosscheck clean
 
@@ -26,11 +39,11 @@ all: test
 
 build: $(TARGET)
 
-$(TARGET): $(SRCS) hmac_sha256.h verify.h
+$(TARGET): $(SRCS) $(HDRS)
 	$(CC) $(CFLAGS) -o $@ $(SRCS)
 
 # --------------------------------------------------------------------------
-# make test: compile, run C test, then run Ruby crosscheck
+# make test: compile, run C host test, then run Ruby crosscheck
 # --------------------------------------------------------------------------
 test: build
 	@echo "--- C host test ---"
@@ -39,27 +52,31 @@ test: build
 	@$(MAKE) --no-print-directory crosscheck
 
 # --------------------------------------------------------------------------
-# make crosscheck: Ruby (OpenSSL) ↔ C HMAC parity
+# make crosscheck: Ruby OpenSSL Ed25519 sign → C verify MATCH
 #
-# Runs a one-liner Ruby script that recomputes the same MAC using
-# OpenSSL::HMAC — exactly the same code path as the Kiosk server —
-# and compares it to the expected value.  Proves C↔Ruby HMAC parity.
+# Loads the dev private key from lib/dev_unlock_key.rb (same key the server
+# uses), signs a fresh message, and passes the wire token to the C verifier.
+# Proves that C correctly verifies a live server-issued token — not just the
+# static test vector.
 # --------------------------------------------------------------------------
-crosscheck:
+crosscheck: $(TARGET)_crosscheck
 	@echo "--- Ruby ↔ C crosscheck ---"
-	@RUBY_MAC=$$(ruby -e ' \
-	  require "openssl"; \
-	  k = ["$(KLOCK_HEX)"].pack("H*"); \
-	  puts OpenSSL::HMAC.hexdigest("SHA256", k, "SK-001|00112233445566778899aabbccddeeff|resv-1") \
+	@CROSSCHECK_RESULT=$$(ruby -r openssl -r base64 -e ' \
+	  pem = "-----BEGIN PRIVATE KEY-----\nMC4CAQAwBQYDK2VwBCIEINeFKJGXag/XX62rnmCiS2NKnbvRliRBDuuTbrxQ/n3R\n-----END PRIVATE KEY-----\n"; \
+	  key = OpenSSL::PKey.read(pem); \
+	  msg = "SK-001|resv-live|1750001000|1750001900|deadbeef00112233445566778899aabb"; \
+	  sig = key.sign(nil, msg); \
+	  sig_b64 = Base64.urlsafe_encode64(sig, padding: false); \
+	  puts "#{msg}.#{sig_b64}" \
 	') && \
-	echo "  Ruby  mac : $$RUBY_MAC" && \
-	echo "  C     mac : $(EXPECTED_MAC)" && \
-	if [ "$$RUBY_MAC" = "$(EXPECTED_MAC)" ]; then \
-	  echo "  MATCH — C HMAC == Ruby/OpenSSL (server) HMAC ✓"; \
-	else \
-	  echo "  MISMATCH — C HMAC != Ruby/OpenSSL !"; \
-	  exit 1; \
-	fi
+	echo "  Ruby-signed token: $$CROSSCHECK_RESULT" && \
+	./$(TARGET)_crosscheck "$$CROSSCHECK_RESULT"
+
+# The crosscheck helper binary verifies a single token passed as argv[1]
+# using now=1750001800 (inside the live-window), SCOOTER_CODE="SK-001".
+# Built separately so the main host_test is self-contained.
+$(TARGET)_crosscheck: crosscheck_main.c verify.c $(ED25519_SRCS) $(HDRS)
+	$(CC) $(CFLAGS) -o $@ crosscheck_main.c verify.c $(ED25519_SRCS)
 
 clean:
-	rm -f $(TARGET) *.o
+	rm -f $(TARGET) $(TARGET)_crosscheck *.o

@@ -106,12 +106,12 @@ Kiosk::Server::Queries.register("menu_by_restaurant") do |args|
     .select(:id, :name, :sku, :price_cents)
 end
 
-Kiosk::Server::Queries.register("my_orders") do |args, identity|
-  Order.where(user_id: identity.user_id)
+Kiosk::Server::Queries.register("my_orders") do |_params|
+  Order.where("user_id = kiosk.current_user_id()").select(:id, :restaurant_id, :total_cents, :status)
 end
 ```
 
-Agents call these by name only (`command:"query", body:{name:"menu_by_restaurant", restaurant:"..."}`). They never supply SQL. App-layer isolation lives here: user-scoped queries scope by `identity.user_id` in the block; catalogue queries are open to all authenticated agents.
+The handler block receives only the agent-supplied params (the `:name` is stripped by the Executor) and runs inside a session whose `kiosk.current_user_id()` is the authenticated principal. Agents call these by name only (`command:"query", body:{name:"menu_by_restaurant", restaurant:"..."}`). They never supply SQL. App-layer isolation lives here: user-scoped queries scope by `kiosk.current_user_id()` (server-derived from the session, never an agent param) in the block; catalogue queries are open to all authenticated agents.
 
 RLS is available as optional defense-in-depth via `enable_rls_on` — useful if you want a Postgres-level backstop in addition to the app-layer checks above. It is not required for Kiosk's isolation model.
 

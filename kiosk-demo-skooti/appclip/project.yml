@@ -1,0 +1,186 @@
+# project.yml — XcodeGen spec for the Skooti App Clip demo
+#
+# GENERATED PROJECT: run `make project` (or `xcodegen generate`) to produce
+# SkootiDemo.xcodeproj.  The .xcodeproj is gitignored — commit project.yml + sources.
+#
+# ── Quick start ──────────────────────────────────────────────────────────────
+#
+#   brew install xcodegen          # one-time
+#   cd appclip && make project     # generates SkootiDemo.xcodeproj
+#   make build-sim                 # compile-check (Simulator, no signing needed)
+#   make open                      # open in Xcode → set team → run to device
+#
+# ── Bundle-prefix / team override ────────────────────────────────────────────
+#
+#   Default bundle prefix : app.skooti.demo
+#   Default team          : (empty — auto signing fills it in Xcode)
+#
+#   To override without editing this file, set the env vars before xcodegen:
+#     BUNDLE_PREFIX=app.skooti.personal xcodegen generate
+#     DEVELOPMENT_TEAM=ABCDE12345     xcodegen generate
+#
+#   Or pass via make:
+#     BUNDLE_PREFIX=app.skooti.personal DEVELOPMENT_TEAM=ABCDE12345 make project
+#
+# ── Two-target structure ──────────────────────────────────────────────────────
+#
+#   Skooti       — container iOS app (required; App Clips cannot ship standalone)
+#   SkootiClip   — App Clip (product type: on-demand-install-capable)
+#
+#   The container embeds the App Clip (Embed App Clips build phase).
+#
+# ── App Clip provisioning requirements ───────────────────────────────────────
+#
+#   A paid Apple Developer Program account is required to sign and run
+#   the App Clip target.  Free personal teams cannot sign the
+#   on-demand-install-capable entitlement.
+#
+#   1. Xcode → Skooti target → Signing & Capabilities → set your Team.
+#   2. Xcode → SkootiClip target → Signing & Capabilities → set the same Team.
+#   3. Associated Domains (appclips:skooti.app) requires the domain to serve
+#      an apple-app-site-association file in production.  For local demo:
+#      Settings → Developer → Local Experiences → prefix https://skooti.app/unlock.
+#   See README.md for full provisioning steps.
+
+name: SkootiDemo
+
+# ── Global settings ───────────────────────────────────────────────────────────
+
+options:
+  minimumXcodeGenVersion: "2.18"
+  deploymentTarget:
+    iOS: "17.0"
+  bundleIdPrefix: ${BUNDLE_PREFIX:app.skooti.demo}
+  xcodeVersion: "16"
+  generateEmptyDirectories: false
+  groupSortPosition: none
+
+settings:
+  base:
+    DEVELOPMENT_TEAM: ${DEVELOPMENT_TEAM:}
+    SWIFT_VERSION: "5.9"
+    IPHONEOS_DEPLOYMENT_TARGET: "17.0"
+    TARGETED_DEVICE_FAMILY: "1"
+    CODE_SIGN_STYLE: Automatic
+    DEBUG_INFORMATION_FORMAT: dwarf-with-dsym
+
+# ── Targets ───────────────────────────────────────────────────────────────────
+
+targets:
+
+  # ── Container app ────────────────────────────────────────────────────────────
+  Skooti:
+    type: application
+    platform: iOS
+    deploymentTarget: "17.0"
+
+    info:
+      path: Skooti/Skooti-Info.plist
+      properties:
+        NSUserActivityTypes:
+          - NSUserActivityTypeBrowsingWeb
+        UILaunchScreen: {}
+        UISupportedInterfaceOrientations:
+          - UIInterfaceOrientationPortrait
+
+    # XcodeGen writes the entitlements file at `path` with the given `properties`.
+    # Do NOT hand-edit the generated entitlements files — edit here and re-run
+    # `make project`.  The container needs the same associated domain as the clip
+    # so iOS trusts the parent-clip relationship.
+    entitlements:
+      path: Skooti/Skooti.entitlements
+      properties:
+        com.apple.developer.associated-domains:
+          - "appclips:skooti.app"
+
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: ${BUNDLE_PREFIX:app.skooti.demo}
+        PRODUCT_NAME: Skooti
+        INFOPLIST_FILE: Skooti/Skooti-Info.plist
+        CODE_SIGN_ENTITLEMENTS: Skooti/Skooti.entitlements
+        DEVELOPMENT_TEAM: ${DEVELOPMENT_TEAM:}
+
+    sources:
+      - path: Skooti
+        includes:
+          - "*.swift"
+
+    # The container embeds the App Clip.
+    # XcodeGen generates an "Embed App Clips" build phase.
+    dependencies:
+      - target: SkootiClip
+        embed: true
+
+    # Build the scheme for the container (the usual run target in Xcode / CLI).
+    scheme:
+      testTargets: []
+      gatherCoverageData: false
+
+  # ── App Clip ─────────────────────────────────────────────────────────────────
+  SkootiClip:
+    type: application.on-demand-install-capable
+    platform: iOS
+    deploymentTarget: "17.0"
+
+    info:
+      path: SkootiClip/SkootiClip-Info.plist
+      properties:
+        # Bluetooth permission — required; without this iOS refuses to show the
+        # permission dialog and CBCentralManager reports .unauthorized immediately.
+        NSBluetoothAlwaysUsageDescription: "Skooti needs Bluetooth to connect to the scooter lock and unlock it."
+        # NSAppClip dict — required in every App Clip's Info.plist.
+        NSAppClip:
+          NSAppClipRequestEphemeralUserNotification: false
+        # NSUserActivityTypes — tells iOS this clip handles web URL activities.
+        # Triggers onContinueUserActivity(NSUserActivityTypeBrowsingWeb, …) in SkootiClipApp.
+        NSUserActivityTypes:
+          - NSUserActivityTypeBrowsingWeb
+        UILaunchScreen: {}
+        UISupportedInterfaceOrientations:
+          - UIInterfaceOrientationPortrait
+        # App Clips CANNOT use background BLE (bluetooth-central).
+        # Do NOT add UIBackgroundModes here.
+
+    # XcodeGen writes the entitlements file at `path` with the given `properties`.
+    entitlements:
+      path: SkootiClip/SkootiClip.entitlements
+      properties:
+        # Required for NFC / App Clip Code / QR launch.  Without this the system
+        # will not launch the clip when a user taps the scooter tag.
+        com.apple.developer.associated-domains:
+          - "appclips:skooti.app"
+        # Marks this target as an App Clip — required entitlement.
+        # Only available with a paid Apple Developer Program account.
+        com.apple.developer.on-demand-install-capable: true
+
+    settings:
+      base:
+        # Bundle ID must be parent ID + ".Clip" (Apple requirement).
+        PRODUCT_BUNDLE_IDENTIFIER: ${BUNDLE_PREFIX:app.skooti.demo}.Clip
+        PRODUCT_NAME: SkootiClip
+        INFOPLIST_FILE: SkootiClip/SkootiClip-Info.plist
+        CODE_SIGN_ENTITLEMENTS: SkootiClip/SkootiClip.entitlements
+        DEVELOPMENT_TEAM: ${DEVELOPMENT_TEAM:}
+
+    sources:
+      - path: SkootiClip
+        includes:
+          - "*.swift"
+
+# ── Schemes ───────────────────────────────────────────────────────────────────
+
+schemes:
+  Skooti:
+    build:
+      targets:
+        Skooti: all
+        SkootiClip: all
+    run:
+      config: Debug
+    profile:
+      config: Release
+    analyze:
+      config: Debug
+    archive:
+      config: Release

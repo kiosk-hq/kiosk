@@ -7,14 +7,22 @@
 //   Unlock UUID:   4e2a1002-5b3c-4b1e-9f8c-6d7e8a9b0c1d
 //     Properties:  WRITE (+ WRITE_NR)
 //     Format:      wire rental token (UTF-8 string, up to ~220 bytes)
-//                  "<scooter_code>|<reservation_id>|<iat>|<exp>|<jti>.<base64url(sig)>"
+//                  "kiosk-rental-v1|<scooter_code>|<reservation_id>|<iat>|<exp>|<jti>.<base64url(sig)>"
 //
 // Cross-checked against:
 //   firmware/skooti_lock.ino  #define SERVICE_UUID / UNLOCK_UUID
+//   firmware/skooti_lock.ino  NimBLEDevice::init("skooti-" SCOOTER_CODE) — advertised name
 //   firmware/skooti_lock.ino  UnlockCallbacks::onWrite — receives the full wire token
 //
 // Arch 2 flow (NO challenge, NO server round-trip):
-//   scan → connect → discover unlock characteristic → write rental token → unlocked
+//   scan → connect (to skooti-<scooterCode> ONLY) → discover unlock char → write token → unlocked
+//
+// Device-name filtering: the firmware advertises as "skooti-<SCOOTER_CODE>" (e.g. "skooti-SK-001").
+// When multiple scooters are in range, scan(scooterCode:) connects ONLY to the peripheral
+// whose advertised name matches "skooti-<scooterCode>".  The name comes from either:
+//   - CBAdvertisementDataLocalNameKey in the advertisement data packet, OR
+//   - peripheral.name (cached by CoreBluetooth from scan response).
+// The firmware sets pAdv->setScanResponse(true) so the name is included in the scan response.
 //
 // The rental token arrives in the launch URL rt= param (already in memory as a String).
 // LockBLE receives it via writeToken(rentalToken:) and writes the raw UTF-8 bytes to
@@ -71,6 +79,9 @@ final class LockBLE: NSObject, ObservableObject {
     private var peripheral: CBPeripheral?
     private var unlockChar: CBCharacteristic?
     private var pendingScooterCode: String?
+    /// Expected BLE advertised device name: "skooti-<scooterCode>" (e.g. "skooti-SK-001").
+    /// Derived from the scooterCode in scan(scooterCode:) and matched in didDiscover.
+    private var expectedDeviceName: String?
 
     override init() {
         super.init()
@@ -83,10 +94,14 @@ final class LockBLE: NSObject, ObservableObject {
     // ────────────────────────────────────────────────────────────
 
     /// Begin scanning for a SKOOTI lock advertising the service UUID.
-    /// The scooterCode is used for logging / future device-name filtering.
+    ///
+    /// The scooterCode is matched against the peripheral's advertised name.
+    /// The firmware advertises as "skooti-<SCOOTER_CODE>" (e.g. "skooti-SK-001").
+    /// Only the peripheral whose name equals "skooti-<scooterCode>" is connected.
     func scan(scooterCode: String) {
         guard state == .idle else { return }
         pendingScooterCode = scooterCode
+        expectedDeviceName = "skooti-\(scooterCode)"
         state = .scanning
 
         if central.state == .poweredOn {
@@ -173,7 +188,27 @@ extension LockBLE: CBCentralManagerDelegate {
         rssi RSSI: NSNumber
     ) {
         Task { @MainActor in
-            // Stop scanning — connect to the first SKOOTI peripheral found.
+            // Filter by device name: firmware advertises as "skooti-<SCOOTER_CODE>".
+            // The name comes from CBAdvertisementDataLocalNameKey (advertisement data)
+            // or from peripheral.name (scan response, since setScanResponse(true) is set
+            // in the firmware).  Accept the peripheral only when the name matches
+            // "skooti-<scooterCode>" from the launch URL.
+            let advertisedName = advertisementData[CBAdvertisementDataLocalNameKey] as? String
+                                 ?? peripheral.name
+                                 ?? ""
+
+            guard let expected = expectedDeviceName else {
+                // expectedDeviceName not set — should not happen; fail gracefully.
+                state = .failed(reason: "Internal: no expected device name set")
+                return
+            }
+
+            guard advertisedName == expected else {
+                // Wrong scooter nearby — keep scanning; do not connect.
+                return
+            }
+
+            // Found the correct scooter — stop scanning and connect.
             central.stopScan()
             self.peripheral = peripheral
             peripheral.delegate = self

@@ -1,0 +1,16 @@
+# Generated Xcode project — regenerate with `make project` (requires xcodegen)
+SkootiDemo.xcodeproj/
+
+# Xcode build artifacts
+build/
+DerivedData/
+*.xcarchive
+*.ipa
+
+# Xcode user-specific files
+xcuserdata/
+*.xccheckout
+*.moved-aside
+
+# macOS
+.DS_Store

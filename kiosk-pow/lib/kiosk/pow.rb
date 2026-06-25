@@ -53,7 +53,7 @@ module Kiosk
     # @param nonce  [#to_s] the nonce (converted to decimal ASCII string, e.g. "0", "1234")
     # @return [String] 32 raw bytes (binary encoding)
     def self.digest(salt:, params:, nonce:)
-      password = nonce.to_s.encode(Encoding::ASCII)
+      password = nonce.to_s.b
       m = Integer(params[:m])
       t = Integer(params[:t])
       p = Integer(params[:p])

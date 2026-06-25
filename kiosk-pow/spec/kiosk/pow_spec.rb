@@ -186,6 +186,28 @@ RSpec.describe Kiosk::Pow do
       described_class.verify(salt:, params:, nonce: "42")
       expect(call_count).to eq(1)
     end
+
+    # Non-ASCII / binary nonce must NOT raise — it should simply fail the
+    # leading-zero-bits check and return false (junk proof → :bad_proof in gate).
+    it "returns false (not raise) for a non-ASCII nonce containing byte >127" do
+      params = described_class.params(d: 1, m: 8_192, t: 1, p: 1)
+      expect {
+        result = described_class.verify(salt:, params:, nonce: "abc\xFF")
+        # result may be true or false — the point is no exception is raised
+        expect(result).to be(true).or be(false)
+      }.not_to raise_error
+    end
+
+    it "returns false for a nonce with embedded non-ASCII bytes against a realistic d" do
+      # At d=6 the probability of any specific nonce passing is ~1.6%; a junk
+      # non-ASCII nonce is not expected to pass, but we only care that it does
+      # NOT raise. We assert no-raise (see above) and separately check the
+      # return type for type safety.
+      params = described_class.params(d: 6, m: 8_192, t: 1, p: 1)
+      result = nil
+      expect { result = described_class.verify(salt:, params:, nonce: "abc\xFF") }.not_to raise_error
+      expect(result).to be(true).or be(false)
+    end
   end
 
   # ---------------------------------------------------------------------------

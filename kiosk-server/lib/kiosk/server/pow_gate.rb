@@ -108,9 +108,13 @@ module Kiosk
         id        = challenge[:id]
 
         # Replay check (cheap — before the Argon2id eval).
+        # A spent id means the client already submitted a VALID proof and was
+        # served, but the response may have been lost (at-least-once HTTP retry).
+        # Re-issuing a fresh challenge lets the honest client re-solve without
+        # any penalty; a malicious replayer must also re-solve and gains nothing.
+        # We do NOT call on_bad_proof — a replayed valid proof is not a wrong proof.
         if config.pow_spent_store.spent?(id)
-          config.on_bad_proof.call(identity: identity)
-          raise Errors::Forbidden, "proof of work already spent"
+          raise Errors::PowRequired.new(challenge: issue_challenge(spec, fp, secret, config))
         end
 
         # Cheap sig + expiry checks first (inside Challenge.verify),

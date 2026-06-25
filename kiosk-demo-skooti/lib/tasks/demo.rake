@@ -13,13 +13,16 @@
 # without going through Rake.
 
 namespace :demo do
-  desc "Create + migrate + seed the demo database (idempotent)."
+  desc "Create + load schema + seed the demo database (idempotent)."
   task :setup do
     sh "psql -d postgres -tAc \"DO \\$\\$ BEGIN " \
        "IF NOT EXISTS (SELECT FROM pg_roles WHERE rolname = 'app_role') " \
        "THEN CREATE ROLE app_role NOLOGIN; END IF; END \\$\\$;\" >/dev/null"
     sh "psql -d postgres -tAc 'GRANT app_role TO CURRENT_USER' >/dev/null"
-    sh "bundle exec rails db:drop db:create db:migrate db:seed"
+    # Path C: schema_format = :sql, so db:schema:load loads structure.sql
+    # directly (no RLS). Use db:schema:load instead of db:migrate so that
+    # the canonical structure.sql (no ROW LEVEL SECURITY) is the source of truth.
+    sh "bundle exec rails db:drop db:create db:schema:load db:seed"
   end
 
   desc "Boot the server, run rental_flow.rb end-to-end (happy + all negative gates), assert."
@@ -125,6 +128,21 @@ namespace :demo do
       happy_result = run_flow.call
 
       # ── Basic HTTP + lock assertions ────────────────────────────────────
+      if happy_result["http_browse"] == 200
+        puts "  OK  http_browse (query scooters_available) == 200"
+      else
+        failures << "happy: http_browse expected 200, got #{happy_result["http_browse"].inspect}"
+        puts "  FAIL  http_browse expected 200, got #{happy_result["http_browse"].inspect}"
+      end
+
+      browse_count = happy_result["browse_rows_count"].to_i
+      if browse_count >= 1
+        puts "  OK  browse_rows_count >= 1 (got #{browse_count})"
+      else
+        failures << "happy: browse_rows_count expected >= 1, got #{browse_count.inspect}"
+        puts "  FAIL  browse_rows_count expected >= 1, got #{browse_count.inspect}"
+      end
+
       if happy_result["http_start_rental"] == 200
         puts "  OK  http_start_rental == 200"
       else
@@ -349,6 +367,140 @@ namespace :demo do
         puts "  FAIL  C3 re-start_rental: expected 403, got #{rc_c3.inspect}"
         puts "       Response: #{exec_res.body}"
       end
+    end
+
+    # ── RUN 6: Query-verb assertions — scooters_available + per-user my_reservations ──
+    # Proves: (a) query scooters_available returns SK-001;
+    #         (b) query my_reservations after reserve returns exactly the
+    #             principal's reservation (app-layer per-user isolation, no RLS).
+    puts "\n══ RUN 6: Query-verb assertions (scooters_available + my_reservations per-user) ══"
+    boot_server.call do
+      require "digest"
+      require "net/http"
+      require "openssl"
+      require "securerandom"
+
+      # Helper: one POST and return [status_int, parsed_body].
+      q_post = lambda do |path, body_hash, bearer|
+        uri = URI("#{server_url}#{path}")
+        req = Net::HTTP::Post.new(uri, "Content-Type" => "application/json", "Authorization" => "Bearer #{bearer}")
+        req.body = JSON.generate(body_hash)
+        res = Net::HTTP.new(uri.host, uri.port).request(req)
+        [res.code.to_i, JSON.parse(res.body)]
+      end
+
+      # Register a fresh agent (re-use PoW solve helper from RUN 5 pattern).
+      q_key = OpenSSL::PKey::RSA.generate(2048)
+      q_pem = q_key.public_key.to_pem
+      q_pow = 0
+      q_pow += 1 until begin
+        d = Digest::SHA256.digest("#{q_pem}.#{q_pow}")
+        count = 0
+        d.each_byte do |b|
+          if b == 0; count += 8
+          else; bit = 7; bit -= 1 while bit >= 0 && b[bit] == 0; count += (7 - bit); break
+          end
+        end
+        count >= 20
+      end
+      reg_rc, reg_data = q_post.call(
+        "/kiosk/agents/register",
+        { name: "hermes-q6", public_key: q_pem, role: "customer", pow: q_pow.to_s },
+        "",
+      )
+      abort "RUN6 register failed (#{reg_rc})" unless reg_rc == 201
+      q_token   = reg_data["access_token"]
+      q_user_id = reg_data["user_id"]
+
+      # KYC the agent.
+      require_relative "../../lib/stub_kyc"
+      q_att = StubKyc.attest(user_id: q_user_id)
+      q_post.call("/kiosk/agents/kyc", { kyc_jws: q_att }, q_token)
+
+      # ── QA1: query scooters_available — SK-001 must be present ──────────
+      qa1_rc, qa1_resp = q_post.call(
+        "/kiosk/exec",
+        { command: "query", body: { name: "scooters_available" } },
+        q_token,
+      )
+      if qa1_rc == 200
+        rows = qa1_resp["rows"] || []
+        codes = rows.map { |r| r["code"] }
+        if codes.include?("SK-001")
+          puts "  OK  QA1 scooters_available: SK-001 present (#{codes.inspect})"
+        else
+          failures << "qa1: scooters_available — SK-001 not found, got #{codes.inspect}"
+          puts "  FAIL  QA1 scooters_available: SK-001 not found, got #{codes.inspect}"
+        end
+      else
+        failures << "qa1: query scooters_available expected 200, got #{qa1_rc}"
+        puts "  FAIL  QA1 query scooters_available returned #{qa1_rc}: #{qa1_resp.inspect}"
+      end
+
+      # ── QA2: query my_reservations before reservation — must be empty ────
+      qa2_rc, qa2_resp = q_post.call(
+        "/kiosk/exec",
+        { command: "query", body: { name: "my_reservations" } },
+        q_token,
+      )
+      if qa2_rc == 200
+        rows_before = qa2_resp["rows"] || []
+        if rows_before.empty?
+          puts "  OK  QA2 my_reservations (before reserve): empty for fresh principal"
+        else
+          failures << "qa2: my_reservations before reserve expected [], got #{rows_before.inspect}"
+          puts "  FAIL  QA2 my_reservations before reserve: expected [], got #{rows_before.inspect}"
+        end
+      else
+        failures << "qa2: query my_reservations expected 200, got #{qa2_rc}"
+        puts "  FAIL  QA2 query my_reservations returned #{qa2_rc}: #{qa2_resp.inspect}"
+      end
+
+      # Reserve SK-001 for this principal.
+      rsv_rc, rsv_data = q_post.call(
+        "/kiosk/exec",
+        { command: "run", body: { name: "reserve", scooter_code: "SK-001" } },
+        q_token,
+      )
+      abort "RUN6 reserve failed (#{rsv_rc}): #{rsv_data.inspect}" unless rsv_rc == 200
+      q_reservation_id = rsv_data.dig("value", "reservation_id")
+      puts "  Reserved: #{q_reservation_id}"
+
+      # ── QA3: query my_reservations after reservation — exactly 1 row ─────
+      # Demonstrates app-layer per-user isolation: only this principal's
+      # reservation is visible; not rows from other principals (RUN 1 etc.).
+      qa3_rc, qa3_resp = q_post.call(
+        "/kiosk/exec",
+        { command: "query", body: { name: "my_reservations" } },
+        q_token,
+      )
+      if qa3_rc == 200
+        rows_after = qa3_resp["rows"] || []
+        if rows_after.size == 1 && rows_after.first["id"] == q_reservation_id
+          puts "  OK  QA3 my_reservations (after reserve): exactly 1 row, id matches"
+        else
+          failures << "qa3: my_reservations expected [{id:#{q_reservation_id}}], got #{rows_after.inspect}"
+          puts "  FAIL  QA3 my_reservations after reserve: expected 1 row with id=#{q_reservation_id}, got #{rows_after.inspect}"
+        end
+      else
+        failures << "qa3: query my_reservations expected 200, got #{qa3_rc}"
+        puts "  FAIL  QA3 query my_reservations returned #{qa3_rc}: #{qa3_resp.inspect}"
+      end
+    end
+
+    # ── RLS gone: confirm structure.sql has no ROW LEVEL SECURITY for app tables ──
+    puts "\n══ Structure check: no ROW LEVEL SECURITY on scooters/reservations ══"
+    structure_path = File.expand_path("../../db/structure.sql", __dir__)
+    if File.exist?(structure_path)
+      structure = File.read(structure_path)
+      if structure.match?(/ROW LEVEL SECURITY/)
+        failures << "structure.sql still contains ROW LEVEL SECURITY — regenerate after migration edit"
+        puts "  FAIL  structure.sql still contains ROW LEVEL SECURITY"
+      else
+        puts "  OK  structure.sql: no ROW LEVEL SECURITY found"
+      end
+    else
+      puts "  (structure.sql not found — skip RLS check)"
     end
 
     # ── final verdict ─────────────────────────────────────────────────────

@@ -690,40 +690,11 @@ ALTER TABLE ONLY public.reservations
 
 
 --
--- Name: reservations; Type: ROW SECURITY; Schema: public; Owner: -
---
-
-ALTER TABLE public.reservations ENABLE ROW LEVEL SECURITY;
-
---
--- Name: reservations reservations_insert; Type: POLICY; Schema: public; Owner: -
---
-
-CREATE POLICY reservations_insert ON public.reservations FOR INSERT WITH CHECK (((user_id = kiosk.current_user_id()) AND (kiosk."current_role"() = 'customer'::text)));
-
-
---
--- Name: reservations reservations_select; Type: POLICY; Schema: public; Owner: -
---
-
-CREATE POLICY reservations_select ON public.reservations FOR SELECT USING ((user_id = kiosk.current_user_id()));
-
-
---
--- Name: scooters; Type: ROW SECURITY; Schema: public; Owner: -
---
-
-ALTER TABLE public.scooters ENABLE ROW LEVEL SECURITY;
-
---
--- Name: scooters scooters_select; Type: POLICY; Schema: public; Owner: -
---
-
-CREATE POLICY scooters_select ON public.scooters FOR SELECT USING (true);
-
-
---
 -- PostgreSQL database dump complete
+--
+-- Path C: RLS removed from scooters and reservations. App-layer isolation
+-- is provided by the Actions' explicit user_id = kiosk.current_user_id()
+-- predicates and the my_reservations query's own WHERE clause.
 --
 
 SET search_path TO "$user", public;

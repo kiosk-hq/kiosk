@@ -54,6 +54,34 @@ Kiosk.configure do |c|
   c.unlock_signing_key = DevUnlockKey.private_key
 end
 
+# ─── Queries ────────────────────────────────────────────────────────────────
+
+# scooters_available — public fleet catalog. No per-user scoping: all
+# authenticated agents can browse available scooters. The block returns the
+# exact columns the agent needs (no full-table scrape).
+Kiosk::Server::Queries.register("scooters_available") do |_params|
+  ActiveRecord::Base.connection.execute(
+    "SELECT id, code, status, lat, lng, price_per_min_cents " \
+    "FROM public.scooters " \
+    "WHERE status = 'available' " \
+    "ORDER BY id"
+  ).to_a
+end
+
+# my_reservations — per-user reservation list scoped by the session GUC.
+# The WHERE is provider-controlled; the agent supplies no filter. This
+# demonstrates app-layer per-user isolation without RLS: the principal can
+# only see rows where user_id matches kiosk.current_user_id(), enforced in
+# the query definition itself.
+Kiosk::Server::Queries.register("my_reservations") do |_params|
+  ActiveRecord::Base.connection.execute(
+    "SELECT id, scooter_id, status " \
+    "FROM public.reservations " \
+    "WHERE user_id = kiosk.current_user_id() " \
+    "ORDER BY created_at DESC"
+  ).to_a
+end
+
 # ─── Actions ────────────────────────────────────────────────────────────────
 
 # reserve — create a scooter reservation row for the authenticated user.

@@ -1,8 +1,8 @@
-// Models.swift — shared data types for the Skooti App Clip
+// Models.swift — shared data types for the Skooti App Clip (Arch 2)
 //
-// These structs represent the wire contracts with the Kiosk server
-// and the BLE handshake state machine.  None of them touch UIKit /
-// AppKit — they are pure value types safe to use from any context.
+// These structs represent the wire contracts with the BLE lock and the launch URL.
+// None of them touch UIKit / AppKit — they are pure value types safe to use from
+// any context.
 
 import Foundation
 
@@ -10,72 +10,75 @@ import Foundation
 // MARK: — Agent Handoff
 // ============================================================
 //
-// The App Clip needs two pieces of identity before it can contact
-// the Kiosk server:
+// Arch 2: the only values the App Clip needs to unlock are:
 //
-//   bearer_token    — the agent's access_token (JWT) issued by the
-//                     Kiosk provider when the user registered.
-//   reservation_id  — the UUID that the personal-agent app obtained
-//                     after running the "reserve" Action.
+//   scooterCode   — identifies which lock to BLE-connect to (also embedded in
+//                   the token, but used for scanning / UI before writing).
+//   rentalToken   — the provider-signed wire token:
+//                   "<scooter_code>|<reservation_id>|<iat>|<exp>|<jti>.<base64url(sig)>"
+//                   issued by RentalTokenIssuer (server) and carried in the rt= URL param.
+//                   The clip writes this string verbatim over BLE; the lock verifies it
+//                   offline (Ed25519 + own scooter_code + exp + jti).
 //
 // PRODUCTION INTEGRATION SEAM
 // ─────────────────────────────────────────────────────────────
-// In production the user's personal-agent app (which did the full
-// register → KYC → reserve → pay flow) hands the App Clip these two
-// values via ONE of:
+// The rental token is short-lived (15-min TTL, exp field).  In the reference path it
+// travels in the launch URL's rt= parameter — set by the assistant's personal-agent app
+// after pay/start_rental, encoded into the NFC tag URL or the App Clip Code deep-link.
 //
-//   (a) Shared App Group Keychain
-//       Both the full app (bundle: app.skooti.personal) and the
-//       App Clip target (bundle: app.skooti.personal.Clip) belong
-//       to the same App Group (e.g. group.app.skooti).  The full app
-//       writes the token + reservation_id into the shared Keychain
-//       item; the App Clip reads it on launch.
+// Alternative delivery paths (same AgentHandoff struct; only from(url:) changes):
 //
-//   (b) Encoded in the launch URL (demo/testing convenience only)
-//       https://skooti.app/unlock?scooter=SK-001
-//                                &token=<JWT>
-//                                &reservation_id=<uuid>
-//       Acceptable for a demo or a short-lived deep-link QR code;
-//       NOT suitable for production (token visible in server logs /
-//       browser history).
+//   (a) URL param — reference path (current stub).
+//       https://skooti.app/unlock?scooter=SK-001&rt=<wire-token>
+//       Simple, works for demos.  The token is single-use + 15-min lived; exposure
+//       in logs is bounded by that window.
 //
-//   (c) A server round-trip: the App Clip authenticates the device
-//       (Face ID / passkey), then calls a Skooti endpoint that issues
-//       a one-time unlock token scoped to (scooter, user, 5-min TTL).
+//   (b) Shared App Group Keychain
+//       The full Skooti app (which ran register → KYC → reserve → pay → start_rental)
+//       writes the rental token into a Keychain item in a shared App Group
+//       (e.g. group.app.skooti).  The App Clip reads it on launch.
+//       Both targets must declare the same App Group entitlement.
 //
-// The stub below reads from the launch URL (option b) so the demo
-// works end-to-end without the full app installed.  Swap the
-// implementation of AgentHandoff.from(url:) for option (a) or (c)
-// without changing any other file.
+//   (c) Server round-trip: the App Clip authenticates (Face ID / passkey), then
+//       calls a Skooti endpoint that issues (or looks up) the pending rental token
+//       scoped to (scooter, user).  No token travels in the URL at all.
+//
+// Swap only AgentHandoff.from(url:) for option (b) or (c) without changing any other
+// file.
 // ─────────────────────────────────────────────────────────────
 
 struct AgentHandoff {
-    /// Bearer token (JWT) from the Kiosk agent registration.
-    let bearerToken: String
-    /// Reservation UUID returned by the "reserve" Action.
-    let reservationId: String
+    /// The scooter's short identifier (e.g. "SK-001"), parsed from the URL scooter= param.
+    let scooterCode: String
+    /// The provider-signed rental token (wire format), from the URL rt= param.
+    /// Written verbatim as UTF-8 bytes to the lock's unlock BLE characteristic.
+    let rentalToken: String
 
-    // STUB — reads token + reservation_id from launch URL query params.
-    // Replace with Keychain / server round-trip in production.
+    // STUB — reads scooter + rt from launch URL query params.
+    // Replace with Keychain / server round-trip for option (b) or (c).
     static func from(url: URL) -> AgentHandoff? {
         guard let components = URLComponents(url: url, resolvingAgainstBaseURL: false),
               let items = components.queryItems else { return nil }
 
         let params = Dictionary(uniqueKeysWithValues:
             items.compactMap { item -> (String, String)? in
-                guard let value = item.value else { return nil }
+                guard let value = item.value, !value.isEmpty else { return nil }
                 return (item.name, value)
             }
         )
 
-        guard let token = params["token"],
-              let reservationId = params["reservation_id"] else {
-            // Fall back to a hard-coded demo stub so the UI can be
-            // exercised without the full query params present.
-            // DEMO ONLY — remove before any real deployment.
-            return Configuration.demoHandoff
+        // scooter= is always required.
+        guard let scooterCode = params["scooter"] else { return nil }
+
+        // rt= is the rental token (Arch 2 reference path).
+        if let rt = params["rt"] {
+            return AgentHandoff(scooterCode: scooterCode, rentalToken: rt)
         }
-        return AgentHandoff(bearerToken: token, reservationId: reservationId)
+
+        // Fall back to a hard-coded demo stub when rt= is absent, so the UI can be
+        // exercised with a Local Experience URL that doesn't yet carry a real token.
+        // DEMO ONLY — remove or replace before any on-device test against real hardware.
+        return Configuration.demoHandoff(scooterCode: scooterCode)
     }
 }
 
@@ -83,10 +86,9 @@ struct AgentHandoff {
 // MARK: — Configuration
 // ============================================================
 //
-// Centralises the few constants that vary between dev / staging /
-// production.  In Xcode these would typically be set via an xcconfig
-// or a Build Setting injected into Info.plist; here they are plain
-// Swift constants for clarity.
+// Centralises the few constants that vary between dev / staging / production.
+// In Xcode these would typically be set via an xcconfig or a Build Setting
+// injected into Info.plist; here they are plain Swift constants for clarity.
 
 enum Configuration {
     /// Base URL of the Kiosk provider (kiosk-demo-skooti).
@@ -94,45 +96,40 @@ enum Configuration {
     static let kioskBaseURL = URL(string: "https://skooti.app")!
 
     // ── DEMO STUB ─────────────────────────────────────────────
-    // Hard-coded token + reservation_id used when the launch URL
-    // does not carry them.  This makes the UI testable with a
-    // Local Experience even without a running server.
+    // A hard-coded rental token used when the launch URL does not carry rt=.
+    // This is the test-vector token from Plan 4.2 T1 (SCOOTER_CODE=SK-001).
+    // It will only verify on the lock if DEMO_NOW < 1750000900 (the exp).
     //
-    // REPLACE with real values (or remove the fallback) before
-    // any on-device test against a real Kiosk server.
-    static let demoHandoff = AgentHandoff(
-        bearerToken: "REPLACE_ME_demo_bearer_token",
-        reservationId: "REPLACE_ME_demo_reservation_uuid"
-    )
-}
-
-// ============================================================
-// MARK: — Kiosk server response types
-// ============================================================
-
-/// Successful response from POST /kiosk/exec {command:"run", body:{name:"unlock",…}}
-struct UnlockResponse: Decodable {
-    struct Value: Decodable {
-        /// 64 lowercase hex chars — HMAC-SHA256 the lock will verify.
-        let mac: String
-        /// "HMAC-SHA256" — informational; not used by the App Clip.
-        let alg: String?
+    // REPLACE with a freshly-issued token before any on-device test.
+    static func demoHandoff(scooterCode: String) -> AgentHandoff {
+        AgentHandoff(
+            scooterCode: scooterCode,
+            rentalToken: "SK-001|resv-1|1750000000|1750000900|aabbccddeeff00112233445566778899" +
+                         ".b-8ZCqcN1FZAXn4YbXPJXasTED2rwq0DSOXrcRSjI9ajReEBb9Y3m3YSHgNJEElC" +
+                         "HSwnEGGYbNGiEWRCZD_yBw"
+        )
     }
-    let value: Value
 }
 
 // ============================================================
-// MARK: — BLE state
+// MARK: — BLE state (Arch 2)
 // ============================================================
 
-/// Tracks the App Clip's progress through the unlock flow.
+/// Tracks the App Clip's progress through the Arch-2 unlock flow.
+///
+/// Flow: idle → scanning → connecting → discovering → writingToken → unlocked
+///                                                  ↘ failed(reason:)
 enum UnlockState: Equatable {
     case idle
     case scanning
     case connecting
-    case readingChallenge
-    case fetchingMAC(nonce: String)
-    case writingUnlock
+    /// Connected; discovering SKOOTI service + unlock characteristic.
+    case discovering
+    /// Characteristics found; ViewModel is about to call writeToken(rentalToken:).
+    case discovered
+    /// Rental token has been written to the lock (write dispatched).
+    case writingToken
+    /// CoreBluetooth confirmed the ATT write; command delivered to the lock.
     case unlocked
     case failed(reason: String)
 }

@@ -1,15 +1,28 @@
-// SkootiClipApp.swift — App Clip entry point
+// SkootiClipApp.swift — App Clip entry point (Arch 2)
 //
 // Launch flow:
 //   1. User taps an NFC tag / App Clip Code on a scooter.
-//   2. iOS decodes the App Clip Code URL: https://skooti.app/unlock?scooter=SK-001
-//      (optionally also &token=<JWT>&reservation_id=<uuid> for the demo stub).
+//   2. iOS decodes the URL: https://skooti.app/unlock?scooter=SK-001&rt=<wire-token>
 //   3. iOS calls onContinueUserActivity with an NSUserActivity whose
 //      webpageURL is the decoded URL.
 //   4. This handler:
-//        a. Parses the scooter code from the URL.
-//        b. Resolves the AgentHandoff (token + reservation_id).
-//        c. Shows UnlockView and starts the BLE flow.
+//        a. Parses scooter= and rt= from the URL via AgentHandoff.from(url:).
+//        b. Shows UnlockView and starts the BLE flow.
+//
+// The rt= parameter carries the provider-signed rental token (Arch 2):
+//   "<scooter_code>|<reservation_id>|<iat>|<exp>|<jti>.<base64url(sig)>"
+// The assistant's personal-agent app obtains this token after pay/start_rental
+// and encodes it into the NFC tag URL / App Clip Code deep-link.  The App Clip
+// writes it verbatim to the lock over BLE; the lock verifies it offline (Ed25519).
+// No server call is made at unlock time.
+//
+// AgentHandoff integration seam:
+//   Reference path: rt= in the URL (current implementation).
+//   Alternative A:  Shared App Group Keychain — the full app writes the token after
+//                   start_rental; the Clip reads it on launch.
+//   Alternative B:  Server round-trip — the Clip authenticates (Face ID/passkey) and
+//                   calls a Skooti endpoint that issues or looks up the pending token.
+//   Swap only AgentHandoff.from(url:) for A or B; no other file changes needed.
 //
 // Associated Domains entitlement:
 //   The App Clip target's entitlements file must include:
@@ -18,7 +31,6 @@
 //
 // NSBluetoothAlwaysUsageDescription:
 //   Must be set in Info.plist (see SkootiClip-Info.plist snippet in appclip/).
-//   The string explains why the App Clip needs Bluetooth.
 
 import SwiftUI
 
@@ -26,7 +38,6 @@ import SwiftUI
 struct SkootiClipApp: App {
 
     // State driving the root view.
-    @State private var scooterCode: String = ""
     @State private var handoff: AgentHandoff? = nil
     @State private var launchError: String? = nil
 
@@ -42,7 +53,7 @@ struct SkootiClipApp: App {
     @ViewBuilder
     private var rootView: some View {
         if let handoff {
-            UnlockView(scooterCode: scooterCode, handoff: handoff)
+            UnlockView(handoff: handoff)
         } else if let error = launchError {
             LaunchErrorView(message: error)
         } else {
@@ -60,20 +71,12 @@ struct SkootiClipApp: App {
             return
         }
 
-        // Parse scooter code from ?scooter=SK-001
-        guard let components = URLComponents(url: url, resolvingAgainstBaseURL: false),
-              let scooterItem = components.queryItems?.first(where: { $0.name == "scooter" }),
-              let code = scooterItem.value, !code.isEmpty else {
-            launchError = "Missing ?scooter= parameter in launch URL: \(url)"
-            return
-        }
-
         guard let resolved = AgentHandoff.from(url: url) else {
-            launchError = "Could not resolve agent token / reservation ID."
+            launchError = "Missing or invalid ?scooter= parameter in launch URL: \(url)\n" +
+                          "Expected: https://skooti.app/unlock?scooter=SK-001&rt=<token>"
             return
         }
 
-        scooterCode = code
         handoff = resolved
     }
 }

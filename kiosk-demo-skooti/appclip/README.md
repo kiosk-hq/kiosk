@@ -1,9 +1,62 @@
 # Skooti App Clip — Build & Provisioning Guide
 
-> **Status:** Sources written; NOT compiled here (no Xcode / Apple account in the build
-> environment).  The server chain and firmware crypto are proven (see Part B + C).
-> On-device BLE and the launch flow are to be validated by Phil when the board +
-> Apple Developer account are ready.
+> **Status:** Sources written for Arch 2 (offline Ed25519 token); NOT compiled here
+> (no Xcode / Apple account in the build environment).  Server chain and firmware
+> crypto are proven (Plan 4.2 T1–T3).  On-device BLE and the launch flow are to be
+> validated by Phil when the board + Apple Developer account are ready.
+
+---
+
+## How Arch 2 works
+
+```
+NFC tag / App Clip Code
+  URL: https://skooti.app/unlock?scooter=SK-001&rt=<wire-token>
+       │                           │               │
+       │                    scooter code       rental token
+       │                    (for BLE scan)     (provider-signed)
+       ▼
+  iOS App Clip launches
+       │
+       ├─ Parse scooter= and rt= from URL  ← AgentHandoff.from(url:)
+       │
+       ├─ BLE scan for service 4e2a1000-…
+       ├─ Connect + discover unlock char 4e2a1002-…
+       ├─ Write rt token (UTF-8) to unlock char  ← no server call
+       │
+       └─ Lock verifies offline (Ed25519 + scooter_code + exp + jti)
+          GPIO HIGH 3 s → physically unlocked
+```
+
+**No challenge characteristic.  No server round-trip at unlock.**
+The rental token is issued by the server at `start_rental` (after pay) and
+delivered to the App Clip via the launch URL's `rt=` parameter.
+The lock verifies it fully offline.
+
+### Wire token format (identical across server / lock-sim / firmware / clip)
+
+```
+<scooter_code>|<reservation_id>|<iat>|<exp>|<jti>.<base64url(Ed25519 sig)>
+```
+
+Split on the **last** `.`; the left side is the signed message; the right side is
+the 64-byte Ed25519 signature, base64url-encoded without padding.
+
+---
+
+## Source layout
+
+```
+appclip/
+  SkootiClip/
+    SkootiClipApp.swift   — @main entry; parses launch URL (scooter= + rt=), routes to UnlockView
+    UnlockView.swift      — SwiftUI screen + UnlockViewModel (drives the BLE flow)
+    LockBLE.swift         — CBCentralManager wrapper; scan → connect → discover → write token
+    Models.swift          — value types: AgentHandoff, Configuration, UnlockState
+    SkootiClip-Info.plist — required keys snippet (NSBluetoothAlwaysUsageDescription)
+    SkootiClip.entitlements — Associated Domains + on-demand-install-capable
+  README.md               — this file
+```
 
 ---
 
@@ -24,23 +77,6 @@ membership**.  Specifically:
 
 A **physical iPhone** is also required — the Simulator does not support CoreBluetooth
 connections to real BLE hardware.
-
----
-
-## Source layout
-
-```
-appclip/
-  SkootiClip/
-    SkootiClipApp.swift        — @main entry; parses launch URL, routes to UnlockView
-    UnlockView.swift           — SwiftUI screen + UnlockViewModel (drives the BLE flow)
-    LockBLE.swift              — CBCentralManager wrapper; scan → connect → read → write
-    KioskClient.swift          — POST /kiosk/exec to fetch the HMAC MAC
-    Models.swift               — value types: AgentHandoff, Configuration, UnlockState, …
-    SkootiClip-Info.plist      — required keys snippet (NSBluetoothAlwaysUsageDescription)
-    SkootiClip.entitlements    — Associated Domains + on-demand-install-capable
-  README.md                    — this file
-```
 
 ---
 
@@ -148,11 +184,10 @@ publishing to App Store Connect or even building an archive.
    - URL prefix: `https://skooti.app/unlock`
    - Bundle ID: `app.skooti.personal.Clip`
    - App Clip experience title: `Skooti Unlock`
-3. Now simulate an NFC tap or App Clip Code scan:
+3. Simulate an NFC tap or App Clip Code scan:
    - In the **Camera** app, point at an NFC Tag / App Clip Code.
-   - Or use the Xcode Simulator's **Features → Trigger iCloud Link** with the URL.
-   - Or use `xcrun simctl openurl booted "https://skooti.app/unlock?scooter=SK-001"` for
-     the Simulator (no BLE hardware available in the Simulator).
+   - Or use `xcrun simctl openurl booted "https://skooti.app/unlock?scooter=SK-001&rt=<token>"`
+     for the Simulator (no BLE hardware available in the Simulator).
 
 The Local Experience overrides the AASA lookup — iOS trusts the local mapping
 without the live `skooti.app` domain being configured.
@@ -163,13 +198,11 @@ without the live `skooti.app` domain being configured.
 
 ### NFC Tag
 
-Write the URL `https://skooti.app/unlock?scooter=SK-001` to an NFC NDEF tag:
+Write the URL `https://skooti.app/unlock?scooter=SK-001&rt=<rental-token>` to an NFC
+NDEF tag using the NFC Tools app on iOS or any NDEF writer.
 
-```sh
-# Using the NFC Tools app on iOS, or any NDEF writer:
-#   Record type: URI
-#   Value:       https://skooti.app/unlock?scooter=SK-001
-```
+The rental token is issued by the server after `pay` / `start_rental` and placed into
+the URL.  For the demo you can write a URL with the test-vector token from Plan 4.2 T1.
 
 When a user taps the tag with iOS 14+, the system reads the URL, matches it against
 registered App Clips / Associated Domains, and shows the App Clip banner.
@@ -177,119 +210,83 @@ registered App Clips / Associated Domains, and shows the App Clip banner.
 ### App Clip Code
 
 Generate an App Clip Code in App Store Connect (Codes section, under your app's
-App Clip experience).  Each code embeds the URL and an NFC payload.  The code
-is printed / displayed on the scooter.
-
-For the demo the NFC tag approach is simpler — no App Store Connect needed.
+App Clip experience).  Each code embeds a URL and an NFC payload.  For per-rental
+tokens the URL must be dynamic (generated at start_rental time) — encode it in a QR
+code rather than a static App Clip Code.
 
 ---
 
-## Agent token + reservation_id handoff (integration seam)
+## Rental token handoff (integration seam)
 
-The App Clip needs two values before it can call the Kiosk server:
+The App Clip needs two values:
 
-| Value | Source in production |
-|-------|----------------------|
-| `bearer_token` | Agent's JWT from the Kiosk registration |
-| `reservation_id` | UUID from the `reserve` Action |
+| Value | URL param | Source |
+|-------|-----------|--------|
+| scooter code | `scooter=` | NFC tag / App Clip Code URL |
+| rental token | `rt=` | server `start_rental` response |
 
-**Demo stub (current implementation in `Models.swift`):**
-`AgentHandoff.from(url:)` reads these from URL query params:
+**Reference path (current implementation in `Models.swift`):**
+`AgentHandoff.from(url:)` reads `scooter=` and `rt=` from URL query params:
 
 ```
-https://skooti.app/unlock?scooter=SK-001&token=<JWT>&reservation_id=<uuid>
+https://skooti.app/unlock?scooter=SK-001&rt=SK-001|resv-1|1750000000|1750000900|aabb….<sig>
 ```
 
-This is acceptable for a demo — put the token in the NFC URL or the Local Experience URL.
-It is NOT suitable for production (token appears in server logs / browser history).
+The rental token is short-lived (15-min TTL embedded in `exp`).  Within that window
+the token appearing in a URL is acceptable — it's single-use (jti) and the lock
+rejects it after the first successful write.
 
-**Production option A — Shared App Group Keychain:**
-The full Skooti app (which ran the register → KYC → reserve → pay flow) writes
-`bearer_token` and `reservation_id` into a Keychain item in a shared App Group
-(e.g. `group.app.skooti`).  The App Clip reads it on launch.
+**Alternative A — Shared App Group Keychain:**
+The full Skooti app (which ran register → KYC → reserve → pay → start_rental) writes
+the rental token into a Keychain item in a shared App Group (e.g. `group.app.skooti`).
+The App Clip reads it on launch, ignoring the `rt=` param entirely.
 
 ```swift
-// Full app writes:
-KeychainHelper.write(key: "unlock_handoff", value: handoffJSON,
-                     accessGroup: "group.app.skooti")
+// Full app writes (after start_rental):
+KeychainHelper.write(key: "rental_token",  value: rentalToken,  accessGroup: "group.app.skooti")
+KeychainHelper.write(key: "scooter_code",  value: scooterCode,  accessGroup: "group.app.skooti")
 
 // App Clip reads (in AgentHandoff.from(url:)):
-let data = KeychainHelper.read(key: "unlock_handoff",
-                                accessGroup: "group.app.skooti")
+let token = KeychainHelper.read(key: "rental_token", accessGroup: "group.app.skooti")
 ```
 
 Both targets must declare the same App Group entitlement
 (`com.apple.security.application-groups = ["group.app.skooti"]`).
 
-**Production option B — Server-issued single-use unlock token:**
-The full app tells the Skooti server "user X wants to unlock scooter SK-001 now."
-The server issues a short-lived (5-min TTL) single-use token.  The App Clip
-presents Face ID / passkey, exchanges it for the token, then proceeds.  No
-secrets travel in URLs.
+**Alternative B — Server round-trip at clip launch:**
+The clip authenticates (Face ID / passkey), then calls a Skooti endpoint that issues
+or looks up the pending rental token for (scooter, user).  No token travels in the URL.
 
-Swap `AgentHandoff.from(url:)` for either option without touching any other file.
+Swap only `AgentHandoff.from(url:)` for alternative A or B; no other file changes needed.
 
 ---
 
-## BLE wire contract (cross-checked against firmware)
+## BLE wire contract (cross-checked against firmware/skooti_lock.ino)
 
-The App Clip uses these UUIDs, verbatim from `firmware/skooti_lock.ino`:
-
-| | UUID |
-|-|------|
+| Role | UUID |
+|------|------|
 | Service | `4e2a1000-5b3c-4b1e-9f8c-6d7e8a9b0c1d` |
-| Challenge (READ+NOTIFY) | `4e2a1001-5b3c-4b1e-9f8c-6d7e8a9b0c1d` |
 | Unlock (WRITE) | `4e2a1002-5b3c-4b1e-9f8c-6d7e8a9b0c1d` |
 
-**Challenge read** returns 32 ASCII lowercase hex chars (one-shot nonce).
-
-**Unlock write** payload (ASCII, UTF-8, pipe-delimited):
+**Unlock write** payload: the raw rental token string, UTF-8 encoded, up to ~220 bytes.
 
 ```
-<reservation_id>|<64-char-mac-hex>
+SK-001|resv-abc123|1750000000|1750000900|aabbccddeeff00112233445566778899.<base64url_sig>
 ```
 
-Example: `resv-abc123|896eec16ca0d164293762269f0d34c319a41b4a463bedc2ce11f3269a49e9b1f...`
+The App Clip writes the token with `CBPeripheral.writeValue(_:for:type:.withResponse)`.
+CoreBluetooth confirms the ATT write; the lock then verifies offline and drives the GPIO.
+There is **no BLE read-back of the verify result** — "write acknowledged" = "command
+delivered".  On success the user will see the LED or hear the relay within ~1 s.
 
-This matches `UnlockCallbacks::onWrite` in `skooti_lock.ino` (line ~186), which splits
-on the first `|` and calls `skooti_verify_unlock(K_LOCK, SCOOTER_CODE, pending_nonce_hex,
-reservation_id, mac_hex)`.
+**MTU:** NimBLE on the lock negotiates MTU 256.  A typical token is ~180–220 bytes.
+The clip checks `peripheral.maximumWriteValueLength(for: .withResponse)` and fails
+with a clear error if the token is too large.  In practice iOS negotiates ≥ 185 bytes
+with a nearby BLE 4.2+ peripheral.
 
 **Foreground BLE only:** App Clips cannot use `bluetooth-central` background mode.
-The lock's GPIO stays high for 3 s after a valid MAC; the user should physically
-engage the scooter within that window.
-
----
-
-## Server call (cross-checked against unlock_flow.rb)
-
-```http
-POST https://skooti.app/kiosk/exec
-Authorization: Bearer <agent_token>
-Content-Type: application/json
-
-{
-  "command": "run",
-  "body": {
-    "name":           "unlock",
-    "nonce":          "<32 lowercase hex chars from BLE challenge>",
-    "reservation_id": "<uuid>"
-  }
-}
-```
-
-Response (HTTP 200):
-
-```json
-{
-  "value": {
-    "mac": "<64 lowercase hex chars>",
-    "alg": "HMAC-SHA256"
-  }
-}
-```
-
-This matches `unlock_flow.rb` lines 194–205 (the `post_json` call to `/kiosk/exec`).
+The lock's GPIO stays high for 3 s after a valid token; the user should engage the
+scooter within that window.
 
 ---
 
@@ -297,12 +294,12 @@ This matches `unlock_flow.rb` lines 194–205 (the `post_json` call to `/kiosk/e
 
 | Claim | Status |
 |-------|--------|
-| Server HMAC chain (register → KYC → reserve → pay → unlock) | **PROVEN** (`rake demo`, Part B) |
-| Firmware HMAC-SHA256 matches Ruby/OpenSSL over shared vectors | **PROVEN** (`make test`, Part C) |
+| Server Ed25519 rental-token issue + verify chain (register → KYC → reserve → pay → start_rental) | **PROVEN** (`rake demo`, Plan 4.2 T2) |
+| Firmware Ed25519 offline verify + Ruby↔C interop over shared vectors | **PROVEN** (`make test`, Plan 4.2 T3) |
 | App Clip Swift source compiles | **Not yet** — requires Xcode + Apple account |
-| BLE scan → connect → challenge read → unlock write on a real ESP32-C3 | **Not yet** — needs board + on-device build |
+| BLE scan → connect → unlock characteristic discover → write token on a real ESP32-C3 | **Not yet** — needs board + on-device build |
 | App Clip Code / NFC launch on iOS | **Not yet** — needs signed build + device |
-| Agent handoff via shared Keychain (production path) | **Not yet** — stub (URL params) in place |
+| Rental token handoff via Shared App Group Keychain (production path A) | **Not yet** — URL-param stub in place |
 
 ---
 
@@ -315,10 +312,17 @@ This matches `unlock_flow.rb` lines 194–205 (the `post_json` call to `/kiosk/e
 → AASA not served at `skooti.app/.well-known/apple-app-site-association`, or
   the `appclips` key is wrong.  Use Local Experience to bypass during development.
 
-**Unlock write times out / lock doesn't respond**
-→ Check that `NimBLEDevice::setMTU(185)` in the firmware is sufficient for
-  `reservation_id + "|" + 64-char-mac` (max ~150 bytes).  If the reservation_id
-  is longer, bump the MTU or use a write-without-response and check serial output.
+**`handshake error` / `AgentHandoff returns nil`**
+→ The launch URL is missing `scooter=` or carries no `rt=` and the demo stub token
+  doesn't match the lock's `exp` window.  Use `xcrun simctl openurl` with a fresh token.
+
+**Token write rejected / lock stays locked**
+→ Check serial output at 115200 baud.  Common causes: `exp < DEMO_NOW` (token expired),
+  wrong `scooter_code` in the token, or replayed `jti`.
+
+**Token too large (MTU error)**
+→ The negotiated MTU was smaller than the token.  Shorten `reservation_id` or reduce
+  `scooter_code` length.  The clip logs the exact byte counts.
 
 **`Failed to connect` immediately**
 → The iPhone is more than ~10 m from the scooter, or the firmware crashed.

@@ -1,17 +1,19 @@
-// UnlockView.swift — the single screen of the Skooti App Clip
+// UnlockView.swift — the single screen of the Skooti App Clip (Arch 2)
 //
 // Layout:
-//   • Scooter code extracted from the launch URL (e.g. "SK-001")
+//   • Scooter code from the launch URL (e.g. "SK-001")
 //   • Status indicator reflecting UnlockState
 //   • Animated progress / success / failure affordances
 //
-// The ViewModel lives here (small enough to keep in one file) and
-// drives the BLE + server flow sequentially:
+// The ViewModel lives here (small enough to keep in one file) and drives
+// the Arch-2 BLE flow:
 //
-//   scan → connect → readChallenge → fetchMAC → writeUnlock → unlocked
+//   scan → connect → discover → write token → unlocked
 //
-// UI is intentionally minimal — App Clips must be < 15 MB and should
-// feel instant.
+// No server call at unlock time.  The rental token arrives in handoff.rentalToken
+// (parsed from the launch URL rt= param by AgentHandoff.from(url:)).
+//
+// UI is intentionally minimal — App Clips must be < 15 MB and should feel instant.
 
 import SwiftUI
 
@@ -27,14 +29,13 @@ final class UnlockViewModel: ObservableObject {
     @Published var errorMessage: String?
 
     private let ble = LockBLE()
-    private let client = KioskClient()
     private var handoff: AgentHandoff?
     private var observation: Task<Void, Never>?
 
     // Call once when the App Clip launches (from SkootiClipApp.onContinueUserActivity).
-    func start(scooterCode: String, handoff: AgentHandoff) {
-        self.scooterCode = scooterCode
+    func start(handoff: AgentHandoff) {
         self.handoff = handoff
+        self.scooterCode = handoff.scooterCode
         errorMessage = nil
 
         // Observe the LockBLE state and drive the next step of the flow.
@@ -45,7 +46,7 @@ final class UnlockViewModel: ObservableObject {
             }
         }
 
-        ble.scan(scooterCode: scooterCode)
+        ble.scan(scooterCode: handoff.scooterCode)
     }
 
     // ── BLE state → flow step ──────────────────────────────────
@@ -54,30 +55,19 @@ final class UnlockViewModel: ObservableObject {
         displayState = bleState
 
         switch bleState {
-        case .fetchingMAC(let nonce):
-            await fetchMACAndUnlock(nonce: nonce)
+        case .discovered:
+            // Characteristics found — write the rental token straight to the lock.
+            guard let handoff else {
+                displayState = .failed(reason: "No rental token available")
+                return
+            }
+            ble.writeToken(rentalToken: handoff.rentalToken)
+
         case .failed(let reason):
             errorMessage = reason
+
         default:
             break
-        }
-    }
-
-    private func fetchMACAndUnlock(nonce: String) async {
-        guard let handoff else {
-            displayState = .failed(reason: "No agent token available")
-            return
-        }
-        do {
-            let mac = try await client.unlock(
-                bearerToken: handoff.bearerToken,
-                reservationId: handoff.reservationId,
-                nonce: nonce
-            )
-            ble.writeUnlock(reservationId: handoff.reservationId, mac: mac)
-        } catch {
-            displayState = .failed(reason: error.localizedDescription)
-            errorMessage = error.localizedDescription
         }
     }
 
@@ -93,7 +83,7 @@ final class UnlockViewModel: ObservableObject {
                         previous = current
                         continuation.yield(current)
                         if case .unlocked = current { continuation.finish(); break }
-                        if case .failed = current  { continuation.finish(); break }
+                        if case .failed   = current { continuation.finish(); break }
                     }
                     try? await Task.sleep(nanoseconds: 100_000_000) // 100 ms poll
                 }
@@ -110,8 +100,7 @@ final class UnlockViewModel: ObservableObject {
 struct UnlockView: View {
     @StateObject private var vm = UnlockViewModel()
 
-    // Supplied by SkootiClipApp via environment / direct initialisation.
-    let scooterCode: String
+    // Supplied by SkootiClipApp via the resolved AgentHandoff.
     let handoff: AgentHandoff
 
     var body: some View {
@@ -128,7 +117,7 @@ struct UnlockView: View {
             .padding(24)
         }
         .onAppear {
-            vm.start(scooterCode: scooterCode, handoff: handoff)
+            vm.start(handoff: handoff)
         }
     }
 
@@ -141,7 +130,7 @@ struct UnlockView: View {
                 .foregroundStyle(.primary)
             Text("Skooti")
                 .font(.largeTitle.bold())
-            Text(scooterCode)
+            Text(vm.scooterCode)
                 .font(.title3)
                 .foregroundStyle(.secondary)
         }
@@ -162,7 +151,7 @@ struct UnlockView: View {
     @ViewBuilder
     private var statusIcon: some View {
         switch vm.displayState {
-        case .idle, .scanning, .connecting, .readingChallenge, .fetchingMAC, .writingUnlock:
+        case .idle, .scanning, .connecting, .discovering, .discovered, .writingToken:
             ProgressView()
                 .scaleEffect(1.5)
                 .padding()
@@ -180,14 +169,14 @@ struct UnlockView: View {
 
     private var statusText: String {
         switch vm.displayState {
-        case .idle:                    return "Preparing…"
-        case .scanning:                return "Looking for scooter…"
-        case .connecting:              return "Connecting…"
-        case .readingChallenge:        return "Handshaking…"
-        case .fetchingMAC:             return "Verifying with server…"
-        case .writingUnlock:           return "Unlocking…"
-        case .unlocked:                return "Unlocked! Ride safely."
-        case .failed(let reason):      return reason
+        case .idle:              return "Preparing…"
+        case .scanning:          return "Looking for scooter…"
+        case .connecting:        return "Connecting…"
+        case .discovering:       return "Discovering services…"
+        case .discovered:        return "Sending unlock token…"
+        case .writingToken:      return "Unlocking…"
+        case .unlocked:          return "Unlocked! Ride safely."
+        case .failed(let reason): return reason
         }
     }
 
@@ -195,7 +184,7 @@ struct UnlockView: View {
 
     private var retryButton: some View {
         Button("Try again") {
-            vm.start(scooterCode: scooterCode, handoff: handoff)
+            vm.start(handoff: handoff)
         }
         .buttonStyle(.borderedProminent)
     }

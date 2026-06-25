@@ -106,12 +106,14 @@ module Kiosk
                           end
       end
 
-      # Raw bytes master key used by {UnlockAuthority} to derive per-lock
-      # HMAC keys.  Provide as a plain string (binary or hex-decoded bytes).
-      attr_writer :unlock_master_key
-      def unlock_master_key
-        @unlock_master_key
-      end
+      # Ed25519 private key ({OpenSSL::PKey::PKey}) used by {RentalTokenIssuer}
+      # to sign offline rental tokens. The public half is baked into every
+      # scooter lock at provisioning time.
+      #
+      # Provide as an OpenSSL::PKey::PKey (Ed25519) instance.
+      # In production load from an env var / secrets manager; in the demo
+      # a fixed dev keypair (DevUnlockKey) is used so vectors are stable.
+      attr_accessor :unlock_signing_key
 
       # Storage adapter for {Kiosk::Server::DeviceAuthorization} rows
       # (§6.5 + §6.7 Device-Grant state machine). Lazy-defaults to

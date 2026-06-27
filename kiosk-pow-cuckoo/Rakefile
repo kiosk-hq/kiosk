@@ -1,5 +1,81 @@
 require "rspec/core/rake_task"
+require "base64"
+require "json"
+require "shellwords"
 
 RSpec::Core::RakeTask.new(:spec)
 
 task default: :spec
+
+# ---------------------------------------------------------------------------
+# solve_parity — cross-impl gate
+#
+# TOY MECHANISM DEMO — proofsize 12 at edgebits 10; NOT production difficulty.
+#
+# Runs the numpy solver (solve_cuckoo.py) at edgebits=10, proofsize=12 with a
+# fixed salt under the safety wrapper (512 MB cap + 30 s timeout + low priority),
+# then calls Kiosk::Pow::Cuckoo.verify in Ruby and asserts:
+#   (a) the solver's proof is ACCEPTED, and
+#   (b) a tampered proof (one cycle edge mutated) is REJECTED.
+#
+# This proves the pure-Python numpy solver and the KAT-validated Ruby verifier
+# produce / verify bit-identical proofs at the toy demo size.
+#
+# Why edgebits=10, not 16–18:
+#   A valid proofsize=12 Cuckatoo cycle requires the bipartite pair-graph
+#   (N/2 nodes per side, N edges) to have girth ≤ 12. For edgebits ≥ 13,
+#   the expected girth exceeds 12 and 12-cycles essentially don't exist.
+#   edgebits=10 (N=1024, pairs=512, girth ≈ 9) is the right demo size for
+#   proofsize=12 and solves in ~1 second.
+# ---------------------------------------------------------------------------
+task :solve_parity do
+  require_relative "lib/kiosk/pow/cuckoo"
+
+  # TOY MECHANISM DEMO — proofsize 12 at edgebits 10; NOT production difficulty.
+  PARITY_EDGEBITS  = 10
+  PARITY_PROOFSIZE = 12
+  # Fixed 8-byte salt (base64: "cGFyaXR5IQ==")
+  PARITY_SALT_B64 = "cGFyaXR5IQ=="
+  PARITY_SALT     = Base64.strict_decode64(PARITY_SALT_B64)
+
+  challenge = JSON.generate({
+    "salt"   => PARITY_SALT_B64,
+    "params" => { "edgebits" => PARITY_EDGEBITS, "proofsize" => PARITY_PROOFSIZE, "target" => nil }
+  })
+
+  solver = File.expand_path("solve_cuckoo.py", __dir__)
+  abort "solve_cuckoo.py not found at #{solver}" unless File.exist?(solver)
+
+  # Safety wrapper: 512 MB cap + 30 s timeout + low priority.
+  # The solver's built-in _enforce_memory_budget guard also refuses oversized
+  # edgebits before allocating; both guards are active.
+  safe_cmd = "KIOSK_POW_MAX_BYTES=536870912 timeout 30 nice -n 19 python3 #{solver} #{Shellwords.shellescape(challenge)}"
+
+  puts "Running numpy solver (TOY DEMO: edgebits=#{PARITY_EDGEBITS}, proofsize=#{PARITY_PROOFSIZE}) …"
+  t0  = Process.clock_gettime(Process::CLOCK_MONOTONIC)
+  raw = `#{safe_cmd}`
+  elapsed = Process.clock_gettime(Process::CLOCK_MONOTONIC) - t0
+
+  abort "Solver exited non-zero (exit #{$?.exitstatus})\nOutput: #{raw}" unless $?.success?
+  proof = JSON.parse(raw.strip)
+  puts "  header_nonce=#{proof["header_nonce"]}  cycle[0..2]=#{proof["cycle"][0..2].inspect}  (#{elapsed.round(2)}s)"
+
+  params = Kiosk::Pow::Cuckoo.params(edgebits: PARITY_EDGEBITS, proofsize: PARITY_PROOFSIZE)
+  nonce  = { header_nonce: proof["header_nonce"], cycle: proof["cycle"] }
+
+  # (a) Accept
+  result = Kiosk::Pow::Cuckoo.verify(salt: PARITY_SALT, params: params, nonce: nonce)
+  abort "FAIL: Ruby verifier REJECTED a valid solver proof!\n  proof=#{proof.inspect}" unless result
+  puts "  (a) Ruby verifier ACCEPTS solver proof — OK"
+
+  # (b) Reject tampered cycle (mutate first edge ±1)
+  tampered_cycle = proof["cycle"].dup
+  tampered_cycle[0] = tampered_cycle[0] == 0 ? tampered_cycle[0] + 1 : tampered_cycle[0] - 1
+  # Re-sort to keep ascending (required by verifier input contract)
+  tampered_nonce = { header_nonce: proof["header_nonce"], cycle: tampered_cycle.sort }
+  bad = Kiosk::Pow::Cuckoo.verify(salt: PARITY_SALT, params: params, nonce: tampered_nonce)
+  abort "FAIL: Ruby verifier ACCEPTED a tampered proof!" if bad
+  puts "  (b) Ruby verifier REJECTS tampered proof    — OK"
+
+  puts "solve_parity PASSED  (TOY DEMO: edgebits=#{PARITY_EDGEBITS}, proofsize=#{PARITY_PROOFSIZE}, solve=#{elapsed.round(2)}s)"
+end

@@ -1,6 +1,7 @@
 # frozen_string_literal: true
 
 require "spec_helper"
+require "base64"
 
 RSpec.describe Kiosk::Pow::Cuckoo do
   # ---------------------------------------------------------------------------
@@ -307,6 +308,82 @@ RSpec.describe Kiosk::Pow::Cuckoo do
       it "returns false for a nonce missing the cycle key" do
         expect(described_class.verify(salt: KAT_SALT, params: params,
           nonce: { header_nonce: KAT_NONCE })).to be(false)
+      end
+    end
+
+    # -------------------------------------------------------------------------
+    # Toy proofsize=12 cross-impl vector (edgebits=10)
+    #
+    # TOY MECHANISM DEMO — proofsize 12 at edgebits 10; NOT production difficulty.
+    #
+    # This vector was produced by the Python solver (solve_cuckoo.py) with:
+    #   salt  = Base64.strict_decode64("cGFyaXR5IQ==")  # "parity!"
+    #   edgebits = 10, proofsize = 12, header_nonce = 1
+    #
+    # Python cross-reference (must match):
+    #   import hashlib, struct, base64
+    #   salt = base64.b64decode("cGFyaXR5IQ==")
+    #   header = salt + struct.pack("<I", 1)
+    #   hashlib.blake2b(header, digest_size=32).hexdigest()
+    #   => keys used for U/V computation
+    # -------------------------------------------------------------------------
+    context "ACCEPT — toy proofsize=12 cross-impl vector (edgebits=10, hn=1)" do
+      TOY_EDGEBITS  = 10
+      TOY_SALT_B64  = "cGFyaXR5IQ=="
+      TOY_SALT      = Base64.strict_decode64(TOY_SALT_B64).freeze
+      TOY_HN        = 1
+      TOY_PROOFSIZE = 12
+      TOY_CYCLE     = [12, 362, 383, 633, 694, 717, 849, 872, 934, 944, 948, 961].freeze
+
+      it "accepts the 12-cycle produced by the Python solver via .verify" do
+        result = described_class.verify(
+          salt:   TOY_SALT,
+          params: described_class.params(edgebits: TOY_EDGEBITS, proofsize: TOY_PROOFSIZE),
+          nonce:  { header_nonce: TOY_HN, cycle: TOY_CYCLE }
+        )
+        expect(result).to be(true),
+          "Proofsize=12 cross-impl vector FAILED — keying, siphash, or cycle walk is wrong"
+      end
+
+      it "accepts via .verify_cycle with pre-derived keys" do
+        header = TOY_SALT + [TOY_HN].pack("V")
+        keys   = described_class.blake2b256(header).unpack("Q<4")
+        result = described_class.verify_cycle(
+          keys:      keys,
+          edgebits:  TOY_EDGEBITS,
+          cycle:     TOY_CYCLE,
+          proofsize: TOY_PROOFSIZE
+        )
+        expect(result).to be(true)
+      end
+
+      it "rejects the same cycle with wrong header_nonce" do
+        result = described_class.verify(
+          salt:   TOY_SALT,
+          params: described_class.params(edgebits: TOY_EDGEBITS, proofsize: TOY_PROOFSIZE),
+          nonce:  { header_nonce: TOY_HN + 1, cycle: TOY_CYCLE }
+        )
+        expect(result).to be(false)
+      end
+
+      it "rejects a truncated cycle (11 edges instead of 12)" do
+        result = described_class.verify(
+          salt:   TOY_SALT,
+          params: described_class.params(edgebits: TOY_EDGEBITS, proofsize: TOY_PROOFSIZE),
+          nonce:  { header_nonce: TOY_HN, cycle: TOY_CYCLE[0, 11] }
+        )
+        expect(result).to be(false)
+      end
+
+      it "rejects a mutated first edge" do
+        bad_cycle = TOY_CYCLE.dup
+        bad_cycle[0] = bad_cycle[0] + 1  # corrupt first edge
+        result = described_class.verify(
+          salt:   TOY_SALT,
+          params: described_class.params(edgebits: TOY_EDGEBITS, proofsize: TOY_PROOFSIZE),
+          nonce:  { header_nonce: TOY_HN, cycle: bad_cycle }
+        )
+        expect(result).to be(false)
       end
     end
 

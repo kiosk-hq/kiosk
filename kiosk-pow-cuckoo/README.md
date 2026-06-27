@@ -5,17 +5,22 @@ Cuckatoo-Cycle proof-of-work backend for [Kiosk](https://kiosk.tech).
 ## What this is
 
 An optional PoW backend with a large solve:verify asymmetry — solving requires
-finding a 42-cycle in a large random bipartite graph (gigabytes of RAM, seconds
-of CPU), while verifying is 42 SipHash evaluations plus a cycle-walk (~10 μs).
+finding a cycle in a large random bipartite graph (gigabytes of RAM, seconds of
+CPU), while verifying is proofsize SipHash evaluations plus a cycle-walk (~10 μs).
 
-This gem ships **the verifier only** (T1).  A solver is a separate component.
+**This gem ships the VERIFIER only.**  The verifier is production-correct,
+validated against Grin's Cuckatoo29 L=42 known-answer test vector.
+
+The included Python solver (`solve_cuckoo.py`) is a **REFERENCE/TOY solver**
+for small edgebits and reduced proofsize only — see Solver section below.
 
 ## Algorithm: Cuckatoo Cycle
 
-- Graph size: `N = 2^edgebits` nodes on each side of the bipartite graph
+- Graph size: `N = 2^edgebits` edges in a random bipartite graph
 - Edge `i` connects `U(i) = siphash(2i) mod N` to `V(i) = siphash(2i+1) mod N`
-- Proof: 42 strictly-ascending edge indices forming a single cycle
-- Keys: `blake2b-256(header)` split into four LE-u64 words
+- Proof: `proofsize` strictly-ascending edge indices forming a single cycle
+  on node-pairs (`node >> 1`)
+- Keys: `blake2b-256(salt ‖ LE32(header_nonce))` split into four LE-u64 words
 
 SipHash uses Cuckatoo's **non-standard initialization** (keys feed directly into
 `v0..v3` without XOR-ing the 0x736f6d65... magic constants from the standard
@@ -32,17 +37,22 @@ SipHash spec).
 ## Known-answer validation
 
 The verifier is validated against Grin's Cuckatoo29 CI test vector:
-- `edgebits=29`, header = 80 zero bytes keyed with `nonce=20`
+- `edgebits=29`, header = 80 zero bytes keyed with `nonce=20`, `proofsize=42`
 - 42-cycle accepted; five categories of bad inputs rejected
+
+Run: `bundle exec rspec` — 35+ examples, all green.
 
 ## API
 
 ```ruby
-# Challenge params
-params = Kiosk::Pow::Cuckoo.params(edgebits: 29)
+# Challenge params (proofsize defaults to 42; pass proofsize: 12 for the toy demo)
+params = Kiosk::Pow::Cuckoo.params(edgebits: 29, proofsize: 42)
 # => { edgebits: 29, proofsize: 42, target: nil }
 
 # Verify a proof (composite nonce: header_nonce + cycle)
+# -- This is the ONE deviation from kiosk-pow's scalar nonce: --
+# The wire proof is { header_nonce: <u32>, cycle: [proofsize ints, ascending] }
+# kiosk-reputation passes this composite object unchanged to .verify.
 Kiosk::Pow::Cuckoo.verify(
   salt:   raw_salt_bytes,
   params: params,
@@ -52,8 +62,70 @@ Kiosk::Pow::Cuckoo.verify(
 
 # Lower-level: verify cycle with pre-derived keys
 keys = Kiosk::Pow::Cuckoo.blake2b256(header).unpack("Q<4")
-Kiosk::Pow::Cuckoo.verify_cycle(keys: keys, edgebits: 29, cycle: cycle)
+Kiosk::Pow::Cuckoo.verify_cycle(keys: keys, edgebits: 29, cycle: cycle, proofsize: 42)
 ```
+
+## Wire interface: composite nonce
+
+Unlike `kiosk-pow` (Argon2id, scalar nonce), Cuckatoo proofs are composite:
+
+```json
+{
+  "challenge": { "id": "...", "alg": "cuckatoo", "params": {...}, "salt": "...", "exp": ..., "sig": "..." },
+  "nonce":     { "header_nonce": 1, "cycle": [12, 362, 383, ...] }
+}
+```
+
+`kiosk-reputation`'s `Challenge.verify` passes the entire `nonce` field through
+to the backend's `.verify(salt:, params:, nonce:)` unchanged.  Confirm: it uses
+`nonce = pow[:nonce] || pow["nonce"]` and does NOT assume `nonce` is a String.
+
+## Solver
+
+### Shipped Python solver (`solve_cuckoo.py`) — REFERENCE/TOY ONLY
+
+`solve_cuckoo.py` is a **pure-Python + numpy reference solver for small
+edgebits and reduced proofsize only**.
+
+| Property | Value |
+|----------|-------|
+| Language | Python 3 + numpy |
+| Status   | Reference/toy — NOT production |
+| Purpose  | Mechanism demonstration at small sizes |
+| Tested at | edgebits=10, proofsize=12 (~1 second) |
+| Memory guard | Built-in `_enforce_memory_budget`: refuses oversized edgebits |
+| Safety wrapper | `KIOSK_POW_MAX_BYTES=536870912 timeout 30 nice -n 19 python3 solve_cuckoo.py` |
+
+**Why edgebits=10 for proofsize=12:**
+A valid Cuckatoo proofsize=12 cycle exists in the bipartite pair-graph only when
+the pair-graph girth ≤ 12. With N/2 = 2^(edgebits-1) pair values per side and
+mean pair-degree 2, the expected girth is approximately log₂(N/2). For
+proofsize=12, this requires edgebits ≤ 12-13. At edgebits=10 (N/2=512) cycles
+exist and solve in ~1 second. At edgebits ≥ 14, 12-cycles essentially vanish.
+
+**Cannot solve production Cuckatoo** (L=42, edgebits≥29). Pure Python cannot
+allocate or search the required ~1 GB+ graph in usable time. Production requires
+a native solver (C/C++ like Tromp's `lean`/`mean` miner).
+
+### Cross-impl parity gate
+
+```bash
+cd oss/kiosk-pow-cuckoo
+bundle exec rake solve_parity
+```
+
+Runs `solve_cuckoo.py` at the toy demo params (edgebits=10, proofsize=12) under
+the safety wrapper, then calls the Ruby `Kiosk::Pow::Cuckoo.verify` and asserts
+the proof is accepted.  This proves solver output is accepted by the validated
+verifier.
+
+### Production solver (out of scope for this gem)
+
+Production Cuckatoo (edgebits≥29, proofsize=42) requires clients with a native
+solver.  Options:
+- **Tromp's C miner** (`lean`/`mean`, `simple`): fast, FAIR-MINING/GPLv2+ license
+- **GPU solvers**: faster still; CUDA-only
+- Provider mandates the algorithm (ADR-0001); clients that cannot solve are denied
 
 ## Difficulty target
 
@@ -69,9 +141,26 @@ When set, the verifier additionally checks:
 blake2b-256(sorted_cycle_edges_as_LE_u64) < target
 ```
 
+## Toy mechanism demo
+
+```bash
+cd oss/kiosk-demo-foodelivery
+bundle exec rake demo:cuckoo
+```
+
+**TOY MECHANISM DEMO — proofsize 12 at edgebits 10; NOT production difficulty.**
+
+Boots foodelivery with `KIOSK_POW_CUCKOO_DEMO=1`, runs the full
+402 → solve → 200 loop, and tests wrong proof → 403.
+
 ## Caveats
 
-- Cuckatoo is NOT ASIC-proof (1 GB-SRAM ASICs exist for edgebits=31+).  The
-  provider mandates it; clients that cannot solve are denied.  This is
+- Cuckatoo is NOT ASIC-proof (1 GB-SRAM ASICs exist for edgebits=31+). The
+  provider mandates it; clients that cannot solve are denied. This is
   intentional: it raises the cost of abuse.
-- `edgebits < 19` is suitable only for testing; production uses edgebits ≥ 29.
+- **Argon2id** (`kiosk-pow`) is the practical default with a uniformly-fast
+  solver available on all platforms. Use Cuckatoo when the extreme solve:verify
+  asymmetry (GB-RAM solver vs. µs verifier) is specifically required.
+- `proofsize < 42` is a deviation from production Cuckatoo (L=42 per Grin/Tromp
+  spec). The toy demo (L=12) demonstrates the mechanism only.
+- `edgebits < 29` is suitable only for testing; production Grin uses edgebits 29.

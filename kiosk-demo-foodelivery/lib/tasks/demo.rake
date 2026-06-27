@@ -407,6 +407,152 @@ namespace :demo do
       exit 1
     end
   end
+
+  # -------------------------------------------------------------------------
+  desc <<~DESC
+    TOY MECHANISM DEMO — proofsize 12 at edgebits 10; NOT production difficulty.
+
+    Boot the server with KIOSK_POW_CUCKOO_DEMO=1, run cuckoo_flow.rb:
+      402 cuckatoo challenge → solve_cuckoo.py (real solver, safety wrapper)
+      → 200 served; wrong Cuckatoo proof → 403.
+
+    Demonstrates:
+      • Cuckatoo proof-of-work challenge-response loop (algorithm mechanism)
+      • Composite wire nonce: {header_nonce, cycle} (not a scalar)
+      • kiosk-reputation passes the composite nonce unchanged to the backend
+
+    Solver safety: KIOSK_POW_MAX_BYTES=512MB cap + 30s timeout + nice -n 19.
+    The solver's built-in _enforce_memory_budget guard also refuses oversized
+    edgebits before allocating. edgebits=10 peak ≈ 96 KB, well under cap.
+
+    NOT production Cuckatoo (edgebits>=29, proofsize=42). This is a reference
+    solver demo only. See kiosk-pow-cuckoo/README.md for production notes.
+  DESC
+  task :cuckoo do
+    # Requirement: python3 with numpy must be available.
+    # Install with: pip install numpy
+    python_ok = system("python3 -c 'import numpy' 2>/dev/null")
+    unless python_ok
+      abort "numpy not found. Install with: pip install numpy\n" \
+            "Then re-run: bundle exec rake demo:cuckoo"
+    end
+
+    require "resolv"
+
+    port = ENV.fetch("PORT", "3003")  # port 3003 to avoid conflict with demo:pow (3002)
+    log  = "/tmp/kiosk-foodelivery-cuckoo-demo.log"
+
+    host = begin
+      addr = Resolv.getaddress("foodelivery.app") rescue ""
+      addr == "127.0.0.1" ? "foodelivery.app" : "127.0.0.1"
+    end
+
+    server_url   = "http://#{host}:#{port}"
+    kiosk_issuer = server_url
+
+    puts "\n── TOY MECHANISM DEMO: Starting foodelivery (Cuckatoo PoW) on #{server_url} ──"
+    puts "   proofsize 12 at edgebits 10; NOT production difficulty."
+
+    env_vars = {
+      "KIOSK_ISSUER"            => kiosk_issuer,
+      "KIOSK_POW_CUCKOO_DEMO"   => "1",
+    }
+    server_pid = spawn(
+      env_vars,
+      "bundle exec rails s -p #{port} -b 127.0.0.1 -e development",
+      out: log, err: log,
+    )
+
+    at_exit do
+      begin
+        Process.kill("TERM", server_pid)
+        Process.wait(server_pid)
+      rescue Errno::ESRCH, Errno::ECHILD
+        nil
+      end
+    end
+
+    # Wait for readiness.
+    require "net/http"
+    require "uri"
+    ready = false
+    30.times do
+      begin
+        res = Net::HTTP.get_response(URI("#{server_url}/.well-known/kiosk.json"))
+        if res.code.to_i == 200
+          ready = true
+          break
+        end
+      rescue Errno::ECONNREFUSED, Errno::EADDRNOTAVAIL, SocketError
+        nil
+      end
+      sleep 1
+    end
+    abort "Server did not become ready — see #{log}" unless ready
+    puts "  Server up at #{server_url} (Cuckatoo PoW active)"
+
+    # Run cuckoo_flow.rb.
+    flow_rb = File.expand_path("../../cuckoo_flow.rb", __dir__)
+    puts "\n── Running cuckoo_flow.rb (TOY MECHANISM DEMO) ──"
+    raw = `SERVER_URL=#{server_url} KIOSK_ISSUER=#{kiosk_issuer} bundle exec ruby #{flow_rb} 2>&1`
+    puts raw
+
+    begin
+      result = JSON.parse(raw.lines.grep(/^\{/).last || raw)
+    rescue JSON::ParserError => e
+      abort "cuckoo_flow.rb did not produce valid JSON: #{e.message}\nOutput:\n#{raw}"
+    end
+
+    # ── Assertions ──
+    puts "\n── Cuckatoo PoW assertions (TOY DEMO: edgebits=10, proofsize=12) ──"
+    failures = []
+
+    if result["alg"] == "cuckatoo"
+      puts "  ✓  challenge alg=cuckatoo"
+    else
+      failures << "expected alg=cuckatoo, got #{result["alg"].inspect}"
+      puts "  ✗  expected alg=cuckatoo, got #{result["alg"].inspect}"
+    end
+
+    if result["http_challenge"] == 402
+      puts "  ✓  query challenged: HTTP 402 (pow_required)"
+    else
+      failures << "expected http_challenge=402, got #{result["http_challenge"].inspect}"
+      puts "  ✗  expected HTTP 402, got #{result["http_challenge"].inspect}"
+    end
+
+    if result["served"] == true && result["http_served_after_solve"] == 200
+      puts "  ✓  served after Cuckatoo solve: HTTP 200, #{result["menu_rows"]} menu rows"
+      puts "     (header_nonce=#{result["header_nonce"]}, cycle_length=#{result["cycle_length"]})"
+    else
+      failures << "expected served=true + http_served_after_solve=200, got #{result.slice("served", "http_served_after_solve").inspect}"
+      puts "  ✗  not served after solve: #{result.inspect}"
+    end
+
+    if result["http_wrong_proof"] == 403
+      puts "  ✓  wrong Cuckatoo proof rejected: HTTP 403"
+    else
+      failures << "expected http_wrong_proof=403, got #{result["http_wrong_proof"].inspect}"
+      puts "  ✗  wrong proof returned #{result["http_wrong_proof"].inspect}"
+    end
+
+    bpc = result["bad_proof_count"].to_i
+    if bpc >= 1
+      puts "  ✓  on_bad_proof penalized: bad_proof_count=#{bpc}"
+    else
+      failures << "expected bad_proof_count>=1 after wrong proof, got #{bpc}"
+      puts "  ✗  bad_proof_count=#{bpc} (expected >=1)"
+    end
+
+    if failures.empty?
+      puts "\n  All Cuckatoo PoW assertions passed."
+      puts "  TOY MECHANISM DEMO PASSED — proofsize 12 at edgebits 10; NOT production difficulty."
+    else
+      puts "\n  FAILED:"
+      failures.each { |f| puts "    - #{f}" }
+      exit 1
+    end
+  end
 end
 
 desc "End-to-end Kiosk demo: setup the DB then run the no-human order end-to-end."

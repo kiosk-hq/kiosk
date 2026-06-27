@@ -23,6 +23,7 @@ gem "kiosk-rls",                path: "../kiosk-rls"
 gem "kiosk-server",             path: "../kiosk-server"
 gem "kiosk-pay-stripe",         path: "../kiosk-pay-stripe"
 gem "kiosk-pow",                path: "../kiosk-pow"
+gem "kiosk-pow-cuckoo",         path: "../kiosk-pow-cuckoo"
 gem "kiosk-reputation",         path: "../kiosk-reputation"
 
 group :development, :test do

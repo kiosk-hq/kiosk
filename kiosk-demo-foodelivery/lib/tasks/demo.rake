@@ -834,6 +834,105 @@ namespace :demo do
       exit 1
     end
   end
+
+  # ── demo:redteam ─────────────────────────────────────────────────────────
+  desc <<~DESC
+    Adversarial regression battery (R3 Phase 2 Task 3) — kiosk-redteam.
+
+    Boots foodelivery, runs all generic Kiosk::Redteam scenarios and asserts
+    each applicable attack is BLOCKED:
+
+      BLOCKED  CrossTenantRead    — B's my_orders must not include A's orders
+      BLOCKED  ForgedUserId       — agent-supplied user_id arg must be ignored
+      BLOCKED  MandatePrincipalSwap — B signs a mandate with A's identity; rejected
+      BLOCKED  MandateReplay      — B re-submits A's signed JWS; rejected
+      BLOCKED  TokenTampering     — altered JWT (claim flipped) rejected 401
+
+    Scenarios that require a surface foodelivery does not expose SKIP cleanly:
+      SKIPPED  UnpaidGatedAction, SpentResourceReuse, PayForOtherUseSelf
+               (no gated_action configured)
+      SKIPPED  MissingKyc, ExpiredKyc, ForgedKyc  (requires_kyc: false)
+
+    When KIOSK_POW_DEMO=1, also runs:
+      BLOCKED  RegistrationWithoutPow
+
+    Exits 0 when all applicable scenarios are BLOCKED; exits 1 on any BREACH.
+    A BREACH = a real hole in foodelivery — fix the app, not the scenario.
+  DESC
+  task redteam: :setup do
+    require "resolv"
+    require "json"
+    require "net/http"
+    require "uri"
+
+    port = ENV.fetch("PORT", "3002")
+    log  = "/tmp/kiosk-foodelivery-redteam.log"
+
+    # ── host resolution ────────────────────────────────────────────────
+    host = begin
+      addr = Resolv.getaddress("foodelivery.app") rescue ""
+      addr == "127.0.0.1" ? "foodelivery.app" : "127.0.0.1"
+    end
+
+    server_url   = "http://#{host}:#{port}"
+    kiosk_issuer = server_url
+
+    puts "\n── Starting foodelivery (redteam battery) on #{server_url} ──"
+
+    # ── boot the server ────────────────────────────────────────────────
+    env_vars = { "KIOSK_ISSUER" => kiosk_issuer }
+    env_vars["KIOSK_POW_DEMO"] = "1" if ENV["KIOSK_POW_DEMO"] == "1"
+
+    server_pid = spawn(
+      env_vars,
+      "bundle exec rails s -p #{port} -b 127.0.0.1 -e development",
+      out: log, err: log,
+    )
+
+    at_exit do
+      begin
+        Process.kill("TERM", server_pid)
+        Process.wait(server_pid)
+      rescue Errno::ESRCH, Errno::ECHILD
+        nil
+      end
+    end
+
+    # ── wait for readiness ─────────────────────────────────────────────
+    ready = false
+    30.times do
+      begin
+        res = Net::HTTP.get_response(URI("#{server_url}/.well-known/kiosk.json"))
+        if res.code.to_i == 200
+          ready = true
+          break
+        end
+      rescue Errno::ECONNREFUSED, Errno::EADDRNOTAVAIL, SocketError
+        nil
+      end
+      sleep 1
+    end
+    abort "Server did not become ready — see #{log}" unless ready
+    puts "  Server up at #{server_url}"
+
+    # ── run redteam_suite.rb ───────────────────────────────────────────
+    suite_rb = File.expand_path("../../redteam_suite.rb", __dir__)
+    puts "\n── Running redteam_suite.rb ──"
+
+    env_str = "SERVER_URL=#{server_url} KIOSK_ISSUER=#{kiosk_issuer}"
+    env_str += " KIOSK_POW_DEMO=1" if ENV["KIOSK_POW_DEMO"] == "1"
+
+    system("#{env_str} bundle exec ruby #{suite_rb}")
+    exit_status = $?.exitstatus
+
+    if exit_status == 0
+      puts "\n  redteam: all applicable scenarios BLOCKED. Exit 0."
+    else
+      puts "\n  redteam: BREACH DETECTED or error — see output above. Exit #{exit_status}."
+      exit exit_status
+    end
+  end
+  # ── end demo:redteam ─────────────────────────────────────────────────────
 end
 
 desc "End-to-end Kiosk demo: setup the DB then run the no-human order end-to-end."

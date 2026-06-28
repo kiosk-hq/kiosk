@@ -74,4 +74,35 @@ RSpec.describe Kiosk::Server::SessionContext do
       expect(connection.executed_sql).to be_empty
     end
   end
+
+  describe "#guc_statements enforce_db_role" do
+    before { Kiosk.reset! }
+
+    context "when enforce_db_role is unset (default false)" do
+      it "contains no SET LOCAL ROLE statement — exactly the 4 GUC statements as today" do
+        ctx = described_class.new(connection: connection, identity: build_identity(actor: "agent"))
+        stmts = ctx.guc_statements
+
+        expect(stmts.size).to eq(4)
+        expect(stmts.none? { |s| s.include?("ROLE") }).to be(true)
+      end
+    end
+
+    context "when enforce_db_role is true and app_role is 'kiosk_app'" do
+      before do
+        Kiosk.configure do |c|
+          c.enforce_db_role = true
+          c.app_role        = "kiosk_app"
+        end
+      end
+
+      it "appends SET LOCAL ROLE as the last element, after the GUC statements" do
+        ctx = described_class.new(connection: connection, identity: build_identity(actor: "agent"))
+        stmts = ctx.guc_statements
+
+        expect(stmts.last).to eq(%(SET LOCAL ROLE "kiosk_app"))
+        expect(stmts[-2]).to include("current_agent_id")
+      end
+    end
+  end
 end

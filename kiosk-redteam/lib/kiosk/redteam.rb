@@ -7,6 +7,21 @@ require "kiosk/redteam/verdict"
 require "kiosk/redteam/client"
 require "kiosk/redteam/scenario"
 require "kiosk/redteam/runner"
+require "kiosk/redteam/profile"
+
+# Scenario library (Task 2)
+require "kiosk/redteam/scenarios/cross_tenant_read"
+require "kiosk/redteam/scenarios/forged_user_id"
+require "kiosk/redteam/scenarios/mandate_principal_swap"
+require "kiosk/redteam/scenarios/mandate_replay"
+require "kiosk/redteam/scenarios/token_tampering"
+require "kiosk/redteam/scenarios/registration_without_pow"
+require "kiosk/redteam/scenarios/unpaid_gated_action"
+require "kiosk/redteam/scenarios/missing_kyc"
+require "kiosk/redteam/scenarios/expired_kyc"
+require "kiosk/redteam/scenarios/forged_kyc"
+require "kiosk/redteam/scenarios/spent_resource_reuse"
+require "kiosk/redteam/scenarios/pay_for_other_use_self"
 
 module Kiosk
   # Adversarial regression harness for Kiosk providers.

@@ -5,6 +5,7 @@
 #   rake demo:setup        idempotent db:drop / create / schema:load / seed
 #   rake demo:walkthrough  boots the server, runs a curl-driven showcase,
 #                          tears down
+#   rake demo:isolation    adversarial cross-tenant denial test (R1 Phase 1 T3)
 #   rake demo              setup + walkthrough end-to-end
 #
 # The walkthrough lives in bin/demo (POSIX shell) so it's debuggable
@@ -26,6 +27,141 @@ namespace :demo do
   desc "Boot the server and run the demo walkthrough."
   task :walkthrough do
     exec File.expand_path("../../bin/demo", __dir__)
+  end
+
+  # ---------------------------------------------------------------------------
+  desc <<~DESC
+    Adversarial cross-tenant isolation test (R1 Phase 1 Task 3).
+
+    Runs demo:setup (clean DB + seed), boots the server, runs isolation_flow.rb
+    with the two seeded principals (Alice and Bob), and asserts all cross-tenant
+    denial properties:
+
+      Assertion 1 (exclusion): B's my_appointments does NOT contain A's appointment aA.
+      Assertion 2 (forged user_id ignored): B calls book_appointment with a forged
+        user_id arg (A's UUID). The created appointment's DB user_id is B (server
+        uses kiosk.current_user_id(), ignores agent-supplied user_id). Verified by:
+          - the appointment's DB user_id column == B's user_id (not A's)
+          - A's my_appointments does NOT contain B's forged appointment
+      Note: book_appointment takes salon_id (open catalogue); no user-owned
+        resource target -> ownership-denial assertion does not apply to this surface.
+
+    Exits 0 if all assertions hold (isolation works); exits 1 on failure.
+    A red assertion = real isolation hole: fix the app, not the test.
+  DESC
+  task isolation: :setup do
+    require "json"
+
+    port = ENV.fetch("PORT", "3001")
+    log  = "/tmp/kiosk-saas-booking-isolation.log"
+    db   = "kiosk_demo_development"
+
+    server_url   = "http://127.0.0.1:#{port}"
+    kiosk_issuer = server_url
+
+    puts "\n── Starting saas-booking (isolation test) on #{server_url} ──"
+
+    # ── boot the server ────────────────────────────────────────────────
+    File.truncate(log, 0) if File.exist?(log)
+    server_pid = spawn(
+      { "KIOSK_ISSUER" => kiosk_issuer },
+      "bundle exec rails s -p #{port} -b 127.0.0.1 -e development",
+      out: log, err: log,
+    )
+
+    at_exit do
+      begin
+        Process.kill("TERM", server_pid)
+        Process.wait(server_pid)
+      rescue Errno::ESRCH, Errno::ECHILD
+        nil
+      end
+      puts "  Server stopped."
+    end
+
+    # ── wait for readiness ─────────────────────────────────────────────
+    require "net/http"
+    require "uri"
+    ready = false
+    40.times do
+      begin
+        res = Net::HTTP.get_response(URI("#{server_url}/.well-known/kiosk.json"))
+        if res.code.to_i == 200
+          ready = true
+          break
+        end
+      rescue Errno::ECONNREFUSED, Errno::EADDRNOTAVAIL, SocketError
+        nil
+      end
+      sleep 1
+    end
+    abort "Server did not become ready — see #{log}" unless ready
+    puts "  Server up at #{server_url}"
+
+    # ── run isolation_flow.rb ──────────────────────────────────────────
+    flow_rb = File.expand_path("../../isolation_flow.rb", __dir__)
+    puts "\n── Running isolation_flow.rb (adversarial cross-tenant) ──"
+    raw = `SERVER_URL=#{server_url} KIOSK_ISSUER=#{kiosk_issuer} bundle exec ruby #{flow_rb} 2>&1`
+    puts raw
+
+    # ── parse JSON output ──────────────────────────────────────────────
+    begin
+      result = JSON.parse(raw.lines.grep(/^\{/).last || raw)
+    rescue JSON::ParserError => e
+      abort "isolation_flow.rb did not produce valid JSON: #{e.message}\nOutput:\n#{raw}"
+    end
+
+    failures = []
+    puts "\n── Adversarial isolation assertions ──"
+
+    user_id_a        = result["user_id_a"]
+    user_id_b        = result["user_id_b"]
+    appt_id_a        = result["appt_id_a"]
+    appt_id_b        = result["appt_id_b"]
+    b_appt_ids       = result["b_appt_ids"]       || []
+    a_appt_ids_after = result["a_appt_ids_after"] || []
+
+    # ── Assertion 1: B's my_appointments excludes A's appointment ─────
+    if b_appt_ids.include?(appt_id_a)
+      failures << "ISOLATION HOLE: B's my_appointments contains A's appointment #{appt_id_a} — cross-tenant leak"
+      puts "  x  Assertion 1 FAILED: B sees A's appointment #{appt_id_a} — isolation hole"
+    else
+      puts "  OK  Assertion 1: B's my_appointments excludes A's appointment #{appt_id_a} (app-layer isolation)"
+    end
+
+    # ── Assertion 2a: A's my_appointments excludes B's forged appointment ──
+    if a_appt_ids_after.include?(appt_id_b)
+      failures << "ISOLATION HOLE: A's my_appointments contains B's forged appointment #{appt_id_b} — cross-tenant leak"
+      puts "  x  Assertion 2a FAILED: A sees B's forged appointment #{appt_id_b} — isolation hole"
+    else
+      puts "  OK  Assertion 2a: A's my_appointments excludes B's forged appointment #{appt_id_b}"
+    end
+
+    # ── Assertion 2b: DB user_id on B's forged appointment == B's UUID ──
+    db_user_id = `psql -X -d #{db} -tAc "SELECT user_id FROM appointments WHERE id = '#{appt_id_b}'" 2>&1`.strip
+    if db_user_id == user_id_b
+      puts "  OK  Assertion 2b: DB appointments.user_id for aB == user_id_b (#{user_id_b}) — forged arg ignored"
+    elsif db_user_id == user_id_a
+      failures << "ISOLATION HOLE: DB appointments.user_id for aB is A's user_id (#{user_id_a}) — forged user_id arg was NOT ignored"
+      puts "  x  Assertion 2b FAILED: server used forged user_id arg (appointment belongs to A, not B)"
+    else
+      failures << "Unexpected user_id for aB: got #{db_user_id.inspect}, expected B's #{user_id_b}"
+      puts "  x  Assertion 2b FAILED: unexpected user_id #{db_user_id.inspect} for aB"
+    end
+
+    # ── Note: book_appointment surface — no ownership-denial test ─────
+    puts "\n  (Note) Ownership-denial assertion: N/A for book_appointment."
+    puts "         book_appointment takes salon_id (open catalogue);"
+    puts "         no user-owned resource target exists in the Action args."
+    puts "         No cross-principal ownership check is applicable to this surface."
+
+    if failures.empty?
+      puts "\n  All adversarial assertions passed — app-layer isolation holds."
+    else
+      puts "\n  FAILED assertions:"
+      failures.each { |f| puts "    - #{f}" }
+      exit 1
+    end
   end
 end
 

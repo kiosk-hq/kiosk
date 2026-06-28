@@ -119,14 +119,26 @@ namespace :demo do
     appt_id_a        = result["appt_id_a"]
     appt_id_b        = result["appt_id_b"]
     b_appt_ids       = result["b_appt_ids"]       || []
+    b_appt_ids_after = result["b_appt_ids_after"] || []
     a_appt_ids_after = result["a_appt_ids_after"] || []
 
-    # ── Assertion 1: B's my_appointments excludes A's appointment ─────
+    # ── Assertion 1a: B's my_appointments excludes A's appointment ────
     if b_appt_ids.include?(appt_id_a)
       failures << "ISOLATION HOLE: B's my_appointments contains A's appointment #{appt_id_a} — cross-tenant leak"
-      puts "  x  Assertion 1 FAILED: B sees A's appointment #{appt_id_a} — isolation hole"
+      puts "  x  Assertion 1a FAILED: B sees A's appointment #{appt_id_a} — isolation hole"
     else
-      puts "  OK  Assertion 1: B's my_appointments excludes A's appointment #{appt_id_a} (app-layer isolation)"
+      puts "  OK  Assertion 1a: B's my_appointments excludes A's appointment #{appt_id_a} (app-layer isolation)"
+    end
+
+    # ── Assertion 1b: B's my_appointments (after booking) includes B's own ──
+    # Positive control: proves the exclusion above is not vacuous. If
+    # my_appointments always returned empty for B, Assertion 1a would pass
+    # spuriously. Seeing appt_id_b here confirms the query is live for B.
+    if b_appt_ids_after.include?(appt_id_b)
+      puts "  OK  Assertion 1b: B's my_appointments (after booking) includes B's own #{appt_id_b} (positive control)"
+    else
+      failures << "B's my_appointments (after booking) does not include B's own appointment #{appt_id_b}; got #{b_appt_ids_after.inspect} — positive control failed (vacuous exclusion)"
+      puts "  x  Assertion 1b FAILED: B's my_appointments missing B's own appt_id_b #{appt_id_b} — positive control failed"
     end
 
     # ── Assertion 2a: A's my_appointments excludes B's forged appointment ──

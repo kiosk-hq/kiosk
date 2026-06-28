@@ -698,7 +698,7 @@ namespace :demo do
     Exits 0 if all assertions hold (isolation works); exits 1 on failure.
     A red assertion = real isolation hole: fix the app, not the test.
   DESC
-  task :isolation do
+  task isolation: :setup do
     require "resolv"
     require "json"
 

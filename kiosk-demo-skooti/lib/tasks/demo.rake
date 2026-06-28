@@ -520,12 +520,17 @@ namespace :demo do
   desc <<~DESC
     Adversarial cross-tenant isolation test (R1 Phase 1 Task 2).
 
-    Boots the server, runs isolation_flow.rb with two fresh principals (A and B),
-    and asserts all cross-tenant denial properties:
+    Runs demo:setup (clean DB + seed), boots the server, runs isolation_flow.rb
+    with two fresh principals (A and B), and asserts all cross-tenant denial properties:
 
-      Assertion 1 (ownership denial): B calls start_rental on A's reservation_id.
-        Gate-1 WHERE user_id = kiosk.current_user_id() finds nothing → 403.
-      Assertion 2 (exclusion): B's my_reservations does NOT contain A's reservation_id.
+      Assertion 1 (ownership denial — Gate-1 isolated): B satisfies Gate-2 (KYC)
+        and Gate-3 (settles a payment mandate referencing rA) then calls
+        start_rental on A's reservation_id. Gate-1 (user_id = kiosk.current_user_id()
+        AND status='reserved') finds nothing → 403. The 403 isolates Gate-1 ownership
+        because Gate-2 and Gate-3 are both genuinely satisfied by B.
+      Assertion 2a (exclusion): B's my_reservations does NOT contain A's reservation.
+      Assertion 2b (positive control): B's my_reservations DOES contain B's own
+        reservation, proving the exclusion is not vacuous.
       Assertion 3 (forged user_id ignored): B calls reserve with user_id: A's UUID.
         The created reservation's DB user_id is B (server uses kiosk.current_user_id(),
         ignores agent-supplied user_id).
@@ -533,7 +538,7 @@ namespace :demo do
     Exits 0 if all assertions hold (isolation works); exits 1 on failure.
     A red assertion = real isolation hole: fix the app, not the test.
   DESC
-  task :isolation do
+  task isolation: :setup do
     require "resolv"
     require "json"
 
@@ -614,27 +619,40 @@ namespace :demo do
     failures = []
     puts "\n── Adversarial isolation assertions ──"
 
-    user_id_a            = result["user_id_a"]
-    user_id_b            = result["user_id_b"]
-    reservation_id_a     = result["reservation_id_a"]
+    user_id_a               = result["user_id_a"]
+    user_id_b               = result["user_id_b"]
+    reservation_id_a        = result["reservation_id_a"]
     reservation_id_b_forged = result["reservation_id_b_forged"]
-    b_start_rental_rc    = result["b_start_rental_rc"]
-    b_reservation_ids    = result["b_reservation_ids"] || []
+    b_start_rental_rc       = result["b_start_rental_rc"]
+    b_reservation_ids       = result["b_reservation_ids"] || []
 
-    # ── Assertion 1: B's start_rental on A's reservation → 403 ───────────
+    # ── Assertion 1: B's start_rental on A's reservation → 403 ──────────
+    # B passed Gate-2 (KYC) and Gate-3 (payment for rA) before this attempt;
+    # the 403 therefore isolates Gate-1 ownership exclusively.
     if b_start_rental_rc == 403
-      puts "  OK  Assertion 1: B's start_rental on A's rA #{reservation_id_a} → 403 (Gate-1 ownership denied)"
+      puts "  OK  Assertion 1: B's start_rental on A's rA #{reservation_id_a} → 403 (Gate-1 ownership denied; Gate-2+3 passed)"
     else
       failures << "ISOLATION HOLE: B's start_rental on A's reservation returned #{b_start_rental_rc.inspect} (expected 403) — Gate-1 ownership bypass"
       puts "  FAIL  Assertion 1: B's start_rental on A's rA expected 403, got #{b_start_rental_rc.inspect} — isolation hole"
     end
 
-    # ── Assertion 2: B's my_reservations excludes A's reservation ────────
+    # ── Assertion 2a: B's my_reservations excludes A's reservation ───────
     if b_reservation_ids.include?(reservation_id_a)
       failures << "ISOLATION HOLE: B's my_reservations contains A's reservation #{reservation_id_a} — cross-tenant leak"
-      puts "  FAIL  Assertion 2: B sees A's reservation #{reservation_id_a} in my_reservations — isolation hole"
+      puts "  FAIL  Assertion 2a: B sees A's reservation #{reservation_id_a} in my_reservations — isolation hole"
     else
-      puts "  OK  Assertion 2: B's my_reservations excludes A's reservation #{reservation_id_a} (app-layer isolation)"
+      puts "  OK  Assertion 2a: B's my_reservations excludes A's reservation #{reservation_id_a} (app-layer isolation)"
+    end
+
+    # ── Assertion 2b: B's my_reservations includes B's own reservation ───
+    # Positive control: proves the exclusion above is not vacuous (the query
+    # returns rows for B; if it always returned empty, Assertion 2a would
+    # pass spuriously).
+    if b_reservation_ids.include?(reservation_id_b_forged)
+      puts "  OK  Assertion 2b: B's my_reservations includes B's own #{reservation_id_b_forged} (positive control — exclusion non-vacuous)"
+    else
+      failures << "B's my_reservations does not include B's own reservation #{reservation_id_b_forged}; got #{b_reservation_ids.inspect} — positive control failed (vacuous exclusion)"
+      puts "  FAIL  Assertion 2b: B's my_reservations missing B's own rB_forged #{reservation_id_b_forged} — positive control failed"
     end
 
     # ── Assertion 3: DB user_id on B's forged reservation == user_id_b ───

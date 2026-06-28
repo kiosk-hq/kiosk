@@ -408,6 +408,129 @@ namespace :demo do
     end
   end
 
+  # ── demo:rls — additive RLS-enforce reference (R1 Phase 1 Task 5) ─────────
+  desc <<~DESC
+    RLS enforce reference (R1 Phase 1 Task 5) — strictly additive overlay; does NOT
+    touch Path-C structure.sql and does NOT add any migration.
+
+    Loads the normal structure.sql schema (db:drop → db:create → db:schema:load →
+    db:seed — identical to demo:setup), then applies RLS as an IMPERATIVE OVERLAY
+    via the kiosk-rls gem (Kiosk::RLS::Emitter — dogfooded).
+
+    Role model:
+      kiosk_foodelivery_app  NOLOGIN NOSUPERUSER NOBYPASSRLS   ← non-owner, subject to RLS
+      GRANT kiosk_foodelivery_app TO CURRENT_USER              ← allows SET LOCAL ROLE
+
+    Initializer gate (KIOSK_RLS_ENFORCE=1):
+      c.enforce_db_role = true
+      c.app_role        = "kiosk_foodelivery_app"
+    SessionContext.open appends SET LOCAL ROLE "kiosk_foodelivery_app" after GUCs.
+
+    Three-way proof (rls_proof.rb):
+      1. Negative control: owner/superuser WITHOUT SessionContext sees BOTH rows
+         (superuser bypasses RLS — the pre-fix no-op / leak).
+      2. Enforced session for A: raw unscoped SELECT * FROM orders → only A's row.
+      3. Enforced session for B: raw unscoped SELECT * FROM orders → only B's row.
+
+    Exits 0 if all three assertions pass; exits 1 on any failure.
+    Default `rake demo` (Path-C) is completely unaffected: structure.sql unchanged,
+    no ROW LEVEL SECURITY in it, no migration added.
+  DESC
+  task :rls do
+    # ── Step 1: Load structure.sql — identical to demo:setup (Path-C canonical) ─
+    # No RLS, no migrations — the canonical structure.sql stays unchanged.
+    sh "bundle exec rails db:drop db:create db:schema:load db:seed"
+
+    # ── Step 2: Create the non-owner app role (idempotent) ──────────────────
+    # NOLOGIN: cannot connect directly — only reachable via SET LOCAL ROLE.
+    # NOSUPERUSER: does not bypass RLS (unlike the login/owner role).
+    # NOBYPASSRLS: explicitly subject to all RLS policies (the default for
+    #              non-superuser roles, but stated for clarity and production parity).
+    sh "psql -d postgres -tAc \"DO \\$\\$ BEGIN " \
+       "IF NOT EXISTS (SELECT FROM pg_roles WHERE rolname = 'kiosk_foodelivery_app') " \
+       "THEN CREATE ROLE kiosk_foodelivery_app NOLOGIN NOSUPERUSER NOBYPASSRLS; END IF; " \
+       "END \\$\\$;\" >/dev/null"
+    puts "  Role kiosk_foodelivery_app ensured (NOLOGIN NOSUPERUSER NOBYPASSRLS)."
+
+    # ── Step 3: Grant kiosk_foodelivery_app to CURRENT_USER ─────────────────
+    # Required so that the owner session can execute SET LOCAL ROLE kiosk_foodelivery_app
+    # inside a transaction (SET ROLE requires membership; GRANT first makes
+    # CURRENT_USER a member of the app role).
+    sh "psql -d postgres -tAc 'GRANT kiosk_foodelivery_app TO CURRENT_USER' >/dev/null"
+    puts "  GRANT kiosk_foodelivery_app TO CURRENT_USER — SET LOCAL ROLE now available."
+
+    # ── Step 4: Apply RLS overlay via kiosk-rls Emitter (dogfooded) ─────────
+    # rls_overlay.rb:
+    #   GRANT USAGE ON SCHEMA public, kiosk
+    #   Kiosk::RLS::Emitter.statements_for(orders_table):
+    #     ALTER TABLE orders ENABLE ROW LEVEL SECURITY
+    #     ALTER TABLE orders FORCE ROW LEVEL SECURITY      ← production-fidelity
+    #     GRANT SELECT,INSERT,UPDATE,DELETE ON orders TO kiosk_foodelivery_app
+    #     CREATE POLICY orders_select USING (user_id = kiosk.current_user_id())
+    #     CREATE POLICY orders_insert WITH CHECK (user_id = kiosk.current_user_id())
+    #     COMMENT ON TABLE orders IS '...'
+    #
+    # Run WITHOUT KIOSK_RLS_ENFORCE — overlay setup is privileged (owner connection).
+    overlay_rb = File.expand_path("../../rls_overlay.rb", __dir__)
+    puts "\n── Applying RLS overlay ──"
+    sh "bundle exec rails runner #{overlay_rb}"
+
+    # ── Step 5: Run the three-way isolation proof ────────────────────────────
+    # KIOSK_RLS_ENFORCE=1 activates the initializer gate:
+    #   c.enforce_db_role = true
+    #   c.app_role        = "kiosk_foodelivery_app"
+    # SessionContext.open then appends SET LOCAL ROLE "kiosk_foodelivery_app"
+    # after the GUC statements.
+    proof_rb = File.expand_path("../../rls_proof.rb", __dir__)
+    puts "\n── Running RLS isolation proof (KIOSK_RLS_ENFORCE=1) ──"
+    raw = `KIOSK_RLS_ENFORCE=1 bundle exec rails runner #{proof_rb} 2>&1`
+    puts raw
+
+    # ── Parse JSON and assert ────────────────────────────────────────────────
+    begin
+      result = JSON.parse(raw.lines.grep(/^\{/).last || raw)
+    rescue JSON::ParserError => e
+      abort "rls_proof.rb did not produce valid JSON: #{e.message}\nOutput:\n#{raw}"
+    end
+
+    puts "\n── RLS proof assertions ──"
+    failures = []
+
+    owner_sees = result["negative_control_owner_sees"].to_i
+    if owner_sees == 2
+      puts "  ✓  negative control: owner/superuser sees #{owner_sees} rows — no-op without role-drop (leak demonstrated)"
+    else
+      failures << "negative control: expected 2 rows, got #{owner_sees}"
+      puts "  ✗  negative control FAILED: owner sees #{owner_sees} (expected 2)"
+    end
+
+    a_sees = result["enforced_a_sees"].to_i
+    if a_sees == 1
+      puts "  ✓  enforced session A: sees #{a_sees} row (own order only) — RLS backstop works"
+    else
+      failures << "enforced A: expected 1 row, got #{a_sees}"
+      puts "  ✗  enforced A FAILED: sees #{a_sees} row(s) (expected 1)"
+    end
+
+    b_sees = result["enforced_b_sees"].to_i
+    if b_sees == 1
+      puts "  ✓  enforced session B: sees #{b_sees} row (own order only) — RLS backstop works"
+    else
+      failures << "enforced B: expected 1 row, got #{b_sees}"
+      puts "  ✗  enforced B FAILED: sees #{b_sees} row(s) (expected 1)"
+    end
+
+    if failures.empty?
+      puts "\n  RLS proof PASSED — FORCE+role-drop blocks raw cross-tenant SELECT."
+      puts "  structure.sql is unchanged; default demo path unaffected."
+    else
+      puts "\n  FAILED assertions:"
+      failures.each { |f| puts "    - #{f}" }
+      exit 1
+    end
+  end
+  # ── end demo:rls ──────────────────────────────────────────────────────────
+
   # -------------------------------------------------------------------------
   desc <<~DESC
     TOY MECHANISM DEMO — proofsize 12 at edgebits 10; NOT production difficulty.

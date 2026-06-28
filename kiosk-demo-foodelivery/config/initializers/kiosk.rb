@@ -113,6 +113,22 @@ Kiosk.configure do |c|
   c.roles  = %i[customer]
   c.owner  = { name: "foodelivery", support: "help@foodelivery.app" }
 
+  # ── RLS enforce gate (R1 Phase 1 Task 5 — demo:rls only) ─────────────────
+  # When KIOSK_RLS_ENFORCE=1, SessionContext.open appends
+  #   SET LOCAL ROLE "kiosk_foodelivery_app"
+  # after the GUC statements, dropping the session to the non-owner app role
+  # for the duration of the transaction.  The non-owner role is subject to
+  # the RLS policies applied by demo:rls (ENABLE + FORCE + per-user SELECT/INSERT
+  # policies on the orders table).
+  #
+  # When unset (default), enforce_db_role = false and app_role falls back to the
+  # ENV-driven default ("app_role") — no role-drop, byte-identical to the
+  # pre-T5 behaviour (Path-C demo:order / demo:isolation / demo:pow / demo:cuckoo).
+  if ENV["KIOSK_RLS_ENFORCE"] == "1"
+    c.enforce_db_role = true
+    c.app_role        = "kiosk_foodelivery_app"
+  end
+
   # JwtOrStubIdp tries Kiosk-issued JWTs (Device-Grant output) first,
   # then falls back to StubIdp's bespoke `agent:u-…:a-…:r-…` shape.
   # One endpoint authenticates both for the demo. Real providers swap

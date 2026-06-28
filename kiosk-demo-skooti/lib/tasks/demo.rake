@@ -677,5 +677,115 @@ namespace :demo do
   end
 end
 
+namespace :demo do
+  # ── demo:redteam ─────────────────────────────────────────────────────────
+  desc <<~DESC
+    Adversarial regression battery (R3 Phase 2 Task 4) — kiosk-redteam.
+
+    Boots skooti, runs all 12 Kiosk::Redteam scenarios against the full chain
+    (PoW d=20 → KYC → reserve → pay → start_rental) and asserts each attack
+    is BLOCKED:
+
+      BLOCKED  PayForOtherUseSelf    — C2: B pays for A's reservation, tries start_rental
+      BLOCKED  SpentResourceReuse    — C3: re-start_rental on already-active reservation
+      BLOCKED  MissingKyc            — start_rental without any KYC → Gate-2 fires
+      BLOCKED  ExpiredKyc            — expired attestation rejected at /kyc or Gate-2
+      BLOCKED  ForgedKyc             — wrong-key attestation rejected at /kyc
+      BLOCKED  UnpaidGatedAction     — start_rental without payment → Gate-3 fires
+      BLOCKED  CrossTenantRead       — B's my_reservations excludes A's rows
+      BLOCKED  ForgedUserId          — agent-supplied user_id in reserve args ignored
+      BLOCKED  RegistrationWithoutPow — /register without PoW rejected (d=20)
+      BLOCKED  MandatePrincipalSwap  — B signs mandate with A's identity; rejected
+      BLOCKED  MandateReplay         — B re-submits A's JWS; rejected
+      BLOCKED  TokenTampering        — altered JWT claim rejected 401
+
+    Exits 0 when all scenarios are BLOCKED; exits 1 on any BREACH.
+    A BREACH = a real hole in skooti — fix the app, not the scenario.
+  DESC
+  task redteam: :setup do
+    require "resolv"
+    require "json"
+    require "net/http"
+    require "uri"
+
+    port = ENV.fetch("PORT", "3003")
+    log  = "/tmp/kiosk-skooti-redteam.log"
+
+    # ── host resolution ────────────────────────────────────────────────────
+    host = begin
+      addr = begin
+        Resolv.getaddress("skooti.app")
+      rescue Resolv::ResolvError
+        ""
+      end
+      if addr == "127.0.0.1"
+        "skooti.app"
+      else
+        puts "  (add to /etc/hosts: 127.0.0.1 skooti.app — using 127.0.0.1)" if addr.empty?
+        "127.0.0.1"
+      end
+    end
+
+    server_url   = "http://#{host}:#{port}"
+    kiosk_issuer = server_url
+
+    puts "\n── Starting skooti (redteam battery) on #{server_url} ──"
+
+    # ── boot the server ────────────────────────────────────────────────────
+    env_vars = { "KIOSK_ISSUER" => kiosk_issuer }
+
+    File.truncate(log, 0) if File.exist?(log)
+    server_pid = spawn(
+      env_vars,
+      "bundle exec rails s -p #{port} -b 127.0.0.1 -e development",
+      out: log, err: log,
+    )
+
+    at_exit do
+      begin
+        Process.kill("TERM", server_pid)
+        Process.wait(server_pid)
+      rescue Errno::ESRCH, Errno::ECHILD
+        nil
+      end
+      puts "  Server stopped."
+    end
+
+    # ── wait for readiness ─────────────────────────────────────────────────
+    ready = false
+    40.times do
+      begin
+        res = Net::HTTP.get_response(URI("#{server_url}/.well-known/kiosk.json"))
+        if res.code.to_i == 200
+          ready = true
+          break
+        end
+      rescue Errno::ECONNREFUSED, Errno::EADDRNOTAVAIL, SocketError
+        nil
+      end
+      sleep 1
+    end
+    abort "Server did not become ready — see #{log}" unless ready
+    puts "  Server up at #{server_url}"
+
+    # ── run redteam_suite.rb ───────────────────────────────────────────────
+    suite_rb = File.expand_path("../../redteam_suite.rb", __dir__)
+    puts "\n── Running redteam_suite.rb ──"
+
+    env_str = "SERVER_URL=#{server_url} KIOSK_ISSUER=#{kiosk_issuer}"
+
+    system("#{env_str} bundle exec ruby #{suite_rb}")
+    exit_status = $?.exitstatus
+
+    if exit_status == 0
+      puts "\n  redteam: all applicable scenarios BLOCKED. Exit 0."
+    else
+      puts "\n  redteam: BREACH DETECTED or error — see output above. Exit #{exit_status}."
+      exit exit_status
+    end
+  end
+  # ── end demo:redteam ─────────────────────────────────────────────────────
+end
+
 desc "End-to-end Kiosk skooti demo: setup the DB then prove the full rental chain (Arch 2)."
 task demo: ["demo:setup", "demo:rideflow"]

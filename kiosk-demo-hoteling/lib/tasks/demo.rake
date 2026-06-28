@@ -160,6 +160,14 @@ namespace :demo do
         failures << "happy: kiosk.payment_mandates expected >= 1, got #{pm_count.inspect}"
         puts "  FAIL  kiosk.payment_mandates expected >= 1, got #{pm_count.inspect}"
       end
+
+      resv_kiosk_count = `psql -X -d #{db} -tAc "SELECT COUNT(*) FROM kiosk.reservations WHERE resource_kind='room_booking'" 2>&1`.strip
+      if resv_kiosk_count.to_i >= 1
+        puts "  OK  kiosk.reservations[resource_kind=room_booking] >= 1 (got #{resv_kiosk_count})"
+      else
+        failures << "happy: kiosk.reservations[resource_kind=room_booking] expected >= 1, got #{resv_kiosk_count.inspect}"
+        puts "  FAIL  kiosk.reservations[resource_kind=room_booking] expected >= 1, got #{resv_kiosk_count.inspect}"
+      end
     end
 
     # ── RUN 2: Server-gate negative — SKIP_PAY → 403 ─────────────────────

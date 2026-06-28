@@ -201,6 +201,57 @@ request. The reference solver is `kiosk-pow/solve.py`.
 
 ---
 
+## Self-discovery
+
+Instead of relying solely on this static file, an agent can ask the provider
+for a live, machine-readable catalog of every registered query and action:
+
+```http
+POST /kiosk/exec
+Authorization: Bearer <access_token>
+Content-Type: application/json
+
+{ "command": "schema" }
+```
+
+Response — HTTP 200, inside `.value`:
+
+```json
+{
+  "verbs":   ["query", "run", "pay", "schema", "help"],
+  "queries": [
+    { "name": "restaurants",        "description": "Browse the public restaurant catalog", "params": null },
+    { "name": "menu_by_restaurant", "description": "Browse menu items for a named restaurant",
+                                    "params": { "restaurant": "string — restaurant name" } },
+    { "name": "my_orders",          "description": "List this principal's placed orders ...", "params": null }
+  ],
+  "actions": [
+    { "name": "place_order", "description": "Place a food order for the authenticated principal",
+                              "params": { "menu_item_id": "integer — id of the menu item to order",
+                                          "quantity": "integer — number of items (default 1)",
+                                          "delivery_address": "string — delivery address" } }
+  ]
+}
+```
+
+For a human-readable rendering of the same catalog:
+
+```http
+POST /kiosk/exec
+Authorization: Bearer <access_token>
+Content-Type: application/json
+
+{ "command": "help" }
+```
+
+Response `.value.text` is a plain-text listing of implemented verbs, queries,
+and actions with their descriptions and param hints.
+
+Use `schema` to discover what is available at runtime rather than hard-coding
+query or action names from this file.
+
+---
+
 ## Rules
 
 1. **Generate the keypair once per session; keep the private key.** Mandate verification looks up the public key you registered. If you lose the key, re-register.

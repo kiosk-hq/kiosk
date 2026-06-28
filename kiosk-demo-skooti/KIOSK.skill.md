@@ -238,6 +238,57 @@ mechanism solved inline — it is not the Argon2id `pow_required` exec protocol.
 
 ---
 
+## Self-discovery
+
+Instead of relying solely on this static file, an agent can ask the provider
+for a live, machine-readable catalog of every registered query and action:
+
+```http
+POST /kiosk/exec
+Authorization: Bearer <access_token>
+Content-Type: application/json
+
+{ "command": "schema" }
+```
+
+Response — HTTP 200, inside `.value`:
+
+```json
+{
+  "verbs":   ["query", "run", "pay", "schema", "help"],
+  "queries": [
+    { "name": "scooters_available", "description": "Browse available scooters in the fleet",
+                                    "params": null },
+    { "name": "my_reservations",    "description": "List this principal's scooter reservations ...",
+                                    "params": null }
+  ],
+  "actions": [
+    { "name": "reserve",      "description": "Reserve a scooter by its code for the authenticated principal",
+                               "params": { "scooter_code": "string — scooter code, e.g. 'SK-001'" } },
+    { "name": "start_rental", "description": "Verify gates (ownership, KYC, payment) and issue an Ed25519 offline rental token",
+                               "params": { "reservation_id": "uuid — the reservation to activate" } }
+  ]
+}
+```
+
+For a human-readable rendering of the same catalog:
+
+```http
+POST /kiosk/exec
+Authorization: Bearer <access_token>
+Content-Type: application/json
+
+{ "command": "help" }
+```
+
+Response `.value.text` is a plain-text listing of implemented verbs, queries,
+and actions with their descriptions and param hints.
+
+Use `schema` to discover what is available at runtime rather than hard-coding
+query or action names from this file.
+
+---
+
 ## Rules
 
 1. **Generate the keypair once per session; keep the private key.**

@@ -835,6 +835,157 @@ namespace :demo do
     end
   end
 
+  # ── demo:schema ──────────────────────────────────────────────────────────
+  desc <<~DESC
+    Self-discovery proof (P3 Task 2) — verifies schema + help verbs over HTTP.
+
+    Boots the server, registers a fresh agent, calls:
+      POST /kiosk/exec { command: "schema" }
+      POST /kiosk/exec { command: "help"   }
+
+    Asserts:
+      • schema.verbs includes query/run/pay/schema/help and NOT events
+      • schema.queries includes my_orders with a description
+      • schema.actions includes place_order with a description
+      • help.text mentions my_orders and place_order by name
+
+    Exits 0 if all assertions pass; exits 1 on any miss.
+  DESC
+  task schema: :setup do
+    require "resolv"
+    require "net/http"
+    require "uri"
+    require "json"
+
+    port = ENV.fetch("PORT", "3002")
+    log  = "/tmp/kiosk-foodelivery-schema.log"
+
+    host = begin
+      addr = Resolv.getaddress("foodelivery.app") rescue ""
+      addr == "127.0.0.1" ? "foodelivery.app" : "127.0.0.1"
+    end
+
+    server_url   = "http://#{host}:#{port}"
+    kiosk_issuer = server_url
+
+    puts "\n── Starting foodelivery (schema/help proof) on #{server_url} ──"
+
+    server_pid = spawn(
+      { "KIOSK_ISSUER" => kiosk_issuer },
+      "bundle exec rails s -p #{port} -b 127.0.0.1 -e development",
+      out: log, err: log,
+    )
+
+    at_exit do
+      begin
+        Process.kill("TERM", server_pid)
+        Process.wait(server_pid)
+      rescue Errno::ESRCH, Errno::ECHILD
+        nil
+      end
+    end
+
+    ready = false
+    30.times do
+      begin
+        res = Net::HTTP.get_response(URI("#{server_url}/.well-known/kiosk.json"))
+        if res.code.to_i == 200
+          ready = true
+          break
+        end
+      rescue Errno::ECONNREFUSED, Errno::EADDRNOTAVAIL, SocketError
+        nil
+      end
+      sleep 1
+    end
+    abort "Server did not become ready — see #{log}" unless ready
+    puts "  Server up at #{server_url}"
+
+    flow_rb = File.expand_path("../../schema_flow.rb", __dir__)
+    puts "\n── Running schema_flow.rb ──"
+    raw = `SERVER_URL=#{server_url} KIOSK_ISSUER=#{kiosk_issuer} bundle exec ruby #{flow_rb} 2>&1`
+    puts raw
+
+    begin
+      result = JSON.parse(raw.lines.grep(/^\{/).last || raw)
+    rescue JSON::ParserError => e
+      abort "schema_flow.rb did not produce valid JSON: #{e.message}\nOutput:\n#{raw}"
+    end
+
+    puts "\n── Schema/help assertions ──"
+    failures = []
+
+    verbs   = result["schema_verbs"]   || []
+    queries = result["schema_queries"] || []
+    actions = result["schema_actions"] || []
+    text    = result["help_text"]      || ""
+
+    # Verbs: query/run/pay/schema/help present; events absent
+    %w[query run pay schema help].each do |v|
+      if verbs.include?(v)
+        puts "  ✓  schema.verbs includes #{v}"
+      else
+        failures << "schema.verbs missing #{v} (got #{verbs.inspect})"
+        puts "  ✗  schema.verbs missing #{v}"
+      end
+    end
+    if verbs.include?("events")
+      failures << "schema.verbs must NOT include events (got #{verbs.inspect})"
+      puts "  ✗  schema.verbs must NOT include events"
+    else
+      puts "  ✓  schema.verbs does not include events"
+    end
+
+    # my_orders present with a description
+    my_orders_entry = queries.find { |q| q["name"] == "my_orders" }
+    if my_orders_entry
+      puts "  ✓  schema.queries includes my_orders"
+      if my_orders_entry["description"] && !my_orders_entry["description"].to_s.empty?
+        puts "  ✓  my_orders has description: #{my_orders_entry["description"].inspect}"
+      else
+        failures << "my_orders missing description"
+        puts "  ✗  my_orders missing description"
+      end
+    else
+      failures << "schema.queries missing my_orders"
+      puts "  ✗  schema.queries missing my_orders"
+    end
+
+    # place_order present with a description
+    place_order_entry = actions.find { |a| a["name"] == "place_order" }
+    if place_order_entry
+      puts "  ✓  schema.actions includes place_order"
+      if place_order_entry["description"] && !place_order_entry["description"].to_s.empty?
+        puts "  ✓  place_order has description: #{place_order_entry["description"].inspect}"
+      else
+        failures << "place_order missing description"
+        puts "  ✗  place_order missing description"
+      end
+    else
+      failures << "schema.actions missing place_order"
+      puts "  ✗  schema.actions missing place_order"
+    end
+
+    # help text mentions my_orders and place_order
+    %w[my_orders place_order].each do |name|
+      if text.include?(name)
+        puts "  ✓  help text mentions #{name}"
+      else
+        failures << "help text does not mention #{name}"
+        puts "  ✗  help text does not mention #{name}"
+      end
+    end
+
+    if failures.empty?
+      puts "\n  All schema/help assertions passed."
+    else
+      puts "\n  FAILED assertions:"
+      failures.each { |f| puts "    - #{f}" }
+      exit 1
+    end
+  end
+  # ── end demo:schema ───────────────────────────────────────────────────────
+
   # ── demo:redteam ─────────────────────────────────────────────────────────
   desc <<~DESC
     Adversarial regression battery (R3 Phase 2 Task 3) — kiosk-redteam.

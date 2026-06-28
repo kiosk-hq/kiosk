@@ -787,5 +787,164 @@ namespace :demo do
   # ── end demo:redteam ─────────────────────────────────────────────────────
 end
 
+namespace :demo do
+  # ── demo:schema ────────────────────────────────────────────────────────────
+  desc <<~DESC
+    Self-discovery proof (P3 Task 2) — verifies schema + help verbs over HTTP.
+
+    Boots the server, registers a fresh agent (PoW d=20), calls:
+      POST /kiosk/exec { command: "schema" }
+      POST /kiosk/exec { command: "help"   }
+
+    Asserts:
+      • schema.verbs includes query/run/pay/schema/help and NOT events
+      • schema.queries includes reserve with a description
+      • schema.actions includes start_rental with a description
+      • help.text mentions reserve and start_rental by name
+
+    Exits 0 if all assertions pass; exits 1 on any miss.
+  DESC
+  task schema: :setup do
+    require "resolv"
+    require "net/http"
+    require "uri"
+    require "json"
+
+    port = ENV.fetch("PORT", "3003")
+    log  = "/tmp/kiosk-skooti-schema.log"
+
+    host = begin
+      addr = begin
+        Resolv.getaddress("skooti.app")
+      rescue Resolv::ResolvError
+        ""
+      end
+      addr == "127.0.0.1" ? "skooti.app" : "127.0.0.1"
+    end
+
+    server_url   = "http://#{host}:#{port}"
+    kiosk_issuer = server_url
+
+    puts "\n── Starting skooti (schema/help proof) on #{server_url} ──"
+
+    File.truncate(log, 0) if File.exist?(log)
+    server_pid = spawn(
+      { "KIOSK_ISSUER" => kiosk_issuer },
+      "bundle exec rails s -p #{port} -b 127.0.0.1 -e development",
+      out: log, err: log,
+    )
+
+    at_exit do
+      begin
+        Process.kill("TERM", server_pid)
+        Process.wait(server_pid)
+      rescue Errno::ESRCH, Errno::ECHILD
+        nil
+      end
+      puts "  Server stopped."
+    end
+
+    ready = false
+    40.times do
+      begin
+        res = Net::HTTP.get_response(URI("#{server_url}/.well-known/kiosk.json"))
+        if res.code.to_i == 200
+          ready = true
+          break
+        end
+      rescue Errno::ECONNREFUSED, Errno::EADDRNOTAVAIL, SocketError
+        nil
+      end
+      sleep 1
+    end
+    abort "Server did not become ready — see #{log}" unless ready
+    puts "  Server up at #{server_url}"
+
+    flow_rb = File.expand_path("../../schema_flow.rb", __dir__)
+    puts "\n── Running schema_flow.rb ──"
+    raw = `SERVER_URL=#{server_url} KIOSK_ISSUER=#{kiosk_issuer} bundle exec ruby #{flow_rb} 2>&1`
+    puts raw
+
+    begin
+      result = JSON.parse(raw.lines.grep(/^\{/).last || raw)
+    rescue JSON::ParserError => e
+      abort "schema_flow.rb did not produce valid JSON: #{e.message}\nOutput:\n#{raw}"
+    end
+
+    puts "\n── Schema/help assertions ──"
+    failures = []
+
+    verbs   = result["schema_verbs"]   || []
+    queries = result["schema_queries"] || []
+    actions = result["schema_actions"] || []
+    text    = result["help_text"]      || ""
+
+    # Verbs: query/run/pay/schema/help present; events absent
+    %w[query run pay schema help].each do |v|
+      if verbs.include?(v)
+        puts "  ✓  schema.verbs includes #{v}"
+      else
+        failures << "schema.verbs missing #{v} (got #{verbs.inspect})"
+        puts "  ✗  schema.verbs missing #{v}"
+      end
+    end
+    if verbs.include?("events")
+      failures << "schema.verbs must NOT include events (got #{verbs.inspect})"
+      puts "  ✗  schema.verbs must NOT include events"
+    else
+      puts "  ✓  schema.verbs does not include events"
+    end
+
+    # reserve present with a description (reserve is an Action, not a query)
+    reserve_entry = actions.find { |a| a["name"] == "reserve" }
+    if reserve_entry
+      puts "  ✓  schema.actions includes reserve"
+      if reserve_entry["description"] && !reserve_entry["description"].to_s.empty?
+        puts "  ✓  reserve has description: #{reserve_entry["description"].inspect}"
+      else
+        failures << "reserve missing description"
+        puts "  ✗  reserve missing description"
+      end
+    else
+      failures << "schema.actions missing reserve"
+      puts "  ✗  schema.actions missing reserve"
+    end
+
+    # start_rental present with a description
+    start_rental_entry = actions.find { |a| a["name"] == "start_rental" }
+    if start_rental_entry
+      puts "  ✓  schema.actions includes start_rental"
+      if start_rental_entry["description"] && !start_rental_entry["description"].to_s.empty?
+        puts "  ✓  start_rental has description: #{start_rental_entry["description"].inspect}"
+      else
+        failures << "start_rental missing description"
+        puts "  ✗  start_rental missing description"
+      end
+    else
+      failures << "schema.actions missing start_rental"
+      puts "  ✗  schema.actions missing start_rental"
+    end
+
+    # help text mentions reserve and start_rental
+    %w[reserve start_rental].each do |name|
+      if text.include?(name)
+        puts "  ✓  help text mentions #{name}"
+      else
+        failures << "help text does not mention #{name}"
+        puts "  ✗  help text does not mention #{name}"
+      end
+    end
+
+    if failures.empty?
+      puts "\n  All schema/help assertions passed."
+    else
+      puts "\n  FAILED assertions:"
+      failures.each { |f| puts "    - #{f}" }
+      exit 1
+    end
+  end
+  # ── end demo:schema ────────────────────────────────────────────────────────
+end
+
 desc "End-to-end Kiosk skooti demo: setup the DB then prove the full rental chain (Arch 2)."
 task demo: ["demo:setup", "demo:rideflow"]

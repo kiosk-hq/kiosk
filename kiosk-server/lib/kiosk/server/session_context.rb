@@ -37,15 +37,24 @@ module Kiosk
       end
 
       # Just the SQL statements that would be issued, useful in tests +
-      # documentation.
+      # documentation. When +enforce_db_role+ is set, appends a
+      # <tt>SET LOCAL ROLE</tt> statement as the final entry so the session
+      # drops to the app role after the GUCs are applied (reverts at
+      # COMMIT/ROLLBACK — same «SET LOCAL» scoping guarantee as the GUCs).
       def guc_statements
-        ns = Kiosk.configuration.guc_namespace
-        [
+        ns    = Kiosk.configuration.guc_namespace
+        stmts = [
           guc_sql(Kiosk::GUC.for(ns, Kiosk::GUC::USER_ID),  identity.user_id),
           guc_sql(Kiosk::GUC.for(ns, Kiosk::GUC::ROLE),     identity.role),
           guc_sql(Kiosk::GUC.for(ns, Kiosk::GUC::ACTOR),    identity.actor),
           (guc_sql(Kiosk::GUC.for(ns, Kiosk::GUC::AGENT_ID), identity.agent_id) if identity.agent_id),
         ].compact
+
+        if Kiosk.configuration.enforce_db_role
+          stmts + ["SET LOCAL ROLE #{quote_ident(Kiosk.configuration.app_role)}"]
+        else
+          stmts
+        end
       end
 
       private

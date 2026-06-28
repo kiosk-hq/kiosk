@@ -32,6 +32,11 @@ module Kiosk
         @schema ||= "kiosk"
       end
       attr_writer :schema
+
+      def enforce_db_role
+        @enforce_db_role ||= false
+      end
+      attr_writer :enforce_db_role
     end
   end
 end

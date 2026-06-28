@@ -22,6 +22,7 @@ gem "kiosk-core",               path: "../kiosk-core"
 gem "kiosk-rls",                path: "../kiosk-rls"
 gem "kiosk-server",             path: "../kiosk-server"
 gem "kiosk-pay-stripe",         path: "../kiosk-pay-stripe"
+gem "kiosk-redteam",            path: "../kiosk-redteam"
 
 group :development, :test do
   # See https://guides.rubyonrails.org/debugging_rails_applications.html#debugging-with-the-debug-gem

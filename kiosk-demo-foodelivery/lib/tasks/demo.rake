@@ -553,6 +553,164 @@ namespace :demo do
       exit 1
     end
   end
+  # ---------------------------------------------------------------------------
+  desc <<~DESC
+    Adversarial cross-tenant isolation test (R1 Phase 1 Task 1).
+
+    Boots the server, runs isolation_flow.rb with two fresh principals (A and B),
+    and asserts all cross-tenant denial properties:
+
+      Assertion 1 (exclusion): B's my_orders does NOT contain A's order oA.
+      Assertion 2 (forged user_id ignored): B calls place_order with a forged
+        user_id arg (A's UUID). The created order belongs to B (server uses
+        kiosk.current_user_id(), ignores agent-supplied user_id). Verified by:
+          - the order's DB user_id column == B's user_id (not A's)
+          - B's my_orders contains the order
+          - A's my_orders does NOT contain it
+      ⚠️ Assertion 3 (pay/order binding) — NOT TESTABLE with current mandate
+        structure: foodelivery's cart mandate carries line_items:[{sku,qty}] only;
+        there is no order_id field in the mandate or pay args. Cross-principal
+        settle cannot be fabricated. See report for the gap analysis.
+
+    Exits 0 if all assertions hold (isolation works); exits 1 on failure.
+    A red assertion = real isolation hole: fix the app, not the test.
+  DESC
+  task :isolation do
+    require "resolv"
+    require "json"
+
+    port = ENV.fetch("PORT", "3002")
+    log  = "/tmp/kiosk-foodelivery-isolation.log"
+
+    # ── host resolution ────────────────────────────────────────────────
+    host = begin
+      addr = Resolv.getaddress("foodelivery.app") rescue ""
+      if addr == "127.0.0.1"
+        "foodelivery.app"
+      else
+        puts "  add to /etc/hosts:  127.0.0.1 foodelivery.app" if addr.empty?
+        "127.0.0.1"
+      end
+    end
+
+    server_url   = "http://#{host}:#{port}"
+    kiosk_issuer = server_url
+
+    puts "\n── Starting foodelivery (isolation test) on #{server_url} ──"
+
+    # ── boot the server ────────────────────────────────────────────────
+    env_vars = { "KIOSK_ISSUER" => kiosk_issuer }
+    server_pid = spawn(
+      env_vars,
+      "bundle exec rails s -p #{port} -b 127.0.0.1 -e development",
+      out: log, err: log,
+    )
+
+    at_exit do
+      begin
+        Process.kill("TERM", server_pid)
+        Process.wait(server_pid)
+      rescue Errno::ESRCH, Errno::ECHILD
+        nil
+      end
+    end
+
+    # ── wait for readiness ─────────────────────────────────────────────
+    require "net/http"
+    require "uri"
+    ready = false
+    30.times do
+      begin
+        res = Net::HTTP.get_response(URI("#{server_url}/.well-known/kiosk.json"))
+        if res.code.to_i == 200
+          ready = true
+          break
+        end
+      rescue Errno::ECONNREFUSED, Errno::EADDRNOTAVAIL, SocketError
+        nil
+      end
+      sleep 1
+    end
+    abort "Server did not become ready — see #{log}" unless ready
+    puts "  Server up at #{server_url}"
+
+    # ── run isolation_flow.rb ──────────────────────────────────────────
+    flow_rb = File.expand_path("../../isolation_flow.rb", __dir__)
+    puts "\n── Running isolation_flow.rb (adversarial cross-tenant) ──"
+    raw = `SERVER_URL=#{server_url} KIOSK_ISSUER=#{kiosk_issuer} bundle exec ruby #{flow_rb} 2>&1`
+    puts raw
+
+    # ── parse JSON output ──────────────────────────────────────────────
+    begin
+      result = JSON.parse(raw.lines.grep(/^\{/).last || raw)
+    rescue JSON::ParserError => e
+      abort "isolation_flow.rb did not produce valid JSON: #{e.message}\nOutput:\n#{raw}"
+    end
+
+    failures = []
+    puts "\n── Adversarial isolation assertions ──"
+
+    user_id_a  = result["user_id_a"]
+    user_id_b  = result["user_id_b"]
+    order_id_a = result["order_id_a"]
+    order_id_b = result["order_id_b"]
+    b_before   = result["b_order_ids_before"] || []
+    b_after    = result["b_order_ids_after"]  || []
+    a_after    = result["a_order_ids_after"]  || []
+
+    # ── Assertion 1: B's my_orders (before) excludes A's order ────────
+    if b_before.include?(order_id_a)
+      failures << "ISOLATION HOLE: B's my_orders (before) contains A's order #{order_id_a} — cross-tenant leak"
+      puts "  ✗  Assertion 1 FAILED: B sees A's order #{order_id_a} — isolation hole"
+    else
+      puts "  ✓  Assertion 1: B's my_orders (before) excludes A's order #{order_id_a} (app-layer isolation)"
+    end
+
+    # ── Assertion 2a: B's my_orders (after forged place_order) contains oB ──
+    if b_after.include?(order_id_b)
+      puts "  ✓  Assertion 2a: B's my_orders (after forged order) includes oB #{order_id_b}"
+    else
+      failures << "B's my_orders (after forged order) does not contain oB #{order_id_b}; got #{b_after.inspect}"
+      puts "  ✗  Assertion 2a FAILED: B's my_orders missing oB #{order_id_b}"
+    end
+
+    # ── Assertion 2b: A's my_orders (after B's forged order) excludes oB ──
+    if a_after.include?(order_id_b)
+      failures << "ISOLATION HOLE: A's my_orders contains B's forged order #{order_id_b} — cross-tenant leak"
+      puts "  ✗  Assertion 2b FAILED: A sees B's order #{order_id_b} — isolation hole"
+    else
+      puts "  ✓  Assertion 2b: A's my_orders excludes B's forged order #{order_id_b}"
+    end
+
+    # ── Assertion 2c: DB user_id on oB is B's, not A's (forged arg ignored) ──
+    db = "kiosk_foodelivery_development"
+    db_user_id = `psql -X -d #{db} -tAc "SELECT user_id FROM orders WHERE id = '#{order_id_b}'" 2>&1`.strip
+    if db_user_id == user_id_b
+      puts "  ✓  Assertion 2c: DB orders.user_id for oB == user_id_b (#{user_id_b}) — forged arg ignored"
+    elsif db_user_id == user_id_a
+      failures << "ISOLATION HOLE: DB orders.user_id for oB is A's user_id (#{user_id_a}) — forged user_id arg was NOT ignored"
+      puts "  ✗  Assertion 2c FAILED: server used forged user_id arg (order belongs to A, not B)"
+    else
+      failures << "Unexpected user_id for oB: got #{db_user_id.inspect}, expected B's #{user_id_b}"
+      puts "  ✗  Assertion 2c FAILED: unexpected user_id #{db_user_id.inspect} for oB"
+    end
+
+    # ── Assertion 3 (⚠️ not testable — documented gap) ────────────────
+    puts "\n  ⚠️  Assertion 3 (pay/order binding): SKIPPED — not testable."
+    puts "      foodelivery's cart mandate has no order_id field; pay path is"
+    puts "      disconnected from specific placed orders. A cross-principal"
+    puts "      settle via a forged order reference cannot be constructed."
+    puts "      Gap: no server-side check that cart.line_items correspond to"
+    puts "      a placed order owned by the payer. Flagged for follow-up review."
+
+    if failures.empty?
+      puts "\n  All adversarial assertions passed — app-layer isolation holds."
+    else
+      puts "\n  FAILED assertions:"
+      failures.each { |f| puts "    - #{f}" }
+      exit 1
+    end
+  end
 end
 
 desc "End-to-end Kiosk demo: setup the DB then run the no-human order end-to-end."

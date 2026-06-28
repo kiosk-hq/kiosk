@@ -1,0 +1,19 @@
+default: &default
+  adapter: postgresql
+  encoding: unicode
+  pool: <%= ENV.fetch("RAILS_MAX_THREADS") { 5 } %>
+  host: <%= ENV.fetch("PGHOST", "localhost") %>
+
+development:
+  <<: *default
+  database: kiosk_hoteling_development
+
+test:
+  <<: *default
+  database: kiosk_hoteling_test
+
+production:
+  <<: *default
+  database: kiosk_hoteling_production
+  username: <%= ENV.fetch("KIOSK_HOTELING_DB_USER", "kiosk_hoteling") %>
+  password: <%= ENV["KIOSK_HOTELING_DB_PASSWORD"] %>

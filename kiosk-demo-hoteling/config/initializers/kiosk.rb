@@ -115,41 +115,43 @@ Kiosk::Server::Actions.register("reserve_room",
   nights      = (co - ci).to_i
   total_cents = nights * rt["nightly_price_cents"].to_i
 
-  # INSERT booking row
-  booking = conn.execute(<<~SQL).first
-    INSERT INTO public.bookings (user_id, property_id, room_type_id, check_in, check_out, total_cents, status, created_at, updated_at)
-    VALUES (
-      #{conn.quote(uid)}::uuid,
-      #{conn.quote(property_id.to_s)}::integer,
-      #{conn.quote(room_type_id.to_s)}::integer,
-      #{conn.quote(check_in.to_s)}::date,
-      #{conn.quote(check_out.to_s)}::date,
-      #{conn.quote(total_cents.to_s)}::integer,
-      'reserved',
-      now(), now()
-    )
-    RETURNING id
-  SQL
+  conn.transaction do
+    # INSERT booking row
+    booking = conn.execute(<<~SQL).first
+      INSERT INTO public.bookings (user_id, property_id, room_type_id, check_in, check_out, total_cents, status, created_at, updated_at)
+      VALUES (
+        #{conn.quote(uid)}::uuid,
+        #{conn.quote(property_id.to_s)}::integer,
+        #{conn.quote(room_type_id.to_s)}::integer,
+        #{conn.quote(check_in.to_s)}::date,
+        #{conn.quote(check_out.to_s)}::date,
+        #{conn.quote(total_cents.to_s)}::integer,
+        'reserved',
+        now(), now()
+      )
+      RETURNING id
+    SQL
 
-  booking_id = booking["id"]
+    booking_id = booking["id"]
 
-  # INSERT kiosk.reservations TTL row bound to the booking
-  conn.execute(<<~SQL)
-    INSERT INTO kiosk.reservations (user_id, agent_id, resource_kind, resource_id, args, expires_at)
-    VALUES (
-      #{conn.quote(uid)}::uuid,
-      #{agent_id.nil? ? "NULL" : "#{conn.quote(agent_id.to_s)}::uuid"},
-      'room_booking',
-      #{conn.quote(booking_id.to_s)},
-      '{}'::jsonb,
-      now() + interval '15 minutes'
-    )
-  SQL
+    # INSERT kiosk.reservations TTL row bound to the booking
+    conn.execute(<<~SQL)
+      INSERT INTO kiosk.reservations (user_id, agent_id, resource_kind, resource_id, args, expires_at)
+      VALUES (
+        #{conn.quote(uid)}::uuid,
+        #{agent_id.nil? ? "NULL" : "#{conn.quote(agent_id.to_s)}::uuid"},
+        'room_booking',
+        #{conn.quote(booking_id.to_s)},
+        '{}'::jsonb,
+        now() + interval '15 minutes'
+      )
+    SQL
 
-  {
-    booking_id:  booking_id,
-    total_cents: total_cents,
-  }
+    {
+      booking_id:  booking_id,
+      total_cents: total_cents,
+    }
+  end
 end
 
 Kiosk::Server::Actions.register("confirm_booking",
@@ -164,38 +166,42 @@ Kiosk::Server::Actions.register("confirm_booking",
     raise Kiosk::Server::Errors::BadRequest.new("missing field: booking_id")
   end
 
-  # ── Gate 1: booking belongs to principal AND status = 'reserved' ──────
-  booking = conn.execute(
-    "SELECT id FROM public.bookings " \
-    "WHERE id = #{conn.quote(booking_id.to_s)}::uuid " \
-    "AND user_id = kiosk.current_user_id() " \
-    "AND status = 'reserved' " \
-    "LIMIT 1"
-  ).first
-  raise Kiosk::Server::Errors::Forbidden.new("booking not found or not yours") if booking.nil?
+  conn.transaction do
+    # ── Gate 1: booking belongs to principal AND status = 'reserved' ──────
+    booking = conn.execute(
+      "SELECT id FROM public.bookings " \
+      "WHERE id = #{conn.quote(booking_id.to_s)}::uuid " \
+      "AND user_id = kiosk.current_user_id() " \
+      "AND status = 'reserved' " \
+      "LIMIT 1"
+    ).first
+    raise Kiosk::Server::Errors::Forbidden.new("booking not found or not yours") if booking.nil?
 
-  # ── Gate 2: settled payment mandate whose cart references THIS booking ─
-  booking_filter_json = [{ booking_id: booking_id.to_s }].to_json
-  paid = conn.execute(
-    "SELECT 1 AS ok " \
-    "FROM kiosk.payment_mandates pm " \
-    "JOIN kiosk.cart_mandates cm ON cm.id = pm.cart_mandate_id " \
-    "WHERE pm.user_id = kiosk.current_user_id() " \
-    "AND cm.line_items @> #{conn.quote(booking_filter_json)}::jsonb " \
-    "LIMIT 1"
-  ).first
-  raise Kiosk::Server::Errors::Forbidden.new("no settled payment mandate for this booking") if paid.nil?
+    # ── Gate 2: settled payment mandate whose cart references THIS booking ─
+    booking_filter_json = [{ booking_id: booking_id.to_s }].to_json
+    paid = conn.execute(
+      "SELECT 1 AS ok " \
+      "FROM kiosk.payment_mandates pm " \
+      "JOIN kiosk.cart_mandates cm ON cm.id = pm.cart_mandate_id " \
+      "WHERE pm.user_id = kiosk.current_user_id() " \
+      "AND cm.line_items @> #{conn.quote(booking_filter_json)}::jsonb " \
+      "LIMIT 1"
+    ).first
+    raise Kiosk::Server::Errors::Forbidden.new("no settled payment mandate for this booking") if paid.nil?
 
-  # ── All gates passed: confirm ─────────────────────────────────────────
-  confirmation_code = SecureRandom.uuid
-  conn.execute(
-    "UPDATE public.bookings SET status = 'confirmed', updated_at = now() " \
-    "WHERE id = #{conn.quote(booking_id.to_s)}::uuid"
-  )
+    # ── All gates passed: confirm ─────────────────────────────────────────
+    confirmation_code = SecureRandom.uuid
+    conn.execute(
+      "UPDATE public.bookings SET status = 'confirmed', updated_at = now() " \
+      "WHERE id = #{conn.quote(booking_id.to_s)}::uuid " \
+      "AND user_id = kiosk.current_user_id() " \
+      "AND status = 'reserved'"
+    )
 
-  {
-    booking_id:        booking_id,
-    status:            "confirmed",
-    confirmation_code: confirmation_code,
-  }
+    {
+      booking_id:        booking_id,
+      status:            "confirmed",
+      confirmation_code: confirmation_code,
+    }
+  end
 end

@@ -124,7 +124,22 @@ abort "B's forged appointment_id missing from response: #{JSON.generate(forged_r
 
 STDERR.puts "  B booked (forged user_id): appt_id=#{appt_id_b}"
 
-# ── Step 5: A queries my_appointments after B's forged booking ───────────────
+# ── Step 5: B queries my_appointments after its own booking (positive control) ─
+# Assertion 1b positive control: B must see its OWN appointment appt_id_b in
+# my_appointments. This proves that Assertion 1's exclusion is not vacuous:
+# if my_appointments always returned empty for B, the exclusion of aA would
+# pass spuriously. Seeing appt_id_b here confirms the query is live for B.
+rc, b_appts_after_resp = post_json(
+  "#{SERVER}/kiosk/exec",
+  { command: "query", body: { name: "my_appointments" } },
+  { "Authorization" => "Bearer #{TOKEN_B}" },
+)
+abort "B my_appointments (after) failed (#{rc}): #{JSON.generate(b_appts_after_resp)}" unless rc == 200
+
+b_appt_ids_after = (b_appts_after_resp["rows"] || []).map { |r| r["id"] }
+STDERR.puts "  B my_appointments (after own booking): #{b_appt_ids_after.inspect}"
+
+# ── Step 6: A queries my_appointments after B's forged booking ───────────────
 # A must NOT see B's forged appointment (cross-check for Assertion 2).
 rc, a_appts_resp = post_json(
   "#{SERVER}/kiosk/exec",
@@ -143,5 +158,6 @@ puts JSON.generate(
   appt_id_a:        appt_id_a,
   appt_id_b:        appt_id_b,
   b_appt_ids:       b_appt_ids,
+  b_appt_ids_after: b_appt_ids_after,
   a_appt_ids_after: a_appt_ids_after,
 )

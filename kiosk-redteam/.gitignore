@@ -1,0 +1,5 @@
+/.rspec_status
+/.bundle
+__pycache__/
+*.gem
+/Gemfile.lock

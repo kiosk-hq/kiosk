@@ -579,12 +579,16 @@ namespace :demo do
     each applicable attack is BLOCKED:
 
       BLOCKED  CrossTenantRead      — B's my_orders must not include A's deliveries
-      BLOCKED  ForgedUserId         — agent-supplied user_id arg must be ignored
       BLOCKED  MandatePrincipalSwap — B signs a mandate with A's identity; rejected
       BLOCKED  MandateReplay        — B re-submits A's signed mandate JWS; rejected
       BLOCKED  TokenTampering       — altered JWT (claim flipped) rejected 401
 
     Scenarios that require a surface getgrocery does not expose SKIP cleanly:
+      SKIPPED  ForgedUserId         — forge_action nil: add_to_cart returns cart_id
+                                      but my_orders lists delivery ids; readback
+                                      would be vacuously BLOCKED (entity mismatch).
+                                      Real coverage: demo:isolation Assertion 7
+                                      (DB SELECT confirms cart.user_id = caller's id).
       SKIPPED  UnpaidGatedAction, SpentResourceReuse, PayForOtherUseSelf
                (no gated_action — cart ownership is NOT a payment gate)
       SKIPPED  MissingKyc, ExpiredKyc, ForgedKyc  (requires_kyc: false)

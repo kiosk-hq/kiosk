@@ -27,6 +27,14 @@ module Kiosk
       # SessionContext; these manage their own SessionContext(s) instead.
       SELF_MANAGED_VERBS = %i[pay].freeze
 
+      # Verbs that enumerate the in-process registry only — they need no
+      # database connection and must NOT open a SessionContext.
+      NO_DB_VERBS = %i[schema help].freeze
+
+      # The verbs that are actually implemented and advertised to agents.
+      # `events` is stubbed and omitted intentionally.
+      IMPLEMENTED_VERBS = %w[query run pay schema help].freeze
+
       def self.call(kind:, args:, identity:, connection:)
         new(connection: connection, identity: identity).call(kind: kind, args: args)
       end
@@ -49,7 +57,9 @@ module Kiosk
           )
         end
 
-        if SELF_MANAGED_VERBS.include?(verb)
+        if NO_DB_VERBS.include?(verb)
+          dispatch(verb, args) # catalog-only verbs — no DB or SessionContext needed
+        elsif SELF_MANAGED_VERBS.include?(verb)
           dispatch(verb, args) # the verb manages its own SessionContext(s)
         else
           SessionContext.open(connection: connection, identity: identity) do
@@ -255,17 +265,52 @@ module Kiosk
 
       def q(value) = connection.quote(value)
 
-      # ─── stubs — land in follow-up releases ────────────────────────────
+      # ─── schema ────────────────────────────────────────────────────────
 
+      # Returns the provider's in-process catalog so an agent can self-discover
+      # available queries and actions without relying solely on a static skill file.
+      # Never opens a SessionContext or touches the DB.
       def verb_schema(_args)
-        raise NotImplementedError,
-              "`schema` verb arrives in a follow-up release (Postgres introspection)"
+        Result.new(kind: :value, payload: {
+          verbs:   IMPLEMENTED_VERBS,
+          queries: Queries.catalog,
+          actions: Actions.catalog,
+        })
       end
 
+      # ─── help ──────────────────────────────────────────────────────────
+
+      # Returns a human-readable rendering of the same catalog as verb_schema —
+      # lists implemented verbs, then each query and action with its description
+      # and params hint. Never opens a SessionContext or touches the DB.
       def verb_help(_args)
-        raise NotImplementedError,
-              "`help` verb arrives in a follow-up release (reads COMMENT ON TABLE/ACTION)"
+        lines = ["Available verbs: #{IMPLEMENTED_VERBS.join(", ")}", ""]
+
+        queries = Queries.catalog
+        if queries.any?
+          lines << "Queries:"
+          queries.each do |q|
+            desc   = q[:description] ? " — #{q[:description]}" : ""
+            hint   = q[:params]      ? " (params: #{q[:params]})" : ""
+            lines << "  #{q[:name]}#{desc}#{hint}"
+          end
+          lines << ""
+        end
+
+        actions = Actions.catalog
+        if actions.any?
+          lines << "Actions:"
+          actions.each do |a|
+            desc   = a[:description] ? " — #{a[:description]}" : ""
+            hint   = a[:params]      ? " (params: #{a[:params]})" : ""
+            lines << "  #{a[:name]}#{desc}#{hint}"
+          end
+        end
+
+        Result.new(kind: :value, payload: { text: lines.join("\n") })
       end
+
+      # ─── stub — lands in a follow-up release ───────────────────────────
 
       def verb_events(_args)
         raise NotImplementedError,

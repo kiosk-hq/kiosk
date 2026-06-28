@@ -46,13 +46,15 @@ module Kiosk
 
       private
 
-      # Return a skip Verdict (counts as blocked) when the profile lacks the
-      # surface this scenario exercises.
+      # Return a skip Verdict when the profile lacks the surface this scenario
+      # exercises.  A skip is NOT a pass — it is a distinct third state that
+      # does not count towards the blocked count and does not fail the battery.
+      # The expected-applicable assertion in each demo catches spurious skips.
       #
       # @param reason [String] human-readable reason, e.g. "no per_user_query"
       # @return [Verdict]
       def skip_verdict(reason)
-        Verdict.new(blocked: true, status: 0, detail: "SKIP — #{reason}")
+        Verdict.new(blocked: false, skipped: true, status: 0, detail: "SKIP — #{reason}")
       end
 
       # Wrap a server Response into a Verdict using the canonical blocked? helper.
@@ -64,6 +66,7 @@ module Kiosk
         blocked = Kiosk::Redteam.blocked?(response)
         Verdict.new(
           blocked: blocked,
+          skipped: false,
           status:  response.status,
           detail:  blocked ? "" : (detail || "HTTP #{response.status}: #{response.body.inspect}"),
         )

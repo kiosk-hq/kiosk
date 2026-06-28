@@ -30,6 +30,12 @@ module Kiosk
     #   The key in each returned row hash that holds the resource ID.
     #   Defaults to "id".
     #
+    # @!attribute result_id_key [String]
+    #   The key in a forge_action response body["value"] that holds the newly
+    #   created resource's ID.  Often differs from row_id_key because action
+    #   responses use provider-specific names (e.g. "reservation_id", "order_id")
+    #   while query rows normalise to "id".  Defaults to row_id_key.
+    #
     # @!attribute create_owned [#call, nil]
     #   Callable: `(client, principal) -> owned_ref (Hash)`.
     #   Creates a resource owned by `principal` and returns a Hash with at
@@ -86,6 +92,7 @@ module Kiosk
                   :requires_kyc,
                   :per_user_query,
                   :row_id_key,
+                  :result_id_key,
                   :create_owned,
                   :forge_action,
                   :forge_args,
@@ -101,6 +108,7 @@ module Kiosk
         requires_kyc: false,
         per_user_query: nil,
         row_id_key: "id",
+        result_id_key: nil,
         create_owned: nil,
         forge_action: nil,
         forge_args: nil,
@@ -115,6 +123,7 @@ module Kiosk
         @requires_kyc   = requires_kyc
         @per_user_query = per_user_query
         @row_id_key     = row_id_key
+        @result_id_key  = result_id_key || row_id_key
         @create_owned   = create_owned
         @forge_action   = forge_action
         @forge_args     = forge_args

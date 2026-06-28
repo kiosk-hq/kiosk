@@ -13,11 +13,15 @@ RSpec.describe Kiosk::Redteam::Runner do
   end
 
   def blocked_verdict(status: 403)
-    Kiosk::Redteam::Verdict.new(blocked: true, status:, detail: "")
+    Kiosk::Redteam::Verdict.new(blocked: true, skipped: false, status:, detail: "")
   end
 
   def breach_verdict(detail: "attack worked", status: 200)
-    Kiosk::Redteam::Verdict.new(blocked: false, status:, detail:)
+    Kiosk::Redteam::Verdict.new(blocked: false, skipped: false, status:, detail:)
+  end
+
+  def skip_verdict(reason: "no gated_action")
+    Kiosk::Redteam::Verdict.new(blocked: false, skipped: true, status: 0, detail: "SKIP — #{reason}")
   end
 
   # ── #run ────────────────────────────────────────────────────────────────
@@ -53,6 +57,20 @@ RSpec.describe Kiosk::Redteam::Runner do
       expect {
         described_class.new(base_url:, profile:).run([s])
       }.to output(/BREACH.*MandateSwap.*200 — data returned/).to_stdout
+    end
+
+    it "prints SKIP (not BLOCKED) for a skipped verdict" do
+      s = make_scenario("UnpaidGatedAction", skip_verdict(reason: "no gated_action"))
+      expect {
+        described_class.new(base_url:, profile:).run([s])
+      }.to output(/SKIP.*UnpaidGatedAction/).to_stdout
+    end
+
+    it "does not print BLOCKED for a skipped verdict" do
+      s = make_scenario("UnpaidGatedAction", skip_verdict)
+      expect {
+        described_class.new(base_url:, profile:).run([s])
+      }.not_to output(/BLOCKED/).to_stdout
     end
 
     it "passes the client (not nil) and the profile to each scenario" do
@@ -101,11 +119,53 @@ RSpec.describe Kiosk::Redteam::Runner do
     it "returns false when a verdict wraps a 500 (crash-masquerade guard)" do
       # The Scenario level would call Redteam.blocked?(response) with status 500
       # and get false, yielding a breach verdict.
-      crash_verdict = Kiosk::Redteam::Verdict.new(blocked: false, status: 500, detail: "server crashed")
+      crash_verdict = Kiosk::Redteam::Verdict.new(blocked: false, skipped: false, status: 500, detail: "server crashed")
       s = make_scenario("SomeCrash", crash_verdict)
       runner = described_class.new(base_url:, profile:)
       runner.run([s])
       expect(runner.all_blocked?).to be(false)
+    end
+
+    # Critical: a skip must NOT count as a pass.
+    it "returns true when the only non-skipped scenario is blocked (skip does not count as pass)" do
+      s_blocked = make_scenario("A", blocked_verdict)
+      s_skipped = make_scenario("B", skip_verdict)
+      runner = described_class.new(base_url:, profile:)
+      runner.run([s_blocked, s_skipped])
+      expect(runner.all_blocked?).to be(true)
+    end
+  end
+
+  # ── #breaches ───────────────────────────────────────────────────────────────
+
+  describe "#breaches" do
+    it "returns an empty array before any run" do
+      runner = described_class.new(base_url:, profile:)
+      expect(runner.breaches).to eq([])
+    end
+
+    it "returns an empty array when all scenarios are blocked" do
+      s = make_scenario("A", blocked_verdict)
+      runner = described_class.new(base_url:, profile:)
+      runner.run([s])
+      expect(runner.breaches).to be_empty
+    end
+
+    it "returns an empty array when a scenario is skipped (skip is not a breach)" do
+      s = make_scenario("B", skip_verdict)
+      runner = described_class.new(base_url:, profile:)
+      runner.run([s])
+      expect(runner.breaches).to be_empty
+    end
+
+    it "returns only the breach results" do
+      s_blocked = make_scenario("A", blocked_verdict)
+      s_breach  = make_scenario("B", breach_verdict(detail: "data leaked"))
+      s_skipped = make_scenario("C", skip_verdict)
+      runner = described_class.new(base_url:, profile:)
+      runner.run([s_blocked, s_breach, s_skipped])
+      expect(runner.breaches.size).to eq(1)
+      expect(runner.breaches.first[:scenario]).to be(s_breach)
     end
   end
 end

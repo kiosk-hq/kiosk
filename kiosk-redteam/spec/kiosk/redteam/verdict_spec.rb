@@ -66,9 +66,11 @@ RSpec.describe "Kiosk::Redteam.blocked?" do
     expect(Kiosk::Redteam.blocked?(response(200, body))).to be(true)
   end
 
-  it "returns true for error code 'bad_request'" do
+  # bad_request is intentionally excluded: a 400 validation error is NOT
+  # evidence of an auth/authz gate; RegistrationWithoutPow uses its own check.
+  it "returns false for error code 'bad_request' (not an auth denial)" do
     body = { "error" => { "code" => "bad_request" } }
-    expect(Kiosk::Redteam.blocked?(response(200, body))).to be(true)
+    expect(Kiosk::Redteam.blocked?(response(200, body))).to be(false)
   end
 
   it "returns false for an unrecognised domain error code" do
@@ -83,16 +85,23 @@ RSpec.describe "Kiosk::Redteam.blocked?" do
   # ── Verdict struct ───────────────────────────────────────────────────────
 
   describe Kiosk::Redteam::Verdict do
-    it "is a Data with blocked, status, and detail" do
-      v = described_class.new(blocked: true, status: 403, detail: "forbidden")
+    it "is a Data with blocked, skipped, status, and detail" do
+      v = described_class.new(blocked: true, skipped: false, status: 403, detail: "forbidden")
       expect(v.blocked).to be(true)
+      expect(v.skipped).to be(false)
       expect(v.status).to eq(403)
       expect(v.detail).to eq("forbidden")
     end
 
     it "is immutable (frozen)" do
-      v = described_class.new(blocked: false, status: 200, detail: "breach!")
+      v = described_class.new(blocked: false, skipped: false, status: 200, detail: "breach!")
       expect(v).to be_frozen
+    end
+
+    it "carries skipped: true for a skip verdict" do
+      v = described_class.new(blocked: false, skipped: true, status: 0, detail: "SKIP — no gated_action")
+      expect(v.skipped).to be(true)
+      expect(v.blocked).to be(false)
     end
   end
 end

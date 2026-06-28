@@ -12,6 +12,15 @@ RSpec.describe Kiosk::Redteam::Scenarios::MandateReplay do
     minimal_profile(pay_for: pay_for_callable)
   end
 
+  it "uses the public Client#pay_raw method (no private __send__ access)" do
+    # Verify that the scenario never needs to reach into client internals.
+    expect(client).not_to receive(:__send__)
+    stub_registers("a", "b")
+    stub_exec_run(status: 200, body: { "value" => { "id" => "res-1" } })
+    stub_exec_pay(status: 403)
+    scenario.call(client, profile)
+  end
+
   describe "#call — non-vacuity" do
     context "when the server accepts a replayed mandate (broken — BREACH)" do
       it "returns blocked: false" do
@@ -23,6 +32,7 @@ RSpec.describe Kiosk::Redteam::Scenarios::MandateReplay do
         verdict = scenario.call(client, profile)
 
         expect(verdict.blocked).to be(false)
+        expect(verdict.skipped).to be(false)
         expect(verdict.status).to eq(200)
       end
     end
@@ -44,6 +54,7 @@ RSpec.describe Kiosk::Redteam::Scenarios::MandateReplay do
         verdict = scenario.call(client, profile)
 
         expect(verdict.blocked).to be(true)
+        expect(verdict.skipped).to be(false)
         expect(verdict.status).to eq(403)
       end
     end

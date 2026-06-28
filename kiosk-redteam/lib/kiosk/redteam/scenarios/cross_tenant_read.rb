@@ -42,11 +42,12 @@ module Kiosk
           if leaked
             Verdict.new(
               blocked: false,
+              skipped: false,
               status:  resp.status,
               detail:  "A's resource id=#{owned_id} visible in B's #{profile.per_user_query} result",
             )
           else
-            Verdict.new(blocked: true, status: resp.status, detail: "")
+            Verdict.new(blocked: true, skipped: false, status: resp.status, detail: "")
           end
         end
       end

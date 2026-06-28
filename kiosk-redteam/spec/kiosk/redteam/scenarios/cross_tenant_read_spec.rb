@@ -62,14 +62,16 @@ RSpec.describe Kiosk::Redteam::Scenarios::CrossTenantRead do
     it "skips when per_user_query is nil" do
       profile_no_query = Kiosk::Redteam::Profile.new(create_owned: ->(_c, _p) { { id: "x" } })
       verdict = scenario.call(client, profile_no_query)
-      expect(verdict.blocked).to be(true)
+      expect(verdict.skipped).to be(true)
+      expect(verdict.blocked).to be(false)
       expect(verdict.detail).to include("SKIP")
     end
 
     it "skips when create_owned is nil" do
       profile_no_create = Kiosk::Redteam::Profile.new(per_user_query: "my_orders")
       verdict = scenario.call(client, profile_no_create)
-      expect(verdict.blocked).to be(true)
+      expect(verdict.skipped).to be(true)
+      expect(verdict.blocked).to be(false)
       expect(verdict.detail).to include("SKIP")
     end
   end

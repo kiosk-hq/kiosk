@@ -44,6 +44,7 @@ module Kiosk
           unless first_resp.status == 200
             return Verdict.new(
               blocked: false,
+              skipped: false,
               status:  first_resp.status,
               detail:  "first gated_action failed (#{first_resp.status}); cannot test C3",
             )

@@ -55,4 +55,53 @@ RSpec.describe Kiosk::Server::Queries do
       expect(described_class.known).to be_empty
     end
   end
+
+  describe "metadata (description: / params:)" do
+    it "register with description: and params: exposes them via describe" do
+      described_class.register("menu", description: "Browse the menu", params: { restaurant_id: "string" }) { [] }
+
+      descriptor = described_class.describe("menu")
+      expect(descriptor[:name]).to        eq("menu")
+      expect(descriptor[:description]).to eq("Browse the menu")
+      expect(descriptor[:params]).to      eq({ restaurant_id: "string" })
+    end
+
+    it "fetch still returns the callable (not the Entry)" do
+      handler = ->(p) { [{ id: 1 }] }
+      described_class.register("items", handler, description: "List items")
+
+      fetched = described_class.fetch("items")
+      expect(fetched).to eq(handler)
+      expect(fetched.call({})).to eq([{ id: 1 }])
+    end
+
+    it "register without metadata leaves description and params nil" do
+      described_class.register("bare") { [] }
+
+      descriptor = described_class.describe("bare")
+      expect(descriptor[:description]).to be_nil
+      expect(descriptor[:params]).to      be_nil
+    end
+
+    it "catalog returns all descriptors sorted by name" do
+      described_class.register("zebra", description: "Last") { }
+      described_class.register("apple", description: "First") { }
+
+      cat = described_class.catalog
+      expect(cat.map { |d| d[:name] }).to eq(%w[apple zebra])
+      expect(cat.first[:description]).to  eq("First")
+      expect(cat.last[:description]).to   eq("Last")
+    end
+
+    it "catalog is empty after reset!" do
+      described_class.register("a") { }
+      described_class.reset!
+      expect(described_class.catalog).to be_empty
+    end
+
+    it "known is unchanged (still returns names only)" do
+      described_class.register("x", description: "Something") { }
+      expect(described_class.known).to eq(["x"])
+    end
+  end
 end

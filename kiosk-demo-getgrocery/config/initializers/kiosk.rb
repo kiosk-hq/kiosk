@@ -78,7 +78,6 @@ Kiosk::Server::Queries.register("delivery_slots",
     date: "date string YYYY-MM-DD — desired delivery date",
   }) do |params|
   date = params.fetch(:date) { raise Kiosk::Server::Errors::BadRequest.new("missing param: date") }
-  conn = ActiveRecord::Base.connection
 
   # Generate synthetic 2-hour delivery slots for the requested date.
   # Slots: 08:00, 10:00, 12:00, 14:00, 16:00, 18:00 (6 slots).

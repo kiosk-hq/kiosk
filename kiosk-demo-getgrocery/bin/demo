@@ -1,16 +1,13 @@
 #!/usr/bin/env bash
-# Kiosk foodelivery demo walkthrough — a curl-driven tour of the wire surface.
+# Kiosk getgrocery demo walkthrough — a curl-driven tour of the wire surface.
 #
 # Run via `rake demo` (handles DB setup + invokes this script), or
 # directly when the demo DB is already prepared.
 
 set -euo pipefail
 
-PORT="${KIOSK_DEMO_PORT:-3002}"
+PORT="${KIOSK_DEMO_PORT:-3005}"
 SERVER_URL="http://127.0.0.1:$PORT"
-
-# Stable stub token for menu browse (no human needed — this is the no-auth-human path)
-AGENT_TOKEN="agent:u-00000000-0000-0000-0000-000000000001:a-alice-agent:r-customer"
 
 heading() { printf "\n\033[1;36m── %s ──\033[0m\n" "$1"; }
 step()    { printf "\n  \033[1;33m▶\033[0m %s\n" "$1"; }
@@ -30,13 +27,14 @@ require_tool() {
 }
 require_tool curl
 require_tool jq
+require_tool openssl
 
 # ─── boot ────────────────────────────────────────────────────────────
 
-heading "Starting foodelivery (the demo provider) on port $PORT"
+heading "Starting getgrocery (the demo provider) on port $PORT"
 KIOSK_ISSUER="$SERVER_URL" \
   bundle exec rails s -p "$PORT" -b 127.0.0.1 -e development \
-  >/tmp/kiosk-foodelivery-demo.log 2>&1 &
+  >/tmp/kiosk-getgrocery-demo.log 2>&1 &
 SERVER_PID=$!
 
 for _ in $(seq 1 30); do
@@ -48,7 +46,7 @@ for _ in $(seq 1 30); do
 done
 
 curl -sf "$SERVER_URL/.well-known/kiosk.json" >/dev/null || {
-  echo "server did not become ready — see /tmp/kiosk-foodelivery-demo.log" >&2
+  echo "server did not become ready — see /tmp/kiosk-getgrocery-demo.log" >&2
   exit 1
 }
 
@@ -64,61 +62,61 @@ step "GET <endpoint>/.well-known/jwks.json — public verification keys"
 curl -sf "$SERVER_URL/kiosk/.well-known/jwks.json" \
   | jq '.keys[0] | {kty, use, alg, kid}'
 
+# ─── register ────────────────────────────────────────────────────────
+
+heading "Register: agent gets an access token"
+
+step "Generate a throwaway RSA key pair"
+openssl genrsa -out /tmp/demo-agent.pem 2048 2>/dev/null
+PUBKEY_JSON=$(openssl rsa -in /tmp/demo-agent.pem -pubout 2>/dev/null | jq -Rs .)
+
+step "POST /kiosk/agents/register"
+REG=$(curl -sS -X POST "$SERVER_URL/kiosk/agents/register" \
+  -H "Content-Type: application/json" \
+  -d "{\"name\":\"demo-agent\",\"public_key\":$PUBKEY_JSON,\"role\":\"customer\"}")
+echo "$REG" | jq '{agent_id, user_id}'
+AGENT_TOKEN=$(echo "$REG" | jq -r '.access_token')
+
 # ─── named queries ───────────────────────────────────────────────────
 
-heading "Agent browses the menu via named queries"
+heading "Agent browses the store via named queries"
 
-step "List restaurants (publicly visible) — query: restaurants"
-curl -sS -X POST "$SERVER_URL/kiosk/exec" \
+step "List grocery stores — query: stores"
+STORES=$(curl -sS -X POST "$SERVER_URL/kiosk/exec" \
   -H "Authorization: Bearer $AGENT_TOKEN" \
   -H "Content-Type: application/json" \
-  -d '{"command":"query","body":{"name":"restaurants"}}' \
-  | jq '.rows'
+  -d '{"command":"query","body":{"name":"stores"}}')
+echo "$STORES" | jq '.rows'
+STORE_ID=$(echo "$STORES" | jq -r '.rows[0].id')
 
-step "List menu items for Mamma Pizza — query: menu_by_restaurant"
-curl -sS -X POST "$SERVER_URL/kiosk/exec" \
+step "List products at store $STORE_ID — query: products_by_store"
+PRODUCTS=$(curl -sS -X POST "$SERVER_URL/kiosk/exec" \
   -H "Authorization: Bearer $AGENT_TOKEN" \
   -H "Content-Type: application/json" \
-  -d '{"command":"query","body":{"name":"menu_by_restaurant","restaurant":"Mamma Pizza"}}' \
-  | jq '.rows'
+  -d "{\"command\":\"query\",\"body\":{\"name\":\"products_by_store\",\"store_id\":$STORE_ID}}")
+echo "$PRODUCTS" | jq '.rows'
+PRODUCT_ID=$(echo "$PRODUCTS" | jq -r '.rows[0].id')
 
 # ─── run an Action ───────────────────────────────────────────────────
 
-heading "Agent places an order via Action (no human at the provider)"
+heading "Agent adds a product to cart via Action"
 
-MENU_ITEM_ID=$(curl -sS -X POST "$SERVER_URL/kiosk/exec" \
-  -H "Authorization: Bearer $AGENT_TOKEN" \
-  -H "Content-Type: application/json" \
-  -d '{"command":"query","body":{"name":"menu_by_restaurant","restaurant":"Mamma Pizza"}}' \
-  | jq -r '.rows[] | select(.sku=="margherita") | .id')
-
-step "run place_order for menu_item $MENU_ITEM_ID (Margherita)"
+step "run add_to_cart for store $STORE_ID, product $PRODUCT_ID"
 curl -sS -X POST "$SERVER_URL/kiosk/exec" \
   -H "Authorization: Bearer $AGENT_TOKEN" \
   -H "Content-Type: application/json" \
-  -d "{\"command\":\"run\",\"body\":{\"name\":\"place_order\",\"menu_item_id\":$MENU_ITEM_ID,\"quantity\":1,\"delivery_address\":\"1 Test St\"}}" \
+  -d "{\"command\":\"run\",\"body\":{\"name\":\"add_to_cart\",\"store_id\":$STORE_ID,\"product_id\":$PRODUCT_ID,\"qty\":1}}" \
   | jq '.value'
-
-# ─── RLS isolation ───────────────────────────────────────────────────
-
-heading "Per-user isolation: agent sees only their own orders"
-
-step "Count orders visible to this agent's user (should be 1) — query: my_orders"
-curl -sS -X POST "$SERVER_URL/kiosk/exec" \
-  -H "Authorization: Bearer $AGENT_TOKEN" \
-  -H "Content-Type: application/json" \
-  -d '{"command":"query","body":{"name":"my_orders"}}' \
-  | jq '.rows | length'
 
 # ─── done ────────────────────────────────────────────────────────────
 
 heading "Demo complete"
-say "Server log:        /tmp/kiosk-foodelivery-demo.log"
-say "DB:                kiosk_foodelivery_development"
+say "Server log:        /tmp/kiosk-getgrocery-demo.log"
+say "DB:                kiosk_getgrocery_development"
 say ""
 say "To add realistic domain resolution:"
-say "  echo \"127.0.0.1 foodelivery.app\" | sudo tee -a /etc/hosts"
-say "  KIOSK_ISSUER=https://foodelivery.app KIOSK_DEMO_PORT=443 rake demo"
+say "  echo \"127.0.0.1 getgrocery.app\" | sudo tee -a /etc/hosts"
+say "  KIOSK_ISSUER=https://getgrocery.app KIOSK_DEMO_PORT=443 rake demo"
 say ""
-say "Swap StubPsp for real Stripe:"
-say "  replace StubPsp.new with Kiosk::PayStripe::Provider.new(secret_key: ENV['STRIPE_SECRET_KEY'])"
+say "Full flow (cart + substitution + delivery) is covered by:"
+say "  SERVER_URL=http://127.0.0.1:3005 KIOSK_ISSUER=http://127.0.0.1:3005 bundle exec ruby getgrocery_flow.rb"

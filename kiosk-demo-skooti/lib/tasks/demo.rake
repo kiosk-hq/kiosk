@@ -515,5 +515,149 @@ namespace :demo do
   end
 end
 
+namespace :demo do
+  # ---------------------------------------------------------------------------
+  desc <<~DESC
+    Adversarial cross-tenant isolation test (R1 Phase 1 Task 2).
+
+    Boots the server, runs isolation_flow.rb with two fresh principals (A and B),
+    and asserts all cross-tenant denial properties:
+
+      Assertion 1 (ownership denial): B calls start_rental on A's reservation_id.
+        Gate-1 WHERE user_id = kiosk.current_user_id() finds nothing → 403.
+      Assertion 2 (exclusion): B's my_reservations does NOT contain A's reservation_id.
+      Assertion 3 (forged user_id ignored): B calls reserve with user_id: A's UUID.
+        The created reservation's DB user_id is B (server uses kiosk.current_user_id(),
+        ignores agent-supplied user_id).
+
+    Exits 0 if all assertions hold (isolation works); exits 1 on failure.
+    A red assertion = real isolation hole: fix the app, not the test.
+  DESC
+  task :isolation do
+    require "resolv"
+    require "json"
+
+    port = ENV.fetch("PORT", "3003")
+    log  = "/tmp/kiosk-skooti-isolation.log"
+
+    # ── host resolution ────────────────────────────────────────────────────
+    host = begin
+      addr = begin
+        Resolv.getaddress("skooti.app")
+      rescue Resolv::ResolvError
+        ""
+      end
+      if addr == "127.0.0.1"
+        "skooti.app"
+      else
+        puts "  (add to /etc/hosts: 127.0.0.1 skooti.app — using 127.0.0.1)" if addr.empty?
+        "127.0.0.1"
+      end
+    end
+
+    server_url   = "http://#{host}:#{port}"
+    kiosk_issuer = server_url
+    db           = "kiosk_skooti_development"
+
+    puts "\n── Starting skooti (isolation test) on #{server_url} ──"
+
+    # ── boot the server ────────────────────────────────────────────────────
+    File.truncate(log, 0) if File.exist?(log)
+    server_pid = spawn(
+      { "KIOSK_ISSUER" => kiosk_issuer },
+      "bundle exec rails s -p #{port} -b 127.0.0.1 -e development",
+      out: log, err: log,
+    )
+
+    at_exit do
+      begin
+        Process.kill("TERM", server_pid)
+        Process.wait(server_pid)
+      rescue Errno::ESRCH, Errno::ECHILD
+        nil
+      end
+      puts "  Server stopped."
+    end
+
+    # ── wait for readiness ─────────────────────────────────────────────────
+    require "net/http"
+    require "uri"
+    ready = false
+    40.times do
+      begin
+        res = Net::HTTP.get_response(URI("#{server_url}/.well-known/kiosk.json"))
+        if res.code.to_i == 200
+          ready = true
+          break
+        end
+      rescue Errno::ECONNREFUSED, Errno::EADDRNOTAVAIL, SocketError
+        nil
+      end
+      sleep 1
+    end
+    abort "Server did not become ready — see #{log}" unless ready
+    puts "  Server up at #{server_url}"
+
+    # ── run isolation_flow.rb ──────────────────────────────────────────────
+    flow_rb = File.expand_path("../../isolation_flow.rb", __dir__)
+    puts "\n── Running isolation_flow.rb (adversarial cross-tenant) ──"
+    raw = `SERVER_URL=#{server_url} KIOSK_ISSUER=#{kiosk_issuer} bundle exec ruby #{flow_rb} 2>&1`
+    puts raw
+
+    # ── parse JSON output ──────────────────────────────────────────────────
+    begin
+      result = JSON.parse(raw.lines.grep(/^\{/).last || raw)
+    rescue JSON::ParserError => e
+      abort "isolation_flow.rb did not produce valid JSON: #{e.message}\nOutput:\n#{raw}"
+    end
+
+    failures = []
+    puts "\n── Adversarial isolation assertions ──"
+
+    user_id_a            = result["user_id_a"]
+    user_id_b            = result["user_id_b"]
+    reservation_id_a     = result["reservation_id_a"]
+    reservation_id_b_forged = result["reservation_id_b_forged"]
+    b_start_rental_rc    = result["b_start_rental_rc"]
+    b_reservation_ids    = result["b_reservation_ids"] || []
+
+    # ── Assertion 1: B's start_rental on A's reservation → 403 ───────────
+    if b_start_rental_rc == 403
+      puts "  OK  Assertion 1: B's start_rental on A's rA #{reservation_id_a} → 403 (Gate-1 ownership denied)"
+    else
+      failures << "ISOLATION HOLE: B's start_rental on A's reservation returned #{b_start_rental_rc.inspect} (expected 403) — Gate-1 ownership bypass"
+      puts "  FAIL  Assertion 1: B's start_rental on A's rA expected 403, got #{b_start_rental_rc.inspect} — isolation hole"
+    end
+
+    # ── Assertion 2: B's my_reservations excludes A's reservation ────────
+    if b_reservation_ids.include?(reservation_id_a)
+      failures << "ISOLATION HOLE: B's my_reservations contains A's reservation #{reservation_id_a} — cross-tenant leak"
+      puts "  FAIL  Assertion 2: B sees A's reservation #{reservation_id_a} in my_reservations — isolation hole"
+    else
+      puts "  OK  Assertion 2: B's my_reservations excludes A's reservation #{reservation_id_a} (app-layer isolation)"
+    end
+
+    # ── Assertion 3: DB user_id on B's forged reservation == user_id_b ───
+    db_user_id = `psql -X -d #{db} -tAc "SELECT user_id FROM public.reservations WHERE id = '#{reservation_id_b_forged}'" 2>&1`.strip
+    if db_user_id == user_id_b
+      puts "  OK  Assertion 3: DB reservations.user_id for rB == user_id_b (#{user_id_b}) — forged arg ignored"
+    elsif db_user_id == user_id_a
+      failures << "ISOLATION HOLE: DB reservations.user_id for rB is A's user_id (#{user_id_a}) — forged user_id arg was NOT ignored"
+      puts "  FAIL  Assertion 3: server used forged user_id arg (reservation belongs to A, not B)"
+    else
+      failures << "Unexpected user_id for rB: got #{db_user_id.inspect}, expected B's #{user_id_b}"
+      puts "  FAIL  Assertion 3: unexpected user_id #{db_user_id.inspect} for rB"
+    end
+
+    if failures.empty?
+      puts "\n  All adversarial assertions passed — app-layer isolation holds."
+    else
+      puts "\n  FAILED assertions:"
+      failures.each { |f| puts "    - #{f}" }
+      exit 1
+    end
+  end
+end
+
 desc "End-to-end Kiosk skooti demo: setup the DB then prove the full rental chain (Arch 2)."
 task demo: ["demo:setup", "demo:rideflow"]

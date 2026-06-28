@@ -147,6 +147,30 @@ module Kiosk
         JWT.encode(payload, principal.rsa_key, "RS256")
       end
 
+      # Post a pay command with pre-built JWS strings, bypassing signing.
+      #
+      # Use this instead of {#pay} when you already hold raw JWS strings
+      # (e.g. in {Scenarios::MandateReplay} where we re-submit A's exact JWS
+      # under B's bearer token to test mandate non-transferability).
+      #
+      # @param principal  [Principal] whose bearer token to use
+      # @param intent_jws [String]    pre-built intent mandate JWS
+      # @param cart_jws   [String]    pre-built cart mandate JWS
+      # @return [Response]
+      def pay_raw(principal, intent_jws:, cart_jws:)
+        post_json(
+          "/kiosk/exec",
+          {
+            command: "pay",
+            body: {
+              intent_mandate_jws: intent_jws,
+              cart_mandate_jws:   cart_jws,
+            },
+          },
+          bearer: principal.token,
+        )
+      end
+
       private
 
       # Shared implementation for both #register_raw and #register!.

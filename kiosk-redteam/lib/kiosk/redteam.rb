@@ -52,7 +52,10 @@ module Kiosk
 
     # Domain error codes that constitute a deliberate block regardless of HTTP
     # status (some providers return 200 with an error envelope).
-    BLOCKED_ERROR_CODES = %w[forbidden unauthenticated pow_required rls_denied bad_request].freeze
+    # Note: "bad_request" (400) is intentionally excluded — a validation error
+    # is NOT evidence of an auth/authz gate.  RegistrationWithoutPow uses its
+    # own self-sufficient check instead of delegating to blocked?.
+    BLOCKED_ERROR_CODES = %w[forbidden unauthenticated pow_required rls_denied].freeze
 
     # Determine whether a provider response constitutes a successful block.
     #

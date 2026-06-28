@@ -12,7 +12,8 @@
 #   SERVER_URL=http://127.0.0.1:3003 KIOSK_ISSUER=http://127.0.0.1:3003 \
 #   bundle exec ruby redteam_suite.rb
 #
-# Exits non-zero if any applicable scenario reports a BREACH.
+# Exits non-zero if any applicable scenario reports a BREACH or if the
+# expected skip set does not match (catches profile typos that disable gates).
 
 require "kiosk/redteam"
 require "jwt"
@@ -31,9 +32,10 @@ ISSUER   = ENV.fetch("KIOSK_ISSUER", BASE_URL)
 # Extend StubKyc with expired/forged variants directly in this file.
 # stub_kyc.rb's real verification path is NOT changed (no gate-weakening).
 #
-# expired: signed with the REAL key but exp in the past — specifically tests
+# expired: signed with the REAL key but exp 1h in the past — specifically tests
 #          the server's exp check, not just signature checking.
-# forged:  signed with a DIFFERENT key — tests sig/issuer verification.
+# forged:  signed with a DIFFERENT key but the TRUSTED issuer — tests signature
+#          verification in isolation (a weakened-sig regression would be caught).
 class StubKyc
   # Mint a JWS signed with the real key but with exp 1h in the past.
   def self.attest_expired(user_id:)
@@ -52,7 +54,9 @@ class StubKyc
   end
 end
 
-# Wrong signing key (not StubKyc's key) — will fail signature verification.
+# Wrong signing key with the TRUSTED issuer — the only adversarial property is
+# the bad signature.  Using the correct issuer ensures that if signature
+# verification is weakened (e.g. alg:none attack), this scenario catches it.
 FORGED_KYC_KEY = OpenSSL::PKey::RSA.generate(2048)
 
 def attest_forged(user_id)
@@ -61,7 +65,7 @@ def attest_forged(user_id)
     {
       sub:   user_id,
       level: "verified",
-      iss:   "https://kyc.evil",  # wrong issuer too — belt+suspenders
+      iss:   "https://kyc.example",  # trusted issuer; ONLY the signature is wrong
       iat:   now,
       exp:   now + 3600,
     },
@@ -78,6 +82,12 @@ profile = Kiosk::Redteam::Profile.new(
 
   # ── per-user query — CrossTenantRead ─────────────────────────────────────
   per_user_query: "my_reservations",
+
+  # ── row_id_key / result_id_key ────────────────────────────────────────────
+  # Query rows (my_reservations) use "id" as the primary-key column.
+  # The reserve action response uses "reservation_id" in body["value"].
+  row_id_key:    "id",
+  result_id_key: "reservation_id",
 
   # ── create_owned ─────────────────────────────────────────────────────────
   # Browse the available fleet and reserve the first scooter.
@@ -183,6 +193,12 @@ scenarios = [
   Kiosk::Redteam::Scenarios::TokenTampering.new,
 ]
 
+# ── Expected-applicable assertion ─────────────────────────────────────────────
+#
+# skooti exposes the full surface: 12 scenarios, 0 skips expected.
+# If this set changes, a profile typo silently disabled a gate — fail loud.
+EXPECTED_SKIP_NAMES = [].freeze
+
 # ── Run ───────────────────────────────────────────────────────────────────────
 
 puts "\n── skooti redteam battery ──"
@@ -192,34 +208,14 @@ puts "  requires_kyc:   true"
 puts "  scenarios:      #{scenarios.size}"
 puts ""
 
-runner = Kiosk::Redteam::Runner.new(base_url: BASE_URL, profile:)
-
-# Capture per-scenario output to re-emit SKIPPED lines with the correct label.
-require "stringio"
-captured   = StringIO.new
-old_stdout = $stdout
-$stdout    = captured
-begin
-  results = runner.run(scenarios)
-ensure
-  $stdout = old_stdout
-end
-
-captured.string.each_line do |line|
-  if line =~ /BLOCKED ✓ (\S+)/ &&
-       (r = results.find { |x| x[:scenario].name == $1 }) &&
-       r[:verdict].detail.start_with?("SKIP")
-    puts line.sub("BLOCKED ✓", "SKIPPED —")
-  else
-    puts line
-  end
-end
+runner  = Kiosk::Redteam::Runner.new(base_url: BASE_URL, profile:)
+results = runner.run(scenarios)
 
 # ── Summary ───────────────────────────────────────────────────────────────────
 
-blocked_results = results.select { |r| r[:verdict].blocked && !r[:verdict].detail.start_with?("SKIP") }
-skipped_results = results.select { |r| r[:verdict].detail.to_s.start_with?("SKIP") }
-breach_results  = results.reject { |r| r[:verdict].blocked }
+blocked_results = results.select { |r| !r[:verdict].skipped && r[:verdict].blocked }
+skipped_results = results.select { |r| r[:verdict].skipped }
+breach_results  = runner.breaches
 
 puts "\n── Summary ──"
 blocked_results.each { |r| puts "  BLOCKED  ✓ #{r[:scenario].name}" }
@@ -230,10 +226,24 @@ end
 breach_results.each { |r| puts "  BREACH   ✗ #{r[:scenario].name} — #{r[:verdict].detail}" }
 
 puts ""
-if breach_results.empty?
-  puts "  #{blocked_results.size} BLOCKED, #{skipped_results.size} SKIPPED, 0 BREACH — all attacks blocked."
+if breach_results.empty? && skipped_results.empty?
+  puts "  #{blocked_results.size} BLOCKED, 0 SKIPPED, 0 BREACH — all attacks blocked."
 else
-  puts "  #{blocked_results.size} BLOCKED, #{skipped_results.size} SKIPPED, #{breach_results.size} BREACH — FIX REQUIRED"
+  puts "  #{blocked_results.size} BLOCKED, #{skipped_results.size} SKIPPED, #{breach_results.size} BREACH"
 end
 
-exit 1 unless runner.all_blocked?
+# ── Expected-applicable check ─────────────────────────────────────────────────
+
+actual_skip_names = skipped_results.map { |r| r[:scenario].name }.sort
+expected_sorted   = EXPECTED_SKIP_NAMES.sort
+
+if actual_skip_names != expected_sorted
+  puts ""
+  puts "  EXPECTED-APPLICABLE ASSERTION FAILED:"
+  puts "    Expected skips: #{expected_sorted.inspect}"
+  puts "    Actual skips:   #{actual_skip_names.inspect}"
+  puts "  A profile key may have been set to nil, disabling a gate scenario."
+  exit 2
+end
+
+exit 1 if breach_results.any?

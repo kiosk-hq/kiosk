@@ -56,6 +56,7 @@ module Kiosk
           if Kiosk::Redteam.blocked?(pay_resp)
             return Verdict.new(
               blocked: true,
+              skipped: false,
               status:  pay_resp.status,
               detail:  "blocked at pay step (early ownership check)",
             )

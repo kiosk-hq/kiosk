@@ -3,7 +3,7 @@
 module Kiosk
   module Redteam
     module Scenarios
-      # Mandate replay: B re-submits A's already-used cart mandate JWS.
+      # Mandate non-transferability: B re-submits A's already-used cart mandate JWS.
       #
       # Attack:
       #   1. A and B register.
@@ -21,7 +21,7 @@ module Kiosk
           super(
             name:        "MandateReplay",
             category:    "mandate",
-            description: "B re-submits A's signed cart JWS; provider must reject",
+            description: "Mandate non-transferability: B re-submits A's signed mandate JWS under B's token; provider must reject",
           )
         end
 
@@ -42,28 +42,10 @@ module Kiosk
           # A pays legitimately (consuming the mandate).
           client.pay(a, intent: mandates[:intent], cart: mandates[:cart])
 
-          # B re-submits A's exact JWS under B's token.
-          resp = submit_raw_pay(client, b, intent_jws:, cart_jws:)
+          # B re-submits A's exact JWS under B's token using the public pay_raw API.
+          resp = client.pay_raw(b, intent_jws:, cart_jws:)
 
           verdict_from(resp, detail: "mandate replay accepted under B's token (HTTP #{resp.status})")
-        end
-
-        private
-
-        # Post a pay command with pre-built JWS strings without re-signing.
-        # Uses client's private post_json so we can inject arbitrary JWS.
-        def submit_raw_pay(client, principal, intent_jws:, cart_jws:)
-          client.__send__(:post_json,
-            "/kiosk/exec",
-            {
-              command: "pay",
-              body: {
-                intent_mandate_jws: intent_jws,
-                cart_mandate_jws:   cart_jws,
-              },
-            },
-            bearer: principal.token,
-          )
         end
       end
     end

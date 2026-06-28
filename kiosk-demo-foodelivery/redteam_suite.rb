@@ -15,11 +15,17 @@
 #   gated_action   : nil  (no unlock gate)
 #   requires_kyc   : false
 #
+# Note: exec-time PoW (KIOSK_POW_DEMO) is a different gate from registration
+# PoW; RegistrationWithoutPow only applies when /register requires PoW, which
+# foodelivery does not (pow_difficulty: 0).  Exec-time-PoW-aware redteam is
+# a future enhancement.
+#
 # Usage (from kiosk-demo-foodelivery/):
 #   SERVER_URL=http://127.0.0.1:3002 KIOSK_ISSUER=http://127.0.0.1:3002 \
 #   bundle exec ruby redteam_suite.rb
 #
-# Exits non-zero if any applicable scenario reports a BREACH.
+# Exits non-zero if any applicable scenario reports a BREACH or if the
+# expected skip set does not match (catches profile typos that disable gates).
 
 require "kiosk/redteam"
 require "securerandom"
@@ -27,14 +33,17 @@ require "securerandom"
 BASE_URL = ENV.fetch("SERVER_URL", "http://127.0.0.1:3002")
 ISSUER   = ENV.fetch("KIOSK_ISSUER", BASE_URL)
 
-pow_difficulty = ENV.fetch("KIOSK_POW_DEMO", "0") == "1" ? 5 : 0
-
 # ── Profile ───────────────────────────────────────────────────────────────────
 
 profile = Kiosk::Redteam::Profile.new(
-  pow_difficulty: pow_difficulty,
+  pow_difficulty: 0,       # foodelivery has no registration PoW gate
   requires_kyc:   false,
   per_user_query: "my_orders",
+
+  # result_id_key: place_order response body["value"]["order_id"]
+  # row_id_key:    my_orders rows use "id"
+  row_id_key:    "id",
+  result_id_key: "order_id",
 
   # Browse Mamma Pizza's menu for the margherita, then place_order.
   # Returns { id: order_id, menu_item_id:, total_cents: }.
@@ -130,9 +139,9 @@ profile = Kiosk::Redteam::Profile.new(
 #
 # Applicable (5): CrossTenantRead, ForgedUserId, MandatePrincipalSwap,
 #                 MandateReplay, TokenTampering.
-# Skip (6):       UnpaidGatedAction, MissingKyc, ExpiredKyc, ForgedKyc,
-#                 SpentResourceReuse, PayForOtherUseSelf (no gated_action/KYC).
-# Conditional:    RegistrationWithoutPow only when KIOSK_POW_DEMO=1.
+# Skip (6):       UnpaidGatedAction, SpentResourceReuse, PayForOtherUseSelf
+#                 (no gated_action), MissingKyc, ExpiredKyc, ForgedKyc (no KYC).
+# RegistrationWithoutPow: always skipped (pow_difficulty: 0).
 
 scenarios = [
   # Applicable — must be BLOCKED
@@ -149,48 +158,42 @@ scenarios = [
   Kiosk::Redteam::Scenarios::MissingKyc.new,
   Kiosk::Redteam::Scenarios::ExpiredKyc.new,
   Kiosk::Redteam::Scenarios::ForgedKyc.new,
+  # Note: RegistrationWithoutPow is NOT included here.
+  # foodelivery has pow_difficulty: 0 (no registration PoW gate), and the
+  # KIOSK_POW_DEMO flag enables exec-time PoW (a different gate type) which
+  # RegistrationWithoutPow does not test.  Exec-time-PoW redteam is a future
+  # enhancement; skooti covers RegistrationWithoutPow via pow_difficulty: 20.
 ]
 
-# RegistrationWithoutPow only when the server requires PoW at registration.
-scenarios << Kiosk::Redteam::Scenarios::RegistrationWithoutPow.new if pow_difficulty > 0
+# ── Expected-applicable assertion ─────────────────────────────────────────────
+#
+# Exactly 6 scenarios skip because foodelivery lacks gated_action + KYC.
+# If this set changes, a profile typo may have disabled an applicable scenario.
+EXPECTED_SKIP_NAMES = %w[
+  UnpaidGatedAction
+  SpentResourceReuse
+  PayForOtherUseSelf
+  MissingKyc
+  ExpiredKyc
+  ForgedKyc
+].freeze
 
 # ── Run ───────────────────────────────────────────────────────────────────────
 
 puts "\n── foodelivery redteam battery ──"
 puts "  base_url:       #{BASE_URL}"
-puts "  pow_difficulty: #{pow_difficulty}"
+puts "  pow_difficulty: 0"
 puts "  requires_kyc:   false"
 puts ""
 
 runner  = Kiosk::Redteam::Runner.new(base_url: BASE_URL, profile:)
-
-# Capture runner output so we can re-emit it with SKIP properly labelled.
-require "stringio"
-captured = StringIO.new
-old_stdout = $stdout
-$stdout = captured
-begin
-  results = runner.run(scenarios)
-ensure
-  $stdout = old_stdout
-end
-
-# Re-print per-scenario lines, replacing "BLOCKED ✓" with "SKIPPED —" for
-# scenarios whose verdict detail begins with "SKIP".
-captured.string.each_line do |line|
-  if line =~ /BLOCKED ✓ (\S+)/ && (r = results.find { |x| x[:scenario].name == $1 }) &&
-       r[:verdict].detail.start_with?("SKIP")
-    puts line.sub("BLOCKED ✓", "SKIPPED —")
-  else
-    puts line
-  end
-end
+results = runner.run(scenarios)
 
 # ── Summary ───────────────────────────────────────────────────────────────────
 
-blocked_results = results.select { |r| r[:verdict].blocked && !r[:verdict].detail.start_with?("SKIP") }
-skipped_results = results.select { |r| r[:verdict].detail.to_s.start_with?("SKIP") }
-breach_results  = results.reject { |r| r[:verdict].blocked }
+blocked_results = results.select { |r| !r[:verdict].skipped && r[:verdict].blocked }
+skipped_results = results.select { |r| r[:verdict].skipped }
+breach_results  = runner.breaches
 
 puts "\n── Summary ──"
 blocked_results.each { |r| puts "  BLOCKED  ✓ #{r[:scenario].name}" }
@@ -198,7 +201,7 @@ skipped_results.each do |r|
   reason = r[:verdict].detail.delete_prefix("SKIP — ")
   puts "  SKIPPED  — #{r[:scenario].name} (#{reason})"
 end
-breach_results.each  { |r| puts "  BREACH   ✗ #{r[:scenario].name} — #{r[:verdict].detail}" }
+breach_results.each { |r| puts "  BREACH   ✗ #{r[:scenario].name} — #{r[:verdict].detail}" }
 
 puts ""
 if breach_results.empty?
@@ -207,4 +210,18 @@ else
   puts "  #{blocked_results.size} BLOCKED, #{skipped_results.size} SKIPPED, #{breach_results.size} BREACH — FIX REQUIRED"
 end
 
-exit 1 unless runner.all_blocked?
+# ── Expected-applicable check ─────────────────────────────────────────────────
+
+actual_skip_names = skipped_results.map { |r| r[:scenario].name }.sort
+expected_sorted   = EXPECTED_SKIP_NAMES.sort
+
+if actual_skip_names != expected_sorted
+  puts ""
+  puts "  EXPECTED-APPLICABLE ASSERTION FAILED:"
+  puts "    Expected skips: #{expected_sorted.inspect}"
+  puts "    Actual skips:   #{actual_skip_names.inspect}"
+  puts "  A profile key may have been set to nil, disabling a gate scenario."
+  exit 2
+end
+
+exit 1 if breach_results.any?

@@ -845,7 +845,7 @@ namespace :demo do
       BLOCKED  CrossTenantRead    — B's my_orders must not include A's orders
       BLOCKED  ForgedUserId       — agent-supplied user_id arg must be ignored
       BLOCKED  MandatePrincipalSwap — B signs a mandate with A's identity; rejected
-      BLOCKED  MandateReplay      — B re-submits A's signed JWS; rejected
+      BLOCKED  MandateReplay      — B re-submits A's signed mandate JWS; rejected
       BLOCKED  TokenTampering     — altered JWT (claim flipped) rejected 401
 
     Scenarios that require a surface foodelivery does not expose SKIP cleanly:
@@ -853,8 +853,9 @@ namespace :demo do
                (no gated_action configured)
       SKIPPED  MissingKyc, ExpiredKyc, ForgedKyc  (requires_kyc: false)
 
-    When KIOSK_POW_DEMO=1, also runs:
-      BLOCKED  RegistrationWithoutPow
+    Note: RegistrationWithoutPow is not run — foodelivery has no registration
+    PoW gate (pow_difficulty: 0). skooti covers that scenario via d=20.
+    Exec-time PoW redteam is a future enhancement.
 
     Exits 0 when all applicable scenarios are BLOCKED; exits 1 on any BREACH.
     A BREACH = a real hole in foodelivery — fix the app, not the scenario.
@@ -881,7 +882,6 @@ namespace :demo do
 
     # ── boot the server ────────────────────────────────────────────────
     env_vars = { "KIOSK_ISSUER" => kiosk_issuer }
-    env_vars["KIOSK_POW_DEMO"] = "1" if ENV["KIOSK_POW_DEMO"] == "1"
 
     server_pid = spawn(
       env_vars,
@@ -920,7 +920,6 @@ namespace :demo do
     puts "\n── Running redteam_suite.rb ──"
 
     env_str = "SERVER_URL=#{server_url} KIOSK_ISSUER=#{kiosk_issuer}"
-    env_str += " KIOSK_POW_DEMO=1" if ENV["KIOSK_POW_DEMO"] == "1"
 
     system("#{env_str} bundle exec ruby #{suite_rb}")
     exit_status = $?.exitstatus

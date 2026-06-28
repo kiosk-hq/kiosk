@@ -42,45 +42,66 @@ module Kiosk
 
           # Call succeeded — check whether A's per_user_query now contains the
           # resource.  If per_user_query is unavailable, we cannot verify
-          # ownership and must treat a 200 as a breach (conservative).
+          # ownership at all — treat as indeterminate breach (conservative).
           unless profile.per_user_query
             return Verdict.new(
               blocked: false,
+              skipped: false,
               status:  resp.status,
               detail:  "forge_action returned #{resp.status}; cannot verify ownership (no per_user_query)",
             )
           end
 
-          # Extract the new resource id from the action response.
-          new_id = extract_id(resp, profile.row_id_key)
+          # Extract the new resource id from the action response using
+          # profile.result_id_key (no provider names hard-coded here).
+          new_id = extract_id(resp, profile.result_id_key)
+
+          # If we cannot extract the id we cannot positively confirm the server
+          # IGNORED the forged user_id — score as indeterminate breach so the
+          # test fails loud rather than silently passing.
+          unless new_id
+            return Verdict.new(
+              blocked: false,
+              skipped: false,
+              status:  resp.status,
+              detail:  "forge_action returned #{resp.status} but result_id_key=#{profile.result_id_key.inspect} " \
+                       "not found in response; cannot confirm ownership was enforced",
+            )
+          end
 
           query_resp = client.query(a, name: profile.per_user_query)
           a_rows     = rows_from(query_resp)
-          leaked     = new_id && a_rows.any? { |r| r[profile.row_id_key].to_s == new_id.to_s }
+          leaked     = a_rows.any? { |r| r[profile.row_id_key].to_s == new_id.to_s }
 
           if leaked
             Verdict.new(
               blocked: false,
+              skipped: false,
               status:  resp.status,
-              detail:  "forged user_id=#{a.user_id} was honoured; resource visible in A's rows",
+              detail:  "forged user_id=#{a.user_id} was honoured; resource id=#{new_id} visible in A's rows",
             )
           else
-            Verdict.new(blocked: true, status: resp.status, detail: "")
+            Verdict.new(blocked: true, skipped: false, status: resp.status, detail: "")
           end
         end
 
         private
 
-        # Try to extract the resource id from the action response body.
-        # Looks for common key patterns; returns nil when not found.
-        def extract_id(response, row_id_key)
+        # Try to extract the resource id from the action response body using
+        # the profile-supplied result_id_key.  No provider names are hard-coded.
+        #
+        # @param response      [Response]
+        # @param result_id_key [String]   e.g. "reservation_id", "order_id", "id"
+        # @return [String, nil]
+        def extract_id(response, result_id_key)
           body = response.body
           return nil unless body.is_a?(Hash)
 
           value = body["value"]
           return nil unless value.is_a?(Hash)
 
-          value[row_id_key] || value["id"] || value["reservation_id"] || value["order_id"]
+          v = value[result_id_key]
+          v&.to_s&.empty? == false ? v : nil
         end
       end
     end

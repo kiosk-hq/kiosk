@@ -9,9 +9,13 @@ module Kiosk
       # Attack:
       #   1. Attempt register_raw with pow: :skip  (omit the pow field entirely).
       #   2. Attempt register_raw with pow: "0"    (trivially wrong proof).
-      #   3. BLOCKED iff BOTH are rejected (non-201 and blocked status).
+      #   3. BLOCKED iff BOTH are rejected (non-201, no access_token returned).
       #
       # Skipped when: profile.pow_difficulty == 0 (provider has no PoW gate).
+      #
+      # Note: this scenario does NOT delegate to Kiosk::Redteam.blocked? because
+      # a 400 "bad_request" validation error is not evidence of a PoW gate — only
+      # the absence of a successful registration (HTTP 201 + access_token) is.
       class RegistrationWithoutPow < Scenario
         def initialize
           super(
@@ -36,20 +40,36 @@ module Kiosk
             pow:            "0",
           )
 
-          both_blocked = Kiosk::Redteam.blocked?(resp_skip) && Kiosk::Redteam.blocked?(resp_zero)
+          skip_blocked = registration_rejected?(resp_skip)
+          zero_blocked = registration_rejected?(resp_zero)
 
-          if both_blocked
-            Verdict.new(blocked: true, status: resp_zero.status, detail: "")
+          if skip_blocked && zero_blocked
+            Verdict.new(blocked: true, skipped: false, status: resp_zero.status, detail: "")
           else
             details = []
-            details << "pow: :skip returned #{resp_skip.status}"  unless Kiosk::Redteam.blocked?(resp_skip)
-            details << "pow: \"0\" returned #{resp_zero.status}"  unless Kiosk::Redteam.blocked?(resp_zero)
+            details << "pow: :skip returned #{resp_skip.status}" unless skip_blocked
+            details << "pow: \"0\" returned #{resp_zero.status}" unless zero_blocked
             Verdict.new(
               blocked: false,
+              skipped: false,
               status:  resp_zero.status,
               detail:  details.join("; "),
             )
           end
+        end
+
+        private
+
+        # A PoW-required registration is blocked when the response is NOT a
+        # successful 201 with an access_token.  Any non-201 response without
+        # a token means the server rejected the attempt.
+        def registration_rejected?(resp)
+          return false if resp.status == 201
+
+          body = resp.body
+          return true unless body.is_a?(Hash)
+
+          body["access_token"].nil?
         end
       end
     end

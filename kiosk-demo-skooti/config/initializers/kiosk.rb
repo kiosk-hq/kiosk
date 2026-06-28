@@ -60,7 +60,8 @@ end
 # scooters_available — public fleet catalog. No per-user scoping: all
 # authenticated agents can browse available scooters. The block returns the
 # exact columns the agent needs (no full-table scrape).
-Kiosk::Server::Queries.register("scooters_available") do |_params|
+Kiosk::Server::Queries.register("scooters_available",
+                                 description: "Browse available scooters in the fleet") do |_params|
   ActiveRecord::Base.connection.execute(
     "SELECT id, code, status, lat, lng, price_per_min_cents " \
     "FROM public.scooters " \
@@ -74,7 +75,8 @@ end
 # demonstrates app-layer per-user isolation without RLS: the principal can
 # only see rows where user_id matches kiosk.current_user_id(), enforced in
 # the query definition itself.
-Kiosk::Server::Queries.register("my_reservations") do |_params|
+Kiosk::Server::Queries.register("my_reservations",
+                                 description: "List this principal's scooter reservations (scoped to authenticated user via kiosk.current_user_id())") do |_params|
   ActiveRecord::Base.connection.execute(
     "SELECT id, scooter_id, status " \
     "FROM public.reservations " \
@@ -92,7 +94,9 @@ end
 #
 # Runs inside SessionContext (the Executor wraps `run` in a transaction with
 # the four SET LOCAL GUCs already applied), so kiosk.current_user_id() is live.
-Kiosk::Server::Actions.register("reserve") do |args|
+Kiosk::Server::Actions.register("reserve",
+                                  description: "Reserve a scooter by its code for the authenticated principal",
+                                  params: { scooter_code: "string — scooter code, e.g. 'SK-001'" }) do |args|
   conn = ActiveRecord::Base.connection
 
   uid = conn.execute("SELECT kiosk.current_user_id() AS uid").first["uid"]
@@ -128,7 +132,9 @@ end
 #   2. agent is KYC-verified (kyc_verified_at NOT NULL in kiosk.agents)
 #   3. principal has a settled payment mandate for THIS reservation
 # Returns: { scooter_code:, rental_token:, exp: }
-Kiosk::Server::Actions.register("start_rental") do |args|
+Kiosk::Server::Actions.register("start_rental",
+                                  description: "Verify gates (ownership, KYC, payment) and issue an Ed25519 offline rental token",
+                                  params: { reservation_id: "uuid — the reservation to activate" }) do |args|
   conn = ActiveRecord::Base.connection
 
   reservation_id = args[:reservation_id]

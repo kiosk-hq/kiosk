@@ -183,7 +183,8 @@ end
 
 # restaurants — public restaurant catalog. No per-user scoping: all
 # authenticated agents can browse available restaurants.
-Kiosk::Server::Queries.register("restaurants") do |_params|
+Kiosk::Server::Queries.register("restaurants",
+                                 description: "Browse the public restaurant catalog") do |_params|
   ActiveRecord::Base.connection.execute("SELECT id, name FROM restaurants ORDER BY id").to_a
 end
 
@@ -191,7 +192,9 @@ end
 # The agent supplies :restaurant (the restaurant name); the block builds the
 # query with conn.quote binding — agent input is data, never SQL.
 # No per-user scoping: all authenticated agents can browse the menu.
-Kiosk::Server::Queries.register("menu_by_restaurant") do |params|
+Kiosk::Server::Queries.register("menu_by_restaurant",
+                                 description: "Browse menu items for a named restaurant",
+                                 params: { restaurant: "string — restaurant name" }) do |params|
   name = params.fetch(:restaurant) { raise Kiosk::Server::Errors::BadRequest.new("missing param: restaurant") }
   conn = ActiveRecord::Base.connection
   conn.execute(
@@ -208,7 +211,8 @@ end
 # demonstrates app-layer per-user isolation without RLS: the principal can
 # only see rows where user_id matches kiosk.current_user_id(), enforced in
 # the query definition itself.
-Kiosk::Server::Queries.register("my_orders") do |_params|
+Kiosk::Server::Queries.register("my_orders",
+                                 description: "List this principal's placed orders (scoped to authenticated user via kiosk.current_user_id())") do |_params|
   ActiveRecord::Base.connection.execute(
     "SELECT id, restaurant_id, menu_item_id, total_cents, status " \
     "FROM orders " \
@@ -222,7 +226,13 @@ end
 # Register the demo Action. In production, providers use the full
 # `Kiosk::Action` DSL (post-v0.1); for the e2e a simple registered
 # block is sufficient.
-Kiosk::Server::Actions.register("place_order") do |args|
+Kiosk::Server::Actions.register("place_order",
+                                  description: "Place a food order for the authenticated principal",
+                                  params: {
+                                    menu_item_id:     "integer — id of the menu item to order",
+                                    quantity:         "integer — number of items (default 1)",
+                                    delivery_address: "string — delivery address",
+                                  }) do |args|
   # Identity is set via Kiosk::Server::SessionContext SET LOCAL —
   # current_user_id() helper returns the principal. ActiveRecord doesn't
   # have direct access; pull from PG.

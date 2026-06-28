@@ -4,16 +4,23 @@
 #
 # Drives all generic Kiosk::Redteam scenarios against the live getgrocery
 # server and asserts each applicable attack is BLOCKED.  Scenarios that
-# require a surface getgrocery does not expose (gated_action, KYC,
-# pow_difficulty > 0) are SKIPPED cleanly.
+# require a surface getgrocery does not expose (forge_action, gated_action,
+# KYC, pow_difficulty > 0) are SKIPPED cleanly.
 #
 # getgrocery surface:
 #   per_user_query : "my_orders"
 #   create_owned   : browse stores → products_by_store → add_to_cart → confirm_delivery
-#   forge_action   : "add_to_cart"
+#   forge_action   : nil  (see note below — ForgedUserId SKIPPED; coverage in demo:isolation)
 #   pay_for        : intent + cart mandates (grocery scope, RS256)
 #   gated_action   : nil  (no unlock gate — cart ownership is NOT a payment gate)
 #   requires_kyc   : false
+#
+# Note on ForgedUserId: add_to_cart returns a cart_id, but per_user_query
+# ("my_orders") lists delivery ids — different entities.  The readback check
+# in ForgedUserId would therefore be vacuously BLOCKED regardless of server
+# behaviour.  forge_action is set to nil so ForgedUserId SKIPS honestly.
+# The real forged-user_id coverage is in demo:isolation Assertion 7: a DB
+# SELECT confirms the cart's user_id is the caller's (B's), not A's.
 #
 # Note: RegistrationWithoutPow is NOT included here. getgrocery has
 # pow_difficulty: 0 (no registration PoW gate).
@@ -38,15 +45,12 @@ profile = Kiosk::Redteam::Profile.new(
   requires_kyc:   false,
   per_user_query: "my_orders",
 
-  # result_id_key: add_to_cart response body["value"]["cart_id"]
-  # row_id_key:    my_orders rows use "id" (delivery id)
-  #
-  # ForgedUserId: add_to_cart returns {cart_id:, cart_item_id:}, so
-  # result_id_key="cart_id" extracts the cart_id.  Since my_orders only lists
-  # deliveries (not carts), the check is always vacuously BLOCKED; the real
-  # cart-ownership mutation check is in isolation_flow.rb.
+  # result_id_key / row_id_key: used by CrossTenantRead (delivery entities).
+  # add_to_cart returns cart_id; my_orders lists delivery ids — different
+  # entities, so ForgedUserId is SKIPPED (forge_action: nil) rather than
+  # reporting a vacuous BLOCKED.  Coverage lives in demo:isolation Assertion 7.
   row_id_key:    "id",
-  result_id_key: "cart_id",
+  result_id_key: "id",
 
   # Browse FreshMart store → find an in-stock product → add_to_cart →
   # confirm_delivery to create a deliveries row.
@@ -103,26 +107,11 @@ profile = Kiosk::Redteam::Profile.new(
     }
   },
 
-  # ForgedUserId: B calls add_to_cart with user_id: A.user_id injected.
-  # The server must ignore the caller-supplied user_id and use the GUC identity.
-  forge_action: "add_to_cart",
-  forge_args:   ->(client, principal_a, _principal_b) {
-    stores_resp = client.query(principal_a, name: "stores")
-    stores = stores_resp.body.is_a?(Hash) ? (stores_resp.body["rows"] || []) : []
-    raise "redteam: no stores returned in forge_args" if stores.empty?
-    store_id = stores.first["id"]
-
-    prods_resp = client.query(principal_a, name: "products_by_store", store_id: store_id)
-    prods = prods_resp.body.is_a?(Hash) ? (prods_resp.body["rows"] || []) : []
-    raise "redteam: no products returned in forge_args for store #{store_id}" if prods.empty?
-    product = prods.find { |p| p["stock"].to_i > 0 } || prods.first
-
-    {
-      store_id:   store_id,
-      product_id: product["id"],
-      qty:        1,
-    }
-  },
+  # ForgedUserId SKIPPED: forge_action is nil so the scenario hits its
+  # skip_verdict("no forge_action") guard.  The real coverage lives in
+  # demo:isolation Assertion 7 (DB SELECT confirms cart belongs to B, not A).
+  forge_action: nil,
+  forge_args:   nil,
 
   # No gated_action: getgrocery's cart ownership is a mutation gate (not pay+KYC).
   # Scenarios UnpaidGatedAction, SpentResourceReuse, PayForOtherUseSelf SKIP.
@@ -175,19 +164,24 @@ profile = Kiosk::Redteam::Profile.new(
 
 # ── Scenarios ─────────────────────────────────────────────────────────────────
 #
-# Applicable (5): CrossTenantRead, ForgedUserId, MandatePrincipalSwap,
-#                 MandateReplay, TokenTampering.
-# Skip (6):       UnpaidGatedAction, SpentResourceReuse, PayForOtherUseSelf
-#                 (no gated_action), MissingKyc, ExpiredKyc, ForgedKyc (no KYC).
+# Applicable (4): CrossTenantRead, MandatePrincipalSwap, MandateReplay,
+#                 TokenTampering.
+# Skip (7):       ForgedUserId (forge_action nil — vacuous entity mismatch;
+#                   real coverage in demo:isolation Assertion 7),
+#                 UnpaidGatedAction, SpentResourceReuse, PayForOtherUseSelf
+#                   (no gated_action), MissingKyc, ExpiredKyc, ForgedKyc (no KYC).
 # RegistrationWithoutPow: always skipped (pow_difficulty: 0).
 
 scenarios = [
   # Applicable — must be BLOCKED
   Kiosk::Redteam::Scenarios::CrossTenantRead.new,
-  Kiosk::Redteam::Scenarios::ForgedUserId.new,
   Kiosk::Redteam::Scenarios::MandatePrincipalSwap.new,
   Kiosk::Redteam::Scenarios::MandateReplay.new,
   Kiosk::Redteam::Scenarios::TokenTampering.new,
+  # Not applicable — must SKIP (forge_action nil: add_to_cart returns cart_id
+  # but my_orders lists delivery ids; readback would be vacuously BLOCKED.
+  # Genuine forged-user_id coverage: demo:isolation Assertion 7, DB ownership check.)
+  Kiosk::Redteam::Scenarios::ForgedUserId.new,
   # Not applicable — must SKIP (no gated_action)
   Kiosk::Redteam::Scenarios::UnpaidGatedAction.new,
   Kiosk::Redteam::Scenarios::SpentResourceReuse.new,
@@ -202,9 +196,12 @@ scenarios = [
 
 # ── Expected-applicable assertion ─────────────────────────────────────────────
 #
-# Exactly 6 scenarios skip because getgrocery lacks gated_action + KYC.
-# If this set changes, a profile typo may have disabled an applicable scenario.
+# Exactly 7 scenarios skip: ForgedUserId (entity mismatch — vacuous readback,
+# real coverage in demo:isolation Assertion 7) + no gated_action (3) + no KYC (3).
+# If this set changes, a profile key may have been accidentally set to nil,
+# disabling an applicable scenario.
 EXPECTED_SKIP_NAMES = %w[
+  ForgedUserId
   UnpaidGatedAction
   SpentResourceReuse
   PayForOtherUseSelf

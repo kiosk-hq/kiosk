@@ -105,7 +105,7 @@ In production these are versioned RubyGems. The `kiosk-pay-stripe` adapter swaps
 rails g kiosk:install
 ```
 
-This emits: the Kiosk schema migration (the `kiosk.*` namespace with agents, sessions, and mandate tables), the six-verb wire surface (`query`, `run`, `pay`, `schema`, `help`, `events`) mounted at `/kiosk/exec`, the agent-registration endpoint at `/kiosk/agents/register`, and `/.well-known/kiosk.json`. Today `query`, `run`, and `pay` are wired end-to-end; `schema`, `help`, and `events` are stubbed and ship next.
+This emits: the Kiosk schema migration (the `kiosk.*` namespace with agents, sessions, and mandate tables), the six-verb wire surface (`query`, `run`, `pay`, `schema`, `help`, `events`) mounted at `/kiosk/exec`, the agent-registration endpoint at `/kiosk/agents/register`, and `/.well-known/kiosk.json`. Today `query`, `run`, `pay`, `schema`, and `help` are wired end-to-end (agent self-discovery works — see `rake demo:schema`); `events` is stubbed and ships next.
 
 Agents call named queries by name (`query` verb) — never raw SQL. The provider registers the queries it wishes to expose; isolation is enforced at the app layer in the query definitions and in Actions, with RLS available as optional defense-in-depth.
 
@@ -160,7 +160,7 @@ Kiosk::Server::Actions.register("apply_substitution") do |args|
   cart = Cart.find_by!("id = ? AND user_id = ?", args[:cart_id], uid)  # ownership gate → 404/403 if not owner
   item = cart.cart_items.find(args[:cart_item_id])
   if args[:accept]
-    item.update!(substitution_product_id: args[:substitution_product_id], substituted: true)
+    item.update!(product_id: args[:substitution_product_id], substituted: true)  # swap product, not a separate column
   else
     item.destroy!
   end

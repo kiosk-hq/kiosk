@@ -31,6 +31,12 @@ PATH
       ffi (~> 1.0)
 
 PATH
+  remote: ../kiosk-redteam
+  specs:
+    kiosk-redteam (0.0.1)
+      jwt (~> 2.0)
+
+PATH
   remote: ../kiosk-reputation
   specs:
     kiosk-reputation (0.0.1)
@@ -311,6 +317,7 @@ DEPENDENCIES
   kiosk-pay-stripe!
   kiosk-pow!
   kiosk-pow-cuckoo!
+  kiosk-redteam!
   kiosk-reputation!
   kiosk-rls!
   kiosk-server!
@@ -365,6 +372,7 @@ CHECKSUMS
   kiosk-pay-stripe (0.0.1)
   kiosk-pow (0.0.1)
   kiosk-pow-cuckoo (0.0.1)
+  kiosk-redteam (0.0.1)
   kiosk-reputation (0.0.1)
   kiosk-rls (0.0.1)
   kiosk-server (0.0.1)

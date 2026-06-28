@@ -88,6 +88,30 @@ if ENV["KIOSK_POW_CUCKOO_DEMO"] == "1"
   File.write(FOODELIVERY_CUCKOO_BAD_PROOF_FILE, "0")
 end
 
+# ── Reputation PoW gate (R2 P6) — activated only when KIOSK_POW_REPUTATION_DEMO=1 ──
+#
+# Demonstrates the "trust-earned-by-spending" thesis end-to-end using the
+# shipped RateAndReputation policy with demo-tuned thresholds:
+#   0 purchases → argon2id challenge at d = base_d(3) + unproven_d_bonus(2) = 5
+#   1 purchase  → argon2id challenge at d = base_d(3) (cheaper — purchase earns PoW relief)
+#   2+ purchases → free pass (proven?(purchases) → challenge_for returns nil)
+#
+# The factors callable performs a REAL DB lookup: COUNT(*) on kiosk.payment_mandates
+# for the authenticated principal — no faking.
+#
+# Thresholds are small so each argon2id solve completes in ~0.5–2 s on solve.py,
+# keeping total demo runtime well under 15 s.
+
+if ENV["KIOSK_POW_REPUTATION_DEMO"] == "1"
+  require "kiosk/pow"
+  require "kiosk/reputation"
+
+  Kiosk::Reputation::Backends.register(Kiosk::Pow::NAME, Kiosk::Pow)
+
+  FOODELIVERY_REPUTATION_BAD_PROOF_FILE = "/tmp/kiosk-foodelivery-reputation-bad-proof.count"
+  File.write(FOODELIVERY_REPUTATION_BAD_PROOF_FILE, "0")
+end
+
 # Inject the RLS DSL into ActiveRecord::Migration so that migrations can
 # call `enable_rls_on TABLE do ... end` directly. The kiosk-rls README
 # documents this opt-in; auto-injection from the gem itself lands in a
@@ -175,6 +199,52 @@ Kiosk.configure do |c|
     c.on_bad_proof = ->(identity:) {
       count = (File.read(FOODELIVERY_CUCKOO_BAD_PROOF_FILE).to_i rescue 0)
       File.write(FOODELIVERY_CUCKOO_BAD_PROOF_FILE, (count + 1).to_s)
+    }
+  end
+
+  # ── Reputation PoW gate (active only when KIOSK_POW_REPUTATION_DEMO=1) ────
+  # Uses the shipped RateAndReputation policy with REAL purchase-count factors.
+  # Difficulty thresholds (fast for demo, total run < 15 s):
+  #   proven_purchases_threshold: 2  → 2 settled purchases → free pass
+  #   base_d: 3, unproven_d_bonus: 2 → 0 purchases: d=5; 1 purchase: d=3; 2+: nil
+  if ENV["KIOSK_POW_REPUTATION_DEMO"] == "1"
+    c.reputation_policy = Kiosk::Reputation::Policies::RateAndReputation.new(
+      proven_purchases_threshold: 2,
+      low_rate_threshold:         100,
+      base_d:                     3,
+      d_min:                      3,
+      d_max:                      14,
+      rate_d_step:                1,
+      rate_step:                  10,
+      unproven_d_bonus:           2,
+      bad_proof_d_factor:         3,
+    )
+    c.pow_secret = ENV.fetch("KIOSK_POW_SECRET", "demo-pow-secret")
+    c.pow_ttl    = 300
+
+    # Factors: real DB lookup — COUNT(*) on kiosk.payment_mandates for this principal.
+    # request_rate_per_min and bad_proof_count are fixed at 0 for the demo.
+    c.reputation_factors = ->(identity:, **) {
+      uid  = identity.user_id
+      conn = ActiveRecord::Base.connection
+      count = conn.execute(
+        "SELECT COUNT(*) AS settled_count FROM kiosk.payment_mandates " \
+        "WHERE user_id = #{conn.quote(uid.to_s)}"
+      ).first["settled_count"].to_i
+      Kiosk::Reputation::Factors.new(
+        kyc_level:               nil,
+        settled_purchases_count: count,
+        settled_purchases_cents: nil,
+        request_rate_per_min:    0,
+        account_age_seconds:     nil,
+        dispute_count:           nil,
+        bad_proof_count:         0,
+      )
+    }
+
+    c.on_bad_proof = ->(identity:) {
+      cnt = (File.read(FOODELIVERY_REPUTATION_BAD_PROOF_FILE).to_i rescue 0)
+      File.write(FOODELIVERY_REPUTATION_BAD_PROOF_FILE, (cnt + 1).to_s)
     }
   end
 end

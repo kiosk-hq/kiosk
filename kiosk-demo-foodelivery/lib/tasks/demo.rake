@@ -677,6 +677,144 @@ namespace :demo do
     end
   end
   # ---------------------------------------------------------------------------
+  # ── demo:reputation ────────────────────────────────────────────────────────
+  desc <<~DESC
+    Reputation PoW demo (R2 P6 — trust-earned-by-spending).
+
+    Boots the server with KIOSK_POW_REPUTATION_DEMO=1, runs reputation_flow.rb:
+      0 purchases → 402 argon2id challenge at d=5 (unproven)
+      1 purchase  → 402 argon2id challenge at d=3 (purchase earns PoW relief)
+      2 purchases → 200 served directly, NO challenge (proven principal — free pass)
+
+    Asserts:
+      • d_unproven > d_after_1_purchase   (difficulty dropped with a purchase)
+      • served_after_2_purchases == true  (query is free once proven)
+      • challenge_after_2 == nil          (no PoW issued to a proven principal)
+
+    Prints the observed difficulty curve. Exits 0 on pass, 1 on failure.
+
+    Policy: Kiosk::Reputation::Policies::RateAndReputation
+      proven_purchases_threshold: 2, base_d: 3, unproven_d_bonus: 2, d_min: 3
+    Factors: real DB lookup — COUNT(*) FROM kiosk.payment_mandates WHERE user_id = <principal>
+
+    Requirements:
+      python3 with argon2-cffi: pip install argon2-cffi
+  DESC
+  task :reputation do
+    # Requirement: python3 with argon2-cffi must be available.
+    # Install with: pip install argon2-cffi
+    python_ok = system("python3 -c 'import argon2' 2>/dev/null")
+    unless python_ok
+      abort "argon2-cffi not found. Install with: pip install argon2-cffi\n" \
+            "Then re-run: bundle exec rake demo:reputation"
+    end
+
+    require "resolv"
+
+    port = ENV.fetch("PORT", "3004")  # port 3004 to avoid conflict with demo:pow (3002) and demo:cuckoo (3003)
+    log  = "/tmp/kiosk-foodelivery-reputation-demo.log"
+
+    host = begin
+      addr = Resolv.getaddress("foodelivery.app") rescue ""
+      addr == "127.0.0.1" ? "foodelivery.app" : "127.0.0.1"
+    end
+
+    server_url   = "http://#{host}:#{port}"
+    kiosk_issuer = server_url
+
+    puts "\n── Starting foodelivery (Reputation PoW demo) on #{server_url} ──"
+    puts "   Policy: RateAndReputation (proven_purchases_threshold=2, base_d=3, unproven_d_bonus=2)"
+    puts "   Factors: real DB lookup — kiosk.payment_mandates WHERE user_id = <principal>"
+    puts "   Expected curve: d=5 (0 purchases) → d=3 (1 purchase) → free pass (2 purchases)"
+
+    env_vars = {
+      "KIOSK_ISSUER"               => kiosk_issuer,
+      "KIOSK_POW_REPUTATION_DEMO"  => "1",
+    }
+    server_pid = spawn(
+      env_vars,
+      "bundle exec rails s -p #{port} -b 127.0.0.1 -e development",
+      out: log, err: log,
+    )
+
+    at_exit do
+      begin
+        Process.kill("TERM", server_pid)
+        Process.wait(server_pid)
+      rescue Errno::ESRCH, Errno::ECHILD
+        nil
+      end
+    end
+
+    # Wait for readiness.
+    require "net/http"
+    require "uri"
+    ready = false
+    30.times do
+      begin
+        res = Net::HTTP.get_response(URI("#{server_url}/.well-known/kiosk.json"))
+        if res.code.to_i == 200
+          ready = true
+          break
+        end
+      rescue Errno::ECONNREFUSED, Errno::EADDRNOTAVAIL, SocketError
+        nil
+      end
+      sleep 1
+    end
+    abort "Server did not become ready — see #{log}" unless ready
+    puts "  Server up at #{server_url} (Reputation PoW active)"
+
+    # Run reputation_flow.rb.
+    flow_rb = File.expand_path("../../reputation_flow.rb", __dir__)
+    puts "\n── Running reputation_flow.rb ──"
+    raw = `SERVER_URL=#{server_url} KIOSK_ISSUER=#{kiosk_issuer} bundle exec ruby #{flow_rb} 2>&1`
+    puts raw
+
+    begin
+      result = JSON.parse(raw.lines.grep(/^\{/).last || raw)
+    rescue JSON::ParserError => e
+      abort "reputation_flow.rb did not produce valid JSON: #{e.message}\nOutput:\n#{raw}"
+    end
+
+    # ── Assertions ──
+    puts "\n── Reputation PoW assertions ──"
+    failures = []
+
+    d_unproven = result["d_unproven"]
+    d_after_1  = result["d_after_1_purchase"]
+    served_2   = result["served_after_2_purchases"]
+    d_after_2  = result["challenge_after_2"]
+
+    # Print the observed difficulty curve.
+    puts "  Difficulty curve: #{d_unproven} (0 purchases) → #{d_after_1} (1 purchase) → #{d_after_2.inspect} (2 purchases)"
+
+    if d_unproven.to_i > d_after_1.to_i
+      puts "  ✓  d dropped: #{d_unproven} → #{d_after_1} (purchase earns PoW relief)"
+    else
+      failures << "expected d_unproven(#{d_unproven}) > d_after_1_purchase(#{d_after_1}) — difficulty must drop after first purchase"
+      puts "  ✗  d did NOT drop after 1st purchase: #{d_unproven} → #{d_after_1}"
+    end
+
+    if served_2 == true && d_after_2.nil?
+      puts "  ✓  free pass after 2 purchases: query served without any challenge (proven principal)"
+    else
+      failures << "expected served_after_2_purchases=true + challenge_after_2=nil; got served=#{served_2.inspect}, challenge=#{d_after_2.inspect}"
+      puts "  ✗  NOT served without challenge after 2 purchases (served=#{served_2.inspect}, d_after_2=#{d_after_2.inspect})"
+    end
+
+    if failures.empty?
+      puts "\n  All reputation assertions PASSED."
+      puts "  Trust-earned-by-spending: PoW difficulty curve demonstrated end-to-end."
+    else
+      puts "\n  FAILED:"
+      failures.each { |f| puts "    - #{f}" }
+      exit 1
+    end
+  end
+  # ── end demo:reputation ────────────────────────────────────────────────────
+
+  # ---------------------------------------------------------------------------
   desc <<~DESC
     Adversarial cross-tenant isolation test (R1 Phase 1 Task 1).
 

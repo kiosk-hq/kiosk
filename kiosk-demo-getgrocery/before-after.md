@@ -106,8 +106,8 @@ Register the queries you want to expose to agents:
 
 ```ruby
 Kiosk::Server::Queries.register("catalog") do |_args|
-  Product.where(in_stock: true)
-    .select(:id, :name, :price_cents, :unit)
+  Product.where("stock > 0")
+    .select(:id, :name, :price_cents)
 end
 
 Kiosk::Server::Queries.register("delivery_slots") do |args|

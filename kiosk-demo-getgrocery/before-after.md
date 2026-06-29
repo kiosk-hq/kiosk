@@ -60,7 +60,7 @@ getgrocery is a Rails 8 app that speaks Kiosk. The following is representative o
 1. **Discover** — `GET /.well-known/kiosk.json` returns the GetGroceries issuer and surface.
 2. **Self-register** — generated an RSA-2048 keypair, `POST /kiosk/agents/register {name:"hermes-grocery", public_key:<pem>, role:"customer"}` → HTTP 201 → `agent_id`, `user_id`, `access_token`. No existing account. No human login. No OTP. No bot screen.
 3. **Browse catalog** — `POST /kiosk/exec {command:"query", body:{name:"catalog"}}` returned 15 in-stock products. Milk 1 L and Chocolate Spread 400g were absent (out of stock) — the assistant resolved these before building the order: substituted Milk 1 L with 2× Milk 0.5 L, omitted Chocolate Spread after confirming with the user.
-4. **Create order** — `POST /kiosk/exec {command:"run", body:{name:"create_order", items:[{product_id:..., qty:2}, {product_id:..., qty:1}]}}` → HTTP 200, `order_id`, `total_cents:2499`. The assistant composed the full cart; substitution was handled before this call, not after.
+4. **Create order** — `POST /kiosk/exec {command:"run", body:{name:"create_order", items:[{sku:"milk-0.5l", qty:2}, {sku:"free-range-eggs", qty:1}]}}` → HTTP 200, `order_id`, `total_cents:2499`. The assistant composed the full cart (products referenced by `sku`); substitution was handled before this call, not after.
 5. **Query delivery slots** — `POST /kiosk/exec {command:"query", body:{name:"delivery_slots", date:"2026-06-30"}}` → returned 6 available time slots; assistant picked 10:00–12:00.
 6. **Pay** — signed an AP2 intent mandate (`cap_amount_cents:2699`, `scope:"grocery"`, `iss:<issuer>`) and a cart mandate (`total_amount_cents:2499`, `line_items:[{order_id:<order_id>, total:2499}]`, bound to the intent via `intent_mandate_id`) as RS256 JWS with the registered keypair, then `POST /kiosk/exec {command:"pay", ...}` → `settled_amount_cents:2499`, `ok:true`.
 7. **Schedule delivery** — `POST /kiosk/exec {command:"run", body:{name:"schedule_delivery", order_id:<order_id>, delivery_slot_id:<slot_id>, delivery_address:"42 Sakura Lane, Neo-Tokyo"}}` → HTTP 200, `scheduled_at:"2026-06-30T10:00:00.000Z"`.
@@ -134,7 +134,8 @@ Kiosk::Server::Actions.register("create_order") do |args|
   uid   = ActiveRecord::Base.connection.execute("SELECT kiosk.current_user_id() AS uid").first["uid"]
   order = Order.create!(user_id: uid, status: "created")
   args[:items].each do |item|
-    order.order_items.create!(product_id: item[:product_id], qty: item[:qty])
+    product = Product.find_by!(sku: item[:sku])   # agents reference products by sku
+    order.order_items.create!(product: product, qty: item[:qty])
   end
   order.update!(total_cents: order.order_items.sum { |i| i.product.price_cents * i.qty })
   { order_id: order.id, total_cents: order.total_cents, status: order.status }

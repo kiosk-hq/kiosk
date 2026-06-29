@@ -1,36 +1,22 @@
 # frozen_string_literal: true
 
-# getgrocery redteam battery (R3 Phase 2 Task 4)
+# getgrocery redteam battery (P6 corrected surface)
 #
-# Drives all generic Kiosk::Redteam scenarios against the live getgrocery
-# server and asserts each applicable attack is BLOCKED.  Scenarios that
-# require a surface getgrocery does not expose (forge_action, gated_action,
-# KYC, pow_difficulty > 0) are SKIPPED cleanly.
+# Surface: catalog, delivery_slots, my_orders / create_order, schedule_delivery
+# per_user_query : "my_orders"
+# forge_action   : "create_order"
+# gated_action   : "schedule_delivery" (ownership + payment mandate)
+# requires_kyc   : false
+# pow_difficulty : 0
 #
-# getgrocery surface:
-#   per_user_query : "my_orders"
-#   create_owned   : browse stores → products_by_store → add_to_cart → confirm_delivery
-#   forge_action   : nil  (see note below — ForgedUserId SKIPPED; coverage in demo:isolation)
-#   pay_for        : intent + cart mandates (grocery scope, RS256)
-#   gated_action   : nil  (no unlock gate — cart ownership is NOT a payment gate)
-#   requires_kyc   : false
+# Scenarios (8 BLOCKED, 3 SKIPPED, RegistrationWithoutPow not run):
+#   BLOCKED : CrossTenantRead, ForgedUserId, UnpaidGatedAction, SpentResourceReuse,
+#             PayForOtherUseSelf, MandatePrincipalSwap, MandateReplay, TokenTampering
+#   SKIPPED : MissingKyc, ExpiredKyc, ForgedKyc (no KYC)
 #
-# Note on ForgedUserId: add_to_cart returns a cart_id, but per_user_query
-# ("my_orders") lists delivery ids — different entities.  The readback check
-# in ForgedUserId would therefore be vacuously BLOCKED regardless of server
-# behaviour.  forge_action is set to nil so ForgedUserId SKIPS honestly.
-# The real forged-user_id coverage is in demo:isolation Assertion 7: a DB
-# SELECT confirms the cart's user_id is the caller's (B's), not A's.
-#
-# Note: RegistrationWithoutPow is NOT included here. getgrocery has
-# pow_difficulty: 0 (no registration PoW gate).
-#
-# Usage (from kiosk-demo-getgrocery/):
+# Usage:
 #   SERVER_URL=http://127.0.0.1:3005 KIOSK_ISSUER=http://127.0.0.1:3005 \
 #   bundle exec ruby redteam_suite.rb
-#
-# Exits non-zero if any applicable scenario reports a BREACH or if the
-# expected skip set does not match (catches profile typos that disable gates).
 
 require "kiosk/redteam"
 require "securerandom"
@@ -41,85 +27,64 @@ ISSUER   = ENV.fetch("KIOSK_ISSUER", BASE_URL)
 # ── Profile ───────────────────────────────────────────────────────────────────
 
 profile = Kiosk::Redteam::Profile.new(
-  pow_difficulty: 0,       # getgrocery has no registration PoW gate
+  pow_difficulty: 0,
   requires_kyc:   false,
   per_user_query: "my_orders",
 
-  # result_id_key / row_id_key: used by CrossTenantRead (delivery entities).
-  # add_to_cart returns cart_id; my_orders lists delivery ids — different
-  # entities, so ForgedUserId is SKIPPED (forge_action: nil) rather than
-  # reporting a vacuous BLOCKED.  Coverage lives in demo:isolation Assertion 7.
+  # result_id_key: create_order response body["value"]["order_id"]
+  # row_id_key:    my_orders rows have "id" field
+  result_id_key: "order_id",
   row_id_key:    "id",
-  result_id_key: "id",
 
-  # Browse FreshMart store → find an in-stock product → add_to_cart →
-  # confirm_delivery to create a deliveries row.
-  # Returns { id: delivery_id, cart_id:, total_cents: }.
+  # create_owned: query catalog → pick first in-stock product → create_order
+  # Returns { id: order_id, total_cents: N } (id key used by CrossTenantRead etc.)
   create_owned: ->(client, principal) {
-    # Browse stores
-    stores_resp = client.query(principal, name: "stores")
-    stores = stores_resp.body.is_a?(Hash) ? (stores_resp.body["rows"] || []) : []
-    raise "redteam: no stores returned" if stores.empty?
-    store    = stores.first
-    store_id = store["id"]
+    catalog_resp = client.query(principal, name: "catalog")
+    catalog = catalog_resp.body.is_a?(Hash) ? (catalog_resp.body["rows"] || []) : []
+    raise "redteam: catalog returned empty" if catalog.empty?
+    product = catalog.first
 
-    # Browse products
-    prods_resp = client.query(principal, name: "products_by_store", store_id: store_id)
-    prods = prods_resp.body.is_a?(Hash) ? (prods_resp.body["rows"] || []) : []
-    raise "redteam: no products returned for store #{store_id}" if prods.empty?
-    product = prods.find { |p| p["stock"].to_i > 0 } || prods.first
-
-    # Add to cart
-    add_resp = client.run(
+    order_resp = client.run(
       principal,
-      name:       "add_to_cart",
-      store_id:   store_id,
-      product_id: product["id"],
-      qty:        1,
+      name:  "create_order",
+      items: [{ product_id: product["id"], qty: 1 }],
     )
-    raise "redteam: add_to_cart failed (#{add_resp.status}): #{add_resp.body.inspect}" \
-      unless add_resp.status == 200
+    raise "redteam: create_order failed (#{order_resp.status}): #{order_resp.body.inspect}" \
+      unless order_resp.status == 200
 
-    cart_id = add_resp.body.dig("value", "cart_id")
-    raise "redteam: cart_id missing from add_to_cart response" unless cart_id
+    order_id    = order_resp.body.dig("value", "order_id")
+    total_cents = order_resp.body.dig("value", "total_cents").to_i
+    raise "redteam: create_order missing order_id" unless order_id
 
-    total_cents = product["price_cents"].to_i
+    { id: order_id, total_cents: total_cents }
+  },
 
-    # Confirm delivery to create a deliveries row (so CrossTenantRead checks
-    # that B's my_orders does not contain A's delivery_id, which is meaningful)
-    confirm_resp = client.run(
-      principal,
-      name:             "confirm_delivery",
-      cart_id:          cart_id,
-      delivery_slot_id: 1,
-      delivery_address: "1 Redteam St, Istanbul",
-    )
-    raise "redteam: confirm_delivery failed (#{confirm_resp.status}): #{confirm_resp.body.inspect}" \
-      unless confirm_resp.status == 200
+  # forge_args: returns base args for create_order (user_id injected by ForgedUserId scenario)
+  forge_action: "create_order",
+  forge_args: ->(client, _principal_a, _principal_b) {
+    # We need a valid product_id; query catalog as B to get one.
+    # We use a fresh unauthenticated catalog query approach: just hardcode a minimal
+    # args hash. The scenario will add user_id: a.user_id on top.
+    # Actually: the ForgedUserId scenario registers A and B, and calls forge_args(client, a, b).
+    # We can query catalog as B to get a valid product_id.
+    catalog_resp = client.query(_principal_b, name: "catalog")
+    catalog = catalog_resp.body.is_a?(Hash) ? (catalog_resp.body["rows"] || []) : []
+    raise "redteam: catalog empty for forge_args" if catalog.empty?
+    product = catalog.first
+    { items: [{ product_id: product["id"], qty: 1 }] }
+  },
 
-    delivery_id = confirm_resp.body.dig("value", "delivery_id")
-    raise "redteam: delivery_id missing from confirm_delivery response" unless delivery_id
-
+  # gated_action: schedule_delivery (requires ownership + payment mandate)
+  gated_action: "schedule_delivery",
+  gated_args:   ->(owned_ref) {
     {
-      id:          delivery_id,   # CrossTenantRead uses this; must match row_id_key in my_orders
-      cart_id:     cart_id,
-      total_cents: total_cents,
+      order_id:         owned_ref[:id],
+      delivery_slot_id: 1,
+      delivery_address: "1 Redteam St, Neo-Tokyo",
     }
   },
 
-  # ForgedUserId SKIPPED: forge_action is nil so the scenario hits its
-  # skip_verdict("no forge_action") guard.  The real coverage lives in
-  # demo:isolation Assertion 7 (DB SELECT confirms cart belongs to B, not A).
-  forge_action: nil,
-  forge_args:   nil,
-
-  # No gated_action: getgrocery's cart ownership is a mutation gate (not pay+KYC).
-  # Scenarios UnpaidGatedAction, SpentResourceReuse, PayForOtherUseSelf SKIP.
-  gated_action: nil,
-  gated_args:   nil,
-
-  # MandatePrincipalSwap and MandateReplay: build the RS256 mandate payloads.
-  # Returns { intent: Hash, cart: Hash } (raw payloads; the Client signs them).
+  # pay_for: build RS256 intent + cart mandates referencing order_id
   pay_for: ->(client, principal, owned_ref) {
     now       = Time.now.to_i
     intent_id = SecureRandom.uuid
@@ -146,7 +111,7 @@ profile = Kiosk::Redteam::Profile.new(
       user_id:            principal.user_id,
       agent_id:           principal.agent_id,
       iss:                ISSUER,
-      line_items:         [{ delivery_id: owned_ref[:id], total: total_cents }],
+      line_items:         [{ order_id: owned_ref[:id], total: total_cents }],
       total_amount_cents: total_cents,
       currency:           "eur",
       exp:                now + 600,
@@ -156,58 +121,35 @@ profile = Kiosk::Redteam::Profile.new(
     { intent: intent, cart: cart }
   },
 
-  # No KYC in getgrocery — MissingKyc, ExpiredKyc, ForgedKyc SKIP.
   kyc_valid:   nil,
   kyc_expired: nil,
   kyc_forged:  nil,
 )
 
 # ── Scenarios ─────────────────────────────────────────────────────────────────
-#
-# Applicable (4): CrossTenantRead, MandatePrincipalSwap, MandateReplay,
-#                 TokenTampering.
-# Skip (7):       ForgedUserId (forge_action nil — vacuous entity mismatch;
-#                   real coverage in demo:isolation Assertion 7),
-#                 UnpaidGatedAction, SpentResourceReuse, PayForOtherUseSelf
-#                   (no gated_action), MissingKyc, ExpiredKyc, ForgedKyc (no KYC).
-# RegistrationWithoutPow: always skipped (pow_difficulty: 0).
 
 scenarios = [
   # Applicable — must be BLOCKED
   Kiosk::Redteam::Scenarios::CrossTenantRead.new,
-  Kiosk::Redteam::Scenarios::MandatePrincipalSwap.new,
-  Kiosk::Redteam::Scenarios::MandateReplay.new,
-  Kiosk::Redteam::Scenarios::TokenTampering.new,
-  # Not applicable — must SKIP (forge_action nil: add_to_cart returns cart_id
-  # but my_orders lists delivery ids; readback would be vacuously BLOCKED.
-  # Genuine forged-user_id coverage: demo:isolation Assertion 7, DB ownership check.)
   Kiosk::Redteam::Scenarios::ForgedUserId.new,
-  # Not applicable — must SKIP (no gated_action)
   Kiosk::Redteam::Scenarios::UnpaidGatedAction.new,
   Kiosk::Redteam::Scenarios::SpentResourceReuse.new,
   Kiosk::Redteam::Scenarios::PayForOtherUseSelf.new,
+  Kiosk::Redteam::Scenarios::MandatePrincipalSwap.new,
+  Kiosk::Redteam::Scenarios::MandateReplay.new,
+  Kiosk::Redteam::Scenarios::TokenTampering.new,
   # Not applicable — must SKIP (no KYC)
   Kiosk::Redteam::Scenarios::MissingKyc.new,
   Kiosk::Redteam::Scenarios::ExpiredKyc.new,
   Kiosk::Redteam::Scenarios::ForgedKyc.new,
-  # Note: RegistrationWithoutPow is NOT included here. getgrocery has
-  # pow_difficulty: 0 (no registration PoW gate).
+  # Note: RegistrationWithoutPow is NOT run (pow_difficulty: 0)
 ]
 
 # ── Expected-applicable assertion ─────────────────────────────────────────────
-#
-# Exactly 7 scenarios skip: ForgedUserId (entity mismatch — vacuous readback,
-# real coverage in demo:isolation Assertion 7) + no gated_action (3) + no KYC (3).
-# If this set changes, a profile key may have been accidentally set to nil,
-# disabling an applicable scenario.
 EXPECTED_SKIP_NAMES = %w[
-  ForgedUserId
-  UnpaidGatedAction
-  SpentResourceReuse
-  PayForOtherUseSelf
-  MissingKyc
   ExpiredKyc
   ForgedKyc
+  MissingKyc
 ].freeze
 
 # ── Run ───────────────────────────────────────────────────────────────────────

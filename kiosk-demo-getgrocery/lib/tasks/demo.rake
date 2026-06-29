@@ -284,7 +284,7 @@ namespace :demo do
 
     # ── run isolation_flow.rb ──────────────────────────────────────────
     flow_rb = File.expand_path("../../isolation_flow.rb", __dir__)
-    puts "\n── Running isolation_flow.rb (adversarial cross-tenant + cart-ownership) ──"
+    puts "\n── Running isolation_flow.rb (adversarial cross-tenant + order-ownership) ──"
     env_str = "SERVER_URL=#{server_url} KIOSK_ISSUER=#{kiosk_issuer}"
     raw     = `#{env_str} bundle exec ruby #{flow_rb.shellescape} 2>&1`
     puts raw
@@ -296,78 +296,69 @@ namespace :demo do
       abort "isolation_flow.rb did not produce valid JSON: #{e.message}\nOutput:\n#{raw}"
     end
 
+    user_id_b              = result["user_id_b"]
+    order_id_a             = result["order_id_a"]
+    order_id_b             = result["order_id_b"]
+    order_id_b_forged      = result["order_id_b_forged"]
+    b_schedule_on_a_status = result["b_schedule_on_a_status"]
+    b_my_orders_before     = result["b_my_orders_before"] || []
+    b_my_orders_after      = result["b_my_orders_after"]  || []
+    a_my_orders_after      = result["a_my_orders_after"]  || []
+
     failures = []
     puts "\n── Adversarial isolation assertions ──"
 
-    user_id_b             = result["user_id_b"]
-    delivery_id_a         = result["delivery_id_a"]
-    delivery_id_b         = result["delivery_id_b"]
-    cart_id_b_forged      = result["cart_id_b_forged"]
-    b_apply_sub_status    = result["b_apply_sub_status"]
-    b_confirm_on_a_status = result["b_confirm_on_a_status"]
-    b_my_orders_before    = result["b_my_orders_before"] || []
-    b_my_orders_after     = result["b_my_orders_after"]  || []
-    a_my_orders_after     = result["a_my_orders_after"]  || []
-
-    # ── HEADLINE: B cannot apply_substitution on A's cart ─────────────
-    if b_apply_sub_status == 403
-      puts "  ✓  HEADLINE: B cannot apply_substitution on A's cart (cart-ownership gate) → 403"
+    # HEADLINE: B cannot schedule_delivery on A's order (order-ownership gate)
+    if b_schedule_on_a_status == 403
+      puts "  ✓  HEADLINE: B cannot schedule_delivery on A's order (order-ownership gate) → 403"
     else
-      failures << "ISOLATION HOLE: B's apply_substitution on A's cart returned #{b_apply_sub_status} (expected 403)"
-      puts "  ✗  HEADLINE: apply_substitution ownership gate FAILED — returned #{b_apply_sub_status}"
+      failures << "ISOLATION HOLE: B's schedule_delivery on A's order returned #{b_schedule_on_a_status} (expected 403)"
+      puts "  ✗  HEADLINE: schedule_delivery ownership gate FAILED — returned #{b_schedule_on_a_status}"
     end
 
-    # ── HEADLINE: B cannot confirm_delivery on A's cart ───────────────
-    if b_confirm_on_a_status == 403
-      puts "  ✓  HEADLINE: B cannot confirm_delivery on A's cart (cart-ownership gate) → 403"
+    # Assertion 1: B's my_orders (before) excludes A's order
+    if b_my_orders_before.include?(order_id_a)
+      failures << "ISOLATION HOLE: B's my_orders (before) contains A's order #{order_id_a} — cross-tenant leak"
+      puts "  ✗  Assertion 1 FAILED: B sees A's order #{order_id_a} — isolation hole"
     else
-      failures << "ISOLATION HOLE: B's confirm_delivery on A's cart returned #{b_confirm_on_a_status} (expected 403)"
-      puts "  ✗  HEADLINE: confirm_delivery ownership gate FAILED — returned #{b_confirm_on_a_status}"
+      puts "  ✓  Assertion 1: B's my_orders excludes A's order #{order_id_a} (cross-tenant read blocked)"
     end
 
-    # ── Assertion 3: B's my_orders (before) excludes A's delivery ─────
-    if b_my_orders_before.include?(delivery_id_a)
-      failures << "ISOLATION HOLE: B's my_orders (before) contains A's delivery #{delivery_id_a} — cross-tenant leak"
-      puts "  ✗  Assertion 3 FAILED: B sees A's delivery #{delivery_id_a} — isolation hole"
+    # Assertion 2: B's my_orders (after) includes own order (positive control)
+    if b_my_orders_after.include?(order_id_b)
+      puts "  ✓  Assertion 2: B's my_orders includes own order #{order_id_b} (positive control)"
     else
-      puts "  ✓  Assertion 3: B's my_orders excludes A's delivery #{delivery_id_a} (cross-tenant read blocked)"
+      failures << "B's my_orders does not contain own order #{order_id_b}; got #{b_my_orders_after.inspect}"
+      puts "  ✗  Assertion 2 FAILED: B's my_orders missing own order #{order_id_b}"
     end
 
-    # ── Assertion 4: B's my_orders (after) includes own delivery ──────
-    if b_my_orders_after.include?(delivery_id_b)
-      puts "  ✓  Assertion 4: B's my_orders includes own delivery #{delivery_id_b} (positive control)"
+    # Assertion 3: B's my_orders (after) still excludes A's order
+    if b_my_orders_after.include?(order_id_a)
+      failures << "ISOLATION HOLE: B's my_orders (after) contains A's order #{order_id_a} — cross-tenant leak"
+      puts "  ✗  Assertion 3 FAILED: B sees A's order #{order_id_a} after positive control"
     else
-      failures << "B's my_orders does not contain own delivery #{delivery_id_b}; got #{b_my_orders_after.inspect}"
-      puts "  ✗  Assertion 4 FAILED: B's my_orders missing own delivery #{delivery_id_b}"
+      puts "  ✓  Assertion 3: B's my_orders still excludes A's order #{order_id_a}"
     end
 
-    # ── Assertion 5: B's my_orders (after) still excludes A's delivery ─
-    if b_my_orders_after.include?(delivery_id_a)
-      failures << "ISOLATION HOLE: B's my_orders (after) contains A's delivery #{delivery_id_a} — cross-tenant leak"
-      puts "  ✗  Assertion 5 FAILED: B sees A's delivery #{delivery_id_a} after positive control"
+    # Assertion 4: A's my_orders excludes B's order
+    if a_my_orders_after.include?(order_id_b)
+      failures << "ISOLATION HOLE: A's my_orders contains B's order #{order_id_b} — cross-tenant leak"
+      puts "  ✗  Assertion 4 FAILED: A sees B's order #{order_id_b} — isolation hole"
     else
-      puts "  ✓  Assertion 5: B's my_orders still excludes A's delivery #{delivery_id_a}"
+      puts "  ✓  Assertion 4: A's my_orders excludes B's order #{order_id_b}"
     end
 
-    # ── Assertion 6: A's my_orders excludes B's delivery ──────────────
-    if a_my_orders_after.include?(delivery_id_b)
-      failures << "ISOLATION HOLE: A's my_orders contains B's delivery #{delivery_id_b} — cross-tenant leak"
-      puts "  ✗  Assertion 6 FAILED: A sees B's delivery #{delivery_id_b} — isolation hole"
-    else
-      puts "  ✓  Assertion 6: A's my_orders excludes B's delivery #{delivery_id_b}"
-    end
-
-    # ── Assertion 7: DB user_id on forged cart is B's, not A's ────────
-    db_user_id = `psql -X -d #{db} -tAc "SELECT user_id FROM carts WHERE id = '#{cart_id_b_forged}'" 2>&1`.strip
+    # Assertion 5: DB — forged user_id in create_order ignored (order.user_id = B's)
+    db_user_id = `psql -X -d #{db} -tAc "SELECT user_id FROM orders WHERE id = '#{order_id_b_forged}'" 2>&1`.strip
     if db_user_id == user_id_b
-      puts "  ✓  Assertion 7: DB carts.user_id for forged cart == user_id_b (#{user_id_b}) — forged arg ignored"
+      puts "  ✓  Assertion 5: DB orders.user_id for forged order == user_id_b (#{user_id_b}) — forged arg ignored"
     else
-      failures << "ISOLATION HOLE or unexpected: DB carts.user_id for forged cart is #{db_user_id.inspect}, expected B's #{user_id_b}"
-      puts "  ✗  Assertion 7 FAILED: unexpected user_id #{db_user_id.inspect} for forged cart (expected B's)"
+      failures << "ISOLATION HOLE or unexpected: DB orders.user_id for forged order is #{db_user_id.inspect}, expected B's #{user_id_b}"
+      puts "  ✗  Assertion 5 FAILED: unexpected user_id #{db_user_id.inspect} for forged order (expected B's)"
     end
 
     if failures.empty?
-      puts "\n  All adversarial assertions passed — app-layer isolation and cart-ownership gates hold."
+      puts "\n  All adversarial assertions passed — app-layer isolation and order-ownership gates hold."
     else
       puts "\n  FAILED assertions:"
       failures.each { |f| puts "    - #{f}" }

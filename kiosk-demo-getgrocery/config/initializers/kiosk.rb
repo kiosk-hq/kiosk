@@ -183,14 +183,15 @@ Kiosk::Server::Actions.register("schedule_delivery",
   raise Kiosk::Server::Errors::BadRequest.new("delivery_slot_id must be 1–6") unless (1..6).include?(slot_id)
 
   conn.transaction do
-    # ── Gate 1: order belongs to principal ────────────────────────────────
+    # ── Gate 1: order belongs to principal and not already scheduled ─────
     order = conn.execute(
       "SELECT id FROM orders " \
       "WHERE id = #{conn.quote(order_id.to_s)}::uuid " \
       "AND user_id = kiosk.current_user_id() " \
+      "AND status NOT IN ('scheduled') " \
       "LIMIT 1"
     ).first
-    raise Kiosk::Server::Errors::Forbidden.new("order not found or not yours") if order.nil?
+    raise Kiosk::Server::Errors::Forbidden.new("order not found, not yours, or already scheduled") if order.nil?
 
     # ── Gate 2: settled payment mandate referencing this order ────────────
     order_filter_json = [{ order_id: order_id.to_s }].to_json

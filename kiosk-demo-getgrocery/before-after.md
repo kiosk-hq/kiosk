@@ -24,7 +24,7 @@ The complete Uber Eats tool surface available to Claude has two tools: `search` 
 
 The reason incumbents stay at discovery is economic, not technical. Grocery retail media — Instacart ads $1.18B FY2024 (SEC filing, cited in `docs/research/2026-06-22-consumer-agent-validation.md`, Front C) — requires an authenticated in-app session for sponsored placement and closed-loop attribution. A silent agent order via a structured API erases that ad surface entirely. The discovery funnel *is* the product.
 
-**The differentiator getgrocery adds: substitution negotiation.** Real grocery apps require a human to accept or reject out-of-stock substitutions interactively — typically via in-app push notification at delivery time. No public API surface exposes this decision to agents today. With Kiosk, the agent calls `substitution_options` to discover the suggested substitute, then `apply_substitution` to accept or reject it — no human interaction required, no push notification needed.
+**The differentiator getgrocery adds:** The provider's catalog returns facts only — in-stock items. Out-of-stock items are simply absent. The AI assistant reasons over the catalog to resolve substitutions before calling `create_order`. Real grocery apps require a human to accept substitutions via push notification. With Kiosk, the assistant handles substitution decisions using the catalog, without any provider-side substitution surface or human push notification.
 
 **In short:** on real Instacart or Getir, the agent discovers products and deep-links out. The human opens the app, logs in, pays, and later taps a notification to accept or reject substitutions. The agent's contribution is a glorified search result.
 
@@ -35,50 +35,41 @@ The reason incumbents stay at discovery is economic, not technical. Grocery reta
 getgrocery is a Rails 8 app that speaks Kiosk. The following is representative output of `rake demo` (from `getgrocery_flow.rb`):
 
 ```
-{"http_register":201,"http_stores":200,"http_products":200,"http_add_to_cart":200,"http_add_oos":200,"http_sub_options":200,"http_apply_sub":200,"http_delivery_slots":200,"http_confirm_delivery":200,"http_pay":200,"user_id":"a7f3c291-1b2e-4d8a-9cf1-3e507b824f16","agent_id":"b2e94107-3a1c-4f8d-bc2e-91d4a53c7e28","cart_id":"d4f81c3e-7b2a-4e9c-af13-62d7b4c8e509","delivery_id":"e9c2d74f-5a3b-4f8e-b021-73a8c5d9f416","total_cents":2499,"scheduled_at":"2026-06-30T10:00:00.000Z","substitution_accepted":true,"pay":{"ok":true,"kind":"value","value":{"payment_mandate_id":"f1b3e259-8c4d-4a7f-9e12-84b5c7d2a963","psp_reference":"stub_pi_9f4d2c1b-7e3a-4b8f-c219-53d6e8a4b731","settled_amount_cents":2499,"currency":"eur"}}}
+{"http_register":201,"http_catalog":200,"http_order":200,"http_slots":200,"http_pay":200,"http_schedule":200,"http_my_orders":200,"user_id":"a7f3c291-1b2e-4d8a-9cf1-3e507b824f16","agent_id":"b2e94107-3a1c-4f8d-bc2e-91d4a53c7e28","order_id":"d4f81c3e-7b2a-4e9c-af13-62d7b4c8e509","total_cents":2499,"scheduled_at":"2026-06-30T10:00:00.000Z","pay":{"ok":true,"kind":"value","value":{"payment_mandate_id":"f1b3e259-8c4d-4a7f-9e12-84b5c7d2a963","psp_reference":"stub_pi_9f4d2c1b-7e3a-4b8f-c219-53d6e8a4b731","settled_amount_cents":2499,"currency":"eur"}}}
 
 ── Assertions ──
   OK  http_register == 201
-  OK  http_stores == 200
-  OK  http_products == 200
-  OK  http_add_to_cart == 200
-  OK  http_add_oos == 200
-  OK  http_sub_options == 200
-  OK  http_apply_sub == 200
-  OK  http_delivery_slots == 200
-  OK  http_confirm_delivery == 200
+  OK  http_catalog == 200
+  OK  http_order == 200
+  OK  http_slots == 200
   OK  http_pay == 200
-  OK  delivery_id present (e9c2d74f-5a3b-4f8e-b021-73a8c5d9f416)
+  OK  http_schedule == 200
+  OK  http_my_orders == 200
+  OK  order_id present (d4f81c3e-7b2a-4e9c-af13-62d7b4c8e509)
   OK  scheduled_at present (2026-06-30T10:00:00.000Z)
-  OK  substitution_accepted == true
   OK  pay.ok == true
   OK  pay.value.payment_mandate_id present (f1b3e259-8c4d-4a7f-9e12-84b5c7d2a963)
-  OK  deliveries count >= 1 (got 1)
+  OK  orders count >= 1 (got 1)
   OK  kiosk.payment_mandates >= 1 (got 1)
-  OK  cart_items[substituted=true] >= 1 (got 1)
 
   All assertions passed.
 ```
 
 **What the agent did — no human involved at any step:**
 
-1. **Discover** — `GET /.well-known/kiosk.json` returns the getgrocery issuer and surface.
+1. **Discover** — `GET /.well-known/kiosk.json` returns the GetGroceries issuer and surface.
 2. **Self-register** — generated an RSA-2048 keypair, `POST /kiosk/agents/register {name:"hermes-grocery", public_key:<pem>, role:"customer"}` → HTTP 201 → `agent_id`, `user_id`, `access_token`. No existing account. No human login. No OTP. No bot screen.
-3. **Browse stores** — `POST /kiosk/exec {command:"query", body:{name:"stores"}}` returned FreshMart.
-4. **Browse products** — `POST /kiosk/exec {command:"query", body:{name:"products_by_store", store_id:1}}` returned product rows; found organic-milk (in stock) and avocado (out of stock, substitution policy present).
-5. **Add in-stock item** — `POST /kiosk/exec {command:"run", body:{name:"add_to_cart", store_id:1, product_id:<milk_id>, qty:2}}` → HTTP 200, `cart_id`, `cart_item_id`.
-6. **Add OOS item** — `add_to_cart` again for avocado → HTTP 200, same `cart_id`, new `cart_item_id`.
-7. **Query substitution options** — `POST /kiosk/exec {command:"query", body:{name:"substitution_options", product_id:<avocado_id>}}` → returned banana as `suggested_product_id`.
-8. **Accept substitution** — `POST /kiosk/exec {command:"run", body:{name:"apply_substitution", cart_id:<cart_id>, cart_item_id:<avocado_item_id>, substitution_product_id:<banana_id>, accept:true}}` → HTTP 200, `accepted:true`. **No human push notification. No in-app prompt. The agent decided.**
-9. **Query delivery slots** — `POST /kiosk/exec {command:"query", body:{name:"delivery_slots", date:"2026-06-30"}}` → slot id for 10:00–12:00.
-10. **Confirm delivery** — `POST /kiosk/exec {command:"run", body:{name:"confirm_delivery", cart_id:<cart_id>, delivery_slot_id:<slot_id>, delivery_address:"42 Bagdat Caddesi, Istanbul"}}` → HTTP 200, `delivery_id`, `scheduled_at`, `total_cents:2499`.
-11. **Pay** — signed an AP2 intent mandate (`cap_amount_cents:2699`, `scope:"grocery"`, `iss:<issuer>`) and a cart mandate (`total_amount_cents:2499`, `line_items:[{delivery_id:<delivery_id>, total:2499}]`, bound to the intent via `intent_mandate_id`) as RS256 JWS with the registered keypair, then `POST /kiosk/exec {command:"pay", ...}` → `settled_amount_cents:2499`, `ok:true`.
+3. **Browse catalog** — `POST /kiosk/exec {command:"query", body:{name:"catalog"}}` returned 15 in-stock products. Milk 1 L and Chocolate Spread 400g were absent (out of stock) — the assistant resolved these before building the order: substituted Milk 1 L with 2× Milk 0.5 L, omitted Chocolate Spread after confirming with the user.
+4. **Create order** — `POST /kiosk/exec {command:"run", body:{name:"create_order", items:[{product_id:..., qty:2}, {product_id:..., qty:1}]}}` → HTTP 200, `order_id`, `total_cents:2499`. The assistant composed the full cart; substitution was handled before this call, not after.
+5. **Query delivery slots** — `POST /kiosk/exec {command:"query", body:{name:"delivery_slots", date:"2026-06-30"}}` → returned 6 available time slots; assistant picked 10:00–12:00.
+6. **Pay** — signed an AP2 intent mandate (`cap_amount_cents:2699`, `scope:"grocery"`, `iss:<issuer>`) and a cart mandate (`total_amount_cents:2499`, `line_items:[{order_id:<order_id>, total:2499}]`, bound to the intent via `intent_mandate_id`) as RS256 JWS with the registered keypair, then `POST /kiosk/exec {command:"pay", ...}` → `settled_amount_cents:2499`, `ok:true`.
+7. **Schedule delivery** — `POST /kiosk/exec {command:"run", body:{name:"schedule_delivery", order_id:<order_id>, delivery_slot_id:<slot_id>, delivery_address:"42 Sakura Lane, Neo-Tokyo"}}` → HTTP 200, `scheduled_at:"2026-06-30T10:00:00.000Z"`.
 
-The database confirmed: one row in `deliveries`, one row in `kiosk.payment_mandates`, one row in `cart_items` with `substituted:true`.
+The database confirmed: one row in `orders` with `status='scheduled'`, one row in `kiosk.payment_mandates`.
 
-The business outcome: the user said "order groceries from getgrocery." Their assistant completed the purchase — discovery, registration, cart, substitution negotiation, delivery confirmation, payment — without the user touching anything and without the user having an account at getgrocery beforehand.
+The business outcome: the user said "order groceries from GetGroceries." Their assistant completed the purchase — discovery, registration, catalog browse, substitution reasoning, order creation, payment, delivery scheduling — without the user touching anything and without the user having an account at GetGroceries beforehand.
 
-The provider outcome: getgrocery received a real delivery order and a real payment. The customer relationship stays with getgrocery (the mandate carries the provider's issuer). There is no intermediate platform taking a discovery fee or owning the session.
+The provider outcome: GetGroceries received a real order and a real payment. The customer relationship stays with GetGroceries (the mandate carries the provider's issuer). There is no intermediate platform taking a discovery fee or owning the session.
 
 **This is a demo against a fake provider with a stub payment processor.** The mechanism works. Whether real providers will integrate and whether real users will value this enough to drive adoption are open questions — the demo does not answer them.
 
@@ -114,18 +105,9 @@ Agents call named queries by name (`query` verb) — never raw SQL. The provider
 Register the queries you want to expose to agents:
 
 ```ruby
-Kiosk::Server::Queries.register("stores") do |_args|
-  Store.select(:id, :name, :city)
-end
-
-Kiosk::Server::Queries.register("products_by_store") do |args|
-  Product.where(store_id: args[:store_id])
-    .select(:id, :name, :sku, :price_cents, :stock, :substitution_policy)
-end
-
-Kiosk::Server::Queries.register("substitution_options") do |args|
-  SubstitutionPolicy.where(product_id: args[:product_id])
-    .select(:product_id, :suggested_product_id)
+Kiosk::Server::Queries.register("catalog") do |_args|
+  Product.where(in_stock: true)
+    .select(:id, :name, :price_cents, :unit)
 end
 
 Kiosk::Server::Queries.register("delivery_slots") do |args|
@@ -134,8 +116,8 @@ Kiosk::Server::Queries.register("delivery_slots") do |args|
 end
 
 Kiosk::Server::Queries.register("my_orders") do |_args|
-  Delivery.where("user_id = kiosk.current_user_id()")
-    .select(:id, :status, :scheduled_at, :total_cents, :delivery_address)
+  Order.where("user_id = kiosk.current_user_id()")
+    .select(:id, :status, :total_cents, :slot_at, :address, :created_at)
 end
 ```
 
@@ -145,41 +127,41 @@ RLS is available as optional defense-in-depth via `enable_rls_on` — useful if 
 
 **4. Register Actions (with ownership checks)**
 
-`apply_substitution` and `confirm_delivery` are **ownership-gated** — the server must verify `WHERE id = cart_id AND user_id = kiosk.current_user_id()` before mutating. Register them with an ownership check block:
+`schedule_delivery` is **payment-binding gated** — the server must verify a settled mandate exists for the order before mutating. `create_order` attaches ownership via `kiosk.current_user_id()`. Register them:
 
 ```ruby
-Kiosk::Server::Actions.register("add_to_cart") do |args|
-  uid  = ActiveRecord::Base.connection.execute("SELECT kiosk.current_user_id() AS uid").first["uid"]
-  cart = Cart.find_or_create_by!(user_id: uid, store_id: args[:store_id])
-  item = cart.cart_items.create!(product_id: args[:product_id], qty: args[:qty])
-  { cart_id: cart.id, cart_item_id: item.id, store_id: cart.store_id, product_id: item.product_id, qty: item.qty }
-end
-
-Kiosk::Server::Actions.register("apply_substitution") do |args|
-  uid  = ActiveRecord::Base.connection.execute("SELECT kiosk.current_user_id() AS uid").first["uid"]
-  cart = Cart.find_by!("id = ? AND user_id = ?", args[:cart_id], uid)  # ownership gate → 404/403 if not owner
-  item = cart.cart_items.find(args[:cart_item_id])
-  if args[:accept]
-    item.update!(product_id: args[:substitution_product_id], substituted: true)  # swap product, not a separate column
-  else
-    item.destroy!
+Kiosk::Server::Actions.register("create_order") do |args|
+  uid   = ActiveRecord::Base.connection.execute("SELECT kiosk.current_user_id() AS uid").first["uid"]
+  order = Order.create!(user_id: uid, status: "created")
+  args[:items].each do |item|
+    order.order_items.create!(product_id: item[:product_id], qty: item[:qty])
   end
-  { cart_item_id: item.id, accepted: args[:accept] }
+  order.update!(total_cents: order.order_items.sum { |i| i.product.price_cents * i.qty })
+  { order_id: order.id, total_cents: order.total_cents, status: order.status }
 end
 
-Kiosk::Server::Actions.register("confirm_delivery") do |args|
-  uid      = ActiveRecord::Base.connection.execute("SELECT kiosk.current_user_id() AS uid").first["uid"]
-  cart     = Cart.find_by!("id = ? AND user_id = ?", args[:cart_id], uid)  # ownership gate → 404/403 if not owner
-  slot     = DeliverySlot.find(args[:delivery_slot_id])
-  delivery = Delivery.create!(
-    user_id:          uid,
-    cart_id:          cart.id,
-    delivery_slot_id: slot.id,
-    delivery_address: args.fetch(:delivery_address),
-    total_cents:      cart.cart_items.sum { |i| i.effective_price_cents * i.qty },
-    scheduled_at:     slot.start_time,
+Kiosk::Server::Actions.register("schedule_delivery") do |args|
+  uid  = ActiveRecord::Base.connection.execute("SELECT kiosk.current_user_id() AS uid").first["uid"]
+  # Payment-binding gate: verify a settled mandate references this order
+  paid = ActiveRecord::Base.connection.execute(<<~SQL).first["paid"]
+    SELECT EXISTS (
+      SELECT 1 FROM kiosk.cart_mandates cm
+      JOIN kiosk.payment_mandates pm ON pm.cart_mandate_id = cm.id
+      WHERE cm.line_items @> json_build_array(
+        json_build_object('order_id', #{ActiveRecord::Base.connection.quote(args[:order_id])})
+      )::jsonb
+    ) AS paid
+  SQL
+  raise Kiosk::PaymentRequired, "order must be paid before scheduling" unless paid == "t" || paid == true
+
+  order = Order.find_by!("id = ? AND user_id = ?", args[:order_id], uid)
+  slot  = DeliverySlot.find(args[:delivery_slot_id])
+  order.update!(
+    status:   "scheduled",
+    slot_at:  slot.start_time,
+    address:  args.fetch(:delivery_address),
   )
-  { delivery_id: delivery.id, scheduled_at: delivery.scheduled_at, total_cents: delivery.total_cents, status: delivery.status }
+  { order_id: order.id, scheduled_at: order.slot_at, status: order.status }
 end
 ```
 
@@ -188,7 +170,7 @@ end
 ```ruby
 # config/initializers/kiosk.rb
 Kiosk.configure do |c|
-  c.issuer           = "https://getgrocery.app"
+  c.issuer           = "https://getgroceries.app"
   c.payment_provider = KioskPay::Stripe::Adapter.new(secret_key: ENV["STRIPE_SECRET_KEY"])
 end
 ```
@@ -197,7 +179,7 @@ The stub PSP (`StubPsp`) used in the demo can be swapped for the Stripe adapter 
 
 **What this does not require:** a new user-facing login flow, a new mobile app, an OAuth integration, a webhook endpoint, or any changes to the provider's existing Rails models. The satellite gems add a parallel surface; the existing application is untouched.
 
-**What this enables:** any personal agent that has read `KIOSK.skill.md` — or that discovers the `issuer` and `endpoint` via `/.well-known/kiosk.json` — can complete a grocery order including substitution negotiation without the user having an account at the provider and without the user being present. The provider drops its anti-bot wall for sanctioned agent traffic; the anti-bot wall stays in place for everything else.
+**What this enables:** any personal agent that has read `KIOSK.skill.md` — or that discovers the `issuer` and `endpoint` via `/.well-known/kiosk.json` — can complete a grocery order without the user having an account at the provider and without the user being present. The provider drops its anti-bot wall for sanctioned agent traffic; the anti-bot wall stays in place for everything else.
 
 See `getgrocery_flow.rb` in this directory for the full worked example.
 

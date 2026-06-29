@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Orders — GetGrocery Admin</title>
+  <title>Orders — GetGroceries Admin</title>
   <style>
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
@@ -14,7 +14,6 @@
       min-height: 100vh;
     }
 
-    /* ── Header ─────────────────────────────────────────────────── */
     header {
       background: #1a6b3c;
       color: #fff;
@@ -33,7 +32,6 @@
     .logo span { color: #7fe89f; }
     nav { font-size: 13px; opacity: .85; }
 
-    /* ── Page ────────────────────────────────────────────────────── */
     main {
       max-width: 900px;
       margin: 32px auto;
@@ -51,7 +49,6 @@
       margin-bottom: 24px;
     }
 
-    /* ── Order card ──────────────────────────────────────────────── */
     .order-card {
       background: #fff;
       border-radius: 10px;
@@ -80,7 +77,6 @@
       border-radius: 5px;
     }
 
-    /* ── Status badges ───────────────────────────────────────────── */
     .badge {
       font-size: 11px;
       font-weight: 700;
@@ -89,19 +85,23 @@
       border-radius: 20px;
       text-transform: uppercase;
     }
-    .badge-paid {
+    .badge-scheduled {
       background: #d1fae5;
       color: #065f46;
       border: 1px solid #6ee7b7;
     }
-    .badge-pending {
-      background: #fef3c7;
-      color: #92400e;
-      border: 1px solid #fcd34d;
+    .badge-paid {
+      background: #dbeafe;
+      color: #1e40af;
+      border: 1px solid #93c5fd;
+    }
+    .badge-created {
+      background: #f1f5f9;
+      color: #475569;
+      border: 1px solid #cbd5e1;
     }
 
-    /* ── Delivery info ───────────────────────────────────────────── */
-    .delivery-info {
+    .order-meta {
       display: flex;
       flex-wrap: wrap;
       gap: 18px;
@@ -109,12 +109,11 @@
       font-size: 13.5px;
       color: #555;
     }
-    .delivery-info .label {
+    .order-meta .label {
       font-weight: 600;
       color: #333;
     }
 
-    /* ── Line items ──────────────────────────────────────────────── */
     .order-items {
       padding: 10px 20px 14px;
     }
@@ -132,11 +131,6 @@
     }
     .item:last-child { margin-bottom: 0; }
 
-    .item.substituted {
-      background: #fffbeb;
-      border-color: #fde68a;
-    }
-
     .item .qty {
       font-weight: 600;
       color: #1a6b3c;
@@ -147,16 +141,6 @@
       flex: 1;
       font-weight: 500;
     }
-    .sub-tag {
-      font-size: 11px;
-      font-weight: 600;
-      background: #fef3c7;
-      color: #92400e;
-      border: 1px solid #fcd34d;
-      padding: 1px 7px;
-      border-radius: 12px;
-      white-space: nowrap;
-    }
     .item .price {
       font-size: 13px;
       color: #888;
@@ -164,7 +148,6 @@
       text-align: right;
     }
 
-    /* ── Empty state ─────────────────────────────────────────────── */
     .empty {
       text-align: center;
       color: #aaa;
@@ -172,7 +155,6 @@
       padding: 60px 0;
     }
 
-    /* ── Footer ──────────────────────────────────────────────────── */
     footer {
       text-align: center;
       font-size: 11px;
@@ -184,8 +166,8 @@
 <body>
 
 <header>
-  <div class="logo">Get<span>Grocery</span></div>
-  <nav>Store Admin &rsaquo; Orders</nav>
+  <div class="logo">Get<span>Groceries</span></div>
+  <nav>Provider Admin &rsaquo; Orders</nav>
 </header>
 
 <main>
@@ -200,47 +182,58 @@
   <% else %>
     <% @orders.each do |order| %>
       <%
-        paid      = order["paid"] == "t" || order["paid"] == true
-        slot_raw  = order["slot_at"].to_s
-        slot_time = begin
+        paid       = order["paid"] == "t" || order["paid"] == true
+        status     = order["status"].to_s
+        scheduled  = status == "scheduled"
+        slot_raw   = order["slot_at"].to_s
+        slot_time  = begin
           t = Time.parse(slot_raw)
-          t_end = t + 7200  # 2-hour delivery window
+          t_end = t + 7200
           "#{t.strftime("%a %-d %b, %H:%M")} – #{t_end.strftime("%H:%M")}"
         rescue
-          slot_raw
+          slot_raw.empty? ? "—" : slot_raw
         end
-        created   = begin
+        created    = begin
           Time.parse(order["created_at"].to_s).strftime("%-d %b %Y at %H:%M")
         rescue
           order["created_at"].to_s
         end
-        items     = order["items"] || []
+        total_str  = format("€%.2f", order["total_cents"].to_i / 100.0)
+        items      = order["items"] || []
+
+        badge_class = if scheduled
+          "badge-scheduled"
+        elsif paid
+          "badge-paid"
+        else
+          "badge-created"
+        end
+        badge_label = scheduled ? "SCHEDULED" : (paid ? "PAID" : "CREATED")
       %>
       <div class="order-card">
         <div class="order-header">
           <span class="order-id">#<%= order["short_id"] %></span>
-          <span class="badge <%= paid ? "badge-paid" : "badge-pending" %>">
-            <%= paid ? "PAID" : "PENDING" %>
-          </span>
-          <div class="delivery-info">
-            <span><span class="label">Address:</span> <%= h order["address"] %></span>
-            <span><span class="label">Slot:</span> <%= slot_time %></span>
+          <span class="badge <%= badge_class %>"><%= badge_label %></span>
+          <div class="order-meta">
+            <span><span class="label">Total:</span> <%= total_str %></span>
+            <% if order["address"] && !order["address"].empty? %>
+              <span><span class="label">Address:</span> <%= h order["address"] %></span>
+            <% end %>
+            <% if scheduled && !slot_raw.empty? %>
+              <span><span class="label">Slot:</span> <%= slot_time %></span>
+            <% end %>
             <span style="color:#bbb">Ordered <%= created %></span>
           </div>
         </div>
 
         <div class="order-items">
           <% if items.empty? %>
-            <span style="color:#bbb;font-size:13px">No items on cart</span>
+            <span style="color:#bbb;font-size:13px">No items</span>
           <% else %>
             <% items.each do |item| %>
-              <% subst = item["substituted"] == "t" || item["substituted"] == true %>
-              <div class="item<%= subst ? " substituted" : "" %>">
+              <div class="item">
                 <span class="qty">&times;<%= item["qty"] %></span>
                 <span class="name"><%= h item["product_name"] %></span>
-                <% if subst %>
-                  <span class="sub-tag">&#8644; substituted</span>
-                <% end %>
                 <span class="price">&euro;<%= format("%.2f", item["price_cents"].to_i / 100.0) %></span>
               </div>
             <% end %>
@@ -252,7 +245,7 @@
 </main>
 
 <footer>
-  GetGrocery Admin &mdash; Demo Provider &mdash; Powered by Kiosk
+  GetGroceries Admin &mdash; Demo Provider &mdash; Powered by Kiosk
 </footer>
 
 </body>

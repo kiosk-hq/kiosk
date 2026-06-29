@@ -2,7 +2,7 @@
 
 A personal agent (Hermes, Comet, OpenClaw, OpenSquilla, a capable Siri) follows these steps to discover, register, browse, act, and pay at any Kiosk provider — with no human account, no human login, and no human at the keyboard until the purchase is complete.
 
-The human says: *"order groceries from getgrocery."* The agent does everything else — including negotiating substitutions for out-of-stock items.
+The human says: *"order groceries from GetGroceries."* The agent does everything else — including resolving substitutions for out-of-stock items before placing the order.
 
 ---
 
@@ -49,26 +49,9 @@ No human is involved. There is no existing account at the provider. The provider
 
 ## Step 3 — Browse with `query` (named, parameterized — no SQL)
 
-The agent **never sends SQL**. Instead, call a provider-registered named query by name and pass params. For getgrocery, browse the store catalog and product listings:
+The agent **never sends SQL**. Instead, call a provider-registered named query by name and pass params. For GetGroceries, browse the catalog, available delivery slots, and your own orders:
 
-**List stores:**
-
-```http
-POST /kiosk/exec
-Authorization: Bearer <access_token>
-Content-Type: application/json
-
-{
-  "command": "query",
-  "body": {
-    "name": "stores"
-  }
-}
-```
-
-The response is a `rows` array. Pick a store — note its `id`.
-
-**Browse products in a store:**
+**Browse the product catalog:**
 
 ```http
 POST /kiosk/exec
@@ -78,31 +61,14 @@ Content-Type: application/json
 {
   "command": "query",
   "body": {
-    "name":     "products_by_store",
-    "store_id": "<store id from stores>"
+    "name": "catalog"
   }
 }
 ```
 
-Pick the products you want — note each product's `id`, `price_cents`, and `stock`. A `stock` of 0 means the item is out of stock; check `substitution_policy` for whether a suggested alternative is available.
+The response is a `rows` array of in-stock products. Each row has `id`, `name`, `price_cents`, and `unit`. Note the `id` of each product you want.
 
-**Check substitution options (for OOS items):**
-
-```http
-POST /kiosk/exec
-Authorization: Bearer <access_token>
-Content-Type: application/json
-
-{
-  "command": "query",
-  "body": {
-    "name":       "substitution_options",
-    "product_id": "<id of OOS product>"
-  }
-}
-```
-
-Returns the provider-suggested substitute product(s). Note the substitute's `suggested_product_id`.
+> **Substitutions are the assistant's decision.** The catalog returns in-stock items only — an item absent from the catalog is out of stock. The assistant reasons over the catalog: "Milk 1 L" not present → use 2× "Milk 0.5 L"; "Chocolate Spread" not present → ask the user (peanut butter?) or omit. The provider does not suggest substitutions.
 
 **Check delivery slots:**
 
@@ -120,17 +86,34 @@ Content-Type: application/json
 }
 ```
 
-Note the `id` of your preferred slot.
+Returns available slots for the given date. Note the `id` of your preferred slot.
 
-App-layer isolation is in effect: the `my_orders` query scopes to the authenticated principal via `WHERE user_id = kiosk.current_user_id()` — no raw SQL, no RLS required. Catalogue queries (`stores`, `products_by_store`, `substitution_options`, `delivery_slots`) are available to all authenticated agents.
+**View your orders:**
+
+```http
+POST /kiosk/exec
+Authorization: Bearer <access_token>
+Content-Type: application/json
+
+{
+  "command": "query",
+  "body": {
+    "name": "my_orders"
+  }
+}
+```
+
+App-layer isolation is in effect: `my_orders` scopes to the authenticated principal via `WHERE user_id = kiosk.current_user_id()` — no raw SQL, no RLS required. The `catalog` and `delivery_slots` queries are available to all authenticated agents.
 
 ---
 
 ## Step 4 — Act with `run`
 
-Use the `run` command to invoke provider-registered Actions. getgrocery exposes three actions: `add_to_cart`, `apply_substitution`, and `confirm_delivery`.
+Use the `run` command to invoke provider-registered Actions. GetGroceries exposes two actions: `create_order` and `schedule_delivery`.
 
-**Add items to cart:**
+**Create an order:**
+
+The assistant submits the **whole cart at once** via `create_order`. There is no incremental `add_to_cart`.
 
 ```http
 POST /kiosk/exec
@@ -140,10 +123,11 @@ Content-Type: application/json
 {
   "command": "run",
   "body": {
-    "name":       "add_to_cart",
-    "store_id":   "<store id>",
-    "product_id": "<product id from Step 3>",
-    "qty":        1
+    "name":  "create_order",
+    "items": [
+      { "product_id": "<id>", "qty": 2 },
+      { "product_id": "<id>", "qty": 1 }
+    ]
   }
 }
 ```
@@ -152,19 +136,19 @@ Successful response — HTTP 200, inside `.value`:
 
 ```json
 {
-  "cart_id":      "<uuid>",
-  "cart_item_id": "<uuid>",
-  "store_id":     "<id>",
-  "product_id":   "<id>",
-  "qty":          1
+  "order_id":    "<uuid>",
+  "total_cents": 2499,
+  "status":      "created"
 }
 ```
 
-Note `cart_id` — all subsequent cart operations reference it. Calling `add_to_cart` again for the same principal returns the same `cart_id`.
+Note `order_id` and `total_cents` — both are required for Step 5.
 
-**Accept or reject a substitution (OOS items):**
+This action is **ownership-gated**: the server derives `user_id` from the authenticated session via `kiosk.current_user_id()` and attaches it to the order.
 
-When a product is out of stock, the agent calls `apply_substitution` to accept or reject the suggested alternative — **no human interaction required:**
+**Schedule delivery:**
+
+This action is **payment-binding gated**: the server checks that a settled `kiosk.payment_mandates` row exists whose cart mandate `line_items @> [{"order_id": <order_id>}]`. Call `pay` first (Step 5), then `schedule_delivery`.
 
 ```http
 POST /kiosk/exec
@@ -174,33 +158,10 @@ Content-Type: application/json
 {
   "command": "run",
   "body": {
-    "name":                    "apply_substitution",
-    "cart_id":                 "<cart_id from add_to_cart>",
-    "cart_item_id":            "<cart_item_id of OOS item>",
-    "substitution_product_id": "<suggested_product_id from substitution_options>",
-    "accept":                  true
-  }
-}
-```
-
-Set `accept: false` to reject the substitution and remove the OOS item from the cart.
-
-This action is **cart-ownership gated**: the server enforces `WHERE id = cart_id AND user_id = kiosk.current_user_id()` — only the cart's owner can apply substitutions.
-
-**Confirm delivery:**
-
-```http
-POST /kiosk/exec
-Authorization: Bearer <access_token>
-Content-Type: application/json
-
-{
-  "command": "run",
-  "body": {
-    "name":             "confirm_delivery",
-    "cart_id":          "<cart_id>",
+    "name":             "schedule_delivery",
+    "order_id":         "<order_id from create_order>",
     "delivery_slot_id": "<slot id from delivery_slots>",
-    "delivery_address": "1 Test St, Istanbul"
+    "delivery_address": "42 Sakura Lane, Neo-Tokyo"
   }
 }
 ```
@@ -209,16 +170,11 @@ Successful response — HTTP 200, inside `.value`:
 
 ```json
 {
-  "delivery_id":  "<uuid>",
+  "order_id":    "<uuid>",
   "scheduled_at": "<ISO8601 datetime>",
-  "total_cents":  2499,
-  "status":       "confirmed"
+  "status":      "scheduled"
 }
 ```
-
-Note `delivery_id` and `total_cents` — both are required for Step 5.
-
-This action is also **cart-ownership gated**: the server enforces `WHERE id = cart_id AND user_id = kiosk.current_user_id()`.
 
 ---
 
@@ -242,7 +198,7 @@ Payment requires two JWS tokens signed with the private key you generated in Ste
 }
 ```
 
-`cap_amount_cents` must be >= the delivery total. A small buffer (e.g. +100¢) is conventional.
+`cap_amount_cents` must be >= the order total. A small buffer (e.g. +100¢) is conventional.
 
 ### Cart mandate (actual charge, bound to the intent)
 
@@ -253,7 +209,7 @@ Payment requires two JWS tokens signed with the private key you generated in Ste
   "user_id":            "<user_id from Step 2>",
   "agent_id":           "<agent_id from Step 2>",
   "iss":                "<provider issuer>",
-  "line_items":         [{ "delivery_id": "<delivery_id from Step 4>", "total": <total_cents> }],
+  "line_items":         [{ "order_id": "<order_id from create_order>", "total": <total_cents> }],
   "total_amount_cents": <total_cents from Step 4>,
   "currency":           "eur",
   "exp":                <now + 600>,
@@ -294,6 +250,8 @@ Successful response — HTTP 200:
 }
 ```
 
+After `pay` succeeds, call `schedule_delivery` (Step 4) to book the time slot.
+
 ---
 
 ## Handling `pow_required`
@@ -307,7 +265,7 @@ documented in `kiosk-pow/SKILL.md`. Summary:
 3. Re-POST the **exact same** request body with a top-level `pow` field:
    ```json
    { "command": "query",
-     "body":    { "name": "stores" },
+     "body":    { "name": "catalog" },
      "pow":     { "challenge": { ...verbatim... }, "nonce": "<from solver>" } }
    ```
 
@@ -336,24 +294,17 @@ Response — HTTP 200, inside `.value`:
 {
   "verbs":   ["query", "run", "pay", "schema", "help"],
   "queries": [
-    { "name": "stores",               "description": "Browse the public store catalog", "params": null },
-    { "name": "products_by_store",    "description": "Browse products for a given store",
-                                      "params": { "store_id": "integer — store id" } },
-    { "name": "substitution_options", "description": "Get suggested substitutes for an out-of-stock product",
-                                      "params": { "product_id": "integer — product id" } },
-    { "name": "delivery_slots",       "description": "List available delivery slots for a date",
-                                      "params": { "date": "string — YYYY-MM-DD" } },
-    { "name": "my_orders",            "description": "List this principal's confirmed deliveries", "params": null }
+    { "name": "catalog",        "description": "Browse all in-stock products", "params": null },
+    { "name": "delivery_slots", "description": "List available delivery slots for a date",
+                                "params": { "date": "string — YYYY-MM-DD" } },
+    { "name": "my_orders",      "description": "List this principal's orders", "params": null }
   ],
   "actions": [
-    { "name": "add_to_cart",        "description": "Add a product to the authenticated principal's cart",
-                                    "params": { "store_id": "integer", "product_id": "integer", "qty": "integer" } },
-    { "name": "apply_substitution", "description": "Accept or reject a substitution for an out-of-stock cart item",
-                                    "params": { "cart_id": "uuid", "cart_item_id": "uuid",
-                                                "substitution_product_id": "integer", "accept": "boolean" } },
-    { "name": "confirm_delivery",   "description": "Confirm the cart as a delivery order",
-                                    "params": { "cart_id": "uuid", "delivery_slot_id": "integer",
-                                                "delivery_address": "string" } }
+    { "name": "create_order",      "description": "Submit a full cart as a new order",
+                                   "params": { "items": "array of {product_id: uuid, qty: integer}" } },
+    { "name": "schedule_delivery", "description": "Book a delivery slot for a paid order",
+                                   "params": { "order_id": "uuid", "delivery_slot_id": "integer",
+                                               "delivery_address": "string" } }
   ]
 }
 ```
@@ -384,12 +335,13 @@ query or action names from this file.
 4. **Start by reading `/.well-known/kiosk.json`.** It gives you the `issuer` (for mandate signing) and the `endpoint` for `/kiosk/exec` before you send a single request.
 5. **The cap must cover the total.** `cap_amount_cents` >= `total_amount_cents`. The cart mandate is rejected if it exceeds the cap.
 6. **`intent_mandate_id` in the cart must reference the intent's `id`.** The server verifies this binding.
+7. **Pay before scheduling.** `schedule_delivery` is payment-binding gated — the server verifies a settled mandate exists for the order before booking the slot.
 
 ---
 
 ## Worked example
 
-`getgrocery_flow.rb` in this directory is a standalone Ruby script that executes this exact flow — register → browse stores → browse products → add_to_cart → query substitution_options → apply_substitution → query delivery_slots → confirm_delivery → sign mandates → pay — against the getgrocery demo app. It prints one JSON line on success and exits non-zero on any failure. Run it with:
+`getgrocery_flow.rb` in this directory is a standalone Ruby script that executes this exact flow — register → query catalog → create_order {items} → query delivery_slots → pay (mandate: order_id) → schedule_delivery {order_id, slot, address} — against the GetGroceries demo app. It prints one JSON line on success and exits non-zero on any failure. Run it with:
 
 ```
 SERVER_URL=http://127.0.0.1:3005 \

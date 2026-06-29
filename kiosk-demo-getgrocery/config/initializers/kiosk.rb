@@ -134,7 +134,7 @@ Kiosk::Server::Actions.register("create_order",
         # Replace items
         conn.execute("DELETE FROM order_items WHERE order_id = #{conn.quote(order_id.to_s)}::uuid")
         conn.execute(
-          "UPDATE orders SET total_cents = #{total_cents}, updated_at = now() " \
+          "UPDATE orders SET total_cents = #{conn.quote(total_cents)}, updated_at = now() " \
           "WHERE id = #{conn.quote(order_id.to_s)}::uuid"
         )
       end
@@ -144,7 +144,7 @@ Kiosk::Server::Actions.register("create_order",
       # Create new order
       order_id = conn.execute(
         "INSERT INTO orders (id, user_id, status, total_cents, created_at, updated_at) " \
-        "VALUES (gen_random_uuid(), #{conn.quote(uid)}::uuid, 'created', #{total_cents}, now(), now()) " \
+        "VALUES (gen_random_uuid(), #{conn.quote(uid)}::uuid, 'created', #{conn.quote(total_cents)}, now(), now()) " \
         "RETURNING id"
       ).first["id"]
     end

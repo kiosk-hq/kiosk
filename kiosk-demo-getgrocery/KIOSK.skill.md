@@ -113,7 +113,7 @@ Use the `run` command to invoke provider-registered Actions. GetGroceries expose
 
 **Create an order:**
 
-The assistant submits the **whole cart at once** via `create_order`. There is no incremental `add_to_cart`.
+The assistant submits the **whole cart at once** via `create_order`. There is no per-item incremental call.
 
 ```http
 POST /kiosk/exec

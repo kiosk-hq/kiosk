@@ -21,7 +21,7 @@ namespace :demo do
     end
   end
 
-  desc "Boot the server, run getgrocery_flow.rb end-to-end (no-human happy path), assert."
+  desc "Boot the server, run getgrocery_flow.rb end-to-end (no-human happy path: register→catalog→create_order→pay→schedule_delivery→my_orders), assert."
   task :shop do
     require "resolv"
     require "net/http"
@@ -113,41 +113,30 @@ namespace :demo do
       end
     end
 
-    check.call("http_register",         result["http_register"],         201)
-    check.call("http_stores",           result["http_stores"],           200)
-    check.call("http_products",         result["http_products"],         200)
-    check.call("http_add_to_cart",      result["http_add_to_cart"],      200)
-    check.call("http_add_oos",          result["http_add_oos"],          200)
-    check.call("http_sub_options",      result["http_sub_options"],      200)
-    check.call("http_apply_sub",        result["http_apply_sub"],        200)
-    check.call("http_delivery_slots",   result["http_delivery_slots"],   200)
-    check.call("http_confirm_delivery", result["http_confirm_delivery"], 200)
-    check.call("http_pay",              result["http_pay"],              200)
+    check.call("http_register",  result["http_register"],  201)
+    check.call("http_catalog",   result["http_catalog"],   200)
+    check.call("http_order",     result["http_order"],     200)
+    check.call("http_slots",     result["http_slots"],     200)
+    check.call("http_pay",       result["http_pay"],       200)
+    check.call("http_schedule",  result["http_schedule"],  200)
+    check.call("http_my_orders", result["http_my_orders"], 200)
 
-    # Delivery ID present
-    did = result["delivery_id"]
-    if did && !did.to_s.empty?
-      puts "  OK  delivery_id present (#{did})"
+    # order_id present
+    oid = result["order_id"]
+    if oid && !oid.to_s.empty?
+      puts "  OK  order_id present (#{oid})"
     else
-      failures << "delivery_id missing or empty"
-      puts "  FAIL  delivery_id missing or empty"
+      failures << "order_id missing or empty"
+      puts "  FAIL  order_id missing or empty"
     end
 
-    # Scheduled_at present
+    # scheduled_at present
     sat = result["scheduled_at"]
     if sat && !sat.to_s.empty?
       puts "  OK  scheduled_at present (#{sat})"
     else
       failures << "scheduled_at missing or empty"
       puts "  FAIL  scheduled_at missing or empty"
-    end
-
-    # Substitution accepted
-    if result["substitution_accepted"] == true
-      puts "  OK  substitution_accepted == true"
-    else
-      failures << "substitution_accepted expected true, got #{result["substitution_accepted"].inspect}"
-      puts "  FAIL  substitution_accepted expected true, got #{result["substitution_accepted"].inspect}"
     end
 
     # pay.ok == true
@@ -168,12 +157,12 @@ namespace :demo do
     end
 
     # -- assertions: DB row counts --
-    deliveries_count = `psql -X -d #{db} -tAc 'SELECT COUNT(*) FROM deliveries' 2>&1`.strip
-    if deliveries_count.to_i >= 1
-      puts "  OK  deliveries count >= 1 (got #{deliveries_count})"
+    orders_count = `psql -X -d #{db} -tAc "SELECT COUNT(*) FROM orders WHERE status = 'scheduled'" 2>&1`.strip
+    if orders_count.to_i >= 1
+      puts "  OK  orders[status=scheduled] count >= 1 (got #{orders_count})"
     else
-      failures << "deliveries COUNT expected >= 1, got #{deliveries_count.inspect}"
-      puts "  FAIL  deliveries COUNT expected >= 1, got #{deliveries_count.inspect}"
+      failures << "orders[status=scheduled] COUNT expected >= 1, got #{orders_count.inspect}"
+      puts "  FAIL  orders[status=scheduled] COUNT expected >= 1, got #{orders_count.inspect}"
     end
 
     pm_count = `psql -X -d #{db} -tAc 'SELECT COUNT(*) FROM kiosk.payment_mandates' 2>&1`.strip
@@ -184,13 +173,21 @@ namespace :demo do
       puts "  FAIL  kiosk.payment_mandates COUNT expected >= 1, got #{pm_count.inspect}"
     end
 
-    # Substituted cart_item in DB
-    sub_count = `psql -X -d #{db} -tAc 'SELECT COUNT(*) FROM cart_items WHERE substituted = true' 2>&1`.strip
-    if sub_count.to_i >= 1
-      puts "  OK  cart_items[substituted=true] >= 1 (got #{sub_count})"
+    items_count = `psql -X -d #{db} -tAc 'SELECT COUNT(*) FROM order_items' 2>&1`.strip
+    if items_count.to_i >= 1
+      puts "  OK  order_items count >= 1 (got #{items_count})"
     else
-      failures << "cart_items[substituted=true] expected >= 1, got #{sub_count.inspect}"
-      puts "  FAIL  cart_items[substituted=true] expected >= 1, got #{sub_count.inspect}"
+      failures << "order_items COUNT expected >= 1, got #{items_count.inspect}"
+      puts "  FAIL  order_items COUNT expected >= 1, got #{items_count.inspect}"
+    end
+
+    # my_orders contains own order_id
+    my_orders = result["my_orders"] || []
+    if my_orders.any? { |o| o["id"] == result["order_id"] }
+      puts "  OK  my_orders contains own order #{result["order_id"]}"
+    else
+      failures << "my_orders does not contain order_id #{result["order_id"].inspect}"
+      puts "  FAIL  my_orders does not contain order_id #{result["order_id"].inspect}"
     end
 
     # -- final verdict --
@@ -205,19 +202,17 @@ namespace :demo do
 
   # ── demo:isolation ───────────────────────────────────────────────────────────
   desc <<~DESC
-    Adversarial cross-tenant isolation test (R3 Phase 2 Task 4).
+    Adversarial cross-tenant isolation test.
 
     Boots the server, runs isolation_flow.rb with two fresh principals (A and B),
     and asserts all cross-tenant denial properties including getgrocery's
-    distinctive cart-ownership mutation gates:
+    distinctive order-ownership mutation gates:
 
-      HEADLINE: B cannot apply_substitution on A's cart (cart-ownership gate)
-      HEADLINE: B cannot confirm_delivery on A's cart (cart-ownership gate)
-      Assertion 3: B's my_orders excludes A's delivery (cross-tenant read blocked)
-      Assertion 4: B's my_orders includes own delivery (positive control)
-      Assertion 5: B's my_orders still excludes A's delivery after positive control
-      Assertion 6: A's my_orders excludes B's delivery
-      Assertion 7: DB check — forged user_id in add_to_cart ignored (cart belongs to B)
+      HEADLINE: B cannot schedule_delivery on A's order (order-ownership gate)
+      Assertion 3: B's my_orders excludes A's order (cross-tenant read blocked)
+      Assertion 4: B's my_orders includes own order (positive control)
+      Assertion 5: B's my_orders still excludes A's order after positive control
+      Assertion 6: A's my_orders excludes B's order
 
     Exits 0 if all assertions hold (isolation works); exits 1 on failure.
     A red assertion = real isolation hole: fix the app, not the test.
@@ -383,7 +378,7 @@ namespace :demo do
 
   # ── demo:schema ──────────────────────────────────────────────────────────────
   desc <<~DESC
-    Self-discovery proof (R3 Phase 2 Task 4) — verifies schema + help verbs over HTTP.
+    Self-discovery proof — verifies schema + help verbs over HTTP.
 
     Boots the server, registers a fresh agent, calls:
       POST /kiosk/exec { command: "schema" }
@@ -391,11 +386,11 @@ namespace :demo do
 
     Asserts:
       • schema.verbs includes query/run/pay/schema/help and NOT events
-      • schema.queries includes my_orders with a description
-      • schema.actions includes add_to_cart with a description
-      • schema.actions includes apply_substitution with a description
-      • schema.actions includes confirm_delivery with a description
-      • help.text mentions my_orders, add_to_cart, apply_substitution, confirm_delivery
+      • schema.queries includes catalog, delivery_slots, my_orders (each with description)
+      • schema.actions includes create_order, schedule_delivery (each with description)
+      • schema.queries does NOT include stores, products_by_store, substitution_options
+      • schema.actions does NOT include add_to_cart, apply_substitution, confirm_delivery
+      • help.text mentions catalog, create_order, schedule_delivery, my_orders
 
     Exits 0 if all assertions pass; exits 1 on any miss.
   DESC
@@ -491,68 +486,62 @@ namespace :demo do
       puts "  ✓  schema.verbs does not include events"
     end
 
-    # my_orders present with a description
-    my_orders_entry = queries.find { |q| q["name"] == "my_orders" }
-    if my_orders_entry
-      puts "  ✓  schema.queries includes my_orders"
-      if my_orders_entry["description"] && !my_orders_entry["description"].to_s.empty?
-        puts "  ✓  my_orders has description: #{my_orders_entry["description"].inspect}"
+    # queries present with descriptions: catalog, delivery_slots, my_orders
+    %w[catalog delivery_slots my_orders].each do |qname|
+      entry = queries.find { |q| q["name"] == qname }
+      if entry
+        puts "  ✓  schema.queries includes #{qname}"
+        if entry["description"] && !entry["description"].to_s.empty?
+          puts "  ✓  #{qname} has description: #{entry["description"].inspect}"
+        else
+          failures << "#{qname} missing description"
+          puts "  ✗  #{qname} missing description"
+        end
       else
-        failures << "my_orders missing description"
-        puts "  ✗  my_orders missing description"
+        failures << "schema.queries missing #{qname}"
+        puts "  ✗  schema.queries missing #{qname}"
       end
-    else
-      failures << "schema.queries missing my_orders"
-      puts "  ✗  schema.queries missing my_orders"
     end
 
-    # add_to_cart present in actions with a description
-    add_to_cart_entry = actions.find { |a| a["name"] == "add_to_cart" }
-    if add_to_cart_entry
-      puts "  ✓  schema.actions includes add_to_cart"
-      if add_to_cart_entry["description"] && !add_to_cart_entry["description"].to_s.empty?
-        puts "  ✓  add_to_cart has description: #{add_to_cart_entry["description"].inspect}"
+    # actions present with descriptions: create_order, schedule_delivery
+    %w[create_order schedule_delivery].each do |aname|
+      entry = actions.find { |a| a["name"] == aname }
+      if entry
+        puts "  ✓  schema.actions includes #{aname}"
+        if entry["description"] && !entry["description"].to_s.empty?
+          puts "  ✓  #{aname} has description: #{entry["description"].inspect}"
+        else
+          failures << "#{aname} missing description"
+          puts "  ✗  #{aname} missing description"
+        end
       else
-        failures << "add_to_cart missing description"
-        puts "  ✗  add_to_cart missing description"
+        failures << "schema.actions missing #{aname}"
+        puts "  ✗  schema.actions missing #{aname}"
       end
-    else
-      failures << "schema.actions missing add_to_cart"
-      puts "  ✗  schema.actions missing add_to_cart"
     end
 
-    # apply_substitution present with a description
-    apply_sub_entry = actions.find { |a| a["name"] == "apply_substitution" }
-    if apply_sub_entry
-      puts "  ✓  schema.actions includes apply_substitution"
-      if apply_sub_entry["description"] && !apply_sub_entry["description"].to_s.empty?
-        puts "  ✓  apply_substitution has description: #{apply_sub_entry["description"].inspect}"
+    # queries must NOT include old names
+    %w[stores products_by_store substitution_options].each do |qname|
+      if queries.any? { |q| q["name"] == qname }
+        failures << "schema.queries must NOT include #{qname} (old surface)"
+        puts "  ✗  schema.queries must NOT include #{qname}"
       else
-        failures << "apply_substitution missing description"
-        puts "  ✗  apply_substitution missing description"
+        puts "  ✓  schema.queries does not include #{qname} (old surface absent)"
       end
-    else
-      failures << "schema.actions missing apply_substitution"
-      puts "  ✗  schema.actions missing apply_substitution"
     end
 
-    # confirm_delivery present with a description
-    confirm_entry = actions.find { |a| a["name"] == "confirm_delivery" }
-    if confirm_entry
-      puts "  ✓  schema.actions includes confirm_delivery"
-      if confirm_entry["description"] && !confirm_entry["description"].to_s.empty?
-        puts "  ✓  confirm_delivery has description: #{confirm_entry["description"].inspect}"
+    # actions must NOT include old names
+    %w[add_to_cart apply_substitution confirm_delivery].each do |aname|
+      if actions.any? { |a| a["name"] == aname }
+        failures << "schema.actions must NOT include #{aname} (old surface)"
+        puts "  ✗  schema.actions must NOT include #{aname}"
       else
-        failures << "confirm_delivery missing description"
-        puts "  ✗  confirm_delivery missing description"
+        puts "  ✓  schema.actions does not include #{aname} (old surface absent)"
       end
-    else
-      failures << "schema.actions missing confirm_delivery"
-      puts "  ✗  schema.actions missing confirm_delivery"
     end
 
     # help text mentions all key action and query names
-    %w[my_orders add_to_cart apply_substitution confirm_delivery].each do |name|
+    %w[catalog create_order schedule_delivery my_orders].each do |name|
       if text.include?(name)
         puts "  ✓  help text mentions #{name}"
       else
@@ -573,24 +562,24 @@ namespace :demo do
 
   # ── demo:redteam ─────────────────────────────────────────────────────────────
   desc <<~DESC
-    Adversarial regression battery (R3 Phase 2 Task 4) — kiosk-redteam.
+    Adversarial regression battery — kiosk-redteam.
 
     Boots getgrocery, runs all generic Kiosk::Redteam scenarios and asserts
     each applicable attack is BLOCKED:
 
-      BLOCKED  CrossTenantRead      — B's my_orders must not include A's deliveries
+      BLOCKED  CrossTenantRead      — B's my_orders must not include A's orders
       BLOCKED  MandatePrincipalSwap — B signs a mandate with A's identity; rejected
       BLOCKED  MandateReplay        — B re-submits A's signed mandate JWS; rejected
       BLOCKED  TokenTampering       — altered JWT (claim flipped) rejected 401
 
     Scenarios that require a surface getgrocery does not expose SKIP cleanly:
-      SKIPPED  ForgedUserId         — forge_action nil: add_to_cart returns cart_id
-                                      but my_orders lists delivery ids; readback
+      SKIPPED  ForgedUserId         — forge_action nil: create_order returns order_id
+                                      but my_orders lists order ids; readback
                                       would be vacuously BLOCKED (entity mismatch).
-                                      Real coverage: demo:isolation Assertion 7
-                                      (DB SELECT confirms cart.user_id = caller's id).
+                                      Real coverage: demo:isolation (DB SELECT confirms
+                                      order.user_id = caller's id).
       SKIPPED  UnpaidGatedAction, SpentResourceReuse, PayForOtherUseSelf
-               (no gated_action — cart ownership is NOT a payment gate)
+               (schedule_delivery is gated on payment mandate)
       SKIPPED  MissingKyc, ExpiredKyc, ForgedKyc  (requires_kyc: false)
 
     Note: RegistrationWithoutPow is not run — getgrocery has no registration
@@ -684,5 +673,5 @@ namespace :demo do
   # ── end demo:redteam ──────────────────────────────────────────────────────────
 end
 
-desc "End-to-end getgrocery demo: setup DB then run no-human cart->substitution->delivery."
+desc "End-to-end getgrocery demo: setup DB then run no-human catalog->create_order->pay->schedule_delivery."
 task demo: ["demo:setup", "demo:shop"]

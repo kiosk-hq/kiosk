@@ -3,6 +3,14 @@
 require "json"
 
 Rails.application.routes.draw do
+  # Human storefront + the agent hook ("Agents → Kiosk here") on the homepage.
+  root "home#index"
+
+  # Unauthenticated agent bootstrap: protocol handshake + live surface, so an
+  # agent that lands from the homepage can self-onboard with no prior knowledge.
+  # (Demo: app-level; a follow-up moves this into kiosk-server as a convention.)
+  get "/kiosk/help", to: "kiosk_help#show"
+
   # Kiosk wire surface (controllers shipped by kiosk-server).
   # In a follow-up release these will be mounted via the engine's own
   # routes drawer; for v0.1 alpha we wire them manually here.

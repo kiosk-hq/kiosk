@@ -39,10 +39,10 @@ Kiosk::Server::Queries.register("catalog",
   description: "Browse in-stock products from the getgrocery catalog (out-of-stock items are hidden)") do |_params|
   conn = ActiveRecord::Base.connection
   rows = conn.execute(
-    "SELECT id, name, price_cents, stock FROM products WHERE stock > 0 ORDER BY name"
+    "SELECT sku, name, price_cents, stock FROM products WHERE stock > 0 ORDER BY name"
   ).to_a
   rows.map do |r|
-    row = { "id" => r["id"], "name" => r["name"], "price_cents" => r["price_cents"] }
+    row = { "sku" => r["sku"], "name" => r["name"], "price_cents" => r["price_cents"] }
     row["low"] = true if r["stock"].to_i <= LOW_STOCK_THRESHOLD
     row
   end
@@ -87,7 +87,7 @@ end
 Kiosk::Server::Actions.register("create_order",
   description: "Create (or replace) a grocery order for the authenticated principal",
   params: {
-    items:    "array of {product_id, qty} — the complete cart",
+    items:    "array of {sku, qty} — the complete cart (products referenced by sku)",
     order_id: "(optional) uuid — if given and order belongs to principal and not yet paid, replaces its items",
   }) do |args|
   conn = ActiveRecord::Base.connection
@@ -98,23 +98,25 @@ Kiosk::Server::Actions.register("create_order",
   raise Kiosk::Server::Errors::BadRequest.new("items must be a non-empty array") if items.empty?
 
   items = items.map do |it|
-    product_id = (it[:product_id] || it["product_id"]).to_i
-    qty        = (it[:qty]        || it["qty"] || 1).to_i
+    sku = (it[:sku] || it["sku"]).to_s
+    qty = (it[:qty] || it["qty"] || 1).to_i
+    raise Kiosk::Server::Errors::BadRequest.new("each item needs a sku") if sku.empty?
     raise Kiosk::Server::Errors::BadRequest.new("qty must be >= 1") if qty < 1
-    { product_id: product_id, qty: qty }
+    { sku: sku, qty: qty }
   end
 
-  product_ids = items.map { |i| i[:product_id] }
-
   conn.transaction do
-    # Compute total from current prices
-    quoted_ids = product_ids.map { |id| conn.quote(id.to_s) }.join(", ")
-    price_rows = conn.execute(
-      "SELECT id, price_cents FROM products WHERE id IN (#{quoted_ids})"
+    # Resolve skus → product id + price (consumer references products by sku, not the numeric id)
+    quoted_skus = items.map { |i| conn.quote(i[:sku]) }.uniq.join(", ")
+    product_rows = conn.execute(
+      "SELECT id, sku, price_cents FROM products WHERE sku IN (#{quoted_skus})"
     ).to_a
-    price_map = price_rows.each_with_object({}) { |r, h| h[r["id"].to_i] = r["price_cents"].to_i }
+    by_sku = product_rows.each_with_object({}) { |r, h| h[r["sku"]] = r }
 
-    total_cents = items.sum { |i| (price_map[i[:product_id]] || 0) * i[:qty] }
+    missing = items.map { |i| i[:sku] }.uniq.reject { |s| by_sku.key?(s) }
+    raise Kiosk::Server::Errors::BadRequest.new("unknown sku(s): #{missing.join(", ")}") unless missing.empty?
+
+    total_cents = items.sum { |i| by_sku[i[:sku]]["price_cents"].to_i * i[:qty] }
 
     # Optional order_id: replace items if order belongs to principal and is not yet paid/scheduled
     given_order_id = args[:order_id] || args["order_id"]
@@ -149,11 +151,12 @@ Kiosk::Server::Actions.register("create_order",
       ).first["id"]
     end
 
-    # Insert order_items
+    # Insert order_items (resolve each sku → internal product id)
     items.each do |item|
+      product_id = by_sku[item[:sku]]["id"]
       conn.execute(
         "INSERT INTO order_items (order_id, product_id, qty, created_at, updated_at) " \
-        "VALUES (#{conn.quote(order_id.to_s)}::uuid, #{conn.quote(item[:product_id].to_s)}::integer, " \
+        "VALUES (#{conn.quote(order_id.to_s)}::uuid, #{conn.quote(product_id.to_s)}::integer, " \
         "#{conn.quote(item[:qty].to_s)}::integer, now(), now())"
       )
     end

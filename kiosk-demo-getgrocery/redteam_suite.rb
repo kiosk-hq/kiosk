@@ -47,7 +47,7 @@ profile = Kiosk::Redteam::Profile.new(
     order_resp = client.run(
       principal,
       name:  "create_order",
-      items: [{ product_id: product["id"], qty: 1 }],
+      items: [{ sku: product["sku"], qty: 1 }],
     )
     raise "redteam: create_order failed (#{order_resp.status}): #{order_resp.body.inspect}" \
       unless order_resp.status == 200
@@ -62,16 +62,16 @@ profile = Kiosk::Redteam::Profile.new(
   # forge_args: returns base args for create_order (user_id injected by ForgedUserId scenario)
   forge_action: "create_order",
   forge_args: ->(client, _principal_a, _principal_b) {
-    # We need a valid product_id; query catalog as B to get one.
+    # We need a valid sku; query catalog as B to get one.
     # We use a fresh unauthenticated catalog query approach: just hardcode a minimal
     # args hash. The scenario will add user_id: a.user_id on top.
     # Actually: the ForgedUserId scenario registers A and B, and calls forge_args(client, a, b).
-    # We can query catalog as B to get a valid product_id.
+    # We can query catalog as B to get a valid sku.
     catalog_resp = client.query(_principal_b, name: "catalog")
     catalog = catalog_resp.body.is_a?(Hash) ? (catalog_resp.body["rows"] || []) : []
     raise "redteam: catalog empty for forge_args" if catalog.empty?
     product = catalog.first
-    { items: [{ product_id: product["id"], qty: 1 }] }
+    { items: [{ sku: product["sku"], qty: 1 }] }
   },
 
   # gated_action: schedule_delivery (requires ownership + payment mandate)

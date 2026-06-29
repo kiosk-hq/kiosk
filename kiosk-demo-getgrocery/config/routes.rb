@@ -21,6 +21,10 @@ Rails.application.routes.draw do
     [200, { "content-type" => "application/json" }, [doc]]
   }
 
+  # ─── Provider admin (read-only demo back-office) ──────────────────────────
+  # No auth required — demo provider only. Production would authenticate.
+  get "/admin/orders" => "admin/orders#index", as: :admin_orders
+
   # ─── E2e-only test fixtures ──────────────────────────────────────────
   # Simulates user approval / denial at /oauth/device/verify. The real
   # consent-screen UI (Kiosk-branded HTML + Devise current_user) is a

@@ -125,8 +125,8 @@ Content-Type: application/json
   "body": {
     "name":  "create_order",
     "items": [
-      { "product_id": "<id>", "qty": 2 },
-      { "product_id": "<id>", "qty": 1 }
+      { "sku": "<sku>", "qty": 2 },
+      { "sku": "<sku>", "qty": 1 }
     ]
   }
 }
@@ -300,7 +300,7 @@ Response — HTTP 200, inside `.value`:
   ],
   "actions": [
     { "name": "create_order",      "description": "Submit a full cart as a new order",
-                                   "params": { "items": "array of {product_id: uuid, qty: integer}" } },
+                                   "params": { "items": "array of {sku: string, qty: integer}" } },
     { "name": "schedule_delivery", "description": "Book a delivery slot for a paid order",
                                    "params": { "order_id": "uuid", "delivery_slot_id": "integer",
                                                "delivery_address": "string" } }

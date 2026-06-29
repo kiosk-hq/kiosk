@@ -3,11 +3,13 @@
 class CreateGetgroceryTables < ActiveRecord::Migration[ActiveRecord::Migration.current_version]
   def change
     create_table :products do |t|
+      t.string  :sku,         null: false   # stable public identifier (agents reference products by sku)
       t.string  :name,        null: false
       t.integer :price_cents, null: false
       t.integer :stock,       null: false, default: 0
       t.timestamps
     end
+    add_index :products, :sku, unique: true
 
     create_table :orders, id: :uuid do |t|
       t.references :user, null: false, foreign_key: true, type: :uuid

@@ -107,12 +107,12 @@ abort "catalog failed (#{rc}): #{JSON.generate(catalog_resp)}" unless rc == 200
 catalog = catalog_resp.fetch("rows", [])
 abort "catalog empty" if catalog.empty?
 product = catalog.first
-product_id = product.fetch("id")
+product_sku = product.fetch("sku")
 
 # ── Step 4: A creates order_a ─────────────────────────────────────────────────
 rc, order_a_resp = post_json(
   "#{SERVER}/kiosk/exec",
-  { command: "run", body: { name: "create_order", items: [{ product_id: product_id, qty: 1 }] } },
+  { command: "run", body: { name: "create_order", items: [{ sku: product_sku, qty: 1 }] } },
   { "Authorization" => "Bearer #{token_a}" },
 )
 abort "A create_order failed (#{rc}): #{JSON.generate(order_a_resp)}" unless rc == 200
@@ -171,7 +171,7 @@ rc, forged_resp = post_json(
     command: "run",
     body: {
       name:       "create_order",
-      items:      [{ product_id: product_id, qty: 1 }],
+      items:      [{ sku: product_sku, qty: 1 }],
       user_id:    user_id_a,  # adversarial: B supplies A's user_id
     },
   },
@@ -184,7 +184,7 @@ abort "order_id_b_forged missing" unless order_id_b_forged
 # ── Step 10: B creates genuine order, pays, schedules ────────────────────────
 rc, order_b_resp = post_json(
   "#{SERVER}/kiosk/exec",
-  { command: "run", body: { name: "create_order", items: [{ product_id: product_id, qty: 1 }] } },
+  { command: "run", body: { name: "create_order", items: [{ sku: product_sku, qty: 1 }] } },
   { "Authorization" => "Bearer #{token_b}" },
 )
 abort "B create_order (genuine) failed (#{rc}): #{JSON.generate(order_b_resp)}" unless rc == 200

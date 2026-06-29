@@ -310,6 +310,7 @@ CREATE TABLE public.orders (
 
 CREATE TABLE public.products (
     id bigint NOT NULL,
+    sku character varying NOT NULL,
     name character varying NOT NULL,
     price_cents integer NOT NULL,
     stock integer DEFAULT 0 NOT NULL,
@@ -662,6 +663,13 @@ CREATE INDEX index_order_items_on_product_id ON public.order_items USING btree (
 --
 
 CREATE INDEX index_orders_on_user_id ON public.orders USING btree (user_id);
+
+
+--
+-- Name: index_products_on_sku; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE UNIQUE INDEX index_products_on_sku ON public.products USING btree (sku);
 
 
 --

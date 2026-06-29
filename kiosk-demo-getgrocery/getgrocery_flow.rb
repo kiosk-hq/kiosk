@@ -54,8 +54,8 @@ abort "catalog returned empty rows" if catalog.empty?
 STDERR.puts "  Catalog: #{catalog.size} in-stock products"
 
 # Pick a few in-stock products (take first 3, or fewer if catalog has < 3)
-items = catalog.first(3).map { |p| { product_id: p.fetch("id"), qty: 1 } }
-STDERR.puts "  Ordering: #{items.map { |i| "product_id=#{i[:product_id]}" }.join(", ")}"
+items = catalog.first(3).map { |p| { sku: p.fetch("sku"), qty: 1 } }
+STDERR.puts "  Ordering: #{items.map { |i| "sku=#{i[:sku]}" }.join(", ")}"
 
 # -- Step 3: create_order --
 rc_order, order_resp = post_json(

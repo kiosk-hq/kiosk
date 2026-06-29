@@ -1,10 +1,10 @@
 # frozen_string_literal: true
 
 # Kiosk-demo (getgrocery-shape) configuration.
-# Grocery delivery with cart + substitution negotiation + delivery slot.
-# No PoW, no KYC, no hardware unlock.
-# Queries: stores, products_by_store, substitution_options, delivery_slots, my_orders
-# Actions: add_to_cart, apply_substitution, confirm_delivery
+# Single grocery provider — no store layer. Catalog exposes in-stock facts;
+# the AI assistant handles substitution decisions.
+# Queries: catalog, delivery_slots, my_orders
+# Actions: create_order, schedule_delivery
 
 require Rails.root.join("lib/stub_idp")
 require Rails.root.join("lib/jwt_or_stub_idp")
@@ -31,45 +31,21 @@ Kiosk.configure do |c|
   c.payment_provider = StubPsp.new
 end
 
+LOW_STOCK_THRESHOLD = 5
+
 # ─── Queries ────────────────────────────────────────────────────────────────
 
-Kiosk::Server::Queries.register("stores",
-  description: "Browse all available grocery stores") do |_params|
-  ActiveRecord::Base.connection.execute(
-    "SELECT id, name, city FROM stores ORDER BY name"
-  ).to_a
-end
-
-Kiosk::Server::Queries.register("products_by_store",
-  description: "Browse products available at a specific store",
-  params: {
-    store_id: "integer — store id from the stores query",
-  }) do |params|
-  store_id = params.fetch(:store_id) { raise Kiosk::Server::Errors::BadRequest.new("missing param: store_id") }
+Kiosk::Server::Queries.register("catalog",
+  description: "Browse in-stock products from the getgrocery catalog (out-of-stock items are hidden)") do |_params|
   conn = ActiveRecord::Base.connection
-  conn.execute(
-    "SELECT id, sku, name, price_cents, stock " \
-    "FROM products " \
-    "WHERE store_id = #{conn.quote(store_id.to_s)}::integer " \
-    "ORDER BY name"
+  rows = conn.execute(
+    "SELECT id, name, price_cents, stock FROM products WHERE stock > 0 ORDER BY name"
   ).to_a
-end
-
-Kiosk::Server::Queries.register("substitution_options",
-  description: "Get suggested substitute products when a product is low or out of stock",
-  params: {
-    product_id: "integer — product id that is low/out of stock",
-  }) do |params|
-  product_id = params.fetch(:product_id) { raise Kiosk::Server::Errors::BadRequest.new("missing param: product_id") }
-  conn = ActiveRecord::Base.connection
-  conn.execute(
-    "SELECT sp.id AS policy_id, sp.out_product_id, sp.suggested_product_id, " \
-    "  p.sku AS suggested_sku, p.name AS suggested_name, p.price_cents AS suggested_price_cents, p.stock AS suggested_stock " \
-    "FROM substitution_policies sp " \
-    "JOIN products p ON p.id = sp.suggested_product_id " \
-    "WHERE sp.out_product_id = #{conn.quote(product_id.to_s)}::integer " \
-    "ORDER BY p.name"
-  ).to_a
+  rows.map do |r|
+    row = { "id" => r["id"], "name" => r["name"], "price_cents" => r["price_cents"] }
+    row["low"] = true if r["stock"].to_i <= LOW_STOCK_THRESHOLD
+    row
+  end
 end
 
 Kiosk::Server::Queries.register("delivery_slots",
@@ -79,231 +55,169 @@ Kiosk::Server::Queries.register("delivery_slots",
   }) do |params|
   date = params.fetch(:date) { raise Kiosk::Server::Errors::BadRequest.new("missing param: date") }
 
-  # Generate synthetic 2-hour delivery slots for the requested date.
-  # Slots: 08:00, 10:00, 12:00, 14:00, 16:00, 18:00 (6 slots).
   parsed = begin
     Date.parse(date.to_s)
   rescue ArgumentError
     raise Kiosk::Server::Errors::BadRequest.new("invalid date: #{date}")
   end
 
-  slots = (0..5).map do |i|
+  (0..5).map do |i|
     hour = 8 + i * 2
     slot_time = Time.utc(parsed.year, parsed.month, parsed.day, hour, 0, 0)
     {
-      "id"        => i + 1,
-      "slot_at"   => slot_time.iso8601,
-      "label"     => "#{hour.to_s.rjust(2, "0")}:00–#{(hour + 2).to_s.rjust(2, "0")}:00",
-      "available" => true,
+      "id"      => i + 1,
+      "slot_at" => slot_time.iso8601,
+      "label"   => "#{hour.to_s.rjust(2, "0")}:00–#{(hour + 2).to_s.rjust(2, "0")}:00",
     }
   end
-  slots
 end
 
 Kiosk::Server::Queries.register("my_orders",
-  description: "List this principal's grocery deliveries (scoped to authenticated user via kiosk.current_user_id())") do |_params|
+  description: "List this principal's orders (scoped to authenticated user via kiosk.current_user_id())") do |_params|
   ActiveRecord::Base.connection.execute(
-    "SELECT d.id, d.cart_id, d.slot_at, d.address, d.status, d.created_at " \
-    "FROM deliveries d " \
-    "WHERE d.user_id = kiosk.current_user_id() " \
-    "ORDER BY d.created_at DESC"
+    "SELECT id, status, total_cents, slot_at, address " \
+    "FROM orders " \
+    "WHERE user_id = kiosk.current_user_id() " \
+    "ORDER BY created_at DESC"
   ).to_a
 end
 
 # ─── Actions ────────────────────────────────────────────────────────────────
 
-Kiosk::Server::Actions.register("add_to_cart",
-  description: "Add a product to the authenticated principal's open cart for a store (creates cart if needed)",
+Kiosk::Server::Actions.register("create_order",
+  description: "Create (or replace) a grocery order for the authenticated principal",
   params: {
-    store_id:   "integer — store id",
-    product_id: "integer — product id",
-    qty:        "integer — quantity (default 1)",
+    items:    "array of {product_id, qty} — the complete cart",
+    order_id: "(optional) uuid — if given and order belongs to principal and not yet paid, replaces its items",
   }) do |args|
   conn = ActiveRecord::Base.connection
   uid = conn.execute("SELECT kiosk.current_user_id() AS uid").first["uid"]
   raise Kiosk::Server::Errors::Unauthenticated.new("no authenticated user") if uid.nil?
 
-  store_id   = args.fetch(:store_id)   { raise Kiosk::Server::Errors::BadRequest.new("missing field: store_id") }
-  product_id = args.fetch(:product_id) { raise Kiosk::Server::Errors::BadRequest.new("missing field: product_id") }
-  qty        = (args[:qty] || 1).to_i
-  raise Kiosk::Server::Errors::BadRequest.new("qty must be >= 1") if qty < 1
+  items = args[:items] || args["items"] || []
+  raise Kiosk::Server::Errors::BadRequest.new("items must be a non-empty array") if items.empty?
+
+  items = items.map do |it|
+    product_id = (it[:product_id] || it["product_id"]).to_i
+    qty        = (it[:qty]        || it["qty"] || 1).to_i
+    raise Kiosk::Server::Errors::BadRequest.new("qty must be >= 1") if qty < 1
+    { product_id: product_id, qty: qty }
+  end
+
+  product_ids = items.map { |i| i[:product_id] }
 
   conn.transaction do
-    # Find or create the open cart for this user+store
-    cart = conn.execute(
-      "SELECT id FROM carts " \
-      "WHERE user_id = #{conn.quote(uid)}::uuid " \
-      "AND store_id = #{conn.quote(store_id.to_s)}::integer " \
-      "AND status = 'open' " \
-      "LIMIT 1"
-    ).first
+    # Compute total from current prices
+    quoted_ids = product_ids.map { |id| conn.quote(id.to_s) }.join(", ")
+    price_rows = conn.execute(
+      "SELECT id, price_cents FROM products WHERE id IN (#{quoted_ids})"
+    ).to_a
+    price_map = price_rows.each_with_object({}) { |r, h| h[r["id"].to_i] = r["price_cents"].to_i }
 
-    if cart.nil?
-      cart = conn.execute(
-        "INSERT INTO carts (user_id, store_id, status, created_at, updated_at) " \
-        "VALUES (#{conn.quote(uid)}::uuid, #{conn.quote(store_id.to_s)}::integer, 'open', now(), now()) " \
-        "RETURNING id"
+    total_cents = items.sum { |i| (price_map[i[:product_id]] || 0) * i[:qty] }
+
+    # Optional order_id: replace items if order belongs to principal and is not yet paid/scheduled
+    given_order_id = args[:order_id] || args["order_id"]
+    order_id = nil
+
+    if given_order_id && !given_order_id.to_s.empty?
+      existing = conn.execute(
+        "SELECT id, status FROM orders " \
+        "WHERE id = #{conn.quote(given_order_id.to_s)}::uuid " \
+        "AND user_id = #{conn.quote(uid)}::uuid " \
+        "AND status NOT IN ('paid', 'scheduled') " \
+        "LIMIT 1"
       ).first
+
+      if existing
+        order_id = existing["id"]
+        # Replace items
+        conn.execute("DELETE FROM order_items WHERE order_id = #{conn.quote(order_id.to_s)}::uuid")
+        conn.execute(
+          "UPDATE orders SET total_cents = #{total_cents}, updated_at = now() " \
+          "WHERE id = #{conn.quote(order_id.to_s)}::uuid"
+        )
+      end
     end
 
-    cart_id = cart["id"]
-
-    # Upsert the cart_item (increment qty if exists)
-    existing_item = conn.execute(
-      "SELECT id, qty FROM cart_items " \
-      "WHERE cart_id = #{conn.quote(cart_id.to_s)}::uuid " \
-      "AND product_id = #{conn.quote(product_id.to_s)}::integer " \
-      "LIMIT 1"
-    ).first
-
-    cart_item_id = if existing_item
-      new_qty = existing_item["qty"].to_i + qty
-      conn.execute(
-        "UPDATE cart_items SET qty = #{new_qty}, updated_at = now() " \
-        "WHERE id = #{conn.quote(existing_item["id"].to_s)}::integer " \
-        "RETURNING id"
-      ).first["id"]
-    else
-      conn.execute(
-        "INSERT INTO cart_items (cart_id, product_id, qty, substituted, created_at, updated_at) " \
-        "VALUES (#{conn.quote(cart_id.to_s)}::uuid, #{conn.quote(product_id.to_s)}::integer, " \
-        "#{qty}, false, now(), now()) " \
+    unless order_id
+      # Create new order
+      order_id = conn.execute(
+        "INSERT INTO orders (id, user_id, status, total_cents, created_at, updated_at) " \
+        "VALUES (gen_random_uuid(), #{conn.quote(uid)}::uuid, 'created', #{total_cents}, now(), now()) " \
         "RETURNING id"
       ).first["id"]
     end
 
-    { cart_id: cart_id, cart_item_id: cart_item_id }
+    # Insert order_items
+    items.each do |item|
+      conn.execute(
+        "INSERT INTO order_items (order_id, product_id, qty, created_at, updated_at) " \
+        "VALUES (#{conn.quote(order_id.to_s)}::uuid, #{conn.quote(item[:product_id].to_s)}::integer, " \
+        "#{conn.quote(item[:qty].to_s)}::integer, now(), now())"
+      )
+    end
+
+    { order_id: order_id, total_cents: total_cents }
   end
 end
 
-Kiosk::Server::Actions.register("apply_substitution",
-  description: "Accept or reject a substitution for an out-of-stock cart item (ownership-gated to the cart's user)",
+Kiosk::Server::Actions.register("schedule_delivery",
+  description: "Schedule delivery for a paid order (requires settled payment mandate referencing this order)",
   params: {
-    cart_id:                 "uuid — the cart id (must belong to the authenticated principal)",
-    cart_item_id:            "integer — the cart item id to substitute",
-    substitution_product_id: "integer — the substitute product id",
-    accept:                  "boolean — true to accept the substitution, false to reject/remove",
-  }) do |args|
-  conn = ActiveRecord::Base.connection
-
-  cart_id                 = args.fetch(:cart_id)                 { raise Kiosk::Server::Errors::BadRequest.new("missing field: cart_id") }
-  cart_item_id            = args.fetch(:cart_item_id)            { raise Kiosk::Server::Errors::BadRequest.new("missing field: cart_item_id") }
-  substitution_product_id = args.fetch(:substitution_product_id) { raise Kiosk::Server::Errors::BadRequest.new("missing field: substitution_product_id") }
-  accept                  = args.fetch(:accept)                  { raise Kiosk::Server::Errors::BadRequest.new("missing field: accept") }
-
-  conn.transaction do
-    # OWNERSHIP GATE: cart must belong to the authenticated principal
-    cart = conn.execute(
-      "SELECT id FROM carts " \
-      "WHERE id = #{conn.quote(cart_id.to_s)}::uuid " \
-      "AND user_id = kiosk.current_user_id() " \
-      "AND status = 'open' " \
-      "LIMIT 1"
-    ).first
-    raise Kiosk::Server::Errors::Forbidden.new("cart not found or not yours") if cart.nil?
-
-    # Verify the cart item belongs to this cart
-    item = conn.execute(
-      "SELECT id, product_id, qty, substituted FROM cart_items " \
-      "WHERE id = #{conn.quote(cart_item_id.to_s)}::integer " \
-      "AND cart_id = #{conn.quote(cart_id.to_s)}::uuid " \
-      "LIMIT 1"
-    ).first
-    raise Kiosk::Server::Errors::BadRequest.new("cart item not found in this cart") if item.nil?
-
-    if accept
-      # Swap the product to the substitute
-      conn.execute(
-        "UPDATE cart_items " \
-        "SET product_id = #{conn.quote(substitution_product_id.to_s)}::integer, " \
-        "    substituted = true, " \
-        "    updated_at = now() " \
-        "WHERE id = #{conn.quote(cart_item_id.to_s)}::integer " \
-        "AND cart_id = #{conn.quote(cart_id.to_s)}::uuid"
-      )
-      updated = conn.execute(
-        "SELECT id, cart_id, product_id, qty, substituted FROM cart_items " \
-        "WHERE id = #{conn.quote(cart_item_id.to_s)}::integer LIMIT 1"
-      ).first
-      { accepted: true, cart_item: updated }
-    else
-      # Remove the item from the cart
-      conn.execute(
-        "DELETE FROM cart_items " \
-        "WHERE id = #{conn.quote(cart_item_id.to_s)}::integer " \
-        "AND cart_id = #{conn.quote(cart_id.to_s)}::uuid"
-      )
-      { accepted: false, cart_item_id: cart_item_id, removed: true }
-    end
-  end
-end
-
-Kiosk::Server::Actions.register("confirm_delivery",
-  description: "Confirm the delivery for a cart, scheduling a slot (ownership-gated to the cart's user)",
-  params: {
-    cart_id:          "uuid — the cart to confirm (must belong to the authenticated principal)",
-    delivery_slot_id: "integer — slot id from the delivery_slots query",
+    order_id:         "uuid — the order to schedule",
+    delivery_slot_id: "integer — slot id from the delivery_slots query (1–6)",
     delivery_address: "string — delivery address",
   }) do |args|
   conn = ActiveRecord::Base.connection
 
-  cart_id          = args.fetch(:cart_id)          { raise Kiosk::Server::Errors::BadRequest.new("missing field: cart_id") }
-  delivery_slot_id = args.fetch(:delivery_slot_id) { raise Kiosk::Server::Errors::BadRequest.new("missing field: delivery_slot_id") }
-  delivery_address = args.fetch(:delivery_address) { raise Kiosk::Server::Errors::BadRequest.new("missing field: delivery_address") }
+  order_id         = args[:order_id]         || args["order_id"]
+  delivery_slot_id = args[:delivery_slot_id] || args["delivery_slot_id"]
+  delivery_address = args[:delivery_address] || args["delivery_address"]
+
+  raise Kiosk::Server::Errors::BadRequest.new("missing field: order_id")         if order_id.nil? || order_id.to_s.empty?
+  raise Kiosk::Server::Errors::BadRequest.new("missing field: delivery_slot_id") if delivery_slot_id.nil?
+  raise Kiosk::Server::Errors::BadRequest.new("missing field: delivery_address") if delivery_address.nil? || delivery_address.to_s.empty?
+
+  slot_id = delivery_slot_id.to_i
+  raise Kiosk::Server::Errors::BadRequest.new("delivery_slot_id must be 1–6") unless (1..6).include?(slot_id)
 
   conn.transaction do
-    # OWNERSHIP GATE: cart must belong to the authenticated principal and be open
-    cart = conn.execute(
-      "SELECT c.id, c.store_id FROM carts c " \
-      "WHERE c.id = #{conn.quote(cart_id.to_s)}::uuid " \
-      "AND c.user_id = kiosk.current_user_id() " \
-      "AND c.status = 'open' " \
+    # ── Gate 1: order belongs to principal ────────────────────────────────
+    order = conn.execute(
+      "SELECT id FROM orders " \
+      "WHERE id = #{conn.quote(order_id.to_s)}::uuid " \
+      "AND user_id = kiosk.current_user_id() " \
       "LIMIT 1"
     ).first
-    raise Kiosk::Server::Errors::Forbidden.new("cart not found or not yours") if cart.nil?
+    raise Kiosk::Server::Errors::Forbidden.new("order not found or not yours") if order.nil?
 
-    # Compute total_cents from cart items
-    total_row = conn.execute(
-      "SELECT COALESCE(SUM(ci.qty * p.price_cents), 0) AS total_cents " \
-      "FROM cart_items ci " \
-      "JOIN products p ON p.id = ci.product_id " \
-      "WHERE ci.cart_id = #{conn.quote(cart_id.to_s)}::uuid"
+    # ── Gate 2: settled payment mandate referencing this order ────────────
+    order_filter_json = [{ order_id: order_id.to_s }].to_json
+    paid = conn.execute(
+      "SELECT 1 AS ok " \
+      "FROM kiosk.payment_mandates pm " \
+      "JOIN kiosk.cart_mandates cm ON cm.id = pm.cart_mandate_id " \
+      "WHERE pm.user_id = kiosk.current_user_id() " \
+      "AND cm.line_items @> #{conn.quote(order_filter_json)}::jsonb " \
+      "LIMIT 1"
     ).first
-    total_cents = total_row["total_cents"].to_i
+    raise Kiosk::Server::Errors::Forbidden.new("no settled payment mandate for this order") if paid.nil?
 
-    # Compute slot_at from slot_id (slots 1-6: hour = 6 + slot_id * 2)
-    slot_id = delivery_slot_id.to_i
-    raise Kiosk::Server::Errors::BadRequest.new("delivery_slot_id must be 1-6") unless (1..6).include?(slot_id)
-    delivery_date = Date.today + 1  # Default to tomorrow if not specified
-    hour = 6 + slot_id * 2
-    slot_at = Time.utc(delivery_date.year, delivery_date.month, delivery_date.day, hour, 0, 0)
+    # ── Compute slot_at (slot 1 = 08:00, slot 2 = 10:00, ...) ────────────
+    delivery_date = Date.today + 1
+    hour          = 8 + (slot_id - 1) * 2
+    slot_at       = Time.utc(delivery_date.year, delivery_date.month, delivery_date.day, hour, 0, 0)
 
-    uid = conn.execute("SELECT kiosk.current_user_id() AS uid").first["uid"]
-
-    # Create delivery row
-    delivery = conn.execute(
-      "INSERT INTO deliveries (user_id, cart_id, slot_at, address, status, created_at, updated_at) " \
-      "VALUES (" \
-      "  #{conn.quote(uid)}::uuid, " \
-      "  #{conn.quote(cart_id.to_s)}::uuid, " \
-      "  #{conn.quote(slot_at.iso8601)}::timestamp, " \
-      "  #{conn.quote(delivery_address.to_s)}, " \
-      "  'scheduled', now(), now()" \
-      ") RETURNING id"
-    ).first
-    delivery_id = delivery["id"]
-
-    # Mark cart as confirmed
+    # ── Update order ──────────────────────────────────────────────────────
     conn.execute(
-      "UPDATE carts SET status = 'confirmed', updated_at = now() " \
-      "WHERE id = #{conn.quote(cart_id.to_s)}::uuid " \
+      "UPDATE orders " \
+      "SET status = 'scheduled', slot_at = #{conn.quote(slot_at.iso8601)}::timestamptz, " \
+      "    address = #{conn.quote(delivery_address.to_s)}, updated_at = now() " \
+      "WHERE id = #{conn.quote(order_id.to_s)}::uuid " \
       "AND user_id = kiosk.current_user_id()"
     )
 
-    {
-      delivery_id:  delivery_id,
-      total_cents:  total_cents,
-      scheduled_at: slot_at.iso8601,
-    }
+    { order_id: order_id, scheduled_at: slot_at.iso8601 }
   end
 end

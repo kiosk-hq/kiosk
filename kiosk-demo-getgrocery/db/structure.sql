@@ -256,25 +256,24 @@ CREATE TABLE public.ar_internal_metadata (
 
 
 --
--- Name: cart_items; Type: TABLE; Schema: public; Owner: -
+-- Name: order_items; Type: TABLE; Schema: public; Owner: -
 --
 
-CREATE TABLE public.cart_items (
+CREATE TABLE public.order_items (
     id bigint NOT NULL,
-    cart_id uuid NOT NULL,
+    order_id uuid NOT NULL,
     product_id bigint NOT NULL,
     qty integer DEFAULT 1 NOT NULL,
-    substituted boolean DEFAULT false NOT NULL,
     created_at timestamp(6) without time zone NOT NULL,
     updated_at timestamp(6) without time zone NOT NULL
 );
 
 
 --
--- Name: cart_items_id_seq; Type: SEQUENCE; Schema: public; Owner: -
+-- Name: order_items_id_seq; Type: SEQUENCE; Schema: public; Owner: -
 --
 
-CREATE SEQUENCE public.cart_items_id_seq
+CREATE SEQUENCE public.order_items_id_seq
     START WITH 1
     INCREMENT BY 1
     NO MINVALUE
@@ -283,37 +282,23 @@ CREATE SEQUENCE public.cart_items_id_seq
 
 
 --
--- Name: cart_items_id_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: -
+-- Name: order_items_id_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: -
 --
 
-ALTER SEQUENCE public.cart_items_id_seq OWNED BY public.cart_items.id;
+ALTER SEQUENCE public.order_items_id_seq OWNED BY public.order_items.id;
 
 
 --
--- Name: carts; Type: TABLE; Schema: public; Owner: -
+-- Name: orders; Type: TABLE; Schema: public; Owner: -
 --
 
-CREATE TABLE public.carts (
+CREATE TABLE public.orders (
     id uuid DEFAULT gen_random_uuid() NOT NULL,
     user_id uuid NOT NULL,
-    store_id bigint NOT NULL,
-    status character varying DEFAULT 'open'::character varying NOT NULL,
-    created_at timestamp(6) without time zone NOT NULL,
-    updated_at timestamp(6) without time zone NOT NULL
-);
-
-
---
--- Name: deliveries; Type: TABLE; Schema: public; Owner: -
---
-
-CREATE TABLE public.deliveries (
-    id uuid DEFAULT gen_random_uuid() NOT NULL,
-    user_id uuid NOT NULL,
-    cart_id uuid NOT NULL,
-    slot_at timestamp without time zone NOT NULL,
-    address character varying NOT NULL,
-    status character varying DEFAULT 'scheduled'::character varying NOT NULL,
+    status character varying DEFAULT 'created'::character varying NOT NULL,
+    total_cents integer DEFAULT 0 NOT NULL,
+    slot_at timestamp with time zone,
+    address text,
     created_at timestamp(6) without time zone NOT NULL,
     updated_at timestamp(6) without time zone NOT NULL
 );
@@ -325,8 +310,6 @@ CREATE TABLE public.deliveries (
 
 CREATE TABLE public.products (
     id bigint NOT NULL,
-    store_id bigint NOT NULL,
-    sku character varying NOT NULL,
     name character varying NOT NULL,
     price_cents integer NOT NULL,
     stock integer DEFAULT 0 NOT NULL,
@@ -364,71 +347,6 @@ CREATE TABLE public.schema_migrations (
 
 
 --
--- Name: stores; Type: TABLE; Schema: public; Owner: -
---
-
-CREATE TABLE public.stores (
-    id bigint NOT NULL,
-    name character varying NOT NULL,
-    city character varying NOT NULL,
-    created_at timestamp(6) without time zone NOT NULL,
-    updated_at timestamp(6) without time zone NOT NULL
-);
-
-
---
--- Name: stores_id_seq; Type: SEQUENCE; Schema: public; Owner: -
---
-
-CREATE SEQUENCE public.stores_id_seq
-    START WITH 1
-    INCREMENT BY 1
-    NO MINVALUE
-    NO MAXVALUE
-    CACHE 1;
-
-
---
--- Name: stores_id_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: -
---
-
-ALTER SEQUENCE public.stores_id_seq OWNED BY public.stores.id;
-
-
---
--- Name: substitution_policies; Type: TABLE; Schema: public; Owner: -
---
-
-CREATE TABLE public.substitution_policies (
-    id bigint NOT NULL,
-    store_id bigint NOT NULL,
-    out_product_id integer NOT NULL,
-    suggested_product_id integer NOT NULL,
-    created_at timestamp(6) without time zone NOT NULL,
-    updated_at timestamp(6) without time zone NOT NULL
-);
-
-
---
--- Name: substitution_policies_id_seq; Type: SEQUENCE; Schema: public; Owner: -
---
-
-CREATE SEQUENCE public.substitution_policies_id_seq
-    START WITH 1
-    INCREMENT BY 1
-    NO MINVALUE
-    NO MAXVALUE
-    CACHE 1;
-
-
---
--- Name: substitution_policies_id_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: -
---
-
-ALTER SEQUENCE public.substitution_policies_id_seq OWNED BY public.substitution_policies.id;
-
-
---
 -- Name: users; Type: TABLE; Schema: public; Owner: -
 --
 
@@ -440,10 +358,10 @@ CREATE TABLE public.users (
 
 
 --
--- Name: cart_items id; Type: DEFAULT; Schema: public; Owner: -
+-- Name: order_items id; Type: DEFAULT; Schema: public; Owner: -
 --
 
-ALTER TABLE ONLY public.cart_items ALTER COLUMN id SET DEFAULT nextval('public.cart_items_id_seq'::regclass);
+ALTER TABLE ONLY public.order_items ALTER COLUMN id SET DEFAULT nextval('public.order_items_id_seq'::regclass);
 
 
 --
@@ -451,20 +369,6 @@ ALTER TABLE ONLY public.cart_items ALTER COLUMN id SET DEFAULT nextval('public.c
 --
 
 ALTER TABLE ONLY public.products ALTER COLUMN id SET DEFAULT nextval('public.products_id_seq'::regclass);
-
-
---
--- Name: stores id; Type: DEFAULT; Schema: public; Owner: -
---
-
-ALTER TABLE ONLY public.stores ALTER COLUMN id SET DEFAULT nextval('public.stores_id_seq'::regclass);
-
-
---
--- Name: substitution_policies id; Type: DEFAULT; Schema: public; Owner: -
---
-
-ALTER TABLE ONLY public.substitution_policies ALTER COLUMN id SET DEFAULT nextval('public.substitution_policies_id_seq'::regclass);
 
 
 --
@@ -588,27 +492,19 @@ ALTER TABLE ONLY public.ar_internal_metadata
 
 
 --
--- Name: cart_items cart_items_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+-- Name: order_items order_items_pkey; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
-ALTER TABLE ONLY public.cart_items
-    ADD CONSTRAINT cart_items_pkey PRIMARY KEY (id);
-
-
---
--- Name: carts carts_pkey; Type: CONSTRAINT; Schema: public; Owner: -
---
-
-ALTER TABLE ONLY public.carts
-    ADD CONSTRAINT carts_pkey PRIMARY KEY (id);
+ALTER TABLE ONLY public.order_items
+    ADD CONSTRAINT order_items_pkey PRIMARY KEY (id);
 
 
 --
--- Name: deliveries deliveries_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+-- Name: orders orders_pkey; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
-ALTER TABLE ONLY public.deliveries
-    ADD CONSTRAINT deliveries_pkey PRIMARY KEY (id);
+ALTER TABLE ONLY public.orders
+    ADD CONSTRAINT orders_pkey PRIMARY KEY (id);
 
 
 --
@@ -625,22 +521,6 @@ ALTER TABLE ONLY public.products
 
 ALTER TABLE ONLY public.schema_migrations
     ADD CONSTRAINT schema_migrations_pkey PRIMARY KEY (version);
-
-
---
--- Name: stores stores_pkey; Type: CONSTRAINT; Schema: public; Owner: -
---
-
-ALTER TABLE ONLY public.stores
-    ADD CONSTRAINT stores_pkey PRIMARY KEY (id);
-
-
---
--- Name: substitution_policies substitution_policies_pkey; Type: CONSTRAINT; Schema: public; Owner: -
---
-
-ALTER TABLE ONLY public.substitution_policies
-    ADD CONSTRAINT substitution_policies_pkey PRIMARY KEY (id);
 
 
 --
@@ -764,73 +644,24 @@ CREATE INDEX idx_reservations_user_id ON kiosk.reservations USING btree (user_id
 
 
 --
--- Name: index_cart_items_on_cart_id; Type: INDEX; Schema: public; Owner: -
+-- Name: index_order_items_on_order_id; Type: INDEX; Schema: public; Owner: -
 --
 
-CREATE INDEX index_cart_items_on_cart_id ON public.cart_items USING btree (cart_id);
-
-
---
--- Name: index_cart_items_on_product_id; Type: INDEX; Schema: public; Owner: -
---
-
-CREATE INDEX index_cart_items_on_product_id ON public.cart_items USING btree (product_id);
+CREATE INDEX index_order_items_on_order_id ON public.order_items USING btree (order_id);
 
 
 --
--- Name: index_carts_on_store_id; Type: INDEX; Schema: public; Owner: -
+-- Name: index_order_items_on_product_id; Type: INDEX; Schema: public; Owner: -
 --
 
-CREATE INDEX index_carts_on_store_id ON public.carts USING btree (store_id);
-
-
---
--- Name: index_carts_on_user_id; Type: INDEX; Schema: public; Owner: -
---
-
-CREATE INDEX index_carts_on_user_id ON public.carts USING btree (user_id);
+CREATE INDEX index_order_items_on_product_id ON public.order_items USING btree (product_id);
 
 
 --
--- Name: index_carts_on_user_id_and_store_id_and_status; Type: INDEX; Schema: public; Owner: -
+-- Name: index_orders_on_user_id; Type: INDEX; Schema: public; Owner: -
 --
 
-CREATE INDEX index_carts_on_user_id_and_store_id_and_status ON public.carts USING btree (user_id, store_id, status);
-
-
---
--- Name: index_deliveries_on_cart_id; Type: INDEX; Schema: public; Owner: -
---
-
-CREATE INDEX index_deliveries_on_cart_id ON public.deliveries USING btree (cart_id);
-
-
---
--- Name: index_deliveries_on_user_id; Type: INDEX; Schema: public; Owner: -
---
-
-CREATE INDEX index_deliveries_on_user_id ON public.deliveries USING btree (user_id);
-
-
---
--- Name: index_products_on_store_id; Type: INDEX; Schema: public; Owner: -
---
-
-CREATE INDEX index_products_on_store_id ON public.products USING btree (store_id);
-
-
---
--- Name: index_substitution_policies_on_store_id; Type: INDEX; Schema: public; Owner: -
---
-
-CREATE INDEX index_substitution_policies_on_store_id ON public.substitution_policies USING btree (store_id);
-
-
---
--- Name: index_substitution_policies_on_store_id_and_out_product_id; Type: INDEX; Schema: public; Owner: -
---
-
-CREATE UNIQUE INDEX index_substitution_policies_on_store_id_and_out_product_id ON public.substitution_policies USING btree (store_id, out_product_id);
+CREATE INDEX index_orders_on_user_id ON public.orders USING btree (user_id);
 
 
 --
@@ -882,67 +713,27 @@ ALTER TABLE ONLY kiosk.payment_mandates
 
 
 --
--- Name: substitution_policies fk_rails_3aac9efaec; Type: FK CONSTRAINT; Schema: public; Owner: -
+-- Name: order_items fk_rails_e3cb28f071; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
-ALTER TABLE ONLY public.substitution_policies
-    ADD CONSTRAINT fk_rails_3aac9efaec FOREIGN KEY (store_id) REFERENCES public.stores(id);
-
-
---
--- Name: products fk_rails_5cf8ff66a6; Type: FK CONSTRAINT; Schema: public; Owner: -
---
-
-ALTER TABLE ONLY public.products
-    ADD CONSTRAINT fk_rails_5cf8ff66a6 FOREIGN KEY (store_id) REFERENCES public.stores(id);
+ALTER TABLE ONLY public.order_items
+    ADD CONSTRAINT fk_rails_e3cb28f071 FOREIGN KEY (order_id) REFERENCES public.orders(id);
 
 
 --
--- Name: cart_items fk_rails_681a180e84; Type: FK CONSTRAINT; Schema: public; Owner: -
+-- Name: order_items fk_rails_f1a29ddd47; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
-ALTER TABLE ONLY public.cart_items
-    ADD CONSTRAINT fk_rails_681a180e84 FOREIGN KEY (product_id) REFERENCES public.products(id);
-
-
---
--- Name: cart_items fk_rails_6cdb1f0139; Type: FK CONSTRAINT; Schema: public; Owner: -
---
-
-ALTER TABLE ONLY public.cart_items
-    ADD CONSTRAINT fk_rails_6cdb1f0139 FOREIGN KEY (cart_id) REFERENCES public.carts(id);
+ALTER TABLE ONLY public.order_items
+    ADD CONSTRAINT fk_rails_f1a29ddd47 FOREIGN KEY (product_id) REFERENCES public.products(id);
 
 
 --
--- Name: deliveries fk_rails_a02a70f329; Type: FK CONSTRAINT; Schema: public; Owner: -
+-- Name: orders fk_rails_f868b47f6a; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
-ALTER TABLE ONLY public.deliveries
-    ADD CONSTRAINT fk_rails_a02a70f329 FOREIGN KEY (cart_id) REFERENCES public.carts(id);
-
-
---
--- Name: deliveries fk_rails_de15c80c9c; Type: FK CONSTRAINT; Schema: public; Owner: -
---
-
-ALTER TABLE ONLY public.deliveries
-    ADD CONSTRAINT fk_rails_de15c80c9c FOREIGN KEY (user_id) REFERENCES public.users(id);
-
-
---
--- Name: carts fk_rails_ea59a35211; Type: FK CONSTRAINT; Schema: public; Owner: -
---
-
-ALTER TABLE ONLY public.carts
-    ADD CONSTRAINT fk_rails_ea59a35211 FOREIGN KEY (user_id) REFERENCES public.users(id);
-
-
---
--- Name: carts fk_rails_fb0f29318e; Type: FK CONSTRAINT; Schema: public; Owner: -
---
-
-ALTER TABLE ONLY public.carts
-    ADD CONSTRAINT fk_rails_fb0f29318e FOREIGN KEY (store_id) REFERENCES public.stores(id);
+ALTER TABLE ONLY public.orders
+    ADD CONSTRAINT fk_rails_f868b47f6a FOREIGN KEY (user_id) REFERENCES public.users(id);
 
 
 --

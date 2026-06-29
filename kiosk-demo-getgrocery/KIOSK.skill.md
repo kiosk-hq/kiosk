@@ -66,7 +66,7 @@ Content-Type: application/json
 }
 ```
 
-The response is a `rows` array of in-stock products. Each row has `id`, `name`, `price_cents`, and `unit`. Note the `id` of each product you want.
+The response is a `rows` array of in-stock products. Each row has `id`, `name`, and `price_cents`; rows with low remaining stock also include `"low": true`. Note the `id` of each product you want.
 
 > **Substitutions are the assistant's decision.** The catalog returns in-stock items only — an item absent from the catalog is out of stock. The assistant reasons over the catalog: "Milk 1 L" not present → use 2× "Milk 0.5 L"; "Chocolate Spread" not present → ask the user (peanut butter?) or omit. The provider does not suggest substitutions.
 
@@ -137,8 +137,7 @@ Successful response — HTTP 200, inside `.value`:
 ```json
 {
   "order_id":    "<uuid>",
-  "total_cents": 2499,
-  "status":      "created"
+  "total_cents": 2499
 }
 ```
 

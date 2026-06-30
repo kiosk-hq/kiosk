@@ -26,7 +26,9 @@ module Kiosk
       # @param payment_method [String] assistant-presented PSP payment-method reference
       # @return [Hash] { psp_reference:, settled_amount_cents:, settled_at: }
       def capture(cart_mandate, payment_method:)
-        pm = payment_method || @test_payment_method
+        pm = (payment_method && !payment_method.empty?) ? payment_method : @test_payment_method
+        raise ArgumentError, "no payment_method supplied" if pm.to_s.empty?
+
         intent = ::Stripe::PaymentIntent.create(
           {
             amount:         cart_mandate.total_amount_cents,
@@ -51,7 +53,9 @@ module Kiosk
       # @param payment_method [String] assistant-presented PSP payment-method reference
       # @return [Hash] { stripe_payment_intent_id:, client_secret:, status: }
       def authorize(cart_mandate, payment_method:)
-        pm = payment_method || @test_payment_method
+        pm = (payment_method && !payment_method.empty?) ? payment_method : @test_payment_method
+        raise ArgumentError, "no payment_method supplied" if pm.to_s.empty?
+
         intent = ::Stripe::PaymentIntent.create(
           {
             amount:         cart_mandate.total_amount_cents,

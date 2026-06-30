@@ -3,7 +3,7 @@
 # Kiosk reputation end-to-end driver (R2 P6 — trust-earned-by-spending).
 #
 # Demonstrates the full "difficulty drops as purchases accrue" lifecycle using
-# the shipped RateAndReputation policy with real payment_mandates lookups:
+# the shipped RateAndReputation policy with real settlements lookups:
 #
 #   0 purchases → 402 argon2id challenge at d=5 (unproven principal)
 #   1 purchase  → 402 argon2id challenge at d=3 (lower — purchase earned PoW relief)

@@ -118,9 +118,9 @@ Note `reservation_id` and `price_per_min_cents` — both needed for Step 5.
 
 ---
 
-## Step 5 — Pay: sign AP2 intent + cart mandates (RS256 JWS)
+## Step 5 — Pay: sign AP2 intent + cart + payment mandates (RS256 JWS)
 
-Payment requires two JWS tokens signed with the private key from Step 2. The
+Payment requires three JWS tokens signed with the private key from Step 2. The
 algorithm is RS256. The `iss` claim **must equal the provider's issuer** (from
 `/.well-known/kiosk.json`).
 
@@ -157,6 +157,25 @@ algorithm is RS256. The `iss` claim **must equal the provider's issuer** (from
 }
 ```
 
+### Payment mandate (the assistant's funding instrument, bound to the cart)
+
+```json
+{
+  "id":              "<fresh UUID>",
+  "cart_mandate_id": "<id from the cart mandate above>",
+  "user_id":         "<user_id from Step 2>",
+  "agent_id":        "<agent_id from Step 2>",
+  "iss":             "<provider issuer>",
+  "payment_method":  "<PSP PaymentMethod id>",
+  "amount_cents":    <total_amount_cents from the cart mandate>,
+  "currency":        "eur",
+  "exp":             <now + 600>,
+  "iat":             <now>
+}
+```
+
+`cart_mandate_id` binds the payment mandate to the cart. `amount_cents` must match the cart total exactly. The assistant presents the payment instrument; the provider charges it via its PSP.
+
 ### Pay call
 
 ```http
@@ -167,8 +186,9 @@ Content-Type: application/json
 {
   "command": "pay",
   "body": {
-    "intent_mandate_jws": "<RS256 JWS of intent payload>",
-    "cart_mandate_jws":   "<RS256 JWS of cart payload>"
+    "intent_mandate_jws":  "<RS256 JWS of intent payload>",
+    "cart_mandate_jws":    "<RS256 JWS of cart payload>",
+    "payment_mandate_jws": "<RS256 JWS of payment payload>"
   }
 }
 ```

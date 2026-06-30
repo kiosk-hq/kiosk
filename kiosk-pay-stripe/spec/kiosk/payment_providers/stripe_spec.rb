@@ -60,6 +60,13 @@ RSpec.describe Kiosk::PaymentProviders::Stripe do
 
       adapter.capture(cart_mandate, payment_method: nil)
     end
+
+    it "raises ArgumentError when payment_method is nil and no test_payment_method is configured" do
+      no_pm_adapter = described_class.new(api_key: "sk_test_dummy", test_payment_method: nil)
+      expect {
+        no_pm_adapter.capture(cart_mandate, payment_method: nil)
+      }.to raise_error(ArgumentError, "no payment_method supplied")
+    end
   end
 
   describe "#authorize" do

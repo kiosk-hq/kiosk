@@ -6,7 +6,7 @@
 #
 #   Assertion 1 — confirm_booking ownership denial (Gate-1 isolated):
 #     Principal A reserves room → booking_id rA.
-#     Principal B settles a payment mandate whose cart references rA
+#     Principal B's pay call creates a settlement whose cart references rA
 #     (satisfies Gate-2) then calls run confirm_booking {booking_id: rA}.
 #     → Must be denied (HTTP 403). Gate-1 WHERE id=rA AND
 #       user_id=kiosk.current_user_id() AND status='reserved' finds nothing
@@ -131,7 +131,7 @@ total_cents_a = rsv_a_resp.dig("value", "total_cents").to_i
 abort "A's booking_id missing from response: #{JSON.generate(rsv_a_resp)}" unless booking_id_a
 STDERR.puts "  A reserved: booking_id=#{booking_id_a} total=#{total_cents_a}c"
 
-# ── Step 5: B settles a payment mandate referencing rA (satisfies Gate-2) ────
+# ── Step 5: B's pay creates a settlement referencing rA (satisfies Gate-2) ────
 # B signs intent + cart + payment mandates with B's registered RSA key. The cart's
 # line_items contain {booking_id: booking_id_a} so that Gate-2's jsonb-
 # containment check passes for B.  settlements.user_id is written from
@@ -266,7 +266,7 @@ b_booking_ids = (b_bookings_resp["rows"] || []).map { |r| r["id"] }
 STDERR.puts "  B my_bookings: #{b_booking_ids.inspect}"
 
 # ── Step 8: B calls confirm_booking on A's booking_id (Assertion 1) ──────────
-# B has a settled payment mandate referencing rA (Gate-2 ✓).
+# B has a settlement referencing rA (Gate-2 ✓).
 # Gate-1 WHERE id=rA AND user_id=kiosk.current_user_id() AND status='reserved'
 # finds nothing because rA.user_id = A ≠ B → 403.
 # The 403 genuinely isolates Gate-1 ownership, not a payment gap.

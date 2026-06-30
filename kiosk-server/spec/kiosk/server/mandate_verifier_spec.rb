@@ -166,16 +166,20 @@ RSpec.describe Kiosk::Server::MandateVerifier do
         .to raise_error(Kiosk::Server::Errors::Forbidden, /currency|amount/)
     end
 
-    it "rejects a payment with a missing payment_method" do
-      bad = payment_payload.reject { |k, _| k == :payment_method }
-      expect { described_class.verify_payment(raw_jws: sign(bad), identity: identity, cart: cart_mandate) }
-        .to raise_error(Kiosk::Server::Errors::BadRequest, /payment_method/)
+    # SetupIntent model: the assistant authorises but never presents a card —
+    # the provider's PSP resolves the principal's on-file card at capture time.
+    # payment_method is therefore OPTIONAL in the mandate.
+    it "accepts a payment with a nil/absent payment_method (SetupIntent model: on-file card)" do
+      no_pm = payment_payload.reject { |k, _| k == :payment_method }
+      pm = described_class.verify_payment(raw_jws: sign(no_pm), identity: identity, cart: cart_mandate)
+      expect(pm).to be_a(Kiosk::Mandate::PaymentMandate)
+      expect(pm.payment_method).to be_nil
     end
 
-    it "rejects a payment with an empty payment_method" do
-      bad = payment_payload.merge(payment_method: "")
-      expect { described_class.verify_payment(raw_jws: sign(bad), identity: identity, cart: cart_mandate) }
-        .to raise_error(Kiosk::Server::Errors::BadRequest, /payment_method/)
+    it "accepts a payment with an empty payment_method" do
+      empty_pm = payment_payload.merge(payment_method: "")
+      pm = described_class.verify_payment(raw_jws: sign(empty_pm), identity: identity, cart: cart_mandate)
+      expect(pm.payment_method).to eq("")
     end
 
     it "applies the shared decode checks (wrong signer rejected)" do

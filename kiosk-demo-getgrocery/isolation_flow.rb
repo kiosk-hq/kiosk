@@ -72,7 +72,8 @@ def pay_for_order(server, issuer, token, key, user_id, agent_id, order_id, total
     user_id:         user_id,
     agent_id:        agent_id,
     iss:             issuer,
-    payment_method:  "pm_card_visa",
+    # No payment_method: SetupIntent model — on-file card resolved by the
+    # Stripe adapter; the server persists "on_file" as an audit sentinel.
     amount_cents:    total_cents,
     currency:        "eur",
     exp:             now + 600,

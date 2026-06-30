@@ -16,6 +16,21 @@ module Kiosk
     # CloudPayments, SberPay, ESIA-pay, … — are commercial and built on
     # customer demand rather than upfront (see spec §15.3).
     class Base
+      # Returns true when the principal MUST complete a payment setup flow
+      # (e.g. Stripe SetupIntent — card-on-file) before a charge can proceed.
+      # The executor calls this BEFORE persisting the mandate trail so it can
+      # return a clean 402 without burning the mandate ids.
+      #
+      # Default: false — StubPsp and adapters without a SetupIntent model
+      # inherit this and are never gated.  Stripe overrides when a
+      # customer_resolver is configured.
+      #
+      # @param user_id [String] principal identifier
+      # @return [Boolean]
+      def setup_required?(user_id:) # rubocop:disable Lint/UnusedMethodArgument
+        false
+      end
+
       # Authorise a cart mandate: PSP-side intent or hold creation.
       # The assistant-presented `payment_method` is the funding instrument.
       #

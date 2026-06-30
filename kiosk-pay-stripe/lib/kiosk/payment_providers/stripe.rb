@@ -66,6 +66,22 @@ module Kiosk
         session.url
       end
 
+      # Returns true when the principal MUST complete a Stripe SetupIntent
+      # before a charge can proceed (overrides Base#setup_required?).
+      #
+      # Only meaningful when a customer_resolver is configured (SetupIntent
+      # model).  When there is no resolver the adapter operates in back-compat
+      # mode (explicit PM or test_payment_method fallback) and setup is never
+      # required from the server side.
+      #
+      # @param user_id [String]
+      # @return [Boolean]
+      def setup_required?(user_id:)
+        return false unless @customer_resolver
+
+        !saved_method?(user_id: user_id)
+      end
+
       # Returns true iff the resolved Customer has a usable saved card.
       # The assistant calls this before `pay`; if false, it triggers setup_url
       # and waits for the human to complete the SetupIntent.

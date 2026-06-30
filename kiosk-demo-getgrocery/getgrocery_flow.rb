@@ -149,7 +149,9 @@ payment_payload = {
   user_id:         user_id,
   agent_id:        agent_id,
   iss:             ISSUER,
-  payment_method:  "pm_card_visa",
+  # No payment_method: SetupIntent model — the provider's Stripe adapter
+  # resolves the principal's on-file card; the assistant never presents one.
+  # The server persists "on_file" as an audit sentinel.
   amount_cents:    total_cents,
   currency:        "eur",
   exp:             now + 600,

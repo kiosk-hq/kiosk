@@ -282,7 +282,7 @@ RSpec.describe Kiosk::Server::Executor do
         .and_return("pay-row")
       allow_any_instance_of(described_class).to receive(:persist_settlement)
         .and_return("s-1")
-      Kiosk.configuration.payment_provider = instance_double("PSP", capture: settlement)
+      Kiosk.configuration.payment_provider = instance_double("PSP", capture: settlement, setup_required?: false)
     end
 
     it "verifies the trail, captures, and returns the full settlement payload" do
@@ -356,6 +356,7 @@ RSpec.describe Kiosk::Server::Executor do
     it "captures OUTSIDE any DB transaction" do
       in_tx_at_capture = nil
       Kiosk.configuration.payment_provider = instance_double("PSP")
+      allow(Kiosk.configuration.payment_provider).to receive(:setup_required?).and_return(false)
       allow(Kiosk.configuration.payment_provider).to receive(:capture) do |_cart, **_kwargs|
         in_tx_at_capture = connection.in_transaction?
         settlement
@@ -363,6 +364,37 @@ RSpec.describe Kiosk::Server::Executor do
 
       described_class.call(kind: :pay, args: valid_args, identity: identity, connection: connection)
       expect(in_tx_at_capture).to be(false)
+    end
+
+    # I-1: provider.setup_required? == true → clean 402 BEFORE Phase 1 persists
+    # anything.  No mandate ids are burned, so the agent can retry after the
+    # human completes the SetupIntent flow without hitting the UNIQUE idempotency key.
+    it "raises PaymentSetupRequired (402) before persisting mandates when provider.setup_required? is true" do
+      provider = instance_double("PSP", setup_required?: true)
+      Kiosk.configuration.payment_provider = provider
+
+      # Phase 1 mandate verification must not run — no mandate burning.
+      expect(Kiosk::Server::MandateVerifier).not_to receive(:verify_intent)
+
+      expect {
+        described_class.call(kind: :pay, args: valid_args, identity: identity, connection: connection)
+      }.to raise_error(Kiosk::Server::Errors::PaymentSetupRequired) { |e|
+        expect(e.http_status).to eq(402)
+        expect(e.code).to        eq("payment_setup_required")
+      }
+    end
+
+    # I-1 belt-and-suspenders: if a card is detached between the pre-check and
+    # capture (race), the PSP raises SetupRequired and we re-raise it cleanly.
+    it "re-raises a capture-time SetupRequired as PaymentSetupRequired (402)" do
+      allow(Kiosk.configuration.payment_provider).to receive(:capture)
+        .and_raise(Kiosk::PaymentProviders::SetupRequired)
+
+      expect {
+        described_class.call(kind: :pay, args: valid_args, identity: identity, connection: connection)
+      }.to raise_error(Kiosk::Server::Errors::PaymentSetupRequired) { |e|
+        expect(e.http_status).to eq(402)
+      }
     end
 
     it "raises BadRequest when intent_mandate_jws is missing" do

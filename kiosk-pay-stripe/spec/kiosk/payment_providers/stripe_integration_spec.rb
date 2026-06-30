@@ -61,7 +61,7 @@ RSpec.describe Kiosk::PaymentProviders::Stripe, :integration do
 
   describe "#setup_url" do
     it "returns a hosted Stripe Checkout URL for the setup flow" do
-      url = adapter.setup_url(user_id: user_id, return_url: "https://example.com/return")
+      url = adapter.setup_url(user_id: user_id)
       expect(url).to start_with("https://checkout.stripe.com/")
     end
   end

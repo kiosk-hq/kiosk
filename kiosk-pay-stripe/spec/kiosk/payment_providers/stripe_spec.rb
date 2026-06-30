@@ -44,13 +44,12 @@ RSpec.describe Kiosk::PaymentProviders::Stripe do
       session = double("CheckoutSession", url: "https://checkout.stripe.com/setup/abc")
 
       expect(::Stripe::Checkout::Session).to receive(:create).with(
-        mode:        "setup",
-        customer:    "cus_existing",
-        success_url: "https://example.com/return",
-        cancel_url:  "https://example.com/return",
+        mode:                    "setup",
+        customer:                "cus_existing",
+        redirect_on_completion:  "never",
       ).and_return(session)
 
-      url = resolver_adapter.setup_url(user_id: "user-1", return_url: "https://example.com/return")
+      url = resolver_adapter.setup_url(user_id: "user-1")
       expect(url).to eq("https://checkout.stripe.com/setup/abc")
     end
 
@@ -67,10 +66,10 @@ RSpec.describe Kiosk::PaymentProviders::Stripe do
 
       expect(::Stripe::Customer).to receive(:create).with({}).and_return(new_cus)
       expect(::Stripe::Checkout::Session).to receive(:create).with(
-        hash_including(customer: "cus_new", mode: "setup"),
+        hash_including(customer: "cus_new", mode: "setup", redirect_on_completion: "never"),
       ).and_return(session)
 
-      url = fresh_adapter.setup_url(user_id: "user-2", return_url: "https://example.com/return")
+      url = fresh_adapter.setup_url(user_id: "user-2")
       expect(url).to eq("https://checkout.stripe.com/setup/xyz")
       expect(saved["user-2"]).to eq("cus_new")
     end

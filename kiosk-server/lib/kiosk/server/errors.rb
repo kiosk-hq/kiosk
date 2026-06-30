@@ -108,6 +108,21 @@ module Kiosk
         HTTP_STATUS = 500
       end
 
+      # The principal has no saved payment method on file and must complete a
+      # SetupIntent (or equivalent PSP onboarding) before this charge can
+      # proceed.  The assistant should call `payment_setup` to obtain the
+      # setup URL and have the human complete it.  HTTP 402.
+      class PaymentSetupRequired < Base
+        CODE        = "payment_setup_required"
+        EXIT_CODE   = 2
+        HTTP_STATUS = 402
+
+        def initialize(message = "payment setup required",
+                       hint: "call payment_setup to obtain a card setup link")
+          super(message, hint: hint)
+        end
+      end
+
       # Proof-of-work required — the provider's reputation policy demands a
       # PoW challenge for this request. The client must solve the challenge and
       # re-send the request with `pow: {challenge:, nonce:}`. HTTP 402.

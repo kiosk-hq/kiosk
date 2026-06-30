@@ -156,6 +156,16 @@ module Kiosk
         provider = Kiosk.configuration.payment_provider
         raise Errors::Forbidden, "no payment_provider configured" if provider.nil?
 
+        # Pre-check: if the provider knows the principal has no saved payment
+        # method, return a clean 402 NOW — before Phase 1 persists anything.
+        # This prevents burning the mandate ids on a charge that cannot
+        # succeed, so the agent can retry after the human completes the
+        # SetupIntent flow without hitting the UNIQUE (user_id, mandate_id)
+        # idempotency key.
+        if provider.respond_to?(:setup_required?) && provider.setup_required?(user_id: identity.user_id)
+          raise Errors::PaymentSetupRequired
+        end
+
         # Phase 1 — verify + persist the full mandate trail (GUC-scoped
         # transaction; no RLS policy on the mandate tables yet). The persist
         # helpers return the SERVER-generated uuid PKs, which thread the FK
@@ -181,8 +191,17 @@ module Kiosk
 
         # Phase 2 — irreversible external capture. OUTSIDE any DB transaction.
         # The assistant-presented payment_method is threaded from the verified
-        # PaymentMandate so the PSP charges THAT instrument.
-        settled = provider.capture(cart, payment_method: payment.payment_method)
+        # PaymentMandate so the PSP charges THAT instrument (nil in the
+        # SetupIntent model — the adapter resolves the on-file card itself).
+        #
+        # Belt-and-suspenders: if the PSP raises SetupRequired at capture time
+        # (e.g. the on-file card was detached between the pre-check and now),
+        # surface a clean 402 rather than a 500.
+        settled = begin
+          provider.capture(cart, payment_method: payment.payment_method)
+        rescue Kiosk::PaymentProviders::SetupRequired
+          raise Errors::PaymentSetupRequired
+        end
 
         # Phase 3 — record settlement (fresh GUC-scoped transaction; no RLS
         # policy on the mandate tables yet).
@@ -248,12 +267,17 @@ module Kiosk
       # token for audit. `UNIQUE (user_id, mandate_id)` prevents replay.
       def persist_payment_mandate(cart_row_id:, payment:)
         schema = Kiosk.configuration.schema
+        # payment_method is optional in the SetupIntent model (the principal's
+        # on-file card is the funding source, not a presented PM). Persist
+        # "on_file" as a clear audit sentinel when absent — the column is NOT
+        # NULL and "on_file" is unambiguous: funded from the on-file card.
+        pm_db = payment.payment_method.to_s.empty? ? "on_file" : payment.payment_method
         connection.execute(<<~SQL).to_a.first.fetch("id")
           INSERT INTO #{schema}.payment_mandates
             (mandate_id, cart_mandate_id, user_id, agent_id, issuer,
              payment_method, amount_cents, currency, expires_at, created_at, raw_jws)
           VALUES (#{q(payment.id)}, #{q(cart_row_id)}, #{q(payment.user_id)},
-             #{q(payment.agent_id)}, #{q(payment.issuer)}, #{q(payment.payment_method)},
+             #{q(payment.agent_id)}, #{q(payment.issuer)}, #{q(pm_db)},
              #{payment.amount_cents.to_i}, #{q(payment.currency)}, #{q(payment.expires_at)},
              now(), #{q(payment.raw_jws)})
           RETURNING id

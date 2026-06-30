@@ -36,8 +36,13 @@ module Kiosk
       end
 
       # Verify a PaymentMandate JWS → {Kiosk::Mandate::PaymentMandate},
-      # enforcing that it is bound to `cart`, matches its amount/currency, and
-      # carries a non-empty payment_method reference.
+      # enforcing that it is bound to `cart` and matches its amount/currency.
+      #
+      # `payment_method` is OPTIONAL: in the SetupIntent model the assistant
+      # authorises the charge but never presents a card — the provider's PSP
+      # resolves the principal's on-file card.  Adapters that do require an
+      # explicit PM (StubPsp, early tests) still send one; the field is simply
+      # no longer rejected when absent.
       def verify_payment(raw_jws:, identity:, cart:)
         payload = decode_and_check(raw_jws, identity)
 
@@ -47,9 +52,6 @@ module Kiosk
         unless payload[:amount_cents].to_i == cart.total_amount_cents.to_i &&
                payload[:currency] == cart.currency
           raise Errors::Forbidden.new("payment amount/currency does not match cart")
-        end
-        if payload[:payment_method].nil? || payload[:payment_method].to_s.empty?
-          raise Errors::BadRequest.new("payment mandate missing payment_method")
         end
 
         Kiosk::Mandate::PaymentMandate.new(

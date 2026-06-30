@@ -76,6 +76,46 @@ RSpec.describe Kiosk::PaymentProviders::Stripe do
     end
   end
 
+  # ── setup_required? ──────────────────────────────────────────────────────────
+
+  describe "#setup_required?" do
+    it "returns false when no customer resolver is configured (back-compat mode)" do
+      # Without a resolver the adapter operates in explicit-PM / test-PM mode;
+      # no SetupIntent check is performed.
+      expect(adapter.setup_required?(user_id: "user-1")).to be false
+    end
+
+    it "returns true when the resolver returns nil (principal has no Customer yet)" do
+      no_cus_adapter = described_class.new(
+        api_key:           "sk_test_dummy",
+        customer_resolver: ->(_uid) { nil },
+      )
+      expect(no_cus_adapter.setup_required?(user_id: "user-unknown")).to be true
+    end
+
+    it "returns true when the Customer exists but has no saved cards" do
+      invoice_settings = double("InvoiceSettings", default_payment_method: nil)
+      customer         = double("Customer", invoice_settings: invoice_settings)
+      pm_list          = double("PMList", data: [])
+
+      allow(::Stripe::Customer).to receive(:retrieve).with("cus_existing").and_return(customer)
+      allow(::Stripe::PaymentMethod).to receive(:list).with(
+        customer: "cus_existing", type: "card",
+      ).and_return(pm_list)
+
+      expect(resolver_adapter.setup_required?(user_id: "user-1")).to be true
+    end
+
+    it "returns false when the Customer has a saved default payment method" do
+      invoice_settings = double("InvoiceSettings", default_payment_method: "pm_saved_123")
+      customer         = double("Customer", invoice_settings: invoice_settings)
+
+      allow(::Stripe::Customer).to receive(:retrieve).with("cus_existing").and_return(customer)
+
+      expect(resolver_adapter.setup_required?(user_id: "user-1")).to be false
+    end
+  end
+
   # ── saved_method? ─────────────────────────────────────────────────────────
 
   describe "#saved_method?" do

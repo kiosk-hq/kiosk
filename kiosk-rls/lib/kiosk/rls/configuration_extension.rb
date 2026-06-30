@@ -37,7 +37,7 @@ module Kiosk
       # inside EVERY request transaction (query / run / pay verbs). This means
       # app_role must have complete GRANTs on every table those verbs touch,
       # including the kiosk.* mandate tables (kiosk.agents, kiosk.payment_mandates,
-      # kiosk.cart_mandates, kiosk.intent_mandates, etc.) and all application
+      # kiosk.settlements, kiosk.cart_mandates, kiosk.intent_mandates, etc.) and all application
       # tables accessed by registered queries and actions.
       #
       # IMPORTANT — scope of the foodelivery demo:rls reference:

@@ -196,17 +196,17 @@ Kiosk::Server::Actions.register("schedule_delivery",
     ).first
     raise Kiosk::Server::Errors::Forbidden.new("order not found, not yours, or already scheduled") if order.nil?
 
-    # ── Gate 2: settled payment mandate referencing this order ────────────
+    # ── Gate 2: settlement (capture receipt) referencing this order ──────────
     order_filter_json = [{ order_id: order_id.to_s }].to_json
     paid = conn.execute(
       "SELECT 1 AS ok " \
-      "FROM kiosk.payment_mandates pm " \
+      "FROM kiosk.settlements pm " \
       "JOIN kiosk.cart_mandates cm ON cm.id = pm.cart_mandate_id " \
       "WHERE pm.user_id = kiosk.current_user_id() " \
       "AND cm.line_items @> #{conn.quote(order_filter_json)}::jsonb " \
       "LIMIT 1"
     ).first
-    raise Kiosk::Server::Errors::Forbidden.new("no settled payment mandate for this order") if paid.nil?
+    raise Kiosk::Server::Errors::Forbidden.new("no settlement for this order") if paid.nil?
 
     # ── Compute slot_at (slot 1 = 08:00, slot 2 = 10:00, ...) ────────────
     delivery_date = Date.today + 1

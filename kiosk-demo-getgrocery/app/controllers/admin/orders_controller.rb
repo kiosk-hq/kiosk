@@ -29,7 +29,7 @@ module Admin
           COALESCE((
             SELECT TRUE
             FROM kiosk.cart_mandates cm
-            JOIN kiosk.payment_mandates pm ON pm.cart_mandate_id = cm.id
+            JOIN kiosk.settlements pm ON pm.cart_mandate_id = cm.id
             WHERE cm.line_items @> json_build_array(
               json_build_object('order_id', o.id::text)
             )::jsonb

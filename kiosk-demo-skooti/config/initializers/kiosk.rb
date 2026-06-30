@@ -181,19 +181,19 @@ Kiosk::Server::Actions.register("start_rental",
   end
 
   # ── Gate 3: settled payment whose cart references THIS reservation ───────
-  # C2: join payment_mandates → cart_mandates and require that line_items
+  # C2: join settlements → cart_mandates and require that line_items
   # contains the reservation_id of this specific reservation. Prevents
   # paying for reservation A and starting rental B.
   resv_filter_json = [{ reservation_id: reservation_id.to_s }].to_json
   paid = conn.execute(
     "SELECT 1 AS ok " \
-    "FROM kiosk.payment_mandates pm " \
+    "FROM kiosk.settlements pm " \
     "JOIN kiosk.cart_mandates cm ON cm.id = pm.cart_mandate_id " \
     "WHERE pm.user_id = kiosk.current_user_id() " \
     "AND cm.line_items @> #{conn.quote(resv_filter_json)}::jsonb " \
     "LIMIT 1"
   ).first
-  raise Kiosk::Server::Errors::Forbidden.new("no settled payment mandate for this reservation") if paid.nil?
+  raise Kiosk::Server::Errors::Forbidden.new("no settlement for this reservation") if paid.nil?
 
   # ── All gates passed: issue an Ed25519 rental token ─────────────────────
   # Token is bound to the server-derived scooter code, not any client value.

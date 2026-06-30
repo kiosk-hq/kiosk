@@ -144,12 +144,12 @@ namespace :demo do
       puts "  ✗  orders COUNT expected 1, got #{orders_count.inspect}"
     end
 
-    pm_count = `psql -X -d #{db} -tAc 'SELECT COUNT(*) FROM kiosk.payment_mandates' 2>&1`.strip
+    pm_count = `psql -X -d #{db} -tAc 'SELECT COUNT(*) FROM kiosk.settlements' 2>&1`.strip
     if pm_count == "1"
-      puts "  ✓  kiosk.payment_mandates count = 1"
+      puts "  ✓  kiosk.settlements count = 1"
     else
-      failures << "kiosk.payment_mandates COUNT expected 1, got #{pm_count.inspect}"
-      puts "  ✗  kiosk.payment_mandates COUNT expected 1, got #{pm_count.inspect}"
+      failures << "kiosk.settlements COUNT expected 1, got #{pm_count.inspect}"
+      puts "  ✗  kiosk.settlements COUNT expected 1, got #{pm_count.inspect}"
     end
 
     # ── query-verb assertions ──────────────────────────────────────────────
@@ -695,7 +695,7 @@ namespace :demo do
 
     Policy: Kiosk::Reputation::Policies::RateAndReputation
       proven_purchases_threshold: 2, base_d: 3, unproven_d_bonus: 2, d_min: 3
-    Factors: real DB lookup — COUNT(*) FROM kiosk.payment_mandates WHERE user_id = <principal>
+    Factors: real DB lookup — COUNT(*) FROM kiosk.settlements WHERE user_id = <principal>
 
     Requirements:
       python3 with argon2-cffi: pip install argon2-cffi
@@ -724,7 +724,7 @@ namespace :demo do
 
     puts "\n── Starting foodelivery (Reputation PoW demo) on #{server_url} ──"
     puts "   Policy: RateAndReputation (proven_purchases_threshold=2, base_d=3, unproven_d_bonus=2)"
-    puts "   Factors: real DB lookup — kiosk.payment_mandates WHERE user_id = <principal>"
+    puts "   Factors: real DB lookup — kiosk.settlements WHERE user_id = <principal>"
     puts "   Expected curve: d=5 (0 purchases) → d=3 (1 purchase) → free pass (2 purchases)"
 
     env_vars = {

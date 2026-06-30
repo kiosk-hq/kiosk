@@ -177,17 +177,17 @@ Kiosk::Server::Actions.register("confirm_booking",
     ).first
     raise Kiosk::Server::Errors::Forbidden.new("booking not found or not yours") if booking.nil?
 
-    # ── Gate 2: settled payment mandate whose cart references THIS booking ─
+    # ── Gate 2: settlement (capture receipt) whose cart references THIS booking
     booking_filter_json = [{ booking_id: booking_id.to_s }].to_json
     paid = conn.execute(
       "SELECT 1 AS ok " \
-      "FROM kiosk.payment_mandates pm " \
+      "FROM kiosk.settlements pm " \
       "JOIN kiosk.cart_mandates cm ON cm.id = pm.cart_mandate_id " \
       "WHERE pm.user_id = kiosk.current_user_id() " \
       "AND cm.line_items @> #{conn.quote(booking_filter_json)}::jsonb " \
       "LIMIT 1"
     ).first
-    raise Kiosk::Server::Errors::Forbidden.new("no settled payment mandate for this booking") if paid.nil?
+    raise Kiosk::Server::Errors::Forbidden.new("no settlement for this booking") if paid.nil?
 
     # ── All gates passed: confirm ─────────────────────────────────────────
     confirmation_code = SecureRandom.uuid

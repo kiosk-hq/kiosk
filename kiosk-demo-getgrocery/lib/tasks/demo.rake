@@ -248,6 +248,20 @@ namespace :demo do
     require "net/http"
     require "uri"
 
+    # getgroceries uses the real Stripe adapter (no StubPsp).
+    # isolation_flow.rb calls POST /kiosk/_test/attach_card per principal
+    # which hits real Stripe — the server will not boot without this key.
+    if ENV["STRIPE_SECRET_KEY"].to_s.strip.empty?
+      abort <<~MSG
+        demo:isolation requires STRIPE_SECRET_KEY (a Stripe test key, sk_test_…).
+        getgroceries uses the real Stripe adapter — principals pay via off_session
+        Stripe charge; the attach_card seam also calls Stripe on the server side.
+
+          KEY=$(awk -F'"' '/STRIPE_SECRET_KEY/{print $2}' mise.toml)
+          STRIPE_SECRET_KEY="$KEY" bundle exec rake demo:isolation
+      MSG
+    end
+
     port = ENV.fetch("PORT", "3005")
     log  = "/tmp/kiosk-getgrocery-isolation.log"
     db   = "kiosk_getgrocery_development"
@@ -609,6 +623,21 @@ namespace :demo do
     require "json"
     require "net/http"
     require "uri"
+
+    # getgroceries uses the real Stripe adapter (no StubPsp).
+    # redteam_suite.rb calls client.attach_test_card per paying principal,
+    # which hits real Stripe test-mode — the server will not boot without this key.
+    # A Stripe mock is the future optimization so the suite no longer needs live Stripe.
+    if ENV["STRIPE_SECRET_KEY"].to_s.strip.empty?
+      abort <<~MSG
+        demo:redteam requires STRIPE_SECRET_KEY (a Stripe test key, sk_test_…).
+        getgroceries uses the real Stripe adapter — scenarios that settle payments
+        call POST /kiosk/_test/attach_card per principal (real Stripe test charge).
+
+          KEY=$(awk -F'"' '/STRIPE_SECRET_KEY/{print $2}' mise.toml)
+          STRIPE_SECRET_KEY="$KEY" bundle exec rake demo:redteam
+      MSG
+    end
 
     port = ENV.fetch("PORT", "3005")
     log  = "/tmp/kiosk-getgrocery-redteam.log"

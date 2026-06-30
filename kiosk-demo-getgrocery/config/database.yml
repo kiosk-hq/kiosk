@@ -6,7 +6,7 @@ default: &default
 
 development:
   <<: *default
-  database: kiosk_getgrocery_development
+  database: <%= ENV.fetch("KIOSK_GETGROCERY_DB", "kiosk_getgrocery_development") %>
 
 test:
   <<: *default

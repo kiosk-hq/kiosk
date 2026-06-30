@@ -4,21 +4,32 @@ module Kiosk
   # AP2 (Agent Payments Protocol) mandate value objects.
   # See design spec §5.5 «Agent payments (AP2)».
   #
-  # The mandate trio:
+  # The AP2 mandate trio — all three are signed JWS tokens issued by the
+  # assistant and verified by the provider:
   #
-  #   1. IntentMandate  — user → agent: «this much, for this purpose,
-  #                                      until this time».
-  #   2. CartMandate    — agent ↔ provider: «these line items at this
-  #                                          price, bound to the intent».
-  #   3. PaymentMandate — settlement attestation: «PSP settled this cart».
+  #   1. IntentMandate   — assistant presents to provider: «my user authorises
+  #                        up to this amount, for this purpose, until this
+  #                        expiry».
+  #   2. CartMandate     — assistant commits to: «these line items at this
+  #                        total, bound to the intent above».
+  #   3. PaymentMandate  — assistant presents its payment credential: «charge
+  #                        this payment method for this amount, against that
+  #                        cart».
   #
-  # Each is signed (JWS) by the agent: `signer = agent_id`,
-  # `subject = user_id`. `iss` MUST equal `kiosk.issuer` from
+  # Each mandate is signed by the assistant's registered key (`agent_id`),
+  # with `subject = user_id`. `iss` MUST equal `kiosk.issuer` from
   # `/.well-known/kiosk.json` (spec §3.4) — mismatch is treated as forged
   # provenance and rejected.
   #
+  # After the provider's PSP captures the charge it emits a Settlement — an
+  # unsigned server-minted receipt attesting «PSP settled this cart»:
+  #
+  #   Settlement  — PSP receipt: psp_reference, settled amount, timestamp.
+  #                 Not signed by the assistant; issued by the provider after
+  #                 capture. Used by post-pay gates ("was it paid?").
+  #
   # The value objects below carry the parsed/verified content; the raw JWS
-  # string lives in the `*_mandates` Postgres tables and on the wire.
+  # string lives in the corresponding Postgres tables and on the wire.
   module Mandate
     IntentMandate = Data.define(
       :id, :user_id, :agent_id, :issuer, :scope, :cap_amount_cents, :currency,
@@ -30,7 +41,17 @@ module Kiosk
       :total_amount_cents, :currency, :expires_at, :created_at, :raw_jws
     )
 
+    # The third AP2 mandate: the assistant presents a payment credential.
+    # Signed by the assistant and verified by the provider before capture.
+    # Carries the payment-method reference the PSP will charge.
     PaymentMandate = Data.define(
+      :id, :cart_mandate_id, :user_id, :agent_id, :issuer, :payment_method,
+      :amount_cents, :currency, :expires_at, :created_at, :raw_jws
+    )
+
+    # PSP settlement receipt — server-minted after successful capture.
+    # Not a signed mandate; records what the PSP actually settled.
+    Settlement = Data.define(
       :id, :cart_mandate_id, :user_id, :agent_id, :issuer, :psp_reference,
       :settled_amount_cents, :currency, :settled_at, :raw_jws
     )

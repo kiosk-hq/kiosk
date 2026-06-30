@@ -119,7 +119,7 @@ Kiosk::Server::Actions.register("payment_setup",
   if provider.saved_method?(user_id: uid)
     { status: "ready" }
   else
-    { status: "setup_required", setup_url: provider.setup_url(user_id: uid, return_url: "#{issuer}/payment/return") }
+    { status: "setup_required", setup_url: provider.setup_url(user_id: uid) }
   end
 end
 

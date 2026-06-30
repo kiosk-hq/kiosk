@@ -53,15 +53,14 @@ module Kiosk
       # never sees card data.
       #
       # @param user_id [String] synthetic principal identifier
-      # @param return_url [String] URL Stripe redirects to on success or cancel
       # @return [String] hosted Stripe Checkout URL
-      def setup_url(user_id:, return_url:)
+      def setup_url(user_id:)
         cus_id  = ensure_customer(user_id)
         session = ::Stripe::Checkout::Session.create(
-          mode:        "setup",
-          customer:    cus_id,
-          success_url: return_url,
-          cancel_url:  return_url,
+          mode:                    "setup",
+          customer:                cus_id,
+          payment_method_types:    ["card"],
+          redirect_on_completion:  "never",
         )
         session.url
       end

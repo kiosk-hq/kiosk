@@ -368,6 +368,38 @@ CREATE TABLE public.schema_migrations (
 
 
 --
+-- Name: stripe_customers; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.stripe_customers (
+    id bigint NOT NULL,
+    user_id uuid NOT NULL,
+    customer_id character varying NOT NULL,
+    created_at timestamp(6) without time zone NOT NULL,
+    updated_at timestamp(6) without time zone NOT NULL
+);
+
+
+--
+-- Name: stripe_customers_id_seq; Type: SEQUENCE; Schema: public; Owner: -
+--
+
+CREATE SEQUENCE public.stripe_customers_id_seq
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1;
+
+
+--
+-- Name: stripe_customers_id_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: -
+--
+
+ALTER SEQUENCE public.stripe_customers_id_seq OWNED BY public.stripe_customers.id;
+
+
+--
 -- Name: users; Type: TABLE; Schema: public; Owner: -
 --
 
@@ -390,6 +422,13 @@ ALTER TABLE ONLY public.order_items ALTER COLUMN id SET DEFAULT nextval('public.
 --
 
 ALTER TABLE ONLY public.products ALTER COLUMN id SET DEFAULT nextval('public.products_id_seq'::regclass);
+
+
+--
+-- Name: stripe_customers id; Type: DEFAULT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.stripe_customers ALTER COLUMN id SET DEFAULT nextval('public.stripe_customers_id_seq'::regclass);
 
 
 --
@@ -561,6 +600,14 @@ ALTER TABLE ONLY public.schema_migrations
 
 
 --
+-- Name: stripe_customers stripe_customers_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.stripe_customers
+    ADD CONSTRAINT stripe_customers_pkey PRIMARY KEY (id);
+
+
+--
 -- Name: users users_pkey; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -723,6 +770,13 @@ CREATE UNIQUE INDEX index_products_on_sku ON public.products USING btree (sku);
 
 
 --
+-- Name: index_stripe_customers_on_user_id; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE UNIQUE INDEX index_stripe_customers_on_user_id ON public.stripe_customers USING btree (user_id);
+
+
+--
 -- Name: action_log action_log_action_name_fkey; Type: FK CONSTRAINT; Schema: kiosk; Owner: -
 --
 
@@ -809,6 +863,7 @@ ALTER TABLE ONLY public.orders
 SET search_path TO "$user", public;
 
 INSERT INTO "schema_migrations" (version) VALUES
+('20260630000001'),
 ('20260618131463'),
 ('20260618131462'),
 ('20260618131461'),

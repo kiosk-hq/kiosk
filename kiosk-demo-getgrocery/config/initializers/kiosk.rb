@@ -3,14 +3,12 @@
 # Kiosk-demo (getgrocery-shape) configuration.
 # Single grocery provider — no store layer. Catalog exposes in-stock facts;
 # the AI assistant handles substitution decisions.
-# Queries: catalog, delivery_slots, my_orders
-# Actions: create_order, schedule_delivery
+# Queries:  catalog, delivery_slots, my_orders
+# Actions:  create_order, schedule_delivery, payment_setup
 
 require Rails.root.join("lib/stub_idp")
 require Rails.root.join("lib/jwt_or_stub_idp")
-require Rails.root.join("lib/stub_psp")
-
-# Real Stripe adapter is loaded lazily below if STRIPE_SECRET_KEY is set.
+require "kiosk/payment_providers/stripe"
 
 ActiveRecord::Migration.include(Kiosk::RLS::DSL)
 
@@ -31,25 +29,23 @@ Kiosk.configure do |c|
 
   c.agent_idp = JwtOrStubIdp.new(stub: StubIdp.new)
 
-  # Payment provider: use real Stripe in test mode when STRIPE_SECRET_KEY is set,
-  # otherwise fall back to StubPsp so CI / no-key runs stay green.
+  # Payment provider: real Stripe in test mode (sk_test_…).
+  # getgroceries uses SetupIntent card-on-file: card saved once on Stripe's
+  # hosted page, charged off_session per purchase. See docs/architecture/payment-model.md.
   #
-  # With a Stripe test key, `pay` makes a real test-mode PaymentIntent charged to
-  # the assistant-presented payment method (pm_card_visa in the getgroceries flow).
-  # This is topology A: the assistant presents the payment credential; the provider's
-  # PSP (Stripe) charges it directly via a merchant-pull PaymentIntent.
-  # The demo uses a single Stripe test account — both sides of the transaction
-  # resolve inside that account. Cross-processor settlement (topology B: network
-  # tokens / issuer rails) is a future concern and is NOT implemented here.
+  # The principal→Stripe Customer mapping is stored in `stripe_customers` and
+  # injected as lambdas — the kiosk-pay-stripe gem stays provider-agnostic.
   #
-  # Without a key → StubPsp handles capture in-process (returns a stub pi_ reference).
-  c.payment_provider =
-    if ENV["STRIPE_SECRET_KEY"] && !ENV["STRIPE_SECRET_KEY"].empty?
-      require "kiosk/payment_providers/stripe"
-      Kiosk::PaymentProviders::Stripe.new(api_key: ENV["STRIPE_SECRET_KEY"])
-    else
-      StubPsp.new
-    end
+  # STRIPE_SECRET_KEY is required — the server will not boot without it.
+  # Use a Stripe test key (sk_test_…); no KYC, works from anywhere.
+  key = ENV["STRIPE_SECRET_KEY"]
+  raise "getgroceries requires STRIPE_SECRET_KEY (Stripe test key, sk_test_…) — see docs/architecture/payment-model.md" if key.nil? || key.empty?
+
+  c.payment_provider = Kiosk::PaymentProviders::Stripe.new(
+    api_key:           key,
+    customer_resolver: ->(uid) { StripeCustomer.find_by(user_id: uid)&.customer_id },
+    customer_saver:    ->(uid, cid) { StripeCustomer.create!(user_id: uid, customer_id: cid) },
+  )
 end
 
 LOW_STOCK_THRESHOLD = 5
@@ -104,6 +100,28 @@ Kiosk::Server::Queries.register("my_orders",
 end
 
 # ─── Actions ────────────────────────────────────────────────────────────────
+
+Kiosk::Server::Actions.register("payment_setup",
+  description: "Check whether the authenticated principal has a saved card on file. " \
+               "Returns {status: \"ready\"} if a card is already saved and the assistant can proceed to `pay`. " \
+               "Returns {status: \"setup_required\", setup_url: \"…\"} when no card is saved — " \
+               "the assistant must hand the setup_url to the human, wait for them to complete the " \
+               "Stripe-hosted card entry, then call payment_setup again before paying. " \
+               "The assistant should call this before every `pay` invocation on a new device or session.",
+  params: {}) do |_args|
+  conn     = ActiveRecord::Base.connection
+  uid      = conn.execute("SELECT kiosk.current_user_id() AS uid").first["uid"]
+  raise Kiosk::Server::Errors::Unauthenticated.new("no authenticated user") if uid.nil?
+
+  provider = Kiosk.configuration.payment_provider
+  issuer   = Kiosk.configuration.issuer
+
+  if provider.saved_method?(user_id: uid)
+    { status: "ready" }
+  else
+    { status: "setup_required", setup_url: provider.setup_url(user_id: uid, return_url: "#{issuer}/payment/return") }
+  end
+end
 
 Kiosk::Server::Actions.register("create_order",
   description: "Create (or replace) a grocery order for the authenticated principal",

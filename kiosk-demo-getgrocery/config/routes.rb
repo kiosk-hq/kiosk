@@ -23,10 +23,20 @@ Rails.application.routes.draw do
   # /.well-known/kiosk.json discovery endpoint — built on the fly from
   # Kiosk.configuration. Inlined here since kiosk-server doesn't yet
   # ship a controller for it.
+  # well-known = the machine-readable HANDSHAKE: who/where/which version + issuer
+  # (the AP2 `iss` anchor) + auth, served at the guessable conventional URL. It
+  # is NOT the surface — it points to /kiosk/help, which carries the protocol +
+  # the live queries/actions. The `verbs` summary is DERIVED from the actually
+  # implemented verbs (no hardcoded capability list), the same source /kiosk/help
+  # renders from, so the two never drift.
   get "/.well-known/kiosk.json", to: ->(env) {
     base_url = "#{env['rack.url_scheme']}://#{env['HTTP_HOST']}"
-    doc = Kiosk::Server::WellKnown.build_json(base_url: base_url)
-    [200, { "content-type" => "application/json" }, [doc]]
+    doc      = Kiosk::Server::WellKnown.build(base_url: base_url)
+    endpoint = doc[:kiosk][:endpoint]
+    doc[:kiosk].delete(:capabilities)          # drop the static capability list
+    doc[:kiosk][:verbs] = Kiosk::Server::Executor::IMPLEMENTED_VERBS  # the truth
+    doc[:kiosk][:help]  = "#{endpoint}/help"   # the surface + protocol live here
+    [200, { "content-type" => "application/json" }, [JSON.generate(doc)]]
   }
 
   # ─── Provider admin (read-only demo back-office) ──────────────────────────

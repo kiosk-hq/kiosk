@@ -25,7 +25,7 @@ Kiosk.configure do |c|
 
   c.issuer = ENV.fetch("KIOSK_ISSUER", "http://localhost:3005")
   c.roles  = %i[customer]
-  c.owner  = { name: "getgrocery", support: "help@getgrocery.app" }
+  c.owner  = { name: "GetGroceries", support: "help@getgroceries.com" }
 
   c.agent_idp        = JwtOrStubIdp.new(stub: StubIdp.new)
   c.payment_provider = StubPsp.new

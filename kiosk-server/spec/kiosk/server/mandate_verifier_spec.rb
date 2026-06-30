@@ -34,6 +34,15 @@ RSpec.describe Kiosk::Server::MandateVerifier do
     described_class.verify_intent(raw_jws: sign(intent_payload), identity: identity)
   end
 
+  let(:cart_mandate) do
+    described_class.verify_cart(raw_jws: sign(cart_payload), identity: identity, intent: intent)
+  end
+
+  let(:payment_payload) do
+    base(id: "pay-1", cart_mandate_id: "cart-1", payment_method: "pm_card_visa",
+         amount_cents: 1599, currency: "eur")
+  end
+
   # ─── verify_intent ───────────────────────────────────────────────────
 
   describe ".verify_intent" do
@@ -115,6 +124,87 @@ RSpec.describe Kiosk::Server::MandateVerifier do
     it "applies the shared decode checks (principal mismatch rejected)" do
       bad = cart_payload.merge(user_id: "u-999")
       expect { described_class.verify_cart(raw_jws: sign(bad), identity: identity, intent: intent) }
+        .to raise_error(Kiosk::Server::Errors::Forbidden, /principal/)
+    end
+  end
+
+  # ─── verify_payment ──────────────────────────────────────────────────
+
+  describe ".verify_payment" do
+    it "returns a PaymentMandate for a valid signed JWS bound to the cart" do
+      pm = described_class.verify_payment(raw_jws: sign(payment_payload), identity: identity, cart: cart_mandate)
+      expect(pm).to be_a(Kiosk::Mandate::PaymentMandate)
+      expect(pm.id).to              eq("pay-1")
+      expect(pm.cart_mandate_id).to eq("cart-1")
+      expect(pm.payment_method).to  eq("pm_card_visa")
+      expect(pm.amount_cents).to    eq(1599)
+      expect(pm.currency).to        eq("eur")
+      expect(pm.issuer).to          eq(issuer)
+    end
+
+    it "rejects a payment not bound to the presented cart (wrong cart_mandate_id)" do
+      bad = payment_payload.merge(cart_mandate_id: "cart-OTHER")
+      expect { described_class.verify_payment(raw_jws: sign(bad), identity: identity, cart: cart_mandate) }
+        .to raise_error(Kiosk::Server::Errors::Forbidden, /bound/)
+    end
+
+    it "rejects a payment whose amount_cents does not match the cart total" do
+      bad = payment_payload.merge(amount_cents: 99_999)
+      expect { described_class.verify_payment(raw_jws: sign(bad), identity: identity, cart: cart_mandate) }
+        .to raise_error(Kiosk::Server::Errors::Forbidden, /amount/)
+    end
+
+    it "rejects a payment whose amount is under the cart total" do
+      bad = payment_payload.merge(amount_cents: 100)
+      expect { described_class.verify_payment(raw_jws: sign(bad), identity: identity, cart: cart_mandate) }
+        .to raise_error(Kiosk::Server::Errors::Forbidden, /amount/)
+    end
+
+    it "rejects a payment with a mismatched currency" do
+      bad = payment_payload.merge(currency: "usd")
+      expect { described_class.verify_payment(raw_jws: sign(bad), identity: identity, cart: cart_mandate) }
+        .to raise_error(Kiosk::Server::Errors::Forbidden, /currency|amount/)
+    end
+
+    it "rejects a payment with a missing payment_method" do
+      bad = payment_payload.reject { |k, _| k == :payment_method }
+      expect { described_class.verify_payment(raw_jws: sign(bad), identity: identity, cart: cart_mandate) }
+        .to raise_error(Kiosk::Server::Errors::BadRequest, /payment_method/)
+    end
+
+    it "rejects a payment with an empty payment_method" do
+      bad = payment_payload.merge(payment_method: "")
+      expect { described_class.verify_payment(raw_jws: sign(bad), identity: identity, cart: cart_mandate) }
+        .to raise_error(Kiosk::Server::Errors::BadRequest, /payment_method/)
+    end
+
+    it "applies the shared decode checks (wrong signer rejected)" do
+      forged = JWT.encode(payment_payload, OpenSSL::PKey::RSA.generate(2048), "RS256")
+      expect { described_class.verify_payment(raw_jws: forged, identity: identity, cart: cart_mandate) }
+        .to raise_error(Kiosk::Server::Errors::Forbidden)
+    end
+
+    it "applies the shared decode checks (expired mandate rejected)" do
+      past = payment_payload.merge(exp: (Time.now - 60).to_i)
+      expect { described_class.verify_payment(raw_jws: sign(past), identity: identity, cart: cart_mandate) }
+        .to raise_error(Kiosk::Server::Errors::Forbidden, /expired/)
+    end
+
+    it "applies the shared decode checks (missing exp rejected)" do
+      no_exp = payment_payload.reject { |k, _| k == :exp }
+      expect { described_class.verify_payment(raw_jws: sign(no_exp), identity: identity, cart: cart_mandate) }
+        .to raise_error(Kiosk::Server::Errors::Forbidden, /exp/i)
+    end
+
+    it "applies the shared decode checks (wrong issuer rejected)" do
+      bad = payment_payload.merge(iss: "https://evil.example")
+      expect { described_class.verify_payment(raw_jws: sign(bad), identity: identity, cart: cart_mandate) }
+        .to raise_error(Kiosk::Server::Errors::Forbidden, /issuer/)
+    end
+
+    it "applies the shared decode checks (principal mismatch rejected)" do
+      bad = payment_payload.merge(user_id: "u-999")
+      expect { described_class.verify_payment(raw_jws: sign(bad), identity: identity, cart: cart_mandate) }
         .to raise_error(Kiosk::Server::Errors::Forbidden, /principal/)
     end
   end

@@ -35,6 +35,34 @@ module Kiosk
         )
       end
 
+      # Verify a PaymentMandate JWS → {Kiosk::Mandate::PaymentMandate},
+      # enforcing that it is bound to `cart`, matches its amount/currency, and
+      # carries a non-empty payment_method reference.
+      def verify_payment(raw_jws:, identity:, cart:)
+        payload = decode_and_check(raw_jws, identity)
+
+        unless payload[:cart_mandate_id] == cart.id
+          raise Errors::Forbidden.new("payment not bound to the cart")
+        end
+        unless payload[:amount_cents].to_i == cart.total_amount_cents.to_i &&
+               payload[:currency] == cart.currency
+          raise Errors::Forbidden.new("payment amount/currency does not match cart")
+        end
+        if payload[:payment_method].nil? || payload[:payment_method].to_s.empty?
+          raise Errors::BadRequest.new("payment mandate missing payment_method")
+        end
+
+        Kiosk::Mandate::PaymentMandate.new(
+          id: payload[:id], cart_mandate_id: payload[:cart_mandate_id],
+          user_id: payload[:user_id], agent_id: payload[:agent_id], issuer: payload[:iss],
+          payment_method: payload[:payment_method],
+          amount_cents: payload[:amount_cents], currency: payload[:currency],
+          expires_at: (Time.at(payload[:exp]) if payload[:exp]),
+          created_at: (Time.at(payload[:iat]) if payload[:iat]),
+          raw_jws: raw_jws,
+        )
+      end
+
       # Verify a CartMandate JWS → {Kiosk::Mandate::CartMandate}, enforcing
       # that it is bound to `intent` and stays within the intent's cap.
       def verify_cart(raw_jws:, identity:, intent:)

@@ -145,28 +145,33 @@ module Kiosk
       #              recoverable, but NO reconciliation worker exists yet —
       #              follow-up. Never a silent double-charge.
       def verb_pay(args)
-        args        = symbolize(args)
-        raw_intent  = args[:intent_mandate_jws]
-        raw_cart    = args[:cart_mandate_jws]
-        raise Errors::BadRequest, "args.intent_mandate_jws required" if raw_intent.nil? || raw_intent.to_s.empty?
-        raise Errors::BadRequest, "args.cart_mandate_jws required"   if raw_cart.nil?   || raw_cart.to_s.empty?
+        args         = symbolize(args)
+        raw_intent   = args[:intent_mandate_jws]
+        raw_cart     = args[:cart_mandate_jws]
+        raw_payment  = args[:payment_mandate_jws]
+        raise Errors::BadRequest, "args.intent_mandate_jws required"   if raw_intent.nil?  || raw_intent.to_s.empty?
+        raise Errors::BadRequest, "args.cart_mandate_jws required"     if raw_cart.nil?    || raw_cart.to_s.empty?
+        raise Errors::BadRequest, "args.payment_mandate_jws required"  if raw_payment.nil? || raw_payment.to_s.empty?
 
         provider = Kiosk.configuration.payment_provider
         raise Errors::Forbidden, "no payment_provider configured" if provider.nil?
 
-        # Phase 1 — verify + persist the mandate trail (GUC-scoped transaction;
-        # no RLS policy on the mandate tables yet). The persist helpers return
-        # the SERVER-generated uuid PKs, which thread the FK chain. A unique
-        # violation (same signed mandate replayed) rolls the tx back and
-        # propagates here, where it becomes a clean 409 Conflict.
-        cart = nil
+        # Phase 1 — verify + persist the full mandate trail (GUC-scoped
+        # transaction; no RLS policy on the mandate tables yet). The persist
+        # helpers return the SERVER-generated uuid PKs, which thread the FK
+        # chain. A unique violation (same signed mandate replayed) rolls the tx
+        # back and propagates here, where it becomes a clean 409 Conflict.
+        cart    = nil
         cart_row = nil
+        payment = nil
         begin
           SessionContext.open(connection: connection, identity: identity) do
-            intent = MandateVerifier.verify_intent(raw_jws: raw_intent, identity: identity)
-            cart   = MandateVerifier.verify_cart(raw_jws: raw_cart, identity: identity, intent: intent)
+            intent  = MandateVerifier.verify_intent(raw_jws: raw_intent, identity: identity)
+            cart    = MandateVerifier.verify_cart(raw_jws: raw_cart, identity: identity, intent: intent)
+            payment = MandateVerifier.verify_payment(raw_jws: raw_payment, identity: identity, cart: cart)
             intent_row = persist_intent_mandate(intent)
             cart_row   = persist_cart_mandate(cart, intent_row_id: intent_row)
+            persist_payment_mandate(cart_row_id: cart_row, payment: payment)
           end
         rescue StandardError => e
           raise Errors::Conflict.new("mandate already processed") if unique_violation?(e)
@@ -175,17 +180,19 @@ module Kiosk
         end
 
         # Phase 2 — irreversible external capture. OUTSIDE any DB transaction.
-        settled = provider.capture(cart)
+        # The assistant-presented payment_method is threaded from the verified
+        # PaymentMandate so the PSP charges THAT instrument.
+        settled = provider.capture(cart, payment_method: payment.payment_method)
 
         # Phase 3 — record settlement (fresh GUC-scoped transaction; no RLS
         # policy on the mandate tables yet).
-        payment_id = nil
+        settlement_id = nil
         SessionContext.open(connection: connection, identity: identity) do
-          payment_id = persist_payment_mandate(cart_row_id: cart_row, cart: cart, settled: settled)
+          settlement_id = persist_settlement(cart_row_id: cart_row, cart: cart, settled: settled)
         end
 
         Result.new(kind: :value, payload: {
-          payment_mandate_id:   payment_id,
+          settlement_id:        settlement_id,
           psp_reference:        settled[:psp_reference],
           settled_amount_cents: settled[:settled_amount_cents],
           currency:             cart.currency,
@@ -233,17 +240,37 @@ module Kiosk
         SQL
       end
 
-      # Inserts the payment-mandate row under the open SessionContext
+      # Inserts the signed payment-mandate row under the open SessionContext
+      # (GUC-scoped transaction; no RLS policy on the mandate tables yet). The
+      # PK is SERVER-generated; `cart_mandate_id` references the SERVER cart id
+      # returned by phase 1 (`cart_row_id`), threading the FK chain. The
+      # agent-signed id lands in `mandate_id`; `raw_jws` carries the full signed
+      # token for audit. `UNIQUE (user_id, mandate_id)` prevents replay.
+      def persist_payment_mandate(cart_row_id:, payment:)
+        schema = Kiosk.configuration.schema
+        connection.execute(<<~SQL).to_a.first.fetch("id")
+          INSERT INTO #{schema}.payment_mandates
+            (mandate_id, cart_mandate_id, user_id, agent_id, issuer,
+             payment_method, amount_cents, currency, expires_at, created_at, raw_jws)
+          VALUES (#{q(payment.id)}, #{q(cart_row_id)}, #{q(payment.user_id)},
+             #{q(payment.agent_id)}, #{q(payment.issuer)}, #{q(payment.payment_method)},
+             #{payment.amount_cents.to_i}, #{q(payment.currency)}, #{q(payment.expires_at)},
+             now(), #{q(payment.raw_jws)})
+          RETURNING id
+        SQL
+      end
+
+      # Inserts the settlement receipt row under the open SessionContext
       # (GUC-scoped transaction; no RLS policy on the mandate tables yet). The
       # PK is SERVER-generated; `cart_mandate_id` references the SERVER cart id
       # returned by phase 1 (`cart_row_id`), so the FK resolves. This is a
       # server-side settlement receipt (no agent-signed id), so there is no
       # `mandate_id`; `UNIQUE (cart_mandate_id)` is its idempotency anchor.
-      # Returns the new payment_mandate server id.
-      def persist_payment_mandate(cart_row_id:, cart:, settled:)
+      # Returns the new settlement server id.
+      def persist_settlement(cart_row_id:, cart:, settled:)
         schema = Kiosk.configuration.schema
         connection.execute(<<~SQL).to_a.first.fetch("id")
-          INSERT INTO #{schema}.payment_mandates
+          INSERT INTO #{schema}.settlements
             (cart_mandate_id, user_id, agent_id, issuer, psp_reference,
              settled_amount_cents, currency, settled_at, raw_jws)
           VALUES (#{q(cart_row_id)}, #{q(cart.user_id)}, #{q(cart.agent_id)},

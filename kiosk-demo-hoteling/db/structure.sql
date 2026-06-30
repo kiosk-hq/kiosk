@@ -215,14 +215,16 @@ CREATE TABLE kiosk.intent_mandates (
 
 CREATE TABLE kiosk.payment_mandates (
     id uuid DEFAULT gen_random_uuid() NOT NULL,
+    mandate_id text NOT NULL,
     cart_mandate_id uuid NOT NULL,
     user_id uuid NOT NULL,
     agent_id uuid NOT NULL,
     issuer text NOT NULL,
-    psp_reference text NOT NULL,
-    settled_amount_cents bigint NOT NULL,
+    payment_method text NOT NULL,
+    amount_cents bigint NOT NULL,
     currency text NOT NULL,
-    settled_at timestamp with time zone NOT NULL,
+    expires_at timestamp with time zone,
+    created_at timestamp with time zone DEFAULT now() NOT NULL,
     raw_jws text NOT NULL
 );
 
@@ -241,6 +243,24 @@ CREATE TABLE kiosk.reservations (
     reserved_at timestamp with time zone DEFAULT now() NOT NULL,
     expires_at timestamp with time zone NOT NULL,
     released_at timestamp with time zone
+);
+
+
+--
+-- Name: settlements; Type: TABLE; Schema: kiosk; Owner: -
+--
+
+CREATE TABLE kiosk.settlements (
+    id uuid DEFAULT gen_random_uuid() NOT NULL,
+    cart_mandate_id uuid NOT NULL,
+    user_id uuid NOT NULL,
+    agent_id uuid NOT NULL,
+    issuer text NOT NULL,
+    psp_reference text NOT NULL,
+    settled_amount_cents bigint NOT NULL,
+    currency text NOT NULL,
+    settled_at timestamp with time zone NOT NULL,
+    raw_jws text NOT NULL
 );
 
 
@@ -454,19 +474,19 @@ ALTER TABLE ONLY kiosk.intent_mandates
 
 
 --
--- Name: payment_mandates payment_mandates_cart_mandate_id_key; Type: CONSTRAINT; Schema: kiosk; Owner: -
---
-
-ALTER TABLE ONLY kiosk.payment_mandates
-    ADD CONSTRAINT payment_mandates_cart_mandate_id_key UNIQUE (cart_mandate_id);
-
-
---
 -- Name: payment_mandates payment_mandates_pkey; Type: CONSTRAINT; Schema: kiosk; Owner: -
 --
 
 ALTER TABLE ONLY kiosk.payment_mandates
     ADD CONSTRAINT payment_mandates_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: payment_mandates payment_mandates_user_id_mandate_id_key; Type: CONSTRAINT; Schema: kiosk; Owner: -
+--
+
+ALTER TABLE ONLY kiosk.payment_mandates
+    ADD CONSTRAINT payment_mandates_user_id_mandate_id_key UNIQUE (user_id, mandate_id);
 
 
 --
@@ -483,6 +503,22 @@ ALTER TABLE ONLY kiosk.reservations
 
 ALTER TABLE ONLY kiosk.reservations
     ADD CONSTRAINT reservations_unique_active UNIQUE (resource_kind, resource_id, released_at) DEFERRABLE INITIALLY DEFERRED;
+
+
+--
+-- Name: settlements settlements_cart_mandate_id_key; Type: CONSTRAINT; Schema: kiosk; Owner: -
+--
+
+ALTER TABLE ONLY kiosk.settlements
+    ADD CONSTRAINT settlements_cart_mandate_id_key UNIQUE (cart_mandate_id);
+
+
+--
+-- Name: settlements settlements_pkey; Type: CONSTRAINT; Schema: kiosk; Owner: -
+--
+
+ALTER TABLE ONLY kiosk.settlements
+    ADD CONSTRAINT settlements_pkey PRIMARY KEY (id);
 
 
 --
@@ -646,6 +682,20 @@ CREATE INDEX idx_reservations_user_id ON kiosk.reservations USING btree (user_id
 
 
 --
+-- Name: idx_settlements_cart; Type: INDEX; Schema: kiosk; Owner: -
+--
+
+CREATE INDEX idx_settlements_cart ON kiosk.settlements USING btree (cart_mandate_id);
+
+
+--
+-- Name: idx_settlements_user_id; Type: INDEX; Schema: kiosk; Owner: -
+--
+
+CREATE INDEX idx_settlements_user_id ON kiosk.settlements USING btree (user_id);
+
+
+--
 -- Name: index_bookings_on_property_id; Type: INDEX; Schema: public; Owner: -
 --
 
@@ -719,6 +769,14 @@ ALTER TABLE ONLY kiosk.cart_mandates
 
 ALTER TABLE ONLY kiosk.payment_mandates
     ADD CONSTRAINT payment_mandates_cart_mandate_id_fkey FOREIGN KEY (cart_mandate_id) REFERENCES kiosk.cart_mandates(id) ON DELETE CASCADE;
+
+
+--
+-- Name: settlements settlements_cart_mandate_id_fkey; Type: FK CONSTRAINT; Schema: kiosk; Owner: -
+--
+
+ALTER TABLE ONLY kiosk.settlements
+    ADD CONSTRAINT settlements_cart_mandate_id_fkey FOREIGN KEY (cart_mandate_id) REFERENCES kiosk.cart_mandates(id) ON DELETE CASCADE;
 
 
 --

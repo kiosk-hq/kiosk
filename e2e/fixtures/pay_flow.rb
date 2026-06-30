@@ -32,10 +32,15 @@ cart_id = SecureRandom.uuid
 cart = { id: cart_id, intent_mandate_id: intent_id, user_id: user_id, agent_id: agent_id,
          iss: ISSUER, line_items: [{ sku: "pizza", qty: 1 }], total_amount_cents: total_amount_cents,
          currency: "eur", exp: now + 600, iat: now }
+payment_id = SecureRandom.uuid
+payment = { id: payment_id, cart_mandate_id: cart_id, user_id: user_id, agent_id: agent_id,
+            iss: ISSUER, payment_method: "pm_demo", amount_cents: total_amount_cents,
+            currency: "eur", exp: now + 600, iat: now }
 
 rc, pay = post_json("#{SERVER}/kiosk/exec",
   { command: "pay", body: { intent_mandate_jws: JWT.encode(intent, key, "RS256"),
-                            cart_mandate_jws:   JWT.encode(cart, key, "RS256") } },
+                            cart_mandate_jws:   JWT.encode(cart, key, "RS256"),
+                            payment_mandate_jws: JWT.encode(payment, key, "RS256") } },
   { "Authorization" => "Bearer #{token}" })
 
 puts JSON.generate(http_code: rc, user_id: user_id, agent_id: agent_id, response: pay)

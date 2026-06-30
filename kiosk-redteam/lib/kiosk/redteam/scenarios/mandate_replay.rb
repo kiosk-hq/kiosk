@@ -35,15 +35,17 @@ module Kiosk
           owned_ref = profile.create_owned.call(client, a)
           mandates  = profile.pay_for.call(client, a, owned_ref)
 
-          # Capture A's raw JWS before submitting.
-          intent_jws = client.sign_mandate(a, mandates[:intent])
-          cart_jws   = client.sign_mandate(a, mandates[:cart])
+          # Capture A's raw JWS before submitting (including the payment mandate).
+          intent_jws  = client.sign_mandate(a, mandates[:intent])
+          cart_jws    = client.sign_mandate(a, mandates[:cart])
+          payment     = client.build_payment_mandate(a, cart: mandates[:cart])
+          payment_jws = client.sign_mandate(a, payment)
 
           # A pays legitimately (consuming the mandate).
           client.pay(a, intent: mandates[:intent], cart: mandates[:cart])
 
           # B re-submits A's exact JWS under B's token using the public pay_raw API.
-          resp = client.pay_raw(b, intent_jws:, cart_jws:)
+          resp = client.pay_raw(b, intent_jws:, cart_jws:, payment_jws:)
 
           verdict_from(resp, detail: "mandate replay accepted under B's token (HTTP #{resp.status})")
         end

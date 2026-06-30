@@ -404,13 +404,13 @@ assert "pay: ok=true"                 "$(echo "$pay_out" | jq -r '.response.ok')
 assert "pay: kind=value"              "$(echo "$pay_out" | jq -r '.response.kind')"                   "value"
 assert "pay: psp_reference present"   "$(echo "$pay_out" | jq -r '.response.value.psp_reference | length > 0')" "true"
 assert "pay: settled 1599"            "$(echo "$pay_out" | jq -r '.response.value.settled_amount_cents')" "1599"
-assert "pay: payment_mandate_id"      "$(echo "$pay_out" | jq -r '.response.value.payment_mandate_id | length > 0')" "true"
+assert "pay: settlement_id"           "$(echo "$pay_out" | jq -r '.response.value.settlement_id | length > 0')" "true"
 
 # The full AP2 trail landed in Postgres — one row each, no human anywhere.
 assert "db: 1 intent_mandate"         "$(psql -X -d "$DB_NAME" -tAc 'SELECT COUNT(*) FROM kiosk.intent_mandates')"   "1"
 assert "db: 1 cart_mandate"           "$(psql -X -d "$DB_NAME" -tAc 'SELECT COUNT(*) FROM kiosk.cart_mandates')"     "1"
 assert "db: 1 payment_mandate"        "$(psql -X -d "$DB_NAME" -tAc 'SELECT COUNT(*) FROM kiosk.payment_mandates')"  "1"
-assert "db: settlement amount 1599"   "$(psql -X -d "$DB_NAME" -tAc 'SELECT settled_amount_cents FROM kiosk.payment_mandates LIMIT 1')" "1599"
+assert "db: settlement amount 1599"   "$(psql -X -d "$DB_NAME" -tAc 'SELECT settled_amount_cents FROM kiosk.settlements LIMIT 1')" "1599"
 
 # ─── summary ────────────────────────────────────────────────────────────
 

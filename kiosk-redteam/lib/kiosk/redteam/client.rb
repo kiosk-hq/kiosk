@@ -113,28 +113,62 @@ module Kiosk
         )
       end
 
-      # Sign and POST a pay command with RS256-signed intent + cart mandates.
+      # Sign and POST a pay command with RS256-signed intent + cart + payment mandates.
       #
       # The mandates are signed with the principal's RSA private key so the
       # provider can verify the principal authored them.  Use {#sign_mandate}
       # directly to craft forged / tampered mandates.
       #
-      # @param principal [Principal]
-      # @param intent    [Hash] intent mandate payload
-      # @param cart      [Hash] cart mandate payload
+      # The payment mandate is built automatically from the cart payload
+      # (cart_mandate_id = cart[:id], amount_cents = cart[:total_amount_cents],
+      # currency = cart[:currency], iss = cart[:iss]).
+      #
+      # @param principal      [Principal]
+      # @param intent         [Hash]   intent mandate payload
+      # @param cart           [Hash]   cart mandate payload
+      # @param payment_method [String] payment instrument reference (default "pm_demo")
       # @return [Response]
-      def pay(principal, intent:, cart:)
+      def pay(principal, intent:, cart:, payment_method: "pm_demo")
+        payment = build_payment_mandate(principal, cart: cart, payment_method: payment_method)
         post_json(
           "/kiosk/exec",
           {
             command: "pay",
             body: {
-              intent_mandate_jws: sign_mandate(principal, intent),
-              cart_mandate_jws:   sign_mandate(principal, cart),
+              intent_mandate_jws:  sign_mandate(principal, intent),
+              cart_mandate_jws:    sign_mandate(principal, cart),
+              payment_mandate_jws: sign_mandate(principal, payment),
             },
           },
           bearer: principal.token,
         )
+      end
+
+      # Build a payment mandate payload bound to the given cart and principal.
+      #
+      # Accepts both symbol-keyed and string-keyed cart hashes (flow drivers use
+      # symbols; test support stubs may use strings).
+      #
+      # @param principal      [Principal]
+      # @param cart           [Hash]   cart mandate payload (must have :id or "id",
+      #                                :total_amount_cents or "total_amount_cents",
+      #                                :currency or "currency", :iss or "iss")
+      # @param payment_method [String] payment instrument reference
+      # @return [Hash] unsigned payment mandate payload
+      def build_payment_mandate(principal, cart:, payment_method: "pm_demo")
+        now = Time.now.to_i
+        {
+          id:              SecureRandom.uuid,
+          cart_mandate_id: cart[:id] || cart["id"],
+          user_id:         principal.user_id,
+          agent_id:        principal.agent_id,
+          iss:             cart[:iss] || cart["iss"],
+          payment_method:  payment_method,
+          amount_cents:    cart[:total_amount_cents] || cart["total_amount_cents"],
+          currency:        cart[:currency] || cart["currency"],
+          exp:             now + 600,
+          iat:             now,
+        }
       end
 
       # Sign an arbitrary payload as an RS256 JWS using the principal's private
@@ -153,18 +187,20 @@ module Kiosk
       # (e.g. in {Scenarios::MandateReplay} where we re-submit A's exact JWS
       # under B's bearer token to test mandate non-transferability).
       #
-      # @param principal  [Principal] whose bearer token to use
-      # @param intent_jws [String]    pre-built intent mandate JWS
-      # @param cart_jws   [String]    pre-built cart mandate JWS
+      # @param principal   [Principal] whose bearer token to use
+      # @param intent_jws  [String]    pre-built intent mandate JWS
+      # @param cart_jws    [String]    pre-built cart mandate JWS
+      # @param payment_jws [String]    pre-built payment mandate JWS
       # @return [Response]
-      def pay_raw(principal, intent_jws:, cart_jws:)
+      def pay_raw(principal, intent_jws:, cart_jws:, payment_jws:)
         post_json(
           "/kiosk/exec",
           {
             command: "pay",
             body: {
-              intent_mandate_jws: intent_jws,
-              cart_mandate_jws:   cart_jws,
+              intent_mandate_jws:  intent_jws,
+              cart_mandate_jws:    cart_jws,
+              payment_mandate_jws: payment_jws,
             },
           },
           bearer: principal.token,

@@ -117,12 +117,12 @@ namespace :demo do
       puts "  ✗  pay.ok — got #{pay["ok"].inspect}"
     end
 
-    pm_id = pay.dig("value", "payment_mandate_id")
+    pm_id = pay.dig("value", "settlement_id")
     if pm_id && !pm_id.empty?
-      puts "  ✓  pay.value.payment_mandate_id present (#{pm_id})"
+      puts "  ✓  pay.value.settlement_id present (#{pm_id})"
     else
-      failures << "pay.value.payment_mandate_id missing"
-      puts "  ✗  pay.value.payment_mandate_id missing"
+      failures << "pay.value.settlement_id missing"
+      puts "  ✗  pay.value.settlement_id missing"
     end
 
     oid = order["order_id"]

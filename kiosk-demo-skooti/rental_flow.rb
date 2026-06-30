@@ -167,6 +167,7 @@ unless SKIP_PAY
   now         = Time.now.to_i
   intent_id   = SecureRandom.uuid
   cart_id     = SecureRandom.uuid
+  payment_id  = SecureRandom.uuid
   cap_cents   = price_per_min * 10 + 100
   total_cents = price_per_min * 1
 
@@ -195,22 +196,37 @@ unless SKIP_PAY
     iat:                now,
   }
 
-  intent_jws = JWT.encode(intent_payload, key, "RS256")
-  cart_jws   = JWT.encode(cart_payload,   key, "RS256")
+  payment_payload = {
+    id:              payment_id,
+    cart_mandate_id: cart_id,
+    user_id:         user_id,
+    agent_id:        agent_id,
+    iss:             ISSUER,
+    payment_method:  "pm_demo",
+    amount_cents:    total_cents,
+    currency:        "eur",
+    exp:             now + 600,
+    iat:             now,
+  }
+
+  intent_jws  = JWT.encode(intent_payload,  key, "RS256")
+  cart_jws    = JWT.encode(cart_payload,    key, "RS256")
+  payment_jws = JWT.encode(payment_payload, key, "RS256")
 
   rc_pay, pay_resp = post_json(
     "#{SERVER}/kiosk/exec",
     {
       command: "pay",
       body: {
-        intent_mandate_jws: intent_jws,
-        cart_mandate_jws:   cart_jws,
+        intent_mandate_jws:  intent_jws,
+        cart_mandate_jws:    cart_jws,
+        payment_mandate_jws: payment_jws,
       },
     },
     { "Authorization" => "Bearer #{token}" },
   )
   abort "pay failed (#{rc_pay}): #{JSON.generate(pay_resp)}" unless rc_pay == 200
-  STDERR.puts "  Payment settled: mandate_id=#{pay_resp.dig("value", "payment_mandate_id")}"
+  STDERR.puts "  Payment settled: settlement_id=#{pay_resp.dig("value", "settlement_id")}"
 end
 
 # ── Step 5: start_rental — server verifies gates + issues Ed25519 rental token ─

@@ -118,8 +118,23 @@ cart_payload = {
   iat:                now,
 }
 
-intent_jws = JWT.encode(intent_payload, key, "RS256")
-cart_jws   = JWT.encode(cart_payload,   key, "RS256")
+payment_id = SecureRandom.uuid
+payment_payload = {
+  id:              payment_id,
+  cart_mandate_id: cart_id,
+  user_id:         user_id,
+  agent_id:        agent_id,
+  iss:             ISSUER,
+  payment_method:  "pm_demo",
+  amount_cents:    total_cents,
+  currency:        "eur",
+  exp:             now + 600,
+  iat:             now,
+}
+
+intent_jws  = JWT.encode(intent_payload,  key, "RS256")
+cart_jws    = JWT.encode(cart_payload,    key, "RS256")
+payment_jws = JWT.encode(payment_payload, key, "RS256")
 
 # ── Step 5: pay ─────────────────────────────────────────────────────────
 
@@ -128,8 +143,9 @@ rc, pay = post_json(
   {
     command: "pay",
     body: {
-      intent_mandate_jws: intent_jws,
-      cart_mandate_jws:   cart_jws,
+      intent_mandate_jws:  intent_jws,
+      cart_mandate_jws:    cart_jws,
+      payment_mandate_jws: payment_jws,
     },
   },
   { "Authorization" => "Bearer #{token}" },

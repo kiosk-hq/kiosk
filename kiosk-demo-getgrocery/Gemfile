@@ -7,11 +7,12 @@ gem "tzinfo-data", platforms: %i[ windows jruby ]
 gem "bootsnap", require: false
 
 # --- Kiosk ----------------------------------------------------------------
-gem "kiosk-all",      path: "../kiosk-all"
-gem "kiosk-core",     path: "../kiosk-core"
-gem "kiosk-rls",      path: "../kiosk-rls"
-gem "kiosk-server",   path: "../kiosk-server"
-gem "kiosk-redteam",  path: "../kiosk-redteam"
+gem "kiosk-all",        path: "../kiosk-all"
+gem "kiosk-core",       path: "../kiosk-core"
+gem "kiosk-rls",        path: "../kiosk-rls"
+gem "kiosk-server",     path: "../kiosk-server"
+gem "kiosk-redteam",    path: "../kiosk-redteam"
+gem "kiosk-pay-stripe", path: "../kiosk-pay-stripe"
 
 group :development, :test do
   gem "debug", platforms: %i[ mri windows ], require: "debug/prelude"

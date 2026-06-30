@@ -10,6 +10,8 @@ require Rails.root.join("lib/stub_idp")
 require Rails.root.join("lib/jwt_or_stub_idp")
 require Rails.root.join("lib/stub_psp")
 
+# Real Stripe adapter is loaded lazily below if STRIPE_SECRET_KEY is set.
+
 ActiveRecord::Migration.include(Kiosk::RLS::DSL)
 
 Kiosk.configure do |c|
@@ -27,8 +29,27 @@ Kiosk.configure do |c|
   c.roles  = %i[customer]
   c.owner  = { name: "GetGroceries", support: "help@getgroceries.com" }
 
-  c.agent_idp        = JwtOrStubIdp.new(stub: StubIdp.new)
-  c.payment_provider = StubPsp.new
+  c.agent_idp = JwtOrStubIdp.new(stub: StubIdp.new)
+
+  # Payment provider: use real Stripe in test mode when STRIPE_SECRET_KEY is set,
+  # otherwise fall back to StubPsp so CI / no-key runs stay green.
+  #
+  # With a Stripe test key, `pay` makes a real test-mode PaymentIntent charged to
+  # the assistant-presented payment method (pm_card_visa in the getgroceries flow).
+  # This is topology A: the assistant presents the payment credential; the provider's
+  # PSP (Stripe) charges it directly via a merchant-pull PaymentIntent.
+  # The demo uses a single Stripe test account — both sides of the transaction
+  # resolve inside that account. Cross-processor settlement (topology B: network
+  # tokens / issuer rails) is a future concern and is NOT implemented here.
+  #
+  # Without a key → StubPsp handles capture in-process (returns a stub pi_ reference).
+  c.payment_provider =
+    if ENV["STRIPE_SECRET_KEY"] && !ENV["STRIPE_SECRET_KEY"].empty?
+      require "kiosk/payment_providers/stripe"
+      Kiosk::PaymentProviders::Stripe.new(api_key: ENV["STRIPE_SECRET_KEY"])
+    else
+      StubPsp.new
+    end
 end
 
 LOW_STOCK_THRESHOLD = 5

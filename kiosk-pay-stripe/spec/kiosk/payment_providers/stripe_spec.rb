@@ -59,7 +59,7 @@ RSpec.describe Kiosk::PaymentProviders::Stripe do
       session  = double("CheckoutSession", url: "https://checkout.stripe.com/setup/xyz")
 
       fresh_adapter = described_class.new(
-        api_key:           "sk_test_dummy",
+        api_key:           "***",
         customer_resolver: ->(_uid) { nil },
         customer_saver:    ->(uid, cid) { saved[uid] = cid },
       )

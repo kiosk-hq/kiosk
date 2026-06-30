@@ -147,7 +147,7 @@ This action is **ownership-gated**: the server derives `user_id` from the authen
 
 **Schedule delivery:**
 
-This action is **payment-binding gated**: the server checks that a settled `kiosk.payment_mandates` row exists whose cart mandate `line_items @> [{"order_id": <order_id>}]`. Call `pay` first (Step 5), then `schedule_delivery`.
+This action is **payment-binding gated**: the server checks that a settled `kiosk.settlements` row exists whose cart mandate `line_items @> [{"order_id": <order_id>}]`. Call `pay` first (Step 5), then `schedule_delivery`.
 
 ```http
 POST /kiosk/exec
@@ -177,9 +177,9 @@ Successful response — HTTP 200, inside `.value`:
 
 ---
 
-## Step 5 — Pay: sign AP2 intent + cart mandates (RS256 JWS)
+## Step 5 — Pay: sign AP2 intent + cart + payment mandates (RS256 JWS)
 
-Payment requires two JWS tokens signed with the private key you generated in Step 2. The algorithm is RS256. The `iss` claim in both mandates **must equal the provider's issuer** (from `/.well-known/kiosk.json`).
+Payment requires three JWS tokens signed with the private key you generated in Step 2. The algorithm is RS256. The `iss` claim in all mandates **must equal the provider's issuer** (from `/.well-known/kiosk.json`).
 
 ### Intent mandate (spending cap)
 
@@ -218,6 +218,25 @@ Payment requires two JWS tokens signed with the private key you generated in Ste
 
 `intent_mandate_id` binds the cart mandate to the intent cap. Every mandate must be bound to your registered principal via `user_id` + `agent_id`.
 
+### Payment mandate (the assistant's funding instrument, bound to the cart)
+
+```json
+{
+  "id":              "<fresh UUID>",
+  "cart_mandate_id": "<id from the cart mandate above>",
+  "user_id":         "<user_id from Step 2>",
+  "agent_id":        "<agent_id from Step 2>",
+  "iss":             "<provider issuer>",
+  "payment_method":  "<Stripe PaymentMethod id, e.g. pm_card_visa>",
+  "amount_cents":    <total_cents from Step 4>,
+  "currency":        "eur",
+  "exp":             <now + 600>,
+  "iat":             <now>
+}
+```
+
+`cart_mandate_id` binds the payment mandate to the cart. `amount_cents` must match the cart total exactly — the server rejects mismatches. The `payment_method` is the assistant-presented Stripe PaymentMethod; the provider charges it via its PSP. The assistant presents the card; the provider stores nothing.
+
 ### Pay call
 
 ```http
@@ -228,8 +247,9 @@ Content-Type: application/json
 {
   "command": "pay",
   "body": {
-    "intent_mandate_jws": "<RS256 JWS of intent payload>",
-    "cart_mandate_jws":   "<RS256 JWS of cart payload>"
+    "intent_mandate_jws":  "<RS256 JWS of intent payload>",
+    "cart_mandate_jws":    "<RS256 JWS of cart payload>",
+    "payment_mandate_jws": "<RS256 JWS of payment payload>"
   }
 }
 ```
@@ -241,7 +261,7 @@ Successful response — HTTP 200:
   "ok":    true,
   "kind":  "value",
   "value": {
-    "payment_mandate_id":   "<uuid>",
+    "settlement_id":        "<uuid>",
     "psp_reference":        "<provider PSP reference>",
     "settled_amount_cents": 2499,
     "currency":             "eur"

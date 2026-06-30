@@ -13,6 +13,7 @@ class CreateKioskMandates < ActiveRecord::Migration[ActiveRecord::Migration.curr
 
   def down
     execute %(DROP TABLE IF EXISTS "kiosk".payment_mandates)
+    execute %(DROP TABLE IF EXISTS "kiosk".settlements)
     execute %(DROP TABLE IF EXISTS "kiosk".cart_mandates)
     execute %(DROP TABLE IF EXISTS "kiosk".intent_mandates)
   end

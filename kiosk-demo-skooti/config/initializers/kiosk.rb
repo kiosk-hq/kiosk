@@ -130,7 +130,7 @@ end
 # Gates (all three must pass, else 403 Forbidden):
 #   1. reservation exists and belongs to the principal AND status = 'reserved'
 #   2. agent is KYC-verified (kyc_verified_at NOT NULL in kiosk.agents)
-#   3. principal has a settled payment mandate for THIS reservation
+#   3. principal has a settled payment (settlement) for THIS reservation
 # Returns: { scooter_code:, rental_token:, exp: }
 Kiosk::Server::Actions.register("start_rental",
                                   description: "Verify gates (ownership, KYC, payment) and issue an Ed25519 offline rental token",

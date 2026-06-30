@@ -187,7 +187,7 @@ Kiosk::Server::Actions.register("create_order",
 end
 
 Kiosk::Server::Actions.register("schedule_delivery",
-  description: "Schedule delivery for a paid order (requires settled payment mandate referencing this order)",
+  description: "Schedule delivery for a paid order (requires settled payment / settlement referencing this order)",
   params: {
     order_id:         "uuid — the order to schedule",
     delivery_slot_id: "integer — slot id from the delivery_slots query (1–6)",

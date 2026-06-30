@@ -51,7 +51,7 @@ Assistant (agent token → Kiosk API)
        │
        Gate 1: reservation exists, belongs to this principal, status = 'reserved'
        Gate 2: agent is KYC-verified (kyc_verified_at NOT NULL)
-       Gate 3: settled payment mandate references THIS reservation_id
+       Gate 3: settled payment (settlement record) references THIS reservation_id
        │
        All gates pass →
          scooter_code derived server-side from reservation FK (not from client)

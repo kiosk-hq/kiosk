@@ -27,3 +27,6 @@
 
 # Ignore Spring files.
 /spring/*.pid
+
+# Local secrets (Stripe test key etc.) — never commit
+mise.toml

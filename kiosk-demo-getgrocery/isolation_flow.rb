@@ -102,6 +102,14 @@ agent_id_a = reg_a.fetch("agent_id")
 user_id_a  = reg_a.fetch("user_id")
 token_a    = reg_a.fetch("access_token")
 
+# ── Step 1b: attach test card for A (dev-only seam) ──────────────────────────
+# Off_session pay (Step 5) requires a Stripe Customer with a saved payment method.
+# POST /kiosk/_test/attach_card attaches pm_card_visa server-side via a real
+# SetupIntent. Hits real Stripe (test-mode sk_test_…); a Stripe mock is the
+# future optimization so the adversarial suites no longer need live Stripe.
+rc, attach_a = post_json("#{SERVER}/kiosk/_test/attach_card", { user_id: user_id_a })
+abort "attach_card for A failed (#{rc}): #{JSON.generate(attach_a)}" unless rc == 200
+
 # ── Step 2: Register Principal B ─────────────────────────────────────────────
 key_b = OpenSSL::PKey::RSA.generate(2048)
 rc, reg_b = post_json(
@@ -112,6 +120,11 @@ abort "register B failed (#{rc}): #{JSON.generate(reg_b)}" unless rc == 201
 agent_id_b = reg_b.fetch("agent_id")
 user_id_b  = reg_b.fetch("user_id")
 token_b    = reg_b.fetch("access_token")
+
+# ── Step 2b: attach test card for B (dev-only seam) ──────────────────────────
+# B's genuine pay (Step 10) also needs a saved card.
+rc, attach_b = post_json("#{SERVER}/kiosk/_test/attach_card", { user_id: user_id_b })
+abort "attach_card for B failed (#{rc}): #{JSON.generate(attach_b)}" unless rc == 200
 
 # ── Step 3: Query catalog (shared) ───────────────────────────────────────────
 rc, catalog_resp = post_json(

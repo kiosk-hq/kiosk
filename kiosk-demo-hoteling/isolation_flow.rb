@@ -132,15 +132,16 @@ abort "A's booking_id missing from response: #{JSON.generate(rsv_a_resp)}" unles
 STDERR.puts "  A reserved: booking_id=#{booking_id_a} total=#{total_cents_a}c"
 
 # ── Step 5: B settles a payment mandate referencing rA (satisfies Gate-2) ────
-# B signs intent + cart mandates with B's registered RSA key. The cart's
+# B signs intent + cart + payment mandates with B's registered RSA key. The cart's
 # line_items contain {booking_id: booking_id_a} so that Gate-2's jsonb-
-# containment check passes for B.  payment_mandates.user_id is written from
-# the GUC (kiosk.current_user_id() = B), so pm.user_id = B for Gate-2.
+# containment check passes for B.  settlements.user_id is written from
+# the GUC (kiosk.current_user_id() = B), so s.user_id = B for Gate-2.
 # After this step, only Gate-1 can deny B's confirm_booking(rA).
-now_b       = Time.now.to_i
-intent_id_b = SecureRandom.uuid
-cart_id_b   = SecureRandom.uuid
-cap_b       = total_cents_a + 100
+now_b        = Time.now.to_i
+intent_id_b  = SecureRandom.uuid
+cart_id_b    = SecureRandom.uuid
+payment_id_b = SecureRandom.uuid
+cap_b        = total_cents_a + 100
 
 intent_b_payload = {
   id:               intent_id_b,
@@ -165,20 +166,34 @@ cart_b_payload = {
   exp:                now_b + 600,
   iat:                now_b,
 }
+payment_b_payload = {
+  id:              payment_id_b,
+  cart_mandate_id: cart_id_b,
+  user_id:         user_id_b,
+  agent_id:        agent_id_b,
+  iss:             ISSUER,
+  payment_method:  "pm_demo",
+  amount_cents:    total_cents_a,
+  currency:        "eur",
+  exp:             now_b + 600,
+  iat:             now_b,
+}
 
-intent_b_jws = JWT.encode(intent_b_payload, key_b, "RS256")
-cart_b_jws   = JWT.encode(cart_b_payload,   key_b, "RS256")
+intent_b_jws  = JWT.encode(intent_b_payload,  key_b, "RS256")
+cart_b_jws    = JWT.encode(cart_b_payload,    key_b, "RS256")
+payment_b_jws = JWT.encode(payment_b_payload, key_b, "RS256")
 
 rc_pay_b, pay_b_resp = post_json(
   "#{SERVER}/kiosk/exec",
   {
     command: "pay",
-    body: { intent_mandate_jws: intent_b_jws, cart_mandate_jws: cart_b_jws },
+    body: { intent_mandate_jws: intent_b_jws, cart_mandate_jws: cart_b_jws,
+             payment_mandate_jws: payment_b_jws },
   },
   { "Authorization" => "Bearer #{token_b}" },
 )
 abort "B pay (for rA) failed (#{rc_pay_b}): #{JSON.generate(pay_b_resp)}" unless rc_pay_b == 200
-STDERR.puts "  B paid for rA: mandate_id=#{pay_b_resp.dig("value", "payment_mandate_id")} — Gate-2 now passes for B"
+STDERR.puts "  B paid for rA: settlement_id=#{pay_b_resp.dig("value", "settlement_id")} — Gate-2 now passes for B"
 
 # ── Step 6: B calls reserve_room with forged user_id arg (Assertion 3) ───────
 # B supplies user_id: user_id_a adversarially. The server ignores it —

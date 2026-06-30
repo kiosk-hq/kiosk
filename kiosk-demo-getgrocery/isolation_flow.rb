@@ -36,9 +36,10 @@ def post_json(url, body, headers = {})
 end
 
 def pay_for_order(server, issuer, token, key, user_id, agent_id, order_id, total_cents)
-  now       = Time.now.to_i
-  intent_id = SecureRandom.uuid
-  cart_id   = SecureRandom.uuid
+  now        = Time.now.to_i
+  intent_id  = SecureRandom.uuid
+  cart_id    = SecureRandom.uuid
+  payment_id = SecureRandom.uuid
 
   intent_payload = {
     id:               intent_id,
@@ -65,12 +66,27 @@ def pay_for_order(server, issuer, token, key, user_id, agent_id, order_id, total
     iat:                now,
   }
 
-  intent_jws = JWT.encode(intent_payload, key, "RS256")
-  cart_jws   = JWT.encode(cart_payload,   key, "RS256")
+  payment_payload = {
+    id:              payment_id,
+    cart_mandate_id: cart_id,
+    user_id:         user_id,
+    agent_id:        agent_id,
+    iss:             issuer,
+    payment_method:  "pm_card_visa",
+    amount_cents:    total_cents,
+    currency:        "eur",
+    exp:             now + 600,
+    iat:             now,
+  }
+
+  intent_jws  = JWT.encode(intent_payload,  key, "RS256")
+  cart_jws    = JWT.encode(cart_payload,    key, "RS256")
+  payment_jws = JWT.encode(payment_payload, key, "RS256")
 
   post_json(
     "#{server}/kiosk/exec",
-    { command: "pay", body: { intent_mandate_jws: intent_jws, cart_mandate_jws: cart_jws } },
+    { command: "pay", body: { intent_mandate_jws: intent_jws, cart_mandate_jws: cart_jws,
+                               payment_mandate_jws: payment_jws } },
     { "Authorization" => "Bearer #{token}" },
   )
 end

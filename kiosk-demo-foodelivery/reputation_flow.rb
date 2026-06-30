@@ -104,10 +104,11 @@ def make_purchase(menu_item_id, key, user_id, agent_id, token)
   total_cents = resp.dig("value", "total_cents")
   abort "place_order returned no total_cents" if total_cents.nil?
 
-  # ── Sign AP2 intent + cart mandates ───────────────────────────────────────
-  now       = Time.now.to_i
-  intent_id = SecureRandom.uuid
-  cart_id   = SecureRandom.uuid
+  # ── Sign AP2 intent + cart + payment mandates ─────────────────────────────
+  now        = Time.now.to_i
+  intent_id  = SecureRandom.uuid
+  cart_id    = SecureRandom.uuid
+  payment_id = SecureRandom.uuid
 
   intent_payload = {
     id:               intent_id,
@@ -132,18 +133,32 @@ def make_purchase(menu_item_id, key, user_id, agent_id, token)
     exp:                now + 600,
     iat:                now,
   }
+  payment_payload = {
+    id:              payment_id,
+    cart_mandate_id: cart_id,
+    user_id:         user_id,
+    agent_id:        agent_id,
+    iss:             ISSUER,
+    payment_method:  "pm_demo",
+    amount_cents:    total_cents,
+    currency:        "eur",
+    exp:             now + 600,
+    iat:             now,
+  }
 
-  intent_jws = JWT.encode(intent_payload, key, "RS256")
-  cart_jws   = JWT.encode(cart_payload,   key, "RS256")
+  intent_jws  = JWT.encode(intent_payload,  key, "RS256")
+  cart_jws    = JWT.encode(cart_payload,    key, "RS256")
+  payment_jws = JWT.encode(payment_payload, key, "RS256")
 
   # ── pay ───────────────────────────────────────────────────────────────────
   # Generate the pay body ONCE — exec_with_pow re-sends the same body on retry,
   # so the request_fingerprint (which covers body) is identical in both calls.
-  pay_body = { intent_mandate_jws: intent_jws, cart_mandate_jws: cart_jws }
+  pay_body = { intent_mandate_jws: intent_jws, cart_mandate_jws: cart_jws,
+               payment_mandate_jws: payment_jws }
   rc, resp, _ = exec_with_pow("pay", pay_body, token)
   abort "pay failed (#{rc}): #{JSON.generate(resp)}" unless rc == 200
 
-  resp.dig("value", "payment_mandate_id")
+  resp.dig("value", "settlement_id")
 end
 
 # ── Step 1: register a fresh principal ─────────────────────────────────────
@@ -179,7 +194,7 @@ $stderr.puts "  [rep] d0=#{d0} (unproven, 0 purchases). #{rows.size} menu rows s
 
 $stderr.puts "  [rep] Step 3: making purchase 1 (run + pay, each PoW-gated at d0=#{d0})"
 pm1 = make_purchase(menu_item_id, key, user_id, agent_id, token)
-$stderr.puts "  [rep] purchase 1 settled (payment_mandate_id=#{pm1})"
+$stderr.puts "  [rep] purchase 1 settled (settlement_id=#{pm1})"
 
 # ── Step 4: query with 1 purchase → 402 (d1 < d0) → solve → 200 ───────────
 
@@ -194,7 +209,7 @@ $stderr.puts "  [rep] d1=#{d1} (1 purchase). Difficulty dropped: #{d0} → #{d1}
 
 $stderr.puts "  [rep] Step 5: making purchase 2 (run + pay, each PoW-gated at d1=#{d1})"
 pm2 = make_purchase(menu_item_id, key, user_id, agent_id, token)
-$stderr.puts "  [rep] purchase 2 settled (payment_mandate_id=#{pm2})"
+$stderr.puts "  [rep] purchase 2 settled (settlement_id=#{pm2})"
 
 # ── Step 6: query with 2 purchases → 200 directly (proven — free pass) ─────
 

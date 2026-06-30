@@ -148,12 +148,12 @@ namespace :demo do
       puts "  FAIL  pay.ok got #{pay["ok"].inspect}"
     end
 
-    pm_id = pay.dig("value", "payment_mandate_id")
+    pm_id = pay.dig("value", "settlement_id")
     if pm_id && !pm_id.to_s.empty?
-      puts "  OK  pay.value.payment_mandate_id present (#{pm_id})"
+      puts "  OK  pay.value.settlement_id present (#{pm_id})"
     else
-      failures << "pay.value.payment_mandate_id missing"
-      puts "  FAIL  pay.value.payment_mandate_id missing"
+      failures << "pay.value.settlement_id missing"
+      puts "  FAIL  pay.value.settlement_id missing"
     end
 
     # -- assertions: DB row counts --

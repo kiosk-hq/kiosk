@@ -96,39 +96,6 @@ Rails.application.routes.draw do
       )
     }
 
-    # Dev-only payment seam: programmatically attach a Stripe test card to the
-    # principal identified by `user_id`, simulating a completed SetupIntent
-    # without a human at a hosted page. Used by `rake demo:shop` / automated
-    # drivers that cannot open a browser.
-    #
-    # POST /kiosk/_test/attach_card  { user_id: "<uuid>" }
-    # => 200 { ok: true, status: "ready", customer_id: "cus_…" }
-    #
-    # NEVER exists in production — gated by Rails.env.development?.
-    post "/kiosk/_test/attach_card", to: ->(env) {
-      req  = Rack::Request.new(env)
-      body = begin
-        raw = req.body.read
-        req.body.rewind
-        JSON.parse(raw)
-      rescue
-        {}
-      end
-      uid = body["user_id"] || req.params["user_id"]
-      if uid.nil? || uid.to_s.strip.empty?
-        [400, { "content-type" => "application/json" },
-         [JSON.generate(ok: false, error: "user_id required")]]
-      else
-        begin
-          provider = Kiosk.configuration.payment_provider
-          cus_id   = provider.attach_test_card(user_id: uid)
-          [200, { "content-type" => "application/json" },
-           [JSON.generate(ok: true, status: "ready", customer_id: cus_id)]]
-        rescue => e
-          [500, { "content-type" => "application/json" },
-           [JSON.generate(ok: false, error: e.message)]]
-        end
-      end
-    }
+
   end
 end

@@ -235,7 +235,7 @@ module Kiosk
         cus_id = @customer_resolver&.call(user_id)
         return cus_id if cus_id
 
-        cus = ::Stripe::Customer.create({})
+        cus = ::Stripe::Customer.create({ name: "principal-#{user_id}" })
         @customer_saver&.call(user_id, cus.id)
         cus.id
       end

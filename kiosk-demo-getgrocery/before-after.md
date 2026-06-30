@@ -176,7 +176,7 @@ Kiosk.configure do |c|
 end
 ```
 
-The stub PSP (`StubPsp`) used in the demo can be swapped for the Stripe adapter without touching any other code.
+This demo uses the **real Stripe adapter in test mode** (`STRIPE_SECRET_KEY=sk_test_…`): the buyer's card is saved once via a hosted SetupIntent and charged `off_session` per purchase — the assistant never holds card data. See `docs/architecture/payment-model.md`.
 
 **What this does not require:** a new user-facing login flow, a new mobile app, an OAuth integration, a webhook endpoint, or any changes to the provider's existing Rails models. The satellite gems add a parallel surface; the existing application is untouched.
 

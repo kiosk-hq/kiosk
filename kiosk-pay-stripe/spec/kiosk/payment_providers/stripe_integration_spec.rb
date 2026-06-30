@@ -18,17 +18,19 @@ RSpec.describe Kiosk::PaymentProviders::Stripe, :integration do
     )
   end
 
-  it "captures then refunds a real test payment" do
-    captured = adapter.capture(cart_mandate)
+  it "captures then refunds a real test payment using the assistant-presented payment method" do
+    # The assistant presents pm_card_visa — Stripe charges it in test mode.
+    captured = adapter.capture(cart_mandate, payment_method: "pm_card_visa")
     expect(captured[:settled_amount_cents]).to eq(1599)
+    expect(captured[:psp_reference]).to start_with("pi_")
 
-    payment_mandate = Kiosk::Mandate::PaymentMandate.new(
-      id: "p", cart_mandate_id: cart_mandate.id, user_id: "u", agent_id: "a",
+    settlement = Kiosk::Mandate::Settlement.new(
+      id: "s", cart_mandate_id: cart_mandate.id, user_id: "u", agent_id: "a",
       issuer: "https://demo.example", psp_reference: captured[:psp_reference],
       settled_amount_cents: 1599, currency: "eur", settled_at: nil, raw_jws: "jws",
     )
 
-    refunded = adapter.refund(payment_mandate)
+    refunded = adapter.refund(settlement)
     expect(refunded[:refund_id]).to start_with("re_")
   end
 end

@@ -23,13 +23,15 @@ module Kiosk
       end
 
       # @param cart_mandate [Kiosk::Mandate::CartMandate]
+      # @param payment_method [String] assistant-presented PSP payment-method reference
       # @return [Hash] { psp_reference:, settled_amount_cents:, settled_at: }
-      def capture(cart_mandate)
+      def capture(cart_mandate, payment_method:)
+        pm = payment_method || @test_payment_method
         intent = ::Stripe::PaymentIntent.create(
           {
             amount:         cart_mandate.total_amount_cents,
             currency:       cart_mandate.currency,
-            payment_method: @test_payment_method,
+            payment_method: pm,
             confirm:        true,
             capture_method: "automatic",
             metadata:       { cart_mandate_id: cart_mandate.id },
@@ -46,13 +48,15 @@ module Kiosk
       end
 
       # @param cart_mandate [Kiosk::Mandate::CartMandate]
+      # @param payment_method [String] assistant-presented PSP payment-method reference
       # @return [Hash] { stripe_payment_intent_id:, client_secret:, status: }
-      def authorize(cart_mandate)
+      def authorize(cart_mandate, payment_method:)
+        pm = payment_method || @test_payment_method
         intent = ::Stripe::PaymentIntent.create(
           {
             amount:         cart_mandate.total_amount_cents,
             currency:       cart_mandate.currency,
-            payment_method: @test_payment_method,
+            payment_method: pm,
             confirm:        true,
             capture_method: "manual",
             metadata:       { cart_mandate_id: cart_mandate.id },
@@ -67,11 +71,11 @@ module Kiosk
         }
       end
 
-      # @param payment_mandate [Kiosk::Mandate::PaymentMandate]
+      # @param settlement [Kiosk::Mandate::Settlement]
       # @param amount_cents [Integer, nil] partial refund; nil = full
       # @return [Hash] { refund_id: }
-      def refund(payment_mandate, amount_cents = nil)
-        params = { payment_intent: payment_mandate.psp_reference }
+      def refund(settlement, amount_cents = nil)
+        params = { payment_intent: settlement.psp_reference }
         params[:amount] = amount_cents unless amount_cents.nil?
 
         refund = ::Stripe::Refund.create(params)

@@ -5,7 +5,7 @@
 # the settlement shape verb_pay expects (psp_reference, settled_amount_cents,
 # settled_at).
 class StubPsp < Kiosk::PaymentProviders::Base
-  def capture(cart_mandate)
+  def capture(cart_mandate, payment_method:)
     {
       psp_reference:        "stub_pi_#{cart_mandate.id}",
       settled_amount_cents: cart_mandate.total_amount_cents,

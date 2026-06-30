@@ -20,8 +20,8 @@ RSpec.describe Kiosk::PaymentProviders::Stripe do
     )
   end
 
-  let(:payment_mandate) do
-    Kiosk::Mandate::PaymentMandate.new(
+  let(:settlement) do
+    Kiosk::Mandate::Settlement.new(
       id: "pay-1", cart_mandate_id: "cart-1", user_id: "user-1",
       agent_id: "agent-1", issuer: "https://demo.example",
       psp_reference: "pi_123", settled_amount_cents: 1599,
@@ -30,7 +30,7 @@ RSpec.describe Kiosk::PaymentProviders::Stripe do
   end
 
   describe "#capture" do
-    it "creates a confirmed automatic-capture PaymentIntent from the mandate" do
+    it "creates a confirmed automatic-capture PaymentIntent using the assistant-presented payment method" do
       pi = double("PaymentIntent", id: "pi_123", amount_received: 1599, created: 1_700_000_000)
 
       expect(::Stripe::PaymentIntent).to receive(:create).with(
@@ -43,16 +43,27 @@ RSpec.describe Kiosk::PaymentProviders::Stripe do
         { idempotency_key: "cart-1-capture" },
       ).and_return(pi)
 
-      result = adapter.capture(cart_mandate)
+      result = adapter.capture(cart_mandate, payment_method: "pm_card_visa")
 
       expect(result[:psp_reference]).to eq("pi_123")
       expect(result[:settled_amount_cents]).to eq(1599)
       expect(result[:settled_at]).to eq(Time.at(1_700_000_000).utc)
     end
+
+    it "falls back to the default test payment method when payment_method is nil" do
+      pi = double("PaymentIntent", id: "pi_123", amount_received: 1599, created: 1_700_000_000)
+
+      expect(::Stripe::PaymentIntent).to receive(:create).with(
+        hash_including(payment_method: "pm_card_visa"),
+        anything,
+      ).and_return(pi)
+
+      adapter.capture(cart_mandate, payment_method: nil)
+    end
   end
 
   describe "#authorize" do
-    it "creates a manual-capture hold and returns its reference" do
+    it "creates a manual-capture hold using the assistant-presented payment method" do
       pi = double("PaymentIntent", id: "pi_hold", client_secret: "cs_1", status: "requires_capture")
 
       expect(::Stripe::PaymentIntent).to receive(:create).with(
@@ -65,7 +76,7 @@ RSpec.describe Kiosk::PaymentProviders::Stripe do
         { idempotency_key: "cart-1-auth" },
       ).and_return(pi)
 
-      result = adapter.authorize(cart_mandate)
+      result = adapter.authorize(cart_mandate, payment_method: "pm_card_visa")
 
       expect(result[:stripe_payment_intent_id]).to eq("pi_hold")
       expect(result[:client_secret]).to eq("cs_1")
@@ -79,7 +90,7 @@ RSpec.describe Kiosk::PaymentProviders::Stripe do
         { payment_intent: "pi_123" },
       ).and_return(double("Refund", id: "re_1"))
 
-      expect(adapter.refund(payment_mandate)).to eq(refund_id: "re_1")
+      expect(adapter.refund(settlement)).to eq(refund_id: "re_1")
     end
 
     it "refunds a partial amount when given" do
@@ -87,7 +98,7 @@ RSpec.describe Kiosk::PaymentProviders::Stripe do
         { payment_intent: "pi_123", amount: 500 },
       ).and_return(double("Refund", id: "re_2"))
 
-      expect(adapter.refund(payment_mandate, 500)).to eq(refund_id: "re_2")
+      expect(adapter.refund(settlement, 500)).to eq(refund_id: "re_2")
     end
   end
 end

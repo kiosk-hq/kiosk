@@ -21,12 +21,26 @@ namespace :demo do
     end
   end
 
-  desc "Boot the server, run getgrocery_flow.rb end-to-end (no-human happy path: register→catalog→create_order→pay→schedule_delivery→my_orders), assert."
+  desc "Boot the server, run getgrocery_flow.rb end-to-end (no-human happy path: register→attach_card→catalog→create_order→payment_setup→pay→schedule_delivery→my_orders), assert."
   task :shop do
     require "resolv"
     require "net/http"
     require "uri"
     require "json"
+
+    # getgroceries uses the real Stripe adapter — no StubPsp.
+    # A Stripe test key (sk_test_…) is required to boot the server and run the
+    # off_session charge. Fail fast here with a clear message rather than letting
+    # the server crash on boot.
+    if ENV["STRIPE_SECRET_KEY"].to_s.strip.empty?
+      abort <<~MSG
+        demo:shop requires STRIPE_SECRET_KEY (a Stripe test key, sk_test_…).
+        getgroceries uses the real Stripe adapter — there is no StubPsp fallback.
+
+          export STRIPE_SECRET_KEY=sk_test_…
+          bundle exec rake demo:shop
+      MSG
+    end
 
     port         = ENV.fetch("PORT", "3005")
     log          = "/tmp/kiosk-getgrocery-demo.log"
@@ -113,13 +127,15 @@ namespace :demo do
       end
     end
 
-    check.call("http_register",  result["http_register"],  201)
-    check.call("http_catalog",   result["http_catalog"],   200)
-    check.call("http_order",     result["http_order"],     200)
-    check.call("http_slots",     result["http_slots"],     200)
-    check.call("http_pay",       result["http_pay"],       200)
-    check.call("http_schedule",  result["http_schedule"],  200)
-    check.call("http_my_orders", result["http_my_orders"], 200)
+    check.call("http_register",      result["http_register"],      201)
+    check.call("http_attach",        result["http_attach"],        200)
+    check.call("http_catalog",       result["http_catalog"],       200)
+    check.call("http_order",         result["http_order"],         200)
+    check.call("http_slots",         result["http_slots"],         200)
+    check.call("http_payment_setup", result["http_payment_setup"], 200)
+    check.call("http_pay",           result["http_pay"],           200)
+    check.call("http_schedule",      result["http_schedule"],      200)
+    check.call("http_my_orders",     result["http_my_orders"],     200)
 
     # order_id present
     oid = result["order_id"]
@@ -154,6 +170,15 @@ namespace :demo do
     else
       failures << "pay.value.settlement_id missing"
       puts "  FAIL  pay.value.settlement_id missing"
+    end
+
+    # psp_reference must start with pi_ — confirms a real Stripe off_session charge
+    psp_ref = result["psp_reference"].to_s
+    if psp_ref.match?(/\Api_/)
+      puts "  OK  psp_reference is a real Stripe PaymentIntent (#{psp_ref})"
+    else
+      failures << "psp_reference expected /^pi_/ (real Stripe charge), got #{psp_ref.inspect} — ensure STRIPE_SECRET_KEY is a real sk_test_… key"
+      puts "  FAIL  psp_reference not a real Stripe pi_… (got #{psp_ref.inspect})"
     end
 
     # -- assertions: DB row counts --

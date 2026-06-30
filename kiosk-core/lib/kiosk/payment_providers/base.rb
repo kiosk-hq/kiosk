@@ -2,6 +2,12 @@
 
 module Kiosk
   module PaymentProviders
+    # Raised when a buyer has no saved payment method at the provider's PSP
+    # and must complete the SetupIntent flow before a charge can proceed.
+    # The caller (e.g. a Kiosk Action) should surface the setup URL to the
+    # assistant so the human can enter their card.
+    SetupRequired = Class.new(StandardError)
+
     # Abstract base for AP2 PSP (Payment Service Provider) adapters.
     # See design spec §5.5 «Agent payments (AP2)».
     #

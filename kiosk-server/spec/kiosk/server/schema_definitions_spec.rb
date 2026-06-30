@@ -117,15 +117,19 @@ RSpec.describe Kiosk::Server::SchemaDefinitions do
 
   describe ".mandates_sql" do
     subject(:sql) { described_class.mandates_sql(schema: "kiosk", user_id_type: :uuid) }
-    it "creates the three mandate tables" do
+
+    it "creates the three signed mandate tables and the settlements receipt table" do
       expect(sql).to include('CREATE TABLE "kiosk".intent_mandates')
       expect(sql).to include('CREATE TABLE "kiosk".cart_mandates')
       expect(sql).to include('CREATE TABLE "kiosk".payment_mandates')
+      expect(sql).to include('CREATE TABLE "kiosk".settlements')
     end
-    it "links cart→intent and payment→cart by FK" do
+
+    it "links cart→intent, payment→cart, and settlement→cart by FK" do
       expect(sql).to include('REFERENCES "kiosk".intent_mandates(id)')
       expect(sql).to include('REFERENCES "kiosk".cart_mandates(id)')
     end
+
     it "stores money as bigint cents and keeps raw JWS" do
       expect(sql).to include("cap_amount_cents  bigint")
       expect(sql).to include("settled_amount_cents bigint")
@@ -133,26 +137,40 @@ RSpec.describe Kiosk::Server::SchemaDefinitions do
     end
 
     it "keeps a server-generated uuid PK on every table (never caller-supplied)" do
-      expect(sql.scan(/\bid +uuid PRIMARY KEY DEFAULT gen_random_uuid\(\)/).size).to eq(3)
+      expect(sql.scan(/\bid +uuid PRIMARY KEY DEFAULT gen_random_uuid\(\)/).size).to eq(4)
     end
 
-    it "stores the agent-signed mandate id in a separate mandate_id text NOT NULL column on the agent-signed mandates" do
-      # intent + cart are agent-signed and carry a signed id; payment is a
-      # server-side settlement receipt with no agent-signed id, so it has none.
-      expect(sql.scan(/mandate_id +text NOT NULL/).size).to eq(2)
-      payment_table = sql[/CREATE TABLE "kiosk"\.payment_mandates.*?\);/m]
-      # No standalone `mandate_id <type>` column (cart_mandate_id is a FK, not this).
-      expect(payment_table).not_to match(/^\s*mandate_id\s+\w/)
+    it "stores the agent-signed mandate id in a mandate_id text NOT NULL column on all three signed mandates" do
+      # intent, cart, and payment_mandates are all agent-signed and carry a signed id;
+      # settlements is a server-side PSP receipt with no agent-signed mandate_id.
+      expect(sql.scan(/mandate_id +text NOT NULL/).size).to eq(3)
+      settlements_table = sql[/CREATE TABLE "kiosk"\.settlements.*?\);/m]
+      # No standalone `mandate_id <type>` column on settlements.
+      expect(settlements_table).not_to match(/^\s*mandate_id\s+\w/)
     end
 
-    it "enforces per-principal uniqueness of the signed id on intent and cart mandates" do
+    it "enforces per-principal uniqueness of the signed id on all three signed mandates" do
       expect(sql).to include("UNIQUE (user_id, mandate_id)")
-      # one for intent_mandates, one for cart_mandates
-      expect(sql.scan("UNIQUE (user_id, mandate_id)").size).to eq(2)
+      # one for intent_mandates, one for cart_mandates, one for payment_mandates
+      expect(sql.scan("UNIQUE (user_id, mandate_id)").size).to eq(3)
     end
 
-    it "anchors idempotency with one settlement per cart on payment_mandates" do
+    it "anchors idempotency with one settlement per cart on settlements" do
       expect(sql).to include("UNIQUE (cart_mandate_id)")
+    end
+
+    it "the signed payment_mandates table carries mandate_id, payment_method, amount_cents, and UNIQUE(user_id, mandate_id)" do
+      payment_table = sql[/CREATE TABLE "kiosk"\.payment_mandates.*?\);/m]
+      expect(payment_table).to include("mandate_id")
+      expect(payment_table).to include("payment_method")
+      expect(payment_table).to include("amount_cents")
+      expect(payment_table).to include("UNIQUE (user_id, mandate_id)")
+    end
+
+    it "the settlements table carries psp_reference and settled_amount_cents" do
+      settlements_table = sql[/CREATE TABLE "kiosk"\.settlements.*?\);/m]
+      expect(settlements_table).to include("psp_reference")
+      expect(settlements_table).to include("settled_amount_cents")
     end
   end
 

@@ -206,10 +206,12 @@ module Kiosk
 
       # ─── 006 create_kiosk_mandates ─────────────────────────────────────
 
-      # AP2 mandate trail: `intent_mandates` (spending envelope signed by the
-      # user), `cart_mandates` (agent-assembled cart within the envelope),
-      # `payment_mandates` (PSP settlement receipt). Each row carries its
-      # original JWS so the chain is auditable end-to-end.
+      # AP2 mandate trail: three signed mandate tables — `intent_mandates`
+      # (spending envelope signed by the user), `cart_mandates`
+      # (agent-assembled cart within the envelope), `payment_mandates`
+      # (assistant-signed payment mandate carrying the payment instrument) —
+      # plus `settlements` (PSP settlement receipt). Each signed-mandate row
+      # carries its original JWS so the chain is auditable end-to-end.
       #
       # `id` is a SERVER-generated uuid PK (`gen_random_uuid()`) — never
       # supplied by the caller, so one principal cannot pre-occupy or block
@@ -217,7 +219,7 @@ module Kiosk
       # mandate id lives in `mandate_id text NOT NULL` for audit + idempotency,
       # made unique PER PRINCIPAL via `UNIQUE (user_id, mandate_id)`. The FK
       # chain references the SERVER ids; `UNIQUE (cart_mandate_id)` on
-      # payment_mandates anchors one settlement per cart.
+      # settlements anchors one settlement per cart.
       def mandates_sql(schema: nil, user_id_type: nil)
         schema       ||= Kiosk.configuration.schema
         user_id_type ||= Kiosk.configuration.user_id_type
@@ -260,6 +262,24 @@ module Kiosk
           CREATE INDEX idx_cart_mandates_intent  ON "#{schema}".cart_mandates (intent_mandate_id);
 
           CREATE TABLE "#{schema}".payment_mandates (
+            id               uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+            mandate_id       text NOT NULL,
+            cart_mandate_id  uuid NOT NULL REFERENCES "#{schema}".cart_mandates(id) ON DELETE CASCADE,
+            user_id          #{col_type} NOT NULL,
+            agent_id         uuid NOT NULL,
+            issuer           text NOT NULL,
+            payment_method   text NOT NULL,
+            amount_cents     bigint NOT NULL,
+            currency         text NOT NULL,
+            expires_at       timestamptz,
+            created_at       timestamptz NOT NULL DEFAULT now(),
+            raw_jws          text NOT NULL,
+            UNIQUE (user_id, mandate_id)
+          );
+          CREATE INDEX idx_payment_mandates_user_id ON "#{schema}".payment_mandates (user_id);
+          CREATE INDEX idx_payment_mandates_cart    ON "#{schema}".payment_mandates (cart_mandate_id);
+
+          CREATE TABLE "#{schema}".settlements (
             id                   uuid PRIMARY KEY DEFAULT gen_random_uuid(),
             cart_mandate_id      uuid NOT NULL REFERENCES "#{schema}".cart_mandates(id) ON DELETE CASCADE,
             user_id              #{col_type} NOT NULL,
@@ -272,8 +292,8 @@ module Kiosk
             raw_jws              text NOT NULL,
             UNIQUE (cart_mandate_id)
           );
-          CREATE INDEX idx_payment_mandates_user_id ON "#{schema}".payment_mandates (user_id);
-          CREATE INDEX idx_payment_mandates_cart    ON "#{schema}".payment_mandates (cart_mandate_id);
+          CREATE INDEX idx_settlements_user_id ON "#{schema}".settlements (user_id);
+          CREATE INDEX idx_settlements_cart    ON "#{schema}".settlements (cart_mandate_id);
         SQL
       end
 

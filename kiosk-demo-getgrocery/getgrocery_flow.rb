@@ -1,8 +1,10 @@
 # frozen_string_literal: true
 
 # Agent-side driver: no-human grocery order end-to-end.
-# Flow: register → query catalog → run create_order → query delivery_slots
-#       → pay → run schedule_delivery → query my_orders
+# Flow: register → attach_card (dev-only seam, simulates completed SetupIntent)
+#       → query catalog → run create_order → query delivery_slots
+#       → payment_setup (verify "ready") → pay (off_session → real pi_…)
+#       → run schedule_delivery → query my_orders
 #
 # Usage:
 #   SERVER_URL=http://127.0.0.1:3005 \
@@ -41,6 +43,19 @@ agent_id = reg.fetch("agent_id")
 user_id  = reg.fetch("user_id")
 token    = reg.fetch("access_token")
 STDERR.puts "  Registered: user_id=#{user_id}"
+
+# -- Step 1b: attach test card (dev-only seam) --
+# Simulates a completed Stripe SetupIntent without a human at a hosted page.
+# The dev-only route POST /kiosk/_test/attach_card (gated by Rails.env.development?)
+# calls provider.attach_test_card(user_id:) server-side: creates a Stripe Customer
+# for this principal, attaches pm_card_visa, sets it as the default PM.
+# After this, payment_setup returns {status:"ready"} and pay runs off_session.
+rc_attach, attach_resp = post_json(
+  "#{SERVER}/kiosk/_test/attach_card",
+  { user_id: user_id },
+)
+abort "attach_card failed (#{rc_attach}): #{JSON.generate(attach_resp)}" unless rc_attach == 200
+STDERR.puts "  attach_test_card: customer_id=#{attach_resp["customer_id"]}"
 
 # -- Step 2: query catalog --
 rc_catalog, catalog_resp = post_json(
@@ -83,7 +98,21 @@ slot    = slots.first
 slot_id = slot.fetch("id")
 STDERR.puts "  Delivery slot: id=#{slot_id} #{slot["label"]} on #{delivery_date}"
 
-# -- Step 5: pay --
+# -- Step 5: payment_setup (verify card is on file before paying) --
+# In the live flow an assistant calls this before every pay; if setup_required,
+# it hands the human the setup_url. Here attach_test_card already ran, so
+# the provider must respond {status:"ready"}.
+rc_setup, setup_resp = post_json(
+  "#{SERVER}/kiosk/exec",
+  { command: "run", body: { name: "payment_setup" } },
+  { "Authorization" => "Bearer #{token}" },
+)
+abort "payment_setup failed (#{rc_setup}): #{JSON.generate(setup_resp)}" unless rc_setup == 200
+setup_status = setup_resp.dig("value", "status")
+abort "payment_setup status expected 'ready', got #{setup_status.inspect}" unless setup_status == "ready"
+STDERR.puts "  payment_setup: #{setup_status}"
+
+# -- Step 6: pay --
 now        = Time.now.to_i
 intent_id  = SecureRandom.uuid
 cart_id    = SecureRandom.uuid
@@ -138,9 +167,11 @@ rc_pay, pay_resp = post_json(
   { "Authorization" => "Bearer #{token}" },
 )
 abort "pay failed (#{rc_pay}): #{JSON.generate(pay_resp)}" unless rc_pay == 200
-STDERR.puts "  pay: settlement_id=#{pay_resp.dig("value", "settlement_id")}"
+psp_ref = pay_resp.dig("value", "psp_reference").to_s
+abort "pay: psp_reference expected 'pi_…' (real Stripe), got #{psp_ref.inspect}" unless psp_ref.start_with?("pi_")
+STDERR.puts "  pay: settlement_id=#{pay_resp.dig("value", "settlement_id")} psp_reference=#{psp_ref}"
 
-# -- Step 6: schedule_delivery --
+# -- Step 7: schedule_delivery --  (renumbered; was Step 6 before payment_setup was added)
 rc_sched, sched_resp = post_json(
   "#{SERVER}/kiosk/exec",
   { command: "run", body: { name: "schedule_delivery",
@@ -154,7 +185,7 @@ sched_value  = sched_resp.fetch("value")
 scheduled_at = sched_value.fetch("scheduled_at")
 STDERR.puts "  schedule_delivery: order_id=#{order_id} scheduled=#{scheduled_at}"
 
-# -- Step 7: query my_orders to confirm --
+# -- Step 8: query my_orders to confirm --
 rc_my, my_resp = post_json(
   "#{SERVER}/kiosk/exec",
   { command: "query", body: { name: "my_orders" } },
@@ -164,20 +195,23 @@ abort "my_orders failed (#{rc_my}): #{JSON.generate(my_resp)}" unless rc_my == 2
 my_orders = my_resp.fetch("rows", [])
 STDERR.puts "  my_orders: #{my_orders.size} order(s)"
 
-# -- Step 8: print ONE JSON line --
+# -- Step 9: print ONE JSON line --
 puts JSON.generate(
-  http_register:  rc_reg,
-  http_catalog:   rc_catalog,
-  http_order:     rc_order,
-  http_slots:     rc_slots,
-  http_pay:       rc_pay,
-  http_schedule:  rc_sched,
-  http_my_orders: rc_my,
-  user_id:        user_id,
-  agent_id:       agent_id,
-  order_id:       order_id,
-  total_cents:    total_cents,
-  scheduled_at:   scheduled_at,
-  my_orders:      my_orders,
-  pay:            pay_resp,
+  http_register:      rc_reg,
+  http_attach:        rc_attach,
+  http_catalog:       rc_catalog,
+  http_order:         rc_order,
+  http_slots:         rc_slots,
+  http_payment_setup: rc_setup,
+  http_pay:           rc_pay,
+  http_schedule:      rc_sched,
+  http_my_orders:     rc_my,
+  user_id:            user_id,
+  agent_id:           agent_id,
+  order_id:           order_id,
+  total_cents:        total_cents,
+  scheduled_at:       scheduled_at,
+  psp_reference:      psp_ref,
+  my_orders:          my_orders,
+  pay:                pay_resp,
 )

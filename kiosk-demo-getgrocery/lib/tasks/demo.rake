@@ -165,12 +165,12 @@ namespace :demo do
       puts "  FAIL  orders[status=scheduled] COUNT expected >= 1, got #{orders_count.inspect}"
     end
 
-    pm_count = `psql -X -d #{db} -tAc 'SELECT COUNT(*) FROM kiosk.payment_mandates' 2>&1`.strip
+    pm_count = `psql -X -d #{db} -tAc 'SELECT COUNT(*) FROM kiosk.settlements' 2>&1`.strip
     if pm_count.to_i >= 1
-      puts "  OK  kiosk.payment_mandates >= 1 (got #{pm_count})"
+      puts "  OK  kiosk.settlements >= 1 (got #{pm_count})"
     else
-      failures << "kiosk.payment_mandates COUNT expected >= 1, got #{pm_count.inspect}"
-      puts "  FAIL  kiosk.payment_mandates COUNT expected >= 1, got #{pm_count.inspect}"
+      failures << "kiosk.settlements COUNT expected >= 1, got #{pm_count.inspect}"
+      puts "  FAIL  kiosk.settlements COUNT expected >= 1, got #{pm_count.inspect}"
     end
 
     items_count = `psql -X -d #{db} -tAc 'SELECT COUNT(*) FROM order_items' 2>&1`.strip

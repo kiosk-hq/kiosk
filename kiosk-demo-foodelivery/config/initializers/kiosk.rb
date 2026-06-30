@@ -96,7 +96,7 @@ end
 #   1 purchase  → argon2id challenge at d = base_d(3) (cheaper — purchase earns PoW relief)
 #   2+ purchases → free pass (proven?(purchases) → challenge_for returns nil)
 #
-# The factors callable performs a REAL DB lookup: COUNT(*) on kiosk.payment_mandates
+# The factors callable performs a REAL DB lookup: COUNT(*) on kiosk.settlements
 # for the authenticated principal — no faking.
 #
 # Thresholds are small so each argon2id solve completes in ~0.5–2 s on solve.py,
@@ -222,13 +222,13 @@ Kiosk.configure do |c|
     c.pow_secret = ENV.fetch("KIOSK_POW_SECRET", "demo-pow-secret")
     c.pow_ttl    = 300
 
-    # Factors: real DB lookup — COUNT(*) on kiosk.payment_mandates for this principal.
+    # Factors: real DB lookup — COUNT(*) on kiosk.settlements for this principal.
     # request_rate_per_min and bad_proof_count are fixed at 0 for the demo.
     c.reputation_factors = ->(identity:, **) {
       uid  = identity.user_id
       conn = ActiveRecord::Base.connection
       count = conn.execute(
-        "SELECT COUNT(*) AS settled_count FROM kiosk.payment_mandates " \
+        "SELECT COUNT(*) AS settled_count FROM kiosk.settlements " \
         "WHERE user_id = #{conn.quote(uid.to_s)}"
       ).first["settled_count"].to_i
       Kiosk::Reputation::Factors.new(

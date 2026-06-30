@@ -182,12 +182,12 @@ namespace :demo do
         puts "  FAIL  reservations[status=active] expected >= 1, got #{res_count.inspect}"
       end
 
-      pm_count = `psql -X -d #{db} -tAc 'SELECT COUNT(*) FROM kiosk.payment_mandates' 2>&1`.strip
+      pm_count = `psql -X -d #{db} -tAc 'SELECT COUNT(*) FROM kiosk.settlements' 2>&1`.strip
       if pm_count.to_i >= 1
-        puts "  OK  kiosk.payment_mandates >= 1 (got #{pm_count})"
+        puts "  OK  kiosk.settlements >= 1 (got #{pm_count})"
       else
-        failures << "happy: kiosk.payment_mandates expected >= 1, got #{pm_count.inspect}"
-        puts "  FAIL  kiosk.payment_mandates expected >= 1, got #{pm_count.inspect}"
+        failures << "happy: kiosk.settlements expected >= 1, got #{pm_count.inspect}"
+        puts "  FAIL  kiosk.settlements expected >= 1, got #{pm_count.inspect}"
       end
 
       # ── Offline-token negatives (lock-sim level) ─────────────────────────

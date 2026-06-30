@@ -6,6 +6,38 @@
 #   rake demo:shop    boots the server, runs getgrocery_flow.rb, asserts happy path
 #   rake demo         setup + shop (full end-to-end proof)
 
+# Start (or reuse) a local stripe-mock; return its HTTP base URL. The adversarial
+# suites use it so the full pay→settlement→gate flow runs with NO real Stripe
+# (fast, no key, no charges, CI-runnable). demo:shop still uses real Stripe.
+def start_stripe_mock
+  require "socket"
+  port = 12111
+  url  = "http://127.0.0.1:#{port}"
+
+  reachable = lambda do
+    s = TCPSocket.new("127.0.0.1", port); s.close; true
+  rescue StandardError
+    false
+  end
+
+  return url if reachable.call # already running — reuse it
+
+  unless system("command -v stripe-mock >/dev/null 2>&1")
+    abort "stripe-mock not found. Install it: brew install stripe-mock"
+  end
+
+  pid = spawn("stripe-mock", out: "/tmp/stripe-mock.log", err: "/tmp/stripe-mock.log")
+  at_exit do
+    Process.kill("TERM", pid)
+    Process.wait(pid)
+  rescue Errno::ESRCH, Errno::ECHILD
+    nil
+  end
+
+  30.times { return url if reachable.call; sleep 0.3 }
+  abort "stripe-mock did not become ready on #{url} — see /tmp/stripe-mock.log"
+end
+
 namespace :demo do
   desc "Create + load schema + seed the demo database (idempotent)."
   task :setup do
@@ -44,7 +76,7 @@ namespace :demo do
 
     port         = ENV.fetch("PORT", "3005")
     log          = "/tmp/kiosk-getgrocery-demo.log"
-    db           = "kiosk_getgrocery_development"
+    db           = ENV.fetch("KIOSK_GETGROCERY_DB", "kiosk_getgrocery_development")
     flow_rb      = File.expand_path("../../getgrocery_flow.rb", __dir__)
     failures     = []
 
@@ -248,23 +280,15 @@ namespace :demo do
     require "net/http"
     require "uri"
 
-    # getgroceries uses the real Stripe adapter (no StubPsp).
-    # isolation_flow.rb calls POST /kiosk/_test/attach_card per principal
-    # which hits real Stripe — the server will not boot without this key.
-    if ENV["STRIPE_SECRET_KEY"].to_s.strip.empty?
-      abort <<~MSG
-        demo:isolation requires STRIPE_SECRET_KEY (a Stripe test key, sk_test_…).
-        getgroceries uses the real Stripe adapter — principals pay via off_session
-        Stripe charge; the attach_card seam also calls Stripe on the server side.
-
-          KEY=$(awk -F'"' '/STRIPE_SECRET_KEY/{print $2}' mise.toml)
-          STRIPE_SECRET_KEY="$KEY" bundle exec rake demo:isolation
-      MSG
-    end
+    # Adversarial suite → stripe-mock (no real charges, no key). The gates being
+    # tested are pure Kiosk logic; Stripe is only the settlement rail, so a mock
+    # exercises the full flow end-to-end.
+    mock_url = start_stripe_mock
+    puts "  (stripe-mock at #{mock_url} — adversarial suite, no real Stripe)"
 
     port = ENV.fetch("PORT", "3005")
     log  = "/tmp/kiosk-getgrocery-isolation.log"
-    db   = "kiosk_getgrocery_development"
+    db   = ENV.fetch("KIOSK_GETGROCERY_DB", "kiosk_getgrocery_development")
 
     # ── host resolution ────────────────────────────────────────────────
     host = begin
@@ -289,7 +313,7 @@ namespace :demo do
     # ── boot the server ────────────────────────────────────────────────
     File.truncate(log, 0) if File.exist?(log)
     server_pid = spawn(
-      { "KIOSK_ISSUER" => kiosk_issuer },
+      { "KIOSK_ISSUER" => kiosk_issuer, "STRIPE_MOCK_URL" => mock_url, "STRIPE_SECRET_KEY" => "sk_test_mock" },
       "bundle exec rails s -p #{port} -b 127.0.0.1 -e development",
       out: log, err: log,
     )
@@ -625,19 +649,10 @@ namespace :demo do
     require "uri"
 
     # getgroceries uses the real Stripe adapter (no StubPsp).
-    # redteam_suite.rb calls client.attach_test_card per paying principal,
-    # which hits real Stripe test-mode — the server will not boot without this key.
-    # A Stripe mock is the future optimization so the suite no longer needs live Stripe.
-    if ENV["STRIPE_SECRET_KEY"].to_s.strip.empty?
-      abort <<~MSG
-        demo:redteam requires STRIPE_SECRET_KEY (a Stripe test key, sk_test_…).
-        getgroceries uses the real Stripe adapter — scenarios that settle payments
-        call POST /kiosk/_test/attach_card per principal (real Stripe test charge).
-
-          KEY=$(awk -F'"' '/STRIPE_SECRET_KEY/{print $2}' mise.toml)
-          STRIPE_SECRET_KEY="$KEY" bundle exec rake demo:redteam
-      MSG
-    end
+    # Adversarial battery → stripe-mock (no real charges, no key). The gates
+    # under test are pure Kiosk logic; Stripe is only the settlement rail.
+    mock_url = start_stripe_mock
+    puts "  (stripe-mock at #{mock_url} — adversarial battery, no real Stripe)"
 
     port = ENV.fetch("PORT", "3005")
     log  = "/tmp/kiosk-getgrocery-redteam.log"
@@ -664,7 +679,7 @@ namespace :demo do
 
     # ── boot the server ────────────────────────────────────────────────
     File.truncate(log, 0) if File.exist?(log)
-    env_vars = { "KIOSK_ISSUER" => kiosk_issuer }
+    env_vars = { "KIOSK_ISSUER" => kiosk_issuer, "STRIPE_MOCK_URL" => mock_url, "STRIPE_SECRET_KEY" => "sk_test_mock" }
 
     server_pid = spawn(
       env_vars,

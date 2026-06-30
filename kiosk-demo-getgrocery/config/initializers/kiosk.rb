@@ -36,10 +36,19 @@ Kiosk.configure do |c|
   # The principal→Stripe Customer mapping is stored in `stripe_customers` and
   # injected as lambdas — the kiosk-pay-stripe gem stays provider-agnostic.
   #
-  # STRIPE_SECRET_KEY is required — the server will not boot without it.
-  # Use a Stripe test key (sk_test_…); no KYC, works from anywhere.
-  key = ENV["STRIPE_SECRET_KEY"]
-  raise "getgroceries requires STRIPE_SECRET_KEY (Stripe test key, sk_test_…) — see docs/architecture/payment-model.md" if key.nil? || key.empty?
+  # Real Stripe by default (demo:shop → real pi_…). When STRIPE_MOCK_URL is set
+  # (the adversarial suites), point the SDK at a local stripe-mock instead —
+  # fast, no key, no real charges. stripe-mock returns shaped fixtures, so the
+  # full pay→settlement flow runs and the Kiosk gates (ownership + "settlement
+  # exists") are exercised end-to-end without hitting Stripe.
+  if (mock = ENV["STRIPE_MOCK_URL"]) && !mock.empty?
+    require "stripe"
+    Stripe.api_base = mock                          # e.g. http://127.0.0.1:12111
+    key = ENV["STRIPE_SECRET_KEY"].to_s.empty? ? "sk_test_mock" : ENV["STRIPE_SECRET_KEY"]
+  else
+    key = ENV["STRIPE_SECRET_KEY"]
+    raise "getgroceries requires STRIPE_SECRET_KEY (sk_test_…) or STRIPE_MOCK_URL — see docs/architecture/payment-model.md" if key.nil? || key.empty?
+  end
 
   c.payment_provider = Kiosk::PaymentProviders::Stripe.new(
     api_key:           key,

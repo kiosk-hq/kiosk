@@ -236,9 +236,15 @@ RSpec.describe Kiosk::PaymentProviders::Stripe do
         }.to raise_error(Kiosk::PaymentProviders::SetupRequired)
       end
 
-      it "includes the customer in the PaymentIntent when an explicit pm is also given" do
+      it "ignores an explicitly presented pm and charges the on-file card when a resolver is configured" do
+        invoice_settings = double("InvoiceSettings", default_payment_method: "pm_default_visa")
+        customer         = double("Customer", invoice_settings: invoice_settings)
+        allow(::Stripe::Customer).to receive(:retrieve).with("cus_existing").and_return(customer)
+
+        # In the SetupIntent model the assistant authorizes, never presents a
+        # card — so a presented pm is ignored and the saved card is charged.
         expect(::Stripe::PaymentIntent).to receive(:create).with(
-          hash_including(customer: "cus_existing", payment_method: "pm_explicit"),
+          hash_including(customer: "cus_existing", payment_method: "pm_default_visa"),
           anything,
         ).and_return(pi)
 
@@ -296,21 +302,23 @@ RSpec.describe Kiosk::PaymentProviders::Stripe do
   # ── attach_test_card ──────────────────────────────────────────────────────
 
   describe "#attach_test_card" do
-    it "attaches pm_card_visa to an existing customer and sets it as the default, returning the customer_id" do
-      expect(::Stripe::PaymentMethod).to receive(:attach).with(
-        "pm_card_visa", { customer: "cus_existing" },
-      ).and_return(double("PM"))
+    it "saves the card via a SetupIntent and sets the attached pm as the default, returning the customer_id" do
+      setup = double("SetupIntent", payment_method: "pm_attached_1")
+      expect(::Stripe::SetupIntent).to receive(:create).with(
+        hash_including(customer: "cus_existing", payment_method: "pm_card_visa", confirm: true, usage: "off_session"),
+      ).and_return(setup)
 
+      # The default is set to the SetupIntent's ATTACHED pm id, not the shared token.
       expect(::Stripe::Customer).to receive(:update).with(
         "cus_existing",
-        { invoice_settings: { default_payment_method: "pm_card_visa" } },
+        { invoice_settings: { default_payment_method: "pm_attached_1" } },
       ).and_return(double("Customer"))
 
       result = resolver_adapter.attach_test_card(user_id: "user-1")
       expect(result).to eq("cus_existing")
     end
 
-    it "creates a new customer when none exists and saves the mapping before attaching" do
+    it "creates a new customer when none exists and saves the mapping before the SetupIntent" do
       saved      = {}
       new_cus_id = "cus_created"
       new_cus    = double("Customer", id: new_cus_id)
@@ -322,12 +330,13 @@ RSpec.describe Kiosk::PaymentProviders::Stripe do
       )
 
       expect(::Stripe::Customer).to receive(:create).with({}).and_return(new_cus)
-      expect(::Stripe::PaymentMethod).to receive(:attach).with(
-        "pm_card_visa", { customer: new_cus_id },
-      ).and_return(double("PM"))
+      setup = double("SetupIntent", payment_method: "pm_attached_2")
+      expect(::Stripe::SetupIntent).to receive(:create).with(
+        hash_including(customer: new_cus_id, payment_method: "pm_card_visa"),
+      ).and_return(setup)
       expect(::Stripe::Customer).to receive(:update).with(
         new_cus_id,
-        { invoice_settings: { default_payment_method: "pm_card_visa" } },
+        { invoice_settings: { default_payment_method: "pm_attached_2" } },
       ).and_return(double("Customer"))
 
       result = fresh_adapter.attach_test_card(user_id: "user-new")
@@ -336,9 +345,10 @@ RSpec.describe Kiosk::PaymentProviders::Stripe do
     end
 
     it "accepts a custom payment_method argument" do
-      allow(::Stripe::PaymentMethod).to receive(:attach).with(
-        "pm_card_mastercard", { customer: "cus_existing" },
-      ).and_return(double("PM"))
+      setup = double("SetupIntent", payment_method: "pm_attached_mc")
+      allow(::Stripe::SetupIntent).to receive(:create).with(
+        hash_including(customer: "cus_existing", payment_method: "pm_card_mastercard"),
+      ).and_return(setup)
       allow(::Stripe::Customer).to receive(:update).and_return(double("Customer"))
 
       result = resolver_adapter.attach_test_card(user_id: "user-1", payment_method: "pm_card_mastercard")

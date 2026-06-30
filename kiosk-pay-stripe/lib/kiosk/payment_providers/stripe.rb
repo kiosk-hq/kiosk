@@ -100,20 +100,19 @@ module Kiosk
       # @return [Hash] { psp_reference:, settled_amount_cents:, settled_at: }
       # @raise [Kiosk::PaymentProviders::SetupRequired] when no PM is available
       def capture(cart_mandate, payment_method: nil)
-        pm     = non_empty(payment_method)
-        cus_id = @customer_resolver&.call(cart_mandate.user_id)
-
-        if pm.nil?
-          if cus_id
-            # SetupIntent path: use the principal's on-file card.
-            pm = saved_payment_method_for(cus_id)
-            raise SetupRequired unless pm
-          else
-            # Back-compat path: no resolver configured. Fall back to the test
-            # PM (useful in unit tests / demos before SetupIntent is wired up).
-            pm = non_empty(@test_payment_method) unless @customer_resolver
-            raise SetupRequired unless pm
-          end
+        if @customer_resolver
+          # SetupIntent model: the principal's card is on file. Resolve the
+          # customer (no customer ⇒ the principal must set up a card first) and
+          # charge its saved card. The mandate's payment_method is deliberately
+          # ignored — in this model the assistant authorizes, never presents a card.
+          cus_id = @customer_resolver.call(cart_mandate.user_id)
+          raise SetupRequired unless cus_id
+          pm = saved_payment_method_for(cus_id) || raise(SetupRequired)
+        else
+          # No resolver (unit tests / pre-SetupIntent demos): use an explicitly
+          # presented PM, else the configured test fallback.
+          cus_id = nil
+          pm = non_empty(payment_method) || non_empty(@test_payment_method) || raise(SetupRequired)
         end
 
         intent = ::Stripe::PaymentIntent.create(
@@ -192,10 +191,23 @@ module Kiosk
       # @return [String] the customer_id
       def attach_test_card(user_id:, payment_method: "pm_card_visa")
         cus_id = ensure_customer(user_id)
-        ::Stripe::PaymentMethod.attach(payment_method, { customer: cus_id })
+        # Save the card the faithful way — a real SetupIntent (exactly what the
+        # human's hosted-page flow does), confirmed with the test PM. Stripe
+        # attaches a fresh PaymentMethod to the customer and returns its id;
+        # that returned id (NOT the shared "pm_card_visa" token) is what we set
+        # as the default and later charge off_session.
+        setup = ::Stripe::SetupIntent.create(
+          {
+            customer:             cus_id,
+            payment_method:       payment_method,
+            payment_method_types: ["card"],
+            confirm:              true,
+            usage:                "off_session",
+          },
+        )
         ::Stripe::Customer.update(
           cus_id,
-          { invoice_settings: { default_payment_method: payment_method } },
+          { invoice_settings: { default_payment_method: setup.payment_method } },
         )
         cus_id
       end

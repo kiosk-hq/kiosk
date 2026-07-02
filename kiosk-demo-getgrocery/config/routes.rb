@@ -12,9 +12,11 @@ Rails.application.routes.draw do
   get "/kiosk/help", to: "kiosk_help#show"
 
   # Kiosk wire surface (controllers shipped by kiosk-server).
-  # In a follow-up release these will be mounted via the engine's own
-  # routes drawer; for v0.1 alpha we wire them manually here.
-  post "/kiosk/exec",                              to: "kiosk/server/exec#exec"
+  # REST endpoints (ADR-0005): one per verb, HTTP method = semantics.
+  get  "/kiosk/schema",                            to: "kiosk/server/exec#schema"
+  post "/kiosk/query",                             to: "kiosk/server/exec#query"
+  post "/kiosk/run",                               to: "kiosk/server/exec#run"
+  post "/kiosk/pay",                               to: "kiosk/server/exec#pay"
   get  "/kiosk/.well-known/jwks.json",             to: "kiosk/server/jwks#show"
   post "/kiosk/oauth/device_authorization",        to: "kiosk/server/oauth_device_authorization#create"
   post "/kiosk/oauth/token",                       to: "kiosk/server/oauth_token#create"
@@ -35,6 +37,12 @@ Rails.application.routes.draw do
     endpoint = doc[:kiosk][:endpoint]
     doc[:kiosk].delete(:capabilities)          # drop the static capability list
     doc[:kiosk][:verbs] = Kiosk::Server::Executor::IMPLEMENTED_VERBS  # the truth
+    doc[:kiosk][:routing] = {                                         # ADR-0005
+      "schema" => { "method" => "GET",  "path" => "#{endpoint}/schema" },
+      "query"  => { "method" => "POST", "path" => "#{endpoint}/query" },
+      "run"    => { "method" => "POST", "path" => "#{endpoint}/run" },
+      "pay"    => { "method" => "POST", "path" => "#{endpoint}/pay" },
+    }
     doc[:kiosk][:help]  = "#{endpoint}/help"   # the surface + protocol live here
     [200, { "content-type" => "application/json" }, [JSON.generate(doc)]]
   }

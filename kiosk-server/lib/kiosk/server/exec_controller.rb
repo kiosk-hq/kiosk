@@ -16,10 +16,11 @@ if defined?(::ActionController::API)
       # POST /kiosk/exec — Rails controller wrapping {Executor}.
       # See design spec §5.4 «Server side» for the contract.
       #
-      # Wire request body (JSON):
-      #
-      #   { "command": "query", "body": { "name": "menu_by_restaurant", "restaurant": "..." } }
-      #   { "command": "run", "body": { "name": "ping", "...": "..." } }
+      # REST endpoints (one per verb — ADR-0005):
+      #   GET  /kiosk/schema
+      #   POST /kiosk/query  { "name": "catalog", ... }
+      #   POST /kiosk/run    { "name": "create_order", ... }
+      #   POST /kiosk/pay    { "intent_mandate_jws": "...", ... }
       #
       # Wire response (JSON): success per {Result#to_envelope}, error per
       # {Errors::Base#to_envelope}.
@@ -30,21 +31,36 @@ if defined?(::ActionController::API)
       # through the same endpoint). Adapter `#verify(request)` returns a
       # {Kiosk::Identity} or `nil`; `nil` becomes 401.
       class ExecController < ::ActionController::API
-        def exec
+        # REST verb: GET /kiosk/schema
+        def schema
+          run_command(:schema, {})
+        end
+
+        # REST verb: POST /kiosk/query
+        def query
+          run_command(:query, parse_body!)
+        end
+
+        # REST verb: POST /kiosk/run
+        def run
+          run_command(:run, parse_body!)
+        end
+
+        # REST verb: POST /kiosk/pay
+        def pay
+          run_command(:pay, parse_body!)
+        end
+
+        private
+
+        def run_command(command, args)
           identity = resolve_identity!
-          parsed   = parse_body!
 
-          command = parsed[:command] || parsed[:kind]
-          args    = parsed[:body]    || parsed[:args]
-
-          # PoW gate: no-op when reputation_policy is nil (the default).
-          # Raises Errors::PowRequired (402) or Errors::Forbidden (403) on
-          # challenge / bad-proof; returns :proceed otherwise.
           PowGate.gate(
             identity: identity,
             command:  command,
             body:     args,
-            pow:      parsed[:pow],
+            pow:      nil,
           )
 
           result = Executor.call(
@@ -58,8 +74,6 @@ if defined?(::ActionController::API)
         rescue Errors::Base => e
           render_envelope(e.to_envelope, status: e.http_status)
         end
-
-        private
 
         def resolve_identity!
           idp = Kiosk.configuration.agent_idp || Kiosk.configuration.user_idp

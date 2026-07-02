@@ -69,7 +69,7 @@ module Kiosk
           mode:                    "setup",
           customer:                cus_id,
           payment_method_types:    ["card"],
-          redirect_on_completion:  "never",
+          success_url:             @return_url || "http://localhost:3005/payment/return",
         )
         session.url
       end

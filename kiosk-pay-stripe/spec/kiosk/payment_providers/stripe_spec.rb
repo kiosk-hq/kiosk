@@ -43,9 +43,11 @@ RSpec.describe Kiosk::PaymentProviders::Stripe do
     it "creates a Checkout Session in setup mode for an existing customer and returns the url" do
       session = double("CheckoutSession", url: "https://checkout.stripe.com/setup/abc")
 
+      # redirect_on_completion: "never" ⇒ no success_url/cancel_url needed.
       expect(::Stripe::Checkout::Session).to receive(:create).with(
         mode:                    "setup",
         customer:                "cus_existing",
+        payment_method_types:    ["card"],
         redirect_on_completion:  "never",
       ).and_return(session)
 
@@ -64,7 +66,7 @@ RSpec.describe Kiosk::PaymentProviders::Stripe do
         customer_saver:    ->(uid, cid) { saved[uid] = cid },
       )
 
-      expect(::Stripe::Customer).to receive(:create).with({}).and_return(new_cus)
+      expect(::Stripe::Customer).to receive(:create).with({ name: "principal-user-2" }).and_return(new_cus)
       expect(::Stripe::Checkout::Session).to receive(:create).with(
         hash_including(customer: "cus_new", mode: "setup", redirect_on_completion: "never"),
       ).and_return(session)
@@ -368,7 +370,7 @@ RSpec.describe Kiosk::PaymentProviders::Stripe do
         customer_saver:    ->(uid, cid) { saved[uid] = cid },
       )
 
-      expect(::Stripe::Customer).to receive(:create).with({}).and_return(new_cus)
+      expect(::Stripe::Customer).to receive(:create).with({ name: "principal-user-new" }).and_return(new_cus)
       setup = double("SetupIntent", payment_method: "pm_attached_2")
       expect(::Stripe::SetupIntent).to receive(:create).with(
         hash_including(customer: new_cus_id, payment_method: "pm_card_visa"),

@@ -186,7 +186,22 @@ module Kiosk
         pem = ENV["KIOSK_SIGNING_KEY_PEM"]
         return Kiosk::Server::SigningKey.from_pem(pem) if pem && !pem.empty?
 
-        Kiosk::Server::SigningKey.generate
+        encoded = ENV["KIOSK_SIGNING_KEY_B64"]
+        if encoded && !encoded.empty?
+          require "base64"
+          return Kiosk::Server::SigningKey.from_pem(Base64.decode64(encoded))
+        end
+
+        raise <<~MSG
+          KIOSK_SIGNING_KEY_PEM or KIOSK_SIGNING_KEY_B64 is required.
+
+          Generate one with:
+            openssl genrsa 2048 | base64
+
+          Then set it in your environment or mise.toml:
+            [env]
+            KIOSK_SIGNING_KEY_B64 = "LS0tLS1CRUdJTi..."
+        MSG
       end
     end
   end

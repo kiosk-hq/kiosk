@@ -193,7 +193,6 @@ STDERR.puts "  my_orders: #{my_orders.size} order(s)"
 # -- Step 9: print ONE JSON line --
 puts JSON.generate(
   http_register:      rc_reg,
-  http_attach:        rc_attach,
   http_catalog:       rc_catalog,
   http_order:         rc_order,
   http_slots:         rc_slots,

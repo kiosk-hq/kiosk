@@ -6,6 +6,6 @@
 class HomeController < ActionController::Base
   def index
     # Set a Link header too, so a header-only agent finds the well-known.
-    response.set_header("Link", '</.well-known/kiosk.json>; rel="kiosk"')
+    response.set_header("Link", '<http://kiosk.tech:8787/skill.md>; rel="kiosk"')
   end
 end

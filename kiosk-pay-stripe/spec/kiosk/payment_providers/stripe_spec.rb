@@ -43,12 +43,12 @@ RSpec.describe Kiosk::PaymentProviders::Stripe do
     it "creates a Checkout Session in setup mode for an existing customer and returns the url" do
       session = double("CheckoutSession", url: "https://checkout.stripe.com/setup/abc")
 
-      # redirect_on_completion: "never" ⇒ no success_url/cancel_url needed.
+      # success_url is required by Stripe API even for hosted checkout.
       expect(::Stripe::Checkout::Session).to receive(:create).with(
         mode:                    "setup",
         customer:                "cus_existing",
         payment_method_types:    ["card"],
-        redirect_on_completion:  "never",
+        success_url:             "http://localhost:3005/payment/return",
       ).and_return(session)
 
       url = resolver_adapter.setup_url(user_id: "user-1")
@@ -68,7 +68,7 @@ RSpec.describe Kiosk::PaymentProviders::Stripe do
 
       expect(::Stripe::Customer).to receive(:create).with({ name: "principal-user-2" }).and_return(new_cus)
       expect(::Stripe::Checkout::Session).to receive(:create).with(
-        hash_including(customer: "cus_new", mode: "setup", redirect_on_completion: "never"),
+        hash_including(customer: "cus_new", mode: "setup", success_url: "http://localhost:3005/payment/return"),
       ).and_return(session)
 
       url = fresh_adapter.setup_url(user_id: "user-2")

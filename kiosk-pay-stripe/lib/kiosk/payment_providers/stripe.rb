@@ -41,13 +41,15 @@ module Kiosk
       #   never enabled in production or the live demo, where the real hosted
       #   SetupIntent flow runs.
       def initialize(api_key: nil, test_payment_method: "pm_card_visa",
-                     customer_resolver: nil, customer_saver: nil, test_autocard: false)
+                     customer_resolver: nil, customer_saver: nil, test_autocard: false,
+                     return_url: nil)
         super()
         @api_key             = api_key || ENV.fetch("STRIPE_SECRET_KEY", nil)
         @test_payment_method = test_payment_method
         @customer_resolver   = customer_resolver
         @customer_saver      = customer_saver
         @test_autocard       = test_autocard
+        @return_url          = return_url
         require "stripe"
         # PoC scope: this sets a PROCESS-GLOBAL Stripe key. Multiple adapter
         # instances with different keys would clobber each other; a future fix

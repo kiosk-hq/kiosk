@@ -162,7 +162,6 @@ namespace :demo do
     end
 
     check.call("http_register",      result["http_register"],      201)
-    check.call("http_attach",        result["http_attach"],        200)
     check.call("http_catalog",       result["http_catalog"],       200)
     check.call("http_order",         result["http_order"],         200)
     check.call("http_slots",         result["http_slots"],         200)

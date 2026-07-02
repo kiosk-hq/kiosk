@@ -59,6 +59,7 @@ Kiosk.configure do |c|
     customer_resolver: ->(uid) { StripeCustomer.find_by(user_id: uid)&.customer_id },
     customer_saver:    ->(uid, cid) { StripeCustomer.create!(user_id: uid, customer_id: cid) },
     test_autocard:     ENV["KIOSK_TEST_AUTOCARD"] == "1",
+    return_url:        "http://kiosk.tech:8787/payment/return",
   )
 end
 

@@ -12,6 +12,9 @@ module Kiosk
         role       = role.to_s
         difficulty = config.registration_difficulty
 
+        # Normalise PEM: strip leading/trailing whitespace so lookup matches storage.
+        public_key_pem = public_key_pem.strip
+
         unless config.roles.map(&:to_s).include?(role)
           raise Errors::BadRequest.new("role #{role.inspect} not in configured roles",
                                        hint: "Allowed: #{config.roles.inspect}")

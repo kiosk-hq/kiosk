@@ -49,6 +49,10 @@ class FakeConnection
     @next_result
   end
 
+  def quote(value)
+    "'#{value}'"
+  end
+
   def in_transaction? = @transaction_depth > 0
 end
 

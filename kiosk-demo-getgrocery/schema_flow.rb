@@ -19,6 +19,15 @@ require "uri"
 
 SERVER = ENV.fetch("SERVER_URL")
 
+def get_json(path, bearer: nil)
+  uri = URI("#{SERVER}#{path}")
+  headers = {}
+  headers["Authorization"] = "Bearer #{bearer}" if bearer
+  req = Net::HTTP::Get.new(uri, headers)
+  res = Net::HTTP.new(uri.host, uri.port).request(req)
+  [res.code.to_i, (JSON.parse(res.body) rescue {})]
+end
+
 def post_json(path, body, bearer: nil)
   uri = URI("#{SERVER}#{path}")
   headers = { "Content-Type" => "application/json" }
@@ -41,12 +50,12 @@ token = reg.fetch("access_token")
 
 # ── Call schema ──────────────────────────────────────────────────────────────
 
-schema_rc, schema_body = post_json("/kiosk/exec", { command: "schema" }, bearer: token)
+schema_rc, schema_body = get_json("/kiosk/schema", bearer: token)
 abort "schema call failed (#{schema_rc}): #{JSON.generate(schema_body)}" unless schema_rc == 200
 
 # ── Call help ────────────────────────────────────────────────────────────────
 
-help_rc, help_body = post_json("/kiosk/exec", { command: "help" }, bearer: token)
+help_rc, help_body = get_json("/kiosk/help", bearer: token)
 abort "help call failed (#{help_rc}): #{JSON.generate(help_body)}" unless help_rc == 200
 
 # ── Emit structured JSON for the rake task to assert ────────────────────────

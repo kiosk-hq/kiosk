@@ -85,9 +85,9 @@ def pay_for_order(server, issuer, token, key, user_id, agent_id, order_id, total
   payment_jws = JWT.encode(payment_payload, key, "RS256")
 
   post_json(
-    "#{server}/kiosk/exec",
-    { command: "pay", body: { intent_mandate_jws: intent_jws, cart_mandate_jws: cart_jws,
-                               payment_mandate_jws: payment_jws } },
+    "#{server}/kiosk/pay",
+    { intent_mandate_jws: intent_jws, cart_mandate_jws: cart_jws,
+      payment_mandate_jws: payment_jws },
     { "Authorization" => "Bearer #{token}" },
   )
 end
@@ -119,8 +119,8 @@ token_b    = reg_b.fetch("access_token")
 
 # ── Step 3: Query catalog (shared) ───────────────────────────────────────────
 rc, catalog_resp = post_json(
-  "#{SERVER}/kiosk/exec",
-  { command: "query", body: { name: "catalog" } },
+  "#{SERVER}/kiosk/query",
+  { name: "catalog" },
   { "Authorization" => "Bearer #{token_a}" },
 )
 abort "catalog failed (#{rc}): #{JSON.generate(catalog_resp)}" unless rc == 200
@@ -131,8 +131,8 @@ product_sku = product.fetch("sku")
 
 # ── Step 4: A creates order_a ─────────────────────────────────────────────────
 rc, order_a_resp = post_json(
-  "#{SERVER}/kiosk/exec",
-  { command: "run", body: { name: "create_order", items: [{ sku: product_sku, qty: 1 }] } },
+  "#{SERVER}/kiosk/run",
+  { name: "create_order", items: [{ sku: product_sku, qty: 1 }] },
   { "Authorization" => "Bearer #{token_a}" },
 )
 abort "A create_order failed (#{rc}): #{JSON.generate(order_a_resp)}" unless rc == 200
@@ -146,8 +146,8 @@ abort "A pay failed (#{rc})" unless rc == 200
 
 # ── Step 6: B queries my_orders (before having any orders) ───────────────────
 rc, b_before_resp = post_json(
-  "#{SERVER}/kiosk/exec",
-  { command: "query", body: { name: "my_orders" } },
+  "#{SERVER}/kiosk/query",
+  { name: "my_orders" },
   { "Authorization" => "Bearer #{token_b}" },
 )
 abort "B my_orders (before) failed (#{rc})" unless rc == 200
@@ -155,30 +155,24 @@ b_my_orders_before = (b_before_resp["rows"] || []).map { |r| r["id"] }
 
 # ── Step 7: B tries schedule_delivery on A's order (MUST be 403) ─────────────
 b_schedule_on_a_status, _b_schedule_on_a_resp = post_json(
-  "#{SERVER}/kiosk/exec",
+  "#{SERVER}/kiosk/run",
   {
-    command: "run",
-    body: {
-      name:             "schedule_delivery",
-      order_id:         order_id_a,
-      delivery_slot_id: 1,
-      delivery_address: "2 Evil St, Neo-Tokyo",
-    },
+    name:             "schedule_delivery",
+    order_id:         order_id_a,
+    delivery_slot_id: 1,
+    delivery_address: "2 Evil St, Neo-Tokyo",
   },
   { "Authorization" => "Bearer #{token_b}" },
 )
 
 # ── Step 8: A schedules own order (MUST succeed) ──────────────────────────────
 rc, sched_a = post_json(
-  "#{SERVER}/kiosk/exec",
+  "#{SERVER}/kiosk/run",
   {
-    command: "run",
-    body: {
-      name:             "schedule_delivery",
-      order_id:         order_id_a,
-      delivery_slot_id: 2,
-      delivery_address: "1 Good St, Neo-Tokyo",
-    },
+    name:             "schedule_delivery",
+    order_id:         order_id_a,
+    delivery_slot_id: 2,
+    delivery_address: "1 Good St, Neo-Tokyo",
   },
   { "Authorization" => "Bearer #{token_a}" },
 )
@@ -186,14 +180,11 @@ abort "A schedule_delivery failed (#{rc}): #{JSON.generate(sched_a)}" unless rc 
 
 # ── Step 9: B calls create_order with forged user_id ─────────────────────────
 rc, forged_resp = post_json(
-  "#{SERVER}/kiosk/exec",
+  "#{SERVER}/kiosk/run",
   {
-    command: "run",
-    body: {
-      name:       "create_order",
-      items:      [{ sku: product_sku, qty: 1 }],
-      user_id:    user_id_a,  # adversarial: B supplies A's user_id
-    },
+    name:       "create_order",
+    items:      [{ sku: product_sku, qty: 1 }],
+    user_id:    user_id_a,  # adversarial: B supplies A's user_id
   },
   { "Authorization" => "Bearer #{token_b}" },
 )
@@ -203,8 +194,8 @@ abort "order_id_b_forged missing" unless order_id_b_forged
 
 # ── Step 10: B creates genuine order, pays, schedules ────────────────────────
 rc, order_b_resp = post_json(
-  "#{SERVER}/kiosk/exec",
-  { command: "run", body: { name: "create_order", items: [{ sku: product_sku, qty: 1 }] } },
+  "#{SERVER}/kiosk/run",
+  { name: "create_order", items: [{ sku: product_sku, qty: 1 }] },
   { "Authorization" => "Bearer #{token_b}" },
 )
 abort "B create_order (genuine) failed (#{rc}): #{JSON.generate(order_b_resp)}" unless rc == 200
@@ -216,15 +207,12 @@ rc, _pay_b = pay_for_order(SERVER, ISSUER, token_b, key_b, user_id_b, agent_id_b
 abort "B pay failed (#{rc})" unless rc == 200
 
 rc, sched_b = post_json(
-  "#{SERVER}/kiosk/exec",
+  "#{SERVER}/kiosk/run",
   {
-    command: "run",
-    body: {
-      name:             "schedule_delivery",
-      order_id:         order_id_b,
-      delivery_slot_id: 1,
-      delivery_address: "3 Bob St, Neo-Tokyo",
-    },
+    name:             "schedule_delivery",
+    order_id:         order_id_b,
+    delivery_slot_id: 1,
+    delivery_address: "3 Bob St, Neo-Tokyo",
   },
   { "Authorization" => "Bearer #{token_b}" },
 )
@@ -232,8 +220,8 @@ abort "B schedule_delivery failed (#{rc}): #{JSON.generate(sched_b)}" unless rc 
 
 # ── Step 11: B queries my_orders after creating own order ─────────────────────
 rc, b_after_resp = post_json(
-  "#{SERVER}/kiosk/exec",
-  { command: "query", body: { name: "my_orders" } },
+  "#{SERVER}/kiosk/query",
+  { name: "my_orders" },
   { "Authorization" => "Bearer #{token_b}" },
 )
 abort "B my_orders (after) failed (#{rc})" unless rc == 200
@@ -241,8 +229,8 @@ b_my_orders_after = (b_after_resp["rows"] || []).map { |r| r["id"] }
 
 # ── Step 12: A queries my_orders after B's positive control ───────────────────
 rc, a_after_resp = post_json(
-  "#{SERVER}/kiosk/exec",
-  { command: "query", body: { name: "my_orders" } },
+  "#{SERVER}/kiosk/query",
+  { name: "my_orders" },
   { "Authorization" => "Bearer #{token_a}" },
 )
 abort "A my_orders (after) failed (#{rc})" unless rc == 200

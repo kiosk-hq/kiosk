@@ -52,8 +52,8 @@ STDERR.puts "  Registered: user_id=#{user_id}"
 
 # -- Step 2: query catalog --
 rc_catalog, catalog_resp = post_json(
-  "#{SERVER}/kiosk/exec",
-  { command: "query", body: { name: "catalog" } },
+  "#{SERVER}/kiosk/query",
+  { name: "catalog" },
   { "Authorization" => "Bearer #{token}" },
 )
 abort "query catalog failed (#{rc_catalog}): #{JSON.generate(catalog_resp)}" unless rc_catalog == 200
@@ -67,8 +67,8 @@ STDERR.puts "  Ordering: #{items.map { |i| "sku=#{i[:sku]}" }.join(", ")}"
 
 # -- Step 3: create_order --
 rc_order, order_resp = post_json(
-  "#{SERVER}/kiosk/exec",
-  { command: "run", body: { name: "create_order", items: items } },
+  "#{SERVER}/kiosk/run",
+  { name: "create_order", items: items },
   { "Authorization" => "Bearer #{token}" },
 )
 abort "create_order failed (#{rc_order}): #{JSON.generate(order_resp)}" unless rc_order == 200
@@ -80,8 +80,8 @@ STDERR.puts "  create_order: order_id=#{order_id} total=#{total_cents}c"
 # -- Step 4: query delivery_slots --
 delivery_date = (Date.today + 1).to_s
 rc_slots, slots_resp = post_json(
-  "#{SERVER}/kiosk/exec",
-  { command: "query", body: { name: "delivery_slots", date: delivery_date } },
+  "#{SERVER}/kiosk/query",
+  { name: "delivery_slots", date: delivery_date },
   { "Authorization" => "Bearer #{token}" },
 )
 abort "query delivery_slots failed (#{rc_slots}): #{JSON.generate(slots_resp)}" unless rc_slots == 200
@@ -96,8 +96,8 @@ STDERR.puts "  Delivery slot: id=#{slot_id} #{slot["label"]} on #{delivery_date}
 # it hands the human the setup_url. Under KIOSK_TEST_AUTOCARD the provider
 # reports {status:"ready"} (card auto-provisioned at capture).
 rc_setup, setup_resp = post_json(
-  "#{SERVER}/kiosk/exec",
-  { command: "run", body: { name: "payment_setup" } },
+  "#{SERVER}/kiosk/run",
+  { name: "payment_setup" },
   { "Authorization" => "Bearer #{token}" },
 )
 abort "payment_setup failed (#{rc_setup}): #{JSON.generate(setup_resp)}" unless rc_setup == 200
@@ -156,9 +156,9 @@ cart_jws    = JWT.encode(cart_payload,    key, "RS256")
 payment_jws = JWT.encode(payment_payload, key, "RS256")
 
 rc_pay, pay_resp = post_json(
-  "#{SERVER}/kiosk/exec",
-  { command: "pay", body: { intent_mandate_jws: intent_jws, cart_mandate_jws: cart_jws,
-                             payment_mandate_jws: payment_jws } },
+  "#{SERVER}/kiosk/pay",
+  { intent_mandate_jws: intent_jws, cart_mandate_jws: cart_jws,
+    payment_mandate_jws: payment_jws },
   { "Authorization" => "Bearer #{token}" },
 )
 abort "pay failed (#{rc_pay}): #{JSON.generate(pay_resp)}" unless rc_pay == 200
@@ -168,11 +168,11 @@ STDERR.puts "  pay: settlement_id=#{pay_resp.dig("value", "settlement_id")} psp_
 
 # -- Step 7: schedule_delivery --  (renumbered; was Step 6 before payment_setup was added)
 rc_sched, sched_resp = post_json(
-  "#{SERVER}/kiosk/exec",
-  { command: "run", body: { name: "schedule_delivery",
-                             order_id:         order_id,
-                             delivery_slot_id: slot_id,
-                             delivery_address: "42 Sakura Ave, Neo-Tokyo" } },
+  "#{SERVER}/kiosk/run",
+  { name: "schedule_delivery",
+    order_id:         order_id,
+    delivery_slot_id: slot_id,
+    delivery_address: "42 Sakura Ave, Neo-Tokyo" },
   { "Authorization" => "Bearer #{token}" },
 )
 abort "schedule_delivery failed (#{rc_sched}): #{JSON.generate(sched_resp)}" unless rc_sched == 200
@@ -182,8 +182,8 @@ STDERR.puts "  schedule_delivery: order_id=#{order_id} scheduled=#{scheduled_at}
 
 # -- Step 8: query my_orders to confirm --
 rc_my, my_resp = post_json(
-  "#{SERVER}/kiosk/exec",
-  { command: "query", body: { name: "my_orders" } },
+  "#{SERVER}/kiosk/query",
+  { name: "my_orders" },
   { "Authorization" => "Bearer #{token}" },
 )
 abort "my_orders failed (#{rc_my}): #{JSON.generate(my_resp)}" unless rc_my == 200

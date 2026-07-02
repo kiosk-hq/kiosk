@@ -82,18 +82,18 @@ AGENT_TOKEN=$(echo "$REG" | jq -r '.access_token')
 heading "Agent browses the store via named queries"
 
 step "List grocery stores — query: stores"
-STORES=$(curl -sS -X POST "$SERVER_URL/kiosk/exec" \
+STORES=$(curl -sS -X POST "$SERVER_URL/kiosk/query" \
   -H "Authorization: Bearer $AGENT_TOKEN" \
   -H "Content-Type: application/json" \
-  -d '{"command":"query","body":{"name":"stores"}}')
+  -d '{"name":"stores"}')
 echo "$STORES" | jq '.rows'
 STORE_ID=$(echo "$STORES" | jq -r '.rows[0].id')
 
 step "List products at store $STORE_ID — query: products_by_store"
-PRODUCTS=$(curl -sS -X POST "$SERVER_URL/kiosk/exec" \
+PRODUCTS=$(curl -sS -X POST "$SERVER_URL/kiosk/query" \
   -H "Authorization: Bearer $AGENT_TOKEN" \
   -H "Content-Type: application/json" \
-  -d "{\"command\":\"query\",\"body\":{\"name\":\"products_by_store\",\"store_id\":$STORE_ID}}")
+  -d "{\"name\":\"products_by_store\",\"store_id\":$STORE_ID}")
 echo "$PRODUCTS" | jq '.rows'
 PRODUCT_ID=$(echo "$PRODUCTS" | jq -r '.rows[0].id')
 
@@ -102,10 +102,10 @@ PRODUCT_ID=$(echo "$PRODUCTS" | jq -r '.rows[0].id')
 heading "Agent adds a product to cart via Action"
 
 step "run add_to_cart for store $STORE_ID, product $PRODUCT_ID"
-curl -sS -X POST "$SERVER_URL/kiosk/exec" \
+curl -sS -X POST "$SERVER_URL/kiosk/run" \
   -H "Authorization: Bearer $AGENT_TOKEN" \
   -H "Content-Type: application/json" \
-  -d "{\"command\":\"run\",\"body\":{\"name\":\"add_to_cart\",\"store_id\":$STORE_ID,\"product_id\":$PRODUCT_ID,\"qty\":1}}" \
+  -d "{\"name\":\"add_to_cart\",\"store_id\":$STORE_ID,\"product_id\":$PRODUCT_ID,\"qty\":1}" \
   | jq '.value'
 
 # ─── done ────────────────────────────────────────────────────────────

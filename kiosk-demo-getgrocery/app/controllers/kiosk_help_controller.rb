@@ -25,30 +25,37 @@ class KioskHelpController < ActionController::Base
       below is the whole protocol; the surface in section 3 is live.
 
       ## 1. Discover
-      `GET /.well-known/kiosk.json` → `issuer` and `endpoint`. The exec URL is
-      `<endpoint>/exec`. This provider's issuer is `#{issuer}`.
+      `GET /.well-known/kiosk.json` → `issuer`, `endpoint`, and `routing` (verb → method + path).
+      This provider's issuer is `#{issuer}`.
 
       ## 2. Register (one RSA keypair per session)
       Generate an RSA-2048 keypair; keep the private key. Then:
       `POST /kiosk/agents/register` `{ "name": "<your name>", "public_key": "<PEM>", "role": "customer" }`
-      → `{ agent_id, user_id, access_token }`. Send `Authorization: Bearer <access_token>` on every call below.
+      → `{ agent_id, user_id, access_token }`. Send `Authorization: Bearer *** on every call below.
 
       ## 3. Call the surface
-      `POST <endpoint>/exec { "command": <verb>, "body": { "name": <name>, ...params } }`
-      Verbs: `query` (read), `run` (action), `pay` (settle), `schema` / `help` (self-describe).
+      REST endpoints (one per verb, HTTP method = semantics):
 
-      ### Queries — `{ "command":"query", "body":{ "name": … } }`
+      - `GET  <endpoint>/schema` — machine-readable surface (queries + actions + params)
+      - `POST <endpoint>/query  { "name": <name>, ...params }` — read data
+      - `POST <endpoint>/run    { "name": <name>, ...params }` — perform action
+      - `POST <endpoint>/pay    { "intent_mandate_jws": …, "cart_mandate_jws": …, "payment_mandate_jws": … }` — settle payment
+
+      Legacy `POST /exec { "command": <verb>, "body": {…} }` still works for backward compatibility.
+
+      ### Queries — `POST /query { "name": … }`
       #{describe(Kiosk::Server::Queries)}
 
-      ### Actions — `{ "command":"run", "body":{ "name": … } }`
+      ### Actions — `POST /run { "name": … }`
       #{describe(Kiosk::Server::Actions)}
 
       ## 4. Pay (AP2 mandates)
-      Sign two compact **RS256 JWS** with your keypair, `iss` = `#{issuer}`:
+      Sign three **RS256 JWS** with your keypair, `iss` = `#{issuer}`:
       - **intent**: `{ id, user_id, agent_id, iss, scope, cap_amount_cents, currency, exp, iat }`
       - **cart**: `{ id, intent_mandate_id, user_id, agent_id, iss, line_items:[…], total_amount_cents, currency, exp, iat }`
-      Then `POST <endpoint>/exec { "command":"pay", "body":{ "intent_mandate_jws":"…", "cart_mandate_jws":"…" } }`.
-      Bind both mandates to your registered `user_id`/`agent_id`; `iss` must equal the issuer above.
+      - **payment**: `{ id, cart_mandate_id, user_id, agent_id, iss, payment_method, amount_cents, currency, exp, iat }`
+      Then `POST <endpoint>/pay { "intent_mandate_jws": …, "cart_mandate_jws": …, "payment_mandate_jws": … }`.
+      Bind all mandates to your registered `user_id`/`agent_id`; `iss` must equal the issuer above.
 
       ## 5. Notes
       - If any call returns HTTP 402 `pow_required`, solve the proof-of-work in the

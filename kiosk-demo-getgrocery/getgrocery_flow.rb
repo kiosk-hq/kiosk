@@ -1,10 +1,11 @@
 # frozen_string_literal: true
 
 # Agent-side driver: no-human grocery order end-to-end.
-# Flow: register → attach_card (dev-only seam, simulates completed SetupIntent)
-#       → query catalog → run create_order → query delivery_slots
+# Flow: register → query catalog → run create_order → query delivery_slots
 #       → payment_setup (verify "ready") → pay (off_session → real pi_…)
 #       → run schedule_delivery → query my_orders
+# Runs with KIOSK_TEST_AUTOCARD=1: the adapter simulates a completed SetupIntent,
+# so there is no card-setup step (the live flow uses the real hosted page).
 #
 # Usage:
 #   SERVER_URL=http://127.0.0.1:3005 \
@@ -44,18 +45,10 @@ user_id  = reg.fetch("user_id")
 token    = reg.fetch("access_token")
 STDERR.puts "  Registered: user_id=#{user_id}"
 
-# -- Step 1b: attach test card (dev-only seam) --
-# Simulates a completed Stripe SetupIntent without a human at a hosted page.
-# The dev-only route POST /kiosk/_test/attach_card (gated by Rails.env.development?)
-# calls provider.attach_test_card(user_id:) server-side: creates a Stripe Customer
-# for this principal, attaches pm_card_visa, sets it as the default PM.
-# After this, payment_setup returns {status:"ready"} and pay runs off_session.
-rc_attach, attach_resp = post_json(
-  "#{SERVER}/kiosk/_test/attach_card",
-  { user_id: user_id },
-)
-abort "attach_card failed (#{rc_attach}): #{JSON.generate(attach_resp)}" unless rc_attach == 200
-STDERR.puts "  attach_test_card: customer_id=#{attach_resp["customer_id"]}"
+# NOTE: no card-setup step here. This runs with KIOSK_TEST_AUTOCARD=1 (set by the
+# rake task), so the Stripe adapter simulates a completed SetupIntent at capture —
+# payment_setup returns {status:"ready"} and pay runs off_session. In production /
+# the live demo the human completes the real hosted SetupIntent once instead.
 
 # -- Step 2: query catalog --
 rc_catalog, catalog_resp = post_json(
@@ -100,8 +93,8 @@ STDERR.puts "  Delivery slot: id=#{slot_id} #{slot["label"]} on #{delivery_date}
 
 # -- Step 5: payment_setup (verify card is on file before paying) --
 # In the live flow an assistant calls this before every pay; if setup_required,
-# it hands the human the setup_url. Here attach_test_card already ran, so
-# the provider must respond {status:"ready"}.
+# it hands the human the setup_url. Under KIOSK_TEST_AUTOCARD the provider
+# reports {status:"ready"} (card auto-provisioned at capture).
 rc_setup, setup_resp = post_json(
   "#{SERVER}/kiosk/exec",
   { command: "run", body: { name: "payment_setup" } },

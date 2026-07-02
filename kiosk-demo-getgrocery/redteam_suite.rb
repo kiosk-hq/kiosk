@@ -85,16 +85,10 @@ profile = Kiosk::Redteam::Profile.new(
   },
 
   # pay_for: build RS256 intent + cart mandates referencing order_id.
-  # Attaches a Stripe test card for the paying principal before returning
-  # mandates — off_session pay requires a Stripe Customer with a saved PM.
-  # Hits real Stripe (test-mode sk_test_…); a Stripe mock is the future
-  # optimization so the adversarial suites no longer need live Stripe.
-  pay_for: ->(client, principal, owned_ref) {
-    # Attach test card so the off_session Stripe charge settles.
-    attach_resp = client.attach_test_card(principal)
-    raise "redteam: attach_test_card failed (#{attach_resp.status}) for #{principal.user_id}" \
-      unless attach_resp.status == 200
-
+  # No card-setup step: this suite runs with KIOSK_TEST_AUTOCARD=1 against
+  # stripe-mock, so the adapter auto-provisions a test card at capture and the
+  # off_session charge settles. The gates under test are pure Kiosk logic.
+  pay_for: ->(_client, principal, owned_ref) {
     now       = Time.now.to_i
     intent_id = SecureRandom.uuid
     cart_id   = SecureRandom.uuid

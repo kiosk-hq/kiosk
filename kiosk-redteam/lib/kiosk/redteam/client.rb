@@ -68,25 +68,6 @@ module Kiosk
         )
       end
 
-      # ── Dev-only test seam ────────────────────────────────────────────────────
-
-      # Attach a Stripe test card (pm_card_visa) to the given principal's Stripe
-      # Customer via the dev-only route POST /kiosk/_test/attach_card.
-      #
-      # Must be called before the first off_session pay when the target server uses
-      # the real Stripe adapter (no StubPsp fallback).  The route is gated by
-      # Rails.env.development? and does not exist in production.
-      #
-      # Hits real Stripe test-mode (sk_test_…); a Stripe mock is the future
-      # optimization — for now the adversarial suites call this once per principal
-      # that will settle a payment.
-      #
-      # @param principal [Principal]
-      # @return [Response]
-      def attach_test_card(principal)
-        post_json("/kiosk/_test/attach_card", { user_id: principal.user_id })
-      end
-
       # ── KYC ───────────────────────────────────────────────────────────────
 
       # Submit a KYC attestation JWS for the given principal.

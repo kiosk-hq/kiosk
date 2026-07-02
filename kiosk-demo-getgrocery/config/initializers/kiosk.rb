@@ -50,10 +50,15 @@ Kiosk.configure do |c|
     raise "getgroceries requires STRIPE_SECRET_KEY (sk_test_…) or STRIPE_MOCK_URL — see docs/architecture/payment-model.md" if key.nil? || key.empty?
   end
 
+  # KIOSK_TEST_AUTOCARD=1 (set by the demo/redteam/isolation rake tasks) makes the
+  # adapter simulate a completed SetupIntent — automated suites need no card-setup
+  # step and no server-side test route. NEVER set in production or the live demo,
+  # where the real hosted SetupIntent flow runs (human enters the card once).
   c.payment_provider = Kiosk::PaymentProviders::Stripe.new(
     api_key:           key,
     customer_resolver: ->(uid) { StripeCustomer.find_by(user_id: uid)&.customer_id },
     customer_saver:    ->(uid, cid) { StripeCustomer.create!(user_id: uid, customer_id: cid) },
+    test_autocard:     ENV["KIOSK_TEST_AUTOCARD"] == "1",
   )
 end
 
@@ -125,10 +130,13 @@ Kiosk::Server::Actions.register("payment_setup",
   provider = Kiosk.configuration.payment_provider
   issuer   = Kiosk.configuration.issuer
 
-  if provider.saved_method?(user_id: uid)
-    { status: "ready" }
-  else
+  # Key off setup_required? (not saved_method?) so it honours the adapter's
+  # policy — incl. KIOSK_TEST_AUTOCARD, where setup is auto-completed at capture
+  # and this returns "ready" without a hosted-page round-trip.
+  if provider.setup_required?(user_id: uid)
     { status: "setup_required", setup_url: provider.setup_url(user_id: uid) }
+  else
+    { status: "ready" }
   end
 end
 

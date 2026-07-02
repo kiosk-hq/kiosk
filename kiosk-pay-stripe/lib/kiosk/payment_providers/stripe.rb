@@ -32,13 +32,22 @@ module Kiosk
       #   host (e.g. getgroceries); the gem never reads app tables directly.
       # @param customer_saver [#call, nil] callable `(user_id, customer_id) -> void`
       #   Persists a new principal→Customer mapping. Injected by the host.
+      # @param test_autocard [Boolean] TEST-ONLY. When true, the adapter
+      #   simulates a completed SetupIntent (auto-attaches a test card at
+      #   capture) instead of requiring the human's hosted card entry — so
+      #   automated suites (demo drivers, redteam, isolation) need no card-setup
+      #   step and no server-side test route. The host sets this ONLY in a test
+      #   environment (e.g. getgroceries when KIOSK_TEST_AUTOCARD=1); it is
+      #   never enabled in production or the live demo, where the real hosted
+      #   SetupIntent flow runs.
       def initialize(api_key: nil, test_payment_method: "pm_card_visa",
-                     customer_resolver: nil, customer_saver: nil)
+                     customer_resolver: nil, customer_saver: nil, test_autocard: false)
         super()
         @api_key             = api_key || ENV.fetch("STRIPE_SECRET_KEY", nil)
         @test_payment_method = test_payment_method
         @customer_resolver   = customer_resolver
         @customer_saver      = customer_saver
+        @test_autocard       = test_autocard
         require "stripe"
         # PoC scope: this sets a PROCESS-GLOBAL Stripe key. Multiple adapter
         # instances with different keys would clobber each other; a future fix
@@ -77,6 +86,7 @@ module Kiosk
       # @return [Boolean]
       def setup_required?(user_id:)
         return false unless @customer_resolver
+        return false if @test_autocard  # test mode: card auto-provisioned at capture
 
         !saved_method?(user_id: user_id)
       end
@@ -121,6 +131,11 @@ module Kiosk
           # charge its saved card. The mandate's payment_method is deliberately
           # ignored — in this model the assistant authorizes, never presents a card.
           cus_id = @customer_resolver.call(cart_mandate.user_id)
+          # TEST-ONLY: simulate the human's completed SetupIntent so automated
+          # suites need no card-setup step. Never enabled in prod/live demo.
+          if @test_autocard && (cus_id.nil? || saved_payment_method_for(cus_id).nil?)
+            cus_id = attach_test_card(user_id: cart_mandate.user_id)
+          end
           raise SetupRequired unless cus_id
           pm = saved_payment_method_for(cus_id) || raise(SetupRequired)
         else

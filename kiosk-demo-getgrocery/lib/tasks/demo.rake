@@ -101,9 +101,11 @@ namespace :demo do
     puts "\n-- Starting getgrocery on #{server_url} --"
 
     # -- boot the server --
+    # KIOSK_TEST_AUTOCARD=1: the adapter simulates a completed SetupIntent so the
+    # driver needs no card-setup step (real Stripe still produces a real pi_…).
     File.truncate(log, 0) if File.exist?(log)
     server_pid = spawn(
-      { "KIOSK_ISSUER" => kiosk_issuer },
+      { "KIOSK_ISSUER" => kiosk_issuer, "KIOSK_TEST_AUTOCARD" => "1" },
       "bundle exec rails s -p #{port} -b 127.0.0.1 -e development",
       out: log, err: log,
     )
@@ -313,7 +315,7 @@ namespace :demo do
     # ── boot the server ────────────────────────────────────────────────
     File.truncate(log, 0) if File.exist?(log)
     server_pid = spawn(
-      { "KIOSK_ISSUER" => kiosk_issuer, "STRIPE_MOCK_URL" => mock_url, "STRIPE_SECRET_KEY" => "sk_test_mock" },
+      { "KIOSK_ISSUER" => kiosk_issuer, "STRIPE_MOCK_URL" => mock_url, "STRIPE_SECRET_KEY" => "sk_test_mock", "KIOSK_TEST_AUTOCARD" => "1" },
       "bundle exec rails s -p #{port} -b 127.0.0.1 -e development",
       out: log, err: log,
     )
@@ -679,7 +681,7 @@ namespace :demo do
 
     # ── boot the server ────────────────────────────────────────────────
     File.truncate(log, 0) if File.exist?(log)
-    env_vars = { "KIOSK_ISSUER" => kiosk_issuer, "STRIPE_MOCK_URL" => mock_url, "STRIPE_SECRET_KEY" => "sk_test_mock" }
+    env_vars = { "KIOSK_ISSUER" => kiosk_issuer, "STRIPE_MOCK_URL" => mock_url, "STRIPE_SECRET_KEY" => "sk_test_mock", "KIOSK_TEST_AUTOCARD" => "1" }
 
     server_pid = spawn(
       env_vars,

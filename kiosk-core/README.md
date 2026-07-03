@@ -4,7 +4,7 @@ Core abstractions for the [Kiosk](https://kiosk.tech) framework.
 
 ## What is Kiosk
 
-Kiosk turns a Postgres-backed business app into a production-grade agent surface: MCP endpoint, multi-agent identity per user, RLS-protected data plane, AP2 mandate trail, structured audit. Apache-2.0.
+Kiosk turns a Postgres-backed business app into a production-grade agent surface: REST endpoint, multi-agent identity per user, RLS-protected data plane, AP2 mandate trail, structured audit. Apache-2.0.
 
 ## What is kiosk-core
 

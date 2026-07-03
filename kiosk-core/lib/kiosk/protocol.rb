@@ -4,7 +4,7 @@ module Kiosk
   # Wire-protocol constants and HTTP header names.
   # See design spec §3.2 «Distribution» for the version-handshake contract.
   module Protocol
-    # Semver of the wire protocol exposed at /kiosk/exec, /kiosk/mcp, etc.
+    # Semver of the wire protocol exposed at /kiosk/query, /kiosk/run, /kiosk/pay, etc.
     # Changes more slowly than the server version itself.
     API_VERSION = "0.1.0"
 

@@ -40,8 +40,21 @@ assert() {
 
 exec_call() {
   local token="$1"
-  local body="$2"
-  curl -sS -X POST "$SERVER_URL/kiosk/exec" \
+  local verb="$2"
+  local body="$3"
+  local url="$SERVER_URL/kiosk/$verb"
+  curl -sS -X POST "$url" \
+    -H "Authorization: Bearer $token" \
+    -H "Content-Type: application/json" \
+    -d "$body"
+}
+
+exec_json() {
+  # Generic POST to an arbitrary kiosk path.
+  local token="$1"
+  local path="$2"
+  local body="$3"
+  curl -sS -X POST "$SERVER_URL$path" \
     -H "Authorization: Bearer $token" \
     -H "Content-Type: application/json" \
     -d "$body"
@@ -62,10 +75,10 @@ assert "kiosk.capabilities[]"      "$(echo "$wk" | jq -r '.kiosk.capabilities | 
 
 printf "\n\033[1m=== response headers ===\033[0m\n"
 
-headers=$(curl -sS -o /dev/null -D - -X POST "$SERVER_URL/kiosk/exec" \
+headers=$(curl -sS -o /dev/null -D - -X POST "$SERVER_URL/kiosk/query" \
   -H "Authorization: Bearer $ALICE_AGENT_TOKEN" \
   -H "Content-Type: application/json" \
-  -d '{"command":"query","body":{"name":"salons"}}')
+  -d '{"name":"salons"}')
 
 assert "Kiosk-Server-Version present" "$(echo "$headers" | grep -i '^Kiosk-Server-Version:' | wc -l | tr -d ' ')" "1"
 assert "Kiosk-API-Version present"    "$(echo "$headers" | grep -i '^Kiosk-API-Version:'    | wc -l | tr -d ' ')" "1"
@@ -75,7 +88,7 @@ assert "Kiosk-Min-Client present"     "$(echo "$headers" | grep -i '^Kiosk-Min-C
 
 printf "\n\033[1m=== query verb ===\033[0m\n"
 
-r=$(exec_call "$ALICE_AGENT_TOKEN" '{"command":"query","body":{"name":"salons"}}')
+r=$(exec_call "$ALICE_AGENT_TOKEN" "query" '{"name":"salons"}')
 assert "ok: true"                  "$(echo "$r" | jq -r '.ok')"                    "true"
 assert "kind: rows"                "$(echo "$r" | jq -r '.kind')"                  "rows"
 assert "exactly 1 salon"           "$(echo "$r" | jq -r '.rows | length')"         "1"
@@ -86,54 +99,54 @@ assert "salon name is Combette"      "$(echo "$r" | jq -r '.rows[0].name')"     
 printf "\n\033[1m=== run verb — book_appointment ===\033[0m\n"
 
 # Get salon id first.
-salon_id=$(exec_call "$ALICE_AGENT_TOKEN" '{"command":"query","body":{"name":"salons"}}' | jq -r '.rows[0].id')
+salon_id=$(exec_call "$ALICE_AGENT_TOKEN" "query" '{"name":"salons"}' | jq -r '.rows[0].id')
 
-r=$(exec_call "$ALICE_AGENT_TOKEN" "{\"command\":\"run\",\"body\":{\"name\":\"book_appointment\",\"salon_id\":$salon_id,\"slot\":\"2026-06-15T14:00:00Z\"}}")
+r=$(exec_call "$ALICE_AGENT_TOKEN" "run" "{\"name\":\"book_appointment\",\"salon_id\":$salon_id,\"slot\":\"2026-06-15T14:00:00Z\"}")
 assert "ok: true"                  "$(echo "$r" | jq -r '.ok')"                    "true"
 assert "kind: value"               "$(echo "$r" | jq -r '.kind')"                  "value"
 assert "appointment_id returned"   "$(echo "$r" | jq -r '.value.appointment_id | length > 0')" "true"
-assert "salon_id echoed"           "$(echo "$r" | jq -r ".value.salon_id")"        "$salon_id"
+assert "salon_id echoed"           "$(echo "$r" | jq -r \".value.salon_id\")"        "$salon_id"
 
 # ─── appointment landed in DB ───────────────────────────────────────────
 
 printf "\n\033[1m=== verify appointment landed ===\033[0m\n"
 
-r=$(exec_call "$ALICE_AGENT_TOKEN" '{"command":"query","body":{"name":"my_appointments"}}')
+r=$(exec_call "$ALICE_AGENT_TOKEN" "query" '{"name":"my_appointments"}')
 assert "1 appointment exists"      "$(echo "$r" | jq -r '.rows | length')"          "1"
 
 # ─── error envelopes ────────────────────────────────────────────────────
 
 printf "\n\033[1m=== error envelopes ===\033[0m\n"
 
-# Unknown verb → BadRequest, http 400, code bad_request
-status=$(curl -sS -o /dev/null -w "%{http_code}" -X POST "$SERVER_URL/kiosk/exec" \
+# Unknown query name → NotFound, http 404, code not_found
+status=$(curl -sS -o /dev/null -w "%{http_code}" -X POST "$SERVER_URL/kiosk/query" \
   -H "Authorization: Bearer $ALICE_AGENT_TOKEN" \
   -H "Content-Type: application/json" \
-  -d '{"command":"frobnicate","body":{}}')
-assert "unknown verb → 400"        "$status" "400"
+  -d '{"name":"frobnicate"}')
+assert "unknown query → 404"        "$status" "404"
 
-r=$(exec_call "$ALICE_AGENT_TOKEN" '{"command":"frobnicate","body":{}}')
-assert "ok: false on bad verb"     "$(echo "$r" | jq -r '.ok')"                "false"
-assert "error.code bad_request"    "$(echo "$r" | jq -r '.error.code')"        "bad_request"
+r=$(exec_call "$ALICE_AGENT_TOKEN" "query" '{"name":"frobnicate"}')
+assert "ok: false on bad query"     "$(echo "$r" | jq -r '.ok')"                "false"
+assert "error.code not_found"       "$(echo "$r" | jq -r '.error.code')"        "not_found"
 
 # Unknown action name → NotFound, http 404, code not_found
-status=$(curl -sS -o /dev/null -w "%{http_code}" -X POST "$SERVER_URL/kiosk/exec" \
+status=$(curl -sS -o /dev/null -w "%{http_code}" -X POST "$SERVER_URL/kiosk/run" \
   -H "Authorization: Bearer $ALICE_AGENT_TOKEN" \
   -H "Content-Type: application/json" \
-  -d '{"command":"run","body":{"name":"nope"}}')
+  -d '{"name":"nope"}')
 assert "unknown action → 404"      "$status" "404"
 
 # Missing Authorization → Unauthenticated, http 401
-status=$(curl -sS -o /dev/null -w "%{http_code}" -X POST "$SERVER_URL/kiosk/exec" \
+status=$(curl -sS -o /dev/null -w "%{http_code}" -X POST "$SERVER_URL/kiosk/query" \
   -H "Content-Type: application/json" \
-  -d '{"command":"query","body":{"name":"salons"}}')
+  -d '{"name":"salons"}')
 assert "no auth → 401"             "$status" "401"
 
 # Stub IdP returns nil for unknown token shape → 401
-status=$(curl -sS -o /dev/null -w "%{http_code}" -X POST "$SERVER_URL/kiosk/exec" \
+status=$(curl -sS -o /dev/null -w "%{http_code}" -X POST "$SERVER_URL/kiosk/query" \
   -H "Authorization: Bearer garbage" \
   -H "Content-Type: application/json" \
-  -d '{"command":"query","body":{"name":"salons"}}')
+  -d '{"name":"salons"}')
 assert "garbage token → 401"       "$status" "401"
 
 # ─── JWKS endpoint ──────────────────────────────────────────────────────
@@ -219,11 +232,11 @@ poll3=$(curl -sS -X POST "$SERVER_URL/kiosk/oauth/token" \
   --data-urlencode "device_code=$DEVICE_CODE")
 assert "token poll (replay): error=invalid_grant"       "$(echo "$poll3" | jq -r '.error')"       "invalid_grant"
 
-# Step 6 — use the JWT against /kiosk/exec.
-exec_with_jwt=$(curl -sS -X POST "$SERVER_URL/kiosk/exec" \
+# Step 6 — use the JWT against /kiosk/query.
+exec_with_jwt=$(curl -sS -X POST "$SERVER_URL/kiosk/query" \
   -H "Authorization: Bearer $ACCESS_TOKEN" \
   -H "Content-Type: application/json" \
-  -d '{"command":"query","body":{"name":"salons"}}')
+  -d '{"name":"salons"}')
 assert "exec via OAuth JWT: ok=true"                    "$(echo "$exec_with_jwt" | jq -r '.ok')"             "true"
 assert "exec via OAuth JWT: returns rows"               "$(echo "$exec_with_jwt" | jq -r '.kind')"           "rows"
 assert "exec via OAuth JWT: salon present"              "$(echo "$exec_with_jwt" | jq -r '.rows[0].name')"   "Combette on Park"
@@ -383,10 +396,10 @@ else
 
   # Verify the persisted token actually works against /kiosk/exec.
   PERSISTED_TOKEN=$(jq -r --arg h "$SERVER_URL" '.[$h].token' "$LOGIN_HOME/.kiosk/credentials")
-  exec_with_persisted=$(curl -sS -X POST "$SERVER_URL/kiosk/exec" \
+  exec_with_persisted=$(curl -sS -X POST "$SERVER_URL/kiosk/query" \
     -H "Authorization: Bearer $PERSISTED_TOKEN" \
     -H "Content-Type: application/json" \
-    -d '{"command":"query","body":{"name":"salons"}}')
+    -d '{"name":"salons"}')
   assert "login: persisted token authenticates /kiosk/exec" \
     "$(echo "$exec_with_persisted" | jq -r '.ok')" "true"
 

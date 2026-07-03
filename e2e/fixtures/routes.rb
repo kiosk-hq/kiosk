@@ -4,11 +4,13 @@ require "json"
 
 Rails.application.routes.draw do
   # Kiosk wire surface (controllers shipped by kiosk-server).
-  # In a follow-up release these will be mounted via the engine's own
-  # routes drawer; for v0.1 alpha we wire them manually here.
-  post "/kiosk/exec",                              to: "kiosk/server/exec#exec"
-  post "/kiosk/agents/register",                   to: "kiosk/server/agents_registration#create"
-  get  "/kiosk/.well-known/jwks.json",             to: "kiosk/server/jwks#show"
+  # REST endpoints — HTTP method carries semantics (GET = read, POST = write).
+  get  "/kiosk/schema",                             to: "kiosk/server/exec#schema"
+  post "/kiosk/query",                              to: "kiosk/server/exec#query"
+  post "/kiosk/run",                                to: "kiosk/server/exec#run"
+  post "/kiosk/pay",                                to: "kiosk/server/exec#pay"
+  post "/kiosk/agents/register",                    to: "kiosk/server/agents_registration#create"
+  get  "/kiosk/.well-known/jwks.json",              to: "kiosk/server/jwks#show"
   post "/kiosk/oauth/device_authorization",        to: "kiosk/server/oauth_device_authorization#create"
   post "/kiosk/oauth/token",                       to: "kiosk/server/oauth_token#create"
 

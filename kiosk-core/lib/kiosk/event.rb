@@ -4,8 +4,8 @@ module Kiosk
   # Provider → user notification event.
   # See design spec §5.8 «Provider → User notifications».
   #
-  # Carried over `/kiosk/events` as NDJSON (Tier 2 polling) or MCP
-  # `notifications/*` (Tier 1 push, post-v1.0).
+  # Carried over `/kiosk/events` as NDJSON (Tier 2 polling).
+  # Tier 1 push delivery (post-v1.0) via NotificationAdapter.
   #
   # @!attribute [r] id
   #   Server-side unique event id.

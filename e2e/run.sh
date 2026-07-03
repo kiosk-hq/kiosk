@@ -4,7 +4,7 @@
 # Same script runs locally and in CI. Builds a fresh Rails app from
 # scratch, installs Kiosk via path overrides, runs the kiosk:install
 # generator, applies migrations, seeds, starts the server, drives a
-# mock-AI-assistant script against /kiosk/exec, asserts on results,
+# mock-AI-assistant script against REST endpoints, asserts on results,
 # tears down.
 #
 # Prereqs:
@@ -26,6 +26,13 @@ set -euo pipefail
 
 SCRIPT_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
 KIOSK_OSS="${KIOSK_OSS:-$( cd "$SCRIPT_DIR/.." && pwd )}"
+
+# ─── mise (Ruby version manager) ────────────────────────────────────────
+# Export mise environment — no cd hooks, persists across directories.
+if command -v mise >/dev/null 2>&1; then
+  mise trust "$KIOSK_OSS" >/dev/null 2>&1 || true
+  eval "$(mise env -s bash)"
+fi
 SERVER_PORT="${SERVER_PORT:-3001}"
 DB_NAME="kiosk_e2e_$$"
 APP_NAME="demo_app"
@@ -57,7 +64,7 @@ log "pre-flight: ruby, bundler, rails, postgres"
 
 command -v ruby     >/dev/null || fail "ruby not on PATH"
 command -v bundle   >/dev/null || fail "bundler not on PATH"
-command -v rails    >/dev/null || { log "rails gem missing — installing"; gem install rails --no-document; }
+command -v rails    >/dev/null && rails --version >/dev/null 2>&1 || { log "rails gem missing — installing"; gem install rails --no-document; }
 command -v psql     >/dev/null || fail "psql not on PATH"
 command -v curl     >/dev/null || fail "curl not on PATH"
 command -v jq       >/dev/null || fail "jq not on PATH"
@@ -169,6 +176,12 @@ bundle exec rails db:create db:migrate db:seed RAILS_ENV=development \
     fail "rails db setup failed"
   }
 ok "schema + seeds applied"
+
+# ─── signing key for JWKS / OAuth ───────────────────────────────────────
+log "generate signing key for JWKS / OAuth"
+SIGNING_KEY_PEM=$(openssl genrsa 2048 2>/dev/null)
+export KIOSK_SIGNING_KEY_B64=$(echo "$SIGNING_KEY_PEM" | base64)
+ok "signing key generated"
 
 # ─── start server ───────────────────────────────────────────────────────
 

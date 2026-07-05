@@ -212,6 +212,54 @@ bundle exec ruby getgrocery_flow.rb
 
 ---
 
+## How agents find you (add 3 hooks, invisible to humans)
+
+Agents need to discover that your site speaks Kiosk. Three hooks — two
+machine-readable, one visual cue for the curious. None interfere with
+your existing site.
+
+### 1. HTML `<link>` tag (machine-readable)
+
+Add to your `<head>`:
+
+```html
+<link rel="kiosk" href="https://kiosk.tech/skill.md">
+```
+
+An agent scanning the page sees this and knows it can transact here.
+
+### 2. HTTP `Link` header (for agents that don't parse HTML)
+
+In your controller:
+
+```ruby
+response.set_header("Link", '<https://kiosk.tech/skill.md>; rel="kiosk"')
+```
+
+A HEAD request is enough — no page download needed.
+
+### 3. Visual "Agents — over here" card (human-readable, subtle)
+
+Add a small section at the bottom of your homepage. It tells agent
+users that your store speaks Kiosk without distracting regular customers:
+
+```html
+<section style="background:#0f2a1c;color:#fff;border-radius:16px;
+                padding:26px 28px;max-width:880px;margin:8px auto 56px">
+  <h2 style="font-size:19px">🤖 Agents — over here. This store speaks Kiosk.</h2>
+  <p style="font-size:14px;opacity:.92">
+    Your assistant can order and pay directly — no human account needed.
+    Start at <code>/.well-known/kiosk.json</code>, then <code>/kiosk/help</code>.
+  </p>
+  <a href="/.well-known/kiosk.json">/.well-known/kiosk.json</a>
+  <a href="/kiosk/help">/kiosk/help</a>
+</section>
+```
+
+See [getgroceries' homepage](https://github.com/kiosk-hq/kiosk/blob/main/kiosk-demo-getgrocery/app/views/home/index.html.erb) for a live example — it's at the bottom, below the product categories. Regular users scroll past it. Agent users know where to look.
+
+---
+
 ## What the agent experience looks like
 
 From the agent's perspective, after these 7 steps:

@@ -1,24 +1,55 @@
-# Kiosk — OSS gems monorepo
+# Kiosk — OSS reference implementation
 
 Apache-2.0 monorepo for [Kiosk](https://kiosk.tech) — the framework that turns a Postgres-backed business app into a production-grade agent surface (REST endpoint, multi-agent identity per user, RLS-protected data plane, AP2 mandate trail, structured audit).
 
 ## Layout
 
+### Core framework
+
 | Gem | Purpose | Status |
 |---|---|---|
 | `kiosk-core` | Value types, abstract bases, GUC constants, configuration. No Rails dep. | alpha |
-| `kiosk-rls` | RLS DSL + migration helpers + `rake kiosk:rls:{show,check}` | planned (M1) |
-| `kiosk-server` | Rails engine, routes, OAuth 2.1 surface, executor | planned (M1-M3) |
-| `kiosk-rls-rspec` / `kiosk-rls-minitest` | Journey-test helpers | planned (M3) |
-| `kiosk-all` | Meta-gem; `bundle add kiosk-all` installs the family | planned (M3) |
-| `kiosk-user-idp-devise` | First user-IdP adapter | planned (M2) |
-| `kiosk-pay-stripe` | First PSP adapter — AP2 mandate trail | planned (M4) |
-| `kiosk-credentials-persona` | First KYC broker adapter | planned (M5) |
-| `kiosk-agent-test` | Live-LLM journey-test companion | planned (M6) |
-| `kiosk-credentials-all` | Multi-region KYC umbrella | planned (M6) |
-| `kiosk-cli` | POSIX-shell CLI binary (`bin/kiosk`) + `install.sh` | alpha (M2) |
-| `kiosk-website` | Landing + docs site source (Astro) | planned (M5-M6) |
-| `kiosk-demo-saas-booking` | Combette reference demo — `rake demo` shows the full wire surface in ~30s | alpha (M3) |
+| `kiosk-rls` | RLS DSL + migration helpers + `rake kiosk:rls:{show,check}` | alpha |
+| `kiosk-server` | Rails engine, routes, OAuth 2.1 surface, executor | alpha |
+| `kiosk-all` | Meta-gem; `bundle add kiosk-all` installs the family | alpha |
+| `kiosk-test-support` | Shared test helpers, factories, RSpec matchers | alpha |
+
+### Plugins & adapters
+
+| Gem | Purpose | Status |
+|---|---|---|
+| `kiosk-rls-rspec` | RSpec journey-test helpers for RLS policies | alpha |
+| `kiosk-rls-minitest` | Minitest journey-test helpers for RLS policies | alpha |
+| `kiosk-user-idp-devise` | User-IdP adapter (Devise) | alpha |
+| `kiosk-pay-stripe` | PSP adapter — Stripe, AP2 mandate trail | alpha |
+
+### Proof-of-work
+
+| Gem | Algorithm | Solver memory | Default? |
+|---|---|---|---|
+| `kiosk-pow-equihash` | Equihash (n=192, k=7) | ~1 GiB | ✅ |
+| `kiosk-pow` | Argon2id (D=0..256) | 64 MiB | legacy |
+| `kiosk-pow-cuckoo` | Cuckatoo29 | ~4 GiB | no |
+
+See `kiosk-pow-equihash/README.md` for the full comparison and rationale.
+
+### Reputation & security
+
+| Gem | Purpose | Status |
+|---|---|---|
+| `kiosk-reputation` | Customer reputation scoring, fraud detection | alpha |
+| `kiosk-redteam` | Red-team scenarios, adversarial test harness | alpha |
+
+### Demo providers
+
+| Demo | Vertical | Status |
+|---|---|---|
+| `kiosk-demo-getgrocery` | Grocery delivery | active |
+| `kiosk-demo-foodelivery` | Restaurant delivery | active |
+| `kiosk-demo-hoteling` | Hotel booking | active |
+| `kiosk-demo-skooti` | Scooter rental | active |
+| `kiosk-demo-saas-booking` | Salon/appointment booking (Combette) | alpha |
+| `e2e` | End-to-end test fixtures, stub PSP, agent pay flow | active |
 
 ## Contributing
 
@@ -33,9 +64,10 @@ Per-gem versioning is independent — path-scoped git tags (e.g. `kiosk-core/v0.
 
 Apache-2.0 for every gem in this repo. See each gem's `LICENSE.txt`.
 
-Commercial gems (regional PSPs, enterprise-IdP tiers) live in separate private repos under the `kiosk-hq` org and are not part of this monorepo. See [kiosk.tech](https://kiosk.tech) for licensing details.
+Commercial gems (regional PSPs, enterprise-IdP tiers) live in separate private repos under the `kiosk-hq` org and are not part of this monorepo.
 
 ## Links
 
-- [kiosk.tech](https://kiosk.tech) — landing + docs
+- [kiosk.tech](https://kiosk.tech) — landing page + agent skill
+- [kiosk.tech/skill.md](https://kiosk.tech/skill.md) — universal agent skill
 - [Issue tracker](https://github.com/kiosk-hq/kiosk/issues)

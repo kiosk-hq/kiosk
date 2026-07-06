@@ -36,7 +36,7 @@ fi
 SERVER_PORT="${SERVER_PORT:-3001}"
 DB_NAME="kiosk_e2e_$$"
 APP_NAME="demo_app"
-TMP_DIR="$(mktemp -d -t kiosk-e2e)"
+TMP_DIR="$(mktemp -d -t kiosk-e2e.XXXX)"
 SERVER_PID=""
 
 # Make rails/bundle available even if gem-bin-dir isn't on PATH.

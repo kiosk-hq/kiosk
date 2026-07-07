@@ -60,13 +60,10 @@ token    = reg.fetch("access_token")
 # ── Step 2: browse — find the Margherita menu item via named query ───────
 
 rc, browse = post_json(
-  "#{SERVER}/kiosk/exec",
+  "#{SERVER}/kiosk/query",
   {
-    command: "query",
-    body: {
-      name:       "menu_by_restaurant",
-      restaurant: "Mamma Pizza",
-    },
+    name:       "menu_by_restaurant",
+    restaurant: "Mamma Pizza",
   },
   { "Authorization" => "Bearer #{token}" },
 )
@@ -81,15 +78,12 @@ menu_item_id = margherita.fetch("id")
 # ── Step 3: place order ─────────────────────────────────────────────────
 
 rc, run_resp = post_json(
-  "#{SERVER}/kiosk/exec",
+  "#{SERVER}/kiosk/run",
   {
-    command: "run",
-    body: {
-      name:             "place_order",
-      menu_item_id:     menu_item_id,
-      quantity:         1,
-      delivery_address: "1 Test St, Istanbul",
-    },
+    name:             "place_order",
+    menu_item_id:     menu_item_id,
+    quantity:         1,
+    delivery_address: "1 Test St, Istanbul",
   },
   { "Authorization" => "Bearer #{token}" },
 )
@@ -152,14 +146,11 @@ payment_jws = JWT.encode(payment_payload, key, "RS256")
 # ── Step 5: pay ─────────────────────────────────────────────────────────
 
 rc, pay = post_json(
-  "#{SERVER}/kiosk/exec",
+  "#{SERVER}/kiosk/pay",
   {
-    command: "pay",
-    body: {
-      intent_mandate_jws:  intent_jws,
-      cart_mandate_jws:    cart_jws,
-      payment_mandate_jws: payment_jws,
-    },
+    intent_mandate_jws:  intent_jws,
+    cart_mandate_jws:    cart_jws,
+    payment_mandate_jws: payment_jws,
   },
   { "Authorization" => "Bearer #{token}" },
 )

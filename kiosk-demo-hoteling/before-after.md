@@ -52,11 +52,11 @@ hoteling is a Rails 8.1 app that speaks Kiosk. The following is the recorded out
 **What the agent did — no human involved at any step:**
 
 1. **Discover** — `GET /.well-known/kiosk.json` returns the hoteling issuer and surface.
-2. **Self-register** — generated an RSA-2048 keypair, `POST /kiosk/agents/register {name:"hermes-hoteling", public_key:<pem>, role:"customer"}` → HTTP 201 → `agent_id`, `user_id`, `access_token`. No existing account. No human login. No bot check.
-3. **Browse** — `POST /kiosk/exec {command:"query", body:{name:"properties"}}` returned 5 hotel properties. `POST /kiosk/exec {command:"query", body:{name:"availability", property_id:1, check_in:"2026-07-28", check_out:"2026-07-31"}}` returned available room types with nightly prices.
-4. **Reserve** — `POST /kiosk/exec {command:"run", body:{name:"reserve_room", property_id:1, room_type_id:1, check_in:"2026-07-28", check_out:"2026-07-31"}}` → HTTP 200, `booking_id:<uuid>`, `total_cents:24000`. A TTL hold was created in `kiosk.reservations`.
-5. **Pay** — signed an AP2 intent mandate (`cap_amount_cents:24100`, `scope:"lodging"`, `iss:<issuer>`) and a cart mandate (`total_amount_cents:24000`, `line_items:[{sku:"Standard", qty:3, booking_id:<uuid>}]`, bound to the intent via `intent_mandate_id`) as RS256 JWS with the registered keypair, then `POST /kiosk/exec {command:"pay", ...}` → `settled_amount_cents:24000`, `ok:true`.
-6. **Confirm** — `POST /kiosk/exec {command:"run", body:{name:"confirm_booking", booking_id:<uuid>}}` → HTTP 200, `status:"confirmed"`, `confirmation_code:<uuid>`. The server verified ownership (Gate 1) and the settled mandate referencing this booking (Gate 2) before confirming.
+2. **Self-register** — generated an RSA-2048 keypair, then completed the proof-of-possession handshake: `GET /kiosk/auth/challenge` → signed the challenge as an RS256 JWS (`aud` = the hoteling issuer) → `POST /kiosk/auth/register {public_key:<pem>, signed:<jws>}` → HTTP 201 → `agent_id`, `user_id`, `access_token`. No existing account. No human login. No bot check.
+3. **Browse** — `POST /kiosk/query {name:"properties"}` returned 5 hotel properties. `POST /kiosk/query {name:"availability", property_id:1, check_in:"2026-07-28", check_out:"2026-07-31"}` returned available room types with nightly prices.
+4. **Reserve** — `POST /kiosk/run {name:"reserve_room", property_id:1, room_type_id:1, check_in:"2026-07-28", check_out:"2026-07-31"}` → HTTP 200, `booking_id:<uuid>`, `total_cents:24000`. A TTL hold was created in `kiosk.reservations`.
+5. **Pay** — signed an AP2 intent mandate (`cap_amount_cents:24100`, `scope:"lodging"`, `iss:<issuer>`) and a cart mandate (`total_amount_cents:24000`, `line_items:[{sku:"Standard", qty:3, booking_id:<uuid>}]`, bound to the intent via `intent_mandate_id`) as RS256 JWS with the registered keypair, then `POST /kiosk/pay {intent_mandate_jws:…, cart_mandate_jws:…, payment_mandate_jws:…}` → `settled_amount_cents:24000`, `ok:true`.
+6. **Confirm** — `POST /kiosk/run {name:"confirm_booking", booking_id:<uuid>}` → HTTP 200, `status:"confirmed"`, `confirmation_code:<uuid>`. The server verified ownership (Gate 1) and the settled mandate referencing this booking (Gate 2) before confirming.
 
 The database confirmed: one row in `bookings` with `status='confirmed'`, one row in `kiosk.payment_mandates`, one row in `kiosk.reservations`.
 
@@ -89,7 +89,7 @@ In production these are versioned RubyGems. The `kiosk-pay-stripe` adapter swaps
 rails g kiosk:install
 ```
 
-This emits: the Kiosk schema migration (the `kiosk.*` namespace with agents, sessions, mandate, and reservations tables), the six-verb wire surface (`query`, `run`, `pay`, `schema`, `help`, `events`) mounted at `/kiosk/exec`, the agent-registration endpoint at `/kiosk/agents/register`, and `/.well-known/kiosk.json`.
+This emits: the Kiosk schema migration (the `kiosk.*` namespace with agents, sessions, mandate, and reservations tables), the REST wire surface (`/kiosk/query`, `/kiosk/run`, `/kiosk/pay`, `/kiosk/schema`), the proof-of-possession auth handshake at `/kiosk/auth/challenge` + `/kiosk/auth/register`, and `/.well-known/kiosk.json`.
 
 **3. Register named queries**
 

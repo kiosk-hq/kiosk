@@ -6,7 +6,7 @@
 
 ## Handling `pow_required`
 
-Any `/kiosk/exec` response may be HTTP 402 with this shape:
+Any `/kiosk/{query,run,pay}` response may be HTTP 402 with this shape:
 
 ```json
 {

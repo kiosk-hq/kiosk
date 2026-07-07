@@ -15,29 +15,41 @@ GET /.well-known/kiosk.json
 ```
 
 Returns the provider's `issuer` and `endpoint`. Read `issuer` — copy it
-verbatim into every mandate you sign (Step 5). `endpoint` is where you send all
-`/kiosk/exec` calls below. You browse provider data via named `query` calls
+verbatim into every mandate you sign (Step 5). `endpoint` is the base for the
+REST wire calls below (`/kiosk/query`, `/kiosk/run`, `/kiosk/pay`,
+`/kiosk/schema`). You browse provider data via named `query` calls
 (Step 3) — never send SQL.
 
 ---
 
-## Step 2 — Self-register (SHA256 PoW at registration)
+## Step 2 — Self-register (proof-of-possession handshake + SHA256 PoW)
 
 Generate an RSA-2048 keypair. Keep the private key for the session.
 
 The skooti registration endpoint requires a SHA256 leading-zero PoW over the
 public key (difficulty 20). Find the smallest nonce `n ≥ 0` such that
-`SHA256("<public_key_pem>.<n>")` has ≥ 20 leading zero bits, then include it as
-`pow`:
+`SHA256("<public_key_pem>.<n>")` has ≥ 20 leading zero bits — you attach it as
+`pow` on the register call below.
+
+A public key is not a credential — prove control of the **private** key. Fetch
+a single-use challenge, then sign it with `aud` set to the provider's issuer (so
+the proof can't be relayed to another provider):
 
 ```http
-POST /kiosk/agents/register
+GET /kiosk/auth/challenge?public_key=<URL-encoded PEM>
+```
+
+Returns `{ "challenge": "<nonce>" }`. Sign an RS256 JWS over
+`{ "aud": "<provider issuer>", "nonce": "<challenge>", "jti": "<fresh UUID>", "iat": <now> }`
+with your private key, then register — attaching the solved PoW nonce:
+
+```http
+POST /kiosk/auth/register
 Content-Type: application/json
 
 {
-  "name":       "hermes",
   "public_key": "<PEM-encoded RSA public key>",
-  "role":       "customer",
+  "signed":     "<RS256 JWS over {aud, nonce, jti, iat}>",
   "pow":        "<solved nonce string>"
 }
 ```
@@ -79,14 +91,11 @@ Successful response — HTTP 200.
 Browse available scooters via the named query `scooters_available`:
 
 ```http
-POST /kiosk/exec
+POST /kiosk/query
 Authorization: Bearer <access_token>
 Content-Type: application/json
 
-{
-  "command": "query",
-  "body":    { "name": "scooters_available" }
-}
+{ "name": "scooters_available" }
 ```
 
 Returns a `rows` array. Pick a scooter — note its `code` (e.g. `"SK-001"`).
@@ -94,14 +103,11 @@ Returns a `rows` array. Pick a scooter — note its `code` (e.g. `"SK-001"`).
 Reserve it:
 
 ```http
-POST /kiosk/exec
+POST /kiosk/run
 Authorization: Bearer <access_token>
 Content-Type: application/json
 
-{
-  "command": "run",
-  "body":    { "name": "reserve", "scooter_code": "<code>" }
-}
+{ "name": "reserve", "scooter_code": "<code>" }
 ```
 
 Successful response `.value`:
@@ -179,17 +185,14 @@ algorithm is RS256. The `iss` claim **must equal the provider's issuer** (from
 ### Pay call
 
 ```http
-POST /kiosk/exec
+POST /kiosk/pay
 Authorization: Bearer <access_token>
 Content-Type: application/json
 
 {
-  "command": "pay",
-  "body": {
-    "intent_mandate_jws":  "<RS256 JWS of intent payload>",
-    "cart_mandate_jws":    "<RS256 JWS of cart payload>",
-    "payment_mandate_jws": "<RS256 JWS of payment payload>"
-  }
+  "intent_mandate_jws":  "<RS256 JWS of intent payload>",
+  "cart_mandate_jws":    "<RS256 JWS of cart payload>",
+  "payment_mandate_jws": "<RS256 JWS of payment payload>"
 }
 ```
 
@@ -203,14 +206,11 @@ Call `start_rental`. The server verifies all gates (reservation exists, KYC
 cleared, payment settled) and issues a short-lived Ed25519 rental token:
 
 ```http
-POST /kiosk/exec
+POST /kiosk/run
 Authorization: Bearer <access_token>
 Content-Type: application/json
 
-{
-  "command": "run",
-  "body":    { "name": "start_rental", "reservation_id": "<reservation_id>" }
-}
+{ "name": "start_rental", "reservation_id": "<reservation_id>" }
 ```
 
 Successful response `.value`:
@@ -236,17 +236,17 @@ model.
 
 ## Handling `pow_required`
 
-Any `/kiosk/exec` response may be HTTP 402 with `error.code == "pow_required"`.
-When this happens, solve the challenge and retry — the full protocol is
-documented in `kiosk-pow/SKILL.md`. Summary:
+Any wire response (`/kiosk/query`, `/kiosk/run`, `/kiosk/pay`, `/kiosk/schema`)
+may be HTTP 402 with `error.code == "pow_required"`. When this happens, solve
+the challenge and retry — the full protocol is documented in
+`kiosk-pow/SKILL.md`. Summary:
 
 1. Install once: `pip install argon2-cffi`
 2. Solve: `python3 kiosk-pow/solve.py '<challenge-json>'` → reads `{"nonce": "..."}`
-3. Re-POST the **exact same** request body with a top-level `pow` field:
+3. Re-POST the **exact same** request (same path + body) with a top-level `pow` field:
    ```json
-   { "command": "query",
-     "body":    { "name": "scooters_available" },
-     "pow":     { "challenge": { ...verbatim... }, "nonce": "<from solver>" } }
+   { "name": "scooters_available",
+     "pow":  { "challenge": { ...verbatim... }, "nonce": "<from solver>" } }
    ```
 
 Do not negotiate or downgrade the algorithm — solve what the provider demands
@@ -264,18 +264,15 @@ Instead of relying solely on this static file, an agent can ask the provider
 for a live, machine-readable catalog of every registered query and action:
 
 ```http
-POST /kiosk/exec
+GET /kiosk/schema
 Authorization: Bearer <access_token>
-Content-Type: application/json
-
-{ "command": "schema" }
 ```
 
 Response — HTTP 200, inside `.value`:
 
 ```json
 {
-  "verbs":   ["query", "run", "pay", "schema", "help"],
+  "verbs":   ["query", "run", "pay", "schema"],
   "queries": [
     { "name": "scooters_available", "description": "Browse available scooters in the fleet",
                                     "params": null },
@@ -291,19 +288,6 @@ Response — HTTP 200, inside `.value`:
 }
 ```
 
-For a human-readable rendering of the same catalog:
-
-```http
-POST /kiosk/exec
-Authorization: Bearer <access_token>
-Content-Type: application/json
-
-{ "command": "help" }
-```
-
-Response `.value.text` is a plain-text listing of implemented verbs, queries,
-and actions with their descriptions and param hints.
-
 Use `schema` to discover what is available at runtime rather than hard-coding
 query or action names from this file.
 
@@ -313,7 +297,7 @@ query or action names from this file.
 
 1. **Generate the keypair once per session; keep the private key.**
 2. **Every mandate must be bound to your registered principal.** `user_id` and
-   `agent_id` in both mandates must match the values from `/kiosk/agents/register`.
+   `agent_id` in both mandates must match the values from `/kiosk/auth/register`.
 3. **`iss` must equal the provider's issuer.** Read it from
    `/.well-known/kiosk.json` and copy it verbatim.
 4. **KYC and payment are gates.** `start_rental` returns 403 if either is

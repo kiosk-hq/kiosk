@@ -22,18 +22,14 @@ RSpec.describe Kiosk::Redteam::Scenarios::ForgedUserId do
         stub_registers("a", "b")
         # forge_action by B with user_id=A succeeds and returns "res-forged"
         # Then A's query returns res-forged (forged id was honoured)
-        stub_request(:post, "#{BASE_URL}/kiosk/exec")
-          .with { |req|
-            body = JSON.parse(req.body)
-            body["command"] == "run" && body.dig("body", "name") == "reserve"
-          }
+        stub_request(:post, "#{BASE_URL}/kiosk/run")
+          .with { |req| JSON.parse(req.body)["name"] == "reserve" }
           .to_return(
             status: 200,
             body:   JSON.generate({ "value" => { "id" => "res-forged", "owner" => "user-a" } }),
             headers: { "Content-Type" => "application/json" },
           )
-        stub_request(:post, "#{BASE_URL}/kiosk/exec")
-          .with { |req| JSON.parse(req.body)["command"] == "query" }
+        stub_request(:post, "#{BASE_URL}/kiosk/query")
           .to_return(
             status: 200,
             body:   JSON.generate({ "rows" => [{ "id" => "res-forged" }] }),
@@ -52,11 +48,8 @@ RSpec.describe Kiosk::Redteam::Scenarios::ForgedUserId do
       it "returns blocked: false rather than silently claiming BLOCKED" do
         stub_registers("a", "b")
         # forge_action returns 200 but body has no 'id' key (e.g. different field name)
-        stub_request(:post, "#{BASE_URL}/kiosk/exec")
-          .with { |req|
-            body = JSON.parse(req.body)
-            body["command"] == "run" && body.dig("body", "name") == "reserve"
-          }
+        stub_request(:post, "#{BASE_URL}/kiosk/run")
+          .with { |req| JSON.parse(req.body)["name"] == "reserve" }
           .to_return(
             status: 200,
             body:   JSON.generate({ "value" => { "unknown_key" => "xyz" } }),
@@ -75,11 +68,8 @@ RSpec.describe Kiosk::Redteam::Scenarios::ForgedUserId do
       it "returns blocked: true when forge_action is rejected 403" do
         stub_registers("a", "b")
         # Forge call is rejected outright
-        stub_request(:post, "#{BASE_URL}/kiosk/exec")
-          .with { |req|
-            body = JSON.parse(req.body)
-            body["command"] == "run" && body.dig("body", "name") == "reserve"
-          }
+        stub_request(:post, "#{BASE_URL}/kiosk/run")
+          .with { |req| JSON.parse(req.body)["name"] == "reserve" }
           .to_return(
             status:  403,
             body:    JSON.generate({ "error" => { "code" => "forbidden" } }),
@@ -94,11 +84,8 @@ RSpec.describe Kiosk::Redteam::Scenarios::ForgedUserId do
 
       it "returns blocked: true when A's query does not contain the forged resource" do
         stub_registers("a", "b")
-        stub_request(:post, "#{BASE_URL}/kiosk/exec")
-          .with { |req|
-            body = JSON.parse(req.body)
-            body["command"] == "run" && body.dig("body", "name") == "reserve"
-          }
+        stub_request(:post, "#{BASE_URL}/kiosk/run")
+          .with { |req| JSON.parse(req.body)["name"] == "reserve" }
           .to_return(
             status: 200,
             body:   JSON.generate({ "value" => { "id" => "res-b-own" } }),

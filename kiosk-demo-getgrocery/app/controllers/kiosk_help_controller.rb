@@ -46,8 +46,6 @@ class KioskHelpController < ActionController::Base
       - `POST <endpoint>/run    { "name": <name>, ...params }` — perform action
       - `POST <endpoint>/pay    { "intent_mandate_jws": …, "cart_mandate_jws": …, "payment_mandate_jws": … }` — settle payment
 
-      Legacy `POST /exec { "command": <verb>, "body": {…} }` still works for backward compatibility.
-
       ### Queries — `POST /query { "name": … }`
       #{describe(Kiosk::Server::Queries)}
 
@@ -65,8 +63,8 @@ class KioskHelpController < ActionController::Base
       ## 5. Notes
       - If any call returns HTTP 402 `pow_required`, solve the proof-of-work in the
         challenge and retry the same request with a top-level `pow` field.
-      - You can always re-derive section 3 at runtime: `query`-less `{ "command":"schema" }`
-        returns the machine-readable surface, `{ "command":"help" }` the human-readable one.
+      - You can always re-derive section 3 at runtime: `GET <endpoint>/schema`
+        returns the machine-readable surface; `GET <endpoint>/help` this human-readable one.
     MD
   end
 

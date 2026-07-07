@@ -8,7 +8,7 @@ Reproducible end-to-end test of the Kiosk OSS gems. The same script (`run.sh`) r
 - `kiosk-server` Rails engine boots inside a fresh app
 - `/.well-known/kiosk.json` discovery endpoint returns a valid document
 - Response headers (`Kiosk-Server-Version`, `Kiosk-API-Version`, `Kiosk-Min-Client`) are injected on `/kiosk/*`
-- `POST /kiosk/exec` accepts JSON requests and dispatches through `Kiosk::Server::Executor`
+- `POST /kiosk/{query,run,pay}` accept JSON requests and dispatch through `Kiosk::Server::Executor`
 - The `query` verb calls provider-registered named queries (`salons`, `my_appointments`) and returns rows
 - The `run` verb dispatches to registered Actions
 - Error envelopes have the right shape and HTTP status (`BadRequest` → 400, `NotFound` → 404, `Unauthenticated` → 401)
@@ -78,5 +78,5 @@ e2e/
     ├── seeds.rb                            # 2 users (Alice + Bob), 1 salon
     ├── stub_idp.rb                         # Bearer-token-parsing agent IdP
     ├── initializer_kiosk.rb                # Kiosk.configure + registered Action
-    └── routes.rb                           # mounts /kiosk/exec + /.well-known/kiosk.json
+    └── routes.rb                           # mounts /kiosk/{query,run,pay,schema} + /.well-known/kiosk.json
 ```

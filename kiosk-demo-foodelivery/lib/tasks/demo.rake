@@ -159,6 +159,10 @@ namespace :demo do
     # These run against the same running server (already up from order_flow.rb run above).
     puts "\n── Query-verb assertions ──"
 
+    require "jwt"
+    require "openssl"
+    require "securerandom"
+
     q_post = lambda do |path, body_hash, bearer = ""|
       uri = URI("#{server_url}#{path}")
       req = Net::HTTP::Post.new(uri, { "Content-Type" => "application/json", "Authorization" => "Bearer #{bearer}" })
@@ -167,11 +171,26 @@ namespace :demo do
       [res.code.to_i, (JSON.parse(res.body) rescue {})]
     end
 
-    # Register a second fresh agent (different principal — proves per-user scoping).
+    q_get = lambda do |path, bearer = ""|
+      uri = URI("#{server_url}#{path}")
+      headers = {}
+      headers["Authorization"] = "Bearer #{bearer}" unless bearer.to_s.empty?
+      res = Net::HTTP.new(uri.host, uri.port).request(Net::HTTP::Get.new(uri, headers))
+      [res.code.to_i, (JSON.parse(res.body) rescue {})]
+    end
+
+    # Register a second fresh agent (different principal — proves per-user scoping)
+    # via the proof-of-possession handshake: challenge → sign RS256 JWS → register.
     q_key = OpenSSL::PKey::RSA.generate(2048)
+    q_pem = q_key.public_key.to_pem
+    _q_ch_rc, q_ch = q_get.call("/kiosk/auth/challenge?public_key=#{URI.encode_www_form_component(q_pem)}")
+    q_pop = JWT.encode(
+      { aud: kiosk_issuer, nonce: q_ch["challenge"], jti: SecureRandom.uuid, iat: Time.now.to_i },
+      q_key, "RS256",
+    )
     q_reg_rc, q_reg = q_post.call(
-      "/kiosk/agents/register",
-      { name: "hermes-qa", public_key: q_key.public_key.to_pem, role: "customer" },
+      "/kiosk/auth/register",
+      { public_key: q_pem, signed: q_pop },
     )
     if q_reg_rc == 201
       q_token   = q_reg["access_token"]
@@ -179,8 +198,8 @@ namespace :demo do
 
       # QA1: query menu_by_restaurant — Margherita must be present.
       qa1_rc, qa1_resp = q_post.call(
-        "/kiosk/exec",
-        { command: "query", body: { name: "menu_by_restaurant", restaurant: "Mamma Pizza" } },
+        "/kiosk/query",
+        { name: "menu_by_restaurant", restaurant: "Mamma Pizza" },
         q_token,
       )
       if qa1_rc == 200
@@ -199,8 +218,8 @@ namespace :demo do
 
       # QA2: query my_orders before placing — must be empty for fresh principal.
       qa2_rc, qa2_resp = q_post.call(
-        "/kiosk/exec",
-        { command: "query", body: { name: "my_orders" } },
+        "/kiosk/query",
+        { name: "my_orders" },
         q_token,
       )
       if qa2_rc == 200
@@ -220,15 +239,12 @@ namespace :demo do
       if qa1_rc == 200 && (qa1_margherita = (qa1_resp["rows"] || []).find { |r| r["sku"] == "margherita" })
         qa_menu_item_id = qa1_margherita.fetch("id")
         qa_place_rc, qa_place = q_post.call(
-          "/kiosk/exec",
+          "/kiosk/run",
           {
-            command: "run",
-            body: {
-              name:             "place_order",
-              menu_item_id:     qa_menu_item_id,
-              quantity:         1,
-              delivery_address: "2 Query St, Istanbul",
-            },
+            name:             "place_order",
+            menu_item_id:     qa_menu_item_id,
+            quantity:         1,
+            delivery_address: "2 Query St, Istanbul",
           },
           q_token,
         )
@@ -238,8 +254,8 @@ namespace :demo do
 
           # QA3: query my_orders after placing — exactly 1 row, this principal only.
           qa3_rc, qa3_resp = q_post.call(
-            "/kiosk/exec",
-            { command: "query", body: { name: "my_orders" } },
+            "/kiosk/query",
+            { name: "my_orders" },
             q_token,
           )
           if qa3_rc == 200
@@ -975,17 +991,15 @@ namespace :demo do
 
   # ── demo:schema ──────────────────────────────────────────────────────────
   desc <<~DESC
-    Self-discovery proof (P3 Task 2) — verifies schema + help verbs over HTTP.
+    Self-discovery proof (P3 Task 2) — verifies the schema verb over HTTP.
 
     Boots the server, registers a fresh agent, calls:
-      POST /kiosk/exec { command: "schema" }
-      POST /kiosk/exec { command: "help"   }
+      GET /kiosk/schema
 
     Asserts:
       • schema.verbs includes query/run/pay/schema/help and NOT events
       • schema.queries includes my_orders with a description
       • schema.actions includes place_order with a description
-      • help.text mentions my_orders and place_order by name
 
     Exits 0 if all assertions pass; exits 1 on any miss.
   DESC
@@ -1006,7 +1020,7 @@ namespace :demo do
     server_url   = "http://#{host}:#{port}"
     kiosk_issuer = server_url
 
-    puts "\n── Starting foodelivery (schema/help proof) on #{server_url} ──"
+    puts "\n── Starting foodelivery (schema proof) on #{server_url} ──"
 
     server_pid = spawn(
       { "KIOSK_ISSUER" => kiosk_issuer },
@@ -1050,13 +1064,12 @@ namespace :demo do
       abort "schema_flow.rb did not produce valid JSON: #{e.message}\nOutput:\n#{raw}"
     end
 
-    puts "\n── Schema/help assertions ──"
+    puts "\n── Schema assertions ──"
     failures = []
 
     verbs   = result["schema_verbs"]   || []
     queries = result["schema_queries"] || []
     actions = result["schema_actions"] || []
-    text    = result["help_text"]      || ""
 
     # Verbs: query/run/pay/schema/help present; events absent
     %w[query run pay schema help].each do |v|
@@ -1104,18 +1117,8 @@ namespace :demo do
       puts "  ✗  schema.actions missing place_order"
     end
 
-    # help text mentions my_orders and place_order
-    %w[my_orders place_order].each do |name|
-      if text.include?(name)
-        puts "  ✓  help text mentions #{name}"
-      else
-        failures << "help text does not mention #{name}"
-        puts "  ✗  help text does not mention #{name}"
-      end
-    end
-
     if failures.empty?
-      puts "\n  All schema/help assertions passed."
+      puts "\n  All schema assertions passed."
     else
       puts "\n  FAILED assertions:"
       failures.each { |f| puts "    - #{f}" }

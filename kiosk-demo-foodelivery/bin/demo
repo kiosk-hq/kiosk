@@ -69,34 +69,34 @@ curl -sf "$SERVER_URL/kiosk/.well-known/jwks.json" \
 heading "Agent browses the menu via named queries"
 
 step "List restaurants (publicly visible) — query: restaurants"
-curl -sS -X POST "$SERVER_URL/kiosk/exec" \
+curl -sS -X POST "$SERVER_URL/kiosk/query" \
   -H "Authorization: Bearer $AGENT_TOKEN" \
   -H "Content-Type: application/json" \
-  -d '{"command":"query","body":{"name":"restaurants"}}' \
+  -d '{"name":"restaurants"}' \
   | jq '.rows'
 
 step "List menu items for Mamma Pizza — query: menu_by_restaurant"
-curl -sS -X POST "$SERVER_URL/kiosk/exec" \
+curl -sS -X POST "$SERVER_URL/kiosk/query" \
   -H "Authorization: Bearer $AGENT_TOKEN" \
   -H "Content-Type: application/json" \
-  -d '{"command":"query","body":{"name":"menu_by_restaurant","restaurant":"Mamma Pizza"}}' \
+  -d '{"name":"menu_by_restaurant","restaurant":"Mamma Pizza"}' \
   | jq '.rows'
 
 # ─── run an Action ───────────────────────────────────────────────────
 
 heading "Agent places an order via Action (no human at the provider)"
 
-MENU_ITEM_ID=$(curl -sS -X POST "$SERVER_URL/kiosk/exec" \
+MENU_ITEM_ID=$(curl -sS -X POST "$SERVER_URL/kiosk/query" \
   -H "Authorization: Bearer $AGENT_TOKEN" \
   -H "Content-Type: application/json" \
-  -d '{"command":"query","body":{"name":"menu_by_restaurant","restaurant":"Mamma Pizza"}}' \
+  -d '{"name":"menu_by_restaurant","restaurant":"Mamma Pizza"}' \
   | jq -r '.rows[] | select(.sku=="margherita") | .id')
 
 step "run place_order for menu_item $MENU_ITEM_ID (Margherita)"
-curl -sS -X POST "$SERVER_URL/kiosk/exec" \
+curl -sS -X POST "$SERVER_URL/kiosk/run" \
   -H "Authorization: Bearer $AGENT_TOKEN" \
   -H "Content-Type: application/json" \
-  -d "{\"command\":\"run\",\"body\":{\"name\":\"place_order\",\"menu_item_id\":$MENU_ITEM_ID,\"quantity\":1,\"delivery_address\":\"1 Test St\"}}" \
+  -d "{\"name\":\"place_order\",\"menu_item_id\":$MENU_ITEM_ID,\"quantity\":1,\"delivery_address\":\"1 Test St\"}" \
   | jq '.value'
 
 # ─── RLS isolation ───────────────────────────────────────────────────
@@ -104,10 +104,10 @@ curl -sS -X POST "$SERVER_URL/kiosk/exec" \
 heading "Per-user isolation: agent sees only their own orders"
 
 step "Count orders visible to this agent's user (should be 1) — query: my_orders"
-curl -sS -X POST "$SERVER_URL/kiosk/exec" \
+curl -sS -X POST "$SERVER_URL/kiosk/query" \
   -H "Authorization: Bearer $AGENT_TOKEN" \
   -H "Content-Type: application/json" \
-  -d '{"command":"query","body":{"name":"my_orders"}}' \
+  -d '{"name":"my_orders"}' \
   | jq '.rows | length'
 
 # ─── done ────────────────────────────────────────────────────────────

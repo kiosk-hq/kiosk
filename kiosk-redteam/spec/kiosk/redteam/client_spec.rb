@@ -219,17 +219,17 @@ RSpec.describe Kiosk::Redteam::Client do
       Kiosk::Redteam::Principal.new(agent_id: "a1", user_id: "u1", token: "tok-q", rsa_key: nil)
     end
 
-    it "POSTs command=query with the given name and params" do
+    it "POSTs to /kiosk/query with the given name and params (flat body)" do
       captured_body = nil
-      stub_request(:post, "#{base_url}/kiosk/exec")
+      stub_request(:post, "#{base_url}/kiosk/query")
         .with { |req| captured_body = JSON.parse(req.body); true }
         .to_return(status: 200, body: JSON.generate("rows" => []), headers: { "Content-Type" => "application/json" })
 
       client.query(principal, name: "my_orders", restaurant: "Foo")
 
-      expect(captured_body["command"]).to eq("query")
-      expect(captured_body["body"]["name"]).to eq("my_orders")
-      expect(captured_body["body"]["restaurant"]).to eq("Foo")
+      expect(captured_body["name"]).to eq("my_orders")
+      expect(captured_body["restaurant"]).to eq("Foo")
+      expect(captured_body).not_to have_key("command")
     end
   end
 
@@ -240,17 +240,17 @@ RSpec.describe Kiosk::Redteam::Client do
       Kiosk::Redteam::Principal.new(agent_id: "a1", user_id: "u1", token: "tok-r", rsa_key: nil)
     end
 
-    it "POSTs command=run with the given name and args" do
+    it "POSTs to /kiosk/run with the given name and args (flat body)" do
       captured_body = nil
-      stub_request(:post, "#{base_url}/kiosk/exec")
+      stub_request(:post, "#{base_url}/kiosk/run")
         .with { |req| captured_body = JSON.parse(req.body); true }
         .to_return(status: 200, body: JSON.generate("value" => {}), headers: { "Content-Type" => "application/json" })
 
       client.run(principal, name: "place_order", quantity: 2)
 
-      expect(captured_body["command"]).to eq("run")
-      expect(captured_body["body"]["name"]).to eq("place_order")
-      expect(captured_body["body"]["quantity"]).to eq(2)
+      expect(captured_body["name"]).to eq("place_order")
+      expect(captured_body["quantity"]).to eq(2)
+      expect(captured_body).not_to have_key("command")
     end
   end
 
@@ -262,9 +262,9 @@ RSpec.describe Kiosk::Redteam::Client do
       Kiosk::Redteam::Principal.new(agent_id: "ag1", user_id: "us1", token: "tok-p", rsa_key:)
     end
 
-    it "POSTs command=pay with signed intent_mandate_jws and cart_mandate_jws" do
+    it "POSTs to /kiosk/pay with signed intent_mandate_jws and cart_mandate_jws" do
       captured_body = nil
-      stub_request(:post, "#{base_url}/kiosk/exec")
+      stub_request(:post, "#{base_url}/kiosk/pay")
         .with { |req| captured_body = JSON.parse(req.body); true }
         .to_return(status: 200, body: JSON.generate("value" => { "payment_mandate_id" => "pm1" }),
                    headers: { "Content-Type" => "application/json" })
@@ -276,10 +276,10 @@ RSpec.describe Kiosk::Redteam::Client do
       resp = client.pay(principal, intent:, cart:)
 
       expect(resp.status).to eq(200)
-      expect(captured_body["command"]).to eq("pay")
+      expect(captured_body).not_to have_key("command")
 
-      intent_jws = captured_body.dig("body", "intent_mandate_jws")
-      cart_jws   = captured_body.dig("body", "cart_mandate_jws")
+      intent_jws = captured_body["intent_mandate_jws"]
+      cart_jws   = captured_body["cart_mandate_jws"]
 
       expect(intent_jws).not_to be_nil
       expect(cart_jws).not_to be_nil

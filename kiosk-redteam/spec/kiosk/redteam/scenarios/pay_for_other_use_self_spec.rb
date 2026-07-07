@@ -22,22 +22,16 @@ RSpec.describe Kiosk::Redteam::Scenarios::PayForOtherUseSelf do
         # A registers, B registers
         stub_registers("a", "b")
         # A create_owned (reserve) succeeds
-        stub_request(:post, "#{BASE_URL}/kiosk/exec")
-          .with { |req|
-            body = JSON.parse(req.body)
-            body["command"] == "run" && body.dig("body", "name") == "reserve"
-          }
+        stub_request(:post, "#{BASE_URL}/kiosk/run")
+          .with { |req| JSON.parse(req.body)["name"] == "reserve" }
           .to_return(status: 200,
                      body:   JSON.generate({ "value" => { "id" => "res-a" } }),
                      headers: { "Content-Type" => "application/json" })
         # B pays (no ownership check at pay time)
         stub_exec_pay(status: 200)
         # B starts A's rental — SHOULD be blocked but server allows it (breach)
-        stub_request(:post, "#{BASE_URL}/kiosk/exec")
-          .with { |req|
-            body = JSON.parse(req.body)
-            body["command"] == "run" && body.dig("body", "name") == "start_rental"
-          }
+        stub_request(:post, "#{BASE_URL}/kiosk/run")
+          .with { |req| JSON.parse(req.body)["name"] == "start_rental" }
           .to_return(status: 200,
                      body:   JSON.generate({ "value" => { "rental_token" => "tok-b" } }),
                      headers: { "Content-Type" => "application/json" })
@@ -52,20 +46,14 @@ RSpec.describe Kiosk::Redteam::Scenarios::PayForOtherUseSelf do
     context "when the server blocks B's gated action on A's resource (correct — BLOCKED)" do
       it "returns blocked: true" do
         stub_registers("a", "b")
-        stub_request(:post, "#{BASE_URL}/kiosk/exec")
-          .with { |req|
-            body = JSON.parse(req.body)
-            body["command"] == "run" && body.dig("body", "name") == "reserve"
-          }
+        stub_request(:post, "#{BASE_URL}/kiosk/run")
+          .with { |req| JSON.parse(req.body)["name"] == "reserve" }
           .to_return(status: 200,
                      body:   JSON.generate({ "value" => { "id" => "res-a" } }),
                      headers: { "Content-Type" => "application/json" })
         stub_exec_pay(status: 200)
-        stub_request(:post, "#{BASE_URL}/kiosk/exec")
-          .with { |req|
-            body = JSON.parse(req.body)
-            body["command"] == "run" && body.dig("body", "name") == "start_rental"
-          }
+        stub_request(:post, "#{BASE_URL}/kiosk/run")
+          .with { |req| JSON.parse(req.body)["name"] == "start_rental" }
           .to_return(status: 403,
                      body:   JSON.generate({ "error" => { "code" => "forbidden" } }),
                      headers: { "Content-Type" => "application/json" })
@@ -80,11 +68,8 @@ RSpec.describe Kiosk::Redteam::Scenarios::PayForOtherUseSelf do
     context "when the server blocks B's payment itself (early ownership gate — also BLOCKED)" do
       it "returns blocked: true with early-gate detail" do
         stub_registers("a", "b")
-        stub_request(:post, "#{BASE_URL}/kiosk/exec")
-          .with { |req|
-            body = JSON.parse(req.body)
-            body["command"] == "run" && body.dig("body", "name") == "reserve"
-          }
+        stub_request(:post, "#{BASE_URL}/kiosk/run")
+          .with { |req| JSON.parse(req.body)["name"] == "reserve" }
           .to_return(status: 200,
                      body:   JSON.generate({ "value" => { "id" => "res-a" } }),
                      headers: { "Content-Type" => "application/json" })

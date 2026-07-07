@@ -142,8 +142,8 @@ end
 # fleet first; find SK-001's code, then reserve it.
 
 rc_browse, browse_resp = post_json(
-  "#{SERVER}/kiosk/exec",
-  { command: "query", body: { name: "scooters_available" } },
+  "#{SERVER}/kiosk/query",
+  { name: "scooters_available" },
   { "Authorization" => "Bearer #{token}" },
 )
 abort "query scooters_available failed (#{rc_browse}): #{JSON.generate(browse_resp)}" unless rc_browse == 200
@@ -157,8 +157,8 @@ target_code    = target_scooter.fetch("code")
 STDERR.puts "  Browsed fleet: #{browse_rows.size} scooter(s) available, picking #{target_code}"
 
 rc_rsv, rsv = post_json(
-  "#{SERVER}/kiosk/exec",
-  { command: "run", body: { name: "reserve", scooter_code: target_code } },
+  "#{SERVER}/kiosk/run",
+  { name: "reserve", scooter_code: target_code },
   { "Authorization" => "Bearer #{token}" },
 )
 abort "reserve failed (#{rc_rsv}): #{JSON.generate(rsv)}" unless rc_rsv == 200
@@ -226,14 +226,11 @@ unless SKIP_PAY
   payment_jws = JWT.encode(payment_payload, key, "RS256")
 
   rc_pay, pay_resp = post_json(
-    "#{SERVER}/kiosk/exec",
+    "#{SERVER}/kiosk/pay",
     {
-      command: "pay",
-      body: {
-        intent_mandate_jws:  intent_jws,
-        cart_mandate_jws:    cart_jws,
-        payment_mandate_jws: payment_jws,
-      },
+      intent_mandate_jws:  intent_jws,
+      cart_mandate_jws:    cart_jws,
+      payment_mandate_jws: payment_jws,
     },
     { "Authorization" => "Bearer #{token}" },
   )
@@ -244,13 +241,10 @@ end
 # ── Step 5: start_rental — server verifies gates + issues Ed25519 rental token ─
 
 rc_rental, rental_resp = post_json(
-  "#{SERVER}/kiosk/exec",
+  "#{SERVER}/kiosk/run",
   {
-    command: "run",
-    body: {
-      name:           "start_rental",
-      reservation_id: reservation_id,
-    },
+    name:           "start_rental",
+    reservation_id: reservation_id,
   },
   { "Authorization" => "Bearer #{token}" },
 )

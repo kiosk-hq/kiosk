@@ -71,16 +71,16 @@ abort "register failed (#{rc}): #{JSON.generate(reg)}" unless rc == 201
 token = reg.fetch("access_token")
 
 # The request we will prove.  Identical body is sent in all retry steps so
-# the server computes the same request_fingerprint.
-QUERY_COMMAND = "query"
-QUERY_BODY    = { name: "menu_by_restaurant", restaurant: "Mamma Pizza" }
-AUTH_HEADER   = { "Authorization" => "Bearer #{token}" }
+# the server computes the same request_fingerprint. The solved proof is added
+# as a top-level `pow` sibling on retry (excluded from the fingerprint).
+QUERY_BODY  = { name: "menu_by_restaurant", restaurant: "Mamma Pizza" }
+AUTH_HEADER = { "Authorization" => "Bearer #{token}" }
 
 # ── Step 2: initial POST → expect 402 pow_required ─────────────────────────
 
 rc_challenge, resp_challenge = post_json(
-  "#{SERVER}/kiosk/exec",
-  { command: QUERY_COMMAND, body: QUERY_BODY },
+  "#{SERVER}/kiosk/query",
+  QUERY_BODY,
   AUTH_HEADER,
 )
 
@@ -118,8 +118,8 @@ end
 # challenge for the wrong-nonce test so the solve+serve step is unaffected.
 
 rc_neg_issue, resp_neg_issue = post_json(
-  "#{SERVER}/kiosk/exec",
-  { command: QUERY_COMMAND, body: QUERY_BODY },
+  "#{SERVER}/kiosk/query",
+  QUERY_BODY,
   AUTH_HEADER,
 )
 abort "expected fresh 402 for negative test, got #{rc_neg_issue}" unless rc_neg_issue == 402
@@ -129,8 +129,8 @@ challenge_neg = resp_neg_issue.dig("error", "challenge")
 # not a decimal integer; Argon2id("invalid-nonce", ...) will not satisfy d=5
 # zero-bits with overwhelming probability.
 rc_wrong, resp_wrong = post_json(
-  "#{SERVER}/kiosk/exec",
-  { command: QUERY_COMMAND, body: QUERY_BODY, pow: { challenge: challenge_neg, nonce: "invalid-nonce" } },
+  "#{SERVER}/kiosk/query",
+  QUERY_BODY.merge(pow: { challenge: challenge_neg, nonce: "invalid-nonce" }),
   AUTH_HEADER,
 )
 
@@ -148,8 +148,8 @@ end
 # ── Step 4: re-POST with correct proof → expect 200 served ─────────────────
 
 rc_served, resp_served = post_json(
-  "#{SERVER}/kiosk/exec",
-  { command: QUERY_COMMAND, body: QUERY_BODY, pow: { challenge: challenge, nonce: nonce } },
+  "#{SERVER}/kiosk/query",
+  QUERY_BODY.merge(pow: { challenge: challenge, nonce: nonce }),
   AUTH_HEADER,
 )
 

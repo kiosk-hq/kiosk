@@ -138,8 +138,8 @@ user_id_b, agent_id_b, token_b, key_b = register_principal(name: "bob-agent")
 
 # ── Step 3: A reserves SK-001 → reservation_id rA ───────────────────────────
 rc, reserve_a_resp = post_json(
-  "#{SERVER}/kiosk/exec",
-  { command: "run", body: { name: "reserve", scooter_code: "SK-001" } },
+  "#{SERVER}/kiosk/run",
+  { name: "reserve", scooter_code: "SK-001" },
   { "Authorization" => "Bearer #{token_a}" },
 )
 abort "A reserve failed (#{rc}): #{JSON.generate(reserve_a_resp)}" unless rc == 200
@@ -204,14 +204,11 @@ cart_b_jws    = JWT.encode(cart_b_payload,    key_b, "RS256")
 payment_b_jws = JWT.encode(payment_b_payload, key_b, "RS256")
 
 rc_pay_b, pay_b_resp = post_json(
-  "#{SERVER}/kiosk/exec",
+  "#{SERVER}/kiosk/pay",
   {
-    command: "pay",
-    body: {
-      intent_mandate_jws:  intent_b_jws,
-      cart_mandate_jws:    cart_b_jws,
-      payment_mandate_jws: payment_b_jws,
-    },
+    intent_mandate_jws:  intent_b_jws,
+    cart_mandate_jws:    cart_b_jws,
+    payment_mandate_jws: payment_b_jws,
   },
   { "Authorization" => "Bearer #{token_b}" },
 )
@@ -224,14 +221,11 @@ STDERR.puts "  B paid for rA: settlement_id=#{pay_b_resp.dig("value", "settlemen
 # Done before the my_reservations query so B has its own row for the
 # positive-control half of Assertion 2b.
 rc, forged_resp = post_json(
-  "#{SERVER}/kiosk/exec",
+  "#{SERVER}/kiosk/run",
   {
-    command: "run",
-    body: {
-      name:         "reserve",
-      scooter_code: "SK-001",
-      user_id:      user_id_a,  # adversarial: B supplies A's user_id
-    },
+    name:         "reserve",
+    scooter_code: "SK-001",
+    user_id:      user_id_a,  # adversarial: B supplies A's user_id
   },
   { "Authorization" => "Bearer #{token_b}" },
 )
@@ -247,8 +241,8 @@ STDERR.puts "  B forged reserve: reservation_id=#{reservation_id_b_forged}"
 #   2b positive control: b_reservation_ids MUST contain rB_forged, proving
 #     the exclusion is non-vacuous (the query actually returns B's own rows).
 rc, b_rsv_resp = post_json(
-  "#{SERVER}/kiosk/exec",
-  { command: "query", body: { name: "my_reservations" } },
+  "#{SERVER}/kiosk/query",
+  { name: "my_reservations" },
   { "Authorization" => "Bearer #{token_b}" },
 )
 abort "B my_reservations failed (#{rc}): #{JSON.generate(b_rsv_resp)}" unless rc == 200
@@ -262,8 +256,8 @@ STDERR.puts "  B my_reservations: #{b_reservation_ids.inspect}"
 # nothing because rA.user_id = A ≠ B → 403.
 # The 403 now genuinely isolates Gate-1 ownership, not a Gate-3 payment gap.
 rc_start_b, start_b_resp = post_json(
-  "#{SERVER}/kiosk/exec",
-  { command: "run", body: { name: "start_rental", reservation_id: reservation_id_a } },
+  "#{SERVER}/kiosk/run",
+  { name: "start_rental", reservation_id: reservation_id_a },
   { "Authorization" => "Bearer #{token_b}" },
 )
 STDERR.puts "  B start_rental on A's rA: HTTP #{rc_start_b} (expected 403)"

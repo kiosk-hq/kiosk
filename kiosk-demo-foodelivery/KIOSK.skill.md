@@ -20,14 +20,32 @@ This returns the provider's `issuer` and `endpoint`. Read `issuer` — you copy 
 
 Generate an RSA-2048 keypair. Keep the private key for the duration of this session; you will use it to sign mandates in Step 5.
 
+A public key is not a credential — prove control of the **private** key. Fetch a single-use challenge, sign it (with `aud` set to the provider issuer so the proof cannot be relayed to another provider), then register.
+
 ```http
-POST /kiosk/agents/register
+GET /kiosk/auth/challenge?public_key=<url-encoded PEM>
+```
+
+Sign the returned `challenge` as an RS256 JWS with your private key:
+
+```json
+{
+  "aud":   "<provider issuer>",
+  "nonce": "<challenge from the response>",
+  "jti":   "<fresh UUID>",
+  "iat":   <now>
+}
+```
+
+Then register the new key (use `POST /kiosk/auth/login` instead when the provider already knows this key):
+
+```http
+POST /kiosk/auth/register
 Content-Type: application/json
 
 {
-  "name":       "hermes",
   "public_key": "<PEM-encoded RSA public key>",
-  "role":       "customer"
+  "signed":     "<RS256 JWS of the payload above>"
 }
 ```
 
@@ -52,16 +70,13 @@ No human is involved. There is no existing account at the provider. The provider
 The agent **never sends SQL**. Instead, call a provider-registered named query by name and pass params. The provider controls exactly what is readable. For foodelivery, use `menu_by_restaurant` to browse the menu for a named restaurant.
 
 ```http
-POST /kiosk/exec
+POST /kiosk/query
 Authorization: Bearer <access_token>
 Content-Type: application/json
 
 {
-  "command": "query",
-  "body": {
-    "name":       "menu_by_restaurant",
-    "restaurant": "Mamma Pizza"
-  }
+  "name":       "menu_by_restaurant",
+  "restaurant": "Mamma Pizza"
 }
 ```
 
@@ -73,21 +88,18 @@ App-layer isolation is in effect: the `my_orders` query scopes to the authentica
 
 ## Step 4 — Act with `run` (e.g. `place_order`)
 
-Use the `run` command to invoke a provider-registered Action. Action names are provider-specific — `foodelivery` exposes `place_order`.
+Use the `run` verb to invoke a provider-registered Action. Action names are provider-specific — `foodelivery` exposes `place_order`.
 
 ```http
-POST /kiosk/exec
+POST /kiosk/run
 Authorization: Bearer <access_token>
 Content-Type: application/json
 
 {
-  "command": "run",
-  "body": {
-    "name":             "place_order",
-    "menu_item_id":     "<id from Step 3>",
-    "quantity":         1,
-    "delivery_address": "1 Test St, Istanbul"
-  }
+  "name":             "place_order",
+  "menu_item_id":     "<id from Step 3>",
+  "quantity":         1,
+  "delivery_address": "1 Test St, Istanbul"
 }
 ```
 
@@ -169,17 +181,14 @@ Payment requires three JWS tokens signed with the private key you generated in S
 ### Pay call
 
 ```http
-POST /kiosk/exec
+POST /kiosk/pay
 Authorization: Bearer <access_token>
 Content-Type: application/json
 
 {
-  "command": "pay",
-  "body": {
-    "intent_mandate_jws":  "<RS256 JWS of intent payload>",
-    "cart_mandate_jws":    "<RS256 JWS of cart payload>",
-    "payment_mandate_jws": "<RS256 JWS of payment payload>"
-  }
+  "intent_mandate_jws":  "<RS256 JWS of intent payload>",
+  "cart_mandate_jws":    "<RS256 JWS of cart payload>",
+  "payment_mandate_jws": "<RS256 JWS of payment payload>"
 }
 ```
 
@@ -202,17 +211,18 @@ Successful response — HTTP 200:
 
 ## Handling `pow_required`
 
-Any `/kiosk/exec` response may be HTTP 402 with `error.code == "pow_required"`.
-When this happens, solve the challenge and retry — the full protocol is
-documented in `kiosk-pow/SKILL.md`. Summary:
+Any `query`, `run`, or `pay` response may be HTTP 402 with `error.code ==
+"pow_required"`. When this happens, solve the challenge and retry — the full
+protocol is documented in `kiosk-pow/SKILL.md`. Summary:
 
 1. Install once: `pip install argon2-cffi`
 2. Solve: `python3 kiosk-pow/solve.py '<challenge-json>'` → reads `{"nonce": "..."}`
-3. Re-POST the **exact same** request body with a top-level `pow` field:
+3. Re-POST the **exact same** request args to the same verb endpoint, adding a
+   top-level `pow` field:
    ```json
-   { "command": "query",
-     "body":    { "name": "menu_by_restaurant", "restaurant": "Mamma Pizza" },
-     "pow":     { "challenge": { ...verbatim... }, "nonce": "<from solver>" } }
+   POST /kiosk/query
+   { "name": "menu_by_restaurant", "restaurant": "Mamma Pizza",
+     "pow":  { "challenge": { ...verbatim... }, "nonce": "<from solver>" } }
    ```
 
 Do not negotiate or downgrade the algorithm — solve what the provider demands
@@ -227,11 +237,8 @@ Instead of relying solely on this static file, an agent can ask the provider
 for a live, machine-readable catalog of every registered query and action:
 
 ```http
-POST /kiosk/exec
+GET /kiosk/schema
 Authorization: Bearer <access_token>
-Content-Type: application/json
-
-{ "command": "schema" }
 ```
 
 Response — HTTP 200, inside `.value`:
@@ -254,19 +261,6 @@ Response — HTTP 200, inside `.value`:
 }
 ```
 
-For a human-readable rendering of the same catalog:
-
-```http
-POST /kiosk/exec
-Authorization: Bearer <access_token>
-Content-Type: application/json
-
-{ "command": "help" }
-```
-
-Response `.value.text` is a plain-text listing of implemented verbs, queries,
-and actions with their descriptions and param hints.
-
 Use `schema` to discover what is available at runtime rather than hard-coding
 query or action names from this file.
 
@@ -275,9 +269,9 @@ query or action names from this file.
 ## Rules
 
 1. **Generate the keypair once per session; keep the private key.** Mandate verification looks up the public key you registered. If you lose the key, re-register.
-2. **Every mandate must be bound to your registered principal.** `user_id` and `agent_id` in both mandates must match the values returned by `/kiosk/agents/register`.
+2. **Every mandate must be bound to your registered principal.** `user_id` and `agent_id` in both mandates must match the values returned by `/kiosk/auth/register`.
 3. **`iss` must equal the provider's issuer.** Read it from `/.well-known/kiosk.json` and copy it verbatim into both mandates.
-4. **Start by reading `/.well-known/kiosk.json`.** It gives you the `issuer` (for mandate signing) and the `endpoint` for `/kiosk/exec` before you send a single request.
+4. **Start by reading `/.well-known/kiosk.json`.** It gives you the `issuer` (for mandate signing) and the `endpoint` for the REST wire calls (`/kiosk/query`, `/kiosk/run`, `/kiosk/pay`, `/kiosk/schema`) before you send a single request.
 5. **The cap must cover the total.** `cap_amount_cents` >= `total_amount_cents`. The cart mandate is rejected if it exceeds the cap.
 6. **`intent_mandate_id` in the cart must reference the intent's `id`.** The server verifies this binding.
 

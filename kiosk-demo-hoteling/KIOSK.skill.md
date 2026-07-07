@@ -20,14 +20,38 @@ This returns the provider's `issuer` and `endpoint`. Read `issuer` — you copy 
 
 Generate an RSA-2048 keypair. Keep the private key for the duration of this session; you will use it to sign mandates in Step 5.
 
+Registration is a **proof-of-possession handshake**: a public key is not a credential — you must prove you control the matching private key. First fetch a single-use challenge for your public key:
+
 ```http
-POST /kiosk/agents/register
+GET /kiosk/auth/challenge?public_key=<URL-encoded PEM>
+```
+
+Response — HTTP 200:
+
+```json
+{ "challenge": "<single-use nonce>" }
+```
+
+Sign an RS256 JWS over the challenge. Set `aud` to the provider's issuer (from `/.well-known/kiosk.json`) so the proof cannot be relayed to another provider:
+
+```json
+{
+  "aud":   "<provider issuer>",
+  "nonce": "<challenge from above>",
+  "jti":   "<fresh UUID>",
+  "iat":   <now>
+}
+```
+
+Then register the new key, presenting the PEM and the signed challenge:
+
+```http
+POST /kiosk/auth/register
 Content-Type: application/json
 
 {
-  "name":       "hermes",
   "public_key": "<PEM-encoded RSA public key>",
-  "role":       "customer"
+  "signed":     "<RS256 JWS of the challenge payload above>"
 }
 ```
 
@@ -43,9 +67,11 @@ Successful response — HTTP 201:
 
 Store `agent_id`, `user_id`, and `access_token`. All subsequent requests carry `Authorization: Bearer <access_token>`.
 
+If you already registered this key in a prior session, skip registration and re-authenticate the **known** key at `POST /kiosk/auth/login` (same challenge → sign → present shape) to mint a fresh `access_token`.
+
 No human is involved. There is no existing account at the provider. The provider creates a synthetic principal on the fly. This is the point: **the agent has no account at the provider and needs none.**
 
-hoteling does not require a proof-of-work or a KYC attestation to register — `POST /kiosk/agents/register` with the JSON above is sufficient.
+hoteling does not require a proof-of-work or a KYC attestation to register — the challenge → sign → `POST /kiosk/auth/register` handshake above is sufficient.
 
 ---
 
@@ -56,14 +82,11 @@ The agent **never sends SQL**. Instead, call provider-registered named queries b
 ### `properties` — browse the hotel catalog
 
 ```http
-POST /kiosk/exec
+POST /kiosk/query
 Authorization: Bearer <access_token>
 Content-Type: application/json
 
-{
-  "command": "query",
-  "body": { "name": "properties" }
-}
+{ "name": "properties" }
 ```
 
 Response `rows` contains `id`, `name`, `city`. Pick a property and note its `id`.
@@ -71,18 +94,15 @@ Response `rows` contains `id`, `name`, `city`. Pick a property and note its `id`
 ### `availability` — check room types and prices for given dates
 
 ```http
-POST /kiosk/exec
+POST /kiosk/query
 Authorization: Bearer <access_token>
 Content-Type: application/json
 
 {
-  "command": "query",
-  "body": {
-    "name":        "availability",
-    "property_id": 1,
-    "check_in":    "2026-08-01",
-    "check_out":   "2026-08-04"
-  }
+  "name":        "availability",
+  "property_id": 1,
+  "check_in":    "2026-08-01",
+  "check_out":   "2026-08-04"
 }
 ```
 
@@ -91,14 +111,11 @@ Response `rows` contains `id` (room_type_id), `name`, `nightly_price_cents` for 
 ### `my_bookings` — per-user booking list (scoped to authenticated principal)
 
 ```http
-POST /kiosk/exec
+POST /kiosk/query
 Authorization: Bearer <access_token>
 Content-Type: application/json
 
-{
-  "command": "query",
-  "body": { "name": "my_bookings" }
-}
+{ "name": "my_bookings" }
 ```
 
 App-layer isolation is in effect: `my_bookings` scopes by `WHERE user_id = kiosk.current_user_id()` — this is the server-derived principal UUID, never an agent-supplied param. Agents cannot read other users' bookings by injecting a different user_id.
@@ -110,19 +127,16 @@ App-layer isolation is in effect: `my_bookings` scopes by `WHERE user_id = kiosk
 Use the `run` command to reserve a room. Pass the property, room type, and dates from Step 3.
 
 ```http
-POST /kiosk/exec
+POST /kiosk/run
 Authorization: Bearer <access_token>
 Content-Type: application/json
 
 {
-  "command": "run",
-  "body": {
-    "name":         "reserve_room",
-    "property_id":  1,
-    "room_type_id": 2,
-    "check_in":     "2026-08-01",
-    "check_out":    "2026-08-04"
-  }
+  "name":         "reserve_room",
+  "property_id":  1,
+  "room_type_id": 2,
+  "check_in":     "2026-08-01",
+  "check_out":    "2026-08-04"
 }
 ```
 
@@ -204,17 +218,14 @@ Payment requires three JWS tokens signed with the private key from Step 2. The a
 ### Pay call
 
 ```http
-POST /kiosk/exec
+POST /kiosk/pay
 Authorization: Bearer <access_token>
 Content-Type: application/json
 
 {
-  "command": "pay",
-  "body": {
-    "intent_mandate_jws":  "<RS256 JWS of intent payload>",
-    "cart_mandate_jws":    "<RS256 JWS of cart payload>",
-    "payment_mandate_jws": "<RS256 JWS of payment payload>"
-  }
+  "intent_mandate_jws":  "<RS256 JWS of intent payload>",
+  "cart_mandate_jws":    "<RS256 JWS of cart payload>",
+  "payment_mandate_jws": "<RS256 JWS of payment payload>"
 }
 ```
 
@@ -240,16 +251,13 @@ Successful response — HTTP 200:
 After payment is settled, confirm the booking.
 
 ```http
-POST /kiosk/exec
+POST /kiosk/run
 Authorization: Bearer <access_token>
 Content-Type: application/json
 
 {
-  "command": "run",
-  "body": {
-    "name":       "confirm_booking",
-    "booking_id": "<booking_id from Step 4>"
-  }
+  "name":       "confirm_booking",
+  "booking_id": "<booking_id from Step 4>"
 }
 ```
 
@@ -271,17 +279,17 @@ Successful response — HTTP 200, inside `.value`:
 
 ## Handling `pow_required`
 
-Any `/kiosk/exec` response may be HTTP 402 with `error.code == "pow_required"`.
-When this happens, solve the challenge and retry — the full protocol is
-documented in `kiosk-pow/SKILL.md`. Summary:
+Any `/kiosk/query`, `/kiosk/run`, or `/kiosk/pay` response may be HTTP 402 with
+`error.code == "pow_required"`. When this happens, solve the challenge and retry —
+the full protocol is documented in `kiosk-pow/SKILL.md`. Summary:
 
 1. Install once: `pip install argon2-cffi`
 2. Solve: `python3 kiosk-pow/solve.py '<challenge-json>'` → reads `{"nonce": "..."}`
-3. Re-POST the **exact same** request body with a top-level `pow` field:
+3. Re-POST to the **same** endpoint with the **exact same** request body plus a
+   top-level `pow` field:
    ```json
-   { "command": "query",
-     "body":    { "name": "properties" },
-     "pow":     { "challenge": { ...verbatim... }, "nonce": "<from solver>" } }
+   { "name": "properties",
+     "pow":  { "challenge": { ...verbatim... }, "nonce": "<from solver>" } }
    ```
 
 hoteling does not currently require PoW at registration, but any provider can add it at any time. Always handle `pow_required` gracefully.
@@ -294,11 +302,8 @@ Instead of relying solely on this static file, an agent can ask the provider
 for a live, machine-readable catalog of every registered query and action:
 
 ```http
-POST /kiosk/exec
+GET /kiosk/schema
 Authorization: Bearer <access_token>
-Content-Type: application/json
-
-{ "command": "schema" }
 ```
 
 Response — HTTP 200, inside `.value`:
@@ -327,19 +332,6 @@ Response — HTTP 200, inside `.value`:
 }
 ```
 
-For a human-readable rendering of the same catalog:
-
-```http
-POST /kiosk/exec
-Authorization: Bearer <access_token>
-Content-Type: application/json
-
-{ "command": "help" }
-```
-
-Response `.value.text` is a plain-text listing of implemented verbs, queries,
-and actions with their descriptions and param hints.
-
 Use `schema` to discover what is available at runtime rather than hard-coding
 query or action names from this file.
 
@@ -348,9 +340,9 @@ query or action names from this file.
 ## Rules
 
 1. **Generate the keypair once per session; keep the private key.** Mandate verification looks up the public key you registered. If you lose the key, re-register.
-2. **Every mandate must be bound to your registered principal.** `user_id` and `agent_id` in both mandates must match the values returned by `/kiosk/agents/register`.
+2. **Every mandate must be bound to your registered principal.** `user_id` and `agent_id` in both mandates must match the values returned by `/kiosk/auth/register`.
 3. **`iss` must equal the provider's issuer.** Read it from `/.well-known/kiosk.json` and copy it verbatim into both mandates.
-4. **Start by reading `/.well-known/kiosk.json`.** It gives you the `issuer` (for mandate signing) and the `endpoint` for `/kiosk/exec` before you send a single request.
+4. **Start by reading `/.well-known/kiosk.json`.** It gives you the `issuer` (for mandate signing) and the `endpoint` — the REST base for `/kiosk/query`, `/kiosk/run`, `/kiosk/pay`, and `/kiosk/schema` — before you send a single request.
 5. **The cap must cover the total.** `cap_amount_cents` >= `total_amount_cents`. The cart mandate is rejected if it exceeds the cap.
 6. **`intent_mandate_id` in the cart must reference the intent's `id`.** The server verifies this binding.
 7. **The `booking_id` in `line_items` must reference the booking being confirmed.** `confirm_booking` Gate-2 checks this with a jsonb-containment query.

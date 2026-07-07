@@ -102,8 +102,8 @@ user_id_b, agent_id_b, token_b, key_b = register_principal(name: "bob-hoteling")
 
 # ── Step 3: A queries properties and availability ─────────────────────────────
 rc_props_a, props_resp_a = post_json(
-  "#{SERVER}/kiosk/exec",
-  { command: "query", body: { name: "properties" } },
+  "#{SERVER}/kiosk/query",
+  { name: "properties" },
   { "Authorization" => "Bearer #{token_a}" },
 )
 abort "A query properties failed (#{rc_props_a}): #{JSON.generate(props_resp_a)}" unless rc_props_a == 200
@@ -114,9 +114,9 @@ prop_a = all_props_a.first
 prop_id_a = prop_a["id"]
 
 rc_avail_a, avail_resp_a = post_json(
-  "#{SERVER}/kiosk/exec",
-  { command: "query", body: { name: "availability",
-      property_id: prop_id_a, check_in: CHECK_IN_A, check_out: CHECK_OUT_A } },
+  "#{SERVER}/kiosk/query",
+  { name: "availability",
+    property_id: prop_id_a, check_in: CHECK_IN_A, check_out: CHECK_OUT_A },
   { "Authorization" => "Bearer #{token_a}" },
 )
 abort "A query availability failed (#{rc_avail_a}): #{JSON.generate(avail_resp_a)}" unless rc_avail_a == 200
@@ -130,10 +130,10 @@ STDERR.puts "  A will reserve #{room_type_name_a} at property #{prop_id_a}"
 
 # ── Step 4: A reserves room → booking_id rA ──────────────────────────────────
 rc_rsv_a, rsv_a_resp = post_json(
-  "#{SERVER}/kiosk/exec",
-  { command: "run", body: { name: "reserve_room",
-      property_id: prop_id_a, room_type_id: room_type_id_a,
-      check_in: CHECK_IN_A, check_out: CHECK_OUT_A } },
+  "#{SERVER}/kiosk/run",
+  { name: "reserve_room",
+    property_id: prop_id_a, room_type_id: room_type_id_a,
+    check_in: CHECK_IN_A, check_out: CHECK_OUT_A },
   { "Authorization" => "Bearer #{token_a}" },
 )
 abort "A reserve_room failed (#{rc_rsv_a}): #{JSON.generate(rsv_a_resp)}" unless rc_rsv_a == 200
@@ -196,12 +196,9 @@ cart_b_jws    = JWT.encode(cart_b_payload,    key_b, "RS256")
 payment_b_jws = JWT.encode(payment_b_payload, key_b, "RS256")
 
 rc_pay_b, pay_b_resp = post_json(
-  "#{SERVER}/kiosk/exec",
-  {
-    command: "pay",
-    body: { intent_mandate_jws: intent_b_jws, cart_mandate_jws: cart_b_jws,
-             payment_mandate_jws: payment_b_jws },
-  },
+  "#{SERVER}/kiosk/pay",
+  { intent_mandate_jws: intent_b_jws, cart_mandate_jws: cart_b_jws,
+    payment_mandate_jws: payment_b_jws },
   { "Authorization" => "Bearer #{token_b}" },
 )
 abort "B pay (for rA) failed (#{rc_pay_b}): #{JSON.generate(pay_b_resp)}" unless rc_pay_b == 200
@@ -214,8 +211,8 @@ STDERR.puts "  B paid for rA: settlement_id=#{pay_b_resp.dig("value", "settlemen
 #
 # First find an available room for B's date range.
 rc_props_b, props_resp_b = post_json(
-  "#{SERVER}/kiosk/exec",
-  { command: "query", body: { name: "properties" } },
+  "#{SERVER}/kiosk/query",
+  { name: "properties" },
   { "Authorization" => "Bearer #{token_b}" },
 )
 abort "B query properties failed (#{rc_props_b})" unless rc_props_b == 200
@@ -226,9 +223,9 @@ prop_b = nil
 room_b = nil
 all_props_b.each do |p|
   rc_av, av_r = post_json(
-    "#{SERVER}/kiosk/exec",
-    { command: "query", body: { name: "availability",
-        property_id: p["id"], check_in: CHECK_IN_B, check_out: CHECK_OUT_B } },
+    "#{SERVER}/kiosk/query",
+    { name: "availability",
+      property_id: p["id"], check_in: CHECK_IN_B, check_out: CHECK_OUT_B },
     { "Authorization" => "Bearer #{token_b}" },
   )
   next unless rc_av == 200
@@ -242,17 +239,14 @@ end
 abort "B: no room available for #{CHECK_IN_B}..#{CHECK_OUT_B}" unless prop_b
 
 rc_forge, forged_resp = post_json(
-  "#{SERVER}/kiosk/exec",
+  "#{SERVER}/kiosk/run",
   {
-    command: "run",
-    body: {
-      name:         "reserve_room",
-      property_id:  prop_b["id"],
-      room_type_id: room_b["id"],
-      check_in:     CHECK_IN_B,
-      check_out:    CHECK_OUT_B,
-      user_id:      user_id_a,  # adversarial: B supplies A's user_id
-    },
+    name:         "reserve_room",
+    property_id:  prop_b["id"],
+    room_type_id: room_b["id"],
+    check_in:     CHECK_IN_B,
+    check_out:    CHECK_OUT_B,
+    user_id:      user_id_a,  # adversarial: B supplies A's user_id
   },
   { "Authorization" => "Bearer #{token_b}" },
 )
@@ -268,8 +262,8 @@ STDERR.puts "  B forged reserve: booking_id=#{booking_id_b_forged}"
 #   2b positive control: b_booking_ids MUST contain rB_forged, proving
 #     the exclusion is non-vacuous (the query actually returns B's own rows).
 rc_b_bookings, b_bookings_resp = post_json(
-  "#{SERVER}/kiosk/exec",
-  { command: "query", body: { name: "my_bookings" } },
+  "#{SERVER}/kiosk/query",
+  { name: "my_bookings" },
   { "Authorization" => "Bearer #{token_b}" },
 )
 abort "B my_bookings failed (#{rc_b_bookings}): #{JSON.generate(b_bookings_resp)}" unless rc_b_bookings == 200
@@ -283,8 +277,8 @@ STDERR.puts "  B my_bookings: #{b_booking_ids.inspect}"
 # finds nothing because rA.user_id = A ≠ B → 403.
 # The 403 genuinely isolates Gate-1 ownership, not a payment gap.
 rc_confirm_b, confirm_b_resp = post_json(
-  "#{SERVER}/kiosk/exec",
-  { command: "run", body: { name: "confirm_booking", booking_id: booking_id_a } },
+  "#{SERVER}/kiosk/run",
+  { name: "confirm_booking", booking_id: booking_id_a },
   { "Authorization" => "Bearer #{token_b}" },
 )
 STDERR.puts "  B confirm_booking on A's rA: HTTP #{rc_confirm_b} (expected 403)"

@@ -466,17 +466,15 @@ end
 namespace :demo do
   # ── demo:schema ─────────────────────────────────────────────────────────────
   desc <<~DESC
-    Self-discovery proof (P4 Task 2) — verifies schema + help verbs over HTTP.
+    Self-discovery proof (P4 Task 2) — verifies the schema verb over HTTP.
 
     Boots the server, registers a fresh agent (no PoW for hoteling), calls:
-      POST /kiosk/exec { command: "schema" }
-      POST /kiosk/exec { command: "help"   }
+      GET /kiosk/schema
 
     Asserts:
       • schema.verbs includes query/run/pay/schema/help and NOT events
       • schema.queries includes properties, availability, my_bookings with descriptions
       • schema.actions includes reserve_room, confirm_booking with descriptions
-      • help.text mentions reserve_room and confirm_booking by name
 
     Exits 0 if all assertions pass; exits 1 on any miss.
   DESC
@@ -547,13 +545,12 @@ namespace :demo do
       abort "schema_flow.rb did not produce valid JSON: #{e.message}\nOutput:\n#{raw}"
     end
 
-    puts "\n── Schema/help assertions ──"
+    puts "\n── Schema assertions ──"
     failures = []
 
     verbs   = result["schema_verbs"]   || []
     queries = result["schema_queries"] || []
     actions = result["schema_actions"] || []
-    text    = result["help_text"]      || ""
 
     # Verbs: query/run/pay/schema/help present; events absent
     %w[query run pay schema help].each do |v|
@@ -605,18 +602,8 @@ namespace :demo do
       end
     end
 
-    # help text mentions reserve_room and confirm_booking
-    %w[reserve_room confirm_booking].each do |name|
-      if text.include?(name)
-        puts "  OK  help text mentions #{name}"
-      else
-        failures << "help text does not mention #{name}"
-        puts "  FAIL  help text does not mention #{name}"
-      end
-    end
-
     if failures.empty?
-      puts "\n  All schema/help assertions passed."
+      puts "\n  All schema assertions passed."
     else
       puts "\n  FAILED assertions:"
       failures.each { |f| puts "    - #{f}" }

@@ -32,19 +32,13 @@ RSpec.describe Kiosk::Redteam::Scenarios::UnpaidGatedAction do
     context "when the server blocks the gated action (correct — BLOCKED)" do
       it "returns blocked: true" do
         stub_registers("a")
-        stub_request(:post, "#{BASE_URL}/kiosk/exec")
-          .with { |req|
-            body = JSON.parse(req.body)
-            body["command"] == "run" && body.dig("body", "name") == "reserve"
-          }
+        stub_request(:post, "#{BASE_URL}/kiosk/run")
+          .with { |req| JSON.parse(req.body)["name"] == "reserve" }
           .to_return(status: 200,
                      body: JSON.generate({ "value" => { "id" => "res-1" } }),
                      headers: { "Content-Type" => "application/json" })
-        stub_request(:post, "#{BASE_URL}/kiosk/exec")
-          .with { |req|
-            body = JSON.parse(req.body)
-            body["command"] == "run" && body.dig("body", "name") == "start_rental"
-          }
+        stub_request(:post, "#{BASE_URL}/kiosk/run")
+          .with { |req| JSON.parse(req.body)["name"] == "start_rental" }
           .to_return(status: 403,
                      body: JSON.generate({ "error" => { "code" => "forbidden" } }),
                      headers: { "Content-Type" => "application/json" })

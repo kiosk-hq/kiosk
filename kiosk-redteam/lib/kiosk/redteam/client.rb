@@ -93,8 +93,8 @@ module Kiosk
       # @return [Response]
       def query(principal, name:, **params)
         post_json(
-          "/kiosk/exec",
-          { command: "query", body: { name: name }.merge(params) },
+          "/kiosk/query",
+          { name: name }.merge(params),
           bearer: principal.token,
         )
       end
@@ -107,8 +107,8 @@ module Kiosk
       # @return [Response]
       def run(principal, name:, **args)
         post_json(
-          "/kiosk/exec",
-          { command: "run", body: { name: name }.merge(args) },
+          "/kiosk/run",
+          { name: name }.merge(args),
           bearer: principal.token,
         )
       end
@@ -131,14 +131,11 @@ module Kiosk
       def pay(principal, intent:, cart:, payment_method: "pm_demo")
         payment = build_payment_mandate(principal, cart: cart, payment_method: payment_method)
         post_json(
-          "/kiosk/exec",
+          "/kiosk/pay",
           {
-            command: "pay",
-            body: {
-              intent_mandate_jws:  sign_mandate(principal, intent),
-              cart_mandate_jws:    sign_mandate(principal, cart),
-              payment_mandate_jws: sign_mandate(principal, payment),
-            },
+            intent_mandate_jws:  sign_mandate(principal, intent),
+            cart_mandate_jws:    sign_mandate(principal, cart),
+            payment_mandate_jws: sign_mandate(principal, payment),
           },
           bearer: principal.token,
         )
@@ -194,14 +191,11 @@ module Kiosk
       # @return [Response]
       def pay_raw(principal, intent_jws:, cart_jws:, payment_jws:)
         post_json(
-          "/kiosk/exec",
+          "/kiosk/pay",
           {
-            command: "pay",
-            body: {
-              intent_mandate_jws:  intent_jws,
-              cart_mandate_jws:    cart_jws,
-              payment_mandate_jws: payment_jws,
-            },
+            intent_mandate_jws:  intent_jws,
+            cart_mandate_jws:    cart_jws,
+            payment_mandate_jws: payment_jws,
           },
           bearer: principal.token,
         )

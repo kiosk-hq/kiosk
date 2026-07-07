@@ -69,10 +69,10 @@ curl -sf "$SERVER_URL/kiosk/.well-known/jwks.json" \
 heading "Agent browses the scooter fleet via named query"
 
 step "List scooters (publicly visible) — query: scooters_available"
-curl -sS -X POST "$SERVER_URL/kiosk/exec" \
+curl -sS -X POST "$SERVER_URL/kiosk/query" \
   -H "Authorization: Bearer $AGENT_TOKEN" \
   -H "Content-Type: application/json" \
-  -d '{"command":"query","body":{"name":"scooters_available"}}' \
+  -d '{"name":"scooters_available"}' \
   | jq '.rows'
 
 # ─── done ────────────────────────────────────────────────────────────

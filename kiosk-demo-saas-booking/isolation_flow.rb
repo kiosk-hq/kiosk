@@ -57,8 +57,8 @@ end
 # ── Step 1: Get salon_id from the open catalogue ─────────────────────────────
 # salons query is open-read; any authenticated principal may browse.
 rc, salons_resp = post_json(
-  "#{SERVER}/kiosk/exec",
-  { command: "query", body: { name: "salons" } },
+  "#{SERVER}/kiosk/query",
+  { name: "salons" },
   { "Authorization" => "Bearer #{TOKEN_A}" },
 )
 abort "salons query failed (#{rc}): #{JSON.generate(salons_resp)}" unless rc == 200
@@ -70,14 +70,11 @@ STDERR.puts "  salon_id=#{salon_id}"
 
 # ── Step 2: A books appointment aA ───────────────────────────────────────────
 rc, appt_a_resp = post_json(
-  "#{SERVER}/kiosk/exec",
+  "#{SERVER}/kiosk/run",
   {
-    command: "run",
-    body: {
-      name:     "book_appointment",
-      salon_id: salon_id,
-      slot:     "2026-09-01T10:00:00Z",
-    },
+    name:     "book_appointment",
+    salon_id: salon_id,
+    slot:     "2026-09-01T10:00:00Z",
   },
   { "Authorization" => "Bearer #{TOKEN_A}" },
 )
@@ -90,8 +87,8 @@ STDERR.puts "  A booked: appt_id=#{appt_id_a}"
 
 # ── Step 3: B queries my_appointments — must NOT contain aA (Assertion 1) ────
 rc, b_appts_resp = post_json(
-  "#{SERVER}/kiosk/exec",
-  { command: "query", body: { name: "my_appointments" } },
+  "#{SERVER}/kiosk/query",
+  { name: "my_appointments" },
   { "Authorization" => "Bearer #{TOKEN_B}" },
 )
 abort "B my_appointments failed (#{rc}): #{JSON.generate(b_appts_resp)}" unless rc == 200
@@ -105,15 +102,12 @@ STDERR.puts "  B my_appointments: #{b_appt_ids.inspect}"
 # and reads the identity from kiosk.current_user_id() — so the created
 # appointment must belong to B, not A.
 rc, forged_resp = post_json(
-  "#{SERVER}/kiosk/exec",
+  "#{SERVER}/kiosk/run",
   {
-    command: "run",
-    body: {
-      name:     "book_appointment",
-      salon_id: salon_id,
-      slot:     "2026-09-02T11:00:00Z",
-      user_id:  ALICE_UUID, # adversarial: B supplies A's user_id in args
-    },
+    name:     "book_appointment",
+    salon_id: salon_id,
+    slot:     "2026-09-02T11:00:00Z",
+    user_id:  ALICE_UUID, # adversarial: B supplies A's user_id in args
   },
   { "Authorization" => "Bearer #{TOKEN_B}" },
 )
@@ -130,8 +124,8 @@ STDERR.puts "  B booked (forged user_id): appt_id=#{appt_id_b}"
 # if my_appointments always returned empty for B, the exclusion of aA would
 # pass spuriously. Seeing appt_id_b here confirms the query is live for B.
 rc, b_appts_after_resp = post_json(
-  "#{SERVER}/kiosk/exec",
-  { command: "query", body: { name: "my_appointments" } },
+  "#{SERVER}/kiosk/query",
+  { name: "my_appointments" },
   { "Authorization" => "Bearer #{TOKEN_B}" },
 )
 abort "B my_appointments (after) failed (#{rc}): #{JSON.generate(b_appts_after_resp)}" unless rc == 200
@@ -142,8 +136,8 @@ STDERR.puts "  B my_appointments (after own booking): #{b_appt_ids_after.inspect
 # ── Step 6: A queries my_appointments after B's forged booking ───────────────
 # A must NOT see B's forged appointment (cross-check for Assertion 2).
 rc, a_appts_resp = post_json(
-  "#{SERVER}/kiosk/exec",
-  { command: "query", body: { name: "my_appointments" } },
+  "#{SERVER}/kiosk/query",
+  { name: "my_appointments" },
   { "Authorization" => "Bearer #{TOKEN_A}" },
 )
 abort "A my_appointments (after) failed (#{rc}): #{JSON.generate(a_appts_resp)}" unless rc == 200

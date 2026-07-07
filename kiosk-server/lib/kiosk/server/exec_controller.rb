@@ -13,7 +13,7 @@ if defined?(::ActionController::API)
 
   module Kiosk
     module Server
-      # POST /kiosk/exec — Rails controller wrapping {Executor}.
+      # REST wire surface — Rails controller wrapping {Executor}.
       # See design spec §5.4 «Server side» for the contract.
       #
       # REST endpoints (one per verb — ADR-0005):

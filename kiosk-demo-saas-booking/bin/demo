@@ -71,34 +71,34 @@ curl -sf "$SERVER_URL/kiosk/.well-known/jwks.json" \
 heading "Alice's agent reads data (named queries)"
 
 step "List salons (publicly visible)"
-curl -sS -X POST "$SERVER_URL/kiosk/exec" \
+curl -sS -X POST "$SERVER_URL/kiosk/query" \
   -H "Authorization: Bearer $ALICE_TOKEN" \
   -H "Content-Type: application/json" \
-  -d '{"command":"query","body":{"name":"salons"}}' \
+  -d '{"name":"salons"}' \
   | jq '.rows'
 
 step "Count appointments visible to Alice (initially 0)"
-curl -sS -X POST "$SERVER_URL/kiosk/exec" \
+curl -sS -X POST "$SERVER_URL/kiosk/query" \
   -H "Authorization: Bearer $ALICE_TOKEN" \
   -H "Content-Type: application/json" \
-  -d '{"command":"query","body":{"name":"my_appointments"}}' \
+  -d '{"name":"my_appointments"}' \
   | jq '.rows | length'
 
 # ─── run an Action ───────────────────────────────────────────────────
 
 heading "Alice's agent books an appointment via Action"
 
-SALON_ID=$(curl -sS -X POST "$SERVER_URL/kiosk/exec" \
+SALON_ID=$(curl -sS -X POST "$SERVER_URL/kiosk/query" \
   -H "Authorization: Bearer $ALICE_TOKEN" \
   -H "Content-Type: application/json" \
-  -d '{"command":"query","body":{"name":"salons"}}' \
+  -d '{"name":"salons"}' \
   | jq -r '.rows[0].id')
 
 step "run book_appointment for salon $SALON_ID"
-curl -sS -X POST "$SERVER_URL/kiosk/exec" \
+curl -sS -X POST "$SERVER_URL/kiosk/run" \
   -H "Authorization: Bearer $ALICE_TOKEN" \
   -H "Content-Type: application/json" \
-  -d "{\"command\":\"run\",\"body\":{\"name\":\"book_appointment\",\"salon_id\":$SALON_ID,\"slot\":\"2026-07-01T14:00:00Z\"}}" \
+  -d "{\"name\":\"book_appointment\",\"salon_id\":$SALON_ID,\"slot\":\"2026-07-01T14:00:00Z\"}" \
   | jq '.value'
 
 # ─── RLS isolation ───────────────────────────────────────────────────
@@ -106,17 +106,17 @@ curl -sS -X POST "$SERVER_URL/kiosk/exec" \
 heading "App-layer isolation: Alice and Bob can only see their own"
 
 step "Alice sees her appointment (count = 1)"
-curl -sS -X POST "$SERVER_URL/kiosk/exec" \
+curl -sS -X POST "$SERVER_URL/kiosk/query" \
   -H "Authorization: Bearer $ALICE_TOKEN" \
   -H "Content-Type: application/json" \
-  -d '{"command":"query","body":{"name":"my_appointments"}}' \
+  -d '{"name":"my_appointments"}' \
   | jq '.rows | length'
 
 step "Bob sees 0 (same query, different identity)"
-curl -sS -X POST "$SERVER_URL/kiosk/exec" \
+curl -sS -X POST "$SERVER_URL/kiosk/query" \
   -H "Authorization: Bearer $BOB_TOKEN" \
   -H "Content-Type: application/json" \
-  -d '{"command":"query","body":{"name":"my_appointments"}}' \
+  -d '{"name":"my_appointments"}' \
   | jq '.rows | length'
 
 # ─── OAuth Device Grant ──────────────────────────────────────────────
@@ -153,11 +153,11 @@ JWT=$(echo "$TOKEN_RESP" | jq -r '.access_token')
 echo "$TOKEN_RESP" | jq '. | {token_type, expires_in, scope}'
 say "JWT (truncated): ${JWT:0:72}…"
 
-step "Use the JWT against /kiosk/exec — same wire shape, OAuth-issued bearer"
-curl -sS -X POST "$SERVER_URL/kiosk/exec" \
+step "Use the JWT against /kiosk/query — same wire shape, OAuth-issued bearer"
+curl -sS -X POST "$SERVER_URL/kiosk/query" \
   -H "Authorization: Bearer $JWT" \
   -H "Content-Type: application/json" \
-  -d '{"command":"query","body":{"name":"salons"}}' \
+  -d '{"name":"salons"}' \
   | jq '.rows'
 
 # ─── done ────────────────────────────────────────────────────────────

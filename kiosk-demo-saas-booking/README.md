@@ -4,7 +4,7 @@ A salon-booking SaaS, Kiosk-enabled. Demonstrates:
 
 - `/.well-known/kiosk.json` discovery
 - JWKS endpoint for JWT verification
-- Authenticated `/kiosk/exec` calls (query + run verbs)
+- Authenticated REST wire surface (`/kiosk/query`, `/kiosk/run`, `/kiosk/pay`, `/kiosk/schema`) — query + run verbs
 - App-layer data isolation (two users, two views of the same table); RLS available as optional defense-in-depth
 - OAuth 2.1 Device Authorization Grant (RFC 8628) — the `kiosk login` flow
 - A `book_appointment` Action
@@ -33,11 +33,11 @@ rake demo
 The walkthrough (`bin/demo`) prints six sections:
 
 1. **Discovery** — well-known + JWKS payloads, so an agent host like claude.ai sees what's behind the URL
-2. **Named query** — `POST /kiosk/exec` with `command: query`, returning rows scoped by app-layer authz
-3. **Run an Action** — `command: run` invoking `book_appointment` (the demo's lone registered Action)
+2. **Named query** — `POST /kiosk/query` with `{name: ...}`, returning rows scoped by app-layer authz
+3. **Run an Action** — `POST /kiosk/run` invoking `book_appointment` (the demo's lone registered Action)
 4. **Isolation** — same query run as Alice vs Bob; each sees only their own (enforced in the query block, RLS optional)
 5. **OAuth Device Grant** — full flow: device_authorization → user approval (simulated) → token poll → JWT bearer
-6. **JWT against `/kiosk/exec`** — the OAuth-issued bearer is interchangeable with the legacy synthetic shape
+6. **JWT against `/kiosk/query`** — the OAuth-issued bearer is interchangeable with the legacy synthetic shape
 
 After the walkthrough finishes, the server is torn down cleanly. Server logs are at `/tmp/kiosk-demo.log` if you want to inspect what hit the HTTP surface.
 

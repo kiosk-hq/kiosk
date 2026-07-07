@@ -90,8 +90,8 @@ token_b    = reg_b.fetch("access_token")
 
 # ── Step 3: A browses menu to find margherita ─────────────────────────────────
 rc, browse = post_json(
-  "#{SERVER}/kiosk/exec",
-  { command: "query", body: { name: "menu_by_restaurant", restaurant: "Mamma Pizza" } },
+  "#{SERVER}/kiosk/query",
+  { name: "menu_by_restaurant", restaurant: "Mamma Pizza" },
   { "Authorization" => "Bearer #{token_a}" },
 )
 abort "menu browse failed (#{rc}): #{JSON.generate(browse)}" unless rc == 200
@@ -103,15 +103,12 @@ menu_item_id = margherita.fetch("id")
 
 # ── Step 4: A places order oA ─────────────────────────────────────────────────
 rc, order_a_resp = post_json(
-  "#{SERVER}/kiosk/exec",
+  "#{SERVER}/kiosk/run",
   {
-    command: "run",
-    body: {
-      name:             "place_order",
-      menu_item_id:     menu_item_id,
-      quantity:         1,
-      delivery_address: "1 Tenant A St, Istanbul",
-    },
+    name:             "place_order",
+    menu_item_id:     menu_item_id,
+    quantity:         1,
+    delivery_address: "1 Tenant A St, Istanbul",
   },
   { "Authorization" => "Bearer #{token_a}" },
 )
@@ -122,8 +119,8 @@ abort "A's order_id missing from response: #{JSON.generate(order_a_resp)}" unles
 
 # ── Step 5: B queries my_orders BEFORE placing anything (Assertion 1 data) ───
 rc, b_before_resp = post_json(
-  "#{SERVER}/kiosk/exec",
-  { command: "query", body: { name: "my_orders" } },
+  "#{SERVER}/kiosk/query",
+  { name: "my_orders" },
   { "Authorization" => "Bearer #{token_b}" },
 )
 abort "B my_orders (before) failed (#{rc}): #{JSON.generate(b_before_resp)}" unless rc == 200
@@ -131,16 +128,13 @@ b_order_ids_before = (b_before_resp["rows"] || []).map { |r| r["id"] }
 
 # ── Step 6: B places order with FORGED user_id arg (Assertion 2) ─────────────
 rc, forged_resp = post_json(
-  "#{SERVER}/kiosk/exec",
+  "#{SERVER}/kiosk/run",
   {
-    command: "run",
-    body: {
-      name:             "place_order",
-      menu_item_id:     menu_item_id,
-      quantity:         1,
-      delivery_address: "2 Forged St, Istanbul",
-      user_id:          user_id_a,  # adversarial: B supplies A's user_id
-    },
+    name:             "place_order",
+    menu_item_id:     menu_item_id,
+    quantity:         1,
+    delivery_address: "2 Forged St, Istanbul",
+    user_id:          user_id_a,  # adversarial: B supplies A's user_id
   },
   { "Authorization" => "Bearer #{token_b}" },
 )
@@ -151,8 +145,8 @@ abort "B's forged order_id missing from response: #{JSON.generate(forged_resp)}"
 
 # ── Step 7: B queries my_orders AFTER placing (must include oB, not oA) ──────
 rc, b_after_resp = post_json(
-  "#{SERVER}/kiosk/exec",
-  { command: "query", body: { name: "my_orders" } },
+  "#{SERVER}/kiosk/query",
+  { name: "my_orders" },
   { "Authorization" => "Bearer #{token_b}" },
 )
 abort "B my_orders (after) failed (#{rc}): #{JSON.generate(b_after_resp)}" unless rc == 200
@@ -160,8 +154,8 @@ b_order_ids_after = (b_after_resp["rows"] || []).map { |r| r["id"] }
 
 # ── Step 8: A queries my_orders AFTER B's forged order (must NOT include oB) ─
 rc, a_after_resp = post_json(
-  "#{SERVER}/kiosk/exec",
-  { command: "query", body: { name: "my_orders" } },
+  "#{SERVER}/kiosk/query",
+  { name: "my_orders" },
   { "Authorization" => "Bearer #{token_a}" },
 )
 abort "A my_orders (after) failed (#{rc}): #{JSON.generate(a_after_resp)}" unless rc == 200

@@ -436,8 +436,8 @@ namespace :demo do
     Self-discovery proof — verifies schema + help verbs over HTTP.
 
     Boots the server, registers a fresh agent, calls:
-      POST /kiosk/exec { command: "schema" }
-      POST /kiosk/exec { command: "help"   }
+      GET /kiosk/schema
+      GET /kiosk/help
 
     Asserts:
       • schema.verbs includes query/run/pay/schema/help and NOT events

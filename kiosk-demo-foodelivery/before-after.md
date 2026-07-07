@@ -55,10 +55,10 @@ foodelivery is a Rails 8.1 app that speaks Kiosk. The following is the recorded 
 **What the agent did — no human involved at any step:**
 
 1. **Discover** — `GET /.well-known/kiosk.json` returns the foodelivery issuer and surface.
-2. **Self-register** — generated an RSA-2048 keypair, `POST /kiosk/agents/register {name:"hermes", public_key:<pem>, role:"customer"}` → HTTP 201 → `agent_id`, `user_id`, `access_token`. No existing account. No human login. No OTP. No bot screen.
-3. **Browse** — `POST /kiosk/exec {command:"query", body:{name:"menu_by_restaurant", restaurant:"Mamma Pizza"}}` returned the menu rows; found the Margherita: `id`, `sku:"margherita"`, `price_cents:1599`. No SQL sent — the agent called a provider-registered named query.
-4. **Place order** — `POST /kiosk/exec {command:"run", body:{name:"place_order", menu_item_id:<id>, quantity:1, delivery_address:"1 Test St, Istanbul"}}` → HTTP 200, `total_cents:1599`, `status:"placed"`.
-5. **Pay** — signed an AP2 intent mandate (`cap_amount_cents:1699`, `scope:"food"`, `iss:<issuer>`) and a cart mandate (`total_amount_cents:1599`, `line_items:[{sku:"margherita",qty:1}]`, bound to the intent via `intent_mandate_id`) as RS256 JWS with the registered keypair, then `POST /kiosk/exec {command:"pay", ...}` → `settled_amount_cents:1599`, `ok:true`.
+2. **Self-register** — generated an RSA-2048 keypair, proved possession of the private key (`GET /kiosk/auth/challenge` → sign an RS256 JWS `{aud, nonce, jti, iat}` → `POST /kiosk/auth/register {public_key:<pem>, signed:<jws>}`) → HTTP 201 → `agent_id`, `user_id`, `access_token`. No existing account. No human login. No OTP. No bot screen.
+3. **Browse** — `POST /kiosk/query {name:"menu_by_restaurant", restaurant:"Mamma Pizza"}` returned the menu rows; found the Margherita: `id`, `sku:"margherita"`, `price_cents:1599`. No SQL sent — the agent called a provider-registered named query.
+4. **Place order** — `POST /kiosk/run {name:"place_order", menu_item_id:<id>, quantity:1, delivery_address:"1 Test St, Istanbul"}` → HTTP 200, `total_cents:1599`, `status:"placed"`.
+5. **Pay** — signed an AP2 intent mandate (`cap_amount_cents:1699`, `scope:"food"`, `iss:<issuer>`) and a cart mandate (`total_amount_cents:1599`, `line_items:[{sku:"margherita",qty:1}]`, bound to the intent via `intent_mandate_id`) as RS256 JWS with the registered keypair, then `POST /kiosk/pay {...}` → `settled_amount_cents:1599`, `ok:true`.
 
 The database confirmed: one row in `orders`, one row in `kiosk.payment_mandates`.
 
@@ -91,7 +91,7 @@ In production these are versioned RubyGems. The `kiosk-pay-stripe` adapter swaps
 rails g kiosk:install
 ```
 
-This emits: the Kiosk schema migration (the `kiosk.*` namespace with agents, sessions, and mandate tables), the six-verb wire surface (`query`, `run`, `pay`, `schema`, `help`, `events`) mounted at `/kiosk/exec`, the agent-registration endpoint at `/kiosk/agents/register`, and `/.well-known/kiosk.json`. Today `query`, `run`, and `pay` are wired end-to-end; `schema`, `help`, and `events` are stubbed and ship next.
+This emits: the Kiosk schema migration (the `kiosk.*` namespace with agents, sessions, and mandate tables), the REST wire surface (`/kiosk/query`, `/kiosk/run`, `/kiosk/pay`, `/kiosk/schema` — one endpoint per verb, HTTP method carries the semantics), the proof-of-possession auth handshake at `/kiosk/auth/*` (`challenge`, `register`, `login`, `revoke`), and `/.well-known/kiosk.json`. Today `query`, `run`, `pay`, and `schema` are wired end-to-end.
 
 Agents call named queries by name (`query` verb) — never raw SQL. The provider registers the queries it wishes to expose; isolation is enforced at the app layer in the query definitions and in Actions, with RLS available as optional defense-in-depth.
 
@@ -111,7 +111,7 @@ Kiosk::Server::Queries.register("my_orders") do |_params|
 end
 ```
 
-The handler block receives only the agent-supplied params (the `:name` is stripped by the Executor) and runs inside a session whose `kiosk.current_user_id()` is the authenticated principal. Agents call these by name only (`command:"query", body:{name:"menu_by_restaurant", restaurant:"..."}`). They never supply SQL. App-layer isolation lives here: user-scoped queries scope by `kiosk.current_user_id()` (server-derived from the session, never an agent param) in the block; catalogue queries are open to all authenticated agents.
+The handler block receives only the agent-supplied params (the `:name` is stripped by the Executor) and runs inside a session whose `kiosk.current_user_id()` is the authenticated principal. Agents call these by name only (`POST /kiosk/query {name:"menu_by_restaurant", restaurant:"..."}`). They never supply SQL. App-layer isolation lives here: user-scoped queries scope by `kiosk.current_user_id()` (server-derived from the session, never an agent param) in the block; catalogue queries are open to all authenticated agents.
 
 RLS is available as optional defense-in-depth via `enable_rls_on` — useful if you want a Postgres-level backstop in addition to the app-layer checks above. It is not required for Kiosk's isolation model.
 

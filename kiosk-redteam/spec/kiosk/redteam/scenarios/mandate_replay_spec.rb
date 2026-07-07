@@ -42,8 +42,7 @@ RSpec.describe Kiosk::Redteam::Scenarios::MandateReplay do
         stub_registers("a", "b")
         stub_exec_run(status: 200, body: { "value" => { "id" => "res-1" } })
         # A's first pay succeeds; B's replay is rejected.
-        stub_request(:post, "#{BASE_URL}/kiosk/exec")
-          .with { |req| JSON.parse(req.body)["command"] == "pay" }
+        stub_request(:post, "#{BASE_URL}/kiosk/pay")
           .to_return(
             { status: 200, body: JSON.generate({ "value" => { "payment_mandate_id" => "pm-1" } }),
               headers: { "Content-Type" => "application/json" } },

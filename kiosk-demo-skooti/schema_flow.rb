@@ -1,9 +1,9 @@
 # frozen_string_literal: true
 
-# Self-discovery proof driver — schema + help verbs over HTTP.
+# Self-discovery proof driver — schema verb over HTTP.
 #
 # Registers a fresh agent (SHA256 PoW at difficulty=20 — skooti registration
-# gate), calls `schema` and `help`, prints one JSON line on stdout.
+# gate), calls `schema` (GET /kiosk/schema), prints one JSON line on stdout.
 #
 # Usage (invoked by rake demo:schema — do not run standalone without the server):
 #   SERVER_URL=http://127.0.0.1:3003 \
@@ -82,26 +82,18 @@ rc, reg = post_json(
 abort "register failed (#{rc}): #{JSON.generate(reg)}" unless rc == 201
 token = reg.fetch("access_token")
 
-# ── Call schema ──────────────────────────────────────────────────────────────
+# ── Call schema (GET /kiosk/schema — REST self-discovery) ────────────────────
 
-schema_rc, schema_body = post_json("/kiosk/exec", { command: "schema" }, bearer: token)
+schema_rc, schema_body = get_json("/kiosk/schema", bearer: token)
 abort "schema call failed (#{schema_rc}): #{JSON.generate(schema_body)}" unless schema_rc == 200
-
-# ── Call help ────────────────────────────────────────────────────────────────
-
-help_rc, help_body = post_json("/kiosk/exec", { command: "help" }, bearer: token)
-abort "help call failed (#{help_rc}): #{JSON.generate(help_body)}" unless help_rc == 200
 
 # ── Emit structured JSON for the rake task to assert ────────────────────────
 
 schema_value = schema_body["value"] || {}
-help_value   = help_body["value"] || {}
 
 puts JSON.generate({
   schema_status:  schema_rc,
   schema_verbs:   schema_value["verbs"],
   schema_queries: schema_value["queries"],
   schema_actions: schema_value["actions"],
-  help_status:    help_rc,
-  help_text:      help_value["text"],
 })

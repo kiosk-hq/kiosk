@@ -9,8 +9,8 @@ Gem::Specification.new do |spec|
   spec.summary       = "Rails engine + Rack middleware + pure-Ruby helpers for the Kiosk framework"
   spec.description   = <<~DESC
     kiosk-server is the host-side surface for Kiosk: a Rails engine that
-    mounts the wire endpoints (/kiosk/exec, /kiosk/oauth/*,
-    /kiosk/agents/*, /kiosk/events), a Rack middleware that injects the
+    mounts the wire endpoints (/kiosk/{schema,query,run,pay},
+    /kiosk/auth/*, /kiosk/oauth/*), a Rack middleware that injects the
     Kiosk-Server-Version / Kiosk-API-Version / Kiosk-Min-Client response
     headers, a pure-Ruby builder for /.well-known/kiosk.json, and SQL
     generators for the four canonical schema migrations.

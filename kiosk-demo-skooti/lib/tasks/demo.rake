@@ -33,6 +33,8 @@ namespace :demo do
     require "json"
     require "openssl"
     require "base64"
+    require "jwt"
+    require "securerandom"
 
     $LOAD_PATH.unshift File.expand_path("../", __dir__)
     require "lock_sim"
@@ -320,7 +322,8 @@ namespace :demo do
       require "openssl"
       require "securerandom"
 
-      # Re-register a fresh agent.
+      # Re-register a fresh agent via the proof-of-possession handshake
+      # (challenge → sign → register), keeping the SHA256 PoW gate.
       agent_key     = OpenSSL::PKey::RSA.generate(2048)
       agent_pem     = agent_key.public_key.to_pem
       difficulty    = 20
@@ -337,9 +340,16 @@ namespace :demo do
         count >= difficulty
       end
 
-      uri = URI("#{server_url}/kiosk/agents/register")
+      # PoP handshake: fetch a single-use challenge, sign it (aud = origin), register.
+      ch_uri  = URI("#{server_url}/kiosk/auth/challenge?public_key=#{URI.encode_www_form_component(agent_pem)}")
+      ch_data = JSON.parse(Net::HTTP.get_response(ch_uri).body)
+      pop = JWT.encode(
+        { aud: kiosk_issuer, nonce: ch_data.fetch("challenge"), jti: SecureRandom.uuid, iat: Time.now.to_i },
+        agent_key, "RS256",
+      )
+      uri = URI("#{server_url}/kiosk/auth/register")
       req = Net::HTTP::Post.new(uri, "Content-Type" => "application/json")
-      req.body = JSON.generate(name: "hermes-c3", public_key: agent_pem, role: "customer", pow: pow.to_s)
+      req.body = JSON.generate(public_key: agent_pem, signed: pop, pow: pow.to_s)
       reg_resp = Net::HTTP.new(uri.host, uri.port).request(req)
       reg_data = JSON.parse(reg_resp.body)
       agent_token = reg_data["access_token"]
@@ -354,18 +364,18 @@ namespace :demo do
       Net::HTTP.new(kyc_uri.host, kyc_uri.port).request(kyc_req)
 
       # Attempt start_rental on the ALREADY ACTIVE reservation — Gate 1 rejects.
-      exec_uri = URI("#{server_url}/kiosk/exec")
-      exec_req = Net::HTTP::Post.new(exec_uri, "Content-Type" => "application/json", "Authorization" => "Bearer #{agent_token}")
-      exec_req.body = JSON.generate(command: "run", body: { name: "start_rental", reservation_id: active_reservation_id })
-      exec_res = Net::HTTP.new(exec_uri.host, exec_uri.port).request(exec_req)
-      rc_c3 = exec_res.code.to_i
+      run_uri = URI("#{server_url}/kiosk/run")
+      run_req = Net::HTTP::Post.new(run_uri, "Content-Type" => "application/json", "Authorization" => "Bearer #{agent_token}")
+      run_req.body = JSON.generate(name: "start_rental", reservation_id: active_reservation_id)
+      run_res = Net::HTTP.new(run_uri.host, run_uri.port).request(run_req)
+      rc_c3 = run_res.code.to_i
 
       if rc_c3 == 403
         puts "  OK  C3 re-start_rental: http == 403 (reservation already active)"
       else
         failures << "c3_relock: http_start_rental expected 403, got #{rc_c3.inspect}"
         puts "  FAIL  C3 re-start_rental: expected 403, got #{rc_c3.inspect}"
-        puts "       Response: #{exec_res.body}"
+        puts "       Response: #{run_res.body}"
       end
     end
 
@@ -403,9 +413,16 @@ namespace :demo do
         end
         count >= 20
       end
+      # PoP handshake: challenge → sign (aud = origin) → register (PoW preserved).
+      q_ch_uri  = URI("#{server_url}/kiosk/auth/challenge?public_key=#{URI.encode_www_form_component(q_pem)}")
+      q_ch_data = JSON.parse(Net::HTTP.get_response(q_ch_uri).body)
+      q_pop = JWT.encode(
+        { aud: kiosk_issuer, nonce: q_ch_data.fetch("challenge"), jti: SecureRandom.uuid, iat: Time.now.to_i },
+        q_key, "RS256",
+      )
       reg_rc, reg_data = q_post.call(
-        "/kiosk/agents/register",
-        { name: "hermes-q6", public_key: q_pem, role: "customer", pow: q_pow.to_s },
+        "/kiosk/auth/register",
+        { public_key: q_pem, signed: q_pop, pow: q_pow.to_s },
         "",
       )
       abort "RUN6 register failed (#{reg_rc})" unless reg_rc == 201
@@ -419,8 +436,8 @@ namespace :demo do
 
       # ── QA1: query scooters_available — SK-001 must be present ──────────
       qa1_rc, qa1_resp = q_post.call(
-        "/kiosk/exec",
-        { command: "query", body: { name: "scooters_available" } },
+        "/kiosk/query",
+        { name: "scooters_available" },
         q_token,
       )
       if qa1_rc == 200
@@ -439,8 +456,8 @@ namespace :demo do
 
       # ── QA2: query my_reservations before reservation — must be empty ────
       qa2_rc, qa2_resp = q_post.call(
-        "/kiosk/exec",
-        { command: "query", body: { name: "my_reservations" } },
+        "/kiosk/query",
+        { name: "my_reservations" },
         q_token,
       )
       if qa2_rc == 200
@@ -458,8 +475,8 @@ namespace :demo do
 
       # Reserve SK-001 for this principal.
       rsv_rc, rsv_data = q_post.call(
-        "/kiosk/exec",
-        { command: "run", body: { name: "reserve", scooter_code: "SK-001" } },
+        "/kiosk/run",
+        { name: "reserve", scooter_code: "SK-001" },
         q_token,
       )
       abort "RUN6 reserve failed (#{rsv_rc}): #{rsv_data.inspect}" unless rsv_rc == 200
@@ -470,8 +487,8 @@ namespace :demo do
       # Demonstrates app-layer per-user isolation: only this principal's
       # reservation is visible; not rows from other principals (RUN 1 etc.).
       qa3_rc, qa3_resp = q_post.call(
-        "/kiosk/exec",
-        { command: "query", body: { name: "my_reservations" } },
+        "/kiosk/query",
+        { name: "my_reservations" },
         q_token,
       )
       if qa3_rc == 200
@@ -790,17 +807,15 @@ end
 namespace :demo do
   # ── demo:schema ────────────────────────────────────────────────────────────
   desc <<~DESC
-    Self-discovery proof (P3 Task 2) — verifies schema + help verbs over HTTP.
+    Self-discovery proof (P3 Task 2) — verifies the schema verb over HTTP.
 
     Boots the server, registers a fresh agent (PoW d=20), calls:
-      POST /kiosk/exec { command: "schema" }
-      POST /kiosk/exec { command: "help"   }
+      GET /kiosk/schema
 
     Asserts:
-      • schema.verbs includes query/run/pay/schema/help and NOT events
+      • schema.verbs includes query/run/pay/schema and NOT events
       • schema.queries includes reserve with a description
       • schema.actions includes start_rental with a description
-      • help.text mentions reserve and start_rental by name
 
     Exits 0 if all assertions pass; exits 1 on any miss.
   DESC
@@ -871,16 +886,15 @@ namespace :demo do
       abort "schema_flow.rb did not produce valid JSON: #{e.message}\nOutput:\n#{raw}"
     end
 
-    puts "\n── Schema/help assertions ──"
+    puts "\n── Schema assertions ──"
     failures = []
 
     verbs   = result["schema_verbs"]   || []
     queries = result["schema_queries"] || []
     actions = result["schema_actions"] || []
-    text    = result["help_text"]      || ""
 
-    # Verbs: query/run/pay/schema/help present; events absent
-    %w[query run pay schema help].each do |v|
+    # Verbs: query/run/pay/schema present; events absent
+    %w[query run pay schema].each do |v|
       if verbs.include?(v)
         puts "  ✓  schema.verbs includes #{v}"
       else
@@ -925,18 +939,8 @@ namespace :demo do
       puts "  ✗  schema.actions missing start_rental"
     end
 
-    # help text mentions reserve and start_rental
-    %w[reserve start_rental].each do |name|
-      if text.include?(name)
-        puts "  ✓  help text mentions #{name}"
-      else
-        failures << "help text does not mention #{name}"
-        puts "  ✗  help text does not mention #{name}"
-      end
-    end
-
     if failures.empty?
-      puts "\n  All schema/help assertions passed."
+      puts "\n  All schema assertions passed."
     else
       puts "\n  FAILED assertions:"
       failures.each { |f| puts "    - #{f}" }

@@ -73,8 +73,9 @@ end
 # that was solved (nil = no challenge was needed — free pass).
 def exec_with_pow(command, body, token)
   headers = { "Authorization" => "Bearer #{token}" }
+  path    = "#{SERVER}/kiosk/#{command}"  # REST verb endpoint (query/run/pay)
 
-  rc, resp = post_json("#{SERVER}/kiosk/exec", { command: command, body: body }, headers)
+  rc, resp = post_json(path, body, headers)
 
   if rc == 402
     challenge = resp.dig("error", "challenge")
@@ -82,10 +83,11 @@ def exec_with_pow(command, body, token)
     d     = challenge.dig("params", "d")
     nonce = solve_challenge(challenge)
 
-    # Re-submit the IDENTICAL body — request_fingerprint must match.
+    # Re-submit the IDENTICAL args + the solved proof as a top-level `pow`
+    # sibling (excluded from the request_fingerprint, which must match).
     rc, resp = post_json(
-      "#{SERVER}/kiosk/exec",
-      { command: command, body: body, pow: { challenge: challenge, nonce: nonce } },
+      path,
+      body.merge(pow: { challenge: challenge, nonce: nonce }),
       headers,
     )
     [rc, resp, d]

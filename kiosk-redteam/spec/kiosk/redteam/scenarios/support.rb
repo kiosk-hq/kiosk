@@ -43,9 +43,9 @@ def stub_kyc(status: 200)
     )
 end
 
+# REST surface: the verb is the path, not a `command` field in the body.
 def stub_exec_run(status: 200, body: { "value" => { "id" => "res-1" } })
-  stub_request(:post, "#{BASE_URL}/kiosk/exec")
-    .with { |req| JSON.parse(req.body)["command"] == "run" }
+  stub_request(:post, "#{BASE_URL}/kiosk/run")
     .to_return(
       status:  status,
       body:    JSON.generate(body),
@@ -54,8 +54,7 @@ def stub_exec_run(status: 200, body: { "value" => { "id" => "res-1" } })
 end
 
 def stub_exec_query(status: 200, rows: [])
-  stub_request(:post, "#{BASE_URL}/kiosk/exec")
-    .with { |req| JSON.parse(req.body)["command"] == "query" }
+  stub_request(:post, "#{BASE_URL}/kiosk/query")
     .to_return(
       status:  status,
       body:    JSON.generate({ "rows" => rows }),
@@ -64,8 +63,7 @@ def stub_exec_query(status: 200, rows: [])
 end
 
 def stub_exec_pay(status: 200)
-  stub_request(:post, "#{BASE_URL}/kiosk/exec")
-    .with { |req| JSON.parse(req.body)["command"] == "pay" }
+  stub_request(:post, "#{BASE_URL}/kiosk/pay")
     .to_return(
       status:  status,
       body:    JSON.generate(status == 200 ? { "value" => { "payment_mandate_id" => "pm-1" } } : { "error" => { "code" => "forbidden" } }),
@@ -73,15 +71,13 @@ def stub_exec_pay(status: 200)
     )
 end
 
-# Stub exec to return the same response for any command.
+# Stub all read/write verbs to return the same response.
 def stub_exec_any(status:, body: nil)
   body ||= status >= 400 ? { "error" => { "code" => "forbidden" } } : { "value" => {} }
-  stub_request(:post, "#{BASE_URL}/kiosk/exec")
-    .to_return(
-      status:  status,
-      body:    JSON.generate(body),
-      headers: { "Content-Type" => "application/json" },
-    )
+  ret = { status: status, body: JSON.generate(body), headers: { "Content-Type" => "application/json" } }
+  stub_request(:post, "#{BASE_URL}/kiosk/query").to_return(ret)
+  stub_request(:post, "#{BASE_URL}/kiosk/run").to_return(ret)
+  stub_request(:post, "#{BASE_URL}/kiosk/pay").to_return(ret)
 end
 
 # ── Minimal profile factories ───────────────────────────────────────────────

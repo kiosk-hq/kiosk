@@ -79,15 +79,14 @@ abort "register failed (#{rc}): #{JSON.generate(reg)}" unless rc == 201
 
 token = reg.fetch("access_token")
 
-QUERY_COMMAND = "query"
-QUERY_BODY    = { name: "menu_by_restaurant", restaurant: "Mamma Pizza" }
-AUTH_HEADER   = { "Authorization" => "Bearer #{token}" }
+QUERY_BODY  = { name: "menu_by_restaurant", restaurant: "Mamma Pizza" }
+AUTH_HEADER = { "Authorization" => "Bearer #{token}" }
 
 # ── Step 2: initial POST → expect 402 pow_required (alg=cuckatoo) ──────────
 
 rc_challenge, resp_challenge = post_json(
-  "#{SERVER}/kiosk/exec",
-  { command: QUERY_COMMAND, body: QUERY_BODY },
+  "#{SERVER}/kiosk/query",
+  QUERY_BODY,
   AUTH_HEADER,
 )
 
@@ -147,8 +146,8 @@ nonce = { header_nonce: header_nonce, cycle: cycle }
 # nonce structure but a cycle that does NOT satisfy the Cuckatoo verifier.
 
 rc_neg_issue, resp_neg_issue = post_json(
-  "#{SERVER}/kiosk/exec",
-  { command: QUERY_COMMAND, body: QUERY_BODY },
+  "#{SERVER}/kiosk/query",
+  QUERY_BODY,
   AUTH_HEADER,
 )
 abort "expected fresh 402 for negative test, got #{rc_neg_issue}" unless rc_neg_issue == 402
@@ -161,8 +160,8 @@ bad_cycle[0] = bad_cycle[0] == 0 ? bad_cycle[0] + 1 : bad_cycle[0] - 1
 bad_nonce  = { header_nonce: header_nonce, cycle: bad_cycle.sort }
 
 rc_wrong, resp_wrong = post_json(
-  "#{SERVER}/kiosk/exec",
-  { command: QUERY_COMMAND, body: QUERY_BODY, pow: { challenge: challenge_neg, nonce: bad_nonce } },
+  "#{SERVER}/kiosk/query",
+  QUERY_BODY.merge(pow: { challenge: challenge_neg, nonce: bad_nonce }),
   AUTH_HEADER,
 )
 unless rc_wrong == 403
@@ -177,8 +176,8 @@ end
 # ── Step 4: re-POST with correct Cuckatoo proof → expect 200 served ─────────
 
 rc_served, resp_served = post_json(
-  "#{SERVER}/kiosk/exec",
-  { command: QUERY_COMMAND, body: QUERY_BODY, pow: { challenge: challenge, nonce: nonce } },
+  "#{SERVER}/kiosk/query",
+  QUERY_BODY.merge(pow: { challenge: challenge, nonce: nonce }),
   AUTH_HEADER,
 )
 

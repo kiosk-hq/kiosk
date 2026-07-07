@@ -63,8 +63,8 @@ STDERR.puts "  Registered: user_id=#{user_id}"
 # ── Step 2: query properties ─────────────────────────────────────────────
 
 rc_props, props_resp = post_json(
-  "#{SERVER}/kiosk/exec",
-  { command: "query", body: { name: "properties" } },
+  "#{SERVER}/kiosk/query",
+  { name: "properties" },
   { "Authorization" => "Bearer #{token}" },
 )
 abort "query properties failed (#{rc_props}): #{JSON.generate(props_resp)}" unless rc_props == 200
@@ -81,8 +81,8 @@ check_in  = (Date.today + 30).to_s
 check_out = (Date.today + 33).to_s
 
 rc_avail, avail_resp = post_json(
-  "#{SERVER}/kiosk/exec",
-  { command: "query", body: { name: "availability", property_id: property_id, check_in: check_in, check_out: check_out } },
+  "#{SERVER}/kiosk/query",
+  { name: "availability", property_id: property_id, check_in: check_in, check_out: check_out },
   { "Authorization" => "Bearer #{token}" },
 )
 abort "query availability failed (#{rc_avail}): #{JSON.generate(avail_resp)}" unless rc_avail == 200
@@ -98,9 +98,9 @@ STDERR.puts "  Availability: #{avail_rows.size} room type(s) available, using id
 # ── Step 4: reserve_room ──────────────────────────────────────────────────
 
 rc_rsv, rsv_resp = post_json(
-  "#{SERVER}/kiosk/exec",
-  { command: "run", body: { name: "reserve_room", property_id: property_id, room_type_id: room_type_id,
-                            check_in: check_in, check_out: check_out } },
+  "#{SERVER}/kiosk/run",
+  { name: "reserve_room", property_id: property_id, room_type_id: room_type_id,
+    check_in: check_in, check_out: check_out },
   { "Authorization" => "Bearer #{token}" },
 )
 abort "reserve_room failed (#{rc_rsv}): #{JSON.generate(rsv_resp)}" unless rc_rsv == 200
@@ -167,10 +167,9 @@ unless SKIP_PAY
   payment_jws = JWT.encode(payment_payload, key, "RS256")
 
   rc_pay, pay_resp = post_json(
-    "#{SERVER}/kiosk/exec",
-    { command: "pay",
-      body: { intent_mandate_jws: intent_jws, cart_mandate_jws: cart_jws,
-               payment_mandate_jws: payment_jws } },
+    "#{SERVER}/kiosk/pay",
+    { intent_mandate_jws: intent_jws, cart_mandate_jws: cart_jws,
+      payment_mandate_jws: payment_jws },
     { "Authorization" => "Bearer #{token}" },
   )
   abort "pay failed (#{rc_pay}): #{JSON.generate(pay_resp)}" unless rc_pay == 200
@@ -180,8 +179,8 @@ end
 # ── Step 6: confirm_booking ───────────────────────────────────────────────
 
 rc_confirm, confirm_resp = post_json(
-  "#{SERVER}/kiosk/exec",
-  { command: "run", body: { name: "confirm_booking", booking_id: booking_id } },
+  "#{SERVER}/kiosk/run",
+  { name: "confirm_booking", booking_id: booking_id },
   { "Authorization" => "Bearer #{token}" },
 )
 

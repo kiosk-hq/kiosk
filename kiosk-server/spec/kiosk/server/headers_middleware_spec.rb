@@ -23,7 +23,7 @@ RSpec.describe Kiosk::Server::HeadersMiddleware do
     end
 
     it "injects the headers on any /kiosk/* sub-path" do
-      _, headers, _ = call("/kiosk/exec")
+      _, headers, _ = call("/kiosk/query")
       expect(headers[Kiosk::Protocol::HEADER_API_VERSION]).to eq(Kiosk::Protocol::API_VERSION)
     end
 

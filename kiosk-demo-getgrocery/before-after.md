@@ -58,12 +58,12 @@ getgrocery is a Rails 8 app that speaks Kiosk. The following is representative o
 **What the agent did — no human involved at any step:**
 
 1. **Discover** — `GET /.well-known/kiosk.json` returns the GetGroceries issuer and surface.
-2. **Self-register** — generated an RSA-2048 keypair, `POST /kiosk/agents/register {name:"hermes-grocery", public_key:<pem>, role:"customer"}` → HTTP 201 → `agent_id`, `user_id`, `access_token`. No existing account. No human login. No OTP. No bot screen.
-3. **Browse catalog** — `POST /kiosk/exec {command:"query", body:{name:"catalog"}}` returned 15 in-stock products. Milk 1 L and Chocolate Spread 400g were absent (out of stock) — the assistant resolved these before building the order: substituted Milk 1 L with 2× Milk 0.5 L, omitted Chocolate Spread after confirming with the user.
-4. **Create order** — `POST /kiosk/exec {command:"run", body:{name:"create_order", items:[{sku:"milk-0.5l", qty:2}, {sku:"free-range-eggs", qty:1}]}}` → HTTP 200, `order_id`, `total_cents:2499`. The assistant composed the full cart (products referenced by `sku`); substitution was handled before this call, not after.
-5. **Query delivery slots** — `POST /kiosk/exec {command:"query", body:{name:"delivery_slots", date:"2026-06-30"}}` → returned 6 available time slots; assistant picked 10:00–12:00.
-6. **Pay** — signed an AP2 intent mandate (`cap_amount_cents:2699`, `scope:"grocery"`, `iss:<issuer>`) and a cart mandate (`total_amount_cents:2499`, `line_items:[{order_id:<order_id>, total:2499}]`, bound to the intent via `intent_mandate_id`) as RS256 JWS with the registered keypair, then `POST /kiosk/exec {command:"pay", ...}` → `settled_amount_cents:2499`, `ok:true`.
-7. **Schedule delivery** — `POST /kiosk/exec {command:"run", body:{name:"schedule_delivery", order_id:<order_id>, delivery_slot_id:<slot_id>, delivery_address:"42 Sakura Lane, Neo-Tokyo"}}` → HTTP 200, `scheduled_at:"2026-06-30T10:00:00.000Z"`.
+2. **Self-register** — generated an RSA-2048 keypair, proved possession of the private key (`GET /kiosk/auth/challenge` → signed the nonce as an origin-bound RS256 JWS → `POST /kiosk/auth/register {public_key:<pem>, signed:<jws>}`) → HTTP 201 → `agent_id`, `user_id`, `access_token`. No existing account. No human login. No OTP. No bot screen.
+3. **Browse catalog** — `POST /kiosk/query {name:"catalog"}` returned 15 in-stock products. Milk 1 L and Chocolate Spread 400g were absent (out of stock) — the assistant resolved these before building the order: substituted Milk 1 L with 2× Milk 0.5 L, omitted Chocolate Spread after confirming with the user.
+4. **Create order** — `POST /kiosk/run {name:"create_order", items:[{sku:"milk-0.5l", qty:2}, {sku:"free-range-eggs", qty:1}]}` → HTTP 200, `order_id`, `total_cents:2499`. The assistant composed the full cart (products referenced by `sku`); substitution was handled before this call, not after.
+5. **Query delivery slots** — `POST /kiosk/query {name:"delivery_slots", date:"2026-06-30"}` → returned 6 available time slots; assistant picked 10:00–12:00.
+6. **Pay** — signed an AP2 intent mandate (`cap_amount_cents:2699`, `scope:"grocery"`, `iss:<issuer>`) and a cart mandate (`total_amount_cents:2499`, `line_items:[{order_id:<order_id>, total:2499}]`, bound to the intent via `intent_mandate_id`) as RS256 JWS with the registered keypair, then `POST /kiosk/pay {intent_mandate_jws, cart_mandate_jws, payment_mandate_jws}` → `settled_amount_cents:2499`, `ok:true`.
+7. **Schedule delivery** — `POST /kiosk/run {name:"schedule_delivery", order_id:<order_id>, delivery_slot_id:<slot_id>, delivery_address:"42 Sakura Lane, Neo-Tokyo"}` → HTTP 200, `scheduled_at:"2026-06-30T10:00:00.000Z"`.
 
 The database confirmed: one row in `orders` with `status='scheduled'`, one row in `kiosk.payment_mandates`.
 
@@ -96,7 +96,7 @@ In production these are versioned RubyGems. The `kiosk-pay-stripe` adapter swaps
 rails g kiosk:install
 ```
 
-This emits: the Kiosk schema migration (the `kiosk.*` namespace with agents, sessions, and mandate tables), the six-verb wire surface (`query`, `run`, `pay`, `schema`, `help`, `events`) mounted at `/kiosk/exec`, the agent-registration endpoint at `/kiosk/agents/register`, and `/.well-known/kiosk.json`. Today `query`, `run`, `pay`, `schema`, and `help` are wired end-to-end (agent self-discovery works — see `rake demo:schema`); `events` is stubbed and ships next.
+This emits: the Kiosk schema migration (the `kiosk.*` namespace with agents, sessions, and mandate tables), the REST wire surface (`GET /kiosk/schema`, `POST /kiosk/query`, `POST /kiosk/run`, `POST /kiosk/pay`), the auth handshake at `/kiosk/auth/{challenge,register,login,revoke}`, and `/.well-known/kiosk.json`. Today `query`, `run`, `pay`, `schema`, and `help` are wired end-to-end (agent self-discovery works — see `rake demo:schema`); `events` is stubbed and ships next.
 
 Agents call named queries by name (`query` verb) — never raw SQL. The provider registers the queries it wishes to expose; isolation is enforced at the app layer in the query definitions and in Actions, with RLS available as optional defense-in-depth.
 

@@ -37,11 +37,8 @@ RSpec.describe Kiosk::Redteam::Scenarios::ExpiredKyc do
         stub_exec_run(status: 200, body: { "value" => { "id" => "res-1" } })
         stub_exec_pay(status: 200)
         # Gated action also succeeds — no gate catches the expired KYC
-        stub_request(:post, "#{BASE_URL}/kiosk/exec")
-          .with { |req|
-            body = JSON.parse(req.body)
-            body["command"] == "run" && body.dig("body", "name") == "start_rental"
-          }
+        stub_request(:post, "#{BASE_URL}/kiosk/run")
+          .with { |req| JSON.parse(req.body)["name"] == "start_rental" }
           .to_return(status: 200,
                      body:   JSON.generate({ "value" => { "rental_token" => "tok" } }),
                      headers: { "Content-Type" => "application/json" })
@@ -58,11 +55,8 @@ RSpec.describe Kiosk::Redteam::Scenarios::ExpiredKyc do
         stub_kyc(status: 200)  # /kyc accepts (lenient)
         stub_exec_run(status: 200, body: { "value" => { "id" => "res-1" } })
         stub_exec_pay(status: 200)
-        stub_request(:post, "#{BASE_URL}/kiosk/exec")
-          .with { |req|
-            body = JSON.parse(req.body)
-            body["command"] == "run" && body.dig("body", "name") == "start_rental"
-          }
+        stub_request(:post, "#{BASE_URL}/kiosk/run")
+          .with { |req| JSON.parse(req.body)["name"] == "start_rental" }
           .to_return(status: 403,
                      body:   JSON.generate({ "error" => { "code" => "forbidden" } }),
                      headers: { "Content-Type" => "application/json" })

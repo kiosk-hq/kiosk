@@ -30,7 +30,7 @@ end
 
 # Stub successive register calls; pass suffixes in order of expected calls.
 def stub_registers(*suffixes)
-  stub_request(:post, "#{BASE_URL}/kiosk/agents/register")
+  stub_request(:post, "#{BASE_URL}/kiosk/auth/register")
     .to_return(*suffixes.map { |s| reg_response(s) })
 end
 

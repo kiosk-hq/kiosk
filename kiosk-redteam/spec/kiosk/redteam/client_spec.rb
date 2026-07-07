@@ -18,7 +18,7 @@ RSpec.describe Kiosk::Redteam::Client do
 
   describe "#register_raw" do
     it "returns a Response" do
-      stub_request(:post, "#{base_url}/kiosk/agents/register")
+      stub_request(:post, "#{base_url}/kiosk/auth/register")
         .to_return(status: 201, body: register_body, headers: { "Content-Type" => "application/json" })
 
       result = client.register_raw(name: "test-agent")
@@ -28,7 +28,7 @@ RSpec.describe Kiosk::Redteam::Client do
 
     context "when pow: :skip" do
       it "posts without a pow field" do
-        req_stub = stub_request(:post, "#{base_url}/kiosk/agents/register")
+        req_stub = stub_request(:post, "#{base_url}/kiosk/auth/register")
           .to_return(status: 422, body: JSON.generate("error" => { "code" => "pow_required" }),
                      headers: { "Content-Type" => "application/json" })
 
@@ -48,7 +48,7 @@ RSpec.describe Kiosk::Redteam::Client do
     context "when pow is a verbatim String" do
       it "sends that exact string as the pow field" do
         captured_body = nil
-        stub_request(:post, "#{base_url}/kiosk/agents/register")
+        stub_request(:post, "#{base_url}/kiosk/auth/register")
           .with { |req| captured_body = JSON.parse(req.body); true }
           .to_return(status: 422, body: JSON.generate("error" => { "code" => "bad_request" }),
                      headers: { "Content-Type" => "application/json" })
@@ -66,7 +66,7 @@ RSpec.describe Kiosk::Redteam::Client do
     context "with pow_difficulty: 0 (no PoW required)" do
       it "posts without a pow field and returns a Principal" do
         captured_body = nil
-        stub_request(:post, "#{base_url}/kiosk/agents/register")
+        stub_request(:post, "#{base_url}/kiosk/auth/register")
           .with { |req| captured_body = JSON.parse(req.body); true }
           .to_return(status: 201, body: register_body, headers: { "Content-Type" => "application/json" })
 
@@ -85,7 +85,7 @@ RSpec.describe Kiosk::Redteam::Client do
     context "with pow_difficulty: 1 (minimal difficulty, fast in specs)" do
       it "posts a pow field whose SHA256 hash satisfies the difficulty" do
         captured_body = nil
-        stub_request(:post, "#{base_url}/kiosk/agents/register")
+        stub_request(:post, "#{base_url}/kiosk/auth/register")
           .with { |req| captured_body = JSON.parse(req.body); true }
           .to_return(status: 201, body: register_body, headers: { "Content-Type" => "application/json" })
 
@@ -105,7 +105,7 @@ RSpec.describe Kiosk::Redteam::Client do
     context "with pow: :skip" do
       it "posts without a pow field even when difficulty > 0" do
         captured_body = nil
-        stub_request(:post, "#{base_url}/kiosk/agents/register")
+        stub_request(:post, "#{base_url}/kiosk/auth/register")
           .with { |req| captured_body = JSON.parse(req.body); true }
           .to_return(status: 201, body: register_body, headers: { "Content-Type" => "application/json" })
 
@@ -116,7 +116,7 @@ RSpec.describe Kiosk::Redteam::Client do
     end
 
     it "raises RegistrationError on non-201" do
-      stub_request(:post, "#{base_url}/kiosk/agents/register")
+      stub_request(:post, "#{base_url}/kiosk/auth/register")
         .to_return(status: 422, body: JSON.generate("error" => { "code" => "pow_required" }),
                    headers: { "Content-Type" => "application/json" })
 
@@ -125,16 +125,18 @@ RSpec.describe Kiosk::Redteam::Client do
       }.to raise_error(Kiosk::Redteam::Client::RegistrationError, /expected 201, got 422/)
     end
 
-    it "posts name, public_key, and role in the request body" do
+    it "posts public_key and a proof-of-possession JWS (no name/role on the wire)" do
       captured_body = nil
-      stub_request(:post, "#{base_url}/kiosk/agents/register")
+      stub_request(:post, "#{base_url}/kiosk/auth/register")
         .with { |req| captured_body = JSON.parse(req.body); true }
         .to_return(status: 201, body: register_body, headers: { "Content-Type" => "application/json" })
 
       client.register!(name: "hermes", role: "customer")
 
-      expect(captured_body["name"]).to eq("hermes")
-      expect(captured_body["role"]).to eq("customer")
+      # name/role are pinned server-side now — they are not sent.
+      expect(captured_body).not_to have_key("name")
+      expect(captured_body).not_to have_key("role")
+      expect(captured_body["signed"]).to be_a(String).and match(/\A[\w-]+\.[\w-]+\.[\w-]+\z/) # compact JWS
       expect(captured_body["public_key"]).to match(/BEGIN PUBLIC KEY/)
     end
   end
@@ -295,7 +297,7 @@ RSpec.describe Kiosk::Redteam::Client do
 
   describe "Response body" do
     it "returns an empty hash when the response body is not valid JSON" do
-      stub_request(:post, "#{base_url}/kiosk/agents/register")
+      stub_request(:post, "#{base_url}/kiosk/auth/register")
         .to_return(status: 500, body: "Internal Server Error", headers: {})
 
       result = client.register_raw(name: "err-agent")

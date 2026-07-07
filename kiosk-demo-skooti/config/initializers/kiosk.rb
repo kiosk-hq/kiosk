@@ -34,6 +34,8 @@ Kiosk.configure do |c|
 
   c.issuer = ENV.fetch("KIOSK_ISSUER", "http://localhost:3003")
   c.roles  = %i[customer]
+  # Role pinned to every self-registered agent (agents cannot choose their own).
+  c.registration_role = :customer
   c.owner  = { name: "skooti", support: "help@skooti.app" }
 
   # JwtOrStubIdp tries Kiosk-issued JWTs (Device-Grant output) first,

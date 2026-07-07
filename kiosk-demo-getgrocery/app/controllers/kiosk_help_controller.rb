@@ -28,10 +28,15 @@ class KioskHelpController < ActionController::Base
       `GET /.well-known/kiosk.json` → `issuer`, `endpoint`, and `routing` (verb → method + path).
       This provider's issuer is `#{issuer}`.
 
-      ## 2. Register (one RSA keypair per session)
-      Generate an RSA-2048 keypair; keep the private key. Then:
-      `POST /kiosk/agents/register` `{ "name": "<your name>", "public_key": "<PEM>", "role": "customer" }`
-      → `{ agent_id, user_id, access_token }`. Send `Authorization: Bearer *** on every call below.
+      ## 2. Register / login (prove you hold the private key)
+      Generate an RSA-2048 keypair; keep the private key. Registration is a
+      proof-of-possession handshake (a public key alone is not a credential):
+      1. `GET /kiosk/auth/challenge?public_key=<url-encoded PEM>` → `{ challenge, exp }`
+      2. Sign a compact RS256 JWS `{ aud, nonce, jti, iat }` — `aud` MUST be the
+         origin you connected to (relay defense), `nonce` is the challenge.
+      3. New key: `POST /kiosk/auth/register { "public_key": "<PEM>", "signed": "<JWS>" }`
+         → `{ agent_id, user_id, access_token }`. Known key: `POST /kiosk/auth/login`
+         (same body) → `{ access_token }`. Send `Authorization: Bearer ***` on every call below.
 
       ## 3. Call the surface
       REST endpoints (one per verb, HTTP method = semantics):

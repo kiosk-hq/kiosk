@@ -54,6 +54,12 @@ def post_json(url, body, headers = {})
   [res.code.to_i, (JSON.parse(res.body) rescue {})]
 end
 
+def get_json(url, headers = {})
+  uri = URI(url)
+  res = Net::HTTP.new(uri.host, uri.port).request(Net::HTTP::Get.new(uri, headers))
+  [res.code.to_i, (JSON.parse(res.body) rescue {})]
+end
+
 # Replicates Kiosk::Server::ProofOfWork.leading_zero_bits exactly.
 def leading_zero_bits(bytes)
   return 0 if bytes.empty?
@@ -78,7 +84,8 @@ def solve_pow(pem, difficulty)
   pow
 end
 
-# Register a fresh principal: solve PoW, POST /kiosk/agents/register, POST /kiosk/agents/kyc.
+# Register a fresh principal: solve PoW, PoP handshake (GET /kiosk/auth/challenge
+# then POST /kiosk/auth/register), POST /kiosk/agents/kyc.
 # Returns [user_id, agent_id, token, key].
 #
 # KYC is done for BOTH principals so that Gate-2 does not block B when B
@@ -95,9 +102,15 @@ def register_principal(name:, difficulty: 20)
   pow = solve_pow(pem, difficulty)
   STDERR.puts "  PoW solved: pow=#{pow}"
 
+  rc_ch, ch = get_json("#{SERVER}/kiosk/auth/challenge?public_key=#{URI.encode_www_form_component(pem)}")
+  abort "challenge #{name} failed (#{rc_ch}): #{JSON.generate(ch)}" unless rc_ch == 200
+  pop = JWT.encode(
+    { aud: ISSUER, nonce: ch.fetch("challenge"), jti: SecureRandom.uuid, iat: Time.now.to_i },
+    key, "RS256",
+  )
   rc, reg = post_json(
-    "#{SERVER}/kiosk/agents/register",
-    { name: name, public_key: pem, role: "customer", pow: pow.to_s },
+    "#{SERVER}/kiosk/auth/register",
+    { public_key: pem, signed: pop, pow: pow.to_s },
   )
   abort "register #{name} failed (#{rc}): #{JSON.generate(reg)}" unless rc == 201
 

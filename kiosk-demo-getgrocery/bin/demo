@@ -68,12 +68,27 @@ heading "Register: agent gets an access token"
 
 step "Generate a throwaway RSA key pair"
 openssl genrsa -out /tmp/demo-agent.pem 2048 2>/dev/null
-PUBKEY_JSON=$(openssl rsa -in /tmp/demo-agent.pem -pubout 2>/dev/null | jq -Rs .)
+PUBKEY_PEM=$(openssl rsa -in /tmp/demo-agent.pem -pubout 2>/dev/null)
+PUBKEY_JSON=$(printf '%s' "$PUBKEY_PEM" | jq -Rs .)
 
-step "POST /kiosk/agents/register"
-REG=$(curl -sS -X POST "$SERVER_URL/kiosk/agents/register" \
+# JWS uses URL-safe base64 with no padding.
+b64url() { openssl base64 -A | tr '+/' '-_' | tr -d '='; }
+
+step "GET /kiosk/auth/challenge — a public key is not a credential; prove you hold the private key"
+CHALLENGE=$(curl -sSG "$SERVER_URL/kiosk/auth/challenge" --data-urlencode "public_key=$PUBKEY_PEM" | jq -r '.challenge')
+
+step "Sign the challenge (aud = this origin, so the proof can't be relayed)"
+JWS_HEADER=$(printf '{"alg":"RS256","typ":"JWT"}' | b64url)
+JWS_PAYLOAD=$(printf '{"aud":"%s","nonce":"%s","jti":"%s","iat":%s}' \
+  "${KIOSK_ISSUER:-$SERVER_URL}" "$CHALLENGE" "$(uuidgen)" "$(date +%s)" | b64url)
+JWS_SIG=$(printf '%s.%s' "$JWS_HEADER" "$JWS_PAYLOAD" \
+  | openssl dgst -sha256 -sign /tmp/demo-agent.pem -binary | b64url)
+SIGNED="$JWS_HEADER.$JWS_PAYLOAD.$JWS_SIG"
+
+step "POST /kiosk/auth/register"
+REG=$(curl -sS -X POST "$SERVER_URL/kiosk/auth/register" \
   -H "Content-Type: application/json" \
-  -d "{\"name\":\"demo-agent\",\"public_key\":$PUBKEY_JSON,\"role\":\"customer\"}")
+  -d "{\"public_key\":$PUBKEY_JSON,\"signed\":\"$SIGNED\"}")
 echo "$REG" | jq '{agent_id, user_id}'
 AGENT_TOKEN=$(echo "$REG" | jq -r '.access_token')
 

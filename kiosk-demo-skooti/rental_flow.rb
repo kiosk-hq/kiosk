@@ -63,6 +63,12 @@ def post_json(url, body, headers = {})
   [res.code.to_i, (JSON.parse(res.body) rescue {})]
 end
 
+def get_json(url, headers = {})
+  uri = URI(url)
+  res = Net::HTTP.new(uri.host, uri.port).request(Net::HTTP::Get.new(uri, headers))
+  [res.code.to_i, (JSON.parse(res.body) rescue {})]
+end
+
 # Replicates Kiosk::Server::ProofOfWork.leading_zero_bits exactly.
 def leading_zero_bits(bytes)
   return 0 if bytes.empty?
@@ -98,9 +104,15 @@ pow = 0
 pow += 1 until pow_valid?(pem, pow.to_s, 20)
 STDERR.puts "  PoW solved: pow=#{pow}"
 
+rc_ch, ch = get_json("#{SERVER}/kiosk/auth/challenge?public_key=#{URI.encode_www_form_component(pem)}")
+abort "challenge failed (#{rc_ch}): #{JSON.generate(ch)}" unless rc_ch == 200
+pop = JWT.encode(
+  { aud: ISSUER, nonce: ch.fetch("challenge"), jti: SecureRandom.uuid, iat: Time.now.to_i },
+  key, "RS256",
+)
 rc_reg, reg = post_json(
-  "#{SERVER}/kiosk/agents/register",
-  { name: "hermes-scooter", public_key: pem, role: "customer", pow: pow.to_s },
+  "#{SERVER}/kiosk/auth/register",
+  { public_key: pem, signed: pop, pow: pow.to_s },
 )
 abort "register failed (#{rc_reg}): #{JSON.generate(reg)}" unless rc_reg == 201
 

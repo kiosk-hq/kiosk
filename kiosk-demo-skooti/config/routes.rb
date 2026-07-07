@@ -10,7 +10,10 @@ Rails.application.routes.draw do
   get  "/kiosk/.well-known/jwks.json",             to: "kiosk/server/jwks#show"
   post "/kiosk/oauth/device_authorization",        to: "kiosk/server/oauth_device_authorization#create"
   post "/kiosk/oauth/token",                       to: "kiosk/server/oauth_token#create"
-  post "/kiosk/agents/register",                   to: "kiosk/server/agents_registration#create"
+  get  "/kiosk/auth/challenge",                     to: "kiosk/server/auth#challenge"
+  post "/kiosk/auth/register",                      to: "kiosk/server/auth#register"
+  post "/kiosk/auth/login",                         to: "kiosk/server/auth#login"
+  post "/kiosk/auth/revoke",                        to: "kiosk/server/auth#revoke"
   post "/kiosk/agents/kyc",                        to: "kiosk/server/kyc_attestation#create"
 
   # /.well-known/kiosk.json discovery endpoint — built on the fly from

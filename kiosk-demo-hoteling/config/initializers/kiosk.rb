@@ -28,6 +28,8 @@ Kiosk.configure do |c|
 
   c.issuer = ENV.fetch("KIOSK_ISSUER", "http://localhost:3004")
   c.roles  = %i[customer]
+  # Role pinned to every self-registered agent (agents cannot choose their own).
+  c.registration_role = :customer
   c.owner  = { name: "hoteling", support: "help@hoteling.app" }
 
   c.agent_idp = JwtOrStubIdp.new(stub: StubIdp.new)

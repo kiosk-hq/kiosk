@@ -213,15 +213,32 @@ module Kiosk
       # Returns [Response, OpenSSL::PKey::RSA] — the key is discarded by
       # register_raw (it was for a rejected registration) but captured by
       # register! to build the Principal.
+      #
+      # Registration is now a proof-of-possession handshake: fetch a single-use
+      # challenge, sign it (origin-bound via `aud`), then POST the signature.
+      # `name`/`role` are no longer sent on the wire (the server pins the role);
+      # the kwargs are kept so existing callers/scenarios don't have to change.
       def build_register(name:, role:, pow_difficulty:, pow:)
         key = OpenSSL::PKey::RSA.generate(2048)
         pem = key.public_key.to_pem
         pow_value = resolve_pow(pem, pow, pow_difficulty)
 
-        body = { name: name, public_key: pem, role: role }
+        body = { public_key: pem, signed: build_pop(key, pem) }
         body[:pow] = pow_value unless pow_value.nil?
 
-        [post_json("/kiosk/agents/register", body), key]
+        [post_json("/kiosk/auth/register", body), key]
+      end
+
+      # Fetch a challenge for +pem+ and sign it with the private +key+ — the
+      # client side of the PoP handshake. `aud` binds the proof to the origin we
+      # dialed so it can't be relayed to another provider.
+      def build_pop(key, pem)
+        resp  = get_json("/kiosk/auth/challenge?public_key=#{URI.encode_www_form_component(pem)}")
+        nonce = resp.body.is_a?(Hash) ? resp.body["challenge"] : nil
+        JWT.encode(
+          { aud: @base_url, nonce: nonce, jti: SecureRandom.uuid, iat: Time.now.to_i },
+          key, "RS256",
+        )
       end
 
       # Resolve the pow field value given the pow strategy.
@@ -283,6 +300,21 @@ module Kiosk
 
         http = Net::HTTP.new(uri.host, uri.port)
         res  = http.request(req)
+
+        parsed = begin
+          JSON.parse(res.body)
+        rescue JSON::ParserError
+          {}
+        end
+
+        Response.new(status: res.code.to_i, body: parsed)
+      end
+
+      # GET the given path; returns a {Response}. Used for the auth-challenge
+      # fetch that opens the registration handshake.
+      def get_json(path)
+        uri = URI("#{@base_url}#{path}")
+        res = Net::HTTP.new(uri.host, uri.port).request(Net::HTTP::Get.new(uri))
 
         parsed = begin
           JSON.parse(res.body)

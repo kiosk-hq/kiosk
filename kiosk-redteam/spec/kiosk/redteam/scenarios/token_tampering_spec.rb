@@ -23,7 +23,7 @@ RSpec.describe Kiosk::Redteam::Scenarios::TokenTampering do
     context "when the server accepts a tampered token (broken — BREACH)" do
       it "returns blocked: false" do
         # Registration returns a real RS256 JWT so tamper_token works correctly.
-        stub_request(:post, "#{BASE_URL}/kiosk/agents/register")
+        stub_request(:post, "#{BASE_URL}/kiosk/auth/register")
           .to_return(
             status:  201,
             body:    JSON.generate("agent_id" => "agent-b", "user_id" => "user-b",
@@ -42,7 +42,7 @@ RSpec.describe Kiosk::Redteam::Scenarios::TokenTampering do
 
     context "when the server rejects the tampered token (correct — BLOCKED)" do
       it "returns blocked: true" do
-        stub_request(:post, "#{BASE_URL}/kiosk/agents/register")
+        stub_request(:post, "#{BASE_URL}/kiosk/auth/register")
           .to_return(
             status:  201,
             body:    JSON.generate("agent_id" => "agent-b", "user_id" => "user-b",

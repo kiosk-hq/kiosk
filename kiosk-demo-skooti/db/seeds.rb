@@ -1,7 +1,7 @@
 # frozen_string_literal: true
 
 # Seed a single scooter for the skooti demo.
-# No human users needed — agents self-register via /kiosk/agents/register.
+# No human users needed — agents self-register via /kiosk/auth/register (proof-of-possession handshake).
 
 sk001 = Scooter.find_or_create_by!(code: "SK-001") do |s|
   s.status             = "available"

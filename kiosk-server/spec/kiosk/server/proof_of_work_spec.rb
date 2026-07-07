@@ -124,7 +124,9 @@ RSpec.describe Kiosk::Server::ProofOfWork do
   # when difficulty > 0.
 
   describe "registration gate (difficulty > 0)" do
-    let(:pem)         { OpenSSL::PKey::RSA.generate(2048).public_key.to_pem }
+    # Pre-stripped: AgentRegistration.call strips the PEM before hashing, so the
+    # brute-forced pow must be computed against the same (stripped) string.
+    let(:pem)         { OpenSSL::PKey::RSA.generate(2048).public_key.to_pem.strip }
     let(:valid_pow)   do
       # Brute-force difficulty=1 PoW
       (0..9_999).each do |i|
@@ -137,17 +139,18 @@ RSpec.describe Kiosk::Server::ProofOfWork do
 
     before do
       Kiosk.configure do |c|
-        c.roles                  = %i[customer]
-        c.schema                 = "kiosk"
+        c.roles                   = %i[customer]
+        c.schema                  = "kiosk"
+        c.registration_role       = :customer
         c.registration_difficulty = 1
       end
     end
 
     it "raises Errors::BadRequest when pow is missing and difficulty > 0" do
       expect {
-        Kiosk::Server::AgentRegistration.call(
-          name: "Agent", public_key_pem: pem, role: "customer", pow: nil,
-        )
+        # PoW is checked before proof-of-possession, so the `signed` value is
+        # never reached here — a placeholder keeps the required keyword happy.
+        Kiosk::Server::AgentRegistration.call(public_key_pem: pem, signed: "unused", pow: nil)
       }.to raise_error(Kiosk::Server::Errors::BadRequest, /proof.of.work/i)
     end
 
@@ -165,9 +168,7 @@ RSpec.describe Kiosk::Server::ProofOfWork do
       raise "Could not find an invalid PoW in 10_000 tries" unless failing_pow
 
       expect {
-        Kiosk::Server::AgentRegistration.call(
-          name: "Agent", public_key_pem: pem, role: "customer", pow: failing_pow,
-        )
+        Kiosk::Server::AgentRegistration.call(public_key_pem: pem, signed: "unused", pow: failing_pow)
       }.to raise_error(Kiosk::Server::Errors::BadRequest, /proof.of.work/i)
     end
   end

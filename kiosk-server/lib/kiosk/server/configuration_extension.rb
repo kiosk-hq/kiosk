@@ -82,6 +82,18 @@ module Kiosk
         @registration_difficulty ||= 0
       end
 
+      # Role assigned to every self-registered agent. Self-registration mints a
+      # Bearer token with no human in the loop, so the role is pinned by the
+      # provider server-side — an agent CANNOT choose its own role (that would
+      # be a privilege-selection primitive: the role lands in a `SET LOCAL` GUC
+      # every RLS policy trusts). Privileged roles are obtainable only through
+      # the human-approved device-grant flow.
+      #
+      # No default: self-registration raises a ConfigurationError until the
+      # provider sets this explicitly. Must be one of {#roles}.
+      #   Kiosk.configure { |c| c.registration_role = :customer }
+      attr_accessor :registration_role
+
       # Issuer string of the trusted KYC attestation provider.
       # Must match the `iss` claim of submitted KYC JWS tokens.
       attr_writer :kyc_issuer
@@ -178,6 +190,39 @@ module Kiosk
       attr_writer :pow_spent_store
       def pow_spent_store
         @pow_spent_store ||= Kiosk::Server::PowSpentStore.new
+      end
+
+      # ── PoP auth handshake (challenge-response) ───────────────────────────
+
+      # In-process store binding a public key to its outstanding, single-use
+      # auth challenge nonce (the server side of `/auth/challenge`). Override
+      # with a shared-store implementation in multi-process deployments.
+      #
+      # @return [Kiosk::Server::AuthChallengeStore, #put, #take]
+      attr_writer :auth_challenge_store
+      def auth_challenge_store
+        @auth_challenge_store ||= Kiosk::Server::AuthChallengeStore.new
+      end
+
+      # Auth-challenge lifetime in seconds — the window an agent has between
+      # `GET /auth/challenge` and its signed `POST /auth/{register,login}`.
+      # Default 120.
+      attr_writer :auth_challenge_ttl
+      def auth_challenge_ttl
+        @auth_challenge_ttl ||= 120
+      end
+
+      # Per-agent token-revocation watermark store backing `/auth/revoke`
+      # ("log out other sessions"). Consulted by {JwtIssuer.verify} on every
+      # access-token check. Override with a shared/durable implementation in
+      # multi-process deployments; set to nil to disable revocation enforcement.
+      #
+      # @return [Kiosk::Server::RevocationStore, #revoke_all, #revoked?, nil]
+      attr_writer :revocation_store
+      def revocation_store
+        return @revocation_store if defined?(@revocation_store)
+
+        @revocation_store = Kiosk::Server::RevocationStore.new
       end
 
       private

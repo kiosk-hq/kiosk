@@ -1,7 +1,7 @@
 # frozen_string_literal: true
 
 # Seed hotel properties and room types for the hoteling demo.
-# No human users needed — agents self-register via /kiosk/agents/register.
+# No human users needed — agents self-register via /kiosk/auth/register (proof-of-possession handshake).
 
 gran_hotel = Property.find_or_create_by!(name: "Gran Hotel Istanbul") { |p| p.city = "Istanbul" }
 RoomType.find_or_create_by!(property: gran_hotel, name: "Standard") { |rt| rt.nightly_price_cents = 8000 }

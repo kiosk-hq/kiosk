@@ -65,7 +65,6 @@ module Kiosk
           CREATE TABLE "#{schema}".agents (
             id              uuid PRIMARY KEY DEFAULT gen_random_uuid(),
             user_id         #{col_type} NOT NULL REFERENCES "#{user_table}"(id) ON DELETE CASCADE,
-            name            text NOT NULL,
             allowed_roles   text[] NOT NULL DEFAULT '{}'::text[],
             public_key      text,
             notification_pubkey text,

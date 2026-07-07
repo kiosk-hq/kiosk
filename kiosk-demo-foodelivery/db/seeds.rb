@@ -1,7 +1,7 @@
 # frozen_string_literal: true
 
 # Synthetic restaurant "Mamma Pizza" with a few menu items.
-# No human users needed — agents self-register via /kiosk/agents/register.
+# No human users needed — agents self-register via /kiosk/auth/register (proof-of-possession handshake).
 
 pizza = Restaurant.find_or_create_by!(name: "Mamma Pizza")
 

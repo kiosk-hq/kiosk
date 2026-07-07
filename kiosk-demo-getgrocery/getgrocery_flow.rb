@@ -33,12 +33,25 @@ def post_json(url, body, headers = {})
   [res.code.to_i, (JSON.parse(res.body) rescue {})]
 end
 
-# -- Step 1: register (no PoW) --
+def get_json(url, headers = {})
+  uri = URI(url)
+  res = Net::HTTP.new(uri.host, uri.port).request(Net::HTTP::Get.new(uri, headers))
+  [res.code.to_i, (JSON.parse(res.body) rescue {})]
+end
+
+# -- Step 1: register (proof-of-possession handshake) --
+# A public key is not a credential — it's public. Prove control of the PRIVATE
+# key: fetch a single-use challenge, sign it with `aud` = the origin we dialed
+# (so the proof can't be relayed to another provider), then register.
 key = OpenSSL::PKey::RSA.generate(2048)
-rc_reg, reg = post_json(
-  "#{SERVER}/kiosk/agents/register",
-  { name: "hermes-grocery", public_key: key.public_key.to_pem, role: "customer" },
+pem = key.public_key.to_pem
+rc_ch, ch = get_json("#{SERVER}/kiosk/auth/challenge?public_key=#{URI.encode_www_form_component(pem)}")
+abort "challenge failed (#{rc_ch}): #{JSON.generate(ch)}" unless rc_ch == 200
+pop = JWT.encode(
+  { aud: ISSUER, nonce: ch.fetch("challenge"), jti: SecureRandom.uuid, iat: Time.now.to_i },
+  key, "RS256",
 )
+rc_reg, reg = post_json("#{SERVER}/kiosk/auth/register", { public_key: pem, signed: pop })
 abort "register failed (#{rc_reg}): #{JSON.generate(reg)}" unless rc_reg == 201
 agent_id = reg.fetch("agent_id")
 user_id  = reg.fetch("user_id")

@@ -57,6 +57,13 @@ module Kiosk
       # before the cryptographic check.
       class InvalidError < Error; end
 
+      # Token's signature and lifetime are valid, but the agent's revocation
+      # watermark covers its `iat` — it was invalidated by `/auth/revoke`
+      # ("log out other sessions"). A subclass of {Error}, so every IdP that
+      # already rescues {Error} → nil (→ 401) treats a revoked token exactly
+      # like any other failed verification.
+      class RevokedError < Error; end
+
       module_function
 
       # Issue a signed JWT.
@@ -107,10 +114,16 @@ module Kiosk
       #   accepted as-is (no equality check).
       # @param leeway [Integer] clock-skew window in seconds. Default
       #   {DEFAULT_LEEWAY}.
+      # @param revocation_store [#revoked?, nil] consulted after the
+      #   cryptographic check to reject tokens invalidated by `/auth/revoke`.
+      #   Defaults to `Kiosk.configuration.revocation_store` (so every IdP that
+      #   calls this method gets revocation enforcement for free); pass `nil` to
+      #   skip the check entirely.
       # @return [Hash] verified claims (symbolised keys).
       # @raise [Error] on any verification failure (subclass indicates
       #   which check rejected the token).
-      def verify(token:, jwks:, audience: nil, issuer: nil, leeway: DEFAULT_LEEWAY)
+      def verify(token:, jwks:, audience: nil, issuer: nil, leeway: DEFAULT_LEEWAY,
+                 revocation_store: :from_config)
         jwks_doc = normalize_jwks(jwks)
 
         decoded, = ::JWT.decode(
@@ -126,7 +139,14 @@ module Kiosk
           leeway:     leeway,
         )
 
-        symbolize(decoded)
+        claims = symbolize(decoded)
+
+        store = revocation_store == :from_config ? configured_revocation_store : revocation_store
+        if store && store.revoked?(agent_id: claims[:agent_id], iat: claims[:iat])
+          raise RevokedError, "access token revoked"
+        end
+
+        claims
       rescue ::JWT::ExpiredSignature => e
         raise ExpiredError, e.message
       rescue ::JWT::InvalidAudError => e
@@ -160,6 +180,16 @@ module Kiosk
 
       def symbolize(hash)
         hash.each_with_object({}) { |(k, v), out| out[k.to_sym] = v }
+      end
+
+      # The configured revocation store, or nil when the host has no server
+      # ConfigurationExtension loaded / has explicitly disabled revocation.
+      # Isolated so `verify` stays a pure function unless a store is present.
+      def configured_revocation_store
+        cfg = Kiosk.configuration
+        cfg.respond_to?(:revocation_store) ? cfg.revocation_store : nil
+      rescue StandardError
+        nil
       end
     end
   end

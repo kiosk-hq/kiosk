@@ -31,13 +31,26 @@ def post_json(url, body, headers = {})
   [res.code.to_i, (JSON.parse(res.body) rescue {})]
 end
 
+def get_json(url, headers = {})
+  uri = URI(url)
+  res = Net::HTTP.new(uri.host, uri.port).request(Net::HTTP::Get.new(uri, headers))
+  [res.code.to_i, (JSON.parse(res.body) rescue {})]
+end
+
 # ── Step 1: register (no PoW for hoteling) ──────────────────────────────
 
 key = OpenSSL::PKey::RSA.generate(2048)
+pem = key.public_key.to_pem
 
+rc_ch, ch = get_json("#{SERVER}/kiosk/auth/challenge?public_key=#{URI.encode_www_form_component(pem)}")
+abort "challenge failed (#{rc_ch}): #{JSON.generate(ch)}" unless rc_ch == 200
+pop = JWT.encode(
+  { aud: ISSUER, nonce: ch.fetch("challenge"), jti: SecureRandom.uuid, iat: Time.now.to_i },
+  key, "RS256",
+)
 rc_reg, reg = post_json(
-  "#{SERVER}/kiosk/agents/register",
-  { name: "hermes-hoteling", public_key: key.public_key.to_pem, role: "customer" },
+  "#{SERVER}/kiosk/auth/register",
+  { public_key: pem, signed: pop },
 )
 abort "register failed (#{rc_reg}): #{JSON.generate(reg)}" unless rc_reg == 201
 

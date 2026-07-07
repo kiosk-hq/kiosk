@@ -35,6 +35,12 @@ def post_json(url, body, headers = {})
   [res.code.to_i, (JSON.parse(res.body) rescue {})]
 end
 
+def get_json(url, headers = {})
+  uri = URI(url)
+  res = Net::HTTP.new(uri.host, uri.port).request(Net::HTTP::Get.new(uri, headers))
+  [res.code.to_i, (JSON.parse(res.body) rescue {})]
+end
+
 def pay_for_order(server, issuer, token, key, user_id, agent_id, order_id, total_cents)
   now        = Time.now.to_i
   intent_id  = SecureRandom.uuid
@@ -94,9 +100,16 @@ end
 
 # ── Step 1: Register Principal A ─────────────────────────────────────────────
 key_a = OpenSSL::PKey::RSA.generate(2048)
+pem_a = key_a.public_key.to_pem
+rc_ch_a, ch_a = get_json("#{SERVER}/kiosk/auth/challenge?public_key=#{URI.encode_www_form_component(pem_a)}")
+abort "challenge A failed (#{rc_ch_a}): #{JSON.generate(ch_a)}" unless rc_ch_a == 200
+pop_a = JWT.encode(
+  { aud: ISSUER, nonce: ch_a.fetch("challenge"), jti: SecureRandom.uuid, iat: Time.now.to_i },
+  key_a, "RS256",
+)
 rc, reg_a = post_json(
-  "#{SERVER}/kiosk/agents/register",
-  { name: "alice-agent", public_key: key_a.public_key.to_pem, role: "customer" },
+  "#{SERVER}/kiosk/auth/register",
+  { public_key: pem_a, signed: pop_a },
 )
 abort "register A failed (#{rc}): #{JSON.generate(reg_a)}" unless rc == 201
 agent_id_a = reg_a.fetch("agent_id")
@@ -108,9 +121,16 @@ token_a    = reg_a.fetch("access_token")
 
 # ── Step 2: Register Principal B ─────────────────────────────────────────────
 key_b = OpenSSL::PKey::RSA.generate(2048)
+pem_b = key_b.public_key.to_pem
+rc_ch_b, ch_b = get_json("#{SERVER}/kiosk/auth/challenge?public_key=#{URI.encode_www_form_component(pem_b)}")
+abort "challenge B failed (#{rc_ch_b}): #{JSON.generate(ch_b)}" unless rc_ch_b == 200
+pop_b = JWT.encode(
+  { aud: ISSUER, nonce: ch_b.fetch("challenge"), jti: SecureRandom.uuid, iat: Time.now.to_i },
+  key_b, "RS256",
+)
 rc, reg_b = post_json(
-  "#{SERVER}/kiosk/agents/register",
-  { name: "bob-agent", public_key: key_b.public_key.to_pem, role: "customer" },
+  "#{SERVER}/kiosk/auth/register",
+  { public_key: pem_b, signed: pop_b },
 )
 abort "register B failed (#{rc}): #{JSON.generate(reg_b)}" unless rc == 201
 agent_id_b = reg_b.fetch("agent_id")

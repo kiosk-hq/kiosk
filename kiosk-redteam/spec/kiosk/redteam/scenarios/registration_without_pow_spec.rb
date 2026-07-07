@@ -14,7 +14,7 @@ RSpec.describe Kiosk::Redteam::Scenarios::RegistrationWithoutPow do
     context "when the server accepts registration without PoW (broken — BREACH)" do
       it "returns blocked: false" do
         # Both :skip and "0" succeed — server has no PoW gate
-        stub_request(:post, "#{BASE_URL}/kiosk/agents/register")
+        stub_request(:post, "#{BASE_URL}/kiosk/auth/register")
           .to_return(
             { status: 201, body: JSON.generate("agent_id" => "a1", "user_id" => "u1", "access_token" => "t1"),
               headers: { "Content-Type" => "application/json" } },
@@ -33,7 +33,7 @@ RSpec.describe Kiosk::Redteam::Scenarios::RegistrationWithoutPow do
       it "returns blocked: true on a 422 pow_required + 400 bad_request (no reliance on error code)" do
         # The scenario uses its own registration_rejected? check (status != 201, no token)
         # so it does NOT rely on Kiosk::Redteam.blocked? or the bad_request code.
-        stub_request(:post, "#{BASE_URL}/kiosk/agents/register")
+        stub_request(:post, "#{BASE_URL}/kiosk/auth/register")
           .to_return(
             { status: 422, body: JSON.generate("error" => { "code" => "pow_required" }),
               headers: { "Content-Type" => "application/json" } },
@@ -48,7 +48,7 @@ RSpec.describe Kiosk::Redteam::Scenarios::RegistrationWithoutPow do
       end
 
       it "returns blocked: true even when no domain error code is present (only status matters)" do
-        stub_request(:post, "#{BASE_URL}/kiosk/agents/register")
+        stub_request(:post, "#{BASE_URL}/kiosk/auth/register")
           .to_return(
             { status: 422, body: JSON.generate({}),
               headers: { "Content-Type" => "application/json" } },
@@ -64,7 +64,7 @@ RSpec.describe Kiosk::Redteam::Scenarios::RegistrationWithoutPow do
 
     context "when only one attempt is blocked but not both (partial gate)" do
       it "returns blocked: false" do
-        stub_request(:post, "#{BASE_URL}/kiosk/agents/register")
+        stub_request(:post, "#{BASE_URL}/kiosk/auth/register")
           .to_return(
             { status: 422, body: JSON.generate("error" => { "code" => "pow_required" }),
               headers: { "Content-Type" => "application/json" } },

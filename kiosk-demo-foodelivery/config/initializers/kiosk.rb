@@ -135,6 +135,8 @@ Kiosk.configure do |c|
 
   c.issuer = ENV.fetch("KIOSK_ISSUER", "http://localhost:3002")
   c.roles  = %i[customer]
+  # Role pinned to every self-registered agent (agents cannot choose their own).
+  c.registration_role = :customer
   c.owner  = { name: "foodelivery", support: "help@foodelivery.app" }
 
   # ── RLS enforce gate (R1 Phase 1 Task 5 — demo:rls only) ─────────────────

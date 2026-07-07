@@ -155,6 +155,38 @@ RSpec.describe Kiosk::Server::JwtIssuer do
       }.to raise_error(described_class::SignatureError)
     end
 
+    describe "revocation" do
+      let(:agent_token) {
+        described_class.issue(claims: { sub: "u", agent_id: "a-1" }, audience: audience)
+      }
+
+      it "rejects a token whose agent has been revoked as of now" do
+        store = Kiosk::Server::RevocationStore.new
+        agent_token # issue first (iat = now)
+        store.revoke_all("a-1", at: Time.now.to_i + 120) # watermark ahead of iat
+        expect {
+          described_class.verify(token: agent_token, jwks: jwks, audience: audience, revocation_store: store)
+        }.to raise_error(described_class::RevokedError)
+      end
+
+      it "accepts a token issued after the revocation watermark (fresh login survives)" do
+        store = Kiosk::Server::RevocationStore.new
+        store.revoke_all("a-1", at: Time.now.to_i - 120) # watermark in the past
+        fresh = described_class.issue(claims: { sub: "u", agent_id: "a-1" }, audience: audience)
+        expect {
+          described_class.verify(token: fresh, jwks: jwks, audience: audience, revocation_store: store)
+        }.not_to raise_error
+      end
+
+      it "skips the check when revocation_store is nil" do
+        store = Kiosk::Server::RevocationStore.new
+        store.revoke_all("a-1", at: Time.now.to_i + 120)
+        expect {
+          described_class.verify(token: agent_token, jwks: jwks, audience: audience, revocation_store: nil)
+        }.not_to raise_error
+      end
+    end
+
     it "respects clock skew leeway for slightly-in-the-future iat" do
       future = described_class.issue(
         claims:   { sub: "u" },

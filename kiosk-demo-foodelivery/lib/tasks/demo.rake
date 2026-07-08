@@ -997,7 +997,7 @@ namespace :demo do
       GET /kiosk/schema
 
     Asserts:
-      • schema.verbs includes query/run/pay/schema/help and NOT events
+      • schema.verbs includes query/run/pay/schema and NOT events
       • schema.queries includes my_orders with a description
       • schema.actions includes place_order with a description
 
@@ -1071,8 +1071,8 @@ namespace :demo do
     queries = result["schema_queries"] || []
     actions = result["schema_actions"] || []
 
-    # Verbs: query/run/pay/schema/help present; events absent
-    %w[query run pay schema help].each do |v|
+    # Verbs: query/run/pay/schema present; events absent
+    %w[query run pay schema].each do |v|
       if verbs.include?(v)
         puts "  ✓  schema.verbs includes #{v}"
       else

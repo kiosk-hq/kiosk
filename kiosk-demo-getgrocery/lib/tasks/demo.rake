@@ -433,19 +433,17 @@ namespace :demo do
 
   # ── demo:schema ──────────────────────────────────────────────────────────────
   desc <<~DESC
-    Self-discovery proof — verifies schema + help verbs over HTTP.
+    Self-discovery proof — verifies the schema verb over HTTP.
 
     Boots the server, registers a fresh agent, calls:
       GET /kiosk/schema
-      GET /kiosk/help
 
     Asserts:
-      • schema.verbs includes query/run/pay/schema/help and NOT events
+      • schema.verbs includes query/run/pay/schema and NOT events
       • schema.queries includes catalog, delivery_slots, my_orders (each with description)
       • schema.actions includes create_order, schedule_delivery (each with description)
       • schema.queries does NOT include stores, products_by_store, substitution_options
       • schema.actions does NOT include add_to_cart, apply_substitution, confirm_delivery
-      • help.text mentions catalog, create_order, schedule_delivery, my_orders
 
     Exits 0 if all assertions pass; exits 1 on any miss.
   DESC
@@ -470,7 +468,7 @@ namespace :demo do
     server_url   = "http://#{host}:#{port}"
     kiosk_issuer = server_url
 
-    puts "\n── Starting getgrocery (schema/help proof) on #{server_url} ──"
+    puts "\n── Starting getgrocery (schema proof) on #{server_url} ──"
 
     File.truncate(log, 0) if File.exist?(log)
     server_pid = spawn(
@@ -517,16 +515,15 @@ namespace :demo do
       abort "schema_flow.rb did not produce valid JSON: #{e.message}\nOutput:\n#{raw}"
     end
 
-    puts "\n── Schema/help assertions ──"
+    puts "\n── Schema assertions ──"
     failures = []
 
     verbs   = result["schema_verbs"]   || []
     queries = result["schema_queries"] || []
     actions = result["schema_actions"] || []
-    text    = result["help_text"]      || ""
 
-    # Verbs: query/run/pay/schema/help present; events absent
-    %w[query run pay schema help].each do |v|
+    # Verbs: query/run/pay/schema present; events absent
+    %w[query run pay schema].each do |v|
       if verbs.include?(v)
         puts "  ✓  schema.verbs includes #{v}"
       else
@@ -595,18 +592,8 @@ namespace :demo do
       end
     end
 
-    # help text mentions all key action and query names
-    %w[catalog create_order schedule_delivery my_orders].each do |name|
-      if text.include?(name)
-        puts "  ✓  help text mentions #{name}"
-      else
-        failures << "help text does not mention #{name}"
-        puts "  ✗  help text does not mention #{name}"
-      end
-    end
-
     if failures.empty?
-      puts "\n  All schema/help assertions passed."
+      puts "\n  All schema assertions passed."
     else
       puts "\n  FAILED assertions:"
       failures.each { |f| puts "    - #{f}" }

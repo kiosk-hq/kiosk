@@ -840,7 +840,7 @@ namespace :demo do
     server_url   = "http://#{host}:#{port}"
     kiosk_issuer = server_url
 
-    puts "\n── Starting skooti (schema/help proof) on #{server_url} ──"
+    puts "\n── Starting skooti (schema proof) on #{server_url} ──"
 
     File.truncate(log, 0) if File.exist?(log)
     server_pid = spawn(

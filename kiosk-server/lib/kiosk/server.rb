@@ -75,7 +75,7 @@ module Kiosk
     #   - {Kiosk::Server::SessionContext}   — transaction + four SET LOCAL GUCs
     #   - {Kiosk::Server::Actions}          — minimal Action registry (full DSL later)
     #   - {Kiosk::Server::RentalTokenIssuer} — Ed25519 offline rental-token sign/verify (Arch 2)
-    #   - {Kiosk::Server::Executor}         — six-verb dispatch (query/run/pay working; schema/help/events stubbed)
+    #   - {Kiosk::Server::Executor}         — wire dispatch (query/run/pay/schema working; events stubbed)
     #   - {Kiosk::Server::ExecController}   — Rails controller wrapping Executor (only when Rails loaded)
     #   - {Kiosk::Server::JwksController}   — Rails controller serving /.well-known/jwks.json (only when Rails loaded)
     #   - {Kiosk::Server::Engine}           — Rails engine (only when Rails loaded)

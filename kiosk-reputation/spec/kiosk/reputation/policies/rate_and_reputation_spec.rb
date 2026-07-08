@@ -1,9 +1,9 @@
 # frozen_string_literal: true
 
 RSpec.describe Kiosk::Reputation::Policies::RateAndReputation do
-  before do
-    Kiosk::Reputation::Backends.register("argon2id", TestHelpers::StubBackend)
-  end
+  # The policy is self-contained: it returns an equihash challenge spec
+  # `{alg:, params:, count:}` and never touches the Backends registry (the gate
+  # resolves the equihash backend at verify time). So no backend stub is needed.
 
   # Use default thresholds: proven >= 5 purchases, low rate <= 10 req/min.
   subject(:policy) { described_class.new }
@@ -21,9 +21,10 @@ RSpec.describe Kiosk::Reputation::Policies::RateAndReputation do
     Kiosk::Reputation::Factors.new(**defaults.merge(overrides))
   end
 
-  def d_for(factor_overrides = {})
+  # Proof COUNT demanded for the given factors (nil = free pass).
+  def count_for(factor_overrides = {})
     result = policy.challenge_for(identity: nil, verb: :query, factors: factors(factor_overrides))
-    result&.dig(:params, :d)
+    result && result[:count]
   end
 
   # ---------------------------------------------------------------------------
@@ -31,16 +32,40 @@ RSpec.describe Kiosk::Reputation::Policies::RateAndReputation do
   # ---------------------------------------------------------------------------
   describe "nil (free pass)" do
     it "returns nil for a proven, low-rate, clean principal" do
-      expect(d_for(settled_purchases_count: 5, request_rate_per_min: 10, bad_proof_count: 0)).to be_nil
+      expect(count_for(settled_purchases_count: 5, request_rate_per_min: 10, bad_proof_count: 0)).to be_nil
     end
 
     it "returns nil when purchases exceed the threshold with zero rate" do
-      expect(d_for(settled_purchases_count: 100, request_rate_per_min: 0, bad_proof_count: 0)).to be_nil
+      expect(count_for(settled_purchases_count: 100, request_rate_per_min: 0, bad_proof_count: 0)).to be_nil
     end
 
-    it "returns nil for all-nil factors (empty) when purchases nil == 0 < threshold" do
-      # settled_purchases_count nil → .to_i == 0 → unproven → challenged
-      expect(d_for(settled_purchases_count: nil, request_rate_per_min: nil, bad_proof_count: nil)).not_to be_nil
+    it "challenges all-nil factors (purchases nil == 0 < threshold)" do
+      expect(count_for(settled_purchases_count: nil, request_rate_per_min: nil, bad_proof_count: nil)).not_to be_nil
+    end
+  end
+
+  # ---------------------------------------------------------------------------
+  # Challenge shape: equihash + count
+  # ---------------------------------------------------------------------------
+  describe "challenge shape" do
+    subject(:result) do
+      policy.challenge_for(
+        identity: nil, verb: :query,
+        factors: factors(settled_purchases_count: 0, request_rate_per_min: 5)
+      )
+    end
+
+    it "issues an :equihash challenge (argon2id is legacy)" do
+      expect(result[:alg]).to eq("equihash")
+    end
+
+    it "carries equihash (n, k) params" do
+      expect(result[:params]).to eq({ n: 192, k: 7 })
+    end
+
+    it "carries an integer proof count >= 1" do
+      expect(result[:count]).to be_a(Integer)
+      expect(result[:count]).to be >= 1
     end
   end
 
@@ -48,17 +73,9 @@ RSpec.describe Kiosk::Reputation::Policies::RateAndReputation do
   # Unproven principal (0 purchases)
   # ---------------------------------------------------------------------------
   describe "unproven principal" do
-    it "issues a challenge with the base_d + unproven bonus when rate is low" do
-      # base_d(5) + unproven_d_bonus(2) = 7
-      expect(d_for(settled_purchases_count: 0, request_rate_per_min: 5)).to eq(7)
-    end
-
-    it "returns an :argon2id challenge" do
-      result = policy.challenge_for(
-        identity: nil, verb: :query,
-        factors: factors(settled_purchases_count: 0, request_rate_per_min: 5)
-      )
-      expect(result[:alg]).to eq("argon2id")
+    it "demands base_count + unproven bonus when rate is low" do
+      # base_count(1) + unproven_count_bonus(1) = 2
+      expect(count_for(settled_purchases_count: 0, request_rate_per_min: 5)).to eq(2)
     end
   end
 
@@ -66,19 +83,19 @@ RSpec.describe Kiosk::Reputation::Policies::RateAndReputation do
   # High rate escalation
   # ---------------------------------------------------------------------------
   describe "high request rate" do
-    it "issues a challenge when rate exceeds low_rate_threshold for a proven principal" do
-      expect(d_for(settled_purchases_count: 5, request_rate_per_min: 20)).not_to be_nil
+    it "challenges a proven principal whose rate exceeds low_rate_threshold" do
+      expect(count_for(settled_purchases_count: 5, request_rate_per_min: 20)).not_to be_nil
     end
 
-    it "escalates d as rate increases (proven principal, no bad proofs)" do
-      d_at_20  = d_for(settled_purchases_count: 5, request_rate_per_min: 20,  bad_proof_count: 0)
-      d_at_100 = d_for(settled_purchases_count: 5, request_rate_per_min: 100, bad_proof_count: 0)
-      expect(d_at_100).to be > d_at_20
+    it "escalates count as rate increases (proven principal, no bad proofs)" do
+      c_at_20  = count_for(settled_purchases_count: 5, request_rate_per_min: 20,  bad_proof_count: 0)
+      c_at_100 = count_for(settled_purchases_count: 5, request_rate_per_min: 100, bad_proof_count: 0)
+      expect(c_at_100).to be > c_at_20
     end
 
-    it "combines rate escalation with unproven bonus" do
-      # base_d(5) + rate_excess(20-10=10, ceil(10/10)*1=1) + unproven(2) = 8
-      expect(d_for(settled_purchases_count: 0, request_rate_per_min: 20)).to eq(8)
+    it "combines rate escalation with the unproven bonus" do
+      # base(1) + rate_excess(ceil((20-10)/10)=1) + unproven(1) = 3
+      expect(count_for(settled_purchases_count: 0, request_rate_per_min: 20)).to eq(3)
     end
   end
 
@@ -87,42 +104,38 @@ RSpec.describe Kiosk::Reputation::Policies::RateAndReputation do
   # ---------------------------------------------------------------------------
   describe "bad_proof_count escalation" do
     it "challenges even a proven, low-rate principal when bad_proof_count > 0" do
-      expect(d_for(settled_purchases_count: 5, request_rate_per_min: 5, bad_proof_count: 1)).not_to be_nil
+      expect(count_for(settled_purchases_count: 5, request_rate_per_min: 5, bad_proof_count: 1)).not_to be_nil
     end
 
-    it "escalates d as bad_proof_count increases" do
-      d1 = d_for(settled_purchases_count: 0, request_rate_per_min: 0, bad_proof_count: 1)
-      d2 = d_for(settled_purchases_count: 0, request_rate_per_min: 0, bad_proof_count: 2)
-      d3 = d_for(settled_purchases_count: 0, request_rate_per_min: 0, bad_proof_count: 3)
-      expect(d2).to be > d1
-      expect(d3).to be > d2
+    it "escalates count as bad_proof_count increases" do
+      c1 = count_for(settled_purchases_count: 0, request_rate_per_min: 0, bad_proof_count: 1)
+      c2 = count_for(settled_purchases_count: 0, request_rate_per_min: 0, bad_proof_count: 2)
+      expect(c2).to be > c1
     end
 
-    it "escalates faster than rate (bad_proof_d_factor > rate_d_step per unit)" do
-      # Default: bad_proof_d_factor = 3, rate_d_step = 1 per rate_step(10) req/min.
-      d_bad_proof = d_for(settled_purchases_count: 0, request_rate_per_min: 0, bad_proof_count: 1)
-      d_rate_10   = d_for(settled_purchases_count: 0, request_rate_per_min: 10, bad_proof_count: 0)
-      # 1 bad proof adds 3; 10 extra req/min adds 1. Bad proof should be higher.
-      expect(d_bad_proof - 7).to be >= 3  # unproven base is 7; +3 for 1 bad proof
+    it "escalates faster than rate (bad_proof_count_factor(3) > rate_count_step(1))" do
+      # unproven base is 2; +3 per bad proof.
+      c_bad_proof = count_for(settled_purchases_count: 0, request_rate_per_min: 0, bad_proof_count: 1)
+      expect(c_bad_proof - 2).to be >= 3
     end
   end
 
   # ---------------------------------------------------------------------------
-  # d clamping
+  # count clamping
   # ---------------------------------------------------------------------------
-  describe "d clamping" do
-    it "caps d at d_max (14) even with extreme inputs" do
-      extreme_d = d_for(settled_purchases_count: 0, request_rate_per_min: 10_000, bad_proof_count: 100)
-      expect(extreme_d).to eq(14)
+  describe "count clamping" do
+    it "caps count at count_max (10) even with extreme inputs" do
+      extreme = count_for(settled_purchases_count: 0, request_rate_per_min: 10_000, bad_proof_count: 100)
+      expect(extreme).to eq(10)
     end
 
-    it "floors d at d_min (3)" do
-      policy_low = described_class.new(base_d: 0, unproven_d_bonus: 0, d_min: 3)
+    it "floors count at count_min (1)" do
+      policy_low = described_class.new(base_count: 0, unproven_count_bonus: 0, count_min: 1)
       result     = policy_low.challenge_for(
         identity: nil, verb: :query,
         factors: factors(settled_purchases_count: 0, request_rate_per_min: 0)
       )
-      expect(result[:params][:d]).to eq(3)
+      expect(result[:count]).to eq(1)
     end
   end
 
@@ -132,7 +145,6 @@ RSpec.describe Kiosk::Reputation::Policies::RateAndReputation do
   describe "custom constructor params" do
     it "respects a custom proven_purchases_threshold" do
       strict = described_class.new(proven_purchases_threshold: 100)
-      # 5 purchases is no longer enough
       result = strict.challenge_for(
         identity: nil, verb: :query,
         factors: factors(settled_purchases_count: 5, request_rate_per_min: 5, bad_proof_count: 0)
@@ -142,13 +154,21 @@ RSpec.describe Kiosk::Reputation::Policies::RateAndReputation do
 
     it "respects a custom low_rate_threshold" do
       lenient = described_class.new(low_rate_threshold: 200)
-      # 100 req/min is now low-rate for a proven principal
       expect(
         lenient.challenge_for(
           identity: nil, verb: :query,
           factors: factors(settled_purchases_count: 5, request_rate_per_min: 100, bad_proof_count: 0)
         )
       ).to be_nil
+    end
+
+    it "respects custom equihash (n, k) params" do
+      tuned  = described_class.new(equihash_n: 200, equihash_k: 9)
+      result = tuned.challenge_for(
+        identity: nil, verb: :query,
+        factors: factors(settled_purchases_count: 0, request_rate_per_min: 5)
+      )
+      expect(result[:params]).to eq({ n: 200, k: 9 })
     end
   end
 

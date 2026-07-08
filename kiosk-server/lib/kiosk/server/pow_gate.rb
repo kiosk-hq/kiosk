@@ -95,55 +95,92 @@ module Kiosk
 
         return :proceed if spec.nil?  # policy decided not to challenge this request
 
-        # ── No proof submitted — issue a fresh challenge ──────────────────────
+        # ── How many independent proofs must this request carry? ──────────────
+        # Equihash has no continuous difficulty dial — the policy escalates by
+        # PROOF COUNT (N×PoW). Each challenge has a distinct salt, so there is no
+        # amortisation across them (a shared salt would let one sorted table
+        # serve every proof). `count` defaults to 1 when the policy omits it.
+        count     = pow_count(spec)
+        submitted = extract_proofs(pow)
 
-        if blank?(pow)
-          raise Errors::PowRequired.new(challenge: issue_challenge(spec, fp, secret, config))
+        # ── No proof submitted — issue `count` fresh, independent challenges ──
+        if submitted.empty?
+          raise Errors::PowRequired.new(
+            challenges: issue_challenges(count, spec, fp, secret, config),
+          )
         end
 
-        # ── Proof submitted — verify ──────────────────────────────────────────
+        # ── Proofs submitted — verify each. We need `count` DISTINCT, unspent,
+        #    valid proofs to proceed. A single cryptographically WRONG proof is
+        #    bad faith → 403 immediately (as in the single-proof gate).
+        accepted = {} # challenge id => exp (dedup by id; ignores repeats)
+        submitted.each do |proof|
+          challenge = symbolize_keys(proof[:challenge] || proof["challenge"] || {})
+          nonce     = proof[:nonce] || proof["nonce"]
+          id        = challenge[:id]
 
-        challenge = symbolize_keys(pow[:challenge] || pow["challenge"] || {})
-        nonce     = pow[:nonce] || pow["nonce"]
-        id        = challenge[:id]
+          next if id.nil? || accepted.key?(id)
 
-        # Replay check (cheap — before the Argon2id eval).
-        # A spent id means the client already submitted a VALID proof and was
-        # served, but the response may have been lost (at-least-once HTTP retry).
-        # Re-issuing a fresh challenge lets the honest client re-solve without
-        # any penalty; a malicious replayer must also re-solve and gains nothing.
-        # We do NOT call on_bad_proof — a replayed valid proof is not a wrong proof.
-        if config.pow_spent_store.spent?(id)
-          raise Errors::PowRequired.new(challenge: issue_challenge(spec, fp, secret, config))
+          # Replay: an already-spent proof does not count toward the quota, but
+          # it is NOT bad faith (at-least-once HTTP retry may resend a served
+          # proof) — skip it without penalty. We do NOT call on_bad_proof.
+          next if config.pow_spent_store.spent?(id)
+
+          # Cheap sig + expiry checks first (inside Challenge.verify), then the
+          # one expensive backend eval.
+          outcome = ::Kiosk::Reputation::Challenge.verify(
+            challenge:            challenge,
+            nonce:                nonce,
+            request_fingerprint:  fp,
+            secret:               secret,
+            now:                  Time.now.to_i,
+          )
+
+          case outcome
+          when :ok
+            accepted[id] = challenge[:exp].to_i
+          when :bad_proof
+            config.on_bad_proof.call(identity: identity)
+            raise Errors::Forbidden, "invalid proof of work"
+          when :expired, :bad_sig
+            # Doesn't count; falls through to a fresh re-challenge below if the
+            # quota isn't met. No on_bad_proof (honest clock skew / retry).
+          end
         end
 
-        # Cheap sig + expiry checks first (inside Challenge.verify),
-        # then the one expensive backend eval.
-        outcome = ::Kiosk::Reputation::Challenge.verify(
-          challenge:            challenge,
-          nonce:                nonce,
-          request_fingerprint:  fp,
-          secret:               secret,
-          now:                  Time.now.to_i,
-        )
-
-        case outcome
-        when :ok
-          config.pow_spent_store.mark_spent(id, challenge[:exp].to_i)
+        if accepted.size >= count
+          # Spend all accepted proofs only now that the quota is met, so a
+          # partial submission can be re-tried without burning valid proofs.
+          accepted.each { |id, exp| config.pow_spent_store.mark_spent(id, exp) }
           :proceed
-
-        when :bad_proof
-          config.on_bad_proof.call(identity: identity)
-          raise Errors::Forbidden, "invalid proof of work"
-
-        when :expired, :bad_sig
-          # Expired or wrong-request proof: re-issue a fresh challenge.
-          # Note: :bad_sig also covers a tampered challenge or replay against a
-          # different request — re-challenging is safe because the backend eval
-          # was NOT reached (cheap check short-circuited). We do NOT call
-          # on_bad_proof for :bad_sig (could be an honest clock skew / retry).
-          raise Errors::PowRequired.new(challenge: issue_challenge(spec, fp, secret, config))
+        else
+          raise Errors::PowRequired.new(
+            challenges: issue_challenges(count, spec, fp, secret, config),
+          )
         end
+      end
+
+      # Split a submitted proof out of the request body.
+      #
+      # On the wire `pow` is a SIBLING of the verb args (`{name:"catalog", pow:{…}}`).
+      # It must be removed before the body is used for either purpose:
+      #   * fingerprinting — the challenge is bound to the ORIGINAL request, which
+      #     had no `pow`; leaving it in would change the fingerprint on retry and
+      #     every valid proof would be rejected as `:bad_sig`.
+      #   * dispatch — the {Executor} must never see the `pow` key.
+      #
+      # Non-mutating: returns a fresh body hash. Accepts symbol- or string-keyed
+      # `pow`. Returns `[nil, arg]` unchanged for a non-Hash arg.
+      #
+      # @param body [Hash, Object]
+      # @return [Array(Object, Object)] `[pow, body_without_pow]`
+      def split_pow(body)
+        return [nil, body] unless body.is_a?(Hash)
+
+        rest = body.dup
+        pow  = rest.delete(:pow)
+        pow  = rest.delete("pow") if pow.nil?
+        [pow, rest]
       end
 
       # ── Internal helpers (all module_function so they're callable from above) ──
@@ -161,6 +198,38 @@ module Kiosk
           ttl:                  config.pow_ttl,
           now:                  Time.now.to_i,
         )
+      end
+
+      # Number of independent proofs the policy demands for this request.
+      # Defaults to 1 (single-proof) when the spec omits `count`. Floored at 1.
+      def pow_count(spec)
+        n = (spec[:count] || spec["count"] || 1).to_i
+        n < 1 ? 1 : n
+      end
+
+      # Issue `count` independent challenges — each gets its own random salt and
+      # id (via Challenge.issue defaults) but binds to the SAME request
+      # fingerprint, so all N must be solved to prove work for THIS request.
+      def issue_challenges(count, spec, fp, secret, config)
+        Array.new(count) { issue_challenge(spec, fp, secret, config) }
+      end
+
+      # Normalise the submitted `pow` field into a list of `{challenge:, nonce:}`
+      # proofs. Accepts:
+      #   * plural:   { proofs: [ {challenge:, nonce:}, ... ] }  (N×PoW wire)
+      #   * singular: { challenge:, nonce: }                     (N=1 convenience)
+      #   * a bare Array of proofs
+      # Returns [] for anything blank/unrecognised.
+      def extract_proofs(pow)
+        return [] if blank?(pow)
+        return pow if pow.is_a?(Array)
+        return [] unless pow.is_a?(Hash)
+
+        list = pow[:proofs] || pow["proofs"]
+        return Array(list) if list
+        return [pow] if pow[:challenge] || pow["challenge"]
+
+        []
       end
 
       # Recursively serialise a value to JSON with all Hash keys sorted.

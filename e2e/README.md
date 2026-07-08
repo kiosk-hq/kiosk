@@ -18,7 +18,7 @@ Reproducible end-to-end test of the Kiosk OSS gems. The same script (`run.sh`) r
 
 - **RLS.** Path C removes raw SQL entirely — there is no arbitrary-SQL surface. Per-user isolation is enforced app-layer in registered query definitions (the `WHERE user_id = kiosk.current_user_id()` in `my_appointments`). RLS is optional and not used in this fixture; satellite-mode role separation per spec §7.6 lands in a follow-up. The `app_role` pre-creation in `run.sh` is kept harmless for forward compatibility.
 - **AP2 mandate trail.** The `pay` verb is not yet implemented (lands with `kiosk-pay-stripe` at M4).
-- **`schema` / `help` / `events` verbs** — all stubbed (`NotImplementedError`).
+- **`events` verb** — stubbed (`NotImplementedError`); `schema` is implemented.
 - **Multi-agent revocation** flows.
 - **Live LLM agent integration** — that's the `kiosk-agent-test` companion gem's job.
 

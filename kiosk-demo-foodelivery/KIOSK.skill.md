@@ -245,7 +245,7 @@ Response — HTTP 200, inside `.value`:
 
 ```json
 {
-  "verbs":   ["query", "run", "pay", "schema", "help"],
+  "verbs":   ["query", "run", "pay", "schema"],
   "queries": [
     { "name": "restaurants",        "description": "Browse the public restaurant catalog", "params": null },
     { "name": "menu_by_restaurant", "description": "Browse menu items for a named restaurant",

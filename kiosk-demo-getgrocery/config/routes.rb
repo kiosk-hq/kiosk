@@ -6,11 +6,6 @@ Rails.application.routes.draw do
   # Human storefront + the agent hook ("Agents → Kiosk here") on the homepage.
   root "home#index"
 
-  # Unauthenticated agent bootstrap: protocol handshake + live surface, so an
-  # agent that lands from the homepage can self-onboard with no prior knowledge.
-  # (Demo: app-level; a follow-up moves this into kiosk-server as a convention.)
-  get "/kiosk/help", to: "kiosk_help#show"
-
   # Kiosk wire surface (controllers shipped by kiosk-server).
   # REST endpoints (ADR-0005): one per verb, HTTP method = semantics.
   get  "/kiosk/schema",                            to: "kiosk/server/exec#schema"
@@ -30,10 +25,10 @@ Rails.application.routes.draw do
   # ship a controller for it.
   # well-known = the machine-readable HANDSHAKE: who/where/which version + issuer
   # (the AP2 `iss` anchor) + auth, served at the guessable conventional URL. It
-  # is NOT the surface — it points to /kiosk/help, which carries the protocol +
-  # the live queries/actions. The `verbs` summary is DERIVED from the actually
-  # implemented verbs (no hardcoded capability list), the same source /kiosk/help
-  # renders from, so the two never drift.
+  # is NOT the surface — it points to the REST verbs (schema/query/run/pay),
+  # which carry the protocol + the live queries/actions. The `verbs` summary is
+  # DERIVED from the actually implemented verbs (no hardcoded capability list),
+  # so discovery and the live surface never drift.
   get "/.well-known/kiosk.json", to: ->(env) {
     base_url = "#{env['rack.url_scheme']}://#{env['HTTP_HOST']}"
     doc      = Kiosk::Server::WellKnown.build(base_url: base_url)
@@ -46,7 +41,6 @@ Rails.application.routes.draw do
       "run"    => { "method" => "POST", "path" => "#{endpoint}/run" },
       "pay"    => { "method" => "POST", "path" => "#{endpoint}/pay" },
     }
-    doc[:kiosk][:help]  = "#{endpoint}/help"   # the surface + protocol live here
     [200, { "content-type" => "application/json" }, [JSON.generate(doc)]]
   }
 

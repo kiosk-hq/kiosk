@@ -18,8 +18,8 @@ module Kiosk
     # `Kiosk::ExecController#exec` pseudocode shown there, factored out of
     # the controller so it's testable without Rails.
     class Executor
-      # Spec §5.1: the fixed six-verb wire surface.
-      VERBS = %i[query run pay schema help events].freeze
+      # Spec §5.1: the fixed wire-surface verbs.
+      VERBS = %i[query run pay schema events].freeze
 
       # Verbs that open their own transaction boundaries because they perform
       # an irreversible external side effect (a PSP capture) that a DB
@@ -29,11 +29,11 @@ module Kiosk
 
       # Verbs that enumerate the in-process registry only — they need no
       # database connection and must NOT open a SessionContext.
-      NO_DB_VERBS = %i[schema help].freeze
+      NO_DB_VERBS = %i[schema].freeze
 
       # The verbs that are actually implemented and advertised to agents.
       # `events` is stubbed and omitted intentionally.
-      IMPLEMENTED_VERBS = %w[query run pay schema help].freeze
+      IMPLEMENTED_VERBS = %w[query run pay schema].freeze
 
       def self.call(kind:, args:, identity:, connection:)
         new(connection: connection, identity: identity).call(kind: kind, args: args)
@@ -76,7 +76,6 @@ module Kiosk
         when :run    then verb_run(args)
         when :pay    then verb_pay(args)
         when :schema then verb_schema(args)
-        when :help   then verb_help(args)
         when :events then verb_events(args)
         end
       end
@@ -327,38 +326,6 @@ module Kiosk
           queries: Queries.catalog,
           actions: Actions.catalog,
         })
-      end
-
-      # ─── help ──────────────────────────────────────────────────────────
-
-      # Returns a human-readable rendering of the same catalog as verb_schema —
-      # lists implemented verbs, then each query and action with its description
-      # and params hint. Never opens a SessionContext or touches the DB.
-      def verb_help(_args)
-        lines = ["Available verbs: #{IMPLEMENTED_VERBS.join(", ")}", ""]
-
-        queries = Queries.catalog
-        if queries.any?
-          lines << "Queries:"
-          queries.each do |q|
-            desc   = q[:description] ? " — #{q[:description]}" : ""
-            hint   = q[:params]      ? " (params: #{q[:params]})" : ""
-            lines << "  #{q[:name]}#{desc}#{hint}"
-          end
-          lines << ""
-        end
-
-        actions = Actions.catalog
-        if actions.any?
-          lines << "Actions:"
-          actions.each do |a|
-            desc   = a[:description] ? " — #{a[:description]}" : ""
-            hint   = a[:params]      ? " (params: #{a[:params]})" : ""
-            lines << "  #{a[:name]}#{desc}#{hint}"
-          end
-        end
-
-        Result.new(kind: :value, payload: { text: lines.join("\n") })
       end
 
       # ─── stub — lands in a follow-up release ───────────────────────────

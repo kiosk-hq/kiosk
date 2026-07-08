@@ -96,7 +96,7 @@ In production these are versioned RubyGems. The `kiosk-pay-stripe` adapter swaps
 rails g kiosk:install
 ```
 
-This emits: the Kiosk schema migration (the `kiosk.*` namespace with agents, sessions, and mandate tables), the REST wire surface (`GET /kiosk/schema`, `POST /kiosk/query`, `POST /kiosk/run`, `POST /kiosk/pay`), the auth handshake at `/kiosk/auth/{challenge,register,login,revoke}`, and `/.well-known/kiosk.json`. Today `query`, `run`, `pay`, `schema`, and `help` are wired end-to-end (agent self-discovery works — see `rake demo:schema`); `events` is stubbed and ships next.
+This emits: the Kiosk schema migration (the `kiosk.*` namespace with agents, sessions, and mandate tables), the REST wire surface (`GET /kiosk/schema`, `POST /kiosk/query`, `POST /kiosk/run`, `POST /kiosk/pay`), the auth handshake at `/kiosk/auth/{challenge,register,login,revoke}`, and `/.well-known/kiosk.json`. Today `query`, `run`, `pay`, and `schema` are wired end-to-end (agent self-discovery works — see `rake demo:schema`); `events` is stubbed and ships next.
 
 Agents call named queries by name (`query` verb) — never raw SQL. The provider registers the queries it wishes to expose; isolation is enforced at the app layer in the query definitions and in Actions, with RLS available as optional defense-in-depth.
 

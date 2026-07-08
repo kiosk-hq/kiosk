@@ -9,5 +9,7 @@ gem "kiosk-test-support", path: "../kiosk-test-support"
 
 # PoW-gate path deps — available in specs; NOT hard-required in lib code.
 # The host that wires a reputation_policy will have these loaded transitively.
-gem "kiosk-pow",        path: "../kiosk-pow"
-gem "kiosk-reputation", path: "../kiosk-reputation"
+# kiosk-pow (argon2id) is the legacy backend; kiosk-pow-equihash is the default.
+gem "kiosk-pow",          path: "../kiosk-pow"
+gem "kiosk-pow-equihash", path: "../kiosk-pow-equihash"
+gem "kiosk-reputation",   path: "../kiosk-reputation"

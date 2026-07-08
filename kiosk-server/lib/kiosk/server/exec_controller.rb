@@ -56,16 +56,21 @@ if defined?(::ActionController::API)
         def run_command(command, args)
           identity = resolve_identity!
 
+          # Pull the submitted proof out of the body: it is a sibling of the verb
+          # args, and must be excluded from BOTH the challenge fingerprint (which
+          # binds to the pow-less original request) and the Executor dispatch.
+          pow, body = PowGate.split_pow(args)
+
           PowGate.gate(
             identity: identity,
             command:  command,
-            body:     args,
-            pow:      nil,
+            body:     body,
+            pow:      pow,
           )
 
           result = Executor.call(
             kind:       command,
-            args:       args,
+            args:       body,
             identity:   identity,
             connection: connection_for(identity),
           )

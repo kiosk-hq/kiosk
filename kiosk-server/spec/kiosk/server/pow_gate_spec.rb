@@ -179,7 +179,8 @@ RSpec.describe Kiosk::Server::PowGate do
         expect(envelope[:ok]).to be(false)
         expect(envelope.dig(:error, :code)).to    eq("pow_required")
         expect(envelope.dig(:error, :message)).to eq("proof-of-work required")
-        expect(envelope.dig(:error, :challenge)).not_to be_nil
+        expect(envelope.dig(:error, :challenges)).to be_an(Array)
+        expect(envelope.dig(:error, :challenges).first).not_to be_nil
       end
 
       it "PowRequired has HTTP status 402" do
@@ -419,6 +420,91 @@ RSpec.describe Kiosk::Server::PowGate do
     end
   end
 
+  # ─── N×PoW: policy demands multiple independent proofs ─────────────────────
+  # The gate is algorithm-agnostic — argon2id (d=4, m=8) keeps solving fast.
+  # Equihash's own verify math is covered in kiosk-pow-equihash. Here we prove
+  # the gate's N-proof ORCHESTRATION: N distinct challenges, all-or-re-challenge,
+  # no-burn-on-partial, and bad-faith detection.
+  context "with a policy that demands N independent proofs (count > 1)" do
+    let(:count) { 3 }
+    let(:multi_proof_policy) do
+      n = count
+      Class.new(Kiosk::Reputation::Policy) do
+        define_method(:challenge_for) do |identity:, verb:, factors:|
+          { alg: "argon2id", params: Kiosk::Pow.params(d: 4, m: 8), count: n }
+        end
+      end.new
+    end
+
+    before { configure_with_policy(multi_proof_policy) }
+
+    def issue_n_challenges(command: "query", body: { name: "menu" })
+      err = catch_error(Kiosk::Server::Errors::PowRequired) do
+        described_class.gate(identity: identity, command: command, body: body, pow: nil)
+      end
+      err.challenges
+    end
+
+    def solve_all(challenges)
+      challenges.map { |ch| { challenge: ch, nonce: solve_nonce(ch) } }
+    end
+
+    it "issues `count` challenges with distinct ids AND salts (no amortisation)" do
+      challenges = issue_n_challenges
+      expect(challenges.length).to eq(count)
+      expect(challenges.map { |c| c[:id] }.uniq.length).to eq(count)
+      expect(challenges.map { |c| c[:salt] }.uniq.length).to eq(count)
+    end
+
+    it "proceeds only when ALL `count` proofs are valid" do
+      result = described_class.gate(
+        identity: identity, command: "query", body: { name: "menu" },
+        pow: { proofs: solve_all(issue_n_challenges) },
+      )
+      expect(result).to eq(:proceed)
+    end
+
+    it "re-challenges when fewer than `count` valid proofs are submitted" do
+      proofs = solve_all(issue_n_challenges)
+      expect {
+        described_class.gate(
+          identity: identity, command: "query", body: { name: "menu" },
+          pow: { proofs: proofs.first(count - 1) },
+        )
+      }.to raise_error(Kiosk::Server::Errors::PowRequired)
+    end
+
+    it "does NOT spend proofs on a short submission (a later full submission still works)" do
+      proofs = solve_all(issue_n_challenges)
+
+      catch_error(Kiosk::Server::Errors::PowRequired) do
+        described_class.gate(
+          identity: identity, command: "query", body: { name: "menu" },
+          pow: { proofs: proofs.first(count - 1) },
+        )
+      end
+
+      result = described_class.gate(
+        identity: identity, command: "query", body: { name: "menu" },
+        pow: { proofs: proofs },
+      )
+      expect(result).to eq(:proceed)
+    end
+
+    it "raises Forbidden if any single proof is cryptographically wrong" do
+      challenges = issue_n_challenges
+      proofs     = solve_all(challenges)
+      proofs[1]  = { challenge: challenges[1], nonce: find_bad_nonce(challenges[1]) }
+
+      expect {
+        described_class.gate(
+          identity: identity, command: "query", body: { name: "menu" },
+          pow: { proofs: proofs },
+        )
+      }.to raise_error(Kiosk::Server::Errors::Forbidden, /invalid proof/)
+    end
+  end
+
   # ─── PowRequired error class ──────────────────────────────────────────────
 
   describe Kiosk::Server::Errors::PowRequired do
@@ -437,16 +523,27 @@ RSpec.describe Kiosk::Server::PowGate do
       expect(error.code).to eq("pow_required")
     end
 
-    it "carries the challenge hash" do
+    it "carries the challenge hash (singular convenience accessor)" do
       expect(error.challenge).to eq(challenge_hash)
     end
 
-    it "serialises to the correct envelope" do
+    it "wraps a singular challenge into the challenges list" do
+      expect(error.challenges).to eq([challenge_hash])
+    end
+
+    it "accepts a plural challenges list directly" do
+      c2 = challenge_hash.merge(id: "cid-2", salt: "def")
+      err = described_class.new(challenges: [challenge_hash, c2])
+      expect(err.challenges).to eq([challenge_hash, c2])
+      expect(err.challenge).to eq(challenge_hash) # first
+    end
+
+    it "serialises to the correct envelope (plural challenges)" do
       envelope = error.to_envelope
       expect(envelope[:ok]).to be(false)
       expect(envelope.dig(:error, :code)).to    eq("pow_required")
       expect(envelope.dig(:error, :message)).to eq("proof-of-work required")
-      expect(envelope.dig(:error, :challenge)).to eq(challenge_hash)
+      expect(envelope.dig(:error, :challenges)).to eq([challenge_hash])
     end
   end
 
@@ -458,5 +555,44 @@ RSpec.describe Kiosk::Server::PowGate do
     nil
   rescue klass => e
     e
+  end
+end
+
+# ─── .split_pow — separate the submitted proof from the request body ─────────
+# The wire carries `pow` as a sibling of the verb args. It MUST be pulled out
+# before the body is (a) fingerprinted (the fingerprint binds the challenge to
+# the ORIGINAL request, which had no pow) and (b) handed to the Executor (which
+# must never see the pow key). This is the fix for the dropped-proof regression:
+# the REST controller previously passed `pow: nil` and left `pow` inside the
+# body, so a solved proof could never be verified.
+RSpec.describe "Kiosk::Server::PowGate.split_pow" do
+  subject(:split) { Kiosk::Server::PowGate.method(:split_pow) }
+
+  it "extracts a symbol-keyed :pow and returns the body without it" do
+    pow, body = split.call({ name: "catalog", pow: { challenge: {}, nonce: 1 } })
+    expect(pow).to eq({ challenge: {}, nonce: 1 })
+    expect(body).to eq({ name: "catalog" })
+  end
+
+  it "extracts a string-keyed 'pow' too" do
+    pow, body = split.call({ "name" => "catalog", "pow" => { "nonce" => 2 } })
+    expect(pow).to eq({ "nonce" => 2 })
+    expect(body).to eq({ "name" => "catalog" })
+  end
+
+  it "returns [nil, body] unchanged when there is no pow" do
+    pow, body = split.call({ name: "catalog" })
+    expect(pow).to be_nil
+    expect(body).to eq({ name: "catalog" })
+  end
+
+  it "does not mutate the caller's hash" do
+    original = { name: "catalog", pow: { nonce: 1 } }
+    split.call(original)
+    expect(original).to eq({ name: "catalog", pow: { nonce: 1 } })
+  end
+
+  it "returns [nil, arg] for a non-hash body" do
+    expect(split.call(nil)).to eq([nil, nil])
   end
 end

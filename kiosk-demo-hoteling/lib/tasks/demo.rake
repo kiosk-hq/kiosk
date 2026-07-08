@@ -472,7 +472,7 @@ namespace :demo do
       GET /kiosk/schema
 
     Asserts:
-      • schema.verbs includes query/run/pay/schema/help and NOT events
+      • schema.verbs includes query/run/pay/schema and NOT events
       • schema.queries includes properties, availability, my_bookings with descriptions
       • schema.actions includes reserve_room, confirm_booking with descriptions
 
@@ -499,7 +499,7 @@ namespace :demo do
     server_url   = "http://#{host}:#{port}"
     kiosk_issuer = server_url
 
-    puts "\n── Starting hoteling (schema/help proof) on #{server_url} ──"
+    puts "\n── Starting hoteling (schema proof) on #{server_url} ──"
 
     File.truncate(log, 0) if File.exist?(log)
     server_pid = spawn(
@@ -552,8 +552,8 @@ namespace :demo do
     queries = result["schema_queries"] || []
     actions = result["schema_actions"] || []
 
-    # Verbs: query/run/pay/schema/help present; events absent
-    %w[query run pay schema help].each do |v|
+    # Verbs: query/run/pay/schema present; events absent
+    %w[query run pay schema].each do |v|
       if verbs.include?(v)
         puts "  OK  schema.verbs includes #{v}"
       else

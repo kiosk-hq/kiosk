@@ -310,7 +310,7 @@ Response — HTTP 200, inside `.value`:
 
 ```json
 {
-  "verbs":   ["query", "run", "pay", "schema", "help"],
+  "verbs":   ["query", "run", "pay", "schema"],
   "queries": [
     { "name": "properties",   "description": "Browse all available hotel properties", "params": null },
     { "name": "availability", "description": "Check room availability at a property for given dates",

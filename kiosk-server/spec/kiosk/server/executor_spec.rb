@@ -165,8 +165,8 @@ RSpec.describe Kiosk::Server::Executor do
 
       expect(result).to be_a(Kiosk::Server::Result)
       expect(result.kind).to eq(:value)
-      expect(result.payload[:verbs]).to include("query", "run", "pay", "schema", "help")
-      expect(result.payload[:verbs]).not_to include("events")
+      expect(result.payload[:verbs]).to include("query", "run", "pay", "schema")
+      expect(result.payload[:verbs]).not_to include("help", "events")
       expect(result.payload[:queries]).to include(
         hash_including(name: "menu", description: "Browse the menu", params: { restaurant_id: "string" }),
       )
@@ -191,47 +191,11 @@ RSpec.describe Kiosk::Server::Executor do
     end
   end
 
-  describe "verb :help" do
-    before do
-      Kiosk::Server::Queries.register("menu", description: "Browse the menu") { |_| [] }
-      Kiosk::Server::Actions.register("place_order", description: "Place an order") { |_| {} }
-    end
-
-    it "returns a :value Result with human-readable text" do
-      result = described_class.call(kind: :help, args: {}, identity: identity, connection: connection)
-
-      expect(result).to be_a(Kiosk::Server::Result)
-      expect(result.kind).to eq(:value)
-      expect(result.payload[:text]).to be_a(String)
-    end
-
-    it "text includes the implemented verbs" do
-      result = described_class.call(kind: :help, args: {}, identity: identity, connection: connection)
-      text = result.payload[:text]
-
-      %w[query run pay schema help].each { |v| expect(text).to include(v) }
-      expect(text).not_to include("events")
-    end
-
-    it "text includes each registered query name and description" do
-      result = described_class.call(kind: :help, args: {}, identity: identity, connection: connection)
-      text = result.payload[:text]
-
-      expect(text).to include("menu")
-      expect(text).to include("Browse the menu")
-    end
-
-    it "text includes each registered action name and description" do
-      result = described_class.call(kind: :help, args: {}, identity: identity, connection: connection)
-      text = result.payload[:text]
-
-      expect(text).to include("place_order")
-      expect(text).to include("Place an order")
-    end
-
-    it "does not open a SessionContext (zero DB calls)" do
-      described_class.call(kind: :help, args: {}, identity: identity, connection: connection)
-      expect(connection.executed_sql).to be_empty
+  describe "verb :help (removed)" do
+    it "is no longer a recognised verb" do
+      expect {
+        described_class.call(kind: :help, args: {}, identity: identity, connection: connection)
+      }.to raise_error(Kiosk::Server::Errors::BadRequest, /Unknown verb/)
     end
   end
 

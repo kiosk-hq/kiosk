@@ -10,7 +10,7 @@ module Kiosk
     #                logic
     #
     # Controllers in this gem are thin shims over these methods — the
-    # same way {ExecController} is a shim over {Executor}. Logic lives
+    # same way {WireController} is a shim over {Executor}. Logic lives
     # here so unit tests don't require a Rails environment, and so the
     # service is reachable from non-Rails hosts (Rack apps, batch jobs,
     # tests that simulate the OAuth interactions in-process).

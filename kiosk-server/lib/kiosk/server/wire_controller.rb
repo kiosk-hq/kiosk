@@ -30,7 +30,7 @@ if defined?(::ActionController::API)
       # `Kiosk.configuration.user_idp` (web/mobile channels mounted
       # through the same endpoint). Adapter `#verify(request)` returns a
       # {Kiosk::Identity} or `nil`; `nil` becomes 401.
-      class ExecController < ::ActionController::API
+      class WireController < ::ActionController::API
         # REST verb: GET /kiosk/schema
         def schema
           run_command(:schema, {})

@@ -1,7 +1,7 @@
 # frozen_string_literal: true
 
 # Conditionally defined — only available inside a Rails host, same pattern
-# as AgentsRegistrationController and ExecController.
+# as WireController and AuthController.
 
 if defined?(::ActionController::API)
   require "json"

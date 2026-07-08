@@ -2,7 +2,7 @@
 
 module Kiosk
   module Server
-    # Exception classes the {Executor} raises and {ExecController}
+    # Exception classes the {Executor} raises and {WireController}
     # serialises to error envelopes per design spec §5.2 (exit codes 0/2/3/4/5/6).
     #
     # Each subclass declares three constants used by the wire envelope and

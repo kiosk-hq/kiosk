@@ -14,9 +14,9 @@ module Kiosk
     # appropriate verb method, returns {Result} on success or raises
     # {Errors::Base} subclass on failure.
     #
-    # See design spec §5.4 «Server side» — this implements the
-    # `Kiosk::ExecController#exec` pseudocode shown there, factored out of
-    # the controller so it's testable without Rails.
+    # See design spec §5.4 «Server side» — this implements the per-verb
+    # dispatch that {WireController} wraps, factored out of the controller
+    # so it's testable without Rails.
     class Executor
       # Spec §5.1: the fixed wire-surface verbs.
       VERBS = %i[query run pay schema events].freeze

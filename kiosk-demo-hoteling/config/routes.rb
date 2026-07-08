@@ -7,10 +7,10 @@ Rails.application.routes.draw do
   # In a follow-up release these will be mounted via the engine's own
   # routes drawer; for v0.1 alpha we wire them manually here.
   # REST endpoints (ADR-0005): one per verb, HTTP method = semantics.
-  get  "/kiosk/schema",                            to: "kiosk/server/exec#schema"
-  post "/kiosk/query",                             to: "kiosk/server/exec#query"
-  post "/kiosk/run",                               to: "kiosk/server/exec#run"
-  post "/kiosk/pay",                               to: "kiosk/server/exec#pay"
+  get  "/kiosk/schema",                            to: "kiosk/server/wire#schema"
+  post "/kiosk/query",                             to: "kiosk/server/wire#query"
+  post "/kiosk/run",                               to: "kiosk/server/wire#run"
+  post "/kiosk/pay",                               to: "kiosk/server/wire#pay"
   get  "/kiosk/.well-known/jwks.json",             to: "kiosk/server/jwks#show"
   post "/kiosk/oauth/device_authorization",        to: "kiosk/server/oauth_device_authorization#create"
   post "/kiosk/oauth/token",                       to: "kiosk/server/oauth_token#create"

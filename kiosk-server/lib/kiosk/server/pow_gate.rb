@@ -7,7 +7,7 @@ module Kiosk
   module Server
     # PoW challenge-response gate (R2 protocol hook).
     #
-    # Called by {ExecController#exec} AFTER identity resolution and BEFORE
+    # Called by {WireController#run_command} AFTER identity resolution and BEFORE
     # {Executor.call}. When `Kiosk.configuration.reputation_policy` is nil
     # (the default), {.gate} returns `:proceed` immediately — zero overhead,
     # no `kiosk-reputation` references evaluated. This is the invariant that

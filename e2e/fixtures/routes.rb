@@ -5,10 +5,10 @@ require "json"
 Rails.application.routes.draw do
   # Kiosk wire surface (controllers shipped by kiosk-server).
   # REST endpoints — HTTP method carries semantics (GET = read, POST = write).
-  get  "/kiosk/schema",                             to: "kiosk/server/exec#schema"
-  post "/kiosk/query",                              to: "kiosk/server/exec#query"
-  post "/kiosk/run",                                to: "kiosk/server/exec#run"
-  post "/kiosk/pay",                                to: "kiosk/server/exec#pay"
+  get  "/kiosk/schema",                             to: "kiosk/server/wire#schema"
+  post "/kiosk/query",                              to: "kiosk/server/wire#query"
+  post "/kiosk/run",                                to: "kiosk/server/wire#run"
+  post "/kiosk/pay",                                to: "kiosk/server/wire#pay"
   get  "/kiosk/auth/challenge",                     to: "kiosk/server/auth#challenge"
   post "/kiosk/auth/register",                      to: "kiosk/server/auth#register"
   post "/kiosk/auth/login",                         to: "kiosk/server/auth#login"

@@ -9,7 +9,7 @@
 #   agent:u-<uuid>:a-<agent_id>:r-<role>   → identity with actor=agent
 #   human:u-<uuid>:r-<role>                → identity with actor=human
 #
-# Anything else returns nil → ExecController treats as unauthenticated.
+# Anything else returns nil → WireController treats as unauthenticated.
 class StubIdp < Kiosk::AgentIdentityProviders::Base
   AGENT_RE = /\A
     agent:

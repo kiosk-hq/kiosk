@@ -43,10 +43,10 @@ require "kiosk/server/mandate_verifier"
 # Optional Rails engine — only defines itself if Rails::Engine is loaded.
 require "kiosk/server/engine"
 
-# Conditionally loaded — only defines ExecController + JwksController +
+# Conditionally loaded — only defines WireController + JwksController +
 # OAuth controllers when ActionController::API is available (i.e., a
 # Rails host). Safe to require in plain Ruby contexts.
-require "kiosk/server/exec_controller"
+require "kiosk/server/wire_controller"
 require "kiosk/server/jwks_controller"
 require "kiosk/server/oauth_device_authorization_controller"
 require "kiosk/server/oauth_token_controller"
@@ -76,7 +76,7 @@ module Kiosk
     #   - {Kiosk::Server::Actions}          — minimal Action registry (full DSL later)
     #   - {Kiosk::Server::RentalTokenIssuer} — Ed25519 offline rental-token sign/verify (Arch 2)
     #   - {Kiosk::Server::Executor}         — wire dispatch (query/run/pay/schema working; events stubbed)
-    #   - {Kiosk::Server::ExecController}   — Rails controller wrapping Executor (only when Rails loaded)
+    #   - {Kiosk::Server::WireController}   — Rails controller wrapping Executor (only when Rails loaded)
     #   - {Kiosk::Server::JwksController}   — Rails controller serving /.well-known/jwks.json (only when Rails loaded)
     #   - {Kiosk::Server::Engine}           — Rails engine (only when Rails loaded)
   end

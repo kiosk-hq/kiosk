@@ -175,7 +175,7 @@ assert "jwks: no private p field"      "$(echo "$jwks" | jq -r '.keys[0] | has("
 #   2) client polls /oauth/token while pending → authorization_pending
 #   3) test fixture simulates user approval (real flow uses verify HTML form)
 #   4) client polls again → access_token (JWT)
-#   5) JWT used against /kiosk/query → ExecController authenticates via the
+#   5) JWT used against /kiosk/query → WireController authenticates via the
 #      JWT-aware composite IdP, query call succeeds with the JWT's `sub` user
 
 printf "\n\033[1m=== oauth device_authorization (RFC 8628) ===\033[0m\n"

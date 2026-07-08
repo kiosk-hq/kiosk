@@ -2,7 +2,7 @@
 
 # Conditionally defined — kiosk-server runs in non-Rails contexts (Rack, unit
 # tests) by simply not loading this file when ActionController::API isn't
-# around. Same pattern as ExecController.
+# around. Same pattern as WireController.
 
 if defined?(::ActionController::API)
   require "json"

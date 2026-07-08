@@ -3,7 +3,7 @@
 module Kiosk
   module Server
     # Success-side envelope returned from {Executor} and serialised by
-    # {ExecController}. Errors use {Errors::Base#to_envelope}.
+    # {WireController}. Errors use {Errors::Base#to_envelope}.
     #
     # `kind` distinguishes the payload shape:
     #

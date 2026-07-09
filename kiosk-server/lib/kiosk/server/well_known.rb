@@ -31,11 +31,15 @@ module Kiosk
         kiosk = {
           version:  DOCUMENT_VERSION,
           endpoint: endpoint,
+          # Proof-of-possession challenge-response (NOT OAuth). The agent proves
+          # it holds the private key for a per-domain keypair; see skill.md and
+          # specification.html "Registration & login".
           auth: {
-            kind:             "oauth2",
-            authorize_url:    "#{endpoint}/oauth/authorize",
-            token_url:        "#{endpoint}/oauth/token",
-            scopes_supported: [],
+            kind:          "kiosk-pop",
+            challenge_url: "#{endpoint}/auth/challenge",
+            register_url:  "#{endpoint}/auth/register",
+            login_url:     "#{endpoint}/auth/login",
+            revoke_url:    "#{endpoint}/auth/revoke",
           },
           capabilities: Array(config.capabilities),
           min_client:   config.min_client,

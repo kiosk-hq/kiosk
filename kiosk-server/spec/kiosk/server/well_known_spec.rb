@@ -36,16 +36,27 @@ RSpec.describe Kiosk::Server::WellKnown do
       expect(d[:kiosk][:endpoint]).to eq("https://api.acme.example/kiosk")
     end
 
-    it "advertises OAuth 2.1 endpoints under the same origin" do
-      expect(doc[:kiosk][:auth][:kind]).to          eq("oauth2")
-      expect(doc[:kiosk][:auth][:authorize_url]).to eq("https://api.acme.example/kiosk/oauth/authorize")
-      expect(doc[:kiosk][:auth][:token_url]).to     eq("https://api.acme.example/kiosk/oauth/token")
+    it "advertises the proof-of-possession auth surface under the same origin" do
+      expect(doc[:kiosk][:auth][:kind]).to          eq("kiosk-pop")
+      expect(doc[:kiosk][:auth][:challenge_url]).to eq("https://api.acme.example/kiosk/auth/challenge")
+      expect(doc[:kiosk][:auth][:register_url]).to  eq("https://api.acme.example/kiosk/auth/register")
+      expect(doc[:kiosk][:auth][:login_url]).to     eq("https://api.acme.example/kiosk/auth/login")
+      expect(doc[:kiosk][:auth][:revoke_url]).to    eq("https://api.acme.example/kiosk/auth/revoke")
+    end
+
+    it "does not advertise a legacy OAuth surface" do
+      expect(doc[:kiosk][:auth]).not_to have_key(:authorize_url)
+      expect(doc[:kiosk][:auth]).not_to have_key(:token_url)
+    end
+
+    it "defaults capabilities to the shipped verb surface" do
+      expect(doc[:kiosk][:capabilities]).to eq(%w[query actions ap2])
     end
 
     it "passes through configured capabilities" do
-      Kiosk.configure { |c| c.capabilities = %w[sql actions] }
+      Kiosk.configure { |c| c.capabilities = %w[query actions] }
       d = described_class.build(base_url: "https://api.acme.example")
-      expect(d[:kiosk][:capabilities]).to eq(%w[sql actions])
+      expect(d[:kiosk][:capabilities]).to eq(%w[query actions])
     end
 
     it "passes through configured min_client" do

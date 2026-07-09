@@ -6,8 +6,8 @@ RSpec.describe Kiosk::Server::ConfigurationExtension do
       expect(Kiosk.configuration.mount_path).to eq("/kiosk")
     end
 
-    it "defaults capabilities to the MVP-complete set" do
-      expect(Kiosk.configuration.capabilities).to eq(%w[sql actions ap2 events])
+    it "defaults capabilities to the shipped verb surface" do
+      expect(Kiosk.configuration.capabilities).to eq(%w[query actions ap2])
     end
 
     it "freezes the default capabilities array" do

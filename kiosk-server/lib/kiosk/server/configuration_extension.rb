@@ -24,7 +24,7 @@ module Kiosk
       # if they ship only a subset.
       attr_writer :capabilities
       def capabilities
-        @capabilities ||= %w[sql actions ap2 events].freeze
+        @capabilities ||= %w[query actions ap2].freeze
       end
 
       # Owner block for the well-known document. Free-form hash; the spec
@@ -89,13 +89,31 @@ module Kiosk
                        end
       end
 
-      # Minimum leading zero BITS required in the PoW digest at agent
-      # registration (`SHA256(public_key_pem + "." + pow_nonce)`).
-      # Default 0 = disabled (open registration — Plan 2/3 behaviour unchanged).
-      # Providers that gate physical-service access can set e.g. 20.
-      attr_writer :registration_difficulty
-      def registration_difficulty
-        @registration_difficulty ||= 0
+      # Number of independent Equihash proofs required at agent registration
+      # (`POST /auth/register`). Default 0 = disabled (open registration).
+      # Providers that gate physical-service access, or want to price fresh
+      # identity minting, set e.g. 1. When > 0, registration uses the SAME
+      # Equihash challenge-response as the reputation gate (see {RegistrationPow}),
+      # so `pow_secret` must also be set and `kiosk-pow-equihash` loaded.
+      attr_writer :registration_pow_count
+      def registration_pow_count
+        @registration_pow_count ||= 0
+      end
+
+      # Equihash params for the registration gate. Default nil → the shipped
+      # `kiosk-pow-equihash` defaults (`Kiosk::Pow::Equihash.params`). Override
+      # to demand different (n, k).
+      attr_accessor :registration_pow_params
+
+      # Removed 2026-07-08 (ADR-0001 amended: "one PoW = Equihash"). The old
+      # SHA256 leading-zero-bits registration hashcash is gone — SHA256 is the
+      # most ASIC-optimised hash on Earth, exactly the CPU-hard PoW the ADR
+      # drops. Use `registration_pow_count` (Equihash) instead.
+      def registration_difficulty=(_)
+        raise ArgumentError,
+          "registration_difficulty (SHA256 hashcash) was removed — ADR-0001 amended, " \
+          "one PoW = Equihash. Use `c.registration_pow_count = 1` (Equihash) and set " \
+          "`c.pow_secret`."
       end
 
       # Role assigned to every self-registered agent. Self-registration mints a

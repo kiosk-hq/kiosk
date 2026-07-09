@@ -4,6 +4,12 @@ All notable changes follow [Keep a Changelog](https://keepachangelog.com/en/1.1.
 
 ## [Unreleased]
 
+### Changed
+
+- `Kiosk::Configuration` gains `schema` (default "kiosk") and `app_role`
+  (default "app_role") — moved from kiosk-rls; they are deployment
+  vocabulary shared by kiosk-server, not RLS-specific.
+
 ### Added
 
 - Initial skeleton.

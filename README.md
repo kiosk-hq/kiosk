@@ -1,6 +1,6 @@
 # Kiosk — OSS reference implementation
 
-Apache-2.0 monorepo for [Kiosk](https://kiosk.tech) — the framework that turns a Postgres-backed business app into a production-grade agent surface (REST endpoint, multi-agent identity per user, RLS-protected data plane, AP2 mandate trail).
+Apache-2.0 monorepo for [Kiosk](https://kiosk.tech) — the framework that turns a Postgres-backed business app into a production-grade agent surface (REST endpoint, multi-agent identity per user, app-layer-authorized data plane with opt-in Postgres RLS defense-in-depth, AP2 mandate trail).
 
 ## Layout
 
@@ -9,9 +9,9 @@ Apache-2.0 monorepo for [Kiosk](https://kiosk.tech) — the framework that turns
 | Gem | Purpose | Status |
 |---|---|---|
 | `kiosk-core` | Value types, abstract bases, GUC constants, configuration. No Rails dep. | alpha |
-| `kiosk-rls` | RLS DSL + migration helpers + `rake kiosk:rls:{show,check}` | alpha |
+| `kiosk-rls` | Opt-in RLS DSL + migration helpers + `rake kiosk:rls:{show,check}` | alpha |
 | `kiosk-server` | Rails engine, routes, OAuth 2.1 surface, executor | alpha |
-| `kiosk-all` | Meta-gem; `bundle add kiosk-all` installs the family | alpha |
+| `kiosk-all` | Meta-gem; `bundle add kiosk-all` installs core + server | alpha |
 | `kiosk-test-support` | Shared test helpers, factories, RSpec matchers | alpha |
 
 ### Plugins & adapters

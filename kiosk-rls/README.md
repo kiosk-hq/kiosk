@@ -58,25 +58,28 @@ remove_kiosk_policy_from :rentals, :delete
 rename_kiosk_policy_on   :rentals, from: :select, to: "rentals_select_owner_or_admin"
 ```
 
-## Install
+## Install (opt-in)
+
+`kiosk-rls` is NOT pulled in by `kiosk-server` or `kiosk-all` — opting in
+means adding the gem yourself:
 
 ```ruby
 gem "kiosk-rls"
 ```
 
-Or, via the meta-gem:
-
-```ruby
-gem "kiosk-all"
-```
-
 ## Rails integration
 
-For now, opt-in manually in `config/initializers/kiosk_rls.rb`:
+Opt in manually in `config/initializers/kiosk_rls.rb`:
 
 ```ruby
 require "kiosk/rls"
 ActiveRecord::Migration.include(Kiosk::RLS::DSL)
+
+Kiosk.configure do |c|
+  c.app_role        = "app_role"      # lives in kiosk-core config
+  c.system_role     = "system_role"   # added by this gem
+  c.enforce_db_role = true            # kiosk-server: SET LOCAL ROLE per request
+end
 ```
 
 A `kiosk/rls/migration` auto-inject path lands later.

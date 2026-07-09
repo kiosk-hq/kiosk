@@ -1,6 +1,6 @@
 # kiosk-user-idp-devise
 
-The Devise user-IdP adapter for [Kiosk](https://kiosk.tech) — bundled by default for Rails providers that authenticate principals through Devise.
+The Devise user-IdP adapter for [Kiosk](https://kiosk.tech) — for Rails providers that authenticate principals through Devise. Install it explicitly; it is not bundled by `kiosk-all`.
 
 ## What it does
 
@@ -12,14 +12,10 @@ The adapter is **agnostic about how the user logged in**: Devise's `database_aut
 
 ## Install
 
+Add the adapter explicitly — the `kiosk-all` meta-gem pulls in only `kiosk-core` and `kiosk-server`, so IdP adapters are opt-in per provider:
+
 ```ruby
 gem "kiosk-user-idp-devise"
-```
-
-Or via the meta-gem:
-
-```ruby
-gem "kiosk-all"
 ```
 
 The adapter declares no hard runtime dependency on `devise` — your provider's already-installed Devise satisfies the requirement.

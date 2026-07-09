@@ -8,7 +8,7 @@ module Kiosk
     # An agent-IdP MINTS and VERIFIES agent credentials. Subclasses ship as
     # `kiosk-agent-idp-*` gems (Microsoft Entra Agent ID, Okta Agent Identity,
     # Google Agent Passport, …) or as the bundled
-    # `Kiosk::AgentIdentityProviders::DefaultAgentIdp` shipped in
+    # `Kiosk::Server::AgentIdentityProviders::DefaultAgentIdp` shipped in
     # kiosk-server, which registers agents into the local `agents` table and
     # signs tokens with the provider's own JWKS.
     class Base

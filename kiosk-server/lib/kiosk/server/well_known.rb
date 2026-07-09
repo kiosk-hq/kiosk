@@ -41,6 +41,8 @@ module Kiosk
             login_url:     "#{endpoint}/auth/login",
             revoke_url:    "#{endpoint}/auth/revoke",
           },
+          # Verb names the endpoint actually serves — subset of
+          # schema/query/run/pay, computed from the live registry (ADR-0009).
           capabilities: Array(config.capabilities),
           min_client:   config.min_client,
           issuer:       config.issuer,

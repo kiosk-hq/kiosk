@@ -6,7 +6,7 @@ A salon-booking SaaS, Kiosk-enabled. Demonstrates:
 - JWKS endpoint for JWT verification
 - Authenticated REST wire surface (`/kiosk/query`, `/kiosk/run`, `/kiosk/pay`, `/kiosk/schema`) — query + run verbs
 - App-layer data isolation (two users, two views of the same table); RLS available as optional defense-in-depth
-- OAuth 2.1 Device Authorization Grant (RFC 8628) — the `kiosk login` flow
+- OAuth 2.1 Device Authorization Grant (RFC 8628) — the agent-login flow
 - A `book_appointment` Action
 
 Combette is the canonical reference shape for personal-services SaaS — barbershops, restaurants, gyms, clinics. Same patterns apply.
@@ -26,7 +26,6 @@ rake demo
 
 - Ruby 4.0+, Postgres reachable (`pg_isready` returns OK)
 - `curl`, `jq` on PATH
-- (Optional) The `kiosk` CLI for hands-on exploration: `curl -fsSL https://kiosk.tech/kiosk | sh`
 
 ## What the demo shows
 

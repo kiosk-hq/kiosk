@@ -31,11 +31,27 @@ module Kiosk
       end
 
       # Capabilities the server advertises in `/.well-known/kiosk.json`.
-      # Default reflects an MVP-complete deployment; providers can prune
-      # if they ship only a subset.
+      #
+      # Members are VERB NAMES the endpoint actually serves, drawn from the
+      # canonical set `schema`, `query`, `run`, `pay` and emitted in that
+      # order (ADR-0009). Computed from the live registry — NOT a static
+      # list — so the document never advertises a verb the provider hasn't
+      # wired:
+      #   * `schema` — present whenever ≥1 query OR ≥1 action is registered
+      #     (schema is the self-description of those).
+      #   * `query`  — present iff ≥1 named query is registered.
+      #   * `run`    — present iff ≥1 action is registered.
+      #   * `pay`    — present iff a payment provider (AP2) is configured.
+      # HTTP methods are never encoded here; the verb→method binding is fixed
+      # and known to agents.
+      #
+      # A provider may still pin an explicit list via `c.capabilities = [...]`;
+      # that override is returned verbatim.
       attr_writer :capabilities
       def capabilities
-        @capabilities ||= %w[query actions ap2].freeze
+        return @capabilities if @capabilities
+
+        computed_capabilities
       end
 
       # Owner block for the well-known document. Free-form hash; the spec
@@ -141,6 +157,27 @@ module Kiosk
       # provider sets this explicitly. Must be one of {#roles}.
       #   Kiosk.configure { |c| c.registration_role = :customer }
       attr_accessor :registration_role
+
+      # Provider-supplied factory that creates the assistant account backing a
+      # self-registered agent (ADR-0010). Optional.
+      #
+      # When set, `AgentRegistration` generates the assistant-account id
+      # (`SecureRandom.uuid`) and invokes this proc as
+      # `assistant_creation.call(assistant_account_id, pubkey)`, letting the
+      # provider persist its OWN record under that id and satisfy its OWN model
+      # validations. The generated id becomes the registered agent's principal.
+      #
+      # When unset, registration falls back to `user_model.constantize.create!`
+      # (the greenfield default — works only for models without required
+      # attributes). A real Rails app with e.g. `validates :email, presence:`
+      # should set this hook to avoid a 500 at registration.
+      #
+      #   Kiosk.configure do |c|
+      #     c.assistant_creation = ->(assistant_account_id, pubkey) do
+      #       AssistantAccount.create!(id: assistant_account_id, kind: :agent)
+      #     end
+      #   end
+      attr_accessor :assistant_creation
 
       # Issuer string of the trusted KYC attestation provider.
       # Must match the `iss` claim of submitted KYC JWS tokens.
@@ -274,6 +311,21 @@ module Kiosk
       end
 
       private
+
+      # Compute the advertised capability list from the live registry, in the
+      # canonical order schema, query, run, pay (ADR-0009). See {#capabilities}.
+      def computed_capabilities
+        has_queries = Kiosk::Server::Queries.known.any?
+        has_actions = Kiosk::Server::Actions.known.any?
+        has_pay     = !payment_provider.nil?
+
+        caps = []
+        caps << "schema" if has_queries || has_actions
+        caps << "query"  if has_queries
+        caps << "run"    if has_actions
+        caps << "pay"    if has_pay
+        caps.freeze
+      end
 
       def default_signing_key
         pem = ENV["KIOSK_SIGNING_KEY_PEM"]

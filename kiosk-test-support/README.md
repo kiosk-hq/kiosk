@@ -54,7 +54,7 @@ Kiosk::TestHelpers.executor = Kiosk::TestHelpers::NullExecutor.new.tap do |e|
 end
 ```
 
-Until `kiosk-server` ships, the `NullExecutor` is the only available backend.
+The `NullExecutor` is the zero-dependency fallback for unit-shaped tests; production-shaped tests wire `Kiosk::Server::TestExecutor` from the shipped `kiosk-server` gem (above).
 
 ## Status
 

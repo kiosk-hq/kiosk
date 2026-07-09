@@ -64,7 +64,7 @@ Per-gem versioning is independent — path-scoped git tags (e.g. `kiosk-core/v0.
 
 Apache-2.0 for every gem in this repo. See each gem's `LICENSE.txt`.
 
-Commercial gems (regional PSPs, enterprise-IdP tiers) live in separate private repos under the `kiosk-hq` org and are not part of this monorepo.
+Commercial gems (regional PSPs, enterprise-IdP tiers) are planned to live in separate repos under the `kiosk-hq` org, outside this Apache-2.0 monorepo. None exist yet.
 
 ## Links
 

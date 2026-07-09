@@ -96,4 +96,70 @@ RSpec.describe Kiosk::Server::AgentRegistration do
       }.to raise_error(Kiosk::Server::Errors::Conflict, /already registered/)
     end
   end
+
+  # ─── assistant-account factory (ADR-0010) ───────────────────────────────
+  # When the provider configures `assistant_creation`, the framework generates
+  # the assistant-account id and hands it (with the pubkey) to the provider,
+  # which persists its OWN record. The generated id becomes the principal —
+  # NOT a bare `user_model.create!` (which 500s on any validated model).
+  describe "assistant-account factory (config.assistant_creation)" do
+    let(:con) { FakeConnection.new }
+
+    before do
+      ar_base = class_double("ActiveRecord::Base").as_stubbed_const
+      allow(ar_base).to receive(:connection).and_return(con)
+      allow_any_instance_of(Kiosk::Server::AgentIdentityProviders::DefaultAgentIdp)
+        .to receive(:issue).and_return("fake-token")
+      allow(Kiosk::Server::PopVerifier).to receive(:verify!).and_return({ nonce: "nonce-1" })
+      allow(Kiosk::Server::AuthChallenge).to receive(:consume!).and_return(true)
+      # SELECT (dup check) empty → INSERT returns the agent id.
+      results = [[], [{ "id" => "agent-1" }]]
+      allow(con).to receive(:execute) { |_sql| results.shift || [] }
+    end
+
+    it "calls the factory with (assistant_account_id, pubkey) and uses that id as the principal" do
+      captured = {}
+      Kiosk.configure do |c|
+        c.assistant_creation = ->(assistant_account_id, pubkey) do
+          captured[:id]     = assistant_account_id
+          captured[:pubkey] = pubkey
+        end
+      end
+
+      result = described_class.call(public_key_pem: pem, signed: "sig")
+
+      # The framework generated a UUID and passed it to the provider…
+      expect(captured[:id]).to match(/\A[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\z/)
+      expect(captured[:pubkey]).to eq(pem)
+      # …and that same id is the agent's principal in the response.
+      expect(result[:user_id]).to eq(captured[:id])
+    end
+
+    it "does NOT fall back to user_model.create! when the factory is set" do
+      user_model = double("UserModel")
+      allow(user_model).to receive(:create!).and_return(double(id: 999))
+      allow(Kiosk.configuration).to receive(:user_model)
+        .and_return(double(constantize: user_model))
+      Kiosk.configure { |c| c.assistant_creation = ->(_id, _pubkey) {} }
+
+      described_class.call(public_key_pem: pem, signed: "sig")
+
+      expect(user_model).not_to have_received(:create!)
+    end
+
+    it "writes the generated principal id into the agents row" do
+      captured_id = nil
+      executed    = []
+      results     = [[], [{ "id" => "agent-1" }]]
+      allow(con).to receive(:execute) { |sql| executed << sql; results.shift || [] }
+      Kiosk.configure do |c|
+        c.assistant_creation = ->(assistant_account_id, _pubkey) { captured_id = assistant_account_id }
+      end
+
+      described_class.call(public_key_pem: pem, signed: "sig")
+
+      insert_sql = executed.find { |s| s =~ /INSERT INTO kiosk\.agents/ }
+      expect(insert_sql).to include(captured_id)
+    end
+  end
 end

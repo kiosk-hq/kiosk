@@ -25,7 +25,10 @@ module Kiosk
     attr_accessor :user_idp
 
     # Agent-IdP adapter instance — mints / verifies agent tokens.
-    # Default nil here; `kiosk-server` defaults to `DefaultAgentIdp`.
+    # Default nil here. `kiosk-server` does NOT default this: WireController
+    # falls back to `user_idp` when `agent_idp` is nil. The built-in agent
+    # flows (register / login / auth / pay / kyc) instantiate
+    # `Kiosk::Server::AgentIdentityProviders::DefaultAgentIdp` directly.
     attr_accessor :agent_idp
 
     # Payment PSP adapter instance — handles authorize / capture / refund of

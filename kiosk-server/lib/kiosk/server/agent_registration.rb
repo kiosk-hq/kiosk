@@ -1,9 +1,15 @@
 # frozen_string_literal: true
 
+require "securerandom"
+
 module Kiosk
   module Server
-    # Greenfield self-registration: provision an id-only synthetic principal
-    # and an agent bound to it, then mint the agent's first token. No human.
+    # Greenfield self-registration: provision the assistant account backing the
+    # agent, bind an agent to it, then mint the agent's first token. No human.
+    #
+    # The assistant account is created either by a provider-supplied factory
+    # (`config.assistant_creation`, ADR-0010) or, when none is configured, by a
+    # bare `user_model.create!` (the greenfield fallback — see #call).
     module AgentRegistration
       module_function
 
@@ -61,15 +67,39 @@ module Kiosk
         end
 
         conn.transaction do
-          user_id  = config.user_model.constantize.create!.id
+          # The principal backing this agent is an ASSISTANT ACCOUNT (ADR-0010),
+          # not necessarily a human user. Prefer the provider-supplied factory:
+          # the framework generates the id and the provider persists its own
+          # record under it (satisfying its own model validations). Fall back to
+          # a bare `create!` only when no factory is configured — that path
+          # 500s on any model with required attributes, which is exactly why
+          # `assistant_creation` exists.
+          assistant_account_id = create_assistant_account(config, public_key_pem)
+
           agent_id = conn.execute(<<~SQL).first.fetch("id")
             INSERT INTO #{config.schema}.agents (user_id, allowed_roles, public_key)
-            VALUES (#{conn.quote(user_id)},
+            VALUES (#{conn.quote(assistant_account_id)},
                     ARRAY[#{conn.quote(role)}]::text[], #{conn.quote(public_key_pem)})
             RETURNING id
           SQL
           token = AgentIdentityProviders::DefaultAgentIdp.new.issue(agent_id: agent_id, role: role)
-          { agent_id: agent_id, user_id: user_id.to_s, access_token: token }
+          # Wire key stays `user_id`: ADR-0010 renames the factory surface only,
+          # not the existing user_id / kiosk.current_user_id() GUC surface.
+          { agent_id: agent_id, user_id: assistant_account_id.to_s, access_token: token }
+        end
+      end
+
+      # Create the assistant account backing a freshly registered agent and
+      # return its id (the agent's principal). ADR-0010.
+      def create_assistant_account(config, public_key_pem)
+        if config.assistant_creation
+          # Framework owns id generation; provider persists its own record under
+          # it. `pubkey` lets the provider bind the account to the credential.
+          assistant_account_id = SecureRandom.uuid
+          config.assistant_creation.call(assistant_account_id, public_key_pem)
+          assistant_account_id
+        else
+          config.user_model.constantize.create!.id
         end
       end
     end

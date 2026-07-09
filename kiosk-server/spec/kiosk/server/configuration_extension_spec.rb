@@ -6,11 +6,13 @@ RSpec.describe Kiosk::Server::ConfigurationExtension do
       expect(Kiosk.configuration.mount_path).to eq("/kiosk")
     end
 
-    it "defaults capabilities to the shipped verb surface" do
-      expect(Kiosk.configuration.capabilities).to eq(%w[query actions ap2])
+    # capabilities is COMPUTED from the live registry (ADR-0009): with nothing
+    # registered and no payment provider, the endpoint advertises no verbs.
+    it "computes capabilities as empty when no queries/actions/payments exist" do
+      expect(Kiosk.configuration.capabilities).to eq([])
     end
 
-    it "freezes the default capabilities array" do
+    it "freezes the computed capabilities array" do
       expect(Kiosk.configuration.capabilities).to be_frozen
     end
 
@@ -29,9 +31,10 @@ RSpec.describe Kiosk::Server::ConfigurationExtension do
       expect(Kiosk.configuration.mount_path).to eq("/agent-surface")
     end
 
-    it "lets capabilities be narrowed (providers shipping a subset)" do
-      Kiosk.configure { |c| c.capabilities = %w[sql] }
-      expect(Kiosk.configuration.capabilities).to eq(%w[sql])
+    it "lets capabilities be pinned explicitly (returned verbatim, bypasses computation)" do
+      Kiosk::Server::Queries.register("q") { [] }
+      Kiosk.configure { |c| c.capabilities = %w[schema query] }
+      expect(Kiosk.configuration.capabilities).to eq(%w[schema query])
     end
 
     it "lets owner be set" do
@@ -42,6 +45,39 @@ RSpec.describe Kiosk::Server::ConfigurationExtension do
     it "lets min_client be bumped (provider requires newer CLI feature)" do
       Kiosk.configure { |c| c.min_client = "0.5.0" }
       expect(Kiosk.configuration.min_client).to eq("0.5.0")
+    end
+  end
+
+  # ─── computed capabilities (ADR-0009) ──────────────────────────────────
+  # Members are verb names actually served, drawn from schema/query/run/pay
+  # and emitted in that order. Derived from the live registry so discovery
+  # never advertises a verb the provider has not wired.
+  describe "#capabilities (computed)" do
+    it "includes schema + query when only a query is registered" do
+      Kiosk::Server::Queries.register("catalog") { [] }
+      expect(Kiosk.configuration.capabilities).to eq(%w[schema query])
+    end
+
+    it "includes schema + run when only an action is registered" do
+      Kiosk::Server::Actions.register("checkout") { {} }
+      expect(Kiosk.configuration.capabilities).to eq(%w[schema run])
+    end
+
+    it "includes pay when a payment provider is configured" do
+      Kiosk.configure { |c| c.payment_provider = Object.new }
+      expect(Kiosk.configuration.capabilities).to eq(%w[pay])
+    end
+
+    it "emits the full set in canonical order schema, query, run, pay" do
+      Kiosk::Server::Queries.register("catalog") { [] }
+      Kiosk::Server::Actions.register("checkout") { {} }
+      Kiosk.configure { |c| c.payment_provider = Object.new }
+      expect(Kiosk.configuration.capabilities).to eq(%w[schema query run pay])
+    end
+
+    it "never encodes HTTP methods" do
+      Kiosk::Server::Queries.register("catalog") { [] }
+      expect(Kiosk.configuration.capabilities).not_to include("GET", "POST")
     end
   end
 

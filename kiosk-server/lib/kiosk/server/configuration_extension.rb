@@ -3,10 +3,9 @@
 module Kiosk
   module Server
     # Adds server-specific fields to {Kiosk::Configuration} via include.
-    # Stacks on top of {Kiosk::RLS::ConfigurationExtension} (which adds
-    # `app_role`, `system_role`, `schema`) and the base Configuration
-    # attributes from kiosk-core (`user_model`, `user_id_type`,
-    # `guc_namespace`, `roles`, `issuer`, …).
+    # Stacks on top of the base Configuration attributes from kiosk-core
+    # (`user_model`, `user_id_type`, `guc_namespace`, `schema`, `app_role`,
+    # `roles`, `issuer`, …).
     #
     # See design spec §3.4 for the well-known shape and §3.6 for the URL
     # surface map.
@@ -17,6 +16,18 @@ module Kiosk
       attr_writer :mount_path
       def mount_path
         @mount_path ||= Kiosk::Protocol::DEFAULT_MOUNT_PATH
+      end
+
+      # When true, SessionContext appends `SET LOCAL ROLE <app_role>` inside
+      # EVERY request transaction (query / run / pay verbs) — the DB-privilege
+      # backstop for opt-in RLS enforcement. app_role must then hold complete
+      # GRANTs on every table those verbs touch: the kiosk.* mandate tables
+      # (kiosk.agents, kiosk.intent_mandates, kiosk.cart_mandates,
+      # kiosk.payment_mandates, kiosk.settlements, …) and all application
+      # tables reached by registered queries and actions. Default false.
+      attr_writer :enforce_db_role
+      def enforce_db_role
+        @enforce_db_role ||= false
       end
 
       # Capabilities the server advertises in `/.well-known/kiosk.json`.

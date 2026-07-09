@@ -53,11 +53,21 @@ RSpec.describe Kiosk::Server::ConfigurationExtension do
     end
   end
 
-  describe "stacking with kiosk-rls extension" do
-    it "still exposes kiosk-rls's schema/app_role/system_role attrs (extension stacking)" do
-      expect(Kiosk.configuration.schema).to       eq("kiosk")
-      expect(Kiosk.configuration.app_role).to     eq("app_role")
-      expect(Kiosk.configuration.system_role).to  eq("system_role")
+  describe "stacking on kiosk-core configuration" do
+    it "exposes kiosk-core's schema/app_role attrs (no kiosk-rls needed)" do
+      expect(Kiosk.configuration.schema).to   eq("kiosk")
+      expect(Kiosk.configuration.app_role).to eq("app_role")
+    end
+  end
+
+  describe "#enforce_db_role" do
+    it "defaults to false" do
+      expect(Kiosk.configuration.enforce_db_role).to be(false)
+    end
+
+    it "is settable via Kiosk.configure" do
+      Kiosk.configure { |c| c.enforce_db_role = true }
+      expect(Kiosk.configuration.enforce_db_role).to be(true)
     end
   end
 

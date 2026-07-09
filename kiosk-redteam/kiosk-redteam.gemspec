@@ -4,7 +4,7 @@ Gem::Specification.new do |spec|
   spec.name          = "kiosk-redteam"
   spec.version       = Kiosk::Redteam::VERSION
   spec.authors       = ["Phil Pirozhkov"]
-  spec.email         = ["phil@kiosk.tech"]
+  spec.email         = ["hello@fili.pp.ru"]
 
   spec.summary       = "Adversarial regression harness for Kiosk providers"
   spec.description   = <<~DESC

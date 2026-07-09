@@ -8,9 +8,8 @@ module Kiosk
       module_function
 
       def call(public_key_pem:, signed:, pow: nil)
-        config     = Kiosk.configuration
-        role       = config.registration_role.to_s
-        difficulty = config.registration_difficulty
+        config = Kiosk.configuration
+        role   = config.registration_role.to_s
 
         # Normalise PEM: strip leading/trailing whitespace so lookup matches storage.
         public_key_pem = public_key_pem.strip
@@ -31,14 +30,11 @@ module Kiosk
                 "#{config.roles.inspect}"
         end
 
-        if difficulty > 0
-          unless pow && ProofOfWork.valid?(public_key_pem: public_key_pem, pow: pow, difficulty: difficulty)
-            raise Errors::BadRequest.new(
-              "proof-of-work required or invalid",
-              hint: "Compute SHA256(public_key_pem + '.' + pow) with >= #{difficulty} leading zero bits",
-            )
-          end
-        end
+        # Optional Equihash PoW to price fresh identity minting. No-op unless
+        # the provider set registration_pow_count > 0. Raises 402 (with the
+        # challenges) or 403 (bad-faith proof); one PoW, same wire as the
+        # reputation gate.
+        RegistrationPow.gate(public_key_pem: public_key_pem, pow: pow, config: config)
 
         # Prove the registrant controls the PRIVATE half of the key it is
         # registering — a public key alone is not a credential (it is public).

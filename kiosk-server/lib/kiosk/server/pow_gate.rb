@@ -26,9 +26,9 @@ module Kiosk
     # On a submitted proof, `Kiosk::Reputation::Challenge.verify` enforces:
     #   1. HMAC sig + request-fingerprint binding (cheap constant-time compare)
     #   2. Expiry check (integer compare)
-    #   3. Argon2id backend eval (expensive — costs `m` KiB per eval)
+    #   3. Equihash backend eval (cheap — 2^k BLAKE2b hashes, µs + KB)
     # A flood of forged or expired proofs is rejected at step 1/2 without
-    # burning an Argon2id evaluation.
+    # burning a backend evaluation.
     #
     # == Spent-id set
     #
@@ -95,24 +95,48 @@ module Kiosk
 
         return :proceed if spec.nil?  # policy decided not to challenge this request
 
+        enforce(
+          spec:         spec,
+          fingerprint:  fp,
+          pow:          pow,
+          secret:       secret,
+          config:       config,
+          on_bad_proof: -> { config.on_bad_proof.call(identity: identity) },
+        )
+      end
+
+      # Verify a set of submitted proofs against a `spec` bound to `fingerprint`,
+      # or raise to demand them. Shared by the reputation gate ({.gate}) and the
+      # registration gate ({RegistrationPow}), which differ only in how they
+      # derive `spec`/`fingerprint` and whether a principal exists yet.
+      #
+      # @param spec         [Hash]     `{alg:, params:, count:}` (count defaults to 1)
+      # @param fingerprint  [String]   request fingerprint the challenges bind to
+      # @param pow          [Hash, nil] submitted proof(s)
+      # @param secret       [String]   HMAC key for challenge sig
+      # @param config       [Kiosk::Configuration]
+      # @param on_bad_proof [#call]    invoked on a cryptographically invalid proof
+      # @return [:proceed]
+      # @raise  [Errors::PowRequired] (402) when more valid proofs are needed
+      # @raise  [Errors::Forbidden]   (403) on a bad-faith (wrong) proof
+      def enforce(spec:, fingerprint:, pow:, secret:, config:, on_bad_proof:)
         # ── How many independent proofs must this request carry? ──────────────
-        # Equihash has no continuous difficulty dial — the policy escalates by
-        # PROOF COUNT (N×PoW). Each challenge has a distinct salt, so there is no
-        # amortisation across them (a shared salt would let one sorted table
-        # serve every proof). `count` defaults to 1 when the policy omits it.
+        # Equihash has no continuous difficulty dial — escalation is by PROOF
+        # COUNT (N×PoW). Each challenge has a distinct salt, so there is no
+        # amortisation across them. `count` defaults to 1 when spec omits it.
         count     = pow_count(spec)
         submitted = extract_proofs(pow)
 
         # ── No proof submitted — issue `count` fresh, independent challenges ──
         if submitted.empty?
           raise Errors::PowRequired.new(
-            challenges: issue_challenges(count, spec, fp, secret, config),
+            challenges: issue_challenges(count, spec, fingerprint, secret, config),
           )
         end
 
         # ── Proofs submitted — verify each. We need `count` DISTINCT, unspent,
         #    valid proofs to proceed. A single cryptographically WRONG proof is
-        #    bad faith → 403 immediately (as in the single-proof gate).
+        #    bad faith → 403 immediately.
         accepted = {} # challenge id => exp (dedup by id; ignores repeats)
         submitted.each do |proof|
           challenge = symbolize_keys(proof[:challenge] || proof["challenge"] || {})
@@ -123,15 +147,15 @@ module Kiosk
 
           # Replay: an already-spent proof does not count toward the quota, but
           # it is NOT bad faith (at-least-once HTTP retry may resend a served
-          # proof) — skip it without penalty. We do NOT call on_bad_proof.
+          # proof) — skip it without penalty.
           next if config.pow_spent_store.spent?(id)
 
           # Cheap sig + expiry checks first (inside Challenge.verify), then the
-          # one expensive backend eval.
+          # one cheap backend eval.
           outcome = ::Kiosk::Reputation::Challenge.verify(
             challenge:            challenge,
             nonce:                nonce,
-            request_fingerprint:  fp,
+            request_fingerprint:  fingerprint,
             secret:               secret,
             now:                  Time.now.to_i,
           )
@@ -140,7 +164,7 @@ module Kiosk
           when :ok
             accepted[id] = challenge[:exp].to_i
           when :bad_proof
-            config.on_bad_proof.call(identity: identity)
+            on_bad_proof.call
             raise Errors::Forbidden, "invalid proof of work"
           when :expired, :bad_sig
             # Doesn't count; falls through to a fresh re-challenge below if the
@@ -155,7 +179,7 @@ module Kiosk
           :proceed
         else
           raise Errors::PowRequired.new(
-            challenges: issue_challenges(count, spec, fp, secret, config),
+            challenges: issue_challenges(count, spec, fingerprint, secret, config),
           )
         end
       end
@@ -189,13 +213,13 @@ module Kiosk
         obj.nil? || (obj.respond_to?(:empty?) && obj.empty?)
       end
 
-      def issue_challenge(spec, fp, secret, config)
+      def issue_challenge(spec, fp, secret, config, ttl)
         ::Kiosk::Reputation::Challenge.issue(
           alg:                  spec[:alg],
           params:               spec[:params],
           request_fingerprint:  fp,
           secret:               secret,
-          ttl:                  config.pow_ttl,
+          ttl:                  ttl,
           now:                  Time.now.to_i,
         )
       end
@@ -210,8 +234,13 @@ module Kiosk
       # Issue `count` independent challenges — each gets its own random salt and
       # id (via Challenge.issue defaults) but binds to the SAME request
       # fingerprint, so all N must be solved to prove work for THIS request.
+      #
+      # The per-challenge TTL scales with `count`: a slow honest client solving
+      # N proofs sequentially must not have the first challenge expire before it
+      # reaches the last one. TTL = pow_ttl * count (min pow_ttl at count 1).
       def issue_challenges(count, spec, fp, secret, config)
-        Array.new(count) { issue_challenge(spec, fp, secret, config) }
+        ttl = config.pow_ttl * [count, 1].max
+        Array.new(count) { issue_challenge(spec, fp, secret, config, ttl) }
       end
 
       # Normalise the submitted `pow` field into a list of `{challenge:, nonce:}`

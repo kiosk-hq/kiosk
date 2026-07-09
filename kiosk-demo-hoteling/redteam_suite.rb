@@ -175,6 +175,7 @@ scenarios = [
   Kiosk::Redteam::Scenarios::MandatePrincipalSwap.new,
   Kiosk::Redteam::Scenarios::MandateReplay.new,
   Kiosk::Redteam::Scenarios::TokenTampering.new,
+  Kiosk::Redteam::Scenarios::PrivilegeSelfSelection.new,
   Kiosk::Redteam::Scenarios::MissingKyc.new,              # → SKIP (no KYC)
   Kiosk::Redteam::Scenarios::ExpiredKyc.new,              # → SKIP (no KYC)
   Kiosk::Redteam::Scenarios::ForgedKyc.new,               # → SKIP (no KYC)

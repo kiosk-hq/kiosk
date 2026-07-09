@@ -36,6 +36,18 @@ module Kiosk
     # Postgres GUC namespace (see {Kiosk::GUC}). Default "app".
     attr_accessor :guc_namespace
 
+    # Postgres schema where Kiosk's own tables (agents, intent/cart/payment
+    # mandates, settlements, events) and helper functions live. Default
+    # "kiosk". Overridable for providers whose primary backend already uses
+    # a `kiosk` schema for its own purposes.
+    attr_accessor :schema
+
+    # Runtime DB role Kiosk references by name — in `GRANT ... TO <role>`
+    # statements emitted by the opt-in kiosk-rls DSL, and in `SET LOCAL
+    # ROLE` when kiosk-server's `enforce_db_role` is on. Kiosk does NOT
+    # create the role; the provider's DBA does. Default "app_role".
+    attr_accessor :app_role
+
     # Fixed set of role names the provider supports.
     # E.g. `%i[customer master support]`. Never include `:admin`
     # (see spec §7.1.X — job-titled roles beat privilege-titled ones).
@@ -53,6 +65,8 @@ module Kiosk
       @agent_idp        = nil
       @payment_provider = nil
       @guc_namespace    = GUC::DEFAULT_NAMESPACE
+      @schema           = "kiosk"
+      @app_role         = "app_role"
       @roles            = []
       @issuer           = nil
     end

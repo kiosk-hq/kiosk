@@ -35,6 +35,28 @@ RSpec.describe Kiosk::Configuration do
     it "leaves agent_idp nil (kiosk-server defaults to DefaultAgentIdp)" do
       expect(config.agent_idp).to be_nil
     end
+
+    it "defaults schema to 'kiosk'" do
+      expect(config.schema).to eq("kiosk")
+    end
+
+    it "defaults app_role to 'app_role'" do
+      expect(config.app_role).to eq("app_role")
+    end
+  end
+
+  describe "#schema" do
+    it "is settable via Kiosk.configure" do
+      Kiosk.configure { |c| c.schema = "agent_surface" }
+      expect(Kiosk.configuration.schema).to eq("agent_surface")
+    end
+  end
+
+  describe "#app_role" do
+    it "is settable via Kiosk.configure" do
+      Kiosk.configure { |c| c.app_role = "agent_role" }
+      expect(Kiosk.configuration.app_role).to eq("agent_role")
+    end
   end
 
   describe "#payment_provider" do

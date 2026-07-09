@@ -2,44 +2,64 @@
 
 Memory-hard proof-of-work for Kiosk. Default PoW backend.
 
-## Why Equihash is the default
+Its job is a **cheap-to-verify metered toll**, not a hardware equaliser.
+Equihash is not ASIC- or GPU-proof — it was ASIC'd on Zcash (Antminer Z9/Z15)
+and GPUs solve it well (the Wagner sort/collide parallelises, and it is
+memory-bandwidth-bound). What it buys the provider is a microsecond, few-KB
+`verify` against a solve that costs the client real time and memory, plus an
+`N×PoW` count knob. Abuse resistance comes from reputation and caps — see
+[ADR-0007](https://kiosk.tech) (PoW = metered pricing, not a hardware wall).
 
-|  | Argon2id | Cuckatoo29 | **Equihash 192/7** |
+## Why Equihash is the shipped default
+
+|  | Argon2id | Cuckatoo29 | **Equihash (default)** |
 |---|---|---|---|
-| Solver memory | 64 MiB | ~4 GiB | **~1 GiB** |
 | Verify memory | 64 MiB ⚠️ | ~KB | **~KB** |
-| Verify time | ~ms (1 Argon2id) | µs (42 edges) | **µs (128 BLAKE2b)** |
+| Verify time | ~ms (1 Argon2id) | µs (42 edges) | **µs (2^k BLAKE2b)** |
 | Lever (solve/verify) | tens× | millions× | **millions×** |
-| ASIC barrier | L3-cacheable | SRAM for 4G | **HBM/DDR, 1G SRAM ~$1k** |
 | Dependencies | argon2 gem (C-ext) | Pure Ruby | **Pure Ruby (0 deps)** |
 | Difficulty tuning | D=0..256 (smooth) | edgebits | **N×PoW (discrete)** |
 
-Equihash beats Argon2id on every dimension that matters for an agent-commerce protocol:
+The one property that actually matters for a gateway is **cheap verify**:
 
-- **Asymmetric:** 1 GiB to solve, microseconds to verify. Argon2id requires 64 MiB to _verify_ — unacceptable for a high-throughput gateway.
-- **Zero dependencies:** Pure Ruby BLAKE2b-256. Argon2id needs a C extension.
-- **ASIC-resistant at 1 GiB:** Custom SRAM for 1 GiB costs ~$1k per chip. GPU/FPGA need HBM/DDR — commodity hardware, no ASIC advantage.
-- **Progressive difficulty via N×PoW:** Instead of a continuous difficulty dial (Argon2id's `D=0..256`), the protocol asks for _N independent proofs_. This is simpler, self-documenting, and lets operators tune anti-abuse per-client: "solve 1 PoW normally, 10 if you're spamming."
+- **Asymmetric verify.** Microseconds and a few KB to check. Argon2id needs
+  64 MiB to _verify_, so a flood of bad proofs is a DoS on the verifier itself
+  — unacceptable for a high-throughput endpoint.
+- **Zero dependencies.** Pure Ruby BLAKE2b-256. Argon2id needs a C extension.
+- **Progressive difficulty via N×PoW.** Instead of a continuous dial the policy
+  asks for _N independent proofs_: "1 normally, 10 if you're scraping." Prices
+  throughput, not latency (a solver with enough memory runs them in parallel).
+
+No hardware-parity claim is made — none of Argon2id, Cuckatoo, or Equihash
+delivers it. Equihash wins on verify cost + zero deps, which is what a
+provider's own machine pays on every request.
 
 ## Parameters
 
-Default: **n=192, k=7** (~1 GiB solver memory).
+Default: **n=168, k=7** — benchmark-chosen (see [bench/](bench/README.md)):
+the largest params whose reference numpy solve stays under a ~30 s / 1–2 GiB
+consumer-laptop budget (p95 ~10 s, ~1.3 GiB peak). Cost is driven by
+`n_div = n/(k+1)`.
 
-| Param | n=192, k=7 | Zcash (n=200, k=9) | Toy (n=24, k=3) |
-|---|---|---|---|
-| n_div = n/(k+1) | 24 | 20 | 6 |
-| Nonces generated | 2^25 ≈ 33.5M | 2^21 ≈ 2M | 2^7 = 128 |
-| Nonces in proof | 2^7 = 128 | 2^9 = 512 | 2^3 = 8 |
-| Solver RAM | ~1 GiB | ~50 MiB | ~KB |
-| Verify cost | 128 BLAKE2b | 512 BLAKE2b | 8 BLAKE2b |
+| Param | **n=168, k=7 (default)** | old n=192, k=7 | Zcash (n=200, k=9) | Toy (n=24, k=3) |
+|---|---|---|---|---|
+| n_div = n/(k+1) | **21** | 24 | 20 | 6 |
+| Nonces generated | **2^22 ≈ 4.2M** | 2^25 ≈ 33.5M | 2^21 ≈ 2M | 2^7 = 128 |
+| Nonces in proof | **2^7 = 128** | 128 | 2^9 = 512 | 2^3 = 8 |
+| Reference solve (numpy) | **~10 s, ~1.3 GiB** | ~155 s, ~5.4 GiB | — | instant |
+| Verify cost | **128 BLAKE2b** | 128 BLAKE2b | 512 BLAKE2b | 8 BLAKE2b |
 
-Our parameters are intentionally 20× more memory-intensive than Zcash's, targeting a meaningful ASIC barrier while remaining feasible on high-end mobile devices and laptops.
+192/7 (the previous default) measured ~155 s and ~5.4 GiB on the reference
+numpy solver — too heavy for a laptop; 168/7 is the retuned default. Providers
+pick their own `(n, k)` and proof count for their own cost/latency trade-off.
 
 ## Memory reuse across parallel challenges
 
 **Buffer reuse: yes. Work reuse: no.**
 
-The solver allocates ~1 GiB for the sorted nonce table. This buffer can be reused across challenges (same allocation, different data). However, the _computational work_ cannot be reused:
+The solver allocates one sorted-nonce-table buffer (~1.3 GiB at the default
+params). This buffer can be reused across challenges (same allocation, different
+data). However, the _computational work_ cannot be reused:
 
 - Each challenge has a unique `salt` (random 32 bytes)
 - The seed = `salt ‖ LE32(header_nonce)` is hashed with each nonce
@@ -53,10 +73,14 @@ This is a deliberate design property: honest clients doing occasional PoWs pay t
 Equihash has discrete difficulty — only via (n, k) parameter changes. Instead of a continuous difficulty dial, the protocol uses **proof count**:
 
 ```
-Normal client:   solve 1 PoW  (1 GiB, ~seconds)
-Suspicious:      solve 3 PoWs (3 GiB, 3× time)
-Abuser:          solve 10 PoWs (10 GiB, 10× time)
+Normal client:   solve 1 PoW   (1× memory, 1× work)
+Suspicious:      solve 3 PoWs   (3× work; parallel if RAM allows)
+Abuser:          solve 10 PoWs  (10× work)
 ```
+
+N prices _throughput_, not latency: a solver with enough memory runs the N
+independent proofs in parallel, so wall-clock need not grow 10× — but the total
+compute/energy does, which is the cost that lands on a sustained scraper.
 
 This is superior to Argon2id's `D` parameter because:
 
@@ -72,7 +96,7 @@ Challenge:
 {
   "alg": "equihash",
   "salt_b64": "<base64 32 bytes>",
-  "params": { "n": 192, "k": 7 },
+  "params": { "n": 168, "k": 7 },
   "header_nonce": 0
 }
 ```
@@ -93,7 +117,7 @@ order (see "Verification contract" below).
 ```ruby
 Kiosk::Pow::Equihash.verify(
   salt:   raw_bytes,
-  params: { n: 192, k: 7 },
+  params: { n: 168, k: 7 },
   nonce:  { indices: [/* 128 u64 */] }
 )
 # => true / false
@@ -117,8 +141,8 @@ zero on that block. Two consequences the verifier must respect:
 
 - **Tree check = XOR, not equality.** Checking "all 2^(j+1) leaves share the
   top (j+1)×n_div bits" is wrong for groups larger than 2 (it is satisfiable
-  only by an astronomically rare all-equal cluster — at n=192,k=7 it asks 128
-  leaves to share 168 bits, expected count ≈ 2^25/2^168 ≈ 0). The correct
+  only by an astronomically rare all-equal cluster — at n=168,k=7 it asks 128
+  leaves to share 147 bits, expected count ≈ 2^22/2^147 ≈ 0). The correct
   check is that the group's **XOR** cancels those bits.
 - **Order = canonical, not a global sort.** A real solution's tree order is
   not ascending (pair (a,b)+(c,d) may interleave when flattened). Requiring a
@@ -136,7 +160,7 @@ zero on that block. Two consequences the verifier must respect:
 
 ```bash
 pip install numpy          # REQUIRED — see performance note below
-python3 solve.py '{"salt_b64":"...", "params":{"n":192,"k":7}}'
+python3 solve.py '{"salt_b64":"...", "params":{"n":168,"k":7}}'
 # => {"indices": [...128 u64 in canonical tree order...], "header_nonce": 0}
 ```
 
@@ -150,15 +174,21 @@ collisions/XORs run as whole-array ops. Deep Wagner levels grow degenerate
 the healthy small buckets, and unsolved seeds retry with the next
 `header_nonce`.
 
-**Performance (measured, n=192 k=7, one M-series laptop core):** ~140 s and
-~6 GB peak. This is a REFERENCE implementation — correct and dependency-light,
-not a miner. The floor is inherent to pure Python + numpy at 2^25 entries: the
-BLAKE2b generation alone is ~12 s (stdlib, unvectorisable), and seven collision
-rounds over 33.5 M rows dominate the rest. **numpy is not optional** — without
-it the pure-Python path is >10× slower (≈90 s → many minutes) and ~5 GB from
-Python object overhead. A production agent that needs sub-minute solves should
-bind an optimised native solver (e.g. tromp/equihash); the Ruby verifier is
-unaffected (µs either way).
+**Performance (measured, reference numpy solver, one M-series laptop core):**
+
+| params | p50 solve | p95 solve | peak RSS |
+|---|---|---|---|
+| **n=168, k=7 (default)** | ~9.6 s | ~10.3 s | ~1.3 GiB |
+| n=192, k=7 (old default) | ~155 s | ~155 s | ~5.4 GiB |
+
+Full grid in [bench/README.md](bench/README.md). This is a REFERENCE
+implementation — correct and dependency-light, not a miner. **numpy is not
+optional** — the Wagner sort/collide steps are vectorised; without it the pure
+Python path is an order of magnitude slower. These numbers are the honest-client
+*floor* (slowest participant): a native or GPU solver is faster, since Equihash
+parallelises well — which is exactly why the security story is verify-asymmetry
++ reputation, not hardware parity (ADR-0007). A provider that needs faster
+honest solves lowers `n`; the Ruby verifier is µs either way.
 
 See `solve.py` for the implementation.
 

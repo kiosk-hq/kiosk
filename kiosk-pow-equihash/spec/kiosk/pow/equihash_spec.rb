@@ -119,6 +119,58 @@ RSpec.describe Kiosk::Pow::Equihash do
       )).to be(true)
     end
 
+    # ─── Multi-level KATs (k ≥ 2) — the real Wagner tree ─────────────────
+    #
+    # Deterministic solutions from the reference Wagner solver, salt
+    # "kiosk-eqx-kat-01" (16 bytes), header_nonce 0. Indices are in Zcash
+    # CANONICAL (subtree) order — NOT globally sorted: at each tree node the
+    # left half's first index precedes the right half's. A genuine Wagner
+    # solution cancels each level's block via XOR (the leaves do NOT share a
+    # prefix), and its canonical order is not ascending — the two properties
+    # the pre-fix verifier got wrong (it demanded leaf-prefix equality + a
+    # global sort, which no real k≥2 solution satisfies).
+    let(:m_salt) { "kiosk-eqx-kat-01".b }
+
+    it "ACCEPT — valid k=2 KAT (n=24, canonical/tree order)" do
+      expect(described_class.verify(
+        salt: m_salt, params: described_class.params(n: 24, k: 2),
+        nonce: { indices: [29, 653, 113, 572] },
+      )).to be(true)
+    end
+
+    it "ACCEPT — valid k=3 KAT (n=32, canonical/tree order)" do
+      expect(described_class.verify(
+        salt: m_salt, params: described_class.params(n: 32, k: 3),
+        nonce: { indices: [31, 833, 279, 285, 147, 676, 596, 738] },
+      )).to be(true)
+    end
+
+    it "REJECT — the SAME k=2 solution globally sorted (breaks the tree pairing)" do
+      # Sorting regroups (29,653)(113,572) into (29,113)(572,653), which are
+      # not the colliding pairs → the level-0 XOR no longer cancels.
+      expect(described_class.verify(
+        salt: m_salt, params: described_class.params(n: 24, k: 2),
+        nonce: { indices: [29, 113, 572, 653] },
+      )).to be(false)
+    end
+
+    it "REJECT — k=2 with one mutated index (XOR no longer cancels)" do
+      expect(described_class.verify(
+        salt: m_salt, params: described_class.params(n: 24, k: 2),
+        nonce: { indices: [29, 653, 113, 573] },
+      )).to be(false)
+    end
+
+    it "REJECT — k=2 canonical values but subtree order violated (halves swapped)" do
+      # Swap the two level-1 halves: right subtree (113,572) placed before the
+      # left (29,653). XOR still cancels, but left.first(113) > right.first(29)
+      # violates the canonical subtree ordering.
+      expect(described_class.verify(
+        salt: m_salt, params: described_class.params(n: 24, k: 2),
+        nonce: { indices: [113, 572, 29, 653] },
+      )).to be(false)
+    end
+
     # ─── REJECT — hash mismatch ──────────────────────────────────────
 
     it "REJECT — wrong salt" do

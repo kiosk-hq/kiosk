@@ -19,11 +19,13 @@ module Kiosk
     # == Wire API
     #
     # The proof `nonce` is a Hash:
-    #   { indices: [128 strictly-ascending u64 integers] }
+    #   { indices: [128 u64 integers in Zcash-canonical tree order] }
+    # (canonical order, NOT a global sort — see #verify).
     #
     # `verify(salt:, params:, nonce:)` recomputes 128 BLAKE2b-256 hashes,
-    # extracts n bits from each, checks the collision tree, and verifies
-    # the global XOR = 0.
+    # extracts n bits from each, checks the Wagner collision tree (per-level
+    # XOR cancellation + canonical subtree ordering), and verifies the global
+    # XOR = 0.
     #
     # == No difficulty target
     #
@@ -176,14 +178,13 @@ module Kiosk
         expected_len = 1 << k  # 2^k
         return false unless indices.length == expected_len
 
-        # Strictly ascending, no duplicates.
-        prev = -1
-        indices.each do |idx|
-          return false if idx.is_a?(Float)  # reject floats outright
-          i = Integer(idx)
-          return false unless i > prev
-          prev = i
-        end
+        # Indices must be distinct non-negative integers. Their ORDER is NOT a
+        # global sort — a genuine Wagner solution's canonical order is not
+        # ascending. Ordering is enforced structurally below (Zcash subtree
+        # rule: at each tree node the left half's first index precedes the
+        # right half's), which also rules out trivial reorderings.
+        return false if indices.any? { |idx| idx.is_a?(Float) || Integer(idx) < 0 }
+        return false unless indices.uniq.length == expected_len
 
         n_div = n / (k + 1)  # bits per level: 192/8 = 24
         n_bytes = n / 8       # 24 bytes for 192 bits
@@ -205,20 +206,36 @@ module Kiosk
         xor_all = hash_vals.reduce(0) { |acc, v| acc ^ v }
         return false unless xor_all == 0
 
-        # Step 3: Verify the Wagner collision tree.
-        # Level j (0-indexed): groups of size 2^(j+1) must collide on
-        # (j+1) * n_div most-significant bits.
+        # Step 3: Verify the Wagner collision tree (Zcash-canonical).
+        #
+        # At level j (0-indexed) the solution splits into groups of 2^(j+1)
+        # leaves. For each group:
+        #
+        #   (a) the XOR of the group's leaf hashes CANCELS the top (j+1)*n_div
+        #       bits — this is how Wagner works (siblings' XOR zeros the block).
+        #       The leaves do NOT share a common prefix; only their XOR does.
+        #   (b) canonical ordering: the left half's first index precedes the
+        #       right half's (Zcash "algorithm binding" — rules out trivial
+        #       reorderings and pins one canonical form per solution).
+        #
+        # Applied at every level, (a) is equivalent to the classic
+        # generalized-birthday collision tree; combined with Step 2 (the full
+        # n-bit XOR) it fully constrains the solution.
         (0...k).each do |level|
-          group_size = 1 << (level + 1)                     # 2, 4, 8, ..., 128
-          num_groups = expected_len / group_size            # 64, 32, 16, ..., 1
-          prefix_bits = (level + 1) * n_div                 # 24, 48, 72, ..., 168
-          prefix_shift = n - prefix_bits                    # 168, 144, 120, ..., 24
+          group_size   = 1 << (level + 1)                   # 2, 4, 8, ..., 2^k
+          num_groups   = expected_len / group_size
+          prefix_bits  = (level + 1) * n_div                # 24, 48, ..., k*24
+          prefix_shift = n - prefix_bits
+          half         = group_size / 2
 
           num_groups.times do |g|
-            base_prefix = hash_vals[g * group_size] >> prefix_shift
-            (1...group_size).each do |i|
-              return false unless (hash_vals[g * group_size + i] >> prefix_shift) == base_prefix
-            end
+            base = g * group_size
+
+            group_xor = 0
+            group_size.times { |i| group_xor ^= hash_vals[base + i] }
+            return false unless (group_xor >> prefix_shift).zero?
+
+            return false unless indices[base] < indices[base + half]
           end
         end
 

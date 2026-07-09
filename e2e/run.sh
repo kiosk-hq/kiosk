@@ -30,8 +30,17 @@ KIOSK_OSS="${KIOSK_OSS:-$( cd "$SCRIPT_DIR/.." && pwd )}"
 # ─── mise (Ruby version manager) ────────────────────────────────────────
 # Export mise environment — no cd hooks, persists across directories.
 if command -v mise >/dev/null 2>&1; then
-  mise trust "$KIOSK_OSS" >/dev/null 2>&1 || true
+  mise trust "$KIOSK_OSS"  >/dev/null 2>&1 || true
+  mise trust "$SCRIPT_DIR" >/dev/null 2>&1 || true
   eval "$(mise env -s bash)"
+fi
+
+# Put the active Ruby's gem bindir first, so `rails`/`bundle` resolve to the
+# gems installed under this Ruby — not the macOS system stub at /usr/bin/rails
+# (which exits 0 with a "Rails is not installed" message and fools pre-flight).
+if command -v ruby >/dev/null 2>&1; then
+  GEM_BINDIR="$(ruby -e 'print Gem.bindir' 2>/dev/null || true)"
+  [ -n "$GEM_BINDIR" ] && PATH="$GEM_BINDIR:$PATH" && export PATH
 fi
 SERVER_PORT="${SERVER_PORT:-3001}"
 DB_NAME="kiosk_e2e_$$"
@@ -64,7 +73,15 @@ log "pre-flight: ruby, bundler, rails, postgres"
 
 command -v ruby     >/dev/null || fail "ruby not on PATH"
 command -v bundle   >/dev/null || fail "bundler not on PATH"
-command -v rails    >/dev/null && rails --version >/dev/null 2>&1 || { log "rails gem missing — installing"; gem install rails --no-document; }
+# `rails --version` on a real gem prints "Rails <n>"; the macOS system stub at
+# /usr/bin/rails prints "Rails is not currently installed…" and exits 0, so
+# match a version digit specifically. Install into the active gem home if absent.
+if ! rails --version 2>/dev/null | grep -qE '^Rails [0-9]'; then
+  log "rails gem missing — installing into $(ruby -e 'print Gem.dir')"
+  gem install rails --no-document
+  hash -r  # forget the cached /usr/bin/rails so the fresh binstub is picked up
+fi
+rails --version 2>/dev/null | grep -qE '^Rails [0-9]' || fail "rails still not resolvable (got: $(rails --version 2>&1 | head -1))"
 command -v psql     >/dev/null || fail "psql not on PATH"
 command -v curl     >/dev/null || fail "curl not on PATH"
 command -v jq       >/dev/null || fail "jq not on PATH"

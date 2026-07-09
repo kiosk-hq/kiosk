@@ -22,6 +22,8 @@ gem "kiosk-core",               path: "../kiosk-core"
 gem "kiosk-rls",                path: "../kiosk-rls"
 gem "kiosk-server",             path: "../kiosk-server"
 gem "kiosk-pay-stripe",         path: "../kiosk-pay-stripe"
+gem "kiosk-pow-equihash",       path: "../kiosk-pow-equihash"
+gem "kiosk-reputation",         path: "../kiosk-reputation"
 gem "kiosk-redteam",            path: "../kiosk-redteam"
 
 group :development, :test do

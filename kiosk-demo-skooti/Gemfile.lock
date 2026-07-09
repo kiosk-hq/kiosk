@@ -19,10 +19,21 @@ PATH
       stripe (~> 19)
 
 PATH
+  remote: ../kiosk-pow-equihash
+  specs:
+    kiosk-pow-equihash (0.1.0)
+
+PATH
   remote: ../kiosk-redteam
   specs:
     kiosk-redteam (0.0.1)
       jwt (~> 2.0)
+
+PATH
+  remote: ../kiosk-reputation
+  specs:
+    kiosk-reputation (0.0.1)
+      base64
 
 PATH
   remote: ../kiosk-rls
@@ -288,7 +299,9 @@ DEPENDENCIES
   kiosk-all!
   kiosk-core!
   kiosk-pay-stripe!
+  kiosk-pow-equihash!
   kiosk-redteam!
+  kiosk-reputation!
   kiosk-rls!
   kiosk-server!
   pg (~> 1.1)
@@ -332,7 +345,9 @@ CHECKSUMS
   kiosk-all (0.0.1)
   kiosk-core (0.0.1)
   kiosk-pay-stripe (0.0.1)
+  kiosk-pow-equihash (0.1.0)
   kiosk-redteam (0.0.1)
+  kiosk-reputation (0.0.1)
   kiosk-rls (0.0.1)
   kiosk-server (0.0.1)
   logger (1.7.0) sha256=196edec7cc44b66cfb40f9755ce11b392f21f7967696af15d274dde7edff0203

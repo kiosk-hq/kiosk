@@ -17,6 +17,14 @@ require Rails.root.join("lib/dev_unlock_key")
 # follow-up.
 ActiveRecord::Migration.include(Kiosk::RLS::DSL)
 
+# Registration PoW gate uses Equihash (ADR-0001 amended: one PoW = Equihash;
+# the old SHA256 hashcash is gone). Small demo params keep the register solve
+# well under a second. See ADR-0007 for the metered-pricing framing.
+require "kiosk/pow/equihash"
+require "kiosk/reputation"
+Kiosk::Reputation::Backends.register(Kiosk::Pow::Equihash::NAME, Kiosk::Pow::Equihash)
+SKOOTI_REGISTRATION_POW_PARAMS = { n: 96, k: 5 }.freeze
+
 Kiosk.configure do |c|
   c.user_model     = "User"
   c.user_id_type   = :uuid
@@ -47,8 +55,11 @@ Kiosk.configure do |c|
   # Payment provider — stub for the demo; swap in kiosk-pay-stripe for real.
   c.payment_provider = StubPsp.new
 
-  # PoW gate: ~20 bits ≈ <1 s to solve on a modern CPU. Filters bot registration.
-  c.registration_difficulty = 20
+  # Registration PoW gate: 1 Equihash proof to register. Prices bot registration
+  # for a physical-service provider (each fresh identity pays compute up front).
+  c.registration_pow_count  = 1
+  c.registration_pow_params = SKOOTI_REGISTRATION_POW_PARAMS
+  c.pow_secret              = ENV.fetch("KIOSK_POW_SECRET", "skooti-demo-pow-secret")
 
   # KYC attestation verifier — trusts the stub KYC provider.
   c.kyc_issuer    = "https://kyc.example"

@@ -60,32 +60,9 @@ def get_json(url, headers = {})
   [res.code.to_i, (JSON.parse(res.body) rescue {})]
 end
 
-# Replicates Kiosk::Server::ProofOfWork.leading_zero_bits exactly.
-def leading_zero_bits(bytes)
-  return 0 if bytes.empty?
+require_relative "lib/equihash_register"
 
-  count = 0
-  bytes.each_byte do |b|
-    if b == 0
-      count += 8
-    else
-      bit = 7
-      bit -= 1 while bit >= 0 && b[bit] == 0
-      count += (7 - bit)
-      break
-    end
-  end
-  count
-end
-
-def solve_pow(pem, difficulty)
-  pow = 0
-  pow += 1 until leading_zero_bits(Digest::SHA256.digest("#{pem}.#{pow}")) >= difficulty
-  pow
-end
-
-# Register a fresh principal: solve PoW, PoP handshake (GET /kiosk/auth/challenge
-# then POST /kiosk/auth/register), POST /kiosk/agents/kyc.
+# Register a fresh principal through the Equihash-gated /auth/register, then KYC.
 # Returns [user_id, agent_id, token, key].
 #
 # KYC is done for BOTH principals so that Gate-2 does not block B when B
@@ -94,25 +71,12 @@ end
 # both gates are satisfied, the ONLY gate that can deny B is Gate-1 (ownership
 # predicate: rA.user_id = A ≠ B). This makes Assertion 1 genuinely isolate
 # the ownership predicate rather than an incidental payment gap.
-def register_principal(name:, difficulty: 20)
-  key = OpenSSL::PKey::RSA.generate(2048)
-  pem = key.public_key.to_pem
-
-  STDERR.puts "  Solving PoW (difficulty=#{difficulty}) for #{name}..."
-  pow = solve_pow(pem, difficulty)
-  STDERR.puts "  PoW solved: pow=#{pow}"
-
-  rc_ch, ch = get_json("#{SERVER}/kiosk/auth/challenge?public_key=#{URI.encode_www_form_component(pem)}")
-  abort "challenge #{name} failed (#{rc_ch}): #{JSON.generate(ch)}" unless rc_ch == 200
-  pop = JWT.encode(
-    { aud: ISSUER, nonce: ch.fetch("challenge"), jti: SecureRandom.uuid, iat: Time.now.to_i },
-    key, "RS256",
+def register_principal(name:)
+  STDERR.puts "  Registering #{name} (solving 1 Equihash PoW)..."
+  key, reg = equihash_register(
+    server: SERVER, issuer: ISSUER,
+    get_json: method(:get_json), post_json: method(:post_json),
   )
-  rc, reg = post_json(
-    "#{SERVER}/kiosk/auth/register",
-    { public_key: pem, signed: pop, pow: pow.to_s },
-  )
-  abort "register #{name} failed (#{rc}): #{JSON.generate(reg)}" unless rc == 201
 
   user_id  = reg.fetch("user_id")
   agent_id = reg.fetch("agent_id")

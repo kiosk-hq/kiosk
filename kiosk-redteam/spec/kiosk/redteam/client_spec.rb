@@ -2,6 +2,7 @@
 
 require "spec_helper"
 require "digest"
+require "base64"
 require "openssl"
 require "jwt"
 
@@ -82,23 +83,33 @@ RSpec.describe Kiosk::Redteam::Client do
       end
     end
 
-    context "with pow_difficulty: 1 (minimal difficulty, fast in specs)" do
-      it "posts a pow field whose SHA256 hash satisfies the difficulty" do
-        captured_body = nil
+    context "when the provider gates registration with Equihash (402)" do
+      it "solves the challenge and resubmits with pow.proofs" do
+        # First register → 402 with a KAT challenge (n=8,k=1); the client solves
+        # it with the real solver and resubmits. Second register → 201.
+        kat_challenge = { "id" => "c1", "alg" => "equihash", "params" => { "n" => 8, "k" => 1 },
+                          "salt" => Base64.strict_encode64("kat"), "exp" => 9_999_999_999, "sig" => "x" }
+        bodies = []
+        calls  = 0
         stub_request(:post, "#{base_url}/kiosk/auth/register")
-          .with { |req| captured_body = JSON.parse(req.body); true }
-          .to_return(status: 201, body: register_body, headers: { "Content-Type" => "application/json" })
+          .with { |req| bodies << JSON.parse(req.body); true }
+          .to_return do
+            calls += 1
+            if calls == 1
+              { status: 402, body: JSON.generate(ok: false, error: { code: "pow_required", challenges: [kat_challenge] }),
+                headers: { "Content-Type" => "application/json" } }
+            else
+              { status: 201, body: register_body, headers: { "Content-Type" => "application/json" } }
+            end
+          end
 
-        client.register!(name: "pow-agent", pow_difficulty: 1, pow: :solve)
+        principal = client.register!(name: "pow-agent", pow_difficulty: 1, pow: :solve)
 
-        expect(captured_body).to have_key("pow")
-        pem = captured_body.fetch("public_key")
-        pow = captured_body.fetch("pow")
-
-        # Verify the solved PoW actually satisfies difficulty=1
-        digest = Digest::SHA256.digest("#{pem}.#{pow}")
-        leading_zeros = count_leading_zero_bits(digest)
-        expect(leading_zeros).to be >= 1
+        expect(principal.token).to eq("tok-abc")
+        expect(bodies.first).not_to have_key("pow")           # first attempt: no pow
+        proofs = bodies.last.dig("pow", "proofs")             # resubmit carries proofs
+        expect(proofs).to be_an(Array)
+        expect(proofs.first["nonce"]).to include("indices")
       end
     end
 

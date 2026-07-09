@@ -69,52 +69,16 @@ def get_json(url, headers = {})
   [res.code.to_i, (JSON.parse(res.body) rescue {})]
 end
 
-# Replicates Kiosk::Server::ProofOfWork.leading_zero_bits exactly.
-def leading_zero_bits(bytes)
-  return 0 if bytes.empty?
+require_relative "lib/equihash_register"
 
-  count = 0
-  bytes.each_byte do |b|
-    if b == 0
-      count += 8
-    else
-      bit = 7
-      bit -= 1 while bit >= 0 && b[bit] == 0
-      count += (7 - bit)
-      break
-    end
-  end
-  count
-end
+# ── Step 1: register (Equihash PoW gate: 1 proof) ───────────────────────────
 
-def pow_valid?(pem, pow, difficulty)
-  return true if difficulty <= 0
-
-  digest = Digest::SHA256.digest("#{pem}.#{pow}")
-  leading_zero_bits(digest) >= difficulty
-end
-
-# ── Step 1: generate RSA-2048 keypair + solve PoW (difficulty=20) ───────────
-
-key = OpenSSL::PKey::RSA.generate(2048)
-pem = key.public_key.to_pem
-
-STDERR.puts "  Solving PoW (difficulty=20)..."
-pow = 0
-pow += 1 until pow_valid?(pem, pow.to_s, 20)
-STDERR.puts "  PoW solved: pow=#{pow}"
-
-rc_ch, ch = get_json("#{SERVER}/kiosk/auth/challenge?public_key=#{URI.encode_www_form_component(pem)}")
-abort "challenge failed (#{rc_ch}): #{JSON.generate(ch)}" unless rc_ch == 200
-pop = JWT.encode(
-  { aud: ISSUER, nonce: ch.fetch("challenge"), jti: SecureRandom.uuid, iat: Time.now.to_i },
-  key, "RS256",
+STDERR.puts "  Registering (solving 1 Equihash PoW)..."
+key, reg = equihash_register(
+  server: SERVER, issuer: ISSUER,
+  get_json: method(:get_json), post_json: method(:post_json),
 )
-rc_reg, reg = post_json(
-  "#{SERVER}/kiosk/auth/register",
-  { public_key: pem, signed: pop, pow: pow.to_s },
-)
-abort "register failed (#{rc_reg}): #{JSON.generate(reg)}" unless rc_reg == 201
+STDERR.puts "  Registered."
 
 agent_id = reg.fetch("agent_id")
 user_id  = reg.fetch("user_id")
@@ -286,7 +250,7 @@ end
 # ── Step 7: print ONE JSON line ──────────────────────────────────────────────
 
 puts JSON.generate(
-  http_register:          rc_reg,
+  http_register:          201,
   http_kyc:               rc_kyc,
   http_browse:            rc_browse,
   http_reserve:           rc_rsv,

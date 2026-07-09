@@ -41,33 +41,12 @@ def get_json(path, bearer: nil)
   [res.code.to_i, (JSON.parse(res.body) rescue {})]
 end
 
-# Replicates Kiosk::Server::ProofOfWork.leading_zero_bits exactly.
-def leading_zero_bits(bytes)
-  return 0 if bytes.empty?
+require_relative "lib/equihash_register"  # for equihash_solve
 
-  count = 0
-  bytes.each_byte do |b|
-    if b == 0
-      count += 8
-    else
-      bit = 7
-      bit -= 1 while bit >= 0 && b[bit] == 0
-      count += (7 - bit)
-      break
-    end
-  end
-  count
-end
-
-# ── Register a fresh agent (PoW difficulty=20) ───────────────────────────────
+# ── Register a fresh agent (Equihash PoW gate: 1 proof) ──────────────────────
 
 key = OpenSSL::PKey::RSA.generate(2048)
 pem = key.public_key.to_pem
-
-STDERR.puts "  Solving PoW (difficulty=20)..."
-pow = 0
-pow += 1 until leading_zero_bits(Digest::SHA256.digest("#{pem}.#{pow}")) >= 20
-STDERR.puts "  PoW solved: pow=#{pow}"
 
 rc_ch, ch = get_json("/kiosk/auth/challenge?public_key=#{URI.encode_www_form_component(pem)}")
 abort "challenge failed (#{rc_ch}): #{JSON.generate(ch)}" unless rc_ch == 200
@@ -75,10 +54,16 @@ pop = JWT.encode(
   { aud: SERVER, nonce: ch.fetch("challenge"), jti: SecureRandom.uuid, iat: Time.now.to_i },
   key, "RS256",
 )
-rc, reg = post_json(
-  "/kiosk/auth/register",
-  { public_key: pem, signed: pop, pow: pow.to_s },
-)
+
+STDERR.puts "  Registering (solving 1 Equihash PoW)..."
+reg_body = { public_key: pem, signed: pop }
+rc, reg  = post_json("/kiosk/auth/register", reg_body)
+if rc == 402
+  challenges = reg.dig("error", "challenges")
+  abort "402 without challenges[]: #{JSON.generate(reg)}" unless challenges.is_a?(Array) && challenges.any?
+  proofs = challenges.map { |c| { challenge: c, nonce: equihash_solve(c) } }
+  rc, reg = post_json("/kiosk/auth/register", reg_body.merge(pow: { proofs: proofs }))
+end
 abort "register failed (#{rc}): #{JSON.generate(reg)}" unless rc == 201
 token = reg.fetch("access_token")
 

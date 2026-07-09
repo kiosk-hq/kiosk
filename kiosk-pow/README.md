@@ -2,9 +2,16 @@
 
 Argon2id memory-hard proof-of-work backend for the [Kiosk](https://kiosk.tech) framework.
 
+> **Retired / optional.** The shipped default PoW backend is
+> [`kiosk-pow-equihash`](../kiosk-pow-equihash) (ADR-0001, amended 2026-07-08 —
+> "one PoW = Equihash"). Argon2id's `verify` costs one `m`-sized eval (~64 MiB),
+> so a flood of bad proofs is a DoS on the *verifier* — the exact failure the
+> asymmetric-verify goal exists to prevent. This gem stays in the repo as an
+> opt-in backend and reference; it is no longer wired into demos or docs.
+
 ## What it is
 
-`kiosk-pow` is the default PoW backend for Kiosk. It implements a
+`kiosk-pow` implements a
 **search-form Argon2id PoW**: a client finds the smallest nonce `n ≥ 0` such
 that `Argon2id(password=str(n), salt=raw_salt, ...)` has ≥ `d` leading zero
 bits. The provider verifies by computing **one** Argon2id eval — the solve:verify

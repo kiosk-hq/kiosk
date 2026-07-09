@@ -19,23 +19,29 @@ Kiosk.configure do |c|
   c.user_id_column = :id
 
   # ─── Postgres surface ────────────────────────────────────────────────
-  # GUC namespace used in RLS policies and SET LOCAL statements.
-  # Default "app" — change if your primary backend already uses app.*.
+  # GUC namespace used in SET LOCAL statements (and RLS policies, if you
+  # opt in). Default "app" — change if your backend already uses app.*.
   # c.guc_namespace = "<%= options[:guc_namespace] %>"
 
   # Postgres schema for Kiosk helper functions and tables.
   # c.schema = "<%= options[:schema] %>"
 
-  # Database roles (provider creates these — Kiosk does not).
-  # c.app_role    = "app_role"      # runtime role with NOBYPASSRLS
-  # c.system_role = "system_role"   # privileged role; owns RLS-enabled tables
+  # ─── Opt-in: DB-level RLS defense-in-depth ───────────────────────────
+  # Kiosk's isolation comes from the sanctioned query/run/pay surface with
+  # app-layer authz. Postgres RLS is available as belt-and-suspenders:
+  # add `gem "kiosk-rls"`, include Kiosk::RLS::DSL into your migrations,
+  # and configure the DB roles (provider creates these — Kiosk does not).
+  # c.app_role        = "app_role"      # runtime role with NOBYPASSRLS
+  # c.system_role     = "system_role"   # privileged role; owns the tables
+  # c.enforce_db_role = true            # SET LOCAL ROLE app_role per request
 
   # ─── Wire surface ────────────────────────────────────────────────────
   # Issuer URL — MUST match `kiosk.issuer` in /.well-known/kiosk.json.
   # c.issuer = "https://<your-host>"
 
-  # Role vocabulary providers' RLS policies branch on. Never include
-  # `:admin` — prefer job-titled roles like `:support`, `:master`.
+  # Role vocabulary your authz (app-layer policies, and RLS if opted in)
+  # branches on. Never include `:admin` — prefer job-titled roles like
+  # `:support`, `:master`.
   # c.roles = %i[customer]
 
   # Owner block surfaced in /.well-known/kiosk.json.

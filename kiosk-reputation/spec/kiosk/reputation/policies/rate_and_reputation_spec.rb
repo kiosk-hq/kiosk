@@ -60,7 +60,7 @@ RSpec.describe Kiosk::Reputation::Policies::RateAndReputation do
     end
 
     it "carries equihash (n, k) params" do
-      expect(result[:params]).to eq({ n: 192, k: 7 })
+      expect(result[:params]).to eq({ n: 168, k: 7 })
     end
 
     it "carries an integer proof count >= 1" do

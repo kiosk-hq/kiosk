@@ -59,7 +59,10 @@ module Kiosk
           bad_proof_count_factor:     3,
           count_min:                  1,
           count_max:                  10,
-          equihash_n:                 192,
+          # Matches Kiosk::Pow::Equihash defaults (benchmark-chosen, ADR-0007).
+          # Literals, not the constant, so this gem stays loadable without
+          # kiosk-pow-equihash present; a provider overrides per policy.
+          equihash_n:                 168,
           equihash_k:                 7
         )
           @proven_purchases_threshold = proven_purchases_threshold

@@ -4,13 +4,12 @@ The «I just want to start» meta-gem for the [Kiosk](https://kiosk.tech) framew
 
 ## What it pulls in
 
-`kiosk-all` declares runtime dependencies on the three production data-plane gems:
+`kiosk-all` declares runtime dependencies on the two production data-plane gems:
 
 - **`kiosk-core`** — value types (`Identity`, `Mandate`, `Event`), abstract adapter base classes, GUC namespace constants, `Kiosk.configure`, protocol version surface
-- **`kiosk-rls`** — RLS DSL (`enable_rls_on`, `policy`, migration verbs) and pure-SQL DDL emitter
 - **`kiosk-server`** — Rails engine, headers middleware, `/.well-known/kiosk.json` builder, canonical schema-migration SQL
 
-Requiring `kiosk-all` loads `Kiosk`, `Kiosk::RLS`, and `Kiosk::Server`.
+Requiring `kiosk-all` loads `Kiosk` and `Kiosk::Server`.
 
 ## Install
 
@@ -18,7 +17,17 @@ Requiring `kiosk-all` loads `Kiosk`, `Kiosk::RLS`, and `Kiosk::Server`.
 gem "kiosk-all"
 ```
 
-That's it for the data plane. Two more pieces you add per stack:
+That's it for the data plane. Optional pieces you add per stack:
+
+### RLS defense-in-depth — opt-in
+
+`kiosk-all` does **not** pull in `kiosk-rls`. Kiosk's isolation comes from the sanctioned query/run/pay surface with app-layer authz; Postgres RLS is available as belt-and-suspenders hardening. Opt in explicitly:
+
+```ruby
+gem "kiosk-rls"           # opt-in: DB-level RLS defense-in-depth
+```
+
+See the kiosk-rls README for wiring (`Kiosk::RLS::DSL`, `enable_rls_on`, roles).
 
 ### Test harness — pick one
 

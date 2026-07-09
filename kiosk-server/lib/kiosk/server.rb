@@ -5,7 +5,6 @@
 # a host. See https://kiosk.tech and design spec §3, §6.7.
 
 require "kiosk"
-require "kiosk/rls"
 
 require "kiosk/server/version"
 require "kiosk/server/signing_key"

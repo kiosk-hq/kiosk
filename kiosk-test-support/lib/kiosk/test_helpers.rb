@@ -1,7 +1,6 @@
 # frozen_string_literal: true
 
 require "kiosk"
-require "kiosk/rls"
 
 require "kiosk/test_helpers/version"
 require "kiosk/test_helpers/errors"

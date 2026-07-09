@@ -4,6 +4,12 @@ All notable changes follow [Keep a Changelog](https://keepachangelog.com/en/1.1.
 
 ## [Unreleased]
 
+### Changed
+
+- Dropped the `kiosk-rls` dependency (RLS is opt-in now). This gem never
+  used `Kiosk::RLS` constants — `Errors::RLSDenied` is its own class and
+  stays.
+
 ### Added
 
 - Initial skeleton.

@@ -13,7 +13,7 @@ module Kiosk
     # HTTP driver for the Kiosk provider API.
     #
     # Covers the full agent flow:
-    #   register (+ SHA256 PoW solving) → kyc → query / run → pay
+    #   register (+ Equihash PoW solving on 402) → kyc → query / run → pay
     #
     # Two registration entry points:
     #   - {#register_raw} — always returns a {Response}; use in scenarios that

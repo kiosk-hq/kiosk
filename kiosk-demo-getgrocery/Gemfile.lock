@@ -3,7 +3,6 @@ PATH
   specs:
     kiosk-all (0.0.1)
       kiosk-core (~> 0.0)
-      kiosk-rls (~> 0.0)
       kiosk-server (~> 0.0)
 
 PATH
@@ -47,7 +46,6 @@ PATH
     kiosk-server (0.0.1)
       jwt (~> 2.8)
       kiosk-core (~> 0.0)
-      kiosk-rls (~> 0.0)
 
 GEM
   remote: https://rubygems.org/

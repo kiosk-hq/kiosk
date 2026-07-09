@@ -67,7 +67,8 @@ printf "\n\033[1m=== /.well-known/kiosk.json ===\033[0m\n"
 wk=$(curl -sf "$SERVER_URL/.well-known/kiosk.json")
 assert "kiosk.version present"     "$(echo "$wk" | jq -r '.kiosk.version')"     "1.0"
 assert "kiosk.endpoint correct"    "$(echo "$wk" | jq -r '.kiosk.endpoint')"    "$SERVER_URL/kiosk"
-assert "kiosk.auth.kind oauth2"    "$(echo "$wk" | jq -r '.kiosk.auth.kind')"   "oauth2"
+assert "kiosk.auth.kind kiosk-pop" "$(echo "$wk" | jq -r '.kiosk.auth.kind')"   "kiosk-pop"
+assert "kiosk.auth.challenge_url"  "$(echo "$wk" | jq -r '.kiosk.auth.challenge_url')" "$SERVER_URL/kiosk/auth/challenge"
 assert "kiosk.issuer set"          "$(echo "$wk" | jq -r '.kiosk.issuer')"      "$SERVER_URL"
 assert "kiosk.capabilities[]"      "$(echo "$wk" | jq -r '.kiosk.capabilities | length')" "4"
 

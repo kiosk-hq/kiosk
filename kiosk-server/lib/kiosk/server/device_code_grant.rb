@@ -9,6 +9,22 @@ module Kiosk
     #   .exchange — POST /oauth/token (grant_type=device_code) handler
     #                logic
     #
+    # == Why Kiosk keeps this alongside proof-of-possession auth
+    #
+    # The primary auth is proof-of-possession (/auth/challenge → /auth/register
+    # | /auth/login): an agent proves it holds a private key and gets a token
+    # bound to a synthetic principal — no human. The device grant serves the
+    # ONE case PoP cannot: binding a *new* agent key to an *existing HUMAN*
+    # account. The human approves the `user_code` on a provider consent screen
+    # (as their logged-in self), and {DeviceVerification.approve} attaches the
+    # authorization to THAT `user_id`; the minted token therefore shares the
+    # human's principal — same saved card, same history. Use cases: account
+    # recovery when an assistant lost its key, or linking a second device.
+    #
+    # It is an OPT-IN recovery/linking path: NOT the primary auth, and
+    # deliberately NOT advertised in /.well-known/kiosk.json (see {WellKnown}).
+    # It is also NOT gated by KYC — human approval is the only precondition.
+    #
     # Controllers in this gem are thin shims over these methods — the
     # same way {WireController} is a shim over {Executor}. Logic lives
     # here so unit tests don't require a Rails environment, and so the

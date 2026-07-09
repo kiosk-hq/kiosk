@@ -7,6 +7,18 @@
 require Rails.root.join("lib/stub_idp")
 require Rails.root.join("lib/jwt_or_stub_idp")
 
+# Registration PoW gate (KIOSK_POW_REGISTER_DEMO=1). A booking SaaS can price
+# fresh-identity minting: registering an agent costs one Equihash proof
+# (ADR-0001 amended — one PoW = Equihash; ADR-0007 — a metered toll). Small demo
+# params solve sub-second. Off by default so the walkthrough/isolation flows are
+# unchanged.
+SAAS_REGISTRATION_POW_PARAMS = { n: 96, k: 5 }.freeze
+if ENV["KIOSK_POW_REGISTER_DEMO"] == "1"
+  require "kiosk/pow/equihash"
+  require "kiosk/reputation"
+  Kiosk::Reputation::Backends.register(Kiosk::Pow::Equihash::NAME, Kiosk::Pow::Equihash)
+end
+
 Kiosk.configure do |c|
   c.user_model     = "User"
   c.user_id_type   = :uuid
@@ -36,6 +48,13 @@ Kiosk.configure do |c|
   # in `kiosk-user-idp-devise` (or another adapter); see the README.
   c.agent_idp = JwtOrStubIdp.new(stub: StubIdp.new)
   # user_idp not needed — composite handles both channels.
+
+  # ── Registration PoW gate (active only when KIOSK_POW_REGISTER_DEMO=1) ───
+  if ENV["KIOSK_POW_REGISTER_DEMO"] == "1"
+    c.registration_pow_count  = 1
+    c.registration_pow_params = SAAS_REGISTRATION_POW_PARAMS
+    c.pow_secret              = ENV.fetch("KIOSK_POW_SECRET", "saas-demo-pow-secret")
+  end
 end
 
 # ─── Queries ────────────────────────────────────────────────────────────────

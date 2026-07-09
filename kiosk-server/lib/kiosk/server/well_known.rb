@@ -28,22 +28,25 @@ module Kiosk
         base = base_url.to_s.chomp("/")
         endpoint = base + config.mount_path
 
-        {
-          kiosk: {
-            version:  DOCUMENT_VERSION,
-            endpoint: endpoint,
-            auth: {
-              kind:             "oauth2",
-              authorize_url:    "#{endpoint}/oauth/authorize",
-              token_url:        "#{endpoint}/oauth/token",
-              scopes_supported: [],
-            },
-            capabilities: Array(config.capabilities),
-            min_client:   config.min_client,
-            issuer:       config.issuer,
-            owner:        config.owner || {},
+        kiosk = {
+          version:  DOCUMENT_VERSION,
+          endpoint: endpoint,
+          auth: {
+            kind:             "oauth2",
+            authorize_url:    "#{endpoint}/oauth/authorize",
+            token_url:        "#{endpoint}/oauth/token",
+            scopes_supported: [],
           },
+          capabilities: Array(config.capabilities),
+          min_client:   config.min_client,
+          issuer:       config.issuer,
+          owner:        config.owner || {},
         }
+        if config.skill_sha256
+          kiosk[:skill] = { url: config.skill_url, sha256: config.skill_sha256 }
+        end
+
+        { kiosk: kiosk }
       end
 
       # JSON-encoded form of {#build}. Suitable to return directly from a

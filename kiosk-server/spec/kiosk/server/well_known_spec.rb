@@ -63,6 +63,25 @@ RSpec.describe Kiosk::Server::WellKnown do
       expect(doc[:kiosk][:owner][:support]).to eq("support@acme.example")
     end
 
+    it "omits the skill block when skill_sha256 is not set" do
+      expect(doc[:kiosk]).not_to have_key(:skill)
+    end
+
+    it "advertises the skill descriptor when skill_sha256 is set" do
+      Kiosk.configure { |c| c.skill_sha256 = "abc123" }
+      d = described_class.build(base_url: "https://api.acme.example")
+      expect(d[:kiosk][:skill]).to eq(url: "https://kiosk.tech/skill-v1.0.md", sha256: "abc123")
+    end
+
+    it "respects an overridden skill_url" do
+      Kiosk.configure do |c|
+        c.skill_url    = "https://kiosk.tech/skill-v1.1.md"
+        c.skill_sha256 = "def456"
+      end
+      d = described_class.build(base_url: "https://api.acme.example")
+      expect(d[:kiosk][:skill]).to eq(url: "https://kiosk.tech/skill-v1.1.md", sha256: "def456")
+    end
+
     it "raises if issuer is not configured" do
       Kiosk.reset!
       expect { described_class.build(base_url: "https://api.acme.example") }

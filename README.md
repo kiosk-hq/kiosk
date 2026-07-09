@@ -10,7 +10,7 @@ Apache-2.0 monorepo for [Kiosk](https://kiosk.tech) — the framework that turns
 |---|---|---|
 | `kiosk-core` | Value types, abstract bases, GUC constants, configuration. No Rails dep. | alpha |
 | `kiosk-rls` | Opt-in RLS DSL + migration helpers + `rake kiosk:rls:{show,check}` | alpha |
-| `kiosk-server` | Rails engine, routes, OAuth 2.1 surface, executor | alpha |
+| `kiosk-server` | Rails engine, routes, kiosk-pop auth surface, executor | alpha |
 | `kiosk-all` | Meta-gem; `bundle add kiosk-all` installs core + server | alpha |
 | `kiosk-test-support` | Shared test helpers, factories, RSpec matchers | alpha |
 

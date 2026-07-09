@@ -1,11 +1,15 @@
 #!/usr/bin/env python3
 """
-Equihash PoW solver for Kiosk (n=192, k=7, ~1 GiB RAM).
+Equihash PoW solver for Kiosk (default n=168, k=7).
+
+This is a REFERENCE solver: pure Python + numpy. On a consumer laptop the
+default params solve in ~10s using ~1.3 GiB (see bench/). Providers pick their
+own params; a heavier n means a heavier solve. Not a tuned miner.
 
 Usage:
   python3 solve.py '<json_challenge>'
 
-Challenge JSON: {"salt_b64": "...", "params": {"n": 192, "k": 7}, "header_nonce": 0}
+Challenge JSON: {"salt_b64": "...", "params": {"n": 168, "k": 7}, "header_nonce": 0}
 Output JSON:   {"indices": [...], "header_nonce": 0}
 
 Toy mode (for testing):
@@ -22,8 +26,8 @@ except ImportError:  # pragma: no cover - guidance path
     sys.stderr.write(
         "ERROR: this solver requires numpy.\n"
         "  pip install numpy\n"
-        "Without it a pure-Python solve of the production parameters (n=192, k=7)\n"
-        "takes >90s and ~5 GB; numpy keeps it to ~seconds and ~2-3 GB.\n"
+        "The Wagner sort/collide steps are vectorised; without numpy a solve of\n"
+        "the default parameters is an order of magnitude slower.\n"
     )
     sys.exit(3)
 
@@ -151,7 +155,8 @@ def solve_equihash(seed: bytes, n: int, k: int):
 
     words = pack_hashes(seed, N, n)        # level-0 hashes; entry i ≡ nonce i
     # uint32 everywhere the row-count fits (N < 2^32) to keep peak RSS down: at
-    # n=192 the arrays are 2^25 rows, so every int64→uint32 saves ~130 MB.
+    # the default n=168 the arrays are 2^22 rows, so every int64→uint32 saves
+    # tens of MB; at larger n the saving grows.
     mins = np.arange(N, dtype=np.uint32)   # min leaf index per entry (for ordering)
     tree = []                              # tree[L] = (left_pos, right_pos) into level L
 
@@ -253,7 +258,7 @@ def main():
     # Accept both `salt_b64` and the gate/challenge wire key `salt`.
     salt_b64 = challenge.get("salt_b64") or challenge["salt"]
     params = challenge.get("params", {})
-    n = params.get("n", 24 if toy else 192)
+    n = params.get("n", 24 if toy else 168)
     k = params.get("k", 3 if toy else 7)
     start_nonce = challenge.get("header_nonce", 0)
 

@@ -21,16 +21,16 @@ RSpec.describe Kiosk::Pow::Equihash do
   end
 
   describe "DEFAULT_N / DEFAULT_K" do
-    it "are production-grade parameters (192, 7)" do
-      expect(described_class::DEFAULT_N).to eq(192)
+    it "are the benchmark-chosen defaults (168, 7)" do
+      expect(described_class::DEFAULT_N).to eq(168)
       expect(described_class::DEFAULT_K).to eq(7)
     end
   end
 
   describe ".params" do
-    it "returns n:192, k:7 by default" do
+    it "returns n:168, k:7 by default" do
       p = described_class.params
-      expect(p).to eq({ n: 192, k: 7 })
+      expect(p).to eq({ n: 168, k: 7 })
     end
 
     it "accepts custom n and k" do
@@ -355,6 +355,10 @@ RSpec.describe Kiosk::Pow::Equihash do
       solver_py = File.join(__dir__, "../../../solve.py")
       skip "solve.py not found" unless File.exist?(solver_py)
 
+      # solve.py requires numpy; the plain blake2b python may lack it.
+      python = find_python_with_numpy
+      skip "python3 with numpy not found (pip install numpy)" unless python
+
       require "base64"
       challenge = JSON.generate(
         "salt_b64" => Base64.strict_encode64("kat".b),
@@ -379,6 +383,14 @@ RSpec.describe Kiosk::Pow::Equihash do
   def find_python_with_blake2b
     %w[python3.14 python3.13 python3.12 python3 /opt/homebrew/bin/python3].find { |py|
       system("#{py} -c 'import hashlib; hashlib.blake2b(b\"\", digest_size=32)' 2>/dev/null")
+    }
+  end
+
+  # solve.py needs numpy (the Wagner sort/collide steps are vectorised), so its
+  # parity test must pick an interpreter that has it, not just blake2b.
+  def find_python_with_numpy
+    %w[python3.14 python3.13 python3.12 python3 /opt/homebrew/bin/python3].find { |py|
+      system("#{py} -c 'import hashlib, numpy; hashlib.blake2b(b\"\", digest_size=32)' 2>/dev/null")
     }
   end
 end

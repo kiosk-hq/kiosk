@@ -7,7 +7,9 @@ module Kiosk
     # Equihash memory-hard proof-of-work backend for Kiosk.
     #
     # Birthday-collision PoW (Biryukov & Khovratovich, 2016).
-    # Default parameters: (n=192, k=7) → ~1 GiB solver memory.
+    # Default parameters: (n=168, k=7) → ~1.3 GiB / ~10s reference solve
+    # (see bench/). Equihash is NOT ASIC- or GPU-proof — its role here is a
+    # cheap-to-verify metered toll, not a hardware equaliser (ADR-0007).
     #
     # == Algorithm
     #
@@ -43,8 +45,8 @@ module Kiosk
       # See README.md for the full comparison.
       DEFAULT = true
 
-      # Default production parameters: ~1 GiB solver memory, µs verify.
-      DEFAULT_N = 192
+      # Default parameters (benchmark-chosen; see .params and bench/).
+      DEFAULT_N = 168
       DEFAULT_K = 7
 
       # ───────────────────────────────────────────────────────────────────
@@ -152,10 +154,18 @@ module Kiosk
 
       # Build algorithm-specific challenge params.
       #
-      # @param n [Integer] total hash bits (default 192)
+      # Default (n=168, k=7): chosen by the parameter sweep in bench/ — the
+      # largest params whose reference numpy solve stays under a ~30s / 1-2 GiB
+      # consumer-laptop budget (p95 ~10s, ~1.3 GiB peak). n_div = n/(k+1) = 21
+      # drives cost; n must be a multiple of 8 and n_div must not exceed 24. See
+      # bench/README.md for the measured grid. Providers tune per ADR-0007
+      # ("N ∝ cost of serving the verb"): raise n for a heavier toll, raise the
+      # policy's proof count for throughput pricing.
+      #
+      # @param n [Integer] total hash bits (default 168)
       # @param k [Integer] tree depth (default 7); 2^k indices in solution
       # @return [Hash]
-      def self.params(n: 192, k: 7)
+      def self.params(n: 168, k: 7)
         { n:, k: }
       end
 
@@ -172,8 +182,8 @@ module Kiosk
         indices = nonce[:indices] || nonce["indices"]
         return false if indices.nil? || !indices.is_a?(Array)
 
-        n = Integer(params[:n]  || params["n"]  || 192)
-        k = Integer(params[:k]  || params["k"]  || 7)
+        n = Integer(params[:n]  || params["n"]  || DEFAULT_N)
+        k = Integer(params[:k]  || params["k"]  || DEFAULT_K)
 
         expected_len = 1 << k  # 2^k
         return false unless indices.length == expected_len
@@ -186,8 +196,8 @@ module Kiosk
         return false if indices.any? { |idx| idx.is_a?(Float) || Integer(idx) < 0 }
         return false unless indices.uniq.length == expected_len
 
-        n_div = n / (k + 1)  # bits per level: 192/8 = 24
-        n_bytes = n / 8       # 24 bytes for 192 bits
+        n_div = n / (k + 1)  # bits per level: 168/8 = 21
+        n_bytes = n / 8       # 21 bytes for 168 bits
 
         # Build the seed: salt bytes ‖ header_nonce as LE u32 (future-proofing).
         # header_nonce defaults to 0 for now; extensibility point.

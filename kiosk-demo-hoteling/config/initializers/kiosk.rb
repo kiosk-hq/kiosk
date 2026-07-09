@@ -15,6 +15,51 @@ require Rails.root.join("lib/stub_psp")
 # call `enable_rls_on TABLE do ... end` directly.
 ActiveRecord::Migration.include(Kiosk::RLS::DSL)
 
+# ── Browse-heavy PoW demo (KIOSK_POW_BROWSE_DEMO=1) ───────────────────────
+#
+# Hotel search is browse-heavy: an assistant comparing options runs many
+# `availability` queries, and that is legitimate — indistinguishable from
+# scraping by pattern alone. So this vertical does NOT treat browsing as
+# suspicion. It PRICES DEPTH: the first few queries are free, then each extra
+# query costs proof-of-work, escalating with the request rate (ADR-0007 —
+# metered pricing, not a wall). A human's assistant pays a few seconds of
+# compute to look deeper; a bulk scraper pays linearly and forever.
+#
+# The rate is tracked per agent in-process (demo only — a real provider uses a
+# shared counter / sliding window). EQUIHASH_BROWSE_PARAMS are small so each
+# proof solves sub-second.
+EQUIHASH_BROWSE_PARAMS = { n: 96, k: 5 }.freeze
+HOTELING_FREE_BROWSES  = 3    # first N availability queries are free
+HOTELING_RATE_STEP     = 2    # +1 proof per this many queries beyond the free tier
+HOTELING_MAX_PROOFS    = 5
+
+if ENV["KIOSK_POW_BROWSE_DEMO"] == "1"
+  require "kiosk/pow/equihash"
+  require "kiosk/reputation"
+  Kiosk::Reputation::Backends.register(Kiosk::Pow::Equihash::NAME, Kiosk::Pow::Equihash)
+
+  HOTELING_BROWSE_COUNT = Hash.new(0)  # agent_id => availability queries so far
+
+  # Priced-pagination policy: free below the allowance, then proof count rises
+  # with the query rate. Only the `query` verb (browsing) is priced; run/pay
+  # are never gated here.
+  class HotelingBrowsePolicy < Kiosk::Reputation::Policy
+    def initialize(params)
+      @params = params
+    end
+
+    def challenge_for(identity:, verb:, factors:)
+      return nil unless verb == :query
+      rate = factors.request_rate_per_min.to_i
+      return nil if rate <= HOTELING_FREE_BROWSES
+
+      over  = rate - HOTELING_FREE_BROWSES
+      count = [(over + HOTELING_RATE_STEP - 1) / HOTELING_RATE_STEP, HOTELING_MAX_PROOFS].min
+      { alg: Kiosk::Pow::Equihash::NAME, params: @params, count: count }
+    end
+  end
+end
+
 Kiosk.configure do |c|
   c.user_model     = "User"
   c.user_id_type   = :uuid
@@ -37,6 +82,26 @@ Kiosk.configure do |c|
   c.agent_idp = JwtOrStubIdp.new(stub: StubIdp.new)
 
   c.payment_provider = StubPsp.new
+
+  # ── Browse-heavy priced-pagination gate (KIOSK_POW_BROWSE_DEMO=1) ────────
+  if ENV["KIOSK_POW_BROWSE_DEMO"] == "1"
+    c.reputation_policy = HotelingBrowsePolicy.new(EQUIHASH_BROWSE_PARAMS)
+    c.pow_secret        = ENV.fetch("KIOSK_POW_SECRET", "hoteling-demo-pow-secret")
+    c.pow_ttl           = 300
+
+    # Factors: count availability queries per agent in-process and report the
+    # running total as the "rate". Only `query` is counted (browsing depth).
+    c.reputation_factors = ->(identity:, verb:) {
+      if verb == :query
+        HOTELING_BROWSE_COUNT[identity.agent_id] += 1
+      end
+      Kiosk::Reputation::Factors.new(
+        kyc_level: nil, settled_purchases_count: nil, settled_purchases_cents: nil,
+        request_rate_per_min: HOTELING_BROWSE_COUNT[identity.agent_id],
+        account_age_seconds: nil, dispute_count: nil, bad_proof_count: 0,
+      )
+    }
+  end
 end
 
 # ─── Queries ────────────────────────────────────────────────────────────────

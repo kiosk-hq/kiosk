@@ -32,7 +32,7 @@ Kiosk.configure do |c|
   c.registration_role = :customer
   c.owner  = { name: "hoteling", support: "help@hoteling.app" }
   # Dual-check (skill.md): canonical skill URL + SHA-256 of its content.
-  c.skill_sha256 = "53ddef7286add319aa740f9819807fa209daeea0c17f3871b0eff112f81db237"
+  c.skill_sha256 = "9f7a68a17cf3f36be9fc215d277efcac980693f2fe8366d0cea50c57f08e415c"
 
   c.agent_idp = JwtOrStubIdp.new(stub: StubIdp.new)
 

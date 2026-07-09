@@ -1,22 +1,23 @@
 # frozen_string_literal: true
 
-# Kiosk reputation end-to-end driver (R2 P6 — trust-earned-by-spending).
+# Kiosk reputation end-to-end driver (trust-earned-by-spending).
 #
-# Demonstrates the full "difficulty drops as purchases accrue" lifecycle using
-# the shipped RateAndReputation policy with real settlements lookups:
+# Demonstrates the full "cost drops as purchases accrue" lifecycle using the
+# shipped RateAndReputation policy with real settlements lookups. Escalation is
+# by PROOF COUNT (N×PoW), not a difficulty dial:
 #
-#   0 purchases → 402 argon2id challenge at d=5 (unproven principal)
-#   1 purchase  → 402 argon2id challenge at d=3 (lower — purchase earned PoW relief)
+#   0 purchases → 402 with N=2 equihash challenges (unproven principal)
+#   1 purchase  → 402 with N=1 challenge (cheaper — purchase earned relief)
 #   2 purchases → 200 served directly, no challenge (proven → free pass)
 #
 # Steps:
 #   1. Register a fresh principal.
-#   2. POST query menu_by_restaurant → 402 (d0, unproven). Solve, verify served.
-#   3. Make purchase 1: place_order (run) + sign mandates + pay (each also PoW-gated).
-#   4. POST query → 402 (d1, 1 purchase). Solve, verify served. Assert d1 < d0.
+#   2. POST query menu_by_restaurant → 402 (n0 proofs, unproven). Solve, served.
+#   3. Make purchase 1: place_order (run) + sign mandates + pay (each PoW-gated).
+#   4. POST query → 402 (n1 proofs). Solve, served. Assert n1 < n0.
 #   5. Make purchase 2 (same flow as step 3).
 #   6. POST query → 200 directly (free pass, proven). Assert no challenge.
-#   7. Emit ONE JSON line with the difficulty curve.
+#   7. Emit ONE JSON line with the proof-count curve.
 #
 # Usage (invoked by rake demo:reputation — do not run standalone without the server):
 #   SERVER_URL=http://127.0.0.1:3004 \
@@ -25,7 +26,7 @@
 #
 # Requirements:
 #   - The server must be running with KIOSK_POW_REPUTATION_DEMO=1.
-#   - python3 with argon2-cffi: pip install argon2-cffi
+#   - python3 with numpy: pip install numpy
 
 require "json"
 require "net/http"
@@ -37,7 +38,7 @@ require "jwt"
 
 SERVER   = ENV.fetch("SERVER_URL")
 ISSUER   = ENV.fetch("KIOSK_ISSUER")
-SOLVE_PY = File.expand_path("../kiosk-pow/solve.py", __dir__)
+SOLVE_PY = File.expand_path("../kiosk-pow-equihash/solve.py", __dir__)
 
 # ── Shared helpers ─────────────────────────────────────────────────────────
 
@@ -55,22 +56,21 @@ def get_json(url, headers = {})
   [res.code.to_i, (JSON.parse(res.body) rescue {})]
 end
 
-# Reuse solve.py from kiosk-pow (same solver as demo:pow).
+# Solve one equihash challenge with the shipped Python solver → proof nonce.
 def solve_challenge(challenge)
   out, status = Open3.capture2("python3", SOLVE_PY, JSON.generate(challenge))
   abort "solve.py failed for challenge #{challenge["id"]}: #{out}" unless status.success?
-  begin
-    JSON.parse(out).fetch("nonce")
-  rescue KeyError, JSON::ParserError => e
-    abort "solve.py output not parseable as {nonce:}: #{e.message}\nOutput: #{out}"
-  end
+  parsed = JSON.parse(out)
+  abort "solve.py error: #{parsed["error"]}" if parsed.key?("error")
+  { "indices" => parsed.fetch("indices"), "header_nonce" => parsed.fetch("header_nonce") }
 end
 
 # Execute a Kiosk verb with automatic PoW handling.
 #
-# If the server issues a 402 challenge, solves it with solve.py and re-sends
-# the SAME body + solved proof. Returns [rc, resp, d] where d is the difficulty
-# that was solved (nil = no challenge was needed — free pass).
+# If the server issues a 402, solves EVERY challenge in error.challenges[] with
+# solve.py and re-sends the SAME body + pow:{proofs:[...]}. Returns [rc, resp, n]
+# where n is the number of proofs solved (nil = no challenge — free pass). The
+# proof count is this protocol's difficulty measure (N×PoW).
 def exec_with_pow(command, body, token)
   headers = { "Authorization" => "Bearer #{token}" }
   path    = "#{SERVER}/kiosk/#{command}"  # REST verb endpoint (query/run/pay)
@@ -78,19 +78,14 @@ def exec_with_pow(command, body, token)
   rc, resp = post_json(path, body, headers)
 
   if rc == 402
-    challenge = resp.dig("error", "challenge")
-    abort "missing challenge object in 402 for #{command}" unless challenge
-    d     = challenge.dig("params", "d")
-    nonce = solve_challenge(challenge)
+    challenges = resp.dig("error", "challenges")
+    abort "missing challenges[] in 402 for #{command}" unless challenges.is_a?(Array) && challenges.any?
+    proofs = challenges.map { |c| { challenge: c, nonce: solve_challenge(c) } }
 
-    # Re-submit the IDENTICAL args + the solved proof as a top-level `pow`
-    # sibling (excluded from the request_fingerprint, which must match).
-    rc, resp = post_json(
-      path,
-      body.merge(pow: { challenge: challenge, nonce: nonce }),
-      headers,
-    )
-    [rc, resp, d]
+    # Re-submit the IDENTICAL args + solved proofs as a top-level `pow` sibling
+    # (excluded from the request_fingerprint, which must match).
+    rc, resp = post_json(path, body.merge(pow: { proofs: proofs }), headers)
+    [rc, resp, proofs.size]
   else
     [rc, resp, nil]
   end
@@ -193,50 +188,51 @@ QUERY_BODY = { name: "menu_by_restaurant", restaurant: "Mamma Pizza" }
 
 # ── Step 2: query with 0 purchases → 402 (d0, unproven) → solve → 200 ─────
 
-$stderr.puts "  [rep] Step 2: query (0 purchases) — expect 402 + challenge"
-rc, resp, d0 = exec_with_pow("query", QUERY_BODY, token)
+$stderr.puts "  [rep] Step 2: query (0 purchases) — expect 402 + challenges"
+rc, resp, n0 = exec_with_pow("query", QUERY_BODY, token)
 abort "expected 200 after solve (0 purchases), got #{rc}: #{JSON.generate(resp)}" unless rc == 200
-abort "d0 must be non-nil — unproven principal must have received a challenge" if d0.nil?
+abort "n0 must be non-nil — unproven principal must have received a challenge" if n0.nil?
 
 rows = resp.fetch("rows", [])
 margherita = rows.find { |r| r["sku"] == "margherita" }
 abort "margherita not found in menu rows" unless margherita
 menu_item_id = margherita.fetch("id")
 
-$stderr.puts "  [rep] d0=#{d0} (unproven, 0 purchases). #{rows.size} menu rows served after solve."
+$stderr.puts "  [rep] n0=#{n0} proofs (unproven, 0 purchases). #{rows.size} menu rows served after solve."
 
 # ── Step 3: purchase 1 ─────────────────────────────────────────────────────
 
-$stderr.puts "  [rep] Step 3: making purchase 1 (run + pay, each PoW-gated at d0=#{d0})"
+$stderr.puts "  [rep] Step 3: making purchase 1 (run + pay, each PoW-gated at n0=#{n0})"
 pm1 = make_purchase(menu_item_id, key, user_id, agent_id, token)
 $stderr.puts "  [rep] purchase 1 settled (settlement_id=#{pm1})"
 
-# ── Step 4: query with 1 purchase → 402 (d1 < d0) → solve → 200 ───────────
+# ── Step 4: query with 1 purchase → 402 (n1 < n0) → solve → 200 ───────────
 
-$stderr.puts "  [rep] Step 4: query (1 purchase) — expect 402 with lower d"
-rc, resp, d1 = exec_with_pow("query", QUERY_BODY, token)
+$stderr.puts "  [rep] Step 4: query (1 purchase) — expect 402 with fewer proofs"
+rc, resp, n1 = exec_with_pow("query", QUERY_BODY, token)
 abort "expected 200 after solve (1 purchase), got #{rc}: #{JSON.generate(resp)}" unless rc == 200
-abort "d1 must be non-nil — 1 purchase is not yet proven" if d1.nil?
+abort "n1 must be non-nil — 1 purchase is not yet proven" if n1.nil?
+abort "expected proof count to drop after a purchase: n1=#{n1} not < n0=#{n0}" unless n1 < n0
 
-$stderr.puts "  [rep] d1=#{d1} (1 purchase). Difficulty dropped: #{d0} → #{d1}."
+$stderr.puts "  [rep] n1=#{n1} proofs (1 purchase). Cost dropped: #{n0} → #{n1} proofs."
 
 # ── Step 5: purchase 2 ─────────────────────────────────────────────────────
 
-$stderr.puts "  [rep] Step 5: making purchase 2 (run + pay, each PoW-gated at d1=#{d1})"
+$stderr.puts "  [rep] Step 5: making purchase 2 (run + pay, each PoW-gated at n1=#{n1})"
 pm2 = make_purchase(menu_item_id, key, user_id, agent_id, token)
 $stderr.puts "  [rep] purchase 2 settled (settlement_id=#{pm2})"
 
 # ── Step 6: query with 2 purchases → 200 directly (proven — free pass) ─────
 
 $stderr.puts "  [rep] Step 6: query (2 purchases) — expect 200 with NO challenge (free pass)"
-rc2, resp2, d2 = exec_with_pow("query", QUERY_BODY, token)
+rc2, resp2, n2 = exec_with_pow("query", QUERY_BODY, token)
 served_after_2 = rc2 == 200
 
 unless served_after_2
   abort "expected 200 free pass after 2 purchases, got #{rc2}: #{JSON.generate(resp2)}"
 end
-unless d2.nil?
-  abort "expected no challenge (d2=nil) after 2 purchases — principal must be proven. Got d2=#{d2}"
+unless n2.nil?
+  abort "expected no challenge (n2=nil) after 2 purchases — principal must be proven. Got n2=#{n2}"
 end
 
 $stderr.puts "  [rep] served without challenge! Proven principal — free pass confirmed."
@@ -244,8 +240,8 @@ $stderr.puts "  [rep] served without challenge! Proven principal — free pass c
 # ── Step 7: emit ONE JSON line ─────────────────────────────────────────────
 
 puts JSON.generate(
-  d_unproven:               d0,
-  d_after_1_purchase:       d1,
+  proofs_unproven:          n0,
+  proofs_after_1_purchase:  n1,
   served_after_2_purchases: served_after_2,
-  challenge_after_2:        d2,
+  challenge_after_2:        n2,
 )

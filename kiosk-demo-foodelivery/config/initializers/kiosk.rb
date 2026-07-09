@@ -10,7 +10,7 @@ require Rails.root.join("lib/stub_psp")
 
 # ── PoW / Reputation (R2) — activated only when KIOSK_POW_DEMO=1 ──────────
 #
-# Gate: the Argon2id PoW challenge is issued ONLY for the :query verb.
+# Gate: the Equihash PoW challenge is issued ONLY for the :query verb.
 # The :run and :pay verbs are left ungated so that the existing no-human
 # order flow (order_flow.rb / rake demo:order) continues to pass without
 # any PoW handling.
@@ -19,15 +19,17 @@ require Rails.root.join("lib/stub_psp")
 #   - rake demo:order boots the server WITHOUT KIOSK_POW_DEMO=1 → no PoW.
 #   - rake demo:pow   boots the server WITH   KIOSK_POW_DEMO=1 → PoW active.
 #
-# Difficulty d: 5 leading zero bits → solve.py completes in ~1–2 seconds.
-# Memory: m=8192 KiB (8 MiB) — small enough for a laptop demo, still
-# memory-hard (ASIC-resistant for the demo purpose).
+# Demo params: n=96, k=5 — a small, non-toy Equihash instance the reference
+# solver clears in well under a second. Production defaults (n=168, k=7) are
+# ~10 s; a demo wants speed. See ADR-0007: PoW is a metered toll, tuned per
+# provider, not a hardware wall.
+EQUIHASH_DEMO_PARAMS = { n: 96, k: 5 }.freeze
 
 if ENV["KIOSK_POW_DEMO"] == "1"
-  require "kiosk/pow"
+  require "kiosk/pow/equihash"
   require "kiosk/reputation"
 
-  Kiosk::Reputation::Backends.register(Kiosk::Pow::NAME, Kiosk::Pow)
+  Kiosk::Reputation::Backends.register(Kiosk::Pow::Equihash::NAME, Kiosk::Pow::Equihash)
 
   # Demo policy: always challenge :query; let :run/:pay through freely.
   # A real provider replaces this with Policies::RateAndReputation or a
@@ -41,7 +43,7 @@ if ENV["KIOSK_POW_DEMO"] == "1"
     def challenge_for(identity:, verb:, factors:)
       return nil unless verb == :query
 
-      { alg: Kiosk::Pow::NAME, params: @pow_params }
+      { alg: Kiosk::Pow::Equihash::NAME, params: @pow_params }
     end
   end
 
@@ -50,63 +52,23 @@ if ENV["KIOSK_POW_DEMO"] == "1"
   File.write(FOODELIVERY_BAD_PROOF_FILE, "0")
 end
 
-# ── Cuckatoo PoW / Reputation (R2 T3) — activated only when KIOSK_POW_CUCKOO_DEMO=1 ──
-#
-# TOY MECHANISM DEMO — proofsize 12 at edgebits 10; NOT production difficulty.
-#
-# Gate: the Cuckatoo PoW challenge is issued ONLY for the :query verb.
-# The :run and :pay verbs are left ungated so the existing order flow continues
-# to pass without PoW handling.
-#
-# Why edgebits=10: proofsize=12 cycles exist only when the bipartite pair-graph
-# girth ≤ 12, which requires edgebits ≤ ~12. edgebits=10 (N=1024, pairs=512)
-# gives ~1-second solve time. This is explicitly a demonstration of the
-# mechanism, not production-grade difficulty (which requires edgebits≥29).
-
-if ENV["KIOSK_POW_CUCKOO_DEMO"] == "1"
-  require "kiosk/pow/cuckoo"
-  require "kiosk/reputation"
-
-  Kiosk::Reputation::Backends.register(Kiosk::Pow::Cuckoo::NAME, Kiosk::Pow::Cuckoo)
-
-  # Demo policy: always challenge :query; let :run/:pay through freely.
-  class FoodeliveryDemoCuckatooPowPolicy < Kiosk::Reputation::Policy
-    def initialize(pow_params)
-      @pow_params = pow_params
-    end
-
-    # @return [{alg:, params:}] when verb is :query; nil otherwise.
-    def challenge_for(identity:, verb:, factors:)
-      return nil unless verb == :query
-
-      { alg: Kiosk::Pow::Cuckoo::NAME, params: @pow_params }
-    end
-  end
-
-  # Counter file written by on_bad_proof; the cuckoo_flow.rb driver reads it.
-  FOODELIVERY_CUCKOO_BAD_PROOF_FILE = "/tmp/kiosk-foodelivery-cuckoo-bad-proof.count"
-  File.write(FOODELIVERY_CUCKOO_BAD_PROOF_FILE, "0")
-end
-
 # ── Reputation PoW gate (R2 P6) — activated only when KIOSK_POW_REPUTATION_DEMO=1 ──
 #
 # Demonstrates the "trust-earned-by-spending" thesis end-to-end using the
-# shipped RateAndReputation policy with demo-tuned thresholds:
-#   0 purchases → argon2id challenge at d = base_d(3) + unproven_d_bonus(2) = 5
-#   1 purchase  → argon2id challenge at d = base_d(3) (cheaper — purchase earns PoW relief)
+# shipped RateAndReputation policy, escalating by PROOF COUNT (N×PoW):
+#   0 purchases → count = base_count(1) + unproven_count_bonus(1) = 2 proofs
+#   1 purchase  → count = base_count(1) = 1 proof (purchase earns relief)
 #   2+ purchases → free pass (proven?(purchases) → challenge_for returns nil)
 #
 # The factors callable performs a REAL DB lookup: COUNT(*) on kiosk.settlements
-# for the authenticated principal — no faking.
-#
-# Thresholds are small so each argon2id solve completes in ~0.5–2 s on solve.py,
-# keeping total demo runtime well under 15 s.
+# for the authenticated principal — no faking. Equihash params are the small
+# demo instance so each proof solves in well under a second.
 
 if ENV["KIOSK_POW_REPUTATION_DEMO"] == "1"
-  require "kiosk/pow"
+  require "kiosk/pow/equihash"
   require "kiosk/reputation"
 
-  Kiosk::Reputation::Backends.register(Kiosk::Pow::NAME, Kiosk::Pow)
+  Kiosk::Reputation::Backends.register(Kiosk::Pow::Equihash::NAME, Kiosk::Pow::Equihash)
 
   FOODELIVERY_REPUTATION_BAD_PROOF_FILE = "/tmp/kiosk-foodelivery-reputation-bad-proof.count"
   File.write(FOODELIVERY_REPUTATION_BAD_PROOF_FILE, "0")
@@ -167,10 +129,10 @@ Kiosk.configure do |c|
   # Payment provider — stub for the demo; swap in kiosk-pay-stripe for real.
   c.payment_provider = StubPsp.new
 
-  # ── Argon2id PoW gate (active only when KIOSK_POW_DEMO=1) ───────────────
+  # ── Equihash PoW gate (active only when KIOSK_POW_DEMO=1) ───────────────
   if ENV["KIOSK_POW_DEMO"] == "1"
-    # Small cost for demo speed: d=5 bits (~1–2 s on solve.py), m=8 MiB.
-    pow_params = Kiosk::Pow.params(d: 5, m: 8_192, t: 1, p: 1)
+    # Small, non-toy Equihash instance for demo speed (sub-second solve).
+    pow_params = Kiosk::Pow::Equihash.params(**EQUIHASH_DEMO_PARAMS)
 
     c.reputation_policy = FoodeliveryDemoPowPolicy.new(pow_params)
     c.pow_secret        = ENV.fetch("KIOSK_POW_SECRET", "demo-pow-secret")
@@ -187,41 +149,25 @@ Kiosk.configure do |c|
     }
   end
 
-  # ── Cuckatoo PoW gate (active only when KIOSK_POW_CUCKOO_DEMO=1) ─────────
-  # TOY MECHANISM DEMO — proofsize 12 at edgebits 10; NOT production difficulty.
-  if ENV["KIOSK_POW_CUCKOO_DEMO"] == "1"
-    # edgebits=10, proofsize=12 — toy demo size where 12-cycles exist and
-    # solve_cuckoo.py (pure Python + numpy) completes in ~1 second.
-    cuckoo_params = Kiosk::Pow::Cuckoo.params(edgebits: 10, proofsize: 12, target: nil)
-
-    c.reputation_policy = FoodeliveryDemoCuckatooPowPolicy.new(cuckoo_params)
-    c.pow_secret        = ENV.fetch("KIOSK_POW_SECRET", "demo-pow-secret")
-    c.pow_ttl           = 300
-
-    c.reputation_factors = ->(**) { Kiosk::Reputation::Factors.empty }
-
-    c.on_bad_proof = ->(identity:) {
-      count = (File.read(FOODELIVERY_CUCKOO_BAD_PROOF_FILE).to_i rescue 0)
-      File.write(FOODELIVERY_CUCKOO_BAD_PROOF_FILE, (count + 1).to_s)
-    }
-  end
-
   # ── Reputation PoW gate (active only when KIOSK_POW_REPUTATION_DEMO=1) ────
-  # Uses the shipped RateAndReputation policy with REAL purchase-count factors.
-  # Difficulty thresholds (fast for demo, total run < 15 s):
+  # Uses the shipped RateAndReputation policy with REAL purchase-count factors,
+  # escalating by PROOF COUNT (N×PoW):
   #   proven_purchases_threshold: 2  → 2 settled purchases → free pass
-  #   base_d: 3, unproven_d_bonus: 2 → 0 purchases: d=5; 1 purchase: d=3; 2+: nil
+  #   base_count: 1, unproven_count_bonus: 1 → 0 purchases: 2 proofs;
+  #                                            1 purchase: 1 proof; 2+: nil
   if ENV["KIOSK_POW_REPUTATION_DEMO"] == "1"
     c.reputation_policy = Kiosk::Reputation::Policies::RateAndReputation.new(
       proven_purchases_threshold: 2,
       low_rate_threshold:         100,
-      base_d:                     3,
-      d_min:                      3,
-      d_max:                      14,
-      rate_d_step:                1,
+      base_count:                 1,
+      count_min:                  1,
+      count_max:                  10,
+      rate_count_step:            1,
       rate_step:                  10,
-      unproven_d_bonus:           2,
-      bad_proof_d_factor:         3,
+      unproven_count_bonus:       1,
+      bad_proof_count_factor:     3,
+      equihash_n:                 EQUIHASH_DEMO_PARAMS[:n],
+      equihash_k:                 EQUIHASH_DEMO_PARAMS[:k],
     )
     c.pow_secret = ENV.fetch("KIOSK_POW_SECRET", "demo-pow-secret")
     c.pow_ttl    = 300

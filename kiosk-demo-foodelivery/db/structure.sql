@@ -141,7 +141,6 @@ CREATE TABLE kiosk.agent_tokens (
 CREATE TABLE kiosk.agents (
     id uuid DEFAULT gen_random_uuid() NOT NULL,
     user_id uuid NOT NULL,
-    name text NOT NULL,
     allowed_roles text[] DEFAULT '{}'::text[] NOT NULL,
     public_key text,
     notification_pubkey text,

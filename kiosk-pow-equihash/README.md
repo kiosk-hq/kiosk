@@ -80,10 +80,13 @@ Challenge:
 Proof:
 ```json
 {
-  "indices": [128 ascending u64 integers],
+  "indices": [128 u64 integers in Zcash-canonical tree order],
   "header_nonce": 0
 }
 ```
+
+`indices` are **not** globally sorted — they are in canonical Wagner-tree
+order (see "Verification contract" below).
 
 ## Verification (Ruby)
 
@@ -97,20 +100,65 @@ Kiosk::Pow::Equihash.verify(
 ```
 
 Checks performed (in order):
-1. Exactly 2^k indices, strictly ascending, no floats
-2. Global XOR of all 2^k hashes = 0 on n bits
-3. Collision tree: at level j, groups of 2^(j+1) indices share top (j+1)×n_div bits
+1. Exactly 2^k distinct, non-negative indices (no floats)
+2. Global XOR of all 2^k leaf hashes = 0 on n bits
+3. Collision tree — at each level j, every group of 2^(j+1) leaves:
+   - has its **XOR cancel** the top (j+1)×n_div bits (Wagner cancellation), and
+   - is in **canonical order**: the left half's first index < the right half's.
 
 Verification cost: 128 BLAKE2b-256 hashes → ~microseconds.
 
-## Solver (Python)
+### Verification contract (why it is XOR-cancellation, not prefix-equality)
+
+Equihash is a *generalized-birthday* PoW: a valid solution is a binary tree of
+2^k leaf hashes where **sibling XORs cancel** one n_div-bit block per level.
+The leaves in a group do **not** share a common prefix — only their XOR is
+zero on that block. Two consequences the verifier must respect:
+
+- **Tree check = XOR, not equality.** Checking "all 2^(j+1) leaves share the
+  top (j+1)×n_div bits" is wrong for groups larger than 2 (it is satisfiable
+  only by an astronomically rare all-equal cluster — at n=192,k=7 it asks 128
+  leaves to share 168 bits, expected count ≈ 2^25/2^168 ≈ 0). The correct
+  check is that the group's **XOR** cancels those bits.
+- **Order = canonical, not a global sort.** A real solution's tree order is
+  not ascending (pair (a,b)+(c,d) may interleave when flattened). Requiring a
+  global sort rejects every genuine k≥2 solution. We use Zcash "algorithm
+  binding": at each node the left subtree's first index precedes the right's.
+
+> **History.** Before this fix the verifier checked leaf-prefix *equality* plus
+> a global ascending sort. Both are invisible at k=1 (one pair: tree order ==
+> sorted, and XOR-cancel == equal), which is all the KATs and demos exercised —
+> so the bug was latent, and equihash never accepted a real proof at the
+> production parameters (k=7). Fixed to the Zcash-canonical contract above;
+> `spec/kiosk/pow/equihash_spec.rb` now carries k=2 and k=3 KATs.
+
+## Solver (Python + numpy)
 
 ```bash
+pip install numpy          # REQUIRED — see performance note below
 python3 solve.py '{"salt_b64":"...", "params":{"n":192,"k":7}}'
-# => {"indices": [...128 u64...], "header_nonce": 0}
+# => {"indices": [...128 u64 in canonical tree order...], "header_nonce": 0}
 ```
 
-The solver uses Wagner's algorithm with greedy adjacent pairing. It retries with incrementing `header_nonce` until a valid solution (passing collision-tree verification) is found. For production parameters (n=192, k=7), solutions are typically found within a few attempts.
+The solver runs full Wagner's algorithm (all pairs within each collision
+bucket, not greedy adjacent pairs) and emits the solution in Zcash-canonical
+tree order. Every hot step is vectorised in numpy: leaf hashes are packed into
+a uint64 array, each level sorts by the n_div-bit collision block, and
+collisions/XORs run as whole-array ops. Deep Wagner levels grow degenerate
+"megabuckets" of index-reusing entries; the solver caps bucket participation
+(`BUCKET_CAP`) to keep work and memory bounded — the real solution comes from
+the healthy small buckets, and unsolved seeds retry with the next
+`header_nonce`.
+
+**Performance (measured, n=192 k=7, one M-series laptop core):** ~140 s and
+~6 GB peak. This is a REFERENCE implementation — correct and dependency-light,
+not a miner. The floor is inherent to pure Python + numpy at 2^25 entries: the
+BLAKE2b generation alone is ~12 s (stdlib, unvectorisable), and seven collision
+rounds over 33.5 M rows dominate the rest. **numpy is not optional** — without
+it the pure-Python path is >10× slower (≈90 s → many minutes) and ~5 GB from
+Python object overhead. A production agent that needs sub-minute solves should
+bind an optimised native solver (e.g. tromp/equihash); the Ruby verifier is
+unaffected (µs either way).
 
 See `solve.py` for the implementation.
 

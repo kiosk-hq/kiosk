@@ -114,7 +114,7 @@ module Kiosk
         rescue StandardError => e
           raise Errors::ActionFailed.new(
             "Action #{name.inspect} raised #{e.class}: #{e.message}",
-            hint: "See server logs (action_log row) for full backtrace.",
+            hint: "See server logs for the backtrace.",
           )
         end
 

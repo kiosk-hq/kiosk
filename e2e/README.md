@@ -13,11 +13,12 @@ Reproducible end-to-end test of the Kiosk OSS gems. The same script (`run.sh`) r
 - The `run` verb dispatches to registered Actions
 - Error envelopes have the right shape and HTTP status (`BadRequest` → 400, `NotFound` → 404, `Unauthenticated` → 401)
 - `SET LOCAL` GUCs flow correctly: the `book_appointment` Action reads `kiosk.current_user_id()` and the `my_appointments` query returns only the calling principal's rows (app-layer isolation via `WHERE user_id = kiosk.current_user_id()`)
+- The `pay` verb settles a full AP2 mandate trail: `pay_flow.rb` self-registers a synthetic principal, signs intent → cart → payment mandates (JWS), pays against a stub PSP; assertions cover the response envelope and all four DB tables (`intent_mandates`, `cart_mandates`, `payment_mandates`, `settlements`)
 
 ## What it does NOT verify (deferred)
 
 - **RLS.** Path C removes raw SQL entirely — there is no arbitrary-SQL surface. Per-user isolation is enforced app-layer in registered query definitions (the `WHERE user_id = kiosk.current_user_id()` in `my_appointments`). RLS is optional and not used in this fixture; satellite-mode role separation per spec §7.6 lands in a follow-up. The `app_role` pre-creation in `run.sh` is kept harmless for forward compatibility.
-- **AP2 mandate trail.** The `pay` verb is not yet implemented (lands with `kiosk-pay-stripe` at M4).
+- **Live PSP capture.** The pay flow runs against `StubPsp` (deterministic in-process provider) — no real Stripe call here; the Stripe adapter is `kiosk-pay-stripe`.
 - **`events` verb** — stubbed (`NotImplementedError`); `schema` is implemented.
 - **Multi-agent revocation** flows.
 - **Live LLM agent integration** — that's the `kiosk-agent-test` companion gem's job.
@@ -77,6 +78,9 @@ e2e/
     ├── user.rb, salon.rb, appointment.rb   # ActiveRecord models
     ├── seeds.rb                            # 2 users (Alice + Bob), 1 salon
     ├── stub_idp.rb                         # Bearer-token-parsing agent IdP
+    ├── jwt_or_stub_idp.rb                  # composite IdP: Kiosk-issued JWTs + StubIdp fallback
+    ├── stub_psp.rb                         # deterministic in-process PSP (no real Stripe)
+    ├── pay_flow.rb                         # no-human AP2 pay flow: register → sign mandates → pay
     ├── initializer_kiosk.rb                # Kiosk.configure + registered Action
     └── routes.rb                           # mounts /kiosk/{query,run,pay,schema} + /.well-known/kiosk.json
 ```

@@ -1,8 +1,8 @@
 # frozen_string_literal: true
 
-require "digest"
 require "json"
 require "net/http"
+require "open3"
 require "openssl"
 require "securerandom"
 require "uri"
@@ -215,12 +215,28 @@ module Kiosk
       def build_register(name:, role:, pow_difficulty:, pow:)
         key = OpenSSL::PKey::RSA.generate(2048)
         pem = key.public_key.to_pem
-        pow_value = resolve_pow(pem, pow, pow_difficulty)
-
         body = { public_key: pem, signed: build_pop(key, pem) }
-        body[:pow] = pow_value unless pow_value.nil?
 
-        [post_json("/kiosk/auth/register", body), key]
+        # Negative-test strategies short-circuit: :skip omits pow (missing-proof
+        # test), a verbatim String sends a malformed pow (bad-proof test). Both
+        # expect rejection, so we post once and return.
+        if pow == :skip
+          return [post_json("/kiosk/auth/register", body), key]
+        elsif pow.is_a?(String)
+          return [post_json("/kiosk/auth/register", body.merge(pow: pow)), key]
+        end
+
+        # :solve — post; if the provider gates registration (402 Equihash), solve
+        # every challenge and resubmit the SAME signed body with pow:{proofs:}.
+        resp = post_json("/kiosk/auth/register", body)
+        if resp.status == 402
+          challenges = resp.body.dig("error", "challenges") rescue nil
+          if challenges.is_a?(Array) && challenges.any?
+            proofs = challenges.map { |c| { challenge: c, nonce: equihash_solve(c) } }
+            resp = post_json("/kiosk/auth/register", body.merge(pow: { proofs: proofs }))
+          end
+        end
+        [resp, key]
       end
 
       # Fetch a challenge for +pem+ and sign it with the private +key+ — the
@@ -235,47 +251,19 @@ module Kiosk
         )
       end
 
-      # Resolve the pow field value given the pow strategy.
+      # Solve one Equihash registration challenge with the shipped Python solver.
+      # Registration PoW is the SAME Equihash machinery as the query/run gate
+      # (ADR-0001 amended: one PoW = Equihash).
       #
-      # @return [String, nil] value to send as the "pow" field, or nil to omit it
-      def resolve_pow(pem, pow, difficulty)
-        case pow
-        when :skip
-          nil
-        when :solve
-          return nil unless difficulty > 0
-
-          n = 0
-          n += 1 until leading_zero_bits(Digest::SHA256.digest("#{pem}.#{n}")) >= difficulty
-          n.to_s
-        else
-          pow.to_s   # verbatim String (e.g. bad-proof test)
-        end
-      end
-
-      # Count leading zero bits in a binary digest string.
-      #
-      # Copied EXACTLY from kiosk-demo-skooti/rental_flow.rb:67-82, which in
-      # turn mirrors Kiosk::Server::ProofOfWork.leading_zero_bits.
-      # Do not change without updating both sources.
-      #
-      # @param bytes [String] raw binary bytes (e.g. 32-byte SHA256 output)
-      # @return [Integer]
-      def leading_zero_bits(bytes)
-        return 0 if bytes.empty?
-
-        count = 0
-        bytes.each_byte do |b|
-          if b == 0
-            count += 8
-          else
-            bit = 7
-            bit -= 1 while bit >= 0 && b[bit] == 0
-            count += (7 - bit)
-            break
-          end
-        end
-        count
+      # @param challenge [Hash] a challenge from the 402 error.challenges[]
+      # @return [Hash] the proof nonce {"indices"=>[...], "header_nonce"=>N}
+      def equihash_solve(challenge)
+        solve_py = File.expand_path("../../../../kiosk-pow-equihash/solve.py", __dir__)
+        out, status = Open3.capture2("python3", solve_py, JSON.generate(challenge))
+        raise "equihash solve.py failed: #{out}" unless status.success?
+        parsed = JSON.parse(out)
+        raise "equihash solve.py error: #{parsed["error"]}" if parsed.key?("error")
+        { "indices" => parsed.fetch("indices"), "header_nonce" => parsed.fetch("header_nonce") }
       end
 
       # POST JSON to the given path; returns a {Response}.

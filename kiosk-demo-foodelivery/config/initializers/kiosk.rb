@@ -138,6 +138,8 @@ Kiosk.configure do |c|
   # Role pinned to every self-registered agent (agents cannot choose their own).
   c.registration_role = :customer
   c.owner  = { name: "foodelivery", support: "help@foodelivery.app" }
+  # Dual-check (skill.md): canonical skill URL + SHA-256 of its content.
+  c.skill_sha256 = "53ddef7286add319aa740f9819807fa209daeea0c17f3871b0eff112f81db237"
 
   # ── RLS enforce gate (R1 Phase 1 Task 5 — demo:rls only) ─────────────────
   # When KIOSK_RLS_ENFORCE=1, SessionContext.open appends

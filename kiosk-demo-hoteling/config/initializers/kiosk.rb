@@ -31,6 +31,8 @@ Kiosk.configure do |c|
   # Role pinned to every self-registered agent (agents cannot choose their own).
   c.registration_role = :customer
   c.owner  = { name: "hoteling", support: "help@hoteling.app" }
+  # Dual-check (skill.md): canonical skill URL + SHA-256 of its content.
+  c.skill_sha256 = "53ddef7286add319aa740f9819807fa209daeea0c17f3871b0eff112f81db237"
 
   c.agent_idp = JwtOrStubIdp.new(stub: StubIdp.new)
 

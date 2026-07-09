@@ -76,10 +76,13 @@ module Kiosk
       # Resolution order:
       #   1. explicit value set via `Kiosk.configure { |c| c.signing_key = ... }`
       #      (accepts a {Kiosk::Server::SigningKey} or a PEM string)
-      #   2. PEM from the `KIOSK_SIGNING_KEY_PEM` env var (production path)
-      #   3. fresh in-memory RSA 2048 keypair (dev path — every process
-      #      restart issues new tokens, which is fine for local development
-      #      but never for production)
+      #   2. PEM from the `KIOSK_SIGNING_KEY_PEM` env var, or base64-encoded
+      #      PEM from `KIOSK_SIGNING_KEY_B64` (single-line friendly for
+      #      mise.toml / dotenv)
+      #   3. otherwise RAISES with generation instructions. Auto-generation
+      #      was removed on purpose: a fresh per-boot key silently
+      #      invalidates every issued JWT — agents are forced to re-register
+      #      and lose their Stripe Customer card associations.
       #
       # @return [Kiosk::Server::SigningKey]
       def signing_key

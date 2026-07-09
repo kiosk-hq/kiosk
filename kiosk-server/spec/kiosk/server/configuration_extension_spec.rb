@@ -76,19 +76,28 @@ RSpec.describe Kiosk::Server::ConfigurationExtension do
     let(:rsa)         { OpenSSL::PKey::RSA.generate(2048) }
     let(:signing_key) { Kiosk::Server::SigningKey.new(rsa) }
 
+    # Scrub BOTH env vars so these examples behave identically on machines
+    # that keep KIOSK_SIGNING_KEY_B64 in their env (mise.toml [env]) and on
+    # clean ones. Restore-or-delete in ensure so examples that set a var
+    # inside their body don't leak it into later examples.
     around do |example|
-      original = ENV.delete("KIOSK_SIGNING_KEY_PEM")
+      original_pem = ENV.delete("KIOSK_SIGNING_KEY_PEM")
+      original_b64 = ENV.delete("KIOSK_SIGNING_KEY_B64")
       example.run
     ensure
-      ENV["KIOSK_SIGNING_KEY_PEM"] = original if original
+      original_pem ? ENV["KIOSK_SIGNING_KEY_PEM"] = original_pem : ENV.delete("KIOSK_SIGNING_KEY_PEM")
+      original_b64 ? ENV["KIOSK_SIGNING_KEY_B64"] = original_b64 : ENV.delete("KIOSK_SIGNING_KEY_B64")
     end
 
-    it "lazy-generates a fresh SigningKey when nothing is configured" do
-      expect(Kiosk.configuration.signing_key).to be_a(Kiosk::Server::SigningKey)
-      expect(Kiosk.configuration.signing_key).to be_private
+    it "raises with generation instructions when no key is configured and no env var is set" do
+      expect {
+        Kiosk.configuration.signing_key
+      }.to raise_error(RuntimeError, /KIOSK_SIGNING_KEY_PEM or KIOSK_SIGNING_KEY_B64 is required/)
     end
 
-    it "memoises the generated key across accesses" do
+    it "memoises the env-resolved key across accesses" do
+      ENV["KIOSK_SIGNING_KEY_PEM"] = rsa.to_pem
+      Kiosk.reset!
       first  = Kiosk.configuration.signing_key
       second = Kiosk.configuration.signing_key
       expect(second).to equal(first)
@@ -116,10 +125,19 @@ RSpec.describe Kiosk::Server::ConfigurationExtension do
       expect(Kiosk.configuration.signing_key.kid).to eq(signing_key.kid)
     end
 
-    it "Kiosk.reset! drops any configured key" do
+    it "honours KIOSK_SIGNING_KEY_B64 env var for default resolution" do
+      require "base64"
+      ENV["KIOSK_SIGNING_KEY_B64"] = Base64.strict_encode64(rsa.to_pem)
+      Kiosk.reset!
+      expect(Kiosk.configuration.signing_key.kid).to eq(signing_key.kid)
+    end
+
+    it "Kiosk.reset! drops any configured key (next access without env raises)" do
       Kiosk.configure { |c| c.signing_key = signing_key }
       Kiosk.reset!
-      expect(Kiosk.configuration.signing_key).not_to equal(signing_key)
+      expect {
+        Kiosk.configuration.signing_key
+      }.to raise_error(RuntimeError, /KIOSK_SIGNING_KEY_PEM or KIOSK_SIGNING_KEY_B64 is required/)
     end
   end
 end

@@ -4,7 +4,7 @@ Gem::Specification.new do |spec|
   spec.name          = "kiosk-all"
   spec.version       = Kiosk::All::VERSION
   spec.authors       = ["Phil Pirozhkov"]
-  spec.email         = ["phil@kiosk.tech"]
+  spec.email         = ["hello@fili.pp.ru"]
 
   spec.summary       = "Meta-gem that bundles the Kiosk production stack (core + server)"
   spec.description   = <<~DESC

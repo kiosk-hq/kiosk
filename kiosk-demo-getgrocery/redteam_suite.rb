@@ -141,6 +141,7 @@ scenarios = [
   Kiosk::Redteam::Scenarios::MandatePrincipalSwap.new,
   Kiosk::Redteam::Scenarios::MandateReplay.new,
   Kiosk::Redteam::Scenarios::TokenTampering.new,
+  Kiosk::Redteam::Scenarios::PrivilegeSelfSelection.new,
   # Not applicable — must SKIP (no KYC)
   Kiosk::Redteam::Scenarios::MissingKyc.new,
   Kiosk::Redteam::Scenarios::ExpiredKyc.new,

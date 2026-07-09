@@ -191,6 +191,7 @@ scenarios = [
   Kiosk::Redteam::Scenarios::MandatePrincipalSwap.new,
   Kiosk::Redteam::Scenarios::MandateReplay.new,
   Kiosk::Redteam::Scenarios::TokenTampering.new,
+  Kiosk::Redteam::Scenarios::PrivilegeSelfSelection.new,
 ]
 
 # ── Expected-applicable assertion ─────────────────────────────────────────────

@@ -4,7 +4,7 @@ Gem::Specification.new do |spec|
   spec.name          = "kiosk-user-idp-devise"
   spec.version       = Kiosk::UserIdentityProviders::DeviseVersion::VERSION
   spec.authors       = ["Phil Pirozhkov"]
-  spec.email         = ["phil@kiosk.tech"]
+  spec.email         = ["hello@fili.pp.ru"]
 
   spec.summary       = "Devise user-IdP adapter for the Kiosk framework"
   spec.description   = <<~DESC

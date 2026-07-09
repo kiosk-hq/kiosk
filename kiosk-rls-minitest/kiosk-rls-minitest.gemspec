@@ -4,7 +4,7 @@ Gem::Specification.new do |spec|
   spec.name          = "kiosk-rls-minitest"
   spec.version       = Kiosk::RLSMinitest::VERSION
   spec.authors       = ["Phil Pirozhkov"]
-  spec.email         = ["phil@kiosk.tech"]
+  spec.email         = ["hello@fili.pp.ru"]
 
   spec.summary       = "Minitest integration for the Kiosk journey-test DSL"
   spec.description   = <<~DESC

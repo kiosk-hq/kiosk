@@ -4,7 +4,7 @@ Gem::Specification.new do |spec|
   spec.name          = "kiosk-test-support"
   spec.version       = Kiosk::TestHelpers::VERSION
   spec.authors       = ["Phil Pirozhkov"]
-  spec.email         = ["phil@kiosk.tech"]
+  spec.email         = ["hello@fili.pp.ru"]
 
   spec.summary       = "Shared journey-test DSL for Kiosk test harnesses (RSpec, Minitest)"
   spec.description   = <<~DESC

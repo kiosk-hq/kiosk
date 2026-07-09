@@ -4,7 +4,7 @@ Gem::Specification.new do |spec|
   spec.name          = "kiosk-core"
   spec.version       = Kiosk::VERSION
   spec.authors       = ["Phil Pirozhkov"]
-  spec.email         = ["phil@kiosk.tech"]
+  spec.email         = ["hello@fili.pp.ru"]
 
   spec.summary       = "Core abstractions for Kiosk — value types, abstract bases, GUC constants, configuration"
   spec.description   = <<~DESC

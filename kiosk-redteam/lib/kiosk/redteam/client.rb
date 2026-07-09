@@ -13,7 +13,7 @@ module Kiosk
     # HTTP driver for the Kiosk provider API.
     #
     # Covers the full agent flow:
-    #   register (+ SHA256 PoW solving) → kyc → query / run → pay
+    #   register (+ Equihash PoW solving on 402) → kyc → query / run → pay
     #
     # Two registration entry points:
     #   - {#register_raw} — always returns a {Response}; use in scenarios that
@@ -43,9 +43,13 @@ module Kiosk
       #   :solve  — auto-solve PoW when pow_difficulty > 0 (omit field when 0)
       #   :skip   — never include the pow field (test missing-proof)
       #   String  — send this exact value verbatim (test bad-proof)
+      # @param wire_role      [String, nil]
+      #   ADVERSARIAL: when set, inject a `role` field into the register body to
+      #   simulate an agent trying to self-select a privileged role. The server
+      #   MUST ignore it (the role is pinned server-side). nil = send nothing.
       # @return [Response]
-      def register_raw(name:, role: "customer", pow_difficulty: 0, pow: :solve)
-        response, _key = build_register(name:, role:, pow_difficulty:, pow:)
+      def register_raw(name:, role: "customer", pow_difficulty: 0, pow: :solve, wire_role: nil)
+        response, _key = build_register(name:, role:, pow_difficulty:, pow:, wire_role:)
         response
       end
 
@@ -212,10 +216,13 @@ module Kiosk
       # challenge, sign it (origin-bound via `aud`), then POST the signature.
       # `name`/`role` are no longer sent on the wire (the server pins the role);
       # the kwargs are kept so existing callers/scenarios don't have to change.
-      def build_register(name:, role:, pow_difficulty:, pow:)
+      def build_register(name:, role:, pow_difficulty:, pow:, wire_role: nil)
         key = OpenSSL::PKey::RSA.generate(2048)
         pem = key.public_key.to_pem
         body = { public_key: pem, signed: build_pop(key, pem) }
+        # ADVERSARIAL injection: a real agent never sends this; PrivilegeSelfSelection
+        # sets it to prove the server ignores a client-chosen role.
+        body[:role] = wire_role unless wire_role.nil?
 
         # Negative-test strategies short-circuit: :skip omits pow (missing-proof
         # test), a verbatim String sends a malformed pow (bad-proof test). Both

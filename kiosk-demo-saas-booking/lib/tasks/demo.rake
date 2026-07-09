@@ -179,3 +179,74 @@ end
 
 desc "End-to-end Kiosk demo: setup the DB then run the walkthrough."
 task demo: ["demo:setup", "demo:walkthrough"]
+
+namespace :demo do
+  desc <<~DESC
+    Registration-PoW demo (KIOSK_POW_REGISTER_DEMO=1).
+
+    Boots the server with the registration gate active and runs register_flow.rb:
+    register with no proof → 402; solve the Equihash challenge and resubmit →
+    201; the fresh token queries `salons` → 200. Requires python3 + numpy.
+  DESC
+  task register: :setup do
+    require "net/http"; require "uri"; require "json"; require "shellwords"
+
+    abort "numpy not found (pip install numpy)" unless system("python3 -c 'import numpy' 2>/dev/null")
+
+    port         = ENV.fetch("PORT", "3001")
+    server_url   = "http://127.0.0.1:#{port}"
+    log          = "/tmp/kiosk-saas-register.log"
+    flow_rb      = File.expand_path("../../register_flow.rb", __dir__)
+    failures     = []
+
+    File.truncate(log, 0) if File.exist?(log)
+    server_pid = spawn(
+      { "KIOSK_ISSUER" => server_url, "KIOSK_POW_REGISTER_DEMO" => "1" },
+      "bundle exec rails s -p #{port} -b 127.0.0.1 -e development",
+      out: log, err: log,
+    )
+    begin
+      ready = false
+      40.times do
+        begin
+          ready = true if Net::HTTP.get_response(URI("#{server_url}/.well-known/kiosk.json")).code.to_i == 200
+        rescue Errno::ECONNREFUSED, Errno::EADDRNOTAVAIL, SocketError
+          nil
+        end
+        break if ready
+        sleep 1
+      end
+      abort "Server did not become ready — see #{log}" unless ready
+      puts "  Server up at #{server_url} (registration PoW active)"
+
+      env = "SERVER_URL=#{server_url.shellescape} KIOSK_ISSUER=#{server_url.shellescape}"
+      raw = `#{env} bundle exec ruby #{flow_rb.shellescape} 2>&1`
+      json_line = raw.lines.grep(/^\{/).last
+      puts raw.lines.reject { |l| l.start_with?("{") }.join
+      puts json_line if json_line
+      result = JSON.parse(json_line || raw) rescue abort("register_flow.rb produced no JSON:\n#{raw}")
+
+      puts "\n══ Registration PoW assertions ══"
+      check = lambda do |label, ok|
+        if ok then puts "  OK  #{label}" else failures << label; puts "  FAIL  #{label}" end
+      end
+      check.call("register without proof → 402",   result["http_register_no_pow"] == 402)
+      check.call("register with proof → 201",       result["http_register_solved"] == 201)
+      check.call("solved 1 proof",                  result["proofs_solved"].to_i >= 1)
+      check.call("fresh token queries salons → 200", result["http_salons"] == 200 && result["salons_rows"].to_i >= 1)
+    ensure
+      begin
+        Process.kill("TERM", server_pid); Process.wait(server_pid)
+      rescue Errno::ESRCH, Errno::ECHILD
+        nil
+      end
+      puts "  Server stopped."
+    end
+
+    if failures.empty?
+      puts "\n  All registration PoW assertions PASSED."
+    else
+      puts "\n  FAILED:"; failures.each { |f| puts "    - #{f}" }; exit 1
+    end
+  end
+end

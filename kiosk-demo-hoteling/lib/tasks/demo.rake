@@ -615,3 +615,92 @@ end
 
 desc "End-to-end Kiosk hoteling demo: setup the DB then prove the full booking chain."
 task demo: ["demo:setup", "demo:book"]
+
+namespace :demo do
+  desc <<~DESC
+    Browse-heavy priced-pagination PoW demo (KIOSK_POW_BROWSE_DEMO=1).
+
+    Boots the server with the browse gate active and runs browse_flow.rb: a
+    burst of `properties` queries where the first few are free and each extra
+    one costs escalating proof-of-work (ADR-0007 — price depth, don't ban it).
+
+    Asserts: a non-empty free prefix, the demanded proof count becomes positive,
+    and the curve is monotonic non-decreasing. Requires python3 + numpy.
+  DESC
+  task browse: :setup do
+    require "net/http"; require "uri"; require "json"; require "shellwords"
+
+    python_ok = system("python3 -c 'import numpy' 2>/dev/null")
+    abort "numpy not found. Install with: pip install numpy" unless python_ok
+
+    port         = ENV.fetch("PORT", "3004")
+    server_url   = "http://127.0.0.1:#{port}"
+    kiosk_issuer = server_url
+    log          = "/tmp/kiosk-hoteling-browse.log"
+    flow_rb      = File.expand_path("../../browse_flow.rb", __dir__)
+    failures     = []
+
+    File.truncate(log, 0) if File.exist?(log)
+    server_pid = spawn(
+      { "KIOSK_ISSUER" => kiosk_issuer, "KIOSK_POW_BROWSE_DEMO" => "1" },
+      "bundle exec rails s -p #{port} -b 127.0.0.1 -e development",
+      out: log, err: log,
+    )
+    begin
+      ready = false
+      40.times do
+        begin
+          ready = true if Net::HTTP.get_response(URI("#{server_url}/.well-known/kiosk.json")).code.to_i == 200
+        rescue Errno::ECONNREFUSED, Errno::EADDRNOTAVAIL, SocketError
+          nil
+        end
+        break if ready
+        sleep 1
+      end
+      abort "Server did not become ready — see #{log}" unless ready
+      puts "  Server up at #{server_url} (browse gate active)"
+
+      env = "SERVER_URL=#{server_url.shellescape} KIOSK_ISSUER=#{kiosk_issuer.shellescape}"
+      raw = `#{env} bundle exec ruby #{flow_rb.shellescape} 2>&1`
+      json_line = raw.lines.grep(/^\{/).last
+      puts raw.lines.reject { |l| l.start_with?("{") }.join
+      puts json_line if json_line
+      result = JSON.parse(json_line || raw) rescue abort("browse_flow.rb produced no JSON:\n#{raw}")
+
+      puts "\n══ Browse priced-pagination assertions ══"
+      puts "  Proof-count curve: #{result["curve"].inspect}"
+
+      if result["free_prefix"].to_i >= 1
+        puts "  OK  free prefix (#{result["free_prefix"]} queries served without PoW)"
+      else
+        failures << "expected a non-empty free prefix, curve=#{result["curve"].inspect}"
+        puts "  FAIL  no free prefix"
+      end
+      if result["became_priced"]
+        puts "  OK  depth got priced (proof count rose above 0)"
+      else
+        failures << "expected the proof count to become positive, curve=#{result["curve"].inspect}"
+        puts "  FAIL  browsing never got priced"
+      end
+      if result["monotonic"]
+        puts "  OK  proof count is monotonic non-decreasing"
+      else
+        failures << "expected a monotonic curve, got #{result["curve"].inspect}"
+        puts "  FAIL  proof count not monotonic"
+      end
+    ensure
+      begin
+        Process.kill("TERM", server_pid); Process.wait(server_pid)
+      rescue Errno::ESRCH, Errno::ECHILD
+        nil
+      end
+      puts "  Server stopped."
+    end
+
+    if failures.empty?
+      puts "\n  All browse assertions PASSED — depth priced, not banned."
+    else
+      puts "\n  FAILED:"; failures.each { |f| puts "    - #{f}" }; exit 1
+    end
+  end
+end

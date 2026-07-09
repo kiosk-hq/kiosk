@@ -309,11 +309,11 @@ namespace :demo do
 
   desc "Boot the server with KIOSK_POW_DEMO=1, run pow_flow.rb (402→solve.py→200 + wrong-nonce→403)."
   task :pow do
-    # Requirement: python3 with argon2-cffi must be available.
-    # Install with: pip install argon2-cffi
-    python_ok = system("python3 -c 'import argon2' 2>/dev/null")
+    # Requirement: python3 with numpy (the equihash solver is vectorised).
+    # Install with: pip install numpy
+    python_ok = system("python3 -c 'import numpy' 2>/dev/null")
     unless python_ok
-      abort "argon2-cffi not found. Install with: pip install argon2-cffi\n" \
+      abort "numpy not found. Install with: pip install numpy\n" \
             "Then re-run: bundle exec rake demo:pow"
     end
 
@@ -547,187 +547,41 @@ namespace :demo do
   end
   # ── end demo:rls ──────────────────────────────────────────────────────────
 
-  # -------------------------------------------------------------------------
-  desc <<~DESC
-    TOY MECHANISM DEMO — proofsize 12 at edgebits 10; NOT production difficulty.
-
-    Boot the server with KIOSK_POW_CUCKOO_DEMO=1, run cuckoo_flow.rb:
-      402 cuckatoo challenge → solve_cuckoo.py (real solver, safety wrapper)
-      → 200 served; wrong Cuckatoo proof → 403.
-
-    Demonstrates:
-      • Cuckatoo proof-of-work challenge-response loop (algorithm mechanism)
-      • Composite wire nonce: {header_nonce, cycle} (not a scalar)
-      • kiosk-reputation passes the composite nonce unchanged to the backend
-
-    Solver safety: KIOSK_POW_MAX_BYTES=512MB cap + 30s timeout + nice -n 19.
-    The solver's built-in _enforce_memory_budget guard also refuses oversized
-    edgebits before allocating. edgebits=10 peak ≈ 96 KB, well under cap.
-
-    NOT production Cuckatoo (edgebits>=29, proofsize=42). This is a reference
-    solver demo only. See kiosk-pow-cuckoo/README.md for production notes.
-  DESC
-  task :cuckoo do
-    # Requirement: python3 with numpy must be available.
-    # Install with: pip install numpy
-    python_ok = system("python3 -c 'import numpy' 2>/dev/null")
-    unless python_ok
-      abort "numpy not found. Install with: pip install numpy\n" \
-            "Then re-run: bundle exec rake demo:cuckoo"
-    end
-
-    require "resolv"
-
-    port = ENV.fetch("PORT", "3003")  # port 3003 to avoid conflict with demo:pow (3002)
-    log  = "/tmp/kiosk-foodelivery-cuckoo-demo.log"
-
-    host = begin
-      addr = Resolv.getaddress("foodelivery.app") rescue ""
-      addr == "127.0.0.1" ? "foodelivery.app" : "127.0.0.1"
-    end
-
-    server_url   = "http://#{host}:#{port}"
-    kiosk_issuer = server_url
-
-    puts "\n── TOY MECHANISM DEMO: Starting foodelivery (Cuckatoo PoW) on #{server_url} ──"
-    puts "   proofsize 12 at edgebits 10; NOT production difficulty."
-
-    env_vars = {
-      "KIOSK_ISSUER"            => kiosk_issuer,
-      "KIOSK_POW_CUCKOO_DEMO"   => "1",
-    }
-    server_pid = spawn(
-      env_vars,
-      "bundle exec rails s -p #{port} -b 127.0.0.1 -e development",
-      out: log, err: log,
-    )
-
-    at_exit do
-      begin
-        Process.kill("TERM", server_pid)
-        Process.wait(server_pid)
-      rescue Errno::ESRCH, Errno::ECHILD
-        nil
-      end
-    end
-
-    # Wait for readiness.
-    require "net/http"
-    require "uri"
-    ready = false
-    30.times do
-      begin
-        res = Net::HTTP.get_response(URI("#{server_url}/.well-known/kiosk.json"))
-        if res.code.to_i == 200
-          ready = true
-          break
-        end
-      rescue Errno::ECONNREFUSED, Errno::EADDRNOTAVAIL, SocketError
-        nil
-      end
-      sleep 1
-    end
-    abort "Server did not become ready — see #{log}" unless ready
-    puts "  Server up at #{server_url} (Cuckatoo PoW active)"
-
-    # Run cuckoo_flow.rb.
-    flow_rb = File.expand_path("../../cuckoo_flow.rb", __dir__)
-    puts "\n── Running cuckoo_flow.rb (TOY MECHANISM DEMO) ──"
-    raw = `SERVER_URL=#{server_url} KIOSK_ISSUER=#{kiosk_issuer} bundle exec ruby #{flow_rb} 2>&1`
-    puts raw
-
-    begin
-      result = JSON.parse(raw.lines.grep(/^\{/).last || raw)
-    rescue JSON::ParserError => e
-      abort "cuckoo_flow.rb did not produce valid JSON: #{e.message}\nOutput:\n#{raw}"
-    end
-
-    # ── Assertions ──
-    puts "\n── Cuckatoo PoW assertions (TOY DEMO: edgebits=10, proofsize=12) ──"
-    failures = []
-
-    if result["alg"] == "cuckatoo"
-      puts "  ✓  challenge alg=cuckatoo"
-    else
-      failures << "expected alg=cuckatoo, got #{result["alg"].inspect}"
-      puts "  ✗  expected alg=cuckatoo, got #{result["alg"].inspect}"
-    end
-
-    if result["http_challenge"] == 402
-      puts "  ✓  query challenged: HTTP 402 (pow_required)"
-    else
-      failures << "expected http_challenge=402, got #{result["http_challenge"].inspect}"
-      puts "  ✗  expected HTTP 402, got #{result["http_challenge"].inspect}"
-    end
-
-    if result["served"] == true && result["http_served_after_solve"] == 200
-      puts "  ✓  served after Cuckatoo solve: HTTP 200, #{result["menu_rows"]} menu rows"
-      puts "     (header_nonce=#{result["header_nonce"]}, cycle_length=#{result["cycle_length"]})"
-    else
-      failures << "expected served=true + http_served_after_solve=200, got #{result.slice("served", "http_served_after_solve").inspect}"
-      puts "  ✗  not served after solve: #{result.inspect}"
-    end
-
-    if result["http_wrong_proof"] == 403
-      puts "  ✓  wrong Cuckatoo proof rejected: HTTP 403"
-    else
-      failures << "expected http_wrong_proof=403, got #{result["http_wrong_proof"].inspect}"
-      puts "  ✗  wrong proof returned #{result["http_wrong_proof"].inspect}"
-    end
-
-    bpc = result["bad_proof_count"].to_i
-    if bpc >= 1
-      puts "  ✓  on_bad_proof penalized: bad_proof_count=#{bpc}"
-    else
-      failures << "expected bad_proof_count>=1 after wrong proof, got #{bpc}"
-      puts "  ✗  bad_proof_count=#{bpc} (expected >=1)"
-    end
-
-    if failures.empty?
-      puts "\n  All Cuckatoo PoW assertions passed."
-      puts "  TOY MECHANISM DEMO PASSED — proofsize 12 at edgebits 10; NOT production difficulty."
-    else
-      puts "\n  FAILED:"
-      failures.each { |f| puts "    - #{f}" }
-      exit 1
-    end
-  end
-  # ---------------------------------------------------------------------------
   # ── demo:reputation ────────────────────────────────────────────────────────
   desc <<~DESC
     Reputation PoW demo (R2 P6 — trust-earned-by-spending).
 
     Boots the server with KIOSK_POW_REPUTATION_DEMO=1, runs reputation_flow.rb:
-      0 purchases → 402 argon2id challenge at d=5 (unproven)
-      1 purchase  → 402 argon2id challenge at d=3 (purchase earns PoW relief)
+      0 purchases → 402 with 2 equihash challenges (unproven)
+      1 purchase  → 402 with 1 challenge (purchase earns relief)
       2 purchases → 200 served directly, NO challenge (proven principal — free pass)
 
     Asserts:
-      • d_unproven > d_after_1_purchase   (difficulty dropped with a purchase)
-      • served_after_2_purchases == true  (query is free once proven)
-      • challenge_after_2 == nil          (no PoW issued to a proven principal)
+      • proofs_unproven > proofs_after_1_purchase  (cost dropped with a purchase)
+      • served_after_2_purchases == true           (query is free once proven)
+      • challenge_after_2 == nil                   (no PoW issued to a proven principal)
 
-    Prints the observed difficulty curve. Exits 0 on pass, 1 on failure.
+    Prints the observed proof-count curve. Exits 0 on pass, 1 on failure.
 
     Policy: Kiosk::Reputation::Policies::RateAndReputation
-      proven_purchases_threshold: 2, base_d: 3, unproven_d_bonus: 2, d_min: 3
+      proven_purchases_threshold: 2, base_count: 1, unproven_count_bonus: 1
     Factors: real DB lookup — COUNT(*) FROM kiosk.settlements WHERE user_id = <principal>
 
     Requirements:
-      python3 with argon2-cffi: pip install argon2-cffi
+      python3 with numpy: pip install numpy
   DESC
   task :reputation do
-    # Requirement: python3 with argon2-cffi must be available.
-    # Install with: pip install argon2-cffi
-    python_ok = system("python3 -c 'import argon2' 2>/dev/null")
+    # Requirement: python3 with numpy (the equihash solver is vectorised).
+    # Install with: pip install numpy
+    python_ok = system("python3 -c 'import numpy' 2>/dev/null")
     unless python_ok
-      abort "argon2-cffi not found. Install with: pip install argon2-cffi\n" \
+      abort "numpy not found. Install with: pip install numpy\n" \
             "Then re-run: bundle exec rake demo:reputation"
     end
 
     require "resolv"
 
-    port = ENV.fetch("PORT", "3004")  # port 3004 to avoid conflict with demo:pow (3002) and demo:cuckoo (3003)
+    port = ENV.fetch("PORT", "3004")  # port 3004 to avoid conflict with demo:pow (3002)
     log  = "/tmp/kiosk-foodelivery-reputation-demo.log"
 
     host = begin
@@ -797,31 +651,31 @@ namespace :demo do
     puts "\n── Reputation PoW assertions ──"
     failures = []
 
-    d_unproven = result["d_unproven"]
-    d_after_1  = result["d_after_1_purchase"]
+    n_unproven = result["proofs_unproven"]
+    n_after_1  = result["proofs_after_1_purchase"]
     served_2   = result["served_after_2_purchases"]
-    d_after_2  = result["challenge_after_2"]
+    n_after_2  = result["challenge_after_2"]
 
-    # Print the observed difficulty curve.
-    puts "  Difficulty curve: #{d_unproven} (0 purchases) → #{d_after_1} (1 purchase) → #{d_after_2.inspect} (2 purchases)"
+    # Print the observed proof-count curve.
+    puts "  Proof-count curve: #{n_unproven} (0 purchases) → #{n_after_1} (1 purchase) → #{n_after_2.inspect} (2 purchases)"
 
-    if d_unproven.to_i > d_after_1.to_i
-      puts "  ✓  d dropped: #{d_unproven} → #{d_after_1} (purchase earns PoW relief)"
+    if n_unproven.to_i > n_after_1.to_i
+      puts "  ✓  proof count dropped: #{n_unproven} → #{n_after_1} (purchase earns relief)"
     else
-      failures << "expected d_unproven(#{d_unproven}) > d_after_1_purchase(#{d_after_1}) — difficulty must drop after first purchase"
-      puts "  ✗  d did NOT drop after 1st purchase: #{d_unproven} → #{d_after_1}"
+      failures << "expected proofs_unproven(#{n_unproven}) > proofs_after_1_purchase(#{n_after_1}) — cost must drop after first purchase"
+      puts "  ✗  proof count did NOT drop after 1st purchase: #{n_unproven} → #{n_after_1}"
     end
 
-    if served_2 == true && d_after_2.nil?
+    if served_2 == true && n_after_2.nil?
       puts "  ✓  free pass after 2 purchases: query served without any challenge (proven principal)"
     else
-      failures << "expected served_after_2_purchases=true + challenge_after_2=nil; got served=#{served_2.inspect}, challenge=#{d_after_2.inspect}"
-      puts "  ✗  NOT served without challenge after 2 purchases (served=#{served_2.inspect}, d_after_2=#{d_after_2.inspect})"
+      failures << "expected served_after_2_purchases=true + challenge_after_2=nil; got served=#{served_2.inspect}, challenge=#{n_after_2.inspect}"
+      puts "  ✗  NOT served without challenge after 2 purchases (served=#{served_2.inspect}, n_after_2=#{n_after_2.inspect})"
     end
 
     if failures.empty?
       puts "\n  All reputation assertions PASSED."
-      puts "  Trust-earned-by-spending: PoW difficulty curve demonstrated end-to-end."
+      puts "  Trust-earned-by-spending: PoW proof-count curve demonstrated end-to-end."
     else
       puts "\n  FAILED:"
       failures.each { |f| puts "    - #{f}" }

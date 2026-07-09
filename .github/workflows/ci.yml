@@ -1,0 +1,175 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  gems:
+    name: ${{ matrix.gem }}
+    runs-on: ubuntu-latest
+
+    strategy:
+      fail-fast: false
+      matrix:
+        gem:
+          - kiosk-all
+          - kiosk-core
+          - kiosk-pay-stripe
+          - kiosk-pow
+          - kiosk-pow-cuckoo
+          - kiosk-pow-equihash
+          - kiosk-redteam
+          - kiosk-reputation
+          - kiosk-rls
+          - kiosk-rls-rspec
+          - kiosk-server
+          - kiosk-test-support
+          - kiosk-user-idp-devise
+        cmd: ["bundle exec rspec"]
+        include:
+          - gem: kiosk-rls-minitest
+            cmd: bundle exec rake test
+
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_HOST_AUTH_METHOD: trust
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+    env:
+      PGHOST: localhost
+      PGUSER: postgres
+      PGPASSWORD: postgres
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Ruby
+        uses: ruby/setup-ruby@v1
+        with:
+          ruby-version: "4.0.1"
+          bundler-cache: false
+
+      - name: Install dependencies
+        working-directory: ${{ matrix.gem }}
+        run: bundle install
+
+      - name: Run suite
+        working-directory: ${{ matrix.gem }}
+        run: ${{ matrix.cmd }}
+
+  demos:
+    name: ${{ matrix.demo }}
+    runs-on: ubuntu-latest
+
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - demo: kiosk-demo-foodelivery
+            tasks: demo:walkthrough demo:isolation demo:redteam
+          - demo: kiosk-demo-getgrocery
+            tasks: demo:shop demo:isolation demo:redteam
+          - demo: kiosk-demo-hoteling
+            tasks: demo:book demo:isolation demo:redteam
+          - demo: kiosk-demo-skooti
+            tasks: demo:rideflow demo:isolation demo:redteam
+          # saas-booking has no demo:redteam / demo:schema yet (K-003)
+          - demo: kiosk-demo-saas-booking
+            tasks: demo:walkthrough demo:isolation
+          # demo:pow excluded everywhere: solves real memory-hard PoW (K-001)
+
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_HOST_AUTH_METHOD: trust
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+    env:
+      PGHOST: localhost
+      PGUSER: postgres
+      PGPASSWORD: postgres
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Ruby
+        uses: ruby/setup-ruby@v1
+        with:
+          ruby-version: "4.0.1"
+          bundler-cache: false
+
+      - name: Install dependencies
+        working-directory: ${{ matrix.demo }}
+        run: bundle install
+
+      - name: Set up demo
+        working-directory: ${{ matrix.demo }}
+        run: bin/rails demo:setup
+
+      - name: Run demo flows
+        working-directory: ${{ matrix.demo }}
+        run: bin/rails ${{ matrix.tasks }}
+
+  e2e:
+    name: kiosk OSS end-to-end
+    runs-on: ubuntu-latest
+
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_HOST_AUTH_METHOD: trust
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+    env:
+      PGHOST: localhost
+      PGUSER: postgres
+      PGPASSWORD: postgres
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Ruby
+        uses: ruby/setup-ruby@v1
+        with:
+          ruby-version: "4.0.1"
+          bundler-cache: false
+
+      - name: Install Rails
+        run: gem install rails --no-document
+
+      - name: Install jq
+        run: sudo apt-get update && sudo apt-get install -y jq
+
+      - name: Run e2e
+        run: ./e2e/run.sh

@@ -4,6 +4,14 @@ All notable changes follow [Keep a Changelog](https://keepachangelog.com/en/1.1.
 
 ## [Unreleased]
 
+### Changed
+
+- **RLS is now opt-in.** kiosk-server no longer depends on or requires
+  `kiosk-rls`. Hosts that want DB-level row enforcement add
+  `gem "kiosk-rls"` themselves (see the kiosk-rls README). Config moves:
+  `schema` and `app_role` now live in kiosk-core's `Kiosk::Configuration`;
+  `enforce_db_role` in kiosk-server's extension. No wire-surface change.
+
 ### Added
 
 - Initial skeleton.

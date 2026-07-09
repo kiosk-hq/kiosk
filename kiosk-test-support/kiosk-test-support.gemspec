@@ -36,7 +36,6 @@ Gem::Specification.new do |spec|
   spec.require_paths = ["lib"]
 
   spec.add_dependency "kiosk-core", "~> 0.0"
-  spec.add_dependency "kiosk-rls",  "~> 0.0"
 
   spec.add_development_dependency "rspec", "~> 3.13"
   spec.add_development_dependency "rake",  "~> 13.2"

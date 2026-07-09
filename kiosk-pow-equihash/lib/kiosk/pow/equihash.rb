@@ -207,7 +207,7 @@ module Kiosk
         # Step 1: Compute all 2^k hashes and extract n bits as integers.
         hash_vals = indices.map do |idx|
           h = blake2b256(seed + [Integer(idx)].pack("Q<"))
-          # Take first n_bytes (24), convert to big-endian integer.
+          # Take first n_bytes (21 for n=168), convert to big-endian integer.
           # byte[0] is most significant → matches "first X bits" semantics.
           h.byteslice(0, n_bytes).unpack("C*").reduce(0) { |acc, b| (acc << 8) | b }
         end
@@ -234,7 +234,7 @@ module Kiosk
         (0...k).each do |level|
           group_size   = 1 << (level + 1)                   # 2, 4, 8, ..., 2^k
           num_groups   = expected_len / group_size
-          prefix_bits  = (level + 1) * n_div                # 24, 48, ..., k*24
+          prefix_bits  = (level + 1) * n_div                # 21, 42, ..., k*21
           prefix_shift = n - prefix_bits
           half         = group_size / 2
 

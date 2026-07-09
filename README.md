@@ -27,7 +27,7 @@ Apache-2.0 monorepo for [Kiosk](https://kiosk.tech) — the framework that turns
 
 | Gem | Algorithm | Solver memory | Default? |
 |---|---|---|---|
-| `kiosk-pow-equihash` | Equihash (n=192, k=7) | ~1 GiB | ✅ |
+| `kiosk-pow-equihash` | Equihash (n=168, k=7) | ~1.3 GiB | ✅ |
 | `kiosk-pow` | Argon2id (D=0..256) | 64 MiB | legacy |
 | `kiosk-pow-cuckoo` | Cuckatoo29 | ~4 GiB | no |
 

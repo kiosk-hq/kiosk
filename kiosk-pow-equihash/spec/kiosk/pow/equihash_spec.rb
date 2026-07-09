@@ -292,10 +292,63 @@ RSpec.describe Kiosk::Pow::Equihash do
   end
 
   # ─────────────────────────────────────────────────────────────────────
-  # default params (n=192, k=7) structural checks
+  # Production-parameter KAT (n=168, k=7) — frozen reference solution
+  #
+  # Generated 2026-07-09 by the reference solver (solve.py, numpy):
+  #   salt "kiosk-eqx-kat-01", params {n: 168, k: 7}, header_nonce 0
+  # Indices in Zcash-canonical (subtree) order. Pins the verifier at the
+  # shipped default parameters, not just toy sizes (K-001).
   # ─────────────────────────────────────────────────────────────────────
 
-  describe "default params (n=192, k=7)" do
+  describe "production params (n=168, k=7) KAT" do
+    let(:prod_salt) { "kiosk-eqx-kat-01".b }
+    let(:prod_params) { described_class.params(n: 168, k: 7) }
+    let(:prod_indices) do
+      [
+        35635, 443602, 769922, 2841204, 288650, 2534367, 3711384, 4167287,
+        439322, 3579870, 3884016, 4011474, 1469807, 2859441, 1582951, 2663283,
+        175258, 904564, 2551933, 3478559, 2097074, 2914645, 3026485, 3645933,
+        326539, 3134338, 1410867, 3946408, 1215314, 2610863, 1729482, 2563633,
+        215557, 1365296, 3286033, 3379331, 1092666, 2048436, 1956659, 4083619,
+        327630, 966319, 546923, 3597822, 1019737, 3289324, 2515996, 4102785,
+        352766, 2643465, 2237387, 3118040, 1365775, 3292860, 1484813, 2325158,
+        1130131, 3785225, 1311199, 1689016, 1154546, 2027634, 2238579, 2294173,
+        47664, 1747214, 1924004, 2999276, 2036646, 2481260, 2187884, 3492692,
+        1006856, 1260610, 1570131, 3646554, 1388645, 2876691, 2128978, 2588422,
+        367435, 513091, 3105269, 4005382, 489985, 629292, 2672040, 2928191,
+        367906, 2335214, 761171, 3386820, 681939, 2064865, 1410874, 1730962,
+        219306, 4024412, 1712945, 3300801, 719958, 3009238, 1383878, 2994505,
+        417321, 3362644, 2678745, 2792851, 2071420, 2778845, 2441747, 4028940,
+        220716, 2282797, 1287422, 1739283, 1064154, 3198198, 3579075, 3590378,
+        228235, 2335503, 1297479, 3907179, 1108349, 2972099, 3417182, 3877732
+      ]
+    end
+
+    it "ACCEPT — the frozen reference solution (canonical order)" do
+      expect(described_class.verify(
+        salt: prod_salt, params: prod_params, nonce: { indices: prod_indices }
+      )).to be(true)
+    end
+
+    it "REJECT — the same solution globally sorted (breaks tree pairing)" do
+      expect(described_class.verify(
+        salt: prod_salt, params: prod_params, nonce: { indices: prod_indices.sort }
+      )).to be(false)
+    end
+
+    it "REJECT — one mutated index (XOR no longer cancels)" do
+      mutated = prod_indices.dup.tap { |ix| ix[127] += 1 }
+      expect(described_class.verify(
+        salt: prod_salt, params: prod_params, nonce: { indices: mutated }
+      )).to be(false)
+    end
+  end
+
+  # ─────────────────────────────────────────────────────────────────────
+  # default params (n=168, k=7) structural checks
+  # ─────────────────────────────────────────────────────────────────────
+
+  describe "default params (n=168, k=7)" do
     let(:big_params) { described_class.params }
 
     it "REJECT — 127 indices (expect 128)" do

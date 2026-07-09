@@ -85,7 +85,7 @@ time (with `pow`) are identical by design.
 1. Recompute + compare HMAC sig (constant-time `OpenSSL.fixed_length_secure_compare`)
    → `:bad_sig` (tampered, wrong request binding, or forged challenge)
 2. Expiry check (`exp > now`) → `:expired`
-3. **Only then**: one backend eval (equihash verify — 2^k BLAKE2b hashes, µs + KB)
+3. **Only then**: one backend eval (equihash verify — 2^k BLAKE2b hashes, ~ms + KB)
    → `:ok` / `:bad_proof`
 
 Floods of forged or expired proofs are rejected at steps 1/2 without burning a
@@ -277,7 +277,8 @@ end
   domain-specific policies that reflect their actual trust signals.
 - **The provider mandates the algorithm.** Clients comply or are denied — do
   not add a negotiation path.
-- **Verify is cheap; the solve is the cost.** Equihash verify is µs + KB, so
+- **Verify is cheap; the solve is the cost.** Equihash verify is a few ms + KB
+  (memory is the asymmetry: KB to verify vs ~1.3 GiB to solve), so
   the gate can check every request — only *challenge* on suspicion/rate, since
   each challenge costs the client a real solve.
 - **`Policies::RateAndReputation` is an example.** Its thresholds and

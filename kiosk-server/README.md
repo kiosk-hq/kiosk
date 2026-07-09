@@ -6,7 +6,7 @@ The Kiosk Rails engine — host-side surface for [Kiosk](https://kiosk.tech).
 
 The full host-side surface is shipped and covered by the gem's own suite (500+ passing specs):
 
-- **Wire-protocol controllers** — `WireController` serves the `/kiosk/query`, `/kiosk/run`, `/kiosk/pay`, `/kiosk/schema` verbs; `AuthController` runs the register/login proof-of-possession challenge-response; JWKS, OAuth device-authorization, and token controllers back the login flow.
+- **Wire-protocol controllers** — `WireController` serves the `/kiosk/query`, `/kiosk/run`, `/kiosk/pay`, `/kiosk/schema` verbs; `AuthController` runs the register/login proof-of-possession challenge-response (kiosk-pop — the auth story, ADR-0008); JWKS backs stateless token verification. (OAuth device-authorization controllers ship but are dormant, not the default auth path.)
 - **`Kiosk::Server::Executor`** — dispatches resolved commands to the host's registered queries and Actions.
 - **Agent registration & login** — `AgentRegistration`, `AgentLogin`, `RegistrationPow`, and the pluggable agent-IdP resolve and mint per-agent identities.
 - **PoW gate** — `PowGate` enforces the reputation policy's N×PoW challenge-response (soft dependency on `kiosk-reputation`; zero overhead when no policy is set).
@@ -42,7 +42,7 @@ Kiosk.configure do |c|
   c.roles         = %i[customer master support]
   c.owner         = { name: "Acme Inc.", support: "support@acme.example" }
   # c.mount_path  = "/kiosk"   # default
-  # c.capabilities = %w[query actions ap2 events]   # default
+  # c.capabilities = %w[schema query run pay]   # optional override; computed from the registry by default (ADR-0009)
 end
 ```
 

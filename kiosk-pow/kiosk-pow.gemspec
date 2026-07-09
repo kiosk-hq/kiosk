@@ -4,7 +4,7 @@ Gem::Specification.new do |spec|
   spec.name          = "kiosk-pow"
   spec.version       = Kiosk::Pow::VERSION
   spec.authors       = ["Phil Pirozhkov"]
-  spec.email         = ["phil@kiosk.tech"]
+  spec.email         = ["hello@fili.pp.ru"]
 
   spec.summary       = "Argon2id memory-hard proof-of-work backend for Kiosk"
   spec.description   = <<~DESC

@@ -4,7 +4,7 @@ Gem::Specification.new do |spec|
   spec.name          = "kiosk-server"
   spec.version       = Kiosk::Server::VERSION
   spec.authors       = ["Phil Pirozhkov"]
-  spec.email         = ["phil@kiosk.tech"]
+  spec.email         = ["hello@fili.pp.ru"]
 
   spec.summary       = "Rails engine + Rack middleware + pure-Ruby helpers for the Kiosk framework"
   spec.description   = <<~DESC

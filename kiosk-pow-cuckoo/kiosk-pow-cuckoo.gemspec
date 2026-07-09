@@ -4,7 +4,7 @@ Gem::Specification.new do |spec|
   spec.name          = "kiosk-pow-cuckoo"
   spec.version       = Kiosk::Pow::Cuckoo::VERSION
   spec.authors       = ["Phil Pirozhkov"]
-  spec.email         = ["phil@kiosk.tech"]
+  spec.email         = ["hello@fili.pp.ru"]
 
   spec.summary       = "Cuckatoo-Cycle proof-of-work backend for Kiosk"
   spec.description   = <<~DESC

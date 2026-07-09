@@ -20,10 +20,12 @@ ActiveRecord::Migration.include(Kiosk::RLS::DSL)
 # Hotel search is browse-heavy: an assistant comparing options runs many
 # `availability` queries, and that is legitimate — indistinguishable from
 # scraping by pattern alone. So this vertical does NOT treat browsing as
-# suspicion. It PRICES DEPTH: the first few queries are free, then each extra
-# query costs proof-of-work, escalating with the request rate (ADR-0007 —
-# metered pricing, not a wall). A human's assistant pays a few seconds of
-# compute to look deeper; a bulk scraper pays linearly and forever.
+# suspicion. It PRICES BY REQUEST RATE (a coarse proxy for depth): the first
+# few queries are free, then each extra query costs escalating proof-of-work
+# (ADR-0007 — metered pricing, not a wall). A human's assistant pays a few
+# seconds of compute to look deeper; a bulk scraper pays linearly and forever.
+# (The offset/page-precise "metered pagination" variant is deferred in ADR-0007;
+# this rate-based form needs no change to the reputation Factors interface.)
 #
 # The rate is tracked per agent in-process (demo only — a real provider uses a
 # shared counter / sliding window). EQUIHASH_BROWSE_PARAMS are small so each

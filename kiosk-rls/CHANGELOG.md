@@ -4,6 +4,13 @@ All notable changes follow [Keep a Changelog](https://keepachangelog.com/en/1.1.
 
 ## [Unreleased]
 
+### Changed
+
+- Now truly opt-in: no longer a dependency of kiosk-server, kiosk-all, or
+  kiosk-test-support. `ConfigurationExtension` now contributes only
+  `system_role`; `schema` and `app_role` moved to kiosk-core,
+  `enforce_db_role` to kiosk-server.
+
 ### Added
 
 - Initial skeleton.

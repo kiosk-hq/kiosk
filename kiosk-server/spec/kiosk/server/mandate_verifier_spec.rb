@@ -74,6 +74,21 @@ RSpec.describe Kiosk::Server::MandateVerifier do
         .to raise_error(Kiosk::Server::Errors::Forbidden, /exp/i)
     end
 
+    # K-020: id and iat are spec-MUST claims. The payloads below are otherwise
+    # fully valid (correct key, iss, principal, exp) — they passed the old
+    # exp-only check and must now be rejected on presence alone.
+    it "rejects a mandate with no id claim" do
+      no_id = intent_payload.reject { |k, _| k == :id }
+      expect { described_class.verify_intent(raw_jws: sign(no_id), identity: identity) }
+        .to raise_error(Kiosk::Server::Errors::Forbidden, /id/i)
+    end
+
+    it "rejects a mandate with no iat claim" do
+      no_iat = intent_payload.reject { |k, _| k == :iat }
+      expect { described_class.verify_intent(raw_jws: sign(no_iat), identity: identity) }
+        .to raise_error(Kiosk::Server::Errors::Forbidden, /iat/i)
+    end
+
     it "rejects when agent_id in the payload does not match the authenticated identity" do
       bad = intent_payload.merge(agent_id: "someone-else")
       expect { described_class.verify_intent(raw_jws: sign(bad), identity: identity) }

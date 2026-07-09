@@ -165,9 +165,10 @@ Boots foodelivery with `KIOSK_POW_CUCKOO_DEMO=1`, runs the full
 - Cuckatoo is NOT ASIC-proof (1 GB-SRAM ASICs exist for edgebits=31+). The
   provider mandates it; clients that cannot solve are denied. This is
   intentional: it raises the cost of abuse.
-- **Argon2id** (`kiosk-pow`) is the practical default with a uniformly-fast
-  solver available on all platforms. Use Cuckatoo when the extreme solve:verify
-  asymmetry (GB-RAM solver vs. µs verifier) is specifically required.
+- **Equihash** (`kiosk-pow-equihash`) is the shipped default (ADR-0007).
+  Argon2id (`kiosk-pow`) remains as a legacy backend. Use Cuckatoo only when the
+  extreme solve:verify asymmetry (GB-RAM solver vs. µs verifier) is specifically
+  required.
 - `proofsize < 42` is a deviation from production Cuckatoo (L=42 per Grin/Tromp
   spec). The toy demo (L=12) demonstrates the mechanism only.
 - `edgebits < 29` is suitable only for testing; production Grin uses edgebits 29.

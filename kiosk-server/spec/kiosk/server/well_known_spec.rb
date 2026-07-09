@@ -49,14 +49,25 @@ RSpec.describe Kiosk::Server::WellKnown do
       expect(doc[:kiosk][:auth]).not_to have_key(:token_url)
     end
 
-    it "defaults capabilities to the shipped verb surface" do
-      expect(doc[:kiosk][:capabilities]).to eq(%w[query actions ap2])
+    # capabilities is computed from the live registry (ADR-0009): empty here
+    # since this context registers no queries/actions and wires no payment.
+    it "advertises an empty capability set when nothing is registered" do
+      expect(doc[:kiosk][:capabilities]).to eq([])
     end
 
-    it "passes through configured capabilities" do
-      Kiosk.configure { |c| c.capabilities = %w[query actions] }
+    it "advertises the computed verb names (schema/query/run/pay) from the registry" do
+      Kiosk::Server::Queries.register("catalog") { [] }
+      Kiosk::Server::Actions.register("checkout") { {} }
+      Kiosk.configure { |c| c.payment_provider = Object.new }
       d = described_class.build(base_url: "https://api.acme.example")
-      expect(d[:kiosk][:capabilities]).to eq(%w[query actions])
+      expect(d[:kiosk][:capabilities]).to eq(%w[schema query run pay])
+    end
+
+    it "passes through an explicitly pinned capability list" do
+      Kiosk::Server::Queries.register("catalog") { [] }
+      Kiosk.configure { |c| c.capabilities = %w[schema query] }
+      d = described_class.build(base_url: "https://api.acme.example")
+      expect(d[:kiosk][:capabilities]).to eq(%w[schema query])
     end
 
     it "passes through configured min_client" do

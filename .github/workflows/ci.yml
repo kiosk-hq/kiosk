@@ -124,6 +124,11 @@ jobs:
         working-directory: ${{ matrix.demo }}
         run: bundle install
 
+      # Demos don't self-provision a signing key yet (K-034); give CI an
+      # ephemeral one so registration/JWT flows don't 500.
+      - name: Generate ephemeral signing key
+        run: echo "KIOSK_SIGNING_KEY_B64=$(ruby -e 'require %{openssl}; require %{base64}; puts Base64.strict_encode64(OpenSSL::PKey::RSA.new(2048).to_pem)')" >> "$GITHUB_ENV"
+
       - name: Set up demo
         working-directory: ${{ matrix.demo }}
         run: bin/rails demo:setup

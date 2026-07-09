@@ -250,3 +250,205 @@ namespace :demo do
     end
   end
 end
+
+namespace :demo do
+  # ── demo:redteam ─────────────────────────────────────────────────────────
+  desc <<~DESC
+    Adversarial regression battery — attacks saas-booking's live surface.
+
+    Boots the server and runs redteam_suite.rb against the salon-booking
+    surface (salons / my_appointments queries, book_appointment action),
+    asserting each attack is BLOCKED:
+
+      BLOCKED  CrossTenantRead  — B's my_appointments excludes A's appointment
+      BLOCKED  ForgedUserId     — agent-supplied user_id in book args ignored
+      BLOCKED  MissingAuth      — request with no Authorization → 401
+      BLOCKED  GarbageToken     — unparseable bearer token → 401
+      BLOCKED  UnknownQuery     — unregistered query name → 404
+      BLOCKED  UnknownAction    — unregistered action name → 404
+
+    saas-booking has no payment or KYC surface, so the battery covers only the
+    attacks the surface can actually exhibit. Exits 0 when all are BLOCKED;
+    exits 1 on any BREACH. A BREACH = a real hole — fix the app, not the scenario.
+  DESC
+  task redteam: :setup do
+    require "net/http"
+    require "uri"
+
+    port         = ENV.fetch("PORT", "3001")
+    log          = "/tmp/kiosk-saas-booking-redteam.log"
+    server_url   = "http://127.0.0.1:#{port}"
+    kiosk_issuer = server_url
+
+    puts "\n── Starting saas-booking (redteam battery) on #{server_url} ──"
+
+    File.truncate(log, 0) if File.exist?(log)
+    server_pid = spawn(
+      { "KIOSK_ISSUER" => kiosk_issuer },
+      "bundle exec rails s -p #{port} -b 127.0.0.1 -e development",
+      out: log, err: log,
+    )
+
+    at_exit do
+      begin
+        Process.kill("TERM", server_pid)
+        Process.wait(server_pid)
+      rescue Errno::ESRCH, Errno::ECHILD
+        nil
+      end
+      puts "  Server stopped."
+    end
+
+    ready = false
+    40.times do
+      begin
+        res = Net::HTTP.get_response(URI("#{server_url}/.well-known/kiosk.json"))
+        if res.code.to_i == 200
+          ready = true
+          break
+        end
+      rescue Errno::ECONNREFUSED, Errno::EADDRNOTAVAIL, SocketError
+        nil
+      end
+      sleep 1
+    end
+    abort "Server did not become ready — see #{log}" unless ready
+    puts "  Server up at #{server_url}"
+
+    suite_rb = File.expand_path("../../redteam_suite.rb", __dir__)
+    puts "\n── Running redteam_suite.rb ──"
+    system("SERVER_URL=#{server_url} KIOSK_ISSUER=#{kiosk_issuer} bundle exec ruby #{suite_rb}")
+    exit_status = $?.exitstatus
+
+    if exit_status == 0
+      puts "\n  redteam: all scenarios BLOCKED. Exit 0."
+    else
+      puts "\n  redteam: BREACH DETECTED or error — see output above. Exit #{exit_status}."
+      exit exit_status
+    end
+  end
+  # ── end demo:redteam ─────────────────────────────────────────────────────
+end
+
+namespace :demo do
+  # ── demo:schema ───────────────────────────────────────────────────────────
+  desc <<~DESC
+    Self-discovery proof — verifies the schema verb over HTTP.
+
+    Boots the server, authenticates a seeded principal, calls:
+      GET /kiosk/schema
+
+    Asserts:
+      • schema.verbs includes query/run/pay/schema and NOT events
+      • schema.queries includes salons and my_appointments
+      • schema.actions includes book_appointment
+
+    Exits 0 if all assertions pass; exits 1 on any miss.
+  DESC
+  task schema: :setup do
+    require "net/http"
+    require "uri"
+    require "json"
+
+    port         = ENV.fetch("PORT", "3001")
+    log          = "/tmp/kiosk-saas-booking-schema.log"
+    server_url   = "http://127.0.0.1:#{port}"
+    kiosk_issuer = server_url
+
+    puts "\n── Starting saas-booking (schema proof) on #{server_url} ──"
+
+    File.truncate(log, 0) if File.exist?(log)
+    server_pid = spawn(
+      { "KIOSK_ISSUER" => kiosk_issuer },
+      "bundle exec rails s -p #{port} -b 127.0.0.1 -e development",
+      out: log, err: log,
+    )
+
+    at_exit do
+      begin
+        Process.kill("TERM", server_pid)
+        Process.wait(server_pid)
+      rescue Errno::ESRCH, Errno::ECHILD
+        nil
+      end
+      puts "  Server stopped."
+    end
+
+    ready = false
+    40.times do
+      begin
+        res = Net::HTTP.get_response(URI("#{server_url}/.well-known/kiosk.json"))
+        if res.code.to_i == 200
+          ready = true
+          break
+        end
+      rescue Errno::ECONNREFUSED, Errno::EADDRNOTAVAIL, SocketError
+        nil
+      end
+      sleep 1
+    end
+    abort "Server did not become ready — see #{log}" unless ready
+    puts "  Server up at #{server_url}"
+
+    flow_rb = File.expand_path("../../schema_flow.rb", __dir__)
+    puts "\n── Running schema_flow.rb ──"
+    raw = `SERVER_URL=#{server_url} KIOSK_ISSUER=#{kiosk_issuer} bundle exec ruby #{flow_rb} 2>&1`
+    puts raw
+
+    begin
+      result = JSON.parse(raw.lines.grep(/^\{/).last || raw)
+    rescue JSON::ParserError => e
+      abort "schema_flow.rb did not produce valid JSON: #{e.message}\nOutput:\n#{raw}"
+    end
+
+    puts "\n── Schema assertions ──"
+    failures = []
+
+    verbs   = result["schema_verbs"]   || []
+    queries = (result["schema_queries"] || []).map { |q| q["name"] }
+    actions = (result["schema_actions"] || []).map { |a| a["name"] }
+
+    # Verbs: query/run/pay/schema present; events absent.
+    %w[query run pay schema].each do |v|
+      if verbs.include?(v)
+        puts "  ✓  schema.verbs includes #{v}"
+      else
+        failures << "schema.verbs missing #{v} (got #{verbs.inspect})"
+        puts "  ✗  schema.verbs missing #{v}"
+      end
+    end
+    if verbs.include?("events")
+      failures << "schema.verbs must NOT include events (got #{verbs.inspect})"
+      puts "  ✗  schema.verbs must NOT include events"
+    else
+      puts "  ✓  schema.verbs does not include events"
+    end
+
+    # Queries: salons + my_appointments registered.
+    %w[salons my_appointments].each do |q|
+      if queries.include?(q)
+        puts "  ✓  schema.queries includes #{q}"
+      else
+        failures << "schema.queries missing #{q} (got #{queries.inspect})"
+        puts "  ✗  schema.queries missing #{q}"
+      end
+    end
+
+    # Actions: book_appointment registered.
+    if actions.include?("book_appointment")
+      puts "  ✓  schema.actions includes book_appointment"
+    else
+      failures << "schema.actions missing book_appointment (got #{actions.inspect})"
+      puts "  ✗  schema.actions missing book_appointment"
+    end
+
+    if failures.empty?
+      puts "\n  All schema assertions passed."
+    else
+      puts "\n  FAILED assertions:"
+      failures.each { |f| puts "    - #{f}" }
+      exit 1
+    end
+  end
+  # ── end demo:schema ────────────────────────────────────────────────────────
+end

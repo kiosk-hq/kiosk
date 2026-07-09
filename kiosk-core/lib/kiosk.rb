@@ -26,7 +26,7 @@ module Kiosk
   #     c.user_id_type   = :uuid
   #     c.user_id_column = :id
   #     c.user_idp       = MyApp::KioskAdapters::Devise.new
-  #     c.agent_idp      = Kiosk::AgentIdentityProviders::DefaultAgentIdp.new
+  #     c.agent_idp      = Kiosk::Server::AgentIdentityProviders::DefaultAgentIdp.new
   #     c.guc_namespace  = "app"
   #     c.roles          = %i[customer master support]
   #     c.issuer         = "https://api.acme.example"

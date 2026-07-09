@@ -25,23 +25,13 @@ Rails.application.routes.draw do
   # ship a controller for it.
   # well-known = the machine-readable HANDSHAKE: who/where/which version + issuer
   # (the AP2 `iss` anchor) + auth, served at the guessable conventional URL. It
-  # is NOT the surface — it points to the REST verbs (schema/query/run/pay),
-  # which carry the protocol + the live queries/actions. The `verbs` summary is
-  # DERIVED from the actually implemented verbs (no hardcoded capability list),
+  # is NOT the surface — it advertises `capabilities`, the verb names actually
+  # served (schema/query/run/pay), computed from the live registry (ADR-0009),
   # so discovery and the live surface never drift.
   get "/.well-known/kiosk.json", to: ->(env) {
     base_url = "#{env['rack.url_scheme']}://#{env['HTTP_HOST']}"
-    doc      = Kiosk::Server::WellKnown.build(base_url: base_url)
-    endpoint = doc[:kiosk][:endpoint]
-    doc[:kiosk].delete(:capabilities)          # drop the static capability list
-    doc[:kiosk][:verbs] = Kiosk::Server::Executor::IMPLEMENTED_VERBS  # the truth
-    doc[:kiosk][:routing] = {                                         # ADR-0005
-      "schema" => { "method" => "GET",  "path" => "#{endpoint}/schema" },
-      "query"  => { "method" => "POST", "path" => "#{endpoint}/query" },
-      "run"    => { "method" => "POST", "path" => "#{endpoint}/run" },
-      "pay"    => { "method" => "POST", "path" => "#{endpoint}/pay" },
-    }
-    [200, { "content-type" => "application/json" }, [JSON.generate(doc)]]
+    [200, { "content-type" => "application/json" },
+     [Kiosk::Server::WellKnown.build_json(base_url: base_url)]]
   }
 
   # ─── Provider admin (read-only demo back-office) ──────────────────────────

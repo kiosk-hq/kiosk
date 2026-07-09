@@ -723,3 +723,85 @@ end
 
 desc "End-to-end getgrocery demo: setup DB then run no-human catalog->create_order->pay->schedule_delivery."
 task demo: ["demo:setup", "demo:shop"]
+
+namespace :demo do
+  desc <<~DESC
+    Commerce catalog-toll PoW demo (KIOSK_POW_DEMO=1).
+
+    Boots the server with the catalog gate active and runs pow_flow.rb:
+    catalog query → 402 equihash → solve.py → 200; wrong nonce → 403 + penalty.
+    Requires python3 + numpy.
+  DESC
+  task :pow do
+    require "net/http"; require "uri"; require "json"; require "shellwords"
+
+    abort "numpy not found (pip install numpy)" unless system("python3 -c 'import numpy' 2>/dev/null")
+
+    # The catalog-toll flow never pays; default a dummy Stripe test key so the
+    # initializer boots (setup + server) without a real key or stripe-mock.
+    ENV["STRIPE_SECRET_KEY"] = "sk_test_dummy" if ENV["STRIPE_SECRET_KEY"].to_s.empty?
+    Rake::Task["demo:setup"].invoke
+
+    port         = ENV.fetch("PORT", "3005")
+    server_url   = "http://127.0.0.1:#{port}"
+    log          = "/tmp/kiosk-getgrocery-pow.log"
+    flow_rb      = File.expand_path("../../pow_flow.rb", __dir__)
+    failures     = []
+
+    # The catalog-toll flow never pays, so a dummy test key is enough to boot the
+    # Stripe adapter (no API call is made). Real key / stripe-mock is only needed
+    # for the payment demos (demo:shop).
+    stripe_key = ENV["STRIPE_SECRET_KEY"].to_s.empty? ? "sk_test_dummy" : ENV["STRIPE_SECRET_KEY"]
+
+    File.truncate(log, 0) if File.exist?(log)
+    server_pid = spawn(
+      { "KIOSK_ISSUER" => server_url, "KIOSK_POW_DEMO" => "1",
+        "KIOSK_TEST_AUTOCARD" => "1", "STRIPE_SECRET_KEY" => stripe_key },
+      "bundle exec rails s -p #{port} -b 127.0.0.1 -e development",
+      out: log, err: log,
+    )
+    begin
+      ready = false
+      40.times do
+        begin
+          ready = true if Net::HTTP.get_response(URI("#{server_url}/.well-known/kiosk.json")).code.to_i == 200
+        rescue Errno::ECONNREFUSED, Errno::EADDRNOTAVAIL, SocketError
+          nil
+        end
+        break if ready
+        sleep 1
+      end
+      abort "Server did not become ready — see #{log}" unless ready
+      puts "  Server up at #{server_url} (catalog PoW active)"
+
+      env = "SERVER_URL=#{server_url.shellescape} KIOSK_ISSUER=#{server_url.shellescape}"
+      raw = `#{env} bundle exec ruby #{flow_rb.shellescape} 2>&1`
+      json_line = raw.lines.grep(/^\{/).last
+      puts raw.lines.reject { |l| l.start_with?("{") }.join
+      puts json_line if json_line
+      result = JSON.parse(json_line || raw) rescue abort("pow_flow.rb produced no JSON:\n#{raw}")
+
+      puts "\n══ Catalog PoW assertions ══"
+      check = lambda do |label, ok|
+        if ok then puts "  OK  #{label}" else failures << label; puts "  FAIL  #{label}" end
+      end
+      check.call("catalog challenged (402)",         result["http_challenge"] == 402)
+      check.call("served after solve (200 + rows)",  result["served"] == true && result["catalog_rows"].to_i >= 1)
+      check.call("wrong nonce rejected (403)",       result["http_wrong_nonce"] == 403)
+      check.call("on_bad_proof penalized",           result["bad_proof_count"].to_i >= 1)
+    ensure
+      begin
+        Process.kill("TERM", server_pid); Process.wait(server_pid)
+      rescue Errno::ESRCH, Errno::ECHILD
+        nil
+      end
+      puts "  Server stopped."
+    end
+
+    if failures.empty?
+      puts "\n  All catalog PoW assertions PASSED."
+    else
+      puts "\n  FAILED:"; failures.each { |f| puts "    - #{f}" }; exit 1
+    end
+  end
+end

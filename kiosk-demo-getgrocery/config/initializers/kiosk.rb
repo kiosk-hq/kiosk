@@ -12,6 +12,34 @@ require "kiosk/payment_providers/stripe"
 
 ActiveRecord::Migration.include(Kiosk::RLS::DSL)
 
+# ── Commerce catalog-toll PoW demo (KIOSK_POW_DEMO=1) ─────────────────────
+#
+# A grocery provider can toll the `catalog` query to price anonymous browsing
+# (ADR-0007 — a metered toll, not a wall). Small demo params solve sub-second.
+# run/pay are left ungated so the existing shop flow is unchanged.
+EQUIHASH_DEMO_PARAMS = { n: 96, k: 5 }.freeze
+
+if ENV["KIOSK_POW_DEMO"] == "1"
+  require "kiosk/pow/equihash"
+  require "kiosk/reputation"
+  Kiosk::Reputation::Backends.register(Kiosk::Pow::Equihash::NAME, Kiosk::Pow::Equihash)
+
+  GETGROCERY_BAD_PROOF_FILE = "/tmp/kiosk-getgrocery-bad-proof.count"
+  File.write(GETGROCERY_BAD_PROOF_FILE, "0")
+
+  class GetgroceryCatalogPowPolicy < Kiosk::Reputation::Policy
+    def initialize(params)
+      @params = params
+    end
+
+    def challenge_for(identity:, verb:, factors:)
+      return nil unless verb == :query
+
+      { alg: Kiosk::Pow::Equihash::NAME, params: @params }
+    end
+  end
+end
+
 Kiosk.configure do |c|
   c.user_model     = "User"
   c.user_id_type   = :uuid
@@ -65,6 +93,18 @@ Kiosk.configure do |c|
     test_autocard:     ENV["KIOSK_TEST_AUTOCARD"] == "1",
     return_url:        "http://kiosk.tech:8787/payment/return",
   )
+
+  # ── Catalog-toll PoW gate (active only when KIOSK_POW_DEMO=1) ────────────
+  if ENV["KIOSK_POW_DEMO"] == "1"
+    c.reputation_policy  = GetgroceryCatalogPowPolicy.new(Kiosk::Pow::Equihash.params(**EQUIHASH_DEMO_PARAMS))
+    c.pow_secret         = ENV.fetch("KIOSK_POW_SECRET", "getgrocery-demo-pow-secret")
+    c.pow_ttl            = 300
+    c.reputation_factors = ->(**) { Kiosk::Reputation::Factors.empty }
+    c.on_bad_proof = ->(identity:) {
+      n = (File.read(GETGROCERY_BAD_PROOF_FILE).to_i rescue 0)
+      File.write(GETGROCERY_BAD_PROOF_FILE, (n + 1).to_s)
+    }
+  end
 end
 
 LOW_STOCK_THRESHOLD = 5

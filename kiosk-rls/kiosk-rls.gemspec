@@ -4,7 +4,7 @@ Gem::Specification.new do |spec|
   spec.name          = "kiosk-rls"
   spec.version       = Kiosk::RLS::VERSION
   spec.authors       = ["Phil Pirozhkov"]
-  spec.email         = ["phil@kiosk.tech"]
+  spec.email         = ["hello@fili.pp.ru"]
 
   spec.summary       = "RLS DSL and PostgreSQL DDL emitter for the Kiosk framework"
   spec.description   = <<~DESC

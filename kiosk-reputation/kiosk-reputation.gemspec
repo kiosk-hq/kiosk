@@ -4,7 +4,7 @@ Gem::Specification.new do |spec|
   spec.name          = "kiosk-reputation"
   spec.version       = Kiosk::Reputation::VERSION
   spec.authors       = ["Phil Pirozhkov"]
-  spec.email         = ["phil@kiosk.tech"]
+  spec.email         = ["hello@fili.pp.ru"]
 
   spec.summary       = "Policy + wire-challenge layer for Kiosk's proof-of-work system"
   spec.description   = <<~DESC

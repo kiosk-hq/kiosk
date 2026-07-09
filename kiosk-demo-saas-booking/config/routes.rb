@@ -10,6 +10,11 @@ Rails.application.routes.draw do
   post "/kiosk/query",                             to: "kiosk/server/wire#query"
   post "/kiosk/run",                               to: "kiosk/server/wire#run"
   post "/kiosk/pay",                               to: "kiosk/server/wire#pay"
+  # Proof-of-possession auth surface (used by the registration-PoW demo).
+  get  "/kiosk/auth/challenge",                    to: "kiosk/server/auth#challenge"
+  post "/kiosk/auth/register",                     to: "kiosk/server/auth#register"
+  post "/kiosk/auth/login",                        to: "kiosk/server/auth#login"
+  post "/kiosk/auth/revoke",                       to: "kiosk/server/auth#revoke"
   get  "/kiosk/.well-known/jwks.json",             to: "kiosk/server/jwks#show"
   post "/kiosk/oauth/device_authorization",        to: "kiosk/server/oauth_device_authorization#create"
   post "/kiosk/oauth/token",                       to: "kiosk/server/oauth_token#create"

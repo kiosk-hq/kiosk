@@ -150,6 +150,7 @@ scenarios = [
   Kiosk::Redteam::Scenarios::MandatePrincipalSwap.new,
   Kiosk::Redteam::Scenarios::MandateReplay.new,
   Kiosk::Redteam::Scenarios::TokenTampering.new,
+  Kiosk::Redteam::Scenarios::PrivilegeSelfSelection.new,
   # Not applicable — must SKIP (no gated_action)
   Kiosk::Redteam::Scenarios::UnpaidGatedAction.new,
   Kiosk::Redteam::Scenarios::SpentResourceReuse.new,

@@ -6,7 +6,7 @@ Gem::Specification.new do |spec|
   spec.name        = "kiosk-pay-stripe"
   spec.version     = Kiosk::PaymentProviders::StripeVersion::VERSION
   spec.authors     = ["Phil Pirozhkov"]
-  spec.email       = ["phil@kiosk.tech"]
+  spec.email       = ["hello@fili.pp.ru"]
 
   spec.summary     = "Stripe PSP adapter for the Kiosk framework"
   spec.description = <<~DESC

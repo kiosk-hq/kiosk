@@ -43,6 +43,22 @@ module Kiosk
         @min_client ||= Kiosk::Protocol::MIN_CLIENT
       end
 
+      # Skill descriptor advertised in `/.well-known/kiosk.json` (the
+      # "Dual-check" contract in skill.md): the canonical, versioned skill
+      # URL plus the SHA-256 of its content, so an agent can verify the
+      # skill it cached (or is about to fetch) is the one this provider
+      # was built against.
+      #
+      # The `skill` block is emitted only when `skill_sha256` is set — a
+      # stale hash baked into the gem would be worse than no block at all.
+      # Providers set it in the initializer and update it when they adopt
+      # a newer skill version.
+      attr_writer :skill_url
+      def skill_url
+        @skill_url ||= "https://kiosk.tech/skill-v1.0.md"
+      end
+      attr_accessor :skill_sha256
+
       # RSA signing key used by the OAuth 2.1 surface (§6.7) and the
       # bundled IdP (§6.2) to issue JWTs.
       #

@@ -4,5 +4,4 @@ gemspec
 
 # Local-development overrides — sibling gems haven't shipped to RubyGems yet.
 gem "kiosk-core",   path: "../kiosk-core"
-gem "kiosk-rls",    path: "../kiosk-rls"
 gem "kiosk-server", path: "../kiosk-server"

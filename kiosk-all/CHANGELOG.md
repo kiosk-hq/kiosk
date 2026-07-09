@@ -4,6 +4,11 @@ All notable changes follow [Keep a Changelog](https://keepachangelog.com/en/1.1.
 
 ## [Unreleased]
 
+### Changed
+
+- `kiosk-rls` is no longer bundled — RLS is opt-in. Add `gem "kiosk-rls"`
+  explicitly if you use `enable_rls_on` in migrations.
+
 ### Added
 
 - Initial skeleton.

@@ -6,15 +6,16 @@ Gem::Specification.new do |spec|
   spec.authors       = ["Phil Pirozhkov"]
   spec.email         = ["phil@kiosk.tech"]
 
-  spec.summary       = "Meta-gem that bundles the Kiosk production stack (core + RLS + server)"
+  spec.summary       = "Meta-gem that bundles the Kiosk production stack (core + server)"
   spec.description   = <<~DESC
     kiosk-all is the «I just want to start» entry point for the Kiosk
     framework. Installing it pulls in the production data-plane gems:
-    kiosk-core (value types, abstract bases, configuration), kiosk-rls
-    (RLS DSL + SQL emitter), and kiosk-server (Rails engine, headers,
-    well-known, schema migrations).
+    kiosk-core (value types, abstract bases, configuration) and
+    kiosk-server (Rails engine, headers, well-known, schema migrations).
 
     Deliberately out of scope:
+      - kiosk-rls — opt-in DB-level RLS defense-in-depth; add it
+        explicitly if you use enable_rls_on in migrations.
       - Test harnesses (kiosk-test-support, kiosk-rls-rspec,
         kiosk-rls-minitest) — host picks one per stack and adds it to
         the dev/test group of its Gemfile.
@@ -36,7 +37,6 @@ Gem::Specification.new do |spec|
   spec.require_paths = ["lib"]
 
   spec.add_dependency "kiosk-core",   "~> 0.0"
-  spec.add_dependency "kiosk-rls",    "~> 0.0"
   spec.add_dependency "kiosk-server", "~> 0.0"
 
   spec.add_development_dependency "rspec", "~> 3.13"

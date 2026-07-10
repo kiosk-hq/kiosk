@@ -6,10 +6,12 @@ A salon-booking SaaS, Kiosk-enabled. Demonstrates:
 - JWKS endpoint for JWT verification
 - Authenticated REST wire surface (`/kiosk/query`, `/kiosk/run`, `/kiosk/pay`, `/kiosk/schema`) — query + run verbs
 - App-layer data isolation (two users, two views of the same table); RLS available as optional defense-in-depth
-- OAuth 2.1 Device Authorization Grant (RFC 8628) — the agent-login flow
+- OAuth 2.1 Device Authorization Grant (RFC 8628) — for when the human already has an account with this provider and wants to link their agent to it
 - A `book_appointment` Action
 
 Combette is the canonical reference shape for personal-services SaaS — barbershops, restaurants, gyms, clinics. Same patterns apply.
+
+> **Auth:** For greenfield agents that don't yet have an account, the default Kiosk auth story is `kiosk-pop` — register/login by proof-of-possession (ADR-0008). The OAuth device grant shown here is the *optional* path for the other case: a human who **already has** a Combette account authorizing their agent against that existing account.
 
 ## Run the demo
 
@@ -35,7 +37,7 @@ The walkthrough (`bin/demo`) prints six sections:
 2. **Named query** — `POST /kiosk/query` with `{name: ...}`, returning rows scoped by app-layer authz
 3. **Run an Action** — `POST /kiosk/run` invoking `book_appointment` (the demo's lone registered Action)
 4. **Isolation** — same query run as Alice vs Bob; each sees only their own (enforced in the query block, RLS optional)
-5. **OAuth Device Grant** — full flow: device_authorization → user approval (simulated) → token poll → JWT bearer
+5. **OAuth Device Grant (existing-account path)** — a human who already has a Combette account authorizes their agent against it: device_authorization → user approval (simulated) → token poll → JWT bearer. This is the have-an-account case, distinct from `kiosk-pop` greenfield registration
 6. **JWT against `/kiosk/query`** — the OAuth-issued bearer is interchangeable with the legacy synthetic shape
 
 After the walkthrough finishes, the server is torn down cleanly. Server logs are at `/tmp/kiosk-demo.log` if you want to inspect what hit the HTTP surface.

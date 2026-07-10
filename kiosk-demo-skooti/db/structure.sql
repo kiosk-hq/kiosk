@@ -549,6 +549,13 @@ CREATE UNIQUE INDEX idx_agent_tokens_hash ON kiosk.agent_tokens USING btree (tok
 
 
 --
+-- Name: idx_agents_public_key_live; Type: INDEX; Schema: kiosk; Owner: -
+--
+
+CREATE UNIQUE INDEX idx_agents_public_key_live ON kiosk.agents USING btree (public_key) WHERE (revoked_at IS NULL);
+
+
+--
 -- Name: idx_agents_user_id; Type: INDEX; Schema: kiosk; Owner: -
 --
 

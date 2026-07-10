@@ -84,6 +84,19 @@ RSpec.describe Kiosk::Server::SchemaDefinitions do
       out = described_class.identity_tables_sql
       expect(out).to include("user_id         bigint NOT NULL")
     end
+
+    # K-043 — DB-level dedupe of the credential, not TOCTOU SELECT-then-INSERT.
+    it "adds a PARTIAL unique index on public_key for LIVE (non-revoked) rows only" do
+      expect(sql).to match(
+        /CREATE UNIQUE INDEX idx_agents_public_key_live\s+ON "kiosk"\.agents \(public_key\) WHERE revoked_at IS NULL/,
+      )
+    end
+
+    it "keeps the public_key uniqueness partial so a revoked key can re-register" do
+      # A bare (non-partial) UNIQUE on public_key would block re-registering a
+      # revoked key — the index MUST be scoped to revoked_at IS NULL.
+      expect(sql).not_to match(/UNIQUE INDEX idx_agents_public_key_live\s+ON "kiosk"\.agents \(public_key\);/)
+    end
   end
 
   describe ".actions_log_sql" do

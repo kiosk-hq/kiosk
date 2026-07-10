@@ -161,11 +161,13 @@ module Kiosk
       # Provider-supplied factory that creates the assistant account backing a
       # self-registered agent (ADR-0010). Optional.
       #
-      # When set, `AgentRegistration` generates the assistant-account id
-      # (`SecureRandom.uuid`) and invokes this proc as
-      # `assistant_creation.call(assistant_account_id, pubkey)`, letting the
-      # provider persist its OWN record under that id and satisfy its OWN model
-      # validations. The generated id becomes the registered agent's principal.
+      # When set, `AgentRegistration` invokes this proc with ONE argument — the
+      # registrant's public key — and USES its RETURN VALUE as the principal
+      # (`agents.user_id`). The provider creates its OWN record (satisfying its
+      # OWN model validations) and returns that record's id. Because the id
+      # comes from the provider's own row, this works for bigint AND uuid PKs;
+      # the old framework-generated-uuid contract forced a uuid principal and
+      # 500'd on bigint apps. Returning nil raises a ConfigurationError.
       #
       # When unset, registration falls back to `user_model.constantize.create!`
       # (the greenfield default — works only for models without required
@@ -173,8 +175,8 @@ module Kiosk
       # should set this hook to avoid a 500 at registration.
       #
       #   Kiosk.configure do |c|
-      #     c.assistant_creation = ->(assistant_account_id, pubkey) do
-      #       AssistantAccount.create!(id: assistant_account_id, kind: :agent)
+      #     c.assistant_creation = ->(pubkey) do
+      #       AssistantAccount.create!(kind: :agent).id
       #     end
       #   end
       attr_accessor :assistant_creation

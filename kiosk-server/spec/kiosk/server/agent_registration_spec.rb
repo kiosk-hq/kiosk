@@ -98,10 +98,11 @@ RSpec.describe Kiosk::Server::AgentRegistration do
   end
 
   # ─── assistant-account factory (ADR-0010) ───────────────────────────────
-  # When the provider configures `assistant_creation`, the framework generates
-  # the assistant-account id and hands it (with the pubkey) to the provider,
-  # which persists its OWN record. The generated id becomes the principal —
-  # NOT a bare `user_model.create!` (which 500s on any validated model).
+  # When the provider configures `assistant_creation`, the framework invokes it
+  # with ONE arg (the pubkey) and USES the return value as the principal
+  # (`agents.user_id`). The provider persists its OWN record and returns that
+  # record's id — so a bigint (or any non-uuid) id flows straight through,
+  # instead of the framework forcing a uuid principal that 500s on bigint apps.
   describe "assistant-account factory (config.assistant_creation)" do
     let(:con) { FakeConnection.new }
 
@@ -117,22 +118,45 @@ RSpec.describe Kiosk::Server::AgentRegistration do
       allow(con).to receive(:execute) { |_sql| results.shift || [] }
     end
 
-    it "calls the factory with (assistant_account_id, pubkey) and uses that id as the principal" do
+    it "calls the factory with ONLY the pubkey and uses its RETURN as the principal" do
       captured = {}
       Kiosk.configure do |c|
-        c.assistant_creation = ->(assistant_account_id, pubkey) do
-          captured[:id]     = assistant_account_id
-          captured[:pubkey] = pubkey
+        c.assistant_creation = ->(pubkey) do
+          captured[:args] = pubkey
+          # A provider on bigint PKs returns an INTEGER id — this must flow through
+          # untouched (the old contract forced a uuid principal and 500'd here).
+          987_654
         end
       end
 
       result = described_class.call(public_key_pem: pem, signed: "sig")
 
-      # The framework generated a UUID and passed it to the provider…
-      expect(captured[:id]).to match(/\A[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\z/)
-      expect(captured[:pubkey]).to eq(pem)
-      # …and that same id is the agent's principal in the response.
-      expect(result[:user_id]).to eq(captured[:id])
+      # Block received exactly one positional arg: the pubkey (no framework-minted id).
+      expect(described_class.method(:create_assistant_account)).not_to be_nil
+      expect(captured[:args]).to eq(pem)
+      # …and the block's return value IS the agent's principal in the response.
+      expect(result[:user_id]).to eq("987654")
+    end
+
+    it "flows a bigint principal id straight through to agents.user_id (no uuid coercion)" do
+      executed = []
+      results  = [[], [{ "id" => "agent-1" }]]
+      allow(con).to receive(:execute) { |sql| executed << sql; results.shift || [] }
+      Kiosk.configure { |c| c.assistant_creation = ->(_pubkey) { 42 } }
+
+      described_class.call(public_key_pem: pem, signed: "sig")
+
+      insert_sql = executed.find { |s| s =~ /INSERT INTO kiosk\.agents/ }
+      # The integer id — NOT a uuid — is what lands in the row.
+      expect(insert_sql).to match(/VALUES \('42'/)
+      expect(insert_sql).not_to match(/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}/)
+    end
+
+    it "raises ConfigurationError when the factory returns nil (must return an id)" do
+      Kiosk.configure { |c| c.assistant_creation = ->(_pubkey) { nil } }
+      expect {
+        described_class.call(public_key_pem: pem, signed: "sig")
+      }.to raise_error(Kiosk::Server::Errors::ConfigurationError, /assistant_creation returned nil/)
     end
 
     it "does NOT fall back to user_model.create! when the factory is set" do
@@ -140,26 +164,11 @@ RSpec.describe Kiosk::Server::AgentRegistration do
       allow(user_model).to receive(:create!).and_return(double(id: 999))
       allow(Kiosk.configuration).to receive(:user_model)
         .and_return(double(constantize: user_model))
-      Kiosk.configure { |c| c.assistant_creation = ->(_id, _pubkey) {} }
+      Kiosk.configure { |c| c.assistant_creation = ->(_pubkey) { 7 } }
 
       described_class.call(public_key_pem: pem, signed: "sig")
 
       expect(user_model).not_to have_received(:create!)
-    end
-
-    it "writes the generated principal id into the agents row" do
-      captured_id = nil
-      executed    = []
-      results     = [[], [{ "id" => "agent-1" }]]
-      allow(con).to receive(:execute) { |sql| executed << sql; results.shift || [] }
-      Kiosk.configure do |c|
-        c.assistant_creation = ->(assistant_account_id, _pubkey) { captured_id = assistant_account_id }
-      end
-
-      described_class.call(public_key_pem: pem, signed: "sig")
-
-      insert_sql = executed.find { |s| s =~ /INSERT INTO kiosk\.agents/ }
-      expect(insert_sql).to include(captured_id)
     end
   end
 end

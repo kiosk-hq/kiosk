@@ -72,6 +72,11 @@ module Kiosk
             revoked_at      timestamptz
           );
           CREATE INDEX idx_agents_user_id ON "#{schema}".agents (user_id) WHERE revoked_at IS NULL;
+          -- Dedupe at the DB, not via SELECT-then-INSERT (TOCTOU): two LIVE
+          -- rows for one public key cannot coexist. Partial (WHERE revoked_at
+          -- IS NULL) so a revoked key can re-register. (K-043)
+          CREATE UNIQUE INDEX idx_agents_public_key_live
+            ON "#{schema}".agents (public_key) WHERE revoked_at IS NULL;
 
           CREATE TABLE "#{schema}".agent_tokens (
             id          uuid PRIMARY KEY DEFAULT gen_random_uuid(),

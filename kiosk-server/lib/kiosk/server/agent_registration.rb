@@ -1,7 +1,5 @@
 # frozen_string_literal: true
 
-require "securerandom"
-
 module Kiosk
   module Server
     # Greenfield self-registration: provision the assistant account backing the
@@ -69,11 +67,12 @@ module Kiosk
         conn.transaction do
           # The principal backing this agent is an ASSISTANT ACCOUNT (ADR-0010),
           # not necessarily a human user. Prefer the provider-supplied factory:
-          # the framework generates the id and the provider persists its own
-          # record under it (satisfying its own model validations). Fall back to
-          # a bare `create!` only when no factory is configured — that path
-          # 500s on any model with required attributes, which is exactly why
-          # `assistant_creation` exists.
+          # the provider creates its OWN record (satisfying its own model
+          # validations) and RETURNS the principal id, which the framework uses
+          # verbatim as `agents.user_id` — so it works for bigint AND uuid PKs.
+          # Fall back to a bare `create!` only when no factory is configured —
+          # that path 500s on any model with required attributes, which is
+          # exactly why `assistant_creation` exists.
           assistant_account_id = create_assistant_account(config, public_key_pem)
 
           agent_id = conn.execute(<<~SQL).first.fetch("id")
@@ -93,11 +92,17 @@ module Kiosk
       # return its id (the agent's principal). ADR-0010.
       def create_assistant_account(config, public_key_pem)
         if config.assistant_creation
-          # Framework owns id generation; provider persists its own record under
-          # it. `pubkey` lets the provider bind the account to the credential.
-          assistant_account_id = SecureRandom.uuid
-          config.assistant_creation.call(assistant_account_id, public_key_pem)
-          assistant_account_id
+          # Provider owns BOTH record creation AND id: it persists its own row
+          # (bigint or uuid PK) and RETURNS the principal id, which we use
+          # verbatim. `pubkey` lets it bind the account to the credential.
+          id = config.assistant_creation.call(public_key_pem)
+          if id.nil?
+            raise Errors::ConfigurationError,
+                  "config.assistant_creation returned nil. The block must create the " \
+                  "assistant account and RETURN its id (used as agents.user_id), e.g. " \
+                  "c.assistant_creation = ->(pubkey) { AssistantAccount.create!(...).id }"
+          end
+          id
         else
           config.user_model.constantize.create!.id
         end

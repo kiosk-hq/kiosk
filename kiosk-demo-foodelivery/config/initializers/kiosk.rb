@@ -4,6 +4,17 @@
 # food-delivery reference shape: uuid users, JWT-or-stub IdP, StubPsp,
 # one Action registered (place_order).
 
+# ── Ephemeral dev signing key (K-034) ────────────────────────────────────
+# JWT / register flows need a signing key. In development or test, if none is
+# provided, self-provision an EPHEMERAL RSA key so `demo:setup` and the flows
+# run out-of-the-box. Never do this in production — a real key must be set.
+if ENV["KIOSK_SIGNING_KEY_B64"].nil? && ENV["KIOSK_SIGNING_KEY_PEM"].nil? && Rails.env.local?
+  require "openssl"
+  require "base64"
+  ENV["KIOSK_SIGNING_KEY_B64"] = Base64.strict_encode64(OpenSSL::PKey::RSA.new(2048).to_pem)
+  warn "[kiosk] WARNING: generated an EPHEMERAL signing key (#{Rails.env}); set KIOSK_SIGNING_KEY_B64/PEM for a stable key."
+end
+
 require Rails.root.join("lib/stub_idp")
 require Rails.root.join("lib/jwt_or_stub_idp")
 require Rails.root.join("lib/stub_psp")

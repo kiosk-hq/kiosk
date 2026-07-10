@@ -121,7 +121,11 @@ curl -sS -X POST "$SERVER_URL/kiosk/query" \
 
 # ─── OAuth Device Grant ──────────────────────────────────────────────
 
-heading "OAuth 2.1 Device Authorization Grant (RFC 8628) — the real CLI flow"
+heading "OAuth 2.1 Device Authorization Grant (RFC 8628) — existing-account authorization"
+
+say "For a human who ALREADY has a Combette account: this is how they authorize"
+say "their agent against that existing account. (Greenfield agents without an"
+say "account use kiosk-pop register/login instead — the default auth story, ADR-0008.)"
 
 step "Initiate /oauth/device_authorization"
 DA=$(curl -sS -X POST "$SERVER_URL/kiosk/oauth/device_authorization" \
@@ -169,7 +173,7 @@ say ""
 say "Try it yourself:"
 say "  install the CLI:  curl -fsSL https://kiosk.tech/kiosk | sh"
 say "  query directly:   kiosk $SERVER_URL sql 'SELECT id, name FROM salons'"
-say "  real OAuth flow:  kiosk $SERVER_URL login"
+say "  link an existing account (OAuth device grant):  kiosk $SERVER_URL login"
 say ""
 say "Swap StubIdp for production-shape auth:"
 say "  replace lib/jwt_or_stub_idp.rb with kiosk-user-idp-devise (or your IdP)"

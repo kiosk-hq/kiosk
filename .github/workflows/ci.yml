@@ -79,16 +79,15 @@ jobs:
       matrix:
         include:
           - demo: kiosk-demo-foodelivery
-            tasks: demo:walkthrough demo:isolation demo:redteam
+            tasks: demo:walkthrough demo:isolation demo:redteam demo:schema
           - demo: kiosk-demo-getgrocery
-            tasks: demo:shop demo:isolation demo:redteam
+            tasks: demo:shop demo:isolation demo:redteam demo:schema
           - demo: kiosk-demo-hoteling
-            tasks: demo:book demo:isolation demo:redteam
+            tasks: demo:book demo:isolation demo:redteam demo:schema
           - demo: kiosk-demo-skooti
-            tasks: demo:rideflow demo:isolation demo:redteam
-          # saas-booking has no demo:redteam / demo:schema yet (K-003)
+            tasks: demo:rideflow demo:isolation demo:redteam demo:schema
           - demo: kiosk-demo-saas-booking
-            tasks: demo:walkthrough demo:isolation
+            tasks: demo:walkthrough demo:isolation demo:redteam demo:schema
           # demo:pow excluded everywhere: solves real memory-hard PoW (K-001)
 
     services:
@@ -124,8 +123,8 @@ jobs:
         working-directory: ${{ matrix.demo }}
         run: bundle install
 
-      # Demos don't self-provision a signing key yet (K-034); give CI an
-      # ephemeral one so registration/JWT flows don't 500.
+      # Demos self-provision a dev signing key since e8bc5bf (K-034 fixed);
+      # this ephemeral key is belt-and-braces only.
       - name: Generate ephemeral signing key
         run: echo "KIOSK_SIGNING_KEY_B64=$(ruby -e 'require %{openssl}; require %{base64}; puts Base64.strict_encode64(OpenSSL::PKey::RSA.new(2048).to_pem)')" >> "$GITHUB_ENV"
 

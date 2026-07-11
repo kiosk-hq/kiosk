@@ -10,7 +10,7 @@ module Kiosk
     # In the canonical Rails case the host is `ActiveRecord::Migration`
     # (see `kiosk/rls/migration` for the optional auto-injection).
     #
-    # The four migration verbs from spec §7.3 (evolving policies):
+    # The four migration verbs (evolving policies):
     #
     #   enable_rls_on(table)                  — full-table RLS turn-on
     #   add_kiosk_policy_to(table, action)    — single-policy addition

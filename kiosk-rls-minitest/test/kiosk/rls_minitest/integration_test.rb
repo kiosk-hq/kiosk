@@ -2,7 +2,7 @@
 
 require "test_helper"
 
-# Exercise the documented entry point from spec §12: a Minitest test class
+# Exercise the canonical entry point: a Minitest test class
 # that does `include Kiosk::TestHelpers` should get both the journey DSL
 # and the Kiosk assertions, in one include.
 class IntegrationJourneyTest < Minitest::Test

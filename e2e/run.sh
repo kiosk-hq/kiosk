@@ -95,7 +95,7 @@ ok "all prerequisites present"
 # Pre-create app_role so Kiosk.configure app_role= / system_role= reference
 # a real PG role. NOLOGIN + grant to current user is harmless forward-compat:
 # Path C uses app-layer isolation (named queries), not RLS. Role separation
-# per spec §7.6 lands in a follow-up — see e2e/README.md.
+# lands in a follow-up — see e2e/README.md.
 psql -d postgres -tAc "DO \$\$ BEGIN
   IF NOT EXISTS (SELECT FROM pg_roles WHERE rolname = 'app_role') THEN
     CREATE ROLE app_role NOLOGIN;

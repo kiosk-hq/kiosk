@@ -7,9 +7,6 @@ module Kiosk
     # Minitest assertions for the structured Kiosk error classes. Mixed
     # into `Minitest::Test` (and friends) automatically when the user
     # `include Kiosk::TestHelpers` — see {Kiosk::RLSMinitest::Integration}.
-    #
-    # See design spec §12 (assertions paragraph) and §5.2 (structured
-    # exit-code error classes).
     module Assertions
       # Pass when the block raises {Kiosk::TestHelpers::Errors::RLSDenied}.
       def assert_rls_denied(msg = nil, &block)

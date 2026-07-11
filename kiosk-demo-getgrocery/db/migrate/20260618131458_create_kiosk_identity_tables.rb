@@ -1,7 +1,6 @@
 # frozen_string_literal: true
 
 # Migration 002 — Kiosk identity tables: agents, agent_tokens, agent_mappings.
-# See implementation-plan §3 and design-spec §6.1, §6.4, §6.5.
 class CreateKioskIdentityTables < ActiveRecord::Migration[ActiveRecord::Migration.current_version]
   def up
     execute Kiosk::Server::SchemaDefinitions.identity_tables_sql(

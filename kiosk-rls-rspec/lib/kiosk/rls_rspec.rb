@@ -1,7 +1,6 @@
 # frozen_string_literal: true
 
 # kiosk-rls-rspec — RSpec wiring for the Kiosk journey-test DSL.
-# See design spec §12.
 
 require "rspec/core"
 require "kiosk/test_helpers"
@@ -13,7 +12,7 @@ module Kiosk
   module RLSRSpec
     # The metadata tags that pull in the journey DSL. `:kiosk_journey` is
     # the deterministic SQL/Action shape; `:kiosk_agent` is reserved for
-    # the optional `kiosk-agent-test` companion gem (spec §12.5), which
+    # the optional `kiosk-agent-test` companion gem, which
     # upgrades this same module with a live-LLM driver. Both tags share
     # the same DSL surface so a test can graduate from one to the other
     # without changing the helper calls.

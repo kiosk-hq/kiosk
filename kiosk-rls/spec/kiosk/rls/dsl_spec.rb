@@ -4,7 +4,7 @@ RSpec.describe Kiosk::RLS::DSL do
   subject(:host) { FakeMigration.new }
 
   describe "#enable_rls_on" do
-    it "executes the canonical spec §7.4 sequence" do
+    it "executes the canonical RLS enable sequence" do
       host.enable_rls_on :rentals do
         policy :select, using: "user_id = kiosk.current_user_id()"
         policy :insert, check: "user_id = kiosk.current_user_id() AND kiosk.current_role() = 'customer'"
@@ -21,7 +21,7 @@ RSpec.describe Kiosk::RLS::DSL do
       ])
     end
 
-    it "raises if comment is missing (spec §7.5)" do
+    it "raises if comment is missing" do
       expect {
         host.enable_rls_on(:rentals) { policy :select, using: "x" }
       }.to raise_error(ArgumentError, /comment/)

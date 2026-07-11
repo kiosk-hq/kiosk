@@ -6,7 +6,7 @@ module Kiosk
   module UserIdentityProviders
     # Devise user-IdP adapter — the bundled-by-default {Kiosk::UserIdentityProviders::Base}
     # implementation for Rails providers that authenticate principals through
-    # Devise. See design spec §6.4.
+    # Devise.
     #
     # The adapter is agnostic about HOW the user logged in: Devise's
     # `database_authenticatable` and `omniauthable` modules both populate
@@ -86,7 +86,7 @@ module Kiosk
         nil
       end
 
-      # Per spec §6.2 / §6.4 each token carries exactly one active role.
+      # Each token carries exactly one active role.
       # Resolution order:
       #   1. `user.kiosk_role` (provider opt-in customisation)
       #   2. first symbol in `Kiosk.configuration.roles` (default)

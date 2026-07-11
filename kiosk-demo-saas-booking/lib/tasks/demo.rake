@@ -54,7 +54,7 @@ namespace :demo do
 
     port = ENV.fetch("PORT", "3001")
     log  = "/tmp/kiosk-saas-booking-isolation.log"
-    db   = "kiosk_demo_development"
+    db   = "kiosk_saas_booking_development"
 
     server_url   = "http://127.0.0.1:#{port}"
     kiosk_issuer = server_url

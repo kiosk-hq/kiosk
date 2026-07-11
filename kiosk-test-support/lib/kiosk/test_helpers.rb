@@ -19,7 +19,6 @@ module Kiosk
   #   - `kiosk-rls-minitest` — provides `assert_rls_denied`,
   #     `assert_quota_exceeded`, and an include-and-go module.
   #
-  # See design spec §12.
   module TestHelpers
     class << self
       # The active executor — anything responding to the contract documented

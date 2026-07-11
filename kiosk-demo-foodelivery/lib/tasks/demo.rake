@@ -853,7 +853,7 @@ namespace :demo do
     Asserts:
       • schema.verbs includes query/run/pay/schema and NOT events
       • schema.queries includes my_orders with a description
-      • schema.actions includes place_order with a description
+      • schema.actions includes place_order, payment_setup with descriptions
 
     Exits 0 if all assertions pass; exits 1 on any miss.
   DESC
@@ -956,19 +956,21 @@ namespace :demo do
       puts "  ✗  schema.queries missing my_orders"
     end
 
-    # place_order present with a description
-    place_order_entry = actions.find { |a| a["name"] == "place_order" }
-    if place_order_entry
-      puts "  ✓  schema.actions includes place_order"
-      if place_order_entry["description"] && !place_order_entry["description"].to_s.empty?
-        puts "  ✓  place_order has description: #{place_order_entry["description"].inspect}"
+    # Actions: place_order, payment_setup (K-057 — skill Step 5) with descriptions
+    %w[place_order payment_setup].each do |aname|
+      entry = actions.find { |a| a["name"] == aname }
+      if entry
+        puts "  ✓  schema.actions includes #{aname}"
+        if entry["description"] && !entry["description"].to_s.empty?
+          puts "  ✓  #{aname} has description: #{entry["description"].inspect}"
+        else
+          failures << "#{aname} missing description"
+          puts "  ✗  #{aname} missing description"
+        end
       else
-        failures << "place_order missing description"
-        puts "  ✗  place_order missing description"
+        failures << "schema.actions missing #{aname}"
+        puts "  ✗  schema.actions missing #{aname}"
       end
-    else
-      failures << "schema.actions missing place_order"
-      puts "  ✗  schema.actions missing place_order"
     end
 
     if failures.empty?

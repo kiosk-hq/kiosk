@@ -3,7 +3,7 @@
 # Kiosk-demo (hoteling-shape) configuration. Hotel booking with payment gate.
 # No PoW, no KYC, no hardware unlock.
 # Queries: properties, availability, my_bookings
-# Actions: reserve_room, confirm_booking
+# Actions: reserve_room, confirm_booking, payment_setup
 
 require "securerandom"
 
@@ -90,7 +90,7 @@ Kiosk.configure do |c|
   c.registration_role = :customer
   c.owner  = { name: "hoteling", support: "help@hoteling.app" }
   # Dual-check (skill.md): canonical skill URL + SHA-256 of its content.
-  c.skill_sha256 = "9f7a68a17cf3f36be9fc215d277efcac980693f2fe8366d0cea50c57f08e415c"
+  c.skill_sha256 = "b58453ddd432ef6a4696ce223549c25c3e10bf9688d829a79620299e0aa7f0b1"
 
   c.agent_idp = JwtOrStubIdp.new(stub: StubIdp.new)
 
@@ -163,6 +163,30 @@ Kiosk::Server::Queries.register("my_bookings",
 end
 
 # ─── Actions ────────────────────────────────────────────────────────────────
+
+# payment_setup — canonical skill Step 5 runs this unconditionally before
+# `pay` (K-057). Mirrors the getgrocery registration shape; with StubPsp
+# (no SetupIntent model) setup_required? is always false, so this is an
+# immediate no-op success: {status: "ready"}.
+Kiosk::Server::Actions.register("payment_setup",
+  description: "Check whether the authenticated principal has a saved payment method. " \
+               "Returns {status: \"ready\"} when the assistant can proceed to `pay`. " \
+               "Returns {status: \"setup_required\", setup_url: \"…\"} when a hosted setup flow " \
+               "must be completed by the human first. This demo's stub PSP needs no setup, " \
+               "so it always returns ready. The assistant should call this before `pay`.",
+  params: {}) do |_args|
+  conn = ActiveRecord::Base.connection
+  uid  = conn.execute("SELECT kiosk.current_user_id() AS uid").first["uid"]
+  raise Kiosk::Server::Errors::Unauthenticated.new("no authenticated user") if uid.nil?
+
+  provider = Kiosk.configuration.payment_provider
+
+  if provider.setup_required?(user_id: uid)
+    { status: "setup_required", setup_url: provider.setup_url(user_id: uid) }
+  else
+    { status: "ready" }
+  end
+end
 
 Kiosk::Server::Actions.register("reserve_room",
   description: "Reserve a room for the authenticated principal (creates a TTL hold)",

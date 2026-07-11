@@ -7,8 +7,7 @@ module Kiosk
     # these by class.
     #
     # The real executor (in `kiosk-server`) raises the same classes when a
-    # SQL statement returns an RLS denial or a quota check fails — see design
-    # spec §5.2 «structured exit-code error classes» and §12 «matchers».
+    # SQL statement returns an RLS denial or a quota check fails.
     module Errors
       # Raised when the configured executor reports the SQL or Action was
       # rejected by an RLS policy. The matcher / assertion is the canonical

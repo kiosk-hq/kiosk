@@ -474,7 +474,7 @@ namespace :demo do
     Asserts:
       • schema.verbs includes query/run/pay/schema and NOT events
       • schema.queries includes properties, availability, my_bookings with descriptions
-      • schema.actions includes reserve_room, confirm_booking with descriptions
+      • schema.actions includes reserve_room, confirm_booking, payment_setup with descriptions
 
     Exits 0 if all assertions pass; exits 1 on any miss.
   DESC
@@ -585,8 +585,8 @@ namespace :demo do
       end
     end
 
-    # Actions: reserve_room, confirm_booking with descriptions
-    %w[reserve_room confirm_booking].each do |aname|
+    # Actions: reserve_room, confirm_booking, payment_setup (K-057) with descriptions
+    %w[reserve_room confirm_booking payment_setup].each do |aname|
       entry = actions.find { |a| a["name"] == aname }
       if entry
         puts "  OK  schema.actions includes #{aname}"

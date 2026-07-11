@@ -1,7 +1,6 @@
 # frozen_string_literal: true
 
 # Migration 003 — kiosk.actions registry + kiosk.action_log invocation records.
-# See implementation-plan §3 and design-spec §5.7.
 class CreateKioskActionsLog < ActiveRecord::Migration[ActiveRecord::Migration.current_version]
   def up
     execute Kiosk::Server::SchemaDefinitions.actions_log_sql(

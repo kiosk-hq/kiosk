@@ -1,6 +1,6 @@
 # frozen_string_literal: true
 
-# Demo-specific schema: a SaaS-booking-shape provider (Combette per spec §2.6).
+# Demo-specific schema: a SaaS-booking-shape provider.
 #
 # Under Path C, RLS is OPTIONAL and this demo drops it. App-layer isolation
 # is provided instead:

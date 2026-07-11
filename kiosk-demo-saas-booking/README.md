@@ -22,7 +22,7 @@ bundle install
 rake demo
 ```
 
-`rake demo` creates the Postgres database, runs migrations + seeds, boots the Rails server, and walks through every wire endpoint with `curl` + `jq` output. Takes ~30 seconds end-to-end.
+`rake demo` creates the Postgres database, runs migrations + seeds, boots the Rails server, and walks through discovery, named queries, the `book_appointment` Action, Alice/Bob isolation, and the OAuth device grant with `curl` + `jq` output. (`/kiosk/schema` and `/kiosk/pay` are not part of this walkthrough — see `rake demo:schema` and the e2e harness.)
 
 ### Prerequisites
 

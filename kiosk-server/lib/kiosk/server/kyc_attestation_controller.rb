@@ -37,14 +37,13 @@ if defined?(::ActionController::API)
 
         private
 
-        # Same IdP resolution as WireController#resolve_identity!: the
-        # configured agent IdP first, then the user IdP — never a hardcoded
-        # DefaultAgentIdp (K-071: providers with a custom idp were locked out).
+        # KYC attestation is an AGENT-only surface: the effective agent IdP
+        # (configured override or the bundled default — ADR-0013; K-071:
+        # providers with a custom idp were locked out by a hardcoded
+        # DefaultAgentIdp). No user_idp fallback — a web session must not
+        # stamp an agent's kyc_verified_at.
         def authenticate!
-          idp = Kiosk.configuration.agent_idp || Kiosk.configuration.user_idp
-          raise Errors::Unauthenticated, "no IdP configured" if idp.nil?
-
-          identity = idp.verify(request)
+          identity = IdentityResolution.agent_idp.verify(request)
           raise Errors::Unauthenticated.new("missing or invalid agent token") if identity.nil?
 
           identity

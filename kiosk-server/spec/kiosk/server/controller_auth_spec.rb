@@ -115,6 +115,10 @@ RSpec.describe "wire-surface controller auth" do
       Kiosk.configure do |c|
         c.kyc_issuer     = kyc_issuer
         c.kyc_public_key = kyc_key.public_key
+        # The zero-config default idp (ADR-0013) verifies against the
+        # provider's own signing key — configure one like a real install.
+        c.signing_key    = Kiosk::Server::SigningKey.generate
+        c.issuer         = "https://demo.example"
       end
     end
 
@@ -138,18 +142,65 @@ RSpec.describe "wire-surface controller auth" do
       expect(executed_sql.last).to include("'a-custom'")
     end
 
-    it "falls back to the configured user_idp when no agent_idp is set" do
+    it "does NOT fall back to user_idp — KYC is an agent-only surface (ADR-0013)" do
       Kiosk.configure { |c| c.user_idp = custom_idp }
 
       status, body = dispatch(Kiosk::Server::KycAttestationController, :create, kyc_env)
-      expect(status).to eq(200)
-      expect(body).to eq(kyc_verified: true)
+      expect(status).to eq(401)
+      expect(body.dig(:error, :code)).to eq("unauthenticated")
     end
 
-    it "returns 401 when no IdP is configured at all" do
+    it "returns 401 for a foreign token under the zero-config default (bundled kiosk-pop idp)" do
       status, body = dispatch(Kiosk::Server::KycAttestationController, :create, kyc_env)
       expect(status).to eq(401)
       expect(body.dig(:error, :code)).to eq("unauthenticated")
+    end
+  end
+
+  # ─── ADR-0013: zero-config default idp + user_idp fallback on the wire ──
+  describe "WireController identity resolution defaults (ADR-0013)" do
+    before do
+      Kiosk.configure do |c|
+        c.signing_key = Kiosk::Server::SigningKey.generate
+        c.issuer      = "https://demo.example"
+        c.roles       = %i[customer]
+        # NOTE: no agent_idp, no user_idp — zero-config install.
+      end
+
+      fake_conn = Object.new.tap do |conn|
+        conn.define_singleton_method(:execute) { |_sql| [] }
+        conn.define_singleton_method(:transaction) { |&blk| blk.call }
+        conn.define_singleton_method(:quote) { |v| "'#{v}'" }
+        conn.define_singleton_method(:quote_table_name) { |n| n }
+      end
+      ar_base = Class.new { define_singleton_method(:connection) { fake_conn } }
+      stub_const("ActiveRecord::Base", ar_base)
+    end
+
+    it "verifies a self-minted token with NO idp configured (bundled kiosk-pop default)" do
+      token = Kiosk::Server::JwtIssuer.issue(
+        claims:   { sub: "u-1", agent_id: "a-1", role: "customer", actor: "agent" },
+        audience: "https://demo.example",
+      )
+      status, = dispatch(Kiosk::Server::WireController, :schema,
+                         bearer_env("/kiosk/schema", token))
+      expect(status).to eq(200)
+    end
+
+    it "still 401s garbage under the zero-config default" do
+      status, body = dispatch(Kiosk::Server::WireController, :schema,
+                              bearer_env("/kiosk/schema", "garbage"))
+      expect(status).to eq(401)
+      expect(body.dig(:error, :code)).to eq("unauthenticated")
+    end
+
+    it "falls through to user_idp when the agent idp resolves nothing (no Authorization header)" do
+      fixed = build_identity(actor: "human", agent_id: nil, user_id: "u-web")
+      Kiosk.configure { |c| c.user_idp = Class.new { define_method(:verify) { |_r| fixed } }.new }
+
+      status, = dispatch(Kiosk::Server::WireController, :schema,
+                         Rack::MockRequest.env_for("/kiosk/schema"))
+      expect(status).to eq(200)
     end
   end
 

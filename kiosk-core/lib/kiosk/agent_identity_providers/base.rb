@@ -11,18 +11,23 @@ module Kiosk
     # kiosk-server, which registers agents into the local `agents` table and
     # signs tokens with the provider's own JWKS.
     class Base
-      # Verify an incoming Authorization header into a {Kiosk::Identity}.
+      # Verify an incoming HTTP request into a {Kiosk::Identity}.
       #
-      # @param authorization_header [String] raw value of HTTP `Authorization`
-      # @return [Kiosk::Identity]
-      # @raise [Kiosk::AgentIdentityProviders::InvalidToken] on signature
-      #   or claims failure
-      def verify(_authorization_header)
+      # @param request [#headers, #env] HTTP request shape (the adapter
+      #   extracts its credential — typically the `Authorization` header)
+      # @return [Kiosk::Identity, nil] nil when the credential is absent,
+      #   foreign, or invalid — the caller turns nil into 401; adapters
+      #   should not let verification errors escape (K-070)
+      def verify(_request)
         raise NotImplementedError, "#{self.class}#verify must be implemented by the adapter"
       end
 
       # Issue a fresh agent token for a registered agent at the chosen role.
-      # Used at registration completion and at refresh.
+      #
+      # 0.1: the built-in kiosk-pop endpoints (register / login / revoke)
+      # mint via the bundled DefaultAgentIdp by design (ADR-0013) and do NOT
+      # call a custom adapter's #issue; adapter-supplied issuance (Entra /
+      # Okta / Passport-style, roles-from-IdP) is the 0.2 seam — T-014.
       #
       # @param agent_id [String] UUID in the provider's `agents` table
       # @param role [String, Symbol] active role for the issued token

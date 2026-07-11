@@ -55,6 +55,11 @@ Kiosk.configure do |c|
 
   # ─── Pluggable identity adapters ─────────────────────────────────────
   # Configure when the corresponding adapter gem is installed.
+  # Identity adapters (ADR-0013) — both OPTIONAL:
+  # agent_idp defaults to the bundled kiosk-pop DefaultAgentIdp (verifies the
+  # tokens register/login mint) — set it only to front another agent-identity
+  # system or to compose adapters. user_idp lets your EXISTING session auth
+  # (Devise etc.) call the same wire endpoints from your own frontend.
   # c.user_idp  = Kiosk::UserIdentityProviders::Devise.new
-  # c.agent_idp = Kiosk::Server::AgentIdentityProviders::DefaultAgentIdp.new
+  # c.agent_idp = MyCustomAgentIdp.new
 end

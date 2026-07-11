@@ -9,12 +9,12 @@ module Kiosk
     SetupRequired = Class.new(StandardError)
 
     # Abstract base for AP2 PSP (Payment Service Provider) adapters.
-    # See design spec §5.5 «Agent payments (AP2)».
+    # See the Payment (AP2 mandate chain) section of the spec.
     #
     # Subclasses ship as `kiosk-pay-*` gems. Stripe and Paddle are open
     # (drive global adoption); regional PSPs — Tinkoff, YooKassa,
     # CloudPayments, SberPay, ESIA-pay, … — are commercial and built on
-    # customer demand rather than upfront (see spec §15.3).
+    # customer demand rather than upfront.
     class Base
       # Returns true when the principal MUST complete a payment setup flow
       # (e.g. Stripe SetupIntent — card-on-file) before a charge can proceed.

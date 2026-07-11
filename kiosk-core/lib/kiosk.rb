@@ -9,13 +9,10 @@ require "kiosk/guc"
 require "kiosk/configuration"
 require "kiosk/identity"
 require "kiosk/mandate"
-require "kiosk/event"
 
 require "kiosk/agent_identity_providers/base"
 require "kiosk/user_identity_providers/base"
 require "kiosk/payment_providers/base"
-require "kiosk/credential_brokers/base"
-require "kiosk/notification_adapter/base"
 
 module Kiosk
   # Configure Kiosk for the host application.

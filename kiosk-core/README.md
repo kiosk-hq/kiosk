@@ -4,19 +4,17 @@ Core abstractions for the [Kiosk](https://kiosk.tech) framework.
 
 ## What is Kiosk
 
-Kiosk turns a Postgres-backed business app into a production-grade agent surface: REST endpoint, multi-agent identity per user, RLS-protected data plane, AP2 mandate trail. Apache-2.0.
+Kiosk turns a Postgres-backed business app into an agent surface: REST endpoint, multi-agent identity per user, app-layer-authorized data plane with opt-in Postgres RLS defense-in-depth, AP2 mandate trail. Alpha. Apache-2.0.
 
 ## What is kiosk-core
 
 The foundation. Defines:
 
-- **Value types** — `Kiosk::Identity`, `Kiosk::Mandate` (intent / cart / payment), `Kiosk::Event`
+- **Value types** — `Kiosk::Identity`, `Kiosk::Mandate` (intent / cart / payment)
 - **Abstract base classes** that adapter gems extend:
   - `Kiosk::AgentIdentityProviders::Base`
   - `Kiosk::UserIdentityProviders::Base`
   - `Kiosk::PaymentProviders::Base`
-  - `Kiosk::CredentialBrokers::Base`
-  - `Kiosk::NotificationAdapter::Base`
 - **Postgres GUC namespace constants** — `Kiosk::GUC`
 - **Protocol-version surface** — `Kiosk::Protocol` (API version, min client, response header names, well-known path)
 - **Configuration** — `Kiosk.configure { |c| ... }`

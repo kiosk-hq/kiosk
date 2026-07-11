@@ -3,7 +3,6 @@
 module Kiosk
   module AgentIdentityProviders
     # Abstract base for agent-IdP adapters.
-    # See design spec §6.4 «Pluggable IdP — two roles, two deployments».
     #
     # An agent-IdP MINTS and VERIFIES agent credentials. Subclasses ship as
     # `kiosk-agent-idp-*` gems (Microsoft Entra Agent ID, Okta Agent Identity,
@@ -33,7 +32,7 @@ module Kiosk
       end
 
       # Return the AP2 mandate-signing public key bound to this agent.
-      # See spec §5.5 «Identity ↔ AP2 keys».
+      # See the Payment (AP2 mandate chain) section of the spec.
       #
       # @param agent_id [String]
       # @return [Object] public key suitable for JWS verification

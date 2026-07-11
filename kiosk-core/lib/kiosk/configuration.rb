@@ -19,7 +19,7 @@ module Kiosk
 
     # User-IdP adapter instance — consumes the provider's principal
     # authentication. The principal may be a human, synthetic placeholder,
-    # service account, team / org, or parent agent (see spec §6.1).
+    # service account, team / org, or parent agent.
     # Default nil; `kiosk:install` wires one based on detected stack
     # (Devise / Clerk / Auth0 / generic OIDC / etc.).
     attr_accessor :user_idp
@@ -53,7 +53,7 @@ module Kiosk
 
     # Fixed set of role names the provider supports.
     # E.g. `%i[customer master support]`. Never include `:admin`
-    # (see spec §7.1.X — job-titled roles beat privilege-titled ones).
+    # (job-titled roles beat privilege-titled ones).
     attr_accessor :roles
 
     # Canonical issuer URL — used in JWT `iss` claim and AP2 mandate `iss`.

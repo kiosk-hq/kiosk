@@ -2,7 +2,7 @@
 
 module Kiosk
   # AP2 (Agent Payments Protocol) mandate value objects.
-  # See design spec §5.5 «Agent payments (AP2)».
+  # See the Payment (AP2 mandate chain) section of the spec.
   #
   # The AP2 mandate trio — all three are signed JWS tokens issued by the
   # assistant and verified by the provider:
@@ -18,7 +18,7 @@ module Kiosk
   #
   # Each mandate is signed by the assistant's registered key (`agent_id`),
   # with `subject = user_id`. `iss` MUST equal `kiosk.issuer` from
-  # `/.well-known/kiosk.json` (spec §3.4) — mismatch is treated as forged
+  # `/.well-known/kiosk.json` — mismatch is treated as forged
   # provenance and rejected.
   #
   # After the provider's PSP captures the charge it emits a Settlement — an

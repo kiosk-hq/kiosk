@@ -3,12 +3,11 @@
 module Kiosk
   module UserIdentityProviders
     # Abstract base for user-IdP adapters.
-    # See design spec §6.4.
     #
     # A user-IdP CONSUMES whatever already authenticates the principal at
     # the provider. The principal is typically a human, but equally a
     # synthetic placeholder, service account, team / org, or parent agent
-    # depending on the adapter — see spec §6.1.
+    # depending on the adapter.
     #
     # Embedded-mode adapters: `kiosk-user-idp-devise`, `kiosk-user-idp-warden`.
     # Satellite-mode adapters: `kiosk-user-idp-jwt-bearer`,

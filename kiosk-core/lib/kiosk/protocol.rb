@@ -1,8 +1,7 @@
 # frozen_string_literal: true
 
 module Kiosk
-  # Wire-protocol constants and HTTP header names.
-  # See design spec §3.2 «Distribution» for the version-handshake contract.
+  # Wire-protocol constants and HTTP header names for the version handshake.
   module Protocol
     # Semver of the wire protocol exposed at /kiosk/query, /kiosk/run, /kiosk/pay, etc.
     # Changes more slowly than the server version itself.

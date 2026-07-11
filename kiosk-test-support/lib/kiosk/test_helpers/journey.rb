@@ -4,7 +4,7 @@ require "securerandom"
 
 module Kiosk
   module TestHelpers
-    # The journey-test DSL from design spec §12. Mixed into RSpec example
+    # The journey-test DSL. Mixed into RSpec example
     # groups tagged `type: :kiosk_journey` (via `kiosk-rls-rspec`) and into
     # Minitest test cases via `include Kiosk::TestHelpers` (via
     # `kiosk-rls-minitest`).
@@ -15,7 +15,7 @@ module Kiosk
     # right GUCs and roll back at the end.
     #
     # Calls outside any scope (`query("…")` at the top of the example)
-    # raise — see spec §6.3 «default deny». Use `as_anonymous` to assert
+    # raise (default deny). Use `as_anonymous` to assert
     # that explicitly.
     module Journey
       # Scope to an agent identity acting on behalf of `user`. Generates a
@@ -47,7 +47,7 @@ module Kiosk
       end
 
       # Scope to a synthetic-user agent labelled `name`. For greenfield-style
-      # tests where there is no real `users` row to anchor to (spec §6.1).
+      # tests where there is no real `users` row to anchor to.
       # The synthetic user_id is deterministic from `name` so repeated calls
       # in the same test refer to the same principal.
       def as_agent(name, role: nil, &block)
@@ -73,7 +73,7 @@ module Kiosk
       end
 
       # Invoke an Action by name with keyword args. Returns whatever the
-      # Action returns (typically `Kiosk::Event` or `Kiosk::Mandate`).
+      # Action returns (typically a result Hash or `Kiosk::Mandate`).
       def run_action(name, **args)
         TestHelpers.require_executor!.run_action(name, args)
       end

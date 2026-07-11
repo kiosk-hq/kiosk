@@ -4,8 +4,6 @@ module Kiosk
   # Postgres GUC (Grand Unified Configuration) names that Kiosk uses to carry
   # identity from an HTTP request into the Postgres session.
   #
-  # See design spec §6.3 «Postgres-side context».
-  #
   # Default namespace is `app` (short, ergonomic in policy text). Providers
   # whose primary backend already uses `app.*` for its own settings can
   # override via `Kiosk.configure { |c| c.guc_namespace = "kiosk" }` and

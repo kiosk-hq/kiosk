@@ -3,7 +3,7 @@
 module Kiosk
   module Server
     # Helper for composing the three response headers kiosk-server sends on
-    # every `/kiosk/*` response. See spec §3.2 «API-version handshake».
+    # every `/kiosk/*` response (the API-version handshake).
     module Headers
       # Mutate a Rack headers hash to add the three Kiosk headers.
       # The server version defaults to {Kiosk::Server::VERSION}; callers

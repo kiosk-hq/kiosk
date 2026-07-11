@@ -3,7 +3,7 @@
 module Kiosk
   module Server
     # Pure SQL generators for the six canonical Kiosk migrations.
-    # See implementation plan §3 — migrations 001-006:
+    # Migrations 001-006:
     #
     #   001 create_kiosk_schema                → schema + four current_*() helpers
     #   002 create_kiosk_identity_tables       → agents, agent_tokens, agent_mappings
@@ -23,7 +23,7 @@ module Kiosk
       # ─── 001 create_kiosk_schema ───────────────────────────────────────
 
       # CREATE SCHEMA + four `<schema>.current_*()` STABLE helpers, typed
-      # against the provider's user-id type. See spec §6.3.
+      # against the provider's user-id type.
       def helper_functions_sql(schema: nil, guc_namespace: nil, user_id_type: nil)
         schema       ||= Kiosk.configuration.schema
         guc_namespace ||= Kiosk.configuration.guc_namespace
@@ -55,7 +55,7 @@ module Kiosk
 
       # `agents` — credential per (user × agent host); `agent_tokens` —
       # issued tokens for revocation; `agent_mappings` — external IdP
-      # subject ↔ local `agent_id` mapping. See spec §6.1, §6.4, §6.5.
+      # subject ↔ local `agent_id` mapping.
       def identity_tables_sql(schema: nil, user_id_type: nil, user_table: "users")
         schema      ||= Kiosk.configuration.schema
         user_id_type ||= Kiosk.configuration.user_id_type
@@ -137,7 +137,7 @@ module Kiosk
 
       # Atomic reserve-then-pay primitive. TTL row in `kiosk.reservations`
       # holds inventory while AP2 mandate trail completes; expiry releases
-      # automatically. See spec §5.5.
+      # automatically.
       def reservations_sql(schema: nil, user_id_type: nil)
         schema      ||= Kiosk.configuration.schema
         user_id_type ||= Kiosk.configuration.user_id_type
@@ -168,7 +168,7 @@ module Kiosk
       # RFC 8628 Device Authorization Grant state machine table. One row
       # per `kiosk login` flow: created on /oauth/device_authorization,
       # mutated by /oauth/device/verify (approve/deny), consumed by
-      # /oauth/token (device_code grant). See spec §6.5 + §6.7.
+      # /oauth/token (device_code grant).
       #
       # device_code_hash carries SHA-256 of the actual device_code; the
       # plain code lives only in the response body to the initiating

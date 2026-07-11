@@ -19,8 +19,8 @@ module Kiosk
     #     audience against the supplied JWKS. Returns the claims hash on
     #     success; raises a {Error} subclass on failure.
     #
-    # Used by the §6.7 OAuth surface to issue access tokens, by the §6.5
-    # bundled IdP for direct token issuance, and by §5.5 AP2 mandate
+    # Used by the OAuth surface to issue access tokens, by the
+    # bundled IdP for direct token issuance, and by AP2 mandate
     # validation for cross-server signature checks.
     module JwtIssuer
       # Algorithm advertised in the JWS header. Pinned to RS256 — the

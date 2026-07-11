@@ -2,7 +2,7 @@
 
 # kiosk-server — Rails engine (when in a Rails host) + pure-Ruby pieces
 # (well-known doc builder, headers, schema-migration SQL) that don't need
-# a host. See https://kiosk.tech and design spec §3, §6.7.
+# a host. See https://kiosk.tech.
 
 require "kiosk"
 
@@ -57,9 +57,9 @@ module Kiosk
     # Pieces shipped in this gem:
     #
     #   - {Kiosk::Server::WellKnown}        — builds /.well-known/kiosk.json
-    #   - {Kiosk::Server::SigningKey}       — RSA keypair value object (§6.2)
+    #   - {Kiosk::Server::SigningKey}       — RSA keypair value object
     #   - {Kiosk::Server::Jwks}             — JWKS document builder (RFC 7517)
-    #   - {Kiosk::Server::JwtIssuer}        — RS256 sign / verify (§6.2, §6.7)
+    #   - {Kiosk::Server::JwtIssuer}        — RS256 sign / verify
     #   - {Kiosk::Server::DeviceAuthorization}        — RFC 8628 Device-Grant value object
     #   - {Kiosk::Server::DeviceAuthorizationStores}  — storage adapter (InMemory ships; ActiveRecord follows)
     #   - {Kiosk::Server::DeviceCodeGrant}            — pure-Ruby service: .start + .exchange

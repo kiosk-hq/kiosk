@@ -8,7 +8,7 @@ module Kiosk
     # Pure function over {Kiosk::Configuration} and the request's base URL —
     # no Rails dependency, no I/O.
     #
-    # See design spec §3.4 «Auto-discovery via /.well-known/kiosk.json».
+    # See the Discovery section of the spec.
     module WellKnown
       # Schema version of the well-known document itself (separate from
       # the API version).
@@ -20,7 +20,7 @@ module Kiosk
       #   `Kiosk.configuration`)
       # @param base_url [String] the provider's HTTPS origin
       #   (e.g. `https://acme.example`); MUST be the same-registrable-domain
-      #   the well-known is served from per §3.4
+      #   the well-known is served from.
       # @return [Hash]
       def self.build(base_url:, config: Kiosk.configuration)
         validate_issuer!(config)
@@ -66,8 +66,8 @@ module Kiosk
 
         raise ArgumentError,
               "Kiosk.configuration.issuer must be set before serving " \
-              "/.well-known/kiosk.json — see design spec §3.4 (the issuer " \
-              "is the AP2 mandate `iss` anchor)"
+              "/.well-known/kiosk.json — the issuer " \
+              "is the AP2 mandate `iss` anchor"
       end
     end
   end

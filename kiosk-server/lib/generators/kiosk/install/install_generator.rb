@@ -19,6 +19,7 @@ module Kiosk
     #   - db/migrate/<ts+3>_create_kiosk_reservations.rb
     #   - db/migrate/<ts+4>_create_kiosk_device_authorizations.rb
     #   - db/migrate/<ts+5>_create_kiosk_mandates.rb
+    #   - db/migrate/<ts+6>_add_kyc_verified_at_to_kiosk_agents.rb
     #
     # Each migration file is a thin wrapper that calls into
     # {Kiosk::Server::SchemaDefinitions} at host-app runtime, so the SQL
@@ -29,8 +30,6 @@ module Kiosk
     # the SchemaDefinitions methods (the migration files embed them
     # literally — config drift between generation time and migrate time
     # only matters for fields the operator deliberately overrides).
-    #
-    # See spec §9 and implementation-plan §3 (migrations 001-006).
     class InstallGenerator < ::Rails::Generators::Base
       include ::Rails::Generators::Migration
 
@@ -48,7 +47,7 @@ module Kiosk
                                    desc: "GUC namespace prefix used in SET LOCAL statements"
 
       # Rails::Generators::Migration requires a class-level
-      # next_migration_number. We bump a counter so the six migrations
+      # next_migration_number. We bump a counter so the seven migrations
       # created in one invocation get strictly-ascending UTC timestamps
       # (otherwise `db/migrate` glob sort is non-deterministic).
       @migration_counter = 0

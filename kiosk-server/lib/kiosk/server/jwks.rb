@@ -4,9 +4,9 @@ module Kiosk
   module Server
     # Pure-Ruby JWKS document builder per RFC 7517 §5.
     #
-    # The document at `<endpoint>/.well-known/jwks.json` (§3.5, §6.2) lets
-    # any verifier — agents, audit consumers, the badge prover (§3.5),
-    # cross-server mandate validators (§5.5) — fetch the public keys that
+    # The document at `<endpoint>/.well-known/jwks.json` lets
+    # any verifier — agents, audit consumers, the badge prover,
+    # cross-server mandate validators — fetch the public keys that
     # sign this deployment's JWTs.
     #
     # Multi-key shape supports key rotation: the deployment publishes both

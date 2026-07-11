@@ -30,8 +30,6 @@ module Kiosk
     # here so unit tests don't require a Rails environment, and so the
     # service is reachable from non-Rails hosts (Rack apps, batch jobs,
     # tests that simulate the OAuth interactions in-process).
-    #
-    # See design spec §6.5 (Device Grant) + §6.7 (OAuth surface).
     module DeviceCodeGrant
       # OAuth grant_type literal per RFC 8628 §3.4.
       GRANT_TYPE = "urn:ietf:params:oauth:grant-type:device_code"

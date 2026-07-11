@@ -5,7 +5,6 @@ module Kiosk
     # Pure-Ruby service module for the user-facing half of the RFC 8628
     # Device Authorization Grant — i.e. what runs when the user lands at
     # `<endpoint>/oauth/device/verify` from their phone / second device.
-    # See design spec §6.5 + §6.7.
     #
     # Three operations:
     #

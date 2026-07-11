@@ -10,15 +10,15 @@ module Kiosk
   module Server
     # Central dispatcher. Receives a verb (one of {VERBS}) + args +
     # {Kiosk::Identity} + a database connection. Opens {SessionContext}
-    # (transaction + four `SET LOCAL` GUCs per spec §6.3), routes to the
+    # (transaction + four `SET LOCAL` GUCs), routes to the
     # appropriate verb method, returns {Result} on success or raises
     # {Errors::Base} subclass on failure.
     #
-    # See design spec §5.4 «Server side» — this implements the per-verb
+    # This implements the per-verb
     # dispatch that {WireController} wraps, factored out of the controller
     # so it's testable without Rails.
     class Executor
-      # Spec §5.1: the fixed wire-surface verbs.
+      # The fixed wire-surface verbs — see the Endpoints section of the spec.
       VERBS = %i[query run pay schema events].freeze
 
       # Verbs that open their own transaction boundaries because they perform
@@ -332,7 +332,7 @@ module Kiosk
 
       def verb_events(_args)
         raise NotImplementedError,
-              "`events` verb arrives in a follow-up release (NDJSON streaming per §5.8)"
+              "`events` verb arrives in a follow-up release (NDJSON streaming)"
       end
 
       # ─── helpers ───────────────────────────────────────────────────────

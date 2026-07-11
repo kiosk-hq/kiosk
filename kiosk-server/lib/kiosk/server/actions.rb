@@ -7,8 +7,8 @@ module Kiosk
     # Process-wide registry of Action handlers.
     #
     # Stub for v0.1 alpha. The full `Kiosk::Action` DSL (`description`,
-    # `accepts`, `requires_payment`, `escalate_to :system`, etc.) per
-    # design spec §8 lands in a follow-up release. For now, register a
+    # `accepts`, `requires_payment`, `escalate_to :system`, etc.)
+    # lands in a follow-up release. For now, register a
     # name + callable, fetch + invoke from {Executor}.
     #
     # @example

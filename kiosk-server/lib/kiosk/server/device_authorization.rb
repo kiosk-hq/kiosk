@@ -9,7 +9,7 @@ module Kiosk
     # Grant flow. One row per `kiosk login` invocation: created on
     # POST /oauth/device_authorization, mutated by user approval at
     # /oauth/device/verify, consumed by the polling client at POST
-    # /oauth/token (device_code grant). See design spec §6.5 + §6.7.
+    # /oauth/token (device_code grant).
     #
     # Two codes per row:
     #

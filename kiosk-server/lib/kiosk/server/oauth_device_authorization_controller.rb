@@ -37,6 +37,18 @@ if defined?(::ActionController::API)
           requested_role = (params[:role] || params[:scope])&.to_s
           requested_role = nil if requested_role && requested_role.empty?
 
+          # The requested role is CLIENT-chosen and ends up in the minted JWT,
+          # so it must be validated against the provider's declared roles
+          # (K-072, ADR-0011 principle: role assignment is provider-owned —
+          # a client must never smuggle an arbitrary role claim).
+          if requested_role && !Kiosk.configuration.roles.map(&:to_s).include?(requested_role)
+            return render_oauth_error(
+              :invalid_request,
+              "unknown role #{requested_role.inspect} — not among this provider's roles",
+              status: 400,
+            )
+          end
+
           result = DeviceCodeGrant.start(
             client_id:      client_id,
             requested_role: requested_role,

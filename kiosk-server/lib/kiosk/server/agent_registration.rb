@@ -13,26 +13,23 @@ module Kiosk
 
       def call(public_key_pem:, signed:, pow: nil)
         config = Kiosk.configuration
-        role   = config.registration_role.to_s
+        role   = config.registration_role&.to_s
+        role   = nil if role && role.empty?
 
-        # Normalise PEM: strip leading/trailing whitespace so lookup matches storage.
-        public_key_pem = public_key_pem.strip
-
-        # The role is pinned server-side — the agent never sends one. A missing
-        # or misconfigured registration_role is a provider error (loud 500),
-        # NOT a client BadRequest.
-        if role.empty?
-          raise Errors::ConfigurationError,
-                "Kiosk.configuration.registration_role is not set. Self-registration " \
-                "mints a token with no human in the loop, so the provider MUST pin the " \
-                "role server-side (agents cannot choose it). " \
-                "Set: Kiosk.configure { |c| c.registration_role = :customer }"
-        end
-        unless config.roles.map(&:to_s).include?(role)
+        # The role is pinned server-side when configured — the agent never
+        # sends one (that would be a privilege-selection primitive). OPTIONAL
+        # per ADR-0011 (roles are hook-or-absent in 0.1): when unset, the agent
+        # row gets NO role, and the provider may instead assign roles inside
+        # its `assistant_creation` hook. A CONFIGURED role that is not among
+        # the declared roles is still a provider error (loud 500).
+        if role && !config.roles.map(&:to_s).include?(role)
           raise Errors::ConfigurationError,
                 "registration_role #{role.inspect} is not among configured roles " \
                 "#{config.roles.inspect}"
         end
+
+        # Normalise PEM: strip leading/trailing whitespace so lookup matches storage.
+        public_key_pem = public_key_pem.strip
 
         # Optional Equihash PoW to price fresh identity minting. No-op unless
         # the provider set registration_pow_count > 0. Raises 402 (with the
@@ -75,10 +72,13 @@ module Kiosk
           # exactly why `assistant_creation` exists.
           assistant_account_id = create_assistant_account(config, public_key_pem)
 
+          # NULL allowed_roles when no registration_role is configured
+          # (ADR-0011: single-role providers need no role at all).
+          allowed_roles_sql = role ? "ARRAY[#{conn.quote(role)}]::text[]" : "NULL"
           agent_id = conn.execute(<<~SQL).first.fetch("id")
             INSERT INTO #{config.schema}.agents (user_id, allowed_roles, public_key)
             VALUES (#{conn.quote(assistant_account_id)},
-                    ARRAY[#{conn.quote(role)}]::text[], #{conn.quote(public_key_pem)})
+                    #{allowed_roles_sql}, #{conn.quote(public_key_pem)})
             RETURNING id
           SQL
           token = AgentIdentityProviders::DefaultAgentIdp.new.issue(agent_id: agent_id, role: role)

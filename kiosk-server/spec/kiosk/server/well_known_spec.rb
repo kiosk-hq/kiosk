@@ -92,7 +92,8 @@ RSpec.describe Kiosk::Server::WellKnown do
     it "advertises the skill descriptor when skill_sha256 is set" do
       Kiosk.configure { |c| c.skill_sha256 = "abc123" }
       d = described_class.build(base_url: "https://api.acme.example")
-      expect(d[:kiosk][:skill]).to eq(url: "https://kiosk.tech/skill-v1.0.md", sha256: "abc123")
+      # Default skill URL is the immutable versioned artifact (ADR-0012).
+      expect(d[:kiosk][:skill]).to eq(url: "https://kiosk.tech/skill-v0.1.1.md", sha256: "abc123")
     end
 
     it "respects an overridden skill_url" do

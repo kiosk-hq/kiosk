@@ -14,7 +14,7 @@ if defined?(::ActionController::API)
   module Kiosk
     module Server
       # REST wire surface — Rails controller wrapping {Executor}.
-      # See design spec §5.4 «Server side» for the contract.
+      # See the Endpoints section of the spec for the contract.
       #
       # REST endpoints (one per verb — ADR-0005):
       #   GET  /kiosk/schema
@@ -110,7 +110,7 @@ if defined?(::ActionController::API)
         end
 
         # Default: host's primary ActiveRecord connection. Satellite-mode
-        # / app_role connection-pool plumbing per spec §7.7 lands in a
+        # / app_role connection-pool plumbing lands in a
         # follow-up release.
         def connection_for(_identity)
           ::ActiveRecord::Base.connection

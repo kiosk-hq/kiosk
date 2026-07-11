@@ -1,7 +1,28 @@
 version: 2
 updates:
+# Monorepo: no Gemfile at "/" — one bundler root per gem/demo (e2e generates
+# its app at runtime and has no checked-in Gemfile).
 - package-ecosystem: bundler
-  directory: "/"
+  directories:
+    - "/kiosk-all"
+    - "/kiosk-core"
+    - "/kiosk-demo-foodelivery"
+    - "/kiosk-demo-getgrocery"
+    - "/kiosk-demo-hoteling"
+    - "/kiosk-demo-saas-booking"
+    - "/kiosk-demo-skooti"
+    - "/kiosk-pay-stripe"
+    - "/kiosk-pow"
+    - "/kiosk-pow-cuckoo"
+    - "/kiosk-pow-equihash"
+    - "/kiosk-redteam"
+    - "/kiosk-reputation"
+    - "/kiosk-rls"
+    - "/kiosk-rls-minitest"
+    - "/kiosk-rls-rspec"
+    - "/kiosk-server"
+    - "/kiosk-test-support"
+    - "/kiosk-user-idp-devise"
   schedule:
     interval: weekly
   open-pull-requests-limit: 10

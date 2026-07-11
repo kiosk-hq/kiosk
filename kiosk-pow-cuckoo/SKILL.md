@@ -35,7 +35,7 @@ nonce is a String.  The backend's `.verify` receives the full Hash.
 **TOY MECHANISM DEMO — proofsize 12 at edgebits 10; NOT production difficulty.**
 
 ```bash
-cd oss/kiosk-dem-foodelivery
+cd kiosk-demo-foodelivery
 bundle exec rake demo:cuckoo
 ```
 
@@ -45,9 +45,10 @@ Demonstrates the 402 → Cuckatoo solve → 200 loop and wrong-proof → 403.
 
 1. **Provider mandates the algorithm** (ADR-0001). Clients that cannot solve
    are denied — intentional.
-2. **Argon2id (`kiosk-pow`) is the practical default** with a uniformly-fast
-   solver on all platforms. Choose Cuckatoo specifically for the extreme
-   solve:verify asymmetry.
+2. **Equihash (`kiosk-pow-equihash`) is the shipped default** (ADR-0007).
+   Argon2id (`kiosk-pow`) remains as a legacy backend. Choose Cuckatoo only
+   when the extreme solve:verify asymmetry (GB-RAM solver vs. µs verifier)
+   is specifically required.
 3. **Production solver**: requires a native C/CUDA miner (Tromp's lean/mean
    or similar). The Python solver is for demonstration only.
 4. **Proofsize**: production is L=42 (Grin/Tromp standard). The toy demo uses

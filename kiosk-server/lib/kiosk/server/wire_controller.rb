@@ -25,11 +25,12 @@ if defined?(::ActionController::API)
       # Wire response (JSON): success per {Result#to_envelope}, error per
       # {Errors::Base#to_envelope}.
       #
-      # Identity resolution: tries `Kiosk.configuration.agent_idp` first
-      # (the typical agent-channel case), falls back to
-      # `Kiosk.configuration.user_idp` (web/mobile channels mounted
-      # through the same endpoint). Adapter `#verify(request)` returns a
-      # {Kiosk::Identity} or `nil`; `nil` becomes 401.
+      # Identity resolution (ADR-0013): {IdentityResolution.resolve} — the
+      # agent IdP first (`Kiosk.configuration.agent_idp`, defaulting to the
+      # bundled kiosk-pop DefaultAgentIdp so a zero-config install works),
+      # then `Kiosk.configuration.user_idp` (web/mobile sessions on the same
+      # endpoints). Adapter `#verify(request)` returns a {Kiosk::Identity}
+      # or `nil`; nothing resolved becomes 401.
       class WireController < ::ActionController::API
         # REST verb: GET /kiosk/schema
         def schema
@@ -81,10 +82,7 @@ if defined?(::ActionController::API)
         end
 
         def resolve_identity!
-          idp = Kiosk.configuration.agent_idp || Kiosk.configuration.user_idp
-          raise Errors::Unauthenticated, "no IdP configured" if idp.nil?
-
-          identity = idp.verify(request)
+          identity = IdentityResolution.resolve(request)
           raise Errors::Unauthenticated, "no identity resolved from request" if identity.nil?
 
           identity

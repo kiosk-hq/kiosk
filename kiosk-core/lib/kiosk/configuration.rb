@@ -24,11 +24,14 @@ module Kiosk
     # (Devise / Clerk / Auth0 / generic OIDC / etc.).
     attr_accessor :user_idp
 
-    # Agent-IdP adapter instance — mints / verifies agent tokens.
-    # Default nil here. `kiosk-server` does NOT default this: WireController
-    # falls back to `user_idp` when `agent_idp` is nil. The built-in agent
-    # flows (register / login / auth / pay / kyc) instantiate
-    # `Kiosk::Server::AgentIdentityProviders::DefaultAgentIdp` directly.
+    # Agent-IdP adapter instance — verifies agent tokens (and, from 0.2,
+    # mints them — T-014). OPTIONAL override (ADR-0013): when nil,
+    # kiosk-server uses its bundled kiosk-pop engine
+    # (`Kiosk::Server::AgentIdentityProviders::DefaultAgentIdp`) — the same
+    # engine whose tokens the built-in register/login/revoke endpoints mint,
+    # so a zero-config install verifies what it issues. Set this to front a
+    # different agent-identity system or to compose (see the demos'
+    # JwtOrStubIdp).
     attr_accessor :agent_idp
 
     # Payment PSP adapter instance — handles authorize / capture / refund of

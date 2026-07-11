@@ -79,6 +79,9 @@ if defined?(::ActionController::API)
           end
 
           Kiosk.configuration.revocation_store&.revoke_all(identity.agent_id, at: Time.now.to_i)
+          # kiosk-pop endpoints mint their own tokens via the bundled
+          # DefaultAgentIdp by design (ADR-0013); adapter-supplied issuance
+          # is the 0.2 seam (T-014).
           token = AgentIdentityProviders::DefaultAgentIdp.new.issue(
             agent_id: identity.agent_id, role: identity.role,
           )
@@ -92,7 +95,7 @@ if defined?(::ActionController::API)
         # Resolve the caller's agent identity from its Bearer token. A missing,
         # invalid, or already-revoked token resolves to nil → 401.
         def authenticated_agent
-          Kiosk.configuration.agent_idp&.verify(request)
+          IdentityResolution.agent_idp.verify(request)
         rescue Kiosk::Server::JwtIssuer::Error, Kiosk::AgentIdentityProviders::InvalidToken
           nil
         end

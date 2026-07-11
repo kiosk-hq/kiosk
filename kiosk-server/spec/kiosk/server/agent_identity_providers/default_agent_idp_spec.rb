@@ -1,5 +1,7 @@
 # frozen_string_literal: true
 
+require "jwt"
+
 RSpec.describe Kiosk::Server::AgentIdentityProviders::DefaultAgentIdp do
   subject(:idp) { described_class.new }
 
@@ -97,6 +99,44 @@ RSpec.describe Kiosk::Server::AgentIdentityProviders::DefaultAgentIdp do
     it "scopes lookup_user_id lookups to non-revoked agents" do
       idp.send(:lookup_user_id, "agent-1")
       expect(recorder.last).to match(/FROM kiosk\.agents WHERE id = 'agent-1' AND revoked_at IS NULL/)
+    end
+  end
+  describe "#issue (role-less path, ADR-0011 / K-078)" do
+    let(:idp) do
+      described_class.new.tap { |i| allow(i).to receive(:lookup_user_id).and_return("u-1") }
+    end
+
+    it "omits the role claim entirely when role is nil" do
+      token = idp.issue(agent_id: "a-1", role: nil)
+      payload, = ::JWT.decode(token, Kiosk.configuration.signing_key.rsa.public_key, true, algorithms: ["RS256"])
+
+      expect(payload).not_to have_key("role")
+      expect(payload["sub"]).to eq("u-1")
+      expect(payload["agent_id"]).to eq("a-1")
+    end
+
+    it "round-trips to a usable role-less Identity (the K-078 regression: an empty-string role claim made Identity raise)" do
+      token  = idp.issue(agent_id: "a-1", role: nil)
+      claims = Kiosk::Server::JwtIssuer.verify(
+        token:    token,
+        jwks:     Kiosk::Server::Jwks.build(keys: [Kiosk.configuration.signing_key]),
+        audience: "https://demo.example",
+        issuer:   "https://demo.example",
+      )
+
+      # The exact construction #verify performs — must not raise for nil role.
+      identity = Kiosk::Identity.new(
+        user_id: claims[:sub], role: claims[:role], actor: "agent",
+        agent_id: claims[:agent_id], claims: claims,
+      )
+      expect(identity.role).to be_nil
+      expect(identity.agent_id).to eq("a-1")
+    end
+
+    it "still carries the role claim when a role is present" do
+      token = idp.issue(agent_id: "a-1", role: :customer)
+      payload, = ::JWT.decode(token, Kiosk.configuration.signing_key.rsa.public_key, true, algorithms: ["RS256"])
+      expect(payload["role"]).to eq("customer")
     end
   end
 end

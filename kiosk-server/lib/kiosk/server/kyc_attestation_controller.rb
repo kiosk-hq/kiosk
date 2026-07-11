@@ -37,8 +37,13 @@ if defined?(::ActionController::API)
 
         private
 
+        # Same IdP resolution as WireController#resolve_identity!: the
+        # configured agent IdP first, then the user IdP — never a hardcoded
+        # DefaultAgentIdp (K-071: providers with a custom idp were locked out).
         def authenticate!
-          idp = AgentIdentityProviders::DefaultAgentIdp.new
+          idp = Kiosk.configuration.agent_idp || Kiosk.configuration.user_idp
+          raise Errors::Unauthenticated, "no IdP configured" if idp.nil?
+
           identity = idp.verify(request)
           raise Errors::Unauthenticated.new("missing or invalid agent token") if identity.nil?
 

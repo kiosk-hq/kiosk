@@ -23,13 +23,6 @@ RSpec.describe Kiosk::Server::AgentRegistration do
       expect(param_names).not_to include(:name)
     end
 
-    it "raises ConfigurationError when registration_role is unset (loud misconfiguration)" do
-      Kiosk.configure { |c| c.registration_role = nil }
-      expect {
-        described_class.call(public_key_pem: "PEM", signed: "sig")
-      }.to raise_error(Kiosk::Server::Errors::ConfigurationError, /registration_role/)
-    end
-
     it "raises ConfigurationError when registration_role is not among configured roles" do
       Kiosk.configure { |c| c.registration_role = :admin }
       expect {
@@ -94,6 +87,32 @@ RSpec.describe Kiosk::Server::AgentRegistration do
       expect {
         described_class.call(public_key_pem: pem, signed: "sig")
       }.to raise_error(Kiosk::Server::Errors::Conflict, /already registered/)
+    end
+
+    # ADR-0011: roles are hook-or-absent in 0.1. registration_role is OPTIONAL —
+    # when unset, registration MUST NOT fail and the agent row carries NO role.
+    it "succeeds with registration_role unset, writing NULL allowed_roles (ADR-0011)" do
+      Kiosk.configure { |c| c.registration_role = nil }
+      results  = [[], [{ "id" => "agent-1" }]] # SELECT empty → INSERT returns id
+      executed = []
+      allow(con).to receive(:execute) { |sql| executed << sql; results.shift || [] }
+
+      result = described_class.call(public_key_pem: pem, signed: "sig")
+      expect(result[:agent_id]).to eq("agent-1")
+      expect(result[:access_token]).to eq("fake-token")
+
+      insert_sql = executed.find { |s| s =~ /INSERT INTO kiosk\.agents/ }
+      expect(insert_sql).to include("NULL")
+      expect(insert_sql).not_to match(/ARRAY\[/)
+    end
+
+    it "treats an empty-string registration_role as unset (no ConfigurationError)" do
+      Kiosk.configure { |c| c.registration_role = "" }
+      results = [[], [{ "id" => "agent-1" }]]
+      allow(con).to receive(:execute) { |_sql| results.shift || [] }
+
+      expect(described_class.call(public_key_pem: pem, signed: "sig")[:agent_id])
+        .to eq("agent-1")
     end
   end
 

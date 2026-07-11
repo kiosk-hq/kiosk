@@ -44,6 +44,19 @@ RSpec.describe Kiosk::Server::SessionContext do
       ])
     end
 
+    it "skips the role SET LOCAL for a role-less identity (ADR-0011, K-078)" do
+      described_class.open(
+        connection: connection,
+        identity:   build_identity(actor: "agent", role: nil),
+      ) { }
+
+      expect(connection.executed_sql).to eq([
+        %(SET LOCAL "app"."current_user_id" = 'u-1'),
+        %(SET LOCAL "app"."current_actor" = 'agent'),
+        %(SET LOCAL "app"."current_agent_id" = 'a-1'),
+      ])
+    end
+
     it "uses the configured GUC namespace" do
       Kiosk.configure { |c| c.guc_namespace = "kiosk" }
       described_class.open(

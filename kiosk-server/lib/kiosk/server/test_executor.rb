@@ -65,7 +65,7 @@ module Kiosk
     class TestExecutor
       # Raised when a `query` / `run_action` lands outside any
       # `with_identity` scope. The Journey DSL refuses to allow this by
-      # default (spec §6.3 «default deny»); see {Kiosk::TestHelpers::Journey#query}.
+      # default; see {Kiosk::TestHelpers::Journey#query}.
       class NoScopeError < StandardError; end
 
       # Internal marker that signals "abort this transaction" both for
@@ -188,7 +188,7 @@ module Kiosk
         return if in_scope?
 
         raise NoScopeError,
-          "call from inside as_user / as_agent / as_anonymous block (spec §6.3 default-deny)"
+          "call from inside as_user / as_agent / as_anonymous block (default-deny)"
       end
 
       def apply_gucs(identity)

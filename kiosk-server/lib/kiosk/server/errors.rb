@@ -3,13 +3,14 @@
 module Kiosk
   module Server
     # Exception classes the {Executor} raises and {WireController}
-    # serialises to error envelopes per design spec §5.2 (exit codes 0/2/3/4/5/6).
+    # serialises to error envelopes (exit codes 0/2/3/4/5/6) — see the
+    # response-envelope section of the spec.
     #
     # Each subclass declares three constants used by the wire envelope and
     # HTTP serialisation:
     #
     #   CODE        — stable string for the JSON envelope's `error.code`
-    #   EXIT_CODE   — CLI exit code per spec §5.2
+    #   EXIT_CODE   — CLI exit code
     #   HTTP_STATUS — HTTP response status the controller renders
     module Errors
       # Base class. `rescue Kiosk::Server::Errors::Base` catches every Kiosk
@@ -31,7 +32,7 @@ module Kiosk
         def exit_code   = self.class.const_get(:EXIT_CODE)
         def http_status = self.class.const_get(:HTTP_STATUS)
 
-        # Envelope shape per spec §5.2 — structured body with `code`,
+        # Envelope shape — structured body with `code`,
         # `hint`, `query_id`. nil fields are dropped for compactness.
         def to_envelope
           {

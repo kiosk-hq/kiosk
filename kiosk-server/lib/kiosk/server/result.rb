@@ -11,8 +11,7 @@ module Kiosk
     #   :value  — single value returned by an Action; under `value`
     #   :stream — streaming events (NDJSON); under `events`
     #
-    # `query_id` is an optional opaque correlation id for log lookup
-    # (spec §5.2 «code, hint, query_id»).
+    # `query_id` is an optional opaque correlation id for log lookup.
     Result = Data.define(:kind, :payload, :query_id) do
       KINDS = %i[rows value stream].freeze
 

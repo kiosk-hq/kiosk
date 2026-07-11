@@ -44,6 +44,12 @@ Kiosk.configure do |c|
   # `:support`, `:master`.
   # c.roles = %i[customer]
 
+  # Role pinned to every self-registered agent (agents cannot choose their
+  # own). OPTIONAL: when unset, self-registered agents get no role — assign
+  # roles inside the `c.assistant_creation` hook instead if your app
+  # branches on them. When set, must be one of `c.roles`.
+  # c.registration_role = :customer
+
   # Owner block surfaced in /.well-known/kiosk.json.
   # c.owner = { name: "Your Company", support: "support@example.com" }
 

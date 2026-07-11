@@ -31,13 +31,38 @@ RSpec.describe Kiosk::Server::AgentIdentityProviders::DefaultAgentIdp do
     expect(idp.verify({})).to be_nil
   end
 
-  it "raises on a token signed by a different key" do
+  # K-070: verification failures resolve to nil (→ 401 at the controller),
+  # never escape as JwtIssuer::Error (which surfaced as HTTP 500).
+  it "returns nil for a token signed by a different key" do
     other = Kiosk::Server::SigningKey.generate
     token = Kiosk::Server::JwtIssuer.issue(
       claims: { sub: "u", agent_id: "a", role: "customer", actor: "agent" },
       audience: "https://demo.example", signing_key: other,
     )
-    expect { idp.verify(bearer(token)) }.to raise_error(Kiosk::Server::JwtIssuer::Error)
+    expect(idp.verify(bearer(token))).to be_nil
+  end
+
+  it "returns nil for an expired token" do
+    token = Kiosk::Server::JwtIssuer.issue(
+      claims:   { sub: "u", agent_id: "a", role: "customer", actor: "agent" },
+      audience: "https://demo.example",
+      now:      Time.now - 7200, # default 1h lifetime + 60s leeway long gone
+    )
+    expect(idp.verify(bearer(token))).to be_nil
+  end
+
+  it "returns nil for a malformed (garbage) token" do
+    expect(idp.verify(bearer("definitely-not-a-jwt"))).to be_nil
+  end
+
+  it "returns nil for a revoked token" do
+    token = Kiosk::Server::JwtIssuer.issue(
+      claims:   { sub: "u", agent_id: "agent-rev", role: "customer", actor: "agent" },
+      audience: "https://demo.example",
+      now:      Time.now - 10,
+    )
+    Kiosk.configuration.revocation_store.revoke_all("agent-rev", at: Time.now.to_i)
+    expect(idp.verify(bearer(token))).to be_nil
   end
 
   # I1 — a revoked agent must not be able to authenticate or sign mandates.

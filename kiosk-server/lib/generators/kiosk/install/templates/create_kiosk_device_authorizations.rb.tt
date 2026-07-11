@@ -2,7 +2,6 @@
 
 # Migration 005 — kiosk.device_authorizations for the RFC 8628
 # Device Authorization Grant state machine.
-# See implementation-plan §3 and design-spec §6.5 + §6.7.
 class CreateKioskDeviceAuthorizations < ActiveRecord::Migration[ActiveRecord::Migration.current_version]
   def up
     execute Kiosk::Server::SchemaDefinitions.device_authorizations_sql(

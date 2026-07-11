@@ -1,7 +1,7 @@
 # frozen_string_literal: true
 
 RSpec.describe Kiosk::Server::Errors do
-  describe "exit-code + HTTP-status + CODE mapping (spec §5.2)" do
+  describe "exit-code + HTTP-status + CODE mapping" do
     {
       Kiosk::Server::Errors::Base            => ["internal_error", 6, 500],
       Kiosk::Server::Errors::BadRequest      => ["bad_request",    2, 400],

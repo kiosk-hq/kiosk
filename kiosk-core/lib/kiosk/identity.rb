@@ -1,9 +1,8 @@
 # frozen_string_literal: true
 
 module Kiosk
-  # Resolved identity of the principal making a request.
-  # See design spec §6.2 «JWT shape» — this is the canonical Ruby value
-  # object an IdP adapter returns from #verify.
+  # Resolved identity of the principal making a request — the canonical
+  # Ruby value object an IdP adapter returns from #verify.
   #
   # Immutable. Compared by value.
   #
@@ -11,15 +10,17 @@ module Kiosk
   #   The principal id (whatever the provider's user-id type is — uuid,
   #   bigint, integer, text). The principal need NOT be a human; it may
   #   be a synthetic placeholder, service account, group, or parent agent
-  #   depending on the user-IdP adapter (see spec §6.1).
+  #   depending on the user-IdP adapter.
   # @!attribute [r] role
-  #   The active role for this token — one of the configured `Kiosk.roles`.
+  #   The active role for this token — one of the configured `Kiosk.roles`,
+  #   or +nil+ for a role-less principal (ADR-0011: roles are hook-or-absent
+  #   in 0.1; single-role providers need no role at all).
   # @!attribute [r] actor
   #   `"agent"` | `"human"` | `"service"` — channel kind, recorded for
   #   audit and Action-level gating; NEVER appears in RLS policies.
   # @!attribute [r] agent_id
   #   Present iff `actor == "agent"`. Identifies the specific agent
-  #   credential (multi-agent per user — see spec §6.4).
+  #   credential (multi-agent per user).
   # @!attribute [r] claims
   #   Hash of additional claims from the upstream IdP. Adapter-specific;
   #   Kiosk treats opaque except for the four canonical fields above.
@@ -28,7 +29,9 @@ module Kiosk
 
     def initialize(user_id:, role:, actor:, agent_id: nil, claims: {})
       raise ArgumentError, "user_id required" if user_id.nil?
-      raise ArgumentError, "role required"    if role.nil? || role.to_s.empty?
+
+      # Role is optional (ADR-0011): absent and empty both mean "no role".
+      role = nil if role && role.to_s.empty?
 
       actor = actor.to_s
       unless VALID_ACTORS.include?(actor)
@@ -47,7 +50,7 @@ module Kiosk
 
       super(
         user_id:  user_id,
-        role:     role.to_s,
+        role:     role&.to_s,
         actor:    actor,
         agent_id: agent_id,
         claims:   claims || {},

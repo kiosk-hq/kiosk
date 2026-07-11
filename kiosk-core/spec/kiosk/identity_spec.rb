@@ -35,14 +35,14 @@ RSpec.describe Kiosk::Identity do
         .to raise_error(ArgumentError, /user_id/)
     end
 
-    it "rejects missing role" do
-      expect { described_class.new(**valid_args.merge(role: nil)) }
-        .to raise_error(ArgumentError, /role/)
+    it "allows a missing role (ADR-0011: hook-or-absent)" do
+      identity = described_class.new(**valid_args.merge(role: nil))
+      expect(identity.role).to be_nil
     end
 
-    it "rejects empty role" do
-      expect { described_class.new(**valid_args.merge(role: "")) }
-        .to raise_error(ArgumentError, /role/)
+    it "normalizes an empty role to nil" do
+      identity = described_class.new(**valid_args.merge(role: ""))
+      expect(identity.role).to be_nil
     end
 
     it "rejects unknown actor" do

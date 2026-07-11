@@ -7,8 +7,7 @@ module Kiosk
     # (`user_model`, `user_id_type`, `guc_namespace`, `schema`, `app_role`,
     # `roles`, `issuer`, …).
     #
-    # See design spec §3.4 for the well-known shape and §3.6 for the URL
-    # surface map.
+    # See the Discovery section of the spec for the well-known shape.
     module ConfigurationExtension
       # URL prefix at which kiosk-server is mounted under the provider's
       # origin. Default: `/kiosk` (the spec's suggested default mount path).
@@ -54,8 +53,8 @@ module Kiosk
         computed_capabilities
       end
 
-      # Owner block for the well-known document. Free-form hash; the spec
-      # §3.4 example uses `{ name: ..., support: ... }`. Providers should
+      # Owner block for the well-known document. Free-form hash, e.g.
+      # `{ name: ..., support: ... }`. Providers should
       # set at minimum a contact email.
       attr_writer :owner
       def owner
@@ -82,12 +81,12 @@ module Kiosk
       # a newer skill version.
       attr_writer :skill_url
       def skill_url
-        @skill_url ||= "https://kiosk.tech/skill-v1.0.md"
+        @skill_url ||= "https://kiosk.tech/skill-v0.1.1.md"
       end
       attr_accessor :skill_sha256
 
-      # RSA signing key used by the OAuth 2.1 surface (§6.7) and the
-      # bundled IdP (§6.2) to issue JWTs.
+      # RSA signing key used by the OAuth 2.1 surface and the
+      # bundled IdP to issue JWTs.
       #
       # Resolution order:
       #   1. explicit value set via `Kiosk.configure { |c| c.signing_key = ... }`
@@ -153,8 +152,10 @@ module Kiosk
       # every RLS policy trusts). Privileged roles are obtainable only through
       # the human-approved device-grant flow.
       #
-      # No default: self-registration raises a ConfigurationError until the
-      # provider sets this explicitly. Must be one of {#roles}.
+      # OPTIONAL (ADR-0011: roles are hook-or-absent in 0.1). When unset,
+      # self-registered agents get NO role (`agents.allowed_roles` stays NULL);
+      # a provider that needs roles may assign them inside its
+      # `assistant_creation` hook instead. When set, it must be one of {#roles}.
       #   Kiosk.configure { |c| c.registration_role = :customer }
       attr_accessor :registration_role
 
@@ -215,7 +216,7 @@ module Kiosk
       attr_accessor :unlock_signing_key
 
       # Storage adapter for {Kiosk::Server::DeviceAuthorization} rows
-      # (§6.5 + §6.7 Device-Grant state machine). Lazy-defaults to
+      # (RFC 8628 Device-Grant state machine). Lazy-defaults to
       # {DeviceAuthorizationStores::InMemory} — fine for development +
       # tests + small single-process deployments. Production Rails apps
       # set this to the ActiveRecord-backed adapter (lands in a

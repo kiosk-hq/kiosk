@@ -5,8 +5,6 @@ module Kiosk
     # Value object representing one PostgreSQL row-level-security policy
     # declaration.
     #
-    # See design spec §7 «RLS DSL».
-    #
     # @!attribute [r] name
     #   The policy name as it lives in `pg_policy` (e.g. `rentals_select`).
     # @!attribute [r] action

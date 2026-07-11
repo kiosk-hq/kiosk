@@ -4,8 +4,6 @@ require "rspec/expectations"
 
 # Matcher: `expect { ... }.to be_rls_denied`
 # Succeeds when the block raises {Kiosk::TestHelpers::Errors::RLSDenied}.
-# See design spec §12 (matchers paragraph) and §5.2 (structured exit-code
-# error classes).
 RSpec::Matchers.define :be_rls_denied do
   supports_block_expectations
 

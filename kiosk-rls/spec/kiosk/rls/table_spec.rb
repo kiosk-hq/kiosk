@@ -87,7 +87,7 @@ RSpec.describe Kiosk::RLS::Table do
   describe "#validate!" do
     subject(:table) { described_class.new(:rentals) }
 
-    it "raises when comment is missing (spec §7.5)" do
+    it "raises when comment is missing" do
       table.policy(:select, using: "x")
       expect { table.validate! }
         .to raise_error(ArgumentError, /comment/)

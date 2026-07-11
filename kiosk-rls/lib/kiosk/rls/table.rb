@@ -7,9 +7,6 @@ module Kiosk
     # Mutable builder used inside an `enable_rls_on TABLE do ... end` block.
     # Collects policy declarations + comment + table-level metadata, then is
     # frozen and passed to {Kiosk::RLS::Emitter} for SQL emission.
-    #
-    # See design spec §7.4 (what `enable_rls_on` actually does) and §7.5
-    # (mandatory comment).
     class Table
       attr_reader :name, :policies, :comment_text, :app_role, :sequences
 
@@ -38,13 +35,13 @@ module Kiosk
         @comment_text = text&.to_s
       end
 
-      # Run after the block — enforces spec §7.5 comment requirement.
+      # Run after the block — enforces the mandatory-comment requirement.
       # Returns self so the call site can chain.
       def validate!
         if @comment_text.nil? || @comment_text.empty?
           raise ArgumentError,
                 "enable_rls_on(:#{@name}) requires a `comment \"...\"` " \
-                "inside the block (spec §7.5)"
+                "inside the block"
         end
         self
       end

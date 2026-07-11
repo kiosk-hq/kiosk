@@ -4,7 +4,7 @@ module Kiosk
   module RLS
     # Adds the RLS-only field to {Kiosk::Configuration} via include.
     #
-    # See design spec §7.6 / §7.7 — the privileged role (default
+    # The privileged role (default
     # `system_role`) owns the tables and is what `escalate_to :system`
     # switches the connection pool to. Kiosk does NOT create the role —
     # the provider's DBA does.

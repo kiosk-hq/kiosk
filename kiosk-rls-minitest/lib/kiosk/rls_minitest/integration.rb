@@ -2,7 +2,7 @@
 
 module Kiosk
   module TestHelpers
-    # `include Kiosk::TestHelpers` is the documented entry point in spec §12.
+    # `include Kiosk::TestHelpers` is the canonical entry point.
     # When mixed into a Minitest test class, also pull in the journey DSL
     # and the Kiosk assertions in one go — no second include needed.
     #

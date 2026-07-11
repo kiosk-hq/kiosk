@@ -110,7 +110,7 @@ RSpec.describe Kiosk::RLS::Emitter do
   end
 
   describe ".statements_for(table)" do
-    it "emits the canonical spec §7.4 sequence (no sequences case)" do
+    it "emits the canonical RLS enable sequence (no sequences case)" do
       table = Kiosk::RLS::Table.new(:rentals)
       table.policy(:select, using: "user_id = kiosk.current_user_id()")
       table.policy(:insert, check: "user_id = kiosk.current_user_id()")

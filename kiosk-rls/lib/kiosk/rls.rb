@@ -1,7 +1,7 @@
 # frozen_string_literal: true
 
 # kiosk-rls — the Kiosk RLS DSL and SQL emitter.
-# See https://kiosk.tech and design spec §7 «RLS DSL».
+# See https://kiosk.tech.
 
 require "kiosk"
 

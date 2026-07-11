@@ -808,7 +808,7 @@ namespace :demo do
     Asserts:
       • schema.verbs includes query/run/pay/schema and NOT events
       • schema.queries includes reserve with a description
-      • schema.actions includes start_rental with a description
+      • schema.actions includes start_rental, payment_setup with descriptions
 
     Exits 0 if all assertions pass; exits 1 on any miss.
   DESC
@@ -917,19 +917,21 @@ namespace :demo do
       puts "  ✗  schema.actions missing reserve"
     end
 
-    # start_rental present with a description
-    start_rental_entry = actions.find { |a| a["name"] == "start_rental" }
-    if start_rental_entry
-      puts "  ✓  schema.actions includes start_rental"
-      if start_rental_entry["description"] && !start_rental_entry["description"].to_s.empty?
-        puts "  ✓  start_rental has description: #{start_rental_entry["description"].inspect}"
+    # start_rental, payment_setup (K-057 — skill Step 5) present with descriptions
+    %w[start_rental payment_setup].each do |aname|
+      entry = actions.find { |a| a["name"] == aname }
+      if entry
+        puts "  ✓  schema.actions includes #{aname}"
+        if entry["description"] && !entry["description"].to_s.empty?
+          puts "  ✓  #{aname} has description: #{entry["description"].inspect}"
+        else
+          failures << "#{aname} missing description"
+          puts "  ✗  #{aname} missing description"
+        end
       else
-        failures << "start_rental missing description"
-        puts "  ✗  start_rental missing description"
+        failures << "schema.actions missing #{aname}"
+        puts "  ✗  schema.actions missing #{aname}"
       end
-    else
-      failures << "schema.actions missing start_rental"
-      puts "  ✗  schema.actions missing start_rental"
     end
 
     if failures.empty?

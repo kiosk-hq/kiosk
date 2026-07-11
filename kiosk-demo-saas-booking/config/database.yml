@@ -6,14 +6,14 @@ default: &default
 
 development:
   <<: *default
-  database: kiosk_demo_development
+  database: kiosk_saas_booking_development
 
 test:
   <<: *default
-  database: kiosk_demo_test
+  database: kiosk_saas_booking_test
 
 production:
   <<: *default
-  database: kiosk_demo_production
-  username: <%= ENV.fetch("KIOSK_DEMO_DB_USER", "kiosk_demo") %>
-  password: <%= ENV["KIOSK_DEMO_DB_PASSWORD"] %>
+  database: kiosk_saas_booking_production
+  username: <%= ENV.fetch("KIOSK_SAAS_BOOKING_DB_USER", "kiosk_saas_booking") %>
+  password: <%= ENV["KIOSK_SAAS_BOOKING_DB_PASSWORD"] %>

@@ -1,7 +1,6 @@
 # frozen_string_literal: true
 
 # Migration 001 — Kiosk schema + the four current_*() helper functions.
-# See implementation-plan §3 and design-spec §6.3.
 #
 # `ActiveRecord::Migration[…]` resolves at host-app load time, so this
 # file picks up whatever Rails version the host is on.

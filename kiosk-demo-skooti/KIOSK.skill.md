@@ -22,14 +22,9 @@ REST wire calls below (`/kiosk/query`, `/kiosk/run`, `/kiosk/pay`,
 
 ---
 
-## Step 2 — Self-register (proof-of-possession handshake + SHA256 PoW)
+## Step 2 — Self-register (proof-of-possession handshake + Equihash PoW)
 
 Generate an RSA-2048 keypair. Keep the private key for the session.
-
-The skooti registration endpoint requires a SHA256 leading-zero PoW over the
-public key (difficulty 20). Find the smallest nonce `n ≥ 0` such that
-`SHA256("<public_key_pem>.<n>")` has ≥ 20 leading zero bits — you attach it as
-`pow` on the register call below.
 
 A public key is not a credential — prove control of the **private** key. Fetch
 a single-use challenge, then sign it with `aud` set to the provider's issuer (so
@@ -41,7 +36,7 @@ GET /kiosk/auth/challenge?public_key=<URL-encoded PEM>
 
 Returns `{ "challenge": "<nonce>" }`. Sign an RS256 JWS over
 `{ "aud": "<provider issuer>", "nonce": "<challenge>", "jti": "<fresh UUID>", "iat": <now> }`
-with your private key, then register — attaching the solved PoW nonce:
+with your private key, then register:
 
 ```http
 POST /kiosk/auth/register
@@ -49,8 +44,26 @@ Content-Type: application/json
 
 {
   "public_key": "<PEM-encoded RSA public key>",
-  "signed":     "<RS256 JWS over {aud, nonce, jti, iat}>",
-  "pow":        "<solved nonce string>"
+  "signed":     "<RS256 JWS over {aud, nonce, jti, iat}>"
+}
+```
+
+skooti prices registration with proof-of-work: this first attempt returns
+HTTP 402 with `error.code == "pow_required"` and an `error.challenges` array
+(Equihash, `params: {"n": 96, "k": 5}` — solves in well under a second).
+Solve EVERY challenge (see "Handling `pow_required`" below), then re-POST the
+**same** register body with a top-level `pow` field. The PoP `signed` proof
+is not consumed by the 402 — reuse it verbatim:
+
+```http
+POST /kiosk/auth/register
+Content-Type: application/json
+
+{
+  "public_key": "<PEM-encoded RSA public key>",
+  "signed":     "<same RS256 JWS as above>",
+  "pow":        { "proofs": [ { "challenge": { ...echoed verbatim... },
+                                "nonce": { "indices": [...], "header_nonce": 0 } } ] }
 }
 ```
 
@@ -237,24 +250,44 @@ model.
 ## Handling `pow_required`
 
 Any wire response (`/kiosk/query`, `/kiosk/run`, `/kiosk/pay`, `/kiosk/schema`)
-may be HTTP 402 with `error.code == "pow_required"`. When this happens, solve
-the challenge and retry — the full protocol is documented in
-`kiosk-pow/SKILL.md`. Summary:
+— and `/kiosk/auth/register` (Step 2) — may be HTTP 402 with
+`error.code == "pow_required"` and an `error.challenges` array:
 
-1. Install once: `pip install argon2-cffi`
-2. Solve: `python3 kiosk-pow/solve.py '<challenge-json>'` → reads `{"nonce": "..."}`
-3. Re-POST the **exact same** request (same path + body) with a top-level `pow` field:
+```json
+{
+  "ok": false,
+  "error": {
+    "code": "pow_required",
+    "challenges": [
+      { "alg": "equihash", "params": { "n": 96, "k": 5 },
+        "salt": "dGVzdC1zYWx0…", "exp": 1751846400, "sig": "hmac…" }
+    ]
+  }
+}
+```
+
+When this happens:
+
+1. Solve EVERY challenge in the list with the reference solver
+   (`solve.py` in `kiosk-pow-equihash`):
+   `python3 kiosk-pow-equihash/solve.py '<challenge-json>'` →
+   `{"indices": [...], "header_nonce": 0}`
+2. Re-POST the **exact same** request (same path + body) with a top-level
+   `pow` field. Each proof echoes its challenge back **verbatim** — it
+   carries the provider's HMAC signature and is bound to this exact request:
    ```json
    { "name": "scooters_available",
-     "pow":  { "challenge": { ...verbatim... }, "nonce": "<from solver>" } }
+     "pow":  { "proofs": [ { "challenge": { ...verbatim... },
+                             "nonce": { "indices": [...], "header_nonce": 0 } } ] } }
    ```
+   For a single challenge the shorthand
+   `"pow": { "challenge": {…}, "nonce": {…} }` is also accepted.
 
-Do not negotiate or downgrade the algorithm — solve what the provider demands
-or tell the user to update. The provider may challenge again on any subsequent
-request. The reference solver is `kiosk-pow/solve.py`.
-
-Note: the SHA256 PoW at registration (Step 2) is a different, simpler
-mechanism solved inline — it is not the Argon2id `pow_required` exec protocol.
+Challenges expire (`exp`) and proofs are single-use — solve and retry
+promptly, do not cache. Do not negotiate or downgrade the algorithm — solve
+what the provider demands or tell the user to update. The provider may
+challenge again on any subsequent request. skooti's demo params (n=96, k=5)
+solve in well under a second; estimate cost from `params` before solving.
 
 ---
 
@@ -280,6 +313,8 @@ Response — HTTP 200, inside `.value`:
                                     "params": null }
   ],
   "actions": [
+    { "name": "payment_setup", "description": "Check whether the authenticated principal has a saved payment method ...",
+                               "params": {} },
     { "name": "reserve",      "description": "Reserve a scooter by its code for the authenticated principal",
                                "params": { "scooter_code": "string — scooter code, e.g. 'SK-001'" } },
     { "name": "start_rental", "description": "Verify gates (ownership, KYC, payment) and issue an Ed25519 offline rental token",

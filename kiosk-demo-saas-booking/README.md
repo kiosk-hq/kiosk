@@ -50,9 +50,9 @@ After the walkthrough finishes, the server is torn down cleanly. Server logs are
 | `app/models/{user,salon,appointment}.rb` | Three trivial AR models |
 | `config/initializers/kiosk.rb` | `Kiosk.configure` block + the `book_appointment` Action |
 | `lib/stub_idp.rb` | Bespoke synthetic-token IdP for the demo's hard-coded Alice + Bob |
-| `lib/jwt_or_stub_idp.rb` | Composite IdP: tries OAuth-issued JWTs first, falls back to StubIdp |
+| `lib/jwt_or_stub_idp.rb` | Composite IdP: tries Kiosk-issued JWTs first, falls back to StubIdp |
 | `bin/demo` | The walkthrough — POSIX shell, curl-driven, no Ruby in the loop |
-| `lib/tasks/demo.rake` | `rake demo:setup`, `rake demo:walkthrough`, `rake demo` |
+| `lib/tasks/demo.rake` | `rake demo:setup`, `rake demo:walkthrough`, `rake demo`, `rake demo:isolation`, `rake demo:register`, `rake demo:redteam`, `rake demo:schema` |
 
 ## Make it real
 

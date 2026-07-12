@@ -130,7 +130,8 @@ Kiosk.configure do |c|
     c.app_role        = "kiosk_foodelivery_app"
   end
 
-  # JwtOrStubIdp tries Kiosk-issued JWTs (Device-Grant output) first,
+  # JwtOrStubIdp tries Kiosk-issued JWTs (kiosk-pop register/login output;
+  # OAuth device-grant dormant per ADR-0008) first,
   # then falls back to StubIdp's bespoke `agent:u-…:a-…:r-…` shape.
   # One endpoint authenticates both for the demo. Real providers swap
   # in `kiosk-user-idp-devise` (or another adapter); see the README.

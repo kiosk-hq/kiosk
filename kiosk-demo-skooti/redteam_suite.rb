@@ -175,7 +175,7 @@ profile = Kiosk::Redteam::Profile.new(
 
 # ── Scenario list ─────────────────────────────────────────────────────────────
 #
-# All 12 are listed; skooti's full surface makes all applicable.
+# All 13 are listed; skooti's full surface makes all applicable.
 # RegistrationWithoutPow: pow_difficulty>0 (Equihash gate on) → always applicable.
 
 scenarios = [

@@ -9,7 +9,7 @@ Gem::Specification.new do |spec|
   spec.summary       = "Shared journey-test DSL for Kiosk test harnesses (RSpec, Minitest)"
   spec.description   = <<~DESC
     kiosk-test-support carries the framework-agnostic pieces of the Kiosk
-    journey-test DSL described in design spec §12: the Journey module
+    journey-test DSL: the Journey module
     (`as_agent_of`, `as_user`, `as_agent`, `as_anonymous`, `query`,
     `run_action`, `pay_action`, `kiosk_seed`), the pluggable executor
     contract, a NullExecutor for self-tests, and the structured error

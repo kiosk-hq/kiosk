@@ -4,7 +4,7 @@ Framework-agnostic journey-test DSL for the [Kiosk](https://kiosk.tech) test har
 
 ## What it does
 
-Carries the shared pieces of the Kiosk journey-test DSL (design spec §12): the `Journey` module mixed into RSpec / Minitest tests, the pluggable `executor` contract, a `NullExecutor` for self-tests, and the structured error classes that the framework-specific matchers and assertions look for.
+Carries the shared pieces of the Kiosk journey-test DSL: the `Journey` module mixed into RSpec / Minitest tests, the pluggable `executor` contract, a `NullExecutor` for self-tests, and the structured error classes that the framework-specific matchers and assertions look for.
 
 You normally don't install this gem directly — install one of the harnesses:
 
@@ -34,7 +34,7 @@ as_anonymous do
 end
 ```
 
-Helpers: `as_agent_of(user, role:)`, `as_user(user, role:)`, `as_agent(name)`, `as_anonymous`, `query(sql)`, `run_action(name, **args)`, `pay_action(name, **args)`, `kiosk_seed(table, count:, owner:, **attrs)`. See spec §12 for full semantics.
+Helpers: `as_agent_of(user, role:)`, `as_user(user, role:)`, `as_agent(name)`, `as_anonymous`, `query(sql)`, `run_action(name, **args)`, `pay_action(name, **args)`, `kiosk_seed(table, count:, owner:, **attrs)`. See the specification for full semantics.
 
 ## Wiring an executor
 
@@ -67,5 +67,4 @@ Apache-2.0 — see `LICENSE.txt`.
 ## Links
 
 - [kiosk.tech](https://kiosk.tech)
-- [Design spec §12](https://github.com/kiosk-hq/kiosk-meta) (private during pre-launch)
 - [Issue tracker](https://github.com/kiosk-hq/kiosk/issues)

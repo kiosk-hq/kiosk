@@ -2,7 +2,7 @@
 
 # skooti redteam battery (R3 Phase 2 Task 4)
 #
-# Exercises the full skooti chain: PoW d=20 → KYC → reserve → pay →
+# Exercises the full skooti chain: Equihash PoW n=96 k=5 → KYC → reserve → pay →
 # start_rental (3-gate ownership/KYC/payment).  Headline scenarios:
 #   C2  PayForOtherUseSelf  — B pays for A's reservation, B tries start_rental
 #   C3  SpentResourceReuse  — re-start_rental on an active reservation
@@ -77,7 +77,7 @@ end
 # ── Profile ───────────────────────────────────────────────────────────────────
 
 profile = Kiosk::Redteam::Profile.new(
-  pow_difficulty: 20,     # skooti mandates d=20 at /register
+  pow_difficulty: 20,     # >0 flips on the /register gate; skooti gates with an Equihash proof (n=96 k=5) and the client solves the real 402 challenge — the numeric value is not an Equihash param
   requires_kyc:   true,   # start_rental Gate-2 checks kyc_verified_at
 
   # ── per-user query — CrossTenantRead ─────────────────────────────────────
@@ -176,7 +176,7 @@ profile = Kiosk::Redteam::Profile.new(
 # ── Scenario list ─────────────────────────────────────────────────────────────
 #
 # All 12 are listed; skooti's full surface makes all applicable.
-# RegistrationWithoutPow: pow_difficulty=20 → always applicable.
+# RegistrationWithoutPow: pow_difficulty>0 (Equihash gate on) → always applicable.
 
 scenarios = [
   Kiosk::Redteam::Scenarios::PayForOtherUseSelf.new,     # C2 — headline
@@ -187,7 +187,7 @@ scenarios = [
   Kiosk::Redteam::Scenarios::UnpaidGatedAction.new,
   Kiosk::Redteam::Scenarios::CrossTenantRead.new,
   Kiosk::Redteam::Scenarios::ForgedUserId.new,
-  Kiosk::Redteam::Scenarios::RegistrationWithoutPow.new, # d=20 always applicable
+  Kiosk::Redteam::Scenarios::RegistrationWithoutPow.new, # Equihash gate on → always applicable
   Kiosk::Redteam::Scenarios::MandatePrincipalSwap.new,
   Kiosk::Redteam::Scenarios::MandateReplay.new,
   Kiosk::Redteam::Scenarios::TokenTampering.new,
@@ -204,7 +204,7 @@ EXPECTED_SKIP_NAMES = [].freeze
 
 puts "\n── skooti redteam battery ──"
 puts "  base_url:       #{BASE_URL}"
-puts "  pow_difficulty: 20"
+puts "  register gate:  Equihash n=96 k=5 (pow_difficulty>0)"
 puts "  requires_kyc:   true"
 puts "  scenarios:      #{scenarios.size}"
 puts ""

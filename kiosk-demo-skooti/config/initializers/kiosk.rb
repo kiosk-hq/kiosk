@@ -57,7 +57,7 @@ Kiosk.configure do |c|
   c.registration_role = :customer
   c.owner  = { name: "skooti", support: "help@skooti.app" }
   # Dual-check (skill.md): canonical skill URL + SHA-256 of its content.
-  c.skill_sha256 = "b58453ddd432ef6a4696ce223549c25c3e10bf9688d829a79620299e0aa7f0b1"
+  c.skill_sha256 = "7cd44398e6102c20ea95484c1fe03df68907545c4c21412b18bd559226ed95c9"
 
   # JwtOrStubIdp tries Kiosk-issued JWTs (Device-Grant output) first,
   # then falls back to StubIdp's bespoke `agent:u-…:a-…:r-…` shape.

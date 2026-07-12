@@ -693,7 +693,7 @@ namespace :demo do
     Adversarial regression battery (R3 Phase 2 Task 4) — kiosk-redteam.
 
     Boots skooti, runs all 12 Kiosk::Redteam scenarios against the full chain
-    (PoW d=20 → KYC → reserve → pay → start_rental) and asserts each attack
+    (Equihash PoW n=96 k=5 → KYC → reserve → pay → start_rental) and asserts each attack
     is BLOCKED:
 
       BLOCKED  PayForOtherUseSelf    — C2: B pays for A's reservation, tries start_rental
@@ -704,7 +704,7 @@ namespace :demo do
       BLOCKED  UnpaidGatedAction     — start_rental without payment → Gate-3 fires
       BLOCKED  CrossTenantRead       — B's my_reservations excludes A's rows
       BLOCKED  ForgedUserId          — agent-supplied user_id in reserve args ignored
-      BLOCKED  RegistrationWithoutPow — /register without PoW rejected (d=20)
+      BLOCKED  RegistrationWithoutPow — /register without a valid Equihash proof rejected
       BLOCKED  MandatePrincipalSwap  — B signs mandate with A's identity; rejected
       BLOCKED  MandateReplay         — B re-submits A's JWS; rejected
       BLOCKED  TokenTampering        — altered JWT claim rejected 401
@@ -802,7 +802,7 @@ namespace :demo do
   desc <<~DESC
     Self-discovery proof (P3 Task 2) — verifies the schema verb over HTTP.
 
-    Boots the server, registers a fresh agent (PoW d=20), calls:
+    Boots the server, registers a fresh agent (Equihash PoW n=96 k=5), calls:
       GET /kiosk/schema
 
     Asserts:

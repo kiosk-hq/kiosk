@@ -30,7 +30,7 @@ skooti is a Rails app that speaks Kiosk. The following is a recorded no-human ru
 **What the agent did — no human account, no human login, no human at the keyboard:**
 
 1. **Discover** — `GET /.well-known/kiosk.json` → skooti's issuer + endpoint.
-2. **Self-register, accountably** — generated an RSA-2048 keypair and solved a **SHA256 proof-of-work** (difficulty 20) over its public key, then completed the proof-of-possession handshake — `GET /kiosk/auth/challenge` → signed the nonce → `POST /kiosk/auth/register {public_key, signed, pow}` → HTTP 201. The PoW is the "I'm not a fly-by bot" cost: cheap once for an honest client, expensive at scrape scale. No human account, no OTP, no anti-bot screen.
+2. **Self-register, accountably** — generated an RSA-2048 keypair and solved an **Equihash proof-of-work** (n=96, k=5) over its public key, then completed the proof-of-possession handshake — `GET /kiosk/auth/challenge` → signed the nonce → `POST /kiosk/auth/register {public_key, signed, pow}` → HTTP 201. The PoW is the "I'm not a fly-by bot" cost: cheap once for an honest client, expensive at scrape scale. No human account, no OTP, no anti-bot screen.
 3. **Prove identity once** — submitted a **KYC attestation** (a signed credential from a trusted broker) → HTTP 200. Reusable across rentals; the human is never in the loop.
 4. **Browse + reserve** — `query scooters_available` → picked `SK-001`; `run reserve` → a `reservation_id` with a TTL hold.
 5. **Pay** — signed an AP2 intent mandate + a cart mandate (RS256 JWS, `iss` = skooti's issuer, cart `line_items` bound to the `reservation_id`), `pay` → settled.
@@ -49,7 +49,7 @@ Two things skooti does that the incumbent flow cannot:
 
 The delta between "today's scooter app" and "skooti" is a provider-side integration plus one piece of lock firmware.
 
-**1. Add the Kiosk satellite gems** (`kiosk-core`, `kiosk-server`, plus `kiosk-pow`/`kiosk-reputation` for the bot-wall and `kiosk-credentials-*` for KYC). In production these are versioned RubyGems; `kiosk-pay-stripe` swaps in for real payments.
+**1. Add the Kiosk satellite gems** (`kiosk-core`, `kiosk-server`, plus `kiosk-pow-equihash`/`kiosk-reputation` for the bot-wall). KYC needs no extra gem in 0.1: `kiosk-server` verifies a signed `level:"verified"` attestation against a configured issuer public key (`c.kyc_public_key`); pluggable KYC-broker adapters are roadmap. In production these are versioned RubyGems; `kiosk-pay-stripe` swaps in for real payments.
 
 **2. Run the generator** (`rails g kiosk:install`) — emits the `kiosk.*` schema (agents, sessions, reservations, mandate tables), the REST wire surface (`/kiosk/query`, `/kiosk/run`, `/kiosk/pay`, `/kiosk/schema`), `/kiosk/auth/register` (with the PoW gate), and `/.well-known/kiosk.json`. The provider's existing Rails models are untouched.
 

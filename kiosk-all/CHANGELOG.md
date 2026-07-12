@@ -12,8 +12,8 @@ All notable changes follow [Keep a Changelog](https://keepachangelog.com/en/1.1.
 ### Added
 
 - Initial skeleton.
-- Meta-gem entry point (`lib/kiosk-all.rb`) that requires `kiosk`, `kiosk/rls`, and `kiosk/server`.
-- Runtime dependencies on `kiosk-core`, `kiosk-rls`, `kiosk-server` (production data plane only).
+- Meta-gem entry point (`lib/kiosk-all.rb`) that requires `kiosk` and `kiosk/server`.
+- Runtime dependencies on `kiosk-core`, `kiosk-server` (production data plane only).
 
 ### Deliberately not included
 

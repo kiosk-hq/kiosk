@@ -12,17 +12,19 @@ Gem::Specification.new do |spec|
     proof-of-work, issues and verifies the signed wire challenge, and provides a
     pluggable reputation policy interface.
 
-    Pure Ruby — no dependency on kiosk-pow or kiosk-core. PoW backends register
-    themselves via Kiosk::Reputation::Backends.register (kiosk-pow registers
-    "argon2id"; kiosk-pow-cuckoo will register "cuckoo").
+    Pure Ruby — no dependency on any PoW gem or kiosk-core. PoW backends register
+    themselves via Kiosk::Reputation::Backends.register (kiosk-pow-equihash
+    registers "equihash", the shipped default; kiosk-pow registers the legacy
+    "argon2id"; a future kiosk-pow-cuckoo would register "cuckoo").
 
     Anti-DoS invariant: Challenge.verify performs cheap HMAC-sig + expiry checks
     BEFORE the one expensive backend eval, so floods of forged/expired proofs are
-    rejected without burning Argon2id memory.
+    rejected without running a proof check.
 
-    Ships a configurable example policy (Policies::RateAndReputation) that
-    escalates difficulty on high request rate, unproven principals, and
-    bad-proof history. Providers are expected to replace or subclass it.
+    Ships a configurable example policy (Policies::RateAndReputation) that, since
+    Equihash has no continuous difficulty dial, escalates by PROOF COUNT (a
+    count-curve) on high request rate, unproven principals, and bad-proof history.
+    Providers are expected to replace or subclass it.
   DESC
   spec.homepage      = "https://kiosk.tech"
   spec.license       = "Apache-2.0"

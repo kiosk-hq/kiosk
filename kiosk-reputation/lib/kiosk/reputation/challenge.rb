@@ -24,11 +24,11 @@ module Kiosk
     #      → :bad_sig on mismatch  (forged, tampered, or wrong-request proof)
     #   2. Check exp > now (integer comparison).
     #      → :expired if passed
-    #   3. ONLY THEN call the backend .verify (one Argon2id eval — costs m KiB).
+    #   3. ONLY THEN call the backend .verify (one Equihash proof check).
     #      → :ok if the proof is valid, :bad_proof otherwise
     #
-    # Steps 1–2 reject floods of forged/expired proofs without burning an
-    # Argon2id eval. The expensive backend is invoked exactly once per
+    # Steps 1–2 reject floods of forged/expired proofs without burning a
+    # backend eval. The expensive backend is invoked exactly once per
     # well-formed, unexpired, correctly-bound proof.
     #
     # == Spent-id set
@@ -47,8 +47,8 @@ module Kiosk
       class << self
         # Build a signed, request-bound challenge hash.
         #
-        # @param alg                [String]  algorithm name (e.g. "argon2id")
-        # @param params             [Hash]    algorithm-specific params (e.g. {m:,t:,p:,d:})
+        # @param alg                [String]  algorithm name (e.g. "equihash")
+        # @param params             [Hash]    algorithm-specific params (e.g. {n:,k:})
         # @param request_fingerprint [String] opaque hash of the original request
         # @param secret             [String]  HMAC key (provider secret; raw bytes or ASCII)
         # @param ttl                [Integer] validity window in seconds
@@ -108,7 +108,7 @@ module Kiosk
         # ordering does not affect the sig. Both issue and verify must call this
         # with the same inputs to produce the same sig.
         #
-        # Format: id|alg|d=6,m=65536,p=1,t=1|<salt_b64>|<exp>|<fingerprint>
+        # Format: id|alg|k=7,n=168|<salt_b64>|<exp>|<fingerprint>
         # (params sorted by key, joined with comma; fields joined with pipe)
         def canonical_string(id, alg, params, salt_b64, exp, request_fingerprint)
           params_str = params

@@ -15,7 +15,7 @@ memory-bandwidth-bound). What it buys the provider is a few-KB, ~17 ms
 |  | Argon2id | Cuckatoo29 | **Equihash (default)** |
 |---|---|---|---|
 | Verify memory | 64 MiB ⚠️ | ~KB | **~KB** |
-| Verify time | ~ms (1 Argon2id) | µs (42 edges) | **~17 ms (128 BLAKE2b, Ruby)** |
+| Verify time | ~ms (1 Argon2id) | 42 SipHash + walk (unbenched) | **~17 ms (128 BLAKE2b, Ruby)** |
 | Lever (solve/verify) | tens× | millions× | **millions×** |
 | Dependencies | argon2 gem (C-ext) | Pure Ruby | **Pure Ruby (0 deps)** |
 | Difficulty tuning | D=0..256 (smooth) | edgebits | **N×PoW (discrete)** |

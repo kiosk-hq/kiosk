@@ -41,10 +41,18 @@ Challenge JSON:
 Output (one JSON line):
     {"header_nonce": <int>, "cycle": [42 ints ascending]}
 
-Honest performance note:
-    edgebits=18  → ~1–10 s on a modern CPU  (demo-safe)
-    edgebits=20  → ~10–60 s
-    edgebits=29  → infeasible in pure numpy (requires a C miner)
+Honest performance note (edgebits and proofsize are coupled):
+    A proofsize=L cycle only exists once the pair-graph girth ≤ L, and the
+    expected girth is ~log2(N/2) = edgebits-1. So the solvable pairing is a
+    proofsize matched to the graph size, NOT edgebits varied under the
+    default proofsize=42:
+      edgebits=10, proofsize=12  → ~1 s on a modern CPU  (demo-safe; the
+                                   tested / parity-gate combo)
+      edgebits=12, proofsize=12  → ~seconds (12-cycles thin out by edgebits 14)
+    The default proofsize=42 needs girth ~42 (edgebits ~43): at production
+    edgebits (29+) with proofsize=42 the graph is far too large for pure
+    numpy, and at small edgebits a 42-cycle essentially never exists. Either
+    way, proofsize=42 is infeasible here and requires a native C miner.
 """
 
 import base64

@@ -11,7 +11,8 @@ Gem::Specification.new do |spec|
   spec.license = "Apache-2.0"
   spec.required_ruby_version = ">= 3.2.0"
 
-  spec.files = Dir.glob("lib/**/*.rb") + %w[solve.py LICENSE.txt]
+  spec.files = Dir.glob("lib/**/*.rb") + %w[solve.py README.md LICENSE.txt] +
+               (File.exist?("CHANGELOG.md") ? %w[CHANGELOG.md] : [])
 
   spec.add_development_dependency "rspec", "~> 3.13"
   spec.add_development_dependency "base64"

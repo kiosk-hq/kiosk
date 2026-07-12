@@ -8,8 +8,8 @@ RSpec.describe Kiosk::Reputation::Challenge do
   let(:id)          { "challenge-uuid-001" }
   let(:now)         { 1_750_000_000 }
   let(:ttl)         { 300 }
-  let(:params)      { { m: 65_536, t: 1, p: 1, d: 6 } }
-  let(:alg)         { "argon2id" }
+  let(:params)      { { n: 168, k: 7 } }
+  let(:alg)         { "equihash" }
 
   let(:challenge) do
     described_class.issue(
@@ -21,7 +21,7 @@ RSpec.describe Kiosk::Reputation::Challenge do
   end
 
   before do
-    Kiosk::Reputation::Backends.register("argon2id", TestHelpers::StubBackend)
+    Kiosk::Reputation::Backends.register("equihash", TestHelpers::StubBackend)
   end
 
   # ---------------------------------------------------------------------------
@@ -96,7 +96,7 @@ RSpec.describe Kiosk::Reputation::Challenge do
     end
 
     it "returns :bad_sig when params are tampered" do
-      tampered = challenge.merge(params: { m: 65_536, t: 1, p: 1, d: 99 })
+      tampered = challenge.merge(params: { n: 168, k: 9 })
       expect(verify_with(challenge: tampered)).to eq(:bad_sig)
     end
 
@@ -126,7 +126,7 @@ RSpec.describe Kiosk::Reputation::Challenge do
     context "anti-DoS ordering — backend is NOT called on :bad_sig" do
       it "does not invoke the backend when sig is wrong (uses spy backend)" do
         Kiosk::Reputation::Backends.reset!
-        Kiosk::Reputation::Backends.register("argon2id", TestHelpers::SpyRaisingBackend)
+        Kiosk::Reputation::Backends.register("equihash", TestHelpers::SpyRaisingBackend)
 
         tampered = challenge.merge(sig: "badbad" * 10 + "ab")
         # If the backend were called the SpyRaisingBackend would raise.
@@ -161,7 +161,7 @@ RSpec.describe Kiosk::Reputation::Challenge do
     context "anti-DoS ordering — backend is NOT called on :expired" do
       it "does not invoke the backend for an expired challenge (uses spy backend)" do
         Kiosk::Reputation::Backends.reset!
-        Kiosk::Reputation::Backends.register("argon2id", TestHelpers::SpyRaisingBackend)
+        Kiosk::Reputation::Backends.register("equihash", TestHelpers::SpyRaisingBackend)
 
         # Re-issue with the spy backend now registered.
         c = described_class.issue(
@@ -185,7 +185,7 @@ RSpec.describe Kiosk::Reputation::Challenge do
 
       it "returns :expired (not any other symbol) for the expired spy scenario" do
         Kiosk::Reputation::Backends.reset!
-        Kiosk::Reputation::Backends.register("argon2id", TestHelpers::SpyRaisingBackend)
+        Kiosk::Reputation::Backends.register("equihash", TestHelpers::SpyRaisingBackend)
 
         c = described_class.issue(
           alg: alg, params: params,
@@ -227,12 +227,12 @@ RSpec.describe Kiosk::Reputation::Challenge do
   describe "canonical string is param-key-order-independent" do
     it "produces the same sig regardless of params hash key insertion order" do
       c1 = described_class.issue(
-        alg: alg, params: { m: 65_536, t: 1, p: 1, d: 6 },
+        alg: alg, params: { n: 168, k: 7 },
         request_fingerprint: fingerprint, secret: secret,
         ttl: ttl, now: now, salt: salt, id: id
       )
       c2 = described_class.issue(
-        alg: alg, params: { d: 6, p: 1, t: 1, m: 65_536 },
+        alg: alg, params: { k: 7, n: 168 },
         request_fingerprint: fingerprint, secret: secret,
         ttl: ttl, now: now, salt: salt, id: id
       )

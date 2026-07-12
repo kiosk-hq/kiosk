@@ -21,19 +21,19 @@ RSpec.configure do |config|
 end
 
 # ---------------------------------------------------------------------------
-# StubBackend — registered as "argon2id" in tests that need a PoW backend.
+# StubBackend — registered as "equihash" in tests that need a PoW backend.
+#
+# The Challenge module is algorithm-agnostic: .issue/.verify treat alg/params
+# as opaque and only call the backend's .verify. So these doubles need .verify
+# alone — no .params dial (equihash memory is fixed by (n,k); the policy
+# escalates by PROOF COUNT, not by params).
 #
 # .verify returns true iff nonce == "good" (any other value is a "bad proof").
-# .params(d:) returns { d: } — the minimal params shape for assertions.
 # ---------------------------------------------------------------------------
 module TestHelpers
   class StubBackend
     def self.verify(salt:, params:, nonce:)
       nonce.to_s == "good"
-    end
-
-    def self.params(d:, **)
-      { d: d }
     end
   end
 
@@ -44,10 +44,6 @@ module TestHelpers
     def self.verify(salt:, params:, nonce:)
       raise "SpyRaisingBackend#verify called — " \
             "the expensive backend eval must NOT be reached before sig/expiry checks pass"
-    end
-
-    def self.params(d:, **)
-      { d: d }
     end
   end
 end

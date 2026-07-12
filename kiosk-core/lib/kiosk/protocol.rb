@@ -7,9 +7,9 @@ module Kiosk
     # Changes more slowly than the server version itself.
     API_VERSION = "0.1.0"
 
-    # Minimum kiosk CLI client version that can speak this API version.
-    # Older clients must upgrade; the server returns Kiosk::Protocol::HEADER_MIN_CLIENT
-    # on every response so the client can self-check.
+    # Minimum client version that can speak this API version. Advertised in
+    # the Kiosk::Protocol::HEADER_MIN_CLIENT response header on every
+    # /kiosk/* response; older clients are expected to upgrade.
     MIN_CLIENT = "0.1.0"
 
     # HTTP response header names (sent on every /kiosk/* response).

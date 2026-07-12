@@ -43,7 +43,7 @@ module Kiosk
     attr_accessor :guc_namespace
 
     # Postgres schema where Kiosk's own tables (agents, intent/cart/payment
-    # mandates, settlements, events) and helper functions live. Default
+    # mandates, settlements) and helper functions live. Default
     # "kiosk". Overridable for providers whose primary backend already uses
     # a `kiosk` schema for its own purposes.
     attr_accessor :schema

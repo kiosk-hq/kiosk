@@ -6,8 +6,7 @@ module Kiosk
   #
   # Default namespace is `app` (short, ergonomic in policy text). Providers
   # whose primary backend already uses `app.*` for its own settings can
-  # override via `Kiosk.configure { |c| c.guc_namespace = "kiosk" }` and
-  # `bin/kiosk doctor` will warn on conflict at boot.
+  # override via `Kiosk.configure { |c| c.guc_namespace = "kiosk" }`.
   module GUC
     DEFAULT_NAMESPACE = "app"
 

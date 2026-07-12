@@ -32,25 +32,29 @@ The reason incumbents stay at discovery is economic, not technical. Grocery reta
 
 ## With Kiosk — getgrocery (`rake demo` output)
 
-getgrocery is a Rails 8 app that speaks Kiosk. The following is representative output of `rake demo` (from `getgrocery_flow.rb`):
+getgrocery is a Rails 8 app that speaks Kiosk. The following is representative output of `rake demo` (from `getgrocery_flow.rb`), run against the real Stripe adapter in test mode — `psp_reference` is a genuine Stripe test-mode `pi_…` PaymentIntent and settlement is recorded in `kiosk.settlements`:
 
 ```
-{"http_register":201,"http_catalog":200,"http_order":200,"http_slots":200,"http_pay":200,"http_schedule":200,"http_my_orders":200,"user_id":"a7f3c291-1b2e-4d8a-9cf1-3e507b824f16","agent_id":"b2e94107-3a1c-4f8d-bc2e-91d4a53c7e28","order_id":"d4f81c3e-7b2a-4e9c-af13-62d7b4c8e509","total_cents":2499,"scheduled_at":"2026-06-30T10:00:00.000Z","pay":{"ok":true,"kind":"value","value":{"payment_mandate_id":"f1b3e259-8c4d-4a7f-9e12-84b5c7d2a963","psp_reference":"stub_pi_9f4d2c1b-7e3a-4b8f-c219-53d6e8a4b731","settled_amount_cents":2499,"currency":"eur"}}}
+{"http_register":201,"http_catalog":200,"http_order":200,"http_slots":200,"http_payment_setup":200,"http_pay":200,"http_schedule":200,"http_my_orders":200,"user_id":"a7f3c291-1b2e-4d8a-9cf1-3e507b824f16","agent_id":"b2e94107-3a1c-4f8d-bc2e-91d4a53c7e28","order_id":"d4f81c3e-7b2a-4e9c-af13-62d7b4c8e509","total_cents":2499,"scheduled_at":"2026-06-30T10:00:00.000Z","psp_reference":"pi_3Qk9fLR2bkGb2V0T1aX7dZ8p","pay":{"ok":true,"kind":"value","value":{"settlement_id":"f1b3e259-8c4d-4a7f-9e12-84b5c7d2a963","psp_reference":"pi_3Qk9fLR2bkGb2V0T1aX7dZ8p","settled_amount_cents":2499,"currency":"eur"}}}
 
-── Assertions ──
+-- Assertions --
   OK  http_register == 201
   OK  http_catalog == 200
   OK  http_order == 200
   OK  http_slots == 200
+  OK  http_payment_setup == 200
   OK  http_pay == 200
   OK  http_schedule == 200
   OK  http_my_orders == 200
   OK  order_id present (d4f81c3e-7b2a-4e9c-af13-62d7b4c8e509)
   OK  scheduled_at present (2026-06-30T10:00:00.000Z)
   OK  pay.ok == true
-  OK  pay.value.payment_mandate_id present (f1b3e259-8c4d-4a7f-9e12-84b5c7d2a963)
-  OK  orders count >= 1 (got 1)
-  OK  kiosk.payment_mandates >= 1 (got 1)
+  OK  pay.value.settlement_id present (f1b3e259-8c4d-4a7f-9e12-84b5c7d2a963)
+  OK  psp_reference is a real Stripe PaymentIntent (pi_3Qk9fLR2bkGb2V0T1aX7dZ8p)
+  OK  orders[status=scheduled] count >= 1 (got 1)
+  OK  kiosk.settlements >= 1 (got 1)
+  OK  order_items count >= 1 (got 3)
+  OK  my_orders contains own order d4f81c3e-7b2a-4e9c-af13-62d7b4c8e509
 
   All assertions passed.
 ```
@@ -65,13 +69,13 @@ getgrocery is a Rails 8 app that speaks Kiosk. The following is representative o
 6. **Pay** — signed an AP2 intent mandate (`cap_amount_cents:2699`, `scope:"grocery"`, `iss:<issuer>`) and a cart mandate (`total_amount_cents:2499`, `line_items:[{order_id:<order_id>, total:2499}]`, bound to the intent via `intent_mandate_id`) as RS256 JWS with the registered keypair, then `POST /kiosk/pay {intent_mandate_jws, cart_mandate_jws, payment_mandate_jws}` → `settled_amount_cents:2499`, `ok:true`.
 7. **Schedule delivery** — `POST /kiosk/run {name:"schedule_delivery", order_id:<order_id>, delivery_slot_id:<slot_id>, delivery_address:"42 Sakura Lane, Neo-Tokyo"}` → HTTP 200, `scheduled_at:"2026-06-30T10:00:00.000Z"`.
 
-The database confirmed: one row in `orders` with `status='scheduled'`, one row in `kiosk.payment_mandates`.
+The database confirmed: one row in `orders` with `status='scheduled'`, one row in `kiosk.settlements`.
 
 The business outcome: the user said "order groceries from GetGroceries." Their assistant completed the purchase — discovery, registration, catalog browse, substitution reasoning, order creation, payment, delivery scheduling — without the user touching anything and without the user having an account at GetGroceries beforehand.
 
 The provider outcome: GetGroceries received a real order and a real payment. The customer relationship stays with GetGroceries (the mandate carries the provider's issuer). There is no intermediate platform taking a discovery fee or owning the session.
 
-**This is a demo against a fake provider with a stub payment processor.** The mechanism works. Whether real providers will integrate and whether real users will value this enough to drive adoption are open questions — the demo does not answer them.
+**This is a demo against a fake provider, settled through the real Stripe adapter in test mode.** The mechanism works. Whether real providers will integrate and whether real users will value this enough to drive adoption are open questions — the demo does not answer them.
 
 ---
 

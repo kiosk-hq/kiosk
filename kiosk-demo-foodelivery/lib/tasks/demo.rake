@@ -593,9 +593,9 @@ namespace :demo do
     kiosk_issuer = server_url
 
     puts "\n── Starting foodelivery (Reputation PoW demo) on #{server_url} ──"
-    puts "   Policy: RateAndReputation (proven_purchases_threshold=2, base_d=3, unproven_d_bonus=2)"
+    puts "   Policy: RateAndReputation (proven_purchases_threshold=2, base_count=1, unproven_count_bonus=1)"
     puts "   Factors: real DB lookup — kiosk.settlements WHERE user_id = <principal>"
-    puts "   Expected curve: d=5 (0 purchases) → d=3 (1 purchase) → free pass (2 purchases)"
+    puts "   Expected curve (by PROOF COUNT, N×PoW): 2 proofs (0 purchases) → 1 proof (1 purchase) → free pass (2 purchases)"
 
     env_vars = {
       "KIOSK_ISSUER"               => kiosk_issuer,
@@ -995,6 +995,7 @@ namespace :demo do
       BLOCKED  MandatePrincipalSwap — B signs a mandate with A's identity; rejected
       BLOCKED  MandateReplay      — B re-submits A's signed mandate JWS; rejected
       BLOCKED  TokenTampering     — altered JWT (claim flipped) rejected 401
+      BLOCKED  PrivilegeSelfSelection — client-chosen registration role ignored (server-pinned)
 
     Scenarios that require a surface foodelivery does not expose SKIP cleanly:
       SKIPPED  UnpaidGatedAction, SpentResourceReuse, PayForOtherUseSelf

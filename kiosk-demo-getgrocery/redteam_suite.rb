@@ -9,9 +9,10 @@
 # requires_kyc   : false
 # pow_difficulty : 0
 #
-# Scenarios (8 BLOCKED, 3 SKIPPED, RegistrationWithoutPow not run):
+# Scenarios (9 BLOCKED, 3 SKIPPED, RegistrationWithoutPow not run):
 #   BLOCKED : CrossTenantRead, ForgedUserId, UnpaidGatedAction, SpentResourceReuse,
-#             PayForOtherUseSelf, MandatePrincipalSwap, MandateReplay, TokenTampering
+#             PayForOtherUseSelf, MandatePrincipalSwap, MandateReplay, TokenTampering,
+#             PrivilegeSelfSelection
 #   SKIPPED : MissingKyc, ExpiredKyc, ForgedKyc (no KYC)
 #
 # Usage:

@@ -613,21 +613,19 @@ namespace :demo do
     Adversarial regression battery — kiosk-redteam.
 
     Boots getgrocery, runs all generic Kiosk::Redteam scenarios and asserts
-    each applicable attack is BLOCKED:
+    each applicable attack is BLOCKED (9 BLOCKED, 3 SKIPPED):
 
-      BLOCKED  CrossTenantRead      — B's my_orders must not include A's orders
-      BLOCKED  MandatePrincipalSwap — B signs a mandate with A's identity; rejected
-      BLOCKED  MandateReplay        — B re-submits A's signed mandate JWS; rejected
-      BLOCKED  TokenTampering       — altered JWT (claim flipped) rejected 401
+      BLOCKED  CrossTenantRead        — B's my_orders must not include A's orders
+      BLOCKED  ForgedUserId           — forged user_id in create_order ignored; order stays B's
+      BLOCKED  UnpaidGatedAction      — schedule_delivery without a settled mandate rejected
+      BLOCKED  SpentResourceReuse     — a mandate already settled cannot be reused
+      BLOCKED  PayForOtherUseSelf     — mandate paid for one order cannot gate another
+      BLOCKED  MandatePrincipalSwap   — B signs a mandate with A's identity; rejected
+      BLOCKED  MandateReplay          — B re-submits A's signed mandate JWS; rejected
+      BLOCKED  TokenTampering         — altered JWT (claim flipped) rejected 401
+      BLOCKED  PrivilegeSelfSelection — agent cannot self-assign elevated privilege
 
     Scenarios that require a surface getgrocery does not expose SKIP cleanly:
-      SKIPPED  ForgedUserId         — forge_action nil: create_order returns order_id
-                                      but my_orders lists order ids; readback
-                                      would be vacuously BLOCKED (entity mismatch).
-                                      Real coverage: demo:isolation (DB SELECT confirms
-                                      order.user_id = caller's id).
-      SKIPPED  UnpaidGatedAction, SpentResourceReuse, PayForOtherUseSelf
-               (schedule_delivery is gated on payment mandate)
       SKIPPED  MissingKyc, ExpiredKyc, ForgedKyc  (requires_kyc: false)
 
     Note: RegistrationWithoutPow is not run — getgrocery has no registration

@@ -93,7 +93,7 @@ end
 
 # Execute one full purchase: place_order (run) → sign AP2 mandates → pay.
 # All three steps go through exec_with_pow (the server challenges each verb
-# until the principal is proven). Returns the payment_mandate_id.
+# until the principal is proven). Returns the settlement_id from the pay result.
 def make_purchase(menu_item_id, key, user_id, agent_id, token)
   # ── run: place_order ──────────────────────────────────────────────────────
   order_body = {
@@ -186,7 +186,7 @@ token    = reg.fetch("access_token")
 
 QUERY_BODY = { name: "menu_by_restaurant", restaurant: "Mamma Pizza" }
 
-# ── Step 2: query with 0 purchases → 402 (d0, unproven) → solve → 200 ─────
+# ── Step 2: query with 0 purchases → 402 (n0 proofs, unproven) → solve → 200 ─
 
 $stderr.puts "  [rep] Step 2: query (0 purchases) — expect 402 + challenges"
 rc, resp, n0 = exec_with_pow("query", QUERY_BODY, token)

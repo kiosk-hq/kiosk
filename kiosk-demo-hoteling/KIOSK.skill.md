@@ -280,19 +280,47 @@ Successful response — HTTP 200, inside `.value`:
 ## Handling `pow_required`
 
 Any `/kiosk/query`, `/kiosk/run`, or `/kiosk/pay` response may be HTTP 402 with
-`error.code == "pow_required"`. When this happens, solve the challenge and retry —
-the full protocol is documented in `kiosk-pow/SKILL.md`. Summary:
+`error.code == "pow_required"` and an `error.challenges` array. hoteling prices
+browse-heavy querying with **Equihash** (`params: {"n": 96, "k": 5}` — a small
+demo instance that the reference solver clears in well under a second; a
+challenge may carry a `count` field asking for more than one proof):
 
-1. Install once: `pip install argon2-cffi`
-2. Solve: `python3 kiosk-pow/solve.py '<challenge-json>'` → reads `{"nonce": "..."}`
-3. Re-POST to the **same** endpoint with the **exact same** request body plus a
-   top-level `pow` field:
+```json
+{
+  "ok": false,
+  "error": {
+    "code": "pow_required",
+    "challenges": [
+      { "alg": "equihash", "params": { "n": 96, "k": 5 },
+        "salt": "dGVzdC1zYWx0…", "exp": 1751846400, "sig": "hmac…" }
+    ]
+  }
+}
+```
+
+When this happens:
+
+1. Solve EVERY challenge in the list with the reference solver
+   (`solve.py` in `kiosk-pow-equihash`):
+   `python3 kiosk-pow-equihash/solve.py '<challenge-json>'` →
+   `{"indices": [...], "header_nonce": 0}`
+   (requires `python3` with numpy: `pip install numpy`)
+2. Re-POST to the **same** endpoint with the **exact same** request body plus a
+   top-level `pow` field. Each proof echoes its challenge back **verbatim** — it
+   carries the provider's HMAC signature and is bound to this exact request:
    ```json
    { "name": "properties",
-     "pow":  { "challenge": { ...verbatim... }, "nonce": "<from solver>" } }
+     "pow":  { "proofs": [ { "challenge": { ...verbatim... },
+                             "nonce": { "indices": [...], "header_nonce": 0 } } ] } }
    ```
+   For a single challenge the shorthand
+   `"pow": { "challenge": {…}, "nonce": {…} }` is also accepted.
 
-hoteling does not currently require PoW at registration, but any provider can add it at any time. Always handle `pow_required` gracefully.
+Challenges expire (`exp`) and proofs are single-use — solve and retry promptly,
+do not cache. hoteling does not require PoW at registration (the challenge → sign
+→ `POST /kiosk/auth/register` handshake is sufficient), but any provider can add
+it at any time. Always handle `pow_required` gracefully. The reference solver is
+`kiosk-pow-equihash/solve.py`.
 
 ---
 

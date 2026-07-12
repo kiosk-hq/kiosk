@@ -212,22 +212,45 @@ Successful response — HTTP 200:
 ## Handling `pow_required`
 
 Any `query`, `run`, or `pay` response may be HTTP 402 with `error.code ==
-"pow_required"`. When this happens, solve the challenge and retry — the full
-protocol is documented in `kiosk-pow/SKILL.md`. Summary:
+"pow_required"` and an `error.challenges` array. foodelivery prices proof-of-work
+with **Equihash** (`params: {"n": 96, "k": 5}` — a small demo instance that the
+reference solver clears in well under a second):
 
-1. Install once: `pip install argon2-cffi`
-2. Solve: `python3 kiosk-pow/solve.py '<challenge-json>'` → reads `{"nonce": "..."}`
-3. Re-POST the **exact same** request args to the same verb endpoint, adding a
-   top-level `pow` field:
+```json
+{
+  "ok": false,
+  "error": {
+    "code": "pow_required",
+    "challenges": [
+      { "alg": "equihash", "params": { "n": 96, "k": 5 },
+        "salt": "dGVzdC1zYWx0…", "exp": 1751846400, "sig": "hmac…" }
+    ]
+  }
+}
+```
+
+When this happens:
+
+1. Solve EVERY challenge in the list with the reference solver
+   (`solve.py` in `kiosk-pow-equihash`):
+   `python3 kiosk-pow-equihash/solve.py '<challenge-json>'` →
+   `{"indices": [...], "header_nonce": 0}`
+   (requires `python3` with numpy: `pip install numpy`)
+2. Re-POST the **exact same** request (same path + body) with a top-level
+   `pow` field. Each proof echoes its challenge back **verbatim** — it carries
+   the provider's HMAC signature and is bound to this exact request:
    ```json
-   POST /kiosk/query
    { "name": "menu_by_restaurant", "restaurant": "Mamma Pizza",
-     "pow":  { "challenge": { ...verbatim... }, "nonce": "<from solver>" } }
+     "pow":  { "proofs": [ { "challenge": { ...verbatim... },
+                             "nonce": { "indices": [...], "header_nonce": 0 } } ] } }
    ```
+   For a single challenge the shorthand
+   `"pow": { "challenge": {…}, "nonce": {…} }` is also accepted.
 
-Do not negotiate or downgrade the algorithm — solve what the provider demands
-or tell the user to update. The provider may challenge again on any subsequent
-request. The reference solver is `kiosk-pow/solve.py`.
+Challenges expire (`exp`) and proofs are single-use — solve and retry promptly,
+do not cache. Do not negotiate or downgrade the algorithm — solve what the
+provider demands or tell the user to update. The provider may challenge again on
+any subsequent request. The reference solver is `kiosk-pow-equihash/solve.py`.
 
 ---
 

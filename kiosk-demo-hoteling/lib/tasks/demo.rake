@@ -362,7 +362,7 @@ namespace :demo do
   desc <<~DESC
     Adversarial regression battery (P4 Task 2) — kiosk-redteam.
 
-    Boots hoteling, runs all 12 Kiosk::Redteam scenarios against the chain
+    Boots hoteling, runs all 13 Kiosk::Redteam scenarios against the chain
     (no PoW → no KYC → reserve_room → pay → confirm_booking) and asserts
     each applicable attack is BLOCKED:
 
@@ -374,6 +374,7 @@ namespace :demo do
       BLOCKED  MandatePrincipalSwap  — B signs mandate with A's identity; rejected
       BLOCKED  MandateReplay         — B re-submits A's JWS; rejected
       BLOCKED  TokenTampering        — altered JWT claim rejected 401
+      BLOCKED  PrivilegeSelfSelection — client-chosen registration role ignored (server-pinned)
       SKIPPED  MissingKyc            — hoteling has no KYC gate
       SKIPPED  ExpiredKyc            — hoteling has no KYC gate
       SKIPPED  ForgedKyc             — hoteling has no KYC gate

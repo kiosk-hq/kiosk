@@ -163,8 +163,8 @@ profile = Kiosk::Redteam::Profile.new(
 
 # ── Scenario list ─────────────────────────────────────────────────────────────
 #
-# All 12 are listed; 4 are expected to be skipped (KYC variants + PoW).
-# 8 scenarios are applicable to hoteling's surface.
+# All 13 are listed; 4 are expected to be skipped (KYC variants + PoW).
+# 9 scenarios are applicable to hoteling's surface.
 
 scenarios = [
   Kiosk::Redteam::Scenarios::PayForOtherUseSelf.new,      # C2 — headline

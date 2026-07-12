@@ -24,7 +24,7 @@ Anti-bot friction compounds this. Behavioral fingerprinting (Cloudflare Turnstil
 
 ## With Kiosk — hoteling (`rake demo` output)
 
-hoteling is a Rails 8.1 app that speaks Kiosk. The following is the recorded output of `rake demo` (from `oss/.superpowers/sdd/p4-T2-report.md`).
+hoteling is a Rails 8.1 app that speaks Kiosk. The following is the recorded output of `rake demo`.
 
 ```
   Registered: user_id=<uuid>

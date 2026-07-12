@@ -36,7 +36,7 @@ The lesson the validation doc draws:
 
 ## With Kiosk — foodelivery (`rake demo` output)
 
-foodelivery is a Rails 8.1 app that speaks Kiosk. The following is the recorded output of two consecutive `rake demo` runs (from `oss/.superpowers/sdd/plan3-BC-report.md`, commit 999f28b).
+foodelivery is a Rails 8.1 app that speaks Kiosk. The following is the recorded output of two consecutive `rake demo` runs.
 
 **Run 1:**
 ```

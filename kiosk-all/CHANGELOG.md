@@ -18,4 +18,4 @@ All notable changes follow [Keep a Changelog](https://keepachangelog.com/en/1.1.
 ### Deliberately not included
 
 - `kiosk-test-support`, `kiosk-rls-rspec`, `kiosk-rls-minitest` — test-only; host adds one to the dev/test group of its Gemfile per its test stack.
-- Adapter gems (`kiosk-user-idp-*`, `kiosk-pay-*`, `kiosk-credentials-*`) — providers pick per market and stack; a single umbrella would pull in unused dependencies.
+- Adapter gems (`kiosk-user-idp-*`, `kiosk-pay-*`) — providers pick per market and stack; a single umbrella would pull in unused dependencies.

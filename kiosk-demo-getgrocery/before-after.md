@@ -35,7 +35,7 @@ The reason incumbents stay at discovery is economic, not technical. Grocery reta
 getgrocery is a Rails 8 app that speaks Kiosk. The following is representative output of `rake demo` (from `getgrocery_flow.rb`), run against the real Stripe adapter in test mode — `psp_reference` is a genuine Stripe test-mode `pi_…` PaymentIntent and settlement is recorded in `kiosk.settlements`:
 
 ```
-{"http_register":201,"http_catalog":200,"http_order":200,"http_slots":200,"http_payment_setup":200,"http_pay":200,"http_schedule":200,"http_my_orders":200,"user_id":"a7f3c291-1b2e-4d8a-9cf1-3e507b824f16","agent_id":"b2e94107-3a1c-4f8d-bc2e-91d4a53c7e28","order_id":"d4f81c3e-7b2a-4e9c-af13-62d7b4c8e509","total_cents":2499,"scheduled_at":"2026-06-30T10:00:00.000Z","psp_reference":"pi_3Qk9fLR2bkGb2V0T1aX7dZ8p","pay":{"ok":true,"kind":"value","value":{"settlement_id":"f1b3e259-8c4d-4a7f-9e12-84b5c7d2a963","psp_reference":"pi_3Qk9fLR2bkGb2V0T1aX7dZ8p","settled_amount_cents":2499,"currency":"eur"}}}
+{"http_register":201,"http_catalog":200,"http_order":200,"http_slots":200,"http_payment_setup":200,"http_pay":200,"http_schedule":200,"http_my_orders":200,"user_id":"a7f3c291-1b2e-4d8a-9cf1-3e507b824f16","agent_id":"b2e94107-3a1c-4f8d-bc2e-91d4a53c7e28","order_id":"d4f81c3e-7b2a-4e9c-af13-62d7b4c8e509","total_cents":847,"scheduled_at":"2026-07-13T08:00:00.000Z","psp_reference":"pi_3Qk9fLR2bkGb2V0T1aX7dZ8p","pay":{"ok":true,"kind":"value","value":{"settlement_id":"f1b3e259-8c4d-4a7f-9e12-84b5c7d2a963","psp_reference":"pi_3Qk9fLR2bkGb2V0T1aX7dZ8p","settled_amount_cents":847,"currency":"eur"}}}
 
 -- Assertions --
   OK  http_register == 201
@@ -47,7 +47,7 @@ getgrocery is a Rails 8 app that speaks Kiosk. The following is representative o
   OK  http_schedule == 200
   OK  http_my_orders == 200
   OK  order_id present (d4f81c3e-7b2a-4e9c-af13-62d7b4c8e509)
-  OK  scheduled_at present (2026-06-30T10:00:00.000Z)
+  OK  scheduled_at present (2026-07-13T08:00:00.000Z)
   OK  pay.ok == true
   OK  pay.value.settlement_id present (f1b3e259-8c4d-4a7f-9e12-84b5c7d2a963)
   OK  psp_reference is a real Stripe PaymentIntent (pi_3Qk9fLR2bkGb2V0T1aX7dZ8p)
@@ -63,15 +63,15 @@ getgrocery is a Rails 8 app that speaks Kiosk. The following is representative o
 
 1. **Discover** — `GET /.well-known/kiosk.json` returns the GetGroceries issuer and surface.
 2. **Self-register** — generated an RSA-2048 keypair, proved possession of the private key (`GET /kiosk/auth/challenge` → signed the nonce as an origin-bound RS256 JWS → `POST /kiosk/auth/register {public_key:<pem>, signed:<jws>}`) → HTTP 201 → `agent_id`, `user_id`, `access_token`. No existing account. No human login. No OTP. No bot screen.
-3. **Browse catalog** — `POST /kiosk/query {name:"catalog"}` returned 15 in-stock products. Milk 1 L and Chocolate Spread 400g were absent (out of stock) — the assistant resolved these before building the order: substituted Milk 1 L with 2× Milk 0.5 L, omitted Chocolate Spread after confirming with the user.
-4. **Create order** — `POST /kiosk/run {name:"create_order", items:[{sku:"milk-0.5l", qty:2}, {sku:"free-range-eggs", qty:1}]}` → HTTP 200, `order_id`, `total_cents:2499`. The assistant composed the full cart (products referenced by `sku`); substitution was handled before this call, not after.
-5. **Query delivery slots** — `POST /kiosk/query {name:"delivery_slots", date:"2026-06-30"}` → returned 6 available time slots; assistant picked 10:00–12:00.
-6. **Pay** — signed an AP2 intent mandate (`cap_amount_cents:2699`, `scope:"grocery"`, `iss:<issuer>`) and a cart mandate (`total_amount_cents:2499`, `line_items:[{order_id:<order_id>, total:2499}]`, bound to the intent via `intent_mandate_id`) as RS256 JWS with the registered keypair, then `POST /kiosk/pay {intent_mandate_jws, cart_mandate_jws, payment_mandate_jws}` → `settled_amount_cents:2499`, `ok:true`.
-7. **Schedule delivery** — `POST /kiosk/run {name:"schedule_delivery", order_id:<order_id>, delivery_slot_id:<slot_id>, delivery_address:"42 Sakura Lane, Neo-Tokyo"}` → HTTP 200, `scheduled_at:"2026-06-30T10:00:00.000Z"`.
+3. **Browse catalog** — `POST /kiosk/query {name:"catalog"}` returned 15 in-stock products, sorted by name (Milk 1 L and Chocolate Spread 400g are out of stock, so the catalog hides them — see `db/seeds.rb`). This worked example's driver builds the cart from the first three in-stock rows: Apple Juice (349c), Banana (149c), Butter 250g (349c), one of each.
+4. **Create order** — `POST /kiosk/run {name:"create_order", items:[{sku:"apple-juice", qty:1}, {sku:"banana", qty:1}, {sku:"butter-250g", qty:1}]}` → HTTP 200, `order_id`, `total_cents:847`. The assistant composed the full cart (products referenced by `sku`).
+5. **Query delivery slots** — `POST /kiosk/query {name:"delivery_slots", date:"2026-07-13"}` → returned 6 available time slots; the driver picked the first, 08:00–10:00.
+6. **Pay** — signed an AP2 intent mandate (`cap_amount_cents:1047`, `scope:"grocery"`, `iss:<issuer>`) and a cart mandate (`total_amount_cents:847`, `line_items:[{order_id:<order_id>, total:847}]`, bound to the intent via `intent_mandate_id`) as RS256 JWS with the registered keypair, then `POST /kiosk/pay {intent_mandate_jws, cart_mandate_jws, payment_mandate_jws}` → `settled_amount_cents:847`, `ok:true`.
+7. **Schedule delivery** — `POST /kiosk/run {name:"schedule_delivery", order_id:<order_id>, delivery_slot_id:<slot_id>, delivery_address:"42 Sakura Ave, Neo-Tokyo"}` → HTTP 200, `scheduled_at:"2026-07-13T08:00:00.000Z"`.
 
 The database confirmed: one row in `orders` with `status='scheduled'`, one row in `kiosk.settlements`.
 
-The business outcome: the user said "order groceries from GetGroceries." Their assistant completed the purchase — discovery, registration, catalog browse, substitution reasoning, order creation, payment, delivery scheduling — without the user touching anything and without the user having an account at GetGroceries beforehand.
+The business outcome: the user said "order groceries from GetGroceries." Their assistant completed the purchase — discovery, registration, catalog browse, order creation, payment, delivery scheduling — without the user touching anything and without the user having an account at GetGroceries beforehand.
 
 The provider outcome: GetGroceries received a real order and a real payment. The customer relationship stays with GetGroceries (the mandate carries the provider's issuer). There is no intermediate platform taking a discovery fee or owning the session.
 
@@ -147,11 +147,11 @@ end
 
 Kiosk::Server::Actions.register("schedule_delivery") do |args|
   uid  = ActiveRecord::Base.connection.execute("SELECT kiosk.current_user_id() AS uid").first["uid"]
-  # Payment-binding gate: verify a settled mandate references this order
+  # Payment-binding gate: verify a settlement (capture receipt) references this order
   paid = ActiveRecord::Base.connection.execute(<<~SQL).first["paid"]
     SELECT EXISTS (
-      SELECT 1 FROM kiosk.cart_mandates cm
-      JOIN kiosk.payment_mandates pm ON pm.cart_mandate_id = cm.id
+      SELECT 1 FROM kiosk.settlements pm
+      JOIN kiosk.cart_mandates cm ON cm.id = pm.cart_mandate_id
       WHERE cm.line_items @> json_build_array(
         json_build_object('order_id', #{ActiveRecord::Base.connection.quote(args[:order_id])})
       )::jsonb

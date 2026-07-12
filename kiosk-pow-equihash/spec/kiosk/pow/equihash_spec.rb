@@ -221,6 +221,21 @@ RSpec.describe Kiosk::Pow::Equihash do
       )).to be(false)
     end
 
+    # K-149: a malformed index (nil / non-numeric string) must return false,
+    # never raise. Guards the `indices.all? { Integer && >= 0 }` check that
+    # replaced a coercing `Integer(idx)` (which raised TypeError/ArgumentError).
+    it "REJECT — nil element in indices (returns false, does not raise)" do
+      expect(described_class.verify(
+        salt: kat_salt, params: kat_params, nonce: { indices: [nil, 10] }
+      )).to be(false)
+    end
+
+    it "REJECT — non-numeric string element in indices (returns false, does not raise)" do
+      expect(described_class.verify(
+        salt: kat_salt, params: kat_params, nonce: { indices: ["x", 10] }
+      )).to be(false)
+    end
+
     # ─── REJECT — guard rails ────────────────────────────────────────
 
     it "REJECT — nonce is nil" do

@@ -35,7 +35,7 @@ RSpec.configure do |config|
 end
 ```
 
-Until `kiosk-server` ships, use the bundled `NullExecutor` for unit-shaped tests:
+For unit-shaped tests that need no live database, use the bundled `NullExecutor` instead:
 
 ```ruby
 Kiosk::TestHelpers.executor = Kiosk::TestHelpers::NullExecutor.new

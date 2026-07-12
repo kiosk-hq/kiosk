@@ -12,18 +12,16 @@ module Kiosk
     #
     # The `:stream` kind (events, NDJSON) was removed with the `events` verb
     # (K-083): it was never an ADR-0009 capability and had no producer.
-    #
-    # `query_id` is an optional opaque correlation id for log lookup.
-    Result = Data.define(:kind, :payload, :query_id) do
+    Result = Data.define(:kind, :payload) do
       KINDS = %i[rows value].freeze
 
-      def initialize(kind:, payload:, query_id: nil)
+      def initialize(kind:, payload:)
         kind = kind.to_sym
         unless KINDS.include?(kind)
           raise ArgumentError, "kind must be one of #{KINDS.inspect}, got #{kind.inspect}"
         end
 
-        super(kind: kind, payload: payload, query_id: query_id)
+        super(kind: kind, payload: payload)
       end
 
       def ok? = true
@@ -32,7 +30,6 @@ module Kiosk
 
       def to_envelope
         envelope = { ok: true, kind: kind }
-        envelope[:query_id] = query_id if query_id
         envelope[payload_key] = payload
         envelope
       end

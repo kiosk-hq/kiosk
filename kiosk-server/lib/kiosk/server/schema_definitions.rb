@@ -15,9 +15,9 @@ module Kiosk
     #
     # Pure functions: no database connection, no Rails dependency. Output
     # is SQL strings the host migration framework (`ActiveRecord::Migration#execute`)
-    # runs. `kiosk:install` (separate generator, not yet built) will copy
-    # ActiveRecord::Migration class files into the host's `db/migrate/` that
-    # invoke these.
+    # runs. The shipped `kiosk:install` generator
+    # (lib/generators/kiosk/install) copies ActiveRecord::Migration class
+    # files into the host's `db/migrate/` that invoke these.
     module SchemaDefinitions
       module_function
 

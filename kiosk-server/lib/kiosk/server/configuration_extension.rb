@@ -85,8 +85,9 @@ module Kiosk
       end
       attr_accessor :skill_sha256
 
-      # RSA signing key used by the OAuth 2.1 surface and the
-      # bundled IdP to issue JWTs.
+      # RSA signing key used by the bundled kiosk-pop IdP to issue and
+      # verify JWTs (the dormant OAuth 2.1 device-grant surface also relied
+      # on it — ADR-0008).
       #
       # Resolution order:
       #   1. explicit value set via `Kiosk.configure { |c| c.signing_key = ... }`

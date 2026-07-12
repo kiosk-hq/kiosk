@@ -9,11 +9,13 @@ module Kiosk
     #
     #   :rows   — SQL result rows (Array<Hash>); serialised under `rows`
     #   :value  — single value returned by an Action; under `value`
-    #   :stream — streaming events (NDJSON); under `events`
+    #
+    # The `:stream` kind (events, NDJSON) was removed with the `events` verb
+    # (K-083): it was never an ADR-0009 capability and had no producer.
     #
     # `query_id` is an optional opaque correlation id for log lookup.
     Result = Data.define(:kind, :payload, :query_id) do
-      KINDS = %i[rows value stream].freeze
+      KINDS = %i[rows value].freeze
 
       def initialize(kind:, payload:, query_id: nil)
         kind = kind.to_sym
@@ -39,9 +41,8 @@ module Kiosk
 
       def payload_key
         case kind
-        when :rows   then :rows
-        when :value  then :value
-        when :stream then :events
+        when :rows  then :rows
+        when :value then :value
         end
       end
     end

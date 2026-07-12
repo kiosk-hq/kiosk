@@ -14,9 +14,11 @@ RSpec.describe Kiosk::Server::Result do
       expect(r.payload).to eq({ id: 7 })
     end
 
-    it "constructs with :stream kind for events" do
-      r = described_class.new(kind: :stream, payload: [{ k: "x" }])
-      expect(r.kind).to eq(:stream)
+    # K-083: the :stream kind (events verb) was removed — it is now rejected
+    # like any other unknown kind.
+    it "rejects the removed :stream kind" do
+      expect { described_class.new(kind: :stream, payload: []) }
+        .to raise_error(ArgumentError, /kind must be one of/)
     end
 
     it "coerces kind to a symbol" do
@@ -52,11 +54,6 @@ RSpec.describe Kiosk::Server::Result do
     it "puts :value payload under `value` key" do
       r = described_class.new(kind: :value, payload: { ok: 1 })
       expect(r.to_envelope).to eq(ok: true, kind: :value, value: { ok: 1 })
-    end
-
-    it "puts :stream payload under `events` key" do
-      r = described_class.new(kind: :stream, payload: [{ k: 1 }])
-      expect(r.to_envelope).to eq(ok: true, kind: :stream, events: [{ k: 1 }])
     end
 
     it "includes query_id when set" do

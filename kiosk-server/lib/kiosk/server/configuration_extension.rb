@@ -81,7 +81,7 @@ module Kiosk
       # a newer skill version.
       attr_writer :skill_url
       def skill_url
-        @skill_url ||= "https://kiosk.tech/skill-v0.1.1.md"
+        @skill_url ||= "https://kiosk.tech/skill-v0.1.2.md"
       end
       attr_accessor :skill_sha256
 
@@ -294,10 +294,19 @@ module Kiosk
 
       # Auth-challenge lifetime in seconds — the window an agent has between
       # `GET /auth/challenge` and its signed `POST /auth/{register,login}`.
-      # Default 120.
+      #
+      # K-100: at registration the agent must ALSO solve the Equihash PoW
+      # (`registration_pow_count` proofs) inside this same window before it can
+      # POST /auth/register. The PoW solve window is `pow_ttl * count` (see
+      # PowGate#issue_challenges). The old flat 120s default was SHORTER than a
+      # single-proof PoW window (pow_ttl = 300s), so a legitimate slow solver's
+      # auth nonce expired mid-solve — and the burned PoW proofs were already
+      # spent. The default now DERIVES from the PoW window so it always exceeds
+      # it (with 60s headroom), and scales when a provider raises `pow_ttl` or
+      # `registration_pow_count`. Set explicitly to override.
       attr_writer :auth_challenge_ttl
       def auth_challenge_ttl
-        @auth_challenge_ttl ||= 120
+        @auth_challenge_ttl ||= pow_ttl * [registration_pow_count.to_i, 1].max + 60
       end
 
       # Per-agent token-revocation watermark store backing `/auth/revoke`

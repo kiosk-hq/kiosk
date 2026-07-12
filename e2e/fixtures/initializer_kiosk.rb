@@ -40,7 +40,7 @@ end
 
 # salons — public catalog. Any authenticated agent can browse.
 # No per-user scoping: the WHERE is provider-controlled and always TRUE.
-Kiosk::Server::Queries.register("salons") do |_params|
+Kiosk::Server::Queries.register("salons", description: "List all bookable salons (public catalog).") do |_params|
   ActiveRecord::Base.connection.execute(
     "SELECT id, name FROM salons ORDER BY id"
   ).to_a
@@ -50,7 +50,7 @@ end
 # The WHERE is provider-controlled; the agent supplies no user filter.
 # App-layer per-user isolation without RLS: the principal sees only rows
 # where user_id matches kiosk.current_user_id(), enforced in the query.
-Kiosk::Server::Queries.register("my_appointments") do |_params|
+Kiosk::Server::Queries.register("my_appointments", description: "List the calling principal's own appointments.") do |_params|
   ActiveRecord::Base.connection.execute(
     "SELECT id, salon_id, slot FROM appointments " \
     "WHERE user_id = kiosk.current_user_id() " \
@@ -63,7 +63,7 @@ end
 # Register the demo Action. In production, providers use the full
 # `Kiosk::Action` DSL (post-v0.1); for the e2e a simple registered
 # block is sufficient.
-Kiosk::Server::Actions.register("book_appointment") do |args|
+Kiosk::Server::Actions.register("book_appointment", description: "Book an appointment at a salon for a given slot.") do |args|
   # Identity is set via Kiosk::Server::SessionContext SET LOCAL —
   # current_user_id() helper returns the principal. ActiveRecord doesn't
   # have direct access; pull from PG.

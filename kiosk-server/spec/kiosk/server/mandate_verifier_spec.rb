@@ -100,6 +100,35 @@ RSpec.describe Kiosk::Server::MandateVerifier do
       expect { described_class.verify_intent(raw_jws: sign(bad), identity: identity) }
         .to raise_error(Kiosk::Server::Errors::Forbidden, /principal/)
     end
+
+    # K-092: on a bigint-PK host the authenticated Identity carries an Integer
+    # user_id/agent_id (the token `sub` round-trips as bigint), while the agent
+    # signs the mandate with the String the register response returned. The
+    # principal check must compare as STRING on both sides, or every mandate on
+    # a bigint host is wrongly Forbidden.
+    context "on a bigint-PK host (Integer identity, String mandate principal)" do
+      let(:agent_key)  { OpenSSL::PKey::RSA.generate(2048) }
+      let(:identity)   { build_identity(agent_id: 7, user_id: 42) }
+      let(:big_intent) { intent_payload.merge(agent_id: "7", user_id: "42") }
+
+      before do
+        allow_any_instance_of(Kiosk::Server::AgentIdentityProviders::DefaultAgentIdp)
+          .to receive(:agent_payment_key).with(7).and_return(agent_key.public_key)
+      end
+
+      it "verifies an Integer identity against a String mandate principal" do
+        m = described_class.verify_intent(raw_jws: sign(big_intent), identity: identity)
+        expect(m).to be_a(Kiosk::Mandate::IntentMandate)
+        expect(m.user_id).to  eq("42")
+        expect(m.agent_id).to eq("7")
+      end
+
+      it "still rejects a genuinely different principal (43 != 42)" do
+        wrong = big_intent.merge(user_id: "43")
+        expect { described_class.verify_intent(raw_jws: sign(wrong), identity: identity) }
+          .to raise_error(Kiosk::Server::Errors::Forbidden, /principal/)
+      end
+    end
   end
 
   # ─── verify_cart ─────────────────────────────────────────────────────
@@ -122,6 +151,16 @@ RSpec.describe Kiosk::Server::MandateVerifier do
       over = cart_payload.merge(total_amount_cents: 99_999)
       expect { described_class.verify_cart(raw_jws: sign(over), identity: identity, intent: intent) }
         .to raise_error(Kiosk::Server::Errors::Forbidden, /cap/)
+    end
+
+    # K-101: the cap comparison is currency-blind without this guard — a 4999
+    # USD cart would slip under a 5000 EUR cap. The intent is 5000 eur (see
+    # intent_payload); a same-number-under-cap cart in a DIFFERENT currency
+    # must be rejected on currency, not silently accepted.
+    it "rejects a cart priced in a different currency than the intent cap (4999 USD vs 5000 EUR cap)" do
+      usd = cart_payload.merge(total_amount_cents: 4999, currency: "usd")
+      expect { described_class.verify_cart(raw_jws: sign(usd), identity: identity, intent: intent) }
+        .to raise_error(Kiosk::Server::Errors::Forbidden, /currency/)
     end
 
     it "applies the shared decode checks (wrong issuer rejected)" do

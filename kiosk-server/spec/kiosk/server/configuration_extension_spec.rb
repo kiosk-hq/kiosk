@@ -23,6 +23,33 @@ RSpec.describe Kiosk::Server::ConfigurationExtension do
     it "defaults min_client to the Protocol's MIN_CLIENT" do
       expect(Kiosk.configuration.min_client).to eq(Kiosk::Protocol::MIN_CLIENT)
     end
+
+    # K-100: the auth-challenge nonce must outlive the registration PoW solve,
+    # or a slow honest solver's nonce expires mid-solve (and the proofs are
+    # already burned). The PoW solve window is pow_ttl * count.
+    describe "auth_challenge_ttl vs the registration PoW solve window" do
+      it "defaults to comfortably exceed a single-proof PoW window (count treated as >= 1)" do
+        c = Kiosk.configuration
+        expect(c.auth_challenge_ttl).to be > c.pow_ttl
+      end
+
+      it "exceeds the full PoW window pow_ttl * registration_pow_count" do
+        Kiosk.configure { |cfg| cfg.registration_pow_count = 3 }
+        c = Kiosk.configuration
+        expect(c.auth_challenge_ttl).to be >= c.pow_ttl * c.registration_pow_count
+      end
+
+      it "scales when pow_ttl is raised" do
+        Kiosk.configure { |cfg| cfg.pow_ttl = 600 }
+        c = Kiosk.configuration
+        expect(c.auth_challenge_ttl).to be > c.pow_ttl
+      end
+
+      it "still honours an explicit override" do
+        Kiosk.configure { |cfg| cfg.auth_challenge_ttl = 45 }
+        expect(Kiosk.configuration.auth_challenge_ttl).to eq(45)
+      end
+    end
   end
 
   describe "overrides" do

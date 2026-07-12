@@ -146,11 +146,13 @@ RSpec.describe Kiosk::Server::Executor do
     end
   end
 
-  describe "stub verbs (deferred to follow-up release)" do
-    it ":events raises NotImplementedError with a descriptive message" do
+  # K-083: the `events` verb was removed (never an ADR-0009 capability). It is
+  # now an unknown verb → a clean 400 BadRequest, not a raw NotImplementedError.
+  describe "removed :events verb" do
+    it "is rejected as an unknown verb (clean BadRequest, not NotImplementedError)" do
       expect {
         described_class.call(kind: :events, args: {}, identity: identity, connection: connection)
-      }.to raise_error(NotImplementedError, /follow-up|kiosk-pay/)
+      }.to raise_error(Kiosk::Server::Errors::BadRequest, /Unknown verb/)
     end
   end
 

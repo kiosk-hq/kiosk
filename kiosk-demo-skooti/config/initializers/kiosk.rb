@@ -59,7 +59,8 @@ Kiosk.configure do |c|
   # Dual-check (skill.md): canonical skill URL + SHA-256 of its content.
   c.skill_sha256 = "7cd44398e6102c20ea95484c1fe03df68907545c4c21412b18bd559226ed95c9"
 
-  # JwtOrStubIdp tries Kiosk-issued JWTs (Device-Grant output) first,
+  # JwtOrStubIdp tries Kiosk-issued JWTs (kiosk-pop register/login output;
+  # OAuth device-grant dormant per ADR-0008) first,
   # then falls back to StubIdp's bespoke `agent:u-…:a-…:r-…` shape.
   c.agent_idp = JwtOrStubIdp.new(stub: StubIdp.new)
 

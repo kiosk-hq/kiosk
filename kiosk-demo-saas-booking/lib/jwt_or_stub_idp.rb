@@ -1,11 +1,13 @@
 # frozen_string_literal: true
 
-# Composite IdP for the e2e: tries Kiosk-issued JWTs first (the
-# Device-Grant flow output), falls back to the bespoke
+# Composite IdP for the e2e: tries Kiosk-issued JWTs first (minted by the
+# bundled kiosk-pop IdP via register/login, or — uniquely for this
+# existing-account demo — by the OAuth device-grant walkthrough kept live
+# per ADR-0008), falls back to the bespoke
 # `agent:u-…:a-…:r-…` / `human:u-…:r-…` shape that StubIdp parses.
 # Lets the REST wire surface (/kiosk/query, /kiosk/run, /kiosk/pay,
 # /kiosk/schema) authenticate both legacy synthetic tokens AND real
-# OAuth-issued JWTs in the same test run.
+# Kiosk-issued JWTs in the same test run.
 #
 # In production, a host app would pick ONE of these (or a real adapter
 # like kiosk-user-idp-devise). The composite shape lives in the e2e

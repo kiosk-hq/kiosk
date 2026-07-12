@@ -18,7 +18,6 @@ Rails.application.routes.draw do
   post "/kiosk/auth/register",                      to: "kiosk/server/auth#register"
   post "/kiosk/auth/login",                         to: "kiosk/server/auth#login"
   post "/kiosk/auth/revoke",                        to: "kiosk/server/auth#revoke"
-  post "/kiosk/agents/kyc",                        to: "kiosk/server/kyc_attestation#create"
 
   # /.well-known/kiosk.json discovery endpoint — built on the fly from
   # Kiosk.configuration. Inlined here since kiosk-server doesn't yet

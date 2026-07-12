@@ -32,7 +32,7 @@ RSpec.describe Kiosk::Configuration do
       expect(config.user_idp).to be_nil
     end
 
-    it "leaves agent_idp nil (kiosk-server falls back to user_idp; agent flows use DefaultAgentIdp directly)" do
+    it "leaves agent_idp nil (kiosk-server falls back to the bundled DefaultAgentIdp per ADR-0013)" do
       expect(config.agent_idp).to be_nil
     end
 

@@ -6,7 +6,7 @@ The «I just want to start» meta-gem for the [Kiosk](https://kiosk.tech) framew
 
 `kiosk-all` declares runtime dependencies on the two production data-plane gems:
 
-- **`kiosk-core`** — value types (`Identity`, `Mandate`, `Event`), abstract adapter base classes, GUC namespace constants, `Kiosk.configure`, protocol version surface
+- **`kiosk-core`** — value types (`Identity`, `Mandate`), abstract adapter base classes, GUC namespace constants, `Kiosk.configure`, protocol version surface
 - **`kiosk-server`** — Rails engine, headers middleware, `/.well-known/kiosk.json` builder, canonical schema-migration SQL
 
 Requiring `kiosk-all` loads `Kiosk` and `Kiosk::Server`.

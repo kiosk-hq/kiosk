@@ -78,8 +78,9 @@ module Kiosk
         TestHelpers.require_executor!.run_action(name, args)
       end
 
-      # Invoke a pay-Action by name. Same contract as `run_action`, but the
-      # real executor records an AP2 mandate trio.
+      # Invoke a pay-Action by name. Same contract as `run_action`. The AP2
+      # mandate flow ships alongside `kiosk-pay-*` (M4); until then the real
+      # executor raises `NotImplementedError`.
       def pay_action(name, **args)
         TestHelpers.require_executor!.pay_action(name, args)
       end

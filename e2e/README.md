@@ -63,7 +63,7 @@ Output is colour-coded `✓` / `✗` per assertion; exits non-zero on any failur
 
 ## CI
 
-`.github/workflows/e2e.yml` invokes the same script after standard Ruby + Postgres setup. The CI service-postgres user is a superuser, same as a typical local Homebrew setup — no role-separation differences.
+`.github/workflows/ci.yml` invokes the same script (the `e2e` job) after standard Ruby + Postgres setup. The CI service-postgres user is a superuser, same as a typical local Homebrew setup — no role-separation differences.
 
 ## File layout
 
@@ -74,7 +74,7 @@ e2e/
 ├── README.md                               # this file
 └── fixtures/                               # files copied into the generated app
     ├── create_users.rb                     # provider's user table (UUID PK)
-    ├── create_salons_and_appointments.rb   # demo schema + enable_rls_on
+    ├── create_salons_and_appointments.rb   # demo schema (salons + appointments)
     ├── user.rb, salon.rb, appointment.rb   # ActiveRecord models
     ├── seeds.rb                            # 2 users (Alice + Bob), 1 salon
     ├── stub_idp.rb                         # Bearer-token-parsing agent IdP

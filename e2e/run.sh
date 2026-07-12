@@ -16,7 +16,7 @@
 #   ./e2e/run.sh
 #
 # Env:
-#   KIOSK_OSS       — path to oss/ root (defaults to script's parent dir)
+#   KIOSK_OSS       — path to the reference monorepo root (defaults to script's parent dir)
 #   PGHOST          — Postgres host (default: localhost)
 #   SERVER_PORT     — port for the started Rails app (default: 3001)
 
@@ -88,7 +88,7 @@ command -v jq       >/dev/null || fail "jq not on PATH"
 
 pg_isready -q || fail "postgres not accepting connections (run: brew services start postgresql)"
 
-[ -d "$KIOSK_OSS/kiosk-core" ] || fail "KIOSK_OSS=$KIOSK_OSS missing kiosk-core (set KIOSK_OSS to oss/ root)"
+[ -d "$KIOSK_OSS/kiosk-core" ] || fail "KIOSK_OSS=$KIOSK_OSS missing kiosk-core (set KIOSK_OSS to the reference monorepo root)"
 
 ok "all prerequisites present"
 
@@ -223,8 +223,8 @@ psql -d "$DB_NAME" -qtA >/dev/null 2>&1 <<SQL || true
 SQL
 ok "K-043: live-key uniqueness enforced at the DB; revoked key may re-register"
 
-# ─── signing key for JWKS / OAuth ───────────────────────────────────────
-log "generate signing key for JWKS / OAuth"
+# ─── signing key for JWKS (kiosk-pop JWTs) ──────────────────────────────
+log "generate signing key for JWKS (kiosk-pop JWTs)"
 SIGNING_KEY_PEM=$(openssl genrsa 2048 2>/dev/null)
 export KIOSK_SIGNING_KEY_B64=$(echo "$SIGNING_KEY_PEM" | base64)
 ok "signing key generated"

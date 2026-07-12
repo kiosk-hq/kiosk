@@ -36,7 +36,7 @@ agent_id = reg.fetch("agent_id"); user_id = reg.fetch("user_id"); token = reg.fe
 now = Time.now.to_i
 intent_id = SecureRandom.uuid
 cap_amount_cents = 2000
-total_amount_cents = ENV["CART_OVER_CAP"] ? cap_amount_cents + 1 : 1599
+total_amount_cents = 1599
 intent = { id: intent_id, user_id: user_id, agent_id: agent_id, iss: ISSUER,
            scope: "food", cap_amount_cents: cap_amount_cents, currency: "eur", exp: now + 600, iat: now }
 cart_id = SecureRandom.uuid

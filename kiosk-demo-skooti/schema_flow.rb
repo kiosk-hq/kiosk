@@ -2,7 +2,7 @@
 
 # Self-discovery proof driver — schema verb over HTTP.
 #
-# Registers a fresh agent (SHA256 PoW at difficulty=20 — skooti registration
+# Registers a fresh agent (Equihash PoW n=96 k=5 — skooti registration
 # gate), calls `schema` (GET /kiosk/schema), prints one JSON line on stdout.
 #
 # Usage (invoked by rake demo:schema — do not run standalone without the server):

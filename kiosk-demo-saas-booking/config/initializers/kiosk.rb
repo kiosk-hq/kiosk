@@ -51,7 +51,7 @@ Kiosk.configure do |c|
   c.registration_role = :customer
   c.owner  = { name: "Combette on Park (Kiosk demo)", support: "demo@kiosk.tech" }
   # Dual-check (skill.md): canonical skill URL + SHA-256 of its content.
-  c.skill_sha256 = "b58453ddd432ef6a4696ce223549c25c3e10bf9688d829a79620299e0aa7f0b1"
+  c.skill_sha256 = "7cd44398e6102c20ea95484c1fe03df68907545c4c21412b18bd559226ed95c9"
 
   # JwtOrStubIdp tries Kiosk-issued JWTs (Device-Grant output) first,
   # then falls back to StubIdp's bespoke `agent:u-…:a-…:r-…` shape.
@@ -72,7 +72,8 @@ end
 
 # salons — full salon catalogue; no per-user scoping, any authenticated
 # principal may browse (mirrors the public SELECT policy previously in RLS).
-Kiosk::Server::Queries.register("salons") do |_params|
+Kiosk::Server::Queries.register("salons",
+                                 description: "Browse the public salon catalogue") do |_params|
   ActiveRecord::Base.connection.execute(
     "SELECT id, name FROM salons ORDER BY id"
   ).to_a
@@ -81,7 +82,8 @@ end
 # my_appointments — per-user appointment list scoped by the session GUC.
 # App-layer isolation: the agent supplies no filter; the WHERE is
 # provider-controlled and cannot be bypassed by the caller.
-Kiosk::Server::Queries.register("my_appointments") do |_params|
+Kiosk::Server::Queries.register("my_appointments",
+                                 description: "List this principal's appointments (scoped to authenticated user via kiosk.current_user_id())") do |_params|
   ActiveRecord::Base.connection.execute(
     "SELECT id, salon_id, slot FROM appointments " \
     "WHERE user_id = kiosk.current_user_id() " \
@@ -94,7 +96,8 @@ end
 # Register the demo Action. In production, providers use the full
 # `Kiosk::Action` DSL (post-v0.1); for the e2e a simple registered
 # block is sufficient.
-Kiosk::Server::Actions.register("book_appointment") do |args|
+Kiosk::Server::Actions.register("book_appointment",
+                                 description: "Book an appointment at a salon for the authenticated principal") do |args|
   # Identity is set via Kiosk::Server::SessionContext SET LOCAL —
   # current_user_id() helper returns the principal. ActiveRecord doesn't
   # have direct access; pull from PG.

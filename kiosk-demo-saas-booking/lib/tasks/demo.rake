@@ -342,6 +342,7 @@ namespace :demo do
       • schema.verbs includes query/run/pay/schema and NOT events
       • schema.queries includes salons and my_appointments
       • schema.actions includes book_appointment
+      • every query/action entry carries a non-empty description
 
     Exits 0 if all assertions pass; exits 1 on any miss.
   DESC
@@ -404,9 +405,11 @@ namespace :demo do
     puts "\n── Schema assertions ──"
     failures = []
 
-    verbs   = result["schema_verbs"]   || []
-    queries = (result["schema_queries"] || []).map { |q| q["name"] }
-    actions = (result["schema_actions"] || []).map { |a| a["name"] }
+    verbs        = result["schema_verbs"]   || []
+    query_specs  = result["schema_queries"] || []
+    action_specs = result["schema_actions"] || []
+    queries = query_specs.map  { |q| q["name"] }
+    actions = action_specs.map { |a| a["name"] }
 
     # Verbs: query/run/pay/schema present; events absent.
     %w[query run pay schema].each do |v|
@@ -440,6 +443,20 @@ namespace :demo do
     else
       failures << "schema.actions missing book_appointment (got #{actions.inspect})"
       puts "  ✗  schema.actions missing book_appointment"
+    end
+
+    # Descriptions: every query/action must carry non-empty metadata (K-099 —
+    # bare-block registration served null description; schema is the agent's
+    # only self-discovery surface).
+    (query_specs + action_specs).each do |spec|
+      name = spec["name"]
+      desc = spec["description"]
+      if desc.is_a?(String) && !desc.strip.empty?
+        puts "  ✓  schema entry #{name} carries a description"
+      else
+        failures << "schema entry #{name} has null/blank description (got #{desc.inspect})"
+        puts "  ✗  schema entry #{name} has null/blank description"
+      end
     end
 
     if failures.empty?

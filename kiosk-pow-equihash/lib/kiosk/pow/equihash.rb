@@ -16,7 +16,8 @@ module Kiosk
     # The solver finds 2^k nonces whose BLAKE2b-256(seed ‖ nonce) outputs
     # XOR to zero in the first n bits AND form a valid collision tree
     # (Wagner's algorithm).  The verifier recomputes 2^k hashes and checks
-    # both conditions — microseconds, ~KB of memory.
+    # both conditions — ~17 ms (pure Ruby, 128 BLAKE2b at the default
+    # params), ~KB of memory.
     #
     # == Wire API
     #
@@ -193,7 +194,11 @@ module Kiosk
         # ascending. Ordering is enforced structurally below (Zcash subtree
         # rule: at each tree node the left half's first index precedes the
         # right half's), which also rules out trivial reorderings.
-        return false if indices.any? { |idx| idx.is_a?(Float) || Integer(idx) < 0 }
+        #
+        # Reject any element that is not a plain Integer (nil, String, Float,
+        # …) rather than coercing — a malformed index means a malformed proof,
+        # which must return false, never raise (K-149).
+        return false unless indices.all? { |idx| idx.is_a?(Integer) && idx >= 0 }
         return false unless indices.uniq.length == expected_len
 
         n_div = n / (k + 1)  # bits per level: 168/8 = 21

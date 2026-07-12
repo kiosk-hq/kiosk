@@ -7,7 +7,7 @@ Gem::Specification.new do |spec|
   spec.version = Kiosk::Pow::Equihash::VERSION
   spec.authors = ["Kiosk"]
   spec.email   = ["hello@fili.pp.ru"]
-  spec.summary = "Equihash memory-hard PoW backend for Kiosk (n=192, k=7, ~1 GiB)"
+  spec.summary = "Equihash memory-hard PoW backend for Kiosk (default n=168, k=7; ~17 ms verify, ~1.3 GiB solve)"
   spec.license = "Apache-2.0"
   spec.required_ruby_version = ">= 3.2.0"
 

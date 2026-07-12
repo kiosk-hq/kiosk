@@ -11,9 +11,10 @@ Cuckatoo-Cycle proof-of-work backend for [Kiosk](https://kiosk.tech).
 
 ## What this is
 
-An optional PoW backend with a large solve:verify asymmetry — solving requires
-finding a cycle in a large random bipartite graph (gigabytes of RAM, seconds of
-CPU), while verifying is proofsize SipHash evaluations plus a cycle-walk (~10 μs).
+An optional (shelved) PoW backend with a large solve:verify asymmetry — solving
+requires finding a cycle in a large random bipartite graph (gigabytes of RAM,
+seconds of CPU), while verifying is a handful of operations: `proofsize` SipHash
+evaluations plus a cycle-walk (no wall-clock verify figure is benchmarked here).
 
 **This gem ships the VERIFIER only.**  The verifier is production-correct,
 validated against Grin's Cuckatoo29 L=42 known-answer test vector.
@@ -171,8 +172,8 @@ proof.
   intentional: it raises the cost of abuse.
 - **Equihash** (`kiosk-pow-equihash`) is the shipped default (ADR-0007).
   Argon2id (`kiosk-pow`) remains as a legacy backend. Use Cuckatoo only when the
-  extreme solve:verify asymmetry (GB-RAM solver vs. µs verifier) is specifically
-  required.
+  extreme solve:verify asymmetry (GB-RAM solver vs. a few-hash verifier) is
+  specifically required.
 - `proofsize < 42` is a deviation from production Cuckatoo (L=42 per Grin/Tromp
   spec). The toy demo (L=12) demonstrates the mechanism only.
 - `edgebits < 29` is suitable only for testing; production Grin uses edgebits 29.

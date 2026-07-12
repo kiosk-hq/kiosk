@@ -7,9 +7,10 @@
 validated against Grin's Cuckatoo29 L=42 known-answer test vector.  35 specs
 green.  Pure Ruby, clean-room, no GPL code, Apache-2.0.
 
-Verification cost: `proofsize` SipHash-2-4 evaluations + cycle-walk ≈ 10 μs.
-The large solve:verify asymmetry is the point: solving costs GB-RAM × seconds;
-verifying costs microseconds.
+Verification cost: `proofsize` SipHash-2-4 evaluations + a cycle-walk — a
+handful of operations (no wall-clock figure is benchmarked here). The large
+solve:verify asymmetry is the point: solving costs GB-RAM × seconds; verifying
+is a few cheap hash evaluations.
 
 ### The SOLVER — reference/toy only
 `solve_cuckoo.py` is a **pure-Python + numpy REFERENCE solver for small edgebits
@@ -51,8 +52,8 @@ proof (solve → verify at edgebits 10, proofsize 12).
    are denied — intentional.
 2. **Equihash (`kiosk-pow-equihash`) is the shipped default** (ADR-0007).
    Argon2id (`kiosk-pow`) remains as a legacy backend. Choose Cuckatoo only
-   when the extreme solve:verify asymmetry (GB-RAM solver vs. µs verifier)
-   is specifically required.
+   when the extreme solve:verify asymmetry (GB-RAM solver vs. a few-hash
+   verifier) is specifically required.
 3. **Production solver**: requires a native C/CUDA miner (Tromp's lean/mean
    or similar). The Python solver is for demonstration only.
 4. **Proofsize**: production is L=42 (Grin/Tromp standard). The toy demo uses

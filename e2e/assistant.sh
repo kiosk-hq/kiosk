@@ -153,7 +153,7 @@ assert "garbage token → 401"       "$status" "401"
 # ─── JWKS endpoint ──────────────────────────────────────────────────────
 #
 # /kiosk/.well-known/jwks.json publishes the RSA public key that signs
-# JWTs issued by the bundled IdP and OAuth surface.
+# the kiosk-pop JWTs minted by the bundled IdP (register/login/revoke).
 
 printf "\n\033[1m=== /kiosk/.well-known/jwks.json ===\033[0m\n"
 

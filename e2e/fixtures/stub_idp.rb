@@ -4,10 +4,9 @@
 # a {Kiosk::Identity}. Real adapters (Devise / Auth0 / WorkOS / etc.) ship
 # as `kiosk-user-idp-*` and `kiosk-agent-idp-*` gems.
 #
-# Two token shapes:
+# Token shape:
 #
 #   agent:u-<uuid>:a-<agent_id>:r-<role>   → identity with actor=agent
-#   human:u-<uuid>:r-<role>                → identity with actor=human
 #
 # Anything else returns nil → WireController treats as unauthenticated.
 class StubIdp < Kiosk::AgentIdentityProviders::Base
@@ -15,12 +14,6 @@ class StubIdp < Kiosk::AgentIdentityProviders::Base
     agent:
     u-(?<user_id>[0-9a-fA-F-]+):
     a-(?<agent_id>[^:]+):
-    r-(?<role>\w+)\z
-  /x.freeze
-
-  HUMAN_RE = /\A
-    human:
-    u-(?<user_id>[0-9a-fA-F-]+):
     r-(?<role>\w+)\z
   /x.freeze
 
@@ -36,12 +29,6 @@ class StubIdp < Kiosk::AgentIdentityProviders::Base
         agent_id: match[:agent_id],
         role:     match[:role],
         actor:    "agent",
-      )
-    elsif (match = HUMAN_RE.match(token))
-      Kiosk::Identity.new(
-        user_id:  match[:user_id],
-        role:     match[:role],
-        actor:    "human",
       )
     end
   end

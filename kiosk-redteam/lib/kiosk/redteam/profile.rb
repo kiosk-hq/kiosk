@@ -13,8 +13,10 @@ module Kiosk
     # == Required fields (nil = skip scenarios that need that surface)
     #
     # @!attribute pow_difficulty [Integer]
-    #   Minimum leading zero bits required by the PoW gate on /register.
-    #   0 means no PoW is required; {RegistrationWithoutPow} is skipped.
+    #   Caller-side flag: >0 means the provider is expected to gate /register
+    #   with Equihash (the actual n/k parameters and count-escalation ride in
+    #   the server's 402 challenges — this integer does not encode leading-zero
+    #   bits). 0 means no PoW is required; {RegistrationWithoutPow} is skipped.
     #
     # @!attribute requires_kyc [Boolean]
     #   Whether the provider's gated action requires a prior KYC attestation.

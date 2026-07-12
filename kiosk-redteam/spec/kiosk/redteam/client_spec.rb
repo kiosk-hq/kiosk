@@ -1,7 +1,6 @@
 # frozen_string_literal: true
 
 require "spec_helper"
-require "digest"
 require "base64"
 require "openssl"
 require "jwt"
@@ -338,24 +337,5 @@ RSpec.describe Kiosk::Redteam::Client do
       expect(result.status).to eq(500)
       expect(result.body).to eq({})
     end
-  end
-
-  private
-
-  # Helper used in PoW verification specs.
-  def count_leading_zero_bits(bytes)
-    return 0 if bytes.empty?
-    count = 0
-    bytes.each_byte do |b|
-      if b == 0
-        count += 8
-      else
-        bit = 7
-        bit -= 1 while bit >= 0 && b[bit] == 0
-        count += (7 - bit)
-        break
-      end
-    end
-    count
   end
 end

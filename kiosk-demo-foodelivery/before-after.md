@@ -40,14 +40,14 @@ foodelivery is a Rails 8.1 app that speaks Kiosk. The following is the recorded 
 
 **Run 1:**
 ```
-{"http_register":201,"user_id":"3e406ba4-46a0-402d-a5c1-7eadb173db82","agent_id":"e118679e-009e-4458-8bbd-573ccfe0985a","order":{"order_id":"18aaacf8-1e7e-484c-b02d-76f578854418","restaurant_id":1,"total_cents":1599,"status":"placed"},"pay":{"ok":true,"kind":"value","value":{"payment_mandate_id":"4ae8407f-451d-46ca-8869-0c8e8d337719","psp_reference":"stub_pi_8380d66b-5a24-4cf4-9d0f-06b8c9464a64","settled_amount_cents":1599,"currency":"eur"}}}
+{"http_register":201,"user_id":"3e406ba4-46a0-402d-a5c1-7eadb173db82","agent_id":"e118679e-009e-4458-8bbd-573ccfe0985a","order":{"order_id":"18aaacf8-1e7e-484c-b02d-76f578854418","restaurant_id":1,"total_cents":1599,"status":"placed"},"pay":{"ok":true,"kind":"value","value":{"settlement_id":"4ae8407f-451d-46ca-8869-0c8e8d337719","psp_reference":"stub_pi_8380d66b-5a24-4cf4-9d0f-06b8c9464a64","settled_amount_cents":1599,"currency":"eur"}}}
 
 ── Assertions ──
   ✓  pay.ok == true
-  ✓  pay.value.payment_mandate_id present (4ae8407f-451d-46ca-8869-0c8e8d337719)
+  ✓  pay.value.settlement_id present (4ae8407f-451d-46ca-8869-0c8e8d337719)
   ✓  order.order_id present (18aaacf8-1e7e-484c-b02d-76f578854418)
   ✓  orders count = 1
-  ✓  kiosk.payment_mandates count = 1
+  ✓  kiosk.settlements count = 1
 
   All assertions passed.
 ```
@@ -60,7 +60,7 @@ foodelivery is a Rails 8.1 app that speaks Kiosk. The following is the recorded 
 4. **Place order** — `POST /kiosk/run {name:"place_order", menu_item_id:<id>, quantity:1, delivery_address:"1 Test St, Istanbul"}` → HTTP 200, `total_cents:1599`, `status:"placed"`.
 5. **Pay** — signed an AP2 intent mandate (`cap_amount_cents:1699`, `scope:"food"`, `iss:<issuer>`) and a cart mandate (`total_amount_cents:1599`, `line_items:[{sku:"margherita",qty:1}]`, bound to the intent via `intent_mandate_id`) as RS256 JWS with the registered keypair, then `POST /kiosk/pay {...}` → `settled_amount_cents:1599`, `ok:true`.
 
-The database confirmed: one row in `orders`, one row in `kiosk.payment_mandates`.
+The database confirmed: one row in `orders`, one row in `kiosk.settlements`.
 
 The business outcome: the user said "order a Margherita from foodelivery." Their assistant completed the purchase — discovery, registration, order, payment — without the user touching anything and without the user having an account at foodelivery beforehand.
 
@@ -142,11 +142,11 @@ Actions are plain Ruby blocks. The `kiosk.current_user_id()` Postgres function r
 # config/initializers/kiosk.rb
 Kiosk.configure do |c|
   c.issuer           = "https://foodelivery.app"
-  c.payment_provider = KioskPay::Stripe::Adapter.new(secret_key: ENV["STRIPE_SECRET_KEY"])
+  c.payment_provider = Kiosk::PaymentProviders::Stripe.new(api_key: ENV["STRIPE_SECRET_KEY"])
 end
 ```
 
-The stub PSP (`StubPsp`) used in the demo can be swapped for the Stripe adapter without touching any other code.
+The stub PSP (`StubPsp`, a `Kiosk::PaymentProviders::Base` subclass) used in the demo can be swapped for the Stripe adapter without touching any other code.
 
 **What this does not require:** a new user-facing login flow, a new mobile app, an OAuth integration, a webhook endpoint, or any changes to the provider's existing Rails models. The satellite gems add a parallel surface; the existing application is untouched.
 

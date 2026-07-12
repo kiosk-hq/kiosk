@@ -31,7 +31,7 @@ hoteling is a Rails 8.1 app that speaks Kiosk. The following is the recorded out
   Properties: 5 found, using id=1 (Gran Hotel Istanbul)
   Availability: 3 room type(s) available, using id=1 (Standard, 8000c/night)
   Reserved: booking_id=<uuid> total=24000c
-  Payment settled: mandate_id=<uuid>
+  Payment settled: settlement_id=<uuid>
 
 ── Assertions ──
   OK  http_register == 201
@@ -43,7 +43,7 @@ hoteling is a Rails 8.1 app that speaks Kiosk. The following is the recorded out
   OK  confirm_status == confirmed
   OK  booking_id present (<uuid>)
   OK  bookings[status=confirmed] >= 1 (got 1)
-  OK  kiosk.payment_mandates >= 1 (got 1)
+  OK  kiosk.settlements >= 1 (got 1)
   OK  kiosk.reservations[resource_kind=room_booking] >= 1 (got 1)
 
   All assertions passed.
@@ -58,7 +58,7 @@ hoteling is a Rails 8.1 app that speaks Kiosk. The following is the recorded out
 5. **Pay** — signed an AP2 intent mandate (`cap_amount_cents:24100`, `scope:"lodging"`, `iss:<issuer>`) and a cart mandate (`total_amount_cents:24000`, `line_items:[{sku:"Standard", qty:3, booking_id:<uuid>}]`, bound to the intent via `intent_mandate_id`) as RS256 JWS with the registered keypair, then `POST /kiosk/pay {intent_mandate_jws:…, cart_mandate_jws:…, payment_mandate_jws:…}` → `settled_amount_cents:24000`, `ok:true`.
 6. **Confirm** — `POST /kiosk/run {name:"confirm_booking", booking_id:<uuid>}` → HTTP 200, `status:"confirmed"`, `confirmation_code:<uuid>`. The server verified ownership (Gate 1) and the settled mandate referencing this booking (Gate 2) before confirming.
 
-The database confirmed: one row in `bookings` with `status='confirmed'`, one row in `kiosk.payment_mandates`, one row in `kiosk.reservations`.
+The database confirmed: one row in `bookings` with `status='confirmed'`, one row in `kiosk.settlements`, one row in `kiosk.reservations`.
 
 The business outcome: the user said "book a hotel room for next month." Their assistant completed the full booking — discovery, registration, room selection, reservation, payment, confirmation — without the user touching anything and without the user having an account at hoteling beforehand.
 
@@ -152,11 +152,11 @@ Gate 1 (ownership) and Gate 2 (payment binding) together form the C2 defense: B 
 # config/initializers/kiosk.rb
 Kiosk.configure do |c|
   c.issuer           = "https://hoteling.app"
-  c.payment_provider = KioskPay::Stripe::Adapter.new(secret_key: ENV["STRIPE_SECRET_KEY"])
+  c.payment_provider = Kiosk::PaymentProviders::Stripe.new(api_key: ENV["STRIPE_SECRET_KEY"])
 end
 ```
 
-The stub PSP (`StubPsp`) used in the demo can be swapped for the Stripe adapter without touching any other code.
+The stub PSP (`StubPsp`, a `Kiosk::PaymentProviders::Base` subclass) used in the demo can be swapped for the Stripe adapter without touching any other code.
 
 **What this does not require:** a new user-facing login flow, a new mobile app, an OAuth integration, a webhook endpoint, or any changes to the provider's existing Rails models. The satellite gems add a parallel surface; the existing application is untouched.
 

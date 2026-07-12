@@ -196,7 +196,7 @@ scenarios = [
 
 # ── Expected-applicable assertion ─────────────────────────────────────────────
 #
-# skooti exposes the full surface: 12 scenarios, 0 skips expected.
+# skooti exposes the full surface: 13 scenarios, 0 skips expected.
 # If this set changes, a profile typo silently disabled a gate — fail loud.
 EXPECTED_SKIP_NAMES = [].freeze
 

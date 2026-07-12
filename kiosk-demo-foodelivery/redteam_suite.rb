@@ -137,11 +137,12 @@ profile = Kiosk::Redteam::Profile.new(
 
 # ── Scenarios ─────────────────────────────────────────────────────────────────
 #
-# Applicable (5): CrossTenantRead, ForgedUserId, MandatePrincipalSwap,
-#                 MandateReplay, TokenTampering.
+# Applicable (6): CrossTenantRead, ForgedUserId, MandatePrincipalSwap,
+#                 MandateReplay, TokenTampering, PrivilegeSelfSelection.
 # Skip (6):       UnpaidGatedAction, SpentResourceReuse, PayForOtherUseSelf
 #                 (no gated_action), MissingKyc, ExpiredKyc, ForgedKyc (no KYC).
-# RegistrationWithoutPow: always skipped (pow_difficulty: 0).
+# RegistrationWithoutPow: always skipped (pow_difficulty: 0), and NOT listed below.
+# 12 scenarios listed → 6 applicable (BLOCKED), 6 skipped.
 
 scenarios = [
   # Applicable — must be BLOCKED

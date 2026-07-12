@@ -5,7 +5,7 @@ require "jwt"
 
 # Stub KYC provider for the skooti demo. Uses a fixed dev RSA keypair so
 # that both the Rails server (which loads this at boot to configure
-# `kyc_public_key`) and the standalone unlock_flow.rb driver (which loads
+# `kyc_public_key`) and the standalone rental_flow.rb driver (which loads
 # this in a separate process) share the same signing key.
 #
 # In production / real KYC integration:

@@ -8,9 +8,6 @@
 #                        rental chain), asserts happy path + all negative gates,
 #                        tears down
 #   rake demo            setup + rideflow (full end-to-end proof)
-#
-# The walkthrough lives in bin/demo (POSIX shell) so it's debuggable
-# without going through Rake.
 
 namespace :demo do
   desc "Create + load schema + seed the demo database (idempotent)."
@@ -692,7 +689,7 @@ namespace :demo do
   desc <<~DESC
     Adversarial regression battery (R3 Phase 2 Task 4) — kiosk-redteam.
 
-    Boots skooti, runs all 12 Kiosk::Redteam scenarios against the full chain
+    Boots skooti, runs all 13 Kiosk::Redteam scenarios against the full chain
     (Equihash PoW n=96 k=5 → KYC → reserve → pay → start_rental) and asserts each attack
     is BLOCKED:
 
@@ -708,6 +705,7 @@ namespace :demo do
       BLOCKED  MandatePrincipalSwap  — B signs mandate with A's identity; rejected
       BLOCKED  MandateReplay         — B re-submits A's JWS; rejected
       BLOCKED  TokenTampering        — altered JWT claim rejected 401
+      BLOCKED  PrivilegeSelfSelection — agent cannot self-assign elevated privilege
 
     Exits 0 when all scenarios are BLOCKED; exits 1 on any BREACH.
     A BREACH = a real hole in skooti — fix the app, not the scenario.
@@ -807,8 +805,7 @@ namespace :demo do
 
     Asserts:
       • schema.verbs includes query/run/pay/schema and NOT events
-      • schema.queries includes reserve with a description
-      • schema.actions includes start_rental, payment_setup with descriptions
+      • schema.actions includes reserve, start_rental, payment_setup with descriptions
 
     Exits 0 if all assertions pass; exits 1 on any miss.
   DESC

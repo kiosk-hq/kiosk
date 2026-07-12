@@ -26,7 +26,9 @@ module Kiosk
     # On a submitted proof, `Kiosk::Reputation::Challenge.verify` enforces:
     #   1. HMAC sig + request-fingerprint binding (cheap constant-time compare)
     #   2. Expiry check (integer compare)
-    #   3. Equihash backend eval (cheap — 2^k BLAKE2b hashes, µs + KB)
+    #   3. Equihash backend eval (at n=168 k=7: ~16-17 ms + KB of RAM to
+    #      verify — memory is the asymmetry, since SOLVING the same proof
+    #      costs ~1.3 GiB)
     # A flood of forged or expired proofs is rejected at step 1/2 without
     # burning a backend evaluation.
     #

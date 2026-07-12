@@ -34,27 +34,32 @@ if defined?(::ActionController::API)
       class WireController < ::ActionController::API
         # REST verb: GET /kiosk/schema
         def schema
-          run_command(:schema, {})
+          run_command(:schema)
         end
 
         # REST verb: POST /kiosk/query
         def query
-          run_command(:query, parse_body!)
+          run_command(:query)
         end
 
         # REST verb: POST /kiosk/run
         def run
-          run_command(:run, parse_body!)
+          run_command(:run)
         end
 
         # REST verb: POST /kiosk/pay
         def pay
-          run_command(:pay, parse_body!)
+          run_command(:pay)
         end
 
         private
 
-        def run_command(command, args)
+        def run_command(command)
+          # parse_body! runs INSIDE the rescue below: a malformed body raises
+          # Errors::BadRequest, which must render a 400 envelope, not escape as
+          # an uncaught 500 (K-147; the same parse-outside-rescue class fixed
+          # for AuthController/KycAttestationController).
+          args     = parse_body!
           identity = resolve_identity!
 
           # Pull the submitted proof out of the body: it is a sibling of the verb

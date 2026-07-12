@@ -84,6 +84,30 @@ RSpec.describe "wire-surface controller auth" do
       expect(status).to eq(401)
       expect(body.dig(:error, :code)).to eq("unauthenticated")
     end
+
+    # K-147: parse_body! raises Errors::BadRequest on a malformed body; it must
+    # render a 400 envelope, not escape run_command's rescue as an uncaught 500.
+    def query_status_for(raw_body)
+      token = Kiosk::Server::JwtIssuer.issue(
+        claims:   { sub: "u-1", agent_id: "a-1", role: "customer", actor: "agent" },
+        audience: "https://demo.example",
+      )
+      dispatch(Kiosk::Server::WireController, :query,
+               bearer_env("/kiosk/query", token, method: "POST",
+                          input: raw_body, "CONTENT_TYPE" => "application/json"))
+    end
+
+    it "returns 400 bad_request (not 500) for INVALID JSON on a wire POST" do
+      status, body = query_status_for("{not valid json")
+      expect(status).to eq(400)
+      expect(body.dig(:error, :code)).to eq("bad_request")
+    end
+
+    it "returns 400 bad_request (not 500) for a non-object JSON body on a wire POST" do
+      status, body = query_status_for("[1, 2, 3]")
+      expect(status).to eq(400)
+      expect(body.dig(:error, :code)).to eq("bad_request")
+    end
   end
 
   # ─── K-071: KYC endpoint uses the CONFIGURED IdP, not a hardcoded one ───
@@ -179,6 +203,19 @@ RSpec.describe "wire-surface controller auth" do
                               kyc_env_with_body("[1,2,3]"))
       expect(status).to eq(400)
       expect(body.dig(:error, :code)).to eq("bad_request")
+    end
+
+    # K-148: a well-formed JSON OBJECT that simply omits kyc_jws is a distinct
+    # branch from the malformed-body ones above — it survives parse_body! and
+    # hits `body[:kyc_jws] or raise BadRequest("missing field: kyc_jws")`.
+    it "returns 400 BadRequest for a valid JSON object missing the kyc_jws field" do
+      Kiosk.configure { |c| c.agent_idp = custom_idp }
+
+      status, body = dispatch(Kiosk::Server::KycAttestationController, :create,
+                              kyc_env_with_body(JSON.generate(not_kyc_jws: "x")))
+      expect(status).to eq(400)
+      expect(body.dig(:error, :code)).to eq("bad_request")
+      expect(body.dig(:error, :message)).to include("kyc_jws")
     end
   end
 

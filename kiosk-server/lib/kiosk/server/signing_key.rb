@@ -7,8 +7,10 @@ require "json"
 
 module Kiosk
   module Server
-    # RSA signing-key value object used by the OAuth 2.1 surface and
-    # by the bundled IdP for JWT issuance.
+    # RSA signing-key value object used by {JwtIssuer} and the bundled
+    # agent-IdP to sign/verify the JWTs the kiosk-pop auth surface issues,
+    # and to publish the public half as JWKS. (The OAuth 2.1 device-grant
+    # surface that also relied on it is dormant per ADR-0008.)
     #
     # Wraps an `OpenSSL::PKey::RSA` instance and exposes the derived
     # JWK shape and RFC 7638 thumbprint as cached attributes. The same key

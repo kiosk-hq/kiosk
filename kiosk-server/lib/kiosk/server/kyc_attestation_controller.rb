@@ -19,7 +19,10 @@ if defined?(::ActionController::API)
       #
       # Request body: { "kyc_jws": "<compact JWS>" }
       # Success (200): { "kyc_verified": true }
-      # Failure (401/403): error envelope from Kiosk::Server::Errors.
+      # Failure (400/401/403): error envelope from Kiosk::Server::Errors — 400
+      # for a missing/malformed/non-object JSON body or a missing kyc_jws field
+      # (K-093), 401 for a missing/invalid agent token, 403 for a failed KYC
+      # verification.
       class KycAttestationController < ::ActionController::API
         def create
           identity = authenticate!

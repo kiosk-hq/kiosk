@@ -113,6 +113,29 @@ RSpec.describe Kiosk::Redteam::Client do
       end
     end
 
+    context "when the 402 gate carries no solvable challenges" do
+      it "does NOT resubmit and surfaces the 402 as a RegistrationError" do
+        # A 402 whose error envelope has no `challenges` array: the client
+        # cannot solve anything, so it must post exactly once (no resubmit)
+        # and register! must raise on the still-402 response.
+        calls = 0
+        stub_request(:post, "#{base_url}/kiosk/auth/register")
+          .to_return do
+            calls += 1
+            { status: 402,
+              body: JSON.generate(ok: false, error: { code: "pow_required" }),
+              headers: { "Content-Type" => "application/json" } }
+          end
+
+        expect {
+          client.register!(name: "no-challenges-agent", pow_difficulty: 1, pow: :solve)
+        }.to raise_error(Kiosk::Redteam::Client::RegistrationError, /expected 201, got 402/)
+
+        # Exactly one POST — the solve/resubmit branch was NOT taken.
+        expect(calls).to eq(1)
+      end
+    end
+
     context "with pow: :skip" do
       it "posts without a pow field even when difficulty > 0" do
         captured_body = nil

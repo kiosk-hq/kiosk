@@ -12,10 +12,10 @@ Gem::Specification.new do |spec|
     and asserts each attack is correctly blocked (HTTP 401/402/403 or a domain
     denial response).  A scenario that finds a real breach fails loudly.
 
-    Ships: an HTTP Client (register+SHA256-PoW, kyc, query/run/pay with RS256
-    mandate signing), a Scenario/Verdict/Runner framework, and — in Task 2 —
-    a library of generic attack scenarios parameterised by a per-provider
-    Profile.  Intended to back a `demo:redteam` rake task in each demo gem.
+    Ships: an HTTP Client (register + Equihash PoW, kyc, query/run/pay with
+    RS256 mandate signing), a Scenario/Verdict/Runner framework, and a library
+    of generic attack scenarios parameterised by a per-provider Profile.
+    Intended to back a `demo:redteam` rake task in each demo gem.
 
     No dependency on kiosk-core or Rails.
   DESC
@@ -25,7 +25,6 @@ Gem::Specification.new do |spec|
 
   spec.metadata["homepage_uri"]    = spec.homepage
   spec.metadata["source_code_uri"] = "https://github.com/kiosk-hq/kiosk"
-  spec.metadata["changelog_uri"]   = "https://github.com/kiosk-hq/kiosk/blob/main/kiosk-redteam/CHANGELOG.md"
   spec.metadata["bug_tracker_uri"] = "https://github.com/kiosk-hq/kiosk/issues"
 
   spec.files         = Dir.glob("lib/**/*") + %w[kiosk-redteam.gemspec]

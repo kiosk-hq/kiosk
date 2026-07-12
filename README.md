@@ -1,6 +1,6 @@
 # Kiosk — OSS reference implementation
 
-Apache-2.0 monorepo for [Kiosk](https://kiosk.tech) — the framework that turns a Postgres-backed business app into a production-grade agent surface (REST endpoint, multi-agent identity per user, app-layer-authorized data plane with opt-in Postgres RLS defense-in-depth, AP2 mandate trail).
+Apache-2.0 monorepo for [Kiosk](https://kiosk.tech) — the framework that turns a Postgres-backed business app into an agent surface (REST endpoint, multi-agent identity per user, app-layer-authorized data plane with opt-in Postgres RLS defense-in-depth, AP2 mandate trail).
 
 ## Layout
 

@@ -82,6 +82,11 @@ jobs:
             tasks: demo:walkthrough demo:isolation demo:redteam demo:schema
           - demo: kiosk-demo-getgrocery
             tasks: demo:shop demo:isolation demo:redteam demo:schema
+            # getgrocery uses the real Stripe adapter; its initializer aborts
+            # boot without a key. A dummy sk_test_ key lets demo:setup/demo:schema
+            # boot (K-087). demo:shop/isolation/redteam still need a real key or a
+            # stripe-mock binary — tracked separately.
+            stripe_key: sk_test_dummy
           - demo: kiosk-demo-hoteling
             tasks: demo:book demo:isolation demo:redteam demo:schema
           - demo: kiosk-demo-skooti
@@ -130,11 +135,24 @@ jobs:
 
       - name: Set up demo
         working-directory: ${{ matrix.demo }}
+        env:
+          STRIPE_SECRET_KEY: ${{ matrix.stripe_key }}
         run: bin/rails demo:setup
 
+      # Each demo task runs in its OWN bin/rails invocation. Demo servers are
+      # cleaned up at_exit (process end), so batching every task into one
+      # invocation leaves a later task probing a stale server booted with a
+      # different env (order-dependent flake, K-086).
       - name: Run demo flows
         working-directory: ${{ matrix.demo }}
-        run: bin/rails ${{ matrix.tasks }}
+        env:
+          STRIPE_SECRET_KEY: ${{ matrix.stripe_key }}
+        run: |
+          for task in ${{ matrix.tasks }}; do
+            echo "::group::$task"
+            bin/rails "$task"
+            echo "::endgroup::"
+          done
 
   e2e:
     name: kiosk OSS end-to-end

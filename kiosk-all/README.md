@@ -49,10 +49,9 @@ Why not bundled: test-support gems pull in `rspec`/`minitest` and host-test infr
 ```ruby
 gem "kiosk-user-idp-devise"      # or -warden, -jwt-bearer, -clerk, -auth0, …
 gem "kiosk-pay-stripe"           # or -paddle, …
-gem "kiosk-credentials-persona"  # or -onfido, -sumsub, … (only if you need KYC)
 ```
 
-Why not bundled: there is no «one PSP per provider» or «one IdP per provider» globally; bundling Stripe + Paddle + every IdP would pull five unused gems into every Gemfile. Providers pick per market (`kiosk-pay-*`) and per existing identity stack (`kiosk-user-idp-*`). See design spec §15.4 — this is the same reason `kiosk-pay-all` is deliberately not provided.
+Why not bundled: there is no «one PSP per provider» or «one IdP per provider» globally; bundling Stripe + Paddle + every IdP would pull five unused gems into every Gemfile. Providers pick per market (`kiosk-pay-*`) and per existing identity stack (`kiosk-user-idp-*`) — this is the same reason `kiosk-pay-all` is deliberately not provided.
 
 ## Status
 

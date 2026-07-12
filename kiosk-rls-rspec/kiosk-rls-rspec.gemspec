@@ -18,7 +18,7 @@ Gem::Specification.new do |spec|
     later upgrades to live-LLM mode).
 
     Ships the matchers `be_rls_denied` and `be_quota_exceeded` for asserting
-    the structured exit-code errors described in design spec §5.2.
+    the structured exit-code errors.
   DESC
   spec.homepage      = "https://kiosk.tech"
   spec.license       = "Apache-2.0"

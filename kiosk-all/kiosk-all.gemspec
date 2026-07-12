@@ -19,10 +19,10 @@ Gem::Specification.new do |spec|
       - Test harnesses (kiosk-test-support, kiosk-rls-rspec,
         kiosk-rls-minitest) — host picks one per stack and adds it to
         the dev/test group of its Gemfile.
-      - Adapter gems (kiosk-user-idp-*, kiosk-pay-*,
-        kiosk-credentials-*) — providers pick per market/stack.
+      - Adapter gems (kiosk-user-idp-*, kiosk-pay-*) —
+        providers pick per market/stack.
 
-    See https://kiosk.tech and design spec §15.4.
+    See https://kiosk.tech.
   DESC
   spec.homepage      = "https://kiosk.tech"
   spec.license       = "Apache-2.0"

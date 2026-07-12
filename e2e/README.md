@@ -17,9 +17,9 @@ Reproducible end-to-end test of the Kiosk OSS gems. The same script (`run.sh`) r
 
 ## What it does NOT verify (deferred)
 
-- **RLS.** Path C removes raw SQL entirely — there is no arbitrary-SQL surface. Per-user isolation is enforced app-layer in registered query definitions (the `WHERE user_id = kiosk.current_user_id()` in `my_appointments`). RLS is optional and not used in this fixture; satellite-mode role separation per spec §7.6 lands in a follow-up. The `app_role` pre-creation in `run.sh` is kept harmless for forward compatibility.
+- **RLS.** Path C removes raw SQL entirely — there is no arbitrary-SQL surface. Per-user isolation is enforced app-layer in registered query definitions (the `WHERE user_id = kiosk.current_user_id()` in `my_appointments`). RLS is optional and not used in this fixture; satellite-mode role separation lands in a follow-up. The `app_role` pre-creation in `run.sh` is kept harmless for forward compatibility.
 - **Live PSP capture.** The pay flow runs against `StubPsp` (deterministic in-process provider) — no real Stripe call here; the Stripe adapter is `kiosk-pay-stripe`.
-- **`events` verb** — stubbed (`NotImplementedError`); `schema` is implemented.
+- **Streaming.** There is no streaming/events verb (removed K-083); the wire surface is `query`, `run`, `pay`, `schema`.
 - **Multi-agent revocation** flows.
 - **Live LLM agent integration** — that's the `kiosk-agent-test` companion gem's job.
 

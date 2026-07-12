@@ -38,9 +38,12 @@ module Kiosk
       #
       # @param name           [String]           agent display name
       # @param role           [String]           "customer" (default)
-      # @param pow_difficulty [Integer]          required leading-zero bits (0 = none)
+      # @param pow_difficulty [Integer]          caller-side flag: >0 means the
+      #   provider is expected to gate registration with Equihash (0 = none).
+      #   The actual Equihash parameters (n, k) ride in the server's 402
+      #   challenges; this integer does not encode leading-zero bits.
       # @param pow            [:solve, :skip, String]
-      #   :solve  — auto-solve PoW when pow_difficulty > 0 (omit field when 0)
+      #   :solve  — auto-solve each 402 Equihash challenge and resubmit
       #   :skip   — never include the pow field (test missing-proof)
       #   String  — send this exact value verbatim (test bad-proof)
       # @param wire_role      [String, nil]

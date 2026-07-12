@@ -9,7 +9,7 @@ require "kiosk/redteam/scenario"
 require "kiosk/redteam/runner"
 require "kiosk/redteam/profile"
 
-# Scenario library (Task 2)
+# Scenario library
 require "kiosk/redteam/scenarios/cross_tenant_read"
 require "kiosk/redteam/scenarios/forged_user_id"
 require "kiosk/redteam/scenarios/mandate_principal_swap"

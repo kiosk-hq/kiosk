@@ -5,21 +5,25 @@ module Kiosk
     # Registry mapping algorithm names to PoW backend objects.
     #
     # A backend must respond to:
-    #   .params(d:, **) -> Hash    — build challenge params for a difficulty tier
+    #   .params(n:, k:) -> Hash    — build the challenge params for the algorithm
+    #                                (equihash memory is fixed by (n,k); there is
+    #                                no continuous difficulty dial — the policy
+    #                                escalates by PROOF COUNT, not by params)
     #   .verify(salt:, params:, nonce:) -> Boolean — verify a submitted proof
     #
-    # kiosk-pow registers itself here:
-    #   Kiosk::Reputation::Backends.register("argon2id", Kiosk::Pow)
+    # kiosk-pow-equihash registers itself here (the shipped default backend):
+    #   Kiosk::Reputation::Backends.register("equihash", Kiosk::Pow::Equihash)
     #
-    # kiosk-pow-cuckoo (Phase 2) will register:
-    #   Kiosk::Reputation::Backends.register("cuckoo", Kiosk::PowCuckoo)
+    # Legacy/alternative backends register under their own name, e.g.
+    # kiosk-pow (Argon2id, legacy) as "argon2id", or a future
+    # kiosk-pow-cuckoo as "cuckoo".
     module Backends
       @registry = {}
 
       class << self
         # Register a backend under an algorithm name.
         #
-        # @param alg_name [String] name advertised in the challenge (e.g. "argon2id")
+        # @param alg_name [String] name advertised in the challenge (e.g. "equihash")
         # @param backend  [Object] must respond to .params and .verify
         def register(alg_name, backend)
           @registry[alg_name.to_s] = backend

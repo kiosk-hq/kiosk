@@ -10,9 +10,10 @@ require "kiosk/reputation/policies/rate_and_reputation"
 module Kiosk
   # Policy + wire-challenge layer for Kiosk's proof-of-work system.
   #
-  # kiosk-reputation is backend-agnostic: concrete PoW algorithms (Argon2id,
-  # Cuckoo Cycle, …) register themselves via {Backends.register}. This gem
-  # does not depend on kiosk-pow or kiosk-core.
+  # kiosk-reputation is backend-agnostic: concrete PoW algorithms (Equihash —
+  # the shipped default, Argon2id legacy, Cuckoo Cycle, …) register themselves
+  # via {Backends.register}. This gem does not depend on any PoW gem or
+  # kiosk-core.
   #
   # == Key components
   #
@@ -27,7 +28,7 @@ module Kiosk
   # {Challenge.verify} always performs cheap checks first:
   #   1. HMAC sig + request-binding (constant-time compare)  → :bad_sig
   #   2. Expiry check                                         → :expired
-  #   3. Backend .verify (one Argon2id eval, costs m KiB)    → :ok / :bad_proof
+  #   3. Backend .verify (one Equihash proof check)          → :ok / :bad_proof
   #
   # Floods of forged or expired proofs are rejected at step 1/2 without
   # burning an expensive backend evaluation.

@@ -34,8 +34,8 @@ module Kiosk
     # JwtOrStubIdp).
     attr_accessor :agent_idp
 
-    # Payment PSP adapter instance — handles authorize / capture / refund of
-    # AP2 mandates (see {Kiosk::PaymentProviders::Base}). Default nil; the
+    # Payment PSP adapter instance — captures AP2 cart mandates into PSP
+    # settlements (see {Kiosk::PaymentProviders::Base}). Default nil; the
     # provider selects one per market (kiosk-pay-stripe, kiosk-pay-paddle, …).
     attr_accessor :payment_provider
 

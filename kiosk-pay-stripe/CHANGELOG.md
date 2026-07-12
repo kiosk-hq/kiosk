@@ -1,4 +1,4 @@
 # Changelog
 
 ## [Unreleased]
-- Initial Stripe PSP adapter: capture / refund (test mode).
+- Initial Stripe PSP adapter: capture (test mode).

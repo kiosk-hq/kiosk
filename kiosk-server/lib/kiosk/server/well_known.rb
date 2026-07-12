@@ -46,7 +46,7 @@ module Kiosk
           capabilities: Array(config.capabilities),
           min_client:   config.min_client,
           issuer:       config.issuer,
-          owner:        config.owner || {},
+          owner:        config.owner,
         }
         if config.skill_sha256
           kiosk[:skill] = { url: config.skill_url, sha256: config.skill_sha256 }

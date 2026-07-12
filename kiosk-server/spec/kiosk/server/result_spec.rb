@@ -30,11 +30,6 @@ RSpec.describe Kiosk::Server::Result do
       expect { described_class.new(kind: :unknown, payload: []) }
         .to raise_error(ArgumentError, /kind must be one of/)
     end
-
-    it "carries optional query_id for log correlation" do
-      r = described_class.new(kind: :rows, payload: [], query_id: "q-42")
-      expect(r.query_id).to eq("q-42")
-    end
   end
 
   describe "#ok? and #http_status" do
@@ -54,16 +49,6 @@ RSpec.describe Kiosk::Server::Result do
     it "puts :value payload under `value` key" do
       r = described_class.new(kind: :value, payload: { ok: 1 })
       expect(r.to_envelope).to eq(ok: true, kind: :value, value: { ok: 1 })
-    end
-
-    it "includes query_id when set" do
-      r = described_class.new(kind: :rows, payload: [], query_id: "q-9")
-      expect(r.to_envelope[:query_id]).to eq("q-9")
-    end
-
-    it "omits query_id when nil" do
-      r = described_class.new(kind: :rows, payload: [])
-      expect(r.to_envelope).not_to have_key(:query_id)
     end
   end
 

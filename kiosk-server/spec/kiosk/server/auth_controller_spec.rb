@@ -118,3 +118,113 @@ RSpec.describe "AuthController#revoke (revoke-all-sessions)" do
     expect(Kiosk.configuration.revocation_store.revoked?(agent_id: "a-2", iat: 0)).to be(true)
   end
 end
+
+# ─── K-163: challenge / register / login HTTP-boundary error branches ─────
+#
+# The success paths of these actions are covered end-to-end by the auth-flow
+# and e2e specs; these examples pin the controller's OWN error guards — the
+# missing-public_key 400, missing-field 400, and malformed-body 400 — so they
+# render a clean 4xx envelope rather than escaping as a 500.
+RSpec.describe "AuthController auth-surface error branches (K-163)" do
+  def dispatch(controller, action, env)
+    status, _headers, body = controller.action(action).call(env)
+    raw = +""
+    body.each { |chunk| raw << chunk }
+    [status, raw.empty? ? {} : JSON.parse(raw, symbolize_names: true)]
+  end
+
+  def post_env(path, raw_body)
+    Rack::MockRequest.env_for(path, method: "POST", input: raw_body,
+                              "CONTENT_TYPE" => "application/json")
+  end
+
+  before do
+    Kiosk.configure do |c|
+      c.signing_key = Kiosk::Server::SigningKey.generate
+      c.issuer      = "https://demo.example"
+      c.roles       = %i[customer]
+      c.agent_idp   = Kiosk::Server::AgentIdentityProviders::DefaultAgentIdp.new
+    end
+  end
+
+  # ─── GET /auth/challenge missing-public_key guard ───────────────────────
+  describe "#challenge" do
+    it "returns 400 bad_request when public_key is absent" do
+      env = Rack::MockRequest.env_for("/kiosk/auth/challenge")
+      status, body = dispatch(Kiosk::Server::AuthController, :challenge, env)
+      expect(status).to eq(400)
+      expect(body.dig(:error, :code)).to eq("bad_request")
+      expect(body.dig(:error, :message)).to include("public_key")
+    end
+
+    it "returns 400 bad_request when public_key is blank" do
+      env = Rack::MockRequest.env_for("/kiosk/auth/challenge?public_key=")
+      status, body = dispatch(Kiosk::Server::AuthController, :challenge, env)
+      expect(status).to eq(400)
+      expect(body.dig(:error, :code)).to eq("bad_request")
+    end
+  end
+
+  # ─── POST /auth/register body/field guards ──────────────────────────────
+  describe "#register" do
+    it "returns 400 bad_request for an EMPTY body (not 500)" do
+      status, body = dispatch(Kiosk::Server::AuthController, :register, post_env("/kiosk/auth/register", ""))
+      expect(status).to eq(400)
+      expect(body.dig(:error, :code)).to eq("bad_request")
+    end
+
+    it "returns 400 bad_request for INVALID JSON (not 500)" do
+      status, body = dispatch(Kiosk::Server::AuthController, :register,
+                              post_env("/kiosk/auth/register", "{not valid json"))
+      expect(status).to eq(400)
+      expect(body.dig(:error, :code)).to eq("bad_request")
+    end
+
+    it "returns 400 bad_request for a non-object JSON body (not 500)" do
+      status, body = dispatch(Kiosk::Server::AuthController, :register,
+                              post_env("/kiosk/auth/register", "[1,2,3]"))
+      expect(status).to eq(400)
+      expect(body.dig(:error, :code)).to eq("bad_request")
+    end
+
+    it "returns 400 bad_request naming the missing field when public_key is omitted" do
+      status, body = dispatch(Kiosk::Server::AuthController, :register,
+                              post_env("/kiosk/auth/register", JSON.generate(signed: "x")))
+      expect(status).to eq(400)
+      expect(body.dig(:error, :code)).to eq("bad_request")
+      expect(body.dig(:error, :message)).to include("public_key")
+    end
+
+    it "returns 400 bad_request naming the missing field when signed is omitted" do
+      status, body = dispatch(Kiosk::Server::AuthController, :register,
+                              post_env("/kiosk/auth/register", JSON.generate(public_key: "x")))
+      expect(status).to eq(400)
+      expect(body.dig(:error, :code)).to eq("bad_request")
+      expect(body.dig(:error, :message)).to include("signed")
+    end
+  end
+
+  # ─── POST /auth/login body/field guards ─────────────────────────────────
+  describe "#login" do
+    it "returns 400 bad_request for an EMPTY body (not 500)" do
+      status, body = dispatch(Kiosk::Server::AuthController, :login, post_env("/kiosk/auth/login", ""))
+      expect(status).to eq(400)
+      expect(body.dig(:error, :code)).to eq("bad_request")
+    end
+
+    it "returns 400 bad_request for INVALID JSON (not 500)" do
+      status, body = dispatch(Kiosk::Server::AuthController, :login,
+                              post_env("/kiosk/auth/login", "{not valid json"))
+      expect(status).to eq(400)
+      expect(body.dig(:error, :code)).to eq("bad_request")
+    end
+
+    it "returns 400 bad_request naming the missing field when signed is omitted" do
+      status, body = dispatch(Kiosk::Server::AuthController, :login,
+                              post_env("/kiosk/auth/login", JSON.generate(public_key: "x")))
+      expect(status).to eq(400)
+      expect(body.dig(:error, :code)).to eq("bad_request")
+      expect(body.dig(:error, :message)).to include("signed")
+    end
+  end
+end

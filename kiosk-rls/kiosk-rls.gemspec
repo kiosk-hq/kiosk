@@ -16,8 +16,8 @@ Gem::Specification.new do |spec|
     LEVEL SECURITY, GRANT, CREATE POLICY, COMMENT ON TABLE) and runs inside
     the migration's transaction via the host's `#execute` method.
 
-    Adds RLS-relevant fields to `Kiosk::Configuration`: `app_role`,
-    `system_role`, `schema`.
+    Adds the RLS-only `system_role` field to `Kiosk::Configuration`
+    (`app_role` and `schema` live in kiosk-core).
 
     No PostgreSQL runtime dependency — pure SQL generation. The host
     provides the connection.

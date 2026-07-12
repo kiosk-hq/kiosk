@@ -30,7 +30,8 @@ module Kiosk
         )
       end
 
-      # Mandatory: table comment surfaced through `sub <host> help <table>`.
+      # Mandatory: table comment emitted as a PostgreSQL COMMENT ON TABLE,
+      # introspectable via standard Postgres tooling (`\d+`, `obj_description`).
       def comment(text)
         @comment_text = text&.to_s
       end

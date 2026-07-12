@@ -9,7 +9,6 @@ All notable changes follow [Keep a Changelog](https://keepachangelog.com/en/1.1.
 - Initial skeleton.
 - `Kiosk::TestHelpers` extended with the Minitest convenience surface — `include Kiosk::TestHelpers` in a `Minitest::Test` subclass mixes in the journey DSL and the `assert_rls_denied` / `assert_quota_exceeded` assertions.
 - Negative-form assertions `refute_rls_denied` and `refute_quota_exceeded` plus the spec-DSL `must_raise_*` / `wont_raise_*` analogues.
-- Per-test executor reset hook — runs in `before_setup` so user `setup` methods see a fresh `Kiosk::TestHelpers.executor` slot.
 
 ### Notes on the three-gem split
 

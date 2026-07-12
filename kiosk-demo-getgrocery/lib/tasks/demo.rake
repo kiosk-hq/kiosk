@@ -273,10 +273,11 @@ namespace :demo do
     distinctive order-ownership mutation gates:
 
       HEADLINE: B cannot schedule_delivery on A's order (order-ownership gate)
-      Assertion 3: B's my_orders excludes A's order (cross-tenant read blocked)
-      Assertion 4: B's my_orders includes own order (positive control)
-      Assertion 5: B's my_orders still excludes A's order after positive control
-      Assertion 6: A's my_orders excludes B's order
+      Assertion 1: B's my_orders excludes A's order (cross-tenant read blocked)
+      Assertion 2: B's my_orders includes own order (positive control)
+      Assertion 3: B's my_orders still excludes A's order after positive control
+      Assertion 4: A's my_orders excludes B's order
+      Assertion 5: DB orders.user_id for forged order == B (forged arg ignored)
 
     Exits 0 if all assertions hold (isolation works); exits 1 on failure.
     A red assertion = real isolation hole: fix the app, not the test.

@@ -47,5 +47,27 @@ RSpec.describe Kiosk::PaymentProviders::Stripe do
       result = adapter.capture(cart)
       expect(result[:psp_reference]).to eq("pi_auto")
     end
+
+    it "charges the existing saved card without re-provisioning when the customer already has one" do
+      adapter = described_class.new(
+        api_key:           "sk_test_x",
+        customer_resolver: ->(_uid) { "cus_existing" }, # customer already on file
+        test_autocard:     true,
+      )
+      cart = double("CartMandate", user_id: "u", total_amount_cents: 500, currency: "eur", id: "cart-1")
+
+      # The customer already has a saved card, so the auto-provision short-circuit
+      # is skipped: attach_test_card must NOT be called and the on-file card is charged.
+      expect(adapter).not_to receive(:attach_test_card)
+      allow(adapter).to receive(:saved_payment_method_for).with("cus_existing").and_return("pm_onfile")
+
+      expect(::Stripe::PaymentIntent).to receive(:create).with(
+        hash_including(customer: "cus_existing", payment_method: "pm_onfile", off_session: true),
+        anything,
+      ).and_return(double("PI", id: "pi_existing", amount_received: 500, created: 0))
+
+      result = adapter.capture(cart)
+      expect(result[:psp_reference]).to eq("pi_existing")
+    end
   end
 end

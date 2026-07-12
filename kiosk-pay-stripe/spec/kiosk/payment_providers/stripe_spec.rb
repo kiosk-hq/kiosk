@@ -294,32 +294,6 @@ RSpec.describe Kiosk::PaymentProviders::Stripe do
     end
   end
 
-  # ── authorize ─────────────────────────────────────────────────────────────
-
-  describe "#authorize" do
-    it "creates a manual-capture hold using the assistant-presented payment method" do
-      pi = double("PaymentIntent", id: "pi_hold", client_secret: "cs_1", status: "requires_capture")
-
-      expect(::Stripe::PaymentIntent).to receive(:create).with(
-        {
-          amount:         1599,
-          currency:       "eur",
-          payment_method: "pm_card_visa",
-          confirm:        true,
-          capture_method: "manual",
-          metadata:       { cart_mandate_id: "cart-1" },
-        },
-        { idempotency_key: "cart-1-auth" },
-      ).and_return(pi)
-
-      result = adapter.authorize(cart_mandate, payment_method: "pm_card_visa")
-
-      expect(result[:stripe_payment_intent_id]).to eq("pi_hold")
-      expect(result[:client_secret]).to eq("cs_1")
-      expect(result[:status]).to eq("requires_capture")
-    end
-  end
-
   # ── refund ────────────────────────────────────────────────────────────────
 
   describe "#refund" do

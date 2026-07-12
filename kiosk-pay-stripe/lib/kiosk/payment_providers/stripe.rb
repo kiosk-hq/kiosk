@@ -171,34 +171,6 @@ module Kiosk
         }
       end
 
-      # Authorise a cart mandate: create a manual-capture hold on the PSP.
-      #
-      # @param cart_mandate [Kiosk::Mandate::CartMandate]
-      # @param payment_method [String] assistant-presented PSP payment-method reference
-      # @return [Hash] { stripe_payment_intent_id:, client_secret:, status: }
-      def authorize(cart_mandate, payment_method:)
-        pm = non_empty(payment_method) || non_empty(@test_payment_method)
-        raise ArgumentError, "no payment_method supplied" if pm.nil?
-
-        intent = ::Stripe::PaymentIntent.create(
-          {
-            amount:         cart_mandate.total_amount_cents,
-            currency:       cart_mandate.currency,
-            payment_method: pm,
-            confirm:        true,
-            capture_method: "manual",
-            metadata:       { cart_mandate_id: cart_mandate.id },
-          },
-          { idempotency_key: "#{cart_mandate.id}-auth" },
-        )
-
-        {
-          stripe_payment_intent_id: intent.id,
-          client_secret:            intent.client_secret,
-          status:                   intent.status,
-        }
-      end
-
       # @param settlement [Kiosk::Mandate::Settlement]
       # @param amount_cents [Integer, nil] partial refund; nil = full
       # @return [Hash] { refund_id: }

@@ -171,17 +171,6 @@ module Kiosk
         }
       end
 
-      # @param settlement [Kiosk::Mandate::Settlement]
-      # @param amount_cents [Integer, nil] partial refund; nil = full
-      # @return [Hash] { refund_id: }
-      def refund(settlement, amount_cents = nil)
-        params = { payment_intent: settlement.psp_reference }
-        params[:amount] = amount_cents unless amount_cents.nil?
-
-        refund = ::Stripe::Refund.create(params)
-        { refund_id: refund.id }
-      end
-
       # Programmatically attach a test card to the principal's Customer,
       # simulating a completed SetupIntent without a human at a hosted page.
       # Used by automated `rake demo` and integration specs.

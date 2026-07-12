@@ -11,9 +11,9 @@ Gem::Specification.new do |spec|
   spec.summary     = "Stripe PSP adapter for the Kiosk framework"
   spec.description = <<~DESC
     kiosk-pay-stripe is the open-source Stripe payment adapter for Kiosk.
-    It implements Kiosk::PaymentProviders::Base (authorize / capture /
-    refund) over Stripe PaymentIntents, settling AP2 cart mandates. Stripe
-    is the default global OSS PSP; regional PSPs ship as separate gems.
+    It implements Kiosk::PaymentProviders::Base#capture over Stripe
+    PaymentIntents, settling AP2 cart mandates. Stripe is the default
+    global OSS PSP; regional PSPs ship as separate gems.
   DESC
   spec.homepage    = "https://kiosk.tech"
   spec.license     = "Apache-2.0"

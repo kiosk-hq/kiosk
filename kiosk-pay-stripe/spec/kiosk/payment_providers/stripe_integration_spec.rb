@@ -33,8 +33,8 @@ RSpec.describe Kiosk::PaymentProviders::Stripe, :integration do
     )
   end
 
-  describe "#attach_test_card + #capture + #refund (full off_session round-trip)" do
-    it "attaches a test card then captures and refunds a real test payment" do
+  describe "#attach_test_card + #capture (full off_session round-trip)" do
+    it "attaches a test card then captures a real test payment" do
       # Simulate a completed SetupIntent programmatically (no human at hosted page).
       cus_id = adapter.attach_test_card(user_id: user_id)
       expect(cus_id).to start_with("cus_")
@@ -47,15 +47,6 @@ RSpec.describe Kiosk::PaymentProviders::Stripe, :integration do
       captured = adapter.capture(cart_mandate, payment_method: nil)
       expect(captured[:settled_amount_cents]).to eq(1599)
       expect(captured[:psp_reference]).to start_with("pi_")
-
-      settlement = Kiosk::Mandate::Settlement.new(
-        id: "s", cart_mandate_id: cart_mandate.id, user_id: user_id, agent_id: "a",
-        issuer: "https://demo.example", psp_reference: captured[:psp_reference],
-        settled_amount_cents: 1599, currency: "eur", settled_at: nil, raw_jws: "jws",
-      )
-
-      refunded = adapter.refund(settlement)
-      expect(refunded[:refund_id]).to start_with("re_")
     end
   end
 

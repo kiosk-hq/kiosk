@@ -28,15 +28,6 @@ RSpec.describe Kiosk::PaymentProviders::Stripe do
     )
   end
 
-  let(:settlement) do
-    Kiosk::Mandate::Settlement.new(
-      id: "pay-1", cart_mandate_id: "cart-1", user_id: "user-1",
-      agent_id: "agent-1", issuer: "https://demo.example",
-      psp_reference: "pi_123", settled_amount_cents: 1599,
-      currency: "eur", settled_at: nil, raw_jws: "jws",
-    )
-  end
-
   # ── setup_url ────────────────────────────────────────────────────────────────
 
   describe "#setup_url" do
@@ -291,26 +282,6 @@ RSpec.describe Kiosk::PaymentProviders::Stripe do
 
         resolver_adapter.capture(cart_mandate, payment_method: "pm_explicit")
       end
-    end
-  end
-
-  # ── refund ────────────────────────────────────────────────────────────────
-
-  describe "#refund" do
-    it "refunds the full amount when amount_cents is nil" do
-      expect(::Stripe::Refund).to receive(:create).with(
-        { payment_intent: "pi_123" },
-      ).and_return(double("Refund", id: "re_1"))
-
-      expect(adapter.refund(settlement)).to eq(refund_id: "re_1")
-    end
-
-    it "refunds a partial amount when given" do
-      expect(::Stripe::Refund).to receive(:create).with(
-        { payment_intent: "pi_123", amount: 500 },
-      ).and_return(double("Refund", id: "re_2"))
-
-      expect(adapter.refund(settlement, 500)).to eq(refund_id: "re_2")
     end
   end
 

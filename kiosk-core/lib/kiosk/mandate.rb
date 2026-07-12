@@ -21,12 +21,11 @@ module Kiosk
   # `/.well-known/kiosk.json` — mismatch is treated as forged
   # provenance and rejected.
   #
-  # After the provider's PSP captures the charge it emits a Settlement — an
-  # unsigned server-minted receipt attesting «PSP settled this cart»:
-  #
-  #   Settlement  — PSP receipt: psp_reference, settled amount, timestamp.
-  #                 Not signed by the assistant; issued by the provider after
-  #                 capture. Used by post-pay gates ("was it paid?").
+  # After the provider's PSP captures the charge it records a settlement — an
+  # unsigned server-minted receipt attesting «PSP settled this cart»
+  # (psp_reference, settled amount, timestamp). That receipt is not a signed
+  # mandate and has no value type here: the PSP adapter returns it as a plain
+  # hash and kiosk-server persists it straight into the `settlements` table.
   #
   # The value objects below carry the parsed/verified content; the raw JWS
   # string lives in the corresponding Postgres tables and on the wire.
@@ -47,13 +46,6 @@ module Kiosk
     PaymentMandate = Data.define(
       :id, :cart_mandate_id, :user_id, :agent_id, :issuer, :payment_method,
       :amount_cents, :currency, :expires_at, :created_at, :raw_jws
-    )
-
-    # PSP settlement receipt — server-minted after successful capture.
-    # Not a signed mandate; records what the PSP actually settled.
-    Settlement = Data.define(
-      :id, :cart_mandate_id, :user_id, :agent_id, :issuer, :psp_reference,
-      :settled_amount_cents, :currency, :settled_at, :raw_jws
     )
   end
 end

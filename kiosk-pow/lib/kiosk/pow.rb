@@ -10,7 +10,7 @@ module Kiosk
   #
   # Provider-side Ruby verify + the shipped Python solver (solve.py).
   # The wire protocol is algorithm-agnostic; kiosk-reputation dispatches here
-  # when {NAME} is the demanded algorithm.
+  # when "argon2id" (NAME) is the demanded algorithm.
   #
   # == Canonical PoW computation (byte-identical in Ruby verify and Python solve)
   #

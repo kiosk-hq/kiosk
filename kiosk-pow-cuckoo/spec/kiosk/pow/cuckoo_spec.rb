@@ -407,6 +407,26 @@ RSpec.describe Kiosk::Pow::Cuckoo do
         expect(result).to be(true)
       end
 
+      it "accepts when a non-trivial target is set and the cycle-hash satisfies it" do
+        # Realistic target-set-AND-passes path: derive the exact cycle-hash the
+        # verifier computes (blake2b-256 of the sorted cycle edges as LE u64,
+        # big-endian integer) and set target one above it — a specific 256-bit
+        # value strictly between 0 and max that this proof genuinely clears.
+        cycle_packed = KAT_CYCLE.sort.pack("Q<*")
+        hash_int     = described_class.blake2b256(cycle_packed)
+                                      .unpack("C*").reduce(0) { |acc, b| (acc << 8) | b }
+        target       = hash_int + 1   # hash_int < target → passes the check
+        expect(target).to be > 0
+        expect(target).to be < (1 << 256)
+
+        p = described_class.params(edgebits: KAT_EDGEBITS, target: target)
+        result = described_class.verify(
+          salt: KAT_SALT, params: p,
+          nonce: { header_nonce: KAT_NONCE, cycle: KAT_CYCLE }
+        )
+        expect(result).to be(true)
+      end
+
       it "rejects when target is 0 (nothing passes)" do
         p = described_class.params(edgebits: KAT_EDGEBITS, target: 0)
         result = described_class.verify(

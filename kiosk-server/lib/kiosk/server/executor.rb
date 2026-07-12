@@ -153,6 +153,15 @@ module Kiosk
         raise Errors::BadRequest, "args.cart_mandate_jws required"     if raw_cart.nil?    || raw_cart.to_s.empty?
         raise Errors::BadRequest, "args.payment_mandate_jws required"  if raw_payment.nil? || raw_payment.to_s.empty?
 
+        # Payment is agent-only: the AP2 mandate chain is signed by the agent's
+        # payment key. A non-agent principal (e.g. a web/mobile user_idp session,
+        # agent_id nil per ADR-0013) has no payment key, so reject it cleanly
+        # here rather than letting agent_payment_key(nil) raise InvalidToken →
+        # HTTP 500 downstream (K-114; same 500-not-4xx class as K-070/K-093).
+        if identity.agent_id.nil?
+          raise Errors::Forbidden, "payment requires an agent identity (mandates are agent-signed)"
+        end
+
         provider = Kiosk.configuration.payment_provider
         raise Errors::Forbidden, "no payment_provider configured" if provider.nil?
 

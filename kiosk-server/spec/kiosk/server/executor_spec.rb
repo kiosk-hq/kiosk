@@ -306,6 +306,17 @@ RSpec.describe Kiosk::Server::Executor do
         .to raise_error(Kiosk::Server::Errors::Forbidden, /cap/)
     end
 
+    # K-114: an agentless principal (user_idp web/mobile session, agent_id nil
+    # per ADR-0013) cannot pay — mandates are agent-signed. Reject with a clean
+    # 403, not a 500 from agent_payment_key(nil) deep in mandate verification.
+    it "rejects an agentless caller (agent_id nil) with a clean 403 before verifying mandates" do
+      agentless = build_identity(actor: "human", agent_id: nil)
+      expect(Kiosk::Server::MandateVerifier).not_to receive(:verify_intent)
+
+      expect { described_class.call(kind: :pay, args: valid_args, identity: agentless, connection: connection) }
+        .to raise_error(Kiosk::Server::Errors::Forbidden, /agent identity/) { |e| expect(e.http_status).to eq(403) }
+    end
+
     it "does not capture when phase-1 persistence raises a unique violation" do
       stub_const("ActiveRecord::RecordNotUnique", Class.new(StandardError))
       allow_any_instance_of(described_class).to receive(:persist_intent_mandate)

@@ -155,6 +155,31 @@ RSpec.describe "wire-surface controller auth" do
       expect(status).to eq(401)
       expect(body.dig(:error, :code)).to eq("unauthenticated")
     end
+
+    # K-093: an authenticated request with a malformed body must be a clean 400
+    # BadRequest, not a 500. The parse previously ran outside the Errors::Base
+    # rescue, so an empty body (JSON::ParserError) leaked as an unhandled 500.
+    def kyc_env_with_body(input)
+      bearer_env("/kiosk/agents/kyc", "opaque-custom-token",
+                 method: "POST", input: input, "CONTENT_TYPE" => "application/json")
+    end
+
+    it "returns 400 BadRequest (not 500) for an EMPTY body on an authenticated request" do
+      Kiosk.configure { |c| c.agent_idp = custom_idp }
+
+      status, body = dispatch(Kiosk::Server::KycAttestationController, :create, kyc_env_with_body(""))
+      expect(status).to eq(400)
+      expect(body.dig(:error, :code)).to eq("bad_request")
+    end
+
+    it "returns 400 BadRequest (not 500) for a scalar/array body (TypeError on body[:kyc_jws])" do
+      Kiosk.configure { |c| c.agent_idp = custom_idp }
+
+      status, body = dispatch(Kiosk::Server::KycAttestationController, :create,
+                              kyc_env_with_body("[1,2,3]"))
+      expect(status).to eq(400)
+      expect(body.dig(:error, :code)).to eq("bad_request")
+    end
   end
 
   # ─── ADR-0013: zero-config default idp + user_idp fallback on the wire ──

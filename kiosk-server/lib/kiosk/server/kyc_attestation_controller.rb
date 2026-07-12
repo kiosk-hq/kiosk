@@ -23,7 +23,7 @@ if defined?(::ActionController::API)
       class KycAttestationController < ::ActionController::API
         def create
           identity = authenticate!
-          body     = JSON.parse(request.raw_post, symbolize_names: true)
+          body     = parse_body!
           raw_jws  = body[:kyc_jws] or raise Errors::BadRequest.new("missing field: kyc_jws")
 
           KycVerifier.verify(raw_jws: raw_jws, identity: identity)
@@ -36,6 +36,24 @@ if defined?(::ActionController::API)
         end
 
         private
+
+        # Parse the request body as a JSON object (K-093). Mirrors
+        # WireController/AuthController#parse_body!: an empty body, malformed
+        # JSON, or a non-object (scalar/array) body is a 400 BadRequest, never
+        # a 500 — previously the bare JSON.parse ran outside the Errors::Base
+        # rescue, so JSON::ParserError / TypeError (body[:kyc_jws] on an Array)
+        # leaked as an unhandled 500.
+        def parse_body!
+          raw = request.raw_post
+          raise Errors::BadRequest, "request body must be a JSON object" if raw.nil? || raw.empty?
+
+          parsed = JSON.parse(raw, symbolize_names: true)
+          raise Errors::BadRequest, "request body must be a JSON object" unless parsed.is_a?(Hash)
+
+          parsed
+        rescue JSON::ParserError => e
+          raise Errors::BadRequest, "invalid JSON body: #{e.message}"
+        end
 
         # KYC attestation is an AGENT-only surface: the effective agent IdP
         # (configured override or the bundled default — ADR-0013; K-071:

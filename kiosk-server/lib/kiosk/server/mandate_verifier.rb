@@ -86,6 +86,17 @@ module Kiosk
           raise Errors::Forbidden.new("cart not bound to the intent",
                                       hint: "expected intent_mandate_id #{intent.id.inspect}")
         end
+        # Currency guard (K-101): the cap comparison is meaningless across
+        # currencies — 4999 "USD" is NOT within a 5000 "EUR" cap. verify_payment
+        # already checks amount AND currency together; the intent→cart cap must
+        # do the same, or an agent could bypass a EUR cap by pricing the cart in
+        # a weaker unit. Reject the mismatch before comparing the amounts.
+        if cart.currency != intent.currency
+          raise Errors::Forbidden.new(
+            "cart currency does not match intent cap currency",
+            hint: "cart #{cart.currency.inspect} != intent #{intent.currency.inspect}",
+          )
+        end
         if cart.total_amount_cents.to_i > intent.cap_amount_cents.to_i
           raise Errors::Forbidden.new(
             "cart total exceeds intent cap",
@@ -114,7 +125,15 @@ module Kiosk
         if payload[:iss] != issuer
           raise Errors::Forbidden.new("mandate issuer mismatch", hint: "expected #{issuer.inspect}")
         end
-        unless payload[:agent_id] == identity.agent_id && payload[:user_id] == identity.user_id
+        # Compare the principal as STRING on BOTH sides (K-092). The agent
+        # signs the mandate's `user_id`/`agent_id` with whatever the register
+        # response returned (a String — AgentRegistration stringifies user_id),
+        # but on a bigint-PK host the authenticated {Kiosk::Identity} carries
+        # the raw Integer that the token's `sub` round-trips as. A strict `==`
+        # ("42" == 42) is always false, so every mandate on a bigint host was
+        # wrongly Forbidden. Normalising to string keeps uuid hosts unchanged.
+        unless payload[:agent_id].to_s == identity.agent_id.to_s &&
+               payload[:user_id].to_s == identity.user_id.to_s
           raise Errors::Forbidden.new(
             "mandate principal mismatch",
             hint: "mandate must be signed for the authenticated agent/user",

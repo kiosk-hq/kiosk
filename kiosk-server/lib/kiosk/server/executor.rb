@@ -19,7 +19,10 @@ module Kiosk
     # so it's testable without Rails.
     class Executor
       # The fixed wire-surface verbs — see the Endpoints section of the spec.
-      VERBS = %i[query run pay schema events].freeze
+      # `events` was removed (K-083): it was never an ADR-0009 capability, the
+      # Kiosk::Event type is gone (K-069), and the stub only ever raised a raw
+      # NotImplementedError. An unknown verb now returns a clean 400 envelope.
+      VERBS = %i[query run pay schema].freeze
 
       # Verbs that open their own transaction boundaries because they perform
       # an irreversible external side effect (a PSP capture) that a DB
@@ -32,7 +35,6 @@ module Kiosk
       NO_DB_VERBS = %i[schema].freeze
 
       # The verbs that are actually implemented and advertised to agents.
-      # `events` is stubbed and omitted intentionally.
       IMPLEMENTED_VERBS = %w[query run pay schema].freeze
 
       def self.call(kind:, args:, identity:, connection:)
@@ -76,7 +78,6 @@ module Kiosk
         when :run    then verb_run(args)
         when :pay    then verb_pay(args)
         when :schema then verb_schema(args)
-        when :events then verb_events(args)
         end
       end
 
@@ -326,13 +327,6 @@ module Kiosk
           queries: Queries.catalog,
           actions: Actions.catalog,
         })
-      end
-
-      # ─── stub — lands in a follow-up release ───────────────────────────
-
-      def verb_events(_args)
-        raise NotImplementedError,
-              "`events` verb arrives in a follow-up release (NDJSON streaming)"
       end
 
       # ─── helpers ───────────────────────────────────────────────────────

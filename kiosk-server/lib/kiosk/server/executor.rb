@@ -34,9 +34,6 @@ module Kiosk
       # database connection and must NOT open a SessionContext.
       NO_DB_VERBS = %i[schema].freeze
 
-      # The verbs that are actually implemented and advertised to agents.
-      IMPLEMENTED_VERBS = %w[query run pay schema].freeze
-
       def self.call(kind:, args:, identity:, connection:)
         new(connection: connection, identity: identity).call(kind: kind, args: args)
       end
@@ -330,9 +327,16 @@ module Kiosk
       # Returns the provider's in-process catalog so an agent can self-discover
       # available queries and actions without relying solely on a static skill file.
       # Never opens a SessionContext or touches the DB.
+      #
+      # `verbs` is the full fixed wire surface ({VERBS}) — `pay` is always
+      # listed here even when no payment_provider is wired. This is NOT the
+      # advertised capability set: `/.well-known/kiosk.json` computes its
+      # `capabilities` from the live registry and DROPS `pay` when no provider
+      # is configured (see Configuration#computed_capabilities). Do not treat
+      # these `verbs` as mirroring what the origin advertises.
       def verb_schema(_args)
         Result.new(kind: :value, payload: {
-          verbs:   IMPLEMENTED_VERBS,
+          verbs:   VERBS.map(&:to_s),
           queries: Queries.catalog,
           actions: Actions.catalog,
         })

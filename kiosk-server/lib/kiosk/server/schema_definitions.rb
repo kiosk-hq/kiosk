@@ -2,15 +2,16 @@
 
 module Kiosk
   module Server
-    # Pure SQL generators for the six canonical Kiosk migrations.
-    # Migrations 001-006:
+    # Pure SQL generators for the seven canonical Kiosk migrations.
+    # Migrations 001-007:
     #
     #   001 create_kiosk_schema                → schema + four current_*() helpers
     #   002 create_kiosk_identity_tables       → agents, agent_tokens, agent_mappings
     #   003 create_kiosk_actions_log           → kiosk.actions, kiosk.action_log
     #   004 create_kiosk_reservations          → kiosk.reservations
     #   005 create_kiosk_device_authorizations → kiosk.device_authorizations (RFC 8628 Device Grant)
-    #   006 create_kiosk_mandates              → intent_mandates, cart_mandates, payment_mandates (AP2 trail)
+    #   006 create_kiosk_mandates              → intent_mandates, cart_mandates, payment_mandates, settlements (AP2 trail)
+    #   007 add_kyc_verified_at                → kiosk.agents.kyc_verified_at column
     #
     # Pure functions: no database connection, no Rails dependency. Output
     # is SQL strings the host migration framework (`ActiveRecord::Migration#execute`)

@@ -49,4 +49,21 @@ RSpec.describe Kiosk::Server::AgentLogin do
       described_class.call(public_key_pem: pem, signed: "sig")
     }.to raise_error(Kiosk::Server::Errors::NotFound, /no agent registered/)
   end
+
+  # K-148: `allowed_roles` comes back as a Postgres text[] LITERAL string
+  # ("{customer}") from the raw adapter, but some adapters/casts hand back a
+  # real Ruby Array. primary_role must handle both — the String branch is
+  # covered by the tests above; this pins the Array branch (allowed_roles.first).
+  it "picks the first role from an Array-typed allowed_roles column" do
+    allow(con).to receive(:execute).and_return(
+      [{ "id" => "agent-1", "user_id" => 42, "allowed_roles" => %w[staff customer] }],
+    )
+    idp_spy = instance_double(Kiosk::Server::AgentIdentityProviders::DefaultAgentIdp,
+                              issue: "fresh-token")
+    allow(Kiosk::Server::AgentIdentityProviders::DefaultAgentIdp).to receive(:new).and_return(idp_spy)
+
+    described_class.call(public_key_pem: pem, signed: "sig")
+
+    expect(idp_spy).to have_received(:issue).with(agent_id: "agent-1", role: "staff")
+  end
 end

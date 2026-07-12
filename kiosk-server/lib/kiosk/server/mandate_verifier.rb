@@ -31,8 +31,8 @@ module Kiosk
           id: payload[:id], user_id: payload[:user_id], agent_id: payload[:agent_id],
           issuer: payload[:iss], scope: payload[:scope],
           cap_amount_cents: payload[:cap_amount_cents], currency: payload[:currency],
-          expires_at: (Time.at(payload[:exp]) if payload[:exp]),
-          created_at: (Time.at(payload[:iat]) if payload[:iat]),
+          expires_at: Time.at(payload[:exp]),
+          created_at: Time.at(payload[:iat]),
           raw_jws: raw_jws,
         )
       end
@@ -61,8 +61,8 @@ module Kiosk
           user_id: payload[:user_id], agent_id: payload[:agent_id], issuer: payload[:iss],
           payment_method: payload[:payment_method],
           amount_cents: payload[:amount_cents], currency: payload[:currency],
-          expires_at: (Time.at(payload[:exp]) if payload[:exp]),
-          created_at: (Time.at(payload[:iat]) if payload[:iat]),
+          expires_at: Time.at(payload[:exp]),
+          created_at: Time.at(payload[:iat]),
           raw_jws: raw_jws,
         )
       end
@@ -77,8 +77,8 @@ module Kiosk
           user_id: payload[:user_id], agent_id: payload[:agent_id], issuer: payload[:iss],
           line_items: payload[:line_items], total_amount_cents: payload[:total_amount_cents],
           currency: payload[:currency],
-          expires_at: (Time.at(payload[:exp]) if payload[:exp]),
-          created_at: (Time.at(payload[:iat]) if payload[:iat]),
+          expires_at: Time.at(payload[:exp]),
+          created_at: Time.at(payload[:iat]),
           raw_jws: raw_jws,
         )
 

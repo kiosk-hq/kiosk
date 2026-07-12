@@ -10,8 +10,9 @@ module Kiosk
     #   { sub: <user_id>, level: "verified", iss: <kyc_issuer>, iat: <unix>, exp: <unix> }
     #
     # Verified against `Kiosk.configuration.kyc_public_key` (RS256).
-    # Checks: correct issuer, sub matches authenticated identity, not expired.
-    # Raises `Errors::Forbidden` on any failure.
+    # Checks: `level == "verified"` (case-sensitive — an unverified/other-level
+    # attestation is rejected), correct issuer, sub matches authenticated
+    # identity, and not expired. Raises `Errors::Forbidden` on any failure.
     module KycVerifier
       module_function
 

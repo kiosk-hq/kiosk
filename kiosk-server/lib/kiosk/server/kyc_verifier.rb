@@ -11,8 +11,9 @@ module Kiosk
     #
     # Verified against `Kiosk.configuration.kyc_public_key` (RS256).
     # Checks: `level == "verified"` (case-sensitive — an unverified/other-level
-    # attestation is rejected), correct issuer, sub matches authenticated
-    # identity, and not expired. Raises `Errors::Forbidden` on any failure.
+    # attestation is rejected), correct issuer, `sub` matches the authenticated
+    # identity (compared as String on both sides so a bigint-PK host works — see
+    # K-092), and not expired. Raises `Errors::Forbidden` on any failure.
     module KycVerifier
       module_function
 
@@ -44,7 +45,13 @@ module Kiosk
           )
         end
 
-        unless payload[:sub] == identity.user_id
+        # Compare the principal as STRING on BOTH sides (K-092, mirroring
+        # MandateVerifier). On a bigint-PK host the authenticated Identity
+        # carries the raw Integer that the token `sub` round-trips as, while the
+        # KYC provider signs `sub` with whatever id it was handed (a String). A
+        # strict `==` ("42" == 42) is always false, so every KYC attestation on
+        # a bigint host was wrongly Forbidden. Normalising keeps uuid hosts as-is.
+        unless payload[:sub].to_s == identity.user_id.to_s
           raise Errors::Forbidden.new(
             "KYC attestation subject mismatch",
             hint: "sub must equal the authenticated user_id",

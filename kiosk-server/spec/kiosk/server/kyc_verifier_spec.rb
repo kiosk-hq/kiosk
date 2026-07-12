@@ -54,6 +54,28 @@ RSpec.describe Kiosk::Server::KycVerifier do
         .to raise_error(Kiosk::Server::Errors::Forbidden, /subject/)
     end
 
+    # K-092: on a bigint-PK host the authenticated Identity carries an Integer
+    # user_id (the token `sub` round-trips as bigint) while the KYC provider
+    # signs `sub` with the String id it was handed. The subject check must
+    # compare as STRING on both sides, or every attestation on a bigint host is
+    # wrongly Forbidden. (Mirrors MandateVerifier's bigint contract.)
+    context "on a bigint-PK host (Integer identity, String attestation sub)" do
+      let(:identity) { build_identity(user_id: 42, agent_id: 7) }
+
+      it "verifies an Integer identity against a String attestation sub" do
+        raw_jws = sign_kyc(valid_payload(sub: "42"))
+        claims  = described_class.verify(raw_jws: raw_jws, identity: identity)
+        expect(claims[:sub]).to eq("42")
+        expect(claims[:level]).to eq("verified")
+      end
+
+      it "still rejects a genuinely different subject (43 != 42)" do
+        raw_jws = sign_kyc(valid_payload(sub: "43"))
+        expect { described_class.verify(raw_jws: raw_jws, identity: identity) }
+          .to raise_error(Kiosk::Server::Errors::Forbidden, /subject/)
+      end
+    end
+
     it "raises Errors::Forbidden for an expired attestation" do
       raw_jws = sign_kyc(valid_payload(exp: past))
       expect { described_class.verify(raw_jws: raw_jws, identity: identity) }

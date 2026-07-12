@@ -8,8 +8,10 @@ Gem::Specification.new do |spec|
 
   spec.summary       = "Devise user-IdP adapter for the Kiosk framework"
   spec.description   = <<~DESC
-    kiosk-user-idp-devise is the bundled-by-default user-IdP adapter for
-    Rails providers that authenticate principals through Devise.
+    kiosk-user-idp-devise is the opt-in user-IdP adapter for Rails
+    providers that authenticate principals through Devise. Add it to your
+    Gemfile explicitly — the kiosk-all meta-gem pulls in only kiosk-core
+    and kiosk-server, so IdP adapters are chosen per provider.
 
     It reads `current_user` from the controller passed by kiosk-server and
     returns a {Kiosk::Identity} value object. Covers both Devise paths —

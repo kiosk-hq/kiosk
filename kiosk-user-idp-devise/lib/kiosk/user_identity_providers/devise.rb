@@ -4,9 +4,11 @@ require "kiosk"
 
 module Kiosk
   module UserIdentityProviders
-    # Devise user-IdP adapter — the bundled-by-default {Kiosk::UserIdentityProviders::Base}
+    # Devise user-IdP adapter — an opt-in {Kiosk::UserIdentityProviders::Base}
     # implementation for Rails providers that authenticate principals through
-    # Devise.
+    # Devise. Add `kiosk-user-idp-devise` to the Gemfile explicitly; the
+    # `kiosk-all` meta-gem bundles only `kiosk-core` and `kiosk-server`, so
+    # IdP adapters are chosen per provider.
     #
     # The adapter is agnostic about HOW the user logged in: Devise's
     # `database_authenticatable` and `omniauthable` modules both populate

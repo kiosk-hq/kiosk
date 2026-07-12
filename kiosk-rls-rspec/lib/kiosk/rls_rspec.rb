@@ -18,7 +18,7 @@ module Kiosk
     # without changing the helper calls.
     JOURNEY_TYPES = %i[kiosk_journey kiosk_agent].freeze
 
-    # Register the journey DSL include + per-example executor reset with
+    # Register the journey DSL include for the journey metadata tags with
     # the given RSpec configuration. Called automatically on require if
     # RSpec is already loaded; providers using an unusual load order can
     # invoke it manually.

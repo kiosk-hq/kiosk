@@ -60,18 +60,16 @@ namespace :demo do
     require "uri"
     require "json"
 
-    # getgroceries uses the real Stripe adapter — no StubPsp.
-    # A Stripe test key (sk_test_…) is required to boot the server and run the
-    # off_session charge. Fail fast here with a clear message rather than letting
-    # the server crash on boot.
-    if ENV["STRIPE_SECRET_KEY"].to_s.strip.empty?
-      abort <<~MSG
-        demo:shop requires STRIPE_SECRET_KEY (a Stripe test key, sk_test_…).
-        getgroceries uses the real Stripe adapter — there is no StubPsp fallback.
-
-          export STRIPE_SECRET_KEY=sk_test_…
-          bundle exec rake demo:shop
-      MSG
+    # getgroceries uses the real Stripe adapter — no StubPsp. To run the
+    # off_session charge you need EITHER a real Stripe test key (sk_test_…,
+    # producing a genuine pi_ against Stripe test mode) OR — when no key is
+    # present, e.g. in CI — a local stripe-mock, which returns shaped pi_
+    # fixtures so the full flow runs secret-free (K-110: never inject keys
+    # into CI). A real key takes precedence when set.
+    use_mock = ENV["STRIPE_SECRET_KEY"].to_s.strip.empty?
+    mock_url = use_mock ? start_stripe_mock : nil
+    if use_mock
+      puts "  (no STRIPE_SECRET_KEY — running against stripe-mock at #{mock_url}, no real charge)"
     end
 
     port         = ENV.fetch("PORT", "3005")
@@ -104,8 +102,13 @@ namespace :demo do
     # KIOSK_TEST_AUTOCARD=1: the adapter simulates a completed SetupIntent so the
     # driver needs no card-setup step (real Stripe still produces a real pi_…).
     File.truncate(log, 0) if File.exist?(log)
+    boot_env = { "KIOSK_ISSUER" => kiosk_issuer, "KIOSK_TEST_AUTOCARD" => "1" }
+    if use_mock
+      boot_env["STRIPE_MOCK_URL"]   = mock_url
+      boot_env["STRIPE_SECRET_KEY"] = "sk_test_mock"
+    end
     server_pid = spawn(
-      { "KIOSK_ISSUER" => kiosk_issuer, "KIOSK_TEST_AUTOCARD" => "1" },
+      boot_env,
       "bundle exec rails s -p #{port} -b 127.0.0.1 -e development",
       out: log, err: log,
     )
@@ -205,13 +208,16 @@ namespace :demo do
       puts "  FAIL  pay.value.settlement_id missing"
     end
 
-    # psp_reference must start with pi_ — confirms a real Stripe off_session charge
+    # psp_reference must start with pi_ — a real Stripe (or stripe-mock)
+    # off_session PaymentIntent went through the adapter.
     psp_ref = result["psp_reference"].to_s
     if psp_ref.match?(/\Api_/)
-      puts "  OK  psp_reference is a real Stripe PaymentIntent (#{psp_ref})"
+      kind = use_mock ? "stripe-mock" : "real Stripe"
+      puts "  OK  psp_reference is a #{kind} PaymentIntent (#{psp_ref})"
     else
-      failures << "psp_reference expected /^pi_/ (real Stripe charge), got #{psp_ref.inspect} — ensure STRIPE_SECRET_KEY is a real sk_test_… key"
-      puts "  FAIL  psp_reference not a real Stripe pi_… (got #{psp_ref.inspect})"
+      hint = use_mock ? "stripe-mock did not return a pi_ — see /tmp/stripe-mock.log" : "ensure STRIPE_SECRET_KEY is a real sk_test_… key"
+      failures << "psp_reference expected /^pi_/, got #{psp_ref.inspect} — #{hint}"
+      puts "  FAIL  psp_reference not a pi_… (got #{psp_ref.inspect})"
     end
 
     # -- assertions: DB row counts --

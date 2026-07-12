@@ -33,7 +33,7 @@ Gem::Specification.new do |spec|
   spec.require_paths = ["lib"]
 
   spec.add_dependency "kiosk-core", "~> 0.0"
-  # JWT issue/verify for the §6.7 OAuth surface and §6.2 access tokens.
+  # JWT issue/verify for the OAuth surface and access tokens.
   # ruby-jwt is the de-facto Ruby JOSE library — small, MIT, no transitive deps.
   spec.add_dependency "jwt", "~> 2.8"
 

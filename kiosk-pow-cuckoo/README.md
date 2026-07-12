@@ -117,7 +117,7 @@ a native solver (C/C++ like Tromp's `lean`/`mean` miner).
 ### Cross-impl parity gate
 
 ```bash
-cd oss/kiosk-pow-cuckoo
+cd kiosk-pow-cuckoo
 bundle exec rake solve_parity
 ```
 
@@ -150,15 +150,19 @@ blake2b-256(sorted_cycle_edges_as_LE_u64) < target
 
 ## Toy mechanism demo
 
-```bash
-cd oss/kiosk-demo-foodelivery
-bundle exec rake demo:cuckoo
-```
-
 **TOY MECHANISM DEMO — proofsize 12 at edgebits 10; NOT production difficulty.**
 
-Boots foodelivery with `KIOSK_POW_CUCKOO_DEMO=1`, runs the full
-402 → solve → 200 loop, and tests wrong proof → 403.
+Cuckatoo is no longer wired into any demo app. The solve → verify loop at the
+toy params is exercised by this gem's cross-impl parity gate (see the Solver
+section above):
+
+```bash
+cd kiosk-pow-cuckoo
+bundle exec rake solve_parity
+```
+
+Runs the Python reference solver, then asserts the Ruby verifier accepts its
+proof.
 
 ## Caveats
 

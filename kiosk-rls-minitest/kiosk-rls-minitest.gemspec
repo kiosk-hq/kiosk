@@ -16,9 +16,8 @@ Gem::Specification.new do |spec|
     `as_anonymous`, `query`, `run_action`, `pay_action`, `kiosk_seed`).
 
     Ships the assertions `assert_rls_denied` and `assert_quota_exceeded`
-    for asserting the structured exit-code errors described in design
-    spec §5.2 — both also exposed as the Minitest `_must_*` /
-    `_wont_*` spec-DSL forms.
+    for asserting the structured exit-code errors — both also exposed as
+    the Minitest `_must_*` / `_wont_*` spec-DSL forms.
   DESC
   spec.homepage      = "https://kiosk.tech"
   spec.license       = "Apache-2.0"

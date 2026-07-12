@@ -86,7 +86,7 @@ A `kiosk/rls/migration` auto-inject path lands later.
 
 ## Status
 
-Pre-v0.1 alpha. The DSL surface is stable across pre-v0.1 minor bumps; SQL emission may evolve as we add corner cases (schema-qualified tables, partitioned tables, view-based column gating per spec §7.8).
+Pre-v0.1 alpha. The DSL surface is stable across pre-v0.1 minor bumps; SQL emission may evolve as we add corner cases (schema-qualified tables, partitioned tables, view-based column gating).
 
 Out of this release: `rake kiosk:rls:show TABLE` and `rake kiosk:rls:check` (need a live PostgreSQL connection and land in a follow-up).
 
@@ -97,5 +97,4 @@ Apache-2.0 — see `LICENSE.txt`.
 ## Links
 
 - [kiosk.tech](https://kiosk.tech)
-- [Design spec §7](https://github.com/kiosk-hq/kiosk-meta) (private during pre-launch)
 - [Issue tracker](https://github.com/kiosk-hq/kiosk/issues)

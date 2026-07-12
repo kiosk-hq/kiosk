@@ -34,12 +34,16 @@ nonce is a String.  The backend's `.verify` receives the full Hash.
 
 **TOY MECHANISM DEMO — proofsize 12 at edgebits 10; NOT production difficulty.**
 
+Cuckatoo is no longer wired into any demo app. The solve → verify loop is
+exercised by this gem's cross-impl parity gate at the toy params:
+
 ```bash
-cd kiosk-demo-foodelivery
-bundle exec rake demo:cuckoo
+cd kiosk-pow-cuckoo
+bundle exec rake solve_parity
 ```
 
-Demonstrates the 402 → Cuckatoo solve → 200 loop and wrong-proof → 403.
+Runs the Python reference solver, then asserts the Ruby verifier accepts its
+proof (solve → verify at edgebits 10, proofsize 12).
 
 ## Production deployment notes
 

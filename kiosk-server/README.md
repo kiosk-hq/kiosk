@@ -10,7 +10,7 @@ The full host-side surface is shipped and covered by the gem's own suite (500+ p
 - **`Kiosk::Server::Executor`** — dispatches resolved commands to the host's registered queries and Actions.
 - **Agent registration & login** — `AgentRegistration`, `AgentLogin`, `RegistrationPow`, and the pluggable agent-IdP resolve and mint per-agent identities.
 - **PoW gate** — `PowGate` enforces the reputation policy's N×PoW challenge-response (soft dependency on `kiosk-reputation`; zero overhead when no policy is set).
-- **`Kiosk::Server::WellKnown`** — pure-Ruby builder for `/.well-known/kiosk.json` per spec §3.4.
+- **`Kiosk::Server::WellKnown`** — pure-Ruby builder for `/.well-known/kiosk.json`.
 - **`Kiosk::Server::Headers`** + **`HeadersMiddleware`** — Rack middleware that injects `Kiosk-Server-Version`, `Kiosk-API-Version`, `Kiosk-Min-Client` on `/kiosk/*` responses.
 - **`Kiosk::Server::SchemaDefinitions`** — SQL generators for the canonical migrations (schema + helpers, identity tables, actions log, reservations, device authorizations, mandates).
 - **`Kiosk::Server::Engine`** — Rails engine declaration (conditionally loaded when `Rails::Engine` exists); auto-mounts the headers middleware.

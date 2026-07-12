@@ -10,7 +10,7 @@ Gem::Specification.new do |spec|
   spec.description   = <<~DESC
     kiosk-rls provides the row-level-security DSL Kiosk providers use inside
     their ActiveRecord migrations: `enable_rls_on`, `policy`, plus the
-    add/change/remove/rename migration verbs from the Kiosk design spec §7.
+    add/change/remove/rename migration verbs.
 
     The DSL compiles to standard PostgreSQL DDL (ALTER TABLE ENABLE ROW
     LEVEL SECURITY, GRANT, CREATE POLICY, COMMENT ON TABLE) and runs inside

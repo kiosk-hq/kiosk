@@ -57,7 +57,7 @@ Output is colour-coded `✓` / `✗` per assertion; exits non-zero on any failur
 
 | Env var | Default | What it does |
 |---|---|---|
-| `KIOSK_OSS` | auto-detected from script path | Path to the `oss/` root (sibling-gem path overrides resolve from here) |
+| `KIOSK_OSS` | auto-detected from script path | Path to the reference monorepo root (sibling-gem path overrides resolve from here) |
 | `PGHOST` | `localhost` | Postgres host for the generated `database.yml` |
 | `SERVER_PORT` | `3001` | Port for the in-test Rails server |
 

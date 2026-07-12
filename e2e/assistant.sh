@@ -107,13 +107,30 @@ assert "ok: true"                  "$(echo "$r" | jq -r '.ok')"                 
 assert "kind: value"               "$(echo "$r" | jq -r '.kind')"                  "value"
 assert "appointment_id returned"   "$(echo "$r" | jq -r '.value.appointment_id | length > 0')" "true"
 assert "salon_id echoed"           "$(echo "$r" | jq -r '.value.salon_id')"        "$salon_id"
+alice_appt_id=$(echo "$r" | jq -r '.value.appointment_id')
 
-# ─── appointment landed in DB ───────────────────────────────────────────
+# Bob books at the same (public) salon so both users own exactly one row.
+r=$(exec_call "$BOB_AGENT_TOKEN" "run" "{\"name\":\"book_appointment\",\"salon_id\":$salon_id,\"slot\":\"2026-06-16T10:00:00Z\"}")
+assert "bob: ok: true"             "$(echo "$r" | jq -r '.ok')"                    "true"
+bob_appt_id=$(echo "$r" | jq -r '.value.appointment_id')
 
-printf "\n\033[1m=== verify appointment landed ===\033[0m\n"
+# ─── app-layer per-user isolation (the headline security property) ──────
+# my_appointments filters WHERE user_id = kiosk.current_user_id(), where the
+# GUC is set from the caller's authenticated identity (bearer token). With
+# Alice AND Bob each owning one appointment, prove each principal sees ONLY
+# their own row — never the other's — even though both hit the same query.
 
-r=$(exec_call "$ALICE_AGENT_TOKEN" "query" '{"name":"my_appointments"}')
-assert "1 appointment exists"      "$(echo "$r" | jq -r '.rows | length')"          "1"
+printf "\n\033[1m=== verify appointment landed + per-user isolation ===\033[0m\n"
+
+alice_appts=$(exec_call "$ALICE_AGENT_TOKEN" "query" '{"name":"my_appointments"}')
+assert "alice: 1 appointment exists"  "$(echo "$alice_appts" | jq -r '.rows | length')"                                 "1"
+assert "alice: sees her own row"      "$(echo "$alice_appts" | jq -r --arg id "$alice_appt_id" '[.rows[].id] | index($id) != null')" "true"
+assert "alice: does NOT see bob's row" "$(echo "$alice_appts" | jq -r --arg id "$bob_appt_id"   '[.rows[].id] | index($id) == null')" "true"
+
+bob_appts=$(exec_call "$BOB_AGENT_TOKEN" "query" '{"name":"my_appointments"}')
+assert "bob: 1 appointment exists"    "$(echo "$bob_appts" | jq -r '.rows | length')"                                   "1"
+assert "bob: sees his own row"        "$(echo "$bob_appts" | jq -r --arg id "$bob_appt_id"   '[.rows[].id] | index($id) != null')" "true"
+assert "bob: does NOT see alice's row" "$(echo "$bob_appts" | jq -r --arg id "$alice_appt_id" '[.rows[].id] | index($id) == null')" "true"
 
 # ─── error envelopes ────────────────────────────────────────────────────
 

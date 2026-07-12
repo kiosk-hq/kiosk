@@ -27,9 +27,11 @@ Kiosk.configure do |c|
   c.registration_role = :customer
   c.owner  = { name: "Combette E2E Demo", support: "demo@kiosk.tech" }
 
-  # JwtOrStubIdp tries Kiosk-issued JWTs (Device-Grant output) first,
-  # then falls back to StubIdp's bespoke `agent:u-…:a-…:r-…` shape.
-  # One endpoint authenticates both for the e2e suite.
+  # JwtOrStubIdp tries kiosk-pop JWTs (minted by the bundled IdP's
+  # register/login) first, then falls back to StubIdp's bespoke
+  # `agent:u-…:a-…:r-…` shape. The OAuth device-grant surface is dormant
+  # (ADR-0008) and does not mint these JWTs. One endpoint authenticates
+  # both for the e2e suite.
   c.agent_idp = JwtOrStubIdp.new(stub: StubIdp.new)
   # user_idp not needed — composite handles both channels.
 

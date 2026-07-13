@@ -23,19 +23,18 @@ RSpec.describe Kiosk::Server::Errors do
 
   describe "Base#to_envelope" do
     it "produces a structured ok:false envelope" do
-      e = Kiosk::Server::Errors::RLSDenied.new("denied", hint: "check policy", query_id: "q-42")
+      e = Kiosk::Server::Errors::RLSDenied.new("denied", hint: "check policy")
       expect(e.to_envelope).to eq(
         ok: false,
         error: {
-          code:     "rls_denied",
-          message:  "denied",
-          hint:     "check policy",
-          query_id: "q-42",
+          code:    "rls_denied",
+          message: "denied",
+          hint:    "check policy",
         },
       )
     end
 
-    it "drops nil hint and query_id from the envelope" do
+    it "drops nil hint from the envelope" do
       e = Kiosk::Server::Errors::BadRequest.new("nope")
       expect(e.to_envelope).to eq(
         ok: false,

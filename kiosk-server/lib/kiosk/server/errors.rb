@@ -20,28 +20,26 @@ module Kiosk
         EXIT_CODE   = 6
         HTTP_STATUS = 500
 
-        attr_reader :hint, :query_id
+        attr_reader :hint
 
-        def initialize(message = nil, hint: nil, query_id: nil)
+        def initialize(message = nil, hint: nil)
           super(message)
-          @hint     = hint
-          @query_id = query_id
+          @hint = hint
         end
 
         def code        = self.class.const_get(:CODE)
         def exit_code   = self.class.const_get(:EXIT_CODE)
         def http_status = self.class.const_get(:HTTP_STATUS)
 
-        # Envelope shape — structured body with `code`,
-        # `hint`, `query_id`. nil fields are dropped for compactness.
+        # Envelope shape — structured body with `code`, `message`, `hint`.
+        # nil fields are dropped for compactness.
         def to_envelope
           {
             ok: false,
             error: {
-              code:     code,
-              message:  message,
-              hint:     hint,
-              query_id: query_id,
+              code:    code,
+              message: message,
+              hint:    hint,
             }.compact,
           }
         end

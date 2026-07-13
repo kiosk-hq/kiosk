@@ -69,7 +69,7 @@ RSpec.describe Kiosk::Server::PowGate do
   def issue_challenge_via_gate(command: "query", body: { name: "menu" })
     described_class.gate(identity: identity, command: command, body: body, pow: nil)
   rescue Kiosk::Server::Errors::PowRequired => e
-    e.challenge
+    e.challenges.first
   end
 
   # ─── request_fingerprint ──────────────────────────────────────────────────
@@ -161,7 +161,7 @@ RSpec.describe Kiosk::Server::PowGate do
           described_class.gate(identity: identity, command: "query", body: { name: "menu" }, pow: nil)
         end
 
-        ch = error.challenge
+        ch = error.challenges.first
         expect(ch[:id]).not_to   be_nil
         expect(ch[:alg]).to      eq("argon2id")
         expect(ch[:params]).to   include(:d)
@@ -297,7 +297,7 @@ RSpec.describe Kiosk::Server::PowGate do
           described_class.gate(identity: identity, command: "query", body: { name: "menu" }, pow: pow)
         end
 
-        new_ch = new_error.challenge
+        new_ch = new_error.challenges.first
         expect(new_ch[:id]).not_to   be_nil
         expect(new_ch[:id]).not_to   eq(challenge[:id])  # fresh id
         expect(new_ch[:alg]).to      eq("argon2id")
@@ -509,7 +509,7 @@ RSpec.describe Kiosk::Server::PowGate do
 
   describe Kiosk::Server::Errors::PowRequired do
     let(:challenge_hash) { { id: "cid-1", alg: "argon2id", params: { d: 4 }, salt: "abc", exp: 9999, sig: "xxx" } }
-    subject(:error)      { described_class.new(challenge: challenge_hash) }
+    subject(:error)      { described_class.new(challenges: [challenge_hash]) }
 
     it "is a subclass of Errors::Base" do
       expect(error).to be_a(Kiosk::Server::Errors::Base)
@@ -523,19 +523,14 @@ RSpec.describe Kiosk::Server::PowGate do
       expect(error.code).to eq("pow_required")
     end
 
-    it "carries the challenge hash (singular convenience accessor)" do
-      expect(error.challenge).to eq(challenge_hash)
-    end
-
-    it "wraps a singular challenge into the challenges list" do
+    it "carries the challenges list" do
       expect(error.challenges).to eq([challenge_hash])
     end
 
-    it "accepts a plural challenges list directly" do
+    it "accepts a multi-element challenges list" do
       c2 = challenge_hash.merge(id: "cid-2", salt: "def")
       err = described_class.new(challenges: [challenge_hash, c2])
       expect(err.challenges).to eq([challenge_hash, c2])
-      expect(err.challenge).to eq(challenge_hash) # first
     end
 
     it "serialises to the correct envelope (plural challenges)" do

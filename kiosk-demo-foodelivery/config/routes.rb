@@ -1,7 +1,5 @@
 # frozen_string_literal: true
 
-require "json"
-
 Rails.application.routes.draw do
   # Kiosk wire surface (controllers shipped by kiosk-server).
   # In a follow-up release these will be mounted via the engine's own

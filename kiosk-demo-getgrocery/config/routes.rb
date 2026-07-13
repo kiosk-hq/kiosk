@@ -1,7 +1,5 @@
 # frozen_string_literal: true
 
-require "json"
-
 Rails.application.routes.draw do
   # Human storefront + the agent hook ("Agents → Kiosk here") on the homepage.
   root "home#index"

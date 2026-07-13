@@ -2,15 +2,19 @@
 
 # Adversarial cross-tenant isolation test driver (P6 corrected surface).
 #
-# Assertions:
-#   Assertion 1: B's my_orders excludes A's order (cross-tenant read exclusion)
-#   Assertion 2 (HEADLINE): B cannot schedule_delivery on A's order → 403
-#   Assertion 3: A schedules own order (positive control for schedule gate)
-#   Assertion 4: B creates own order + schedules → positive control
-#   Assertion 5: B's my_orders includes own order (positive control)
-#   Assertion 6: B's my_orders still excludes A's order
-#   Assertion 7: A's my_orders excludes B's order
-#   Assertion 8: DB — forged user_id on create_order ignored (order.user_id = B's)
+# Drives two fresh principals (A and B) through the adversarial steps and
+# emits ONE JSON line of observations; the demo:isolation rake task consumes
+# it and asserts (same scheme as the task's desc and its run output):
+#
+#   HEADLINE: B cannot schedule_delivery on A's order (order-ownership gate)
+#   Assertion 1: B's my_orders excludes A's order (cross-tenant read blocked)
+#   Assertion 2: B's my_orders includes own order (positive control)
+#   Assertion 3: B's my_orders still excludes A's order after positive control
+#   Assertion 4: A's my_orders excludes B's order
+#   Assertion 5: DB orders.user_id for forged order == B (forged arg ignored)
+#
+# Positive controls that must simply succeed (A schedules own order; B creates,
+# pays and schedules own order) abort this flow directly on failure.
 #
 # Usage:
 #   SERVER_URL=http://127.0.0.1:3005 \

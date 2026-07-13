@@ -8,7 +8,8 @@
 # HeadersMiddleware into the host stack (initializer below). Route wiring is
 # NOT drawn by the engine yet — host apps mount the controllers manually in
 # their own `config/routes.rb` (see the demos and `e2e/fixtures/routes.rb`).
-# An automatic routes drawer + `kiosk:install` generator remain deferred.
+# An automatic routes drawer remains deferred; the `kiosk:install`
+# generator ships (lib/generators/kiosk/install).
 
 if defined?(::Rails::Engine)
   module Kiosk

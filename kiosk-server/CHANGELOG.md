@@ -23,24 +23,24 @@ All notable changes follow [Keep a Changelog](https://keepachangelog.com/en/1.1.
 - `Kiosk::Server::Engine` — Rails engine declaration (conditionally loaded when `Rails::Engine` is defined). Auto-mounts `HeadersMiddleware` in the host app's stack.
 
 - **Executor and Errors layer** (follow-up addition within Unreleased):
-  - `Kiosk::Server::Errors` hierarchy — `Base`, `BadRequest`, `Unauthenticated`, `Forbidden`, `RLSDenied`, `NotFound`, `QuotaExceeded`, `ActionFailed` — each carrying `CODE`, `EXIT_CODE`, `HTTP_STATUS` per spec §5.2; `Base#to_envelope` serialises `ok:false` body with `code/message/hint/query_id` (nil fields dropped).
-  - `Kiosk::Server::Result` Data class — `:rows`/`:value`/`:stream` envelope shapes; `to_envelope` for JSON serialisation; `query_id` optional.
+  - `Kiosk::Server::Errors` hierarchy — `Base`, `BadRequest`, `Unauthenticated`, `Forbidden`, `RLSDenied`, `NotFound`, `QuotaExceeded`, `ActionFailed` — each carrying `CODE`, `EXIT_CODE`, `HTTP_STATUS` per spec §5.2; `Base#to_envelope` serialises `ok:false` body with `code/message/hint` (nil fields dropped).
+  - `Kiosk::Server::Result` Data class — `:rows`/`:value` envelope shapes; `to_envelope` for JSON serialisation.
   - `Kiosk::Server::SessionContext` — opens a transaction on any connection responding to `#transaction`/`#execute`, emits `SET LOCAL` for the four canonical GUCs per spec §6.3; skips `agent_id` GUC for non-agent actors; respects configured `guc_namespace`.
   - `Kiosk::Server::Actions` — minimal process-wide registry (`register(name, &block)`, `fetch(name)`, `known`, `reset!`); raises `Errors::NotFound` on unknown.
-  - `Kiosk::Server::Executor` — six-verb dispatch (`sql`, `run`, `pay`, `schema`, `help`, `events`); `sql` + `run` fully working against any conforming connection; `pay`/`schema`/`help`/`events` raise `NotImplementedError` pointing at the follow-up release that adds them.
-  - `Kiosk::Server::ExecController` — Rails controller (conditionally defined when `ActionController::API` is loaded); resolves identity via configured `agent_idp` then `user_idp`, parses JSON body, calls `Executor`, serialises envelope with HTTP status + Kiosk headers.
+  - `Kiosk::Server::Executor` — four-verb dispatch (`query`, `run`, `pay`, `schema`), all fully working against any conforming connection.
+  - `Kiosk::Server::WireController` — Rails controller (conditionally defined when `ActionController::API` is loaded); resolves identity via configured `agent_idp` then `user_idp`, parses JSON body, calls `Executor`, serialises envelope with HTTP status + Kiosk headers.
 
 - **Install generator** (follow-up addition within Unreleased):
   - `Kiosk::Generators::InstallGenerator` — `bin/rails g kiosk:install` produces `config/initializers/kiosk.rb` and the four canonical migrations (`create_kiosk_schema`, `create_kiosk_identity_tables`, `create_kiosk_actions_log`, `create_kiosk_reservations`); each migration is a thin wrapper that calls into `Kiosk::Server::SchemaDefinitions` so SQL regenerates against the current `Kiosk.configuration` at `db:migrate` time. Class options: `--user-table`, `--user-id-type`, `--schema`, `--guc-namespace`. Adds `railties ~> 8.1` as a development dependency.
 
 - **Fixes uncovered by the first end-to-end run** (within Unreleased):
   - `SessionContext` now quotes each dot-segment of the GUC name in `SET LOCAL`. Required because `current_role` is a PostgreSQL reserved keyword; unquoted `SET LOCAL app.current_role = '…'` is a syntax error. Quoting is safe across all GUC names.
-  - `ExecController#parse_body!` now reads `request.raw_post` instead of `request.body.read`. The latter returns empty when a prior middleware (Rails' `ParamsWrapper` with `--api`-style controllers) has already consumed the body stream; `raw_post` is Rails-safe.
+  - `WireController#parse_body!` now reads `request.raw_post` instead of `request.body.read`. The latter returns empty when a prior middleware (Rails' `ParamsWrapper` with `--api`-style controllers) has already consumed the body stream; `raw_post` is Rails-safe.
 
 - **JWKS foundation** (within Unreleased; first piece of the §6.7 OAuth surface):
   - `Kiosk::Server::SigningKey` — RSA keypair value object. `.generate` for fresh keys, `.from_pem` for loaded keys, `#kid` as the RFC 7638 thumbprint, `#to_jwk` for JWKS-publish shape. Enforces 2048-bit minimum; rejects non-RSA inputs; never leaks private parameters via `#to_jwk`.
   - `Kiosk::Server::Jwks.build(keys: [...])` — pure-Ruby JWKS document builder per RFC 7517. Multi-key shape supports key rotation overlap windows.
-  - `Kiosk::Server::ConfigurationExtension#signing_key` — lazy default resolves in this order: explicit setter value, `KIOSK_SIGNING_KEY_PEM` env var, or freshly-generated 2048-bit RSA. Setter accepts a `SigningKey` instance or a PEM string. `Kiosk.reset!` drops the configured key.
+  - `Kiosk::Server::ConfigurationExtension#signing_key` — lazy default resolves in this order: explicit setter value, `KIOSK_SIGNING_KEY_PEM` env var, `KIOSK_SIGNING_KEY_B64` env var; raises when none is set (no silent fresh-key generation — a deployment must provide its key). Setter accepts a `SigningKey` instance or a PEM string. `Kiosk.reset!` drops the configured key.
 
 - **JWT issue + verify** (within Unreleased; second piece of the §6.7 OAuth surface):
   - `Kiosk::Server::JwtIssuer.issue(claims:, audience:, ...)` — RS256-signed token with `iat`/`nbf`/`exp`/`iss`/`aud`/`jti` set automatically. JWS header carries `kid` so verifiers can pick the right key during rotation overlap. Default lifetime one hour; caller can override.
@@ -66,22 +66,21 @@ All notable changes follow [Keep a Changelog](https://keepachangelog.com/en/1.1.
   - Adds `kiosk-test-support` as a development dependency (for error class definitions). Host apps using TestExecutor will have it loaded transitively via `kiosk-rls-rspec` / `kiosk-rls-minitest`.
   - 27 new test examples cover scope enforcement, identity propagation, hermetic rollback semantics, RLS-error translation, action invocation, seed quoting + value rendering. Full kiosk-server suite: 280 examples, 0 failures (was 251 — added 29).
 
-- **Device Authorization Grant — Sub-slices 4+5 of 5: CLI login + e2e wire** (within Unreleased; closes the §6.7 OAuth Device Grant family):
-  - `kiosk-cli` ships `kiosk <host> login` — RFC 8628 client. Initiates /oauth/device_authorization, displays user_code + verification URL, optionally auto-opens browser (`open` / `xdg-open`), polls /oauth/token at server interval with `slow_down` backoff, persists bearer to ~/.kiosk/credentials (chmod 0600) on success.
-  - E2e extended (66 total assertions, +5 for the CLI login flow): runs `kiosk <SERVER_URL> login` in background with isolated HOME, captures the user_code from CLI stdout, simulates user approval via the helper-backed test fixture, waits for CLI to finish, asserts exit 0 + token persisted + persisted token successfully authenticates a follow-up /kiosk/exec call.
-  - **M2 marquee demo path is now end-to-end functional.** A real user runs `kiosk <provider> login`, types code at /oauth/device/verify on phone, gets JWT in ~/.kiosk/credentials, then `kiosk <provider> sql '...'` works. Closes the §6.5 + §6.7 Device-Grant family; remaining OAuth flows (PKCE authorization_code for browser hosts, DCR per RFC 7591) are tracked separately.
+- **Device Authorization Grant — Sub-slices 4+5 of 5: CLI login + e2e wire** (within Unreleased; later unwound):
+  - The `kiosk-cli` RFC 8628 login client and the e2e device-login assertions built in this sub-slice were subsequently REMOVED: per ADR-0008 Kiosk auth is the proof-of-possession challenge-response handshake, not OAuth. `kiosk-cli` is not part of the release, and e2e intentionally does not exercise the device-grant endpoints.
+  - The device-grant surface itself (`/oauth/device_authorization`, `/oauth/token`, state machine, stores) stays in kiosk-server as dormant code — retained for a possible future human-in-the-loop consent flow, covered by its unit specs.
 
 - **Device Authorization Grant — Sub-slice 3 of 5: DeviceVerification helper** (within Unreleased; sixth piece of the §6.7 OAuth surface):
   - `Kiosk::Server::DeviceVerification` — pure-Ruby state-machine helpers for the user-facing half of the Device Grant flow. `.find_pending(user_code:)`, `.approve(user_code:, user_id:)`, `.deny(user_code:)`. Strips visual XXXX-XXXX dash + whitespace, upcases (auto-cap keyboards). Raises `CodeNotFoundError` when user_code doesn't resolve to a pending row (distinct from `DeviceAuthorization::StateError` — that one signals a logic error in calling code).
   - **Scope decision:** Kiosk owns the state-machine half (identical across providers). The consent-screen HTML/branding/host-app-login integration is provider responsibility — host's Rails controller calls these helpers from its own actions and renders its own UI. This is consistent with the satellite-mode-neutral principle (Kiosk ships primitives; provider owns presentation).
-  - Test fixture refactored: e2e's `_test/device_authorization/approve` endpoint now delegates to the helper (proves the helper works end-to-end). Added `/verify` endpoint that takes a `decision=approve|deny` parameter for richer test scenarios.
+  - (The e2e `_test/device_authorization` fixture endpoints that exercised this helper were later removed along with the rest of the e2e device-grant wiring — the surface is dormant per ADR-0008; coverage lives in the unit specs.)
   - Test coverage: 17 new examples (normalize_user_code 4 / find_pending 6 / approve 5 / deny 2). Full kiosk-server suite: 251 examples, 0 failures (+17).
 
 - **Device Authorization Grant — Sub-slice 2 of 5: OAuth endpoints + e2e wire** (within Unreleased; fifth piece of the §6.7 OAuth surface):
-  - `Kiosk::Server::DeviceCodeGrant` — pure-Ruby service module. `.start` and `.exchange` implement the §6.5 + RFC 8628 §3.5 state machine; controllers are thin shims (same pattern as `Executor` ↔ `ExecController`). `.exchange` produces a uniform `{ok:, ...}` Hash mapping RFC 8628 error codes (`authorization_pending`, `access_denied`, `expired_token`, `invalid_grant`, `invalid_request`) to outcomes. Lazy expiry: a row past `expires_at` is bumped to `:expired` on first poll, then errors uniformly.
+  - `Kiosk::Server::DeviceCodeGrant` — pure-Ruby service module. `.start` and `.exchange` implement the §6.5 + RFC 8628 §3.5 state machine; controllers are thin shims (same pattern as `Executor` ↔ `WireController`). `.exchange` produces a uniform `{ok:, ...}` Hash mapping RFC 8628 error codes (`authorization_pending`, `access_denied`, `expired_token`, `invalid_grant`, `invalid_request`) to outcomes. Lazy expiry: a row past `expires_at` is bumped to `:expired` on first poll, then errors uniformly.
   - `Kiosk::Server::OauthDeviceAuthorizationController` — POST `<mount>/oauth/device_authorization`. Returns the full RFC 8628 §3.2 response (`device_code`, `user_code`, `verification_uri`, `verification_uri_complete`, `expires_in`, `interval`). Composes `verification_uri` from `request.base_url + mount_path` so it works regardless of where the engine is mounted.
   - `Kiosk::Server::OauthTokenController` — POST `<mount>/oauth/token`. Multi-grant entry point; currently dispatches `urn:ietf:params:oauth:grant-type:device_code` to `DeviceCodeGrant.exchange`. Other grants (`authorization_code` with PKCE, `refresh_token`) return `unsupported_grant_type` with a descriptive note pointing at the follow-up sub-slice.
-  - E2e suite extended (18 new assertions, 61 total): full polling flow from `POST /oauth/device_authorization` through fixture-simulated approval, polled `access_token`, replay-protection (`invalid_grant` on second poll), JWT usage against `/kiosk/exec`, unsupported-grant-type rejection, missing-client_id rejection. JWT-aware composite IdP (`JwtOrStubIdp`) added to the fixture so one endpoint authenticates both legacy synthetic tokens and OAuth-issued JWTs.
+  - (The e2e device-grant assertions added here were later removed — e2e intentionally does not exercise the dormant surface, per ADR-0008. The JWT-aware composite IdP (`JwtOrStubIdp`) remains in the e2e fixtures.)
   - Test coverage: 12 new `DeviceCodeGrant` examples covering state-machine outcomes, JWT verification round-trip, expires_in/scope omission. Full kiosk-server suite remains at 234 examples, 0 failures (+12).
 
 - **Device Authorization Grant foundation (RFC 8628) — Sub-slice 1 of 5** (within Unreleased; fourth piece of the §6.7 OAuth surface; covers spec §6.5 `kiosk login` flow):
@@ -93,11 +92,9 @@ All notable changes follow [Keep a Changelog](https://keepachangelog.com/en/1.1.
 
 ### Out of scope for first release
 
-- OAuth 2.1 surface (token/authorize/revoke/introspect endpoints) — follow-up.
+- OAuth 2.1 surface (authorize/introspect/PKCE/DCR) — dropped as the auth mechanism: Kiosk auth is the proof-of-possession challenge-response handshake (ADR-0008); the device-grant code ships dormant.
 - Full `Kiosk::Action` DSL (`description`, `accepts`, `requires_payment`, `escalate_to :system`) — current `Actions` registry is a minimal callable map.
-- `pay` verb implementation (lands with `kiosk-pay-stripe`, M4).
-- `schema` / `help` verbs (need Postgres introspection of catalog + COMMENT ON).
-- `events` verb (NDJSON streaming per §5.8).
+- `help` and `events` verbs — removed from the wire surface entirely (`help` dropped by decision, `events` per K-083), not deferred.
 - `rake kiosk:doctor` — follow-up.
 - Full Rails-engine integration tests (requires booting a host app) — follow-up.
-- Satellite-mode connection-pool plumbing per spec §7.7 (currently `ExecController#connection_for` uses `ActiveRecord::Base.connection`).
+- Satellite-mode connection-pool plumbing per spec §7.7 (currently `WireController#connection_for` uses `ActiveRecord::Base.connection`).

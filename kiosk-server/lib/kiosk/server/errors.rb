@@ -135,15 +135,10 @@ module Kiosk
         # The full set of independent challenges the client must solve.
         attr_reader :challenges
 
-        # `challenges:` is the canonical N-proof list. `challenge:` (singular) is
-        # accepted for convenience and wrapped into a one-element list.
-        def initialize(challenges: nil, challenge: nil)
+        def initialize(challenges:)
           super("proof-of-work required")
-          @challenges = challenges || (challenge.nil? ? [] : [challenge])
+          @challenges = challenges
         end
-
-        # Convenience accessor for the common single-proof (N=1) case.
-        def challenge = @challenges.first
 
         # Override: embed the challenges in the error envelope so the client
         # can solve them without a second round-trip.

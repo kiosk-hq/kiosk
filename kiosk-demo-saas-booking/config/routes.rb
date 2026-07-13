@@ -1,7 +1,5 @@
 # frozen_string_literal: true
 
-require "json"
-
 Rails.application.routes.draw do
   # Kiosk wire surface (controllers shipped by kiosk-server).
   # In a follow-up release these will be mounted via the engine's own
@@ -27,58 +25,4 @@ Rails.application.routes.draw do
     doc = Kiosk::Server::WellKnown.build_json(base_url: base_url)
     [200, { "content-type" => "application/json" }, [doc]]
   }
-
-  # ─── E2e-only test fixtures ──────────────────────────────────────────
-  # Simulates user approval / denial at /oauth/device/verify. The real
-  # consent-screen UI (Kiosk-branded HTML + Devise current_user) is a
-  # provider responsibility — Kiosk ships the {DeviceVerification}
-  # state-machine helpers; the host's controller wires them up. This
-  # fixture proves the helper works end-to-end without a browser
-  # in the loop.
-  if Rails.env.development?
-    handle_verification = ->(decision, user_code, user_id) do
-      begin
-        case decision
-        when "approve"
-          Kiosk::Server::DeviceVerification.approve(user_code: user_code, user_id: user_id)
-          [200, { "content-type" => "application/json" },
-           [JSON.generate(ok: true, status: "approved")]]
-        when "deny"
-          Kiosk::Server::DeviceVerification.deny(user_code: user_code)
-          [200, { "content-type" => "application/json" },
-           [JSON.generate(ok: true, status: "denied")]]
-        else
-          [400, { "content-type" => "application/json" },
-           [JSON.generate(ok: false, error: "decision must be 'approve' or 'deny'")]]
-        end
-      rescue Kiosk::Server::DeviceVerification::CodeNotFoundError => e
-        [404, { "content-type" => "application/json" },
-         [JSON.generate(ok: false, error: e.message)]]
-      rescue ArgumentError => e
-        [400, { "content-type" => "application/json" },
-         [JSON.generate(ok: false, error: e.message)]]
-      end
-    end
-
-    # Generic verify endpoint — accepts decision=approve|deny.
-    post "/kiosk/_test/device_authorization/verify", to: ->(env) {
-      req = Rack::Request.new(env)
-      handle_verification.call(
-        req.params["decision"].to_s,
-        req.params["user_code"].to_s,
-        req.params["user_id"].to_s,
-      )
-    }
-
-    # Back-compat alias: hard-codes decision=approve. Used by the
-    # sub-slice-2 e2e assertions; remove once those migrate.
-    post "/kiosk/_test/device_authorization/approve", to: ->(env) {
-      req = Rack::Request.new(env)
-      handle_verification.call(
-        "approve",
-        req.params["user_code"].to_s,
-        req.params["user_id"].to_s,
-      )
-    }
-  end
 end

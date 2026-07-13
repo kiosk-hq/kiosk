@@ -119,51 +119,6 @@ curl -sS -X POST "$SERVER_URL/kiosk/query" \
   -d '{"name":"my_appointments"}' \
   | jq '.rows | length'
 
-# ─── OAuth Device Grant ──────────────────────────────────────────────
-
-heading "OAuth 2.1 Device Authorization Grant (RFC 8628) — existing-account authorization"
-
-say "For a human who ALREADY has a Combette account: this is how they authorize"
-say "their agent against that existing account. (Greenfield agents without an"
-say "account use kiosk-pop register/login instead — the default auth story, ADR-0008.)"
-
-step "Initiate /oauth/device_authorization"
-DA=$(curl -sS -X POST "$SERVER_URL/kiosk/oauth/device_authorization" \
-  -H "Content-Type: application/x-www-form-urlencoded" \
-  --data-urlencode "client_id=demo-cli" \
-  --data-urlencode "role=customer")
-
-DEVICE_CODE=$(echo "$DA" | jq -r '.device_code')
-USER_CODE=$(echo "$DA"   | jq -r '.user_code')
-echo "$DA" | jq '. | {user_code, verification_uri, expires_in, interval}'
-
-say ""
-say "→ In a real flow: human opens verification_uri on phone, types user_code,"
-say "  clicks 'Approve' on the provider's branded consent page."
-
-step "Simulate user approval (fixture endpoint stands in for the consent UI)"
-curl -sS -X POST "$SERVER_URL/kiosk/_test/device_authorization/verify" \
-  -H "Content-Type: application/x-www-form-urlencoded" \
-  --data-urlencode "decision=approve" \
-  --data-urlencode "user_code=$USER_CODE" \
-  --data-urlencode "user_id=$ALICE" | jq
-
-step "Poll /oauth/token → CLI receives JWT bearer"
-TOKEN_RESP=$(curl -sS -X POST "$SERVER_URL/kiosk/oauth/token" \
-  -H "Content-Type: application/x-www-form-urlencoded" \
-  --data-urlencode "grant_type=urn:ietf:params:oauth:grant-type:device_code" \
-  --data-urlencode "device_code=$DEVICE_CODE")
-JWT=$(echo "$TOKEN_RESP" | jq -r '.access_token')
-echo "$TOKEN_RESP" | jq '. | {token_type, expires_in, scope}'
-say "JWT (truncated): ${JWT:0:72}…"
-
-step "Use the JWT against /kiosk/query — same wire shape, OAuth-issued bearer"
-curl -sS -X POST "$SERVER_URL/kiosk/query" \
-  -H "Authorization: Bearer $JWT" \
-  -H "Content-Type: application/json" \
-  -d '{"name":"salons"}' \
-  | jq '.rows'
-
 # ─── done ────────────────────────────────────────────────────────────
 
 heading "Demo complete"
@@ -176,8 +131,6 @@ say "    curl -sS -X POST $SERVER_URL/kiosk/query \\"
 say "      -H 'Authorization: Bearer $ALICE_TOKEN' \\"
 say "      -H 'Content-Type: application/json' \\"
 say "      -d '{\"name\":\"salons\"}' | jq '.rows'"
-say "  authorize an agent against an existing account: the OAuth device-grant"
-say "    flow above (POST /kiosk/oauth/device_authorization → approve → /kiosk/oauth/token)"
 say ""
 say "Swap StubIdp for production-shape auth:"
 say "  replace lib/jwt_or_stub_idp.rb with kiosk-user-idp-devise (or your IdP)"

@@ -16,7 +16,7 @@ The foundation. Defines:
   - `Kiosk::UserIdentityProviders::Base`
   - `Kiosk::PaymentProviders::Base`
 - **Postgres GUC namespace constants** — `Kiosk::GUC`
-- **Protocol-version surface** — `Kiosk::Protocol` (API version, min client, response header names, well-known path)
+- **Protocol-version surface** — `Kiosk::Protocol` (API version, min client, response header names, default mount path)
 - **Configuration** — `Kiosk.configure { |c| ... }`
 
 No Rails dependency. Loadable in any Ruby app. Heavier `kiosk-server`, `kiosk-rls`, and adapter gems build on top of this.

@@ -17,9 +17,6 @@ module Kiosk
     HEADER_API_VERSION    = "Kiosk-API-Version"
     HEADER_MIN_CLIENT     = "Kiosk-Min-Client"
 
-    # Well-known discovery path on the provider's origin.
-    WELL_KNOWN_PATH = "/.well-known/kiosk.json"
-
     # Default URL prefix at which kiosk-server mounts its endpoints.
     # Provider may mount elsewhere; this is the suggested default and what
     # the well-known document advertises out-of-the-box.

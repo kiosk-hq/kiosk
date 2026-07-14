@@ -17,4 +17,4 @@ All notable changes follow [Keep a Changelog](https://keepachangelog.com/en/1.1.
 - Abstract base classes: `AgentIdentityProviders::Base`, `UserIdentityProviders::Base`, `PaymentProviders::Base`.
 - GUC namespace constants (`Kiosk::GUC`) with the four well-known names (`current_user_id`, `current_role`, `current_actor`, `current_agent_id`) and a composer (`Kiosk::GUC.for`).
 - Configuration object (`Kiosk::Configuration`) and `Kiosk.configure { |c| ... }` block.
-- Protocol-version surface (`Kiosk::Protocol`): `API_VERSION`, `MIN_CLIENT`, response-header names, well-known path, default mount path.
+- Protocol-version surface (`Kiosk::Protocol`): `API_VERSION`, `MIN_CLIENT`, response-header names, default mount path.

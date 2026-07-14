@@ -15,10 +15,6 @@ RSpec.describe Kiosk::Protocol do
     expect(described_class::HEADER_MIN_CLIENT).to     eq("Kiosk-Min-Client")
   end
 
-  it "documents the well-known discovery path" do
-    expect(described_class::WELL_KNOWN_PATH).to eq("/.well-known/kiosk.json")
-  end
-
   it "documents the default mount path" do
     expect(described_class::DEFAULT_MOUNT_PATH).to eq("/kiosk")
   end

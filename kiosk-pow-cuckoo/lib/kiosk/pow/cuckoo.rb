@@ -253,6 +253,10 @@ module Kiosk
 
         # Compute U/V endpoints; verify strictly-ascending and in-range.
         cycle.each_with_index do |edge, n|
+          # A non-Integer edge (nil, String, Float, …) means a malformed proof,
+          # which must return false, never raise (K-149) — comparing a String
+          # with an Integer throws ArgumentError.
+          return false unless edge.is_a?(Integer)
           return false if edge >= n_nodes
           return false if n > 0 && edge <= cycle[n - 1]   # strict ascending (also deduplicates)
           uvs[2 * n]     = siphash(k0, k1, k2, k3, 2 * edge) & mask
@@ -327,7 +331,15 @@ module Kiosk
         target    = params[:target] || params["target"]
 
         # Build the 80-byte header: salt bytes ‖ header_nonce as LE u32.
-        header = salt.b + [Integer(header_nonce)].pack("V")
+        # header_nonce is client-supplied. A non-numeric/non-coercible value
+        # means a malformed proof, which must return false, never raise
+        # (K-149) — Integer() throws ArgumentError/TypeError on "abc", [1], {}.
+        header_nonce = begin
+          Integer(header_nonce)
+        rescue ArgumentError, TypeError
+          return false
+        end
+        header = salt.b + [header_nonce].pack("V")
 
         # Derive SipHash keys from the header.
         hdr32          = blake2b256(header)

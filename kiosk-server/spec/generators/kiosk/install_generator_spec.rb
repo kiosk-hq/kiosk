@@ -218,13 +218,21 @@ RSpec.describe Kiosk::Generators::InstallGenerator do
         expect(body).to include("user_id_type: :bigint")
       end
 
-      it "drops the three mandate tables in reverse-FK order in #down" do
+      it "drops all four mandate tables — including settlements — in reverse-FK order in #down" do
         invoke!(%w[--schema=ksk])
         body = File.read(file)
-        payment_idx = body.index('DROP TABLE IF EXISTS "ksk".payment_mandates')
-        cart_idx    = body.index('DROP TABLE IF EXISTS "ksk".cart_mandates')
-        intent_idx  = body.index('DROP TABLE IF EXISTS "ksk".intent_mandates')
+        payment_idx     = body.index('DROP TABLE IF EXISTS "ksk".payment_mandates')
+        settlements_idx = body.index('DROP TABLE IF EXISTS "ksk".settlements')
+        cart_idx        = body.index('DROP TABLE IF EXISTS "ksk".cart_mandates')
+        intent_idx      = body.index('DROP TABLE IF EXISTS "ksk".intent_mandates')
+        # settlements is created by mandates_sql with a FK to cart_mandates, so a
+        # down that never drops it — or drops cart_mandates first — fails on the
+        # FK dependency during db:rollback. (K-137)
+        expect(settlements_idx).not_to be_nil
+        # Both payment_mandates and settlements reference cart_mandates; both drop
+        # before it. cart_mandates references intent_mandates; it drops before that.
         expect(payment_idx).to be < cart_idx
+        expect(settlements_idx).to be < cart_idx
         expect(cart_idx).to be < intent_idx
       end
     end

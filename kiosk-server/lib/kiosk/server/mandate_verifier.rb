@@ -30,6 +30,7 @@ module Kiosk
         # would nil-coerce to 0 in the verify_cart cap comparison, making that
         # comparison vacuous (see K-199); reject it here, before any .to_i.
         require_amount!(payload, :cap_amount_cents)
+        require_currency!(payload)
 
         Kiosk::Mandate::IntentMandate.new(
           id: payload[:id], user_id: payload[:user_id], agent_id: payload[:agent_id],
@@ -55,6 +56,7 @@ module Kiosk
         # would nil-coerce to 0 below, so a payment omitting it would "match" a
         # 0-cent cart and persist a 0-cent row (K-199); reject before any .to_i.
         require_amount!(payload, :amount_cents)
+        require_currency!(payload)
 
         unless payload[:cart_mandate_id] == cart.id
           raise Errors::Forbidden.new("payment not bound to the cart")
@@ -84,6 +86,7 @@ module Kiosk
         # in verify_payment's amount match, making both vacuous and persisting a
         # 0-cent cart row (K-199); reject before any .to_i.
         require_amount!(payload, :total_amount_cents)
+        require_currency!(payload)
 
         cart = Kiosk::Mandate::CartMandate.new(
           id: payload[:id], intent_mandate_id: payload[:intent_mandate_id],
@@ -131,6 +134,19 @@ module Kiosk
         raise Errors::Forbidden.new(
           "mandate missing required amount field: #{field}",
           hint: "#{field} is a required AP2 mandate field",
+        )
+      end
+
+      # Reject an ABSENT (nil) required `currency`. With both intent and cart
+      # omitting it, the K-101 cap guard (`nil != nil` → false) and the
+      # verify_payment match (`nil == nil` → true) both pass vacuously, then the
+      # NOT NULL currency column 500s after partial persist (K-302, K-199 class).
+      def require_currency!(payload)
+        return unless payload[:currency].nil?
+
+        raise Errors::Forbidden.new(
+          "mandate missing required currency field",
+          hint: "currency is a required AP2 mandate field",
         )
       end
       private_class_method :require_amount!

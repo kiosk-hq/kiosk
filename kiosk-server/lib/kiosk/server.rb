@@ -92,7 +92,7 @@ module Kiosk
     #   Infra:
     #   - {Kiosk::Server::Headers}          — composes the three response headers
     #   - {Kiosk::Server::HeadersMiddleware}— Rack middleware that injects them
-    #   - {Kiosk::Server::SchemaDefinitions}— SQL for migrations 001-004
+    #   - {Kiosk::Server::SchemaDefinitions}— SQL for migrations 001-007
     #   - {Kiosk::Server::Engine}           — Rails engine (only when Rails loaded)
     #
     #   Dormant OAuth 2.1 device-grant surface (code retained, unwired — ADR-0008):

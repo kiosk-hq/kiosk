@@ -116,6 +116,16 @@ RSpec.describe Kiosk::Server::MandateVerifier do
         .to raise_error(Kiosk::Server::Errors::Forbidden, /cap_amount_cents/)
     end
 
+    # K-302: currency is a REQUIRED mandate field (spec AP2 table). ABSENT on
+    # both intent and cart makes the K-101 cap guard (nil != nil) and the
+    # verify_payment match (nil == nil) pass vacuously, then a NOT NULL currency
+    # column 500s after partial persist — reject on presence instead.
+    it "rejects an intent missing currency (absent)" do
+      no_cur = intent_payload.reject { |k, _| k == :currency }
+      expect { described_class.verify_intent(raw_jws: sign(no_cur), identity: identity) }
+        .to raise_error(Kiosk::Server::Errors::Forbidden, /currency/)
+    end
+
     it "rejects when user_id in the payload does not match the authenticated identity" do
       bad = intent_payload.merge(user_id: "u-999")
       expect { described_class.verify_intent(raw_jws: sign(bad), identity: identity) }
@@ -191,6 +201,13 @@ RSpec.describe Kiosk::Server::MandateVerifier do
       no_total = cart_payload.reject { |k, _| k == :total_amount_cents }
       expect { described_class.verify_cart(raw_jws: sign(no_total), identity: identity, intent: intent) }
         .to raise_error(Kiosk::Server::Errors::Forbidden, /total_amount_cents/)
+    end
+
+    # K-302: absent currency on the cart (see the intent-side rationale).
+    it "rejects a cart missing currency (absent)" do
+      no_cur = cart_payload.reject { |k, _| k == :currency }
+      expect { described_class.verify_cart(raw_jws: sign(no_cur), identity: identity, intent: intent) }
+        .to raise_error(Kiosk::Server::Errors::Forbidden, /currency/)
     end
 
     it "applies the shared decode checks (wrong issuer rejected)" do

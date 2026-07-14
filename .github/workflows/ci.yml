@@ -97,7 +97,7 @@ jobs:
           - demo: kiosk-demo-hoteling
             tasks: demo:book demo:isolation demo:redteam demo:schema
           - demo: kiosk-demo-skooti
-            tasks: demo:rideflow demo:isolation demo:redteam demo:schema
+            tasks: demo:kat demo:rideflow demo:isolation demo:redteam demo:schema
           - demo: kiosk-demo-saas-booking
             tasks: demo:walkthrough demo:isolation demo:redteam demo:schema
           # demo:pow excluded everywhere: solves real memory-hard PoW (K-001)

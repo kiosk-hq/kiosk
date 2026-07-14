@@ -1,7 +1,7 @@
 # frozen_string_literal: true
 
 # Migration 006 — kiosk AP2 mandate trail:
-# intent_mandates, cart_mandates, payment_mandates.
+# intent_mandates, cart_mandates, payment_mandates, settlements.
 # See the Payment (AP2 mandate chain) section of the spec.
 class CreateKioskMandates < ActiveRecord::Migration[ActiveRecord::Migration.current_version]
   def up
@@ -12,7 +12,10 @@ class CreateKioskMandates < ActiveRecord::Migration[ActiveRecord::Migration.curr
   end
 
   def down
+    # Reverse-FK order: payment_mandates and settlements both reference
+    # cart_mandates, so both drop before it; cart_mandates before intent_mandates.
     execute %(DROP TABLE IF EXISTS "<%= options[:schema] %>".payment_mandates)
+    execute %(DROP TABLE IF EXISTS "<%= options[:schema] %>".settlements)
     execute %(DROP TABLE IF EXISTS "<%= options[:schema] %>".cart_mandates)
     execute %(DROP TABLE IF EXISTS "<%= options[:schema] %>".intent_mandates)
   end

@@ -310,3 +310,53 @@ Kiosk::Server::Actions.register("place_order",
 
   { order_id: order.id, restaurant_id: order.restaurant_id, total_cents: order.total_cents, status: order.status }
 end
+
+# confirm_order — post-pay confirmation gated on order-ownership + settlement.
+# Mirrors getgrocery's schedule_delivery order-ownership gate (K-185): a placed
+# order is confirmed only by its owner, and only once a settlement referencing
+# that order exists. The pay path binds the order via the cart mandate's
+# line_items (each carries {order_id, total}); this action verifies both gates
+# app-layer, so a cross-principal confirm on another's order is a clean 403.
+Kiosk::Server::Actions.register("confirm_order",
+  description: "Confirm a paid order for the authenticated principal " \
+               "(requires the order to belong to the principal AND a settlement referencing it)",
+  params: {
+    order_id: "uuid — the order to confirm (from place_order; must be paid and owned by the principal)",
+  }) do |args|
+  conn = ActiveRecord::Base.connection
+
+  order_id = args[:order_id] || args["order_id"]
+  raise Kiosk::Server::Errors::BadRequest.new("missing field: order_id") if order_id.nil? || order_id.to_s.empty?
+
+  conn.transaction do
+    # ── Gate 1: order belongs to principal and not already confirmed ─────
+    order = conn.execute(
+      "SELECT id FROM orders " \
+      "WHERE id = #{conn.quote(order_id.to_s)}::uuid " \
+      "AND user_id = kiosk.current_user_id() " \
+      "AND status NOT IN ('confirmed') " \
+      "LIMIT 1"
+    ).first
+    raise Kiosk::Server::Errors::Forbidden.new("order not found, not yours, or already confirmed") if order.nil?
+
+    # ── Gate 2: settlement (capture receipt) referencing this order ──────
+    order_filter_json = [{ order_id: order_id.to_s }].to_json
+    paid = conn.execute(
+      "SELECT 1 AS ok " \
+      "FROM kiosk.settlements pm " \
+      "JOIN kiosk.cart_mandates cm ON cm.id = pm.cart_mandate_id " \
+      "WHERE pm.user_id = kiosk.current_user_id() " \
+      "AND cm.line_items @> #{conn.quote(order_filter_json)}::jsonb " \
+      "LIMIT 1"
+    ).first
+    raise Kiosk::Server::Errors::Forbidden.new("no settlement for this order") if paid.nil?
+
+    conn.execute(
+      "UPDATE orders SET status = 'confirmed', updated_at = now() " \
+      "WHERE id = #{conn.quote(order_id.to_s)}::uuid " \
+      "AND user_id = kiosk.current_user_id()"
+    )
+
+    { order_id: order_id, status: "confirmed" }
+  end
+end

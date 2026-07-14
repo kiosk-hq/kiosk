@@ -5,6 +5,18 @@ module Admin
   # Shows recent orders with payment status, address, slot, and line items.
   #
   # NOTE: No authentication — demo provider only.
+  #
+  # No-coverage rationale (K-301, K-208 precedent): this is a pure
+  # human-inspection back-office view, not a wire/spec surface. It is reachable
+  # only via GET /admin/orders (routes.rb) and called by no flow driver, redteam
+  # scenario, or Kiosk verb — it exists solely so an operator can eyeball orders
+  # after demo:shop. The demo ships no controller-test harness (its assertions
+  # are the booted-server flow drivers, Postgres-gated); the underlying read
+  # correctness — paid-status via kiosk.settlements→cart_mandates and the items
+  # join — is already exercised end-to-end by demo:shop (settlement + order_items
+  # row-count assertions) and demo:isolation. Adding a booted-server assertion for
+  # this visualization surface alone would be disproportionate, so it is left
+  # documented-uncovered rather than asserted.
   class OrdersController < ActionController::Base
     layout false
 

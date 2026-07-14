@@ -149,7 +149,7 @@ Payment requires three JWS tokens signed with the private key you generated in S
   "user_id":            "<user_id from Step 2>",
   "agent_id":           "<agent_id from Step 2>",
   "iss":                "<provider issuer>",
-  "line_items":         [{ "sku": "margherita", "qty": 1 }],
+  "line_items":         [{ "order_id": "<order_id from Step 4>", "total": <total_cents from Step 4> }],
   "total_amount_cents": <total_cents from Step 4>,
   "currency":           "eur",
   "exp":                <now + 600>,
@@ -157,7 +157,7 @@ Payment requires three JWS tokens signed with the private key you generated in S
 }
 ```
 
-`intent_mandate_id` binds the cart mandate to the intent cap. Every mandate must be bound to your registered principal via `user_id` + `agent_id`.
+`intent_mandate_id` binds the cart mandate to the intent cap. Every mandate must be bound to your registered principal via `user_id` + `agent_id`. The `order_id` in `line_items` is what `confirm_order`'s payment gate checks (Step 6) — it must reference the exact order you placed in Step 4.
 
 ### Payment mandate (the assistant's funding instrument, bound to the cart)
 
@@ -206,6 +206,36 @@ Successful response — HTTP 200:
   }
 }
 ```
+
+---
+
+## Step 6 — Confirm: `run confirm_order`
+
+After payment is settled, confirm the order.
+
+```http
+POST /kiosk/run
+Authorization: Bearer <access_token>
+Content-Type: application/json
+
+{
+  "name":     "confirm_order",
+  "order_id": "<order_id from Step 4>"
+}
+```
+
+Successful response — HTTP 200, inside `.value`:
+
+```json
+{
+  "order_id": "<uuid>",
+  "status":   "confirmed"
+}
+```
+
+`confirm_order` enforces two gates server-side:
+- **Gate 1 (ownership):** the order must belong to the authenticated principal and not already be confirmed (`user_id = kiosk.current_user_id() AND status NOT IN ('confirmed')`). A different principal cannot confirm your order even if they paid for it.
+- **Gate 2 (payment):** a settled payment mandate must exist whose cart `line_items` reference this `order_id`. Calling `confirm_order` without prior payment returns HTTP 403.
 
 ---
 
@@ -276,6 +306,8 @@ Response — HTTP 200, inside `.value`:
     { "name": "my_orders",          "description": "List this principal's placed orders ...", "params": null }
   ],
   "actions": [
+    { "name": "confirm_order", "description": "Confirm a paid order for the authenticated principal (requires the order to belong to the principal AND a settlement referencing it)",
+                               "params": { "order_id": "uuid — the order to confirm (from place_order; must be paid and owned by the principal)" } },
     { "name": "payment_setup", "description": "Check whether the authenticated principal has a saved payment method ... (call this before `pay`)",
                                "params": {} },
     { "name": "place_order", "description": "Place a food order for the authenticated principal",
@@ -299,12 +331,13 @@ query or action names from this file.
 4. **Start by reading `/.well-known/kiosk.json`.** It gives you the `issuer` (for mandate signing) and the `endpoint` for the REST wire calls (`/kiosk/query`, `/kiosk/run`, `/kiosk/pay`, `/kiosk/schema`) before you send a single request.
 5. **The cap must cover the total.** `cap_amount_cents` >= `total_amount_cents`. The cart mandate is rejected if it exceeds the cap.
 6. **`intent_mandate_id` in the cart must reference the intent's `id`.** The server verifies this binding.
+7. **The `order_id` in `line_items` must reference the order being confirmed.** `confirm_order` Gate-2 checks this with a jsonb-containment query against the settled cart mandate.
 
 ---
 
 ## Worked example
 
-`order_flow.rb` in this directory is a standalone Ruby script that executes this exact flow — register → browse → place_order → sign mandates → pay — against the foodelivery demo app. It prints one JSON line on success and exits non-zero on any failure. Run it with:
+`order_flow.rb` in this directory is a standalone Ruby script that executes this exact flow — register → browse → place_order → sign mandates → pay → confirm_order — against the foodelivery demo app. It prints one JSON line on success and exits non-zero on any failure. Run it with:
 
 ```
 SERVER_URL=http://127.0.0.1:3002 \

@@ -90,8 +90,8 @@ module Kiosk
     # Count the number of leading zero BITS in a binary digest string.
     #
     # Spans bytes: a fully-zero byte contributes 8, then continues into the
-    # next byte. Matches the semantics of
-    # {Kiosk::Server::ProofOfWork.leading_zero_bits}.
+    # next byte. This is the difficulty check for the search-form PoW: a nonce
+    # is valid iff this count over its digest is >= params[:d].
     #
     # @param bytes [String] raw binary bytes (e.g. the 32-byte Argon2id output)
     # @return [Integer]

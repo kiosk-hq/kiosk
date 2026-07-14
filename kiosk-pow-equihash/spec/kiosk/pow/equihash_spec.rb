@@ -14,12 +14,6 @@ RSpec.describe Kiosk::Pow::Equihash do
     end
   end
 
-  describe "DEFAULT" do
-    it "is the default PoW backend" do
-      expect(described_class::DEFAULT).to be(true)
-    end
-  end
-
   describe "DEFAULT_N / DEFAULT_K" do
     it "are the benchmark-chosen defaults (168, 7)" do
       expect(described_class::DEFAULT_N).to eq(168)

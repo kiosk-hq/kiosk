@@ -17,8 +17,10 @@ that `Argon2id(password=str(n), salt=raw_salt, ...)` has ≥ `d` leading zero
 bits. The provider verifies by computing **one** Argon2id eval — the solve:verify
 lever is exactly `2^d`.
 
-Providers can demand this PoW on any `/kiosk/{query,run,pay}` verb at their discretion,
-via `kiosk-reputation`'s policy layer. `kiosk-pow` ships both sides:
+Providers can demand this PoW on the `/kiosk/{query,run}` verbs (and, as an
+optional registration toll, on `/kiosk/auth/register`) at their discretion, via
+`kiosk-reputation`'s policy layer. `pay`'s 402 is `payment_setup_required`, not
+PoW. `kiosk-pow` ships both sides:
 
 - **Ruby verify** (`Kiosk::Pow.verify`) — one Argon2id eval, no loop.
 - **Python solver** (`solve.py`) — an assistant runs this in its sandbox when

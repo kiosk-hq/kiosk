@@ -6,7 +6,8 @@
 
 ## Handling `pow_required`
 
-Any `/kiosk/{query,run,pay}` response may be HTTP 402 with this shape:
+Any `query` or `run` response may be HTTP 402 with this shape (the gate always
+emits a `challenges` array — one entry for N=1, more under N×PoW):
 
 ```json
 {
@@ -14,17 +15,21 @@ Any `/kiosk/{query,run,pay}` response may be HTTP 402 with this shape:
   "error": {
     "code": "pow_required",
     "message": "proof-of-work required",
-    "challenge": {
-      "id":     "<opaque id>",
-      "alg":    "argon2id",
-      "params": { "m": 65536, "t": 1, "p": 1, "d": 6 },
-      "salt":   "<base64-encoded raw salt>",
-      "exp":    1750000600,
-      "sig":    "<HMAC-SHA256 hex>"
-    }
+    "challenges": [
+      {
+        "id":     "<opaque id>",
+        "alg":    "argon2id",
+        "params": { "m": 65536, "t": 1, "p": 1, "d": 6 },
+        "salt":   "<base64-encoded raw salt>",
+        "exp":    1750000600,
+        "sig":    "<HMAC-SHA256 hex>"
+      }
+    ]
   }
 }
 ```
+
+Solve every challenge in the array; submit one proof per challenge (see step 3).
 
 **Do this — in order:**
 
@@ -46,11 +51,14 @@ Any `/kiosk/{query,run,pay}` response may be HTTP 402 with this shape:
    This may take a few seconds to a few minutes depending on `d`. Read the
    `nonce` string from that output.
 
-3. Re-POST the **exact same** original request body with a top-level `pow` field added:
+3. Re-POST the **exact same** original request body — the verb args stay at the
+   top level (the wire posts them flat) — with a sibling `pow` field added. For a
+   single challenge, `pow` is `{ "challenge": ..., "nonce": ... }`; for N×PoW,
+   `pow` is `{ "proofs": [ { "challenge": ..., "nonce": ... }, ... ] }`:
    ```json
    {
-     "command": "query",
-     "body":    { "name": "menu_by_restaurant", "restaurant": "Mamma Pizza" },
+     "name":       "menu_by_restaurant",
+     "restaurant": "Mamma Pizza",
      "pow": {
        "challenge": { "id": "...", "alg": "argon2id", "params": { "m": 65536, "t": 1, "p": 1, "d": 6 }, "salt": "...", "exp": 1750000600, "sig": "..." },
        "nonce":     "73821"
@@ -59,7 +67,8 @@ Any `/kiosk/{query,run,pay}` response may be HTTP 402 with this shape:
    ```
    The `challenge` value inside `pow` must be the **verbatim** challenge object
    from the 402 response — every field, unchanged. `nonce` is the decimal string
-   returned by `solve.py`.
+   returned by `solve.py`. When the 402 returned multiple challenges, submit one
+   `{challenge, nonce}` per challenge inside `pow.proofs`.
 
 4. The server verifies and serves the original response. If it returns HTTP 403
    (`invalid proof of work`), do not retry silently — tell the user:
@@ -72,7 +81,7 @@ Any `/kiosk/{query,run,pay}` response may be HTTP 402 with this shape:
   Please update me."_
 - Solve with a different algorithm (e.g. SHA256 instead of `argon2id`).
 - Skip the proof and retry without `pow`.
-- Send raw SQL — use named `query` calls with `body.name` + parameters.
+- Send raw SQL — use named `query` calls with a top-level `name` + parameters.
 
 The provider may demand PoW again on subsequent requests at its discretion.
 If you receive another 402, solve and retry again.

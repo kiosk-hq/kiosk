@@ -38,13 +38,13 @@ module Kiosk
     # or decreasing k.
     module Equihash
       # Algorithm identifier used in challenge params.
+      #
+      # Equihash is the shipped default Kiosk PoW backend — chosen over Argon2id
+      # (verify is 64 MiB → unacceptable for gateway) and Cuckatoo29 (4 GiB
+      # solver → excessive for mobile clients); see README.md for the full
+      # comparison. Defaultness is established by registry wiring, not a
+      # constant on this module.
       NAME = "equihash"
-
-      # Equihash is the default Kiosk PoW backend.
-      # Chosen over Argon2id (verify is 64 MiB → unacceptable for gateway)
-      # and Cuckatoo29 (4 GiB solver → excessive for mobile clients).
-      # See README.md for the full comparison.
-      DEFAULT = true
 
       # Default parameters (benchmark-chosen; see .params and bench/).
       DEFAULT_N = 168

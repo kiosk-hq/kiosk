@@ -330,7 +330,10 @@ module Kiosk
         proofsize = Integer(params[:proofsize] || params["proofsize"] || 42)
         target    = params[:target] || params["target"]
 
-        # Build the 80-byte header: salt bytes ‖ header_nonce as LE u32.
+        # Build the header: salt bytes ‖ header_nonce as LE u32 (4 bytes). Its
+        # length is salt.bytesize + 4 — 80 bytes only for a 76-byte salt (the
+        # Grin KAT); the gem's own solve_parity uses an 8-byte salt (12-byte
+        # header).
         # header_nonce is client-supplied. A non-numeric/non-coercible value
         # means a malformed proof, which must return false, never raise
         # (K-149) — Integer() throws ArgumentError/TypeError on "abc", [1], {}.

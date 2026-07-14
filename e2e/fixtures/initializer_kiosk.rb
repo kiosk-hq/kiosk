@@ -17,7 +17,14 @@ Kiosk.configure do |c|
   c.schema         = "kiosk"
 
   # Path C: RLS is optional; no enable_rls_on in this fixture. app_role /
-  # system_role are kept for the `run.sh` pre-creation step (harmless).
+  # system_role are kept for the `run.sh` role pre-creation step (harmless).
+  #
+  # NOTE (load-bearing): `c.system_role=` is defined ONLY by
+  # Kiosk::RLS::ConfigurationExtension (kiosk-rls), which run.sh installs via
+  # a path override even though RLS itself is unused here. `app_role` is a
+  # kiosk-core attr; `system_role` is not — so this line is why the Gemfile
+  # `gem "kiosk-rls"` entry in run.sh is mandatory: dropping the gem makes
+  # this call raise NoMethodError at boot.
   c.app_role    = ENV.fetch("KIOSK_APP_ROLE",    "app_role")
   c.system_role = ENV.fetch("KIOSK_SYSTEM_ROLE", "app_role")
 
@@ -62,9 +69,10 @@ end
 
 # ─── Actions ────────────────────────────────────────────────────────────────
 
-# Register the demo Action. In production, providers use the full
-# `Kiosk::Action` DSL (post-v0.1); for the e2e a simple registered
-# block is sufficient.
+# Register the demo Action. A registered name + block IS the shipped v0.1
+# Action API — the same `Kiosk::Server::Actions.register` call the five demo
+# apps use. The richer `Kiosk::Action` DSL (accepts/requires_payment/
+# escalate_to) is a post-v0.1 follow-up and does not exist yet.
 Kiosk::Server::Actions.register("book_appointment", description: "Book an appointment at a salon for a given slot.") do |args|
   # Identity is set via Kiosk::Server::SessionContext SET LOCAL —
   # current_user_id() helper returns the principal. ActiveRecord doesn't

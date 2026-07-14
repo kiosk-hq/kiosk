@@ -11,13 +11,15 @@ Reproducible end-to-end test of the Kiosk OSS gems. The same script (`run.sh`) r
 - `POST /kiosk/{query,run,pay}` accept JSON requests and dispatch through `Kiosk::Server::Executor`
 - The `query` verb calls provider-registered named queries (`salons`, `my_appointments`) and returns rows
 - The `run` verb dispatches to registered Actions
-- Error envelopes have the right shape and HTTP status (`BadRequest` → 400, `NotFound` → 404, `Unauthenticated` → 401)
+- Error envelopes have the right shape and HTTP status (`NotFound` → 404 for unknown query/action, `Unauthenticated` → 401 for missing/garbage token)
+- The `/kiosk/.well-known/jwks.json` endpoint publishes exactly one RSA/RS256 signing key (kty/use/alg/kid/n/e) and never leaks private parameters (`d`, `p`)
+- The partial UNIQUE index on `kiosk.agents.public_key` (WHERE `revoked_at IS NULL`) rejects a second LIVE row for one key at the DB level while allowing a revoked re-registration (K-043)
 - `SET LOCAL` GUCs flow correctly: the `book_appointment` Action reads `kiosk.current_user_id()` and the `my_appointments` query returns only the calling principal's rows (app-layer isolation via `WHERE user_id = kiosk.current_user_id()`)
 - The `pay` verb settles a full AP2 mandate trail: `pay_flow.rb` self-registers a synthetic principal, signs intent → cart → payment mandates (JWS), pays against a stub PSP; assertions cover the response envelope and all four DB tables (`intent_mandates`, `cart_mandates`, `payment_mandates`, `settlements`)
 
 ## What it does NOT verify (deferred)
 
-- **RLS.** Path C removes raw SQL entirely — there is no arbitrary-SQL surface. Per-user isolation is enforced app-layer in registered query definitions (the `WHERE user_id = kiosk.current_user_id()` in `my_appointments`). RLS is optional and not used in this fixture; satellite-mode role separation lands in a follow-up. The `app_role` pre-creation in `run.sh` is kept harmless for forward compatibility.
+- **RLS.** Path C removes raw SQL entirely — there is no arbitrary-SQL surface. Per-user isolation is enforced app-layer in registered query definitions (the `WHERE user_id = kiosk.current_user_id()` in `my_appointments`). RLS is optional and its enforcement is not exercised in this fixture; satellite-mode role separation lands in a follow-up. The `app_role` pre-creation in `run.sh` is kept harmless for forward compatibility. Note: the `kiosk-rls` gem is still installed (see `run.sh`), because it is the only source of `Configuration#system_role=`, which `initializer_kiosk.rb` assigns — the gem is a mandatory boot dependency here even though RLS itself is off.
 - **Live PSP capture.** The pay flow runs against `StubPsp` (deterministic in-process provider) — no real Stripe call here; the Stripe adapter is `kiosk-pay-stripe`.
 - **Streaming.** There is no streaming/events verb (removed K-083); the wire surface is `query`, `run`, `pay`, `schema`.
 - **Multi-agent revocation** flows.

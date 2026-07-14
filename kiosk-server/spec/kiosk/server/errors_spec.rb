@@ -1,21 +1,20 @@
 # frozen_string_literal: true
 
 RSpec.describe Kiosk::Server::Errors do
-  describe "exit-code + HTTP-status + CODE mapping" do
+  describe "HTTP-status + CODE mapping" do
     {
-      Kiosk::Server::Errors::Base            => ["internal_error", 6, 500],
-      Kiosk::Server::Errors::BadRequest      => ["bad_request",    2, 400],
-      Kiosk::Server::Errors::Unauthenticated => ["unauthenticated", 3, 401],
-      Kiosk::Server::Errors::Forbidden       => ["forbidden",      3, 403],
-      Kiosk::Server::Errors::RLSDenied       => ["rls_denied",     4, 403],
-      Kiosk::Server::Errors::NotFound        => ["not_found",      2, 404],
-      Kiosk::Server::Errors::QuotaExceeded   => ["quota_exceeded", 5, 429],
-      Kiosk::Server::Errors::ActionFailed    => ["action_failed",  6, 500],
-    }.each do |klass, (code, exit_code, http_status)|
-      it "#{klass.name.split('::').last} → code=#{code.inspect} exit=#{exit_code} http=#{http_status}" do
+      Kiosk::Server::Errors::Base            => ["internal_error",  500],
+      Kiosk::Server::Errors::BadRequest      => ["bad_request",     400],
+      Kiosk::Server::Errors::Unauthenticated => ["unauthenticated", 401],
+      Kiosk::Server::Errors::Forbidden       => ["forbidden",       403],
+      Kiosk::Server::Errors::RLSDenied       => ["rls_denied",      403],
+      Kiosk::Server::Errors::NotFound        => ["not_found",       404],
+      Kiosk::Server::Errors::QuotaExceeded   => ["quota_exceeded",  429],
+      Kiosk::Server::Errors::ActionFailed    => ["action_failed",   500],
+    }.each do |klass, (code, http_status)|
+      it "#{klass.name.split('::').last} → code=#{code.inspect} http=#{http_status}" do
         instance = klass.new("boom")
         expect(instance.code).to        eq(code)
-        expect(instance.exit_code).to   eq(exit_code)
         expect(instance.http_status).to eq(http_status)
       end
     end

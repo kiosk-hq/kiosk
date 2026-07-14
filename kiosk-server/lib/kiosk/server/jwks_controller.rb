@@ -11,9 +11,8 @@ if defined?(::ActionController::API)
   module Kiosk
     module Server
       # GET <endpoint>/.well-known/jwks.json — publishes the JWKS that
-      # verifiers (agents, audit consumers, the badge prover,
-      # cross-server mandate validators) use to check JWT
-      # signatures issued by this deployment.
+      # verifiers (agents, audit consumers, cross-server mandate
+      # validators) use to check JWT signatures issued by this deployment.
       #
       # The JWKS contains only public-key parameters; private parameters
       # never leave the server's memory (enforced by {SigningKey#to_jwk}).

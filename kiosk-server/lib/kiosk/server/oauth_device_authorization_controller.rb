@@ -11,7 +11,8 @@ if defined?(::ActionController::API)
   module Kiosk
     module Server
       # POST <endpoint>/oauth/device_authorization — RFC 8628 §3.1.
-      # The CLI's first call in the `kiosk login` flow.
+      # The initiating device-grant client's first call. (No first-party CLI
+      # ships in 0.1; the client is any RFC 8628 device-grant client.)
       #
       # Request: `application/x-www-form-urlencoded` (OAuth convention)
       #   client_id    required — identifier of the calling client

@@ -166,10 +166,16 @@ module Kiosk
 
       # ─── 005 create_kiosk_device_authorizations ───────────────────────
 
-      # RFC 8628 Device Authorization Grant state machine table. One row
-      # per `kiosk login` flow: created on /oauth/device_authorization,
-      # mutated by /oauth/device/verify (approve/deny), consumed by
-      # /oauth/token (device_code grant).
+      # DDL for the RFC 8628 Device Authorization Grant state machine table:
+      # one row per device-authorization request — created on
+      # /oauth/device_authorization, mutated by /oauth/device/verify
+      # (approve/deny), consumed by /oauth/token (device_code grant).
+      #
+      # NOTE: this is the schema for a durable {DeviceAuthorizationStores}
+      # adapter, but no such adapter ships in 0.1 — the Device-Grant
+      # endpoints use {DeviceAuthorizationStores::InMemory} by default, so
+      # unless a host wires its own AR-backed store, this table is created by
+      # the migration but not read or written by shipped code.
       #
       # device_code_hash carries SHA-256 of the actual device_code; the
       # plain code lives only in the response body to the initiating

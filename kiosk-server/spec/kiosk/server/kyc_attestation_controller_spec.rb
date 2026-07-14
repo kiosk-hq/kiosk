@@ -3,12 +3,14 @@
 require "jwt"
 require "openssl"
 
-# The KycAttestationController wraps ActionController::API and only defines
-# itself when Rails is loaded. Specs stub the DB layer exactly as other
-# controller-adjacent tests do (see agent_registration_spec.rb, which also
-# avoids a real DB).
+# Unit-covers the business logic BEHIND the KYC attestation endpoint —
+# {KycVerifier.verify} and {DefaultAgentIdp#kyc_verified?} — without a Rails
+# stack. The controller's HTTP dispatch (auth resolution, body parsing,
+# response envelope, ADR-0013 agent-only rule) is exercised end-to-end in
+# controller_auth_spec.rb, which loads and dispatches the real controller via
+# ActionController::Metal.
 
-RSpec.describe "Kiosk::Server::KycAttestationController (unit)" do
+RSpec.describe "Kiosk::Server KYC attestation logic (unit)" do
   let(:kyc_key)    { OpenSSL::PKey::RSA.generate(2048) }
   let(:kyc_issuer) { "https://kyc.example" }
   let(:user_id)    { "u-kyc-1" }

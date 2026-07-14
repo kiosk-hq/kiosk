@@ -7,7 +7,6 @@ RSpec.describe Kiosk::Server::MandateVerifier do
   let(:future)    { (Time.now + 600).to_i }
 
   before do
-    Kiosk.reset!
     Kiosk.configure { |c| c.issuer = issuer }
     allow_any_instance_of(Kiosk::Server::AgentIdentityProviders::DefaultAgentIdp)
       .to receive(:agent_payment_key).with("agent-1").and_return(agent_key.public_key)
@@ -129,7 +128,6 @@ RSpec.describe Kiosk::Server::MandateVerifier do
     # principal check must compare as STRING on both sides, or every mandate on
     # a bigint host is wrongly Forbidden.
     context "on a bigint-PK host (Integer identity, String mandate principal)" do
-      let(:agent_key)  { OpenSSL::PKey::RSA.generate(2048) }
       let(:identity)   { build_identity(agent_id: 7, user_id: 42) }
       let(:big_intent) { intent_payload.merge(agent_id: "7", user_id: "42") }
 

@@ -4,9 +4,12 @@ module Kiosk
   module Server
     # In-process TTL-keyed store for spent PoW challenge ids.
     #
-    # Prevents replay of a valid, unexpired proof: once a challenge id has been
-    # used successfully it is marked spent; subsequent submissions of the same id
-    # are rejected as `Errors::Forbidden`.
+    # Prevents replay of a valid, unexpired proof from counting toward the PoW
+    # quota: once a challenge id has been used successfully it is marked spent.
+    # A subsequent submission of the same id is NOT bad faith (an at-least-once
+    # HTTP retry may resend a served proof), so {PowGate#enforce} skips it
+    # without penalty; if the quota then goes unmet the request gets a fresh
+    # `Errors::PowRequired` re-challenge (402) — never `Errors::Forbidden`.
     #
     # The store is pruned opportunistically on each `spent?` call, so memory
     # usage is bounded by the number of unexpired challenge ids seen since the

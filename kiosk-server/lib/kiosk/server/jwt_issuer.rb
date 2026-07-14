@@ -20,9 +20,11 @@ module Kiosk
     #     success; raises a {Error} subclass on failure.
     #
     # Used by the bundled kiosk-pop IdP ({DefaultAgentIdp}) for direct
-    # access-token issuance and by AP2 mandate validation for cross-server
-    # signature checks. (The OAuth 2.1 device-grant surface that also issued
-    # tokens through it is dormant per ADR-0008.)
+    # access-token issuance and verification. (The OAuth 2.1 device-grant
+    # surface that also issued tokens through it is dormant per ADR-0008.)
+    # NOTE: AP2 mandate verification ({MandateVerifier}) and KYC attestation
+    # verification ({KycVerifier}) do NOT go through here — they decode via
+    # `::JWT.decode` directly against the agent / KYC-provider key.
     module JwtIssuer
       # Algorithm advertised in the JWS header. Pinned to RS256 — the
       # OAuth-ecosystem baseline and the only algorithm our SigningKey

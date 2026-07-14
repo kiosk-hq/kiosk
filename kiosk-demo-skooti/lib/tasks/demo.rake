@@ -4,12 +4,23 @@
 # Tasks:
 #
 #   rake demo:setup      idempotent db:drop / create / migrate / seed
+#   rake demo:kat        DB-free known-answer test for the RentalTokenIssuer
+#                        demo lib (byte-exact wire vector the firmware mirrors)
 #   rake demo:rideflow   boots the server, runs rental_flow.rb (no-human full
 #                        rental chain), asserts happy path + all negative gates,
 #                        tears down
 #   rake demo            setup + rideflow (full end-to-end proof)
 
 namespace :demo do
+  desc "Known-answer test for the RentalTokenIssuer demo lib (DB-free; no server boot)."
+  task :kat do
+    # Run standalone (fresh ruby, no Rails): the KAT stands up its own tiny
+    # Kiosk.configuration carrier and self-configures its load path, so it must
+    # NOT be required into the booted Rails process (where the real
+    # Kiosk::Configuration is present). Exit status propagates the pass/fail.
+    sh "ruby #{Rails.root.join('lib/rental_token_issuer_kat.rb')}"
+  end
+
   desc "Create + load schema + seed the demo database (idempotent)."
   task :setup do
     sh "psql -d postgres -tAc \"DO \\$\\$ BEGIN " \

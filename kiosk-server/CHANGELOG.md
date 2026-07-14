@@ -23,7 +23,7 @@ All notable changes follow [Keep a Changelog](https://keepachangelog.com/en/1.1.
 - `Kiosk::Server::Engine` — Rails engine declaration (conditionally loaded when `Rails::Engine` is defined). Auto-mounts `HeadersMiddleware` in the host app's stack.
 
 - **Executor and Errors layer** (follow-up addition within Unreleased):
-  - `Kiosk::Server::Errors` hierarchy — `Base`, `BadRequest`, `Unauthenticated`, `Forbidden`, `RLSDenied`, `NotFound`, `QuotaExceeded`, `ActionFailed` — each carrying `CODE`, `EXIT_CODE`, `HTTP_STATUS` per spec §5.2; `Base#to_envelope` serialises `ok:false` body with `code/message/hint` (nil fields dropped).
+  - `Kiosk::Server::Errors` hierarchy — `Base`, `BadRequest`, `Unauthenticated`, `Forbidden`, `RLSDenied`, `NotFound`, `QuotaExceeded`, `ActionFailed` — each carrying `CODE` and `HTTP_STATUS` per spec §5.2; `Base#to_envelope` serialises `ok:false` body with `code/message/hint` (nil fields dropped).
   - `Kiosk::Server::Result` Data class — `:rows`/`:value` envelope shapes; `to_envelope` for JSON serialisation.
   - `Kiosk::Server::SessionContext` — opens a transaction on any connection responding to `#transaction`/`#execute`, emits `SET LOCAL` for the four canonical GUCs per spec §6.3; skips `agent_id` GUC for non-agent actors; respects configured `guc_namespace`.
   - `Kiosk::Server::Actions` — minimal process-wide registry (`register(name, &block)`, `fetch(name)`, `known`, `reset!`); raises `Errors::NotFound` on unknown.

@@ -1,8 +1,10 @@
 # frozen_string_literal: true
 
 # Conditionally defined — kiosk-server runs in non-Rails contexts (Rack,
-# unit tests) by simply not loading this file when ActionController::API
-# isn't around. Engine wires up the route when Rails is present.
+# unit tests). server.rb requires this file unconditionally; the
+# `if defined?(::ActionController::API)` guard below means it only defines
+# the controller when ActionController::API is present. In plain Ruby the
+# require is a no-op. Engine wires up the route when Rails is present.
 
 if defined?(::ActionController::API)
   require "kiosk/server/device_code_grant"

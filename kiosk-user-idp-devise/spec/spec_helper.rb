@@ -21,8 +21,10 @@ RSpec.configure do |config|
 end
 
 # Test doubles — kiosk-user-idp-devise does NOT depend on Devise at runtime
-# or at test time; it only reads `request.current_user`. A small Ruby
-# struct-like double covers both shapes.
+# or at test time. The shipped wire reads the signed-in user from the
+# request's Warden proxy (`request.env["warden"].user`); a controller-shaped
+# `#current_user` and a bare Rack `env` Hash are also accepted. Small Ruby
+# struct-like doubles cover every shape.
 
 class FakeUser
   attr_reader :id

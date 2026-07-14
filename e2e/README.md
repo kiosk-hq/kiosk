@@ -23,7 +23,7 @@ Reproducible end-to-end test of the Kiosk OSS gems. The same script (`run.sh`) r
 - **Live PSP capture.** The pay flow runs against `StubPsp` (deterministic in-process provider) — no real Stripe call here; the Stripe adapter is `kiosk-pay-stripe`.
 - **Streaming.** There is no streaming/events verb (removed K-083); the wire surface is `query`, `run`, `pay`, `schema`.
 - **Multi-agent revocation** flows.
-- **Live LLM agent integration** — that's the `kiosk-agent-test` companion gem's job.
+- **Live LLM agent integration** — this fixture drives the wire surface with deterministic `curl`/`jq` calls, not a real model; a live-LLM driver would be a future companion gem (`kiosk-agent-test` does not exist yet).
 
 ## Prerequisites
 

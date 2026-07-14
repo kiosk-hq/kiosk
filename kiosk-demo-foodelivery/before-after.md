@@ -39,7 +39,7 @@ The lesson the validation doc draws:
 foodelivery is a Rails 8.1 app that speaks Kiosk. The following is the recorded output of a `rake demo` run.
 
 ```
-{"http_register":201,"user_id":"3e406ba4-46a0-402d-a5c1-7eadb173db82","agent_id":"e118679e-009e-4458-8bbd-573ccfe0985a","order":{"order_id":"18aaacf8-1e7e-484c-b02d-76f578854418","restaurant_id":1,"total_cents":1599,"status":"placed"},"pay":{"ok":true,"kind":"value","value":{"settlement_id":"4ae8407f-451d-46ca-8869-0c8e8d337719","psp_reference":"stub_pi_8380d66b-5a24-4cf4-9d0f-06b8c9464a64","settled_amount_cents":1599,"currency":"eur"}}}
+{"http_register":201,"user_id":"3e406ba4-46a0-402d-a5c1-7eadb173db82","agent_id":"e118679e-009e-4458-8bbd-573ccfe0985a","order":{"order_id":"18aaacf8-1e7e-484c-b02d-76f578854418","restaurant_id":1,"total_cents":1599,"status":"placed"},"pay":{"ok":true,"kind":"value","value":{"settlement_id":"4ae8407f-451d-46ca-8869-0c8e8d337719","psp_reference":"stub_pi_8380d66b-5a24-4cf4-9d0f-06b8c9464a64","settled_amount_cents":1599,"currency":"eur"}},"confirm":{"ok":true,"kind":"value","value":{"order_id":"18aaacf8-1e7e-484c-b02d-76f578854418","status":"confirmed"}}}
 
 ── Assertions ──
   ✓  pay.ok == true
@@ -57,11 +57,12 @@ foodelivery is a Rails 8.1 app that speaks Kiosk. The following is the recorded 
 2. **Self-register** — generated an RSA-2048 keypair, proved possession of the private key (`GET /kiosk/auth/challenge` → sign an RS256 JWS `{aud, nonce, jti, iat}` → `POST /kiosk/auth/register {public_key:<pem>, signed:<jws>}`) → HTTP 201 → `agent_id`, `user_id`, `access_token`. No existing account. No human login. No OTP. No bot screen.
 3. **Browse** — `POST /kiosk/query {name:"menu_by_restaurant", restaurant:"Mamma Pizza"}` returned the menu rows; found the Margherita: `id`, `sku:"margherita"`, `price_cents:1599`. No SQL sent — the agent called a provider-registered named query.
 4. **Place order** — `POST /kiosk/run {name:"place_order", menu_item_id:<id>, quantity:1, delivery_address:"1 Test St, Istanbul"}` → HTTP 200, `total_cents:1599`, `status:"placed"`.
-5. **Pay** — signed an AP2 intent mandate (`cap_amount_cents:1699`, `scope:"food"`, `iss:<issuer>`) and a cart mandate (`total_amount_cents:1599`, `line_items:[{sku:"margherita",qty:1}]`, bound to the intent via `intent_mandate_id`) as RS256 JWS with the registered keypair, then `POST /kiosk/pay {...}` → `settled_amount_cents:1599`, `ok:true`.
+5. **Pay** — signed an AP2 intent mandate (`cap_amount_cents:1699`, `scope:"food"`, `iss:<issuer>`) and a cart mandate (`total_amount_cents:1599`, `line_items:[{order_id:<uuid>, total:1599}]` bound to the placed order, bound to the intent via `intent_mandate_id`) as RS256 JWS with the registered keypair, then `POST /kiosk/pay {...}` → `settled_amount_cents:1599`, `ok:true`.
+6. **Confirm** — `POST /kiosk/run {name:"confirm_order", order_id:<uuid>}` → HTTP 200, `status:"confirmed"`. The server verified ownership (Gate 1: the order belongs to the authenticated principal and is not already confirmed) and a settled mandate referencing this order (Gate 2: a settlement whose cart `line_items` carry this `order_id`) before confirming — so a different principal cannot confirm this order even if they paid.
 
-The database confirmed: one row in `orders`, one row in `kiosk.settlements`.
+The database confirmed: one row in `orders` (now `status='confirmed'`), one row in `kiosk.settlements`.
 
-The business outcome: the user said "order a Margherita from foodelivery." Their assistant completed the purchase — discovery, registration, order, payment — without the user touching anything and without the user having an account at foodelivery beforehand.
+The business outcome: the user said "order a Margherita from foodelivery." Their assistant completed the purchase — discovery, registration, order, payment, confirmation — without the user touching anything and without the user having an account at foodelivery beforehand.
 
 The provider outcome: foodelivery received a real order and a real payment. The customer relationship stays with foodelivery (the mandate carries the provider's issuer). There is no intermediate platform taking a discovery fee or owning the session.
 
@@ -139,7 +140,7 @@ The handler block receives only the agent-supplied params (the `:name` is stripp
 
 RLS is available as optional defense-in-depth via `enable_rls_on` — useful if you want a Postgres-level backstop in addition to the app-layer checks above. It is not required for Kiosk's isolation model.
 
-**4. Register a `place_order` Action**
+**4. Register Actions (`place_order` and `confirm_order`)**
 
 ```ruby
 Kiosk::Server::Actions.register("place_order") do |args|
@@ -156,9 +157,19 @@ Kiosk::Server::Actions.register("place_order") do |args|
   )
   { order_id: order.id, total_cents: order.total_cents, status: order.status }
 end
+
+Kiosk::Server::Actions.register("confirm_order",
+  description: "Confirm a paid order for the authenticated principal " \
+              "(requires the order to belong to the principal AND a settlement referencing it)",
+  params: { order_id: "uuid" }) do |args|
+  # Gate 1: ownership — order.user_id must equal kiosk.current_user_id() AND status NOT IN ('confirmed')
+  # Gate 2: payment  — a settlement whose cart line_items @> [{order_id:}]
+  # Both must pass; else Forbidden.
+  { order_id: args[:order_id], status: "confirmed" }
+end
 ```
 
-Actions are plain Ruby blocks. The `kiosk.current_user_id()` Postgres function returns the synthetic principal's ID. The action enforces user-scope in the block; it cannot access rows belonging to other users because the app-layer query filters by `uid`.
+Actions are plain Ruby blocks. The `kiosk.current_user_id()` Postgres function returns the synthetic principal's ID. The action enforces user-scope in the block; it cannot access rows belonging to other users because the app-layer query filters by `uid`. Gate 1 (ownership) and Gate 2 (payment binding) together stop B from confirming A's order even if B paid a mandate referencing A's `order_id` — the ownership check fires first.
 
 **5. Wire a payment-provider adapter**
 

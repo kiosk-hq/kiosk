@@ -15,8 +15,10 @@ module Kiosk
     # right GUCs and roll back at the end.
     #
     # Calls outside any scope (`query("…")` at the top of the example)
-    # raise (default deny). Use `as_anonymous` to assert
-    # that explicitly.
+    # raise under `Kiosk::Server::TestExecutor` (default deny); use
+    # `as_anonymous` to assert that explicitly. The bundled `NullExecutor`
+    # does not enforce scope — it records the unscoped call and returns its
+    # default result.
     module Journey
       # Scope to an agent identity acting on behalf of `user`. Generates a
       # synthetic `agent_id` for this scope.
@@ -78,9 +80,10 @@ module Kiosk
         TestHelpers.require_executor!.run_action(name, args)
       end
 
-      # Invoke a pay-Action by name. Same contract as `run_action`. The AP2
-      # mandate flow ships alongside `kiosk-pay-*` (M4); until then the real
-      # executor raises `NotImplementedError`.
+      # Invoke a pay-Action by name. Same contract as `run_action`.
+      # `Kiosk::Server::TestExecutor` does not exercise settlement through the
+      # always-rolls-back RLS journey scope, so it raises `NotImplementedError`;
+      # settlement runs via `Executor#verb_pay` + a `kiosk-pay-*` provider.
       def pay_action(name, **args)
         TestHelpers.require_executor!.pay_action(name, args)
       end

@@ -34,7 +34,7 @@ as_anonymous do
 end
 ```
 
-Helpers: `as_agent_of(user, role:)`, `as_user(user, role:)`, `as_agent(name)`, `as_anonymous`, `query(sql)`, `run_action(name, **args)`, `pay_action(name, **args)`, `kiosk_seed(table, count:, owner:, **attrs)`. See the specification for full semantics.
+Helpers: `as_agent_of(user, role:)`, `as_user(user, role:)`, `as_agent(name)`, `as_anonymous`, `query(sql)`, `run_action(name, **args)`, `pay_action(name, **args)`, `kiosk_seed(table, count:, owner:, **attrs)`. See the `Kiosk::TestHelpers::Journey` docstrings for full semantics.
 
 ## Wiring an executor
 
@@ -58,7 +58,7 @@ The `NullExecutor` is the zero-dependency fallback for unit-shaped tests; produc
 
 ## Status
 
-Pre-v1.0 alpha. The Journey DSL surface is stable across pre-v1.0 minor bumps; the executor contract may evolve as `kiosk-server` lands.
+Pre-v1.0 alpha. The Journey DSL surface is stable across pre-v1.0 minor bumps; the executor contract may still evolve pre-v1.0 (`kiosk-server` ships `Kiosk::Server::TestExecutor` against it today).
 
 ## License
 

@@ -79,7 +79,12 @@ jobs:
       matrix:
         include:
           - demo: kiosk-demo-foodelivery
-            tasks: demo:walkthrough demo:isolation demo:redteam demo:schema
+            # demo:order is the pay-settling headline (order_flow.rb + QA1-3 +
+            # settlements assertions), matching how each sibling row runs its
+            # settling headline (shop/book/rideflow). It settles via StubPsp,
+            # so no Stripe key / stripe-mock is needed. (demo:walkthrough is the
+            # curl tour; it self-asserts but does not exercise the pay verb.)
+            tasks: demo:order demo:isolation demo:redteam demo:schema
           - demo: kiosk-demo-getgrocery
             tasks: demo:shop demo:isolation demo:redteam demo:schema
             # getgrocery uses the real Stripe adapter. CI carries NO Stripe key

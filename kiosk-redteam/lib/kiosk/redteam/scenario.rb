@@ -72,7 +72,11 @@ module Kiosk
         )
       end
 
-      # Register a principal, solving PoW at the profile difficulty.
+      # Register a principal.  Any PoW solving is driven entirely by the
+      # server's 402 Equihash challenges, not by profile.pow_difficulty:
+      # that integer is INERT — accepted but never read by the Client (see
+      # {Client#register_raw}).  It is threaded through only so callers don't
+      # have to change; scenarios read it directly to decide applicability.
       #
       # @param client  [Client]
       # @param name    [String]

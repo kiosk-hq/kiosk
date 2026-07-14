@@ -84,5 +84,5 @@ e2e/
     ├── stub_psp.rb                         # deterministic in-process PSP (no real Stripe)
     ├── pay_flow.rb                         # no-human AP2 pay flow: register → sign mandates → pay
     ├── initializer_kiosk.rb                # Kiosk.configure + registered Action
-    └── routes.rb                           # mounts /kiosk/{query,run,pay,schema} + /.well-known/kiosk.json
+    └── routes.rb                           # mounts /kiosk/{query,run,pay,schema}, /kiosk/auth/{challenge,register,login,revoke}, jwks, oauth/* device routes + /.well-known/kiosk.json
 ```

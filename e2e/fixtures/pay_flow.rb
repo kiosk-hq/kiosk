@@ -1,8 +1,9 @@
 # frozen_string_literal: true
 
 # No-human payment proof. The agent generates its own keypair, SELF-REGISTERS
-# a synthetic principal (no human, no device-grant), signs an AP2 intent+cart
-# mandate bound to that principal, and pays. Prints a JSON line on stdout.
+# a synthetic principal (no human, no device-grant), signs the full AP2 mandate
+# trail (intent → cart → payment) bound to that principal, and pays. Prints a
+# JSON line on stdout.
 require "jwt"; require "json"; require "net/http"; require "uri"; require "openssl"; require "securerandom"
 
 SERVER = ENV.fetch("SERVER_URL")

@@ -89,7 +89,32 @@ In production these are versioned RubyGems. The `kiosk-pay-stripe` adapter swaps
 rails g kiosk:install
 ```
 
-This emits: the Kiosk schema migration (the `kiosk.*` namespace with agents, sessions, mandate, and reservations tables), the REST wire surface (`/kiosk/query`, `/kiosk/run`, `/kiosk/pay`, `/kiosk/schema`), the proof-of-possession auth handshake at `/kiosk/auth/challenge` + `/kiosk/auth/register`, and `/.well-known/kiosk.json`.
+This emits exactly two things: `config/initializers/kiosk.rb` (a `Kiosk.configure` block) and the seven `kiosk.*` schema migrations (the namespace with agents, sessions, actions-log, reservations, device-authorizations, mandate tables, plus the KYC column). Run `bin/rails db:migrate` to apply them.
+
+The generator does **not** touch your routes. `kiosk-server` ships the wire controllers; you mount them yourself. In this demo that block lives in `config/routes.rb`:
+
+```ruby
+# config/routes.rb — the wire surface, mounted manually (v0.1 alpha).
+# REST endpoints (ADR-0005): one per verb, HTTP method carries the semantics.
+get  "/kiosk/schema",         to: "kiosk/server/wire#schema"
+post "/kiosk/query",          to: "kiosk/server/wire#query"
+post "/kiosk/run",            to: "kiosk/server/wire#run"
+post "/kiosk/pay",            to: "kiosk/server/wire#pay"
+get  "/kiosk/auth/challenge", to: "kiosk/server/auth#challenge"
+post "/kiosk/auth/register",  to: "kiosk/server/auth#register"
+post "/kiosk/auth/login",     to: "kiosk/server/auth#login"
+post "/kiosk/auth/revoke",    to: "kiosk/server/auth#revoke"
+
+# /.well-known/kiosk.json is built on the fly from Kiosk.configuration;
+# kiosk-server does not yet ship a controller for it, so it is inlined here.
+get "/.well-known/kiosk.json", to: ->(env) {
+  base_url = "#{env['rack.url_scheme']}://#{env['HTTP_HOST']}"
+  [200, { "content-type" => "application/json" },
+   [Kiosk::Server::WellKnown.build_json(base_url: base_url)]]
+}
+```
+
+(A follow-up release will mount these via the engine's own routes drawer so this block collapses to one line.)
 
 **3. Register named queries**
 

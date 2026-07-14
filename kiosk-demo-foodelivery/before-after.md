@@ -91,7 +91,32 @@ In production these are versioned RubyGems. The `kiosk-pay-stripe` adapter swaps
 rails g kiosk:install
 ```
 
-This emits: the Kiosk schema migration (the `kiosk.*` namespace with agents, sessions, and mandate tables), the REST wire surface (`/kiosk/query`, `/kiosk/run`, `/kiosk/pay`, `/kiosk/schema` — one endpoint per verb, HTTP method carries the semantics), the proof-of-possession auth handshake at `/kiosk/auth/*` (`challenge`, `register`, `login`, `revoke`), and `/.well-known/kiosk.json`. Today `query`, `run`, `pay`, and `schema` are wired end-to-end.
+This emits exactly two things: `config/initializers/kiosk.rb` (a `Kiosk.configure` block) and the seven `kiosk.*` schema migrations (the namespace with agents, sessions, actions-log, reservations, device-authorizations, mandate tables, plus the KYC column). Run `bin/rails db:migrate` to apply them.
+
+The generator does **not** touch your routes. `kiosk-server` ships the wire controllers; you mount them yourself. In this demo that block lives in `config/routes.rb`:
+
+```ruby
+# config/routes.rb — the wire surface, mounted manually (v0.1 alpha).
+# REST endpoints (ADR-0005): one per verb, HTTP method carries the semantics.
+get  "/kiosk/schema",         to: "kiosk/server/wire#schema"
+post "/kiosk/query",          to: "kiosk/server/wire#query"
+post "/kiosk/run",            to: "kiosk/server/wire#run"
+post "/kiosk/pay",            to: "kiosk/server/wire#pay"
+get  "/kiosk/auth/challenge", to: "kiosk/server/auth#challenge"
+post "/kiosk/auth/register",  to: "kiosk/server/auth#register"
+post "/kiosk/auth/login",     to: "kiosk/server/auth#login"
+post "/kiosk/auth/revoke",    to: "kiosk/server/auth#revoke"
+
+# /.well-known/kiosk.json is built on the fly from Kiosk.configuration;
+# kiosk-server does not yet ship a controller for it, so it is inlined here.
+get "/.well-known/kiosk.json", to: ->(env) {
+  base_url = "#{env['rack.url_scheme']}://#{env['HTTP_HOST']}"
+  [200, { "content-type" => "application/json" },
+   [Kiosk::Server::WellKnown.build_json(base_url: base_url)]]
+}
+```
+
+`query`, `run`, `pay`, and `schema` are wired end-to-end. (A follow-up release will mount these via the engine's own routes drawer so this block collapses to one line.)
 
 Agents call named queries by name (`query` verb) — never raw SQL. The provider registers the queries it wishes to expose; isolation is enforced at the app layer in the query definitions and in Actions, with RLS available as optional defense-in-depth.
 

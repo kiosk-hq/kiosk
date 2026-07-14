@@ -84,6 +84,17 @@ RSpec.describe Kiosk::TestHelpers::NullExecutor do
       expect(executor.calls_of(:pay_action).size).to eq(1)
       expect(executor.calls_of(:run_action)).to be_empty
     end
+
+    it "returns nil by default" do
+      expect(executor.pay_action(:buy, { sku: "x" })).to be_nil
+    end
+
+    it "returns the queued result FIFO via enqueue_pay_action" do
+      executor.enqueue_pay_action({ "status" => "captured" })
+      executor.enqueue_pay_action({ "status" => "declined" })
+      expect(executor.pay_action(:buy, {})).to eq("status" => "captured")
+      expect(executor.pay_action(:buy, {})).to eq("status" => "declined")
+    end
   end
 
   describe "#seed" do
@@ -91,6 +102,17 @@ RSpec.describe Kiosk::TestHelpers::NullExecutor do
       executor.seed(:rentals, { active: true }, count: 3)
       call = executor.calls_of(:seed).first
       expect(call.args).to eq(table: :rentals, attrs: { active: true }, count: 3)
+    end
+
+    it "returns nil by default" do
+      expect(executor.seed(:rentals, { active: true }, count: 1)).to be_nil
+    end
+
+    it "returns the queued result FIFO via enqueue_seed" do
+      executor.enqueue_seed([{ "id" => 1 }])
+      executor.enqueue_seed([{ "id" => 2 }])
+      expect(executor.seed(:rentals, {}, count: 1)).to eq([{ "id" => 1 }])
+      expect(executor.seed(:rentals, {}, count: 1)).to eq([{ "id" => 2 }])
     end
   end
 

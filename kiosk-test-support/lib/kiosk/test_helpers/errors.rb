@@ -6,8 +6,11 @@ module Kiosk
     # matchers (RSpec `be_rls_denied`, Minitest `assert_rls_denied`) look for
     # these by class.
     #
-    # The real executor (in `kiosk-server`) raises the same classes when a
-    # SQL statement returns an RLS denial or a quota check fails.
+    # The real executor (`Kiosk::Server::TestExecutor` in `kiosk-server`)
+    # raises `RLSDenied` when a SQL statement returns an RLS denial.
+    # `QuotaExceeded` has no raiser in the shipped executor yet; it exists so
+    # the matchers / assertions and the `NullExecutor` can exercise the
+    # quota-denial path.
     module Errors
       # Raised when the configured executor reports the SQL or Action was
       # rejected by an RLS policy. The matcher / assertion is the canonical

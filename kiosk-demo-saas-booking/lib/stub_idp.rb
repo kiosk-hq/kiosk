@@ -1,8 +1,10 @@
 # frozen_string_literal: true
 
 # Stub Agent-IdP for this demo. Parses `Authorization: Bearer …` into
-# a {Kiosk::Identity}. Real adapters (Devise / Auth0 / WorkOS / etc.) ship
-# as `kiosk-user-idp-*` and `kiosk-agent-idp-*` gems.
+# a {Kiosk::Identity}. The only real adapter shipped today is
+# `kiosk-user-idp-devise` (a user-IdP, currently unwired). Third-party
+# agent-IdP adapters (Entra / Okta / Passport-style) are planned to ship as
+# `kiosk-agent-idp-*` gems — none exist yet.
 #
 # Two token shapes:
 #

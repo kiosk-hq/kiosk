@@ -201,7 +201,7 @@ assert "jwks: no private p field"      "$(echo "$jwks" | jq -r '.keys[0] | has("
 # human-in-the-loop consent flow but is not part of the advertised surface, so
 # e2e does not assert on it (findings K-016 / K-023).
 
-# ─── no-human AP2 pay flow (register → intent+cart mandate → pay → persist) ───
+# ─── no-human AP2 pay flow (register → intent → cart → payment mandate → pay → persist) ───
 printf "\n\033[1m=== no-human register → mandate → pay ===\033[0m\n"
 
 pay_out=$( cd "$APP_DIR" && SERVER_URL="$SERVER_URL" KIOSK_ISSUER="$KIOSK_ISSUER" \

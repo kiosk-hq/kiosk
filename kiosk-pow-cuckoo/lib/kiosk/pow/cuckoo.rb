@@ -361,10 +361,10 @@ module Kiosk
         if target
           cycle_packed = cycle.sort.pack("Q<*")
           cycle_hash   = blake2b256(cycle_packed)
-          # Interpret both values as big-endian 256-bit integers.
-          hash_int   = cycle_hash.unpack("C*").reduce(0) { |acc, b| (acc << 8) | b }
-          target_int = target.is_a?(Integer) ? target : target.unpack("C*").reduce(0) { |acc, b| (acc << 8) | b }
-          return false if hash_int >= target_int
+          # Interpret the 32-byte hash as a big-endian 256-bit integer and
+          # compare against the Integer target (the .params contract).
+          hash_int = cycle_hash.unpack("C*").reduce(0) { |acc, b| (acc << 8) | b }
+          return false if hash_int >= target
         end
 
         true

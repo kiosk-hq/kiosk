@@ -1,11 +1,14 @@
 # frozen_string_literal: true
 
-# Kiosk demo orchestration. Three sub-tasks:
+# Kiosk demo orchestration. Sub-tasks:
 #
 #   rake demo:setup        idempotent db:drop / create / schema:load / seed
 #   rake demo:walkthrough  boots the server, runs a curl-driven showcase,
 #                          tears down
 #   rake demo:isolation    adversarial cross-tenant denial test (R1 Phase 1 T3)
+#   rake demo:register     registration-PoW demo (no-proof 402 → solve → 201)
+#   rake demo:redteam      adversarial regression battery against the live surface
+#   rake demo:schema       self-discovery proof over the schema verb
 #   rake demo              setup + walkthrough end-to-end
 #
 # The walkthrough lives in bin/demo (POSIX shell) so it's debuggable

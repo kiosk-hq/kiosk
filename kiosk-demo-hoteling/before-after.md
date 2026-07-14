@@ -28,9 +28,9 @@ hoteling is a Rails 8.1 app that speaks Kiosk. The following is the recorded out
 
 ```
   Registered: user_id=<uuid>
-  Properties: 5 found, using id=1 (Gran Hotel Istanbul)
-  Availability: 3 room type(s) available, using id=1 (Standard, 8000c/night)
-  Reserved: booking_id=<uuid> total=24000c
+  Properties: 5 found, using id=4 (Bosphorus Palace)
+  Availability: 2 room type(s) available, using id=<id> (Classic, 15000c/night)
+  Reserved: booking_id=<uuid> total=45000c
   Payment settled: settlement_id=<uuid>
 
 ── Assertions ──
@@ -53,9 +53,9 @@ hoteling is a Rails 8.1 app that speaks Kiosk. The following is the recorded out
 
 1. **Discover** — `GET /.well-known/kiosk.json` returns the hoteling issuer and surface.
 2. **Self-register** — generated an RSA-2048 keypair, then completed the proof-of-possession handshake: `GET /kiosk/auth/challenge` → signed the challenge as an RS256 JWS (`aud` = the hoteling issuer) → `POST /kiosk/auth/register {public_key:<pem>, signed:<jws>}` → HTTP 201 → `agent_id`, `user_id`, `access_token`. No existing account. No human login. No bot check.
-3. **Browse** — `POST /kiosk/query {name:"properties"}` returned 5 hotel properties. `POST /kiosk/query {name:"availability", property_id:1, check_in:"2026-07-28", check_out:"2026-07-31"}` returned available room types with nightly prices.
-4. **Reserve** — `POST /kiosk/run {name:"reserve_room", property_id:1, room_type_id:1, check_in:"2026-07-28", check_out:"2026-07-31"}` → HTTP 200, `booking_id:<uuid>`, `total_cents:24000`. A TTL hold was created in `kiosk.reservations`.
-5. **Pay** — signed an AP2 intent mandate (`cap_amount_cents:24100`, `scope:"lodging"`, `iss:<issuer>`) and a cart mandate (`total_amount_cents:24000`, `line_items:[{sku:"Standard", qty:3, booking_id:<uuid>}]`, bound to the intent via `intent_mandate_id`) as RS256 JWS with the registered keypair, then `POST /kiosk/pay {intent_mandate_jws:…, cart_mandate_jws:…, payment_mandate_jws:…}` → `settled_amount_cents:24000`, `ok:true`.
+3. **Browse** — `POST /kiosk/query {name:"properties"}` returned 5 hotel properties (ordered by name; the flow uses the first, Bosphorus Palace, id=4). `POST /kiosk/query {name:"availability", property_id:4, check_in:"2026-07-28", check_out:"2026-07-31"}` returned available room types with nightly prices (ordered by price; the flow uses the first, Classic).
+4. **Reserve** — `POST /kiosk/run {name:"reserve_room", property_id:4, room_type_id:<id>, check_in:"2026-07-28", check_out:"2026-07-31"}` → HTTP 200, `booking_id:<uuid>`, `total_cents:45000`. A TTL hold was created in `kiosk.reservations`.
+5. **Pay** — signed an AP2 intent mandate (`cap_amount_cents:45100`, `scope:"lodging"`, `iss:<issuer>`) and a cart mandate (`total_amount_cents:45000`, `line_items:[{sku:"Classic", qty:3, booking_id:<uuid>}]`, bound to the intent via `intent_mandate_id`) as RS256 JWS with the registered keypair, then `POST /kiosk/pay {intent_mandate_jws:…, cart_mandate_jws:…, payment_mandate_jws:…}` → `settled_amount_cents:45000`, `ok:true`.
 6. **Confirm** — `POST /kiosk/run {name:"confirm_booking", booking_id:<uuid>}` → HTTP 200, `status:"confirmed"`, `confirmation_code:<uuid>`. The server verified ownership (Gate 1) and the settled mandate referencing this booking (Gate 2) before confirming.
 
 The database confirmed: one row in `bookings` with `status='confirmed'`, one row in `kiosk.settlements`, one row in `kiosk.reservations`.

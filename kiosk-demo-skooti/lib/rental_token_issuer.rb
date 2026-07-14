@@ -44,8 +44,17 @@ module RentalTokenIssuer
   class << self
     # Issue a signed rental token.
     #
-    # @param scooter_code   [String]  e.g. "SK-001"
-    # @param reservation_id [String]  UUID or other opaque ID
+    # Charset contract: `scooter_code` and `reservation_id` MUST NOT contain the
+    # field delimiter `|` (nor be split by it). The signed message packs six
+    # fields pipe-delimited, and {.verify} rejects any message whose split does
+    # not yield exactly 6 fields — so a `|` in either input mints a validly
+    # SIGNED token that this issuer's own verifier rejects (a field-shift
+    # hazard for a laxer external verifier). The skooti demo only ever passes
+    # `SK-###` codes and opaque IDs with no pipe, so this is a documented input
+    # precondition rather than an enforced guard; see K-209.
+    #
+    # @param scooter_code   [String]  e.g. "SK-001" (no `|`)
+    # @param reservation_id [String]  UUID or other opaque ID (no `|`)
     # @param now            [Integer] current unix timestamp (seconds)
     # @param ttl            [Integer] token lifetime in seconds (default 900 = 15 min)
     # @return [String] wire token: "<message>.<base64url_sig>"
@@ -65,6 +74,12 @@ module RentalTokenIssuer
     #
     # Splits on the LAST ".", base64url-decodes the signature, Ed25519-verifies
     # the message, checks exp >= now.
+    #
+    # Reference-verifier surface: the production unlock path never calls this —
+    # the scooter lock (lib/lock_sim.rb / the firmware) does the verification.
+    # This Ruby verifier exists solely as the known-answer-vector anchor the KAT
+    # (lib/rental_token_issuer_kat.rb) runs the firmware's expected wire vector
+    # through, so the byte-exact contract stays cross-checked without the lock.
     #
     # @param token [String] wire token
     # @param now   [Integer] current unix timestamp (seconds)
@@ -110,7 +125,14 @@ module RentalTokenIssuer
       nil
     end
 
-    # The public key PEM string derived from the configured signing key.
+    # The public key PEM string derived from the CONFIGURED signing key.
+    #
+    # KAT-anchor surface: production provisioning reads the public key from the
+    # fixed dev keypair via {DevUnlockKey.public_key_pem} (see rental_flow.rb /
+    # demo.rake) — that path does not depend on a configured signing key. This
+    # helper derives the same value from `Kiosk.configuration.unlock_signing_key`
+    # so the KAT can assert the configured-key round-trip matches the firmware
+    # fixture; the two derivations are deliberately independent to cross-check.
     #
     # @return [String] PEM
     def public_key_pem
@@ -120,6 +142,10 @@ module RentalTokenIssuer
     # The raw 32-byte Ed25519 public key as a lowercase hex string.
     # This is the value that gets baked into each scooter lock's firmware.
     # Ed25519 DER-encoded public key = 12-byte header + 32-byte raw key.
+    #
+    # KAT-anchor surface (see {.public_key_pem}): the firmware fixture is taken
+    # from {DevUnlockKey.public_key_raw32_hex}; the KAT asserts this
+    # configured-key derivation equals it.
     #
     # @return [String] 64 lowercase hex chars
     def public_key_raw32_hex

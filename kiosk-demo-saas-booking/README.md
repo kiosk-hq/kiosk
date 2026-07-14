@@ -14,8 +14,10 @@ Combette is the canonical reference shape for personal-services SaaS — barbers
 
 ## Run the demo
 
+The demo lives in the Kiosk monorepo and resolves its gems by path
+(`../kiosk-*` in the Gemfile), so run it from its checked-out directory:
+
 ```sh
-git clone https://github.com/kiosk-hq/kiosk-demo-saas-booking.git
 cd kiosk-demo-saas-booking
 bundle install
 rake demo

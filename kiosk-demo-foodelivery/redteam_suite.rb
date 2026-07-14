@@ -164,7 +164,8 @@ scenarios = [
   # foodelivery has pow_difficulty: 0 (no registration PoW gate), and the
   # KIOSK_POW_DEMO flag enables exec-time PoW (a different gate type) which
   # RegistrationWithoutPow does not test.  Exec-time-PoW redteam is a future
-  # enhancement; skooti covers RegistrationWithoutPow via pow_difficulty: 20.
+  # enhancement; skooti covers RegistrationWithoutPow with its Equihash
+  # registration gate (n=96 k=5), solved against the real 402 challenge.
 ]
 
 # ── Expected-applicable assertion ─────────────────────────────────────────────

@@ -101,7 +101,7 @@ curl -sS -X POST "$SERVER_URL/kiosk/run" \
   -d "{\"name\":\"book_appointment\",\"salon_id\":$SALON_ID,\"slot\":\"2026-07-01T14:00:00Z\"}" \
   | jq '.value'
 
-# ─── RLS isolation ───────────────────────────────────────────────────
+# ─── App-layer isolation ─────────────────────────────────────────────
 
 heading "App-layer isolation: Alice and Bob can only see their own"
 

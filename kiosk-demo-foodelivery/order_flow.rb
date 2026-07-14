@@ -3,7 +3,7 @@
 # Reference agent driver: no-human food order end-to-end.
 #
 # Generalises e2e/fixtures/pay_flow.rb to the full order flow:
-#   register → browse menu (sql) → place_order (run) → sign AP2 mandates → pay
+#   register → browse menu (named query) → place_order (run) → sign AP2 mandates → pay
 #
 # Usage:
 #   SERVER_URL=http://127.0.0.1:3002 \

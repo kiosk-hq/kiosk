@@ -36,7 +36,6 @@
 #
 # ────────────────────────────────────────────────────────────────────────────
 
-require "digest"
 require "json"
 require "net/http"
 require "openssl"

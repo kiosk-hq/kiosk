@@ -249,9 +249,12 @@ model.
 
 ## Handling `pow_required`
 
-Any wire response (`/kiosk/query`, `/kiosk/run`, `/kiosk/pay`, `/kiosk/schema`)
-— and `/kiosk/auth/register` (Step 2) — may be HTTP 402 with
-`error.code == "pow_required"` and an `error.challenges` array:
+A `/kiosk/query` or `/kiosk/run` — and `/kiosk/auth/register` (Step 2) — may be
+HTTP 402 with `error.code == "pow_required"` and an `error.challenges` array
+(`/kiosk/schema` and `/kiosk/pay` never gate on PoW). skooti configures only the
+registration toll, so here the 402 arrives at register (Step 2) and the wire
+verbs do not challenge; the query/run case applies to providers that also price
+those calls:
 
 ```json
 {
@@ -285,9 +288,9 @@ When this happens:
 
 Challenges expire (`exp`) and proofs are single-use — solve and retry
 promptly, do not cache. Do not negotiate or downgrade the algorithm — solve
-what the provider demands or tell the user to update. The provider may
-challenge again on any subsequent request. skooti's demo params (n=96, k=5)
-solve in well under a second; estimate cost from `params` before solving.
+what the provider demands or tell the user to update. skooti's demo params
+(n=96, k=5) solve in well under a second; estimate cost from `params` before
+solving.
 
 ---
 

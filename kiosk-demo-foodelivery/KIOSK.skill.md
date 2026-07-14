@@ -276,6 +276,8 @@ Response — HTTP 200, inside `.value`:
     { "name": "my_orders",          "description": "List this principal's placed orders ...", "params": null }
   ],
   "actions": [
+    { "name": "payment_setup", "description": "Check whether the authenticated principal has a saved payment method ... (call this before `pay`)",
+                               "params": {} },
     { "name": "place_order", "description": "Place a food order for the authenticated principal",
                               "params": { "menu_item_id": "integer — id of the menu item to order",
                                           "quantity": "integer — number of items (default 1)",

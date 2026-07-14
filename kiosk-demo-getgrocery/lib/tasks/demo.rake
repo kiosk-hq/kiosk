@@ -2,9 +2,13 @@
 
 # Kiosk demo orchestration for kiosk-demo-getgrocery.
 # Tasks:
-#   rake demo:setup   idempotent db:drop / create / migrate / seed
-#   rake demo:shop    boots the server, runs getgrocery_flow.rb, asserts happy path
-#   rake demo         setup + shop (full end-to-end proof)
+#   rake demo:setup      idempotent db:drop / create / migrate / seed
+#   rake demo:shop       boots the server, runs getgrocery_flow.rb, asserts happy path
+#   rake demo:isolation  adversarial cross-tenant + order-ownership isolation test
+#   rake demo:schema     self-discovery proof over the schema verb
+#   rake demo:redteam    adversarial regression battery (kiosk-redteam scenarios)
+#   rake demo:pow        commerce catalog-toll PoW demo (catalog 402 → solve → 200)
+#   rake demo            setup + shop (full end-to-end proof)
 
 # Start (or reuse) a local stripe-mock; return its HTTP base URL. The adversarial
 # suites use it so the full pay→settlement→gate flow runs with NO real Stripe
@@ -53,7 +57,7 @@ namespace :demo do
     end
   end
 
-  desc "Boot the server, run getgrocery_flow.rb end-to-end (no-human happy path: register→attach_card→catalog→create_order→payment_setup→pay→schedule_delivery→my_orders), assert."
+  desc "Boot the server, run getgrocery_flow.rb end-to-end (no-human happy path: register→catalog→create_order→delivery_slots→payment_setup→pay→schedule_delivery→my_orders), assert."
   task :shop do
     require "resolv"
     require "net/http"

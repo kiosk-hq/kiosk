@@ -3,10 +3,14 @@
 # Kiosk demo orchestration for kiosk-demo-hoteling.
 # Tasks:
 #
-#   rake demo:setup   idempotent db:drop / create / migrate / seed
-#   rake demo:book    boots the server, runs hoteling_flow.rb (no-human full
-#                     booking chain), asserts happy path + negative gate
-#   rake demo         setup + book (full end-to-end proof)
+#   rake demo:setup      idempotent db:drop / create / schema:load / seed
+#   rake demo:book       boots the server, runs hoteling_flow.rb (no-human full
+#                        booking chain), asserts happy path + negative gate
+#   rake demo:isolation  adversarial cross-tenant isolation test
+#   rake demo:redteam    adversarial regression battery (kiosk-redteam)
+#   rake demo:schema     self-discovery proof — verifies the schema verb over HTTP
+#   rake demo:browse     browse-heavy priced-pagination PoW demo (KIOSK_POW_BROWSE_DEMO=1)
+#   rake demo            setup + book (full end-to-end proof)
 
 namespace :demo do
   desc "Create + load schema + seed the demo database (idempotent)."

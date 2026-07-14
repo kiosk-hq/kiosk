@@ -27,13 +27,12 @@
 # Usage:
 #   SERVER_URL=http://127.0.0.1:3004 \
 #   KIOSK_ISSUER=http://127.0.0.1:3004 \
-#   DB=kiosk_hoteling_development \
 #   bundle exec ruby isolation_flow.rb
 #
 # Prints ONE JSON line on stdout; non-zero exit on any failure.
+# (The DB-row assertions run in the demo:isolation rake task, not here.)
 
 require "date"
-require "digest"
 require "json"
 require "net/http"
 require "openssl"

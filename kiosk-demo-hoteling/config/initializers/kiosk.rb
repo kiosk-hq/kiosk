@@ -1,7 +1,10 @@
 # frozen_string_literal: true
 
 # Kiosk-demo (hoteling-shape) configuration. Hotel booking with payment gate.
-# No PoW, no KYC, no hardware unlock.
+# No KYC, no hardware unlock. PoW is off by default; with
+# KIOSK_POW_BROWSE_DEMO=1 the browse-heavy `query` verb is priced by request
+# rate with escalating Equihash (n=96 k=5) proofs (see the browse gate below,
+# exercised by demo:browse).
 # Queries: properties, availability, my_bookings
 # Actions: reserve_room, confirm_booking, payment_setup
 

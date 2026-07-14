@@ -2,10 +2,16 @@
 
 # Kiosk demo orchestration. Tasks:
 #
-#   rake demo:setup        idempotent db:drop / create / migrate / seed
+#   rake demo:setup        idempotent db:drop / create / schema:load / seed
 #   rake demo:walkthrough  boots the server, runs a curl-driven showcase, tears down
 #   rake demo:order        boots the server, runs order_flow.rb (no-human full order),
 #                          asserts DB row counts, tears down
+#   rake demo:pow          boots with KIOSK_POW_DEMO=1, runs pow_flow.rb (402→solve→200)
+#   rake demo:rls          RLS-enforce overlay reference (additive; leaves structure.sql)
+#   rake demo:reputation   trust-earned-by-spending PoW demo, runs reputation_flow.rb
+#   rake demo:isolation    adversarial cross-tenant isolation test
+#   rake demo:schema       self-discovery proof — verifies the schema verb over HTTP
+#   rake demo:redteam      adversarial regression battery (kiosk-redteam)
 #   rake demo              setup + order (the full end-to-end proof)
 #
 # The walkthrough lives in bin/demo (POSIX shell) so it's debuggable
@@ -1003,8 +1009,9 @@ namespace :demo do
       SKIPPED  MissingKyc, ExpiredKyc, ForgedKyc  (requires_kyc: false)
 
     Note: RegistrationWithoutPow is not run — foodelivery has no registration
-    PoW gate (pow_difficulty: 0). skooti covers that scenario via d=20.
-    Exec-time PoW redteam is a future enhancement.
+    PoW gate (pow_difficulty: 0). skooti covers that scenario: its registration
+    gate is an Equihash proof (n=96 k=5) that the client solves against the real
+    402 challenge. Exec-time PoW redteam is a future enhancement.
 
     Exits 0 when all applicable scenarios are BLOCKED; exits 1 on any BREACH.
     A BREACH = a real hole in foodelivery — fix the app, not the scenario.

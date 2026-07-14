@@ -124,7 +124,7 @@ Kiosk.configure do |c|
   #
   # When unset (default), enforce_db_role = false and app_role falls back to the
   # ENV-driven default ("app_role") — no role-drop, byte-identical to the
-  # pre-T5 behaviour (Path-C demo:order / demo:isolation / demo:pow / demo:cuckoo).
+  # pre-T5 behaviour (Path-C demo:order / demo:isolation / demo:pow).
   if ENV["KIOSK_RLS_ENFORCE"] == "1"
     c.enforce_db_role = true
     c.app_role        = "kiosk_foodelivery_app"

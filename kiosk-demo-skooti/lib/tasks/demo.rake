@@ -9,6 +9,9 @@
 #   rake demo:rideflow   boots the server, runs rental_flow.rb (no-human full
 #                        rental chain), asserts happy path + all negative gates,
 #                        tears down
+#   rake demo:isolation  adversarial cross-tenant + ownership isolation test
+#   rake demo:redteam    adversarial regression battery (kiosk-redteam scenarios)
+#   rake demo:schema     self-discovery proof over the schema verb
 #   rake demo            setup + rideflow (full end-to-end proof)
 
 namespace :demo do

@@ -12,7 +12,6 @@
 #
 # Prints ONE JSON line on stdout; non-zero exit on any HTTP failure.
 
-require "digest"
 require "jwt"
 require "json"
 require "net/http"

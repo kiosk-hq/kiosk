@@ -36,9 +36,8 @@ The lesson the validation doc draws:
 
 ## With Kiosk — foodelivery (`rake demo` output)
 
-foodelivery is a Rails 8.1 app that speaks Kiosk. The following is the recorded output of two consecutive `rake demo` runs.
+foodelivery is a Rails 8.1 app that speaks Kiosk. The following is the recorded output of a `rake demo` run.
 
-**Run 1:**
 ```
 {"http_register":201,"user_id":"3e406ba4-46a0-402d-a5c1-7eadb173db82","agent_id":"e118679e-009e-4458-8bbd-573ccfe0985a","order":{"order_id":"18aaacf8-1e7e-484c-b02d-76f578854418","restaurant_id":1,"total_cents":1599,"status":"placed"},"pay":{"ok":true,"kind":"value","value":{"settlement_id":"4ae8407f-451d-46ca-8869-0c8e8d337719","psp_reference":"stub_pi_8380d66b-5a24-4cf4-9d0f-06b8c9464a64","settled_amount_cents":1599,"currency":"eur"}}}
 

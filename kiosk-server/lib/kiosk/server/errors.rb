@@ -83,7 +83,12 @@ module Kiosk
         HTTP_STATUS = 409
       end
 
-      # Rate limit hit.
+      # Rate limit hit. No raiser in the shipped executor yet — kiosk-server
+      # ships no quota/rate-limit enforcement and the spec documents no
+      # quota_exceeded/429 error code. The class exists to reserve the CODE +
+      # HTTP_STATUS for a future quota gate and to keep the error hierarchy
+      # complete; the exercised quota-denial path lives in kiosk-test-support
+      # (NullExecutor + the be_quota_exceeded / assert_quota_exceeded helpers).
       class QuotaExceeded < Base
         CODE        = "quota_exceeded"
         HTTP_STATUS = 429

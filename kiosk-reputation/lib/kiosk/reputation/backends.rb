@@ -4,19 +4,24 @@ module Kiosk
   module Reputation
     # Registry mapping algorithm names to PoW backend objects.
     #
-    # A backend must respond to:
-    #   .params(n:, k:) -> Hash    — build the challenge params for the algorithm
-    #                                (equihash memory is fixed by (n,k); there is
-    #                                no continuous difficulty dial — the policy
-    #                                escalates by PROOF COUNT, not by params)
+    # A registered backend need only respond to:
     #   .verify(salt:, params:, nonce:) -> Boolean — verify a submitted proof
     #
-    # kiosk-pow-equihash registers itself here (the shipped default backend):
-    #   Kiosk::Reputation::Backends.register("equihash", Kiosk::Pow::Equihash)
+    # {Challenge.verify} resolves a backend via {fetch} and calls only its
+    # .verify. (Backends also expose a .params helper for building challenge
+    # params, but its signature is algorithm-specific — equihash takes (n:, k:),
+    # argon2id takes (d:, m:, t:, p:), cuckatoo takes (edgebits:, proofsize:,
+    # target:) — and it is called directly on the concrete backend by the host,
+    # never through this registry.)
     #
-    # Legacy/alternative backends register under their own name, e.g.
-    # kiosk-pow (Argon2id, legacy) as "argon2id", or a future
-    # kiosk-pow-cuckoo as "cuckoo".
+    # The host must register a backend before the first challenge verify — no
+    # PoW gem self-registers on require. The shipped default:
+    #   require "kiosk/pow/equihash"
+    #   Kiosk::Reputation::Backends.register(Kiosk::Pow::Equihash::NAME, Kiosk::Pow::Equihash)
+    #
+    # Alternative backends register under their own name, e.g. kiosk-pow
+    # (Argon2id, legacy) as "argon2id", or kiosk-pow-cuckoo (opt-in) as
+    # "cuckatoo" (Kiosk::Pow::Cuckoo::NAME).
     module Backends
       @registry = {}
 
@@ -24,7 +29,7 @@ module Kiosk
         # Register a backend under an algorithm name.
         #
         # @param alg_name [String] name advertised in the challenge (e.g. "equihash")
-        # @param backend  [Object] must respond to .params and .verify
+        # @param backend  [Object] must respond to .verify(salt:, params:, nonce:)
         def register(alg_name, backend)
           @registry[alg_name.to_s] = backend
         end

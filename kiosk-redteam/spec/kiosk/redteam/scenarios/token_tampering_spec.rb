@@ -4,6 +4,8 @@ require "spec_helper"
 require_relative "support"
 require "jwt"
 require "openssl"
+require "json"
+require "base64"
 
 RSpec.describe Kiosk::Redteam::Scenarios::TokenTampering do
   subject(:scenario) { described_class.new }
@@ -76,6 +78,59 @@ RSpec.describe Kiosk::Redteam::Scenarios::TokenTampering do
       expect {
         JWT.decode(tampered, signing_key.public_key, true, algorithms: ["RS256"])
       }.to raise_error(JWT::DecodeError)
+    end
+
+    # The role branch (claims["role"]) is covered by the token above. The
+    # remaining branches (sub / exp / else) are only reached for tokens that
+    # carry no `role` claim — e.g. a role-absent provider per ADR-0011 (K-078).
+    # Decode the tampered payload to prove the intended claim was flipped.
+    def flipped_claims(scenario_instance, token)
+      payload_b64 = scenario_instance.send(:tamper_token, token).split(".")[1]
+      padded = payload_b64 + ("=" * ((4 - payload_b64.length % 4) % 4))
+      JSON.parse(Base64.urlsafe_decode64(padded))
+    end
+
+    context "when the token carries no role claim (role-absent provider, ADR-0011)" do
+      let(:sub_token) do
+        now = Time.now.to_i
+        JWT.encode({ sub: "user-b", exp: now + 3600, iat: now }, signing_key, "RS256")
+      end
+
+      it "flips the sub claim" do
+        claims = flipped_claims(scenario_instance, sub_token)
+        expect(claims["sub"]).to eq("user-b-tampered")
+      end
+
+      it "still produces a signature-invalid token" do
+        tampered = scenario_instance.send(:tamper_token, sub_token)
+        expect {
+          JWT.decode(tampered, signing_key.public_key, true, algorithms: ["RS256"])
+        }.to raise_error(JWT::DecodeError)
+      end
+    end
+
+    context "when the token carries only an exp claim (no role, no sub)" do
+      let(:exp_token) do
+        now = Time.now.to_i
+        JWT.encode({ exp: now + 3600, iat: now }, signing_key, "RS256")
+      end
+
+      it "bumps the exp claim by 999_999 seconds" do
+        now = Time.now.to_i
+        claims = flipped_claims(scenario_instance, exp_token)
+        expect(claims["exp"]).to eq(now + 3600 + 999_999)
+      end
+    end
+
+    context "when the token carries none of role / sub / exp" do
+      let(:sentinel_token) do
+        JWT.encode({ iat: Time.now.to_i, foo: "bar" }, signing_key, "RS256")
+      end
+
+      it "injects the __tamper__ sentinel claim" do
+        claims = flipped_claims(scenario_instance, sentinel_token)
+        expect(claims["__tamper__"]).to be(true)
+      end
     end
   end
 end

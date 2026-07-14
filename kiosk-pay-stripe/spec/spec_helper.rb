@@ -12,5 +12,13 @@ RSpec.configure do |config|
   config.disable_monkey_patching!
   config.warnings = false
 
-  config.before(:each) { Kiosk.reset! }
+  # The adapter sets `::Stripe.api_key` process-globally in its constructor
+  # (stripe.rb). That is the only global state these specs mutate, so restore
+  # it around each example to keep leakage between examples out.
+  config.around(:each) do |example|
+    saved_key = ::Stripe.api_key
+    example.run
+  ensure
+    ::Stripe.api_key = saved_key
+  end
 end

@@ -5,7 +5,8 @@
 #
 # NOTE: real `pi_…` verification needs the operator's test key. Without it,
 # these examples are skipped. The mocked suite (stripe_spec.rb) runs without
-# a key and covers all new methods with WebMock/RSpec doubles.
+# a key and covers the adapter's public methods with plain RSpec doubles
+# (no WebMock — the SDK classes are stubbed directly).
 RSpec.describe Kiosk::PaymentProviders::Stripe, :integration do
   before do
     skip "set STRIPE_SECRET_KEY (sk_test_…) to run" unless ENV["STRIPE_SECRET_KEY"]

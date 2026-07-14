@@ -11,14 +11,14 @@ module Kiosk
     # IdP adapters are chosen per provider.
     #
     # The adapter is agnostic about HOW the user logged in: Devise's
-    # `database_authenticatable` and `omniauthable` modules both populate
-    # `current_user`, so the same one-line read covers password login,
+    # `database_authenticatable` and `omniauthable` modules both populate the
+    # request's Warden user, so the same read covers password login,
     # passwordless magic-link, and any OmniAuth strategy (Google, GitHub,
     # SAML, …).
     #
     # Lockable / confirmable handling is implicit: Devise's
-    # `active_for_authentication?` already gates `current_user`, so a locked
-    # or unconfirmed user yields `current_user == nil` and {#verify} returns
+    # `active_for_authentication?` already gates the Warden user, so a locked
+    # or unconfirmed principal yields no signed-in user and {#verify} returns
     # nil — which {Kiosk::Server::Executor} treats as unauthenticated. No
     # extra code needed in the adapter.
     #
@@ -40,8 +40,8 @@ module Kiosk
     #   end
     #
     # @note No hard runtime dependency on the `devise` gem. The adapter only
-    #   calls `request.current_user`; the provider's already-installed Devise
-    #   satisfies the requirement.
+    #   reads the request's Warden user (`request.env["warden"].user`); the
+    #   provider's already-installed Devise satisfies the requirement.
     class Devise < Base
       # Raised when {#verify} cannot determine a role to attach to the
       # resolved identity — e.g. the user model defines no `#kiosk_role` and
@@ -50,13 +50,17 @@ module Kiosk
 
       # Resolve the request into a {Kiosk::Identity}.
       #
-      # @param request [#current_user, Hash] typically the Rails controller
-      #   instance (kiosk-server passes `self`); also accepts a Rack `env`
-      #   Hash where `env["warden"].user` is the principal (controller
-      #   compatibility for hosts that pass raw env).
-      # @return [Kiosk::Identity, nil] identity if `current_user` is present;
-      #   nil if `current_user` is nil (unauthenticated, locked, or
-      #   unconfirmed — all three converge on this single signal).
+      # @param request [#env, #current_user, Hash] the shipped wire passes an
+      #   `ActionDispatch::Request` (kiosk-server's
+      #   `IdentityResolution.resolve(request)` — the {Base} `#headers, #env`
+      #   contract), and the user is read from that request's Warden proxy at
+      #   `request.env["warden"].user`. Also accepts a controller-shaped object
+      #   exposing `#current_user`, and a raw Rack `env` Hash carrying
+      #   `env["warden"]` — for hosts that pass either directly.
+      # @return [Kiosk::Identity, nil] identity when a signed-in user is found;
+      #   nil when none is (unauthenticated, locked, or unconfirmed — Devise's
+      #   `active_for_authentication?` gates the Warden user, so all three
+      #   converge on this single signal).
       # @raise [ConfigurationError] when role resolution falls through.
       def verify(request)
         user = current_user_from(request)
@@ -73,17 +77,33 @@ module Kiosk
 
       private
 
-      # Extract `current_user` from either a Rails controller (the common
-      # case — kiosk-server passes `self`) or a raw Rack env Hash (the
-      # `controller_compat` shim — for hosts that haven't yet been adapted).
+      # Extract the signed-in user from whatever shape the host passes.
+      #
+      # Shipped wire (primary): an `ActionDispatch::Request`. It does NOT
+      # expose `#current_user` (that is a controller helper, not a request
+      # method), so we read the user from the request's Warden proxy —
+      # `request.env["warden"].user` — which is how Devise exposes the
+      # signed-in principal to Rack-level components once its middleware has
+      # run. A not-signed-in request yields a proxy whose `#user` is nil.
+      #
+      # Also handles a controller-shaped object exposing `#current_user`, and
+      # a bare Rack env Hash carrying `env["warden"]`, for hosts that pass
+      # either directly.
       def current_user_from(request)
         return request.current_user if request.respond_to?(:current_user)
 
-        # Rack env shim — Warden stores the authenticated user under
-        # `env["warden"].user` after Devise's middleware runs.
-        if request.is_a?(Hash) && (warden = request["warden"])
-          return warden.user
-        end
+        env = rack_env_for(request)
+        return nil if env.nil?
+
+        warden = env["warden"]
+        warden && warden.user
+      end
+
+      # The Rack env for a request-shaped object (`#env`) or a bare env Hash;
+      # nil for anything else.
+      def rack_env_for(request)
+        return request.env if request.respond_to?(:env)
+        return request     if request.is_a?(Hash)
 
         nil
       end

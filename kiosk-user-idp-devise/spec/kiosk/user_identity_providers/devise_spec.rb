@@ -100,6 +100,37 @@ RSpec.describe Kiosk::UserIdentityProviders::Devise do
       end
     end
 
+    context "shipped wire — ActionDispatch::Request (K-247)" do
+      # kiosk-server's WireController does NOT pass `self`; it passes
+      # `request` (an ActionDispatch::Request) to
+      # `IdentityResolution.resolve(request)`. That object has no
+      # `#current_user` and is not a Hash — the adapter must read the
+      # signed-in user from its Warden proxy at `request.env["warden"].user`,
+      # or every Devise-session human 401s on the real wire.
+      it "resolves an Identity from the request's Warden user" do
+        user    = FakeUser.new(id: user_id)
+        request = FakeActionDispatchRequest.new(warden: FakeWarden.new(user: user))
+
+        identity = adapter.verify(request)
+
+        expect(identity).to be_a(Kiosk::Identity)
+        expect(identity.user_id).to eq(user_id)
+        expect(identity).to be_human
+      end
+
+      it "returns nil when the request carries a Warden proxy with no signed-in user" do
+        request = FakeActionDispatchRequest.new(warden: FakeWarden.new(user: nil))
+
+        expect(adapter.verify(request)).to be_nil
+      end
+
+      it "returns nil when the request env has no Warden proxy at all" do
+        request = FakeActionDispatchRequest.new(warden: nil)
+
+        expect(adapter.verify(request)).to be_nil
+      end
+    end
+
     context "Rack env shim" do
       it "reads the user from env['warden'].user when the request is a Hash" do
         user   = FakeUser.new(id: user_id)

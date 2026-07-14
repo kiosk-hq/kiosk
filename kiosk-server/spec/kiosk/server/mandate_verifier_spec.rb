@@ -68,6 +68,19 @@ RSpec.describe Kiosk::Server::MandateVerifier do
         .to raise_error(Kiosk::Server::Errors::Forbidden)
     end
 
+    # K-200: agent_payment_key raises Kiosk::AgentIdentityProviders::InvalidToken
+    # when the authenticated (non-nil) agent_id has no live kiosk.agents row
+    # (revoked/deleted between auth and now). InvalidToken is NOT an Errors::Base,
+    # so it escaped decode_and_check's JWT-only rescues and the controller's
+    # Errors::Base rescue as an HTTP 500. It must be caught → clean 403 Forbidden.
+    it "rejects (403, not 500) when the agent has no registered payment key" do
+      allow_any_instance_of(Kiosk::Server::AgentIdentityProviders::DefaultAgentIdp)
+        .to receive(:agent_payment_key).with("agent-1")
+        .and_raise(Kiosk::AgentIdentityProviders::InvalidToken, "no key for agent agent-1")
+      expect { described_class.verify_intent(raw_jws: sign(intent_payload), identity: identity) }
+        .to raise_error(Kiosk::Server::Errors::Forbidden, /payment key|revoked|unknown/)
+    end
+
     it "rejects a mandate with no exp claim" do
       no_exp = intent_payload.reject { |k, _| k == :exp }
       expect { described_class.verify_intent(raw_jws: sign(no_exp), identity: identity) }
@@ -93,6 +106,15 @@ RSpec.describe Kiosk::Server::MandateVerifier do
       bad = intent_payload.merge(agent_id: "someone-else")
       expect { described_class.verify_intent(raw_jws: sign(bad), identity: identity) }
         .to raise_error(Kiosk::Server::Errors::Forbidden, /principal/)
+    end
+
+    # K-199: cap_amount_cents is a REQUIRED intent field. ABSENT (nil) would
+    # nil-coerce to 0 in the verify_cart cap comparison, making it vacuous — an
+    # absent cap must be rejected on presence, before any .to_i.
+    it "rejects an intent missing cap_amount_cents (absent, not 0)" do
+      no_cap = intent_payload.reject { |k, _| k == :cap_amount_cents }
+      expect { described_class.verify_intent(raw_jws: sign(no_cap), identity: identity) }
+        .to raise_error(Kiosk::Server::Errors::Forbidden, /cap_amount_cents/)
     end
 
     it "rejects when user_id in the payload does not match the authenticated identity" do
@@ -161,6 +183,16 @@ RSpec.describe Kiosk::Server::MandateVerifier do
       usd = cart_payload.merge(total_amount_cents: 4999, currency: "usd")
       expect { described_class.verify_cart(raw_jws: sign(usd), identity: identity, intent: intent) }
         .to raise_error(Kiosk::Server::Errors::Forbidden, /currency/)
+    end
+
+    # K-199: total_amount_cents is a REQUIRED cart field. ABSENT (nil) would
+    # nil-coerce to 0, satisfying the cap comparison (0 <= 5000) vacuously and
+    # persisting a 0-cent cart row. It must be rejected on presence, before the
+    # .to_i — an absent total is NOT a valid within-cap cart.
+    it "rejects a cart missing total_amount_cents (absent, not 0)" do
+      no_total = cart_payload.reject { |k, _| k == :total_amount_cents }
+      expect { described_class.verify_cart(raw_jws: sign(no_total), identity: identity, intent: intent) }
+        .to raise_error(Kiosk::Server::Errors::Forbidden, /total_amount_cents/)
     end
 
     it "applies the shared decode checks (wrong issuer rejected)" do
@@ -234,6 +266,16 @@ RSpec.describe Kiosk::Server::MandateVerifier do
       empty_pm = payment_payload.merge(payment_method: "")
       pm = described_class.verify_payment(raw_jws: sign(empty_pm), identity: identity, cart: cart_mandate)
       expect(pm.payment_method).to eq("")
+    end
+
+    # K-199: amount_cents is a REQUIRED payment field. ABSENT (nil) would
+    # nil-coerce to 0 in the amount-match check; against a same-absent (0) cart
+    # total it would "match" and persist a 0-cent payment row. Reject on
+    # presence, before the .to_i — an absent amount is not a valid payment.
+    it "rejects a payment missing amount_cents (absent, not 0)" do
+      no_amount = payment_payload.reject { |k, _| k == :amount_cents }
+      expect { described_class.verify_payment(raw_jws: sign(no_amount), identity: identity, cart: cart_mandate) }
+        .to raise_error(Kiosk::Server::Errors::Forbidden, /amount_cents/)
     end
 
     it "applies the shared decode checks (wrong signer rejected)" do

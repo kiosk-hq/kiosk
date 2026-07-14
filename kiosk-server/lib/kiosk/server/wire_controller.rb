@@ -85,7 +85,7 @@ if defined?(::ActionController::API)
 
           render_envelope(result.to_envelope, status: result.http_status)
         rescue Errors::Base => e
-          render_envelope(e.to_envelope, status: e.http_status)
+          render_envelope(e.to_envelope, status: e.http_status, error: e)
         end
 
         def resolve_identity!
@@ -121,9 +121,30 @@ if defined?(::ActionController::API)
           ::ActiveRecord::Base.connection
         end
 
-        def render_envelope(envelope, status:)
+        def render_envelope(envelope, status:, error: nil)
           Kiosk::Server::Headers.add_to(response.headers)
+          if error && (challenge = www_authenticate_for(error))
+            response.set_header("WWW-Authenticate", challenge)
+          end
           render json: envelope, status: status
+        end
+
+        # RFC 7235 challenge header that de-overloads the two 402 gates (ADR-0014):
+        # the header NAMES the gate, the JSON body still CARRIES the payload
+        # (the PoW N-challenge list / the payment_setup pointer). Keyed purely on
+        # the error class; nil for every non-402 error (no header emitted).
+        #
+        # The `Payment` scheme params (`realm`, `method`) are isolated here so a
+        # change in the still-draft IETF scheme (draft-ryan-httpauth-payment) is
+        # a one-place edit.
+        def www_authenticate_for(error)
+          issuer = Kiosk.configuration.issuer
+          case error
+          when Errors::PowRequired
+            %(Kiosk-PoW realm="#{issuer}")
+          when Errors::PaymentSetupRequired
+            %(Payment realm="#{issuer}", method="ap2")
+          end
         end
       end
     end

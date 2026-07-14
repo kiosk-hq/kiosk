@@ -28,7 +28,7 @@ RSpec.describe Kiosk::Configuration do
       expect(config.issuer).to be_nil
     end
 
-    it "leaves user_idp nil (resolved by kiosk:install based on detected stack)" do
+    it "leaves user_idp nil (satellite mode; kiosk:install writes a commented-out Devise line to uncomment)" do
       expect(config.user_idp).to be_nil
     end
 

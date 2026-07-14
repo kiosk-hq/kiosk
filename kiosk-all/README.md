@@ -47,9 +47,11 @@ Why not bundled: test-support gems pull in `rspec`/`minitest` and host-test infr
 `kiosk-all` does **not** pull in any adapter gem. Add the ones you actually use:
 
 ```ruby
-gem "kiosk-user-idp-devise"      # or -warden, -jwt-bearer, -clerk, -auth0, …
-gem "kiosk-pay-stripe"           # or -paddle, …
+gem "kiosk-user-idp-devise"      # only shipped user-IdP adapter today
+gem "kiosk-pay-stripe"           # only shipped PSP adapter today
 ```
+
+Further `kiosk-user-idp-*` (Warden, JWT-bearer, Clerk, Auth0, …) and `kiosk-pay-*` (Paddle, regional PSPs, …) adapters are planned per market and stack — none exist yet.
 
 Why not bundled: there is no «one PSP per provider» or «one IdP per provider» globally; bundling Stripe + Paddle + every IdP would pull five unused gems into every Gemfile. Providers pick per market (`kiosk-pay-*`) and per existing identity stack (`kiosk-user-idp-*`) — this is the same reason `kiosk-pay-all` is deliberately not provided.
 

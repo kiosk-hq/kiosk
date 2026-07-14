@@ -24,5 +24,16 @@ RSpec.describe "kiosk-all meta-gem" do
     it "does not load kiosk-rls (RLS is opt-in; host adds the gem explicitly)" do
       expect(defined?(Kiosk::RLS)).to be_nil
     end
+
+    it "does not load the test-only DSL (kiosk-test-support)" do
+      expect(defined?(Kiosk::TestHelpers)).to be_nil
+    end
+
+    it "does not load adapter gems (kiosk-pay-stripe, kiosk-user-idp-devise)" do
+      # The provider *base* classes ship in kiosk-core (extension points);
+      # only the concrete adapter classes live in the un-depended adapter gems.
+      expect(defined?(Kiosk::PaymentProviders::Stripe)).to be_nil
+      expect(defined?(Kiosk::UserIdentityProviders::Devise)).to be_nil
+    end
   end
 end

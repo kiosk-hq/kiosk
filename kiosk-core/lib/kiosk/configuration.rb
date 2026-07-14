@@ -4,8 +4,9 @@ module Kiosk
   # Holds host-application choices: which user model, which IdP adapters,
   # which GUC namespace, role vocabulary, issuer URL.
   #
-  # Filled via `Kiosk.configure { |c| ... }`. Sensible defaults for a
-  # greenfield Rails app with the bundled agent-IdP and a stub user model.
+  # Filled via `Kiosk.configure { |c| ... }`. Defaults suit a greenfield
+  # Rails app on the bundled agent-IdP; the provider supplies its own user
+  # model and (optionally) a user-IdP adapter.
   class Configuration
     # Provider's user model class name as a String — resolved at request time
     # by kiosk-server, not eagerly, to avoid load-order issues.
@@ -20,8 +21,10 @@ module Kiosk
     # User-IdP adapter instance — consumes the provider's principal
     # authentication. The principal may be a human, synthetic placeholder,
     # service account, team / org, or parent agent.
-    # Default nil; `kiosk:install` wires one based on detected stack
-    # (Devise / Clerk / Auth0 / generic OIDC / etc.).
+    # Default nil (satellite mode: the provider's own frontend drives the
+    # wire endpoints). `kiosk:install` writes a commented-out
+    # `Kiosk::UserIdentityProviders::Devise.new` line to uncomment when the
+    # kiosk-user-idp-devise adapter is installed.
     attr_accessor :user_idp
 
     # Agent-IdP adapter instance — verifies agent tokens (and, from 0.2,
@@ -36,7 +39,8 @@ module Kiosk
 
     # Payment PSP adapter instance — captures AP2 cart mandates into PSP
     # settlements (see {Kiosk::PaymentProviders::Base}). Default nil; the
-    # provider selects one per market (kiosk-pay-stripe, kiosk-pay-paddle, …).
+    # provider selects one per market (kiosk-pay-stripe today; further
+    # kiosk-pay-* adapters planned).
     attr_accessor :payment_provider
 
     # Postgres GUC namespace (see {Kiosk::GUC}). Default "app".

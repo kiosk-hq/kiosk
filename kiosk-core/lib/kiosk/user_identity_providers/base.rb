@@ -9,9 +9,10 @@ module Kiosk
     # synthetic placeholder, service account, team / org, or parent agent
     # depending on the adapter.
     #
-    # Embedded-mode adapters: `kiosk-user-idp-devise`, `kiosk-user-idp-warden`.
-    # Satellite-mode adapters: `kiosk-user-idp-jwt-bearer`,
-    # `kiosk-user-idp-pg-session`, `kiosk-user-idp-oidc-generic`, etc.
+    # Adapters ship as `kiosk-user-idp-*` gems. Today only
+    # `kiosk-user-idp-devise` (embedded mode) ships; further embedded and
+    # satellite-mode adapters (Warden, JWT-bearer, pg-session, generic OIDC,
+    # …) are planned — none exist yet.
     class Base
       # Verify an incoming request into a {Kiosk::Identity}.
       #

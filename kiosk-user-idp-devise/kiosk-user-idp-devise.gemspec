@@ -13,18 +13,19 @@ Gem::Specification.new do |spec|
     Gemfile explicitly — the kiosk-all meta-gem pulls in only kiosk-core
     and kiosk-server, so IdP adapters are chosen per provider.
 
-    It reads `current_user` from the controller passed by kiosk-server and
-    returns a {Kiosk::Identity} value object. Covers both Devise paths —
-    `database_authenticatable` and `omniauthable` — since both populate
-    `current_user`, so the adapter is agnostic to how the user logged in.
+    It reads the signed-in user from the request's Warden proxy
+    (`request.env["warden"].user`) passed by kiosk-server and returns a
+    {Kiosk::Identity} value object. Covers both Devise paths —
+    `database_authenticatable` and `omniauthable` — since both populate the
+    Warden user, so the adapter is agnostic to how the user logged in.
 
     Lockable / confirmable handling comes for free: Devise's
-    `active_for_authentication?` already gates `current_user`, so a locked
-    or unconfirmed user yields `current_user == nil` and the request fails
-    as unauthenticated with no extra code.
+    `active_for_authentication?` already gates the Warden user, so a locked
+    or unconfirmed user yields no signed-in user and the request fails as
+    unauthenticated with no extra code.
 
-    No hard runtime dependency on Devise itself — the adapter only calls
-    `request.current_user`, so the provider's already-installed Devise
+    No hard runtime dependency on Devise itself — the adapter only reads the
+    request's Warden user, so the provider's already-installed Devise
     satisfies the requirement.
   DESC
   spec.homepage      = "https://kiosk.tech"

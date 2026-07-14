@@ -4,11 +4,11 @@ The Devise user-IdP adapter for [Kiosk](https://kiosk.tech) — for Rails provid
 
 ## What it does
 
-Reads `current_user` from the incoming request and returns a `Kiosk::Identity` value object the rest of the Kiosk pipeline keys off (RLS GUCs, audit log, Action gating).
+Reads the signed-in user from the incoming request's Warden proxy and returns a `Kiosk::Identity` value object the rest of the Kiosk pipeline keys off (RLS GUCs, audit log, Action gating).
 
-The adapter is **agnostic about how the user logged in**: Devise's `database_authenticatable` and `omniauthable` modules both populate `current_user`, so the same one-line read covers password login, passwordless magic-link, and every OmniAuth strategy (Google, GitHub, SAML, …).
+The adapter is **agnostic about how the user logged in**: Devise's `database_authenticatable` and `omniauthable` modules both populate the request's Warden user, so the same read covers password login, passwordless magic-link, and every OmniAuth strategy (Google, GitHub, SAML, …).
 
-**Lockable / confirmable handling is implicit.** Devise's `active_for_authentication?` already gates `current_user`, so a locked or unconfirmed user yields `current_user == nil` and the request fails as unauthenticated. No extra code in the adapter.
+**Lockable / confirmable handling is implicit.** Devise's `active_for_authentication?` already gates the Warden user, so a locked or unconfirmed user yields no signed-in user and the request fails as unauthenticated. No extra code in the adapter.
 
 ## Install
 
@@ -18,7 +18,7 @@ Add the adapter explicitly — the `kiosk-all` meta-gem pulls in only `kiosk-cor
 gem "kiosk-user-idp-devise"
 ```
 
-The adapter declares no hard runtime dependency on `devise` — your provider's already-installed Devise satisfies the requirement.
+The adapter declares no hard runtime dependency on `devise` — it only reads the request's Warden user, and your provider's already-installed Devise satisfies the requirement.
 
 ## Wire up
 
@@ -53,7 +53,7 @@ end
 
 ## Request shape
 
-In typical Rails controllers kiosk-server calls the adapter from the controller and passes `self`. The adapter calls `request.current_user`. A small Rack-env shim (`env["warden"].user`) is also supported for hosts that pass raw env.
+The shipped wire passes an `ActionDispatch::Request` (kiosk-server's `IdentityResolution.resolve(request)`). The adapter reads the signed-in user from that request's Warden proxy — `request.env["warden"].user` — which is how Devise exposes the principal to Rack-level components once its middleware has run. A controller-shaped object exposing `#current_user`, and a bare Rack `env` Hash carrying `env["warden"]`, are also accepted for hosts that pass either directly.
 
 ## Status
 

@@ -52,3 +52,27 @@ class FakeRequest
     @current_user = current_user
   end
 end
+
+# Minimal Warden::Proxy stand-in: `#user` returns the signed-in principal
+# (nil when not signed in). Real Warden takes an optional scope; the adapter
+# calls it scopeless, matching Devise's single-model default scope.
+class FakeWarden
+  def initialize(user: nil)
+    @user = user
+  end
+
+  def user(_scope = nil)
+    @user
+  end
+end
+
+# The shipped-wire shape: an `ActionDispatch::Request`-like object. It does
+# NOT expose `#current_user` (that is a controller helper, not a request
+# method) — the adapter must read the Warden user from `#env`.
+class FakeActionDispatchRequest
+  attr_reader :env
+
+  def initialize(warden: nil)
+    @env = warden.nil? ? {} : { "warden" => warden }
+  end
+end

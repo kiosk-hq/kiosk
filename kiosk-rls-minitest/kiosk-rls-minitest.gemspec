@@ -17,7 +17,7 @@ Gem::Specification.new do |spec|
 
     Ships the assertions `assert_rls_denied` and `assert_quota_exceeded`
     for asserting the structured error classes — both also exposed as
-    the Minitest `_must_*` / `_wont_*` spec-DSL forms.
+    the Minitest `must_raise_*` / `wont_raise_*` spec-DSL forms.
   DESC
   spec.homepage      = "https://kiosk.tech"
   spec.license       = "Apache-2.0"

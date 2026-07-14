@@ -94,8 +94,9 @@ module Kiosk
       end
 
       # Returns true iff the resolved Customer has a usable saved card.
-      # The assistant calls this before `pay`; if false, it triggers setup_url
-      # and waits for the human to complete the SetupIntent.
+      # Internal predicate for `setup_required?` (its sole caller); callers
+      # gate on `setup_required?`, not this, so the adapter's policy
+      # (e.g. test_autocard) is honoured.
       #
       # @param user_id [String]
       # @return [Boolean]

@@ -215,7 +215,7 @@ module Kiosk
         obj.nil? || (obj.respond_to?(:empty?) && obj.empty?)
       end
 
-      def issue_challenge(spec, fp, secret, config, ttl)
+      def issue_challenge(spec, fp, secret, ttl)
         ::Kiosk::Reputation::Challenge.issue(
           alg:                  spec[:alg],
           params:               spec[:params],
@@ -242,7 +242,7 @@ module Kiosk
       # reaches the last one. TTL = pow_ttl * count (min pow_ttl at count 1).
       def issue_challenges(count, spec, fp, secret, config)
         ttl = config.pow_ttl * [count, 1].max
-        Array.new(count) { issue_challenge(spec, fp, secret, config, ttl) }
+        Array.new(count) { issue_challenge(spec, fp, secret, ttl) }
       end
 
       # Normalise the submitted `pow` field into a list of `{challenge:, nonce:}`

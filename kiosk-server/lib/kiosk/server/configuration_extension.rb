@@ -230,7 +230,9 @@ module Kiosk
       # Reputation policy that decides when and how hard to challenge a request.
       # Default nil = never challenge (zero overhead; existing behaviour unchanged).
       # Set to a `Kiosk::Reputation::Policy` instance (or any object responding to
-      # `#challenge_for(identity:, verb:, factors:) → {alg:,params:}|nil`).
+      # `#challenge_for(identity:, verb:, factors:) → {alg:,params:,count:}|nil`
+      # (`count` is the N×PoW proof-count escalation lever; the gate defaults it
+      # to 1 when omitted).
       attr_writer :reputation_policy
       def reputation_policy
         @reputation_policy

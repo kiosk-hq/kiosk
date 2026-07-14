@@ -207,15 +207,6 @@ module Kiosk
                           end
       end
 
-      # Ed25519 private key ({OpenSSL::PKey::PKey}) used by {RentalTokenIssuer}
-      # to sign offline rental tokens. The public half is baked into every
-      # scooter lock at provisioning time.
-      #
-      # Provide as an OpenSSL::PKey::PKey (Ed25519) instance.
-      # In production load from an env var / secrets manager; in the demo
-      # a fixed dev keypair (DevUnlockKey) is used so vectors are stable.
-      attr_accessor :unlock_signing_key
-
       # Storage adapter for {Kiosk::Server::DeviceAuthorization} rows
       # (RFC 8628 Device-Grant state machine). Lazy-defaults to
       # {DeviceAuthorizationStores::InMemory} — fine for development +

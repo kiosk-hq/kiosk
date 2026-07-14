@@ -60,7 +60,7 @@
  *   token   = "<message>.1Vx7nv8xgznLwWgdsS_MhWi1W1fhMQQWSgi1CPRVO3osohmlw_PhaTS9ZJaBOx9yeQZfzn2k8J4JjSXPd12SBA"
  *
  * This matches:
- *   Ruby server:  RentalTokenIssuer.issue  (kiosk-server)
+ *   Ruby server:  RentalTokenIssuer.issue  (kiosk-demo-skooti/lib/rental_token_issuer.rb)
  *   Ruby sim:     LockSim#unlock           (kiosk-demo-skooti/lib/lock_sim.rb)
  *   C shared:     skooti_verify_token      (firmware/verify.c)
  *   C host test:  host_test.c              (proven by `make test`)

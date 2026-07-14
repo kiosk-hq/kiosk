@@ -18,19 +18,19 @@ Rails.application.routes.draw do
   post "/kiosk/auth/login",                         to: "kiosk/server/auth#login"
   post "/kiosk/auth/revoke",                        to: "kiosk/server/auth#revoke"
 
-  # /.well-known/kiosk.json discovery endpoint — built on the fly from
-  # Kiosk.configuration. Inlined here since kiosk-server doesn't yet
-  # ship a controller for it.
-  # well-known = the machine-readable HANDSHAKE: who/where/which version + issuer
-  # (the AP2 `iss` anchor) + auth, served at the guessable conventional URL. It
-  # is NOT the surface — it advertises `capabilities`, the verb names actually
-  # served (schema/query/run/pay), computed from the live registry (ADR-0009),
-  # so discovery and the live surface never drift.
-  get "/.well-known/kiosk.json", to: ->(env) {
-    base_url = "#{env['rack.url_scheme']}://#{env['HTTP_HOST']}"
-    [200, { "content-type" => "application/json" },
-     [Kiosk::Server::WellKnown.build_json(base_url: base_url)]]
-  }
+  # Native discovery surface — served by kiosk-server's DiscoveryController
+  # (rendered from Kiosk::Server::WellKnown, the single generator seam).
+  # agents.txt / agents.json are ROOT-served per the agents.txt v1.0 standard.
+  get "/agents.txt",                        to: "kiosk/server/discovery#agents_txt"
+  get "/agents.json",                       to: "kiosk/server/discovery#agents_json"
+  get "/.well-known/agent-configuration",   to: "kiosk/server/discovery#agent_configuration"
+
+  # /.well-known/kiosk.json discovery endpoint — the machine-readable
+  # HANDSHAKE: who/where/which version + issuer (the AP2 `iss` anchor) + auth,
+  # served at the guessable conventional URL. It advertises `capabilities`,
+  # the verb names actually served (schema/query/run/pay), computed from the
+  # live registry (ADR-0009), so discovery and the live surface never drift.
+  get "/.well-known/kiosk.json",            to: "kiosk/server/discovery#kiosk_json"
 
   # ─── Provider admin (read-only demo back-office) ──────────────────────────
   # No auth required — demo provider only. Production would authenticate.

@@ -6,7 +6,7 @@ module Kiosk
   module RLS
     # Mutable builder used inside an `enable_rls_on TABLE do ... end` block.
     # Collects policy declarations + comment + table-level metadata, then is
-    # frozen and passed to {Kiosk::RLS::Emitter} for SQL emission.
+    # passed (unfrozen) to {Kiosk::RLS::Emitter} for SQL emission.
     class Table
       attr_reader :name, :policies, :comment_text, :app_role, :sequences
 

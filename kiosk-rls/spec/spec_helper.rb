@@ -17,8 +17,9 @@ RSpec.configure do |config|
   config.warnings = false
 
   # Reset Kiosk.configuration between examples to keep tests independent —
-  # this also resets the RLS-specific extension fields (`app_role`,
-  # `system_role`, `schema`) since they live as ivars on Configuration.
+  # this also resets the RLS-specific extension field (`system_role`; the
+  # only field this gem adds — `app_role`/`schema` come from kiosk-core)
+  # since it lives as an ivar on Configuration.
   config.before(:each) { Kiosk.reset! }
 end
 

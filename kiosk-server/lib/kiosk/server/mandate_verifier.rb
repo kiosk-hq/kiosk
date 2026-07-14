@@ -26,6 +26,10 @@ module Kiosk
       # Verify an IntentMandate JWS → {Kiosk::Mandate::IntentMandate}.
       def verify_intent(raw_jws:, identity:)
         payload = decode_and_check(raw_jws, identity)
+        # `cap_amount_cents` is a REQUIRED intent field (spec AP2 table). ABSENT
+        # would nil-coerce to 0 in the verify_cart cap comparison, making that
+        # comparison vacuous (see K-199); reject it here, before any .to_i.
+        require_amount!(payload, :cap_amount_cents)
 
         Kiosk::Mandate::IntentMandate.new(
           id: payload[:id], user_id: payload[:user_id], agent_id: payload[:agent_id],
@@ -47,6 +51,10 @@ module Kiosk
       # no longer rejected when absent.
       def verify_payment(raw_jws:, identity:, cart:)
         payload = decode_and_check(raw_jws, identity)
+        # `amount_cents` is a REQUIRED payment field (spec AP2 table). ABSENT
+        # would nil-coerce to 0 below, so a payment omitting it would "match" a
+        # 0-cent cart and persist a 0-cent row (K-199); reject before any .to_i.
+        require_amount!(payload, :amount_cents)
 
         unless payload[:cart_mandate_id] == cart.id
           raise Errors::Forbidden.new("payment not bound to the cart")
@@ -71,6 +79,11 @@ module Kiosk
       # that it is bound to `intent` and stays within the intent's cap.
       def verify_cart(raw_jws:, identity:, intent:)
         payload = decode_and_check(raw_jws, identity)
+        # `total_amount_cents` is a REQUIRED cart field (spec AP2 table). ABSENT
+        # would nil-coerce to 0 in the cap comparison below (0 <= any cap) and
+        # in verify_payment's amount match, making both vacuous and persisting a
+        # 0-cent cart row (K-199); reject before any .to_i.
+        require_amount!(payload, :total_amount_cents)
 
         cart = Kiosk::Mandate::CartMandate.new(
           id: payload[:id], intent_mandate_id: payload[:intent_mandate_id],
@@ -106,6 +119,21 @@ module Kiosk
 
         cart
       end
+
+      # Reject a REQUIRED amount field that is ABSENT (nil) from the payload,
+      # BEFORE any `.to_i` coercion. `nil.to_i` is 0, so an omitted amount would
+      # otherwise satisfy the spending-envelope checks vacuously (0 <= cap,
+      # 0 == 0) and persist a 0-cent row (K-199). An explicitly-present 0 is a
+      # different, non-security case and is left to the amount/cap comparisons.
+      def require_amount!(payload, field)
+        return unless payload[field].nil?
+
+        raise Errors::Forbidden.new(
+          "mandate missing required amount field: #{field}",
+          hint: "#{field} is a required AP2 mandate field",
+        )
+      end
+      private_class_method :require_amount!
 
       # Every mandate MUST carry these claims (spec, AP2 mandate section).
       # Presence is enforced at decode time; `iss`/`user_id`/`agent_id` are
@@ -147,6 +175,17 @@ module Kiosk
         raise Errors::Forbidden.new("mandate missing required claim: #{e.message}")
       rescue ::JWT::DecodeError => e
         raise Errors::Forbidden.new("mandate signature invalid: #{e.message}")
+      rescue Kiosk::AgentIdentityProviders::InvalidToken
+        # agent_payment_key raises this when the authenticated agent_id has no
+        # live kiosk.agents row (revoked or deleted between auth and now). It is
+        # NOT an Errors::Base, so it escaped these rescues and the controller's
+        # Errors::Base rescue as an HTTP 500 (K-200; same 500-not-4xx class as
+        # K-070/K-093/K-114, whose guard only covered the nil-agent_id sibling).
+        # A revoked/absent agent has no signing key → clean 403 Forbidden.
+        raise Errors::Forbidden.new(
+          "mandate agent has no registered payment key",
+          hint: "the authenticated agent is revoked or unknown",
+        )
       end
       private_class_method :decode_and_check
     end

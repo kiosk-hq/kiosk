@@ -25,7 +25,7 @@ namespace :demo do
   end
 
   desc "Boot the server and run the curl demo walkthrough."
-  task :walkthrough do
+  task walkthrough: :setup do
     exec File.expand_path("../../bin/demo", __dir__)
   end
 

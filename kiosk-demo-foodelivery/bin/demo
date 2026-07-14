@@ -1,8 +1,15 @@
 #!/usr/bin/env bash
 # Kiosk foodelivery demo walkthrough — a curl-driven tour of the wire surface.
 #
-# Run via `rake demo` (handles DB setup + invokes this script), or
-# directly when the demo DB is already prepared.
+# Run via `rake demo:walkthrough` (boots the server, runs this script, tears
+# down), or directly when the demo DB is already prepared (rake demo:setup).
+# `rake demo` runs the pay-settling headline (demo:setup + demo:order), not
+# this tour.
+#
+# This tour browses and places one real order under a single stable stub
+# principal (AGENT_TOKEN below); demo:setup seeds its users row so place_order
+# succeeds (Order belongs_to :user). The order/my_orders steps ASSERT their
+# results and exit non-zero on any mismatch — a broken showcase fails loudly.
 
 set -euo pipefail
 
@@ -93,22 +100,48 @@ MENU_ITEM_ID=$(curl -sS -X POST "$SERVER_URL/kiosk/query" \
   | jq -r '.rows[] | select(.sku=="margherita") | .id')
 
 step "run place_order for menu_item $MENU_ITEM_ID (Margherita)"
-curl -sS -X POST "$SERVER_URL/kiosk/run" \
+PLACE_RESP=$(curl -sS -X POST "$SERVER_URL/kiosk/run" \
   -H "Authorization: Bearer $AGENT_TOKEN" \
   -H "Content-Type: application/json" \
-  -d "{\"name\":\"place_order\",\"menu_item_id\":$MENU_ITEM_ID,\"quantity\":1,\"delivery_address\":\"1 Test St\"}" \
-  | jq '.value'
+  -d "{\"name\":\"place_order\",\"menu_item_id\":$MENU_ITEM_ID,\"quantity\":1,\"delivery_address\":\"1 Test St\"}")
+printf '%s\n' "$PLACE_RESP" | jq '.value'
+
+# Assert: a success envelope carries a .value object with an order_id. A broken
+# showcase (e.g. missing users row → Order belongs_to :user fails) returns an
+# error envelope with .value == null; catch it here and fail the script.
+ORDER_ID=$(printf '%s\n' "$PLACE_RESP" | jq -r '.value.order_id // empty')
+if [[ -z "$ORDER_ID" ]]; then
+  echo "✗ place_order did not return a value.order_id — got: $PLACE_RESP" >&2
+  exit 1
+fi
+say "✓ place_order succeeded (order_id=$ORDER_ID)"
 
 # ─── app-layer isolation ─────────────────────────────────────────────
 
 heading "App-layer isolation: agent sees only their own orders"
 
 step "Count orders visible to this agent's user (should be 1) — query: my_orders"
-curl -sS -X POST "$SERVER_URL/kiosk/query" \
+MY_ORDERS_RESP=$(curl -sS -X POST "$SERVER_URL/kiosk/query" \
   -H "Authorization: Bearer $AGENT_TOKEN" \
   -H "Content-Type: application/json" \
-  -d '{"name":"my_orders"}' \
-  | jq '.rows | length'
+  -d '{"name":"my_orders"}')
+MY_ORDERS_COUNT=$(printf '%s\n' "$MY_ORDERS_RESP" | jq '.rows | length')
+printf '%s\n' "$MY_ORDERS_COUNT"
+
+# Assert: exactly the one order just placed is visible to this principal
+# (fresh DB from demo:setup → 0 pre-existing orders). A broken place_order
+# (0 rows) or a cross-tenant leak (>1 row) trips this.
+if [[ "$MY_ORDERS_COUNT" != "1" ]]; then
+  echo "✗ my_orders expected exactly 1 row, got ${MY_ORDERS_COUNT} — response: $MY_ORDERS_RESP" >&2
+  exit 1
+fi
+# ...and that row is the order just placed, not some stray row.
+MY_ORDER_ID=$(printf '%s\n' "$MY_ORDERS_RESP" | jq -r '.rows[0].id // empty')
+if [[ "$MY_ORDER_ID" != "$ORDER_ID" ]]; then
+  echo "✗ my_orders row id ($MY_ORDER_ID) != placed order id ($ORDER_ID) — response: $MY_ORDERS_RESP" >&2
+  exit 1
+fi
+say "✓ my_orders shows exactly the 1 order just placed (app-layer per-user isolation)"
 
 # ─── done ────────────────────────────────────────────────────────────
 
@@ -118,7 +151,7 @@ say "DB:                kiosk_foodelivery_development"
 say ""
 say "To add realistic domain resolution:"
 say "  echo \"127.0.0.1 foodelivery.app\" | sudo tee -a /etc/hosts"
-say "  KIOSK_ISSUER=https://foodelivery.app KIOSK_DEMO_PORT=443 rake demo"
+say "  KIOSK_ISSUER=https://foodelivery.app KIOSK_DEMO_PORT=443 rake demo:walkthrough"
 say ""
 say "Swap StubPsp for real Stripe:"
 say "  replace StubPsp.new with Kiosk::PaymentProviders::Stripe.new(api_key: ENV['STRIPE_SECRET_KEY'])"

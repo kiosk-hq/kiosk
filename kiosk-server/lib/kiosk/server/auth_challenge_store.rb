@@ -28,7 +28,14 @@ module Kiosk
       # Record +nonce+ as the outstanding challenge for +public_key_pem+ until
       # Unix timestamp +exp+. Overwrites any prior challenge for the same key —
       # only the most recently issued challenge is valid.
+      #
+      # Prunes expired entries opportunistically on the way in (K-210): a
+      # distinct-key challenge flood — GET /auth/challenge is unauthenticated —
+      # cannot accumulate unboundedly, since each insert first drops every
+      # already-expired entry. Without this, expired entries only cleared when a
+      # later #take ran, which never happens for keys that never register.
       def put(public_key_pem, nonce, exp)
+        prune!
         @mutex.synchronize { @store[public_key_pem] = [nonce, exp] }
       end
 
@@ -54,7 +61,8 @@ module Kiosk
       end
 
       # Drop every challenge whose exp has passed. Called automatically by
-      # {#take} before each look-up.
+      # {#put} before each insert and by {#take} before each look-up, so
+      # expired entries never accumulate.
       def prune!
         now = Time.now.to_i
         @mutex.synchronize { @store.reject! { |_, (_, exp)| exp <= now } }

@@ -202,6 +202,32 @@ RSpec.describe "AuthController auth-surface error branches (K-163)" do
       expect(body.dig(:error, :code)).to eq("bad_request")
       expect(body.dig(:error, :message)).to include("signed")
     end
+
+    # K-204: a wrong-TYPED public_key (not just a missing one — K-163 covered
+    # only missing fields) must render a clean 400, not escape as a 500. A JSON
+    # number / object / array field reaches AgentRegistration as an Integer /
+    # Hash / Array; `.to_s.strip` coerces it so PopVerifier rejects it as an
+    # invalid key with a 400 envelope instead of NoMethodError-ing on `.strip`.
+    it "returns 400 bad_request (not 500) when public_key is a NUMBER" do
+      status, body = dispatch(Kiosk::Server::AuthController, :register,
+                              post_env("/kiosk/auth/register", JSON.generate(public_key: 12_345, signed: "x")))
+      expect(status).to eq(400)
+      expect(body.dig(:error, :code)).to eq("bad_request")
+    end
+
+    it "returns 400 bad_request (not 500) when public_key is an OBJECT" do
+      status, body = dispatch(Kiosk::Server::AuthController, :register,
+                              post_env("/kiosk/auth/register", JSON.generate(public_key: { k: "v" }, signed: "x")))
+      expect(status).to eq(400)
+      expect(body.dig(:error, :code)).to eq("bad_request")
+    end
+
+    it "returns 400 bad_request (not 500) when public_key is an ARRAY" do
+      status, body = dispatch(Kiosk::Server::AuthController, :register,
+                              post_env("/kiosk/auth/register", JSON.generate(public_key: [1, 2], signed: "x")))
+      expect(status).to eq(400)
+      expect(body.dig(:error, :code)).to eq("bad_request")
+    end
   end
 
   # ─── POST /auth/login body/field guards ─────────────────────────────────
@@ -225,6 +251,21 @@ RSpec.describe "AuthController auth-surface error branches (K-163)" do
       expect(status).to eq(400)
       expect(body.dig(:error, :code)).to eq("bad_request")
       expect(body.dig(:error, :message)).to include("signed")
+    end
+
+    # K-204: the same wrong-typed-field guard on the login sibling.
+    it "returns 400 bad_request (not 500) when public_key is a NUMBER" do
+      status, body = dispatch(Kiosk::Server::AuthController, :login,
+                              post_env("/kiosk/auth/login", JSON.generate(public_key: 12_345, signed: "x")))
+      expect(status).to eq(400)
+      expect(body.dig(:error, :code)).to eq("bad_request")
+    end
+
+    it "returns 400 bad_request (not 500) when public_key is an OBJECT" do
+      status, body = dispatch(Kiosk::Server::AuthController, :login,
+                              post_env("/kiosk/auth/login", JSON.generate(public_key: { k: "v" }, signed: "x")))
+      expect(status).to eq(400)
+      expect(body.dig(:error, :code)).to eq("bad_request")
     end
   end
 end

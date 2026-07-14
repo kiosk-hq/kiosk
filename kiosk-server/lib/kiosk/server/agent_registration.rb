@@ -28,8 +28,11 @@ module Kiosk
                 "#{config.roles.inspect}"
         end
 
-        # Normalise PEM: strip leading/trailing whitespace so lookup matches storage.
-        public_key_pem = public_key_pem.strip
+        # Normalise PEM: coerce-to-String then strip leading/trailing whitespace
+        # so lookup matches storage. `.to_s` first so a wrong-typed field (number,
+        # object, array from the JSON body) yields a clean 400 downstream via
+        # PopVerifier's invalid-key guard, not a NoMethodError 500 here (K-204).
+        public_key_pem = public_key_pem.to_s.strip
 
         # Optional Equihash PoW to price fresh identity minting. No-op unless
         # the provider set registration_pow_count > 0. Raises 402 (with the

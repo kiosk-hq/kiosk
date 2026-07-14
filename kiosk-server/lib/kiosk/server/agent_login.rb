@@ -16,7 +16,10 @@ module Kiosk
 
       def call(public_key_pem:, signed:)
         config = Kiosk.configuration
-        pem    = public_key_pem.strip
+        # `.to_s` first so a wrong-typed field (number/object/array from the JSON
+        # body) yields a clean 400 downstream via PopVerifier's invalid-key guard,
+        # not a NoMethodError 500 here (K-204).
+        pem    = public_key_pem.to_s.strip
 
         # Prove possession BEFORE any lookup or state change.
         payload = PopVerifier.verify!(public_key_pem: pem, signed: signed)

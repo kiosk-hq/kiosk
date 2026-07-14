@@ -42,4 +42,28 @@ RSpec.describe Kiosk::Server::AuthChallengeStore do
     # Even the correct nonce is gone after pruning.
     expect(store.take(pem, "nonce-1")).to be(false)
   end
+
+  # K-210: GET /auth/challenge is unauthenticated, so an attacker can flood
+  # #put with arbitrarily many DISTINCT public keys. Because #put prunes
+  # expired entries on the way in, an all-expired flood cannot accumulate
+  # unboundedly — the store does not retain every key seen. (Before the fix,
+  # expired entries only cleared on a later #take, which never runs for keys
+  # that never register.)
+  it "does not accumulate expired distinct-key challenges (bounded growth)" do
+    stale = Time.now.to_i - 1
+    1_000.times { |i| store.put("key-#{i}", "nonce-#{i}", stale) }
+
+    live = Time.now.to_i + 300
+    store.put("live-key", "live-nonce", live)
+
+    # Every prior stale entry was dropped: only the live one remains.
+    expect(store_size(store)).to eq(1)
+    expect(store.take("live-key", "live-nonce")).to be(true)
+  end
+
+  # Reach the private @store hash for a size assertion without adding a public
+  # accessor to the shipped surface.
+  def store_size(store)
+    store.instance_variable_get(:@store).size
+  end
 end

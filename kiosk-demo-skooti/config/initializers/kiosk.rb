@@ -21,6 +21,17 @@ require Rails.root.join("lib/jwt_or_stub_idp")
 require Rails.root.join("lib/stub_psp")
 require Rails.root.join("lib/stub_kyc")
 require Rails.root.join("lib/dev_unlock_key")
+require Rails.root.join("lib/rental_token_issuer")
+
+# Ed25519 rental-token signing key holder. The RentalTokenIssuer demo lib
+# reads Kiosk.configuration.unlock_signing_key; the neutral kiosk-server core
+# no longer carries this scooter-rental attribute (it moved here with the
+# issuer). Re-add the accessor to the config object so the initializer below
+# can set it and the issuer can read it back.
+module SkootiUnlockSigningKey
+  attr_accessor :unlock_signing_key
+end
+Kiosk::Configuration.include(SkootiUnlockSigningKey)
 
 # Inject the RLS DSL into ActiveRecord::Migration so that migrations can
 # call `enable_rls_on TABLE do ... end` directly. The kiosk-rls README
@@ -248,8 +259,10 @@ Kiosk::Server::Actions.register("start_rental",
 
   # ── All gates passed: issue an Ed25519 rental token ─────────────────────
   # Token is bound to the server-derived scooter code, not any client value.
+  # RentalTokenIssuer is a skooti-demo lib (lib/rental_token_issuer.rb), not
+  # part of the neutral kiosk-server core.
   now   = Time.now.to_i
-  token = Kiosk::Server::RentalTokenIssuer.issue(
+  token = RentalTokenIssuer.issue(
     scooter_code:   code,
     reservation_id: reservation_id.to_s,
     now:            now,

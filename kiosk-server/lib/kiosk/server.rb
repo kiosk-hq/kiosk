@@ -37,7 +37,6 @@ require "kiosk/server/auth_challenge"
 require "kiosk/server/pop_verifier"
 require "kiosk/server/agent_login"
 require "kiosk/server/kyc_verifier"
-require "kiosk/server/rental_token_issuer"
 require "kiosk/server/mandate_verifier"
 
 # Optional Rails engine — only defines itself if Rails::Engine is loaded.
@@ -74,7 +73,6 @@ module Kiosk
     #   - {Kiosk::Server::Result}           — success envelope value type
     #   - {Kiosk::Server::SessionContext}   — transaction + four SET LOCAL GUCs
     #   - {Kiosk::Server::Actions}          — minimal Action registry (full DSL later)
-    #   - {Kiosk::Server::RentalTokenIssuer} — Ed25519 offline rental-token sign/verify (Arch 2)
     #   - {Kiosk::Server::Executor}         — wire dispatch (query/run/pay/schema working; events stubbed)
     #   - {Kiosk::Server::WireController}   — Rails controller wrapping Executor (only when Rails loaded)
     #   - {Kiosk::Server::JwksController}   — Rails controller serving /.well-known/jwks.json (only when Rails loaded)

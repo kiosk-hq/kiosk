@@ -695,8 +695,14 @@ namespace :demo do
     Adversarial cross-tenant isolation test (R1 Phase 1 Task 1).
 
     Boots the server, runs isolation_flow.rb with two fresh principals (A and B),
-    and asserts all cross-tenant denial properties:
+    and asserts all cross-tenant denial properties, including the order-ownership
+    mutation gate that binds pay to a placed order (K-185):
 
+      HEADLINE (pay/order binding): B cannot confirm_order on A's order.
+        A places order oA and pays for it (the cart mandate binds the settlement
+        to oA via line_items[{order_id}]). B calls confirm_order with order_id=oA
+        → MUST be 403: confirm_order gates on order-ownership AND an existing
+        settlement referencing oA, so a cross-principal confirm is rejected.
       Assertion 1 (exclusion): B's my_orders does NOT contain A's order oA.
       Assertion 2 (forged user_id ignored): B calls place_order with a forged
         user_id arg (A's UUID). The created order belongs to B (server uses
@@ -704,10 +710,6 @@ namespace :demo do
           - the order's DB user_id column == B's user_id (not A's)
           - B's my_orders contains the order
           - A's my_orders does NOT contain it
-      ⚠️ Assertion 3 (pay/order binding) — NOT TESTABLE with current mandate
-        structure: foodelivery's cart mandate carries line_items:[{sku,qty}] only;
-        there is no order_id field in the mandate or pay args. Cross-principal
-        settle cannot be fabricated. See report for the gap analysis.
 
     Exits 0 if all assertions hold (isolation works); exits 1 on failure.
     A red assertion = real isolation hole: fix the app, not the test.
@@ -787,13 +789,22 @@ namespace :demo do
     failures = []
     puts "\n── Adversarial isolation assertions ──"
 
-    user_id_a  = result["user_id_a"]
-    user_id_b  = result["user_id_b"]
-    order_id_a = result["order_id_a"]
-    order_id_b = result["order_id_b"]
-    b_before   = result["b_order_ids_before"] || []
-    b_after    = result["b_order_ids_after"]  || []
-    a_after    = result["a_order_ids_after"]  || []
+    user_id_a              = result["user_id_a"]
+    user_id_b              = result["user_id_b"]
+    order_id_a             = result["order_id_a"]
+    order_id_b             = result["order_id_b"]
+    b_confirm_on_a_status  = result["b_confirm_on_a_status"]
+    b_before               = result["b_order_ids_before"] || []
+    b_after                = result["b_order_ids_after"]  || []
+    a_after                = result["a_order_ids_after"]  || []
+
+    # ── HEADLINE: B cannot confirm_order on A's order (order-ownership gate) ──
+    if b_confirm_on_a_status == 403
+      puts "  ✓  HEADLINE: B cannot confirm_order on A's order (pay/order-ownership gate) → 403"
+    else
+      failures << "ISOLATION HOLE: B's confirm_order on A's order returned #{b_confirm_on_a_status} (expected 403)"
+      puts "  ✗  HEADLINE: confirm_order ownership gate FAILED — returned #{b_confirm_on_a_status}"
+    end
 
     # ── Assertion 1: B's my_orders (before) excludes A's order ────────
     if b_before.include?(order_id_a)
@@ -831,14 +842,6 @@ namespace :demo do
       failures << "Unexpected user_id for oB: got #{db_user_id.inspect}, expected B's #{user_id_b}"
       puts "  ✗  Assertion 2c FAILED: unexpected user_id #{db_user_id.inspect} for oB"
     end
-
-    # ── Assertion 3 (⚠️ not testable — documented gap) ────────────────
-    puts "\n  ⚠️  Assertion 3 (pay/order binding): SKIPPED — not testable."
-    puts "      foodelivery's cart mandate has no order_id field; pay path is"
-    puts "      disconnected from specific placed orders. A cross-principal"
-    puts "      settle via a forged order reference cannot be constructed."
-    puts "      Gap: no server-side check that cart.line_items correspond to"
-    puts "      a placed order owned by the payer. Flagged for follow-up review."
 
     if failures.empty?
       puts "\n  All adversarial assertions passed — app-layer isolation holds."

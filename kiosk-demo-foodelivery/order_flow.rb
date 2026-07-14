@@ -118,7 +118,10 @@ cart_payload = {
   user_id:            user_id,
   agent_id:           agent_id,
   iss:                ISSUER,
-  line_items:         [{ sku: "margherita", qty: 1 }],
+  # Bind the cart to the placed order (K-185): the cart mandate carries the
+  # order_id so the settlement can be matched to a specific owned order, exactly
+  # as getgrocery binds its cart to a create_order id. confirm_order gates on it.
+  line_items:         [{ order_id: order_id, total: total_cents }],
   total_amount_cents: total_cents,
   currency:           "eur",
   exp:                now + 600,
@@ -156,7 +159,20 @@ rc, pay = post_json(
 )
 abort "pay failed (#{rc}): #{JSON.generate(pay)}" unless rc == 200
 
-# ── Step 6: print ONE JSON line ─────────────────────────────────────────
+# ── Step 6: confirm_order — post-pay, order-ownership + settlement gated ──
+# Mirrors getgrocery's schedule_delivery: the legitimate owner confirms the
+# paid order. The action re-checks ownership and that a settlement references
+# this order (bound via the cart mandate's order_id), so this only succeeds
+# for the order's owner after a real settlement.
+
+rc, confirm = post_json(
+  "#{SERVER}/kiosk/run",
+  { name: "confirm_order", order_id: order_id },
+  { "Authorization" => "Bearer #{token}" },
+)
+abort "confirm_order failed (#{rc}): #{JSON.generate(confirm)}" unless rc == 200
+
+# ── Step 7: print ONE JSON line ─────────────────────────────────────────
 
 puts JSON.generate(
   http_register: 201,
@@ -164,4 +180,5 @@ puts JSON.generate(
   agent_id:      agent_id,
   order:         order_value,
   pay:           pay,
+  confirm:       confirm,
 )

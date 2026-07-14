@@ -264,6 +264,31 @@ RSpec.describe Kiosk::Pow::Equihash do
       )).to be(false)
     end
 
+    # K-149 (reopened): header_nonce is client-supplied and flowed straight
+    # into `Integer(hn)` — a non-numeric value raised ArgumentError/TypeError
+    # (an HTTP 500 at the wire), violating the "return false, never raise"
+    # contract the index guard above already honours.
+    it "REJECT — non-numeric string header_nonce (returns false, does not raise)" do
+      expect(described_class.verify(
+        salt: kat_salt, params: kat_params,
+        nonce: { "indices" => [2, 10], "header_nonce" => "abc" }
+      )).to be(false)
+    end
+
+    it "REJECT — non-coercible header_nonce type (Array) returns false, does not raise" do
+      expect(described_class.verify(
+        salt: kat_salt, params: kat_params,
+        nonce: { indices: [2, 10], header_nonce: [1] }
+      )).to be(false)
+    end
+
+    it "REJECT — Hash header_nonce returns false, does not raise" do
+      expect(described_class.verify(
+        salt: kat_salt, params: kat_params,
+        nonce: { indices: [2, 10], header_nonce: { "x" => 1 } }
+      )).to be(false)
+    end
+
     it "ACCEPT — header_nonce=0 same as default" do
       expect(described_class.verify(
         salt: kat_salt, params: kat_params, nonce: { indices: [2, 10], header_nonce: 0 }

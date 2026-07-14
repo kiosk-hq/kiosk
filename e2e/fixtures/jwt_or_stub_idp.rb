@@ -27,11 +27,8 @@ class JwtOrStubIdp < Kiosk::AgentIdentityProviders::Base
   private
 
   def bearer_token_for(request)
-    header = if request.respond_to?(:headers)
-               request.headers["Authorization"] || request.headers["authorization"]
-             elsif request.is_a?(Hash)
-               request["HTTP_AUTHORIZATION"]
-             end
+    # All callers pass a Rails request (see Base#verify @param [#headers, #env]).
+    header = request.headers["Authorization"] || request.headers["authorization"]
     return nil if header.nil? || header.empty?
 
     header.sub(/\ABearer\s+/i, "")

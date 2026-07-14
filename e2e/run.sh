@@ -118,6 +118,9 @@ ok "$APP_NAME generated"
 cat >> Gemfile <<RUBY
 
 # Kiosk OSS gems via path overrides (sibling clone of kiosk-hq/kiosk).
+# kiosk-rls is REQUIRED even though this fixture does not use RLS: it is the
+# only source of Configuration#system_role=, which initializer_kiosk.rb sets.
+# Dropping it makes the initializer raise NoMethodError at boot.
 gem "kiosk-all",    path: "$KIOSK_OSS/kiosk-all"
 gem "kiosk-core",   path: "$KIOSK_OSS/kiosk-core"
 gem "kiosk-rls",    path: "$KIOSK_OSS/kiosk-rls"

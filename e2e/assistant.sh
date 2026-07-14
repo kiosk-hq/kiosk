@@ -1,12 +1,18 @@
 #!/usr/bin/env bash
 # Mock AI assistant — exercises the Kiosk wire surface against a running
-# kiosk-server. Sourced by e2e/run.sh after server start.
+# kiosk-server. Executed as a bash subprocess by e2e/run.sh after server
+# start (not sourced — it runs under its own `set -euo pipefail`).
 #
 # Asserts on response envelopes from the REST wire surface
 # (/kiosk/query, /kiosk/run, /kiosk/pay). Exits non-zero on any failure.
 #
-# Env (set by caller):
-#   SERVER_URL — e.g. http://127.0.0.1:3001
+# Env (all set by run.sh; the pay-flow + DB assertions dereference them
+# under `set -u`, so all are required):
+#   SERVER_URL   — e.g. http://127.0.0.1:3001
+#   APP_DIR      — the generated Rails app dir (cwd for pay_flow.rb)
+#   FIXTURES     — path to e2e/fixtures (locates pay_flow.rb)
+#   DB_NAME      — Postgres database for the direct AP2-trail assertions
+#   KIOSK_ISSUER — issuer/audience passed through to pay_flow.rb
 
 set -euo pipefail
 

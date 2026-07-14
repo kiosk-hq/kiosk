@@ -1,8 +1,10 @@
 # frozen_string_literal: true
 
 # Stub Agent-IdP for the e2e demo. Parses `Authorization: Bearer …` into
-# a {Kiosk::Identity}. Real adapters (Devise / Auth0 / WorkOS / etc.) ship
-# as `kiosk-user-idp-*` and `kiosk-agent-idp-*` gems.
+# a {Kiosk::Identity}. The only real adapter shipped today is
+# `kiosk-user-idp-devise` (a user-IdP, currently unwired). Third-party
+# agent-IdP adapters (Entra / Okta / Passport-style) are planned to ship as
+# `kiosk-agent-idp-*` gems — none exist yet.
 #
 # Token shape:
 #
@@ -36,12 +38,7 @@ class StubIdp < Kiosk::AgentIdentityProviders::Base
   private
 
   def authorization_for(request)
-    if request.respond_to?(:headers)
-      request.headers["Authorization"] || request.headers["authorization"]
-    elsif request.is_a?(Hash)
-      request["HTTP_AUTHORIZATION"] || request[:authorization]
-    elsif request.is_a?(String)
-      request
-    end
+    # All callers pass a Rails request (see Base#verify @param [#headers, #env]).
+    request.headers["Authorization"] || request.headers["authorization"]
   end
 end

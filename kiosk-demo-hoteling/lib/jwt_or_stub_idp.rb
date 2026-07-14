@@ -1,16 +1,16 @@
 # frozen_string_literal: true
 
-# Composite IdP for the e2e: tries Kiosk-issued JWTs first (minted by the
-# bundled kiosk-pop IdP via register/login; the OAuth device-grant surface
-# is dormant per ADR-0008), falls back to the bespoke
-# `agent:u-…:a-…:r-…` / `human:u-…:r-…` shape that StubIdp parses.
+# Composite Agent-IdP for this demo app: tries Kiosk-issued JWTs first (minted
+# by the bundled kiosk-pop IdP via register/login; the OAuth device-grant
+# surface is dormant per ADR-0008), falls back to the bespoke
+# `agent:u-…:a-…:r-…` shape that StubIdp parses.
 # Lets the Kiosk REST endpoints (/kiosk/query, /kiosk/run, /kiosk/pay,
 # /kiosk/schema) authenticate both legacy synthetic tokens AND real
-# kiosk-pop-issued JWTs in the same test run.
+# kiosk-pop-issued JWTs in the same run.
 #
 # In production, a host app would pick ONE of these (or a real adapter
-# like kiosk-user-idp-devise). The composite shape lives in the e2e
-# fixture, not in the gem.
+# like kiosk-user-idp-devise). The composite shape is a demo convenience,
+# not part of any shipped gem.
 class JwtOrStubIdp < Kiosk::AgentIdentityProviders::Base
   def initialize(stub:)
     @stub = stub

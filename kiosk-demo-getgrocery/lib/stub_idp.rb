@@ -1,6 +1,6 @@
 # frozen_string_literal: true
 
-# Stub Agent-IdP for the e2e demo. Parses `Authorization: Bearer …` into
+# Stub Agent-IdP for this demo. Parses `Authorization: Bearer …` into
 # a {Kiosk::Identity}. Real adapters (Devise / Auth0 / WorkOS / etc.) ship
 # as `kiosk-user-idp-*` and `kiosk-agent-idp-*` gems.
 #

@@ -179,7 +179,7 @@ psp_ref = pay_resp.dig("value", "psp_reference").to_s
 abort "pay: psp_reference expected 'pi_…' (real Stripe), got #{psp_ref.inspect}" unless psp_ref.start_with?("pi_")
 STDERR.puts "  pay: settlement_id=#{pay_resp.dig("value", "settlement_id")} psp_reference=#{psp_ref}"
 
-# -- Step 7: schedule_delivery --  (renumbered; was Step 6 before payment_setup was added)
+# -- Step 7: schedule_delivery --
 rc_sched, sched_resp = post_json(
   "#{SERVER}/kiosk/run",
   { name: "schedule_delivery",

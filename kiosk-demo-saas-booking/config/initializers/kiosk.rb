@@ -39,9 +39,10 @@ Kiosk.configure do |c|
   c.schema         = "kiosk"
 
   # The Rails connection's role owns the tables AND issues queries (no
-  # role separation in v0.1 alpha). Set app_role to the same role so the
-  # `GRANT TO app_role` statements in `enable_rls_on` are no-ops on a
-  # role that already has all privileges via ownership.
+  # role separation in v0.1 alpha). This demo runs WITHOUT RLS — isolation
+  # is enforced at the app layer (see the migration and the query/Action
+  # WHERE clauses) — so app_role and system_role are set to the same role
+  # only to satisfy the config; no `enable_rls_on`/GRANT statements run here.
   c.app_role    = ENV.fetch("KIOSK_APP_ROLE",    "app_role")
   c.system_role = ENV.fetch("KIOSK_SYSTEM_ROLE", "app_role")
 
@@ -97,7 +98,7 @@ end
 # ─── Actions ────────────────────────────────────────────────────────────────
 
 # Register the demo Action. In production, providers use the full
-# `Kiosk::Action` DSL (post-v0.1); for the e2e a simple registered
+# `Kiosk::Action` DSL (post-v0.1); for this demo a simple registered
 # block is sufficient.
 Kiosk::Server::Actions.register("book_appointment",
                                  description: "Book an appointment at a salon for the authenticated principal",

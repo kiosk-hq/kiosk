@@ -70,6 +70,7 @@ module RentalTokenIssuerKAT
       check_public_key
       check_known_answer_vector
       check_domain_separation
+      check_input_and_key_guards
 
       if @failures.empty?
         puts "OK  RentalTokenIssuer KAT — all #{@passed} assertions passed"
@@ -189,6 +190,37 @@ module RentalTokenIssuerKAT
       tampered_message = message.sub("kiosk-rental-v1", "kiosk-rental-v0")
       tampered_token   = "#{tampered_message}.#{sig_b64}"
       assert("domain-sep: wrong tag -> nil", RentalTokenIssuer.verify(token: tampered_token, now: 1_750_000_000).nil?)
+    end
+
+    # K-209: the unconfigured-key raise, verify's nil-public-key return, and the
+    # pipe field-shift hazard (a `|` in an input mints a signed token this
+    # issuer's own verifier rejects — see the RentalTokenIssuer.issue charset
+    # contract). Saves/restores the configured key so it exercises the nil path.
+    def check_input_and_key_guards
+      # ── Pipe in an input: valid signature, but 8 pipe fields, so self-verify
+      #    rejects it (field-shift hazard the charset contract warns about).
+      poisoned = RentalTokenIssuer.issue(
+        scooter_code: "SK|001", reservation_id: "resv|1", now: 1_750_000_000,
+      )
+      poison_fields = poisoned.split(".")[..-2].join(".").split("|")
+      assert("pipe-input: message has >6 fields", poison_fields.length > 6)
+      assert("pipe-input: own verify rejects -> nil",
+        RentalTokenIssuer.verify(token: poisoned, now: 1_750_000_000).nil?)
+
+      # ── Unconfigured key: issue raises, verify returns nil (no key to derive).
+      saved = Kiosk.configuration.unlock_signing_key
+      Kiosk.configuration.unlock_signing_key = nil
+      raised = begin
+        RentalTokenIssuer.issue(scooter_code: "SK-001", reservation_id: "r", now: 1_750_000_000)
+        false
+      rescue ArgumentError
+        true
+      end
+      assert("unconfigured-key: issue raises ArgumentError", raised)
+      assert("unconfigured-key: verify -> nil",
+        RentalTokenIssuer.verify(token: "anything.sig", now: 1_750_000_000).nil?)
+    ensure
+      Kiosk.configuration.unlock_signing_key = saved
     end
 
     # Temporarily pin SecureRandom.hex(16) to the fixture jti so the KAT

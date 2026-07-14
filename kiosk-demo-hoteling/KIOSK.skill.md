@@ -349,13 +349,15 @@ Response — HTTP 200, inside `.value`:
                                "params": null }
   ],
   "actions": [
+    { "name": "confirm_booking", "description": "Confirm a reserved booking (requires payment mandate referencing this booking)",
+                                  "params": { "booking_id": "uuid — the booking to confirm" } },
+    { "name": "payment_setup",   "description": "Check whether the authenticated principal has a saved payment method ... (call this before `pay`)",
+                                  "params": {} },
     { "name": "reserve_room",    "description": "Reserve a room for the authenticated principal (creates a TTL hold)",
                                   "params": { "property_id":  "integer — property id",
                                               "room_type_id": "integer — room type id",
                                               "check_in":     "date string YYYY-MM-DD",
-                                              "check_out":    "date string YYYY-MM-DD" } },
-    { "name": "confirm_booking", "description": "Confirm a reserved booking (requires payment mandate referencing this booking)",
-                                  "params": { "booking_id": "uuid — the booking to confirm" } }
+                                              "check_out":    "date string YYYY-MM-DD" } }
   ]
 }
 ```

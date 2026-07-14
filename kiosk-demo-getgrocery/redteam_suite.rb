@@ -63,11 +63,8 @@ profile = Kiosk::Redteam::Profile.new(
   # forge_args: returns base args for create_order (user_id injected by ForgedUserId scenario)
   forge_action: "create_order",
   forge_args: ->(client, _principal_a, _principal_b) {
-    # We need a valid sku; query catalog as B to get one.
-    # We use a fresh unauthenticated catalog query approach: just hardcode a minimal
-    # args hash. The scenario will add user_id: a.user_id on top.
-    # Actually: the ForgedUserId scenario registers A and B, and calls forge_args(client, a, b).
-    # We can query catalog as B to get a valid sku.
+    # Query the catalog as B to get a valid sku for create_order; the
+    # ForgedUserId scenario adds user_id: A's UUID on top of these args.
     catalog_resp = client.query(_principal_b, name: "catalog")
     catalog = catalog_resp.body.is_a?(Hash) ? (catalog_resp.body["rows"] || []) : []
     raise "redteam: catalog empty for forge_args" if catalog.empty?

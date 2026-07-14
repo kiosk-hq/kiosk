@@ -30,7 +30,6 @@
 #
 # Prints ONE JSON line on stdout; non-zero exit on any failure.
 
-require "digest"
 require "json"
 require "net/http"
 require "openssl"

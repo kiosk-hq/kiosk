@@ -102,7 +102,7 @@ Kiosk.configure do |c|
     customer_resolver: ->(uid) { StripeCustomer.find_by(user_id: uid)&.customer_id },
     customer_saver:    ->(uid, cid) { StripeCustomer.create!(user_id: uid, customer_id: cid) },
     test_autocard:     ENV["KIOSK_TEST_AUTOCARD"] == "1",
-    return_url:        "http://kiosk.tech:8787/payment/return",
+    return_url:        "#{Kiosk.configuration.issuer}/payment/return",
   )
 
   # ── Catalog-toll PoW gate (active only when KIOSK_POW_DEMO=1) ────────────

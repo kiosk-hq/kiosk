@@ -11,13 +11,6 @@ PATH
     kiosk-core (0.0.1)
 
 PATH
-  remote: ../kiosk-pay-stripe
-  specs:
-    kiosk-pay-stripe (0.0.1)
-      kiosk-core (~> 0.0)
-      stripe (~> 19)
-
-PATH
   remote: ../kiosk-pow-equihash
   specs:
     kiosk-pow-equihash (0.1.0)
@@ -258,9 +251,6 @@ GEM
       io-console (~> 0.5)
     securerandom (0.4.1)
     stringio (3.2.0)
-    stripe (19.2.1)
-      bigdecimal
-      logger
     thor (1.5.0)
     timeout (0.6.1)
     tsort (0.2.0)
@@ -291,7 +281,6 @@ DEPENDENCIES
   debug
   kiosk-all!
   kiosk-core!
-  kiosk-pay-stripe!
   kiosk-pow-equihash!
   kiosk-redteam!
   kiosk-reputation!
@@ -335,7 +324,6 @@ CHECKSUMS
   jwt (2.10.3) sha256=e4d9352fbc7309b1a7448c7dd713dfe4d8c47077af80759cdbed8f878ea0b484
   kiosk-all (0.0.1)
   kiosk-core (0.0.1)
-  kiosk-pay-stripe (0.0.1)
   kiosk-pow-equihash (0.1.0)
   kiosk-redteam (0.0.1)
   kiosk-reputation (0.0.1)
@@ -387,7 +375,6 @@ CHECKSUMS
   reline (0.6.3) sha256=1198b04973565b36ec0f11542ab3f5cfeeec34823f4e54cebde90968092b1835
   securerandom (0.4.1) sha256=cc5193d414a4341b6e225f0cb4446aceca8e50d5e1888743fac16987638ea0b1
   stringio (3.2.0) sha256=c37cb2e58b4ffbd33fe5cd948c05934af997b36e0b6ca6fdf43afa234cf222e1
-  stripe (19.2.1) sha256=21bdf5fd766ff912cf1a21e8706b27b83896750d7a5750699464e34daae6e369
   thor (1.5.0) sha256=e3a9e55fe857e44859ce104a84675ab6e8cd59c650a49106a05f55f136425e73
   timeout (0.6.1) sha256=78f57368a7e7bbadec56971f78a3f5ecbcfb59b7fcbb0a3ed6ddc08a5094accb
   tsort (0.2.0) sha256=9650a793f6859a43b6641671278f79cfead60ac714148aabe4e3f0060480089f

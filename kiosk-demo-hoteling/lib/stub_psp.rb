@@ -1,6 +1,6 @@
 # frozen_string_literal: true
 
-# E2E test PSP: a deterministic in-process Kiosk payment provider. No real
+# Demo stub PSP: a deterministic in-process Kiosk payment provider. No real
 # Stripe — proves the server-side register→mandate→pay→persist flow. Returns
 # the settlement shape verb_pay expects (psp_reference, settled_amount_cents,
 # settled_at).

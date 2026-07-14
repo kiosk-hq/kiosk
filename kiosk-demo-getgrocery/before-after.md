@@ -182,7 +182,7 @@ Kiosk::Server::Actions.register("schedule_delivery") do |args|
       )::jsonb
     ) AS paid
   SQL
-  raise Kiosk::PaymentRequired, "order must be paid before scheduling" unless paid == "t" || paid == true
+  raise Kiosk::Server::Errors::Forbidden, "no settlement for this order" unless paid == "t" || paid == true
 
   order = Order.find_by!("id = ? AND user_id = ?", args[:order_id], uid)
   slot  = DeliverySlot.find(args[:delivery_slot_id])
@@ -201,7 +201,7 @@ end
 # config/initializers/kiosk.rb
 Kiosk.configure do |c|
   c.issuer           = "https://getgroceries.app"
-  c.payment_provider = KioskPay::Stripe::Adapter.new(secret_key: ENV["STRIPE_SECRET_KEY"])
+  c.payment_provider = Kiosk::PaymentProviders::Stripe.new(api_key: ENV["STRIPE_SECRET_KEY"])
 end
 ```
 

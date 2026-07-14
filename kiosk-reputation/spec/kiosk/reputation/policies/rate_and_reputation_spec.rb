@@ -77,6 +77,13 @@ RSpec.describe Kiosk::Reputation::Policies::RateAndReputation do
       # base_count(1) + unproven_count_bonus(1) = 2
       expect(count_for(settled_purchases_count: 0, request_rate_per_min: 5)).to eq(2)
     end
+
+    it "adds the unproven bonus ONLY at zero purchases, not merely below the proven threshold" do
+      # 3 purchases: below proven threshold (5) so still challenged, but NOT
+      # zero — so the unproven bonus does NOT fire. count = base_count(1) alone.
+      # (Pins purchases.zero? against a mutation to purchases < threshold.)
+      expect(count_for(settled_purchases_count: 3, request_rate_per_min: 5)).to eq(1)
+    end
   end
 
   # ---------------------------------------------------------------------------

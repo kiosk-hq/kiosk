@@ -11,9 +11,9 @@ module Kiosk
   # Policy + wire-challenge layer for Kiosk's proof-of-work system.
   #
   # kiosk-reputation is backend-agnostic: concrete PoW algorithms (Equihash —
-  # the shipped default, Argon2id legacy, Cuckoo Cycle, …) register themselves
-  # via {Backends.register}. This gem does not depend on any PoW gem or
-  # kiosk-core.
+  # the shipped default, Argon2id legacy, Cuckatoo Cycle, …) are registered by
+  # the HOST via {Backends.register} (no PoW gem self-registers on require).
+  # This gem does not depend on any PoW gem or kiosk-core.
   #
   # == Key components
   #

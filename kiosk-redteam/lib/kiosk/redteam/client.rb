@@ -38,10 +38,12 @@ module Kiosk
       #
       # @param name           [String]           agent display name
       # @param role           [String]           "customer" (default)
-      # @param pow_difficulty [Integer]          caller-side flag: >0 means the
-      #   provider is expected to gate registration with Equihash (0 = none).
-      #   The actual Equihash parameters (n, k) ride in the server's 402
-      #   challenges; this integer does not encode leading-zero bits.
+      # @param pow_difficulty [Integer]          INERT — accepted but never read
+      #   by the Client. PoW solving is driven entirely by the server's 402
+      #   Equihash challenges (see {#build_register}), not by this integer.
+      #   Kept only so callers/scenarios that thread `profile.pow_difficulty`
+      #   through don't have to change; scenarios read that value directly to
+      #   decide applicability (e.g. RegistrationWithoutPow).
       # @param pow            [:solve, :skip, String]
       #   :solve  — auto-solve each 402 Equihash challenge and resubmit
       #   :skip   — never include the pow field (test missing-proof)
@@ -217,8 +219,10 @@ module Kiosk
       #
       # Registration is now a proof-of-possession handshake: fetch a single-use
       # challenge, sign it (origin-bound via `aud`), then POST the signature.
-      # `name`/`role` are no longer sent on the wire (the server pins the role);
-      # the kwargs are kept so existing callers/scenarios don't have to change.
+      # `name`/`role` are no longer sent on the wire (the server pins the role),
+      # and `pow_difficulty` is never read — PoW is driven off the server's 402
+      # challenges below. These kwargs are kept inert so existing
+      # callers/scenarios don't have to change.
       def build_register(name:, role:, pow_difficulty:, pow:, wire_role: nil)
         key = OpenSSL::PKey::RSA.generate(2048)
         pem = key.public_key.to_pem

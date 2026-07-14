@@ -222,6 +222,40 @@ RSpec.describe Kiosk::Reputation::Challenge do
   end
 
   # ---------------------------------------------------------------------------
+  # String-keyed params (JSON round-trip shape from the wire)
+  # ---------------------------------------------------------------------------
+  describe ".verify — string-keyed params (production/JSON shape)" do
+    # In production the gate's symbolize_keys is shallow, so nested `params`
+    # keys arrive as strings ({"n"=>168,"k"=>7}). canonical_string (k.to_s) and
+    # verify's symbolize_keys exist precisely so this round-trips to :ok.
+    let(:string_params) { { "n" => 168, "k" => 7 } }
+
+    let(:string_challenge) do
+      described_class.issue(
+        alg: alg, params: string_params,
+        request_fingerprint: fingerprint,
+        secret: secret, ttl: ttl,
+        now: now, salt: salt, id: id
+      )
+    end
+
+    it "returns :ok for a string-keyed challenge with a correct nonce" do
+      result = described_class.verify(
+        challenge: string_challenge,
+        nonce: "good",
+        request_fingerprint: fingerprint,
+        secret: secret,
+        now: now + 1
+      )
+      expect(result).to eq(:ok)
+    end
+
+    it "produces the same sig as the symbol-keyed challenge (key type is invisible to the sig)" do
+      expect(string_challenge[:sig]).to eq(challenge[:sig])
+    end
+  end
+
+  # ---------------------------------------------------------------------------
   # Canonical string stability
   # ---------------------------------------------------------------------------
   describe "canonical string is param-key-order-independent" do

@@ -8,11 +8,12 @@ Policy and wire-challenge layer for Kiosk's proof-of-work system.
 proof-of-work, issues and verifies the signed wire challenge, and provides a
 pluggable reputation policy interface.
 
-**Pure Ruby — no dependency on kiosk-pow or kiosk-core.** PoW backends
-register themselves via `Kiosk::Reputation::Backends.register`. This gem is
-backend-agnostic: the shipped default is **equihash** (`kiosk-pow-equihash`,
-ADR-0007); `kiosk-pow` registers Argon2id (legacy); `kiosk-pow-cuckoo`
-registers Cuckatoo Cycle (opt-in).
+**Pure Ruby — no dependency on kiosk-pow or kiosk-core.** The host registers a
+PoW backend via `Kiosk::Reputation::Backends.register` (no PoW gem self-registers
+on require — see [Installation](#installation)). This gem is backend-agnostic:
+the shipped default is **equihash** (`kiosk-pow-equihash`, ADR-0007); `kiosk-pow`
+provides Argon2id (legacy, registers as `argon2id`); `kiosk-pow-cuckoo` provides
+Cuckatoo Cycle (opt-in, registers as `cuckatoo`).
 
 ## Wire protocol
 
@@ -103,9 +104,14 @@ Kiosk::Reputation::Backends.fetch("equihash")   # => Kiosk::Pow::Equihash
 Kiosk::Reputation::Backends.known               # => ["equihash"]
 ```
 
-A backend must respond to:
-- `.params(**) → Hash` — build challenge params (equihash: `{n:, k:}`)
+A registered backend need only respond to:
 - `.verify(salt:, params:, nonce:) → Boolean` — verify a submitted proof
+  (`Challenge.verify` resolves the backend via `fetch` and calls only this).
+
+Backends also expose a `.params` helper for building challenge params, but its
+signature is algorithm-specific (equihash `(n:, k:)`, argon2id `(d:, m:, t:, p:)`,
+cuckatoo `(edgebits:, proofsize:, target:)`) and it is called directly on the
+concrete backend by the host, never through this registry.
 
 ### `Challenge`
 

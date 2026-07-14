@@ -78,6 +78,40 @@ assert "kiosk.auth.challenge_url"  "$(echo "$wk" | jq -r '.kiosk.auth.challenge_
 assert "kiosk.issuer set"          "$(echo "$wk" | jq -r '.kiosk.issuer')"      "$SERVER_URL"
 assert "kiosk.capabilities[]"      "$(echo "$wk" | jq -r '.kiosk.capabilities | join(",")')" "schema,query,run,pay"
 
+# ─── native discovery: agents.txt / agents.json / agent-configuration ───
+#
+# The agents.txt v1.0 surface (ROOT-served) plus the RFC 8414-style
+# agent-configuration doc, all served by DiscoveryController from the same
+# WellKnown model as kiosk.json above (so they cannot drift).
+
+printf "\n\033[1m=== /agents.txt (native agents.txt v1.0) ===\033[0m\n"
+
+# Capture status + headers + body in one request.
+at_headers=$(curl -sS -o /tmp/agents_txt_body -D - "$SERVER_URL/agents.txt")
+at_status=$(curl -sS -o /dev/null -w "%{http_code}" "$SERVER_URL/agents.txt")
+at_body=$(cat /tmp/agents_txt_body)
+assert "agents.txt → 200"            "$at_status" "200"
+assert "agents.txt Content-Type"     "$(echo "$at_headers" | grep -i '^Content-Type:' | grep -ic 'text/plain')" "1"
+assert "agents.txt CORS *"           "$(echo "$at_headers" | grep -i '^Access-Control-Allow-Origin:' | grep -c '\*')" "1"
+assert "agents.txt Protocols: ap2"   "$(echo "$at_body" | grep -c '^Protocols: ap2$')" "1"
+assert "agents.txt has Skills:"      "$(echo "$at_body" | grep -c '^Skills: ')" "1"
+
+printf "\n\033[1m=== /agents.json (native agents.json v1.0) ===\033[0m\n"
+
+aj_status=$(curl -sS -o /dev/null -w "%{http_code}" "$SERVER_URL/agents.json")
+aj_headers=$(curl -sS -o /dev/null -D - "$SERVER_URL/agents.json")
+aj=$(curl -sf "$SERVER_URL/agents.json")
+assert "agents.json → 200"           "$aj_status" "200"
+assert "agents.json Content-Type"    "$(echo "$aj_headers" | grep -i '^Content-Type:' | grep -ic 'application/json')" "1"
+assert "agents.json auth.discovery"  "$(echo "$aj" | jq -r '.authorization.discovery')" "/.well-known/agent-configuration"
+
+printf "\n\033[1m=== /.well-known/agent-configuration (agent-auth discovery) ===\033[0m\n"
+
+ac_status=$(curl -sS -o /dev/null -w "%{http_code}" "$SERVER_URL/.well-known/agent-configuration")
+ac=$(curl -sf "$SERVER_URL/.well-known/agent-configuration")
+assert "agent-configuration → 200"        "$ac_status" "200"
+assert "agent-configuration endpoints.register" "$(echo "$ac" | jq -r '.endpoints.register | length > 0')" "true"
+
 # ─── Kiosk-* response headers ───────────────────────────────────────────
 
 printf "\n\033[1m=== response headers ===\033[0m\n"

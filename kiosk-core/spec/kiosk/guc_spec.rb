@@ -9,19 +9,6 @@ RSpec.describe Kiosk::GUC do
       expect(described_class::AGENT_ID).to eq("current_agent_id")
     end
 
-    it "lists ALL in canonical order" do
-      expect(described_class::ALL).to eq([
-        "current_user_id",
-        "current_role",
-        "current_actor",
-        "current_agent_id",
-      ])
-    end
-
-    it "freezes ALL" do
-      expect(described_class::ALL).to be_frozen
-    end
-
     it "defaults namespace to 'app'" do
       expect(described_class::DEFAULT_NAMESPACE).to eq("app")
     end

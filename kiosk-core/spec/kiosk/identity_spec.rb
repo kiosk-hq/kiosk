@@ -81,6 +81,11 @@ RSpec.describe Kiosk::Identity do
       identity = described_class.new(user_id: "u", role: "customer", actor: "human")
       expect(identity.claims).to eq({})
     end
+
+    it "normalizes an explicit claims: nil to empty hash" do
+      identity = described_class.new(**valid_args.merge(claims: nil))
+      expect(identity.claims).to eq({})
+    end
   end
 
   describe "predicates" do

@@ -27,7 +27,7 @@ No Rails dependency. Loadable in any Ruby app. Heavier `kiosk-server`, `kiosk-rl
 gem "kiosk-core"
 ```
 
-For the full provider stack, install the meta-gem:
+For the data plane (core + server), install the meta-gem — add RLS, payment, and IdP adapters per stack:
 
 ```ruby
 gem "kiosk-all"

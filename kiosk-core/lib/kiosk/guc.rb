@@ -16,8 +16,6 @@ module Kiosk
     ACTOR    = "current_actor"
     AGENT_ID = "current_agent_id"
 
-    ALL = [USER_ID, ROLE, ACTOR, AGENT_ID].freeze
-
     # Compose the full GUC name for `SET LOCAL` statements.
     #
     # @example

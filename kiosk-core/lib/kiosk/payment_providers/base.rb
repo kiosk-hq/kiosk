@@ -11,10 +11,9 @@ module Kiosk
     # Abstract base for AP2 PSP (Payment Service Provider) adapters.
     # See the Payment (AP2 mandate chain) section of the spec.
     #
-    # Subclasses ship as `kiosk-pay-*` gems. Stripe and Paddle are open
-    # (drive global adoption); regional PSPs — Tinkoff, YooKassa,
-    # CloudPayments, SberPay, ESIA-pay, … — are commercial and built on
-    # customer demand rather than upfront.
+    # Subclasses ship as `kiosk-pay-*` gems. Today only `kiosk-pay-stripe`
+    # ships; further open adapters (e.g. Paddle) and commercial regional
+    # PSPs are planned on customer demand — none exist yet.
     class Base
       # Returns true when the principal MUST complete a payment setup flow
       # (e.g. Stripe SetupIntent — card-on-file) before a charge can proceed.

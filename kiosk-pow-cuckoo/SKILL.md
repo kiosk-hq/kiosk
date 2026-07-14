@@ -4,7 +4,7 @@
 
 ### The VERIFIER — production-correct
 `Kiosk::Pow::Cuckoo.verify(salt:, params:, nonce:)` is production-correct and
-validated against Grin's Cuckatoo29 L=42 known-answer test vector.  41 specs
+validated against Grin's Cuckatoo29 L=42 known-answer test vector.  35+ specs
 green.  Pure Ruby, clean-room, no GPL code, Apache-2.0.
 
 Verification cost: `proofsize` SipHash-2-4 evaluations + a cycle-walk — a

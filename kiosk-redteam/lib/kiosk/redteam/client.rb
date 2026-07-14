@@ -37,7 +37,11 @@ module Kiosk
       # (e.g. RegistrationWithoutPow).
       #
       # @param name           [String]           agent display name
-      # @param role           [String]           "customer" (default)
+      # @param role           [String]           INERT — accepted but never sent
+      #   on the wire. The server pins the role during the proof-of-possession
+      #   handshake (see {#build_register}); this kwarg is threaded through but
+      #   never reaches the register body. To adversarially inject a role, use
+      #   `wire_role:` instead. Kept only so callers don't have to change.
       # @param pow_difficulty [Integer]          INERT — accepted but never read
       #   by the Client. PoW solving is driven entirely by the server's 402
       #   Equihash challenges (see {#build_register}), not by this integer.

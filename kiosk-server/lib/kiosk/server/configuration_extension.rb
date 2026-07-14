@@ -61,9 +61,14 @@ module Kiosk
         @owner ||= {}
       end
 
-      # Minimum agent-CLI client version this deployment will accept.
-      # Default: {Kiosk::Protocol::MIN_CLIENT}. Providers may bump if they
-      # rely on a newer wire feature.
+      # Minimum client version this deployment ADVERTISES in
+      # `/.well-known/kiosk.json` (see {WellKnown}). Default:
+      # {Kiosk::Protocol::MIN_CLIENT}. Purely informational in 0.1: no code
+      # compares any incoming request's client version against it, so a bump
+      # is advisory only. Note the per-response `Kiosk-Min-Client` header is
+      # NOT driven by this value — {Headers} emits the protocol-level
+      # {Kiosk::Protocol::MIN_CLIENT} constant, so a bumped provider advertises
+      # the new value only in the well-known document, not in the header.
       attr_writer :min_client
       def min_client
         @min_client ||= Kiosk::Protocol::MIN_CLIENT
@@ -209,10 +214,10 @@ module Kiosk
 
       # Storage adapter for {Kiosk::Server::DeviceAuthorization} rows
       # (RFC 8628 Device-Grant state machine). Lazy-defaults to
-      # {DeviceAuthorizationStores::InMemory} — fine for development +
-      # tests + small single-process deployments. Production Rails apps
-      # set this to the ActiveRecord-backed adapter (lands in a
-      # follow-up release).
+      # {DeviceAuthorizationStores::InMemory} — the only store that ships in
+      # 0.1, fine for development + tests + small single-process deployments.
+      # A multi-process deployment must set this to a durable {Base}
+      # implementation it provides (none ships).
       #
       # @return [DeviceAuthorizationStores::Base]
       attr_writer :device_authorization_store

@@ -77,9 +77,7 @@ module Kiosk
           if request.respond_to?(:headers)
             request.headers["Authorization"] || request.headers["authorization"]
           elsif request.is_a?(Hash)
-            request["HTTP_AUTHORIZATION"] || request[:authorization]
-          elsif request.is_a?(String)
-            request
+            request["HTTP_AUTHORIZATION"]
           end
         end
       end

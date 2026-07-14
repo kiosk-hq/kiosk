@@ -6,10 +6,11 @@ require "digest"
 module Kiosk
   module Server
     # State-machine value object for the RFC 8628 Device Authorization
-    # Grant flow. One row per `kiosk login` invocation: created on
+    # Grant flow. One row per device-authorization request: created on
     # POST /oauth/device_authorization, mutated by user approval at
     # /oauth/device/verify, consumed by the polling client at POST
-    # /oauth/token (device_code grant).
+    # /oauth/token (device_code grant). (No first-party CLI ships in 0.1;
+    # the initiating client is any RFC 8628 device-grant client.)
     #
     # Two codes per row:
     #
@@ -50,8 +51,8 @@ module Kiosk
       DEVICE_CODE_BYTES  = 32
 
       # Default OAuth device-flow lifetime (RFC 8628 §3.2 example: 1800;
-      # we pick 900 to bias toward fresh codes since `kiosk login`
-      # interactive sessions complete in <2 min usually).
+      # we pick 900 to bias toward fresh codes since interactive
+      # device-grant approval sessions complete in <2 min usually).
       DEFAULT_EXPIRES_IN = 900
 
       # Raised on attempted illegal state transition (e.g. approving an

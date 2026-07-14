@@ -105,6 +105,10 @@ module Kiosk
       # block's return value; re-raises any exception the block threw
       # after the rollback completes.
       def with_identity(identity, &block)
+        # Guard BEFORE touching any scope state. If this raised after
+        # incrementing @scope_depth, the ensure below would still fire and
+        # decrement it (and clobber @current_identity) — corrupting an
+        # enclosing scope when a blockless call is rescued inside it (K-213).
         raise ArgumentError, "block required" unless block
 
         previous_identity = @current_identity
@@ -114,26 +118,30 @@ module Kiosk
         caught = nil
 
         begin
-          connection.transaction do
-            apply_gucs(identity) if identity
-            begin
-              result = block.call(self)
-            rescue StandardError => e
-              caught = e
+          begin
+            connection.transaction do
+              apply_gucs(identity) if identity
+              begin
+                result = block.call(self)
+              rescue StandardError => e
+                caught = e
+              end
+              raise RollbackMarker
             end
-            raise RollbackMarker
+          rescue RollbackMarker
+            # Expected. AR's transaction caught the marker → rolled back +
+            # re-raised; we swallow here. For connection doubles that don't
+            # swallow Rollback themselves, this rescue is the cleanup point.
           end
-        rescue RollbackMarker
-          # Expected. AR's transaction caught the marker → rolled back +
-          # re-raised; we swallow here. For connection doubles that don't
-          # swallow Rollback themselves, this rescue is the cleanup point.
-        end
 
-        raise caught if caught
-        result
-      ensure
-        @current_identity = previous_identity
-        @scope_depth     -= 1
+          raise caught if caught
+          result
+        ensure
+          # Only unwind scope state we actually set up above — reached solely
+          # when the block guard passed, so an enclosing scope is preserved.
+          @current_identity = previous_identity
+          @scope_depth     -= 1
+        end
       end
 
       # Execute a SQL statement inside the active scope. Returns rows as
@@ -155,10 +163,15 @@ module Kiosk
         end
       end
 
-      # AP2 mandate flow lands in M4 alongside `kiosk-pay-*`.
+      # `pay` is deliberately unsupported in the RLS journey DSL: the real
+      # settlement path (Executor#verb_pay + kiosk-pay-stripe) captures against
+      # a live PSP and manages its own transaction boundaries, which the
+      # always-rolls-back journey scope cannot host. Journey tests exercise
+      # query / run_action against RLS policies, not payment capture.
       def pay_action(_name, _args)
         require_scope!
-        raise NotImplementedError, "pay_action will land alongside kiosk-pay-* in M4"
+        raise NotImplementedError, "pay is not exercised through the RLS journey DSL; " \
+                                   "settlement runs via Executor#verb_pay + a kiosk-pay-* provider"
       end
 
       # Bulk-insert `count` rows into `table` with the supplied `attrs`.
@@ -237,7 +250,10 @@ module Kiosk
         when true                 then "TRUE"
         when false                then "FALSE"
         when Numeric              then value.to_s
-        when Time, DateTime       then "'#{value.utc.iso8601}'"
+        # `to_time.getutc` is non-mutating and works for plain Time AND plain
+        # DateTime (which has no #utc). `Time#utc` mutates the caller's object
+        # and `DateTime#utc` raises NoMethodError outside ActiveSupport (K-214).
+        when Time, DateTime       then "'#{value.to_time.getutc.iso8601}'"
         when Date                 then "'#{value.iso8601}'"
         else
           "'#{value.to_s.gsub("'", "''")}'"

@@ -96,6 +96,32 @@ RSpec.describe Kiosk::Server::TestExecutor do
       expect { executor.with_identity(identity) }.to raise_error(ArgumentError, /block required/)
     end
 
+    it "leaves an enclosing scope intact when a blockless call is rescued inside it (K-213)" do
+      preserved = nil
+      executor.with_identity(nil) do
+        begin
+          executor.with_identity(nil) # blockless → ArgumentError before scope setup
+        rescue ArgumentError
+          # swallow, as a careless test might
+        end
+        # The failed blockless call must NOT have unwound the outer scope.
+        preserved = executor.in_scope?
+      end
+      expect(preserved).to be(true)
+    end
+
+    it "keeps current_identity from an enclosing scope after a rescued blockless call (K-213)" do
+      observed = nil
+      executor.with_identity(identity) do
+        begin
+          executor.with_identity(identity) # blockless → ArgumentError
+        rescue ArgumentError
+        end
+        observed = executor.current_identity
+      end
+      expect(observed).to eq(identity)
+    end
+
     it "marks in_scope? for the duration of the block" do
       seen = false
       executor.with_identity(identity) { seen = executor.in_scope? }
@@ -164,10 +190,10 @@ RSpec.describe Kiosk::Server::TestExecutor do
   end
 
   describe "#pay_action" do
-    it "raises NotImplementedError (lands with kiosk-pay-* in M4)" do
+    it "raises NotImplementedError — pay is not exercised through the journey DSL" do
       expect {
         executor.with_identity(identity) { executor.pay_action(:foo, {}) }
-      }.to raise_error(NotImplementedError, /M4/)
+      }.to raise_error(NotImplementedError, /not exercised through the RLS journey DSL/)
     end
   end
 
@@ -220,6 +246,23 @@ RSpec.describe Kiosk::Server::TestExecutor do
       system_connection.queue_result([row])
       result = executor.seed(:appointments, { user_id: "u-1", salon_id: 1 }, count: 1)
       expect(result.first).to include(id: 42, user_id: "u-1", salon_id: 1)
+    end
+
+    it "renders a Time as a UTC ISO-8601 literal without mutating the caller's object (K-214)" do
+      system_connection.queue_result([row])
+      t = Time.new(2026, 7, 14, 12, 0, 0, "+03:00")
+      executor.seed(:t, { at: t }, count: 1)
+      expect(system_connection.executed_sql.first).to include("'2026-07-14T09:00:00Z'")
+      # `Time#utc` would have mutated `t` to UTC in place; `to_time.getutc` must not.
+      expect(t.utc_offset).to eq(3 * 3600)
+    end
+
+    it "renders a plain DateTime without raising NoMethodError (K-214)" do
+      require "date"
+      system_connection.queue_result([row])
+      d = DateTime.new(2026, 7, 14, 12, 0, 0, "+03:00")
+      expect { executor.seed(:t, { at: d }, count: 1) }.not_to raise_error
+      expect(system_connection.executed_sql.first).to include("'2026-07-14T09:00:00Z'")
     end
   end
 end

@@ -2,19 +2,18 @@
 
 module Kiosk
   module Server
-    # Persistence layer for {DeviceAuthorization} rows. Adapter pattern
-    # — host apps swap implementations between in-memory (dev, tests)
-    # and ActiveRecord (production). The ActiveRecord adapter lives in
-    # a follow-up release; this file ships the abstract {Base} + an
-    # in-memory implementation that satisfies the Base contract.
+    # Persistence layer for {DeviceAuthorization} rows. Adapter pattern —
+    # {Base} defines the contract; only the in-memory {InMemory} store ships
+    # in 0.1. A durable (e.g. ActiveRecord-backed) adapter is NOT included;
+    # a host that needs one implements the four {Base} operations itself.
     #
     # Resolved via {Kiosk::Configuration#device_authorization_store}
     # with lazy default {InMemory}.
     module DeviceAuthorizationStores
       # Raised when a write would violate device_code_hash uniqueness
-      # or the pending-user_code uniqueness window. The actual ActiveRecord
-      # adapter will translate the underlying PG ‹unique_violation› into
-      # this same class so callers can `rescue` uniformly.
+      # or the pending-user_code uniqueness window. A durable adapter is
+      # expected to translate the underlying PG ‹unique_violation› into this
+      # same class so callers can `rescue` uniformly.
       class UniqueConstraintError < StandardError; end
 
       # Raised by {Base#update} when no row matches the supplied id.
@@ -30,9 +29,10 @@ module Kiosk
 
       # In-process store. Backed by a Hash keyed by id; lookups iterate.
       # Thread-safe via a Mutex (Device-Grant flows are low-frequency by
-      # nature — one row per `kiosk login`, then consumed). Suitable for
-      # development, integration tests, and small single-process
-      # deployments. Production uses the ActiveRecord adapter.
+      # nature — one row per device-authorization request, then consumed).
+      # This is the only store that ships in 0.1: suitable for development,
+      # integration tests, and small single-process deployments. A
+      # multi-process deployment needs a durable {Base} implementation.
       class InMemory < Base
         def initialize
           @by_id = {}

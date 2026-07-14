@@ -101,7 +101,7 @@ module Kiosk
 
       def verb_run(args)
         args = symbolize(args)
-        name = args.delete(:name) || args.delete(:action)
+        name = args.delete(:name)
         raise Errors::BadRequest, "args.name (action) required" if name.nil? || name.to_s.empty?
 
         handler = Actions.fetch(name)

@@ -1,8 +1,10 @@
 # frozen_string_literal: true
 
 # Rails engine skeleton. Conditionally defined — `kiosk-server` runs
-# happily in non-Rails contexts (e.g. plain Rack app or unit tests) by
-# simply not loading this file via the autoload graph.
+# happily in non-Rails contexts (e.g. plain Rack app or unit tests): the
+# file is always required (server.rb loads it unconditionally), but the
+# `if defined?(::Rails::Engine)` guard below means it only defines the
+# Engine class when Rails is present. In plain Ruby the require is a no-op.
 #
 # The wire/auth/jwks/kyc controllers have shipped; the engine auto-injects
 # HeadersMiddleware into the host stack (initializer below). Route wiring is

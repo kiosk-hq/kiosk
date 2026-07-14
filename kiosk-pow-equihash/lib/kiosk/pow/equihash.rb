@@ -206,8 +206,17 @@ module Kiosk
 
         # Build the seed: salt bytes ‖ header_nonce as LE u32 (future-proofing).
         # header_nonce defaults to 0 for now; extensibility point.
+        #
+        # header_nonce is client-supplied. A non-numeric/non-coercible value
+        # means a malformed proof, which must return false, never raise
+        # (K-149) — Integer() throws ArgumentError/TypeError on "abc", [1], {}.
         hn = nonce[:header_nonce] || nonce["header_nonce"] || 0
-        seed = salt.b + [Integer(hn)].pack("V")
+        hn = begin
+          Integer(hn)
+        rescue ArgumentError, TypeError
+          return false
+        end
+        seed = salt.b + [hn].pack("V")
 
         # Step 1: Compute all 2^k hashes and extract n bits as integers.
         hash_vals = indices.map do |idx|

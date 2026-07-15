@@ -80,4 +80,24 @@ RSpec.describe "DiscoveryController" do
       expect(raw).to eq(expected)
     end
   end
+
+  describe "GET /.well-known/api-catalog" do
+    it "returns 200 application/linkset+json (RFC 9727) with a non-empty item list" do
+      # A registered query makes `schema` a live capability, so the linkset
+      # catalogues the wire endpoints (not just the discovery companion).
+      Kiosk::Server::Queries.register("catalog") { [] }
+      status, headers, raw = dispatch(:api_catalog, "/.well-known/api-catalog")
+      expect(status).to eq(200)
+      expect(headers["Content-Type"]).to include("application/linkset+json")
+      # The RFC 9727 profile parameter identifies the api-catalog media type.
+      expect(headers["Content-Type"]).to include('profile="https://www.rfc-editor.org/info/rfc9727"')
+      expect(headers["Access-Control-Allow-Origin"]).to eq("*")
+      doc = JSON.parse(raw)
+      items = doc.dig("linkset", 0, "item")
+      expect(items).not_to be_empty
+      # The schema endpoint is tagged as the machine-readable service-desc.
+      schema = items.find { |i| i["href"].end_with?("/schema") }
+      expect(schema["rel"]).to eq("service-desc")
+    end
+  end
 end

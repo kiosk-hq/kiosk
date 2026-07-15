@@ -32,6 +32,10 @@ Rails.application.routes.draw do
   # live registry (ADR-0009), so discovery and the live surface never drift.
   get "/.well-known/kiosk.json",            to: "kiosk/server/discovery#kiosk_json"
 
+  # /.well-known/api-catalog — RFC 9727 linkset of the live wire endpoints
+  # (schema tagged service-desc), served by the same DiscoveryController.
+  get "/.well-known/api-catalog",           to: "kiosk/server/discovery#api_catalog"
+
   # ─── Provider admin (read-only demo back-office) ──────────────────────────
   # No auth required — demo provider only. Production would authenticate.
   get "/admin/orders" => "admin/orders#index", as: :admin_orders

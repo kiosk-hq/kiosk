@@ -46,7 +46,7 @@ require "kiosk/server/engine"
 # ActionController::API is available (i.e., a Rails host); safe to require in
 # plain Ruby contexts. This block loads the wire surface (WireController),
 # the discovery surface (DiscoveryController — agents.txt/json,
-# agent-configuration, kiosk.json), JWKS (JwksController), the kiosk-pop auth
+# agent-configuration, kiosk.json, api-catalog), JWKS (JwksController), the kiosk-pop auth
 # surface (AuthController — NOT OAuth), the KYC attestation surface
 # (KycAttestationController), and the dormant OAuth 2.1 device-grant
 # controllers (per ADR-0008).
@@ -86,8 +86,8 @@ module Kiosk
     #   - {Kiosk::Server::KycAttestationController} — Rails controller for the KYC surface (only when Rails loaded)
     #
     #   Signing / discovery:
-    #   - {Kiosk::Server::WellKnown}        — discovery generator: kiosk.json (build), agents.txt, agents.json, agent-configuration
-    #   - {Kiosk::Server::DiscoveryController} — serves those four discovery docs (only when Rails loaded)
+    #   - {Kiosk::Server::WellKnown}        — discovery generator: kiosk.json (build), agents.txt, agents.json, agent-configuration, api-catalog (RFC 9727)
+    #   - {Kiosk::Server::DiscoveryController} — serves those five discovery docs (only when Rails loaded)
     #   - {Kiosk::Server::SigningKey}       — RSA keypair value object
     #   - {Kiosk::Server::Jwks}             — JWKS document builder (RFC 7517)
     #   - {Kiosk::Server::JwtIssuer}        — RS256 sign / verify (kiosk-pop access tokens)

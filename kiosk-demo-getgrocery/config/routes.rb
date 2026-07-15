@@ -39,4 +39,19 @@ Rails.application.routes.draw do
   # ─── Provider admin (read-only demo back-office) ──────────────────────────
   # No auth required — demo provider only. Production would authenticate.
   get "/admin/orders" => "admin/orders#index", as: :admin_orders
+
+  # ─── Stripe Checkout return page ──────────────────────────────────────────
+  # The SetupIntent success_url (return_url in the initializer) lands the human
+  # here after they save a card. Without this route the human hit a 404
+  # post-card-entry (the demo gap K-239 named). Production providers point at
+  # kiosk.tech/payment/return; a self-hosted demo serves its own.
+  get "/payment/return", to: ->(_env) {
+    [200, { "content-type" => "text/html; charset=utf-8" },
+     ["<!DOCTYPE html><html><head><meta charset='utf-8'><title>Card saved</title></head>" \
+      "<body style='font-family:system-ui,sans-serif;text-align:center;padding:64px'>" \
+      "<h1>Card saved ✓</h1><p>Your assistant can now pay on your behalf. " \
+      "You can close this tab.</p>" \
+      "<p style='color:#888;font-size:14px'>getgrocery · Stripe test mode</p>" \
+      "</body></html>"]]
+  }
 end

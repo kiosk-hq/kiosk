@@ -5,7 +5,7 @@ require "json"
 module Kiosk
   module Server
     # Discovery generator — one model over {Kiosk::Configuration} + the
-    # request's base URL, four renderers, no drift (0.2 standards alignment):
+    # request's base URL, five renderers, no drift (0.2 standards alignment):
     #
     #   .build / .build_json          — the bespoke `/.well-known/kiosk.json`
     #                                   (a DERIVED ALIAS, byte-stable)
@@ -13,9 +13,11 @@ module Kiosk
     #   .agents_json / _string        — native agents.json v1.0 companion
     #   .agent_configuration          — /.well-known/agent-configuration
     #                                   (agent-auth discovery, kiosk-pop)
+    #   .api_catalog / _string        — /.well-known/api-catalog
+    #                                   (RFC 9727 linkset of the wire endpoints)
     #
     # Each renderer is a pure function — no Rails dependency, no I/O — so the
-    # four discovery surfaces cannot drift from one another.
+    # five discovery surfaces cannot drift from one another.
     #
     # See the Discovery section of the spec.
     module WellKnown
@@ -142,6 +144,10 @@ module Kiosk
             min_client:  config.min_client,
             api_version: Kiosk::Protocol::API_VERSION,
             mount_path:  config.mount_path,
+            # RFC 9727 API Catalog pointer (root-served linkset). Lives under
+            # the experimental `x-kiosk` namespace — agents.json v1.0 has no
+            # standard link-catalog key, so we do NOT force a top-level field.
+            api_catalog: "/.well-known/api-catalog",
           },
         }
 
@@ -172,6 +178,50 @@ module Kiosk
           jwks_uri:   "#{endpoint}/.well-known/jwks.json",
           auth_modes: ["kiosk-pop"],
         }
+      end
+
+      # ── W-catalog: /.well-known/api-catalog (RFC 9727 linkset) ─────────
+      #
+      # RFC 9727 "API Catalog" served as an `application/linkset+json` body: a
+      # single linkset member, `anchor`ed at the api-catalog URL, whose `item`
+      # array hyperlinks the live API endpoints. Kiosk's "APIs" are the wire
+      # verbs — `<endpoint>/{schema,query,run,pay}` — filtered to the verbs the
+      # deployment actually serves (`config.capabilities`, computed from the
+      # live registry per ADR-0009), plus the agents.json discovery companion.
+      #
+      # The `schema` endpoint is the machine-readable surface description, so it
+      # carries the RFC 9727 `service-desc` relation (SHOULD); every other link
+      # is a plain `item`.
+      #
+      # @return [Hash]
+      def self.api_catalog(base_url:, config: Kiosk.configuration)
+        validate_issuer!(config)
+        base = base_url.to_s.chomp("/")
+        endpoint = base + config.mount_path
+        verbs = Array(config.capabilities)
+
+        items = []
+        # schema is the machine-readable service description (service-desc).
+        if verbs.include?("schema")
+          items << { href: "#{endpoint}/schema", rel: "service-desc" }
+        end
+        # The remaining wire verbs are plain catalogued APIs.
+        %w[query run pay].each do |verb|
+          items << { href: "#{endpoint}/#{verb}", rel: "item" } if verbs.include?(verb)
+        end
+        # The agents.json discovery companion (root-served).
+        items << { href: "#{base}/agents.json", rel: "item" }
+
+        {
+          linkset: [
+            { anchor: "#{base}/.well-known/api-catalog", item: items },
+          ],
+        }
+      end
+
+      # JSON-encoded form of {#api_catalog}.
+      def self.api_catalog_string(**kwargs)
+        JSON.generate(api_catalog(**kwargs))
       end
 
       # Absolute URLs of the four kiosk-pop auth endpoints under `endpoint`

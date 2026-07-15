@@ -12,7 +12,7 @@ if defined?(::ActionController::API)
 
   module Kiosk
     module Server
-      # Discovery surface — one controller, four discovery documents, all
+      # Discovery surface — one controller, five discovery documents, all
       # rendered from {WellKnown} (the single generator seam, so they cannot
       # drift):
       #
@@ -22,6 +22,8 @@ if defined?(::ActionController::API)
       #   GET /.well-known/kiosk.json            → the bespoke kiosk.json (derived
       #                                            alias; byte-identical to
       #                                            {WellKnown.build_json})
+      #   GET /.well-known/api-catalog           → RFC 9727 linkset of the wire
+      #                                            endpoints (application/linkset+json)
       #
       # The base URL is taken from the request (`request.base_url`), so a
       # provider that mounts these routes serves the correct origin without
@@ -50,6 +52,17 @@ if defined?(::ActionController::API)
         # stays byte-identical to the canonical document.
         def kiosk_json
           render json: WellKnown.build_json(base_url: request.base_url)
+        end
+
+        # GET /.well-known/api-catalog — RFC 9727 API Catalog: a linkset of the
+        # live wire endpoints (schema tagged `service-desc`) plus the discovery
+        # companion. Served as `application/linkset+json` with the RFC 9727
+        # profile parameter.
+        def api_catalog
+          allow_cors
+          render json: WellKnown.api_catalog(base_url: request.base_url),
+                 content_type: 'application/linkset+json; ' \
+                               'profile="https://www.rfc-editor.org/info/rfc9727"'
         end
 
         private

@@ -27,4 +27,8 @@ Rails.application.routes.draw do
   # /.well-known/kiosk.json discovery endpoint — served by the shipped
   # DiscoveryController (same WellKnown.build_json document).
   get "/.well-known/kiosk.json",            to: "kiosk/server/discovery#kiosk_json"
+
+  # /.well-known/api-catalog — RFC 9727 linkset of the live wire endpoints
+  # (schema tagged service-desc), served by the same DiscoveryController.
+  get "/.well-known/api-catalog",           to: "kiosk/server/discovery#api_catalog"
 end

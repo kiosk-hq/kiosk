@@ -93,7 +93,7 @@ RSpec.describe Kiosk::Server::WellKnown do
       Kiosk.configure { |c| c.skill_sha256 = "abc123" }
       d = described_class.build(base_url: "https://api.acme.example")
       # Default skill URL is the immutable versioned artifact (ADR-0012).
-      expect(d[:kiosk][:skill]).to eq(url: "https://kiosk.tech/skill-v0.1.2.md", sha256: "abc123")
+      expect(d[:kiosk][:skill]).to eq(url: "https://kiosk.tech/skill-v0.1.3.md", sha256: "abc123")
     end
 
     it "respects an overridden skill_url" do
@@ -229,6 +229,10 @@ RSpec.describe Kiosk::Server::WellKnown do
       expect(xk[:min_client]).to eq(Kiosk.configuration.min_client)
     end
 
+    it "points at the RFC 9727 api-catalog under the x-kiosk extension" do
+      expect(doc[:"x-kiosk"][:api_catalog]).to eq("/.well-known/api-catalog")
+    end
+
     it "round-trips through JSON" do
       json = described_class.agents_json_string(base_url: "https://api.acme.example")
       parsed = JSON.parse(json)
@@ -271,6 +275,105 @@ RSpec.describe Kiosk::Server::WellKnown do
       Kiosk.reset!
       expect { described_class.agent_configuration(base_url: "https://api.acme.example") }
         .to raise_error(ArgumentError, /issuer/)
+    end
+  end
+
+  # ─── W-catalog: /.well-known/api-catalog (RFC 9727 linkset) ──────────────
+  describe ".api_catalog" do
+    subject(:doc) { described_class.api_catalog(base_url: "https://api.acme.example") }
+
+    # The linkset's single member: anchored at the api-catalog URL, carrying
+    # the `item` link array.
+    def member(d) = d[:linkset].first
+
+    it "returns an RFC 9727 linkset anchored at the api-catalog URL" do
+      expect(doc).to have_key(:linkset)
+      expect(member(doc)[:anchor]).to eq("https://api.acme.example/.well-known/api-catalog")
+    end
+
+    it "carries a non-empty item array of endpoint links" do
+      items = member(doc)[:item]
+      expect(items).to be_an(Array)
+      expect(items).not_to be_empty
+      expect(items).to all(include(:href, :rel))
+    end
+
+    it "links the wire endpoints present in capabilities" do
+      Kiosk::Server::Queries.register("catalog") { [] }
+      Kiosk::Server::Actions.register("checkout") { {} }
+      Kiosk.configure { |c| c.payment_provider = Object.new }
+      d = described_class.api_catalog(base_url: "https://api.acme.example")
+      hrefs = member(d)[:item].map { |i| i[:href] }
+      expect(hrefs).to include("https://api.acme.example/kiosk/schema")
+      expect(hrefs).to include("https://api.acme.example/kiosk/query")
+      expect(hrefs).to include("https://api.acme.example/kiosk/run")
+      expect(hrefs).to include("https://api.acme.example/kiosk/pay")
+    end
+
+    it "omits wire endpoints not present in capabilities" do
+      # Register only a query → capabilities = [schema, query]; run/pay absent.
+      Kiosk::Server::Queries.register("catalog") { [] }
+      d = described_class.api_catalog(base_url: "https://api.acme.example")
+      hrefs = member(d)[:item].map { |i| i[:href] }
+      expect(hrefs).to include("https://api.acme.example/kiosk/schema")
+      expect(hrefs).to include("https://api.acme.example/kiosk/query")
+      expect(hrefs).not_to include("https://api.acme.example/kiosk/run")
+      expect(hrefs).not_to include("https://api.acme.example/kiosk/pay")
+    end
+
+    it "links no wire endpoints when nothing is registered (schema absent)" do
+      # Bare config registers no queries/actions → capabilities = []; only the
+      # agents.json discovery companion is catalogued.
+      hrefs = member(doc)[:item].map { |i| i[:href] }
+      expect(hrefs).to eq(["https://api.acme.example/agents.json"])
+    end
+
+    it "tags the schema endpoint as the machine-readable service-desc" do
+      Kiosk::Server::Queries.register("catalog") { [] }
+      d = described_class.api_catalog(base_url: "https://api.acme.example")
+      schema = member(d)[:item].find { |i| i[:href].end_with?("/schema") }
+      expect(schema[:rel]).to eq("service-desc")
+    end
+
+    it "tags the non-schema wire endpoints with rel=item" do
+      Kiosk::Server::Actions.register("checkout") { {} }
+      d = described_class.api_catalog(base_url: "https://api.acme.example")
+      run = d[:linkset].first[:item].find { |i| i[:href].end_with?("/run") }
+      expect(run[:rel]).to eq("item")
+    end
+
+    it "links the agents.json discovery companion" do
+      hrefs = member(doc)[:item].map { |i| i[:href] }
+      expect(hrefs).to include("https://api.acme.example/agents.json")
+    end
+
+    it "respects an overridden mount_path for the wire endpoints" do
+      Kiosk::Server::Queries.register("catalog") { [] }
+      Kiosk.configure { |c| c.mount_path = "/agent-surface" }
+      d = described_class.api_catalog(base_url: "https://api.acme.example")
+      hrefs = d[:linkset].first[:item].map { |i| i[:href] }
+      expect(hrefs).to include("https://api.acme.example/agent-surface/schema")
+    end
+
+    it "strips trailing slashes from base_url" do
+      d = described_class.api_catalog(base_url: "https://api.acme.example/")
+      expect(d[:linkset].first[:anchor])
+        .to eq("https://api.acme.example/.well-known/api-catalog")
+    end
+
+    it "validates the issuer (same contract as build)" do
+      Kiosk.reset!
+      expect { described_class.api_catalog(base_url: "https://api.acme.example") }
+        .to raise_error(ArgumentError, /issuer/)
+    end
+
+    describe ".api_catalog_string" do
+      it "round-trips through JSON" do
+        json = described_class.api_catalog_string(base_url: "https://api.acme.example")
+        parsed = JSON.parse(json)
+        expect(parsed.dig("linkset", 0, "anchor"))
+          .to eq("https://api.acme.example/.well-known/api-catalog")
+      end
     end
   end
 end

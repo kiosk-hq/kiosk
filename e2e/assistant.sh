@@ -112,6 +112,15 @@ ac=$(curl -sf "$SERVER_URL/.well-known/agent-configuration")
 assert "agent-configuration → 200"        "$ac_status" "200"
 assert "agent-configuration endpoints.register" "$(echo "$ac" | jq -r '.endpoints.register | length > 0')" "true"
 
+printf "\n\033[1m=== /.well-known/api-catalog (RFC 9727 linkset) ===\033[0m\n"
+
+apc_status=$(curl -sS -o /dev/null -w "%{http_code}" "$SERVER_URL/.well-known/api-catalog")
+apc_headers=$(curl -sS -o /dev/null -D - "$SERVER_URL/.well-known/api-catalog")
+apc=$(curl -sf "$SERVER_URL/.well-known/api-catalog")
+assert "api-catalog → 200"           "$apc_status" "200"
+assert "api-catalog Content-Type"    "$(echo "$apc_headers" | grep -i '^Content-Type:' | grep -ic 'application/linkset+json')" "1"
+assert "api-catalog items non-empty" "$(echo "$apc" | jq -r '.linkset[0].item | length > 0')" "true"
+
 # ─── Kiosk-* response headers ───────────────────────────────────────────
 
 printf "\n\033[1m=== response headers ===\033[0m\n"

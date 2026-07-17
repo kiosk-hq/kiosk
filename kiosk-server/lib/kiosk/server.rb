@@ -14,6 +14,8 @@ require "kiosk/server/device_authorization"
 require "kiosk/server/device_authorization_stores"
 require "kiosk/server/device_code_grant"
 require "kiosk/server/device_verification"
+require "kiosk/server/account_binding"
+require "kiosk/server/link_code"
 require "kiosk/server/configuration_extension"
 require "kiosk/server/headers"
 require "kiosk/server/headers_middleware"
@@ -43,18 +45,21 @@ require "kiosk/server/mandate_verifier"
 require "kiosk/server/engine"
 
 # Controllers — each file defines its controller only when
-# ActionController::API is available (i.e., a Rails host); safe to require in
-# plain Ruby contexts. This block loads the wire surface (WireController),
-# the discovery surface (DiscoveryController — agents.txt/json,
-# agent-configuration, kiosk.json, api-catalog), JWKS (JwksController), the kiosk-pop auth
-# surface (AuthController — NOT OAuth), the KYC attestation surface
-# (KycAttestationController), and the dormant OAuth 2.1 device-grant
-# controllers (per ADR-0008).
+# ActionController::API (or ::Base for the HTML pages) is available (i.e., a
+# Rails host); safe to require in plain Ruby contexts. This block loads the
+# wire surface (WireController), the discovery surface (DiscoveryController —
+# agents.txt/json, agent-configuration, kiosk.json, api-catalog, auth.md),
+# JWKS (JwksController), the kiosk-pop auth surface (AuthController — NOT
+# OAuth — plus the link/claim/unlink binding endpoints), the KYC attestation
+# surface (KycAttestationController), and the account-binding ceremony's
+# OAuth-wire + HTML controllers (ADR-0017).
 require "kiosk/server/wire_controller"
 require "kiosk/server/discovery_controller"
 require "kiosk/server/jwks_controller"
 require "kiosk/server/oauth_device_authorization_controller"
 require "kiosk/server/oauth_token_controller"
+require "kiosk/server/device_verify_controller"
+require "kiosk/server/assistants_controller"
 require "kiosk/server/auth_controller"
 require "kiosk/server/kyc_attestation_controller"
 
@@ -86,8 +91,8 @@ module Kiosk
     #   - {Kiosk::Server::KycAttestationController} — Rails controller for the KYC surface (only when Rails loaded)
     #
     #   Signing / discovery:
-    #   - {Kiosk::Server::WellKnown}        — discovery generator: kiosk.json (build), agents.txt, agents.json, agent-configuration, api-catalog (RFC 9727)
-    #   - {Kiosk::Server::DiscoveryController} — serves those five discovery docs (only when Rails loaded)
+    #   - {Kiosk::Server::WellKnown}        — discovery generator: kiosk.json (build), agents.txt, agents.json, agent-configuration, api-catalog (RFC 9727), auth.md
+    #   - {Kiosk::Server::DiscoveryController} — serves those six discovery docs (only when Rails loaded)
     #   - {Kiosk::Server::SigningKey}       — RSA keypair value object
     #   - {Kiosk::Server::Jwks}             — JWKS document builder (RFC 7517)
     #   - {Kiosk::Server::JwtIssuer}        — RS256 sign / verify (kiosk-pop access tokens)
@@ -96,15 +101,21 @@ module Kiosk
     #   Infra:
     #   - {Kiosk::Server::Headers}          — composes the three response headers
     #   - {Kiosk::Server::HeadersMiddleware}— Rack middleware that injects them
-    #   - {Kiosk::Server::SchemaDefinitions}— SQL for migrations 001-007
+    #   - {Kiosk::Server::SchemaDefinitions}— SQL for migrations 001-008
     #   - {Kiosk::Server::Engine}           — Rails engine (only when Rails loaded)
     #
-    #   Dormant OAuth 2.1 device-grant surface (code retained, unwired — ADR-0008):
-    #   - {Kiosk::Server::DeviceAuthorization}        — RFC 8628 Device-Grant value object
-    #   - {Kiosk::Server::DeviceAuthorizationStores}  — storage adapter (only an InMemory store ships)
-    #   - {Kiosk::Server::DeviceCodeGrant}            — pure-Ruby service: .start + .exchange
-    #   - {Kiosk::Server::DeviceVerification}         — pure-Ruby helpers: .find_pending + .approve + .deny
+    #   Account-binding ceremony (ADR-0017 — the RFC 8628 machinery revived
+    #   as the key-bound claim/link surface; kiosk-pop stays the only token
+    #   story):
+    #   - {Kiosk::Server::DeviceAuthorization}        — ceremony state machine (kind: claim/link)
+    #   - {Kiosk::Server::DeviceAuthorizationStores}  — storage adapters (durable ActiveRecord default + InMemory)
+    #   - {Kiosk::Server::DeviceCodeGrant}            — claim flow service: .start + .exchange (BIND-POP)
+    #   - {Kiosk::Server::DeviceVerification}         — verify-page helpers: .find_pending + .approve + .deny
+    #   - {Kiosk::Server::AccountBinding}             — fresh-register / rebind / unlink + the assistant_claimed / assistant_unlinked hooks
+    #   - {Kiosk::Server::LinkCode}                   — link flow service: .mint + .redeem
     #   - {Kiosk::Server::OauthDeviceAuthorizationController} — POST /oauth/device_authorization
     #   - {Kiosk::Server::OauthTokenController}        — POST /oauth/token (device_code grant)
+    #   - {Kiosk::Server::DeviceVerifyController}      — GET/POST /oauth/device/verify (HTML, overridable views)
+    #   - {Kiosk::Server::AssistantsController}        — «Link an assistant» page (HTML, overridable views)
   end
 end

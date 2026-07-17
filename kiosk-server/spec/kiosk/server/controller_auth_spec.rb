@@ -268,13 +268,21 @@ RSpec.describe "wire-surface controller auth" do
 
   # ─── K-072: client-chosen requested_role is validated against roles ─────
   describe "OauthDeviceAuthorizationController requested_role validation" do
+    let(:public_key) { OpenSSL::PKey::RSA.generate(2048).public_key.to_pem }
+
     before do
-      Kiosk.configure { |c| c.roles = %i[customer] }
+      Kiosk.configure do |c|
+        c.roles = %i[customer]
+        # The binding ceremony requires a public_key (ADR-0017); pin the
+        # in-memory store so these wire tests stay DB-free.
+        c.device_authorization_store =
+          Kiosk::Server::DeviceAuthorizationStores::InMemory.new
+      end
     end
 
     def device_authorization_env(params)
       Rack::MockRequest.env_for("/kiosk/oauth/device_authorization",
-                                method: "POST", params: params)
+                                method: "POST", params: { "public_key" => public_key }.merge(params))
     end
 
     it "rejects a role not among the configured roles with 400 invalid_request" do

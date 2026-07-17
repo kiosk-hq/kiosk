@@ -1,0 +1,53 @@
+<%# «Link an assistant» page (ADR-0017, link flow — Kiosk extension).
+    Minimal on purpose — override by shipping
+    app/views/kiosk/server/assistants/show.html.erb in the host app. %>
+<main>
+  <h1>Linked assistant accounts</h1>
+
+  <% if @notice %><p role="status"><%= @notice %></p><% end %>
+  <% if @error %><p role="alert"><%= @error %></p><% end %>
+
+  <% if @link_code %>
+    <section>
+      <h2>Your link code</h2>
+      <p>
+        Paste this into your assistant's chat. It works once and expires in
+        <%= @expires_in %> seconds — it is shown only now.
+      </p>
+      <p><code><%= @link_code %></code></p>
+    </section>
+  <% end %>
+
+  <section>
+    <h2>Link a new assistant</h2>
+    <p>
+      Mint a code, hand it to your assistant; the assistant redeems it with
+      its own key and is then bound to your account.
+    </p>
+    <form action="<%= @page_path %>/link" method="post">
+      <input type="hidden" name="authenticity_token" value="<%= form_authenticity_token %>">
+      <button type="submit">Mint a link code</button>
+    </form>
+  </section>
+
+  <section>
+    <h2>Currently linked</h2>
+    <% if @assistants.empty? %>
+      <p>No assistant accounts are linked yet.</p>
+    <% else %>
+      <ul>
+        <% @assistants.each do |assistant| %>
+          <li>
+            <code><%= assistant[:fingerprint] %></code>
+            — linked <%= assistant[:created_at] %>
+            <form action="<%= @page_path %>/unlink" method="post">
+              <input type="hidden" name="authenticity_token" value="<%= form_authenticity_token %>">
+              <input type="hidden" name="agent_id" value="<%= assistant[:agent_id] %>">
+              <button type="submit">Unlink</button>
+            </form>
+          </li>
+        <% end %>
+      </ul>
+    <% end %>
+  </section>
+</main>

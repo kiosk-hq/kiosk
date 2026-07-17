@@ -14,6 +14,7 @@ All notable changes follow [Keep a Changelog](https://keepachangelog.com/en/1.1.
 
 ### Added
 
+- **Account binding (ADR-0017, W5).** The dormant device-grant machinery is revived as the key-bound claim/link ceremonies: `POST /oauth/device_authorization` requires the agent's `public_key`, the engine-drawn verify page authenticates via `user_idp`, and the token poll demands a possession proof (`signed`, BIND-POP) before any binding — fresh keys register as linked assistant accounts, known keys rebind with reputation carried; link codes mint/redeem via `POST /auth/link` / `POST /auth/claim`; `POST /auth/unlink` deactivates a binding and fires `assistant_unlinked`. Codes are stored hashed in the new durable `DeviceAuthorizationStores::ActiveRecord` default (migration 008); discovery gains `/auth.md` and additive binding keys across the other five surfaces. Tokens remain kiosk-pop-only.
 - Initial skeleton.
 - `Kiosk::Server::ConfigurationExtension` — adds `mount_path`, `capabilities`, `owner`, `min_client` to `Kiosk::Configuration` with lazy defaults.
 - `Kiosk::Server::WellKnown` — pure-Ruby builder for `/.well-known/kiosk.json` per spec §3.4. Returns Hash or JSON string. Validates `issuer` is set.

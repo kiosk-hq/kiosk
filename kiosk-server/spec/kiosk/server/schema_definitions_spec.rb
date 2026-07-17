@@ -187,6 +187,37 @@ RSpec.describe Kiosk::Server::SchemaDefinitions do
     end
   end
 
+  describe ".rebuild_device_authorizations_sql" do
+    subject(:sql) { described_class.rebuild_device_authorizations_sql }
+
+    it "recreates the table (lossless: the 005 shape was never written by shipped code)" do
+      expect(sql).to include(%(DROP TABLE IF EXISTS "kiosk".device_authorizations))
+      expect(sql).to include(%(CREATE TABLE "kiosk".device_authorizations))
+    end
+
+    it "stores both codes hashed only (text hex digests, no plaintext user_code)" do
+      expect(sql).to include("device_code_hash text NOT NULL")
+      expect(sql).to include("user_code_hash   text NOT NULL")
+      expect(sql).not_to match(/\buser_code\s+text/)
+    end
+
+    it "carries the binding columns: public_key_pem + kind (claim/link)" do
+      expect(sql).to include("public_key_pem   text")
+      expect(sql).to include("kind             text NOT NULL DEFAULT 'claim'")
+      expect(sql).to include("CHECK (kind IN ('claim', 'link'))")
+    end
+
+    it "enforces device_code uniqueness and pending-only user_code uniqueness" do
+      expect(sql).to include("CREATE UNIQUE INDEX idx_device_authorizations_code_hash")
+      expect(sql).to match(/idx_device_authorizations_user_code_pending.*?WHERE status = 'pending'/m)
+    end
+
+    it "types user_id against the provider's user-id type" do
+      out = described_class.rebuild_device_authorizations_sql(user_id_type: :bigint)
+      expect(out).to include("user_id          bigint")
+    end
+  end
+
   describe ".user_id_cast" do
     it "maps :uuid to 'uuid'" do
       expect(described_class.user_id_cast(:uuid)).to eq("uuid")

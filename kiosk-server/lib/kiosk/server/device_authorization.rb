@@ -5,22 +5,33 @@ require "digest"
 
 module Kiosk
   module Server
-    # State-machine value object for the RFC 8628 Device Authorization
-    # Grant flow. One row per device-authorization request: created on
-    # POST /oauth/device_authorization, mutated by user approval at
-    # /oauth/device/verify, consumed by the polling client at POST
-    # /oauth/token (device_code grant). (No first-party CLI ships in 0.1;
-    # the initiating client is any RFC 8628 device-grant client.)
+    # State-machine value object for the account-binding ceremony (ADR-0017)
+    # riding the RFC 8628 Device Authorization Grant wire. One row per
+    # binding request, in one of two kinds:
     #
-    # Two codes per row:
+    #   - `:claim` — agent-initiated (auth.md "User Claimed"): created on
+    #     POST /oauth/device_authorization carrying the agent's public key,
+    #     approved/denied by the human at /oauth/device/verify, consumed by
+    #     the polling client at POST /oauth/token (device_code grant).
+    #   - `:link` — human-initiated (Kiosk extension): created PRE-APPROVED
+    #     and already bound to the signed-in human's user_id at
+    #     POST /auth/link; consumed when the agent redeems the link code at
+    #     POST /auth/claim.
     #
-    #   - **device_code**  — long opaque CSPRNG token (~32 bytes
-    #     base64url). Returned to the initiating client in the
-    #     /oauth/device_authorization response. Persisted only as
-    #     SHA-256 digest (`device_code_hash`); plain form is throw-away.
+    # Two codes per row — both persisted as SHA-256 hex digests ONLY (the
+    # plain forms are returned exactly once by {.generate} and never
+    # reconstructable):
+    #
+    #   - **device_code**  — long opaque CSPRNG token (~32 bytes base64url).
+    #     Returned to the initiating client (claim) or handed to the human
+    #     as the link code (link).
     #   - **user_code**    — 8-char Crockford-alphabet code displayed
-    #     to the human, who types it at the verification URL.
+    #     to the human, who types it at the verification URL (claim only).
     #     Crockford-style (no 0/O/1/I/L/U) avoids confusion at typing.
+    #
+    # `public_key_pem` carries the key the ceremony will bind (nil for
+    # `:link` rows until redeem, and for legacy pre-binding rows); `user_id`
+    # is stamped at approval (claim) or creation (link).
     #
     # Lifecycle: `:pending → :approved | :denied → :consumed | :expired`.
     # Transitions are non-destructive — each returns a new instance via
@@ -29,7 +40,9 @@ module Kiosk
     class DeviceAuthorization < Data.define(
       :id,
       :device_code_hash,
-      :user_code,
+      :user_code_hash,
+      :public_key_pem,
+      :kind,
       :client_id,
       :requested_role,
       :status,
@@ -40,9 +53,14 @@ module Kiosk
     )
       STATUSES = %i[pending approved denied consumed expired].freeze
 
+      # The two ceremony directions (ADR-0017): agent-initiated `:claim`
+      # (auth.md "User Claimed") and human-initiated `:link` (Kiosk
+      # extension).
+      KINDS = %i[claim link].freeze
+
       # Crockford-style alphabet — 32 unambiguous chars (no 0/O/1/I/L/U).
-      # 32^8 ≈ 1.1 × 10^12 possible codes; brute-force is gated by
-      # /oauth/token's poll-interval + the row's `expires_at`.
+      # 32^8 ≈ 1.1 × 10^12 possible codes; brute-force is gated by the
+      # verify page's attempt cap + the row's `expires_at`.
       USER_CODE_ALPHABET = "ABCDEFGHJKMNPQRSTUVWXYZ23456789".chars.freeze
       USER_CODE_LENGTH   = 8
 
@@ -60,20 +78,24 @@ module Kiosk
       # controller, not a user-visible OAuth error.
       class StateError < StandardError; end
 
-      # Generate a fresh authorization. Returns [plain_device_code, da].
-      # The plain code is the only opportunity to reveal it; once `da`
-      # is persisted (only the hash survives), the plain form is lost.
-      def self.generate(client_id:, requested_role: nil, expires_in: DEFAULT_EXPIRES_IN, now: Time.now)
+      # Generate a fresh authorization. Returns
+      # [plain_device_code, plain_user_code, da]. The plain codes exist
+      # only in this return value; once `da` is persisted (only the hex
+      # digests survive), the plain forms are lost.
+      def self.generate(client_id:, kind: :claim, public_key_pem: nil,
+                        requested_role: nil, expires_in: DEFAULT_EXPIRES_IN, now: Time.now)
         raise ArgumentError, "client_id required" if client_id.nil? || client_id.to_s.empty?
         raise ArgumentError, "expires_in must be > 0" unless expires_in.positive?
 
         plain_device_code = SecureRandom.urlsafe_base64(DEVICE_CODE_BYTES)
-        user_code = USER_CODE_LENGTH.times.map { USER_CODE_ALPHABET.sample(random: SecureRandom) }.join
+        plain_user_code = USER_CODE_LENGTH.times.map { USER_CODE_ALPHABET.sample(random: SecureRandom) }.join
 
         da = new(
           id:               SecureRandom.uuid,
-          device_code_hash: Digest::SHA256.digest(plain_device_code),
-          user_code:        user_code,
+          device_code_hash: hash_device_code(plain_device_code),
+          user_code_hash:   hash_user_code(plain_user_code),
+          public_key_pem:   public_key_pem,
+          kind:             kind,
           client_id:        client_id.to_s,
           requested_role:   requested_role&.to_s,
           status:           :pending,
@@ -83,21 +105,43 @@ module Kiosk
           created_at:       now,
         )
 
-        [plain_device_code, da]
+        [plain_device_code, plain_user_code, da]
       end
 
-      # Compute the SHA-256 hash of a plaintext device_code for lookup.
+      # SHA-256 hex digest of a plaintext device_code for storage/lookup.
+      # Hex (not raw bytes) so the durable store persists it in a plain
+      # `text` column — same convention as `agent_tokens.token_hash`.
       def self.hash_device_code(plain_device_code)
-        Digest::SHA256.digest(plain_device_code)
+        Digest::SHA256.hexdigest(plain_device_code)
       end
 
-      def initialize(status:, **rest)
+      # SHA-256 hex digest of a plaintext user_code for storage/lookup.
+      # Callers normalise first (see {DeviceVerification.normalize_user_code});
+      # {.generate} produces codes already in the canonical 8-char form.
+      def self.hash_user_code(plain_user_code)
+        Digest::SHA256.hexdigest(plain_user_code)
+      end
+
+      # Human-displayable form of a PLAIN user_code: `XXXX-XXXX`. The dash
+      # is purely visual; the verification controller strips dashes /
+      # whitespace before matching against the stored digest. A class
+      # method because the row itself holds only the hash.
+      def self.display_user_code(plain_user_code)
+        "#{plain_user_code[0, 4]}-#{plain_user_code[4, 4]}"
+      end
+
+      def initialize(status:, kind:, **rest)
         status_sym = status.to_sym
         unless STATUSES.include?(status_sym)
           raise ArgumentError,
             "status must be one of #{STATUSES.inspect}, got #{status.inspect}"
         end
-        super(status: status_sym, **rest)
+        kind_sym = kind.to_sym
+        unless KINDS.include?(kind_sym)
+          raise ArgumentError,
+            "kind must be one of #{KINDS.inspect}, got #{kind.inspect}"
+        end
+        super(status: status_sym, kind: kind_sym, **rest)
       end
 
       def pending?  = status == :pending
@@ -106,10 +150,13 @@ module Kiosk
       def consumed? = status == :consumed
       def expired?  = status == :expired
 
+      def claim? = kind == :claim
+      def link?  = kind == :link
+
       # Whether the row's expires_at has passed. Expiry is enforced by
-      # the polling controller (POST /oauth/token reads this before
-      # serving a token); the in-DB `status` is bumped to `:expired` by
-      # a periodic sweep job or lazily on next lookup.
+      # the consuming endpoints (POST /oauth/token and POST /auth/claim
+      # read this before binding); the in-DB `status` is bumped to
+      # `:expired` lazily on next lookup.
       def expired_at_time?(now = Time.now)
         now >= expires_at
       end
@@ -136,13 +183,6 @@ module Kiosk
           raise StateError, "cannot expire a #{status} authorization"
         end
         with(status: :expired)
-      end
-
-      # Human-displayable form: `XXXX-XXXX`. The dash is purely visual;
-      # the verification controller strips dashes / whitespace before
-      # matching against the stored code.
-      def display_user_code
-        "#{user_code[0, 4]}-#{user_code[4, 4]}"
       end
     end
   end

@@ -2,8 +2,8 @@
 
 module Kiosk
   module Server
-    # Pure SQL generators for the seven canonical Kiosk migrations.
-    # Migrations 001-007:
+    # Pure SQL generators for the eight canonical Kiosk migrations.
+    # Migrations 001-008:
     #
     #   001 create_kiosk_schema                → schema + four current_*() helpers
     #   002 create_kiosk_identity_tables       → agents, agent_tokens, agent_mappings
@@ -12,6 +12,8 @@ module Kiosk
     #   005 create_kiosk_device_authorizations → kiosk.device_authorizations (RFC 8628 Device Grant)
     #   006 create_kiosk_mandates              → intent_mandates, cart_mandates, payment_mandates, settlements (AP2 trail)
     #   007 add_kyc_verified_at                → kiosk.agents.kyc_verified_at column
+    #   008 rebuild_kiosk_device_authorizations → device_authorizations in the
+    #       account-binding shape (public_key_pem, kind, hashed user_code — ADR-0017)
     #
     # Pure functions: no database connection, no Rails dependency. Output
     # is SQL strings the host migration framework (`ActiveRecord::Migration#execute`)
@@ -171,11 +173,13 @@ module Kiosk
       # /oauth/device_authorization, mutated by /oauth/device/verify
       # (approve/deny), consumed by /oauth/token (device_code grant).
       #
-      # NOTE: this is the schema for a durable {DeviceAuthorizationStores}
-      # adapter, but no such adapter ships in 0.1 — the Device-Grant
-      # endpoints use {DeviceAuthorizationStores::InMemory} by default, so
-      # unless a host wires its own AR-backed store, this table is created by
-      # the migration but not read or written by shipped code.
+      # NOTE (historical): 0.1 shipped this table unused — no durable
+      # adapter existed and the InMemory store served the (dormant)
+      # endpoints, so shipped code never read or wrote it. Migration 008
+      # ({.rebuild_device_authorizations_sql}) rebuilds it in the
+      # account-binding shape (ADR-0017) that the shipped
+      # {DeviceAuthorizationStores::ActiveRecord} adapter reads and writes;
+      # this 005 form is kept for migration-history fidelity.
       #
       # device_code_hash carries SHA-256 of the actual device_code; the
       # plain code lives only in the response body to the initiating
@@ -319,6 +323,61 @@ module Kiosk
         <<~SQL.strip
           ALTER TABLE "#{schema}".agents
             ADD COLUMN IF NOT EXISTS kyc_verified_at timestamptz;
+        SQL
+      end
+
+      # ─── 008 rebuild_kiosk_device_authorizations (account binding) ─────
+
+      # Rebuilds `kiosk.device_authorizations` in the account-binding shape
+      # (ADR-0017) read/written by {DeviceAuthorizationStores::ActiveRecord},
+      # the default store when ActiveRecord is present:
+      #
+      #   - `user_code` (plaintext) → `user_code_hash` — codes are stored
+      #     hashed ONLY (SHA-256 hex, matching `agent_tokens.token_hash`);
+      #   - `device_code_hash` becomes text (hex digest, was bytea);
+      #   - `public_key_pem` — the key the ceremony binds (BIND-POP proves
+      #     possession of it before any binding);
+      #   - `kind` — `claim` (agent-initiated) or `link` (human-initiated,
+      #     rows born pre-approved and already bound to the human).
+      #
+      # DROP + CREATE, not ALTER: the 005 table was created-but-never-written
+      # by shipped 0.1 code (see the 005 NOTE), so recreation is lossless.
+      def rebuild_device_authorizations_sql(schema: nil, user_id_type: nil)
+        schema      ||= Kiosk.configuration.schema
+        user_id_type ||= Kiosk.configuration.user_id_type
+        col_type = user_id_cast(user_id_type)
+
+        <<~SQL.strip
+          DROP TABLE IF EXISTS "#{schema}".device_authorizations;
+
+          CREATE TABLE "#{schema}".device_authorizations (
+            id               uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+            device_code_hash text NOT NULL,
+            user_code_hash   text NOT NULL,
+            public_key_pem   text,
+            kind             text NOT NULL DEFAULT 'claim',
+            client_id        text NOT NULL,
+            requested_role   text,
+            status           text NOT NULL,
+            user_id          #{col_type},
+            expires_at       timestamptz NOT NULL,
+            consumed_at      timestamptz,
+            created_at       timestamptz NOT NULL DEFAULT now(),
+            CONSTRAINT device_authorizations_status_check
+              CHECK (status IN ('pending', 'approved', 'denied', 'consumed', 'expired')),
+            CONSTRAINT device_authorizations_kind_check
+              CHECK (kind IN ('claim', 'link'))
+          );
+          CREATE UNIQUE INDEX idx_device_authorizations_code_hash
+            ON "#{schema}".device_authorizations (device_code_hash);
+          -- Only `pending` rows need a unique user_code; approved/consumed
+          -- rows may share codes from past flows without collision.
+          CREATE UNIQUE INDEX idx_device_authorizations_user_code_pending
+            ON "#{schema}".device_authorizations (user_code_hash)
+            WHERE status = 'pending';
+          CREATE INDEX idx_device_authorizations_expiry
+            ON "#{schema}".device_authorizations (expires_at)
+            WHERE status IN ('pending', 'approved');
         SQL
       end
 

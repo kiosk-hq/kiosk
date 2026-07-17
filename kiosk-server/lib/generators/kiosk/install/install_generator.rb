@@ -20,6 +20,7 @@ module Kiosk
     #   - db/migrate/<ts+4>_create_kiosk_device_authorizations.rb
     #   - db/migrate/<ts+5>_create_kiosk_mandates.rb
     #   - db/migrate/<ts+6>_add_kyc_verified_at_to_kiosk_agents.rb
+    #   - db/migrate/<ts+7>_rebuild_kiosk_device_authorizations.rb
     #
     # Each migration file is a thin wrapper that calls into
     # {Kiosk::Server::SchemaDefinitions} at host-app runtime, so the SQL
@@ -35,7 +36,7 @@ module Kiosk
 
       source_root File.expand_path("templates", __dir__)
 
-      desc "Generate Kiosk initializer and the seven base migrations (001-007)."
+      desc "Generate Kiosk initializer and the eight base migrations (001-008)."
 
       class_option :user_table,    type: :string, default: "users",
                                    desc: "Provider's user table name"
@@ -47,7 +48,7 @@ module Kiosk
                                    desc: "GUC namespace prefix used in SET LOCAL statements"
 
       # Rails::Generators::Migration requires a class-level
-      # next_migration_number. We bump a counter so the seven migrations
+      # next_migration_number. We bump a counter so the eight migrations
       # created in one invocation get strictly-ascending UTC timestamps
       # (otherwise `db/migrate` glob sort is non-deterministic).
       @migration_counter = 0
@@ -97,6 +98,11 @@ module Kiosk
       def create_kyc_migration
         migration_template "add_kyc_verified_at_to_kiosk_agents.rb.tt",
                            "db/migrate/add_kyc_verified_at_to_kiosk_agents.rb"
+      end
+
+      def create_rebuild_device_authorizations_migration
+        migration_template "rebuild_kiosk_device_authorizations.rb.tt",
+                           "db/migrate/rebuild_kiosk_device_authorizations.rb"
       end
     end
   end

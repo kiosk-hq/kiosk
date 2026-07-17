@@ -79,9 +79,9 @@ RSpec.describe Kiosk::Generators::InstallGenerator do
   end
 
   describe "migrations" do
-    it "creates exactly the seven canonical migrations (001-007)" do
+    it "creates exactly the eight canonical migrations (001-008)" do
       invoke!
-      expect(migrations.size).to eq(7)
+      expect(migrations.size).to eq(8)
       basenames = migrations.map { |p| File.basename(p) }
       expect(basenames).to include(
         a_string_ending_with("_create_kiosk_schema.rb"),
@@ -91,14 +91,15 @@ RSpec.describe Kiosk::Generators::InstallGenerator do
         a_string_ending_with("_create_kiosk_device_authorizations.rb"),
         a_string_ending_with("_create_kiosk_mandates.rb"),
         a_string_ending_with("_add_kyc_verified_at_to_kiosk_agents.rb"),
+        a_string_ending_with("_rebuild_kiosk_device_authorizations.rb"),
       )
     end
 
-    it "orders the migration timestamps in 001 → 007 sequence" do
+    it "orders the migration timestamps in 001 → 008 sequence" do
       invoke!
       timestamps = migrations.map { |p| File.basename(p).split("_").first.to_i }
       expect(timestamps).to eq(timestamps.sort)
-      expect(timestamps.uniq.size).to eq(7) # strictly ascending, no collisions
+      expect(timestamps.uniq.size).to eq(8) # strictly ascending, no collisions
     end
 
     describe "001 create_kiosk_schema" do
@@ -234,6 +235,32 @@ RSpec.describe Kiosk::Generators::InstallGenerator do
         expect(payment_idx).to be < cart_idx
         expect(settlements_idx).to be < cart_idx
         expect(cart_idx).to be < intent_idx
+      end
+    end
+
+    describe "008 rebuild_kiosk_device_authorizations" do
+      let(:file) { migrations.find { |p| p.end_with?("_rebuild_kiosk_device_authorizations.rb") } }
+
+      it "calls SchemaDefinitions.rebuild_device_authorizations_sql with the configured args" do
+        invoke!(%w[--schema=ksk --user-id-type=bigint])
+        body = File.read(file)
+        expect(body).to include("Kiosk::Server::SchemaDefinitions.rebuild_device_authorizations_sql(")
+        expect(body).to include('schema:       "ksk"')
+        expect(body).to include("user_id_type: :bigint")
+      end
+
+      it "sorts after 005 so the rebuild wins" do
+        invoke!
+        create_idx  = migrations.index { |p| p.end_with?("_create_kiosk_device_authorizations.rb") }
+        rebuild_idx = migrations.index { |p| p.end_with?("_rebuild_kiosk_device_authorizations.rb") }
+        expect(rebuild_idx).to be > create_idx
+      end
+
+      it "restores the 005 table shape in #down" do
+        invoke!(%w[--schema=ksk])
+        body = File.read(file)
+        expect(body).to include('DROP TABLE IF EXISTS "ksk".device_authorizations')
+        expect(body).to include("Kiosk::Server::SchemaDefinitions.device_authorizations_sql(")
       end
     end
 

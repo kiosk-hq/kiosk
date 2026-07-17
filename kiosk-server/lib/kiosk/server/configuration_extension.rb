@@ -91,8 +91,8 @@ module Kiosk
       attr_accessor :skill_sha256
 
       # RSA signing key used by the bundled kiosk-pop IdP to issue and
-      # verify JWTs (the dormant OAuth 2.1 device-grant surface also relied
-      # on it — ADR-0008).
+      # verify JWTs (the account-binding ceremony's token poll mints
+      # through the same IdP — ADR-0017).
       #
       # Resolution order:
       #   1. explicit value set via `Kiosk.configure { |c| c.signing_key = ... }`
@@ -212,18 +212,42 @@ module Kiosk
                           end
       end
 
-      # Storage adapter for {Kiosk::Server::DeviceAuthorization} rows
-      # (RFC 8628 Device-Grant state machine). Lazy-defaults to
-      # {DeviceAuthorizationStores::InMemory} — the only store that ships in
-      # 0.1, fine for development + tests + small single-process deployments.
-      # A multi-process deployment must set this to a durable {Base}
-      # implementation it provides (none ships).
+      # Storage adapter for {Kiosk::Server::DeviceAuthorization} rows (the
+      # account-binding ceremony state machine, ADR-0017). Lazy default:
+      # the durable {DeviceAuthorizationStores::ActiveRecord} store (over
+      # `kiosk.device_authorizations`, migration 008) whenever ActiveRecord
+      # is present — the ceremony is cross-process by nature (the human
+      # approves in a browser while the agent polls from another process;
+      # K-156). Falls back to {DeviceAuthorizationStores::InMemory} in
+      # AR-less contexts (unit tests, plain Rack hosts without a DB).
       #
       # @return [DeviceAuthorizationStores::Base]
       attr_writer :device_authorization_store
       def device_authorization_store
-        @device_authorization_store ||= Kiosk::Server::DeviceAuthorizationStores::InMemory.new
+        @device_authorization_store ||=
+          if defined?(::ActiveRecord::Base)
+            Kiosk::Server::DeviceAuthorizationStores::ActiveRecord.new
+          else
+            Kiosk::Server::DeviceAuthorizationStores::InMemory.new
+          end
       end
+
+      # ── Account-binding hooks (ADR-0017) ──────────────────────────────────
+
+      # Optional callable fired when a KNOWN key is claimed onto (rebound to)
+      # an assistant-account holder's account — scenario TWO's upgrade path.
+      # Invoked with keywords `(agent:, previous_user_id:, user_id:)` inside
+      # the rebind transaction, so a raising hook rolls the rebind back.
+      # Core never touches provider-domain rows (satellite neutrality); this
+      # hook is where the vertical adopts/migrates the old standalone
+      # account's domain data if it wants to. Default nil (no-op).
+      attr_accessor :assistant_claimed
+
+      # Optional callable fired when a binding is deactivated via
+      # POST /auth/unlink (registration-layer revocation). Invoked with
+      # keywords `(agent:, user_id:)` after the agent row is deactivated
+      # and its tokens are watermark-revoked. Default nil (no-op).
+      attr_accessor :assistant_unlinked
 
       # ── PoW challenge-response gate (R2) ──────────────────────────────────
 

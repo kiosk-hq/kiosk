@@ -4,51 +4,84 @@ require "digest"
 
 RSpec.describe Kiosk::Server::DeviceAuthorization do
   describe ".generate" do
-    it "returns [plain_device_code, DeviceAuthorization] pair" do
-      plain_code, da = described_class.generate(client_id: "kiosk-cli")
+    it "returns [plain_device_code, plain_user_code, DeviceAuthorization]" do
+      plain_code, plain_user_code, da = described_class.generate(client_id: "kiosk-cli")
 
       expect(plain_code).to be_a(String)
+      expect(plain_user_code).to be_a(String)
       expect(da).to be_a(described_class)
     end
 
     it "starts in :pending status with no user_id and no consumed_at" do
-      _plain, da = described_class.generate(client_id: "kiosk-cli")
+      _plain, _user, da = described_class.generate(client_id: "kiosk-cli")
       expect(da).to be_pending
       expect(da.user_id).to     be_nil
       expect(da.consumed_at).to be_nil
     end
 
-    it "persists only the SHA-256 hash of the device_code (not plain)" do
-      plain, da = described_class.generate(client_id: "kiosk-cli")
-      expect(da.device_code_hash).to eq(Digest::SHA256.digest(plain))
+    it "defaults to kind :claim" do
+      _plain, _user, da = described_class.generate(client_id: "kiosk-cli")
+      expect(da.kind).to eq(:claim)
+      expect(da).to be_claim
+    end
+
+    it "accepts kind :link" do
+      _plain, _user, da = described_class.generate(client_id: "kiosk-link", kind: :link)
+      expect(da).to be_link
+    end
+
+    it "rejects an unknown kind" do
+      expect { described_class.generate(client_id: "kiosk-cli", kind: :wat) }
+        .to raise_error(ArgumentError, /kind must be/)
+    end
+
+    it "captures the public key the ceremony will bind" do
+      _plain, _user, da = described_class.generate(client_id: "kiosk-cli", public_key_pem: "PEM")
+      expect(da.public_key_pem).to eq("PEM")
+    end
+
+    it "defaults public_key_pem to nil (link rows receive the key at redeem)" do
+      _plain, _user, da = described_class.generate(client_id: "kiosk-link", kind: :link)
+      expect(da.public_key_pem).to be_nil
+    end
+
+    it "persists only the SHA-256 hex digest of the device_code (not plain)" do
+      plain, _user, da = described_class.generate(client_id: "kiosk-cli")
+      expect(da.device_code_hash).to eq(Digest::SHA256.hexdigest(plain))
       expect(da.respond_to?(:device_code)).to be(false)
     end
 
+    it "persists only the SHA-256 hex digest of the user_code (not plain)" do
+      _plain, plain_user_code, da = described_class.generate(client_id: "kiosk-cli")
+      expect(da.user_code_hash).to eq(Digest::SHA256.hexdigest(plain_user_code))
+      expect(da.respond_to?(:user_code)).to be(false)
+    end
+
     it "produces a Crockford-alphabet user_code of length 8 (no 0/O/1/I/L/U)" do
-      _plain, da = described_class.generate(client_id: "kiosk-cli")
-      expect(da.user_code.length).to eq(8)
-      expect(da.user_code).to match(/\A[ABCDEFGHJKMNPQRSTUVWXYZ23456789]+\z/)
+      _plain, plain_user_code, = described_class.generate(client_id: "kiosk-cli")
+      expect(plain_user_code.length).to eq(8)
+      expect(plain_user_code).to match(/\A[ABCDEFGHJKMNPQRSTUVWXYZ23456789]+\z/)
     end
 
     it "captures the requested role when provided" do
-      _plain, da = described_class.generate(client_id: "kiosk-cli", requested_role: "customer")
+      _plain, _user, da = described_class.generate(client_id: "kiosk-cli", requested_role: "customer")
       expect(da.requested_role).to eq("customer")
     end
 
     it "accepts a nil requested_role (caller may negotiate later)" do
-      _plain, da = described_class.generate(client_id: "kiosk-cli")
+      _plain, _user, da = described_class.generate(client_id: "kiosk-cli")
       expect(da.requested_role).to be_nil
     end
 
     it "computes expires_at as now + expires_in" do
       now = Time.utc(2026, 6, 14, 12, 0, 0)
-      _plain, da = described_class.generate(client_id: "kiosk-cli", expires_in: 600, now: now)
+      _plain, _user, da = described_class.generate(client_id: "kiosk-cli", expires_in: 600, now: now)
       expect(da.expires_at).to eq(now + 600)
     end
 
     it "defaults expires_in to the canonical 900s (15 min)" do
       now = Time.now
-      _plain, da = described_class.generate(client_id: "kiosk-cli", now: now)
+      _plain, _user, da = described_class.generate(client_id: "kiosk-cli", now: now)
       expect(da.expires_at - now).to be_within(1).of(described_class::DEFAULT_EXPIRES_IN)
     end
 
@@ -70,22 +103,28 @@ RSpec.describe Kiosk::Server::DeviceAuthorization do
     end
 
     it "produces distinct user_codes across calls (32^8 collision space)" do
-      codes = 50.times.map { described_class.generate(client_id: "kiosk-cli").last.user_code }
+      codes = 50.times.map { described_class.generate(client_id: "kiosk-cli")[1] }
       expect(codes.uniq.size).to eq(50)
     end
   end
 
   describe ".hash_device_code" do
     it "matches the hash baked into a generated row" do
-      plain, da = described_class.generate(client_id: "kiosk-cli")
+      plain, _user, da = described_class.generate(client_id: "kiosk-cli")
       expect(described_class.hash_device_code(plain)).to eq(da.device_code_hash)
+    end
+  end
+
+  describe ".hash_user_code" do
+    it "matches the hash baked into a generated row" do
+      _plain, plain_user_code, da = described_class.generate(client_id: "kiosk-cli")
+      expect(described_class.hash_user_code(plain_user_code)).to eq(da.user_code_hash)
     end
   end
 
   describe "status validation" do
     let(:base_attrs) do
-      _plain, da = described_class.generate(client_id: "kiosk-cli")
-      da.to_h
+      described_class.generate(client_id: "kiosk-cli").last.to_h
     end
 
     it "accepts the five canonical statuses" do
@@ -97,6 +136,11 @@ RSpec.describe Kiosk::Server::DeviceAuthorization do
     it "rejects any other symbol" do
       expect { described_class.new(**base_attrs.merge(status: :wat)) }
         .to raise_error(ArgumentError, /status must be/)
+    end
+
+    it "rejects any kind outside claim/link" do
+      expect { described_class.new(**base_attrs.merge(kind: :wat)) }
+        .to raise_error(ArgumentError, /kind must be/)
     end
   end
 
@@ -185,8 +229,7 @@ RSpec.describe Kiosk::Server::DeviceAuthorization do
 
   describe "#expired_at_time?" do
     let(:da) {
-      _plain, da = described_class.generate(client_id: "kiosk-cli", expires_in: 600, now: Time.utc(2026, 6, 14, 12, 0, 0))
-      da
+      described_class.generate(client_id: "kiosk-cli", expires_in: 600, now: Time.utc(2026, 6, 14, 12, 0, 0)).last
     }
 
     it "false when now < expires_at" do
@@ -199,11 +242,12 @@ RSpec.describe Kiosk::Server::DeviceAuthorization do
     end
   end
 
-  describe "#display_user_code" do
-    it "formats as XXXX-XXXX for human display" do
-      _plain, da = described_class.generate(client_id: "kiosk-cli")
-      expect(da.display_user_code).to match(/\A[A-Z0-9]{4}-[A-Z0-9]{4}\z/)
-      expect(da.display_user_code.tr("-", "")).to eq(da.user_code)
+  describe ".display_user_code" do
+    it "formats a plain user_code as XXXX-XXXX for human display" do
+      _plain, plain_user_code, = described_class.generate(client_id: "kiosk-cli")
+      display = described_class.display_user_code(plain_user_code)
+      expect(display).to match(/\A[A-Z0-9]{4}-[A-Z0-9]{4}\z/)
+      expect(display.tr("-", "")).to eq(plain_user_code)
     end
   end
 end

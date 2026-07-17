@@ -11,18 +11,31 @@ if defined?(::ActionController::API)
   require "kiosk/server/agent_registration"
   require "kiosk/server/agent_login"
   require "kiosk/server/auth_challenge"
+  require "kiosk/server/account_binding"
+  require "kiosk/server/link_code"
   require "kiosk/server/errors"
   require "kiosk/server/headers"
 
   module Kiosk
     module Server
-      # PoP auth surface (challenge-response). One controller, four actions:
+      # PoP auth surface (challenge-response). One controller; the four
+      # kiosk-pop actions:
       #
       #   GET  /kiosk/auth/challenge?public_key=…            → { challenge, exp }
       #   POST /kiosk/auth/register  { public_key, signed[, pow] }
       #                                → 201 { user_id, agent_id, access_token }
       #   POST /kiosk/auth/login     { public_key, signed }  → 200 { access_token }
       #   POST /kiosk/auth/revoke    (Bearer)                → 200 { access_token }
+      #
+      # plus the link half of the account-binding ceremony (ADR-0017 — a
+      # Kiosk extension; the agent-initiated claim half lives on the OAuth
+      # controllers):
+      #
+      #   POST /kiosk/auth/link      (user_idp session)      → 201 { link_code, expires_in }
+      #   POST /kiosk/auth/claim     { code, public_key, signed }
+      #                                → 201 { agent_id, user_id, access_token }
+      #   POST /kiosk/auth/unlink    (user_idp session, { agent_id })
+      #                                → 200 { ok: true }
       #
       # `signed` is a compact RS256 JWS (see {PopVerifier}) proving the caller
       # holds the private key — and, via its `aud` claim, binding the proof to
@@ -92,7 +105,66 @@ if defined?(::ActionController::API)
           render_error(e)
         end
 
+        # Mint a link code for the signed-in assistant-account holder
+        # (session channel — ADR-0013: binding approval belongs to the
+        # provider's own session auth). The human hands the code to their
+        # assistant, which redeems it at POST /auth/claim.
+        def link
+          identity = authenticated_account_holder!
+          result   = LinkCode.mint(user_id: identity.user_id)
+          respond({ link_code: result[:link_code], expires_in: result[:expires_in] }, :created)
+        rescue Errors::Base => e
+          render_error(e)
+        end
+
+        # Redeem a link code: register-shaped body — the possession proof is
+        # REQUIRED (BIND-POP), so a leaked request body alone can never bind
+        # a key its holder does not control. Same fresh/rebind semantics as
+        # the claim flow; same 201 shape as /auth/register.
+        def claim
+          body   = parse_body!
+          result = LinkCode.redeem(
+            code:           body.fetch(:code),
+            public_key_pem: body.fetch(:public_key),
+            signed:         body.fetch(:signed),
+          )
+          respond(result, :created)
+        rescue KeyError => e
+          render_error(Errors::BadRequest.new("missing field: #{e.message}"))
+        rescue Errors::Base => e
+          render_error(e)
+        end
+
+        # Registration-layer revocation (ADR-0017): the signed-in holder
+        # deactivates one of THEIR linked assistant accounts. Token verify
+        # and login deny the key from here on.
+        def unlink
+          identity = authenticated_account_holder!
+          body     = parse_body!
+          AccountBinding.unlink!(agent_id: body.fetch(:agent_id), user_id: identity.user_id)
+          respond({ ok: true }, :ok)
+        rescue KeyError => e
+          render_error(Errors::BadRequest.new("missing field: #{e.message}"))
+        rescue Errors::Base => e
+          render_error(e)
+        end
+
         private
+
+        # Resolve the signed-in assistant-account holder via the provider's
+        # `user_idp` session adapter. No session (or no adapter configured)
+        # → 401: the binding surface never accepts agent Bearer tokens for
+        # the human's side of the ceremony.
+        def authenticated_account_holder!
+          identity = Kiosk.configuration.user_idp&.verify(request)
+          if identity.nil?
+            raise Errors::Unauthenticated.new(
+              "account session required",
+              hint: "sign in to the provider first — this endpoint authenticates via the provider's own session",
+            )
+          end
+          identity
+        end
 
         # Resolve the caller's agent identity from its Bearer token. A missing,
         # invalid, or already-revoked token resolves to nil → 401.

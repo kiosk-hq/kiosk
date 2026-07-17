@@ -4,7 +4,7 @@
 # unit tests). server.rb requires this file unconditionally; the
 # `if defined?(::ActionController::API)` guard below means it only defines
 # the controller when ActionController::API is present. In plain Ruby the
-# require is a no-op. Engine wires up the route when Rails is present.
+# require is a no-op. The engine draws the route when Rails is present.
 
 if defined?(::ActionController::API)
   require "kiosk/server/device_code_grant"
@@ -12,12 +12,15 @@ if defined?(::ActionController::API)
 
   module Kiosk
     module Server
-      # POST <endpoint>/oauth/device_authorization — RFC 8628 §3.1.
-      # The initiating device-grant client's first call. (No first-party CLI
-      # ships in 0.1; the client is any RFC 8628 device-grant client.)
+      # POST <endpoint>/oauth/device_authorization — RFC 8628 §3.1, opening
+      # the claim half of the account-binding ceremony (ADR-0017, auth.md
+      # "User Claimed"). The initiating agent's first call.
       #
       # Request: `application/x-www-form-urlencoded` (OAuth convention)
       #   client_id    required — identifier of the calling client
+      #   public_key   required — PEM of the RSA-2048+ key the ceremony
+      #                 will bind; the token poll must later prove
+      #                 possession of it (BIND-POP)
       #   scope        optional — synonym for `role`; OAuth-standard name
       #   role         optional — Kiosk extension; alias for `scope`
       #
@@ -37,6 +40,20 @@ if defined?(::ActionController::API)
             return render_oauth_error(:invalid_request, "client_id parameter required", status: 400)
           end
 
+          # The binding ceremony is key-bound: without a key there is
+          # nothing to bind, and BIND-POP has nothing to verify. Reuses
+          # PopVerifier's key checks (RSA-2048 floor) so the binding
+          # surface can never accept a key registration would reject.
+          public_key = params[:public_key].to_s
+          if public_key.empty?
+            return render_oauth_error(:invalid_request, "public_key parameter required", status: 400)
+          end
+          begin
+            PopVerifier.load_public_key(public_key.strip)
+          rescue Errors::BadRequest => e
+            return render_oauth_error(:invalid_request, e.message, status: 400)
+          end
+
           requested_role = (params[:role] || params[:scope])&.to_s
           requested_role = nil if requested_role && requested_role.empty?
 
@@ -54,6 +71,7 @@ if defined?(::ActionController::API)
 
           result = DeviceCodeGrant.start(
             client_id:      client_id,
+            public_key_pem: public_key,
             requested_role: requested_role,
           )
 

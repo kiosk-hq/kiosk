@@ -2,9 +2,9 @@
 
 module Kiosk
   module Server
-    # Pure-Ruby service module for the user-facing half of the RFC 8628
-    # Device Authorization Grant — i.e. what runs when the user lands at
-    # `<endpoint>/oauth/device/verify` from their phone / second device.
+    # Pure-Ruby service module for the human-facing half of the claim
+    # ceremony — i.e. what runs when the account holder lands at
+    # `<endpoint>/oauth/device/verify` in their own browser.
     #
     # Three operations:
     #
@@ -14,29 +14,15 @@ module Kiosk
     #   .approve(user_code:, user_id:) — transition pending → approved
     #   .deny(user_code:)           — transition pending → denied
     #
+    # Codes are stored hashed only: the typed code is normalised, hashed
+    # ({DeviceAuthorization.hash_user_code}) and matched against
+    # `user_code_hash`.
+    #
     # **Scope.** This module owns the state-machine half of verification
-    # (the part that ALL providers do identically). It does NOT own the
-    # consent-screen UI, the host-app login integration, or the branded
-    # "you're approved, return to your terminal" landing page — those
-    # are provider responsibilities. The host's controller calls these
-    # helpers from its own actions.
-    #
-    # @example Provider's Rails controller
-    #   class DeviceVerificationController < ApplicationController
-    #     before_action :authenticate_user!
-    #
-    #     def show
-    #       @da = Kiosk::Server::DeviceVerification.find_pending(user_code: params[:user_code])
-    #       render :consent if @da
-    #     end
-    #
-    #     def approve
-    #       Kiosk::Server::DeviceVerification.approve(
-    #         user_code: params[:user_code], user_id: current_user.id,
-    #       )
-    #       render :approved
-    #     end
-    #   end
+    # (the part that ALL providers do identically). The consent-screen UI
+    # ships as {DeviceVerifyController} + minimal overridable engine views
+    # (Devise-style batteries); a provider may also call these helpers from
+    # its own controller for a fully bespoke page.
     module DeviceVerification
       # Raised when the user_code does not resolve to a pending row.
       # Distinct from {DeviceAuthorization::StateError} which signals a
@@ -46,18 +32,19 @@ module Kiosk
 
       module_function
 
-      # Normalise then look up. Returns the {DeviceAuthorization} if a
-      # pending row matches; `nil` otherwise. Callers render their own
+      # Normalise, hash, then look up. Returns the {DeviceAuthorization} if
+      # a pending row matches; `nil` otherwise. Callers render their own
       # "code not recognised" / "code expired" pages on `nil`.
       def find_pending(user_code:, store: Kiosk.configuration.device_authorization_store)
         normalized = normalize_user_code(user_code)
         return nil if normalized.empty?
 
-        store.find_by_user_code(normalized)
+        store.find_by_user_code_hash(DeviceAuthorization.hash_user_code(normalized))
       end
 
-      # Transition pending → approved. Raises {CodeNotFoundError} when
-      # no pending row matches.
+      # Transition pending → approved, stamping the approving account
+      # holder's user_id. Raises {CodeNotFoundError} when no pending row
+      # matches.
       def approve(user_code:, user_id:,
                   store: Kiosk.configuration.device_authorization_store)
         raise ArgumentError, "user_id required" if user_id.nil? || user_id.to_s.empty?
@@ -77,10 +64,10 @@ module Kiosk
       end
 
       # User-typed codes arrive with the visual `XXXX-XXXX` dash + any
-      # ambient whitespace from copy/paste. Storage uses the raw 8-char
-      # form, so normalise both before comparison. Case-insensitive
-      # because some keyboards / browsers auto-capitalise; we upcase
-      # against the Crockford alphabet.
+      # ambient whitespace from copy/paste. Storage hashes the raw 8-char
+      # form, so normalise before hashing. Case-insensitive because some
+      # keyboards / browsers auto-capitalise; we upcase against the
+      # Crockford alphabet.
       def normalize_user_code(raw)
         raw.to_s.gsub(/[\s\-]/, "").upcase
       end

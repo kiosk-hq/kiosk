@@ -61,6 +61,9 @@ module Kiosk
 
       # Parse the presented public key, rejecting anything that isn't a usable
       # RSA-2048+ public key with a clear client error rather than a raw crash.
+      # Public: the account-binding surface (POST /oauth/device_authorization,
+      # POST /auth/claim) reuses this exact check so the key floor cannot
+      # drift between registration and binding (ADR-0017).
       def load_public_key(pem)
         rsa = OpenSSL::PKey::RSA.new(pem)
         if rsa.n.num_bits < SigningKey::MIN_KEY_BITS
@@ -72,7 +75,6 @@ module Kiosk
       rescue OpenSSL::PKey::PKeyError => e
         raise Errors::BadRequest.new("invalid public key: #{e.message}")
       end
-      private_class_method :load_public_key
     end
   end
 end

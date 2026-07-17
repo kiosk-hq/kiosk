@@ -8,10 +8,17 @@ RSpec.describe Kiosk::Server::DeviceVerification do
     Kiosk.configure { |c| c.device_authorization_store = store }
   end
 
+  # Create a pending claim row; returns [plain_user_code, da].
   def fresh
-    _plain, da = Kiosk::Server::DeviceAuthorization.generate(client_id: "kiosk-cli")
+    _plain, plain_user_code, da = Kiosk::Server::DeviceAuthorization.generate(
+      client_id: "kiosk-cli", public_key_pem: "PEM",
+    )
     store.create(da)
-    da
+    [plain_user_code, da]
+  end
+
+  def display(plain_user_code)
+    Kiosk::Server::DeviceAuthorization.display_user_code(plain_user_code)
   end
 
   describe ".normalize_user_code" do
@@ -36,19 +43,19 @@ RSpec.describe Kiosk::Server::DeviceVerification do
   end
 
   describe ".find_pending" do
-    it "returns the row for a matching pending user_code" do
-      da = fresh
-      expect(described_class.find_pending(user_code: da.user_code)).to eq(da)
+    it "returns the row for a matching pending user_code (hashed lookup)" do
+      code, da = fresh
+      expect(described_class.find_pending(user_code: code)).to eq(da)
     end
 
     it "honours the display form (XXXX-XXXX)" do
-      da = fresh
-      expect(described_class.find_pending(user_code: da.display_user_code)).to eq(da)
+      code, da = fresh
+      expect(described_class.find_pending(user_code: display(code))).to eq(da)
     end
 
     it "honours case-insensitive lookup (user typed lowercase)" do
-      da = fresh
-      expect(described_class.find_pending(user_code: da.display_user_code.downcase)).to eq(da)
+      code, da = fresh
+      expect(described_class.find_pending(user_code: display(code).downcase)).to eq(da)
     end
 
     it "returns nil for a code that does not exist" do
@@ -56,12 +63,12 @@ RSpec.describe Kiosk::Server::DeviceVerification do
     end
 
     it "returns nil when the row has left pending (approved/denied/consumed)" do
-      da = fresh
+      code, da = fresh
       store.update(da.approve(user_id: user_id))
-      expect(described_class.find_pending(user_code: da.user_code)).to be_nil
+      expect(described_class.find_pending(user_code: code)).to be_nil
     end
 
-    it "returns nil for blank input (no DB hit)" do
+    it "returns nil for blank input (no store hit)" do
       expect(described_class.find_pending(user_code: nil)).to be_nil
       expect(described_class.find_pending(user_code: "")).to be_nil
     end
@@ -69,15 +76,15 @@ RSpec.describe Kiosk::Server::DeviceVerification do
 
   describe ".approve" do
     it "transitions a pending row to approved with the user_id set" do
-      da = fresh
-      approved = described_class.approve(user_code: da.user_code, user_id: user_id)
+      code, = fresh
+      approved = described_class.approve(user_code: code, user_id: user_id)
       expect(approved).to be_approved
       expect(approved.user_id).to eq(user_id)
     end
 
     it "accepts the display form (XXXX-XXXX) at the boundary" do
-      da = fresh
-      approved = described_class.approve(user_code: da.display_user_code, user_id: user_id)
+      code, = fresh
+      approved = described_class.approve(user_code: display(code), user_id: user_id)
       expect(approved).to be_approved
     end
 
@@ -88,26 +95,26 @@ RSpec.describe Kiosk::Server::DeviceVerification do
     end
 
     it "raises CodeNotFoundError when the row has already been approved" do
-      da = fresh
-      described_class.approve(user_code: da.user_code, user_id: user_id)
+      code, = fresh
+      described_class.approve(user_code: code, user_id: user_id)
       expect {
-        described_class.approve(user_code: da.user_code, user_id: user_id)
+        described_class.approve(user_code: code, user_id: user_id)
       }.to raise_error(described_class::CodeNotFoundError)
     end
 
     it "raises ArgumentError when user_id is blank" do
-      da = fresh
-      expect { described_class.approve(user_code: da.user_code, user_id: nil) }
+      code, = fresh
+      expect { described_class.approve(user_code: code, user_id: nil) }
         .to raise_error(ArgumentError, /user_id/)
-      expect { described_class.approve(user_code: da.user_code, user_id: "") }
+      expect { described_class.approve(user_code: code, user_id: "") }
         .to raise_error(ArgumentError, /user_id/)
     end
   end
 
   describe ".deny" do
-    it "transitions a pending row to denied (no user_id needed — user said no)" do
-      da = fresh
-      denied = described_class.deny(user_code: da.user_code)
+    it "transitions a pending row to denied (no user_id needed — the holder said no)" do
+      code, = fresh
+      denied = described_class.deny(user_code: code)
       expect(denied).to be_denied
       expect(denied.user_id).to be_nil
     end

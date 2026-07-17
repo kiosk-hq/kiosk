@@ -1,0 +1,37 @@
+<%# Claim-ceremony verify page (ADR-0017). Minimal on purpose — override
+    by shipping app/views/kiosk/server/device_verify/show.html.erb in the
+    host app. %>
+<main>
+  <h1>Link an assistant to your account</h1>
+
+  <% if @error %>
+    <p role="alert"><%= @error %></p>
+  <% end %>
+
+  <% if @authorization %>
+    <p>
+      An assistant is asking to be linked to <strong>your</strong> account.
+      Approve only if you started this yourself and the fingerprint below
+      matches the one your assistant shows you.
+    </p>
+    <dl>
+      <dt>Key fingerprint</dt>
+      <dd><code><%= @fingerprint %></code></dd>
+      <dt>Requested at</dt>
+      <dd><%= @authorization.created_at.utc %></dd>
+    </dl>
+    <form action="<%= request.path %>" method="post">
+      <input type="hidden" name="authenticity_token" value="<%= form_authenticity_token %>">
+      <input type="hidden" name="user_code" value="<%= @user_code %>">
+      <button type="submit" name="decision" value="approve">Approve</button>
+      <button type="submit" name="decision" value="deny">Deny</button>
+    </form>
+  <% else %>
+    <p>Enter the code your assistant shows you (looks like <code>WDJB-MJHT</code>).</p>
+    <form action="<%= request.path %>" method="get">
+      <label for="user_code">Code</label>
+      <input type="text" id="user_code" name="user_code" autocomplete="off" autofocus>
+      <button type="submit">Continue</button>
+    </form>
+  <% end %>
+</main>

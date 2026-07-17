@@ -1,0 +1,14 @@
+<%# Claim-ceremony decision confirmation. Override by shipping
+    app/views/kiosk/server/device_verify/decided.html.erb in the host app. %>
+<main>
+  <% if @decision == :approved %>
+    <h1>Approved</h1>
+    <p>
+      The assistant is now cleared to link to your account — you can return
+      to it. You can unlink it at any time from your linked-assistants page.
+    </p>
+  <% else %>
+    <h1>Denied</h1>
+    <p>The request was denied. Nothing was linked to your account.</p>
+  <% end %>
+</main>

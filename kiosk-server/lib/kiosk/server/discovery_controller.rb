@@ -12,7 +12,7 @@ if defined?(::ActionController::API)
 
   module Kiosk
     module Server
-      # Discovery surface — one controller, five discovery documents, all
+      # Discovery surface — one controller, six discovery documents, all
       # rendered from {WellKnown} (the single generator seam, so they cannot
       # drift):
       #
@@ -24,6 +24,8 @@ if defined?(::ActionController::API)
       #                                            {WellKnown.build_json})
       #   GET /.well-known/api-catalog           → RFC 9727 linkset of the wire
       #                                            endpoints (application/linkset+json)
+      #   GET /auth.md                           → agent-auth methods in the
+      #                                            auth.md vocabulary (ADR-0017)
       #
       # The base URL is taken from the request (`request.base_url`), so a
       # provider that mounts these routes serves the correct origin without
@@ -63,6 +65,15 @@ if defined?(::ActionController::API)
           render json: WellKnown.api_catalog(base_url: request.base_url),
                  content_type: 'application/linkset+json; ' \
                                'profile="https://www.rfc-editor.org/info/rfc9727"'
+        end
+
+        # GET /auth.md — the provider's auth methods in the auth.md
+        # vocabulary (kiosk-pop presented as anonymous-class + PoP upgrade;
+        # user_claimed = the claim ceremony; link flow = Kiosk extension).
+        def auth_md
+          allow_cors
+          render plain: WellKnown.auth_md(base_url: request.base_url),
+                 content_type: "text/markdown; charset=utf-8"
         end
 
         private

@@ -65,7 +65,20 @@ RSpec.describe "DiscoveryController" do
       doc = JSON.parse(raw)
       expect(doc["issuer"]).to eq("https://api.acme.example")
       expect(doc.dig("endpoints", "challenge")).to eq("https://api.acme.example/kiosk/auth/challenge")
-      expect(doc["auth_modes"]).to eq(["kiosk-pop"])
+      expect(doc["auth_modes"]).to eq(["kiosk-pop", "user-claimed", "link-code"])
+      expect(doc["auth_md"]).to eq("https://api.acme.example/auth.md")
+    end
+  end
+
+  describe "GET /auth.md" do
+    it "returns 200 text/markdown with the auth.md body + CORS" do
+      status, headers, raw = dispatch(:auth_md, "/auth.md")
+      expect(status).to eq(200)
+      expect(headers["Content-Type"]).to eq("text/markdown; charset=utf-8")
+      expect(headers["Access-Control-Allow-Origin"]).to eq("*")
+      # Byte-identical to the renderer (single generator seam).
+      expect(raw).to eq(Kiosk::Server::WellKnown.auth_md(base_url: "https://api.acme.example"))
+      expect(raw).to include("## Pick a method")
     end
   end
 

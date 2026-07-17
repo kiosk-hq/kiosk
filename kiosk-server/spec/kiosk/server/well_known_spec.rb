@@ -49,6 +49,18 @@ RSpec.describe Kiosk::Server::WellKnown do
       expect(doc[:kiosk][:auth]).not_to have_key(:token_url)
     end
 
+    it "advertises the account-binding endpoints (additive keys, ADR-0017)" do
+      expect(doc[:kiosk][:auth][:device_authorization_url])
+        .to eq("https://api.acme.example/kiosk/oauth/device_authorization")
+      expect(doc[:kiosk][:auth][:claim_url])
+        .to eq("https://api.acme.example/kiosk/auth/claim")
+    end
+
+    it "keeps the pre-binding auth keys first and byte-identical (additive-only rule)" do
+      expect(doc[:kiosk][:auth].keys.first(5))
+        .to eq(%i[kind challenge_url register_url login_url revoke_url])
+    end
+
     # capabilities is computed from the live registry (ADR-0009): empty here
     # since this context registers no queries/actions and wires no payment.
     it "advertises an empty capability set when nothing is registered" do
@@ -145,11 +157,11 @@ RSpec.describe Kiosk::Server::WellKnown do
       expect(body).to be_a(String)
     end
 
-    it "carries the agents.txt v1.0 payment + auth directives" do
+    it "carries the agents.txt v1.0 payment + auth directives (auth-md alongside agent-auth)" do
       d = directives(body)
       expect(d["Protocols"]).to eq("ap2")
       expect(d["Payments"]).to eq("required")
-      expect(d["Authorization"]).to eq("agent-auth")
+      expect(d["Authorization"]).to eq("agent-auth auth-md")
       expect(d["Identity"]).to eq("required")
     end
 
@@ -206,8 +218,8 @@ RSpec.describe Kiosk::Server::WellKnown do
       expect(doc[:payments]).to have_key(:ap2)
     end
 
-    it "advertises agent-auth with the agent-configuration discovery pointer" do
-      expect(doc[:authorization][:protocols]).to eq(["agent-auth"])
+    it "advertises agent-auth + auth-md with the agent-configuration discovery pointer" do
+      expect(doc[:authorization][:protocols]).to eq(["agent-auth", "auth-md"])
       expect(doc[:authorization][:discovery]).to eq("/.well-known/agent-configuration")
       expect(doc[:authorization][:identity]).to eq("required")
     end
@@ -260,8 +272,12 @@ RSpec.describe Kiosk::Server::WellKnown do
       expect(doc[:jwks_uri]).to eq("https://api.acme.example/kiosk/.well-known/jwks.json")
     end
 
-    it "declares the kiosk-pop auth mode" do
-      expect(doc[:auth_modes]).to eq(["kiosk-pop"])
+    it "declares kiosk-pop plus the binding modes (ADR-0017)" do
+      expect(doc[:auth_modes]).to eq(["kiosk-pop", "user-claimed", "link-code"])
+    end
+
+    it "points at /auth.md for the full method description" do
+      expect(doc[:auth_md]).to eq("https://api.acme.example/auth.md")
     end
 
     it "respects an overridden mount_path across all endpoints" do
@@ -274,6 +290,63 @@ RSpec.describe Kiosk::Server::WellKnown do
     it "validates the issuer (same contract as build)" do
       Kiosk.reset!
       expect { described_class.agent_configuration(base_url: "https://api.acme.example") }
+        .to raise_error(ArgumentError, /issuer/)
+    end
+  end
+
+  # ─── W5: /auth.md (auth.md-vocabulary method description) ────────────────
+  describe ".auth_md" do
+    subject(:body) { described_class.auth_md(base_url: "https://api.acme.example") }
+
+    it "follows the canonical auth.md section order" do
+      sections = body.each_line.filter_map { |l| l.chomp[/\A## (.+)\z/, 1]&.strip }
+      expect(sections).to eq([
+        "Discover", "Pick a method", "Register", "Claim ceremony",
+        "Exchange", "Use the access_token", "Errors", "Revocation",
+      ])
+      expect(body).to start_with("# ")
+    end
+
+    it "presents kiosk-pop as anonymous-class + PoP upgrade — NEVER as Agent Verified" do
+      expect(body).to match(/anonymous/i)
+      expect(body).to match(/proof-of-possession/i)
+      expect(body).not_to include("Agent Verified")
+    end
+
+    it "marks identity assertion (ID-JAG) as not supported / planned" do
+      expect(body).to match(/Identity assertion \(ID-JAG\).*not supported \(planned\)/)
+    end
+
+    it "labels the link flow a Kiosk extension (auth.md has no human-initiated direction)" do
+      expect(body).to match(/Link code.*Kiosk extension/m)
+    end
+
+    it "advertises the ceremony endpoints as absolute URLs under the mount" do
+      expect(body).to include("https://api.acme.example/kiosk/oauth/device_authorization")
+      expect(body).to include("https://api.acme.example/kiosk/auth/claim")
+      expect(body).to include("https://api.acme.example/kiosk/auth/login")
+      expect(body).to include("https://api.acme.example/kiosk/auth/unlink")
+    end
+
+    it "documents the OAuth error vocabulary as the envelope exception" do
+      %w[authorization_pending slow_down expired_token access_denied
+         invalid_grant invalid_client].each do |code|
+        expect(body).to include(code)
+      end
+    end
+
+    it "requires the possession proof in the token poll (BIND-POP is not optional)" do
+      expect(body).to match(/`signed`.*possession proof/m)
+      expect(body).to include("No binding happens without a valid possession proof")
+    end
+
+    it "states the reputation-carry rule (claiming never whitewashes)" do
+      expect(body).to match(/reputation\s+carries over/)
+    end
+
+    it "validates the issuer (same contract as build)" do
+      Kiosk.reset!
+      expect { described_class.auth_md(base_url: "https://api.acme.example") }
         .to raise_error(ArgumentError, /issuer/)
     end
   end

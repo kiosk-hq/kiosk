@@ -5,7 +5,7 @@ require "json"
 module Kiosk
   module Server
     # Discovery generator — one model over {Kiosk::Configuration} + the
-    # request's base URL, five renderers, no drift (0.2 standards alignment):
+    # request's base URL, six renderers, no drift (0.2 standards alignment):
     #
     #   .build / .build_json          — the bespoke `/.well-known/kiosk.json`
     #                                   (a DERIVED ALIAS, byte-stable)
@@ -15,9 +15,11 @@ module Kiosk
     #                                   (agent-auth discovery, kiosk-pop)
     #   .api_catalog / _string        — /.well-known/api-catalog
     #                                   (RFC 9727 linkset of the wire endpoints)
+    #   .auth_md                      — /auth.md (agent-auth methods in the
+    #                                   auth.md vocabulary, ADR-0017)
     #
     # Each renderer is a pure function — no Rails dependency, no I/O — so the
-    # five discovery surfaces cannot drift from one another.
+    # six discovery surfaces cannot drift from one another.
     #
     # See the Discovery section of the spec.
     module WellKnown
@@ -55,6 +57,11 @@ module Kiosk
             register_url:  auth_urls(endpoint)[:register],
             login_url:     auth_urls(endpoint)[:login],
             revoke_url:    auth_urls(endpoint)[:revoke],
+            # Account-binding ceremony (ADR-0017) — additive 0.1.x-compatible
+            # keys: the claim flow's opening endpoint and the link-code
+            # redeem endpoint. Full ceremony description: <base>/auth.md.
+            device_authorization_url: "#{endpoint}/oauth/device_authorization",
+            claim_url:                "#{endpoint}/auth/claim",
           },
           # Verb names the endpoint actually serves — subset of
           # schema/query/run/pay, computed from the live registry (ADR-0009).
@@ -95,7 +102,7 @@ module Kiosk
           "Protocols: ap2",
           "Payments: required",
           "",
-          "Authorization: agent-auth",
+          "Authorization: agent-auth auth-md",
           "Identity: required",
         ]
         if config.skill_url && !config.skill_url.to_s.empty?
@@ -131,7 +138,7 @@ module Kiosk
             required: true,
           },
           authorization: {
-            protocols: ["agent-auth"],
+            protocols: ["agent-auth", "auth-md"],
             discovery: "/.well-known/agent-configuration",
             identity:  "required",
           },
@@ -176,7 +183,11 @@ module Kiosk
           issuer:     config.issuer,
           endpoints:  auth_urls(endpoint),
           jwks_uri:   "#{endpoint}/.well-known/jwks.json",
-          auth_modes: ["kiosk-pop"],
+          # kiosk-pop = the anonymous-class + PoP self-registration story;
+          # user-claimed = the agent-initiated claim ceremony; link-code =
+          # the human-initiated link flow (Kiosk extension). ADR-0017.
+          auth_modes: ["kiosk-pop", "user-claimed", "link-code"],
+          auth_md:    "#{base}/auth.md",
         }
       end
 
@@ -222,6 +233,141 @@ module Kiosk
       # JSON-encoded form of {#api_catalog}.
       def self.api_catalog_string(**kwargs)
         JSON.generate(api_catalog(**kwargs))
+      end
+
+      # ── W5: /auth.md (agent-auth methods in the auth.md vocabulary) ────
+      #
+      # Markdown body served at `<origin>/auth.md`, following auth.md's
+      # canonical section order (Title → Discover → Pick a method → Register
+      # → Claim ceremony → Exchange → Use the access_token → Errors →
+      # Revocation) and describing OUR methods honestly (ADR-0017):
+      #
+      #   - in auth.md's taxonomy kiosk-pop is the ANONYMOUS class plus a
+      #     proof-of-possession upgrade (auth.md has no PoP — that is
+      #     Kiosk's "more"). It is NOT "Agent Verified": no external
+      #     agent-IdP vouches for the agent.
+      #   - `user_claimed` = the claim ceremony (RFC 8628 wire).
+      #   - the link flow is labeled a Kiosk extension (auth.md defines no
+      #     human-initiated direction).
+      #   - `identity_assertion` (ID-JAG) — not supported, planned
+      #     (ADR-0013 `issue()` seam).
+      #
+      # Rendered from the same model as the other five surfaces, so it
+      # cannot drift; a change in the young auth.md format is one renderer
+      # edit.
+      #
+      # @return [String]
+      def self.auth_md(base_url:, config: Kiosk.configuration)
+        validate_issuer!(config)
+        base = base_url.to_s.chomp("/")
+        endpoint = base + config.mount_path
+        urls = auth_urls(endpoint)
+
+        <<~MARKDOWN
+          # #{site_name(config)} — agent authentication
+
+          How AI assistants authenticate against this provider's Kiosk
+          endpoint (`#{endpoint}`). Wire contract: the Kiosk specification
+          (https://kiosk.tech/specification.html).
+
+          ## Discover
+
+          - This file: `#{base}/auth.md`
+          - Agent auth configuration: `#{base}/.well-known/agent-configuration`
+          - Kiosk discovery document: `#{base}/.well-known/kiosk.json`
+          - Token-verification keys (JWKS): `#{endpoint}/.well-known/jwks.json`
+
+          ## Pick a method
+
+          - **Anonymous + proof-of-possession (kiosk-pop)** — supported.
+            Self-registration of a per-provider RSA keypair: no human
+            account needed. In auth.md terms this is the anonymous class,
+            upgraded with a key-possession proof on every register/login.
+          - **User claimed** — supported. The claim ceremony below binds an
+            agent key to an EXISTING account after its holder approves in
+            their own browser session.
+          - **Link code** — supported (Kiosk extension: auth.md defines no
+            human-initiated direction). The account holder mints a
+            single-use code on the provider's site and hands it to the
+            assistant.
+          - **Identity assertion (ID-JAG)** — not supported (planned).
+
+          ## Register
+
+          kiosk-pop self-registration (anonymous class):
+
+          1. `GET #{urls[:challenge]}?public_key=<PEM>` → `{ challenge, exp }`
+          2. Sign a compact RS256 JWS over `{aud, nonce, jti}` with the
+             private key (`aud` = the origin you dialed; `nonce` = the
+             challenge).
+          3. `POST #{urls[:register]}` `{ public_key, signed[, pow] }`
+             → `201 { agent_id, user_id, access_token }`
+
+          Registration may be priced with an Equihash proof-of-work
+          (`402 pow_required` carries the challenges).
+
+          ## Claim ceremony
+
+          User-claimed binding (RFC 8628 wire) — binds YOUR key to the
+          account holder's existing account; single-use, short-TTL codes:
+
+          1. `POST #{endpoint}/oauth/device_authorization`
+             (form-encoded: `client_id`, `public_key` — required) →
+             `{ device_code, user_code, verification_uri, expires_in, interval }`
+          2. Show the holder: "open <verification_uri>, enter <user_code>".
+             They approve in their own signed-in browser session.
+          3. Poll `POST #{endpoint}/oauth/token` (form-encoded:
+             `grant_type=urn:ietf:params:oauth:grant-type:device_code`,
+             `device_code`, and `signed` — the same challenge-response
+             possession proof as register/login, for the SAME key from
+             step 1) → `{ access_token, token_type, expires_in }`.
+             No binding happens without a valid possession proof.
+
+          Link flow (Kiosk extension, mirror direction): the holder mints a
+          code on the provider's site and pastes it to you; redeem with
+          `POST #{endpoint}/auth/claim` `{ code, public_key, signed }`
+          → `201 { agent_id, user_id, access_token }`.
+
+          A fresh key becomes a linked assistant account under the holder's
+          account; an already-registered key is re-bound (its reputation
+          carries over — claiming never resets an identity).
+
+          ## Exchange
+
+          There is no separate exchange step: registration, the claim
+          ceremony and the link redeem each return the access token
+          directly. Refresh by logging in with your key —
+          `POST #{urls[:login]}` `{ public_key, signed }` — the ceremony
+          never repeats.
+
+          ## Use the access_token
+
+          Send `Authorization: Bearer <access_token>` to the wire verbs
+          under `#{endpoint}` (`schema`, `query`, `run`, `pay`). Tokens are
+          RS256 JWTs verifiable against the JWKS above.
+
+          ## Errors
+
+          - Kiosk endpoints (`/auth/*`, wire verbs) use the JSON envelope:
+            `{ ok: false, error: { code, message, hint } }` (codes such as
+            `unauthenticated`, `not_found`, `conflict`, `pow_required`).
+          - The claim ceremony's OAuth endpoints use the OAuth error shape
+            `{ error, error_description }` with the RFC 8628 vocabulary:
+            `authorization_pending`, `slow_down`, `expired_token`,
+            `access_denied`, `invalid_grant`, `invalid_client` — a
+            documented exception to the envelope.
+
+          ## Revocation
+
+          - Credential layer: `POST #{urls[:revoke]}` (Bearer) revokes every
+            outstanding token for your identity and returns a fresh one.
+          - Registration layer (unlink): the account holder — or the
+            provider — deactivates a key's binding (`POST
+            #{endpoint}/auth/unlink`, session-authenticated, or the
+            provider's linked-assistants page). An unlinked key stops
+            verifying and can no longer log in; it does NOT revert to a
+            standalone account.
+        MARKDOWN
       end
 
       # Absolute URLs of the four kiosk-pop auth endpoints under `endpoint`

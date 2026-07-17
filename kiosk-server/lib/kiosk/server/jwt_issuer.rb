@@ -20,8 +20,8 @@ module Kiosk
     #     success; raises a {Error} subclass on failure.
     #
     # Used by the bundled kiosk-pop IdP ({DefaultAgentIdp}) for direct
-    # access-token issuance and verification. (The OAuth 2.1 device-grant
-    # surface that also issued tokens through it is dormant per ADR-0008.)
+    # access-token issuance and verification — including the tokens the
+    # account-binding ceremony returns (ADR-0017: one token minter).
     # NOTE: AP2 mandate verification ({MandateVerifier}) and KYC attestation
     # verification ({KycVerifier}) do NOT go through here — they decode via
     # `::JWT.decode` directly against the agent / KYC-provider key.

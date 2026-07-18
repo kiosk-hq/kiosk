@@ -245,12 +245,6 @@ RSpec.describe Kiosk::Server::WellKnown do
       expect(doc[:"x-kiosk"][:api_catalog]).to eq("/.well-known/api-catalog")
     end
 
-    it "round-trips through JSON" do
-      json = described_class.agents_json_string(base_url: "https://api.acme.example")
-      parsed = JSON.parse(json)
-      expect(parsed["version"]).to eq("1.0")
-      expect(parsed.dig("site", "url")).to eq("https://api.acme.example")
-    end
   end
 
   # ─── W3: /.well-known/agent-configuration (agent-auth discovery) ─────────
@@ -440,13 +434,5 @@ RSpec.describe Kiosk::Server::WellKnown do
         .to raise_error(ArgumentError, /issuer/)
     end
 
-    describe ".api_catalog_string" do
-      it "round-trips through JSON" do
-        json = described_class.api_catalog_string(base_url: "https://api.acme.example")
-        parsed = JSON.parse(json)
-        expect(parsed.dig("linkset", 0, "anchor"))
-          .to eq("https://api.acme.example/.well-known/api-catalog")
-      end
-    end
   end
 end

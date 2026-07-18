@@ -193,7 +193,22 @@ if defined?(::ActionController::API)
 
         def render_error(err)
           Kiosk::Server::Headers.add_to(response.headers)
+          if (challenge = www_authenticate_for(err))
+            response.set_header("WWW-Authenticate", challenge)
+          end
           render json: err.to_envelope, status: err.http_status
+        end
+
+        # RFC 7235 gate header (ADR-0014), mirroring WireController#www_authenticate_for.
+        # The registration toll answers `402 pow_required`, so its response carries
+        # `WWW-Authenticate: Kiosk-PoW` like the wire-verb PoW gate — the spec error
+        # table states every pow_required 402 carries the header (K-314).
+        def www_authenticate_for(err)
+          issuer = Kiosk.configuration.issuer
+          case err
+          when Errors::PowRequired          then %(Kiosk-PoW realm="#{issuer}")
+          when Errors::PaymentSetupRequired then %(Payment realm="#{issuer}", method="ap2")
+          end
         end
       end
     end

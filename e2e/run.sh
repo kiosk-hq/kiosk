@@ -179,6 +179,7 @@ cp "$FIXTURES/appointment.rb"        app/models/appointment.rb
 cp "$FIXTURES/seeds.rb"              db/seeds.rb
 mkdir -p lib
 cp "$FIXTURES/stub_idp.rb"           lib/stub_idp.rb
+cp "$FIXTURES/stub_user_idp.rb"      lib/stub_user_idp.rb
 cp "$FIXTURES/jwt_or_stub_idp.rb"    lib/jwt_or_stub_idp.rb
 cp "$FIXTURES/stub_psp.rb"           lib/stub_psp.rb
 cp "$FIXTURES/initializer_kiosk.rb"  config/initializers/kiosk.rb

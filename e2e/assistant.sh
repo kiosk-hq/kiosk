@@ -235,14 +235,32 @@ assert "jwks: e (exponent) present"    "$(echo "$jwks" | jq -r '.keys[0].e | len
 assert "jwks: no private d field"      "$(echo "$jwks" | jq -r '.keys[0] | has("d")')"      "false"
 assert "jwks: no private p field"      "$(echo "$jwks" | jq -r '.keys[0] | has("p")')"      "false"
 
-# ─── OAuth 2.1 Device Authorization Grant — intentionally NOT exercised ──
+# ─── account binding: claim ceremony → bound wire → link redeem → unlink ──
 #
-# The device-grant surface (/oauth/device_authorization, /oauth/token) ships
-# in kiosk-server but stays DORMANT per ADR-0008: Kiosk auth is the
-# proof-of-possession challenge-response handshake (see well-known assertions
-# above), not OAuth. The device-grant code is retained for a possible future
-# human-in-the-loop consent flow but is not part of the advertised surface, so
-# e2e does not assert on it (findings K-016 / K-023).
+# The RFC 8628-shaped claim ceremony binds an agent's public key to an
+# existing human account (alice); the token poll requires a possession
+# proof. Tokens remain kiosk-pop-minted: login is the refresh path, and
+# unlink (registration-layer revocation) kills it.
+printf "\n\033[1m=== account binding: claim → approve → PoP poll → bound wire → link → unlink ===\033[0m\n"
+
+authmd=$(curl -s -o /dev/null -w '%{http_code}' "$SERVER_URL/auth.md")
+assert "binding: /auth.md served"           "$authmd" "200"
+
+bind_out=$( cd "$APP_DIR" && SERVER_URL="$SERVER_URL" KIOSK_ISSUER="$KIOSK_ISSUER" \
+              HUMAN_USER_ID="$ALICE" bundle exec ruby "$FIXTURES/claim_flow.rb" )
+
+assert "binding: device_authorization fields" "$(echo "$bind_out" | jq -r '.da_fields')"                            "true"
+assert "binding: pending before approval"     "$(echo "$bind_out" | jq -r '.pending | map(tostring) | join(":")')"  "400:authorization_pending"
+assert "binding: poll without proof denied"   "$(echo "$bind_out" | jq -r '.no_pop | map(tostring) | join(":")')"   "401:invalid_client"
+assert "binding: human approve → 200"         "$(echo "$bind_out" | jq -r '.approve')"                              "200"
+assert "binding: fast poll → slow_down"       "$(echo "$bind_out" | jq -r '.slow_down | map(tostring) | join(":")')" "400:slow_down"
+assert "binding: token bound to the human"    "$(echo "$bind_out" | jq -r '.bound_user')"                           "true"
+assert "binding: wire verb as bound account"  "$(echo "$bind_out" | jq -r '.wire_as_bound | map(tostring) | join(":")')" "200:true"
+assert "binding: kiosk-pop login refresh"     "$(echo "$bind_out" | jq -r '.login_bound')"                          "200"
+assert "binding: link-code mint (session)"    "$(echo "$bind_out" | jq -r '.link_mint')"                            "201"
+assert "binding: link-code redeem → human"    "$(echo "$bind_out" | jq -r '.link_claim | map(tostring) | join(":")')" "201:true"
+assert "binding: unlink → 200"                "$(echo "$bind_out" | jq -r '.unlink')"                               "200"
+assert "binding: login after unlink → 404"    "$(echo "$bind_out" | jq -r '.login_after_unlink')"                   "404"
 
 # ─── no-human AP2 pay flow (register → intent → cart → payment mandate → pay → persist) ───
 printf "\n\033[1m=== no-human register → mandate → pay ===\033[0m\n"

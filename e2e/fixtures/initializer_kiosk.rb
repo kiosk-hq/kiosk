@@ -5,6 +5,7 @@
 # the demo: synthetic users (uuid), stub IdP, one Action registered.
 
 require Rails.root.join("lib/stub_idp")
+require Rails.root.join("lib/stub_user_idp")
 require Rails.root.join("lib/jwt_or_stub_idp")
 require Rails.root.join("lib/stub_psp")
 
@@ -36,11 +37,13 @@ Kiosk.configure do |c|
 
   # JwtOrStubIdp tries kiosk-pop JWTs (minted by the bundled IdP's
   # register/login) first, then falls back to StubIdp's bespoke
-  # `agent:u-…:a-…:r-…` shape. The OAuth device-grant surface is dormant
-  # (ADR-0008) and does not mint these JWTs. One endpoint authenticates
-  # both for the e2e suite.
+  # `agent:u-…:a-…:r-…` shape. The account-binding token poll mints the
+  # same kiosk JWTs, so bound assistants authenticate through the JWT path
+  # too. One endpoint authenticates both for the e2e suite.
   c.agent_idp = JwtOrStubIdp.new(stub: StubIdp.new)
-  # user_idp not needed — composite handles both channels.
+  # The provider's own web-session channel: authenticates the approving
+  # human on the account-binding pages (device verify, link mint, unlink).
+  c.user_idp = StubUserIdp.new
 
   c.payment_provider = StubPsp.new
 end

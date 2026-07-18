@@ -10,10 +10,10 @@ module Kiosk
     #   .build / .build_json          — the bespoke `/.well-known/kiosk.json`
     #                                   (a DERIVED ALIAS, byte-stable)
     #   .agents_txt                   — native agents.txt v1.0 envelope
-    #   .agents_json / _string        — native agents.json v1.0 companion
+    #   .agents_json                  — native agents.json v1.0 companion
     #   .agent_configuration          — /.well-known/agent-configuration
     #                                   (agent-auth discovery, kiosk-pop)
-    #   .api_catalog / _string        — /.well-known/api-catalog
+    #   .api_catalog                  — /.well-known/api-catalog
     #                                   (RFC 9727 linkset of the wire endpoints)
     #   .auth_md                      — /auth.md (agent-auth methods in the
     #                                   auth.md vocabulary, ADR-0017)

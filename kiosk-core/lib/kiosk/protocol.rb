@@ -5,12 +5,12 @@ module Kiosk
   module Protocol
     # Semver of the wire protocol exposed at /kiosk/query, /kiosk/run, /kiosk/pay, etc.
     # Changes more slowly than the server version itself.
-    API_VERSION = "0.1.0"
+    API_VERSION = "0.2.0"
 
     # Minimum client version that can speak this API version. Advertised in
     # the Kiosk::Protocol::HEADER_MIN_CLIENT response header on every
     # /kiosk/* response; older clients are expected to upgrade.
-    MIN_CLIENT = "0.1.0"
+    MIN_CLIENT = "0.2.0"
 
     # HTTP response header names (sent on every /kiosk/* response).
     HEADER_SERVER_VERSION = "Kiosk-Server-Version"

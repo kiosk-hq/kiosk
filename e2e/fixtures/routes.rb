@@ -15,6 +15,15 @@ Rails.application.routes.draw do
   post "/kiosk/oauth/device_authorization",        to: "kiosk/server/oauth_device_authorization#create"
   post "/kiosk/oauth/token",                       to: "kiosk/server/oauth_token#create"
 
+  # Account binding: the human half (verify page, link mint, unlink — session
+  # channel) and the agent half (link-code redeem).
+  get  "/kiosk/oauth/device/verify",               to: "kiosk/server/device_verify#show"
+  post "/kiosk/oauth/device/verify",               to: "kiosk/server/device_verify#create"
+  post "/kiosk/auth/link",                         to: "kiosk/server/auth#link"
+  post "/kiosk/auth/claim",                        to: "kiosk/server/auth#claim"
+  post "/kiosk/auth/unlink",                       to: "kiosk/server/auth#unlink"
+  get  "/auth.md",                                 to: "kiosk/server/discovery#auth_md"
+
   # Native discovery surface — served by kiosk-server's DiscoveryController
   # (rendered from Kiosk::Server::WellKnown, the single generator seam).
   # agents.txt / agents.json are ROOT-served per the agents.txt v1.0 standard.

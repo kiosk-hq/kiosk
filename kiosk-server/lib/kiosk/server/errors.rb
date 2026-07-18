@@ -69,6 +69,17 @@ module Kiosk
         HTTP_STATUS = 403
       end
 
+      # The acting assistant's per-assistant spending cap would be exceeded by
+      # this charge (ADR-0019). HTTP 403 — a policy refusal the agent cannot pay
+      # its way past; the human must raise the cap. Distinct CODE from Forbidden
+      # so an agent can tell «over your spending limit» from «you can't do this»,
+      # and distinct from the 402 gates (which mean «do X then retry»). Enforced
+      # in the pay path BEFORE the irreversible capture.
+      class SpendingCapExceeded < Base
+        CODE        = "spending_cap_exceeded"
+        HTTP_STATUS = 403
+      end
+
       # Resource lookup failed — unknown table, unknown Action name.
       class NotFound < Base
         CODE        = "not_found"

@@ -249,6 +249,22 @@ module Kiosk
       # and its tokens are watermark-revoked. Default nil (no-op).
       attr_accessor :assistant_unlinked
 
+      # ── Per-assistant spending cap (ADR-0019) ─────────────────────────────
+
+      # Optional callable returning the spending cap (in cents) for an assistant,
+      # or nil for no cap. Invoked `(agent_id:) → Integer | nil` in the pay path
+      # BEFORE the irreversible PSP capture; a cap of 0 disables the assistant's
+      # payments entirely. Default nil = the feature is off (no enforcement, no
+      # lookup — existing behaviour unchanged). A ready-made column-backed
+      # implementation is {Kiosk::Server::ColumnSpendingCap} (reads
+      # `agents.spending_cap_cents`, the column edited by the manage-assistants
+      # page); a provider storing caps elsewhere supplies its own callable.
+      attr_accessor :spending_cap
+
+      # Rolling window in days over which settled spend is summed against the
+      # cap. Default nil = all-time cumulative. E.g. 7 for a weekly allowance.
+      attr_accessor :spending_cap_window_days
+
       # ── PoW challenge-response gate (R2) ──────────────────────────────────
 
       # Reputation policy that decides when and how hard to challenge a request.

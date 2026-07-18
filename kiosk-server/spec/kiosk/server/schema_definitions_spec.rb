@@ -99,6 +99,21 @@ RSpec.describe Kiosk::Server::SchemaDefinitions do
     end
   end
 
+  describe ".agent_governance_columns_sql" do
+    subject(:sql) { described_class.agent_governance_columns_sql(schema: "kiosk") }
+
+    it "adds spending_cap_cents + human_label to agents, idempotently (ADR-0019)" do
+      expect(sql).to include('ALTER TABLE "kiosk".agents')
+      expect(sql).to include("ADD COLUMN IF NOT EXISTS spending_cap_cents bigint")
+      expect(sql).to include("ADD COLUMN IF NOT EXISTS human_label")
+    end
+
+    it "defaults the schema from configuration" do
+      Kiosk.configure { |c| c.schema = "shop" }
+      expect(described_class.agent_governance_columns_sql).to include('"shop".agents')
+    end
+  end
+
   describe ".actions_log_sql" do
     subject(:sql) { described_class.actions_log_sql }
 

@@ -333,6 +333,10 @@ namespace :demo do
       check.call("minted token is bound to the human's account",   result["bound_user"] == true)
       check.call("wire verb (book_appointment) as the account → 200", result["wire_book"] == 200)
       check.call("assistant 1 sees its booking in my_appointments", result["a1_sees_booking"] == true)
+      check.call("manage-assistants page (session channel) → 200", result["manage_page"] == 200)
+      check.call("manage page lists the bound assistant",           result["manage_lists_a1"] == true)
+      check.call("set spending cap via the manage page → 200",      result["manage_update"] == 200)
+      check.call("re-rendered page shows the saved cap + label",    result["manage_cap_shown"] == true)
       check.call("link-code mint (session channel) → 201",         result["link_mint"] == 201)
       check.call("link-code redeem binds to the same account",     result["link_claim"] == [201, true])
       check.call("assistant 2 sees assistant 1's booking (same account)", result["a2_sees_booking"] == true)
@@ -345,6 +349,8 @@ namespace :demo do
       agent1 = result["agent_id_1"].to_s
       bound_uid = `psql -X -d #{db} -tAc "SELECT user_id FROM kiosk.agents WHERE id = '#{agent1}'" 2>&1`.strip
       check.call("DB kiosk.agents.user_id for assistant 1 == the human (#{holder_id})", bound_uid == holder_id)
+      db_cap = `psql -X -d #{db} -tAc "SELECT spending_cap_cents FROM kiosk.agents WHERE id = '#{agent1}'" 2>&1`.strip
+      check.call("DB kiosk.agents.spending_cap_cents for assistant 1 == 12345 (set on the manage page)", db_cap == "12345")
       appt_uid = `psql -X -d #{db} -tAc "SELECT user_id FROM appointments WHERE id = '#{result["appointment_id"]}'" 2>&1`.strip
       check.call("DB appointments.user_id for the booking == the human",  appt_uid == holder_id)
     ensure

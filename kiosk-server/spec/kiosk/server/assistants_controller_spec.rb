@@ -110,4 +110,81 @@ RSpec.describe "AssistantsController" do
     expect(html).to include(%(action="/kiosk/auth/assistants/link"))
     expect(html).not_to include("/link/link")
   end
+
+  it "surfaces the label, settled spend, and cap for each bound assistant (show)" do
+    con.next_result = [
+      { "id" => "agent-1", "public_key" => pem, "created_at" => "2026-07-17 12:00:00+00",
+        "human_label" => "Alice shopper", "spending_cap_cents" => 5000, "settled_cents" => 1200 },
+    ]
+    status, html = dispatch(:show, method: "GET")
+
+    expect(status).to eq(200)
+    expect(html).to include("Alice shopper")
+    expect(html).to include("spent: 1200 cents")
+    expect(html).to include("cap: 5000 cents")
+    # The SELECT reaches for the new governance columns + the settled-spend subquery.
+    select = con.executed_sql.grep(/SELECT/i).first
+    expect(select).to include("human_label")
+    expect(select).to include("spending_cap_cents")
+    expect(select).to include("settled_amount_cents")
+  end
+
+  it "shows «(unnamed)» / «cap: none» when the label and cap are unset" do
+    con.next_result = [
+      { "id" => "agent-1", "public_key" => pem, "created_at" => "2026-07-17 12:00:00+00",
+        "human_label" => nil, "spending_cap_cents" => nil, "settled_cents" => 0 },
+    ]
+    _status, html = dispatch(:show, method: "GET")
+
+    expect(html).to include("(unnamed)")
+    expect(html).to include("cap: none")
+  end
+
+  it "shows «cap: disabled» when the cap is zero" do
+    con.next_result = [
+      { "id" => "agent-1", "public_key" => pem, "created_at" => "2026-07-17 12:00:00+00",
+        "human_label" => "Bot", "spending_cap_cents" => 0, "settled_cents" => 0 },
+    ]
+    _status, html = dispatch(:show, method: "GET")
+
+    expect(html).to include("cap: disabled")
+  end
+
+  it "updates the label and spending cap, scoped by both agent id AND user_id" do
+    status, html = dispatch(
+      :update, method: "POST",
+      params: { "agent_id" => "agent-1", "human_label" => "Alice's shopper", "spending_cap_cents" => "5000" },
+    )
+
+    expect(status).to eq(200)
+    expect(html).to include("Assistant settings saved")
+    upd = con.executed_sql.grep(/UPDATE/i).first
+    expect(upd).to include("human_label = 'Alice's shopper'")
+    expect(upd).to include("spending_cap_cents = 5000")
+    # Ownership scoping: the WHERE pins BOTH the agent id and the session holder.
+    expect(upd).to include("id = 'agent-1'")
+    expect(upd).to include("user_id = '#{user_id}'")
+    expect(upd).to include("revoked_at IS NULL")
+  end
+
+  it "clears the cap (unlimited) when spending_cap_cents is blank" do
+    _status, _html = dispatch(
+      :update, method: "POST",
+      params: { "agent_id" => "agent-1", "spending_cap_cents" => "" },
+    )
+
+    upd = con.executed_sql.grep(/UPDATE/i).first
+    expect(upd).to include("spending_cap_cents = NULL")
+  end
+
+  it "rejects a non-integer spending cap with 400 and writes no UPDATE" do
+    status, html = dispatch(
+      :update, method: "POST",
+      params: { "agent_id" => "agent-1", "spending_cap_cents" => "lots" },
+    )
+
+    expect(status).to eq(400)
+    expect(html).to include("must be an integer")
+    expect(con.executed_sql.grep(/UPDATE/i)).to be_empty
+  end
 end

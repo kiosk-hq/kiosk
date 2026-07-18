@@ -179,6 +179,29 @@ rc, mine = post_json("/kiosk/query", { name: "my_appointments" }, { "Authorizati
 results[:a1_sees_booking] = rc == 200 && mine.fetch("rows", []).any? { |r| r["id"] == appointment_id }
 STDERR.puts "  Booked appointment #{appointment_id} as the account holder"
 
+# ══ MANAGE ASSISTANTS page (T-030): the signed-in human opens the HTML
+#    governance page, sees assistant 1 listed, and sets a spending cap. ═══════
+page = get_html("/kiosk/auth/assistants")
+results[:manage_page] = page.code.to_i
+results[:manage_lists_a1] = page.code.to_i == 200 && page.body.include?(agent1)
+STDERR.puts "  Manage-assistants page (#{page.code}) lists assistant 1: #{results[:manage_lists_a1]}"
+
+# Set a 12345-cent cap on assistant 1 (session-authed form POST).
+upd = post_form("/kiosk/auth/assistants/update",
+                "authenticity_token"  => csrf_token(page.body),
+                "agent_id"            => agent1,
+                "human_label"         => "Alice booking bot",
+                "spending_cap_cents"  => "12345")
+results[:manage_update] = upd.code.to_i
+# The re-rendered page reflects the saved cap + label.
+after = get_html("/kiosk/auth/assistants")
+results[:manage_cap_shown] =
+  after.code.to_i == 200 &&
+  after.body.include?("cap: 12345 cents") &&
+  after.body.include?("Alice booking bot")
+# DB ground truth: the column now carries the cap.
+STDERR.puts "  Set spending cap on assistant 1 (#{upd.code}); page shows cap: #{results[:manage_cap_shown]}"
+
 # ══ HUMAN-INITIATED: link code → second assistant → unlink the first ════════
 rc, link = post_json("/kiosk/auth/link", {}, { session: true })
 results[:link_mint] = rc

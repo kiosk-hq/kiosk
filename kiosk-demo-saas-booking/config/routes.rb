@@ -27,6 +27,14 @@ Rails.application.routes.draw do
   post "/kiosk/auth/unlink",                       to: "kiosk/server/auth#unlink"
   get  "/auth.md",                                 to: "kiosk/server/discovery#auth_md"
 
+  # «Manage assistants» HTML page (kiosk-server AssistantsController): a
+  # signed-in account holder lists their bound assistants, mints link codes,
+  # unlinks, and edits per-assistant label + spending cap (ADR-0017/0019).
+  get  "/kiosk/auth/assistants",                   to: "kiosk/server/assistants#show"
+  post "/kiosk/auth/assistants/link",              to: "kiosk/server/assistants#link"
+  post "/kiosk/auth/assistants/unlink",            to: "kiosk/server/assistants#unlink"
+  post "/kiosk/auth/assistants/update",            to: "kiosk/server/assistants#update"
+
   # Human sign-in (Devise) — the web session that approves assistant links.
   devise_for :users
 

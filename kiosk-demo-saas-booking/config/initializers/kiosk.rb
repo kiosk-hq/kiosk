@@ -62,8 +62,14 @@ Kiosk.configure do |c|
   c.agent_idp = JwtOrStubIdp.new(stub: StubIdp.new)
   # The provider's own web-session channel (Devise/Warden): authenticates
   # the approving human on the account-binding surfaces — the device
-  # verify page, link-code mint, and unlink. Walked by `rake demo:binding`.
+  # verify page, link-code mint, unlink, and the manage-assistants page.
+  # Walked by `rake demo:binding`.
   c.user_idp = Kiosk::UserIdentityProviders::Devise.new
+
+  # Per-assistant spending cap (ADR-0019): read the cap from
+  # agents.spending_cap_cents (the column edited on the manage-assistants
+  # page). window_days stays default nil = all-time cumulative spend.
+  c.spending_cap = Kiosk::Server::ColumnSpendingCap.new
 
   # ── Registration PoW gate (active only when KIOSK_POW_REGISTER_DEMO=1) ───
   if ENV["KIOSK_POW_REGISTER_DEMO"] == "1"

@@ -38,8 +38,34 @@
       <ul>
         <% @assistants.each do |assistant| %>
           <li>
+            <strong><%= assistant[:human_label].to_s.empty? ? "(unnamed)" : assistant[:human_label] %></strong>
             <code><%= assistant[:fingerprint] %></code>
             — linked <%= assistant[:created_at] %>
+            <p>
+              spent: <%= assistant[:settled_cents] %> cents —
+              <%
+                cap = assistant[:spending_cap_cents]
+                cap_label = if cap.nil?
+                              "cap: none"
+                            elsif cap.zero?
+                              "cap: disabled"
+                            else
+                              "cap: #{cap} cents"
+                            end
+              %>
+              <%= cap_label %>
+            </p>
+            <form action="<%= @page_path %>/update" method="post">
+              <input type="hidden" name="authenticity_token" value="<%= form_authenticity_token %>">
+              <input type="hidden" name="agent_id" value="<%= assistant[:agent_id] %>">
+              <label>Label
+                <input type="text" name="human_label" value="<%= assistant[:human_label] %>">
+              </label>
+              <label>Spending cap (cents, blank = no cap)
+                <input type="number" name="spending_cap_cents" min="0" value="<%= assistant[:spending_cap_cents] %>">
+              </label>
+              <button type="submit">Save</button>
+            </form>
             <form action="<%= @page_path %>/unlink" method="post">
               <input type="hidden" name="authenticity_token" value="<%= form_authenticity_token %>">
               <input type="hidden" name="agent_id" value="<%= assistant[:agent_id] %>">

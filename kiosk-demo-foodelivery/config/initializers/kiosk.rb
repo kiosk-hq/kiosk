@@ -16,6 +16,7 @@ if ENV["KIOSK_SIGNING_KEY_B64"].nil? && ENV["KIOSK_SIGNING_KEY_PEM"].nil? && Rai
 end
 
 require Rails.root.join("lib/stub_idp")
+require Rails.root.join("lib/stub_user_idp")
 require Rails.root.join("lib/jwt_or_stub_idp")
 require Rails.root.join("lib/stub_psp")
 
@@ -136,6 +137,9 @@ Kiosk.configure do |c|
   # One endpoint authenticates both for the demo. Real providers swap
   # in `kiosk-user-idp-devise` (or another adapter); see the README.
   c.agent_idp = JwtOrStubIdp.new(stub: StubIdp.new)
+  # The web-session channel for the account-binding surfaces (verify
+  # page, link mint, unlink) — see lib/stub_user_idp.rb for the scope.
+  c.user_idp = StubUserIdp.new
   # user_idp not needed — composite handles both channels.
 
   # Payment provider — stub for the demo; swap in kiosk-pay-stripe for real.

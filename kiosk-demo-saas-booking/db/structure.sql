@@ -261,7 +261,9 @@ CREATE TABLE public.schema_migrations (
 CREATE TABLE public.users (
     id uuid DEFAULT gen_random_uuid() NOT NULL,
     created_at timestamp(6) without time zone NOT NULL,
-    updated_at timestamp(6) without time zone NOT NULL
+    updated_at timestamp(6) without time zone NOT NULL,
+    email character varying,
+    encrypted_password character varying DEFAULT ''::character varying NOT NULL
 );
 
 
@@ -468,6 +470,13 @@ CREATE INDEX index_appointments_on_user_id ON public.appointments USING btree (u
 
 
 --
+-- Name: index_users_on_email; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE UNIQUE INDEX index_users_on_email ON public.users USING btree (email);
+
+
+--
 -- Name: action_log action_log_action_name_fkey; Type: FK CONSTRAINT; Schema: kiosk; Owner: -
 --
 
@@ -522,6 +531,7 @@ ALTER TABLE ONLY public.appointments
 SET search_path TO "$user", public;
 
 INSERT INTO "schema_migrations" (version) VALUES
+('20260718000001'),
 ('20260717000001'),
 ('20260618131462'),
 ('20260618131461'),

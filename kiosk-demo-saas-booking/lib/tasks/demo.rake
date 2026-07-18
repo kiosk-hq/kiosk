@@ -7,6 +7,8 @@
 #                          tears down
 #   rake demo:isolation    adversarial cross-tenant denial test (R1 Phase 1 T3)
 #   rake demo:register     registration-PoW demo (no-proof 402 → solve → 201)
+#   rake demo:binding      account-binding walkthrough (claim ceremony over the
+#                          real Devise session + link-code redeem + unlink)
 #   rake demo:redteam      adversarial regression battery against the live surface
 #   rake demo:schema       self-discovery proof over the schema verb
 #   rake demo              setup + walkthrough end-to-end
@@ -248,6 +250,114 @@ namespace :demo do
 
     if failures.empty?
       puts "\n  All registration PoW assertions PASSED."
+    else
+      puts "\n  FAILED:"; failures.each { |f| puts "    - #{f}" }; exit 1
+    end
+  end
+end
+
+namespace :demo do
+  desc <<~DESC
+    Account-binding walkthrough — both binding flows against the live app.
+
+    Boots the server and runs binding_flow.rb, which drives BOTH sides of
+    the ceremony over plain HTTP:
+
+      FIRST CONTACT (claim): an assistant with a fresh key opens the claim
+      ceremony; the human signs in through the REAL Devise form
+      (/users/sign_in — cookie + CSRF dance, no fixtures), approves on the
+      verify page, the assistant's possession-proof poll mints a token
+      bound to the human's account, and it books an appointment there.
+
+      HUMAN-INITIATED (link): the signed-in human mints a link code, a
+      second assistant redeems it at /auth/claim and sees the same
+      account's appointments; the human then unlinks the first assistant —
+      its login 404s from that moment while the second keeps working.
+
+    Exits 0 if every assertion holds; exits 1 on failure.
+  DESC
+  task binding: :setup do
+    require "net/http"; require "uri"; require "json"; require "shellwords"
+
+    port         = ENV.fetch("PORT", "3001")
+    server_url   = "http://127.0.0.1:#{port}"
+    log          = "/tmp/kiosk-saas-booking-binding.log"
+    flow_rb      = File.expand_path("../../binding_flow.rb", __dir__)
+    db           = "kiosk_saas_booking_development"
+    failures     = []
+
+    # The seeded account holder (db/seeds.rb) — Alice approves the link.
+    holder_id       = "00000000-0000-0000-0000-000000000001"
+    holder_email    = "alice@example.com"
+    holder_password = "combette-demo-password"
+
+    puts "\n── Starting saas-booking (account-binding walkthrough) on #{server_url} ──"
+
+    File.truncate(log, 0) if File.exist?(log)
+    server_pid = spawn(
+      { "KIOSK_ISSUER" => server_url },
+      "bundle exec rails s -p #{port} -b 127.0.0.1 -e development",
+      out: log, err: log,
+    )
+    begin
+      ready = false
+      40.times do
+        begin
+          ready = true if Net::HTTP.get_response(URI("#{server_url}/.well-known/kiosk.json")).code.to_i == 200
+        rescue Errno::ECONNREFUSED, Errno::EADDRNOTAVAIL, SocketError
+          nil
+        end
+        break if ready
+        sleep 1
+      end
+      abort "Server did not become ready — see #{log}" unless ready
+      puts "  Server up at #{server_url}"
+
+      env = "SERVER_URL=#{server_url.shellescape} KIOSK_ISSUER=#{server_url.shellescape} " \
+            "HOLDER_ID=#{holder_id.shellescape} HOLDER_EMAIL=#{holder_email.shellescape} " \
+            "HOLDER_PASSWORD=#{holder_password.shellescape}"
+      raw = `#{env} bundle exec ruby #{flow_rb.shellescape} 2>&1`
+      json_line = raw.lines.grep(/^\{/).last
+      puts raw.lines.reject { |l| l.start_with?("{") }.join
+      puts json_line if json_line
+      result = JSON.parse(json_line || raw) rescue abort("binding_flow.rb produced no JSON:\n#{raw}")
+
+      puts "\n══ Account-binding assertions ══"
+      check = lambda do |label, ok|
+        if ok then puts "  OK  #{label}" else failures << label; puts "  FAIL  #{label}" end
+      end
+      check.call("human signed in via the real Devise form",       result["human_signed_in"] == true)
+      check.call("device_authorization carries the RFC 8628 fields", result["da_fields"] == true)
+      check.call("poll before approval → authorization_pending",   result["pending"] == [400, "authorization_pending"])
+      check.call("human approve on the verify page → 200",         result["approve"] == 200)
+      check.call("minted token is bound to the human's account",   result["bound_user"] == true)
+      check.call("wire verb (book_appointment) as the account → 200", result["wire_book"] == 200)
+      check.call("assistant 1 sees its booking in my_appointments", result["a1_sees_booking"] == true)
+      check.call("link-code mint (session channel) → 201",         result["link_mint"] == 201)
+      check.call("link-code redeem binds to the same account",     result["link_claim"] == [201, true])
+      check.call("assistant 2 sees assistant 1's booking (same account)", result["a2_sees_booking"] == true)
+      check.call("unlink assistant 1 → 200",                       result["unlink"] == 200)
+      check.call("assistant 1 login after unlink → 404",           result["login_a1_after_unlink"] == 404)
+      check.call("assistant 2 login still works → 200",            result["login_a2_still_works"] == 200)
+
+      # DB ground truth: the ceremony's product is the key→account binding,
+      # and the booking landed on the human's own row.
+      agent1 = result["agent_id_1"].to_s
+      bound_uid = `psql -X -d #{db} -tAc "SELECT user_id FROM kiosk.agents WHERE id = '#{agent1}'" 2>&1`.strip
+      check.call("DB kiosk.agents.user_id for assistant 1 == the human (#{holder_id})", bound_uid == holder_id)
+      appt_uid = `psql -X -d #{db} -tAc "SELECT user_id FROM appointments WHERE id = '#{result["appointment_id"]}'" 2>&1`.strip
+      check.call("DB appointments.user_id for the booking == the human",  appt_uid == holder_id)
+    ensure
+      begin
+        Process.kill("TERM", server_pid); Process.wait(server_pid)
+      rescue Errno::ESRCH, Errno::ECHILD
+        nil
+      end
+      puts "  Server stopped."
+    end
+
+    if failures.empty?
+      puts "\n  All account-binding assertions PASSED."
     else
       puts "\n  FAILED:"; failures.each { |f| puts "    - #{f}" }; exit 1
     end

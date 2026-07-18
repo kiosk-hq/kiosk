@@ -63,9 +63,9 @@ module Kiosk
 
       # Minimum client version this deployment ADVERTISES in
       # `/.well-known/kiosk.json` (see {WellKnown}). Default:
-      # {Kiosk::Protocol::MIN_CLIENT}. Purely informational in 0.1: no code
-      # compares any incoming request's client version against it, so a bump
-      # is advisory only. Note the per-response `Kiosk-Min-Client` header is
+      # {Kiosk::Protocol::MIN_CLIENT}. Advisory only: no code compares any
+      # incoming request's client version against it, so a bump is
+      # informational. Note the per-response `Kiosk-Min-Client` header is
       # NOT driven by this value — {Headers} emits the protocol-level
       # {Kiosk::Protocol::MIN_CLIENT} constant, so a bumped provider advertises
       # the new value only in the well-known document, not in the header.

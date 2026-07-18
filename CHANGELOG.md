@@ -3,6 +3,7 @@
 Significant changes only (CLAUDE.md rule 5): one line per change, 1–2
 sentences — essence and intent, not content.
 
+- 2026-07-19: The advertised wire version is now 0.2.0 — Kiosk::Protocol::API_VERSION and MIN_CLIENT bump to match the 0.2 protocol, so the Kiosk-API-Version/Kiosk-Min-Client headers and the agents.json api_version now report parity with the framework release. (K-325)
 - 2026-07-18: sweep-012 fixes — the registration toll 402 now carries WWW-Authenticate: Kiosk-PoW like the wire-verb gate (K-314); removed the unused WellKnown agents_json_string/api_catalog_string spec-only wrappers (K-320); re-pinned skill v0.2.2 across the five demos and the default URL (K-317/K-318).
 - 2026-07-09: Adopted the Kiosk 0.1 convergence process: repo constitution in CLAUDE.md (five rules), workspace-level findings/TODO ledgers, and a repo-wide CI workflow running every gem suite, demo happy-path/isolation/redteam flows, and e2e. (PLAN.md at the workspace root)
 - 2026-07-09: Discovery `/.well-known/kiosk.json` now advertises `capabilities` as verb names (schema/query/run/pay) computed from the registry, replacing the static `[query,actions,ap2]`. (ADR-0009, K-017)

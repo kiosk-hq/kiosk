@@ -17,6 +17,7 @@ end
 
 require Rails.root.join("lib/stub_idp")
 require Rails.root.join("lib/jwt_or_stub_idp")
+require "kiosk/user_identity_providers/devise"
 
 # Registration PoW gate (KIOSK_POW_REGISTER_DEMO=1). A booking SaaS can price
 # fresh-identity minting: registering an agent costs one Equihash proof
@@ -55,12 +56,14 @@ Kiosk.configure do |c|
   c.skill_sha256 = "08b2f4b34f0c0cc20491130f617e3927326095c1bb36dde9023cfbd0546669bf"
 
   # JwtOrStubIdp tries Kiosk-issued JWTs (kiosk-pop register/login output;
-  # OAuth device-grant dormant per ADR-0008) first,
-  # then falls back to StubIdp's bespoke `agent:u-…:a-…:r-…` shape.
-  # One endpoint authenticates both for the demo. Real providers swap
-  # in `kiosk-user-idp-devise` (or another adapter); see the README.
+  # the account-binding token poll mints the same JWTs) first, then falls
+  # back to StubIdp's bespoke `agent:u-…:a-…:r-…` shape. One endpoint
+  # authenticates both for the demo.
   c.agent_idp = JwtOrStubIdp.new(stub: StubIdp.new)
-  # user_idp not needed — composite handles both channels.
+  # The provider's own web-session channel (Devise/Warden): authenticates
+  # the approving human on the account-binding surfaces — the device
+  # verify page, link-code mint, and unlink. Walked by `rake demo:binding`.
+  c.user_idp = Kiosk::UserIdentityProviders::Devise.new
 
   # ── Registration PoW gate (active only when KIOSK_POW_REGISTER_DEMO=1) ───
   if ENV["KIOSK_POW_REGISTER_DEMO"] == "1"

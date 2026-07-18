@@ -17,6 +17,31 @@ Rails.application.routes.draw do
   post "/kiosk/oauth/device_authorization",        to: "kiosk/server/oauth_device_authorization#create"
   post "/kiosk/oauth/token",                       to: "kiosk/server/oauth_token#create"
 
+  # Account binding: the human half (verify page, link mint, unlink — the
+  # Devise session channel) and the agent half (link-code redeem). Walked
+  # end-to-end by `rake demo:binding`.
+  get  "/kiosk/oauth/device/verify",               to: "kiosk/server/device_verify#show"
+  post "/kiosk/oauth/device/verify",               to: "kiosk/server/device_verify#create"
+  post "/kiosk/auth/link",                         to: "kiosk/server/auth#link"
+  post "/kiosk/auth/claim",                        to: "kiosk/server/auth#claim"
+  post "/kiosk/auth/unlink",                       to: "kiosk/server/auth#unlink"
+  get  "/auth.md",                                 to: "kiosk/server/discovery#auth_md"
+
+  # Human sign-in (Devise) — the web session that approves assistant links.
+  devise_for :users
+
+  # Minimal landing page: Devise needs a post-sign-in destination, and a
+  # human landing here should learn where both doors are.
+  root to: proc { |_env|
+    [200, { "content-type" => "text/html; charset=utf-8" },
+     ["<!DOCTYPE html><html><head><meta charset='utf-8'><title>Combette on Park</title></head>" \
+      "<body style='font-family:system-ui,sans-serif;text-align:center;padding:64px'>" \
+      "<h1>Combette on Park</h1><p>Kiosk demo salon. Humans sign in at " \
+      "<a href='/users/sign_in'>/users/sign_in</a>; assistants connect via the " \
+      "Kiosk wire (see <a href='/.well-known/kiosk.json'>/.well-known/kiosk.json</a>).</p>" \
+      "</body></html>"]]
+  }
+
   # Native discovery surface — served by kiosk-server's DiscoveryController
   # (rendered from Kiosk::Server::WellKnown, the single generator seam).
   # agents.txt / agents.json are ROOT-served per the agents.txt v1.0 standard.

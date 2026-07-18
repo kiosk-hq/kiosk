@@ -7,10 +7,11 @@ A salon-booking SaaS, Kiosk-enabled. Demonstrates:
 - Authenticated REST wire surface (`/kiosk/query`, `/kiosk/run`, `/kiosk/pay`, `/kiosk/schema`) — query + run verbs
 - App-layer data isolation (two users, two views of the same table); RLS available as optional defense-in-depth
 - A `book_appointment` Action
+- Human↔assistant account binding over real Devise sessions — the claim ceremony (verify page) and human-minted link codes, walked by `rake demo:binding`
 
 Combette is the canonical reference shape for personal-services SaaS — barbershops, restaurants, gyms, clinics. Same patterns apply.
 
-> **Auth:** The Kiosk auth story is `kiosk-pop` — register/login by proof-of-possession (ADR-0008); `rake demo:register` exercises it end-to-end. The OAuth 2.1 device-grant code ships in kiosk-server but stays dormant: its `/kiosk/oauth/*` endpoints are mounted here for wire-shape parity with the other demos, and this demo provides no consent UI, so the flow cannot complete. Linking an agent to an existing human account is a post-0.1 feature.
+> **Auth:** The Kiosk auth story is `kiosk-pop` — register/login by proof-of-possession; `rake demo:register` exercises it end-to-end. The mounted `/kiosk/oauth/*` endpoints are the **account-binding ceremony** (RFC 8628 shape): an assistant's public key gets bound to an existing human account after the human — signed in through the demo's real Devise form — approves on the verify page, and the token poll requires a possession proof for that key. The reverse direction is the human-initiated link code (`/kiosk/auth/link` → `/kiosk/auth/claim`), and `/kiosk/auth/unlink` revokes one assistant without touching the human's own session. Tokens are always minted by kiosk-pop; `/auth.md` describes the methods. `rake demo:binding` walks all of it end-to-end.
 
 ## Run the demo
 
@@ -41,24 +42,35 @@ The walkthrough (`bin/demo`) prints four sections:
 
 After the walkthrough finishes, the server is torn down cleanly. Server logs are at `/tmp/kiosk-demo.log` if you want to inspect what hit the HTTP surface.
 
+### Account binding (`rake demo:binding`)
+
+Two flows, one run, all over plain HTTP against the live app:
+
+1. **First contact (claim)** — an assistant with a fresh key opens the ceremony at `/kiosk/oauth/device_authorization`; the human signs in through the real Devise form (cookie + CSRF dance — no fixtures), approves on the verify page (which shows the key's fingerprint), the assistant's possession-proof poll on `/kiosk/oauth/token` mints a token bound to the human's account, and it books an appointment there.
+2. **Human-initiated (link)** — the signed-in human mints a link code, a second assistant redeems it at `/kiosk/auth/claim` and sees the same account's appointments. The human then unlinks the first assistant: its `/kiosk/auth/login` 404s from that moment while the second keeps working.
+
+The task asserts every step, plus the DB ground truth: `kiosk.agents.user_id` for the bound key equals the human's id, and the booking landed on the human's own row.
+
 ## Repo tour
 
 | Path | What's there |
 |---|---|
-| `db/migrate/` | Generator-produced kiosk migrations + the Combette schema |
-| `app/models/{user,salon,appointment}.rb` | Three trivial AR models |
+| `db/migrate/` | Generator-produced kiosk migrations + the Combette schema (users carry Devise login columns) |
+| `app/models/{user,salon,appointment}.rb` | Three trivial AR models; `User` is `database_authenticatable` for the human sign-in |
 | `config/initializers/kiosk.rb` | `Kiosk.configure` block + the `book_appointment` Action |
+| `config/initializers/devise.rb` | Minimal Devise setup — the human session that approves assistant links |
 | `lib/stub_idp.rb` | Bespoke synthetic-token IdP for the demo's hard-coded Alice + Bob |
 | `lib/jwt_or_stub_idp.rb` | Composite IdP: tries Kiosk-issued JWTs first, falls back to StubIdp |
+| `binding_flow.rb` | Account-binding driver: claim ceremony over the real Devise session, link-code redeem, unlink |
 | `bin/demo` | The walkthrough — POSIX shell, curl-driven, no Ruby in the loop |
-| `lib/tasks/demo.rake` | `rake demo:setup`, `rake demo:walkthrough`, `rake demo`, `rake demo:isolation`, `rake demo:register`, `rake demo:redteam`, `rake demo:schema` |
+| `lib/tasks/demo.rake` | `rake demo:setup`, `rake demo:walkthrough`, `rake demo`, `rake demo:isolation`, `rake demo:register`, `rake demo:binding`, `rake demo:redteam`, `rake demo:schema` |
 
 ## Make it real
 
 The demo bakes in shortcuts that production providers replace. Each transition is small:
 
-- **Synthetic users (Alice, Bob)** → real user table populated by your provider's signup flow.
-- **`StubIdp`** → `kiosk-user-idp-devise` (or your IdP adapter). The bespoke `agent:u-…:a-…:r-…` token shape disappears; real Kiosk-issued JWTs flow through.
+- **Synthetic users (Alice, Bob)** → real user table populated by your provider's signup flow (the demo already gives them real Devise credentials so the binding walkthrough signs in like a person would).
+- **`StubIdp`** (agent channel) → registered assistants already flow through real Kiosk-issued JWTs; the bespoke `agent:u-…:a-…:r-…` fallback shape disappears. The human session channel already runs the real `kiosk-user-idp-devise` adapter.
 
 ## License
 

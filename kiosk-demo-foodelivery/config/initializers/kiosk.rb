@@ -112,7 +112,7 @@ Kiosk.configure do |c|
   c.registration_role = :customer
   c.owner  = { name: "foodelivery", support: "help@foodelivery.app" }
   # Dual-check (skill.md): canonical skill URL + SHA-256 of its content.
-  c.skill_sha256 = "204e781234f43ce4b361050ea09078ff29a20c07a7f0ea7387bfc3db2ccc2316"
+  c.skill_sha256 = "08b2f4b34f0c0cc20491130f617e3927326095c1bb36dde9023cfbd0546669bf"
 
   # ── RLS enforce gate (R1 Phase 1 Task 5 — demo:rls only) ─────────────────
   # When KIOSK_RLS_ENFORCE=1, SessionContext.open appends

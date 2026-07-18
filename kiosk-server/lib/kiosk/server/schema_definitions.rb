@@ -326,6 +326,23 @@ module Kiosk
         SQL
       end
 
+      # Adds the per-assistant governance columns to `kiosk.agents` (ADR-0019):
+      #   `spending_cap_cents bigint` — per-assistant spend cap; NULL = unlimited
+      #     (the default), 0 = disabled. Enforced by the pay path via the
+      #     `config.spending_cap` seam ({ColumnSpendingCap} reads this column).
+      #   `human_label text` — a human-friendly name for the manage-assistants page.
+      # Idempotent (ADD COLUMN IF NOT EXISTS) — safe to re-run. Opt-in: a provider
+      # only needs this migration if it enables per-assistant caps/labels.
+      def agent_governance_columns_sql(schema: nil)
+        schema ||= Kiosk.configuration.schema
+
+        <<~SQL.strip
+          ALTER TABLE "#{schema}".agents
+            ADD COLUMN IF NOT EXISTS spending_cap_cents bigint,
+            ADD COLUMN IF NOT EXISTS human_label        text;
+        SQL
+      end
+
       # ─── 008 rebuild_kiosk_device_authorizations (account binding) ─────
 
       # Rebuilds `kiosk.device_authorizations` in the account-binding shape

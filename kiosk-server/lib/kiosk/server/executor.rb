@@ -184,6 +184,11 @@ module Kiosk
           SessionContext.open(connection: connection, identity: identity) do
             intent  = MandateVerifier.verify_intent(raw_jws: raw_intent, identity: identity)
             cart    = MandateVerifier.verify_cart(raw_jws: raw_cart, identity: identity, intent: intent)
+            # Per-assistant spending cap (ADR-0019). Checked here — after the cart
+            # is known, before any mandate row is persisted and before the
+            # irreversible capture — so a rejection rolls back cleanly (nothing
+            # persisted, no charge, no burned mandate id).
+            enforce_spending_cap!(cart)
             payment = MandateVerifier.verify_payment(raw_jws: raw_payment, identity: identity, cart: cart)
             intent_row = persist_intent_mandate(intent)
             cart_row   = persist_cart_mandate(cart, intent_row_id: intent_row)
@@ -321,6 +326,47 @@ module Kiosk
       end
 
       def q(value) = connection.quote(value)
+
+      # ─── spending cap (ADR-0019) ───────────────────────────────────────
+
+      # Raises Errors::SpendingCapExceeded when the acting assistant's cap would
+      # be exceeded by this cart. No-op when no `config.spending_cap` seam is
+      # configured or the assistant is uncapped (seam returns nil). Called inside
+      # the phase-1 transaction BEFORE any persist, so a rejection rolls back and
+      # never burns a mandate id or reaches the irreversible capture. cap 0 =
+      # disabled. Best-effort at pay time (not a hard lock): a concurrent
+      # double-spend could slip one charge over the cap — acceptable under the
+      # metered-toll model.
+      def enforce_spending_cap!(cart)
+        seam = Kiosk.configuration.spending_cap
+        return if seam.nil?
+
+        cap = seam.call(agent_id: identity.agent_id)
+        return if cap.nil? # this assistant is uncapped
+
+        window_days = Kiosk.configuration.spending_cap_window_days
+        spent = settled_total_cents(agent_id: identity.agent_id, window_days: window_days)
+        return if spent + cart.total_amount_cents.to_i <= cap.to_i
+
+        window_note = window_days ? " in the last #{window_days.to_i} day(s)" : ""
+        raise Errors::SpendingCapExceeded.new(
+          "assistant spending cap exceeded",
+          hint: "cap #{cap.to_i} cents; #{spent} already settled#{window_note}; this charge is #{cart.total_amount_cents.to_i}",
+        )
+      end
+
+      # Sums this agent's settled spend (optionally within a rolling window of
+      # `window_days`) from the settlements receipt table, under the open
+      # SessionContext. Returns cents (0 when the agent has settled nothing).
+      def settled_total_cents(agent_id:, window_days:)
+        schema = Kiosk.configuration.schema
+        window = window_days ? "AND settled_at >= now() - #{window_days.to_i} * INTERVAL '1 day'" : ""
+        connection.execute(<<~SQL).to_a.first.fetch("total").to_i
+          SELECT COALESCE(SUM(settled_amount_cents), 0) AS total
+          FROM #{schema}.settlements
+          WHERE agent_id = #{q(agent_id)} #{window}
+        SQL
+      end
 
       # ─── schema ────────────────────────────────────────────────────────
 

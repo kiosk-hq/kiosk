@@ -262,6 +262,53 @@ RSpec.describe Kiosk::Server::Executor do
       )
     end
 
+    context "per-assistant spending cap (ADR-0019)" do
+      it "does not enforce when no spending_cap seam is configured (default)" do
+        expect_any_instance_of(described_class).not_to receive(:settled_total_cents)
+        expect(Kiosk.configuration.payment_provider).to receive(:capture).and_return(settlement)
+        described_class.call(kind: :pay, args: valid_args, identity: identity, connection: connection)
+      end
+
+      it "does not enforce for an assistant the seam reports uncapped (nil)" do
+        Kiosk.configuration.spending_cap = ->(agent_id:) { nil }
+        expect_any_instance_of(described_class).not_to receive(:settled_total_cents)
+        expect(Kiosk.configuration.payment_provider).to receive(:capture).and_return(settlement)
+        described_class.call(kind: :pay, args: valid_args, identity: identity, connection: connection)
+      end
+
+      it "proceeds when spent + cart total is within the cap" do
+        Kiosk.configuration.spending_cap = ->(agent_id:) { 5000 }
+        allow_any_instance_of(described_class).to receive(:settled_total_cents).and_return(1000) # +1599 = 2599 <= 5000
+        expect(Kiosk.configuration.payment_provider).to receive(:capture).and_return(settlement)
+        result = described_class.call(kind: :pay, args: valid_args, identity: identity, connection: connection)
+        expect(result.kind).to eq(:value)
+      end
+
+      it "rejects with SpendingCapExceeded (403) and does NOT capture when the cap would be exceeded" do
+        Kiosk.configuration.spending_cap = ->(agent_id:) { 2000 }
+        allow_any_instance_of(described_class).to receive(:settled_total_cents).and_return(1000) # +1599 = 2599 > 2000
+        expect(Kiosk.configuration.payment_provider).not_to receive(:capture)
+        expect { described_class.call(kind: :pay, args: valid_args, identity: identity, connection: connection) }
+          .to raise_error(Kiosk::Server::Errors::SpendingCapExceeded) { |e| expect(e.http_status).to eq(403) }
+      end
+
+      it "treats a cap of 0 as disabled (any charge rejected)" do
+        Kiosk.configuration.spending_cap = ->(agent_id:) { 0 }
+        allow_any_instance_of(described_class).to receive(:settled_total_cents).and_return(0)
+        expect(Kiosk.configuration.payment_provider).not_to receive(:capture)
+        expect { described_class.call(kind: :pay, args: valid_args, identity: identity, connection: connection) }
+          .to raise_error(Kiosk::Server::Errors::SpendingCapExceeded)
+      end
+
+      it "passes the acting agent_id and the configured window to the settled-total query" do
+        Kiosk.configuration.spending_cap = ->(agent_id:) { 5000 }
+        Kiosk.configuration.spending_cap_window_days = 7
+        expect_any_instance_of(described_class).to receive(:settled_total_cents)
+          .with(agent_id: "a-1", window_days: 7).and_return(0)
+        described_class.call(kind: :pay, args: valid_args, identity: identity, connection: connection)
+      end
+    end
+
     it "threads the SERVER-generated intent id into the cart persist (FK chain, not the signed id)" do
       expect_any_instance_of(described_class).to receive(:persist_cart_mandate)
         .with(cart, intent_row_id: "intent-row").and_return("cart-row")

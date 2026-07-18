@@ -18,6 +18,18 @@ Rails.application.routes.draw do
   post "/kiosk/auth/login",                         to: "kiosk/server/auth#login"
   post "/kiosk/auth/revoke",                        to: "kiosk/server/auth#revoke"
 
+  # Account binding: the human half (verify page, link mint, unlink — the
+  # stub user-session channel, see lib/stub_user_idp.rb) and the agent
+  # half (link-code redeem). `rake demo:claim` walks the claim-rebind
+  # ceremony: an already-registered assistant's key is re-bound to the
+  # human's own account.
+  get  "/kiosk/oauth/device/verify",               to: "kiosk/server/device_verify#show"
+  post "/kiosk/oauth/device/verify",               to: "kiosk/server/device_verify#create"
+  post "/kiosk/auth/link",                         to: "kiosk/server/auth#link"
+  post "/kiosk/auth/claim",                        to: "kiosk/server/auth#claim"
+  post "/kiosk/auth/unlink",                       to: "kiosk/server/auth#unlink"
+  get  "/auth.md",                                 to: "kiosk/server/discovery#auth_md"
+
   # Native discovery surface — served by kiosk-server's DiscoveryController
   # (rendered from Kiosk::Server::WellKnown, the single generator seam).
   # agents.txt / agents.json are ROOT-served per the agents.txt v1.0 standard.

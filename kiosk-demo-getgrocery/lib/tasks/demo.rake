@@ -4,6 +4,8 @@
 # Tasks:
 #   rake demo:setup      idempotent db:drop / create / migrate / seed
 #   rake demo:shop       boots the server, runs getgrocery_flow.rb, asserts happy path
+#   rake demo:claim      claim-rebind walkthrough: a standalone assistant's key is
+#                        re-bound to the human's account, then pays with its saved card
 #   rake demo:isolation  adversarial cross-tenant + order-ownership isolation test
 #   rake demo:schema     self-discovery proof over the schema verb
 #   rake demo:redteam    adversarial regression battery (kiosk-redteam scenarios)
@@ -267,6 +269,155 @@ namespace :demo do
       exit 1
     end
   end
+
+  # ── demo:claim ───────────────────────────────────────────────────────────────
+  desc <<~DESC
+    Claim-rebind walkthrough — "why not MY account?".
+
+    Boots the server against stripe-mock (the walkthrough charges a SEEDED
+    card-on-file mapping — a mock fixture, no real key, no real charge; run
+    demo:shop for the real-Stripe path) and runs claim_flow.rb:
+
+      1. A standalone assistant self-registers (fresh key, own synthetic
+         account), orders groceries, and hits payment_setup → setup_required
+         (no card on file).
+      2. The human says "use MY account": the claim ceremony runs with the
+         EXISTING key — verify-page approval (stub session channel) +
+         possession-proof token poll — and REBINDS it: agent_id stays,
+         user_id remaps to the seeded human, reputation carries. The old
+         standalone order is NOT migrated (no assistant_claimed hook here).
+      3. A NEW order as the human: payment_setup → ready (the seeded saved
+         card), pay settles off_session against it.
+
+    Exits 0 if all assertions hold; exits 1 on failure.
+  DESC
+  task :claim do
+    require "resolv"
+    require "json"
+    require "net/http"
+    require "uri"
+    require "shellwords"
+
+    mock_url = start_stripe_mock
+    ENV["STRIPE_MOCK_URL"]   = mock_url
+    ENV["STRIPE_SECRET_KEY"] = "sk_test_mock" if ENV["STRIPE_SECRET_KEY"].to_s.empty?
+    puts "  (stripe-mock at #{mock_url} — seeded saved-card fixture, no real Stripe)"
+    Rake::Task["demo:setup"].invoke
+
+    port = ENV.fetch("PORT", "3005")
+    log  = "/tmp/kiosk-getgrocery-claim.log"
+    db   = ENV.fetch("KIOSK_GETGROCERY_DB", "kiosk_getgrocery_development")
+
+    # The seeded account holder with the saved card (db/seeds.rb).
+    human_id     = "00000000-0000-0000-0000-000000000042"
+    human_cus_id = "cus_getgrocery_saved_card"
+
+    # ── host resolution ────────────────────────────────────────────────
+    host = begin
+      addr = begin
+        Resolv.getaddress("getgrocery.app")
+      rescue Resolv::ResolvError
+        ""
+      end
+      if addr == "127.0.0.1"
+        "getgrocery.app"
+      else
+        puts "  (add to /etc/hosts: 127.0.0.1 getgrocery.app -- using 127.0.0.1)" if addr.empty?
+        "127.0.0.1"
+      end
+    end
+
+    server_url   = "http://#{host}:#{port}"
+    kiosk_issuer = server_url
+    failures     = []
+
+    puts "\n── Starting getgrocery (claim-rebind walkthrough) on #{server_url} ──"
+
+    # ── boot the server ────────────────────────────────────────────────
+    # NO KIOSK_TEST_AUTOCARD: the standalone account must genuinely get
+    # setup_required, and the human's "ready" must come from the seeded
+    # card mapping — the contrast is the point of the walkthrough.
+    File.truncate(log, 0) if File.exist?(log)
+    server_pid = spawn(
+      { "KIOSK_ISSUER" => kiosk_issuer, "STRIPE_MOCK_URL" => mock_url, "STRIPE_SECRET_KEY" => "sk_test_mock" },
+      "bundle exec rails s -p #{port} -b 127.0.0.1 -e development",
+      out: log, err: log,
+    )
+
+    at_exit do
+      begin
+        Process.kill("TERM", server_pid)
+        Process.wait(server_pid)
+      rescue Errno::ESRCH, Errno::ECHILD
+        nil
+      end
+      puts "  Server stopped."
+    end
+
+    # ── wait for readiness ─────────────────────────────────────────────
+    ready = false
+    40.times do
+      begin
+        res = Net::HTTP.get_response(URI("#{server_url}/.well-known/kiosk.json"))
+        if res.code.to_i == 200
+          ready = true
+          break
+        end
+      rescue Errno::ECONNREFUSED, Errno::EADDRNOTAVAIL, SocketError
+        nil
+      end
+      sleep 1
+    end
+    abort "Server did not become ready — see #{log}" unless ready
+    puts "  Server up at #{server_url}"
+
+    # ── run claim_flow.rb ──────────────────────────────────────────────
+    flow_rb = File.expand_path("../../claim_flow.rb", __dir__)
+    puts "\n── Running claim_flow.rb ──"
+    env_str = "SERVER_URL=#{server_url.shellescape} KIOSK_ISSUER=#{kiosk_issuer.shellescape} " \
+              "HUMAN_USER_ID=#{human_id.shellescape}"
+    raw = `#{env_str} bundle exec ruby #{flow_rb.shellescape} 2>&1`
+    json_line = raw.lines.grep(/^\{/).last
+    puts raw.lines.reject { |l| l.start_with?("{") }.join
+    puts json_line if json_line
+    result = JSON.parse(json_line || raw) rescue abort("claim_flow.rb produced no JSON:\n#{raw}")
+
+    puts "\n══ Claim-rebind assertions ══"
+    check = lambda do |label, ok|
+      if ok then puts "  OK  #{label}" else failures << label; puts "  FAIL  #{label}" end
+    end
+    check.call("standalone register → 201",                        result["http_register"] == 201)
+    check.call("standalone payment_setup → setup_required (no card)", result["standalone_payment_setup"] == [200, "setup_required"])
+    check.call("device_authorization carries the RFC 8628 fields",  result["da_fields"] == true)
+    check.call("human approve on the verify page → 200",            result["approve"] == 200)
+    check.call("REBIND: agent_id stable across the claim",          result["agent_id_stable"] == true)
+    check.call("REBIND: user_id remapped to the human",             result["rebound_user"] == true)
+    check.call("standalone order NOT migrated to the human",        result["standalone_order_not_migrated"] == true)
+    check.call("human payment_setup → ready (saved card)",          result["human_payment_setup"] == [200, "ready"])
+    check.call("pay with the saved card → 200",                     result["http_pay"] == 200)
+    check.call("psp_reference is a stripe-mock PaymentIntent (pi_…)", result["psp_reference"].to_s.start_with?("pi_"))
+    check.call("human's my_orders contains the new order",          result["human_sees_new_order"] == true)
+
+    # ── DB ground truth ────────────────────────────────────────────────
+    agent_id = result["agent_id"].to_s
+    bound_uid = `psql -X -d #{db} -tAc "SELECT user_id FROM kiosk.agents WHERE id = '#{agent_id}'" 2>&1`.strip
+    check.call("DB kiosk.agents.user_id for the key == the human (#{human_id})", bound_uid == human_id)
+    settle_uid = `psql -X -d #{db} -tAc "SELECT user_id FROM kiosk.settlements ORDER BY settled_at DESC LIMIT 1" 2>&1`.strip
+    check.call("DB settlement charged the human's account",         settle_uid == human_id)
+    human_cus = `psql -X -d #{db} -tAc "SELECT customer_id FROM stripe_customers WHERE user_id = '#{human_id}'" 2>&1`.strip
+    check.call("DB the human's card mapping is still the SEEDED one (#{human_cus_id})", human_cus == human_cus_id)
+    standalone_uid = `psql -X -d #{db} -tAc "SELECT user_id FROM orders WHERE id = '#{result["standalone_order_id"]}'" 2>&1`.strip
+    check.call("DB the standalone order still belongs to the standalone account", standalone_uid == result["standalone_user_id"])
+
+    if failures.empty?
+      puts "\n  All claim-rebind assertions PASSED."
+    else
+      puts "\n  FAILED assertions:"
+      failures.each { |f| puts "    - #{f}" }
+      exit 1
+    end
+  end
+  # ── end demo:claim ────────────────────────────────────────────────────────────
 
   # ── demo:isolation ───────────────────────────────────────────────────────────
   desc <<~DESC

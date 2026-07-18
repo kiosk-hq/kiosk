@@ -40,7 +40,23 @@
   end
 end
 
+# ── Human account holder with a card on file (claim-rebind walkthrough) ─────
+# One seeded human: `rake demo:claim` re-binds a standalone assistant's key to
+# THIS account, then pays with the account's saved card. The card is
+# represented the way the app represents every saved card — a
+# `stripe_customers` mapping row (in the live flow the human creates it once
+# on the Stripe-hosted SetupIntent page); the walkthrough runs against
+# stripe-mock, which serves the card fixture for that customer.
+HUMAN_ID     = "00000000-0000-0000-0000-000000000042"
+HUMAN_CUS_ID = "cus_getgrocery_saved_card"
+
+User.find_or_create_by!(id: HUMAN_ID)
+StripeCustomer.find_or_create_by!(user_id: HUMAN_ID) do |sc|
+  sc.customer_id = HUMAN_CUS_ID
+end
+
 puts "Seeded: #{Product.count} products (#{Product.where("stock > 0").count} in-stock, #{Product.where(stock: 0).count} out-of-stock)"
 puts "  In-stock low (stock ≤ 5): #{Product.where("stock > 0 AND stock <= 5").pluck(:sku).join(", ")}"
 puts "  Out-of-stock (absent from catalog): #{Product.where(stock: 0).pluck(:sku).join(", ")}"
 puts "  Delivery city context: Neo-Tokyo"
+puts "  Account holder with saved card: #{HUMAN_ID} (#{HUMAN_CUS_ID})"

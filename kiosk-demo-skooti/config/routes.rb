@@ -1,6 +1,18 @@
 # frozen_string_literal: true
 
 Rails.application.routes.draw do
+
+  # Account binding: the human half (verify page, link mint, unlink — the
+  # stub user-session channel, see lib/stub_user_idp.rb) and the agent
+  # half (link-code redeem). Routed so every URL the discovery documents
+  # advertise resolves; the walkthrough demos live in saas-booking
+  # (claim + link) and getgrocery (claim-rebind).
+  get  "/kiosk/oauth/device/verify",               to: "kiosk/server/device_verify#show"
+  post "/kiosk/oauth/device/verify",               to: "kiosk/server/device_verify#create"
+  post "/kiosk/auth/link",                         to: "kiosk/server/auth#link"
+  post "/kiosk/auth/claim",                        to: "kiosk/server/auth#claim"
+  post "/kiosk/auth/unlink",                       to: "kiosk/server/auth#unlink"
+  get  "/auth.md",                                 to: "kiosk/server/discovery#auth_md"
   # Kiosk wire surface (controllers shipped by kiosk-server).
   # In a follow-up release these will be mounted via the engine's own
   # routes drawer; for v0.1 alpha we wire them manually here.

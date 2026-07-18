@@ -17,6 +17,7 @@ if ENV["KIOSK_SIGNING_KEY_B64"].nil? && ENV["KIOSK_SIGNING_KEY_PEM"].nil? && Rai
 end
 
 require Rails.root.join("lib/stub_idp")
+require Rails.root.join("lib/stub_user_idp")
 require Rails.root.join("lib/jwt_or_stub_idp")
 require Rails.root.join("lib/stub_psp")
 require Rails.root.join("lib/stub_kyc")
@@ -74,6 +75,9 @@ Kiosk.configure do |c|
   # OAuth device-grant dormant per ADR-0008) first,
   # then falls back to StubIdp's bespoke `agent:u-…:a-…:r-…` shape.
   c.agent_idp = JwtOrStubIdp.new(stub: StubIdp.new)
+  # The web-session channel for the account-binding surfaces (verify
+  # page, link mint, unlink) — see lib/stub_user_idp.rb for the scope.
+  c.user_idp = StubUserIdp.new
 
   # Payment provider — stub for the demo; swap in kiosk-pay-stripe for real.
   c.payment_provider = StubPsp.new

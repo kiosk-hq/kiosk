@@ -22,6 +22,7 @@ if ENV["KIOSK_SIGNING_KEY_B64"].nil? && ENV["KIOSK_SIGNING_KEY_PEM"].nil? && Rai
 end
 
 require Rails.root.join("lib/stub_idp")
+require Rails.root.join("lib/stub_user_idp")
 require Rails.root.join("lib/jwt_or_stub_idp")
 require Rails.root.join("lib/stub_psp")
 
@@ -96,6 +97,9 @@ Kiosk.configure do |c|
   c.skill_sha256 = "08b2f4b34f0c0cc20491130f617e3927326095c1bb36dde9023cfbd0546669bf"
 
   c.agent_idp = JwtOrStubIdp.new(stub: StubIdp.new)
+  # The web-session channel for the account-binding surfaces (verify
+  # page, link mint, unlink) — see lib/stub_user_idp.rb for the scope.
+  c.user_idp = StubUserIdp.new
 
   c.payment_provider = StubPsp.new
 

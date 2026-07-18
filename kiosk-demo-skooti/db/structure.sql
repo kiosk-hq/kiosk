@@ -176,8 +176,10 @@ CREATE TABLE kiosk.cart_mandates (
 
 CREATE TABLE kiosk.device_authorizations (
     id uuid DEFAULT gen_random_uuid() NOT NULL,
-    device_code_hash bytea NOT NULL,
-    user_code text NOT NULL,
+    device_code_hash text NOT NULL,
+    user_code_hash text NOT NULL,
+    public_key_pem text,
+    kind text DEFAULT 'claim'::text NOT NULL,
     client_id text NOT NULL,
     requested_role text,
     status text NOT NULL,
@@ -185,6 +187,7 @@ CREATE TABLE kiosk.device_authorizations (
     expires_at timestamp with time zone NOT NULL,
     consumed_at timestamp with time zone,
     created_at timestamp with time zone DEFAULT now() NOT NULL,
+    CONSTRAINT device_authorizations_kind_check CHECK ((kind = ANY (ARRAY['claim'::text, 'link'::text]))),
     CONSTRAINT device_authorizations_status_check CHECK ((status = ANY (ARRAY['pending'::text, 'approved'::text, 'denied'::text, 'consumed'::text, 'expired'::text])))
 );
 
@@ -594,7 +597,7 @@ CREATE INDEX idx_device_authorizations_expiry ON kiosk.device_authorizations USI
 -- Name: idx_device_authorizations_user_code_pending; Type: INDEX; Schema: kiosk; Owner: -
 --
 
-CREATE UNIQUE INDEX idx_device_authorizations_user_code_pending ON kiosk.device_authorizations USING btree (user_code) WHERE (status = 'pending'::text);
+CREATE UNIQUE INDEX idx_device_authorizations_user_code_pending ON kiosk.device_authorizations USING btree (user_code_hash) WHERE (status = 'pending'::text);
 
 
 --
@@ -746,6 +749,7 @@ ALTER TABLE ONLY public.reservations
 SET search_path TO "$user", public;
 
 INSERT INTO "schema_migrations" (version) VALUES
+('20260717000001'),
 ('20260618131464'),
 ('20260618131463'),
 ('20260618131462'),

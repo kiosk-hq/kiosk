@@ -161,11 +161,6 @@ module Kiosk
         doc
       end
 
-      # JSON-encoded form of {#agents_json}.
-      def self.agents_json_string(**kwargs)
-        JSON.generate(agents_json(**kwargs))
-      end
-
       # ── W3: /.well-known/agent-configuration (agent-auth discovery) ─────
       #
       # Publishes the kiosk-pop auth capability so `Authorization: agent-auth`
@@ -228,11 +223,6 @@ module Kiosk
             { anchor: "#{base}/.well-known/api-catalog", item: items },
           ],
         }
-      end
-
-      # JSON-encoded form of {#api_catalog}.
-      def self.api_catalog_string(**kwargs)
-        JSON.generate(api_catalog(**kwargs))
       end
 
       # ── W5: /auth.md (agent-auth methods in the auth.md vocabulary) ────

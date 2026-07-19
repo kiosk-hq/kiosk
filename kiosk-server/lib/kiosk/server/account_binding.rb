@@ -19,8 +19,13 @@ module Kiosk
     #   - **Known key** → **rebind**: `agent_id` stays stable,
     #     `agents.user_id` remaps to the human's, and the identity's
     #     reputation carries over untouched (no whitewash, no inherited
-    #     trust). The `assistant_claimed` hook then lets the vertical
-    #     migrate domain data (core never touches provider rows).
+    #     trust). When the ceremony carries a `requested_role` (roles-from-
+    #     IdP, Path A: the new human's role), `allowed_roles` is REMAPPED to
+    #     it — the agent adopts the role of the principal it is now bound to,
+    #     the same "adopt the new principal's context" rule reputation-carry
+    #     follows; a role-less ceremony leaves `allowed_roles` untouched. The
+    #     `assistant_claimed` hook then lets the vertical migrate domain data
+    #     (core never touches provider rows).
     #
     # Tokens are ALWAYS minted through the same {AgentIdentityProviders::
     # DefaultAgentIdp}/{JwtIssuer} path as `/auth/login` — the ceremony is
@@ -46,7 +51,7 @@ module Kiosk
         SQL
 
         if existing
-          rebind(conn, config, existing, user_id)
+          rebind(conn, config, existing, user_id, requested_role)
         else
           register_linked(conn, config, pem, user_id, requested_role)
         end
@@ -91,19 +96,31 @@ module Kiosk
       class << self
         private
 
-        # Known key: remap the principal, keep agent_id + allowed_roles +
-        # reputation. The hook runs inside the transaction so a raising
-        # provider migration rolls the rebind back atomically. Because the
-        # principal changes, the key's pre-link tokens are watermark-revoked
-        # (like `unlink!`) — only the freshly minted token below survives.
-        def rebind(conn, config, existing, user_id)
+        # Known key: remap the principal, keep agent_id + reputation. The
+        # hook runs inside the transaction so a raising provider migration
+        # rolls the rebind back atomically. Because the principal changes, the
+        # key's pre-link tokens are watermark-revoked (like `unlink!`) — only
+        # the freshly minted token below survives.
+        #
+        # Role on rebind (roles-from-IdP, Path A): when the ceremony carries a
+        # `requested_role` (the NEW human's role, validated against
+        # `config.roles`), `allowed_roles` is REMAPPED to it in the same
+        # UPDATE — the agent adopts the role of the principal it is now bound
+        # to. A role-less ceremony (`requested_role` nil) leaves the existing
+        # `allowed_roles` untouched, so single-role / no-IdP providers keep
+        # today's behavior with no regression.
+        def rebind(conn, config, existing, user_id, requested_role = nil)
           agent_id = existing.fetch("id")
           previous = existing.fetch("user_id")
+          new_role = validated_role(config, requested_role)
+          # nil requested_role → keep the agent's own registered role.
+          effective_role = new_role || primary_role(existing.fetch("allowed_roles"))
 
           conn.transaction do
+            role_set = new_role ? ", allowed_roles = ARRAY[#{conn.quote(new_role)}]::text[]" : ""
             conn.execute(<<~SQL)
               UPDATE #{config.schema}.agents
-              SET user_id = #{conn.quote(user_id)}
+              SET user_id = #{conn.quote(user_id)}#{role_set}
               WHERE id = #{conn.quote(agent_id)}
             SQL
             config.assistant_claimed&.call(
@@ -120,22 +137,17 @@ module Kiosk
           # survives the store's strict `iat < watermark` check.
           config.revocation_store&.revoke_all(agent_id, at: Time.now.to_i)
 
-          token = issue_token(agent_id, primary_role(existing.fetch("allowed_roles")))
+          token = issue_token(agent_id, effective_role)
           { agent_id: agent_id, user_id: user_id.to_s, access_token: token, fresh: false }
         end
 
         # Fresh key: a new linked assistant account under the approving
-        # human's principal. Role: the ceremony's requested_role (validated
-        # against the provider's declared roles at request time) or the
-        # provider's registration_role default; NULL when neither is set
-        # (roles are hook-or-absent).
+        # human's principal. Role: the ceremony's requested_role (the bound
+        # human's role under roles-from-IdP, validated against the provider's
+        # declared roles) or the provider's registration_role default; NULL
+        # when neither is set (roles are hook-or-absent).
         def register_linked(conn, config, pem, user_id, requested_role)
-          role = (requested_role || config.registration_role)&.to_s
-          role = nil if role && role.empty?
-          if role && !config.roles.map(&:to_s).include?(role)
-            raise Errors::ConfigurationError,
-                  "binding role #{role.inspect} is not among configured roles #{config.roles.inspect}"
-          end
+          role = validated_role(config, requested_role || config.registration_role)
 
           allowed_roles_sql = role ? "ARRAY[#{conn.quote(role)}]::text[]" : "NULL"
           agent_id = conn.transaction do
@@ -148,6 +160,21 @@ module Kiosk
 
           token = issue_token(agent_id, role)
           { agent_id: agent_id, user_id: user_id.to_s, access_token: token, fresh: true }
+        end
+
+        # Normalise a candidate role to a String (or nil when absent/blank)
+        # and reject any value outside the provider's declared `config.roles`.
+        # Shared by fresh-key registration and rebind so both apply the same
+        # gate — an agent (or a leaked link row) can never widen its scope
+        # past a role the provider actually declares.
+        def validated_role(config, candidate)
+          role = candidate&.to_s
+          role = nil if role && role.empty?
+          if role && !config.roles.map(&:to_s).include?(role)
+            raise Errors::ConfigurationError,
+                  "binding role #{role.inspect} is not among configured roles #{config.roles.inspect}"
+          end
+          role
         end
 
         # kiosk-pop is the only token minter: same

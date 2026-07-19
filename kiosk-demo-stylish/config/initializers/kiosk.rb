@@ -17,6 +17,8 @@ end
 
 require Rails.root.join("lib/stub_idp")
 require Rails.root.join("lib/jwt_or_stub_idp")
+require Rails.root.join("lib/stub_user_idp")
+require Rails.root.join("lib/composite_user_idp")
 require "kiosk/user_identity_providers/devise"
 
 # Registration PoW gate (KIOSK_POW_REGISTER_DEMO=1). A booking SaaS can price
@@ -48,8 +50,14 @@ Kiosk.configure do |c|
   c.system_role = ENV.fetch("KIOSK_SYSTEM_ROLE", "app_role")
 
   c.issuer = ENV.fetch("KIOSK_ISSUER", "http://localhost:3001")
-  c.roles  = %i[customer]
-  # Role pinned to every self-registered agent (agents cannot choose their own).
+  # stylish is dual-audience: CUSTOMERS book (customer), salon STAFF manage
+  # the calendar (owner / stylist). Staff roles are sourced from the
+  # provider's own IdP (roles-from-IdP, T-014) — see the StubUserIdp and the
+  # `salon_calendar` query below.
+  c.roles  = %i[customer stylist owner]
+  # Role pinned to every SELF-registered agent (agents cannot choose their
+  # own). Staff assistants get their role indirectly, from the bound human's
+  # IdP role at link time — never self-selected.
   c.registration_role = :customer
   c.owner  = { name: "Stylish (Kiosk demo)", support: "demo@kiosk.tech" }
   # Dual-check (skill.md): canonical skill URL + SHA-256 of its content.
@@ -60,11 +68,17 @@ Kiosk.configure do |c|
   # back to StubIdp's bespoke `agent:u-…:a-…:r-…` shape. One endpoint
   # authenticates both for the demo.
   c.agent_idp = JwtOrStubIdp.new(stub: StubIdp.new)
-  # The provider's own web-session channel (Devise/Warden): authenticates
-  # the approving human on the account-binding surfaces — the device
-  # verify page, link-code mint, unlink, and the manage-assistants page.
-  # Walked by `rake demo:binding`.
-  c.user_idp = Kiosk::UserIdentityProviders::Devise.new
+  # The provider's own human-session channels. A composite: the
+  # role-carrying StubUserIdp (the salon SSO/Okta stand-in — an
+  # `X-Staff-Session` header naming a staff member, whose staff_role becomes
+  # the session role; walked by `rake demo:roles`) tried first, then the real
+  # Devise/Warden session (the /users/sign_in cookie that approves links on
+  # the verify page, mints link codes, unlinks, and drives the
+  # manage-assistants page; walked by `rake demo:binding`).
+  c.user_idp = CompositeUserIdp.new(
+    StubUserIdp.new,
+    Kiosk::UserIdentityProviders::Devise.new,
+  )
 
   # Per-assistant spending cap: read the cap from
   # agents.spending_cap_cents (the column edited on the manage-assistants
@@ -102,6 +116,50 @@ Kiosk::Server::Queries.register("my_appointments",
     "WHERE user_id = kiosk.current_user_id() " \
     "ORDER BY id"
   ).to_a
+end
+
+# salon_calendar — STAFF calendar, role-gated (roles-from-IdP, T-014).
+# Reads kiosk.current_role() (the GUC set from the token's role claim, which a
+# staff assistant inherited from the bound human's IdP role):
+#
+#   owner   → the WHOLE book: every appointment at the salon, plus a
+#             revenue total (all chairs).
+#   stylist → ONLY their own chairs: rows WHERE stylist_id =
+#             kiosk.current_user_id(). A stylist's assistant cannot widen
+#             this — the role rides the token, not the request args, and the
+#             WHERE is provider-controlled.
+#
+# Any other role (or none) sees an empty calendar. The gate is un-bypassable:
+# an agent can neither self-select `owner` at binding nor pass a wider filter.
+STYLISH_APPOINTMENT_PRICE_CENTS = 6000 # flat demo price per chair, for the owner's revenue total
+Kiosk::Server::Queries.register("salon_calendar",
+                                 description: "Staff calendar — role-gated: owner sees the whole book + revenue, a stylist only their own chairs (role from the bound human's IdP)",
+                                 params: {}) do |_params|
+  role = ActiveRecord::Base.connection.execute(
+    "SELECT kiosk.current_role() AS role"
+  ).first["role"]
+
+  scope =
+    case role
+    when "owner"   then "TRUE"                                    # the whole book
+    when "stylist" then "stylist_id = kiosk.current_user_id()"    # only own chairs
+    else "FALSE"                                                  # non-staff see nothing
+    end
+
+  rows = ActiveRecord::Base.connection.execute(
+    "SELECT id, salon_id, stylist_id, slot FROM appointments " \
+    "WHERE #{scope} ORDER BY slot"
+  ).to_a
+
+  # Owner also gets a revenue total across everything they can see.
+  if role == "owner"
+    rows << {
+      "summary"       => "revenue",
+      "appointments"  => rows.size,
+      "revenue_cents" => rows.size * STYLISH_APPOINTMENT_PRICE_CENTS,
+    }
+  end
+  rows
 end
 
 # ─── Actions ────────────────────────────────────────────────────────────────

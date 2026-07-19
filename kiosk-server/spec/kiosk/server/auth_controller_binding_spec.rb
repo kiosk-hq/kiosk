@@ -72,6 +72,30 @@ RSpec.describe "AuthController binding endpoints" do
       expect(status).to eq(401)
       expect(body.dig(:error, :code)).to eq("unauthenticated")
     end
+
+    # roles-from-IdP (T-014, Path A): the human's role — as the provider's
+    # user_idp reports it on the session identity — is captured onto the link
+    # row, so the assistant that redeems it inherits the human's role.
+    it "captures the human's user_idp role onto the link row (roles-from-IdP)" do
+      Kiosk.configure { |c| c.roles = %i[customer owner] }
+      wire_user_idp(build_identity(actor: "human", agent_id: nil, user_id: user_id, role: "owner"))
+
+      _status, body = dispatch(:link)
+      row = store.find_by_device_code_hash(
+        Kiosk::Server::DeviceAuthorization.hash_device_code(body[:link_code]),
+      )
+      expect(row.requested_role).to eq("owner")
+    end
+
+    it "captures no role for a role-less human session (no regression)" do
+      wire_user_idp(build_identity(actor: "human", agent_id: nil, user_id: user_id, role: nil))
+
+      _status, body = dispatch(:link)
+      row = store.find_by_device_code_hash(
+        Kiosk::Server::DeviceAuthorization.hash_device_code(body[:link_code]),
+      )
+      expect(row.requested_role).to be_nil
+    end
   end
 
   describe "POST /auth/claim" do

@@ -109,9 +109,16 @@ if defined?(::ActionController::API)
         # (session channel — binding approval belongs to the
         # provider's own session auth). The human hands the code to their
         # assistant, which redeems it at POST /auth/claim.
+        #
+        # roles-from-IdP (T-014, Path A): the human's own role — as the
+        # provider's `user_idp` reports it (`identity.role`) — is captured
+        # onto the link row's `requested_role`, so the assistant bound at
+        # claim time INHERITS the human's role (see {AccountBinding.bind!}).
+        # A role-less `user_idp` reports `nil`; the binding then falls back
+        # to `registration_role`/absent exactly as before (no regression).
         def link
           identity = authenticated_account_holder!
-          result   = LinkCode.mint(user_id: identity.user_id)
+          result   = LinkCode.mint(user_id: identity.user_id, requested_role: identity.role)
           respond({ link_code: result[:link_code], expires_in: result[:expires_in] }, :created)
         rescue Errors::Base => e
           render_error(e)

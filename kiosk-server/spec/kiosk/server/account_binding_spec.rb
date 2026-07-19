@@ -143,6 +143,44 @@ RSpec.describe Kiosk::Server::AccountBinding do
       described_class.bind!(public_key_pem: pem, user_id: user_id)
     end
 
+    # roles-from-IdP (T-014, Path A): a rebind carrying the NEW human's role
+    # remaps allowed_roles in the same UPDATE and mints the token with it —
+    # the agent adopts the role of the principal it is now bound to.
+    context "when the ceremony carries a requested_role (roles-from-IdP)" do
+      before { Kiosk.configure { |c| c.roles = %i[customer stylist owner] } }
+
+      it "remaps allowed_roles to the new human's role in the rebind UPDATE" do
+        described_class.bind!(public_key_pem: pem, user_id: user_id, requested_role: "owner")
+
+        update = con.executed_sql.grep(/UPDATE/i).first
+        expect(update).to include("SET user_id = '#{user_id}'")
+        expect(update).to include("allowed_roles = ARRAY['owner']::text[]")
+        expect(con.executed_sql.grep(/INSERT/i)).to be_empty # still a rebind
+      end
+
+      it "mints the token with the ADOPTED role, not the pre-link one" do
+        idp = Kiosk::Server::AgentIdentityProviders::DefaultAgentIdp
+        allow_any_instance_of(idp).to receive(:issue) do |_instance, agent_id:, role:|
+          expect(agent_id).to eq("agent-known")
+          expect(role).to eq("stylist") # adopted, not the pre-link "customer"
+          "kiosk-pop-jwt"
+        end
+
+        described_class.bind!(public_key_pem: pem, user_id: user_id, requested_role: "stylist")
+      end
+
+      it "rejects a role outside the declared set on rebind (no scope widening)" do
+        expect {
+          described_class.bind!(public_key_pem: pem, user_id: user_id, requested_role: "root")
+        }.to raise_error(Kiosk::Server::Errors::ConfigurationError, /root/)
+      end
+    end
+
+    it "leaves allowed_roles untouched on a role-less rebind (no-IdP providers)" do
+      described_class.bind!(public_key_pem: pem, user_id: user_id, requested_role: nil)
+      expect(con.executed_sql.join).not_to match(/allowed_roles\s*=/i)
+    end
+
     # TUDU-REBIND-TOKENS (K-338): a rebind is a principal change, so — like
     # unlink! — it watermark-revokes the key's pre-link tokens.
     it "watermark-revokes the key's pre-link tokens (principal change ⇒ re-login)" do

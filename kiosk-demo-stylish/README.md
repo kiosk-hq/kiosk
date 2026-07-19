@@ -8,6 +8,7 @@ Stylish is a hair-styling salon-booking service (stylish.example), Kiosk-enabled
 - App-layer data isolation (two users, two views of the same table); RLS available as optional defense-in-depth
 - A `book_appointment` Action
 - Human↔assistant account binding over real Devise sessions — the claim ceremony (verify page) and human-minted link codes, walked by `rake demo:binding`
+- **Roles from a configured IdP** — stylish is dual-audience: customers book, and salon **staff** (owner / stylist) manage the calendar. A staff member's role, supplied by the provider's own identity system, is inherited by their assistant at link time, and the `salon_calendar` query gates on it (owner sees the whole book + revenue; a stylist only their own chairs). Walked by `rake demo:roles`.
 
 Stylish is the canonical reference shape for personal-services SaaS — barbershops, restaurants, gyms, clinics. Same patterns apply.
 
@@ -51,26 +52,39 @@ Two flows, one run, all over plain HTTP against the live app:
 
 The task asserts every step, plus the DB ground truth: `kiosk.agents.user_id` for the bound key equals the human's id, and the booking landed on the human's own row.
 
+### Roles from an IdP (`rake demo:roles`)
+
+The role an assistant works with is sourced **indirectly, from the bound human's IdP role** — the natural extension of the link ceremony. A salon owner and a stylist each link an assistant over a role-carrying session (`StubUserIdp`, the salon's SSO/Okta stand-in):
+
+1. **Owner** links an assistant → the token carries `role: owner` → `salon_calendar` returns the **whole book** (every stylist's appointments) plus a revenue total.
+2. **Stylist** links an assistant → the token carries `role: stylist` → `salon_calendar` returns **only that stylist's own chairs**.
+
+The role rides the token, sourced from the provider's identity system — never self-selected by the agent. A stylist's assistant cannot widen its scope to the owner's book: the role is set at binding from the IdP (not the claim body), and the query's `WHERE` is provider-controlled. `rake demo:roles` asserts both views with DB ground-truth on `kiosk.agents.allowed_roles`, and the redteam battery (`rake demo:redteam`) proves the escalation is BLOCKED.
+
 ## Repo tour
 
 | Path | What's there |
 |---|---|
-| `db/migrate/` | Generator-produced kiosk migrations + the Stylish salon/appointment schema (users carry Devise login columns) |
-| `app/models/{user,salon,appointment}.rb` | Three trivial AR models; `User` is `database_authenticatable` for the human sign-in |
-| `config/initializers/kiosk.rb` | `Kiosk.configure` block + the `book_appointment` Action |
+| `db/migrate/` | Generator-produced kiosk migrations + the Stylish salon/appointment schema (users carry Devise login columns + a `staff_role`; appointments carry a `stylist_id`) |
+| `app/models/{user,salon,appointment}.rb` | Three trivial AR models; `User` is `database_authenticatable` for the human sign-in and carries `staff_role` (owner/stylist) for the staff surface |
+| `config/initializers/kiosk.rb` | `Kiosk.configure` block + the `book_appointment` Action + the role-gated `salon_calendar` query |
 | `config/initializers/devise.rb` | Minimal Devise setup — the human session that approves assistant links |
-| `lib/stub_idp.rb` | Bespoke synthetic-token IdP for the demo's hard-coded Alice + Bob |
-| `lib/jwt_or_stub_idp.rb` | Composite IdP: tries Kiosk-issued JWTs first, falls back to StubIdp |
+| `lib/stub_idp.rb` | Bespoke synthetic-token agent-IdP for the demo's hard-coded Alice + Bob |
+| `lib/jwt_or_stub_idp.rb` | Composite agent-IdP: tries Kiosk-issued JWTs first, falls back to StubIdp |
+| `lib/stub_user_idp.rb` | Role-carrying **user**-IdP (SSO/Okta stand-in): an `X-Staff-Session` header names a staff member; the session identity carries their `staff_role` |
+| `lib/composite_user_idp.rb` | Composite user-IdP: the role-carrying StubUserIdp first, then the real Devise session |
 | `binding_flow.rb` | Account-binding driver: claim ceremony over the real Devise session, link-code redeem, unlink |
+| `roles_flow.rb` | roles-from-IdP driver: owner + stylist each link an assistant, `salon_calendar` gates on the inherited role |
 | `bin/demo` | The walkthrough — POSIX shell, curl-driven, no Ruby in the loop |
-| `lib/tasks/demo.rake` | `rake demo:setup`, `rake demo:walkthrough`, `rake demo`, `rake demo:isolation`, `rake demo:register`, `rake demo:binding`, `rake demo:redteam`, `rake demo:schema` |
+| `lib/tasks/demo.rake` | `rake demo:setup`, `rake demo:walkthrough`, `rake demo`, `rake demo:isolation`, `rake demo:register`, `rake demo:binding`, `rake demo:roles`, `rake demo:redteam`, `rake demo:schema` |
 
 ## Make it real
 
 The demo bakes in shortcuts that production providers replace. Each transition is small:
 
-- **Synthetic users (Alice, Bob)** → real user table populated by your provider's signup flow (the demo already gives them real Devise credentials so the binding walkthrough signs in like a person would).
+- **Synthetic users (Alice, Bob) + staff (owner, stylists)** → real user table populated by your provider's signup flow (the demo already gives them real Devise credentials so the binding walkthrough signs in like a person would).
 - **`StubIdp`** (agent channel) → registered assistants already flow through real Kiosk-issued JWTs; the bespoke `agent:u-…:a-…:r-…` fallback shape disappears. The human session channel already runs the real `kiosk-user-idp-devise` adapter.
+- **`StubUserIdp`** (the role-carrying SSO/Okta stand-in) → your real SSO/OIDC session. The Devise adapter already reads a per-user role via `User#kiosk_role`, so a production provider drops the stub and sources the staff role from its own identity system; the assistant inherits it at link time unchanged.
 
 ## License
 

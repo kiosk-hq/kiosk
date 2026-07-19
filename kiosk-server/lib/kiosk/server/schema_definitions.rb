@@ -2,8 +2,8 @@
 
 module Kiosk
   module Server
-    # Pure SQL generators for the eight canonical Kiosk migrations.
-    # Migrations 001-008:
+    # Pure SQL generators for the nine canonical Kiosk migrations.
+    # Migrations 001-009:
     #
     #   001 create_kiosk_schema                → schema + four current_*() helpers
     #   002 create_kiosk_identity_tables       → agents, agent_tokens, agent_mappings

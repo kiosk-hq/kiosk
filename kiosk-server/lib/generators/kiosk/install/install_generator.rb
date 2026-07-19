@@ -49,7 +49,7 @@ module Kiosk
                                    desc: "GUC namespace prefix used in SET LOCAL statements"
 
       # Rails::Generators::Migration requires a class-level
-      # next_migration_number. We bump a counter so the eight migrations
+      # next_migration_number. We bump a counter so the nine migrations
       # created in one invocation get strictly-ascending UTC timestamps
       # (otherwise `db/migrate` glob sort is non-deterministic).
       @migration_counter = 0

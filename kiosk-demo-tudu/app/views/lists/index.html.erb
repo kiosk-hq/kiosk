@@ -1,0 +1,26 @@
+<% if user_signed_in? %>
+  <h2>Your lists</h2>
+
+  <% if @lists.empty? %>
+    <p>No lists yet. Create one below, or ask your assistant to.</p>
+  <% else %>
+    <ul>
+      <% @lists.each do |l| %>
+        <li>
+          <%= link_to l["title"], list_path(l["list_id"]) %>
+          <span class="role">(<%= l["role"] %>)</span>
+        </li>
+      <% end %>
+    </ul>
+  <% end %>
+
+  <h3>New list</h3>
+  <%= form_with url: lists_path, method: :post do %>
+    <%= text_field_tag :title, nil, placeholder: "List title", required: true %>
+    <%= submit_tag "Create" %>
+  <% end %>
+<% else %>
+  <p>tudu — a multi-user collaborative todo app (Kiosk demo, no payments).</p>
+  <p>Humans <%= link_to "sign in", new_user_session_path %>; assistants work over the
+    Kiosk wire (see <a href="/.well-known/kiosk.json">/.well-known/kiosk.json</a>).</p>
+<% end %>

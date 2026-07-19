@@ -108,6 +108,14 @@ jobs:
             # timing-sensitive (RFC 8628 poll interval) so it stays local-only,
             # matching every sibling (no demo runs binding in CI).
             tasks: demo:walkthrough demo:isolation demo:redteam demo:schema
+          - demo: kiosk-demo-tudu
+            # NON-COMMERCE collaborative todo — no payments. demo:collab is the
+            # happy path (membership-based sharing + agent→agent invites +
+            # per-agent attribution); demo:schema asserts `pay` ABSENT like
+            # philslist. demo:link (the W5 rebind/assistant_claimed ceremony) is
+            # timing-sensitive (RFC 8628 poll) so it stays local-only, matching
+            # every sibling (no demo runs binding in CI).
+            tasks: demo:collab demo:isolation demo:redteam demo:schema
           # demo:pow excluded everywhere: solves real memory-hard PoW
 
     services:

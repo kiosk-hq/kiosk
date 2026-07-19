@@ -1,0 +1,120 @@
+#!/usr/bin/env bash
+# philslist demo walkthrough — a curl-driven tour of the wire surface.
+#
+# The happy path is the VISIBLE CONTRAST with every commerce demo:
+#   browse → post → edit → close, with NO payment step.
+#
+# Run via `rake demo` (handles DB setup + invokes this script), or directly
+# when the demo DB is already prepared. Exits non-zero on any failed assertion
+# so CI catches regressions.
+
+set -euo pipefail
+
+PORT="${KIOSK_DEMO_PORT:-3001}"
+SERVER_URL="http://127.0.0.1:$PORT"
+ALICE="00000000-0000-0000-0000-000000000001"
+BOB="00000000-0000-0000-0000-000000000002"
+
+ALICE_TOKEN="agent:u-$ALICE:a-alice-claude:r-customer"
+BOB_TOKEN="agent:u-$BOB:a-bob-chatgpt:r-customer"
+
+heading() { printf "\n\033[1;36m── %s ──\033[0m\n" "$1"; }
+step()    { printf "\n  \033[1;33m▶\033[0m %s\n" "$1"; }
+say()     { printf "  %s\n" "$1"; }
+fail()    { printf "\n  \033[1;31m✗ %s\033[0m\n" "$1" >&2; exit 1; }
+
+cleanup() {
+  if [[ -n "${SERVER_PID:-}" ]]; then
+    kill "$SERVER_PID" 2>/dev/null || true
+    wait "$SERVER_PID" 2>/dev/null || true
+  fi
+}
+trap cleanup EXIT
+
+require_tool() {
+  command -v "$1" >/dev/null 2>&1 \
+    || { echo "missing: $1 — install it then re-run" >&2; exit 1; }
+}
+require_tool curl
+require_tool jq
+
+q()   { curl -sS -X POST "$SERVER_URL/kiosk/query" -H "Authorization: Bearer $1" \
+          -H "Content-Type: application/json" -d "$2"; }
+run() { curl -sS -X POST "$SERVER_URL/kiosk/run"   -H "Authorization: Bearer $1" \
+          -H "Content-Type: application/json" -d "$2"; }
+
+# ─── boot ────────────────────────────────────────────────────────────
+
+heading "Starting philslist (the demo provider) on port $PORT"
+KIOSK_ISSUER="$SERVER_URL" \
+  bundle exec rails s -p "$PORT" -b 127.0.0.1 -e development \
+  >/tmp/kiosk-philslist-demo.log 2>&1 &
+SERVER_PID=$!
+
+for _ in $(seq 1 30); do
+  if curl -sf "$SERVER_URL/.well-known/kiosk.json" >/dev/null 2>&1; then
+    say "✓ Server up at $SERVER_URL"
+    break
+  fi
+  sleep 1
+done
+curl -sf "$SERVER_URL/.well-known/kiosk.json" >/dev/null \
+  || fail "server did not become ready — see /tmp/kiosk-philslist-demo.log"
+
+# ─── discovery: prove there is NO payment ─────────────────────────────
+
+heading "Discovery: what is this provider? (note: no payments)"
+
+step "GET /.well-known/kiosk.json — capabilities"
+CAPS=$(curl -sf "$SERVER_URL/.well-known/kiosk.json" | jq -c '.kiosk.capabilities')
+say "capabilities = $CAPS"
+echo "$CAPS" | jq -e 'index("pay") == null' >/dev/null \
+  || fail "capabilities advertise 'pay' — philslist must take no payments"
+say "✓ 'pay' is ABSENT from capabilities — not-only-commerce, demonstrably"
+
+# ─── browse the open board (cross-owner, no account needed) ───────────
+
+heading "Alice's agent browses the open board (browse_listings)"
+
+step "browse_listings — all sellers, open board"
+q "$ALICE_TOKEN" '{"name":"browse_listings"}' | jq '.rows | map({title, price_text, category_slug, owner_handle})'
+COUNT=$(q "$ALICE_TOKEN" '{"name":"browse_listings"}' | jq '.rows | length')
+[[ "$COUNT" -ge 2 ]] || fail "expected the seeded cross-owner board (>=2 listings), got $COUNT"
+say "✓ browse sees $COUNT listings across owners"
+
+# ─── post → edit → close (NO payment step) ────────────────────────────
+
+heading "Alice's agent posts a listing (post_listing) — no card, no checkout"
+
+step "run post_listing (desk for sale)"
+POST=$(run "$ALICE_TOKEN" '{"name":"post_listing","category_slug":"furniture","title":"Oak desk","body":"Solid oak, moving sale","price_text":"1500 TL"}')
+echo "$POST" | jq '.value'
+LISTING_ID=$(echo "$POST" | jq -r '.value.listing_id')
+[[ "$LISTING_ID" != "null" && -n "$LISTING_ID" ]] || fail "post_listing did not return a listing_id"
+say "✓ posted listing $LISTING_ID"
+
+step "run edit_listing (drop the price)"
+run "$ALICE_TOKEN" "{\"name\":\"edit_listing\",\"listing_id\":\"$LISTING_ID\",\"price_text\":\"1200 TL\"}" | jq '.value'
+
+step "run close_listing (it sold)"
+CLOSE=$(run "$ALICE_TOKEN" "{\"name\":\"close_listing\",\"listing_id\":\"$LISTING_ID\"}")
+echo "$CLOSE" | jq '.value'
+[[ "$(echo "$CLOSE" | jq -r '.value.status')" == "closed" ]] || fail "close_listing did not close the listing"
+say "✓ closed listing $LISTING_ID"
+
+step "my_listings reflects the final state (the desk is now closed)"
+MINE=$(q "$ALICE_TOKEN" '{"name":"my_listings"}')
+echo "$MINE" | jq '.rows | map({title, status, price_text})'
+echo "$MINE" | jq -e --arg id "$LISTING_ID" '.rows[] | select(.id == $id) | .status == "closed"' >/dev/null \
+  || fail "my_listings does not show the posted desk as closed"
+say "✓ my_listings shows the desk closed at 1200 TL"
+
+# ─── done ────────────────────────────────────────────────────────────
+
+heading "Demo complete — a full provider exchange with NO money on the wire"
+say "Server log:        /tmp/kiosk-philslist-demo.log"
+say "DB:                kiosk_philslist_development"
+say ""
+say "The whole exchange (browse → post → edit → close) used query + run only."
+say "There is no /kiosk/pay route and 'pay' is absent from the discovery doc —"
+say "the same wire the commerce demos use for money, here with none."

@@ -1,0 +1,23 @@
+# frozen_string_literal: true
+
+# Migration 008 — rebuild kiosk.device_authorizations in the
+# account-binding shape: hashed user_code, public_key_pem, kind
+# (claim/link). Read/written by the durable
+# Kiosk::Server::DeviceAuthorizationStores::ActiveRecord store.
+class RebuildKioskDeviceAuthorizations < ActiveRecord::Migration[ActiveRecord::Migration.current_version]
+  def up
+    execute Kiosk::Server::SchemaDefinitions.rebuild_device_authorizations_sql(
+      schema:       "kiosk",
+      user_id_type: :uuid,
+    )
+  end
+
+  def down
+    # Restores the (unused) 0.1 table shape so 005's down still applies.
+    execute %(DROP TABLE IF EXISTS "kiosk".device_authorizations)
+    execute Kiosk::Server::SchemaDefinitions.device_authorizations_sql(
+      schema:       "kiosk",
+      user_id_type: :uuid,
+    )
+  end
+end

@@ -157,12 +157,35 @@ RSpec.describe Kiosk::Server::WellKnown do
       expect(body).to be_a(String)
     end
 
-    it "carries the agents.txt v1.0 payment + auth directives (auth-md alongside agent-auth)" do
+    it "carries the agents.txt v1.0 auth directives (auth-md alongside agent-auth)" do
       d = directives(body)
-      expect(d["Protocols"]).to eq("ap2")
-      expect(d["Payments"]).to eq("required")
       expect(d["Authorization"]).to eq("agent-auth auth-md")
       expect(d["Identity"]).to eq("required")
+    end
+
+    # Payment directives are pay-conditional (K-334): emitted only when the
+    # provider serves `pay` (a payment_provider is configured → `pay` is in the
+    # computed capabilities, ADR-0009).
+    context "when the provider serves pay (payment_provider configured)" do
+      before { Kiosk.configure { |c| c.payment_provider = Object.new } }
+
+      it "carries the AP2 payment directives" do
+        d = directives(described_class.agents_txt(base_url: "https://api.acme.example"))
+        expect(d["Protocols"]).to eq("ap2")
+        expect(d["Payments"]).to eq("required")
+      end
+    end
+
+    context "when the provider serves no pay (no payment_provider)" do
+      it "omits the AP2 payment directives but keeps auth/identity" do
+        # Bare config from the outer `before` registers no payment_provider →
+        # capabilities excludes `pay`.
+        expect(body).not_to include("Protocols: ap2")
+        expect(body).not_to include("Payments: required")
+        d = directives(body)
+        expect(d["Authorization"]).to eq("agent-auth auth-md")
+        expect(d["Identity"]).to eq("required")
+      end
     end
 
     it "emits a Skills directive pointing at the configured skill URL" do
@@ -213,9 +236,25 @@ RSpec.describe Kiosk::Server::WellKnown do
       expect(d[:site][:name]).to eq("api.acme.example")
     end
 
-    it "declares AP2 payments as required" do
-      expect(doc[:payments][:required]).to be(true)
-      expect(doc[:payments]).to have_key(:ap2)
+    # The `payments` block is pay-conditional (K-334): present only when the
+    # provider serves `pay` (payment_provider configured → `pay` in capabilities,
+    # ADR-0009). Optional in agents.json v1.0, so omitted otherwise.
+    context "when the provider serves pay (payment_provider configured)" do
+      before { Kiosk.configure { |c| c.payment_provider = Object.new } }
+
+      it "declares AP2 payments as required" do
+        d = described_class.agents_json(base_url: "https://api.acme.example")
+        expect(d[:payments][:required]).to be(true)
+        expect(d[:payments]).to have_key(:ap2)
+      end
+    end
+
+    context "when the provider serves no pay (no payment_provider)" do
+      it "omits the payments key entirely" do
+        # Bare config from the outer `before` registers no payment_provider →
+        # capabilities excludes `pay`.
+        expect(doc).not_to have_key(:payments)
+      end
     end
 
     it "advertises agent-auth + auth-md with the agent-configuration discovery pointer" do

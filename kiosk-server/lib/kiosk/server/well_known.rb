@@ -98,13 +98,19 @@ module Kiosk
         lines = [
           "# agents.txt — https://agents-txt.com",
           "# JSON: #{base}/agents.json",
-          "",
-          "Protocols: ap2",
-          "Payments: required",
-          "",
-          "Authorization: agent-auth auth-md",
-          "Identity: required",
         ]
+        # Payment directives are emitted ONLY when the provider serves `pay`
+        # (K-334). `capabilities` is the canonical computed set — `pay` drops
+        # out when no payment provider is configured (ADR-0009), so a
+        # payment-less provider advertises no AP2/Payments here.
+        if pay_served?(config)
+          lines << ""
+          lines << "Protocols: ap2"
+          lines << "Payments: required"
+        end
+        lines << ""
+        lines << "Authorization: agent-auth auth-md"
+        lines << "Identity: required"
         if config.skill_url && !config.skill_url.to_s.empty?
           lines << ""
           lines << "Skills: #{config.skill_url}"
@@ -131,31 +137,36 @@ module Kiosk
           version:  AGENTS_VERSION,
           standard: AGENTS_STANDARD,
           site:     { name: site_name(config), url: base },
-          # AP2 = "Mandate-trust layer with VC presentations" (agents.json
-          # v1.0). A Kiosk provider gates all access, so payment is required.
-          payments: {
+        }
+        # `payments` is OPTIONAL in agents.json v1.0. Emit it ONLY when the
+        # provider serves `pay` (K-334): `pay` drops out of `capabilities`
+        # when no payment provider is configured (ADR-0009), so a payment-less
+        # provider advertises no AP2/payments block here.
+        if pay_served?(config)
+          # AP2 = "Mandate-trust layer with VC presentations" (agents.json v1.0).
+          doc[:payments] = {
             ap2:      { description: "Mandate-trust layer with VC presentations" },
             required: true,
-          },
-          authorization: {
-            protocols: ["agent-auth", "auth-md"],
-            discovery: "/.well-known/agent-configuration",
-            identity:  "required",
-          },
-          skills: skills_list(config),
-          # Kiosk extension: the structured six-verb contract the envelope
-          # points at. `x-` is the sanctioned experimental prefix.
-          "x-kiosk": {
-            wire:        { verbs: Array(config.capabilities),
-                           schema: "#{config.mount_path}/schema" },
-            min_client:  config.min_client,
-            api_version: Kiosk::Protocol::API_VERSION,
-            mount_path:  config.mount_path,
-            # RFC 9727 API Catalog pointer (root-served linkset). Lives under
-            # the experimental `x-kiosk` namespace — agents.json v1.0 has no
-            # standard link-catalog key, so we do NOT force a top-level field.
-            api_catalog: "/.well-known/api-catalog",
-          },
+          }
+        end
+        doc[:authorization] = {
+          protocols: ["agent-auth", "auth-md"],
+          discovery: "/.well-known/agent-configuration",
+          identity:  "required",
+        }
+        doc[:skills] = skills_list(config)
+        # Kiosk extension: the structured six-verb contract the envelope
+        # points at. `x-` is the sanctioned experimental prefix.
+        doc[:"x-kiosk"] = {
+          wire:        { verbs: Array(config.capabilities),
+                         schema: "#{config.mount_path}/schema" },
+          min_client:  config.min_client,
+          api_version: Kiosk::Protocol::API_VERSION,
+          mount_path:  config.mount_path,
+          # RFC 9727 API Catalog pointer (root-served linkset). Lives under
+          # the experimental `x-kiosk` namespace — agents.json v1.0 has no
+          # standard link-catalog key, so we do NOT force a top-level field.
+          api_catalog: "/.well-known/api-catalog",
         }
 
         doc
@@ -372,6 +383,16 @@ module Kiosk
         }
       end
       private_class_method :auth_urls
+
+      # Whether this deployment serves the `pay` verb — the canonical gate for
+      # advertising AP2/payments across the discovery surfaces (K-334).
+      # `capabilities` is the computed set (ADR-0009); `pay` drops out when no
+      # payment provider is configured, so this is false for payment-less
+      # providers.
+      def self.pay_served?(config)
+        Array(config.capabilities).map(&:to_s).include?("pay")
+      end
+      private_class_method :pay_served?
 
       # site.name for agents.json: the provider's owner name when set, else the
       # issuer host (a stable, always-present fallback).

@@ -23,4 +23,26 @@ RSpec.describe Kiosk::Server::SchemaDefinitions do
       expect(out).to include('"custom".agents')
     end
   end
+
+  describe ".kyc_attributes_sql" do
+    subject(:sql) { described_class.kyc_attributes_sql }
+
+    it "adds kyc_attributes jsonb to the agents table (idempotent)" do
+      expect(sql).to include("ALTER TABLE")
+      expect(sql).to include(".agents")
+      expect(sql).to include("ADD COLUMN IF NOT EXISTS kyc_attributes jsonb")
+    end
+
+    it "uses the configured schema name" do
+      Kiosk.configure { |c| c.schema = "myschema" }
+      out = described_class.kyc_attributes_sql
+      expect(out).to include("myschema")
+      expect(out).to include(".agents")
+    end
+
+    it "accepts explicit schema override" do
+      out = described_class.kyc_attributes_sql(schema: "custom")
+      expect(out).to include('"custom".agents')
+    end
+  end
 end

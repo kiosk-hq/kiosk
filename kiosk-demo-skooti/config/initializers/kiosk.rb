@@ -100,12 +100,14 @@ end
 # ─── Queries ────────────────────────────────────────────────────────────────
 
 # scooters_available — public fleet catalog. No per-user scoping: all
-# authenticated agents can browse available scooters. The block returns the
-# exact columns the agent needs (no full-table scrape).
+# authenticated agents can browse the available fleet. The block returns the
+# exact columns the agent needs (no full-table scrape). `kind` +
+# `needs_licence` let the agent tell the licence-free electric scooter apart
+# from the KYC-gated combustion motorcycle before it commits to a rental verb.
 Kiosk::Server::Queries.register("scooters_available",
-                                 description: "Browse available scooters in the fleet") do |_params|
+                                 description: "Browse the available fleet (scooters + motorcycles); needs_licence flags the KYC-gated combustion vehicles") do |_params|
   ActiveRecord::Base.connection.execute(
-    "SELECT id, code, status, lat, lng, price_per_min_cents " \
+    "SELECT id, code, status, kind, needs_licence, lat, lng, price_per_min_cents " \
     "FROM public.scooters " \
     "WHERE status = 'available' " \
     "ORDER BY id"
@@ -273,6 +275,115 @@ Kiosk::Server::Actions.register("start_rental",
   )
 
   # Mark the reservation active.
+  conn.execute(
+    "UPDATE public.reservations SET status = 'active' WHERE id = #{conn.quote(reservation_id.to_s)}::uuid"
+  )
+
+  {
+    scooter_code:  code,
+    rental_token:  token,
+    exp:           now + 900,
+  }
+end
+
+# rent_motorcycle — start a rental of a COMBUSTION-ENGINE motorcycle.
+#
+# This is the KYC-ATTRIBUTE-GATED action that the old DefaultAgentIdp
+# `unlock`-gate comment anticipated (resolves ledger K-346). Unlike the
+# licence-free electric scooter (start_rental), a combustion motorcycle
+# requires the calling agent to have completed a KYC attestation carrying BOTH
+# named anonymized boolean attributes:
+#     age_over_18 == true  AND  licence_a == true
+# The provider learns only these two booleans — never the DOB or licence
+# number (the anonymized/attestation privacy point). If either is missing the
+# action rejects with a clean 403 `kyc_required` before doing anything else.
+#
+# args: { reservation_id: }  — a reservation on a needs_licence vehicle.
+# Gates (all must pass, else 403):
+#   0. KYC attributes: age_over_18 AND licence_a  → 403 kyc_required if unmet
+#   1. reservation exists, belongs to the principal, status='reserved'
+#   2. the reserved vehicle is a needs_licence motorcycle
+#   3. a settled payment references THIS reservation
+# On success issues the same Ed25519 offline rental token as start_rental.
+Kiosk::Server::Actions.register("rent_motorcycle",
+                                  description: "Rent a combustion-engine motorcycle — KYC-gated on age_over_18 AND licence_a (category-A licence); issues an Ed25519 offline rental token",
+                                  params: { reservation_id: "uuid — the motorcycle reservation to activate" }) do |args|
+  conn = ActiveRecord::Base.connection
+
+  # ── Gate 0: KYC named-attribute gate (age_over_18 AND licence_a) ────────
+  # Read the stored anonymized boolean attributes for the calling agent. Only
+  # booleans that a valid, signed attestation granted were ever persisted — a
+  # forged/self-asserted attestation never reaches this column (the /kyc
+  # endpoint rejects a bad signature). A `->> 'name' = 'true'` test per
+  # required attribute keeps the check in SQL and NULL-safe.
+  kyc_row = conn.execute(<<~SQL).first
+    SELECT
+      COALESCE(kyc_attributes ->> 'age_over_18', 'false') AS age_over_18,
+      COALESCE(kyc_attributes ->> 'licence_a',   'false') AS licence_a
+    FROM kiosk.agents
+    WHERE id = kiosk.current_agent_id()
+      AND revoked_at IS NULL
+  SQL
+  has_all = kyc_row &&
+            kyc_row["age_over_18"] == "true" &&
+            kyc_row["licence_a"] == "true"
+  unless has_all
+    raise Kiosk::Server::Errors::KycRequired.new(
+      "motorcycle rental requires KYC attributes age_over_18 and licence_a",
+      hint: "complete KYC: age≥18 and category-A licence required",
+    )
+  end
+
+  reservation_id = args[:reservation_id]
+  if reservation_id.nil? || reservation_id.to_s.empty?
+    raise Kiosk::Server::Errors::BadRequest.new("missing field: reservation_id")
+  end
+
+  # ── Gate 1: reservation belongs to the principal, status='reserved' ────
+  reservation = conn.execute(
+    "SELECT id, scooter_id FROM public.reservations " \
+    "WHERE id = #{conn.quote(reservation_id.to_s)}::uuid " \
+    "AND user_id = kiosk.current_user_id() " \
+    "AND status = 'reserved' " \
+    "LIMIT 1"
+  ).first
+  raise Kiosk::Server::Errors::Forbidden.new("reservation not found or not yours") if reservation.nil?
+
+  # ── Gate 2: the reserved vehicle is a needs_licence motorcycle ──────────
+  vehicle = conn.execute(
+    "SELECT code, needs_licence FROM scooters WHERE id = #{conn.quote(reservation["scooter_id"].to_s)} LIMIT 1"
+  ).first
+  raise Kiosk::Server::Errors::Forbidden.new("vehicle not found for reservation") if vehicle.nil?
+
+  needs_licence = vehicle["needs_licence"] == true || vehicle["needs_licence"] == "t" || vehicle["needs_licence"] == "true"
+  unless needs_licence
+    raise Kiosk::Server::Errors::BadRequest.new(
+      "#{vehicle["code"]} is not a licence-required motorcycle — use start_rental for licence-free vehicles",
+    )
+  end
+
+  code = vehicle["code"]
+
+  # ── Gate 3: settled payment referencing THIS reservation ────────────────
+  resv_filter_json = [{ reservation_id: reservation_id.to_s }].to_json
+  paid = conn.execute(
+    "SELECT 1 AS ok " \
+    "FROM kiosk.settlements pm " \
+    "JOIN kiosk.cart_mandates cm ON cm.id = pm.cart_mandate_id " \
+    "WHERE pm.user_id = kiosk.current_user_id() " \
+    "AND cm.line_items @> #{conn.quote(resv_filter_json)}::jsonb " \
+    "LIMIT 1"
+  ).first
+  raise Kiosk::Server::Errors::Forbidden.new("no settlement for this reservation") if paid.nil?
+
+  # ── All gates passed: issue the Ed25519 rental token ────────────────────
+  now   = Time.now.to_i
+  token = RentalTokenIssuer.issue(
+    scooter_code:   code,
+    reservation_id: reservation_id.to_s,
+    now:            now,
+  )
+
   conn.execute(
     "UPDATE public.reservations SET status = 'active' WHERE id = #{conn.quote(reservation_id.to_s)}::uuid"
   )

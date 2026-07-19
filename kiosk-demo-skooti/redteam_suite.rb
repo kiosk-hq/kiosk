@@ -7,6 +7,9 @@
 #   C2  PayForOtherUseSelf  — B pays for A's reservation, B tries start_rental
 #   C3  SpentResourceReuse  — re-start_rental on an active reservation
 #       KYC bypass variants  — missing / expired / forged attestation
+#   MotorcycleForgedKyc      — T-018 beat: a forged attestation self-asserting
+#                              {age_over_18, licence_a} is rejected, so the
+#                              KYC-attribute-gated rent_motorcycle stays 403.
 #
 # Usage (from kiosk-demo-skooti/):
 #   SERVER_URL=http://127.0.0.1:3003 KIOSK_ISSUER=http://127.0.0.1:3003 \
@@ -212,6 +215,72 @@ puts ""
 runner  = Kiosk::Redteam::Runner.new(base_url: BASE_URL, profile:)
 results = runner.run(scenarios)
 
+# ── skooti-local beat: forged motorcycle KYC attributes (T-018) ───────────────
+#
+# The generic ForgedKyc scenario above proves a forged attestation is rejected
+# at /kyc for the binary start_rental gate. This beat proves the SAME defence
+# holds for the NAMED-ATTRIBUTE gate on rent_motorcycle: an attestation that
+# SELF-ASSERTS {age_over_18, licence_a} but is signed by the WRONG key must be
+# rejected at /kyc → the attributes are never granted → rent_motorcycle stays
+# 403 kyc_required. A weakened signature check (e.g. alg:none) would let the
+# agent mint its own licence and unlock a combustion motorcycle — a real BREACH.
+motorcycle_forged_kyc = lambda do
+  client = Kiosk::Redteam::Client.new(base_url: BASE_URL)
+  a = client.register!(name: "redteam-mc-fkyc", pow_difficulty: 20)
+
+  # Reserve + pay for the motorcycle so ONLY the KYC-attribute gate can be the
+  # thing that blocks (isolates Gate 0, exactly like the demo:kyc happy path).
+  fleet = client.query(a, name: "scooters_available")
+  mc    = (fleet.body["rows"] || []).find { |r| r["code"] == "MC-001" }
+  raise "redteam(skooti): MC-001 not in fleet" unless mc
+
+  rsv = client.run(a, name: "reserve", scooter_code: "MC-001")
+  raise "redteam(skooti): reserve MC-001 failed (#{rsv.status})" unless rsv.status == 200
+  reservation_id = rsv.body.dig("value", "reservation_id")
+  price_min      = rsv.body.dig("value", "price_per_min_cents").to_i
+
+  now = Time.now.to_i
+  intent_id = SecureRandom.uuid
+  cart_id   = SecureRandom.uuid
+  total     = price_min.positive? ? price_min : 100
+  intent = { id: intent_id, user_id: a.user_id, agent_id: a.agent_id, iss: ISSUER,
+             scope: "mobility", cap_amount_cents: total + 100, currency: "eur",
+             exp: now + 600, iat: now }
+  cart = { id: cart_id, intent_mandate_id: intent_id, user_id: a.user_id, agent_id: a.agent_id,
+           iss: ISSUER, line_items: [{ sku: "MC-001", qty: 1, reservation_id: }],
+           total_amount_cents: total, currency: "eur", exp: now + 600, iat: now }
+  pay_resp = client.pay(a, intent:, cart:)
+  raise "redteam(skooti): pay MC-001 failed (#{pay_resp.status})" unless pay_resp.status == 200
+
+  # Forge a KYC attestation that self-asserts BOTH attributes but is signed by
+  # the WRONG key (trusted issuer, bad signature) — mirrors attest_forged.
+  forged = JWT.encode(
+    { sub: a.user_id, level: "verified", iss: "https://kyc.example",
+      iat: now, exp: now + 3600,
+      attributes: { age_over_18: true, licence_a: true } },
+    FORGED_KYC_KEY, "RS256",
+  )
+  kyc_resp = client.kyc(a, attestation_jws: forged)
+
+  # Whether or not /kyc rejected it, the decisive property is that
+  # rent_motorcycle is STILL denied — the forged attributes were never granted.
+  rent = client.run(a, name: "rent_motorcycle", reservation_id:)
+
+  kyc_blocked  = Kiosk::Redteam.blocked?(kyc_resp)
+  rent_blocked = rent.status == 403 && rent.body.is_a?(Hash) && rent.body.dig("error", "code") == "kyc_required"
+
+  if kyc_blocked && rent_blocked
+    { blocked: true, detail: "forged attestation rejected at /kyc (#{kyc_resp.status}); rent_motorcycle stays 403 kyc_required" }
+  elsif rent_blocked
+    # /kyc accepted it but no attributes were granted → still safe, still BLOCKED.
+    { blocked: true, detail: "forged attestation not granted; rent_motorcycle stays 403 kyc_required" }
+  else
+    { blocked: false, detail: "forged KYC unlocked the motorcycle: /kyc=#{kyc_resp.status}, rent_motorcycle=#{rent.status}" }
+  end
+end
+
+mc_beat = motorcycle_forged_kyc.call
+
 # ── Summary ───────────────────────────────────────────────────────────────────
 
 blocked_results = results.select { |r| !r[:verdict].skipped && r[:verdict].blocked }
@@ -226,11 +295,21 @@ skipped_results.each do |r|
 end
 breach_results.each { |r| puts "  BREACH   ✗ #{r[:scenario].name} — #{r[:verdict].detail}" }
 
-puts ""
-if breach_results.empty? && skipped_results.empty?
-  puts "  #{blocked_results.size} BLOCKED, 0 SKIPPED, 0 BREACH — all attacks blocked."
+# ── skooti-local beat verdict (T-018) ─────────────────────────────────────────
+if mc_beat[:blocked]
+  puts "  BLOCKED  ✓ MotorcycleForgedKyc — #{mc_beat[:detail]}"
 else
-  puts "  #{blocked_results.size} BLOCKED, #{skipped_results.size} SKIPPED, #{breach_results.size} BREACH"
+  puts "  BREACH   ✗ MotorcycleForgedKyc — #{mc_beat[:detail]}"
+end
+
+blocked_count = blocked_results.size + (mc_beat[:blocked] ? 1 : 0)
+beat_breach   = mc_beat[:blocked] ? 0 : 1
+
+puts ""
+if breach_results.empty? && skipped_results.empty? && beat_breach.zero?
+  puts "  #{blocked_count} BLOCKED, 0 SKIPPED, 0 BREACH — all attacks blocked."
+else
+  puts "  #{blocked_count} BLOCKED, #{skipped_results.size} SKIPPED, #{breach_results.size + beat_breach} BREACH"
 end
 
 # ── Expected-applicable check ─────────────────────────────────────────────────
@@ -247,4 +326,4 @@ if actual_skip_names != expected_sorted
   exit 2
 end
 
-exit 1 if breach_results.any?
+exit 1 if breach_results.any? || beat_breach.positive?

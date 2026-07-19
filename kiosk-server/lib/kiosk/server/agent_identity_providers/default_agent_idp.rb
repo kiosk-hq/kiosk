@@ -1,5 +1,6 @@
 # frozen_string_literal: true
 
+require "json"
 require "kiosk/agent_identity_providers/base"
 
 module Kiosk
@@ -49,7 +50,10 @@ module Kiosk
         end
 
         # Returns true iff the agent has a non-NULL `kyc_verified_at` timestamp.
-        # Used by the `unlock` Action gate and any other KYC-restricted Action.
+        # The binary KYC gate. A KYC-restricted Action (e.g. skooti's
+        # `rent_motorcycle`, the registered gate that resolves the K-346
+        # `unlock`-gate reference) calls this, or the finer-grained
+        # {#kyc_has_attributes?} when it needs specific booleans.
         def kyc_verified?(agent_id)
           row = ActiveRecord::Base.connection.execute(
             "SELECT kyc_verified_at FROM #{schema}.agents WHERE id = #{quote(agent_id)} AND revoked_at IS NULL",
@@ -57,6 +61,34 @@ module Kiosk
           return false if row.nil?
 
           !row.fetch("kyc_verified_at", nil).nil?
+        end
+
+        # Returns the NAMED ANONYMIZED boolean attributes a valid attestation
+        # granted this agent — a String-keyed hash like
+        # `{"age_over_18" => true, "licence_a" => true}`. Empty `{}` when the
+        # agent verified with a bare binary attestation, or when no attestation
+        # is on file / the agent is unknown. Only booleans were ever stored —
+        # never the DOB, licence number, or any document (the anonymized point).
+        def kyc_attributes(agent_id)
+          row = ActiveRecord::Base.connection.execute(
+            "SELECT kyc_attributes FROM #{schema}.agents WHERE id = #{quote(agent_id)} AND revoked_at IS NULL",
+          ).first
+          return {} if row.nil?
+
+          raw = row.fetch("kyc_attributes", nil)
+          return {} if raw.nil?
+
+          parsed = raw.is_a?(String) ? JSON.parse(raw) : raw
+          parsed.is_a?(Hash) ? parsed : {}
+        end
+
+        # Returns true iff EVERY name in `required` is present-and-true in the
+        # agent's stored KYC attributes. `required` is a list of attribute
+        # names (Strings/Symbols). Used by an attribute-gated Action, e.g.
+        # `rent_motorcycle` requiring both `age_over_18` and `licence_a`.
+        def kyc_has_attributes?(agent_id, required)
+          attrs = kyc_attributes(agent_id)
+          Array(required).all? { |name| attrs[name.to_s] == true }
         end
 
         private

@@ -42,6 +42,33 @@ RSpec.describe Kiosk::Server::KycVerifier do
 
     # ─── rejection paths ─────────────────────────────────────────────
 
+    # ─── named anonymized attributes (T-018) ─────────────────────────────
+
+    it "returns an empty attribute set for a bare binary attestation (backward-compat)" do
+      claims = described_class.verify(raw_jws: sign_kyc(valid_payload), identity: identity)
+      expect(claims[:attributes]).to eq({})
+    end
+
+    it "returns the granted named boolean attributes (String-keyed)" do
+      raw_jws = sign_kyc(valid_payload(attributes: { age_over_18: true, licence_a: true }))
+      claims  = described_class.verify(raw_jws: raw_jws, identity: identity)
+      expect(claims[:attributes]).to eq("age_over_18" => true, "licence_a" => true)
+    end
+
+    it "drops any non-true attribute value (no truthy-but-not-true grants)" do
+      raw_jws = sign_kyc(valid_payload(attributes: {
+        age_over_18: true, licence_a: false, licence_b: "yes", extra: 1,
+      }))
+      claims = described_class.verify(raw_jws: raw_jws, identity: identity)
+      expect(claims[:attributes]).to eq("age_over_18" => true)
+    end
+
+    it "raises Errors::Forbidden when attributes is not an object" do
+      raw_jws = sign_kyc(valid_payload(attributes: ["age_over_18"]))
+      expect { described_class.verify(raw_jws: raw_jws, identity: identity) }
+        .to raise_error(Kiosk::Server::Errors::Forbidden, /attributes must be an object/)
+    end
+
     it "raises Errors::Forbidden when the iss does not match kyc_issuer" do
       raw_jws = sign_kyc(valid_payload(iss: "https://evil-kyc.example"))
       expect { described_class.verify(raw_jws: raw_jws, identity: identity) }

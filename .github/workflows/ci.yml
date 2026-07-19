@@ -97,7 +97,9 @@ jobs:
           - demo: kiosk-demo-hoteling
             tasks: demo:book demo:isolation demo:redteam demo:schema
           - demo: kiosk-demo-skooti
-            tasks: demo:kat demo:rideflow demo:isolation demo:redteam demo:schema
+            # demo:kyc = the KYC attribute gate (combustion motorcycle needs
+            # age_over_18 + licence_a; the electric scooter is licence-free).
+            tasks: demo:kat demo:rideflow demo:kyc demo:isolation demo:redteam demo:schema
           - demo: kiosk-demo-saas-booking
             tasks: demo:walkthrough demo:isolation demo:redteam demo:schema
           - demo: kiosk-demo-philslist

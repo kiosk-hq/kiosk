@@ -58,9 +58,14 @@ class StubKyc
 
   # Issue a KYC attestation JWS for the given user_id.
   #
-  # @param user_id [String] the user's UUID
+  # @param user_id    [String] the user's UUID
+  # @param attributes [Hash]   OPTIONAL named anonymized boolean attributes the
+  #   KYC provider vouches for, e.g. { age_over_18: true, licence_a: true }.
+  #   Only booleans are carried — the provider signs that these facts hold, it
+  #   never ships the underlying DOB or licence number. Omit for a bare binary
+  #   attestation (backward-compatible: sets kyc_verified_at, no attributes).
   # @return [String] compact RS256 JWS
-  def self.attest(user_id:)
+  def self.attest(user_id:, attributes: nil)
     now = Time.now.to_i
     payload = {
       sub:   user_id,
@@ -69,6 +74,7 @@ class StubKyc
       iat:   now,
       exp:   now + 3600,
     }
+    payload[:attributes] = attributes unless attributes.nil?
     JWT.encode(payload, KEYPAIR, "RS256")
   end
 end

@@ -80,6 +80,17 @@ module Kiosk
         HTTP_STATUS = 403
       end
 
+      # The acting agent has not completed the KYC attestation(s) this Action
+      # requires — either no attestation on file, or the stored attributes do
+      # not include every required boolean. HTTP 403 — a policy refusal the
+      # agent clears by submitting a KYC attestation carrying the missing
+      # attributes to POST /agents/kyc, then retrying. Distinct CODE from
+      # Forbidden so an agent can tell «complete KYC» from «you can't do this».
+      class KycRequired < Base
+        CODE        = "kyc_required"
+        HTTP_STATUS = 403
+      end
+
       # Resource lookup failed — unknown table, unknown Action name.
       class NotFound < Base
         CODE        = "not_found"

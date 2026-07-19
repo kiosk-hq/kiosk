@@ -9,6 +9,7 @@ RSpec.describe Kiosk::Server::Errors do
       Kiosk::Server::Errors::Forbidden       => ["forbidden",       403],
       Kiosk::Server::Errors::RLSDenied       => ["rls_denied",      403],
       Kiosk::Server::Errors::SpendingCapExceeded => ["spending_cap_exceeded", 403],
+      Kiosk::Server::Errors::KycRequired     => ["kyc_required",    403],
       Kiosk::Server::Errors::NotFound        => ["not_found",       404],
       Kiosk::Server::Errors::QuotaExceeded   => ["quota_exceeded",  429],
       Kiosk::Server::Errors::ActionFailed    => ["action_failed",   500],
@@ -48,6 +49,7 @@ RSpec.describe Kiosk::Server::Errors do
       [Kiosk::Server::Errors::BadRequest, Kiosk::Server::Errors::Unauthenticated,
        Kiosk::Server::Errors::Forbidden,  Kiosk::Server::Errors::RLSDenied,
        Kiosk::Server::Errors::SpendingCapExceeded,
+       Kiosk::Server::Errors::KycRequired,
        Kiosk::Server::Errors::NotFound,   Kiosk::Server::Errors::QuotaExceeded,
        Kiosk::Server::Errors::ActionFailed].each do |klass|
         begin

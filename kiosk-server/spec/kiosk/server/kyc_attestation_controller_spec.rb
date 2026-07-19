@@ -79,4 +79,58 @@ RSpec.describe "Kiosk::Server KYC attestation logic (unit)" do
       expect(idp.kyc_verified?(agent_id)).to be false
     end
   end
+
+  # ─── DefaultAgentIdp attribute queries (T-018) ────────────────────────
+  describe "DefaultAgentIdp KYC attributes" do
+    let(:idp) { Kiosk::Server::AgentIdentityProviders::DefaultAgentIdp.new }
+
+    def stub_ar(result)
+      fake_conn = Object.new.tap do |c|
+        row = result
+        c.define_singleton_method(:execute) { |_sql| row }
+        c.define_singleton_method(:quote)   { |v| "'#{v}'" }
+      end
+      ar_base = Class.new { define_singleton_method(:connection) { fake_conn } }
+      stub_const("ActiveRecord::Base", ar_base)
+    end
+
+    describe "#kyc_attributes" do
+      it "parses a jsonb String into a hash" do
+        stub_ar([{ "kyc_attributes" => '{"age_over_18":true,"licence_a":true}' }])
+        expect(idp.kyc_attributes(agent_id)).to eq("age_over_18" => true, "licence_a" => true)
+      end
+
+      it "passes through an already-parsed hash" do
+        stub_ar([{ "kyc_attributes" => { "age_over_18" => true } }])
+        expect(idp.kyc_attributes(agent_id)).to eq("age_over_18" => true)
+      end
+
+      it "returns {} when the column is null" do
+        stub_ar([{ "kyc_attributes" => nil }])
+        expect(idp.kyc_attributes(agent_id)).to eq({})
+      end
+
+      it "returns {} when the agent is not found" do
+        stub_ar([])
+        expect(idp.kyc_attributes(agent_id)).to eq({})
+      end
+    end
+
+    describe "#kyc_has_attributes?" do
+      it "is true when every required attribute is present-and-true" do
+        stub_ar([{ "kyc_attributes" => '{"age_over_18":true,"licence_a":true}' }])
+        expect(idp.kyc_has_attributes?(agent_id, %w[age_over_18 licence_a])).to be true
+      end
+
+      it "is false when a required attribute is missing" do
+        stub_ar([{ "kyc_attributes" => '{"age_over_18":true}' }])
+        expect(idp.kyc_has_attributes?(agent_id, %w[age_over_18 licence_a])).to be false
+      end
+
+      it "accepts Symbol required names" do
+        stub_ar([{ "kyc_attributes" => '{"age_over_18":true}' }])
+        expect(idp.kyc_has_attributes?(agent_id, [:age_over_18])).to be true
+      end
+    end
+  end
 end

@@ -97,7 +97,15 @@ Kiosk.configure do |c|
     key = ENV["STRIPE_SECRET_KEY"].to_s.empty? ? "sk_test_mock" : ENV["STRIPE_SECRET_KEY"]
   else
     key = ENV["STRIPE_SECRET_KEY"]
-    raise "getgroceries requires STRIPE_SECRET_KEY (sk_test_…) or STRIPE_MOCK_URL" if key.nil? || key.empty?
+    if key.nil? || key.empty?
+      # Out-of-box parity with the sibling demos (K-348, T-016): in dev/test the
+      # app boots on a placeholder so db:setup/schema/isolation/redteam run with
+      # no payment config; only a REAL charge (demo:shop) needs a live key or
+      # STRIPE_MOCK_URL, and fails clearly at charge time if neither is set.
+      raise "getgrocery requires STRIPE_SECRET_KEY (sk_test_…) or STRIPE_MOCK_URL" unless Rails.env.local?
+      warn "[getgrocery] no STRIPE_SECRET_KEY/STRIPE_MOCK_URL set — using a placeholder key; demo:shop needs one to charge."
+      key = "sk_test_placeholder"
+    end
   end
 
   # KIOSK_TEST_AUTOCARD=1 (set by the demo/redteam/isolation rake tasks) makes the

@@ -200,7 +200,8 @@ CREATE TABLE public.appointments (
     salon_id bigint NOT NULL,
     slot timestamp without time zone NOT NULL,
     created_at timestamp(6) without time zone NOT NULL,
-    updated_at timestamp(6) without time zone NOT NULL
+    updated_at timestamp(6) without time zone NOT NULL,
+    stylist_id uuid
 );
 
 
@@ -265,7 +266,8 @@ CREATE TABLE public.users (
     created_at timestamp(6) without time zone NOT NULL,
     updated_at timestamp(6) without time zone NOT NULL,
     email character varying,
-    encrypted_password character varying DEFAULT ''::character varying NOT NULL
+    encrypted_password character varying DEFAULT ''::character varying NOT NULL,
+    staff_role character varying
 );
 
 
@@ -465,6 +467,13 @@ CREATE INDEX index_appointments_on_salon_id ON public.appointments USING btree (
 
 
 --
+-- Name: index_appointments_on_stylist_id; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX index_appointments_on_stylist_id ON public.appointments USING btree (stylist_id);
+
+
+--
 -- Name: index_appointments_on_user_id; Type: INDEX; Schema: public; Owner: -
 --
 
@@ -527,12 +536,21 @@ ALTER TABLE ONLY public.appointments
 
 
 --
+-- Name: appointments fk_rails_stylist; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.appointments
+    ADD CONSTRAINT fk_rails_stylist FOREIGN KEY (stylist_id) REFERENCES public.users(id);
+
+
+--
 -- PostgreSQL database dump complete
 --
 
 SET search_path TO "$user", public;
 
 INSERT INTO "schema_migrations" (version) VALUES
+('20260719000001'),
 ('20260718000002'),
 ('20260718000001'),
 ('20260717000001'),

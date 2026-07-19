@@ -54,6 +54,19 @@ RSpec.describe Kiosk::Server::LinkCode do
       )
       expect(stored).to eq(result[:da])
     end
+
+    # roles-from-IdP (T-014, Path A): the human's role travels on the link
+    # row so the assistant inherits it at claim time.
+    it "stamps the human's requested_role onto the link row (roles-from-IdP)" do
+      Kiosk.configure { |c| c.roles = %i[customer owner] }
+      result = described_class.mint(user_id: user_id, requested_role: "owner")
+      expect(result[:da].requested_role).to eq("owner")
+    end
+
+    it "leaves requested_role nil for a role-less human (no regression)" do
+      result = described_class.mint(user_id: user_id)
+      expect(result[:da].requested_role).to be_nil
+    end
   end
 
   describe ".redeem" do
@@ -73,6 +86,17 @@ RSpec.describe Kiosk::Server::LinkCode do
       expect {
         described_class.redeem(code: code, public_key_pem: pem, signed: signed_proof)
       }.to raise_error(Kiosk::Server::Errors::Conflict, /already used/)
+    end
+
+    it "forwards the row's captured requested_role to AccountBinding.bind! (roles-from-IdP)" do
+      Kiosk.configure { |c| c.roles = %i[customer owner] }
+      stub_binding
+      role_code = described_class.mint(user_id: user_id, requested_role: "owner")[:link_code]
+
+      described_class.redeem(code: role_code, public_key_pem: pem, signed: signed_proof)
+      expect(Kiosk::Server::AccountBinding).to have_received(:bind!).with(
+        public_key_pem: pem.strip, user_id: user_id, requested_role: "owner",
+      )
     end
 
     it "raises Unauthenticated on a failed proof and does NOT consume the code" do

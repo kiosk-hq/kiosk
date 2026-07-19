@@ -371,6 +371,116 @@ namespace :demo do
 end
 
 namespace :demo do
+  # ── demo:roles ─────────────────────────────────────────────────────────────
+  desc <<~DESC
+    roles-from-IdP demo (T-014, Path A — indirect, via the bound human).
+
+    Boots the server and runs roles_flow.rb. A salon OWNER links their
+    assistant over a role-carrying session (the StubUserIdp SSO/Okta
+    stand-in); the assistant INHERITS the owner role and `salon_calendar`
+    returns the WHOLE book + a revenue total. A STYLIST links their
+    assistant; it inherits the stylist role and `salon_calendar` returns
+    ONLY that stylist's own chairs. The role is sourced from the provider's
+    IdP at link time, never self-selected by the agent.
+
+    Asserts (with DB ground-truth on kiosk.agents.allowed_roles + row counts):
+      • owner-agent allowed_roles == {owner};   token role == owner
+      • stylist-agent allowed_roles == {stylist}; token role == stylist
+      • owner sees ALL seeded staff appointments + a revenue total
+      • stylist sees ONLY their own chairs (fewer rows; every row is theirs)
+
+    Exits 0 if all hold; exits 1 on failure. A red assertion = a real role
+    gate hole: fix the app, not the test.
+  DESC
+  task roles: :setup do
+    require "net/http"; require "uri"; require "json"; require "shellwords"
+
+    port         = ENV.fetch("PORT", "3001")
+    server_url   = "http://127.0.0.1:#{port}"
+    kiosk_issuer = server_url
+    log          = "/tmp/kiosk-stylish-roles.log"
+    flow_rb      = File.expand_path("../../roles_flow.rb", __dir__)
+    db           = "kiosk_stylish_development"
+    failures     = []
+
+    owner_id    = "00000000-0000-0000-0000-0000000000a0"
+    stylist1_id = "00000000-0000-0000-0000-0000000000b1"
+
+    puts "\n── Starting stylish (roles-from-IdP demo) on #{server_url} ──"
+
+    File.truncate(log, 0) if File.exist?(log)
+    server_pid = spawn(
+      { "KIOSK_ISSUER" => kiosk_issuer },
+      "bundle exec rails s -p #{port} -b 127.0.0.1 -e development",
+      out: log, err: log,
+    )
+    begin
+      ready = false
+      40.times do
+        begin
+          ready = true if Net::HTTP.get_response(URI("#{server_url}/.well-known/kiosk.json")).code.to_i == 200
+        rescue Errno::ECONNREFUSED, Errno::EADDRNOTAVAIL, SocketError
+          nil
+        end
+        break if ready
+        sleep 1
+      end
+      abort "Server did not become ready — see #{log}" unless ready
+      puts "  Server up at #{server_url}"
+
+      env = "SERVER_URL=#{server_url.shellescape} KIOSK_ISSUER=#{kiosk_issuer.shellescape}"
+      raw = `#{env} bundle exec ruby #{flow_rb.shellescape} 2>&1`
+      json_line = raw.lines.grep(/^\{/).last
+      puts raw.lines.reject { |l| l.start_with?("{") }.join
+      puts json_line if json_line
+      result = JSON.parse(json_line || raw) rescue abort("roles_flow.rb produced no JSON:\n#{raw}")
+
+      # DB ground truth: how many appointments the salon actually has, and how
+      # many belong to stylist Bea — the counts the calendar must honor.
+      total_appts   = `psql -X -d #{db} -tAc "SELECT count(*) FROM appointments"`.strip.to_i
+      stylist_appts = `psql -X -d #{db} -tAc "SELECT count(*) FROM appointments WHERE stylist_id = '#{stylist1_id}'"`.strip.to_i
+
+      puts "\n══ roles-from-IdP assertions ══"
+      check = lambda do |label, ok|
+        if ok then puts "  OK  #{label}" else failures << label; puts "  FAIL  #{label}" end
+      end
+
+      # DB ground-truth: the inherited role landed on the agent row.
+      owner_roles = `psql -X -d #{db} -tAc "SELECT allowed_roles FROM kiosk.agents WHERE user_id = '#{owner_id}' AND revoked_at IS NULL ORDER BY created_at DESC LIMIT 1"`.strip
+      styl_roles  = `psql -X -d #{db} -tAc "SELECT allowed_roles FROM kiosk.agents WHERE user_id = '#{stylist1_id}' AND revoked_at IS NULL ORDER BY created_at DESC LIMIT 1"`.strip
+      check.call("DB owner-agent allowed_roles == {owner} (inherited from IdP)",     owner_roles == "{owner}")
+      check.call("DB stylist-agent allowed_roles == {stylist} (inherited from IdP)", styl_roles == "{stylist}")
+
+      # Token roles reflect the inherited role (not self-selected).
+      check.call("owner assistant token role == owner",     result["owner_token_role"] == "owner")
+      check.call("stylist assistant token role == stylist", result["stylist_token_role"] == "stylist")
+
+      # The wire gate: owner sees the whole book + revenue, stylist only own.
+      check.call("owner salon_calendar returns ALL #{total_appts} appointments",  result["owner_appt_count"] == total_appts)
+      check.call("owner salon_calendar carries a revenue total (> 0)",            result["owner_revenue_cents"].to_i > 0)
+      check.call("stylist salon_calendar returns ONLY own #{stylist_appts} chairs", result["stylist_appt_count"] == stylist_appts)
+      check.call("stylist sees strictly fewer rows than the owner (scope narrowed)", stylist_appts < total_appts && result["stylist_appt_count"] < result["owner_appt_count"])
+      check.call("every row the stylist sees is their own chair",                 result["stylist_all_own"] == true)
+      check.call("stylist sees NO revenue total (owner-only)",                     result["stylist_sees_revenue"] == false)
+    ensure
+      begin
+        Process.kill("TERM", server_pid); Process.wait(server_pid)
+      rescue Errno::ESRCH, Errno::ECHILD
+        nil
+      end
+      puts "  Server stopped."
+    end
+
+    if failures.empty?
+      puts "\n  All roles-from-IdP assertions PASSED."
+    else
+      puts "\n  FAILED:"; failures.each { |f| puts "    - #{f}" }; exit 1
+    end
+  end
+  # ── end demo:roles ─────────────────────────────────────────────────────────
+end
+
+namespace :demo do
   # ── demo:redteam ─────────────────────────────────────────────────────────
   desc <<~DESC
     Adversarial regression battery — attacks stylish's live surface.
@@ -385,6 +495,12 @@ namespace :demo do
       BLOCKED  GarbageToken     — unparseable bearer token → 401
       BLOCKED  UnknownQuery     — unregistered query name → 404
       BLOCKED  UnknownAction    — unregistered action name → 404
+      BLOCKED  StylistCannotSelfSelectOwnerAtBinding — a stylist linking an
+               assistant cannot smuggle an `owner` role into the claim body;
+               the role comes from the IdP session, so the token stays stylist
+      BLOCKED  StylistCalendarStaysStylistScoped — that stylist's agent sees
+               only its own chairs + no revenue in salon_calendar (role gate
+               un-bypassable)
 
     stylish has no payment or KYC surface, so the battery covers only the
     attacks the surface can actually exhibit. Exits 0 when all are BLOCKED;

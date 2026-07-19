@@ -31,7 +31,7 @@ Gem::Specification.new do |spec|
   spec.require_paths = ["lib"]
 
   # RS256 mandate signing / verification in specs
-  spec.add_dependency "jwt", "~> 2.0"
+  spec.add_dependency "jwt", ">= 2", "< 4"
 
   spec.add_development_dependency "rspec",   "~> 3.13"
   spec.add_development_dependency "webmock", "~> 3.0"

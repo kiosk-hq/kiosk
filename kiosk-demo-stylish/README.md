@@ -1,6 +1,6 @@
-# Combette — Kiosk reference demo
+# Stylish — Kiosk reference demo
 
-A salon-booking SaaS, Kiosk-enabled. Demonstrates:
+Stylish is a hair-styling salon-booking service (stylish.example), Kiosk-enabled. Its one seeded salon is **Combette on Park**. Demonstrates:
 
 - `/.well-known/kiosk.json` discovery
 - JWKS endpoint for JWT verification
@@ -9,7 +9,7 @@ A salon-booking SaaS, Kiosk-enabled. Demonstrates:
 - A `book_appointment` Action
 - Human↔assistant account binding over real Devise sessions — the claim ceremony (verify page) and human-minted link codes, walked by `rake demo:binding`
 
-Combette is the canonical reference shape for personal-services SaaS — barbershops, restaurants, gyms, clinics. Same patterns apply.
+Stylish is the canonical reference shape for personal-services SaaS — barbershops, restaurants, gyms, clinics. Same patterns apply.
 
 > **Auth:** The Kiosk auth story is `kiosk-pop` — register/login by proof-of-possession; `rake demo:register` exercises it end-to-end. The mounted `/kiosk/oauth/*` endpoints are the **account-binding ceremony** (RFC 8628 shape): an assistant's public key gets bound to an existing human account after the human — signed in through the demo's real Devise form — approves on the verify page, and the token poll requires a possession proof for that key. The reverse direction is the human-initiated link code (`/kiosk/auth/link` → `/kiosk/auth/claim`), and `/kiosk/auth/unlink` revokes one assistant without touching the human's own session. Tokens are always minted by kiosk-pop; `/auth.md` describes the methods. `rake demo:binding` walks all of it end-to-end.
 
@@ -19,7 +19,7 @@ The demo lives in the Kiosk monorepo and resolves its gems by path
 (`../kiosk-*` in the Gemfile), so run it from its checked-out directory:
 
 ```sh
-cd kiosk-demo-saas-booking
+cd kiosk-demo-stylish
 bundle install
 rake demo
 ```
@@ -55,7 +55,7 @@ The task asserts every step, plus the DB ground truth: `kiosk.agents.user_id` fo
 
 | Path | What's there |
 |---|---|
-| `db/migrate/` | Generator-produced kiosk migrations + the Combette schema (users carry Devise login columns) |
+| `db/migrate/` | Generator-produced kiosk migrations + the Stylish salon/appointment schema (users carry Devise login columns) |
 | `app/models/{user,salon,appointment}.rb` | Three trivial AR models; `User` is `database_authenticatable` for the human sign-in |
 | `config/initializers/kiosk.rb` | `Kiosk.configure` block + the `book_appointment` Action |
 | `config/initializers/devise.rb` | Minimal Devise setup — the human session that approves assistant links |

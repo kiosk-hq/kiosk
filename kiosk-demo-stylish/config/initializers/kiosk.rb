@@ -1,7 +1,7 @@
 # frozen_string_literal: true
 
-# Kiosk-demo (Combette-shape) configuration. Concrete values for the
-# salon-booking reference shape: uuid users, JWT-or-stub IdP, one
+# Kiosk-demo (stylish — Combette-shape) configuration. Concrete values for
+# the salon-booking reference shape: uuid users, JWT-or-stub IdP, one
 # Action registered (book_appointment).
 
 # ── Ephemeral dev signing key ────────────────────────────────────
@@ -24,7 +24,7 @@ require "kiosk/user_identity_providers/devise"
 # (one PoW = Equihash — a metered toll). Small demo
 # params solve sub-second. Off by default so the walkthrough/isolation flows are
 # unchanged.
-SAAS_REGISTRATION_POW_PARAMS = { n: 96, k: 5 }.freeze
+STYLISH_REGISTRATION_POW_PARAMS = { n: 96, k: 5 }.freeze
 if ENV["KIOSK_POW_REGISTER_DEMO"] == "1"
   require "kiosk/pow/equihash"
   require "kiosk/reputation"
@@ -51,7 +51,7 @@ Kiosk.configure do |c|
   c.roles  = %i[customer]
   # Role pinned to every self-registered agent (agents cannot choose their own).
   c.registration_role = :customer
-  c.owner  = { name: "Combette on Park (Kiosk demo)", support: "demo@kiosk.tech" }
+  c.owner  = { name: "Stylish (Kiosk demo)", support: "demo@kiosk.tech" }
   # Dual-check (skill.md): canonical skill URL + SHA-256 of its content.
   c.skill_sha256 = "3af06c1622053bab833b468c12f7f28d129c015da15c91d0fdcfe0c303885e83"
 
@@ -74,8 +74,8 @@ Kiosk.configure do |c|
   # ── Registration PoW gate (active only when KIOSK_POW_REGISTER_DEMO=1) ───
   if ENV["KIOSK_POW_REGISTER_DEMO"] == "1"
     c.registration_pow_count  = 1
-    c.registration_pow_params = SAAS_REGISTRATION_POW_PARAMS
-    c.pow_secret              = ENV.fetch("KIOSK_POW_SECRET", "saas-demo-pow-secret")
+    c.registration_pow_params = STYLISH_REGISTRATION_POW_PARAMS
+    c.pow_secret              = ENV.fetch("KIOSK_POW_SECRET", "stylish-demo-pow-secret")
   end
 end
 

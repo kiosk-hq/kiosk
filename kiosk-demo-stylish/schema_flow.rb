@@ -2,7 +2,7 @@
 
 # Self-discovery proof driver — verifies the `schema` verb over HTTP.
 #
-# Boots against a running saas-booking server, authenticates with a StubIdp
+# Boots against a running stylish server, authenticates with a StubIdp
 # token (no RSA registration needed for the demo shape), calls:
 #   GET /kiosk/schema
 # and emits ONE JSON line the demo:schema rake task asserts on.

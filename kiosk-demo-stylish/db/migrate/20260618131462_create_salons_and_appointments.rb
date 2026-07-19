@@ -1,6 +1,6 @@
 # frozen_string_literal: true
 
-# Demo-specific schema: a SaaS-booking-shape provider.
+# Demo-specific schema: a salon-booking-shape provider.
 #
 # Under Path C, RLS is OPTIONAL and this demo drops it. App-layer isolation
 # is provided instead:

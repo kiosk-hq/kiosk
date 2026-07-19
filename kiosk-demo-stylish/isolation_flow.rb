@@ -2,7 +2,7 @@
 
 # Adversarial cross-tenant isolation test driver.
 #
-# Proves saas-booking app-layer predicates enforce cross-tenant denial:
+# Proves stylish app-layer predicates enforce cross-tenant denial:
 #
 #   Assertion 1 — my_appointments exclusion:
 #     Principal A books appointment aA.
@@ -38,7 +38,7 @@ require "uri"
 SERVER = ENV.fetch("SERVER_URL")
 
 # Pre-seeded principals (see db/seeds.rb). StubIdp parses the token
-# directly — no RSA key registration needed for the saas-booking demo shape.
+# directly — no RSA key registration needed for the stylish demo shape.
 ALICE_UUID = "00000000-0000-0000-0000-000000000001"
 BOB_UUID   = "00000000-0000-0000-0000-000000000002"
 

@@ -1,8 +1,8 @@
 # frozen_string_literal: true
 
-# Adversarial regression battery for saas-booking (Combette salon booking).
+# Adversarial regression battery for stylish (Combette salon booking).
 #
-# Runs a set of attacks against the live saas-booking surface (salons /
+# Runs a set of attacks against the live stylish surface (salons /
 # my_appointments queries, book_appointment action) and asserts each is
 # BLOCKED. This demo has no payment or KYC surface, so the battery covers the
 # attacks that actually apply to it — cross-tenant reads, forged principal
@@ -23,7 +23,7 @@
 #   bundle exec ruby redteam_suite.rb
 #
 # Exits 0 when every scenario is BLOCKED; exits 1 on any BREACH.
-# A BREACH = a real hole in saas-booking — fix the app, not the scenario.
+# A BREACH = a real hole in stylish — fix the app, not the scenario.
 
 require "json"
 require "net/http"

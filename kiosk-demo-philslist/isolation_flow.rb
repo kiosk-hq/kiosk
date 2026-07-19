@@ -2,7 +2,7 @@
 
 # Adversarial cross-owner isolation test driver for philslist.
 #
-# Unlike saas-booking (whose book_appointment targets an open catalogue, so
+# Unlike stylish (whose book_appointment targets an open catalogue, so
 # ownership-denial is N/A), philslist listings are OWNED resources — this is the
 # first demo where cross-owner WRITE denial is the headline.
 #

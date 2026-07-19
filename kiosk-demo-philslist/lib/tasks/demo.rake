@@ -73,7 +73,7 @@ namespace :demo do
       Assertion 2a (exclusion): Bob's my_listings does NOT contain Alice's listing.
       Assertion 2b (positive control): Bob's my_listings DOES contain Bob's own.
       Assertion 3 (cross-owner WRITE denial): Bob edit_listing on Alice's
-        listing → 403. This is the assertion saas-booking marks N/A; here it is
+        listing → 403. This is the assertion stylish marks N/A; here it is
         the headline.
       Assertion 4 (cross-owner WRITE denial): Bob close_listing on Alice's
         listing → 403.

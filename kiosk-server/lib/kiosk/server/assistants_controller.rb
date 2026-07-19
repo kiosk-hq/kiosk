@@ -131,7 +131,7 @@ if defined?(::ActionController::Base)
         # neutrality holds).
         #
         # Providers with no payment surface never migrate a settlements table
-        # (e.g. saas-booking): when the correlated subquery hits a missing
+        # (e.g. stylish): when the correlated subquery hits a missing
         # table, fall back to a spend-free listing (settled 0) so the
         # governance page still works.
         def bound_assistants

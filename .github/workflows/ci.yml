@@ -100,13 +100,13 @@ jobs:
             # demo:kyc = the KYC attribute gate (combustion motorcycle needs
             # age_over_18 + licence_a; the electric scooter is licence-free).
             tasks: demo:kat demo:rideflow demo:kyc demo:isolation demo:redteam demo:schema
-          - demo: kiosk-demo-saas-booking
+          - demo: kiosk-demo-stylish
             tasks: demo:walkthrough demo:isolation demo:redteam demo:schema
           - demo: kiosk-demo-philslist
             # NON-COMMERCE classifieds board — no payments. demo:walkthrough is
             # the browse→post→edit→close happy path; demo:schema asserts `pay` is
             # ABSENT from the advertised capabilities (the not-only-commerce
-            # proof). Same standard task set as saas-booking; demo:binding is
+            # proof). Same standard task set as stylish; demo:binding is
             # timing-sensitive (RFC 8628 poll interval) so it stays local-only,
             # matching every sibling (no demo runs binding in CI).
             tasks: demo:walkthrough demo:isolation demo:redteam demo:schema

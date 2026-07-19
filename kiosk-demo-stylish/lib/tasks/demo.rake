@@ -58,13 +58,13 @@ namespace :demo do
     require "json"
 
     port = ENV.fetch("PORT", "3001")
-    log  = "/tmp/kiosk-saas-booking-isolation.log"
-    db   = "kiosk_saas_booking_development"
+    log  = "/tmp/kiosk-stylish-isolation.log"
+    db   = "kiosk_stylish_development"
 
     server_url   = "http://127.0.0.1:#{port}"
     kiosk_issuer = server_url
 
-    puts "\n── Starting saas-booking (isolation test) on #{server_url} ──"
+    puts "\n── Starting stylish (isolation test) on #{server_url} ──"
 
     # ── boot the server ────────────────────────────────────────────────
     File.truncate(log, 0) if File.exist?(log)
@@ -200,7 +200,7 @@ namespace :demo do
 
     port         = ENV.fetch("PORT", "3001")
     server_url   = "http://127.0.0.1:#{port}"
-    log          = "/tmp/kiosk-saas-register.log"
+    log          = "/tmp/kiosk-stylish-register.log"
     flow_rb      = File.expand_path("../../register_flow.rb", __dir__)
     failures     = []
 
@@ -281,9 +281,9 @@ namespace :demo do
 
     port         = ENV.fetch("PORT", "3001")
     server_url   = "http://127.0.0.1:#{port}"
-    log          = "/tmp/kiosk-saas-booking-binding.log"
+    log          = "/tmp/kiosk-stylish-binding.log"
     flow_rb      = File.expand_path("../../binding_flow.rb", __dir__)
-    db           = "kiosk_saas_booking_development"
+    db           = "kiosk_stylish_development"
     failures     = []
 
     # The seeded account holder (db/seeds.rb) — Alice approves the link.
@@ -291,7 +291,7 @@ namespace :demo do
     holder_email    = "alice@example.com"
     holder_password = "combette-demo-password"
 
-    puts "\n── Starting saas-booking (account-binding walkthrough) on #{server_url} ──"
+    puts "\n── Starting stylish (account-binding walkthrough) on #{server_url} ──"
 
     File.truncate(log, 0) if File.exist?(log)
     server_pid = spawn(
@@ -373,7 +373,7 @@ end
 namespace :demo do
   # ── demo:redteam ─────────────────────────────────────────────────────────
   desc <<~DESC
-    Adversarial regression battery — attacks saas-booking's live surface.
+    Adversarial regression battery — attacks stylish's live surface.
 
     Boots the server and runs redteam_suite.rb against the salon-booking
     surface (salons / my_appointments queries, book_appointment action),
@@ -386,7 +386,7 @@ namespace :demo do
       BLOCKED  UnknownQuery     — unregistered query name → 404
       BLOCKED  UnknownAction    — unregistered action name → 404
 
-    saas-booking has no payment or KYC surface, so the battery covers only the
+    stylish has no payment or KYC surface, so the battery covers only the
     attacks the surface can actually exhibit. Exits 0 when all are BLOCKED;
     exits 1 on any BREACH. A BREACH = a real hole — fix the app, not the scenario.
   DESC
@@ -395,11 +395,11 @@ namespace :demo do
     require "uri"
 
     port         = ENV.fetch("PORT", "3001")
-    log          = "/tmp/kiosk-saas-booking-redteam.log"
+    log          = "/tmp/kiosk-stylish-redteam.log"
     server_url   = "http://127.0.0.1:#{port}"
     kiosk_issuer = server_url
 
-    puts "\n── Starting saas-booking (redteam battery) on #{server_url} ──"
+    puts "\n── Starting stylish (redteam battery) on #{server_url} ──"
 
     File.truncate(log, 0) if File.exist?(log)
     server_pid = spawn(
@@ -471,11 +471,11 @@ namespace :demo do
     require "json"
 
     port         = ENV.fetch("PORT", "3001")
-    log          = "/tmp/kiosk-saas-booking-schema.log"
+    log          = "/tmp/kiosk-stylish-schema.log"
     server_url   = "http://127.0.0.1:#{port}"
     kiosk_issuer = server_url
 
-    puts "\n── Starting saas-booking (schema proof) on #{server_url} ──"
+    puts "\n── Starting stylish (schema proof) on #{server_url} ──"
 
     File.truncate(log, 0) if File.exist?(log)
     server_pid = spawn(

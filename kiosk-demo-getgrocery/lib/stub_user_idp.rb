@@ -6,7 +6,7 @@
 # human through this stub instead: `Authorization: user:u-<uuid>` parses
 # into a {Kiosk::Identity} with actor=human. In production this is a real
 # session adapter — the only one shipped today is kiosk-user-idp-devise,
-# which reads the request's Warden user (see kiosk-demo-saas-booking for
+# which reads the request's Warden user (see kiosk-demo-stylish for
 # it wired end-to-end). The account-binding surfaces (device verify page,
 # link mint, unlink) authenticate the human through this channel; agents
 # never present this shape.

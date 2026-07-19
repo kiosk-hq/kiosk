@@ -1,6 +1,6 @@
 # frozen_string_literal: true
 
-# Demo-specific schema: a SaaS-booking-shape provider.
+# Demo-specific schema: a salon-booking-shape provider.
 #
 # `salons` is open-read (any authenticated principal browses) via the
 # registered `salons` named query.

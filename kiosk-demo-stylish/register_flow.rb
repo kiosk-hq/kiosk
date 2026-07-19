@@ -1,6 +1,6 @@
 # frozen_string_literal: true
 
-# Combette (saas-booking) registration-PoW driver.
+# Combette / stylish registration-PoW driver.
 #
 # Proves the optional Equihash registration gate: POST /auth/register with no
 # proof returns 402; the agent solves the challenge(s) and resubmits the SAME

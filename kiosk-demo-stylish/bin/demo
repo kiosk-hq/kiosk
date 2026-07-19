@@ -123,7 +123,7 @@ curl -sS -X POST "$SERVER_URL/kiosk/query" \
 
 heading "Demo complete"
 say "Server log:        /tmp/kiosk-demo.log"
-say "DB:                kiosk_saas_booking_development"
+say "DB:                kiosk_stylish_development"
 say ""
 say "Try it yourself (the wire is plain HTTP — curl + jq):"
 say "  run a named query:"

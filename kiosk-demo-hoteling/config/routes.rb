@@ -16,7 +16,7 @@ Rails.application.routes.draw do
   # Kiosk wire surface (controllers shipped by kiosk-server).
   # In a follow-up release these will be mounted via the engine's own
   # routes drawer; for v0.1 alpha we wire them manually here.
-  # REST endpoints (ADR-0005): one per verb, HTTP method = semantics.
+  # REST endpoints: one per verb, HTTP method = semantics.
   get  "/kiosk/schema",                            to: "kiosk/server/wire#schema"
   post "/kiosk/query",                             to: "kiosk/server/wire#query"
   post "/kiosk/run",                               to: "kiosk/server/wire#run"

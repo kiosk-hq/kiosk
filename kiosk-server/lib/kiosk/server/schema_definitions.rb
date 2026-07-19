@@ -13,7 +13,7 @@ module Kiosk
     #   006 create_kiosk_mandates              → intent_mandates, cart_mandates, payment_mandates, settlements (AP2 trail)
     #   007 add_kyc_verified_at                → kiosk.agents.kyc_verified_at column
     #   008 rebuild_kiosk_device_authorizations → device_authorizations in the
-    #       account-binding shape (public_key_pem, kind, hashed user_code — ADR-0017)
+    #       account-binding shape (public_key_pem, kind, hashed user_code)
     #
     # Pure functions: no database connection, no Rails dependency. Output
     # is SQL strings the host migration framework (`ActiveRecord::Migration#execute`)
@@ -77,7 +77,7 @@ module Kiosk
           CREATE INDEX idx_agents_user_id ON "#{schema}".agents (user_id) WHERE revoked_at IS NULL;
           -- Dedupe at the DB, not via SELECT-then-INSERT (TOCTOU): two LIVE
           -- rows for one public key cannot coexist. Partial (WHERE revoked_at
-          -- IS NULL) so a revoked key can re-register. (K-043)
+          -- IS NULL) so a revoked key can re-register.
           CREATE UNIQUE INDEX idx_agents_public_key_live
             ON "#{schema}".agents (public_key) WHERE revoked_at IS NULL;
 
@@ -177,7 +177,7 @@ module Kiosk
       # adapter existed and the InMemory store served the (dormant)
       # endpoints, so shipped code never read or wrote it. Migration 008
       # ({.rebuild_device_authorizations_sql}) rebuilds it in the
-      # account-binding shape (ADR-0017) that the shipped
+      # account-binding shape that the shipped
       # {DeviceAuthorizationStores::ActiveRecord} adapter reads and writes;
       # this 005 form is kept for migration-history fidelity.
       #
@@ -326,7 +326,7 @@ module Kiosk
         SQL
       end
 
-      # Adds the per-assistant governance columns to `kiosk.agents` (ADR-0019):
+      # Adds the per-assistant governance columns to `kiosk.agents`:
       #   `spending_cap_cents bigint` — per-assistant spend cap; NULL = unlimited
       #     (the default), 0 = disabled. Enforced by the pay path via the
       #     `config.spending_cap` seam ({ColumnSpendingCap} reads this column).
@@ -346,7 +346,7 @@ module Kiosk
       # ─── 008 rebuild_kiosk_device_authorizations (account binding) ─────
 
       # Rebuilds `kiosk.device_authorizations` in the account-binding shape
-      # (ADR-0017) read/written by {DeviceAuthorizationStores::ActiveRecord},
+      # read/written by {DeviceAuthorizationStores::ActiveRecord},
       # the default store when ActiveRecord is present:
       #
       #   - `user_code` (plaintext) → `user_code_hash` — codes are stored

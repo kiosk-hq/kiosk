@@ -8,7 +8,7 @@
 
 Every current personal agent (Hermes, OpenClaw, ChatGPT Agent, Gemini with app navigation) stalls at the same wall: the connector stops at discovery.
 
-**The Booking.com connector probed in-session confirms the end-state** (`docs/research/2026-06-22-consumer-agent-validation.md`, Front A):
+**The Booking.com connector probed in-session confirms the end-state:**
 
 > Both flagship consumer-commerce connectors in Claude today (Uber Eats, Booking.com) **stop at discovery.** Their terminal step is a deep link back to the provider's own app/site, where the human must register and pay.
 
@@ -95,7 +95,7 @@ The generator does **not** touch your routes. `kiosk-server` ships the wire cont
 
 ```ruby
 # config/routes.rb — the wire surface, mounted manually (v0.1 alpha).
-# REST endpoints (ADR-0005): one per verb, HTTP method carries the semantics.
+# REST endpoints: one per verb, HTTP method carries the semantics.
 get  "/kiosk/schema",         to: "kiosk/server/wire#schema"
 post "/kiosk/query",          to: "kiosk/server/wire#query"
 post "/kiosk/run",            to: "kiosk/server/wire#run"
@@ -189,4 +189,4 @@ The stub PSP (`StubPsp`, a `Kiosk::PaymentProviders::Base` subclass) used in the
 
 ---
 
-*Validation research source: `docs/research/2026-06-22-consumer-agent-validation.md` — primary evidence from live connector probes (Booking.com) as of 2026-06-22. The Booking.com connector finding (search + QA only, no reserve/checkout tool) was confirmed in-session via MCP tool introspection.*
+*Validation research: primary evidence from live connector probes (Booking.com) as of 2026-06-22. The Booking.com connector finding (search + QA only, no reserve/checkout tool) was confirmed in-session via MCP tool introspection.*

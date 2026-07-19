@@ -9,7 +9,7 @@ module Kiosk
     # Birthday-collision PoW (Biryukov & Khovratovich, 2016).
     # Default parameters: (n=168, k=7) → ~1.3 GiB / ~10s reference solve
     # (see bench/). Equihash is NOT ASIC- or GPU-proof — its role here is a
-    # cheap-to-verify metered toll, not a hardware equaliser (ADR-0007).
+    # cheap-to-verify metered toll, not a hardware equaliser.
     #
     # == Algorithm
     #
@@ -159,7 +159,7 @@ module Kiosk
       # largest params whose reference numpy solve stays under a ~30s / 1-2 GiB
       # consumer-laptop budget (p95 ~10s, ~1.3 GiB peak). n_div = n/(k+1) = 21
       # drives cost; n must be a multiple of 8 and n_div must not exceed 24. See
-      # bench/README.md for the measured grid. Providers tune per ADR-0007
+      # bench/README.md for the measured grid. Providers tune
       # ("N ∝ cost of serving the verb"): raise n for a heavier toll, raise the
       # policy's proof count for throughput pricing.
       #
@@ -197,7 +197,7 @@ module Kiosk
         #
         # Reject any element that is not a plain Integer (nil, String, Float,
         # …) rather than coercing — a malformed index means a malformed proof,
-        # which must return false, never raise (K-149).
+        # which must return false, never raise.
         return false unless indices.all? { |idx| idx.is_a?(Integer) && idx >= 0 }
         return false unless indices.uniq.length == expected_len
 
@@ -208,8 +208,8 @@ module Kiosk
         # header_nonce defaults to 0 for now; extensibility point.
         #
         # header_nonce is client-supplied. A non-numeric/non-coercible value
-        # means a malformed proof, which must return false, never raise
-        # (K-149) — Integer() throws ArgumentError/TypeError on "abc", [1], {}.
+        # means a malformed proof, which must return false, never raise —
+        # Integer() throws ArgumentError/TypeError on "abc", [1], {}.
         hn = nonce[:header_nonce] || nonce["header_nonce"] || 0
         hn = begin
           Integer(hn)

@@ -118,7 +118,7 @@ cart_payload = {
   user_id:            user_id,
   agent_id:           agent_id,
   iss:                ISSUER,
-  # Bind the cart to the placed order (K-185): the cart mandate carries the
+  # Bind the cart to the placed order: the cart mandate carries the
   # order_id so the settlement can be matched to a specific owned order, exactly
   # as getgrocery binds its cart to a create_order id. confirm_order gates on it.
   line_items:         [{ order_id: order_id, total: total_cents }],

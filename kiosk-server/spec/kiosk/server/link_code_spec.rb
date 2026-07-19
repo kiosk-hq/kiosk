@@ -2,7 +2,7 @@
 
 require "openssl"
 
-# The link half of the ceremony (ADR-0017, Kiosk extension). Binding is
+# The link half of the ceremony (Kiosk extension). Binding is
 # stubbed (account_binding_spec.rb covers it); the possession proof uses a
 # REAL key so the BIND-POP gate is exercised end-to-end at this layer.
 RSpec.describe Kiosk::Server::LinkCode do
@@ -64,7 +64,7 @@ RSpec.describe Kiosk::Server::LinkCode do
       result = described_class.redeem(code: code, public_key_pem: pem, signed: signed_proof)
 
       expect(result).to eq(agent_id: "agent-1", user_id: user_id, access_token: "kiosk-pop-jwt")
-      # The PEM is normalised (stripped) before binding — K-204 pattern.
+      # The PEM is normalised (stripped) before binding.
       expect(Kiosk::Server::AccountBinding).to have_received(:bind!).with(
         public_key_pem: pem.strip, user_id: user_id, requested_role: nil,
       )

@@ -241,8 +241,7 @@ RSpec.describe Kiosk::Server::DeviceAuthorizationStores do
   describe "Kiosk.configuration.device_authorization_store" do
     # ActiveRecord IS loaded in this spec process (required at the top of
     # this file), so the lazy default resolves to the durable adapter —
-    # exactly what a Rails host gets (ADR-0017: in-memory dies cross-process,
-    # K-156).
+    # exactly what a Rails host gets (in-memory dies cross-process).
     it "lazy-defaults to the durable ActiveRecord store when ActiveRecord is present" do
       expect(Kiosk.configuration.device_authorization_store)
         .to be_a(Kiosk::Server::DeviceAuthorizationStores::ActiveRecord)

@@ -15,7 +15,7 @@
 # the schema verb's `verbs` field is the FIXED four-verb wire surface
 # (Kiosk::Server::Executor::VERBS = [query, run, pay, schema]) and lists `pay`
 # unconditionally. The advertised capability set is what drops `pay` when no
-# payment_provider is configured (ADR-0009 + K-334) — so the honest assertion is
+# payment_provider is configured — so the honest assertion is
 # `/.well-known/kiosk.json` capabilities == [schema, query, run], and no
 # payments block in agents.json / agents.txt.
 #

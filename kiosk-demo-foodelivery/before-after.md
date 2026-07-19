@@ -8,13 +8,13 @@
 
 Every current personal agent (Hermes, OpenClaw, ChatGPT Agent, Gemini with app navigation) stalls at the same two walls: the anti-bot screen and the login/payment gate.
 
-**Anti-bot friction documented in validation research** (`docs/research/2026-06-22-consumer-agent-validation.md`, Front B):
+**Anti-bot friction documented in validation research:**
 
 > Documented ChatGPT-Agent food orders take **6–20 minutes** (2–3× human) and stop at the **anti-bot screen, login, or payment** — the agent opens a user browser to finish.
 
 The structural root cause is a stack of incompatible requirements: behavioral fingerprinting (Cloudflare Turnstile, DataDome) flags agent traffic; OTP walls assume a human-held device; the user's payment instrument lives outside the agent's context; and EU/UK PSD2 SCA requires a biometric or device-OTP challenge on first use that only the human can satisfy.
 
-**The Uber Eats connector probed in-session confirms the end-state** (`docs/research/2026-06-22-consumer-agent-validation.md`, Front A):
+**The Uber Eats connector probed in-session confirms the end-state:**
 
 The complete Uber Eats tool surface available to Claude has two tools: `search` (returns restaurant listings) and `publish_analytics` (internal telemetry). The session schema's own `deeplink_id` field is described as *"Id generated in the widget before navigating to Uber Eats"* — confirming the intended flow: **the agent shows options, then deep-links the user out to the Uber Eats app** to register, pay, and order. There is no add-to-cart, checkout, payment, or confirm tool.
 
@@ -97,7 +97,7 @@ The generator does **not** touch your routes. `kiosk-server` ships the wire cont
 
 ```ruby
 # config/routes.rb — the wire surface, mounted manually (v0.1 alpha).
-# REST endpoints (ADR-0005): one per verb, HTTP method carries the semantics.
+# REST endpoints: one per verb, HTTP method carries the semantics.
 get  "/kiosk/schema",         to: "kiosk/server/wire#schema"
 post "/kiosk/query",          to: "kiosk/server/wire#query"
 post "/kiosk/run",            to: "kiosk/server/wire#run"
@@ -189,4 +189,4 @@ The stub PSP (`StubPsp`, a `Kiosk::PaymentProviders::Base` subclass) used in the
 
 ---
 
-*Validation research source: `docs/research/2026-06-22-consumer-agent-validation.md` — primary evidence from live connector probes (Uber Eats, Booking.com) plus independent verification of OpenAI Instant Checkout walkback, Amazon v. Perplexity injunction, and Google Universal Cart, all as of 2026-06-22.*
+*Validation research: primary evidence from live connector probes (Uber Eats, Booking.com) plus independent verification of OpenAI Instant Checkout walkback, Amazon v. Perplexity injunction, and Google Universal Cart, all as of 2026-06-22.*

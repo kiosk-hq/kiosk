@@ -6,7 +6,7 @@ RSpec.describe Kiosk::Server::ConfigurationExtension do
       expect(Kiosk.configuration.mount_path).to eq("/kiosk")
     end
 
-    # capabilities is COMPUTED from the live registry (ADR-0009): with nothing
+    # capabilities is COMPUTED from the live registry: with nothing
     # registered and no payment provider, the endpoint advertises no verbs.
     it "computes capabilities as empty when no queries/actions/payments exist" do
       expect(Kiosk.configuration.capabilities).to eq([])
@@ -24,7 +24,7 @@ RSpec.describe Kiosk::Server::ConfigurationExtension do
       expect(Kiosk.configuration.min_client).to eq(Kiosk::Protocol::MIN_CLIENT)
     end
 
-    # K-100: the auth-challenge nonce must outlive the registration PoW solve,
+    # The auth-challenge nonce must outlive the registration PoW solve,
     # or a slow honest solver's nonce expires mid-solve (and the proofs are
     # already burned). The PoW solve window is pow_ttl * count.
     describe "auth_challenge_ttl vs the registration PoW solve window" do
@@ -75,7 +75,7 @@ RSpec.describe Kiosk::Server::ConfigurationExtension do
     end
   end
 
-  # ─── computed capabilities (ADR-0009) ──────────────────────────────────
+  # ─── computed capabilities ──────────────────────────────────
   # Members are verb names actually served, drawn from schema/query/run/pay
   # and emitted in that order. Derived from the live registry so discovery
   # never advertises a verb the provider has not wired.

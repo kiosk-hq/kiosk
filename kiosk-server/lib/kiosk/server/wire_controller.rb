@@ -18,7 +18,7 @@ if defined?(::ActionController::API)
       # REST wire surface — Rails controller wrapping {Executor}.
       # See the Endpoints section of the spec for the contract.
       #
-      # REST endpoints (one per verb — ADR-0005):
+      # REST endpoints (one per verb):
       #   GET  /kiosk/schema
       #   POST /kiosk/query  { "name": "catalog", ... }
       #   POST /kiosk/run    { "name": "create_order", ... }
@@ -27,7 +27,7 @@ if defined?(::ActionController::API)
       # Wire response (JSON): success per {Result#to_envelope}, error per
       # {Errors::Base#to_envelope}.
       #
-      # Identity resolution (ADR-0013): {IdentityResolution.resolve} — the
+      # Identity resolution: {IdentityResolution.resolve} — the
       # agent IdP first (`Kiosk.configuration.agent_idp`, defaulting to the
       # bundled kiosk-pop DefaultAgentIdp so a zero-config install works),
       # then `Kiosk.configuration.user_idp` (web/mobile sessions on the same
@@ -59,7 +59,7 @@ if defined?(::ActionController::API)
         def run_command(command)
           # parse_body! runs INSIDE the rescue below: a malformed body raises
           # Errors::BadRequest, which must render a 400 envelope, not escape as
-          # an uncaught 500 (K-147; the same parse-outside-rescue class fixed
+          # an uncaught 500 (the same parse-outside-rescue class fixed
           # for AuthController/KycAttestationController).
           args     = parse_body!
           identity = resolve_identity!
@@ -129,7 +129,7 @@ if defined?(::ActionController::API)
           render json: envelope, status: status
         end
 
-        # RFC 7235 challenge header that de-overloads the two 402 gates (ADR-0014):
+        # RFC 7235 challenge header that de-overloads the two 402 gates:
         # the header NAMES the gate, the JSON body still CARRIES the payload
         # (the PoW N-challenge list / the payment_setup pointer). Keyed purely on
         # the error class; nil for every non-402 error (no header emitted).

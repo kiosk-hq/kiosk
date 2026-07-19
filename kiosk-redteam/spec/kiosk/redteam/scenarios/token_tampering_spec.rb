@@ -82,7 +82,7 @@ RSpec.describe Kiosk::Redteam::Scenarios::TokenTampering do
 
     # The role branch (claims["role"]) is covered by the token above. The
     # remaining branches (sub / exp / else) are only reached for tokens that
-    # carry no `role` claim — e.g. a role-absent provider per ADR-0011 (K-078).
+    # carry no `role` claim — e.g. a role-absent provider.
     # Decode the tampered payload to prove the intended claim was flipped.
     def flipped_claims(scenario_instance, token)
       payload_b64 = scenario_instance.send(:tamper_token, token).split(".")[1]
@@ -90,7 +90,7 @@ RSpec.describe Kiosk::Redteam::Scenarios::TokenTampering do
       JSON.parse(Base64.urlsafe_decode64(padded))
     end
 
-    context "when the token carries no role claim (role-absent provider, ADR-0011)" do
+    context "when the token carries no role claim (role-absent provider)" do
       let(:sub_token) do
         now = Time.now.to_i
         JWT.encode({ sub: "user-b", exp: now + 3600, iat: now }, signing_key, "RS256")

@@ -271,7 +271,7 @@ module Kiosk
 
       # Solve one Equihash registration challenge with the shipped Python solver.
       # Registration PoW is the SAME Equihash machinery as the query/run gate
-      # (ADR-0001 amended: one PoW = Equihash).
+      # (one PoW backend: Equihash).
       #
       # @param challenge [Hash] a challenge from the 402 error.challenges[]
       # @return [Hash] the proof nonce {"indices"=>[...], "header_nonce"=>N}

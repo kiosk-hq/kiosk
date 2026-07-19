@@ -54,7 +54,7 @@ RSpec.describe Kiosk::Server::KycVerifier do
         .to raise_error(Kiosk::Server::Errors::Forbidden, /subject/)
     end
 
-    # K-092: on a bigint-PK host the authenticated Identity carries an Integer
+    # On a bigint-PK host the authenticated Identity carries an Integer
     # user_id (the token `sub` round-trips as bigint) while the KYC provider
     # signs `sub` with the String id it was handed. The subject check must
     # compare as STRING on both sides, or every attestation on a bigint host is

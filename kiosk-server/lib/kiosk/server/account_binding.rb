@@ -2,7 +2,7 @@
 
 module Kiosk
   module Server
-    # The product of the account-binding ceremony (ADR-0017): a durable
+    # The product of the account-binding ceremony: a durable
     # «public key → assistant-account holder's user_id» link. Shared by the
     # claim flow (POST /oauth/token, device_code grant) and the link flow
     # (POST /auth/claim) — both call {.bind!} after their possession proof
@@ -24,7 +24,7 @@ module Kiosk
     #
     # Tokens are ALWAYS minted through the same {AgentIdentityProviders::
     # DefaultAgentIdp}/{JwtIssuer} path as `/auth/login` — the ceremony is
-    # a binding surface, never a second token story (ADR-0008 holds).
+    # a binding surface, never a second token story.
     module AccountBinding
       module_function
 
@@ -117,7 +117,7 @@ module Kiosk
         # human's principal. Role: the ceremony's requested_role (validated
         # against the provider's declared roles at request time) or the
         # provider's registration_role default; NULL when neither is set
-        # (ADR-0011: roles are hook-or-absent).
+        # (roles are hook-or-absent).
         def register_linked(conn, config, pem, user_id, requested_role)
           role = (requested_role || config.registration_role)&.to_s
           role = nil if role && role.empty?
@@ -139,7 +139,7 @@ module Kiosk
           { agent_id: agent_id, user_id: user_id.to_s, access_token: token, fresh: true }
         end
 
-        # kiosk-pop is the only token minter (ADR-0008/0017): same
+        # kiosk-pop is the only token minter: same
         # DefaultAgentIdp path as /auth/login and /auth/register.
         def issue_token(agent_id, role)
           AgentIdentityProviders::DefaultAgentIdp.new.issue(agent_id: agent_id, role: role)

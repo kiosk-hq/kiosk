@@ -13,7 +13,7 @@
 
 ---
 
-## How Arch 2 works
+## How offline unlock works
 
 ```
 NFC tag / QR code

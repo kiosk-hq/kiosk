@@ -85,7 +85,7 @@ RSpec.describe Kiosk::Server::SchemaDefinitions do
       expect(out).to include("user_id         bigint NOT NULL")
     end
 
-    # K-043 — DB-level dedupe of the credential, not TOCTOU SELECT-then-INSERT.
+    # DB-level dedupe of the credential, not TOCTOU SELECT-then-INSERT.
     it "adds a PARTIAL unique index on public_key for LIVE (non-revoked) rows only" do
       expect(sql).to match(
         /CREATE UNIQUE INDEX idx_agents_public_key_live\s+ON "kiosk"\.agents \(public_key\) WHERE revoked_at IS NULL/,
@@ -102,7 +102,7 @@ RSpec.describe Kiosk::Server::SchemaDefinitions do
   describe ".agent_governance_columns_sql" do
     subject(:sql) { described_class.agent_governance_columns_sql(schema: "kiosk") }
 
-    it "adds spending_cap_cents + human_label to agents, idempotently (ADR-0019)" do
+    it "adds spending_cap_cents + human_label to agents, idempotently" do
       expect(sql).to include('ALTER TABLE "kiosk".agents')
       expect(sql).to include("ADD COLUMN IF NOT EXISTS spending_cap_cents bigint")
       expect(sql).to include("ADD COLUMN IF NOT EXISTS human_label")

@@ -19,8 +19,8 @@ module Kiosk
     # so it's testable without Rails.
     class Executor
       # The fixed wire-surface verbs — see the Endpoints section of the spec.
-      # `events` was removed (K-083): it was never an ADR-0009 capability, the
-      # Kiosk::Event type is gone (K-069), and the stub only ever raised a raw
+      # `events` was removed: it was never a capability, the
+      # Kiosk::Event type is gone, and the stub only ever raised a raw
       # NotImplementedError. An unknown verb now returns a clean 400 envelope.
       VERBS = %i[query run pay schema].freeze
 
@@ -152,9 +152,9 @@ module Kiosk
 
         # Payment is agent-only: the AP2 mandate chain is signed by the agent's
         # payment key. A non-agent principal (e.g. a web/mobile user_idp session,
-        # agent_id nil per ADR-0013) has no payment key, so reject it cleanly
+        # agent_id nil) has no payment key, so reject it cleanly
         # here rather than letting agent_payment_key(nil) raise InvalidToken →
-        # HTTP 500 downstream (K-114; same 500-not-4xx class as K-070/K-093).
+        # HTTP 500 downstream (same 500-not-4xx class as the other guarded paths).
         if identity.agent_id.nil?
           raise Errors::Forbidden, "payment requires an agent identity (mandates are agent-signed)"
         end
@@ -184,7 +184,7 @@ module Kiosk
           SessionContext.open(connection: connection, identity: identity) do
             intent  = MandateVerifier.verify_intent(raw_jws: raw_intent, identity: identity)
             cart    = MandateVerifier.verify_cart(raw_jws: raw_cart, identity: identity, intent: intent)
-            # Per-assistant spending cap (ADR-0019). Checked here — after the cart
+            # Per-assistant spending cap. Checked here — after the cart
             # is known, before any mandate row is persisted and before the
             # irreversible capture — so a rejection rolls back cleanly (nothing
             # persisted, no charge, no burned mandate id).
@@ -327,7 +327,7 @@ module Kiosk
 
       def q(value) = connection.quote(value)
 
-      # ─── spending cap (ADR-0019) ───────────────────────────────────────
+      # ─── spending cap ───────────────────────────────────────
 
       # Raises Errors::SpendingCapExceeded when the acting assistant's cap would
       # be exceeded by this cart. No-op when no `config.spending_cap` seam is

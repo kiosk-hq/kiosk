@@ -50,7 +50,7 @@ RSpec.describe Kiosk::Server::AgentLogin do
     }.to raise_error(Kiosk::Server::Errors::NotFound, /no agent registered/)
   end
 
-  # K-148: `allowed_roles` comes back as a Postgres text[] LITERAL string
+  # `allowed_roles` comes back as a Postgres text[] LITERAL string
   # ("{customer}") from the raw adapter, but some adapters/casts hand back a
   # real Ruby Array. primary_role must handle both — the String branch is
   # covered by the tests above; this pins the Array branch (allowed_roles.first).

@@ -44,7 +44,7 @@ RSpec.describe Kiosk::Server::SessionContext do
       ])
     end
 
-    it "skips the role SET LOCAL for a role-less identity (ADR-0011, K-078)" do
+    it "skips the role SET LOCAL for a role-less identity" do
       described_class.open(
         connection: connection,
         identity:   build_identity(actor: "agent", role: nil),

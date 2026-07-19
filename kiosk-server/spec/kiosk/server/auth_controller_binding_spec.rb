@@ -1,6 +1,6 @@
 # frozen_string_literal: true
 
-# AuthController's link-flow endpoints (ADR-0017): link (session-authed code
+# AuthController's link-flow endpoints: link (session-authed code
 # mint), claim (register-shaped redeem), unlink (registration-layer
 # revocation). Service semantics live in link_code_spec.rb /
 # account_binding_spec.rb; here the controller contract is pinned — auth,

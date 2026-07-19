@@ -70,7 +70,7 @@ namespace :demo do
     # off_session charge you need EITHER a real Stripe test key (sk_test_…,
     # producing a genuine pi_ against Stripe test mode) OR — when no key is
     # present, e.g. in CI — a local stripe-mock, which returns shaped pi_
-    # fixtures so the full flow runs secret-free (K-110: never inject keys
+    # fixtures so the full flow runs secret-free (never inject keys
     # into CI). A real key takes precedence when set.
     use_mock = ENV["STRIPE_SECRET_KEY"].to_s.strip.empty?
     mock_url = use_mock ? start_stripe_mock : nil

@@ -18,7 +18,7 @@ module Kiosk
         config = Kiosk.configuration
         # `.to_s` first so a wrong-typed field (number/object/array from the JSON
         # body) yields a clean 400 downstream via PopVerifier's invalid-key guard,
-        # not a NoMethodError 500 here (K-204).
+        # not a NoMethodError 500 here.
         pem    = public_key_pem.to_s.strip
 
         # Prove possession BEFORE any lookup or state change.

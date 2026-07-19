@@ -12,8 +12,8 @@ module Kiosk
     # Verified against `Kiosk.configuration.kyc_public_key` (RS256).
     # Checks: `level == "verified"` (case-sensitive — an unverified/other-level
     # attestation is rejected), correct issuer, `sub` matches the authenticated
-    # identity (compared as String on both sides so a bigint-PK host works — see
-    # K-092), and not expired. Raises `Errors::Forbidden` on any failure.
+    # identity (compared as String on both sides so a bigint-PK host works),
+    # and not expired. Raises `Errors::Forbidden` on any failure.
     module KycVerifier
       module_function
 
@@ -45,7 +45,7 @@ module Kiosk
           )
         end
 
-        # Compare the principal as STRING on BOTH sides (K-092, mirroring
+        # Compare the principal as STRING on BOTH sides (mirroring
         # MandateVerifier). On a bigint-PK host the authenticated Identity
         # carries the raw Integer that the token `sub` round-trips as, while the
         # KYC provider signs `sub` with whatever id it was handed (a String). A

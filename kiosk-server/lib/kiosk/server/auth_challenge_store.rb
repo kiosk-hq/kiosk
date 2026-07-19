@@ -29,7 +29,7 @@ module Kiosk
       # Unix timestamp +exp+. Overwrites any prior challenge for the same key —
       # only the most recently issued challenge is valid.
       #
-      # Prunes expired entries opportunistically on the way in (K-210): a
+      # Prunes expired entries opportunistically on the way in: a
       # distinct-key challenge flood — GET /auth/challenge is unauthenticated —
       # cannot accumulate unboundedly, since each insert first drops every
       # already-expired entry. Without this, expired entries only cleared when a

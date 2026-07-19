@@ -96,7 +96,7 @@ RSpec.describe Kiosk::Server::TestExecutor do
       expect { executor.with_identity(identity) }.to raise_error(ArgumentError, /block required/)
     end
 
-    it "leaves an enclosing scope intact when a blockless call is rescued inside it (K-213)" do
+    it "leaves an enclosing scope intact when a blockless call is rescued inside it" do
       preserved = nil
       executor.with_identity(nil) do
         begin
@@ -110,7 +110,7 @@ RSpec.describe Kiosk::Server::TestExecutor do
       expect(preserved).to be(true)
     end
 
-    it "keeps current_identity from an enclosing scope after a rescued blockless call (K-213)" do
+    it "keeps current_identity from an enclosing scope after a rescued blockless call" do
       observed = nil
       executor.with_identity(identity) do
         begin
@@ -248,7 +248,7 @@ RSpec.describe Kiosk::Server::TestExecutor do
       expect(result.first).to include(id: 42, user_id: "u-1", salon_id: 1)
     end
 
-    it "renders a Time as a UTC ISO-8601 literal without mutating the caller's object (K-214)" do
+    it "renders a Time as a UTC ISO-8601 literal without mutating the caller's object" do
       system_connection.queue_result([row])
       t = Time.new(2026, 7, 14, 12, 0, 0, "+03:00")
       executor.seed(:t, { at: t }, count: 1)
@@ -257,7 +257,7 @@ RSpec.describe Kiosk::Server::TestExecutor do
       expect(t.utc_offset).to eq(3 * 3600)
     end
 
-    it "renders a plain DateTime without raising NoMethodError (K-214)" do
+    it "renders a plain DateTime without raising NoMethodError" do
       require "date"
       system_connection.queue_result([row])
       d = DateTime.new(2026, 7, 14, 12, 0, 0, "+03:00")

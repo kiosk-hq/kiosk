@@ -100,7 +100,7 @@ RSpec.describe Kiosk::UserIdentityProviders::Devise do
       end
     end
 
-    context "shipped wire — ActionDispatch::Request (K-247)" do
+    context "shipped wire — ActionDispatch::Request" do
       # kiosk-server's WireController does NOT pass `self`; it passes
       # `request` (an ActionDispatch::Request) to
       # `IdentityResolution.resolve(request)`. That object has no

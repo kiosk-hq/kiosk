@@ -1,6 +1,6 @@
 # frozen_string_literal: true
 
-# skooti redteam battery (R3 Phase 2 Task 4)
+# skooti redteam battery
 #
 # Exercises the full skooti chain: Equihash PoW n=96 k=5 → KYC → reserve → pay →
 # start_rental (3-gate ownership/KYC/payment).  Headline scenarios:

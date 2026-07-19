@@ -36,7 +36,7 @@ Gem::Specification.new do |spec|
 
   # Ship the reference Python solver alongside the Ruby verifier (README calls
   # it "included"; the Rakefile's parity check requires it). Guarded by
-  # File.exist? so packaging never fails if a sibling file is absent (K-155).
+  # File.exist? so packaging never fails if a sibling file is absent.
   spec.files         = Dir.glob("lib/**/*") + %w[README.md LICENSE.txt CHANGELOG.md] +
                        %w[solve_cuckoo.py requirements.txt SKILL.md].select { |f| File.exist?(f) }
   spec.require_paths = ["lib"]

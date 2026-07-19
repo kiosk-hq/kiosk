@@ -198,13 +198,13 @@ bundle exec rails db:create db:migrate db:seed RAILS_ENV=development \
   }
 ok "schema + seeds applied"
 
-# ─── DB-level dedupe of live agent keys (K-043) ─────────────────────────
+# ─── DB-level dedupe of live agent keys ─────────────────────────────────
 # Prove the partial UNIQUE index (public_key WHERE revoked_at IS NULL)
 # rejects a SECOND live agent row for one key at the DB level — not via a
 # TOCTOU SELECT-then-INSERT. A revoked row for the same key is allowed.
 log "assert DB-level uniqueness on kiosk.agents.public_key (live rows)"
 K043_KEY="k043-dup-$$"
-psql -d "$DB_NAME" -v ON_ERROR_STOP=1 -qtA >/dev/null 2>&1 <<SQL || fail "K-043 setup insert failed"
+psql -d "$DB_NAME" -v ON_ERROR_STOP=1 -qtA >/dev/null 2>&1 <<SQL || fail "live-key uniqueness setup insert failed"
   INSERT INTO users (id, created_at, updated_at) VALUES (gen_random_uuid(), now(), now());
   INSERT INTO kiosk.agents (user_id, allowed_roles, public_key)
     SELECT id, ARRAY['customer']::text[], '$K043_KEY' FROM users LIMIT 1;
@@ -215,17 +215,17 @@ if psql -d "$DB_NAME" -v ON_ERROR_STOP=1 -qtA >/dev/null 2>&1 <<SQL
     SELECT id, ARRAY['customer']::text[], '$K043_KEY' FROM users LIMIT 1;
 SQL
 then
-  fail "K-043: a SECOND live agent row with the same public_key was accepted (unique index missing)"
+  fail "a SECOND live agent row with the same public_key was accepted (unique index missing)"
 fi
 # A revoked row for the same key IS allowed (partial index skips revoked rows).
-psql -d "$DB_NAME" -v ON_ERROR_STOP=1 -qtA >/dev/null 2>&1 <<SQL || fail "K-043: revoked-key re-insert wrongly rejected"
+psql -d "$DB_NAME" -v ON_ERROR_STOP=1 -qtA >/dev/null 2>&1 <<SQL || fail "revoked-key re-insert wrongly rejected"
   INSERT INTO kiosk.agents (user_id, allowed_roles, public_key, revoked_at)
     SELECT id, ARRAY['customer']::text[], '$K043_KEY', now() FROM users LIMIT 1;
 SQL
 psql -d "$DB_NAME" -qtA >/dev/null 2>&1 <<SQL || true
   DELETE FROM kiosk.agents WHERE public_key = '$K043_KEY';
 SQL
-ok "K-043: live-key uniqueness enforced at the DB; revoked key may re-register"
+ok "live-key uniqueness enforced at the DB; revoked key may re-register"
 
 # ─── signing key for JWKS (kiosk-pop JWTs) ──────────────────────────────
 log "generate signing key for JWKS (kiosk-pop JWTs)"

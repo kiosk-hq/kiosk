@@ -29,7 +29,7 @@ Rails.application.routes.draw do
 
   # «Manage assistants» HTML page (kiosk-server AssistantsController): a
   # signed-in account holder lists their bound assistants, mints link codes,
-  # unlinks, and edits per-assistant label + spending cap (ADR-0017/0019).
+  # unlinks, and edits per-assistant label + spending cap.
   get  "/kiosk/auth/assistants",                   to: "kiosk/server/assistants#show"
   post "/kiosk/auth/assistants/link",              to: "kiosk/server/assistants#link"
   post "/kiosk/auth/assistants/unlink",            to: "kiosk/server/assistants#unlink"

@@ -2,7 +2,7 @@
 
 module Kiosk
   module Server
-    # Identity resolution for the wire surface (ADR-0013).
+    # Identity resolution for the wire surface.
     #
     # The bundled kiosk-pop engine — {AgentIdentityProviders::DefaultAgentIdp}
     # — is the DEFAULT agent-IdP: it verifies the very tokens the built-in

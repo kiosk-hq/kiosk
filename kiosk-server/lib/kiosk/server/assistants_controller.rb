@@ -14,7 +14,7 @@ if defined?(::ActionController::Base)
 
   module Kiosk
     module Server
-      # The «Link an assistant» engine page (ADR-0017, link flow — Kiosk
+      # The «Link an assistant» engine page (link flow — Kiosk
       # extension): a session-authenticated account holder lists the
       # assistant accounts bound to them, mints link codes, and unlinks.
       #
@@ -58,7 +58,7 @@ if defined?(::ActionController::Base)
           render_page(status: e.http_status)
         end
 
-        # Edit a bound assistant's human label and/or spending cap (ADR-0019).
+        # Edit a bound assistant's human label and/or spending cap.
         # Ownership-scoped: the UPDATE's WHERE pins both the agent id AND the
         # session holder's user_id, so a holder may only touch their own live
         # rows. Empty spending_cap_cents → NULL (unlimited); a non-integer

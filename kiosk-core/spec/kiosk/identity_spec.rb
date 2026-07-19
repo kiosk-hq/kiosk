@@ -35,7 +35,7 @@ RSpec.describe Kiosk::Identity do
         .to raise_error(ArgumentError, /user_id/)
     end
 
-    it "allows a missing role (ADR-0011: hook-or-absent)" do
+    it "allows a missing role (hook-or-absent)" do
       identity = described_class.new(**valid_args.merge(role: nil))
       expect(identity.role).to be_nil
     end

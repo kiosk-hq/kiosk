@@ -1,4 +1,4 @@
-// SkootiClipApp.swift — App Clip entry point (Arch 2)
+// SkootiClipApp.swift — App Clip entry point (offline Ed25519)
 //
 // Launch flow:
 //   1. User taps an NFC tag / App Clip Code on a scooter.
@@ -9,7 +9,7 @@
 //        a. Parses scooter= and rt= from the URL via AgentHandoff.from(url:).
 //        b. Shows UnlockView and starts the BLE flow.
 //
-// The rt= parameter carries the provider-signed rental token (Arch 2):
+// The rt= parameter carries the provider-signed rental token:
 //   "<scooter_code>|<reservation_id>|<iat>|<exp>|<jti>.<base64url(sig)>"
 // The assistant's personal-agent app obtains this token after pay/start_rental
 // and encodes it into the NFC tag URL / App Clip Code deep-link.  The App Clip

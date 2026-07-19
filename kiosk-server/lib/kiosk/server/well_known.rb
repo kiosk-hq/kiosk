@@ -16,7 +16,7 @@ module Kiosk
     #   .api_catalog                  — /.well-known/api-catalog
     #                                   (RFC 9727 linkset of the wire endpoints)
     #   .auth_md                      — /auth.md (agent-auth methods in the
-    #                                   auth.md vocabulary, ADR-0017)
+    #                                   auth.md vocabulary)
     #
     # Each renderer is a pure function — no Rails dependency, no I/O — so the
     # six discovery surfaces cannot drift from one another.
@@ -57,14 +57,14 @@ module Kiosk
             register_url:  auth_urls(endpoint)[:register],
             login_url:     auth_urls(endpoint)[:login],
             revoke_url:    auth_urls(endpoint)[:revoke],
-            # Account-binding ceremony (ADR-0017) — additive 0.1.x-compatible
+            # Account-binding ceremony — additive 0.1.x-compatible
             # keys: the claim flow's opening endpoint and the link-code
             # redeem endpoint. Full ceremony description: <base>/auth.md.
             device_authorization_url: "#{endpoint}/oauth/device_authorization",
             claim_url:                "#{endpoint}/auth/claim",
           },
           # Verb names the endpoint actually serves — subset of
-          # schema/query/run/pay, computed from the live registry (ADR-0009).
+          # schema/query/run/pay, computed from the live registry.
           capabilities: Array(config.capabilities),
           min_client:   config.min_client,
           issuer:       config.issuer,
@@ -99,9 +99,9 @@ module Kiosk
           "# agents.txt — https://agents-txt.com",
           "# JSON: #{base}/agents.json",
         ]
-        # Payment directives are emitted ONLY when the provider serves `pay`
-        # (K-334). `capabilities` is the canonical computed set — `pay` drops
-        # out when no payment provider is configured (ADR-0009), so a
+        # Payment directives are emitted ONLY when the provider serves `pay`.
+        # `capabilities` is the canonical computed set — `pay` drops
+        # out when no payment provider is configured, so a
         # payment-less provider advertises no AP2/Payments here.
         if pay_served?(config)
           lines << ""
@@ -139,8 +139,8 @@ module Kiosk
           site:     { name: site_name(config), url: base },
         }
         # `payments` is OPTIONAL in agents.json v1.0. Emit it ONLY when the
-        # provider serves `pay` (K-334): `pay` drops out of `capabilities`
-        # when no payment provider is configured (ADR-0009), so a payment-less
+        # provider serves `pay`: `pay` drops out of `capabilities`
+        # when no payment provider is configured, so a payment-less
         # provider advertises no AP2/payments block here.
         if pay_served?(config)
           # AP2 = "Mandate-trust layer with VC presentations" (agents.json v1.0).
@@ -191,7 +191,7 @@ module Kiosk
           jwks_uri:   "#{endpoint}/.well-known/jwks.json",
           # kiosk-pop = the anonymous-class + PoP self-registration story;
           # user-claimed = the agent-initiated claim ceremony; link-code =
-          # the human-initiated link flow (Kiosk extension). ADR-0017.
+          # the human-initiated link flow (Kiosk extension).
           auth_modes: ["kiosk-pop", "user-claimed", "link-code"],
           auth_md:    "#{base}/auth.md",
         }
@@ -204,7 +204,7 @@ module Kiosk
       # array hyperlinks the live API endpoints. Kiosk's "APIs" are the wire
       # verbs — `<endpoint>/{schema,query,run,pay}` — filtered to the verbs the
       # deployment actually serves (`config.capabilities`, computed from the
-      # live registry per ADR-0009), plus the agents.json discovery companion.
+      # live registry), plus the agents.json discovery companion.
       #
       # The `schema` endpoint is the machine-readable surface description, so it
       # carries the RFC 9727 `service-desc` relation (SHOULD); every other link
@@ -241,7 +241,7 @@ module Kiosk
       # Markdown body served at `<origin>/auth.md`, following auth.md's
       # canonical section order (Title → Discover → Pick a method → Register
       # → Claim ceremony → Exchange → Use the access_token → Errors →
-      # Revocation) and describing OUR methods honestly (ADR-0017):
+      # Revocation) and describing OUR methods honestly:
       #
       #   - in auth.md's taxonomy kiosk-pop is the ANONYMOUS class plus a
       #     proof-of-possession upgrade (auth.md has no PoP — that is
@@ -251,7 +251,7 @@ module Kiosk
       #   - the link flow is labeled a Kiosk extension (auth.md defines no
       #     human-initiated direction).
       #   - `identity_assertion` (ID-JAG) — not supported, planned
-      #     (ADR-0013 `issue()` seam).
+      #     (the `issue()` seam).
       #
       # Rendered from the same model as the other five surfaces, so it
       # cannot drift; a change in the young auth.md format is one renderer
@@ -385,8 +385,8 @@ module Kiosk
       private_class_method :auth_urls
 
       # Whether this deployment serves the `pay` verb — the canonical gate for
-      # advertising AP2/payments across the discovery surfaces (K-334).
-      # `capabilities` is the computed set (ADR-0009); `pay` drops out when no
+      # advertising AP2/payments across the discovery surfaces.
+      # `capabilities` is the computed set; `pay` drops out when no
       # payment provider is configured, so this is false for payment-less
       # providers.
       def self.pay_served?(config)

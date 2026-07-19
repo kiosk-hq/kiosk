@@ -1,4 +1,4 @@
-// Models.swift — shared data types for the Skooti App Clip (Arch 2)
+// Models.swift — shared data types for the Skooti App Clip (offline Ed25519)
 //
 // These structs represent the wire contracts with the BLE lock and the launch URL.
 // None of them touch UIKit / AppKit — they are pure value types safe to use from
@@ -10,7 +10,7 @@ import Foundation
 // MARK: — Agent Handoff
 // ============================================================
 //
-// Arch 2: the only values the App Clip needs to unlock are:
+// The only values the App Clip needs to unlock are:
 //
 //   scooterCode   — identifies which lock to BLE-connect to (also embedded in
 //                   the token, but used for scanning / UI before writing).
@@ -70,7 +70,7 @@ struct AgentHandoff {
         // scooter= is always required.
         guard let scooterCode = params["scooter"] else { return nil }
 
-        // rt= is the rental token (Arch 2 reference path).
+        // rt= is the rental token (offline reference path).
         if let rt = params["rt"] {
             return AgentHandoff(scooterCode: scooterCode, rentalToken: rt)
         }
@@ -112,10 +112,10 @@ enum Configuration {
 }
 
 // ============================================================
-// MARK: — BLE state (Arch 2)
+// MARK: — BLE state
 // ============================================================
 
-/// Tracks the App Clip's progress through the Arch-2 unlock flow.
+/// Tracks the App Clip's progress through the offline unlock flow.
 ///
 /// Flow: idle → scanning → connecting → discovering → writingToken → unlocked
 ///                                                  ↘ failed(reason:)

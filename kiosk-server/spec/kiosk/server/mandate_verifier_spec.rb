@@ -67,7 +67,7 @@ RSpec.describe Kiosk::Server::MandateVerifier do
         .to raise_error(Kiosk::Server::Errors::Forbidden)
     end
 
-    # K-200: agent_payment_key raises Kiosk::AgentIdentityProviders::InvalidToken
+    # agent_payment_key raises Kiosk::AgentIdentityProviders::InvalidToken
     # when the authenticated (non-nil) agent_id has no live kiosk.agents row
     # (revoked/deleted between auth and now). InvalidToken is NOT an Errors::Base,
     # so it escaped decode_and_check's JWT-only rescues and the controller's
@@ -86,7 +86,7 @@ RSpec.describe Kiosk::Server::MandateVerifier do
         .to raise_error(Kiosk::Server::Errors::Forbidden, /exp/i)
     end
 
-    # K-020: id and iat are spec-MUST claims. The payloads below are otherwise
+    # id and iat are spec-MUST claims. The payloads below are otherwise
     # fully valid (correct key, iss, principal, exp) — they passed the old
     # exp-only check and must now be rejected on presence alone.
     it "rejects a mandate with no id claim" do
@@ -107,7 +107,7 @@ RSpec.describe Kiosk::Server::MandateVerifier do
         .to raise_error(Kiosk::Server::Errors::Forbidden, /principal/)
     end
 
-    # K-199: cap_amount_cents is a REQUIRED intent field. ABSENT (nil) would
+    # cap_amount_cents is a REQUIRED intent field. ABSENT (nil) would
     # nil-coerce to 0 in the verify_cart cap comparison, making it vacuous — an
     # absent cap must be rejected on presence, before any .to_i.
     it "rejects an intent missing cap_amount_cents (absent, not 0)" do
@@ -116,8 +116,8 @@ RSpec.describe Kiosk::Server::MandateVerifier do
         .to raise_error(Kiosk::Server::Errors::Forbidden, /cap_amount_cents/)
     end
 
-    # K-302: currency is a REQUIRED mandate field (spec AP2 table). ABSENT on
-    # both intent and cart makes the K-101 cap guard (nil != nil) and the
+    # Currency is a REQUIRED mandate field (spec AP2 table). ABSENT on
+    # both intent and cart makes the cap guard (nil != nil) and the
     # verify_payment match (nil == nil) pass vacuously, then a NOT NULL currency
     # column 500s after partial persist — reject on presence instead.
     it "rejects an intent missing currency (absent)" do
@@ -132,7 +132,7 @@ RSpec.describe Kiosk::Server::MandateVerifier do
         .to raise_error(Kiosk::Server::Errors::Forbidden, /principal/)
     end
 
-    # K-092: on a bigint-PK host the authenticated Identity carries an Integer
+    # On a bigint-PK host the authenticated Identity carries an Integer
     # user_id/agent_id (the token `sub` round-trips as bigint), while the agent
     # signs the mandate with the String the register response returned. The
     # principal check must compare as STRING on both sides, or every mandate on
@@ -183,7 +183,7 @@ RSpec.describe Kiosk::Server::MandateVerifier do
         .to raise_error(Kiosk::Server::Errors::Forbidden, /cap/)
     end
 
-    # K-101: the cap comparison is currency-blind without this guard — a 4999
+    # The cap comparison is currency-blind without this guard — a 4999
     # USD cart would slip under a 5000 EUR cap. The intent is 5000 eur (see
     # intent_payload); a same-number-under-cap cart in a DIFFERENT currency
     # must be rejected on currency, not silently accepted.
@@ -193,7 +193,7 @@ RSpec.describe Kiosk::Server::MandateVerifier do
         .to raise_error(Kiosk::Server::Errors::Forbidden, /currency/)
     end
 
-    # K-199: total_amount_cents is a REQUIRED cart field. ABSENT (nil) would
+    # total_amount_cents is a REQUIRED cart field. ABSENT (nil) would
     # nil-coerce to 0, satisfying the cap comparison (0 <= 5000) vacuously and
     # persisting a 0-cent cart row. It must be rejected on presence, before the
     # .to_i — an absent total is NOT a valid within-cap cart.
@@ -203,7 +203,7 @@ RSpec.describe Kiosk::Server::MandateVerifier do
         .to raise_error(Kiosk::Server::Errors::Forbidden, /total_amount_cents/)
     end
 
-    # K-302: absent currency on the cart (see the intent-side rationale).
+    # Absent currency on the cart (see the intent-side rationale).
     it "rejects a cart missing currency (absent)" do
       no_cur = cart_payload.reject { |k, _| k == :currency }
       expect { described_class.verify_cart(raw_jws: sign(no_cur), identity: identity, intent: intent) }
@@ -283,7 +283,7 @@ RSpec.describe Kiosk::Server::MandateVerifier do
       expect(pm.payment_method).to eq("")
     end
 
-    # K-199: amount_cents is a REQUIRED payment field. ABSENT (nil) would
+    # amount_cents is a REQUIRED payment field. ABSENT (nil) would
     # nil-coerce to 0 in the amount-match check; against a same-absent (0) cart
     # total it would "match" and persist a 0-cent payment row. Reject on
     # presence, before the .to_i — an absent amount is not a valid payment.

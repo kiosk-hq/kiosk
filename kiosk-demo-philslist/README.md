@@ -115,7 +115,7 @@ for **both** bound keys equals the human's id, and the posted listing's
 | Path | What's there |
 |---|---|
 | `db/migrate/` | The pruned canonical kiosk migrations (schema, identity, actions_log, device_authorizations, governance columns) — **no** reservations/mandates/settlements — plus `categories` + `listings` |
-| `app/models/{user,category,listing}.rb` | `User` is the account principal (ADR-0010) and `database_authenticatable`; `Listing.owner_id` is the load-bearing isolation predicate |
+| `app/models/{user,category,listing}.rb` | `User` is the account principal and `database_authenticatable`; `Listing.owner_id` is the load-bearing isolation predicate |
 | `config/initializers/kiosk.rb` | `Kiosk.configure` (NO `payment_provider`) + the browse/my queries and post/edit/close actions |
 | `lib/stub_idp.rb` / `lib/jwt_or_stub_idp.rb` | Demo IdP: Kiosk JWTs first, bespoke `agent:u-…:a-…:r-…` fallback |
 | `isolation_flow.rb` / `redteam_suite.rb` / `schema_flow.rb` / `binding_flow.rb` / `register_flow.rb` | One-JSON-line flow drivers the rake tasks assert on |

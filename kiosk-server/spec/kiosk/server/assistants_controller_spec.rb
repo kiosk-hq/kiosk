@@ -1,6 +1,6 @@
 # frozen_string_literal: true
 
-# The «Link an assistant» engine page (ADR-0017): session-authed listing of
+# The «Link an assistant» engine page: session-authed listing of
 # bound assistant accounts + mint/unlink, HTML shim over LinkCode /
 # AccountBinding. Same Metal-dispatch harness as the other controller specs.
 

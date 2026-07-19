@@ -1,6 +1,6 @@
 # frozen_string_literal: true
 
-# The account principal (ADR-0010): ONE table for both human account holders
+# The account principal: ONE table for both human account holders
 # and headless assistant-created principals — no separate "user" surface.
 # `kiosk.current_user_id()` resolves to this table's `id` (the physical table
 # stays `users` so the framework identity wiring matches every other demo; the

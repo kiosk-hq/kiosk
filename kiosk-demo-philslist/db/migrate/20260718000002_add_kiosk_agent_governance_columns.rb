@@ -1,7 +1,7 @@
 # frozen_string_literal: true
 
 # Adds the per-assistant governance columns (spending_cap_cents + human_label)
-# to kiosk.agents (ADR-0019). Thin wrapper over
+# to kiosk.agents. Thin wrapper over
 # Kiosk::Server::SchemaDefinitions.agent_governance_columns_sql — read/written
 # by the manage-assistants page and enforced in the pay path via the
 # config.spending_cap seam (Kiosk::Server::ColumnSpendingCap).

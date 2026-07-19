@@ -13,7 +13,7 @@ module Kiosk
   #   depending on the user-IdP adapter.
   # @!attribute [r] role
   #   The active role for this token — one of the configured `Kiosk.roles`,
-  #   or +nil+ for a role-less principal (ADR-0011: roles are hook-or-absent
+  #   or +nil+ for a role-less principal (roles are hook-or-absent
   #   in 0.1; single-role providers need no role at all).
   # @!attribute [r] actor
   #   `"agent"` | `"human"` | `"service"` — channel kind, recorded for
@@ -30,7 +30,7 @@ module Kiosk
     def initialize(user_id:, role:, actor:, agent_id: nil, claims: {})
       raise ArgumentError, "user_id required" if user_id.nil?
 
-      # Role is optional (ADR-0011): absent and empty both mean "no role".
+      # Role is optional: absent and empty both mean "no role".
       role = nil if role && role.to_s.empty?
 
       actor = actor.to_s

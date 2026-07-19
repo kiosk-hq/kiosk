@@ -25,7 +25,7 @@ if defined?(::ActionController::API)
       #   GET /.well-known/api-catalog           → RFC 9727 linkset of the wire
       #                                            endpoints (application/linkset+json)
       #   GET /auth.md                           → agent-auth methods in the
-      #                                            auth.md vocabulary (ADR-0017)
+      #                                            auth.md vocabulary
       #
       # The base URL is taken from the request (`request.base_url`), so a
       # provider that mounts these routes serves the correct origin without

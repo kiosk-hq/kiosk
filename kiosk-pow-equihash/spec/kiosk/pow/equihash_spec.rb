@@ -215,7 +215,7 @@ RSpec.describe Kiosk::Pow::Equihash do
       )).to be(false)
     end
 
-    # K-149: a malformed index (nil / non-numeric string) must return false,
+    # A malformed index (nil / non-numeric string) must return false,
     # never raise. Guards the `indices.all? { Integer && >= 0 }` check that
     # replaced a coercing `Integer(idx)` (which raised TypeError/ArgumentError).
     it "REJECT — nil element in indices (returns false, does not raise)" do
@@ -258,7 +258,7 @@ RSpec.describe Kiosk::Pow::Equihash do
       )).to be(false)
     end
 
-    # K-149 (reopened): header_nonce is client-supplied and flowed straight
+    # header_nonce is client-supplied and flowed straight
     # into `Integer(hn)` — a non-numeric value raised ArgumentError/TypeError
     # (an HTTP 500 at the wire), violating the "return false, never raise"
     # contract the index guard above already honours.
@@ -331,7 +331,7 @@ RSpec.describe Kiosk::Pow::Equihash do
   # Generated 2026-07-09 by the reference solver (solve.py, numpy):
   #   salt "kiosk-eqx-kat-01", params {n: 168, k: 7}, header_nonce 0
   # Indices in Zcash-canonical (subtree) order. Pins the verifier at the
-  # shipped default parameters, not just toy sizes (K-001).
+  # shipped default parameters, not just toy sizes.
   # ─────────────────────────────────────────────────────────────────────
 
   describe "production params (n=168, k=7) KAT" do

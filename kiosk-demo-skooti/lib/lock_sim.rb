@@ -3,9 +3,9 @@
 require "openssl"
 require "base64"
 
-# Software simulator of the ESP32 BLE scooter lock firmware (Arch 2 — Ed25519, token v2).
+# Software simulator of the ESP32 BLE scooter lock firmware (offline Ed25519, token v2).
 #
-# The physical lock (Arch 2):
+# The physical lock:
 #   1. Baked at provisioning with:
 #      - the skooti Ed25519 PUBLIC key (32 bytes)
 #      - its own SCOOTER_CODE
@@ -29,7 +29,7 @@ require "base64"
 # This simulator reproduces that exact logic so the agent-side driver can be
 # tested without real hardware.
 #
-# NO HMAC, no nonce/challenge — those are Arch-1 concepts and are gone.
+# NO HMAC, no nonce/challenge — this is a pure offline verify path.
 
 LOCK_SIM_CONTEXT_TAG = "kiosk-rental-v1"
 

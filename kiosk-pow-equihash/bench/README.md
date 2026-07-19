@@ -33,11 +33,11 @@ ceiling; 192/7 (the old default) is ~155 s and ~5.4 GiB — unusable on a laptop
 ## Caveats (be honest about what this is)
 
 - This is a **reference** solver (pure Python + numpy), not a tuned miner. A
-  native or GPU solver is faster — Equihash parallelises well (see ADR-0007).
+  native or GPU solver is faster — Equihash parallelises well.
   The numbers above are the *honest-client floor*, i.e. the slowest participant.
 - The tool is deliberately coarse: a provider picks its own `(n, k)` and proof
   count for its own cost/latency trade-off. These defaults are a sane starting
   point, not a security guarantee. PoW here is a metered toll with a cheap
   verify, not a hardware equaliser — abuse resistance comes from reputation and
-  caps (ADR-0007).
+  caps.
 - Numbers are hardware-specific; re-run `bench.py` on your target to retune.

@@ -1,6 +1,6 @@
 # frozen_string_literal: true
 
-# The claim ceremony's human-facing verify page (ADR-0017): session-
+# The claim ceremony's human-facing verify page: session-
 # authenticated via user_idp, shows what is being linked (key fingerprint +
 # requested-at), approve/deny, attempt-capped code entry.
 #

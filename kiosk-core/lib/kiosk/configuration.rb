@@ -28,7 +28,7 @@ module Kiosk
     attr_accessor :user_idp
 
     # Agent-IdP adapter instance — verifies agent tokens (and, from 0.2,
-    # mints them — T-014). OPTIONAL override (ADR-0013): when nil,
+    # mints them). OPTIONAL override: when nil,
     # kiosk-server uses its bundled kiosk-pop engine
     # (`Kiosk::Server::AgentIdentityProviders::DefaultAgentIdp`) — the same
     # engine whose tokens the built-in register/login/revoke endpoints mint,

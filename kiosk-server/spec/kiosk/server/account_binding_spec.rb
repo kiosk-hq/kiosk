@@ -1,6 +1,6 @@
 # frozen_string_literal: true
 
-# The binding product of the ceremony (ADR-0017): fresh key → linked
+# The binding product of the ceremony: fresh key → linked
 # assistant account under the holder's user_id; known key → rebind with
 # reputation carried; unlink = registration-layer revocation. DB access is
 # exercised against the FakeConnection (the AgentRegistration/AgentLogin
@@ -63,7 +63,7 @@ RSpec.describe Kiosk::Server::AccountBinding do
       expect(con.executed_sql.grep(/INSERT/i).first).to include("ARRAY['customer']::text[]")
     end
 
-    it "falls back to registration_role, and NULL when neither is set (ADR-0011)" do
+    it "falls back to registration_role, and NULL when neither is set" do
       described_class.bind!(public_key_pem: pem, user_id: user_id)
       expect(con.executed_sql.grep(/INSERT/i).first).to include("NULL")
 

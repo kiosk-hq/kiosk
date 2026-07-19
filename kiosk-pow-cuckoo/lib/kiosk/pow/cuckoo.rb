@@ -254,7 +254,7 @@ module Kiosk
         # Compute U/V endpoints; verify strictly-ascending and in-range.
         cycle.each_with_index do |edge, n|
           # A non-Integer edge (nil, String, Float, …) means a malformed proof,
-          # which must return false, never raise (K-149) — comparing a String
+          # which must return false, never raise — comparing a String
           # with an Integer throws ArgumentError.
           return false unless edge.is_a?(Integer)
           return false if edge >= n_nodes
@@ -336,7 +336,7 @@ module Kiosk
         # header).
         # header_nonce is client-supplied. A non-numeric/non-coercible value
         # means a malformed proof, which must return false, never raise
-        # (K-149) — Integer() throws ArgumentError/TypeError on "abc", [1], {}.
+        # Integer() throws ArgumentError/TypeError on "abc", [1], {}.
         header_nonce = begin
           Integer(header_nonce)
         rescue ArgumentError, TypeError

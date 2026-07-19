@@ -1,6 +1,6 @@
 # frozen_string_literal: true
 
-# The engine-drawn account-binding routes (ADR-0017): a host that mounts
+# The engine-drawn account-binding routes: a host that mounts
 # Kiosk::Server::Engine at the configured mount_path gets the full claim +
 # link surface without hand-writing routes. spec_helper requires
 # kiosk/server before Rails exists, so the Engine class is materialised here

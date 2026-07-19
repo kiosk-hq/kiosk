@@ -1,6 +1,6 @@
 # frozen_string_literal: true
 
-# Kiosk demo orchestration for kiosk-demo-skooti (Arch 2 — Ed25519 offline token).
+# Kiosk demo orchestration for kiosk-demo-skooti (Ed25519 offline token).
 # Tasks:
 #
 #   rake demo:setup      idempotent db:drop / create / migrate / seed
@@ -539,7 +539,7 @@ end
 namespace :demo do
   # ---------------------------------------------------------------------------
   desc <<~DESC
-    Adversarial cross-tenant isolation test (R1 Phase 1 Task 2).
+    Adversarial cross-tenant isolation test.
 
     Runs demo:setup (clean DB + seed), boots the server, runs isolation_flow.rb
     with two fresh principals (A and B), and asserts all cross-tenant denial properties:
@@ -701,7 +701,7 @@ end
 namespace :demo do
   # ── demo:redteam ─────────────────────────────────────────────────────────
   desc <<~DESC
-    Adversarial regression battery (R3 Phase 2 Task 4) — kiosk-redteam.
+    Adversarial regression battery — kiosk-redteam.
 
     Boots skooti, runs all 13 Kiosk::Redteam scenarios against the full chain
     (Equihash PoW n=96 k=5 → KYC → reserve → pay → start_rental) and asserts each attack
@@ -812,7 +812,7 @@ end
 namespace :demo do
   # ── demo:schema ────────────────────────────────────────────────────────────
   desc <<~DESC
-    Self-discovery proof (P3 Task 2) — verifies the schema verb over HTTP.
+    Self-discovery proof — verifies the schema verb over HTTP.
 
     Boots the server, registers a fresh agent (Equihash PoW n=96 k=5), calls:
       GET /kiosk/schema
@@ -928,7 +928,7 @@ namespace :demo do
       puts "  ✗  schema.actions missing reserve"
     end
 
-    # start_rental, payment_setup (K-057 — skill Step 5) present with descriptions
+    # start_rental, payment_setup (skill Step 5) present with descriptions
     %w[start_rental payment_setup].each do |aname|
       entry = actions.find { |a| a["name"] == aname }
       if entry
@@ -956,5 +956,5 @@ namespace :demo do
   # ── end demo:schema ────────────────────────────────────────────────────────
 end
 
-desc "End-to-end Kiosk skooti demo: setup the DB then prove the full rental chain (Arch 2)."
+desc "End-to-end Kiosk skooti demo: setup the DB then prove the full rental chain."
 task demo: ["demo:setup", "demo:rideflow"]

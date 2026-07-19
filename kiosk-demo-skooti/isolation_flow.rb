@@ -1,6 +1,6 @@
 # frozen_string_literal: true
 
-# Adversarial cross-tenant isolation test driver (R1 Phase 1 Task 2).
+# Adversarial cross-tenant isolation test driver.
 #
 # Proves skooti app-layer predicates enforce cross-tenant denial:
 #

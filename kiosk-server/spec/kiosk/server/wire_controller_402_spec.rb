@@ -1,6 +1,6 @@
 # frozen_string_literal: true
 
-# WireController 402 WWW-Authenticate header specs (W4 / ADR-0014).
+# WireController 402 WWW-Authenticate header specs.
 #
 # De-overloading the two 402 gates: the `WWW-Authenticate` response header
 # NAMES the gate (Kiosk-PoW vs Payment) so a client can disambiguate at the
@@ -72,7 +72,7 @@ RSpec.describe "WireController 402 WWW-Authenticate (W4)" do
       )
       expect(status).to eq(402)
       expect(headers["WWW-Authenticate"]).to eq('Kiosk-PoW realm="https://demo.example"')
-      # Body payload preserved (ADR-0014: header names, body carries).
+      # Body payload preserved (header names, body carries).
       expect(body.dig(:error, :code)).to eq("pow_required")
       expect(body.dig(:error, :challenges)).to be_an(Array)
       expect(body.dig(:error, :challenges)).not_to be_empty

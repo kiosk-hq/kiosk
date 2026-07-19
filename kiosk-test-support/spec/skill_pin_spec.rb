@@ -2,7 +2,7 @@
 
 require "digest"
 
-# K-050 guard (ADR-0012 — immutable versioned skill files).
+# Skill pin guard (immutable versioned skill files).
 #
 # Every demo initializer pins `skill_sha256`, the integrity hash a
 # hash-verifying agent checks against the published skill file advertised in
@@ -13,9 +13,9 @@ require "digest"
 # drift fails the suite immediately.
 #
 # Umbrella layout only: the parent of reference/ contains kiosk.tech/. On a
-# checkout without that sibling (public CI, T-011) the whole spec skips —
+# checkout without that sibling (public CI) the whole spec skips —
 # public CI must not depend on private/local workspace layout.
-RSpec.describe "demo skill_sha256 pins (K-050 guard)" do
+RSpec.describe "demo skill_sha256 pins" do
   monorepo_root = File.expand_path("../..", __dir__)  # spec/ -> kiosk-test-support/ -> reference/
   site_root     = File.expand_path("../kiosk.tech", monorepo_root)
 
@@ -30,7 +30,7 @@ RSpec.describe "demo skill_sha256 pins (K-050 guard)" do
   ].sort
 
   before do
-    skip "sibling kiosk.tech checkout not present (public CI, T-011)" unless File.directory?(site_root)
+    skip "sibling kiosk.tech checkout not present (public CI)" unless File.directory?(site_root)
   end
 
   it "finds the demo initializers" do
@@ -61,7 +61,7 @@ RSpec.describe "demo skill_sha256 pins (K-050 guard)" do
       expect(pin).to eq(actual),
                      "#{demo} pins skill_sha256 #{pin} but #{File.basename(url)} " \
                      "hashes to #{actual} — re-pin the demos or publish a new " \
-                     "immutable skill version (ADR-0012)"
+                     "immutable skill version"
     end
   end
 end

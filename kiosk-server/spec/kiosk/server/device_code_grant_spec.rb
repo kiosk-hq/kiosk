@@ -1,6 +1,6 @@
 # frozen_string_literal: true
 
-# The claim half of the account-binding ceremony (ADR-0017). Binding itself
+# The claim half of the account-binding ceremony. Binding itself
 # (fresh-register vs rebind) is covered in account_binding_spec.rb; here it
 # is stubbed so the RFC 8628 state machine + BIND-POP gate can be exercised
 # in isolation.

@@ -202,7 +202,7 @@ end
 namespace :demo do
   # ── demo:isolation ──────────────────────────────────────────────────────────
   desc <<~DESC
-    Adversarial cross-tenant isolation test (P4 Task 2).
+    Adversarial cross-tenant isolation test.
 
     Runs demo:setup (clean DB + seed), boots the server, runs isolation_flow.rb
     with two fresh principals (A and B), and asserts all cross-tenant denial
@@ -364,7 +364,7 @@ end
 namespace :demo do
   # ── demo:redteam ─────────────────────────────────────────────────────────
   desc <<~DESC
-    Adversarial regression battery (P4 Task 2) — kiosk-redteam.
+    Adversarial regression battery — kiosk-redteam.
 
     Boots hoteling, runs all 13 Kiosk::Redteam scenarios against the chain
     (no PoW → no KYC → reserve_room → pay → confirm_booking) and asserts
@@ -471,7 +471,7 @@ end
 namespace :demo do
   # ── demo:schema ─────────────────────────────────────────────────────────────
   desc <<~DESC
-    Self-discovery proof (P4 Task 2) — verifies the schema verb over HTTP.
+    Self-discovery proof — verifies the schema verb over HTTP.
 
     Boots the server, registers a fresh agent (no PoW for hoteling), calls:
       GET /kiosk/schema
@@ -590,7 +590,7 @@ namespace :demo do
       end
     end
 
-    # Actions: reserve_room, confirm_booking, payment_setup (K-057) with descriptions
+    # Actions: reserve_room, confirm_booking, payment_setup with descriptions
     %w[reserve_room confirm_booking payment_setup].each do |aname|
       entry = actions.find { |a| a["name"] == aname }
       if entry
@@ -627,7 +627,7 @@ namespace :demo do
 
     Boots the server with the browse gate active and runs browse_flow.rb: a
     burst of `properties` queries where the first few are free and each extra
-    one costs escalating proof-of-work (ADR-0007 — price depth, don't ban it).
+    one costs escalating proof-of-work (price depth, don't ban it).
 
     Asserts: a non-empty free prefix, the demanded proof count becomes positive,
     and the curve is monotonic non-decreasing. Requires python3 + numpy.

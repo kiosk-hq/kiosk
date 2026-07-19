@@ -45,8 +45,8 @@ module Kiosk
         ns    = Kiosk.configuration.guc_namespace
         stmts = [
           guc_sql(Kiosk::GUC.for(ns, Kiosk::GUC::USER_ID),  identity.user_id),
-          # Role-less identities (ADR-0011) set no role GUC — RLS/app checks
-          # reading it via current_setting(..., true) see NULL (K-078).
+          # Role-less identities set no role GUC — RLS/app checks
+          # reading it via current_setting(..., true) see NULL.
           (guc_sql(Kiosk::GUC.for(ns, Kiosk::GUC::ROLE),    identity.role) if identity.role),
           guc_sql(Kiosk::GUC.for(ns, Kiosk::GUC::ACTOR),    identity.actor),
           (guc_sql(Kiosk::GUC.for(ns, Kiosk::GUC::AGENT_ID), identity.agent_id) if identity.agent_id),

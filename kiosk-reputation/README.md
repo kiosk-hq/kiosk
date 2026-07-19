@@ -11,7 +11,7 @@ pluggable reputation policy interface.
 **Pure Ruby — no dependency on kiosk-pow or kiosk-core.** The host registers a
 PoW backend via `Kiosk::Reputation::Backends.register` (no PoW gem self-registers
 on require — see [Installation](#installation)). This gem is backend-agnostic:
-the shipped default is **equihash** (`kiosk-pow-equihash`, ADR-0007); `kiosk-pow`
+the shipped default is **equihash** (`kiosk-pow-equihash`); `kiosk-pow`
 provides Argon2id (legacy, registers as `argon2id`); `kiosk-pow-cuckoo` provides
 Cuckatoo Cycle (opt-in, registers as `cuckatoo`).
 
@@ -51,7 +51,7 @@ Key properties:
   lever is PROOF COUNT. Each challenge has its own `id` and fresh `salt`, so
   there is no amortisation: all N must be solved to prove work for this request.
 - `alg` + `params` are **mandated** — no client negotiation field. `equihash`
-  is the shipped default (ADR-0007); `argon2id` is legacy.
+  is the shipped default; `argon2id` is legacy.
 - `salt` is fresh per challenge — prevents precomputation / rainbow tables.
 - `sig` is HMAC-SHA256 (provider `pow_secret`) over the challenge fields **and
   a fingerprint of the original request** (`SHA256(command + "\n" + canonical_json(body))`).
@@ -202,7 +202,7 @@ policy = Kiosk::Reputation::Policies::RateAndReputation.new(
   bad_proof_count_factor:     3,    # count += bad_proof_count * this factor
   count_min:                  1,
   count_max:                  10,
-  equihash_n:                 168,  # matches Kiosk::Pow::Equihash defaults (ADR-0007)
+  equihash_n:                 168,  # matches Kiosk::Pow::Equihash defaults
   equihash_k:                 7
 )
 
@@ -295,7 +295,7 @@ end
 
 ```ruby
 gem "kiosk-reputation"
-gem "kiosk-pow-equihash"  # default backend (ADR-0007)
+gem "kiosk-pow-equihash"  # default backend
 # gem "kiosk-pow"         # legacy Argon2id backend, if you specifically want it
 ```
 

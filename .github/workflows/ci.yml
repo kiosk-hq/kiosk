@@ -88,7 +88,7 @@ jobs:
           - demo: kiosk-demo-getgrocery
             tasks: demo:shop demo:isolation demo:redteam demo:schema
             # getgrocery uses the real Stripe adapter. CI carries NO Stripe key
-            # (K-110: never inject keys into CI); a local stripe-mock returns
+            # (never inject keys into CI); a local stripe-mock returns
             # shaped pi_ fixtures so the full flow — including demo:shop's
             # off_session charge — runs secret-free. STRIPE_MOCK_URL (set by the
             # stripe-mock step below) makes demo:setup/demo:schema boot, and
@@ -108,7 +108,7 @@ jobs:
             # timing-sensitive (RFC 8628 poll interval) so it stays local-only,
             # matching every sibling (no demo runs binding in CI).
             tasks: demo:walkthrough demo:isolation demo:redteam demo:schema
-          # demo:pow excluded everywhere: solves real memory-hard PoW (K-001)
+          # demo:pow excluded everywhere: solves real memory-hard PoW
 
     services:
       postgres:
@@ -143,16 +143,16 @@ jobs:
         working-directory: ${{ matrix.demo }}
         run: bundle install
 
-      # Demos self-provision a dev signing key since e8bc5bf (K-034 fixed);
+      # Demos self-provision a dev signing key when none is set;
       # this ephemeral key is belt-and-braces only.
       - name: Generate ephemeral signing key
         run: echo "KIOSK_SIGNING_KEY_B64=$(ruby -e 'require %{openssl}; require %{base64}; puts Base64.strict_encode64(OpenSSL::PKey::RSA.new(2048).to_pem)')" >> "$GITHUB_ENV"
 
       # getgrocery only: install stripe-mock on PATH and advertise its URL so
       # the real-Stripe-adapter demo runs against canned pi_ fixtures with NO
-      # key (K-110). demo:setup/demo:schema boot on STRIPE_MOCK_URL; the
+      # key. demo:setup/demo:schema boot on STRIPE_MOCK_URL; the
       # charge-running tasks self-start the mock process via `command -v`.
-      - name: Set up stripe-mock (getgrocery, no key in CI — K-110)
+      - name: Set up stripe-mock (getgrocery, no key in CI)
         if: matrix.stripe_mock
         run: |
           go install github.com/stripe/stripe-mock@latest
@@ -166,7 +166,7 @@ jobs:
       # Each demo task runs in its OWN bin/rails invocation. Demo servers are
       # cleaned up at_exit (process end), so batching every task into one
       # invocation leaves a later task probing a stale server booted with a
-      # different env (order-dependent flake, K-086).
+      # different env (order-dependent flake).
       - name: Run demo flows
         working-directory: ${{ matrix.demo }}
         run: |

@@ -228,7 +228,7 @@ RSpec.describe Kiosk::Generators::InstallGenerator do
         intent_idx      = body.index('DROP TABLE IF EXISTS "ksk".intent_mandates')
         # settlements is created by mandates_sql with a FK to cart_mandates, so a
         # down that never drops it — or drops cart_mandates first — fails on the
-        # FK dependency during db:rollback. (K-137)
+        # FK dependency during db:rollback.
         expect(settlements_idx).not_to be_nil
         # Both payment_mandates and settlements reference cart_mandates; both drop
         # before it. cart_mandates references intent_mandates; it drops before that.

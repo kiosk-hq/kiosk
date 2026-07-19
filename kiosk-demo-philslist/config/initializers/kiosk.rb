@@ -5,11 +5,11 @@
 # The whole point of this demo: the same four-verb wire the commerce demos use
 # for money carries a services/data surface with NO payment at all. There is NO
 # `payment_provider` here, so `capabilities` computes to schema/query/run and
-# DROPS `pay` (ADR-0009 + K-334) — `/.well-known/kiosk.json`, `agents.json` and
+# DROPS `pay` — `/.well-known/kiosk.json`, `agents.json` and
 # `agents.txt` all advertise no payments. That absence is the not-only-commerce
 # proof (`demo:schema` asserts it).
 
-# ── Ephemeral dev signing key (K-034) ────────────────────────────────────
+# ── Ephemeral dev signing key ────────────────────────────────────
 # JWT / register / binding flows need a signing key. In development or test, if
 # none is provided, self-provision an EPHEMERAL RSA key so `demo:setup` and the
 # flows run out-of-the-box. Never do this in production — a real key must be set.
@@ -107,7 +107,7 @@ end
 # matching listings across ALL owners (no owner_id filter). Optional
 # category_slug + keyword filters; status clamps to open|closed (defaults open).
 # All caller input is passed through conn.quote (parameterized ILIKE on
-# title/body) — no raw interpolation (K-042 raw-pipe hygiene, the sibling-demo
+# title/body) — no raw interpolation (raw-pipe hygiene, the sibling-demo
 # quoting pattern).
 Kiosk::Server::Queries.register(
   "browse_listings",
@@ -211,7 +211,7 @@ Kiosk::Server::Actions.register(
   conn = ActiveRecord::Base.connection
 
   # Only the columns the caller supplied are updated; each value is quoted
-  # (K-042). updated_at always bumps so a no-op patch still verifies ownership.
+  # updated_at always bumps so a no-op patch still verifies ownership.
   set_fragments = ["updated_at = now()"]
   %i[title body price_text].each do |col|
     set_fragments << "#{col} = #{conn.quote(args[col])}" if args.key?(col)

@@ -5,7 +5,7 @@
 # StubKyc, Actions (reserve, start_rental, payment_setup) + named queries
 # (scooters_available, my_reservations).
 
-# ── Ephemeral dev signing key (K-034) ────────────────────────────────────
+# ── Ephemeral dev signing key ────────────────────────────────────────────
 # JWT / register flows need a signing key. In development or test, if none is
 # provided, self-provision an EPHEMERAL RSA key so `demo:setup` and the flows
 # run out-of-the-box. Never do this in production — a real key must be set.
@@ -40,9 +40,9 @@ Kiosk::Configuration.include(SkootiUnlockSigningKey)
 # follow-up.
 ActiveRecord::Migration.include(Kiosk::RLS::DSL)
 
-# Registration PoW gate uses Equihash (ADR-0001 amended: one PoW = Equihash;
+# Registration PoW gate uses Equihash (one PoW = Equihash;
 # the old SHA256 hashcash is gone). Small demo params keep the register solve
-# well under a second. See ADR-0007 for the metered-pricing framing.
+# well under a second. PoW is a metered toll, tuned per provider.
 require "kiosk/pow/equihash"
 require "kiosk/reputation"
 Kiosk::Reputation::Backends.register(Kiosk::Pow::Equihash::NAME, Kiosk::Pow::Equihash)
@@ -72,7 +72,7 @@ Kiosk.configure do |c|
   c.skill_sha256 = "3af06c1622053bab833b468c12f7f28d129c015da15c91d0fdcfe0c303885e83"
 
   # JwtOrStubIdp tries Kiosk-issued JWTs (kiosk-pop register/login output;
-  # OAuth device-grant dormant per ADR-0008) first,
+  # OAuth device-grant dormant) first,
   # then falls back to StubIdp's bespoke `agent:u-…:a-…:r-…` shape.
   c.agent_idp = JwtOrStubIdp.new(stub: StubIdp.new)
   # The web-session channel for the account-binding surfaces (verify
@@ -92,7 +92,7 @@ Kiosk.configure do |c|
   c.kyc_issuer    = "https://kyc.example"
   c.kyc_public_key = StubKyc.public_key
 
-  # Ed25519 rental-token signing key (Arch 2 offline token).
+  # Ed25519 rental-token signing key (offline token).
   # Fixed dev keypair — stable vectors; swap for env-loaded PEM in production.
   c.unlock_signing_key = DevUnlockKey.private_key
 end
@@ -130,7 +130,7 @@ end
 # ─── Actions ────────────────────────────────────────────────────────────────
 
 # payment_setup — canonical skill Step 5 runs this unconditionally before
-# `pay` (K-057). Mirrors the getgrocery registration shape; with StubPsp
+# `pay`. Mirrors the getgrocery registration shape; with StubPsp
 # (no SetupIntent model) setup_required? is always false, so this is an
 # immediate no-op success: {status: "ready"}.
 Kiosk::Server::Actions.register("payment_setup",

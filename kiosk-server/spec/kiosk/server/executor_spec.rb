@@ -146,7 +146,7 @@ RSpec.describe Kiosk::Server::Executor do
     end
   end
 
-  # K-083: the `events` verb was removed (never an ADR-0009 capability). It is
+  # The `events` verb was removed (never a capability). It is
   # now an unknown verb → a clean 400 BadRequest, not a raw NotImplementedError.
   describe "removed :events verb" do
     it "is rejected as an unknown verb (clean BadRequest, not NotImplementedError)" do
@@ -262,7 +262,7 @@ RSpec.describe Kiosk::Server::Executor do
       )
     end
 
-    context "per-assistant spending cap (ADR-0019)" do
+    context "per-assistant spending cap" do
       it "does not enforce when no spending_cap seam is configured (default)" do
         expect_any_instance_of(described_class).not_to receive(:settled_total_cents)
         expect(Kiosk.configuration.payment_provider).to receive(:capture).and_return(settlement)
@@ -353,8 +353,8 @@ RSpec.describe Kiosk::Server::Executor do
         .to raise_error(Kiosk::Server::Errors::Forbidden, /cap/)
     end
 
-    # K-114: an agentless principal (user_idp web/mobile session, agent_id nil
-    # per ADR-0013) cannot pay — mandates are agent-signed. Reject with a clean
+    # An agentless principal (user_idp web/mobile session, agent_id nil)
+    # cannot pay — mandates are agent-signed. Reject with a clean
     # 403, not a 500 from agent_payment_key(nil) deep in mandate verification.
     it "rejects an agentless caller (agent_id nil) with a clean 403 before verifying mandates" do
       agentless = build_identity(actor: "human", agent_id: nil)

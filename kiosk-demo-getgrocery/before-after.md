@@ -8,13 +8,13 @@
 
 Every current personal agent (Hermes, OpenClaw, ChatGPT Agent, Gemini with app navigation) stalls at the same walls: the anti-bot screen, the login gate, and — uniquely in grocery — the substitution confirmation wall.
 
-**Anti-bot friction documented in validation research** (`docs/research/2026-06-22-consumer-agent-validation.md`, Front B):
+**Anti-bot friction documented in validation research:**
 
 > Documented ChatGPT-Agent food orders take **6–20 minutes** (2–3× human) and stop at the **anti-bot screen, login, or payment** — the agent opens a user browser to finish.
 
 The structural root cause is a stack of incompatible requirements: behavioral fingerprinting (Cloudflare Turnstile, DataDome) flags agent traffic; OTP walls assume a human-held device; the user's payment instrument lives outside the agent's context; and EU/UK PSD2 SCA requires a biometric or device-OTP challenge on first use that only the human can satisfy.
 
-**Both flagship consumer-commerce connectors in Claude today (Uber Eats, Booking.com) stop at discovery** (`docs/research/2026-06-22-consumer-agent-validation.md`, Front A):
+**Both flagship consumer-commerce connectors in Claude today (Uber Eats, Booking.com) stop at discovery:**
 
 > Both flagship consumer-commerce connectors in Claude today (Uber Eats, Booking.com) **stop at discovery.** Their terminal step is a deep link back to the provider's own app/site, where the human must register and pay.
 
@@ -22,7 +22,7 @@ The complete Uber Eats tool surface available to Claude has two tools: `search` 
 
 **The same pattern holds for grocery platforms (Instacart, Getir):** both expose search and deep-link flows but no add-to-cart, checkout, substitution acceptance, or payment API. The agent shows available groceries, then hands the user to the app.
 
-The reason incumbents stay at discovery is economic, not technical. Grocery retail media — Instacart ads $1.18B FY2024 (SEC filing, cited in `docs/research/2026-06-22-consumer-agent-validation.md`, Front C) — requires an authenticated in-app session for sponsored placement and closed-loop attribution. A silent agent order via a structured API erases that ad surface entirely. The discovery funnel *is* the product.
+The reason incumbents stay at discovery is economic, not technical. Grocery retail media — Instacart ads $1.18B FY2024 (SEC filing) — requires an authenticated in-app session for sponsored placement and closed-loop attribution. A silent agent order via a structured API erases that ad surface entirely. The discovery funnel *is* the product.
 
 **The differentiator getgrocery adds:** The provider's catalog returns facts only — in-stock items. Out-of-stock items are simply absent. The AI assistant reasons over the catalog to resolve substitutions before calling `create_order`. Real grocery apps require a human to accept substitutions via push notification. With Kiosk, the assistant handles substitution decisions using the catalog, without any provider-side substitution surface or human push notification.
 
@@ -106,7 +106,7 @@ The generator does **not** touch your routes. `kiosk-server` ships the wire cont
 
 ```ruby
 # config/routes.rb — the wire surface, mounted manually (v0.1 alpha).
-# REST endpoints (ADR-0005): one per verb, HTTP method carries the semantics.
+# REST endpoints: one per verb, HTTP method carries the semantics.
 get  "/kiosk/schema",         to: "kiosk/server/wire#schema"
 post "/kiosk/query",          to: "kiosk/server/wire#query"
 post "/kiosk/run",            to: "kiosk/server/wire#run"
@@ -205,7 +205,7 @@ Kiosk.configure do |c|
 end
 ```
 
-This demo uses the **real Stripe adapter in test mode** (`STRIPE_SECRET_KEY=sk_test_…`): the buyer's card is saved once via a hosted SetupIntent and charged `off_session` per purchase — the assistant never holds card data. See `docs/architecture/payment-model.md`.
+This demo uses the **real Stripe adapter in test mode** (`STRIPE_SECRET_KEY=sk_test_…`): the buyer's card is saved once via a hosted SetupIntent and charged `off_session` per purchase — the assistant never holds card data.
 
 **What this does not require:** a new user-facing login flow, a new mobile app, an OAuth integration, a webhook endpoint, or any changes to the provider's existing Rails models. The satellite gems add a parallel surface; the existing application is untouched.
 
@@ -215,4 +215,4 @@ See `getgrocery_flow.rb` in this directory for the full worked example.
 
 ---
 
-*Validation research source: `docs/research/2026-06-22-consumer-agent-validation.md` — primary evidence from live connector probes (Uber Eats, Booking.com) plus independent verification of OpenAI Instant Checkout walkback, Amazon v. Perplexity injunction, and Google Universal Cart, all as of 2026-06-22.*
+*Validation research: primary evidence from live connector probes (Uber Eats, Booking.com) plus independent verification of OpenAI Instant Checkout walkback, Amazon v. Perplexity injunction, and Google Universal Cart, all as of 2026-06-22.*

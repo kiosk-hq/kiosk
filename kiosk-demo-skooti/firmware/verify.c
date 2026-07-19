@@ -1,5 +1,5 @@
 /*
- * verify.c — skooti offline rental-token verification (Arch 2, Ed25519, v2)
+ * verify.c — skooti offline rental-token verification (offline Ed25519, v2)
  *
  * Portable C99.  No BLE, Arduino, or platform-specific dependencies.
  * Compiles on host (clang/gcc) and ESP32-C3 toolchain.

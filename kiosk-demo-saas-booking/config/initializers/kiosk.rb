@@ -4,7 +4,7 @@
 # salon-booking reference shape: uuid users, JWT-or-stub IdP, one
 # Action registered (book_appointment).
 
-# ── Ephemeral dev signing key (K-034) ────────────────────────────────────
+# ── Ephemeral dev signing key ────────────────────────────────────
 # JWT / register flows need a signing key. In development or test, if none is
 # provided, self-provision an EPHEMERAL RSA key so `demo:setup` and the flows
 # run out-of-the-box. Never do this in production — a real key must be set.
@@ -21,7 +21,7 @@ require "kiosk/user_identity_providers/devise"
 
 # Registration PoW gate (KIOSK_POW_REGISTER_DEMO=1). A booking SaaS can price
 # fresh-identity minting: registering an agent costs one Equihash proof
-# (ADR-0001 amended — one PoW = Equihash; ADR-0007 — a metered toll). Small demo
+# (one PoW = Equihash — a metered toll). Small demo
 # params solve sub-second. Off by default so the walkthrough/isolation flows are
 # unchanged.
 SAAS_REGISTRATION_POW_PARAMS = { n: 96, k: 5 }.freeze
@@ -66,7 +66,7 @@ Kiosk.configure do |c|
   # Walked by `rake demo:binding`.
   c.user_idp = Kiosk::UserIdentityProviders::Devise.new
 
-  # Per-assistant spending cap (ADR-0019): read the cap from
+  # Per-assistant spending cap: read the cap from
   # agents.spending_cap_cents (the column edited on the manage-assistants
   # page). window_days stays default nil = all-time cumulative spend.
   c.spending_cap = Kiosk::Server::ColumnSpendingCap.new

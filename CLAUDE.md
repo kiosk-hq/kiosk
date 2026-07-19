@@ -8,19 +8,8 @@ This repo is the Kiosk OSS monorepo: core gems (`kiosk-core`, `kiosk-server`,
 demo Rails apps (`kiosk-demo-*`), and the `e2e/` harness. Gem table:
 `README.md`.
 
-This repo will eventually be PUBLIC. Shipped content (code, READMEs) must
-not depend on private material (meta/, umbrella files); the pointers below
-serve the private development phase and are scrubbed before publication
-(workspace T-011).
-
-Part of the Kiosk workspace — the workspace constitution binds here. Paths
-below are absolute on purpose: worktree checkouts live outside the umbrella.
-
-- Workspace root: `/Users/pirj/source/kiosk` — `GOAL.md`, `PLAN.md`, `ARCHITECTURE.md`
-- Findings ledger (record ALL discrepancies here): `/Users/pirj/source/kiosk/findings.md`
-- Planned work: `/Users/pirj/source/kiosk/TODO.md`
-- Normative spec: `/Users/pirj/source/kiosk/kiosk.tech/specification.html` · agent skill: `/Users/pirj/source/kiosk/kiosk.tech/skill.md`
-- ADRs: `/Users/pirj/source/kiosk/meta/docs/adr/`
+The normative spec lives at https://kiosk.tech (`specification.html`); the
+universal agent skill is `skill.md` on the same site.
 
 ## The five rules
 
@@ -50,5 +39,4 @@ below are absolute on purpose: worktree checkouts live outside the umbrella.
   `demo:redteam`). Postgres required.
 - Full e2e: `./e2e/run.sh` (Postgres + jq). CI: `.github/workflows/ci.yml`
   (gems matrix + demos matrix + e2e).
-- Inline `TODO`/`FIXME` must reference a `K-`/`T-` ID from the workspace
-  ledgers; orphans become findings.
+- Inline `TODO`/`FIXME` must state a concrete rationale, not a bare marker.

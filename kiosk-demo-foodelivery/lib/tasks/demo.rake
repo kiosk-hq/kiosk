@@ -430,9 +430,9 @@ namespace :demo do
     end
   end
 
-  # ── demo:rls — additive RLS-enforce reference (R1 Phase 1 Task 5) ─────────
+  # ── demo:rls — additive RLS-enforce reference ─────────────────────────────
   desc <<~DESC
-    RLS enforce reference (R1 Phase 1 Task 5) — strictly additive overlay; does NOT
+    RLS enforce reference — strictly additive overlay; does NOT
     touch Path-C structure.sql and does NOT add any migration.
 
     Loads the normal structure.sql schema (db:drop → db:create → db:schema:load →
@@ -692,11 +692,11 @@ namespace :demo do
 
   # ---------------------------------------------------------------------------
   desc <<~DESC
-    Adversarial cross-tenant isolation test (R1 Phase 1 Task 1).
+    Adversarial cross-tenant isolation test.
 
     Boots the server, runs isolation_flow.rb with two fresh principals (A and B),
     and asserts all cross-tenant denial properties, including the order-ownership
-    mutation gate that binds pay to a placed order (K-185):
+    mutation gate that binds pay to a placed order:
 
       HEADLINE (pay/order binding): B cannot confirm_order on A's order.
         A places order oA and pays for it (the cart mandate binds the settlement
@@ -854,7 +854,7 @@ namespace :demo do
 
   # ── demo:schema ──────────────────────────────────────────────────────────
   desc <<~DESC
-    Self-discovery proof (P3 Task 2) — verifies the schema verb over HTTP.
+    Self-discovery proof — verifies the schema verb over HTTP.
 
     Boots the server, registers a fresh agent, calls:
       GET /kiosk/schema
@@ -965,7 +965,7 @@ namespace :demo do
       puts "  ✗  schema.queries missing my_orders"
     end
 
-    # Actions: place_order, payment_setup (K-057 — skill Step 5) with descriptions
+    # Actions: place_order, payment_setup (skill Step 5) with descriptions
     %w[place_order payment_setup].each do |aname|
       entry = actions.find { |a| a["name"] == aname }
       if entry
@@ -994,7 +994,7 @@ namespace :demo do
 
   # ── demo:redteam ─────────────────────────────────────────────────────────
   desc <<~DESC
-    Adversarial regression battery (R3 Phase 2 Task 3) — kiosk-redteam.
+    Adversarial regression battery — kiosk-redteam.
 
     Boots foodelivery, runs all generic Kiosk::Redteam scenarios and asserts
     each applicable attack is BLOCKED:

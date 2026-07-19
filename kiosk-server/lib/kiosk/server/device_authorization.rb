@@ -5,7 +5,7 @@ require "digest"
 
 module Kiosk
   module Server
-    # State-machine value object for the account-binding ceremony (ADR-0017)
+    # State-machine value object for the account-binding ceremony
     # riding the RFC 8628 Device Authorization Grant wire. One row per
     # binding request, in one of two kinds:
     #
@@ -53,7 +53,7 @@ module Kiosk
     )
       STATUSES = %i[pending approved denied consumed expired].freeze
 
-      # The two ceremony directions (ADR-0017): agent-initiated `:claim`
+      # The two ceremony directions: agent-initiated `:claim`
       # (auth.md "User Claimed") and human-initiated `:link` (Kiosk
       # extension).
       KINDS = %i[claim link].freeze

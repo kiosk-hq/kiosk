@@ -192,7 +192,7 @@ module RentalTokenIssuerKAT
       assert("domain-sep: wrong tag -> nil", RentalTokenIssuer.verify(token: tampered_token, now: 1_750_000_000).nil?)
     end
 
-    # K-209: the unconfigured-key raise, verify's nil-public-key return, and the
+    # The unconfigured-key raise, verify's nil-public-key return, and the
     # pipe field-shift hazard (a `|` in an input mints a signed token this
     # issuer's own verifier rejects — see the RentalTokenIssuer.issue charset
     # contract). Saves/restores the configured key so it exercises the nil path.

@@ -5,7 +5,7 @@
 # Hotel search is legitimately browse-heavy — an assistant compares many
 # options. This vertical does not treat that as suspicion; it prices DEPTH:
 # the first few queries are free, then each extra one costs proof-of-work,
-# escalating with the query rate (ADR-0007). This driver registers once, then
+# escalating with the query rate. This driver registers once, then
 # runs a burst of `properties` queries and records, per query, how many proofs
 # the provider demanded — showing the free-then-priced curve.
 #

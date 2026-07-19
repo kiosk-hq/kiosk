@@ -8,7 +8,7 @@
 #
 # The wire/auth/jwks/kyc controllers have shipped; the engine auto-injects
 # HeadersMiddleware into the host stack (initializer below). Route wiring:
-# the engine draws the ACCOUNT-BINDING surface (ADR-0017) below — a host
+# the engine draws the ACCOUNT-BINDING surface below — a host
 # `mount Kiosk::Server::Engine => Kiosk.configuration.mount_path` gets the
 # full claim + link ceremony. The wire/auth/jwks/kyc/discovery routes are
 # still mounted manually by hosts in their own `config/routes.rb` (see the
@@ -27,7 +27,7 @@ if defined?(::Rails::Engine)
           app.middleware.use Kiosk::Server::HeadersMiddleware
         end
 
-        # Account-binding ceremony routes (ADR-0017). Mount the engine at
+        # Account-binding ceremony routes. Mount the engine at
         # the configured mount_path so the advertised URLs
         # (<endpoint>/oauth/…, <endpoint>/auth/…) resolve.
         routes do

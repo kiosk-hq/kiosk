@@ -1,7 +1,7 @@
 # frozen_string_literal: true
 
 # Migration 008 — rebuild kiosk.device_authorizations in the
-# account-binding shape (ADR-0017): hashed user_code, public_key_pem,
+# account-binding shape: hashed user_code, public_key_pem,
 # kind (claim/link). Read/written by the durable
 # Kiosk::Server::DeviceAuthorizationStores::ActiveRecord store.
 class RebuildKioskDeviceAuthorizations < ActiveRecord::Migration[ActiveRecord::Migration.current_version]

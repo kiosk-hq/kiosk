@@ -1,4 +1,4 @@
-// LockBLE.swift — CoreBluetooth central manager for the SKOOTI lock (Arch 2)
+// LockBLE.swift — CoreBluetooth central manager for the SKOOTI lock (offline Ed25519)
 //
 // BLE contract (must match skooti_lock.ino EXACTLY):
 //
@@ -14,7 +14,7 @@
 //   firmware/skooti_lock.ino  NimBLEDevice::init("skooti-" SCOOTER_CODE) — advertised name
 //   firmware/skooti_lock.ino  UnlockCallbacks::onWrite — receives the full wire token
 //
-// Arch 2 flow (NO challenge, NO server round-trip):
+// Offline flow (NO challenge, NO server round-trip):
 //   scan → connect (to skooti-<scooterCode> ONLY) → discover unlock char → write token → unlocked
 //
 // Device-name filtering: the firmware advertises as "skooti-<SCOOTER_CODE>" (e.g. "skooti-SK-001").
@@ -54,7 +54,7 @@ private let kUnlockUUID  = CBUUID(string: "4e2a1002-5b3c-4b1e-9f8c-6d7e8a9b0c1d"
 // MARK: — LockBLE
 // ============================================================
 
-/// Manages a single BLE connection to a SKOOTI lock (Arch 2 — offline token).
+/// Manages a single BLE connection to a SKOOTI lock (offline token).
 ///
 /// Usage:
 ///   1. Call `scan(scooterCode:)` — the manager scans for the SKOOTI service UUID.
@@ -270,7 +270,7 @@ extension LockBLE: CBPeripheralDelegate {
                 state = .failed(reason: "SKOOTI service not found on peripheral")
                 return
             }
-            // Discover only the unlock characteristic — no challenge in Arch 2.
+            // Discover only the unlock characteristic — no challenge in the offline flow.
             peripheral.discoverCharacteristics([kUnlockUUID], for: service)
         }
     }

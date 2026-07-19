@@ -6,7 +6,7 @@ module Kiosk
     # agent, bind an agent to it, then mint the agent's first token. No human.
     #
     # The assistant account is created either by a provider-supplied factory
-    # (`config.assistant_creation`, ADR-0010) or, when none is configured, by a
+    # (`config.assistant_creation`) or, when none is configured, by a
     # bare `user_model.create!` (the greenfield fallback — see #call).
     module AgentRegistration
       module_function
@@ -18,7 +18,7 @@ module Kiosk
 
         # The role is pinned server-side when configured — the agent never
         # sends one (that would be a privilege-selection primitive). OPTIONAL
-        # per ADR-0011 (roles are hook-or-absent in 0.1): when unset, the agent
+        # (roles are hook-or-absent in 0.1): when unset, the agent
         # row gets NO role, and the provider may instead assign roles inside
         # its `assistant_creation` hook. A CONFIGURED role that is not among
         # the declared roles is still a provider error (loud 500).
@@ -31,7 +31,7 @@ module Kiosk
         # Normalise PEM: coerce-to-String then strip leading/trailing whitespace
         # so lookup matches storage. `.to_s` first so a wrong-typed field (number,
         # object, array from the JSON body) yields a clean 400 downstream via
-        # PopVerifier's invalid-key guard, not a NoMethodError 500 here (K-204).
+        # PopVerifier's invalid-key guard, not a NoMethodError 500 here.
         public_key_pem = public_key_pem.to_s.strip
 
         # Optional Equihash PoW to price fresh identity minting. No-op unless
@@ -65,7 +65,7 @@ module Kiosk
         end
 
         conn.transaction do
-          # The principal backing this agent is an ASSISTANT ACCOUNT (ADR-0010),
+          # The principal backing this agent is an ASSISTANT ACCOUNT,
           # not necessarily a human user. Prefer the provider-supplied factory:
           # the provider creates its OWN record (satisfying its own model
           # validations) and RETURNS the principal id, which the framework uses
@@ -76,7 +76,7 @@ module Kiosk
           assistant_account_id = create_assistant_account(config, public_key_pem)
 
           # NULL allowed_roles when no registration_role is configured
-          # (ADR-0011: single-role providers need no role at all).
+          # (single-role providers need no role at all).
           allowed_roles_sql = role ? "ARRAY[#{conn.quote(role)}]::text[]" : "NULL"
           agent_id = conn.execute(<<~SQL).first.fetch("id")
             INSERT INTO #{config.schema}.agents (user_id, allowed_roles, public_key)
@@ -85,14 +85,14 @@ module Kiosk
             RETURNING id
           SQL
           token = AgentIdentityProviders::DefaultAgentIdp.new.issue(agent_id: agent_id, role: role)
-          # Wire key stays `user_id`: ADR-0010 renames the factory surface only,
+          # Wire key stays `user_id`: the factory-surface rename touches only that,
           # not the existing user_id / kiosk.current_user_id() GUC surface.
           { agent_id: agent_id, user_id: assistant_account_id.to_s, access_token: token }
         end
       end
 
       # Create the assistant account backing a freshly registered agent and
-      # return its id (the agent's principal). ADR-0010.
+      # return its id (the agent's principal).
       def create_assistant_account(config, public_key_pem)
         if config.assistant_creation
           # Provider owns BOTH record creation AND id: it persists its own row

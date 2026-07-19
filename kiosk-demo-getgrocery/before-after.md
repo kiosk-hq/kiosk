@@ -100,7 +100,7 @@ In production these are versioned RubyGems. The `kiosk-pay-stripe` adapter swaps
 rails g kiosk:install
 ```
 
-This emits exactly two things: `config/initializers/kiosk.rb` (a `Kiosk.configure` block) and the seven `kiosk.*` schema migrations (the namespace with agents, sessions, actions-log, reservations, device-authorizations, mandate tables, plus the KYC column). Run `bin/rails db:migrate` to apply them.
+This emits exactly two things: `config/initializers/kiosk.rb` (a `Kiosk.configure` block) and the nine `kiosk.*` schema migrations (the namespace with agents, sessions, actions-log, reservations, device-authorizations, mandate tables, plus the KYC column). Run `bin/rails db:migrate` to apply them.
 
 The generator does **not** touch your routes. `kiosk-server` ships the wire controllers; you mount them yourself. In this demo that block lives in `config/routes.rb`:
 

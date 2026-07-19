@@ -1,0 +1,34 @@
+<p><%= link_to "← All lists", lists_path %></p>
+
+<h2>Todos</h2>
+<% if @todos.empty? %>
+  <p>No todos yet.</p>
+<% else %>
+  <ul>
+    <% @todos.each do |t| %>
+      <li>
+        <span class="<%= 'done' if t['done'] %>"><%= t["title"] %></span>
+        <% if t["created_by_agent_id"] %>
+          <span class="role">added by assistant <%= t["created_by_agent_id"] %></span>
+        <% end %>
+        <% unless t["done"] %>
+          <%= button_to "Done", complete_list_todo_path(@list_id, t["todo_id"]), method: :post, class: "inline" %>
+        <% end %>
+      </li>
+    <% end %>
+  </ul>
+<% end %>
+
+<%= form_with url: list_todos_path(@list_id), method: :post do %>
+  <%= text_field_tag :title, nil, placeholder: "New todo", required: true %>
+  <%= submit_tag "Add" %>
+<% end %>
+
+<h2>Members</h2>
+<ul>
+  <% @members.each do |m| %>
+    <li><%= m["handle"] || m["account_id"] %> <span class="role">(<%= m["role"] %>)</span></li>
+  <% end %>
+</ul>
+
+<%= button_to "Invite a collaborator (mint a code)", invite_list_path(@list_id), method: :post %>

@@ -93,7 +93,9 @@ module Kiosk
 
         # Known key: remap the principal, keep agent_id + allowed_roles +
         # reputation. The hook runs inside the transaction so a raising
-        # provider migration rolls the rebind back atomically.
+        # provider migration rolls the rebind back atomically. Because the
+        # principal changes, the key's pre-link tokens are watermark-revoked
+        # (like `unlink!`) — only the freshly minted token below survives.
         def rebind(conn, config, existing, user_id)
           agent_id = existing.fetch("id")
           previous = existing.fetch("user_id")
@@ -108,6 +110,15 @@ module Kiosk
               agent: agent_id, previous_user_id: previous, user_id: user_id,
             )
           end
+
+          # A rebind is a principal change: the key's pre-link tokens still
+          # carried the OLD `sub`, so they must die exactly as `unlink!` does —
+          # "linking makes the agent re-login" holds literally. Same watermark
+          # `/auth/revoke` and `unlink!` use: every token minted strictly BEFORE
+          # this instant stops verifying; the replacement token minted just below
+          # (and any later `/auth/login`) is issued at/after the watermark and
+          # survives the store's strict `iat < watermark` check.
+          config.revocation_store&.revoke_all(agent_id, at: Time.now.to_i)
 
           token = issue_token(agent_id, primary_role(existing.fetch("allowed_roles")))
           { agent_id: agent_id, user_id: user_id.to_s, access_token: token, fresh: false }

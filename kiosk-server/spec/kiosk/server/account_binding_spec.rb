@@ -142,6 +142,79 @@ RSpec.describe Kiosk::Server::AccountBinding do
 
       described_class.bind!(public_key_pem: pem, user_id: user_id)
     end
+
+    # TUDU-REBIND-TOKENS (K-338): a rebind is a principal change, so — like
+    # unlink! — it watermark-revokes the key's pre-link tokens.
+    it "watermark-revokes the key's pre-link tokens (principal change ⇒ re-login)" do
+      expect(Kiosk.configuration.revocation_store)
+        .to receive(:revoke_all).with("agent-known", hash_including(:at))
+
+      described_class.bind!(public_key_pem: pem, user_id: user_id)
+    end
+  end
+
+  # End-to-end watermark ordering with the REAL RevocationStore + JwtIssuer:
+  # a token minted BEFORE the rebind must stop verifying, while the fresh token
+  # bind! returns must still verify. Proves the strict `iat < watermark` check
+  # keeps the replacement token alive.
+  describe ".bind! — known key rebind watermark ordering (real issuer)" do
+    let(:agent_id)      { "agent-known" }
+    let(:previous_user) { "22222222-2222-2222-2222-222222222222" }
+
+    before do
+      Kiosk.reset!
+      Kiosk.configure do |c|
+        c.signing_key = Kiosk::Server::SigningKey.generate
+        c.issuer      = "https://demo.example"
+        c.roles       = %i[customer]
+        c.schema      = "kiosk"
+      end
+      # Un-stub issue (the outer before stubs it to a fixed string) so bind!
+      # mints a REAL JWT; lookup_user_id (called inside issue) resolves the
+      # rebound principal without a DB.
+      allow_any_instance_of(Kiosk::Server::AgentIdentityProviders::DefaultAgentIdp)
+        .to receive(:issue).and_call_original
+      allow_any_instance_of(Kiosk::Server::AgentIdentityProviders::DefaultAgentIdp)
+        .to receive(:lookup_user_id).and_return(user_id)
+      allow(con).to receive(:execute) do |sql|
+        con.executed_sql << sql
+        if sql =~ /SELECT/i
+          [{ "id" => agent_id, "user_id" => previous_user, "allowed_roles" => "{customer}" }]
+        else
+          []
+        end
+      end
+      ar_base = class_double("ActiveRecord::Base").as_stubbed_const
+      allow(ar_base).to receive(:connection).and_return(con)
+    end
+
+    def verify(token)
+      Kiosk::Server::JwtIssuer.verify(
+        token:    token,
+        jwks:     Kiosk::Server::Jwks.build(keys: [Kiosk.configuration.signing_key]),
+        audience: "https://demo.example",
+        issuer:   "https://demo.example",
+      )
+    end
+
+    it "revokes a pre-rebind token but leaves the fresh bind! token verifiable" do
+      # A token minted BEFORE the rebind (iat in the past ⇒ strictly < watermark).
+      prelink = Kiosk::Server::JwtIssuer.issue(
+        claims:   { sub: previous_user, agent_id: agent_id, role: "customer", actor: "agent" },
+        audience: "https://demo.example",
+        now:      Time.now - 10,
+      )
+      expect { verify(prelink) }.not_to raise_error # valid before the rebind
+
+      result = described_class.bind!(public_key_pem: pem, user_id: user_id)
+      fresh  = result.fetch(:access_token)
+
+      # Pre-link token now covered by the watermark → RevokedError (→ 401).
+      expect { verify(prelink) }.to raise_error(Kiosk::Server::JwtIssuer::RevokedError)
+      # The fresh token returned by bind! survives (iat >= watermark).
+      expect { verify(fresh) }.not_to raise_error
+      expect(verify(fresh)[:sub]).to eq(user_id)
+    end
   end
 
   describe ".unlink!" do

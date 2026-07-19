@@ -21,8 +21,8 @@
 #   InviteCodeReplay      — an already-used invite code is rejected → 403
 #   RevokedMemberAccess   — a removed member's next read is blocked → 403
 #   RevokedAgentKey       — an unlinked agent's login is denied → 404
-#   PreLinkTokenAfterLink — a token minted before rebind can't reach the
-#                           migrated list → 403 (its principal owns nothing now)
+#   PreLinkTokenAfterLink — a token minted before rebind is watermark-revoked by
+#                           the rebind (principal change) → 401 (K-338)
 #
 # Usage:
 #   SERVER_URL=… KIOSK_ISSUER=… HOLDER_ID=… HOLDER_EMAIL=… HOLDER_PASSWORD=… \
@@ -175,18 +175,20 @@ rc, = post_json("/kiosk/auth/login", { public_key: rpem, signed: pop_proof(rk, r
 record(results, "RevokedAgentKey", rc == 404, "unlinked agent login → #{rc} (want 404)")
 
 # PreLinkTokenAfterLink — an agent registers headless, creates a list, then
-# rebinds to Alice (assistant_claimed migrates the list). The PRE-LINK token's
-# principal (the old headless account) owns nothing now → its list_todos on the
-# migrated list is BLOCKED (403). (Shipped rebind remaps the principal rather
-# than watermark-revoking the token; the access denial is the honest signal.)
+# rebinds to Alice (assistant_claimed migrates the list). A rebind is a
+# principal change, so — like unlink — it watermark-revokes the key's pre-link
+# tokens (K-338). The PRE-LINK token no longer authenticates at all → 401.
 pl = register_agent("prelink")
 rc, plc = post_json("/kiosk/run", { name: "create_list", title: "Pre-link list" }, bearer(pl[:token]))
 pl_list = plc.dig("value", "list_id")
 rc, link2 = post_json("/kiosk/auth/link", {}, { session: true })
+# Cross a second boundary so the pre-link token (minted at register above) is
+# unambiguously older than the rebind watermark — JWT iat is second-resolution.
+sleep 1.1
 rc, = post_json("/kiosk/auth/claim", { code: link2["link_code"], public_key: pl[:pem], signed: pop_proof(pl[:key], pl[:pem]) })
 rc, = post_json("/kiosk/query", { name: "list_todos", list_id: pl_list }, bearer(pl[:token]))
-record(results, "PreLinkTokenAfterLink", rc == 403,
-       "pre-link token reading the migrated list → #{rc} (want 403 — principal migrated away)")
+record(results, "PreLinkTokenAfterLink", rc == 401,
+       "pre-link token after rebind → #{rc} (want 401 — watermark-revoked)")
 
 # ── Verdict ──────────────────────────────────────────────────────────────────
 breaches = results.reject { |r| r[:blocked] }

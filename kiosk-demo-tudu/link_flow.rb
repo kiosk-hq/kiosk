@@ -16,11 +16,10 @@
 # Asserts:
 #   (a) after link, the pre-existing "Hike" list now belongs to Alice
 #       (assistant_claimed migrated it — verified in the rake task via psql);
-#   (b) the PRE-LINK token no longer reaches the list — its principal (the old
-#       headless account) owns nothing now (my_lists is empty). NOTE: the
-#       shipped W5 rebind remaps the principal but does NOT watermark-revoke the
-#       pre-link token, so it still authenticates; it simply resolves to the
-#       now-empty headless account. (See the build report — recorded per rule 2.)
+#   (b) the PRE-LINK token no longer authenticates at all — a rebind is a
+#       principal change, so (like unlink) it watermark-revokes the key's
+#       pre-link tokens (K-338). The old token now fails with 401, forcing the
+#       agent to re-login for a token under the new principal.
 #   (c) after the assistant RE-LOGS IN (fresh token, sub=Alice), it sees "Hike"
 #       under Alice — and Alice's browser session (my_lists as the human) sees
 #       the same list. One shared world.
@@ -138,6 +137,11 @@ results[:link_mint] = rc
 abort "link mint failed (#{rc}): #{JSON.generate(link)}" unless rc == 201
 
 # ── 3. The SAME key redeems the code → REBIND + assistant_claimed migration ──
+# The rebind watermark-revokes tokens minted STRICTLY before it (JWT iat is
+# second-resolution). Cross a second boundary so the pre-link token, minted
+# above, is unambiguously older than the rebind instant — over a real network
+# these steps span seconds; the sleep just makes the local demo deterministic.
+sleep 1.1
 rc, claimed = post_json("/kiosk/auth/claim",
                         { code: link.fetch("link_code", ""), public_key: pem, signed: pop_proof(key, pem) })
 results[:claim_status]        = rc
@@ -146,11 +150,11 @@ results[:claim_same_agent_id] = claimed["agent_id"] == agent_id
 abort "claim failed (#{rc}): #{JSON.generate(claimed)}" unless rc == 201
 STDERR.puts "  Rebind: agent_id=#{claimed['agent_id']} now user_id=#{claimed['user_id']} (was #{headless_user_id})"
 
-# (b) The PRE-LINK token now resolves to the old headless account, which owns
-#     nothing after migration — my_lists is empty.
-rc, prelink = post_json("/kiosk/query", { name: "my_lists" }, bearer(headless_token))
-results[:prelink_status]     = rc
-results[:prelink_list_empty] = rc == 200 && (prelink["rows"] || []).none? { |r| r["list_id"] == list_id }
+# (b) The PRE-LINK token is watermark-revoked by the rebind (principal change ⇒
+#     the agent must re-login) — its next call is rejected 401, not merely empty.
+rc, _prelink = post_json("/kiosk/query", { name: "my_lists" }, bearer(headless_token))
+results[:prelink_status]   = rc
+results[:prelink_revoked]  = rc == 401
 
 # (c) The assistant RE-LOGS IN (fresh token bound to Alice) and sees "Hike".
 rc, relog = post_json("/kiosk/auth/login", { public_key: pem, signed: pop_proof(key, pem) })

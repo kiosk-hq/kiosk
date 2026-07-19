@@ -38,12 +38,7 @@ class StubIdp < Kiosk::AgentIdentityProviders::Base
   private
 
   def authorization_for(request)
-    if request.respond_to?(:headers)
-      request.headers["Authorization"] || request.headers["authorization"]
-    elsif request.is_a?(Hash)
-      request["HTTP_AUTHORIZATION"] || request[:authorization]
-    elsif request.is_a?(String)
-      request
-    end
+    # Sole caller is JwtOrStubIdp#verify, which forwards the Rails request.
+    request.headers["Authorization"] || request.headers["authorization"]
   end
 end

@@ -100,6 +100,14 @@ jobs:
             tasks: demo:kat demo:rideflow demo:isolation demo:redteam demo:schema
           - demo: kiosk-demo-saas-booking
             tasks: demo:walkthrough demo:isolation demo:redteam demo:schema
+          - demo: kiosk-demo-philslist
+            # NON-COMMERCE classifieds board — no payments. demo:walkthrough is
+            # the browse→post→edit→close happy path; demo:schema asserts `pay` is
+            # ABSENT from the advertised capabilities (the not-only-commerce
+            # proof). Same standard task set as saas-booking; demo:binding is
+            # timing-sensitive (RFC 8628 poll interval) so it stays local-only,
+            # matching every sibling (no demo runs binding in CI).
+            tasks: demo:walkthrough demo:isolation demo:redteam demo:schema
           # demo:pow excluded everywhere: solves real memory-hard PoW (K-001)
 
     services:

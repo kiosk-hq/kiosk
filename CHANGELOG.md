@@ -3,6 +3,7 @@
 Significant changes only (CLAUDE.md rule 5): one line per change, 1–2
 sentences — essence and intent, not content.
 
+- 2026-07-19: New `kiosk-demo-philslist` — a NON-COMMERCE classifieds board proving Kiosk is not only for commerce: the same query/run/schema + account-binding wire with NO payment provider, so `pay` is absent from the advertised capabilities. Its headline is cross-owner WRITE denial on owned listings (edit/close → 403) and a multi-account household (two assistants on one account); wired into the CI demos matrix. (T-029, T-027)
 - 2026-07-19: Discovery no longer advertises AP2/payments when the provider serves no `pay` — agents.txt drops `Protocols: ap2`/`Payments: required` and agents.json omits its `payments` block for payment-less providers, so the standard surfaces stay consistent with the computed `capabilities`. (K-334, ADR-0009)
 - 2026-07-19: The advertised wire version is now 0.2.0 — Kiosk::Protocol::API_VERSION and MIN_CLIENT bump to match the 0.2 protocol, so the Kiosk-API-Version/Kiosk-Min-Client headers and the agents.json api_version now report parity with the framework release. (K-325)
 - 2026-07-18: sweep-012 fixes — the registration toll 402 now carries WWW-Authenticate: Kiosk-PoW like the wire-verb gate (K-314); removed the unused WellKnown agents_json_string/api_catalog_string spec-only wrappers (K-320); re-pinned skill v0.2.2 across the five demos and the default URL (K-317/K-318).

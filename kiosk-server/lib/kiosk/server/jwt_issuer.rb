@@ -21,7 +21,7 @@ module Kiosk
     #
     # Used by the bundled kiosk-pop IdP ({DefaultAgentIdp}) for direct
     # access-token issuance and verification — including the tokens the
-    # account-binding ceremony returns (ADR-0017: one token minter).
+    # account-binding ceremony returns (one token minter).
     # NOTE: AP2 mandate verification ({MandateVerifier}) and KYC attestation
     # verification ({KycVerifier}) do NOT go through here — they decode via
     # `::JWT.decode` directly against the agent / KYC-provider key.

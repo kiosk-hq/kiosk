@@ -1,9 +1,9 @@
 # frozen_string_literal: true
 
-# Adversarial cross-tenant isolation test driver (R1 Phase 1 Task 1).
+# Adversarial cross-tenant isolation test driver.
 #
 # Proves app-layer predicates enforce cross-tenant denial, including the
-# order-ownership mutation gate that binds pay to a placed order (K-185):
+# order-ownership mutation gate that binds pay to a placed order:
 #
 #   HEADLINE (pay/order binding) — B cannot confirm_order on A's order:
 #     Principal A places order oA and pays for it (the cart mandate binds the
@@ -54,7 +54,7 @@ end
 
 # Sign the AP2 mandate chain for `order_id` and POST /kiosk/pay. The cart
 # mandate carries the order_id in line_items so the settlement is bound to a
-# specific placed order (K-185) — this is what confirm_order's Gate 2 checks.
+# specific placed order — this is what confirm_order's Gate 2 checks.
 def pay_for_order(server, issuer, token, key, user_id, agent_id, order_id, total_cents)
   now        = Time.now.to_i
   intent_id  = SecureRandom.uuid

@@ -51,7 +51,7 @@ module RentalTokenIssuer
     # SIGNED token that this issuer's own verifier rejects (a field-shift
     # hazard for a laxer external verifier). The skooti demo only ever passes
     # `SK-###` codes and opaque IDs with no pipe, so this is a documented input
-    # precondition rather than an enforced guard; see K-209.
+    # precondition rather than an enforced guard.
     #
     # @param scooter_code   [String]  e.g. "SK-001" (no `|`)
     # @param reservation_id [String]  UUID or other opaque ID (no `|`)

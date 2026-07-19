@@ -6,7 +6,7 @@ module Admin
   #
   # NOTE: No authentication — demo provider only.
   #
-  # No-coverage rationale (K-301, K-208 precedent): this is a pure
+  # No-coverage rationale: this is a pure
   # human-inspection back-office view, not a wire/spec surface. It is reachable
   # only via GET /admin/orders (routes.rb) and called by no flow driver, redteam
   # scenario, or Kiosk verb — it exists solely so an operator can eyeball orders

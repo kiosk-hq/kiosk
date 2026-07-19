@@ -5,7 +5,7 @@
 #   rake demo:setup        idempotent db:drop / create / schema:load / seed
 #   rake demo:walkthrough  boots the server, runs a curl-driven showcase,
 #                          tears down
-#   rake demo:isolation    adversarial cross-tenant denial test (R1 Phase 1 T3)
+#   rake demo:isolation    adversarial cross-tenant denial test
 #   rake demo:register     registration-PoW demo (no-proof 402 → solve → 201)
 #   rake demo:binding      account-binding walkthrough (claim ceremony over the
 #                          real Devise session + link-code redeem + unlink)
@@ -36,7 +36,7 @@ namespace :demo do
 
   # ---------------------------------------------------------------------------
   desc <<~DESC
-    Adversarial cross-tenant isolation test (R1 Phase 1 Task 3).
+    Adversarial cross-tenant isolation test.
 
     Runs demo:setup (clean DB + seed), boots the server, runs isolation_flow.rb
     with the two seeded principals (Alice and Bob), and asserts all cross-tenant
@@ -564,8 +564,8 @@ namespace :demo do
       puts "  ✗  schema.actions missing book_appointment"
     end
 
-    # Descriptions: every query/action must carry non-empty metadata (K-099 —
-    # bare-block registration served null description; schema is the agent's
+    # Descriptions: every query/action must carry non-empty metadata
+    # (bare-block registration served null description; schema is the agent's
     # only self-discovery surface).
     (query_specs + action_specs).each do |spec|
       name = spec["name"]

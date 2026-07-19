@@ -6,7 +6,7 @@ require "kiosk/payment_providers/stripe/version"
 module Kiosk
   module PaymentProviders
     # Stripe PSP adapter (test mode for the PoC). See the Payment section
-    # of the spec and docs/architecture/payment-model.md.
+    # of the spec.
     #
     # NOTE: always reference the SDK as `::Stripe` — bare `Stripe` resolves
     # to this class.

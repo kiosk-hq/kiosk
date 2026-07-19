@@ -28,7 +28,7 @@ module Kiosk
         payload = decode_and_check(raw_jws, identity)
         # `cap_amount_cents` is a REQUIRED intent field (spec AP2 table). ABSENT
         # would nil-coerce to 0 in the verify_cart cap comparison, making that
-        # comparison vacuous (see K-199); reject it here, before any .to_i.
+        # comparison vacuous; reject it here, before any .to_i.
         require_amount!(payload, :cap_amount_cents)
         require_currency!(payload)
 
@@ -54,7 +54,7 @@ module Kiosk
         payload = decode_and_check(raw_jws, identity)
         # `amount_cents` is a REQUIRED payment field (spec AP2 table). ABSENT
         # would nil-coerce to 0 below, so a payment omitting it would "match" a
-        # 0-cent cart and persist a 0-cent row (K-199); reject before any .to_i.
+        # 0-cent cart and persist a 0-cent row; reject before any .to_i.
         require_amount!(payload, :amount_cents)
         require_currency!(payload)
 
@@ -84,7 +84,7 @@ module Kiosk
         # `total_amount_cents` is a REQUIRED cart field (spec AP2 table). ABSENT
         # would nil-coerce to 0 in the cap comparison below (0 <= any cap) and
         # in verify_payment's amount match, making both vacuous and persisting a
-        # 0-cent cart row (K-199); reject before any .to_i.
+        # 0-cent cart row; reject before any .to_i.
         require_amount!(payload, :total_amount_cents)
         require_currency!(payload)
 
@@ -102,7 +102,7 @@ module Kiosk
           raise Errors::Forbidden.new("cart not bound to the intent",
                                       hint: "expected intent_mandate_id #{intent.id.inspect}")
         end
-        # Currency guard (K-101): the cap comparison is meaningless across
+        # Currency guard: the cap comparison is meaningless across
         # currencies — 4999 "USD" is NOT within a 5000 "EUR" cap. verify_payment
         # already checks amount AND currency together; the intent→cart cap must
         # do the same, or an agent could bypass a EUR cap by pricing the cart in
@@ -126,7 +126,7 @@ module Kiosk
       # Reject a REQUIRED amount field that is ABSENT (nil) from the payload,
       # BEFORE any `.to_i` coercion. `nil.to_i` is 0, so an omitted amount would
       # otherwise satisfy the spending-envelope checks vacuously (0 <= cap,
-      # 0 == 0) and persist a 0-cent row (K-199). An explicitly-present 0 is a
+      # 0 == 0) and persist a 0-cent row. An explicitly-present 0 is a
       # different, non-security case and is left to the amount/cap comparisons.
       def require_amount!(payload, field)
         return unless payload[field].nil?
@@ -138,9 +138,9 @@ module Kiosk
       end
 
       # Reject an ABSENT (nil) required `currency`. With both intent and cart
-      # omitting it, the K-101 cap guard (`nil != nil` → false) and the
+      # omitting it, the cap guard (`nil != nil` → false) and the
       # verify_payment match (`nil == nil` → true) both pass vacuously, then the
-      # NOT NULL currency column 500s after partial persist (K-302, K-199 class).
+      # NOT NULL currency column 500s after partial persist (same class as the missing-amount case).
       def require_currency!(payload)
         return unless payload[:currency].nil?
 
@@ -169,7 +169,7 @@ module Kiosk
         if payload[:iss] != issuer
           raise Errors::Forbidden.new("mandate issuer mismatch", hint: "expected #{issuer.inspect}")
         end
-        # Compare the principal as STRING on BOTH sides (K-092). The agent
+        # Compare the principal as STRING on BOTH sides. The agent
         # signs the mandate's `user_id`/`agent_id` with whatever the register
         # response returned (a String — AgentRegistration stringifies user_id),
         # but on a bigint-PK host the authenticated {Kiosk::Identity} carries
@@ -195,8 +195,8 @@ module Kiosk
         # agent_payment_key raises this when the authenticated agent_id has no
         # live kiosk.agents row (revoked or deleted between auth and now). It is
         # NOT an Errors::Base, so it escaped these rescues and the controller's
-        # Errors::Base rescue as an HTTP 500 (K-200; same 500-not-4xx class as
-        # K-070/K-093/K-114, whose guard only covered the nil-agent_id sibling).
+        # Errors::Base rescue as an HTTP 500 (same 500-not-4xx class as the
+        # other guarded paths, whose guard only covered the nil-agent_id sibling).
         # A revoked/absent agent has no signing key → clean 403 Forbidden.
         raise Errors::Forbidden.new(
           "mandate agent has no registered payment key",

@@ -240,7 +240,7 @@ end
 
 namespace :demo do
   desc <<~DESC
-    Account-binding walkthrough — the ADR-0017 ceremony + MULTI-ACCOUNT proof.
+    Account-binding walkthrough — the binding ceremony + MULTI-ACCOUNT proof.
 
     Boots the server and runs binding_flow.rb, which drives BOTH sides of the
     ceremony over plain HTTP:
@@ -394,7 +394,7 @@ namespace :demo do
       • schema.actions includes post_listing/edit_listing/close_listing
       • every query/action entry carries a non-empty description
       • the DISCOVERY capabilities do NOT include `pay` (the not-only-commerce
-        proof — pay drops out with no payment_provider, ADR-0009 + K-334)
+        proof — pay drops out with no payment_provider)
       • agents.json carries NO payments block
       • agents.txt carries NO `Protocols: ap2` / `Payments:` directives
 
@@ -471,7 +471,7 @@ namespace :demo do
       end
     end
 
-    # Descriptions non-empty (K-099).
+    # Descriptions non-empty.
     (query_specs + action_specs).each do |spec|
       name = spec["name"]
       desc = spec["description"]

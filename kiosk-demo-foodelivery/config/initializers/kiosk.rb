@@ -4,7 +4,7 @@
 # food-delivery reference shape: uuid users, JWT-or-stub IdP, StubPsp,
 # Actions (place_order, payment_setup).
 
-# ── Ephemeral dev signing key (K-034) ────────────────────────────────────
+# ── Ephemeral dev signing key ─────────────────────────────────────────────
 # JWT / register flows need a signing key. In development or test, if none is
 # provided, self-provision an EPHEMERAL RSA key so `demo:setup` and the flows
 # run out-of-the-box. Never do this in production — a real key must be set.
@@ -33,7 +33,7 @@ require Rails.root.join("lib/stub_psp")
 #
 # Demo params: n=96, k=5 — a small, non-toy Equihash instance the reference
 # solver clears in well under a second. Production defaults (n=168, k=7) are
-# ~10 s; a demo wants speed. See ADR-0007: PoW is a metered toll, tuned per
+# ~10 s; a demo wants speed. PoW is a metered toll, tuned per
 # provider, not a hardware wall.
 EQUIHASH_DEMO_PARAMS = { n: 96, k: 5 }.freeze
 
@@ -115,7 +115,7 @@ Kiosk.configure do |c|
   # Dual-check (skill.md): canonical skill URL + SHA-256 of its content.
   c.skill_sha256 = "3af06c1622053bab833b468c12f7f28d129c015da15c91d0fdcfe0c303885e83"
 
-  # ── RLS enforce gate (R1 Phase 1 Task 5 — demo:rls only) ─────────────────
+  # ── RLS enforce gate (demo:rls only) ─────────────────────────────────────
   # When KIOSK_RLS_ENFORCE=1, SessionContext.open appends
   #   SET LOCAL ROLE "kiosk_foodelivery_app"
   # after the GUC statements, dropping the session to the non-owner app role
@@ -132,7 +132,7 @@ Kiosk.configure do |c|
   end
 
   # JwtOrStubIdp tries Kiosk-issued JWTs (kiosk-pop register/login output;
-  # OAuth device-grant dormant per ADR-0008) first,
+  # OAuth device-grant dormant) first,
   # then falls back to StubIdp's bespoke `agent:u-…:a-…:r-…` shape.
   # One endpoint authenticates both for the demo. Real providers swap
   # in `kiosk-user-idp-devise` (or another adapter); see the README.
@@ -260,7 +260,7 @@ end
 # ─── Actions ────────────────────────────────────────────────────────────────
 
 # payment_setup — canonical skill Step 5 runs this unconditionally before
-# `pay` (K-057). Mirrors the getgrocery registration shape; with StubPsp
+# `pay`. Mirrors the getgrocery registration shape; with StubPsp
 # (no SetupIntent model) setup_required? is always false, so this is an
 # immediate no-op success: {status: "ready"}.
 Kiosk::Server::Actions.register("payment_setup",
@@ -316,7 +316,7 @@ Kiosk::Server::Actions.register("place_order",
 end
 
 # confirm_order — post-pay confirmation gated on order-ownership + settlement.
-# Mirrors getgrocery's schedule_delivery order-ownership gate (K-185): a placed
+# Mirrors getgrocery's schedule_delivery order-ownership gate: a placed
 # order is confirmed only by its owner, and only once a settlement referencing
 # that order exists. The pay path binds the order via the cart mandate's
 # line_items (each carries {order_id, total}); this action verifies both gates

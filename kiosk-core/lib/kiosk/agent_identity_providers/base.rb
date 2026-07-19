@@ -18,7 +18,7 @@ module Kiosk
       #   extracts its credential — typically the `Authorization` header)
       # @return [Kiosk::Identity, nil] nil when the credential is absent,
       #   foreign, or invalid — the caller turns nil into 401; adapters
-      #   should not let verification errors escape (K-070)
+      #   should not let verification errors escape
       def verify(_request)
         raise NotImplementedError, "#{self.class}#verify must be implemented by the adapter"
       end
@@ -26,9 +26,9 @@ module Kiosk
       # Issue a fresh agent token for a registered agent at the chosen role.
       #
       # 0.1: the built-in kiosk-pop endpoints (register / login / revoke)
-      # mint via the bundled DefaultAgentIdp by design (ADR-0013) and do NOT
+      # mint via the bundled DefaultAgentIdp by design and do NOT
       # call a custom adapter's #issue; adapter-supplied issuance (Entra /
-      # Okta / Passport-style, roles-from-IdP) is the 0.2 seam — T-014.
+      # Okta / Passport-style, roles-from-IdP) is the 0.2 seam.
       #
       # @param agent_id [String] UUID in the provider's `agents` table
       # @param role [String, Symbol] active role for the issued token

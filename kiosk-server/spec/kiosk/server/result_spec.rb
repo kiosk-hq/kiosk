@@ -14,7 +14,7 @@ RSpec.describe Kiosk::Server::Result do
       expect(r.payload).to eq({ id: 7 })
     end
 
-    # K-083: the :stream kind (events verb) was removed — it is now rejected
+    # The :stream kind (events verb) was removed — it is now rejected
     # like any other unknown kind.
     it "rejects the removed :stream kind" do
       expect { described_class.new(kind: :stream, payload: []) }

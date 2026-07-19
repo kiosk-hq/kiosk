@@ -1,6 +1,6 @@
 # frozen_string_literal: true
 
-# Wire-level controller specs (K-070 / K-071 / K-072).
+# Wire-level controller specs.
 #
 # The controllers guard themselves behind `defined?(::ActionController::API)`,
 # and spec_helper requires kiosk/server BEFORE actionpack is available — so
@@ -28,7 +28,7 @@ RSpec.describe "wire-surface controller auth" do
     Rack::MockRequest.env_for(path, "HTTP_AUTHORIZATION" => "Bearer #{token}", **opts)
   end
 
-  # ─── K-070: bad tokens on a wire endpoint are 401, never 500 ────────────
+  # ─── bad tokens on a wire endpoint are 401, never 500 ────────────
   describe "WireController with the bare DefaultAgentIdp" do
     before do
       Kiosk.configure do |c|
@@ -85,7 +85,7 @@ RSpec.describe "wire-surface controller auth" do
       expect(body.dig(:error, :code)).to eq("unauthenticated")
     end
 
-    # K-147: parse_body! raises Errors::BadRequest on a malformed body; it must
+    # parse_body! raises Errors::BadRequest on a malformed body; it must
     # render a 400 envelope, not escape run_command's rescue as an uncaught 500.
     def query_status_for(raw_body)
       token = Kiosk::Server::JwtIssuer.issue(
@@ -110,7 +110,7 @@ RSpec.describe "wire-surface controller auth" do
     end
   end
 
-  # ─── K-071: KYC endpoint uses the CONFIGURED IdP, not a hardcoded one ───
+  # ─── KYC endpoint uses the CONFIGURED IdP, not a hardcoded one ───
   describe "KycAttestationController IdP resolution" do
     let(:kyc_key)    { OpenSSL::PKey::RSA.generate(2048) }
     let(:kyc_issuer) { "https://kyc.example" }
@@ -139,7 +139,7 @@ RSpec.describe "wire-surface controller auth" do
       Kiosk.configure do |c|
         c.kyc_issuer     = kyc_issuer
         c.kyc_public_key = kyc_key.public_key
-        # The zero-config default idp (ADR-0013) verifies against the
+        # The zero-config default idp verifies against the
         # provider's own signing key — configure one like a real install.
         c.signing_key    = Kiosk::Server::SigningKey.generate
         c.issuer         = "https://demo.example"
@@ -166,7 +166,7 @@ RSpec.describe "wire-surface controller auth" do
       expect(executed_sql.last).to include("'a-custom'")
     end
 
-    it "does NOT fall back to user_idp — KYC is an agent-only surface (ADR-0013)" do
+    it "does NOT fall back to user_idp — KYC is an agent-only surface" do
       Kiosk.configure { |c| c.user_idp = custom_idp }
 
       status, body = dispatch(Kiosk::Server::KycAttestationController, :create, kyc_env)
@@ -180,7 +180,7 @@ RSpec.describe "wire-surface controller auth" do
       expect(body.dig(:error, :code)).to eq("unauthenticated")
     end
 
-    # K-093: an authenticated request with a malformed body must be a clean 400
+    # An authenticated request with a malformed body must be a clean 400
     # BadRequest, not a 500. The parse previously ran outside the Errors::Base
     # rescue, so an empty body (JSON::ParserError) leaked as an unhandled 500.
     def kyc_env_with_body(input)
@@ -205,7 +205,7 @@ RSpec.describe "wire-surface controller auth" do
       expect(body.dig(:error, :code)).to eq("bad_request")
     end
 
-    # K-148: a well-formed JSON OBJECT that simply omits kyc_jws is a distinct
+    # A well-formed JSON OBJECT that simply omits kyc_jws is a distinct
     # branch from the malformed-body ones above — it survives parse_body! and
     # hits `body[:kyc_jws] or raise BadRequest("missing field: kyc_jws")`.
     it "returns 400 BadRequest for a valid JSON object missing the kyc_jws field" do
@@ -219,8 +219,8 @@ RSpec.describe "wire-surface controller auth" do
     end
   end
 
-  # ─── ADR-0013: zero-config default idp + user_idp fallback on the wire ──
-  describe "WireController identity resolution defaults (ADR-0013)" do
+  # ─── zero-config default idp + user_idp fallback on the wire ──
+  describe "WireController identity resolution defaults" do
     before do
       Kiosk.configure do |c|
         c.signing_key = Kiosk::Server::SigningKey.generate
@@ -266,14 +266,14 @@ RSpec.describe "wire-surface controller auth" do
     end
   end
 
-  # ─── K-072: client-chosen requested_role is validated against roles ─────
+  # ─── client-chosen requested_role is validated against roles ─────
   describe "OauthDeviceAuthorizationController requested_role validation" do
     let(:public_key) { OpenSSL::PKey::RSA.generate(2048).public_key.to_pem }
 
     before do
       Kiosk.configure do |c|
         c.roles = %i[customer]
-        # The binding ceremony requires a public_key (ADR-0017); pin the
+        # The binding ceremony requires a public_key; pin the
         # in-memory store so these wire tests stay DB-free.
         c.device_authorization_store =
           Kiosk::Server::DeviceAuthorizationStores::InMemory.new

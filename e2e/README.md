@@ -13,7 +13,7 @@ Reproducible end-to-end test of the Kiosk OSS gems. The same script (`run.sh`) r
 - The `run` verb dispatches to registered Actions
 - Error envelopes have the right shape and HTTP status (`NotFound` → 404 for unknown query/action, `Unauthenticated` → 401 for missing/garbage token)
 - The `/kiosk/.well-known/jwks.json` endpoint publishes exactly one RSA/RS256 signing key (kty/use/alg/kid/n/e) and never leaks private parameters (`d`, `p`)
-- The partial UNIQUE index on `kiosk.agents.public_key` (WHERE `revoked_at IS NULL`) rejects a second LIVE row for one key at the DB level while allowing a revoked re-registration (K-043)
+- The partial UNIQUE index on `kiosk.agents.public_key` (WHERE `revoked_at IS NULL`) rejects a second LIVE row for one key at the DB level while allowing a revoked re-registration
 - `SET LOCAL` GUCs flow correctly: the `book_appointment` Action reads `kiosk.current_user_id()` and the `my_appointments` query returns only the calling principal's rows (app-layer isolation via `WHERE user_id = kiosk.current_user_id()`)
 - The `pay` verb settles a full AP2 mandate trail: `pay_flow.rb` self-registers a synthetic principal, signs intent → cart → payment mandates (JWS), pays against a stub PSP; assertions cover the response envelope and all four DB tables (`intent_mandates`, `cart_mandates`, `payment_mandates`, `settlements`)
 
@@ -21,7 +21,7 @@ Reproducible end-to-end test of the Kiosk OSS gems. The same script (`run.sh`) r
 
 - **RLS.** Path C removes raw SQL entirely — there is no arbitrary-SQL surface. Per-user isolation is enforced app-layer in registered query definitions (the `WHERE user_id = kiosk.current_user_id()` in `my_appointments`). RLS is optional and its enforcement is not exercised in this fixture; satellite-mode role separation lands in a follow-up. The `app_role` pre-creation in `run.sh` is kept harmless for forward compatibility. Note: the `kiosk-rls` gem is still installed (see `run.sh`), because it is the only source of `Configuration#system_role=`, which `initializer_kiosk.rb` assigns — the gem is a mandatory boot dependency here even though RLS itself is off.
 - **Live PSP capture.** The pay flow runs against `StubPsp` (deterministic in-process provider) — no real Stripe call here; the Stripe adapter is `kiosk-pay-stripe`.
-- **Streaming.** There is no streaming/events verb (removed K-083); the wire surface is `query`, `run`, `pay`, `schema`.
+- **Streaming.** There is no streaming/events verb; the wire surface is `query`, `run`, `pay`, `schema`.
 - **Multi-agent revocation** flows.
 - **Live LLM agent integration** — this fixture drives the wire surface with deterministic `curl`/`jq` calls, not a real model; a live-LLM driver would be a future companion gem (`kiosk-agent-test` does not exist yet).
 
@@ -35,7 +35,7 @@ Reproducible end-to-end test of the Kiosk OSS gems. The same script (`run.sh`) r
 ## Run locally
 
 ```bash
-cd /path/to/kiosk-hq/kiosk        # or your local oss clone
+cd /path/to/kiosk-hq/kiosk        # or your local clone
 ./e2e/run.sh
 ```
 

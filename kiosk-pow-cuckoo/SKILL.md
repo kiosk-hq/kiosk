@@ -48,9 +48,9 @@ proof (solve → verify at edgebits 10, proofsize 12).
 
 ## Production deployment notes
 
-1. **Provider mandates the algorithm** (ADR-0001). Clients that cannot solve
+1. **Provider mandates the algorithm**. Clients that cannot solve
    are denied — intentional.
-2. **Equihash (`kiosk-pow-equihash`) is the shipped default** (ADR-0007).
+2. **Equihash (`kiosk-pow-equihash`) is the shipped default**.
    Argon2id (`kiosk-pow`) remains as a legacy backend. Choose Cuckatoo only
    when the extreme solve:verify asymmetry (GB-RAM solver vs. a few-hash
    verifier) is specifically required.

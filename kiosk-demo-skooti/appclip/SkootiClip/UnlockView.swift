@@ -1,4 +1,4 @@
-// UnlockView.swift — the single screen of the Skooti App Clip (Arch 2)
+// UnlockView.swift — the single screen of the Skooti App Clip (offline Ed25519)
 //
 // Layout:
 //   • Scooter code from the launch URL (e.g. "SK-001")
@@ -6,7 +6,7 @@
 //   • Animated progress / success / failure affordances
 //
 // The ViewModel lives here (small enough to keep in one file) and drives
-// the Arch-2 BLE flow:
+// the offline BLE flow:
 //
 //   scan → connect → discover → write token → unlocked
 //

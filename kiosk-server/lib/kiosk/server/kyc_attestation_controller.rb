@@ -21,7 +21,7 @@ if defined?(::ActionController::API)
       # Success (200): { "kyc_verified": true }
       # Failure (400/401/403): error envelope from Kiosk::Server::Errors — 400
       # for a missing/malformed/non-object JSON body or a missing kyc_jws field
-      # (K-093), 401 for a missing/invalid agent token, 403 for a failed KYC
+      # 401 for a missing/invalid agent token, 403 for a failed KYC
       # verification.
       class KycAttestationController < ::ActionController::API
         def create
@@ -40,7 +40,7 @@ if defined?(::ActionController::API)
 
         private
 
-        # Parse the request body as a JSON object (K-093). Mirrors
+        # Parse the request body as a JSON object. Mirrors
         # WireController/AuthController#parse_body!: an empty body, malformed
         # JSON, or a non-object (scalar/array) body is a 400 BadRequest, never
         # a 500 — previously the bare JSON.parse ran outside the Errors::Base
@@ -59,7 +59,7 @@ if defined?(::ActionController::API)
         end
 
         # KYC attestation is an AGENT-only surface: the effective agent IdP
-        # (configured override or the bundled default — ADR-0013; K-071:
+        # (configured override or the bundled default; without this,
         # providers with a custom idp were locked out by a hardcoded
         # DefaultAgentIdp). No user_idp fallback — a web session must not
         # stamp an agent's kyc_verified_at.

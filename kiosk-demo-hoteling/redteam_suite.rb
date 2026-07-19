@@ -1,6 +1,6 @@
 # frozen_string_literal: true
 
-# hoteling redteam battery (P4 Task 2)
+# hoteling redteam battery
 #
 # Exercises the hoteling chain: no PoW → no KYC → reserve_room → pay →
 # confirm_booking (2-gate: ownership / payment). Headline scenarios:

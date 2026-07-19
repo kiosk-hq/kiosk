@@ -1,6 +1,6 @@
 # frozen_string_literal: true
 
-# Controller shims of the claim ceremony's OAuth wire (ADR-0017).
+# Controller shims of the claim ceremony's OAuth wire.
 #
 # Mirrors controller_auth_spec.rb: the controllers guard themselves behind
 # `defined?(::ActionController::API)`, and spec_helper requires kiosk/server
@@ -91,7 +91,7 @@ RSpec.describe "OAuth binding controllers" do
       expect(body[:error_description]).to match(/client_id/)
     end
 
-    it "rejects an undeclared role (K-072)" do
+    it "rejects an undeclared role" do
       status, body = start!("client_id" => "assistant", "public_key" => pem, "role" => "root")
       expect(status).to eq(400)
       expect(body[:error_description]).to match(/unknown role/)

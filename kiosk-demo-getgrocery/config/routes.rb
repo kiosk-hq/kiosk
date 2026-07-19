@@ -5,7 +5,7 @@ Rails.application.routes.draw do
   root "home#index"
 
   # Kiosk wire surface (controllers shipped by kiosk-server).
-  # REST endpoints (ADR-0005): one per verb, HTTP method = semantics.
+  # REST endpoints: one per verb, HTTP method = semantics.
   get  "/kiosk/schema",                            to: "kiosk/server/wire#schema"
   post "/kiosk/query",                             to: "kiosk/server/wire#query"
   post "/kiosk/run",                               to: "kiosk/server/wire#run"
@@ -41,7 +41,7 @@ Rails.application.routes.draw do
   # HANDSHAKE: who/where/which version + issuer (the AP2 `iss` anchor) + auth,
   # served at the guessable conventional URL. It advertises `capabilities`,
   # the verb names actually served (schema/query/run/pay), computed from the
-  # live registry (ADR-0009), so discovery and the live surface never drift.
+  # live registry, so discovery and the live surface never drift.
   get "/.well-known/kiosk.json",            to: "kiosk/server/discovery#kiosk_json"
 
   # /.well-known/api-catalog — RFC 9727 linkset of the live wire endpoints
@@ -55,7 +55,7 @@ Rails.application.routes.draw do
   # ─── Stripe Checkout return page ──────────────────────────────────────────
   # The SetupIntent success_url (return_url in the initializer) lands the human
   # here after they save a card. Without this route the human hit a 404
-  # post-card-entry (the demo gap K-239 named). Production providers point at
+  # post-card-entry (a demo gap this route closes). Production providers point at
   # kiosk.tech/payment/return; a self-hosted demo serves its own.
   get "/payment/return", to: ->(_env) {
     [200, { "content-type" => "text/html; charset=utf-8" },

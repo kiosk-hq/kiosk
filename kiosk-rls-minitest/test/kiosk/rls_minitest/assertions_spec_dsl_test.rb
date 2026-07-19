@@ -6,7 +6,7 @@ require "test_helper"
 # `infect_an_assertion` (assertions.rb) — `must_raise_rls_denied`,
 # `must_raise_quota_exceeded`, `wont_raise_rls_denied`,
 # `wont_raise_quota_exceeded` — promised by README.md and the gemspec but
-# otherwise untested (K-243). Uses Minitest's spec runner so
+# otherwise untested. Uses Minitest's spec runner so
 # `Minitest::Spec.current` is the ctx the infected expectation delegates to,
 # and `include Kiosk::TestHelpers` gives that spec instance the underlying
 # `assert_*` / `refute_*` assertions.

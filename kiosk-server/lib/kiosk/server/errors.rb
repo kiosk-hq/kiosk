@@ -70,7 +70,7 @@ module Kiosk
       end
 
       # The acting assistant's per-assistant spending cap would be exceeded by
-      # this charge (ADR-0019). HTTP 403 — a policy refusal the agent cannot pay
+      # this charge. HTTP 403 — a policy refusal the agent cannot pay
       # its way past; the human must raise the cap. Distinct CODE from Forbidden
       # so an agent can tell «over your spending limit» from «you can't do this»,
       # and distinct from the 402 gates (which mean «do X then retry»). Enforced

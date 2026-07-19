@@ -43,7 +43,7 @@ RSpec.describe Kiosk::Server::AuthChallengeStore do
     expect(store.take(pem, "nonce-1")).to be(false)
   end
 
-  # K-210: GET /auth/challenge is unauthenticated, so an attacker can flood
+  # GET /auth/challenge is unauthenticated, so an attacker can flood
   # #put with arbitrarily many DISTINCT public keys. Because #put prunes
   # expired entries on the way in, an all-expired flood cannot accumulate
   # unboundedly — the store does not retain every key seen. (Before the fix,

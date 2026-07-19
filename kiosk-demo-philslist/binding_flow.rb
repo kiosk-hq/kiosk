@@ -1,6 +1,6 @@
 # frozen_string_literal: true
 
-# philslist account-binding driver — the ADR-0017 ceremony + the MULTI-ACCOUNT
+# philslist account-binding driver — the binding ceremony + the MULTI-ACCOUNT
 # household proof, two scenarios in one run:
 #
 #   FIRST CONTACT (claim): an assistant with a FRESH key opens the claim

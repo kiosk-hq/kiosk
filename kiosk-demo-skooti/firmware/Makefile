@@ -1,4 +1,4 @@
-# Makefile — skooti firmware Ed25519 host crypto test (Arch 2)
+# Makefile — skooti firmware Ed25519 host crypto test (offline Ed25519)
 #
 # Targets:
 #   make test        — compile + run C host test + Ruby crosscheck

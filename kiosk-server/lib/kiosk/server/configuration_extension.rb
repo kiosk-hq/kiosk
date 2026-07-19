@@ -33,7 +33,7 @@ module Kiosk
       #
       # Members are VERB NAMES the endpoint actually serves, drawn from the
       # canonical set `schema`, `query`, `run`, `pay` and emitted in that
-      # order (ADR-0009). Computed from the live registry — NOT a static
+      # order. Computed from the live registry — NOT a static
       # list — so the document never advertises a verb the provider hasn't
       # wired:
       #   * `schema` — present whenever ≥1 query OR ≥1 action is registered
@@ -92,7 +92,7 @@ module Kiosk
 
       # RSA signing key used by the bundled kiosk-pop IdP to issue and
       # verify JWTs (the account-binding ceremony's token poll mints
-      # through the same IdP — ADR-0017).
+      # through the same IdP).
       #
       # Resolution order:
       #   1. explicit value set via `Kiosk.configure { |c| c.signing_key = ... }`
@@ -140,13 +140,13 @@ module Kiosk
       # to demand different (n, k).
       attr_accessor :registration_pow_params
 
-      # Removed 2026-07-08 (ADR-0001 amended: "one PoW = Equihash"). The old
+      # Removed 2026-07-08 (spec amended: "one PoW = Equihash"). The old
       # SHA256 leading-zero-bits registration hashcash is gone — SHA256 is the
       # most ASIC-optimised hash on Earth, exactly the CPU-hard PoW the ADR
       # drops. Use `registration_pow_count` (Equihash) instead.
       def registration_difficulty=(_)
         raise ArgumentError,
-          "registration_difficulty (SHA256 hashcash) was removed — ADR-0001 amended, " \
+          "registration_difficulty (SHA256 hashcash) was removed — spec amended, " \
           "one PoW = Equihash. Use `c.registration_pow_count = 1` (Equihash) and set " \
           "`c.pow_secret`."
       end
@@ -158,7 +158,7 @@ module Kiosk
       # every RLS policy trusts). Privileged roles are obtainable only through
       # the human-approved device-grant flow.
       #
-      # OPTIONAL (ADR-0011: roles are hook-or-absent in 0.1). When unset,
+      # OPTIONAL (roles are hook-or-absent in 0.1). When unset,
       # self-registered agents get NO role (`agents.allowed_roles` stays NULL);
       # a provider that needs roles may assign them inside its
       # `assistant_creation` hook instead. When set, it must be one of {#roles}.
@@ -166,7 +166,7 @@ module Kiosk
       attr_accessor :registration_role
 
       # Provider-supplied factory that creates the assistant account backing a
-      # self-registered agent (ADR-0010). Optional.
+      # self-registered agent. Optional.
       #
       # When set, `AgentRegistration` invokes this proc with ONE argument — the
       # registrant's public key — and USES its RETURN VALUE as the principal
@@ -213,12 +213,12 @@ module Kiosk
       end
 
       # Storage adapter for {Kiosk::Server::DeviceAuthorization} rows (the
-      # account-binding ceremony state machine, ADR-0017). Lazy default:
+      # account-binding ceremony state machine). Lazy default:
       # the durable {DeviceAuthorizationStores::ActiveRecord} store (over
       # `kiosk.device_authorizations`, migration 008) whenever ActiveRecord
       # is present — the ceremony is cross-process by nature (the human
       # approves in a browser while the agent polls from another process;
-      # K-156). Falls back to {DeviceAuthorizationStores::InMemory} in
+      # cross-process by nature). Falls back to {DeviceAuthorizationStores::InMemory} in
       # AR-less contexts (unit tests, plain Rack hosts without a DB).
       #
       # @return [DeviceAuthorizationStores::Base]
@@ -232,7 +232,7 @@ module Kiosk
           end
       end
 
-      # ── Account-binding hooks (ADR-0017) ──────────────────────────────────
+      # ── Account-binding hooks ──────────────────────────────────
 
       # Optional callable fired when a KNOWN key is claimed onto (rebound to)
       # an assistant-account holder's account — scenario TWO's upgrade path.
@@ -249,7 +249,7 @@ module Kiosk
       # and its tokens are watermark-revoked. Default nil (no-op).
       attr_accessor :assistant_unlinked
 
-      # ── Per-assistant spending cap (ADR-0019) ─────────────────────────────
+      # ── Per-assistant spending cap ─────────────────────────────
 
       # Optional callable returning the spending cap (in cents) for an assistant,
       # or nil for no cap. Invoked `(agent_id:) → Integer | nil` in the pay path
@@ -334,7 +334,7 @@ module Kiosk
       # Auth-challenge lifetime in seconds — the window an agent has between
       # `GET /auth/challenge` and its signed `POST /auth/{register,login}`.
       #
-      # K-100: at registration the agent must ALSO solve the Equihash PoW
+      # At registration the agent must ALSO solve the Equihash PoW
       # (`registration_pow_count` proofs) inside this same window before it can
       # POST /auth/register. The PoW solve window is `pow_ttl * count` (see
       # PowGate#issue_challenges). The old flat 120s default was SHORTER than a
@@ -364,7 +364,7 @@ module Kiosk
       private
 
       # Compute the advertised capability list from the live registry, in the
-      # canonical order schema, query, run, pay (ADR-0009). See {#capabilities}.
+      # canonical order schema, query, run, pay. See {#capabilities}.
       def computed_capabilities
         has_queries = Kiosk::Server::Queries.known.any?
         has_actions = Kiosk::Server::Actions.known.any?

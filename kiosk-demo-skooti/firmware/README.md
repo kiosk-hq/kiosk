@@ -1,4 +1,4 @@
-# skooti firmware — ESP32-C3 BLE scooter lock (Arch 2: Ed25519)
+# skooti firmware — ESP32-C3 BLE scooter lock (offline Ed25519)
 
 This directory contains:
 
@@ -16,7 +16,7 @@ validated when the ESP32-C3 board is available.
 
 ---
 
-## Crypto contract (Arch 2 — offline Ed25519, token v2)
+## Crypto contract (offline Ed25519, token v2)
 
 ```
 skooti_pubkey   = <32 bytes, baked into every lock>
@@ -47,7 +47,7 @@ Expected output (23 assertions pass, crosscheck MATCH):
 
 ```
 --- C host test ---
-=== skooti firmware Ed25519 host test (Arch 2) ===
+=== skooti firmware Ed25519 host test (offline Ed25519, token v2) ===
 Public key : 8857880d21f87b85872f31aeea8d0024acebb2fdf933b25a479f4f9e80babefd
 Scooter    : SK-001
 ...
@@ -74,7 +74,7 @@ compiled on the host (ESP32 Arduino toolchain required); only `ed25519/` +
 | **Service** | `4e2a1000-5b3c-4b1e-9f8c-6d7e8a9b0c1d` | — | — |
 | **Unlock** | `4e2a1002-5b3c-4b1e-9f8c-6d7e8a9b0c1d` | WRITE + WRITE_NR | wire rental token (ASCII, ≤ 512 bytes; MTU negotiated to 256) |
 
-### Unlock flow (App Clip → lock, Arch 2)
+### Unlock flow (App Clip → lock, offline)
 
 1. App Clip receives the rental token in the `rt=` URL parameter of its launch link.
 2. App Clip connects to `skooti-SK-001` BLE peripheral.
@@ -137,7 +137,7 @@ On XIAO ESP32-C3 the onboard LED is active-LOW on GPIO 8 → set `LED_ACTIVE_HIG
 
 ---
 
-## Provisioning (Arch 2)
+## Provisioning
 
 Every physical lock is provisioned with:
 

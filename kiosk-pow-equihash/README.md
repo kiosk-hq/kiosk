@@ -7,8 +7,8 @@ Equihash is not ASIC- or GPU-proof — it was ASIC'd on Zcash (Antminer Z9/Z15)
 and GPUs solve it well (the Wagner sort/collide parallelises, and it is
 memory-bandwidth-bound). What it buys the provider is a few-KB, ~17 ms
 `verify` against a solve that costs the client real time and memory, plus an
-`N×PoW` count knob. Abuse resistance comes from reputation and caps — see
-[ADR-0007](https://kiosk.tech) (PoW = metered pricing, not a hardware wall).
+`N×PoW` count knob. Abuse resistance comes from reputation and caps
+(PoW = metered pricing, not a hardware wall).
 
 ## Why Equihash is the shipped default
 
@@ -195,7 +195,7 @@ optional** — the Wagner sort/collide steps are vectorised; without it the pure
 Python path is an order of magnitude slower. These numbers are the honest-client
 *floor* (slowest participant): a native or GPU solver is faster, since Equihash
 parallelises well — which is exactly why the security story is verify-asymmetry
-+ reputation, not hardware parity (ADR-0007). A provider that needs faster
++ reputation, not hardware parity. A provider that needs faster
 honest solves lowers `n`; the Ruby verifier stays ~17 ms either way.
 
 See `solve.py` for the implementation.

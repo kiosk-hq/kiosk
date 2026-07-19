@@ -1,5 +1,5 @@
 /*
- * host_test.c — Arch 2 crypto proof: firmware Ed25519 verify matches server
+ * host_test.c — offline Ed25519 crypto proof: firmware verify matches server
  *
  * Compile and run via:  make test
  *
@@ -395,7 +395,7 @@ static void test_jti_store(void)
 
 int main(void)
 {
-    printf("=== skooti firmware Ed25519 host test (Arch 2, token v2) ===\n");
+    printf("=== skooti firmware Ed25519 host test (offline Ed25519, token v2) ===\n");
     printf("Public key : 8857880d21f87b85872f31aeea8d0024acebb2fdf933b25a479f4f9e80babefd\n");
     printf("Scooter    : %s\n", SCOOTER_CODE);
 

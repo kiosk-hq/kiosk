@@ -1,6 +1,6 @@
 # frozen_string_literal: true
 
-# AuthController 402 WWW-Authenticate header spec (K-314).
+# AuthController 402 WWW-Authenticate header spec.
 #
 # The registration toll answers `402 pow_required` at POST /kiosk/auth/register.
 # The spec error table (specification.html) and skill both state every
@@ -20,7 +20,7 @@ require "kiosk/reputation"
 
 load File.expand_path("../../../lib/kiosk/server/auth_controller.rb", __dir__)
 
-RSpec.describe "AuthController 402 WWW-Authenticate (K-314)" do
+RSpec.describe "AuthController 402 WWW-Authenticate" do
   KAT_PARAMS_314 = { n: 8, k: 1 }.freeze
   PEM_314 = "-----BEGIN PUBLIC KEY-----\nMFkwE... (test)\n-----END PUBLIC KEY-----"
 

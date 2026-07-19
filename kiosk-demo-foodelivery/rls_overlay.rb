@@ -1,6 +1,6 @@
 # frozen_string_literal: true
 
-# RLS overlay setup for foodelivery demo:rls (R1 Phase 1 Task 5).
+# RLS overlay setup for foodelivery demo:rls.
 #
 # Run as the privileged owner connection BEFORE rls_proof.rb.
 # Does NOT add a Rails migration — this is an imperative overlay layered on top

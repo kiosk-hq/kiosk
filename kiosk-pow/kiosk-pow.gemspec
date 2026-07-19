@@ -11,7 +11,7 @@ Gem::Specification.new do |spec|
     kiosk-pow is the legacy/retired PoW backend for the Kiosk framework: an
     Argon2id search-form proof-of-work that providers can demand on any verb to
     conserve their own compute against scraping and flooding. The shipped
-    default is now Equihash (kiosk-pow-equihash, ADR-0007); Argon2id remains as
+    default is now Equihash (kiosk-pow-equihash); Argon2id remains as
     a legacy backend because its 64 MiB verify is unacceptable for a gateway.
 
     Ships the provider-side Ruby verify (one Argon2id eval, no loop) and a

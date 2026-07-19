@@ -3,8 +3,8 @@
 Argon2id memory-hard proof-of-work backend for the [Kiosk](https://kiosk.tech) framework.
 
 > **Retired / optional.** The shipped default PoW backend is
-> [`kiosk-pow-equihash`](../kiosk-pow-equihash) (ADR-0001, amended 2026-07-08 —
-> "one PoW = Equihash"). Argon2id's `verify` costs one `m`-sized eval (~64 MiB),
+> [`kiosk-pow-equihash`](../kiosk-pow-equihash) — one PoW backend, Equihash.
+> Argon2id's `verify` costs one `m`-sized eval (~64 MiB),
 > so a flood of bad proofs is a DoS on the *verifier* — the exact failure the
 > asymmetric-verify goal exists to prevent. This gem stays in the repo as an
 > opt-in backend and reference; it is no longer wired into demos or docs.

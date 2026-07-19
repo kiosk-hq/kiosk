@@ -108,7 +108,7 @@ module Kiosk
         # Guard BEFORE touching any scope state. If this raised after
         # incrementing @scope_depth, the ensure below would still fire and
         # decrement it (and clobber @current_identity) — corrupting an
-        # enclosing scope when a blockless call is rescued inside it (K-213).
+        # enclosing scope when a blockless call is rescued inside it.
         raise ArgumentError, "block required" unless block
 
         previous_identity = @current_identity
@@ -252,7 +252,7 @@ module Kiosk
         when Numeric              then value.to_s
         # `to_time.getutc` is non-mutating and works for plain Time AND plain
         # DateTime (which has no #utc). `Time#utc` mutates the caller's object
-        # and `DateTime#utc` raises NoMethodError outside ActiveSupport (K-214).
+        # and `DateTime#utc` raises NoMethodError outside ActiveSupport.
         when Time, DateTime       then "'#{value.to_time.getutc.iso8601}'"
         when Date                 then "'#{value.iso8601}'"
         else

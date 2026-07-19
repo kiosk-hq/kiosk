@@ -1,6 +1,6 @@
 # frozen_string_literal: true
 
-# foodelivery redteam battery (R3 Phase 2 Task 3)
+# foodelivery redteam battery
 #
 # Drives all generic Kiosk::Redteam scenarios against the live foodelivery
 # server and asserts each applicable attack is BLOCKED.  Scenarios that

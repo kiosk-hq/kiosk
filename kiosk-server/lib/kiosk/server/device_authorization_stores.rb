@@ -9,10 +9,9 @@ module Kiosk
     #
     #   - {ActiveRecord} — durable store over the `kiosk.device_authorizations`
     #     table (schema_definitions migration 008). The DEFAULT whenever
-    #     ActiveRecord is present (ADR-0017: the binding ceremony is
+    #     ActiveRecord is present (the binding ceremony is
     #     cross-process by nature — the human approves in a browser while the
-    #     agent polls from another process; an in-memory row can't serve both,
-    #     the exact K-156 failure).
+    #     agent polls from another process; an in-memory row can't serve both).
     #   - {InMemory} — in-process store for tests and single-process
     #     development.
     #

@@ -1,5 +1,5 @@
 /*
- * skooti_lock.ino — ESP32-C3 BLE scooter lock firmware (Arch 2: Ed25519)
+ * skooti_lock.ino — ESP32-C3 BLE scooter lock firmware (offline Ed25519)
  *
  * Target:   ESP32-C3 (e.g. Seeed XIAO ESP32-C3, AI-Thinker ESP-C3-32S, ...)
  * Library:  NimBLE-Arduino (https://github.com/h2zero/NimBLE-Arduino)
@@ -7,7 +7,7 @@
  * Board:    "ESP32C3 Dev Module" in Arduino IDE / arduino-cli
  *
  * =========================================================================
- * OVERVIEW — Arch 2 (offline Ed25519 rental-token verify)
+ * OVERVIEW — offline Ed25519 rental-token verify
  * =========================================================================
  * This firmware implements a BLE GATT peripheral that exposes a single
  * GATT service ("SKOOTI") with ONE characteristic:
@@ -24,11 +24,11 @@
  *          UNLOCK_DURATION_MS (3 s), then LOW (= unlocked).
  *       4. On any failure: stays locked, logs reason to Serial.
  *
- * There is NO challenge/response round-trip in Arch 2.  The server issues a
+ * There is NO challenge/response round-trip in the offline flow.  The server issues a
  * signed token (via start_rental) that the lock verifies fully offline.
  *
  * =========================================================================
- * PROVISIONING MODEL (Arch 2)
+ * PROVISIONING MODEL
  * =========================================================================
  * Every lock is provisioned with:
  *   - SKOOTI_PUBKEY (32 bytes) — the skooti Ed25519 public key.
@@ -318,7 +318,7 @@ void setup(void)
 {
     Serial.begin(115200);
     while (!Serial) delay(10);
-    Serial.println("[boot] skooti_lock Arch2 — " SCOOTER_CODE);
+    Serial.println("[boot] skooti_lock offline-Ed25519 — " SCOOTER_CODE);
 
     /* GPIO */
     pinMode(LED_GPIO, OUTPUT);

@@ -6,7 +6,7 @@
 # Queries:  catalog, delivery_slots, my_orders
 # Actions:  create_order, schedule_delivery, payment_setup
 
-# ── Ephemeral dev signing key (K-034) ────────────────────────────────────
+# ── Ephemeral dev signing key ─────────────────────────────────────────────
 # JWT / register flows need a signing key. In development or test, if none is
 # provided, self-provision an EPHEMERAL RSA key so `demo:setup` and the flows
 # run out-of-the-box. Never do this in production — a real key must be set.
@@ -27,7 +27,7 @@ ActiveRecord::Migration.include(Kiosk::RLS::DSL)
 # ── Commerce catalog-toll PoW demo (KIOSK_POW_DEMO=1) ─────────────────────
 #
 # A grocery provider can toll the `catalog` query to price anonymous browsing
-# (ADR-0007 — a metered toll, not a wall). Small demo params solve sub-second.
+# (a metered toll, not a wall). Small demo params solve sub-second.
 # run/pay are left ungated so the existing shop flow is unchanged.
 EQUIHASH_DEMO_PARAMS = { n: 96, k: 5 }.freeze
 
@@ -81,7 +81,7 @@ Kiosk.configure do |c|
 
   # Payment provider: real Stripe in test mode (sk_test_…).
   # getgroceries uses SetupIntent card-on-file: card saved once on Stripe's
-  # hosted page, charged off_session per purchase. See docs/architecture/payment-model.md.
+  # hosted page, charged off_session per purchase.
   #
   # The principal→Stripe Customer mapping is stored in `stripe_customers` and
   # injected as lambdas — the kiosk-pay-stripe gem stays provider-agnostic.
@@ -97,7 +97,7 @@ Kiosk.configure do |c|
     key = ENV["STRIPE_SECRET_KEY"].to_s.empty? ? "sk_test_mock" : ENV["STRIPE_SECRET_KEY"]
   else
     key = ENV["STRIPE_SECRET_KEY"]
-    raise "getgroceries requires STRIPE_SECRET_KEY (sk_test_…) or STRIPE_MOCK_URL — see docs/architecture/payment-model.md" if key.nil? || key.empty?
+    raise "getgroceries requires STRIPE_SECRET_KEY (sk_test_…) or STRIPE_MOCK_URL" if key.nil? || key.empty?
   end
 
   # KIOSK_TEST_AUTOCARD=1 (set by the demo/redteam/isolation rake tasks) makes the

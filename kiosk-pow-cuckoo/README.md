@@ -3,8 +3,8 @@
 Cuckatoo-Cycle proof-of-work backend for [Kiosk](https://kiosk.tech).
 
 > **Shelved / optional.** The shipped default PoW backend is
-> [`kiosk-pow-equihash`](../kiosk-pow-equihash) (ADR-0001, amended 2026-07-08 —
-> "one PoW = Equihash"). Cuckatoo meets the asymmetric-verify bar, but needs
+> [`kiosk-pow-equihash`](../kiosk-pow-equihash) — one PoW backend, Equihash.
+> Cuckatoo meets the asymmetric-verify bar, but needs
 > ~4 GiB solves and heavier solver tooling (this gem ships only a toy solver),
 > so it is not the default. It stays in the repo as an opt-in backend and may
 > return as a first-class extension; it is no longer wired into demos or docs.
@@ -133,7 +133,7 @@ Production Cuckatoo (edgebits≥29, proofsize=42) requires clients with a native
 solver.  Options:
 - **Tromp's C miner** (`lean`/`mean`, `simple`): fast, FAIR-MINING/GPLv2+ license
 - **GPU solvers**: faster still; CUDA-only
-- Provider mandates the algorithm (ADR-0001); clients that cannot solve are denied
+- Provider mandates the algorithm; clients that cannot solve are denied
 
 ## Difficulty target
 
@@ -170,7 +170,7 @@ proof.
 - Cuckatoo is NOT ASIC-proof (1 GB-SRAM ASICs exist for edgebits=31+). The
   provider mandates it; clients that cannot solve are denied. This is
   intentional: it raises the cost of abuse.
-- **Equihash** (`kiosk-pow-equihash`) is the shipped default (ADR-0007).
+- **Equihash** (`kiosk-pow-equihash`) is the shipped default.
   Argon2id (`kiosk-pow`) remains as a legacy backend. Use Cuckatoo only when the
   extreme solve:verify asymmetry (GB-RAM solver vs. a few-hash verifier) is
   specifically required.

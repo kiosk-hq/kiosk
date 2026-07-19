@@ -23,7 +23,7 @@ class CreateCategoriesAndListings < ActiveRecord::Migration[ActiveRecord::Migrat
     add_index :categories, :slug, unique: true
 
     create_table :listings, id: :uuid do |t|
-      # owner_id → users.id (the account principal, ADR-0010). The load-bearing
+      # owner_id → users.id (the account principal). The load-bearing
       # isolation predicate: edit/close are scoped to owner_id.
       t.references :owner, null: false, foreign_key: { to_table: :users }, type: :uuid
       t.references :category, null: false, foreign_key: true

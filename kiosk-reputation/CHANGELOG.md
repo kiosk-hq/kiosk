@@ -6,7 +6,7 @@ All notable changes follow [Keep a Changelog](https://keepachangelog.com/en/1.1.
 
 ### Added
 
-- Initial implementation (R2 Task 2).
+- Initial implementation.
 - `Kiosk::Reputation::Backends` — algorithm registry: `register` / `fetch` / `known` / `reset!`.
 - `Kiosk::Reputation::Challenge` — stateless, request-bound wire challenge: `issue` / `verify` with anti-DoS cheap-before-expensive ordering (HMAC sig + expiry before backend eval).
 - `Kiosk::Reputation::Factors` — immutable Data class with all-nullable reputation fields; `.empty` constructor.

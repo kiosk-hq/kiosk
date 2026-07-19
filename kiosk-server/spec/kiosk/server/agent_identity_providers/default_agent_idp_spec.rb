@@ -33,7 +33,7 @@ RSpec.describe Kiosk::Server::AgentIdentityProviders::DefaultAgentIdp do
     expect(idp.verify({})).to be_nil
   end
 
-  # K-070: verification failures resolve to nil (→ 401 at the controller),
+  # Verification failures resolve to nil (→ 401 at the controller),
   # never escape as JwtIssuer::Error (which surfaced as HTTP 500).
   it "returns nil for a token signed by a different key" do
     other = Kiosk::Server::SigningKey.generate
@@ -101,7 +101,7 @@ RSpec.describe Kiosk::Server::AgentIdentityProviders::DefaultAgentIdp do
       expect(recorder.last).to match(/FROM kiosk\.agents WHERE id = 'agent-1' AND revoked_at IS NULL/)
     end
   end
-  describe "#issue (role-less path, ADR-0011 / K-078)" do
+  describe "#issue (role-less path)" do
     let(:idp) do
       described_class.new.tap { |i| allow(i).to receive(:lookup_user_id).and_return("u-1") }
     end
@@ -115,7 +115,7 @@ RSpec.describe Kiosk::Server::AgentIdentityProviders::DefaultAgentIdp do
       expect(payload["agent_id"]).to eq("a-1")
     end
 
-    it "round-trips to a usable role-less Identity (the K-078 regression: an empty-string role claim made Identity raise)" do
+    it "round-trips to a usable role-less Identity (the regression: an empty-string role claim made Identity raise)" do
       token  = idp.issue(agent_id: "a-1", role: nil)
       claims = Kiosk::Server::JwtIssuer.verify(
         token:    token,

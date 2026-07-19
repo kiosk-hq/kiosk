@@ -8,7 +8,7 @@ RSpec.describe Kiosk::Server::IdentityResolution do
   def nil_idp             = Class.new { define_method(:verify) { |_r| nil } }.new
 
   describe ".agent_idp" do
-    it "defaults to the bundled kiosk-pop DefaultAgentIdp (ADR-0013)" do
+    it "defaults to the bundled kiosk-pop DefaultAgentIdp" do
       expect(described_class.agent_idp)
         .to be_a(Kiosk::Server::AgentIdentityProviders::DefaultAgentIdp)
     end

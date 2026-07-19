@@ -2,7 +2,7 @@
 
 # Composite Agent-IdP for this demo app: tries Kiosk-issued JWTs first (minted
 # by the bundled kiosk-pop IdP via register/login; the OAuth device-grant
-# surface is dormant per ADR-0008), falls back to the bespoke
+# surface is dormant), falls back to the bespoke
 # `agent:u-…:a-…:r-…` shape that StubIdp parses.
 # Lets the REST wire surface (/kiosk/query, /kiosk/run, /kiosk/pay,
 # /kiosk/schema) authenticate both legacy synthetic tokens AND real

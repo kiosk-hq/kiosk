@@ -202,10 +202,10 @@ RSpec.describe Kiosk::Pow::Cuckoo do
         expect(described_class.verify_cycle(keys: KAT_KEYS, edgebits: KAT_EDGEBITS, cycle: [])).to be(false)
       end
 
-      it "(g) returns false (not raise) for a non-Integer cycle element (K-227)" do
+      it "(g) returns false (not raise) for a non-Integer cycle element" do
         # A String edge at full proofsize length reaches the `edge >= n_nodes`
         # comparison, which used to raise ArgumentError. Malformed proof types
-        # must return false, never raise (K-149 never-raise class).
+        # must return false, never raise.
         expect {
           expect(described_class.verify_cycle(
             keys: [1, 2, 3, 4], edgebits: 10, cycle: ["x", 2], proofsize: 2
@@ -321,7 +321,7 @@ RSpec.describe Kiosk::Pow::Cuckoo do
           nonce: { header_nonce: KAT_NONCE })).to be(false)
       end
 
-      it "returns false (not raise) for a non-numeric header_nonce (K-227)" do
+      it "returns false (not raise) for a non-numeric header_nonce" do
         # Integer("abc") used to raise ArgumentError while building the header.
         # A non-coercible header_nonce means a malformed proof → false, not raise.
         expect {
@@ -330,7 +330,7 @@ RSpec.describe Kiosk::Pow::Cuckoo do
         }.not_to raise_error
       end
 
-      it "returns false (not raise) for a non-Integer cycle element (K-227)" do
+      it "returns false (not raise) for a non-Integer cycle element" do
         # A String cycle element at matching proofsize reaches the in-range
         # comparison in verify_cycle, which used to raise ArgumentError.
         p2 = described_class.params(edgebits: 10, proofsize: 2)

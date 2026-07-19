@@ -9,7 +9,7 @@ module Kiosk
   module Server
     # RSA signing-key value object used by {JwtIssuer} and the bundled
     # agent-IdP to sign/verify the JWTs the kiosk-pop auth surface issues
-    # (including the account-binding ceremony's token poll — ADR-0017),
+    # (including the account-binding ceremony's token poll),
     # and to publish the public half as JWKS.
     #
     # Wraps an `OpenSSL::PKey::RSA` instance and exposes the derived

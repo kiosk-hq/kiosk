@@ -1,6 +1,6 @@
 # frozen_string_literal: true
 
-# Adversarial cross-tenant isolation test driver (P4 Task 2).
+# Adversarial cross-tenant isolation test driver.
 #
 # Proves hoteling app-layer predicates enforce cross-tenant denial:
 #

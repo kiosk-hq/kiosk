@@ -89,9 +89,9 @@ RSpec.describe Kiosk::Server::AgentRegistration do
       }.to raise_error(Kiosk::Server::Errors::Conflict, /already registered/)
     end
 
-    # ADR-0011: roles are hook-or-absent in 0.1. registration_role is OPTIONAL —
+    # Roles are hook-or-absent in 0.1. registration_role is OPTIONAL —
     # when unset, registration MUST NOT fail and the agent row carries NO role.
-    it "succeeds with registration_role unset, writing NULL allowed_roles (ADR-0011)" do
+    it "succeeds with registration_role unset, writing NULL allowed_roles" do
       Kiosk.configure { |c| c.registration_role = nil }
       results  = [[], [{ "id" => "agent-1" }]] # SELECT empty → INSERT returns id
       executed = []
@@ -116,7 +116,7 @@ RSpec.describe Kiosk::Server::AgentRegistration do
     end
   end
 
-  # ─── assistant-account factory (ADR-0010) ───────────────────────────────
+  # ─── assistant-account factory ───────────────────────────────
   # When the provider configures `assistant_creation`, the framework invokes it
   # with ONE arg (the pubkey) and USES the return value as the principal
   # (`agents.user_id`). The provider persists its OWN record and returns that

@@ -13,7 +13,7 @@ if defined?(::ActionController::API)
   module Kiosk
     module Server
       # POST <endpoint>/oauth/device_authorization — RFC 8628 §3.1, opening
-      # the claim half of the account-binding ceremony (ADR-0017, auth.md
+      # the claim half of the account-binding ceremony (auth.md
       # "User Claimed"). The initiating agent's first call.
       #
       # Request: `application/x-www-form-urlencoded` (OAuth convention)
@@ -59,7 +59,7 @@ if defined?(::ActionController::API)
 
           # The requested role is CLIENT-chosen and ends up in the minted JWT,
           # so it must be validated against the provider's declared roles
-          # (K-072, ADR-0011 principle: role assignment is provider-owned —
+          # (role assignment is provider-owned —
           # a client must never smuggle an arbitrary role claim).
           if requested_role && !Kiosk.configuration.roles.map(&:to_s).include?(requested_role)
             return render_oauth_error(

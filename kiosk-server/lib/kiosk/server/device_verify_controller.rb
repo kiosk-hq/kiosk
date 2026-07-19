@@ -13,14 +13,14 @@ if defined?(::ActionController::Base)
 
   module Kiosk
     module Server
-      # The human half of the claim ceremony (ADR-0017) — the verify page:
+      # The human half of the claim ceremony — the verify page:
       #
       #   GET  <mount>/oauth/device/verify[?user_code=…] — code entry, then
       #        the consent panel (key fingerprint + requested-at)
       #   POST <mount>/oauth/device/verify — approve / deny decision
       #
-      # Session-authenticated via the provider's `user_idp` (ADR-0013
-      # refinement: binding approval is the session channel's job) — an
+      # Session-authenticated via the provider's `user_idp` (binding
+      # approval is the session channel's job) — an
       # unauthenticated visitor gets a 401 telling them to sign in to the
       # provider first. Batteries-included: the minimal views under
       # app/views/kiosk/server/device_verify are rendered by default and a

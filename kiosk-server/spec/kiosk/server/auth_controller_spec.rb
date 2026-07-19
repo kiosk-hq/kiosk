@@ -1,6 +1,6 @@
 # frozen_string_literal: true
 
-# AuthController#revoke specs (K-146).
+# AuthController#revoke specs.
 #
 # Mirrors controller_auth_spec.rb: the controller guards itself behind
 # `defined?(::ActionController::API)`, and spec_helper requires kiosk/server
@@ -119,13 +119,13 @@ RSpec.describe "AuthController#revoke (revoke-all-sessions)" do
   end
 end
 
-# ─── K-163: challenge / register / login HTTP-boundary error branches ─────
+# ─── challenge / register / login HTTP-boundary error branches ─────
 #
 # The success paths of these actions are covered end-to-end by the auth-flow
 # and e2e specs; these examples pin the controller's OWN error guards — the
 # missing-public_key 400, missing-field 400, and malformed-body 400 — so they
 # render a clean 4xx envelope rather than escaping as a 500.
-RSpec.describe "AuthController auth-surface error branches (K-163)" do
+RSpec.describe "AuthController auth-surface error branches" do
   def dispatch(controller, action, env)
     status, _headers, body = controller.action(action).call(env)
     raw = +""
@@ -203,8 +203,8 @@ RSpec.describe "AuthController auth-surface error branches (K-163)" do
       expect(body.dig(:error, :message)).to include("signed")
     end
 
-    # K-204: a wrong-TYPED public_key (not just a missing one — K-163 covered
-    # only missing fields) must render a clean 400, not escape as a 500. A JSON
+    # A wrong-TYPED public_key (not just a missing one — the missing-field
+    # branch covered only missing fields) must render a clean 400, not escape as a 500. A JSON
     # number / object / array field reaches AgentRegistration as an Integer /
     # Hash / Array; `.to_s.strip` coerces it so PopVerifier rejects it as an
     # invalid key with a 400 envelope instead of NoMethodError-ing on `.strip`.
@@ -253,7 +253,7 @@ RSpec.describe "AuthController auth-surface error branches (K-163)" do
       expect(body.dig(:error, :message)).to include("signed")
     end
 
-    # K-204: the same wrong-typed-field guard on the login sibling.
+    # The same wrong-typed-field guard on the login sibling.
     it "returns 400 bad_request (not 500) when public_key is a NUMBER" do
       status, body = dispatch(Kiosk::Server::AuthController, :login,
                               post_env("/kiosk/auth/login", JSON.generate(public_key: 12_345, signed: "x")))

@@ -179,7 +179,7 @@ rc, mine = post_json("/kiosk/query", { name: "my_appointments" }, { "Authorizati
 results[:a1_sees_booking] = rc == 200 && mine.fetch("rows", []).any? { |r| r["id"] == appointment_id }
 STDERR.puts "  Booked appointment #{appointment_id} as the account holder"
 
-# ══ MANAGE ASSISTANTS page (T-030): the signed-in human opens the HTML
+# ══ MANAGE ASSISTANTS page: the signed-in human opens the HTML
 #    governance page, sees assistant 1 listed, and sets a spending cap. ═══════
 page = get_html("/kiosk/auth/assistants")
 results[:manage_page] = page.code.to_i

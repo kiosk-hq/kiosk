@@ -63,7 +63,7 @@ module Kiosk
       # RSA-2048+ public key with a clear client error rather than a raw crash.
       # Public: the account-binding surface (POST /oauth/device_authorization,
       # POST /auth/claim) reuses this exact check so the key floor cannot
-      # drift between registration and binding (ADR-0017).
+      # drift between registration and binding.
       def load_public_key(pem)
         rsa = OpenSSL::PKey::RSA.new(pem)
         if rsa.n.num_bits < SigningKey::MIN_KEY_BITS

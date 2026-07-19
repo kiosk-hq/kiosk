@@ -15,7 +15,7 @@ if defined?(::ActionController::API)
       # POST <endpoint>/oauth/token — the polling end of the claim
       # ceremony. See RFC 6749 §3.2 (token endpoint) + RFC 8628 §3.4
       # (device_code grant). Only the device_code grant is served: the
-      # endpoint completes the account binding (ADR-0017); it is not a
+      # endpoint completes the account binding; it is not a
       # general OAuth token service — kiosk-pop remains the only auth
       # story, and the JWT returned here is minted through the very same
       # DefaultAgentIdp path as /auth/login.

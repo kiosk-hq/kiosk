@@ -1,6 +1,6 @@
 # frozen_string_literal: true
 
-# Agent-side driver: no-human scooter rental end-to-end (Arch 2 — Ed25519 offline token).
+# Agent-side driver: no-human scooter rental end-to-end (Ed25519 offline token).
 #
 # Flow: register (PoW) → KYC → reserve → pay → start_rental → LockSim.unlock
 #

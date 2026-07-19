@@ -51,7 +51,7 @@ RSpec.describe Kiosk::Redteam::Scenarios::UnpaidGatedAction do
     end
   end
 
-  # Coverage for submit_valid_kyc + the `if profile.requires_kyc` guard (K-296).
+  # Coverage for submit_valid_kyc + the `if profile.requires_kyc` guard.
   # The three scenarios that gate submit_valid_kyc behind requires_kyc
   # (UnpaidGatedAction, PayForOtherUseSelf, SpentResourceReuse) all build their
   # profile with requires_kyc defaulting to false, so the helper never ran in

@@ -49,7 +49,7 @@ RSpec.describe Kiosk::Server::WellKnown do
       expect(doc[:kiosk][:auth]).not_to have_key(:token_url)
     end
 
-    it "advertises the account-binding endpoints (additive keys, ADR-0017)" do
+    it "advertises the account-binding endpoints (additive keys)" do
       expect(doc[:kiosk][:auth][:device_authorization_url])
         .to eq("https://api.acme.example/kiosk/oauth/device_authorization")
       expect(doc[:kiosk][:auth][:claim_url])
@@ -61,7 +61,7 @@ RSpec.describe Kiosk::Server::WellKnown do
         .to eq(%i[kind challenge_url register_url login_url revoke_url])
     end
 
-    # capabilities is computed from the live registry (ADR-0009): empty here
+    # capabilities is computed from the live registry: empty here
     # since this context registers no queries/actions and wires no payment.
     it "advertises an empty capability set when nothing is registered" do
       expect(doc[:kiosk][:capabilities]).to eq([])
@@ -104,7 +104,7 @@ RSpec.describe Kiosk::Server::WellKnown do
     it "advertises the skill descriptor when skill_sha256 is set" do
       Kiosk.configure { |c| c.skill_sha256 = "abc123" }
       d = described_class.build(base_url: "https://api.acme.example")
-      # Default skill URL is the immutable versioned artifact (ADR-0012).
+      # Default skill URL is the immutable versioned artifact.
       expect(d[:kiosk][:skill]).to eq(url: "https://kiosk.tech/skill-v0.2.3.md", sha256: "abc123")
     end
 
@@ -163,9 +163,9 @@ RSpec.describe Kiosk::Server::WellKnown do
       expect(d["Identity"]).to eq("required")
     end
 
-    # Payment directives are pay-conditional (K-334): emitted only when the
+    # Payment directives are pay-conditional: emitted only when the
     # provider serves `pay` (a payment_provider is configured → `pay` is in the
-    # computed capabilities, ADR-0009).
+    # computed capabilities).
     context "when the provider serves pay (payment_provider configured)" do
       before { Kiosk.configure { |c| c.payment_provider = Object.new } }
 
@@ -236,9 +236,9 @@ RSpec.describe Kiosk::Server::WellKnown do
       expect(d[:site][:name]).to eq("api.acme.example")
     end
 
-    # The `payments` block is pay-conditional (K-334): present only when the
-    # provider serves `pay` (payment_provider configured → `pay` in capabilities,
-    # ADR-0009). Optional in agents.json v1.0, so omitted otherwise.
+    # The `payments` block is pay-conditional: present only when the
+    # provider serves `pay` (payment_provider configured → `pay` in capabilities).
+    # Optional in agents.json v1.0, so omitted otherwise.
     context "when the provider serves pay (payment_provider configured)" do
       before { Kiosk.configure { |c| c.payment_provider = Object.new } }
 
@@ -305,7 +305,7 @@ RSpec.describe Kiosk::Server::WellKnown do
       expect(doc[:jwks_uri]).to eq("https://api.acme.example/kiosk/.well-known/jwks.json")
     end
 
-    it "declares kiosk-pop plus the binding modes (ADR-0017)" do
+    it "declares kiosk-pop plus the binding modes" do
       expect(doc[:auth_modes]).to eq(["kiosk-pop", "user-claimed", "link-code"])
     end
 

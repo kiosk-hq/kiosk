@@ -61,7 +61,7 @@ abort "register failed (#{rc}): #{JSON.generate(reg)}" unless rc == 201
 token = reg.fetch("access_token")
 STDERR.puts "  Registered: user_id=#{reg["user_id"]}"
 
-# ── Call schema (GET /kiosk/schema — ADR-0005 REST verb) ─────────────────────
+# ── Call schema (GET /kiosk/schema — REST verb) ──────────────────────────────
 
 schema_rc, schema_body = get_json("/kiosk/schema", bearer: token)
 abort "schema call failed (#{schema_rc}): #{JSON.generate(schema_body)}" unless schema_rc == 200

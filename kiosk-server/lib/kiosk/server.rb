@@ -53,7 +53,7 @@ require "kiosk/server/engine"
 # JWKS (JwksController), the kiosk-pop auth surface (AuthController — NOT
 # OAuth — plus the link/claim/unlink binding endpoints), the KYC attestation
 # surface (KycAttestationController), and the account-binding ceremony's
-# OAuth-wire + HTML controllers (ADR-0017).
+# OAuth-wire + HTML controllers.
 require "kiosk/server/wire_controller"
 require "kiosk/server/discovery_controller"
 require "kiosk/server/jwks_controller"
@@ -105,7 +105,7 @@ module Kiosk
     #   - {Kiosk::Server::SchemaDefinitions}— SQL for migrations 001-008
     #   - {Kiosk::Server::Engine}           — Rails engine (only when Rails loaded)
     #
-    #   Account-binding ceremony (ADR-0017 — the RFC 8628 machinery revived
+    #   Account-binding ceremony (the RFC 8628 machinery revived
     #   as the key-bound claim/link surface; kiosk-pop stays the only token
     #   story):
     #   - {Kiosk::Server::DeviceAuthorization}        — ceremony state machine (kind: claim/link)

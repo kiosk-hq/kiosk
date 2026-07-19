@@ -27,14 +27,14 @@ module Kiosk
         rescue JwtIssuer::Error
           # Expired, revoked, wrongly-signed, or malformed tokens resolve to
           # nil — the controller turns nil into 401 Unauthenticated. Letting
-          # the error escape here surfaced as an HTTP 500 (K-070).
+          # the error escape here surfaced as an HTTP 500.
           nil
         end
 
         def issue(agent_id:, role:)
           claims = { sub: lookup_user_id(agent_id), agent_id: agent_id, actor: "agent" }
-          # Role-less principals (ADR-0011) get NO role claim — an empty-string
-          # claim would round-trip into an unusable Identity (K-078).
+          # Role-less principals get NO role claim — an empty-string
+          # claim would round-trip into an unusable Identity.
           claims[:role] = role.to_s unless role.nil? || role.to_s.empty?
           JwtIssuer.issue(claims: claims, audience: Kiosk.configuration.issuer)
         end

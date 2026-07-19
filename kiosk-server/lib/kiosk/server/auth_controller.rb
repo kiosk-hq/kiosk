@@ -27,7 +27,7 @@ if defined?(::ActionController::API)
       #   POST /kiosk/auth/login     { public_key, signed }  → 200 { access_token }
       #   POST /kiosk/auth/revoke    (Bearer)                → 200 { access_token }
       #
-      # plus the link half of the account-binding ceremony (ADR-0017 — a
+      # plus the link half of the account-binding ceremony (a
       # Kiosk extension; the agent-initiated claim half lives on the OAuth
       # controllers):
       #
@@ -95,8 +95,8 @@ if defined?(::ActionController::API)
 
           Kiosk.configuration.revocation_store&.revoke_all(identity.agent_id, at: Time.now.to_i)
           # kiosk-pop endpoints mint their own tokens via the bundled
-          # DefaultAgentIdp by design (ADR-0013); adapter-supplied issuance
-          # is the 0.2 seam (T-014).
+          # DefaultAgentIdp by design; adapter-supplied issuance
+          # is the 0.2 seam.
           token = AgentIdentityProviders::DefaultAgentIdp.new.issue(
             agent_id: identity.agent_id, role: identity.role,
           )
@@ -106,7 +106,7 @@ if defined?(::ActionController::API)
         end
 
         # Mint a link code for the signed-in assistant-account holder
-        # (session channel — ADR-0013: binding approval belongs to the
+        # (session channel — binding approval belongs to the
         # provider's own session auth). The human hands the code to their
         # assistant, which redeems it at POST /auth/claim.
         def link
@@ -135,7 +135,7 @@ if defined?(::ActionController::API)
           render_error(e)
         end
 
-        # Registration-layer revocation (ADR-0017): the signed-in holder
+        # Registration-layer revocation: the signed-in holder
         # deactivates one of THEIR linked assistant accounts. Token verify
         # and login deny the key from here on.
         def unlink
@@ -199,10 +199,10 @@ if defined?(::ActionController::API)
           render json: err.to_envelope, status: err.http_status
         end
 
-        # RFC 7235 gate header (ADR-0014), mirroring WireController#www_authenticate_for.
+        # RFC 7235 gate header, mirroring WireController#www_authenticate_for.
         # The registration toll answers `402 pow_required`, so its response carries
         # `WWW-Authenticate: Kiosk-PoW` like the wire-verb PoW gate — the spec error
-        # table states every pow_required 402 carries the header (K-314).
+        # table states every pow_required 402 carries the header.
         def www_authenticate_for(err)
           issuer = Kiosk.configuration.issuer
           case err

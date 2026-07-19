@@ -3,7 +3,7 @@
 module Kiosk
   module Server
     # Pure-Ruby service module for the claim half of the account-binding
-    # ceremony (ADR-0017) on the RFC 8628 Device Authorization Grant wire.
+    # ceremony on the RFC 8628 Device Authorization Grant wire.
     # Two entry points:
     #
     #   .start    — POST /oauth/device_authorization handler logic
@@ -28,7 +28,7 @@ module Kiosk
     # via /auth/login — the ceremony never repeats.
     #
     # It is NOT gated by KYC — human approval + key possession are the only
-    # preconditions (ADR-0013: KYC stays agent-only).
+    # preconditions (KYC stays agent-only).
     #
     # Controllers in this gem are thin shims over these methods — the
     # same way {WireController} is a shim over {Executor}. Logic lives
@@ -151,7 +151,7 @@ module Kiosk
       class << self
         private
 
-        # BIND-POP (ADR-0017 amendment): possession of the row's key is
+        # BIND-POP: possession of the row's key is
         # proven BEFORE the binding is created. Any proof failure —
         # missing `signed`, bad signature, stale/missing challenge nonce —
         # maps to OAuth `invalid_client` and leaves the row approved.

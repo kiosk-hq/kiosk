@@ -10,7 +10,7 @@
 
 require "securerandom"
 
-# ── Ephemeral dev signing key (K-034) ────────────────────────────────────
+# ── Ephemeral dev signing key ─────────────────────────────────────────────
 # JWT / register flows need a signing key. In development or test, if none is
 # provided, self-provision an EPHEMERAL RSA key so `demo:setup` and the flows
 # run out-of-the-box. Never do this in production — a real key must be set.
@@ -37,9 +37,9 @@ ActiveRecord::Migration.include(Kiosk::RLS::DSL)
 # scraping by pattern alone. So this vertical does NOT treat browsing as
 # suspicion. It PRICES BY REQUEST RATE (a coarse proxy for depth): the first
 # few queries are free, then each extra query costs escalating proof-of-work
-# (ADR-0007 — metered pricing, not a wall). A human's assistant pays a few
+# (metered pricing, not a wall). A human's assistant pays a few
 # seconds of compute to look deeper; a bulk scraper pays linearly and forever.
-# (The offset/page-precise "metered pagination" variant is deferred in ADR-0007;
+# (The offset/page-precise "metered pagination" variant is deferred;
 # this rate-based form needs no change to the reputation Factors interface.)
 #
 # The rate is tracked per agent in-process (demo only — a real provider uses a
@@ -172,7 +172,7 @@ end
 # ─── Actions ────────────────────────────────────────────────────────────────
 
 # payment_setup — canonical skill Step 5 runs this unconditionally before
-# `pay` (K-057). Mirrors the getgrocery registration shape; with StubPsp
+# `pay`. Mirrors the getgrocery registration shape; with StubPsp
 # (no SetupIntent model) setup_required? is always false, so this is an
 # immediate no-op success: {status: "ready"}.
 Kiosk::Server::Actions.register("payment_setup",

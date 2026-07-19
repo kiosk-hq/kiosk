@@ -2,7 +2,7 @@
 
 module Kiosk
   module Server
-    # The link half of the account-binding ceremony (ADR-0017) — the
+    # The link half of the account-binding ceremony — the
     # human-initiated direction, a Kiosk EXTENSION (auth.md defines no
     # reverse flow): the signed-in account holder mints a short-lived,
     # single-use link code from the provider's web UI, hands it to their
@@ -65,8 +65,8 @@ module Kiosk
                  now: Time.now)
         raise Errors::BadRequest.new("code required") if code.nil? || code.to_s.empty?
 
-        # Same normalisation + key floor as registration (K-204 / ADR-0017:
-        # PopVerifier's checks are THE key checks).
+        # Same normalisation + key floor as registration
+        # (PopVerifier's checks are THE key checks).
         pem = public_key_pem.to_s.strip
         PopVerifier.load_public_key(pem)
 

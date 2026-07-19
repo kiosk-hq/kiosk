@@ -10,8 +10,8 @@ module Kiosk
     #   :rows   — SQL result rows (Array<Hash>); serialised under `rows`
     #   :value  — single value returned by an Action; under `value`
     #
-    # The `:stream` kind (events, NDJSON) was removed with the `events` verb
-    # (K-083): it was never an ADR-0009 capability and had no producer.
+    # The `:stream` kind (events, NDJSON) was removed with the `events` verb:
+    # it was never a capability and had no producer.
     Result = Data.define(:kind, :payload) do
       KINDS = %i[rows value].freeze
 

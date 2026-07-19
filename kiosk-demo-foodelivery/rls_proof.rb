@@ -1,6 +1,6 @@
 # frozen_string_literal: true
 
-# RLS isolation proof for foodelivery demo:rls (R1 Phase 1 Task 5).
+# RLS isolation proof for foodelivery demo:rls.
 #
 # Run with: KIOSK_RLS_ENFORCE=1 bundle exec rails runner rls_proof.rb
 #

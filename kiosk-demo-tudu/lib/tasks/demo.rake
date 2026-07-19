@@ -145,7 +145,7 @@ namespace :demo do
       check.call("human signed in via the real Devise form",        r["human_signed_in"] == true)
       check.call("link code minted (session channel) → 201",        r["link_mint"] == 201)
       check.call("claim rebound the key to Alice (same agent_id)",   r["claim_status"] == 201 && r["claim_rebound_to_holder"] && r["claim_same_agent_id"])
-      check.call("pre-link token's principal owns nothing (migrated away)", r["prelink_status"] == 200 && r["prelink_list_empty"])
+      check.call("pre-link token revoked by the rebind (principal change ⇒ 401)", r["prelink_status"] == 401 && r["prelink_revoked"])
       check.call("re-login mints a token whose sub is Alice",        r["relogin_sub_is_holder"])
       check.call("re-logged-in agent sees 'Hike' as owner under Alice", r["agent_sees_migrated_list"])
       check.call("Alice's browser session sees 'Hike'",             r["human_sees_migrated_list"])

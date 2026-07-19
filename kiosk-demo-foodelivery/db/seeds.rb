@@ -9,7 +9,7 @@
 # no PoP round-trip so the tour stays curl-readable). Because
 # `Order belongs_to :user` (load_defaults 8.1 requires the association),
 # place_order for that stub principal needs a matching users row; seed it here
-# with the same UUID bin/demo's AGENT_TOKEN carries. (saas-booking seeds its
+# with the same UUID bin/demo's AGENT_TOKEN carries. (stylish seeds its
 # Alice/Bob stub users for the identical reason.)
 WALKTHROUGH_STUB_USER_ID = "00000000-0000-0000-0000-000000000001"
 User.find_or_create_by!(id: WALKTHROUGH_STUB_USER_ID)

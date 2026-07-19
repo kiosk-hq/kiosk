@@ -1,6 +1,6 @@
 # frozen_string_literal: true
 
-# Combette (saas-booking) account-binding driver — two scenarios, one run:
+# Combette / stylish account-binding driver — two scenarios, one run:
 #
 #   FIRST CONTACT (claim): an assistant with a FRESH key opens the claim
 #   ceremony (device_authorization → the human approves on the real verify
@@ -125,7 +125,7 @@ STDERR.puts "  Human signed in via /users/sign_in (Devise session cookie held)"
 key = OpenSSL::PKey::RSA.generate(2048)
 pem = key.public_key.to_pem
 rc, da = post_json("/kiosk/oauth/device_authorization",
-                   { client_id: "saas-booking-binding-demo", public_key: pem })
+                   { client_id: "stylish-binding-demo", public_key: pem })
 abort "device_authorization failed (#{rc}): #{JSON.generate(da)}" unless rc == 200
 results[:da_fields] = %w[device_code user_code verification_uri expires_in interval].all? { |k| da.key?(k) }
 device_code = da.fetch("device_code")

@@ -48,7 +48,7 @@ See `kiosk-pow-equihash/README.md` for the full comparison and rationale.
 | `kiosk-demo-foodelivery` | Restaurant delivery | active |
 | `kiosk-demo-hoteling` | Hotel booking | active |
 | `kiosk-demo-skooti` | Scooter rental | active |
-| `kiosk-demo-saas-booking` | Salon/appointment booking (Combette) | alpha |
+| `kiosk-demo-stylish` | Salon/appointment booking (Combette on Park) | alpha |
 | `kiosk-demo-philslist` | Classifieds board — non-commerce (no payments) | active |
 | `kiosk-demo-tudu` | Collaborative todo — non-commerce (no payments) | active |
 | `e2e` | End-to-end test fixtures, stub PSP, agent pay flow | active |

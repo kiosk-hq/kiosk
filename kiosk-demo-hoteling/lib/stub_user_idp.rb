@@ -7,7 +7,7 @@
 # parses into a {Kiosk::Identity} with actor=human. In production this is
 # a real session adapter — the only one shipped today is
 # kiosk-user-idp-devise, which reads the request's Warden user (see
-# kiosk-demo-saas-booking for it wired end-to-end). Agents never present
+# kiosk-demo-stylish for it wired end-to-end). Agents never present
 # this shape.
 class StubUserIdp < Kiosk::AgentIdentityProviders::Base
   USER_RE = /\Auser:u-(?<user_id>[0-9a-fA-F-]+)\z/

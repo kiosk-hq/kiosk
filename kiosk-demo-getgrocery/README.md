@@ -34,5 +34,5 @@ real customer exists to charge.
 
 The human side of the claim ceremony (verify page, link mint, unlink)
 authenticates through a stub web-session channel (`lib/stub_user_idp.rb`) —
-this demo ships no human login UI. See kiosk-demo-saas-booking for the same
+this demo ships no human login UI. See kiosk-demo-stylish for the same
 ceremony over real Devise sessions.

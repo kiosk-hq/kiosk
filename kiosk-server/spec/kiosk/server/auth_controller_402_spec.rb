@@ -21,8 +21,8 @@ require "kiosk/reputation"
 load File.expand_path("../../../lib/kiosk/server/auth_controller.rb", __dir__)
 
 RSpec.describe "AuthController 402 WWW-Authenticate" do
-  KAT_PARAMS_314 = { n: 8, k: 1 }.freeze
-  PEM_314 = "-----BEGIN PUBLIC KEY-----\nMFkwE... (test)\n-----END PUBLIC KEY-----"
+  KAT_PARAMS_REGISTER = { n: 8, k: 1 }.freeze
+  PEM_REGISTER = "-----BEGIN PUBLIC KEY-----\nMFkwE... (test)\n-----END PUBLIC KEY-----"
 
   def dispatch(action, env)
     status, headers, body = Kiosk::Server::AuthController.action(action).call(env)
@@ -37,7 +37,7 @@ RSpec.describe "AuthController 402 WWW-Authenticate" do
       c.signing_key             = Kiosk::Server::SigningKey.generate
       c.issuer                  = "https://demo.example"
       c.registration_pow_count  = 1
-      c.registration_pow_params = KAT_PARAMS_314
+      c.registration_pow_params = KAT_PARAMS_REGISTER
       c.pow_secret              = "registration-pow-secret"
     end
   end
@@ -50,7 +50,7 @@ RSpec.describe "AuthController 402 WWW-Authenticate" do
   it "register toll 402 pow_required carries WWW-Authenticate: Kiosk-PoW AND the challenges body" do
     env = Rack::MockRequest.env_for(
       "/kiosk/auth/register", method: "POST", "CONTENT_TYPE" => "application/json",
-      input: JSON.generate(public_key: PEM_314, signed: "dummy-not-reached"),
+      input: JSON.generate(public_key: PEM_REGISTER, signed: "dummy-not-reached"),
     )
     status, headers, body = dispatch(:register, env)
 

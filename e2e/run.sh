@@ -203,16 +203,16 @@ ok "schema + seeds applied"
 # rejects a SECOND live agent row for one key at the DB level — not via a
 # TOCTOU SELECT-then-INSERT. A revoked row for the same key is allowed.
 log "assert DB-level uniqueness on kiosk.agents.public_key (live rows)"
-K043_KEY="k043-dup-$$"
+REGISTER_DUP_KEY="register-dup-$$"
 psql -d "$DB_NAME" -v ON_ERROR_STOP=1 -qtA >/dev/null 2>&1 <<SQL || fail "live-key uniqueness setup insert failed"
   INSERT INTO users (id, created_at, updated_at) VALUES (gen_random_uuid(), now(), now());
   INSERT INTO kiosk.agents (user_id, allowed_roles, public_key)
-    SELECT id, ARRAY['customer']::text[], '$K043_KEY' FROM users LIMIT 1;
+    SELECT id, ARRAY['customer']::text[], '$REGISTER_DUP_KEY' FROM users LIMIT 1;
 SQL
 # Second LIVE insert of the same key must be REJECTED by the unique index.
 if psql -d "$DB_NAME" -v ON_ERROR_STOP=1 -qtA >/dev/null 2>&1 <<SQL
   INSERT INTO kiosk.agents (user_id, allowed_roles, public_key)
-    SELECT id, ARRAY['customer']::text[], '$K043_KEY' FROM users LIMIT 1;
+    SELECT id, ARRAY['customer']::text[], '$REGISTER_DUP_KEY' FROM users LIMIT 1;
 SQL
 then
   fail "a SECOND live agent row with the same public_key was accepted (unique index missing)"
@@ -220,10 +220,10 @@ fi
 # A revoked row for the same key IS allowed (partial index skips revoked rows).
 psql -d "$DB_NAME" -v ON_ERROR_STOP=1 -qtA >/dev/null 2>&1 <<SQL || fail "revoked-key re-insert wrongly rejected"
   INSERT INTO kiosk.agents (user_id, allowed_roles, public_key, revoked_at)
-    SELECT id, ARRAY['customer']::text[], '$K043_KEY', now() FROM users LIMIT 1;
+    SELECT id, ARRAY['customer']::text[], '$REGISTER_DUP_KEY', now() FROM users LIMIT 1;
 SQL
 psql -d "$DB_NAME" -qtA >/dev/null 2>&1 <<SQL || true
-  DELETE FROM kiosk.agents WHERE public_key = '$K043_KEY';
+  DELETE FROM kiosk.agents WHERE public_key = '$REGISTER_DUP_KEY';
 SQL
 ok "live-key uniqueness enforced at the DB; revoked key may re-register"
 

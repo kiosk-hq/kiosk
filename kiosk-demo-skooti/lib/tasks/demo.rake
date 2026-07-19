@@ -819,7 +819,8 @@ namespace :demo do
 
     Asserts:
       • schema.verbs includes query/run/pay/schema and NOT events
-      • schema.actions includes reserve, start_rental, payment_setup with descriptions
+      • schema.actions includes reserve, start_rental, rent_motorcycle,
+        payment_setup with descriptions
 
     Exits 0 if all assertions pass; exits 1 on any miss.
   DESC
@@ -928,8 +929,9 @@ namespace :demo do
       puts "  ✗  schema.actions missing reserve"
     end
 
-    # start_rental, payment_setup (skill Step 5) present with descriptions
-    %w[start_rental payment_setup].each do |aname|
+    # start_rental, rent_motorcycle (the KYC-gated action), payment_setup
+    # (skill Step 5) present with descriptions
+    %w[start_rental rent_motorcycle payment_setup].each do |aname|
       entry = actions.find { |a| a["name"] == aname }
       if entry
         puts "  ✓  schema.actions includes #{aname}"
@@ -954,6 +956,144 @@ namespace :demo do
     end
   end
   # ── end demo:schema ────────────────────────────────────────────────────────
+end
+
+namespace :demo do
+  # ── demo:kyc ───────────────────────────────────────────────────────────────
+  desc <<~DESC
+    KYC named-anonymized-attribute gate proof (T-018).
+
+    Runs demo:setup (clean DB + seed SK-001 scooter + MC-001 motorcycle), boots
+    the server, runs kyc_flow.rb and asserts the attribute-gated motorcycle path
+    plus the KYC-free scooter positive control:
+
+      A1  rent_motorcycle WITHOUT KYC        → 403, error.code == "kyc_required"
+      A2  submit KYC {age_over_18, licence_a} → 200 (attributes recorded)
+      A3  rent_motorcycle WITH KYC           → 200, offline token unlocks the lock
+      B   start_rental SK-001 with a BARE     → 200 with ZERO attributes recorded
+          KYC attestation (no attributes)       (the attribute gate did not leak)
+
+    Exits 0 when all four hold; exits 1 on any miss. A red assertion = the KYC
+    gate is broken (or leaked onto the scooter path) — fix the app, not the test.
+  DESC
+  task kyc: :setup do
+    require "resolv"
+    require "net/http"
+    require "uri"
+    require "json"
+    require "shellwords"
+
+    port = ENV.fetch("PORT", "3003")
+    log  = "/tmp/kiosk-skooti-kyc.log"
+
+    host = begin
+      addr = begin
+        Resolv.getaddress("skooti.app")
+      rescue Resolv::ResolvError
+        ""
+      end
+      addr == "127.0.0.1" ? "skooti.app" : "127.0.0.1"
+    end
+
+    server_url   = "http://#{host}:#{port}"
+    kiosk_issuer = server_url
+
+    puts "\n── Starting skooti (KYC-gate proof) on #{server_url} ──"
+
+    File.truncate(log, 0) if File.exist?(log)
+    server_pid = spawn(
+      { "KIOSK_ISSUER" => kiosk_issuer },
+      "bundle exec rails s -p #{port} -b 127.0.0.1 -e development",
+      out: log, err: log,
+    )
+
+    at_exit do
+      begin
+        Process.kill("TERM", server_pid)
+        Process.wait(server_pid)
+      rescue Errno::ESRCH, Errno::ECHILD
+        nil
+      end
+      puts "  Server stopped."
+    end
+
+    ready = false
+    40.times do
+      begin
+        res = Net::HTTP.get_response(URI("#{server_url}/.well-known/kiosk.json"))
+        if res.code.to_i == 200
+          ready = true
+          break
+        end
+      rescue Errno::ECONNREFUSED, Errno::EADDRNOTAVAIL, SocketError
+        nil
+      end
+      sleep 1
+    end
+    abort "Server did not become ready — see #{log}" unless ready
+    puts "  Server up at #{server_url}"
+
+    flow_rb = File.expand_path("../../kyc_flow.rb", __dir__)
+    puts "\n── Running kyc_flow.rb ──"
+    raw = `SERVER_URL=#{server_url} KIOSK_ISSUER=#{kiosk_issuer} bundle exec ruby #{flow_rb.shellescape} 2>&1`
+    stderr_lines = raw.lines.reject { |l| l.start_with?("{") }
+    json_line    = raw.lines.grep(/^\{/).last
+    puts stderr_lines.join
+    puts json_line if json_line
+
+    begin
+      result = JSON.parse(json_line || raw)
+    rescue JSON::ParserError => e
+      abort "kyc_flow.rb did not produce valid JSON: #{e.message}\nOutput:\n#{raw}"
+    end
+
+    puts "\n── KYC-gate assertions ──"
+    failures = []
+
+    # A1: rent_motorcycle without KYC → 403 kyc_required.
+    if result["http_mc_rent_no_kyc"] == 403 && result["mc_rent_no_kyc_code"] == "kyc_required"
+      puts "  OK  A1 rent_motorcycle without KYC → 403 kyc_required"
+    else
+      failures << "A1: rent_motorcycle without KYC expected 403/kyc_required, got #{result["http_mc_rent_no_kyc"].inspect}/#{result["mc_rent_no_kyc_code"].inspect}"
+      puts "  FAIL  A1 rent_motorcycle without KYC → #{result["http_mc_rent_no_kyc"].inspect}/#{result["mc_rent_no_kyc_code"].inspect}"
+    end
+
+    # A2: KYC submit recorded both attributes.
+    attrs = result["kyc_attributes"] || {}
+    if result["http_kyc_submit"] == 200 && attrs["age_over_18"] == true && attrs["licence_a"] == true
+      puts "  OK  A2 KYC accepted with attributes {age_over_18, licence_a}"
+    else
+      failures << "A2: KYC submit expected 200 with both attributes, got #{result["http_kyc_submit"].inspect}/#{attrs.inspect}"
+      puts "  FAIL  A2 KYC submit → #{result["http_kyc_submit"].inspect}/#{attrs.inspect}"
+    end
+
+    # A3: rent_motorcycle with KYC → 200 and the offline token unlocks.
+    if result["http_mc_rent_with_kyc"] == 200 && result["mc_unlocked"] == true
+      puts "  OK  A3 rent_motorcycle with KYC → 200, motorcycle unlocked"
+    else
+      failures << "A3: rent_motorcycle with KYC expected 200/unlocked, got #{result["http_mc_rent_with_kyc"].inspect}/#{result["mc_unlocked"].inspect}"
+      puts "  FAIL  A3 rent_motorcycle with KYC → #{result["http_mc_rent_with_kyc"].inspect}/#{result["mc_unlocked"].inspect}"
+    end
+
+    # B: scooter positive control — start_rental succeeds with a bare binary
+    # attestation carrying ZERO attributes, proving the age_over_18/licence_a
+    # attribute gate is specific to rent_motorcycle and did not leak here.
+    if result["http_scooter_rent_no_kyc"] == 200 && result["scooter_kyc_attrs_empty"] == true
+      puts "  OK  B  start_rental SK-001 with bare KYC (0 attributes) → 200 (attribute gate is action-specific)"
+    else
+      failures << "B: scooter start_rental with bare KYC expected 200 + empty attributes, got #{result["http_scooter_rent_no_kyc"].inspect}/empty=#{result["scooter_kyc_attrs_empty"].inspect}"
+      puts "  FAIL  B  scooter start_rental (bare KYC) → #{result["http_scooter_rent_no_kyc"].inspect}/empty=#{result["scooter_kyc_attrs_empty"].inspect}"
+    end
+
+    if failures.empty?
+      puts "\n  All KYC-gate assertions passed."
+    else
+      puts "\n  FAILED assertions:"
+      failures.each { |f| puts "    - #{f}" }
+      exit 1
+    end
+  end
+  # ── end demo:kyc ─────────────────────────────────────────────────────────────
 end
 
 desc "End-to-end Kiosk skooti demo: setup the DB then prove the full rental chain."

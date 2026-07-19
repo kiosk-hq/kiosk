@@ -161,9 +161,35 @@ RSpec.describe "wire-surface controller auth" do
 
       status, body = dispatch(Kiosk::Server::KycAttestationController, :create, kyc_env)
       expect(status).to eq(200)
-      expect(body).to eq(kyc_verified: true)
-      # The row updated is the one for the CUSTOM idp's identity.
+      # A bare binary attestation (no `attributes`) verifies and returns the
+      # empty attribute set — the anonymized named-attributes surface (T-018).
+      expect(body).to eq(kyc_verified: true, attributes: {})
+      # The row updated is the one for the CUSTOM idp's identity, and now also
+      # persists the (empty) kyc_attributes jsonb alongside kyc_verified_at.
       expect(executed_sql.last).to include("'a-custom'")
+      expect(executed_sql.last).to include("kyc_attributes")
+    end
+
+    it "records the named anonymized attributes an attestation carries" do
+      Kiosk.configure { |c| c.agent_idp = custom_idp }
+
+      body_json = JSON.generate(kyc_jws: JWT.encode(
+        { sub: "u-kyc", level: "verified", iss: kyc_issuer,
+          iat: (Time.now - 5).to_i, exp: (Time.now + 600).to_i,
+          attributes: { age_over_18: true, licence_a: true } },
+        kyc_key, "RS256",
+      ))
+      env = bearer_env("/kiosk/agents/kyc", "opaque-custom-token",
+                       method: "POST", input: body_json, "CONTENT_TYPE" => "application/json")
+
+      status, body = dispatch(Kiosk::Server::KycAttestationController, :create, env)
+      expect(status).to eq(200)
+      # NB: the wire body is String-keyed JSON ({"age_over_18": true}); the
+      # dispatch harness re-parses it with symbolize_names, hence Symbol keys here.
+      expect(body).to eq(kyc_verified: true, attributes: { age_over_18: true, licence_a: true })
+      # The persisted jsonb carries exactly the granted booleans — never a document.
+      expect(executed_sql.last).to include("age_over_18")
+      expect(executed_sql.last).to include("licence_a")
     end
 
     it "does NOT fall back to user_idp — KYC is an agent-only surface" do

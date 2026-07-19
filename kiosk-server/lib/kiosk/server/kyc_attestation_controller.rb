@@ -29,11 +29,11 @@ if defined?(::ActionController::API)
           body     = parse_body!
           raw_jws  = body[:kyc_jws] or raise Errors::BadRequest.new("missing field: kyc_jws")
 
-          KycVerifier.verify(raw_jws: raw_jws, identity: identity)
-          mark_kyc_verified!(identity.agent_id)
+          claims = KycVerifier.verify(raw_jws: raw_jws, identity: identity)
+          mark_kyc_verified!(identity.agent_id, attributes: claims[:attributes] || {})
 
           Kiosk::Server::Headers.add_to(response.headers)
-          render json: { kyc_verified: true }, status: :ok
+          render json: { kyc_verified: true, attributes: claims[:attributes] || {} }, status: :ok
         rescue Errors::Base => e
           render_error(e)
         end
@@ -70,12 +70,17 @@ if defined?(::ActionController::API)
           identity
         end
 
-        def mark_kyc_verified!(agent_id)
+        # Records verification: stamps kyc_verified_at and persists the NAMED
+        # ANONYMIZED boolean attributes as jsonb. Only the booleans are stored
+        # — the underlying documents never reach this layer. Written together
+        # so a downstream attribute gate and the binary gate stay consistent.
+        def mark_kyc_verified!(agent_id, attributes: {})
           conn   = ActiveRecord::Base.connection
           schema = Kiosk.configuration.schema
           conn.execute(
             "UPDATE #{conn.quote_table_name("#{schema}.agents")} " \
-            "SET kyc_verified_at = now() " \
+            "SET kyc_verified_at = now(), " \
+            "kyc_attributes = #{conn.quote(JSON.generate(attributes))}::jsonb " \
             "WHERE id = #{conn.quote(agent_id)} AND revoked_at IS NULL",
           )
         end

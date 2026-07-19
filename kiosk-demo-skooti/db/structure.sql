@@ -146,7 +146,8 @@ CREATE TABLE kiosk.agents (
     notification_pubkey text,
     created_at timestamp with time zone DEFAULT now() NOT NULL,
     revoked_at timestamp with time zone,
-    kyc_verified_at timestamp with time zone
+    kyc_verified_at timestamp with time zone,
+    kyc_attributes jsonb
 );
 
 
@@ -314,7 +315,9 @@ CREATE TABLE public.scooters (
     lng numeric(10,6),
     price_per_min_cents integer NOT NULL,
     created_at timestamp(6) without time zone NOT NULL,
-    updated_at timestamp(6) without time zone NOT NULL
+    updated_at timestamp(6) without time zone NOT NULL,
+    kind character varying DEFAULT 'scooter'::character varying NOT NULL,
+    needs_licence boolean DEFAULT false NOT NULL
 );
 
 
@@ -750,6 +753,8 @@ SET search_path TO "$user", public;
 
 INSERT INTO "schema_migrations" (version) VALUES
 ('20260717000001'),
+('20260618131466'),
+('20260618131465'),
 ('20260618131464'),
 ('20260618131463'),
 ('20260618131462'),

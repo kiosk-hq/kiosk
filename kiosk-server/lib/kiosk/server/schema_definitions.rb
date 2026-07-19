@@ -14,6 +14,8 @@ module Kiosk
     #   007 add_kyc_verified_at                → kiosk.agents.kyc_verified_at column
     #   008 rebuild_kiosk_device_authorizations → device_authorizations in the
     #       account-binding shape (public_key_pem, kind, hashed user_code)
+    #   009 add_kyc_attributes                  → kiosk.agents.kyc_attributes jsonb
+    #       (named anonymized boolean attributes; additive, opt-in)
     #
     # Pure functions: no database connection, no Rails dependency. Output
     # is SQL strings the host migration framework (`ActiveRecord::Migration#execute`)
@@ -323,6 +325,23 @@ module Kiosk
         <<~SQL.strip
           ALTER TABLE "#{schema}".agents
             ADD COLUMN IF NOT EXISTS kyc_verified_at timestamptz;
+        SQL
+      end
+
+      # Adds `kyc_attributes jsonb` to `kiosk.agents` — the set of NAMED
+      # ANONYMIZED boolean attributes a valid KYC attestation granted (e.g.
+      # `{"age_over_18": true, "licence_a": true}`). NULL until the agent
+      # submits an attestation; a bare binary attestation with no attributes
+      # writes `{}`. Only the booleans are stored — never the DOB, licence
+      # number, or any underlying document. Idempotent (ADD COLUMN IF NOT
+      # EXISTS) — safe to re-run. Additive: providers that only need the binary
+      # `kyc_verified_at` gate can skip this migration.
+      def kyc_attributes_sql(schema: nil)
+        schema ||= Kiosk.configuration.schema
+
+        <<~SQL.strip
+          ALTER TABLE "#{schema}".agents
+            ADD COLUMN IF NOT EXISTS kyc_attributes jsonb;
         SQL
       end
 

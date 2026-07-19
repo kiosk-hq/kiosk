@@ -28,6 +28,11 @@ RSpec.describe "DiscoveryController" do
     Kiosk.configure do |c|
       c.issuer = "https://api.acme.example"
       c.owner  = { name: "Acme Inc.", support: "support@acme.example" }
+      # Serve `pay` so the discovery surfaces advertise the AP2/payment
+      # directives (pay-conditional, K-334). WellKnown gates them on
+      # `pay` ∈ capabilities (ADR-0009), so a payment_provider must be
+      # configured for `Protocols: ap2` / `Payments: required` to appear.
+      c.payment_provider = Object.new
     end
   end
 

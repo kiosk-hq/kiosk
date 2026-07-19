@@ -61,7 +61,7 @@ Kiosk.configure do |c|
   c.registration_role = :customer
   c.owner  = { name: "Stylish (Kiosk demo)", support: "demo@kiosk.tech" }
   # Dual-check (skill.md): canonical skill URL + SHA-256 of its content.
-  c.skill_sha256 = "3af06c1622053bab833b468c12f7f28d129c015da15c91d0fdcfe0c303885e83"
+  c.skill_sha256 = "4ed1860cab6cdfd3bb6efed646217aa195a8febe6f015bd6f54023d9afada589"
 
   # JwtOrStubIdp tries Kiosk-issued JWTs (kiosk-pop register/login output;
   # the account-binding token poll mints the same JWTs) first, then falls

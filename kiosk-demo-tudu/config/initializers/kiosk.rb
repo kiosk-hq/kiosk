@@ -62,7 +62,7 @@ Kiosk.configure do |c|
   c.owner  = { name: "tudu (Kiosk demo)", support: "demo@kiosk.tech" }
   # Pin the universal skill (immutable versioned file on kiosk.tech), like the
   # sibling demos — the skill-pin guard validates this against the real file.
-  c.skill_sha256 = "3af06c1622053bab833b468c12f7f28d129c015da15c91d0fdcfe0c303885e83"
+  c.skill_sha256 = "4ed1860cab6cdfd3bb6efed646217aa195a8febe6f015bd6f54023d9afada589"
 
   # ── NO payment_provider ──────────────────────────────────────────────────
   # This is deliberate and load-bearing: with no AP2 provider configured,

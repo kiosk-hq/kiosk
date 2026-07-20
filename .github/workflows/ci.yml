@@ -246,5 +246,16 @@ jobs:
       - name: Install jq
         run: sudo apt-get update && sudo apt-get install -y jq
 
+      # The e2e golden path registers with a real register-time Equihash PoW,
+      # solved by the bundled numpy-vectorised solver (solve.py); the harness
+      # needs numpy or it errors "this solver requires numpy" (K-375; re-added
+      # after K-372 removed it when e2e was toll-free).
+      - name: Set up Python (Equihash solver)
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install numpy (Equihash solver)
+        run: python -m pip install numpy
+
       - name: Run e2e
         run: ./e2e/run.sh

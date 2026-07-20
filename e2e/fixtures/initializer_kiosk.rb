@@ -9,6 +9,16 @@ require Rails.root.join("lib/stub_user_idp")
 require Rails.root.join("lib/jwt_or_stub_idp")
 require Rails.root.join("lib/stub_psp")
 
+# Registration PoW gate uses Equihash (one PoW = Equihash). Small demo params
+# (n=96 k=5, matching the demos) keep the register solve well under a second.
+# PoW is a metered toll, tuned per provider — here it prices bot registration
+# on the e2e golden path so the harness exercises the real 402 → solve → retry
+# handshake, not a toll-free shortcut.
+require "kiosk/pow/equihash"
+require "kiosk/reputation"
+Kiosk::Reputation::Backends.register(Kiosk::Pow::Equihash::NAME, Kiosk::Pow::Equihash)
+E2E_REGISTRATION_POW_PARAMS = { n: 96, k: 5 }.freeze
+
 Kiosk.configure do |c|
   c.user_model     = "User"
   c.user_id_type   = :uuid
@@ -34,6 +44,13 @@ Kiosk.configure do |c|
   # Role pinned to every self-registered agent (agents cannot choose their own).
   c.registration_role = :customer
   c.owner  = { name: "Combette E2E Demo", support: "demo@kiosk.tech" }
+
+  # Registration PoW gate: 1 Equihash proof to register. POST /kiosk/auth/register
+  # returns 402 pow_required until a valid proof is attached (assistant.sh solves
+  # it with the bundled kiosk-pow-equihash/solve.py). Same mechanism the demos use.
+  c.registration_pow_count  = 1
+  c.registration_pow_params = E2E_REGISTRATION_POW_PARAMS
+  c.pow_secret              = ENV.fetch("KIOSK_POW_SECRET", "e2e-demo-pow-secret")
 
   # JwtOrStubIdp tries kiosk-pop JWTs (minted by the bundled IdP's
   # register/login) first, then falls back to StubIdp's bespoke

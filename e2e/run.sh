@@ -85,6 +85,10 @@ rails --version 2>/dev/null | grep -qE '^Rails [0-9]' || fail "rails still not r
 command -v psql     >/dev/null || fail "psql not on PATH"
 command -v curl     >/dev/null || fail "curl not on PATH"
 command -v jq       >/dev/null || fail "jq not on PATH"
+# The golden path registers with a real register-time Equihash PoW, solved by
+# the bundled numpy-vectorised solver (kiosk-pow-equihash/solve.py).
+command -v python3  >/dev/null || fail "python3 not on PATH (needed by the Equihash register-PoW solver)"
+python3 -c "import numpy" 2>/dev/null || fail "python numpy missing (pip install numpy) — needed by the Equihash register-PoW solver"
 
 pg_isready -q || fail "postgres not accepting connections (run: brew services start postgresql)"
 
@@ -121,10 +125,15 @@ cat >> Gemfile <<RUBY
 # kiosk-rls is REQUIRED even though this fixture does not use RLS: it is the
 # only source of Configuration#system_role=, which initializer_kiosk.rb sets.
 # Dropping it makes the initializer raise NoMethodError at boot.
-gem "kiosk-all",    path: "$KIOSK_OSS/kiosk-all"
-gem "kiosk-core",   path: "$KIOSK_OSS/kiosk-core"
-gem "kiosk-rls",    path: "$KIOSK_OSS/kiosk-rls"
-gem "kiosk-server", path: "$KIOSK_OSS/kiosk-server"
+# kiosk-reputation + kiosk-pow-equihash back the register-time Equihash PoW
+# gate (registration_pow_count=1 in the initializer); neither is a transitive
+# dep of kiosk-all, so both must be path-overridden explicitly (same as demos).
+gem "kiosk-all",           path: "$KIOSK_OSS/kiosk-all"
+gem "kiosk-core",          path: "$KIOSK_OSS/kiosk-core"
+gem "kiosk-rls",           path: "$KIOSK_OSS/kiosk-rls"
+gem "kiosk-server",        path: "$KIOSK_OSS/kiosk-server"
+gem "kiosk-reputation",    path: "$KIOSK_OSS/kiosk-reputation"
+gem "kiosk-pow-equihash",  path: "$KIOSK_OSS/kiosk-pow-equihash"
 RUBY
 
 log "bundle install (this can take a moment on a cold cache)"
@@ -154,6 +163,10 @@ YML
 log "stage fixtures + run kiosk:install generator"
 
 FIXTURES="$KIOSK_OSS/e2e/fixtures"
+# The register-PoW flows shell out to the bundled Equihash solver. Export the
+# path so equihash_register.rb finds it (fixtures run from $FIXTURES, not $APP).
+export SOLVE_PY="$KIOSK_OSS/kiosk-pow-equihash/solve.py"
+[ -f "$SOLVE_PY" ] || fail "solver missing at $SOLVE_PY"
 
 # 1) Users migration (must precede kiosk:install — kiosk-server's identity
 # tables FK to users(id)). Rails creates db/migrate/ lazily, so mkdir
@@ -265,6 +278,7 @@ if ! SERVER_URL="http://127.0.0.1:$SERVER_PORT" \
        FIXTURES="$FIXTURES" \
        DB_NAME="$DB_NAME" \
        KIOSK_ISSUER="$KIOSK_ISSUER" \
+       SOLVE_PY="$SOLVE_PY" \
        bash "$KIOSK_OSS/e2e/assistant.sh"; then
   log "assistant failed — last 80 lines of server log:"
   tail -80 /tmp/kiosk-e2e-server.log

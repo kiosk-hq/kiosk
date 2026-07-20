@@ -1,0 +1,63 @@
+# Kiosk hosted live demos — parameterised systemd unit (T-032)
+# Design: meta/docs/architecture/2026-07-20-hosted-live-demos.md §1
+#
+# ONE Puma per demo app, bound to loopback, fronted by Caddy. This is a
+# TEMPLATE unit: `%i` is the instance name (the text after the @). Enable one
+# instance per app:
+#
+#   systemctl enable --now kiosk-demo@getgrocery
+#   systemctl enable --now kiosk-demo@atablefor
+#   ... hoteling skooti stylish philslist tudu
+#
+# ── How %i maps to app + port ───────────────────────────────────────────────
+# %i selects BOTH the app dir and its port, via two conventions:
+#   1. WorkingDirectory = /srv/kiosk/kiosk-demo-%i   (the gem checkout)
+#      NOTE: atablefor's gem dir is kiosk-demo-atablefor (renamed from
+#      foodelivery, T-033). All others: kiosk-demo-<name>.
+#   2. PORT is supplied by that app's EnvironmentFile (/etc/kiosk-demo/%i.env),
+#      set from env/<app>.env — the single source of truth for the port.
+# Port map (keep in sync with Caddyfile + env files):
+#   getgrocery 3001 · atablefor 3002 · hoteling 3003 · skooti 3004 ·
+#   stylish 3005 · philslist 3006 · tudu 3007
+#
+# ExecStart binds Rails' server to 127.0.0.1 explicitly (loopback only; Caddy
+# is the sole public ingress). Puma reads WEB_CONCURRENCY / RAILS_MAX_THREADS
+# from the EnvironmentFile.
+
+[Unit]
+Description=Kiosk demo (%i) — Puma on loopback, behind Caddy
+After=network.target postgresql.service
+Wants=postgresql.service
+
+[Service]
+Type=simple
+User=kiosk
+Group=kiosk
+
+WorkingDirectory=/srv/kiosk/kiosk-demo-%i
+EnvironmentFile=/etc/kiosk-demo/%i.env
+
+# -b 127.0.0.1 keeps the app off every public interface; -p uses $PORT from the
+# EnvironmentFile. `bundle exec` uses the app's pinned gems.
+ExecStart=/usr/bin/env bash -lc 'exec bundle exec bin/rails server -e production -b 127.0.0.1 -p ${PORT}'
+
+Restart=always
+RestartSec=3
+# Give a stampede-loaded worker time to boot before systemd calls it up.
+TimeoutStartSec=60
+KillMode=mixed
+
+# ── Hardening (least privilege; the app only needs its checkout + tmp) ───────
+NoNewPrivileges=true
+ProtectSystem=strict
+ReadWritePaths=/srv/kiosk/kiosk-demo-%i/tmp /srv/kiosk/kiosk-demo-%i/log
+PrivateTmp=true
+ProtectHome=true
+
+# Logs to the journal: `journalctl -u kiosk-demo@getgrocery -f`
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=kiosk-demo-%i
+
+[Install]
+WantedBy=multi-user.target

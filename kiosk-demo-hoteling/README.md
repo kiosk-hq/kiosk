@@ -1,3 +1,3 @@
 # kiosk-demo-hoteling
 
-Hotel booking demo provider for Kiosk.
+Hotel booking demo operator for Kiosk.

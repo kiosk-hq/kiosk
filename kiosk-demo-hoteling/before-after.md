@@ -1,6 +1,6 @@
 # Before and After — why agents stall at Booking.com, and what hoteling proves
 
-**Honesty note up front.** hoteling is what Booking.com *would* look like if it spoke Kiosk — a fake-but-realistic hotel-booking provider built to demonstrate the mechanism. Nothing below implies that real Booking.com works this way. The demo proves the *mechanism* works; whether providers will adopt it is an open question.
+**Honesty note up front.** hoteling is what Booking.com *would* look like if it spoke Kiosk — a fake-but-realistic hotel-booking operator built to demonstrate the mechanism. Nothing below implies that real Booking.com works this way. The demo proves the *mechanism* works; whether operators will adopt it is an open question.
 
 ---
 
@@ -10,7 +10,7 @@ Every current personal agent (Hermes, OpenClaw, ChatGPT Agent, Gemini with app n
 
 **The Booking.com connector probed in-session confirms the end-state:**
 
-> Both flagship consumer-commerce connectors in Claude today (Uber Eats, Booking.com) **stop at discovery.** Their terminal step is a deep link back to the provider's own app/site, where the human must register and pay.
+> Both flagship consumer-commerce connectors in Claude today (Uber Eats, Booking.com) **stop at discovery.** Their terminal step is a deep link back to the operator's own app/site, where the human must register and pay.
 
 The Booking.com MCP connector exposes two tools: `accommodations_search` (returns property listings) and `answer_property_qa_by_ids` (answers natural-language questions about specific properties). The session schema's own `deeplink_id` field describes navigating *to* Booking.com — confirming the intended flow: **the agent shows options, then deep-links the user out to Booking.com to register, authenticate, and pay.** There is no reserve, no checkout, no payment tool.
 
@@ -62,15 +62,15 @@ The database confirmed: one row in `bookings` with `status='confirmed'`, one row
 
 The business outcome: the user said "book a hotel room for next month." Their assistant completed the full booking — discovery, registration, room selection, reservation, payment, confirmation — without the user touching anything and without the user having an account at hoteling beforehand.
 
-The provider outcome: hoteling received a confirmed booking and a settled payment. The customer relationship stays with hoteling (the mandate carries the provider's issuer). There is no intermediate platform taking a discovery fee or owning the session.
+The operator outcome: hoteling received a confirmed booking and a settled payment. The customer relationship stays with hoteling (the mandate carries the operator's issuer). There is no intermediate platform taking a discovery fee or owning the session.
 
-**This is a demo against a fake provider with a stub payment processor.** The mechanism works. Whether real providers will integrate and whether real users will value this enough to drive adoption are open questions — the demo does not answer them.
+**This is a demo against a fake operator with a stub payment processor.** The mechanism works. Whether real operators will integrate and whether real users will value this enough to drive adoption are open questions — the demo does not answer them.
 
 ---
 
-## What's needed — the provider adoption recipe
+## What's needed — the operator adoption recipe
 
-The delta between "today's Booking.com" and "hoteling" is a provider-side integration. The pieces:
+The delta between "today's Booking.com" and "hoteling" is an operator-side integration. The pieces:
 
 **1. Add the Kiosk satellite gems**
 
@@ -183,9 +183,9 @@ end
 
 The stub PSP (`StubPsp`, a `Kiosk::PaymentProviders::Base` subclass) used in the demo can be swapped for the Stripe adapter without touching any other code.
 
-**What this does not require:** a new user-facing login flow, a new mobile app, an OAuth integration, a webhook endpoint, or any changes to the provider's existing Rails models. The satellite gems add a parallel surface; the existing application is untouched.
+**What this does not require:** a new user-facing login flow, a new mobile app, an OAuth integration, a webhook endpoint, or any changes to the operator's existing Rails models. The satellite gems add a parallel surface; the existing application is untouched.
 
-**What this enables:** any personal agent that has read `KIOSK.skill.md` — or that discovers the `issuer` and `endpoint` via `/.well-known/kiosk.json` — can complete a hotel booking without the user having an account at the provider and without the user being present. The provider drops its anti-bot wall for sanctioned agent traffic; the anti-bot wall stays in place for everything else.
+**What this enables:** any personal agent that has read `KIOSK.skill.md` — or that discovers the `issuer` and `endpoint` via `/.well-known/kiosk.json` — can complete a hotel booking without the user having an account at the operator and without the user being present. The operator drops its anti-bot wall for sanctioned agent traffic; the anti-bot wall stays in place for everything else.
 
 ---
 

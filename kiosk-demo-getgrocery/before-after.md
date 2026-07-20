@@ -1,6 +1,6 @@
 # Before and After — why agents stall at Instacart and Getir, and what getgrocery proves
 
-**Honesty note up front.** getgrocery is what Instacart/Getir would look like if it spoke Kiosk — a fake-but-realistic grocery-delivery provider built to demonstrate the mechanism. Nothing below implies that real Instacart or Getir work this way. The demo proves the *mechanism* works; whether providers will adopt it is an open question.
+**Honesty note up front.** getgrocery is what Instacart/Getir would look like if it spoke Kiosk — a fake-but-realistic grocery-delivery operator built to demonstrate the mechanism. Nothing below implies that real Instacart or Getir work this way. The demo proves the *mechanism* works; whether operators will adopt it is an open question.
 
 ---
 
@@ -16,7 +16,7 @@ The structural root cause is a stack of incompatible requirements: behavioral fi
 
 **Both flagship consumer-commerce connectors in Claude today (Uber Eats, Booking.com) stop at discovery:**
 
-> Both flagship consumer-commerce connectors in Claude today (Uber Eats, Booking.com) **stop at discovery.** Their terminal step is a deep link back to the provider's own app/site, where the human must register and pay.
+> Both flagship consumer-commerce connectors in Claude today (Uber Eats, Booking.com) **stop at discovery.** Their terminal step is a deep link back to the operator's own app/site, where the human must register and pay.
 
 The complete Uber Eats tool surface available to Claude has two tools: `search` (returns restaurant listings) and `publish_analytics` (internal telemetry). The session schema's own `deeplink_id` field is described as *"Id generated in the widget before navigating to Uber Eats"* — confirming the intended flow: **the agent shows options, then deep-links the user out to the Uber Eats app** to register, pay, and order. There is no add-to-cart, checkout, payment, or confirm tool.
 
@@ -24,7 +24,7 @@ The complete Uber Eats tool surface available to Claude has two tools: `search` 
 
 The reason incumbents stay at discovery is economic, not technical. Grocery retail media — Instacart ads $1.18B FY2024 (SEC filing) — requires an authenticated in-app session for sponsored placement and closed-loop attribution. A silent agent order via a structured API erases that ad surface entirely. The discovery funnel *is* the product.
 
-**The differentiator getgrocery adds:** The provider's catalog returns facts only — in-stock items. Out-of-stock items are simply absent. The AI assistant reasons over the catalog to resolve substitutions before calling `create_order`. Real grocery apps require a human to accept substitutions via push notification. With Kiosk, the assistant handles substitution decisions using the catalog, without any provider-side substitution surface or human push notification.
+**The differentiator getgrocery adds:** The operator's catalog returns facts only — in-stock items. Out-of-stock items are simply absent. The AI assistant reasons over the catalog to resolve substitutions before calling `create_order`. Real grocery apps require a human to accept substitutions via push notification. With Kiosk, the assistant handles substitution decisions using the catalog, without any operator-side substitution surface or human push notification.
 
 **In short:** on real Instacart or Getir, the agent discovers products and deep-links out. The human opens the app, logs in, pays, and later taps a notification to accept or reject substitutions. The agent's contribution is a glorified search result.
 
@@ -73,15 +73,15 @@ The database confirmed: one row in `orders` with `status='scheduled'`, one row i
 
 The business outcome: the user said "order groceries from GetGroceries." Their assistant completed the purchase — discovery, registration, catalog browse, order creation, payment, delivery scheduling — without the user touching anything and without the user having an account at GetGroceries beforehand.
 
-The provider outcome: GetGroceries received a real order and a real payment. The customer relationship stays with GetGroceries (the mandate carries the provider's issuer). There is no intermediate platform taking a discovery fee or owning the session.
+The operator outcome: GetGroceries received a real order and a real payment. The customer relationship stays with GetGroceries (the mandate carries the operator's issuer). There is no intermediate platform taking a discovery fee or owning the session.
 
-**This is a demo against a fake provider, settled through the real Stripe adapter in test mode.** The mechanism works. Whether real providers will integrate and whether real users will value this enough to drive adoption are open questions — the demo does not answer them.
+**This is a demo against a fake operator, settled through the real Stripe adapter in test mode.** The mechanism works. Whether real operators will integrate and whether real users will value this enough to drive adoption are open questions — the demo does not answer them.
 
 ---
 
-## What's needed — the provider adoption recipe
+## What's needed — the operator adoption recipe
 
-The delta between "today's Instacart" and "getgrocery" is a provider-side integration. The pieces:
+The delta between "today's Instacart" and "getgrocery" is an operator-side integration. The pieces:
 
 **1. Add the Kiosk satellite gems**
 
@@ -127,7 +127,7 @@ get "/.well-known/kiosk.json", to: ->(env) {
 
 `query`, `run`, `pay`, and `schema` are wired end-to-end (agent self-discovery works — see `rake demo:schema`). (A follow-up release will mount these via the engine's own routes drawer so this block collapses to one line.)
 
-Agents call named queries by name (`query` verb) — never raw SQL. The provider registers the queries it wishes to expose; isolation is enforced at the app layer in the query definitions and in Actions, with RLS available as optional defense-in-depth.
+Agents call named queries by name (`query` verb) — never raw SQL. The operator registers the queries it wishes to expose; isolation is enforced at the app layer in the query definitions and in Actions, with RLS available as optional defense-in-depth.
 
 **3. Register named queries (and optionally apply RLS)**
 
@@ -207,9 +207,9 @@ end
 
 This demo uses the **real Stripe adapter in test mode** (`STRIPE_SECRET_KEY=sk_test_…`): the buyer's card is saved once via a hosted SetupIntent and charged `off_session` per purchase — the assistant never holds card data.
 
-**What this does not require:** a new user-facing login flow, a new mobile app, an OAuth integration, a webhook endpoint, or any changes to the provider's existing Rails models. The satellite gems add a parallel surface; the existing application is untouched.
+**What this does not require:** a new user-facing login flow, a new mobile app, an OAuth integration, a webhook endpoint, or any changes to the operator's existing Rails models. The satellite gems add a parallel surface; the existing application is untouched.
 
-**What this enables:** any personal agent that discovers the `issuer` and `endpoint` via `/.well-known/kiosk.json` and reads the served surface via `GET /kiosk/schema` (see `rake demo:schema`) can complete a grocery order without the user having an account at the provider and without the user being present. The provider drops its anti-bot wall for sanctioned agent traffic; the anti-bot wall stays in place for everything else.
+**What this enables:** any personal agent that discovers the `issuer` and `endpoint` via `/.well-known/kiosk.json` and reads the served surface via `GET /kiosk/schema` (see `rake demo:schema`) can complete a grocery order without the user having an account at the operator and without the user being present. The operator drops its anti-bot wall for sanctioned agent traffic; the anti-bot wall stays in place for everything else.
 
 See `getgrocery_flow.rb` in this directory for the full worked example.
 

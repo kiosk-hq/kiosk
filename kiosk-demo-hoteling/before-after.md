@@ -1,24 +1,24 @@
-# Before and After — why agents stall at Booking.com, and what hoteling proves
+# Before and After — why AI assistants stall at Booking.com, and what hoteling proves
 
 **Honesty note up front.** hoteling is what Booking.com *would* look like if it spoke Kiosk — a fake-but-realistic hotel-booking operator built to demonstrate the mechanism. Nothing below implies that real Booking.com works this way. The demo proves the *mechanism* works; whether operators will adopt it is an open question.
 
 ---
 
-## Before — a real agent on real Booking.com today
+## Before — a real AI assistant on real Booking.com today
 
-Every current personal agent (Hermes, OpenClaw, ChatGPT Agent, Gemini with app navigation) stalls at the same wall: the connector stops at discovery.
+Every current personal AI assistant (Hermes, OpenClaw, ChatGPT Agent, Gemini with app navigation) stalls at the same wall: the connector stops at discovery.
 
 **The Booking.com connector probed in-session confirms the end-state:**
 
 > Both flagship consumer-commerce connectors in Claude today (Uber Eats, Booking.com) **stop at discovery.** Their terminal step is a deep link back to the operator's own app/site, where the human must register and pay.
 
-The Booking.com MCP connector exposes two tools: `accommodations_search` (returns property listings) and `answer_property_qa_by_ids` (answers natural-language questions about specific properties). The session schema's own `deeplink_id` field describes navigating *to* Booking.com — confirming the intended flow: **the agent shows options, then deep-links the user out to Booking.com to register, authenticate, and pay.** There is no reserve, no checkout, no payment tool.
+The Booking.com MCP connector exposes two tools: `accommodations_search` (returns property listings) and `answer_property_qa_by_ids` (answers natural-language questions about specific properties). The session schema's own `deeplink_id` field describes navigating *to* Booking.com — confirming the intended flow: **the AI assistant shows options, then deep-links the user out to Booking.com to register, authenticate, and pay.** There is no reserve, no checkout, no payment tool.
 
-**The structural root cause is economic, not technical.** Booking.com's business model depends on an authenticated in-app session: display advertising, metasearch fees, loyalty points, and first-party data capture all require the human to complete the booking inside Booking.com's own funnel. A silent agent reservation via a structured API erases that session entirely. The discovery step *is* the product.
+**The structural root cause is economic, not technical.** Booking.com's business model depends on an authenticated in-app session: display advertising, metasearch fees, loyalty points, and first-party data capture all require the human to complete the booking inside Booking.com's own funnel. A silent AI-assistant reservation via a structured API erases that session entirely. The discovery step *is* the product.
 
-Anti-bot friction compounds this. Behavioral fingerprinting (Cloudflare Turnstile) flags agent traffic; the user's payment instrument lives outside the agent's context; and EU/UK PSD2 SCA requires a biometric or device-OTP challenge on first use that only the human can satisfy.
+Anti-bot friction compounds this. Behavioral fingerprinting (Cloudflare Turnstile) flags AI-assistant traffic; the user's payment instrument lives outside the AI assistant's context; and EU/UK PSD2 SCA requires a biometric or device-OTP challenge on first use that only the human can satisfy.
 
-**In short:** the agent discovers available hotels, then hands back to the human. The human navigates to Booking.com, creates or logs into an account, passes bot checks, authenticates, and pays. The agent's contribution is a glorified search result.
+**In short:** the AI assistant discovers available hotels, then hands back to the human. The human navigates to Booking.com, creates or logs into an account, passes bot checks, authenticates, and pays. The AI assistant's contribution is a glorified search result.
 
 ---
 
@@ -49,7 +49,7 @@ hoteling is a Rails 8.1 app that speaks Kiosk. The following is the recorded out
   All assertions passed.
 ```
 
-**What the agent did — no human involved at any step:**
+**What the AI assistant did — no human involved at any step:**
 
 1. **Discover** — `GET /.well-known/kiosk.json` returns the hoteling issuer and surface.
 2. **Self-register** — generated an RSA-2048 keypair, then completed the proof-of-possession handshake: `GET /kiosk/auth/challenge` → signed the challenge as an RS256 JWS (`aud` = the hoteling issuer) → `POST /kiosk/auth/register {public_key:<pem>, signed:<jws>}` → HTTP 201 → `agent_id`, `user_id`, `access_token`. No existing account. No human login. No bot check.
@@ -118,7 +118,7 @@ get "/.well-known/kiosk.json", to: ->(env) {
 
 **3. Register named queries**
 
-Register the queries you want to expose to agents:
+Register the queries you want to expose to AI assistants:
 
 ```ruby
 Kiosk::Server::Queries.register("properties",
@@ -145,7 +145,7 @@ Kiosk::Server::Queries.register("my_bookings",
 end
 ```
 
-The handler block receives only agent-supplied params and runs inside a session whose `kiosk.current_user_id()` is the authenticated principal. `my_bookings` scopes by the server-derived user UUID — agents cannot inject a different `user_id` to read other users' bookings.
+The handler block receives only AI-assistant-supplied params and runs inside a session whose `kiosk.current_user_id()` is the authenticated principal. `my_bookings` scopes by the server-derived user UUID — AI assistants cannot inject a different `user_id` to read other users' bookings.
 
 **4. Register Actions (`reserve_room` and `confirm_booking`)**
 
@@ -185,7 +185,7 @@ The stub PSP (`StubPsp`, a `Kiosk::PaymentProviders::Base` subclass) used in the
 
 **What this does not require:** a new user-facing login flow, a new mobile app, an OAuth integration, a webhook endpoint, or any changes to the operator's existing Rails models. The satellite gems add a parallel surface; the existing application is untouched.
 
-**What this enables:** any personal agent that has read the published Kiosk skill — or that discovers the `issuer` and `endpoint` via `/.well-known/kiosk.json` — can complete a hotel booking without the user having an account at the operator and without the user being present. The operator drops its anti-bot wall for sanctioned agent traffic; the anti-bot wall stays in place for everything else.
+**What this enables:** any personal AI assistant that has read the published Kiosk skill — or that discovers the `issuer` and `endpoint` via `/.well-known/kiosk.json` — can complete a hotel booking without the user having an account at the operator and without the user being present. The operator drops its anti-bot wall for sanctioned AI-assistant traffic; the anti-bot wall stays in place for everything else.
 
 ---
 

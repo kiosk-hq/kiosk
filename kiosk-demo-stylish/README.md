@@ -36,7 +36,7 @@ rake demo
 
 The walkthrough (`bin/demo`) prints four sections:
 
-1. **Discovery** — well-known + JWKS payloads, so an agent host like claude.ai sees what's behind the URL
+1. **Discovery** — well-known + JWKS payloads, so an AI-assistant host like claude.ai sees what's behind the URL
 2. **Named query** — `POST /kiosk/query` with `{name: ...}`, returning rows scoped by app-layer authz
 3. **Run an Action** — `POST /kiosk/run` invoking `book_appointment` (the demo's lone registered Action)
 4. **Isolation** — same query run as Alice vs Bob; each sees only their own (enforced in the query block, RLS optional)
@@ -59,7 +59,7 @@ The role an assistant works with is sourced **indirectly, from the bound human's
 1. **Owner** links an assistant → the token carries `role: owner` → `salon_calendar` returns the **whole book** (every stylist's appointments) plus a revenue total.
 2. **Stylist** links an assistant → the token carries `role: stylist` → `salon_calendar` returns **only that stylist's own chairs**.
 
-The role rides the token, sourced from the operator's identity system — never self-selected by the agent. A stylist's assistant cannot widen its scope to the owner's book: the role is set at binding from the IdP (not the claim body), and the query's `WHERE` is operator-controlled. `rake demo:roles` asserts both views with DB ground-truth on `kiosk.agents.allowed_roles`, and the redteam battery (`rake demo:redteam`) proves the escalation is BLOCKED.
+The role rides the token, sourced from the operator's identity system — never self-selected by the AI assistant. A stylist's assistant cannot widen its scope to the owner's book: the role is set at binding from the IdP (not the claim body), and the query's `WHERE` is operator-controlled. `rake demo:roles` asserts both views with DB ground-truth on `kiosk.agents.allowed_roles`, and the redteam battery (`rake demo:redteam`) proves the escalation is BLOCKED.
 
 ## Repo tour
 
@@ -83,7 +83,7 @@ The role rides the token, sourced from the operator's identity system — never 
 The demo bakes in shortcuts that production operators replace. Each transition is small:
 
 - **Synthetic users (Alice, Bob) + staff (owner, stylists)** → real user table populated by your operator's signup flow (the demo already gives them real Devise credentials so the binding walkthrough signs in like a person would).
-- **`StubIdp`** (agent channel) → registered assistants already flow through real Kiosk-issued JWTs; the bespoke `agent:u-…:a-…:r-…` fallback shape disappears. The human session channel already runs the real `kiosk-user-idp-devise` adapter.
+- **`StubIdp`** (AI-assistant channel) → registered assistants already flow through real Kiosk-issued JWTs; the bespoke `agent:u-…:a-…:r-…` fallback shape disappears. The human session channel already runs the real `kiosk-user-idp-devise` adapter.
 - **`StubUserIdp`** (the role-carrying SSO/Okta stand-in) → your real SSO/OIDC session. The Devise adapter already reads a per-user role via `User#kiosk_role`, so a production operator drops the stub and sources the staff role from its own identity system; the assistant inherits it at link time unchanged.
 
 ## License

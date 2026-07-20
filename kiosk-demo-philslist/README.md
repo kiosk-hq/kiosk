@@ -129,7 +129,7 @@ The demo bakes in shortcuts production operators replace:
 - **Synthetic accounts (Alice, Bob)** → your real user table (the demo already
   gives them real Devise credentials so the binding walkthrough signs in like a
   person would).
-- **`StubIdp`** (agent channel) → registered assistants already flow through
+- **`StubIdp`** (AI-assistant channel) → registered assistants already flow through
   real Kiosk-issued JWTs; the bespoke fallback shape disappears. The human
   session channel already runs the real `kiosk-user-idp-devise` adapter.
 

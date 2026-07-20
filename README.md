@@ -1,6 +1,6 @@
 # Kiosk — OSS reference implementation
 
-Apache-2.0 monorepo for [Kiosk](https://kiosk.tech) — the framework that turns a Postgres-backed business app into an agent surface (REST endpoint, multi-agent identity per user, app-layer-authorized data plane with opt-in Postgres RLS defense-in-depth, AP2 mandate trail).
+Apache-2.0 monorepo for [Kiosk](https://kiosk.tech) — the framework that turns a Postgres-backed business app into an AI-assistant surface (REST endpoint, multi-assistant identity per user, app-layer-authorized data plane with opt-in Postgres RLS defense-in-depth, AP2 mandate trail).
 
 ## Layout
 
@@ -51,7 +51,7 @@ See `kiosk-pow-equihash/README.md` for the full comparison and rationale.
 | `kiosk-demo-stylish` | Salon/appointment booking (Combette on Park) | alpha |
 | `kiosk-demo-philslist` | Classifieds board — non-commerce (no payments) | active |
 | `kiosk-demo-tudu` | Collaborative todo — non-commerce (no payments) | active |
-| `e2e` | End-to-end test fixtures, stub PSP, agent pay flow | active |
+| `e2e` | End-to-end test fixtures, stub PSP, AI-assistant pay flow | active |
 
 ## Contributing
 
@@ -70,6 +70,6 @@ Commercial gems (regional PSPs, enterprise-IdP tiers) are planned to live in sep
 
 ## Links
 
-- [kiosk.tech](https://kiosk.tech) — landing page + agent skill
-- [kiosk.tech/skill.md](https://kiosk.tech/skill.md) — universal agent skill
+- [kiosk.tech](https://kiosk.tech) — landing page + AI-assistant skill
+- [kiosk.tech/skill.md](https://kiosk.tech/skill.md) — universal AI-assistant skill
 - [Issue tracker](https://github.com/kiosk-hq/kiosk/issues)

@@ -7,6 +7,8 @@
 #   rake demo:claim      claim-rebind walkthrough: a standalone assistant's key is
 #                        re-bound to the human's account, then pays with its saved card
 #   rake demo:isolation  adversarial cross-tenant + order-ownership isolation test
+#   rake demo:rls        opt-in Postgres RLS showcase — enforced-session three-way
+#                        proof (rls_proof.rb) that a non-owner app_role is order-scoped
 #   rake demo:schema     self-discovery proof over the schema verb
 #   rake demo:redteam    adversarial regression battery (kiosk-redteam scenarios)
 #   rake demo:pow        commerce catalog-toll PoW demo (catalog 402 → solve → 200)

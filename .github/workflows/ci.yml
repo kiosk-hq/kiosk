@@ -67,7 +67,7 @@ jobs:
       # "this solver requires numpy" and exits non-zero (K-372).
       - name: Set up Python (Equihash solver)
         if: matrix.gem == 'kiosk-redteam'
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@v7
         with:
           python-version: "3.12"
       - name: Install numpy (Equihash solver)
@@ -164,7 +164,7 @@ jobs:
       # Demos register with a real Equihash PoW (numpy-vectorised solve.py),
       # so the solver needs numpy in CI (K-372).
       - name: Set up Python (Equihash solver)
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@v7
         with:
           python-version: "3.12"
       - name: Install numpy (Equihash solver)
@@ -251,7 +251,7 @@ jobs:
       # needs numpy or it errors "this solver requires numpy" (K-375; re-added
       # after K-372 removed it when e2e was toll-free).
       - name: Set up Python (Equihash solver)
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@v7
         with:
           python-version: "3.12"
       - name: Install numpy (Equihash solver)

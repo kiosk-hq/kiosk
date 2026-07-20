@@ -14,7 +14,8 @@ Gem::Specification.new do |spec|
     Ships the provider-side Ruby VERIFIER only (T1).  The verifier is cheap
     (a handful of hash evaluations; no wall-clock figure is benchmarked),
     security-critical, and validated against Grin's Cuckatoo29 CI test
-    vector.  A solver is a separate component (T2/T3).
+    vector.  A reference Python solver (solve_cuckoo.py) ships alongside for
+    parity testing; production solving is the AI assistant's concern (T2/T3).
 
     The implementation is clean-room from Tromp's public-domain algorithm
     spec (doc/spec, doc/mathspec) — no GPL/FAIR-MINING code is included.

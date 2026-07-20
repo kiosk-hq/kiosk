@@ -10,6 +10,8 @@
 #                        rental chain), asserts happy path + all negative gates,
 #                        tears down
 #   rake demo:isolation  adversarial cross-tenant + ownership isolation test
+#   rake demo:kyc        named-anonymized-attribute KYC gate proof (age_over_18 +
+#                        licence_a): motorcycle 403→attest→200, scooter stays KYC-free
 #   rake demo:redteam    adversarial regression battery (kiosk-redteam scenarios)
 #   rake demo:schema     self-discovery proof over the schema verb
 #   rake demo            setup + rideflow (full end-to-end proof)

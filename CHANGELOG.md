@@ -3,6 +3,7 @@
 Significant changes only (CLAUDE.md rule 5): one line per change, 1–2
 sentences — essence and intent, not content.
 
+- 2026-07-20: Bumped the wire to protocol 0.3.0 (`API_VERSION`/`MIN_CLIENT`) — a backward-compatible feature-milestone MINOR over 0.2 (KYC, roles-from-IdP, per-assistant spending caps, the non-commerce demos) with no breaking wire change; re-pinned all seven demos to the new immutable `skill-v0.3.0`.
 - 2026-07-20: Reframed the food-delivery demo into `kiosk-demo-atablefor`, a restaurant TABLE-BOOKING provider (Mamma Pizza now takes reservations) — the "book a table for two tomorrow at 8" flagship story, with a four-verb no-payment surface (availability/my_bookings queries, book_table/cancel_booking actions; `pay` absent from advertised capabilities), PoW + a reputation curve reframed as anti-reservation-scalping, and owner-scoped isolation; the suite's single RLS *showcase* moved to getgrocery's new `demo:rls` task (T-033).
 - 2026-07-19: getgrocery boots out-of-box like its siblings — in dev/test it uses a placeholder Stripe key when none is set, so demo:setup/schema/isolation run with no payment config; only a real charge (demo:shop) needs a live key or stripe-mock (K-348).
 - 2026-07-19: KYC attestations can now carry named anonymized `attributes` ({name: true} booleans, e.g. age_over_18/licence_a) alongside the binary `level`, so an action can gate on required attributes and reject with the new `kyc_required` (403) wire error without ever learning the underlying documents; demonstrated by the skooti `rent_motorcycle` gate (T-018).

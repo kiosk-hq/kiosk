@@ -94,7 +94,8 @@ Kiosk.configure do |c|
   c.registration_role = :customer
   c.owner  = { name: "hoteling", support: "help@hoteling.app" }
   # Dual-check (skill.md): canonical skill URL + SHA-256 of its content.
-  c.skill_sha256 = "4ed1860cab6cdfd3bb6efed646217aa195a8febe6f015bd6f54023d9afada589"
+  c.skill_url    = "https://kiosk.tech/skill-v0.3.0.md"
+  c.skill_sha256 = "5331eed3f6ebd00b7c26ab903da81c49ef630c54132efbb376ec93a2cd124dea"
 
   c.agent_idp = JwtOrStubIdp.new(stub: StubIdp.new)
   # The web-session channel for the account-binding surfaces (verify

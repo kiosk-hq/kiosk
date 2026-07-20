@@ -4,7 +4,7 @@ Restaurant table-booking demo operator for Kiosk.
 
 `atablefor` is a fake-but-realistic restaurant (Mamma Pizza) that takes table
 reservations over the Kiosk wire — the "book a table for two, tomorrow at 8"
-story, completed by an agent with no human present and no payment (a
+story, completed by an AI assistant with no human present and no payment (a
 reservation takes no money).
 
 ## Wire surface
@@ -32,5 +32,5 @@ bin/rails demo:reputation  # anti-scalping: PoW cost drops as a real booking his
 bin/rails demo:walkthrough # curl-driven tour of the wire surface
 ```
 
-See `before-after.md` for why agents stall at restaurant booking today and what
+See `before-after.md` for why AI assistants stall at restaurant booking today and what
 this demo proves.

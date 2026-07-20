@@ -4,7 +4,7 @@ A multi-user collaborative todo app, Kiosk-enabled. Like philslist it proves
 Kiosk is **not only for commerce** — no money on the wire at all — but where
 philslist shows owner-scoped isolation on a public board, tudu shows the shape
 critics claim GUC-style patterns can't handle: **membership-based many-to-many
-access**, **agent→agent collaboration expressed entirely at the app layer**, and
+access**, **AI-assistant→AI-assistant collaboration expressed entirely at the app layer**, and
 the **W5 account-link rebind** that migrates an assistant's work to a human.
 
 Demonstrates:
@@ -14,7 +14,7 @@ Demonstrates:
   `EXISTS (SELECT 1 FROM memberships WHERE list_id = :id AND account_id =
   kiosk.current_user_id())`; a non-member gets `403`, not `404`, so probing
   can't enumerate ids.
-- **Agent→agent invites, pure app-layer** — an owner mints a single-use, TTL'd,
+- **AI-assistant→AI-assistant invites, pure app-layer** — an owner mints a single-use, TTL'd,
   hashed collaboration code (`invite`); the recipient's assistant redeems it
   (`accept_invite`) to join as a member; `remove_member` cuts access instantly.
   The spec stays silent on invites *by design* — this proves the query/run
@@ -23,8 +23,8 @@ Demonstrates:
   (creates the "Hike" list), the human links it, and the shipped
   `assistant_claimed` hook **migrates the list to the human**. First real use of
   the hook in the repo. After linking, one human account holds **≥2
-  independently-revocable assistants** (multi-agent identity).
-- **Attribution in a shared space** — each todo records the agent that added it
+  independently-revocable assistants** (multi-assistant identity).
+- **Attribution in a shared space** — each todo records the AI assistant that added it
   (`created_by_agent_id`): "who added the tent? — Bob's assistant."
 - **`/.well-known/kiosk.json` with `pay` absent** — no `payment_provider`, no
   `/kiosk/pay` route, no mandate/settlement tables (shared with philslist).
@@ -43,7 +43,7 @@ rake demo
 ```
 
 `rake demo` creates the Postgres database, loads the schema + seeds, boots the
-Rails server, and walks the collaboration happy path (two agents, a shared list
+Rails server, and walks the collaboration happy path (two AI assistants, a shared list
 via invite, attribution asserted).
 
 ### Prerequisites
@@ -54,10 +54,10 @@ via invite, attribution asserted).
 
 ### Collaboration happy path (`rake demo:collab`)
 
-Two PoP-registered agents share a list with no spec change: Alice's agent
-creates "Hike" and mints an invite; Bob's agent accepts it and joins as a
-member; both add todos. Asserts both agents see the shared list, each todo is
-attributed to the agent that added it, and the list has an owner + a member.
+Two PoP-registered AI assistants share a list with no spec change: Alice's AI assistant
+creates "Hike" and mints an invite; Bob's AI assistant accepts it and joins as a
+member; both add todos. Asserts both AI assistants see the shared list, each todo is
+attributed to the AI assistant that added it, and the list has an owner + a member.
 
 ### W5 rebind + list transfer (`rake demo:link`)
 
@@ -66,7 +66,7 @@ through the real Devise form, mints a link code, and the assistant's key redeems
 it → **rebind**: the `assistant_claimed` hook migrates the list to Alice. The
 pre-link token's principal owns nothing after migration; the assistant re-logs
 in and sees the list under Alice; Alice's browser sees it too; Alice ends with
-≥2 non-revoked agents. DB ground truth is checked via `psql`.
+≥2 non-revoked AI assistants. DB ground truth is checked via `psql`.
 
 ### Membership isolation (`rake demo:isolation`)
 
@@ -91,16 +91,16 @@ Asserts the schema catalog (queries/actions + non-empty descriptions, including
 include `pay`, `agents.json` carries no payments block, and `agents.txt` carries
 no `Protocols: ap2` / `Payments:` directives.
 
-## Agent surface
+## AI-assistant surface
 
 | Verb | Name | What it does |
 |---|---|---|
-| query | `whoami` | The GUC principal + acting agent |
+| query | `whoami` | The GUC principal + acting AI assistant |
 | query | `my_lists` | Lists the caller is a member of (owner or member) |
 | query | `list_todos(list_id)` | A member-list's todos, with attribution |
 | query | `list_members(list_id)` | A member-list's members + roles |
 | run | `create_list(title)` | Create a list; caller becomes owner |
-| run | `add_todo(list_id, title)` | Add a todo (attributed to the acting agent) |
+| run | `add_todo(list_id, title)` | Add a todo (attributed to the acting AI assistant) |
 | run | `complete_todo(todo_id)` | Mark a todo done (member-gated) |
 | run | `invite(list_id)` | Owner-only: mint a single-use, TTL'd invite code |
 | run | `accept_invite(code)` | Redeem a code → join as a member |
@@ -129,7 +129,7 @@ The demo bakes in shortcuts production operators replace:
 - **Synthetic accounts (Alice, Bob)** → your real user table (the demo already
   gives them real Devise credentials so the link walkthrough signs in like a
   person would).
-- **`StubIdp`** (agent channel) → registered assistants already flow through
+- **`StubIdp`** (AI-assistant channel) → registered assistants already flow through
   real Kiosk-issued JWTs; the bespoke fallback shape disappears. The human
   session channel already runs the real `kiosk-user-idp-devise` adapter.
 

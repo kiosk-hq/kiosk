@@ -1,32 +1,32 @@
-# Before and After — why agents stall at Instacart and Getir, and what getgrocery proves
+# Before and After — why AI assistants stall at Instacart and Getir, and what getgrocery proves
 
 **Honesty note up front.** getgrocery is what Instacart/Getir would look like if it spoke Kiosk — a fake-but-realistic grocery-delivery operator built to demonstrate the mechanism. Nothing below implies that real Instacart or Getir work this way. The demo proves the *mechanism* works; whether operators will adopt it is an open question.
 
 ---
 
-## Before — a real agent on real Instacart or Getir today
+## Before — a real AI assistant on real Instacart or Getir today
 
-Every current personal agent (Hermes, OpenClaw, ChatGPT Agent, Gemini with app navigation) stalls at the same walls: the anti-bot screen, the login gate, and — uniquely in grocery — the substitution confirmation wall.
+Every current personal AI assistant (Hermes, OpenClaw, ChatGPT Agent, Gemini with app navigation) stalls at the same walls: the anti-bot screen, the login gate, and — uniquely in grocery — the substitution confirmation wall.
 
 **Anti-bot friction documented in validation research:**
 
-> Documented ChatGPT-Agent food orders take **6–20 minutes** (2–3× human) and stop at the **anti-bot screen, login, or payment** — the agent opens a user browser to finish.
+> Documented ChatGPT-Agent food orders take **6–20 minutes** (2–3× human) and stop at the **anti-bot screen, login, or payment** — the AI assistant opens a user browser to finish.
 
-The structural root cause is a stack of incompatible requirements: behavioral fingerprinting (Cloudflare Turnstile, DataDome) flags agent traffic; OTP walls assume a human-held device; the user's payment instrument lives outside the agent's context; and EU/UK PSD2 SCA requires a biometric or device-OTP challenge on first use that only the human can satisfy.
+The structural root cause is a stack of incompatible requirements: behavioral fingerprinting (Cloudflare Turnstile, DataDome) flags AI-assistant traffic; OTP walls assume a human-held device; the user's payment instrument lives outside the AI assistant's context; and EU/UK PSD2 SCA requires a biometric or device-OTP challenge on first use that only the human can satisfy.
 
 **Both flagship consumer-commerce connectors in Claude today (Uber Eats, Booking.com) stop at discovery:**
 
 > Both flagship consumer-commerce connectors in Claude today (Uber Eats, Booking.com) **stop at discovery.** Their terminal step is a deep link back to the operator's own app/site, where the human must register and pay.
 
-The complete Uber Eats tool surface available to Claude has two tools: `search` (returns restaurant listings) and `publish_analytics` (internal telemetry). The session schema's own `deeplink_id` field is described as *"Id generated in the widget before navigating to Uber Eats"* — confirming the intended flow: **the agent shows options, then deep-links the user out to the Uber Eats app** to register, pay, and order. There is no add-to-cart, checkout, payment, or confirm tool.
+The complete Uber Eats tool surface available to Claude has two tools: `search` (returns restaurant listings) and `publish_analytics` (internal telemetry). The session schema's own `deeplink_id` field is described as *"Id generated in the widget before navigating to Uber Eats"* — confirming the intended flow: **the AI assistant shows options, then deep-links the user out to the Uber Eats app** to register, pay, and order. There is no add-to-cart, checkout, payment, or confirm tool.
 
-**The same pattern holds for grocery platforms (Instacart, Getir):** both expose search and deep-link flows but no add-to-cart, checkout, substitution acceptance, or payment API. The agent shows available groceries, then hands the user to the app.
+**The same pattern holds for grocery platforms (Instacart, Getir):** both expose search and deep-link flows but no add-to-cart, checkout, substitution acceptance, or payment API. The AI assistant shows available groceries, then hands the user to the app.
 
-The reason incumbents stay at discovery is economic, not technical. Grocery retail media — Instacart ads $1.18B FY2024 (SEC filing) — requires an authenticated in-app session for sponsored placement and closed-loop attribution. A silent agent order via a structured API erases that ad surface entirely. The discovery funnel *is* the product.
+The reason incumbents stay at discovery is economic, not technical. Grocery retail media — Instacart ads $1.18B FY2024 (SEC filing) — requires an authenticated in-app session for sponsored placement and closed-loop attribution. A silent AI-assistant order via a structured API erases that ad surface entirely. The discovery funnel *is* the product.
 
 **The differentiator getgrocery adds:** The operator's catalog returns facts only — in-stock items. Out-of-stock items are simply absent. The AI assistant reasons over the catalog to resolve substitutions before calling `create_order`. Real grocery apps require a human to accept substitutions via push notification. With Kiosk, the assistant handles substitution decisions using the catalog, without any operator-side substitution surface or human push notification.
 
-**In short:** on real Instacart or Getir, the agent discovers products and deep-links out. The human opens the app, logs in, pays, and later taps a notification to accept or reject substitutions. The agent's contribution is a glorified search result.
+**In short:** on real Instacart or Getir, the AI assistant discovers products and deep-links out. The human opens the app, logs in, pays, and later taps a notification to accept or reject substitutions. The AI assistant's contribution is a glorified search result.
 
 ---
 
@@ -59,7 +59,7 @@ getgrocery is a Rails 8 app that speaks Kiosk. The following is representative o
   All assertions passed.
 ```
 
-**What the agent did — no human involved at any step:**
+**What the AI assistant did — no human involved at any step:**
 
 1. **Discover** — `GET /.well-known/kiosk.json` returns the GetGroceries issuer and surface.
 2. **Self-register** — generated an RSA-2048 keypair, proved possession of the private key (`GET /kiosk/auth/challenge` → signed the nonce as an origin-bound RS256 JWS → `POST /kiosk/auth/register {public_key:<pem>, signed:<jws>}`) → HTTP 201 → `agent_id`, `user_id`, `access_token`. No existing account. No human login. No OTP. No bot screen.
@@ -125,13 +125,13 @@ get "/.well-known/kiosk.json", to: ->(env) {
 }
 ```
 
-`query`, `run`, `pay`, and `schema` are wired end-to-end (agent self-discovery works — see `rake demo:schema`). (A follow-up release will mount these via the engine's own routes drawer so this block collapses to one line.)
+`query`, `run`, `pay`, and `schema` are wired end-to-end (AI-assistant self-discovery works — see `rake demo:schema`). (A follow-up release will mount these via the engine's own routes drawer so this block collapses to one line.)
 
-Agents call named queries by name (`query` verb) — never raw SQL. The operator registers the queries it wishes to expose; isolation is enforced at the app layer in the query definitions and in Actions, with RLS available as optional defense-in-depth.
+AI assistants call named queries by name (`query` verb) — never raw SQL. The operator registers the queries it wishes to expose; isolation is enforced at the app layer in the query definitions and in Actions, with RLS available as optional defense-in-depth.
 
 **3. Register named queries (and optionally apply RLS)**
 
-Register the queries you want to expose to agents:
+Register the queries you want to expose to AI assistants:
 
 ```ruby
 Kiosk::Server::Queries.register("catalog") do |_args|
@@ -150,7 +150,7 @@ Kiosk::Server::Queries.register("my_orders") do |_args|
 end
 ```
 
-The handler block receives only the agent-supplied params and runs inside a session whose `kiosk.current_user_id()` is the authenticated principal. `my_orders` scopes by `kiosk.current_user_id()` (server-derived from the session, never an agent param). Catalogue queries are open to all authenticated agents.
+The handler block receives only the AI-assistant-supplied params and runs inside a session whose `kiosk.current_user_id()` is the authenticated principal. `my_orders` scopes by `kiosk.current_user_id()` (server-derived from the session, never an AI-assistant param). Catalogue queries are open to all authenticated AI assistants.
 
 RLS is available as optional defense-in-depth via `enable_rls_on` — useful if you want a Postgres-level backstop in addition to the app-layer checks. It is not required for Kiosk's isolation model.
 
@@ -209,7 +209,7 @@ This demo uses the **real Stripe adapter in test mode** (`STRIPE_SECRET_KEY=sk_t
 
 **What this does not require:** a new user-facing login flow, a new mobile app, an OAuth integration, a webhook endpoint, or any changes to the operator's existing Rails models. The satellite gems add a parallel surface; the existing application is untouched.
 
-**What this enables:** any personal agent that discovers the `issuer` and `endpoint` via `/.well-known/kiosk.json` and reads the served surface via `GET /kiosk/schema` (see `rake demo:schema`) can complete a grocery order without the user having an account at the operator and without the user being present. The operator drops its anti-bot wall for sanctioned agent traffic; the anti-bot wall stays in place for everything else.
+**What this enables:** any personal AI assistant that discovers the `issuer` and `endpoint` via `/.well-known/kiosk.json` and reads the served surface via `GET /kiosk/schema` (see `rake demo:schema`) can complete a grocery order without the user having an account at the operator and without the user being present. The operator drops its anti-bot wall for sanctioned AI-assistant traffic; the anti-bot wall stays in place for everything else.
 
 See `getgrocery_flow.rb` in this directory for the full worked example.
 

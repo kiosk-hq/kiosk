@@ -35,7 +35,7 @@ universal agent skill is `skill.md` on the same site.
 - Ruby 4.0.1 (`.mise.toml`); per-gem bundles: `cd <gem> && bundle install &&
   bundle exec rspec` (`kiosk-rls-minitest`: `bundle exec rake test`).
 - Demos: `bin/rails demo:setup`, then the flow tasks
-  (`demo:walkthrough`/`shop`/`book`/`rideflow`, `demo:isolation`,
+  (`demo:walkthrough`/`shop`/`book`/`rideflow`/`collab`, `demo:isolation`,
   `demo:redteam`). Postgres required.
 - Full e2e: `./e2e/run.sh` (Postgres + jq). CI: `.github/workflows/ci.yml`
   (gems matrix + demos matrix + e2e).

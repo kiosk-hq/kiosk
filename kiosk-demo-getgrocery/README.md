@@ -1,6 +1,6 @@
 # kiosk-demo-getgrocery
 
-Grocery delivery demo provider for Kiosk.
+Grocery delivery demo operator for Kiosk.
 
 Single implicit store (getgrocery IS the store): catalog / delivery_slots /
 my_orders queries, create_order / schedule_delivery / payment_setup actions,

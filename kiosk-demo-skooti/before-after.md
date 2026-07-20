@@ -1,6 +1,6 @@
 # Before and After — why an agent can't unlock a scooter, and what skooti proves
 
-**Honesty note up front.** skooti is what a scooter-rental operator (Tier, Lime, Bird) *would* look like if it spoke Kiosk — a fake-but-realistic provider built to demonstrate the two things nobody else does for agents: **accountable registration** (proof-of-work + KYC, so a provider can drop its bot-wall for sanctioned agents without opening it to scrapers) and the **physical last-mile** (an agent pays, and the scooter unlocks itself *offline*). Nothing below implies any real operator works this way. The demo proves the *mechanism*; whether operators adopt it is an open question.
+**Honesty note up front.** skooti is what a scooter-rental operator (Tier, Lime, Bird) *would* look like if it spoke Kiosk — a fake-but-realistic operator built to demonstrate the two things nobody else does for agents: **accountable registration** (proof-of-work + KYC, so an operator can drop its bot-wall for sanctioned agents without opening it to scrapers) and the **physical last-mile** (an agent pays, and the scooter unlocks itself *offline*). Nothing below implies any real operator works this way. The demo proves the *mechanism*; whether operators adopt it is an open question.
 
 ---
 
@@ -38,20 +38,20 @@ skooti is a Rails app that speaks Kiosk. The following is a recorded no-human ru
 
 Two things skooti does that the incumbent flow cannot:
 
-1. **Accountability that drops the bot-wall for sanctioned agents only.** Registration PoW + KYC give the provider a real signal — a cost paid and an identity attested — so it can serve accountable agents through a structured API while keeping every anti-bot defence in place for unsanctioned traffic. Trust is then *earned by spending*: a provider can demand escalating PoW from a principal with no history and little from a proven one (see the atablefor `demo:reputation` beat). A scraper renting identities pays and pays; a real rider stops paying after the first ride.
+1. **Accountability that drops the bot-wall for sanctioned agents only.** Registration PoW + KYC give the operator a real signal — a cost paid and an identity attested — so it can serve accountable agents through a structured API while keeping every anti-bot defence in place for unsanctioned traffic. Trust is then *earned by spending*: an operator can demand escalating PoW from a principal with no history and little from a proven one (see the atablefor `demo:reputation` beat). A scraper renting identities pays and pays; a real rider stops paying after the first ride.
 2. **The physical last-mile, offline.** The scooter is its own trust anchor: *"someone paid skooti for ME, < 15 minutes ago, and here is the signature to prove it."* No app session, no human scan, no connectivity required at the lock. The agent pays; the scooter lets itself be ridden.
 
 **This is a demo against a fake operator with a stub PSP and a software lock-simulator** (the firmware crypto is host-tested against the same vectors; on-device BLE on an ESP32-C3 is the remaining hardware step). The mechanism works end-to-end. Whether real operators integrate, and whether riders value an agent-driven unlock, are open questions the demo does not answer.
 
 ---
 
-## What's needed — the provider adoption recipe
+## What's needed — the operator adoption recipe
 
-The delta between "today's scooter app" and "skooti" is a provider-side integration plus one piece of lock firmware.
+The delta between "today's scooter app" and "skooti" is an operator-side integration plus one piece of lock firmware.
 
 **1. Add the Kiosk satellite gems** (`kiosk-core`, `kiosk-server`, plus `kiosk-pow-equihash`/`kiosk-reputation` for the bot-wall). KYC needs no extra gem in 0.1: `kiosk-server` verifies a signed `level:"verified"` attestation against a configured issuer public key (`c.kyc_public_key`); pluggable KYC-broker adapters are roadmap. In production these are versioned RubyGems; `kiosk-pay-stripe` swaps in for real payments.
 
-**2. Run the generator** (`rails g kiosk:install`) — emits exactly two things: `config/initializers/kiosk.rb` and the nine `kiosk.*` schema migrations (agents, sessions, actions-log, reservations, device-authorizations, mandate tables, plus the KYC column); `bin/rails db:migrate` applies them. The generator does **not** touch your routes: `kiosk-server` ships the wire controllers and you mount them yourself in `config/routes.rb` — the REST verbs (`/kiosk/query`, `/kiosk/run`, `/kiosk/pay`, `/kiosk/schema`), the auth handshake (`/kiosk/auth/{challenge,register,login,revoke}` plus skooti's `/kiosk/agents/kyc`; `register` carries the PoW gate), and `/.well-known/kiosk.json` (inlined, built from `Kiosk.configuration`). The provider's existing Rails models are untouched.
+**2. Run the generator** (`rails g kiosk:install`) — emits exactly two things: `config/initializers/kiosk.rb` and the nine `kiosk.*` schema migrations (agents, sessions, actions-log, reservations, device-authorizations, mandate tables, plus the KYC column); `bin/rails db:migrate` applies them. The generator does **not** touch your routes: `kiosk-server` ships the wire controllers and you mount them yourself in `config/routes.rb` — the REST verbs (`/kiosk/query`, `/kiosk/run`, `/kiosk/pay`, `/kiosk/schema`), the auth handshake (`/kiosk/auth/{challenge,register,login,revoke}` plus skooti's `/kiosk/agents/kyc`; `register` carries the PoW gate), and `/.well-known/kiosk.json` (inlined, built from `Kiosk.configuration`). The operator's existing Rails models are untouched.
 
 **3. Register the rental queries + actions** — `scooters_available` / `my_reservations` (named queries, never raw SQL), `reserve` (TTL hold), and `start_rental` (the three gates: ownership + KYC + payment-settled-for-this-reservation). User-scoped queries filter by `kiosk.current_user_id()`, server-derived — never an agent parameter.
 

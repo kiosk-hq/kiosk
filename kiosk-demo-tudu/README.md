@@ -124,7 +124,7 @@ Human↔assistant linking is **not** a run action — it's the W5 ceremony
 
 ## Make it real
 
-The demo bakes in shortcuts production providers replace:
+The demo bakes in shortcuts production operators replace:
 
 - **Synthetic accounts (Alice, Bob)** → your real user table (the demo already
   gives them real Devise credentials so the link walkthrough signs in like a

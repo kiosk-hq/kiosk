@@ -8,7 +8,7 @@ Stylish is a hair-styling salon-booking service (stylish.example), Kiosk-enabled
 - App-layer data isolation (two users, two views of the same table); RLS available as optional defense-in-depth
 - A `book_appointment` Action
 - Human↔assistant account binding over real Devise sessions — the claim ceremony (verify page) and human-minted link codes, walked by `rake demo:binding`
-- **Roles from a configured IdP** — stylish is dual-audience: customers book, and salon **staff** (owner / stylist) manage the calendar. A staff member's role, supplied by the provider's own identity system, is inherited by their assistant at link time, and the `salon_calendar` query gates on it (owner sees the whole book + revenue; a stylist only their own chairs). Walked by `rake demo:roles`.
+- **Roles from a configured IdP** — stylish is dual-audience: customers book, and salon **staff** (owner / stylist) manage the calendar. A staff member's role, supplied by the operator's own identity system, is inherited by their assistant at link time, and the `salon_calendar` query gates on it (owner sees the whole book + revenue; a stylist only their own chairs). Walked by `rake demo:roles`.
 
 Stylish is the canonical reference shape for personal-services SaaS — barbershops, restaurants, gyms, clinics. Same patterns apply.
 
@@ -59,7 +59,7 @@ The role an assistant works with is sourced **indirectly, from the bound human's
 1. **Owner** links an assistant → the token carries `role: owner` → `salon_calendar` returns the **whole book** (every stylist's appointments) plus a revenue total.
 2. **Stylist** links an assistant → the token carries `role: stylist` → `salon_calendar` returns **only that stylist's own chairs**.
 
-The role rides the token, sourced from the provider's identity system — never self-selected by the agent. A stylist's assistant cannot widen its scope to the owner's book: the role is set at binding from the IdP (not the claim body), and the query's `WHERE` is provider-controlled. `rake demo:roles` asserts both views with DB ground-truth on `kiosk.agents.allowed_roles`, and the redteam battery (`rake demo:redteam`) proves the escalation is BLOCKED.
+The role rides the token, sourced from the operator's identity system — never self-selected by the agent. A stylist's assistant cannot widen its scope to the owner's book: the role is set at binding from the IdP (not the claim body), and the query's `WHERE` is operator-controlled. `rake demo:roles` asserts both views with DB ground-truth on `kiosk.agents.allowed_roles`, and the redteam battery (`rake demo:redteam`) proves the escalation is BLOCKED.
 
 ## Repo tour
 
@@ -80,11 +80,11 @@ The role rides the token, sourced from the provider's identity system — never 
 
 ## Make it real
 
-The demo bakes in shortcuts that production providers replace. Each transition is small:
+The demo bakes in shortcuts that production operators replace. Each transition is small:
 
-- **Synthetic users (Alice, Bob) + staff (owner, stylists)** → real user table populated by your provider's signup flow (the demo already gives them real Devise credentials so the binding walkthrough signs in like a person would).
+- **Synthetic users (Alice, Bob) + staff (owner, stylists)** → real user table populated by your operator's signup flow (the demo already gives them real Devise credentials so the binding walkthrough signs in like a person would).
 - **`StubIdp`** (agent channel) → registered assistants already flow through real Kiosk-issued JWTs; the bespoke `agent:u-…:a-…:r-…` fallback shape disappears. The human session channel already runs the real `kiosk-user-idp-devise` adapter.
-- **`StubUserIdp`** (the role-carrying SSO/Okta stand-in) → your real SSO/OIDC session. The Devise adapter already reads a per-user role via `User#kiosk_role`, so a production provider drops the stub and sources the staff role from its own identity system; the assistant inherits it at link time unchanged.
+- **`StubUserIdp`** (the role-carrying SSO/Okta stand-in) → your real SSO/OIDC session. The Devise adapter already reads a per-user role via `User#kiosk_role`, so a production operator drops the stub and sources the staff role from its own identity system; the assistant inherits it at link time unchanged.
 
 ## License
 

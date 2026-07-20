@@ -1,6 +1,6 @@
 # kiosk-demo-atablefor
 
-Restaurant table-booking demo provider for Kiosk.
+Restaurant table-booking demo operator for Kiosk.
 
 `atablefor` is a fake-but-realistic restaurant (Mamma Pizza) that takes table
 reservations over the Kiosk wire — the "book a table for two, tomorrow at 8"

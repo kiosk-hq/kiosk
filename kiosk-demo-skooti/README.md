@@ -1,3 +1,3 @@
 # kiosk-demo-skooti
 
-Scooter rental demo provider for Kiosk.
+Scooter rental demo operator for Kiosk.

@@ -11,7 +11,7 @@ Demonstrates:
 
 - `/.well-known/kiosk.json` discovery **with `pay` absent** from capabilities —
   and `agents.json` / `agents.txt` carrying no payments block (the honest
-  signal this provider takes no money)
+  signal this operator takes no money)
 - Authenticated REST wire surface (`/kiosk/query`, `/kiosk/run`,
   `/kiosk/schema`) — and deliberately **no `/kiosk/pay` route**
 - App-layer data isolation on an **owned resource**: any principal may
@@ -124,7 +124,7 @@ for **both** bound keys equals the human's id, and the posted listing's
 
 ## Make it real
 
-The demo bakes in shortcuts production providers replace:
+The demo bakes in shortcuts production operators replace:
 
 - **Synthetic accounts (Alice, Bob)** → your real user table (the demo already
   gives them real Devise credentials so the binding walkthrough signs in like a

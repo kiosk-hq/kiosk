@@ -262,6 +262,29 @@ assert "binding: link-code redeem → human"    "$(echo "$bind_out" | jq -r '.li
 assert "binding: unlink → 200"                "$(echo "$bind_out" | jq -r '.unlink')"                               "200"
 assert "binding: login after unlink → 404"    "$(echo "$bind_out" | jq -r '.login_after_unlink')"                   "404"
 
+# ─── register-PoW golden path (402 pow_required → solve Equihash → 201) ──────
+#
+# The DoD-2 leg: the agent golden path registers through a REAL register-time
+# Equihash proof-of-work (registration_pow_count=1, n=96 k=5), not a toll-free
+# shortcut. register_pow_flow.rb proves, in one run: (1) a no-proof register is
+# REJECTED 402 pow_required with challenges[], (2) solving each challenge with
+# the bundled numpy solver and re-POSTing with pow:{proofs:[...]} SUCCEEDS 201,
+# (3) the PoW-minted token authenticates a real wire verb. Same mechanism the
+# demos use (kiosk-demo-skooti).
+printf "\n\033[1m=== register-PoW golden path: no-proof 402 → solve Equihash → 201 → wire ===\033[0m\n"
+
+reg_out=$( cd "$APP_DIR" && SERVER_URL="$SERVER_URL" KIOSK_ISSUER="$KIOSK_ISSUER" \
+             SOLVE_PY="${SOLVE_PY:?SOLVE_PY must be set by run.sh}" \
+             bundle exec ruby "$FIXTURES/register_pow_flow.rb" )
+
+assert "register-pow: no-proof → 402"          "$(echo "$reg_out" | jq -r '.no_proof_status')"        "402"
+assert "register-pow: code pow_required"       "$(echo "$reg_out" | jq -r '.no_proof_code')"          "pow_required"
+assert "register-pow: 1 challenge issued"      "$(echo "$reg_out" | jq -r '.challenges_len')"         "1"
+assert "register-pow: solve+proof → registered" "$(echo "$reg_out" | jq -r '.with_proof_registered')" "true"
+assert "register-pow: role pinned customer"    "$(echo "$reg_out" | jq -r '.role')"                   "customer"
+assert "register-pow: minted token wire → 200" "$(echo "$reg_out" | jq -r '.wire_status')"            "200"
+assert "register-pow: minted token wire ok"    "$(echo "$reg_out" | jq -r '.wire_ok')"                "true"
+
 # ─── no-human AP2 pay flow (register → intent → cart → payment mandate → pay → persist) ───
 printf "\n\033[1m=== no-human register → mandate → pay ===\033[0m\n"
 

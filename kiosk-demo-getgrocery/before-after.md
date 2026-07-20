@@ -105,7 +105,7 @@ This emits exactly two things: `config/initializers/kiosk.rb` (a `Kiosk.configur
 The generator does **not** touch your routes. `kiosk-server` ships the wire controllers; you mount them yourself. In this demo that block lives in `config/routes.rb`:
 
 ```ruby
-# config/routes.rb — the wire surface, mounted manually (v0.1 alpha).
+# config/routes.rb — the wire surface, mounted manually.
 # REST endpoints: one per verb, HTTP method carries the semantics.
 get  "/kiosk/schema",         to: "kiosk/server/wire#schema"
 post "/kiosk/query",          to: "kiosk/server/wire#query"

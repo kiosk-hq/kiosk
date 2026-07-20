@@ -261,3 +261,18 @@ Kiosk::Server::Actions.register(
 
   { listing_id: args[:listing_id], status: "closed" }
 end
+
+# ── Live-activity telemetry (T-032 §4) — opt-in, app-layer, privacy-safe ───
+# Off unless KIOSK_TELEMETRY=1. One event per successful wire action via a Rack
+# middleware; aggregate at GET /demo/activity.json. NOT in kiosk-core.
+if ENV["KIOSK_TELEMETRY"] == "1"
+  require Rails.root.join("lib/demo_telemetry")
+  PHILSLIST_VERB_MAP = {
+    "post_listing"  => "ordered",
+    "edit_listing"  => "ran",
+    "close_listing" => "cancelled",
+  }.freeze
+  Rails.application.config.middleware.use(
+    DemoTelemetryMiddleware, verb_map: PHILSLIST_VERB_MAP,
+  )
+end

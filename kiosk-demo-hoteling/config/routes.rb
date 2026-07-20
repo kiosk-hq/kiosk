@@ -43,4 +43,11 @@ Rails.application.routes.draw do
   # /.well-known/api-catalog — RFC 9727 linkset of the live wire endpoints
   # (schema tagged service-desc), served by the same DiscoveryController.
   get "/.well-known/api-catalog",           to: "kiosk/server/discovery#api_catalog"
+
+  # ─── Live-activity telemetry aggregate (T-032 §4, opt-in) ─────────────────
+  # Privacy-safe counts for the demo page + the kiosk.tech landing tile.
+  # Drawn ONLY when KIOSK_TELEMETRY=1 so it is a no-op in CI/local flows.
+  if ENV["KIOSK_TELEMETRY"] == "1"
+    get "/demo/activity.json", to: "demo_activity#show", defaults: { format: :json }
+  end
 end

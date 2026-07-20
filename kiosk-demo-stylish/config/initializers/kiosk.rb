@@ -189,3 +189,16 @@ Kiosk::Server::Actions.register("book_appointment",
 
   { appointment_id: appointment.id, salon_id: appointment.salon_id, slot: appointment.slot.iso8601 }
 end
+
+# ── Live-activity telemetry (T-032 §4) — opt-in, app-layer, privacy-safe ───
+# Off unless KIOSK_TELEMETRY=1. One event per successful wire action via a Rack
+# middleware; aggregate at GET /demo/activity.json. NOT in kiosk-core.
+if ENV["KIOSK_TELEMETRY"] == "1"
+  require Rails.root.join("lib/demo_telemetry")
+  STYLISH_VERB_MAP = {
+    "book_appointment" => "booked",
+  }.freeze
+  Rails.application.config.middleware.use(
+    DemoTelemetryMiddleware, verb_map: STYLISH_VERB_MAP,
+  )
+end

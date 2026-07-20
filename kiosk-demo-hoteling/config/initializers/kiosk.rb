@@ -25,6 +25,7 @@ require Rails.root.join("lib/stub_idp")
 require Rails.root.join("lib/stub_user_idp")
 require Rails.root.join("lib/jwt_or_stub_idp")
 require Rails.root.join("lib/stub_psp")
+require Rails.root.join("lib/pow_difficulty")
 
 # Inject the RLS DSL into ActiveRecord::Migration so that migrations can
 # call `enable_rls_on TABLE do ... end` directly.
@@ -43,9 +44,11 @@ ActiveRecord::Migration.include(Kiosk::RLS::DSL)
 # this rate-based form needs no change to the reputation Factors interface.)
 #
 # The rate is tracked per agent in-process (demo only — a real provider uses a
-# shared counter / sliding window). EQUIHASH_BROWSE_PARAMS are small so each
-# proof solves sub-second.
-EQUIHASH_BROWSE_PARAMS = { n: 96, k: 5 }.freeze
+# shared counter / sliding window). EQUIHASH_BROWSE_PARAMS follow
+# KIOSK_POW_DIFFICULTY (lib/pow_difficulty.rb): low (default) → n=96 k=5
+# sub-second; high → n=168 k=7 (~10s / ~1.3 GiB). hoteling ships low; the knob
+# is here for parity across the hosted apps. Unset = low.
+EQUIHASH_BROWSE_PARAMS = PowDifficulty.params
 HOTELING_FREE_BROWSES  = 3    # first N availability queries are free
 HOTELING_RATE_STEP     = 2    # +1 proof per this many queries beyond the free tier
 HOTELING_MAX_PROOFS    = 5
@@ -92,7 +95,13 @@ Kiosk.configure do |c|
   c.roles  = %i[customer]
   # Role pinned to every self-registered agent (agents cannot choose their own).
   c.registration_role = :customer
+  # owner is free-form and flows verbatim into /.well-known/kiosk.json. A
+  # "beware: intensive PoW" notice appears only when KIOSK_POW_DIFFICULTY=high
+  # (hoteling ships low, so normally absent).
   c.owner  = { name: "hoteling", support: "help@hoteling.app" }
+  if (notice = PowDifficulty.pow_notice)
+    c.owner = c.owner.merge(pow_difficulty: PowDifficulty.level, pow_notice: notice)
+  end
   # Dual-check (skill.md): canonical skill URL + SHA-256 of its content.
   c.skill_url    = "https://kiosk.tech/skill-v0.3.2.md"
   c.skill_sha256 = "ba708c6234f277409653810f8ef4d3ea10679866e3fd57cf7cb9148b089065d4"
@@ -318,4 +327,19 @@ Kiosk::Server::Actions.register("confirm_booking",
       confirmation_code: confirmation_code,
     }
   end
+end
+
+# ── Live-activity telemetry (T-032 §4) — opt-in, app-layer, privacy-safe ───
+# Off unless KIOSK_TELEMETRY=1. One event per successful wire action via a Rack
+# middleware; aggregate at GET /demo/activity.json. NOT in kiosk-core.
+if ENV["KIOSK_TELEMETRY"] == "1"
+  require Rails.root.join("lib/demo_telemetry")
+  HOTELING_VERB_MAP = {
+    "reserve_room"    => "reserved",
+    "confirm_booking" => "booked",
+    "payment_setup"   => "ran",
+  }.freeze
+  Rails.application.config.middleware.use(
+    DemoTelemetryMiddleware, verb_map: HOTELING_VERB_MAP,
+  )
 end

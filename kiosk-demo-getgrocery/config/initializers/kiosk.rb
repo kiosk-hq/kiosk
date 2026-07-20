@@ -20,6 +20,7 @@ end
 require Rails.root.join("lib/stub_idp")
 require Rails.root.join("lib/stub_user_idp")
 require Rails.root.join("lib/jwt_or_stub_idp")
+require Rails.root.join("lib/pow_difficulty")
 require "kiosk/payment_providers/stripe"
 
 ActiveRecord::Migration.include(Kiosk::RLS::DSL)
@@ -27,9 +28,11 @@ ActiveRecord::Migration.include(Kiosk::RLS::DSL)
 # ── Commerce catalog-toll PoW demo (KIOSK_POW_DEMO=1) ─────────────────────
 #
 # A grocery provider can toll the `catalog` query to price anonymous browsing
-# (a metered toll, not a wall). Small demo params solve sub-second.
-# run/pay are left ungated so the existing shop flow is unchanged.
-EQUIHASH_DEMO_PARAMS = { n: 96, k: 5 }.freeze
+# (a metered toll, not a wall). Params follow KIOSK_POW_DIFFICULTY
+# (lib/pow_difficulty.rb): low (default) → n=96 k=5 sub-second; high → n=168 k=7
+# (~10s / ~1.3 GiB). getgrocery ships low (the flagship stays poke-friendly for
+# the full shop flow); the knob is here for parity. run/pay are never gated.
+EQUIHASH_DEMO_PARAMS = PowDifficulty.params
 
 if ENV["KIOSK_POW_DEMO"] == "1"
   require "kiosk/pow/equihash"
@@ -80,7 +83,13 @@ Kiosk.configure do |c|
   c.roles  = %i[customer]
   # Role pinned to every self-registered agent (agents cannot choose their own).
   c.registration_role = :customer
+  # owner is free-form and flows verbatim into /.well-known/kiosk.json. A
+  # "beware: intensive PoW" notice appears only when KIOSK_POW_DIFFICULTY=high
+  # (getgrocery ships low, so normally absent).
   c.owner  = { name: "GetGroceries", support: "help@getgroceries.com" }
+  if (notice = PowDifficulty.pow_notice)
+    c.owner = c.owner.merge(pow_difficulty: PowDifficulty.level, pow_notice: notice)
+  end
   # Dual-check (skill.md): canonical skill URL + SHA-256 of its content.
   c.skill_url    = "https://kiosk.tech/skill-v0.3.2.md"
   c.skill_sha256 = "ba708c6234f277409653810f8ef4d3ea10679866e3fd57cf7cb9148b089065d4"
@@ -145,6 +154,24 @@ Kiosk.configure do |c|
       File.write(GETGROCERY_BAD_PROOF_FILE, (n + 1).to_s)
     }
   end
+end
+
+# ── Live-activity telemetry (T-032 §4) — opt-in, app-layer, privacy-safe ───
+# Off unless KIOSK_TELEMETRY=1. When on, one event is recorded per successful
+# wire action via a Rack middleware; the aggregate is served at
+# GET /demo/activity.json. NOT part of kiosk-core (satellite neutrality).
+# GETGROCERY_VERB_MAP maps this vertical's concrete run-verbs onto the generic
+# action kinds so the landing aggregate reads uniformly across demos.
+if ENV["KIOSK_TELEMETRY"] == "1"
+  require Rails.root.join("lib/demo_telemetry")
+  GETGROCERY_VERB_MAP = {
+    "create_order"      => "ordered",
+    "schedule_delivery" => "scheduled",
+    "payment_setup"     => "ran",
+  }.freeze
+  Rails.application.config.middleware.use(
+    DemoTelemetryMiddleware, verb_map: GETGROCERY_VERB_MAP,
+  )
 end
 
 LOW_STOCK_THRESHOLD = 5

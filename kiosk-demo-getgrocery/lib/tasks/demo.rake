@@ -1078,3 +1078,45 @@ namespace :demo do
   end
   # ── end demo:rls ──────────────────────────────────────────────────────────
 end
+
+namespace :demo do
+  # ── demo:telemetry ─────────────────────────────────────────────────────────
+  desc <<~DESC
+    Live-activity telemetry demo (T-032 §4). Seeds simulated events into the
+    (shared) telemetry store and prints the privacy-safe aggregate — the JSON
+    the /demo/activity.json endpoint and the kiosk.tech landing tile return,
+    BEFORE any real deploy traffic. Sets KIOSK_TELEMETRY=1 for this process.
+
+      rake demo:telemetry            # 40 events / 8 agents, then print aggregate
+      EVENTS=100 AGENTS=20 rake demo:telemetry
+
+    No server boot; talks to the telemetry store directly (the demo's own DB
+    locally, or KIOSK_TELEMETRY_DB_URL if the shared hosted DB is set).
+  DESC
+  task telemetry: :environment do
+    ENV["KIOSK_TELEMETRY"] ||= "1"
+    require Rails.root.join("lib/demo_telemetry")
+
+    events = (ENV["EVENTS"] || 40).to_i
+    agents = (ENV["AGENTS"] || 8).to_i
+
+    puts "\n── Seeding #{events} simulated events across #{agents} agents (app=#{DemoTelemetry.app_name}) ──"
+    written = DemoTelemetry.simulate!(events: events, agents: agents)
+    puts "  wrote #{written} rows into #{DemoTelemetry::TABLE}"
+
+    puts "\n── Aggregate (scope=this app) — what GET /demo/activity.json?scope=app returns ──"
+    puts JSON.pretty_generate(DemoTelemetry.aggregates(app: DemoTelemetry.app_name))
+
+    puts "\n── Aggregate (scope=all) — what the kiosk.tech landing tile fetches ──"
+    puts JSON.pretty_generate(DemoTelemetry.aggregates(app: nil))
+
+    agg = DemoTelemetry.aggregates(app: DemoTelemetry.app_name)
+    if agg[:assistants_active_10m].to_i > 0 && agg[:registered_total].to_i > 0
+      puts "\n  OK  telemetry aggregate populated (active #{agg[:assistants_active_10m]}, registered #{agg[:registered_total]})."
+    else
+      puts "\n  FAIL  telemetry aggregate empty after seeding — #{agg.inspect}"
+      exit 1
+    end
+  end
+  # ── end demo:telemetry ─────────────────────────────────────────────────────
+end

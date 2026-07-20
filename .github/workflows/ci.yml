@@ -35,7 +35,7 @@ jobs:
 
     services:
       postgres:
-        image: postgres:16
+        image: postgres:17
         env:
           POSTGRES_USER: postgres
           POSTGRES_PASSWORD: postgres
@@ -134,7 +134,7 @@ jobs:
 
     services:
       postgres:
-        image: postgres:16
+        image: postgres:17
         env:
           POSTGRES_USER: postgres
           POSTGRES_PASSWORD: postgres
@@ -190,6 +190,16 @@ jobs:
           echo "$(go env GOPATH)/bin" >> "$GITHUB_PATH"
           echo "STRIPE_MOCK_URL=http://127.0.0.1:12111" >> "$GITHUB_ENV"
 
+      # The committed db/structure.sql files are PG17-format (they SET
+      # transaction_timeout, a v17 param); loading them needs a psql >= 17, and
+      # dumping after migrate needs a pg_dump matching the postgres:17 service.
+      # Runner images ship an older client inconsistently (K-390/K-391), so pin 17.
+      - name: Install PostgreSQL 17 client
+        run: |
+          sudo sh -c 'echo "deb https://apt.postgresql.org/pub/repos/apt $(lsb_release -cs)-pgdg main" > /etc/apt/sources.list.d/pgdg.list'
+          curl -fsSL https://www.postgresql.org/media/keys/ACCC4CF8.asc | sudo tee /etc/apt/trusted.gpg.d/pgdg.asc >/dev/null
+          sudo apt-get update -qq && sudo apt-get install -y -qq postgresql-client-17
+
       - name: Set up demo
         working-directory: ${{ matrix.demo }}
         run: bin/rails demo:setup
@@ -213,7 +223,7 @@ jobs:
 
     services:
       postgres:
-        image: postgres:16
+        image: postgres:17
         env:
           POSTGRES_USER: postgres
           POSTGRES_PASSWORD: postgres
@@ -256,6 +266,12 @@ jobs:
           python-version: "3.12"
       - name: Install numpy (Equihash solver)
         run: python -m pip install numpy
+
+      - name: Install PostgreSQL 17 client (PG17-format structure.sql / postgres:17 service)
+        run: |
+          sudo sh -c 'echo "deb https://apt.postgresql.org/pub/repos/apt $(lsb_release -cs)-pgdg main" > /etc/apt/sources.list.d/pgdg.list'
+          curl -fsSL https://www.postgresql.org/media/keys/ACCC4CF8.asc | sudo tee /etc/apt/trusted.gpg.d/pgdg.asc >/dev/null
+          sudo apt-get update -qq && sudo apt-get install -y -qq postgresql-client-17
 
       - name: Run e2e
         run: ./e2e/run.sh

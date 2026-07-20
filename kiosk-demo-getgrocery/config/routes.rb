@@ -52,6 +52,13 @@ Rails.application.routes.draw do
   # No auth required — demo provider only. Production would authenticate.
   get "/admin/orders" => "admin/orders#index", as: :admin_orders
 
+  # ─── Live-activity telemetry aggregate (T-032 §4, opt-in) ─────────────────
+  # Privacy-safe counts the demo page + the kiosk.tech landing tile fetch.
+  # Drawn ONLY when KIOSK_TELEMETRY=1 so it is a pure no-op in CI/local flows.
+  if ENV["KIOSK_TELEMETRY"] == "1"
+    get "/demo/activity.json", to: "demo_activity#show", defaults: { format: :json }
+  end
+
   # ─── Stripe Checkout return page ──────────────────────────────────────────
   # The SetupIntent success_url (return_url in the initializer) lands the human
   # here after they save a card. Without this route the human hit a 404

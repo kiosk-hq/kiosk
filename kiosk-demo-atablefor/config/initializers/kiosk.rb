@@ -19,6 +19,7 @@ end
 require Rails.root.join("lib/stub_idp")
 require Rails.root.join("lib/stub_user_idp")
 require Rails.root.join("lib/jwt_or_stub_idp")
+require Rails.root.join("lib/pow_difficulty")
 
 # ── PoW / Reputation (R2) — activated only when KIOSK_POW_DEMO=1 ──────────
 #
@@ -34,10 +35,15 @@ require Rails.root.join("lib/jwt_or_stub_idp")
 # scripts that mass-claim prime-time 2-tops to resell. PoW prices that at the
 # door — a metered toll per query, tuned per provider, not a hardware wall.
 #
-# Demo params: n=96, k=5 — a small, non-toy Equihash instance the reference
-# solver clears in well under a second. Production defaults (n=168, k=7) are
-# ~10 s; a demo wants speed.
-EQUIHASH_DEMO_PARAMS = { n: 96, k: 5 }.freeze
+# Equihash params are chosen by KIOSK_POW_DIFFICULTY (lib/pow_difficulty.rb):
+#   low  (default) → n=96 k=5  — small, non-toy instance the reference solver
+#                    clears in well under a second; local flows + CI stay fast.
+#   high           → n=168 k=7 — the shipped default (~10s / ~1.3 GiB): a real
+#                    memory+CPU toll for the hosted deploy so a scalper feels
+#                    the anti-scalping cost first-hand. Unset = low.
+# Both the :query toll (KIOSK_POW_DEMO) and the anti-scalping reputation gate
+# (KIOSK_POW_REPUTATION_DEMO) inherit this level.
+EQUIHASH_DEMO_PARAMS = PowDifficulty.params
 
 if ENV["KIOSK_POW_DEMO"] == "1"
   require "kiosk/pow/equihash"
@@ -119,7 +125,14 @@ Kiosk.configure do |c|
   c.roles  = %i[customer]
   # Role pinned to every self-registered agent (agents cannot choose their own).
   c.registration_role = :customer
+  # owner is free-form and flows verbatim into /.well-known/kiosk.json. When
+  # KIOSK_POW_DIFFICULTY=high, surface an honest "beware: intensive PoW" notice
+  # here so an agent/reader sees the anti-scalping toll up front (the 402
+  # challenge params carry the same heavy n/k).
   c.owner  = { name: "atablefor", support: "help@atablefor.app" }
+  if (notice = PowDifficulty.pow_notice)
+    c.owner = c.owner.merge(pow_difficulty: PowDifficulty.level, pow_notice: notice)
+  end
   # Dual-check (skill.md): canonical skill URL + SHA-256 of its content.
   c.skill_url    = "https://kiosk.tech/skill-v0.3.2.md"
   c.skill_sha256 = "ba708c6234f277409653810f8ef4d3ea10679866e3fd57cf7cb9148b089065d4"
@@ -209,6 +222,20 @@ Kiosk.configure do |c|
       File.write(ATABLEFOR_REPUTATION_BAD_PROOF_FILE, (cnt + 1).to_s)
     }
   end
+end
+
+# ── Live-activity telemetry (T-032 §4) — opt-in, app-layer, privacy-safe ───
+# Off unless KIOSK_TELEMETRY=1. One event per successful wire action via a Rack
+# middleware; aggregate at GET /demo/activity.json. NOT in kiosk-core.
+if ENV["KIOSK_TELEMETRY"] == "1"
+  require Rails.root.join("lib/demo_telemetry")
+  ATABLEFOR_VERB_MAP = {
+    "book_table"     => "booked",
+    "cancel_booking" => "cancelled",
+  }.freeze
+  Rails.application.config.middleware.use(
+    DemoTelemetryMiddleware, verb_map: ATABLEFOR_VERB_MAP,
+  )
 end
 
 # ─── Queries ────────────────────────────────────────────────────────────────

@@ -32,19 +32,25 @@ This directory is the *app-side* handoff; DNS + VPS provisioning is Phil's.
 
 **PoW difficulty is a feature** (design §8.4): most demos run a low/fast toll so
 a poker can register in ~1 s and still SEE the toll; **skooti** and **atablefor**
-run a high (~30 s) memory+CPU-hard toll behind a "beware: intensive PoW" banner
-so the DoS shield is tangible first-hand. The `KIOSK_POW_DIFFICULTY` env key in
-each env file records this intent per demo (wiring caveat below).
+run a high memory+CPU-hard toll behind a "beware: intensive PoW" banner so the
+DoS shield is tangible first-hand. `KIOSK_POW_DIFFICULTY` in each env file drives
+this per demo.
 
-> **Wiring caveat (read before deploy).** Today each demo reads *fixed small*
-> Equihash params from its initializer (`{n:96,k:5}`), gated by an app-specific
-> toggle (`KIOSK_POW_DEMO` / `KIOSK_POW_BROWSE_DEMO` / `KIOSK_POW_REGISTER_DEMO`;
-> skooti's registration PoW is always on). `KIOSK_POW_DIFFICULTY=low|high` is the
-> **design-level knob** — it documents the intended per-demo toll but is **not
-> yet consumed** by app code. Making `high` map to ~30 s heavy params is a small
-> app change that lands with the telemetry/rename follow-up (see bottom). Ship
-> now with the low defaults if the follow-up hasn't landed; the banner + snippet
-> still demonstrate the toll.
+> **How it wires (WIRED — T-032).** Each demo's initializer reads
+> `ENV["KIOSK_POW_DIFFICULTY"]` (`low` default, `high` opt-in) via
+> `lib/pow_difficulty.rb` and sets its Equihash params accordingly:
+> - **low** → `{n:96,k:5}` — sub-second reference solve, poke-friendly.
+> - **high** → `{n:168,k:7}` — the shipped Equihash default: ~10 s and ~1.3 GiB
+>   per proof on the reference (numpy) solver — a real memory+CPU toll. Verified
+>   to clear (measured 8.9–9.5 s) end-to-end.
+>
+> **Unset ⇒ low**, so local `demo:setup`/CI never pay the heavy toll and never
+> hang — the high params are the hosted-deploy setting only. When `high`, the
+> initializer also adds a `pow_difficulty` + `pow_notice` ("beware: memory- and
+> CPU-intensive proof-of-work…") to the `owner` block of
+> `/.well-known/kiosk.json`, and the 402 challenge already carries the heavy
+> `{n,k}` — so an agent/reader sees the toll up front. Env files ship
+> skooti/atablefor = `high`, the rest = `low`.
 
 ## What Phil does vs. what's automated
 
@@ -161,30 +167,53 @@ curl -s -X POST "$BASE/kiosk/query" \
 > demo landing once the hosted challenge format is pinned. skooti/atablefor show
 > the "beware: memory- and CPU-intensive PoW" banner so pokers expect the ~30 s.
 
-## Follow-up (documented, NOT wired here) — live-activity telemetry (design §4)
+## Live-activity telemetry (design §4) — WIRED (T-032, opt-in)
 
-The design calls for aggregate, privacy-safe **live-activity counters** on each
-demo page plus an aggregate tile on the kiosk.tech landing. This runbook
-deliberately does **not** wire it, because it touches **every demo** and so must
-land **after the atablefor rename (T-033) settles** to avoid collisions. Approach
-to implement next:
+Aggregate, privacy-safe **live-activity counters** are now wired into all seven
+demos (app-layer, NOT kiosk-core — satellite neutrality). Off by default; a demo
+that never sets `KIOSK_TELEMETRY=1` behaves exactly as before.
 
-- A shared `kiosk_demo_telemetry` DB with an append-only
-  `events(app, action_kind, agent_hash, at)` table, written by a thin
-  `after_action`/middleware hook **in each app** (app-layer, NOT kiosk-core —
-  satellite neutrality).
-- A tiny cached (10–30 s) JSON endpoint the landing fetches, exposing:
-  assistants active in the last 10 min (distinct `agent_hash`), total
-  registered, actions in the last hour by generic kind (browsed / ordered /
-  booked / paid).
-- **Privacy guard:** counts only. `agent_hash` is a per-app *salted* hash used
-  solely for distinct-counts — never surfaced, **never joined across apps**
-  (joining an agent across demos would be the cross-provider tracking Kiosk
-  forbids). No IPs, no UAs, no per-assistant detail.
+**Shared store.** Provision the one shared DB once:
 
-Also add a per-app `demo:prune` (+ idempotent `demo:seed`) rake task so
-`prune.sh` reclaims disk from throwaway registrations (§6) — `prune.sh` already
-calls these tasks if present and no-ops safely if not.
+    psql -v ON_ERROR_STOP=1 -v tm_pw="'<telemetry-pw>'" -f telemetry-init.sql
 
-Both land as one gated change once the rename is in (touched-app suites +
-`e2e/run.sh`).
+This creates the `kiosk_demo_telemetry` DB + `kiosk_telemetry` LOGIN role + the
+append-only `demo_telemetry_events(app, action_kind, agent_hash, at)` table.
+(The apps also create this table idempotently at runtime, so a fresh boot
+against an empty shared DB self-heals — but run the SQL for least-privilege
+grants.)
+
+**Per-app env** (add to each `env/<app>.env`):
+
+    KIOSK_TELEMETRY=1
+    KIOSK_TELEMETRY_DB_URL=postgres://kiosk_telemetry:<pw>@127.0.0.1/kiosk_demo_telemetry
+    KIOSK_TELEMETRY_SALT=<a DISTINCT random salt PER APP>   # keeps agent hashes non-joinable
+
+`KIOSK_TELEMETRY_DB_URL` unset ⇒ the app writes to its OWN DB (local/CI
+testable). Set it on every hosted app to the shared DB so the landing aggregate
+spans all demos.
+
+**Endpoint.** Each app serves `GET /demo/activity.json` (only when
+`KIOSK_TELEMETRY=1`), cached `max-age=10`, `Access-Control-Allow-Origin: *`:
+
+    { assistants_active_10m, registered_total,
+      actions_last_hour: { browsed, ordered, booked, paid, … },
+      generated_at, scope }
+
+`?scope=app` = this demo's own page counts; default `scope=all` = the ALL-apps
+aggregate the **kiosk.tech landing tile** fetches (point the tile at any hosted
+app's `/demo/activity.json`, or a dedicated one, all reading the shared DB).
+
+**Privacy guard.** Counts only. `agent_hash` is a per-app *salted* hash used
+solely for distinct-counts — never surfaced, **never joined across apps**
+(joining an agent across demos would be the cross-provider tracking Kiosk
+forbids; the per-app salt makes it impossible by construction). No IPs, no UAs,
+no raw agent id, no per-assistant detail.
+
+**Demonstrate before real traffic.** `rake demo:telemetry` (in getgrocery)
+seeds simulated events and prints both aggregates — the exact JSON the endpoint
+and landing tile return.
+
+Still open (not this change): a per-app `demo:prune` (+ idempotent `demo:seed`)
+rake task so `prune.sh` reclaims disk from throwaway registrations (§6) —
+`prune.sh` already calls these if present and no-ops safely if not.

@@ -493,3 +493,21 @@ Kiosk::Server::Actions.register(
 
   { removed: true }
 end
+
+# ── Live-activity telemetry (T-032 §4) — opt-in, app-layer, privacy-safe ───
+# Off unless KIOSK_TELEMETRY=1. One event per successful wire action via a Rack
+# middleware; aggregate at GET /demo/activity.json. NOT in kiosk-core.
+if ENV["KIOSK_TELEMETRY"] == "1"
+  require Rails.root.join("lib/demo_telemetry")
+  TUDU_VERB_MAP = {
+    "create_list"    => "ran",
+    "add_todo"       => "ran",
+    "complete_todo"  => "ran",
+    "invite"         => "ran",
+    "accept_invite"  => "ran",
+    "remove_member"  => "ran",
+  }.freeze
+  Rails.application.config.middleware.use(
+    DemoTelemetryMiddleware, verb_map: TUDU_VERB_MAP,
+  )
+end

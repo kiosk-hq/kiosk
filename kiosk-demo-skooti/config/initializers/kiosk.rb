@@ -23,6 +23,7 @@ require Rails.root.join("lib/stub_psp")
 require Rails.root.join("lib/stub_kyc")
 require Rails.root.join("lib/dev_unlock_key")
 require Rails.root.join("lib/rental_token_issuer")
+require Rails.root.join("lib/pow_difficulty")
 
 # Ed25519 rental-token signing key holder. The RentalTokenIssuer demo lib
 # reads Kiosk.configuration.unlock_signing_key; the neutral kiosk-server core
@@ -41,12 +42,17 @@ Kiosk::Configuration.include(SkootiUnlockSigningKey)
 ActiveRecord::Migration.include(Kiosk::RLS::DSL)
 
 # Registration PoW gate uses Equihash (one PoW = Equihash;
-# the old SHA256 hashcash is gone). Small demo params keep the register solve
-# well under a second. PoW is a metered toll, tuned per provider.
+# the old SHA256 hashcash is gone). PoW is a metered toll, tuned per provider.
+#
+# Params are chosen by KIOSK_POW_DIFFICULTY (lib/pow_difficulty.rb):
+#   low  (default) → n=96 k=5  — sub-second solve; CI/local stay fast.
+#   high           → n=168 k=7 — genuinely memory+CPU-intensive (~10s / ~1.3 GiB)
+#                    for the hosted deploy, so a poker feels the toll first-hand.
+# Unset = low, so this demo's flows and CI register at the fast params.
 require "kiosk/pow/equihash"
 require "kiosk/reputation"
 Kiosk::Reputation::Backends.register(Kiosk::Pow::Equihash::NAME, Kiosk::Pow::Equihash)
-SKOOTI_REGISTRATION_POW_PARAMS = { n: 96, k: 5 }.freeze
+SKOOTI_REGISTRATION_POW_PARAMS = PowDifficulty.params
 
 Kiosk.configure do |c|
   c.user_model     = "User"
@@ -67,7 +73,14 @@ Kiosk.configure do |c|
   c.roles  = %i[customer]
   # Role pinned to every self-registered agent (agents cannot choose their own).
   c.registration_role = :customer
+  # owner is free-form and flows verbatim into /.well-known/kiosk.json. When
+  # KIOSK_POW_DIFFICULTY=high, surface an honest "beware: intensive PoW" notice
+  # here so an agent/reader sees the toll BEFORE it dials register (the 402
+  # challenge params say the same, this is the up-front discovery signal).
   c.owner  = { name: "skooti", support: "help@skooti.app" }
+  if (notice = PowDifficulty.pow_notice)
+    c.owner = c.owner.merge(pow_difficulty: PowDifficulty.level, pow_notice: notice)
+  end
   # Dual-check (skill.md): canonical skill URL + SHA-256 of its content.
   c.skill_url    = "https://kiosk.tech/skill-v0.3.2.md"
   c.skill_sha256 = "ba708c6234f277409653810f8ef4d3ea10679866e3fd57cf7cb9148b089065d4"
@@ -96,6 +109,22 @@ Kiosk.configure do |c|
   # Ed25519 rental-token signing key (offline token).
   # Fixed dev keypair — stable vectors; swap for env-loaded PEM in production.
   c.unlock_signing_key = DevUnlockKey.private_key
+end
+
+# ── Live-activity telemetry (T-032 §4) — opt-in, app-layer, privacy-safe ───
+# Off unless KIOSK_TELEMETRY=1. One event per successful wire action via a Rack
+# middleware; aggregate at GET /demo/activity.json. NOT in kiosk-core.
+if ENV["KIOSK_TELEMETRY"] == "1"
+  require Rails.root.join("lib/demo_telemetry")
+  SKOOTI_VERB_MAP = {
+    "reserve"         => "reserved",
+    "start_rental"    => "ran",
+    "rent_motorcycle" => "ran",
+    "payment_setup"   => "ran",
+  }.freeze
+  Rails.application.config.middleware.use(
+    DemoTelemetryMiddleware, verb_map: SKOOTI_VERB_MAP,
+  )
 end
 
 # ─── Queries ────────────────────────────────────────────────────────────────

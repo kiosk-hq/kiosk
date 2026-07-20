@@ -1,21 +1,26 @@
 # frozen_string_literal: true
 
-# Kiosk reputation end-to-end driver (trust-earned-by-spending).
+# Kiosk reputation end-to-end driver (anti-scalping — trust earned by booking).
 #
-# Demonstrates the full "cost drops as purchases accrue" lifecycle using the
-# shipped RateAndReputation policy with real settlements lookups. Escalation is
-# by PROOF COUNT (N×PoW), not a difficulty dial:
+# Demonstrates the full "PoW cost drops as a real booking history accrues"
+# lifecycle using the shipped RateAndReputation policy with a real
+# confirmed-bookings lookup. Escalation is by PROOF COUNT (N×PoW), not a
+# difficulty dial:
 #
-#   0 purchases → 402 with N=2 equihash challenges (unproven principal)
-#   1 purchase  → 402 with N=1 challenge (cheaper — purchase earned relief)
-#   2 purchases → 200 served directly, no challenge (proven → free pass)
+#   0 confirmed bookings → 402 with N=2 equihash challenges (unproven principal)
+#   1 confirmed booking  → 402 with N=1 challenge (cheaper — a booking earned relief)
+#   2 confirmed bookings → 200 served directly, no challenge (proven → free pass)
+#
+# This is the anti-reservation-scalping mechanic: a fresh / low-reputation
+# agent pays escalating PoW to probe prime-time availability; a scalper renting
+# fresh identities pays and pays, while a returning diner earns relief.
 #
 # Steps:
 #   1. Register a fresh principal.
-#   2. POST query menu_by_restaurant → 402 (n0 proofs, unproven). Solve, served.
-#   3. Make purchase 1: place_order (run) + sign mandates + pay (each PoW-gated).
+#   2. POST query availability → 402 (n0 proofs, unproven). Solve, served.
+#   3. Make booking 1: book_table (run) — PoW-gated at n0.
 #   4. POST query → 402 (n1 proofs). Solve, served. Assert n1 < n0.
-#   5. Make purchase 2 (same flow as step 3).
+#   5. Make booking 2 (same flow).
 #   6. POST query → 200 directly (free pass, proven). Assert no challenge.
 #   7. Emit ONE JSON line with the proof-count curve.
 #
@@ -28,6 +33,7 @@
 #   - The server must be running with KIOSK_POW_REPUTATION_DEMO=1.
 #   - python3 with numpy: pip install numpy
 
+require "date"
 require "json"
 require "net/http"
 require "uri"
@@ -73,7 +79,7 @@ end
 # proof count is this protocol's difficulty measure (N×PoW).
 def exec_with_pow(command, body, token)
   headers = { "Authorization" => "Bearer #{token}" }
-  path    = "#{SERVER}/kiosk/#{command}"  # REST verb endpoint (query/run/pay)
+  path    = "#{SERVER}/kiosk/#{command}"  # REST verb endpoint (query/run)
 
   rc, resp = post_json(path, body, headers)
 
@@ -91,77 +97,30 @@ def exec_with_pow(command, body, token)
   end
 end
 
-# Execute one full purchase: place_order (run) → sign AP2 mandates → pay.
-# All three steps go through exec_with_pow (the server challenges each verb
-# until the principal is proven). Returns the settlement_id from the pay result.
-def make_purchase(menu_item_id, key, user_id, agent_id, token)
-  # ── run: place_order ──────────────────────────────────────────────────────
-  order_body = {
-    name:             "place_order",
-    menu_item_id:     menu_item_id,
-    quantity:         1,
-    delivery_address: "1 Reputation Demo St, Istanbul",
-  }
-  rc, resp, _ = exec_with_pow("run", order_body, token)
-  abort "place_order failed (#{rc}): #{JSON.generate(resp)}" unless rc == 200
-  total_cents = resp.dig("value", "total_cents")
-  abort "place_order returned no total_cents" if total_cents.nil?
+TOMORROW = (Date.today + 1).iso8601
 
-  # ── Sign AP2 intent + cart + payment mandates ─────────────────────────────
-  now        = Time.now.to_i
-  intent_id  = SecureRandom.uuid
-  cart_id    = SecureRandom.uuid
-  payment_id = SecureRandom.uuid
+# Find an open slot time for a party of `party` tomorrow, excluding any of
+# `exclude_times`. Availability itself is PoW-gated, so this goes through
+# exec_with_pow. Returns [time, proofs_solved].
+def find_open_time(party, token, exclude_times)
+  rc, resp, _n = exec_with_pow("query", { name: "availability", date: TOMORROW, party_size: party }, token)
+  abort "availability failed (#{rc}): #{JSON.generate(resp)}" unless rc == 200
+  rows = (resp.fetch("rows", [])).reject { |r| exclude_times.include?(r["slot_time"]) }
+  slot = rows.first
+  abort "no open slot for party #{party} tomorrow (excluding #{exclude_times.inspect})" unless slot
+  slot.fetch("slot_time")
+end
 
-  intent_payload = {
-    id:               intent_id,
-    user_id:          user_id,
-    agent_id:         agent_id,
-    iss:              ISSUER,
-    scope:            "food",
-    cap_amount_cents: total_cents + 100,
-    currency:         "eur",
-    exp:              now + 600,
-    iat:              now,
-  }
-  cart_payload = {
-    id:                 cart_id,
-    intent_mandate_id:  intent_id,
-    user_id:            user_id,
-    agent_id:           agent_id,
-    iss:                ISSUER,
-    line_items:         [{ sku: "margherita", qty: 1 }],
-    total_amount_cents: total_cents,
-    currency:           "eur",
-    exp:                now + 600,
-    iat:                now,
-  }
-  payment_payload = {
-    id:              payment_id,
-    cart_mandate_id: cart_id,
-    user_id:         user_id,
-    agent_id:        agent_id,
-    iss:             ISSUER,
-    payment_method:  "pm_demo",
-    amount_cents:    total_cents,
-    currency:        "eur",
-    exp:             now + 600,
-    iat:             now,
-  }
-
-  intent_jws  = JWT.encode(intent_payload,  key, "RS256")
-  cart_jws    = JWT.encode(cart_payload,    key, "RS256")
-  payment_jws = JWT.encode(payment_payload, key, "RS256")
-
-  # ── pay ───────────────────────────────────────────────────────────────────
-  # Generate the pay body ONCE — exec_with_pow re-sends the same body on retry,
-  # so the request_fingerprint (which covers body) is identical in both calls.
-  pay_body = { intent_mandate_jws: intent_jws, cart_mandate_jws: cart_jws,
-               payment_mandate_jws: payment_jws }
-  rc, resp, _ = exec_with_pow("pay", pay_body, token)
-  abort "pay failed (#{rc}): #{JSON.generate(resp)}" unless rc == 200
-
-  resp.dig("value", "settlement_id")
+# Execute one full booking: book_table (run), PoW-gated. Returns the slot_time
+# used (so the caller can avoid double-booking it) and booking_id.
+def make_booking(party, token, taken_times)
+  time = find_open_time(party, token, taken_times)
+  rc, resp, _ = exec_with_pow("run",
+    { name: "book_table", date: TOMORROW, time: time, party_size: party }, token)
+  abort "book_table failed (#{rc}): #{JSON.generate(resp)}" unless rc == 200
+  booking_id = resp.dig("value", "booking_id")
+  abort "book_table returned no booking_id" if booking_id.to_s.empty?
+  [time, booking_id]
 end
 
 # ── Step 1: register a fresh principal ─────────────────────────────────────
@@ -180,59 +139,55 @@ rc, reg = post_json(
 )
 abort "register failed (#{rc}): #{JSON.generate(reg)}" unless rc == 201
 
-agent_id = reg.fetch("agent_id")
-user_id  = reg.fetch("user_id")
-token    = reg.fetch("access_token")
+token = reg.fetch("access_token")
 
-QUERY_BODY = { name: "menu_by_restaurant", restaurant: "Mamma Pizza" }
+taken = []
+QUERY_BODY = { name: "availability", date: TOMORROW, party_size: 2 }
 
-# ── Step 2: query with 0 purchases → 402 (n0 proofs, unproven) → solve → 200 ─
+# ── Step 2: query with 0 bookings → 402 (n0 proofs, unproven) → solve → 200 ─
 
-$stderr.puts "  [rep] Step 2: query (0 purchases) — expect 402 + challenges"
+$stderr.puts "  [rep] Step 2: query availability (0 bookings) — expect 402 + challenges"
 rc, resp, n0 = exec_with_pow("query", QUERY_BODY, token)
-abort "expected 200 after solve (0 purchases), got #{rc}: #{JSON.generate(resp)}" unless rc == 200
+abort "expected 200 after solve (0 bookings), got #{rc}: #{JSON.generate(resp)}" unless rc == 200
 abort "n0 must be non-nil — unproven principal must have received a challenge" if n0.nil?
 
-rows = resp.fetch("rows", [])
-margherita = rows.find { |r| r["sku"] == "margherita" }
-abort "margherita not found in menu rows" unless margherita
-menu_item_id = margherita.fetch("id")
+$stderr.puts "  [rep] n0=#{n0} proofs (unproven, 0 bookings). #{resp.fetch('rows', []).size} open slots served after solve."
 
-$stderr.puts "  [rep] n0=#{n0} proofs (unproven, 0 purchases). #{rows.size} menu rows served after solve."
+# ── Step 3: booking 1 ──────────────────────────────────────────────────────
 
-# ── Step 3: purchase 1 ─────────────────────────────────────────────────────
+$stderr.puts "  [rep] Step 3: making booking 1 (book_table, PoW-gated at n0=#{n0})"
+t1, b1 = make_booking(2, token, taken)
+taken << t1
+$stderr.puts "  [rep] booking 1 confirmed (booking_id=#{b1}, slot=#{t1})"
 
-$stderr.puts "  [rep] Step 3: making purchase 1 (run + pay, each PoW-gated at n0=#{n0})"
-pm1 = make_purchase(menu_item_id, key, user_id, agent_id, token)
-$stderr.puts "  [rep] purchase 1 settled (settlement_id=#{pm1})"
+# ── Step 4: query with 1 booking → 402 (n1 < n0) → solve → 200 ─────────────
 
-# ── Step 4: query with 1 purchase → 402 (n1 < n0) → solve → 200 ───────────
-
-$stderr.puts "  [rep] Step 4: query (1 purchase) — expect 402 with fewer proofs"
+$stderr.puts "  [rep] Step 4: query (1 booking) — expect 402 with fewer proofs"
 rc, resp, n1 = exec_with_pow("query", QUERY_BODY, token)
-abort "expected 200 after solve (1 purchase), got #{rc}: #{JSON.generate(resp)}" unless rc == 200
-abort "n1 must be non-nil — 1 purchase is not yet proven" if n1.nil?
-abort "expected proof count to drop after a purchase: n1=#{n1} not < n0=#{n0}" unless n1 < n0
+abort "expected 200 after solve (1 booking), got #{rc}: #{JSON.generate(resp)}" unless rc == 200
+abort "n1 must be non-nil — 1 booking is not yet proven" if n1.nil?
+abort "expected proof count to drop after a booking: n1=#{n1} not < n0=#{n0}" unless n1 < n0
 
-$stderr.puts "  [rep] n1=#{n1} proofs (1 purchase). Cost dropped: #{n0} → #{n1} proofs."
+$stderr.puts "  [rep] n1=#{n1} proofs (1 booking). Cost dropped: #{n0} → #{n1} proofs."
 
-# ── Step 5: purchase 2 ─────────────────────────────────────────────────────
+# ── Step 5: booking 2 ──────────────────────────────────────────────────────
 
-$stderr.puts "  [rep] Step 5: making purchase 2 (run + pay, each PoW-gated at n1=#{n1})"
-pm2 = make_purchase(menu_item_id, key, user_id, agent_id, token)
-$stderr.puts "  [rep] purchase 2 settled (settlement_id=#{pm2})"
+$stderr.puts "  [rep] Step 5: making booking 2 (book_table, PoW-gated at n1=#{n1})"
+t2, b2 = make_booking(2, token, taken)
+taken << t2
+$stderr.puts "  [rep] booking 2 confirmed (booking_id=#{b2}, slot=#{t2})"
 
-# ── Step 6: query with 2 purchases → 200 directly (proven — free pass) ─────
+# ── Step 6: query with 2 bookings → 200 directly (proven — free pass) ──────
 
-$stderr.puts "  [rep] Step 6: query (2 purchases) — expect 200 with NO challenge (free pass)"
+$stderr.puts "  [rep] Step 6: query (2 bookings) — expect 200 with NO challenge (free pass)"
 rc2, resp2, n2 = exec_with_pow("query", QUERY_BODY, token)
 served_after_2 = rc2 == 200
 
 unless served_after_2
-  abort "expected 200 free pass after 2 purchases, got #{rc2}: #{JSON.generate(resp2)}"
+  abort "expected 200 free pass after 2 bookings, got #{rc2}: #{JSON.generate(resp2)}"
 end
 unless n2.nil?
-  abort "expected no challenge (n2=nil) after 2 purchases — principal must be proven. Got n2=#{n2}"
+  abort "expected no challenge (n2=nil) after 2 bookings — principal must be proven. Got n2=#{n2}"
 end
 
 $stderr.puts "  [rep] served without challenge! Proven principal — free pass confirmed."
@@ -241,7 +196,7 @@ $stderr.puts "  [rep] served without challenge! Proven principal — free pass c
 
 puts JSON.generate(
   proofs_unproven:          n0,
-  proofs_after_1_purchase:  n1,
-  served_after_2_purchases: served_after_2,
+  proofs_after_1_booking:   n1,
+  served_after_2_bookings:  served_after_2,
   challenge_after_2:        n2,
 )

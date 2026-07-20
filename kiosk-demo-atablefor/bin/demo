@@ -1,23 +1,27 @@
 #!/usr/bin/env bash
-# Kiosk foodelivery demo walkthrough — a curl-driven tour of the wire surface.
+# Kiosk atablefor demo walkthrough — a curl-driven tour of the wire surface.
 #
 # Run via `rake demo:walkthrough` (boots the server, runs this script, tears
 # down), or directly when the demo DB is already prepared (rake demo:setup).
-# `rake demo` runs the pay-settling headline (demo:setup + demo:order), not
-# this tour.
+# `rake demo` runs the headline booking (demo:setup + demo:book), not this tour.
 #
-# This tour browses and places one real order under a single stable stub
-# principal (AGENT_TOKEN below); demo:setup seeds its users row so place_order
-# succeeds (Order belongs_to :user). The order/my_orders steps ASSERT their
-# results and exit non-zero on any mismatch — a broken showcase fails loudly.
+# This tour books one real table under a single stable stub principal
+# (AGENT_TOKEN below); demo:setup seeds its users row so book_table succeeds
+# (Booking belongs_to :user). The book/my_bookings steps ASSERT their results
+# and exit non-zero on any mismatch — a broken showcase fails loudly.
+# atablefor takes NO payments: a table reservation needs none.
 
 set -euo pipefail
 
 PORT="${KIOSK_DEMO_PORT:-3002}"
 SERVER_URL="http://127.0.0.1:$PORT"
 
-# Stable stub token for menu browse (no human needed — this is the no-auth-human path)
+# Stable stub token for the booking tour (no human needed — the no-auth-human path)
 AGENT_TOKEN="agent:u-00000000-0000-0000-0000-000000000001:a-alice-agent:r-customer"
+
+# "a table for two, tomorrow at 8" — tomorrow's date, 20:00.
+TOMORROW="$(date -v+1d +%Y-%m-%d 2>/dev/null || date -d '+1 day' +%Y-%m-%d)"
+PARTY=2
 
 heading() { printf "\n\033[1;36m── %s ──\033[0m\n" "$1"; }
 step()    { printf "\n  \033[1;33m▶\033[0m %s\n" "$1"; }
@@ -40,10 +44,10 @@ require_tool jq
 
 # ─── boot ────────────────────────────────────────────────────────────
 
-heading "Starting foodelivery (the demo provider) on port $PORT"
+heading "Starting atablefor (the demo provider) on port $PORT"
 KIOSK_ISSUER="$SERVER_URL" \
   bundle exec rails s -p "$PORT" -b 127.0.0.1 -e development \
-  >/tmp/kiosk-foodelivery-demo.log 2>&1 &
+  >/tmp/kiosk-atablefor-demo.log 2>&1 &
 SERVER_PID=$!
 
 for _ in $(seq 1 30); do
@@ -55,7 +59,7 @@ for _ in $(seq 1 30); do
 done
 
 curl -sf "$SERVER_URL/.well-known/kiosk.json" >/dev/null || {
-  echo "server did not become ready — see /tmp/kiosk-foodelivery-demo.log" >&2
+  echo "server did not become ready — see /tmp/kiosk-atablefor-demo.log" >&2
   exit 1
 }
 
@@ -64,6 +68,7 @@ curl -sf "$SERVER_URL/.well-known/kiosk.json" >/dev/null || {
 heading "Discovery: what is this provider?"
 
 step "GET /.well-known/kiosk.json"
+# capabilities are [schema, query, run] — no `pay` (a reservation takes no money).
 curl -sf "$SERVER_URL/.well-known/kiosk.json" \
   | jq '.kiosk | {version, endpoint, issuer, capabilities, owner}'
 
@@ -73,85 +78,84 @@ curl -sf "$SERVER_URL/kiosk/.well-known/jwks.json" \
 
 # ─── named queries ───────────────────────────────────────────────────
 
-heading "Agent browses the menu via named queries"
+heading "Agent checks availability via a named query"
 
-step "List restaurants (publicly visible) — query: restaurants"
+step "Open table-slots for a party of $PARTY tomorrow ($TOMORROW) — query: availability"
 curl -sS -X POST "$SERVER_URL/kiosk/query" \
   -H "Authorization: Bearer $AGENT_TOKEN" \
   -H "Content-Type: application/json" \
-  -d '{"name":"restaurants"}' \
-  | jq '.rows'
-
-step "List menu items for Mamma Pizza — query: menu_by_restaurant"
-curl -sS -X POST "$SERVER_URL/kiosk/query" \
-  -H "Authorization: Bearer $AGENT_TOKEN" \
-  -H "Content-Type: application/json" \
-  -d '{"name":"menu_by_restaurant","restaurant":"Mamma Pizza"}' \
+  -d "{\"name\":\"availability\",\"date\":\"$TOMORROW\",\"party_size\":$PARTY}" \
   | jq '.rows'
 
 # ─── run an Action ───────────────────────────────────────────────────
 
-heading "Agent places an order via Action (no human at the provider)"
+heading "Agent books a table via Action (no human at the provider)"
 
-MENU_ITEM_ID=$(curl -sS -X POST "$SERVER_URL/kiosk/query" \
+# Pick the 20:00 2-top ("a table for two, tomorrow at 8"); fall back to the
+# first open slot if the headline one is gone.
+SLOT_TIME=$(curl -sS -X POST "$SERVER_URL/kiosk/query" \
   -H "Authorization: Bearer $AGENT_TOKEN" \
   -H "Content-Type: application/json" \
-  -d '{"name":"menu_by_restaurant","restaurant":"Mamma Pizza"}' \
-  | jq -r '.rows[] | select(.sku=="margherita") | .id')
+  -d "{\"name\":\"availability\",\"date\":\"$TOMORROW\",\"party_size\":$PARTY}" \
+  | jq -r '([.rows[] | select(.slot_time=="20:00")] + .rows)[0].slot_time // empty')
 
-step "run place_order for menu_item $MENU_ITEM_ID (Margherita)"
-PLACE_RESP=$(curl -sS -X POST "$SERVER_URL/kiosk/run" \
-  -H "Authorization: Bearer $AGENT_TOKEN" \
-  -H "Content-Type: application/json" \
-  -d "{\"name\":\"place_order\",\"menu_item_id\":$MENU_ITEM_ID,\"quantity\":1,\"delivery_address\":\"1 Test St\"}")
-printf '%s\n' "$PLACE_RESP" | jq '.value'
-
-# Assert: a success envelope carries a .value object with an order_id. A broken
-# showcase (e.g. missing users row → Order belongs_to :user fails) returns an
-# error envelope with .value == null; catch it here and fail the script.
-ORDER_ID=$(printf '%s\n' "$PLACE_RESP" | jq -r '.value.order_id // empty')
-if [[ -z "$ORDER_ID" ]]; then
-  echo "✗ place_order did not return a value.order_id — got: $PLACE_RESP" >&2
+if [[ -z "$SLOT_TIME" ]]; then
+  echo "✗ no open slot for a party of $PARTY tomorrow" >&2
   exit 1
 fi
-say "✓ place_order succeeded (order_id=$ORDER_ID)"
+
+step "run book_table for $TOMORROW $SLOT_TIME, party of $PARTY"
+BOOK_RESP=$(curl -sS -X POST "$SERVER_URL/kiosk/run" \
+  -H "Authorization: Bearer $AGENT_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d "{\"name\":\"book_table\",\"date\":\"$TOMORROW\",\"time\":\"$SLOT_TIME\",\"party_size\":$PARTY}")
+printf '%s\n' "$BOOK_RESP" | jq '.value'
+
+# Assert: a success envelope carries a .value object with a booking_id. A broken
+# showcase (e.g. missing users row → Booking belongs_to :user fails) returns an
+# error envelope with .value == null; catch it here and fail the script.
+BOOKING_ID=$(printf '%s\n' "$BOOK_RESP" | jq -r '.value.booking_id // empty')
+if [[ -z "$BOOKING_ID" ]]; then
+  echo "✗ book_table did not return a value.booking_id — got: $BOOK_RESP" >&2
+  exit 1
+fi
+say "✓ book_table succeeded (booking_id=$BOOKING_ID)"
 
 # ─── app-layer isolation ─────────────────────────────────────────────
 
-heading "App-layer isolation: agent sees only their own orders"
+heading "App-layer isolation: agent sees only their own bookings"
 
-step "Count orders visible to this agent's user (should be 1) — query: my_orders"
-MY_ORDERS_RESP=$(curl -sS -X POST "$SERVER_URL/kiosk/query" \
+step "List bookings visible to this agent's user (should be 1) — query: my_bookings"
+MY_RESP=$(curl -sS -X POST "$SERVER_URL/kiosk/query" \
   -H "Authorization: Bearer $AGENT_TOKEN" \
   -H "Content-Type: application/json" \
-  -d '{"name":"my_orders"}')
-MY_ORDERS_COUNT=$(printf '%s\n' "$MY_ORDERS_RESP" | jq '.rows | length')
-printf '%s\n' "$MY_ORDERS_COUNT"
+  -d '{"name":"my_bookings"}')
+MY_COUNT=$(printf '%s\n' "$MY_RESP" | jq '.rows | length')
+printf '%s\n' "$MY_COUNT"
 
-# Assert: exactly the one order just placed is visible to this principal
-# (fresh DB from demo:setup → 0 pre-existing orders). A broken place_order
+# Assert: exactly the one booking just made is visible to this principal
+# (fresh DB from demo:setup → 0 pre-existing bookings). A broken book_table
 # (0 rows) or a cross-tenant leak (>1 row) trips this.
-if [[ "$MY_ORDERS_COUNT" != "1" ]]; then
-  echo "✗ my_orders expected exactly 1 row, got ${MY_ORDERS_COUNT} — response: $MY_ORDERS_RESP" >&2
+if [[ "$MY_COUNT" != "1" ]]; then
+  echo "✗ my_bookings expected exactly 1 row, got ${MY_COUNT} — response: $MY_RESP" >&2
   exit 1
 fi
-# ...and that row is the order just placed, not some stray row.
-MY_ORDER_ID=$(printf '%s\n' "$MY_ORDERS_RESP" | jq -r '.rows[0].id // empty')
-if [[ "$MY_ORDER_ID" != "$ORDER_ID" ]]; then
-  echo "✗ my_orders row id ($MY_ORDER_ID) != placed order id ($ORDER_ID) — response: $MY_ORDERS_RESP" >&2
+MY_BOOKING_ID=$(printf '%s\n' "$MY_RESP" | jq -r '.rows[0].id // empty')
+if [[ "$MY_BOOKING_ID" != "$BOOKING_ID" ]]; then
+  echo "✗ my_bookings row id ($MY_BOOKING_ID) != booking id ($BOOKING_ID) — response: $MY_RESP" >&2
   exit 1
 fi
-say "✓ my_orders shows exactly the 1 order just placed (app-layer per-user isolation)"
+say "✓ my_bookings shows exactly the 1 booking just made (app-layer per-user isolation)"
 
 # ─── done ────────────────────────────────────────────────────────────
 
 heading "Demo complete"
-say "Server log:        /tmp/kiosk-foodelivery-demo.log"
-say "DB:                kiosk_foodelivery_development"
+say "Server log:        /tmp/kiosk-atablefor-demo.log"
+say "DB:                kiosk_atablefor_development"
 say ""
 say "To add realistic domain resolution:"
-say "  echo \"127.0.0.1 foodelivery.app\" | sudo tee -a /etc/hosts"
-say "  KIOSK_ISSUER=https://foodelivery.app KIOSK_DEMO_PORT=443 rake demo:walkthrough"
+say "  echo \"127.0.0.1 atablefor.app\" | sudo tee -a /etc/hosts"
+say "  KIOSK_ISSUER=https://atablefor.app KIOSK_DEMO_PORT=443 rake demo:walkthrough"
 say ""
-say "Swap StubPsp for real Stripe:"
-say "  replace StubPsp.new with Kiosk::PaymentProviders::Stripe.new(api_key: ENV['STRIPE_SECRET_KEY'])"
+say "Swap StubIdp for production-shape auth:"
+say "  replace lib/jwt_or_stub_idp.rb with kiosk-user-idp-devise (or your IdP)"

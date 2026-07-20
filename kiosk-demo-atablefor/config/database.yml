@@ -6,14 +6,14 @@ default: &default
 
 development:
   <<: *default
-  database: kiosk_foodelivery_development
+  database: kiosk_atablefor_development
 
 test:
   <<: *default
-  database: kiosk_foodelivery_test
+  database: kiosk_atablefor_test
 
 production:
   <<: *default
-  database: kiosk_foodelivery_production
-  username: <%= ENV.fetch("KIOSK_FOODELIVERY_DB_USER", "kiosk_foodelivery") %>
-  password: <%= ENV["KIOSK_FOODELIVERY_DB_PASSWORD"] %>
+  database: kiosk_atablefor_production
+  username: <%= ENV.fetch("KIOSK_ATABLEFOR_DB_USER", "kiosk_atablefor") %>
+  password: <%= ENV["KIOSK_ATABLEFOR_DB_PASSWORD"] %>

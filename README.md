@@ -45,7 +45,7 @@ See `kiosk-pow-equihash/README.md` for the full comparison and rationale.
 | Demo | Vertical | Status |
 |---|---|---|
 | `kiosk-demo-getgrocery` | Grocery delivery | active |
-| `kiosk-demo-foodelivery` | Restaurant delivery | active |
+| `kiosk-demo-atablefor` | Restaurant table-booking — non-commerce (no payments) | active |
 | `kiosk-demo-hoteling` | Hotel booking | active |
 | `kiosk-demo-skooti` | Scooter rental | active |
 | `kiosk-demo-stylish` | Salon/appointment booking (Combette on Park) | alpha |

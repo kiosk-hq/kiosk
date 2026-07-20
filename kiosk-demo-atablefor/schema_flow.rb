@@ -1,74 +1,84 @@
 # frozen_string_literal: true
 
-# Self-discovery proof driver — schema verb over HTTP.
+# Self-discovery proof driver — verifies the `schema` verb AND the discovery
+# documents over HTTP, with the load-bearing NOT-ONLY-COMMERCE assertions.
 #
-# Registers a fresh agent (no PoW — foodelivery has no registration gate),
-# calls `schema` (GET /kiosk/schema), prints one JSON line on stdout.
+# Boots against a running atablefor server, authenticates with a StubIdp token
+# (the pre-seeded walkthrough principal — see db/seeds.rb), calls:
+#   GET /kiosk/schema
+#   GET /.well-known/kiosk.json
+#   GET /agents.json
+#   GET /agents.txt
+# and emits ONE JSON line the demo:schema rake task asserts on.
 #
-# Usage (invoked by rake demo:schema — do not run standalone without the server):
-#   SERVER_URL=http://127.0.0.1:3002 \
-#   KIOSK_ISSUER=http://127.0.0.1:3002 \
+# The `pay`-absent proof is against the DISCOVERY documents, NOT schema.verbs:
+# the schema verb's `verbs` field is the FIXED four-verb wire surface
+# (Kiosk::Server::Executor::VERBS = [query, run, pay, schema]) and lists `pay`
+# unconditionally. The advertised capability set is what drops `pay` when no
+# payment_provider is configured — so the honest assertion is
+# `/.well-known/kiosk.json` capabilities == [schema, query, run], and no
+# payments block in agents.json / agents.txt. atablefor books tables — a
+# reservation takes no money.
+#
+# Usage:
+#   SERVER_URL=http://127.0.0.1:3002 KIOSK_ISSUER=http://127.0.0.1:3002 \
 #   bundle exec ruby schema_flow.rb
 #
-# Prints ONE JSON line on stdout; non-zero exit on any HTTP failure.
+# Prints ONE JSON line on stdout; non-zero exit on transport failure.
 
-require "jwt"
 require "json"
 require "net/http"
-require "openssl"
-require "securerandom"
 require "uri"
 
 SERVER = ENV.fetch("SERVER_URL")
 
-def post_json(path, body, bearer: nil)
-  uri = URI("#{SERVER}#{path}")
-  headers = { "Content-Type" => "application/json" }
-  headers["Authorization"] = "Bearer #{bearer}" if bearer
-  req = Net::HTTP::Post.new(uri, headers)
-  req.body = JSON.generate(body)
-  res = Net::HTTP.new(uri.host, uri.port).request(req)
-  [res.code.to_i, (JSON.parse(res.body) rescue {})]
-end
+# Pre-seeded principal (see db/seeds.rb). StubIdp parses the token directly.
+STUB_UUID = "00000000-0000-0000-0000-000000000001"
+TOKEN     = "agent:u-#{STUB_UUID}:a-schema-probe:r-customer"
 
-def get_json(path, bearer: nil)
-  uri = URI("#{SERVER}#{path}")
-  headers = {}
-  headers["Authorization"] = "Bearer #{bearer}" if bearer
+def get(url, headers = {})
+  uri = URI(url)
   req = Net::HTTP::Get.new(uri, headers)
-  res = Net::HTTP.new(uri.host, uri.port).request(req)
+  Net::HTTP.new(uri.host, uri.port).request(req)
+end
+
+def get_json(url, headers = {})
+  res = get(url, headers)
   [res.code.to_i, (JSON.parse(res.body) rescue {})]
 end
 
-# ── Register a fresh agent ───────────────────────────────────────────────────
+# ── The schema verb ─────────────────────────────────────────────────────────
+rc, body = get_json("#{SERVER}/kiosk/schema", { "Authorization" => "Bearer #{TOKEN}" })
+abort "schema call failed (#{rc}): #{JSON.generate(body)}" unless rc == 200
+schema_value = body["value"] || {}
+STDERR.puts "  schema.verbs=#{(schema_value['verbs'] || []).inspect}"
 
-key = OpenSSL::PKey::RSA.generate(2048)
-pem = key.public_key.to_pem
-rc_ch, ch = get_json("/kiosk/auth/challenge?public_key=#{URI.encode_www_form_component(pem)}")
-abort "challenge failed (#{rc_ch}): #{JSON.generate(ch)}" unless rc_ch == 200
-pop = JWT.encode(
-  { aud: SERVER, nonce: ch.fetch("challenge"), jti: SecureRandom.uuid, iat: Time.now.to_i },
-  key, "RS256",
+# ── /.well-known/kiosk.json — the advertised capability set ──────────────────
+wk_rc, wk = get_json("#{SERVER}/.well-known/kiosk.json")
+abort "kiosk.json failed (#{wk_rc})" unless wk_rc == 200
+capabilities = wk.dig("kiosk", "capabilities") || []
+STDERR.puts "  discovery capabilities=#{capabilities.inspect}"
+
+# ── agents.json — the payments block (must be absent) ────────────────────────
+aj_rc, agents_json = get_json("#{SERVER}/agents.json")
+abort "agents.json failed (#{aj_rc})" unless aj_rc == 200
+agents_json_has_payments = agents_json.key?("payments")
+
+# ── agents.txt — the AP2 / Payments directives (must be absent) ──────────────
+at_res = get("#{SERVER}/agents.txt")
+abort "agents.txt failed (#{at_res.code})" unless at_res.code.to_i == 200
+agents_txt = at_res.body.to_s
+agents_txt_has_ap2      = agents_txt.include?("Protocols: ap2")
+agents_txt_has_payments = agents_txt.match?(/^Payments:/)
+
+# ── Emit ONE JSON line for the rake task to assert ───────────────────────────
+puts JSON.generate(
+  schema_status:            rc,
+  schema_verbs:             schema_value["verbs"],
+  schema_queries:           schema_value["queries"],
+  schema_actions:           schema_value["actions"],
+  discovery_capabilities:   capabilities,
+  agents_json_has_payments: agents_json_has_payments,
+  agents_txt_has_ap2:       agents_txt_has_ap2,
+  agents_txt_has_payments:  agents_txt_has_payments,
 )
-rc, reg = post_json(
-  "/kiosk/auth/register",
-  { public_key: pem, signed: pop },
-)
-abort "register failed (#{rc}): #{JSON.generate(reg)}" unless rc == 201
-token = reg.fetch("access_token")
-
-# ── Call schema (REST: GET /kiosk/schema) ────────────────────────────────────
-
-schema_rc, schema_body = get_json("/kiosk/schema", bearer: token)
-abort "schema call failed (#{schema_rc}): #{JSON.generate(schema_body)}" unless schema_rc == 200
-
-# ── Emit structured JSON for the rake task to assert ────────────────────────
-
-schema_value = schema_body["value"] || {}
-
-puts JSON.generate({
-  schema_status:  schema_rc,
-  schema_verbs:   schema_value["verbs"],
-  schema_queries: schema_value["queries"],
-  schema_actions: schema_value["actions"],
-})

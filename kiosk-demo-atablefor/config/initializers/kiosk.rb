@@ -1,8 +1,9 @@
 # frozen_string_literal: true
 
-# Kiosk-demo (foodelivery-shape) configuration. Concrete values for the
-# food-delivery reference shape: uuid users, JWT-or-stub IdP, StubPsp,
-# Actions (place_order, payment_setup).
+# Kiosk-demo (atablefor-shape) configuration. Concrete values for the
+# restaurant table-booking reference shape: uuid users, JWT-or-stub IdP,
+# NO payment provider (a reservation takes no money), Actions
+# (book_table, cancel_booking).
 
 # ── Ephemeral dev signing key ─────────────────────────────────────────────
 # JWT / register flows need a signing key. In development or test, if none is
@@ -18,23 +19,24 @@ end
 require Rails.root.join("lib/stub_idp")
 require Rails.root.join("lib/stub_user_idp")
 require Rails.root.join("lib/jwt_or_stub_idp")
-require Rails.root.join("lib/stub_psp")
 
 # ── PoW / Reputation (R2) — activated only when KIOSK_POW_DEMO=1 ──────────
 #
 # Gate: the Equihash PoW challenge is issued ONLY for the :query verb.
-# The :run and :pay verbs are left ungated so that the existing no-human
-# order flow (order_flow.rb / rake demo:order) continues to pass without
-# any PoW handling.
+# The :run verb is left ungated so the existing no-human booking flow
+# (book_flow.rb / rake demo:book) continues to pass without any PoW handling.
 #
 # The guard is intentional:
-#   - rake demo:order boots the server WITHOUT KIOSK_POW_DEMO=1 → no PoW.
-#   - rake demo:pow   boots the server WITH   KIOSK_POW_DEMO=1 → PoW active.
+#   - rake demo:book boots the server WITHOUT KIOSK_POW_DEMO=1 → no PoW.
+#   - rake demo:pow  boots the server WITH   KIOSK_POW_DEMO=1 → PoW active.
+#
+# Reservation-scalping is exactly the abuse a table-booking provider fears:
+# scripts that mass-claim prime-time 2-tops to resell. PoW prices that at the
+# door — a metered toll per query, tuned per provider, not a hardware wall.
 #
 # Demo params: n=96, k=5 — a small, non-toy Equihash instance the reference
 # solver clears in well under a second. Production defaults (n=168, k=7) are
-# ~10 s; a demo wants speed. PoW is a metered toll, tuned per
-# provider, not a hardware wall.
+# ~10 s; a demo wants speed.
 EQUIHASH_DEMO_PARAMS = { n: 96, k: 5 }.freeze
 
 if ENV["KIOSK_POW_DEMO"] == "1"
@@ -43,10 +45,10 @@ if ENV["KIOSK_POW_DEMO"] == "1"
 
   Kiosk::Reputation::Backends.register(Kiosk::Pow::Equihash::NAME, Kiosk::Pow::Equihash)
 
-  # Demo policy: always challenge :query; let :run/:pay through freely.
-  # A real provider replaces this with Policies::RateAndReputation or a
+  # Demo policy: always challenge :query (availability lookup); let :run through
+  # freely. A real provider replaces this with Policies::RateAndReputation or a
   # domain-specific subclass. The inline class keeps the demo self-contained.
-  class FoodeliveryDemoPowPolicy < Kiosk::Reputation::Policy
+  class AtableforDemoPowPolicy < Kiosk::Reputation::Policy
     def initialize(pow_params)
       @pow_params = pow_params
     end
@@ -60,21 +62,25 @@ if ENV["KIOSK_POW_DEMO"] == "1"
   end
 
   # Counter file written by on_bad_proof; the pow_flow.rb driver reads it.
-  FOODELIVERY_BAD_PROOF_FILE = "/tmp/kiosk-foodelivery-bad-proof.count"
-  File.write(FOODELIVERY_BAD_PROOF_FILE, "0")
+  ATABLEFOR_BAD_PROOF_FILE = "/tmp/kiosk-atablefor-bad-proof.count"
+  File.write(ATABLEFOR_BAD_PROOF_FILE, "0")
 end
 
-# ── Reputation PoW gate (R2 P6) — activated only when KIOSK_POW_REPUTATION_DEMO=1 ──
+# ── Reputation PoW gate (anti-scalping) — activated only when KIOSK_POW_REPUTATION_DEMO=1 ──
 #
-# Demonstrates the "trust-earned-by-spending" thesis end-to-end using the
-# shipped RateAndReputation policy, escalating by PROOF COUNT (N×PoW):
-#   0 purchases → count = base_count(1) + unproven_count_bonus(1) = 2 proofs
-#   1 purchase  → count = base_count(1) = 1 proof (purchase earns relief)
-#   2+ purchases → free pass (proven?(purchases) → challenge_for returns nil)
+# The anti-scalping mechanic: a fresh / low-reputation agent pays ESCALATING
+# PoW (N×PoW) to look at prime-time availability, and that cost DROPS as it
+# builds a real booking history. A scalper renting fresh identities pays and
+# pays; a returning diner earns relief. Escalation is by PROOF COUNT:
+#   0 confirmed bookings → count = base_count(1) + unproven_count_bonus(1) = 2 proofs
+#   1 confirmed booking  → count = base_count(1) = 1 proof (a real booking earns relief)
+#   2+ confirmed bookings → free pass (proven?(bookings) → challenge_for returns nil)
 #
-# The factors callable performs a REAL DB lookup: COUNT(*) on kiosk.settlements
-# for the authenticated principal — no faking. Equihash params are the small
-# demo instance so each proof solves in well under a second.
+# The factors callable performs a REAL DB lookup: COUNT(*) of the principal's
+# CONFIRMED bookings — no faking. Mapped into the shipped RateAndReputation
+# policy's `settled_purchases_count` factor (a generic "proven completed
+# actions" count; for a booking provider that is confirmed reservations).
+# Equihash params are the small demo instance so each proof solves sub-second.
 
 if ENV["KIOSK_POW_REPUTATION_DEMO"] == "1"
   require "kiosk/pow/equihash"
@@ -82,14 +88,14 @@ if ENV["KIOSK_POW_REPUTATION_DEMO"] == "1"
 
   Kiosk::Reputation::Backends.register(Kiosk::Pow::Equihash::NAME, Kiosk::Pow::Equihash)
 
-  FOODELIVERY_REPUTATION_BAD_PROOF_FILE = "/tmp/kiosk-foodelivery-reputation-bad-proof.count"
-  File.write(FOODELIVERY_REPUTATION_BAD_PROOF_FILE, "0")
+  ATABLEFOR_REPUTATION_BAD_PROOF_FILE = "/tmp/kiosk-atablefor-reputation-bad-proof.count"
+  File.write(ATABLEFOR_REPUTATION_BAD_PROOF_FILE, "0")
 end
 
-# Inject the RLS DSL into ActiveRecord::Migration so that migrations can
-# call `enable_rls_on TABLE do ... end` directly. The kiosk-rls README
-# documents this opt-in; auto-injection from the gem itself lands in a
-# follow-up.
+# Inject the RLS DSL into ActiveRecord::Migration so migrations can call
+# `enable_rls_on TABLE do ... end` directly. atablefor keeps kiosk-rls wired as
+# the baseline data plane (all 7 demos do); it simply ships no RLS *showcase*
+# task — booking has no apt RLS beat. The kiosk-rls README documents this opt-in.
 ActiveRecord::Migration.include(Kiosk::RLS::DSL)
 
 Kiosk.configure do |c|
@@ -101,9 +107,11 @@ Kiosk.configure do |c|
   c.schema         = "kiosk"
 
   # The Rails connection's role owns the tables AND issues queries (no
-  # role separation in v0.1 alpha). Set app_role to the same role so the
-  # `GRANT TO app_role` statements in `enable_rls_on` are no-ops on a
-  # role that already has all privileges via ownership.
+  # role separation in v0.1 alpha). This demo runs WITHOUT RLS enforcement —
+  # isolation is enforced at the app layer (the book_table Action's explicit
+  # user_id scoping and the my_bookings query's own WHERE predicate) — so
+  # app_role and system_role are set to the same role only to satisfy the
+  # config; no enable_rls_on / GRANT statements run here.
   c.app_role    = ENV.fetch("KIOSK_APP_ROLE",    "app_role")
   c.system_role = ENV.fetch("KIOSK_SYSTEM_ROLE", "app_role")
 
@@ -111,46 +119,31 @@ Kiosk.configure do |c|
   c.roles  = %i[customer]
   # Role pinned to every self-registered agent (agents cannot choose their own).
   c.registration_role = :customer
-  c.owner  = { name: "foodelivery", support: "help@foodelivery.app" }
+  c.owner  = { name: "atablefor", support: "help@atablefor.app" }
   # Dual-check (skill.md): canonical skill URL + SHA-256 of its content.
   c.skill_sha256 = "4ed1860cab6cdfd3bb6efed646217aa195a8febe6f015bd6f54023d9afada589"
 
-  # ── RLS enforce gate (demo:rls only) ─────────────────────────────────────
-  # When KIOSK_RLS_ENFORCE=1, SessionContext.open appends
-  #   SET LOCAL ROLE "kiosk_foodelivery_app"
-  # after the GUC statements, dropping the session to the non-owner app role
-  # for the duration of the transaction.  The non-owner role is subject to
-  # the RLS policies applied by demo:rls (ENABLE + FORCE + per-user SELECT/INSERT
-  # policies on the orders table).
-  #
-  # When unset (default), enforce_db_role = false and app_role falls back to the
-  # ENV-driven default ("app_role") — no role-drop, byte-identical to the
-  # pre-T5 behaviour (Path-C demo:order / demo:isolation / demo:pow).
-  if ENV["KIOSK_RLS_ENFORCE"] == "1"
-    c.enforce_db_role = true
-    c.app_role        = "kiosk_foodelivery_app"
-  end
-
   # JwtOrStubIdp tries Kiosk-issued JWTs (kiosk-pop register/login output;
-  # OAuth device-grant dormant) first,
-  # then falls back to StubIdp's bespoke `agent:u-…:a-…:r-…` shape.
-  # One endpoint authenticates both for the demo. Real providers swap
-  # in `kiosk-user-idp-devise` (or another adapter); see the README.
+  # OAuth device-grant dormant) first, then falls back to StubIdp's bespoke
+  # `agent:u-…:a-…:r-…` shape. One endpoint authenticates both for the demo.
+  # Real providers swap in `kiosk-user-idp-devise` (or another adapter).
   c.agent_idp = JwtOrStubIdp.new(stub: StubIdp.new)
-  # The web-session channel for the account-binding surfaces (verify
-  # page, link mint, unlink) — see lib/stub_user_idp.rb for the scope.
+  # The web-session channel for the account-binding surfaces (verify page,
+  # link mint, unlink) — see lib/stub_user_idp.rb for the scope.
   c.user_idp = StubUserIdp.new
-  # user_idp not needed — composite handles both channels.
 
-  # Payment provider — stub for the demo; swap in kiosk-pay-stripe for real.
-  c.payment_provider = StubPsp.new
+  # ── NO payment_provider ──────────────────────────────────────────────────
+  # This is deliberate and load-bearing: with no AP2 provider configured,
+  # `pay` drops out of `capabilities` and the discovery documents carry no
+  # payments block. atablefor books restaurant tables — a reservation takes
+  # no money. The advertised capabilities are [schema, query, run].
 
   # ── Equihash PoW gate (active only when KIOSK_POW_DEMO=1) ───────────────
   if ENV["KIOSK_POW_DEMO"] == "1"
     # Small, non-toy Equihash instance for demo speed (sub-second solve).
     pow_params = Kiosk::Pow::Equihash.params(**EQUIHASH_DEMO_PARAMS)
 
-    c.reputation_policy = FoodeliveryDemoPowPolicy.new(pow_params)
+    c.reputation_policy = AtableforDemoPowPolicy.new(pow_params)
     c.pow_secret        = ENV.fetch("KIOSK_POW_SECRET", "demo-pow-secret")
     c.pow_ttl           = 300
 
@@ -160,17 +153,17 @@ Kiosk.configure do |c|
 
     # on_bad_proof: increment the counter file so pow_flow.rb can assert it.
     c.on_bad_proof = ->(identity:) {
-      count = (File.read(FOODELIVERY_BAD_PROOF_FILE).to_i rescue 0)
-      File.write(FOODELIVERY_BAD_PROOF_FILE, (count + 1).to_s)
+      count = (File.read(ATABLEFOR_BAD_PROOF_FILE).to_i rescue 0)
+      File.write(ATABLEFOR_BAD_PROOF_FILE, (count + 1).to_s)
     }
   end
 
   # ── Reputation PoW gate (active only when KIOSK_POW_REPUTATION_DEMO=1) ────
-  # Uses the shipped RateAndReputation policy with REAL purchase-count factors,
-  # escalating by PROOF COUNT (N×PoW):
-  #   proven_purchases_threshold: 2  → 2 settled purchases → free pass
-  #   base_count: 1, unproven_count_bonus: 1 → 0 purchases: 2 proofs;
-  #                                            1 purchase: 1 proof; 2+: nil
+  # Uses the shipped RateAndReputation policy with REAL confirmed-booking-count
+  # factors, escalating by PROOF COUNT (N×PoW):
+  #   proven_purchases_threshold: 2  → 2 confirmed bookings → free pass
+  #   base_count: 1, unproven_count_bonus: 1 → 0 bookings: 2 proofs;
+  #                                            1 booking: 1 proof; 2+: nil
   if ENV["KIOSK_POW_REPUTATION_DEMO"] == "1"
     c.reputation_policy = Kiosk::Reputation::Policies::RateAndReputation.new(
       proven_purchases_threshold: 2,
@@ -188,15 +181,17 @@ Kiosk.configure do |c|
     c.pow_secret = ENV.fetch("KIOSK_POW_SECRET", "demo-pow-secret")
     c.pow_ttl    = 300
 
-    # Factors: real DB lookup — COUNT(*) on kiosk.settlements for this principal.
+    # Factors: real DB lookup — COUNT(*) of the principal's CONFIRMED bookings.
+    # A confirmed reservation is this provider's "proven completed action"
+    # signal, mapped into the policy's settled_purchases_count factor.
     # request_rate_per_min and bad_proof_count are fixed at 0 for the demo.
     c.reputation_factors = ->(identity:, **) {
       uid  = identity.user_id
       conn = ActiveRecord::Base.connection
       count = conn.execute(
-        "SELECT COUNT(*) AS settled_count FROM kiosk.settlements " \
-        "WHERE user_id = #{conn.quote(uid.to_s)}"
-      ).first["settled_count"].to_i
+        "SELECT COUNT(*) AS confirmed_count FROM bookings " \
+        "WHERE user_id = #{conn.quote(uid.to_s)}::uuid AND status = 'confirmed'"
+      ).first["confirmed_count"].to_i
       Kiosk::Reputation::Factors.new(
         kyc_level:               nil,
         settled_purchases_count: count,
@@ -209,158 +204,164 @@ Kiosk.configure do |c|
     }
 
     c.on_bad_proof = ->(identity:) {
-      cnt = (File.read(FOODELIVERY_REPUTATION_BAD_PROOF_FILE).to_i rescue 0)
-      File.write(FOODELIVERY_REPUTATION_BAD_PROOF_FILE, (cnt + 1).to_s)
+      cnt = (File.read(ATABLEFOR_REPUTATION_BAD_PROOF_FILE).to_i rescue 0)
+      File.write(ATABLEFOR_REPUTATION_BAD_PROOF_FILE, (cnt + 1).to_s)
     }
   end
 end
 
 # ─── Queries ────────────────────────────────────────────────────────────────
 
-# restaurants — public restaurant catalog. No per-user scoping: all
-# authenticated agents can browse available restaurants.
-Kiosk::Server::Queries.register("restaurants",
-                                 description: "Browse the public restaurant catalog") do |_params|
-  ActiveRecord::Base.connection.execute("SELECT id, name FROM restaurants ORDER BY id").to_a
-end
-
-# menu_by_restaurant — parameterized menu catalog for a named restaurant.
-# The agent supplies :restaurant (the restaurant name); the block builds the
-# query with conn.quote binding — agent input is data, never SQL.
-# No per-user scoping: all authenticated agents can browse the menu.
-Kiosk::Server::Queries.register("menu_by_restaurant",
-                                 description: "Browse menu items for a named restaurant",
-                                 params: { restaurant: "string — restaurant name" }) do |params|
-  name = params.fetch(:restaurant) { raise Kiosk::Server::Errors::BadRequest.new("missing param: restaurant") }
+# availability — open table-slots for a given date that seat the party.
+# Public (no per-user scoping): any authenticated agent may browse availability.
+# The agent supplies :date (ISO 8601 date) and :party_size; the block builds
+# the query with conn.quote binding — agent input is data, never SQL. Returns
+# only slots whose status is 'open' and whose capacity >= party_size.
+Kiosk::Server::Queries.register("availability",
+                                 description: "List open table time-slots for a date that seat the party " \
+                                              "(params: date, party_size)",
+                                 params: {
+                                   date:       "string — the reservation date as an ISO 8601 date (YYYY-MM-DD)",
+                                   party_size: "integer — number of guests; only tables seating at least this many are returned",
+                                 }) do |params|
+  date       = params.fetch(:date) { raise Kiosk::Server::Errors::BadRequest.new("missing param: date") }
+  party_size = (params.fetch(:party_size) { raise Kiosk::Server::Errors::BadRequest.new("missing param: party_size") }).to_i
   conn = ActiveRecord::Base.connection
   conn.execute(
-    "SELECT mi.id, mi.name, mi.sku, mi.price_cents " \
-    "FROM menu_items mi " \
-    "JOIN restaurants r ON r.id = mi.restaurant_id " \
-    "WHERE r.name = #{conn.quote(name.to_s)} " \
-    "ORDER BY mi.id"
+    "SELECT ts.id, ts.table_label, ts.capacity, " \
+    "to_char(ts.slot_date, 'YYYY-MM-DD') AS slot_date, " \
+    "to_char(ts.slot_time, 'HH24:MI')    AS slot_time " \
+    "FROM table_slots ts " \
+    "WHERE ts.status = 'open' " \
+    "AND ts.slot_date = #{conn.quote(date.to_s)}::date " \
+    "AND ts.capacity >= #{party_size} " \
+    "ORDER BY ts.slot_time, ts.capacity"
   ).to_a
 end
 
-# my_orders — per-user order list scoped by the session GUC.
+# my_bookings — per-user booking list scoped by the session GUC.
 # The WHERE is provider-controlled; the agent supplies no filter. This
-# demonstrates app-layer per-user isolation without RLS: the principal can
-# only see rows where user_id matches kiosk.current_user_id(), enforced in
-# the query definition itself.
-Kiosk::Server::Queries.register("my_orders",
-                                 description: "List this principal's placed orders (scoped to authenticated user via kiosk.current_user_id())") do |_params|
+# demonstrates app-layer per-user isolation: the principal can only see rows
+# where user_id matches kiosk.current_user_id(), enforced in the query itself.
+Kiosk::Server::Queries.register("my_bookings",
+                                 description: "List this principal's table bookings (scoped to authenticated user via kiosk.current_user_id())") do |_params|
   ActiveRecord::Base.connection.execute(
-    "SELECT id, restaurant_id, menu_item_id, total_cents, status " \
-    "FROM orders " \
-    "WHERE user_id = kiosk.current_user_id() " \
-    "ORDER BY id"
+    "SELECT b.id, b.restaurant_id, b.table_slot_id, b.party_size, b.status, " \
+    "to_char(ts.slot_date, 'YYYY-MM-DD') AS slot_date, " \
+    "to_char(ts.slot_time, 'HH24:MI')    AS slot_time " \
+    "FROM bookings b " \
+    "JOIN table_slots ts ON ts.id = b.table_slot_id " \
+    "WHERE b.user_id = kiosk.current_user_id() " \
+    "ORDER BY ts.slot_date, ts.slot_time"
   ).to_a
 end
 
 # ─── Actions ────────────────────────────────────────────────────────────────
 
-# payment_setup — canonical skill Step 5 runs this unconditionally before
-# `pay`. Mirrors the getgrocery registration shape; with StubPsp
-# (no SetupIntent model) setup_required? is always false, so this is an
-# immediate no-op success: {status: "ready"}.
-Kiosk::Server::Actions.register("payment_setup",
-  description: "Check whether the authenticated principal has a saved payment method. " \
-               "Returns {status: \"ready\"} when the assistant can proceed to `pay`. " \
-               "Returns {status: \"setup_required\", setup_url: \"…\"} when a hosted setup flow " \
-               "must be completed by the human first. This demo's stub PSP needs no setup, " \
-               "so it always returns ready. The assistant should call this before `pay`.",
-  params: {}) do |_args|
+# book_table — claim an open table-slot for the authenticated principal and
+# create a confirmed booking. Selects an open slot at Mamma Pizza matching the
+# requested date, time and party size, atomically marks it 'booked', and
+# records the booking under kiosk.current_user_id(). No payment — a reservation
+# takes no money.
+Kiosk::Server::Actions.register("book_table",
+                                  description: "Book a restaurant table for the authenticated principal " \
+                                               "(params: date, time, party_size). Confirms a reservation on an " \
+                                               "open slot that seats the party; returns the confirmed booking.",
+                                  params: {
+                                    date:       "string — reservation date as an ISO 8601 date (YYYY-MM-DD)",
+                                    time:       "string — reservation time as HH:MM (24-hour), e.g. \"20:00\"",
+                                    party_size: "integer — number of guests",
+                                  }) do |args|
   conn = ActiveRecord::Base.connection
-  uid  = conn.execute("SELECT kiosk.current_user_id() AS uid").first["uid"]
-  raise Kiosk::Server::Errors::Unauthenticated.new("no authenticated user") if uid.nil?
 
-  provider = Kiosk.configuration.payment_provider
+  date       = (args[:date] || args["date"]).to_s
+  time       = (args[:time] || args["time"]).to_s
+  party_size = (args[:party_size] || args["party_size"]).to_i
+  raise Kiosk::Server::Errors::BadRequest.new("missing param: date")       if date.empty?
+  raise Kiosk::Server::Errors::BadRequest.new("missing param: time")       if time.empty?
+  raise Kiosk::Server::Errors::BadRequest.new("party_size must be >= 1")    if party_size < 1
 
-  if provider.setup_required?(user_id: uid)
-    { status: "setup_required", setup_url: provider.setup_url(user_id: uid) }
-  else
-    { status: "ready" }
+  # Identity is set via Kiosk::Server::SessionContext SET LOCAL —
+  # current_user_id() returns the principal. ActiveRecord doesn't have direct
+  # access; pull from PG.
+  uid = conn.execute("SELECT kiosk.current_user_id() AS uid").first["uid"]
+
+  conn.transaction do
+    # Claim an open slot atomically (FOR UPDATE SKIP LOCKED so concurrent
+    # bookers never claim the same table). Match date + time + capacity.
+    slot = conn.execute(
+      "SELECT ts.id, ts.restaurant_id FROM table_slots ts " \
+      "WHERE ts.status = 'open' " \
+      "AND ts.slot_date = #{conn.quote(date)}::date " \
+      "AND to_char(ts.slot_time, 'HH24:MI') = #{conn.quote(time)} " \
+      "AND ts.capacity >= #{party_size} " \
+      "ORDER BY ts.capacity " \
+      "FOR UPDATE SKIP LOCKED " \
+      "LIMIT 1"
+    ).first
+    raise Kiosk::Server::Errors::Conflict.new("no open table for #{date} #{time} seating #{party_size}") if slot.nil?
+
+    slot_id       = slot["id"]
+    restaurant_id = slot["restaurant_id"]
+
+    conn.execute("UPDATE table_slots SET status = 'booked', updated_at = now() WHERE id = #{slot_id}")
+
+    booking = conn.execute(
+      "INSERT INTO bookings " \
+      "(id, user_id, restaurant_id, table_slot_id, party_size, status, created_at, updated_at) " \
+      "VALUES (gen_random_uuid(), #{conn.quote(uid.to_s)}::uuid, #{restaurant_id}, #{slot_id}, " \
+      "#{party_size}, 'confirmed', now(), now()) " \
+      "RETURNING id, party_size, status"
+    ).first
+
+    {
+      booking_id:    booking["id"],
+      restaurant_id: restaurant_id,
+      table_slot_id: slot_id,
+      party_size:    booking["party_size"].to_i,
+      date:          date,
+      time:          time,
+      status:        booking["status"],
+    }
   end
 end
 
-# Register the demo Action. In production, providers use the full
-# `Kiosk::Action` DSL (post-v0.1); for the e2e a simple registered
-# block is sufficient.
-Kiosk::Server::Actions.register("place_order",
-                                  description: "Place a food order for the authenticated principal",
-                                  params: {
-                                    menu_item_id:     "integer — id of the menu item to order",
-                                    quantity:         "integer — number of items (default 1)",
-                                    delivery_address: "string — delivery address",
-                                  }) do |args|
-  # Identity is set via Kiosk::Server::SessionContext SET LOCAL —
-  # current_user_id() helper returns the principal. ActiveRecord doesn't
-  # have direct access; pull from PG.
-  uid = ActiveRecord::Base.connection.execute(
-    "SELECT kiosk.current_user_id() AS uid"
-  ).first["uid"]
-
-  item = MenuItem.find(args[:menu_item_id])
-  qty  = (args[:quantity] || 1).to_i
-
-  order = Order.create!(
-    user_id:          uid,
-    restaurant_id:    item.restaurant_id,
-    menu_item_id:     item.id,
-    quantity:         qty,
-    total_cents:      item.price_cents * qty,
-    delivery_address: args.fetch(:delivery_address),
-  )
-
-  { order_id: order.id, restaurant_id: order.restaurant_id, total_cents: order.total_cents, status: order.status }
-end
-
-# confirm_order — post-pay confirmation gated on order-ownership + settlement.
-# Mirrors getgrocery's schedule_delivery order-ownership gate: a placed
-# order is confirmed only by its owner, and only once a settlement referencing
-# that order exists. The pay path binds the order via the cart mandate's
-# line_items (each carries {order_id, total}); this action verifies both gates
-# app-layer, so a cross-principal confirm on another's order is a clean 403.
-Kiosk::Server::Actions.register("confirm_order",
-  description: "Confirm a paid order for the authenticated principal " \
-               "(requires the order to belong to the principal AND a settlement referencing it)",
+# cancel_booking — cancel one of the authenticated principal's own bookings and
+# free the table-slot. Owner-scoped: the WHERE gates on user_id =
+# kiosk.current_user_id(), so a cross-principal cancel on another's booking is a
+# clean 403 (the booking is not found under the caller's identity).
+Kiosk::Server::Actions.register("cancel_booking",
+  description: "Cancel one of the authenticated principal's own table bookings " \
+               "(requires the booking to belong to the principal). Frees the table-slot.",
   params: {
-    order_id: "uuid — the order to confirm (from place_order; must be paid and owned by the principal)",
+    booking_id: "uuid — the booking to cancel (from book_table / my_bookings; must belong to the principal)",
   }) do |args|
   conn = ActiveRecord::Base.connection
 
-  order_id = args[:order_id] || args["order_id"]
-  raise Kiosk::Server::Errors::BadRequest.new("missing field: order_id") if order_id.nil? || order_id.to_s.empty?
+  booking_id = args[:booking_id] || args["booking_id"]
+  raise Kiosk::Server::Errors::BadRequest.new("missing field: booking_id") if booking_id.nil? || booking_id.to_s.empty?
 
   conn.transaction do
-    # ── Gate 1: order belongs to principal and not already confirmed ─────
-    order = conn.execute(
-      "SELECT id FROM orders " \
-      "WHERE id = #{conn.quote(order_id.to_s)}::uuid " \
+    # Owner-scoped: the booking must belong to the caller and not be cancelled.
+    booking = conn.execute(
+      "SELECT id, table_slot_id FROM bookings " \
+      "WHERE id = #{conn.quote(booking_id.to_s)}::uuid " \
       "AND user_id = kiosk.current_user_id() " \
-      "AND status NOT IN ('confirmed') " \
+      "AND status <> 'cancelled' " \
       "LIMIT 1"
     ).first
-    raise Kiosk::Server::Errors::Forbidden.new("order not found, not yours, or already confirmed") if order.nil?
+    raise Kiosk::Server::Errors::Forbidden.new("booking not found, not yours, or already cancelled") if booking.nil?
 
-    # ── Gate 2: settlement (capture receipt) referencing this order ──────
-    order_filter_json = [{ order_id: order_id.to_s }].to_json
-    paid = conn.execute(
-      "SELECT 1 AS ok " \
-      "FROM kiosk.settlements pm " \
-      "JOIN kiosk.cart_mandates cm ON cm.id = pm.cart_mandate_id " \
-      "WHERE pm.user_id = kiosk.current_user_id() " \
-      "AND cm.line_items @> #{conn.quote(order_filter_json)}::jsonb " \
-      "LIMIT 1"
-    ).first
-    raise Kiosk::Server::Errors::Forbidden.new("no settlement for this order") if paid.nil?
+    slot_id = booking["table_slot_id"]
 
     conn.execute(
-      "UPDATE orders SET status = 'confirmed', updated_at = now() " \
-      "WHERE id = #{conn.quote(order_id.to_s)}::uuid " \
+      "UPDATE bookings SET status = 'cancelled', updated_at = now() " \
+      "WHERE id = #{conn.quote(booking_id.to_s)}::uuid " \
       "AND user_id = kiosk.current_user_id()"
     )
+    # Free the slot so it can be booked again.
+    conn.execute("UPDATE table_slots SET status = 'open', updated_at = now() WHERE id = #{slot_id}")
 
-    { order_id: order_id, status: "confirmed" }
+    { booking_id: booking_id, status: "cancelled" }
   end
 end

@@ -1,21 +1,22 @@
 # frozen_string_literal: true
 
-# Kiosk demo orchestration. Tasks:
+# Kiosk demo orchestration (atablefor — restaurant table-booking). Tasks:
 #
 #   rake demo:setup        idempotent db:drop / create / schema:load / seed
 #   rake demo:walkthrough  boots the server, runs a curl-driven showcase, tears down
-#   rake demo:order        boots the server, runs order_flow.rb (no-human full order),
-#                          asserts DB row counts, tears down
+#   rake demo:book         boots the server, runs book_flow.rb (no-human table booking),
+#                          asserts the confirmed booking, tears down
 #   rake demo:pow          boots with KIOSK_POW_DEMO=1, runs pow_flow.rb (402→solve→200)
-#   rake demo:rls          RLS-enforce overlay reference (additive; leaves structure.sql)
-#   rake demo:reputation   trust-earned-by-spending PoW demo, runs reputation_flow.rb
+#   rake demo:reputation   anti-scalping PoW demo (cost drops as bookings accrue)
 #   rake demo:isolation    adversarial cross-tenant isolation test
-#   rake demo:schema       self-discovery proof — verifies the schema verb over HTTP
-#   rake demo:redteam      adversarial regression battery (kiosk-redteam)
-#   rake demo              setup + order (the full end-to-end proof)
+#   rake demo:schema       self-discovery proof — verifies the schema verb + pay-absent
+#   rake demo:redteam      adversarial regression battery
+#   rake demo              setup + book (the full end-to-end proof)
 #
-# The walkthrough lives in bin/demo (POSIX shell) so it's debuggable
-# without going through Rake.
+# atablefor takes NO payments (a reservation needs none), so there is no
+# demo:rls / demo:order / pay path — the RLS *showcase* lives in getgrocery.
+# The walkthrough lives in bin/demo (POSIX shell) so it's debuggable without
+# going through Rake.
 
 namespace :demo do
   desc "Create + load schema + seed the demo database (idempotent)."
@@ -25,8 +26,8 @@ namespace :demo do
        "THEN CREATE ROLE app_role NOLOGIN; END IF; END \\$\\$;\" >/dev/null"
     sh "psql -d postgres -tAc 'GRANT app_role TO CURRENT_USER' >/dev/null"
     # Path C: schema_format = :sql, so db:schema:load loads structure.sql
-    # directly (no RLS). Use db:schema:load instead of db:migrate so that
-    # the canonical structure.sql (no ROW LEVEL SECURITY) is the source of truth.
+    # directly. Use db:schema:load instead of db:migrate so the canonical
+    # structure.sql is the source of truth.
     sh "bundle exec rails db:drop db:create db:schema:load db:seed"
   end
 
@@ -35,20 +36,20 @@ namespace :demo do
     exec File.expand_path("../../bin/demo", __dir__)
   end
 
-  desc "Boot the server, run the no-human order_flow.rb end-to-end, assert DB rows."
-  task :order do
+  desc "Boot the server, run the no-human book_flow.rb end-to-end, assert the booking."
+  task :book do
     require "resolv"
 
     port = ENV.fetch("PORT", "3002")
-    log  = "/tmp/kiosk-foodelivery-demo.log"
+    log  = "/tmp/kiosk-atablefor-demo.log"
 
     # ── host resolution ────────────────────────────────────────────────
     host = begin
-      addr = Resolv.getaddress("foodelivery.app") rescue ""
+      addr = Resolv.getaddress("atablefor.app") rescue ""
       if addr == "127.0.0.1"
-        "foodelivery.app"
+        "atablefor.app"
       else
-        puts "  add to /etc/hosts:  127.0.0.1 foodelivery.app" if addr.empty?
+        puts "  add to /etc/hosts:  127.0.0.1 atablefor.app" if addr.empty?
         "127.0.0.1"
       end
     end
@@ -56,7 +57,7 @@ namespace :demo do
     server_url   = "http://#{host}:#{port}"
     kiosk_issuer = server_url
 
-    puts "\n── Starting foodelivery on #{server_url} ──"
+    puts "\n── Starting atablefor on #{server_url} ──"
 
     # ── boot the server ────────────────────────────────────────────────
     env_vars = {
@@ -96,9 +97,9 @@ namespace :demo do
     abort "Server did not become ready — see #{log}" unless ready
     puts "  Server up at #{server_url}"
 
-    # ── run order_flow.rb ──────────────────────────────────────────────
-    flow_rb = File.expand_path("../../order_flow.rb", __dir__)
-    puts "\n── Running order_flow.rb ──"
+    # ── run book_flow.rb ───────────────────────────────────────────────
+    flow_rb = File.expand_path("../../book_flow.rb", __dir__)
+    puts "\n── Running book_flow.rb ──"
     raw = `SERVER_URL=#{server_url} KIOSK_ISSUER=#{kiosk_issuer} bundle exec ruby #{flow_rb} 2>&1`
     puts raw
 
@@ -106,202 +107,64 @@ namespace :demo do
     begin
       result = JSON.parse(raw.lines.grep(/^\{/).last || raw)
     rescue JSON::ParserError => e
-      abort "order_flow.rb did not produce valid JSON: #{e.message}\nOutput:\n#{raw}"
+      abort "book_flow.rb did not produce valid JSON: #{e.message}\nOutput:\n#{raw}"
     end
 
     # ── assertions: HTTP + JSON ────────────────────────────────────────
     puts "\n── Assertions ──"
     failures = []
 
-    pay   = result["pay"]   || {}
-    order = result["order"] || {}
+    booking     = result["booking"]     || {}
+    my_bookings = result["my_bookings"] || []
 
-    if pay["ok"] == true
-      puts "  ✓  pay.ok == true"
+    booking_id = booking["booking_id"]
+    if booking_id && !booking_id.empty?
+      puts "  ✓  booking.booking_id present (#{booking_id})"
     else
-      failures << "pay.ok is not true (got #{pay["ok"].inspect})"
-      puts "  ✗  pay.ok — got #{pay["ok"].inspect}"
+      failures << "booking.booking_id missing"
+      puts "  ✗  booking.booking_id missing"
     end
 
-    pm_id = pay.dig("value", "settlement_id")
-    if pm_id && !pm_id.empty?
-      puts "  ✓  pay.value.settlement_id present (#{pm_id})"
+    if booking["status"] == "confirmed"
+      puts "  ✓  booking.status == confirmed"
     else
-      failures << "pay.value.settlement_id missing"
-      puts "  ✗  pay.value.settlement_id missing"
+      failures << "booking.status expected 'confirmed', got #{booking["status"].inspect}"
+      puts "  ✗  booking.status — got #{booking["status"].inspect}"
     end
 
-    oid = order["order_id"]
-    if oid && !oid.empty?
-      puts "  ✓  order.order_id present (#{oid})"
+    if booking["party_size"] == 2
+      puts "  ✓  booking.party_size == 2 (a table for two)"
     else
-      failures << "order.order_id missing"
-      puts "  ✗  order.order_id missing"
+      failures << "booking.party_size expected 2, got #{booking["party_size"].inspect}"
+      puts "  ✗  booking.party_size — got #{booking["party_size"].inspect}"
+    end
+
+    # my_bookings must show exactly the one confirmed booking just made.
+    if my_bookings.size == 1 && my_bookings.first["id"] == booking_id && my_bookings.first["status"] == "confirmed"
+      puts "  ✓  my_bookings shows the confirmed booking (id=#{booking_id})"
+    else
+      failures << "my_bookings expected [{id:#{booking_id}, status:confirmed}], got #{my_bookings.inspect}"
+      puts "  ✗  my_bookings — got #{my_bookings.inspect}"
     end
 
     # ── assertions: psql row counts ────────────────────────────────────
-    db = "kiosk_foodelivery_development"
+    db = "kiosk_atablefor_development"
 
-    orders_count = `psql -X -d #{db} -tAc 'SELECT COUNT(*) FROM orders' 2>&1`.strip
-    if orders_count == "1"
-      puts "  ✓  orders count = 1"
+    bookings_count = `psql -X -d #{db} -tAc "SELECT COUNT(*) FROM bookings WHERE status = 'confirmed'" 2>&1`.strip
+    if bookings_count == "1"
+      puts "  ✓  confirmed bookings count = 1"
     else
-      failures << "orders COUNT expected 1, got #{orders_count.inspect}"
-      puts "  ✗  orders COUNT expected 1, got #{orders_count.inspect}"
+      failures << "confirmed bookings COUNT expected 1, got #{bookings_count.inspect}"
+      puts "  ✗  confirmed bookings COUNT expected 1, got #{bookings_count.inspect}"
     end
 
-    pm_count = `psql -X -d #{db} -tAc 'SELECT COUNT(*) FROM kiosk.settlements' 2>&1`.strip
-    if pm_count == "1"
-      puts "  ✓  kiosk.settlements count = 1"
+    # The booked slot must be marked 'booked' (no double-booking).
+    booked_slots = `psql -X -d #{db} -tAc "SELECT COUNT(*) FROM table_slots WHERE status = 'booked'" 2>&1`.strip
+    if booked_slots == "1"
+      puts "  ✓  exactly 1 table_slot marked booked"
     else
-      failures << "kiosk.settlements COUNT expected 1, got #{pm_count.inspect}"
-      puts "  ✗  kiosk.settlements COUNT expected 1, got #{pm_count.inspect}"
-    end
-
-    # ── query-verb assertions ──────────────────────────────────────────────
-    # QA1: query menu_by_restaurant — proves agent browses via named query, not SQL.
-    # QA2: query my_orders (before extra order) — empty for the fresh second principal.
-    # QA3: query my_orders (after extra order) — exactly 1 row, scoped to that principal.
-    # These run against the same running server (already up from order_flow.rb run above).
-    puts "\n── Query-verb assertions ──"
-
-    require "jwt"
-    require "openssl"
-    require "securerandom"
-
-    q_post = lambda do |path, body_hash, bearer = ""|
-      uri = URI("#{server_url}#{path}")
-      req = Net::HTTP::Post.new(uri, { "Content-Type" => "application/json", "Authorization" => "Bearer #{bearer}" })
-      req.body = JSON.generate(body_hash)
-      res = Net::HTTP.new(uri.host, uri.port).request(req)
-      [res.code.to_i, (JSON.parse(res.body) rescue {})]
-    end
-
-    q_get = lambda do |path, bearer = ""|
-      uri = URI("#{server_url}#{path}")
-      headers = {}
-      headers["Authorization"] = "Bearer #{bearer}" unless bearer.to_s.empty?
-      res = Net::HTTP.new(uri.host, uri.port).request(Net::HTTP::Get.new(uri, headers))
-      [res.code.to_i, (JSON.parse(res.body) rescue {})]
-    end
-
-    # Register a second fresh agent (different principal — proves per-user scoping)
-    # via the proof-of-possession handshake: challenge → sign RS256 JWS → register.
-    q_key = OpenSSL::PKey::RSA.generate(2048)
-    q_pem = q_key.public_key.to_pem
-    _q_ch_rc, q_ch = q_get.call("/kiosk/auth/challenge?public_key=#{URI.encode_www_form_component(q_pem)}")
-    q_pop = JWT.encode(
-      { aud: kiosk_issuer, nonce: q_ch["challenge"], jti: SecureRandom.uuid, iat: Time.now.to_i },
-      q_key, "RS256",
-    )
-    q_reg_rc, q_reg = q_post.call(
-      "/kiosk/auth/register",
-      { public_key: q_pem, signed: q_pop },
-    )
-    if q_reg_rc == 201
-      q_token   = q_reg["access_token"]
-      q_user_id = q_reg["user_id"]
-
-      # QA1: query menu_by_restaurant — Margherita must be present.
-      qa1_rc, qa1_resp = q_post.call(
-        "/kiosk/query",
-        { name: "menu_by_restaurant", restaurant: "Mamma Pizza" },
-        q_token,
-      )
-      if qa1_rc == 200
-        qa1_rows = qa1_resp["rows"] || []
-        qa1_skus = qa1_rows.map { |r| r["sku"] }
-        if qa1_skus.include?("margherita")
-          puts "  ✓  QA1 query menu_by_restaurant: margherita present (skus=#{qa1_skus.inspect})"
-        else
-          failures << "qa1: menu_by_restaurant — margherita not found, got skus=#{qa1_skus.inspect}"
-          puts "  ✗  QA1 query menu_by_restaurant: margherita not found (skus=#{qa1_skus.inspect})"
-        end
-      else
-        failures << "qa1: query menu_by_restaurant expected 200, got #{qa1_rc}"
-        puts "  ✗  QA1 query menu_by_restaurant returned #{qa1_rc}: #{qa1_resp.inspect}"
-      end
-
-      # QA2: query my_orders before placing — must be empty for fresh principal.
-      qa2_rc, qa2_resp = q_post.call(
-        "/kiosk/query",
-        { name: "my_orders" },
-        q_token,
-      )
-      if qa2_rc == 200
-        qa2_rows = qa2_resp["rows"] || []
-        if qa2_rows.empty?
-          puts "  ✓  QA2 my_orders (before order): empty for fresh principal (app-layer isolation)"
-        else
-          failures << "qa2: my_orders before order expected [], got #{qa2_rows.inspect}"
-          puts "  ✗  QA2 my_orders before order: expected [], got #{qa2_rows.inspect}"
-        end
-      else
-        failures << "qa2: query my_orders expected 200, got #{qa2_rc}"
-        puts "  ✗  QA2 query my_orders returned #{qa2_rc}: #{qa2_resp.inspect}"
-      end
-
-      # Place an order for the second principal (needs menu_item_id from QA1).
-      if qa1_rc == 200 && (qa1_margherita = (qa1_resp["rows"] || []).find { |r| r["sku"] == "margherita" })
-        qa_menu_item_id = qa1_margherita.fetch("id")
-        qa_place_rc, qa_place = q_post.call(
-          "/kiosk/run",
-          {
-            name:             "place_order",
-            menu_item_id:     qa_menu_item_id,
-            quantity:         1,
-            delivery_address: "2 Query St, Istanbul",
-          },
-          q_token,
-        )
-        if qa_place_rc == 200
-          qa_order_id = qa_place.dig("value", "order_id")
-          puts "  Placed QA order: #{qa_order_id}"
-
-          # QA3: query my_orders after placing — exactly 1 row, this principal only.
-          qa3_rc, qa3_resp = q_post.call(
-            "/kiosk/query",
-            { name: "my_orders" },
-            q_token,
-          )
-          if qa3_rc == 200
-            qa3_rows = qa3_resp["rows"] || []
-            if qa3_rows.size == 1 && qa3_rows.first["id"] == qa_order_id
-              puts "  ✓  QA3 my_orders (after order): exactly 1 row, id=#{qa_order_id} (app-layer per-user scoping)"
-            else
-              failures << "qa3: my_orders expected [{id:#{qa_order_id}}], got #{qa3_rows.inspect}"
-              puts "  ✗  QA3 my_orders after order: expected 1 row with id=#{qa_order_id}, got #{qa3_rows.inspect}"
-            end
-          else
-            failures << "qa3: query my_orders expected 200, got #{qa3_rc}"
-            puts "  ✗  QA3 query my_orders returned #{qa3_rc}: #{qa3_resp.inspect}"
-          end
-        else
-          failures << "qa: place_order for second principal failed (#{qa_place_rc}): #{qa_place.inspect}"
-          puts "  ✗  QA place_order for second principal failed"
-        end
-      else
-        failures << "qa: could not get margherita from QA1 — skipping QA3"
-        puts "  ✗  QA: margherita row missing from QA1 — skipping QA3"
-      end
-    else
-      failures << "qa: second agent register failed (#{q_reg_rc}): #{q_reg.inspect}"
-      puts "  ✗  QA register failed (#{q_reg_rc})"
-    end
-
-    # ── RLS gone: confirm structure.sql has no ROW LEVEL SECURITY ───────────
-    puts "\n── Structure check: no ROW LEVEL SECURITY on restaurants/menu_items/orders ──"
-    structure_path = File.expand_path("../../db/structure.sql", __dir__)
-    if File.exist?(structure_path)
-      structure = File.read(structure_path)
-      if structure.match?(/ROW LEVEL SECURITY/)
-        failures << "structure.sql still contains ROW LEVEL SECURITY — regenerate after migration edit"
-        puts "  ✗  structure.sql still contains ROW LEVEL SECURITY"
-      else
-        puts "  ✓  structure.sql: no ROW LEVEL SECURITY found"
-      end
-    else
-      puts "  (structure.sql not found — skip RLS check)"
+      failures << "booked table_slots COUNT expected 1, got #{booked_slots.inspect}"
+      puts "  ✗  booked table_slots COUNT expected 1, got #{booked_slots.inspect}"
     end
 
     if failures.empty?
@@ -326,17 +189,17 @@ namespace :demo do
     require "resolv"
 
     port = ENV.fetch("PORT", "3002")
-    log  = "/tmp/kiosk-foodelivery-pow-demo.log"
+    log  = "/tmp/kiosk-atablefor-pow-demo.log"
 
     host = begin
-      addr = Resolv.getaddress("foodelivery.app") rescue ""
-      addr == "127.0.0.1" ? "foodelivery.app" : "127.0.0.1"
+      addr = Resolv.getaddress("atablefor.app") rescue ""
+      addr == "127.0.0.1" ? "atablefor.app" : "127.0.0.1"
     end
 
     server_url   = "http://#{host}:#{port}"
     kiosk_issuer = server_url
 
-    puts "\n── Starting foodelivery (PoW demo) on #{server_url} ──"
+    puts "\n── Starting atablefor (PoW demo) on #{server_url} ──"
 
     env_vars = {
       "KIOSK_ISSUER"   => kiosk_issuer,
@@ -400,7 +263,7 @@ namespace :demo do
     end
 
     if result["served"] == true && result["http_served_after_solve"] == 200
-      puts "  ✓  served after real solve.py: HTTP 200, #{result["menu_rows"]} menu rows"
+      puts "  ✓  served after real solve.py: HTTP 200, #{result["availability_rows"]} open slots"
     else
       failures << "expected served=true + http_served_after_solve=200, got #{result.slice("served","http_served_after_solve").inspect}"
       puts "  ✗  not served after solve: #{result.inspect}"
@@ -430,155 +293,34 @@ namespace :demo do
     end
   end
 
-  # ── demo:rls — additive RLS-enforce reference ─────────────────────────────
-  desc <<~DESC
-    RLS enforce reference — strictly additive overlay; does NOT
-    touch Path-C structure.sql and does NOT add any migration.
-
-    Loads the normal structure.sql schema (db:drop → db:create → db:schema:load →
-    db:seed — identical to demo:setup), then applies RLS as an IMPERATIVE OVERLAY
-    via the kiosk-rls gem (Kiosk::RLS::Emitter — dogfooded).
-
-    Role model:
-      kiosk_foodelivery_app  NOLOGIN NOSUPERUSER NOBYPASSRLS   ← non-owner, subject to RLS
-      GRANT kiosk_foodelivery_app TO CURRENT_USER              ← allows SET LOCAL ROLE
-
-    Initializer gate (KIOSK_RLS_ENFORCE=1):
-      c.enforce_db_role = true
-      c.app_role        = "kiosk_foodelivery_app"
-    SessionContext.open appends SET LOCAL ROLE "kiosk_foodelivery_app" after GUCs.
-
-    Three-way proof (rls_proof.rb):
-      1. Negative control: owner/superuser WITHOUT SessionContext sees BOTH rows
-         (superuser bypasses RLS — the pre-fix no-op / leak).
-      2. Enforced session for A: raw unscoped SELECT * FROM orders → only A's row.
-      3. Enforced session for B: raw unscoped SELECT * FROM orders → only B's row.
-
-    Exits 0 if all three assertions pass; exits 1 on any failure.
-    Default `rake demo` (Path-C) is completely unaffected: structure.sql unchanged,
-    no ROW LEVEL SECURITY in it, no migration added.
-  DESC
-  task :rls do
-    # ── Step 1: Load structure.sql — identical to demo:setup (Path-C canonical) ─
-    # No RLS, no migrations — the canonical structure.sql stays unchanged.
-    sh "bundle exec rails db:drop db:create db:schema:load db:seed"
-
-    # ── Step 2: Create the non-owner app role (idempotent) ──────────────────
-    # NOLOGIN: cannot connect directly — only reachable via SET LOCAL ROLE.
-    # NOSUPERUSER: does not bypass RLS (unlike the login/owner role).
-    # NOBYPASSRLS: explicitly subject to all RLS policies (the default for
-    #              non-superuser roles, but stated for clarity and production parity).
-    sh "psql -d postgres -tAc \"DO \\$\\$ BEGIN " \
-       "IF NOT EXISTS (SELECT FROM pg_roles WHERE rolname = 'kiosk_foodelivery_app') " \
-       "THEN CREATE ROLE kiosk_foodelivery_app NOLOGIN NOSUPERUSER NOBYPASSRLS; END IF; " \
-       "END \\$\\$;\" >/dev/null"
-    puts "  Role kiosk_foodelivery_app ensured (NOLOGIN NOSUPERUSER NOBYPASSRLS)."
-
-    # ── Step 3: Grant kiosk_foodelivery_app to CURRENT_USER ─────────────────
-    # Required so that the owner session can execute SET LOCAL ROLE kiosk_foodelivery_app
-    # inside a transaction (SET ROLE requires membership; GRANT first makes
-    # CURRENT_USER a member of the app role).
-    sh "psql -d postgres -tAc 'GRANT kiosk_foodelivery_app TO CURRENT_USER' >/dev/null"
-    puts "  GRANT kiosk_foodelivery_app TO CURRENT_USER — SET LOCAL ROLE now available."
-
-    # ── Step 4: Apply RLS overlay via kiosk-rls Emitter (dogfooded) ─────────
-    # rls_overlay.rb:
-    #   GRANT USAGE ON SCHEMA public, kiosk
-    #   Kiosk::RLS::Emitter.statements_for(orders_table):
-    #     ALTER TABLE orders ENABLE ROW LEVEL SECURITY
-    #     ALTER TABLE orders FORCE ROW LEVEL SECURITY      ← production-fidelity
-    #     GRANT SELECT,INSERT,UPDATE,DELETE ON orders TO kiosk_foodelivery_app
-    #     CREATE POLICY orders_select USING (user_id = kiosk.current_user_id())
-    #     CREATE POLICY orders_insert WITH CHECK (user_id = kiosk.current_user_id())
-    #     COMMENT ON TABLE orders IS '...'
-    #
-    # Run WITHOUT KIOSK_RLS_ENFORCE — overlay setup is privileged (owner connection).
-    overlay_rb = File.expand_path("../../rls_overlay.rb", __dir__)
-    puts "\n── Applying RLS overlay ──"
-    sh "bundle exec rails runner #{overlay_rb}"
-
-    # ── Step 5: Run the three-way isolation proof ────────────────────────────
-    # KIOSK_RLS_ENFORCE=1 activates the initializer gate:
-    #   c.enforce_db_role = true
-    #   c.app_role        = "kiosk_foodelivery_app"
-    # SessionContext.open then appends SET LOCAL ROLE "kiosk_foodelivery_app"
-    # after the GUC statements.
-    proof_rb = File.expand_path("../../rls_proof.rb", __dir__)
-    puts "\n── Running RLS isolation proof (KIOSK_RLS_ENFORCE=1) ──"
-    raw = `KIOSK_RLS_ENFORCE=1 bundle exec rails runner #{proof_rb} 2>&1`
-    puts raw
-
-    # ── Parse JSON and assert ────────────────────────────────────────────────
-    begin
-      result = JSON.parse(raw.lines.grep(/^\{/).last || raw)
-    rescue JSON::ParserError => e
-      abort "rls_proof.rb did not produce valid JSON: #{e.message}\nOutput:\n#{raw}"
-    end
-
-    puts "\n── RLS proof assertions ──"
-    failures = []
-
-    owner_sees = result["negative_control_owner_sees"].to_i
-    if owner_sees == 2
-      puts "  ✓  negative control: owner/superuser sees #{owner_sees} rows — no-op without role-drop (leak demonstrated)"
-    else
-      failures << "negative control: expected 2 rows, got #{owner_sees}"
-      puts "  ✗  negative control FAILED: owner sees #{owner_sees} (expected 2)"
-    end
-
-    a_sees = result["enforced_a_sees"].to_i
-    if a_sees == 1
-      puts "  ✓  enforced session A: sees #{a_sees} row (own order only) — RLS backstop works"
-    else
-      failures << "enforced A: expected 1 row, got #{a_sees}"
-      puts "  ✗  enforced A FAILED: sees #{a_sees} row(s) (expected 1)"
-    end
-
-    b_sees = result["enforced_b_sees"].to_i
-    if b_sees == 1
-      puts "  ✓  enforced session B: sees #{b_sees} row (own order only) — RLS backstop works"
-    else
-      failures << "enforced B: expected 1 row, got #{b_sees}"
-      puts "  ✗  enforced B FAILED: sees #{b_sees} row(s) (expected 1)"
-    end
-
-    if failures.empty?
-      puts "\n  RLS proof PASSED — FORCE+role-drop blocks raw cross-tenant SELECT."
-      puts "  structure.sql is unchanged; default demo path unaffected."
-    else
-      puts "\n  FAILED assertions:"
-      failures.each { |f| puts "    - #{f}" }
-      exit 1
-    end
-  end
-  # ── end demo:rls ──────────────────────────────────────────────────────────
-
   # ── demo:reputation ────────────────────────────────────────────────────────
   desc <<~DESC
-    Reputation PoW demo (R2 P6 — trust-earned-by-spending).
+    Anti-scalping reputation PoW demo (trust earned by booking).
 
     Boots the server with KIOSK_POW_REPUTATION_DEMO=1, runs reputation_flow.rb:
-      0 purchases → 402 with 2 equihash challenges (unproven)
-      1 purchase  → 402 with 1 challenge (purchase earns relief)
-      2 purchases → 200 served directly, NO challenge (proven principal — free pass)
+      0 confirmed bookings → 402 with 2 equihash challenges (unproven)
+      1 confirmed booking  → 402 with 1 challenge (a booking earns relief)
+      2 confirmed bookings → 200 served directly, NO challenge (proven — free pass)
+
+    The anti-reservation-scalping mechanic: a fresh / low-reputation agent pays
+    escalating PoW to probe prime-time availability; a scalper renting fresh
+    identities pays and pays, while a returning diner earns relief.
 
     Asserts:
-      • proofs_unproven > proofs_after_1_purchase  (cost dropped with a purchase)
-      • served_after_2_purchases == true           (query is free once proven)
+      • proofs_unproven > proofs_after_1_booking  (cost dropped with a booking)
+      • served_after_2_bookings == true           (query is free once proven)
       • challenge_after_2 == nil                   (no PoW issued to a proven principal)
-
-    Prints the observed proof-count curve. Exits 0 on pass, 1 on failure.
 
     Policy: Kiosk::Reputation::Policies::RateAndReputation
       proven_purchases_threshold: 2, base_count: 1, unproven_count_bonus: 1
-    Factors: real DB lookup — COUNT(*) FROM kiosk.settlements WHERE user_id = <principal>
+    Factors: real DB lookup — COUNT(*) FROM bookings WHERE user_id = <principal>
+             AND status = 'confirmed' (mapped into the policy's proven-count factor)
 
     Requirements:
       python3 with numpy: pip install numpy
   DESC
   task :reputation do
     # Requirement: python3 with numpy (the equihash solver is vectorised).
-    # Install with: pip install numpy
     python_ok = system("python3 -c 'import numpy' 2>/dev/null")
     unless python_ok
       abort "numpy not found. Install with: pip install numpy\n" \
@@ -588,20 +330,20 @@ namespace :demo do
     require "resolv"
 
     port = ENV.fetch("PORT", "3004")  # port 3004 to avoid conflict with demo:pow (3002)
-    log  = "/tmp/kiosk-foodelivery-reputation-demo.log"
+    log  = "/tmp/kiosk-atablefor-reputation-demo.log"
 
     host = begin
-      addr = Resolv.getaddress("foodelivery.app") rescue ""
-      addr == "127.0.0.1" ? "foodelivery.app" : "127.0.0.1"
+      addr = Resolv.getaddress("atablefor.app") rescue ""
+      addr == "127.0.0.1" ? "atablefor.app" : "127.0.0.1"
     end
 
     server_url   = "http://#{host}:#{port}"
     kiosk_issuer = server_url
 
-    puts "\n── Starting foodelivery (Reputation PoW demo) on #{server_url} ──"
+    puts "\n── Starting atablefor (anti-scalping reputation PoW demo) on #{server_url} ──"
     puts "   Policy: RateAndReputation (proven_purchases_threshold=2, base_count=1, unproven_count_bonus=1)"
-    puts "   Factors: real DB lookup — kiosk.settlements WHERE user_id = <principal>"
-    puts "   Expected curve (by PROOF COUNT, N×PoW): 2 proofs (0 purchases) → 1 proof (1 purchase) → free pass (2 purchases)"
+    puts "   Factors: real DB lookup — bookings WHERE user_id = <principal> AND status = 'confirmed'"
+    puts "   Expected curve (by PROOF COUNT, N×PoW): 2 proofs (0 bookings) → 1 proof (1 booking) → free pass (2 bookings)"
 
     env_vars = {
       "KIOSK_ISSUER"               => kiosk_issuer,
@@ -658,30 +400,29 @@ namespace :demo do
     failures = []
 
     n_unproven = result["proofs_unproven"]
-    n_after_1  = result["proofs_after_1_purchase"]
-    served_2   = result["served_after_2_purchases"]
+    n_after_1  = result["proofs_after_1_booking"]
+    served_2   = result["served_after_2_bookings"]
     n_after_2  = result["challenge_after_2"]
 
-    # Print the observed proof-count curve.
-    puts "  Proof-count curve: #{n_unproven} (0 purchases) → #{n_after_1} (1 purchase) → #{n_after_2.inspect} (2 purchases)"
+    puts "  Proof-count curve: #{n_unproven} (0 bookings) → #{n_after_1} (1 booking) → #{n_after_2.inspect} (2 bookings)"
 
     if n_unproven.to_i > n_after_1.to_i
-      puts "  ✓  proof count dropped: #{n_unproven} → #{n_after_1} (purchase earns relief)"
+      puts "  ✓  proof count dropped: #{n_unproven} → #{n_after_1} (a booking earns relief)"
     else
-      failures << "expected proofs_unproven(#{n_unproven}) > proofs_after_1_purchase(#{n_after_1}) — cost must drop after first purchase"
-      puts "  ✗  proof count did NOT drop after 1st purchase: #{n_unproven} → #{n_after_1}"
+      failures << "expected proofs_unproven(#{n_unproven}) > proofs_after_1_booking(#{n_after_1}) — cost must drop after first booking"
+      puts "  ✗  proof count did NOT drop after 1st booking: #{n_unproven} → #{n_after_1}"
     end
 
     if served_2 == true && n_after_2.nil?
-      puts "  ✓  free pass after 2 purchases: query served without any challenge (proven principal)"
+      puts "  ✓  free pass after 2 bookings: query served without any challenge (proven principal)"
     else
-      failures << "expected served_after_2_purchases=true + challenge_after_2=nil; got served=#{served_2.inspect}, challenge=#{n_after_2.inspect}"
-      puts "  ✗  NOT served without challenge after 2 purchases (served=#{served_2.inspect}, n_after_2=#{n_after_2.inspect})"
+      failures << "expected served_after_2_bookings=true + challenge_after_2=nil; got served=#{served_2.inspect}, challenge=#{n_after_2.inspect}"
+      puts "  ✗  NOT served without challenge after 2 bookings (served=#{served_2.inspect}, n_after_2=#{n_after_2.inspect})"
     end
 
     if failures.empty?
       puts "\n  All reputation assertions PASSED."
-      puts "  Trust-earned-by-spending: PoW proof-count curve demonstrated end-to-end."
+      puts "  Anti-scalping: PoW proof-count curve demonstrated end-to-end (cost drops as a real booking history accrues)."
     else
       puts "\n  FAILED:"
       failures.each { |f| puts "    - #{f}" }
@@ -692,24 +433,22 @@ namespace :demo do
 
   # ---------------------------------------------------------------------------
   desc <<~DESC
-    Adversarial cross-tenant isolation test.
+    Adversarial cross-tenant isolation test (table-booking domain).
 
     Boots the server, runs isolation_flow.rb with two fresh principals (A and B),
-    and asserts all cross-tenant denial properties, including the order-ownership
-    mutation gate that binds pay to a placed order:
+    and asserts all cross-tenant denial properties:
 
-      HEADLINE (pay/order binding): B cannot confirm_order on A's order.
-        A places order oA and pays for it (the cart mandate binds the settlement
-        to oA via line_items[{order_id}]). B calls confirm_order with order_id=oA
-        → MUST be 403: confirm_order gates on order-ownership AND an existing
-        settlement referencing oA, so a cross-principal confirm is rejected.
-      Assertion 1 (exclusion): B's my_orders does NOT contain A's order oA.
-      Assertion 2 (forged user_id ignored): B calls place_order with a forged
-        user_id arg (A's UUID). The created order belongs to B (server uses
+      HEADLINE (owner-scoped cancel): B cannot cancel_booking A's booking.
+        A books table oA. B calls cancel_booking with booking_id=oA → MUST be
+        403: cancel_booking gates on booking-ownership, so a cross-principal
+        cancel is rejected and A's booking stays confirmed.
+      Assertion 1 (exclusion): B's my_bookings does NOT contain A's booking oA.
+      Assertion 2 (forged user_id ignored): B calls book_table with a forged
+        user_id arg (A's UUID). The created booking belongs to B (server uses
         kiosk.current_user_id(), ignores agent-supplied user_id). Verified by:
-          - the order's DB user_id column == B's user_id (not A's)
-          - B's my_orders contains the order
-          - A's my_orders does NOT contain it
+          - the booking's DB user_id column == B's user_id (not A's)
+          - B's my_bookings contains the booking
+          - A's my_bookings does NOT contain it
 
     Exits 0 if all assertions hold (isolation works); exits 1 on failure.
     A red assertion = real isolation hole: fix the app, not the test.
@@ -719,15 +458,14 @@ namespace :demo do
     require "json"
 
     port = ENV.fetch("PORT", "3002")
-    log  = "/tmp/kiosk-foodelivery-isolation.log"
+    log  = "/tmp/kiosk-atablefor-isolation.log"
 
-    # ── host resolution ────────────────────────────────────────────────
     host = begin
-      addr = Resolv.getaddress("foodelivery.app") rescue ""
+      addr = Resolv.getaddress("atablefor.app") rescue ""
       if addr == "127.0.0.1"
-        "foodelivery.app"
+        "atablefor.app"
       else
-        puts "  add to /etc/hosts:  127.0.0.1 foodelivery.app" if addr.empty?
+        puts "  add to /etc/hosts:  127.0.0.1 atablefor.app" if addr.empty?
         "127.0.0.1"
       end
     end
@@ -735,9 +473,8 @@ namespace :demo do
     server_url   = "http://#{host}:#{port}"
     kiosk_issuer = server_url
 
-    puts "\n── Starting foodelivery (isolation test) on #{server_url} ──"
+    puts "\n── Starting atablefor (isolation test) on #{server_url} ──"
 
-    # ── boot the server ────────────────────────────────────────────────
     env_vars = { "KIOSK_ISSUER" => kiosk_issuer }
     server_pid = spawn(
       env_vars,
@@ -754,7 +491,6 @@ namespace :demo do
       end
     end
 
-    # ── wait for readiness ─────────────────────────────────────────────
     require "net/http"
     require "uri"
     ready = false
@@ -773,13 +509,11 @@ namespace :demo do
     abort "Server did not become ready — see #{log}" unless ready
     puts "  Server up at #{server_url}"
 
-    # ── run isolation_flow.rb ──────────────────────────────────────────
     flow_rb = File.expand_path("../../isolation_flow.rb", __dir__)
     puts "\n── Running isolation_flow.rb (adversarial cross-tenant) ──"
     raw = `SERVER_URL=#{server_url} KIOSK_ISSUER=#{kiosk_issuer} bundle exec ruby #{flow_rb} 2>&1`
     puts raw
 
-    # ── parse JSON output ──────────────────────────────────────────────
     begin
       result = JSON.parse(raw.lines.grep(/^\{/).last || raw)
     rescue JSON::ParserError => e
@@ -789,55 +523,55 @@ namespace :demo do
     failures = []
     puts "\n── Adversarial isolation assertions ──"
 
-    user_id_a              = result["user_id_a"]
-    user_id_b              = result["user_id_b"]
-    order_id_a             = result["order_id_a"]
-    order_id_b             = result["order_id_b"]
-    b_confirm_on_a_status  = result["b_confirm_on_a_status"]
-    b_before               = result["b_order_ids_before"] || []
-    b_after                = result["b_order_ids_after"]  || []
-    a_after                = result["a_order_ids_after"]  || []
+    user_id_a             = result["user_id_a"]
+    user_id_b             = result["user_id_b"]
+    booking_id_a          = result["booking_id_a"]
+    booking_id_b          = result["booking_id_b"]
+    b_cancel_on_a_status  = result["b_cancel_on_a_status"]
+    b_before              = result["b_booking_ids_before"] || []
+    b_after               = result["b_booking_ids_after"]  || []
+    a_after               = result["a_booking_ids_after"]  || []
 
-    # ── HEADLINE: B cannot confirm_order on A's order (order-ownership gate) ──
-    if b_confirm_on_a_status == 403
-      puts "  ✓  HEADLINE: B cannot confirm_order on A's order (pay/order-ownership gate) → 403"
+    # ── HEADLINE: B cannot cancel A's booking (owner-scoped gate) ──
+    if b_cancel_on_a_status == 403
+      puts "  ✓  HEADLINE: B cannot cancel_booking on A's booking (owner-scoped gate) → 403"
     else
-      failures << "ISOLATION HOLE: B's confirm_order on A's order returned #{b_confirm_on_a_status} (expected 403)"
-      puts "  ✗  HEADLINE: confirm_order ownership gate FAILED — returned #{b_confirm_on_a_status}"
+      failures << "ISOLATION HOLE: B's cancel_booking on A's booking returned #{b_cancel_on_a_status} (expected 403)"
+      puts "  ✗  HEADLINE: cancel_booking ownership gate FAILED — returned #{b_cancel_on_a_status}"
     end
 
-    # ── Assertion 1: B's my_orders (before) excludes A's order ────────
-    if b_before.include?(order_id_a)
-      failures << "ISOLATION HOLE: B's my_orders (before) contains A's order #{order_id_a} — cross-tenant leak"
-      puts "  ✗  Assertion 1 FAILED: B sees A's order #{order_id_a} — isolation hole"
+    # ── Assertion 1: B's my_bookings (before) excludes A's booking ────
+    if b_before.include?(booking_id_a)
+      failures << "ISOLATION HOLE: B's my_bookings (before) contains A's booking #{booking_id_a} — cross-tenant leak"
+      puts "  ✗  Assertion 1 FAILED: B sees A's booking #{booking_id_a} — isolation hole"
     else
-      puts "  ✓  Assertion 1: B's my_orders (before) excludes A's order #{order_id_a} (app-layer isolation)"
+      puts "  ✓  Assertion 1: B's my_bookings (before) excludes A's booking #{booking_id_a} (app-layer isolation)"
     end
 
-    # ── Assertion 2a: B's my_orders (after forged place_order) contains oB ──
-    if b_after.include?(order_id_b)
-      puts "  ✓  Assertion 2a: B's my_orders (after forged order) includes oB #{order_id_b}"
+    # ── Assertion 2a: B's my_bookings (after forged booking) contains oB ──
+    if b_after.include?(booking_id_b)
+      puts "  ✓  Assertion 2a: B's my_bookings (after forged booking) includes oB #{booking_id_b}"
     else
-      failures << "B's my_orders (after forged order) does not contain oB #{order_id_b}; got #{b_after.inspect}"
-      puts "  ✗  Assertion 2a FAILED: B's my_orders missing oB #{order_id_b}"
+      failures << "B's my_bookings (after forged booking) does not contain oB #{booking_id_b}; got #{b_after.inspect}"
+      puts "  ✗  Assertion 2a FAILED: B's my_bookings missing oB #{booking_id_b}"
     end
 
-    # ── Assertion 2b: A's my_orders (after B's forged order) excludes oB ──
-    if a_after.include?(order_id_b)
-      failures << "ISOLATION HOLE: A's my_orders contains B's forged order #{order_id_b} — cross-tenant leak"
-      puts "  ✗  Assertion 2b FAILED: A sees B's order #{order_id_b} — isolation hole"
+    # ── Assertion 2b: A's my_bookings (after B's forged booking) excludes oB ──
+    if a_after.include?(booking_id_b)
+      failures << "ISOLATION HOLE: A's my_bookings contains B's forged booking #{booking_id_b} — cross-tenant leak"
+      puts "  ✗  Assertion 2b FAILED: A sees B's booking #{booking_id_b} — isolation hole"
     else
-      puts "  ✓  Assertion 2b: A's my_orders excludes B's forged order #{order_id_b}"
+      puts "  ✓  Assertion 2b: A's my_bookings excludes B's forged booking #{booking_id_b}"
     end
 
     # ── Assertion 2c: DB user_id on oB is B's, not A's (forged arg ignored) ──
-    db = "kiosk_foodelivery_development"
-    db_user_id = `psql -X -d #{db} -tAc "SELECT user_id FROM orders WHERE id = '#{order_id_b}'" 2>&1`.strip
+    db = "kiosk_atablefor_development"
+    db_user_id = `psql -X -d #{db} -tAc "SELECT user_id FROM bookings WHERE id = '#{booking_id_b}'" 2>&1`.strip
     if db_user_id == user_id_b
-      puts "  ✓  Assertion 2c: DB orders.user_id for oB == user_id_b (#{user_id_b}) — forged arg ignored"
+      puts "  ✓  Assertion 2c: DB bookings.user_id for oB == user_id_b (#{user_id_b}) — forged arg ignored"
     elsif db_user_id == user_id_a
-      failures << "ISOLATION HOLE: DB orders.user_id for oB is A's user_id (#{user_id_a}) — forged user_id arg was NOT ignored"
-      puts "  ✗  Assertion 2c FAILED: server used forged user_id arg (order belongs to A, not B)"
+      failures << "ISOLATION HOLE: DB bookings.user_id for oB is A's user_id (#{user_id_a}) — forged user_id arg was NOT ignored"
+      puts "  ✗  Assertion 2c FAILED: server used forged user_id arg (booking belongs to A, not B)"
     else
       failures << "Unexpected user_id for oB: got #{db_user_id.inspect}, expected B's #{user_id_b}"
       puts "  ✗  Assertion 2c FAILED: unexpected user_id #{db_user_id.inspect} for oB"
@@ -854,15 +588,17 @@ namespace :demo do
 
   # ── demo:schema ──────────────────────────────────────────────────────────
   desc <<~DESC
-    Self-discovery proof — verifies the schema verb over HTTP.
+    Self-discovery proof — verifies the schema verb AND the pay-absent capability set.
 
-    Boots the server, registers a fresh agent, calls:
-      GET /kiosk/schema
+    Boots the server, runs schema_flow.rb (GET /kiosk/schema + /.well-known/kiosk.json
+    + /agents.json + /agents.txt).
 
     Asserts:
-      • schema.verbs includes query/run/pay/schema and NOT events
-      • schema.queries includes my_orders with a description
-      • schema.actions includes place_order, payment_setup with descriptions
+      • discovery capabilities == [schema, query, run] and do NOT include `pay`
+        (atablefor takes no payments — a reservation needs none)
+      • agents.json carries NO payments block; agents.txt has no ap2 / Payments
+      • schema.queries includes availability + my_bookings with descriptions
+      • schema.actions includes book_table + cancel_booking with descriptions
 
     Exits 0 if all assertions pass; exits 1 on any miss.
   DESC
@@ -873,17 +609,17 @@ namespace :demo do
     require "json"
 
     port = ENV.fetch("PORT", "3002")
-    log  = "/tmp/kiosk-foodelivery-schema.log"
+    log  = "/tmp/kiosk-atablefor-schema.log"
 
     host = begin
-      addr = Resolv.getaddress("foodelivery.app") rescue ""
-      addr == "127.0.0.1" ? "foodelivery.app" : "127.0.0.1"
+      addr = Resolv.getaddress("atablefor.app") rescue ""
+      addr == "127.0.0.1" ? "atablefor.app" : "127.0.0.1"
     end
 
     server_url   = "http://#{host}:#{port}"
     kiosk_issuer = server_url
 
-    puts "\n── Starting foodelivery (schema proof) on #{server_url} ──"
+    puts "\n── Starting atablefor (schema proof) on #{server_url} ──"
 
     server_pid = spawn(
       { "KIOSK_ISSUER" => kiosk_issuer },
@@ -930,55 +666,60 @@ namespace :demo do
     puts "\n── Schema assertions ──"
     failures = []
 
-    verbs   = result["schema_verbs"]   || []
-    queries = result["schema_queries"] || []
-    actions = result["schema_actions"] || []
+    verbs        = result["schema_verbs"]          || []
+    queries      = result["schema_queries"]        || []
+    actions      = result["schema_actions"]        || []
+    capabilities = result["discovery_capabilities"] || []
 
-    # Verbs: query/run/pay/schema present; events absent
-    %w[query run pay schema].each do |v|
-      if verbs.include?(v)
-        puts "  ✓  schema.verbs includes #{v}"
+    # ── NOT-ONLY-COMMERCE: pay absent from the ADVERTISED capability set ──
+    if capabilities.include?("pay")
+      failures << "discovery capabilities advertise `pay` (got #{capabilities.inspect}) — atablefor takes no payments"
+      puts "  ✗  discovery capabilities include `pay` — must be ABSENT"
+    else
+      puts "  ✓  discovery capabilities do NOT include `pay` (#{capabilities.inspect}) — a reservation needs no payment"
+    end
+    %w[schema query run].each do |cap|
+      if capabilities.include?(cap)
+        puts "  ✓  discovery capabilities include #{cap}"
       else
-        failures << "schema.verbs missing #{v} (got #{verbs.inspect})"
-        puts "  ✗  schema.verbs missing #{v}"
+        failures << "discovery capabilities missing #{cap} (got #{capabilities.inspect})"
+        puts "  ✗  discovery capabilities missing #{cap}"
       end
     end
-    if verbs.include?("events")
-      failures << "schema.verbs must NOT include events (got #{verbs.inspect})"
-      puts "  ✗  schema.verbs must NOT include events"
+
+    # agents.json / agents.txt carry no payments surface
+    if result["agents_json_has_payments"]
+      failures << "agents.json carries a payments block — must be absent"
+      puts "  ✗  agents.json has a payments block"
     else
-      puts "  ✓  schema.verbs does not include events"
+      puts "  ✓  agents.json carries NO payments block"
+    end
+    if result["agents_txt_has_ap2"] || result["agents_txt_has_payments"]
+      failures << "agents.txt advertises ap2 / Payments — must be absent"
+      puts "  ✗  agents.txt advertises ap2 / Payments"
+    else
+      puts "  ✓  agents.txt carries no ap2 / Payments directives"
     end
 
-    # my_orders present with a description
-    my_orders_entry = queries.find { |q| q["name"] == "my_orders" }
-    if my_orders_entry
-      puts "  ✓  schema.queries includes my_orders"
-      if my_orders_entry["description"] && !my_orders_entry["description"].to_s.empty?
-        puts "  ✓  my_orders has description: #{my_orders_entry["description"].inspect}"
+    # Queries: availability, my_bookings with descriptions
+    %w[availability my_bookings].each do |qname|
+      entry = queries.find { |q| q["name"] == qname }
+      if entry && entry["description"] && !entry["description"].to_s.empty?
+        puts "  ✓  schema.queries includes #{qname} with a description"
       else
-        failures << "my_orders missing description"
-        puts "  ✗  my_orders missing description"
+        failures << "schema.queries missing #{qname} (or its description)"
+        puts "  ✗  schema.queries missing #{qname} (or its description)"
       end
-    else
-      failures << "schema.queries missing my_orders"
-      puts "  ✗  schema.queries missing my_orders"
     end
 
-    # Actions: place_order, payment_setup (skill Step 5) with descriptions
-    %w[place_order payment_setup].each do |aname|
+    # Actions: book_table, cancel_booking with descriptions
+    %w[book_table cancel_booking].each do |aname|
       entry = actions.find { |a| a["name"] == aname }
-      if entry
-        puts "  ✓  schema.actions includes #{aname}"
-        if entry["description"] && !entry["description"].to_s.empty?
-          puts "  ✓  #{aname} has description: #{entry["description"].inspect}"
-        else
-          failures << "#{aname} missing description"
-          puts "  ✗  #{aname} missing description"
-        end
+      if entry && entry["description"] && !entry["description"].to_s.empty?
+        puts "  ✓  schema.actions includes #{aname} with a description"
       else
-        failures << "schema.actions missing #{aname}"
-        puts "  ✗  schema.actions missing #{aname}"
+        failures << "schema.actions missing #{aname} (or its description)"
+        puts "  ✗  schema.actions missing #{aname} (or its description)"
       end
     end
 
@@ -994,30 +735,22 @@ namespace :demo do
 
   # ── demo:redteam ─────────────────────────────────────────────────────────
   desc <<~DESC
-    Adversarial regression battery — kiosk-redteam.
+    Adversarial regression battery.
 
-    Boots foodelivery, runs all generic Kiosk::Redteam scenarios and asserts
-    each applicable attack is BLOCKED:
+    Boots atablefor, runs redteam_suite.rb and asserts each applicable attack is
+    BLOCKED:
 
-      BLOCKED  CrossTenantRead    — B's my_orders must not include A's orders
-      BLOCKED  ForgedUserId       — agent-supplied user_id arg must be ignored
-      BLOCKED  MandatePrincipalSwap — B signs a mandate with A's identity; rejected
-      BLOCKED  MandateReplay      — B re-submits A's signed mandate JWS; rejected
-      BLOCKED  TokenTampering     — altered JWT (claim flipped) rejected 401
-      BLOCKED  PrivilegeSelfSelection — client-chosen registration role ignored (server-pinned)
+      BLOCKED  CrossTenantRead    — B's my_bookings must not include A's booking
+      BLOCKED  ForgedUserId       — agent-supplied user_id arg ignored on book_table
+      BLOCKED  CrossOwnerCancel   — B cancel_booking on A's booking → 403
+      BLOCKED  RegisterWithoutPoP — register without a signed PoP → not 201
+      BLOCKED  MissingAuth        — no Authorization → 401
+      BLOCKED  GarbageToken       — unparseable bearer → 401
+      BLOCKED  UnknownQuery       — unregistered query name → 404
+      BLOCKED  UnknownAction      — unregistered action name → 404
 
-    Scenarios that require a surface foodelivery does not expose SKIP cleanly:
-      SKIPPED  UnpaidGatedAction, SpentResourceReuse, PayForOtherUseSelf
-               (no gated_action configured)
-      SKIPPED  MissingKyc, ExpiredKyc, ForgedKyc  (requires_kyc: false)
-
-    Note: RegistrationWithoutPow is not run — foodelivery has no registration
-    PoW gate (pow_difficulty: 0). skooti covers that scenario: its registration
-    gate is an Equihash proof (n=96 k=5) that the client solves against the real
-    402 challenge. Exec-time PoW redteam is a future enhancement.
-
-    Exits 0 when all applicable scenarios are BLOCKED; exits 1 on any BREACH.
-    A BREACH = a real hole in foodelivery — fix the app, not the scenario.
+    Exits 0 when all scenarios are BLOCKED (0 BREACH); exits 1 on any BREACH.
+    A BREACH = a real hole in atablefor — fix the app, not the scenario.
   DESC
   task redteam: :setup do
     require "resolv"
@@ -1026,20 +759,18 @@ namespace :demo do
     require "uri"
 
     port = ENV.fetch("PORT", "3002")
-    log  = "/tmp/kiosk-foodelivery-redteam.log"
+    log  = "/tmp/kiosk-atablefor-redteam.log"
 
-    # ── host resolution ────────────────────────────────────────────────
     host = begin
-      addr = Resolv.getaddress("foodelivery.app") rescue ""
-      addr == "127.0.0.1" ? "foodelivery.app" : "127.0.0.1"
+      addr = Resolv.getaddress("atablefor.app") rescue ""
+      addr == "127.0.0.1" ? "atablefor.app" : "127.0.0.1"
     end
 
     server_url   = "http://#{host}:#{port}"
     kiosk_issuer = server_url
 
-    puts "\n── Starting foodelivery (redteam battery) on #{server_url} ──"
+    puts "\n── Starting atablefor (redteam battery) on #{server_url} ──"
 
-    # ── boot the server ────────────────────────────────────────────────
     env_vars = { "KIOSK_ISSUER" => kiosk_issuer }
 
     server_pid = spawn(
@@ -1057,7 +788,6 @@ namespace :demo do
       end
     end
 
-    # ── wait for readiness ─────────────────────────────────────────────
     ready = false
     30.times do
       begin
@@ -1074,7 +804,6 @@ namespace :demo do
     abort "Server did not become ready — see #{log}" unless ready
     puts "  Server up at #{server_url}"
 
-    # ── run redteam_suite.rb ───────────────────────────────────────────
     suite_rb = File.expand_path("../../redteam_suite.rb", __dir__)
     puts "\n── Running redteam_suite.rb ──"
 
@@ -1093,5 +822,5 @@ namespace :demo do
   # ── end demo:redteam ─────────────────────────────────────────────────────
 end
 
-desc "End-to-end Kiosk demo: setup the DB then run the no-human order end-to-end."
-task demo: ["demo:setup", "demo:order"]
+desc "End-to-end Kiosk demo: setup the DB then run the no-human table booking end-to-end."
+task demo: ["demo:setup", "demo:book"]

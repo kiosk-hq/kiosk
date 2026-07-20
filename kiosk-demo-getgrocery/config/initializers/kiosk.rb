@@ -63,6 +63,19 @@ Kiosk.configure do |c|
   c.app_role    = ENV.fetch("KIOSK_APP_ROLE",    "app_role")
   c.system_role = ENV.fetch("KIOSK_SYSTEM_ROLE", "app_role")
 
+  # ── RLS enforce gate (demo:rls only) ─────────────────────────────────────
+  # When KIOSK_RLS_ENFORCE=1, SessionContext.open appends
+  #   SET LOCAL ROLE "kiosk_getgrocery_app"
+  # after the GUC statements, dropping the session to the non-owner app role
+  # for the duration of the transaction. That non-owner role is subject to the
+  # RLS policies applied by demo:rls (ENABLE + FORCE + per-user SELECT/INSERT
+  # policies on the orders table). When unset (default) there is no role-drop —
+  # byte-identical to the normal shop path.
+  if ENV["KIOSK_RLS_ENFORCE"] == "1"
+    c.enforce_db_role = true
+    c.app_role        = "kiosk_getgrocery_app"
+  end
+
   c.issuer = ENV.fetch("KIOSK_ISSUER", "http://localhost:3005")
   c.roles  = %i[customer]
   # Role pinned to every self-registered agent (agents cannot choose their own).

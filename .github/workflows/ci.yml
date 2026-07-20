@@ -90,13 +90,13 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - demo: kiosk-demo-foodelivery
-            # demo:order is the pay-settling headline (order_flow.rb + QA1-3 +
-            # settlements assertions), matching how each sibling row runs its
-            # settling headline (shop/book/rideflow). It settles via StubPsp,
-            # so no Stripe key / stripe-mock is needed. (demo:walkthrough is the
-            # curl tour; it self-asserts but does not exercise the pay verb.)
-            tasks: demo:order demo:isolation demo:redteam demo:schema
+          - demo: kiosk-demo-atablefor
+            # Restaurant table-booking (reframed from foodelivery, T-033): NO
+            # payments — demo:book is the headline ("book a table for 2"),
+            # demo:schema asserts pay ABSENT (capabilities [schema,query,run]).
+            # demo:pow/demo:reputation (the anti-scalping toll) run locally, not
+            # in CI (demo:pow is excluded everywhere). demo:rls moved to getgrocery.
+            tasks: demo:book demo:isolation demo:redteam demo:schema
           - demo: kiosk-demo-getgrocery
             tasks: demo:shop demo:isolation demo:redteam demo:schema
             # getgrocery uses the real Stripe adapter. CI carries NO Stripe key

@@ -6,11 +6,14 @@
 # solver (kiosk-pow-equihash/solve.py). Steps:
 #
 #   1. Register an agent (no PoW on registration).
-#   2. POST query menu_by_restaurant → expect HTTP 402 (pow_required).
+#   2. POST query availability → expect HTTP 402 (pow_required).
 #   3. Extract the challenge(s); shell out to solve.py → {indices, header_nonce}.
 #   4. Re-POST the SAME query + pow: {proofs: [{challenge, nonce}]} → 200 + rows.
 #   5. Submit a deliberately wrong nonce against a fresh challenge → expect
 #      HTTP 403 (forbidden / invalid proof); assert on_bad_proof incremented.
+#
+# Reservation-scalping is the abuse this prices at the door: PoW makes a
+# script that mass-probes prime-time availability pay a metered toll per query.
 #
 # Prints ONE JSON line on stdout; non-zero exit on any assertion failure.
 #
@@ -34,7 +37,7 @@ SERVER   = ENV.fetch("SERVER_URL")
 ISSUER   = ENV.fetch("KIOSK_ISSUER")
 SOLVE_PY = File.expand_path("../kiosk-pow-equihash/solve.py", __dir__)
 
-BAD_PROOF_FILE = "/tmp/kiosk-foodelivery-bad-proof.count"
+BAD_PROOF_FILE = "/tmp/kiosk-atablefor-bad-proof.count"
 
 def post_json(url, body, headers = {})
   uri = URI(url)
@@ -77,7 +80,8 @@ token = reg.fetch("access_token")
 
 # The request we prove. The identical body is sent on every retry so the server
 # computes the same request_fingerprint; the proof is a top-level `pow` sibling.
-QUERY_BODY  = { name: "menu_by_restaurant", restaurant: "Mamma Pizza" }
+require "date"
+QUERY_BODY  = { name: "availability", date: (Date.today + 1).iso8601, party_size: 2 }
 AUTH_HEADER = { "Authorization" => "Bearer #{token}" }
 
 # ── Step 2: initial POST → expect 402 pow_required ─────────────────────────
@@ -138,5 +142,5 @@ puts JSON.generate(
   served:                  served,
   proofs_solved:           proofs.size,
   bad_proof_count:         bad_proof_count,
-  menu_rows:               rows.size,
+  availability_rows:       rows.size,
 )

@@ -6,7 +6,7 @@ updates:
   directories:
     - "/kiosk-all"
     - "/kiosk-core"
-    - "/kiosk-demo-foodelivery"
+    - "/kiosk-demo-atablefor"
     - "/kiosk-demo-getgrocery"
     - "/kiosk-demo-hoteling"
     - "/kiosk-demo-skooti"

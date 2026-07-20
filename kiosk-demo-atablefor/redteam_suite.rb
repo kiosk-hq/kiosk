@@ -1,230 +1,139 @@
 # frozen_string_literal: true
 
-# foodelivery redteam battery
+# Adversarial regression battery for atablefor (restaurant table-booking).
 #
-# Drives all generic Kiosk::Redteam scenarios against the live foodelivery
-# server and asserts each applicable attack is BLOCKED.  Scenarios that
-# require a surface foodelivery does not expose (gated_action, KYC,
-# pow_difficulty > 0) are SKIPPED cleanly.
+# Runs a set of attacks against the live surface (availability / my_bookings
+# queries; book_table / cancel_booking actions) and asserts each is BLOCKED.
+# atablefor has no payment or KYC surface, so the battery covers the attacks
+# that actually apply — cross-tenant reads, forged principal args, cross-owner
+# cancels, and the auth/dispatch boundary.
 #
-# foodelivery surface:
-#   per_user_query : "my_orders"
-#   create_owned   : browse menu_by_restaurant → place_order
-#   forge_action   : "place_order"
-#   pay_for        : intent + cart mandates (food scope, RS256)
-#   gated_action   : nil  (no unlock gate)
-#   requires_kyc   : false
+# Scenarios (each must be BLOCKED):
+#   CrossTenantRead   — Bob's my_bookings must NOT contain Alice's booking
+#   ForgedUserId      — forged user_id on book_table ignored (booking belongs to Bob)
+#   CrossOwnerCancel  — Bob cancel_booking on Alice's booking → 403
+#   RegisterWithoutPoP — register with no proof-of-possession JWS → not 201
+#   MissingAuth       — a request with no Authorization → 401
+#   GarbageToken      — an unparseable bearer token → 401
+#   UnknownQuery      — an unregistered query name → 404
+#   UnknownAction     — an unregistered action name → 404
 #
-# Note: exec-time PoW (KIOSK_POW_DEMO) is a different gate from registration
-# PoW; RegistrationWithoutPow only applies when /register requires PoW, which
-# foodelivery does not (pow_difficulty: 0).  Exec-time-PoW-aware redteam is
-# a future enhancement.
-#
-# Usage (from kiosk-demo-foodelivery/):
+# Usage:
 #   SERVER_URL=http://127.0.0.1:3002 KIOSK_ISSUER=http://127.0.0.1:3002 \
 #   bundle exec ruby redteam_suite.rb
 #
-# Exits non-zero if any applicable scenario reports a BREACH or if the
-# expected skip set does not match (catches profile typos that disable gates).
+# Exits 0 when every scenario is BLOCKED (0 BREACH); exits 1 on any BREACH.
+# A BREACH = a real hole in atablefor — fix the app, not the scenario.
 
-require "kiosk/redteam"
-require "securerandom"
+require "date"
+require "json"
+require "net/http"
+require "uri"
 
-BASE_URL = ENV.fetch("SERVER_URL", "http://127.0.0.1:3002")
-ISSUER   = ENV.fetch("KIOSK_ISSUER", BASE_URL)
+SERVER = ENV.fetch("SERVER_URL")
 
-# ── Profile ───────────────────────────────────────────────────────────────────
+ALICE_UUID = "00000000-0000-0000-0000-000000000001"
+BOB_UUID   = "00000000-0000-0000-0000-000000000002"
+TOKEN_A    = "agent:u-#{ALICE_UUID}:a-alice-redteam:r-customer"
+TOKEN_B    = "agent:u-#{BOB_UUID}:a-bob-redteam:r-customer"
+TOMORROW   = (Date.today + 1).iso8601
 
-profile = Kiosk::Redteam::Profile.new(
-  pow_difficulty: 0,       # foodelivery has no registration PoW gate
-  requires_kyc:   false,
-  per_user_query: "my_orders",
-
-  # result_id_key: place_order response body["value"]["order_id"]
-  # row_id_key:    my_orders rows use "id"
-  row_id_key:    "id",
-  result_id_key: "order_id",
-
-  # Browse Mamma Pizza's menu for the margherita, then place_order.
-  # Returns { id: order_id, menu_item_id:, total_cents: }.
-  create_owned: ->(client, principal) {
-    menu_resp  = client.query(principal, name: "menu_by_restaurant", restaurant: "Mamma Pizza")
-    rows       = menu_resp.body.is_a?(Hash) ? (menu_resp.body["rows"] || []) : []
-    margherita = rows.find { |r| r["sku"] == "margherita" }
-    raise "redteam: margherita not found in menu_by_restaurant (rows=#{rows.inspect})" unless margherita
-
-    order_resp = client.run(
-      principal,
-      name:             "place_order",
-      menu_item_id:     margherita["id"],
-      quantity:         1,
-      delivery_address: "1 Redteam St, Istanbul",
-    )
-    raise "redteam: place_order failed (#{order_resp.status}): #{order_resp.body.inspect}" \
-      unless order_resp.status == 200
-
-    {
-      id:           order_resp.body.dig("value", "order_id"),
-      menu_item_id: margherita["id"],
-      total_cents:  order_resp.body.dig("value", "total_cents"),
-    }
-  },
-
-  # ForgedUserId: B calls place_order with user_id: A.user_id injected.
-  # The server must ignore the caller-supplied user_id and use the GUC identity.
-  forge_action: "place_order",
-  forge_args:   ->(client, principal_a, _principal_b) {
-    menu_resp  = client.query(principal_a, name: "menu_by_restaurant", restaurant: "Mamma Pizza")
-    rows       = menu_resp.body.is_a?(Hash) ? (menu_resp.body["rows"] || []) : []
-    margherita = rows.find { |r| r["sku"] == "margherita" }
-    raise "redteam: margherita not found in forge_args (rows=#{rows.inspect})" unless margherita
-
-    {
-      menu_item_id:     margherita["id"],
-      quantity:         1,
-      delivery_address: "2 Forged St, Istanbul",
-    }
-  },
-
-  # No gated_action: foodelivery's place_order is not behind a pay+KYC gate.
-  # Scenarios UnpaidGatedAction, SpentResourceReuse, PayForOtherUseSelf SKIP.
-  gated_action: nil,
-  gated_args:   nil,
-
-  # MandatePrincipalSwap and MandateReplay: build the RS256 mandate payloads.
-  # Returns { intent: Hash, cart: Hash } (raw payloads; the Client signs them).
-  pay_for: ->(client, principal, owned_ref) {
-    now       = Time.now.to_i
-    intent_id = SecureRandom.uuid
-    cart_id   = SecureRandom.uuid
-
-    total_cents      = owned_ref[:total_cents].to_i
-    cap_amount_cents = total_cents + 100
-
-    intent = {
-      id:               intent_id,
-      user_id:          principal.user_id,
-      agent_id:         principal.agent_id,
-      iss:              ISSUER,
-      scope:            "food",
-      cap_amount_cents: cap_amount_cents,
-      currency:         "eur",
-      exp:              now + 600,
-      iat:              now,
-    }
-
-    cart = {
-      id:                 cart_id,
-      intent_mandate_id:  intent_id,
-      user_id:            principal.user_id,
-      agent_id:           principal.agent_id,
-      iss:                ISSUER,
-      line_items:         [{ sku: "margherita", qty: 1 }],
-      total_amount_cents: total_cents,
-      currency:           "eur",
-      exp:                now + 600,
-      iat:                now,
-    }
-
-    { intent: intent, cart: cart }
-  },
-
-  # No KYC in foodelivery — MissingKyc, ExpiredKyc, ForgedKyc SKIP.
-  kyc_valid:   nil,
-  kyc_expired: nil,
-  kyc_forged:  nil,
-)
-
-# ── Scenarios ─────────────────────────────────────────────────────────────────
-#
-# Applicable (6): CrossTenantRead, ForgedUserId, MandatePrincipalSwap,
-#                 MandateReplay, TokenTampering, PrivilegeSelfSelection.
-# Skip (6):       UnpaidGatedAction, SpentResourceReuse, PayForOtherUseSelf
-#                 (no gated_action), MissingKyc, ExpiredKyc, ForgedKyc (no KYC).
-# RegistrationWithoutPow: always skipped (pow_difficulty: 0), and NOT listed below.
-# 12 scenarios listed → 6 applicable (BLOCKED), 6 skipped.
-
-scenarios = [
-  # Applicable — must be BLOCKED
-  Kiosk::Redteam::Scenarios::CrossTenantRead.new,
-  Kiosk::Redteam::Scenarios::ForgedUserId.new,
-  Kiosk::Redteam::Scenarios::MandatePrincipalSwap.new,
-  Kiosk::Redteam::Scenarios::MandateReplay.new,
-  Kiosk::Redteam::Scenarios::TokenTampering.new,
-  Kiosk::Redteam::Scenarios::PrivilegeSelfSelection.new,
-  # Not applicable — must SKIP (no gated_action)
-  Kiosk::Redteam::Scenarios::UnpaidGatedAction.new,
-  Kiosk::Redteam::Scenarios::SpentResourceReuse.new,
-  Kiosk::Redteam::Scenarios::PayForOtherUseSelf.new,
-  # Not applicable — must SKIP (no KYC)
-  Kiosk::Redteam::Scenarios::MissingKyc.new,
-  Kiosk::Redteam::Scenarios::ExpiredKyc.new,
-  Kiosk::Redteam::Scenarios::ForgedKyc.new,
-  # Note: RegistrationWithoutPow is NOT included here.
-  # foodelivery has pow_difficulty: 0 (no registration PoW gate), and the
-  # KIOSK_POW_DEMO flag enables exec-time PoW (a different gate type) which
-  # RegistrationWithoutPow does not test.  Exec-time-PoW redteam is a future
-  # enhancement; skooti covers RegistrationWithoutPow with its Equihash
-  # registration gate (n=96 k=5), solved against the real 402 challenge.
-]
-
-# ── Expected-applicable assertion ─────────────────────────────────────────────
-#
-# Exactly 6 scenarios skip because foodelivery lacks gated_action + KYC.
-# If this set changes, a profile typo may have disabled an applicable scenario.
-EXPECTED_SKIP_NAMES = %w[
-  UnpaidGatedAction
-  SpentResourceReuse
-  PayForOtherUseSelf
-  MissingKyc
-  ExpiredKyc
-  ForgedKyc
-].freeze
-
-# ── Run ───────────────────────────────────────────────────────────────────────
-
-puts "\n── foodelivery redteam battery ──"
-puts "  base_url:       #{BASE_URL}"
-puts "  pow_difficulty: 0"
-puts "  requires_kyc:   false"
-puts ""
-
-runner  = Kiosk::Redteam::Runner.new(base_url: BASE_URL, profile:)
-results = runner.run(scenarios)
-
-# ── Summary ───────────────────────────────────────────────────────────────────
-
-blocked_results = results.select { |r| !r[:verdict].skipped && r[:verdict].blocked }
-skipped_results = results.select { |r| r[:verdict].skipped }
-breach_results  = runner.breaches
-
-puts "\n── Summary ──"
-blocked_results.each { |r| puts "  BLOCKED  ✓ #{r[:scenario].name}" }
-skipped_results.each do |r|
-  reason = r[:verdict].detail.delete_prefix("SKIP — ")
-  puts "  SKIPPED  — #{r[:scenario].name} (#{reason})"
+def post_json(path, body, headers = {})
+  uri = URI("#{SERVER}#{path}")
+  req = Net::HTTP::Post.new(uri, { "Content-Type" => "application/json" }.merge(headers))
+  req.body = JSON.generate(body)
+  res = Net::HTTP.new(uri.host, uri.port).request(req)
+  [res.code.to_i, (JSON.parse(res.body) rescue {})]
 end
-breach_results.each { |r| puts "  BREACH   ✗ #{r[:scenario].name} — #{r[:verdict].detail}" }
 
-puts ""
-if breach_results.empty?
-  puts "  #{blocked_results.size} BLOCKED, #{skipped_results.size} SKIPPED, 0 BREACH — all attacks blocked."
+def bearer(token) = { "Authorization" => "Bearer #{token}" }
+
+results = []
+def record(results, name, blocked, detail)
+  results << { name: name, blocked: blocked, detail: detail }
+  tag = blocked ? "BLOCKED" : "BREACH "
+  puts "  #{tag}  #{name} — #{detail}"
+end
+
+# Find an open slot time for a 2-top tomorrow, excluding `exclude`.
+def open_time(exclude = [])
+  rc, avail = post_json("/kiosk/query",
+                        { name: "availability", date: TOMORROW, party_size: 2 },
+                        bearer(TOKEN_A))
+  abort "availability failed (#{rc}): #{JSON.generate(avail)} — run rake demo:setup" unless rc == 200
+  rows = (avail["rows"] || []).reject { |r| exclude.include?(r["slot_time"]) }
+  slot = rows.first
+  abort "no open slot for a 2-top tomorrow (excluding #{exclude.inspect})" unless slot
+  slot.fetch("slot_time")
+end
+
+# ── Fixture: Alice books a table (target for cross-owner probes) ──────────────
+time_a = open_time
+rc, alice_book = post_json("/kiosk/run",
+                           { name: "book_table", date: TOMORROW, time: time_a, party_size: 2 },
+                           bearer(TOKEN_A))
+abort "A book_table failed (#{rc}): #{JSON.generate(alice_book)} — run rake demo:setup" unless rc == 200
+alice_booking_id = alice_book.dig("value", "booking_id")
+abort "no booking_id from A's booking: #{JSON.generate(alice_book)}" unless alice_booking_id
+
+# ── CrossTenantRead — Bob must not see Alice's booking in my_bookings ─────────
+rc, b_mine = post_json("/kiosk/query", { name: "my_bookings" }, bearer(TOKEN_B))
+b_ids = (b_mine["rows"] || []).map { |r| r["id"] }
+record(results, "CrossTenantRead",
+       rc == 200 && !b_ids.include?(alice_booking_id),
+       "Bob's my_bookings #{b_ids.inspect} excludes Alice's #{alice_booking_id}")
+
+# ── ForgedUserId — Bob books with a forged user_id (Alice's); must be ignored ─
+time_b = open_time([time_a])
+rc, forged = post_json("/kiosk/run",
+                       { name: "book_table", date: TOMORROW, time: time_b, party_size: 2,
+                         user_id: ALICE_UUID },
+                       bearer(TOKEN_B))
+forged_id = forged.dig("value", "booking_id")
+# The forged booking must NOT surface in Alice's my_bookings (it belongs to Bob).
+rc_a, a_mine = post_json("/kiosk/query", { name: "my_bookings" }, bearer(TOKEN_A))
+a_ids = (a_mine["rows"] || []).map { |r| r["id"] }
+record(results, "ForgedUserId",
+       rc == 200 && rc_a == 200 && !a_ids.include?(forged_id),
+       "Alice's bookings #{a_ids.inspect} exclude Bob's forged #{forged_id.inspect}")
+
+# ── CrossOwnerCancel — Bob cancels Alice's booking → 403 ─────────────────────
+rc, _ = post_json("/kiosk/run",
+                  { name: "cancel_booking", booking_id: alice_booking_id },
+                  bearer(TOKEN_B))
+record(results, "CrossOwnerCancel", rc == 403, "Bob cancel Alice's booking → #{rc} (want 403)")
+
+# ── RegisterWithoutPoP — register with no proof-of-possession → not 201 ──────
+require "openssl"
+throwaway_pem = OpenSSL::PKey::RSA.generate(2048).public_key.to_pem
+rc, _ = post_json("/kiosk/auth/register", { public_key: throwaway_pem })
+record(results, "RegisterWithoutPoP", rc != 201, "register with no signed PoP → #{rc} (want != 201)")
+
+# ── MissingAuth — no Authorization header → 401 ──────────────────────────────
+rc, _ = post_json("/kiosk/query", { name: "availability", date: TOMORROW, party_size: 2 })
+record(results, "MissingAuth", rc == 401, "unauthenticated request → #{rc} (want 401)")
+
+# ── GarbageToken — unparseable bearer → 401 ──────────────────────────────────
+rc, _ = post_json("/kiosk/query", { name: "availability", date: TOMORROW, party_size: 2 },
+                  bearer("not-a-real-token"))
+record(results, "GarbageToken", rc == 401, "garbage token → #{rc} (want 401)")
+
+# ── UnknownQuery — unregistered query name → 404 ─────────────────────────────
+rc, _ = post_json("/kiosk/query", { name: "frobnicate" }, bearer(TOKEN_A))
+record(results, "UnknownQuery", rc == 404, "unknown query → #{rc} (want 404)")
+
+# ── UnknownAction — unregistered action name → 404 ───────────────────────────
+rc, _ = post_json("/kiosk/run", { name: "nope" }, bearer(TOKEN_A))
+record(results, "UnknownAction", rc == 404, "unknown action → #{rc} (want 404)")
+
+# ── Verdict ──────────────────────────────────────────────────────────────────
+breaches = results.reject { |r| r[:blocked] }
+puts JSON.generate(scenarios: results.size, blocked: results.count { |r| r[:blocked] }, breaches: breaches.map { |r| r[:name] })
+
+if breaches.empty?
+  puts "\n  redteam: all #{results.size} scenarios BLOCKED."
+  exit 0
 else
-  puts "  #{blocked_results.size} BLOCKED, #{skipped_results.size} SKIPPED, #{breach_results.size} BREACH — FIX REQUIRED"
+  puts "\n  redteam: #{breaches.size} BREACH(es): #{breaches.map { |r| r[:name] }.join(', ')}"
+  exit 1
 end
-
-# ── Expected-applicable check ─────────────────────────────────────────────────
-
-actual_skip_names = skipped_results.map { |r| r[:scenario].name }.sort
-expected_sorted   = EXPECTED_SKIP_NAMES.sort
-
-if actual_skip_names != expected_sorted
-  puts ""
-  puts "  EXPECTED-APPLICABLE ASSERTION FAILED:"
-  puts "    Expected skips: #{expected_sorted.inspect}"
-  puts "    Actual skips:   #{actual_skip_names.inspect}"
-  puts "  A profile key may have been set to nil, disabling a gate scenario."
-  exit 2
-end
-
-exit 1 if breach_results.any?

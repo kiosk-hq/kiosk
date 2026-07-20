@@ -62,6 +62,18 @@ jobs:
           ruby-version: "4.0.1"
           bundler-cache: false
 
+      # kiosk-redteam's client solves a real Equihash PoW via the bundled
+      # numpy-vectorised solver (solve.py); that job needs numpy or it errors
+      # "this solver requires numpy" and exits non-zero (K-372).
+      - name: Set up Python (Equihash solver)
+        if: matrix.gem == 'kiosk-redteam'
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install numpy (Equihash solver)
+        if: matrix.gem == 'kiosk-redteam'
+        run: python -m pip install numpy
+
       - name: Install dependencies
         working-directory: ${{ matrix.gem }}
         run: bundle install
@@ -148,6 +160,15 @@ jobs:
         with:
           ruby-version: "4.0.1"
           bundler-cache: false
+
+      # Demos register with a real Equihash PoW (numpy-vectorised solve.py),
+      # so the solver needs numpy in CI (K-372).
+      - name: Set up Python (Equihash solver)
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install numpy (Equihash solver)
+        run: python -m pip install numpy
 
       - name: Install dependencies
         working-directory: ${{ matrix.demo }}

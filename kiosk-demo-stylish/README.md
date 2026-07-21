@@ -80,11 +80,11 @@ The role rides the token, sourced from the operator's identity system — never 
 
 ## Make it real
 
-The demo bakes in shortcuts that production operators replace. Each transition is small:
+The demo bakes in shortcuts that production operators replace. Each transition is small. Two DIFFERENT identity seams are involved — keep them straight:
 
 - **Synthetic users (Alice, Bob) + staff (owner, stylists)** → real user table populated by your operator's signup flow (the demo already gives them real Devise credentials so the binding walkthrough signs in like a person would).
-- **`StubIdp`** (AI-assistant channel) → registered assistants already flow through real Kiosk-issued JWTs; the bespoke `agent:u-…:a-…:r-…` fallback shape disappears. The human session channel already runs the real `kiosk-user-idp-devise` adapter.
-- **`StubUserIdp`** (the role-carrying SSO/Okta stand-in) → your real SSO/OIDC session. The Devise adapter already reads a per-user role via `User#kiosk_role`, so a production operator drops the stub and sources the staff role from its own identity system; the assistant inherits it at link time unchanged.
+- **`StubIdp` / `jwt_or_stub_idp.rb`** (the AGENT-IdP seam, `c.agent_idp`) → registered assistants already flow through real Kiosk-issued JWTs; the bespoke `agent:u-…:a-…:r-…` fallback shape disappears. To front an EXTERNAL agent-identity issuer (an ID-JAG-style agent-IdP), implement `Kiosk::AgentIdentityProviders::Base` — external agent-IdP adapters are a planned seam, none shipped yet.
+- **`StubUserIdp`** (the USER-IdP seam, `c.user_idp` — the role-carrying SSO/Okta stand-in) → your real SSO/OIDC session. To add a real HUMAN account/role IdP you set `c.user_idp`; `kiosk-user-idp-devise` is the shipped worked example, and this demo already runs it (composed after the stub). The Devise adapter reads a per-user role via `User#kiosk_role`, so a production operator drops the stub and sources the staff role from its own identity system; the assistant inherits it at link time unchanged.
 
 ## License
 

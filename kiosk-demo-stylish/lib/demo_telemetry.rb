@@ -96,9 +96,8 @@ module DemoTelemetry
 
   # Idempotent table creation — so demos using db:schema:load (structure.sql,
   # not db:migrate) still get the table without regenerating 7 structure.sql
-  # files. Safe to call repeatedly; a no-op once the table exists. The
-  # canonical migration (db/migrate/*_create_demo_telemetry_events.rb) creates
-  # the same shape for the hosted shared-telemetry DB.
+  # files. Safe to call repeatedly; a no-op once the table exists. For the
+  # hosted shared-telemetry DB, deploy/telemetry-init.sql provisions the same shape.
   def ensure_schema!(conn = connection)
     conn.execute(<<~SQL)
       CREATE TABLE IF NOT EXISTS #{TABLE} (

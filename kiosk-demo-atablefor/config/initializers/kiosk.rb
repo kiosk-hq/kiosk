@@ -17,9 +17,9 @@ if ENV["KIOSK_SIGNING_KEY_B64"].nil? && ENV["KIOSK_SIGNING_KEY_PEM"].nil? && Rai
 end
 
 require Rails.root.join("lib/stub_idp")
-require Rails.root.join("lib/stub_user_idp")
 require Rails.root.join("lib/jwt_or_stub_idp")
 require Rails.root.join("lib/pow_difficulty")
+require "kiosk/user_identity_providers/devise"
 
 # ── PoW / Reputation (R2) — activated only when KIOSK_POW_DEMO=1 ──────────
 #
@@ -149,9 +149,12 @@ Kiosk.configure do |c|
   # `agent:u-…:a-…:r-…` shape. One endpoint authenticates both for the demo.
   # Real providers swap in `kiosk-user-idp-devise` (or another adapter).
   c.agent_idp = JwtOrStubIdp.new(stub: StubIdp.new)
-  # The web-session channel for the account-binding surfaces (verify page,
-  # link mint, unlink) — see lib/stub_user_idp.rb for the scope.
-  c.user_idp = StubUserIdp.new
+  # The provider's own web-session channel (Devise/Warden): authenticates the
+  # signed-in human diner on the account-binding surfaces — the link-code mint,
+  # the device verify page, and unlink. A diner mints a link code here and their
+  # assistant redeems it, binding the assistant to the diner's account. Walked
+  # by `rake demo:binding`.
+  c.user_idp = Kiosk::UserIdentityProviders::Devise.new
 
   # ── NO payment_provider ──────────────────────────────────────────────────
   # This is deliberate and load-bearing: with no AP2 provider configured,

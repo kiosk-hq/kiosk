@@ -18,7 +18,19 @@
 # `Booking belongs_to :user`.
 WALKTHROUGH_STUB_USER_ID = "00000000-0000-0000-0000-000000000001"
 REDTEAM_STUB_USER_ID     = "00000000-0000-0000-0000-000000000002"
-User.find_or_create_by!(id: WALKTHROUGH_STUB_USER_ID)
+
+# The human diner "Diego" — a real account holder at the restaurant. He signs
+# in through the Devise form (/users/sign_in) and mints a link code so his AI
+# assistant can book on his behalf; the assistant's bookings then tie to this
+# account (demo:binding). Given Devise credentials on the walkthrough stub UUID
+# so the seeded principal doubles as the human account holder.
+# Demo-only credentials (development database, reset by every demo:setup).
+DINER_EMAIL    = "diego@example.com"
+DINER_PASSWORD = "atablefor-demo-password"
+User.find_or_create_by!(id: WALKTHROUGH_STUB_USER_ID) do |u|
+  u.email    = DINER_EMAIL
+  u.password = DINER_PASSWORD
+end
 User.find_or_create_by!(id: REDTEAM_STUB_USER_ID)
 
 pizza = Restaurant.find_or_create_by!(name: "Mamma Pizza")
@@ -54,5 +66,5 @@ slots.each do |offset, label, capacity, time|
   end
 end
 
-puts "Seeded: 1 walkthrough stub user (#{WALKTHROUGH_STUB_USER_ID}), " \
+puts "Seeded: 1 human diner (#{WALKTHROUGH_STUB_USER_ID}; sign-in #{DINER_EMAIL} / #{DINER_PASSWORD}), " \
      "1 restaurant (#{pizza.name}), #{TableSlot.count} bookable table slots"

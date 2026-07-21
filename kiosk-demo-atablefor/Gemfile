@@ -13,6 +13,12 @@ gem "tzinfo-data", platforms: %i[ windows jruby ]
 # Reduces boot times through caching; required in config/boot.rb
 gem "bootsnap", require: false
 
+# Human diner accounts sign in with real Devise sessions; the Kiosk
+# account-binding surfaces (link mint, verify page, unlink) authenticate
+# that Warden session through the kiosk-user-idp-devise adapter below, so a
+# diner can link their AI assistant to their restaurant account.
+gem "devise"
+
 # ─── Kiosk ────────────────────────────────────────────────────────────
 # Path overrides while the gems live in this monorepo. When the demo
 # moves to its own kiosk-hq/kiosk-demo-atablefor repo, swap these to
@@ -24,6 +30,7 @@ gem "kiosk-server",             path: "../kiosk-server"
 gem "kiosk-pow-equihash",       path: "../kiosk-pow-equihash"
 gem "kiosk-reputation",         path: "../kiosk-reputation"
 gem "kiosk-redteam",            path: "../kiosk-redteam"
+gem "kiosk-user-idp-devise",    path: "../kiosk-user-idp-devise"
 
 group :development, :test do
   # See https://guides.rubyonrails.org/debugging_rails_applications.html#debugging-with-the-debug-gem

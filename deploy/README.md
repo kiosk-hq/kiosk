@@ -24,20 +24,22 @@ This directory is the *app-side* handoff; DNS + VPS provisioning is the operator
 | getgrocery | `getgrocery.demo.kiosk.tech` | 3001 | **low** (~1 s, poke-friendly) | yes |
 | atablefor  | `atablefor.demo.kiosk.tech` (or apex `atablefor.us`) | 3002 | **HIGH** (~9–10 s, "beware: intensive PoW") | yes |
 | hoteling   | `hoteling.demo.kiosk.tech` | 3003 | **low** | — |
-| skooti     | `skooti.demo.kiosk.tech` | 3004 | **HIGH** (~9–10 s, "beware: intensive PoW") | — |
+| skooti     | `skooti.demo.kiosk.tech` | 3004 | **low** | — |
 | stylish    | `stylish.demo.kiosk.tech` | 3005 | **low** | — |
 | philslist  | `philslist.demo.kiosk.tech` | 3006 | **low** | — |
 | tudu       | `tudu.demo.kiosk.tech` | 3007 | **low** | — |
 
-**PoW difficulty is a feature**: most demos run a low/fast toll so
-a poker can register in ~1 s and still SEE the toll; **skooti** and **atablefor**
-run a high memory+CPU-hard toll behind a "beware: intensive PoW" banner so the
-DoS shield is tangible first-hand. `KIOSK_POW_DIFFICULTY` in each env file drives
-this per demo.
+**PoW difficulty is a feature**: ALL seven demos honor the
+`KIOSK_POW_DIFFICULTY` knob (low default, high opt-in) in their env file. Six run
+a low/fast toll so a poker can register in ~1 s and still SEE the toll; only
+**atablefor** — the designated production-grade showcase — ships the high
+memory+CPU-hard toll behind a "beware: intensive PoW" banner so the DoS shield is
+tangible first-hand. Any other demo is knob-adjustable: set
+`KIOSK_POW_DIFFICULTY=high` on it too to feel its own toll.
 
-> **How it wires (WIRED).** Each demo's initializer reads
+> **How it wires (WIRED).** All seven demos' initializers read
 > `ENV["KIOSK_POW_DIFFICULTY"]` (`low` default, `high` opt-in) via
-> `lib/pow_difficulty.rb` and sets its Equihash params accordingly:
+> `lib/pow_difficulty.rb` and set their Equihash params accordingly:
 > - **low** → `{n:96,k:5}` — sub-second reference solve, poke-friendly.
 > - **high** → `{n:168,k:7}` — the shipped Equihash default: ~10 s and ~1.3 GiB
 >   per proof on the reference (numpy) solver — a real memory+CPU toll. Verified
@@ -49,7 +51,8 @@ this per demo.
 > CPU-intensive proof-of-work…") to the `owner` block of
 > `/.well-known/kiosk.json`, and the 402 challenge already carries the heavy
 > `{n,k}` — so an AI assistant/reader sees the toll up front. Env files ship
-> skooti/atablefor = `high`, the rest = `low`.
+> only `atablefor` = `high` (the production-grade showcase); all six others =
+> `low` (each still knob-adjustable to `high`).
 
 ## What the operator does vs. what's automated
 
@@ -129,8 +132,8 @@ test card on each demo's landing:
 
 The register gate is a memory-hard PoW by design, so the "true" one-liner ships
 a copy-paste **solver** (`kiosk-pow-equihash/solve.py`). Hosted difficulty is
-low (~1 s) on most demos; skooti/atablefor are intentionally ~9–10 s (you'll feel
-it — that's the point). Flow: **discover → register (solve PoW) → query**.
+low (~1 s) on six demos; atablefor is intentionally ~9–10 s (you'll feel it —
+that's the point). Flow: **discover → register (solve PoW) → query**.
 
 ```sh
 # 0. Discover: who/where/which verbs (no auth).
@@ -147,7 +150,7 @@ CH=$(curl -s "$BASE/kiosk/auth/challenge")
 
 #    b) solve it with the bundled solver (from kiosk-pow-equihash/):
 #       python3 solve.py  reads the challenge on stdin, prints the proof.
-PROOF=$(echo "$CH" | python3 kiosk-pow-equihash/solve.py)   # ~1 s low / ~9–10 s high
+PROOF=$(echo "$CH" | python3 kiosk-pow-equihash/solve.py)   # ~1 s low / ~9–10 s high (atablefor)
 
 #    c) register (agent key + solved proof) → returns a token
 TOKEN=$(curl -s -X POST "$BASE/kiosk/auth/register" \
@@ -163,8 +166,8 @@ curl -s -X POST "$BASE/kiosk/query" \
 
 > The exact challenge/proof JSON shape is what the demo's `/kiosk/auth/challenge`
 > returns and `solve.py` consumes — publish the copy-paste-exact snippet on each
-> demo landing once the hosted challenge format is pinned. skooti/atablefor show
-> the "beware: memory- and CPU-intensive PoW" banner so pokers expect the ~9–10 s.
+> demo landing once the hosted challenge format is pinned. atablefor shows the
+> "beware: memory- and CPU-intensive PoW" banner so pokers expect the ~9–10 s.
 
 ## Live-activity telemetry — WIRED (opt-in)
 

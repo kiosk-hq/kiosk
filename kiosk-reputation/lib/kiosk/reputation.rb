@@ -5,7 +5,9 @@ require "kiosk/reputation/backends"
 require "kiosk/reputation/challenge"
 require "kiosk/reputation/factors"
 require "kiosk/reputation/policy"
+require "kiosk/reputation/backoff_store"
 require "kiosk/reputation/policies/rate_and_reputation"
+require "kiosk/reputation/policies/backoff"
 
 module Kiosk
   # Policy + wire-challenge layer for Kiosk's proof-of-work system.
@@ -22,6 +24,8 @@ module Kiosk
   # {Factors}       — immutable bundle of reputation inputs the host supplies
   # {Policy}        — base class (never challenge); providers subclass or replace
   # {Policies::RateAndReputation} — shipped example policy (see its docs)
+  # {Policies::Backoff} — count-based "solve once, next N calls free" strategy
+  # {BackoffStore}  — in-process per-identity grant counter for {Policies::Backoff}
   #
   # == Anti-DoS invariant (cheap-before-expensive)
   #

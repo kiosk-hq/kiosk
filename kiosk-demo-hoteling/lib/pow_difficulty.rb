@@ -1,6 +1,6 @@
 # frozen_string_literal: true
 
-# Per-demo PoW difficulty knob (T-032, HOSTED-DEMOS decision).
+# Per-demo PoW difficulty knob.
 #
 # Reads ENV["KIOSK_POW_DIFFICULTY"] once and maps it to concrete Equihash
 # (n, k) params so a demo's register/browse PoW can be poke-friendly on most

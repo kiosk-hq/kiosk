@@ -162,7 +162,7 @@ RSpec.describe "wire-surface controller auth" do
       status, body = dispatch(Kiosk::Server::KycAttestationController, :create, kyc_env)
       expect(status).to eq(200)
       # A bare binary attestation (no `attributes`) verifies and returns the
-      # empty attribute set — the anonymized named-attributes surface (T-018).
+      # empty attribute set — the anonymized named-attributes surface.
       expect(body).to eq(kyc_verified: true, attributes: {})
       # The row updated is the one for the CUSTOM idp's identity, and now also
       # persists the (empty) kyc_attributes jsonb alongside kyc_verified_at.

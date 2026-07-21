@@ -143,7 +143,7 @@ RSpec.describe Kiosk::Server::AccountBinding do
       described_class.bind!(public_key_pem: pem, user_id: user_id)
     end
 
-    # roles-from-IdP (T-014, Path A): a rebind carrying the NEW human's role
+    # roles-from-IdP (Path A): a rebind carrying the NEW human's role
     # remaps allowed_roles in the same UPDATE and mints the token with it —
     # the agent adopts the role of the principal it is now bound to.
     context "when the ceremony carries a requested_role (roles-from-IdP)" do
@@ -181,7 +181,7 @@ RSpec.describe Kiosk::Server::AccountBinding do
       expect(con.executed_sql.join).not_to match(/allowed_roles\s*=/i)
     end
 
-    # TUDU-REBIND-TOKENS (K-338): a rebind is a principal change, so — like
+    # A rebind is a principal change, so — like
     # unlink! — it watermark-revokes the key's pre-link tokens.
     it "watermark-revokes the key's pre-link tokens (principal change ⇒ re-login)" do
       expect(Kiosk.configuration.revocation_store)

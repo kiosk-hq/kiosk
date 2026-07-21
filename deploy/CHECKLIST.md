@@ -1,6 +1,6 @@
-# Deploy checklist — hosted demos on kiosk.tech subdomains (T-032)
+# Deploy checklist — hosted demos on kiosk.tech subdomains
 
-Concise, ordered. Detail + file contents: `deploy/README.md`. Phil's actions.
+Concise, ordered. Detail + file contents: `deploy/README.md`. Operator actions.
 Seven demos: getgrocery · atablefor · hoteling · skooti · stylish · philslist · tudu.
 
 ## 1. DNS (you)

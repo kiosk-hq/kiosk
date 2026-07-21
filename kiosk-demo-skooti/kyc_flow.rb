@@ -2,7 +2,7 @@
 
 # Agent-side driver: KYC-gated motorcycle rental + scooter positive control.
 #
-# Proves the named-anonymized-attribute KYC gate (T-018) end-to-end:
+# Proves the named-anonymized-attribute KYC gate end-to-end:
 #
 #   MOTORCYCLE (KYC-gated on age_over_18 AND licence_a):
 #     register (PoW) → reserve(MC-001) → pay → rent_motorcycle WITHOUT KYC → 403

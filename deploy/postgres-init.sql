@@ -1,5 +1,4 @@
--- Kiosk hosted live demos — Postgres provisioning (T-032)
--- Design: meta/docs/architecture/2026-07-20-hosted-live-demos.md §1
+-- Kiosk hosted live demos — Postgres provisioning
 --
 -- ONE Postgres 16 cluster, one database + one least-privilege LOGIN role per
 -- hosted app (DB-per-app). Each demo's config/database.yml (production block)

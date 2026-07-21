@@ -121,7 +121,7 @@ Kiosk.configure do |c|
   else
     key = ENV["STRIPE_SECRET_KEY"]
     if key.nil? || key.empty?
-      # Out-of-box parity with the sibling demos (K-348, T-016): in dev/test the
+      # Out-of-box parity with the sibling demos: in dev/test the
       # app boots on a placeholder so db:setup/schema/isolation/redteam run with
       # no payment config; only a REAL charge (demo:shop) needs a live key or
       # STRIPE_MOCK_URL, and fails clearly at charge time if neither is set.
@@ -156,7 +156,7 @@ Kiosk.configure do |c|
   end
 end
 
-# ── Live-activity telemetry (T-032 §4) — opt-in, app-layer, privacy-safe ───
+# ── Live-activity telemetry — opt-in, app-layer, privacy-safe ───
 # Off unless KIOSK_TELEMETRY=1. When on, one event is recorded per successful
 # wire action via a Rack middleware; the aggregate is served at
 # GET /demo/activity.json. NOT part of kiosk-core (satellite neutrality).

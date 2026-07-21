@@ -111,7 +111,7 @@ Kiosk.configure do |c|
   c.unlock_signing_key = DevUnlockKey.private_key
 end
 
-# ── Live-activity telemetry (T-032 §4) — opt-in, app-layer, privacy-safe ───
+# ── Live-activity telemetry — opt-in, app-layer, privacy-safe ───
 # Off unless KIOSK_TELEMETRY=1. One event per successful wire action via a Rack
 # middleware; aggregate at GET /demo/activity.json. NOT in kiosk-core.
 if ENV["KIOSK_TELEMETRY"] == "1"
@@ -319,7 +319,7 @@ end
 # rent_motorcycle — start a rental of a COMBUSTION-ENGINE motorcycle.
 #
 # This is the KYC-ATTRIBUTE-GATED action that the old DefaultAgentIdp
-# `unlock`-gate comment anticipated (resolves ledger K-346). Unlike the
+# `unlock`-gate comment anticipated. Unlike the
 # licence-free electric scooter (start_rental), a combustion motorcycle
 # requires the calling agent to have completed a KYC attestation carrying BOTH
 # named anonymized boolean attributes:

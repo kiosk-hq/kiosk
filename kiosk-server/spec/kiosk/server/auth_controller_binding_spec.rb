@@ -73,7 +73,7 @@ RSpec.describe "AuthController binding endpoints" do
       expect(body.dig(:error, :code)).to eq("unauthenticated")
     end
 
-    # roles-from-IdP (T-014, Path A): the human's role — as the provider's
+    # roles-from-IdP (Path A): the human's role — as the provider's
     # user_idp reports it on the session identity — is captured onto the link
     # row, so the assistant that redeems it inherits the human's role.
     it "captures the human's user_idp role onto the link row (roles-from-IdP)" do

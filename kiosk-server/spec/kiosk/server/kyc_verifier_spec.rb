@@ -42,7 +42,7 @@ RSpec.describe Kiosk::Server::KycVerifier do
 
     # ─── rejection paths ─────────────────────────────────────────────
 
-    # ─── named anonymized attributes (T-018) ─────────────────────────────
+    # ─── named anonymized attributes ─────────────────────────────
 
     it "returns an empty attribute set for a bare binary attestation (backward-compat)" do
       claims = described_class.verify(raw_jws: sign_kyc(valid_payload), identity: identity)

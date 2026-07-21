@@ -22,7 +22,7 @@
 #   RevokedMemberAccess   — a removed member's next read is blocked → 403
 #   RevokedAgentKey       — an unlinked agent's login is denied → 404
 #   PreLinkTokenAfterLink — a token minted before rebind is watermark-revoked by
-#                           the rebind (principal change) → 401 (K-338)
+#                           the rebind (principal change) → 401
 #
 # Usage:
 #   SERVER_URL=… KIOSK_ISSUER=… HOLDER_ID=… HOLDER_EMAIL=… HOLDER_PASSWORD=… \
@@ -177,7 +177,7 @@ record(results, "RevokedAgentKey", rc == 404, "unlinked agent login → #{rc} (w
 # PreLinkTokenAfterLink — an agent registers headless, creates a list, then
 # rebinds to Alice (assistant_claimed migrates the list). A rebind is a
 # principal change, so — like unlink — it watermark-revokes the key's pre-link
-# tokens (K-338). The PRE-LINK token no longer authenticates at all → 401.
+# tokens. The PRE-LINK token no longer authenticates at all → 401.
 pl = register_agent("prelink")
 rc, plc = post_json("/kiosk/run", { name: "create_list", title: "Pre-link list" }, bearer(pl[:token]))
 pl_list = plc.dig("value", "list_id")

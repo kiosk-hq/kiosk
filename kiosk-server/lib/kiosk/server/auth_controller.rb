@@ -110,7 +110,7 @@ if defined?(::ActionController::API)
         # provider's own session auth). The human hands the code to their
         # assistant, which redeems it at POST /auth/claim.
         #
-        # roles-from-IdP (T-014, Path A): the human's own role — as the
+        # roles-from-IdP (Path A): the human's own role — as the
         # provider's `user_idp` reports it (`identity.role`) — is captured
         # onto the link row's `requested_role`, so the assistant bound at
         # claim time INHERITS the human's role (see {AccountBinding.bind!}).

@@ -7,7 +7,7 @@
 # Devise credentials so the account-binding walkthrough can sign in through the
 # real /users/sign_in form (Alice approves the assistant link there).
 #
-# STAFF — Combette on Park's own people (roles-from-IdP / T-014): one OWNER
+# STAFF — Combette on Park's own people (roles-from-IdP): one OWNER
 # and two STYLISTS, each with a `staff_role`. Their assistant, when linked
 # (W5, role-carrying StubUserIdp session), inherits that role so the
 # `salon_calendar` query gates on it: owner sees the whole book, a stylist

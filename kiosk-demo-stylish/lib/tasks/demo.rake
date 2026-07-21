@@ -9,7 +9,7 @@
 #   rake demo:register     registration-PoW demo (no-proof 402 → solve → 201)
 #   rake demo:binding      account-binding walkthrough (claim ceremony over the
 #                          real Devise session + link-code redeem + unlink)
-#   rake demo:roles        roles-from-IdP demo (T-014) — owner-linked assistant sees
+#   rake demo:roles        roles-from-IdP demo — owner-linked assistant sees
 #                          the whole salon_calendar, stylist-linked sees only own chairs
 #   rake demo:redteam      adversarial regression battery against the live surface
 #   rake demo:schema       self-discovery proof over the schema verb
@@ -375,7 +375,7 @@ end
 namespace :demo do
   # ── demo:roles ─────────────────────────────────────────────────────────────
   desc <<~DESC
-    roles-from-IdP demo (T-014, Path A — indirect, via the bound human).
+    roles-from-IdP demo (Path A — indirect, via the bound human).
 
     Boots the server and runs roles_flow.rb. A salon OWNER links their
     assistant over a role-carrying session (the StubUserIdp SSO/Okta

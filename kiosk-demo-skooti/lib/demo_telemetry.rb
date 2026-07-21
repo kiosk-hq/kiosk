@@ -4,7 +4,7 @@ require "digest"
 require "json"
 
 # Shared, app-layer live-activity telemetry for the hosted Kiosk demos
-# (T-032, design §4). OPT-IN and privacy-safe.
+# OPT-IN and privacy-safe.
 #
 # ── What it is ────────────────────────────────────────────────────────────
 # An append-only `demo_telemetry_events(app, action_kind, agent_hash, at)`

@@ -1,11 +1,10 @@
-# Kiosk hosted live demos — deploy runbook (T-032)
+# Kiosk hosted live demos — deploy runbook
 
 Runbook for hosting all 7 Kiosk demo Rails apps on **one small VPS**, one
 **Postgres** cluster (DB-per-app), fronted by **Caddy** (auto-TLS), each app a
 loopback **Puma** under **systemd** — sized to survive an HN stampede.
 
-Authority for this design: `meta/docs/architecture/2026-07-20-hosted-live-demos.md`.
-This directory is the *app-side* handoff; DNS + VPS provisioning is Phil's.
+This directory is the *app-side* handoff; DNS + VPS provisioning is the operator's.
 
 ## Files in this directory
 
@@ -36,7 +35,7 @@ run a high memory+CPU-hard toll behind a "beware: intensive PoW" banner so the
 DoS shield is tangible first-hand. `KIOSK_POW_DIFFICULTY` in each env file drives
 this per demo.
 
-> **How it wires (WIRED — T-032).** Each demo's initializer reads
+> **How it wires (WIRED).** Each demo's initializer reads
 > `ENV["KIOSK_POW_DIFFICULTY"]` (`low` default, `high` opt-in) via
 > `lib/pow_difficulty.rb` and sets its Equihash params accordingly:
 > - **low** → `{n:96,k:5}` — sub-second reference solve, poke-friendly.
@@ -52,12 +51,12 @@ this per demo.
 > `{n,k}` — so an agent/reader sees the toll up front. Env files ship
 > skooti/atablefor = `high`, the rest = `low`.
 
-## What Phil does vs. what's automated
+## What the operator does vs. what's automated
 
-**Phil (manual):**
+**Operator (manual):**
 1. **DNS.** Either a wildcard `*.demo.kiosk.tech → VPS_IP` (one A record, add
    apps later with no DNS change) or one A record per subdomain above. If you
-   want the cute flagship domain, point `atablefor.us` (+`www`) at the VPS too.
+   want the flagship domain, point `atablefor.us` (+`www`) at the VPS too.
 2. **Provision the VPS** (2–4 GB; design §2 sizes all 7 ≈ 2 GB Puma → 4 GB
    comfortable). Install Postgres 16, Caddy, Ruby (`.mise.toml` pins the
    version), and a non-login `kiosk` service user.
@@ -99,7 +98,7 @@ done
 
 # 3. systemd: install the template unit and enable one instance per app.
 sudo cp /srv/kiosk/reference/deploy/kiosk-demo@.service /etc/systemd/system/
-sudo mkdir -p /etc/kiosk-demo   # env files live here (step in Phil's #3)
+sudo mkdir -p /etc/kiosk-demo   # env files live here (Operator step #3)
 sudo systemctl daemon-reload
 for app in getgrocery atablefor hoteling skooti stylish philslist tudu; do
   sudo systemctl enable --now kiosk-demo@$app
@@ -167,7 +166,7 @@ curl -s -X POST "$BASE/kiosk/query" \
 > demo landing once the hosted challenge format is pinned. skooti/atablefor show
 > the "beware: memory- and CPU-intensive PoW" banner so pokers expect the ~30 s.
 
-## Live-activity telemetry (design §4) — WIRED (T-032, opt-in)
+## Live-activity telemetry — WIRED (opt-in)
 
 Aggregate, privacy-safe **live-activity counters** are now wired into all seven
 demos (app-layer, NOT kiosk-core — satellite neutrality). Off by default; a demo

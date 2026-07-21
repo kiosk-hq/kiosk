@@ -64,7 +64,7 @@ jobs:
 
       # kiosk-redteam's client solves a real Equihash PoW via the bundled
       # numpy-vectorised solver (solve.py); that job needs numpy or it errors
-      # "this solver requires numpy" and exits non-zero (K-372).
+      # "this solver requires numpy" and exits non-zero.
       - name: Set up Python (Equihash solver)
         if: matrix.gem == 'kiosk-redteam'
         uses: actions/setup-python@v7
@@ -91,7 +91,7 @@ jobs:
       matrix:
         include:
           - demo: kiosk-demo-atablefor
-            # Restaurant table-booking (reframed from foodelivery, T-033): NO
+            # Restaurant table-booking: NO
             # payments — demo:book is the headline ("book a table for 2"),
             # demo:schema asserts pay ABSENT (capabilities [schema,query,run]).
             # demo:pow/demo:reputation (the anti-scalping toll) run locally, not
@@ -162,7 +162,7 @@ jobs:
           bundler-cache: false
 
       # Demos register with a real Equihash PoW (numpy-vectorised solve.py),
-      # so the solver needs numpy in CI (K-372).
+      # so the solver needs numpy in CI.
       - name: Set up Python (Equihash solver)
         uses: actions/setup-python@v7
         with:
@@ -193,7 +193,7 @@ jobs:
       # The committed db/structure.sql files are PG17-format (they SET
       # transaction_timeout, a v17 param); loading them needs a psql >= 17, and
       # dumping after migrate needs a pg_dump matching the postgres:17 service.
-      # Runner images ship an older client inconsistently (K-390/K-391), so pin 17.
+      # Runner images ship an older client inconsistently, so pin 17.
       - name: Install PostgreSQL 17 client
         run: |
           sudo sh -c 'echo "deb https://apt.postgresql.org/pub/repos/apt $(lsb_release -cs)-pgdg main" > /etc/apt/sources.list.d/pgdg.list'
@@ -258,8 +258,7 @@ jobs:
 
       # The e2e golden path registers with a real register-time Equihash PoW,
       # solved by the bundled numpy-vectorised solver (solve.py); the harness
-      # needs numpy or it errors "this solver requires numpy" (K-375; re-added
-      # after K-372 removed it when e2e was toll-free).
+      # needs numpy or it errors "this solver requires numpy".
       - name: Set up Python (Equihash solver)
         uses: actions/setup-python@v7
         with:

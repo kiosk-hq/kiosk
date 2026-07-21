@@ -1,5 +1,4 @@
-# Kiosk hosted live demos — Caddy reverse proxy (T-032)
-# Design: meta/docs/architecture/2026-07-20-hosted-live-demos.md §1
+# Kiosk hosted live demos — Caddy reverse proxy
 #
 # One vhost per demo subdomain -> a loopback Puma (systemd unit, see
 # kiosk-demo@.service). Caddy handles automatic TLS (Let's Encrypt HTTP-01)
@@ -12,7 +11,7 @@
 #
 # ── TLS alternatives ────────────────────────────────────────────────────────
 # The per-subdomain blocks below get an individual HTTP-01 cert each — nothing
-# extra to configure. If Phil prefers ONE cert for everything, use a wildcard
+# extra to configure. If you prefer ONE cert for everything, use a wildcard
 # *.demo.kiosk.tech cert via DNS-01 instead. That needs a DNS-provider plugin
 # build of Caddy and an API token, e.g.:
 #
@@ -65,7 +64,7 @@ getgrocery.demo.kiosk.tech {
 }
 
 atablefor.demo.kiosk.tech {
-	# Flagship "book a table for two" (T-033, renamed from foodelivery).
+	# Flagship "book a table for two".
 	# Alt: serve at the apex atablefor.us instead — see header note.
 	import kioskproxy 127.0.0.1:3002
 }

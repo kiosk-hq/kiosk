@@ -1,6 +1,5 @@
 #!/usr/bin/env bash
-# Kiosk hosted live demos — daily housekeeping cron (T-032)
-# Design: meta/docs/architecture/2026-07-20-hosted-live-demos.md §6 (and §2.2)
+# Kiosk hosted live demos — daily housekeeping cron
 #
 # WHY LIGHT: per-agent app-layer isolation makes each demo naturally
 # multi-tenant — an assistant sees only its own rows (owner-scoped queries +
@@ -24,7 +23,7 @@ PRUNE_AGE_HOURS="${KIOSK_PRUNE_AGE_HOURS:-24}"
 # Where the demo gem checkouts live (WorkingDirectory root in the systemd unit).
 APPS_ROOT="${KIOSK_APPS_ROOT:-/srv/kiosk}"
 
-# app <-> gem-dir map. atablefor's dir is kiosk-demo-atablefor after T-033.
+# app <-> gem-dir map. atablefor's dir is kiosk-demo-atablefor.
 APPS=(getgrocery atablefor hoteling skooti stylish philslist tudu)
 
 log() { printf '[kiosk-prune %s] %s\n' "$(date -u +%FT%TZ)" "$*"; }

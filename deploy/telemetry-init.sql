@@ -1,5 +1,4 @@
--- Kiosk hosted live demos — shared live-activity telemetry store (T-032 §4)
--- Design: meta/docs/architecture/2026-07-20-hosted-live-demos.md §4
+-- Kiosk hosted live demos — shared live-activity telemetry store
 --
 -- ONE shared database, ONE append-only table, that ALL demos write to (each app
 -- sets KIOSK_TELEMETRY_DB_URL to this DB). The landing tile reads the ALL-apps

@@ -146,7 +146,7 @@ record(results, "UnknownQuery", rc == 404, "unknown query → #{rc} (want 404)")
 rc, _ = post_json("/kiosk/run", { name: "nope" }, bearer(TOKEN_A))
 record(results, "UnknownAction", rc == 404, "unknown action → #{rc} (want 404)")
 
-# ── roles-from-IdP escalation beats (T-014, Path A) ──────────────────────────
+# ── roles-from-IdP escalation beats (Path A) ──────────────────────────
 # A stylist's agent must NOT be able to obtain owner-scope. The role is
 # sourced from the bound human's IdP at link time — never self-selected by the
 # agent — and salon_calendar's WHERE is provider-controlled.

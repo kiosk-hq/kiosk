@@ -130,19 +130,23 @@ test card on each demo's landing:
 
 ## Poke it — the "curl one-liner"
 
-The register gate is a memory-hard PoW by design, so the "true" one-liner ships
-a copy-paste **solver** (`kiosk-pow-equihash/solve.py`). Hosted difficulty is
-low (~1 s) on six demos; atablefor is intentionally ~9–10 s (you'll feel it —
-that's the point). Flow: **discover → register (solve PoW) → query**.
+Only the top-level **discovery** document is always free. Every Kiosk verb —
+`schema`, `query`, `run`, `pay` — as well as `register` requires a Bearer token
+and MAY toll proof-of-work (there is no verb exemption; even a public "read the
+schema" can be tolled, the way Cloudflare puts a challenge in front of a public
+page). So the register gate is a memory-hard PoW by design, and the "true"
+one-liner ships a copy-paste **solver** (`kiosk-pow-equihash/solve.py`). Hosted
+difficulty is low (~1 s) on six demos; atablefor is intentionally ~9–10 s
+(you'll feel it — that's the point). Flow: **discover (free) → register (solve
+PoW) → schema / query (each MAY toll PoW too)**.
 
 ```sh
-# 0. Discover: who/where/which verbs (no auth).
+# 0. Discover: who/where/which verbs. The ONLY always-free entrypoint — no auth,
+#    no PoW. (The /kiosk/* verbs below are NOT free: each needs a Bearer token
+#    and MAY answer 402 pow_required — solve and retry.)
 curl -s https://getgrocery.demo.kiosk.tech/.well-known/kiosk.json | jq .
 
-# 1. Instant look at the wire, no register: read the schema.
-curl -s https://getgrocery.demo.kiosk.tech/kiosk/schema | jq .
-
-# 2. Full flow — register with the bundled solver, then query.
+# 1. Full flow — register with the bundled solver, then read schema + query.
 BASE=https://getgrocery.demo.kiosk.tech
 
 #    a) get a register challenge (returns the Equihash params to solve)
@@ -157,7 +161,12 @@ TOKEN=$(curl -s -X POST "$BASE/kiosk/auth/register" \
   -H 'content-type: application/json' \
   -d "$PROOF" | jq -r .token)
 
-#    d) call a query as the registered assistant
+#    d) read the schema as the registered assistant (Bearer required; MAY 402 —
+#       solve like register and retry with the pow field)
+curl -s "$BASE/kiosk/schema" \
+  -H "authorization: Bearer $TOKEN" | jq .
+
+#    e) call a query as the registered assistant (same: Bearer required, MAY 402)
 curl -s -X POST "$BASE/kiosk/query" \
   -H "authorization: Bearer $TOKEN" \
   -H 'content-type: application/json' \

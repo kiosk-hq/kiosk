@@ -8,6 +8,8 @@
 #                          asserts the confirmed booking, tears down
 #   rake demo:pow          boots with KIOSK_POW_DEMO=1, runs pow_flow.rb (402→solve→200)
 #   rake demo:reputation   anti-scalping PoW demo (cost drops as bookings accrue)
+#   rake demo:binding      account-binding: a diner links their assistant, whose
+#                          booking then ties to the diner's account
 #   rake demo:isolation    adversarial cross-tenant isolation test
 #   rake demo:schema       self-discovery proof — verifies the schema verb + pay-absent
 #   rake demo:redteam      adversarial regression battery
@@ -430,6 +432,136 @@ namespace :demo do
     end
   end
   # ── end demo:reputation ────────────────────────────────────────────────────
+
+  # ── demo:binding ───────────────────────────────────────────────────────────
+  desc <<~DESC
+    Account-binding walkthrough — a diner links their AI assistant to their
+    restaurant account, and the assistant's booking then ties to that account.
+
+    Runs demo:setup (clean DB + seed), boots the server, and runs binding_flow.rb,
+    which drives BOTH sides of the ceremony over plain HTTP:
+
+      1. The human diner (Diego) signs in through the REAL Devise form
+         (/users/sign_in — cookie + CSRF dance) and mints a LINK code
+         (POST /kiosk/auth/link, session channel — the human IS the approval).
+      2. The assistant, with a FRESH key, redeems the code (POST /kiosk/auth/claim,
+         key + possession proof) → a kiosk.agents row is bound to Diego's account.
+      3. As that bound token, the assistant books a table for two tomorrow at 8.
+
+    Asserts:
+      • the diner signed in via the real Devise form
+      • link-code mint (session channel) → 201
+      • link-code redeem binds the assistant to the diner's account (user_id == Diego)
+      • book_table as the bound token → 200, confirmed
+      • the assistant's my_bookings shows the reservation
+      • DB ground truth — the load-bearing assertion: bookings.user_id for the
+        reservation == Diego's account id (book_table writes under
+        kiosk.current_user_id(), which the binding set to the human)
+      • DB ground truth: kiosk.agents.user_id for the assistant == Diego's account
+
+    Exits 0 if every assertion holds; exits 1 on failure.
+  DESC
+  task binding: :setup do
+    require "resolv"
+    require "json"
+    require "shellwords"
+
+    port = ENV.fetch("PORT", "3002")
+    log  = "/tmp/kiosk-atablefor-binding.log"
+    db   = "kiosk_atablefor_development"
+    flow_rb = File.expand_path("../../binding_flow.rb", __dir__)
+    failures = []
+
+    # The seeded diner (db/seeds.rb) — Diego signs in and mints the link code.
+    holder_id       = "00000000-0000-0000-0000-000000000001"
+    holder_email    = "diego@example.com"
+    holder_password = "atablefor-demo-password"
+
+    host = begin
+      addr = Resolv.getaddress("atablefor.app") rescue ""
+      addr == "127.0.0.1" ? "atablefor.app" : "127.0.0.1"
+    end
+
+    server_url   = "http://#{host}:#{port}"
+    kiosk_issuer = server_url
+
+    puts "\n── Starting atablefor (account-binding walkthrough) on #{server_url} ──"
+
+    server_pid = spawn(
+      { "KIOSK_ISSUER" => kiosk_issuer },
+      "bundle exec rails s -p #{port} -b 127.0.0.1 -e development",
+      out: log, err: log,
+    )
+
+    require "net/http"
+    require "uri"
+    begin
+      ready = false
+      30.times do
+        begin
+          res = Net::HTTP.get_response(URI("#{server_url}/.well-known/kiosk.json"))
+          if res.code.to_i == 200
+            ready = true
+            break
+          end
+        rescue Errno::ECONNREFUSED, Errno::EADDRNOTAVAIL, SocketError
+          nil
+        end
+        sleep 1
+      end
+      abort "Server did not become ready — see #{log}" unless ready
+      puts "  Server up at #{server_url}"
+
+      puts "\n── Running binding_flow.rb ──"
+      env = "SERVER_URL=#{server_url.shellescape} KIOSK_ISSUER=#{kiosk_issuer.shellescape} " \
+            "HOLDER_ID=#{holder_id.shellescape} HOLDER_EMAIL=#{holder_email.shellescape} " \
+            "HOLDER_PASSWORD=#{holder_password.shellescape}"
+      raw = `#{env} bundle exec ruby #{flow_rb.shellescape} 2>&1`
+      puts raw
+
+      begin
+        result = JSON.parse(raw.lines.grep(/^\{/).last || raw)
+      rescue JSON::ParserError => e
+        abort "binding_flow.rb did not produce valid JSON: #{e.message}\nOutput:\n#{raw}"
+      end
+
+      puts "\n══ Account-binding assertions ══"
+      check = lambda do |label, ok|
+        if ok then puts "  ✓  #{label}" else failures << label; puts "  ✗  #{label}" end
+      end
+      check.call("diner signed in via the real Devise form",            result["human_signed_in"] == true)
+      check.call("link-code mint (session channel) → 201",              result["link_mint"] == 201)
+      check.call("link-code redeem → 201",                              result["link_claim"] == 201)
+      check.call("redeem binds the assistant to the diner's account",   result["bound_to_holder"] == true)
+      check.call("book_table as the bound token → 200",                 result["wire_book"] == 200)
+      check.call("booking is confirmed",                                result["booking_status"] == "confirmed")
+      check.call("assistant's my_bookings shows the reservation",       result["my_bookings_has_it"] == true)
+
+      # ── DB ground truth (the load-bearing assertions) ──
+      booking_id = result["booking_id"].to_s
+      agent_id   = result["agent_id"].to_s
+      booking_owner = `psql -X -d #{db} -tAc "SELECT user_id FROM bookings WHERE id = '#{booking_id}'" 2>&1`.strip
+      check.call("DB bookings.user_id for the reservation == the diner (#{holder_id})", booking_owner == holder_id)
+      agent_owner = `psql -X -d #{db} -tAc "SELECT user_id FROM kiosk.agents WHERE id = '#{agent_id}'" 2>&1`.strip
+      check.call("DB kiosk.agents.user_id for the assistant == the diner", agent_owner == holder_id)
+    ensure
+      begin
+        Process.kill("TERM", server_pid); Process.wait(server_pid)
+      rescue Errno::ESRCH, Errno::ECHILD
+        nil
+      end
+      puts "  Server stopped."
+    end
+
+    if failures.empty?
+      puts "\n  All account-binding assertions PASSED — the assistant's booking ties to the diner's account."
+    else
+      puts "\n  FAILED:"
+      failures.each { |f| puts "    - #{f}" }
+      exit 1
+    end
+  end
+  # ── end demo:binding ───────────────────────────────────────────────────────
 
   # ---------------------------------------------------------------------------
   desc <<~DESC

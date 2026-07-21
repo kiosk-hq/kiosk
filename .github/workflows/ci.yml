@@ -97,9 +97,13 @@ jobs:
             # Restaurant table-booking: NO
             # payments — demo:book is the headline ("book a table for 2"),
             # demo:schema asserts pay ABSENT (capabilities [schema,query,run]).
+            # demo:binding is the human-IdP + account-linking beat (a diner links
+            # their assistant via the real Devise session, and the assistant's
+            # booking ties to the diner's account); unlike the sibling binding
+            # demos it carries no RFC 8628 poll timing, so it runs in CI.
             # demo:pow/demo:reputation (the anti-scalping toll) run locally, not
             # in CI (demo:pow is excluded everywhere). demo:rls moved to getgrocery.
-            tasks: demo:book demo:isolation demo:redteam demo:schema
+            tasks: demo:book demo:binding demo:isolation demo:redteam demo:schema
           - demo: kiosk-demo-getgrocery
             tasks: demo:shop demo:isolation demo:redteam demo:schema
             # getgrocery uses the real Stripe adapter. CI carries NO Stripe key

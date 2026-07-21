@@ -7,6 +7,11 @@ reservations over the Kiosk wire — the "book a table for two, tomorrow at 8"
 story, completed by an AI assistant with no human present and no payment (a
 reservation takes no money).
 
+A human diner also has a **real account** at the restaurant (Devise sign-in) and
+can **link their AI assistant** to it: the diner signs in, mints a link code, the
+assistant redeems it, and the assistant's bookings are then tied to the diner's
+account (`demo:binding`).
+
 ## Wire surface
 
 - `query availability(date, party_size)` — open table time-slots that seat the party
@@ -22,8 +27,9 @@ There is **no `pay`**: the advertised capabilities are `[schema, query, run]`.
 Postgres required. From this directory:
 
 ```
-bin/rails demo:setup       # create + load schema + seed Mamma Pizza and its tables
+bin/rails demo:setup       # create + load schema + seed Mamma Pizza, its tables, and a human diner
 bin/rails demo:book        # the headline: register → availability → book_table(party 2) → my_bookings
+bin/rails demo:binding     # a diner signs in (Devise), links their assistant, and its booking ties to the diner
 bin/rails demo:isolation   # cross-tenant denial (an operator's booking is only yours)
 bin/rails demo:redteam     # adversarial regression battery
 bin/rails demo:schema      # self-discovery; asserts `pay` is absent

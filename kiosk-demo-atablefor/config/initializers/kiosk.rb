@@ -105,7 +105,7 @@ if ENV["KIOSK_POW_REPUTATION_DEMO"] == "1"
   File.write(ATABLEFOR_REPUTATION_BAD_PROOF_FILE, "0")
 end
 
-# ── COUNT-BASED PoW backoff (POW-RECENCY-GRACE) — activated only when KIOSK_POW_BACKOFF_DEMO=1 ──
+# ── COUNT-BASED PoW backoff (POW-RECENCY-GRACE) — activated when KIOSK_POW_BACKOFF_DEMO=<N>, N = free-call count ──
 #
 # The "solve once, next N calls free" mechanic: an AI assistant solves ONE
 # Equihash proof and is then granted a fixed COUNT of ungated follow-up requests
@@ -116,7 +116,7 @@ end
 # the toll returns. Uses the shipped Kiosk::Reputation::Policies::Backoff with a
 # fresh in-process BackoffStore — a MULTI-WORKER deploy needs a shared store or
 # the grant is only per-worker (see BackoffStore's doc + atablefor.env.example).
-if ENV["KIOSK_POW_BACKOFF_DEMO"] == "1"
+if ENV["KIOSK_POW_BACKOFF_DEMO"].to_i > 0
   require "kiosk/pow/equihash"
   require "kiosk/reputation"
 
@@ -258,9 +258,12 @@ Kiosk.configure do |c|
   # a solve is sub-second at KIOSK_POW_DIFFICULTY=low). The in-process
   # BackoffStore is authoritative per worker — a multi-worker deploy needs a
   # shared store (see BackoffStore's cross-worker caveat).
-  if ENV["KIOSK_POW_BACKOFF_DEMO"] == "1"
+  if ENV["KIOSK_POW_BACKOFF_DEMO"].to_i > 0
     c.reputation_policy = Kiosk::Reputation::Policies::Backoff.new(
-      count: 3,
+      # The env value IS the count: KIOSK_POW_BACKOFF_DEMO=10 grants 10 ungated
+      # calls per solve. Any positive integer enables; unset/0 leaves the toll
+      # per-request. (demo:backoff sets 3; the deploy env ships 10.)
+      count: [ENV["KIOSK_POW_BACKOFF_DEMO"].to_i, 1].max,
       base:  {
         alg:    Kiosk::Pow::Equihash::NAME,
         params: Kiosk::Pow::Equihash.params(**EQUIHASH_DEMO_PARAMS),

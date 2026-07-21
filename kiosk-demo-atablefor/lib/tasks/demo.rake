@@ -488,7 +488,7 @@ namespace :demo do
 
     env_vars = {
       "KIOSK_ISSUER"            => kiosk_issuer,
-      "KIOSK_POW_BACKOFF_DEMO"  => "1",
+      "KIOSK_POW_BACKOFF_DEMO"  => "3", # the value is the free-call count; the flow asserts exactly 3
     }
     server_pid = spawn(
       env_vars,

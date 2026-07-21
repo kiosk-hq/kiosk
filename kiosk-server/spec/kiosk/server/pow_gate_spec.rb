@@ -351,6 +351,89 @@ RSpec.describe Kiosk::Server::PowGate do
     end
   end
 
+  # ─── on_proof_verified hook (duck-typed, opt-in) ──────────────────────────
+  #
+  # After the gate verifies a submitted proof (a real solve), it calls
+  # #on_proof_verified on the policy IF the policy defines it. Policies that
+  # don't (the base Policy, RateAndReputation, always_challenge_policy) are
+  # unaffected — the whole existing suite above uses hookless policies and stays
+  # green, which is itself the "duck-typed" proof.
+  describe "on_proof_verified hook after a verified solve" do
+    # A hookless always-challenge policy that ALSO records verified solves.
+    let(:hook_calls) { [] }
+    let(:recording_policy) do
+      recorder = hook_calls
+      Class.new(Kiosk::Reputation::Policy) do
+        define_method(:on_proof_verified) { |identity:| recorder << identity }
+        def challenge_for(identity:, verb:, factors:)
+          { alg: "argon2id", params: Kiosk::Pow.params(d: 4, m: 8) }
+        end
+      end.new
+    end
+
+    before { configure_with_policy(recording_policy) }
+
+    it "calls on_proof_verified(identity:) exactly once after a correct proof" do
+      challenge = issue_challenge_via_gate(command: "query", body: { name: "menu" })
+      nonce     = solve_nonce(challenge)
+
+      result = described_class.gate(
+        identity: identity, command: "query", body: { name: "menu" },
+        pow: { challenge: challenge, nonce: nonce },
+      )
+
+      expect(result).to eq(:proceed)
+      expect(hook_calls).to eq([identity])
+    end
+
+    it "does NOT call the hook when a challenge is issued (no proof yet — 402)" do
+      expect {
+        described_class.gate(identity: identity, command: "query", body: { name: "menu" }, pow: nil)
+      }.to raise_error(Kiosk::Server::Errors::PowRequired)
+      expect(hook_calls).to be_empty
+    end
+
+    it "does NOT call the hook on a bad proof (403 raised before the hook)" do
+      challenge = issue_challenge_via_gate(command: "query", body: { name: "menu" })
+      bad_nonce = find_bad_nonce(challenge)
+
+      expect {
+        described_class.gate(identity: identity, command: "query", body: { name: "menu" },
+                             pow: { challenge: challenge, nonce: bad_nonce })
+      }.to raise_error(Kiosk::Server::Errors::Forbidden)
+      expect(hook_calls).to be_empty
+    end
+
+    it "does NOT call the hook on the nil-spec path (policy declines to challenge)" do
+      # A policy that both declines (:run → nil) and records solves. The nil-spec
+      # path returns :proceed WITHOUT running enforce, so the hook must not fire.
+      recorder = hook_calls
+      declining = Class.new(Kiosk::Reputation::Policy) do
+        define_method(:on_proof_verified) { |identity:| recorder << identity }
+        def challenge_for(identity:, verb:, factors:) = nil
+      end.new
+      configure_with_policy(declining)
+
+      result = described_class.gate(identity: identity, command: "query", body: { name: "menu" }, pow: nil)
+      expect(result).to eq(:proceed)
+      expect(hook_calls).to be_empty
+    end
+
+    it "is safe for a policy WITHOUT the hook (duck-typed — always_challenge_policy)" do
+      configure_with_policy(always_challenge_policy)
+      expect(always_challenge_policy).not_to respond_to(:on_proof_verified)
+
+      challenge = issue_challenge_via_gate(command: "query", body: { name: "menu" })
+      nonce     = solve_nonce(challenge)
+
+      result = described_class.gate(
+        identity: identity, command: "query", body: { name: "menu" },
+        pow: { challenge: challenge, nonce: nonce },
+      )
+      expect(result).to eq(:proceed)
+    end
+  end
+
   # ─── PowSpentStore unit tests ─────────────────────────────────────────────
 
   describe Kiosk::Server::PowSpentStore do

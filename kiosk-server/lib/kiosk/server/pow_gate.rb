@@ -97,7 +97,7 @@ module Kiosk
 
         return :proceed if spec.nil?  # policy decided not to challenge this request
 
-        enforce(
+        result = enforce(
           spec:         spec,
           fingerprint:  fp,
           pow:          pow,
@@ -105,6 +105,20 @@ module Kiosk
           config:       config,
           on_bad_proof: -> { config.on_bad_proof.call(identity: identity) },
         )
+
+        # ── Post-verify hook (duck-typed, opt-in) ────────────────────────────
+        # We only reach here when `enforce` verified the submitted proof(s)
+        # without raising (a real solve). Policies that define
+        # #on_proof_verified (e.g. the count-based Backoff strategy) use this to
+        # record the solve — e.g. grant the identity N ungated follow-up calls.
+        # Duck-typed: a policy without the hook (RateAndReputation, the base
+        # Policy, …) is completely unaffected. Never reached on the nil-spec
+        # path above (no enforce ran → no new grant).
+        if policy.respond_to?(:on_proof_verified)
+          policy.on_proof_verified(identity: identity)
+        end
+
+        result
       end
 
       # Verify a set of submitted proofs against a `spec` bound to `fingerprint`,

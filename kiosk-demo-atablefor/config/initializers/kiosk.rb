@@ -105,6 +105,24 @@ if ENV["KIOSK_POW_REPUTATION_DEMO"] == "1"
   File.write(ATABLEFOR_REPUTATION_BAD_PROOF_FILE, "0")
 end
 
+# ── COUNT-BASED PoW backoff (POW-RECENCY-GRACE) — activated only when KIOSK_POW_BACKOFF_DEMO=1 ──
+#
+# The "solve once, next N calls free" mechanic: an AI assistant solves ONE
+# Equihash proof and is then granted a fixed COUNT of ungated follow-up requests
+# before being re-challenged. A COUNT (not a time window) is deliberate — a
+# window would let a bot flood thousands of requests inside it; a count caps
+# exactly how many free calls one ~9 s solve buys. This makes the otherwise-heavy
+# atablefor PoW toll pokeable: one solve buys a short burst of free calls, then
+# the toll returns. Uses the shipped Kiosk::Reputation::Policies::Backoff with a
+# fresh in-process BackoffStore — a MULTI-WORKER deploy needs a shared store or
+# the grant is only per-worker (see BackoffStore's doc + atablefor.env.example).
+if ENV["KIOSK_POW_BACKOFF_DEMO"] == "1"
+  require "kiosk/pow/equihash"
+  require "kiosk/reputation"
+
+  Kiosk::Reputation::Backends.register(Kiosk::Pow::Equihash::NAME, Kiosk::Pow::Equihash)
+end
+
 # Inject the RLS DSL into ActiveRecord::Migration so migrations can call
 # `enable_rls_on TABLE do ... end` directly. atablefor keeps kiosk-rls wired as
 # the baseline data plane (all 7 demos do); it simply ships no RLS *showcase*
@@ -231,6 +249,30 @@ Kiosk.configure do |c|
       cnt = (File.read(ATABLEFOR_REPUTATION_BAD_PROOF_FILE).to_i rescue 0)
       File.write(ATABLEFOR_REPUTATION_BAD_PROOF_FILE, (cnt + 1).to_s)
     }
+  end
+
+  # ── COUNT-BASED PoW backoff gate (active only when KIOSK_POW_BACKOFF_DEMO=1) ─
+  # "Solve once, next N calls free": one solved proof grants the assistant
+  # `count` ungated follow-up calls, then it is re-challenged. count:3 keeps the
+  # demo fast; base demands ONE fresh Equihash proof (the small demo instance so
+  # a solve is sub-second at KIOSK_POW_DIFFICULTY=low). The in-process
+  # BackoffStore is authoritative per worker — a multi-worker deploy needs a
+  # shared store (see BackoffStore's cross-worker caveat).
+  if ENV["KIOSK_POW_BACKOFF_DEMO"] == "1"
+    c.reputation_policy = Kiosk::Reputation::Policies::Backoff.new(
+      count: 3,
+      base:  {
+        alg:    Kiosk::Pow::Equihash::NAME,
+        params: Kiosk::Pow::Equihash.params(**EQUIHASH_DEMO_PARAMS),
+        count:  1,
+      },
+    )
+    c.pow_secret = ENV.fetch("KIOSK_POW_SECRET", "demo-pow-secret")
+    c.pow_ttl    = 300
+
+    # The Backoff strategy ignores factors, but the gate still gathers them
+    # (config.reputation_factors is called before challenge_for). Return empty.
+    c.reputation_factors = ->(**) { Kiosk::Reputation::Factors.empty }
   end
 end
 

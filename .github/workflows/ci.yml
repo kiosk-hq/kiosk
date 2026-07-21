@@ -101,9 +101,13 @@ jobs:
             # their assistant via the real Devise session, and the assistant's
             # booking ties to the diner's account); unlike the sibling binding
             # demos it carries no RFC 8628 poll timing, so it runs in CI.
-            # demo:pow/demo:reputation (the anti-scalping toll) run locally, not
-            # in CI (demo:pow is excluded everywhere). demo:rls moved to getgrocery.
-            tasks: demo:book demo:binding demo:isolation demo:redteam demo:schema
+            # demo:pow/demo:reputation (the heavy anti-scalping toll) run locally,
+            # not in CI (demo:pow is excluded everywhere). demo:backoff, however,
+            # is PoW-only (no RFC 8628 timing) and solves exactly ONE small
+            # Equihash proof at the CI-default `low` difficulty (n=96 k=5,
+            # sub-second) before asserting the count-based grant, so it runs in
+            # CI. demo:rls moved to getgrocery.
+            tasks: demo:backoff demo:book demo:binding demo:isolation demo:redteam demo:schema
           - demo: kiosk-demo-getgrocery
             tasks: demo:shop demo:isolation demo:redteam demo:schema
             # getgrocery uses the real Stripe adapter. CI carries NO Stripe key

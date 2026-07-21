@@ -38,17 +38,10 @@ Rails.application.routes.draw do
   # Human sign-in (Devise) — the web session that approves assistant links.
   devise_for :users
 
-  # Minimal landing page: Devise needs a post-sign-in destination, and a
-  # human landing here should learn where both doors are.
-  root to: proc { |_env|
-    [200, { "content-type" => "text/html; charset=utf-8" },
-     ["<!DOCTYPE html><html><head><meta charset='utf-8'><title>Combette on Park</title></head>" \
-      "<body style='font-family:system-ui,sans-serif;text-align:center;padding:64px'>" \
-      "<h1>Combette on Park</h1><p>Kiosk demo salon. Humans sign in at " \
-      "<a href='/users/sign_in'>/users/sign_in</a>; assistants connect via the " \
-      "Kiosk wire (see <a href='/.well-known/kiosk.json'>/.well-known/kiosk.json</a>).</p>" \
-      "</body></html>"]]
-  }
+  # Public root page: what this demo is + live DOMAIN activity (appointment
+  # counts read from stylish's own tables) + both doors (human sign-in +
+  # the Kiosk wire). Devise still needs this as its post-sign-in destination.
+  root "home#index"
 
   # Native discovery surface — served by kiosk-server's DiscoveryController
   # (rendered from Kiosk::Server::WellKnown, the single generator seam).

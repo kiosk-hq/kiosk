@@ -39,19 +39,12 @@ Rails.application.routes.draw do
   # Human sign-in (Devise) — the web session that approves assistant links.
   devise_for :users
 
-  # Minimal landing page (api-only in spirit — NO public HTML listings index,
-  # by design): Devise needs a post-sign-in destination, and a human landing
-  # here should learn where both doors are. The board itself is read over the
-  # Kiosk wire (browse_listings), shown via curl + jq in the demo — not HTML.
-  root to: proc { |_env|
-    [200, { "content-type" => "text/html; charset=utf-8" },
-     ["<!DOCTYPE html><html><head><meta charset='utf-8'><title>philslist</title></head>" \
-      "<body style='font-family:system-ui,sans-serif;text-align:center;padding:64px'>" \
-      "<h1>philslist</h1><p>Kiosk demo classifieds board (no payments). Humans sign in at " \
-      "<a href='/users/sign_in'>/users/sign_in</a>; assistants browse/post via the " \
-      "Kiosk wire (see <a href='/.well-known/kiosk.json'>/.well-known/kiosk.json</a>).</p>" \
-      "</body></html>"]]
-  }
+  # Public root page: what this demo is + live DOMAIN activity (listing counts
+  # read from philslist's own tables) + both doors (human sign-in + the Kiosk
+  # wire). The board itself is still read/written over the wire (browse_listings
+  # / post_listing) — this page is informational + live-stats, not a listings UI.
+  # Devise needs this as its post-sign-in destination too.
+  root "home#index"
 
   # Native discovery surface — served by kiosk-server's DiscoveryController
   # (rendered from Kiosk::Server::WellKnown, the single generator seam).

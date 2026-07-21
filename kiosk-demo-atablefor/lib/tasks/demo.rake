@@ -8,6 +8,8 @@
 #                          asserts the confirmed booking, tears down
 #   rake demo:pow          boots with KIOSK_POW_DEMO=1, runs pow_flow.rb (402→solve→200)
 #   rake demo:reputation   anti-scalping PoW demo (cost drops as bookings accrue)
+#   rake demo:backoff      count-based PoW backoff (solve once → next N calls free →
+#                          re-challenge; KIOSK_POW_BACKOFF_DEMO=1)
 #   rake demo:binding      account-binding: a diner links their assistant, whose
 #                          booking then ties to the diner's account
 #   rake demo:isolation    adversarial cross-tenant isolation test
@@ -432,6 +434,150 @@ namespace :demo do
     end
   end
   # ── end demo:reputation ────────────────────────────────────────────────────
+
+  # ── demo:backoff ───────────────────────────────────────────────────────────
+  desc <<~DESC
+    COUNT-BASED PoW backoff demo — "solve once, next N calls free" (POW-RECENCY-GRACE).
+
+    Boots the server with KIOSK_POW_BACKOFF_DEMO=1, runs backoff_flow.rb:
+      fresh identity queries → 402 (pow_required, no grant yet)
+      solves via the bundled solver, resubmits → 200 (proof verified → grant set to 3)
+      the NEXT 3 requests are served WITHOUT a challenge (200 — the grant consumed)
+      the 4th request is challenged again (402 — the grant is exhausted)
+
+    A COUNT (not a time window) is deliberate: a window would let a bot flood
+    thousands of requests inside it; a count caps exactly how many free calls one
+    ~9 s solve buys, then the toll returns.
+
+    Asserts:
+      • http_first_challenge == 402       (a fresh identity is tolled)
+      • http_served_after_solve == 200    (a solve verifies and sets the grant)
+      • free_call_statuses == [200,200,200] (the 3 granted follow-ups are free)
+      • http_after_grant == 402           (the 4th is re-challenged)
+
+    Policy: Kiosk::Reputation::Policies::Backoff.new(count: 3, base: {equihash, count: 1})
+    Store:  the in-process BackoffStore — authoritative per worker; a multi-worker
+            deploy needs a shared store (Redis/DB) or the grant is only per-worker.
+
+    Requirements:
+      python3 with numpy: pip install numpy
+  DESC
+  task :backoff do
+    # Requirement: python3 with numpy (the equihash solver is vectorised).
+    python_ok = system("python3 -c 'import numpy' 2>/dev/null")
+    unless python_ok
+      abort "numpy not found. Install with: pip install numpy\n" \
+            "Then re-run: bundle exec rake demo:backoff"
+    end
+
+    require "resolv"
+
+    port = ENV.fetch("PORT", "3006")  # distinct port (pow=3002, reputation=3004)
+    log  = "/tmp/kiosk-atablefor-backoff-demo.log"
+
+    host = begin
+      addr = Resolv.getaddress("atablefor.app") rescue ""
+      addr == "127.0.0.1" ? "atablefor.app" : "127.0.0.1"
+    end
+
+    server_url   = "http://#{host}:#{port}"
+    kiosk_issuer = server_url
+
+    puts "\n── Starting atablefor (count-based PoW backoff demo) on #{server_url} ──"
+    puts "   Policy: Backoff (count=3) — one solve buys the next 3 calls free, then re-challenge"
+
+    env_vars = {
+      "KIOSK_ISSUER"            => kiosk_issuer,
+      "KIOSK_POW_BACKOFF_DEMO"  => "1",
+    }
+    server_pid = spawn(
+      env_vars,
+      "bundle exec rails s -p #{port} -b 127.0.0.1 -e development",
+      out: log, err: log,
+    )
+
+    at_exit do
+      begin
+        Process.kill("TERM", server_pid)
+        Process.wait(server_pid)
+      rescue Errno::ESRCH, Errno::ECHILD
+        nil
+      end
+    end
+
+    # Wait for readiness.
+    require "net/http"
+    require "uri"
+    ready = false
+    30.times do
+      begin
+        res = Net::HTTP.get_response(URI("#{server_url}/.well-known/kiosk.json"))
+        if res.code.to_i == 200
+          ready = true
+          break
+        end
+      rescue Errno::ECONNREFUSED, Errno::EADDRNOTAVAIL, SocketError
+        nil
+      end
+      sleep 1
+    end
+    abort "Server did not become ready — see #{log}" unless ready
+    puts "  Server up at #{server_url} (backoff PoW active)"
+
+    flow_rb = File.expand_path("../../backoff_flow.rb", __dir__)
+    puts "\n── Running backoff_flow.rb ──"
+    raw = `SERVER_URL=#{server_url} KIOSK_ISSUER=#{kiosk_issuer} bundle exec ruby #{flow_rb} 2>&1`
+    puts raw
+
+    begin
+      result = JSON.parse(raw.lines.grep(/^\{/).last || raw)
+    rescue JSON::ParserError => e
+      abort "backoff_flow.rb did not produce valid JSON: #{e.message}\nOutput:\n#{raw}"
+    end
+
+    # ── Assertions ──
+    puts "\n── Backoff PoW assertions ──"
+    failures = []
+
+    if result["http_first_challenge"] == 402
+      puts "  ✓  fresh identity tolled: HTTP 402 (pow_required, no grant yet)"
+    else
+      failures << "expected http_first_challenge=402, got #{result["http_first_challenge"].inspect}"
+      puts "  ✗  first query not challenged: #{result["http_first_challenge"].inspect}"
+    end
+
+    if result["http_served_after_solve"] == 200
+      puts "  ✓  served after real solve.py: HTTP 200 (proof verified → grant set to #{result["grant_count"]})"
+    else
+      failures << "expected http_served_after_solve=200, got #{result["http_served_after_solve"].inspect}"
+      puts "  ✗  not served after solve: #{result["http_served_after_solve"].inspect}"
+    end
+
+    free = result["free_call_statuses"] || []
+    if free.size == result["grant_count"] && free.all? { |s| s == 200 }
+      puts "  ✓  the next #{result["grant_count"]} calls served WITHOUT a challenge (#{free.inspect}) — grant consumed"
+    else
+      failures << "expected #{result["grant_count"]} free 200s after the solve, got #{free.inspect}"
+      puts "  ✗  granted follow-ups not all free: #{free.inspect}"
+    end
+
+    if result["http_after_grant"] == 402
+      puts "  ✓  grant exhausted → the next call is re-challenged: HTTP 402"
+    else
+      failures << "expected http_after_grant=402, got #{result["http_after_grant"].inspect}"
+      puts "  ✗  grant did not expire — 4th call returned #{result["http_after_grant"].inspect}"
+    end
+
+    if failures.empty?
+      puts "\n  All backoff assertions PASSED."
+      puts "  Solve once → next #{result["grant_count"]} calls free → re-challenge. Count-based grant demonstrated end-to-end."
+    else
+      puts "\n  FAILED:"
+      failures.each { |f| puts "    - #{f}" }
+      exit 1
+    end
+  end
+  # ── end demo:backoff ───────────────────────────────────────────────────────
 
   # ── demo:binding ───────────────────────────────────────────────────────────
   desc <<~DESC

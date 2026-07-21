@@ -43,6 +43,13 @@ require Rails.root.join("lib/pow_difficulty")
 #                    the anti-scalping cost first-hand. Unset = low.
 # Both the :query toll (KIOSK_POW_DEMO) and the anti-scalping reputation gate
 # (KIOSK_POW_REPUTATION_DEMO) inherit this level.
+#
+# atablefor is INTENTIONALLY the ONE demo pinned to high in the hosted deploy
+# (deploy/env/atablefor.env.example ships KIOSK_POW_DIFFICULTY=high). It is the
+# designated production-grade showcase: a poker/scalper feels the real ~9–10 s /
+# ~1.3 GiB anti-reservation-scalping toll first-hand (see the "beware" banner on
+# the demo root page). Every other demo is knob-adjustable but defaults light so
+# CI and quick poking stay fast; unset here still resolves to low.
 EQUIHASH_DEMO_PARAMS = PowDifficulty.params
 
 if ENV["KIOSK_POW_DEMO"] == "1"

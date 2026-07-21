@@ -48,7 +48,7 @@ this per demo.
 > initializer also adds a `pow_difficulty` + `pow_notice` ("beware: memory- and
 > CPU-intensive proof-of-work…") to the `owner` block of
 > `/.well-known/kiosk.json`, and the 402 challenge already carries the heavy
-> `{n,k}` — so an agent/reader sees the toll up front. Env files ship
+> `{n,k}` — so an AI assistant/reader sees the toll up front. Env files ship
 > skooti/atablefor = `high`, the rest = `low`.
 
 ## What the operator does vs. what's automated

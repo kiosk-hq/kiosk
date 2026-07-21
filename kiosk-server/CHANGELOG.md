@@ -6,6 +6,7 @@ All notable changes follow [Keep a Changelog](https://keepachangelog.com/en/1.1.
 
 ### Changed
 
+- **Install-generator honesty.** The `kiosk:install` initializer template no longer advertises a nonexistent `MyCustomAgentIdp`; it now states plainly that the bundled kiosk-pop agent-IdP is the default (zero config), that fronting an external agent-identity issuer means subclassing `Kiosk::AgentIdentityProviders::Base` (a planned seam, none shipped), and that `c.user_idp` binds a human account with `kiosk-user-idp-devise` as the worked example. Template text only — no generated behavior change.
 - **RLS is now opt-in.** kiosk-server no longer depends on or requires
   `kiosk-rls`. Hosts that want DB-level row enforcement add
   `gem "kiosk-rls"` themselves (see the kiosk-rls README). Config moves:

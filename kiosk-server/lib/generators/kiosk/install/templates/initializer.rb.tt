@@ -54,12 +54,19 @@ Kiosk.configure do |c|
   # c.owner = { name: "Your Company", support: "support@example.com" }
 
   # ─── Pluggable identity adapters ─────────────────────────────────────
-  # Configure when the corresponding adapter gem is installed.
-  # Identity adapters — both OPTIONAL:
-  # agent_idp defaults to the bundled kiosk-pop DefaultAgentIdp (verifies the
-  # tokens register/login mint) — set it only to front another agent-identity
-  # system or to compose adapters. user_idp lets your EXISTING session auth
-  # (Devise etc.) call the same wire endpoints from your own frontend.
-  # c.user_idp  = Kiosk::UserIdentityProviders::Devise.new
-  # c.agent_idp = MyCustomAgentIdp.new
+  # Two DIFFERENT, both-OPTIONAL seams. You need NEITHER to start:
+  #
+  # AGENT-IdP (c.agent_idp) — verifies/mints AI-assistant credentials. Defaults
+  # to the bundled kiosk-pop DefaultAgentIdp, used with ZERO config: it verifies
+  # the tokens the register/login endpoints mint. Set it ONLY to front an
+  # external agent-identity issuer by implementing
+  # `Kiosk::AgentIdentityProviders::Base` — external agent-IdP adapters are a
+  # planned seam; none ship yet.
+  #   # c.agent_idp = MyExternalAgentIdp.new   # your Kiosk::AgentIdentityProviders::Base subclass
+  #
+  # USER-IdP (c.user_idp) — binds a real HUMAN account (and optionally its role)
+  # from your EXISTING session auth, so a human can approve/manage assistant
+  # links from your own frontend. The shipped worked example is
+  # `kiosk-user-idp-devise` (add `gem "kiosk-user-idp-devise"`):
+  #   # c.user_idp = Kiosk::UserIdentityProviders::Devise.new
 end

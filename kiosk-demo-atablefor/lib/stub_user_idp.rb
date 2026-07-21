@@ -9,7 +9,7 @@
 # kiosk-user-idp-devise, which reads the request's Warden user (see
 # kiosk-demo-stylish for it wired end-to-end). Agents never present
 # this shape.
-class StubUserIdp < Kiosk::AgentIdentityProviders::Base
+class StubUserIdp < Kiosk::UserIdentityProviders::Base
   USER_RE = /\Auser:u-(?<user_id>[0-9a-fA-F-]+)\z/
 
   def verify(request)

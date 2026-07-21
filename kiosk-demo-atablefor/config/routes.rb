@@ -2,16 +2,20 @@
 
 Rails.application.routes.draw do
 
+  # Human diner sign-in (Devise) — the web session that mints the link code a
+  # diner uses to bind their AI assistant to their restaurant account. Walked
+  # end-to-end by `rake demo:binding`.
+  devise_for :users
+
   # Public root page: what this demo is + live DOMAIN activity (booking counts
-  # read from atablefor's own tables) + how an agent pokes the wire. api_only
-  # app, but HomeController inherits ActionController::Base so HTML renders.
+  # read from atablefor's own tables) + how an agent pokes the wire.
+  # HomeController inherits ActionController::Base so HTML renders.
   root "home#index"
 
-  # Account binding: the human half (verify page, link mint, unlink — the
-  # stub user-session channel, see lib/stub_user_idp.rb) and the agent
-  # half (link-code redeem). Routed so every URL the discovery documents
-  # advertise resolves; the walkthrough demos live in stylish
-  # (claim + link) and getgrocery (claim-rebind).
+  # Account binding: the human half (link mint, verify page, unlink — the
+  # Devise session channel) and the agent half (link-code redeem). Walked
+  # end-to-end by `rake demo:binding`: a diner mints a link code, their
+  # assistant redeems it, and the assistant's bookings tie to the diner.
   get  "/kiosk/oauth/device/verify",               to: "kiosk/server/device_verify#show"
   post "/kiosk/oauth/device/verify",               to: "kiosk/server/device_verify#create"
   post "/kiosk/auth/link",                         to: "kiosk/server/auth#link"

@@ -10,7 +10,7 @@
 # it wired end-to-end). The account-binding surfaces (device verify page,
 # link mint, unlink) authenticate the human through this channel; agents
 # never present this shape.
-class StubUserIdp < Kiosk::AgentIdentityProviders::Base
+class StubUserIdp < Kiosk::UserIdentityProviders::Base
   USER_RE = /\Auser:u-(?<user_id>[0-9a-fA-F-]+)\z/
 
   def verify(request)

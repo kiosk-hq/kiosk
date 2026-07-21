@@ -54,7 +54,7 @@ prune_one() {
 		fi
 
 		# Re-seed the shared read-only catalog if the app ships an idempotent
-		# seed task. Safe because the catalog is shared/read-only per §2.2.
+		# seed task. Safe because the catalog is shared/read-only.
 		if RAILS_ENV=production bundle exec bin/rails -T 2>/dev/null | grep -q 'demo:seed'; then
 			log "reseed ${app}: refreshing shared catalog"
 			RAILS_ENV=production bundle exec bin/rails demo:seed

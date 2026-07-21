@@ -227,6 +227,63 @@ escalating for high rate, zero purchases, and bad-faith history (bad_proof_count
 is multiplied by `bad_proof_count_factor` to escalate fast), clamped to
 `[count_min, count_max]`.
 
+### `Policies::Backoff` — count-based "solve once, next N calls free"
+
+A reusable strategy for the recency-grace pattern: after an identity solves
+**one** proof, it is granted a fixed **count** of ungated follow-up requests;
+when that count is exhausted it is challenged again. The grant is a **COUNT, not
+a time window** — a window would let a bot flood thousands of requests inside
+it, whereas a count caps exactly how many free calls one ~9 s solve buys. It
+turns "cost per request" into "cost per burst": the toll is paid once, up front,
+and amortised over the next `count` calls.
+
+```ruby
+policy = Kiosk::Reputation::Policies::Backoff.new(
+  count: 50,                                  # ungated calls one solved proof grants
+  base:  { alg: "equihash",                   # the challenge issued when no grant remains
+           params: { n: 168, k: 7 },
+           count: 1 },                         # per-challenge N×PoW proof count
+  # store: MyRedisBackoffStore.new            # optional — defaults to a fresh in-process store
+)
+
+# No grant yet → issue a fresh challenge (a dup of `base`).
+policy.challenge_for(identity: id, verb: :query, factors: f)
+# => { alg: "equihash", params: { n: 168, k: 7 }, count: 1 }
+
+# The gate calls this AFTER it verifies a submitted proof → grant `count` calls.
+policy.on_proof_verified(identity: id)
+
+# The next `count` calls are served without a challenge …
+policy.challenge_for(identity: id, verb: :query, factors: f)  # => nil (grant consumed)
+# … then the identity is re-challenged when the grant is exhausted.
+```
+
+The grant is **SET** on a verified solve (via `on_proof_verified`, which the
+`kiosk-server` gate invokes after cryptographic verification) and **CONSUMED**
+by subsequent requests (each `challenge_for` decrements one). Grants are keyed
+per identity: a `Kiosk::Identity` is keyed by `agent_id` (falling back to
+`user_id`), so each bound assistant credential earns and spends its own grant; a
+plain string identity is keyed by its own value.
+
+**Store contract.** `store` is any object with two methods:
+
+| method | contract |
+| --- | --- |
+| `grant(key, n)` | set the remaining-grant count for `key` to `n` (a solve resets, does not accumulate) |
+| `consume(key)`  | if the count > 0: decrement and return `true`; else return `false` — **atomically** |
+
+`consume` must decrement-and-test atomically so two concurrent requests can
+never both consume the last grant.
+
+**Multi-worker caveat.** The default `Kiosk::Reputation::BackoffStore` is
+**in-process** and does NOT share state across Puma workers — each worker keeps
+its own counter, so with W workers the effective grant is **per-worker** (an
+identity may get up to `count` free calls from each worker it hits before being
+re-challenged there). The COUNT is authoritative only per worker. A provider
+running multiple processes MUST pass a shared store (Redis/DB) with the same two
+methods. (This mirrors `Kiosk::Server::PowSpentStore`'s in-process default and
+its cross-worker caveat.)
+
 ## Reputation hit on bad proof
 
 When `Challenge.verify` returns `:bad_proof` (well-formed, unexpired,

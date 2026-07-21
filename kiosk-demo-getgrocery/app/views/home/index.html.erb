@@ -20,6 +20,14 @@
     .cat{background:#fff;border:1px solid #e2ece4;border-radius:12px;padding:22px 14px;text-align:center;font-weight:600;font-size:15px}
     .cat .emoji{font-size:30px;display:block;margin-bottom:8px}
 
+    /* ── Live activity stat cards ─────────────────────────────────────── */
+    .stats-wrap{max-width:880px;margin:8px auto 8px;padding:0 24px}
+    .stats-h{margin:0 0 14px;font-size:13px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:#7a8f80;text-align:center}
+    .stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:14px}
+    .stat{background:#fff;border:1px solid #e2ece4;border-radius:14px;padding:22px 16px;text-align:center}
+    .stat .n{font-size:30px;font-weight:800;color:#1a6b3c;line-height:1}
+    .stat .l{margin-top:8px;font-size:13px;color:#5c6d62;font-weight:600}
+
     /* ── The agent hook ───────────────────────────────────────────────── */
     .agents{max-width:880px;margin:8px auto 56px;padding:0 24px}
     .agents-card{background:linear-gradient(135deg,#0f2a1c,#1a6b3c);color:#fff;border-radius:16px;padding:26px 28px;display:flex;flex-wrap:wrap;align-items:center;gap:18px}
@@ -52,6 +60,29 @@
     <div class="cat"><span class="emoji">🥦</span>Produce</div>
     <div class="cat"><span class="emoji">🧴</span>Pantry</div>
     <div class="cat"><span class="emoji">🥤</span>Drinks</div>
+  </section>
+
+  <!-- ── Live activity (real domain counts) ──────────────────────────── -->
+  <section class="stats-wrap">
+    <h3 class="stats-h">Live activity</h3>
+    <div class="stats">
+      <div class="stat">
+        <div class="n"><%= @products_in_catalog %></div>
+        <div class="l">Products in catalog</div>
+      </div>
+      <div class="stat">
+        <div class="n"><%= @orders_placed %></div>
+        <div class="l">Orders placed</div>
+      </div>
+      <div class="stat">
+        <div class="n"><%= @items_ordered %></div>
+        <div class="l">Items ordered</div>
+      </div>
+      <div class="stat">
+        <div class="n"><%= @deliveries_scheduled %></div>
+        <div class="l">Deliveries scheduled</div>
+      </div>
+    </div>
   </section>
 
   <!-- ── Agents → Kiosk here ─────────────────────────────────────────── -->

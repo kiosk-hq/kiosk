@@ -17,6 +17,16 @@ class ListsController < ApplicationController
   # api-in-spirit root.
   def index
     @lists = user_signed_in? ? kiosk_query("my_lists") : nil
+
+    # App-wide live DOMAIN activity summary (real counts, not telemetry, and
+    # NOT principal-scoped — this is the public "what's happening here" tile a
+    # visitor lands on). Cheap Model.count reads on tudu's OWN tables.
+    @activity = {
+      lists:    List.count,
+      todos:    Todo.count,
+      done:     Todo.where(done: true).count,
+      members:  Membership.count,
+    }
   end
 
   def show

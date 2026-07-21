@@ -141,8 +141,8 @@ Kiosk.configure do |c|
     c.owner = c.owner.merge(pow_difficulty: PowDifficulty.level, pow_notice: notice)
   end
   # Dual-check (skill.md): canonical skill URL + SHA-256 of its content.
-  c.skill_url    = "https://kiosk.tech/skill-v0.3.2.md"
-  c.skill_sha256 = "ba708c6234f277409653810f8ef4d3ea10679866e3fd57cf7cb9148b089065d4"
+  c.skill_url    = "https://kiosk.tech/skill-v0.3.3.md"
+  c.skill_sha256 = "711b87e0d2a24123d44a325a5b0a0e255542b812847f6445d772ef21f2e83d0e"
 
   # JwtOrStubIdp tries Kiosk-issued JWTs (kiosk-pop register/login output;
   # OAuth device-grant dormant) first, then falls back to StubIdp's bespoke

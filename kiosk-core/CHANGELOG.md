@@ -6,6 +6,10 @@ All notable changes follow [Keep a Changelog](https://keepachangelog.com/en/1.1.
 
 ### Changed
 
+- `Kiosk::AgentIdentityProviders::Base` doc now states plainly that the
+  bundled `DefaultAgentIdp` ships as the default (zero config) and that
+  fronting an external agent-identity issuer is a PLANNED seam — no external
+  `kiosk-agent-idp-*` adapter ships yet (was overclaiming shipped adapters).
 - `Kiosk::Configuration` gains `schema` (default "kiosk") and `app_role`
   (default "app_role") — moved from kiosk-rls; they are deployment
   vocabulary shared by kiosk-server, not RLS-specific.

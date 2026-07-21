@@ -4,13 +4,13 @@ module Kiosk
   module AgentIdentityProviders
     # Abstract base for agent-IdP adapters.
     #
-    # An agent-IdP MINTS and VERIFIES agent credentials. The only adapter
-    # shipping today is the bundled
-    # `Kiosk::Server::AgentIdentityProviders::DefaultAgentIdp` (in
-    # kiosk-server), which registers agents into the local `agents` table and
-    # signs tokens with the provider's own JWKS. Future third-party adapters
-    # (Microsoft Entra Agent ID, Okta Agent Identity, Google Agent Passport,
-    # …) are planned to ship as `kiosk-agent-idp-*` gems — none exist yet.
+    # An agent-IdP MINTS and VERIFIES agent credentials. The bundled
+    # `Kiosk::Server::AgentIdentityProviders::DefaultAgentIdp` (in kiosk-server)
+    # ships as the default and is used with ZERO config: it registers agents
+    # into the local `agents` table and signs tokens with the provider's own
+    # JWKS. Fronting an EXTERNAL agent-identity issuer by subclassing this Base
+    # is a PLANNED seam — no external `kiosk-agent-idp-*` adapter (Entra Agent
+    # ID, Okta Agent Identity, Google Agent Passport, ID-JAG, …) ships yet.
     class Base
       # Verify an incoming HTTP request into a {Kiosk::Identity}.
       #

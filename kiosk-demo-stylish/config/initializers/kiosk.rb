@@ -19,14 +19,17 @@ require Rails.root.join("lib/stub_idp")
 require Rails.root.join("lib/jwt_or_stub_idp")
 require Rails.root.join("lib/stub_user_idp")
 require Rails.root.join("lib/composite_user_idp")
+require Rails.root.join("lib/pow_difficulty")
 require "kiosk/user_identity_providers/devise"
 
 # Registration PoW gate (KIOSK_POW_REGISTER_DEMO=1). A booking SaaS can price
 # fresh-identity minting: registering an agent costs one Equihash proof
-# (one PoW = Equihash — a metered toll). Small demo
-# params solve sub-second. Off by default so the walkthrough/isolation flows are
-# unchanged.
-STYLISH_REGISTRATION_POW_PARAMS = { n: 96, k: 5 }.freeze
+# (one PoW = Equihash — a metered toll). Params follow KIOSK_POW_DIFFICULTY
+# (lib/pow_difficulty.rb): low (default) → n=96 k=5 sub-second; high → n=168 k=7
+# (~10s / ~1.3 GiB). Unset = low, so the walkthrough/isolation flows and CI are
+# unchanged; a deployer can set high to feel the toll. Off entirely unless
+# KIOSK_POW_REGISTER_DEMO=1.
+STYLISH_REGISTRATION_POW_PARAMS = PowDifficulty.params
 if ENV["KIOSK_POW_REGISTER_DEMO"] == "1"
   require "kiosk/pow/equihash"
   require "kiosk/reputation"
@@ -59,7 +62,14 @@ Kiosk.configure do |c|
   # own). Staff assistants get their role indirectly, from the bound human's
   # IdP role at link time — never self-selected.
   c.registration_role = :customer
+  # owner is free-form and flows verbatim into /.well-known/kiosk.json. When
+  # KIOSK_POW_DIFFICULTY=high, surface an honest "beware: intensive PoW" notice
+  # here so an agent/reader sees the toll BEFORE it dials register (only shown
+  # at high; stylish ships low so it is normally absent).
   c.owner  = { name: "Stylish (Kiosk demo)", support: "demo@kiosk.tech" }
+  if (notice = PowDifficulty.pow_notice)
+    c.owner = c.owner.merge(pow_difficulty: PowDifficulty.level, pow_notice: notice)
+  end
   # Dual-check (skill.md): canonical skill URL + SHA-256 of its content.
   c.skill_url    = "https://kiosk.tech/skill-v0.3.2.md"
   c.skill_sha256 = "ba708c6234f277409653810f8ef4d3ea10679866e3fd57cf7cb9148b089065d4"

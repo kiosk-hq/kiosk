@@ -62,16 +62,19 @@ jobs:
           ruby-version: "4.0.1"
           bundler-cache: false
 
-      # kiosk-redteam's client solves a real Equihash PoW via the bundled
-      # numpy-vectorised solver (solve.py); that job needs numpy or it errors
-      # "this solver requires numpy" and exits non-zero.
+      # Two gem jobs need the bundled numpy-vectorised solver (solve.py):
+      # kiosk-redteam's client solves a real Equihash PoW, and
+      # kiosk-pow-equihash's :parity specs live-solve the shipped 168/7 params
+      # to prove the solver and Ruby verifier agree end-to-end (T-013). Without
+      # numpy solve.py errors "this solver requires numpy" (redteam) or the
+      # :parity roundtrips silently skip (pow-equihash), so install it for both.
       - name: Set up Python (Equihash solver)
-        if: matrix.gem == 'kiosk-redteam'
+        if: matrix.gem == 'kiosk-redteam' || matrix.gem == 'kiosk-pow-equihash'
         uses: actions/setup-python@v7
         with:
           python-version: "3.12"
       - name: Install numpy (Equihash solver)
-        if: matrix.gem == 'kiosk-redteam'
+        if: matrix.gem == 'kiosk-redteam' || matrix.gem == 'kiosk-pow-equihash'
         run: python -m pip install numpy
 
       - name: Install dependencies

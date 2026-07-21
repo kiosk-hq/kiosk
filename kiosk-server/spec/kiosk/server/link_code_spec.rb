@@ -55,7 +55,7 @@ RSpec.describe Kiosk::Server::LinkCode do
       expect(stored).to eq(result[:da])
     end
 
-    # roles-from-IdP (T-014, Path A): the human's role travels on the link
+    # roles-from-IdP (Path A): the human's role travels on the link
     # row so the assistant inherits it at claim time.
     it "stamps the human's requested_role onto the link row (roles-from-IdP)" do
       Kiosk.configure { |c| c.roles = %i[customer owner] }

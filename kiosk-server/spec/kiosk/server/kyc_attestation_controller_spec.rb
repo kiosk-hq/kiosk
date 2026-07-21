@@ -80,7 +80,7 @@ RSpec.describe "Kiosk::Server KYC attestation logic (unit)" do
     end
   end
 
-  # ─── DefaultAgentIdp attribute queries (T-018) ────────────────────────
+  # ─── DefaultAgentIdp attribute queries ────────────────────────
   describe "DefaultAgentIdp KYC attributes" do
     let(:idp) { Kiosk::Server::AgentIdentityProviders::DefaultAgentIdp.new }
 

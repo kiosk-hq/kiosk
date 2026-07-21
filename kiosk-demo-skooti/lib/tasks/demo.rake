@@ -963,7 +963,7 @@ end
 namespace :demo do
   # ── demo:kyc ───────────────────────────────────────────────────────────────
   desc <<~DESC
-    KYC named-anonymized-attribute gate proof (T-018).
+    KYC named-anonymized-attribute gate proof.
 
     Runs demo:setup (clean DB + seed SK-001 scooter + MC-001 motorcycle), boots
     the server, runs kyc_flow.rb and asserts the attribute-gated motorcycle path

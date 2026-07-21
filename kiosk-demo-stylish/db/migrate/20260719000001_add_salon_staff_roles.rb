@@ -1,6 +1,6 @@
 # frozen_string_literal: true
 
-# Salon staff surface (T-014, roles-from-IdP). stylish becomes dual-audience:
+# Salon staff surface (roles-from-IdP). stylish becomes dual-audience:
 # customers book (unchanged), salon STAFF manage the calendar.
 #
 #   - users.staff_role: 'owner' | 'stylist' | NULL. NULL = a customer (or an

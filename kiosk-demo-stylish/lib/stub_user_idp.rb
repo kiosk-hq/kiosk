@@ -1,6 +1,6 @@
 # frozen_string_literal: true
 
-# Role-carrying stub USER-IdP for the roles-from-IdP demo (T-014, Path A).
+# Role-carrying stub USER-IdP for the roles-from-IdP demo (Path A).
 #
 # Stands in for the salon's own SSO / Okta: the provider's session tells
 # Kiosk WHO the signed-in human is AND what role they hold. Where the Devise

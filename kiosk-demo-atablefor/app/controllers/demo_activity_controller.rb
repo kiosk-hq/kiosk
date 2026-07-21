@@ -2,7 +2,7 @@
 
 require Rails.root.join("lib/demo_telemetry")
 
-# GET /demo/activity.json — privacy-safe live-activity aggregates (T-032 §4).
+# GET /demo/activity.json — privacy-safe live-activity aggregates.
 #
 # Returns counts ONLY (no agent detail, no PII):
 #   { assistants_active_10m, registered_total, actions_last_hour: {kind=>n},

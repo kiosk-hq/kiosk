@@ -51,8 +51,7 @@ module Kiosk
 
         # Returns true iff the agent has a non-NULL `kyc_verified_at` timestamp.
         # The binary KYC gate. A KYC-restricted Action (e.g. skooti's
-        # `rent_motorcycle`, the registered gate that resolves the K-346
-        # `unlock`-gate reference) calls this, or the finer-grained
+        # `rent_motorcycle`) calls this, or the finer-grained
         # {#kyc_has_attributes?} when it needs specific booleans.
         def kyc_verified?(agent_id)
           row = ActiveRecord::Base.connection.execute(

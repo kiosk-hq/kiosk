@@ -1,5 +1,4 @@
-# Kiosk hosted live demos — parameterised systemd unit (T-032)
-# Design: meta/docs/architecture/2026-07-20-hosted-live-demos.md §1
+# Kiosk hosted live demos — parameterised systemd unit
 #
 # ONE Puma per demo app, bound to loopback, fronted by Caddy. This is a
 # TEMPLATE unit: `%i` is the instance name (the text after the @). Enable one
@@ -13,7 +12,7 @@
 # %i selects BOTH the app dir and its port, via two conventions:
 #   1. WorkingDirectory = /srv/kiosk/kiosk-demo-%i   (the gem checkout)
 #      NOTE: atablefor's gem dir is kiosk-demo-atablefor (renamed from
-#      foodelivery, T-033). All others: kiosk-demo-<name>.
+#      All apps: kiosk-demo-<name>.
 #   2. PORT is supplied by that app's EnvironmentFile (/etc/kiosk-demo/%i.env),
 #      set from env/<app>.env — the single source of truth for the port.
 # Port map (keep in sync with Caddyfile + env files):

@@ -7,7 +7,7 @@
 #   C2  PayForOtherUseSelf  — B pays for A's reservation, B tries start_rental
 #   C3  SpentResourceReuse  — re-start_rental on an active reservation
 #       KYC bypass variants  — missing / expired / forged attestation
-#   MotorcycleForgedKyc      — T-018 beat: a forged attestation self-asserting
+#   MotorcycleForgedKyc      — a forged attestation self-asserting
 #                              {age_over_18, licence_a} is rejected, so the
 #                              KYC-attribute-gated rent_motorcycle stays 403.
 #
@@ -215,7 +215,7 @@ puts ""
 runner  = Kiosk::Redteam::Runner.new(base_url: BASE_URL, profile:)
 results = runner.run(scenarios)
 
-# ── skooti-local beat: forged motorcycle KYC attributes (T-018) ───────────────
+# ── skooti-local beat: forged motorcycle KYC attributes ───────────────
 #
 # The generic ForgedKyc scenario above proves a forged attestation is rejected
 # at /kyc for the binary start_rental gate. This beat proves the SAME defence
@@ -295,7 +295,7 @@ skipped_results.each do |r|
 end
 breach_results.each { |r| puts "  BREACH   ✗ #{r[:scenario].name} — #{r[:verdict].detail}" }
 
-# ── skooti-local beat verdict (T-018) ─────────────────────────────────────────
+# ── skooti-local beat verdict ─────────────────────────────────────────
 if mc_beat[:blocked]
   puts "  BLOCKED  ✓ MotorcycleForgedKyc — #{mc_beat[:detail]}"
 else

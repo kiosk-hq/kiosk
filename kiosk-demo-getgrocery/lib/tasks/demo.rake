@@ -1082,7 +1082,7 @@ end
 namespace :demo do
   # ── demo:telemetry ─────────────────────────────────────────────────────────
   desc <<~DESC
-    Live-activity telemetry demo (T-032 §4). Seeds simulated events into the
+    Live-activity telemetry demo. Seeds simulated events into the
     (shared) telemetry store and prints the privacy-safe aggregate — the JSON
     the /demo/activity.json endpoint and the kiosk.tech landing tile return,
     BEFORE any real deploy traffic. Sets KIOSK_TELEMETRY=1 for this process.

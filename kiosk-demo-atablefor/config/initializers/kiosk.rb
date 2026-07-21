@@ -224,7 +224,7 @@ Kiosk.configure do |c|
   end
 end
 
-# ── Live-activity telemetry (T-032 §4) — opt-in, app-layer, privacy-safe ───
+# ── Live-activity telemetry — opt-in, app-layer, privacy-safe ───
 # Off unless KIOSK_TELEMETRY=1. One event per successful wire action via a Rack
 # middleware; aggregate at GET /demo/activity.json. NOT in kiosk-core.
 if ENV["KIOSK_TELEMETRY"] == "1"

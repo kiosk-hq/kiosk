@@ -1,6 +1,6 @@
 # frozen_string_literal: true
 
-# roles-from-IdP driver (T-014, Path A) — the INDIRECT, human-idp path.
+# roles-from-IdP driver (Path A) — the INDIRECT, human-idp path.
 #
 # A salon STAFF member links their assistant (W5 link-code ceremony) over a
 # role-carrying session (the StubUserIdp SSO/Okta stand-in: an

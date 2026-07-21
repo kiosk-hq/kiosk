@@ -18,7 +18,7 @@
 #       (assistant_claimed migrated it — verified in the rake task via psql);
 #   (b) the PRE-LINK token no longer authenticates at all — a rebind is a
 #       principal change, so (like unlink) it watermark-revokes the key's
-#       pre-link tokens (K-338). The old token now fails with 401, forcing the
+#       pre-link tokens. The old token now fails with 401, forcing the
 #       agent to re-login for a token under the new principal.
 #   (c) after the assistant RE-LOGS IN (fresh token, sub=Alice), it sees "Hike"
 #       under Alice — and Alice's browser session (my_lists as the human) sees

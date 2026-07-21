@@ -52,7 +52,7 @@ Rails.application.routes.draw do
   # No auth required — demo provider only. Production would authenticate.
   get "/admin/orders" => "admin/orders#index", as: :admin_orders
 
-  # ─── Live-activity telemetry aggregate (T-032 §4, opt-in) ─────────────────
+  # ─── Live-activity telemetry aggregate (opt-in) ─────────────────
   # Privacy-safe counts the demo page + the kiosk.tech landing tile fetch.
   # Drawn ONLY when KIOSK_TELEMETRY=1 so it is a pure no-op in CI/local flows.
   if ENV["KIOSK_TELEMETRY"] == "1"

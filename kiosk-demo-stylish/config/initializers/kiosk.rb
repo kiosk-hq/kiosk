@@ -52,7 +52,7 @@ Kiosk.configure do |c|
   c.issuer = ENV.fetch("KIOSK_ISSUER", "http://localhost:3001")
   # stylish is dual-audience: CUSTOMERS book (customer), salon STAFF manage
   # the calendar (owner / stylist). Staff roles are sourced from the
-  # provider's own IdP (roles-from-IdP, T-014) — see the StubUserIdp and the
+  # provider's own IdP (roles-from-IdP) — see the StubUserIdp and the
   # `salon_calendar` query below.
   c.roles  = %i[customer stylist owner]
   # Role pinned to every SELF-registered agent (agents cannot choose their
@@ -119,7 +119,7 @@ Kiosk::Server::Queries.register("my_appointments",
   ).to_a
 end
 
-# salon_calendar — STAFF calendar, role-gated (roles-from-IdP, T-014).
+# salon_calendar — STAFF calendar, role-gated (roles-from-IdP).
 # Reads kiosk.current_role() (the GUC set from the token's role claim, which a
 # staff assistant inherited from the bound human's IdP role):
 #
@@ -190,7 +190,7 @@ Kiosk::Server::Actions.register("book_appointment",
   { appointment_id: appointment.id, salon_id: appointment.salon_id, slot: appointment.slot.iso8601 }
 end
 
-# ── Live-activity telemetry (T-032 §4) — opt-in, app-layer, privacy-safe ───
+# ── Live-activity telemetry — opt-in, app-layer, privacy-safe ───
 # Off unless KIOSK_TELEMETRY=1. One event per successful wire action via a Rack
 # middleware; aggregate at GET /demo/activity.json. NOT in kiosk-core.
 if ENV["KIOSK_TELEMETRY"] == "1"

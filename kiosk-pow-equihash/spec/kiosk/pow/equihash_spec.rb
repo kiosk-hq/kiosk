@@ -465,6 +465,37 @@ RSpec.describe Kiosk::Pow::Equihash do
       )
       expect(ok).to be(true), "Ruby verify rejected Python output: #{result["indices"].inspect}"
     end
+
+    # T-013: the toy roundtrip above proves the wire, but the shipped params are
+    # n=168 k=7. Only the frozen KAT exercises the verifier at 168/7; nothing
+    # LIVE-solves there. This closes that gap end-to-end: solve.py produces a
+    # fresh 168/7 proof and the Ruby verifier must accept it — the "KATs must run
+    # at shipped params" lesson from the verifier-bug incident. ~9-10 s to solve.
+    it "Ruby verify accepts a LIVE production-param (n=168,k=7) proof from the Python solver" do
+      solver_py = File.join(__dir__, "../../../solve.py")
+      skip "solve.py not found" unless File.exist?(solver_py)
+
+      python = find_python_with_numpy
+      skip "python3 with numpy not found (pip install numpy)" unless python
+
+      require "base64"
+      salt      = "kiosk-eqx-parity-168".b
+      challenge = JSON.generate(
+        "salt_b64"     => Base64.strict_encode64(salt),
+        "params"       => { "n" => 168, "k" => 7 },
+        "header_nonce" => 0,
+      )
+      out    = `#{python} #{solver_py.shellescape} #{challenge.shellescape}`.strip
+      result = JSON.parse(out)
+      skip "Python solver failed: #{result["error"]}" if result.key?("error")
+
+      ok = described_class.verify(
+        salt: salt, params: described_class.params(n: 168, k: 7),
+        nonce: { "indices" => result["indices"] },
+      )
+      expect(ok).to be(true),
+        "Ruby verify rejected the solver's live 168/7 output: #{result["indices"].inspect}"
+    end
   end
 
   def find_python_with_blake2b

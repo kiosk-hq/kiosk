@@ -22,14 +22,14 @@ This directory is the *app-side* handoff; DNS + VPS provisioning is the operator
 | Demo | Subdomain | Port | PoW difficulty | Stripe (test) |
 |------|-----------|------|----------------|---------------|
 | getgrocery | `getgrocery.demo.kiosk.tech` | 3001 | **low** (~1 s, poke-friendly) | yes |
-| atablefor  | `atablefor.demo.kiosk.tech` (or apex `atablefor.us`) | 3002 | **HIGH** (~30 s, "beware: intensive PoW") | yes |
+| atablefor  | `atablefor.demo.kiosk.tech` (or apex `atablefor.us`) | 3002 | **HIGH** (~9–10 s, "beware: intensive PoW") | yes |
 | hoteling   | `hoteling.demo.kiosk.tech` | 3003 | **low** | — |
-| skooti     | `skooti.demo.kiosk.tech` | 3004 | **HIGH** (~30 s, "beware: intensive PoW") | — |
+| skooti     | `skooti.demo.kiosk.tech` | 3004 | **HIGH** (~9–10 s, "beware: intensive PoW") | — |
 | stylish    | `stylish.demo.kiosk.tech` | 3005 | **low** | — |
 | philslist  | `philslist.demo.kiosk.tech` | 3006 | **low** | — |
 | tudu       | `tudu.demo.kiosk.tech` | 3007 | **low** | — |
 
-**PoW difficulty is a feature** (design §8.4): most demos run a low/fast toll so
+**PoW difficulty is a feature**: most demos run a low/fast toll so
 a poker can register in ~1 s and still SEE the toll; **skooti** and **atablefor**
 run a high memory+CPU-hard toll behind a "beware: intensive PoW" banner so the
 DoS shield is tangible first-hand. `KIOSK_POW_DIFFICULTY` in each env file drives
@@ -57,8 +57,8 @@ this per demo.
 1. **DNS.** Either a wildcard `*.demo.kiosk.tech → VPS_IP` (one A record, add
    apps later with no DNS change) or one A record per subdomain above. If you
    want the flagship domain, point `atablefor.us` (+`www`) at the VPS too.
-2. **Provision the VPS** (2–4 GB; design §2 sizes all 7 ≈ 2 GB Puma → 4 GB
-   comfortable). Install Postgres 16, Caddy, Ruby (`.mise.toml` pins the
+2. **Provision the VPS** (2–4 GB; all 7 ≈ 2 GB Puma → 4 GB
+   comfortable). Install Postgres 17, Caddy, Ruby (`.mise.toml` pins the
    version), and a non-login `kiosk` service user.
 3. **Set real secrets.** Replace every `REPLACE_*` value in each
    `env/<app>.env.example` (secret key base, DB passwords, signing key, PoW
@@ -84,7 +84,7 @@ sudo -u postgres psql -v ON_ERROR_STOP=1 \
   -v gg_pw="'…'" -v af_pw="'…'" -v ho_pw="'…'" -v sk_pw="'…'" \
   -v st_pw="'…'" -v pl_pw="'…'" -v td_pw="'…'" \
   -f /srv/kiosk/reference/deploy/postgres-init.sql
-#    Then set max_connections=100 in postgresql.conf (design §2) and reload.
+#    Then set max_connections=100 in postgresql.conf and reload.
 
 # 2. Per app: install gems, precompile assets, prepare the DB (schema + seed).
 for app in getgrocery atablefor hoteling skooti stylish philslist tudu; do
@@ -125,18 +125,18 @@ test card on each demo's landing:
 > **Test card:** `4242 4242 4242 4242` — any future expiry, any CVC, any ZIP.
 > More cards: <https://docs.stripe.com/testing>
 
-## Poke it — the "curl one-liner" (design §3)
+## Poke it — the "curl one-liner"
 
 The register gate is a memory-hard PoW by design, so the "true" one-liner ships
 a copy-paste **solver** (`kiosk-pow-equihash/solve.py`). Hosted difficulty is
-low (~1 s) on most demos; skooti/atablefor are intentionally ~30 s (you'll feel
+low (~1 s) on most demos; skooti/atablefor are intentionally ~9–10 s (you'll feel
 it — that's the point). Flow: **discover → register (solve PoW) → query**.
 
 ```sh
 # 0. Discover: who/where/which verbs (no auth).
 curl -s https://getgrocery.demo.kiosk.tech/.well-known/kiosk.json | jq .
 
-# 1. Instant look at the wire, no register (design §3c): read the schema.
+# 1. Instant look at the wire, no register: read the schema.
 curl -s https://getgrocery.demo.kiosk.tech/kiosk/schema | jq .
 
 # 2. Full flow — register with the bundled solver, then query.
@@ -147,7 +147,7 @@ CH=$(curl -s "$BASE/kiosk/auth/challenge")
 
 #    b) solve it with the bundled solver (from kiosk-pow-equihash/):
 #       python3 solve.py  reads the challenge on stdin, prints the proof.
-PROOF=$(echo "$CH" | python3 kiosk-pow-equihash/solve.py)   # ~1 s low / ~30 s high
+PROOF=$(echo "$CH" | python3 kiosk-pow-equihash/solve.py)   # ~1 s low / ~9–10 s high
 
 #    c) register (agent key + solved proof) → returns a token
 TOKEN=$(curl -s -X POST "$BASE/kiosk/auth/register" \
@@ -164,7 +164,7 @@ curl -s -X POST "$BASE/kiosk/query" \
 > The exact challenge/proof JSON shape is what the demo's `/kiosk/auth/challenge`
 > returns and `solve.py` consumes — publish the copy-paste-exact snippet on each
 > demo landing once the hosted challenge format is pinned. skooti/atablefor show
-> the "beware: memory- and CPU-intensive PoW" banner so pokers expect the ~30 s.
+> the "beware: memory- and CPU-intensive PoW" banner so pokers expect the ~9–10 s.
 
 ## Live-activity telemetry — WIRED (opt-in)
 
@@ -214,5 +214,5 @@ seeds simulated events and prints both aggregates — the exact JSON the endpoin
 and landing tile return.
 
 Still open (not this change): a per-app `demo:prune` (+ idempotent `demo:seed`)
-rake task so `prune.sh` reclaims disk from throwaway registrations (§6) —
+rake task so `prune.sh` reclaims disk from throwaway registrations —
 `prune.sh` already calls these if present and no-ops safely if not.

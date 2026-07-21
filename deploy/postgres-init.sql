@@ -1,6 +1,6 @@
 -- Kiosk hosted live demos — Postgres provisioning
 --
--- ONE Postgres 16 cluster, one database + one least-privilege LOGIN role per
+-- ONE Postgres 17 cluster, one database + one least-privilege LOGIN role per
 -- hosted app (DB-per-app). Each demo's config/database.yml (production block)
 -- expects db  kiosk_<app>_production  owned by role  kiosk_<app>  and
 -- authenticates as KIOSK_<APP>_DB_USER / KIOSK_<APP>_DB_PASSWORD.
@@ -70,7 +70,7 @@ SELECT 'CREATE DATABASE kiosk_tudu_production OWNER kiosk_tudu'
 -- Each app role owns its own DB (set above) so `db:prepare` can create the
 -- `kiosk` schema, tables and (opt-in) RLS policies. No app role is granted on
 -- any other app's DB — cross-tenant isolation at the cluster boundary, on top
--- of the per-agent app-layer isolation (design §2.2). Revoke PUBLIC connect so
+-- of the per-agent app-layer isolation. Revoke PUBLIC connect so
 -- only the owning role reaches each DB.
 
 REVOKE CONNECT ON DATABASE kiosk_getgrocery_production FROM PUBLIC;
@@ -89,7 +89,7 @@ GRANT CONNECT ON DATABASE kiosk_stylish_production    TO kiosk_stylish;
 GRANT CONNECT ON DATABASE kiosk_philslist_production  TO kiosk_philslist;
 GRANT CONNECT ON DATABASE kiosk_tudu_production       TO kiosk_tudu;
 
--- NOTE (connections): design §2 sizes Postgres max_connections >= Σ(app pools)
+-- NOTE (connections): Postgres max_connections >= Σ(app pools)
 -- + headroom. Each app pool = WEB_CONCURRENCY(2) × RAILS_MAX_THREADS(5) = 10;
 -- all 7 apps = 70. Set  max_connections = 100  in postgresql.conf (or front
 -- with PgBouncer if hosting all 7 on a 2 GB box). Not settable from this file.

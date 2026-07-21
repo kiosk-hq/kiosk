@@ -36,7 +36,7 @@
 }
 
 # Reusable snippet: shared proxy + per-IP rate-limit backstop on top of PoW.
-# (Design §2: PoW is the real DoS shield; this is a cheap extra guard.)
+# (PoW is the real DoS shield; this is a cheap extra guard.)
 # NOTE: native rate-limiting needs the caddy-ratelimit module in the build.
 # If your Caddy lacks it, drop the `import ratelimit` lines — the app-layer
 # PoW toll still protects the register path. Kept commented so a stock Caddy

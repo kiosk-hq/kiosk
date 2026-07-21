@@ -19,7 +19,7 @@ Seven demos: getgrocery · atablefor · hoteling · skooti · stylish · philsli
 ## 4. Per-app env (copy `deploy/env/<app>.env.example` → real values)
 For EACH of the 7 apps:
 - [ ] `RAILS_ENV=production`, a generated `SECRET_KEY_BASE`, `KIOSK_<APP>_DB_{HOST,NAME,USER,PASSWORD}`, `PORT` (3001–3007).
-- [ ] **PoW:** `KIOSK_POW_DIFFICULTY=high` for **skooti** + **atablefor** (n=168/k=7, ~9 s / ~1.5 GiB, "beware" banner);
+- [ ] **PoW:** `KIOSK_POW_DIFFICULTY=high` for **skooti** + **atablefor** (n=168/k=7, ~9–10 s / ~1.3 GiB, "beware" banner);
       `low` (or unset) for the other five (fast, poke-friendly).
 - [ ] **Telemetry:** `KIOSK_TELEMETRY=1`, `KIOSK_TELEMETRY_DB_URL=postgres://kiosk_telemetry:…@…/kiosk_demo_telemetry`,
       and a **distinct** `KIOSK_TELEMETRY_SALT=<random>` per app (keeps the per-app agent hashes non-joinable).

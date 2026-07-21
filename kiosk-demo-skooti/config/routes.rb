@@ -2,6 +2,11 @@
 
 Rails.application.routes.draw do
 
+  # Public root page: what this demo is + live DOMAIN activity (fleet + rental
+  # counts read from skooti's own tables) + how an agent pokes the wire. api_only
+  # app, but HomeController inherits ActionController::Base so HTML renders.
+  root "home#index"
+
   # Account binding: the human half (verify page, link mint, unlink — the
   # stub user-session channel, see lib/stub_user_idp.rb) and the agent
   # half (link-code redeem). Routed so every URL the discovery documents

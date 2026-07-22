@@ -26,15 +26,10 @@
     .stat .n{font-size:30px;font-weight:800;color:#8a3b1c;line-height:1}
     .stat .l{margin-top:8px;font-size:13px;color:#786055;font-weight:600}
 
-    /* ── Poke section ─────────────────────────────────────────────────── */
-    .poke{margin:40px auto 0;background:#33190f;color:#f7ece4;border-radius:16px;padding:26px 28px}
-    .poke h2{font-size:18px;font-weight:800;margin-bottom:6px}
-    .poke p{font-size:14px;color:#d1b8a9;margin-bottom:16px}
-    .poke pre{background:#221008;border:1px solid #48281e;border-radius:10px;padding:14px 16px;overflow-x:auto}
-    .poke code{font-family:"SF Mono","Fira Mono",monospace;font-size:13px;color:#f0c69f;white-space:pre}
-    .poke .links{margin-top:16px;display:flex;gap:10px;flex-wrap:wrap}
-    .poke a{background:rgba(255,255,255,.10);color:#fff;text-decoration:none;font-weight:700;font-size:13px;padding:9px 14px;border-radius:9px;border:1px solid rgba(255,255,255,.20)}
-    .poke a:hover{background:rgba(255,255,255,.2)}
+    /* ── Kiosk banner (subtle, assistant-facing hint) ─────────────────── */
+    .kiosk-banner{margin:40px auto 0;padding:10px 0 0;border-top:1px solid #eccbb2;font-size:12.5px;color:#98847a;text-align:center}
+    .kiosk-banner a{color:#8a3b1c;text-decoration:none}
+    .kiosk-banner a:hover{text-decoration:underline}
     footer{text-align:center;font-size:12px;color:#b09a8d;padding:34px 0 40px}
   </style>
 </head>
@@ -74,17 +69,7 @@
       </div>
     </section>
 
-    <section class="poke">
-      <h2>Poke it — this operator speaks Kiosk</h2>
-      <p>Your assistant can check availability and book over the wire. Start at the discovery handshake, then read the schema:</p>
-      <pre><code>curl -s http://localhost:3000/.well-known/kiosk.json | jq .
-curl -s http://localhost:3000/kiosk/schema | jq .</code></pre>
-      <div class="links">
-        <a href="/.well-known/kiosk.json">/.well-known/kiosk.json</a>
-        <a href="/kiosk/schema">/kiosk/schema</a>
-        <a href="https://kiosk.tech/skill.md">skill.md</a>
-      </div>
-    </section>
+    <p class="kiosk-banner">🤖 This service speaks Kiosk — a customer's AI assistant can discover and transact here directly. <a href="/.well-known/kiosk.json">/.well-known/kiosk.json</a></p>
   </div>
 
   <footer>atablefor — demo provider — powered by Kiosk</footer>

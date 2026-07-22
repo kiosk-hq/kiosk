@@ -31,10 +31,6 @@
   <% end %>
 <% else %>
   <p>tudu — a multi-user collaborative todo app (Kiosk demo, no payments).</p>
-  <p>Humans <%= link_to "sign in", new_user_session_path %>; assistants work over the
-    Kiosk wire (see <a href="/.well-known/kiosk.json">/.well-known/kiosk.json</a>).</p>
-  <p class="poke-hint">Poke it — this app speaks Kiosk:<br>
-    <code>curl -s http://localhost:3000/.well-known/kiosk.json | jq .</code><br>
-    <code>curl -s http://localhost:3000/kiosk/schema | jq .</code><br>
-    then read the <a href="https://kiosk.tech/skill.md">skill.md</a>.</p>
+  <p>Humans <%= link_to "sign in", new_user_session_path %> to manage lists and approve assistant links.</p>
+  <p class="kiosk-banner">🤖 This service speaks Kiosk — a customer's AI assistant can discover and transact here directly. <a href="/.well-known/kiosk.json">/.well-known/kiosk.json</a></p>
 <% end %>

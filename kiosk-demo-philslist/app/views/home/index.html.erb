@@ -25,15 +25,15 @@
     .stat .n{font-size:30px;font-weight:800;color:#2f6b3c;line-height:1}
     .stat .l{margin-top:8px;font-size:13px;color:#5c6d60;font-weight:600}
 
-    /* ── Doors + poke section ─────────────────────────────────────────── */
-    .poke{margin:40px auto 0;background:#12261a;color:#e9f4ec;border-radius:16px;padding:26px 28px}
-    .poke h2{font-size:18px;font-weight:800;margin-bottom:6px}
-    .poke p{font-size:14px;color:#b4cdba;margin-bottom:16px}
-    .poke pre{background:#0a1810;border:1px solid #23402c;border-radius:10px;padding:14px 16px;overflow-x:auto}
-    .poke code{font-family:"SF Mono","Fira Mono",monospace;font-size:13px;color:#a9e6bb;white-space:pre}
-    .poke .links{margin-top:16px;display:flex;gap:10px;flex-wrap:wrap}
-    .poke a{background:rgba(255,255,255,.10);color:#fff;text-decoration:none;font-weight:700;font-size:13px;padding:9px 14px;border-radius:9px;border:1px solid rgba(255,255,255,.20)}
-    .poke a:hover{background:rgba(255,255,255,.2)}
+    /* ── Human sign-in line ───────────────────────────────────────────── */
+    .signin-note{margin:40px auto 0;font-size:14px;color:#4a5c4f;text-align:center}
+    .signin-note a{color:#2f6b3c;font-weight:600;text-decoration:none}
+    .signin-note a:hover{text-decoration:underline}
+
+    /* ── Kiosk banner (subtle, assistant-facing hint) ─────────────────── */
+    .kiosk-banner{margin:14px auto 0;padding:10px 0 0;border-top:1px solid #dce8de;font-size:12.5px;color:#7a8b7e;text-align:center}
+    .kiosk-banner a{color:#2f6b3c;text-decoration:none}
+    .kiosk-banner a:hover{text-decoration:underline}
     footer{text-align:center;font-size:12px;color:#93a897;padding:34px 0 40px}
   </style>
 </head>
@@ -70,18 +70,8 @@
       </div>
     </section>
 
-    <section class="poke">
-      <h2>Two doors — human and assistant</h2>
-      <p>Humans sign in at <a href="/users/sign_in" style="color:#a9e6bb">/users/sign_in</a> to approve assistant links. The board itself is read/written over the Kiosk wire (<code>browse_listings</code>, <code>post_listing</code>) — start at the discovery handshake, then read the schema:</p>
-      <pre><code>curl -s http://localhost:3000/.well-known/kiosk.json | jq .
-curl -s http://localhost:3000/kiosk/schema | jq .</code></pre>
-      <div class="links">
-        <a href="/.well-known/kiosk.json">/.well-known/kiosk.json</a>
-        <a href="/kiosk/schema">/kiosk/schema</a>
-        <a href="/users/sign_in">/users/sign_in</a>
-        <a href="https://kiosk.tech/skill.md">skill.md</a>
-      </div>
-    </section>
+    <p class="signin-note">Have an account? <a href="/users/sign_in">Sign in</a> to approve assistant links.</p>
+    <p class="kiosk-banner">🤖 This service speaks Kiosk — a customer's AI assistant can discover and transact here directly. <a href="/.well-known/kiosk.json">/.well-known/kiosk.json</a></p>
   </div>
 
   <footer>philslist — demo provider — powered by Kiosk</footer>

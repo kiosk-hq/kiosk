@@ -7,10 +7,14 @@ Seven demos: getgrocery · atablefor · hoteling · skooti · stylish · philsli
 - [ ] Wildcard `*.demo.kiosk.tech` → VPS_IP (one A record; add apps without DNS changes).
       Or per-app A records (`getgrocery.demo.kiosk.tech`, …). Optionally `atablefor.us` apex.
 
-## 2. Provision the VPS (one small box, ~4 GB)
-- [ ] Ubuntu; install: **Caddy**, **PostgreSQL 17** (the `structure.sql` are PG17-format),
-      **Ruby 4.0.1** (mise), **Python 3 + numpy** (the Equihash solver needs it), git.
-- [ ] `git clone` the reference repo (or deploy a checkout per app).
+## 2. Provision the VPS (one small box, ~2–4 GB)
+- [ ] Install: **Caddy**, **PostgreSQL** (17 preferred; on 16 strip the one `SET transaction_timeout`
+      line from each `structure.sql` — it is the only PG17-ism), **Ruby 4.0.1** via **mise**, git.
+- [ ] **No Python/numpy needed on the server** — it only *verifies* proofs (cheap, pure Ruby). numpy is
+      the client's *solver* (`solve.py`); install it on the box ONLY if you want to run the solve-side
+      demo smoke tests (`demo:shop`/`demo:book`/`demo:backoff`) there.
+- [ ] **Lean Puma** for a small box: `WEB_CONCURRENCY=1` (or 0) + `RAILS_MAX_THREADS=5` per app.
+- [ ] `git clone` the reference repo (or push-to-deploy — see §7).
 
 ## 3. Databases (one Postgres cluster)
 - [ ] `psql -v pw_getgrocery="'…'" … -f deploy/postgres-init.sql`  → 7 app DBs + least-priv roles.
@@ -37,8 +41,11 @@ For EACH of the 7 apps:
 ## 6. Front with Caddy (auto-TLS)
 - [ ] Install `deploy/Caddyfile` (7 vhosts → loopback ports), `caddy reload`. Certs issue automatically.
 
-## 7. Housekeeping
-- [ ] Cron `deploy/prune.sh` daily (prune old anonymous accounts + reseed the shared catalog).
+## 7. Deploy new code (push-to-deploy) + housekeeping
+- [ ] **git push-to-deploy** (mirrors narrathon): a bare repo per box with an ISOLATED `post-receive` hook
+      (own work-tree/service names/deploy user — never touches `/opt/narrathon`) that checks out `main`,
+      `bundle install`, `db:prepare`, and restarts each app's service.
+- [ ] ~~Prune cron~~ — **SKIPPED** (Phil): not essential; reseed a bloated demo DB by hand if ever needed.
 
 ## 8. Verify (per subdomain)
 - [ ] `GET https://<app>.demo.kiosk.tech/.well-known/kiosk.json` returns discovery (atablefor shows the "beware" PoW notice).

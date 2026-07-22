@@ -39,6 +39,13 @@
     .agents-card a{background:rgba(255,255,255,.14);color:#fff;text-decoration:none;font-weight:700;font-size:13px;padding:9px 14px;border-radius:9px;border:1px solid rgba(255,255,255,.22)}
     .agents-card a:hover{background:rgba(255,255,255,.24)}
     .agents-card code{font-family:"SF Mono","Fira Mono",monospace;font-size:12px}
+    .tryit{max-width:880px;margin:0 auto 56px;padding:0 24px}
+    .tryit-card{background:#fff;border:2px solid #1a6b3c;border-radius:16px;padding:24px 28px}
+    .tryit-card h2{font-size:19px;font-weight:800;margin-bottom:8px;color:#0f2a1c}
+    .tryit-card p{font-size:15px;line-height:1.5;color:#243;margin-bottom:10px}
+    .tryit-card em{color:#0f2a1c;font-style:normal;font-weight:600}
+    .tryit-card .card{font-family:"SF Mono","Fira Mono",monospace;background:#f2f8f4;border-radius:9px;padding:10px 14px}
+    .tryit-card .note{color:#5a6b60;font-size:13px}
     footer{text-align:center;font-size:12px;color:#9bb0a2;padding:28px 0 36px}
   </style>
 </head>
@@ -97,6 +104,16 @@
         <a href="/.well-known/kiosk.json">/.well-known/kiosk.json</a>
         <a href="/kiosk/schema">/kiosk/schema</a>
       </div>
+    </div>
+  </section>
+
+  <!-- ── Try it (human invitation + Stripe test card) ──────────────────── -->
+  <section class="tryit">
+    <div class="tryit-card">
+      <h2>👋 Try it with your own assistant</h2>
+      <p>Tell your AI assistant: <em>"Order a few groceries from getgrocery.demo.kiosk.tech and check out."</em> It discovers this store, registers itself, shops, and pays — no account, no app to install. When it hands you the Stripe checkout link, pay with the test card:</p>
+      <p class="card"><strong>4242&nbsp;4242&nbsp;4242&nbsp;4242</strong> &nbsp;·&nbsp; any future expiry &nbsp;·&nbsp; any CVC &nbsp;·&nbsp; any ZIP</p>
+      <p class="note">Stripe <strong>test mode</strong> — no real charge, no real card ever touched.</p>
     </div>
   </section>
 

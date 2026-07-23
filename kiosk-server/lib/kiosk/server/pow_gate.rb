@@ -92,7 +92,16 @@ module Kiosk
         # ── Ask the policy ───────────────────────────────────────────────────
 
         fp      = request_fingerprint(command: command, body: body)
-        factors = config.reputation_factors.call(identity: identity, verb: command.to_sym)
+        # Anonymous (identity-less) requests reach the gate on PUBLIC verbs
+        # (schema): there is no principal to compute per-identity reputation for,
+        # so use empty factors. The policy still decides whether to challenge —
+        # it receives identity: nil and MUST check the verb before dereferencing
+        # identity (the shipped demo policies return early on non-target verbs).
+        factors = if identity.nil?
+                    ::Kiosk::Reputation::Factors.empty
+                  else
+                    config.reputation_factors.call(identity: identity, verb: command.to_sym)
+                  end
         spec    = policy.challenge_for(identity: identity, verb: command.to_sym, factors: factors)
 
         return :proceed if spec.nil?  # policy decided not to challenge this request

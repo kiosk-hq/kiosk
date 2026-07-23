@@ -35,8 +35,12 @@ if defined?(::ActionController::API)
       # or `nil`; nothing resolved becomes 401.
       class WireController < ::ActionController::API
         # REST verb: GET /kiosk/schema
+        #
+        # Anonymous-readable: the schema is the machine-readable API description,
+        # so it does NOT require a resolved identity (unlike query/run/pay). The
+        # PoW gate still applies, so an operator MAY toll it anti-scrape.
         def schema
-          run_command(:schema)
+          run_command(:schema, anonymous_ok: true)
         end
 
         # REST verb: POST /kiosk/query
@@ -56,13 +60,13 @@ if defined?(::ActionController::API)
 
         private
 
-        def run_command(command)
+        def run_command(command, anonymous_ok: false)
           # parse_body! runs INSIDE the rescue below: a malformed body raises
           # Errors::BadRequest, which must render a 400 envelope, not escape as
           # an uncaught 500 (the same parse-outside-rescue class fixed
           # for AuthController/KycAttestationController).
           args     = parse_body!
-          identity = resolve_identity!
+          identity = resolve_identity!(anonymous_ok: anonymous_ok)
 
           # Pull the submitted proof out of the body: it is a sibling of the verb
           # args, and must be excluded from BOTH the challenge fingerprint (which
@@ -88,9 +92,14 @@ if defined?(::ActionController::API)
           render_envelope(e.to_envelope, status: e.http_status, error: e)
         end
 
-        def resolve_identity!
+        # Resolve the request principal. With `anonymous_ok: true` (public verbs
+        # like schema) a request that resolves to nothing returns nil instead of
+        # raising 401 — the verb is served anonymously (still PoW-gateable).
+        def resolve_identity!(anonymous_ok: false)
           identity = IdentityResolution.resolve(request)
-          raise Errors::Unauthenticated, "no identity resolved from request" if identity.nil?
+          if identity.nil? && !anonymous_ok
+            raise Errors::Unauthenticated, "no identity resolved from request"
+          end
 
           identity
         end

@@ -36,7 +36,8 @@
     .chip{font-size:12.5px;font-weight:600;color:var(--accent);background:var(--soft);border-radius:999px;padding:5px 12px}
     .links a{display:inline-block;font-weight:700;font-size:14px;margin:0 18px 0 0;text-decoration:none}
     .links a:hover{text-decoration:underline}
-    .disco{font-size:13px;color:var(--muted);margin-top:14px;padding-top:13px;border-top:1px solid var(--line)}
+    .disco{background:#fff;border:1px solid var(--line);border-radius:14px;padding:15px 22px;font-size:13px;color:var(--muted);text-align:center}
+    .disco a{font-weight:600}
 
     /* 3 — Live activity (compact) */
     .stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(120px,1fr));gap:10px}
@@ -72,7 +73,7 @@
       <div class="tryit">
         <h2>Order groceries — no account, no app</h2>
         <p>Tell your AI assistant:</p>
-        <p class="say">“Order a few groceries from getgrocery.demo.kiosk.tech and check out.”</p>
+        <p class="say">“Order milk, eggs and cheese from getgrocery.demo.kiosk.tech and check out.”</p>
         <p>It discovers this store, registers itself, shops, schedules a delivery slot, and pays. When it hands you the Stripe checkout link, pay with the test card:</p>
         <p class="card"><strong>4242&nbsp;4242&nbsp;4242&nbsp;4242</strong> &nbsp;·&nbsp; any future expiry &nbsp;·&nbsp; any CVC &nbsp;·&nbsp; any ZIP</p>
         <p class="note">Payment is a <strong>real Stripe SetupIntent</strong> in <strong>test mode</strong> (card-on-file, <code>off_session</code>) — no real charge, no real card touched. Proof-of-work here is tuned light (sub-second); the atablefor demo runs the full ~10&nbsp;s toll.</p>
@@ -94,8 +95,12 @@
           <a href="https://github.com/kiosk-hq/kiosk/tree/main/kiosk-demo-getgrocery">▶ Source on GitHub</a>
           <a href="https://kiosk.tech">What is Kiosk? →</a>
         </div>
-        <p class="disco">Machine-readable: a customer's AI assistant can <a href="/.well-known/kiosk.json">learn here how to</a> discover and transact directly.</p>
       </div>
+    </section>
+
+    <!-- ── Machine-readable discovery (its own section, assistant-facing) ── -->
+    <section class="sec">
+      <p class="disco">🔗 Machine-readable: a customer's AI assistant can <a href="/.well-known/kiosk.json">learn here how to</a> discover and transact directly.</p>
     </section>
 
     <!-- ── 3. Live activity (compact) ────────────────────────────────── -->
@@ -132,6 +137,6 @@
     </div>
   </div>
 
-  <footer>GetGroceries — demo provider — powered by Kiosk</footer>
+  <footer>GetGroceries — demo provider — powered by <a href="https://kiosk.tech">Kiosk</a></footer>
 </body>
 </html>

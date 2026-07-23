@@ -1,7 +1,7 @@
 # frozen_string_literal: true
 
-# One implicit provider catalog — getgroceries serves Neo-Tokyo.
-# No Store records: getgroceries IS the store.
+# One implicit provider catalog — getgrocery serves Neo-Tokyo.
+# No Store records: getgrocery IS the store.
 #
 # Products are identified to agents by their stable `sku` (never the numeric DB id).
 #

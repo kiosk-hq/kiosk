@@ -61,7 +61,7 @@ getgrocery is a Rails 8 app that speaks Kiosk. The following is representative o
 
 **What the AI assistant did — no human involved at any step:**
 
-1. **Discover** — `GET /.well-known/kiosk.json` returns the GetGroceries issuer and surface.
+1. **Discover** — `GET /.well-known/kiosk.json` returns the GetGrocery issuer and surface.
 2. **Self-register** — generated an RSA-2048 keypair, proved possession of the private key (`GET /kiosk/auth/challenge` → signed the nonce as an origin-bound RS256 JWS → `POST /kiosk/auth/register {public_key:<pem>, signed:<jws>}`) → HTTP 201 → `agent_id`, `user_id`, `access_token`. No existing account. No human login. No OTP. No bot screen.
 3. **Browse catalog** — `POST /kiosk/query {name:"catalog"}` returned 15 in-stock products, sorted by name (Milk 1 L and Chocolate Spread 400g are out of stock, so the catalog hides them — see `db/seeds.rb`). This worked example's driver builds the cart from the first three in-stock rows: Apple Juice (349c), Banana (149c), Butter 250g (349c), one of each.
 4. **Create order** — `POST /kiosk/run {name:"create_order", items:[{sku:"apple-juice", qty:1}, {sku:"banana", qty:1}, {sku:"butter-250g", qty:1}]}` → HTTP 200, `order_id`, `total_cents:847`. The assistant composed the full cart (products referenced by `sku`).
@@ -71,9 +71,9 @@ getgrocery is a Rails 8 app that speaks Kiosk. The following is representative o
 
 The database confirmed: one row in `orders` with `status='scheduled'`, one row in `kiosk.settlements`.
 
-The business outcome: the user said "order groceries from GetGroceries." Their assistant completed the purchase — discovery, registration, catalog browse, order creation, payment, delivery scheduling — without the user touching anything and without the user having an account at GetGroceries beforehand.
+The business outcome: the user said "order groceries from GetGrocery." Their assistant completed the purchase — discovery, registration, catalog browse, order creation, payment, delivery scheduling — without the user touching anything and without the user having an account at GetGrocery beforehand.
 
-The operator outcome: GetGroceries received a real order and a real payment. The customer relationship stays with GetGroceries (the mandate carries the operator's issuer). There is no intermediate platform taking a discovery fee or owning the session.
+The operator outcome: GetGrocery received a real order and a real payment. The customer relationship stays with GetGrocery (the mandate carries the operator's issuer). There is no intermediate platform taking a discovery fee or owning the session.
 
 **This is a demo against a fake operator, settled through the real Stripe adapter in test mode.** The mechanism works. Whether real operators will integrate and whether real users will value this enough to drive adoption are open questions — the demo does not answer them.
 
@@ -200,7 +200,7 @@ end
 ```ruby
 # config/initializers/kiosk.rb
 Kiosk.configure do |c|
-  c.issuer           = "https://getgroceries.app"
+  c.issuer           = "https://getgrocery.app"
   c.payment_provider = Kiosk::PaymentProviders::Stripe.new(api_key: ENV["STRIPE_SECRET_KEY"])
 end
 ```

@@ -86,7 +86,7 @@ Kiosk.configure do |c|
   # owner is free-form and flows verbatim into /.well-known/kiosk.json. A
   # "beware: intensive PoW" notice appears only when KIOSK_POW_DIFFICULTY=high
   # (getgrocery ships low, so normally absent).
-  c.owner  = { name: "GetGroceries", support: "help@getgroceries.com" }
+  c.owner  = { name: "GetGrocery", support: "help@getgrocery.com" }
   if (notice = PowDifficulty.pow_notice)
     c.owner = c.owner.merge(pow_difficulty: PowDifficulty.level, pow_notice: notice)
   end
@@ -103,7 +103,7 @@ Kiosk.configure do |c|
   c.user_idp = StubUserIdp.new
 
   # Payment provider: real Stripe in test mode (sk_test_…).
-  # getgroceries uses SetupIntent card-on-file: card saved once on Stripe's
+  # getgrocery uses SetupIntent card-on-file: card saved once on Stripe's
   # hosted page, charged off_session per purchase.
   #
   # The principal→Stripe Customer mapping is stored in `stripe_customers` and

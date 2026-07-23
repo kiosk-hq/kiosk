@@ -57,6 +57,4 @@ Rails.application.configure do
   # otherwise 403s any request whose Host header isn't localhost/127.0.0.1,
   # which blocks `rake demo` when it runs on http://getgrocery.app:3005.
   config.hosts << "getgrocery.app"
-  config.hosts << "getgroceries.com"
-  config.hosts << "getgroceries.com:3005"
 end

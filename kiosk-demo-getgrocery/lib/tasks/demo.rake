@@ -68,7 +68,7 @@ namespace :demo do
     require "uri"
     require "json"
 
-    # getgroceries uses the real Stripe adapter — no StubPsp. To run the
+    # getgrocery uses the real Stripe adapter — no StubPsp. To run the
     # off_session charge you need EITHER a real Stripe test key (sk_test_…,
     # producing a genuine pi_ against Stripe test mode) OR — when no key is
     # present, e.g. in CI — a local stripe-mock, which returns shaped pi_
@@ -798,7 +798,7 @@ namespace :demo do
     require "net/http"
     require "uri"
 
-    # getgroceries uses the real Stripe adapter (no StubPsp).
+    # getgrocery uses the real Stripe adapter (no StubPsp).
     # Adversarial battery → stripe-mock (no real charges, no key). The gates
     # under test are pure Kiosk logic; Stripe is only the settlement rail.
     mock_url = start_stripe_mock

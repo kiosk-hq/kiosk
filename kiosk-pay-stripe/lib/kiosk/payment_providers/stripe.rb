@@ -17,7 +17,7 @@ module Kiosk
     # Subsequent purchases are charged `off_session` (merchant-initiated).
     #
     # The gem stays provider-agnostic: the principal→customer mapping is
-    # injected by the host app (e.g. getgroceries) via `customer_resolver:`
+    # injected by the host app (e.g. getgrocery) via `customer_resolver:`
     # and `customer_saver:` callables. No app table is touched inside this gem.
     class Stripe < Base
       VERSION = StripeVersion::VERSION
@@ -29,7 +29,7 @@ module Kiosk
       #   fallback and force the SetupIntent path.
       # @param customer_resolver [#call, nil] callable `(user_id) -> customer_id | nil`
       #   Looks up the saved Stripe Customer for a principal. Injected by the
-      #   host (e.g. getgroceries); the gem never reads app tables directly.
+      #   host (e.g. getgrocery); the gem never reads app tables directly.
       # @param customer_saver [#call, nil] callable `(user_id, customer_id) -> void`
       #   Persists a new principal→Customer mapping. Injected by the host.
       # @param test_autocard [Boolean] TEST-ONLY. When true, the adapter
@@ -37,7 +37,7 @@ module Kiosk
       #   capture) instead of requiring the human's hosted card entry — so
       #   automated suites (demo drivers, redteam, isolation) need no card-setup
       #   step and no server-side test route. The host sets this ONLY in a test
-      #   environment (e.g. getgroceries when KIOSK_TEST_AUTOCARD=1); it is
+      #   environment (e.g. getgrocery when KIOSK_TEST_AUTOCARD=1); it is
       #   never enabled in production or the live demo, where the real hosted
       #   SetupIntent flow runs.
       def initialize(api_key: nil, test_payment_method: "pm_card_visa",

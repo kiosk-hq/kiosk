@@ -1,7 +1,7 @@
 # frozen_string_literal: true
 
 module Admin
-  # Read-only orders view for the GetGroceries provider operator.
+  # Read-only orders view for the GetGrocery provider operator.
   # Shows recent orders with payment status, address, slot, and line items.
   #
   # NOTE: No authentication — demo provider only.

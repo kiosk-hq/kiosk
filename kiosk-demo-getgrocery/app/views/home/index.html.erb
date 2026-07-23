@@ -3,43 +3,59 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>GetGroceries — fresh groceries, delivered in Neo-Tokyo</title>
+  <title>GetGroceries — fresh groceries, delivered in Neo-Tokyo (Kiosk demo)</title>
   <!-- Machine-readable affordance: assistants discover the Kiosk surface here. -->
   <link rel="kiosk" href="https://kiosk.tech/skill.md">
   <style>
+    :root{--accent:#1a6b3c;--accent2:#9bf0b8;--ink:#13241a;--muted:#7a8f80;--soft:#f2f8f4;--line:#e2ece4;--bg:#f6faf6}
     *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
-    body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;color:#13241a;background:#f6faf6}
-    header{background:#1a6b3c;color:#fff;padding:0 32px;height:60px;display:flex;align-items:center;justify-content:space-between}
+    body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;color:var(--ink);background:var(--bg);line-height:1.5}
+    a{color:var(--accent)}
+    header{background:var(--accent);color:#fff;padding:0 32px;height:60px;display:flex;align-items:center;justify-content:space-between}
     .logo{font-size:22px;font-weight:800;letter-spacing:-.5px}
-    .logo span{color:#9bf0b8}
-    .hero{max-width:880px;margin:48px auto 0;padding:0 24px;text-align:center}
-    .hero h1{font-size:34px;line-height:1.15;font-weight:800;margin-bottom:12px}
-    .hero p{font-size:17px;color:#4a5c50;margin-bottom:28px}
-    .cta{display:inline-block;background:#1a6b3c;color:#fff;text-decoration:none;font-weight:700;padding:13px 26px;border-radius:10px}
-    .cats{max-width:880px;margin:40px auto;padding:0 24px;display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:14px}
-    .cat{background:#fff;border:1px solid #e2ece4;border-radius:12px;padding:22px 14px;text-align:center;font-weight:600;font-size:15px}
-    .cat .emoji{font-size:30px;display:block;margin-bottom:8px}
+    .logo span{color:var(--accent2)}
+    .wrap{max-width:860px;margin:0 auto;padding:0 24px}
 
-    /* ── Live activity stat cards ─────────────────────────────────────── */
-    .stats-wrap{max-width:880px;margin:8px auto 8px;padding:0 24px}
-    .stats-h{margin:0 0 14px;font-size:13px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:#7a8f80;text-align:center}
-    .stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:14px}
-    .stat{background:#fff;border:1px solid #e2ece4;border-radius:14px;padding:22px 16px;text-align:center}
-    .stat .n{font-size:30px;font-weight:800;color:#1a6b3c;line-height:1}
-    .stat .l{margin-top:8px;font-size:13px;color:#5c6d62;font-weight:600}
+    /* ── Section shell (Kiosk-facing content) ─────────────────────────── */
+    .sec{margin:32px auto 0}
+    .sec-k{font-size:12px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:var(--muted);display:flex;align-items:center;gap:8px;margin-bottom:12px}
+    .sec-k::before{content:"";width:18px;height:2px;background:var(--accent);border-radius:2px}
 
-    /* ── Kiosk banner (subtle, assistant-facing hint) ───────────────────────────────────────────────── */
-    .kiosk-banner{max-width:880px;margin:8px auto 40px;padding:10px 24px 0;border-top:1px solid #e2ece4;font-size:12.5px;color:#7a8f80;text-align:center}
-    .kiosk-banner a{color:#1a6b3c;text-decoration:none}
-    .kiosk-banner a:hover{text-decoration:underline}
-    .tryit{max-width:880px;margin:0 auto 56px;padding:0 24px}
-    .tryit-card{background:#fff;border:2px solid #1a6b3c;border-radius:16px;padding:24px 28px}
-    .tryit-card h2{font-size:19px;font-weight:800;margin-bottom:8px;color:#0f2a1c}
-    .tryit-card p{font-size:15px;line-height:1.5;color:#243;margin-bottom:10px}
-    .tryit-card em{color:#0f2a1c;font-style:normal;font-weight:600}
-    .tryit-card .card{font-family:"SF Mono","Fira Mono",monospace;background:#f2f8f4;border-radius:9px;padding:10px 14px}
-    .tryit-card .note{color:#5a6b60;font-size:13px}
-    footer{text-align:center;font-size:12px;color:#9bb0a2;padding:28px 0 36px}
+    /* 1 — Try it with your own assistant */
+    .tryit{background:#fff;border:2px solid var(--accent);border-radius:16px;padding:22px 24px}
+    .tryit h2{font-size:19px;font-weight:800;margin-bottom:8px}
+    .tryit p{font-size:15px;margin-bottom:10px;color:#243}
+    .say{background:var(--soft);border-radius:10px;padding:12px 15px;font-size:15px;font-weight:600;color:var(--accent);margin-bottom:12px}
+    .card{font-family:"SF Mono","Fira Mono",monospace;background:var(--soft);border-radius:9px;padding:10px 14px;font-size:14px}
+    .note{font-size:13px;color:var(--muted);margin-top:8px}
+
+    /* 2 — About this demo */
+    .about{background:#fff;border:1px solid var(--line);border-radius:16px;padding:22px 24px}
+    .about p{font-size:15px;margin-bottom:13px}
+    .chips{display:flex;flex-wrap:wrap;gap:8px;margin-bottom:15px}
+    .chip{font-size:12.5px;font-weight:600;color:var(--accent);background:var(--soft);border-radius:999px;padding:5px 12px}
+    .links a{display:inline-block;font-weight:700;font-size:14px;margin:0 18px 0 0;text-decoration:none}
+    .links a:hover{text-decoration:underline}
+    .disco{font-size:13px;color:var(--muted);margin-top:14px;padding-top:13px;border-top:1px solid var(--line)}
+
+    /* 3 — Live activity (compact) */
+    .stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(120px,1fr));gap:10px}
+    .stat{background:#fff;border:1px solid var(--line);border-radius:12px;padding:14px 12px;text-align:center}
+    .stat .n{font-size:23px;font-weight:800;color:var(--accent);line-height:1}
+    .stat .l{margin-top:5px;font-size:12px;color:var(--muted);font-weight:600}
+
+    /* 4 — Storefront (what a human sees) — visually separated */
+    .store{margin:44px auto 0;background:#fff;border:1px solid var(--line);border-radius:16px;overflow:hidden}
+    .store-label{font-size:11.5px;font-weight:700;letter-spacing:.07em;text-transform:uppercase;color:var(--muted);background:var(--soft);padding:9px 22px;border-bottom:1px solid var(--line)}
+    .store-body{padding:34px 24px 40px}
+    .hero{text-align:center;max-width:640px;margin:0 auto}
+    .hero h1{font-size:27px;line-height:1.15;font-weight:800;margin-bottom:12px}
+    .hero p{font-size:16px;color:var(--muted);margin-bottom:22px}
+    .cta{display:inline-block;background:var(--accent);color:#fff;text-decoration:none;font-weight:700;padding:12px 24px;border-radius:10px}
+    .cats{margin:28px auto 0;display:grid;grid-template-columns:repeat(auto-fit,minmax(120px,1fr));gap:12px}
+    .cat{background:var(--bg);border:1px solid var(--line);border-radius:12px;padding:20px 12px;text-align:center;font-weight:600;font-size:14px}
+    .cat .emoji{font-size:28px;display:block;margin-bottom:7px}
+    footer{text-align:center;font-size:12px;color:var(--muted);padding:30px 0 40px}
   </style>
 </head>
 <body>
@@ -48,55 +64,73 @@
     <nav style="font-size:13px;opacity:.9">Neo-Tokyo · same-day delivery</nav>
   </header>
 
-  <section class="hero">
-    <h1>Fresh groceries, at your door in Neo-Tokyo.</h1>
-    <p>Hundreds of everyday items. Pick a delivery slot. Done.</p>
-    <a class="cta" href="#">Start shopping</a>
-  </section>
+  <div class="wrap">
 
-  <section class="cats">
-    <div class="cat"><span class="emoji">🥛</span>Dairy &amp; Eggs</div>
-    <div class="cat"><span class="emoji">🍞</span>Bakery</div>
-    <div class="cat"><span class="emoji">🥦</span>Produce</div>
-    <div class="cat"><span class="emoji">🧴</span>Pantry</div>
-    <div class="cat"><span class="emoji">🥤</span>Drinks</div>
-  </section>
+    <!-- ── 1. Try it with your own assistant ─────────────────────────── -->
+    <section class="sec">
+      <div class="sec-k">🤖 Try it with your own assistant</div>
+      <div class="tryit">
+        <h2>Order groceries — no account, no app</h2>
+        <p>Tell your AI assistant:</p>
+        <p class="say">“Order a few groceries from getgrocery.demo.kiosk.tech and check out.”</p>
+        <p>It discovers this store, registers itself, shops, schedules a delivery slot, and pays. When it hands you the Stripe checkout link, pay with the test card:</p>
+        <p class="card"><strong>4242&nbsp;4242&nbsp;4242&nbsp;4242</strong> &nbsp;·&nbsp; any future expiry &nbsp;·&nbsp; any CVC &nbsp;·&nbsp; any ZIP</p>
+        <p class="note">Payment is a <strong>real Stripe SetupIntent</strong> in <strong>test mode</strong> (card-on-file, <code>off_session</code>) — no real charge, no real card touched. Proof-of-work here is tuned light (sub-second); the atablefor demo runs the full ~10&nbsp;s toll.</p>
+      </div>
+    </section>
 
-  <!-- ── Live activity (real domain counts) ──────────────────────────── -->
-  <section class="stats-wrap">
-    <h3 class="stats-h">Live activity</h3>
-    <div class="stats">
-      <div class="stat">
-        <div class="n"><%= @products_in_catalog %></div>
-        <div class="l">Products in catalog</div>
+    <!-- ── 2. About this demo ────────────────────────────────────────── -->
+    <section class="sec">
+      <div class="sec-k">About this demo</div>
+      <div class="about">
+        <p><strong>getgrocery</strong> is a grocery-delivery demo operator — the full commerce loop over the Kiosk wire: discover → register → shop → schedule delivery → pay. It is the payments reference: a real Stripe SetupIntent card-on-file, charged <code>off_session</code> by the provider (the assistant never sees a card number).</p>
+        <div class="chips">
+          <span class="chip">💳 Real Stripe payments</span>
+          <span class="chip">Card-on-file (SetupIntent, off_session)</span>
+          <span class="chip">Catalog + delivery slots</span>
+          <span class="chip">Human↔assistant account-binding</span>
+        </div>
+        <div class="links">
+          <a href="https://github.com/kiosk-hq/kiosk/tree/main/kiosk-demo-getgrocery">▶ Source on GitHub</a>
+          <a href="https://kiosk.tech">What is Kiosk? →</a>
+        </div>
+        <p class="disco">Machine-readable: a customer's AI assistant can <a href="/.well-known/kiosk.json">learn here how to</a> discover and transact directly.</p>
       </div>
-      <div class="stat">
-        <div class="n"><%= @orders_placed %></div>
-        <div class="l">Orders placed</div>
+    </section>
+
+    <!-- ── 3. Live activity (compact) ────────────────────────────────── -->
+    <section class="sec">
+      <div class="sec-k">Live activity</div>
+      <div class="stats">
+        <div class="stat"><div class="n"><%= @products_in_catalog %></div><div class="l">Products in catalog</div></div>
+        <div class="stat"><div class="n"><%= @orders_placed %></div><div class="l">Orders placed</div></div>
+        <div class="stat"><div class="n"><%= @items_ordered %></div><div class="l">Items ordered</div></div>
+        <div class="stat"><div class="n"><%= @deliveries_scheduled %></div><div class="l">Deliveries scheduled</div></div>
       </div>
-      <div class="stat">
-        <div class="n"><%= @items_ordered %></div>
-        <div class="l">Items ordered</div>
-      </div>
-      <div class="stat">
-        <div class="n"><%= @deliveries_scheduled %></div>
-        <div class="l">Deliveries scheduled</div>
+    </section>
+
+  </div>
+
+  <!-- ── 4. The storefront — what a human visitor sees (separated) ────── -->
+  <div class="wrap">
+    <div class="store">
+      <div class="store-label">The storefront — what a human visitor sees</div>
+      <div class="store-body">
+        <div class="hero">
+          <h1>Fresh groceries, at your door in Neo-Tokyo.</h1>
+          <p>Hundreds of everyday items. Pick a delivery slot. Done.</p>
+          <a class="cta" href="#">Start shopping</a>
+        </div>
+        <div class="cats">
+          <div class="cat"><span class="emoji">🥛</span>Dairy &amp; Eggs</div>
+          <div class="cat"><span class="emoji">🍞</span>Bakery</div>
+          <div class="cat"><span class="emoji">🥦</span>Produce</div>
+          <div class="cat"><span class="emoji">🧴</span>Pantry</div>
+          <div class="cat"><span class="emoji">🥤</span>Drinks</div>
+        </div>
       </div>
     </div>
-  </section>
-
-  <!-- ── Kiosk banner (subtle, assistant-facing hint) ────────────────── -->
-  <p class="kiosk-banner">🤖 This service speaks Kiosk — a customer's AI assistant can discover and transact here directly. <a href="/.well-known/kiosk.json">/.well-known/kiosk.json</a></p>
-
-  <!-- ── Try it (human invitation + Stripe test card) ──────────────────── -->
-  <section class="tryit">
-    <div class="tryit-card">
-      <h2>👋 Try it with your own assistant</h2>
-      <p>Tell your AI assistant: <em>"Order a few groceries from getgrocery.demo.kiosk.tech and check out."</em> It discovers this store, registers itself, shops, and pays — no account, no app to install. When it hands you the Stripe checkout link, pay with the test card:</p>
-      <p class="card"><strong>4242&nbsp;4242&nbsp;4242&nbsp;4242</strong> &nbsp;·&nbsp; any future expiry &nbsp;·&nbsp; any CVC &nbsp;·&nbsp; any ZIP</p>
-      <p class="note">Stripe <strong>test mode</strong> — no real charge, no real card ever touched.</p>
-    </div>
-  </section>
+  </div>
 
   <footer>GetGroceries — demo provider — powered by Kiosk</footer>
 </body>

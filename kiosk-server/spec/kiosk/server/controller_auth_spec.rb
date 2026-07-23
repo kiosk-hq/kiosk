@@ -37,11 +37,23 @@ RSpec.describe "wire-surface controller auth" do
         c.roles       = %i[customer]
         c.agent_idp   = Kiosk::Server::AgentIdentityProviders::DefaultAgentIdp.new
       end
+
+      # schema is a NO_DB verb, but run_command eagerly resolves a connection
+      # (connection_for) before Executor short-circuits it. A real app has
+      # ActiveRecord loaded; stub it so the anonymous-schema reads below don't
+      # NameError. schema's Executor path never touches this connection.
+      stub_const("ActiveRecord::Base", Class.new { def self.connection = nil })
     end
 
-    def schema_status_for(token)
-      status, body = dispatch(Kiosk::Server::WireController, :schema,
-                              bearer_env("/kiosk/schema", token))
+    # `schema` is now anonymous-readable (proven in the block below), so a bad
+    # token THERE is served, not rejected. To keep the "malformed/expired token
+    # yields a clean 401, never a 500" guarantee, exercise it on an auth-GATED
+    # verb (query): identity resolution runs before the body is dispatched, so a
+    # bad token 401s regardless of the (empty) body.
+    def gated_status_for(token)
+      status, body = dispatch(Kiosk::Server::WireController, :query,
+                              bearer_env("/kiosk/query", token, method: "POST",
+                                         input: "{}", "CONTENT_TYPE" => "application/json"))
       [status, body]
     end
 
@@ -51,13 +63,13 @@ RSpec.describe "wire-surface controller auth" do
         audience: "https://demo.example",
         now:      Time.now - 7200,
       )
-      status, body = schema_status_for(token)
+      status, body = gated_status_for(token)
       expect(status).to eq(401)
       expect(body.dig(:error, :code)).to eq("unauthenticated")
     end
 
     it "returns 401 Unauthenticated (not 500) for a GARBAGE token" do
-      status, body = schema_status_for("garbage-not-a-jwt")
+      status, body = gated_status_for("garbage-not-a-jwt")
       expect(status).to eq(401)
       expect(body.dig(:error, :code)).to eq("unauthenticated")
     end
@@ -69,7 +81,7 @@ RSpec.describe "wire-surface controller auth" do
         now:      Time.now - 10,
       )
       Kiosk.configuration.revocation_store.revoke_all("a-rev", at: Time.now.to_i)
-      status, body = schema_status_for(token)
+      status, body = gated_status_for(token)
       expect(status).to eq(401)
       expect(body.dig(:error, :code)).to eq("unauthenticated")
     end
@@ -80,9 +92,24 @@ RSpec.describe "wire-surface controller auth" do
         claims:   { sub: "u-1", agent_id: "a-1", role: "customer", actor: "agent" },
         audience: "https://demo.example", signing_key: other,
       )
-      status, body = schema_status_for(token)
+      status, body = gated_status_for(token)
       expect(status).to eq(401)
       expect(body.dig(:error, :code)).to eq("unauthenticated")
+    end
+
+    # ─── schema is anonymous-readable: no resolved identity required ──
+    it "serves GET /kiosk/schema with NO Authorization header (200, anonymous)" do
+      status, body = dispatch(Kiosk::Server::WireController, :schema,
+                              Rack::MockRequest.env_for("/kiosk/schema"))
+      expect(status).to eq(200)
+      expect(body[:ok]).to be(true)
+      expect(body.dig(:value, :verbs)).to include("schema", "query", "run", "pay")
+    end
+
+    it "serves GET /kiosk/schema (200, not 401/500) for an unresolvable garbage token" do
+      status, = dispatch(Kiosk::Server::WireController, :schema,
+                         bearer_env("/kiosk/schema", "garbage-not-a-jwt"))
+      expect(status).to eq(200)
     end
 
     # parse_body! raises Errors::BadRequest on a malformed body; it must
@@ -275,9 +302,12 @@ RSpec.describe "wire-surface controller auth" do
       expect(status).to eq(200)
     end
 
-    it "still 401s garbage under the zero-config default" do
-      status, body = dispatch(Kiosk::Server::WireController, :schema,
-                              bearer_env("/kiosk/schema", "garbage"))
+    it "still 401s garbage on an auth-gated verb under the zero-config default" do
+      # schema is anonymous-readable; assert the garbage-token rejection on a
+      # gated verb (query) instead.
+      status, body = dispatch(Kiosk::Server::WireController, :query,
+                              bearer_env("/kiosk/query", "garbage", method: "POST",
+                                         input: "{}", "CONTENT_TYPE" => "application/json"))
       expect(status).to eq(401)
       expect(body.dig(:error, :code)).to eq("unauthenticated")
     end

@@ -1,14 +1,15 @@
-<%# Live DOMAIN activity summary — app-wide counts on tudu's own tables. %>
-<% if @activity %>
-  <ul class="activity">
-    <li><div class="n"><%= @activity[:lists] %></div><div class="l">Lists</div></li>
-    <li><div class="n"><%= @activity[:todos] %></div><div class="l">Todos</div></li>
-    <li><div class="n"><%= @activity[:done] %></div><div class="l">Done</div></li>
-    <li><div class="n"><%= @activity[:members] %></div><div class="l">Members</div></li>
-  </ul>
-<% end %>
-
 <% if user_signed_in? %>
+  <%# ── Signed-in: the actual tudu app (this IS the storefront) ─────────── %>
+  <%# Live DOMAIN activity summary — app-wide counts on tudu's own tables. %>
+  <% if @activity %>
+    <ul class="activity" style="margin-top:1.4rem">
+      <li><div class="n"><%= @activity[:lists] %></div><div class="l">Lists</div></li>
+      <li><div class="n"><%= @activity[:todos] %></div><div class="l">Todos</div></li>
+      <li><div class="n"><%= @activity[:done] %></div><div class="l">Done</div></li>
+      <li><div class="n"><%= @activity[:members] %></div><div class="l">Members</div></li>
+    </ul>
+  <% end %>
+
   <h2>Your lists</h2>
 
   <% if @lists.empty? %>
@@ -29,8 +30,66 @@
     <%= text_field_tag :title, nil, placeholder: "List title", required: true %>
     <%= submit_tag "Create" %>
   <% end %>
+
 <% else %>
-  <p>tudu — a multi-user collaborative todo app (Kiosk demo, no payments).</p>
-  <p>Humans <%= link_to "sign in", new_user_session_path %> to manage lists and approve assistant links.</p>
-  <p class="kiosk-banner">🤖 This service speaks Kiosk — a customer's AI assistant can discover and transact here directly. <a href="/.well-known/kiosk.json">/.well-known/kiosk.json</a></p>
+
+  <!-- ── 1. Try it with your own assistant ───────────────────────────── -->
+  <section class="sec">
+    <div class="sec-k">🤖 Try it with your own assistant</div>
+    <div class="tryit">
+      <h2>Share a todo list with your assistant — and with other people's assistants</h2>
+      <p>Tell your AI assistant:</p>
+      <p class="say">“Add ‘buy milk’ to my shared list on tudu.demo.kiosk.tech, and invite my partner's assistant.”</p>
+      <p>It discovers tudu, registers itself, and works your shared lists — no account, no app. There is <strong>no payment</strong> anywhere; tudu proves Kiosk works for collaboration, not just checkout.</p>
+      <div class="linkbox">
+        <strong>Rebind the work to your human account.</strong> An assistant can do work headless, then a human signs in and links it — the assistant's lists and memberships migrate to the person (the W5 rebind). <%= link_to "Sign in", new_user_session_path %> or <%= link_to "create an account", new_user_registration_path %>, then mint a link code your assistant redeems.
+        <div class="cred">Demo login: <code>alice@example.com</code> &nbsp;/&nbsp; <code>tudu-demo-password</code></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ── 2. About this demo ──────────────────────────────────────────── -->
+  <section class="sec">
+    <div class="sec-k">About this demo</div>
+    <div class="about">
+      <p><strong>tudu</strong> is a multi-user collaborative todo app — the <strong>collaboration &amp; membership</strong> reference, and non-commerce (no money on the wire). Where philslist shows owner-scoped isolation, tudu shows the shape critics claim app-layer patterns can't handle: <strong>membership-based many-to-many access</strong> (“rows of lists I'm a member of”), <strong>assistant→assistant collaboration</strong> expressed entirely at the app layer, and the <strong>W5 account-link rebind</strong> that migrates an assistant's work to a human.</p>
+      <div class="chips">
+        <span class="chip">👥 Multi-user collaboration</span>
+        <span class="chip">Membership-based isolation</span>
+        <span class="chip">Assistant↔assistant</span>
+        <span class="chip">W5 account-link rebind</span>
+        <span class="chip">No payment</span>
+      </div>
+      <div class="links">
+        <a href="https://github.com/kiosk-hq/kiosk/tree/main/kiosk-demo-tudu">▶ Source on GitHub</a>
+        <a href="https://kiosk.tech">What is Kiosk? →</a>
+      </div>
+      <p class="disco">Machine-readable: a customer's AI assistant can <a href="/.well-known/kiosk.json">learn here how to</a> discover and transact directly.</p>
+    </div>
+  </section>
+
+  <!-- ── 3. Live activity (compact) ──────────────────────────────────── -->
+  <% if @activity %>
+    <section class="sec">
+      <div class="sec-k">Live activity</div>
+      <ul class="activity">
+        <li><div class="n"><%= @activity[:lists] %></div><div class="l">Lists</div></li>
+        <li><div class="n"><%= @activity[:todos] %></div><div class="l">Todos</div></li>
+        <li><div class="n"><%= @activity[:done] %></div><div class="l">Done</div></li>
+        <li><div class="n"><%= @activity[:members] %></div><div class="l">Members</div></li>
+      </ul>
+    </section>
+  <% end %>
+
+  <!-- ── 4. The app — what a human visitor sees (separated) ───────────── -->
+  <div class="store">
+    <div class="store-label">The app — what a human visitor sees</div>
+    <div class="store-body">
+      <h1>A shared todo app, for people and assistants.</h1>
+      <p>Sign in to manage your lists, add todos, complete them, and invite collaborators — the same shared world your assistant sees over the wire.</p>
+    </div>
+  </div>
+
+  <footer>tudu — demo provider — powered by Kiosk</footer>
+
 <% end %>

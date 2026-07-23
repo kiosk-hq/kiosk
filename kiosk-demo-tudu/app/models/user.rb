@@ -13,7 +13,11 @@
 # only channel, so they can never drive the human surfaces. On account-link the
 # rebind hook migrates a headless account's lists/memberships to the human.
 class User < ApplicationRecord
-  devise :database_authenticatable
+  # :registerable lets a visitor create their own account (sign-up), so the
+  # human↔assistant link flow is walkable end-to-end without a seeded login.
+  # A fresh row is a valid account principal on its own (kiosk.current_user_id()
+  # resolves to this table's id), so self-registration needs no extra wiring.
+  devise :database_authenticatable, :registerable
 
   # Lists this account OWNS (as the owner principal). account_id is the
   # re-parent target of the assistant_claimed rebind hook.

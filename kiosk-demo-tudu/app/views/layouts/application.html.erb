@@ -1,46 +1,96 @@
 <!DOCTYPE html>
-<html>
+<html lang="en">
   <head>
-    <title>tudu</title>
+    <title>tudu — collaborative todo (Kiosk demo)</title>
     <meta name="viewport" content="width=device-width,initial-scale=1">
     <%= csrf_meta_tags %>
+    <!-- Machine-readable affordance: assistants discover the Kiosk surface here. -->
+    <link rel="kiosk" href="https://kiosk.tech/skill.md">
     <style>
-      body { font-family: system-ui, sans-serif; max-width: 640px; margin: 2rem auto; padding: 0 1rem; color: #222; }
-      h1 a { color: inherit; text-decoration: none; }
-      nav { font-size: .9rem; margin-bottom: 1.5rem; color: #666; }
-      nav a { margin-right: 1rem; }
-      .notice { background: #e6f7e6; padding: .6rem .8rem; border-radius: 6px; word-break: break-all; }
-      .alert  { background: #fbe6e6; padding: .6rem .8rem; border-radius: 6px; }
-      ul { list-style: none; padding: 0; }
-      li { padding: .4rem 0; border-bottom: 1px solid #eee; }
-      .done { text-decoration: line-through; color: #999; }
-      form.inline { display: inline; }
-      .role { color: #888; font-size: .85rem; }
-      button, input[type=submit] { cursor: pointer; }
-      .activity { display: flex; flex-wrap: wrap; gap: .6rem; margin: 0 0 1.5rem; padding: 0; list-style: none; }
-      .activity li { border: 1px solid #e2e2e2; border-radius: 8px; padding: .6rem .9rem; flex: 1 1 90px; text-align: center; }
-      .activity .n { font-size: 1.5rem; font-weight: 700; color: #2a5; line-height: 1; }
-      .activity .l { font-size: .75rem; color: #777; margin-top: .3rem; text-transform: uppercase; letter-spacing: .04em; }
-      .kiosk-banner { font-size: .8rem; color: #888; margin-top: 1.5rem; padding-top: .6rem; border-top: 1px solid #eee; }
-      .kiosk-banner a { color: #2a5; }
+      :root{--accent:#1f7a45;--accent2:#a7e8c0;--ink:#18241d;--muted:#7a8b80;--soft:#eaf6ee;--line:#e2ece6;--bg:#f6faf7}
+      *,*::before,*::after{box-sizing:border-box}
+      body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,system-ui,sans-serif;color:var(--ink);background:var(--bg);line-height:1.5;margin:0}
+      a{color:var(--accent)}
+
+      /* ── Consistent header bar (matches the other Kiosk demos) ──────── */
+      header.site{background:var(--accent);color:#fff;padding:0 24px;min-height:60px;display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:6px}
+      header.site .logo{font-size:22px;font-weight:800;letter-spacing:-.5px}
+      header.site .logo a{color:#fff;text-decoration:none}
+      header.site .logo span{color:var(--accent2)}
+      header.site nav{font-size:13px;display:flex;align-items:center;gap:14px;flex-wrap:wrap}
+      header.site nav a{color:#fff;text-decoration:none;opacity:.92}
+      header.site nav a:hover{opacity:1;text-decoration:underline}
+      header.site nav .who{opacity:.8}
+      header.site nav form.inline{display:inline;margin:0}
+      header.site nav button{background:rgba(255,255,255,.16);color:#fff;border:0;border-radius:6px;padding:5px 10px;cursor:pointer;font-size:13px}
+
+      .wrap{max-width:720px;margin:0 auto;padding:0 20px}
+
+      /* ── App bits (signed-in views: lists, todos) ──────────────────── */
+      .notice{background:#e6f7e6;padding:.6rem .8rem;border-radius:6px;word-break:break-all;margin-top:1rem}
+      .alert{background:#fbe6e6;padding:.6rem .8rem;border-radius:6px;margin-top:1rem}
+      ul{list-style:none;padding:0}
+      li{padding:.4rem 0;border-bottom:1px solid var(--line)}
+      .done{text-decoration:line-through;color:#999}
+      form.inline{display:inline}
+      .role{color:#888;font-size:.85rem}
+      button,input[type=submit]{cursor:pointer}
+
+      /* ── Live activity (compact) ───────────────────────────────────── */
+      .activity{display:flex;flex-wrap:wrap;gap:10px;margin:0;padding:0;list-style:none}
+      .activity li{border:1px solid var(--line);border-radius:12px;padding:14px 12px;flex:1 1 100px;text-align:center;background:#fff}
+      .activity .n{font-size:23px;font-weight:800;color:var(--accent);line-height:1}
+      .activity .l{font-size:12px;color:var(--muted);margin-top:5px;font-weight:600;text-transform:uppercase;letter-spacing:.04em}
+
+      /* ── Section shell + landing (shared shape with the other demos) ── */
+      .sec{margin:30px auto 0}
+      .sec-k{font-size:12px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:var(--muted);display:flex;align-items:center;gap:8px;margin-bottom:12px}
+      .sec-k::before{content:"";width:18px;height:2px;background:var(--accent);border-radius:2px}
+      .tryit{background:#fff;border:2px solid var(--accent);border-radius:16px;padding:22px 24px}
+      .tryit h2{font-size:19px;font-weight:800;margin:0 0 8px}
+      .tryit p{font-size:15px;margin-bottom:10px;color:#233}
+      .say{background:var(--soft);border-radius:10px;padding:12px 15px;font-size:15px;font-weight:600;color:var(--accent);margin-bottom:12px}
+      .note{font-size:13px;color:var(--muted);margin-top:8px}
+      .linkbox{margin-top:14px;padding-top:14px;border-top:1px dashed var(--line);font-size:14px}
+      .linkbox a{font-weight:700;text-decoration:none}
+      .cred{margin-top:9px;font-size:13px;color:var(--muted)}
+      .cred code{font-family:"SF Mono","Fira Mono",monospace;background:var(--soft);border-radius:6px;padding:2px 7px;color:var(--ink)}
+      .about{background:#fff;border:1px solid var(--line);border-radius:16px;padding:22px 24px}
+      .about p{font-size:15px;margin-bottom:13px}
+      .chips{display:flex;flex-wrap:wrap;gap:8px;margin-bottom:15px}
+      .chip{font-size:12.5px;font-weight:600;color:var(--accent);background:var(--soft);border-radius:999px;padding:5px 12px}
+      .links a{display:inline-block;font-weight:700;font-size:14px;margin:0 18px 0 0;text-decoration:none}
+      .disco{font-size:13px;color:var(--muted);margin-top:14px;padding-top:13px;border-top:1px solid var(--line)}
+      .store{margin:44px auto 0;background:#fff;border:1px solid var(--line);border-radius:16px;overflow:hidden}
+      .store-label{font-size:11.5px;font-weight:700;letter-spacing:.07em;text-transform:uppercase;color:var(--muted);background:var(--soft);padding:9px 22px;border-bottom:1px solid var(--line)}
+      .store-body{padding:32px 24px 38px;text-align:center}
+      .store-body h1{font-size:24px;font-weight:800;margin-bottom:10px}
+      .store-body p{font-size:16px;color:var(--muted)}
+      footer{text-align:center;font-size:12px;color:var(--muted);padding:30px 0 40px}
+      h2{margin-top:1.4rem}
     </style>
   </head>
   <body>
-    <h1><a href="/">tudu</a></h1>
-    <nav>
-      <% if user_signed_in? %>
-        Signed in as <%= current_user.email %>
-        <%= link_to "My lists", lists_path %>
-        <%= link_to "Assistants", "/kiosk/auth/assistants" %>
-        <%= button_to "Sign out", destroy_user_session_path, method: :delete, class: "inline" %>
-      <% else %>
-        <%= link_to "Sign in", new_user_session_path %>
-      <% end %>
-    </nav>
+    <header class="site">
+      <div class="logo"><a href="/">tu<span>du</span></a></div>
+      <nav>
+        <% if user_signed_in? %>
+          <span class="who">Signed in as <%= current_user.email %></span>
+          <%= link_to "My lists", lists_path %>
+          <%= link_to "Assistants", "/kiosk/auth/assistants" %>
+          <%= button_to "Sign out", destroy_user_session_path, method: :delete, class: "inline" %>
+        <% else %>
+          <%= link_to "Sign in", new_user_session_path %>
+          <%= link_to "Sign up", new_user_registration_path %>
+        <% end %>
+      </nav>
+    </header>
 
-    <% if notice %><p class="notice"><%= notice %></p><% end %>
-    <% if alert %><p class="alert"><%= alert %></p><% end %>
+    <div class="wrap">
+      <% if notice %><p class="notice"><%= notice %></p><% end %>
+      <% if alert %><p class="alert"><%= alert %></p><% end %>
 
-    <%= yield %>
+      <%= yield %>
+    </div>
   </body>
 </html>

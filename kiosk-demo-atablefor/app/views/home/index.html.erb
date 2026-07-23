@@ -7,30 +7,50 @@
   <!-- Machine-readable affordance: assistants discover the Kiosk surface here. -->
   <link rel="kiosk" href="https://kiosk.tech/skill.md">
   <style>
+    :root{--accent:#8a3b1c;--accent2:#ffcf9b;--ink:#2a1a12;--muted:#98847a;--soft:#f7e6da;--line:#eccbb2;--bg:#faf6f2}
     *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
-    body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;color:#2a1a12;background:#faf6f2;line-height:1.5}
-    header{background:#8a3b1c;color:#fff;padding:0 32px;height:60px;display:flex;align-items:center;justify-content:space-between}
+    body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;color:var(--ink);background:var(--bg);line-height:1.5}
+    a{color:var(--accent)}
+    header{background:var(--accent);color:#fff;padding:0 32px;height:60px;display:flex;align-items:center;justify-content:space-between}
     .logo{font-size:22px;font-weight:800;letter-spacing:-.5px}
-    .logo span{color:#ffcf9b}
-    .wrap{max-width:820px;margin:0 auto;padding:0 24px}
-    .hero{margin:44px auto 0;text-align:center}
-    .hero h1{font-size:30px;line-height:1.15;font-weight:800;margin-bottom:10px}
-    .hero p{font-size:17px;color:#68544a}
-    .tag{display:inline-block;margin-top:14px;font-size:13px;font-weight:600;color:#8a3b1c;background:#f7e6da;border-radius:999px;padding:5px 13px}
-    .pow-note{max-width:820px;margin:20px auto 0;font-size:13.5px;line-height:1.5;color:#7a3113;background:#fbeadb;border:1px solid #eccbb2;border-left:4px solid #8a3b1c;border-radius:10px;padding:12px 16px}
+    .logo span{color:var(--accent2)}
+    .wrap{max-width:860px;margin:0 auto;padding:0 24px}
 
-    /* ── Live activity stat cards ─────────────────────────────────────── */
-    .stats-h{margin:44px auto 14px;font-size:13px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:#98847a;text-align:center}
-    .stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:14px}
-    .stat{background:#fff;border:1px solid #efe2d8;border-radius:14px;padding:22px 16px;text-align:center}
-    .stat .n{font-size:30px;font-weight:800;color:#8a3b1c;line-height:1}
-    .stat .l{margin-top:8px;font-size:13px;color:#786055;font-weight:600}
+    .sec{margin:32px auto 0}
+    .sec-k{font-size:12px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:var(--muted);display:flex;align-items:center;gap:8px;margin-bottom:12px}
+    .sec-k::before{content:"";width:18px;height:2px;background:var(--accent);border-radius:2px}
 
-    /* ── Kiosk banner (subtle, assistant-facing hint) ─────────────────── */
-    .kiosk-banner{margin:40px auto 0;padding:10px 0 0;border-top:1px solid #eccbb2;font-size:12.5px;color:#98847a;text-align:center}
-    .kiosk-banner a{color:#8a3b1c;text-decoration:none}
-    .kiosk-banner a:hover{text-decoration:underline}
-    footer{text-align:center;font-size:12px;color:#b09a8d;padding:34px 0 40px}
+    .tryit{background:#fff;border:2px solid var(--accent);border-radius:16px;padding:22px 24px}
+    .tryit h2{font-size:19px;font-weight:800;margin-bottom:8px}
+    .tryit p{font-size:15px;margin-bottom:10px;color:#432}
+    .say{background:var(--soft);border-radius:10px;padding:12px 15px;font-size:15px;font-weight:600;color:var(--accent);margin-bottom:12px}
+    .note{font-size:13px;color:var(--muted);margin-top:8px}
+    .linkbox{margin-top:14px;padding-top:14px;border-top:1px dashed var(--line);font-size:14px}
+    .linkbox a{font-weight:700;text-decoration:none}
+    .linkbox a:hover{text-decoration:underline}
+    .cred{margin-top:9px;font-size:13px;color:var(--muted)}
+    .cred code{font-family:"SF Mono","Fira Mono",monospace;background:var(--soft);border-radius:6px;padding:2px 7px;color:var(--ink)}
+
+    .about{background:#fff;border:1px solid var(--line);border-radius:16px;padding:22px 24px}
+    .about p{font-size:15px;margin-bottom:13px}
+    .chips{display:flex;flex-wrap:wrap;gap:8px;margin-bottom:15px}
+    .chip{font-size:12.5px;font-weight:600;color:var(--accent);background:var(--soft);border-radius:999px;padding:5px 12px}
+    .links a{display:inline-block;font-weight:700;font-size:14px;margin:0 18px 0 0;text-decoration:none}
+    .links a:hover{text-decoration:underline}
+    .disco{font-size:13px;color:var(--muted);margin-top:14px;padding-top:13px;border-top:1px solid var(--line)}
+
+    .stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(120px,1fr));gap:10px}
+    .stat{background:#fff;border:1px solid var(--line);border-radius:12px;padding:14px 12px;text-align:center}
+    .stat .n{font-size:23px;font-weight:800;color:var(--accent);line-height:1}
+    .stat .l{margin-top:5px;font-size:12px;color:var(--muted);font-weight:600}
+
+    .store{margin:44px auto 0;background:#fff;border:1px solid var(--line);border-radius:16px;overflow:hidden}
+    .store-label{font-size:11.5px;font-weight:700;letter-spacing:.07em;text-transform:uppercase;color:var(--muted);background:var(--soft);padding:9px 22px;border-bottom:1px solid var(--line)}
+    .store-body{padding:38px 24px 44px}
+    .hero{text-align:center;max-width:640px;margin:0 auto}
+    .hero h1{font-size:27px;line-height:1.15;font-weight:800;margin-bottom:12px}
+    .hero p{font-size:16px;color:var(--muted)}
+    footer{text-align:center;font-size:12px;color:var(--muted);padding:30px 0 40px}
   </style>
 </head>
 <body>
@@ -40,36 +60,66 @@
   </header>
 
   <div class="wrap">
-    <p class="pow-note">⚠ This demo runs production-grade proof-of-work (~9–10&nbsp;s per register) on purpose — so you can feel the real anti-reservation-scalping toll first-hand. The other Kiosk demos are tuned light (sub-second) for quick poking.</p>
 
-    <section class="hero">
-      <h1>Book a table for two, tomorrow at 8.</h1>
-      <p>A restaurant that takes reservations over the Kiosk wire — completed by an assistant, no human present, no card. Seeded operator: Mamma Pizza.</p>
-      <p style="margin-top:10px">A human diner with a real account here can <strong>link their AI assistant</strong> to it — the assistant's bookings are then tied to the diner's account.</p>
-      <span class="tag">Kiosk demo operator · capabilities [schema, query, run]</span>
-    </section>
-
-    <h3 class="stats-h">Live activity</h3>
-    <section class="stats">
-      <div class="stat">
-        <div class="n"><%= @tables_booked %></div>
-        <div class="l">Tables booked</div>
-      </div>
-      <div class="stat">
-        <div class="n"><%= @covers_seated %></div>
-        <div class="l">Covers seated</div>
-      </div>
-      <div class="stat">
-        <div class="n"><%= @cancellations %></div>
-        <div class="l">Cancellations</div>
-      </div>
-      <div class="stat">
-        <div class="n"><%= @open_slots %></div>
-        <div class="l">Open table slots</div>
+    <!-- ── 1. Try it with your own assistant ─────────────────────────── -->
+    <section class="sec">
+      <div class="sec-k">🤖 Try it with your own assistant</div>
+      <div class="tryit">
+        <h2>Book a table — no human at the keyboard</h2>
+        <p>Tell your AI assistant:</p>
+        <p class="say">“Book a table for two at atablefor.demo.kiosk.tech, tomorrow at 8.”</p>
+        <p>It discovers the restaurant, registers itself, and reserves — no account, no app, and no card (a reservation takes no money).</p>
+        <p class="note">⚠ This demo runs <strong>production-grade proof-of-work</strong> (~9–10&nbsp;s per register) on purpose — so you can feel the real anti-scalping toll first-hand. The other Kiosk demos are tuned light (sub-second) for quick poking.</p>
+        <div class="linkbox">
+          <strong>Link your assistant to your diner profile.</strong> A human diner with a real account here can bind their AI assistant to it — the assistant's bookings then tie to the diner's account. <a href="/users/sign_in">Sign in</a>, then mint a link code your assistant redeems.
+          <div class="cred">Demo login: <code>diego@example.com</code> &nbsp;/&nbsp; <code>atablefor-demo-password</code></div>
+        </div>
       </div>
     </section>
 
-    <p class="kiosk-banner">🤖 This service speaks Kiosk — a customer's AI assistant can discover and transact here directly. <a href="/.well-known/kiosk.json">/.well-known/kiosk.json</a></p>
+    <!-- ── 2. About this demo ────────────────────────────────────────── -->
+    <section class="sec">
+      <div class="sec-k">About this demo</div>
+      <div class="about">
+        <p><strong>atablefor</strong> (seeded operator: Mamma Pizza) is a restaurant table-booking demo. It is the <strong>human↔assistant account-linking</strong> reference: a diner signs in, mints a link code, their assistant redeems it, and the assistant's bookings are then tied to the diner's account — all with <strong>no money on the wire</strong> (a reservation takes no card).</p>
+        <div class="chips">
+          <span class="chip">🔗 Human↔assistant linking</span>
+          <span class="chip">Devise sign-in + link codes</span>
+          <span class="chip">No payment</span>
+          <span class="chip">Production-grade PoW (~10&nbsp;s)</span>
+        </div>
+        <div class="links">
+          <a href="https://github.com/kiosk-hq/kiosk/tree/main/kiosk-demo-atablefor">▶ Source on GitHub</a>
+          <a href="https://kiosk.tech">What is Kiosk? →</a>
+        </div>
+        <p class="disco">Machine-readable: a customer's AI assistant can <a href="/.well-known/kiosk.json">learn here how to</a> discover and transact directly.</p>
+      </div>
+    </section>
+
+    <!-- ── 3. Live activity (compact) ────────────────────────────────── -->
+    <section class="sec">
+      <div class="sec-k">Live activity</div>
+      <div class="stats">
+        <div class="stat"><div class="n"><%= @tables_booked %></div><div class="l">Tables booked</div></div>
+        <div class="stat"><div class="n"><%= @covers_seated %></div><div class="l">Covers seated</div></div>
+        <div class="stat"><div class="n"><%= @cancellations %></div><div class="l">Cancellations</div></div>
+        <div class="stat"><div class="n"><%= @open_slots %></div><div class="l">Open table slots</div></div>
+      </div>
+    </section>
+
+  </div>
+
+  <!-- ── 4. The storefront — what a human visitor sees (separated) ────── -->
+  <div class="wrap">
+    <div class="store">
+      <div class="store-label">The storefront — what a human visitor sees</div>
+      <div class="store-body">
+        <div class="hero">
+          <h1>Book a table for two, tomorrow at 8.</h1>
+          <p>Mamma Pizza — reservations for lunch and dinner, seven days a week.</p>
+        </div>
+      </div>
+    </div>
   </div>
 
   <footer>atablefor — demo provider — powered by Kiosk</footer>

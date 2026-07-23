@@ -113,14 +113,8 @@ RSpec.describe "WireController 402 WWW-Authenticate (W4)" do
   end
 
   # ─── non-402 errors carry NO WWW-Authenticate header ───────────────────
-  # Use an auth-GATED verb (query): `schema` is anonymous-readable, so a bad
-  # token there is served (200), not a 401. query still 401s on a bad token.
   it "does not emit WWW-Authenticate on a non-402 error (e.g. 401)" do
-    status, headers, = dispatch(
-      :query,
-      bearer_env("/kiosk/query", "garbage", method: "POST",
-                 input: "{}", "CONTENT_TYPE" => "application/json"),
-    )
+    status, headers, = dispatch(:schema, bearer_env("/kiosk/schema", "garbage"))
     expect(status).to eq(401)
     expect(headers).not_to have_key("WWW-Authenticate")
   end

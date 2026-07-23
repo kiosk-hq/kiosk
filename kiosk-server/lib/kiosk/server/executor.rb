@@ -34,16 +34,6 @@ module Kiosk
       # database connection and must NOT open a SessionContext.
       NO_DB_VERBS = %i[schema].freeze
 
-      # Verbs an ANONYMOUS caller may invoke — no resolved identity required.
-      # `schema` is just the machine-readable API description (like a public
-      # OpenAPI doc): it enumerates the registry, opens no SessionContext, and
-      # touches no principal-scoped row, so requiring a token to read it would
-      # invert the natural discovery flow (commit before you can see what's
-      # offered). The PoW gate still applies upstream, so an operator MAY toll
-      # it anti-scrape without demanding registration. query/run/pay stay
-      # identity-required.
-      PUBLIC_VERBS = %i[schema].freeze
-
       def self.call(kind:, args:, identity:, connection:)
         new(connection: connection, identity: identity).call(kind: kind, args: args)
       end
@@ -51,6 +41,8 @@ module Kiosk
       attr_reader :connection, :identity
 
       def initialize(connection:, identity:)
+        raise Errors::Unauthenticated, "identity required" if identity.nil?
+
         @connection = connection
         @identity   = identity
       end
@@ -62,13 +54,6 @@ module Kiosk
             "Unknown verb: #{kind.inspect}",
             hint: "Valid verbs: #{VERBS.inspect}",
           )
-        end
-
-        # Identity is required for every verb EXCEPT the public catalog verbs
-        # (schema). Enforced here rather than in the constructor so an anonymous
-        # `schema` read can flow through with identity: nil.
-        if identity.nil? && !PUBLIC_VERBS.include?(verb)
-          raise Errors::Unauthenticated, "identity required"
         end
 
         if NO_DB_VERBS.include?(verb)

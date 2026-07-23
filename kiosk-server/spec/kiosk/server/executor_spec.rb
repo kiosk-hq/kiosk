@@ -5,18 +5,10 @@ RSpec.describe Kiosk::Server::Executor do
   let(:identity)   { build_identity(actor: "agent") }
 
   describe ".call construction" do
-    it "raises Unauthenticated when identity is nil for the identity-required verbs" do
-      %i[query run pay].each do |verb|
-        expect {
-          described_class.call(kind: verb, args: { name: "ping" }, identity: nil, connection: connection)
-        }.to raise_error(Kiosk::Server::Errors::Unauthenticated, /identity/), "expected #{verb} to require identity"
-      end
-    end
-
-    it "allows an anonymous (nil identity) schema read — schema is a PUBLIC verb" do
-      result = described_class.call(kind: :schema, args: {}, identity: nil, connection: connection)
-      expect(result.kind).to eq(:value)
-      expect(result.payload[:verbs]).to include("schema", "query", "run", "pay")
+    it "raises Unauthenticated when identity is nil" do
+      expect {
+        described_class.call(kind: :run, args: { name: "ping" }, identity: nil, connection: connection)
+      }.to raise_error(Kiosk::Server::Errors::Unauthenticated, /identity/)
     end
 
     it "raises BadRequest for an unknown verb" do

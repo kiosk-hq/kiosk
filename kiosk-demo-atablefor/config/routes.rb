@@ -22,6 +22,16 @@ Rails.application.routes.draw do
   post "/kiosk/auth/claim",                        to: "kiosk/server/auth#claim"
   post "/kiosk/auth/unlink",                       to: "kiosk/server/auth#unlink"
   get  "/auth.md",                                 to: "kiosk/server/discovery#auth_md"
+
+  # «Manage assistants» HTML page (kiosk-server AssistantsController): a
+  # signed-in diner lists their bound assistants, mints link codes (shown
+  # once), unlinks, and relabels. Reused wholesale from the engine (it ships
+  # the view) — atablefor does NOT rebuild it. This is the human UI the diner
+  # uses to mint the code their assistant then redeems over the wire.
+  get  "/kiosk/auth/assistants",                   to: "kiosk/server/assistants#show"
+  post "/kiosk/auth/assistants/link",              to: "kiosk/server/assistants#link"
+  post "/kiosk/auth/assistants/unlink",            to: "kiosk/server/assistants#unlink"
+  post "/kiosk/auth/assistants/update",            to: "kiosk/server/assistants#update"
   # Kiosk wire surface (controllers shipped by kiosk-server).
   # In a follow-up release these will be mounted via the engine's own
   # routes drawer; for v0.1 alpha we wire them manually here.

@@ -123,7 +123,14 @@ module Kiosk
         # Duck-typed: a policy without the hook (RateAndReputation, the base
         # Policy, …) is completely unaffected. Never reached on the nil-spec
         # path above (no enforce ran → no new grant).
-        if policy.respond_to?(:on_proof_verified)
+        # Grant follow-up credits only to a RESOLVED principal. An anonymous
+        # caller (identity nil — e.g. an unauthenticated `schema` read) must NOT
+        # accumulate a backoff grant: the grant is keyed by identity, so a nil
+        # identity would share ONE bucket across every anonymous caller (one
+        # solve → free ungated reads for the whole internet). Anonymous tolled
+        # requests therefore pay a fresh proof every time; a replayed proof is
+        # already rejected by the spent-id set above.
+        if !identity.nil? && policy.respond_to?(:on_proof_verified)
           policy.on_proof_verified(identity: identity)
         end
 

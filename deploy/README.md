@@ -22,7 +22,7 @@ This directory is the *app-side* handoff; DNS + VPS provisioning is the operator
 | Demo | Subdomain | Port | PoW difficulty | Stripe (test) |
 |------|-----------|------|----------------|---------------|
 | getgrocery | `getgrocery.demo.kiosk.tech` | 3001 | **low** (~1 s, poke-friendly) | yes |
-| atablefor  | `atablefor.demo.kiosk.tech` (or apex `atablefor.us`) | 3002 | **HIGH** (~9–10 s, "beware: intensive PoW") | yes |
+| atablefor  | `atablefor.demo.kiosk.tech` (or apex `atablefor.us`) | 3002 | **HIGH** (~9–10 s, "beware: intensive PoW") | — (no payment provider) |
 | hoteling   | `hoteling.demo.kiosk.tech` | 3003 | **low** | — |
 | skooti     | `skooti.demo.kiosk.tech` | 3004 | **low** | — |
 | stylish    | `stylish.demo.kiosk.tech` | 3005 | **low** | — |
@@ -65,7 +65,7 @@ tangible first-hand. Any other demo is knob-adjustable: set
    version), and a non-login `kiosk` service user.
 3. **Set real secrets.** Replace every `REPLACE_*` value in each
    `env/<app>.env.example` (secret key base, DB passwords, signing key, PoW
-   secret, Stripe **test** keys for getgrocery + atablefor). Copy to
+   secret, a Stripe **test** key for getgrocery only). Copy to
    `/etc/kiosk-demo/<app>.env`, mode `0600`, owner `kiosk`. The templates are
    shell-source-safe as written, so `set -a; . file` works.
 4. **Run the steps below**, or hand over shell access.
@@ -82,10 +82,11 @@ demo already ships a production `database.yml` pointing at its own DB + role.
 #    Each app lives at /srv/kiosk/kiosk-demo-<name>.
 
 # 1. Postgres: create the 7 DBs + least-privilege roles.
-#    Pass each password as a *quoted* psql variable (inner single quotes).
+#    Pass each password as a plain psql variable — the RAW password, no quotes
+#    (the script quote-escapes it safely via :'var').
 sudo -u postgres psql -v ON_ERROR_STOP=1 \
-  -v gg_pw="'…'" -v af_pw="'…'" -v ho_pw="'…'" -v sk_pw="'…'" \
-  -v st_pw="'…'" -v pl_pw="'…'" -v td_pw="'…'" \
+  -v gg_pw=… -v af_pw=… -v ho_pw=… -v sk_pw=… \
+  -v st_pw=… -v pl_pw=… -v td_pw=… \
   -f /srv/kiosk/reference/deploy/postgres-init.sql
 #    Then set max_connections=100 in postgresql.conf and reload.
 
@@ -120,10 +121,12 @@ sudo systemctl reload caddy
 
 ## Payments — Stripe TEST mode
 
-getgrocery (SetupIntent card-on-file) and atablefor (booking deposit) run
-Stripe in **test mode**. A poker completes a real `off_session` PaymentIntent
-end-to-end with **no real charge** and **no live key on the box**. Publish the
-test card on each demo's landing:
+getgrocery (SetupIntent card-on-file) runs Stripe in **test mode** — it is the
+only demo with a payment provider. A poker completes a real `off_session`
+PaymentIntent end-to-end with **no real charge** and **no live key on the box**.
+(atablefor books restaurant tables — a reservation takes no money, so it
+configures **no** payment provider and `pay` is absent from its capabilities.)
+Publish the test card on getgrocery's landing:
 
 > **Test card:** `4242 4242 4242 4242` — any future expiry, any CVC, any ZIP.
 > More cards: <https://docs.stripe.com/testing>

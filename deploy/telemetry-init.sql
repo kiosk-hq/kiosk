@@ -10,7 +10,8 @@
 -- never PII. Rows are counts of generic action_kinds; no per-assistant detail.
 --
 -- HOW TO RUN (as the cluster superuser, once at provisioning):
---   psql -v ON_ERROR_STOP=1 -v tm_pw="'…'" -f telemetry-init.sql
+--   psql -v ON_ERROR_STOP=1 -v tm_pw=… -f telemetry-init.sql
+-- (tm_pw is the RAW password, unquoted — the script escapes it via :'tm_pw'.)
 --
 -- Then set each app's env:
 --   KIOSK_TELEMETRY=1
@@ -24,11 +25,12 @@
 \set ON_ERROR_STOP on
 
 -- ── Least-privilege LOGIN role for telemetry writes/reads ───────────────────
-DO $$ BEGIN
-  IF NOT EXISTS (SELECT FROM pg_roles WHERE rolname = 'kiosk_telemetry') THEN
-    CREATE ROLE kiosk_telemetry LOGIN PASSWORD :tm_pw;
-  END IF;
-END $$;
+-- Idempotent create in the OUTER SQL so \gexec can interpolate the password
+-- variable. (A :var is NOT substituted inside a DO/dollar-quoted block, so the
+-- literal ":tm_pw" would reach the server and error "syntax error at :".)
+-- :'tm_pw' single-quotes and escapes the password safely.
+SELECT format('CREATE ROLE %I LOGIN PASSWORD %L', 'kiosk_telemetry', :'tm_pw')
+  WHERE NOT EXISTS (SELECT FROM pg_roles WHERE rolname = 'kiosk_telemetry')\gexec
 
 -- ── The shared DB (guarded create; \gexec runs the CREATE only if absent) ───
 SELECT 'CREATE DATABASE kiosk_demo_telemetry OWNER kiosk_telemetry'

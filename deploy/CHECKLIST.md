@@ -17,8 +17,8 @@ Seven demos: getgrocery · atablefor · hoteling · skooti · stylish · philsli
 - [ ] `git clone` the reference repo (or push-to-deploy — see §7).
 
 ## 3. Databases (one Postgres cluster)
-- [ ] `psql -v pw_getgrocery="'…'" … -f deploy/postgres-init.sql`  → 7 app DBs + least-priv roles.
-- [ ] `psql -v tm_pw="'…'" -f deploy/telemetry-init.sql`  → the shared `kiosk_demo_telemetry` DB + role.
+- [ ] `psql -v gg_pw=… -v af_pw=… -v ho_pw=… -v sk_pw=… -v st_pw=… -v pl_pw=… -v td_pw=… -f deploy/postgres-init.sql`  → 7 app DBs + least-priv roles. (Pass each RAW password unquoted — the script escapes it via `:'var'`.)
+- [ ] `psql -v tm_pw=… -f deploy/telemetry-init.sql`  → the shared `kiosk_demo_telemetry` DB + role.
 
 ## 4. Per-app env (copy `deploy/env/<app>.env.example` → real values)
 For EACH of the 7 apps:
@@ -32,7 +32,7 @@ For EACH of the 7 apps:
       **If `WEB_CONCURRENCY>1`, the default in-process count is per-worker — pass a shared BackoffStore (Redis/DB) for an authoritative count, or run atablefor single-worker.**
 - [ ] **Telemetry:** `KIOSK_TELEMETRY=1`, `KIOSK_TELEMETRY_DB_URL=postgres://kiosk_telemetry:…@…/kiosk_demo_telemetry`,
       and a **distinct** `KIOSK_TELEMETRY_SALT=<random>` per app (keeps the per-app agent hashes non-joinable).
-- [ ] **Stripe (getgrocery + atablefor only):** `STRIPE_SECRET_KEY=sk_test_…` (TEST mode — no real charges).
+- [ ] **Stripe (getgrocery only):** `STRIPE_SECRET_KEY=sk_test_…` (TEST mode — no real charges). getgrocery is the only demo with a payment provider; atablefor takes no money (no `pay` capability).
 
 ## 5. Build + boot each app
 - [ ] `bundle install` · `RAILS_ENV=production bin/rails assets:precompile db:prepare` · `bin/rails demo:setup` (seed).
@@ -51,7 +51,7 @@ For EACH of the 7 apps:
 - [ ] `GET https://<app>.demo.kiosk.tech/.well-known/kiosk.json` returns discovery (atablefor shows the "beware" PoW notice).
 - [ ] The demo **root page** loads (what it is + a curl one-liner + the live activity counters).
 - [ ] `GET https://<app>.demo.kiosk.tech/demo/activity.json` returns aggregates.
-- [ ] getgrocery/atablefor: a Stripe test card `4242 4242 4242 4242` completes a real test-mode pay.
+- [ ] getgrocery: a Stripe test card `4242 4242 4242 4242` completes a real test-mode pay (the only demo with a payment provider).
 
 ## Notes
 - Everything is OFF by default in code — nothing here changes local/CI behavior.

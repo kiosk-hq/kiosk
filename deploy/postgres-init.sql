@@ -7,13 +7,14 @@
 --
 -- HOW TO RUN (as the cluster superuser, e.g. postgres):
 --   psql -v ON_ERROR_STOP=1 \
---        -v gg_pw="'…'"  -v af_pw="'…'"  -v ho_pw="'…'"  -v sk_pw="'…'" \
---        -v st_pw="'…'"  -v pl_pw="'…'"  -v td_pw="'…'" \
+--        -v gg_pw=…  -v af_pw=…  -v ho_pw=…  -v sk_pw=… \
+--        -v st_pw=…  -v pl_pw=…  -v td_pw=… \
 --        -f postgres-init.sql
 --
--- Pass each password as a quoted psql variable (note the inner single quotes:
---   -v gg_pw="'S3cret!'"  ). Use the SAME value in env/<app>.env
--- (KIOSK_<APP>_DB_PASSWORD). Never commit real passwords.
+-- Pass each password as a PLAIN psql variable (the RAW password, NO surrounding
+-- quotes: -v gg_pw=S3cret!  — the script quote-escapes it safely via :'var').
+-- Use the SAME value in env/<app>.env (KIOSK_<APP>_DB_PASSWORD).
+-- Never commit real passwords.
 --
 -- Idempotent-ish: roles/dbs are created with guards so re-running is safe.
 -- Run once at provisioning; re-run only adds what is missing.
@@ -21,31 +22,28 @@
 \set ON_ERROR_STOP on
 
 -- ── Roles (LOGIN, no CREATEDB/SUPERUSER — least privilege) ──────────────────
--- gen: DO block so CREATE ROLE is skipped if the role already exists.
+-- Idempotent per-role create in the OUTER SQL so \gexec can interpolate the
+-- password variable. (A CREATE ROLE inside a DO/dollar-quoted block can NOT use
+-- a :var — psql does not substitute variables inside dollar-quoted strings, so
+-- the literal ":gg_pw" would reach the server and error "syntax error at :".)
+-- Each password is spliced with :'var' quote-substitution, which single-quotes
+-- and escapes it safely; the WHERE NOT EXISTS guard skips roles that already
+-- exist, so re-running is a no-op.
 
-DO $$ BEGIN
-  IF NOT EXISTS (SELECT FROM pg_roles WHERE rolname = 'kiosk_getgrocery') THEN
-    CREATE ROLE kiosk_getgrocery LOGIN PASSWORD :gg_pw;
-  END IF;
-  IF NOT EXISTS (SELECT FROM pg_roles WHERE rolname = 'kiosk_atablefor') THEN
-    CREATE ROLE kiosk_atablefor LOGIN PASSWORD :af_pw;
-  END IF;
-  IF NOT EXISTS (SELECT FROM pg_roles WHERE rolname = 'kiosk_hoteling') THEN
-    CREATE ROLE kiosk_hoteling LOGIN PASSWORD :ho_pw;
-  END IF;
-  IF NOT EXISTS (SELECT FROM pg_roles WHERE rolname = 'kiosk_skooti') THEN
-    CREATE ROLE kiosk_skooti LOGIN PASSWORD :sk_pw;
-  END IF;
-  IF NOT EXISTS (SELECT FROM pg_roles WHERE rolname = 'kiosk_stylish') THEN
-    CREATE ROLE kiosk_stylish LOGIN PASSWORD :st_pw;
-  END IF;
-  IF NOT EXISTS (SELECT FROM pg_roles WHERE rolname = 'kiosk_philslist') THEN
-    CREATE ROLE kiosk_philslist LOGIN PASSWORD :pl_pw;
-  END IF;
-  IF NOT EXISTS (SELECT FROM pg_roles WHERE rolname = 'kiosk_tudu') THEN
-    CREATE ROLE kiosk_tudu LOGIN PASSWORD :td_pw;
-  END IF;
-END $$;
+SELECT format('CREATE ROLE %I LOGIN PASSWORD %L', 'kiosk_getgrocery', :'gg_pw')
+  WHERE NOT EXISTS (SELECT FROM pg_roles WHERE rolname = 'kiosk_getgrocery')\gexec
+SELECT format('CREATE ROLE %I LOGIN PASSWORD %L', 'kiosk_atablefor', :'af_pw')
+  WHERE NOT EXISTS (SELECT FROM pg_roles WHERE rolname = 'kiosk_atablefor')\gexec
+SELECT format('CREATE ROLE %I LOGIN PASSWORD %L', 'kiosk_hoteling', :'ho_pw')
+  WHERE NOT EXISTS (SELECT FROM pg_roles WHERE rolname = 'kiosk_hoteling')\gexec
+SELECT format('CREATE ROLE %I LOGIN PASSWORD %L', 'kiosk_skooti', :'sk_pw')
+  WHERE NOT EXISTS (SELECT FROM pg_roles WHERE rolname = 'kiosk_skooti')\gexec
+SELECT format('CREATE ROLE %I LOGIN PASSWORD %L', 'kiosk_stylish', :'st_pw')
+  WHERE NOT EXISTS (SELECT FROM pg_roles WHERE rolname = 'kiosk_stylish')\gexec
+SELECT format('CREATE ROLE %I LOGIN PASSWORD %L', 'kiosk_philslist', :'pl_pw')
+  WHERE NOT EXISTS (SELECT FROM pg_roles WHERE rolname = 'kiosk_philslist')\gexec
+SELECT format('CREATE ROLE %I LOGIN PASSWORD %L', 'kiosk_tudu', :'td_pw')
+  WHERE NOT EXISTS (SELECT FROM pg_roles WHERE rolname = 'kiosk_tudu')\gexec
 
 -- ── Databases (one per app, owned by its role) ──────────────────────────────
 -- CREATE DATABASE cannot run inside a transaction/DO block, and \gexec lets us

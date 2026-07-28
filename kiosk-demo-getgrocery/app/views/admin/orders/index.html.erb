@@ -174,7 +174,8 @@
   <div class="page-title">Recent Orders</div>
   <div class="page-subtitle">
     <% count = @orders.length %>
-    <%= count %> order<%= count == 1 ? "" : "s" %> &mdash; most recent first
+    <%= count %> order<%= count == 1 ? "" : "s" %> &mdash; most recent first<br>
+    Demo operator back-office &mdash; public by design; addresses masked; data resets periodically.
   </div>
 
   <% if @orders.empty? %>
@@ -198,7 +199,8 @@
         rescue
           order["created_at"].to_s
         end
-        total_str  = format("€%.2f", order["total_cents"].to_i / 100.0)
+        cur_glyph  = { "usd" => "$", "eur" => "€" }.fetch(order["settled_currency"].to_s.downcase, "€")
+        total_str  = format("%s%.2f", cur_glyph, order["total_cents"].to_i / 100.0)
         items      = order["items"] || []
 
         badge_class = if scheduled
@@ -234,7 +236,7 @@
               <div class="item">
                 <span class="qty">&times;<%= item["qty"] %></span>
                 <span class="name"><%= h item["product_name"] %></span>
-                <span class="price">&euro;<%= format("%.2f", item["price_cents"].to_i / 100.0) %></span>
+                <span class="price"><%= cur_glyph %><%= format("%.2f", item["price_cents"].to_i / 100.0) %></span>
               </div>
             <% end %>
           <% end %>

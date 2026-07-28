@@ -6,15 +6,17 @@
 # emits ONE JSON line of observations; the demo:isolation rake task consumes
 # it and asserts (same scheme as the task's desc and its run output):
 #
-#   HEADLINE: B cannot schedule_delivery on A's order (order-ownership gate)
+#   HEADLINE: B cannot reschedule_delivery on A's PAID order (order-ownership gate)
 #   Assertion 1: B's my_orders excludes A's order (cross-tenant read blocked)
 #   Assertion 2: B's my_orders includes own order (positive control)
 #   Assertion 3: B's my_orders still excludes A's order after positive control
 #   Assertion 4: A's my_orders excludes B's order
 #   Assertion 5: DB orders.user_id for forged order == B (forged arg ignored)
 #
-# Positive controls that must simply succeed (A schedules own order; B creates,
-# pays and schedules own order) abort this flow directly on failure.
+# Positive controls that must simply succeed (A reschedules own paid order;
+# B creates, pays and reschedules own order) abort this flow directly on
+# failure. Carts mirror their orders at catalog prices (EUR) — the
+# ValidatingPaymentProvider cashier check runs on every capture here.
 #
 # Usage:
 #   SERVER_URL=http://127.0.0.1:3005 \
@@ -45,7 +47,9 @@ def get_json(url, headers = {})
   [res.code.to_i, (JSON.parse(res.body) rescue {})]
 end
 
-def pay_for_order(server, issuer, token, key, user_id, agent_id, order_id, total_cents)
+# Pay for an order with a cart that MIRRORS it (per create_order's pay_hint):
+# one {order_id} entry plus one {sku, qty, price_cents} entry per item.
+def pay_for_order(server, issuer, token, key, user_id, agent_id, order_id, total_cents, items)
   now        = Time.now.to_i
   intent_id  = SecureRandom.uuid
   cart_id    = SecureRandom.uuid
@@ -69,7 +73,7 @@ def pay_for_order(server, issuer, token, key, user_id, agent_id, order_id, total
     user_id:            user_id,
     agent_id:           agent_id,
     iss:                issuer,
-    line_items:         [{ order_id: order_id, total: total_cents }],
+    line_items:         [{ order_id: order_id }] + items,
     total_amount_cents: total_cents,
     currency:           "eur",
     exp:                now + 600,
@@ -150,13 +154,15 @@ rc, catalog_resp = post_json(
 abort "catalog failed (#{rc}): #{JSON.generate(catalog_resp)}" unless rc == 200
 catalog = catalog_resp.fetch("rows", [])
 abort "catalog empty" if catalog.empty?
-product = catalog.first
-product_sku = product.fetch("sku")
+product      = catalog.first
+product_sku  = product.fetch("sku")
+mirror_items = [{ sku: product_sku, qty: 1, price_cents: product.fetch("price_cents").to_i }]
 
-# ── Step 4: A creates order_a ─────────────────────────────────────────────────
+# ── Step 4: A creates order_a (delivery slot + address required) ─────────────
 rc, order_a_resp = post_json(
   "#{SERVER}/kiosk/run",
-  { name: "create_order", items: [{ sku: product_sku, qty: 1 }] },
+  { name: "create_order", items: [{ sku: product_sku, qty: 1 }],
+    delivery_slot_id: 1, delivery_address: "1 Good St, Neo-Tokyo" },
   { "Authorization" => "Bearer #{token_a}" },
 )
 abort "A create_order failed (#{rc}): #{JSON.generate(order_a_resp)}" unless rc == 200
@@ -165,7 +171,7 @@ total_cents_a = order_a_resp.dig("value", "total_cents").to_i
 abort "order_id_a missing" unless order_id_a
 
 # ── Step 5: A pays for order_a ────────────────────────────────────────────────
-rc, _pay_a = pay_for_order(SERVER, ISSUER, token_a, key_a, user_id_a, agent_id_a, order_id_a, total_cents_a)
+rc, _pay_a = pay_for_order(SERVER, ISSUER, token_a, key_a, user_id_a, agent_id_a, order_id_a, total_cents_a, mirror_items)
 abort "A pay failed (#{rc})" unless rc == 200
 
 # ── Step 6: B queries my_orders (before having any orders) ───────────────────
@@ -177,11 +183,11 @@ rc, b_before_resp = post_json(
 abort "B my_orders (before) failed (#{rc})" unless rc == 200
 b_my_orders_before = (b_before_resp["rows"] || []).map { |r| r["id"] }
 
-# ── Step 7: B tries schedule_delivery on A's order (MUST be 403) ─────────────
-b_schedule_on_a_status, _b_schedule_on_a_resp = post_json(
+# ── Step 7: B tries reschedule_delivery on A's paid order (MUST be 403) ──────
+b_reschedule_on_a_status, _b_reschedule_on_a_resp = post_json(
   "#{SERVER}/kiosk/run",
   {
-    name:             "schedule_delivery",
+    name:             "reschedule_delivery",
     order_id:         order_id_a,
     delivery_slot_id: 1,
     delivery_address: "2 Evil St, Neo-Tokyo",
@@ -189,26 +195,27 @@ b_schedule_on_a_status, _b_schedule_on_a_resp = post_json(
   { "Authorization" => "Bearer #{token_b}" },
 )
 
-# ── Step 8: A schedules own order (MUST succeed) ──────────────────────────────
-rc, sched_a = post_json(
+# ── Step 8: A reschedules own paid order (MUST succeed) ──────────────────────
+rc, resched_a = post_json(
   "#{SERVER}/kiosk/run",
   {
-    name:             "schedule_delivery",
+    name:             "reschedule_delivery",
     order_id:         order_id_a,
     delivery_slot_id: 2,
-    delivery_address: "1 Good St, Neo-Tokyo",
   },
   { "Authorization" => "Bearer #{token_a}" },
 )
-abort "A schedule_delivery failed (#{rc}): #{JSON.generate(sched_a)}" unless rc == 200
+abort "A reschedule_delivery failed (#{rc}): #{JSON.generate(resched_a)}" unless rc == 200
 
 # ── Step 9: B calls create_order with forged user_id ─────────────────────────
 rc, forged_resp = post_json(
   "#{SERVER}/kiosk/run",
   {
-    name:       "create_order",
-    items:      [{ sku: product_sku, qty: 1 }],
-    user_id:    user_id_a,  # adversarial: B supplies A's user_id
+    name:             "create_order",
+    items:            [{ sku: product_sku, qty: 1 }],
+    delivery_slot_id: 1,
+    delivery_address: "3 Bob St, Neo-Tokyo",
+    user_id:          user_id_a,  # adversarial: B supplies A's user_id
   },
   { "Authorization" => "Bearer #{token_b}" },
 )
@@ -216,10 +223,11 @@ abort "B forged create_order failed (#{rc}): #{JSON.generate(forged_resp)}" unle
 order_id_b_forged = forged_resp.dig("value", "order_id")
 abort "order_id_b_forged missing" unless order_id_b_forged
 
-# ── Step 10: B creates genuine order, pays, schedules ────────────────────────
+# ── Step 10: B creates genuine order, pays, reschedules ──────────────────────
 rc, order_b_resp = post_json(
   "#{SERVER}/kiosk/run",
-  { name: "create_order", items: [{ sku: product_sku, qty: 1 }] },
+  { name: "create_order", items: [{ sku: product_sku, qty: 1 }],
+    delivery_slot_id: 1, delivery_address: "3 Bob St, Neo-Tokyo" },
   { "Authorization" => "Bearer #{token_b}" },
 )
 abort "B create_order (genuine) failed (#{rc}): #{JSON.generate(order_b_resp)}" unless rc == 200
@@ -227,20 +235,19 @@ order_id_b    = order_b_resp.dig("value", "order_id")
 total_cents_b = order_b_resp.dig("value", "total_cents").to_i
 abort "order_id_b missing" unless order_id_b
 
-rc, _pay_b = pay_for_order(SERVER, ISSUER, token_b, key_b, user_id_b, agent_id_b, order_id_b, total_cents_b)
+rc, _pay_b = pay_for_order(SERVER, ISSUER, token_b, key_b, user_id_b, agent_id_b, order_id_b, total_cents_b, mirror_items)
 abort "B pay failed (#{rc})" unless rc == 200
 
-rc, sched_b = post_json(
+rc, resched_b = post_json(
   "#{SERVER}/kiosk/run",
   {
-    name:             "schedule_delivery",
+    name:             "reschedule_delivery",
     order_id:         order_id_b,
-    delivery_slot_id: 1,
-    delivery_address: "3 Bob St, Neo-Tokyo",
+    delivery_slot_id: 3,
   },
   { "Authorization" => "Bearer #{token_b}" },
 )
-abort "B schedule_delivery failed (#{rc}): #{JSON.generate(sched_b)}" unless rc == 200
+abort "B reschedule_delivery failed (#{rc}): #{JSON.generate(resched_b)}" unless rc == 200
 
 # ── Step 11: B queries my_orders after creating own order ─────────────────────
 rc, b_after_resp = post_json(
@@ -262,15 +269,15 @@ a_my_orders_after = (a_after_resp["rows"] || []).map { |r| r["id"] }
 
 # ── Output ONE JSON line ──────────────────────────────────────────────────────
 puts JSON.generate(
-  user_id_a:               user_id_a,
-  user_id_b:               user_id_b,
-  agent_id_a:              agent_id_a,
-  agent_id_b:              agent_id_b,
-  order_id_a:              order_id_a,
-  order_id_b:              order_id_b,
-  order_id_b_forged:       order_id_b_forged,
-  b_schedule_on_a_status:  b_schedule_on_a_status,
-  b_my_orders_before:      b_my_orders_before,
-  b_my_orders_after:       b_my_orders_after,
-  a_my_orders_after:       a_my_orders_after,
+  user_id_a:                user_id_a,
+  user_id_b:                user_id_b,
+  agent_id_a:               agent_id_a,
+  agent_id_b:               agent_id_b,
+  order_id_a:               order_id_a,
+  order_id_b:               order_id_b,
+  order_id_b_forged:        order_id_b_forged,
+  b_reschedule_on_a_status: b_reschedule_on_a_status,
+  b_my_orders_before:       b_my_orders_before,
+  b_my_orders_after:        b_my_orders_after,
+  a_my_orders_after:        a_my_orders_after,
 )

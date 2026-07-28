@@ -72,7 +72,10 @@ def jwt_claims(token)
 end
 
 def create_order(token, items)
-  rc, resp = post_json("#{SERVER}/kiosk/run", { name: "create_order", items: items },
+  # Delivery is part of the order: slot + address are required fields.
+  rc, resp = post_json("#{SERVER}/kiosk/run",
+                       { name: "create_order", items: items,
+                         delivery_slot_id: 1, delivery_address: "7 Claim Ct, Neo-Tokyo" },
                        { "Authorization" => "Bearer #{token}" })
   abort "create_order failed (#{rc}): #{JSON.generate(resp)}" unless rc == 200
   [resp.dig("value", "order_id"), resp.dig("value", "total_cents")]
@@ -94,7 +97,9 @@ STDERR.puts "  Standalone: registered agent_id=#{agent_id} user_id=#{standalone_
 
 rc, cat = post_json("#{SERVER}/kiosk/query", { name: "catalog" }, { "Authorization" => "Bearer #{token}" })
 abort "catalog failed (#{rc})" unless rc == 200
-items = cat.fetch("rows").first(2).map { |p| { sku: p.fetch("sku"), qty: 1 } }
+chosen = cat.fetch("rows").first(2)
+items  = chosen.map { |p| { sku: p.fetch("sku"), qty: 1 } }
+mirror = chosen.map { |p| { sku: p.fetch("sku"), qty: 1, price_cents: p.fetch("price_cents").to_i } }
 standalone_order_id, = create_order(token, items)
 results[:standalone_order_id] = standalone_order_id
 STDERR.puts "  Standalone: ordered #{items.map { |i| i[:sku] }.join(", ")} (order #{standalone_order_id})"
@@ -167,7 +172,7 @@ intent_payload = {
 cart_payload = {
   id: SecureRandom.uuid, intent_mandate_id: intent_payload[:id], user_id: HUMAN,
   agent_id: agent_id, iss: ISSUER,
-  line_items: [{ order_id: new_order_id, total: total_cents }],
+  line_items: [{ order_id: new_order_id }] + mirror,
   total_amount_cents: total_cents, currency: "eur", exp: now + 600, iat: now,
 }
 payment_payload = {

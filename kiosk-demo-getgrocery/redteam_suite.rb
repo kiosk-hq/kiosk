@@ -2,17 +2,22 @@
 
 # getgrocery redteam battery (P6 corrected surface)
 #
-# Surface: catalog, delivery_slots, my_orders / create_order, schedule_delivery
+# Surface: catalog, delivery_slots, my_orders / create_order, reschedule_delivery
 # per_user_query : "my_orders"
-# forge_action   : "create_order"
-# gated_action   : "schedule_delivery" (ownership + payment mandate)
+# forge_action   : "create_order" (delivery slot + address required)
+# gated_action   : "reschedule_delivery" (ownership + settled payment; one per order)
 # requires_kyc   : false
 # pow_difficulty : 0
 #
-# Scenarios (9 BLOCKED, 3 SKIPPED, RegistrationWithoutPow not run):
+# Every capture runs the ValidatingPaymentProvider cashier check: the cart
+# must be EUR, reference the payer's own unsettled order, mirror its items at
+# catalog prices, and sum correctly. Three local scenarios attack exactly that.
+#
+# Scenarios (12 BLOCKED, 3 SKIPPED, RegistrationWithoutPow not run):
 #   BLOCKED : CrossTenantRead, ForgedUserId, UnpaidGatedAction, SpentResourceReuse,
 #             PayForOtherUseSelf, MandatePrincipalSwap, MandateReplay, TokenTampering,
-#             PrivilegeSelfSelection
+#             PrivilegeSelfSelection, WrongCurrencyCart, TamperedPriceCart,
+#             InflatedTotalCart
 #   SKIPPED : MissingKyc, ExpiredKyc, ForgedKyc (no KYC)
 #
 # Usage:
@@ -38,7 +43,10 @@ profile = Kiosk::Redteam::Profile.new(
   row_id_key:    "id",
 
   # create_owned: query catalog → pick first in-stock product → create_order
-  # Returns { id: order_id, total_cents: N } (id key used by CrossTenantRead etc.)
+  # (delivery slot + address are REQUIRED — delivery is part of the order).
+  # Returns { id:, total_cents:, items: [{sku, qty, price_cents}] } — the items
+  # are kept so pay_for can build a cart that MIRRORS the order at catalog
+  # prices (the ValidatingPaymentProvider cashier check requires it).
   create_owned: ->(client, principal) {
     catalog_resp = client.query(principal, name: "catalog")
     catalog = catalog_resp.body.is_a?(Hash) ? (catalog_resp.body["rows"] || []) : []
@@ -47,8 +55,10 @@ profile = Kiosk::Redteam::Profile.new(
 
     order_resp = client.run(
       principal,
-      name:  "create_order",
-      items: [{ sku: product["sku"], qty: 1 }],
+      name:             "create_order",
+      items:            [{ sku: product["sku"], qty: 1 }],
+      delivery_slot_id: 1,
+      delivery_address: "1 Redteam St, Neo-Tokyo",
     )
     raise "redteam: create_order failed (#{order_resp.status}): #{order_resp.body.inspect}" \
       unless order_resp.status == 200
@@ -57,7 +67,11 @@ profile = Kiosk::Redteam::Profile.new(
     total_cents = order_resp.body.dig("value", "total_cents").to_i
     raise "redteam: create_order missing order_id" unless order_id
 
-    { id: order_id, total_cents: total_cents }
+    {
+      id:          order_id,
+      total_cents: total_cents,
+      items:       [{ sku: product["sku"], qty: 1, price_cents: product["price_cents"].to_i }],
+    }
   },
 
   # forge_args: returns base args for create_order (user_id injected by ForgedUserId scenario)
@@ -69,20 +83,25 @@ profile = Kiosk::Redteam::Profile.new(
     catalog = catalog_resp.body.is_a?(Hash) ? (catalog_resp.body["rows"] || []) : []
     raise "redteam: catalog empty for forge_args" if catalog.empty?
     product = catalog.first
-    { items: [{ sku: product["sku"], qty: 1 }] }
-  },
-
-  # gated_action: schedule_delivery (requires ownership + payment mandate)
-  gated_action: "schedule_delivery",
-  gated_args:   ->(owned_ref) {
     {
-      order_id:         owned_ref[:id],
+      items:            [{ sku: product["sku"], qty: 1 }],
       delivery_slot_id: 1,
       delivery_address: "1 Redteam St, Neo-Tokyo",
     }
   },
 
-  # pay_for: build RS256 intent + cart mandates referencing order_id.
+  # gated_action: reschedule_delivery (ownership + settled payment; ONE
+  # reschedule per order — the second attempt is the C3 spent-resource beat).
+  gated_action: "reschedule_delivery",
+  gated_args:   ->(owned_ref) {
+    {
+      order_id:         owned_ref[:id],
+      delivery_slot_id: 2,
+    }
+  },
+
+  # pay_for: build RS256 intent + cart mandates referencing order_id, with
+  # item lines MIRRORING the order at catalog prices (cashier check).
   # No card-setup step: this suite runs with KIOSK_TEST_AUTOCARD=1 against
   # stripe-mock, so the adapter auto-provisions a test card at capture and the
   # off_session charge settles. The gates under test are pure Kiosk logic.
@@ -92,7 +111,7 @@ profile = Kiosk::Redteam::Profile.new(
     cart_id   = SecureRandom.uuid
 
     total_cents      = owned_ref[:total_cents].to_i
-    cap_amount_cents = total_cents + 100
+    cap_amount_cents = total_cents + 200
 
     intent = {
       id:               intent_id,
@@ -112,7 +131,7 @@ profile = Kiosk::Redteam::Profile.new(
       user_id:            principal.user_id,
       agent_id:           principal.agent_id,
       iss:                ISSUER,
-      line_items:         [{ order_id: owned_ref[:id], total: total_cents }],
+      line_items:         [{ order_id: owned_ref[:id] }] + (owned_ref[:items] || []),
       total_amount_cents: total_cents,
       currency:           "eur",
       exp:                now + 600,
@@ -127,6 +146,82 @@ profile = Kiosk::Redteam::Profile.new(
   kyc_forged:  nil,
 )
 
+# ── Local scenarios: the cashier check (ValidatingPaymentProvider) ────────────
+# The generic battery proves ownership/payment gates; these three prove the
+# operator counts what lands on the counter — currency, prices, total.
+
+# A chain-consistent cart in the wrong currency must not settle: the engine
+# only enforces intent/cart/payment agreement, the OPERATOR prices in EUR.
+class WrongCurrencyCart < Kiosk::Redteam::Scenario
+  def initialize
+    super(
+      name:        "WrongCurrencyCart",
+      category:    "payment",
+      description: "A usd-denominated (chain-consistent) cart at a EUR operator must be rejected at capture",
+    )
+  end
+
+  def call(client, profile)
+    a = register_principal(client, name: "redteam-cur-a", profile:)
+    owned = profile.create_owned.call(client, a)
+    m = profile.pay_for.call(client, a, owned)
+    m[:intent] = m[:intent].merge(currency: "usd")
+    m[:cart]   = m[:cart].merge(currency: "usd")
+    resp = client.pay(a, intent: m[:intent], cart: m[:cart])
+    verdict_from(resp, detail: "usd cart settled at a EUR operator (HTTP #{resp.status})")
+  end
+end
+
+# A tampered per-line price (with total and cap adjusted to stay
+# chain-consistent) must be caught by the catalog-mirror check.
+class TamperedPriceCart < Kiosk::Redteam::Scenario
+  def initialize
+    super(
+      name:        "TamperedPriceCart",
+      category:    "payment",
+      description: "A cart whose line price differs from the catalog must be rejected at capture",
+    )
+  end
+
+  def call(client, profile)
+    a = register_principal(client, name: "redteam-price-a", profile:)
+    owned = profile.create_owned.call(client, a)
+    m = profile.pay_for.call(client, a, owned)
+
+    tampered_items = (owned[:items] || []).map.with_index do |li, i|
+      i.zero? ? li.merge(price_cents: li[:price_cents].to_i - 50) : li
+    end
+    tampered_total = tampered_items.sum { |li| li[:qty].to_i * li[:price_cents].to_i }
+    m[:cart] = m[:cart].merge(
+      line_items:         [{ order_id: owned[:id] }] + tampered_items,
+      total_amount_cents: tampered_total,
+    )
+    resp = client.pay(a, intent: m[:intent], cart: m[:cart])
+    verdict_from(resp, detail: "below-catalog line price settled (HTTP #{resp.status})")
+  end
+end
+
+# Correct lines but an inflated total (within the intent cap, payment mirrors
+# the cart) must be caught by the sum check.
+class InflatedTotalCart < Kiosk::Redteam::Scenario
+  def initialize
+    super(
+      name:        "InflatedTotalCart",
+      category:    "payment",
+      description: "A cart whose total exceeds the sum of its lines must be rejected at capture",
+    )
+  end
+
+  def call(client, profile)
+    a = register_principal(client, name: "redteam-total-a", profile:)
+    owned = profile.create_owned.call(client, a)
+    m = profile.pay_for.call(client, a, owned)
+    m[:cart] = m[:cart].merge(total_amount_cents: owned[:total_cents].to_i + 100)
+    resp = client.pay(a, intent: m[:intent], cart: m[:cart])
+    verdict_from(resp, detail: "total above the order's catalog sum settled (HTTP #{resp.status})")
+  end
+end
+
 # ── Scenarios ─────────────────────────────────────────────────────────────────
 
 scenarios = [
@@ -140,6 +235,9 @@ scenarios = [
   Kiosk::Redteam::Scenarios::MandateReplay.new,
   Kiosk::Redteam::Scenarios::TokenTampering.new,
   Kiosk::Redteam::Scenarios::PrivilegeSelfSelection.new,
+  WrongCurrencyCart.new,
+  TamperedPriceCart.new,
+  InflatedTotalCart.new,
   # Not applicable — must SKIP (no KYC)
   Kiosk::Redteam::Scenarios::MissingKyc.new,
   Kiosk::Redteam::Scenarios::ExpiredKyc.new,

@@ -4,7 +4,9 @@ module Admin
   # Read-only orders view for the GetGrocery provider operator.
   # Shows recent orders with payment status, address, slot, and line items.
   #
-  # NOTE: No authentication — demo provider only.
+  # NOTE: No authentication — public by design: an operator-view showcase on a
+  # sandbox with synthetic data. Delivery addresses are visitor-typed free
+  # text, so they are masked server-side to a short head + tail.
   #
   # No-coverage rationale: this is a pure
   # human-inspection back-office view, not a wire/spec surface. It is reachable
@@ -38,15 +40,15 @@ module Admin
           o.slot_at,
           o.address,
           o.created_at,
-          COALESCE((
-            SELECT TRUE
+          (
+            SELECT pm.currency
             FROM kiosk.cart_mandates cm
             JOIN kiosk.settlements pm ON pm.cart_mandate_id = cm.id
             WHERE cm.line_items @> json_build_array(
               json_build_object('order_id', o.id::text)
             )::jsonb
             LIMIT 1
-          ), FALSE) AS paid
+          ) AS settled_currency
         FROM orders o
         ORDER BY o.created_at DESC
         LIMIT 50
@@ -73,7 +75,20 @@ module Admin
         SQL
       end
 
-      orders.map { |o| o.merge("items" => (items_by_order[o["id"]] || [])) }
+      orders.map do |o|
+        o.merge(
+          "items"   => (items_by_order[o["id"]] || []),
+          "paid"    => !o["settled_currency"].nil?,
+          "address" => mask_address(o["address"])
+        )
+      end
+    end
+
+    # All but a short head and tail of the visitor-typed address, masked.
+    def mask_address(addr)
+      s = addr.to_s
+      return s if s.length <= 7
+      "#{s[0, 4]}#{"*" * [[s.length - 7, 3].max, 18].min}#{s[-3, 3]}"
     end
   end
 end

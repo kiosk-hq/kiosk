@@ -91,8 +91,8 @@ Kiosk.configure do |c|
     c.owner = c.owner.merge(pow_difficulty: PowDifficulty.level, pow_notice: notice)
   end
   # Dual-check (skill.md): canonical skill URL + SHA-256 of its content.
-  c.skill_url    = "https://kiosk.tech/skill-v0.3.5.md"
-  c.skill_sha256 = "66d6a35ed96df828852781522e3c8cc2f73055ef2ec45ece96e42ff083e8712c"
+  c.skill_url    = "https://kiosk.tech/skill-v0.3.6.md"
+  c.skill_sha256 = "d27a9184da55b27ae42833987f9ae6c6afbc9fba75ca98103370d51f67865ef7"
 
   c.agent_idp = JwtOrStubIdp.new(stub: StubIdp.new)
   # The provider's own web-session channel: authenticates the approving
@@ -253,7 +253,10 @@ Kiosk::Server::Actions.register("payment_setup",
 end
 
 Kiosk::Server::Actions.register("create_order",
-  description: "Create (or replace) a grocery order for the authenticated principal",
+  description: "Create (or replace) a grocery order for the authenticated principal. " \
+               "To pay for it, sign your AP2 cart mandate with line_items that include " \
+               "{\"order_id\": <the returned order_id>} — settlements are matched to orders " \
+               "by that reference, and schedule_delivery requires it (the result carries a pay_hint)",
   params: {
     items:    "array of {sku, qty} — the complete cart (products referenced by sku)",
     order_id: "(optional) uuid — if given and order belongs to principal and not yet paid, replaces its items",
@@ -329,12 +332,20 @@ Kiosk::Server::Actions.register("create_order",
       )
     end
 
-    { order_id: order_id, total_cents: total_cents }
+    {
+      order_id:    order_id,
+      total_cents: total_cents,
+      pay_hint:    "pay with a cart mandate whose line_items include " \
+                   "{\"order_id\": \"#{order_id}\"} — schedule_delivery unlocks " \
+                   "only once a settlement references this order that way",
+    }
   end
 end
 
 Kiosk::Server::Actions.register("schedule_delivery",
-  description: "Schedule delivery for a paid order (requires settled payment / settlement referencing this order)",
+  description: "Schedule delivery for a paid order. Requires a settlement whose cart-mandate " \
+               "line_items include {\"order_id\": <order_id>} — pay that way first " \
+               "(see create_order's pay_hint), then schedule",
   params: {
     order_id:         "uuid — the order to schedule",
     delivery_slot_id: "integer — slot id from the delivery_slots query (1–6)",
@@ -374,7 +385,12 @@ Kiosk::Server::Actions.register("schedule_delivery",
       "AND cm.line_items @> #{conn.quote(order_filter_json)}::jsonb " \
       "LIMIT 1"
     ).first
-    raise Kiosk::Server::Errors::Forbidden.new("no settlement for this order") if paid.nil?
+    if paid.nil?
+      raise Kiosk::Server::Errors::Forbidden.new(
+        "no settlement references this order — pay with a cart mandate whose " \
+        "line_items include {\"order_id\": \"#{order_id}\"}, then retry"
+      )
+    end
 
     # ── Compute slot_at (slot 1 = 08:00, slot 2 = 10:00, ...) ────────────
     delivery_date = Date.today + 1

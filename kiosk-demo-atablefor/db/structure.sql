@@ -145,7 +145,9 @@ CREATE TABLE kiosk.agents (
     public_key text,
     notification_pubkey text,
     created_at timestamp with time zone DEFAULT now() NOT NULL,
-    revoked_at timestamp with time zone
+    revoked_at timestamp with time zone,
+    spending_cap_cents bigint,
+    human_label text
 );
 
 
@@ -615,6 +617,7 @@ SET search_path TO "$user", public;
 
 INSERT INTO "schema_migrations" (version) VALUES
 ('20260721000001'),
+('20260718000002'),
 ('20260717000001'),
 ('20260618131462'),
 ('20260618131461'),

@@ -86,7 +86,7 @@ def pay(token, key, user_id, agent_id, code, reservation_id, price_per_min)
   intent = { id: intent_id, user_id:, agent_id:, iss: ISSUER, scope: "mobility",
              cap_amount_cents: cap_cents, currency: "eur", exp: now + 600, iat: now }
   cart   = { id: cart_id, intent_mandate_id: intent_id, user_id:, agent_id:, iss: ISSUER,
-             line_items: [{ sku: code, qty: 1, reservation_id: }],
+             line_items: [{ sku: code, qty: 1, price_cents: price_per_min, reservation_id: }],
              total_amount_cents: total_cents, currency: "eur", exp: now + 600, iat: now }
   payment = { id: payment_id, cart_mandate_id: cart_id, user_id:, agent_id:, iss: ISSUER,
               payment_method: "pm_demo", amount_cents: total_cents, currency: "eur",

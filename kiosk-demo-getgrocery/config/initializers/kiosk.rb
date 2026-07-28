@@ -4,7 +4,10 @@
 # Single grocery provider — no store layer. Catalog exposes in-stock facts;
 # the AI assistant handles substitution decisions.
 # Queries:  catalog, delivery_slots, my_orders
-# Actions:  create_order, schedule_delivery, payment_setup
+# Actions:  create_order (delivery slot + address REQUIRED), reschedule_delivery, payment_setup
+# Pay:      capture is wrapped by ValidatingPaymentProvider — the cart must be
+#           EUR, reference the payer's unsettled order, mirror its items at
+#           catalog prices, and sum correctly (the cashier check).
 
 # ── Ephemeral dev signing key ─────────────────────────────────────────────
 # JWT / register flows need a signing key. In development or test, if none is
@@ -21,6 +24,7 @@ require Rails.root.join("lib/stub_idp")
 require Rails.root.join("lib/stub_user_idp")
 require Rails.root.join("lib/jwt_or_stub_idp")
 require Rails.root.join("lib/pow_difficulty")
+require Rails.root.join("lib/validating_payment_provider")
 require "kiosk/payment_providers/stripe"
 
 ActiveRecord::Migration.include(Kiosk::RLS::DSL)
@@ -135,12 +139,18 @@ Kiosk.configure do |c|
   # adapter simulate a completed SetupIntent — automated suites need no card-setup
   # step and no server-side test route. NEVER set in production or the live demo,
   # where the real hosted SetupIntent flow runs (human enters the card once).
-  c.payment_provider = Kiosk::PaymentProviders::Stripe.new(
-    api_key:           key,
-    customer_resolver: ->(uid) { StripeCustomer.find_by(user_id: uid)&.customer_id },
-    customer_saver:    ->(uid, cid) { StripeCustomer.create!(user_id: uid, customer_id: cid) },
-    test_autocard:     ENV["KIOSK_TEST_AUTOCARD"] == "1",
-    return_url:        "#{Kiosk.configuration.issuer}/payment/return",
+  # The cashier check: ValidatingPaymentProvider verifies the agent-signed
+  # cart against OUR catalog — currency (EUR), per-line prices, and total —
+  # before the wrapped Stripe adapter captures anything.
+  c.payment_provider = ValidatingPaymentProvider.new(
+    Kiosk::PaymentProviders::Stripe.new(
+      api_key:           key,
+      customer_resolver: ->(uid) { StripeCustomer.find_by(user_id: uid)&.customer_id },
+      customer_saver:    ->(uid, cid) { StripeCustomer.create!(user_id: uid, customer_id: cid) },
+      test_autocard:     ENV["KIOSK_TEST_AUTOCARD"] == "1",
+      return_url:        "#{Kiosk.configuration.issuer}/payment/return",
+    ),
+    currency: "eur",
   )
 
   # ── Catalog-toll PoW gate (active only when KIOSK_POW_DEMO=1) ────────────
@@ -165,9 +175,9 @@ end
 if ENV["KIOSK_TELEMETRY"] == "1"
   require Rails.root.join("lib/demo_telemetry")
   GETGROCERY_VERB_MAP = {
-    "create_order"      => "ordered",
-    "schedule_delivery" => "scheduled",
-    "payment_setup"     => "ran",
+    "create_order"        => "ordered",
+    "reschedule_delivery" => "scheduled",
+    "payment_setup"       => "ran",
   }.freeze
   Rails.application.config.middleware.use(
     DemoTelemetryMiddleware, verb_map: GETGROCERY_VERB_MAP,
@@ -179,13 +189,14 @@ LOW_STOCK_THRESHOLD = 5
 # ─── Queries ────────────────────────────────────────────────────────────────
 
 Kiosk::Server::Queries.register("catalog",
-  description: "Browse in-stock products from the getgrocery catalog (out-of-stock items are hidden)") do |_params|
+  description: "Browse in-stock products from the getgrocery catalog (out-of-stock items are hidden). " \
+               "All prices are EUR cents — carts must be signed in eur at these exact prices") do |_params|
   conn = ActiveRecord::Base.connection
   rows = conn.execute(
     "SELECT sku, name, price_cents, stock FROM products WHERE stock > 0 ORDER BY name"
   ).to_a
   rows.map do |r|
-    row = { "sku" => r["sku"], "name" => r["name"], "price_cents" => r["price_cents"] }
+    row = { "sku" => r["sku"], "name" => r["name"], "price_cents" => r["price_cents"], "currency" => "eur" }
     row["low"] = true if r["stock"].to_i <= LOW_STOCK_THRESHOLD
     row
   end
@@ -216,12 +227,18 @@ Kiosk::Server::Queries.register("delivery_slots",
 end
 
 Kiosk::Server::Queries.register("my_orders",
-  description: "List this principal's orders (scoped to authenticated user via kiosk.current_user_id())") do |_params|
+  description: "List this principal's orders with delivery slot, address, and a paid flag (scoped to authenticated user via kiosk.current_user_id())") do |_params|
   ActiveRecord::Base.connection.execute(
-    "SELECT id, status, total_cents, slot_at, address " \
-    "FROM orders " \
-    "WHERE user_id = kiosk.current_user_id() " \
-    "ORDER BY created_at DESC"
+    "SELECT o.id, o.status, o.total_cents, o.slot_at, o.address, " \
+    "EXISTS (" \
+    "SELECT 1 FROM kiosk.settlements pm " \
+    "JOIN kiosk.cart_mandates cm ON cm.id = pm.cart_mandate_id " \
+    "WHERE pm.user_id = kiosk.current_user_id() " \
+    "AND cm.line_items @> json_build_array(json_build_object('order_id', o.id::text))::jsonb" \
+    ") AS paid " \
+    "FROM orders o " \
+    "WHERE o.user_id = kiosk.current_user_id() " \
+    "ORDER BY o.created_at DESC"
   ).to_a
 end
 
@@ -254,12 +271,16 @@ end
 
 Kiosk::Server::Actions.register("create_order",
   description: "Create (or replace) a grocery order for the authenticated principal. " \
-               "To pay for it, sign your AP2 cart mandate with line_items that include " \
-               "{\"order_id\": <the returned order_id>} — settlements are matched to orders " \
-               "by that reference, and schedule_delivery requires it (the result carries a pay_hint)",
+               "Delivery is part of the order: delivery_slot_id and delivery_address are REQUIRED. " \
+               "To pay, sign your AP2 cart mandate in EUR with line_items that mirror the order — " \
+               "one {\"order_id\": <the returned order_id>} entry plus one {\"sku\", \"qty\", \"price_cents\"} " \
+               "entry per item at catalog prices; the operator verifies currency, prices, and total " \
+               "against its catalog before charging (the result carries a pay_hint)",
   params: {
-    items:    "array of {sku, qty} — the complete cart (products referenced by sku)",
-    order_id: "(optional) uuid — if given and order belongs to principal and not yet paid, replaces its items",
+    items:            "array of {sku, qty} — the complete cart (products referenced by sku)",
+    delivery_slot_id: "integer — slot id from the delivery_slots query (1–6), REQUIRED",
+    delivery_address: "string — delivery address, REQUIRED",
+    order_id:         "(optional) uuid — if given and order belongs to principal and not yet paid, replaces its items and delivery details",
   }) do |args|
   conn = ActiveRecord::Base.connection
   uid = conn.execute("SELECT kiosk.current_user_id() AS uid").first["uid"]
@@ -275,6 +296,15 @@ Kiosk::Server::Actions.register("create_order",
     raise Kiosk::Server::Errors::BadRequest.new("qty must be >= 1") if qty < 1
     { sku: sku, qty: qty }
   end
+
+  delivery_slot_id = args[:delivery_slot_id] || args["delivery_slot_id"]
+  delivery_address = args[:delivery_address] || args["delivery_address"]
+  raise Kiosk::Server::Errors::BadRequest.new("missing field: delivery_slot_id — delivery is part of the order") if delivery_slot_id.nil?
+  raise Kiosk::Server::Errors::BadRequest.new("missing field: delivery_address — delivery is part of the order") if delivery_address.nil? || delivery_address.to_s.empty?
+  slot_id = delivery_slot_id.to_i
+  raise Kiosk::Server::Errors::BadRequest.new("delivery_slot_id must be 1–6") unless (1..6).include?(slot_id)
+  delivery_date = Date.today + 1
+  slot_at = Time.utc(delivery_date.year, delivery_date.month, delivery_date.day, 8 + (slot_id - 1) * 2, 0, 0)
 
   conn.transaction do
     # Resolve skus → product id + price (consumer references products by sku, not the numeric id)
@@ -294,11 +324,17 @@ Kiosk::Server::Actions.register("create_order",
     order_id = nil
 
     if given_order_id && !given_order_id.to_s.empty?
+      settled_filter = [{ order_id: given_order_id.to_s }].to_json
       existing = conn.execute(
-        "SELECT id, status FROM orders " \
-        "WHERE id = #{conn.quote(given_order_id.to_s)}::uuid " \
-        "AND user_id = #{conn.quote(uid)}::uuid " \
-        "AND status NOT IN ('paid', 'scheduled') " \
+        "SELECT o.id FROM orders o " \
+        "WHERE o.id = #{conn.quote(given_order_id.to_s)}::uuid " \
+        "AND o.user_id = #{conn.quote(uid)}::uuid " \
+        "AND o.status NOT IN ('paid', 'scheduled', 'rescheduled') " \
+        "AND NOT EXISTS (" \
+        "SELECT 1 FROM kiosk.settlements pm " \
+        "JOIN kiosk.cart_mandates cm ON cm.id = pm.cart_mandate_id " \
+        "WHERE cm.line_items @> #{conn.quote(settled_filter)}::jsonb" \
+        ") " \
         "LIMIT 1"
       ).first
 
@@ -307,7 +343,9 @@ Kiosk::Server::Actions.register("create_order",
         # Replace items
         conn.execute("DELETE FROM order_items WHERE order_id = #{conn.quote(order_id.to_s)}::uuid")
         conn.execute(
-          "UPDATE orders SET total_cents = #{conn.quote(total_cents)}, updated_at = now() " \
+          "UPDATE orders SET total_cents = #{conn.quote(total_cents)}, " \
+          "slot_at = #{conn.quote(slot_at.iso8601)}::timestamptz, " \
+          "address = #{conn.quote(delivery_address.to_s)}, updated_at = now() " \
           "WHERE id = #{conn.quote(order_id.to_s)}::uuid"
         )
       end
@@ -316,8 +354,9 @@ Kiosk::Server::Actions.register("create_order",
     unless order_id
       # Create new order
       order_id = conn.execute(
-        "INSERT INTO orders (id, user_id, status, total_cents, created_at, updated_at) " \
-        "VALUES (gen_random_uuid(), #{conn.quote(uid)}::uuid, 'created', #{conn.quote(total_cents)}, now(), now()) " \
+        "INSERT INTO orders (id, user_id, status, total_cents, slot_at, address, created_at, updated_at) " \
+        "VALUES (gen_random_uuid(), #{conn.quote(uid)}::uuid, 'created', #{conn.quote(total_cents)}, " \
+        "#{conn.quote(slot_at.iso8601)}::timestamptz, #{conn.quote(delivery_address.to_s)}, now(), now()) " \
         "RETURNING id"
       ).first["id"]
     end
@@ -335,21 +374,26 @@ Kiosk::Server::Actions.register("create_order",
     {
       order_id:    order_id,
       total_cents: total_cents,
-      pay_hint:    "pay with a cart mandate whose line_items include " \
-                   "{\"order_id\": \"#{order_id}\"} — schedule_delivery unlocks " \
-                   "only once a settlement references this order that way",
+      currency:    "eur",
+      slot_at:     slot_at.iso8601,
+      pay_hint:    "pay in EUR with a cart mandate whose line_items mirror this order: " \
+                   "one {\"order_id\": \"#{order_id}\"} entry plus one " \
+                   "{\"sku\", \"qty\", \"price_cents\"} entry per item at catalog prices — " \
+                   "the operator verifies currency, prices, and total before charging",
     }
   end
 end
 
-Kiosk::Server::Actions.register("schedule_delivery",
-  description: "Schedule delivery for a paid order. Requires a settlement whose cart-mandate " \
-               "line_items include {\"order_id\": <order_id>} — pay that way first " \
-               "(see create_order's pay_hint), then schedule",
+Kiosk::Server::Actions.register("reschedule_delivery",
+  description: "Move a PAID order's delivery to a different slot (and optionally a new address). " \
+               "One reschedule per order — further changes go through the operator. Requires a " \
+               "settlement whose cart-mandate line_items include {\"order_id\": <order_id>} " \
+               "(see create_order's pay_hint). Unpaid orders: re-place them instead via " \
+               "create_order with order_id",
   params: {
-    order_id:         "uuid — the order to schedule",
-    delivery_slot_id: "integer — slot id from the delivery_slots query (1–6)",
-    delivery_address: "string — delivery address",
+    order_id:         "uuid — the paid order to reschedule",
+    delivery_slot_id: "integer — new slot id from the delivery_slots query (1–6)",
+    delivery_address: "(optional) string — new delivery address; unchanged if omitted",
   }) do |args|
   conn = ActiveRecord::Base.connection
 
@@ -359,7 +403,6 @@ Kiosk::Server::Actions.register("schedule_delivery",
 
   raise Kiosk::Server::Errors::BadRequest.new("missing field: order_id")         if order_id.nil? || order_id.to_s.empty?
   raise Kiosk::Server::Errors::BadRequest.new("missing field: delivery_slot_id") if delivery_slot_id.nil?
-  raise Kiosk::Server::Errors::BadRequest.new("missing field: delivery_address") if delivery_address.nil? || delivery_address.to_s.empty?
 
   slot_id = delivery_slot_id.to_i
   raise Kiosk::Server::Errors::BadRequest.new("delivery_slot_id must be 1–6") unless (1..6).include?(slot_id)
@@ -370,10 +413,10 @@ Kiosk::Server::Actions.register("schedule_delivery",
       "SELECT id FROM orders " \
       "WHERE id = #{conn.quote(order_id.to_s)}::uuid " \
       "AND user_id = kiosk.current_user_id() " \
-      "AND status NOT IN ('scheduled') " \
+      "AND status NOT IN ('scheduled', 'rescheduled') " \
       "LIMIT 1"
     ).first
-    raise Kiosk::Server::Errors::Forbidden.new("order not found, not yours, or already scheduled") if order.nil?
+    raise Kiosk::Server::Errors::Forbidden.new("order not found, not yours, or already rescheduled (one reschedule per order)") if order.nil?
 
     # ── Gate 2: settlement (capture receipt) referencing this order ──────────
     order_filter_json = [{ order_id: order_id.to_s }].to_json
@@ -400,12 +443,12 @@ Kiosk::Server::Actions.register("schedule_delivery",
     # ── Update order ──────────────────────────────────────────────────────
     conn.execute(
       "UPDATE orders " \
-      "SET status = 'scheduled', slot_at = #{conn.quote(slot_at.iso8601)}::timestamptz, " \
-      "    address = #{conn.quote(delivery_address.to_s)}, updated_at = now() " \
+      "SET status = 'rescheduled', slot_at = #{conn.quote(slot_at.iso8601)}::timestamptz, " \
+      "    address = COALESCE(NULLIF(#{conn.quote(delivery_address.to_s)}, ''), address), updated_at = now() " \
       "WHERE id = #{conn.quote(order_id.to_s)}::uuid " \
       "AND user_id = kiosk.current_user_id()"
     )
 
-    { order_id: order_id, scheduled_at: slot_at.iso8601 }
+    { order_id: order_id, rescheduled_at: slot_at.iso8601 }
   end
 end

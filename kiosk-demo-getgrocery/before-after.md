@@ -64,14 +64,14 @@ getgrocery is a Rails 8 app that speaks Kiosk. The following is representative o
 1. **Discover** — `GET /.well-known/kiosk.json` returns the GetGrocery issuer and surface.
 2. **Self-register** — generated an RSA-2048 keypair, proved possession of the private key (`GET /kiosk/auth/challenge` → signed the nonce as an origin-bound RS256 JWS → `POST /kiosk/auth/register {public_key:<pem>, signed:<jws>}`) → HTTP 201 → `agent_id`, `user_id`, `access_token`. No existing account. No human login. No OTP. No bot screen.
 3. **Browse catalog** — `POST /kiosk/query {name:"catalog"}` returned 15 in-stock products, sorted by name (Milk 1 L and Chocolate Spread 400g are out of stock, so the catalog hides them — see `db/seeds.rb`). This worked example's driver builds the cart from the first three in-stock rows: Apple Juice (349c), Banana (149c), Butter 250g (349c), one of each.
-4. **Create order** — `POST /kiosk/run {name:"create_order", items:[{sku:"apple-juice", qty:1}, {sku:"banana", qty:1}, {sku:"butter-250g", qty:1}]}` → HTTP 200, `order_id`, `total_cents:847`. The assistant composed the full cart (products referenced by `sku`).
-5. **Query delivery slots** — `POST /kiosk/query {name:"delivery_slots", date:"2026-07-13"}` → returned 6 available time slots; the driver picked the first, 08:00–10:00.
-6. **Pay** — signed an AP2 intent mandate (`cap_amount_cents:1047`, `scope:"grocery"`, `iss:<issuer>`) and a cart mandate (`total_amount_cents:847`, `line_items:[{order_id:<order_id>, total:847}]`, bound to the intent via `intent_mandate_id`) as RS256 JWS with the registered keypair, then `POST /kiosk/pay {intent_mandate_jws, cart_mandate_jws, payment_mandate_jws}` → `settled_amount_cents:847`, `ok:true`.
-7. **Schedule delivery** — `POST /kiosk/run {name:"schedule_delivery", order_id:<order_id>, delivery_slot_id:<slot_id>, delivery_address:"42 Sakura Ave, Neo-Tokyo"}` → HTTP 200, `scheduled_at:"2026-07-13T08:00:00.000Z"`.
+4. **Query delivery slots** — `POST /kiosk/query {name:"delivery_slots", date:"2026-07-13"}` → returned 6 available time slots; the driver picked the first, 08:00–10:00.
+5. **Create order** — `POST /kiosk/run {name:"create_order", items:[{sku:"apple-juice", qty:1}, {sku:"banana", qty:1}, {sku:"butter-250g", qty:1}], delivery_slot_id:<slot_id>, delivery_address:"42 Sakura Ave, Neo-Tokyo"}` → HTTP 200, `order_id`, `total_cents:847`, `slot_at`, and a `pay_hint`. Delivery is part of the order — slot and address are REQUIRED; the assistant composed the full cart (products referenced by `sku`).
+6. **Pay** — signed an AP2 intent mandate (`cap_amount_cents:1047`, `scope:"grocery"`, `iss:<issuer>`) and a cart mandate (`total_amount_cents:847`, `line_items:[{order_id:<order_id>}, {sku:"apple-juice", qty:1, price_cents:349}, {sku:"banana", qty:1, price_cents:149}, {sku:"butter-250g", qty:1, price_cents:349}]` — mirroring the order per the `pay_hint`, bound to the intent via `intent_mandate_id`) as RS256 JWS with the registered keypair, then `POST /kiosk/pay {intent_mandate_jws, cart_mandate_jws, payment_mandate_jws}` → `settled_amount_cents:847`, `ok:true`.
+7. **(Optional) Move the delivery** — a PAID order's slot can be changed once via `POST /kiosk/run {name:"reschedule_delivery", order_id:<order_id>, delivery_slot_id:<new_slot_id>}`. The operator's cashier check ran at capture: currency (EUR), each line against the catalog, and the total were verified before charging.
 
-The database confirmed: one row in `orders` with `status='scheduled'`, one row in `kiosk.settlements`.
+The database confirmed: one row in `orders` with its delivery slot set (`slot_at`), one row in `kiosk.settlements`.
 
-The business outcome: the user said "order groceries from GetGrocery." Their assistant completed the purchase — discovery, registration, catalog browse, order creation, payment, delivery scheduling — without the user touching anything and without the user having an account at GetGrocery beforehand.
+The business outcome: the user said "order groceries from GetGrocery." Their assistant completed the purchase — discovery, registration, catalog browse, order creation (delivery booked as part of the order), payment — without the user touching anything and without the user having an account at GetGrocery beforehand.
 
 The operator outcome: GetGrocery received a real order and a real payment. The customer relationship stays with GetGrocery (the mandate carries the operator's issuer). There is no intermediate platform taking a discovery fee or owning the session.
 
@@ -156,7 +156,7 @@ RLS is available as optional defense-in-depth via `enable_rls_on` — useful if 
 
 **4. Register Actions (with ownership checks)**
 
-`schedule_delivery` is **payment-binding gated** — the server must verify a settled mandate exists for the order before mutating. `create_order` attaches ownership via `kiosk.current_user_id()`. Register them:
+`reschedule_delivery` is **payment-binding gated** — the server must verify a settled mandate exists for the order before mutating. `create_order` attaches ownership via `kiosk.current_user_id()` and requires the delivery slot + address up front (delivery is part of the order). Register them:
 
 ```ruby
 Kiosk::Server::Actions.register("create_order") do |args|
@@ -170,7 +170,7 @@ Kiosk::Server::Actions.register("create_order") do |args|
   { order_id: order.id, total_cents: order.total_cents, status: order.status }
 end
 
-Kiosk::Server::Actions.register("schedule_delivery") do |args|
+Kiosk::Server::Actions.register("reschedule_delivery") do |args|
   uid  = ActiveRecord::Base.connection.execute("SELECT kiosk.current_user_id() AS uid").first["uid"]
   # Payment-binding gate: verify a settlement (capture receipt) references this order
   paid = ActiveRecord::Base.connection.execute(<<~SQL).first["paid"]
@@ -187,11 +187,10 @@ Kiosk::Server::Actions.register("schedule_delivery") do |args|
   order = Order.find_by!("id = ? AND user_id = ?", args[:order_id], uid)
   slot  = DeliverySlot.find(args[:delivery_slot_id])
   order.update!(
-    status:   "scheduled",
+    status:   "rescheduled",
     slot_at:  slot.start_time,
-    address:  args.fetch(:delivery_address),
   )
-  { order_id: order.id, scheduled_at: order.slot_at, status: order.status }
+  { order_id: order.id, rescheduled_at: order.slot_at, status: order.status }
 end
 ```
 

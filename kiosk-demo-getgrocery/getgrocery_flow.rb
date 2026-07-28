@@ -1,9 +1,11 @@
 # frozen_string_literal: true
 
 # Agent-side driver: no-human grocery order end-to-end.
-# Flow: register → query catalog → run create_order → query delivery_slots
-#       → payment_setup (verify "ready") → pay (off_session → real pi_…)
-#       → run schedule_delivery → query my_orders
+# Flow: register → query catalog → query delivery_slots
+#       → run create_order (items + delivery slot + address — delivery is part
+#         of the order) → payment_setup (verify "ready") → pay (cart mirrors
+#         the order at catalog prices, EUR; off_session → real pi_…)
+#       → query my_orders (own order present, paid: true)
 # Runs with KIOSK_TEST_AUTOCARD=1: the adapter simulates a completed SetupIntent,
 # so there is no card-setup step (the live flow uses the real hosted page).
 #
@@ -72,25 +74,16 @@ rc_catalog, catalog_resp = post_json(
 abort "query catalog failed (#{rc_catalog}): #{JSON.generate(catalog_resp)}" unless rc_catalog == 200
 catalog = catalog_resp.fetch("rows", [])
 abort "catalog returned empty rows" if catalog.empty?
-STDERR.puts "  Catalog: #{catalog.size} in-stock products"
+abort "catalog rows must carry currency=eur" unless catalog.all? { |p| p["currency"] == "eur" }
+STDERR.puts "  Catalog: #{catalog.size} in-stock products (EUR)"
 
-# Pick a few in-stock products (take first 3, or fewer if catalog has < 3)
-items = catalog.first(3).map { |p| { sku: p.fetch("sku"), qty: 1 } }
+# Pick a few in-stock products (take first 3, or fewer if catalog has < 3).
+# Keep the full rows — the cart mandate must mirror them at catalog prices.
+chosen = catalog.first(3)
+items  = chosen.map { |p| { sku: p.fetch("sku"), qty: 1 } }
 STDERR.puts "  Ordering: #{items.map { |i| "sku=#{i[:sku]}" }.join(", ")}"
 
-# -- Step 3: create_order --
-rc_order, order_resp = post_json(
-  "#{SERVER}/kiosk/run",
-  { name: "create_order", items: items },
-  { "Authorization" => "Bearer #{token}" },
-)
-abort "create_order failed (#{rc_order}): #{JSON.generate(order_resp)}" unless rc_order == 200
-order_value = order_resp.fetch("value")
-order_id    = order_value.fetch("order_id")
-total_cents = order_value.fetch("total_cents")
-STDERR.puts "  create_order: order_id=#{order_id} total=#{total_cents}c"
-
-# -- Step 4: query delivery_slots --
+# -- Step 3: query delivery_slots (delivery is part of the order) --
 delivery_date = (Date.today + 1).to_s
 rc_slots, slots_resp = post_json(
   "#{SERVER}/kiosk/query",
@@ -103,6 +96,23 @@ abort "delivery_slots returned empty" if slots.empty?
 slot    = slots.first
 slot_id = slot.fetch("id")
 STDERR.puts "  Delivery slot: id=#{slot_id} #{slot["label"]} on #{delivery_date}"
+
+# -- Step 4: create_order (items + delivery slot + address, all required) --
+rc_order, order_resp = post_json(
+  "#{SERVER}/kiosk/run",
+  { name: "create_order", items: items,
+    delivery_slot_id: slot_id,
+    delivery_address: "42 Sakura Ave, Neo-Tokyo" },
+  { "Authorization" => "Bearer #{token}" },
+)
+abort "create_order failed (#{rc_order}): #{JSON.generate(order_resp)}" unless rc_order == 200
+order_value = order_resp.fetch("value")
+order_id    = order_value.fetch("order_id")
+total_cents = order_value.fetch("total_cents")
+slot_at     = order_value.fetch("slot_at")
+abort "create_order result must carry currency=eur" unless order_value["currency"] == "eur"
+abort "create_order result must carry a pay_hint" if order_value["pay_hint"].to_s.empty?
+STDERR.puts "  create_order: order_id=#{order_id} total=#{total_cents}c slot_at=#{slot_at}"
 
 # -- Step 5: payment_setup (verify card is on file before paying) --
 # In the live flow an assistant calls this before every pay; if setup_required,
@@ -119,10 +129,18 @@ abort "payment_setup status expected 'ready', got #{setup_status.inspect}" unles
 STDERR.puts "  payment_setup: #{setup_status}"
 
 # -- Step 6: pay --
+# The cart MIRRORS the order per create_order's pay_hint: one {order_id}
+# entry plus one {sku, qty, price_cents} entry per item at catalog prices.
+# The operator (ValidatingPaymentProvider) verifies currency, prices, and
+# total against its catalog before capturing.
 now        = Time.now.to_i
 intent_id  = SecureRandom.uuid
 cart_id    = SecureRandom.uuid
 payment_id = SecureRandom.uuid
+
+mirror_lines = chosen.map { |p| { sku: p.fetch("sku"), qty: 1, price_cents: p.fetch("price_cents").to_i } }
+mirror_sum   = mirror_lines.sum { |l| l[:qty] * l[:price_cents] }
+abort "mirror sum #{mirror_sum} != server total #{total_cents}" unless mirror_sum == total_cents.to_i
 
 intent_payload = {
   id:               intent_id,
@@ -142,7 +160,7 @@ cart_payload = {
   user_id:            user_id,
   agent_id:           agent_id,
   iss:                ISSUER,
-  line_items:         [{ order_id: order_id, total: total_cents }],
+  line_items:         [{ order_id: order_id }] + mirror_lines,
   total_amount_cents: total_cents,
   currency:           "eur",
   exp:                now + 600,
@@ -179,21 +197,7 @@ psp_ref = pay_resp.dig("value", "psp_reference").to_s
 abort "pay: psp_reference expected 'pi_…' (real Stripe), got #{psp_ref.inspect}" unless psp_ref.start_with?("pi_")
 STDERR.puts "  pay: settlement_id=#{pay_resp.dig("value", "settlement_id")} psp_reference=#{psp_ref}"
 
-# -- Step 7: schedule_delivery --
-rc_sched, sched_resp = post_json(
-  "#{SERVER}/kiosk/run",
-  { name: "schedule_delivery",
-    order_id:         order_id,
-    delivery_slot_id: slot_id,
-    delivery_address: "42 Sakura Ave, Neo-Tokyo" },
-  { "Authorization" => "Bearer #{token}" },
-)
-abort "schedule_delivery failed (#{rc_sched}): #{JSON.generate(sched_resp)}" unless rc_sched == 200
-sched_value  = sched_resp.fetch("value")
-scheduled_at = sched_value.fetch("scheduled_at")
-STDERR.puts "  schedule_delivery: order_id=#{order_id} scheduled=#{scheduled_at}"
-
-# -- Step 8: query my_orders to confirm --
+# -- Step 7: query my_orders to confirm (own order present, paid) --
 rc_my, my_resp = post_json(
   "#{SERVER}/kiosk/query",
   { name: "my_orders" },
@@ -201,23 +205,27 @@ rc_my, my_resp = post_json(
 )
 abort "my_orders failed (#{rc_my}): #{JSON.generate(my_resp)}" unless rc_my == 200
 my_orders = my_resp.fetch("rows", [])
-STDERR.puts "  my_orders: #{my_orders.size} order(s)"
+own = my_orders.find { |o| o["id"] == order_id }
+abort "my_orders does not contain own order #{order_id}" if own.nil?
+paid = own["paid"] == true || own["paid"] == "t"
+abort "my_orders own order not marked paid: #{own.inspect}" unless paid
+STDERR.puts "  my_orders: #{my_orders.size} order(s); own order paid=true"
 
-# -- Step 9: print ONE JSON line --
+# -- Step 8: print ONE JSON line --
 puts JSON.generate(
   http_register:      rc_reg,
   http_catalog:       rc_catalog,
-  http_order:         rc_order,
   http_slots:         rc_slots,
+  http_order:         rc_order,
   http_payment_setup: rc_setup,
   http_pay:           rc_pay,
-  http_schedule:      rc_sched,
   http_my_orders:     rc_my,
   user_id:            user_id,
   agent_id:           agent_id,
   order_id:           order_id,
   total_cents:        total_cents,
-  scheduled_at:       scheduled_at,
+  slot_at:            slot_at,
+  paid:               paid,
   psp_reference:      psp_ref,
   my_orders:          my_orders,
   pay:                pay_resp,

@@ -217,7 +217,7 @@ module DemoTelemetry
   # Map a wire request → a generic action_kind (or nil to skip). The optional
   # per-app override maps concrete action verb names onto ACTION_KINDS so the
   # aggregate reads the same across verticals (e.g. getgrocery's create_order →
-  # "ordered", schedule_delivery → "scheduled"; atablefor's book_table →
+  # "ordered", reschedule_delivery → "scheduled"; atablefor's book_table →
   # "booked"; skooti's reserve → "reserved"). Unknown run-verbs fall back to
   # "ran".
   #

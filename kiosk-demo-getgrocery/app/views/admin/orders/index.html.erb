@@ -185,7 +185,7 @@
       <%
         paid       = order["paid"] == "t" || order["paid"] == true
         status     = order["status"].to_s
-        scheduled  = status == "scheduled"
+        scheduled  = %w[scheduled rescheduled].include?(status)
         slot_raw   = order["slot_at"].to_s
         slot_time  = begin
           t = Time.parse(slot_raw)
@@ -221,7 +221,7 @@
             <% if order["address"] && !order["address"].empty? %>
               <span><span class="label">Address:</span> <%= h order["address"] %></span>
             <% end %>
-            <% if scheduled && !slot_raw.empty? %>
+            <% if !slot_raw.empty? %>
               <span><span class="label">Slot:</span> <%= slot_time %></span>
             <% end %>
             <span style="color:#bbb">Ordered <%= created %></span>

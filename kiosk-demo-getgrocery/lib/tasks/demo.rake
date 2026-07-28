@@ -61,7 +61,7 @@ namespace :demo do
     end
   end
 
-  desc "Boot the server, run getgrocery_flow.rb end-to-end (no-human happy path: register→catalog→create_order→delivery_slots→payment_setup→pay→schedule_delivery→my_orders), assert."
+  desc "Boot the server, run getgrocery_flow.rb end-to-end (no-human happy path: register→catalog→delivery_slots→create_order (delivery slot+address required)→payment_setup→pay (cart mirrors the order, EUR)→my_orders (paid)), assert."
   task :shop do
     require "resolv"
     require "net/http"
@@ -178,7 +178,6 @@ namespace :demo do
     check.call("http_slots",         result["http_slots"],         200)
     check.call("http_payment_setup", result["http_payment_setup"], 200)
     check.call("http_pay",           result["http_pay"],           200)
-    check.call("http_schedule",      result["http_schedule"],      200)
     check.call("http_my_orders",     result["http_my_orders"],     200)
 
     # order_id present
@@ -190,13 +189,21 @@ namespace :demo do
       puts "  FAIL  order_id missing or empty"
     end
 
-    # scheduled_at present
-    sat = result["scheduled_at"]
+    # slot_at present — delivery is booked at order time
+    sat = result["slot_at"]
     if sat && !sat.to_s.empty?
-      puts "  OK  scheduled_at present (#{sat})"
+      puts "  OK  slot_at present (#{sat})"
     else
-      failures << "scheduled_at missing or empty"
-      puts "  FAIL  scheduled_at missing or empty"
+      failures << "slot_at missing or empty"
+      puts "  FAIL  slot_at missing or empty"
+    end
+
+    # my_orders marks the settled order paid
+    if result["paid"] == true
+      puts "  OK  my_orders own order paid == true"
+    else
+      failures << "my_orders paid flag expected true, got #{result["paid"].inspect}"
+      puts "  FAIL  my_orders paid flag got #{result["paid"].inspect}"
     end
 
     # pay.ok == true
@@ -229,12 +236,12 @@ namespace :demo do
     end
 
     # -- assertions: DB row counts --
-    orders_count = `psql -X -d #{db} -tAc "SELECT COUNT(*) FROM orders WHERE status = 'scheduled'" 2>&1`.strip
+    orders_count = `psql -X -d #{db} -tAc "SELECT COUNT(*) FROM orders WHERE slot_at IS NOT NULL" 2>&1`.strip
     if orders_count.to_i >= 1
-      puts "  OK  orders[status=scheduled] count >= 1 (got #{orders_count})"
+      puts "  OK  orders[slot_at set] count >= 1 (got #{orders_count})"
     else
-      failures << "orders[status=scheduled] COUNT expected >= 1, got #{orders_count.inspect}"
-      puts "  FAIL  orders[status=scheduled] COUNT expected >= 1, got #{orders_count.inspect}"
+      failures << "orders[slot_at set] COUNT expected >= 1, got #{orders_count.inspect}"
+      puts "  FAIL  orders[slot_at set] COUNT expected >= 1, got #{orders_count.inspect}"
     end
 
     pm_count = `psql -X -d #{db} -tAc 'SELECT COUNT(*) FROM kiosk.settlements' 2>&1`.strip
@@ -429,7 +436,7 @@ namespace :demo do
     and asserts all cross-tenant denial properties including getgrocery's
     distinctive order-ownership mutation gates:
 
-      HEADLINE: B cannot schedule_delivery on A's order (order-ownership gate)
+      HEADLINE: B cannot reschedule_delivery on A's PAID order (order-ownership gate)
       Assertion 1: B's my_orders excludes A's order (cross-tenant read blocked)
       Assertion 2: B's my_orders includes own order (positive control)
       Assertion 3: B's my_orders still excludes A's order after positive control
@@ -528,7 +535,7 @@ namespace :demo do
     order_id_a             = result["order_id_a"]
     order_id_b             = result["order_id_b"]
     order_id_b_forged      = result["order_id_b_forged"]
-    b_schedule_on_a_status = result["b_schedule_on_a_status"]
+    b_reschedule_on_a_status = result["b_reschedule_on_a_status"]
     b_my_orders_before     = result["b_my_orders_before"] || []
     b_my_orders_after      = result["b_my_orders_after"]  || []
     a_my_orders_after      = result["a_my_orders_after"]  || []
@@ -536,12 +543,12 @@ namespace :demo do
     failures = []
     puts "\n── Adversarial isolation assertions ──"
 
-    # HEADLINE: B cannot schedule_delivery on A's order (order-ownership gate)
-    if b_schedule_on_a_status == 403
-      puts "  ✓  HEADLINE: B cannot schedule_delivery on A's order (order-ownership gate) → 403"
+    # HEADLINE: B cannot reschedule_delivery on A's PAID order (order-ownership gate)
+    if b_reschedule_on_a_status == 403
+      puts "  ✓  HEADLINE: B cannot reschedule_delivery on A's PAID order (order-ownership gate) → 403"
     else
-      failures << "ISOLATION HOLE: B's schedule_delivery on A's order returned #{b_schedule_on_a_status} (expected 403)"
-      puts "  ✗  HEADLINE: schedule_delivery ownership gate FAILED — returned #{b_schedule_on_a_status}"
+      failures << "ISOLATION HOLE: B's reschedule_delivery on A's order returned #{b_reschedule_on_a_status} (expected 403)"
+      puts "  ✗  HEADLINE: reschedule_delivery ownership gate FAILED — returned #{b_reschedule_on_a_status}"
     end
 
     # Assertion 1: B's my_orders (before) excludes A's order
@@ -605,7 +612,7 @@ namespace :demo do
     Asserts:
       • schema.verbs includes query/run/pay/schema and NOT events
       • schema.queries includes catalog, delivery_slots, my_orders (each with description)
-      • schema.actions includes create_order, schedule_delivery (each with description)
+      • schema.actions includes create_order, reschedule_delivery (each with description)
       • schema.queries does NOT include stores, products_by_store, substitution_options
       • schema.actions does NOT include add_to_cart, apply_substitution, confirm_delivery
 
@@ -719,8 +726,8 @@ namespace :demo do
       end
     end
 
-    # actions present with descriptions: create_order, schedule_delivery
-    %w[create_order schedule_delivery].each do |aname|
+    # actions present with descriptions: create_order, reschedule_delivery
+    %w[create_order reschedule_delivery].each do |aname|
       entry = actions.find { |a| a["name"] == aname }
       if entry
         puts "  ✓  schema.actions includes #{aname}"
@@ -771,17 +778,20 @@ namespace :demo do
     Adversarial regression battery — kiosk-redteam.
 
     Boots getgrocery, runs all generic Kiosk::Redteam scenarios and asserts
-    each applicable attack is BLOCKED (9 BLOCKED, 3 SKIPPED):
+    each applicable attack is BLOCKED (12 BLOCKED, 3 SKIPPED):
 
       BLOCKED  CrossTenantRead        — B's my_orders must not include A's orders
       BLOCKED  ForgedUserId           — forged user_id in create_order ignored; order stays B's
-      BLOCKED  UnpaidGatedAction      — schedule_delivery without a settled mandate rejected
-      BLOCKED  SpentResourceReuse     — a mandate already settled cannot be reused
+      BLOCKED  UnpaidGatedAction      — reschedule_delivery without a settled mandate rejected
+      BLOCKED  SpentResourceReuse     — a paid order reschedules once; the second attempt rejected
       BLOCKED  PayForOtherUseSelf     — mandate paid for one order cannot gate another
       BLOCKED  MandatePrincipalSwap   — B signs a mandate with A's identity; rejected
       BLOCKED  MandateReplay          — B re-submits A's signed mandate JWS; rejected
       BLOCKED  TokenTampering         — altered JWT (claim flipped) rejected 401
       BLOCKED  PrivilegeSelfSelection — agent cannot self-assign elevated privilege
+      BLOCKED  WrongCurrencyCart      — usd cart at a EUR operator rejected at capture
+      BLOCKED  TamperedPriceCart      — line price differing from the catalog rejected
+      BLOCKED  InflatedTotalCart      — total above the sum of the lines rejected
 
     Scenarios that require a surface getgrocery does not expose SKIP cleanly:
       SKIPPED  MissingKyc, ExpiredKyc, ForgedKyc  (requires_kyc: false)
@@ -883,7 +893,7 @@ namespace :demo do
   # ── end demo:redteam ──────────────────────────────────────────────────────────
 end
 
-desc "End-to-end getgrocery demo: setup DB then run no-human catalog->create_order->pay->schedule_delivery."
+desc "End-to-end getgrocery demo: setup DB then run no-human catalog->create_order (slot+address)->pay (mirrored cart)."
 task demo: ["demo:setup", "demo:shop"]
 
 namespace :demo do

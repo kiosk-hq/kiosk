@@ -11,6 +11,12 @@
 #                              {age_over_18, licence_a} is rejected, so the
 #                              KYC-attribute-gated rent_motorcycle stays 403.
 #
+# Three local cashier-check beats attack ValidatingRentalProvider (the monetary
+# check run at capture, before StubPsp settles):
+#   WrongCurrencyCart  — pay own reservation in usd → 403
+#   TamperedPriceCart  — pay below the operator's quoted rental price → 403
+#   InflatedTotalCart  — cart total ≠ sum of its line items → 403
+#
 # Usage (from kiosk-demo-skooti/):
 #   SERVER_URL=http://127.0.0.1:3003 KIOSK_ISSUER=http://127.0.0.1:3003 \
 #   bundle exec ruby redteam_suite.rb
@@ -160,7 +166,7 @@ profile = Kiosk::Redteam::Profile.new(
       user_id:            principal.user_id,
       agent_id:           principal.agent_id,
       iss:                ISSUER,
-      line_items:         [{ sku: owned_ref[:code], qty: 1, reservation_id: owned_ref[:id] }],
+      line_items:         [{ sku: owned_ref[:code], qty: 1, price_cents: total_cents, reservation_id: owned_ref[:id] }],
       total_amount_cents: total_cents,
       currency:           "eur",
       exp:                now + 600,
@@ -176,9 +182,93 @@ profile = Kiosk::Redteam::Profile.new(
   kyc_forged:  method(:attest_forged),
 )
 
+# ── Local scenarios: the cashier check (ValidatingRentalProvider) ─────────────
+# The generic battery proves ownership/KYC/payment gates; these three prove the
+# operator counts what lands on the counter — currency, single reservation,
+# total. Each uses the AGENT'S OWN reservation (no cross-ownership, no KYC
+# needed — the cashier check is monetary and runs at capture): an own-reservation
+# cart at the wrong price/currency isolates the cashier check cleanly.
+
+# A chain-consistent cart in the wrong currency must not settle: the engine
+# only enforces intent/cart/payment agreement, the OPERATOR prices in EUR.
+class WrongCurrencyCart < Kiosk::Redteam::Scenario
+  def initialize
+    super(
+      name:        "WrongCurrencyCart",
+      category:    "payment",
+      description: "A usd-denominated (chain-consistent) cart at a EUR operator must be rejected at capture",
+    )
+  end
+
+  def call(client, profile)
+    a = register_principal(client, name: "redteam-cur-a", profile:)
+    owned = profile.create_owned.call(client, a)
+    m = profile.pay_for.call(client, a, owned)
+    m[:intent] = m[:intent].merge(currency: "usd")
+    m[:cart]   = m[:cart].merge(currency: "usd")
+    resp = client.pay(a, intent: m[:intent], cart: m[:cart])
+    verdict_from(resp, detail: "usd cart settled at a EUR operator (HTTP #{resp.status})")
+  end
+end
+
+# A total below the operator's quoted per-minute rental price must be caught
+# even though the mandate chain is internally consistent.
+class TamperedPriceCart < Kiosk::Redteam::Scenario
+  def initialize
+    super(
+      name:        "TamperedPriceCart",
+      category:    "payment",
+      description: "A cart whose total is below the operator's quoted rental price must be rejected at capture",
+    )
+  end
+
+  def call(client, profile)
+    a = register_principal(client, name: "redteam-price-a", profile:)
+    owned = profile.create_owned.call(client, a)
+    m = profile.pay_for.call(client, a, owned)
+
+    # Pay 50c less than quoted, keeping the priced line consistent with the
+    # lowered total so ONLY the quoted-total check can reject it.
+    quoted        = owned[:price_per_min_cents].to_i
+    quoted        = 100 if quoted <= 0
+    lowered_total = quoted - 50
+    m[:cart] = m[:cart].merge(
+      line_items:         [{ sku: owned[:code], qty: 1, price_cents: lowered_total, reservation_id: owned[:id] }],
+      total_amount_cents: lowered_total,
+    )
+    resp = client.pay(a, intent: m[:intent], cart: m[:cart])
+    verdict_from(resp, detail: "below-quote total settled (HTTP #{resp.status})")
+  end
+end
+
+# Correct priced line but an inflated total (still within the intent cap,
+# payment mirrors the cart) must be caught by the line-sum consistency check.
+class InflatedTotalCart < Kiosk::Redteam::Scenario
+  def initialize
+    super(
+      name:        "InflatedTotalCart",
+      category:    "payment",
+      description: "A cart whose total exceeds the sum of its line items must be rejected at capture",
+    )
+  end
+
+  def call(client, profile)
+    a = register_principal(client, name: "redteam-total-a", profile:)
+    owned = profile.create_owned.call(client, a)
+    m = profile.pay_for.call(client, a, owned)
+    # pay_for's single priced line sums to total_cents; inflate the total only.
+    quoted = owned[:price_per_min_cents].to_i
+    quoted = 100 if quoted <= 0
+    m[:cart] = m[:cart].merge(total_amount_cents: quoted + 50)
+    resp = client.pay(a, intent: m[:intent], cart: m[:cart])
+    verdict_from(resp, detail: "total above the line-item sum settled (HTTP #{resp.status})")
+  end
+end
+
 # ── Scenario list ─────────────────────────────────────────────────────────────
 #
-# All 13 are listed; skooti's full surface makes all applicable.
+# 13 generic + 3 local cashier-check beats; skooti's full surface makes all
+# generic scenarios applicable (0 skips expected).
 # RegistrationWithoutPow: pow_difficulty>0 (Equihash gate on) → always applicable.
 
 scenarios = [
@@ -195,6 +285,9 @@ scenarios = [
   Kiosk::Redteam::Scenarios::MandateReplay.new,
   Kiosk::Redteam::Scenarios::TokenTampering.new,
   Kiosk::Redteam::Scenarios::PrivilegeSelfSelection.new,
+  WrongCurrencyCart.new,                                 # cashier check — currency
+  TamperedPriceCart.new,                                 # cashier check — below quote
+  InflatedTotalCart.new,                                 # cashier check — total ≠ line sum
 ]
 
 # ── Expected-applicable assertion ─────────────────────────────────────────────

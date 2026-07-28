@@ -25,6 +25,7 @@ require Rails.root.join("lib/stub_idp")
 require Rails.root.join("lib/stub_user_idp")
 require Rails.root.join("lib/jwt_or_stub_idp")
 require Rails.root.join("lib/stub_psp")
+require Rails.root.join("lib/validating_booking_provider")
 require Rails.root.join("lib/pow_difficulty")
 
 # Inject the RLS DSL into ActiveRecord::Migration so that migrations can
@@ -111,7 +112,12 @@ Kiosk.configure do |c|
   # page, link mint, unlink) — see lib/stub_user_idp.rb for the scope.
   c.user_idp = StubUserIdp.new
 
-  c.payment_provider = StubPsp.new
+  # The cashier check: ValidatingBookingProvider verifies the agent-signed
+  # cart against OUR quote — currency (EUR), single booking reference, and the
+  # total the operator quoted for that booking — before the wrapped StubPsp
+  # captures anything. Monetary only: booking→payer ownership is enforced at
+  # USE time (confirm_booking Gate-1), not here.
+  c.payment_provider = ValidatingBookingProvider.new(StubPsp.new, currency: "eur")
 
   # ── Browse-heavy priced-pagination gate (KIOSK_POW_BROWSE_DEMO=1) ────────
   if ENV["KIOSK_POW_BROWSE_DEMO"] == "1"
@@ -144,7 +150,9 @@ Kiosk::Server::Queries.register("properties",
 end
 
 Kiosk::Server::Queries.register("availability",
-  description: "Check room availability at a property for given dates",
+  description: "Check room availability at a property for given dates. " \
+               "nightly_price_cents is EUR cents per night — carts must be signed in eur at " \
+               "the operator-quoted total (nights × nightly_price_cents)",
   params: {
     property_id: "integer — property to check",
     check_in:    "date string YYYY-MM-DD",
@@ -154,7 +162,7 @@ Kiosk::Server::Queries.register("availability",
   prop_id   = params.fetch(:property_id)  { raise Kiosk::Server::Errors::BadRequest.new("missing field: property_id") }
   check_in  = params.fetch(:check_in)     { raise Kiosk::Server::Errors::BadRequest.new("missing field: check_in") }
   check_out = params.fetch(:check_out)    { raise Kiosk::Server::Errors::BadRequest.new("missing field: check_out") }
-  conn.execute(<<~SQL).to_a
+  rows = conn.execute(<<~SQL).to_a
     SELECT rt.id, rt.name, rt.nightly_price_cents
     FROM public.room_types rt
     WHERE rt.property_id = #{conn.quote(prop_id.to_s)}::integer
@@ -167,6 +175,10 @@ Kiosk::Server::Queries.register("availability",
     )
     ORDER BY rt.nightly_price_cents
   SQL
+  # Advertise the pricing currency so an external assistant knows to sign its
+  # cart in EUR (the cashier check rejects any other currency at capture).
+  rows.each { |r| r["currency"] = "eur" }
+  rows
 end
 
 Kiosk::Server::Queries.register("my_bookings",
@@ -206,7 +218,10 @@ Kiosk::Server::Actions.register("payment_setup",
 end
 
 Kiosk::Server::Actions.register("reserve_room",
-  description: "Reserve a room for the authenticated principal (creates a TTL hold)",
+  description: "Reserve a room for the authenticated principal (creates a TTL hold). " \
+               "To pay, sign your AP2 cart mandate in EUR at the quoted total_cents with a " \
+               "line_item that references the returned booking_id; the operator verifies " \
+               "currency and total against its quote before charging (the result carries a pay_hint)",
   params: {
     property_id:  "integer — property id",
     room_type_id: "integer — room type id",
@@ -271,8 +286,16 @@ Kiosk::Server::Actions.register("reserve_room",
     SQL
 
     {
-      booking_id:  booking_id,
-      total_cents: total_cents,
+      booking_id:          booking_id,
+      total_cents:         total_cents,
+      currency:            "eur",
+      nights:              nights,
+      nightly_price_cents: rt["nightly_price_cents"].to_i,
+      pay_hint:            "pay in EUR with a cart mandate whose total_amount_cents == #{total_cents} " \
+                           "and whose line_items reference this booking: one " \
+                           "{\"sku\", \"qty\": #{nights}, \"price_cents\": #{rt["nightly_price_cents"]}, " \
+                           "\"booking_id\": \"#{booking_id}\"} entry — the operator verifies currency and " \
+                           "total against its quote before charging",
     }
   end
 end

@@ -20,6 +20,7 @@ require Rails.root.join("lib/stub_idp")
 require Rails.root.join("lib/stub_user_idp")
 require Rails.root.join("lib/jwt_or_stub_idp")
 require Rails.root.join("lib/stub_psp")
+require Rails.root.join("lib/validating_rental_provider")
 require Rails.root.join("lib/stub_kyc")
 require Rails.root.join("lib/dev_unlock_key")
 require Rails.root.join("lib/rental_token_issuer")
@@ -94,7 +95,13 @@ Kiosk.configure do |c|
   c.user_idp = StubUserIdp.new
 
   # Payment provider — stub for the demo; swap in kiosk-pay-stripe for real.
-  c.payment_provider = StubPsp.new
+  # The cashier check: ValidatingRentalProvider verifies the agent-signed cart
+  # against OUR quote — currency (EUR), single reservation reference, and the
+  # per-minute price the operator quoted for that reservation — before the
+  # wrapped StubPsp captures anything. Monetary only: reservation→payer
+  # ownership and KYC are enforced at USE time (start_rental / rent_motorcycle),
+  # not here.
+  c.payment_provider = ValidatingRentalProvider.new(StubPsp.new, currency: "eur")
 
   # Registration PoW gate: 1 Equihash proof to register. Prices bot registration
   # for a physical-service provider (each fresh identity pays compute up front).
@@ -135,13 +142,18 @@ end
 # `needs_licence` let the agent tell the licence-free electric scooter apart
 # from the KYC-gated combustion motorcycle before it commits to a rental verb.
 Kiosk::Server::Queries.register("scooters_available",
-                                 description: "Browse the available fleet (scooters + motorcycles); needs_licence flags the KYC-gated combustion vehicles") do |_params|
-  ActiveRecord::Base.connection.execute(
+                                 description: "Browse the available fleet (scooters + motorcycles); needs_licence flags the KYC-gated combustion vehicles. " \
+                                              "price_per_min_cents is EUR cents per minute — carts must be signed in eur at the operator-quoted total") do |_params|
+  rows = ActiveRecord::Base.connection.execute(
     "SELECT id, code, status, kind, needs_licence, lat, lng, price_per_min_cents " \
     "FROM public.scooters " \
     "WHERE status = 'available' " \
     "ORDER BY id"
   ).to_a
+  # Advertise the pricing currency so an external assistant knows to sign its
+  # cart in EUR (the cashier check rejects any other currency at capture).
+  rows.each { |r| r["currency"] = "eur" }
+  rows
 end
 
 # my_reservations — per-user reservation list scoped by the session GUC.
@@ -193,7 +205,10 @@ end
 # Runs inside SessionContext (the Executor wraps `run` in a transaction with
 # the four SET LOCAL GUCs already applied), so kiosk.current_user_id() is live.
 Kiosk::Server::Actions.register("reserve",
-                                  description: "Reserve a scooter by its code for the authenticated principal",
+                                  description: "Reserve a scooter by its code for the authenticated principal. " \
+                                               "To pay, sign your AP2 cart mandate in EUR at the quoted total (price_per_min_cents for the " \
+                                               "upfront minute) with a line_item that references the returned reservation_id; the operator " \
+                                               "verifies currency and total against its quote before charging (the result carries a pay_hint)",
                                   params: { scooter_code: "string — scooter code, e.g. 'SK-001'" }) do |args|
   conn = ActiveRecord::Base.connection
 
@@ -213,10 +228,17 @@ Kiosk::Server::Actions.register("reserve",
     RETURNING id
   SQL
 
+  quoted_total = scooter["price_per_min_cents"].to_i
   {
     reservation_id:      reservation["id"],
     scooter_code:        scooter["code"],
     price_per_min_cents: scooter["price_per_min_cents"],
+    currency:            "eur",
+    pay_hint:            "pay in EUR with a cart mandate whose total_amount_cents == #{quoted_total} " \
+                         "(the quoted upfront minute) and whose line_items reference this reservation: " \
+                         "one {\"sku\", \"qty\": 1, \"price_cents\": #{quoted_total}, " \
+                         "\"reservation_id\": \"#{reservation["id"]}\"} entry — the operator verifies " \
+                         "currency and total against its quote before charging",
   }
 end
 

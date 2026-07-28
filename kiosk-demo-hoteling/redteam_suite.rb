@@ -7,6 +7,12 @@
 #   C2  PayForOtherUseSelf  — B pays for A's booking, B tries confirm_booking
 #   C3  SpentResourceReuse  — re-confirm an already-confirmed booking
 #
+# Three local cashier-check beats attack ValidatingBookingProvider (the
+# monetary check run at capture, before StubPsp settles):
+#   WrongCurrencyCart  — pay own booking in usd → 403
+#   TamperedPriceCart  — pay below the operator's quoted booking price → 403
+#   InflatedTotalCart  — cart total ≠ sum of its line items → 403
+#
 # KYC scenarios and RegistrationWithoutPow are SKIPPED (hoteling has neither).
 #
 # Usage (from kiosk-demo-hoteling/):
@@ -83,14 +89,16 @@ profile = Kiosk::Redteam::Profile.new(
     raise "redteam(hoteling): reserve_room failed (#{rsv_resp.status}): #{rsv_resp.body.inspect}" \
       unless rsv_resp.status == 200
 
-    booking_id  = rsv_resp.body.dig("value", "booking_id")
-    total_cents = rsv_resp.body.dig("value", "total_cents").to_i
+    booking_id    = rsv_resp.body.dig("value", "booking_id")
+    total_cents   = rsv_resp.body.dig("value", "total_cents").to_i
+    nightly_price = rsv_resp.body.dig("value", "nightly_price_cents").to_i
 
     {
-      id:          booking_id,
-      code:        room["name"],
-      total_cents: total_cents,
-      nights:      NIGHTS,
+      id:            booking_id,
+      code:          room["name"],
+      total_cents:   total_cents,
+      nights:        NIGHTS,
+      nightly_price: nightly_price,
     }
   },
 
@@ -126,6 +134,7 @@ profile = Kiosk::Redteam::Profile.new(
     total_cents      = owned_ref[:total_cents].to_i
     cap_amount_cents = total_cents + 100
     nights           = owned_ref[:nights].to_i.nonzero? || NIGHTS
+    nightly_price    = owned_ref[:nightly_price].to_i.nonzero? || (total_cents / nights)
 
     intent = {
       id:               intent_id,
@@ -145,7 +154,7 @@ profile = Kiosk::Redteam::Profile.new(
       user_id:            principal.user_id,
       agent_id:           principal.agent_id,
       iss:                ISSUER,
-      line_items:         [{ sku: owned_ref[:code], qty: nights, booking_id: owned_ref[:id] }],
+      line_items:         [{ sku: owned_ref[:code], qty: nights, price_cents: nightly_price, booking_id: owned_ref[:id] }],
       total_amount_cents: total_cents,
       currency:           "eur",
       exp:                now + 600,
@@ -161,10 +170,90 @@ profile = Kiosk::Redteam::Profile.new(
   kyc_forged:  nil,
 )
 
+# ── Local scenarios: the cashier check (ValidatingBookingProvider) ────────────
+# The generic battery proves ownership/payment gates; these three prove the
+# operator counts what lands on the counter — currency, single booking, total.
+# Each uses the AGENT'S OWN booking (no cross-ownership needed): the check is
+# monetary only, so an own-booking cart at the wrong price/currency is the
+# clean isolation of the cashier check.
+
+# A chain-consistent cart in the wrong currency must not settle: the engine
+# only enforces intent/cart/payment agreement, the OPERATOR prices in EUR.
+class WrongCurrencyCart < Kiosk::Redteam::Scenario
+  def initialize
+    super(
+      name:        "WrongCurrencyCart",
+      category:    "payment",
+      description: "A usd-denominated (chain-consistent) cart at a EUR operator must be rejected at capture",
+    )
+  end
+
+  def call(client, profile)
+    a = register_principal(client, name: "redteam-cur-a", profile:)
+    owned = profile.create_owned.call(client, a)
+    m = profile.pay_for.call(client, a, owned)
+    m[:intent] = m[:intent].merge(currency: "usd")
+    m[:cart]   = m[:cart].merge(currency: "usd")
+    resp = client.pay(a, intent: m[:intent], cart: m[:cart])
+    verdict_from(resp, detail: "usd cart settled at a EUR operator (HTTP #{resp.status})")
+  end
+end
+
+# A total below the operator's quoted booking price must be caught even though
+# the mandate chain is internally consistent (payment mirrors the cart).
+class TamperedPriceCart < Kiosk::Redteam::Scenario
+  def initialize
+    super(
+      name:        "TamperedPriceCart",
+      category:    "payment",
+      description: "A cart whose total is below the operator's quoted booking price must be rejected at capture",
+    )
+  end
+
+  def call(client, profile)
+    a = register_principal(client, name: "redteam-price-a", profile:)
+    owned = profile.create_owned.call(client, a)
+    m = profile.pay_for.call(client, a, owned)
+
+    # Pay 100c less than quoted, keeping the priced line consistent with the
+    # lowered total so ONLY the quoted-total check can reject it.
+    nights        = owned[:nights].to_i.nonzero? || NIGHTS
+    lowered_total = owned[:total_cents].to_i - 100
+    m[:cart] = m[:cart].merge(
+      line_items:         [{ sku: owned[:code], qty: nights, price_cents: (lowered_total / nights), booking_id: owned[:id] }],
+      total_amount_cents: lowered_total,
+    )
+    resp = client.pay(a, intent: m[:intent], cart: m[:cart])
+    verdict_from(resp, detail: "below-quote total settled (HTTP #{resp.status})")
+  end
+end
+
+# Correct priced lines but an inflated total (still within the intent cap,
+# payment mirrors the cart) must be caught by the line-sum consistency check.
+class InflatedTotalCart < Kiosk::Redteam::Scenario
+  def initialize
+    super(
+      name:        "InflatedTotalCart",
+      category:    "payment",
+      description: "A cart whose total exceeds the sum of its line items must be rejected at capture",
+    )
+  end
+
+  def call(client, profile)
+    a = register_principal(client, name: "redteam-total-a", profile:)
+    owned = profile.create_owned.call(client, a)
+    m = profile.pay_for.call(client, a, owned)
+    # pay_for's line items sum to total_cents; inflate the total only.
+    m[:cart] = m[:cart].merge(total_amount_cents: owned[:total_cents].to_i + 50)
+    resp = client.pay(a, intent: m[:intent], cart: m[:cart])
+    verdict_from(resp, detail: "total above the line-item sum settled (HTTP #{resp.status})")
+  end
+end
+
 # ── Scenario list ─────────────────────────────────────────────────────────────
 #
-# All 13 are listed; 4 are expected to be skipped (KYC variants + PoW).
-# 9 scenarios are applicable to hoteling's surface.
+# 13 generic + 3 local cashier-check beats; 4 generic are expected to be
+# skipped (KYC variants + PoW). 9 generic + 3 local are applicable.
 
 scenarios = [
   Kiosk::Redteam::Scenarios::PayForOtherUseSelf.new,      # C2 — headline
@@ -176,6 +265,9 @@ scenarios = [
   Kiosk::Redteam::Scenarios::MandateReplay.new,
   Kiosk::Redteam::Scenarios::TokenTampering.new,
   Kiosk::Redteam::Scenarios::PrivilegeSelfSelection.new,
+  WrongCurrencyCart.new,                                  # cashier check — currency
+  TamperedPriceCart.new,                                  # cashier check — below quote
+  InflatedTotalCart.new,                                  # cashier check — total ≠ line sum
   Kiosk::Redteam::Scenarios::MissingKyc.new,              # → SKIP (no KYC)
   Kiosk::Redteam::Scenarios::ExpiredKyc.new,              # → SKIP (no KYC)
   Kiosk::Redteam::Scenarios::ForgedKyc.new,               # → SKIP (no KYC)

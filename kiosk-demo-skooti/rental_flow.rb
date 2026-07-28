@@ -164,7 +164,7 @@ unless SKIP_PAY
     user_id:            user_id,
     agent_id:           agent_id,
     iss:                ISSUER,
-    line_items:         [{ sku: scooter_code, qty: 1, reservation_id: reservation_id }],
+    line_items:         [{ sku: scooter_code, qty: 1, price_cents: price_per_min, reservation_id: reservation_id }],
     total_amount_cents: total_cents,
     currency:           "eur",
     exp:                now + 600,

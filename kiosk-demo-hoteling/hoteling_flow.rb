@@ -142,7 +142,7 @@ unless SKIP_PAY
     user_id:            user_id,
     agent_id:           agent_id,
     iss:                ISSUER,
-    line_items:         [{ sku: room_type_name, qty: nights, booking_id: booking_id }],
+    line_items:         [{ sku: room_type_name, qty: nights, price_cents: nightly_price, booking_id: booking_id }],
     total_amount_cents: total_cents,
     currency:           "eur",
     exp:                now + 600,

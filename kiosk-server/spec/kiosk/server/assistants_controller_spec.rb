@@ -37,24 +37,69 @@ RSpec.describe "AssistantsController" do
     allow(ar_base).to receive(:connection).and_return(con)
   end
 
-  def dispatch(action, method:, params: {})
+  def dispatch(action, method:, params: {}, headers: {})
     path = action == :show ? "" : "/#{action}"
     env = Rack::MockRequest.env_for(
       "https://provider.example/kiosk/auth/assistants#{path}",
       method: method, params: params,
     )
+    headers.each { |k, v| env[k] = v }
     env["rack.session"] = session
-    status, _headers, body = Kiosk::Server::AssistantsController.action(action).call(env)
+    status, response_headers, body = Kiosk::Server::AssistantsController.action(action).call(env)
     raw = +""
     body.each { |chunk| raw << chunk }
-    [status, raw]
+    [status, raw, response_headers]
   end
 
-  it "401s without a provider session" do
+  # Default config wires no sign_in_path → the engine keeps its neutral bare
+  # 401 (unchanged API contract). A browser Accept header does NOT change this.
+  it "401s without a provider session when no sign_in_path is configured" do
     wire_user_idp(nil)
-    status, body = dispatch(:show, method: "GET")
+    status, body = dispatch(:show, method: "GET", headers: { "HTTP_ACCEPT" => "text/html" })
     expect(status).to eq(401)
     expect(body).to include("Sign in")
+  end
+
+  # MANAGE-PAGE-UNAUTH-UX: with a sign_in_path wired AND a browser (HTML)
+  # request, an unauthenticated visitor is redirected to the operator's
+  # sign-in — not shown a bare 401 — with a flash alert and a stored return-to.
+  context "with config.sign_in_path set (browser UX)" do
+    before do
+      wire_user_idp(nil)
+      Kiosk.configure { |c| c.sign_in_path = "/users/sign_in" }
+    end
+
+    it "redirects an unauthenticated HTML request to the sign-in path (302) and stores return-to" do
+      status, _body, headers = dispatch(
+        :show, method: "GET", headers: { "HTTP_ACCEPT" => "text/html" },
+      )
+      expect(status).to eq(302)
+      expect(headers["Location"]).to end_with("/users/sign_in")
+      # Devise-convention return-to so the visitor lands back on the manage page.
+      expect(session["user_return_to"]).to eq("/kiosk/auth/assistants")
+    end
+
+    # The flash mixin needs the flash MIDDLEWARE (present in a real Rails app;
+    # absent in this bare Metal dispatch), so we assert the controller ATTEMPTS
+    # to set the alert rather than reading it back out of a serialised session.
+    # The demos' `demo:binding` exercises the real middleware end-to-end.
+    it "sets a flash alert telling the visitor to sign in" do
+      flash_double = {}
+      allow_any_instance_of(Kiosk::Server::AssistantsController)
+        .to receive(:flash).and_return(flash_double)
+      dispatch(:show, method: "GET", headers: { "HTTP_ACCEPT" => "text/html" })
+      expect(flash_double[:alert]).to eq("Please sign in to manage your linked assistants.")
+    end
+
+    # Backward compat: a JSON / API caller still gets the plain 401 even with a
+    # sign_in_path configured — the redirect is HTML-only.
+    it "still 401s a non-HTML (API/JSON) request" do
+      status, body, _headers = dispatch(
+        :show, method: "GET", headers: { "HTTP_ACCEPT" => "application/json" },
+      )
+      expect(status).to eq(401)
+      expect(body).to include("Sign in")
+    end
   end
 
   it "lists the holder's bound assistant accounts with key fingerprints" do

@@ -134,6 +134,17 @@ RSpec.describe Kiosk::Server::ConfigurationExtension do
     end
   end
 
+  describe "#sign_in_path" do
+    it "defaults to nil (engine stays IdP-neutral; bare 401 preserved)" do
+      expect(Kiosk.configuration.sign_in_path).to be_nil
+    end
+
+    it "is settable via Kiosk.configure (operator's own sign-in URL)" do
+      Kiosk.configure { |c| c.sign_in_path = "/users/sign_in" }
+      expect(Kiosk.configuration.sign_in_path).to eq("/users/sign_in")
+    end
+  end
+
   describe "signing_key" do
     # RSA generation is ~100ms; cache one for the whole context.
     let(:rsa)         { OpenSSL::PKey::RSA.generate(2048) }

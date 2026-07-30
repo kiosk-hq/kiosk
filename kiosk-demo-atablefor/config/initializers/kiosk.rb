@@ -173,6 +173,11 @@ Kiosk.configure do |c|
   # assistant redeems it, binding the assistant to the diner's account. Walked
   # by `rake demo:binding`.
   c.user_idp = Kiosk::UserIdentityProviders::Devise.new
+  # Where the engine bounces an UNAUTHENTICATED browser visitor to the
+  # manage-assistants page (this app's Devise sign-in). The engine stays
+  # IdP-neutral, so the sign-in URL is supplied here; without it the page
+  # would render a bare 401 (MANAGE-PAGE-UNAUTH-UX).
+  c.sign_in_path = "/users/sign_in"
 
   # ── NO payment_provider ──────────────────────────────────────────────────
   # This is deliberate and load-bearing: with no AP2 provider configured,

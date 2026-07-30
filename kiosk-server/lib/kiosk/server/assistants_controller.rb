@@ -114,13 +114,59 @@ if defined?(::ActionController::Base)
 
         # Same session rule as the verify page: the provider's `user_idp`
         # session, never an agent Bearer token.
+        #
+        # When identity is absent: if the provider wired a neutral
+        # `config.sign_in_path` AND this is a browser (HTML-preferring)
+        # request, REDIRECT there with a flash alert and a stored return-to, so
+        # a human who bookmarked the manage page lands on the operator's login
+        # and is bounced back after signing in (MANAGE-PAGE-UNAUTH-UX). For a
+        # non-HTML/API request, or when no sign_in_path is configured, keep the
+        # bare 401 — this preserves the API contract and AR-less/plain-Rack
+        # hosts (the engine stays IdP-neutral).
         def require_account_holder!
           @identity = Kiosk.configuration.user_idp&.verify(request)
           return true if @identity
 
+          sign_in_path = Kiosk.configuration.sign_in_path
+          if sign_in_path && html_request?
+            set_sign_in_flash
+            store_return_location
+            redirect_to sign_in_path
+            return false
+          end
+
           render plain: "Sign in to your account first to manage linked assistants.",
                  status: :unauthorized
           false
+        end
+
+        # Browser vs API: prefer the negotiated format, but also accept a raw
+        # `Accept: text/html` (a curl/bookmark hit whose format Rails could not
+        # infer). API clients send JSON and get the plain 401 unchanged.
+        def html_request?
+          return true if request.format.html?
+
+          request.headers["Accept"].to_s.include?("text/html")
+        rescue StandardError
+          false
+        end
+
+        # Flash the sign-in prompt. The flash mixin is present on
+        # ActionController::Base, but `request.flash` needs the flash
+        # middleware in the stack — absent on a bare Rack host or Metal
+        # dispatch — so a missing flash must not abort the redirect.
+        def set_sign_in_flash
+          flash[:alert] = "Please sign in to manage your linked assistants."
+        rescue StandardError
+          nil
+        end
+
+        # Devise convention: remember where the visitor was headed so login can
+        # bounce them back to the manage page. Harmless if unused by the IdP.
+        def store_return_location
+          session["user_return_to"] = request.fullpath
+        rescue StandardError
+          nil
         end
 
         # The holder's live agent rows — id, key fingerprint, created_at,

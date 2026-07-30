@@ -90,6 +90,11 @@ Kiosk.configure do |c|
     StubUserIdp.new,
     Kiosk::UserIdentityProviders::Devise.new,
   )
+  # Where the engine bounces an UNAUTHENTICATED browser visitor to the
+  # manage-assistants page (this app's Devise sign-in). The engine stays
+  # IdP-neutral, so the sign-in URL is supplied here; without it the page
+  # would render a bare 401 (MANAGE-PAGE-UNAUTH-UX).
+  c.sign_in_path = "/users/sign_in"
 
   # Per-assistant spending cap: read the cap from
   # agents.spending_cap_cents (the column edited on the manage-assistants

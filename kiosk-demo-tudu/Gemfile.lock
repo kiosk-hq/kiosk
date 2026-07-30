@@ -31,7 +31,7 @@ PATH
   remote: ../kiosk-server
   specs:
     kiosk-server (0.0.1)
-      jwt (~> 2.8)
+      jwt (>= 2.8, < 4.0)
       kiosk-core (~> 0.0)
 
 PATH

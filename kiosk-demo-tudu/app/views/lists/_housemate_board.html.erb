@@ -1,0 +1,52 @@
+<%# Public, read-only HOUSEMATE board. Renders every list Bob (the seeded
+    housemate) can reach as a card: title · who shared it · his role · its tasks.
+    Shared by the home page (signed-out) and the standalone /shared page.
+    Read-only — no forms, no actions; it only mirrors what the wire (or the web
+    UI) collaborated into being. This is the (b) reveal: when an assistant
+    creates a list and shares it with Bob, the new shared list appears here. %>
+<div class="board">
+  <div class="board-head">
+    <div>
+      <div class="board-title">Housemate view — <%= ListsController::HOUSEMATE_LABEL %></div>
+      <div class="board-sub">Lists shared with this housemate account, and the tasks on them — updates as assistants create &amp; share lists over the wire.</div>
+    </div>
+    <span class="board-count"><%= @housemate_board.size %> <%= "list".pluralize(@housemate_board.size) %></span>
+  </div>
+
+  <% if @housemate_board.empty? %>
+    <p class="board-empty">No shared lists yet. Point an assistant at this endpoint, create a list, and share it with the housemate — it appears here.</p>
+  <% else %>
+    <ul class="board-list">
+      <% @housemate_board.each do |list| %>
+        <li class="board-item">
+          <div class="board-item-head">
+            <span class="board-item-title"><%= list["title"] %></span>
+            <span class="board-item-role"><%= list["my_role"] %></span>
+          </div>
+          <div class="board-item-shared">
+            <% if list["my_role"] == "owner" %>
+              owned by this housemate
+            <% else %>
+              shared by <%= board_handle_name(list["owner_handle"]) %>
+            <% end %>
+          </div>
+          <% if list["tasks"].empty? %>
+            <div class="board-item-empty">No tasks yet.</div>
+          <% else %>
+            <ul class="board-tasks">
+              <% list["tasks"].each do |t| %>
+                <li class="board-task <%= 'is-done' if t['done'] %>">
+                  <span class="board-task-title"><%= t["title"] %></span>
+                  <% if t["created_by_agent_id"] %>
+                    <span class="board-task-by">added by an assistant</span>
+                  <% end %>
+                </li>
+              <% end %>
+            </ul>
+          <% end %>
+        </li>
+      <% end %>
+    </ul>
+    <p class="board-note">This is the housemate's own view. An assistant's list shows up here the moment it is shared with this account — no second sign-in, no payment anywhere. Task text is the shared world; “added by an assistant” marks who added it.</p>
+  <% end %>
+</div>

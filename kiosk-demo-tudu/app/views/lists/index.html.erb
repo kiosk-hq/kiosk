@@ -33,20 +33,29 @@
 
 <% else %>
 
-  <!-- ── 1. Try it with your own assistant ───────────────────────────── -->
+  <!-- ── 0. This is a Kiosk endpoint an assistant drives ─────────────── -->
   <section class="sec">
-    <div class="sec-k">🤖 Try it with your own assistant</div>
+    <div class="sec-k">🔌 This endpoint speaks Kiosk</div>
     <div class="tryit">
-      <h2>Share a todo list with your assistant — and with other people's assistants</h2>
-      <p>Tell your AI assistant:</p>
-      <p class="say">“Add ‘buy milk’ to my shared list on tudu.demo.kiosk.tech, and invite my partner's assistant.”</p>
-      <p>It discovers tudu, registers itself, and works your shared lists — no account, no app. There is <strong>no payment</strong> anywhere; tudu proves Kiosk works for collaboration, not just checkout.</p>
+      <h2>Point your AI assistant here — it creates &amp; shares a todo list</h2>
+      <p>tudu is a <strong>collaborative todo app exposed as a Kiosk endpoint</strong>, not a web form. An assistant discovers the surface, registers itself, creates a list, and <strong>shares it with another account — over the protocol</strong>. Tell your AI assistant:</p>
+      <p class="say">“Add ‘buy milk’ to my shared list on tudu.demo.kiosk.tech, and invite my housemate's assistant.”</p>
+      <p>It discovers tudu, registers itself, and works your shared lists — no account, no app. There is <strong>no payment</strong> anywhere; tudu proves Kiosk works for collaboration, not just checkout. <strong>Where does the shared list show up? In the housemate view below</strong> — a public, read-only window into the account it was shared with.</p>
       <div class="linkbox">
         <strong>Rebind the work to your human account.</strong> An assistant can do work headless, then a human links it — the assistant's lists and memberships migrate to the person (the W5 rebind). <%= link_to "Sign in", new_user_session_path %> or <%= link_to "create an account", new_user_registration_path %>, then open <a href="/kiosk/auth/assistants">Manage&nbsp;assistants</a> and mint a link code. Hand it to your assistant — it redeems the code over the wire.
         <div class="cred">Demo login: <code>alice@example.com</code> &nbsp;/&nbsp; <code>tudu-demo-password</code></div>
       </div>
     </div>
   </section>
+
+  <!-- ── 1. The housemate view (the reveal) ──────────────────────────── -->
+  <% if @housemate_board %>
+    <section class="sec">
+      <div class="sec-k">👀 Housemate view — see the sharing land</div>
+      <%= render "housemate_board" %>
+      <p class="note">This is the seeded housemate's own view (also on its own page: <%= link_to "/shared", shared_path %>). When an assistant creates a list and shares it with this housemate, the shared list appears here — the collaboration is <em>visible</em>, with no second identity store.</p>
+    </section>
+  <% end %>
 
   <!-- ── 2. About this demo ──────────────────────────────────────────── -->
   <section class="sec">

@@ -196,7 +196,8 @@ Kiosk::Server::Queries.register("catalog",
     "SELECT sku, name, price_cents, stock FROM products WHERE stock > 0 ORDER BY name"
   ).to_a
   rows.map do |r|
-    row = { "sku" => r["sku"], "name" => r["name"], "price_cents" => r["price_cents"], "currency" => "eur" }
+    row = { "sku" => r["sku"], "name" => r["name"], "price_cents" => r["price_cents"],
+            "price_eur" => Product.format_eur(r["price_cents"]), "currency" => "eur" }
     row["low"] = true if r["stock"].to_i <= LOW_STOCK_THRESHOLD
     row
   end
@@ -374,6 +375,7 @@ Kiosk::Server::Actions.register("create_order",
     {
       order_id:    order_id,
       total_cents: total_cents,
+      total_eur:   Product.format_eur(total_cents),
       currency:    "eur",
       slot_at:     slot_at.iso8601,
       pay_hint:    "pay in EUR with a cart mandate whose line_items mirror this order: " \

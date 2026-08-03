@@ -75,6 +75,7 @@ abort "query catalog failed (#{rc_catalog}): #{JSON.generate(catalog_resp)}" unl
 catalog = catalog_resp.fetch("rows", [])
 abort "catalog returned empty rows" if catalog.empty?
 abort "catalog rows must carry currency=eur" unless catalog.all? { |p| p["currency"] == "eur" }
+abort "catalog rows must carry a price_eur display string" unless catalog.all? { |p| p["price_eur"].to_s.start_with?("€") }
 STDERR.puts "  Catalog: #{catalog.size} in-stock products (EUR)"
 
 # Pick a few in-stock products (take first 3, or fewer if catalog has < 3).
@@ -111,6 +112,7 @@ order_id    = order_value.fetch("order_id")
 total_cents = order_value.fetch("total_cents")
 slot_at     = order_value.fetch("slot_at")
 abort "create_order result must carry currency=eur" unless order_value["currency"] == "eur"
+abort "create_order result must carry a total_eur display string" unless order_value["total_eur"].to_s.start_with?("€")
 abort "create_order result must carry a pay_hint" if order_value["pay_hint"].to_s.empty?
 STDERR.puts "  create_order: order_id=#{order_id} total=#{total_cents}c slot_at=#{slot_at}"
 

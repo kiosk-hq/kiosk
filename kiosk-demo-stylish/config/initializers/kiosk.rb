@@ -121,6 +121,19 @@ Kiosk::Server::Queries.register("salons",
   ).to_a
 end
 
+# service_menu — the salon's public service menu with EUR prices. Any
+# authenticated principal may read it; an assistant uses it to pick a
+# service_id (and see the € price) before booking.
+Kiosk::Server::Queries.register("service_menu",
+                                 description: "Browse the salon's service menu with EUR prices (name, price_cents, price_eur)",
+                                 params: {}) do |_params|
+  ActiveRecord::Base.connection.execute(
+    "SELECT id, name, price_cents FROM services ORDER BY price_cents"
+  ).to_a.map do |row|
+    row.merge("currency" => "EUR", "price_eur" => Service.format_eur(row["price_cents"]))
+  end
+end
+
 # my_appointments — per-user appointment list scoped by the session GUC.
 # App-layer isolation: the agent supplies no filter; the WHERE is
 # provider-controlled and cannot be bypassed by the caller.
@@ -147,9 +160,12 @@ end
 #
 # Any other role (or none) sees an empty calendar. The gate is un-bypassable:
 # an agent can neither self-select `owner` at binding nor pass a wider filter.
-STYLISH_APPOINTMENT_PRICE_CENTS = 6000 # flat demo price per chair, for the owner's revenue total
+# Each row carries the booked service + its captured EUR price; the owner's
+# revenue total sums those real per-appointment prices (not a flat rate), so
+# the whole-book view is a tangible € figure and a stylist's own-chairs view is
+# strictly narrower.
 Kiosk::Server::Queries.register("salon_calendar",
-                                 description: "Staff calendar — role-gated: owner sees the whole book + revenue, a stylist only their own chairs (role from the bound human's IdP)",
+                                 description: "Staff calendar — role-gated: owner sees the whole book (service, EUR price per chair) + a revenue total, a stylist only their own chairs (role from the bound human's IdP)",
                                  params: {}) do |_params|
   role = ActiveRecord::Base.connection.execute(
     "SELECT kiosk.current_role() AS role"
@@ -157,22 +173,30 @@ Kiosk::Server::Queries.register("salon_calendar",
 
   scope =
     case role
-    when "owner"   then "TRUE"                                    # the whole book
-    when "stylist" then "stylist_id = kiosk.current_user_id()"    # only own chairs
-    else "FALSE"                                                  # non-staff see nothing
+    when "owner"   then "TRUE"                                     # the whole book
+    when "stylist" then "a.stylist_id = kiosk.current_user_id()"   # only own chairs
+    else "FALSE"                                                   # non-staff see nothing
     end
 
   rows = ActiveRecord::Base.connection.execute(
-    "SELECT id, salon_id, stylist_id, slot FROM appointments " \
-    "WHERE #{scope} ORDER BY slot"
-  ).to_a
+    "SELECT a.id, a.salon_id, a.stylist_id, a.slot, " \
+    "       a.service_id, s.name AS service, a.price_cents " \
+    "FROM appointments a LEFT JOIN services s ON s.id = a.service_id " \
+    "WHERE #{scope} ORDER BY a.slot"
+  ).to_a.map do |row|
+    row.merge("currency" => "EUR", "price_eur" => Service.format_eur(row["price_cents"]))
+  end
 
-  # Owner also gets a revenue total across everything they can see.
+  # Owner also gets a revenue total across everything they can see — summed
+  # from the real per-appointment prices captured on each chair.
   if role == "owner"
+    revenue_cents = rows.sum { |r| r["price_cents"].to_i }
     rows << {
       "summary"       => "revenue",
       "appointments"  => rows.size,
-      "revenue_cents" => rows.size * STYLISH_APPOINTMENT_PRICE_CENTS,
+      "currency"      => "EUR",
+      "revenue_cents" => revenue_cents,
+      "revenue_eur"   => Service.format_eur(revenue_cents),
     }
   end
   rows
@@ -184,10 +208,11 @@ end
 # `Kiosk::Action` DSL (post-v0.1); for this demo a simple registered
 # block is sufficient.
 Kiosk::Server::Actions.register("book_appointment",
-                                 description: "Book an appointment at a salon for the authenticated principal",
+                                 description: "Book an appointment at a salon for the authenticated principal (optionally for a service from the `service_menu`, whose EUR price is captured and returned)",
                                  params: {
-                                   salon_id: "integer — id of the salon (from the `salons` query)",
-                                   slot:     "string — appointment time as an ISO 8601 timestamp",
+                                   salon_id:   "integer — id of the salon (from the `salons` query)",
+                                   slot:       "string — appointment time as an ISO 8601 timestamp",
+                                   service_id: "integer — optional id of a service (from the `service_menu` query); its EUR price is captured on the booking",
                                  }) do |args|
   # Identity is set via Kiosk::Server::SessionContext SET LOCAL —
   # current_user_id() helper returns the principal. ActiveRecord doesn't
@@ -196,13 +221,31 @@ Kiosk::Server::Actions.register("book_appointment",
     "SELECT kiosk.current_user_id() AS uid"
   ).first["uid"]
 
+  # Optional service: capture its EUR price onto the booking at book time.
+  service = args[:service_id] && Service.find_by(id: args[:service_id])
+
   appointment = Appointment.create!(
-    user_id:  user_id,
-    salon_id: args[:salon_id],
-    slot:     args[:slot],
+    user_id:     user_id,
+    salon_id:    args[:salon_id],
+    slot:        args[:slot],
+    service_id:  service&.id,
+    price_cents: service&.price_cents,
   )
 
-  { appointment_id: appointment.id, salon_id: appointment.salon_id, slot: appointment.slot.iso8601 }
+  result = {
+    appointment_id: appointment.id,
+    salon_id:       appointment.salon_id,
+    slot:           appointment.slot.iso8601,
+  }
+  if service
+    result.merge!(
+      service:     service.name,
+      currency:    "EUR",
+      price_cents: service.price_cents,
+      price_eur:   service.price_eur,
+    )
+  end
+  result
 end
 
 # ── Live-activity telemetry — opt-in, app-layer, privacy-safe ───

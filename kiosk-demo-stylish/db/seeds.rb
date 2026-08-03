@@ -1,6 +1,6 @@
 # frozen_string_literal: true
 
-# Synthetic principals for the two audiences the stylish demo now serves.
+# Synthetic principals for the two audiences the stylish demo serves.
 #
 # CUSTOMERS — Alice and Bob, with stable UUIDs the assistant scripts use in
 # `Authorization: Bearer agent:u-<uuid>:a-<agent>:r-<role>` headers. Both get
@@ -10,9 +10,14 @@
 # STAFF — Combette on Park's own people (roles-from-IdP): one OWNER
 # and two STYLISTS, each with a `staff_role`. Their assistant, when linked
 # (W5, role-carrying StubUserIdp session), inherits that role so the
-# `salon_calendar` query gates on it: owner sees the whole book, a stylist
-# only their own chairs. Seeded appointments are assigned across the two
-# stylists so the scoping is observable.
+# `salon_calendar` query gates on it: owner sees the whole book + a EUR
+# revenue total, a stylist only their own priced chairs.
+#
+# SERVICES + PRICES — a real EUR service menu, and a full day of appointments
+# TODAY across the two stylists (a mix of services) so the owner's book is
+# non-trivial and its revenue total is meaningful. This is what makes the role
+# reveal land: an owner-linked assistant sees the whole day + revenue; each
+# stylist sees only their own chairs.
 
 ALICE_ID = "00000000-0000-0000-0000-000000000001"
 BOB_ID   = "00000000-0000-0000-0000-000000000002"
@@ -54,20 +59,61 @@ end
 
 salon = Salon.find_or_create_by!(name: "Combette on Park")
 
-# Book across the two stylists so `salon_calendar` scoping is observable:
-# 2 chairs for Bea, 1 for Cleo. Booked BY customers, ASSIGNED to a stylist.
-# (idempotent: keyed on the slot so re-seeding does not multiply rows.)
-[
-  { customer: ALICE_ID, stylist: stylist1, slot: "2026-08-01T10:00:00Z" },
-  { customer: BOB_ID,   stylist: stylist1, slot: "2026-08-01T11:00:00Z" },
-  { customer: ALICE_ID, stylist: stylist2, slot: "2026-08-02T14:00:00Z" },
-].each do |a|
+# ── Service menu (EUR) — coined/generic names, prices in euro cents. ──────────
+MENU = {
+  cut:          { name: "Cut",            price_cents: 3500 },  # €35
+  cut_blowdry:  { name: "Cut & Blow-dry", price_cents: 5000 },  # €50
+  colour:       { name: "Colour",         price_cents: 9000 },  # €90
+  cut_colour:   { name: "Cut & Colour",   price_cents: 12000 }, # €120
+  beard_trim:   { name: "Beard trim",     price_cents: 2000 },  # €20
+}.freeze
+
+services = MENU.transform_values do |m|
+  Service.find_or_create_by!(name: m[:name]) { |s| s.price_cents = m[:price_cents] }
+end
+
+# ── A full day of appointments TODAY across Bea and Cleo. ─────────────────────
+# Booked BY customers, ASSIGNED to a stylist, each with a service + its EUR
+# price captured on the row. Bea works 4 chairs, Cleo works 3 — so the owner's
+# whole-book view is a non-trivial 7 appointments with a real revenue total,
+# while Bea sees only her 4 and Cleo only her 3.
+#
+# Revenue the OWNER sees (sum of the seeded day):
+#   Bea : Colour €90 + Cut&Blow-dry €50 + Cut €35 + Beard trim €20   = €195
+#   Cleo: Cut&Colour €120 + Cut €35 + Beard trim €20                 = €175
+#   ── total ────────────────────────────────────────────────────────  €370
+today = Date.current
+at = ->(h, m) { Time.utc(today.year, today.month, today.day, h, m).iso8601 }
+
+seed_day = [
+  # Bea's chairs
+  { customer: ALICE_ID, stylist: stylist1, service: :colour,      slot: at.call(9, 0) },
+  { customer: BOB_ID,   stylist: stylist1, service: :cut_blowdry, slot: at.call(10, 30) },
+  { customer: ALICE_ID, stylist: stylist1, service: :cut,         slot: at.call(13, 0) },
+  { customer: BOB_ID,   stylist: stylist1, service: :beard_trim,  slot: at.call(15, 0) },
+  # Cleo's chairs
+  { customer: BOB_ID,   stylist: stylist2, service: :cut_colour,  slot: at.call(9, 30) },
+  { customer: ALICE_ID, stylist: stylist2, service: :cut,         slot: at.call(12, 0) },
+  { customer: BOB_ID,   stylist: stylist2, service: :beard_trim,  slot: at.call(16, 30) },
+]
+
+# idempotent: keyed on the slot so re-seeding does not multiply rows.
+seed_day.each do |a|
+  svc = services.fetch(a[:service])
   Appointment.find_or_create_by!(salon: salon, slot: a[:slot]) do |appt|
-    appt.user_id    = a[:customer]
-    appt.stylist_id = a[:stylist].id
+    appt.user_id     = a[:customer]
+    appt.stylist_id  = a[:stylist].id
+    appt.service_id  = svc.id
+    appt.price_cents = svc.price_cents
   end
 end
 
+revenue_cents = seed_day.sum { |a| services.fetch(a[:service]).price_cents }
+bea_count     = seed_day.count { |a| a[:stylist] == stylist1 }
+cleo_count    = seed_day.count { |a| a[:stylist] == stylist2 }
+
 puts "Seeded: 2 customers (#{ALICE_ID}, #{BOB_ID}; sign-in alice@example.com / #{DEMO_PASSWORD})"
 puts "        3 staff — owner #{OWNER_ID}, stylists #{STYLIST1_ID}/#{STYLIST2_ID}"
-puts "        1 salon (#{salon.name}); 3 staff appointments (2 Bea, 1 Cleo)"
+puts "        1 salon (#{salon.name}); #{services.size}-service EUR menu"
+puts "        #{seed_day.size} appointments today (#{bea_count} Bea, #{cleo_count} Cleo); " \
+     "owner revenue total €#{revenue_cents / 100}"

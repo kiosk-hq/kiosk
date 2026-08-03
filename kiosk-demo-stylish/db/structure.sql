@@ -201,7 +201,9 @@ CREATE TABLE public.appointments (
     slot timestamp without time zone NOT NULL,
     created_at timestamp(6) without time zone NOT NULL,
     updated_at timestamp(6) without time zone NOT NULL,
-    stylist_id uuid
+    stylist_id uuid,
+    service_id bigint,
+    price_cents integer
 );
 
 
@@ -258,6 +260,38 @@ CREATE TABLE public.schema_migrations (
 
 
 --
+-- Name: services; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.services (
+    id bigint NOT NULL,
+    name character varying NOT NULL,
+    price_cents integer NOT NULL,
+    created_at timestamp(6) without time zone NOT NULL,
+    updated_at timestamp(6) without time zone NOT NULL
+);
+
+
+--
+-- Name: services_id_seq; Type: SEQUENCE; Schema: public; Owner: -
+--
+
+CREATE SEQUENCE public.services_id_seq
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1;
+
+
+--
+-- Name: services_id_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: -
+--
+
+ALTER SEQUENCE public.services_id_seq OWNED BY public.services.id;
+
+
+--
 -- Name: users; Type: TABLE; Schema: public; Owner: -
 --
 
@@ -276,6 +310,13 @@ CREATE TABLE public.users (
 --
 
 ALTER TABLE ONLY public.salons ALTER COLUMN id SET DEFAULT nextval('public.salons_id_seq'::regclass);
+
+
+--
+-- Name: services id; Type: DEFAULT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.services ALTER COLUMN id SET DEFAULT nextval('public.services_id_seq'::regclass);
 
 
 --
@@ -375,6 +416,14 @@ ALTER TABLE ONLY public.schema_migrations
 
 
 --
+-- Name: services services_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.services
+    ADD CONSTRAINT services_pkey PRIMARY KEY (id);
+
+
+--
 -- Name: users users_pkey; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -467,6 +516,13 @@ CREATE INDEX index_appointments_on_salon_id ON public.appointments USING btree (
 
 
 --
+-- Name: index_appointments_on_service_id; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX index_appointments_on_service_id ON public.appointments USING btree (service_id);
+
+
+--
 -- Name: index_appointments_on_stylist_id; Type: INDEX; Schema: public; Owner: -
 --
 
@@ -520,6 +576,14 @@ ALTER TABLE ONLY kiosk.agents
 
 
 --
+-- Name: appointments fk_rails_486091c262; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.appointments
+    ADD CONSTRAINT fk_rails_486091c262 FOREIGN KEY (service_id) REFERENCES public.services(id);
+
+
+--
 -- Name: appointments fk_rails_9e31213785; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -550,6 +614,7 @@ ALTER TABLE ONLY public.appointments
 SET search_path TO "$user", public;
 
 INSERT INTO "schema_migrations" (version) VALUES
+('20260729000001'),
 ('20260719000001'),
 ('20260718000002'),
 ('20260718000001'),

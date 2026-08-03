@@ -464,6 +464,19 @@ namespace :demo do
       check.call("stylist sees strictly fewer rows than the owner (scope narrowed)", stylist_appts < total_appts && result["stylist_appt_count"] < result["owner_appt_count"])
       check.call("every row the stylist sees is their own chair",                 result["stylist_all_own"] == true)
       check.call("stylist sees NO revenue total (owner-only)",                     result["stylist_sees_revenue"] == false)
+
+      # ── REAL DEVISE PATH (K-437) — the operator path the hosted demo uses. ──
+      # The stub assertions above pass even with the bug; these fail without
+      # User#kiosk_role, because the Devise adapter would resolve every real
+      # sign-in to roles.first (customer). The role must survive the real
+      # /users/sign_in session, not just the X-Staff-Session stub.
+      check.call("REAL DEVISE: owner sign-in → token role == owner",              result["devise_owner_token_role"] == "owner")
+      check.call("REAL DEVISE: owner salon_calendar returns ALL #{total_appts} appointments", result["devise_owner_appt_count"] == total_appts)
+      check.call("REAL DEVISE: stylist sign-in → token role == stylist",          result["devise_stylist_token_role"] == "stylist")
+      check.call("REAL DEVISE: stylist salon_calendar returns ONLY own #{stylist_appts} chairs", result["devise_stylist_appt_count"] == stylist_appts)
+      check.call("REAL DEVISE: every row the stylist sees is their own chair",     result["devise_stylist_all_own"] == true)
+      check.call("REAL DEVISE: customer sign-in → token role == customer",         result["devise_customer_token_role"] == "customer")
+      check.call("REAL DEVISE: customer salon_calendar is empty (non-staff)",      result["devise_customer_appt_count"] == 0)
     ensure
       begin
         Process.kill("TERM", server_pid); Process.wait(server_pid)

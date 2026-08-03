@@ -195,7 +195,7 @@ Kiosk::Server::Actions.register(
     category_slug: "string (required) — the section to post in (see browse_listings)",
     title:         "string (required) — short headline",
     body:          "string (required) — the listing description",
-    price_text:    "string (optional) — free-form display price, e.g. '1500 TL' or 'free'",
+    price_text:    "string (optional) — free-form display price, e.g. '€300' or 'Free'",
   },
 ) do |args|
   owner_id = philslist_current_user_id

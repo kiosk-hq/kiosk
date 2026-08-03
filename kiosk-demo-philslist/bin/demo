@@ -87,14 +87,14 @@ say "✓ browse sees $COUNT listings across owners"
 heading "Alice's agent posts a listing (post_listing) — no card, no checkout"
 
 step "run post_listing (desk for sale)"
-POST=$(run "$ALICE_TOKEN" '{"name":"post_listing","category_slug":"furniture","title":"Oak desk","body":"Solid oak, moving sale","price_text":"1500 TL"}')
+POST=$(run "$ALICE_TOKEN" '{"name":"post_listing","category_slug":"furniture","title":"Oak desk","body":"Solid oak, moving sale","price_text":"€150"}')
 echo "$POST" | jq '.value'
 LISTING_ID=$(echo "$POST" | jq -r '.value.listing_id')
 [[ "$LISTING_ID" != "null" && -n "$LISTING_ID" ]] || fail "post_listing did not return a listing_id"
 say "✓ posted listing $LISTING_ID"
 
 step "run edit_listing (drop the price)"
-run "$ALICE_TOKEN" "{\"name\":\"edit_listing\",\"listing_id\":\"$LISTING_ID\",\"price_text\":\"1200 TL\"}" | jq '.value'
+run "$ALICE_TOKEN" "{\"name\":\"edit_listing\",\"listing_id\":\"$LISTING_ID\",\"price_text\":\"€120\"}" | jq '.value'
 
 step "run close_listing (it sold)"
 CLOSE=$(run "$ALICE_TOKEN" "{\"name\":\"close_listing\",\"listing_id\":\"$LISTING_ID\"}")
@@ -107,7 +107,7 @@ MINE=$(q "$ALICE_TOKEN" '{"name":"my_listings"}')
 echo "$MINE" | jq '.rows | map({title, status, price_text})'
 echo "$MINE" | jq -e --arg id "$LISTING_ID" '.rows[] | select(.id == $id) | .status == "closed"' >/dev/null \
   || fail "my_listings does not show the posted desk as closed"
-say "✓ my_listings shows the desk closed at 1200 TL"
+say "✓ my_listings shows the desk closed at €120"
 
 # ─── done ────────────────────────────────────────────────────────────
 

@@ -317,7 +317,9 @@ CREATE TABLE public.scooters (
     created_at timestamp(6) without time zone NOT NULL,
     updated_at timestamp(6) without time zone NOT NULL,
     kind character varying DEFAULT 'scooter'::character varying NOT NULL,
-    needs_licence boolean DEFAULT false NOT NULL
+    needs_licence boolean DEFAULT false NOT NULL,
+    name character varying,
+    dock character varying
 );
 
 
@@ -752,6 +754,7 @@ ALTER TABLE ONLY public.reservations
 SET search_path TO "$user", public;
 
 INSERT INTO "schema_migrations" (version) VALUES
+('20260803000001'),
 ('20260717000001'),
 ('20260618131466'),
 ('20260618131465'),

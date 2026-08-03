@@ -138,14 +138,19 @@ end
 
 # scooters_available — public fleet catalog. No per-user scoping: all
 # authenticated agents can browse the available fleet. The block returns the
-# exact columns the agent needs (no full-table scrape). `kind` +
-# `needs_licence` let the agent tell the licence-free electric scooter apart
-# from the KYC-gated combustion motorcycle before it commits to a rental verb.
+# exact columns the agent needs (no full-table scrape): each vehicle's `name`
+# and pickup `dock`/location so a plain prompt ("rent an electric scooter near
+# Kadıköy", "rent the Bosphorus Cruiser motorcycle") resolves to a concrete
+# row, plus `kind` + `needs_licence` so the agent tells the licence-free
+# electric scooter apart from the KYC-gated combustion motorcycle before it
+# commits to a rental verb, and the EUR per-minute rate it must sign its cart at.
 Kiosk::Server::Queries.register("scooters_available",
-                                 description: "Browse the available fleet (scooters + motorcycles); needs_licence flags the KYC-gated combustion vehicles. " \
+                                 description: "Browse the available fleet — each row carries the vehicle's name and pickup dock/location " \
+                                              "so you can pick one by name or nearest dock. needs_licence flags the KYC-gated combustion " \
+                                              "motorcycle (rent it via rent_motorcycle); licence-free scooters use start_rental. " \
                                               "price_per_min_cents is EUR cents per minute — carts must be signed in eur at the operator-quoted total") do |_params|
   rows = ActiveRecord::Base.connection.execute(
-    "SELECT id, code, status, kind, needs_licence, lat, lng, price_per_min_cents " \
+    "SELECT id, code, name, dock, status, kind, needs_licence, lat, lng, price_per_min_cents " \
     "FROM public.scooters " \
     "WHERE status = 'available' " \
     "ORDER BY id"

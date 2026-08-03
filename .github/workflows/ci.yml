@@ -228,6 +228,73 @@ jobs:
             echo "::endgroup::"
           done
 
+  # Production-boot smoke — the guard for the prod-only bug class that the
+  # dev-mode gems/demos/e2e jobs are all blind to. Three shipped bugs (K-422
+  # eager-load Zeitwerk crash, K-436 missing governance columns → manage-page
+  # 500, K-439 assume_ssl off → CSRF-Origin silent sign-in failure) ALL reached
+  # the hosted demos and none tripped CI, because CI boots the server in
+  # RAILS_ENV=development (lazy autoload, no proxy, no Origin check). This boots
+  # ONE representative demo (stylish — it exercises Devise sign-in, roles, and
+  # the manage page) exactly like the deploy: RAILS_ENV=production
+  # (config.eager_load=true, config.assume_ssl=true) behind a simulated
+  # proxy+browser, and curl-asserts the four surfaces those bugs broke. See
+  # deploy/production-smoke.sh; any assertion miss fails the job.
+  demo-production-smoke:
+    name: stylish production-boot smoke
+    runs-on: ubuntu-latest
+
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_HOST_AUTH_METHOD: trust
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+    env:
+      PGHOST: localhost
+      PGUSER: postgres
+      PGPASSWORD: postgres
+      # database.yml (production) connects as this role; the postgres service
+      # runs trust auth as `postgres`, so no password is needed.
+      KIOSK_STYLISH_DB_USER: postgres
+      KIOSK_STYLISH_DB_PASSWORD: ""
+
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Set up Ruby
+        uses: ruby/setup-ruby@v1
+        with:
+          ruby-version: "4.0.1"
+          bundler-cache: false
+
+      - name: Install dependencies
+        working-directory: kiosk-demo-stylish
+        run: bundle install
+
+      # structure.sql is PG17-format (SET transaction_timeout, a v17 param), so
+      # db:schema:load needs a psql >= 17 — same reason the demos/e2e jobs pin it.
+      - name: Install PostgreSQL 17 client
+        run: |
+          sudo sh -c 'echo "deb https://apt.postgresql.org/pub/repos/apt $(lsb_release -cs)-pgdg main" > /etc/apt/sources.list.d/pgdg.list'
+          curl -fsSL https://www.postgresql.org/media/keys/ACCC4CF8.asc | sudo tee /etc/apt/trusted.gpg.d/pgdg.asc >/dev/null
+          sudo apt-get update -qq && sudo apt-get install -y -qq postgresql-client-17
+
+      # Boot stylish in production and run the four proxy+browser assertions.
+      # The script self-provides SECRET_KEY_BASE + KIOSK_SIGNING_KEY_B64 (the
+      # production initializer does NOT self-provision a key) on a fixed,
+      # collision-free port.
+      - name: Production-boot smoke (stylish)
+        run: ./deploy/production-smoke.sh
+
   e2e:
     name: kiosk OSS end-to-end
     runs-on: ubuntu-latest

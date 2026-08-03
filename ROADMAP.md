@@ -29,7 +29,11 @@ demonstrated behavior, adversarial coverage, spec text where the wire changes.
 - **Key rotation.** A first-class ceremony for an assistant to roll its
   keypair without losing its account or reputation.
 - **Operator-push events.** The operator tells the assistant something
-  changed ("your slot moved") instead of waiting to be polled.
+  changed instead of waiting to be polled: a slot moved; a saved card is
+  ready (today the assistant relays a card-entry link and then polls for the
+  human to finish, though the PSP already fires a webhook on card-saved); a
+  booking confirmed; or a classifieds buyer wants to reach a listing's poster
+  (today the only channel is a phone number in the listing body).
 - **Ports beyond Ruby.** The wire is HTTPS + JSON + JWS — nothing
   Ruby-specific. The formal spec and JSON Schemas at kiosk.tech exist for
   porters; a Go, Python, or Node provider implementation is a welcome

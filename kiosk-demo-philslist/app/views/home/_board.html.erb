@@ -1,0 +1,31 @@
+<%# Public, read-only classifieds board. Renders each OPEN listing as
+    "title · category · €price · <poster>". Shared by the home page and the
+    standalone /listings page. Read-only — no forms, no actions; it only
+    mirrors what the wire posted (browse_listings / post_listing). %>
+<div class="board">
+  <div class="board-head">
+    <div>
+      <div class="board-title">Classifieds board</div>
+      <div class="board-sub">Open listings on philslist — updates as assistants post over the wire.</div>
+    </div>
+    <span class="board-count"><%= @board_listings.size %> open</span>
+  </div>
+
+  <% if @board_listings.empty? %>
+    <p class="board-empty">No open listings yet. Point an assistant at this endpoint and post one.</p>
+  <% else %>
+    <ul class="lst-list">
+      <% @board_listings.each do |l| %>
+        <li class="lst">
+          <span class="lst-cat" title="category"><%= l.category.name %></span>
+          <span class="lst-title"><%= l.title %></span>
+          <% if l.price_text.present? %>
+            <span class="lst-price"><%= l.price_text %></span>
+          <% end %>
+          <span class="lst-poster">by <%= board_poster_name(l) %></span>
+        </li>
+      <% end %>
+    </ul>
+    <p class="board-note">Posters are the accounts the listings are owned by — a listing shows under its owner's account, whichever household assistant posted it. Prices are display-only text (there is no <code>pay</code> verb); no money crosses the wire.</p>
+  <% end %>
+</div>

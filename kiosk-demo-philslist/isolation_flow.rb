@@ -50,7 +50,7 @@ def bearer(token) = { "Authorization" => "Bearer #{token}" }
 # ── Step 1: both principals post a listing so the board is cross-owner ────────
 rc, alice_post = post_json("/kiosk/run",
                            { name: "post_listing", category_slug: "furniture",
-                             title: "Alice bookshelf", body: "Pine, 5-shelf", price_text: "800 TL" },
+                             title: "Alice bookshelf", body: "Pine, 5-shelf", price_text: "€80" },
                            bearer(TOKEN_A))
 abort "A post_listing failed (#{rc}): #{JSON.generate(alice_post)}" unless rc == 200
 alice_listing_id = alice_post.dig("value", "listing_id")
@@ -59,7 +59,7 @@ STDERR.puts "  A posted listing #{alice_listing_id}"
 
 rc, bob_post = post_json("/kiosk/run",
                          { name: "post_listing", category_slug: "bikes",
-                           title: "Bob mountain bike", body: "Hardtail, size L", price_text: "5000 TL" },
+                           title: "Bob mountain bike", body: "Hardtail, size L", price_text: "€500" },
                          bearer(TOKEN_B))
 abort "B post_listing failed (#{rc}): #{JSON.generate(bob_post)}" unless rc == 200
 bob_listing_id = bob_post.dig("value", "listing_id")
@@ -80,7 +80,7 @@ STDERR.puts "  B my_listings ids: #{b_my_ids.inspect}"
 
 # ── Step 4: Bob edit_listing on ALICE's listing → 403 (Assertion 3) ──────────
 edit_rc, edit_body = post_json("/kiosk/run",
-                               { name: "edit_listing", listing_id: alice_listing_id, price_text: "1 TL" },
+                               { name: "edit_listing", listing_id: alice_listing_id, price_text: "€1" },
                                bearer(TOKEN_B))
 STDERR.puts "  B edit Alice's listing → #{edit_rc}"
 

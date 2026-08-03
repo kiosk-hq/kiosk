@@ -84,7 +84,7 @@ record(results, "ForgedUserId",
 
 # ── CrossOwnerEdit — Bob edits Alice's listing → 403 ─────────────────────────
 rc, _ = post_json("/kiosk/run",
-                  { name: "edit_listing", listing_id: alice_listing_id, price_text: "1 TL" },
+                  { name: "edit_listing", listing_id: alice_listing_id, price_text: "€1" },
                   bearer(TOKEN_B))
 record(results, "CrossOwnerEdit", rc == 403, "Bob edit Alice's listing → #{rc} (want 403)")
 

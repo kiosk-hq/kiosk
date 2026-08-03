@@ -45,6 +45,22 @@
     .stat .n{font-size:23px;font-weight:800;color:var(--accent);line-height:1}
     .stat .l{margin-top:5px;font-size:12px;color:var(--muted);font-weight:600}
 
+    /* public classifieds board */
+    .board{background:#fff;border:1px solid var(--line);border-radius:16px;padding:20px 22px}
+    .board-head{display:flex;align-items:flex-start;justify-content:space-between;gap:12px;margin-bottom:14px}
+    .board-title{font-size:17px;font-weight:800}
+    .board-sub{font-size:13px;color:var(--muted);margin-top:2px}
+    .board-count{flex:none;font-size:12px;font-weight:700;color:var(--accent);background:var(--soft);border-radius:999px;padding:5px 11px;white-space:nowrap}
+    .board-empty{font-size:14px;color:var(--muted);padding:8px 0}
+    .lst-list{list-style:none;display:flex;flex-direction:column;gap:8px}
+    .lst{display:flex;flex-wrap:wrap;align-items:center;gap:10px;padding:11px 13px;background:var(--bg);border:1px solid var(--line);border-radius:11px}
+    .lst-cat{flex:none;font-size:11.5px;font-weight:700;color:var(--accent);background:var(--soft);border-radius:999px;padding:3px 10px}
+    .lst-title{font-weight:700;font-size:14.5px}
+    .lst-price{flex:none;font-size:13px;font-weight:800;color:var(--accent)}
+    .lst-poster{margin-left:auto;font-size:13.5px;font-weight:700;color:var(--ink)}
+    .board-note{font-size:12.5px;color:var(--muted);margin-top:13px;line-height:1.45}
+    .board-note code{font-family:"SF Mono","Fira Mono",monospace;background:var(--soft);border-radius:5px;padding:1px 6px}
+
     .store{margin:44px auto 0;background:#fff;border:1px solid var(--line);border-radius:16px;overflow:hidden}
     .store-label{font-size:11.5px;font-weight:700;letter-spacing:.07em;text-transform:uppercase;color:var(--muted);background:var(--soft);padding:9px 22px;border-bottom:1px solid var(--line)}
     .store-body{padding:38px 24px 44px}
@@ -57,7 +73,7 @@
 <body>
   <header>
     <div class="logo">phils<span>list</span></div>
-    <nav style="font-size:13px;opacity:.9">classifieds · no money on the wire</nav>
+    <nav style="font-size:13px;opacity:.9"><a href="/listings" style="color:#fff;text-decoration:none;font-weight:600;margin-right:16px">Classifieds board</a>classifieds · no money on the wire</nav>
   </header>
 
   <div class="wrap">
@@ -78,14 +94,22 @@
       </div>
     </section>
 
-    <!-- ── 2. About this demo ────────────────────────────────────────── -->
+    <!-- ── 2. The live classifieds board (the reveal) ────────────────── -->
+    <section class="sec">
+      <div class="sec-k">📋 Live classifieds board — see the listing appear</div>
+      <%= render "board" %>
+    </section>
+
+    <!-- ── 3. About this demo ────────────────────────────────────────── -->
     <section class="sec">
       <div class="sec-k">About this demo</div>
       <div class="about">
-        <p><strong>philslist</strong> is a free classifieds board — the <strong>non-commerce</strong> reference. It exercises the full <code>query</code> + <code>run</code> + <code>schema</code> + identity-binding surface with <strong>no money on the wire at all</strong>: <code>/.well-known/kiosk.json</code> advertises <code>pay</code> as absent, the honest signal that this operator takes no money. Owner-scoped isolation keeps each poster's edits to their own listings.</p>
+        <p><strong>philslist</strong> is a free classifieds board — the <strong>non-commerce</strong> reference. It exercises the full <code>query</code> + <code>run</code> + <code>schema</code> + identity-binding surface with <strong>no money on the wire at all</strong>: <code>/.well-known/kiosk.json</code> advertises <code>pay</code> as absent, the honest signal that this operator takes no money. Owner-scoped isolation keeps each poster's edits to their own listings, while a <strong>household</strong> — two assistants bound to ONE account — shares one board presence: a listing either posts shows under the shared account on the board above and to both assistants, yet neither can touch a different owner's listing.</p>
         <div class="chips">
           <span class="chip">🆓 Non-commerce (no pay verb)</span>
           <span class="chip">Owner-scoped isolation</span>
+          <span class="chip">👪 Household — two assistants, one account</span>
+          <span class="chip">Public classifieds board</span>
         </div>
         <div class="links">
           <a href="https://github.com/kiosk-hq/kiosk/tree/main/kiosk-demo-philslist">▶ Source on GitHub</a>
@@ -99,7 +123,7 @@
       <p class="disco">🔗 Machine-readable: a customer's AI assistant can <a href="/.well-known/kiosk.json">learn here how to</a> discover and transact directly.</p>
     </section>
 
-    <!-- ── 3. Live activity (compact) ────────────────────────────────── -->
+    <!-- ── 4. Live activity (compact) ────────────────────────────────── -->
     <section class="sec">
       <div class="sec-k">Live activity</div>
       <div class="stats">
@@ -112,14 +136,14 @@
 
   </div>
 
-  <!-- ── 4. The storefront — what a human visitor sees (separated) ────── -->
+  <!-- ── 5. The storefront — what a human visitor sees (separated) ────── -->
   <div class="wrap">
     <div class="store">
       <div class="store-label">The board — what a human visitor sees</div>
       <div class="store-body">
         <div class="hero">
           <h1>A classifieds board your assistant can post to.</h1>
-          <p>Browse, post, edit and close listings — free, no account required to look.</p>
+          <p>Browse, post, edit and close listings — free, no account required to look. See the live board <a href="/listings">on its own page →</a></p>
         </div>
       </div>
     </div>

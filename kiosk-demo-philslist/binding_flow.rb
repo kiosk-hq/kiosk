@@ -167,7 +167,7 @@ STDERR.puts "  Token minted: sub=#{claims["sub"]} agent_id=#{agent1}"
 # Wire verbs as the human's account: post a listing, list.
 rc, posted = post_json("/kiosk/run",
                        { name: "post_listing", category_slug: "furniture",
-                         title: "Household desk", body: "Posted by assistant 1", price_text: "1500 TL" },
+                         title: "Household desk", body: "Posted by assistant 1", price_text: "€150" },
                        { "Authorization" => "Bearer #{token1}" })
 results[:wire_post] = rc
 listing_id = posted.dig("value", "listing_id")
@@ -202,7 +202,7 @@ results[:a2_sees_listing] = rc == 200 && mine2.fetch("rows", []).any? { |r| r["i
 
 # And the second assistant can EDIT the household listing (multi-account write).
 rc, = post_json("/kiosk/run",
-                { name: "edit_listing", listing_id: listing_id, price_text: "1400 TL" },
+                { name: "edit_listing", listing_id: listing_id, price_text: "€140" },
                 { "Authorization" => "Bearer #{token2}" })
 results[:a2_edit] = rc
 STDERR.puts "  Second assistant edited the household listing → #{rc}"

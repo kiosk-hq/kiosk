@@ -3,6 +3,7 @@
 Significant changes only (CLAUDE.md rule 5): one line per change, 1–2
 sentences — essence and intent, not content.
 
+- 2026-08-03: philslist prices switched to EUR with named seeded listings, and a public read-only classifieds board (home + `/listings`) now shows open listings so a wire-posted ad visibly appears — making the household (two assistants, one account) and owner-scoped isolation concrete; `pay` stays absent. (T-041)
 - 2026-08-03: stylish seeds a EUR service menu and a full day of priced appointments so the roles-from-IdP reveal is tangible — an owner-linked assistant now sees the whole book plus a real € revenue total (7 appointments, ~€370), each stylist only their own priced chairs, a customer nothing. (T-041)
 - 2026-08-03: getgrocery's admin order view renders totals and line prices in EUR (€) unconditionally, matching the EUR catalog and cashier — dropping the stale USD/`$` display branch that the currency cashier check already makes unreachable. (T-041)
 - 2026-08-03: skooti seeds a named, EUR-priced Istanbul fleet — electric scooters at Kadıköy Dock and Beşiktaş Pier (licence-free, €0.15/min) and the KYC-gated "Bosphorus Cruiser" motorcycle (€0.40/min) — and `scooters_available` now surfaces each vehicle's name and pickup dock, so a plain rental prompt has a concrete target; the KYC gate, offline unlock token, and EUR cashier check are unchanged. (T-041)

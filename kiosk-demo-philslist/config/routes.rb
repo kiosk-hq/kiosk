@@ -40,11 +40,16 @@ Rails.application.routes.draw do
   devise_for :users
 
   # Public root page: what this demo is + live DOMAIN activity (listing counts
-  # read from philslist's own tables) + both doors (human sign-in + the Kiosk
-  # wire). The board itself is still read/written over the wire (browse_listings
-  # / post_listing) — this page is informational + live-stats, not a listings UI.
+  # read from philslist's own tables) + the PUBLIC classifieds board (open
+  # listings across all owners — classifieds are public by nature, so a viewer
+  # SEES a wire-posted listing appear). Writes still happen over the wire
+  # (post_listing / edit_listing / close_listing); this page is read-only.
   # Devise needs this as its post-sign-in destination too.
   root "home#index"
+
+  # Standalone, read-only classifieds board — the same open listings on their
+  # own bookmarkable URL, a viewer can watch listings land under each owner.
+  get "/listings", to: "home#listings"
 
   # Native discovery surface — served by kiosk-server's DiscoveryController
   # (rendered from Kiosk::Server::WellKnown, the single generator seam).

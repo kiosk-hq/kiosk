@@ -20,10 +20,15 @@ Demonstrates:
   `owner_id = kiosk.current_user_id()` — the first demo where cross-owner
   **write** denial (not just read exclusion) is the headline
 - `post_listing` / `edit_listing` / `close_listing` actions (owner-only writes)
+- A **public, read-only classifieds board** at `/` and `/listings` (open
+  listings across all owners — title · category · €price · poster). Classifieds
+  are public by nature, so a listing an assistant posts over the wire visibly
+  appears here on the next refresh
 - Human↔assistant account binding over real Devise sessions, including the
-  **multi-account household** beat: a second assistant bound to the same
-  account sees and edits the same owner's listings, each independently
-  revocable (`rake demo:binding`)
+  **multi-account household** beat: two assistants bound to the SAME account
+  (a couple) share one board presence — a listing either posts shows under the
+  shared account and to both assistants — each independently revocable, while
+  neither can touch a different owner's listing (`rake demo:binding`)
 
 ### Before / after
 
@@ -33,7 +38,7 @@ only as this contrast, never as the demo.) With Kiosk, the same board exposes
 browse / post / edit / close to your assistant over four verbs — and it can
 only touch listings you own.
 
-`price_text` is a plain nullable **string** (`"1500 TL"`, `"free"`, or `NULL`)
+`price_text` is a plain nullable **string** (`"€300"`, `"Free"`, or `NULL`)
 — display metadata the board never transacts on. A reviewer looking for a
 hidden PSP finds only a string column.
 

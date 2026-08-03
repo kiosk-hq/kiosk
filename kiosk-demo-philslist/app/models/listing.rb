@@ -1,7 +1,7 @@
 # frozen_string_literal: true
 
 # A classifieds ad. The load-bearing detail: `price_text` is a plain NULLABLE
-# STRING ("1500 TL", "free", or NULL), NOT a money type — the board never
+# STRING ("€300", "Free", or NULL), NOT a money type — the board never
 # transacts on it. A commerce reviewer looking for a hidden PSP finds only a
 # display string. `owner_id` is the account that posted the ad; `edit`/`close`
 # are scoped to `owner_id = kiosk.current_user_id()` (app-layer isolation).

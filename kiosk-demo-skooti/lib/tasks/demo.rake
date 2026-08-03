@@ -283,19 +283,6 @@ namespace :demo do
       end
     end
 
-    # ── RUN 3: Server-gate negative — SKIP_KYC → 403 ─────────────────────
-    puts "\n══ RUN 3: Server-gate negative — SKIP_KYC → 403 ══"
-    boot_server.call do
-      result = run_flow.call("SKIP_KYC" => "1")
-
-      if result["http_start_rental"] == 403
-        puts "  OK  SKIP_KYC: http_start_rental == 403"
-      else
-        failures << "skip_kyc: http_start_rental expected 403, got #{result["http_start_rental"].inspect}"
-        puts "  FAIL  SKIP_KYC: expected 403, got #{result["http_start_rental"].inspect}"
-      end
-    end
-
     # ── RUN 4: C2 — unpaid second reservation → 403 ───────────────────────
     # A fresh reservation with no payment — Gate 3 must reject.
     puts "\n══ RUN 4: C2 — unpaid second reservation → 403 ══"
@@ -1077,14 +1064,14 @@ namespace :demo do
       puts "  FAIL  A3 rent_motorcycle with KYC → #{result["http_mc_rent_with_kyc"].inspect}/#{result["mc_unlocked"].inspect}"
     end
 
-    # B: scooter positive control — start_rental succeeds with a bare binary
-    # attestation carrying ZERO attributes, proving the age_over_18/licence_a
-    # attribute gate is specific to rent_motorcycle and did not leak here.
-    if result["http_scooter_rent_no_kyc"] == 200 && result["scooter_kyc_attrs_empty"] == true
-      puts "  OK  B  start_rental SK-001 with bare KYC (0 attributes) → 200 (attribute gate is action-specific)"
+    # B: scooter positive control — start_rental succeeds with NO KYC submitted
+    # at all (K-442), proving licence-free scooters carry no KYC gate; only the
+    # combustion motorcycle (rent_motorcycle) is KYC-gated.
+    if result["http_scooter_rent_no_kyc"] == 200 && result["scooter_rented_no_kyc"] == true
+      puts "  OK  B  start_rental SK-001 with NO KYC → 200 (licence-free scooters are not KYC-gated)"
     else
-      failures << "B: scooter start_rental with bare KYC expected 200 + empty attributes, got #{result["http_scooter_rent_no_kyc"].inspect}/empty=#{result["scooter_kyc_attrs_empty"].inspect}"
-      puts "  FAIL  B  scooter start_rental (bare KYC) → #{result["http_scooter_rent_no_kyc"].inspect}/empty=#{result["scooter_kyc_attrs_empty"].inspect}"
+      failures << "B: scooter start_rental with no KYC expected 200, got #{result["http_scooter_rent_no_kyc"].inspect}/rented=#{result["scooter_rented_no_kyc"].inspect}"
+      puts "  FAIL  B  scooter start_rental (no KYC) → #{result["http_scooter_rent_no_kyc"].inspect}/rented=#{result["scooter_rented_no_kyc"].inspect}"
     end
 
     if failures.empty?

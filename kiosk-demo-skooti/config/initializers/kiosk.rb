@@ -252,13 +252,15 @@ end
 # args: { reservation_id: }
 # scooter_code is NOT accepted from the client — it is derived server-side from
 # the reservation row, preventing cross-scooter unlock attacks.
-# Gates (all three must pass, else 403 Forbidden):
+# Gates (both must pass, else 403 Forbidden):
 #   1. reservation exists and belongs to the principal AND status = 'reserved'
-#   2. agent is KYC-verified (kyc_verified_at NOT NULL in kiosk.agents)
-#   3. principal has a settled payment (settlement) for THIS reservation
+#   2. principal has a settled payment (settlement) for THIS reservation
+# Licence-free scooters need NO KYC (K-442, DECISIONS-LOG KYC-MODEL) — only the
+# combustion motorcycle (rent_motorcycle) is KYC-gated. "Ride even if you can't
+# walk yet, just pay the fare."
 # Returns: { scooter_code:, rental_token:, exp: }
 Kiosk::Server::Actions.register("start_rental",
-                                  description: "Verify gates (ownership, KYC, payment) and issue an Ed25519 offline rental token",
+                                  description: "Verify gates (ownership, payment) and issue an Ed25519 offline rental token for a licence-free scooter (no KYC)",
                                   params: { reservation_id: "uuid — the reservation to activate" }) do |args|
   conn = ActiveRecord::Base.connection
 
@@ -292,20 +294,7 @@ Kiosk::Server::Actions.register("start_rental",
 
   code = scooter_row["code"]
 
-  # ── Gate 2: agent is KYC-verified ──────────────────────────────────────
-  # kiosk.current_agent_id() reads the app.current_agent_id GUC set by
-  # SessionContext — always present when the request is agent-authenticated.
-  kyc_row = conn.execute(<<~SQL).first
-    SELECT kyc_verified_at
-    FROM kiosk.agents
-    WHERE id = kiosk.current_agent_id()
-      AND revoked_at IS NULL
-  SQL
-  if kyc_row.nil? || kyc_row["kyc_verified_at"].nil?
-    raise Kiosk::Server::Errors::Forbidden.new("agent is not KYC-verified")
-  end
-
-  # ── Gate 3: settled payment whose cart references THIS reservation ───────
+  # ── Gate 2: settled payment whose cart references THIS reservation ───────
   # C2: join settlements → cart_mandates and require that line_items
   # contains the reservation_id of this specific reservation. Prevents
   # paying for reservation A and starting rental B.

@@ -11,7 +11,6 @@
 #
 # Optional env:
 #   SKIP_PAY=1   — skip the pay step (start_rental should return 403)
-#   SKIP_KYC=1   — skip the KYC step (start_rental should return 403)
 #
 # Prints ONE JSON line on stdout; non-zero exit on unexpected failures.
 #
@@ -50,7 +49,6 @@ require "dev_unlock_key"
 SERVER   = ENV.fetch("SERVER_URL")
 ISSUER   = ENV.fetch("KIOSK_ISSUER")
 SKIP_PAY = ENV.key?("SKIP_PAY")
-SKIP_KYC = ENV.key?("SKIP_KYC")
 
 # ── helpers ─────────────────────────────────────────────────────────────────
 
@@ -83,21 +81,9 @@ agent_id = reg.fetch("agent_id")
 user_id  = reg.fetch("user_id")
 token    = reg.fetch("access_token")
 
-# ── Step 2: KYC attestation ──────────────────────────────────────────────────
-
-rc_kyc = nil
-unless SKIP_KYC
-  require_relative "lib/stub_kyc"
-  att = StubKyc.attest(user_id: user_id)
-
-  rc_kyc, kyc_resp = post_json(
-    "#{SERVER}/kiosk/agents/kyc",
-    { kyc_jws: att },
-    { "Authorization" => "Bearer #{token}" },
-  )
-  abort "kyc failed (#{rc_kyc}): #{JSON.generate(kyc_resp)}" unless rc_kyc == 200
-  STDERR.puts "  KYC verified"
-end
+# ── Step 2: (no KYC) ─────────────────────────────────────────────────────────
+# Licence-free scooters need NO KYC (K-442) — the rental proceeds on ownership +
+# payment alone. KYC gates only the combustion motorcycle (see kyc_flow.rb).
 
 # ── Step 3: browse fleet via sanctioned query, then reserve ─────────────────
 #
@@ -250,7 +236,6 @@ end
 
 puts JSON.generate(
   http_register:          201,
-  http_kyc:               rc_kyc,
   http_browse:            rc_browse,
   http_reserve:           rc_rsv,
   http_pay:               rc_pay,

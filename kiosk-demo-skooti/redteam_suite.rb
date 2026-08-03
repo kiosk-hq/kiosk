@@ -2,11 +2,12 @@
 
 # skooti redteam battery
 #
-# Exercises the full skooti chain: Equihash PoW n=96 k=5 → KYC → reserve → pay →
-# start_rental (3-gate ownership/KYC/payment).  Headline scenarios:
+# Exercises the full skooti chain: Equihash PoW n=96 k=5 → reserve → pay →
+# start_rental (2-gate ownership/payment; licence-free scooters are NOT KYC-gated,
+# K-442).  Headline scenarios:
 #   C2  PayForOtherUseSelf  — B pays for A's reservation, B tries start_rental
 #   C3  SpentResourceReuse  — re-start_rental on an active reservation
-#       KYC bypass variants  — missing / expired / forged attestation
+#       KYC verifier variants — expired / forged attestation rejected at /kyc
 #   MotorcycleForgedKyc      — a forged attestation self-asserting
 #                              {age_over_18, licence_a} is rejected, so the
 #                              KYC-attribute-gated rent_motorcycle stays 403.
@@ -87,7 +88,7 @@ end
 
 profile = Kiosk::Redteam::Profile.new(
   pow_difficulty: 20,     # >0 flips on the /register gate; skooti gates with an Equihash proof (n=96 k=5) and the client solves the real 402 challenge — the numeric value is not an Equihash param
-  requires_kyc:   true,   # start_rental Gate-2 checks kyc_verified_at
+  requires_kyc:   true,   # skooti has a KYC verifier — rent_motorcycle is attribute-gated and ExpiredKyc/ForgedKyc exercise /kyc; start_rental itself is NOT KYC-gated (K-442)
 
   # ── per-user query — CrossTenantRead ─────────────────────────────────────
   per_user_query: "my_reservations",
@@ -267,14 +268,16 @@ end
 
 # ── Scenario list ─────────────────────────────────────────────────────────────
 #
-# 13 generic + 3 local cashier-check beats; skooti's full surface makes all
+# 12 generic + 3 local cashier-check beats; skooti's full surface makes all
 # generic scenarios applicable (0 skips expected).
 # RegistrationWithoutPow: pow_difficulty>0 (Equihash gate on) → always applicable.
 
 scenarios = [
   Kiosk::Redteam::Scenarios::PayForOtherUseSelf.new,     # C2 — headline
   Kiosk::Redteam::Scenarios::SpentResourceReuse.new,     # C3
-  Kiosk::Redteam::Scenarios::MissingKyc.new,
+  # MissingKyc removed (K-442): start_rental (scooter) is no longer KYC-gated,
+  # so "no KYC -> gated action blocked" no longer holds for it. The motorcycle's
+  # missing-KYC block is covered by MotorcycleForgedKyc + kyc_flow A1.
   Kiosk::Redteam::Scenarios::ExpiredKyc.new,
   Kiosk::Redteam::Scenarios::ForgedKyc.new,
   Kiosk::Redteam::Scenarios::UnpaidGatedAction.new,
@@ -292,7 +295,7 @@ scenarios = [
 
 # ── Expected-applicable assertion ─────────────────────────────────────────────
 #
-# skooti exposes the full surface: 13 scenarios, 0 skips expected.
+# skooti exposes the full surface: 12 generic scenarios, 0 skips expected.
 # If this set changes, a profile typo silently disabled a gate — fail loud.
 EXPECTED_SKIP_NAMES = [].freeze
 
@@ -311,7 +314,7 @@ results = runner.run(scenarios)
 # ── skooti-local beat: forged motorcycle KYC attributes ───────────────
 #
 # The generic ForgedKyc scenario above proves a forged attestation is rejected
-# at /kyc for the binary start_rental gate. This beat proves the SAME defence
+# at /kyc (the KYC verifier). This beat proves the SAME defence
 # holds for the NAMED-ATTRIBUTE gate on rent_motorcycle: an attestation that
 # SELF-ASSERTS {age_over_18, licence_a} but is signed by the WRONG key must be
 # rejected at /kyc → the attributes are never granted → rent_motorcycle stays

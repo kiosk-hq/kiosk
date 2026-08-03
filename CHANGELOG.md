@@ -3,6 +3,7 @@
 Significant changes only (CLAUDE.md rule 5): one line per change, 1–2
 sentences — essence and intent, not content.
 
+- 2026-08-04: skooti — licence-free scooters no longer require any KYC (K-442, DECISIONS-LOG KYC-MODEL): start_rental drops its binary-KYC gate so a fresh agent rents a scooter on ownership + payment alone; only the combustion motorcycle stays KYC-gated (age_over_18 + licence_a). The redteam's MissingKyc beat is retired (the motorcycle's missing-KYC block stays covered by MotorcycleForgedKyc).
 - 2026-08-04: getgrocery advertises a human-readable EUR price/total alongside the canonical integer cents, so an assistant renders euros instead of raw cents or a guessed glyph — closing a confusion seen in the live agent runs. (K-451)
 - 2026-08-03: Spread the demos across cities rather than all-Turkey — hoteling is now Istanbul-only (the Cappadocia/Ankara/Izmir properties relocated to coined Istanbul hotels, so an "Istanbul" search is coherent), atablefor → Lisbon (Tasca do Tejo, Alfama), skooti → Amsterdam (Jordaan/Prinsengracht docks, Amstel Cruiser motorcycle), and getgrocery's sample delivery address → Dublin; all mechanics, ids, flows, and EUR prices unchanged. (T-041)
 - 2026-08-03: tudu seeds a shared "Flat 3B" household (alice-owned, bob a housemate member) and adds a public read-only housemate view (home + `/shared`) so an assistant's created-and-shared list visibly lands in the collaborator's account — making the collaboration reveal observable without a second identity store. (T-041)

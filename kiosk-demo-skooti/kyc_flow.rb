@@ -9,13 +9,10 @@
 #     → submit KYC attestation {age_over_18:true, licence_a:true} → 200
 #     → rent_motorcycle → 200 (offline rental token, lock-sim unlocks)
 #
-#   SCOOTER (positive control — the attribute gate is action-specific):
-#     register (PoW) → reserve(SK-001) → pay → submit a BARE binary KYC
-#     attestation (NO attributes) → start_rental → 200. Proves start_rental
-#     does NOT require the motorcycle attributes (age_over_18 / licence_a) — the
-#     new attribute gate lives only on rent_motorcycle, it did not leak here.
-#     (start_rental's own long-standing gate is binary KYC, hence the bare
-#     attestation; a fresh agent with no attributes rents the scooter fine.)
+#   SCOOTER (positive control — NO KYC at all, K-442):
+#     register (PoW) → reserve(SK-001) → pay → start_rental → 200, with NO KYC
+#     submitted. A licence-free scooter needs no attestation whatsoever — the
+#     only KYC gate in skooti lives on rent_motorcycle (age_over_18 + licence_a).
 #
 # Prints ONE JSON line on stdout; non-zero exit on unexpected failures.
 #
@@ -147,23 +144,16 @@ if rc_mc_kyc == 200
   STDERR.puts "  motorcycle unlocked=#{mc_unlocked}"
 end
 
-# ── PART B: scooter positive control — NO KYC required ───────────────────────
+# ── PART B: scooter positive control — NO KYC at all (K-442) ─────────────────
 
-STDERR.puts "── PART B: scooter (positive control — no motorcycle attributes) ──"
+STDERR.puts "── PART B: scooter (positive control — NO KYC) ──"
 sc_key, sc_agent, sc_user, sc_token = register_agent
 sc_resv, sc_price = reserve(sc_token, "SK-001")
 pay(sc_token, sc_key, sc_user, sc_agent, "SK-001", sc_resv, sc_price)
-# Submit a BARE binary attestation — NO named attributes. This satisfies
-# start_rental's own binary-KYC gate but grants ZERO attributes, so it proves
-# the age_over_18/licence_a attribute gate did NOT leak onto start_rental.
-sc_att = StubKyc.attest(user_id: sc_user) # no attributes:
-rc_sc_kyc, sc_kyc_body = post_json("#{SERVER}/kiosk/agents/kyc", { kyc_jws: sc_att },
-                                   { "Authorization" => "Bearer #{sc_token}" })
-abort "scooter bare-KYC failed (#{rc_sc_kyc}): #{JSON.generate(sc_kyc_body)}" unless rc_sc_kyc == 200
-sc_attrs_empty = (sc_kyc_body["attributes"] || {}).empty?
-STDERR.puts "  Scooter agent bare KYC: attributes=#{sc_kyc_body["attributes"].inspect} (empty=#{sc_attrs_empty})"
+# NO KYC submitted at all — a fresh agent that has never attested rents a
+# licence-free scooter. Proves start_rental carries NO KYC gate (K-442).
 rc_sc, sc_body = run_action(sc_token, "start_rental", sc_resv)
-STDERR.puts "  start_rental SK-001 (bare KYC, NO attributes): http=#{rc_sc}"
+STDERR.puts "  start_rental SK-001 (NO KYC submitted at all): http=#{rc_sc}"
 
 # ── print ONE JSON line ──────────────────────────────────────────────────────
 
@@ -176,5 +166,5 @@ puts JSON.generate(
   http_mc_rent_with_kyc:     rc_mc_kyc,
   mc_unlocked:               mc_unlocked,
   http_scooter_rent_no_kyc:  rc_sc,
-  scooter_kyc_attrs_empty:   sc_attrs_empty,
+  scooter_rented_no_kyc:     (rc_sc == 200),
 )

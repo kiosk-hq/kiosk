@@ -140,7 +140,7 @@ end
 # authenticated agents can browse the available fleet. The block returns the
 # exact columns the agent needs (no full-table scrape): each vehicle's `name`
 # and pickup `dock`/location so a plain prompt ("rent an electric scooter near
-# Kadıköy", "rent the Bosphorus Cruiser motorcycle") resolves to a concrete
+# the Jordaan", "rent the Amstel Cruiser motorcycle") resolves to a concrete
 # row, plus `kind` + `needs_licence` so the agent tells the licence-free
 # electric scooter apart from the KYC-gated combustion motorcycle before it
 # commits to a rental verb, and the EUR per-minute rate it must sign its cart at.

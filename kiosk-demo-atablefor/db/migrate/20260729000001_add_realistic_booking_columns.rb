@@ -4,7 +4,7 @@
 #   - users.display_name  — the diner's public name shown on the read-only
 #     reservations board (so the board reads "party 2 · Terrace 2 · 20:00 ·
 #     Diego", not a raw email). NULLable: assistant accounts have no name.
-#   - restaurants.neighborhood — a realistic locality ("Beyoğlu") surfaced on
+#   - restaurants.neighborhood — a realistic locality ("Alfama") surfaced on
 #     the home page.
 #   - table_slots.deposit_eur — an OPTIONAL no-show hold shown in EUR on prime
 #     tables. It is DISPLAY-ONLY: atablefor advertises no `pay` verb, so this is

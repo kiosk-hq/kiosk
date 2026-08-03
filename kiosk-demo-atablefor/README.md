@@ -3,8 +3,8 @@
 Restaurant table-booking demo operator for Kiosk — the flagship of the demo
 redesign and the reference for the **viewable board** sharing pattern.
 
-`atablefor` is a fake-but-realistic restaurant (**Meydan Meze House**, Beyoğlu,
-Istanbul) that takes table reservations over the Kiosk wire — the "book a table
+`atablefor` is a fake-but-realistic restaurant (**Tasca do Tejo**, Alfama,
+Lisbon) that takes table reservations over the Kiosk wire — the "book a table
 for two, tomorrow at 8" story, completed by an AI assistant with **no human
 present, no web sign-in, and no payment** (a reservation takes no money; any €
 figure shown is a no-show hold settled at the restaurant, never on the wire).
@@ -38,7 +38,7 @@ There is **no `pay`**: the advertised capabilities are `[schema, query, run]`.
 Postgres required. From this directory:
 
 ```
-bin/rails demo:setup       # create + load schema + seed Meydan Meze House, its named tables, and diners
+bin/rails demo:setup       # create + load schema + seed Tasca do Tejo, its named tables, and diners
 bin/rails demo:book        # the headline: register → availability → book_table(party 2) → my_bookings
 bin/rails demo:binding     # a diner signs in (Devise), links their assistant, and its booking ties to the diner
 bin/rails demo:isolation   # cross-tenant denial (an operator's booking is only yours)

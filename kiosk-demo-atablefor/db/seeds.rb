@@ -1,6 +1,6 @@
 # frozen_string_literal: true
 
-# Synthetic restaurant "Meydan Meze House" (Beyoğlu, Istanbul) taking table
+# Synthetic restaurant "Tasca do Tejo" (Alfama, Lisbon) taking table
 # reservations over the Kiosk wire, with a set of named, bookable tables offered
 # across a few evenings. Coined name — no real brand.
 #
@@ -44,21 +44,21 @@ User.find_or_create_by!(id: REDTEAM_STUB_USER_ID)
 # flows assert their OWN principal's my_bookings, so board seeds must belong to
 # other diners or they'd inflate those counts.
 GUEST_DINER_1_ID   = "00000000-0000-0000-0000-000000000003"
-GUEST_DINER_1_NAME = "Selin Aydın"
+GUEST_DINER_1_NAME = "Inês Costa"
 GUEST_DINER_2_ID   = "00000000-0000-0000-0000-000000000004"
-GUEST_DINER_2_NAME = "Kerem Bulut"
+GUEST_DINER_2_NAME = "Tiago Freitas"
 User.find_or_create_by!(id: GUEST_DINER_1_ID) { |u| u.display_name = GUEST_DINER_1_NAME }
 User.find_or_create_by!(id: GUEST_DINER_2_ID) { |u| u.display_name = GUEST_DINER_2_NAME }
 
-meydan = Restaurant.find_or_create_by!(name: "Meydan Meze House") do |r|
-  r.neighborhood = "Beyoğlu"
+tasca = Restaurant.find_or_create_by!(name: "Tasca do Tejo") do |r|
+  r.neighborhood = "Alfama"
 end
 # Idempotent backfill if the row predates the neighborhood column.
-meydan.update!(neighborhood: "Beyoğlu") if meydan.neighborhood.blank?
+tasca.update!(neighborhood: "Alfama") if tasca.neighborhood.blank?
 
 # Named tables, seated across three seatings (19:00 early · 20:00 main · 21:00
 # late). "tomorrow" (offset 1) carries the headline slot — a 2-top at 20:00, so
-# "book a table for two at Meydan Meze House tomorrow at 8" lands verbatim.
+# "book a table for two at Tasca do Tejo tomorrow at 8" lands verbatim.
 # deposit_eur is a DISPLAY-ONLY no-show hold on the prime terrace/window tables,
 # shown in EUR and settled at the restaurant — atablefor advertises NO `pay`
 # verb, so no money ever crosses the wire.
@@ -86,7 +86,7 @@ slots = [
 
 slots.each do |offset, label, capacity, time, deposit|
   TableSlot.find_or_create_by!(
-    restaurant:  meydan,
+    restaurant:  tasca,
     table_label: label,
     slot_date:   today + offset,
     slot_time:   time,
@@ -99,7 +99,7 @@ end
 
 # ── Two EXISTING reservations so the public board is never empty ─────────────
 # Claim two open slots for the two seeded diners (Diego already has a bound
-# assistant path; Selin is board-only). These read on /reservations as
+# assistant path; Inês is board-only). These read on /reservations as
 # "party · table · time · <diner name>" alongside any freshly-booked one.
 def seed_reservation!(restaurant:, diner_id:, table_label:, offset:, time:, party:)
   slot = TableSlot.find_by(
@@ -122,12 +122,12 @@ def seed_reservation!(restaurant:, diner_id:, table_label:, offset:, time:, part
   end
 end
 
-seed_reservation!(restaurant: meydan, diner_id: GUEST_DINER_1_ID,
+seed_reservation!(restaurant: tasca, diner_id: GUEST_DINER_1_ID,
                   table_label: "Terrace 2", offset: 2, time: "20:00", party: 5)
-seed_reservation!(restaurant: meydan, diner_id: GUEST_DINER_2_ID,
+seed_reservation!(restaurant: tasca, diner_id: GUEST_DINER_2_ID,
                   table_label: "Window 6", offset: 3, time: "21:00", party: 3)
 
 puts "Seeded: 2 named diners (sign-in #{DINER_EMAIL} / #{DINER_PASSWORD}), " \
-     "1 restaurant (#{meydan.name}, #{meydan.neighborhood}), " \
+     "1 restaurant (#{tasca.name}, #{tasca.neighborhood}), " \
      "#{TableSlot.where(status: 'open').count} open + #{TableSlot.where(status: 'booked').count} booked table slots, " \
      "#{Booking.where(status: 'confirmed').count} reservations on the board"

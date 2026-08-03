@@ -226,7 +226,8 @@ CREATE TABLE public.restaurants (
     id bigint NOT NULL,
     name character varying NOT NULL,
     created_at timestamp(6) without time zone NOT NULL,
-    updated_at timestamp(6) without time zone NOT NULL
+    updated_at timestamp(6) without time zone NOT NULL,
+    neighborhood character varying
 );
 
 
@@ -271,7 +272,8 @@ CREATE TABLE public.table_slots (
     slot_time time without time zone NOT NULL,
     status character varying DEFAULT 'open'::character varying NOT NULL,
     created_at timestamp(6) without time zone NOT NULL,
-    updated_at timestamp(6) without time zone NOT NULL
+    updated_at timestamp(6) without time zone NOT NULL,
+    deposit_eur integer DEFAULT 0 NOT NULL
 );
 
 
@@ -303,7 +305,8 @@ CREATE TABLE public.users (
     created_at timestamp(6) without time zone NOT NULL,
     updated_at timestamp(6) without time zone NOT NULL,
     email character varying,
-    encrypted_password character varying DEFAULT ''::character varying NOT NULL
+    encrypted_password character varying DEFAULT ''::character varying NOT NULL,
+    display_name character varying
 );
 
 
@@ -616,6 +619,7 @@ ALTER TABLE ONLY public.bookings
 SET search_path TO "$user", public;
 
 INSERT INTO "schema_migrations" (version) VALUES
+('20260729000001'),
 ('20260721000001'),
 ('20260718000002'),
 ('20260717000001'),

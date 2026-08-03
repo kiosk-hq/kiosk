@@ -151,24 +151,27 @@ namespace :demo do
       puts "  ✗  my_bookings — got #{my_bookings.inspect}"
     end
 
-    # ── assertions: psql row counts ────────────────────────────────────
+    # ── assertions: psql ground truth ──────────────────────────────────
+    # Assert the SPECIFIC booking just made (by id), not DB-wide totals: the
+    # seeds place a couple of existing reservations on the public board, so an
+    # absolute COUNT is seed-dependent. This checks the new row directly.
     db = "kiosk_atablefor_development"
 
-    bookings_count = `psql -X -d #{db} -tAc "SELECT COUNT(*) FROM bookings WHERE status = 'confirmed'" 2>&1`.strip
-    if bookings_count == "1"
-      puts "  ✓  confirmed bookings count = 1"
+    this_booking = `psql -X -d #{db} -tAc "SELECT status FROM bookings WHERE id = '#{booking_id}'" 2>&1`.strip
+    if this_booking == "confirmed"
+      puts "  ✓  the new booking is confirmed in the DB (id=#{booking_id})"
     else
-      failures << "confirmed bookings COUNT expected 1, got #{bookings_count.inspect}"
-      puts "  ✗  confirmed bookings COUNT expected 1, got #{bookings_count.inspect}"
+      failures << "new booking #{booking_id} status expected 'confirmed', got #{this_booking.inspect}"
+      puts "  ✗  new booking status — got #{this_booking.inspect}"
     end
 
-    # The booked slot must be marked 'booked' (no double-booking).
-    booked_slots = `psql -X -d #{db} -tAc "SELECT COUNT(*) FROM table_slots WHERE status = 'booked'" 2>&1`.strip
-    if booked_slots == "1"
-      puts "  ✓  exactly 1 table_slot marked booked"
+    # The slot this booking claimed must be marked 'booked' (no double-booking).
+    this_slot = `psql -X -d #{db} -tAc "SELECT ts.status FROM table_slots ts JOIN bookings b ON b.table_slot_id = ts.id WHERE b.id = '#{booking_id}'" 2>&1`.strip
+    if this_slot == "booked"
+      puts "  ✓  the booked table_slot is marked booked"
     else
-      failures << "booked table_slots COUNT expected 1, got #{booked_slots.inspect}"
-      puts "  ✗  booked table_slots COUNT expected 1, got #{booked_slots.inspect}"
+      failures << "the new booking's table_slot status expected 'booked', got #{this_slot.inspect}"
+      puts "  ✗  the new booking's table_slot status — got #{this_slot.inspect}"
     end
 
     if failures.empty?

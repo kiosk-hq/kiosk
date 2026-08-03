@@ -1,0 +1,32 @@
+<%# Public, read-only reservations board. Renders each upcoming confirmed
+    reservation as "party size · table · time · <diner name>". Shared by the
+    home page and the standalone /reservations page. Read-only — no forms,
+    no actions; it only mirrors what the wire booked. %>
+<div class="board">
+  <div class="board-head">
+    <div>
+      <div class="board-title">Reservations board</div>
+      <div class="board-sub">Upcoming bookings at Meydan Meze House — updates as assistants book over the wire.</div>
+    </div>
+    <span class="board-count"><%= @reservations.size %> upcoming</span>
+  </div>
+
+  <% if @reservations.empty? %>
+    <p class="board-empty">No upcoming reservations yet. Point an assistant at this endpoint and book one.</p>
+  <% else %>
+    <ul class="res-list">
+      <% @reservations.each do |r| %>
+        <li class="res">
+          <span class="res-party" title="party size"><%= r["party_size"] %>&nbsp;guests</span>
+          <span class="res-table"><%= r["table_label"] %></span>
+          <span class="res-when"><%= r["slot_day"] %> · <%= r["slot_time"] %></span>
+          <span class="res-name"><%= board_diner_name(r) %></span>
+          <% if r["deposit_eur"].to_i > 0 %>
+            <span class="res-dep" title="no-show hold, settled at the restaurant">€<%= r["deposit_eur"] %> hold</span>
+          <% end %>
+        </li>
+      <% end %>
+    </ul>
+    <p class="board-note">Names are the diners the bookings are linked to — an assistant's booking shows under its diner's account. No payment crosses the wire; any € figure is a no-show hold settled at the restaurant.</p>
+  <% end %>
+</div>

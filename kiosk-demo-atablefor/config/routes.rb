@@ -7,10 +7,17 @@ Rails.application.routes.draw do
   # end-to-end by `rake demo:binding`.
   devise_for :users
 
-  # Public root page: what this demo is + live DOMAIN activity (booking counts
-  # read from atablefor's own tables) + how an agent pokes the wire.
+  # Public root page: what this demo is + the assistant-facing "point your AI
+  # assistant here" cue + a live, read-only reservations board (upcoming
+  # bookings read from atablefor's own tables, shown under each diner's name).
   # HomeController inherits ActionController::Base so HTML renders.
   root "home#index"
+
+  # Public, read-only reservations board — the (b) reveal: after an assistant
+  # books + links, the reservation shows up here under the diner's name. Shares
+  # HomeController#reservations so the board renders both on the home page and
+  # on its own /reservations URL.
+  get "/reservations", to: "home#reservations"
 
   # Account binding: the human half (link mint, verify page, unlink — the
   # Devise session channel) and the agent half (link-code redeem). Walked

@@ -199,7 +199,7 @@
         rescue
           order["created_at"].to_s
         end
-        cur_glyph  = { "usd" => "$", "eur" => "€" }.fetch(order["settled_currency"].to_s.downcase, "€")
+        cur_glyph  = "€"  # this operator settles in EUR (the cashier rejects any other currency at capture)
         total_str  = format("%s%.2f", cur_glyph, order["total_cents"].to_i / 100.0)
         items      = order["items"] || []
 

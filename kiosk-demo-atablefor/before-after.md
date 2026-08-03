@@ -1,6 +1,6 @@
 # Before and After — why AI assistants stall at restaurant booking, and what atablefor proves
 
-**Honesty note up front.** atablefor is what a restaurant-reservation platform *would* look like if it spoke Kiosk — a fake-but-realistic table-booking operator (Meydan Meze House) built to demonstrate the mechanism. Nothing below implies that any real reservation platform works this way. The demo proves the *mechanism* works; whether operators will adopt it is an open question.
+**Honesty note up front.** atablefor is what a restaurant-reservation platform *would* look like if it spoke Kiosk — a fake-but-realistic table-booking operator (Tasca do Tejo) built to demonstrate the mechanism. Nothing below implies that any real reservation platform works this way. The demo proves the *mechanism* works; whether operators will adopt it is an open question.
 
 ---
 
@@ -52,7 +52,7 @@ atablefor is a Rails 8.1 app that speaks Kiosk. The following is the recorded ou
 
 The database confirmed: one row in `bookings` (`status='confirmed'`), the claimed slot marked `booked`.
 
-The business outcome: the user said "book a table for two at Meydan Meze House tomorrow at 8." Their assistant completed the reservation — discovery, registration, availability, booking — without the user touching anything and without the user having an account at atablefor beforehand.
+The business outcome: the user said "book a table for two at Tasca do Tejo tomorrow at 8." Their assistant completed the reservation — discovery, registration, availability, booking — without the user touching anything and without the user having an account at atablefor beforehand.
 
 The operator outcome: atablefor received a real, accountable reservation. The customer relationship stays with the operator (the token carries the operator's issuer). There is no intermediate platform taking a discovery fee or owning the session.
 

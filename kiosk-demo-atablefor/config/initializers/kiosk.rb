@@ -351,7 +351,7 @@ end
 # ─── Actions ────────────────────────────────────────────────────────────────
 
 # book_table — claim an open table-slot for the authenticated principal and
-# create a confirmed booking. Selects an open slot at Meydan Meze House matching
+# create a confirmed booking. Selects an open slot at Tasca do Tejo matching
 # the requested date, time and party size, atomically marks it 'booked', and
 # records the booking under kiosk.current_user_id(). No payment — a reservation
 # takes no money (any deposit shown is settled at the restaurant, in EUR).

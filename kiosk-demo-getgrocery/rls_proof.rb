@@ -52,8 +52,8 @@ ORDER_B_ID = "bbb00000-0000-0000-0000-000000000001"
 end
 
 [
-  [ORDER_A_ID, USER_A_ID, "1 Alpha Ave, Istanbul"],
-  [ORDER_B_ID, USER_B_ID, "1 Beta Ave, Istanbul"],
+  [ORDER_A_ID, USER_A_ID, "12 Camden Street, Dublin 2"],
+  [ORDER_B_ID, USER_B_ID, "34 Camden Street, Dublin 2"],
 ].each do |oid, uid, addr|
   conn.execute(<<~SQL)
     INSERT INTO orders

@@ -3,6 +3,7 @@
 Significant changes only (CLAUDE.md rule 5): one line per change, 1–2
 sentences — essence and intent, not content.
 
+- 2026-08-03: Spread the demos across cities rather than all-Turkey — hoteling is now Istanbul-only (the Cappadocia/Ankara/Izmir properties relocated to coined Istanbul hotels, so an "Istanbul" search is coherent), atablefor → Lisbon (Tasca do Tejo, Alfama), skooti → Amsterdam (Jordaan/Prinsengracht docks, Amstel Cruiser motorcycle), and getgrocery's sample delivery address → Dublin; all mechanics, ids, flows, and EUR prices unchanged. (T-041)
 - 2026-08-03: tudu seeds a shared "Flat 3B" household (alice-owned, bob a housemate member) and adds a public read-only housemate view (home + `/shared`) so an assistant's created-and-shared list visibly lands in the collaborator's account — making the collaboration reveal observable without a second identity store. (T-041)
 - 2026-08-03: philslist prices switched to EUR with named seeded listings, and a public read-only classifieds board (home + `/listings`) now shows open listings so a wire-posted ad visibly appears — making the household (two assistants, one account) and owner-scoped isolation concrete; `pay` stays absent. (T-041)
 - 2026-08-03: stylish seeds a EUR service menu and a full day of priced appointments so the roles-from-IdP reveal is tangible — an owner-linked assistant now sees the whole book plus a real € revenue total (7 appointments, ~€370), each stylist only their own priced chairs, a customer nothing. (T-041)

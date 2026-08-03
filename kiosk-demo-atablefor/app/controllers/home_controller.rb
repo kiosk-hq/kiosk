@@ -1,20 +1,73 @@
 # frozen_string_literal: true
 
-# The provider's public root page. atablefor is api_only, but this controller
-# inherits from ActionController::Base (not ::API) so it can render an HTML
-# landing — the same pattern getgrocery uses. Its job: tell a human/agent
-# visitor what this demo is, show live DOMAIN activity (real booking counts),
-# and point at the Kiosk discovery entrypoint + skill.
+# The provider's public root page. atablefor is api_only=false, and this
+# controller inherits from ActionController::Base (not ::API) so it can render an
+# HTML landing. Its job: make it OBVIOUS this is a Kiosk endpoint an AI assistant
+# drives (the "point your assistant here / this speaks Kiosk" cue + the one-line
+# prompt), NOT a human web-booking app — and show the PUBLIC, read-only
+# reservations board so a viewer SEES an assistant's booking tied to its diner.
 class HomeController < ActionController::Base
+  # The home page (protocol-primary framing) + the reservations board rendered
+  # inline. Reading the OWN tables, not telemetry; a refresh is enough.
   def index
-    # Cheap domain counts, rendered server-side on page load (a refresh is
-    # enough — no JS polling). These read atablefor's OWN tables, not telemetry.
     @tables_booked  = Booking.where(status: "confirmed").count
     @covers_seated  = Booking.where(status: "confirmed").sum(:party_size)
-    @cancellations  = Booking.where(status: "cancelled").count
     @open_slots     = TableSlot.where(status: "open").count
+    @reservations   = upcoming_reservations
 
     # Set a Link header too, so a header-only agent finds the skill.
     response.set_header("Link", '<https://kiosk.tech/skill.md>; rel="kiosk"')
+  end
+
+  # The board on its own URL. Same data; a standalone read-only page a viewer
+  # can bookmark to watch reservations land under each diner's name.
+  def reservations
+    @reservations = upcoming_reservations
+    response.set_header("Link", '<https://kiosk.tech/skill.md>; rel="kiosk"')
+  end
+
+  private
+
+  # Upcoming confirmed reservations for the public board, joined to the diner's
+  # display name (falls back to a masked local-part if a diner has no name, and
+  # to "Assistant guest" for a headless account with neither). Read-only — the
+  # board never mutates anything. Today onward, soonest first.
+  def upcoming_reservations
+    conn = ActiveRecord::Base.connection
+    conn.execute(<<~SQL).to_a
+      SELECT
+        r.name                              AS restaurant,
+        ts.table_label                      AS table_label,
+        ts.deposit_eur                      AS deposit_eur,
+        b.party_size                        AS party_size,
+        to_char(ts.slot_date, 'Dy DD Mon')  AS slot_day,
+        to_char(ts.slot_time, 'HH24:MI')    AS slot_time,
+        u.display_name                      AS diner_name,
+        u.email                             AS diner_email
+      FROM bookings b
+      JOIN table_slots ts ON ts.id = b.table_slot_id
+      JOIN restaurants r  ON r.id  = b.restaurant_id
+      JOIN users u        ON u.id  = b.user_id
+      WHERE b.status = 'confirmed'
+        AND ts.slot_date >= CURRENT_DATE
+      ORDER BY ts.slot_date, ts.slot_time, ts.table_label
+      LIMIT 50
+    SQL
+  end
+
+  helper_method :board_diner_name
+
+  # Public label for a reservation's diner: the seeded display name, else a
+  # masked email local-part, else a headless-assistant placeholder.
+  def board_diner_name(row)
+    name = row["diner_name"].to_s.strip
+    return name unless name.empty?
+
+    email = row["diner_email"].to_s
+    if email.include?("@")
+      local = email.split("@").first
+      return local.length <= 2 ? local : "#{local[0, 2]}#{'•' * (local.length - 2)}"
+    end
+    "Assistant guest"
   end
 end

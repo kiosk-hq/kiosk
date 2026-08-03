@@ -316,10 +316,12 @@ Kiosk::Server::Queries.register("availability",
   party_size = (params.fetch(:party_size) { raise Kiosk::Server::Errors::BadRequest.new("missing param: party_size") }).to_i
   conn = ActiveRecord::Base.connection
   conn.execute(
-    "SELECT ts.id, ts.table_label, ts.capacity, " \
+    "SELECT ts.id, r.name AS restaurant, ts.table_label, ts.capacity, " \
     "to_char(ts.slot_date, 'YYYY-MM-DD') AS slot_date, " \
-    "to_char(ts.slot_time, 'HH24:MI')    AS slot_time " \
+    "to_char(ts.slot_time, 'HH24:MI')    AS slot_time, " \
+    "ts.deposit_eur " \
     "FROM table_slots ts " \
+    "JOIN restaurants r ON r.id = ts.restaurant_id " \
     "WHERE ts.status = 'open' " \
     "AND ts.slot_date = #{conn.quote(date.to_s)}::date " \
     "AND ts.capacity >= #{party_size} " \
@@ -334,11 +336,13 @@ end
 Kiosk::Server::Queries.register("my_bookings",
                                  description: "List this principal's table bookings (scoped to authenticated user via kiosk.current_user_id())") do |_params|
   ActiveRecord::Base.connection.execute(
-    "SELECT b.id, b.restaurant_id, b.table_slot_id, b.party_size, b.status, " \
+    "SELECT b.id, b.restaurant_id, r.name AS restaurant, ts.table_label, " \
+    "b.table_slot_id, b.party_size, b.status, " \
     "to_char(ts.slot_date, 'YYYY-MM-DD') AS slot_date, " \
     "to_char(ts.slot_time, 'HH24:MI')    AS slot_time " \
     "FROM bookings b " \
     "JOIN table_slots ts ON ts.id = b.table_slot_id " \
+    "JOIN restaurants r  ON r.id = b.restaurant_id " \
     "WHERE b.user_id = kiosk.current_user_id() " \
     "ORDER BY ts.slot_date, ts.slot_time"
   ).to_a
@@ -347,10 +351,10 @@ end
 # ─── Actions ────────────────────────────────────────────────────────────────
 
 # book_table — claim an open table-slot for the authenticated principal and
-# create a confirmed booking. Selects an open slot at Mamma Pizza matching the
-# requested date, time and party size, atomically marks it 'booked', and
+# create a confirmed booking. Selects an open slot at Meydan Meze House matching
+# the requested date, time and party size, atomically marks it 'booked', and
 # records the booking under kiosk.current_user_id(). No payment — a reservation
-# takes no money.
+# takes no money (any deposit shown is settled at the restaurant, in EUR).
 Kiosk::Server::Actions.register("book_table",
                                   description: "Book a restaurant table for the authenticated principal " \
                                                "(params: date, time, party_size). Confirms a reservation on an " \

@@ -3,18 +3,34 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>atablefor — restaurant table booking (Kiosk demo)</title>
+  <title>Meydan Meze House — a Kiosk booking endpoint (atablefor demo)</title>
   <!-- Machine-readable affordance: assistants discover the Kiosk surface here. -->
   <link rel="kiosk" href="https://kiosk.tech/skill.md">
   <style>
-    :root{--accent:#8a3b1c;--accent2:#ffcf9b;--ink:#2a1a12;--muted:#98847a;--soft:#f7e6da;--line:#eccbb2;--bg:#faf6f2}
+    :root{--accent:#8a3b1c;--accent2:#ffcf9b;--ink:#2a1a12;--muted:#98847a;--soft:#f7e6da;--line:#eccbb2;--bg:#faf6f2;--ok:#1a6b3c}
     *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
     body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;color:var(--ink);background:var(--bg);line-height:1.5}
     a{color:var(--accent)}
     header{background:var(--accent);color:#fff;padding:0 32px;height:60px;display:flex;align-items:center;justify-content:space-between}
     .logo{font-size:22px;font-weight:800;letter-spacing:-.5px}
     .logo span{color:var(--accent2)}
+    header nav{display:flex;align-items:center;gap:18px;font-size:13px}
+    header nav a{color:#fff;text-decoration:none;font-weight:600;opacity:.92}
+    header nav a:hover{opacity:1;text-decoration:underline}
+    .staff-login{background:rgba(255,255,255,.16);border-radius:8px;padding:6px 13px}
+    .signout-btn{background:rgba(255,255,255,.16);border:0;color:#fff;font:inherit;font-size:13px;font-weight:600;border-radius:8px;padding:6px 13px;cursor:pointer}
+    .signout-btn:hover{background:rgba(255,255,255,.28)}
+    .whoami{font-size:12px;opacity:.85}
     .wrap{max-width:860px;margin:0 auto;padding:0 24px}
+
+    /* the loud "this is a machine endpoint" banner — first thing a visitor/agent sees */
+    .proto{background:#1c130d;color:#ffe;margin-top:0;padding:26px 24px}
+    .proto .wrap{max-width:860px}
+    .proto-badge{display:inline-block;font-size:11.5px;font-weight:700;letter-spacing:.09em;text-transform:uppercase;color:#ffcf9b;border:1px solid #6b4a33;border-radius:999px;padding:4px 12px;margin-bottom:12px}
+    .proto h1{font-size:24px;line-height:1.2;font-weight:800;margin-bottom:8px}
+    .proto p{font-size:15px;color:#e8d9cd;max-width:640px}
+    .proto .say{background:#2a1c12;border:1px solid #6b4a33;border-radius:10px;padding:13px 16px;font-size:15.5px;font-weight:600;color:#ffcf9b;margin:14px 0 6px}
+    .proto .no-signin{font-size:13px;color:#c9b4a4;margin-top:6px}
 
     .sec{margin:32px auto 0}
     .sec-k{font-size:12px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:var(--muted);display:flex;align-items:center;gap:8px;margin-bottom:12px}
@@ -23,7 +39,9 @@
     .tryit{background:#fff;border:2px solid var(--accent);border-radius:16px;padding:22px 24px}
     .tryit h2{font-size:19px;font-weight:800;margin-bottom:8px}
     .tryit p{font-size:15px;margin-bottom:10px;color:#432}
-    .say{background:var(--soft);border-radius:10px;padding:12px 15px;font-size:15px;font-weight:600;color:var(--accent);margin-bottom:12px}
+    .steps{list-style:none;counter-reset:s;margin:6px 0 4px}
+    .steps li{counter-increment:s;font-size:14.5px;color:#432;padding:3px 0 3px 30px;position:relative}
+    .steps li::before{content:counter(s);position:absolute;left:0;top:2px;width:21px;height:21px;background:var(--soft);color:var(--accent);border-radius:50%;font-size:12px;font-weight:800;display:flex;align-items:center;justify-content:center}
     .note{font-size:13px;color:var(--muted);margin-top:8px}
     .linkbox{margin-top:14px;padding-top:14px;border-top:1px dashed var(--line);font-size:14px}
     .linkbox a{font-weight:700;text-decoration:none}
@@ -45,48 +63,86 @@
     .stat .n{font-size:23px;font-weight:800;color:var(--accent);line-height:1}
     .stat .l{margin-top:5px;font-size:12px;color:var(--muted);font-weight:600}
 
-    .store{margin:44px auto 0;background:#fff;border:1px solid var(--line);border-radius:16px;overflow:hidden}
-    .store-label{font-size:11.5px;font-weight:700;letter-spacing:.07em;text-transform:uppercase;color:var(--muted);background:var(--soft);padding:9px 22px;border-bottom:1px solid var(--line)}
-    .store-body{padding:38px 24px 44px}
-    .hero{text-align:center;max-width:640px;margin:0 auto}
-    .hero h1{font-size:27px;line-height:1.15;font-weight:800;margin-bottom:12px}
-    .hero p{font-size:16px;color:var(--muted)}
+    /* reservations board */
+    .board{background:#fff;border:1px solid var(--line);border-radius:16px;padding:20px 22px}
+    .board-head{display:flex;align-items:flex-start;justify-content:space-between;gap:12px;margin-bottom:14px}
+    .board-title{font-size:17px;font-weight:800}
+    .board-sub{font-size:13px;color:var(--muted);margin-top:2px}
+    .board-count{flex:none;font-size:12px;font-weight:700;color:var(--ok);background:#e7f5ec;border-radius:999px;padding:5px 11px;white-space:nowrap}
+    .board-empty{font-size:14px;color:var(--muted);padding:8px 0}
+    .res-list{list-style:none;display:flex;flex-direction:column;gap:8px}
+    .res{display:flex;flex-wrap:wrap;align-items:center;gap:10px;padding:11px 13px;background:var(--bg);border:1px solid var(--line);border-radius:11px}
+    .res-party{font-weight:800;color:var(--accent);font-size:14px;min-width:78px}
+    .res-table{font-weight:700;font-size:14px}
+    .res-when{font-size:13.5px;color:#5a4638}
+    .res-name{margin-left:auto;font-size:14px;font-weight:700;color:var(--ink)}
+    .res-dep{flex:none;font-size:11.5px;font-weight:700;color:#7a5a12;background:#fbefd2;border-radius:999px;padding:3px 9px}
+    .board-note{font-size:12.5px;color:var(--muted);margin-top:13px;line-height:1.45}
+
     footer{text-align:center;font-size:12px;color:var(--muted);padding:30px 0 40px}
   </style>
 </head>
 <body>
   <header>
     <div class="logo">atable<span>for</span></div>
-    <nav style="font-size:13px;opacity:.9">table reservations · no payment</nav>
+    <nav>
+      <a href="/reservations">Reservations board</a>
+      <% if user_signed_in? %>
+        <span class="whoami">Staff: <%= current_user.display_name.presence || current_user.email %></span>
+        <%= button_to "Sign out", destroy_user_session_path, method: :delete, class: "signout-btn" %>
+      <% else %>
+        <a class="staff-login" href="/users/sign_in">Staff login</a>
+      <% end %>
+    </nav>
   </header>
+
+  <!-- ── 0. PROTOCOL-PRIMARY banner: this is a machine endpoint, not a web form ── -->
+  <section class="proto">
+    <div class="wrap">
+      <span class="proto-badge">🔌 This endpoint speaks Kiosk</span>
+      <h1>Point your AI assistant here — it books the table.</h1>
+      <p>This is <strong>Meydan Meze House</strong> (Beyoğlu, Istanbul) exposed as a <strong>Kiosk</strong> booking endpoint. There is <strong>no web booking form and no human sign-in to reserve</strong> — an assistant discovers the surface, registers itself, and books over the protocol.</p>
+      <p class="say">“Book a table for two at Meydan Meze House tomorrow at 8.”</p>
+      <p class="no-signin">Say that to your assistant. It reads <a href="/.well-known/kiosk.json" style="color:#ffcf9b">/.well-known/kiosk.json</a>, self-registers, and reserves — no login, no app, no card. (Staff sign-in, top right, is only for restaurant staff to manage linked diners.)</p>
+    </div>
+  </section>
 
   <div class="wrap">
 
-    <!-- ── 1. Try it with your own assistant ─────────────────────────── -->
+    <!-- ── 1. How an assistant books here ────────────────────────────── -->
     <section class="sec">
-      <div class="sec-k">🤖 Try it with your own assistant</div>
+      <div class="sec-k">🤖 How an assistant books here — over the protocol</div>
       <div class="tryit">
         <h2>Book a table — no human at the keyboard</h2>
-        <p>Tell your AI assistant:</p>
-        <p class="say">“Book a table for two at atablefor.demo.kiosk.tech, tomorrow at 8.”</p>
-        <p>It discovers the restaurant, registers itself, and reserves — no account, no app, and no card (a reservation takes no money).</p>
+        <p>Give the one-line prompt to your AI assistant. Behind the scenes it:</p>
+        <ol class="steps">
+          <li>Discovers this endpoint via <code style="font-size:13px">/.well-known/kiosk.json</code> — no <code style="font-size:13px">/bookings</code> web page, no browser login.</li>
+          <li>Registers itself with a proof-of-possession handshake (creates its own account).</li>
+          <li>Calls <code style="font-size:13px">query availability</code>, then <code style="font-size:13px">run book_table</code> — the reservation is confirmed.</li>
+        </ol>
         <p class="note">⚠ This demo runs <strong>production-grade proof-of-work</strong> (~9–10&nbsp;s per register) on purpose — so you can feel the real anti-scalping toll first-hand. The other Kiosk demos are tuned light (sub-second) for quick poking.</p>
         <div class="linkbox">
-          <strong>Link your assistant to your diner profile.</strong> <a href="/users/sign_in">Sign in</a> (use the demo login below), then open <a href="/kiosk/auth/assistants">Manage&nbsp;assistants</a> and mint a one-time link code. Hand that code to your AI assistant — it redeems the code over the wire, and its bookings then tie to your account.
+          <strong>Link a booking to a real diner account.</strong> A diner signs in at <a href="/users/sign_in">Staff login</a> (demo login below), opens <a href="/kiosk/auth/assistants">Manage&nbsp;assistants</a> and mints a one-time link code. Hand that code to the assistant — it redeems the code over the wire, and its bookings then appear on the <a href="/reservations">reservations board</a> under that diner's name.
           <div class="cred">Demo login: <code>diego@example.com</code> &nbsp;/&nbsp; <code>atablefor-demo-password</code></div>
         </div>
       </div>
     </section>
 
-    <!-- ── 2. About this demo ────────────────────────────────────────── -->
+    <!-- ── 2. The live reservations board (the reveal) ───────────────── -->
+    <section class="sec">
+      <div class="sec-k">📋 Live reservations board — see the booking land</div>
+      <%= render "board" %>
+    </section>
+
+    <!-- ── 3. About this demo ────────────────────────────────────────── -->
     <section class="sec">
       <div class="sec-k">About this demo</div>
       <div class="about">
-        <p><strong>atablefor</strong> (seeded operator: Mamma Pizza) is a restaurant table-booking demo. It is the <strong>human↔assistant account-linking</strong> reference: a diner signs in, mints a link code, their assistant redeems it, and the assistant's bookings are then tied to the diner's account — all with <strong>no money on the wire</strong> (a reservation takes no card).</p>
+        <p><strong>atablefor</strong> (seeded operator: Meydan Meze House) is a restaurant table-booking demo and the <strong>human↔assistant account-linking</strong> reference: a diner signs in, mints a link code, their assistant redeems it, and the assistant's bookings tie to the diner's account — visible on the board above — all with <strong>no money on the wire</strong> (a reservation takes no card; any € figure is a no-show hold settled at the restaurant).</p>
         <div class="chips">
           <span class="chip">🔗 Human↔assistant linking</span>
-          <span class="chip">Devise sign-in + link codes</span>
-          <span class="chip">No payment</span>
+          <span class="chip">Viewable reservations board</span>
+          <span class="chip">No payment (EUR holds only)</span>
           <span class="chip">Production-grade PoW (~10&nbsp;s)</span>
         </div>
         <div class="links">
@@ -101,30 +157,17 @@
       <p class="disco">🔗 Machine-readable: a customer's AI assistant can <a href="/.well-known/kiosk.json">learn here how to</a> discover and transact directly.</p>
     </section>
 
-    <!-- ── 3. Live activity (compact) ────────────────────────────────── -->
+    <!-- ── 4. Live activity (compact) ────────────────────────────────── -->
     <section class="sec">
       <div class="sec-k">Live activity</div>
       <div class="stats">
         <div class="stat"><div class="n"><%= @tables_booked %></div><div class="l">Tables booked</div></div>
         <div class="stat"><div class="n"><%= @covers_seated %></div><div class="l">Covers seated</div></div>
-        <div class="stat"><div class="n"><%= @cancellations %></div><div class="l">Cancellations</div></div>
+        <div class="stat"><div class="n"><%= @reservations.size %></div><div class="l">Upcoming</div></div>
         <div class="stat"><div class="n"><%= @open_slots %></div><div class="l">Open table slots</div></div>
       </div>
     </section>
 
-  </div>
-
-  <!-- ── 4. The storefront — what a human visitor sees (separated) ────── -->
-  <div class="wrap">
-    <div class="store">
-      <div class="store-label">The storefront — what a human visitor sees</div>
-      <div class="store-body">
-        <div class="hero">
-          <h1>Book a table for two, tomorrow at 8.</h1>
-          <p>Mamma Pizza — reservations for lunch and dinner, seven days a week.</p>
-        </div>
-      </div>
-    </div>
   </div>
 
   <footer>atablefor — demo provider — powered by <a href="https://kiosk.tech">Kiosk</a></footer>

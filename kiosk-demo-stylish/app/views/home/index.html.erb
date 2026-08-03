@@ -66,13 +66,14 @@
     <section class="sec">
       <div class="sec-k">🤖 Try it with your own assistant</div>
       <div class="tryit">
-        <h2>Book a haircut — no human at the keyboard</h2>
-        <p>Tell your AI assistant:</p>
+        <h2>This is a Kiosk endpoint — an AI assistant drives it</h2>
+        <p>stylish is a salon a customer's assistant transacts with directly over the Kiosk wire. Tell your AI assistant:</p>
         <p class="say">“Book a haircut at stylish.demo.kiosk.tech for Thursday afternoon.”</p>
-        <p>It discovers the salon, registers itself, checks the calendar, and books — no account, no app.</p>
+        <p>It discovers the salon, registers itself, reads the service menu (EUR prices), checks the calendar, and books — no account, no app.</p>
         <div class="linkbox">
-          <strong>Staff roles come from the operator's IdP.</strong> <a href="/users/sign_in">Sign in</a> as salon staff (demo login below), then open <a href="/kiosk/auth/assistants">Manage&nbsp;assistants</a> and mint a link code for your AI assistant. Whatever staff role the operator's IdP gives you is inherited by the assistant at link time, and the <code>salon_calendar</code> query gates on it: this demo signs you in as the <strong>owner</strong>, who sees the whole book and revenue — a non-owner staff member's assistant sees only their own chairs.
-          <div class="cred">Demo staff login: <code>owner@combette.example</code> &nbsp;/&nbsp; <code>combette-demo-password</code></div>
+          <strong>The staff reveal — your assistant inherits your role.</strong>
+          Use <a href="/users/sign_in"><strong>Staff login</strong></a> to sign in as salon staff, then open <a href="/kiosk/auth/assistants">Manage&nbsp;assistants</a> and <strong>mint a link code</strong> — hand it to your assistant and it <strong>inherits your role</strong>, sourced from the operator's IdP (not chosen by the assistant). The role-gated <code>salon_calendar</code> query then scopes what it sees: an <strong>owner-linked assistant sees the whole book + the day's € revenue</strong>; a stylist-linked one sees only their own chairs; a customer sees nothing. This demo logs you in as the <strong>owner</strong>, so your assistant sees the full day (7 appointments, ~€370) — the reveal a customer's assistant never gets.
+          <div class="cred">Demo staff login (owner): <code>owner@combette.example</code> &nbsp;/&nbsp; <code>combette-demo-password</code></div>
         </div>
       </div>
     </section>
@@ -81,10 +82,11 @@
     <section class="sec">
       <div class="sec-k">About this demo</div>
       <div class="about">
-        <p><strong>stylish</strong> (seeded salon: Combette on Park) is a salon-booking demo. It is the <strong>roles-from-IdP</strong> reference: staff roles supplied by the operator's own identity system are inherited by a linked assistant, and role-gated queries scope what each assistant can see. It also walks human↔assistant account binding over real Devise sessions.</p>
+        <p><strong>stylish</strong> (seeded salon: Combette on Park) is a salon-booking demo with a EUR service menu and a full day of booked chairs. It is the <strong>roles-from-IdP</strong> reference: staff roles supplied by the operator's own identity system are inherited by a linked assistant, and role-gated queries scope what each assistant can see (owner → whole book + € revenue; stylist → own chairs; customer → nothing). It also walks human↔assistant account binding over real Devise sessions.</p>
         <div class="chips">
           <span class="chip">🪪 IdP roles (staff RBAC)</span>
           <span class="chip">Role-gated queries</span>
+          <span class="chip">💶 EUR service menu</span>
           <span class="chip">Human↔assistant linking</span>
         </div>
         <div class="links">

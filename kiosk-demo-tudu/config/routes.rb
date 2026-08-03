@@ -55,8 +55,15 @@ Rails.application.routes.draw do
     end
   end
 
-  # root → a simple tudu landing pointing at sign-in + the wire.
+  # root → a simple tudu landing pointing at sign-in + the wire, plus the public
+  # housemate board (the collaboration reveal).
   root to: "lists#index"
+
+  # Public, read-only HOUSEMATE view — the (b) reveal: after an assistant creates
+  # a list and shares it with the housemate (Bob), the shared list shows up here
+  # under his account. A viewer SEES the collaboration land without a second
+  # identity store. Shares ListsController#shared with the home-page board.
+  get "/shared", to: "lists#shared"
 
   # Native discovery surface — served by kiosk-server's DiscoveryController
   # (rendered from Kiosk::Server::WellKnown, the single generator seam).

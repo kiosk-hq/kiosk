@@ -573,13 +573,13 @@ namespace :demo do
       puts "  OK  schema.verbs does not include events"
     end
 
-    # Queries: properties, availability, my_bookings with descriptions
-    %w[properties availability my_bookings].each do |qname|
+    # Queries: properties, availability, my_bookings, search_hotels, hotel_detail
+    %w[properties availability my_bookings search_hotels hotel_detail].each do |qname|
       entry = queries.find { |q| q["name"] == qname }
       if entry
         puts "  OK  schema.queries includes #{qname}"
         if entry["description"] && !entry["description"].to_s.empty?
-          puts "  OK  #{qname} has description: #{entry["description"].inspect}"
+          puts "  OK  #{qname} has description: #{entry["description"].inspect[0, 80]}…"
         else
           failures << "#{qname} missing description"
           puts "  FAIL  #{qname} missing description"
@@ -587,6 +587,20 @@ namespace :demo do
       else
         failures << "schema.queries missing #{qname}"
         puts "  FAIL  schema.queries missing #{qname}"
+      end
+    end
+
+    # T-042 / K-452: the two data-plane exemplar queries carry the machine-readable
+    # descriptor extensions (input_schema + example_params + example_row).
+    %w[search_hotels hotel_detail].each do |qname|
+      entry = queries.find { |q| q["name"] == qname } || {}
+      %w[input_schema example_params example_row].each do |ext|
+        if entry[ext] && !entry[ext].to_s.empty?
+          puts "  OK  #{qname} advertises #{ext}"
+        else
+          failures << "#{qname} missing #{ext}"
+          puts "  FAIL  #{qname} missing #{ext}"
+        end
       end
     end
 
@@ -616,6 +630,135 @@ namespace :demo do
     end
   end
   # ── end demo:schema ─────────────────────────────────────────────────────────
+end
+
+namespace :demo do
+  # ── demo:search ─────────────────────────────────────────────────────────────
+  desc <<~DESC
+    Pagination + detail-by-id proof (T-042 / K-452).
+
+    Boots the server over the ~100-hotel catalogue, registers a fresh agent, and
+    runs search_flow.rb to PROVE the data-plane pagination shape:
+
+      • search_hotels with a small limit returns a FULL page carrying a top-level
+        `next` cursor (the result was truncated — silent truncation is now visible).
+      • echoing that `next` back as `cursor` returns the FOLLOWING page, and the
+        two pages are DISJOINT (real paging, not the same slice).
+      • a filtered search that fits in one page OMITS `next` (complete result).
+      • hotel_detail on a summary row's id returns the full property with rooms
+        (the "search returns summaries, fetch detail on demand" pattern).
+
+    Exits 0 if all assertions pass; exits 1 on any miss.
+  DESC
+  task search: :setup do
+    require "resolv"
+    require "net/http"
+    require "uri"
+    require "json"
+
+    port = ENV.fetch("PORT", "3004")
+    log  = "/tmp/kiosk-hoteling-search.log"
+
+    host = begin
+      addr = begin
+        Resolv.getaddress("hoteling.app")
+      rescue Resolv::ResolvError
+        ""
+      end
+      addr == "127.0.0.1" ? "hoteling.app" : "127.0.0.1"
+    end
+
+    server_url   = "http://#{host}:#{port}"
+    kiosk_issuer = server_url
+
+    puts "\n── Starting hoteling (pagination proof) on #{server_url} ──"
+
+    File.truncate(log, 0) if File.exist?(log)
+    server_pid = spawn(
+      { "KIOSK_ISSUER" => kiosk_issuer },
+      "bundle exec rails s -p #{port} -b 127.0.0.1 -e development",
+      out: log, err: log,
+    )
+
+    at_exit do
+      begin
+        Process.kill("TERM", server_pid)
+        Process.wait(server_pid)
+      rescue Errno::ESRCH, Errno::ECHILD
+        nil
+      end
+      puts "  Server stopped."
+    end
+
+    ready = false
+    40.times do
+      begin
+        res = Net::HTTP.get_response(URI("#{server_url}/.well-known/kiosk.json"))
+        if res.code.to_i == 200
+          ready = true
+          break
+        end
+      rescue Errno::ECONNREFUSED, Errno::EADDRNOTAVAIL, SocketError
+        nil
+      end
+      sleep 1
+    end
+    abort "Server did not become ready — see #{log}" unless ready
+    puts "  Server up at #{server_url}"
+
+    flow_rb = File.expand_path("../../search_flow.rb", __dir__)
+    puts "\n── Running search_flow.rb ──"
+    raw = `SERVER_URL=#{server_url} KIOSK_ISSUER=#{kiosk_issuer} bundle exec ruby #{flow_rb} 2>&1`
+    puts raw
+
+    begin
+      result = JSON.parse(raw.lines.grep(/^\{/).last || raw)
+    rescue JSON::ParserError => e
+      abort "search_flow.rb did not produce valid JSON: #{e.message}\nOutput:\n#{raw}"
+    end
+
+    puts "\n── Pagination + detail assertions ──"
+    failures = []
+
+    check = lambda do |ok, pass_msg, fail_msg|
+      if ok
+        puts "  OK  #{pass_msg}"
+      else
+        failures << fail_msg
+        puts "  FAIL  #{fail_msg}"
+      end
+    end
+
+    check.call(result["http_page1"] == 200, "search_hotels page 1 → 200", "page 1 HTTP #{result["http_page1"].inspect}")
+
+    # THE pagination proof: a full page carries `next`; echoing it returns a
+    # DISJOINT next page; the last (filtered, complete) page omits `next`.
+    check.call(result["page1_count"] == 20,
+               "page 1 is a full page of 20 rows", "page 1 count #{result["page1_count"].inspect} (expected 20)")
+    check.call(!result["page1_next"].to_s.empty?,
+               "page 1 carries `next` (truncated) — #{result["page1_next"].inspect}",
+               "page 1 missing `next` — truncation is silent")
+    check.call(result["page2_count"].to_i >= 1 && result["pages_disjoint"] == true,
+               "echoing `next` as `cursor` returns a DISJOINT next page (#{result["page2_count"]} rows)",
+               "next page empty or overlapping (count=#{result["page2_count"].inspect}, disjoint=#{result["pages_disjoint"].inspect})")
+    check.call(result["filtered_has_next"] == false,
+               "the filtered (complete) search OMITS `next` (#{result["filtered_count"]} rows)",
+               "filtered search still carries `next` — cannot signal completeness")
+
+    # detail-by-id: search returns summaries, fetch detail on demand.
+    check.call(result["http_detail"] == 200 && result["detail_room_count"].to_i >= 1,
+               "hotel_detail(id=#{result["detail_id"]}) → full property, #{result["detail_room_count"]} room type(s)",
+               "hotel_detail failed (http=#{result["http_detail"].inspect}, rooms=#{result["detail_room_count"].inspect})")
+
+    if failures.empty?
+      puts "\n  All pagination + detail assertions passed."
+    else
+      puts "\n  FAILED assertions:"
+      failures.each { |f| puts "    - #{f}" }
+      exit 1
+    end
+  end
+  # ── end demo:search ─────────────────────────────────────────────────────────
 end
 
 desc "End-to-end Kiosk hoteling demo: setup the DB then prove the full booking chain."

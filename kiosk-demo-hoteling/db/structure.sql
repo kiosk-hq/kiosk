@@ -305,7 +305,11 @@ CREATE TABLE public.properties (
     name character varying NOT NULL,
     city character varying NOT NULL,
     created_at timestamp(6) without time zone NOT NULL,
-    updated_at timestamp(6) without time zone NOT NULL
+    updated_at timestamp(6) without time zone NOT NULL,
+    neighbourhood character varying,
+    stars integer DEFAULT 3 NOT NULL,
+    amenities jsonb DEFAULT '[]'::jsonb NOT NULL,
+    address character varying
 );
 
 
@@ -726,6 +730,20 @@ CREATE INDEX index_bookings_on_user_id ON public.bookings USING btree (user_id);
 
 
 --
+-- Name: index_properties_on_neighbourhood; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX index_properties_on_neighbourhood ON public.properties USING btree (neighbourhood);
+
+
+--
+-- Name: index_properties_on_stars; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX index_properties_on_stars ON public.properties USING btree (stars);
+
+
+--
 -- Name: index_room_types_on_property_id; Type: INDEX; Schema: public; Owner: -
 --
 
@@ -827,6 +845,7 @@ ALTER TABLE ONLY public.bookings
 SET search_path TO "$user", public;
 
 INSERT INTO "schema_migrations" (version) VALUES
+('20260804000001'),
 ('20260717000001'),
 ('20260628000001'),
 ('20260618131463'),

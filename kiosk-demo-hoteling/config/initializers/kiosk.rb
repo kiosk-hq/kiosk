@@ -140,6 +140,11 @@ Kiosk.configure do |c|
   end
 end
 
+# Amenity vocabulary — the closed set a property MAY offer. Shared by the
+# search_hotels `amenity` filter enum (below) and the seeds (db/seeds.rb).
+AMENITY_POOL = %w[wifi breakfast pool spa gym parking rooftop_bar
+                  airport_shuttle sea_view pet_friendly restaurant hammam].freeze
+
 # ─── Queries ────────────────────────────────────────────────────────────────
 
 Kiosk::Server::Queries.register("properties",
@@ -189,6 +194,166 @@ Kiosk::Server::Queries.register("my_bookings",
     "WHERE b.user_id = kiosk.current_user_id() " \
     "ORDER BY b.created_at DESC"
   ).to_a
+end
+
+# ── search_hotels — paginated, multi-parameter search (T-042 / K-452) ────────
+#
+# The reference exemplar for the "~100 hotels would overwhelm an unpaginated
+# list" case. Filters (all optional) narrow the ~100-property catalog; a small
+# page (default 20) is returned with an opaque `next` cursor when more rows
+# match, absent on the last page. An assistant should apply the human's stated
+# constraints and page only if the human needs to see more.
+HOTELING_SEARCH_PAGE = 20  # default page size (assistant may override via `limit`)
+HOTELING_SEARCH_MAX  = 50  # cap so `limit` can't defeat pagination
+
+Kiosk::Server::Queries.register("search_hotels",
+  description: "Search Istanbul hotels with optional filters, returning a paginated " \
+               "page of SUMMARY rows (one row per property, cheapest room's nightly " \
+               "rate). Apply the user's stated constraints as filters; do not fetch " \
+               "the whole catalogue. All filters are optional and AND together: " \
+               "neighbourhood (exact area name), max_price_cents (cheapest room ≤ this, " \
+               "EUR cents), min_stars (star rating ≥ this), amenity (property must offer " \
+               "it). Page size defaults to 20 (override with limit, capped at 50); when " \
+               "the response carries a top-level `next`, more hotels match — echo it back " \
+               "verbatim as `cursor` to fetch the following page, and keep paging until " \
+               "`next` is absent. from_price_cents is EUR cents (carts are signed in eur). " \
+               "Call hotel_detail with a returned id for the full property (rooms, " \
+               "amenities, address).",
+  params: {
+    neighbourhood:  "string, optional — exact area, e.g. \"Kadıköy\"",
+    max_price_cents: "integer, optional — cheapest room's nightly rate ≤ this (EUR cents)",
+    min_stars:      "integer 1..5, optional — star rating floor",
+    amenity:        "string, optional — property must offer this amenity",
+    limit:          "integer, optional — page size (default 20, max 50)",
+    cursor:         "string, optional — opaque `next` from a prior page, echoed verbatim",
+  },
+  input_schema: {
+    type: "object",
+    additionalProperties: false,
+    properties: {
+      neighbourhood: {
+        type: "string",
+        enum: %w[Sultanahmet Beyoğlu Kadıköy Beşiktaş Şişli Fatih
+                 Üsküdar Galata Taksim Ortaköy Bakırköy Nişantaşı],
+        description: "Exact Istanbul area name.",
+      },
+      max_price_cents: { type: "integer", minimum: 0, description: "Cheapest room ≤ this, EUR cents." },
+      min_stars:       { type: "integer", minimum: 1, maximum: 5, description: "Star-rating floor." },
+      amenity:         { type: "string", enum: AMENITY_POOL, description: "Property must offer this amenity." },
+      limit:           { type: "integer", minimum: 1, maximum: HOTELING_SEARCH_MAX,
+                         default: HOTELING_SEARCH_PAGE, description: "Page size." },
+      cursor:          { type: "string", description: "Opaque `next` cursor from a prior page." },
+    },
+    required: [],
+  },
+  example_params: { neighbourhood: "Beşiktaş", min_stars: 4, max_price_cents: 20000, limit: 20 },
+  example_row: {
+    id: 4, name: "Bosphorus Palace", neighbourhood: "Beşiktaş", stars: 5,
+    from_price_cents: 15000, currency: "eur", room_type_count: 2,
+  }) do |params|
+  conn = ActiveRecord::Base.connection
+
+  limit = params[:limit].to_s.strip.empty? ? HOTELING_SEARCH_PAGE : params[:limit].to_i
+  limit = HOTELING_SEARCH_PAGE if limit <= 0
+  limit = HOTELING_SEARCH_MAX if limit > HOTELING_SEARCH_MAX
+  offset = Kiosk::Server::Cursor.decode_offset(params[:cursor])
+
+  where = ["1=1"]
+  if (nb = params[:neighbourhood]) && !nb.to_s.strip.empty?
+    where << "p.neighbourhood = #{conn.quote(nb.to_s)}"
+  end
+  if (ms = params[:min_stars]) && !ms.to_s.strip.empty?
+    where << "p.stars >= #{conn.quote(ms.to_i.to_s)}::integer"
+  end
+  if (am = params[:amenity]) && !am.to_s.strip.empty?
+    where << "p.amenities @> #{conn.quote([am.to_s].to_json)}::jsonb"
+  end
+  # Cheapest nightly rate per property (the summary price the row advertises).
+  price_floor = "(SELECT MIN(rt.nightly_price_cents) FROM public.room_types rt WHERE rt.property_id = p.id)"
+  if (mp = params[:max_price_cents]) && !mp.to_s.strip.empty?
+    where << "#{price_floor} <= #{conn.quote(mp.to_i.to_s)}::integer"
+  end
+
+  # Fetch limit+1 to detect a following page without a second COUNT query.
+  sql = <<~SQL
+    SELECT p.id, p.name, p.neighbourhood, p.stars,
+           #{price_floor} AS from_price_cents,
+           (SELECT COUNT(*) FROM public.room_types rt WHERE rt.property_id = p.id) AS room_type_count
+    FROM public.properties p
+    WHERE #{where.join(" AND ")}
+    ORDER BY p.stars DESC, from_price_cents ASC, p.id ASC
+    LIMIT #{limit + 1} OFFSET #{offset}
+  SQL
+  rows = conn.execute(sql).to_a
+
+  has_more = rows.length > limit
+  rows = rows.first(limit)
+  rows.each { |r| r["currency"] = "eur" }
+  next_cursor = has_more ? Kiosk::Server::Cursor.encode_offset(offset + limit) : nil
+
+  Kiosk::Server::Page.new(rows: rows, next_cursor: next_cursor)
+end
+
+# ── hotel_detail — fetch ONE property by id (search→summaries, fetch on demand)
+Kiosk::Server::Queries.register("hotel_detail",
+  description: "Fetch the full detail for ONE hotel by its id (from a search_hotels " \
+               "row): name, neighbourhood, stars, address, amenities, and every room " \
+               "type with its nightly rate. This is the \"search returns summaries, " \
+               "fetch detail on demand\" pattern — call it for the one or few hotels the " \
+               "user is choosing between, not for the whole result set. " \
+               "nightly_price_cents is EUR cents (carts are signed in eur).",
+  params: {
+    property_id: "integer — the hotel id from a search_hotels row",
+  },
+  input_schema: {
+    type: "object",
+    additionalProperties: false,
+    properties: {
+      property_id: { type: "integer", description: "Hotel id from a search_hotels row." },
+    },
+    required: ["property_id"],
+  },
+  example_params: { property_id: 4 },
+  example_row: {
+    id: 4, name: "Bosphorus Palace", neighbourhood: "Beşiktaş", stars: 5,
+    address: "Çırağan Cd. 88, Beşiktaş, Istanbul",
+    amenities: %w[wifi breakfast pool spa sea_view airport_shuttle],
+    currency: "eur",
+    room_types: [
+      { id: 7, name: "Classic",   nightly_price_cents: 15000 },
+      { id: 8, name: "Bosphorus", nightly_price_cents: 25000 },
+    ],
+  }) do |params|
+  conn = ActiveRecord::Base.connection
+  pid = params.fetch(:property_id) do
+    raise Kiosk::Server::Errors::BadRequest.new("missing field: property_id")
+  end
+
+  prop = conn.execute(
+    "SELECT id, name, neighbourhood, stars, address, amenities " \
+    "FROM public.properties WHERE id = #{conn.quote(pid.to_s)}::integer LIMIT 1"
+  ).first
+  raise Kiosk::Server::Errors::NotFound.new("hotel not found: #{pid}") if prop.nil?
+
+  rooms = conn.execute(
+    "SELECT id, name, nightly_price_cents FROM public.room_types " \
+    "WHERE property_id = #{conn.quote(pid.to_s)}::integer ORDER BY nightly_price_cents"
+  ).to_a
+
+  # amenities is jsonb — normalise to a Ruby array regardless of driver decoding.
+  amenities = prop["amenities"]
+  amenities = JSON.parse(amenities) if amenities.is_a?(String)
+
+  {
+    id:            prop["id"],
+    name:          prop["name"],
+    neighbourhood: prop["neighbourhood"],
+    stars:         prop["stars"],
+    address:       prop["address"],
+    amenities:     amenities,
+    currency:      "eur",
+    room_types:    rooms,
+  }
 end
 
 # ─── Actions ────────────────────────────────────────────────────────────────

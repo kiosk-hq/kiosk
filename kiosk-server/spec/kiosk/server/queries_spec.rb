@@ -104,4 +104,51 @@ RSpec.describe Kiosk::Server::Queries do
       expect(described_class.known).to eq(["x"])
     end
   end
+
+  describe "machine-readable descriptor extensions (input_schema / example_params / example_row — ADR-0021)" do
+    let(:input_schema) do
+      {
+        type: "object",
+        required: ["city"],
+        properties: {
+          city:  { type: "string" },
+          limit: { type: "integer", minimum: 1, maximum: 50 },
+        },
+      }
+    end
+
+    it "register accepts input_schema:/example_params:/example_row: and exposes them via describe" do
+      described_class.register("search",
+        description: "Search hotels",
+        params: { city: "string" },
+        input_schema: input_schema,
+        example_params: { city: "Lisbon", limit: 20 },
+        example_row: { id: 7, name: "Grand Aljube", city: "Lisbon" }) { [] }
+
+      d = described_class.describe("search")
+      expect(d[:input_schema]).to   eq(input_schema)
+      expect(d[:example_params]).to eq({ city: "Lisbon", limit: 20 })
+      expect(d[:example_row]).to    eq({ id: 7, name: "Grand Aljube", city: "Lisbon" })
+    end
+
+    # Back-compat: a descriptor with no extensions is byte-for-byte the old shape.
+    it "OMITS the new keys entirely when they are not supplied (existing descriptors unchanged)" do
+      described_class.register("plain", description: "Browse", params: { x: "string" }) { [] }
+
+      d = described_class.describe("plain")
+      expect(d).to eq({ name: "plain", description: "Browse", params: { x: "string" } })
+      expect(d).not_to have_key(:input_schema)
+      expect(d).not_to have_key(:example_params)
+      expect(d).not_to have_key(:example_row)
+    end
+
+    it "emits only the extension keys that were supplied" do
+      described_class.register("partial", example_params: { city: "Porto" }) { [] }
+
+      d = described_class.describe("partial")
+      expect(d).to have_key(:example_params)
+      expect(d).not_to have_key(:input_schema)
+      expect(d).not_to have_key(:example_row)
+    end
+  end
 end

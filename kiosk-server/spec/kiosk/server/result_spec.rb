@@ -50,6 +50,36 @@ RSpec.describe Kiosk::Server::Result do
       r = described_class.new(kind: :value, payload: { ok: 1 })
       expect(r.to_envelope).to eq(ok: true, kind: :value, value: { ok: 1 })
     end
+
+    # ── pagination cursor (ADR-0021 / T-042) ──────────────────────────────
+    # ABSENT `next` = complete; PRESENT `next` = truncated (more rows exist).
+
+    it "omits `next` entirely when the query did not paginate (back-compat)" do
+      r = described_class.new(kind: :rows, payload: [{ a: 1 }])
+      expect(r.to_envelope).not_to have_key(:next)
+      expect(r.to_envelope).to eq(ok: true, kind: :rows, rows: [{ a: 1 }])
+    end
+
+    it "emits `next` (the opaque cursor) when the result was truncated" do
+      r = described_class.new(kind: :rows, payload: [{ a: 1 }], next_cursor: "b2Zmc2V0OjQw")
+      expect(r.to_envelope).to eq(ok: true, kind: :rows, rows: [{ a: 1 }], next: "b2Zmc2V0OjQw")
+    end
+
+    it "a :value result never carries `next` (single-object/action results)" do
+      r = described_class.new(kind: :value, payload: { id: 7 })
+      expect(r.to_envelope).not_to have_key(:next)
+    end
+  end
+
+  describe "next_cursor validation" do
+    it "rejects a next_cursor on a non-:rows result" do
+      expect { described_class.new(kind: :value, payload: {}, next_cursor: "x") }
+        .to raise_error(ArgumentError, /only valid on a :rows result/)
+    end
+
+    it "defaults next_cursor to nil (unpaginated)" do
+      expect(described_class.new(kind: :rows, payload: []).next_cursor).to be_nil
+    end
   end
 
   describe "value equality" do

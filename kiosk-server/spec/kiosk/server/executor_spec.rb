@@ -88,6 +88,49 @@ RSpec.describe Kiosk::Server::Executor do
                              identity: identity, connection: connection)
       }.to raise_error(Kiosk::Server::Errors::ActionFailed, /kaboom/)
     end
+
+    # ── cursor pagination seam (ADR-0021 / T-042) ─────────────────────────
+
+    it "leaves next_cursor nil when the handler returns a bare Array (back-compat)" do
+      Kiosk::Server::Queries.register("flat") { |_p| [{ "id" => 1 }, { "id" => 2 }] }
+      result = described_class.call(kind: :query, args: { name: "flat" },
+                                    identity: identity, connection: connection)
+
+      expect(result.kind).to        eq(:rows)
+      expect(result.payload).to     eq([{ "id" => 1 }, { "id" => 2 }])
+      expect(result.next_cursor).to be_nil
+      expect(result.to_envelope).not_to have_key(:next)
+    end
+
+    it "threads a Page's next_cursor into the result envelope as `next`" do
+      Kiosk::Server::Queries.register("paged") do |params|
+        offset = Kiosk::Server::Cursor.decode_offset(params[:cursor])
+        Kiosk::Server::Page.new(
+          rows: [{ "id" => offset + 1 }],
+          next_cursor: Kiosk::Server::Cursor.encode_offset(offset + 1),
+        )
+      end
+
+      result = described_class.call(kind: :query, args: { name: "paged", limit: 1 },
+                                    identity: identity, connection: connection)
+
+      expect(result.kind).to        eq(:rows)
+      expect(result.payload).to     eq([{ "id" => 1 }])
+      expect(result.next_cursor).to eq(Kiosk::Server::Cursor.encode_offset(1))
+      expect(result.to_envelope[:next]).to eq(result.next_cursor)
+    end
+
+    it "omits `next` when a paginating handler signals the last page (Page with nil cursor)" do
+      Kiosk::Server::Queries.register("last") do |_p|
+        Kiosk::Server::Page.new(rows: [{ "id" => 99 }]) # no next_cursor => complete
+      end
+      result = described_class.call(kind: :query, args: { name: "last" },
+                                    identity: identity, connection: connection)
+
+      expect(result.payload).to     eq([{ "id" => 99 }])
+      expect(result.next_cursor).to be_nil
+      expect(result.to_envelope).not_to have_key(:next)
+    end
   end
 
   describe "verb :run" do

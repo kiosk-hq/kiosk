@@ -91,16 +91,21 @@ module ProveKey
   #   level      — "verified" (KycVerifier requires this literal).
   #   attributes — the granted anonymized booleans, e.g. {age_over_18:true,
   #                licence_a:true}. Only booleans — never DOB/licence number.
-  #   operator   — the operator_id the claim is addressed to (aud). The engine
-  #                KycVerifier does NOT check this (unchanged, per the build
-  #                decision); the OPERATOR's callback handler checks it, so a
-  #                claim minted for operator A is rejected at operator B.
+  #   operator   — the operator_id the claim is addressed to (the human-readable
+  #                broker handle; retained for the operator's callback correlation
+  #                and logging).
+  #   aud        — the OPERATOR-BINDING audience the claim is minted FOR. The
+  #                operator's engine Kiosk::Server::KycVerifier REJECTS any claim
+  #                whose `aud` != its configured `kyc_audience` — so a claim minted
+  #                for operator A is rejected at operator B AT THE WIRE (not merely
+  #                by a demo's own callback). Defaults to `operator` when the
+  #                operator did not declare a distinct audience.
   #   request_id — the broker request this claim answers (callback correlation).
   #   nonce      — echoes the request nonce (callback anti-replay).
   #   iat/exp    — short-lived (default 1h).
   #
   # @return [String] compact RS256 JWS
-  def mint(subject:, operator:, attributes:, request_id:, nonce:, ttl: 3600)
+  def mint(subject:, operator:, attributes:, request_id:, nonce:, audience: nil, ttl: 3600)
     now = Time.now.to_i
     JWT.encode(
       {
@@ -108,7 +113,7 @@ module ProveKey
         level:      "verified",
         iss:        ISSUER,
         operator:   operator.to_s,
-        aud:        operator.to_s,
+        aud:        (audience.nil? || audience.to_s.empty? ? operator.to_s : audience.to_s),
         request_id: request_id.to_s,
         nonce:      nonce.to_s,
         attributes: attributes,

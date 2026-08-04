@@ -128,6 +128,33 @@ RSpec.describe "prove.my broker", type: :request do
       expect(row.reload.status).to eq("confirmed")
     end
 
+    it "mints aud from the operator-declared audience (operator-binding, engine-enforced)" do
+      # When the operator declares its kyc_audience at intake, the broker stamps
+      # THAT as `aud` — the value the operator's engine KycVerifier compares
+      # against, so a claim minted for operator A is rejected at operator B.
+      rid = open_request(audience: "https://skooti.app")
+      row = ProveRequest.find(rid)
+      expect(row.audience).to eq("https://skooti.app")
+
+      delivered = {}
+      allow(CallbackPoster).to receive(:deliver) { |args| delivered = args; 200 }
+      post "/verify", params: { request: rid, decision: "approve" }
+
+      payload = decode(delivered[:kyc_jws])
+      expect(payload["aud"]).to eq("https://skooti.app")
+      # operator handle is retained separately for callback correlation/logging
+      expect(payload["operator"]).to eq("skooti")
+    end
+
+    it "falls back to aud == operator_id when no audience is declared (backward-compat)" do
+      rid = open_request # no audience
+      expect(ProveRequest.find(rid).audience).to be_nil
+      delivered = {}
+      allow(CallbackPoster).to receive(:deliver) { |args| delivered = args; 200 }
+      post "/verify", params: { request: rid, decision: "approve" }
+      expect(decode(delivered[:kyc_jws])["aud"]).to eq("skooti")
+    end
+
     it "grants ONLY the attributes the operator asked for (age_over_18 alone)" do
       rid = open_request(requested_claims: ["age_over_18"])
       delivered = {}

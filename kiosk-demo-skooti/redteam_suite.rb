@@ -68,6 +68,7 @@ def attest_forged(user_id)
       sub:   user_id,
       level: "verified",
       iss:   TRUSTED_ISSUER,  # trusted issuer; ONLY the signature is wrong
+      aud:   ProveTrust.operator_id,  # correct audience — isolates the signature defect
       iat:   now,
       exp:   now + 3600,
     },
@@ -375,7 +376,7 @@ motorcycle_forged_kyc = lambda do
   # the WRONG key (trusted issuer, bad signature) — mirrors attest_forged.
   forged = JWT.encode(
     { sub: a.user_id, level: "verified", iss: TRUSTED_ISSUER,
-      iat: now, exp: now + 3600,
+      aud: ProveTrust.operator_id, iat: now, exp: now + 3600,
       attributes: { age_over_18: true, licence_a: true } },
     FORGED_KYC_KEY, "RS256",
   )
@@ -526,13 +527,24 @@ cross_operator_replay = lambda do
   # kyc_status never reaches approved.
   st = client.query(a, name: "kyc_status", request_id:)
   status = (st.body["rows"] || []).first&.dig("status")
-  rejected = cb_rc != 200
-  still_pending = status != "approved"
+  callback_rejected = cb_rc != 200
+  still_pending     = status != "approved"
 
-  if rejected && still_pending
-    { blocked: true, detail: "cross-operator claim rejected at /kyc/callback (#{cb_rc}); kyc_status stays #{status.inspect}" }
+  # ENGINE-LEVEL block (the aud operator-binding): submit the wrong-aud claim
+  # DIRECTLY to the wire endpoint POST /kiosk/agents/kyc, bypassing skooti's
+  # callback entirely. The claim's sub IS A (so sub-binding passes) — only its
+  # aud is wrong. The engine KycVerifier MUST reject it (aud != skooti's
+  # kyc_audience), so a cross-operator claim cannot be stamped even if the
+  # demo's callback check were skipped. This is the wire-level guarantee.
+  wire_resp    = client.kyc(a, attestation_jws: forged_operator_jws)
+  wire_blocked = Kiosk::Redteam.blocked?(wire_resp)
+
+  if callback_rejected && still_pending && wire_blocked
+    { blocked: true, detail: "cross-operator claim rejected at BOTH the engine wire (POST /kiosk/agents/kyc → #{wire_resp.status}, aud mismatch) and /kyc/callback (#{cb_rc}); kyc_status stays #{status.inspect}" }
+  elsif !wire_blocked
+    { blocked: false, detail: "ENGINE BREACH: wrong-aud claim accepted at the wire (POST /kiosk/agents/kyc=#{wire_resp.status})" }
   else
-    { blocked: false, detail: "cross-operator claim accepted: callback=#{cb_rc}, kyc_status=#{status.inspect}" }
+    { blocked: false, detail: "cross-operator claim accepted at the callback: callback=#{cb_rc}, kyc_status=#{status.inspect}" }
   end
 end
 

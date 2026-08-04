@@ -11,16 +11,18 @@ require "openssl"
 # ActionController::Metal.
 
 RSpec.describe "Kiosk::Server KYC attestation logic (unit)" do
-  let(:kyc_key)    { OpenSSL::PKey::RSA.generate(2048) }
-  let(:kyc_issuer) { "https://kyc.example" }
-  let(:user_id)    { "u-kyc-1" }
-  let(:agent_id)   { "a-kyc-1" }
-  let(:identity)   { build_identity(user_id: user_id, agent_id: agent_id) }
-  let(:future)     { (Time.now + 600).to_i }
+  let(:kyc_key)      { OpenSSL::PKey::RSA.generate(2048) }
+  let(:kyc_issuer)   { "https://kyc.example" }
+  let(:kyc_audience) { "acme-operator" }
+  let(:user_id)      { "u-kyc-1" }
+  let(:agent_id)     { "a-kyc-1" }
+  let(:identity)     { build_identity(user_id: user_id, agent_id: agent_id) }
+  let(:future)       { (Time.now + 600).to_i }
 
   before do
     Kiosk.configure do |c|
       c.kyc_issuer     = kyc_issuer
+      c.kyc_audience   = kyc_audience
       c.kyc_public_key = kyc_key.public_key
     end
   end
@@ -28,7 +30,7 @@ RSpec.describe "Kiosk::Server KYC attestation logic (unit)" do
   def valid_jws(**overrides)
     payload = {
       sub: user_id, level: "verified",
-      iss: kyc_issuer, iat: (Time.now - 5).to_i, exp: future,
+      iss: kyc_issuer, aud: kyc_audience, iat: (Time.now - 5).to_i, exp: future,
     }.merge(overrides)
     JWT.encode(payload, kyc_key, "RS256")
   end

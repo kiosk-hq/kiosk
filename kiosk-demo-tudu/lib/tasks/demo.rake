@@ -294,6 +294,20 @@ namespace :demo do
       check.call("schema entry #{spec['name']} carries a description", desc.is_a?(String) && !desc.strip.empty?)
     end
 
+    # T-042 / K-452: the primary read query (my_lists) and primary action
+    # (create_list) advertise the machine-readable descriptor extensions.
+    {
+      query_specs  => %w[my_lists],
+      action_specs => %w[create_list],
+    }.each do |list, names|
+      names.each do |dname|
+        entry = list.find { |e| e["name"] == dname } || {}
+        %w[input_schema example_params example_row].each do |ext|
+          check.call("#{dname} advertises #{ext}", entry.key?(ext) && !entry[ext].nil?)
+        end
+      end
+    end
+
     # ── NOT-ONLY-COMMERCE: pay absent from the ADVERTISED capability set ──
     check.call("discovery capabilities do NOT include `pay` (#{capabilities.inspect})", !capabilities.include?("pay"))
     %w[schema query run].each { |c| check.call("discovery capabilities include #{c}", capabilities.include?(c)) }

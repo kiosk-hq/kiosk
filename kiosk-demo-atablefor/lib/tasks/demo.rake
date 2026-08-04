@@ -1004,6 +1004,25 @@ namespace :demo do
       end
     end
 
+    # T-042 / K-452: the primary read query (availability) and primary action
+    # (book_table) advertise the machine-readable descriptor extensions.
+    {
+      queries => %w[availability],
+      actions => %w[book_table],
+    }.each do |list, names|
+      names.each do |dname|
+        entry = list.find { |e| e["name"] == dname } || {}
+        %w[input_schema example_params example_row].each do |ext|
+          if entry.key?(ext) && !entry[ext].nil?
+            puts "  ✓  #{dname} advertises #{ext}"
+          else
+            failures << "#{dname} missing #{ext}"
+            puts "  ✗  #{dname} missing #{ext}"
+          end
+        end
+      end
+    end
+
     if failures.empty?
       puts "\n  All schema assertions passed."
     else

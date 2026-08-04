@@ -148,7 +148,22 @@ Kiosk::Server::Queries.register("scooters_available",
                                  description: "Browse the available fleet — each row carries the vehicle's name and pickup dock/location " \
                                               "so you can pick one by name or nearest dock. needs_licence flags the KYC-gated combustion " \
                                               "motorcycle (rent it via rent_motorcycle); licence-free scooters use start_rental. " \
-                                              "price_per_min_cents is EUR cents per minute — carts must be signed in eur at the operator-quoted total") do |_params|
+                                              "price_per_min_cents is EUR cents per minute — carts must be signed in eur at the operator-quoted total. " \
+                                              "Takes no parameters and returns the whole available fleet (small; not paginated); reference a " \
+                                              "vehicle by its `code` (e.g. \"SK-001\") when reserving.",
+                                 params: {},
+                                 input_schema: {
+                                   type: "object",
+                                   additionalProperties: false,
+                                   properties: {},
+                                   required: [],
+                                 },
+                                 example_params: {},
+                                 example_row: {
+                                   id: 1, code: "SK-001", name: "Jordaan Jet", dock: "Jordaan Dock",
+                                   status: "available", kind: "scooter", needs_licence: false,
+                                   lat: 52.3739, lng: 4.8809, price_per_min_cents: 15, currency: "eur",
+                                 }) do |_params|
   rows = ActiveRecord::Base.connection.execute(
     "SELECT id, code, name, dock, status, kind, needs_licence, lat, lng, price_per_min_cents " \
     "FROM public.scooters " \
@@ -214,7 +229,22 @@ Kiosk::Server::Actions.register("reserve",
                                                "To pay, sign your AP2 cart mandate in EUR at the quoted total (price_per_min_cents for the " \
                                                "upfront minute) with a line_item that references the returned reservation_id; the operator " \
                                                "verifies currency and total against its quote before charging (the result carries a pay_hint)",
-                                  params: { scooter_code: "string — scooter code, e.g. 'SK-001'" }) do |args|
+                                  params: { scooter_code: "string — scooter code, e.g. 'SK-001'" },
+                                  input_schema: {
+                                    type: "object",
+                                    additionalProperties: false,
+                                    properties: {
+                                      scooter_code: { type: "string",
+                                                      description: "Vehicle code from a scooters_available row, e.g. \"SK-001\"." },
+                                    },
+                                    required: ["scooter_code"],
+                                  },
+                                  example_params: { scooter_code: "SK-001" },
+                                  example_row: {
+                                    reservation_id: "a3f9c1e2-7b4d-4e8a-9c1f-2d6e5b0a3c7f",
+                                    scooter_code: "SK-001", price_per_min_cents: 15, currency: "eur",
+                                    pay_hint: "pay in EUR with a cart mandate whose total_amount_cents == 15 …",
+                                  }) do |args|
   conn = ActiveRecord::Base.connection
 
   uid = conn.execute("SELECT kiosk.current_user_id() AS uid").first["uid"]

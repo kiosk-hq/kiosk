@@ -307,10 +307,32 @@ end
 # only slots whose status is 'open' and whose capacity >= party_size.
 Kiosk::Server::Queries.register("availability",
                                  description: "List open table time-slots for a date that seat the party " \
-                                              "(params: date, party_size)",
+                                              "(params: date, party_size). Returns one row per open slot " \
+                                              "(restaurant, table_label, capacity, slot_date, slot_time, " \
+                                              "deposit_eur); pick a slot_time to pass to book_table. " \
+                                              "deposit_eur is the no-show hold in whole EUR (0 = none), " \
+                                              "settled at the restaurant — no online payment. Returns all " \
+                                              "matching slots for the day (small; not paginated).",
                                  params: {
                                    date:       "string — the reservation date as an ISO 8601 date (YYYY-MM-DD)",
                                    party_size: "integer — number of guests; only tables seating at least this many are returned",
+                                 },
+                                 input_schema: {
+                                   type: "object",
+                                   additionalProperties: false,
+                                   properties: {
+                                     date:       { type: "string", format: "date",
+                                                   description: "Reservation date, YYYY-MM-DD." },
+                                     party_size: { type: "integer", minimum: 1,
+                                                   description: "Number of guests." },
+                                   },
+                                   required: ["date", "party_size"],
+                                 },
+                                 example_params: { date: "2026-08-05", party_size: 2 },
+                                 example_row: {
+                                   id: 1, restaurant: "Tasca do Tejo", table_label: "Window 6",
+                                   capacity: 2, slot_date: "2026-08-05", slot_time: "20:00",
+                                   deposit_eur: 10,
                                  }) do |params|
   date       = params.fetch(:date) { raise Kiosk::Server::Errors::BadRequest.new("missing param: date") }
   party_size = (params.fetch(:party_size) { raise Kiosk::Server::Errors::BadRequest.new("missing param: party_size") }).to_i
@@ -363,6 +385,25 @@ Kiosk::Server::Actions.register("book_table",
                                     date:       "string — reservation date as an ISO 8601 date (YYYY-MM-DD)",
                                     time:       "string — reservation time as HH:MM (24-hour), e.g. \"20:00\"",
                                     party_size: "integer — number of guests",
+                                  },
+                                  input_schema: {
+                                    type: "object",
+                                    additionalProperties: false,
+                                    properties: {
+                                      date:       { type: "string", format: "date",
+                                                    description: "Reservation date, YYYY-MM-DD." },
+                                      time:       { type: "string", pattern: "^[0-2][0-9]:[0-5][0-9]$",
+                                                    description: "Reservation time HH:MM (24-hour), e.g. \"20:00\" (from an availability slot_time)." },
+                                      party_size: { type: "integer", minimum: 1,
+                                                    description: "Number of guests." },
+                                    },
+                                    required: ["date", "time", "party_size"],
+                                  },
+                                  example_params: { date: "2026-08-05", time: "20:00", party_size: 2 },
+                                  example_row: {
+                                    booking_id: "b1f2a3c4-5d6e-4f70-8a91-2b3c4d5e6f70",
+                                    restaurant_id: 1, table_slot_id: 1, party_size: 2,
+                                    date: "2026-08-05", time: "20:00", status: "confirmed",
                                   }) do |args|
   conn = ActiveRecord::Base.connection
 

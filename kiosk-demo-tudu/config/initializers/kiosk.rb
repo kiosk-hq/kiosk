@@ -216,8 +216,21 @@ Kiosk::Server::Queries.register(
   "my_lists",
   description: "List the todo lists the authenticated principal is a member of " \
                "(owner or member), with the caller's role on each. Membership-based " \
-               "access — includes lists the caller was invited into.",
+               "access — includes lists the caller was invited into. Takes no " \
+               "parameters and returns all the caller's lists (small; not paginated); " \
+               "each row carries list_id, title, and the caller's role (owner|member). " \
+               "Pass a list_id to list_todos / add_todo.",
   params: {},
+  input_schema: {
+    type: "object",
+    additionalProperties: false,
+    properties: {},
+    required: [],
+  },
+  example_params: {},
+  example_row: {
+    list_id: "d4e5f6a7-8b9c-4d0e-9f1a-2b3c4d5e6f70", title: "Flat 3B", role: "owner",
+  },
 ) do |_params|
   ActiveRecord::Base.connection.execute(<<~SQL).to_a
     SELECT l.id AS list_id, l.title, m.role
@@ -279,11 +292,22 @@ end
 Kiosk::Server::Actions.register(
   "create_list",
   description: "Create a new todo list owned by the authenticated principal. The " \
-               "caller becomes its owner (an owner membership is created). Returns " \
-               "{ list_id }.",
+               "caller becomes its owner (an owner membership is created). Any forged " \
+               "account_id/owner_id arg is ignored (owner is the authenticated " \
+               "principal). Returns { list_id }.",
   params: {
     title: "string (required) — the list title",
   },
+  input_schema: {
+    type: "object",
+    additionalProperties: false,
+    properties: {
+      title: { type: "string", minLength: 1, description: "The list title." },
+    },
+    required: ["title"],
+  },
+  example_params: { title: "Hike" },
+  example_row: { list_id: "d4e5f6a7-8b9c-4d0e-9f1a-2b3c4d5e6f70" },
 ) do |args|
   conn       = ActiveRecord::Base.connection
   account_id = tudu_current_user_id

@@ -8,7 +8,7 @@
 -- HOW TO RUN (as the cluster superuser, e.g. postgres):
 --   psql -v ON_ERROR_STOP=1 \
 --        -v gg_pw=…  -v af_pw=…  -v ho_pw=…  -v sk_pw=… \
---        -v st_pw=…  -v pl_pw=…  -v td_pw=… \
+--        -v st_pw=…  -v pl_pw=…  -v td_pw=…  -v pv_pw=… \
 --        -f postgres-init.sql
 --
 -- Pass each password as a PLAIN psql variable (the RAW password, NO surrounding
@@ -44,6 +44,9 @@ SELECT format('CREATE ROLE %I LOGIN PASSWORD %L', 'kiosk_philslist', :'pl_pw')
   WHERE NOT EXISTS (SELECT FROM pg_roles WHERE rolname = 'kiosk_philslist')\gexec
 SELECT format('CREATE ROLE %I LOGIN PASSWORD %L', 'kiosk_tudu', :'td_pw')
   WHERE NOT EXISTS (SELECT FROM pg_roles WHERE rolname = 'kiosk_tudu')\gexec
+-- prove.my KYC broker (gem dir kiosk-demo-prove; deploy domain kyc.demo.kiosk.tech)
+SELECT format('CREATE ROLE %I LOGIN PASSWORD %L', 'kiosk_prove', :'pv_pw')
+  WHERE NOT EXISTS (SELECT FROM pg_roles WHERE rolname = 'kiosk_prove')\gexec
 
 -- ── Databases (one per app, owned by its role) ──────────────────────────────
 -- CREATE DATABASE cannot run inside a transaction/DO block, and \gexec lets us
@@ -63,6 +66,8 @@ SELECT 'CREATE DATABASE kiosk_philslist_production OWNER kiosk_philslist'
   WHERE NOT EXISTS (SELECT FROM pg_database WHERE datname = 'kiosk_philslist_production')\gexec
 SELECT 'CREATE DATABASE kiosk_tudu_production OWNER kiosk_tudu'
   WHERE NOT EXISTS (SELECT FROM pg_database WHERE datname = 'kiosk_tudu_production')\gexec
+SELECT 'CREATE DATABASE kiosk_prove_production OWNER kiosk_prove'
+  WHERE NOT EXISTS (SELECT FROM pg_database WHERE datname = 'kiosk_prove_production')\gexec
 
 -- ── Ownership / privilege hardening ─────────────────────────────────────────
 -- Each app role owns its own DB (set above) so `db:prepare` can create the
@@ -78,6 +83,7 @@ REVOKE CONNECT ON DATABASE kiosk_skooti_production    FROM PUBLIC;
 REVOKE CONNECT ON DATABASE kiosk_stylish_production   FROM PUBLIC;
 REVOKE CONNECT ON DATABASE kiosk_philslist_production FROM PUBLIC;
 REVOKE CONNECT ON DATABASE kiosk_tudu_production      FROM PUBLIC;
+REVOKE CONNECT ON DATABASE kiosk_prove_production     FROM PUBLIC;
 
 GRANT CONNECT ON DATABASE kiosk_getgrocery_production TO kiosk_getgrocery;
 GRANT CONNECT ON DATABASE kiosk_atablefor_production  TO kiosk_atablefor;
@@ -86,8 +92,9 @@ GRANT CONNECT ON DATABASE kiosk_skooti_production     TO kiosk_skooti;
 GRANT CONNECT ON DATABASE kiosk_stylish_production    TO kiosk_stylish;
 GRANT CONNECT ON DATABASE kiosk_philslist_production  TO kiosk_philslist;
 GRANT CONNECT ON DATABASE kiosk_tudu_production       TO kiosk_tudu;
+GRANT CONNECT ON DATABASE kiosk_prove_production      TO kiosk_prove;
 
 -- NOTE (connections): Postgres max_connections >= Σ(app pools)
 -- + headroom. Each app pool = WEB_CONCURRENCY(2) × RAILS_MAX_THREADS(5) = 10;
--- all 7 apps = 70. Set  max_connections = 100  in postgresql.conf (or front
--- with PgBouncer if hosting all 7 on a 2 GB box). Not settable from this file.
+-- all 8 apps = 80. Set  max_connections = 100  in postgresql.conf (or front
+-- with PgBouncer if hosting all 8 on a 2 GB box). Not settable from this file.

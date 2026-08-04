@@ -25,8 +25,14 @@ module ProveKey
   module_function
 
   # The issuer identity string. Operators set c.kyc_issuer to this; the broker
-  # stamps it as the JWS `iss`. Production brand is prove.my; keep it stable.
-  ISSUER = "https://prove.my"
+  # stamps it as the JWS `iss`. Env-configurable (KIOSK_PROVE_ISSUER) so the
+  # deploy stamps its own origin and the two-server harness/tests can pin a
+  # matching value on BOTH sides. Deploy default is the registered demo origin
+  # kyc.demo.kiosk.tech; skooti's ProveTrust.issuer defaults to the SAME value
+  # (they must line up — the operator's KycVerifier compares the minted `iss`
+  # against its configured c.kyc_issuer). The far-future production brand is
+  # prove.my; DECISIONS-LOG PROVE-MY-BUILD-FORKS put the demo at kyc.demo.
+  DEFAULT_ISSUER = "https://kyc.demo.kiosk.tech"
 
   # Fixed dev RSA-2048 keypair — stable for the demo. DO NOT use in production.
   # Generated once: `ruby -ropenssl -e "puts OpenSSL::PKey::RSA.new(2048).to_pem"`
@@ -60,8 +66,10 @@ module ProveKey
     -----END RSA PRIVATE KEY-----
   PEM
 
+  # The `iss` the broker stamps into every claim, env-overridable so the deploy,
+  # the two-server harness, and specs can each pin their own value on both sides.
   def issuer
-    ISSUER
+    ENV.fetch("KIOSK_PROVE_ISSUER", DEFAULT_ISSUER)
   end
 
   def keypair
@@ -87,7 +95,7 @@ module ProveKey
   #   sub        — the operator's user_id for the requesting agent (KycVerifier
   #                rejects a claim whose sub != the authenticated agent — the
   #                cross-subject/IssuedKycJwsTheft defense, unchanged).
-  #   iss        — ISSUER (operators configure this as c.kyc_issuer).
+  #   iss        — issuer (operators configure this as c.kyc_issuer).
   #   level      — "verified" (KycVerifier requires this literal).
   #   attributes — the granted anonymized booleans, e.g. {age_over_18:true,
   #                licence_a:true}. Only booleans — never DOB/licence number.
@@ -111,7 +119,7 @@ module ProveKey
       {
         sub:        subject.to_s,
         level:      "verified",
-        iss:        ISSUER,
+        iss:        issuer,
         operator:   operator.to_s,
         aud:        (audience.nil? || audience.to_s.empty? ? operator.to_s : audience.to_s),
         request_id: request_id.to_s,

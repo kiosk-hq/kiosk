@@ -16,13 +16,25 @@
   </p>
 
   <p class="stub">
-    <strong>Demo stub.</strong> This is not a Kiosk operator: it exposes none of
-    the four Kiosk verbs. The human verification page below self-asserts the
-    facts (you click yes/no). In production prove.my reads them from a
-    government identity service (e.g. an mDL / EUDI wallet) you log into — so
-    you cannot answer for someone else. It proves the <em>protocol</em>
-    (per-request binding, no replay, anti-mass-confirm, signed anonymized
-    callback), not that the human is actually over 18.
+    <strong>Demo stub — this does not check anything yet.</strong> On the
+    verification page you simply <em>self-assert</em> the facts (you click
+    yes/no); prove.my takes your word for it. The <strong>real</strong> broker
+    does two things this stub does not: first it verifies you actually
+    <strong>possess a government account</strong> — you log into a national
+    eID or a mobile driving licence (mDL) and authorize prove.my to read your
+    date of birth and licence category — and later that
+    <strong>the account is genuinely yours</strong>, so it cannot be lent or
+    shared to vouch for other people's age or licence. This demo proves the
+    <em>protocol</em> (per-request binding, no replay, anti-mass-confirm,
+    signed anonymized callback) — <strong>not</strong> that the human is
+    actually over 18, and it makes no liveness claim.
+  </p>
+
+  <p class="stub">
+    <strong>Not a Kiosk operator.</strong> prove.my is an <em>issuer</em>, not
+    a Kiosk site: it exposes none of the four Kiosk verbs, has no agent
+    endpoint, and serves no discovery document. This is a page for a human,
+    reached from a link your assistant relays to you.
   </p>
 
   <p class="stub">

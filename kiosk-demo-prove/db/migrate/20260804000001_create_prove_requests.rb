@@ -22,6 +22,13 @@
 #                      replayed callback.
 #   status           — pending → confirmed | declined. Terminal; single-use.
 #   expires_at       — TTL; a request past this cannot be confirmed.
+#
+# This table holds request STATE ONLY (single-use / TTL / no-replay) — never the
+# human's identity or their prior answers. Each verification is INDEPENDENT: a
+# re-verification (e.g. after an agent reset) starts a fresh row with empty
+# checkboxes and the human re-asserts every fact. Deliberate — a "verified-once,
+# reuse" store is exactly the account-sharing hole the real (account-to-person)
+# check must prevent, so the stub does not model it.
 class CreateProveRequests < ActiveRecord::Migration[8.1]
   def change
     create_table :prove_requests, id: false do |t|

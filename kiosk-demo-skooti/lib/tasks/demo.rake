@@ -790,8 +790,14 @@ namespace :demo do
       suite_rb = File.expand_path("../../redteam_suite.rb", __dir__)
       puts "\n── Running redteam_suite.rb (skooti + prove.my broker) ──"
 
+      # The driver mints valid/expired attestations via ProveTestIssuer (iss =
+      # ProveKey.issuer) and forged ones via ProveTrust.issuer — both read
+      # KIOSK_PROVE_ISSUER, so it MUST carry the same pinned iss the broker
+      # stamps and skooti's server verifies against, or the valid-KYC control
+      # mismatches iss.
       env_str = "SERVER_URL=#{server_url} KIOSK_ISSUER=#{kiosk_issuer} " \
                 "KIOSK_PROVE_BROKER_URL=#{broker[:broker_url]} " \
+                "KIOSK_PROVE_ISSUER=#{broker[:wiring]['KIOSK_PROVE_ISSUER']} " \
                 "KIOSK_PROVE_SKOOTI_SECRET=#{broker[:wiring]['KIOSK_PROVE_SKOOTI_SECRET']} " \
                 "KIOSK_PROVE_OPERATOR_ID=#{broker[:wiring]['KIOSK_PROVE_OPERATOR_ID']}"
 

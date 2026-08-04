@@ -7,7 +7,7 @@
 # Port map (must match env/<app>.env PORT and kiosk-demo@.service):
 #   getgrocery -> 3001   atablefor -> 3002   hoteling  -> 3003
 #   skooti     -> 3004   stylish   -> 3005   philslist -> 3006
-#   tudu       -> 3007
+#   tudu       -> 3007   kyc(prove)-> 3008
 #
 # ── TLS alternatives ────────────────────────────────────────────────────────
 # The per-subdomain blocks below get an individual HTTP-01 cert each — nothing
@@ -88,4 +88,11 @@ philslist.demo.kiosk.tech {
 
 tudu.demo.kiosk.tech {
 	import kioskproxy 127.0.0.1:3007
+}
+
+kyc.demo.kiosk.tech {
+	# prove.my anonymizing KYC broker (kiosk-demo-prove). An ISSUER, not a Kiosk
+	# operator — a human explainer + the /verify page + the operator intake/
+	# callback JSON. No PoW, no /.well-known/kiosk.json, no agent surface.
+	import kioskproxy 127.0.0.1:3008
 }

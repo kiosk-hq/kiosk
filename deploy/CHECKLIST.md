@@ -2,6 +2,8 @@
 
 Concise, ordered. Detail + file contents: `deploy/README.md`. Operator actions.
 Seven demos: getgrocery · atablefor · hoteling · skooti · stylish · philslist · tudu.
+Plus the prove.my KYC broker (`kiosk-demo-prove` → `kyc.demo.kiosk.tech`, port 3008) —
+an ISSUER, not a Kiosk operator (no PoW, no `/.well-known/kiosk.json`, no agent surface).
 
 ## 1. DNS (you)
 - [ ] Wildcard `*.demo.kiosk.tech` → VPS_IP (one A record; add apps without DNS changes).
@@ -17,7 +19,7 @@ Seven demos: getgrocery · atablefor · hoteling · skooti · stylish · philsli
 - [ ] `git clone` the reference repo (or push-to-deploy — see §7).
 
 ## 3. Databases (one Postgres cluster)
-- [ ] `psql -v gg_pw=… -v af_pw=… -v ho_pw=… -v sk_pw=… -v st_pw=… -v pl_pw=… -v td_pw=… -f deploy/postgres-init.sql`  → 7 app DBs + least-priv roles. (Pass each RAW password unquoted — the script escapes it via `:'var'`.)
+- [ ] `psql -v gg_pw=… -v af_pw=… -v ho_pw=… -v sk_pw=… -v st_pw=… -v pl_pw=… -v td_pw=… -v pv_pw=… -f deploy/postgres-init.sql`  → 8 app DBs + least-priv roles (7 demos + `kiosk_prove`). (Pass each RAW password unquoted — the script escapes it via `:'var'`.)
 - [ ] `psql -v tm_pw=… -f deploy/telemetry-init.sql`  → the shared `kiosk_demo_telemetry` DB + role.
 
 ## 4. Per-app env (copy `deploy/env/<app>.env.example` → real values)
@@ -33,6 +35,13 @@ For EACH of the 7 apps:
 - [ ] **Telemetry:** `KIOSK_TELEMETRY=1`, `KIOSK_TELEMETRY_DB_URL=postgres://kiosk_telemetry:…@…/kiosk_demo_telemetry`,
       and a **distinct** `KIOSK_TELEMETRY_SALT=<random>` per app (keeps the per-app agent hashes non-joinable).
 - [ ] **Stripe (getgrocery only):** `STRIPE_SECRET_KEY=sk_test_…` (TEST mode — no real charges). getgrocery is the only demo with a payment provider; atablefor takes no money (no `pay` capability).
+
+### 4b. prove.my KYC broker env (copy `deploy/env/kyc-demo.env.example` → `/etc/kiosk-demo/prove.env`)
+- [ ] `SECRET_KEY_BASE`, `KIOSK_PROVE_DB_{USER,PASSWORD}`, `PORT=3008`. No kiosk gem — no signing key / no PoW knob.
+- [ ] **Issuer + public URL:** `KIOSK_PROVE_ISSUER=https://kyc.demo.kiosk.tech`, `PROVE_PUBLIC_URL=https://kyc.demo.kiosk.tech`.
+- [ ] **Broker signing key:** `PROVE_KEY_PEM=<fresh 2048-bit RSA private PEM>` (do NOT ship the baked-in dev key).
+- [ ] **Operator allow-list:** `KIOSK_PROVE_SKOOTI_SECRET=<shared intake secret>`, `KIOSK_PROVE_SKOOTI_CALLBACK_HOST=skooti.demo.kiosk.tech`.
+- [ ] **Wire skooti to it:** in skooti's env set `KIOSK_PROVE_ISSUER` + `KIOSK_PROVE_BROKER_URL` = `https://kyc.demo.kiosk.tech`, the SAME `KIOSK_PROVE_SKOOTI_SECRET`, and `KIOSK_PROVE_PUBLIC_KEY_PEM=<public half of PROVE_KEY_PEM>` (or fetch once from `https://kyc.demo.kiosk.tech/prove_key.pem`).
 
 ## 5. Build + boot each app
 - [ ] `bundle install` · `RAILS_ENV=production bin/rails assets:precompile db:prepare` · `bin/rails demo:setup` (seed).
@@ -52,6 +61,7 @@ For EACH of the 7 apps:
 - [ ] The demo **root page** loads (what it is + a curl one-liner + the live activity counters).
 - [ ] `GET https://<app>.demo.kiosk.tech/demo/activity.json` returns aggregates.
 - [ ] getgrocery: a Stripe test card `4242 4242 4242 4242` completes a real test-mode pay (the only demo with a payment provider).
+- [ ] prove.my broker: `GET https://kyc.demo.kiosk.tech/` renders the human explainer (STUB-KYC notice; NO agent/kiosk signal); `GET /prove_key.pem` returns the public key; `GET /.well-known/kiosk.json` is **absent** (404 — it is an issuer, not an operator).
 
 ## Notes
 - Everything is OFF by default in code — nothing here changes local/CI behavior.

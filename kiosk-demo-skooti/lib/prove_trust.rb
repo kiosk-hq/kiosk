@@ -25,10 +25,13 @@ require "openssl"
 module ProveTrust
   module_function
 
-  # The broker issuer identity — must match the broker's ProveKey::ISSUER. The
-  # harness may override via KIOSK_PROVE_ISSUER; default is the production brand.
+  # The broker issuer identity — must match the broker's ProveKey.issuer. Both
+  # read KIOSK_PROVE_ISSUER and default to the SAME value, so plain `rails s` /
+  # specs (which set no env) and the deploy (which sets it once for both apps)
+  # both line up. The two-server harness pins it explicitly on both sides.
+  # Default is the registered demo origin (DECISIONS-LOG PROVE-MY-BUILD-FORKS).
   def issuer
-    ENV.fetch("KIOSK_PROVE_ISSUER", "https://prove.my")
+    ENV.fetch("KIOSK_PROVE_ISSUER", "https://kyc.demo.kiosk.tech")
   end
 
   # The ProveKey public PEM skooti trusts. Preference order:
@@ -41,9 +44,11 @@ module ProveTrust
     PINNED_DEV_PROVE_PUBLIC_PEM
   end
 
-  # Where request_kyc calls the broker's intake endpoint.
+  # Where request_kyc calls the broker's intake endpoint. Defaults to the
+  # deployed broker origin; the two-server harness overrides it with the local
+  # broker's host:port.
   def broker_url
-    ENV.fetch("KIOSK_PROVE_BROKER_URL", "https://prove.my")
+    ENV.fetch("KIOSK_PROVE_BROKER_URL", "https://kyc.demo.kiosk.tech")
   end
 
   # skooti's operator id + shared secret at the broker's intake.

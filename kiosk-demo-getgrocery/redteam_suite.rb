@@ -58,7 +58,7 @@ profile = Kiosk::Redteam::Profile.new(
       name:             "create_order",
       items:            [{ sku: product["sku"], qty: 1 }],
       delivery_slot_id: 1,
-      delivery_address: "1 Redteam St, Neo-Tokyo",
+      delivery_address: "1 Redteam St, Dublin",
     )
     raise "redteam: create_order failed (#{order_resp.status}): #{order_resp.body.inspect}" \
       unless order_resp.status == 200
@@ -86,7 +86,7 @@ profile = Kiosk::Redteam::Profile.new(
     {
       items:            [{ sku: product["sku"], qty: 1 }],
       delivery_slot_id: 1,
-      delivery_address: "1 Redteam St, Neo-Tokyo",
+      delivery_address: "1 Redteam St, Dublin",
     }
   },
 

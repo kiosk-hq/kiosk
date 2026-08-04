@@ -162,7 +162,7 @@ mirror_items = [{ sku: product_sku, qty: 1, price_cents: product.fetch("price_ce
 rc, order_a_resp = post_json(
   "#{SERVER}/kiosk/run",
   { name: "create_order", items: [{ sku: product_sku, qty: 1 }],
-    delivery_slot_id: 1, delivery_address: "1 Good St, Neo-Tokyo" },
+    delivery_slot_id: 1, delivery_address: "1 Good St, Dublin" },
   { "Authorization" => "Bearer #{token_a}" },
 )
 abort "A create_order failed (#{rc}): #{JSON.generate(order_a_resp)}" unless rc == 200
@@ -190,7 +190,7 @@ b_reschedule_on_a_status, _b_reschedule_on_a_resp = post_json(
     name:             "reschedule_delivery",
     order_id:         order_id_a,
     delivery_slot_id: 1,
-    delivery_address: "2 Evil St, Neo-Tokyo",
+    delivery_address: "2 Evil St, Dublin",
   },
   { "Authorization" => "Bearer #{token_b}" },
 )
@@ -214,7 +214,7 @@ rc, forged_resp = post_json(
     name:             "create_order",
     items:            [{ sku: product_sku, qty: 1 }],
     delivery_slot_id: 1,
-    delivery_address: "3 Bob St, Neo-Tokyo",
+    delivery_address: "3 Bob St, Dublin",
     user_id:          user_id_a,  # adversarial: B supplies A's user_id
   },
   { "Authorization" => "Bearer #{token_b}" },
@@ -227,7 +227,7 @@ abort "order_id_b_forged missing" unless order_id_b_forged
 rc, order_b_resp = post_json(
   "#{SERVER}/kiosk/run",
   { name: "create_order", items: [{ sku: product_sku, qty: 1 }],
-    delivery_slot_id: 1, delivery_address: "3 Bob St, Neo-Tokyo" },
+    delivery_slot_id: 1, delivery_address: "3 Bob St, Dublin" },
   { "Authorization" => "Bearer #{token_b}" },
 )
 abort "B create_order (genuine) failed (#{rc}): #{JSON.generate(order_b_resp)}" unless rc == 200

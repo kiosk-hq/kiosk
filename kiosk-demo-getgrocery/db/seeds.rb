@@ -1,6 +1,6 @@
 # frozen_string_literal: true
 
-# One implicit provider catalog — getgrocery serves Neo-Tokyo.
+# One implicit provider catalog — getgrocery serves Dublin.
 # No Store records: getgrocery IS the store.
 #
 # Products are identified to agents by their stable `sku` (never the numeric DB id).
@@ -58,5 +58,5 @@ end
 puts "Seeded: #{Product.count} products (#{Product.where("stock > 0").count} in-stock, #{Product.where(stock: 0).count} out-of-stock)"
 puts "  In-stock low (stock ≤ 5): #{Product.where("stock > 0 AND stock <= 5").pluck(:sku).join(", ")}"
 puts "  Out-of-stock (absent from catalog): #{Product.where(stock: 0).pluck(:sku).join(", ")}"
-puts "  Delivery city context: Neo-Tokyo"
+puts "  Delivery city context: Dublin"
 puts "  Account holder with saved card: #{HUMAN_ID} (#{HUMAN_CUS_ID})"

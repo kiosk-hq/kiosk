@@ -80,6 +80,12 @@ module Kiosk
 
       # ─── query ─────────────────────────────────────────────────────────
 
+      # A query handler returns either a bare Array of rows (the unchanged,
+      # unpaginated case) or a {Page} (rows + an opaque next_cursor) to opt into
+      # cursor pagination. The handler reads the optional `limit`/`cursor` args
+      # itself; the Executor only threads the resulting cursor into the envelope.
+      # Any other return value (e.g. a Hash from an idiosyncratic query) is
+      # passed through as the rows payload unchanged, preserving back-compat.
       def verb_query(args)
         args = symbolize(args)
         name = args.delete(:name)
@@ -87,14 +93,19 @@ module Kiosk
 
         handler = Queries.fetch(name)
         begin
-          rows = handler.call(args)
+          returned = handler.call(args)
         rescue Errors::Base
           raise
         rescue StandardError => e
           raise Errors::ActionFailed.new("Query #{name.inspect} raised #{e.class}: #{e.message}",
                                          hint: "See server logs for the backtrace.")
         end
-        Result.new(kind: :rows, payload: rows)
+
+        if returned.is_a?(Page)
+          Result.new(kind: :rows, payload: returned.rows, next_cursor: returned.next_cursor)
+        else
+          Result.new(kind: :rows, payload: returned)
+        end
       end
 
       # ─── run ───────────────────────────────────────────────────────────

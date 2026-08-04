@@ -104,4 +104,39 @@ RSpec.describe Kiosk::Server::Actions do
       expect(described_class.known).to eq(["x"])
     end
   end
+
+  describe "machine-readable descriptor extensions (input_schema / example_params / example_row — ADR-0021)" do
+    let(:input_schema) do
+      {
+        type: "object",
+        required: ["items"],
+        properties: { items: { type: "array", items: { type: "string" } } },
+      }
+    end
+
+    it "register accepts input_schema:/example_params:/example_row: and exposes them via describe" do
+      described_class.register("place_order",
+        description: "Place an order",
+        params: { items: "array" },
+        input_schema: input_schema,
+        example_params: { items: ["milk-1l"] },
+        example_row: { order_id: "abc", status: "placed" }) { {} }
+
+      d = described_class.describe("place_order")
+      expect(d[:input_schema]).to   eq(input_schema)
+      expect(d[:example_params]).to eq({ items: ["milk-1l"] })
+      expect(d[:example_row]).to    eq({ order_id: "abc", status: "placed" })
+    end
+
+    # Back-compat: a descriptor with no extensions is byte-for-byte the old shape.
+    it "OMITS the new keys entirely when they are not supplied (existing descriptors unchanged)" do
+      described_class.register("plain", description: "Do", params: { x: "string" }) { {} }
+
+      d = described_class.describe("plain")
+      expect(d).to eq({ name: "plain", description: "Do", params: { x: "string" } })
+      expect(d).not_to have_key(:input_schema)
+      expect(d).not_to have_key(:example_params)
+      expect(d).not_to have_key(:example_row)
+    end
+  end
 end

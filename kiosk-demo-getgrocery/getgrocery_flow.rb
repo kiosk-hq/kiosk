@@ -103,7 +103,7 @@ rc_order, order_resp = post_json(
   "#{SERVER}/kiosk/run",
   { name: "create_order", items: items,
     delivery_slot_id: slot_id,
-    delivery_address: "42 Sakura Ave, Neo-Tokyo" },
+    delivery_address: "42 Camden Street, Dublin" },
   { "Authorization" => "Bearer #{token}" },
 )
 abort "create_order failed (#{rc_order}): #{JSON.generate(order_resp)}" unless rc_order == 200

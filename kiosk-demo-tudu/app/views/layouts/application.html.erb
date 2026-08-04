@@ -24,6 +24,12 @@
       header.site nav form.inline{display:inline;margin:0}
       header.site nav button{background:rgba(255,255,255,.16);color:#fff;border:0;border-radius:6px;padding:5px 10px;cursor:pointer;font-size:13px}
 
+      /* ── Agent-facing header strip: first thing an assistant/agent reads ── */
+      .agentbar{background:var(--ink);color:#fff;font-size:13.5px;padding:9px 24px;display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+      .agentbar .tag{font-size:11px;font-weight:800;letter-spacing:.06em;text-transform:uppercase;background:var(--accent2);color:var(--ink);border-radius:999px;padding:3px 10px;white-space:nowrap}
+      .agentbar a{color:var(--accent2);font-weight:700}
+      .agentbar .what{color:#c1d8c9;font-weight:600}
+
       .wrap{max-width:860px;margin:0 auto;padding:0 20px}
 
       /* ── App bits (signed-in views: lists, todos) ──────────────────── */
@@ -98,6 +104,11 @@
     </style>
   </head>
   <body>
+    <div class="agentbar">
+      <span class="tag">🤖 For agents</span>
+      <span>Agents &amp; AI assistants — <a href="/.well-known/kiosk.json">learn here</a> how to work with this site.</span>
+      <a class="what" href="https://kiosk.tech">(what is this?)</a>
+    </div>
     <header class="site">
       <div class="logo"><a href="/">tu<span>du</span></a></div>
       <nav>

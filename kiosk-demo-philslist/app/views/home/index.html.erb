@@ -16,6 +16,12 @@
     .logo span{color:var(--accent2)}
     .wrap{max-width:860px;margin:0 auto;padding:0 24px}
 
+    /* ── Agent-facing header strip: first thing an assistant/agent reads ── */
+    .agentbar{background:var(--ink);color:#fff;font-size:13.5px;padding:9px 32px;display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+    .agentbar .tag{font-size:11px;font-weight:800;letter-spacing:.06em;text-transform:uppercase;background:var(--accent2);color:var(--ink);border-radius:999px;padding:3px 10px;white-space:nowrap}
+    .agentbar a{color:var(--accent2);font-weight:700}
+    .agentbar .what{color:#c2d8c6;font-weight:600}
+
     .sec{margin:32px auto 0}
     .sec-k{font-size:12px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:var(--muted);display:flex;align-items:center;gap:8px;margin-bottom:12px}
     .sec-k::before{content:"";width:18px;height:2px;background:var(--accent);border-radius:2px}
@@ -71,6 +77,11 @@
   </style>
 </head>
 <body>
+  <div class="agentbar">
+    <span class="tag">🤖 For agents</span>
+    <span>Agents &amp; AI assistants — <a href="/.well-known/kiosk.json">learn here</a> how to work with this site.</span>
+    <a class="what" href="https://kiosk.tech">(what is this?)</a>
+  </div>
   <header>
     <div class="logo">phils<span>list</span></div>
     <nav style="font-size:13px;opacity:.9"><a href="/listings" style="color:#fff;text-decoration:none;font-weight:600;margin-right:16px">Classifieds board</a>classifieds · no money on the wire</nav>
@@ -116,11 +127,6 @@
           <a href="https://kiosk.tech">What is Kiosk? →</a>
         </div>
       </div>
-    </section>
-
-    <!-- ── Machine-readable discovery (its own section, assistant-facing) ── -->
-    <section class="sec">
-      <p class="disco">🔗 Machine-readable: a customer's AI assistant can <a href="/.well-known/kiosk.json">learn here how to</a> discover and transact directly.</p>
     </section>
 
     <!-- ── 4. Live activity (compact) ────────────────────────────────── -->

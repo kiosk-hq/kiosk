@@ -147,8 +147,10 @@ RSpec.describe "wire-surface controller auth" do
     end
 
     def kyc_env
+      # aud == the operator audience (defaults to c.issuer, "https://demo.example"),
+      # so the engine's operator-binding check passes.
       body = JSON.generate(kyc_jws: JWT.encode(
-        { sub: "u-kyc", level: "verified", iss: kyc_issuer,
+        { sub: "u-kyc", level: "verified", iss: kyc_issuer, aud: "https://demo.example",
           iat: (Time.now - 5).to_i, exp: (Time.now + 600).to_i },
         kyc_key, "RS256",
       ))
@@ -174,7 +176,7 @@ RSpec.describe "wire-surface controller auth" do
       Kiosk.configure { |c| c.agent_idp = custom_idp }
 
       body_json = JSON.generate(kyc_jws: JWT.encode(
-        { sub: "u-kyc", level: "verified", iss: kyc_issuer,
+        { sub: "u-kyc", level: "verified", iss: kyc_issuer, aud: "https://demo.example",
           iat: (Time.now - 5).to_i, exp: (Time.now + 600).to_i,
           attributes: { age_over_18: true, licence_a: true } },
         kyc_key, "RS256",

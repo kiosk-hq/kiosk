@@ -39,6 +39,10 @@ class VerificationsController < ActionController::Base
     requested_claims = Array(body["requested_claims"]).map(&:to_s)
     callback_url     = body["callback_url"].to_s
     subject_handle   = body["subject_handle"].to_s
+    # The operator-binding audience the operator declares — the value its engine
+    # KycVerifier compares the minted claim's `aud` against (its `kyc_audience`).
+    # Optional: when absent the broker mints `aud` = operator_id (the handle).
+    audience         = body["audience"].to_s
 
     if subject_handle.empty?
       return render_json({ error: "missing field: subject_handle" }, :bad_request)
@@ -68,6 +72,7 @@ class VerificationsController < ActionController::Base
       requested_claims: requested_claims,
       subject_handle:   subject_handle,
       nonce:            nonce,
+      audience:         (audience.empty? ? nil : audience),
       status:           "pending",
       expires_at:       Time.current + REQUEST_TTL,
     )
@@ -130,6 +135,7 @@ class VerificationsController < ActionController::Base
     kyc_jws = ProveKey.mint(
       subject:    prove_request.subject_handle,
       operator:   prove_request.operator_id,
+      audience:   prove_request.audience,
       attributes: attributes,
       request_id: prove_request.request_id,
       nonce:      prove_request.nonce,

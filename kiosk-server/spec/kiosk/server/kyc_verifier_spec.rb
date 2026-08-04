@@ -4,15 +4,17 @@ require "jwt"
 require "openssl"
 
 RSpec.describe Kiosk::Server::KycVerifier do
-  let(:kyc_key)    { OpenSSL::PKey::RSA.generate(2048) }
-  let(:kyc_issuer) { "https://kyc.example" }
-  let(:identity)   { build_identity(user_id: "u-1", agent_id: "a-1") }
-  let(:future)     { (Time.now + 600).to_i }
-  let(:past)       { (Time.now - 600).to_i }
+  let(:kyc_key)      { OpenSSL::PKey::RSA.generate(2048) }
+  let(:kyc_issuer)   { "https://kyc.example" }
+  let(:kyc_audience) { "acme-operator" }
+  let(:identity)     { build_identity(user_id: "u-1", agent_id: "a-1") }
+  let(:future)       { (Time.now + 600).to_i }
+  let(:past)         { (Time.now - 600).to_i }
 
   before do
     Kiosk.configure do |c|
       c.kyc_issuer     = kyc_issuer
+      c.kyc_audience   = kyc_audience
       c.kyc_public_key = kyc_key.public_key
     end
   end
@@ -25,7 +27,7 @@ RSpec.describe Kiosk::Server::KycVerifier do
   def valid_payload(**overrides)
     {
       sub: "u-1", level: "verified",
-      iss: kyc_issuer, iat: (Time.now - 5).to_i, exp: future,
+      iss: kyc_issuer, aud: kyc_audience, iat: (Time.now - 5).to_i, exp: future,
     }.merge(overrides)
   end
 
@@ -73,6 +75,41 @@ RSpec.describe Kiosk::Server::KycVerifier do
       raw_jws = sign_kyc(valid_payload(iss: "https://evil-kyc.example"))
       expect { described_class.verify(raw_jws: raw_jws, identity: identity) }
         .to raise_error(Kiosk::Server::Errors::Forbidden, /issuer/)
+    end
+
+    # ─── OPERATOR-BINDING: aud (cross-operator claim replay) ──────────────
+    # A claim the KYC provider minted for a DIFFERENT operator's audience is
+    # rejected at the wire — this is the engine-level CrossOperatorClaimReplay
+    # block. Without the aud check a claim solicited by/for operator A would
+    # unlock operator B.
+    it "raises Errors::Forbidden when aud does not match this operator's kyc_audience" do
+      raw_jws = sign_kyc(valid_payload(aud: "other-operator"))
+      expect { described_class.verify(raw_jws: raw_jws, identity: identity) }
+        .to raise_error(Kiosk::Server::Errors::Forbidden, /audience/)
+    end
+
+    it "raises Errors::Forbidden when the aud claim is absent" do
+      payload = valid_payload.reject { |k, _| k == :aud }
+      raw_jws = sign_kyc(payload)
+      expect { described_class.verify(raw_jws: raw_jws, identity: identity) }
+        .to raise_error(Kiosk::Server::Errors::Forbidden)
+    end
+
+    it "accepts an attestation whose aud matches kyc_audience (happy path)" do
+      raw_jws = sign_kyc(valid_payload(aud: kyc_audience))
+      claims  = described_class.verify(raw_jws: raw_jws, identity: identity)
+      expect(claims[:aud]).to eq(kyc_audience)
+      expect(claims[:level]).to eq("verified")
+    end
+
+    it "defaults kyc_audience to the operator issuer when not explicitly set" do
+      Kiosk.configure do |c|
+        c.kyc_audience = nil
+        c.issuer       = "https://operator.example"
+      end
+      raw_jws = sign_kyc(valid_payload(aud: "https://operator.example"))
+      claims  = described_class.verify(raw_jws: raw_jws, identity: identity)
+      expect(claims[:aud]).to eq("https://operator.example")
     end
 
     it "raises Errors::Forbidden when the sub does not match identity.user_id" do

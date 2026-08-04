@@ -119,6 +119,14 @@ Kiosk.configure do |c|
   # config attributes the shipped KycVerifier already reads.
   c.kyc_issuer    = ProveTrust.issuer
   c.kyc_public_key = ProveTrust.public_key
+  # OPERATOR-BINDING (aud): the engine KycVerifier now REJECTS at the wire any
+  # attestation whose `aud` != this operator's kyc_audience — so a claim the
+  # broker minted for another operator cannot unlock skooti even before skooti's
+  # callback-layer operator check runs. skooti declares its stable broker handle
+  # ("skooti") as the audience (the broker mints `aud` = the audience skooti sends
+  # at intake), not its per-deploy origin URL, so the value is stable across the
+  # 127.0.0.1 / skooti.app harness ports.
+  c.kyc_audience  = ProveTrust.operator_id
 
   # Ed25519 rental-token signing key (offline token).
   # Fixed dev keypair — stable vectors; swap for env-loaded PEM in production.

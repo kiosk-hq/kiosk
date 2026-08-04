@@ -7,14 +7,18 @@ module Kiosk
     # Verifies a KYC attestation JWS submitted by an agent.
     #
     # Expected JWS payload:
-    #   { sub: <user_id>, level: "verified", iss: <kyc_issuer>, iat: <unix>, exp: <unix>,
-    #     attributes: { <name>: true, ... } }   # attributes OPTIONAL
+    #   { sub: <user_id>, level: "verified", iss: <kyc_issuer>, aud: <kyc_audience>,
+    #     iat: <unix>, exp: <unix>, attributes: { <name>: true, ... } }
+    #   # attributes OPTIONAL
     #
     # Verified against `Kiosk.configuration.kyc_public_key` (RS256).
     # Checks: `level == "verified"` (case-sensitive — an unverified/other-level
-    # attestation is rejected), correct issuer, `sub` matches the authenticated
-    # identity (compared as String on both sides so a bigint-PK host works),
-    # and not expired. Raises `Errors::Forbidden` on any failure.
+    # attestation is rejected), correct issuer, `aud` matches this operator's
+    # configured `kyc_audience` (OPERATOR-BINDING — a claim the KYC provider
+    # minted for another operator is rejected at the WIRE, not merely by a
+    # demo's own callback), `sub` matches the authenticated identity (compared
+    # as String on both sides so a bigint-PK host works), and not expired.
+    # Raises `Errors::Forbidden` on any failure.
     #
     # NAMED ANONYMIZED ATTRIBUTES: the attestation MAY carry an `attributes`
     # object of `{name: true}` booleans (e.g. `{"age_over_18": true,
@@ -46,7 +50,7 @@ module Kiosk
           raw_jws, key, true,
           algorithms:       ["RS256"],
           verify_expiration: true,
-          required_claims:  ["exp", "iss", "sub"],
+          required_claims:  ["exp", "iss", "aud", "sub"],
         )
         payload  = payload.transform_keys(&:to_sym)
 
@@ -54,6 +58,21 @@ module Kiosk
           raise Errors::Forbidden.new(
             "KYC attestation issuer mismatch",
             hint: "expected #{config.kyc_issuer.inspect}, got #{payload[:iss].inspect}",
+          )
+        end
+
+        # OPERATOR-BINDING (aud): the attestation MUST be minted for THIS
+        # operator. `aud` is compared as String on both sides (an operator may
+        # declare its audience as a plain handle or its origin URL). A claim the
+        # KYC provider minted for a DIFFERENT operator's audience is rejected
+        # HERE — at the wire, on every operator's `POST /kiosk/agents/kyc` —
+        # so a cross-operator claim replay cannot unlock this operator even if a
+        # demo skipped its own callback-layer check.
+        if payload[:aud].to_s != config.kyc_audience.to_s
+          raise Errors::Forbidden.new(
+            "KYC attestation audience mismatch",
+            hint: "aud must equal this operator's kyc_audience " \
+                  "(expected #{config.kyc_audience.inspect}, got #{payload[:aud].inspect})",
           )
         end
 

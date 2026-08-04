@@ -31,6 +31,10 @@ module ProveBrokerClient
       callback_url:     callback_url,
       requested_claims: requested_claims,
       subject_handle:   subject_handle,
+      # The operator-binding audience skooti declares — the value its engine
+      # KycVerifier compares the minted claim's `aud` against (c.kyc_audience).
+      # The broker stamps this as `aud`, so a claim minted here is bound to skooti.
+      audience:         Kiosk.configuration.kyc_audience,
     )
 
     req = Net::HTTP::Post.new(

@@ -40,7 +40,8 @@ CREATE TABLE public.prove_requests (
     status character varying DEFAULT 'pending'::character varying NOT NULL,
     expires_at timestamp(6) without time zone NOT NULL,
     created_at timestamp(6) without time zone NOT NULL,
-    updated_at timestamp(6) without time zone NOT NULL
+    updated_at timestamp(6) without time zone NOT NULL,
+    audience character varying
 );
 
 
@@ -84,5 +85,6 @@ ALTER TABLE ONLY public.schema_migrations
 SET search_path TO "$user", public;
 
 INSERT INTO "schema_migrations" (version) VALUES
-('20260804000001');
+('20260804000001'),
+('20260804000002');
 

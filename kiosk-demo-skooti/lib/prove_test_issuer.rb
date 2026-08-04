@@ -37,11 +37,23 @@ module ProveTestIssuer
     ProveKey::ISSUER
   end
 
+  # The operator-binding audience the minted claims carry as `aud`. Sourced from
+  # ProveTrust.operator_id — the SAME value skooti sets as c.kyc_audience — so the
+  # engine's operator-binding check passes on the test-issuer path exactly as on
+  # the real broker path. Read from ProveTrust (not Kiosk.configuration) because
+  # the flow/redteam drivers run as STANDALONE scripts (no Kiosk config booted),
+  # while ProveTrust is a plain module both the drivers and the server load.
+  def audience
+    require File.expand_path("prove_trust", __dir__) unless defined?(::ProveTrust)
+    ProveTrust.operator_id
+  end
+
   # Mint a valid attestation bound to user_id, optionally carrying anonymized
-  # boolean attributes. Signed with the ProveKey — the key skooti trusts.
+  # boolean attributes. Signed with the ProveKey — the key skooti trusts. Carries
+  # `aud` = skooti's kyc_audience so the engine's operator-binding check passes.
   def attest(user_id:, attributes: nil)
     now = Time.now.to_i
-    payload = { sub: user_id.to_s, level: "verified", iss: issuer, iat: now, exp: now + 3600 }
+    payload = { sub: user_id.to_s, level: "verified", iss: issuer, aud: audience, iat: now, exp: now + 3600 }
     payload[:attributes] = attributes unless attributes.nil?
     JWT.encode(payload, keypair, "RS256")
   end
@@ -51,7 +63,7 @@ module ProveTestIssuer
   def attest_expired(user_id:)
     now = Time.now.to_i
     JWT.encode(
-      { sub: user_id.to_s, level: "verified", iss: issuer, iat: now - 7200, exp: now - 3600 },
+      { sub: user_id.to_s, level: "verified", iss: issuer, aud: audience, iat: now - 7200, exp: now - 3600 },
       keypair, "RS256",
     )
   end

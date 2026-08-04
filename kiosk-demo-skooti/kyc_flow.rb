@@ -8,15 +8,17 @@
 #
 #   MOTORCYCLE (KYC-gated on age_over_18 AND licence_a):
 #     register (PoW) → reserve(MC-001) → pay → rent_motorcycle WITHOUT KYC → 403
-#     kyc_required (error.hint points to `request_kyc`) → run request_kyc (get a
-#     verification_url) → SIMULATE the human approving the stub KYC-provider
-#     page (POST /kyc/verify with the request token) → poll query kyc_status
-#     until approved → submit the issued kyc_jws to POST /kiosk/agents/kyc →
-#     rent_motorcycle → 200 (offline rental token, lock-sim unlocks).
+#     kyc_required (error.hint points to `request_kyc`) → run request_kyc (skooti
+#     calls the prove.my broker; get a broker verification_url) → SIMULATE the
+#     human approving on the BROKER page (POST <broker>/verify with the request
+#     token) → the broker POSTs its signed claim to skooti's /kyc/callback → poll
+#     query kyc_status until approved → submit the broker kyc_jws to POST
+#     /kiosk/agents/kyc → rent_motorcycle → 200 (offline rental token unlocks).
 #
-#   The agent NEVER holds StubKyc's signing key: the attestation is minted by
-#   the stub issuer (skooti host) when the human approves, and relayed back
-#   through kyc_status. This is what makes the flow externally completable.
+#   The agent NEVER holds the broker's signing key: the claim is minted by the
+#   prove.my broker when the human approves, delivered to skooti's callback, and
+#   relayed back through kyc_status. This is what makes the flow externally
+#   completable — and the issuer is now a SHARED broker, not skooti's own stub.
 #
 #   SCOOTER (positive control — NO KYC at all, K-442):
 #     register (PoW) → reserve(SK-001) → pay → start_rental → 200, with NO KYC
@@ -152,11 +154,16 @@ STDERR.puts "  verification_url=#{verification_url.inspect}"
 abort "request_kyc did not return a verification_url (#{rc_req}): #{JSON.generate(req_body)}" \
   if verification_url.nil? || verification_url.empty?
 
-# A3: SIMULATE the human approving the stub KYC-provider page. This POST carries
-# ONLY the request token (the URL's credential) — no signing key. The stub
-# issuer signs the anonymized {age_over_18, licence_a} attestation server-side.
-approve_rc, _approve_html = post_form("#{SERVER}/kyc/verify", { request: request_id, decision: "approve" })
-STDERR.puts "  human approved stub KYC page: http=#{approve_rc}"
+# A3: SIMULATE the human approving on the prove.my BROKER page. The
+# verification_url points at the broker; we POST the approve there (the request
+# token is the only credential — no signing key). The broker signs the
+# anonymized {age_over_18, licence_a} claim and POSTs it to skooti's
+# /kyc/callback, which parks it for the agent to poll. Derive the broker origin
+# from the verification_url so the driver need not know the broker port itself.
+approve_uri  = URI(verification_url)
+approve_base = "#{approve_uri.scheme}://#{approve_uri.host}:#{approve_uri.port}"
+approve_rc, _approve_html = post_form("#{approve_base}/verify", { request: request_id, decision: "approve" })
+STDERR.puts "  human approved prove.my broker page: http=#{approve_rc}"
 abort "approve page POST failed (#{approve_rc})" unless approve_rc == 200
 
 # A4: poll query kyc_status until approved → returns the signed kyc_jws.

@@ -354,9 +354,10 @@ namespace :demo do
       agent_token = reg_data["access_token"]
       new_user_id = reg_data["user_id"]
 
-      # KYC the new agent.
-      require_relative "../../lib/stub_kyc"
-      att = StubKyc.attest(user_id: new_user_id)
+      # KYC the new agent (valid attestation signed with the shared prove.my
+      # ProveKey via ProveTestIssuer — the retired StubKyc's replacement).
+      require_relative "../../lib/prove_test_issuer"
+      att = ProveTestIssuer.attest(user_id: new_user_id)
       kyc_uri = URI("#{server_url}/kiosk/agents/kyc")
       kyc_req = Net::HTTP::Post.new(kyc_uri, "Content-Type" => "application/json", "Authorization" => "Bearer #{agent_token}")
       kyc_req.body = JSON.generate(kyc_jws: att)
@@ -422,9 +423,9 @@ namespace :demo do
       q_token   = reg_data["access_token"]
       q_user_id = reg_data["user_id"]
 
-      # KYC the agent.
-      require_relative "../../lib/stub_kyc"
-      q_att = StubKyc.attest(user_id: q_user_id)
+      # KYC the agent (valid attestation via ProveTestIssuer — ProveKey-signed).
+      require_relative "../../lib/prove_test_issuer"
+      q_att = ProveTestIssuer.attest(user_id: q_user_id)
       q_post.call("/kiosk/agents/kyc", { kyc_jws: q_att }, q_token)
 
       # ── QA1: query scooters_available — SK-001 must be present ──────────
@@ -718,6 +719,7 @@ namespace :demo do
     require "json"
     require "net/http"
     require "uri"
+    require_relative "../prove_broker_boot"
 
     port = ENV.fetch("PORT", "3003")
     log  = "/tmp/kiosk-skooti-redteam.log"
@@ -740,53 +742,62 @@ namespace :demo do
     server_url   = "http://#{host}:#{port}"
     kiosk_issuer = server_url
 
-    puts "\n── Starting skooti (redteam battery) on #{server_url} ──"
+    # TWO-SERVER GATE: the broker-flavored beats (IssuedKycJwsTheft via the
+    # broker, CrossOperatorClaimReplay, ForgedCallbackNoSig) drive prove.my, so
+    # boot the broker first and wire skooti's trust/intake config at it.
+    exit_status = nil
+    ProveBrokerBoot.with_broker(skooti_host: host, log: "/tmp/kiosk-prove-broker-redteam.log") do |broker|
+      puts "\n── Starting skooti (redteam battery) on #{server_url} ──"
 
-    # ── boot the server ────────────────────────────────────────────────────
-    env_vars = { "KIOSK_ISSUER" => kiosk_issuer }
+      # ── boot the server ──────────────────────────────────────────────────
+      env_vars = { "KIOSK_ISSUER" => kiosk_issuer }.merge(broker[:wiring])
 
-    File.truncate(log, 0) if File.exist?(log)
-    server_pid = spawn(
-      env_vars,
-      "bundle exec rails s -p #{port} -b 127.0.0.1 -e development",
-      out: log, err: log,
-    )
+      File.truncate(log, 0) if File.exist?(log)
+      server_pid = spawn(
+        env_vars,
+        "bundle exec rails s -p #{port} -b 127.0.0.1 -e development",
+        out: log, err: log,
+      )
 
-    at_exit do
-      begin
-        Process.kill("TERM", server_pid)
-        Process.wait(server_pid)
-      rescue Errno::ESRCH, Errno::ECHILD
-        nil
-      end
-      puts "  Server stopped."
-    end
-
-    # ── wait for readiness ─────────────────────────────────────────────────
-    ready = false
-    40.times do
-      begin
-        res = Net::HTTP.get_response(URI("#{server_url}/.well-known/kiosk.json"))
-        if res.code.to_i == 200
-          ready = true
-          break
+      at_exit do
+        begin
+          Process.kill("TERM", server_pid)
+          Process.wait(server_pid)
+        rescue Errno::ESRCH, Errno::ECHILD
+          nil
         end
-      rescue Errno::ECONNREFUSED, Errno::EADDRNOTAVAIL, SocketError
-        nil
+        puts "  Server stopped."
       end
-      sleep 1
+
+      # ── wait for readiness ───────────────────────────────────────────────
+      ready = false
+      40.times do
+        begin
+          res = Net::HTTP.get_response(URI("#{server_url}/.well-known/kiosk.json"))
+          if res.code.to_i == 200
+            ready = true
+            break
+          end
+        rescue Errno::ECONNREFUSED, Errno::EADDRNOTAVAIL, SocketError
+          nil
+        end
+        sleep 1
+      end
+      abort "Server did not become ready — see #{log}" unless ready
+      puts "  Server up at #{server_url}"
+
+      # ── run redteam_suite.rb ─────────────────────────────────────────────
+      suite_rb = File.expand_path("../../redteam_suite.rb", __dir__)
+      puts "\n── Running redteam_suite.rb (skooti + prove.my broker) ──"
+
+      env_str = "SERVER_URL=#{server_url} KIOSK_ISSUER=#{kiosk_issuer} " \
+                "KIOSK_PROVE_BROKER_URL=#{broker[:broker_url]} " \
+                "KIOSK_PROVE_SKOOTI_SECRET=#{broker[:wiring]['KIOSK_PROVE_SKOOTI_SECRET']} " \
+                "KIOSK_PROVE_OPERATOR_ID=#{broker[:wiring]['KIOSK_PROVE_OPERATOR_ID']}"
+
+      system("#{env_str} bundle exec ruby #{suite_rb}")
+      exit_status = $?.exitstatus
     end
-    abort "Server did not become ready — see #{log}" unless ready
-    puts "  Server up at #{server_url}"
-
-    # ── run redteam_suite.rb ───────────────────────────────────────────────
-    suite_rb = File.expand_path("../../redteam_suite.rb", __dir__)
-    puts "\n── Running redteam_suite.rb ──"
-
-    env_str = "SERVER_URL=#{server_url} KIOSK_ISSUER=#{kiosk_issuer}"
-
-    system("#{env_str} bundle exec ruby #{suite_rb}")
-    exit_status = $?.exitstatus
 
     if exit_status == 0
       puts "\n  redteam: all applicable scenarios BLOCKED. Exit 0."
@@ -1005,6 +1016,7 @@ namespace :demo do
     require "uri"
     require "json"
     require "shellwords"
+    require_relative "../prove_broker_boot"
 
     port = ENV.fetch("PORT", "3003")
     log  = "/tmp/kiosk-skooti-kyc.log"
@@ -1021,53 +1033,60 @@ namespace :demo do
     server_url   = "http://#{host}:#{port}"
     kiosk_issuer = server_url
 
-    puts "\n── Starting skooti (KYC-gate proof) on #{server_url} ──"
+    # TWO-SERVER GATE: boot the prove.my broker first, wire skooti's trust +
+    # intake config at it, then boot skooti and drive the cross-app KYC flow.
+    result = nil
+    ProveBrokerBoot.with_broker(skooti_host: host) do |broker|
+      puts "\n── Starting skooti (KYC-gate proof) on #{server_url} ──"
 
-    File.truncate(log, 0) if File.exist?(log)
-    server_pid = spawn(
-      { "KIOSK_ISSUER" => kiosk_issuer },
-      "bundle exec rails s -p #{port} -b 127.0.0.1 -e development",
-      out: log, err: log,
-    )
+      File.truncate(log, 0) if File.exist?(log)
+      server_pid = spawn(
+        { "KIOSK_ISSUER" => kiosk_issuer }.merge(broker[:wiring]),
+        "bundle exec rails s -p #{port} -b 127.0.0.1 -e development",
+        out: log, err: log,
+      )
 
-    at_exit do
-      begin
-        Process.kill("TERM", server_pid)
-        Process.wait(server_pid)
-      rescue Errno::ESRCH, Errno::ECHILD
-        nil
-      end
-      puts "  Server stopped."
-    end
-
-    ready = false
-    40.times do
-      begin
-        res = Net::HTTP.get_response(URI("#{server_url}/.well-known/kiosk.json"))
-        if res.code.to_i == 200
-          ready = true
-          break
+      at_exit do
+        begin
+          Process.kill("TERM", server_pid)
+          Process.wait(server_pid)
+        rescue Errno::ESRCH, Errno::ECHILD
+          nil
         end
-      rescue Errno::ECONNREFUSED, Errno::EADDRNOTAVAIL, SocketError
-        nil
+        puts "  Server stopped."
       end
-      sleep 1
-    end
-    abort "Server did not become ready — see #{log}" unless ready
-    puts "  Server up at #{server_url}"
 
-    flow_rb = File.expand_path("../../kyc_flow.rb", __dir__)
-    puts "\n── Running kyc_flow.rb ──"
-    raw = `SERVER_URL=#{server_url} KIOSK_ISSUER=#{kiosk_issuer} bundle exec ruby #{flow_rb.shellescape} 2>&1`
-    stderr_lines = raw.lines.reject { |l| l.start_with?("{") }
-    json_line    = raw.lines.grep(/^\{/).last
-    puts stderr_lines.join
-    puts json_line if json_line
+      ready = false
+      40.times do
+        begin
+          res = Net::HTTP.get_response(URI("#{server_url}/.well-known/kiosk.json"))
+          if res.code.to_i == 200
+            ready = true
+            break
+          end
+        rescue Errno::ECONNREFUSED, Errno::EADDRNOTAVAIL, SocketError
+          nil
+        end
+        sleep 1
+      end
+      abort "Server did not become ready — see #{log}" unless ready
+      puts "  Server up at #{server_url}"
 
-    begin
-      result = JSON.parse(json_line || raw)
-    rescue JSON::ParserError => e
-      abort "kyc_flow.rb did not produce valid JSON: #{e.message}\nOutput:\n#{raw}"
+      flow_rb = File.expand_path("../../kyc_flow.rb", __dir__)
+      puts "\n── Running kyc_flow.rb (skooti + prove.my broker) ──"
+      driver_env = "SERVER_URL=#{server_url} KIOSK_ISSUER=#{kiosk_issuer} " \
+                   "KIOSK_PROVE_BROKER_URL=#{broker[:broker_url]}"
+      raw = `#{driver_env} bundle exec ruby #{flow_rb.shellescape} 2>&1`
+      stderr_lines = raw.lines.reject { |l| l.start_with?("{") }
+      json_line    = raw.lines.grep(/^\{/).last
+      puts stderr_lines.join
+      puts json_line if json_line
+
+      begin
+        result = JSON.parse(json_line || raw)
+      rescue JSON::ParserError => e
+        abort "kyc_flow.rb did not produce valid JSON: #{e.message}\nOutput:\n#{raw}"
+      end
     end
 
     puts "\n── KYC-gate assertions ──"
@@ -1088,22 +1107,23 @@ namespace :demo do
       puts "  FAIL  A1 403 hint does not point to request_kyc"
     end
 
-    # A2: the EXTERNAL issuer path — request_kyc returned a verification_url on
-    # the skooti host, the human-approve page accepted the token, kyc_status
-    # reached approved, and the ISSUER-signed jws was relayed back (the agent
-    # never held the signing key).
+    # A2: the SHARED-BROKER issuer path — request_kyc returned a verification_url
+    # on the prove.my BROKER host, the broker approve page accepted the token,
+    # the broker POSTed its signed claim to skooti's callback, kyc_status reached
+    # approved, and the broker-signed jws was relayed back (the agent never held
+    # the signing key).
     vurl = result["request_kyc_verification_url"].to_s
-    if result["http_request_kyc"] == 200 && vurl.include?("/kyc/verify?request=")
-      puts "  OK  A2 request_kyc → 200 with verification_url #{vurl.inspect}"
+    if result["http_request_kyc"] == 200 && vurl.include?("/verify?request=")
+      puts "  OK  A2 request_kyc → 200 with broker verification_url #{vurl.inspect}"
     else
-      failures << "A2: request_kyc expected 200 with a /kyc/verify?request= url, got #{result["http_request_kyc"].inspect}/#{vurl.inspect}"
+      failures << "A2: request_kyc expected 200 with a /verify?request= broker url, got #{result["http_request_kyc"].inspect}/#{vurl.inspect}"
       puts "  FAIL  A2 request_kyc → #{result["http_request_kyc"].inspect}/#{vurl.inspect}"
     end
     if result["http_approve_page"] == 200 && result["kyc_status"] == "approved" && result["kyc_jws_relayed"] == true
-      puts "  OK  A2 human approved stub page → kyc_status approved, issuer-signed jws relayed (no pre-shared key)"
+      puts "  OK  A2 human approved broker page → callback landed, kyc_status approved, broker-signed jws relayed (no pre-shared key)"
     else
-      failures << "A2: issuer path expected approve=200/status=approved/jws relayed, got approve=#{result["http_approve_page"].inspect}/status=#{result["kyc_status"].inspect}/jws=#{result["kyc_jws_relayed"].inspect}"
-      puts "  FAIL  A2 issuer path → approve=#{result["http_approve_page"].inspect}/status=#{result["kyc_status"].inspect}/jws=#{result["kyc_jws_relayed"].inspect}"
+      failures << "A2: broker path expected approve=200/status=approved/jws relayed, got approve=#{result["http_approve_page"].inspect}/status=#{result["kyc_status"].inspect}/jws=#{result["kyc_jws_relayed"].inspect}"
+      puts "  FAIL  A2 broker path → approve=#{result["http_approve_page"].inspect}/status=#{result["kyc_status"].inspect}/jws=#{result["kyc_jws_relayed"].inspect}"
     end
 
     # A3: the relayed jws is accepted at /agents/kyc and records both attributes.

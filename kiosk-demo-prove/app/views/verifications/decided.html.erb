@@ -1,0 +1,19 @@
+<%# Result of the human's decision on the prove.my verification page. %>
+<main>
+  <h1>prove.my</h1>
+  <% if @decision == :approved %>
+    <h2>Confirmed</h2>
+    <p>
+      We confirmed the requested facts and sent
+      <strong><%= @request.operator_id %></strong> a signed, anonymized answer —
+      only the yes/no booleans, nothing that identifies you. The assistant can
+      now complete its task. You can close this page.
+    </p>
+  <% else %>
+    <h2>Declined</h2>
+    <p>
+      You declined this verification. Nothing was shared. You can close this
+      page.
+    </p>
+  <% end %>
+</main>

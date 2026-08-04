@@ -289,7 +289,8 @@ CREATE TABLE public.kyc_verification_requests (
     status character varying DEFAULT 'pending'::character varying NOT NULL,
     kyc_jws text,
     created_at timestamp(6) without time zone NOT NULL,
-    updated_at timestamp(6) without time zone NOT NULL
+    updated_at timestamp(6) without time zone NOT NULL,
+    broker_nonce character varying
 );
 
 
@@ -776,6 +777,7 @@ ALTER TABLE ONLY public.reservations
 SET search_path TO "$user", public;
 
 INSERT INTO "schema_migrations" (version) VALUES
+('20260804000002'),
 ('20260804000001'),
 ('20260803000001'),
 ('20260717000001'),

@@ -2,8 +2,8 @@
 
 # Kiosk-demo (skooti-shape) configuration. Concrete values for the
 # scooter-rental reference shape: uuid users, JWT-or-stub IdP, StubPsp,
-# StubKyc, Actions (reserve, start_rental, payment_setup) + named queries
-# (scooters_available, my_reservations).
+# the prove.my broker as the trusted KYC issuer, Actions (reserve, start_rental,
+# payment_setup) + named queries (scooters_available, my_reservations).
 
 # ── Ephemeral dev signing key ────────────────────────────────────────────
 # JWT / register flows need a signing key. In development or test, if none is
@@ -21,7 +21,8 @@ require Rails.root.join("lib/stub_user_idp")
 require Rails.root.join("lib/jwt_or_stub_idp")
 require Rails.root.join("lib/stub_psp")
 require Rails.root.join("lib/validating_rental_provider")
-require Rails.root.join("lib/stub_kyc")
+require Rails.root.join("lib/prove_trust")
+require Rails.root.join("lib/prove_broker_client")
 require Rails.root.join("lib/dev_unlock_key")
 require Rails.root.join("lib/rental_token_issuer")
 require Rails.root.join("lib/pow_difficulty")
@@ -109,9 +110,15 @@ Kiosk.configure do |c|
   c.registration_pow_params = SKOOTI_REGISTRATION_POW_PARAMS
   c.pow_secret              = ENV.fetch("KIOSK_POW_SECRET", "skooti-demo-pow-secret")
 
-  # KYC attestation verifier — trusts the stub KYC provider.
-  c.kyc_issuer    = "https://kyc.example"
-  c.kyc_public_key = StubKyc.public_key
+  # KYC attestation verifier — trusts the prove.my broker (the shared
+  # anonymizing KYC issuer). skooti no longer hosts its own issuer: it configures
+  # prove.my as its kyc_issuer + kyc_public_key ONCE (design §5.3) and asks the
+  # broker for exactly the claims it needs (age_over_18 + licence_a). The trust
+  # anchors come from ProveTrust (env-overridable by the two-server harness,
+  # pinned dev fallback for plain boot). No new framework surface — the same two
+  # config attributes the shipped KycVerifier already reads.
+  c.kyc_issuer    = ProveTrust.issuer
+  c.kyc_public_key = ProveTrust.public_key
 
   # Ed25519 rental-token signing key (offline token).
   # Fixed dev keypair — stable vectors; swap for env-loaded PEM in production.
@@ -478,25 +485,27 @@ Kiosk::Server::Actions.register("rent_motorcycle",
   }
 end
 
-# request_kyc — start a stub-KYC verification an EXTERNAL agent can COMPLETE
-# without any pre-shared issuer key (K-440/K-443).
+# request_kyc — start a verification at the prove.my broker an EXTERNAL agent can
+# COMPLETE without any pre-shared issuer key (K-440/K-443, design §5.1).
 #
-# Records a PENDING verification bound to the authenticated agent's user_id and
-# returns a verification_url the agent RELAYS to its human. The URL points at
-# skooti's own stub KYC-provider page (a real deployment would point at a KYC
-# provider such as Persona/Sumsub — kept GENERIC here); it carries an
-# unguessable request token, so the human needs NO account/sign-in to approve.
-# On approve, the stub issuer signs an anonymized {age_over_18, licence_a}
-# attestation for THIS user_id with the key skooti already trusts
-# (c.kyc_public_key). The agent then polls `query kyc_status` and submits the
-# returned jws to POST /kiosk/agents/kyc.
+# Rewired to the shared broker: instead of minting a LOCAL stub token, skooti
+# calls prove.my's intake (server-to-server) with its own callback_url, the two
+# claims it needs (age_over_18 + licence_category:A), and the agent's user_id as
+# the subject the claim must bind to. The broker returns an unguessable
+# verification_url (on the BROKER) and a request_id; skooti stores that
+# request_id as this row's request_token (+ the broker's nonce for callback
+# anti-replay) and returns the broker's verification_url for the agent to relay
+# to its human. On approve, the BROKER signs an anonymized {age_over_18,
+# licence_a} claim and POSTs it to skooti's POST /kyc/callback; the agent then
+# polls `query kyc_status` and submits the returned jws to POST /kiosk/agents/kyc
+# (agent contract UNCHANGED — only the issuer behind the link changed).
 #
 # args: {} — none; the caller is identified by its token.
 # Returns: { request_id:, verification_url:, status: "pending" }
 Kiosk::Server::Actions.register("request_kyc",
                                  description: "Start age≥18 + category-A driving-licence verification for the authenticated principal. " \
-                                              "Returns a verification_url to relay to your human to approve (a KYC provider confirms the " \
-                                              "facts and signs them — it never shares the documents) and a request_id. After the human " \
+                                              "Returns a verification_url to relay to your human to approve (an anonymizing KYC broker confirms " \
+                                              "the facts and signs them — it never shares the documents) and a request_id. After the human " \
                                               "approves, poll `query kyc_status` with the request_id for the signed attestation, submit it " \
                                               "to POST /kiosk/agents/kyc, then retry rent_motorcycle. No pre-shared issuer key needed.",
                                  params: {}) do |_args|
@@ -505,20 +514,32 @@ Kiosk::Server::Actions.register("request_kyc",
   uid = conn.execute("SELECT kiosk.current_user_id() AS uid").first["uid"]
   raise Kiosk::Server::Errors::Unauthenticated.new("no authenticated user") if uid.nil?
 
-  # Unguessable per-request token — the ONLY credential the verification_url
-  # carries (the human needs no sign-in). 256 bits of URL-safe randomness.
-  request_token = SecureRandom.urlsafe_base64(32)
+  # Call the broker's intake server-to-server. skooti hands the broker its own
+  # callback URL, the claims it needs, and the agent's user_id (the subject the
+  # signed claim must bind to). The broker mints the unguessable request_id +
+  # verification_url on ITS side.
+  callback_base = Kiosk.configuration.issuer.to_s.chomp("/")
+  broker = ProveBrokerClient.start_verification(
+    callback_url:     "#{callback_base}/kyc/callback",
+    requested_claims: %w[age_over_18 licence_category:A],
+    subject_handle:   uid.to_s,
+  )
 
+  request_id       = broker.fetch("request_id")
+  verification_url = broker.fetch("verification_url")
+  nonce            = broker["nonce"].to_s
+
+  # Store the BROKER's request_id as our local request_token so kyc_status
+  # (unchanged) polls it, plus the broker nonce the callback must echo.
   conn.execute(<<~SQL)
     INSERT INTO public.kyc_verification_requests
-      (request_token, user_id, status, created_at, updated_at)
-    VALUES (#{conn.quote(request_token)}, #{conn.quote(uid)}::uuid, 'pending', now(), now())
+      (request_token, user_id, broker_nonce, status, created_at, updated_at)
+    VALUES (#{conn.quote(request_id)}, #{conn.quote(uid)}::uuid, #{conn.quote(nonce)}, 'pending', now(), now())
   SQL
 
-  base = Kiosk.configuration.issuer.to_s.chomp("/")
   {
-    request_id:       request_token,
-    verification_url: "#{base}/kyc/verify?request=#{request_token}",
+    request_id:       request_id,
+    verification_url: verification_url,
     status:           "pending",
   }
 end

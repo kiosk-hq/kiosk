@@ -1,0 +1,29 @@
+source "https://rubygems.org"
+
+# prove.my — the anonymizing KYC broker demo (kiosk-demo-prove). This is NOT a
+# Kiosk operator: it mounts NONE of the four verbs and depends on NO kiosk gem.
+# It is the smallest possible Rails app — a request table, an RSA issuer key,
+# an intake controller, a human verification page, and a callback poster.
+gem "rails", "~> 8.1.3"
+# Use postgresql as the database for Active Record
+gem "pg", "~> 1.1"
+# Use the Puma web server [https://github.com/puma/puma]
+gem "puma", ">= 5.0"
+
+# The broker signs its anonymized claims as RS256 JWS — the shape skooti's
+# Kiosk::Server::KycVerifier already accepts. Same jwt gem the demos use.
+gem "jwt", "~> 2.10"
+
+# Windows does not include zoneinfo files, so bundle the tzinfo-data gem
+gem "tzinfo-data", platforms: %i[ windows jruby ]
+
+# Reduces boot times through caching; required in config/boot.rb
+gem "bootsnap", require: false
+
+group :development, :test do
+  gem "debug", platforms: %i[ mri windows ], require: "debug/prelude"
+end
+
+group :test do
+  gem "rspec-rails", "~> 7.0"
+end

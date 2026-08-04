@@ -34,13 +34,14 @@ Rails.application.routes.draw do
   post "/kiosk/auth/revoke",                        to: "kiosk/server/auth#revoke"
   post "/kiosk/agents/kyc",                        to: "kiosk/server/kyc_attestation#create"
 
-  # Stub KYC-provider page (K-440/K-443) — the human half of motorcycle KYC.
-  # `run request_kyc` returns a verification_url pointing here; the human
-  # approves and the stub issuer signs an anonymized {age_over_18, licence_a}
-  # attestation the agent then submits to /kiosk/agents/kyc. No sign-in: the
-  # unguessable ?request=<token> in the URL is the only credential.
-  get  "/kyc/verify",                              to: "kyc_issuer#show"
-  post "/kyc/verify",                              to: "kyc_issuer#create"
+  # prove.my broker callback (design §5.2) — the broker → operator leg. `run
+  # request_kyc` calls the broker's intake with THIS callback; on the human's
+  # approve, the broker POSTs the signed anonymized {age_over_18, licence_a}
+  # claim here. skooti verifies it against the trusted ProveKey, checks the
+  # nonce/operator/request_id it stored, and parks the jws for the agent to
+  # fetch via kyc_status and submit to /kiosk/agents/kyc. The self-hosted stub
+  # KYC-provider page (/kyc/verify) is RETIRED — the broker now owns issuance.
+  post "/kyc/callback",                            to: "kyc_callback#create"
 
   # Native discovery surface — served by kiosk-server's DiscoveryController
   # (rendered from Kiosk::Server::WellKnown, the single generator seam).

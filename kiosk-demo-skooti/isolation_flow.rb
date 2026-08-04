@@ -38,7 +38,10 @@ require "uri"
 require "jwt"
 
 $LOAD_PATH.unshift File.expand_path("lib", __dir__)
-require "stub_kyc"
+# Valid attestations are now minted with the SHARED prove.my broker key
+# (ProveTestIssuer, signing with the ProveKey skooti trusts) — the self-hosted
+# StubKyc retired when issuance moved to the broker.
+require "prove_test_issuer"
 
 SERVER = ENV.fetch("SERVER_URL")
 ISSUER = ENV.fetch("KIOSK_ISSUER")
@@ -81,7 +84,7 @@ def register_principal(name:)
   agent_id = reg.fetch("agent_id")
   token    = reg.fetch("access_token")
 
-  att = StubKyc.attest(user_id: user_id)
+  att = ProveTestIssuer.attest(user_id: user_id)
   rc_kyc, kyc_resp = post_json(
     "#{SERVER}/kiosk/agents/kyc",
     { kyc_jws: att },

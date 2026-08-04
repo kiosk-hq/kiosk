@@ -253,13 +253,19 @@ jobs:
   # 500, K-439 assume_ssl off → CSRF-Origin silent sign-in failure) ALL reached
   # the hosted demos and none tripped CI, because CI boots the server in
   # RAILS_ENV=development (lazy autoload, no proxy, no Origin check). This boots
-  # ONE representative demo (stylish — it exercises Devise sign-in, roles, and
-  # the manage page) exactly like the deploy: RAILS_ENV=production
-  # (config.eager_load=true, config.assume_ssl=true) behind a simulated
-  # proxy+browser, and curl-asserts the four surfaces those bugs broke. See
-  # deploy/production-smoke.sh; any assertion miss fails the job.
+  # ONE demo per UNIQUE human-facing HTML surface exactly like the deploy:
+  # RAILS_ENV=production (config.eager_load=true, config.assume_ssl=true) behind
+  # a simulated proxy+browser, and curl-asserts the surfaces those bugs broke:
+  #   stylish — Devise sign-in, roles, the manage page (the original three-bug
+  #             surface).
+  #   prove   — the prove.my broker's /verify human page (K-462): a distinct
+  #             token-capability HTML surface with a form POST and no login,
+  #             depending on no kiosk gem. The stylish-only smoke never covered
+  #             it. Booting all seven demos in prod would be heavier CI for
+  #             little marginal signal (the prod-only classes are per-surface).
+  # See deploy/production-smoke.sh; any assertion miss fails the job.
   demo-production-smoke:
-    name: stylish production-boot smoke
+    name: production-boot smoke (stylish + prove)
     runs-on: ubuntu-latest
 
     services:
@@ -285,6 +291,9 @@ jobs:
       # runs trust auth as `postgres`, so no password is needed.
       KIOSK_STYLISH_DB_USER: postgres
       KIOSK_STYLISH_DB_PASSWORD: ""
+      # Same for the prove.my broker's production database.yml.
+      KIOSK_PROVE_DB_USER: postgres
+      KIOSK_PROVE_DB_PASSWORD: ""
 
     steps:
       - uses: actions/checkout@v7
@@ -295,8 +304,12 @@ jobs:
           ruby-version: "4.0.1"
           bundler-cache: false
 
-      - name: Install dependencies
+      - name: Install stylish dependencies
         working-directory: kiosk-demo-stylish
+        run: bundle install
+
+      - name: Install prove.my broker dependencies
+        working-directory: kiosk-demo-prove
         run: bundle install
 
       # structure.sql is PG17-format (SET transaction_timeout, a v17 param), so
@@ -312,7 +325,13 @@ jobs:
       # production initializer does NOT self-provision a key) on a fixed,
       # collision-free port.
       - name: Production-boot smoke (stylish)
-        run: ./deploy/production-smoke.sh
+        run: ./deploy/production-smoke.sh stylish
+
+      # Boot the prove.my broker in production and assert its /verify HTML page
+      # (live form + clean not-recognised + form POST behind the proxy) renders
+      # rather than 500 — the K-462 gap the stylish-only smoke did not cover.
+      - name: Production-boot smoke (prove.my broker)
+        run: ./deploy/production-smoke.sh prove
 
   e2e:
     name: kiosk OSS end-to-end

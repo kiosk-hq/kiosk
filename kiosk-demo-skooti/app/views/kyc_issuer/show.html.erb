@@ -1,0 +1,39 @@
+<%# Stub KYC-provider verify page (K-440/K-443). Reached from the
+    verification_url `run request_kyc` returns; the unguessable request token in
+    the URL is the only credential — no sign-in. Approving signs an anonymized
+    {age_over_18, licence_a} attestation for the bound agent; the documents
+    themselves never leave the human. %>
+<main>
+  <h1>Verify your age and category-A driving licence</h1>
+
+  <% if @request.nil? %>
+    <p role="alert">
+      This verification link was not recognised — it may have expired or already
+      been used. Ask the assistant to start verification again.
+    </p>
+  <% elsif @request.status != "pending" %>
+    <p>
+      This verification has already been <strong><%= @request.status %></strong>.
+      You can close this page.
+    </p>
+  <% else %>
+    <p>
+      An assistant asked a KYC provider to confirm two facts about you so you can
+      rent a combustion-engine motorcycle:
+    </p>
+    <ul>
+      <li>you are over 18 (<code>age_over_18</code>), and</li>
+      <li>you hold a category-A driving licence (<code>licence_a</code>).</li>
+    </ul>
+    <p>
+      The provider checks your ID and licence and returns only these two
+      yes/no answers, signed. Your date of birth and licence number are never
+      shared with the assistant or the rental operator.
+    </p>
+    <form action="/kyc/verify" method="post">
+      <input type="hidden" name="request" value="<%= @request.request_token %>">
+      <button type="submit" name="decision" value="approve">Approve</button>
+      <button type="submit" name="decision" value="decline">Decline</button>
+    </form>
+  <% end %>
+</main>

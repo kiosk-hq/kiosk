@@ -11,6 +11,10 @@
 #   MotorcycleForgedKyc      — a forged attestation self-asserting
 #                              {age_over_18, licence_a} is rejected, so the
 #                              KYC-attribute-gated rent_motorcycle stays 403.
+#   IssuedKycJwsTheft        — a REAL issuer-signed jws minted for victim B via
+#                              the stub-issuer approve page cannot be replayed by
+#                              attacker A (KycVerifier binds sub to the caller),
+#                              so A's rent_motorcycle stays 403 (K-440/K-443).
 #
 # Three local cashier-check beats attack ValidatingRentalProvider (the monetary
 # check run at capture, before StubPsp settles):
@@ -377,6 +381,83 @@ end
 
 mc_beat = motorcycle_forged_kyc.call
 
+# ── skooti-local beat: issued-jws cannot be stolen across agents ──────
+#
+# The stub issuer (K-440/K-443) signs an attestation for the request's OWN
+# user_id. This beat proves an ISSUED, VALID jws cannot be lifted onto a
+# DIFFERENT agent: victim B opens request_kyc, the human approves B's page (the
+# page is intentionally open — the token is the credential), so B receives a
+# real issuer-signed jws bound to B's user_id. Attacker A — which has reserved +
+# paid for its OWN motorcycle so ONLY the KYC-attribute gate can block — submits
+# B's jws to /agents/kyc. The KycVerifier binds `sub` to the authenticated
+# identity, so it rejects (subject mismatch) → A's attributes are never granted
+# → A's rent_motorcycle stays 403 kyc_required. A bug that dropped the sub check
+# would let any agent replay someone else's licence — a real BREACH.
+kyc_jws_theft = lambda do
+  http_post_form = lambda do |path, form|
+    uri = URI("#{BASE_URL}#{path}")
+    req = Net::HTTP::Post.new(uri, "Content-Type" => "application/x-www-form-urlencoded")
+    req.body = URI.encode_www_form(form)
+    res = Net::HTTP.new(uri.host, uri.port).request(req)
+    res.code.to_i
+  end
+
+  client = Kiosk::Redteam::Client.new(base_url: BASE_URL)
+
+  # Victim B obtains a REAL issuer-signed attestation via the human-approve page.
+  b = client.register!(name: "redteam-kyc-victim-b", pow_difficulty: 20)
+  req_b = client.run(b, name: "request_kyc")
+  raise "redteam(skooti): request_kyc(B) failed (#{req_b.status})" unless req_b.status == 200
+  token_b = req_b.body.dig("value", "request_id")
+  approve_rc = http_post_form.call("/kyc/verify", { request: token_b, decision: "approve" })
+  raise "redteam(skooti): approve(B) page failed (#{approve_rc})" unless approve_rc == 200
+
+  status_b = client.query(b, name: "kyc_status", request_id: token_b)
+  victim_jws = (status_b.body["rows"] || []).first&.dig("kyc_jws")
+  raise "redteam(skooti): kyc_status(B) returned no jws" if victim_jws.nil? || victim_jws.empty?
+
+  # Attacker A reserves + pays its OWN motorcycle so ONLY the KYC gate can block.
+  a = client.register!(name: "redteam-kyc-attacker-a", pow_difficulty: 20)
+  fleet = client.query(a, name: "scooters_available")
+  mc    = (fleet.body["rows"] || []).find { |r| r["code"] == "MC-001" }
+  raise "redteam(skooti): MC-001 not in fleet (theft beat)" unless mc
+
+  rsv = client.run(a, name: "reserve", scooter_code: "MC-001")
+  raise "redteam(skooti): reserve MC-001(A) failed (#{rsv.status})" unless rsv.status == 200
+  reservation_id = rsv.body.dig("value", "reservation_id")
+  price_min      = rsv.body.dig("value", "price_per_min_cents").to_i
+
+  now = Time.now.to_i
+  intent_id = SecureRandom.uuid
+  cart_id   = SecureRandom.uuid
+  total     = price_min.positive? ? price_min : 100
+  intent = { id: intent_id, user_id: a.user_id, agent_id: a.agent_id, iss: ISSUER,
+             scope: "mobility", cap_amount_cents: total + 100, currency: "eur",
+             exp: now + 600, iat: now }
+  cart = { id: cart_id, intent_mandate_id: intent_id, user_id: a.user_id, agent_id: a.agent_id,
+           iss: ISSUER, line_items: [{ sku: "MC-001", qty: 1, reservation_id: }],
+           total_amount_cents: total, currency: "eur", exp: now + 600, iat: now }
+  pay_resp = client.pay(a, intent:, cart:)
+  raise "redteam(skooti): pay MC-001(A) failed (#{pay_resp.status})" unless pay_resp.status == 200
+
+  # A submits B's issued jws — the subject-binding must reject it.
+  kyc_resp = client.kyc(a, attestation_jws: victim_jws)
+  rent     = client.run(a, name: "rent_motorcycle", reservation_id:)
+
+  kyc_blocked  = Kiosk::Redteam.blocked?(kyc_resp)
+  rent_blocked = rent.status == 403 && rent.body.is_a?(Hash) && rent.body.dig("error", "code") == "kyc_required"
+
+  if kyc_blocked && rent_blocked
+    { blocked: true, detail: "B's issued jws rejected for A at /kyc (#{kyc_resp.status}); A's rent_motorcycle stays 403 kyc_required" }
+  elsif rent_blocked
+    { blocked: true, detail: "B's issued jws not granted to A; rent_motorcycle stays 403 kyc_required" }
+  else
+    { blocked: false, detail: "stolen jws unlocked A's motorcycle: /kyc=#{kyc_resp.status}, rent_motorcycle=#{rent.status}" }
+  end
+end
+
+theft_beat = kyc_jws_theft.call
+
 # ── Summary ───────────────────────────────────────────────────────────────────
 
 blocked_results = results.select { |r| !r[:verdict].skipped && r[:verdict].blocked }
@@ -391,15 +472,21 @@ skipped_results.each do |r|
 end
 breach_results.each { |r| puts "  BREACH   ✗ #{r[:scenario].name} — #{r[:verdict].detail}" }
 
-# ── skooti-local beat verdict ─────────────────────────────────────────
+# ── skooti-local beat verdicts ────────────────────────────────────────
 if mc_beat[:blocked]
   puts "  BLOCKED  ✓ MotorcycleForgedKyc — #{mc_beat[:detail]}"
 else
   puts "  BREACH   ✗ MotorcycleForgedKyc — #{mc_beat[:detail]}"
 end
+if theft_beat[:blocked]
+  puts "  BLOCKED  ✓ IssuedKycJwsTheft — #{theft_beat[:detail]}"
+else
+  puts "  BREACH   ✗ IssuedKycJwsTheft — #{theft_beat[:detail]}"
+end
 
-blocked_count = blocked_results.size + (mc_beat[:blocked] ? 1 : 0)
-beat_breach   = mc_beat[:blocked] ? 0 : 1
+local_beats_blocked = (mc_beat[:blocked] ? 1 : 0) + (theft_beat[:blocked] ? 1 : 0)
+blocked_count = blocked_results.size + local_beats_blocked
+beat_breach   = (mc_beat[:blocked] ? 0 : 1) + (theft_beat[:blocked] ? 0 : 1)
 
 puts ""
 if breach_results.empty? && skipped_results.empty? && beat_breach.zero?

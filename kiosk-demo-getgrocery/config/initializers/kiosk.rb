@@ -95,8 +95,8 @@ Kiosk.configure do |c|
     c.owner = c.owner.merge(pow_difficulty: PowDifficulty.level, pow_notice: notice)
   end
   # Dual-check (skill.md): canonical skill URL + SHA-256 of its content.
-  c.skill_url    = "https://kiosk.tech/skill-v0.3.6.md"
-  c.skill_sha256 = "d27a9184da55b27ae42833987f9ae6c6afbc9fba75ca98103370d51f67865ef7"
+  c.skill_url    = "https://kiosk.tech/skill-v0.3.7.md"
+  c.skill_sha256 = "5cc4d9d5372559aa6d03505b449d9c59b88fd4536872aa186899eca1357341c0"
 
   c.agent_idp = JwtOrStubIdp.new(stub: StubIdp.new)
   # The provider's own web-session channel: authenticates the approving

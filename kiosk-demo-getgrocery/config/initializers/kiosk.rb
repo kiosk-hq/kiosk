@@ -190,7 +190,22 @@ LOW_STOCK_THRESHOLD = 5
 
 Kiosk::Server::Queries.register("catalog",
   description: "Browse in-stock products from the getgrocery catalog (out-of-stock items are hidden). " \
-               "All prices are EUR cents — carts must be signed in eur at these exact prices") do |_params|
+               "All prices are EUR cents — carts must be signed in eur at these exact prices. " \
+               "Takes no parameters and returns the whole in-stock catalogue (small; not paginated); " \
+               "each row carries the stable `sku` (reference products by sku, never the numeric id) and a " \
+               "`low` flag when stock is running out.",
+  params: {},
+  input_schema: {
+    type: "object",
+    additionalProperties: false,
+    properties: {},
+    required: [],
+  },
+  example_params: {},
+  example_row: {
+    sku: "sourdough-bread", name: "Sourdough Bread", price_cents: 449,
+    price_eur: "€4.49", currency: "eur",
+  }) do |_params|
   conn = ActiveRecord::Base.connection
   rows = conn.execute(
     "SELECT sku, name, price_cents, stock FROM products WHERE stock > 0 ORDER BY name"
@@ -282,6 +297,39 @@ Kiosk::Server::Actions.register("create_order",
     delivery_slot_id: "integer — slot id from the delivery_slots query (1–6), REQUIRED",
     delivery_address: "string — delivery address, REQUIRED",
     order_id:         "(optional) uuid — if given and order belongs to principal and not yet paid, replaces its items and delivery details",
+  },
+  input_schema: {
+    type: "object",
+    additionalProperties: false,
+    properties: {
+      items: {
+        type: "array", minItems: 1,
+        description: "The complete cart — products referenced by sku.",
+        items: {
+          type: "object", additionalProperties: false,
+          properties: {
+            sku: { type: "string", description: "Product sku from the catalog query." },
+            qty: { type: "integer", minimum: 1, description: "Quantity." },
+          },
+          required: ["sku", "qty"],
+        },
+      },
+      delivery_slot_id: { type: "integer", minimum: 1, maximum: 6,
+                          description: "Slot id from delivery_slots (1..6)." },
+      delivery_address: { type: "string", description: "Delivery address." },
+      order_id:         { type: "string",
+                          description: "Optional uuid of an unpaid order to replace." },
+    },
+    required: ["items", "delivery_slot_id", "delivery_address"],
+  },
+  example_params: {
+    items: [{ sku: "sourdough-bread", qty: 2 }, { sku: "greek-yogurt", qty: 1 }],
+    delivery_slot_id: 3, delivery_address: "12 Rue de la Paix, Brussels",
+  },
+  example_row: {
+    order_id: "e2b1c0d4-5f6a-4b3c-8d2e-1f0a9b8c7d6e", total_cents: 1287,
+    total_eur: "€12.87", currency: "eur", slot_at: "2026-08-05T12:00:00Z",
+    pay_hint: "pay in EUR with a cart mandate whose line_items mirror this order …",
   }) do |args|
   conn = ActiveRecord::Base.connection
   uid = conn.execute("SELECT kiosk.current_user_id() AS uid").first["uid"]

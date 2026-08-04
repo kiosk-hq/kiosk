@@ -132,11 +132,35 @@ end
 Kiosk::Server::Queries.register(
   "browse_listings",
   description: "Browse the public classifieds board across all sellers. Optional " \
-               "category_slug and keyword filters; status defaults to open.",
+               "category_slug and keyword filters; status defaults to open. All " \
+               "filters are optional and AND together; each row carries the id, " \
+               "title, body, free-form price_text, category_slug, status, and " \
+               "owner_handle. Returns all matching listings (small board; not " \
+               "paginated); prices are free-form text (e.g. \"€300\"), not cents.",
   params: {
     category_slug: "string (optional) — restrict to one category (a listing's category_slug)",
     keyword:       "string (optional) — case-insensitive match on title or body",
     status:        "string (optional) — 'open' (default) or 'closed'",
+  },
+  input_schema: {
+    type: "object",
+    additionalProperties: false,
+    properties: {
+      category_slug: { type: "string",
+                       enum: %w[furniture bikes electronics housing free],
+                       description: "Restrict to one category." },
+      keyword:       { type: "string", description: "Case-insensitive match on title or body." },
+      status:        { type: "string", enum: %w[open closed], default: "open",
+                       description: "Listing status filter." },
+    },
+    required: [],
+  },
+  example_params: { category_slug: "bikes", keyword: "road", status: "open" },
+  example_row: {
+    id: "9c1d2e3f-4a5b-4c6d-8e7f-0a1b2c3d4e5f", title: "Carbon road bike — €300",
+    body: "Lightweight carbon road bike, 54cm, Shimano 105 groupset.",
+    price_text: "€300", category_slug: "bikes", status: "open",
+    owner_handle: "alice@example.com",
   },
 ) do |params|
   conn = ActiveRecord::Base.connection
@@ -190,13 +214,35 @@ end
 # acting agent from the token (attribution).
 Kiosk::Server::Actions.register(
   "post_listing",
-  description: "Post a new classifieds listing owned by the authenticated principal.",
+  description: "Post a new classifieds listing owned by the authenticated principal. " \
+               "price_text is free-form display text (e.g. \"€300\" or \"Free\"), not a " \
+               "cents amount. Any owner_id passed in args is ignored — the listing is " \
+               "owned by the authenticated principal.",
   params: {
     category_slug: "string (required) — the section to post in (see browse_listings)",
     title:         "string (required) — short headline",
     body:          "string (required) — the listing description",
     price_text:    "string (optional) — free-form display price, e.g. '€300' or 'Free'",
   },
+  input_schema: {
+    type: "object",
+    additionalProperties: false,
+    properties: {
+      category_slug: { type: "string",
+                       enum: %w[furniture bikes electronics housing free],
+                       description: "The section to post in (see browse_listings)." },
+      title:         { type: "string", description: "Short headline." },
+      body:          { type: "string", description: "The listing description." },
+      price_text:    { type: "string", description: "Free-form display price, e.g. \"€300\" or \"Free\"." },
+    },
+    required: ["category_slug", "title", "body"],
+  },
+  example_params: {
+    category_slug: "bikes", title: "Carbon road bike — €300",
+    body: "Lightweight carbon road bike, 54cm, Shimano 105 groupset.",
+    price_text: "€300",
+  },
+  example_row: { listing_id: "9c1d2e3f-4a5b-4c6d-8e7f-0a1b2c3d4e5f", status: "open" },
 ) do |args|
   owner_id = philslist_current_user_id
   category = Category.find_by!(slug: args[:category_slug])

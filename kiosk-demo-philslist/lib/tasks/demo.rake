@@ -483,6 +483,25 @@ namespace :demo do
       end
     end
 
+    # T-042 / K-452: the primary read query (browse_listings) and primary action
+    # (post_listing) advertise the machine-readable descriptor extensions.
+    {
+      query_specs  => %w[browse_listings],
+      action_specs => %w[post_listing],
+    }.each do |list, names|
+      names.each do |dname|
+        entry = list.find { |e| e["name"] == dname } || {}
+        %w[input_schema example_params example_row].each do |ext|
+          if entry.key?(ext) && !entry[ext].nil?
+            puts "  ✓  #{dname} advertises #{ext}"
+          else
+            failures << "#{dname} missing #{ext}"
+            puts "  ✗  #{dname} missing #{ext}"
+          end
+        end
+      end
+    end
+
     # ── NOT-ONLY-COMMERCE: pay absent from the ADVERTISED capability set ──
     if capabilities.include?("pay")
       failures << "discovery capabilities advertise `pay` (got #{capabilities.inspect}) — philslist takes no payments"

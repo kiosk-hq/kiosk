@@ -125,8 +125,21 @@ end
 # authenticated principal may read it; an assistant uses it to pick a
 # service_id (and see the € price) before booking.
 Kiosk::Server::Queries.register("service_menu",
-                                 description: "Browse the salon's service menu with EUR prices (name, price_cents, price_eur)",
-                                 params: {}) do |_params|
+                                 description: "Browse the salon's service menu with EUR prices (name, price_cents, price_eur). " \
+                                              "Takes no parameters and returns the whole menu (small; not paginated); pick a service " \
+                                              "`id` to pass as service_id to book_appointment, where its EUR price is captured on the booking.",
+                                 params: {},
+                                 input_schema: {
+                                   type: "object",
+                                   additionalProperties: false,
+                                   properties: {},
+                                   required: [],
+                                 },
+                                 example_params: {},
+                                 example_row: {
+                                   id: 1, name: "Cut", price_cents: 3500,
+                                   currency: "EUR", price_eur: "€35",
+                                 }) do |_params|
   ActiveRecord::Base.connection.execute(
     "SELECT id, name, price_cents FROM services ORDER BY price_cents"
   ).to_a.map do |row|
@@ -213,6 +226,24 @@ Kiosk::Server::Actions.register("book_appointment",
                                    salon_id:   "integer — id of the salon (from the `salons` query)",
                                    slot:       "string — appointment time as an ISO 8601 timestamp",
                                    service_id: "integer — optional id of a service (from the `service_menu` query); its EUR price is captured on the booking",
+                                 },
+                                 input_schema: {
+                                   type: "object",
+                                   additionalProperties: false,
+                                   properties: {
+                                     salon_id:   { type: "integer",
+                                                   description: "Salon id from the salons query." },
+                                     slot:       { type: "string", format: "date-time",
+                                                   description: "Appointment time, ISO 8601 timestamp." },
+                                     service_id: { type: "integer",
+                                                   description: "Optional service id from service_menu; its EUR price is captured." },
+                                   },
+                                   required: ["salon_id", "slot"],
+                                 },
+                                 example_params: { salon_id: 1, slot: "2026-08-05T14:00:00Z", service_id: 1 },
+                                 example_row: {
+                                   appointment_id: 1, salon_id: 1, slot: "2026-08-05T14:00:00Z",
+                                   service: "Cut", currency: "EUR", price_cents: 3500, price_eur: "€35",
                                  }) do |args|
   # Identity is set via Kiosk::Server::SessionContext SET LOCAL —
   # current_user_id() helper returns the principal. ActiveRecord doesn't

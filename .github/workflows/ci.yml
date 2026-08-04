@@ -119,9 +119,20 @@ jobs:
             stripe_mock: true
           - demo: kiosk-demo-hoteling
             tasks: demo:book demo:isolation demo:redteam demo:schema
+          - demo: kiosk-demo-prove
+            # prove.my — the anonymizing KYC broker (an ISSUER, not a Kiosk
+            # operator; mounts none of the four verbs). demo:test runs its own
+            # rspec suite (intake auth + allow-list, per-request/operator/subject
+            # binding, single-use, TTL, SSRF/open-relay guard, signed claim).
+            tasks: demo:test
           - demo: kiosk-demo-skooti
             # demo:kyc = the KYC attribute gate (combustion motorcycle needs
-            # age_over_18 + licence_a; the electric scooter is licence-free).
+            # age_over_18 + licence_a; the electric scooter is licence-free) — now
+            # a TWO-SERVER integration: it boots the prove.my broker
+            # (kiosk-demo-prove) on its own port and drives the cross-app flow, as
+            # does demo:redteam (the broker-flavored theft/cross-operator/forged-
+            # callback beats). So this job also bundles the sibling broker app.
+            prove_broker: kiosk-demo-prove
             tasks: demo:kat demo:rideflow demo:kyc demo:isolation demo:redteam demo:schema
           - demo: kiosk-demo-stylish
             tasks: demo:walkthrough demo:isolation demo:redteam demo:schema
@@ -183,6 +194,14 @@ jobs:
 
       - name: Install dependencies
         working-directory: ${{ matrix.demo }}
+        run: bundle install
+
+      # skooti's demo:kyc / demo:redteam are two-server integrations that boot
+      # the prove.my broker (kiosk-demo-prove) on its own port; that sibling app
+      # needs its own bundle installed for the boot helper to `rails s` it.
+      - name: Install prove.my broker deps (skooti two-server gates)
+        if: matrix.prove_broker
+        working-directory: ${{ matrix.prove_broker }}
         run: bundle install
 
       # Demos self-provision a dev signing key when none is set;

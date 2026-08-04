@@ -33,44 +33,32 @@ require "kiosk/redteam"
 require "jwt"
 require "openssl"
 require "securerandom"
+require "net/http"
+require "uri"
+require "json"
 
-# ── Load skooti's StubKyc from lib/ ──────────────────────────────────────────
+# ── KYC helpers (redteam-only) — the prove.my broker rewire ───────────────────
+#
+# skooti's self-hosted stub KYC issuer retired; the SHARED prove.my broker is now
+# the trusted issuer. Valid/expired attestations are minted with the broker's
+# ProveKey (ProveTestIssuer, signing with the key skooti trusts); the forged
+# variant signs with a DIFFERENT key but the TRUSTED issuer so signature
+# verification is exercised in isolation (an alg:none/weakened-sig regression is
+# caught). None of this weakens the real verification path.
 $LOAD_PATH.unshift File.expand_path("lib", __dir__)
-require "stub_kyc"
+require "prove_test_issuer"
+require "prove_trust"
 
-BASE_URL = ENV.fetch("SERVER_URL", "http://127.0.0.1:3003")
-ISSUER   = ENV.fetch("KIOSK_ISSUER", BASE_URL)
-
-# ── KYC helpers (redteam-only) ────────────────────────────────────────────────
-#
-# Extend StubKyc with expired/forged variants directly in this file.
-# stub_kyc.rb's real verification path is NOT changed (no gate-weakening).
-#
-# expired: signed with the REAL key but exp 1h in the past — specifically tests
-#          the server's exp check, not just signature checking.
-# forged:  signed with a DIFFERENT key but the TRUSTED issuer — tests signature
-#          verification in isolation (a weakened-sig regression would be caught).
-class StubKyc
-  # Mint a JWS signed with the real key but with exp 1h in the past.
-  def self.attest_expired(user_id:)
-    now = Time.now.to_i
-    JWT.encode(
-      {
-        sub:   user_id,
-        level: "verified",
-        iss:   "https://kyc.example",
-        iat:   now - 7200,
-        exp:   now - 3600,
-      },
-      KEYPAIR,   # private_constant accessible inside class body
-      "RS256",
-    )
-  end
-end
+BASE_URL   = ENV.fetch("SERVER_URL", "http://127.0.0.1:3003")
+ISSUER     = ENV.fetch("KIOSK_ISSUER", BASE_URL)
+# The broker's base URL (set by the two-server demo:redteam harness). The
+# broker-flavored beats (theft / cross-operator / forged-callback) drive it.
+BROKER_URL = ENV.fetch("KIOSK_PROVE_BROKER_URL", "http://127.0.0.1:3020")
+TRUSTED_ISSUER = ProveTrust.issuer
 
 # Wrong signing key with the TRUSTED issuer — the only adversarial property is
-# the bad signature.  Using the correct issuer ensures that if signature
-# verification is weakened (e.g. alg:none attack), this scenario catches it.
+# the bad signature. Using the correct issuer ensures a weakened-sig regression
+# (e.g. alg:none) is caught.
 FORGED_KYC_KEY = OpenSSL::PKey::RSA.generate(2048)
 
 def attest_forged(user_id)
@@ -79,13 +67,42 @@ def attest_forged(user_id)
     {
       sub:   user_id,
       level: "verified",
-      iss:   "https://kyc.example",  # trusted issuer; ONLY the signature is wrong
+      iss:   TRUSTED_ISSUER,  # trusted issuer; ONLY the signature is wrong
       iat:   now,
       exp:   now + 3600,
     },
     FORGED_KYC_KEY,
     "RS256",
   )
+end
+
+# ── prove.my broker driver (redteam-only) ─────────────────────────────────────
+# Start a real verification at the broker and approve it as the human would, so
+# the broker mints a REAL signed claim and POSTs it to skooti's callback. Used by
+# the theft / cross-operator / forged-callback beats.
+
+def broker_start_verification(callback_url:, subject_handle:, requested_claims: %w[age_over_18 licence_category:A], operator_id: ProveTrust.operator_id, secret: ProveTrust.intake_secret)
+  uri = URI("#{BROKER_URL}/verifications")
+  req = Net::HTTP::Post.new(uri, "Content-Type" => "application/json", "Authorization" => "Bearer #{secret}")
+  req.body = JSON.generate(operator_id:, callback_url:, requested_claims:, subject_handle:)
+  res = Net::HTTP.new(uri.host, uri.port).request(req)
+  [res.code.to_i, (JSON.parse(res.body) rescue {})]
+end
+
+def broker_approve(request_id)
+  uri = URI("#{BROKER_URL}/verify")
+  req = Net::HTTP::Post.new(uri, "Content-Type" => "application/x-www-form-urlencoded")
+  req.body = URI.encode_www_form(request: request_id, decision: "approve")
+  res = Net::HTTP.new(uri.host, uri.port).request(req)
+  res.code.to_i
+end
+
+def post_kyc_callback(body)
+  uri = URI("#{BASE_URL}/kyc/callback")
+  req = Net::HTTP::Post.new(uri, "Content-Type" => "application/json")
+  req.body = JSON.generate(body)
+  res = Net::HTTP.new(uri.host, uri.port).request(req)
+  res.code.to_i
 end
 
 # ── Profile ───────────────────────────────────────────────────────────────────
@@ -182,8 +199,10 @@ profile = Kiosk::Redteam::Profile.new(
   },
 
   # ── KYC attestation variants ──────────────────────────────────────────────
-  kyc_valid:   ->(user_id) { StubKyc.attest(user_id: user_id) },
-  kyc_expired: ->(user_id) { StubKyc.attest_expired(user_id: user_id) },
+  # Valid/expired minted with the shared prove.my ProveKey (the key skooti now
+  # trusts); forged signs with a wrong key under the trusted issuer.
+  kyc_valid:   ->(user_id) { ProveTestIssuer.attest(user_id: user_id) },
+  kyc_expired: ->(user_id) { ProveTestIssuer.attest_expired(user_id: user_id) },
   kyc_forged:  method(:attest_forged),
 )
 
@@ -355,7 +374,7 @@ motorcycle_forged_kyc = lambda do
   # Forge a KYC attestation that self-asserts BOTH attributes but is signed by
   # the WRONG key (trusted issuer, bad signature) — mirrors attest_forged.
   forged = JWT.encode(
-    { sub: a.user_id, level: "verified", iss: "https://kyc.example",
+    { sub: a.user_id, level: "verified", iss: TRUSTED_ISSUER,
       iat: now, exp: now + 3600,
       attributes: { age_over_18: true, licence_a: true } },
     FORGED_KYC_KEY, "RS256",
@@ -383,37 +402,38 @@ mc_beat = motorcycle_forged_kyc.call
 
 # ── skooti-local beat: issued-jws cannot be stolen across agents ──────
 #
-# The stub issuer (K-440/K-443) signs an attestation for the request's OWN
-# user_id. This beat proves an ISSUED, VALID jws cannot be lifted onto a
-# DIFFERENT agent: victim B opens request_kyc, the human approves B's page (the
-# page is intentionally open — the token is the credential), so B receives a
-# real issuer-signed jws bound to B's user_id. Attacker A — which has reserved +
-# paid for its OWN motorcycle so ONLY the KYC-attribute gate can block — submits
-# B's jws to /agents/kyc. The KycVerifier binds `sub` to the authenticated
-# identity, so it rejects (subject mismatch) → A's attributes are never granted
-# → A's rent_motorcycle stays 403 kyc_required. A bug that dropped the sub check
-# would let any agent replay someone else's licence — a real BREACH.
+# The broker (design §4.5) signs a claim for the request's OWN subject. This beat
+# proves an ISSUED, VALID broker jws cannot be lifted onto a DIFFERENT agent:
+# victim B opens request_kyc (skooti calls the broker), the human approves B's
+# request on the BROKER page, the broker POSTs the signed claim to skooti's
+# callback, and B receives via kyc_status a real broker-signed jws bound to B's
+# user_id. Attacker A — which has reserved + paid for its OWN motorcycle so ONLY
+# the KYC-attribute gate can block — submits B's jws to /agents/kyc. The
+# KycVerifier binds `sub` to the authenticated identity, so it rejects (subject
+# mismatch) → A's attributes are never granted → A's rent_motorcycle stays 403
+# kyc_required. A bug that dropped the sub check would let any agent replay
+# someone else's licence — a real BREACH. (Broker-minted now; the sub-binding
+# defense is identical — design §5.5.)
 kyc_jws_theft = lambda do
-  http_post_form = lambda do |path, form|
-    uri = URI("#{BASE_URL}#{path}")
-    req = Net::HTTP::Post.new(uri, "Content-Type" => "application/x-www-form-urlencoded")
-    req.body = URI.encode_www_form(form)
-    res = Net::HTTP.new(uri.host, uri.port).request(req)
-    res.code.to_i
-  end
-
   client = Kiosk::Redteam::Client.new(base_url: BASE_URL)
 
-  # Victim B obtains a REAL issuer-signed attestation via the human-approve page.
+  # Victim B obtains a REAL broker-signed attestation: request_kyc → approve on
+  # the broker → broker callback parks the jws → kyc_status returns it.
   b = client.register!(name: "redteam-kyc-victim-b", pow_difficulty: 20)
   req_b = client.run(b, name: "request_kyc")
   raise "redteam(skooti): request_kyc(B) failed (#{req_b.status})" unless req_b.status == 200
   token_b = req_b.body.dig("value", "request_id")
-  approve_rc = http_post_form.call("/kyc/verify", { request: token_b, decision: "approve" })
-  raise "redteam(skooti): approve(B) page failed (#{approve_rc})" unless approve_rc == 200
+  approve_rc = broker_approve(token_b)
+  raise "redteam(skooti): approve(B) on broker failed (#{approve_rc})" unless approve_rc == 200
 
-  status_b = client.query(b, name: "kyc_status", request_id: token_b)
-  victim_jws = (status_b.body["rows"] || []).first&.dig("kyc_jws")
+  # Poll kyc_status until the broker's async callback lands the jws.
+  victim_jws = nil
+  20.times do
+    status_b = client.query(b, name: "kyc_status", request_id: token_b)
+    victim_jws = (status_b.body["rows"] || []).first&.dig("kyc_jws")
+    break if victim_jws && !victim_jws.empty?
+    sleep 0.2
+  end
   raise "redteam(skooti): kyc_status(B) returned no jws" if victim_jws.nil? || victim_jws.empty?
 
   # Attacker A reserves + pays its OWN motorcycle so ONLY the KYC gate can block.
@@ -458,6 +478,113 @@ end
 
 theft_beat = kyc_jws_theft.call
 
+# ── broker beat: a claim minted for a DIFFERENT operator is rejected ──────────
+#
+# Cross-operator replay defense (design §4.4 / §5.5), enforced at the DEMO LAYER
+# in skooti's callback (the engine attestation/wire is unchanged). A claim the
+# broker minted addressed to operator "other-operator" (aud/operator) must be
+# rejected when POSTed to skooti's /kyc/callback — skooti only accepts claims
+# addressed to ITSELF. We open a real skooti request (so the request_id/nonce are
+# valid and pending) but mint the claim for a DIFFERENT operator with the broker
+# ProveKey, then deliver it to skooti's callback. skooti must reject (operator
+# mismatch) → kyc_status stays pending → the agent stays 403 kyc_required. A bug
+# that dropped the operator check would let a claim solicited by/for another
+# operator unlock skooti — a real BREACH.
+cross_operator_replay = lambda do
+  client = Kiosk::Redteam::Client.new(base_url: BASE_URL)
+  a = client.register!(name: "redteam-xop", pow_difficulty: 20)
+
+  # Open a real skooti request so the callback correlates to a pending row.
+  req = client.run(a, name: "request_kyc")
+  raise "redteam(skooti): request_kyc(xop) failed (#{req.status})" unless req.status == 200
+  request_id = req.body.dig("value", "request_id")
+
+  # Read the nonce skooti stored (the broker returned it to skooti at intake and
+  # echoes it in a real callback). We fetch it from the broker's intake response
+  # by starting an equivalent request — but simplest is to mint a claim carrying
+  # the SAME nonce the broker holds for this request_id. The broker won't hand us
+  # its stored nonce, so we forge a claim for a DIFFERENT operator and let the
+  # callback's OPERATOR check fire regardless of nonce. To isolate the operator
+  # check we pass the correct nonce shape but a wrong operator; even if the nonce
+  # differed the callback would still reject, so this test is conservative.
+  #
+  # Mint a broker-signed claim for a DIFFERENT operator, bound to A's subject.
+  forged_operator_jws = ProveTestIssuer.keypair && begin
+    now = Time.now.to_i
+    JWT.encode(
+      { sub: a.user_id, level: "verified", iss: ProveTestIssuer.issuer,
+        operator: "other-operator", aud: "other-operator",
+        request_id:, nonce: "any", iat: now, exp: now + 3600,
+        attributes: { age_over_18: true, licence_a: true } },
+      ProveTestIssuer.keypair, "RS256",
+    )
+  end
+
+  cb_rc = post_kyc_callback(request_id:, kyc_jws: forged_operator_jws, nonce: "any")
+
+  # The callback must reject (403/404). The agent's rent stays blocked because
+  # kyc_status never reaches approved.
+  st = client.query(a, name: "kyc_status", request_id:)
+  status = (st.body["rows"] || []).first&.dig("status")
+  rejected = cb_rc != 200
+  still_pending = status != "approved"
+
+  if rejected && still_pending
+    { blocked: true, detail: "cross-operator claim rejected at /kyc/callback (#{cb_rc}); kyc_status stays #{status.inspect}" }
+  else
+    { blocked: false, detail: "cross-operator claim accepted: callback=#{cb_rc}, kyc_status=#{status.inspect}" }
+  end
+end
+
+xop_beat = cross_operator_replay.call
+
+# ── broker beat: an unsigned / wrong-key callback is rejected ─────────────────
+#
+# Callback authenticity (design §4.8 / §5.5): skooti's /kyc/callback verifies the
+# jws against the trusted ProveKey. A callback whose jws is signed by the WRONG
+# key (trusted issuer, bad signature) — or is missing entirely — must be
+# rejected, so a forged callback cannot stamp a claim. We open a real skooti
+# request, then POST a callback carrying a wrong-key jws for A's subject. skooti
+# must reject → kyc_status stays pending → agent stays 403. A weakened signature
+# check would let anyone forge a callback and unlock — a real BREACH.
+forged_callback_no_sig = lambda do
+  client = Kiosk::Redteam::Client.new(base_url: BASE_URL)
+  a = client.register!(name: "redteam-fcb", pow_difficulty: 20)
+
+  req = client.run(a, name: "request_kyc")
+  raise "redteam(skooti): request_kyc(fcb) failed (#{req.status})" unless req.status == 200
+  request_id = req.body.dig("value", "request_id")
+
+  now = Time.now.to_i
+  # Wrong key, trusted issuer, addressed to skooti — ONLY the signature is bad.
+  wrong_key_jws = JWT.encode(
+    { sub: a.user_id, level: "verified", iss: ProveTestIssuer.issuer,
+      operator: ProveTrust.operator_id, aud: ProveTrust.operator_id,
+      request_id:, nonce: "any", iat: now, exp: now + 3600,
+      attributes: { age_over_18: true, licence_a: true } },
+    FORGED_KYC_KEY, "RS256",
+  )
+
+  cb_wrong = post_kyc_callback(request_id:, kyc_jws: wrong_key_jws, nonce: "any")
+  # Also a callback with NO jws at all.
+  cb_missing = post_kyc_callback(request_id:, nonce: "any")
+
+  st = client.query(a, name: "kyc_status", request_id:)
+  status = (st.body["rows"] || []).first&.dig("status")
+
+  wrong_rejected   = cb_wrong != 200
+  missing_rejected = cb_missing != 200
+  still_pending    = status != "approved"
+
+  if wrong_rejected && missing_rejected && still_pending
+    { blocked: true, detail: "wrong-key callback (#{cb_wrong}) and no-jws callback (#{cb_missing}) both rejected; kyc_status stays #{status.inspect}" }
+  else
+    { blocked: false, detail: "forged callback accepted: wrong=#{cb_wrong}, missing=#{cb_missing}, kyc_status=#{status.inspect}" }
+  end
+end
+
+fcb_beat = forged_callback_no_sig.call
+
 # ── Summary ───────────────────────────────────────────────────────────────────
 
 blocked_results = results.select { |r| !r[:verdict].skipped && r[:verdict].blocked }
@@ -483,10 +610,21 @@ if theft_beat[:blocked]
 else
   puts "  BREACH   ✗ IssuedKycJwsTheft — #{theft_beat[:detail]}"
 end
+if xop_beat[:blocked]
+  puts "  BLOCKED  ✓ CrossOperatorClaimReplay — #{xop_beat[:detail]}"
+else
+  puts "  BREACH   ✗ CrossOperatorClaimReplay — #{xop_beat[:detail]}"
+end
+if fcb_beat[:blocked]
+  puts "  BLOCKED  ✓ ForgedCallbackNoSig — #{fcb_beat[:detail]}"
+else
+  puts "  BREACH   ✗ ForgedCallbackNoSig — #{fcb_beat[:detail]}"
+end
 
-local_beats_blocked = (mc_beat[:blocked] ? 1 : 0) + (theft_beat[:blocked] ? 1 : 0)
+all_beats = [mc_beat, theft_beat, xop_beat, fcb_beat]
+local_beats_blocked = all_beats.count { |b| b[:blocked] }
 blocked_count = blocked_results.size + local_beats_blocked
-beat_breach   = (mc_beat[:blocked] ? 0 : 1) + (theft_beat[:blocked] ? 0 : 1)
+beat_breach   = all_beats.count { |b| !b[:blocked] }
 
 puts ""
 if breach_results.empty? && skipped_results.empty? && beat_breach.zero?

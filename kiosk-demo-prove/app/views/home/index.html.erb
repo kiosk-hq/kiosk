@@ -1,0 +1,32 @@
+<main>
+  <h1>prove.my</h1>
+  <p><strong>An anonymizing KYC broker.</strong></p>
+  <p>
+    prove.my sits between the many government age and driving-licence services
+    and the many operators that need to gate a regulated action. A human
+    authorizes prove.my once; it returns to the requesting operator a
+    <strong>signed, anonymized, single-use</strong> claim — "over 18",
+    "holds a category-A licence" — and <strong>nothing that identifies the
+    person</strong>: not the name, date of birth, or licence number.
+  </p>
+  <p>
+    Each operator trusts prove.my as an issuer once and asks for exactly the
+    facts it needs. The operator never registers with a government identity
+    service — prove.my does that, once, for everyone.
+  </p>
+
+  <p class="stub">
+    <strong>Demo stub.</strong> This is not a Kiosk operator: it exposes none of
+    the four Kiosk verbs. The human verification page below self-asserts the
+    facts (you click yes/no). In production prove.my reads them from a
+    government identity service (e.g. an mDL / EUDI wallet) you log into — so
+    you cannot answer for someone else. It proves the <em>protocol</em>
+    (per-request binding, no replay, anti-mass-confirm, signed anonymized
+    callback), not that the human is actually over 18.
+  </p>
+
+  <p class="stub">
+    Verifications in flight: <%= @pending %> pending, <%= @confirmed %> confirmed.
+    The verification page is reached only from an operator-issued link.
+  </p>
+</main>

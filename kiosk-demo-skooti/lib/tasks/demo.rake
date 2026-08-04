@@ -918,9 +918,10 @@ namespace :demo do
       puts "  ✗  schema.actions missing reserve"
     end
 
-    # start_rental, rent_motorcycle (the KYC-gated action), payment_setup
-    # (skill Step 5) present with descriptions
-    %w[start_rental rent_motorcycle payment_setup].each do |aname|
+    # start_rental, rent_motorcycle (the KYC-gated action), request_kyc (the
+    # external stub-issuer trigger, K-440/K-443), payment_setup (skill Step 5)
+    # present with descriptions
+    %w[start_rental rent_motorcycle request_kyc payment_setup].each do |aname|
       entry = actions.find { |a| a["name"] == aname }
       if entry
         puts "  ✓  schema.actions includes #{aname}"
@@ -934,6 +935,15 @@ namespace :demo do
         failures << "schema.actions missing #{aname}"
         puts "  ✗  schema.actions missing #{aname}"
       end
+    end
+
+    # kyc_status query (poll a request_kyc verification) present with a description
+    kyc_status_entry = queries.find { |q| q["name"] == "kyc_status" }
+    if kyc_status_entry && kyc_status_entry["description"].to_s != ""
+      puts "  ✓  schema.queries includes kyc_status with description"
+    else
+      failures << "schema.queries missing kyc_status (or no description)"
+      puts "  ✗  schema.queries missing kyc_status (or no description)"
     end
 
     if failures.empty?
@@ -950,20 +960,25 @@ end
 namespace :demo do
   # ── demo:kyc ───────────────────────────────────────────────────────────────
   desc <<~DESC
-    KYC named-anonymized-attribute gate proof.
+    KYC named-anonymized-attribute gate proof — via the EXTERNAL stub issuer.
 
     Runs demo:setup (clean DB + seed SK-001 scooter + MC-001 motorcycle), boots
-    the server, runs kyc_flow.rb and asserts the attribute-gated motorcycle path
-    plus the KYC-free scooter positive control:
+    the server, runs kyc_flow.rb and asserts a fresh EXTERNAL agent (own keypair
+    only, NO pre-shared issuer key) drives motorcycle KYC to success by relaying
+    a human-approve link, plus the KYC-free scooter positive control:
 
       A1  rent_motorcycle WITHOUT KYC        → 403, error.code == "kyc_required"
-      A2  submit KYC {age_over_18, licence_a} → 200 (attributes recorded)
-      A3  rent_motorcycle WITH KYC           → 200, offline token unlocks the lock
-      B   start_rental SK-001 with a BARE     → 200 with ZERO attributes recorded
-          KYC attestation (no attributes)       (the attribute gate did not leak)
+          and error.hint points the agent at `request_kyc` (K-440/K-443 fix)
+      A2  run request_kyc                    → 200, returns a verification_url on
+          the skooti host; human approves the stub KYC-provider page; poll
+          query kyc_status → approved returns the issuer-signed kyc_jws
+      A3  submit the relayed kyc_jws to      → 200 (attributes {age_over_18,
+          POST /agents/kyc                      licence_a} recorded)
+      A4  rent_motorcycle WITH KYC           → 200, offline token unlocks the lock
+      B   start_rental SK-001 with NO KYC    → 200 (licence-free; no attribute leak)
 
-    Exits 0 when all four hold; exits 1 on any miss. A red assertion = the KYC
-    gate is broken (or leaked onto the scooter path) — fix the app, not the test.
+    Exits 0 when all hold; exits 1 on any miss. A red assertion = the KYC gate is
+    broken (or leaked onto the scooter path) — fix the app, not the test.
   DESC
   task kyc: :setup do
     require "resolv"
@@ -1039,29 +1054,54 @@ namespace :demo do
     puts "\n── KYC-gate assertions ──"
     failures = []
 
-    # A1: rent_motorcycle without KYC → 403 kyc_required.
+    # A1: rent_motorcycle without KYC → 403 kyc_required AND the hint points the
+    # agent at request_kyc (the K-440/K-443 discoverable-path fix).
     if result["http_mc_rent_no_kyc"] == 403 && result["mc_rent_no_kyc_code"] == "kyc_required"
       puts "  OK  A1 rent_motorcycle without KYC → 403 kyc_required"
     else
       failures << "A1: rent_motorcycle without KYC expected 403/kyc_required, got #{result["http_mc_rent_no_kyc"].inspect}/#{result["mc_rent_no_kyc_code"].inspect}"
       puts "  FAIL  A1 rent_motorcycle without KYC → #{result["http_mc_rent_no_kyc"].inspect}/#{result["mc_rent_no_kyc_code"].inspect}"
     end
-
-    # A2: KYC submit recorded both attributes.
-    attrs = result["kyc_attributes"] || {}
-    if result["http_kyc_submit"] == 200 && attrs["age_over_18"] == true && attrs["licence_a"] == true
-      puts "  OK  A2 KYC accepted with attributes {age_over_18, licence_a}"
+    if result["mc_rent_no_kyc_hint_to_req"] == true
+      puts "  OK  A1 403 hint points to request_kyc (agent can discover the path)"
     else
-      failures << "A2: KYC submit expected 200 with both attributes, got #{result["http_kyc_submit"].inspect}/#{attrs.inspect}"
-      puts "  FAIL  A2 KYC submit → #{result["http_kyc_submit"].inspect}/#{attrs.inspect}"
+      failures << "A1: 403 hint does not point to request_kyc"
+      puts "  FAIL  A1 403 hint does not point to request_kyc"
     end
 
-    # A3: rent_motorcycle with KYC → 200 and the offline token unlocks.
-    if result["http_mc_rent_with_kyc"] == 200 && result["mc_unlocked"] == true
-      puts "  OK  A3 rent_motorcycle with KYC → 200, motorcycle unlocked"
+    # A2: the EXTERNAL issuer path — request_kyc returned a verification_url on
+    # the skooti host, the human-approve page accepted the token, kyc_status
+    # reached approved, and the ISSUER-signed jws was relayed back (the agent
+    # never held the signing key).
+    vurl = result["request_kyc_verification_url"].to_s
+    if result["http_request_kyc"] == 200 && vurl.include?("/kyc/verify?request=")
+      puts "  OK  A2 request_kyc → 200 with verification_url #{vurl.inspect}"
     else
-      failures << "A3: rent_motorcycle with KYC expected 200/unlocked, got #{result["http_mc_rent_with_kyc"].inspect}/#{result["mc_unlocked"].inspect}"
-      puts "  FAIL  A3 rent_motorcycle with KYC → #{result["http_mc_rent_with_kyc"].inspect}/#{result["mc_unlocked"].inspect}"
+      failures << "A2: request_kyc expected 200 with a /kyc/verify?request= url, got #{result["http_request_kyc"].inspect}/#{vurl.inspect}"
+      puts "  FAIL  A2 request_kyc → #{result["http_request_kyc"].inspect}/#{vurl.inspect}"
+    end
+    if result["http_approve_page"] == 200 && result["kyc_status"] == "approved" && result["kyc_jws_relayed"] == true
+      puts "  OK  A2 human approved stub page → kyc_status approved, issuer-signed jws relayed (no pre-shared key)"
+    else
+      failures << "A2: issuer path expected approve=200/status=approved/jws relayed, got approve=#{result["http_approve_page"].inspect}/status=#{result["kyc_status"].inspect}/jws=#{result["kyc_jws_relayed"].inspect}"
+      puts "  FAIL  A2 issuer path → approve=#{result["http_approve_page"].inspect}/status=#{result["kyc_status"].inspect}/jws=#{result["kyc_jws_relayed"].inspect}"
+    end
+
+    # A3: the relayed jws is accepted at /agents/kyc and records both attributes.
+    attrs = result["kyc_attributes"] || {}
+    if result["http_kyc_submit"] == 200 && attrs["age_over_18"] == true && attrs["licence_a"] == true
+      puts "  OK  A3 relayed kyc_jws accepted at /agents/kyc with {age_over_18, licence_a}"
+    else
+      failures << "A3: KYC submit expected 200 with both attributes, got #{result["http_kyc_submit"].inspect}/#{attrs.inspect}"
+      puts "  FAIL  A3 KYC submit → #{result["http_kyc_submit"].inspect}/#{attrs.inspect}"
+    end
+
+    # A4: rent_motorcycle with KYC → 200 and the offline token unlocks.
+    if result["http_mc_rent_with_kyc"] == 200 && result["mc_unlocked"] == true
+      puts "  OK  A4 rent_motorcycle with KYC → 200, motorcycle unlocked"
+    else
+      failures << "A4: rent_motorcycle with KYC expected 200/unlocked, got #{result["http_mc_rent_with_kyc"].inspect}/#{result["mc_unlocked"].inspect}"
+      puts "  FAIL  A4 rent_motorcycle with KYC → #{result["http_mc_rent_with_kyc"].inspect}/#{result["mc_unlocked"].inspect}"
     end
 
     # B: scooter positive control — start_rental succeeds with NO KYC submitted

@@ -280,6 +280,20 @@ CREATE TABLE public.ar_internal_metadata (
 
 
 --
+-- Name: kyc_verification_requests; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.kyc_verification_requests (
+    request_token character varying NOT NULL,
+    user_id uuid NOT NULL,
+    status character varying DEFAULT 'pending'::character varying NOT NULL,
+    kyc_jws text,
+    created_at timestamp(6) without time zone NOT NULL,
+    updated_at timestamp(6) without time zone NOT NULL
+);
+
+
+--
 -- Name: reservations; Type: TABLE; Schema: public; Owner: -
 --
 
@@ -494,6 +508,14 @@ ALTER TABLE ONLY kiosk.settlements
 
 ALTER TABLE ONLY public.ar_internal_metadata
     ADD CONSTRAINT ar_internal_metadata_pkey PRIMARY KEY (key);
+
+
+--
+-- Name: kyc_verification_requests kyc_verification_requests_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.kyc_verification_requests
+    ADD CONSTRAINT kyc_verification_requests_pkey PRIMARY KEY (request_token);
 
 
 --
@@ -754,6 +776,7 @@ ALTER TABLE ONLY public.reservations
 SET search_path TO "$user", public;
 
 INSERT INTO "schema_migrations" (version) VALUES
+('20260804000001'),
 ('20260803000001'),
 ('20260717000001'),
 ('20260618131466'),

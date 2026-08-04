@@ -34,6 +34,14 @@ Rails.application.routes.draw do
   post "/kiosk/auth/revoke",                        to: "kiosk/server/auth#revoke"
   post "/kiosk/agents/kyc",                        to: "kiosk/server/kyc_attestation#create"
 
+  # Stub KYC-provider page (K-440/K-443) — the human half of motorcycle KYC.
+  # `run request_kyc` returns a verification_url pointing here; the human
+  # approves and the stub issuer signs an anonymized {age_over_18, licence_a}
+  # attestation the agent then submits to /kiosk/agents/kyc. No sign-in: the
+  # unguessable ?request=<token> in the URL is the only credential.
+  get  "/kyc/verify",                              to: "kyc_issuer#show"
+  post "/kyc/verify",                              to: "kyc_issuer#create"
+
   # Native discovery surface — served by kiosk-server's DiscoveryController
   # (rendered from Kiosk::Server::WellKnown, the single generator seam).
   # agents.txt / agents.json are ROOT-served per the agents.txt v1.0 standard.

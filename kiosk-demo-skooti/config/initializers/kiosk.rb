@@ -376,7 +376,14 @@ Kiosk::Server::Actions.register("rent_motorcycle",
   unless has_all
     raise Kiosk::Server::Errors::KycRequired.new(
       "motorcycle rental requires KYC attributes age_over_18 and licence_a",
-      hint: "complete KYC: age≥18 and category-A licence required",
+      # Point an external agent at the completable path: `run request_kyc`
+      # returns a verification_url the human approves, then poll `query
+      # kyc_status` for the signed attestation and submit it to
+      # POST /kiosk/agents/kyc — no pre-shared issuer key needed (K-440/K-443).
+      hint: "call `run request_kyc` to start age≥18 + category-A licence verification: " \
+            "it returns a verification_url for the human to approve; then poll " \
+            "`query kyc_status` for the signed attestation and submit it to " \
+            "POST /kiosk/agents/kyc, then retry rent_motorcycle",
     )
   end
 
@@ -439,4 +446,89 @@ Kiosk::Server::Actions.register("rent_motorcycle",
     rental_token:  token,
     exp:           now + 900,
   }
+end
+
+# request_kyc — start a stub-KYC verification an EXTERNAL agent can COMPLETE
+# without any pre-shared issuer key (K-440/K-443).
+#
+# Records a PENDING verification bound to the authenticated agent's user_id and
+# returns a verification_url the agent RELAYS to its human. The URL points at
+# skooti's own stub KYC-provider page (a real deployment would point at a KYC
+# provider such as Persona/Sumsub — kept GENERIC here); it carries an
+# unguessable request token, so the human needs NO account/sign-in to approve.
+# On approve, the stub issuer signs an anonymized {age_over_18, licence_a}
+# attestation for THIS user_id with the key skooti already trusts
+# (c.kyc_public_key). The agent then polls `query kyc_status` and submits the
+# returned jws to POST /kiosk/agents/kyc.
+#
+# args: {} — none; the caller is identified by its token.
+# Returns: { request_id:, verification_url:, status: "pending" }
+Kiosk::Server::Actions.register("request_kyc",
+                                 description: "Start age≥18 + category-A driving-licence verification for the authenticated principal. " \
+                                              "Returns a verification_url to relay to your human to approve (a KYC provider confirms the " \
+                                              "facts and signs them — it never shares the documents) and a request_id. After the human " \
+                                              "approves, poll `query kyc_status` with the request_id for the signed attestation, submit it " \
+                                              "to POST /kiosk/agents/kyc, then retry rent_motorcycle. No pre-shared issuer key needed.",
+                                 params: {}) do |_args|
+  conn = ActiveRecord::Base.connection
+
+  uid = conn.execute("SELECT kiosk.current_user_id() AS uid").first["uid"]
+  raise Kiosk::Server::Errors::Unauthenticated.new("no authenticated user") if uid.nil?
+
+  # Unguessable per-request token — the ONLY credential the verification_url
+  # carries (the human needs no sign-in). 256 bits of URL-safe randomness.
+  request_token = SecureRandom.urlsafe_base64(32)
+
+  conn.execute(<<~SQL)
+    INSERT INTO public.kyc_verification_requests
+      (request_token, user_id, status, created_at, updated_at)
+    VALUES (#{conn.quote(request_token)}, #{conn.quote(uid)}::uuid, 'pending', now(), now())
+  SQL
+
+  base = Kiosk.configuration.issuer.to_s.chomp("/")
+  {
+    request_id:       request_token,
+    verification_url: "#{base}/kyc/verify?request=#{request_token}",
+    status:           "pending",
+  }
+end
+
+# kyc_status — poll a request_kyc verification the authenticated agent opened
+# (K-440/K-443). Scoped to kiosk.current_user_id(): an agent can only read its
+# OWN request, so it cannot poll (or lift the jws from) another agent's request.
+#
+# args: { request_id: <token from request_kyc> }
+# Returns one row:
+#   { status: "pending" }                         while the human has not acted
+#   { status: "approved", kyc_jws: "<compact JWS>" } once approved — submit the
+#     kyc_jws to POST /kiosk/agents/kyc, then retry rent_motorcycle
+#   { status: "declined" }                        if the human declined
+Kiosk::Server::Queries.register("kyc_status",
+                                 description: "Poll a request_kyc verification by its request_id. Returns {status: \"pending\"} until the " \
+                                              "human acts; {status: \"approved\", kyc_jws} once approved (submit the kyc_jws to " \
+                                              "POST /kiosk/agents/kyc, then retry rent_motorcycle); {status: \"declined\"} if declined.",
+                                 params: { request_id: "string — the request_id returned by request_kyc" }) do |params|
+  request_id = params[:request_id]
+  if request_id.nil? || request_id.to_s.empty?
+    raise Kiosk::Server::Errors::BadRequest.new("missing field: request_id")
+  end
+
+  conn = ActiveRecord::Base.connection
+  # Bound to the caller: user_id = kiosk.current_user_id() means an agent only
+  # ever sees the status (and jws) of a request IT opened.
+  row = conn.execute(
+    "SELECT status, kyc_jws " \
+    "FROM public.kyc_verification_requests " \
+    "WHERE request_token = #{conn.quote(request_id.to_s)} " \
+    "AND user_id = kiosk.current_user_id() " \
+    "LIMIT 1"
+  ).first
+  raise Kiosk::Server::Errors::NotFound.new("no such verification request for this principal") if row.nil?
+
+  status = row["status"]
+  if status == "approved"
+    [{ "status" => "approved", "kyc_jws" => row["kyc_jws"] }]
+  else
+    [{ "status" => status }]
+  end
 end

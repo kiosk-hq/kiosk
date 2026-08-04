@@ -34,7 +34,7 @@ module ProveTestIssuer
 
   def issuer
     require PROVE_KEY_PATH unless defined?(::ProveKey)
-    ProveKey::ISSUER
+    ProveKey.issuer
   end
 
   # The operator-binding audience the minted claims carry as `aud`. Sourced from

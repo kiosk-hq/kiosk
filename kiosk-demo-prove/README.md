@@ -8,7 +8,10 @@ operator a **signed, anonymized, single-use** claim, bound to that one request.
 Each operator trusts `prove.my` as an issuer once; it never registers with every
 government service (the broker does), and it never sees a document.
 
-Working demo brand: **prove.demo.kiosk.tech** (production brand `prove.my`).
+Deploy origin: **kyc.demo.kiosk.tech** (the registered demo domain; production
+brand `prove.my`). The issuer `iss` / public URL is env-configurable
+(`KIOSK_PROVE_ISSUER`, `PROVE_PUBLIC_URL`) and defaults to that origin; the
+two-server harness and specs pin their own local values on both sides.
 
 ## Not a Kiosk operator — an ISSUER
 
@@ -36,7 +39,7 @@ The callback body the broker POSTs to the operator:
 The minted `kyc_jws` payload (the shape the operator's `KycVerifier` accepts):
 
 ```json
-{ "sub": "<operator user_id>", "iss": "https://prove.my", "level": "verified",
+{ "sub": "<operator user_id>", "iss": "https://kyc.demo.kiosk.tech", "level": "verified",
   "operator": "skooti", "aud": "skooti", "request_id": "…", "nonce": "…",
   "attributes": { "age_over_18": true, "licence_a": true }, "iat": …, "exp": … }
 ```
@@ -63,19 +66,32 @@ The minted `kyc_jws` payload (the shape the operator's `KycVerifier` accepts):
 - **SSRF / open-relay guard.** The broker only POSTs to an operator's
   pre-registered callback host (allow-list), never to a free-form URL a caller
   supplies.
+- **Request-state-only DB, no re-KYC pre-fill.** `prove_requests` stores only
+  per-request STATE (single-use / TTL / no-replay) — never the human's identity
+  or prior answers. Each verification is INDEPENDENT: a re-verification (e.g.
+  after an agent reset) opens a fresh row with empty checkboxes and the human
+  re-asserts every fact. Deliberate — a "verified-once, reuse" store is exactly
+  the account-sharing hole the real account-to-person check must prevent, so the
+  stub does not model it.
 
 ## Demo stub vs. production
 
 This demo **self-asserts** (the human clicks yes/no) and is clearly labelled as
 such on the page. It proves the *protocol* — per-request binding, no replay,
 anti-mass-confirm, signed anonymized callback — not that the human is actually
-over 18. In production the verification page is replaced by a **government
-identity service** login (an mDL / ISO-18013-5 mobile driving licence, an EUDI
-wallet, or a national IdP), from which `prove.my` derives the booleans it was
-asked for. The broker↔operator interface (intake → per-request binding → signed
+over 18, and it makes **no liveness claim**. In production the verification page
+is replaced by a **government identity service** login (an mDL / ISO-18013-5
+mobile driving licence, an EUDI wallet, or a national IdP), from which `prove.my`
+derives the booleans it was asked for. The real broker closes two gaps the stub
+leaves open: it verifies the human **possesses a government account** (the
+account-possession assurance level adopted for now, DECISIONS-LOG
+`KYC-GOVT-IDP-LANDSCAPE`), and later that **the account is actually theirs** — so
+a person cannot lend or share their account to vouch for other people's age or
+licence. The broker↔operator interface (intake → per-request binding → signed
 anonymized callback) is identical, which is why the stub is a faithful proof.
-This production path is **research-gated and provisional**: no named government
-service is claimed as integrated, and no free/assurance claim is made. Vendor KYC
+This production path is **research-gated and provisional**: signed mDL issuance is
+Kiosk v0.5, not earlier; no named government service is claimed as integrated
+today, and no free/assurance claim beyond account-possession is made. Vendor KYC
 (Sumsub/Veriff/Onfido) can return age + licence category but **not anonymized**
 (bundled with full PII) — which is precisely the gap the broker fills.
 

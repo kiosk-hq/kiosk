@@ -11,9 +11,9 @@ This directory is the *app-side* handoff; DNS + VPS provisioning is the operator
 | File | What it is |
 |------|-----------|
 | `Caddyfile` | One vhost per demo subdomain → loopback Puma; automatic TLS. |
-| `postgres-init.sql` | 7 databases + 7 least-privilege login roles (DB-per-app). |
+| `postgres-init.sql` | 8 databases + 8 least-privilege login roles (DB-per-app; 7 demos + the prove.my broker). |
 | `kiosk-demo@.service` | Parameterised systemd unit: one Puma per app (`%i`). |
-| `env/<app>.env.example` | Per-app env template (×7). Copy to `/etc/kiosk-demo/<app>.env`. |
+| `env/<app>.env.example` | Per-app env template (7 demos + `kyc-demo.env.example` for the broker). Copy to `/etc/kiosk-demo/<app>.env`. |
 | `prune.sh` | Daily cron: prune old anonymous accounts, re-seed shared catalog. |
 | `README.md` | This runbook. |
 
@@ -28,6 +28,15 @@ This directory is the *app-side* handoff; DNS + VPS provisioning is the operator
 | stylish    | `stylish.demo.kiosk.tech` | 3005 | **low** | — |
 | philslist  | `philslist.demo.kiosk.tech` | 3006 | **low** | — |
 | tudu       | `tudu.demo.kiosk.tech` | 3007 | **low** | — |
+| prove (KYC broker) | `kyc.demo.kiosk.tech` | 3008 | — (not a Kiosk operator) | — |
+
+**prove.my is the odd one out**: the gem dir is `kiosk-demo-prove` but it serves
+`kyc.demo.kiosk.tech` and is an **ISSUER, not a Kiosk operator** — no PoW gate,
+no `/.well-known/kiosk.json`, no agent surface, no payment provider. It depends
+on no kiosk gem. Its env template is `env/kyc-demo.env.example` → copy to
+`/etc/kiosk-demo/prove.env` (the systemd instance is `prove`, matching the dir);
+its Caddy vhost is `kyc.demo.kiosk.tech → 127.0.0.1:3008`. skooti trusts it as
+its KYC issuer (skooti's env pins `KIOSK_PROVE_*` at this broker).
 
 **PoW difficulty is a feature**: ALL seven demos honor the
 `KIOSK_POW_DIFFICULTY` knob (low default, high opt-in) in their env file. Six run
@@ -86,7 +95,7 @@ demo already ships a production `database.yml` pointing at its own DB + role.
 #    (the script quote-escapes it safely via :'var').
 sudo -u postgres psql -v ON_ERROR_STOP=1 \
   -v gg_pw=… -v af_pw=… -v ho_pw=… -v sk_pw=… \
-  -v st_pw=… -v pl_pw=… -v td_pw=… \
+  -v st_pw=… -v pl_pw=… -v td_pw=… -v pv_pw=… \
   -f /srv/kiosk/reference/deploy/postgres-init.sql
 #    Then set max_connections=100 in postgresql.conf and reload.
 
@@ -100,11 +109,19 @@ done
 #    db:prepare creates the schema, runs migrations (incl. the kiosk schema +
 #    opt-in RLS), and seeds the shared catalog on first run.
 
+# 2b. The prove.my broker (kiosk-demo-prove; serves kyc.demo.kiosk.tech). It is
+#     an ISSUER, not a Kiosk operator — no kiosk gem, no assets manifest — so
+#     prepare it on its own (db:prepare only; assets:precompile is a no-op/absent).
+cd /srv/kiosk/kiosk-demo-prove
+bundle install
+set -a; . /etc/kiosk-demo/prove.env; set +a   # from env/kyc-demo.env.example
+RAILS_ENV=production bin/rails db:prepare
+
 # 3. systemd: install the template unit and enable one instance per app.
 sudo cp /srv/kiosk/reference/deploy/kiosk-demo@.service /etc/systemd/system/
 sudo mkdir -p /etc/kiosk-demo   # env files live here (Operator step #3)
 sudo systemctl daemon-reload
-for app in getgrocery atablefor hoteling skooti stylish philslist tudu; do
+for app in getgrocery atablefor hoteling skooti stylish philslist tudu prove; do
   sudo systemctl enable --now kiosk-demo@$app
 done
 #    Check: systemctl status kiosk-demo@getgrocery ; journalctl -u kiosk-demo@skooti -f

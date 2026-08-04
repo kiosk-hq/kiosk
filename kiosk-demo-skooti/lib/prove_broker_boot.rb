@@ -18,6 +18,12 @@ module ProveBrokerBoot
   BROKER_APP  = File.expand_path("../../kiosk-demo-prove", __dir__)
   BROKER_PORT = ENV.fetch("KIOSK_PROVE_PORT", "3020")
   SHARED_SECRET = "prove-skooti-demo-shared-secret"
+  # The `iss` both apps must agree on. Pinned here explicitly on BOTH the broker
+  # (it stamps this into every claim) and skooti (its KycVerifier compares the
+  # minted `iss` against c.kyc_issuer). Kept as a local test identity so the gate
+  # never depends on either app's deploy default; changing a default cannot
+  # silently break the two-server gate.
+  SHARED_ISSUER = "https://kyc.test.local"
 
   module_function
 
@@ -51,6 +57,9 @@ module ProveBrokerBoot
       # skooti is skooti's own host.
       "KIOSK_PROVE_SKOOTI_CALLBACK_HOST" => skooti_host,
       "KIOSK_PROVE_SKOOTI_SECRET"       => SHARED_SECRET,
+      # The `iss` the broker stamps — pinned to match skooti's KIOSK_PROVE_ISSUER
+      # below so the gate is independent of either app's deploy default.
+      "KIOSK_PROVE_ISSUER"              => SHARED_ISSUER,
       # The verification_url the broker hands back must point at the broker's
       # reachable origin (host:port), so the human/driver can approve on it.
       "PROVE_PUBLIC_URL"                => broker_url,
@@ -91,7 +100,9 @@ module ProveBrokerBoot
     # The env skooti's server + the drivers must carry to reach/trust the broker.
     wiring = {
       "KIOSK_PROVE_BROKER_URL"    => broker_url,
-      "KIOSK_PROVE_ISSUER"        => "https://prove.my",
+      # Same `iss` the broker (broker_env above) stamps — skooti's KycVerifier
+      # compares the minted `iss` against this, so both must line up.
+      "KIOSK_PROVE_ISSUER"        => SHARED_ISSUER,
       "KIOSK_PROVE_SKOOTI_SECRET" => SHARED_SECRET,
       "KIOSK_PROVE_OPERATOR_ID"   => "skooti",
     }

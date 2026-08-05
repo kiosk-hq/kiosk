@@ -457,6 +457,7 @@ namespace :demo do
       Assertion 3: B's my_orders still excludes A's order after positive control
       Assertion 4: A's my_orders excludes B's order
       Assertion 5: DB orders.user_id for forged order == B (forged arg ignored)
+      Assertion 6: a re-pay of an already-settled order → 403 WITH a body (K-472)
 
     Exits 0 if all assertions hold (isolation works); exits 1 on failure.
     A red assertion = real isolation hole: fix the app, not the test.
@@ -554,6 +555,9 @@ namespace :demo do
     b_my_orders_before     = result["b_my_orders_before"] || []
     b_my_orders_after      = result["b_my_orders_after"]  || []
     a_my_orders_after      = result["a_my_orders_after"]  || []
+    repay_settled_status   = result["repay_settled_status"]
+    repay_body_len         = result["repay_body_len"].to_i
+    repay_error_code       = result["repay_error_code"]
 
     failures = []
     puts "\n── Adversarial isolation assertions ──"
@@ -605,6 +609,17 @@ namespace :demo do
     else
       failures << "ISOLATION HOLE or unexpected: DB orders.user_id for forged order is #{db_user_id.inspect}, expected B's #{user_id_b}"
       puts "  ✗  Assertion 5 FAILED: unexpected user_id #{db_user_id.inspect} for forged order (expected B's)"
+    end
+
+    # Assertion 6 (K-472): re-paying an ALREADY-SETTLED order is rejected WITH A
+    # BODY. Every /pay error must carry the JSON error envelope (a real
+    # error.code) — never an empty/bodiless response — so an agent can branch on
+    # it. Guards the K-471 detour: a mistaken second /pay for a paid order.
+    if repay_settled_status == 403 && repay_body_len > 0 && repay_error_code == "forbidden"
+      puts "  ✓  Assertion 6: re-pay of a settled order → 403 with a body (error.code=#{repay_error_code.inspect}, #{repay_body_len} bytes) — no empty pay error"
+    else
+      failures << "PAY-ERROR HOLE: re-pay of a settled order returned status=#{repay_settled_status.inspect} body_len=#{repay_body_len} error.code=#{repay_error_code.inspect} (expected 403, non-empty body, error.code=\"forbidden\")"
+      puts "  ✗  Assertion 6 FAILED: re-pay error status=#{repay_settled_status.inspect} body_len=#{repay_body_len} error.code=#{repay_error_code.inspect}"
     end
 
     if failures.empty?

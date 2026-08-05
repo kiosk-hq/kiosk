@@ -12,6 +12,7 @@
 #   Assertion 3: B's my_orders still excludes A's order after positive control
 #   Assertion 4: A's my_orders excludes B's order
 #   Assertion 5: DB orders.user_id for forged order == B (forged arg ignored)
+#   Assertion 6: a re-pay of an already-settled order → 403 WITH a body (K-472)
 #
 # Positive controls that must simply succeed (A reschedules own paid order;
 # B creates, pays and reschedules own order) abort this flow directly on
@@ -238,6 +239,29 @@ abort "order_id_b missing" unless order_id_b
 rc, _pay_b = pay_for_order(SERVER, ISSUER, token_b, key_b, user_id_b, agent_id_b, order_id_b, total_cents_b, mirror_items)
 abort "B pay failed (#{rc})" unless rc == 200
 
+# ── Step 10b (K-472): a re-pay of an ALREADY-SETTLED order must return the
+# error envelope with a body, never an empty/bodiless response. This is the
+# exact detour from the K-471 live run: an agent mistakes reschedule for
+# "pay again," posts a second /pay for a paid order, and the operator rejects
+# it (403 order already settled). Assert the REJECTION CARRIES A BODY so an
+# agent can branch on error.code. We inspect the raw HTTP response (not the
+# helper's parsed hash) so an empty body would be caught, not swallowed.
+repay_status, repay_body = begin
+  now2 = Time.now.to_i
+  iid = SecureRandom.uuid; cid = SecureRandom.uuid; pid = SecureRandom.uuid
+  common2 = { user_id: user_id_b, agent_id: agent_id_b, iss: ISSUER, exp: now2 + 600, iat: now2 }
+  intent2 = JWT.encode(common2.merge(id: iid, scope: "grocery", cap_amount_cents: total_cents_b + 100, currency: "eur"), key_b, "RS256")
+  cart2   = JWT.encode(common2.merge(id: cid, intent_mandate_id: iid, line_items: [{ order_id: order_id_b }] + mirror_items, total_amount_cents: total_cents_b, currency: "eur"), key_b, "RS256")
+  pay2    = JWT.encode(common2.merge(id: pid, cart_mandate_id: cid, amount_cents: total_cents_b, currency: "eur"), key_b, "RS256")
+  uri = URI("#{SERVER}/kiosk/pay")
+  req = Net::HTTP::Post.new(uri, { "Content-Type" => "application/json", "Authorization" => "Bearer #{token_b}" })
+  req.body = JSON.generate(intent_mandate_jws: intent2, cart_mandate_jws: cart2, payment_mandate_jws: pay2)
+  res = Net::HTTP.new(uri.host, uri.port).request(req)
+  [res.code.to_i, res.body.to_s]
+end
+# error.code parsed from the raw body (empty body ⇒ nil ⇒ assertion fails).
+repay_error_code = (JSON.parse(repay_body)["error"]["code"] rescue nil)
+
 rc, resched_b = post_json(
   "#{SERVER}/kiosk/run",
   {
@@ -280,4 +304,7 @@ puts JSON.generate(
   b_my_orders_before:       b_my_orders_before,
   b_my_orders_after:        b_my_orders_after,
   a_my_orders_after:        a_my_orders_after,
+  repay_settled_status:     repay_status,
+  repay_body_len:           repay_body.bytesize,
+  repay_error_code:         repay_error_code,
 )

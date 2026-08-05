@@ -19,15 +19,26 @@ export PATH="/home/ubuntu/.local/bin:/home/ubuntu/.local/share/mise/installs/rub
 
 WIPE_GG=0; [ "${1:-}" = "--all" ] && WIPE_GG=1
 
-reset_fresh() {  # db:drop + fresh schema + seed, with the service stopped so the
-  local a="$1"   # drop has no open connections; restart after.
-  cd "/srv/kiosk/kiosk-demo-$a" || { echo "  $a: no dir"; return; }
+reset_fresh() {  # drop+recreate the DB as the postgres SUPERUSER (the per-app login
+  local a="$1"   # role is DB-owner but not superuser/createdb, so `rails db:drop`
+  local db="kiosk_${a}_production" role="kiosk_${a}"   # can't do it), then load
+  cd "/srv/kiosk/kiosk-demo-$a" || { echo "  $a: no dir"; return; }  # schema + seed as the app role.
   sudo systemctl stop "kiosk-demo@$a"
+  if ! sudo -u postgres psql -v ON_ERROR_STOP=1 -q >/dev/null 2>&1 <<SQL
+DROP DATABASE IF EXISTS $db WITH (FORCE);
+CREATE DATABASE $db OWNER $role;
+REVOKE CONNECT ON DATABASE $db FROM PUBLIC;
+GRANT CONNECT ON DATABASE $db TO $role;
+SQL
+  then
+    echo "  $a: DB drop/create FAILED (postgres superuser step)"
+    sudo systemctl start "kiosk-demo@$a"; return
+  fi
   if ( set -a; . "/etc/kiosk-demo/$a.env"; set +a
-       DISABLE_DATABASE_ENVIRONMENT_CHECK=1 bundle exec rails db:drop db:create db:schema:load db:seed >/dev/null 2>&1 ); then
+       bundle exec rails db:schema:load db:seed >/dev/null 2>&1 ); then
     echo "  $a: reset + freshly seeded"
   else
-    echo "  $a: RESET FAILED — check bundle exec rails db:setup manually"
+    echo "  $a: schema:load/seed FAILED — run 'bundle exec rails db:schema:load db:seed' in $PWD manually"
   fi
   sudo systemctl start "kiosk-demo@$a"
 }

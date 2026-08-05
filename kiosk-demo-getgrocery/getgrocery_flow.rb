@@ -114,7 +114,7 @@ slot_at     = order_value.fetch("slot_at")
 abort "create_order result must carry currency=eur" unless order_value["currency"] == "eur"
 abort "create_order result must carry a total_eur display string" unless order_value["total_eur"].to_s.start_with?("€")
 abort "create_order result must carry a pay_hint" if order_value["pay_hint"].to_s.empty?
-STDERR.puts "  create_order: order_id=#{order_id} total=#{total_cents}c slot_at=#{slot_at}"
+STDERR.puts "  create_order: order_id=#{order_id} total=#{order_value["total_eur"]} slot_at=#{slot_at}"
 
 # -- Step 5: payment_setup (verify card is on file before paying) --
 # In the live flow an assistant calls this before every pay; if setup_required,

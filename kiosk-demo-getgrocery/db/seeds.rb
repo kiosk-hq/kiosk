@@ -62,6 +62,11 @@ StripeCustomer.find_or_create_by!(user_id: HUMAN_ID) do |sc|
 end
 
 puts "Seeded: #{Product.count} products (#{Product.where("stock > 0").count} in-stock, #{Product.where(stock: 0).count} out-of-stock)"
+# Per-product catalog the operator sees on setup — prices in EUR (€5.99), never
+# raw cents. The wire/DB stays canonical integer cents; this is display only.
+Product.where("stock > 0").order(:name).each do |p|
+  puts "  #{p.name} — #{Product.format_eur(p.price_cents)} (#{p.sku})"
+end
 puts "  In-stock low (stock ≤ 5): #{Product.where("stock > 0 AND stock <= 5").pluck(:sku).join(", ")}"
 puts "  Age-restricted (18+ anonymized-KYC gate at purchase): #{Product.where(age_restricted: true).pluck(:sku).join(", ")}"
 puts "  Out-of-stock (absent from catalog): #{Product.where(stock: 0).pluck(:sku).join(", ")}"

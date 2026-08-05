@@ -93,7 +93,9 @@ target_room = avail_rows.first
 room_type_id   = target_room.fetch("id")
 room_type_name = target_room.fetch("name")
 nightly_price  = target_room.fetch("nightly_price_cents")
-STDERR.puts "  Availability: #{avail_rows.size} room type(s) available, using id=#{room_type_id} (#{room_type_name}, #{nightly_price}c/night)"
+# Human-facing nightly rate in EUR (€120.00/night), never raw cents.
+nightly_price_eur = format("€%.2f", nightly_price.to_i / 100.0)
+STDERR.puts "  Availability: #{avail_rows.size} room type(s) available, using id=#{room_type_id} (#{room_type_name}, #{nightly_price_eur}/night)"
 
 # ── Step 4: reserve_room ──────────────────────────────────────────────────
 
@@ -108,7 +110,8 @@ abort "reserve_room failed (#{rc_rsv}): #{JSON.generate(rsv_resp)}" unless rc_rs
 rsv_value   = rsv_resp.fetch("value")
 booking_id  = rsv_value.fetch("booking_id")
 total_cents = rsv_value.fetch("total_cents")
-STDERR.puts "  Reserved: booking_id=#{booking_id} total=#{total_cents}c"
+# Human-facing total in EUR (€120.00), never raw cents; the wire stays cents.
+STDERR.puts "  Reserved: booking_id=#{booking_id} total=#{format("€%.2f", total_cents.to_i / 100.0)}"
 
 # Calculate nights for the cart
 nights = (Date.parse(check_out) - Date.parse(check_in)).to_i

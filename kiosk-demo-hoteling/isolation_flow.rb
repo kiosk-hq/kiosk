@@ -140,7 +140,7 @@ abort "A reserve_room failed (#{rc_rsv_a}): #{JSON.generate(rsv_a_resp)}" unless
 booking_id_a = rsv_a_resp.dig("value", "booking_id")
 total_cents_a = rsv_a_resp.dig("value", "total_cents").to_i
 abort "A's booking_id missing from response: #{JSON.generate(rsv_a_resp)}" unless booking_id_a
-STDERR.puts "  A reserved: booking_id=#{booking_id_a} total=#{total_cents_a}c"
+STDERR.puts "  A reserved: booking_id=#{booking_id_a} total=#{format("€%.2f", total_cents_a / 100.0)}"
 
 # ── Step 5: B's pay creates a settlement referencing rA (satisfies Gate-2) ────
 # B signs intent + cart + payment mandates with B's registered RSA key. The cart's

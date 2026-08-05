@@ -148,6 +148,17 @@ Publish the test card on getgrocery's landing:
 > **Test card:** `4242 4242 4242 4242` — any future expiry, any CVC, any ZIP.
 > More cards: <https://docs.stripe.com/testing>
 
+> **Stripe account prerequisite (K-473).** The test account behind
+> `STRIPE_SECRET_KEY` MUST have a public business/display name set. `payment_setup`
+> mints a `mode:setup` Checkout Session and hands the human its hosted `setup_url`;
+> the API create succeeds and the session is healthy (`status:open`), but a raw
+> un-onboarded test account (`details_submitted:false`, `display_name`/
+> `business_profile.name` null) has no merchant header to render, so Stripe's hosted
+> page shows **"Something went wrong"** — breaking card entry for every fresh user.
+> Fix (no code): in the Stripe Dashboard (test mode), set the public business/display
+> name under **Settings → Business / Public details**. If the hosted page still errors,
+> complete the minimal remaining test-mode account details.
+
 ## Poke it — the "curl one-liner"
 
 Only the top-level **discovery** document is always free. Every Kiosk verb —

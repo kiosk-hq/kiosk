@@ -35,6 +35,7 @@ For EACH of the 7 apps:
 - [ ] **Telemetry:** `KIOSK_TELEMETRY=1`, `KIOSK_TELEMETRY_DB_URL=postgres://kiosk_telemetry:…@…/kiosk_demo_telemetry`,
       and a **distinct** `KIOSK_TELEMETRY_SALT=<random>` per app (keeps the per-app agent hashes non-joinable).
 - [ ] **Stripe (getgrocery only):** `STRIPE_SECRET_KEY=sk_test_…` (TEST mode — no real charges). getgrocery is the only demo with a payment provider; atablefor takes no money (no `pay` capability).
+- [ ] **Stripe account has a public business name (getgrocery, K-473):** the TEST account behind `STRIPE_SECRET_KEY` MUST have a public business/display name set (Dashboard → Settings → Business / Public details) — else `payment_setup`'s hosted card-setup Checkout renders **"Something went wrong"** for every fresh user even though the session is healthy. See `deploy/README.md` §Payments.
 
 ### 4b. prove.my KYC broker env (copy `deploy/env/kyc-demo.env.example` → `/etc/kiosk-demo/prove.env`)
 - [ ] `SECRET_KEY_BASE`, `KIOSK_PROVE_DB_{USER,PASSWORD}`, `PORT=3008`. No kiosk gem — no signing key / no PoW knob.

@@ -148,16 +148,15 @@ Publish the test card on getgrocery's landing:
 > **Test card:** `4242 4242 4242 4242` — any future expiry, any CVC, any ZIP.
 > More cards: <https://docs.stripe.com/testing>
 
-> **Stripe account prerequisite (K-473).** The test account behind
-> `STRIPE_SECRET_KEY` MUST have a public business/display name set. `payment_setup`
-> mints a `mode:setup` Checkout Session and hands the human its hosted `setup_url`;
-> the API create succeeds and the session is healthy (`status:open`), but a raw
-> un-onboarded test account (`details_submitted:false`, `display_name`/
-> `business_profile.name` null) has no merchant header to render, so Stripe's hosted
-> page shows **"Something went wrong"** — breaking card entry for every fresh user.
-> Fix (no code): in the Stripe Dashboard (test mode), set the public business/display
-> name under **Settings → Business / Public details**. If the hosted page still errors,
-> complete the minimal remaining test-mode account details.
+> **Card-setup Checkout can show "Something went wrong" if a relaying agent truncates the link (K-473).**
+> `payment_setup` returns a valid Stripe `mode:setup` `setup_url` — a long
+> `checkout.stripe.com/c/pay/<id>#fid…` whose ~500-char `#fid…` fragment Stripe REQUIRES to
+> render. The failure is an AGENT relaying that url to the human and DROPPING the fragment (an
+> LLM truncating a long opaque string; proven from a live agent's message store) — NOT our code,
+> the session, or the Stripe account (deploy and local dev share one account; the session is a
+> valid `status:open`). Mitigation: the agent skill instructs assistants to relay the `setup_url`
+> VERBATIM and in full, never truncating the part after `#`. If truncation still recurs, the
+> robust escalation is an operator-hosted short redirect link (a ready alternative — see K-473).
 
 ## Poke it — the "curl one-liner"
 

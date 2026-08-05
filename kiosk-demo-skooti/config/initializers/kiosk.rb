@@ -389,6 +389,15 @@ end
 # number (the anonymized/attestation privacy point). If either is missing the
 # action rejects with a clean 403 `kyc_required` before doing anything else.
 #
+# HONEST SCOPE (KYC-DEMO-SCOPE): this is an ELIGIBILITY gate — it proves a valid
+# licence + 18+ *exist* behind the assistant — NOT an accountability mechanism.
+# An anonymized claim is transferable (a licensed friend could vouch) and the
+# demo settles a nameless hold, not a deposit, so nobody is on the hook for the
+# actual rental. Real vehicle rental needs identity + a contract + insurance +
+# a deposit on top (not modeled). This case illustrates the attestation
+# MECHANISM; anonymized minimal KYC's clean home is a low-liability age-gated
+# PURCHASE (see the getgrocery alcohol demo), where the transaction just closes.
+#
 # args: { reservation_id: }  — a reservation on a needs_licence vehicle.
 # Gates (all must pass, else 403):
 #   0. KYC attributes: age_over_18 AND licence_a  → 403 kyc_required if unmet

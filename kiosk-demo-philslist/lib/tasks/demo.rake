@@ -221,6 +221,8 @@ namespace :demo do
       check.call("register with proof → 201",         result["http_register_solved"] == 201)
       check.call("solved 1 proof",                    result["proofs_solved"].to_i >= 1)
       check.call("fresh token posts a listing → 200", result["http_post"] == 200 && !result["listing_id"].to_s.empty?)
+      check.call("bad category_slug → clean 400 (not 500)", result["http_post_bad_cat"] == 400)
+      check.call("bad-category error names the valid categories", result["bad_cat_lists_valid"] == true)
     ensure
       begin
         Process.kill("TERM", server_pid); Process.wait(server_pid)

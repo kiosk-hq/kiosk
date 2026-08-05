@@ -245,7 +245,23 @@ Kiosk::Server::Actions.register(
   example_row: { listing_id: "9c1d2e3f-4a5b-4c6d-8e7f-0a1b2c3d4e5f", status: "open" },
 ) do |args|
   owner_id = philslist_current_user_id
-  category = Category.find_by!(slug: args[:category_slug])
+
+  # Validate the inputs with clean 400s instead of letting find_by!/create!
+  # raise a RecordNotFound/RecordInvalid that surfaces as an opaque 500. The
+  # error names the valid categories so an assistant that guessed a slug (or
+  # omitted it) can recover without fetching the schema first.
+  slug  = args[:category_slug].to_s
+  valid = Category.order(:slug).pluck(:slug)
+  raise Kiosk::Server::Errors::BadRequest.new(
+    "category_slug is required — one of: #{valid.join(', ')}"
+  ) if slug.empty?
+  category = Category.find_by(slug: slug)
+  raise Kiosk::Server::Errors::BadRequest.new(
+    "unknown category_slug #{slug.inspect} — valid categories: #{valid.join(', ')}"
+  ) unless category
+  raise Kiosk::Server::Errors::BadRequest.new(
+    "title and body are required"
+  ) if args[:title].to_s.strip.empty? || args[:body].to_s.strip.empty?
 
   listing = Listing.create!(
     owner_id:            owner_id,       # forged args[:owner_id] never consulted

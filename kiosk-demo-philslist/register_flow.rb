@@ -73,10 +73,20 @@ rc_post, posted = post_json("#{SERVER}/kiosk/run",
                             { "Authorization" => "Bearer #{token}" })
 listing_id = posted.dig("value", "listing_id")
 
+# ── Robustness: a bad/missing category_slug returns a clean 400 that names the
+# valid categories — NOT a 500 (regression guard for the find_by! crash) ──────
+rc_badcat, badcat = post_json("#{SERVER}/kiosk/run",
+                              { name: "post_listing", category_slug: "not-a-real-slug",
+                                title: "x", body: "y" },
+                              { "Authorization" => "Bearer #{token}" })
+badcat_msg = badcat.dig("error", "message").to_s
+
 puts JSON.generate(
   http_register_no_pow: rc_nopow,
   http_register_solved: rc_reg,
   proofs_solved:        proofs.size,
   http_post:            rc_post,
   listing_id:           listing_id,
+  http_post_bad_cat:    rc_badcat,
+  bad_cat_lists_valid:  badcat_msg.include?("valid categories"),
 )

@@ -598,17 +598,37 @@ Kiosk::Server::Actions.register("create_order",
 end
 
 Kiosk::Server::Actions.register("reschedule_delivery",
-  description: "Move a PAID order's delivery to a different slot (and optionally a new address). " \
-               "One reschedule per order — further changes go through the operator. Requires a " \
-               "settlement whose cart-mandate line_items include {\"order_id\": <order_id>} " \
-               "(see create_order's pay_hint). Unpaid orders: re-place them instead via " \
-               "create_order with order_id",
+  description: "Move an ALREADY-PAID order's delivery to a different slot (and optionally a new address). " \
+               "This REUSES the order's existing payment — do NOT pay again. Just call " \
+               "reschedule_delivery(order_id, delivery_slot_id[, delivery_date[, delivery_address]]) directly; " \
+               "there is no new mandate/settlement to sign. The precondition \"the order must already be paid\" " \
+               "means a settlement for it ALREADY EXISTS (from when you first paid) — it does NOT mean settle " \
+               "now, and re-paying a paid order is rejected (403 order already settled). " \
+               "One reschedule per order — further changes go through the operator. " \
+               "Unpaid orders can't be rescheduled: re-place them instead via create_order with order_id.",
   params: {
-    order_id:         "uuid — the paid order to reschedule",
+    order_id:         "uuid — the ALREADY-PAID order to reschedule (its existing payment is reused; do not pay again)",
     delivery_slot_id: "integer — new slot id from the delivery_slots query (1–6)",
     delivery_date:    "(optional) date string YYYY-MM-DD — the `date` of the new slot you chose; omitting books tomorrow",
     delivery_address: "(optional) string — new delivery address; unchanged if omitted",
-  }) do |args|
+  },
+  input_schema: {
+    type: "object",
+    additionalProperties: false,
+    properties: {
+      order_id:         { type: "string",
+                          description: "uuid of the ALREADY-PAID order to reschedule. Its existing payment is reused — do not pay again." },
+      delivery_slot_id: { type: "integer", minimum: 1, maximum: 6,
+                          description: "New slot id from delivery_slots (1..6)." },
+      delivery_date:    { type: "string",
+                          description: "The `date` (YYYY-MM-DD) of the chosen delivery_slots row. Optional; omitting books tomorrow." },
+      delivery_address: { type: "string",
+                          description: "Optional new in-zone Dublin delivery address; unchanged if omitted." },
+    },
+    required: ["order_id", "delivery_slot_id"],
+  },
+  example_params: { order_id: "e2b1c0d4-5f6a-4b3c-8d2e-1f0a9b8c7d6e", delivery_slot_id: 3, delivery_date: "2026-08-10" },
+  example_row: { order_id: "e2b1c0d4-5f6a-4b3c-8d2e-1f0a9b8c7d6e", rescheduled_at: "2026-08-10T12:00:00Z" }) do |args|
   conn = ActiveRecord::Base.connection
 
   order_id         = args[:order_id]         || args["order_id"]
@@ -666,8 +686,11 @@ Kiosk::Server::Actions.register("reschedule_delivery",
     ).first
     if paid.nil?
       raise Kiosk::Server::Errors::Forbidden.new(
-        "no settlement references this order — pay with a cart mandate whose " \
-        "line_items include {\"order_id\": \"#{order_id}\"}, then retry"
+        "this order is not paid yet — reschedule_delivery only moves an ALREADY-PAID order " \
+        "(it reuses the existing settlement, it does not settle now). Pay for the order first " \
+        "via the normal pay flow (a cart mandate whose line_items include " \
+        "{\"order_id\": \"#{order_id}\"}), THEN call reschedule_delivery — or, if you have not paid, " \
+        "just change the order in place with create_order(order_id: \"#{order_id}\", …)"
       )
     end
 

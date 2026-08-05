@@ -78,7 +78,8 @@ def create_order(token, items)
                          delivery_slot_id: 1, delivery_address: "7 Claim Ct, Dublin" },
                        { "Authorization" => "Bearer #{token}" })
   abort "create_order failed (#{rc}): #{JSON.generate(resp)}" unless rc == 200
-  [resp.dig("value", "order_id"), resp.dig("value", "total_cents")]
+  # Carry the server's EUR display string so operator stdout shows €, not cents.
+  [resp.dig("value", "order_id"), resp.dig("value", "total_cents"), resp.dig("value", "total_eur")]
 end
 
 results = {}
@@ -155,7 +156,7 @@ abort "my_orders failed (#{rc})" unless rc == 200
 results[:standalone_order_not_migrated] = mine.fetch("rows", []).none? { |o| o["id"] == standalone_order_id }
 
 # ── Beat 3: a NEW order as the human, paid with the saved card ──────────────
-new_order_id, total_cents = create_order(human_token, items)
+new_order_id, total_cents, total_eur = create_order(human_token, items)
 results[:new_order_id] = new_order_id
 
 # The human's account HAS a card on file (the seeded mapping) — ready.
@@ -190,7 +191,7 @@ rc, pay = post_json("#{SERVER}/kiosk/pay",
 abort "pay failed (#{rc}): #{JSON.generate(pay)}" unless rc == 200
 results[:http_pay]      = rc
 results[:psp_reference] = pay.dig("value", "psp_reference").to_s
-STDERR.puts "  Paid #{total_cents}c with the human's saved card: #{results[:psp_reference]}"
+STDERR.puts "  Paid #{total_eur} with the human's saved card: #{results[:psp_reference]}"
 
 # The new order is on the human's account now.
 rc, mine = post_json("#{SERVER}/kiosk/query", { name: "my_orders" }, { "Authorization" => "Bearer #{human_token}" })

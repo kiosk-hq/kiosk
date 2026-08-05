@@ -29,14 +29,39 @@
       <input type="hidden" name="request" value="<%= @request.request_id %>">
       <ul class="claims">
         <% @entries.each do |entry| %>
-          <li>☐ <%= entry[:question] %></li>
+          <li>
+            <label>
+              <input type="checkbox" class="claim-check">
+              <%= entry[:question] %>
+            </label>
+          </li>
         <% end %>
       </ul>
       <p>
-        <button type="submit" name="decision" value="approve">Yes — confirm these</button>
+        <button type="submit" name="decision" value="approve" id="approve-btn" disabled>Yes — confirm these</button>
         <button type="submit" name="decision" value="decline">No</button>
       </p>
     </form>
+
+    <%# UI affordance only: the human must actively tick each fact before the
+        "Yes" button enables. This is a client-side gate — the broker's POST
+        /verify approve path reads only `decision`, so the two-server test
+        harness (which POSTs decision=approve directly, no checkbox fields)
+        is unaffected. "No" stays enabled at all times. %>
+    <script>
+      (function () {
+        var boxes = Array.prototype.slice.call(
+          document.querySelectorAll(".claim-check")
+        );
+        var approve = document.getElementById("approve-btn");
+        if (!approve || boxes.length === 0) { return; }
+        function sync() {
+          approve.disabled = !boxes.every(function (b) { return b.checked; });
+        }
+        boxes.forEach(function (b) { b.addEventListener("change", sync); });
+        sync();
+      })();
+    </script>
 
     <p class="stub">
       <em>Demo stub — nothing is checked here.</em> You just self-assert these

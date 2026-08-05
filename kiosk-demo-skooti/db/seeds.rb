@@ -53,6 +53,10 @@ mc001 = Scooter.find_or_create_by!(code: "MC-001") do |s|
   s.price_per_min_cents = 40
 end
 
-puts "Seeded: #{seeded_scooters.size} electric scooters (#{seeded_scooters.first.price_per_min_cents}¢/min, licence-free) " \
+# Human-facing summary: prices shown in EUR (€0.15/min), never raw cents — the
+# per-minute rate stays canonical integer cents on the wire.
+eur_per_min = ->(cents) { format("€%.2f", cents.to_i / 100.0) }
+
+puts "Seeded: #{seeded_scooters.size} electric scooters (#{eur_per_min.call(seeded_scooters.first.price_per_min_cents)}/min, licence-free) " \
      "at Jordaan Dock + Prinsengracht Pier, and the #{mc001.name} motorcycle #{mc001.code} " \
-     "(#{mc001.price_per_min_cents}¢/min, KYC-gated: age_over_18 + licence_a) at #{mc001.dock}"
+     "(#{eur_per_min.call(mc001.price_per_min_cents)}/min, KYC-gated: age_over_18 + licence_a) at #{mc001.dock}"

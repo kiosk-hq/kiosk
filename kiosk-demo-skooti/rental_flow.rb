@@ -116,8 +116,10 @@ rsv_value      = rsv.fetch("value")
 reservation_id = rsv_value.fetch("reservation_id")
 scooter_code   = rsv_value.fetch("scooter_code")
 price_per_min  = rsv_value.fetch("price_per_min_cents")
+# Human-facing rate in EUR (€0.15/min), never raw cents; the wire stays cents.
+price_per_min_eur = format("€%.2f", price_per_min.to_i / 100.0)
 
-STDERR.puts "  Reserved: id=#{reservation_id} scooter=#{scooter_code} price=#{price_per_min}c/min"
+STDERR.puts "  Reserved: id=#{reservation_id} scooter=#{scooter_code} price=#{price_per_min_eur}/min"
 
 # ── Step 4: pay ──────────────────────────────────────────────────────────────
 

@@ -3,8 +3,16 @@
 # Kiosk-demo (getgrocery-shape) configuration.
 # Single grocery provider — no store layer. Catalog exposes in-stock facts;
 # the AI assistant handles substitution decisions.
-# Queries:  catalog, delivery_slots, my_orders
+# Queries:  catalog, delivery_slots (delivery ADDRESS/zone REQUIRED — validated
+#           against served Dublin districts), my_orders
 # Actions:  create_order (delivery slot + address REQUIRED), reschedule_delivery, payment_setup
+#
+# ADDRESS-UPFRONT (K-468): the delivery address is a deliberate, EARLY input.
+# `delivery_slots` will not return slots without an in-zone Dublin address, so
+# the assistant must obtain the address from its human BEFORE it can shop, and
+# `create_order` re-validates the same zone rule (consistency). The operator
+# validates FORMAT + ZONE only — it CANNOT verify a plausible in-zone address is
+# real; the human providing/confirming the address is the ceiling (skill's job).
 # Pay:      capture is wrapped by ValidatingPaymentProvider — the cart must be
 #           EUR, reference the payer's unsettled order, mirror its items at
 #           catalog prices, and sum correctly (the cashier check).
@@ -24,6 +32,7 @@ require Rails.root.join("lib/stub_idp")
 require Rails.root.join("lib/stub_user_idp")
 require Rails.root.join("lib/jwt_or_stub_idp")
 require Rails.root.join("lib/pow_difficulty")
+require Rails.root.join("lib/dublin_zones")
 require Rails.root.join("lib/validating_payment_provider")
 require Rails.root.join("lib/prove_trust")
 require Rails.root.join("lib/prove_broker_client")
@@ -206,6 +215,27 @@ end
 
 LOW_STOCK_THRESHOLD = 5
 
+# ── Delivery-slot time source of truth (K-470) ───────────────────────────────
+# BOTH delivery_slots and create_order compute a slot's wall-clock time from the
+# SAME (date, slot_id) pair via this one helper, so the day+time an assistant
+# sees in delivery_slots is EXACTLY what create_order books and returns. slot_id
+# 1 = 08:00, 2 = 10:00, … (two-hour windows). Previously create_order derived
+# the date independently (Date.today + 1), so a slot chosen for TODAY came back
+# booked for TOMORROW — the two verbs must never disagree on the date.
+module DeliverySlots
+  FIRST_HOUR   = 8
+  WINDOW_HOURS = 2
+  COUNT        = 6
+
+  module_function
+
+  # UTC Time for the start of a slot on a given Date. slot_id is 1..COUNT.
+  def slot_at(date, slot_id)
+    hour = FIRST_HOUR + (slot_id.to_i - 1) * WINDOW_HOURS
+    Time.utc(date.year, date.month, date.day, hour, 0, 0)
+  end
+end
+
 # ─── Queries ────────────────────────────────────────────────────────────────
 
 Kiosk::Server::Queries.register("catalog",
@@ -244,11 +274,47 @@ Kiosk::Server::Queries.register("catalog",
 end
 
 Kiosk::Server::Queries.register("delivery_slots",
-  description: "Get available delivery time slots for a given date",
+  description: "Get available delivery time slots for a date at a Dublin delivery address. " \
+               "delivery_address is REQUIRED and must be an in-zone Dublin address (a postal " \
+               "district — e.g. \"42 Camden Street, Dublin 2\" or an Eircode like \"D02 XY45\"). " \
+               "getgrocery routes by district and delivers only within its served Dublin zones; " \
+               "an out-of-zone or district-less address returns 400 (bad_request) naming what is " \
+               "needed. Obtain the real address from your human FIRST — the same address is required " \
+               "again at create_order. NOTE: the operator validates format + zone only; it cannot " \
+               "verify a plausible in-zone address is real, so confirm it with your human.",
   params: {
-    date: "date string YYYY-MM-DD — desired delivery date",
-  }) do |params|
+    date:             "date string YYYY-MM-DD — desired delivery date",
+    delivery_address: "string — the Dublin delivery address (must name a served postal district), REQUIRED",
+  },
+  input_schema: {
+    type: "object",
+    additionalProperties: false,
+    properties: {
+      date:             { type: "string", description: "Delivery date, YYYY-MM-DD." },
+      delivery_address: { type: "string", description: "Dublin delivery address naming a served postal district." },
+    },
+    required: ["date", "delivery_address"],
+  },
+  example_params: { date: "2026-08-10", delivery_address: "42 Camden Street, Dublin 2" },
+  example_row: { id: 1, date: "2026-08-10", slot_at: "2026-08-10T08:00:00Z", label: "08:00–10:00", zone: "D02" }) do |params|
   date = params.fetch(:date) { raise Kiosk::Server::Errors::BadRequest.new("missing param: date") }
+
+  # ADDRESS-UPFRONT (K-468): the delivery address is a REQUIRED early input.
+  # Validate it names a SERVED Dublin district — reject out-of-zone/malformed
+  # with a clean 400 (bad_request), never a 500. This forces the assistant to
+  # obtain the address from its human before it can even see slots. The check is
+  # FORMAT + ZONE only: it cannot prove a plausible in-zone address is real.
+  delivery_address = params[:delivery_address] || params["delivery_address"]
+  if delivery_address.nil? || delivery_address.to_s.strip.empty?
+    raise Kiosk::Server::Errors::BadRequest.new(
+      DublinZones.reject_message(DublinZones::Result.new(ok: false, zone: nil, reason: :blank)),
+    )
+  end
+  zone_result = DublinZones.check(delivery_address)
+  unless zone_result.ok?
+    raise Kiosk::Server::Errors::BadRequest.new(DublinZones.reject_message(zone_result))
+  end
+  served_zone = zone_result.zone
 
   parsed = begin
     Date.parse(date.to_s)
@@ -256,13 +322,15 @@ Kiosk::Server::Queries.register("delivery_slots",
     raise Kiosk::Server::Errors::BadRequest.new("invalid date: #{date}")
   end
 
-  (0..5).map do |i|
-    hour = 8 + i * 2
-    slot_time = Time.utc(parsed.year, parsed.month, parsed.day, hour, 0, 0)
+  (1..DeliverySlots::COUNT).map do |slot_id|
+    slot_time = DeliverySlots.slot_at(parsed, slot_id)
+    hour      = slot_time.hour
     {
-      "id"      => i + 1,
+      "id"      => slot_id,
+      "date"    => parsed.iso8601,
       "slot_at" => slot_time.iso8601,
-      "label"   => "#{hour.to_s.rjust(2, "0")}:00–#{(hour + 2).to_s.rjust(2, "0")}:00",
+      "label"   => "#{hour.to_s.rjust(2, "0")}:00–#{(hour + DeliverySlots::WINDOW_HOURS).to_s.rjust(2, "0")}:00",
+      "zone"    => served_zone,
     }
   end
 end
@@ -320,7 +388,11 @@ Kiosk::Server::Actions.register("create_order",
   params: {
     items:            "array of {sku, qty} — the complete cart (products referenced by sku)",
     delivery_slot_id: "integer — slot id from the delivery_slots query (1–6), REQUIRED",
-    delivery_address: "string — delivery address, REQUIRED",
+    delivery_date:    "date string YYYY-MM-DD — the DATE of the slot you chose (copy the `date` from that " \
+                      "delivery_slots row) so the booking is on the day you saw. Omitting it books tomorrow.",
+    delivery_address: "string — in-zone Dublin delivery address (must name a served postal district, " \
+                      "the SAME zone you queried delivery_slots with), REQUIRED. An out-of-zone or " \
+                      "district-less address returns 400. Get it from your human — it cannot be verified as real.",
     order_id:         "(optional) uuid — if given and order belongs to principal and not yet paid, replaces its items and delivery details",
   },
   input_schema: {
@@ -341,7 +413,10 @@ Kiosk::Server::Actions.register("create_order",
       },
       delivery_slot_id: { type: "integer", minimum: 1, maximum: 6,
                           description: "Slot id from delivery_slots (1..6)." },
-      delivery_address: { type: "string", description: "Delivery address." },
+      delivery_date:    { type: "string",
+                          description: "The `date` (YYYY-MM-DD) of the chosen delivery_slots row, so the booking lands on the day you saw. Optional; omitting books tomorrow." },
+      delivery_address: { type: "string",
+                          description: "In-zone Dublin delivery address naming a served postal district (e.g. \"Dublin 2\" / \"D02\")." },
       order_id:         { type: "string",
                           description: "Optional uuid of an unpaid order to replace." },
     },
@@ -349,11 +424,11 @@ Kiosk::Server::Actions.register("create_order",
   },
   example_params: {
     items: [{ sku: "sourdough-bread", qty: 2 }, { sku: "greek-yogurt", qty: 1 }],
-    delivery_slot_id: 3, delivery_address: "12 Rue de la Paix, Brussels",
+    delivery_slot_id: 3, delivery_date: "2026-08-10", delivery_address: "42 Camden Street, Dublin 2",
   },
   example_row: {
     order_id: "e2b1c0d4-5f6a-4b3c-8d2e-1f0a9b8c7d6e", total_cents: 1287,
-    total_eur: "€12.87", currency: "eur", slot_at: "2026-08-05T12:00:00Z",
+    total_eur: "€12.87", currency: "eur", slot_at: "2026-08-10T12:00:00Z",
     pay_hint: "pay in EUR with a cart mandate whose line_items mirror this order …",
   }) do |args|
   conn = ActiveRecord::Base.connection
@@ -375,10 +450,38 @@ Kiosk::Server::Actions.register("create_order",
   delivery_address = args[:delivery_address] || args["delivery_address"]
   raise Kiosk::Server::Errors::BadRequest.new("missing field: delivery_slot_id — delivery is part of the order") if delivery_slot_id.nil?
   raise Kiosk::Server::Errors::BadRequest.new("missing field: delivery_address — delivery is part of the order") if delivery_address.nil? || delivery_address.to_s.empty?
+  # ADDRESS-UPFRONT (K-468): re-validate the delivery address against the SAME
+  # served-Dublin-zone rule the slots were issued under (consistency) — an
+  # out-of-zone / district-less address that slipped past (or a different one
+  # than was used for delivery_slots) is rejected here with a clean 400, never a
+  # 500. Format + zone only: the operator still cannot verify a plausible
+  # in-zone address is real — the human must confirm it (skill's job).
+  zone_result = DublinZones.check(delivery_address)
+  raise Kiosk::Server::Errors::BadRequest.new(DublinZones.reject_message(zone_result)) unless zone_result.ok?
   slot_id = delivery_slot_id.to_i
-  raise Kiosk::Server::Errors::BadRequest.new("delivery_slot_id must be 1–6") unless (1..6).include?(slot_id)
-  delivery_date = Date.today + 1
-  slot_at = Time.utc(delivery_date.year, delivery_date.month, delivery_date.day, 8 + (slot_id - 1) * 2, 0, 0)
+  raise Kiosk::Server::Errors::BadRequest.new("delivery_slot_id must be 1–#{DeliverySlots::COUNT}") unless (1..DeliverySlots::COUNT).include?(slot_id)
+
+  # K-470: honor the DATE of the slot the agent chose in delivery_slots — the
+  # day+time create_order books MUST equal the day+time the assistant saw. The
+  # agent passes back the delivery_date it queried delivery_slots with (returned
+  # on each slot row as `date`); compute slot_at from that same (date, slot_id)
+  # via the shared DeliverySlots helper. A past date is rejected (a clean 400).
+  # Backward-compat: if delivery_date is omitted, fall back to tomorrow (the
+  # historical default) so callers that pre-date this field still work — but a
+  # caller that saw a slot for a specific day SHOULD pass that day back.
+  raw_date = args[:delivery_date] || args["delivery_date"]
+  delivery_date =
+    if raw_date.nil? || raw_date.to_s.strip.empty?
+      Date.today + 1
+    else
+      begin
+        Date.parse(raw_date.to_s)
+      rescue ArgumentError
+        raise Kiosk::Server::Errors::BadRequest.new("invalid delivery_date: #{raw_date} — use YYYY-MM-DD from the delivery_slots row you chose")
+      end
+    end
+  raise Kiosk::Server::Errors::BadRequest.new("delivery_date is in the past: #{delivery_date} — choose a current/future delivery slot") if delivery_date < Date.today
+  slot_at = DeliverySlots.slot_at(delivery_date, slot_id)
 
   conn.transaction do
     # Resolve skus → product id + price (consumer references products by sku, not the numeric id)
@@ -503,6 +606,7 @@ Kiosk::Server::Actions.register("reschedule_delivery",
   params: {
     order_id:         "uuid — the paid order to reschedule",
     delivery_slot_id: "integer — new slot id from the delivery_slots query (1–6)",
+    delivery_date:    "(optional) date string YYYY-MM-DD — the `date` of the new slot you chose; omitting books tomorrow",
     delivery_address: "(optional) string — new delivery address; unchanged if omitted",
   }) do |args|
   conn = ActiveRecord::Base.connection
@@ -514,8 +618,30 @@ Kiosk::Server::Actions.register("reschedule_delivery",
   raise Kiosk::Server::Errors::BadRequest.new("missing field: order_id")         if order_id.nil? || order_id.to_s.empty?
   raise Kiosk::Server::Errors::BadRequest.new("missing field: delivery_slot_id") if delivery_slot_id.nil?
 
+  # ADDRESS-UPFRONT (K-468): if a NEW address is supplied, it must also be an
+  # in-zone Dublin address — clean 400, not a 500. Omitted → keep the existing.
+  unless delivery_address.nil? || delivery_address.to_s.strip.empty?
+    zone_result = DublinZones.check(delivery_address)
+    raise Kiosk::Server::Errors::BadRequest.new(DublinZones.reject_message(zone_result)) unless zone_result.ok?
+  end
+
   slot_id = delivery_slot_id.to_i
-  raise Kiosk::Server::Errors::BadRequest.new("delivery_slot_id must be 1–6") unless (1..6).include?(slot_id)
+  raise Kiosk::Server::Errors::BadRequest.new("delivery_slot_id must be 1–#{DeliverySlots::COUNT}") unless (1..DeliverySlots::COUNT).include?(slot_id)
+
+  # K-470: honor the chosen slot's DATE (same source of truth as delivery_slots /
+  # create_order). Optional for backward compat → tomorrow. Reject a past date.
+  raw_date = args[:delivery_date] || args["delivery_date"]
+  new_date =
+    if raw_date.nil? || raw_date.to_s.strip.empty?
+      Date.today + 1
+    else
+      begin
+        Date.parse(raw_date.to_s)
+      rescue ArgumentError
+        raise Kiosk::Server::Errors::BadRequest.new("invalid delivery_date: #{raw_date} — use YYYY-MM-DD from the delivery_slots row you chose")
+      end
+    end
+  raise Kiosk::Server::Errors::BadRequest.new("delivery_date is in the past: #{new_date}") if new_date < Date.today
 
   conn.transaction do
     # ── Gate 1: order belongs to principal and not already scheduled ─────
@@ -545,10 +671,8 @@ Kiosk::Server::Actions.register("reschedule_delivery",
       )
     end
 
-    # ── Compute slot_at (slot 1 = 08:00, slot 2 = 10:00, ...) ────────────
-    delivery_date = Date.today + 1
-    hour          = 8 + (slot_id - 1) * 2
-    slot_at       = Time.utc(delivery_date.year, delivery_date.month, delivery_date.day, hour, 0, 0)
+    # ── Compute slot_at from the shared source of truth (K-470) ──────────
+    slot_at = DeliverySlots.slot_at(new_date, slot_id)
 
     # ── Update order ──────────────────────────────────────────────────────
     conn.execute(
@@ -631,7 +755,9 @@ end
 Kiosk::Server::Queries.register("kyc_status",
   description: "Poll a request_kyc verification by its request_id. Returns {status: \"pending\"} until the " \
                "human acts; {status: \"approved\", kyc_jws} once approved (submit the kyc_jws to " \
-               "POST /kiosk/agents/kyc, then retry create_order); {status: \"declined\"} if declined.",
+               "POST /kiosk/agents/kyc, then retry create_order); {status: \"declined\"} if declined. " \
+               "kyc_jws is a full compact JWS — a long, single-line, dot-separated token; submit the " \
+               "ENTIRE value from this field, never a truncated console echo.",
   params: { request_id: "string — the request_id returned by request_kyc" }) do |params|
   request_id = params[:request_id]
   if request_id.nil? || request_id.to_s.empty?

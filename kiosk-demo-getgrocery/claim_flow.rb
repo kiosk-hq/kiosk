@@ -75,7 +75,7 @@ def create_order(token, items)
   # Delivery is part of the order: slot + address are required fields.
   rc, resp = post_json("#{SERVER}/kiosk/run",
                        { name: "create_order", items: items,
-                         delivery_slot_id: 1, delivery_address: "7 Claim Ct, Dublin" },
+                         delivery_slot_id: 1, delivery_address: "7 Claim Ct, Dublin 8" },
                        { "Authorization" => "Bearer #{token}" })
   abort "create_order failed (#{rc}): #{JSON.generate(resp)}" unless rc == 200
   # Carry the server's EUR display string so operator stdout shows €, not cents.

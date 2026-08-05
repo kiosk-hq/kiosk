@@ -4,6 +4,17 @@
 # kiosk-demo@.service). Caddy handles automatic TLS (Let's Encrypt HTTP-01)
 # per subdomain with zero cert plumbing.
 #
+# ── DRIFT NOTE (K-463) ──────────────────────────────────────────────────────
+# This file is the canonical template for a FRESH, single-purpose box (it uses
+# a `(kioskproxy)` snippet that adds `encode zstd gzip`). The current live VPS,
+# however, is a SHARED host: its /etc/caddy/Caddyfile also serves other sites,
+# was hand-maintained BEFORE this snippet existed, and uses the plainer inline
+# form `reverse_proxy 127.0.0.1:PORT` (no snippet). So do NOT overwrite the live
+# Caddyfile with this file — you would drop the other sites' vhosts. When adding
+# a vhost to the EXISTING live box, hand-add an inline block matching its style
+# (that is how kyc.demo.kiosk.tech was added). Bringing the live box up to this
+# snippet template (to gain `encode`) is a maintenance-window task, not a copy.
+#
 # Port map (must match env/<app>.env PORT and kiosk-demo@.service):
 #   getgrocery -> 3001   atablefor -> 3002   hoteling  -> 3003
 #   skooti     -> 3004   stylish   -> 3005   philslist -> 3006

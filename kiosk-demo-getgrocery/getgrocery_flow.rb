@@ -1,9 +1,11 @@
 # frozen_string_literal: true
 
 # Agent-side driver: no-human grocery order end-to-end.
-# Flow: register → query catalog → query delivery_slots
-#       → run create_order (items + delivery slot + address — delivery is part
-#         of the order) → payment_setup (verify "ready") → pay (cart mirrors
+# Flow: register → query catalog → query delivery_slots (delivery ADDRESS/zone is
+#         a REQUIRED early input, validated against served Dublin districts — an
+#         out-of-zone / district-less address → clean 400, asserted here)
+#       → run create_order (items + delivery slot + in-zone address — delivery is
+#         part of the order) → payment_setup (verify "ready") → pay (cart mirrors
 #         the order at catalog prices, EUR; off_session → real pi_…)
 #       → query my_orders (own order present, paid: true)
 # Runs with KIOSK_TEST_AUTOCARD=1: the adapter simulates a completed SetupIntent,
@@ -84,26 +86,53 @@ chosen = catalog.first(3)
 items  = chosen.map { |p| { sku: p.fetch("sku"), qty: 1 } }
 STDERR.puts "  Ordering: #{items.map { |i| "sku=#{i[:sku]}" }.join(", ")}"
 
-# -- Step 3: query delivery_slots (delivery is part of the order) --
-delivery_date = (Date.today + 1).to_s
+# -- Step 3: query delivery_slots (delivery ADDRESS/zone is a REQUIRED early input) --
+# ADDRESS-UPFRONT (K-468): the address must name a SERVED Dublin district or the
+# operator returns 400 before it will show any slots. This is a real, in-zone
+# Dublin address; in a live run the ASSISTANT obtains it from its human (never
+# invents one) — the operator validates zone/format but cannot verify it is real.
+# K-470: query for TODAY (the live-run scenario) so the assertion below catches
+# any date drift — create_order must book the SAME day the slot was shown for,
+# not a fixed +1.
+delivery_address = "42 Camden Street, Dublin 2"
+delivery_date    = Date.today.to_s
+
+# Negative control: an out-of-zone / district-less address → clean 400 (bad_request),
+# NOT a 500. Proves the address gate rejects gross fakes with a clear message.
+rc_bad, bad_resp = post_json(
+  "#{SERVER}/kiosk/query",
+  { name: "delivery_slots", date: delivery_date, delivery_address: "123 Demo Street, Dublin" },
+  { "Authorization" => "Bearer #{token}" },
+)
+bad_code = bad_resp.dig("error", "code")
+abort "out-of-zone delivery_slots expected 400 bad_request, got #{rc_bad} #{bad_code.inspect}" \
+  unless rc_bad == 400 && bad_code == "bad_request"
+STDERR.puts "  delivery_slots (district-less address): http=#{rc_bad} code=#{bad_code} (rejected, as expected)"
+
 rc_slots, slots_resp = post_json(
   "#{SERVER}/kiosk/query",
-  { name: "delivery_slots", date: delivery_date },
+  { name: "delivery_slots", date: delivery_date, delivery_address: delivery_address },
   { "Authorization" => "Bearer #{token}" },
 )
 abort "query delivery_slots failed (#{rc_slots}): #{JSON.generate(slots_resp)}" unless rc_slots == 200
 slots = slots_resp.fetch("rows", [])
 abort "delivery_slots returned empty" if slots.empty?
-slot    = slots.first
-slot_id = slot.fetch("id")
-STDERR.puts "  Delivery slot: id=#{slot_id} #{slot["label"]} on #{delivery_date}"
+abort "delivery_slots rows must carry the resolved zone" unless slots.all? { |s| s["zone"].to_s.start_with?("D") }
+slot          = slots.first
+slot_id       = slot.fetch("id")
+slot_date     = slot.fetch("date")     # the day the assistant sees for this slot
+chosen_slot_at = slot.fetch("slot_at") # its exact start time — create_order must match
+STDERR.puts "  Delivery slot: id=#{slot_id} #{slot["label"]} zone=#{slot["zone"]} on #{slot_date} (#{chosen_slot_at})"
 
-# -- Step 4: create_order (items + delivery slot + address, all required) --
+# -- Step 4: create_order (items + delivery slot + chosen slot's date + address) --
+# K-470: pass back the DATE of the slot we chose so create_order books the day
+# we saw, not a fixed +1.
 rc_order, order_resp = post_json(
   "#{SERVER}/kiosk/run",
   { name: "create_order", items: items,
     delivery_slot_id: slot_id,
-    delivery_address: "42 Camden Street, Dublin" },
+    delivery_date:    slot_date,
+    delivery_address: delivery_address },
   { "Authorization" => "Bearer #{token}" },
 )
 abort "create_order failed (#{rc_order}): #{JSON.generate(order_resp)}" unless rc_order == 200
@@ -111,6 +140,10 @@ order_value = order_resp.fetch("value")
 order_id    = order_value.fetch("order_id")
 total_cents = order_value.fetch("total_cents")
 slot_at     = order_value.fetch("slot_at")
+# K-470: the booked slot_at MUST equal the date+start-time of the slot the agent
+# saw and chose in delivery_slots — same day, NOT +1.
+abort "K-470: create_order slot_at=#{slot_at.inspect} != chosen delivery_slot slot_at=#{chosen_slot_at.inspect} (date drift)" \
+  unless slot_at == chosen_slot_at
 abort "create_order result must carry currency=eur" unless order_value["currency"] == "eur"
 abort "create_order result must carry a total_eur display string" unless order_value["total_eur"].to_s.start_with?("€")
 abort "create_order result must carry a pay_hint" if order_value["pay_hint"].to_s.empty?
@@ -218,6 +251,8 @@ puts JSON.generate(
   http_register:      rc_reg,
   http_catalog:       rc_catalog,
   http_slots:         rc_slots,
+  http_slots_badzone: rc_bad,
+  slots_badzone_code: bad_code,
   http_order:         rc_order,
   http_payment_setup: rc_setup,
   http_pay:           rc_pay,
@@ -227,6 +262,8 @@ puts JSON.generate(
   order_id:           order_id,
   total_cents:        total_cents,
   slot_at:            slot_at,
+  chosen_slot_at:     chosen_slot_at,
+  slot_date:          slot_date,
   paid:               paid,
   psp_reference:      psp_ref,
   my_orders:          my_orders,

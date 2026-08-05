@@ -176,6 +176,11 @@ namespace :demo do
     check.call("http_catalog",       result["http_catalog"],       200)
     check.call("http_order",         result["http_order"],         200)
     check.call("http_slots",         result["http_slots"],         200)
+    # ADDRESS-UPFRONT (K-468): an out-of-zone / district-less delivery address
+    # must be a CLEAN 400 (bad_request), never a 500; the valid in-zone address
+    # must reach 200 (asserted by http_slots/http_order above).
+    check.call("http_slots_badzone", result["http_slots_badzone"], 400)
+    check.call("slots_badzone_code", result["slots_badzone_code"], "bad_request")
     check.call("http_payment_setup", result["http_payment_setup"], 200)
     check.call("http_pay",           result["http_pay"],           200)
     check.call("http_my_orders",     result["http_my_orders"],     200)
@@ -196,6 +201,16 @@ namespace :demo do
     else
       failures << "slot_at missing or empty"
       puts "  FAIL  slot_at missing or empty"
+    end
+
+    # K-470: create_order's booked slot_at must EQUAL the date+start-time of the
+    # delivery_slot the agent queried and chose — same day, NOT a fixed +1.
+    chosen = result["chosen_slot_at"]
+    if sat && chosen && sat == chosen
+      puts "  OK  create_order slot_at == chosen delivery_slot slot_at (#{sat}) — no date drift"
+    else
+      failures << "K-470: create_order slot_at #{sat.inspect} != chosen delivery_slot slot_at #{chosen.inspect}"
+      puts "  FAIL  K-470: create_order slot_at #{sat.inspect} != chosen delivery_slot slot_at #{chosen.inspect}"
     end
 
     # my_orders marks the settled order paid

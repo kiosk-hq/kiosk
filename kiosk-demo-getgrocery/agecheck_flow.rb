@@ -98,7 +98,7 @@ def catalog(token)
 end
 
 # create_order with a given item set (each {sku, qty:1}). Returns [http, body].
-def create_order(token, items, address: "42 Camden Street, Dublin", slot_id: 1)
+def create_order(token, items, address: "42 Camden Street, Dublin 2", slot_id: 1)
   post_json(
     "#{SERVER}/kiosk/run",
     { name: "create_order", items: items, delivery_slot_id: slot_id, delivery_address: address },

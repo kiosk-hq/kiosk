@@ -20,13 +20,31 @@ rake demo            # setup + shop: no-human register → order (slot+address) 
 | Task | What it proves |
 |---|---|
 | `rake demo:setup` | idempotent db drop / create / load / seed |
-| `rake demo:shop` | no-human happy path: register → catalog → delivery_slots → create_order (delivery slot + address required) → payment_setup → pay (cart mirrors the order at catalog EUR prices, off_session PaymentIntent) → my_orders (paid) |
+| `rake demo:shop` | no-human happy path: register → catalog → delivery_slots (in-zone Dublin address required; a district-less/out-of-zone address → clean 400) → create_order (delivery slot + in-zone address required) → payment_setup → pay (cart mirrors the order at catalog EUR prices, off_session PaymentIntent) → my_orders (paid) |
 | `rake demo:claim` | claim-rebind: a standalone assistant (own key, own synthetic account, `payment_setup → setup_required`) is re-bound to the seeded human's account after verify-page approval — agent_id stays, user_id remaps, the old order is NOT migrated — then pays a new order with the human's saved card (`payment_setup → ready`) |
 | `rake demo:isolation` | adversarial cross-tenant + order-ownership denial |
 | `rake demo:schema` | self-discovery over the schema verb |
 | `rake demo:redteam` | kiosk-redteam battery — 12 attacks BLOCKED (incl. the cashier-check trio: wrong-currency, tampered-price, inflated-total carts), 3 generic KYC scenarios skip (the age-gate is exercised by `demo:agecheck`) |
 | `rake demo:agecheck` | alcohol 18+ age-gate via the prove.my broker (two-server): alcohol order without KYC → 403 → request_kyc → broker approve → 200 → pay; non-alcohol order needs no KYC (200 directly); forged age attestation rejected |
 | `rake demo:pow` | catalog-toll PoW: 402 → solve → 200 |
+
+## Delivery address is an upfront, deliberate input (ADDRESS-UPFRONT)
+
+`delivery_slots` requires a `delivery_address` and validates it names a
+**served Dublin postal district** (`lib/dublin_zones.rb`): a district-less
+address (`"…, Dublin"` with no `Dublin 2`/`D02`), an out-of-zone district, or a
+non-Dublin city returns a clean **400 (`bad_request`)** whose message says what
+is needed — so an assistant must obtain the address **before** it can even see
+slots. `create_order` re-validates the same rule (consistency), and a mismatched
+or out-of-zone address there is likewise a clean 400.
+
+**Honest scope:** the operator validates **format and zone only**. It **cannot**
+tell a fabricated-but-plausible in-zone address (`"1 Nonexistent Way, Dublin 2"`)
+from a real one — there is no address-book lookup. This gate adds realism and
+catches gross fakes; it is not proof the address exists. The real defense is the
+**human** providing/confirming the address — the [Kiosk skill](https://kiosk.tech/skill.md)
+instructs assistants to obtain such real-world details from the human and never
+invent a placeholder.
 
 ## Age-restricted purchases (anonymized KYC)
 

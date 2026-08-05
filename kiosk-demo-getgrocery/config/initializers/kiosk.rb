@@ -359,6 +359,10 @@ Kiosk::Server::Actions.register("payment_setup",
                "Returns {status: \"setup_required\", setup_url: \"…\"} when no card is saved — " \
                "the assistant must hand the setup_url to the human, wait for them to complete the " \
                "Stripe-hosted card entry, then call payment_setup again before paying. " \
+               "IMPORTANT — relay the setup_url to the human COMPLETE and VERBATIM: it is a full URL " \
+               "that includes a REQUIRED fragment (the long opaque part after `#`). If you shorten, " \
+               "truncate, wrap, or drop any of it — especially the `#…` fragment — Stripe's page shows " \
+               "\"Something went wrong\". Copy the entire string exactly; do not summarise or abbreviate it. " \
                "Each setup_url is a fresh single-use Stripe Checkout session minted on THIS call — " \
                "never cache or reuse one. If the human reports the hosted page errored, do NOT reuse " \
                "the old URL — call payment_setup again to mint a new setup_url and hand that over. " \

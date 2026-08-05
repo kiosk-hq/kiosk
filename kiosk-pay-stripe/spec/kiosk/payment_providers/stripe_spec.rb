@@ -46,6 +46,29 @@ RSpec.describe Kiosk::PaymentProviders::Stripe do
       expect(url).to eq("https://checkout.stripe.com/setup/abc")
     end
 
+    # K-473 (contract pin, not the confirmed root cause): a setup-mode session
+    # created WITHOUT explicit payment_method_types falls onto Stripe's
+    # dynamic-payment-methods path, which requires `currency` in setup mode;
+    # omitting both yields a session whose hosted page errors. The shipped code
+    # always passes `payment_method_types: ["card"]` (so `currency` is not
+    # needed) — this pins that so a future regression dropping it is caught here
+    # rather than on Stripe's hosted page. NOTE: this does NOT explain the
+    # observed live "Something went wrong" (the shipped call already pins card);
+    # that is under investigation (key/account context, see the K-473 row).
+    it "always pins explicit payment_method_types so setup mode needs no currency (K-473)" do
+      session = double("CheckoutSession", url: "https://checkout.stripe.com/setup/abc")
+
+      expect(::Stripe::Checkout::Session).to receive(:create) do |params|
+        expect(params[:mode]).to eq("setup")
+        expect(params[:payment_method_types]).to eq(["card"]),
+          "setup-mode session must pin payment_method_types or Stripe requires `currency`"
+        expect(params).to have_key(:success_url)
+        session
+      end
+
+      resolver_adapter.setup_url(user_id: "user-1")
+    end
+
     it "creates a new Customer when none exists, persists the mapping, and returns the session url" do
       saved    = {}
       new_cus  = double("Customer", id: "cus_new")

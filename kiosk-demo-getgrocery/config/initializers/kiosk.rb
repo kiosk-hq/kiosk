@@ -359,6 +359,9 @@ Kiosk::Server::Actions.register("payment_setup",
                "Returns {status: \"setup_required\", setup_url: \"…\"} when no card is saved — " \
                "the assistant must hand the setup_url to the human, wait for them to complete the " \
                "Stripe-hosted card entry, then call payment_setup again before paying. " \
+               "Each setup_url is a fresh single-use Stripe Checkout session minted on THIS call — " \
+               "never cache or reuse one. If the human reports the hosted page errored, do NOT reuse " \
+               "the old URL — call payment_setup again to mint a new setup_url and hand that over. " \
                "The assistant should call this before every `pay` invocation on a new device or session.",
   params: {}) do |_args|
   conn     = ActiveRecord::Base.connection

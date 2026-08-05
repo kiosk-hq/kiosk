@@ -1,0 +1,35 @@
+# frozen_string_literal: true
+
+# A pending age-verification getgrocery started at the prove.my broker (design
+# §5). `request_kyc` calls the broker's intake for the SINGLE claim getgrocery
+# needs — `age_over_18` (NOT a driving licence; contrast skooti's motorcycle
+# gate) — and stores the BROKER's request_id here as `request_token`, plus the
+# broker's per-request `broker_nonce`. The agent relays the broker's
+# verification_url to a human; on approve the broker POSTs its signed anonymized
+# {age_over_18} claim to POST /kyc/callback, which verifies it (trusted ProveKey
+# + nonce + operator + sub) and parks the jws in `kyc_jws`. The agent polls
+# `kyc_status` and submits the jws to POST /kiosk/agents/kyc (agent contract
+# unchanged), then retries create_order for the alcohol cart.
+#
+#   request_token — the BROKER's request_id (PK); the request_id kyc_status
+#                   polls and the callback correlates on.
+#   user_id       — the authenticated agent's user_id the request is bound to;
+#                   the broker signs the claim's `sub` to this so KycVerifier
+#                   binds it to the SAME identity (cross-subject theft defense).
+#   broker_nonce  — the callback anti-replay nonce the broker returned at intake;
+#                   POST /kyc/callback rejects a callback whose nonce differs.
+#   status        — 'pending' → 'approved' | 'declined'.
+#   kyc_jws       — the broker's signed anonymized claim, NULL until the callback
+#                   lands. Only booleans are ever carried — never DOB.
+class CreateKycVerificationRequests < ActiveRecord::Migration[ActiveRecord::Migration.current_version]
+  def change
+    create_table :kyc_verification_requests, id: false do |t|
+      t.string :request_token, null: false, primary_key: true
+      t.uuid   :user_id,       null: false
+      t.string :status,        null: false, default: "pending"
+      t.string :broker_nonce
+      t.text   :kyc_jws
+      t.timestamps
+    end
+  end
+end

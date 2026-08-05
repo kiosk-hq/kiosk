@@ -29,14 +29,20 @@
   { sku: "sparkling-water",  name: "Sparkling Water",       price_cents:  149, stock: 70 },
   { sku: "still-water",      name: "Still Water",           price_cents:  129, stock: 80 },
   { sku: "banana",           name: "Banana",                price_cents:  149, stock: 80 },
+  # ── Age-restricted (alcohol): buying it requires an 18+ anonymized-KYC gate ──
+  # The LOW-liability age-gated-purchase showcase for anonymized KYC — a coined
+  # wine (no real brand). A cart containing it needs an age_over_18 attestation
+  # at create_order; every other grocery item stays age_restricted:false.
+  { sku: "table-red-wine",   name: "House Table Red Wine 750ml", price_cents: 899, stock: 24, age_restricted: true },
   # ── Stock 0: absent from catalog, drive the AI substitution beats ───────────
   { sku: "milk-1l",          name: "Milk 1 L",              price_cents:  149, stock:  0 },
   { sku: "chocolate-spread", name: "Chocolate Spread 400g", price_cents:  349, stock:  0 },
 ].each do |attrs|
   Product.find_or_create_by!(sku: attrs[:sku]) do |p|
-    p.name        = attrs[:name]
-    p.price_cents = attrs[:price_cents]
-    p.stock       = attrs[:stock]
+    p.name           = attrs[:name]
+    p.price_cents    = attrs[:price_cents]
+    p.stock          = attrs[:stock]
+    p.age_restricted = attrs.fetch(:age_restricted, false)
   end
 end
 
@@ -57,6 +63,7 @@ end
 
 puts "Seeded: #{Product.count} products (#{Product.where("stock > 0").count} in-stock, #{Product.where(stock: 0).count} out-of-stock)"
 puts "  In-stock low (stock ≤ 5): #{Product.where("stock > 0 AND stock <= 5").pluck(:sku).join(", ")}"
+puts "  Age-restricted (18+ anonymized-KYC gate at purchase): #{Product.where(age_restricted: true).pluck(:sku).join(", ")}"
 puts "  Out-of-stock (absent from catalog): #{Product.where(stock: 0).pluck(:sku).join(", ")}"
 puts "  Delivery city context: Dublin"
 puts "  Account holder with saved card: #{HUMAN_ID} (#{HUMAN_CUS_ID})"

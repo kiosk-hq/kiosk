@@ -109,13 +109,21 @@ jobs:
             # CI. demo:rls moved to getgrocery.
             tasks: demo:backoff demo:book demo:binding demo:isolation demo:redteam demo:schema
           - demo: kiosk-demo-getgrocery
-            tasks: demo:shop demo:isolation demo:redteam demo:schema
+            # demo:agecheck = the alcohol 18+ age-gate (create_order rejects a
+            # cart with an age_restricted item unless the agent carries
+            # age_over_18) — a TWO-SERVER integration: it boots the prove.my
+            # broker (kiosk-demo-prove) on its own port, with getgrocery
+            # registered as a SECOND broker operator, and drives the cross-app
+            # KYC flow (alcohol→403→broker approve→200; non-alcohol→200 no KYC;
+            # forged attestation rejected). So this job also bundles the broker.
+            prove_broker: kiosk-demo-prove
+            tasks: demo:shop demo:isolation demo:redteam demo:schema demo:agecheck
             # getgrocery uses the real Stripe adapter. CI carries NO Stripe key
             # (never inject keys into CI); a local stripe-mock returns
             # shaped pi_ fixtures so the full flow — including demo:shop's
             # off_session charge — runs secret-free. STRIPE_MOCK_URL (set by the
             # stripe-mock step below) makes demo:setup/demo:schema boot, and
-            # demo:shop/isolation/redteam self-start the mock process.
+            # demo:shop/isolation/redteam/agecheck self-start the mock process.
             stripe_mock: true
           - demo: kiosk-demo-hoteling
             tasks: demo:book demo:isolation demo:redteam demo:schema
@@ -196,10 +204,11 @@ jobs:
         working-directory: ${{ matrix.demo }}
         run: bundle install
 
-      # skooti's demo:kyc / demo:redteam are two-server integrations that boot
-      # the prove.my broker (kiosk-demo-prove) on its own port; that sibling app
-      # needs its own bundle installed for the boot helper to `rails s` it.
-      - name: Install prove.my broker deps (skooti two-server gates)
+      # skooti's demo:kyc / demo:redteam and getgrocery's demo:agecheck are
+      # two-server integrations that boot the prove.my broker (kiosk-demo-prove)
+      # on its own port; that sibling app needs its own bundle installed for the
+      # boot helper to `rails s` it.
+      - name: Install prove.my broker deps (two-server KYC gates)
         if: matrix.prove_broker
         working-directory: ${{ matrix.prove_broker }}
         run: bundle install

@@ -1149,3 +1149,171 @@ namespace :demo do
   end
   # ── end demo:telemetry ─────────────────────────────────────────────────────
 end
+
+namespace :demo do
+  # ── demo:agecheck ──────────────────────────────────────────────────────────
+  desc <<~DESC
+    Alcohol age-gate (18+ anonymized KYC) — the LOW-liability age-gated-purchase
+    showcase for anonymized KYC (KYC-DEMO-SCOPE (b): the gate lives on the
+    PURCHASE where the transaction closes, not on a high-liability rental).
+
+    A TWO-SERVER integration: boots the prove.my broker (kiosk-demo-prove) on its
+    own port — getgrocery is a SECOND registered operator alongside skooti — then
+    boots getgrocery and drives agecheck_flow.rb across both apps:
+
+      A1  create_order WITH the alcohol item, no KYC → 403 kyc_required, and the
+          error.hint points the agent at `request_kyc`.
+      A2  run request_kyc → 200 with a broker verification_url; human approves the
+          broker page; the broker POSTs its signed {age_over_18} claim to
+          /kyc/callback; poll kyc_status → approved returns the broker jws.
+      A3  submit the jws to /agents/kyc → 200 (attribute age_over_18 recorded).
+      A4  retry create_order WITH the alcohol item → 200; payment_setup + pay
+          (cart mirrors the order at catalog EUR prices) → settle.
+      B   NON-alcohol order with NO KYC at all → 200 directly (positive control —
+          the age-gate fires ONLY on age_restricted items).
+      R1  a FORGED age attestation (wrong signing key) → 403 at /agents/kyc.
+      R2  alcohol create_order after the forged submit → still 403 (blocked).
+
+    Reframe honesty (KYC-DEMO-SCOPE (a)): this age-gate is the PROPER home of
+    anonymized KYC — a low-liability eligibility check where the transaction
+    closes. It does NOT confer accountability, which is why anonymized KYC is
+    NOT used for high-liability actions.
+
+    Exits 0 when all hold; exits 1 on any miss. A red assertion = the age-gate is
+    broken (or leaked onto the non-alcohol path) — fix the app, not the test.
+
+    DEPLOY FOLLOW-UP: getgrocery is allow-listed at the broker only by this test
+    harness; a standing deploy allow-list entry for getgrocery is a follow-up.
+  DESC
+  task agecheck: :setup do
+    require "resolv"
+    require "net/http"
+    require "uri"
+    require "json"
+    require "shellwords"
+    require_relative "../prove_broker_boot"
+
+    # The full flow pays for the alcohol order → needs the Stripe adapter to
+    # settle. Run against stripe-mock (no key, no real charge) with autocard.
+    mock_url = start_stripe_mock
+    puts "  (stripe-mock at #{mock_url} — age-gate flow, no real Stripe)"
+
+    port = ENV.fetch("PORT", "3005")
+    log  = "/tmp/kiosk-getgrocery-agecheck.log"
+
+    host = begin
+      addr = begin
+        Resolv.getaddress("getgrocery.app")
+      rescue Resolv::ResolvError
+        ""
+      end
+      addr == "127.0.0.1" ? "getgrocery.app" : "127.0.0.1"
+    end
+
+    server_url   = "http://#{host}:#{port}"
+    kiosk_issuer = server_url
+
+    # TWO-SERVER GATE: boot the prove.my broker first (with getgrocery's callback
+    # host allow-listed + its shared secret), wire getgrocery's trust + intake
+    # config at it, then boot getgrocery and drive the cross-app age-gate flow.
+    result = nil
+    ProveBrokerBoot.with_broker(operator_host: host) do |broker|
+      puts "\n── Starting getgrocery (age-gate proof) on #{server_url} ──"
+
+      File.truncate(log, 0) if File.exist?(log)
+      boot_env = {
+        "KIOSK_ISSUER"        => kiosk_issuer,
+        "KIOSK_TEST_AUTOCARD" => "1",
+        "STRIPE_MOCK_URL"     => mock_url,
+        "STRIPE_SECRET_KEY"   => "sk_test_mock",
+      }.merge(broker[:wiring])
+      server_pid = spawn(
+        boot_env,
+        "bundle exec rails s -p #{port} -b 127.0.0.1 -e development",
+        out: log, err: log,
+      )
+
+      at_exit do
+        begin
+          Process.kill("TERM", server_pid)
+          Process.wait(server_pid)
+        rescue Errno::ESRCH, Errno::ECHILD
+          nil
+        end
+        puts "  Server stopped."
+      end
+
+      ready = false
+      40.times do
+        begin
+          res = Net::HTTP.get_response(URI("#{server_url}/.well-known/kiosk.json"))
+          if res.code.to_i == 200
+            ready = true
+            break
+          end
+        rescue Errno::ECONNREFUSED, Errno::EADDRNOTAVAIL, SocketError
+          nil
+        end
+        sleep 1
+      end
+      abort "Server did not become ready — see #{log}" unless ready
+      puts "  Server up at #{server_url}"
+
+      flow_rb = File.expand_path("../../agecheck_flow.rb", __dir__)
+      puts "\n── Running agecheck_flow.rb (getgrocery + prove.my broker) ──"
+      driver_env = "SERVER_URL=#{server_url} KIOSK_ISSUER=#{kiosk_issuer} " \
+                   "KIOSK_PROVE_BROKER_URL=#{broker[:broker_url]} " \
+                   "KIOSK_PROVE_ISSUER=#{broker[:wiring]["KIOSK_PROVE_ISSUER"]}"
+      raw = `#{driver_env} bundle exec ruby #{flow_rb.shellescape} 2>&1`
+      json_line = raw.lines.grep(/^\{/).last
+      puts raw.lines.reject { |l| l.start_with?("{") }.join
+      puts json_line if json_line
+
+      begin
+        result = JSON.parse(json_line || raw)
+      rescue JSON::ParserError => e
+        abort "agecheck_flow.rb did not produce valid JSON: #{e.message}\nOutput:\n#{raw}"
+      end
+    end
+
+    puts "\n── Age-gate assertions ──"
+    puts "  (KYC-DEMO-SCOPE (a): this age-gate is the PROPER home of anonymized KYC —"
+    puts "   a low-liability eligibility check where the transaction closes; it does NOT"
+    puts "   confer accountability, which is why anonymized KYC is not used for"
+    puts "   high-liability actions.)\n\n"
+    failures = []
+    check = lambda do |label, ok|
+      if ok then puts "  OK  #{label}" else failures << label; puts "  FAIL  #{label}" end
+    end
+
+    check.call("A1 alcohol create_order without KYC → 403 kyc_required",
+               result["http_alcohol_no_kyc"] == 403 && result["alcohol_no_kyc_code"] == "kyc_required")
+    check.call("A1 403 hint points to request_kyc",
+               result["alcohol_no_kyc_hint_to_req"] == true)
+    check.call("A2 request_kyc → 200 with a broker verification_url",
+               result["http_request_kyc"] == 200 && result["request_kyc_verification_url"].to_s.include?("/verify?request="))
+    check.call("A2 human approved broker page → callback landed, kyc_status approved, jws relayed",
+               result["http_approve_page"] == 200 && result["kyc_status"] == "approved" && result["kyc_jws_relayed"] == true)
+    check.call("A3 relayed kyc_jws accepted at /agents/kyc with {age_over_18}",
+               result["http_kyc_submit"] == 200 && (result["kyc_attributes"] || {})["age_over_18"] == true)
+    check.call("A4 retry alcohol create_order WITH KYC → 200",
+               result["http_alcohol_with_kyc"] == 200 && !result["alcohol_order_id"].to_s.empty?)
+    check.call("A4 payment_setup → 200 and pay the alcohol order → 200 (pi_ settlement)",
+               result["http_payment_setup"] == 200 && result["http_pay"] == 200 && result["psp_reference"].to_s.start_with?("pi_"))
+    check.call("B  NON-alcohol create_order with NO KYC → 200 directly (positive control)",
+               result["http_nonalcohol_no_kyc"] == 200 && !result["nonalcohol_order_id"].to_s.empty?)
+    check.call("R1 forged age attestation rejected at /agents/kyc → 403",
+               result["http_forged_kyc_submit"] == 403)
+    check.call("R2 alcohol create_order after the forged submit still blocked → 403",
+               result["http_alcohol_after_forged"] == 403)
+
+    if failures.empty?
+      puts "\n  All age-gate assertions passed."
+    else
+      puts "\n  FAILED assertions:"
+      failures.each { |f| puts "    - #{f}" }
+      exit 1
+    end
+  end
+  # ── end demo:agecheck ──────────────────────────────────────────────────────
+end

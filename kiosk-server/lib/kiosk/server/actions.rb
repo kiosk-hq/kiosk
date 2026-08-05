@@ -53,7 +53,7 @@ module Kiosk
           entry = registry.fetch(name.to_s) do
             raise Errors::NotFound.new(
               "Unknown action: #{name.inspect}",
-              hint: "Known actions: #{registry.keys.inspect}",
+              hint: not_found_hint(name),
             )
           end
           entry.handler
@@ -68,7 +68,7 @@ module Kiosk
           entry = registry.fetch(name.to_s) do
             raise Errors::NotFound.new(
               "Unknown action: #{name.inspect}",
-              hint: "Known actions: #{registry.keys.inspect}",
+              hint: not_found_hint(name),
             )
           end
           descriptor = { name: name.to_s, description: entry.description, params: entry.params }
@@ -92,6 +92,16 @@ module Kiosk
         end
 
         private
+
+        # Recovery hint for an unknown action name. Names the registered action
+        # names (sorted, capped at MAX_HINT_NAMES + "…" so a large surface can't
+        # bloat the envelope) and always points at the schema verb, so an
+        # assistant that mistyped a name can self-correct WITHOUT a schema
+        # round-trip. The names are already public via GET .../schema, so
+        # listing them here leaks nothing new.
+        def not_found_hint(name)
+          Errors.unknown_name_hint(name, "action", registry.keys.sort)
+        end
 
         def registry
           @registry ||= {}

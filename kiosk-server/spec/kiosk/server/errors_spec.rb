@@ -44,6 +44,30 @@ RSpec.describe Kiosk::Server::Errors do
     end
   end
 
+  describe ".unknown_name_hint" do
+    it "names the available names and points at the schema, matching the example shape" do
+      hint = described_class.unknown_name_hint("listings", "query", %w[browse_listings listing_detail])
+      expect(hint).to eq(
+        "unknown query 'listings'. Available: browse_listings, listing_detail. " \
+        "Call GET .../schema for the full catalog.",
+      )
+    end
+
+    it "caps the enumerated names at 20 and appends an ellipsis" do
+      names = (0...30).map { |i| format("q%02d", i) }
+      hint  = described_class.unknown_name_hint("nope", "query", names)
+      expect(hint).to include("q00")
+      expect(hint).to include("q19")
+      expect(hint).not_to include("q20")
+      expect(hint).to include(", ….")
+    end
+
+    it "handles an empty registry without listing names but still points at the schema" do
+      hint = described_class.unknown_name_hint("x", "action", [])
+      expect(hint).to eq("unknown action 'x'. No actions are registered. Call GET .../schema for the full catalog.")
+    end
+  end
+
   describe "rescue-by-Base contract" do
     it "every Kiosk::Server::Errors::* subclass rescues as Base" do
       [Kiosk::Server::Errors::BadRequest, Kiosk::Server::Errors::Unauthenticated,

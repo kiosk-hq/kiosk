@@ -29,15 +29,32 @@ RSpec.describe Kiosk::Server::Queries do
   end
 
   describe ".fetch unknown name" do
-    it "raises NotFound with a helpful hint listing known queries" do
-      described_class.register("menu") { [] }
-      described_class.register("salons") { [] }
+    it "raises NotFound whose hint names the available queries and points at the schema" do
+      described_class.register("browse_listings") { [] }
+      described_class.register("listing_detail") { [] }
+
+      expect { described_class.fetch("listings") }
+        .to raise_error(Kiosk::Server::Errors::NotFound) { |e|
+          expect(e.message).to include("listings")
+          # names an available query so a near-miss typo is recoverable...
+          expect(e.hint).to include("browse_listings")
+          expect(e.hint).to include("listing_detail")
+          # ...WITHOUT first fetching the schema, but still points there.
+          expect(e.hint).to match(/schema/)
+          expect(e.hint).to include("unknown query 'listings'")
+        }
+    end
+
+    it "caps a very long hint list at 20 names + an ellipsis, still pointing at the schema" do
+      30.times { |i| described_class.register(format("q%02d", i)) { [] } }
 
       expect { described_class.fetch("nope") }
         .to raise_error(Kiosk::Server::Errors::NotFound) { |e|
-          expect(e.message).to include("nope")
-          expect(e.hint).to    include("menu")
-          expect(e.hint).to    include("salons")
+          expect(e.hint).to include("q00")
+          expect(e.hint).to include("q19")
+          expect(e.hint).not_to include("q20") # capped
+          expect(e.hint).to include("…")
+          expect(e.hint).to match(/schema/)
         }
     end
   end

@@ -29,15 +29,19 @@ RSpec.describe Kiosk::Server::Actions do
   end
 
   describe ".fetch unknown name" do
-    it "raises NotFound with a helpful hint listing known actions" do
-      described_class.register("ping") { :ok }
-      described_class.register("pong") { :ok }
+    it "raises NotFound whose hint names the available actions and points at the schema" do
+      described_class.register("place_order") { :ok }
+      described_class.register("cancel_order") { :ok }
 
-      expect { described_class.fetch("nope") }
+      expect { described_class.fetch("order") }
         .to raise_error(Kiosk::Server::Errors::NotFound) { |e|
-          expect(e.message).to include("nope")
-          expect(e.hint).to    include("ping")
-          expect(e.hint).to    include("pong")
+          expect(e.message).to include("order")
+          # names an available action so a near-miss typo is recoverable...
+          expect(e.hint).to include("place_order")
+          expect(e.hint).to include("cancel_order")
+          # ...WITHOUT first fetching the schema, but still points there.
+          expect(e.hint).to match(/schema/)
+          expect(e.hint).to include("unknown action 'order'")
         }
     end
   end

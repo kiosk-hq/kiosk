@@ -12,6 +12,32 @@ module Kiosk
     #   CODE        — stable string for the JSON envelope's `error.code`
     #   HTTP_STATUS — HTTP response status the controller renders
     module Errors
+      # Cap on how many registered names a not-found hint enumerates before it
+      # truncates with "…". Keeps the error envelope small on a large surface
+      # while still naming enough for an assistant to spot a near-miss typo.
+      MAX_HINT_NAMES = 20
+
+      # Builds the `hint` for a NotFound raised on an unknown query/action name.
+      # Names the available names for that verb so an assistant that mistyped
+      # (`listings` for `browse_listings`) can recover WITHOUT first fetching the
+      # schema, and always appends the schema pointer for the full descriptions.
+      # The names are already public via GET .../schema, so listing them leaks
+      # nothing an authenticated agent couldn't already read.
+      #
+      #   Errors.unknown_name_hint("listings", "query", %w[browse_listings listing_detail])
+      #   # => "unknown query 'listings'. Available: browse_listings, listing_detail. " \
+      #   #    "Call GET .../schema for the full catalog."
+      #
+      # @param name  [#to_s]         the unknown name the caller supplied
+      # @param verb  [String]        "query" or "action"
+      # @param names [Array<String>] the registered names for that verb (sorted)
+      def self.unknown_name_hint(name, verb, names)
+        listed  = names.first(MAX_HINT_NAMES).join(", ")
+        listed += ", …" if names.size > MAX_HINT_NAMES
+        available = names.empty? ? "No #{verb}s are registered." : "Available: #{listed}."
+        "unknown #{verb} '#{name}'. #{available} Call GET .../schema for the full catalog."
+      end
+
       # Base class. `rescue Kiosk::Server::Errors::Base` catches every Kiosk
       # error without leaking unrelated StandardErrors.
       class Base < StandardError

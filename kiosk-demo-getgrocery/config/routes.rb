@@ -30,6 +30,18 @@ Rails.application.routes.draw do
   post "/kiosk/auth/unlink",                       to: "kiosk/server/auth#unlink"
   get  "/auth.md",                                 to: "kiosk/server/discovery#auth_md"
 
+  # KYC attestation submit (engine controller) — the agent posts the
+  # broker-signed age_over_18 claim here after kyc_status returns approved.
+  post "/kiosk/agents/kyc",                        to: "kiosk/server/kyc_attestation#create"
+
+  # prove.my broker callback (design §5.2) — the broker → operator leg. `run
+  # request_kyc` calls the broker's intake with THIS callback; on the human's
+  # approve, the broker POSTs the signed anonymized {age_over_18} claim here.
+  # getgrocery verifies it against the trusted ProveKey, checks the
+  # nonce/operator/request_id it stored, and parks the jws for the agent to
+  # fetch via kyc_status and submit to /kiosk/agents/kyc.
+  post "/kyc/callback",                            to: "kyc_callback#create"
+
   # Native discovery surface — served by kiosk-server's DiscoveryController
   # (rendered from Kiosk::Server::WellKnown, the single generator seam).
   # agents.txt / agents.json are ROOT-served per the agents.txt v1.0 standard.

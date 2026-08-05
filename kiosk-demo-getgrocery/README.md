@@ -24,8 +24,26 @@ rake demo            # setup + shop: no-human register → order (slot+address) 
 | `rake demo:claim` | claim-rebind: a standalone assistant (own key, own synthetic account, `payment_setup → setup_required`) is re-bound to the seeded human's account after verify-page approval — agent_id stays, user_id remaps, the old order is NOT migrated — then pays a new order with the human's saved card (`payment_setup → ready`) |
 | `rake demo:isolation` | adversarial cross-tenant + order-ownership denial |
 | `rake demo:schema` | self-discovery over the schema verb |
-| `rake demo:redteam` | kiosk-redteam battery — 12 attacks BLOCKED (incl. the cashier-check trio: wrong-currency, tampered-price, inflated-total carts), 3 KYC scenarios skip (no KYC surface) |
+| `rake demo:redteam` | kiosk-redteam battery — 12 attacks BLOCKED (incl. the cashier-check trio: wrong-currency, tampered-price, inflated-total carts), 3 generic KYC scenarios skip (the age-gate is exercised by `demo:agecheck`) |
+| `rake demo:agecheck` | alcohol 18+ age-gate via the prove.my broker (two-server): alcohol order without KYC → 403 → request_kyc → broker approve → 200 → pay; non-alcohol order needs no KYC (200 directly); forged age attestation rejected |
 | `rake demo:pow` | catalog-toll PoW: 402 → solve → 200 |
+
+## Age-restricted purchases (anonymized KYC)
+
+One catalog item is age-restricted (a coined wine — no real brand). A cart
+containing it can only be ordered (`create_order`) by an agent that has
+completed an 18+ anonymized-KYC check via the shared **prove.my** broker
+(`run request_kyc` → human approves a broker link → the broker signs an
+anonymized `{age_over_18}` claim → submit it to `POST /kiosk/agents/kyc`).
+Non-restricted groceries need no KYC. `rake demo:agecheck` drives the full
+two-server flow.
+
+This age-gate is the **proper home** of anonymized KYC: a low-liability
+*eligibility* check where the transaction closes. Anonymized KYC confirms a
+fact (over 18) without identifying the person — so it does **not** confer
+accountability, which is exactly why it is used here (eligibility) and NOT for
+high-liability actions where the operator needs to know *who* is on the hook.
+(getgrocery is a second broker operator; deploy allow-listing is a follow-up.)
 
 Payments need `STRIPE_SECRET_KEY` (sk_test_…, real test-mode charge) or a
 local stripe-mock — the tasks self-start one when no key is set; export

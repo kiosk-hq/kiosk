@@ -9,14 +9,15 @@ require "uri"
 # only to a pre-registered operator's callback host, and only when the caller
 # presents that operator's shared bearer secret.
 #
-# For the one-operator demo, skooti is pre-registered here. Each entry pins:
+# For the demo, two operators are pre-registered here: skooti (motorcycle
+# licence + age gate) and getgrocery (alcohol age gate). Each entry pins:
 #   secret        — the shared bearer secret the operator sends on intake
 #                   (Authorization: Bearer <secret>). Authenticates the operator.
 #   callback_host — the ONLY host prove.my will POST a callback to for this
 #                   operator (host allow-list — an SSRF guard). The intake's
 #                   callback_url must resolve to this host or the request is
-#                   rejected. In the demo the skooti host varies by port, so the
-#                   callback host is read from env (KIOSK_PROVE_SKOOTI_CALLBACK).
+#                   rejected. In the demo the operator host varies by port, so the
+#                   callback host is read from env (KIOSK_PROVE_<OP>_CALLBACK_HOST).
 #
 # Production shape: OAuth client-credentials / mTLS instead of a shared secret,
 # and a registration handshake instead of a static table (design §8.1 / Q1).
@@ -50,15 +51,23 @@ module OperatorRegistry
     uri.host == operator[:callback_host]
   end
 
-  # The static demo registry. skooti is the one pre-registered operator.
+  # The static demo registry. skooti and getgrocery are the two pre-registered
+  # operators.
   #   - secret: shared bearer; env-overridable, else a fixed demo default.
-  #   - callback_host: the skooti host prove.my may call back; env-set by the
-  #     two-server harness (which knows skooti's host:port), else localhost.
+  #   - callback_host: the operator host prove.my may call back; env-set by the
+  #     two-server harness (which knows the operator's host:port), else localhost.
   def registry
     {
       "skooti" => {
         secret:        ENV.fetch("KIOSK_PROVE_SKOOTI_SECRET", "prove-skooti-demo-shared-secret"),
         callback_host: ENV.fetch("KIOSK_PROVE_SKOOTI_CALLBACK_HOST", "127.0.0.1"),
+      },
+      # getgrocery is a SECOND operator — its alcohol age-gate asks the broker
+      # for the age_over_18 claim. Registered for the two-server test harness;
+      # a standing deploy allow-list entry is a follow-up.
+      "getgrocery" => {
+        secret:        ENV.fetch("KIOSK_PROVE_GETGROCERY_SECRET", "prove-getgrocery-demo-shared-secret"),
+        callback_host: ENV.fetch("KIOSK_PROVE_GETGROCERY_CALLBACK_HOST", "127.0.0.1"),
       },
     }
   end

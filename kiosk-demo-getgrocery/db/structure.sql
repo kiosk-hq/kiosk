@@ -145,7 +145,9 @@ CREATE TABLE kiosk.agents (
     public_key text,
     notification_pubkey text,
     created_at timestamp with time zone DEFAULT now() NOT NULL,
-    revoked_at timestamp with time zone
+    revoked_at timestamp with time zone,
+    kyc_verified_at timestamp with time zone,
+    kyc_attributes jsonb
 );
 
 
@@ -278,6 +280,21 @@ CREATE TABLE public.ar_internal_metadata (
 
 
 --
+-- Name: kyc_verification_requests; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.kyc_verification_requests (
+    request_token character varying NOT NULL,
+    user_id uuid NOT NULL,
+    status character varying DEFAULT 'pending'::character varying NOT NULL,
+    broker_nonce character varying,
+    kyc_jws text,
+    created_at timestamp(6) without time zone NOT NULL,
+    updated_at timestamp(6) without time zone NOT NULL
+);
+
+
+--
 -- Name: order_items; Type: TABLE; Schema: public; Owner: -
 --
 
@@ -337,7 +354,8 @@ CREATE TABLE public.products (
     price_cents integer NOT NULL,
     stock integer DEFAULT 0 NOT NULL,
     created_at timestamp(6) without time zone NOT NULL,
-    updated_at timestamp(6) without time zone NOT NULL
+    updated_at timestamp(6) without time zone NOT NULL,
+    age_restricted boolean DEFAULT false NOT NULL
 );
 
 
@@ -567,6 +585,14 @@ ALTER TABLE ONLY kiosk.settlements
 
 ALTER TABLE ONLY public.ar_internal_metadata
     ADD CONSTRAINT ar_internal_metadata_pkey PRIMARY KEY (key);
+
+
+--
+-- Name: kyc_verification_requests kyc_verification_requests_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.kyc_verification_requests
+    ADD CONSTRAINT kyc_verification_requests_pkey PRIMARY KEY (request_token);
 
 
 --
@@ -872,6 +898,10 @@ ALTER TABLE ONLY public.orders
 SET search_path TO "$user", public;
 
 INSERT INTO "schema_migrations" (version) VALUES
+('20260805000004'),
+('20260805000003'),
+('20260805000002'),
+('20260805000001'),
 ('20260717000001'),
 ('20260630000001'),
 ('20260618131463'),

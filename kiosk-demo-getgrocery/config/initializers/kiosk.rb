@@ -25,6 +25,8 @@ require Rails.root.join("lib/stub_user_idp")
 require Rails.root.join("lib/jwt_or_stub_idp")
 require Rails.root.join("lib/pow_difficulty")
 require Rails.root.join("lib/validating_payment_provider")
+require Rails.root.join("lib/prove_trust")
+require Rails.root.join("lib/prove_broker_client")
 require "kiosk/payment_providers/stripe"
 
 ActiveRecord::Migration.include(Kiosk::RLS::DSL)
@@ -153,6 +155,24 @@ Kiosk.configure do |c|
     currency: "eur",
   )
 
+  # ── KYC attestation verifier — trusts the prove.my broker ────────────────
+  # The alcohol age-gate (create_order rejecting a cart with an age_restricted
+  # item unless the agent carries age_over_18) reads the engine-verified
+  # kyc_attributes. getgrocery does NOT host its own issuer: it configures the
+  # SHARED prove.my broker as its kyc_issuer + kyc_public_key ONCE and asks the
+  # broker for exactly the ONE claim it needs (age_over_18 — NOT a driving
+  # licence). Trust anchors come from ProveTrust (env-overridable by the
+  # two-server harness, pinned dev fallback for plain boot). Same two config
+  # attributes the shipped KycVerifier already reads — no new framework surface.
+  c.kyc_issuer     = ProveTrust.issuer
+  c.kyc_public_key = ProveTrust.public_key
+  # OPERATOR-BINDING (aud): the engine KycVerifier REJECTS at the wire any
+  # attestation whose `aud` != this operator's kyc_audience — so a claim the
+  # broker minted for skooti cannot unlock getgrocery even before getgrocery's
+  # callback-layer operator check runs. getgrocery declares its stable broker
+  # handle ("getgrocery") as the audience, not its per-deploy origin URL.
+  c.kyc_audience   = ProveTrust.operator_id
+
   # ── Catalog-toll PoW gate (active only when KIOSK_POW_DEMO=1) ────────────
   if ENV["KIOSK_POW_DEMO"] == "1"
     c.reputation_policy  = GetgroceryCatalogPowPolicy.new(Kiosk::Pow::Equihash.params(**EQUIHASH_DEMO_PARAMS))
@@ -192,8 +212,10 @@ Kiosk::Server::Queries.register("catalog",
   description: "Browse in-stock products from the getgrocery catalog (out-of-stock items are hidden). " \
                "All prices are EUR cents — carts must be signed in eur at these exact prices. " \
                "Takes no parameters and returns the whole in-stock catalogue (small; not paginated); " \
-               "each row carries the stable `sku` (reference products by sku, never the numeric id) and a " \
-               "`low` flag when stock is running out.",
+               "each row carries the stable `sku` (reference products by sku, never the numeric id), a " \
+               "`low` flag when stock is running out, and an `age_restricted` flag on alcohol — an " \
+               "age_restricted item can only be ORDERED (create_order) by an agent that has completed an " \
+               "18+ anonymized-KYC check (run request_kyc first); non-restricted items need no KYC.",
   params: {},
   input_schema: {
     type: "object",
@@ -208,12 +230,15 @@ Kiosk::Server::Queries.register("catalog",
   }) do |_params|
   conn = ActiveRecord::Base.connection
   rows = conn.execute(
-    "SELECT sku, name, price_cents, stock FROM products WHERE stock > 0 ORDER BY name"
+    "SELECT sku, name, price_cents, stock, age_restricted FROM products WHERE stock > 0 ORDER BY name"
   ).to_a
   rows.map do |r|
     row = { "sku" => r["sku"], "name" => r["name"], "price_cents" => r["price_cents"],
             "price_eur" => Product.format_eur(r["price_cents"]), "currency" => "eur" }
     row["low"] = true if r["stock"].to_i <= LOW_STOCK_THRESHOLD
+    # Advertise the 18+ gate on alcohol so an assistant knows to complete
+    # anonymized KYC (request_kyc) BEFORE it tries to order this item.
+    row["age_restricted"] = true if r["age_restricted"] == true || r["age_restricted"] == "t"
     row
   end
 end
@@ -359,12 +384,47 @@ Kiosk::Server::Actions.register("create_order",
     # Resolve skus → product id + price (consumer references products by sku, not the numeric id)
     quoted_skus = items.map { |i| conn.quote(i[:sku]) }.uniq.join(", ")
     product_rows = conn.execute(
-      "SELECT id, sku, price_cents FROM products WHERE sku IN (#{quoted_skus})"
+      "SELECT id, sku, price_cents, age_restricted FROM products WHERE sku IN (#{quoted_skus})"
     ).to_a
     by_sku = product_rows.each_with_object({}) { |r, h| h[r["sku"]] = r }
 
     missing = items.map { |i| i[:sku] }.uniq.reject { |s| by_sku.key?(s) }
     raise Kiosk::Server::Errors::BadRequest.new("unknown sku(s): #{missing.join(", ")}") unless missing.empty?
+
+    # ── Age gate: any age_restricted item in the cart requires age_over_18 ────
+    # KYC-DEMO-SCOPE (b): anonymized minimal KYC belongs on a LOW-liability
+    # eligibility gate where the transaction closes (an alcohol PURCHASE), not on
+    # high-liability rental. If the cart contains ANY age_restricted product, the
+    # authenticated agent must carry an engine-verified age_over_18 attestation.
+    # Only booleans a valid, broker-signed attestation granted are ever persisted
+    # in kiosk_attributes — a forged/self-asserted claim never reaches this column
+    # (POST /kiosk/agents/kyc rejects a bad signature). A cart with no restricted
+    # item skips this entirely (unchanged path). Read the flag as boolean-safe.
+    has_restricted = items.any? do |i|
+      v = by_sku[i[:sku]]["age_restricted"]
+      v == true || v == "t" || v == "true"
+    end
+    if has_restricted
+      kyc_row = conn.execute(<<~SQL).first
+        SELECT COALESCE(kyc_attributes ->> 'age_over_18', 'false') AS age_over_18
+        FROM kiosk.agents
+        WHERE id = kiosk.current_agent_id()
+          AND revoked_at IS NULL
+      SQL
+      unless kyc_row && kyc_row["age_over_18"] == "true"
+        raise Kiosk::Server::Errors::KycRequired.new(
+          "this cart contains an age-restricted (alcohol) item — an 18+ verification is required to order it",
+          # Point an external agent at the completable path: `run request_kyc`
+          # returns a verification_url the human approves, then poll `query
+          # kyc_status` for the signed attestation and submit it to POST
+          # /kiosk/agents/kyc — no pre-shared issuer key needed.
+          hint: "call `run request_kyc` to start an 18+ (age_over_18) verification: " \
+                "it returns a verification_url for the human to approve; then poll " \
+                "`query kyc_status` for the signed attestation and submit it to " \
+                "POST /kiosk/agents/kyc, then retry create_order",
+        )
+      end
+    end
 
     total_cents = items.sum { |i| by_sku[i[:sku]]["price_cents"].to_i * i[:qty] }
 
@@ -500,5 +560,100 @@ Kiosk::Server::Actions.register("reschedule_delivery",
     )
 
     { order_id: order_id, rescheduled_at: slot_at.iso8601 }
+  end
+end
+
+# request_kyc — start an 18+ verification at the prove.my broker an EXTERNAL
+# agent can COMPLETE without any pre-shared issuer key (design §5.1). Instead of
+# minting a local token, getgrocery calls prove.my's intake (server-to-server)
+# with its own callback_url, the SINGLE claim it needs (age_over_18 — NOT a
+# driving licence), and the agent's user_id as the subject the claim must bind
+# to. The broker returns an unguessable verification_url (on the BROKER) and a
+# request_id; getgrocery stores that request_id as this row's request_token (+
+# the broker's nonce for callback anti-replay) and returns the broker's
+# verification_url for the agent to relay to its human. On approve, the BROKER
+# signs an anonymized {age_over_18} claim and POSTs it to getgrocery's POST
+# /kyc/callback; the agent then polls `query kyc_status` and submits the returned
+# jws to POST /kiosk/agents/kyc, then retries create_order for the alcohol cart.
+Kiosk::Server::Actions.register("request_kyc",
+  description: "Start an 18+ (age_over_18) verification for the authenticated principal — required only to " \
+               "order an age_restricted (alcohol) item. Returns a verification_url to relay to your human to " \
+               "approve (an anonymizing KYC broker confirms the fact and signs it — it never shares the " \
+               "documents) and a request_id. After the human approves, poll `query kyc_status` with the " \
+               "request_id for the signed attestation, submit it to POST /kiosk/agents/kyc, then retry " \
+               "create_order. No pre-shared issuer key needed.",
+  params: {}) do |_args|
+  conn = ActiveRecord::Base.connection
+
+  uid = conn.execute("SELECT kiosk.current_user_id() AS uid").first["uid"]
+  raise Kiosk::Server::Errors::Unauthenticated.new("no authenticated user") if uid.nil?
+
+  # Call the broker's intake server-to-server. getgrocery hands the broker its
+  # own callback URL, the single claim it needs, and the agent's user_id (the
+  # subject the signed claim must bind to). The broker mints the unguessable
+  # request_id + verification_url on ITS side.
+  callback_base = Kiosk.configuration.issuer.to_s.chomp("/")
+  broker = ProveBrokerClient.start_verification(
+    callback_url:     "#{callback_base}/kyc/callback",
+    requested_claims: %w[age_over_18],
+    subject_handle:   uid.to_s,
+  )
+
+  request_id       = broker.fetch("request_id")
+  verification_url = broker.fetch("verification_url")
+  nonce            = broker["nonce"].to_s
+
+  # Store the BROKER's request_id as our local request_token so kyc_status
+  # (below) polls it, plus the broker nonce the callback must echo.
+  conn.execute(<<~SQL)
+    INSERT INTO public.kyc_verification_requests
+      (request_token, user_id, broker_nonce, status, created_at, updated_at)
+    VALUES (#{conn.quote(request_id)}, #{conn.quote(uid)}::uuid, #{conn.quote(nonce)}, 'pending', now(), now())
+  SQL
+
+  {
+    request_id:       request_id,
+    verification_url: verification_url,
+    status:           "pending",
+  }
+end
+
+# kyc_status — poll a request_kyc verification the authenticated agent opened.
+# Scoped to kiosk.current_user_id(): an agent can only read its OWN request, so
+# it cannot poll (or lift the jws from) another agent's request.
+#
+# args: { request_id: <token from request_kyc> }
+# Returns one row:
+#   { status: "pending" }                         while the human has not acted
+#   { status: "approved", kyc_jws: "<compact JWS>" } once approved — submit the
+#     kyc_jws to POST /kiosk/agents/kyc, then retry create_order
+#   { status: "declined" }                        if the human declined
+Kiosk::Server::Queries.register("kyc_status",
+  description: "Poll a request_kyc verification by its request_id. Returns {status: \"pending\"} until the " \
+               "human acts; {status: \"approved\", kyc_jws} once approved (submit the kyc_jws to " \
+               "POST /kiosk/agents/kyc, then retry create_order); {status: \"declined\"} if declined.",
+  params: { request_id: "string — the request_id returned by request_kyc" }) do |params|
+  request_id = params[:request_id]
+  if request_id.nil? || request_id.to_s.empty?
+    raise Kiosk::Server::Errors::BadRequest.new("missing field: request_id")
+  end
+
+  conn = ActiveRecord::Base.connection
+  # Bound to the caller: user_id = kiosk.current_user_id() means an agent only
+  # ever sees the status (and jws) of a request IT opened.
+  row = conn.execute(
+    "SELECT status, kyc_jws " \
+    "FROM public.kyc_verification_requests " \
+    "WHERE request_token = #{conn.quote(request_id.to_s)} " \
+    "AND user_id = kiosk.current_user_id() " \
+    "LIMIT 1"
+  ).first
+  raise Kiosk::Server::Errors::NotFound.new("no such verification request for this principal") if row.nil?
+
+  status = row["status"]
+  if status == "approved"
+    [{ "status" => "approved", "kyc_jws" => row["kyc_jws"] }]
+  else
+    [{ "status" => status }]
   end
 end

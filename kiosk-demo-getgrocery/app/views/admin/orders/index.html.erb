@@ -199,7 +199,13 @@
         rescue
           order["created_at"].to_s
         end
-        cur_glyph  = "€"  # this operator settles in EUR (the cashier rejects any other currency at capture)
+        # Glyph reflects the currency the order actually SETTLED in (the controller
+        # exposes settled_currency from kiosk.settlements). Unpaid orders have none,
+        # so fall back to € — this operator's cashier is EUR-only today, so in
+        # practice paid orders also settle EUR, but a non-EUR settlement would now
+        # render its own glyph rather than a hardcoded €.
+        cur_glyph  = { "usd" => "$", "gbp" => "£", "eur" => "€" }
+                       .fetch(order["settled_currency"].to_s.downcase, "€")
         total_str  = format("%s%.2f", cur_glyph, order["total_cents"].to_i / 100.0)
         items      = order["items"] || []
 

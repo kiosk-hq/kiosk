@@ -106,8 +106,8 @@ Kiosk.configure do |c|
     c.owner = c.owner.merge(pow_difficulty: PowDifficulty.level, pow_notice: notice)
   end
   # Dual-check (skill.md): canonical skill URL + SHA-256 of its content.
-  c.skill_url    = "https://kiosk.tech/skill-v0.3.7.md"
-  c.skill_sha256 = "5cc4d9d5372559aa6d03505b449d9c59b88fd4536872aa186899eca1357341c0"
+  c.skill_url    = "https://kiosk.tech/skill-v0.3.8.md"
+  c.skill_sha256 = "7c3d06402bae212288c4538c1510f123652ffa5b2b07dbc4b79ee6871c45c931"
 
   c.agent_idp = JwtOrStubIdp.new(stub: StubIdp.new)
   # The provider's own web-session channel: authenticates the approving
@@ -359,13 +359,6 @@ Kiosk::Server::Actions.register("payment_setup",
                "Returns {status: \"setup_required\", setup_url: \"…\"} when no card is saved — " \
                "the assistant must hand the setup_url to the human, wait for them to complete the " \
                "Stripe-hosted card entry, then call payment_setup again before paying. " \
-               "IMPORTANT — relay the setup_url to the human COMPLETE and VERBATIM: it is a full URL " \
-               "that includes a REQUIRED fragment (the long opaque part after `#`). If you shorten, " \
-               "truncate, wrap, or drop any of it — especially the `#…` fragment — Stripe's page shows " \
-               "\"Something went wrong\". Copy the entire string exactly; do not summarise or abbreviate it. " \
-               "Each setup_url is a fresh single-use Stripe Checkout session minted on THIS call — " \
-               "never cache or reuse one. If the human reports the hosted page errored, do NOT reuse " \
-               "the old URL — call payment_setup again to mint a new setup_url and hand that over. " \
                "The assistant should call this before every `pay` invocation on a new device or session.",
   params: {}) do |_args|
   conn     = ActiveRecord::Base.connection

@@ -4,7 +4,7 @@
 #
 # Proves the optional Equihash registration gate: POST /auth/register with no
 # proof returns 402; the agent solves the challenge(s) and resubmits the SAME
-# signed body with pow:{proofs:}, getting 201. Then the fresh token queries
+# signed body, sending the proof(s) in the Kiosk-PoW request header, getting 201. Then queries
 # `salons`. One JSON line on stdout.
 #
 # Usage (invoked by rake demo:register — needs KIOSK_POW_REGISTER_DEMO=1):
@@ -61,7 +61,7 @@ abort "402 without challenges[]" unless challenges.is_a?(Array) && challenges.an
 
 # ── Solve and resubmit the SAME signed body → expect 201 ────────────────────
 proofs = challenges.map { |c| { challenge: c, nonce: solve(c) } }
-rc_reg, reg = post_json("#{SERVER}/kiosk/auth/register", reg_body.merge(pow: { proofs: proofs }))
+rc_reg, reg = post_json("#{SERVER}/kiosk/auth/register", reg_body, { "Kiosk-PoW" => JSON.generate(proofs) })
 abort "register with proof failed (#{rc_reg}): #{JSON.generate(reg)}" unless rc_reg == 201
 token = reg.fetch("access_token")
 

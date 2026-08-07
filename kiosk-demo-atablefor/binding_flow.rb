@@ -156,7 +156,7 @@ STDERR.puts "  Assistant booked table #{booking_id} (#{tomorrow} #{time}, party 
 rc, mine = post_json("/kiosk/query", { name: "my_bookings" }, bearer(token))
 abort "my_bookings failed (#{rc}): #{JSON.generate(mine)}" unless rc == 200
 rows = mine.fetch("rows", [])
-results[:my_bookings_has_it] = rows.any? { |r| r["id"] == booking_id && r["status"] == "confirmed" }
+results[:my_bookings_has_it] = rows.any? { |r| r["booking_id"] == booking_id && r["status"] == "confirmed" }
 STDERR.puts "  my_bookings (assistant token) shows the booking: #{results[:my_bookings_has_it]}"
 
 puts JSON.generate(results)

@@ -363,9 +363,9 @@ end
 # demonstrates app-layer per-user isolation: the principal can only see rows
 # where user_id matches kiosk.current_user_id(), enforced in the query itself.
 Kiosk::Server::Queries.register("my_bookings",
-                                 description: "List this principal's table bookings (scoped to authenticated user via kiosk.current_user_id())") do |_params|
+                                 description: "List this principal's table bookings (scoped to authenticated user via kiosk.current_user_id()). Each row carries a `booking_id`; pass it to cancel_booking as `booking_id`.") do |_params|
   ActiveRecord::Base.connection.execute(
-    "SELECT b.id, b.restaurant_id, r.name AS restaurant, ts.table_label, " \
+    "SELECT b.id AS booking_id, b.restaurant_id, r.name AS restaurant, ts.table_label, " \
     "b.table_slot_id, b.party_size, b.status, " \
     "to_char(ts.slot_date, 'YYYY-MM-DD') AS slot_date, " \
     "to_char(ts.slot_time, 'HH24:MI')    AS slot_time " \

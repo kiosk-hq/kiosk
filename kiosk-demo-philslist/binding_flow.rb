@@ -173,7 +173,7 @@ results[:wire_post] = rc
 listing_id = posted.dig("value", "listing_id")
 results[:listing_id] = listing_id
 rc, mine = post_json("/kiosk/query", { name: "my_listings" }, { "Authorization" => "Bearer #{token1}" })
-results[:a1_sees_listing] = rc == 200 && mine.fetch("rows", []).any? { |r| r["id"] == listing_id }
+results[:a1_sees_listing] = rc == 200 && mine.fetch("rows", []).any? { |r| r["listing_id"] == listing_id }
 STDERR.puts "  Posted listing #{listing_id} as the account holder"
 
 # ══ MANAGE ASSISTANTS page: the signed-in human sees assistant 1 listed. ═════
@@ -198,7 +198,7 @@ STDERR.puts "  Second assistant redeemed the link code: agent_id=#{agent2}"
 
 # The second assistant sees the SAME account: assistant 1's listing.
 rc, mine2 = post_json("/kiosk/query", { name: "my_listings" }, { "Authorization" => "Bearer #{token2}" })
-results[:a2_sees_listing] = rc == 200 && mine2.fetch("rows", []).any? { |r| r["id"] == listing_id }
+results[:a2_sees_listing] = rc == 200 && mine2.fetch("rows", []).any? { |r| r["listing_id"] == listing_id }
 
 # And the second assistant can EDIT the household listing (multi-account write).
 rc, = post_json("/kiosk/run",

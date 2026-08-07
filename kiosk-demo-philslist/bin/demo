@@ -105,7 +105,7 @@ say "✓ closed listing $LISTING_ID"
 step "my_listings reflects the final state (the desk is now closed)"
 MINE=$(q "$ALICE_TOKEN" '{"name":"my_listings"}')
 echo "$MINE" | jq '.rows | map({title, status, price_text})'
-echo "$MINE" | jq -e --arg id "$LISTING_ID" '.rows[] | select(.id == $id) | .status == "closed"' >/dev/null \
+echo "$MINE" | jq -e --arg id "$LISTING_ID" '.rows[] | select(.listing_id == $id) | .status == "closed"' >/dev/null \
   || fail "my_listings does not show the posted desk as closed"
 say "✓ my_listings shows the desk closed at €120"
 

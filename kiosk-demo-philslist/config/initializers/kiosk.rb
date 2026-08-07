@@ -140,7 +140,8 @@ Kiosk::Server::Queries.register(
   "browse_listings",
   description: "Browse the public classifieds board across all sellers. Optional " \
                "category_slug and keyword filters; status defaults to open. All " \
-               "filters are optional and AND together; each row carries the id, " \
+               "filters are optional and AND together; each row carries a " \
+               "`listing_id` (pass it to edit_listing / close_listing as `listing_id`), " \
                "title, body, free-form price_text, category_slug, status, and " \
                "owner_handle. Returns all matching listings (small board; not " \
                "paginated); prices are free-form text (e.g. \"€300\"), not cents.",
@@ -164,7 +165,7 @@ Kiosk::Server::Queries.register(
   },
   example_params: { category_slug: "bikes", keyword: "road", status: "open" },
   example_row: {
-    id: "9c1d2e3f-4a5b-4c6d-8e7f-0a1b2c3d4e5f", title: "Carbon road bike — €300",
+    listing_id: "9c1d2e3f-4a5b-4c6d-8e7f-0a1b2c3d4e5f", title: "Carbon road bike — €300",
     body: "Lightweight carbon road bike, 54cm, Shimano 105 groupset.",
     price_text: "€300", category_slug: "bikes", status: "open",
     owner_handle: "alice@example.com",
@@ -176,7 +177,7 @@ Kiosk::Server::Queries.register(
   status = "open" unless Listing::STATUSES.include?(status)
 
   sql = +<<~SQL
-    SELECT l.id, l.title, l.body, l.price_text, c.slug AS category_slug,
+    SELECT l.id AS listing_id, l.title, l.body, l.price_text, c.slug AS category_slug,
            l.status, u.email AS owner_handle
       FROM listings l
       JOIN categories c ON c.id = l.category_id
@@ -206,7 +207,7 @@ Kiosk::Server::Queries.register(
   params: {},
 ) do |_params|
   ActiveRecord::Base.connection.execute(
-    "SELECT l.id, l.title, l.price_text, l.status, c.slug AS category_slug " \
+    "SELECT l.id AS listing_id, l.title, l.price_text, l.status, c.slug AS category_slug " \
     "FROM listings l JOIN categories c ON c.id = l.category_id " \
     "WHERE l.owner_id = kiosk.current_user_id() " \
     "ORDER BY l.created_at DESC, l.id",

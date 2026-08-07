@@ -213,7 +213,7 @@ rc, b_rsv_resp = post_json(
 )
 abort "B my_reservations failed (#{rc}): #{JSON.generate(b_rsv_resp)}" unless rc == 200
 
-b_reservation_ids = (b_rsv_resp["rows"] || []).map { |r| r["id"] }
+b_reservation_ids = (b_rsv_resp["rows"] || []).map { |r| r["reservation_id"] }
 STDERR.puts "  B my_reservations: #{b_reservation_ids.inspect}"
 
 # ── Step 6: B calls start_rental on A's reservation_id (Assertion 1) ────────

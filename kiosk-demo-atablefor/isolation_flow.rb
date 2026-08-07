@@ -112,7 +112,7 @@ rc, b_before_resp = post_json(
   { "Authorization" => "Bearer #{b[:token]}" },
 )
 abort "B my_bookings (before) failed (#{rc}): #{JSON.generate(b_before_resp)}" unless rc == 200
-b_booking_ids_before = (b_before_resp["rows"] || []).map { |r| r["id"] }
+b_booking_ids_before = (b_before_resp["rows"] || []).map { |r| r["booking_id"] }
 
 # ── Step 5: B books with a FORGED user_id arg (Assertion 2) ──────────────────
 # B picks a different open slot (not A's), and injects A's user_id — the server
@@ -140,7 +140,7 @@ rc, b_after_resp = post_json(
   { "Authorization" => "Bearer #{b[:token]}" },
 )
 abort "B my_bookings (after) failed (#{rc}): #{JSON.generate(b_after_resp)}" unless rc == 200
-b_booking_ids_after = (b_after_resp["rows"] || []).map { |r| r["id"] }
+b_booking_ids_after = (b_after_resp["rows"] || []).map { |r| r["booking_id"] }
 
 # ── Step 7: A queries my_bookings AFTER B's forged booking (must NOT include oB) ─
 rc, a_after_resp = post_json(
@@ -149,7 +149,7 @@ rc, a_after_resp = post_json(
   { "Authorization" => "Bearer #{a[:token]}" },
 )
 abort "A my_bookings (after) failed (#{rc}): #{JSON.generate(a_after_resp)}" unless rc == 200
-a_booking_ids_after = (a_after_resp["rows"] || []).map { |r| r["id"] }
+a_booking_ids_after = (a_after_resp["rows"] || []).map { |r| r["booking_id"] }
 
 # ── Output ONE JSON line ──────────────────────────────────────────────────────
 puts JSON.generate(

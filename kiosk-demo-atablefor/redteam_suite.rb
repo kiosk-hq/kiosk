@@ -78,7 +78,7 @@ abort "no booking_id from A's booking: #{JSON.generate(alice_book)}" unless alic
 
 # ── CrossTenantRead — Bob must not see Alice's booking in my_bookings ─────────
 rc, b_mine = post_json("/kiosk/query", { name: "my_bookings" }, bearer(TOKEN_B))
-b_ids = (b_mine["rows"] || []).map { |r| r["id"] }
+b_ids = (b_mine["rows"] || []).map { |r| r["booking_id"] }
 record(results, "CrossTenantRead",
        rc == 200 && !b_ids.include?(alice_booking_id),
        "Bob's my_bookings #{b_ids.inspect} excludes Alice's #{alice_booking_id}")
@@ -92,7 +92,7 @@ rc, forged = post_json("/kiosk/run",
 forged_id = forged.dig("value", "booking_id")
 # The forged booking must NOT surface in Alice's my_bookings (it belongs to Bob).
 rc_a, a_mine = post_json("/kiosk/query", { name: "my_bookings" }, bearer(TOKEN_A))
-a_ids = (a_mine["rows"] || []).map { |r| r["id"] }
+a_ids = (a_mine["rows"] || []).map { |r| r["booking_id"] }
 record(results, "ForgedUserId",
        rc == 200 && rc_a == 200 && !a_ids.include?(forged_id),
        "Alice's bookings #{a_ids.inspect} exclude Bob's forged #{forged_id.inspect}")

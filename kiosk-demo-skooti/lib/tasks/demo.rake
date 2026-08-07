@@ -487,11 +487,11 @@ namespace :demo do
       )
       if qa3_rc == 200
         rows_after = qa3_resp["rows"] || []
-        if rows_after.size == 1 && rows_after.first["id"] == q_reservation_id
-          puts "  OK  QA3 my_reservations (after reserve): exactly 1 row, id matches"
+        if rows_after.size == 1 && rows_after.first["reservation_id"] == q_reservation_id
+          puts "  OK  QA3 my_reservations (after reserve): exactly 1 row, reservation_id matches"
         else
-          failures << "qa3: my_reservations expected [{id:#{q_reservation_id}}], got #{rows_after.inspect}"
-          puts "  FAIL  QA3 my_reservations after reserve: expected 1 row with id=#{q_reservation_id}, got #{rows_after.inspect}"
+          failures << "qa3: my_reservations expected [{reservation_id:#{q_reservation_id}}], got #{rows_after.inspect}"
+          puts "  FAIL  QA3 my_reservations after reserve: expected 1 row with reservation_id=#{q_reservation_id}, got #{rows_after.inspect}"
         end
       else
         failures << "qa3: query my_reservations expected 200, got #{qa3_rc}"

@@ -204,9 +204,9 @@ end
 # only see rows where user_id matches kiosk.current_user_id(), enforced in
 # the query definition itself.
 Kiosk::Server::Queries.register("my_reservations",
-                                 description: "List this principal's scooter reservations (scoped to authenticated user via kiosk.current_user_id())") do |_params|
+                                 description: "List this principal's scooter reservations (scoped to authenticated user via kiosk.current_user_id()). Each row carries a `reservation_id`; pass it to start_rental / rent_motorcycle as `reservation_id`.") do |_params|
   ActiveRecord::Base.connection.execute(
-    "SELECT id, scooter_id, status " \
+    "SELECT id AS reservation_id, scooter_id, status " \
     "FROM public.reservations " \
     "WHERE user_id = kiosk.current_user_id() " \
     "ORDER BY created_at DESC"

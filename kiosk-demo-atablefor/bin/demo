@@ -140,7 +140,7 @@ if [[ "$MY_COUNT" != "1" ]]; then
   echo "✗ my_bookings expected exactly 1 row, got ${MY_COUNT} — response: $MY_RESP" >&2
   exit 1
 fi
-MY_BOOKING_ID=$(printf '%s\n' "$MY_RESP" | jq -r '.rows[0].id // empty')
+MY_BOOKING_ID=$(printf '%s\n' "$MY_RESP" | jq -r '.rows[0].booking_id // empty')
 if [[ "$MY_BOOKING_ID" != "$BOOKING_ID" ]]; then
   echo "✗ my_bookings row id ($MY_BOOKING_ID) != booking id ($BOOKING_ID) — response: $MY_RESP" >&2
   exit 1

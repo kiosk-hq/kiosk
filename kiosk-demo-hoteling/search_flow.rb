@@ -7,7 +7,7 @@
 #      page that carries a top-level `next` (truncated).
 #   2. Echo `next` back as `cursor` → the FOLLOWING page (different rows).
 #   3. A filtered search that fits in one page → NO `next` (complete).
-#   4. hotel_detail on a summary row's id → the full property (rooms present).
+#   4. hotel_detail on a summary row's property_id → the full property (rooms present).
 #
 # Usage (invoked by rake demo:search — do not run standalone without the server):
 #   SERVER_URL=http://127.0.0.1:3004 KIOSK_ISSUER=http://127.0.0.1:3004 \
@@ -62,7 +62,7 @@ rc1, p1 = post_json("/kiosk/query", { name: "search_hotels", limit: LIMIT }, bea
 abort "search page1 failed (#{rc1}): #{JSON.generate(p1)}" unless rc1 == 200
 page1_rows = p1["rows"] || []
 page1_next = p1["next"]
-page1_ids  = page1_rows.map { |r| r["id"] }
+page1_ids  = page1_rows.map { |r| r["property_id"] }
 STDERR.puts "  Page 1: #{page1_rows.size} rows, next=#{page1_next.inspect}"
 
 # ── 2. Echo `next` as `cursor` → the FOLLOWING page ─────────────────────────
@@ -70,7 +70,7 @@ rc2, p2 = post_json("/kiosk/query",
   { name: "search_hotels", limit: LIMIT, cursor: page1_next }, bearer: token)
 abort "search page2 failed (#{rc2}): #{JSON.generate(p2)}" unless rc2 == 200
 page2_rows = p2["rows"] || []
-page2_ids  = page2_rows.map { |r| r["id"] }
+page2_ids  = page2_rows.map { |r| r["property_id"] }
 STDERR.puts "  Page 2: #{page2_rows.size} rows, next=#{p2["next"].inspect}"
 
 # Are page 1 and page 2 disjoint (real paging, not the same slice)?
@@ -85,8 +85,8 @@ filtered_rows      = p3["rows"] || []
 filtered_has_next  = p3.key?("next")
 STDERR.puts "  Filtered: #{filtered_rows.size} rows, next present? #{filtered_has_next}"
 
-# ── 4. hotel_detail on a summary row's id → full property with rooms ─────────
-detail_id = page1_rows.first && page1_rows.first["id"]
+# ── 4. hotel_detail on a summary row's property_id → full property with rooms ─
+detail_id = page1_rows.first && page1_rows.first["property_id"]
 rc4, p4 = post_json("/kiosk/query", { name: "hotel_detail", property_id: detail_id }, bearer: token)
 abort "hotel_detail failed (#{rc4}): #{JSON.generate(p4)}" unless rc4 == 200
 detail = p4["rows"] || {}

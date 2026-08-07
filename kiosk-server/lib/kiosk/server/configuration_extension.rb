@@ -292,6 +292,28 @@ module Kiosk
       # cap. Default nil = all-time cumulative. E.g. 7 for a weekly allowance.
       attr_accessor :spending_cap_window_days
 
+      # ── Request-shape validation (opt-in; UNIFORM-VALIDATION slice-1) ─────
+
+      # When true, {WireController} validates a PRESENT `pow` field on a wire
+      # request against the vendored normative PoW schema BEFORE {PowGate.gate}
+      # consumes it, and rejects a malformed shape with a `bad_request` (400)
+      # carrying a hint naming the expected shape — instead of the K-479 silent
+      # re-challenge loop (a malformed pow whose proofs {PowGate.extract_proofs}
+      # cannot parse yields [], so the gate re-issues a fresh 402 forever with no
+      # diagnostic). Default false = byte-identical old behaviour.
+      #
+      # This is a SHAPE check in front of the gate — NOT a replacement for it: a
+      # well-formed-but-forged proof still fails the real cryptographic
+      # verification inside the gate. An ABSENT pow is untouched (the initial
+      # no-pow request still gets its normal 402 challenge). Requires the OPTIONAL
+      # `json_schemer` gem; if this is on but the gem is not loadable, the first
+      # validation raises a {Errors::ConfigurationError} naming it. The demos turn
+      # this on; the fuller uniform-validation layer is v0.5 (T-045).
+      attr_writer :validate_requests
+      def validate_requests
+        @validate_requests ||= false
+      end
+
       # ── PoW challenge-response gate (R2) ──────────────────────────────────
 
       # Reputation policy that decides when and how hard to challenge a request.

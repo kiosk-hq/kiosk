@@ -25,6 +25,11 @@ gem "kiosk-pow-equihash",       path: "../kiosk-pow-equihash"
 gem "kiosk-reputation",         path: "../kiosk-reputation"
 gem "kiosk-redteam",            path: "../kiosk-redteam"
 
+# Opt-in request-shape validation (c.validate_requests = true) — kiosk-server
+# lazily requires json_schemer only when the flag is on (UNIFORM-VALIDATION
+# slice-1, K-479).
+gem "json_schemer"
+
 group :development, :test do
   # See https://guides.rubyonrails.org/debugging_rails_applications.html#debugging-with-the-debug-gem
   gem "debug", platforms: %i[ mri windows ], require: "debug/prelude"

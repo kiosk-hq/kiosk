@@ -12,6 +12,7 @@ if defined?(::ActionController::API)
   require "kiosk/server/errors"
   require "kiosk/server/headers"
   require "kiosk/server/pow_gate"
+  require "kiosk/server/request_validation"
 
   module Kiosk
     module Server
@@ -68,6 +69,19 @@ if defined?(::ActionController::API)
           # args, and must be excluded from BOTH the challenge fingerprint (which
           # binds to the pow-less original request) and the Executor dispatch.
           pow, body = PowGate.split_pow(args)
+
+          # Opt-in request-shape validation (UNIFORM-VALIDATION slice-1, K-479).
+          # Only when the flag is on AND a pow was actually submitted: validate
+          # its shape against the vendored normative schema so a MALFORMED pow
+          # (e.g. `{solutions:[…]}` instead of `{proofs:[{challenge:,nonce:}]}`)
+          # raises a clear 400 with a shape hint — instead of PowGate silently
+          # extracting [] proofs and re-issuing a fresh 402 on every retry. An
+          # ABSENT pow is left untouched (the initial request must still get its
+          # normal 402 challenge), and a WELL-FORMED pow passes through unchanged
+          # to the gate below, which still does the real cryptographic check.
+          if Kiosk.configuration.validate_requests && !PowGate.blank?(pow)
+            RequestValidation.validate_pow!(pow)
+          end
 
           PowGate.gate(
             identity: identity,

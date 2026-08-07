@@ -16,6 +16,11 @@ gem "kiosk-reputation",   path: "../kiosk-reputation"
 gem "kiosk-redteam",      path: "../kiosk-redteam"
 gem "kiosk-pay-stripe",   path: "../kiosk-pay-stripe"
 
+# Opt-in request-shape validation (c.validate_requests = true) — kiosk-server
+# lazily requires json_schemer only when the flag is on (UNIFORM-VALIDATION
+# slice-1, K-479).
+gem "json_schemer"
+
 group :development, :test do
   gem "debug", platforms: %i[ mri windows ], require: "debug/prelude"
 end

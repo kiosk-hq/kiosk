@@ -1,0 +1,71 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://kiosk.tech/spec/schemas/pow.schema.json",
+  "$comment": "VENDORED copy of the normative kiosk.tech schema at spec/schemas/pow.schema.json. This file is self-contained (no cross-file $ref). Keeping it in sync with the upstream normative copy is tracked as T-045.",
+  "title": "Kiosk proof-of-work",
+  "description": "The PoW challenge object (issued in a pow_required 402) and the pow field an agent adds to the retried request body.",
+  "$ref": "#/$defs/powField",
+  "$defs": {
+    "challenge": {
+      "type": "object",
+      "description": "A single stateless, request-bound PoW challenge.",
+      "required": ["id", "alg", "params", "salt", "exp", "sig"],
+      "properties": {
+        "id": { "type": "string", "description": "Opaque unique challenge id." },
+        "alg": { "type": "string", "description": "Algorithm name, e.g. \"equihash\"." },
+        "params": {
+          "type": "object",
+          "description": "Algorithm-specific parameters. For equihash: {n, k}.",
+          "properties": {
+            "n": { "type": "integer" },
+            "k": { "type": "integer" }
+          }
+        },
+        "salt": { "type": "string", "description": "Base64 random salt; no amortization across challenges." },
+        "exp": { "type": "integer", "description": "Unix expiry; scales with the number of requested proofs." },
+        "sig": { "type": "string", "description": "HMAC-SHA256 over the challenge fields plus a fingerprint of the exact request." }
+      }
+    },
+    "proof": {
+      "type": "object",
+      "description": "One solved challenge: the challenge echoed back verbatim plus its solution.",
+      "required": ["challenge", "nonce"],
+      "properties": {
+        "challenge": { "$ref": "#/$defs/challenge" },
+        "nonce": {
+          "type": "object",
+          "description": "The Equihash solution.",
+          "required": ["indices"],
+          "properties": {
+            "indices": {
+              "type": "array",
+              "description": "u64 indices in Zcash canonical (subtree/tree) order; NOT a global ascending sort.",
+              "items": { "type": "integer" }
+            },
+            "header_nonce": {
+              "type": "integer",
+              "description": "OPTIONAL u32, default 0. Folded into the PoW seed after the salt bytes as a little-endian u32; an extensibility point (currently always 0). A verifier reconstructs the seed as salt-bytes || header_nonce(LE u32), so a proof solved for a non-zero header_nonce MUST carry it."
+            }
+          }
+        }
+      }
+    },
+    "powField": {
+      "description": "The top-level pow field added to the retried request body. Either the N-proof list or the single-proof shorthand.",
+      "oneOf": [
+        {
+          "type": "object",
+          "required": ["proofs"],
+          "properties": {
+            "proofs": {
+              "type": "array",
+              "minItems": 1,
+              "items": { "$ref": "#/$defs/proof" }
+            }
+          }
+        },
+        { "$ref": "#/$defs/proof" }
+      ]
+    }
+  }
+}

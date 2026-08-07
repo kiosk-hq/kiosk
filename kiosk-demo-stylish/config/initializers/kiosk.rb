@@ -53,6 +53,13 @@ Kiosk.configure do |c|
   c.system_role = ENV.fetch("KIOSK_SYSTEM_ROLE", "app_role")
 
   c.issuer = ENV.fetch("KIOSK_ISSUER", "http://localhost:3001")
+
+  # UNIFORM-VALIDATION slice-1 (K-479): validate a PRESENT `pow` field against
+  # the normative PoW schema at the wire choke point, so a malformed pow gets a
+  # clear 400 bad_request (with a shape hint) instead of a silent re-issued 402
+  # loop. Needs the json_schemer gem (in the Gemfile). Absent/valid pow paths
+  # unchanged.
+  c.validate_requests = true
   # stylish is dual-audience: CUSTOMERS book (customer), salon STAFF manage
   # the calendar (owner / stylist). Staff roles are sourced from the
   # provider's own IdP (roles-from-IdP) — see the StubUserIdp and the

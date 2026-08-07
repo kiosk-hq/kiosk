@@ -13,6 +13,11 @@ gem "kiosk-pow",          path: "../kiosk-pow"
 gem "kiosk-pow-equihash", path: "../kiosk-pow-equihash"
 gem "kiosk-reputation",   path: "../kiosk-reputation"
 
+# Opt-in request-validation (validate_requests) path dep — available in specs;
+# NOT a runtime dependency of the gem (lazily required in lib only when the flag
+# is on). A host that enables validate_requests adds it to its own Gemfile.
+gem "json_schemer"
+
 # Durable-store contract specs (DeviceAuthorizationStores::ActiveRecord) —
 # available in specs; NOT hard-required in lib code. A Rails host brings its
 # own ActiveRecord + PG driver. The store spec SKIPS its ActiveRecord

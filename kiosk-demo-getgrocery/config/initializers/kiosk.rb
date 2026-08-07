@@ -96,6 +96,13 @@ Kiosk.configure do |c|
 
   c.issuer = ENV.fetch("KIOSK_ISSUER", "http://localhost:3005")
   c.roles  = %i[customer]
+
+  # UNIFORM-VALIDATION slice-1 (K-479): validate a PRESENT `pow` field against
+  # the normative PoW schema at the wire choke point, so a malformed pow gets a
+  # clear 400 bad_request (with a shape hint) instead of a silent re-issued 402
+  # loop. Needs the json_schemer gem (in the Gemfile). Absent/valid pow paths
+  # unchanged.
+  c.validate_requests = true
   # Role pinned to every self-registered agent (agents cannot choose their own).
   c.registration_role = :customer
   # owner is free-form and flows verbatim into /.well-known/kiosk.json. A

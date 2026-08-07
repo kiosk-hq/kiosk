@@ -11,6 +11,17 @@ demonstrated behavior, adversarial coverage, spec text where the wire changes.
   catalog, and rejects carts denominated in anything else — correct, but
   single-currency. Wire-level currency negotiation is deliberately
   post-release.
+- **Uniform request validation.** Slice-1 shipped: an opt-in
+  `c.validate_requests` flag (on in the demos) validates a submitted `pow`
+  field against the normative PoW JSON Schema at the wire choke point, so a
+  malformed proof returns a clear `400 bad_request` with a shape hint instead
+  of a silent re-issued `402` loop (closed K-479). The fuller layer (v0.5,
+  T-045) extends the same json_schemer path to query/run bodies (per-verb
+  `input_schema` + top-level envelope), authors the missing auth schemas,
+  adds a helpful `405` on method mismatch, a CI conformance test validating
+  live demo RESPONSES against the spec schemas, a structured field-path
+  `detail` in the error envelope, and a sync-check that kiosk-server's
+  vendored schemas match the normative `kiosk.tech/spec/schemas/` copies.
 - **More human-login adapters.** A Devise adapter ships as the worked
   example; Warden, OIDC, SAML, and custom-session adapters are the same
   small shape.

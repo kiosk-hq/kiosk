@@ -46,6 +46,23 @@ catches gross fakes; it is not proof the address exists. The real defense is the
 instructs assistants to obtain such real-world details from the human and never
 invent a placeholder.
 
+## Delivery-slot times and the past-slot filter (operator locale = Dublin)
+
+Slot wall-clock times are the **operator's local time**: getgrocery delivers in
+Dublin, so a slot labelled `08:00–10:00` means 08:00 **Europe/Dublin**, and each
+`delivery_slots` row's `slot_at` carries the real offset (`+01:00` in summer IST,
+`+00:00` in winter GMT). The real IANA zone is used — not a fixed offset — so DST
+is handled automatically (`lib/delivery_slots.rb`).
+
+`delivery_slots` returns only **still-bookable** windows: for **today**, a slot
+whose start has already passed in Dublin is dropped (querying at 11:00 hides
+`08:00–10:00` and `10:00–12:00`; if every window has begun, today yields no slots
+and the earliest is tomorrow — correct, not a bug). Future dates keep all slots.
+`create_order`/`reschedule_delivery` re-validate the same rule (consistency): a
+past-start slot for today is rejected with a clean **400 (`bad_request`)**, never
+silently booked. `demo:shop` asserts a past slot is both hidden and rejected;
+`rake demo:slots_spec` is a DB-free unit check of the filter across DST.
+
 ## Age-restricted purchases (anonymized KYC)
 
 One catalog item is age-restricted (a coined wine — no real brand). A cart

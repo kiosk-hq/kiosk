@@ -33,6 +33,7 @@ require Rails.root.join("lib/stub_user_idp")
 require Rails.root.join("lib/jwt_or_stub_idp")
 require Rails.root.join("lib/pow_difficulty")
 require Rails.root.join("lib/dublin_zones")
+require Rails.root.join("lib/delivery_slots")
 require Rails.root.join("lib/validating_payment_provider")
 require Rails.root.join("lib/prove_trust")
 require Rails.root.join("lib/prove_broker_client")
@@ -222,27 +223,6 @@ end
 
 LOW_STOCK_THRESHOLD = 5
 
-# ── Delivery-slot time source of truth (K-470) ───────────────────────────────
-# BOTH delivery_slots and create_order compute a slot's wall-clock time from the
-# SAME (date, slot_id) pair via this one helper, so the day+time an assistant
-# sees in delivery_slots is EXACTLY what create_order books and returns. slot_id
-# 1 = 08:00, 2 = 10:00, … (two-hour windows). Previously create_order derived
-# the date independently (Date.today + 1), so a slot chosen for TODAY came back
-# booked for TOMORROW — the two verbs must never disagree on the date.
-module DeliverySlots
-  FIRST_HOUR   = 8
-  WINDOW_HOURS = 2
-  COUNT        = 6
-
-  module_function
-
-  # UTC Time for the start of a slot on a given Date. slot_id is 1..COUNT.
-  def slot_at(date, slot_id)
-    hour = FIRST_HOUR + (slot_id.to_i - 1) * WINDOW_HOURS
-    Time.utc(date.year, date.month, date.day, hour, 0, 0)
-  end
-end
-
 # ─── Queries ────────────────────────────────────────────────────────────────
 
 Kiosk::Server::Queries.register("catalog",
@@ -303,7 +283,7 @@ Kiosk::Server::Queries.register("delivery_slots",
     required: ["date", "delivery_address"],
   },
   example_params: { date: "2026-08-10", delivery_address: "42 Camden Street, Dublin 2" },
-  example_row: { id: 1, date: "2026-08-10", slot_at: "2026-08-10T08:00:00Z", label: "08:00–10:00", zone: "D02" }) do |params|
+  example_row: { id: 1, date: "2026-08-10", slot_at: "2026-08-10T08:00:00+01:00", label: "08:00–10:00", zone: "D02" }) do |params|
   date = params.fetch(:date) { raise Kiosk::Server::Errors::BadRequest.new("missing param: date") }
 
   # ADDRESS-UPFRONT (K-468): the delivery address is a REQUIRED early input.
@@ -329,7 +309,14 @@ Kiosk::Server::Queries.register("delivery_slots",
     raise Kiosk::Server::Errors::BadRequest.new("invalid date: #{date}")
   end
 
-  (1..DeliverySlots::COUNT).map do |slot_id|
+  # PAST-SLOT FILTER (K-480): return ONLY still-bookable windows. For TODAY, drop
+  # any slot whose start has already passed in the operator's locale (Dublin);
+  # future dates keep all slots. If every one of today's slots has begun,
+  # delivery_slots for today is legitimately empty and the earliest bookable slot
+  # is on a later date — the assistant simply shouldn't see an un-bookable
+  # 08:00–10:00 window at 11:00. `date` on each row (K-470) is unchanged so
+  # create_order books exactly the day/slot shown.
+  DeliverySlots.bookable_ids(parsed).map do |slot_id|
     slot_time = DeliverySlots.slot_at(parsed, slot_id)
     hour      = slot_time.hour
     {
@@ -435,7 +422,7 @@ Kiosk::Server::Actions.register("create_order",
   },
   example_row: {
     order_id: "e2b1c0d4-5f6a-4b3c-8d2e-1f0a9b8c7d6e", total_cents: 1287,
-    total_eur: "€12.87", currency: "eur", slot_at: "2026-08-10T12:00:00Z",
+    total_eur: "€12.87", currency: "eur", slot_at: "2026-08-10T12:00:00+01:00",
     pay_hint: "pay in EUR with a cart mandate whose line_items mirror this order …",
   }) do |args|
   conn = ActiveRecord::Base.connection
@@ -489,6 +476,17 @@ Kiosk::Server::Actions.register("create_order",
     end
   raise Kiosk::Server::Errors::BadRequest.new("delivery_date is in the past: #{delivery_date} — choose a current/future delivery slot") if delivery_date < Date.today
   slot_at = DeliverySlots.slot_at(delivery_date, slot_id)
+  # PAST-SLOT RE-VALIDATION (K-480): mirror the delivery_slots filter so
+  # create_order can't book a window delivery_slots would now hide as past — a
+  # TODAY slot whose start has already passed in the operator's locale (Dublin)
+  # is rejected with a clean 400 (whole past DAYS were already caught above; this
+  # catches a past TIME-OF-DAY today, e.g. booking the 08:00 slot at 11:00).
+  if DeliverySlots.past?(delivery_date, slot_id)
+    raise Kiosk::Server::Errors::BadRequest.new(
+      "delivery slot #{slot_id} on #{delivery_date} has already started (#{slot_at.iso8601}) — " \
+      "choose a later slot; call delivery_slots again for the still-bookable windows"
+    )
+  end
 
   conn.transaction do
     # Resolve skus → product id + price (consumer references products by sku, not the numeric id)
@@ -635,7 +633,7 @@ Kiosk::Server::Actions.register("reschedule_delivery",
     required: ["order_id", "delivery_slot_id"],
   },
   example_params: { order_id: "e2b1c0d4-5f6a-4b3c-8d2e-1f0a9b8c7d6e", delivery_slot_id: 3, delivery_date: "2026-08-10" },
-  example_row: { order_id: "e2b1c0d4-5f6a-4b3c-8d2e-1f0a9b8c7d6e", rescheduled_at: "2026-08-10T12:00:00Z" }) do |args|
+  example_row: { order_id: "e2b1c0d4-5f6a-4b3c-8d2e-1f0a9b8c7d6e", rescheduled_at: "2026-08-10T12:00:00+01:00" }) do |args|
   conn = ActiveRecord::Base.connection
 
   order_id         = args[:order_id]         || args["order_id"]
@@ -669,6 +667,16 @@ Kiosk::Server::Actions.register("reschedule_delivery",
       end
     end
   raise Kiosk::Server::Errors::BadRequest.new("delivery_date is in the past: #{new_date}") if new_date < Date.today
+  # PAST-SLOT RE-VALIDATION (K-480): same rule as create_order — a TODAY slot
+  # whose start has already passed in the operator's locale (Dublin) is rejected
+  # (a clean 400), so a reschedule can't land on an un-bookable past window.
+  if DeliverySlots.past?(new_date, slot_id)
+    raise Kiosk::Server::Errors::BadRequest.new(
+      "delivery slot #{slot_id} on #{new_date} has already started " \
+      "(#{DeliverySlots.slot_at(new_date, slot_id).iso8601}) — choose a later slot; " \
+      "call delivery_slots again for the still-bookable windows"
+    )
+  end
 
   conn.transaction do
     # ── Gate 1: order belongs to principal and not already scheduled ─────

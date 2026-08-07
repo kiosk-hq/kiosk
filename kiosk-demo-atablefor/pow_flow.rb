@@ -8,7 +8,7 @@
 #   1. Register an agent (no PoW on registration).
 #   2. POST query availability → expect HTTP 402 (pow_required).
 #   3. Extract the challenge(s); shell out to solve.py → {indices, header_nonce}.
-#   4. Re-POST the SAME query + pow: {proofs: [{challenge, nonce}]} → 200 + rows.
+#   4. Re-POST the SAME query with the Kiosk-PoW header: [{challenge, nonce}] → 200 + rows.
 #   5. Submit a deliberately wrong nonce against a fresh challenge → expect
 #      HTTP 403 (forbidden / invalid proof); assert on_bad_proof incremented.
 #

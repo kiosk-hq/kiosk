@@ -380,16 +380,17 @@ namespace :demo do
     Boots the server and runs roles_flow.rb. A salon OWNER links their
     assistant over a role-carrying session (the StubUserIdp SSO/Okta
     stand-in); the assistant INHERITS the owner role and `salon_calendar`
-    returns the WHOLE book + a revenue total. A STYLIST links their
-    assistant; it inherits the stylist role and `salon_calendar` returns
-    ONLY that stylist's own chairs. The role is sourced from the provider's
-    IdP at link time, never self-selected by the agent.
+    returns EVERY stylist's open slot (+ any bookings) + a FORECASTED revenue
+    total. A STYLIST links their assistant; it inherits the stylist role and
+    `salon_calendar` returns ONLY that stylist's own open slot. The role is
+    sourced from the provider's IdP at link time, never self-selected by the
+    agent.
 
-    Asserts (with DB ground-truth on kiosk.agents.allowed_roles + row counts):
+    Asserts (with DB ground-truth on kiosk.agents.allowed_roles + slot counts):
       • owner-agent allowed_roles == {owner};   token role == owner
       • stylist-agent allowed_roles == {stylist}; token role == stylist
-      • owner sees ALL seeded staff appointments + a revenue total
-      • stylist sees ONLY their own chairs (fewer rows; every row is theirs)
+      • owner sees ALL seeded open slots + a FORECASTED revenue total
+      • stylist sees ONLY their own open slot (fewer rows; every row is theirs)
 
     Exits 0 if all hold; exits 1 on failure. A red assertion = a real role
     gate hole: fix the app, not the test.
@@ -437,10 +438,12 @@ namespace :demo do
       puts json_line if json_line
       result = JSON.parse(json_line || raw) rescue abort("roles_flow.rb produced no JSON:\n#{raw}")
 
-      # DB ground truth: how many appointments the salon actually has, and how
-      # many belong to stylist Bea — the counts the calendar must honor.
-      total_appts   = `psql -X -d #{db} -tAc "SELECT count(*) FROM appointments"`.strip.to_i
-      stylist_appts = `psql -X -d #{db} -tAc "SELECT count(*) FROM appointments WHERE stylist_id = '#{stylist1_id}'"`.strip.to_i
+      # DB ground truth: how many OPEN slots the salon actually has, and how
+      # many belong to stylist Bea — the counts the calendar must honor. These
+      # are evergreen availability rows (7 stylists, one slot each), not dated
+      # appointments, so the counts never go stale.
+      total_slots   = `psql -X -d #{db} -tAc "SELECT count(*) FROM stylist_slots"`.strip.to_i
+      stylist_slots = `psql -X -d #{db} -tAc "SELECT count(*) FROM stylist_slots WHERE stylist_id = '#{stylist1_id}'"`.strip.to_i
 
       puts "\n══ roles-from-IdP assertions ══"
       check = lambda do |label, ok|
@@ -457,13 +460,13 @@ namespace :demo do
       check.call("owner assistant token role == owner",     result["owner_token_role"] == "owner")
       check.call("stylist assistant token role == stylist", result["stylist_token_role"] == "stylist")
 
-      # The wire gate: owner sees the whole book + revenue, stylist only own.
-      check.call("owner salon_calendar returns ALL #{total_appts} appointments",  result["owner_appt_count"] == total_appts)
-      check.call("owner salon_calendar carries a revenue total (> 0)",            result["owner_revenue_cents"].to_i > 0)
-      check.call("stylist salon_calendar returns ONLY own #{stylist_appts} chairs", result["stylist_appt_count"] == stylist_appts)
-      check.call("stylist sees strictly fewer rows than the owner (scope narrowed)", stylist_appts < total_appts && result["stylist_appt_count"] < result["owner_appt_count"])
+      # The wire gate: owner sees every open slot + a forecast, stylist only own.
+      check.call("owner salon_calendar returns ALL #{total_slots} open slots",     result["owner_slot_count"] == total_slots)
+      check.call("owner salon_calendar carries a FORECASTED revenue total (> 0)",  result["owner_forecast_cents"].to_i > 0)
+      check.call("stylist salon_calendar returns ONLY own #{stylist_slots} open slot", result["stylist_slot_count"] == stylist_slots)
+      check.call("stylist sees strictly fewer slots than the owner (scope narrowed)", stylist_slots < total_slots && result["stylist_slot_count"] < result["owner_slot_count"])
       check.call("every row the stylist sees is their own chair",                 result["stylist_all_own"] == true)
-      check.call("stylist sees NO revenue total (owner-only)",                     result["stylist_sees_revenue"] == false)
+      check.call("stylist sees NO forecast total (owner-only)",                    result["stylist_sees_forecast"] == false)
 
       # ── REAL DEVISE PATH (K-437) — the operator path the hosted demo uses. ──
       # The stub assertions above pass even with the bug; these fail without
@@ -471,9 +474,9 @@ namespace :demo do
       # sign-in to roles.first (customer). The role must survive the real
       # /users/sign_in session, not just the X-Staff-Session stub.
       check.call("REAL DEVISE: owner sign-in → token role == owner",              result["devise_owner_token_role"] == "owner")
-      check.call("REAL DEVISE: owner salon_calendar returns ALL #{total_appts} appointments", result["devise_owner_appt_count"] == total_appts)
+      check.call("REAL DEVISE: owner salon_calendar returns ALL #{total_slots} open slots", result["devise_owner_slot_count"] == total_slots)
       check.call("REAL DEVISE: stylist sign-in → token role == stylist",          result["devise_stylist_token_role"] == "stylist")
-      check.call("REAL DEVISE: stylist salon_calendar returns ONLY own #{stylist_appts} chairs", result["devise_stylist_appt_count"] == stylist_appts)
+      check.call("REAL DEVISE: stylist salon_calendar returns ONLY own #{stylist_slots} open slot", result["devise_stylist_slot_count"] == stylist_slots)
       check.call("REAL DEVISE: every row the stylist sees is their own chair",     result["devise_stylist_all_own"] == true)
       check.call("REAL DEVISE: customer sign-in → token role == customer",         result["devise_customer_token_role"] == "customer")
       check.call("REAL DEVISE: customer salon_calendar is empty (non-staff)",      result["devise_customer_appt_count"] == 0)
@@ -514,7 +517,7 @@ namespace :demo do
                assistant cannot smuggle an `owner` role into the claim body;
                the role comes from the IdP session, so the token stays stylist
       BLOCKED  StylistCalendarStaysStylistScoped — that stylist's agent sees
-               only its own chairs + no revenue in salon_calendar (role gate
+               only its own open slot + no forecast in salon_calendar (role gate
                un-bypassable)
 
     stylish has no payment or KYC surface, so the battery covers only the

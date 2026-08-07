@@ -1,31 +1,34 @@
 # frozen_string_literal: true
 
-# Synthetic principals for the two audiences the stylish demo serves.
+# Synthetic principals + evergreen availability for the stylish demo.
 #
-# CUSTOMERS — Alice and Bob, with stable UUIDs the assistant scripts use in
-# `Authorization: Bearer agent:u-<uuid>:a-<agent>:r-<role>` headers. Both get
-# Devise credentials so the account-binding walkthrough can sign in through the
-# real /users/sign_in form (Alice approves the assistant link there).
+# CUSTOMERS (visitors) — Alice and Bob, with stable UUIDs the assistant scripts
+# use in `Authorization: Bearer agent:u-<uuid>:a-<agent>:r-<role>` headers. Both
+# get Devise credentials so the account-binding walkthrough can sign in through
+# the real /users/sign_in form (Alice approves the assistant link there).
 #
-# STAFF — Combette on Park's own people (roles-from-IdP): one OWNER
-# and two STYLISTS, each with a `staff_role`. Their assistant, when linked
-# (W5, role-carrying StubUserIdp session), inherits that role so the
-# `salon_calendar` query gates on it: owner sees the whole book + a EUR
-# revenue total, a stylist only their own priced chairs.
+# STAFF — Combette on Park's own people (roles-from-IdP): one OWNER and SEVEN
+# STYLISTS, each with a `staff_role`. Their assistant, when linked (W5,
+# role-carrying StubUserIdp session), inherits that role so `salon_calendar`
+# gates on it: an owner-linked assistant sees the whole book (all seven chairs +
+# any bookings) plus the FORECASTED € revenue total, a stylist only their own
+# chair + own bookings.
 #
-# SERVICES + PRICES — a real EUR service menu, and a full day of appointments
-# TODAY across the two stylists (a mix of services) so the owner's book is
-# non-trivial and its revenue total is meaningful. This is what makes the role
-# reveal land: an owner-linked assistant sees the whole day + revenue; each
-# stylist sees only their own chairs.
+# AVAILABILITY (K-446) — the salon's STRUCTURE is SEVEN stylists, each offering
+# ONE open bookable slot (a service + a EUR price). This is EVERGREEN: the seven
+# open slots are always bookable — there are NO synthetic dated appointments and
+# NO reseed cron, so the demo never goes empty as the calendar day rolls over.
+# The salon starts with ZERO bookings; real bookings (public.appointments)
+# accumulate as visitors book during the demo. The staff forecast is projected
+# from the seven slot prices (what the day earns if the open slots fill) and
+# reflects actual bookings as they happen — computed from real rows, never a
+# fixed number.
 
 ALICE_ID = "00000000-0000-0000-0000-000000000001"
 BOB_ID   = "00000000-0000-0000-0000-000000000002"
 
-# Salon staff — stable UUIDs the roles demo drives.
-OWNER_ID    = "00000000-0000-0000-0000-0000000000a0" # salon owner
-STYLIST1_ID = "00000000-0000-0000-0000-0000000000b1" # stylist Bea
-STYLIST2_ID = "00000000-0000-0000-0000-0000000000b2" # stylist Cleo
+# Salon owner — stable UUID the roles demo drives.
+OWNER_ID = "00000000-0000-0000-0000-0000000000a0"
 
 # Demo-only credentials (development database, reset by every demo:setup).
 DEMO_PASSWORD = "combette-demo-password"
@@ -39,22 +42,12 @@ User.find_or_create_by!(id: BOB_ID) do |u|
   u.password = DEMO_PASSWORD
 end
 
-# Staff carry a staff_role and Devise credentials (they sign in to the salon
-# to link their assistant, the same real session the binding surfaces use).
+# Owner carries a staff_role + Devise credentials (they sign in to the salon to
+# link their assistant, the same real session the binding surfaces use).
 owner = User.find_or_create_by!(id: OWNER_ID) do |u|
   u.email      = "owner@combette.example"
   u.password   = DEMO_PASSWORD
   u.staff_role = "owner"
-end
-stylist1 = User.find_or_create_by!(id: STYLIST1_ID) do |u|
-  u.email      = "bea@combette.example"
-  u.password   = DEMO_PASSWORD
-  u.staff_role = "stylist"
-end
-stylist2 = User.find_or_create_by!(id: STYLIST2_ID) do |u|
-  u.email      = "cleo@combette.example"
-  u.password   = DEMO_PASSWORD
-  u.staff_role = "stylist"
 end
 
 salon = Salon.find_or_create_by!(name: "Combette on Park")
@@ -72,48 +65,50 @@ services = MENU.transform_values do |m|
   Service.find_or_create_by!(name: m[:name]) { |s| s.price_cents = m[:price_cents] }
 end
 
-# ── A full day of appointments TODAY across Bea and Cleo. ─────────────────────
-# Booked BY customers, ASSIGNED to a stylist, each with a service + its EUR
-# price captured on the row. Bea works 4 chairs, Cleo works 3 — so the owner's
-# whole-book view is a non-trivial 7 appointments with a real revenue total,
-# while Bea sees only her 4 and Cleo only her 3.
+# ── SEVEN stylists, each with ONE open bookable slot (evergreen availability). ─
+# Bea (…b1) and Cleo (…b2) keep the stable UUIDs the roles/redteam drivers
+# drive; the other five are salon staff too. Each stylist offers one service at
+# its menu price, captured onto the slot so the forecast is a real € figure.
 #
-# Revenue the OWNER sees (sum of the seeded day):
-#   Bea : Colour €90 + Cut&Blow-dry €50 + Cut €35 + Beard trim €20   = €195
-#   Cleo: Cut&Colour €120 + Cut €35 + Beard trim €20                 = €175
-#   ── total ────────────────────────────────────────────────────────  €370
-today = Date.current
-at = ->(h, m) { Time.utc(today.year, today.month, today.day, h, m).iso8601 }
+# Forecast the OWNER sees = sum of the seven open-slot prices (what the day
+# earns if every open slot fills):
+#   Bea   Colour        €90
+#   Cleo  Cut & Colour  €120
+#   Dana  Cut & Blow-dry €50
+#   Esme  Cut           €35
+#   Faye  Beard trim    €20
+#   Gwen  Cut & Blow-dry €50
+#   Hana  Cut           €35
+#   ── forecast ─────────  €400
+STYLISTS = [
+  { id: "00000000-0000-0000-0000-0000000000b1", name: "Bea",  email: "bea@combette.example",  service: :colour },
+  { id: "00000000-0000-0000-0000-0000000000b2", name: "Cleo", email: "cleo@combette.example", service: :cut_colour },
+  { id: "00000000-0000-0000-0000-0000000000b3", name: "Dana", email: "dana@combette.example", service: :cut_blowdry },
+  { id: "00000000-0000-0000-0000-0000000000b4", name: "Esme", email: "esme@combette.example", service: :cut },
+  { id: "00000000-0000-0000-0000-0000000000b5", name: "Faye", email: "faye@combette.example", service: :beard_trim },
+  { id: "00000000-0000-0000-0000-0000000000b6", name: "Gwen", email: "gwen@combette.example", service: :cut_blowdry },
+  { id: "00000000-0000-0000-0000-0000000000b7", name: "Hana", email: "hana@combette.example", service: :cut },
+].freeze
 
-seed_day = [
-  # Bea's chairs
-  { customer: ALICE_ID, stylist: stylist1, service: :colour,      slot: at.call(9, 0) },
-  { customer: BOB_ID,   stylist: stylist1, service: :cut_blowdry, slot: at.call(10, 30) },
-  { customer: ALICE_ID, stylist: stylist1, service: :cut,         slot: at.call(13, 0) },
-  { customer: BOB_ID,   stylist: stylist1, service: :beard_trim,  slot: at.call(15, 0) },
-  # Cleo's chairs
-  { customer: BOB_ID,   stylist: stylist2, service: :cut_colour,  slot: at.call(9, 30) },
-  { customer: ALICE_ID, stylist: stylist2, service: :cut,         slot: at.call(12, 0) },
-  { customer: BOB_ID,   stylist: stylist2, service: :beard_trim,  slot: at.call(16, 30) },
-]
-
-# idempotent: keyed on the slot so re-seeding does not multiply rows.
-seed_day.each do |a|
-  svc = services.fetch(a[:service])
-  Appointment.find_or_create_by!(salon: salon, slot: a[:slot]) do |appt|
-    appt.user_id     = a[:customer]
-    appt.stylist_id  = a[:stylist].id
-    appt.service_id  = svc.id
-    appt.price_cents = svc.price_cents
+STYLISTS.each do |st|
+  stylist = User.find_or_create_by!(id: st[:id]) do |u|
+    u.email      = st[:email]
+    u.password   = DEMO_PASSWORD
+    u.staff_role = "stylist"
+  end
+  svc = services.fetch(st[:service])
+  # Idempotent: one open slot per stylist. Re-seeding does not multiply rows.
+  StylistSlot.find_or_create_by!(stylist_id: stylist.id, salon: salon) do |slot|
+    slot.service_id  = svc.id
+    slot.price_cents = svc.price_cents
+    slot.label       = "Next available with #{st[:name]}"
   end
 end
 
-revenue_cents = seed_day.sum { |a| services.fetch(a[:service]).price_cents }
-bea_count     = seed_day.count { |a| a[:stylist] == stylist1 }
-cleo_count    = seed_day.count { |a| a[:stylist] == stylist2 }
+forecast_cents = StylistSlot.sum(:price_cents)
 
-puts "Seeded: 2 customers (#{ALICE_ID}, #{BOB_ID}; sign-in alice@example.com / #{DEMO_PASSWORD})"
-puts "        3 staff — owner #{OWNER_ID}, stylists #{STYLIST1_ID}/#{STYLIST2_ID}"
+puts "Seeded: 2 customers/visitors (#{ALICE_ID}, #{BOB_ID}; sign-in alice@example.com / #{DEMO_PASSWORD})"
+puts "        #{STYLISTS.size + 1} staff — owner #{OWNER_ID}, #{STYLISTS.size} stylists"
 puts "        1 salon (#{salon.name}); #{services.size}-service EUR menu"
-puts "        #{seed_day.size} appointments today (#{bea_count} Bea, #{cleo_count} Cleo); " \
-     "owner revenue total €#{revenue_cents / 100}"
+puts "        #{StylistSlot.count} OPEN slots (evergreen availability; 0 bookings — visitors book during the demo)"
+puts "        forecasted revenue if the open slots fill: €#{forecast_cents / 100}"

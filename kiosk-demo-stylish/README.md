@@ -6,9 +6,9 @@ Stylish is a hair-styling salon-booking service (stylish.example), Kiosk-enabled
 - JWKS endpoint for JWT verification
 - Authenticated REST wire surface (`/kiosk/query`, `/kiosk/run`, `/kiosk/pay`, `/kiosk/schema`) — query + run verbs
 - App-layer data isolation (two users, two views of the same table); RLS available as optional defense-in-depth
-- A `book_appointment` Action
+- A `book_appointment` Action + an `availability` query — **evergreen availability**: seven stylists, each offering one open bookable slot (no synthetic dated appointments, so the demo never goes empty and needs no reseed cron). The salon starts with zero bookings; real bookings accumulate as visitors book.
 - Human↔assistant account binding over real Devise sessions — the claim ceremony (verify page) and human-minted link codes, walked by `rake demo:binding`
-- **Roles from a configured IdP** — stylish is dual-audience: customers book, and salon **staff** (owner / stylist) manage the calendar. A staff member's role, supplied by the operator's own identity system, is inherited by their assistant at link time, and the `salon_calendar` query gates on it (owner sees the whole book + revenue; a stylist only their own chairs). Walked by `rake demo:roles`.
+- **Roles from a configured IdP** — stylish has two entrances: a **visitor** books an open slot, and salon **staff** (owner / stylist) view the forecast. A staff member's role, supplied by the operator's own identity system, is inherited by their assistant at link time, and the `salon_calendar` query gates on it (owner sees every stylist's open slot + a *forecasted* € revenue — the day's projected earnings if the open slots fill, folding in real bookings; a stylist only their own chair). Walked by `rake demo:roles`. (Multi-account is deferred, so a tester acts as a visitor **or** as staff, not both at once.)
 
 Stylish is the canonical reference shape for personal-services SaaS — barbershops, restaurants, gyms, clinics. Same patterns apply.
 
@@ -56,8 +56,8 @@ The task asserts every step, plus the DB ground truth: `kiosk.agents.user_id` fo
 
 The role an assistant works with is sourced **indirectly, from the bound human's IdP role** — the natural extension of the link ceremony. A salon owner and a stylist each link an assistant over a role-carrying session (`StubUserIdp`, the salon's SSO/Okta stand-in):
 
-1. **Owner** links an assistant → the token carries `role: owner` → `salon_calendar` returns the **whole book** (every stylist's appointments) plus a revenue total.
-2. **Stylist** links an assistant → the token carries `role: stylist` → `salon_calendar` returns **only that stylist's own chairs**.
+1. **Owner** links an assistant → the token carries `role: owner` → `salon_calendar` returns the **whole book** (every stylist's open slot + any bookings) plus a **forecasted** € revenue total — projected from the open-slot prices (what the day earns if the slots fill) and folding in real bookings, computed live, never a fixed number.
+2. **Stylist** links an assistant → the token carries `role: stylist` → `salon_calendar` returns **only that stylist's own chair** (their open slot + their own bookings).
 
 The role rides the token, sourced from the operator's identity system — never self-selected by the AI assistant. A stylist's assistant cannot widen its scope to the owner's book: the role is set at binding from the IdP (not the claim body), and the query's `WHERE` is operator-controlled. `rake demo:roles` asserts both views with DB ground-truth on `kiosk.agents.allowed_roles`, and the redteam battery (`rake demo:redteam`) proves the escalation is BLOCKED.
 
@@ -65,9 +65,9 @@ The role rides the token, sourced from the operator's identity system — never 
 
 | Path | What's there |
 |---|---|
-| `db/migrate/` | Generator-produced kiosk migrations + the Stylish salon/appointment schema (users carry Devise login columns + a `staff_role`; appointments carry a `stylist_id`) |
-| `app/models/{user,salon,appointment}.rb` | Three trivial AR models; `User` is `database_authenticatable` for the human sign-in and carries `staff_role` (owner/stylist) for the staff surface |
-| `config/initializers/kiosk.rb` | `Kiosk.configure` block + the `book_appointment` Action + the role-gated `salon_calendar` query |
+| `db/migrate/` | Generator-produced kiosk migrations + the Stylish schema (users carry Devise login columns + a `staff_role`; `stylist_slots` holds each stylist's one open slot = evergreen availability; `appointments` accumulate real bookings, carrying a `stylist_id`) |
+| `app/models/{user,salon,service,appointment,stylist_slot}.rb` | Trivial AR models; `User` is `database_authenticatable` for the human sign-in and carries `staff_role` (owner/stylist); `StylistSlot` is one stylist's open bookable slot |
+| `config/initializers/kiosk.rb` | `Kiosk.configure` block + the `book_appointment` Action + the `availability` query + the role-gated `salon_calendar` forecast query |
 | `config/initializers/devise.rb` | Minimal Devise setup — the human session that approves assistant links |
 | `lib/stub_idp.rb` | Bespoke synthetic-token agent-IdP for the demo's hard-coded Alice + Bob |
 | `lib/jwt_or_stub_idp.rb` | Composite agent-IdP: tries Kiosk-issued JWTs first, falls back to StubIdp |

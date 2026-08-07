@@ -235,23 +235,26 @@ module Kiosk
         # sets it to prove the server ignores a client-chosen role.
         body[:role] = wire_role unless wire_role.nil?
 
-        # Negative-test strategies short-circuit: :skip omits pow (missing-proof
-        # test), a verbatim String sends a malformed pow (bad-proof test). Both
-        # expect rejection, so we post once and return.
+        # Negative-test strategies short-circuit: :skip omits the proof
+        # (missing-proof test), a verbatim String sends a malformed Kiosk-PoW
+        # header value (bad-proof test). Both expect rejection, so we post once
+        # and return. The proof rides in the Kiosk-PoW header now (ADR-0022), not
+        # the body.
         if pow == :skip
           return [post_json("/kiosk/auth/register", body), key]
         elsif pow.is_a?(String)
-          return [post_json("/kiosk/auth/register", body.merge(pow: pow)), key]
+          return [post_json("/kiosk/auth/register", body, pow: pow), key]
         end
 
         # :solve — post; if the provider gates registration (402 Equihash), solve
-        # every challenge and resubmit the SAME signed body with pow:{proofs:}.
+        # every challenge and resubmit the SAME signed body, sending the proof(s)
+        # in the Kiosk-PoW request header as raw JSON.
         resp = post_json("/kiosk/auth/register", body)
         if resp.status == 402
           challenges = resp.body.dig("error", "challenges") rescue nil
           if challenges.is_a?(Array) && challenges.any?
             proofs = challenges.map { |c| { challenge: c, nonce: equihash_solve(c) } }
-            resp = post_json("/kiosk/auth/register", body.merge(pow: { proofs: proofs }))
+            resp = post_json("/kiosk/auth/register", body, pow: JSON.generate(proofs))
           end
         end
         [resp, key]
@@ -289,11 +292,14 @@ module Kiosk
       # @param path   [String]      URL path (including leading slash)
       # @param body   [Hash]        request body (serialised to JSON)
       # @param bearer [String, nil] Bearer token for Authorization header
+      # @param pow    [String, nil] raw Kiosk-PoW header value (the proof(s) as
+      #   raw JSON, ADR-0022) — used by the register + wire-verb PoW retries
       # @return [Response]
-      def post_json(path, body, bearer: nil)
+      def post_json(path, body, bearer: nil, pow: nil)
         uri = URI("#{@base_url}#{path}")
         headers = { "Content-Type" => "application/json" }
         headers["Authorization"] = "Bearer #{bearer}" if bearer
+        headers["Kiosk-PoW"] = pow if pow
 
         req = Net::HTTP::Post.new(uri, headers)
         req.body = JSON.generate(body)

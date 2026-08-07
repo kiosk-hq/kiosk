@@ -68,7 +68,10 @@ BROWSES.times do |i|
     challenges = resp.dig("error", "challenges")
     abort "browse #{i}: 402 without challenges[]" unless challenges.is_a?(Array) && challenges.any?
     proofs = challenges.map { |c| { challenge: c, nonce: solve(c) } }
-    rc, resp = post_json("#{SERVER}/kiosk/query", QUERY.merge(pow: { proofs: proofs }), auth)
+    # PoW proof rides in the Kiosk-PoW request header as raw JSON (ADR-0022),
+    # not the body — the body stays byte-identical so the challenge fingerprint
+    # matches on retry.
+    rc, resp = post_json("#{SERVER}/kiosk/query", QUERY, auth.merge("Kiosk-PoW" => JSON.generate(proofs)))
     curve << proofs.size
   else
     curve << 0

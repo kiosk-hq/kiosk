@@ -165,8 +165,8 @@ module Kiosk
       # Proof-of-work required — the provider's reputation policy demands one or
       # more PoW challenges for this request. The client solves EACH challenge
       # (each has a distinct salt — no amortisation, that is the N×PoW
-      # anti-abuse dial) and re-sends the SAME request with
-      # `pow: {proofs: [{challenge:, nonce:}, ...]}`. HTTP 402.
+      # anti-abuse dial) and re-sends the SAME request with the proof(s) in the
+      # `Kiosk-PoW` request header as raw JSON (ADR-0022). HTTP 402.
       class PowRequired < Base
         CODE        = "pow_required"
         HTTP_STATUS = 402

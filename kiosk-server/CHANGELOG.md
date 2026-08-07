@@ -6,6 +6,17 @@ All notable changes follow [Keep a Changelog](https://keepachangelog.com/en/1.1.
 
 ### Changed
 
+- **PoW proof moves to the `Kiosk-PoW` request header.** `WireController` and
+  `AuthController#register` now read the proof(s) from the `Kiosk-PoW` request
+  header as raw JSON (`HTTP_KIOSK_POW`) instead of a `pow` body field (ADR-0022,
+  K-483). The parser dual-accepts a single proof, a JSON array, repeated header
+  lines (Rack `\n`-joined), or a proxy comma-combined value, flattening all into
+  one proofs list — so the tolled `schema` GET can carry its proof (a GET has no
+  body). The body is now purely verb args (the challenge fingerprint is over the
+  plain body, unchanged on retry); the old body-pow path is removed (no
+  back-compat). A malformed header is a `bad_request` (400) with a hint;
+  `RequestValidation` validates each parsed proof; the 402 keeps its
+  `WWW-Authenticate: Kiosk-PoW` header (completes T-022).
 - **Install-generator honesty.** The `kiosk:install` initializer template no longer advertises a nonexistent `MyCustomAgentIdp`; it now states plainly that the bundled kiosk-pop agent-IdP is the default (zero config), that fronting an external agent-identity issuer means subclassing `Kiosk::AgentIdentityProviders::Base` (a planned seam, none shipped), and that `c.user_idp` binds a human account with `kiosk-user-idp-devise` as the worked example. Template text only — no generated behavior change.
 - **RLS is now opt-in.** kiosk-server no longer depends on or requires
   `kiosk-rls`. Hosts that want DB-level row enforcement add

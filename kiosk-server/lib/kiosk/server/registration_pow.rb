@@ -17,8 +17,9 @@ module Kiosk
     module RegistrationPow
       module_function
 
-      # @param public_key_pem [String]    the key being registered (normalised)
-      # @param pow            [Hash, nil] submitted proof(s), `{proofs: [...]}`
+      # @param public_key_pem [String]         the key being registered (normalised)
+      # @param pow            [Array, nil] submitted proof(s) parsed from the
+      #   `Kiosk-PoW` header (a flat list of `{challenge:, nonce:}`), or nil
       # @param config         [Kiosk::Configuration]
       # @return [void]
       # @raise  [Errors::PowRequired]       (402) when valid proofs are needed

@@ -43,9 +43,10 @@ module Kiosk
       # Compute the request fingerprint used for challenge binding.
       #
       # Covers `command` and the canonical (key-order-independent) JSON
-      # serialisation of `body`. The `pow` field is a sibling of `body` in the
-      # wire JSON and is intentionally excluded — its absence at issue time and
-      # presence at verify time must produce the same fingerprint.
+      # serialisation of `body`. The proof travels in the `Kiosk-PoW` HEADER
+      # (ADR-0022), NOT in the body, so the body is identical at issue time
+      # (no proof) and verify time (proof in the header) — the fingerprint
+      # matches on retry.
       #
       # @param command [String, Symbol]
       # @param body    [Hash, nil]
@@ -58,8 +59,8 @@ module Kiosk
       #
       # @param identity [Kiosk::Identity]
       # @param command  [String, Symbol]  the Kiosk verb
-      # @param body     [Hash, nil]       the verb args (must NOT include the `pow` key)
-      # @param pow      [Hash, nil]       submitted proof `{challenge:, nonce:}`, or nil
+      # @param body     [Hash, nil]       the verb args (the proof rides in the header, never here)
+      # @param pow      [Array, Hash, nil] proof(s) parsed from the `Kiosk-PoW` header, or nil
       #
       # @return [:proceed]  when the request may proceed to {Executor}
       # @raise  [Errors::PowRequired]       (HTTP 402) when a challenge must be solved
@@ -200,28 +201,61 @@ module Kiosk
         end
       end
 
-      # Split a submitted proof out of the request body.
+      # Parse the PoW proof(s) out of the `Kiosk-PoW` request HEADER
+      # (ADR-0022). The proof is carried in a header, NOT in the request body:
+      # the body is now ONLY verb args, so the challenge fingerprint binds to the
+      # plain body untouched, and a GET (schema) can carry its proof too — a body
+      # is not available on a GET.
       #
-      # On the wire `pow` is a SIBLING of the verb args (`{name:"catalog", pow:{…}}`).
-      # It must be removed before the body is used for either purpose:
-      #   * fingerprinting — the challenge is bound to the ORIGINAL request, which
-      #     had no `pow`; leaving it in would change the fingerprint on retry and
-      #     every valid proof would be rejected as `:bad_sig`.
-      #   * dispatch — the {Executor} must never see the `pow` key.
+      # `raw` is the raw header value — for repeated same-name headers Rack joins
+      # them with "\n" (`env["HTTP_KIOSK_POW"]`), so we split on "\n" first, then
+      # normalise each line into an array of proofs. The forms accepted, all
+      # flattening to one proofs list (b3 dual-accept):
+      #   * one proof         `Kiosk-PoW: {"challenge":…,"nonce":…}`
+      #   * a JSON array       `Kiosk-PoW: [{…},{…}]`
+      #   * repeated lines     `Kiosk-PoW: {A}` / `Kiosk-PoW: {B}` (joined by "\n")
+      #   * comma-combined     `Kiosk-PoW: {A},{B}` (RFC 7230 lets a proxy
+      #     comma-join duplicate headers) — wrapping in `[…]` makes it a JSON array
+      # Raw minified JSON is used (no base64): a minified proof is all-VCHAR /
+      # no-newline, a valid HTTP header value.
       #
-      # Non-mutating: returns a fresh body hash. Accepts symbol- or string-keyed
-      # `pow`. Returns `[nil, arg]` unchanged for a non-Hash arg.
+      # Returns `nil` when the header is absent/blank (the initial request must
+      # still receive its normal 402 challenge). Malformed JSON raises
+      # {Errors::BadRequest} with a hint naming the header + expected shape.
       #
-      # @param body [Hash, Object]
-      # @return [Array(Object, Object)] `[pow, body_without_pow]`
-      def split_pow(body)
-        return [nil, body] unless body.is_a?(Hash)
+      # @param raw [String, nil] the raw `Kiosk-PoW` header value (`HTTP_KIOSK_POW`)
+      # @return [Array<Hash>, nil] a flat list of proofs, or nil when absent
+      def proofs_from_header(raw)
+        return nil if raw.nil?
 
-        rest = body.dup
-        pow  = rest.delete(:pow)
-        pow  = rest.delete("pow") if pow.nil?
-        [pow, rest]
+        proofs = []
+        raw.split("\n").each do |line|
+          value = line.strip
+          next if value.empty?
+
+          wrapped = value.start_with?("[") ? value : "[#{value}]"
+          parsed  = JSON.parse(wrapped, symbolize_names: true)
+          proofs.concat(Array(parsed))
+        end
+
+        proofs.empty? ? nil : proofs
+      rescue JSON::ParserError => e
+        raise Errors::BadRequest.new(
+          "malformed Kiosk-PoW header: #{e.message}",
+          hint: POW_HEADER_HINT,
+        )
       end
+
+      # Human-readable description of the expected Kiosk-PoW header shape, echoed
+      # in the 400 hint (K-451 style — name the shape so the agent can
+      # self-correct).
+      POW_HEADER_HINT =
+        "the Kiosk-PoW header carries the proof(s) as raw minified JSON: a single " \
+        "proof {\"challenge\": <the challenge object from the 402, echoed verbatim>, " \
+        "\"nonce\": {\"indices\": […], \"header_nonce\"?}}, OR a JSON array of such " \
+        "proofs [{…},{…}]. Repeated Kiosk-PoW header lines (one proof each) also " \
+        "work. Solve every challenge issued in the pow_required 402 and echo it " \
+        "back verbatim."
 
       # ── Internal helpers (all module_function so they're callable from above) ──
 

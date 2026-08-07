@@ -1,14 +1,15 @@
 # frozen_string_literal: true
 
 # WireController opt-in request-shape validation (UNIFORM-VALIDATION slice-1,
-# closes K-479).
+# closes K-479; re-pointed to the Kiosk-PoW header by ADR-0022).
 #
-# When `config.validate_requests` is true, a PRESENT `pow` field is validated
-# against the vendored normative PoW schema BEFORE PowGate.gate consumes it. The
-# motivating failure: an agent submitted `pow: {solutions:[…]}` (not the schema
-# shape `{proofs:[{challenge:,nonce:}]}`); PowGate.extract_proofs returned [] and
-# the gate re-issued a fresh 402 on every retry — an infinite loop with no
-# diagnostic. This layer turns that silent re-challenge into a clear 400 hint.
+# When `config.validate_requests` is true, the proof(s) parsed from the
+# `Kiosk-PoW` request header are validated against the vendored normative PoW
+# schema BEFORE PowGate.gate consumes them. The motivating failure: an agent
+# submitted a `{solutions:[…]}` shape (not the schema shape
+# `{challenge:,nonce:}`); PowGate.extract_proofs returned [] and the gate
+# re-issued a fresh 402 on every retry — an infinite loop with no diagnostic.
+# This layer turns that silent re-challenge into a clear 400 hint.
 #
 # Like wire_controller_402_spec.rb: pull in actionpack and re-`load` the
 # controller, then dispatch through ActionController::Metal.action.
@@ -40,20 +41,23 @@ RSpec.describe "WireController opt-in request validation (slice-1, K-479)" do
     )
   end
 
-  # Post a query request whose body carries `pow`. An always-challenge
+  # Post a query request carrying the proof in the `Kiosk-PoW` header (as raw
+  # JSON — the header is the wire location per ADR-0022). An always-challenge
   # reputation policy is configured (see the shared `before`), so a request
   # that CLEARS validation reaches PowGate.gate and comes back 402 pow_required
   # — never touching Executor / ActiveRecord. That lets us assert cleanly on the
-  # validation OUTCOME: a malformed pow is a 400 (rejected before the gate), a
-  # valid/absent pow is a 402 (validation passed it through to the gate).
-  def post_pow(pow)
-    body = { name: "menu" }
-    body[:pow] = pow unless pow == :absent
-    dispatch(
-      :query,
-      bearer_env("/kiosk/query", agent_token, method: "POST",
-                 input: JSON.generate(body), "CONTENT_TYPE" => "application/json"),
-    )
+  # validation OUTCOME: a malformed proof is a 400 (rejected before the gate), a
+  # valid/absent proof is a 402 (validation passed it through to the gate).
+  #
+  # `header` may be a Hash (a single proof, serialised to JSON), an Array of
+  # proofs (serialised to a JSON array), a raw String header value, or :absent.
+  def post_pow(header)
+    opts = { method: "POST",
+             input: JSON.generate(name: "menu"), "CONTENT_TYPE" => "application/json" }
+    unless header == :absent
+      opts["HTTP_KIOSK_POW"] = header.is_a?(String) ? header : JSON.generate(header)
+    end
+    dispatch(:query, bearer_env("/kiosk/query", agent_token, **opts))
   end
 
   # A structurally VALID challenge object (all schema-required fields present).
@@ -103,28 +107,38 @@ RSpec.describe "WireController opt-in request validation (slice-1, K-479)" do
 
       expect(status).to eq(400)
       expect(body.dig(:error, :code)).to eq("bad_request")
-      expect(body.dig(:error, :hint)).to include("pow.proofs[]")
       expect(body.dig(:error, :hint)).to include("challenge")
+      expect(body.dig(:error, :hint)).to include("nonce")
       # It must NOT have been turned into a fresh pow_required challenge.
       expect(body.dig(:error, :code)).not_to eq("pow_required")
     end
 
     it "rejects a proof missing the echoed challenge with 400 bad_request" do
-      status, _headers, body = post_pow(proofs: [{ nonce: { indices: [1, 2, 3] } }])
+      status, _headers, body = post_pow(nonce: { indices: [1, 2, 3] })
 
       expect(status).to eq(400)
       expect(body.dig(:error, :code)).to eq("bad_request")
-      expect(body.dig(:error, :hint)).to include("proofs")
+      expect(body.dig(:error, :hint)).to include("challenge")
     end
 
-    it "does NOT reject a well-formed pow at the validation step (it passes to the gate)" do
+    it "rejects a malformed proof inside a JSON-array header (per-proof validation)" do
+      status, _headers, body = post_pow(
+        [{ challenge: valid_challenge, nonce: { indices: [1, 2, 3, 4] } },
+         { solutions: [{ indices: [9] }] }],
+      )
+
+      expect(status).to eq(400)
+      expect(body.dig(:error, :code)).to eq("bad_request")
+    end
+
+    it "does NOT reject a well-formed proof at the validation step (it passes to the gate)" do
       # A well-formed-but-forged proof clears the SHAPE check and reaches the
       # gate, which does the real cryptographic verification — the forged proof
       # fails there and the gate re-issues a fresh 402. The point: validation
       # did NOT reject it with a 400; the gate (not the shape check) is still the
       # authority on whether a proof is valid.
       status, _headers, body = post_pow(
-        proofs: [{ challenge: valid_challenge, nonce: { indices: [1, 2, 3, 4] } }],
+        challenge: valid_challenge, nonce: { indices: [1, 2, 3, 4] },
       )
 
       expect(status).to eq(402)
@@ -132,18 +146,18 @@ RSpec.describe "WireController opt-in request validation (slice-1, K-479)" do
       expect(body.dig(:error, :code)).not_to eq("bad_request")
     end
 
-    it "accepts the single-proof shorthand (no proofs wrapper)" do
+    it "accepts a JSON-array of well-formed proofs (passes to the gate)" do
       status, _headers, body = post_pow(
-        challenge: valid_challenge, nonce: { indices: [1, 2, 3, 4] },
+        [{ challenge: valid_challenge, nonce: { indices: [1, 2, 3, 4] } }],
       )
 
       expect(status).to eq(402)
       expect(body.dig(:error, :code)).not_to eq("bad_request")
     end
 
-    it "leaves an ABSENT pow untouched — the normal 402 challenge path runs (no 400)" do
-      # An absent pow means the initial request; the gate must still issue the
-      # normal pow_required 402. Missing pow is NOT a malformed pow — it must
+    it "leaves an ABSENT header untouched — the normal 402 challenge path runs (no 400)" do
+      # An absent header means the initial request; the gate must still issue the
+      # normal pow_required 402. Missing proof is NOT a malformed proof — it must
       # never become a 400.
       status, _headers, body = post_pow(:absent)
 
@@ -151,12 +165,20 @@ RSpec.describe "WireController opt-in request validation (slice-1, K-479)" do
       expect(body.dig(:error, :code)).to eq("pow_required")
       expect(body.dig(:error, :code)).not_to eq("bad_request")
     end
+
+    it "rejects a malformed Kiosk-PoW header (invalid JSON) with 400 + hint" do
+      status, _headers, body = post_pow("{not json")
+
+      expect(status).to eq(400)
+      expect(body.dig(:error, :code)).to eq("bad_request")
+      expect(body.dig(:error, :hint)).to include("Kiosk-PoW")
+    end
   end
 
-  # ── Flag OFF (default): a malformed pow behaves exactly as today ───────────
+  # ── Flag OFF (default): a malformed proof behaves exactly as today ─────────
   context "with validate_requests off (default)" do
-    it "does NOT raise a validation error on a malformed pow (byte-identical to today)" do
-      # With the flag off, the malformed pow is simply ignored by
+    it "does NOT raise a validation error on a malformed proof (byte-identical to today)" do
+      # With the flag off, the malformed proof is simply ignored by
       # extract_proofs ([] proofs) and the gate re-issues a fresh 402 — the exact
       # K-479 pre-fix behaviour. The point: no 400 bad_request from a validation
       # step that isn't running.
@@ -165,6 +187,15 @@ RSpec.describe "WireController opt-in request validation (slice-1, K-479)" do
       expect(status).to eq(402)
       expect(body.dig(:error, :code)).to eq("pow_required")
       expect(body.dig(:error, :code)).not_to eq("bad_request")
+    end
+
+    it "STILL rejects a syntactically-invalid header JSON with 400 (parse is not gated by the flag)" do
+      # Header-JSON parsing happens before the opt-in shape check; a header that
+      # is not valid JSON at all is a malformed request regardless of the flag.
+      status, _headers, body = post_pow("{not json")
+
+      expect(status).to eq(400)
+      expect(body.dig(:error, :code)).to eq("bad_request")
     end
   end
 
@@ -179,7 +210,7 @@ RSpec.describe "WireController opt-in request validation (slice-1, K-479)" do
 
     it "raises a ConfigurationError naming the gem" do
       expect {
-        Kiosk::Server::RequestValidation.validate_pow!(proofs: [])
+        Kiosk::Server::RequestValidation.validate_proofs!([{ challenge: {}, nonce: {} }])
       }.to raise_error(Kiosk::Server::Errors::ConfigurationError, /json_schemer/)
     end
   end

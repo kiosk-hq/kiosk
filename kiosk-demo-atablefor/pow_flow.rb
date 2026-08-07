@@ -107,10 +107,12 @@ abort "expected fresh 402 for negative test, got #{rc_neg_issue}" unless rc_neg_
 challenge_neg = resp_neg_issue.dig("error", "challenges").first
 # A wrong nonce: right shape (distinct indices) but not a Wagner solution.
 bad_nonce = { "indices" => (1..(proofs.first[:nonce]["indices"].length)).to_a, "header_nonce" => 0 }
+# PoW proof(s) ride in the Kiosk-PoW request header as raw JSON (ADR-0022), not
+# the body — the body stays byte-identical so the challenge fingerprint matches.
 rc_wrong, resp_wrong = post_json(
   "#{SERVER}/kiosk/query",
-  QUERY_BODY.merge(pow: { proofs: [{ challenge: challenge_neg, nonce: bad_nonce }] }),
-  AUTH_HEADER,
+  QUERY_BODY,
+  AUTH_HEADER.merge("Kiosk-PoW" => JSON.generate([{ challenge: challenge_neg, nonce: bad_nonce }])),
 )
 unless rc_wrong == 403
   abort "expected HTTP 403 for wrong nonce, got #{rc_wrong}: #{JSON.generate(resp_wrong)}"
@@ -124,8 +126,8 @@ end
 
 rc_served, resp_served = post_json(
   "#{SERVER}/kiosk/query",
-  QUERY_BODY.merge(pow: { proofs: proofs }),
-  AUTH_HEADER,
+  QUERY_BODY,
+  AUTH_HEADER.merge("Kiosk-PoW" => JSON.generate(proofs)),
 )
 rows   = resp_served.fetch("rows", [])
 served = rc_served == 200 && rows.any?

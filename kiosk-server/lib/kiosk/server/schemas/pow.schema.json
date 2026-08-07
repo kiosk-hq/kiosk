@@ -3,8 +3,8 @@
   "$id": "https://kiosk.tech/spec/schemas/pow.schema.json",
   "$comment": "VENDORED copy of the normative kiosk.tech schema at spec/schemas/pow.schema.json. This file is self-contained (no cross-file $ref). Keeping it in sync with the upstream normative copy is tracked as T-045.",
   "title": "Kiosk proof-of-work",
-  "description": "The PoW challenge object (issued in a pow_required 402) and the pow field an agent adds to the retried request body.",
-  "$ref": "#/$defs/powField",
+  "description": "The PoW challenge object (issued in a pow_required 402) and the proof(s) an agent returns in the Kiosk-PoW request header (raw JSON) on retry (ADR-0022).",
+  "$ref": "#/$defs/powHeader",
   "$defs": {
     "challenge": {
       "type": "object",
@@ -50,21 +50,15 @@
         }
       }
     },
-    "powField": {
-      "description": "The top-level pow field added to the retried request body. Either the N-proof list or the single-proof shorthand.",
+    "powHeader": {
+      "description": "The value of the Kiosk-PoW request header, as raw JSON (ADR-0022). Either a single proof object, or a JSON array of proofs for the N-proof case. A server also accepts repeated Kiosk-PoW header lines (one proof each) and a proxy comma-combined value; those presentations flatten to the same proofs list and are not expressed here (they are a transport concern).",
       "oneOf": [
+        { "$ref": "#/$defs/proof" },
         {
-          "type": "object",
-          "required": ["proofs"],
-          "properties": {
-            "proofs": {
-              "type": "array",
-              "minItems": 1,
-              "items": { "$ref": "#/$defs/proof" }
-            }
-          }
-        },
-        { "$ref": "#/$defs/proof" }
+          "type": "array",
+          "minItems": 1,
+          "items": { "$ref": "#/$defs/proof" }
+        }
       ]
     }
   }

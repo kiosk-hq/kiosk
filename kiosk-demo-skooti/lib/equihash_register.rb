@@ -5,7 +5,8 @@
 # Registration is gated by ONE Equihash proof (see config/initializers/kiosk.rb).
 # This helper does the full handshake: challenge → sign PoP → register; on a 402
 # it solves every challenge with the shipped Python solver and retries the SAME
-# register body with pow:{proofs:[...]}. Replaces the old inline SHA256 hashcash.
+# register body, sending the proof(s) in the Kiosk-PoW request header as raw JSON
+# (ADR-0022). Replaces the old inline SHA256 hashcash.
 #
 # Requires: json, jwt, net/http, uri, openssl, open3, securerandom (the caller
 # already requires most of these).
@@ -28,7 +29,8 @@ end
 # @param server [String] base URL (e.g. http://skooti.app:3003)
 # @param issuer [String] issuer origin for the PoP `aud` claim
 # @param get_json [#call] ->(url) { [code, body] }
-# @param post_json [#call] ->(url, body) { [code, body] }
+# @param post_json [#call] ->(url, body, headers = {}) { [code, body] }
+#   (the header slot carries the Kiosk-PoW proof on the retry)
 # @return [Array(OpenSSL::PKey::RSA, Hash)] the keypair and the register response
 def equihash_register(server:, issuer:, get_json:, post_json:)
   key = OpenSSL::PKey::RSA.generate(2048)
@@ -50,7 +52,9 @@ def equihash_register(server:, issuer:, get_json:, post_json:)
     challenges = reg.dig("error", "challenges")
     abort "402 without challenges[]: #{JSON.generate(reg)}" unless challenges.is_a?(Array) && challenges.any?
     proofs = challenges.map { |c| { challenge: c, nonce: equihash_solve(c) } }
-    rc, reg = post_json.call("#{server}/kiosk/auth/register", body.merge(pow: { proofs: proofs }))
+    rc, reg = post_json.call(
+      "#{server}/kiosk/auth/register", body, { "Kiosk-PoW" => JSON.generate(proofs) }
+    )
   end
 
   abort "register failed (#{rc}): #{JSON.generate(reg)}" unless rc == 201

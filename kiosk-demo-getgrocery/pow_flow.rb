@@ -67,13 +67,15 @@ proofs = challenges.map { |c| { challenge: c, nonce: solve(c) } }
 # ── Wrong nonce → 403 + penalty ─────────────────────────────────────────────
 _, neg = post_json("#{SERVER}/kiosk/query", QUERY, auth)
 bad = { "indices" => (1..proofs.first[:nonce]["indices"].length).to_a, "header_nonce" => 0 }
-rc_wrong, _ = post_json("#{SERVER}/kiosk/query",
-  QUERY.merge(pow: { proofs: [{ challenge: neg.dig("error", "challenges").first, nonce: bad }] }), auth)
+# PoW proof rides in the Kiosk-PoW request header as raw JSON (ADR-0022), not
+# the body — the body stays byte-identical so the challenge fingerprint matches.
+rc_wrong, _ = post_json("#{SERVER}/kiosk/query", QUERY,
+  auth.merge("Kiosk-PoW" => JSON.generate([{ challenge: neg.dig("error", "challenges").first, nonce: bad }])))
 abort "expected 403 for wrong nonce, got #{rc_wrong}" unless rc_wrong == 403
 bad_proof_count = File.read(BAD_PROOF_FILE).to_i rescue 0
 
 # ── Correct proof → 200 served ──────────────────────────────────────────────
-rc_served, served_resp = post_json("#{SERVER}/kiosk/query", QUERY.merge(pow: { proofs: proofs }), auth)
+rc_served, served_resp = post_json("#{SERVER}/kiosk/query", QUERY, auth.merge("Kiosk-PoW" => JSON.generate(proofs)))
 rows = served_resp.fetch("rows", [])
 abort "expected 200 + rows, got #{rc_served}: #{JSON.generate(served_resp)}" unless rc_served == 200 && rows.any?
 

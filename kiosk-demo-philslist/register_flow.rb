@@ -4,9 +4,9 @@
 #
 # With no payment gate, the optional Equihash registration gate is the FREE
 # board's anti-spam toll. Proves it: POST /auth/register with no proof returns
-# 402; the agent solves the challenge(s) and resubmits the SAME signed body with
-# pow:{proofs:}, getting 201. Then the fresh token POSTS A LISTING. One JSON
-# line on stdout.
+# 402; the agent solves the challenge(s) and resubmits the SAME signed body,
+# sending the proof(s) in the Kiosk-PoW request header (ADR-0022), getting 201.
+# Then the fresh token POSTS A LISTING. One JSON line on stdout.
 #
 # Usage (invoked by rake demo:register — needs KIOSK_POW_REGISTER_DEMO=1):
 #   SERVER_URL=… KIOSK_ISSUER=… bundle exec ruby register_flow.rb
@@ -61,8 +61,10 @@ challenges = resp_nopow.dig("error", "challenges")
 abort "402 without challenges[]" unless challenges.is_a?(Array) && challenges.any?
 
 # ── Solve and resubmit the SAME signed body → expect 201 ────────────────────
+# Proof(s) ride in the Kiosk-PoW request header as raw JSON (ADR-0022); the
+# signed body stays byte-identical so the key-bound challenge fingerprint matches.
 proofs = challenges.map { |c| { challenge: c, nonce: solve(c) } }
-rc_reg, reg = post_json("#{SERVER}/kiosk/auth/register", reg_body.merge(pow: { proofs: proofs }))
+rc_reg, reg = post_json("#{SERVER}/kiosk/auth/register", reg_body, { "Kiosk-PoW" => JSON.generate(proofs) })
 abort "register with proof failed (#{rc_reg}): #{JSON.generate(reg)}" unless rc_reg == 201
 token = reg.fetch("access_token")
 

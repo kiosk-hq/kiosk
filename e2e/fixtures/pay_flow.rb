@@ -33,7 +33,7 @@ key, reg = equihash_register(
   server:    SERVER,
   issuer:    ISSUER,
   get_json:  ->(url) { get_json(url) },
-  post_json: ->(url, body) { post_json(url, body) },
+  post_json: ->(url, body, headers = {}) { post_json(url, body, headers) },
 )
 agent_id = reg.fetch("agent_id"); user_id = reg.fetch("user_id"); token = reg.fetch("access_token")
 

@@ -636,41 +636,56 @@ RSpec.describe Kiosk::Server::PowGate do
   end
 end
 
-# ─── .split_pow — separate the submitted proof from the request body ─────────
-# The wire carries `pow` as a sibling of the verb args. It MUST be pulled out
-# before the body is (a) fingerprinted (the fingerprint binds the challenge to
-# the ORIGINAL request, which had no pow) and (b) handed to the Executor (which
-# must never see the pow key). This is the fix for the dropped-proof regression:
-# the REST controller previously passed `pow: nil` and left `pow` inside the
-# body, so a solved proof could never be verified.
-RSpec.describe "Kiosk::Server::PowGate.split_pow" do
-  subject(:split) { Kiosk::Server::PowGate.method(:split_pow) }
+# ─── .proofs_from_header — parse the proof(s) out of the Kiosk-PoW header ─────
+# The wire carries the proof(s) in the `Kiosk-PoW` request HEADER as raw JSON
+# (ADR-0022), NOT in the body — so the body is identical at issue time (no
+# proof) and verify time (proof in the header) and the challenge fingerprint
+# matches. The parser flattens every accepted presentation (single proof, JSON
+# array, repeated header lines joined by "\n", proxy comma-combined) into one
+# flat proofs list. Malformed JSON → Errors::BadRequest (400) with a header hint.
+RSpec.describe "Kiosk::Server::PowGate.proofs_from_header (b3 dual-accept)" do
+  subject(:parse) { Kiosk::Server::PowGate.method(:proofs_from_header) }
 
-  it "extracts a symbol-keyed :pow and returns the body without it" do
-    pow, body = split.call({ name: "catalog", pow: { challenge: {}, nonce: 1 } })
-    expect(pow).to eq({ challenge: {}, nonce: 1 })
-    expect(body).to eq({ name: "catalog" })
+  let(:proof_a) { { challenge: { id: "a" }, nonce: { indices: [1] } } }
+  let(:proof_b) { { challenge: { id: "b" }, nonce: { indices: [2] } } }
+
+  it "returns nil for an absent header" do
+    expect(parse.call(nil)).to be_nil
   end
 
-  it "extracts a string-keyed 'pow' too" do
-    pow, body = split.call({ "name" => "catalog", "pow" => { "nonce" => 2 } })
-    expect(pow).to eq({ "nonce" => 2 })
-    expect(body).to eq({ "name" => "catalog" })
+  it "returns nil for a blank / whitespace-only header" do
+    expect(parse.call("")).to be_nil
+    expect(parse.call("   ")).to be_nil
   end
 
-  it "returns [nil, body] unchanged when there is no pow" do
-    pow, body = split.call({ name: "catalog" })
-    expect(pow).to be_nil
-    expect(body).to eq({ name: "catalog" })
+  it "wraps a single {…} proof into a one-element proofs list" do
+    proofs = parse.call(JSON.generate(proof_a))
+    expect(proofs).to eq([proof_a])
   end
 
-  it "does not mutate the caller's hash" do
-    original = { name: "catalog", pow: { nonce: 1 } }
-    split.call(original)
-    expect(original).to eq({ name: "catalog", pow: { nonce: 1 } })
+  it "parses a JSON-array value into the proofs list" do
+    proofs = parse.call(JSON.generate([proof_a, proof_b]))
+    expect(proofs).to eq([proof_a, proof_b])
   end
 
-  it "returns [nil, arg] for a non-hash body" do
-    expect(split.call(nil)).to eq([nil, nil])
+  it "flattens repeated header lines (Rack joins duplicates with \\n)" do
+    raw = "#{JSON.generate(proof_a)}\n#{JSON.generate(proof_b)}"
+    expect(parse.call(raw)).to eq([proof_a, proof_b])
+  end
+
+  it "flattens a proxy comma-combined value {A},{B} (RFC 7230)" do
+    raw = "#{JSON.generate(proof_a)},#{JSON.generate(proof_b)}"
+    expect(parse.call(raw)).to eq([proof_a, proof_b])
+  end
+
+  it "supports N > 10 proofs across repeated lines" do
+    lines  = Array.new(12) { |i| JSON.generate(challenge: { id: i.to_s }, nonce: { indices: [i] }) }
+    proofs = parse.call(lines.join("\n"))
+    expect(proofs.length).to eq(12)
+  end
+
+  it "raises Errors::BadRequest with a Kiosk-PoW hint on malformed JSON" do
+    expect { parse.call("{not json") }
+      .to raise_error(Kiosk::Server::Errors::BadRequest, /Kiosk-PoW/)
   end
 end

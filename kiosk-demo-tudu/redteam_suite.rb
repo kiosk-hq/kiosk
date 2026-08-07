@@ -97,12 +97,20 @@ def pop_proof(key, pem)
   JWT.encode({ aud: ISSUER, nonce: ch.fetch("challenge"), jti: SecureRandom.uuid, iat: Time.now.to_i }, key, "RS256")
 end
 
-def register_agent(label)
-  key = OpenSSL::PKey::RSA.generate(2048)
-  pem = key.public_key.to_pem
-  rc, reg = post_json("/kiosk/auth/register", { public_key: pem, signed: pop_proof(key, pem) })
-  abort "#{label} register failed (#{rc}): #{JSON.generate(reg)}" unless rc == 201
-  { key: key, pem: pem, token: reg.fetch("access_token"), agent_id: reg.fetch("agent_id"), user_id: reg.fetch("user_id") }
+require_relative "lib/equihash_register"
+
+# The equihash_register helper injects full-URL get/post callables (tudu's own
+# post_json/get_json take a path), so wrap them to accept a full URL. The plain
+# GET wrapper carries no cookie jar — register needs no session.
+GET_URL  = ->(url)                 { get_json(url.delete_prefix(SERVER)) }
+POST_URL = ->(url, body, hdrs = {}) { post_json(url.delete_prefix(SERVER), body, hdrs) }
+
+# Register a fresh agent, solving the register PoW transparently (register is
+# uniformly tolled). Returns the keypair too — the pre-link scenario re-uses it.
+def register_agent(_label)
+  key, reg = equihash_register(server: SERVER, issuer: ISSUER, get_json: GET_URL, post_json: POST_URL)
+  { key: key, pem: key.public_key.to_pem,
+    token: reg.fetch("access_token"), agent_id: reg.fetch("agent_id"), user_id: reg.fetch("user_id") }
 end
 
 results = []

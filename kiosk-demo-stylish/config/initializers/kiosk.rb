@@ -22,19 +22,19 @@ require Rails.root.join("lib/composite_user_idp")
 require Rails.root.join("lib/pow_difficulty")
 require "kiosk/user_identity_providers/devise"
 
-# Registration PoW gate (KIOSK_POW_REGISTER_DEMO=1). A booking SaaS can price
-# fresh-identity minting: registering an agent costs one Equihash proof
-# (one PoW = Equihash — a metered toll). Params follow KIOSK_POW_DIFFICULTY
-# (lib/pow_difficulty.rb): low (default) → n=96 k=5 sub-second; high → n=168 k=7
-# (~10s / ~1.3 GiB). Unset = low, so the walkthrough/isolation flows and CI are
-# unchanged; a deployer can set high to feel the toll. Off entirely unless
-# KIOSK_POW_REGISTER_DEMO=1.
+# Registration PoW gate — ALWAYS ON. A booking SaaS prices fresh-identity
+# minting: registering an agent costs one Equihash proof (one PoW = Equihash — a
+# metered toll). Register is now uniformly tolled on every demo (no per-demo env
+# flag to remember): it activates on code-deploy and can't be forgotten. Params
+# follow KIOSK_POW_DIFFICULTY (lib/pow_difficulty.rb): low (default) → n=96 k=5
+# sub-second; high → n=168 k=7 (~10s / ~1.3 GiB). Unset = low, so the
+# walkthrough/isolation flows and CI stay fast; a deployer can set high to feel
+# the toll. The prerequisites below MUST run unconditionally, else
+# RegistrationPow.gate raises ConfigurationError at register.
 STYLISH_REGISTRATION_POW_PARAMS = PowDifficulty.params
-if ENV["KIOSK_POW_REGISTER_DEMO"] == "1"
-  require "kiosk/pow/equihash"
-  require "kiosk/reputation"
-  Kiosk::Reputation::Backends.register(Kiosk::Pow::Equihash::NAME, Kiosk::Pow::Equihash)
-end
+require "kiosk/pow/equihash"
+require "kiosk/reputation"
+Kiosk::Reputation::Backends.register(Kiosk::Pow::Equihash::NAME, Kiosk::Pow::Equihash)
 
 Kiosk.configure do |c|
   c.user_model     = "User"
@@ -108,12 +108,10 @@ Kiosk.configure do |c|
   # page). window_days stays default nil = all-time cumulative spend.
   c.spending_cap = Kiosk::Server::ColumnSpendingCap.new
 
-  # ── Registration PoW gate (active only when KIOSK_POW_REGISTER_DEMO=1) ───
-  if ENV["KIOSK_POW_REGISTER_DEMO"] == "1"
-    c.registration_pow_count  = 1
-    c.registration_pow_params = STYLISH_REGISTRATION_POW_PARAMS
-    c.pow_secret              = ENV.fetch("KIOSK_POW_SECRET", "stylish-demo-pow-secret")
-  end
+  # ── Registration PoW gate — ALWAYS ON (register is uniformly tolled) ──────
+  c.registration_pow_count  = 1
+  c.registration_pow_params = STYLISH_REGISTRATION_POW_PARAMS
+  c.pow_secret              = ENV.fetch("KIOSK_POW_SECRET", "stylish-demo-pow-secret")
 end
 
 # ─── Queries ────────────────────────────────────────────────────────────────

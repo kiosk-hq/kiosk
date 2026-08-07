@@ -52,26 +52,24 @@ require "kiosk/user_identity_providers/devise"
 # CI and quick poking stay fast; unset here still resolves to low.
 EQUIHASH_DEMO_PARAMS = PowDifficulty.params
 
-# ── Registration PoW gate (KIOSK_POW_REGISTER_DEMO=1) — POW-VERB-GATING (K-487)
+# ── Registration PoW gate — ALWAYS ON — POW-VERB-GATING (K-487)
 #
-# register is a verb like any other: a table-booking SaaS can price fresh-identity
+# register is a verb like any other: a table-booking SaaS prices fresh-identity
 # minting (one Equihash proof) so a scalper renting throwaway agents pays at the
-# door. This is INDEPENDENT of the :query/:reputation/:backoff verb tolls above —
-# a deployer can toll register alone. Params follow KIOSK_POW_DIFFICULTY
-# (atablefor ships high in the hosted deploy, so register inherits n=168 k=7
-# automatically). Off entirely unless KIOSK_POW_REGISTER_DEMO=1, so demo:setup /
-# CI / the free-register flows are unchanged.
+# door. This is INDEPENDENT of the :query/:reputation/:backoff verb tolls above.
+# Register is now uniformly tolled on every demo (no per-demo env flag to
+# remember): it activates on code-deploy and can't be forgotten. Params follow
+# KIOSK_POW_DIFFICULTY (atablefor ships high in the hosted deploy, so register
+# inherits n=168 k=7 automatically).
 #
 # The gate REQUIRES kiosk-pow-equihash + kiosk-reputation required and the
-# Equihash backend registered; those live inside each verb-toll guard, so hoist
-# them here too (require + Backends.register are idempotent) — register-pow then
-# works even when the verb-toll flags are off.
+# Equihash backend registered; those must run UNCONDITIONALLY (else
+# RegistrationPow.gate raises ConfigurationError at register). require +
+# Backends.register are idempotent, so the verb-toll guards below re-run them harmlessly.
 ATABLEFOR_REGISTRATION_POW_PARAMS = PowDifficulty.params
-if ENV["KIOSK_POW_REGISTER_DEMO"] == "1"
-  require "kiosk/pow/equihash"
-  require "kiosk/reputation"
-  Kiosk::Reputation::Backends.register(Kiosk::Pow::Equihash::NAME, Kiosk::Pow::Equihash)
-end
+require "kiosk/pow/equihash"
+require "kiosk/reputation"
+Kiosk::Reputation::Backends.register(Kiosk::Pow::Equihash::NAME, Kiosk::Pow::Equihash)
 
 if ENV["KIOSK_POW_DEMO"] == "1"
   require "kiosk/pow/equihash"
@@ -311,15 +309,13 @@ Kiosk.configure do |c|
     c.reputation_factors = ->(**) { Kiosk::Reputation::Factors.empty }
   end
 
-  # ── Registration PoW gate (active only when KIOSK_POW_REGISTER_DEMO=1) ───
+  # ── Registration PoW gate — ALWAYS ON (register is uniformly tolled) ──────
   # Price fresh-identity minting: registering an agent costs ONE Equihash proof.
   # Independent of the verb tolls above; pow_secret is set here too so the gate
   # works even when no verb toll is on (RegistrationPow.gate raises without it).
-  if ENV["KIOSK_POW_REGISTER_DEMO"] == "1"
-    c.registration_pow_count  = 1
-    c.registration_pow_params = ATABLEFOR_REGISTRATION_POW_PARAMS
-    c.pow_secret              = ENV.fetch("KIOSK_POW_SECRET", "demo-pow-secret")
-  end
+  c.registration_pow_count  = 1
+  c.registration_pow_params = ATABLEFOR_REGISTRATION_POW_PARAMS
+  c.pow_secret              = ENV.fetch("KIOSK_POW_SECRET", "demo-pow-secret")
 end
 
 # ── Live-activity telemetry — opt-in, app-layer, privacy-safe ───

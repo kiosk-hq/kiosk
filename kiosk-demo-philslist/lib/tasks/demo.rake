@@ -187,10 +187,11 @@ task demo: ["demo:setup", "demo:walkthrough"]
 
 namespace :demo do
   desc <<~DESC
-    Registration-PoW demo (KIOSK_POW_REGISTER_DEMO=1).
+    Registration-PoW demo.
 
     With no payment gate, the registration PoW is a FREE-board anti-spam toll.
-    Boots the server with the gate active and runs register_flow.rb: register
+    Register-PoW is ALWAYS ON (wired in the app config, no env flag), so the
+    default server already gates registration. Runs register_flow.rb: register
     with no proof → 402; solve the Equihash challenge and resubmit → 201; the
     fresh token posts a listing → 200. Requires python3 + numpy.
   DESC
@@ -203,7 +204,7 @@ namespace :demo do
     flow_rb = File.expand_path("../../register_flow.rb", __dir__)
     failures = []
 
-    server_pid, server_url = philslist_boot_server(log: log, port: port, extra_env: { "KIOSK_POW_REGISTER_DEMO" => "1" })
+    server_pid, server_url = philslist_boot_server(log: log, port: port)
     puts "  (registration PoW active)"
     begin
       env = "SERVER_URL=#{server_url.shellescape} KIOSK_ISSUER=#{server_url.shellescape}"

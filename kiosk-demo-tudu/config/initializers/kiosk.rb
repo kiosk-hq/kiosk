@@ -28,19 +28,19 @@ require "kiosk/user_identity_providers/devise"
 require "securerandom"
 require "base64"
 
-# Registration PoW gate (KIOSK_POW_REGISTER_DEMO=1). With no payment gate, the
-# optional registration PoW toll is the defense of a FREE app against spam
-# signups — the same feature the commerce demos price fresh-identity minting
-# with, new meaning. Params follow KIOSK_POW_DIFFICULTY (lib/pow_difficulty.rb):
-# low (default) → n=96 k=5 sub-second; high → n=168 k=7 (~10s / ~1.3 GiB). Unset
-# = low, so the collab/link/isolation flows and CI are unchanged; a deployer can
-# set high to feel the toll. Off entirely unless KIOSK_POW_REGISTER_DEMO=1.
+# Registration PoW gate — ALWAYS ON. With no payment gate, the registration PoW
+# toll is the defense of a FREE app against spam signups — the same feature the
+# commerce demos price fresh-identity minting with, new meaning. Register is now
+# uniformly tolled on every demo (no per-demo env flag to remember): it activates
+# on code-deploy and can't be forgotten. Params follow KIOSK_POW_DIFFICULTY
+# (lib/pow_difficulty.rb): low (default) → n=96 k=5 sub-second; high → n=168 k=7
+# (~10s / ~1.3 GiB). Unset = low, so the collab/link/isolation flows and CI stay
+# fast; a deployer can set high to feel the toll. The prerequisites below MUST run
+# unconditionally, else RegistrationPow.gate raises ConfigurationError at register.
 TUDU_REGISTRATION_POW_PARAMS = PowDifficulty.params
-if ENV["KIOSK_POW_REGISTER_DEMO"] == "1"
-  require "kiosk/pow/equihash"
-  require "kiosk/reputation"
-  Kiosk::Reputation::Backends.register(Kiosk::Pow::Equihash::NAME, Kiosk::Pow::Equihash)
-end
+require "kiosk/pow/equihash"
+require "kiosk/reputation"
+Kiosk::Reputation::Backends.register(Kiosk::Pow::Equihash::NAME, Kiosk::Pow::Equihash)
 
 Kiosk.configure do |c|
   c.user_model     = "User"
@@ -146,12 +146,10 @@ Kiosk.configure do |c|
     _ = agent # attribution available to the hook; not needed for the migration
   end
 
-  # ── Registration PoW gate (active only when KIOSK_POW_REGISTER_DEMO=1) ───
-  if ENV["KIOSK_POW_REGISTER_DEMO"] == "1"
-    c.registration_pow_count  = 1
-    c.registration_pow_params = TUDU_REGISTRATION_POW_PARAMS
-    c.pow_secret              = ENV.fetch("KIOSK_POW_SECRET", "tudu-demo-pow-secret")
-  end
+  # ── Registration PoW gate — ALWAYS ON (register is uniformly tolled) ──────
+  c.registration_pow_count  = 1
+  c.registration_pow_params = TUDU_REGISTRATION_POW_PARAMS
+  c.pow_secret              = ENV.fetch("KIOSK_POW_SECRET", "tudu-demo-pow-secret")
 end
 
 # ─── Helpers ──────────────────────────────────────────────────────────────────

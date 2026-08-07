@@ -2,13 +2,14 @@
 
 # philslist registration-PoW driver.
 #
-# With no payment gate, the optional Equihash registration gate is the FREE
-# board's anti-spam toll. Proves it: POST /auth/register with no proof returns
-# 402; the agent solves the challenge(s) and resubmits the SAME signed body,
-# sending the proof(s) in the Kiosk-PoW request header (ADR-0022), getting 201.
-# Then the fresh token POSTS A LISTING. One JSON line on stdout.
+# With no payment gate, the Equihash registration gate is the FREE board's
+# anti-spam toll. It is ALWAYS ON (wired in the app config, no env flag). Proves
+# it: POST /auth/register with no proof returns 402; the agent solves the
+# challenge(s) and resubmits the SAME signed body, sending the proof(s) in the
+# Kiosk-PoW request header (ADR-0022), getting 201. Then the fresh token POSTS A
+# LISTING. One JSON line on stdout.
 #
-# Usage (invoked by rake demo:register — needs KIOSK_POW_REGISTER_DEMO=1):
+# Usage (invoked by rake demo:register):
 #   SERVER_URL=… KIOSK_ISSUER=… bundle exec ruby register_flow.rb
 # Requires: python3 with numpy.
 

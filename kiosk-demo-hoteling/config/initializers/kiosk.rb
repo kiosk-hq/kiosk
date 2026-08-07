@@ -54,22 +54,21 @@ HOTELING_FREE_BROWSES  = 3    # first N availability queries are free
 HOTELING_RATE_STEP     = 2    # +1 proof per this many queries beyond the free tier
 HOTELING_MAX_PROOFS    = 5
 
-# ── Registration PoW gate (KIOSK_POW_REGISTER_DEMO=1) — POW-VERB-GATING (K-487)
+# ── Registration PoW gate — ALWAYS ON — POW-VERB-GATING (K-487)
 #
-# register is a verb like any other: a hotel provider can price fresh-identity
+# register is a verb like any other: a hotel provider prices fresh-identity
 # minting (one Equihash proof) so a scraper renting throwaway agents pays at the
-# door. Independent of the browse-rate gate above — a deployer can toll register
-# alone. Params follow KIOSK_POW_DIFFICULTY (hoteling ships low → n=96 k=5
-# sub-second). Off entirely unless KIOSK_POW_REGISTER_DEMO=1, so demo:setup / CI /
-# the free-register flows are unchanged. The gate requires the Equihash backend
-# registered; hoist the require + Backends.register here (both idempotent) so
-# register-pow works even when KIOSK_POW_BROWSE_DEMO is off.
+# door. Independent of the browse-rate gate above. Register is now uniformly
+# tolled on every demo (no per-demo env flag to remember): it activates on
+# code-deploy and can't be forgotten. Params follow KIOSK_POW_DIFFICULTY
+# (hoteling ships low → n=96 k=5 sub-second). The gate requires the Equihash
+# backend registered; the require + Backends.register run UNCONDITIONALLY here
+# (both idempotent) so register-pow works regardless of KIOSK_POW_BROWSE_DEMO —
+# else RegistrationPow.gate raises ConfigurationError at register.
 HOTELING_REGISTRATION_POW_PARAMS = PowDifficulty.params
-if ENV["KIOSK_POW_REGISTER_DEMO"] == "1"
-  require "kiosk/pow/equihash"
-  require "kiosk/reputation"
-  Kiosk::Reputation::Backends.register(Kiosk::Pow::Equihash::NAME, Kiosk::Pow::Equihash)
-end
+require "kiosk/pow/equihash"
+require "kiosk/reputation"
+Kiosk::Reputation::Backends.register(Kiosk::Pow::Equihash::NAME, Kiosk::Pow::Equihash)
 
 if ENV["KIOSK_POW_BROWSE_DEMO"] == "1"
   require "kiosk/pow/equihash"
@@ -163,16 +162,14 @@ Kiosk.configure do |c|
     }
   end
 
-  # ── Registration PoW gate (active only when KIOSK_POW_REGISTER_DEMO=1) ───
+  # ── Registration PoW gate — ALWAYS ON (register is uniformly tolled) ──────
   # Price fresh-identity minting: registering an agent costs ONE Equihash proof.
   # Independent of the browse gate above; pow_secret is set here too so the gate
   # works even when KIOSK_POW_BROWSE_DEMO is off (RegistrationPow.gate raises
   # without it).
-  if ENV["KIOSK_POW_REGISTER_DEMO"] == "1"
-    c.registration_pow_count  = 1
-    c.registration_pow_params = HOTELING_REGISTRATION_POW_PARAMS
-    c.pow_secret              = ENV.fetch("KIOSK_POW_SECRET", "hoteling-demo-pow-secret")
-  end
+  c.registration_pow_count  = 1
+  c.registration_pow_params = HOTELING_REGISTRATION_POW_PARAMS
+  c.pow_secret              = ENV.fetch("KIOSK_POW_SECRET", "hoteling-demo-pow-secret")
 end
 
 # Amenity vocabulary — the closed set a property MAY offer. Shared by the

@@ -104,11 +104,14 @@ def bearer(token) = { "Authorization" => "Bearer #{token}" }
 results = {}
 
 # ── 1. Assistant registers HEADLESS and creates the "Hike" list ─────────────
-key = OpenSSL::PKey::RSA.generate(2048)
+# equihash_register solves the register PoW transparently (register is uniformly
+# tolled) and returns the SAME keypair the later claim/login re-use. Its injected
+# get/post callables take a full URL; tudu's own helpers take a path, so wrap.
+require_relative "lib/equihash_register"
+get_url  = ->(url)                 { get_json(url.delete_prefix(SERVER)) }
+post_url = ->(url, body, hdrs = {}) { post_json(url.delete_prefix(SERVER), body, hdrs) }
+key, reg = equihash_register(server: SERVER, issuer: ISSUER, get_json: get_url, post_json: post_url)
 pem = key.public_key.to_pem
-pop = pop_proof(key, pem)
-rc, reg = post_json("/kiosk/auth/register", { public_key: pem, signed: pop })
-abort "headless register failed (#{rc}): #{JSON.generate(reg)}" unless rc == 201
 headless_token   = reg.fetch("access_token")
 agent_id         = reg.fetch("agent_id")
 headless_user_id = reg.fetch("user_id")

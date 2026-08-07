@@ -20,8 +20,8 @@
 #     cannot smuggle an `owner` role into the claim body; the role is sourced
 #     from the bound human's IdP, so the token stays `stylist` (roles-from-IdP)
 #   StylistCalendarStaysStylistScoped — that stylist's agent sees only its own
-#     chairs (no whole-book, no revenue) in salon_calendar — the role gate is
-#     provider-controlled and un-bypassable
+#     open slot (no whole-book, no forecast) in salon_calendar — the role gate
+#     is provider-controlled and un-bypassable
 #
 # Usage:
 #   SERVER_URL=http://127.0.0.1:3001 \
@@ -163,15 +163,15 @@ record(results, "StylistCannotSelfSelectOwnerAtBinding",
        "stylist link with forged owner body → token role #{role_claim.inspect} (want \"stylist\", claim body ignored)")
 
 # StylistCalendarStaysStylistScoped — the stylist's agent calls salon_calendar;
-# it must see ONLY its own chairs and NO revenue total (owner-only), even
+# it must see ONLY its own chair and NO forecast total (owner-only), even
 # though it just tried to claim owner. The role gate is un-bypassable.
 rc, cal = post_json("/kiosk/query", { name: "salon_calendar" }, bearer(stylist_token))
 rows = (cal["rows"] || [])
-own_only     = rows.all? { |r| r["stylist_id"] == STYLIST1_ID }
-no_revenue   = rows.none? { |r| r["summary"] == "revenue" }
+own_only     = rows.reject { |r| r["summary"] }.all? { |r| r["stylist_id"] == STYLIST1_ID }
+no_forecast  = rows.none? { |r| r["summary"] == "forecast" }
 record(results, "StylistCalendarStaysStylistScoped",
-       rc == 200 && own_only && no_revenue && !rows.empty?,
-       "stylist salon_calendar: #{rows.size} rows, own_only=#{own_only}, revenue_hidden=#{no_revenue}")
+       rc == 200 && own_only && no_forecast && !rows.empty?,
+       "stylist salon_calendar: #{rows.size} rows, own_only=#{own_only}, forecast_hidden=#{no_forecast}")
 
 # ── Verdict ──────────────────────────────────────────────────────────────────
 breaches = results.reject { |r| r[:blocked] }

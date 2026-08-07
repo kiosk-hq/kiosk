@@ -73,17 +73,23 @@
 
   <div class="wrap">
 
-    <!-- ── 1. Try it with your own assistant ─────────────────────────── -->
+    <!-- ── 1. Two entrances — visitor or staff ───────────────────────── -->
     <section class="sec">
       <div class="sec-k">🤖 Try it with your own assistant</div>
       <div class="tryit">
         <h2>This is a Kiosk endpoint — an AI assistant drives it</h2>
-        <p>stylish is a salon a customer's assistant transacts with directly over the Kiosk wire. Tell your AI assistant:</p>
-        <p class="say">“Book a haircut at stylish.demo.kiosk.tech for Thursday afternoon.”</p>
-        <p>It discovers the salon, registers itself, reads the service menu (EUR prices), checks the calendar, and books — no account, no app.</p>
+        <p>stylish is a salon an AI assistant transacts with directly over the Kiosk wire. There are <strong>two entrances</strong>, and you take <strong>one or the other</strong> — a tester acts as a <strong>visitor</strong> <em>or</em> as <strong>staff</strong>, not both at once (multi-account is not wired yet).</p>
+
         <div class="linkbox">
-          <strong>The staff reveal — your assistant inherits your role.</strong>
-          Use <a href="/users/sign_in"><strong>Staff login</strong></a> to sign in as salon staff, then open <a href="/kiosk/auth/assistants">Manage&nbsp;assistants</a> and <strong>mint a link code</strong> — hand it to your assistant and it <strong>inherits your role</strong>, sourced from the operator's IdP (not chosen by the assistant). The role-gated <code>salon_calendar</code> query then scopes what it sees: an <strong>owner-linked assistant sees the whole book + the day's € revenue total</strong>; a stylist-linked one sees only their own chairs; a customer sees nothing. This demo logs you in as the <strong>owner</strong>, so your assistant sees today's whole book with its live € revenue total — the reveal a customer's assistant never gets. (The exact count and total come from the live calendar, whatever is booked for the day.)
+          <strong>① Visitor entrance — book a haircut.</strong>
+          Tell your AI assistant:
+          <p class="say">“Book a haircut at stylish.demo.kiosk.tech.”</p>
+          It discovers the salon, registers itself, reads the <strong>open slots</strong> (7 stylists, each with one open booking — evergreen availability), picks a stylist, and books — no account, no app. Your booking is real: it lands in the salon's book and shows up in the staff view.
+        </div>
+
+        <div class="linkbox">
+          <strong>② Staff entrance — see the forecasted revenue.</strong>
+          Use <a href="/users/sign_in"><strong>Staff login</strong></a> to sign in as the salon owner, then open <a href="/kiosk/auth/assistants">Manage&nbsp;assistants</a> and <strong>mint a link code</strong> — hand it to your assistant and it <strong>inherits your role</strong>, sourced from the operator's IdP (not chosen by the assistant). The role-gated <code>salon_calendar</code> query then scopes what it sees: an <strong>owner-linked assistant sees every stylist's open slot plus the day's <em>forecasted</em> € revenue</strong> — the projection of what the day earns if the open slots fill, reflecting real bookings as they happen; a stylist-linked one sees only their own chair; a visitor sees nothing. The figures come from the live salon (open-slot prices + real bookings), never a fixed number.
           <div class="cred">Demo staff login (owner): <code>owner@combette.example</code> &nbsp;/&nbsp; <code>combette-demo-password</code></div>
         </div>
       </div>
@@ -93,11 +99,11 @@
     <section class="sec">
       <div class="sec-k">About this demo</div>
       <div class="about">
-        <p><strong>stylish</strong> (seeded salon: Combette on Park) is a salon-booking demo with a EUR service menu and a full day of booked chairs. It is the <strong>roles-from-IdP</strong> reference: staff roles supplied by the operator's own identity system are inherited by a linked assistant, and role-gated queries scope what each assistant can see (owner → whole book + € revenue; stylist → own chairs; customer → nothing). It also walks human↔assistant account binding over real Devise sessions.</p>
+        <p><strong>stylish</strong> (seeded salon: Combette on Park) is a salon-booking demo built on <strong>evergreen availability</strong>: seven stylists, each offering one open bookable slot, with a EUR service menu — no stale dated appointments, so it never goes empty. It is the <strong>roles-from-IdP</strong> reference: staff roles supplied by the operator's own identity system are inherited by a linked assistant, and role-gated queries scope what each assistant can see (owner → every open slot + a forecasted € revenue; stylist → own chair; visitor → nothing). It also walks human↔assistant account binding over real Devise sessions.</p>
         <div class="chips">
+          <span class="chip">✂️ Evergreen open slots</span>
           <span class="chip">🪪 IdP roles (staff RBAC)</span>
-          <span class="chip">Role-gated queries</span>
-          <span class="chip">💶 EUR service menu</span>
+          <span class="chip">💶 Forecasted € revenue</span>
           <span class="chip">Human↔assistant linking</span>
         </div>
         <div class="links">
@@ -111,10 +117,10 @@
     <section class="sec">
       <div class="sec-k">Live activity</div>
       <div class="stats">
-        <div class="stat"><div class="n"><%= @appointments_booked %></div><div class="l">Appointments booked</div></div>
-        <div class="stat"><div class="n"><%= @upcoming %></div><div class="l">Upcoming</div></div>
-        <div class="stat"><div class="n"><%= @staff_on_book %></div><div class="l">Staff on the book</div></div>
-        <div class="stat"><div class="n"><%= @salons %></div><div class="l">Salons</div></div>
+        <div class="stat"><div class="n"><%= @open_slots %></div><div class="l">Open slots</div></div>
+        <div class="stat"><div class="n"><%= @appointments_booked %></div><div class="l">Booked so far</div></div>
+        <div class="stat"><div class="n"><%= @stylists %></div><div class="l">Stylists</div></div>
+        <div class="stat"><div class="n"><%= @forecast_eur %></div><div class="l">Forecasted revenue</div></div>
       </div>
     </section>
 
@@ -126,7 +132,7 @@
       <div class="store-label">The storefront — what a human visitor sees</div>
       <div class="store-body">
         <div class="hero">
-          <h1>Book my haircut for Thursday.</h1>
+          <h1>Book my next haircut.</h1>
           <p>Combette on Park — cuts, colour and styling, booked in a single conversation.</p>
         </div>
       </div>

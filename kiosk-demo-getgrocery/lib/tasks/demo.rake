@@ -12,6 +12,7 @@
 #   rake demo:schema     self-discovery proof over the schema verb
 #   rake demo:redteam    adversarial regression battery (kiosk-redteam scenarios)
 #   rake demo:pow        commerce catalog-toll PoW demo (catalog 402 → solve → 200)
+#   rake demo:slots_spec DB-free unit spec for the delivery-slot past-filter (K-480)
 #   rake demo            setup + shop (full end-to-end proof)
 
 # Start (or reuse) a local stripe-mock; return its HTTP base URL. The adversarial
@@ -59,6 +60,13 @@ namespace :demo do
     else
       sh "bundle exec rails db:drop db:create db:migrate db:seed"
     end
+  end
+
+  desc "DB-free unit spec for the delivery-slot past-filter + Dublin zone (K-480)."
+  task :slots_spec do
+    spec = File.expand_path("../../spec/delivery_slots_spec.rb", __dir__)
+    puts "\n── delivery_slots K-480 past-filter spec (no DB) ──"
+    sh "ruby #{spec}"
   end
 
   desc "Boot the server, run getgrocery_flow.rb end-to-end (no-human happy path: register→catalog→delivery_slots→create_order (delivery slot+address required)→payment_setup→pay (cart mirrors the order, EUR)→my_orders (paid)), assert."
@@ -211,6 +219,21 @@ namespace :demo do
     else
       failures << "K-470: create_order slot_at #{sat.inspect} != chosen delivery_slot slot_at #{chosen.inspect}"
       puts "  FAIL  K-470: create_order slot_at #{sat.inspect} != chosen delivery_slot slot_at #{chosen.inspect}"
+    end
+
+    # K-480: if the flow ran late enough that some of today's windows had already
+    # started, delivery_slots hid them AND create_order rejected a past one with a
+    # clean 400 bad_request (the negative control in getgrocery_flow.rb only fires
+    # when a genuine past slot exists — a no-op before 08:00 Dublin or when booking
+    # tomorrow, in which case this asserts nothing).
+    psc = result["past_slot_check"]
+    if psc.nil?
+      puts "  OK  K-480: no past slot to reject (booked tomorrow or before 08:00 Dublin) — filter is a no-op"
+    elsif psc["http"] == 400 && psc["code"] == "bad_request"
+      puts "  OK  K-480: create_order on past slot id=#{psc["id"]} → 400 bad_request (un-bookable window rejected)"
+    else
+      failures << "K-480: create_order on past slot expected 400 bad_request, got #{psc.inspect}"
+      puts "  FAIL  K-480: create_order on past slot got #{psc.inspect}"
     end
 
     # my_orders marks the settled order paid

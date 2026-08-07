@@ -94,6 +94,10 @@ STDERR.puts "  Ordering: #{items.map { |i| "sku=#{i[:sku]}" }.join(", ")}"
 # K-470: query for TODAY (the live-run scenario) so the assertion below catches
 # any date drift — create_order must book the SAME day the slot was shown for,
 # not a fixed +1.
+# K-480: delivery_slots now hides today's already-started windows. If this runs
+# late enough in Dublin's day that today is sold out, fall back to tomorrow so
+# the happy-path proof is robust to wall-clock time; the no-drift assertion below
+# copies whatever date the returned row carries, so it holds for either day.
 delivery_address = "42 Camden Street, Dublin 2"
 delivery_date    = Date.today.to_s
 
@@ -109,13 +113,25 @@ abort "out-of-zone delivery_slots expected 400 bad_request, got #{rc_bad} #{bad_
   unless rc_bad == 400 && bad_code == "bad_request"
 STDERR.puts "  delivery_slots (district-less address): http=#{rc_bad} code=#{bad_code} (rejected, as expected)"
 
-rc_slots, slots_resp = post_json(
-  "#{SERVER}/kiosk/query",
-  { name: "delivery_slots", date: delivery_date, delivery_address: delivery_address },
-  { "Authorization" => "Bearer #{token}" },
-)
-abort "query delivery_slots failed (#{rc_slots}): #{JSON.generate(slots_resp)}" unless rc_slots == 200
-slots = slots_resp.fetch("rows", [])
+rc_slots = nil
+query_slots = lambda do |date_str|
+  rc_slots, resp = post_json(
+    "#{SERVER}/kiosk/query",
+    { name: "delivery_slots", date: date_str, delivery_address: delivery_address },
+    { "Authorization" => "Bearer #{token}" },
+  )
+  abort "query delivery_slots failed (#{rc_slots}): #{JSON.generate(resp)}" unless rc_slots == 200
+  resp.fetch("rows", [])
+end
+
+slots = query_slots.call(delivery_date)
+if slots.empty?
+  # K-480: today's windows have all already started in Dublin — the earliest
+  # bookable slot is tomorrow. A live agent would do exactly this.
+  delivery_date = (Date.today + 1).to_s
+  STDERR.puts "  delivery_slots: today is sold out (all windows started) — querying #{delivery_date}"
+  slots = query_slots.call(delivery_date)
+end
 abort "delivery_slots returned empty" if slots.empty?
 abort "delivery_slots rows must carry the resolved zone" unless slots.all? { |s| s["zone"].to_s.start_with?("D") }
 slot          = slots.first
@@ -123,6 +139,32 @@ slot_id       = slot.fetch("id")
 slot_date     = slot.fetch("date")     # the day the assistant sees for this slot
 chosen_slot_at = slot.fetch("slot_at") # its exact start time — create_order must match
 STDERR.puts "  Delivery slot: id=#{slot_id} #{slot["label"]} zone=#{slot["zone"]} on #{slot_date} (#{chosen_slot_at})"
+
+# K-480 negative control: delivery_slots must HIDE already-started windows, and
+# create_order must REJECT one with a clean 400 (never book an un-bookable past
+# slot). This only asserts when there genuinely is a past slot for the queried
+# day — i.e. some early slot id (1..6) is absent from the returned set because
+# its start has already passed in Dublin. (When we're booking tomorrow, or it's
+# before 08:00 Dublin, no slot is past and this control is a no-op.)
+returned_ids   = slots.map { |s| s["id"].to_i }
+missing_ids     = (1..6).to_a - returned_ids
+past_slot_check = nil
+unless missing_ids.empty?
+  past_id = missing_ids.min
+  rc_past, past_resp = post_json(
+    "#{SERVER}/kiosk/run",
+    { name: "create_order", items: items,
+      delivery_slot_id: past_id,
+      delivery_date:    slot_date,
+      delivery_address: delivery_address },
+    { "Authorization" => "Bearer #{token}" },
+  )
+  past_code = past_resp.dig("error", "code")
+  abort "K-480: create_order on a PAST slot (#{past_id} on #{slot_date}) expected 400 bad_request, got #{rc_past} #{past_code.inspect}" \
+    unless rc_past == 400 && past_code == "bad_request"
+  past_slot_check = { id: past_id, http: rc_past, code: past_code }
+  STDERR.puts "  K-480: create_order on past slot id=#{past_id} → http=#{rc_past} code=#{past_code} (rejected, as expected)"
+end
 
 # -- Step 4: create_order (items + delivery slot + chosen slot's date + address) --
 # K-470: pass back the DATE of the slot we chose so create_order books the day
@@ -264,6 +306,7 @@ puts JSON.generate(
   slot_at:            slot_at,
   chosen_slot_at:     chosen_slot_at,
   slot_date:          slot_date,
+  past_slot_check:    past_slot_check,
   paid:               paid,
   psp_reference:      psp_ref,
   my_orders:          my_orders,

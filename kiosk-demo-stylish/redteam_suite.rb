@@ -98,7 +98,7 @@ end
 # ── Fixture: A books an appointment (target for cross-tenant probes) ──────────
 rc, salons = post_json("/kiosk/query", { name: "salons" }, bearer(TOKEN_A))
 abort "salons query failed (#{rc}): #{JSON.generate(salons)} — run rake demo:setup" unless rc == 200
-salon_id = (salons["rows"] || []).first&.fetch("id")
+salon_id = (salons["rows"] || []).first&.fetch("salon_id")
 abort "no salons seeded — run rake demo:setup" unless salon_id
 
 rc, appt_a = post_json(

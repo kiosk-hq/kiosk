@@ -153,7 +153,7 @@ STDERR.puts "  Rebind: agent_id=#{claims["agent_id"]} (stable) user_id=#{claims[
 # not auto-migrated. The human's my_orders must not contain it.
 rc, mine = post_json("#{SERVER}/kiosk/query", { name: "my_orders" }, { "Authorization" => "Bearer #{human_token}" })
 abort "my_orders failed (#{rc})" unless rc == 200
-results[:standalone_order_not_migrated] = mine.fetch("rows", []).none? { |o| o["id"] == standalone_order_id }
+results[:standalone_order_not_migrated] = mine.fetch("rows", []).none? { |o| o["order_id"] == standalone_order_id }
 
 # ── Beat 3: a NEW order as the human, paid with the saved card ──────────────
 new_order_id, total_cents, total_eur = create_order(human_token, items)
@@ -195,6 +195,6 @@ STDERR.puts "  Paid #{total_eur} with the human's saved card: #{results[:psp_ref
 
 # The new order is on the human's account now.
 rc, mine = post_json("#{SERVER}/kiosk/query", { name: "my_orders" }, { "Authorization" => "Bearer #{human_token}" })
-results[:human_sees_new_order] = rc == 200 && mine.fetch("rows", []).any? { |o| o["id"] == new_order_id }
+results[:human_sees_new_order] = rc == 200 && mine.fetch("rows", []).any? { |o| o["order_id"] == new_order_id }
 
 puts JSON.generate(results)

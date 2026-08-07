@@ -135,7 +135,7 @@ end
 abort "delivery_slots returned empty" if slots.empty?
 abort "delivery_slots rows must carry the resolved zone" unless slots.all? { |s| s["zone"].to_s.start_with?("D") }
 slot          = slots.first
-slot_id       = slot.fetch("id")
+slot_id       = slot.fetch("delivery_slot_id")
 slot_date     = slot.fetch("date")     # the day the assistant sees for this slot
 chosen_slot_at = slot.fetch("slot_at") # its exact start time — create_order must match
 STDERR.puts "  Delivery slot: id=#{slot_id} #{slot["label"]} zone=#{slot["zone"]} on #{slot_date} (#{chosen_slot_at})"
@@ -146,7 +146,7 @@ STDERR.puts "  Delivery slot: id=#{slot_id} #{slot["label"]} zone=#{slot["zone"]
 # day — i.e. some early slot id (1..6) is absent from the returned set because
 # its start has already passed in Dublin. (When we're booking tomorrow, or it's
 # before 08:00 Dublin, no slot is past and this control is a no-op.)
-returned_ids   = slots.map { |s| s["id"].to_i }
+returned_ids   = slots.map { |s| s["delivery_slot_id"].to_i }
 missing_ids     = (1..6).to_a - returned_ids
 past_slot_check = nil
 unless missing_ids.empty?
@@ -282,7 +282,7 @@ rc_my, my_resp = post_json(
 )
 abort "my_orders failed (#{rc_my}): #{JSON.generate(my_resp)}" unless rc_my == 200
 my_orders = my_resp.fetch("rows", [])
-own = my_orders.find { |o| o["id"] == order_id }
+own = my_orders.find { |o| o["order_id"] == order_id }
 abort "my_orders does not contain own order #{order_id}" if own.nil?
 paid = own["paid"] == true || own["paid"] == "t"
 abort "my_orders own order not marked paid: #{own.inspect}" unless paid

@@ -268,7 +268,9 @@ Kiosk::Server::Queries.register("delivery_slots",
                "an out-of-zone or district-less address returns 400 (bad_request) naming what is " \
                "needed. Obtain the real address from your human FIRST — the same address is required " \
                "again at create_order. NOTE: the operator validates format + zone only; it cannot " \
-               "verify a plausible in-zone address is real, so confirm it with your human.",
+               "verify a plausible in-zone address is real, so confirm it with your human. " \
+               "Each row carries a `delivery_slot_id` (and its `date`); pass both to create_order " \
+               "as `delivery_slot_id` and `delivery_date`.",
   params: {
     date:             "date string YYYY-MM-DD — desired delivery date",
     delivery_address: "string — the Dublin delivery address (must name a served postal district), REQUIRED",
@@ -283,7 +285,7 @@ Kiosk::Server::Queries.register("delivery_slots",
     required: ["date", "delivery_address"],
   },
   example_params: { date: "2026-08-10", delivery_address: "42 Camden Street, Dublin 2" },
-  example_row: { id: 1, date: "2026-08-10", slot_at: "2026-08-10T08:00:00+01:00", label: "08:00–10:00", zone: "D02" }) do |params|
+  example_row: { delivery_slot_id: 1, date: "2026-08-10", slot_at: "2026-08-10T08:00:00+01:00", label: "08:00–10:00", zone: "D02" }) do |params|
   date = params.fetch(:date) { raise Kiosk::Server::Errors::BadRequest.new("missing param: date") }
 
   # ADDRESS-UPFRONT (K-468): the delivery address is a REQUIRED early input.
@@ -320,7 +322,7 @@ Kiosk::Server::Queries.register("delivery_slots",
     slot_time = DeliverySlots.slot_at(parsed, slot_id)
     hour      = slot_time.hour
     {
-      "id"      => slot_id,
+      "delivery_slot_id" => slot_id,
       "date"    => parsed.iso8601,
       "slot_at" => slot_time.iso8601,
       "label"   => "#{hour.to_s.rjust(2, "0")}:00–#{(hour + DeliverySlots::WINDOW_HOURS).to_s.rjust(2, "0")}:00",
@@ -330,9 +332,9 @@ Kiosk::Server::Queries.register("delivery_slots",
 end
 
 Kiosk::Server::Queries.register("my_orders",
-  description: "List this principal's orders with delivery slot, address, and a paid flag (scoped to authenticated user via kiosk.current_user_id())") do |_params|
+  description: "List this principal's orders with delivery slot, address, and a paid flag (scoped to authenticated user via kiosk.current_user_id()). Each row carries an `order_id`; pass it to reschedule_delivery (or create_order to replace an unpaid order) as `order_id`.") do |_params|
   ActiveRecord::Base.connection.execute(
-    "SELECT o.id, o.status, o.total_cents, o.slot_at, o.address, " \
+    "SELECT o.id AS order_id, o.status, o.total_cents, o.slot_at, o.address, " \
     "EXISTS (" \
     "SELECT 1 FROM kiosk.settlements pm " \
     "JOIN kiosk.cart_mandates cm ON cm.id = pm.cart_mandate_id " \
@@ -381,7 +383,7 @@ Kiosk::Server::Actions.register("create_order",
                "against its catalog before charging (the result carries a pay_hint)",
   params: {
     items:            "array of {sku, qty} — the complete cart (products referenced by sku)",
-    delivery_slot_id: "integer — slot id from the delivery_slots query (1–6), REQUIRED",
+    delivery_slot_id: "integer — the `delivery_slot_id` from a delivery_slots row (1–6), REQUIRED",
     delivery_date:    "date string YYYY-MM-DD — the DATE of the slot you chose (copy the `date` from that " \
                       "delivery_slots row) so the booking is on the day you saw. Omitting it books tomorrow.",
     delivery_address: "string — in-zone Dublin delivery address (must name a served postal district, " \
@@ -406,7 +408,7 @@ Kiosk::Server::Actions.register("create_order",
         },
       },
       delivery_slot_id: { type: "integer", minimum: 1, maximum: 6,
-                          description: "Slot id from delivery_slots (1..6)." },
+                          description: "The `delivery_slot_id` from a delivery_slots row (1..6)." },
       delivery_date:    { type: "string",
                           description: "The `date` (YYYY-MM-DD) of the chosen delivery_slots row, so the booking lands on the day you saw. Optional; omitting books tomorrow." },
       delivery_address: { type: "string",
@@ -613,7 +615,7 @@ Kiosk::Server::Actions.register("reschedule_delivery",
                "Unpaid orders can't be rescheduled: re-place them instead via create_order with order_id.",
   params: {
     order_id:         "uuid — the ALREADY-PAID order to reschedule (its existing payment is reused; do not pay again)",
-    delivery_slot_id: "integer — new slot id from the delivery_slots query (1–6)",
+    delivery_slot_id: "integer — the new `delivery_slot_id` from a delivery_slots row (1–6)",
     delivery_date:    "(optional) date string YYYY-MM-DD — the `date` of the new slot you chose; omitting books tomorrow",
     delivery_address: "(optional) string — new delivery address; unchanged if omitted",
   },
@@ -624,7 +626,7 @@ Kiosk::Server::Actions.register("reschedule_delivery",
       order_id:         { type: "string",
                           description: "uuid of the ALREADY-PAID order to reschedule. Its existing payment is reused — do not pay again." },
       delivery_slot_id: { type: "integer", minimum: 1, maximum: 6,
-                          description: "New slot id from delivery_slots (1..6)." },
+                          description: "The new `delivery_slot_id` from a delivery_slots row (1..6)." },
       delivery_date:    { type: "string",
                           description: "The `date` (YYYY-MM-DD) of the chosen delivery_slots row. Optional; omitting books tomorrow." },
       delivery_address: { type: "string",

@@ -224,8 +224,8 @@ Kiosk::Server::Queries.register("search_hotels",
                "the response carries a top-level `next`, more hotels match — echo it back " \
                "verbatim as `cursor` to fetch the following page, and keep paging until " \
                "`next` is absent. from_price_cents is EUR cents (carts are signed in eur). " \
-               "Call hotel_detail with a returned id for the full property (rooms, " \
-               "amenities, address).",
+               "Each row carries a `property_id`; pass it to hotel_detail as `property_id` " \
+               "for the full property (rooms, amenities, address).",
   params: {
     neighbourhood:  "string, optional — exact area, e.g. \"Kadıköy\"",
     max_price_cents: "integer, optional — cheapest room's nightly rate ≤ this (EUR cents)",
@@ -255,7 +255,7 @@ Kiosk::Server::Queries.register("search_hotels",
   },
   example_params: { neighbourhood: "Beşiktaş", min_stars: 4, max_price_cents: 20000, limit: 20 },
   example_row: {
-    id: 4, name: "Bosphorus Palace", neighbourhood: "Beşiktaş", stars: 5,
+    property_id: 4, name: "Bosphorus Palace", neighbourhood: "Beşiktaş", stars: 5,
     from_price_cents: 15000, currency: "eur", room_type_count: 2,
   }) do |params|
   conn = ActiveRecord::Base.connection
@@ -283,7 +283,7 @@ Kiosk::Server::Queries.register("search_hotels",
 
   # Fetch limit+1 to detect a following page without a second COUNT query.
   sql = <<~SQL
-    SELECT p.id, p.name, p.neighbourhood, p.stars,
+    SELECT p.id AS property_id, p.name, p.neighbourhood, p.stars,
            #{price_floor} AS from_price_cents,
            (SELECT COUNT(*) FROM public.room_types rt WHERE rt.property_id = p.id) AS room_type_count
     FROM public.properties p
@@ -303,26 +303,26 @@ end
 
 # ── hotel_detail — fetch ONE property by id (search→summaries, fetch on demand)
 Kiosk::Server::Queries.register("hotel_detail",
-  description: "Fetch the full detail for ONE hotel by its id (from a search_hotels " \
-               "row): name, neighbourhood, stars, address, amenities, and every room " \
-               "type with its nightly rate. This is the \"search returns summaries, " \
-               "fetch detail on demand\" pattern — call it for the one or few hotels the " \
-               "user is choosing between, not for the whole result set. " \
-               "nightly_price_cents is EUR cents (carts are signed in eur).",
+  description: "Fetch the full detail for ONE hotel by its `property_id` (the same " \
+               "`property_id` a search_hotels row carries): name, neighbourhood, stars, " \
+               "address, amenities, and every room type with its nightly rate. This is " \
+               "the \"search returns summaries, fetch detail on demand\" pattern — call it " \
+               "for the one or few hotels the user is choosing between, not for the whole " \
+               "result set. nightly_price_cents is EUR cents (carts are signed in eur).",
   params: {
-    property_id: "integer — the hotel id from a search_hotels row",
+    property_id: "integer — the `property_id` from a search_hotels row",
   },
   input_schema: {
     type: "object",
     additionalProperties: false,
     properties: {
-      property_id: { type: "integer", description: "Hotel id from a search_hotels row." },
+      property_id: { type: "integer", description: "`property_id` from a search_hotels row." },
     },
     required: ["property_id"],
   },
   example_params: { property_id: 4 },
   example_row: {
-    id: 4, name: "Bosphorus Palace", neighbourhood: "Beşiktaş", stars: 5,
+    property_id: 4, name: "Bosphorus Palace", neighbourhood: "Beşiktaş", stars: 5,
     address: "Çırağan Cd. 88, Beşiktaş, Istanbul",
     amenities: %w[wifi breakfast pool spa sea_view airport_shuttle],
     currency: "eur",
@@ -352,7 +352,7 @@ Kiosk::Server::Queries.register("hotel_detail",
   amenities = JSON.parse(amenities) if amenities.is_a?(String)
 
   {
-    id:            prop["id"],
+    property_id:   prop["id"],
     name:          prop["name"],
     neighbourhood: prop["neighbourhood"],
     stars:         prop["stars"],

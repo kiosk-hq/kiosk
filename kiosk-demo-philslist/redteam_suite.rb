@@ -64,7 +64,7 @@ abort "no listing_id from A's post: #{JSON.generate(alice_post)}" unless alice_l
 
 # ── CrossTenantRead — Bob must not see Alice's listing in my_listings ─────────
 rc, b_mine = post_json("/kiosk/query", { name: "my_listings" }, bearer(TOKEN_B))
-b_ids = (b_mine["rows"] || []).map { |r| r["id"] }
+b_ids = (b_mine["rows"] || []).map { |r| r["listing_id"] }
 record(results, "CrossTenantRead",
        rc == 200 && !b_ids.include?(alice_listing_id),
        "Bob's my_listings #{b_ids.inspect} excludes Alice's #{alice_listing_id}")
@@ -77,7 +77,7 @@ rc, forged = post_json("/kiosk/run",
 forged_id = forged.dig("value", "listing_id")
 # The forged listing must NOT surface in Alice's my_listings (it belongs to Bob).
 rc_a, a_mine = post_json("/kiosk/query", { name: "my_listings" }, bearer(TOKEN_A))
-a_ids = (a_mine["rows"] || []).map { |r| r["id"] }
+a_ids = (a_mine["rows"] || []).map { |r| r["listing_id"] }
 record(results, "ForgedUserId",
        rc == 200 && rc_a == 200 && !a_ids.include?(forged_id),
        "Alice's list #{a_ids.inspect} excludes Bob's forged #{forged_id.inspect}")

@@ -167,7 +167,7 @@ STDERR.puts "  Token minted: sub=#{claims["sub"]} agent_id=#{agent1}"
 # Wire verbs as the human's account: pick a salon, book, list.
 rc, q = post_json("/kiosk/query", { name: "salons" }, { "Authorization" => "Bearer #{token1}" })
 abort "salons query failed (#{rc})" unless rc == 200
-salon_id = q.fetch("rows").first.fetch("id")
+salon_id = q.fetch("rows").first.fetch("salon_id")
 slot     = "#{(Date.today + 1).iso8601}T10:00:00Z"
 rc, booked = post_json("/kiosk/run",
                        { name: "book_appointment", salon_id: salon_id, slot: slot },

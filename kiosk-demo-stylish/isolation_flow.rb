@@ -63,7 +63,7 @@ rc, salons_resp = post_json(
 )
 abort "salons query failed (#{rc}): #{JSON.generate(salons_resp)}" unless rc == 200
 
-salon_id = (salons_resp["rows"] || []).first&.fetch("id")
+salon_id = (salons_resp["rows"] || []).first&.fetch("salon_id")
 abort "no salons found — run bundle exec rake demo:setup first" unless salon_id
 
 STDERR.puts "  salon_id=#{salon_id}"

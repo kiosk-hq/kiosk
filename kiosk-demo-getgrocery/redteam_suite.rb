@@ -38,9 +38,10 @@ profile = Kiosk::Redteam::Profile.new(
   per_user_query: "my_orders",
 
   # result_id_key: create_order response body["value"]["order_id"]
-  # row_id_key:    my_orders rows have "id" field
+  # row_id_key:    my_orders rows carry an "order_id" field (K-482: matches the
+  #                consumer param name so an assistant copies the same key)
   result_id_key: "order_id",
-  row_id_key:    "id",
+  row_id_key:    "order_id",
 
   # create_owned: query catalog → pick first in-stock product → create_order
   # (delivery slot + address are REQUIRED — delivery is part of the order).

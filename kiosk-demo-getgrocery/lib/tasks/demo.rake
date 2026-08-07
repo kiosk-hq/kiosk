@@ -300,7 +300,7 @@ namespace :demo do
 
     # my_orders contains own order_id
     my_orders = result["my_orders"] || []
-    if my_orders.any? { |o| o["id"] == result["order_id"] }
+    if my_orders.any? { |o| o["order_id"] == result["order_id"] }
       puts "  OK  my_orders contains own order #{result["order_id"]}"
     else
       failures << "my_orders does not contain order_id #{result["order_id"].inspect}"

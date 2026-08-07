@@ -144,7 +144,7 @@ namespace :demo do
     end
 
     # my_bookings must show exactly the one confirmed booking just made.
-    if my_bookings.size == 1 && my_bookings.first["id"] == booking_id && my_bookings.first["status"] == "confirmed"
+    if my_bookings.size == 1 && my_bookings.first["booking_id"] == booking_id && my_bookings.first["status"] == "confirmed"
       puts "  ✓  my_bookings shows the confirmed booking (id=#{booking_id})"
     else
       failures << "my_bookings expected [{id:#{booking_id}, status:confirmed}], got #{my_bookings.inspect}"

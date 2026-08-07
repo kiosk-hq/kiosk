@@ -69,13 +69,13 @@ STDERR.puts "  B posted listing #{bob_listing_id}"
 # ── Step 2: browse_listings is cross-owner (Assertion 1) ─────────────────────
 rc, browse = post_json("/kiosk/query", { name: "browse_listings" }, bearer(TOKEN_B))
 abort "browse_listings failed (#{rc}): #{JSON.generate(browse)}" unless rc == 200
-browse_ids = (browse["rows"] || []).map { |r| r["id"] }
+browse_ids = (browse["rows"] || []).map { |r| r["listing_id"] }
 STDERR.puts "  B browse_listings ids: #{browse_ids.inspect}"
 
 # ── Step 3: Bob's my_listings — scoped (Assertions 2a/2b) ────────────────────
 rc, bmine = post_json("/kiosk/query", { name: "my_listings" }, bearer(TOKEN_B))
 abort "B my_listings failed (#{rc}): #{JSON.generate(bmine)}" unless rc == 200
-b_my_ids = (bmine["rows"] || []).map { |r| r["id"] }
+b_my_ids = (bmine["rows"] || []).map { |r| r["listing_id"] }
 STDERR.puts "  B my_listings ids: #{b_my_ids.inspect}"
 
 # ── Step 4: Bob edit_listing on ALICE's listing → 403 (Assertion 3) ──────────

@@ -121,10 +121,10 @@ end
 # salons — full salon catalogue; no per-user scoping, any authenticated
 # principal may browse (mirrors the public SELECT policy previously in RLS).
 Kiosk::Server::Queries.register("salons",
-                                 description: "Browse the public salon catalogue",
+                                 description: "Browse the public salon catalogue. Each row carries a `salon_id`; pass it to book_appointment as `salon_id`.",
                                  params: {}) do |_params|
   ActiveRecord::Base.connection.execute(
-    "SELECT id, name FROM salons ORDER BY id"
+    "SELECT id AS salon_id, name FROM salons ORDER BY id"
   ).to_a
 end
 
@@ -133,8 +133,8 @@ end
 # service_id (and see the € price) before booking.
 Kiosk::Server::Queries.register("service_menu",
                                  description: "Browse the salon's service menu with EUR prices (name, price_cents, price_eur). " \
-                                              "Takes no parameters and returns the whole menu (small; not paginated); pick a service " \
-                                              "`id` to pass as service_id to book_appointment, where its EUR price is captured on the booking.",
+                                              "Takes no parameters and returns the whole menu (small; not paginated); each row carries a " \
+                                              "`service_id` — pass it to book_appointment as `service_id`, where its EUR price is captured on the booking.",
                                  params: {},
                                  input_schema: {
                                    type: "object",
@@ -144,11 +144,11 @@ Kiosk::Server::Queries.register("service_menu",
                                  },
                                  example_params: {},
                                  example_row: {
-                                   id: 1, name: "Cut", price_cents: 3500,
+                                   service_id: 1, name: "Cut", price_cents: 3500,
                                    currency: "EUR", price_eur: "€35",
                                  }) do |_params|
   ActiveRecord::Base.connection.execute(
-    "SELECT id, name, price_cents FROM services ORDER BY price_cents"
+    "SELECT id AS service_id, name, price_cents FROM services ORDER BY price_cents"
   ).to_a.map do |row|
     row.merge("currency" => "EUR", "price_eur" => Service.format_eur(row["price_cents"]))
   end

@@ -182,7 +182,7 @@ rc, b_before_resp = post_json(
   { "Authorization" => "Bearer #{token_b}" },
 )
 abort "B my_orders (before) failed (#{rc})" unless rc == 200
-b_my_orders_before = (b_before_resp["rows"] || []).map { |r| r["id"] }
+b_my_orders_before = (b_before_resp["rows"] || []).map { |r| r["order_id"] }
 
 # ── Step 7: B tries reschedule_delivery on A's paid order (MUST be 403) ──────
 b_reschedule_on_a_status, _b_reschedule_on_a_resp = post_json(
@@ -280,7 +280,7 @@ rc, b_after_resp = post_json(
   { "Authorization" => "Bearer #{token_b}" },
 )
 abort "B my_orders (after) failed (#{rc})" unless rc == 200
-b_my_orders_after = (b_after_resp["rows"] || []).map { |r| r["id"] }
+b_my_orders_after = (b_after_resp["rows"] || []).map { |r| r["order_id"] }
 
 # ── Step 12: A queries my_orders after B's positive control ───────────────────
 rc, a_after_resp = post_json(
@@ -289,7 +289,7 @@ rc, a_after_resp = post_json(
   { "Authorization" => "Bearer #{token_a}" },
 )
 abort "A my_orders (after) failed (#{rc})" unless rc == 200
-a_my_orders_after = (a_after_resp["rows"] || []).map { |r| r["id"] }
+a_my_orders_after = (a_after_resp["rows"] || []).map { |r| r["order_id"] }
 
 # ── Output ONE JSON line ──────────────────────────────────────────────────────
 puts JSON.generate(

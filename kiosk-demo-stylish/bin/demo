@@ -92,7 +92,7 @@ SALON_ID=$(curl -sS -X POST "$SERVER_URL/kiosk/query" \
   -H "Authorization: Bearer $ALICE_TOKEN" \
   -H "Content-Type: application/json" \
   -d '{"name":"salons"}' \
-  | jq -r '.rows[0].id')
+  | jq -r '.rows[0].salon_id')
 
 step "run book_appointment for salon $SALON_ID"
 curl -sS -X POST "$SERVER_URL/kiosk/run" \

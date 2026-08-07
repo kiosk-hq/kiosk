@@ -116,9 +116,11 @@ profile = Kiosk::Redteam::Profile.new(
   per_user_query: "my_reservations",
 
   # ── row_id_key / result_id_key ────────────────────────────────────────────
-  # Query rows (my_reservations) use "id" as the primary-key column.
-  # The reserve action response uses "reservation_id" in body["value"].
-  row_id_key:    "id",
+  # Query rows (my_reservations) carry a "reservation_id" field — matching the
+  # reserve action response's body["value"]["reservation_id"] and the
+  # start_rental/rent_motorcycle param name, so an assistant copies the same
+  # key with no guessing (K-482).
+  row_id_key:    "reservation_id",
   result_id_key: "reservation_id",
 
   # ── create_owned ─────────────────────────────────────────────────────────

@@ -72,8 +72,8 @@ abort "query properties failed (#{rc_props}): #{JSON.generate(props_resp)}" unle
 props = props_resp.fetch("rows")
 abort "properties returned empty rows" if props.empty?
 target_property = props.first
-property_id     = target_property.fetch("id")
-STDERR.puts "  Properties: #{props.size} found, using id=#{property_id} (#{target_property["name"]})"
+property_id     = target_property.fetch("property_id")
+STDERR.puts "  Properties: #{props.size} found, using property_id=#{property_id} (#{target_property["name"]})"
 
 # ── Step 3: query availability ────────────────────────────────────────────
 
@@ -90,12 +90,12 @@ abort "query availability failed (#{rc_avail}): #{JSON.generate(avail_resp)}" un
 avail_rows = avail_resp.fetch("rows")
 abort "availability returned empty rows" if avail_rows.empty?
 target_room = avail_rows.first
-room_type_id   = target_room.fetch("id")
+room_type_id   = target_room.fetch("room_type_id")
 room_type_name = target_room.fetch("name")
 nightly_price  = target_room.fetch("nightly_price_cents")
 # Human-facing nightly rate in EUR (€120.00/night), never raw cents.
 nightly_price_eur = format("€%.2f", nightly_price.to_i / 100.0)
-STDERR.puts "  Availability: #{avail_rows.size} room type(s) available, using id=#{room_type_id} (#{room_type_name}, #{nightly_price_eur}/night)"
+STDERR.puts "  Availability: #{avail_rows.size} room type(s) available, using room_type_id=#{room_type_id} (#{room_type_name}, #{nightly_price_eur}/night)"
 
 # ── Step 4: reserve_room ──────────────────────────────────────────────────
 

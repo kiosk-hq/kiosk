@@ -46,7 +46,7 @@ find_available = lambda { |client, principal|
 
   all_props.each do |p|
     avail_resp = client.query(principal, name: "availability",
-      property_id: p["id"], check_in: CHECK_IN, check_out: CHECK_OUT)
+      property_id: p["property_id"], check_in: CHECK_IN, check_out: CHECK_OUT)
     avail_rows = avail_resp.body.is_a?(Hash) ? (avail_resp.body["rows"] || []) : []
     next if avail_rows.empty?
 
@@ -67,9 +67,9 @@ profile = Kiosk::Redteam::Profile.new(
   per_user_query: "my_bookings",
 
   # ── row_id_key / result_id_key ────────────────────────────────────────────
-  # Query rows (my_bookings) use "id" as the primary-key column.
+  # Query rows (my_bookings) carry "booking_id" (the same name confirm_booking takes).
   # The reserve_room action response uses "booking_id" in body["value"].
-  row_id_key:    "id",
+  row_id_key:    "booking_id",
   result_id_key: "booking_id",
 
   # ── create_owned ─────────────────────────────────────────────────────────
@@ -82,8 +82,8 @@ profile = Kiosk::Redteam::Profile.new(
     room  = found[:room]
 
     rsv_resp = client.run(principal, name: "reserve_room",
-      property_id:  prop["id"],
-      room_type_id: room["id"],
+      property_id:  prop["property_id"],
+      room_type_id: room["room_type_id"],
       check_in:     CHECK_IN,
       check_out:    CHECK_OUT)
     raise "redteam(hoteling): reserve_room failed (#{rsv_resp.status}): #{rsv_resp.body.inspect}" \
@@ -112,8 +112,8 @@ profile = Kiosk::Redteam::Profile.new(
     room  = found[:room]
 
     {
-      property_id:  prop["id"],
-      room_type_id: room["id"],
+      property_id:  prop["property_id"],
+      room_type_id: room["room_type_id"],
       check_in:     CHECK_IN,
       check_out:    CHECK_OUT,
     }

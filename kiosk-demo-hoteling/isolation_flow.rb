@@ -110,7 +110,7 @@ abort "A query properties failed (#{rc_props_a}): #{JSON.generate(props_resp_a)}
 all_props_a = props_resp_a["rows"] || []
 abort "No properties returned" if all_props_a.empty?
 prop_a = all_props_a.first
-prop_id_a = prop_a["id"]
+prop_id_a = prop_a["property_id"]
 
 rc_avail_a, avail_resp_a = post_json(
   "#{SERVER}/kiosk/query",
@@ -123,7 +123,7 @@ abort "A query availability failed (#{rc_avail_a}): #{JSON.generate(avail_resp_a
 avail_rows_a = avail_resp_a["rows"] || []
 abort "No available rooms for A" if avail_rows_a.empty?
 room_a           = avail_rows_a.first
-room_type_id_a   = room_a["id"]
+room_type_id_a   = room_a["room_type_id"]
 room_type_name_a = room_a["name"]
 STDERR.puts "  A will reserve #{room_type_name_a} at property #{prop_id_a}"
 
@@ -224,7 +224,7 @@ all_props_b.each do |p|
   rc_av, av_r = post_json(
     "#{SERVER}/kiosk/query",
     { name: "availability",
-      property_id: p["id"], check_in: CHECK_IN_B, check_out: CHECK_OUT_B },
+      property_id: p["property_id"], check_in: CHECK_IN_B, check_out: CHECK_OUT_B },
     { "Authorization" => "Bearer #{token_b}" },
   )
   next unless rc_av == 200
@@ -241,8 +241,8 @@ rc_forge, forged_resp = post_json(
   "#{SERVER}/kiosk/run",
   {
     name:         "reserve_room",
-    property_id:  prop_b["id"],
-    room_type_id: room_b["id"],
+    property_id:  prop_b["property_id"],
+    room_type_id: room_b["room_type_id"],
     check_in:     CHECK_IN_B,
     check_out:    CHECK_OUT_B,
     user_id:      user_id_a,  # adversarial: B supplies A's user_id
@@ -267,7 +267,7 @@ rc_b_bookings, b_bookings_resp = post_json(
 )
 abort "B my_bookings failed (#{rc_b_bookings}): #{JSON.generate(b_bookings_resp)}" unless rc_b_bookings == 200
 
-b_booking_ids = (b_bookings_resp["rows"] || []).map { |r| r["id"] }
+b_booking_ids = (b_bookings_resp["rows"] || []).map { |r| r["booking_id"] }
 STDERR.puts "  B my_bookings: #{b_booking_ids.inspect}"
 
 # ── Step 8: B calls confirm_booking on A's booking_id (Assertion 1) ──────────

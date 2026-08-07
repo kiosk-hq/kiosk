@@ -335,9 +335,10 @@ namespace :demo do
         agent_key, "RS256",
       )
       reg_body = { public_key: agent_pem, signed: pop }
-      do_register = lambda do |body|
+      do_register = lambda do |body, pow = nil|
         uri = URI("#{server_url}/kiosk/auth/register")
         req = Net::HTTP::Post.new(uri, "Content-Type" => "application/json")
+        req["Kiosk-PoW"] = JSON.generate(pow) if pow
         req.body = JSON.generate(body)
         res = Net::HTTP.new(uri.host, uri.port).request(req)
         [res.code.to_i, (JSON.parse(res.body) rescue {})]
@@ -349,7 +350,7 @@ namespace :demo do
           raise "register solve.py failed: #{out}" unless st.success?
           { challenge: c, nonce: JSON.parse(out).slice("indices", "header_nonce") }
         end
-        rc_reg, reg_data = do_register.call(reg_body.merge(pow: { proofs: proofs }))
+        rc_reg, reg_data = do_register.call(reg_body, proofs)
       end
       agent_token = reg_data["access_token"]
       new_user_id = reg_data["user_id"]
@@ -391,9 +392,10 @@ namespace :demo do
       require "securerandom"
 
       # Helper: one POST and return [status_int, parsed_body].
-      q_post = lambda do |path, body_hash, bearer|
+      q_post = lambda do |path, body_hash, bearer, pow = nil|
         uri = URI("#{server_url}#{path}")
         req = Net::HTTP::Post.new(uri, "Content-Type" => "application/json", "Authorization" => "Bearer #{bearer}")
+        req["Kiosk-PoW"] = JSON.generate(pow) if pow
         req.body = JSON.generate(body_hash)
         res = Net::HTTP.new(uri.host, uri.port).request(req)
         [res.code.to_i, JSON.parse(res.body)]
@@ -417,7 +419,7 @@ namespace :demo do
           raise "RUN6 register solve.py failed: #{out}" unless st.success?
           { challenge: c, nonce: JSON.parse(out).slice("indices", "header_nonce") }
         end
-        reg_rc, reg_data = q_post.call("/kiosk/auth/register", q_reg_body.merge(pow: { proofs: q_proofs }), "")
+        reg_rc, reg_data = q_post.call("/kiosk/auth/register", q_reg_body, "", q_proofs)
       end
       abort "RUN6 register failed (#{reg_rc})" unless reg_rc == 201
       q_token   = reg_data["access_token"]

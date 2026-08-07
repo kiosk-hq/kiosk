@@ -7,7 +7,7 @@
 # Proves, in one run against the live server:
 #   1. A no-proof register is REJECTED with 402 pow_required + challenges[].
 #   2. Solving every challenge (bundled numpy solver) and re-POSTing register
-#      with pow:{proofs:[...]} SUCCEEDS (201) and mints a usable token.
+#      with the Kiosk-PoW header carrying [...] SUCCEEDS (201) and mints a usable token.
 #   3. The minted token authenticates a real wire verb.
 #
 # Same mechanism the demos use (kiosk-demo-skooti). Emits ONE JSON line on

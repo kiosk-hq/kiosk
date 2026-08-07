@@ -2,12 +2,12 @@
 
 # Combette / stylish registration-PoW driver.
 #
-# Proves the optional Equihash registration gate: POST /auth/register with no
-# proof returns 402; the agent solves the challenge(s) and resubmits the SAME
-# signed body, sending the proof(s) in the Kiosk-PoW request header, getting 201. Then queries
-# `salons`. One JSON line on stdout.
+# Proves the Equihash registration gate (ALWAYS ON — wired in the app config, no
+# env flag): POST /auth/register with no proof returns 402; the agent solves the
+# challenge(s) and resubmits the SAME signed body, sending the proof(s) in the
+# Kiosk-PoW request header, getting 201. Then queries `salons`. One JSON line on stdout.
 #
-# Usage (invoked by rake demo:register — needs KIOSK_POW_REGISTER_DEMO=1):
+# Usage (invoked by rake demo:register):
 #   SERVER_URL=… KIOSK_ISSUER=… bundle exec ruby register_flow.rb
 # Requires: python3 with numpy.
 

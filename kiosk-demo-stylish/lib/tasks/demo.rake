@@ -189,10 +189,11 @@ task demo: ["demo:setup", "demo:walkthrough"]
 
 namespace :demo do
   desc <<~DESC
-    Registration-PoW demo (KIOSK_POW_REGISTER_DEMO=1).
+    Registration-PoW demo.
 
-    Boots the server with the registration gate active and runs register_flow.rb:
-    register with no proof → 402; solve the Equihash challenge and resubmit →
+    Register-PoW is ALWAYS ON (wired in the app config, no env flag), so the
+    default server already gates registration. Runs register_flow.rb: register
+    with no proof → 402; solve the Equihash challenge and resubmit →
     201; the fresh token queries `salons` → 200. Requires python3 + numpy.
   DESC
   task register: :setup do
@@ -208,7 +209,7 @@ namespace :demo do
 
     File.truncate(log, 0) if File.exist?(log)
     server_pid = spawn(
-      { "KIOSK_ISSUER" => server_url, "KIOSK_POW_REGISTER_DEMO" => "1" },
+      { "KIOSK_ISSUER" => server_url },
       "bundle exec rails s -p #{port} -b 127.0.0.1 -e development",
       out: log, err: log,
     )

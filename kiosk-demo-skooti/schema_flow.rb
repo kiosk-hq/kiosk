@@ -21,10 +21,11 @@ require "uri"
 
 SERVER = ENV.fetch("SERVER_URL")
 
-def post_json(path, body, bearer: nil)
+def post_json(path, body, bearer: nil, pow: nil)
   uri = URI("#{SERVER}#{path}")
   headers = { "Content-Type" => "application/json" }
   headers["Authorization"] = "Bearer #{bearer}" if bearer
+  headers["Kiosk-PoW"] = pow if pow  # PoW proof rides in the header (ADR-0022)
   req = Net::HTTP::Post.new(uri, headers)
   req.body = JSON.generate(body)
   res = Net::HTTP.new(uri.host, uri.port).request(req)
@@ -61,7 +62,7 @@ if rc == 402
   challenges = reg.dig("error", "challenges")
   abort "402 without challenges[]: #{JSON.generate(reg)}" unless challenges.is_a?(Array) && challenges.any?
   proofs = challenges.map { |c| { challenge: c, nonce: equihash_solve(c) } }
-  rc, reg = post_json("/kiosk/auth/register", reg_body.merge(pow: { proofs: proofs }))
+  rc, reg = post_json("/kiosk/auth/register", reg_body, pow: JSON.generate(proofs))
 end
 abort "register failed (#{rc}): #{JSON.generate(reg)}" unless rc == 201
 token = reg.fetch("access_token")

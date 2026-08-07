@@ -15,6 +15,8 @@ if defined?(::ActionController::API)
   require "kiosk/server/link_code"
   require "kiosk/server/errors"
   require "kiosk/server/headers"
+  require "kiosk/server/pow_gate"
+  require "kiosk/server/request_validation"
 
   module Kiosk
     module Server
@@ -56,12 +58,21 @@ if defined?(::ActionController::API)
         end
 
         # Register a NEW public key (409 if already registered → use /login).
+        #
+        # The optional registration PoW proof rides in the `Kiosk-PoW` request
+        # HEADER (ADR-0022), not the body — the same header the wire verbs use.
+        # The signed body stays pow-free so the challenge fingerprint (bound to
+        # the registering public key) matches on retry.
         def register
           body   = parse_body!
+          pow    = PowGate.proofs_from_header(request.get_header("HTTP_KIOSK_POW"))
+          if Kiosk.configuration.validate_requests && !PowGate.blank?(pow)
+            RequestValidation.validate_proofs!(pow)
+          end
           result = AgentRegistration.call(
             public_key_pem: body.fetch(:public_key),
             signed:         body.fetch(:signed),
-            pow:            body[:pow],
+            pow:            pow,
           )
           respond(result, :created)
         rescue KeyError => e

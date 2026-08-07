@@ -46,16 +46,18 @@ RSpec.describe Kiosk::Redteam::Client do
     end
 
     context "when pow is a verbatim String" do
-      it "sends that exact string as the pow field" do
-        captured_body = nil
+      it "sends that exact string as the Kiosk-PoW header value (ADR-0022)" do
+        captured_header = nil
+        captured_body   = nil
         stub_request(:post, "#{base_url}/kiosk/auth/register")
-          .with { |req| captured_body = JSON.parse(req.body); true }
+          .with { |req| captured_header = req.headers["Kiosk-Pow"]; captured_body = JSON.parse(req.body); true }
           .to_return(status: 422, body: JSON.generate("error" => { "code" => "bad_request" }),
                      headers: { "Content-Type" => "application/json" })
 
         client.register_raw(name: "bad-pow-agent", pow_difficulty: 20, pow: "definitely_wrong_proof")
 
-        expect(captured_body["pow"]).to eq("definitely_wrong_proof")
+        expect(captured_header).to eq("definitely_wrong_proof")
+        expect(captured_body).not_to have_key("pow")  # proof is in the header, not the body
       end
     end
   end
@@ -83,15 +85,16 @@ RSpec.describe Kiosk::Redteam::Client do
     end
 
     context "when the provider gates registration with Equihash (402)" do
-      it "solves the challenge and resubmits with pow.proofs" do
+      it "solves the challenge and resubmits with the proof in the Kiosk-PoW header (ADR-0022)" do
         # First register → 402 with a KAT challenge (n=8,k=1); the client solves
         # it with the real solver and resubmits. Second register → 201.
         kat_challenge = { "id" => "c1", "alg" => "equihash", "params" => { "n" => 8, "k" => 1 },
                           "salt" => Base64.strict_encode64("kat"), "exp" => 9_999_999_999, "sig" => "x" }
-        bodies = []
+        bodies      = []
+        pow_headers = []
         calls  = 0
         stub_request(:post, "#{base_url}/kiosk/auth/register")
-          .with { |req| bodies << JSON.parse(req.body); true }
+          .with { |req| bodies << JSON.parse(req.body); pow_headers << req.headers["Kiosk-Pow"]; true }
           .to_return do
             calls += 1
             if calls == 1
@@ -105,8 +108,10 @@ RSpec.describe Kiosk::Redteam::Client do
         principal = client.register!(name: "pow-agent", pow_difficulty: 1, pow: :solve)
 
         expect(principal.token).to eq("tok-abc")
-        expect(bodies.first).not_to have_key("pow")           # first attempt: no pow
-        proofs = bodies.last.dig("pow", "proofs")             # resubmit carries proofs
+        expect(bodies.first).not_to have_key("pow")            # first attempt: no proof
+        expect(pow_headers.first).to be_nil                    # first attempt: no header
+        expect(bodies.last).not_to have_key("pow")             # resubmit: proof NOT in body
+        proofs = JSON.parse(pow_headers.last)                  # resubmit: proof in the header
         expect(proofs).to be_an(Array)
         expect(proofs.first["nonce"]).to include("indices")
       end

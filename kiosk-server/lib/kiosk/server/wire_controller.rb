@@ -62,25 +62,28 @@ if defined?(::ActionController::API)
           # Errors::BadRequest, which must render a 400 envelope, not escape as
           # an uncaught 500 (the same parse-outside-rescue class fixed
           # for AuthController/KycAttestationController).
-          args     = parse_body!
+          body     = parse_body!
           identity = resolve_identity!
 
-          # Pull the submitted proof out of the body: it is a sibling of the verb
-          # args, and must be excluded from BOTH the challenge fingerprint (which
-          # binds to the pow-less original request) and the Executor dispatch.
-          pow, body = PowGate.split_pow(args)
+          # Read the submitted proof(s) from the `Kiosk-PoW` request HEADER
+          # (ADR-0022), NOT the body: the body is now ONLY verb args, so the
+          # challenge fingerprint binds to the plain body untouched, and a GET
+          # (schema) can carry its proof via the header too (a GET has no body).
+          # proofs_from_header raises Errors::BadRequest (→ 400) on malformed
+          # header JSON, inside this rescue.
+          pow = PowGate.proofs_from_header(request.get_header("HTTP_KIOSK_POW"))
 
           # Opt-in request-shape validation (UNIFORM-VALIDATION slice-1, K-479).
-          # Only when the flag is on AND a pow was actually submitted: validate
-          # its shape against the vendored normative schema so a MALFORMED pow
-          # (e.g. `{solutions:[…]}` instead of `{proofs:[{challenge:,nonce:}]}`)
-          # raises a clear 400 with a shape hint — instead of PowGate silently
-          # extracting [] proofs and re-issuing a fresh 402 on every retry. An
-          # ABSENT pow is left untouched (the initial request must still get its
-          # normal 402 challenge), and a WELL-FORMED pow passes through unchanged
-          # to the gate below, which still does the real cryptographic check.
+          # Only when the flag is on AND a proof was actually submitted: validate
+          # each parsed proof against the vendored normative schema so a MALFORMED
+          # proof (e.g. `{solutions:[…]}` instead of `{challenge:,nonce:}`) raises
+          # a clear 400 with a shape hint — instead of PowGate silently ignoring
+          # it and re-issuing a fresh 402 on every retry. An ABSENT proof is left
+          # untouched (the initial request must still get its normal 402
+          # challenge), and a WELL-FORMED proof passes through unchanged to the
+          # gate below, which still does the real cryptographic check.
           if Kiosk.configuration.validate_requests && !PowGate.blank?(pow)
-            RequestValidation.validate_pow!(pow)
+            RequestValidation.validate_proofs!(pow)
           end
 
           PowGate.gate(

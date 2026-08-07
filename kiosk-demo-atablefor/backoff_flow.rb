@@ -107,10 +107,12 @@ abort "no challenges[] in 402 response" unless challenges.is_a?(Array) && challe
 # ── Step 3: solve → resubmit → expect 200 (grant set to GRANT_COUNT) ────────
 
 proofs = challenges.map { |c| { challenge: c, nonce: solve(c) } }
+# PoW proof(s) ride in the Kiosk-PoW request header as raw JSON (ADR-0022), not
+# the body — the body stays byte-identical so the challenge fingerprint matches.
 rc_solved, resp_solved = post_json(
   "#{SERVER}/kiosk/query",
-  QUERY_BODY.merge(pow: { proofs: proofs }),
-  AUTH_HEADER,
+  QUERY_BODY,
+  AUTH_HEADER.merge("Kiosk-PoW" => JSON.generate(proofs)),
 )
 rows = resp_solved.fetch("rows", [])
 unless rc_solved == 200

@@ -74,9 +74,10 @@ end
 # Execute a Kiosk verb with automatic PoW handling.
 #
 # If the server issues a 402, solves EVERY challenge in error.challenges[] with
-# solve.py and re-sends the SAME body + pow:{proofs:[...]}. Returns [rc, resp, n]
-# where n is the number of proofs solved (nil = no challenge — free pass). The
-# proof count is this protocol's difficulty measure (N×PoW).
+# solve.py and re-sends the SAME body with the proof(s) in the Kiosk-PoW header.
+# Returns [rc, resp, n] where n is the number of proofs solved (nil = no
+# challenge — free pass). The proof count is this protocol's difficulty measure
+# (N×PoW).
 def exec_with_pow(command, body, token)
   headers = { "Authorization" => "Bearer #{token}" }
   path    = "#{SERVER}/kiosk/#{command}"  # REST verb endpoint (query/run)
@@ -88,9 +89,10 @@ def exec_with_pow(command, body, token)
     abort "missing challenges[] in 402 for #{command}" unless challenges.is_a?(Array) && challenges.any?
     proofs = challenges.map { |c| { challenge: c, nonce: solve_challenge(c) } }
 
-    # Re-submit the IDENTICAL args + solved proofs as a top-level `pow` sibling
-    # (excluded from the request_fingerprint, which must match).
-    rc, resp = post_json(path, body.merge(pow: { proofs: proofs }), headers)
+    # Re-submit the IDENTICAL body; the solved proof(s) ride in the Kiosk-PoW
+    # request header as raw JSON (ADR-0022) — the body stays byte-identical so
+    # the request_fingerprint the challenge binds to still matches.
+    rc, resp = post_json(path, body, headers.merge("Kiosk-PoW" => JSON.generate(proofs)))
     [rc, resp, proofs.size]
   else
     [rc, resp, nil]

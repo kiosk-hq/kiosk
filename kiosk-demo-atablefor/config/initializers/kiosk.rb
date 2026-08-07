@@ -337,7 +337,7 @@ Kiosk::Server::Queries.register("availability",
                                  },
                                  example_params: { date: "2026-08-05", party_size: 2 },
                                  example_row: {
-                                   id: 1, restaurant: "Tasca do Tejo", table_label: "Window 6",
+                                   restaurant: "Tasca do Tejo", table_label: "Window 6",
                                    capacity: 2, slot_date: "2026-08-05", slot_time: "20:00",
                                    deposit_eur: 10,
                                  }) do |params|
@@ -345,7 +345,7 @@ Kiosk::Server::Queries.register("availability",
   party_size = (params.fetch(:party_size) { raise Kiosk::Server::Errors::BadRequest.new("missing param: party_size") }).to_i
   conn = ActiveRecord::Base.connection
   conn.execute(
-    "SELECT ts.id, r.name AS restaurant, ts.table_label, ts.capacity, " \
+    "SELECT r.name AS restaurant, ts.table_label, ts.capacity, " \
     "to_char(ts.slot_date, 'YYYY-MM-DD') AS slot_date, " \
     "to_char(ts.slot_time, 'HH24:MI')    AS slot_time, " \
     "ts.deposit_eur " \

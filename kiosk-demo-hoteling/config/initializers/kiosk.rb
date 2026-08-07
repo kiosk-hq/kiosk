@@ -155,18 +155,20 @@ AMENITY_POOL = %w[wifi breakfast pool spa gym parking rooftop_bar
 # ─── Queries ────────────────────────────────────────────────────────────────
 
 Kiosk::Server::Queries.register("properties",
-  description: "Browse all available hotel properties") do |_params|
+  description: "Browse all available hotel properties. Each row carries a " \
+               "`property_id`; pass it to availability (and reserve_room) as `property_id`.") do |_params|
   ActiveRecord::Base.connection.execute(
-    "SELECT id, name, city FROM public.properties ORDER BY name"
+    "SELECT id AS property_id, name, city FROM public.properties ORDER BY name"
   ).to_a
 end
 
 Kiosk::Server::Queries.register("availability",
-  description: "Check room availability at a property for given dates. " \
-               "nightly_price_cents is EUR cents per night — carts must be signed in eur at " \
-               "the operator-quoted total (nights × nightly_price_cents)",
+  description: "Check room availability at a property for given dates. Each row carries a " \
+               "`room_type_id` (pass it to reserve_room as `room_type_id`, along with the " \
+               "same `property_id`). nightly_price_cents is EUR cents per night — carts must " \
+               "be signed in eur at the operator-quoted total (nights × nightly_price_cents)",
   params: {
-    property_id: "integer — property to check",
+    property_id: "integer — property to check (the `property_id` from a properties row)",
     check_in:    "date string YYYY-MM-DD",
     check_out:   "date string YYYY-MM-DD",
   }) do |params|
@@ -175,7 +177,7 @@ Kiosk::Server::Queries.register("availability",
   check_in  = params.fetch(:check_in)     { raise Kiosk::Server::Errors::BadRequest.new("missing field: check_in") }
   check_out = params.fetch(:check_out)    { raise Kiosk::Server::Errors::BadRequest.new("missing field: check_out") }
   rows = conn.execute(<<~SQL).to_a
-    SELECT rt.id, rt.name, rt.nightly_price_cents
+    SELECT rt.id AS room_type_id, rt.name, rt.nightly_price_cents
     FROM public.room_types rt
     WHERE rt.property_id = #{conn.quote(prop_id.to_s)}::integer
     AND rt.id NOT IN (
@@ -194,9 +196,10 @@ Kiosk::Server::Queries.register("availability",
 end
 
 Kiosk::Server::Queries.register("my_bookings",
-  description: "List this principal's hotel bookings (scoped to authenticated user)") do |_params|
+  description: "List this principal's hotel bookings (scoped to authenticated user). " \
+               "Each row carries a `booking_id`; pass it to confirm_booking as `booking_id`.") do |_params|
   ActiveRecord::Base.connection.execute(
-    "SELECT b.id, b.property_id, b.room_type_id, b.check_in, b.check_out, b.total_cents, b.status " \
+    "SELECT b.id AS booking_id, b.property_id, b.room_type_id, b.check_in, b.check_out, b.total_cents, b.status " \
     "FROM public.bookings b " \
     "WHERE b.user_id = kiosk.current_user_id() " \
     "ORDER BY b.created_at DESC"
@@ -305,7 +308,8 @@ end
 Kiosk::Server::Queries.register("hotel_detail",
   description: "Fetch the full detail for ONE hotel by its `property_id` (the same " \
                "`property_id` a search_hotels row carries): name, neighbourhood, stars, " \
-               "address, amenities, and every room type with its nightly rate. This is " \
+               "address, amenities, and every room type (each carries a `room_type_id` for " \
+               "reserve_room) with its nightly rate. This is " \
                "the \"search returns summaries, fetch detail on demand\" pattern — call it " \
                "for the one or few hotels the user is choosing between, not for the whole " \
                "result set. nightly_price_cents is EUR cents (carts are signed in eur).",
@@ -327,8 +331,8 @@ Kiosk::Server::Queries.register("hotel_detail",
     amenities: %w[wifi breakfast pool spa sea_view airport_shuttle],
     currency: "eur",
     room_types: [
-      { id: 7, name: "Classic",   nightly_price_cents: 15000 },
-      { id: 8, name: "Bosphorus", nightly_price_cents: 25000 },
+      { room_type_id: 7, name: "Classic",   nightly_price_cents: 15000 },
+      { room_type_id: 8, name: "Bosphorus", nightly_price_cents: 25000 },
     ],
   }) do |params|
   conn = ActiveRecord::Base.connection
@@ -343,7 +347,7 @@ Kiosk::Server::Queries.register("hotel_detail",
   raise Kiosk::Server::Errors::NotFound.new("hotel not found: #{pid}") if prop.nil?
 
   rooms = conn.execute(
-    "SELECT id, name, nightly_price_cents FROM public.room_types " \
+    "SELECT id AS room_type_id, name, nightly_price_cents FROM public.room_types " \
     "WHERE property_id = #{conn.quote(pid.to_s)}::integer ORDER BY nightly_price_cents"
   ).to_a
 

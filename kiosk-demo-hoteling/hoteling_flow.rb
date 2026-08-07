@@ -37,22 +37,15 @@ def get_json(url, headers = {})
   [res.code.to_i, (JSON.parse(res.body) rescue {})]
 end
 
-# ── Step 1: register (no PoW for hoteling) ──────────────────────────────
+# ── Step 1: register (register PoW solved transparently when the provider gates
+#            registration — KIOSK_POW_REGISTER_DEMO=1). The SAME private key is
+#            returned so the payment mandates below can be signed with it. ──────
 
-key = OpenSSL::PKey::RSA.generate(2048)
-pem = key.public_key.to_pem
-
-rc_ch, ch = get_json("#{SERVER}/kiosk/auth/challenge?public_key=#{URI.encode_www_form_component(pem)}")
-abort "challenge failed (#{rc_ch}): #{JSON.generate(ch)}" unless rc_ch == 200
-pop = JWT.encode(
-  { aud: ISSUER, nonce: ch.fetch("challenge"), jti: SecureRandom.uuid, iat: Time.now.to_i },
-  key, "RS256",
+require_relative "lib/equihash_register"
+key, reg = equihash_register(
+  server: SERVER, issuer: ISSUER,
+  get_json: method(:get_json), post_json: method(:post_json),
 )
-rc_reg, reg = post_json(
-  "#{SERVER}/kiosk/auth/register",
-  { public_key: pem, signed: pop },
-)
-abort "register failed (#{rc_reg}): #{JSON.generate(reg)}" unless rc_reg == 201
 
 agent_id = reg.fetch("agent_id")
 user_id  = reg.fetch("user_id")
@@ -190,7 +183,7 @@ rc_confirm, confirm_resp = post_json(
 # ── Step 7: print ONE JSON line ───────────────────────────────────────────
 
 puts JSON.generate(
-  http_register:        rc_reg,
+  http_register:        201, # equihash_register aborts unless the server returns 201
   http_properties:      rc_props,
   http_availability:    rc_avail,
   http_reserve_room:    rc_rsv,

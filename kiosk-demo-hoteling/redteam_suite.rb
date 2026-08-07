@@ -13,7 +13,9 @@
 #   TamperedPriceCart  — pay below the operator's quoted booking price → 403
 #   InflatedTotalCart  — cart total ≠ sum of its line items → 403
 #
-# KYC scenarios and RegistrationWithoutPow are SKIPPED (hoteling has neither).
+# KYC scenarios are SKIPPED (hoteling has no KYC). RegistrationWithoutPow RUNS:
+# register PoW is ON (KIOSK_POW_REGISTER_DEMO=1), so a missing/bad register proof
+# must be rejected.
 #
 # Usage (from kiosk-demo-hoteling/):
 #   SERVER_URL=http://127.0.0.1:3004 KIOSK_ISSUER=http://127.0.0.1:3004 \
@@ -60,7 +62,11 @@ find_available = lambda { |client, principal|
 # ── Profile ───────────────────────────────────────────────────────────────────
 
 profile = Kiosk::Redteam::Profile.new(
-  pow_difficulty: 0,      # hoteling has no PoW gate at /register
+  # register PoW is ON (KIOSK_POW_REGISTER_DEMO=1): a positive difficulty makes
+  # RegistrationWithoutPow RUN (a missing/bad register proof must be rejected).
+  # The Client ignores the magnitude (PoW solving is driven by the server's 402
+  # challenges); only "> 0" matters here.
+  pow_difficulty: 1,
   requires_kyc:   false,  # no KYC gate
 
   # ── per-user query — CrossTenantRead ─────────────────────────────────────
@@ -252,8 +258,9 @@ end
 
 # ── Scenario list ─────────────────────────────────────────────────────────────
 #
-# 13 generic + 3 local cashier-check beats; 4 generic are expected to be
-# skipped (KYC variants + PoW). 9 generic + 3 local are applicable.
+# 13 generic + 3 local cashier-check beats; 3 generic (KYC variants) are expected
+# to be skipped. 10 generic + 3 local are applicable (RegistrationWithoutPow now
+# runs because register PoW is ON).
 
 scenarios = [
   Kiosk::Redteam::Scenarios::PayForOtherUseSelf.new,      # C2 — headline
@@ -271,26 +278,26 @@ scenarios = [
   Kiosk::Redteam::Scenarios::MissingKyc.new,              # → SKIP (no KYC)
   Kiosk::Redteam::Scenarios::ExpiredKyc.new,              # → SKIP (no KYC)
   Kiosk::Redteam::Scenarios::ForgedKyc.new,               # → SKIP (no KYC)
-  Kiosk::Redteam::Scenarios::RegistrationWithoutPow.new,  # → SKIP (no PoW)
+  Kiosk::Redteam::Scenarios::RegistrationWithoutPow.new,  # → BLOCKED (register PoW ON)
 ]
 
 # ── Expected-applicable assertion ─────────────────────────────────────────────
 #
-# hoteling has no KYC and no registration PoW — these 4 are expected to be
-# skipped. If this set changes, a profile key was silently set to nil,
+# hoteling has no KYC — these 3 KYC variants are expected to be skipped.
+# RegistrationWithoutPow is NOT skipped: register PoW is ON, so it runs and must
+# be BLOCKED. If this set changes, a profile key was silently set to nil,
 # disabling a gate scenario that should be applicable.
 EXPECTED_SKIP_NAMES = %w[
   ExpiredKyc
   ForgedKyc
   MissingKyc
-  RegistrationWithoutPow
 ].freeze
 
 # ── Run ───────────────────────────────────────────────────────────────────────
 
 puts "\n── hoteling redteam battery ──"
 puts "  base_url:       #{BASE_URL}"
-puts "  pow_difficulty: 0 (none)"
+puts "  pow_difficulty: #{profile.pow_difficulty} (register PoW ON)"
 puts "  requires_kyc:   false"
 puts "  scenarios:      #{scenarios.size} (#{EXPECTED_SKIP_NAMES.size} expected skips)"
 puts ""

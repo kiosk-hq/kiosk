@@ -85,10 +85,16 @@ end
 results = {}
 
 # ── Beat 1: standalone — register a fresh key, order groceries ──────────────
-key = OpenSSL::PKey::RSA.generate(2048)
+# The register PoW (KIOSK_POW_REGISTER_DEMO=1) is solved transparently by the
+# helper; the SAME private key is returned so the claim ceremony (Beat 2) and
+# the payment mandates below can re-prove possession / sign with it.
+require_relative "lib/equihash_register"
+key, reg = equihash_register(
+  server: SERVER, issuer: ISSUER,
+  get_json: method(:get_json), post_json: method(:post_json),
+)
 pem = key.public_key.to_pem
-rc, reg = post_json("#{SERVER}/kiosk/auth/register", { public_key: pem, signed: pop_proof(key, pem) })
-abort "register failed (#{rc}): #{JSON.generate(reg)}" unless rc == 201
+rc = 201
 results[:http_register]  = rc
 agent_id                 = reg.fetch("agent_id")
 standalone_user_id       = reg.fetch("user_id")

@@ -71,19 +71,16 @@ def post_form(url, form)
   [res.code.to_i, res.body.to_s]
 end
 
-# Register a fresh agent (getgrocery has no registration PoW gate → plain
-# proof-of-possession handshake). Returns [key, agent_id, user_id, token].
+require_relative "lib/equihash_register"
+
+# Register a fresh agent through the proof-of-possession handshake, solving the
+# Equihash register PoW transparently when the provider gates registration
+# (KIOSK_POW_REGISTER_DEMO=1). Returns [key, agent_id, user_id, token].
 def register_agent
-  key = OpenSSL::PKey::RSA.generate(2048)
-  pem = key.public_key.to_pem
-  rc_ch, ch = get_json("#{SERVER}/kiosk/auth/challenge?public_key=#{URI.encode_www_form_component(pem)}")
-  abort "challenge failed (#{rc_ch}): #{JSON.generate(ch)}" unless rc_ch == 200
-  pop = JWT.encode(
-    { aud: ISSUER, nonce: ch.fetch("challenge"), jti: SecureRandom.uuid, iat: Time.now.to_i },
-    key, "RS256",
+  key, reg = equihash_register(
+    server: SERVER, issuer: ISSUER,
+    get_json: method(:get_json), post_json: method(:post_json),
   )
-  rc_reg, reg = post_json("#{SERVER}/kiosk/auth/register", { public_key: pem, signed: pop })
-  abort "register failed (#{rc_reg}): #{JSON.generate(reg)}" unless rc_reg == 201
   [key, reg.fetch("agent_id"), reg.fetch("user_id"), reg.fetch("access_token")]
 end
 

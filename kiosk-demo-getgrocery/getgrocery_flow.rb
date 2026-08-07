@@ -43,20 +43,18 @@ def get_json(url, headers = {})
   [res.code.to_i, (JSON.parse(res.body) rescue {})]
 end
 
-# -- Step 1: register (proof-of-possession handshake) --
+# -- Step 1: register (proof-of-possession handshake, + register PoW) --
 # A public key is not a credential — it's public. Prove control of the PRIVATE
 # key: fetch a single-use challenge, sign it with `aud` = the origin we dialed
-# (so the proof can't be relayed to another provider), then register.
-key = OpenSSL::PKey::RSA.generate(2048)
-pem = key.public_key.to_pem
-rc_ch, ch = get_json("#{SERVER}/kiosk/auth/challenge?public_key=#{URI.encode_www_form_component(pem)}")
-abort "challenge failed (#{rc_ch}): #{JSON.generate(ch)}" unless rc_ch == 200
-pop = JWT.encode(
-  { aud: ISSUER, nonce: ch.fetch("challenge"), jti: SecureRandom.uuid, iat: Time.now.to_i },
-  key, "RS256",
+# (so the proof can't be relayed to another provider), then register. If the
+# provider gates registration (KIOSK_POW_REGISTER_DEMO=1), the helper solves the
+# Equihash register PoW and resubmits — the SAME private key is returned so it
+# can sign the payment mandates below.
+require_relative "lib/equihash_register"
+key, reg = equihash_register(
+  server: SERVER, issuer: ISSUER,
+  get_json: method(:get_json), post_json: method(:post_json),
 )
-rc_reg, reg = post_json("#{SERVER}/kiosk/auth/register", { public_key: pem, signed: pop })
-abort "register failed (#{rc_reg}): #{JSON.generate(reg)}" unless rc_reg == 201
 agent_id = reg.fetch("agent_id")
 user_id  = reg.fetch("user_id")
 token    = reg.fetch("access_token")
@@ -290,7 +288,8 @@ STDERR.puts "  my_orders: #{my_orders.size} order(s); own order paid=true"
 
 # -- Step 8: print ONE JSON line --
 puts JSON.generate(
-  http_register:      rc_reg,
+  http_register:      201, # equihash_register aborts unless the server returns 201
+
   http_catalog:       rc_catalog,
   http_slots:         rc_slots,
   http_slots_badzone: rc_bad,

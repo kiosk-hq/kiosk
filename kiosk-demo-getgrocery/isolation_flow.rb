@@ -107,20 +107,15 @@ def pay_for_order(server, issuer, token, key, user_id, agent_id, order_id, total
   )
 end
 
+# Register PoW (KIOSK_POW_REGISTER_DEMO=1) is solved transparently by the helper;
+# each principal's private key is returned so it can sign its own pay mandates.
+require_relative "lib/equihash_register"
+
 # ── Step 1: Register Principal A ─────────────────────────────────────────────
-key_a = OpenSSL::PKey::RSA.generate(2048)
-pem_a = key_a.public_key.to_pem
-rc_ch_a, ch_a = get_json("#{SERVER}/kiosk/auth/challenge?public_key=#{URI.encode_www_form_component(pem_a)}")
-abort "challenge A failed (#{rc_ch_a}): #{JSON.generate(ch_a)}" unless rc_ch_a == 200
-pop_a = JWT.encode(
-  { aud: ISSUER, nonce: ch_a.fetch("challenge"), jti: SecureRandom.uuid, iat: Time.now.to_i },
-  key_a, "RS256",
+key_a, reg_a = equihash_register(
+  server: SERVER, issuer: ISSUER,
+  get_json: method(:get_json), post_json: method(:post_json),
 )
-rc, reg_a = post_json(
-  "#{SERVER}/kiosk/auth/register",
-  { public_key: pem_a, signed: pop_a },
-)
-abort "register A failed (#{rc}): #{JSON.generate(reg_a)}" unless rc == 201
 agent_id_a = reg_a.fetch("agent_id")
 user_id_a  = reg_a.fetch("user_id")
 token_a    = reg_a.fetch("access_token")
@@ -129,19 +124,10 @@ token_a    = reg_a.fetch("access_token")
 # auto-provisions a test card at capture (off_session pay settles).
 
 # ── Step 2: Register Principal B ─────────────────────────────────────────────
-key_b = OpenSSL::PKey::RSA.generate(2048)
-pem_b = key_b.public_key.to_pem
-rc_ch_b, ch_b = get_json("#{SERVER}/kiosk/auth/challenge?public_key=#{URI.encode_www_form_component(pem_b)}")
-abort "challenge B failed (#{rc_ch_b}): #{JSON.generate(ch_b)}" unless rc_ch_b == 200
-pop_b = JWT.encode(
-  { aud: ISSUER, nonce: ch_b.fetch("challenge"), jti: SecureRandom.uuid, iat: Time.now.to_i },
-  key_b, "RS256",
+key_b, reg_b = equihash_register(
+  server: SERVER, issuer: ISSUER,
+  get_json: method(:get_json), post_json: method(:post_json),
 )
-rc, reg_b = post_json(
-  "#{SERVER}/kiosk/auth/register",
-  { public_key: pem_b, signed: pop_b },
-)
-abort "register B failed (#{rc}): #{JSON.generate(reg_b)}" unless rc == 201
 agent_id_b = reg_b.fetch("agent_id")
 user_id_b  = reg_b.fetch("user_id")
 token_b    = reg_b.fetch("access_token")

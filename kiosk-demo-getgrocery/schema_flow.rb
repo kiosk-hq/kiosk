@@ -40,21 +40,29 @@ def post_json(path, body, bearer: nil)
   [res.code.to_i, (JSON.parse(res.body) rescue {})]
 end
 
-# ── Register a fresh agent ───────────────────────────────────────────────────
-
-key = OpenSSL::PKey::RSA.generate(2048)
-pem = key.public_key.to_pem
-rc_ch, ch = get_json("/kiosk/auth/challenge?public_key=#{URI.encode_www_form_component(pem)}")
-abort "challenge failed (#{rc_ch}): #{JSON.generate(ch)}" unless rc_ch == 200
-pop = JWT.encode(
-  { aud: SERVER, nonce: ch.fetch("challenge"), jti: SecureRandom.uuid, iat: Time.now.to_i },
-  key, "RS256",
+# ── Register a fresh agent (register PoW solved transparently when the provider
+#    gates registration — KIOSK_POW_REGISTER_DEMO=1) ──────────────────────────
+#
+# This file's get_json/post_json take a `bearer:` kwarg, not the (url, body,
+# headers) shape the shared helper drives; give it full-URL adapter lambdas that
+# carry an arbitrary headers hash (the register retry rides the Kiosk-PoW header).
+require_relative "lib/equihash_register"
+helper_get = ->(url) {
+  uri = URI(url)
+  res = Net::HTTP.new(uri.host, uri.port).request(Net::HTTP::Get.new(uri))
+  [res.code.to_i, (JSON.parse(res.body) rescue {})]
+}
+helper_post = ->(url, body, headers = {}) {
+  uri = URI(url)
+  req = Net::HTTP::Post.new(uri, { "Content-Type" => "application/json" }.merge(headers))
+  req.body = JSON.generate(body)
+  res = Net::HTTP.new(uri.host, uri.port).request(req)
+  [res.code.to_i, (JSON.parse(res.body) rescue {})]
+}
+_key, reg = equihash_register(
+  server: SERVER, issuer: SERVER,
+  get_json: helper_get, post_json: helper_post,
 )
-rc, reg = post_json(
-  "/kiosk/auth/register",
-  { public_key: pem, signed: pop },
-)
-abort "register failed (#{rc}): #{JSON.generate(reg)}" unless rc == 201
 token = reg.fetch("access_token")
 
 # ── Call schema ──────────────────────────────────────────────────────────────

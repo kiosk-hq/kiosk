@@ -54,6 +54,23 @@ HOTELING_FREE_BROWSES  = 3    # first N availability queries are free
 HOTELING_RATE_STEP     = 2    # +1 proof per this many queries beyond the free tier
 HOTELING_MAX_PROOFS    = 5
 
+# ── Registration PoW gate (KIOSK_POW_REGISTER_DEMO=1) — POW-VERB-GATING (K-487)
+#
+# register is a verb like any other: a hotel provider can price fresh-identity
+# minting (one Equihash proof) so a scraper renting throwaway agents pays at the
+# door. Independent of the browse-rate gate above — a deployer can toll register
+# alone. Params follow KIOSK_POW_DIFFICULTY (hoteling ships low → n=96 k=5
+# sub-second). Off entirely unless KIOSK_POW_REGISTER_DEMO=1, so demo:setup / CI /
+# the free-register flows are unchanged. The gate requires the Equihash backend
+# registered; hoist the require + Backends.register here (both idempotent) so
+# register-pow works even when KIOSK_POW_BROWSE_DEMO is off.
+HOTELING_REGISTRATION_POW_PARAMS = PowDifficulty.params
+if ENV["KIOSK_POW_REGISTER_DEMO"] == "1"
+  require "kiosk/pow/equihash"
+  require "kiosk/reputation"
+  Kiosk::Reputation::Backends.register(Kiosk::Pow::Equihash::NAME, Kiosk::Pow::Equihash)
+end
+
 if ENV["KIOSK_POW_BROWSE_DEMO"] == "1"
   require "kiosk/pow/equihash"
   require "kiosk/reputation"
@@ -144,6 +161,17 @@ Kiosk.configure do |c|
         account_age_seconds: nil, dispute_count: nil, bad_proof_count: 0,
       )
     }
+  end
+
+  # ── Registration PoW gate (active only when KIOSK_POW_REGISTER_DEMO=1) ───
+  # Price fresh-identity minting: registering an agent costs ONE Equihash proof.
+  # Independent of the browse gate above; pow_secret is set here too so the gate
+  # works even when KIOSK_POW_BROWSE_DEMO is off (RegistrationPow.gate raises
+  # without it).
+  if ENV["KIOSK_POW_REGISTER_DEMO"] == "1"
+    c.registration_pow_count  = 1
+    c.registration_pow_params = HOTELING_REGISTRATION_POW_PARAMS
+    c.pow_secret              = ENV.fetch("KIOSK_POW_SECRET", "hoteling-demo-pow-secret")
   end
 end
 

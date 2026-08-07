@@ -7,17 +7,17 @@
 # forge_action   : "create_order" (delivery slot + address required)
 # gated_action   : "reschedule_delivery" (ownership + settled payment; one per order)
 # requires_kyc   : false
-# pow_difficulty : 0
+# pow_difficulty : 1  (register PoW ON — KIOSK_POW_REGISTER_DEMO=1)
 #
 # Every capture runs the ValidatingPaymentProvider cashier check: the cart
 # must be EUR, reference the payer's own unsettled order, mirror its items at
 # catalog prices, and sum correctly. Three local scenarios attack exactly that.
 #
-# Scenarios (12 BLOCKED, 3 SKIPPED, RegistrationWithoutPow not run):
+# Scenarios (13 BLOCKED, 3 SKIPPED):
 #   BLOCKED : CrossTenantRead, ForgedUserId, UnpaidGatedAction, SpentResourceReuse,
 #             PayForOtherUseSelf, MandatePrincipalSwap, MandateReplay, TokenTampering,
 #             PrivilegeSelfSelection, WrongCurrencyCart, TamperedPriceCart,
-#             InflatedTotalCart
+#             InflatedTotalCart, RegistrationWithoutPow
 #   SKIPPED : MissingKyc, ExpiredKyc, ForgedKyc (no KYC)
 #
 # Usage:
@@ -33,7 +33,11 @@ ISSUER   = ENV.fetch("KIOSK_ISSUER", BASE_URL)
 # ── Profile ───────────────────────────────────────────────────────────────────
 
 profile = Kiosk::Redteam::Profile.new(
-  pow_difficulty: 0,
+  # register PoW is ON (KIOSK_POW_REGISTER_DEMO=1): a positive difficulty makes
+  # RegistrationWithoutPow RUN (a missing/bad register proof must be rejected).
+  # The Client ignores the magnitude (PoW solving is driven by the server's 402
+  # challenges); only "> 0" matters here.
+  pow_difficulty: 1,
   requires_kyc:   false,
   per_user_query: "my_orders",
 
@@ -239,11 +243,13 @@ scenarios = [
   WrongCurrencyCart.new,
   TamperedPriceCart.new,
   InflatedTotalCart.new,
+  # register PoW is ON — a missing/bad register proof must be rejected (runs
+  # because pow_difficulty > 0).
+  Kiosk::Redteam::Scenarios::RegistrationWithoutPow.new,
   # Not applicable — must SKIP (no KYC)
   Kiosk::Redteam::Scenarios::MissingKyc.new,
   Kiosk::Redteam::Scenarios::ExpiredKyc.new,
   Kiosk::Redteam::Scenarios::ForgedKyc.new,
-  # Note: RegistrationWithoutPow is NOT run (pow_difficulty: 0)
 ]
 
 # ── Expected-applicable assertion ─────────────────────────────────────────────
@@ -257,7 +263,7 @@ EXPECTED_SKIP_NAMES = %w[
 
 puts "\n── getgrocery redteam battery ──"
 puts "  base_url:       #{BASE_URL}"
-puts "  pow_difficulty: 0"
+puts "  pow_difficulty: #{profile.pow_difficulty} (register PoW ON)"
 puts "  requires_kyc:   false"
 puts ""
 

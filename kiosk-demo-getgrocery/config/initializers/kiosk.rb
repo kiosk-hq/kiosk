@@ -50,6 +50,23 @@ ActiveRecord::Migration.include(Kiosk::RLS::DSL)
 # the full shop flow); the knob is here for parity. run/pay are never gated.
 EQUIHASH_DEMO_PARAMS = PowDifficulty.params
 
+# ── Registration PoW gate (KIOSK_POW_REGISTER_DEMO=1) — POW-VERB-GATING (K-487)
+#
+# register is a verb like any other: a grocery provider can price fresh-identity
+# minting (one Equihash proof) so spam signups pay at the door. Independent of
+# the catalog-toll gate above — a deployer can toll register alone. Params follow
+# KIOSK_POW_DIFFICULTY (getgrocery ships low → n=96 k=5 sub-second). Off entirely
+# unless KIOSK_POW_REGISTER_DEMO=1, so demo:setup / CI / the free-register flows
+# are unchanged. The gate requires the Equihash backend registered; hoist the
+# require + Backends.register here (both idempotent) so register-pow works even
+# when KIOSK_POW_DEMO is off.
+GETGROCERY_REGISTRATION_POW_PARAMS = PowDifficulty.params
+if ENV["KIOSK_POW_REGISTER_DEMO"] == "1"
+  require "kiosk/pow/equihash"
+  require "kiosk/reputation"
+  Kiosk::Reputation::Backends.register(Kiosk::Pow::Equihash::NAME, Kiosk::Pow::Equihash)
+end
+
 if ENV["KIOSK_POW_DEMO"] == "1"
   require "kiosk/pow/equihash"
   require "kiosk/reputation"
@@ -200,6 +217,16 @@ Kiosk.configure do |c|
       n = (File.read(GETGROCERY_BAD_PROOF_FILE).to_i rescue 0)
       File.write(GETGROCERY_BAD_PROOF_FILE, (n + 1).to_s)
     }
+  end
+
+  # ── Registration PoW gate (active only when KIOSK_POW_REGISTER_DEMO=1) ───
+  # Price fresh-identity minting: registering an agent costs ONE Equihash proof.
+  # Independent of the catalog toll above; pow_secret is set here too so the gate
+  # works even when KIOSK_POW_DEMO is off (RegistrationPow.gate raises without it).
+  if ENV["KIOSK_POW_REGISTER_DEMO"] == "1"
+    c.registration_pow_count  = 1
+    c.registration_pow_params = GETGROCERY_REGISTRATION_POW_PARAMS
+    c.pow_secret              = ENV.fetch("KIOSK_POW_SECRET", "getgrocery-demo-pow-secret")
   end
 end
 

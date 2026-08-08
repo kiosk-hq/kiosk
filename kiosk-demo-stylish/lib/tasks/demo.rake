@@ -10,7 +10,8 @@
 #   rake demo:binding      account-binding walkthrough (claim ceremony over the
 #                          real Devise session + link-code redeem + unlink)
 #   rake demo:roles        roles-from-IdP demo — owner-linked assistant sees
-#                          the whole salon_calendar, stylist-linked sees only own chairs
+#                          the whole salon_calendar + forecast, a customer-linked
+#                          one sees only its own bookings
 #   rake demo:redteam      adversarial regression battery against the live surface
 #   rake demo:schema       self-discovery proof over the schema verb
 #   rake demo              setup + walkthrough end-to-end

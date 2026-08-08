@@ -201,7 +201,6 @@ CREATE TABLE public.appointments (
     slot timestamp without time zone NOT NULL,
     created_at timestamp(6) without time zone NOT NULL,
     updated_at timestamp(6) without time zone NOT NULL,
-    stylist_id uuid,
     service_id bigint,
     price_cents integer
 );
@@ -523,13 +522,6 @@ CREATE INDEX index_appointments_on_service_id ON public.appointments USING btree
 
 
 --
--- Name: index_appointments_on_stylist_id; Type: INDEX; Schema: public; Owner: -
---
-
-CREATE INDEX index_appointments_on_stylist_id ON public.appointments USING btree (stylist_id);
-
-
---
 -- Name: index_appointments_on_user_id; Type: INDEX; Schema: public; Owner: -
 --
 
@@ -592,14 +584,6 @@ ALTER TABLE ONLY public.appointments
 
 
 --
--- Name: appointments fk_rails_c51d0e755a; Type: FK CONSTRAINT; Schema: public; Owner: -
---
-
-ALTER TABLE ONLY public.appointments
-    ADD CONSTRAINT fk_rails_c51d0e755a FOREIGN KEY (stylist_id) REFERENCES public.users(id);
-
-
---
 -- Name: appointments fk_rails_f298f85235; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -614,6 +598,7 @@ ALTER TABLE ONLY public.appointments
 SET search_path TO "$user", public;
 
 INSERT INTO "schema_migrations" (version) VALUES
+('20260730000001'),
 ('20260729000001'),
 ('20260719000001'),
 ('20260718000002'),

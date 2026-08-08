@@ -1,12 +1,13 @@
 <%# Public, read-only reservations board. Renders each upcoming confirmed
-    reservation as "party size · table · time · <diner name>". Shared by the
-    home page and the standalone /reservations page. Read-only — no forms,
-    no actions; it only mirrors what the wire booked. %>
+    reservation as "party size · restaurant (neighbourhood) · table · time ·
+    <diner name>". Spans ALL restaurants in the aggregator. Shared by the home
+    page and the standalone /reservations page. Read-only — no forms, no
+    actions; it only mirrors what the wire booked. %>
 <div class="board">
   <div class="board-head">
     <div>
       <div class="board-title">Reservations board</div>
-      <div class="board-sub">Upcoming bookings at Tasca do Tejo — updates as assistants book over the wire.</div>
+      <div class="board-sub">Upcoming bookings across the atablefor restaurants — updates as assistants book over the wire.</div>
     </div>
     <span class="board-count"><%= @reservations.size %> upcoming</span>
   </div>
@@ -18,7 +19,7 @@
       <% @reservations.each do |r| %>
         <li class="res">
           <span class="res-party" title="party size"><%= r["party_size"] %>&nbsp;guests</span>
-          <span class="res-table"><%= r["table_label"] %></span>
+          <span class="res-table"><%= r["restaurant"] %><% if r["neighborhood"].present? %> <span style="color:#98847a;font-weight:600">(<%= r["neighborhood"] %>)</span><% end %> · <%= r["table_label"] %></span>
           <span class="res-when"><%= r["slot_day"] %> · <%= r["slot_time"] %></span>
           <span class="res-name"><%= board_diner_name(r) %></span>
           <% if r["deposit_eur"].to_i > 0 %>

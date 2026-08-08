@@ -210,12 +210,47 @@ CREATE TABLE public.bookings (
     id uuid DEFAULT gen_random_uuid() NOT NULL,
     user_id uuid NOT NULL,
     restaurant_id bigint NOT NULL,
-    table_slot_id bigint NOT NULL,
     party_size integer NOT NULL,
     status character varying DEFAULT 'confirmed'::character varying NOT NULL,
     created_at timestamp(6) without time zone NOT NULL,
+    updated_at timestamp(6) without time zone NOT NULL,
+    restaurant_table_id bigint,
+    seating_at timestamp with time zone
+);
+
+
+--
+-- Name: restaurant_tables; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.restaurant_tables (
+    id bigint NOT NULL,
+    restaurant_id bigint NOT NULL,
+    label character varying NOT NULL,
+    capacity integer NOT NULL,
+    deposit_eur integer DEFAULT 0 NOT NULL,
+    created_at timestamp(6) without time zone NOT NULL,
     updated_at timestamp(6) without time zone NOT NULL
 );
+
+
+--
+-- Name: restaurant_tables_id_seq; Type: SEQUENCE; Schema: public; Owner: -
+--
+
+CREATE SEQUENCE public.restaurant_tables_id_seq
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1;
+
+
+--
+-- Name: restaurant_tables_id_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: -
+--
+
+ALTER SEQUENCE public.restaurant_tables_id_seq OWNED BY public.restaurant_tables.id;
 
 
 --
@@ -227,7 +262,8 @@ CREATE TABLE public.restaurants (
     name character varying NOT NULL,
     created_at timestamp(6) without time zone NOT NULL,
     updated_at timestamp(6) without time zone NOT NULL,
-    neighborhood character varying
+    neighborhood character varying,
+    cuisine character varying
 );
 
 
@@ -260,43 +296,6 @@ CREATE TABLE public.schema_migrations (
 
 
 --
--- Name: table_slots; Type: TABLE; Schema: public; Owner: -
---
-
-CREATE TABLE public.table_slots (
-    id bigint NOT NULL,
-    restaurant_id bigint NOT NULL,
-    table_label character varying NOT NULL,
-    capacity integer NOT NULL,
-    slot_date date NOT NULL,
-    slot_time time without time zone NOT NULL,
-    status character varying DEFAULT 'open'::character varying NOT NULL,
-    created_at timestamp(6) without time zone NOT NULL,
-    updated_at timestamp(6) without time zone NOT NULL,
-    deposit_eur integer DEFAULT 0 NOT NULL
-);
-
-
---
--- Name: table_slots_id_seq; Type: SEQUENCE; Schema: public; Owner: -
---
-
-CREATE SEQUENCE public.table_slots_id_seq
-    START WITH 1
-    INCREMENT BY 1
-    NO MINVALUE
-    NO MAXVALUE
-    CACHE 1;
-
-
---
--- Name: table_slots_id_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: -
---
-
-ALTER SEQUENCE public.table_slots_id_seq OWNED BY public.table_slots.id;
-
-
---
 -- Name: users; Type: TABLE; Schema: public; Owner: -
 --
 
@@ -311,17 +310,17 @@ CREATE TABLE public.users (
 
 
 --
+-- Name: restaurant_tables id; Type: DEFAULT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.restaurant_tables ALTER COLUMN id SET DEFAULT nextval('public.restaurant_tables_id_seq'::regclass);
+
+
+--
 -- Name: restaurants id; Type: DEFAULT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY public.restaurants ALTER COLUMN id SET DEFAULT nextval('public.restaurants_id_seq'::regclass);
-
-
---
--- Name: table_slots id; Type: DEFAULT; Schema: public; Owner: -
---
-
-ALTER TABLE ONLY public.table_slots ALTER COLUMN id SET DEFAULT nextval('public.table_slots_id_seq'::regclass);
 
 
 --
@@ -405,6 +404,14 @@ ALTER TABLE ONLY public.bookings
 
 
 --
+-- Name: restaurant_tables restaurant_tables_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.restaurant_tables
+    ADD CONSTRAINT restaurant_tables_pkey PRIMARY KEY (id);
+
+
+--
 -- Name: restaurants restaurants_pkey; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -418,14 +425,6 @@ ALTER TABLE ONLY public.restaurants
 
 ALTER TABLE ONLY public.schema_migrations
     ADD CONSTRAINT schema_migrations_pkey PRIMARY KEY (version);
-
-
---
--- Name: table_slots table_slots_pkey; Type: CONSTRAINT; Schema: public; Owner: -
---
-
-ALTER TABLE ONLY public.table_slots
-    ADD CONSTRAINT table_slots_pkey PRIMARY KEY (id);
 
 
 --
@@ -514,6 +513,13 @@ CREATE INDEX idx_reservations_user_id ON kiosk.reservations USING btree (user_id
 
 
 --
+-- Name: idx_bookings_confirmed_table_seating; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE UNIQUE INDEX idx_bookings_confirmed_table_seating ON public.bookings USING btree (restaurant_table_id, seating_at) WHERE ((status)::text = 'confirmed'::text);
+
+
+--
 -- Name: index_bookings_on_restaurant_id; Type: INDEX; Schema: public; Owner: -
 --
 
@@ -521,10 +527,10 @@ CREATE INDEX index_bookings_on_restaurant_id ON public.bookings USING btree (res
 
 
 --
--- Name: index_bookings_on_table_slot_id; Type: INDEX; Schema: public; Owner: -
+-- Name: index_bookings_on_restaurant_table_id; Type: INDEX; Schema: public; Owner: -
 --
 
-CREATE INDEX index_bookings_on_table_slot_id ON public.bookings USING btree (table_slot_id);
+CREATE INDEX index_bookings_on_restaurant_table_id ON public.bookings USING btree (restaurant_table_id);
 
 
 --
@@ -535,10 +541,17 @@ CREATE INDEX index_bookings_on_user_id ON public.bookings USING btree (user_id);
 
 
 --
--- Name: index_table_slots_on_restaurant_id; Type: INDEX; Schema: public; Owner: -
+-- Name: index_restaurant_tables_on_restaurant_id; Type: INDEX; Schema: public; Owner: -
 --
 
-CREATE INDEX index_table_slots_on_restaurant_id ON public.table_slots USING btree (restaurant_id);
+CREATE INDEX index_restaurant_tables_on_restaurant_id ON public.restaurant_tables USING btree (restaurant_id);
+
+
+--
+-- Name: index_restaurant_tables_on_restaurant_id_and_label; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE UNIQUE INDEX index_restaurant_tables_on_restaurant_id_and_label ON public.restaurant_tables USING btree (restaurant_id, label);
 
 
 --
@@ -589,19 +602,11 @@ ALTER TABLE ONLY public.bookings
 
 
 --
--- Name: bookings fk_rails_47798d6802; Type: FK CONSTRAINT; Schema: public; Owner: -
+-- Name: bookings fk_rails_7f173a40c0; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY public.bookings
-    ADD CONSTRAINT fk_rails_47798d6802 FOREIGN KEY (table_slot_id) REFERENCES public.table_slots(id);
-
-
---
--- Name: table_slots fk_rails_795419d940; Type: FK CONSTRAINT; Schema: public; Owner: -
---
-
-ALTER TABLE ONLY public.table_slots
-    ADD CONSTRAINT fk_rails_795419d940 FOREIGN KEY (restaurant_id) REFERENCES public.restaurants(id);
+    ADD CONSTRAINT fk_rails_7f173a40c0 FOREIGN KEY (restaurant_table_id) REFERENCES public.restaurant_tables(id);
 
 
 --
@@ -613,12 +618,21 @@ ALTER TABLE ONLY public.bookings
 
 
 --
+-- Name: restaurant_tables fk_rails_f0360f9451; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.restaurant_tables
+    ADD CONSTRAINT fk_rails_f0360f9451 FOREIGN KEY (restaurant_id) REFERENCES public.restaurants(id);
+
+
+--
 -- PostgreSQL database dump complete
 --
 
 SET search_path TO "$user", public;
 
 INSERT INTO "schema_migrations" (version) VALUES
+('20260808000001'),
 ('20260729000001'),
 ('20260721000001'),
 ('20260718000002'),

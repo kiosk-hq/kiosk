@@ -131,26 +131,28 @@ results[:agent_id] = agent_id
 abort "claim failed (#{rc}): #{JSON.generate(claimed)}" unless rc == 201
 STDERR.puts "  Assistant redeemed the code: agent_id=#{agent_id} now bound to user_id=#{claimed['user_id']}"
 
-# ══ 4. As the bound assistant, book a table for two tomorrow at 8 ═══════════
-tomorrow = (Date.today + 1).iso8601
-party    = 2
+# ══ 4. As the bound assistant, book a table for two tonight at 8 ════════════
+party = 2
 rc, avail = post_json("/kiosk/query",
-                      { name: "availability", date: tomorrow, party_size: party }, bearer(token))
+                      { name: "availability", party_size: party }, bearer(token))
 abort "availability failed (#{rc}): #{JSON.generate(avail)}" unless rc == 200
 slots = avail.fetch("rows", [])
-slot  = slots.find { |r| r["slot_time"] == "20:00" && r["capacity"].to_i >= party } || slots.first
-abort "no open slot for a party of #{party} tomorrow: #{JSON.generate(slots)}" unless slot
-time  = slot.fetch("slot_time")
+slot  = slots.find { |r| r["seating_time"] == "20:00" && r["capacity"].to_i >= party } || slots.first
+abort "no open table for a party of #{party} tonight: #{JSON.generate(slots)}" unless slot
+date  = slot.fetch("seating_date")
+time  = slot.fetch("seating_time")
 
 rc, run_resp = post_json("/kiosk/run",
-                         { name: "book_table", date: tomorrow, time: time, party_size: party }, bearer(token))
+                         { name: "book_table", restaurant_id: slot.fetch("restaurant_id"),
+                           restaurant_table_id: slot.fetch("restaurant_table_id"),
+                           date: date, time: time, party_size: party }, bearer(token))
 results[:wire_book] = rc
 abort "book_table failed (#{rc}): #{JSON.generate(run_resp)}" unless rc == 200
 booking    = run_resp.fetch("value", {})
 booking_id = booking["booking_id"].to_s
 results[:booking_id]     = booking_id
 results[:booking_status] = booking["status"]
-STDERR.puts "  Assistant booked table #{booking_id} (#{tomorrow} #{time}, party #{party}) as Diego's account"
+STDERR.puts "  Assistant booked table #{booking_id} (#{date} #{time}, party #{party}) as Diego's account"
 
 # ══ 5. The assistant's my_bookings shows the reservation ════════════════════
 rc, mine = post_json("/kiosk/query", { name: "my_bookings" }, bearer(token))

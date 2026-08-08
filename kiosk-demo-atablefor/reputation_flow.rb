@@ -99,30 +99,32 @@ def exec_with_pow(command, body, token)
   end
 end
 
-TOMORROW = (Date.today + 1).iso8601
-
-# Find an open slot time for a party of `party` tomorrow, excluding any of
-# `exclude_times`. Availability itself is PoW-gated, so this goes through
-# exec_with_pow. Returns [time, proofs_solved].
-def find_open_time(party, token, exclude_times)
-  rc, resp, _n = exec_with_pow("query", { name: "availability", date: TOMORROW, party_size: party }, token)
+# Find an open (restaurant, table, seating) row for a party across the
+# aggregator, excluding any [restaurant_table_id, seating_at] pairs.
+# Availability itself is PoW-gated, so this goes through exec_with_pow.
+def find_open_slot(party, token, exclude)
+  rc, resp, _n = exec_with_pow("query", { name: "availability", party_size: party }, token)
   abort "availability failed (#{rc}): #{JSON.generate(resp)}" unless rc == 200
-  rows = (resp.fetch("rows", [])).reject { |r| exclude_times.include?(r["slot_time"]) }
+  rows = (resp.fetch("rows", [])).reject { |r| exclude.include?([r["restaurant_table_id"], r["seating_at"]]) }
   slot = rows.first
-  abort "no open slot for party #{party} tomorrow (excluding #{exclude_times.inspect})" unless slot
-  slot.fetch("slot_time")
+  abort "no open table for party #{party} (excluding #{exclude.inspect})" unless slot
+  slot
 end
 
-# Execute one full booking: book_table (run), PoW-gated. Returns the slot_time
-# used (so the caller can avoid double-booking it) and booking_id.
-def make_booking(party, token, taken_times)
-  time = find_open_time(party, token, taken_times)
+# Execute one full booking: book_table (run), PoW-gated. Returns the claimed
+# [restaurant_table_id, seating_at] pair (so the caller can avoid double-booking
+# it) and booking_id.
+def make_booking(party, token, taken)
+  slot = find_open_slot(party, token, taken)
   rc, resp, _ = exec_with_pow("run",
-    { name: "book_table", date: TOMORROW, time: time, party_size: party }, token)
+    { name: "book_table", restaurant_id: slot.fetch("restaurant_id"),
+      restaurant_table_id: slot.fetch("restaurant_table_id"),
+      date: slot.fetch("seating_date"), time: slot.fetch("seating_time"),
+      party_size: party }, token)
   abort "book_table failed (#{rc}): #{JSON.generate(resp)}" unless rc == 200
   booking_id = resp.dig("value", "booking_id")
   abort "book_table returned no booking_id" if booking_id.to_s.empty?
-  [time, booking_id]
+  [[slot.fetch("restaurant_table_id"), slot.fetch("seating_at")], booking_id]
 end
 
 # ── Step 1: register a fresh principal (register PoW solved transparently when
@@ -137,7 +139,7 @@ _key, reg = equihash_register(
 token = reg.fetch("access_token")
 
 taken = []
-QUERY_BODY = { name: "availability", date: TOMORROW, party_size: 2 }
+QUERY_BODY = { name: "availability", party_size: 2 }
 
 # ── Step 2: query with 0 bookings → 402 (n0 proofs, unproven) → solve → 200 ─
 

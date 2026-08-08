@@ -3,5 +3,5 @@
 class Booking < ApplicationRecord
   belongs_to :user
   belongs_to :restaurant
-  belongs_to :table_slot
+  belongs_to :restaurant_table
 end

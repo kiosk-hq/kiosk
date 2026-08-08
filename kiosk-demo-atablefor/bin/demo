@@ -19,8 +19,8 @@ SERVER_URL="http://127.0.0.1:$PORT"
 # Stable stub token for the booking tour (no human needed — the no-auth-human path)
 AGENT_TOKEN="agent:u-00000000-0000-0000-0000-000000000001:a-alice-agent:r-customer"
 
-# "a table for two, tomorrow at 8" — tomorrow's date, 20:00.
-TOMORROW="$(date -v+1d +%Y-%m-%d 2>/dev/null || date -d '+1 day' +%Y-%m-%d)"
+# "a table for two tonight at 8" — availability returns the current upcoming
+# seatings (Europe/Lisbon), so the tour reads the seating date/time off a row.
 PARTY=2
 
 heading() { printf "\n\033[1;36m── %s ──\033[0m\n" "$1"; }
@@ -80,35 +80,40 @@ curl -sf "$SERVER_URL/kiosk/.well-known/jwks.json" \
 
 heading "Agent checks availability via a named query"
 
-step "Open table-slots for a party of $PARTY tomorrow ($TOMORROW) — query: availability"
+step "Open tables across the aggregator for a party of $PARTY (upcoming seatings) — query: availability"
 curl -sS -X POST "$SERVER_URL/kiosk/query" \
   -H "Authorization: Bearer $AGENT_TOKEN" \
   -H "Content-Type: application/json" \
-  -d "{\"name\":\"availability\",\"date\":\"$TOMORROW\",\"party_size\":$PARTY}" \
+  -d "{\"name\":\"availability\",\"party_size\":$PARTY}" \
   | jq '.rows'
 
 # ─── run an Action ───────────────────────────────────────────────────
 
 heading "Agent books a table via Action (no human at the provider)"
 
-# Pick the 20:00 2-top ("a table for two, tomorrow at 8"); fall back to the
-# first open slot if the headline one is gone.
-SLOT_TIME=$(curl -sS -X POST "$SERVER_URL/kiosk/query" \
+# Pick a 20:00 2-top ("a table for two tonight at 8"); fall back to the first
+# open table if the headline seating is gone. Read the whole row so we can pass
+# restaurant_id + restaurant_table_id + seating_date back to book_table.
+SLOT=$(curl -sS -X POST "$SERVER_URL/kiosk/query" \
   -H "Authorization: Bearer $AGENT_TOKEN" \
   -H "Content-Type: application/json" \
-  -d "{\"name\":\"availability\",\"date\":\"$TOMORROW\",\"party_size\":$PARTY}" \
-  | jq -r '([.rows[] | select(.slot_time=="20:00")] + .rows)[0].slot_time // empty')
+  -d "{\"name\":\"availability\",\"party_size\":$PARTY}" \
+  | jq -c '([.rows[] | select(.seating_time=="20:00")] + .rows)[0] // empty')
 
-if [[ -z "$SLOT_TIME" ]]; then
-  echo "✗ no open slot for a party of $PARTY tomorrow" >&2
+if [[ -z "$SLOT" ]]; then
+  echo "✗ no open table for a party of $PARTY in the upcoming seatings" >&2
   exit 1
 fi
+RESTAURANT_ID=$(printf '%s' "$SLOT" | jq -r '.restaurant_id')
+TABLE_ID=$(printf '%s' "$SLOT" | jq -r '.restaurant_table_id')
+SLOT_DATE=$(printf '%s' "$SLOT" | jq -r '.seating_date')
+SLOT_TIME=$(printf '%s' "$SLOT" | jq -r '.seating_time')
 
-step "run book_table for $TOMORROW $SLOT_TIME, party of $PARTY"
+step "run book_table at restaurant $RESTAURANT_ID table $TABLE_ID for $SLOT_DATE $SLOT_TIME, party of $PARTY"
 BOOK_RESP=$(curl -sS -X POST "$SERVER_URL/kiosk/run" \
   -H "Authorization: Bearer $AGENT_TOKEN" \
   -H "Content-Type: application/json" \
-  -d "{\"name\":\"book_table\",\"date\":\"$TOMORROW\",\"time\":\"$SLOT_TIME\",\"party_size\":$PARTY}")
+  -d "{\"name\":\"book_table\",\"restaurant_id\":$RESTAURANT_ID,\"restaurant_table_id\":$TABLE_ID,\"date\":\"$SLOT_DATE\",\"time\":\"$SLOT_TIME\",\"party_size\":$PARTY}")
 printf '%s\n' "$BOOK_RESP" | jq '.value'
 
 # Assert: a success envelope carries a .value object with a booking_id. A broken

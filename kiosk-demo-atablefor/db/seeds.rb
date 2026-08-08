@@ -44,18 +44,10 @@ User.find_or_create_by!(id: WALKTHROUGH_STUB_USER_ID) do |u|
 end
 User.find_or_create_by!(id: REDTEAM_STUB_USER_ID)
 
-# Two board-only diners, used ONLY to seed a couple of EXISTING reservations on
-# the public board so it is never empty (and reads as a real, busy scene). No
-# login credentials — plain account rows referenced by the seeded bookings.
-# Deliberately NOT the flow principals (0001 Diego / 0002 redteam): the booking
-# flows assert their OWN principal's my_bookings, so board seeds must belong to
-# other diners or they'd inflate those counts.
-GUEST_DINER_1_ID   = "00000000-0000-0000-0000-000000000003"
-GUEST_DINER_1_NAME = "Inês Costa"
-GUEST_DINER_2_ID   = "00000000-0000-0000-0000-000000000004"
-GUEST_DINER_2_NAME = "Tiago Freitas"
-User.find_or_create_by!(id: GUEST_DINER_1_ID) { |u| u.display_name = GUEST_DINER_1_NAME }
-User.find_or_create_by!(id: GUEST_DINER_2_ID) { |u| u.display_name = GUEST_DINER_2_NAME }
+# The public /reservations board is deliberately EMPTY at rest: it mirrors ONLY
+# real bookings made over the Kiosk wire, so a viewer sees a genuine reservation
+# land under its diner's name rather than a pre-seeded scene. No synthetic board
+# reservations are seeded here.
 
 # ── The restaurant roster — ~5 Lisbon spots, coined names, varied tables ─────
 # Each restaurant offers its named tables for EVERY upcoming seating (19/20/21).
@@ -102,43 +94,8 @@ ROSTER.each do |r|
   end
 end
 
-# ── Two EXISTING reservations so the public board is never empty ─────────────
-# Attach them to REAL upcoming seatings computed rollingly (so they're never
-# stale) at two different restaurants, for the two board-only diners. These read
-# on /reservations as "party · restaurant · table · time · <diner name>"
-# alongside any freshly-booked one. If (unusually) no upcoming seating is left
-# in the horizon, the board simply starts empty — honest, not forced.
-def seed_reservation!(restaurant_name:, diner_id:, table_label:, seating:, party:)
-  return unless seating
-
-  restaurant = Restaurant.find_by(name: restaurant_name)
-  table      = restaurant&.restaurant_tables&.find_by(label: table_label)
-  return unless table
-
-  date, time = seating
-  seating_at = Seatings.seating_at(date, time)
-
-  Booking.find_or_create_by!(
-    restaurant_table_id: table.id,
-    seating_at:          seating_at,
-    status:              "confirmed",
-  ) do |b|
-    b.user_id    = diner_id
-    b.restaurant = restaurant
-    b.party_size = party
-  end
-end
-
-# The next two upcoming seatings (soonest-first): put one reservation on each,
-# at two different restaurants, so the board spans the aggregator.
-upcoming = Seatings.upcoming
-seed_reservation!(restaurant_name: "Adega da Graça", diner_id: GUEST_DINER_1_ID,
-                  table_label: "Hall 5", seating: upcoming[0], party: 5)
-seed_reservation!(restaurant_name: "Marisqueira Belém", diner_id: GUEST_DINER_2_ID,
-                  table_label: "Family 6", seating: upcoming[1] || upcoming[0], party: 3)
-
-puts "Seeded: 4 named diners (sign-in #{DINER_EMAIL} / #{DINER_PASSWORD}), " \
+puts "Seeded: Diego (sign-in #{DINER_EMAIL} / #{DINER_PASSWORD}) + redteam stub, " \
      "#{Restaurant.count} restaurants across Lisbon, " \
      "#{RestaurantTable.count} physical tables, " \
-     "#{Booking.where(status: 'confirmed').count} reservations on the board. " \
+     "#{Booking.where(status: 'confirmed').count} reservations on the board (empty at rest). " \
      "Upcoming seatings (Lisbon): #{Seatings.upcoming.map { |d, t| "#{d} #{t}" }.join(', ')}"

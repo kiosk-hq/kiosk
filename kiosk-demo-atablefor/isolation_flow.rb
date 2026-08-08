@@ -64,21 +64,33 @@ def register(server, issuer)
   { agent_id: reg.fetch("agent_id"), user_id: reg.fetch("user_id"), token: reg.fetch("access_token") }
 end
 
-TOMORROW = (Date.today + 1).iso8601
-
-# Find an open slot for a party at TOMORROW, return [time, capacity].
-def find_open_slot(server, token, party, exclude_time: nil)
+# Find an open (restaurant, table, seating) row for a party across the
+# aggregator, excluding any
+# already-claimed (restaurant_table_id, seating_at) pairs. Returns the full row.
+def find_open_slot(server, token, party, exclude: [])
   rc, avail = post_json(
     "#{server}/kiosk/query",
-    { name: "availability", date: TOMORROW, party_size: party },
+    { name: "availability", party_size: party },
     { "Authorization" => "Bearer #{token}" },
   )
   abort "availability failed (#{rc}): #{JSON.generate(avail)}" unless rc == 200
   rows = avail.fetch("rows", [])
-  rows = rows.reject { |r| r["slot_time"] == exclude_time } if exclude_time
+  rows = rows.reject { |r| exclude.include?([r["restaurant_table_id"], r["seating_at"]]) }
   slot = rows.first
-  abort "no open slot for party #{party} tomorrow: #{JSON.generate(avail)}" unless slot
-  slot.fetch("slot_time")
+  abort "no open table for party #{party}: #{JSON.generate(avail)}" unless slot
+  slot
+end
+
+# Book the given availability row as `token`, optionally injecting extra args.
+def book_slot(server, token, slot, party, extra = {})
+  post_json(
+    "#{server}/kiosk/run",
+    { name: "book_table", restaurant_id: slot.fetch("restaurant_id"),
+      restaurant_table_id: slot.fetch("restaurant_table_id"),
+      date: slot.fetch("seating_date"), time: slot.fetch("seating_time"),
+      party_size: party }.merge(extra),
+    { "Authorization" => "Bearer #{token}" },
+  )
 end
 
 # ── Step 1: Register Principal A and Principal B ─────────────────────────────
@@ -86,12 +98,8 @@ a = register(SERVER, ISSUER)
 b = register(SERVER, ISSUER)
 
 # ── Step 2: A books table oA (a 2-top) ───────────────────────────────────────
-time_a = find_open_slot(SERVER, a[:token], 2)
-rc, book_a = post_json(
-  "#{SERVER}/kiosk/run",
-  { name: "book_table", date: TOMORROW, time: time_a, party_size: 2 },
-  { "Authorization" => "Bearer #{a[:token]}" },
-)
+slot_a = find_open_slot(SERVER, a[:token], 2)
+rc, book_a = book_slot(SERVER, a[:token], slot_a, 2)
 abort "A book_table failed (#{rc}): #{JSON.generate(book_a)}" unless rc == 200
 booking_id_a = book_a.dig("value", "booking_id")
 abort "A's booking_id missing: #{JSON.generate(book_a)}" unless booking_id_a
@@ -113,20 +121,12 @@ abort "B my_bookings (before) failed (#{rc}): #{JSON.generate(b_before_resp)}" u
 b_booking_ids_before = (b_before_resp["rows"] || []).map { |r| r["booking_id"] }
 
 # ── Step 5: B books with a FORGED user_id arg (Assertion 2) ──────────────────
-# B picks a different open slot (not A's), and injects A's user_id — the server
-# must ignore the forged arg and attribute the booking to B.
-time_b = find_open_slot(SERVER, b[:token], 2, exclude_time: time_a)
-rc, forged_resp = post_json(
-  "#{SERVER}/kiosk/run",
-  {
-    name:       "book_table",
-    date:       TOMORROW,
-    time:       time_b,
-    party_size: 2,
-    user_id:    a[:user_id],  # adversarial: B supplies A's user_id
-  },
-  { "Authorization" => "Bearer #{b[:token]}" },
-)
+# B picks a different open (table, seating) than A's, and injects A's user_id —
+# the server must ignore the forged arg and attribute the booking to B.
+slot_b = find_open_slot(SERVER, b[:token], 2,
+                        exclude: [[slot_a["restaurant_table_id"], slot_a["seating_at"]]])
+rc, forged_resp = book_slot(SERVER, b[:token], slot_b, 2,
+                            user_id: a[:user_id])  # adversarial: B supplies A's user_id
 abort "B forged book_table failed (#{rc}): #{JSON.generate(forged_resp)}" unless rc == 200
 booking_id_b = forged_resp.dig("value", "booking_id")
 abort "B's forged booking_id missing: #{JSON.generate(forged_resp)}" unless booking_id_b

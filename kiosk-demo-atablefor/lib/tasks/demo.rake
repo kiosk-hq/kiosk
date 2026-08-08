@@ -165,13 +165,14 @@ namespace :demo do
       puts "  ✗  new booking status — got #{this_booking.inspect}"
     end
 
-    # The slot this booking claimed must be marked 'booked' (no double-booking).
-    this_slot = `psql -X -d #{db} -tAc "SELECT ts.status FROM table_slots ts JOIN bookings b ON b.table_slot_id = ts.id WHERE b.id = '#{booking_id}'" 2>&1`.strip
-    if this_slot == "booked"
-      puts "  ✓  the booked table_slot is marked booked"
+    # The booking must pin a physical table + a concrete seating instant (the
+    # finite-contention model: a confirmed row on (table, seating_at) holds it).
+    this_seating = `psql -X -d #{db} -tAc "SELECT restaurant_table_id IS NOT NULL AND seating_at IS NOT NULL FROM bookings WHERE id = '#{booking_id}'" 2>&1`.strip
+    if this_seating == "t"
+      puts "  ✓  the booking pins a table + seating instant (restaurant_table_id + seating_at set)"
     else
-      failures << "the new booking's table_slot status expected 'booked', got #{this_slot.inspect}"
-      puts "  ✗  the new booking's table_slot status — got #{this_slot.inspect}"
+      failures << "the new booking must have restaurant_table_id + seating_at set, got #{this_seating.inspect}"
+      puts "  ✗  the new booking's table/seating — got #{this_seating.inspect}"
     end
 
     if failures.empty?

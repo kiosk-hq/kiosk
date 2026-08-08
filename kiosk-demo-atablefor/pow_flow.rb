@@ -76,8 +76,7 @@ token = reg.fetch("access_token")
 
 # The request we prove. The identical body is sent on every retry so the server
 # computes the same request_fingerprint; the proof is a top-level `pow` sibling.
-require "date"
-QUERY_BODY  = { name: "availability", date: (Date.today + 1).iso8601, party_size: 2 }
+QUERY_BODY  = { name: "availability", party_size: 2 }
 AUTH_HEADER = { "Authorization" => "Bearer #{token}" }
 
 # ── Step 2: initial POST → expect 402 pow_required ─────────────────────────

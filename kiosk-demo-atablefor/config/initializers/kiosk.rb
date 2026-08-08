@@ -4,6 +4,12 @@
 # restaurant table-booking reference shape: uuid users, JWT-or-stub IdP,
 # NO payment provider (a reservation takes no money), Actions
 # (book_table, cancel_booking).
+#
+# atablefor is a restaurant AGGREGATOR across a few Lisbon neighbourhoods
+# (a static roster — see db/seeds.rb). Seatings are ROLLING-CURRENT: the
+# upcoming evening seatings are computed relative to NOW in Europe/Lisbon
+# (lib/seatings.rb), never stale, but the tables are FINITE and CAN sell out
+# for a given seating.
 
 # ── Ephemeral dev signing key ─────────────────────────────────────────────
 # JWT / register flows need a signing key. In development or test, if none is
@@ -19,6 +25,7 @@ end
 require Rails.root.join("lib/stub_idp")
 require Rails.root.join("lib/jwt_or_stub_idp")
 require Rails.root.join("lib/pow_difficulty")
+require Rails.root.join("lib/seatings")
 require "kiosk/user_identity_providers/devise"
 
 # ── PoW / Reputation (R2) — activated only when KIOSK_POW_DEMO=1 ──────────
@@ -334,55 +341,129 @@ end
 
 # ─── Queries ────────────────────────────────────────────────────────────────
 
-# availability — open table-slots for a given date that seat the party.
-# Public (no per-user scoping): any authenticated agent may browse availability.
-# The agent supplies :date (ISO 8601 date) and :party_size; the block builds
-# the query with conn.quote binding — agent input is data, never SQL. Returns
-# only slots whose status is 'open' and whose capacity >= party_size.
+# availability — open tables ACROSS the restaurant aggregator for the upcoming
+# rolling seatings that seat the party. Public (no per-user scoping): any
+# authenticated agent may browse. The upcoming seatings (tonight's 19/20/21 in
+# Europe/Lisbon, past ones filtered, rolling to tomorrow) are computed by
+# lib/seatings.rb — so availability is NEVER stale. Tables are FINITE: a table
+# is "open" for a seating only when no CONFIRMED booking already holds it for
+# that exact (table, seating_at); when every table for a seating is taken,
+# availability is legitimately EMPTY for it (honest sell-out).
+#
+# Optional filters (all agent input goes through conn.quote — data, never SQL):
+#   :party_size   — only tables seating at least this many (used to size the party)
+#   :neighborhood — restrict to one Lisbon neighbourhood (e.g. "Alfama")
+#   :time         — restrict to one seating time ("19:00" | "20:00" | "21:00")
+#   :date         — restrict to one date (YYYY-MM-DD) among the upcoming seatings
+# The result is small (~5 restaurants × a handful of tables × ≤ a few seatings),
+# so it is NOT paginated.
 Kiosk::Server::Queries.register("availability",
-                                 description: "List open table time-slots for a date that seat the party " \
-                                              "(params: date, party_size). Returns one row per open slot " \
-                                              "(restaurant, table_label, capacity, slot_date, slot_time, " \
-                                              "deposit_eur); pick a slot_time to pass to book_table. " \
-                                              "deposit_eur is the no-show hold in whole EUR (0 = none), " \
-                                              "settled at the restaurant — no online payment. Returns all " \
-                                              "matching slots for the day (small; not paginated).",
+                                 description: "List open restaurant tables across the aggregator for the " \
+                                              "UPCOMING seatings that seat the party (params: party_size; " \
+                                              "optional neighborhood, time, date filters). Returns one row " \
+                                              "per open (restaurant, table, seating): restaurant, " \
+                                              "neighborhood, cuisine, restaurant_id, restaurant_table_id, " \
+                                              "table_label, capacity, seating_date, seating_time, seating_at, " \
+                                              "deposit_eur. Pass restaurant_id + restaurant_table_id + " \
+                                              "seating_date + time to book_table. Seatings are the current " \
+                                              "upcoming ones (Europe/Lisbon), never stale; a seating with " \
+                                              "every table taken is absent (sold out). deposit_eur is the " \
+                                              "no-show hold in whole EUR (0 = none), settled at the " \
+                                              "restaurant — no online payment. Small; not paginated.",
                                  params: {
-                                   date:       "string — the reservation date as an ISO 8601 date (YYYY-MM-DD)",
-                                   party_size: "integer — number of guests; only tables seating at least this many are returned",
+                                   party_size:   "integer — number of guests; only tables seating at least this many are returned",
+                                   neighborhood: "string (optional) — restrict to one Lisbon neighbourhood, e.g. \"Alfama\"",
+                                   time:         "string (optional) — restrict to one seating time (\"19:00\" | \"20:00\" | \"21:00\")",
+                                   date:         "string (optional) — restrict to one date (YYYY-MM-DD) among the upcoming seatings",
                                  },
                                  input_schema: {
                                    type: "object",
                                    additionalProperties: false,
                                    properties: {
-                                     date:       { type: "string", format: "date",
-                                                   description: "Reservation date, YYYY-MM-DD." },
-                                     party_size: { type: "integer", minimum: 1,
-                                                   description: "Number of guests." },
+                                     party_size:   { type: "integer", minimum: 1,
+                                                     description: "Number of guests." },
+                                     neighborhood: { type: "string",
+                                                     description: "Optional Lisbon neighbourhood filter, e.g. \"Alfama\"." },
+                                     time:         { type: "string", pattern: "^[0-2][0-9]:[0-5][0-9]$",
+                                                     description: "Optional seating-time filter, \"19:00\" | \"20:00\" | \"21:00\"." },
+                                     date:         { type: "string", format: "date",
+                                                     description: "Optional date filter, YYYY-MM-DD (must be among the upcoming seatings)." },
                                    },
-                                   required: ["date", "party_size"],
+                                   required: ["party_size"],
                                  },
-                                 example_params: { date: "2026-08-05", party_size: 2 },
+                                 example_params: { party_size: 2, neighborhood: "Alfama" },
                                  example_row: {
-                                   restaurant: "Tasca do Tejo", table_label: "Window 6",
-                                   capacity: 2, slot_date: "2026-08-05", slot_time: "20:00",
-                                   deposit_eur: 10,
+                                   restaurant: "Tasca do Tejo", neighborhood: "Alfama",
+                                   cuisine: "Portuguese tavern", restaurant_id: 1,
+                                   restaurant_table_id: 1, table_label: "Window 6", capacity: 2,
+                                   seating_date: "2026-08-08", seating_time: "20:00",
+                                   seating_at: "2026-08-08T20:00:00+01:00", deposit_eur: 10,
                                  }) do |params|
-  date       = params.fetch(:date) { raise Kiosk::Server::Errors::BadRequest.new("missing param: date") }
   party_size = (params.fetch(:party_size) { raise Kiosk::Server::Errors::BadRequest.new("missing param: party_size") }).to_i
+  raise Kiosk::Server::Errors::BadRequest.new("party_size must be >= 1") if party_size < 1
+
+  nbhd_filter = (params[:neighborhood] || params["neighborhood"]).to_s
+  time_filter = (params[:time]         || params["time"]).to_s
+  date_filter = (params[:date]         || params["date"]).to_s
+
   conn = ActiveRecord::Base.connection
-  conn.execute(
-    "SELECT r.name AS restaurant, ts.table_label, ts.capacity, " \
-    "to_char(ts.slot_date, 'YYYY-MM-DD') AS slot_date, " \
-    "to_char(ts.slot_time, 'HH24:MI')    AS slot_time, " \
-    "ts.deposit_eur " \
-    "FROM table_slots ts " \
-    "JOIN restaurants r ON r.id = ts.restaurant_id " \
-    "WHERE ts.status = 'open' " \
-    "AND ts.slot_date = #{conn.quote(date.to_s)}::date " \
-    "AND ts.capacity >= #{party_size} " \
-    "ORDER BY ts.slot_time, ts.capacity"
+
+  # The rolling upcoming seatings (Europe/Lisbon, past filtered, tonight→tomorrow),
+  # each optionally narrowed by the agent's time/date filter.
+  seatings = Seatings.upcoming
+  seatings = seatings.select { |_d, t|   t == time_filter } unless time_filter.empty?
+  seatings = seatings.select { |d, _t| d.iso8601 == date_filter } unless date_filter.empty?
+  return [] if seatings.empty?
+
+  # Every physical table seating >= party, optionally in one neighbourhood.
+  where_nbhd = nbhd_filter.empty? ? "" : "AND r.neighborhood = #{conn.quote(nbhd_filter)} "
+  tables = conn.execute(
+    "SELECT rt.id AS restaurant_table_id, rt.label AS table_label, rt.capacity, rt.deposit_eur, " \
+    "r.id AS restaurant_id, r.name AS restaurant, r.neighborhood, r.cuisine " \
+    "FROM restaurant_tables rt " \
+    "JOIN restaurants r ON r.id = rt.restaurant_id " \
+    "WHERE rt.capacity >= #{party_size} #{where_nbhd}" \
+    "ORDER BY r.name, rt.capacity, rt.label"
   ).to_a
+
+  # Confirmed holds on any of the upcoming seatings — used to subtract taken
+  # (table, seating) pairs so availability sells out honestly. Keyed on the
+  # ABSOLUTE instant (UTC epoch seconds) so the match is timezone-agnostic — the
+  # seating_at column is timestamptz, and Seatings.seating_at is a zoned Lisbon
+  # Time; both reduce to the same epoch, sidestepping session-TZ formatting.
+  seating_epochs = seatings.map { |d, t| Seatings.seating_at(d, t).to_i }
+  taken = {}
+  unless seating_epochs.empty?
+    in_list = seatings.map { |d, t| "#{conn.quote(Seatings.seating_at(d, t).iso8601)}::timestamptz" }.join(", ")
+    conn.execute(
+      "SELECT restaurant_table_id, EXTRACT(EPOCH FROM seating_at)::bigint AS epoch " \
+      "FROM bookings WHERE status = 'confirmed' AND seating_at IN (#{in_list})"
+    ).each { |row| taken["#{row["restaurant_table_id"]}@#{row["epoch"]}"] = true }
+  end
+
+  rows = []
+  seatings.each do |date, time|
+    seating_at = Seatings.seating_at(date, time)
+    key_epoch  = seating_at.to_i
+    tables.each do |t|
+      next if taken["#{t["restaurant_table_id"]}@#{key_epoch}"]
+
+      rows << {
+        "restaurant"          => t["restaurant"],
+        "neighborhood"        => t["neighborhood"],
+        "cuisine"             => t["cuisine"],
+        "restaurant_id"       => t["restaurant_id"],
+        "restaurant_table_id" => t["restaurant_table_id"],
+        "table_label"         => t["table_label"],
+        "capacity"            => t["capacity"],
+        "seating_date"        => date.iso8601,
+        "seating_time"        => time,
+        "seating_at"          => seating_at.iso8601,
+        "deposit_eur"         => t["deposit_eur"],
+      }
+    end
+  end
+  rows
 end
 
 # my_bookings — per-user booking list scoped by the session GUC.
@@ -390,63 +471,103 @@ end
 # demonstrates app-layer per-user isolation: the principal can only see rows
 # where user_id matches kiosk.current_user_id(), enforced in the query itself.
 Kiosk::Server::Queries.register("my_bookings",
-                                 description: "List this principal's table bookings (scoped to authenticated user via kiosk.current_user_id()). Each row carries a `booking_id`; pass it to cancel_booking as `booking_id`.") do |_params|
+                                 description: "List this principal's table bookings across all restaurants " \
+                                              "(scoped to the authenticated user via kiosk.current_user_id()). " \
+                                              "Each row carries a `booking_id`; pass it to cancel_booking as " \
+                                              "`booking_id`.") do |_params|
   ActiveRecord::Base.connection.execute(
-    "SELECT b.id AS booking_id, b.restaurant_id, r.name AS restaurant, ts.table_label, " \
-    "b.table_slot_id, b.party_size, b.status, " \
-    "to_char(ts.slot_date, 'YYYY-MM-DD') AS slot_date, " \
-    "to_char(ts.slot_time, 'HH24:MI')    AS slot_time " \
+    "SELECT b.id AS booking_id, b.restaurant_id, r.name AS restaurant, r.neighborhood, " \
+    "b.restaurant_table_id, rt.label AS table_label, b.party_size, b.status, " \
+    "to_char(b.seating_at AT TIME ZONE 'Europe/Lisbon', 'YYYY-MM-DD') AS seating_date, " \
+    "to_char(b.seating_at AT TIME ZONE 'Europe/Lisbon', 'HH24:MI')    AS seating_time, " \
+    "b.seating_at " \
     "FROM bookings b " \
-    "JOIN table_slots ts ON ts.id = b.table_slot_id " \
-    "JOIN restaurants r  ON r.id = b.restaurant_id " \
+    "JOIN restaurant_tables rt ON rt.id = b.restaurant_table_id " \
+    "JOIN restaurants r        ON r.id  = b.restaurant_id " \
     "WHERE b.user_id = kiosk.current_user_id() " \
-    "ORDER BY ts.slot_date, ts.slot_time"
+    "ORDER BY b.seating_at"
   ).to_a
 end
 
 # ─── Actions ────────────────────────────────────────────────────────────────
 
-# book_table — claim an open table-slot for the authenticated principal and
-# create a confirmed booking. Selects an open slot at Tasca do Tejo matching
-# the requested date, time and party size, atomically marks it 'booked', and
-# records the booking under kiosk.current_user_id(). No payment — a reservation
-# takes no money (any deposit shown is settled at the restaurant, in EUR).
+# book_table — reserve a specific table at a chosen restaurant for a chosen
+# upcoming seating, for the authenticated principal. The (restaurant_id,
+# restaurant_table_id) come from an availability row; the seating is
+# (date, time). The seating must be one of the CURRENT upcoming seatings (not
+# past — re-validated against lib/seatings.rb). Contention is finite: a UNIQUE
+# index on (restaurant_table_id, seating_at) among confirmed rows means a table
+# already held for that seating is a clean 409 Conflict. No payment — a
+# reservation takes no money (any deposit shown is settled at the restaurant).
 Kiosk::Server::Actions.register("book_table",
-                                  description: "Book a restaurant table for the authenticated principal " \
-                                               "(params: date, time, party_size). Confirms a reservation on an " \
-                                               "open slot that seats the party; returns the confirmed booking.",
+                                  description: "Book a specific restaurant table for a chosen upcoming " \
+                                               "seating (params: restaurant_id, restaurant_table_id, date, " \
+                                               "time, party_size — all from an availability row). Confirms " \
+                                               "the reservation; a table already taken for that seating, or a " \
+                                               "seating that has passed, is rejected cleanly.",
                                   params: {
-                                    date:       "string — reservation date as an ISO 8601 date (YYYY-MM-DD)",
-                                    time:       "string — reservation time as HH:MM (24-hour), e.g. \"20:00\"",
-                                    party_size: "integer — number of guests",
+                                    restaurant_id:       "integer — the restaurant_id from an availability row",
+                                    restaurant_table_id: "integer — the restaurant_table_id from an availability row",
+                                    date:                "string — the seating_date (YYYY-MM-DD) from the availability row",
+                                    time:                "string — the seating_time HH:MM (24-hour), e.g. \"20:00\"",
+                                    party_size:          "integer — number of guests (must fit the table's capacity)",
                                   },
                                   input_schema: {
                                     type: "object",
                                     additionalProperties: false,
                                     properties: {
-                                      date:       { type: "string", format: "date",
-                                                    description: "Reservation date, YYYY-MM-DD." },
-                                      time:       { type: "string", pattern: "^[0-2][0-9]:[0-5][0-9]$",
-                                                    description: "Reservation time HH:MM (24-hour), e.g. \"20:00\" (from an availability slot_time)." },
-                                      party_size: { type: "integer", minimum: 1,
-                                                    description: "Number of guests." },
+                                      restaurant_id:       { type: "integer", minimum: 1,
+                                                             description: "The restaurant_id from an availability row." },
+                                      restaurant_table_id: { type: "integer", minimum: 1,
+                                                             description: "The restaurant_table_id from an availability row." },
+                                      date:                { type: "string", format: "date",
+                                                             description: "The seating_date (YYYY-MM-DD) from the availability row." },
+                                      time:                { type: "string", pattern: "^[0-2][0-9]:[0-5][0-9]$",
+                                                             description: "The seating_time HH:MM (24-hour), e.g. \"20:00\"." },
+                                      party_size:          { type: "integer", minimum: 1,
+                                                             description: "Number of guests." },
                                     },
-                                    required: ["date", "time", "party_size"],
+                                    required: ["restaurant_id", "restaurant_table_id", "date", "time", "party_size"],
                                   },
-                                  example_params: { date: "2026-08-05", time: "20:00", party_size: 2 },
+                                  example_params: {
+                                    restaurant_id: 1, restaurant_table_id: 1,
+                                    date: "2026-08-08", time: "20:00", party_size: 2,
+                                  },
                                   example_row: {
                                     booking_id: "b1f2a3c4-5d6e-4f70-8a91-2b3c4d5e6f70",
-                                    restaurant_id: 1, table_slot_id: 1, party_size: 2,
-                                    date: "2026-08-05", time: "20:00", status: "confirmed",
+                                    restaurant_id: 1, restaurant_table_id: 1, party_size: 2,
+                                    date: "2026-08-08", time: "20:00",
+                                    seating_at: "2026-08-08T20:00:00+01:00", status: "confirmed",
                                   }) do |args|
   conn = ActiveRecord::Base.connection
 
-  date       = (args[:date] || args["date"]).to_s
-  time       = (args[:time] || args["time"]).to_s
-  party_size = (args[:party_size] || args["party_size"]).to_i
-  raise Kiosk::Server::Errors::BadRequest.new("missing param: date")       if date.empty?
-  raise Kiosk::Server::Errors::BadRequest.new("missing param: time")       if time.empty?
-  raise Kiosk::Server::Errors::BadRequest.new("party_size must be >= 1")    if party_size < 1
+  restaurant_id       = (args[:restaurant_id]       || args["restaurant_id"]).to_i
+  restaurant_table_id = (args[:restaurant_table_id] || args["restaurant_table_id"]).to_i
+  date                = (args[:date]                || args["date"]).to_s
+  time                = (args[:time]                || args["time"]).to_s
+  party_size          = (args[:party_size]          || args["party_size"]).to_i
+  raise Kiosk::Server::Errors::BadRequest.new("missing param: restaurant_id")       if restaurant_id < 1
+  raise Kiosk::Server::Errors::BadRequest.new("missing param: restaurant_table_id") if restaurant_table_id < 1
+  raise Kiosk::Server::Errors::BadRequest.new("missing param: date")                if date.empty?
+  raise Kiosk::Server::Errors::BadRequest.new("missing param: time")                if time.empty?
+  raise Kiosk::Server::Errors::BadRequest.new("party_size must be >= 1")             if party_size < 1
+
+  # The seating instant, from the SAME helper availability used. Reject a seating
+  # that is not one of the current upcoming ones (past / wrong time), so an agent
+  # can't book a window availability would now hide.
+  parsed_date =
+    begin
+      Date.iso8601(date)
+    rescue ArgumentError
+      raise Kiosk::Server::Errors::BadRequest.new("invalid date: #{date} — use the YYYY-MM-DD from an availability row")
+    end
+  raise Kiosk::Server::Errors::BadRequest.new("unknown seating time: #{time} — use \"19:00\" | \"20:00\" | \"21:00\"") unless Seatings::TIMES.include?(time)
+  if Seatings.past?(parsed_date, time)
+    raise Kiosk::Server::Errors::BadRequest.new(
+      "seating #{date} #{time} has already started — call availability again for the still-bookable seatings"
+    )
+  end
+  seating_at = Seatings.seating_at(parsed_date, time)
 
   # Identity is set via Kiosk::Server::SessionContext SET LOCAL —
   # current_user_id() returns the principal. ActiveRecord doesn't have direct
@@ -454,52 +575,60 @@ Kiosk::Server::Actions.register("book_table",
   uid = conn.execute("SELECT kiosk.current_user_id() AS uid").first["uid"]
 
   conn.transaction do
-    # Claim an open slot atomically (FOR UPDATE SKIP LOCKED so concurrent
-    # bookers never claim the same table). Match date + time + capacity.
-    slot = conn.execute(
-      "SELECT ts.id, ts.restaurant_id FROM table_slots ts " \
-      "WHERE ts.status = 'open' " \
-      "AND ts.slot_date = #{conn.quote(date)}::date " \
-      "AND to_char(ts.slot_time, 'HH24:MI') = #{conn.quote(time)} " \
-      "AND ts.capacity >= #{party_size} " \
-      "ORDER BY ts.capacity " \
-      "FOR UPDATE SKIP LOCKED " \
+    # The chosen table must exist at the chosen restaurant and seat the party.
+    table = conn.execute(
+      "SELECT rt.id, rt.capacity FROM restaurant_tables rt " \
+      "WHERE rt.id = #{restaurant_table_id} AND rt.restaurant_id = #{restaurant_id} " \
+      "AND rt.capacity >= #{party_size} " \
       "LIMIT 1"
     ).first
-    raise Kiosk::Server::Errors::Conflict.new("no open table for #{date} #{time} seating #{party_size}") if slot.nil?
+    raise Kiosk::Server::Errors::BadRequest.new("no such table #{restaurant_table_id} at restaurant #{restaurant_id} seating #{party_size}") if table.nil?
 
-    slot_id       = slot["id"]
-    restaurant_id = slot["restaurant_id"]
-
-    conn.execute("UPDATE table_slots SET status = 'booked', updated_at = now() WHERE id = #{slot_id}")
-
-    booking = conn.execute(
-      "INSERT INTO bookings " \
-      "(id, user_id, restaurant_id, table_slot_id, party_size, status, created_at, updated_at) " \
-      "VALUES (gen_random_uuid(), #{conn.quote(uid.to_s)}::uuid, #{restaurant_id}, #{slot_id}, " \
-      "#{party_size}, 'confirmed', now(), now()) " \
-      "RETURNING id, party_size, status"
+    # Finite contention: is this exact (table, seating) already held? A clean
+    # 409 Conflict, mirrored by the unique partial index (the index is the
+    # authoritative guard even under concurrency).
+    held = conn.execute(
+      "SELECT 1 FROM bookings WHERE status = 'confirmed' " \
+      "AND restaurant_table_id = #{restaurant_table_id} " \
+      "AND seating_at = #{conn.quote(seating_at.iso8601)}::timestamptz LIMIT 1"
     ).first
+    raise Kiosk::Server::Errors::Conflict.new("table #{restaurant_table_id} is already booked for #{date} #{time}") if held
+
+    booking =
+      begin
+        conn.execute(
+          "INSERT INTO bookings " \
+          "(id, user_id, restaurant_id, restaurant_table_id, party_size, seating_at, status, created_at, updated_at) " \
+          "VALUES (gen_random_uuid(), #{conn.quote(uid.to_s)}::uuid, #{restaurant_id}, #{restaurant_table_id}, " \
+          "#{party_size}, #{conn.quote(seating_at.iso8601)}::timestamptz, 'confirmed', now(), now()) " \
+          "RETURNING id, party_size, status"
+        ).first
+      rescue ActiveRecord::RecordNotUnique
+        # Lost a race for the same (table, seating) — the unique index caught it.
+        raise Kiosk::Server::Errors::Conflict.new("table #{restaurant_table_id} is already booked for #{date} #{time}")
+      end
 
     {
-      booking_id:    booking["id"],
-      restaurant_id: restaurant_id,
-      table_slot_id: slot_id,
-      party_size:    booking["party_size"].to_i,
-      date:          date,
-      time:          time,
-      status:        booking["status"],
+      booking_id:          booking["id"],
+      restaurant_id:       restaurant_id,
+      restaurant_table_id: restaurant_table_id,
+      party_size:          booking["party_size"].to_i,
+      date:                date,
+      time:                time,
+      seating_at:          seating_at.iso8601,
+      status:              booking["status"],
     }
   end
 end
 
-# cancel_booking — cancel one of the authenticated principal's own bookings and
-# free the table-slot. Owner-scoped: the WHERE gates on user_id =
-# kiosk.current_user_id(), so a cross-principal cancel on another's booking is a
-# clean 403 (the booking is not found under the caller's identity).
+# cancel_booking — cancel one of the authenticated principal's own bookings,
+# freeing the (table, seating) so it can be booked again. Owner-scoped: the
+# WHERE gates on user_id = kiosk.current_user_id(), so a cross-principal cancel
+# on another's booking is a clean 403 (the booking is not found under the
+# caller's identity).
 Kiosk::Server::Actions.register("cancel_booking",
   description: "Cancel one of the authenticated principal's own table bookings " \
-               "(requires the booking to belong to the principal). Frees the table-slot.",
+               "(requires the booking to belong to the principal). Frees the (table, seating).",
   params: {
     booking_id: "uuid — the booking to cancel (from book_table / my_bookings; must belong to the principal)",
   }) do |args|
@@ -511,7 +640,7 @@ Kiosk::Server::Actions.register("cancel_booking",
   conn.transaction do
     # Owner-scoped: the booking must belong to the caller and not be cancelled.
     booking = conn.execute(
-      "SELECT id, table_slot_id FROM bookings " \
+      "SELECT id FROM bookings " \
       "WHERE id = #{conn.quote(booking_id.to_s)}::uuid " \
       "AND user_id = kiosk.current_user_id() " \
       "AND status <> 'cancelled' " \
@@ -519,15 +648,13 @@ Kiosk::Server::Actions.register("cancel_booking",
     ).first
     raise Kiosk::Server::Errors::Forbidden.new("booking not found, not yours, or already cancelled") if booking.nil?
 
-    slot_id = booking["table_slot_id"]
-
+    # Cancelling drops the row out of the confirmed set, so the unique partial
+    # index frees the (table, seating) for a fresh booking.
     conn.execute(
       "UPDATE bookings SET status = 'cancelled', updated_at = now() " \
       "WHERE id = #{conn.quote(booking_id.to_s)}::uuid " \
       "AND user_id = kiosk.current_user_id()"
     )
-    # Free the slot so it can be booked again.
-    conn.execute("UPDATE table_slots SET status = 'open', updated_at = now() WHERE id = #{slot_id}")
 
     { booking_id: booking_id, status: "cancelled" }
   end

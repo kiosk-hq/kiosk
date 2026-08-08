@@ -12,7 +12,7 @@ class HomeController < ActionController::Base
   def index
     @tables_booked  = Booking.where(status: "confirmed").count
     @covers_seated  = Booking.where(status: "confirmed").sum(:party_size)
-    @open_slots     = TableSlot.where(status: "open").count
+    @restaurants    = Restaurant.count
     @reservations   = upcoming_reservations
 
     # Set a Link header too, so a header-only agent finds the skill.
@@ -28,29 +28,32 @@ class HomeController < ActionController::Base
 
   private
 
-  # Upcoming confirmed reservations for the public board, joined to the diner's
-  # display name (falls back to a masked local-part if a diner has no name, and
-  # to "Assistant guest" for a headless account with neither). Read-only — the
-  # board never mutates anything. Today onward, soonest first.
+  # Upcoming confirmed reservations for the public board, spanning ALL
+  # restaurants in the aggregator, joined to the diner's display name (falls
+  # back to a masked local-part if a diner has no name, and to "Assistant guest"
+  # for a headless account with neither). Read-only — the board never mutates
+  # anything. Now onward, soonest first. Times are rendered in Europe/Lisbon (the
+  # operator's locale) so the board reads in local wall-clock.
   def upcoming_reservations
     conn = ActiveRecord::Base.connection
     conn.execute(<<~SQL).to_a
       SELECT
-        r.name                              AS restaurant,
-        ts.table_label                      AS table_label,
-        ts.deposit_eur                      AS deposit_eur,
-        b.party_size                        AS party_size,
-        to_char(ts.slot_date, 'Dy DD Mon')  AS slot_day,
-        to_char(ts.slot_time, 'HH24:MI')    AS slot_time,
-        u.display_name                      AS diner_name,
-        u.email                             AS diner_email
+        r.name                                                             AS restaurant,
+        r.neighborhood                                                     AS neighborhood,
+        rt.label                                                           AS table_label,
+        rt.deposit_eur                                                     AS deposit_eur,
+        b.party_size                                                       AS party_size,
+        to_char(b.seating_at AT TIME ZONE 'Europe/Lisbon', 'Dy DD Mon')    AS slot_day,
+        to_char(b.seating_at AT TIME ZONE 'Europe/Lisbon', 'HH24:MI')      AS slot_time,
+        u.display_name                                                     AS diner_name,
+        u.email                                                            AS diner_email
       FROM bookings b
-      JOIN table_slots ts ON ts.id = b.table_slot_id
-      JOIN restaurants r  ON r.id  = b.restaurant_id
-      JOIN users u        ON u.id  = b.user_id
+      JOIN restaurant_tables rt ON rt.id = b.restaurant_table_id
+      JOIN restaurants r        ON r.id  = b.restaurant_id
+      JOIN users u              ON u.id  = b.user_id
       WHERE b.status = 'confirmed'
-        AND ts.slot_date >= CURRENT_DATE
-      ORDER BY ts.slot_date, ts.slot_time, ts.table_label
+        AND b.seating_at >= now()
+      ORDER BY b.seating_at, r.name, rt.label
       LIMIT 50
     SQL
   end

@@ -1,6 +1,6 @@
 # Before and After — why AI assistants stall at restaurant booking, and what atablefor proves
 
-**Honesty note up front.** atablefor is what a restaurant-reservation platform *would* look like if it spoke Kiosk — a fake-but-realistic table-booking operator (Tasca do Tejo) built to demonstrate the mechanism. Nothing below implies that any real reservation platform works this way. The demo proves the *mechanism* works; whether operators will adopt it is an open question.
+**Honesty note up front.** atablefor is what a restaurant-reservation platform *would* look like if it spoke Kiosk — a fake-but-realistic table-booking aggregator (a handful of coined Lisbon restaurants) built to demonstrate the mechanism. Nothing below implies that any real reservation platform works this way. The demo proves the *mechanism* works; whether operators will adopt it is an open question.
 
 ---
 
@@ -29,15 +29,15 @@ The reason incumbents stay at discovery is economic, not technical. A reservatio
 atablefor is a Rails 8.1 app that speaks Kiosk. The following is the recorded output of a `rake demo:book` run.
 
 ```
-{"http_register":201,"user_id":"3e406ba4-46a0-402d-a5c1-7eadb173db82","agent_id":"e118679e-009e-4458-8bbd-573ccfe0985a","date":"2026-07-21","time":"20:00","party_size":2,"booking":{"booking_id":"18aaacf8-1e7e-484c-b02d-76f578854418","restaurant_id":1,"table_slot_id":1,"party_size":2,"date":"2026-07-21","time":"20:00","status":"confirmed"},"my_bookings":[{"id":"18aaacf8-1e7e-484c-b02d-76f578854418","restaurant_id":1,"table_slot_id":1,"party_size":2,"status":"confirmed","slot_date":"2026-07-21","slot_time":"20:00"}]}
+{"http_register":201,"user_id":"cd10cd63-c869-459b-9fd0-48955a94139e","agent_id":"e500a8dc-440e-4540-8906-38339e3692ab","date":"2026-08-08","time":"20:00","party_size":2,"booking":{"booking_id":"2840211e-e0d0-4a16-a93c-8261176d407e","restaurant_id":2,"restaurant_table_id":5,"party_size":2,"date":"2026-08-08","time":"20:00","seating_at":"2026-08-08T20:00:00+01:00","status":"confirmed"},"my_bookings":[{"booking_id":"2840211e-e0d0-4a16-a93c-8261176d407e","restaurant_id":2,"restaurant":"Adega da Graça","neighborhood":"Graça","restaurant_table_id":5,"table_label":"Miradouro 1","party_size":2,"status":"confirmed","seating_date":"2026-08-08","seating_time":"20:00","seating_at":"2026-08-08T19:00:00.000+00:00"}]}
 
 ── Assertions ──
-  ✓  booking.booking_id present (18aaacf8-1e7e-484c-b02d-76f578854418)
+  ✓  booking.booking_id present (2840211e-e0d0-4a16-a93c-8261176d407e)
   ✓  booking.status == confirmed
   ✓  booking.party_size == 2 (a table for two)
-  ✓  my_bookings shows the confirmed booking (id=18aaacf8-1e7e-484c-b02d-76f578854418)
-  ✓  confirmed bookings count = 1
-  ✓  exactly 1 table_slot marked booked
+  ✓  my_bookings shows the confirmed booking (id=2840211e-e0d0-4a16-a93c-8261176d407e)
+  ✓  the new booking is confirmed in the DB (id=2840211e-e0d0-4a16-a93c-8261176d407e)
+  ✓  the booking pins a table + seating instant (restaurant_table_id + seating_at set)
 
   All assertions passed.
 ```
@@ -46,13 +46,13 @@ atablefor is a Rails 8.1 app that speaks Kiosk. The following is the recorded ou
 
 1. **Discover** — `GET /.well-known/kiosk.json` returns the atablefor issuer and surface. Capabilities are `[schema, query, run]` — no `pay`. A reservation takes no money.
 2. **Self-register** — generated an RSA-2048 keypair, proved possession of the private key (`GET /kiosk/auth/challenge` → sign an RS256 JWS `{aud, nonce, jti, iat}` → `POST /kiosk/auth/register {public_key:<pem>, signed:<jws>}`) → HTTP 201 → `agent_id`, `user_id`, `access_token`. No existing account. No human login. No OTP. No bot screen.
-3. **Check availability** — `POST /kiosk/query {name:"availability", date:"<tomorrow>", party_size:2}` returned the open time-slots that seat two; found the 20:00 2-top. No SQL sent — the AI assistant called an operator-registered named query.
-4. **Book the table** — `POST /kiosk/run {name:"book_table", date:"<tomorrow>", time:"20:00", party_size:2}` → HTTP 200, `status:"confirmed"`. The operator atomically claimed the open slot (marking it `booked`) and recorded the booking under the authenticated principal.
+3. **Check availability** — `POST /kiosk/query {name:"availability", party_size:2}` returned open tables **across the restaurant roster** for the current upcoming seatings (computed in Europe/Lisbon, never stale); found a 20:00 2-top. No SQL sent — the AI assistant called an operator-registered named query.
+4. **Book the table** — `POST /kiosk/run {name:"book_table", restaurant_id:<r>, restaurant_table_id:<t>, date:"<seating date>", time:"20:00", party_size:2}` → HTTP 200, `status:"confirmed"`. The operator confirmed the reservation under the authenticated principal; a table already held for that seating is a clean 409 (finite, can sell out).
 5. **Confirm it holds** — `POST /kiosk/query {name:"my_bookings"}` → the one confirmed booking, scoped to this principal alone.
 
-The database confirmed: one row in `bookings` (`status='confirmed'`), the claimed slot marked `booked`.
+The database confirmed: one row in `bookings` (`status='confirmed'`), pinning the chosen table and seating instant (a unique index makes the seating sell out honestly).
 
-The business outcome: the user said "book a table for two at Tasca do Tejo tomorrow at 8." Their assistant completed the reservation — discovery, registration, availability, booking — without the user touching anything and without the user having an account at atablefor beforehand.
+The business outcome: the user said "book a table for two in Alfama tonight at 8." Their assistant completed the reservation — discovery, registration, availability across the roster, booking — without the user touching anything and without the user having an account at atablefor beforehand.
 
 The operator outcome: atablefor received a real, accountable reservation. The customer relationship stays with the operator (the token carries the operator's issuer). There is no intermediate platform taking a discovery fee or owning the session.
 
@@ -98,7 +98,8 @@ This emits `config/initializers/kiosk.rb` (a `Kiosk.configure` block) and the `k
 
 ```ruby
 Kiosk::Server::Queries.register("availability") do |args|
-  # open slots for args[:date] that seat args[:party_size]
+  # open tables across all restaurants for the upcoming (rolling, Lisbon-tz)
+  # seatings that seat args[:party_size]; optional neighborhood/time/date filters
 end
 
 Kiosk::Server::Queries.register("my_bookings") do |_params|
@@ -106,20 +107,21 @@ Kiosk::Server::Queries.register("my_bookings") do |_params|
 end
 ```
 
-AI assistants call these by name only (`POST /kiosk/query {name:"availability", date:"…", party_size:2}`). They never supply SQL. App-layer isolation lives here: owner-scoped queries filter by `kiosk.current_user_id()` (operator-derived from the session, never an AI-assistant param); the availability catalogue is open to all authenticated AI assistants.
+AI assistants call these by name only (`POST /kiosk/query {name:"availability", party_size:2}`). They never supply SQL. App-layer isolation lives here: owner-scoped queries filter by `kiosk.current_user_id()` (operator-derived from the session, never an AI-assistant param); the availability catalogue is open to all authenticated AI assistants.
 
 **4. Register Actions (`book_table` and `cancel_booking`)**
 
 ```ruby
 Kiosk::Server::Actions.register("book_table") do |args|
   uid = ActiveRecord::Base.connection.execute("SELECT kiosk.current_user_id() AS uid").first["uid"]
-  # atomically claim an open slot matching date/time/party_size, then create
-  # a confirmed booking under uid. No payment.
+  # reserve args[:restaurant_table_id] at args[:restaurant_id] for the chosen
+  # (date, time) seating, then create a confirmed booking under uid. A table
+  # already held for that seating is a clean 409 (finite). No payment.
 end
 
 Kiosk::Server::Actions.register("cancel_booking") do |args|
   # owner-scoped: WHERE user_id = kiosk.current_user_id() — a cross-principal
-  # cancel is a clean 403, and the freed slot returns to availability.
+  # cancel is a clean 403, and the freed (table, seating) returns to availability.
 end
 ```
 

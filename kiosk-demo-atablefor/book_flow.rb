@@ -53,30 +53,32 @@ agent_id = reg.fetch("agent_id")
 user_id  = reg.fetch("user_id")
 token    = reg.fetch("access_token")
 
-# ── Step 2: query availability for tomorrow, a party of 2 ────────────────────
+# ── Step 2: query availability across the aggregator for a party of 2 ────────
 
-tomorrow = (Date.today + 1).iso8601
-party    = 2
+party = 2
 
 rc, avail = post_json(
   "#{SERVER}/kiosk/query",
-  { name: "availability", date: tomorrow, party_size: party },
+  { name: "availability", party_size: party },
   { "Authorization" => "Bearer #{token}" },
 )
 abort "availability failed (#{rc}): #{JSON.generate(avail)}" unless rc == 200
 
 slots = avail.fetch("rows", [])
-# The headline: a 2-top at 20:00 tomorrow ("a table for two, tomorrow at 8").
-slot = slots.find { |r| r["slot_time"] == "20:00" && r["capacity"].to_i >= party } || slots.first
-abort "no open slot for a party of #{party} tomorrow: #{JSON.generate(slots)}" unless slot
+# The headline: a 2-top at tonight's 20:00 seating ("a table for two tonight at 8").
+slot = slots.find { |r| r["seating_time"] == "20:00" && r["capacity"].to_i >= party } || slots.first
+abort "no open table for a party of #{party} tonight: #{JSON.generate(slots)}" unless slot
 
-time = slot.fetch("slot_time")
+date = slot.fetch("seating_date")
+time = slot.fetch("seating_time")
 
-# ── Step 3: book the table (run book_table) ──────────────────────────────────
+# ── Step 3: book that specific table for that seating (run book_table) ───────
 
 rc, run_resp = post_json(
   "#{SERVER}/kiosk/run",
-  { name: "book_table", date: tomorrow, time: time, party_size: party },
+  { name: "book_table", restaurant_id: slot.fetch("restaurant_id"),
+    restaurant_table_id: slot.fetch("restaurant_table_id"),
+    date: date, time: time, party_size: party },
   { "Authorization" => "Bearer #{token}" },
 )
 abort "book_table failed (#{rc}): #{JSON.generate(run_resp)}" unless rc == 200
@@ -102,7 +104,7 @@ puts JSON.generate(
   http_register:  201,
   user_id:        user_id,
   agent_id:       agent_id,
-  date:           tomorrow,
+  date:           date,
   time:           time,
   party_size:     party,
   booking:        booking_value,

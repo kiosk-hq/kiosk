@@ -36,7 +36,7 @@ class StubUserIdp < Kiosk::UserIdentityProviders::Base
 
     Kiosk::Identity.new(
       user_id:  row.fetch("id"),
-      role:     row.fetch("staff_role"), # 'owner' | 'stylist' — from the provider's IdP
+      role:     row.fetch("staff_role"), # 'owner' — from the provider's IdP
       actor:    "human",
       agent_id: nil,
       claims:   {},

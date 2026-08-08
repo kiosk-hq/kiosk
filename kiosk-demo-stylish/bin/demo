@@ -77,12 +77,12 @@ curl -sS -X POST "$SERVER_URL/kiosk/query" \
   -d '{"name":"salons"}' \
   | jq '.rows'
 
-step "Browse the salon's OPEN slots (evergreen availability — 7 stylists, one slot each)"
+step "Browse the salon's OPEN services (evergreen menu — always bookable, infinite capacity)"
 curl -sS -X POST "$SERVER_URL/kiosk/query" \
   -H "Authorization: Bearer $ALICE_TOKEN" \
   -H "Content-Type: application/json" \
   -d '{"name":"availability"}' \
-  | jq '.rows | map({stylist, service, price_eur})'
+  | jq '.rows | map({service, open, price_eur})'
 
 step "Count appointments visible to Alice (initially 0 — bookings accumulate during the demo)"
 curl -sS -X POST "$SERVER_URL/kiosk/query" \
@@ -93,7 +93,7 @@ curl -sS -X POST "$SERVER_URL/kiosk/query" \
 
 # ─── run an Action ───────────────────────────────────────────────────
 
-heading "Alice's agent books a haircut — picks a stylist's open slot"
+heading "Alice's agent books a haircut — picks a service off the menu"
 
 SALON_ID=$(curl -sS -X POST "$SERVER_URL/kiosk/query" \
   -H "Authorization: Bearer $ALICE_TOKEN" \
@@ -101,18 +101,18 @@ SALON_ID=$(curl -sS -X POST "$SERVER_URL/kiosk/query" \
   -d '{"name":"salons"}' \
   | jq -r '.rows[0].salon_id')
 
-# Pick the first open slot's stylist from the availability query.
-STYLIST_ID=$(curl -sS -X POST "$SERVER_URL/kiosk/query" \
+# Pick the first open service from the availability query (all always bookable).
+SERVICE_ID=$(curl -sS -X POST "$SERVER_URL/kiosk/query" \
   -H "Authorization: Bearer $ALICE_TOKEN" \
   -H "Content-Type: application/json" \
   -d '{"name":"availability"}' \
-  | jq -r '.rows[0].stylist_id')
+  | jq -r '.rows[0].service_id')
 
-step "run book_appointment for salon $SALON_ID with stylist $STYLIST_ID"
+step "run book_appointment for salon $SALON_ID with service $SERVICE_ID"
 curl -sS -X POST "$SERVER_URL/kiosk/run" \
   -H "Authorization: Bearer $ALICE_TOKEN" \
   -H "Content-Type: application/json" \
-  -d "{\"name\":\"book_appointment\",\"salon_id\":$SALON_ID,\"stylist_id\":\"$STYLIST_ID\",\"slot\":\"2026-07-01T14:00:00Z\"}" \
+  -d "{\"name\":\"book_appointment\",\"salon_id\":$SALON_ID,\"service_id\":$SERVICE_ID,\"slot\":\"2026-07-01T14:00:00Z\"}" \
   | jq '.value'
 
 # ─── App-layer isolation ─────────────────────────────────────────────

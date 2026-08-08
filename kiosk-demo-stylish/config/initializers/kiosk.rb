@@ -60,11 +60,12 @@ Kiosk.configure do |c|
   # loop. Needs the json_schemer gem (in the Gemfile). Absent/valid pow paths
   # unchanged.
   c.validate_requests = true
-  # stylish is dual-audience: VISITORS book an open slot (customer), salon STAFF
-  # view the forecasted revenue (owner / stylist). Staff roles are sourced from
-  # the provider's own IdP (roles-from-IdP) — see the StubUserIdp and the
-  # `salon_calendar` query below.
-  c.roles  = %i[customer stylist owner]
+  # stylish is dual-audience: VISITORS book a service off the menu (customer),
+  # salon STAFF view the forecasted revenue (owner). The owner role is sourced
+  # from the provider's own IdP (roles-from-IdP) — see the StubUserIdp and the
+  # `salon_calendar` query below. (No stylist roster — the menu is evergreen and
+  # infinite-capacity, so there is nothing per-stylist to scope.)
+  c.roles  = %i[customer owner]
   # Role pinned to every SELF-registered agent (agents cannot choose their
   # own). Staff assistants get their role indirectly, from the bound human's
   # IdP role at link time — never self-selected.
@@ -152,15 +153,16 @@ Kiosk::Server::Queries.register("service_menu",
   end
 end
 
-# availability — the salon's EVERGREEN open slots (K-446). SEVEN stylists, each
-# offering ONE open bookable slot (service + EUR price). Availability, not dated
-# appointments, so it never goes empty. Any authenticated principal (a visitor's
-# assistant) reads it to pick a stylist to book. Each row carries a `stylist_id`
-# — pass it to book_appointment to book that stylist's open slot.
+# availability — the salon's EVERGREEN availability (K-446). Every service on
+# the menu is ALWAYS bookable: infinite capacity, overbooking allowed, nothing
+# to fill up or go stale, no reseed cron. So availability IS the service menu,
+# every row flagged `open: true`. Any authenticated principal (a visitor's
+# assistant) reads it to pick a service to book. Each row carries a `service_id`
+# — pass it to book_appointment to book that service (its EUR price is captured).
 Kiosk::Server::Queries.register("availability",
-                                 description: "Browse the salon's OPEN slots — each stylist's next-available booking (stylist, service, EUR price). " \
-                                              "Evergreen availability; takes no parameters. Each row carries a `stylist_id` — pass it to " \
-                                              "book_appointment to book that stylist's open slot (its EUR price is captured on the booking).",
+                                 description: "Browse the salon's OPEN services — every menu service is always bookable (evergreen, infinite capacity; the salon never fills up). " \
+                                              "Takes no parameters. Each row carries a `service_id` and `open: true` — pass the id to " \
+                                              "book_appointment to book that service (its EUR price is captured on the booking).",
                                  params: {},
                                  input_schema: {
                                    type: "object",
@@ -170,17 +172,14 @@ Kiosk::Server::Queries.register("availability",
                                  },
                                  example_params: {},
                                  example_row: {
-                                   stylist_id: "00000000-0000-0000-0000-0000000000b1",
-                                   stylist: "Next available with Bea", service: "Colour",
+                                   service_id: 3, service: "Colour", open: true,
                                    currency: "EUR", price_cents: 9000, price_eur: "€90",
                                  }) do |_params|
   ActiveRecord::Base.connection.execute(
-    "SELECT ss.stylist_id, ss.salon_id, ss.label AS stylist, " \
-    "       ss.service_id, sv.name AS service, ss.price_cents " \
-    "FROM stylist_slots ss JOIN services sv ON sv.id = ss.service_id " \
-    "ORDER BY ss.id"
+    "SELECT id AS service_id, name AS service, price_cents FROM services ORDER BY price_cents"
   ).to_a.map do |row|
-    row.merge("currency" => "EUR", "price_eur" => Service.format_eur(row["price_cents"]))
+    row.merge("open" => true, "currency" => "EUR",
+              "price_eur" => Service.format_eur(row["price_cents"]))
   end
 end
 
@@ -201,48 +200,29 @@ end
 # Reads kiosk.current_role() (the GUC set from the token's role claim, which a
 # staff assistant inherited from the bound human's IdP role):
 #
-#   owner   → the WHOLE book: every stylist's OPEN slot + every booking made so
-#             far, plus a FORECAST summary — the day's PROJECTED revenue if the
-#             open slots fill, and the revenue already BOOKED.
-#   stylist → ONLY their own chair: their own open slot + their own bookings
-#             (rows WHERE stylist_id = kiosk.current_user_id()). A stylist's
-#             assistant cannot widen this — the role rides the token, not the
-#             request args, and the WHERE is provider-controlled.
+#   owner → the WHOLE book: every booking made so far (across all visitors),
+#           plus a FORECAST summary — the € revenue SUMMED from those bookings'
+#           captured prices. Starts at €0 and grows as visitors book.
+#   any other role (customer, or none) → ONLY their OWN bookings
+#           (rows WHERE user_id = kiosk.current_user_id()), and NO forecast.
 #
-# Any other role (or none) sees nothing. The gate is un-bypassable: an agent can
-# neither self-select `owner` at binding nor pass a wider filter. The forecast is
-# a PROJECTION computed from the real open-slot prices (what the day earns if the
-# open slots fill) and the booked total from real per-booking prices — never a
-# hardcoded number. It is evergreen: the open slots never go stale, so the staff
-# view is never empty even before any booking is made.
+# The gate is un-bypassable: an agent can neither self-select `owner` at binding
+# nor pass a wider filter — the role rides the token (from the bound human's
+# IdP), not the request args, and the WHERE is provider-controlled. The forecast
+# is computed live from the real per-booking prices — never a hardcoded number.
 Kiosk::Server::Queries.register("salon_calendar",
-                                 description: "Staff forecast — role-gated: owner sees every stylist's open slot + all bookings + a FORECASTED € revenue total (projected if the open slots fill) and the booked total; a stylist only their own open slot + own bookings (role from the bound human's IdP)",
+                                 description: "Staff forecast — role-gated: owner sees ALL bookings + a FORECASTED € revenue total (summed from the actual bookings' prices, growing from €0 as visitors book); any other role sees only their own bookings and no forecast (role from the bound human's IdP)",
                                  params: {}) do |_params|
   role = ActiveRecord::Base.connection.execute(
     "SELECT kiosk.current_role() AS role"
   ).first["role"]
 
-  slot_scope, appt_scope =
-    case role
-    when "owner"   then ["TRUE", "TRUE"]                                                        # the whole book
-    when "stylist" then ["ss.stylist_id = kiosk.current_user_id()", "a.stylist_id = kiosk.current_user_id()"] # only own chair
-    else ["FALSE", "FALSE"]                                                                     # non-staff see nothing
-    end
-
-  # OPEN slots (evergreen availability) the staff member may see.
-  slot_rows = ActiveRecord::Base.connection.execute(
-    "SELECT ss.stylist_id, ss.salon_id, ss.label AS stylist, " \
-    "       ss.service_id, sv.name AS service, ss.price_cents " \
-    "FROM stylist_slots ss JOIN services sv ON sv.id = ss.service_id " \
-    "WHERE #{slot_scope} ORDER BY ss.id"
-  ).to_a.map do |row|
-    row.merge("kind" => "open_slot", "currency" => "EUR",
-              "price_eur" => Service.format_eur(row["price_cents"]))
-  end
+  # owner → the whole book; anyone else → only their own bookings.
+  appt_scope = role == "owner" ? "TRUE" : "a.user_id = kiosk.current_user_id()"
 
   # BOOKINGS made so far (accumulate as visitors book — zero at the start).
   appt_rows = ActiveRecord::Base.connection.execute(
-    "SELECT a.id, a.salon_id, a.stylist_id, a.slot, " \
+    "SELECT a.id, a.salon_id, a.slot, " \
     "       a.service_id, s.name AS service, a.price_cents " \
     "FROM appointments a LEFT JOIN services s ON s.id = a.service_id " \
     "WHERE #{appt_scope} ORDER BY a.slot"
@@ -251,24 +231,20 @@ Kiosk::Server::Queries.register("salon_calendar",
               "price_eur" => Service.format_eur(row["price_cents"]))
   end
 
-  rows = slot_rows + appt_rows
+  rows = appt_rows
 
-  # Owner also gets a FORECAST summary: the projected revenue if the open slots
-  # fill (sum of open-slot prices) plus what is already booked (sum of real
-  # per-booking prices). A projection from real prices — not a fixed number.
+  # Owner also gets a FORECAST summary: the € revenue summed from the real
+  # per-booking prices. A live figure from real rows — not a fixed number; it is
+  # €0 before any booking and grows with each one.
   if role == "owner"
-    forecast_cents = slot_rows.sum { |r| r["price_cents"].to_i }
-    booked_cents   = appt_rows.sum { |r| r["price_cents"].to_i }
-    rows << {
+    booked_cents = appt_rows.sum { |r| r["price_cents"].to_i }
+    rows += [{
       "summary"        => "forecast",
-      "open_slots"     => slot_rows.size,
       "bookings"       => appt_rows.size,
       "currency"       => "EUR",
-      "forecast_cents" => forecast_cents,
-      "forecast_eur"   => Service.format_eur(forecast_cents),
-      "booked_cents"   => booked_cents,
-      "booked_eur"     => Service.format_eur(booked_cents),
-    }
+      "forecast_cents" => booked_cents,
+      "forecast_eur"   => Service.format_eur(booked_cents),
+    }]
   end
   rows
 end
@@ -279,12 +255,11 @@ end
 # `Kiosk::Action` DSL (post-v0.1); for this demo a simple registered
 # block is sufficient.
 Kiosk::Server::Actions.register("book_appointment",
-                                 description: "Book a haircut/styling for the authenticated visitor. Pick a stylist from the `availability` query and pass their `stylist_id` to book that stylist's open slot — its service + EUR price are captured on the booking. (A bare `salon_id` booking without a stylist is also accepted.)",
+                                 description: "Book a service for the authenticated visitor. Pick a service from the `availability`/`service_menu` query and pass its `service_id` — its name + EUR price are captured on the booking. Every service is always bookable (overbooking allowed; the salon never fills up), so this always succeeds. (A bare `salon_id` booking without a service is also accepted.)",
                                  params: {
                                    salon_id:   "integer — id of the salon (from the `salons` query)",
-                                   stylist_id: "string — optional uuid of the chosen stylist (from the `availability` query); books that stylist's open slot, capturing its service + EUR price",
                                    slot:       "string — appointment time as an ISO 8601 timestamp",
-                                   service_id: "integer — optional id of a service (from the `service_menu` query); its EUR price is captured on the booking",
+                                   service_id: "integer — optional id of a service (from the `availability`/`service_menu` query); its EUR price is captured on the booking",
                                  },
                                  input_schema: {
                                    type: "object",
@@ -292,18 +267,16 @@ Kiosk::Server::Actions.register("book_appointment",
                                    properties: {
                                      salon_id:   { type: "integer",
                                                    description: "Salon id from the salons query." },
-                                     stylist_id: { type: "string", format: "uuid",
-                                                   description: "Optional chosen stylist uuid from the availability query; books their open slot." },
                                      slot:       { type: "string", format: "date-time",
                                                    description: "Appointment time, ISO 8601 timestamp." },
                                      service_id: { type: "integer",
-                                                   description: "Optional service id from service_menu; its EUR price is captured." },
+                                                   description: "Optional service id from availability/service_menu; its EUR price is captured." },
                                    },
                                    required: ["salon_id", "slot"],
                                  },
-                                 example_params: { salon_id: 1, stylist_id: "00000000-0000-0000-0000-0000000000b1", slot: "2026-08-05T14:00:00Z" },
+                                 example_params: { salon_id: 1, service_id: 3, slot: "2026-08-05T14:00:00Z" },
                                  example_row: {
-                                   appointment_id: 1, salon_id: 1, stylist_id: "00000000-0000-0000-0000-0000000000b1",
+                                   appointment_id: 1, salon_id: 1,
                                    slot: "2026-08-05T14:00:00Z", service: "Colour",
                                    currency: "EUR", price_cents: 9000, price_eur: "€90",
                                  }) do |args|
@@ -314,22 +287,14 @@ Kiosk::Server::Actions.register("book_appointment",
     "SELECT kiosk.current_user_id() AS uid"
   ).first["uid"]
 
-  # A chosen stylist books that stylist's OPEN slot: its service + captured EUR
-  # price come from the slot (so the booking mirrors the advertised availability).
-  slot = args[:stylist_id] && StylistSlot.find_by(stylist_id: args[:stylist_id])
-
-  # Service: the chosen stylist's slot service, else an explicit service_id.
-  # (A booked slot's price is captured at book time — the menu can change later.)
-  service =
-    if slot then slot.service
-    elsif args[:service_id] then Service.find_by(id: args[:service_id])
-    end
+  # The chosen service (its price is captured at book time — the menu can change
+  # later; the booked price is what the calendar and forecast report).
+  service = args[:service_id] && Service.find_by(id: args[:service_id])
 
   appointment = Appointment.create!(
     user_id:     user_id,
     salon_id:    args[:salon_id],
     slot:        args[:slot],
-    stylist_id:  slot&.stylist_id,
     service_id:  service&.id,
     price_cents: service&.price_cents,
   )
@@ -339,7 +304,6 @@ Kiosk::Server::Actions.register("book_appointment",
     salon_id:       appointment.salon_id,
     slot:           appointment.slot.iso8601,
   }
-  result[:stylist_id] = appointment.stylist_id if appointment.stylist_id
   if service
     result.merge!(
       service:     service.name,

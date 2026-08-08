@@ -292,41 +292,6 @@ ALTER SEQUENCE public.services_id_seq OWNED BY public.services.id;
 
 
 --
--- Name: stylist_slots; Type: TABLE; Schema: public; Owner: -
---
-
-CREATE TABLE public.stylist_slots (
-    id bigint NOT NULL,
-    stylist_id uuid NOT NULL,
-    salon_id bigint NOT NULL,
-    service_id bigint NOT NULL,
-    price_cents integer NOT NULL,
-    label character varying NOT NULL,
-    created_at timestamp(6) without time zone NOT NULL,
-    updated_at timestamp(6) without time zone NOT NULL
-);
-
-
---
--- Name: stylist_slots_id_seq; Type: SEQUENCE; Schema: public; Owner: -
---
-
-CREATE SEQUENCE public.stylist_slots_id_seq
-    START WITH 1
-    INCREMENT BY 1
-    NO MINVALUE
-    NO MAXVALUE
-    CACHE 1;
-
-
---
--- Name: stylist_slots_id_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: -
---
-
-ALTER SEQUENCE public.stylist_slots_id_seq OWNED BY public.stylist_slots.id;
-
-
---
 -- Name: users; Type: TABLE; Schema: public; Owner: -
 --
 
@@ -352,13 +317,6 @@ ALTER TABLE ONLY public.salons ALTER COLUMN id SET DEFAULT nextval('public.salon
 --
 
 ALTER TABLE ONLY public.services ALTER COLUMN id SET DEFAULT nextval('public.services_id_seq'::regclass);
-
-
---
--- Name: stylist_slots id; Type: DEFAULT; Schema: public; Owner: -
---
-
-ALTER TABLE ONLY public.stylist_slots ALTER COLUMN id SET DEFAULT nextval('public.stylist_slots_id_seq'::regclass);
 
 
 --
@@ -463,14 +421,6 @@ ALTER TABLE ONLY public.schema_migrations
 
 ALTER TABLE ONLY public.services
     ADD CONSTRAINT services_pkey PRIMARY KEY (id);
-
-
---
--- Name: stylist_slots stylist_slots_pkey; Type: CONSTRAINT; Schema: public; Owner: -
---
-
-ALTER TABLE ONLY public.stylist_slots
-    ADD CONSTRAINT stylist_slots_pkey PRIMARY KEY (id);
 
 
 --
@@ -587,27 +537,6 @@ CREATE INDEX index_appointments_on_user_id ON public.appointments USING btree (u
 
 
 --
--- Name: index_stylist_slots_on_salon_id; Type: INDEX; Schema: public; Owner: -
---
-
-CREATE INDEX index_stylist_slots_on_salon_id ON public.stylist_slots USING btree (salon_id);
-
-
---
--- Name: index_stylist_slots_on_service_id; Type: INDEX; Schema: public; Owner: -
---
-
-CREATE INDEX index_stylist_slots_on_service_id ON public.stylist_slots USING btree (service_id);
-
-
---
--- Name: index_stylist_slots_on_stylist_id; Type: INDEX; Schema: public; Owner: -
---
-
-CREATE INDEX index_stylist_slots_on_stylist_id ON public.stylist_slots USING btree (stylist_id);
-
-
---
 -- Name: index_users_on_email; Type: INDEX; Schema: public; Owner: -
 --
 
@@ -647,27 +576,11 @@ ALTER TABLE ONLY kiosk.agents
 
 
 --
--- Name: stylist_slots fk_rails_415a57b9ab; Type: FK CONSTRAINT; Schema: public; Owner: -
---
-
-ALTER TABLE ONLY public.stylist_slots
-    ADD CONSTRAINT fk_rails_415a57b9ab FOREIGN KEY (service_id) REFERENCES public.services(id);
-
-
---
 -- Name: appointments fk_rails_486091c262; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY public.appointments
     ADD CONSTRAINT fk_rails_486091c262 FOREIGN KEY (service_id) REFERENCES public.services(id);
-
-
---
--- Name: stylist_slots fk_rails_80b1bc33d4; Type: FK CONSTRAINT; Schema: public; Owner: -
---
-
-ALTER TABLE ONLY public.stylist_slots
-    ADD CONSTRAINT fk_rails_80b1bc33d4 FOREIGN KEY (stylist_id) REFERENCES public.users(id);
 
 
 --
@@ -679,27 +592,19 @@ ALTER TABLE ONLY public.appointments
 
 
 --
+-- Name: appointments fk_rails_c51d0e755a; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.appointments
+    ADD CONSTRAINT fk_rails_c51d0e755a FOREIGN KEY (stylist_id) REFERENCES public.users(id);
+
+
+--
 -- Name: appointments fk_rails_f298f85235; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY public.appointments
     ADD CONSTRAINT fk_rails_f298f85235 FOREIGN KEY (salon_id) REFERENCES public.salons(id);
-
-
---
--- Name: stylist_slots fk_rails_fc7b363c8b; Type: FK CONSTRAINT; Schema: public; Owner: -
---
-
-ALTER TABLE ONLY public.stylist_slots
-    ADD CONSTRAINT fk_rails_fc7b363c8b FOREIGN KEY (salon_id) REFERENCES public.salons(id);
-
-
---
--- Name: appointments fk_rails_stylist; Type: FK CONSTRAINT; Schema: public; Owner: -
---
-
-ALTER TABLE ONLY public.appointments
-    ADD CONSTRAINT fk_rails_stylist FOREIGN KEY (stylist_id) REFERENCES public.users(id);
 
 
 --
@@ -709,7 +614,6 @@ ALTER TABLE ONLY public.appointments
 SET search_path TO "$user", public;
 
 INSERT INTO "schema_migrations" (version) VALUES
-('20260808000001'),
 ('20260729000001'),
 ('20260719000001'),
 ('20260718000002'),

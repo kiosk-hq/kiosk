@@ -2,16 +2,19 @@
 
 # roles-from-IdP driver (Path A) — the INDIRECT, human-idp path.
 #
-# A salon STAFF member links their assistant (W5 link-code ceremony); the
-# assistant INHERITS the human's role, sourced from the provider's own IdP at
-# link time — never self-selected by the agent. kiosk-server captures that role
-# onto the link row at mint and sets the bound agent's allowed_roles from it.
-# The `salon_calendar` query then gates on kiosk.current_role():
+# A salon OWNER links their assistant (W5 link-code ceremony); the assistant
+# INHERITS the human's role, sourced from the provider's own IdP at link time —
+# never self-selected by the agent. kiosk-server captures that role onto the
+# link row at mint and sets the bound agent's allowed_roles from it. The
+# `salon_calendar` query then gates on kiosk.current_role():
 #
-#   OWNER  links an assistant → token role == owner   → salon_calendar returns
-#          ALL of the salon's OPEN slots (+ any bookings) + a FORECAST total.
-#   STYLIST links an assistant → token role == stylist → salon_calendar returns
-#          ONLY that stylist's own open slot (+ their own bookings).
+#   OWNER    links an assistant → token role == owner    → salon_calendar returns
+#            the WHOLE book (every visitor's booking) + a FORECAST € total.
+#   CUSTOMER links an assistant → token role == customer → salon_calendar returns
+#            ONLY that customer's own bookings, and NO forecast.
+#
+# (There is no stylist roster: the menu is evergreen and infinite-capacity, so
+# the meaningful role contrast is owner=whole-book+forecast vs customer=own-only.)
 #
 # This flow exercises the role source through BOTH provider channels, because a
 # role that only resolves through the stub is a role that does not work for a
@@ -41,13 +44,11 @@ SERVER = ENV.fetch("SERVER_URL")
 ISSUER = ENV.fetch("KIOSK_ISSUER")
 
 # Seeded staff (db/seeds.rb).
-OWNER_ID    = "00000000-0000-0000-0000-0000000000a0"
-STYLIST1_ID = "00000000-0000-0000-0000-0000000000b1" # Bea — owns 1 open slot
+OWNER_ID = "00000000-0000-0000-0000-0000000000a0"
 
 # Seeded Devise credentials for the real-sign-in (K-437) path.
 DEMO_PASSWORD  = "combette-demo-password"
 OWNER_EMAIL    = "owner@combette.example"
-STYLIST1_EMAIL = "bea@combette.example"
 CUSTOMER_ID    = "00000000-0000-0000-0000-000000000001" # Alice — a customer (no staff_role)
 CUSTOMER_EMAIL = "alice@example.com"
 
@@ -165,60 +166,38 @@ rc, cal = post_json("/kiosk/query", { name: "salon_calendar" },
 abort "OWNER salon_calendar failed (#{rc}): #{JSON.generate(cal)}" unless rc == 200
 owner_rows     = cal.fetch("rows", [])
 owner_summary  = owner_rows.find { |r| r["summary"] == "forecast" }
-owner_slots    = owner_rows.select { |r| r["kind"] == "open_slot" }
-results[:owner_slot_count]      = owner_slots.size
+owner_bookings = owner_rows.select { |r| r["kind"] == "booking" }
+results[:owner_booking_count]   = owner_bookings.size
 results[:owner_forecast_cents]  = owner_summary && owner_summary["forecast_cents"]
-STDERR.puts "  OWNER sees #{owner_slots.size} open slots; forecast=#{results[:owner_forecast_cents]} cents"
-
-# ══ STYLIST links an assistant → role stylist → salon_calendar = own only ═══
-stylist = link_assistant_as(STYLIST1_ID, "STYLIST")
-results[:stylist_token_role] = stylist[:claims]["role"]
-rc, cal = post_json("/kiosk/query", { name: "salon_calendar" },
-                    { "Authorization" => "Bearer #{stylist[:token]}" })
-abort "STYLIST salon_calendar failed (#{rc}): #{JSON.generate(cal)}" unless rc == 200
-stylist_rows = cal.fetch("rows", [])
-results[:stylist_slot_count]   = stylist_rows.count { |r| r["kind"] == "open_slot" }
-# Every row the stylist sees must be their own chair.
-results[:stylist_all_own]      = stylist_rows.reject { |r| r["summary"] }.all? { |r| r["stylist_id"] == STYLIST1_ID }
-results[:stylist_sees_forecast] = stylist_rows.any? { |r| r["summary"] == "forecast" }
-STDERR.puts "  STYLIST sees #{stylist_rows.size} rows (#{results[:stylist_slot_count]} own slot); all own=#{results[:stylist_all_own]}; forecast row=#{results[:stylist_sees_forecast]}"
+results[:owner_sees_forecast]   = !owner_summary.nil?
+STDERR.puts "  OWNER sees #{owner_bookings.size} bookings; forecast=#{results[:owner_forecast_cents]} cents"
 
 # ══ REAL DEVISE PATH (K-437) — the whole point: the role must survive the real
-#    /users/sign_in session, not just the stub. Owner/stylist/customer each sign
-#    in for real, mint over the session cookie, and the token role + calendar
-#    scope must match. Without User#kiosk_role the Devise adapter falls back to
+#    /users/sign_in session, not just the stub. Owner/customer each sign in for
+#    real, mint over the session cookie, and the token role + calendar scope
+#    must match. Without User#kiosk_role the Devise adapter falls back to
 #    roles.first (customer), so the owner's token comes back "customer" and the
-#    calendar is empty — these three assertions FAIL. ══════════════════════════
+#    forecast disappears — these assertions FAIL. ══════════════════════════════
 
-# OWNER through the real Devise session → role owner, whole book.
+# OWNER through the real Devise session → role owner, whole book + forecast.
 d_owner = link_assistant_via_devise(OWNER_EMAIL, DEMO_PASSWORD, "OWNER")
 results[:devise_owner_token_role] = d_owner[:claims]["role"]
 rc, cal = post_json("/kiosk/query", { name: "salon_calendar" },
                     { "Authorization" => "Bearer #{d_owner[:token]}" })
 abort "OWNER (real Devise) salon_calendar failed (#{rc}): #{JSON.generate(cal)}" unless rc == 200
-d_owner_rows  = cal.fetch("rows", [])
-d_owner_slots = d_owner_rows.select { |r| r["kind"] == "open_slot" }
-results[:devise_owner_slot_count] = d_owner_slots.size
-STDERR.puts "  OWNER (real Devise) role=#{results[:devise_owner_token_role].inspect} sees #{d_owner_slots.size} open slots"
+d_owner_rows = cal.fetch("rows", [])
+results[:devise_owner_sees_forecast] = d_owner_rows.any? { |r| r["summary"] == "forecast" }
+STDERR.puts "  OWNER (real Devise) role=#{results[:devise_owner_token_role].inspect} forecast_row=#{results[:devise_owner_sees_forecast]}"
 
-# STYLIST through the real Devise session → role stylist, only own chairs.
-d_stylist = link_assistant_via_devise(STYLIST1_EMAIL, DEMO_PASSWORD, "STYLIST")
-results[:devise_stylist_token_role] = d_stylist[:claims]["role"]
-rc, cal = post_json("/kiosk/query", { name: "salon_calendar" },
-                    { "Authorization" => "Bearer #{d_stylist[:token]}" })
-abort "STYLIST (real Devise) salon_calendar failed (#{rc}): #{JSON.generate(cal)}" unless rc == 200
-d_stylist_rows = cal.fetch("rows", [])
-results[:devise_stylist_slot_count] = d_stylist_rows.count { |r| r["kind"] == "open_slot" }
-results[:devise_stylist_all_own]    = d_stylist_rows.reject { |r| r["summary"] }.all? { |r| r["stylist_id"] == STYLIST1_ID }
-STDERR.puts "  STYLIST (real Devise) role=#{results[:devise_stylist_token_role].inspect} sees #{d_stylist_rows.size} rows (#{results[:devise_stylist_slot_count]} own slot); all own=#{results[:devise_stylist_all_own]}"
-
-# CUSTOMER through the real Devise session → role customer, empty calendar.
+# CUSTOMER through the real Devise session → role customer, own bookings, no forecast.
 d_customer = link_assistant_via_devise(CUSTOMER_EMAIL, DEMO_PASSWORD, "CUSTOMER")
 results[:devise_customer_token_role] = d_customer[:claims]["role"]
 rc, cal = post_json("/kiosk/query", { name: "salon_calendar" },
                     { "Authorization" => "Bearer #{d_customer[:token]}" })
 abort "CUSTOMER (real Devise) salon_calendar failed (#{rc}): #{JSON.generate(cal)}" unless rc == 200
-results[:devise_customer_appt_count] = cal.fetch("rows", []).size
-STDERR.puts "  CUSTOMER (real Devise) role=#{results[:devise_customer_token_role].inspect} sees #{results[:devise_customer_appt_count]} appointments"
+c_rows = cal.fetch("rows", [])
+results[:devise_customer_sees_forecast] = c_rows.any? { |r| r["summary"] == "forecast" }
+results[:devise_customer_row_count]     = c_rows.size
+STDERR.puts "  CUSTOMER (real Devise) role=#{results[:devise_customer_token_role].inspect} sees #{c_rows.size} rows, forecast_row=#{results[:devise_customer_sees_forecast]}"
 
 puts JSON.generate(results)

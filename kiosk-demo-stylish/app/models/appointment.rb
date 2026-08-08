@@ -3,10 +3,8 @@
 class Appointment < ApplicationRecord
   belongs_to :user
   belongs_to :salon
-  # The staff member (users row, staff_role stylist/owner) assigned to this
-  # appointment. Optional: legacy customer bookings carry no stylist.
-  belongs_to :stylist, class_name: "User", optional: true
   # The service booked from the salon's menu. Optional: legacy bookings that
-  # predate the menu carry no service (and no captured price).
+  # predate the menu (or a bare salon_id booking) carry no service and no
+  # captured price. The captured price_cents drives the owner's forecast.
   belongs_to :service, optional: true
 end

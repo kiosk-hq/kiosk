@@ -1,28 +1,27 @@
 # frozen_string_literal: true
 
-# Synthetic principals + evergreen availability for the stylish demo.
+# Synthetic principals + an evergreen SERVICE MENU for the stylish demo.
 #
 # CUSTOMERS (visitors) — Alice and Bob, with stable UUIDs the assistant scripts
 # use in `Authorization: Bearer agent:u-<uuid>:a-<agent>:r-<role>` headers. Both
 # get Devise credentials so the account-binding walkthrough can sign in through
 # the real /users/sign_in form (Alice approves the assistant link there).
 #
-# STAFF — Combette on Park's own people (roles-from-IdP): one OWNER and SEVEN
-# STYLISTS, each with a `staff_role`. Their assistant, when linked (W5,
-# role-carrying StubUserIdp session), inherits that role so `salon_calendar`
-# gates on it: an owner-linked assistant sees the whole book (all seven chairs +
-# any bookings) plus the FORECASTED € revenue total, a stylist only their own
-# chair + own bookings.
+# STAFF — Combette on Park's OWNER (roles-from-IdP): one owner with a
+# `staff_role`. Their assistant, when linked (W5, role-carrying StubUserIdp
+# session), inherits that role so `salon_calendar` gates on it: an owner-linked
+# assistant sees the whole book (every booking made) plus the FORECAST € total;
+# a customer sees only their own bookings and no forecast.
 #
-# AVAILABILITY (K-446) — the salon's STRUCTURE is SEVEN stylists, each offering
-# ONE open bookable slot (a service + a EUR price). This is EVERGREEN: the seven
-# open slots are always bookable — there are NO synthetic dated appointments and
-# NO reseed cron, so the demo never goes empty as the calendar day rolls over.
+# THE MENU (K-446) — the salon's structure is a small SERVICE MENU (a handful of
+# services, each a EUR price). This is EVERGREEN and INFINITE-CAPACITY: every
+# service is ALWAYS bookable, OVERBOOKING is allowed (a visitor can book any
+# service any number of times), so the salon can always take you and the demo
+# never goes empty or stale. There are NO dated appointments and NO reseed cron.
 # The salon starts with ZERO bookings; real bookings (public.appointments)
-# accumulate as visitors book during the demo. The staff forecast is projected
-# from the seven slot prices (what the day earns if the open slots fill) and
-# reflects actual bookings as they happen — computed from real rows, never a
-# fixed number.
+# accumulate as visitors book. The staff forecast is summed from the ACTUAL
+# bookings' captured prices — it starts at €0 and grows as visitors book,
+# computed from real rows, never a fixed number.
 
 ALICE_ID = "00000000-0000-0000-0000-000000000001"
 BOB_ID   = "00000000-0000-0000-0000-000000000002"
@@ -53,6 +52,8 @@ end
 salon = Salon.find_or_create_by!(name: "Combette on Park")
 
 # ── Service menu (EUR) — coined/generic names, prices in euro cents. ──────────
+# This IS the bookable structure: every service is always open (evergreen,
+# infinite capacity — overbooking allowed). Static; not dated appointments.
 MENU = {
   cut:          { name: "Cut",            price_cents: 3500 },  # €35
   cut_blowdry:  { name: "Cut & Blow-dry", price_cents: 5000 },  # €50
@@ -65,50 +66,7 @@ services = MENU.transform_values do |m|
   Service.find_or_create_by!(name: m[:name]) { |s| s.price_cents = m[:price_cents] }
 end
 
-# ── SEVEN stylists, each with ONE open bookable slot (evergreen availability). ─
-# Bea (…b1) and Cleo (…b2) keep the stable UUIDs the roles/redteam drivers
-# drive; the other five are salon staff too. Each stylist offers one service at
-# its menu price, captured onto the slot so the forecast is a real € figure.
-#
-# Forecast the OWNER sees = sum of the seven open-slot prices (what the day
-# earns if every open slot fills):
-#   Bea   Colour        €90
-#   Cleo  Cut & Colour  €120
-#   Dana  Cut & Blow-dry €50
-#   Esme  Cut           €35
-#   Faye  Beard trim    €20
-#   Gwen  Cut & Blow-dry €50
-#   Hana  Cut           €35
-#   ── forecast ─────────  €400
-STYLISTS = [
-  { id: "00000000-0000-0000-0000-0000000000b1", name: "Bea",  email: "bea@combette.example",  service: :colour },
-  { id: "00000000-0000-0000-0000-0000000000b2", name: "Cleo", email: "cleo@combette.example", service: :cut_colour },
-  { id: "00000000-0000-0000-0000-0000000000b3", name: "Dana", email: "dana@combette.example", service: :cut_blowdry },
-  { id: "00000000-0000-0000-0000-0000000000b4", name: "Esme", email: "esme@combette.example", service: :cut },
-  { id: "00000000-0000-0000-0000-0000000000b5", name: "Faye", email: "faye@combette.example", service: :beard_trim },
-  { id: "00000000-0000-0000-0000-0000000000b6", name: "Gwen", email: "gwen@combette.example", service: :cut_blowdry },
-  { id: "00000000-0000-0000-0000-0000000000b7", name: "Hana", email: "hana@combette.example", service: :cut },
-].freeze
-
-STYLISTS.each do |st|
-  stylist = User.find_or_create_by!(id: st[:id]) do |u|
-    u.email      = st[:email]
-    u.password   = DEMO_PASSWORD
-    u.staff_role = "stylist"
-  end
-  svc = services.fetch(st[:service])
-  # Idempotent: one open slot per stylist. Re-seeding does not multiply rows.
-  StylistSlot.find_or_create_by!(stylist_id: stylist.id, salon: salon) do |slot|
-    slot.service_id  = svc.id
-    slot.price_cents = svc.price_cents
-    slot.label       = "Next available with #{st[:name]}"
-  end
-end
-
-forecast_cents = StylistSlot.sum(:price_cents)
-
 puts "Seeded: 2 customers/visitors (#{ALICE_ID}, #{BOB_ID}; sign-in alice@example.com / #{DEMO_PASSWORD})"
-puts "        #{STYLISTS.size + 1} staff — owner #{OWNER_ID}, #{STYLISTS.size} stylists"
-puts "        1 salon (#{salon.name}); #{services.size}-service EUR menu"
-puts "        #{StylistSlot.count} OPEN slots (evergreen availability; 0 bookings — visitors book during the demo)"
-puts "        forecasted revenue if the open slots fill: €#{forecast_cents / 100}"
+puts "        1 staff — owner #{OWNER_ID} (owner@combette.example)"
+puts "        1 salon (#{salon.name}); #{services.size}-service EUR menu (always bookable — overbooking OK)"
+puts "        0 bookings — visitors book during the demo; the owner's forecast grows from €0"

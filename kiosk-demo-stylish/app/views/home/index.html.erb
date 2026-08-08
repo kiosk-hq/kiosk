@@ -81,15 +81,15 @@
         <p>stylish is a salon an AI assistant transacts with directly over the Kiosk wire. There are <strong>two entrances</strong>, and you take <strong>one or the other</strong> — a tester acts as a <strong>visitor</strong> <em>or</em> as <strong>staff</strong>, not both at once (multi-account is not wired yet).</p>
 
         <div class="linkbox">
-          <strong>① Visitor entrance — book a haircut.</strong>
+          <strong>① Visitor entrance — book any service.</strong>
           Tell your AI assistant:
           <p class="say">“Book a haircut at stylish.demo.kiosk.tech.”</p>
-          It discovers the salon, registers itself, reads the <strong>open slots</strong> (7 stylists, each with one open booking — evergreen availability), picks a stylist, and books — no account, no app. Your booking is real: it lands in the salon's book and shows up in the staff view.
+          It discovers the salon, registers itself, reads the <strong>service menu</strong>, picks a service, and books — no account, no app. <strong>The salon always has room:</strong> every service is open any time, any number of bookings (evergreen, infinite capacity — nothing to fill up). Your booking is real: it lands in the salon's book and shows up in the staff view.
         </div>
 
         <div class="linkbox">
           <strong>② Staff entrance — see the forecasted revenue.</strong>
-          Use <a href="/users/sign_in"><strong>Staff login</strong></a> to sign in as the salon owner, then open <a href="/kiosk/auth/assistants">Manage&nbsp;assistants</a> and <strong>mint a link code</strong> — hand it to your assistant and it <strong>inherits your role</strong>, sourced from the operator's IdP (not chosen by the assistant). The role-gated <code>salon_calendar</code> query then scopes what it sees: an <strong>owner-linked assistant sees every stylist's open slot plus the day's <em>forecasted</em> € revenue</strong> — the projection of what the day earns if the open slots fill, reflecting real bookings as they happen; a stylist-linked one sees only their own chair; a visitor sees nothing. The figures come from the live salon (open-slot prices + real bookings), never a fixed number.
+          Use <a href="/users/sign_in"><strong>Staff login</strong></a> to sign in as the salon owner, then open <a href="/kiosk/auth/assistants">Manage&nbsp;assistants</a> and <strong>mint a link code</strong> — hand it to your assistant and it <strong>inherits your role</strong>, sourced from the operator's IdP (not chosen by the assistant). The role-gated <code>salon_calendar</code> query then scopes what it sees: an <strong>owner-linked assistant sees every booking plus the salon's <em>forecasted</em> € revenue</strong> — summed live from the actual bookings' prices, starting at €0 and growing as visitors book; a visitor-linked one sees only their own bookings and no forecast. The figures come from the live salon's real bookings, never a fixed number.
           <div class="cred">Demo staff login (owner): <code>owner@combette.example</code> &nbsp;/&nbsp; <code>combette-demo-password</code></div>
         </div>
       </div>
@@ -99,9 +99,10 @@
     <section class="sec">
       <div class="sec-k">About this demo</div>
       <div class="about">
-        <p><strong>stylish</strong> (seeded salon: Combette on Park) is a salon-booking demo built on <strong>evergreen availability</strong>: seven stylists, each offering one open bookable slot, with a EUR service menu — no stale dated appointments, so it never goes empty. It is the <strong>roles-from-IdP</strong> reference: staff roles supplied by the operator's own identity system are inherited by a linked assistant, and role-gated queries scope what each assistant can see (owner → every open slot + a forecasted € revenue; stylist → own chair; visitor → nothing). It also walks human↔assistant account binding over real Devise sessions.</p>
+        <p><strong>stylish</strong> (seeded salon: Combette on Park) is a salon-booking demo built on an <strong>evergreen service menu</strong>: a small set of services, each with a EUR price, all always bookable — infinite capacity, overbooking allowed, so the salon never fills up and the demo never goes empty or stale. It is the <strong>roles-from-IdP</strong> reference: staff roles supplied by the operator's own identity system are inherited by a linked assistant, and the role-gated <code>salon_calendar</code> query scopes what each assistant can see (owner → every booking + a forecasted € revenue summed live from real bookings; visitor → only their own bookings, no forecast). It also walks human↔assistant account binding over real Devise sessions.</p>
         <div class="chips">
-          <span class="chip">✂️ Evergreen open slots</span>
+          <span class="chip">✂️ Evergreen service menu</span>
+          <span class="chip">♾️ Always bookable (overbooking)</span>
           <span class="chip">🪪 IdP roles (staff RBAC)</span>
           <span class="chip">💶 Forecasted € revenue</span>
           <span class="chip">Human↔assistant linking</span>
@@ -117,9 +118,9 @@
     <section class="sec">
       <div class="sec-k">Live activity</div>
       <div class="stats">
-        <div class="stat"><div class="n"><%= @open_slots %></div><div class="l">Open slots</div></div>
+        <div class="stat"><div class="n"><%= @services %></div><div class="l">Services on the menu</div></div>
+        <div class="stat"><div class="n">∞</div><div class="l">Capacity (always open)</div></div>
         <div class="stat"><div class="n"><%= @appointments_booked %></div><div class="l">Booked so far</div></div>
-        <div class="stat"><div class="n"><%= @stylists %></div><div class="l">Stylists</div></div>
         <div class="stat"><div class="n"><%= @forecast_eur %></div><div class="l">Forecasted revenue</div></div>
       </div>
     </section>

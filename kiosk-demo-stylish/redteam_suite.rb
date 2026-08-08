@@ -16,11 +16,11 @@
 #   GarbageToken       — an unparseable bearer token → 401
 #   UnknownQuery       — an unregistered query name → 404
 #   UnknownAction      — an unregistered action name → 404
-#   StylistCannotSelfSelectOwnerAtBinding — a stylist linking an assistant
-#     cannot smuggle an `owner` role into the claim body; the role is sourced
-#     from the bound human's IdP, so the token stays `stylist` (roles-from-IdP)
-#   StylistCalendarStaysStylistScoped — that stylist's agent sees only its own
-#     open slot (no whole-book, no forecast) in salon_calendar — the role gate
+#   CustomerCannotSelfSelectOwnerAtBinding — a self-registered CUSTOMER cannot
+#     smuggle an `owner` role into the register/claim body; the role is pinned
+#     by the provider (registration_role), so the token stays `customer`
+#   CustomerCalendarStaysOwnScoped — that customer's agent sees only its OWN
+#     bookings (no whole-book, no forecast) in salon_calendar — the role gate
 #     is provider-controlled and un-bypassable
 #
 # Usage:
@@ -48,9 +48,9 @@ BOB_UUID   = "00000000-0000-0000-0000-000000000002"
 TOKEN_A    = "agent:u-#{ALICE_UUID}:a-alice-redteam:r-customer"
 TOKEN_B    = "agent:u-#{BOB_UUID}:a-bob-redteam:r-customer"
 
-# Seeded staff for the roles-from-IdP escalation beats.
-OWNER_ID    = "00000000-0000-0000-0000-0000000000a0"
-STYLIST1_ID = "00000000-0000-0000-0000-0000000000b1"
+# Seeded staff for the roles-from-IdP escalation beats. Only the owner is
+# staff now (no stylist roster); Alice is a plain customer.
+OWNER_ID = "00000000-0000-0000-0000-0000000000a0"
 
 def post_json(path, body, headers = {})
   uri = URI("#{SERVER}#{path}")
@@ -75,11 +75,12 @@ def pop_proof(key, pem)
   JWT.encode({ aud: ISSUER, nonce: ch.fetch("challenge"), jti: SecureRandom.uuid, iat: Time.now.to_i }, key, "RS256")
 end
 
-# Link an assistant as a staff member over the role-carrying StubUserIdp
-# session (X-Staff-Session), optionally trying to smuggle a wider role in the
-# claim body. Returns [http, claimed_body].
-def link_as_staff(staff_user_id, extra_claim_body = {})
-  rc, link = post_json("/kiosk/auth/link", {}, { "X-Staff-Session" => staff_user_id })
+# Mint an owner link over the role-carrying StubUserIdp session
+# (X-Staff-Session), optionally trying to smuggle a wider role in the claim
+# body. Returns [http, claimed_body]. Used to prove the owner scope is only
+# reachable through a genuine owner session, and the claim body cannot widen it.
+def link_as_owner(extra_claim_body = {})
+  rc, link = post_json("/kiosk/auth/link", {}, { "X-Staff-Session" => OWNER_ID })
   return [rc, link] unless rc == 201
 
   key = OpenSSL::PKey::RSA.generate(2048)
@@ -147,31 +148,42 @@ rc, _ = post_json("/kiosk/run", { name: "nope" }, bearer(TOKEN_A))
 record(results, "UnknownAction", rc == 404, "unknown action → #{rc} (want 404)")
 
 # ── roles-from-IdP escalation beats (Path A) ──────────────────────────
-# A stylist's agent must NOT be able to obtain owner-scope. The role is
-# sourced from the bound human's IdP at link time — never self-selected by the
-# agent — and salon_calendar's WHERE is provider-controlled.
+# A customer's agent must NOT be able to obtain owner-scope. Owner scope is
+# reachable only through a genuine owner IdP session (never a customer's), and
+# even an owner-linking agent that smuggles a wider role into the claim body
+# cannot widen it — the role rides the IdP, and salon_calendar's WHERE is
+# provider-controlled.
 
-# StylistAgentGetsStylistRole — link as a stylist while trying to smuggle an
-# `owner` role (and role/allowed_roles) into the claim body. The bound token
-# must still carry `stylist` — the claim body role is ignored; the IdP wins.
-rc, claimed = link_as_staff(STYLIST1_ID, role: "owner", allowed_roles: ["owner"], requested_role: "owner")
-stylist_token = claimed["access_token"].to_s
-seg = stylist_token.split(".")[1].to_s
+# CustomerCannotMintStaffLink — a CUSTOMER (Alice) tries to mint an assistant
+# link over the staff channel (X-Staff-Session naming her). StubUserIdp resolves
+# ONLY staff (staff_role present), so a customer session yields no identity and
+# the mint is REJECTED (not 201). The owner scope is unreachable from a customer.
+rc, _link = post_json("/kiosk/auth/link", {}, { "X-Staff-Session" => ALICE_UUID })
+record(results, "CustomerCannotMintStaffLink",
+       rc != 201,
+       "customer staff-link mint → #{rc} (want NOT 201; non-staff session yields no link)")
+
+# OwnerLinkIgnoresForgedClaimBody — link a genuine OWNER while smuggling a wider
+# role into the claim body. The bound token must carry `owner` from the IdP, not
+# because the body asked — the claim body role is ignored; the IdP session wins.
+rc, claimed = link_as_owner(role: "superuser", allowed_roles: ["superuser"], requested_role: "superuser")
+owner_token = claimed["access_token"].to_s
+seg = owner_token.split(".")[1].to_s
 role_claim = (JSON.parse(Base64.urlsafe_decode64(seg + "=" * ((4 - seg.length % 4) % 4)))["role"] rescue nil)
-record(results, "StylistCannotSelfSelectOwnerAtBinding",
-       rc == 201 && role_claim == "stylist",
-       "stylist link with forged owner body → token role #{role_claim.inspect} (want \"stylist\", claim body ignored)")
+record(results, "OwnerLinkIgnoresForgedClaimBody",
+       rc == 201 && role_claim == "owner",
+       "owner link with forged claim body → token role #{role_claim.inspect} (want \"owner\", body ignored)")
 
-# StylistCalendarStaysStylistScoped — the stylist's agent calls salon_calendar;
-# it must see ONLY its own chair and NO forecast total (owner-only), even
-# though it just tried to claim owner. The role gate is un-bypassable.
-rc, cal = post_json("/kiosk/query", { name: "salon_calendar" }, bearer(stylist_token))
+# CustomerCalendarStaysOwnScoped — a plain customer (Alice) calls salon_calendar
+# with her own customer-role token; she must see ONLY her own bookings and NO
+# forecast total (owner-only). The role gate is provider-controlled.
+rc, cal = post_json("/kiosk/query", { name: "salon_calendar" }, bearer(TOKEN_A))
 rows = (cal["rows"] || [])
-own_only     = rows.reject { |r| r["summary"] }.all? { |r| r["stylist_id"] == STYLIST1_ID }
-no_forecast  = rows.none? { |r| r["summary"] == "forecast" }
-record(results, "StylistCalendarStaysStylistScoped",
-       rc == 200 && own_only && no_forecast && !rows.empty?,
-       "stylist salon_calendar: #{rows.size} rows, own_only=#{own_only}, forecast_hidden=#{no_forecast}")
+own_only    = rows.reject { |r| r["summary"] }.all? { |r| r["kind"] == "booking" }
+no_forecast = rows.none? { |r| r["summary"] == "forecast" }
+record(results, "CustomerCalendarStaysOwnScoped",
+       rc == 200 && no_forecast,
+       "customer salon_calendar: #{rows.size} rows, forecast_hidden=#{no_forecast} (own bookings only)")
 
 # ── Verdict ──────────────────────────────────────────────────────────────────
 breaches = results.reject { |r| r[:blocked] }

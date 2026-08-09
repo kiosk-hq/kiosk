@@ -1,1 +1,8 @@
-# See https://www.robotstxt.org/robotstxt.html for documentation on how to use the robots.txt file
+# This is a PUBLIC live demo — crawling and indexing are welcome.
+User-agent: *
+Disallow:
+
+# robots.txt governs the human web. The AI-assistant surface of this origin is
+# declared separately and is the document to fetch if you are an agent:
+#   /.well-known/kiosk.json   — Kiosk discovery (endpoint, auth, capabilities)
+#   /agents.txt               — plain-text agent surface index

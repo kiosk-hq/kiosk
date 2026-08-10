@@ -24,7 +24,7 @@ rake demo            # setup + shop: no-human register → order (slot+address) 
 | `rake demo:claim` | claim-rebind: a standalone assistant (own key, own synthetic account, `payment_setup → setup_required`) is re-bound to the seeded human's account after verify-page approval — agent_id stays, user_id remaps, the old order is NOT migrated — then pays a new order with the human's saved card (`payment_setup → ready`) |
 | `rake demo:isolation` | adversarial cross-tenant + order-ownership denial |
 | `rake demo:schema` | self-discovery over the schema verb |
-| `rake demo:redteam` | kiosk-redteam battery — 12 attacks BLOCKED (incl. the cashier-check trio: wrong-currency, tampered-price, inflated-total carts), 3 generic KYC scenarios skip (the age-gate is exercised by `demo:agecheck`) |
+| `rake demo:redteam` | kiosk-redteam battery — 13 attacks BLOCKED (incl. the cashier-check trio: wrong-currency, tampered-price, inflated-total carts, plus RegistrationWithoutPow — register PoW is on, `registration_pow_count=1`), 3 generic KYC scenarios skip (the age-gate is exercised by `demo:agecheck`) |
 | `rake demo:agecheck` | alcohol 18+ age-gate via the prove.my broker (two-server): alcohol order without KYC → 403 → request_kyc → broker approve → 200 → pay; non-alcohol order needs no KYC (200 directly); forged age attestation rejected |
 | `rake demo:pow` | catalog-toll PoW: 402 → solve → 200 |
 

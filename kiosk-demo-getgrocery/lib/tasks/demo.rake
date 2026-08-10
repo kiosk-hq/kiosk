@@ -13,7 +13,10 @@
 #   rake demo:redteam    adversarial regression battery (kiosk-redteam scenarios)
 #   rake demo:pow        commerce catalog-toll PoW demo (catalog 402 → solve → 200)
 #   rake demo:slots_spec DB-free unit spec for the delivery-slot past-filter (K-480)
-#   rake demo:cashier_spec DB-free unit spec for the cashier's order-ref shape check (K-579)
+#   rake demo:cashier_spec DB-free unit spec for the order-ref uuid shape check (K-579)
+#   rake demo:race       pay-path regression: concurrency (K-544) + typed 4xx (K-579)
+#                        + stuck-`paying` self-heal (K-578)
+#   rake demo:reconcile  resolve orders stuck in `paying` from local evidence (K-578)
 #   rake demo            setup + shop (full end-to-end proof)
 
 # Start (or reuse) a local stripe-mock; return its HTTP base URL. The adversarial
@@ -996,6 +999,50 @@ namespace :demo do
     # A generous pool so N racing threads each get their own real connection.
     ok = system({ "RAILS_MAX_THREADS" => "12" }, "bundle exec rails runner #{driver.shellescape}")
     exit(ok ? 0 : 1)
+  end
+
+  desc <<~DESC
+    Reconcile orders stuck in `paying` (K-578) — LOCAL evidence only.
+
+    A crash (or a failed status flip) between a successful capture and the
+    paid-flip leaves an order `paying`: charged ONCE (the atomic claim makes a
+    double charge impossible) but unpayable until reconciled. This sweep:
+
+      • flips `paying` → `paid` for every stuck order that ALREADY has a
+        settlement row — decisive local proof the charge was recorded;
+      • LISTS the rest as UNRESOLVED with their cart-mandate ids, because only
+        the payment processor knows whether money moved. It deliberately does
+        NOT release those claims: releasing one is exactly the blind retry that
+        could double-charge (K-545).
+
+    This demo runs no background worker — invoke it manually (or from cron).
+    Set MINUTES=n to change the "old enough to be stuck" cutoff (default 15).
+  DESC
+  task reconcile: :environment do
+    minutes = Integer(ENV.fetch("MINUTES", "15"))
+    result  = ValidatingPaymentProvider.reconcile_stuck_paying!(older_than_seconds: minutes * 60)
+
+    puts "\n── Stuck-`paying` reconciliation (older than #{minutes} min) ──"
+    if result[:healed].empty? && result[:unresolved].empty?
+      puts "  nothing stuck. Exit 0."
+      next
+    end
+
+    result[:healed].each { |id| puts "  HEALED      #{id} — settlement on file, status → paid" }
+    result[:unresolved].each do |row|
+      puts "  UNRESOLVED  #{row[:order_id]} — claimed #{row[:claimed_at]}, no settlement row."
+      if row[:cart_mandate_ids].empty?
+        # The engine persists the cart mandate (phase 1) BEFORE the claim, so a
+        # wire-driven pay always leaves one. None here means this claim did not
+        # come through /pay at all.
+        puts "              No cart mandate references this order — it was not claimed via the /pay wire path."
+      else
+        puts "              Check the processor for a succeeded charge whose metadata.cart_mandate_id is " \
+             "one of: #{row[:cart_mandate_ids].join(", ")}"
+      end
+    end
+    puts "\n  healed=#{result[:healed].size} unresolved=#{result[:unresolved].size}"
+    puts "  UNRESOLVED orders need a human/PSP check — they are NOT released automatically." unless result[:unresolved].empty?
   end
 end
 

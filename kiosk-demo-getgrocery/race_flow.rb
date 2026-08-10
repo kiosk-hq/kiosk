@@ -1,6 +1,7 @@
 # frozen_string_literal: true
 
-# Concurrency regression for the pay-path double-charge races (K-544).
+# Pay-path regression for getgrocery (K-544 concurrency, K-578 stuck-`paying`
+# reconciliation, K-579 typed 4xx on a malformed order_id).
 #
 # Runs IN-PROCESS against the real getgrocery Postgres schema (via
 # `bin/rails runner`), driving the REAL ValidatingPaymentProvider cashier check
@@ -10,14 +11,23 @@
 # counting stub (to see how many captures fire) — so we exercise the Kiosk
 # serialization, not Stripe.
 #
-# It proves the two invariants the finding demands:
+# It proves the invariants the findings demand:
 #   (a) SWAP: once a /pay for order O has begun (O is `paying`), a concurrent
 #       create_order{order_id:O, items:[expensive]} CANNOT rewrite O's items —
 #       so "pay €1, get €500" is impossible.
 #   (b) AT-MOST-ONCE: under N racing /pay for one order, exactly ONE captures;
 #       the rest are cleanly rejected.
+#   (c) TYPED REJECTION (K-579): a malformed order_id is a 400 bad_request at
+#       every place one reaches an `::uuid` cast — the cart (before anything is
+#       claimed or charged), create_order's replace path and reschedule_delivery
+#       — never a raw 500, which an assistant cannot distinguish from "the
+#       charge may have run".
+#   (d) RECONCILIATION (K-578): an order stranded in `paying` because the
+#       paid-flip was lost heals to `paid` from the settlement row (both at the
+#       next /pay and via the sweep), while one whose outcome only the PSP knows
+#       is reported UNRESOLVED and keeps its claim — never blind-released.
 #
-# Exits 0 iff both hold; non-zero otherwise. Invoked by `rake demo:race`.
+# Exits 0 iff all hold; non-zero otherwise. Invoked by `rake demo:race`.
 
 require "json"
 
@@ -222,14 +232,161 @@ check(denied == n - 1,     "the other #{n - 1} /pay were cleanly rejected (got #
 check(errored.empty?,      "no /pay produced a raw error (got #{errored.inspect})")
 check(order_row(order2)["status"] == "paid", "order O2 settled to `paid`")
 
+puts "\n== K-579: a malformed order_id is a typed 4xx, never a 500 =="
+
+# The cart's {"order_id": …} entry lands in an `::uuid` cast. A malformed one
+# used to reach Postgres, raise InvalidTextRepresentation and escape as a raw
+# 500 — the worst answer on a pay path, since an assistant cannot tell a
+# rejected input from "the charge may have gone through".
+bad_psp = CountingPsp.new
+vpp3    = ValidatingPaymentProvider.new(bad_psp, currency: "eur")
+
+bad_error = begin
+  vpp3.capture(cart_for("not-a-uuid", id: "cart-BAD"))
+  nil
+rescue StandardError => e
+  e
+end
+
+check(bad_error.is_a?(Kiosk::Server::Errors::BadRequest),
+      "a malformed order_id raises BadRequest (got #{bad_error.class})")
+check(bad_error.respond_to?(:http_status) && bad_error.http_status == 400,
+      "…rendered as HTTP 400 (got #{bad_error.respond_to?(:http_status) ? bad_error.http_status : "n/a"})")
+check(bad_error.respond_to?(:code) && bad_error.code == "bad_request",
+      "…with error.code=bad_request (got #{bad_error.respond_to?(:code) ? bad_error.code : "n/a"})")
+check(bad_psp.count.zero?, "…and NOTHING was sent to the PSP (captures=#{bad_psp.count})")
+
+# A well-formed uuid that is not the payer's order still gets the ownership
+# rejection, not a 400 — the shape check must not swallow the authz answer.
+unknown_error = begin
+  vpp3.capture(cart_for("00000000-0000-4000-8000-000000000000", id: "cart-UNKNOWN"))
+  nil
+rescue StandardError => e
+  e
+end
+check(unknown_error.is_a?(Kiosk::Server::Errors::Forbidden),
+      "a well-formed but foreign order_id still gets the ownership rejection (got #{unknown_error.class})")
+
+# The cashier is one of THREE places a wire-supplied id reaches an `::uuid`
+# cast; the same `UuidCheck` guard covers the other two, and they are actions,
+# so drive them through the real registry here rather than trusting the shape of
+# the code. (A DB-free unit pass over the guard itself is `rake demo:cashier_spec`.)
+def action_error(name, args)
+  Kiosk::Server::SessionContext.open(connection: ActiveRecord::Base.connection, identity: identity) do
+    Kiosk::Server::Actions.fetch(name).call(args)
+  end
+  nil
+rescue StandardError => e
+  e
+end
+
+replace_error = action_error("create_order",
+                             { order_id: "not-a-uuid", items: [{ sku: CHEAP_SKU, qty: 1 }],
+                               delivery_slot_id: 3, delivery_date: FUTURE, delivery_address: ADDRESS })
+check(replace_error.is_a?(Kiosk::Server::Errors::BadRequest) && replace_error.http_status == 400,
+      "create_order's replace path rejects a malformed order_id with a 400 (got #{replace_error.class})")
+
+reschedule_error = action_error("reschedule_delivery",
+                                { order_id: "not-a-uuid", delivery_slot_id: 3, delivery_date: FUTURE })
+check(reschedule_error.is_a?(Kiosk::Server::Errors::BadRequest) && reschedule_error.http_status == 400,
+      "reschedule_delivery rejects a malformed order_id with a 400 (got #{reschedule_error.class})")
+
+puts "\n== K-578: an order stuck in `paying` is reconciled from local evidence =="
+
+# Simulate the crash the finding describes: the capture SUCCEEDED and the
+# engine recorded the settlement (executor P3), but the local `paying → paid`
+# flip was lost. The order is charged once and would otherwise sit `paying`
+# forever, unpayable.
+def forge_settlement!(order_id, cart_mandate_id:)
+  conn = ActiveRecord::Base.connection
+  q    = ->(v) { conn.quote(v) }
+  intent_row = conn.execute(
+    "INSERT INTO kiosk.intent_mandates (mandate_id, user_id, agent_id, issuer, scope, " \
+    "cap_amount_cents, currency, expires_at, created_at, raw_jws) " \
+    "VALUES (#{q.call("intent-#{cart_mandate_id}")}, #{q.call(USER_ID)}::uuid, #{q.call(AGENT_ID)}::uuid, " \
+    "'https://getgrocery.demo', 'grocery', 100000, 'eur', now() + interval '1 hour', now(), 'jws') RETURNING id"
+  ).first["id"]
+  cart_row = conn.execute(
+    "INSERT INTO kiosk.cart_mandates (mandate_id, intent_mandate_id, user_id, agent_id, issuer, " \
+    "line_items, total_amount_cents, currency, expires_at, created_at, raw_jws) " \
+    "VALUES (#{q.call(cart_mandate_id)}, #{q.call(intent_row.to_s)}::uuid, #{q.call(USER_ID)}::uuid, " \
+    "#{q.call(AGENT_ID)}::uuid, 'https://getgrocery.demo', " \
+    "#{q.call([{ order_id: order_id }].to_json)}::jsonb, #{CHEAP_PRICE}, 'eur', " \
+    "now() + interval '1 hour', now(), 'jws') RETURNING id"
+  ).first["id"]
+  conn.execute(
+    "INSERT INTO kiosk.settlements (cart_mandate_id, user_id, agent_id, issuer, psp_reference, " \
+    "settled_amount_cents, currency, settled_at, raw_jws) " \
+    "VALUES (#{q.call(cart_row.to_s)}::uuid, #{q.call(USER_ID)}::uuid, #{q.call(AGENT_ID)}::uuid, " \
+    "'https://getgrocery.demo', 'pi_forged_receipt', #{CHEAP_PRICE}, 'eur', now(), 'jws')"
+  )
+end
+
+def strand_as_paying!(order_id, age: "1 hour")
+  ActiveRecord::Base.connection.execute(
+    "UPDATE orders SET status = 'paying', updated_at = now() - interval '#{age}' " \
+    "WHERE id = '#{order_id}'::uuid"
+  )
+end
+
+o3 = create_order!(items: [{ sku: CHEAP_SKU, qty: 1 }], delivery_slot_id: 3,
+                   delivery_date: FUTURE, delivery_address: ADDRESS)
+charged_order = o3[:order_id]
+strand_as_paying!(charged_order)
+forge_settlement!(charged_order, cart_mandate_id: "cart-CHARGED")
+check(order_row(charged_order)["status"] == "paying", "order is stranded in `paying` with a settlement on file")
+
+# (a) The next /pay tells the truth and heals the row on the spot.
+heal_psp = CountingPsp.new
+heal_err = begin
+  ValidatingPaymentProvider.new(heal_psp, currency: "eur").capture(cart_for(charged_order, id: "cart-RETRY"))
+  nil
+rescue StandardError => e
+  e
+end
+check(heal_err.is_a?(Kiosk::Server::Errors::Forbidden) && heal_err.message.include?("already settled"),
+      "a retry on the stranded order answers `order already settled` (got #{heal_err.class}: #{heal_err&.message})")
+check(heal_psp.count.zero?, "…and the PSP was NOT charged a second time (captures=#{heal_psp.count})")
+check(order_row(charged_order)["status"] == "paid",
+      "…and the stranded order self-healed `paying` → `paid`")
+
+# (b) The sweep heals what local evidence proves — and REFUSES to guess on
+#     what it cannot, leaving the claim in place so no blind retry can
+#     double-charge (K-545).
+strand_as_paying!(charged_order) # strand it again for the sweep
+
+o4 = create_order!(items: [{ sku: CHEAP_SKU, qty: 1 }], delivery_slot_id: 3,
+                   delivery_date: FUTURE, delivery_address: ADDRESS)
+unknown_order = o4[:order_id]
+strand_as_paying!(unknown_order) # claimed, NO settlement — only the PSP knows
+
+o5 = create_order!(items: [{ sku: CHEAP_SKU, qty: 1 }], delivery_slot_id: 3,
+                   delivery_date: FUTURE, delivery_address: ADDRESS)
+young_order = o5[:order_id]
+strand_as_paying!(young_order, age: "1 second") # a pay legitimately in flight
+
+sweep = ValidatingPaymentProvider.reconcile_stuck_paying!(older_than_seconds: 600)
+unresolved_ids = sweep[:unresolved].map { |r| r[:order_id] }
+
+check(sweep[:healed].include?(charged_order), "sweep healed the settled order (healed=#{sweep[:healed].size})")
+check(order_row(charged_order)["status"] == "paid", "…its status is `paid`")
+check(unresolved_ids.include?(unknown_order), "sweep reported the unprovable order as UNRESOLVED")
+check(order_row(unknown_order)["status"] == "paying",
+      "…and did NOT release its claim (a blind retry stays impossible)")
+check(sweep[:unresolved].find { |r| r[:order_id] == unknown_order }[:cart_mandate_ids].is_a?(Array),
+      "…reporting the cart-mandate ids to look the charge up at the processor")
+check(!sweep[:healed].include?(young_order) && !unresolved_ids.include?(young_order),
+      "a freshly-claimed order (pay still in flight) is left alone by the sweep")
+
 # ── Verdict ─────────────────────────────────────────────────────────────────
 puts
 if FAILURES.empty?
-  puts "K-544 concurrency spec: ALL PASS"
-  puts JSON.generate(swap_blocked: true, at_most_once: true, captures_under_race: counting.count)
+  puts "getgrocery pay-path spec (K-544/K-578/K-579): ALL PASS"
+  puts JSON.generate(swap_blocked: true, at_most_once: true, captures_under_race: counting.count,
+                     malformed_order_id: "bad_request", stuck_paying_healed: true)
   exit 0
 else
-  puts "K-544 concurrency spec: #{FAILURES.size} FAILURE(S)"
+  puts "getgrocery pay-path spec (K-544/K-578/K-579): #{FAILURES.size} FAILURE(S)"
   FAILURES.each { |f| puts "  - #{f}" }
   exit 1
 end

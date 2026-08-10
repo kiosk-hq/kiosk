@@ -34,6 +34,7 @@ require Rails.root.join("lib/jwt_or_stub_idp")
 require Rails.root.join("lib/pow_difficulty")
 require Rails.root.join("lib/dublin_zones")
 require Rails.root.join("lib/delivery_slots")
+require Rails.root.join("lib/uuid_check")
 require Rails.root.join("lib/validating_payment_provider")
 require Rails.root.join("lib/prove_trust")
 require Rails.root.join("lib/prove_broker_client")
@@ -436,13 +437,31 @@ end
 
 # ─── Actions ────────────────────────────────────────────────────────────────
 
+# payment_setup — the card-on-file readiness probe.
+#
+# POLL CADENCE + STOP CONDITION (K-477): the wire has no server→assistant push,
+# so an assistant learns the human finished the hosted card entry ONLY by
+# re-calling this. The descriptor therefore has to state a cadence AND a
+# terminal stop condition — without one an agent invents its own and can poll
+# forever if the human never completes the step.
+#
+# SAFE TO RE-CALL (K-492): the probe is idempotent. When setup is required the
+# Stripe adapter reuses the setup session already outstanding for this
+# principal instead of minting a new one, so every poll returns the SAME
+# setup_url — an assistant relaying the newest url can no longer bounce its
+# human off the page they are filling in.
 Kiosk::Server::Actions.register("payment_setup",
   description: "Check whether the authenticated principal has a saved card on file. " \
                "Returns {status: \"ready\"} if a card is already saved and the assistant can proceed to `pay`. " \
                "Returns {status: \"setup_required\", setup_url: \"…\"} when no card is saved — " \
                "the assistant must hand the setup_url to the human, wait for them to complete the " \
                "Stripe-hosted card entry, then call payment_setup again before paying. " \
-               "The assistant should call this before every `pay` invocation on a new device or session.",
+               "The assistant should call this before every `pay` invocation on a new device or session. " \
+               "POLLING: re-check every ~5 seconds while your human is at the hosted page, and GIVE UP after " \
+               "about 5 minutes (~60 checks) — tell your human the card setup is still not finished rather " \
+               "than polling indefinitely; they can finish later and you re-check then. " \
+               "Re-checking is safe and repeatable: while one setup is outstanding this returns the SAME " \
+               "setup_url every time, so relay that one link and do NOT send your human a new one per check.",
   params: {}) do |_args|
   conn     = ActiveRecord::Base.connection
   uid      = conn.execute("SELECT kiosk.current_user_id() AS uid").first["uid"]
@@ -630,6 +649,15 @@ Kiosk::Server::Actions.register("create_order",
     order_id = nil
 
     if given_order_id && !given_order_id.to_s.empty?
+      # K-579: this id is cast `::uuid` below — a malformed one made Postgres
+      # raise InvalidTextRepresentation, surfacing as a raw 500 for what is
+      # plainly a client mistake. Check the shape first, answer 400.
+      unless UuidCheck.valid?(given_order_id)
+        raise Kiosk::Server::Errors::BadRequest.new(
+          "order_id #{given_order_id.to_s.inspect} is not a uuid — pass the `order_id` a previous " \
+          "create_order returned (or omit it to place a new order)"
+        )
+      end
       settled_filter = [{ order_id: given_order_id.to_s }].to_json
       # K-544: exclude `paying` (a /pay for this order is mid-flight — its items
       # MUST NOT be swapped from under it) as well as the terminal states, and
@@ -736,6 +764,12 @@ Kiosk::Server::Actions.register("reschedule_delivery",
 
   raise Kiosk::Server::Errors::BadRequest.new("missing field: order_id")         if order_id.nil? || order_id.to_s.empty?
   raise Kiosk::Server::Errors::BadRequest.new("missing field: delivery_slot_id") if delivery_slot_id.nil?
+  # K-579: cast `::uuid` below — reject a malformed id as a clean 400, not a 500.
+  unless UuidCheck.valid?(order_id)
+    raise Kiosk::Server::Errors::BadRequest.new(
+      "order_id #{order_id.to_s.inspect} is not a uuid — pass the `order_id` from my_orders or create_order"
+    )
+  end
 
   # ADDRESS-UPFRONT (K-468): if a NEW address is supplied, it must also be an
   # in-zone Dublin address — clean 400, not a 500. Omitted → keep the existing.
@@ -889,7 +923,14 @@ Kiosk::Server::Queries.register("kyc_status",
                "human acts; {status: \"approved\", kyc_jws} once approved (submit the kyc_jws to " \
                "POST /kiosk/agents/kyc, then retry create_order); {status: \"declined\"} if declined. " \
                "kyc_jws is a full compact JWS — a long, single-line, dot-separated token; submit the " \
-               "ENTIRE value from this field, never a truncated console echo.",
+               "ENTIRE value from this field, never a truncated console echo. " \
+               "POLLING: re-check every ~5 seconds while your human completes the verification, and GIVE UP " \
+               "after about 10 minutes (~120 checks) — an identity check can legitimately take that long, " \
+               "but if it is still \"pending\" then, stop polling and tell your human it is not done yet " \
+               "rather than polling indefinitely. The request_id stays pollable, so you can re-check later " \
+               "(if the human's verification link has since expired, start a new request_kyc). " \
+               "\"declined\" is TERMINAL: do not keep polling it — start a new request_kyc if the human " \
+               "wants to try again.",
   params: { request_id: "string — the request_id returned by request_kyc" }) do |params|
   request_id = params[:request_id]
   if request_id.nil? || request_id.to_s.empty?

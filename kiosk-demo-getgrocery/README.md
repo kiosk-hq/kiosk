@@ -27,7 +27,9 @@ rake demo            # setup + shop: no-human register → order (slot+address) 
 | `rake demo:redteam` | kiosk-redteam battery — 13 attacks BLOCKED (incl. the cashier-check trio: wrong-currency, tampered-price, inflated-total carts, plus RegistrationWithoutPow — register PoW is on, `registration_pow_count=1`), 3 generic KYC scenarios skip (the age-gate is exercised by `demo:agecheck`) |
 | `rake demo:agecheck` | alcohol 18+ age-gate via the prove.my broker (two-server): alcohol order without KYC → 403 → request_kyc → broker approve → 200 → pay; non-alcohol order needs no KYC (200 directly); forged age attestation rejected |
 | `rake demo:pow` | catalog-toll PoW: 402 → solve → 200 |
-| `rake demo:cashier_spec` | DB-free unit check of the cashier's order-reference shape guard: a malformed `order_id` is a clean **400 (`bad_request`)** naming the value, never a 500, and never reaches SQL |
+| `rake demo:race` | pay-path regression (real DB, real threads): an in-flight `/pay` can't have its order's items swapped out from under it and N racing `/pay` capture at most once (K-544); a malformed cart `order_id` is a typed 400, not a 500 (K-579); an order stranded in `paying` heals from its settlement row while an unprovable one keeps its claim (K-578) |
+| `rake demo:reconcile` | resolves orders stuck in `paying` from local evidence — settled ones flip to `paid`, the rest are listed as UNRESOLVED with the cart-mandate ids to check at the processor, and are never blind-released (K-578) |
+| `rake demo:cashier_spec` | DB-free unit check of the same order-reference shape guard (`lib/uuid_check.rb`): a malformed `order_id` is a clean **400 (`bad_request`)** naming the value, leaks no SQL/PG internals, and never reaches a database at all (K-579) |
 
 ## Delivery address is an upfront, deliberate input (ADDRESS-UPFRONT)
 

@@ -160,7 +160,7 @@ Kiosk.configure do |c|
   c.skill_url    = "https://kiosk.tech/skill-v0.3.9.md"
   c.skill_sha256 = "936005cdd3d0674d05b20f5ede258e514a7183fdda78e43eacf0a59039ab4f60"
 
-  c.agent_idp = JwtOrStubIdp.new(stub: StubIdp.new)
+  c.agent_idp = JwtOrStubIdp.new(stub: Rails.env.local? ? StubIdp.new : nil)
   # The web-session channel for the account-binding surfaces (verify
   # page, link mint, unlink) — see lib/stub_user_idp.rb for the scope.
   c.user_idp = StubUserIdp.new

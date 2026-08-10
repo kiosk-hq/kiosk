@@ -162,7 +162,7 @@ Kiosk.configure do |c|
   c.skill_url    = "https://kiosk.tech/skill-v0.3.9.md"
   c.skill_sha256 = "936005cdd3d0674d05b20f5ede258e514a7183fdda78e43eacf0a59039ab4f60"
 
-  c.agent_idp = JwtOrStubIdp.new(stub: StubIdp.new)
+  c.agent_idp = JwtOrStubIdp.new(stub: Rails.env.local? ? StubIdp.new : nil)
   # The provider's own web-session channel: authenticates the approving
   # human on the account-binding surfaces (device verify page, link mint,
   # unlink). A stub because this demo has no human login UI — see

@@ -21,6 +21,15 @@ class JwtOrStubIdp < Kiosk::AgentIdentityProviders::Base
       identity = try_jwt(bearer)
       return identity if identity
     end
+
+    # SECURITY (K-539): the cleartext `agent:u-…:a-…:r-…` stub fallback is a
+    # dev/test convenience ONLY — StubIdp authenticates an UNSIGNED, self-asserted
+    # identity at ANY role (incl. owner). In production it MUST be unreachable: an
+    # external agent registers via PoW→kiosk-pop and presents the SIGNED JWT
+    # handled above. This guard is load-bearing — even if an initializer wires a
+    # stub in production, a forged bearer is rejected here (verify → nil → wire 401).
+    return nil unless Rails.env.local? && @stub
+
     @stub.verify(request)
   end
 

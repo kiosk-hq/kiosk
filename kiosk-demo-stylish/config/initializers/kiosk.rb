@@ -116,7 +116,7 @@ Kiosk.configure do |c|
   # the account-binding token poll mints the same JWTs) first, then falls
   # back to StubIdp's bespoke `agent:u-…:a-…:r-…` shape. One endpoint
   # authenticates both for the demo.
-  c.agent_idp = JwtOrStubIdp.new(stub: StubIdp.new)
+  c.agent_idp = JwtOrStubIdp.new(stub: Rails.env.local? ? StubIdp.new : nil)
   # The provider's own human-session channels. A composite: the
   # role-carrying StubUserIdp (the salon SSO/Okta stand-in — an
   # `X-Staff-Session` header naming a staff member, whose staff_role becomes

@@ -127,7 +127,7 @@ Kiosk.configure do |c|
   # JwtOrStubIdp tries Kiosk-issued JWTs (kiosk-pop register/login output;
   # OAuth device-grant dormant) first,
   # then falls back to StubIdp's bespoke `agent:u-…:a-…:r-…` shape.
-  c.agent_idp = JwtOrStubIdp.new(stub: StubIdp.new)
+  c.agent_idp = JwtOrStubIdp.new(stub: Rails.env.local? ? StubIdp.new : nil)
   # The web-session channel for the account-binding surfaces (verify
   # page, link mint, unlink) — see lib/stub_user_idp.rb for the scope.
   c.user_idp = StubUserIdp.new

@@ -57,7 +57,7 @@ Kiosk.configure do |c|
   # `agent:u-…:a-…:r-…` shape. The account-binding token poll mints the
   # same kiosk JWTs, so bound assistants authenticate through the JWT path
   # too. One endpoint authenticates both for the e2e suite.
-  c.agent_idp = JwtOrStubIdp.new(stub: StubIdp.new)
+  c.agent_idp = JwtOrStubIdp.new(stub: Rails.env.local? ? StubIdp.new : nil)
   # The provider's own web-session channel: authenticates the approving
   # human on the account-binding pages (device verify, link mint, unlink).
   c.user_idp = StubUserIdp.new

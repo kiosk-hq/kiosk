@@ -110,7 +110,37 @@ Kiosk.configure do |c|
     c.app_role        = "kiosk_getgrocery_app"
   end
 
-  c.issuer = ENV.fetch("KIOSK_ISSUER", "http://localhost:3005")
+  # ── Issuer origin — REQUIRED outside development/test (K-510) ────────────
+  # `issuer` is this operator's canonical origin, and it is load-bearing three
+  # times over: it is advertised in /.well-known/kiosk.json, it is the `iss` of
+  # every JWT this app mints, and PopVerifier enforces it as the `aud` of every
+  # assistant proof. A deployment that silently fell back to localhost would
+  # boot HAPPILY and then reject every assistant that dialed the real host with
+  # "proof audience mismatch" — a total, silent auth outage from one unset
+  # variable, whose error text points the agent at an origin it never visited.
+  # So it fails LOUD at boot, matching the signing key (kiosk-server's
+  # default_signing_key raises when KIOSK_SIGNING_KEY_PEM/_B64 is absent).
+  # Development and test keep a localhost default so `bin/rails s` and the demo
+  # flows run out of the box; the port follows the one the server actually
+  # binds (PORT, the same variable lib/tasks/demo.rake and `rails s` read).
+  c.issuer = ENV.fetch("KIOSK_ISSUER") do
+    unless Rails.env.local?
+      raise <<~MSG
+        KIOSK_ISSUER is required outside development/test.
+
+        It is this operator's canonical origin: advertised in
+        /.well-known/kiosk.json, minted as the `iss` of every Kiosk JWT, and
+        enforced as the `aud` of every assistant proof-of-possession. Falling
+        back to localhost here would reject EVERY assistant with "proof
+        audience mismatch".
+
+        Set it to the origin agents actually dial:
+          KIOSK_ISSUER=https://getgrocery.demo.kiosk.tech
+      MSG
+    end
+
+    "http://localhost:#{ENV.fetch("PORT", "3005")}"
+  end
   c.roles  = %i[customer]
 
   # UNIFORM-VALIDATION slice-1 (K-479): validate a PRESENT `pow` field against

@@ -27,6 +27,11 @@ an ISSUER, not a Kiosk operator (no PoW, no `/.well-known/kiosk.json`, no agent 
 ## 4. Per-app env (copy `deploy/env/<app>.env.example` → real values)
 For EACH of the 7 apps:
 - [ ] `RAILS_ENV=production`, a generated `SECRET_KEY_BASE`, `PGHOST`, `KIOSK_<APP>_DB` / `KIOSK_<APP>_DB_{USER,PASSWORD}`, `PORT` (3001–3007). `KIOSK_<APP>_DB` and `KIOSK_<APP>_DB_USER` default to `kiosk_<app>_production` / `kiosk_<app>` — keep the shipped values and §3 needs no extra flags.
+- [ ] **Issuer + signing key (all 7 demos):** `KIOSK_ISSUER` (K-510) and `KIOSK_SIGNING_KEY_B64` are crash-if-absent
+      outside dev/test — the app refuses to boot without them, and so does `zeitwerk:check` in §5. The example ships
+      `KIOSK_ISSUER=https://<app>.demo.kiosk.tech`: **change it if you serve a different origin**, because it is the `aud`
+      every assistant proof is checked against — a wrong value rejects every assistant with "proof audience mismatch"
+      rather than failing loudly at boot.
 - [ ] **PoW:** all 7 demos honor `KIOSK_POW_DIFFICULTY` (low default, high opt-in). Ship `high` for **atablefor** only
       (n=168/k=7, ~9–10 s / ~1.3 GiB, "beware" banner) — the production-grade showcase; `low` (or unset) for the other six
       (fast, poke-friendly; each still knob-adjustable to `high`).
@@ -51,12 +56,23 @@ For EACH of the 7 apps:
 - [ ] **Wire skooti to it:** in skooti's env set `KIOSK_PROVE_ISSUER` + `KIOSK_PROVE_BROKER_URL` = `https://kyc.demo.kiosk.tech`, the SAME `KIOSK_PROVE_SKOOTI_SECRET`, and `KIOSK_PROVE_PUBLIC_KEY_PEM=<public half of PROVE_KEY_PEM>` (or fetch once from `https://kyc.demo.kiosk.tech/prove_key.pem`).
 
 ## 5. Build + boot each app
-- [ ] **Eager-load gate FIRST, on every changed app (K-488/K-513):** `RAILS_ENV=production SECRET_KEY_BASE=throwaway
-      KIOSK_POW_SECRET=throwaway-at-least-32-bytes-long-xxxx bin/rails zeitwerk:check`. It eager-loads the whole app the
-      way production does and exits non-zero on the first constant/path mismatch — the class that 502'd three demos in the
-      K-487 deploy, invisible to every dev-mode gate. Needs no database (it loads code, it does not connect).
-      CI runs it for all 8 apps on every push, so a green CI on the exact commit you are deploying is the same gate;
-      run it by hand whenever you deploy a tree CI has not seen.
+- [ ] **Eager-load gate FIRST, on every changed app (K-488/K-513):**
+      ```
+      RAILS_ENV=production SECRET_KEY_BASE=throwaway \
+        KIOSK_POW_SECRET=throwaway-at-least-32-bytes-long-xxxx \
+        KIOSK_ISSUER=https://throwaway.example.test \
+        bin/rails zeitwerk:check                     # getgrocery: add STRIPE_SECRET_KEY=sk_test_throwaway
+      ```
+      It eager-loads the whole app the way production does and exits non-zero on the first constant/path mismatch — the
+      class that 502'd three demos in the K-487 deploy, invisible to every dev-mode gate. Needs no database (it loads
+      code, it does not connect). Every value here is a throwaway: nothing is signed, served or dialed.
+      The three env vars are not optional decoration — each is crash-if-absent in `production`, and a missing one aborts
+      in the initializer BEFORE Zeitwerk runs, so the command exits 1 for a reason that has nothing to do with eager
+      loading (`KIOSK_POW_SECRET` K-541, `KIOSK_ISSUER` K-510, getgrocery's Stripe key/mock URL). Verified on all 8 apps.
+      CI runs the same gate for all 8 apps on every push, so a green CI on the exact commit you are deploying is the same
+      gate; run it by hand whenever you deploy a tree CI has not seen. **If an initializer ever learns to raise outside
+      dev/test, add the variable HERE and in `.github/workflows/ci.yml` in the same commit** — these two are one gate
+      written twice, and this copy is the one a human types.
 - [ ] `bundle install` · `RAILS_ENV=production bin/rails assets:precompile db:prepare` · `bin/rails demo:setup` (seed).
 - [ ] Enable the systemd unit: `systemctl enable --now kiosk-demo@<app>` (per `deploy/kiosk-demo@.service`, binds 127.0.0.1:<port>).
 

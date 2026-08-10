@@ -61,13 +61,35 @@ For EACH of the 7 apps:
 - [ ] Enable the systemd unit: `systemctl enable --now kiosk-demo@<app>` (per `deploy/kiosk-demo@.service`, binds 127.0.0.1:<port>).
 
 ## 6. Front with Caddy (auto-TLS)
-- [ ] Install `deploy/Caddyfile` (7 vhosts → loopback ports), `caddy reload`. Certs issue automatically.
+- [ ] **Edge rate-limit module — REQUIRED, do this BEFORE installing the Caddyfile (K-540):**
+      `sudo caddy add-package github.com/mholt/caddy-ratelimit` (Caddy ≥ 2.7 swaps in a plugin-included
+      binary; `xcaddy build --with github.com/mholt/caddy-ratelimit` is the stable equivalent if you compile
+      your own) · `sudo systemctl restart caddy` · confirm with `caddy list-modules | grep rate_limit`.
+      A stock Caddy has **no** rate-limiting at all, and `POST /kiosk/auth/register` runs the PoW gate
+      UNAUTHENTICATED — PoW prices the attacker's *solve*, not our *verify* (~19 ms each), so at the shipped
+      `WEB_CONCURRENCY=1` roughly 54 req/s saturate a worker. Nothing in the app substitutes for this.
+      **Acceptable alternative:** a per-IP rate rule on `/kiosk/*` at a CDN/WAF in front of the box — then
+      skip the module and leave the Caddy snippet commented. Deploying with **neither** is the one
+      unacceptable option. Detail: `deploy/README.md` §"Edge rate-limit — REQUIRED".
+- [ ] Install `deploy/Caddyfile` (**8** vhosts → loopback ports: getgrocery/atablefor/hoteling/skooti/
+      stylish/philslist/tudu + `kyc` for the prove.my broker). Certs issue automatically.
+- [ ] **Uncomment the rate-limit (only after the module is installed):** in `/etc/caddy/Caddyfile` uncomment
+      `import ratelimit` inside `(kioskproxy)` AND the whole `(ratelimit)` snippet. They ship **commented**
+      because `rate_limit` is not a stock directive — a stock binary refuses the WHOLE config
+      ("unrecognized directive: rate_limit", verified on Caddy v2.11.2) and then no site serves at all.
+      Then `sudo caddy validate --config /etc/caddy/Caddyfile` · `sudo systemctl reload caddy`.
+- [ ] Verify the limit bites: hammer `/kiosk/auth/register` from one IP and confirm 429 well before the box slows.
+- [ ] ⚠ On the CURRENT live box the `/etc/caddy/Caddyfile` is hand-maintained and also serves other sites —
+      do NOT overwrite it with `deploy/Caddyfile` (you would drop the other vhosts). Hand-add the blocks in its
+      style instead. See the DRIFT NOTE (K-463) in the Caddyfile header.
 
 ## 7. Deploy new code (push-to-deploy) + housekeeping
 - [ ] **git push-to-deploy** (mirrors narrathon): a bare repo per box with an ISOLATED `post-receive` hook
       (own work-tree/service names/deploy user — never touches `/opt/narrathon`) that checks out `main`,
       `bundle install`, `db:prepare`, and restarts each app's service.
-- [ ] ~~Prune cron~~ — **SKIPPED** (Phil): not essential; reseed a bloated demo DB by hand if ever needed.
+- [ ] ~~Prune cron~~ — **SKIPPED** (Phil): not essential; reseed a bloated demo DB by hand if ever needed
+      (`deploy/demo-reset.sh`). `deploy/prune.sh` stays in the repo as an available-but-uninstalled tool —
+      `deploy/README.md` step 5 documents the crontab line for anyone who does want it. Nothing installs it.
 
 ## 8. Verify (per subdomain)
 - [ ] `GET https://<app>.demo.kiosk.tech/.well-known/kiosk.json` returns discovery (atablefor shows the "beware" PoW notice).

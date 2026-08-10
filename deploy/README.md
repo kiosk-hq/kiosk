@@ -16,7 +16,7 @@ This directory is the *app-side* handoff; DNS + VPS provisioning is the operator
 | `postgres-init.sql` | 8 databases + 8 least-privilege login roles (DB-per-app; 7 demos + the prove.my broker). Names default to the shipped ones and are overridable — see [Database names](#database-names). |
 | `kiosk-demo@.service` | Parameterised systemd unit: one Puma per app (`%i`). |
 | `env/<app>.env.example` | Per-app env template (7 demos + `kyc-demo.env.example` for the broker). Copy to `/etc/kiosk-demo/<app>.env`. |
-| `prune.sh` | Daily cron: prune old anonymous accounts, re-seed shared catalog. |
+| `prune.sh` | Optional daily-cron script: prune old anonymous accounts, re-seed shared catalog. **Available but NOT installed** on the hosted box — the cron is deliberately skipped (see step 5). |
 | `README.md` | This runbook. |
 
 ## Per-demo map
@@ -86,8 +86,9 @@ see "Edge rate-limit — REQUIRED" below.) Any other demo is knob-adjustable: se
 4. **Run the steps below**, or hand over shell access.
 
 **Automated (this runbook provides):** the Caddy vhosts, the SQL to create all
-DBs + roles, the systemd unit template, the env templates, and the daily prune
-cron. No app code changes are required to run multi-app/one-Postgres — each
+DBs + roles, the systemd unit template, and the env templates. (`prune.sh` is
+shipped but its cron is deliberately NOT installed — see step 5.)
+No app code changes are required to run multi-app/one-Postgres — each
 demo already ships a production `database.yml` that reads its own DB + role from
 its env file (see [Database names](#database-names)).
 
@@ -117,8 +118,12 @@ file, so it follows an override on its own.
 ### Steps
 
 ```sh
-# 0. Put the monorepo checkout under /srv/kiosk (owned by the kiosk user).
-#    Each app lives at /srv/kiosk/kiosk-demo-<name>.
+# 0. Check the monorepo out AT /srv/kiosk (owned by the kiosk user) — the repo
+#    ROOT is /srv/kiosk itself, not a subdirectory of it. So each app lives at
+#    /srv/kiosk/kiosk-demo-<name> and this runbook's own files are at
+#    /srv/kiosk/deploy/<file>. That is the layout the shipped units and scripts
+#    hardcode: kiosk-demo@.service's WorkingDirectory=/srv/kiosk/kiosk-demo-%i,
+#    prune.sh's APPS_ROOT, and demo-reset.sh's /srv/kiosk/deploy/demo-reset.sh.
 
 # 1. Postgres: create the 8 DBs + least-privilege roles (7 demos + prove).
 #    Pass each password as a plain psql variable — the RAW password, no quotes
@@ -129,7 +134,7 @@ file, so it follows an override on its own.
 sudo -u postgres psql -v ON_ERROR_STOP=1 \
   -v gg_pw=… -v af_pw=… -v ho_pw=… -v sk_pw=… \
   -v st_pw=… -v pl_pw=… -v td_pw=… -v pv_pw=… \
-  -f /srv/kiosk/reference/deploy/postgres-init.sql
+  -f /srv/kiosk/deploy/postgres-init.sql
 #    Then set max_connections=100 in postgresql.conf and reload.
 
 # 2. Per app: install gems, precompile assets, prepare the DB (schema + seed).
@@ -151,7 +156,7 @@ set -a; . /etc/kiosk-demo/prove.env; set +a   # from env/kyc-demo.env.example
 RAILS_ENV=production bin/rails db:prepare
 
 # 3. systemd: install the template unit and enable one instance per app.
-sudo cp /srv/kiosk/reference/deploy/kiosk-demo@.service /etc/systemd/system/
+sudo cp /srv/kiosk/deploy/kiosk-demo@.service /etc/systemd/system/
 sudo mkdir -p /etc/kiosk-demo   # env files live here (Operator step #3)
 sudo systemctl daemon-reload
 for app in getgrocery atablefor hoteling skooti stylish philslist tudu prove; do
@@ -164,8 +169,12 @@ done
 #    Caddy fetches a cert per subdomain on first request (HTTP-01). For a single
 #    wildcard cert instead, see the DNS-01 note in the Caddyfile header.
 
-# 5. Cron: daily housekeeping.
-#    0 4 * * *  /srv/kiosk/reference/deploy/prune.sh >> /var/log/kiosk-prune.log 2>&1
+# 5. Cron: daily housekeeping — OPTIONAL, and NOT installed on the hosted box.
+#    Deliberately skipped (deploy/CHECKLIST.md §7): the demos are per-agent
+#    isolated, so a poker's junk is invisible to the next poker and disk growth
+#    is the only cost — reseed a bloated demo DB by hand (deploy/demo-reset.sh)
+#    if it ever matters. prune.sh ships ready to use for anyone who does want it:
+#    0 4 * * *  /srv/kiosk/deploy/prune.sh >> /var/log/kiosk-prune.log 2>&1
 ```
 
 
@@ -331,7 +340,7 @@ rake task so `prune.sh` reclaims disk from throwaway registrations —
 sudo caddy add-package github.com/mholt/caddy-ratelimit   # Caddy >= 2.7
 sudo systemctl restart caddy
 caddy list-modules | grep rate_limit                      # must print the module
-sudo cp /srv/kiosk/reference/deploy/Caddyfile /etc/caddy/Caddyfile
+sudo cp /srv/kiosk/deploy/Caddyfile /etc/caddy/Caddyfile
 
 #    Now uncomment `import ratelimit` + the (ratelimit) snippet in
 

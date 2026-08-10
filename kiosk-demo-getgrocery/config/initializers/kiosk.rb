@@ -71,6 +71,20 @@ if ENV["KIOSK_POW_DEMO"] == "1"
   require "kiosk/reputation"
   Kiosk::Reputation::Backends.register(Kiosk::Pow::Equihash::NAME, Kiosk::Pow::Equihash)
 
+  # ⚠ TOY COUNTER — NOT a reputation signal (K-590, the atablefor K-498 sibling).
+  # Its ONLY job is to let the local `pow_flow.rb` driver print "the server
+  # counted my bad proof"; nothing reads it for policy (`reputation_factors`
+  # below is `Factors.empty`). Do NOT copy this into a real provider — it is
+  # deliberately wrong in three ways:
+  #   · GLOBAL — the on_bad_proof lambda is handed `identity:` and ignores it,
+  #     so wiring this file into `bad_proof_count_factor` would let ONE abusive
+  #     assistant raise the toll for EVERY assistant on the provider;
+  #   · TRUNCATED AT BOOT — a redeploy silently zeroes the accumulated signal;
+  #   · NO TTL — and never resetting is equally wrong: a count that only grows
+  #     condemns an identity for something a year old.
+  # A production bad-proof count is per-identity, decayed over a window, and
+  # durable across restarts (the same gap as the in-process revocation
+  # watermark). It must be specified before it is built, not bolted on here.
   GETGROCERY_BAD_PROOF_FILE = "/tmp/kiosk-getgrocery-bad-proof.count"
   File.write(GETGROCERY_BAD_PROOF_FILE, "0")
 
@@ -271,6 +285,13 @@ Kiosk.configure do |c|
     c.pow_secret         = pow_secret
     c.pow_ttl            = 300
     c.reputation_factors = ->(**) { Kiosk::Reputation::Factors.empty }
+    # ⚠ TOY COUNTER — the write side of the demo counter defined above, and every
+    # caveat there applies verbatim (global, boot-truncated, no TTL, K-590). Note
+    # this lambda IS handed `identity:` and drops it on the floor: that is what
+    # makes the file global, and why wiring it into a real `bad_proof_count`
+    # factor would ship collective punishment. Its only consumer is the local
+    # driver pow_flow.rb; `reputation_factors` right above feeds the policy
+    # `Factors.empty`, so nothing this counts changes any toll.
     c.on_bad_proof = ->(identity:) {
       n = (File.read(GETGROCERY_BAD_PROOF_FILE).to_i rescue 0)
       File.write(GETGROCERY_BAD_PROOF_FILE, (n + 1).to_s)
@@ -519,7 +540,11 @@ Kiosk::Server::Actions.register("create_order",
                           description: "The `date` (YYYY-MM-DD) of the chosen delivery_slots row, so the booking lands on the day you saw. Optional; omitting books tomorrow." },
       delivery_address: { type: "string",
                           description: "In-zone Dublin delivery address naming a served postal district (e.g. \"Dublin 2\" / \"D02\")." },
-      order_id:         { type: "string",
+      # K-596: `pattern`/`format` so the DECLARED contract carries the shape the
+      # description asserts and the handler enforces (UuidCheck) — a bare
+      # {type:"string"} told an assistant nothing about what "uuid" meant here.
+      order_id:         { type: "string", format: "uuid",
+                          pattern: UuidCheck::JSON_SCHEMA_PATTERN,
                           description: "Optional uuid of an unpaid order to replace." },
     },
     required: ["items", "delivery_slot_id", "delivery_address"],
@@ -743,7 +768,9 @@ Kiosk::Server::Actions.register("reschedule_delivery",
     type: "object",
     additionalProperties: false,
     properties: {
-      order_id:         { type: "string",
+      # K-596: same uuid shape as create_order's order_id — see UuidCheck.
+      order_id:         { type: "string", format: "uuid",
+                          pattern: UuidCheck::JSON_SCHEMA_PATTERN,
                           description: "uuid of the ALREADY-PAID order to reschedule. Its existing payment is reused — do not pay again." },
       delivery_slot_id: { type: "integer", minimum: 1, maximum: 6,
                           description: "The new `delivery_slot_id` from a delivery_slots row (1..6)." },

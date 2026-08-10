@@ -210,12 +210,18 @@ end
 # only see rows where user_id matches kiosk.current_user_id(), enforced in
 # the query definition itself.
 Kiosk::Server::Queries.register("my_reservations",
-                                 description: "List this principal's scooter reservations (scoped to authenticated user via kiosk.current_user_id()). Each row carries a `reservation_id`; pass it to start_rental / rent_motorcycle as `reservation_id`.") do |_params|
+                                 description: "List this principal's scooter reservations (scoped to authenticated user via kiosk.current_user_id()). Each row carries a `reservation_id`; pass it to start_rental / rent_motorcycle as `reservation_id`. Each row also carries the vehicle's `scooter_code` — the same handle scooters_available shows and reserve takes.") do |_params|
+  # The vehicle is identified by its `code`, never by the numeric scooters.id:
+  # that primary key is not a param of any verb, so emitting it would be a dead
+  # field the assistant can only guess at (K-516 sweep; house-style "never
+  # expose a row id that no verb consumes"). The join turns the dead internal
+  # key into the live handle instead of dropping the vehicle from the row.
   ActiveRecord::Base.connection.execute(
-    "SELECT id AS reservation_id, scooter_id, status " \
-    "FROM public.reservations " \
-    "WHERE user_id = kiosk.current_user_id() " \
-    "ORDER BY created_at DESC"
+    "SELECT r.id AS reservation_id, s.code AS scooter_code, r.status " \
+    "FROM public.reservations r " \
+    "JOIN public.scooters s ON s.id = r.scooter_id " \
+    "WHERE r.user_id = kiosk.current_user_id() " \
+    "ORDER BY r.created_at DESC"
   ).to_a
 end
 

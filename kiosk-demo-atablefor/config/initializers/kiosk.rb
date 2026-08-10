@@ -155,7 +155,20 @@ when :demo
     end
   end
 
-  # Counter file written by on_bad_proof; the pow_flow.rb driver reads it.
+  # ⚠ TOY COUNTER — NOT a reputation signal (K-498). Its ONLY job is to let the
+  # local `pow_flow.rb` driver print "the server counted my bad proof"; nothing
+  # reads it for policy (`reputation_factors` below feeds a hardcoded
+  # `bad_proof_count: 0`). Do NOT copy this into a real provider — it is
+  # deliberately wrong in three ways:
+  #   · GLOBAL — the on_bad_proof lambda is handed `identity:` and ignores it,
+  #     so wiring this file into `bad_proof_count_factor` would let ONE abusive
+  #     assistant raise the toll for EVERY assistant on the provider;
+  #   · TRUNCATED AT BOOT — a redeploy silently zeroes the accumulated signal;
+  #   · NO TTL — and never resetting is equally wrong: a count that only grows
+  #     condemns an identity for something a year old.
+  # A production bad-proof count is per-identity, decayed over a window, and
+  # durable across restarts (the same gap as the in-process revocation
+  # watermark). It must be specified before it is built, not bolted on here.
   ATABLEFOR_BAD_PROOF_FILE = "/tmp/kiosk-atablefor-bad-proof.count"
   File.write(ATABLEFOR_BAD_PROOF_FILE, "0")
 when :reputation
@@ -164,6 +177,12 @@ when :reputation
   # real booking history (see the configure block for the RateAndReputation
   # params + the REAL confirmed-bookings DB factor that makes this a demo OF
   # reputation): 0 bookings → 2 proofs · 1 booking → 1 proof · 2+ → free pass.
+  # ⚠ TOY COUNTER — the reputation branch's copy of the demo counter above, and
+  # every caveat there applies verbatim (global, boot-truncated, no TTL, K-498).
+  # It is especially misleading HERE, because this branch's policy really does
+  # declare `bad_proof_count_factor: 3` — but its factors hardcode
+  # `bad_proof_count: 0`, so this file feeds nothing. Wiring it in as-is would
+  # ship collective punishment; a real signal is per-identity and decayed.
   ATABLEFOR_REPUTATION_BAD_PROOF_FILE = "/tmp/kiosk-atablefor-reputation-bad-proof.count"
   File.write(ATABLEFOR_REPUTATION_BAD_PROOF_FILE, "0")
 end
@@ -313,7 +332,10 @@ Kiosk.configure do |c|
     # challenges :query unconditionally). A real provider wires DB lookups.
     c.reputation_factors = ->(**) { Kiosk::Reputation::Factors.empty }
 
-    # on_bad_proof: increment the counter file so pow_flow.rb can assert it.
+    # on_bad_proof: bump the TOY counter file (see its definition above — global,
+    # boot-truncated, TTL-less, K-498) so pow_flow.rb can assert the rejection
+    # happened. `identity:` is deliberately ignored: this is demo instrumentation,
+    # not a per-principal signal, and it must never be read as one.
     c.on_bad_proof = ->(identity:) {
       count = (File.read(ATABLEFOR_BAD_PROOF_FILE).to_i rescue 0)
       File.write(ATABLEFOR_BAD_PROOF_FILE, (count + 1).to_s)
@@ -363,6 +385,8 @@ Kiosk.configure do |c|
       )
     }
 
+    # Same TOY instrumentation as the :demo branch (K-498): global, ignores
+    # `identity:`, boot-truncated, feeds no policy. Demo output only.
     c.on_bad_proof = ->(identity:) {
       cnt = (File.read(ATABLEFOR_REPUTATION_BAD_PROOF_FILE).to_i rescue 0)
       File.write(ATABLEFOR_REPUTATION_BAD_PROOF_FILE, (cnt + 1).to_s)

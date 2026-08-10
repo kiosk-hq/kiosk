@@ -37,6 +37,10 @@ SERVER   = ENV.fetch("SERVER_URL")
 ISSUER   = ENV.fetch("KIOSK_ISSUER")
 SOLVE_PY = File.expand_path("../kiosk-pow-equihash/solve.py", __dir__)
 
+# The TOY counter the demo initializer's on_bad_proof writes (K-498): global,
+# truncated at boot, no TTL, and read by nothing but this driver. It exists so
+# step 3 below can assert the server actually counted the rejected proof — it is
+# NOT the per-identity, decayed bad_proof_count a real provider needs.
 BAD_PROOF_FILE = "/tmp/kiosk-atablefor-bad-proof.count"
 
 def post_json(url, body, headers = {})

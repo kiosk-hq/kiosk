@@ -56,6 +56,26 @@ RSpec.describe Kiosk::PaymentProviders::Stripe, :integration do
       url = adapter.setup_url(user_id: user_id)
       expect(url).to start_with("https://checkout.stripe.com/")
     end
+
+    # K-492 against the real API. This is the ONLY example anywhere that can
+    # answer the question the reuse rests on: does a just-created `mode:setup`
+    # Checkout Session actually come back from `list(status: "open")`? The
+    # double-based specs and the local stateful fake in
+    # `stripe_setup_reuse_spec.rb` both ASSUME it — they exercise our side of
+    # the contract, not Stripe's. Needs STRIPE_SECRET_KEY; CI deliberately has
+    # none, so in CI this is skipped, not passed.
+    it "returns the SAME url on a second call and leaves exactly ONE open setup session (K-492)" do
+      first  = adapter.setup_url(user_id: user_id)
+      second = adapter.setup_url(user_id: user_id)
+
+      expect(second).to eq(first)
+
+      cus_id     = customer_store[user_id]
+      open_setup = ::Stripe::Checkout::Session
+                   .list(customer: cus_id, status: "open", limit: 10)
+                   .data.select { |s| s.mode == "setup" }
+      expect(open_setup.map(&:url)).to eq([first])
+    end
   end
 
   describe "#saved_method? before card setup" do

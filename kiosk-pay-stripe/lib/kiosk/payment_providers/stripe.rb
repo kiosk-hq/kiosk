@@ -258,9 +258,14 @@ module Kiosk
       # target — and so a fixture-returning stub (stripe-mock) cannot be
       # mistaken for a real outstanding session.
       #
-      # BEST EFFORT: any Stripe error while looking up degrades to nil, i.e. to
-      # the pre-K-492 behaviour of minting a fresh session. A readiness probe
-      # must not start failing because a list call did.
+      # BEST EFFORT, BUT NEVER SILENT: a Stripe error while looking up degrades
+      # to minting a fresh session (the pre-K-492 behaviour) — a readiness probe
+      # must not start failing because a list call did — but "the lookup broke"
+      # is NOT the same fact as "there is no outstanding session", so it is
+      # LOGGED. Without that line the two are indistinguishable from outside,
+      # and a wrong filter, a renamed field or an API change silently reverts
+      # the fix to one session per poll while every response still looks
+      # perfectly healthy.
       def outstanding_setup_session(cus_id, success_url:)
         listed = ::Stripe::Checkout::Session.list(customer: cus_id, status: "open", limit: 10)
         Array(listed&.data).find do |s|
@@ -268,8 +273,20 @@ module Kiosk
             field(s, :success_url) == success_url &&
             !field(s, :url).to_s.empty?
         end
-      rescue ::Stripe::StripeError
+      rescue ::Stripe::StripeError => e
+        log_setup_session_lookup_failed(e)
         nil
+      end
+
+      # Say out loud that the K-492 reuse lookup did not answer, so degrading to
+      # a fresh session is visible in the operator's log instead of passing for
+      # the happy path. Operator-side only — nothing here reaches the wire.
+      def log_setup_session_lookup_failed(error)
+        message = "[kiosk-pay-stripe] could not check for an outstanding setup session " \
+                  "(#{error.class}: #{error.message}) — minting a FRESH Checkout Session, so " \
+                  "setup_url is NOT stable across polls until this clears (K-492)."
+        logger = ::Rails.logger if defined?(::Rails) && ::Rails.respond_to?(:logger)
+        logger ? logger.warn(message) : warn(message)
       end
 
       # Read a field off a Stripe object without assuming it is present — the

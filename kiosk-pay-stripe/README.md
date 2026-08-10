@@ -38,7 +38,10 @@ Card-setup handshake (see the Payment section of the spec):
   never sees card data. **Stable across polls:** an already-outstanding
   (`status: open`, same `return_url`) setup session is reused, so an assistant
   polling readiness keeps handing its human the SAME link instead of a fresh
-  one per poll.
+  one per poll. One exception, and it is logged rather than hidden: if the
+  lookup itself errors, the adapter cannot tell "no outstanding session" from
+  "did not find out", so it mints a fresh session (the probe keeps answering)
+  and warns that the url is not stable until that clears.
 - `saved_method?(user_id:)` — true once the resolved Customer has a usable
   saved card.
 

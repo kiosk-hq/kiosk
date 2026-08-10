@@ -50,6 +50,12 @@ For EACH of the 7 apps:
 - [ ] **Wire skooti to it:** in skooti's env set `KIOSK_PROVE_ISSUER` + `KIOSK_PROVE_BROKER_URL` = `https://kyc.demo.kiosk.tech`, the SAME `KIOSK_PROVE_SKOOTI_SECRET`, and `KIOSK_PROVE_PUBLIC_KEY_PEM=<public half of PROVE_KEY_PEM>` (or fetch once from `https://kyc.demo.kiosk.tech/prove_key.pem`).
 
 ## 5. Build + boot each app
+- [ ] **Eager-load gate FIRST, on every changed app (K-488/K-513):** `RAILS_ENV=production SECRET_KEY_BASE=throwaway
+      KIOSK_POW_SECRET=throwaway-at-least-32-bytes-long-xxxx bin/rails zeitwerk:check`. It eager-loads the whole app the
+      way production does and exits non-zero on the first constant/path mismatch — the class that 502'd three demos in the
+      K-487 deploy, invisible to every dev-mode gate. Needs no database (it loads code, it does not connect).
+      CI runs it for all 8 apps on every push, so a green CI on the exact commit you are deploying is the same gate;
+      run it by hand whenever you deploy a tree CI has not seen.
 - [ ] `bundle install` · `RAILS_ENV=production bin/rails assets:precompile db:prepare` · `bin/rails demo:setup` (seed).
 - [ ] Enable the systemd unit: `systemctl enable --now kiosk-demo@<app>` (per `deploy/kiosk-demo@.service`, binds 127.0.0.1:<port>).
 

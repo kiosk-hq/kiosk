@@ -268,13 +268,24 @@ jobs:
       #     dev/test, so without it every kiosk demo aborts before Zeitwerk runs
       #     and this gate silently stops testing anything. A throwaway literal
       #     is enough (no challenge is signed here).
+      #   KIOSK_ISSUER — K-510 made the issuer crash-if-absent outside dev/test
+      #     for the same reason, and it aborts at the same point. Omitting it
+      #     was how this gate came back green-but-blind a second time: the
+      #     K-541 fix above added only the PoW secret, so all seven operator
+      #     demos still exited 1 before Zeitwerk ran. Any syntactically valid
+      #     absolute origin does; nothing is signed or dialed here.
       # The signing key exported above is likewise already in the environment.
+      #
+      # RULE OF THUMB for the next crash-if-absent config: if an initializer
+      # learns to raise outside dev/test, it must be added HERE in the same
+      # commit, or this gate reports success while testing nothing.
       - name: Production eager-load check (zeitwerk:check, K-488/K-513)
         working-directory: ${{ matrix.demo }}
         env:
           RAILS_ENV: production
           SECRET_KEY_BASE: ci-zeitwerk-check-throwaway-secret-key-base
           KIOSK_POW_SECRET: ci-zeitwerk-check-throwaway-pow-secret-not-a-real-key
+          KIOSK_ISSUER: https://ci-zeitwerk-check.example.test
         run: bin/rails zeitwerk:check
 
       # The committed db/structure.sql files are PG17-format (they SET

@@ -8,6 +8,7 @@ RSpec.describe Kiosk::PaymentProviders::Stripe do
       api_key:           "sk_test_dummy",
       customer_resolver: ->(uid) { uid == "user-1" ? "cus_existing" : nil },
       customer_saver:    ->(_uid, _cid) {},
+      return_url:        "https://shop.example/payment/return",
     )
   end
 
@@ -34,12 +35,13 @@ RSpec.describe Kiosk::PaymentProviders::Stripe do
     it "creates a Checkout Session in setup mode for an existing customer and returns the url" do
       session = double("CheckoutSession", url: "https://checkout.stripe.com/setup/abc")
 
-      # success_url is required by Stripe API even for hosted checkout.
+      # success_url is required by Stripe API even for hosted checkout; the host
+      # injects a real operator-owned return_url (K-553 — never a localhost fallback).
       expect(::Stripe::Checkout::Session).to receive(:create).with(
         mode:                    "setup",
         customer:                "cus_existing",
         payment_method_types:    ["card"],
-        success_url:             "http://localhost:3005/payment/return",
+        success_url:             "https://shop.example/payment/return",
       ).and_return(session)
 
       url = resolver_adapter.setup_url(user_id: "user-1")
@@ -78,16 +80,61 @@ RSpec.describe Kiosk::PaymentProviders::Stripe do
         api_key:           "***",
         customer_resolver: ->(_uid) { nil },
         customer_saver:    ->(uid, cid) { saved[uid] = cid },
+        return_url:        "https://shop.example/payment/return",
       )
 
       expect(::Stripe::Customer).to receive(:create).with({ name: "principal-user-2" }).and_return(new_cus)
       expect(::Stripe::Checkout::Session).to receive(:create).with(
-        hash_including(customer: "cus_new", mode: "setup", success_url: "http://localhost:3005/payment/return"),
+        hash_including(customer: "cus_new", mode: "setup", success_url: "https://shop.example/payment/return"),
       ).and_return(session)
 
       url = fresh_adapter.setup_url(user_id: "user-2")
       expect(url).to eq("https://checkout.stripe.com/setup/xyz")
       expect(saved["user-2"]).to eq("cus_new")
+    end
+  end
+
+  # ── return-URL resolution (K-553) ─────────────────────────────────────────────
+  #
+  # The success_url Stripe redirects the human's browser to MUST be a real
+  # operator origin — never a hardcoded localhost, which would send a paying
+  # customer to their own machine on a deploy that forgot to wire it.
+  describe "return URL (success_url) resolution" do
+    let(:session) { double("CheckoutSession", url: "https://checkout.stripe.com/setup/abc") }
+
+    it "uses the explicit return_url the host injected when present" do
+      adapter = described_class.new(
+        api_key:           "sk_test_dummy",
+        customer_resolver: ->(_uid) { "cus_existing" },
+        return_url:        "https://grocer.example/payment/return",
+      )
+      expect(::Stripe::Checkout::Session).to receive(:create).with(
+        hash_including(success_url: "https://grocer.example/payment/return"),
+      ).and_return(session)
+
+      adapter.setup_url(user_id: "user-1")
+    end
+
+    it "derives success_url from the configured Kiosk issuer when no return_url is given" do
+      allow(Kiosk).to receive(:configuration).and_return(double(issuer: "https://derived.example"))
+      adapter = described_class.new(
+        api_key:           "sk_test_dummy",
+        customer_resolver: ->(_uid) { "cus_existing" },
+      )
+      expect(::Stripe::Checkout::Session).to receive(:create).with(
+        hash_including(success_url: "https://derived.example/payment/return"),
+      ).and_return(session)
+
+      adapter.setup_url(user_id: "user-1")
+    end
+
+    it "raises rather than falling back to localhost when neither is configured" do
+      allow(Kiosk).to receive(:configuration).and_return(double(issuer: nil))
+      adapter = described_class.new(
+        api_key:           "sk_test_dummy",
+        customer_resolver: ->(_uid) { "cus_existing" },
+      )
+      expect { adapter.setup_url(user_id: "user-1") }.to raise_error(/return URL/i)
     end
   end
 

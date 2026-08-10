@@ -71,7 +71,7 @@ module Kiosk
           mode:                    "setup",
           customer:                cus_id,
           payment_method_types:    ["card"],
-          success_url:             @return_url || "http://localhost:3005/payment/return",
+          success_url:             resolved_return_url,
         )
         session.url
       end
@@ -207,6 +207,44 @@ module Kiosk
       end
 
       private
+
+      # The `success_url` Stripe redirects the human's BROWSER to after they
+      # enter a card on the hosted page. It MUST be a real, operator-owned
+      # origin: a hardcoded localhost fallback would send a paying customer to
+      # their OWN machine on a deploy that forgot to wire it (K-553). Resolution
+      # order:
+      #   1. the explicit return_url the host injected (e.g. getgrocery passes
+      #      "#{Kiosk.configuration.issuer}/payment/return");
+      #   2. else derive it from the configured Kiosk issuer/origin — the
+      #      operator's real https origin in production (fail-loud per K-510) and
+      #      localhost:PORT in local dev, so it is correct in both WITHOUT ever
+      #      hardcoding localhost;
+      #   3. else (no return_url and no configured issuer) fail LOUD — a hosted
+      #      SetupIntent with no valid return target is a misconfiguration, not
+      #      something to paper over with a localhost address a real human's
+      #      browser would follow.
+      def resolved_return_url
+        return @return_url if @return_url && !@return_url.to_s.strip.empty?
+
+        issuer = configured_issuer
+        return "#{issuer.to_s.chomp("/")}/payment/return" unless issuer.to_s.strip.empty?
+
+        raise "Stripe SetupIntent needs a return URL (success_url) but none is configured. " \
+              "Pass return_url: to Kiosk::PaymentProviders::Stripe.new " \
+              "(e.g. \"\#{Kiosk.configuration.issuer}/payment/return\"), or configure Kiosk's " \
+              "issuer so it can be derived. A localhost fallback is refused because it would " \
+              "send the paying human's browser to their own machine (K-553)."
+      end
+
+      # The configured Kiosk issuer/origin, or nil if Kiosk is not configured
+      # (e.g. this adapter used in isolation). Never raises.
+      def configured_issuer
+        return nil unless defined?(Kiosk) && Kiosk.respond_to?(:configuration)
+
+        Kiosk.configuration&.issuer
+      rescue StandardError
+        nil
+      end
 
       # Resolve existing Customer or create a new one and persist the mapping
       # via the injected `customer_saver`.

@@ -1,0 +1,38 @@
+<!DOCTYPE html>
+<!--
+  Static 404 page (K-532). Rails' PublicExceptions serves this file for every
+  unhandled 404 in production. WITHOUT it, ShowExceptions#pass_response returns
+  a BODYLESS response — text/html, Content-Length: 0 — and an assistant that
+  guessed a web-app path (POST /bookings, POST /api/register) gets nothing to
+  act on. Static, so it cannot interpolate anything: keep every link relative.
+-->
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>404 — no such page</title>
+    <style>
+      :root { color-scheme: light dark; }
+      body { margin: 0; padding: 3rem 1.5rem; font: 16px/1.6 ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; }
+      main { max-width: 42rem; margin: 0 auto; }
+      h1 { font-size: 1.5rem; margin: 0 0 1rem; }
+      code { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 0.95em; }
+      .note { border-left: 3px solid currentColor; padding-left: 1rem; opacity: 0.9; }
+    </style>
+  </head>
+  <body>
+    <main>
+      <h1>404 — no such page</h1>
+      <p>This URL does not exist on this provider.</p>
+      <p class="note">
+        <strong>If you are an AI assistant:</strong> this provider's machine
+        surface is not guessable from web-app paths. Fetch
+        <a href="/.well-known/kiosk.json"><code>/.well-known/kiosk.json</code></a>
+        for the endpoints it actually serves — register/login, schema, query,
+        run, pay — and drive those instead. Every one of them answers with a
+        JSON envelope, including its errors.
+      </p>
+      <p><a href="/">Back to the home page</a></p>
+    </main>
+  </body>
+</html>

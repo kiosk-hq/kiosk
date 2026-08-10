@@ -31,7 +31,21 @@ RSpec.describe Kiosk::PaymentProviders::Stripe do
 
   # ── setup_url ────────────────────────────────────────────────────────────────
 
+  # K-492: `setup_url` first asks Stripe whether an OPEN setup session is already
+  # outstanding for the customer. Unless an example says otherwise, there is none.
+  def stub_no_outstanding_session
+    allow(::Stripe::Checkout::Session).to receive(:list).and_return(double("SessionList", data: []))
+  end
+
+  # A listed Checkout Session as the SDK would return it.
+  def listed_session(mode: "setup", success_url: "https://shop.example/payment/return",
+                     url: "https://checkout.stripe.com/setup/OUTSTANDING")
+    double("ListedSession", mode: mode, success_url: success_url, url: url)
+  end
+
   describe "#setup_url" do
+    before { stub_no_outstanding_session }
+
     it "creates a Checkout Session in setup mode for an existing customer and returns the url" do
       session = double("CheckoutSession", url: "https://checkout.stripe.com/setup/abc")
 
@@ -94,6 +108,82 @@ RSpec.describe Kiosk::PaymentProviders::Stripe do
     end
   end
 
+  # ── setup_url is IDEMPOTENT across polls (K-492) ─────────────────────────────
+  #
+  # `payment_setup` is documented as the readiness probe an assistant POLLS while
+  # its human is at the hosted page. Before this fix each poll called
+  # Checkout::Session.create unconditionally, so the assistant held a NEW url
+  # after every poll (5 sessions were minted for one live card setup) and
+  # relaying the newest one dropped the human off the page they were filling in.
+  describe "#setup_url reuse of an outstanding session (K-492)" do
+    it "returns the OPEN setup session's url and mints NOTHING when one is outstanding" do
+      expect(::Stripe::Checkout::Session).to receive(:list).with(
+        customer: "cus_existing", status: "open", limit: 10,
+      ).and_return(double("SessionList", data: [listed_session]))
+      expect(::Stripe::Checkout::Session).not_to receive(:create)
+
+      expect(resolver_adapter.setup_url(user_id: "user-1"))
+        .to eq("https://checkout.stripe.com/setup/OUTSTANDING")
+    end
+
+    it "returns the SAME url across repeated polls (the poll is side-effect-free)" do
+      allow(::Stripe::Checkout::Session).to receive(:list)
+        .and_return(double("SessionList", data: [listed_session]))
+      allow(::Stripe::Checkout::Session).to receive(:create)
+
+      urls = Array.new(5) { resolver_adapter.setup_url(user_id: "user-1") }
+
+      expect(urls.uniq.size).to eq(1)
+      expect(::Stripe::Checkout::Session).not_to have_received(:create)
+    end
+
+    it "mints a fresh session when the outstanding one targets a DIFFERENT success_url" do
+      # An operator that re-pointed its origin must not hand the human a stale
+      # return target.
+      allow(::Stripe::Checkout::Session).to receive(:list).and_return(
+        double("SessionList", data: [listed_session(success_url: "https://old-origin.example/payment/return")]),
+      )
+      expect(::Stripe::Checkout::Session).to receive(:create)
+        .and_return(double("CheckoutSession", url: "https://checkout.stripe.com/setup/fresh"))
+
+      expect(resolver_adapter.setup_url(user_id: "user-1"))
+        .to eq("https://checkout.stripe.com/setup/fresh")
+    end
+
+    it "ignores a listed session that is not in setup mode" do
+      allow(::Stripe::Checkout::Session).to receive(:list).and_return(
+        double("SessionList", data: [listed_session(mode: "payment")]),
+      )
+      expect(::Stripe::Checkout::Session).to receive(:create)
+        .and_return(double("CheckoutSession", url: "https://checkout.stripe.com/setup/fresh"))
+
+      expect(resolver_adapter.setup_url(user_id: "user-1"))
+        .to eq("https://checkout.stripe.com/setup/fresh")
+    end
+
+    it "falls back to minting when the lookup itself fails (a probe must not start erroring)" do
+      allow(::Stripe::Checkout::Session).to receive(:list)
+        .and_raise(::Stripe::APIConnectionError.new("list timed out"))
+      expect(::Stripe::Checkout::Session).to receive(:create)
+        .and_return(double("CheckoutSession", url: "https://checkout.stripe.com/setup/fresh"))
+
+      expect(resolver_adapter.setup_url(user_id: "user-1"))
+        .to eq("https://checkout.stripe.com/setup/fresh")
+    end
+
+    it "still fails LOUD on an unconfigured return URL before any Stripe call (K-553)" do
+      allow(Kiosk).to receive(:configuration).and_return(double(issuer: nil))
+      adapter = described_class.new(
+        api_key:           "sk_test_dummy",
+        customer_resolver: ->(_uid) { "cus_existing" },
+      )
+      expect(::Stripe::Checkout::Session).not_to receive(:list)
+      expect(::Stripe::Checkout::Session).not_to receive(:create)
+
+      expect { adapter.setup_url(user_id: "user-1") }.to raise_error(/return URL/i)
+    end
+  end
+
   # ── return-URL resolution (K-553) ─────────────────────────────────────────────
   #
   # The success_url Stripe redirects the human's browser to MUST be a real
@@ -101,6 +191,8 @@ RSpec.describe Kiosk::PaymentProviders::Stripe do
   # customer to their own machine on a deploy that forgot to wire it.
   describe "return URL (success_url) resolution" do
     let(:session) { double("CheckoutSession", url: "https://checkout.stripe.com/setup/abc") }
+
+    before { stub_no_outstanding_session }
 
     it "uses the explicit return_url the host injected when present" do
       adapter = described_class.new(

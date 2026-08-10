@@ -35,7 +35,10 @@ Card-setup handshake (see the Payment section of the spec):
 - `setup_url(user_id:)` — hosted Stripe Checkout URL (`mode: "setup"`). The
   human opens it in a browser (NOT the chat) to enter their card on Stripe's
   hosted page; the human is redirected to `return_url` afterward. The gem
-  never sees card data.
+  never sees card data. **Stable across polls:** an already-outstanding
+  (`status: open`, same `return_url`) setup session is reused, so an assistant
+  polling readiness keeps handing its human the SAME link instead of a fresh
+  one per poll.
 - `saved_method?(user_id:)` — true once the resolved Customer has a usable
   saved card.
 

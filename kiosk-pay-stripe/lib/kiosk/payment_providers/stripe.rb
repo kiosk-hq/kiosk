@@ -57,23 +57,42 @@ module Kiosk
         ::Stripe.api_key = @api_key
       end
 
-      # Resolve or create a Stripe Customer for the principal, then create a
-      # Checkout Session in `mode: "setup"`. The human opens the returned URL
-      # in a browser (NOT the chat) to enter their card on Stripe's hosted
-      # page. The card is saved as a PaymentMethod on the Customer; the gem
-      # never sees card data.
+      # Resolve or create a Stripe Customer for the principal, then return a
+      # hosted Checkout Session URL in `mode: "setup"`. The human opens it in a
+      # browser (NOT the chat) to enter their card on Stripe's hosted page. The
+      # card is saved as a PaymentMethod on the Customer; the gem never sees
+      # card data.
+      #
+      # ## STABLE ACROSS POLLS (K-492)
+      # Hosts document `payment_setup` as the readiness probe an assistant POLLS
+      # while its human is still at the hosted page, so this call must not mint a
+      # session per poll. It reuses the `mode:setup` Checkout Session already
+      # OUTSTANDING for this customer when there is one, and only creates a new
+      # session when there is not. Observed live before the fix: FIVE sessions
+      # for ONE card setup at a ~4 s poll cadence — the assistant held a
+      # different url after every poll, and relaying the newest one mid-flow
+      # drops the human off the page they are filling in.
+      #
+      # The wire shape is unchanged (still a hosted Checkout URL); only the
+      # url's stability is.
       #
       # @param user_id [String] synthetic principal identifier
       # @return [String] hosted Stripe Checkout URL
       def setup_url(user_id:)
-        cus_id  = ensure_customer(user_id)
-        session = ::Stripe::Checkout::Session.create(
-          mode:                    "setup",
-          customer:                cus_id,
-          payment_method_types:    ["card"],
-          success_url:             resolved_return_url,
-        )
-        session.url
+        # Resolve the return URL FIRST: it fails LOUD when nothing is configured
+        # (K-553), and that must happen before ANY Stripe call — the reuse
+        # lookup included — so a misconfigured deploy still crashes loudly
+        # instead of listing sessions it could never match.
+        success_url = resolved_return_url
+        cus_id      = ensure_customer(user_id)
+
+        outstanding_setup_session(cus_id, success_url: success_url)&.url ||
+          ::Stripe::Checkout::Session.create(
+            mode:                    "setup",
+            customer:                cus_id,
+            payment_method_types:    ["card"],
+            success_url:             success_url,
+          ).url
       end
 
       # Returns true when the principal MUST complete a Stripe SetupIntent
@@ -226,6 +245,38 @@ module Kiosk
       end
 
       private
+
+      # The `mode:setup` Checkout Session already outstanding for this customer,
+      # or nil when there is none to reuse (K-492).
+      #
+      # "Outstanding" means Stripe still lists it as `status: "open"` — i.e. the
+      # human has neither completed it nor let it expire (a Checkout Session
+      # expires ~24 h after creation, after which Stripe reports `expired` and
+      # this returns nil so a fresh one is minted). We additionally require the
+      # session to target the SAME `success_url` we would create now, so an
+      # operator that re-pointed its origin never hands the human a stale return
+      # target — and so a fixture-returning stub (stripe-mock) cannot be
+      # mistaken for a real outstanding session.
+      #
+      # BEST EFFORT: any Stripe error while looking up degrades to nil, i.e. to
+      # the pre-K-492 behaviour of minting a fresh session. A readiness probe
+      # must not start failing because a list call did.
+      def outstanding_setup_session(cus_id, success_url:)
+        listed = ::Stripe::Checkout::Session.list(customer: cus_id, status: "open", limit: 10)
+        Array(listed&.data).find do |s|
+          field(s, :mode) == "setup" &&
+            field(s, :success_url) == success_url &&
+            !field(s, :url).to_s.empty?
+        end
+      rescue ::Stripe::StripeError
+        nil
+      end
+
+      # Read a field off a Stripe object without assuming it is present — the
+      # SDK's StripeObject raises NoMethodError for fields the API omitted.
+      def field(obj, name)
+        obj.respond_to?(name) ? obj.public_send(name) : nil
+      end
 
       # Map a Stripe::CardError to a short, human-safe, PSP-agnostic reason.
       # Keyed on the stable Stripe error `code` so no raw Stripe message (which

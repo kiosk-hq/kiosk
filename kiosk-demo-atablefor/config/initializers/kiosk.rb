@@ -78,12 +78,67 @@ require "kiosk/pow/equihash"
 require "kiosk/reputation"
 Kiosk::Reputation::Backends.register(Kiosk::Pow::Equihash::NAME, Kiosk::Pow::Equihash)
 
-if ENV["KIOSK_POW_DEMO"] == "1"
-  require "kiosk/pow/equihash"
-  require "kiosk/reputation"
+# ── PoW verb-toll MODE — exactly one, explicitly selected (K-497) ──────────
+#
+# atablefor advertises ONE anti-scalping PoW policy on the :query verb.
+# Historically three independent env flags each configured a DIFFERENT policy
+# inside the same Kiosk.configure block; when more than one was set the LAST
+# assignment silently won (last-block-wins). The live deploy set all three and
+# quietly ran Backoff — not the reputation showcase it advertises — and Backoff's
+# empty-factors reset even killed the reputation DB lookup. Collapsed to ONE
+# explicit selector so exactly one policy can ever run:
+#
+#   KIOSK_POW_MODE = reputation | demo | backoff | off
+#
+#   reputation — the FLAGSHIP anti-scalping showcase (K-517=b): the shipped
+#                RateAndReputation policy with a REAL confirmed-bookings DB
+#                factor. A fresh/low-reputation agent pays escalating PoW to
+#                browse prime-time availability; the cost DROPS as it builds a
+#                genuine booking record. Hosted default (see below).
+#   demo       — flat AtableforDemoPowPolicy: always toll :query (the demo:pow flow).
+#   backoff    — "solve once, next N calls free" (N = KIOSK_POW_BACKOFF_DEMO, else 10).
+#   off        — no :query toll. Registration PoW (below) stays on regardless.
+#
+# The legacy per-policy flags (KIOSK_POW_DEMO / KIOSK_POW_REPUTATION_DEMO /
+# KIOSK_POW_BACKOFF_DEMO) are still honoured as single-mode aliases so the
+# existing rake flows keep working, but setting MORE THAN ONE now RAISES at boot
+# instead of silently picking the last. When nothing is set the mode is
+# REPUTATION in production (the decided flagship policy) and OFF in dev/test, so
+# demo:book / demo:isolation / demo:redteam / demo:schema and CI stay toll-free.
+ATABLEFOR_POW_MODE = begin
+  legacy = []
+  legacy << :demo       if ENV["KIOSK_POW_DEMO"] == "1"
+  legacy << :reputation if ENV["KIOSK_POW_REPUTATION_DEMO"] == "1"
+  legacy << :backoff    if ENV["KIOSK_POW_BACKOFF_DEMO"].to_i > 0
 
-  Kiosk::Reputation::Backends.register(Kiosk::Pow::Equihash::NAME, Kiosk::Pow::Equihash)
+  explicit = ENV["KIOSK_POW_MODE"].to_s.strip.downcase
+  valid    = %w[off demo reputation backoff]
 
+  if !explicit.empty?
+    raise "KIOSK_POW_MODE=#{explicit.inspect} is invalid — use one of: #{valid.join(", ")}." unless valid.include?(explicit)
+    stray = legacy.reject { |m| m.to_s == explicit }
+    warn "[atablefor] KIOSK_POW_MODE=#{explicit} overrides legacy PoW flag(s): #{stray.join(", ")} — remove them." unless stray.empty?
+    explicit.to_sym
+  elsif legacy.length > 1
+    raise <<~MSG
+      More than one legacy PoW flag is set: #{legacy.join(", ")}.
+      They each select a DIFFERENT :query PoW policy and are mutually exclusive —
+      setting several used to silently run only the last (K-497). Select exactly
+      one policy with KIOSK_POW_MODE=reputation|demo|backoff|off and remove the
+      legacy KIOSK_POW_DEMO / KIOSK_POW_REPUTATION_DEMO / KIOSK_POW_BACKOFF_DEMO flags.
+    MSG
+  elsif legacy.length == 1
+    legacy.first
+  else
+    Rails.env.local? ? :off : :reputation
+  end
+end
+
+# Per-mode setup that must run BEFORE Kiosk.configure (the demo policy class and
+# the bad-proof counter files). require + Backends.register already ran
+# unconditionally above for registration PoW; they are idempotent.
+case ATABLEFOR_POW_MODE
+when :demo
   # Demo policy: always challenge :query (availability lookup); let :run through
   # freely. A real provider replaces this with Policies::RateAndReputation or a
   # domain-specific subclass. The inline class keeps the demo self-contained.
@@ -103,50 +158,14 @@ if ENV["KIOSK_POW_DEMO"] == "1"
   # Counter file written by on_bad_proof; the pow_flow.rb driver reads it.
   ATABLEFOR_BAD_PROOF_FILE = "/tmp/kiosk-atablefor-bad-proof.count"
   File.write(ATABLEFOR_BAD_PROOF_FILE, "0")
-end
-
-# ── Reputation PoW gate (anti-scalping) — activated only when KIOSK_POW_REPUTATION_DEMO=1 ──
-#
-# The anti-scalping mechanic: a fresh / low-reputation agent pays ESCALATING
-# PoW (N×PoW) to look at prime-time availability, and that cost DROPS as it
-# builds a real booking history. A scalper renting fresh identities pays and
-# pays; a returning diner earns relief. Escalation is by PROOF COUNT:
-#   0 confirmed bookings → count = base_count(1) + unproven_count_bonus(1) = 2 proofs
-#   1 confirmed booking  → count = base_count(1) = 1 proof (a real booking earns relief)
-#   2+ confirmed bookings → free pass (proven?(bookings) → challenge_for returns nil)
-#
-# The factors callable performs a REAL DB lookup: COUNT(*) of the principal's
-# CONFIRMED bookings — no faking. Mapped into the shipped RateAndReputation
-# policy's `settled_purchases_count` factor (a generic "proven completed
-# actions" count; for a booking provider that is confirmed reservations).
-# Equihash params are the small demo instance so each proof solves sub-second.
-
-if ENV["KIOSK_POW_REPUTATION_DEMO"] == "1"
-  require "kiosk/pow/equihash"
-  require "kiosk/reputation"
-
-  Kiosk::Reputation::Backends.register(Kiosk::Pow::Equihash::NAME, Kiosk::Pow::Equihash)
-
+when :reputation
+  # Anti-scalping mechanic: a fresh/low-reputation agent pays ESCALATING PoW
+  # (N×PoW) to browse prime-time availability, and that cost DROPS as it builds a
+  # real booking history (see the configure block for the RateAndReputation
+  # params + the REAL confirmed-bookings DB factor that makes this a demo OF
+  # reputation): 0 bookings → 2 proofs · 1 booking → 1 proof · 2+ → free pass.
   ATABLEFOR_REPUTATION_BAD_PROOF_FILE = "/tmp/kiosk-atablefor-reputation-bad-proof.count"
   File.write(ATABLEFOR_REPUTATION_BAD_PROOF_FILE, "0")
-end
-
-# ── COUNT-BASED PoW backoff (POW-RECENCY-GRACE) — activated when KIOSK_POW_BACKOFF_DEMO=<N>, N = free-call count ──
-#
-# The "solve once, next N calls free" mechanic: an AI assistant solves ONE
-# Equihash proof and is then granted a fixed COUNT of ungated follow-up requests
-# before being re-challenged. A COUNT (not a time window) is deliberate — a
-# window would let a bot flood thousands of requests inside it; a count caps
-# exactly how many free calls one ~9 s solve buys. This makes the otherwise-heavy
-# atablefor PoW toll pokeable: one solve buys a short burst of free calls, then
-# the toll returns. Uses the shipped Kiosk::Reputation::Policies::Backoff with a
-# fresh in-process BackoffStore — a MULTI-WORKER deploy needs a shared store or
-# the grant is only per-worker (see BackoffStore's doc + atablefor.env.example).
-if ENV["KIOSK_POW_BACKOFF_DEMO"].to_i > 0
-  require "kiosk/pow/equihash"
-  require "kiosk/reputation"
-
-  Kiosk::Reputation::Backends.register(Kiosk::Pow::Equihash::NAME, Kiosk::Pow::Equihash)
 end
 
 # Inject the RLS DSL into ActiveRecord::Migration so migrations can call
@@ -154,6 +173,31 @@ end
 # the baseline data plane (all 7 demos do); it simply ships no RLS *showcase*
 # task — booking has no apt RLS beat. The kiosk-rls README documents this opt-in.
 ActiveRecord::Migration.include(Kiosk::RLS::DSL)
+
+# ── PoW HMAC secret — REQUIRED outside development/test (K-541) ────────────
+# pow_secret is the HMAC key the engine signs every PoW challenge with. This
+# repo is PUBLIC, so a shipped fallback would be world-readable: a reader could
+# mint a self-signed challenge at trivial difficulty {n:8,k:1} and forge a proof
+# the server accepts — silently turning proof-of-work OFF. It MUST come from the
+# environment in production and fail LOUD when absent, matching KIOSK_ISSUER and
+# the signing key. Dev/test keep a stable (non-secret) default so `bin/rails s`,
+# the demo drivers and e2e boot out of the box; a too-short secret is rejected.
+pow_secret = ENV.fetch("KIOSK_POW_SECRET") do
+  unless Rails.env.local?
+    raise <<~MSG
+      KIOSK_POW_SECRET is required outside development/test.
+
+      It is the HMAC key every Kiosk PoW challenge is signed with. This repo is
+      public, so a shipped fallback would be world-readable — anyone could mint a
+      self-signed challenge at trivial difficulty and forge a valid proof,
+      silently turning proof-of-work off. Generate a long random value:
+
+        KIOSK_POW_SECRET=$(openssl rand -hex 32)
+    MSG
+  end
+  "atablefor-demo-pow-secret-dev-insecure-default"
+end
+raise "KIOSK_POW_SECRET must be at least 32 bytes (got #{pow_secret.bytesize}) — generate one with `openssl rand -hex 32`." if pow_secret.bytesize < 32
 
 Kiosk.configure do |c|
   c.user_model     = "User"
@@ -248,13 +292,21 @@ Kiosk.configure do |c|
   # payments block. atablefor books restaurant tables — a reservation takes
   # no money. The advertised capabilities are [schema, query, run].
 
-  # ── Equihash PoW gate (active only when KIOSK_POW_DEMO=1) ───────────────
-  if ENV["KIOSK_POW_DEMO"] == "1"
+  # ── PoW verb-toll gate — exactly one mode (K-497) ───────────────────────
+  # ATABLEFOR_POW_MODE (resolved at the top of this file) selects exactly one
+  # :query PoW policy, so the branches can no longer clobber each other's
+  # reputation_policy / reputation_factors (the last-block-wins bug). In
+  # particular the reputation branch's REAL confirmed-bookings DB factor can no
+  # longer be reset to Factors.empty by a co-active backoff/demo branch — the
+  # reset that had been killing the reputation lookup on the live flagship.
+  # pow_secret is the required HMAC key resolved above (K-541).
+  case ATABLEFOR_POW_MODE
+  when :demo
     # Small, non-toy Equihash instance for demo speed (sub-second solve).
     pow_params = Kiosk::Pow::Equihash.params(**EQUIHASH_DEMO_PARAMS)
 
     c.reputation_policy = AtableforDemoPowPolicy.new(pow_params)
-    c.pow_secret        = ENV.fetch("KIOSK_POW_SECRET", "demo-pow-secret")
+    c.pow_secret        = pow_secret
     c.pow_ttl           = 300
 
     # Factors: always return empty (the demo policy ignores factors and
@@ -266,15 +318,12 @@ Kiosk.configure do |c|
       count = (File.read(ATABLEFOR_BAD_PROOF_FILE).to_i rescue 0)
       File.write(ATABLEFOR_BAD_PROOF_FILE, (count + 1).to_s)
     }
-  end
-
-  # ── Reputation PoW gate (active only when KIOSK_POW_REPUTATION_DEMO=1) ────
-  # Uses the shipped RateAndReputation policy with REAL confirmed-booking-count
-  # factors, escalating by PROOF COUNT (N×PoW):
-  #   proven_purchases_threshold: 2  → 2 confirmed bookings → free pass
-  #   base_count: 1, unproven_count_bonus: 1 → 0 bookings: 2 proofs;
-  #                                            1 booking: 1 proof; 2+: nil
-  if ENV["KIOSK_POW_REPUTATION_DEMO"] == "1"
+  when :reputation
+    # The FLAGSHIP policy (K-517=b): the shipped RateAndReputation with REAL
+    # confirmed-booking-count factors, escalating by PROOF COUNT (N×PoW):
+    #   proven_purchases_threshold: 2  → 2 confirmed bookings → free pass
+    #   base_count: 1, unproven_count_bonus: 1 → 0 bookings: 2 proofs;
+    #                                            1 booking: 1 proof; 2+: nil
     c.reputation_policy = Kiosk::Reputation::Policies::RateAndReputation.new(
       proven_purchases_threshold: 2,
       low_rate_threshold:         100,
@@ -288,13 +337,14 @@ Kiosk.configure do |c|
       equihash_n:                 EQUIHASH_DEMO_PARAMS[:n],
       equihash_k:                 EQUIHASH_DEMO_PARAMS[:k],
     )
-    c.pow_secret = ENV.fetch("KIOSK_POW_SECRET", "demo-pow-secret")
+    c.pow_secret = pow_secret
     c.pow_ttl    = 300
 
-    # Factors: real DB lookup — COUNT(*) of the principal's CONFIRMED bookings.
-    # A confirmed reservation is this provider's "proven completed action"
-    # signal, mapped into the policy's settled_purchases_count factor.
-    # request_rate_per_min and bad_proof_count are fixed at 0 for the demo.
+    # Factors: REAL DB lookup — COUNT(*) of the principal's CONFIRMED bookings.
+    # This is what makes the flagship a demo OF reputation (K-517=b); it MUST NOT
+    # be reset to Factors.empty (the last-block-wins reset K-497 eliminated) or
+    # the policy can never grant relief. A confirmed reservation is this
+    # provider's "proven completed action", mapped into settled_purchases_count.
     c.reputation_factors = ->(identity:, **) {
       uid  = identity.user_id
       conn = ActiveRecord::Base.connection
@@ -317,28 +367,24 @@ Kiosk.configure do |c|
       cnt = (File.read(ATABLEFOR_REPUTATION_BAD_PROOF_FILE).to_i rescue 0)
       File.write(ATABLEFOR_REPUTATION_BAD_PROOF_FILE, (cnt + 1).to_s)
     }
-  end
-
-  # ── COUNT-BASED PoW backoff gate (active only when KIOSK_POW_BACKOFF_DEMO=1) ─
-  # "Solve once, next N calls free": one solved proof grants the assistant
-  # `count` ungated follow-up calls, then it is re-challenged. count:3 keeps the
-  # demo fast; base demands ONE fresh Equihash proof (the small demo instance so
-  # a solve is sub-second at KIOSK_POW_DIFFICULTY=low). The in-process
-  # BackoffStore is authoritative per worker — a multi-worker deploy needs a
-  # shared store (see BackoffStore's cross-worker caveat).
-  if ENV["KIOSK_POW_BACKOFF_DEMO"].to_i > 0
+  when :backoff
+    # "Solve once, next N calls free": one solved proof grants the assistant
+    # `count` ungated follow-up calls, then it is re-challenged. The env value IS
+    # the count (KIOSK_POW_BACKOFF_DEMO=10 grants 10; demo:backoff sets 3); when
+    # mode is `backoff` with no count, default 10. base demands ONE fresh
+    # Equihash proof. The in-process BackoffStore is authoritative per worker — a
+    # multi-worker deploy needs a shared store (see BackoffStore's caveat).
+    backoff_count = ENV["KIOSK_POW_BACKOFF_DEMO"].to_i
+    backoff_count = 10 if backoff_count < 1
     c.reputation_policy = Kiosk::Reputation::Policies::Backoff.new(
-      # The env value IS the count: KIOSK_POW_BACKOFF_DEMO=10 grants 10 ungated
-      # calls per solve. Any positive integer enables; unset/0 leaves the toll
-      # per-request. (demo:backoff sets 3; the deploy env ships 10.)
-      count: [ENV["KIOSK_POW_BACKOFF_DEMO"].to_i, 1].max,
+      count: backoff_count,
       base:  {
         alg:    Kiosk::Pow::Equihash::NAME,
         params: Kiosk::Pow::Equihash.params(**EQUIHASH_DEMO_PARAMS),
         count:  1,
       },
     )
-    c.pow_secret = ENV.fetch("KIOSK_POW_SECRET", "demo-pow-secret")
+    c.pow_secret = pow_secret
     c.pow_ttl    = 300
 
     # The Backoff strategy ignores factors, but the gate still gathers them
@@ -348,11 +394,11 @@ Kiosk.configure do |c|
 
   # ── Registration PoW gate — ALWAYS ON (register is uniformly tolled) ──────
   # Price fresh-identity minting: registering an agent costs ONE Equihash proof.
-  # Independent of the verb tolls above; pow_secret is set here too so the gate
-  # works even when no verb toll is on (RegistrationPow.gate raises without it).
+  # Independent of the verb toll above; pow_secret is set here too so the gate
+  # works even in :off mode (RegistrationPow.gate raises without it).
   c.registration_pow_count  = 1
   c.registration_pow_params = ATABLEFOR_REGISTRATION_POW_PARAMS
-  c.pow_secret              = ENV.fetch("KIOSK_POW_SECRET", "demo-pow-secret")
+  c.pow_secret              = pow_secret
 end
 
 # ── Live-activity telemetry — opt-in, app-layer, privacy-safe ───

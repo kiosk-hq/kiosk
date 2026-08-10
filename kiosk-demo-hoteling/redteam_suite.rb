@@ -14,7 +14,7 @@
 #   InflatedTotalCart  — cart total ≠ sum of its line items → 403
 #
 # KYC scenarios are SKIPPED (hoteling has no KYC). RegistrationWithoutPow RUNS:
-# register PoW is ON (KIOSK_POW_REGISTER_DEMO=1), so a missing/bad register proof
+# register PoW is ON (registration_pow_count=1), so a missing/bad register proof
 # must be rejected.
 #
 # Usage (from kiosk-demo-hoteling/):
@@ -62,7 +62,7 @@ find_available = lambda { |client, principal|
 # ── Profile ───────────────────────────────────────────────────────────────────
 
 profile = Kiosk::Redteam::Profile.new(
-  # register PoW is ON (KIOSK_POW_REGISTER_DEMO=1): a positive difficulty makes
+  # register PoW is ON (registration_pow_count=1): a positive difficulty makes
   # RegistrationWithoutPow RUN (a missing/bad register proof must be rejected).
   # The Client ignores the magnitude (PoW solving is driven by the server's 402
   # challenges); only "> 0" matters here.

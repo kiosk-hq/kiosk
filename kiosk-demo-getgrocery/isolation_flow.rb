@@ -107,8 +107,8 @@ def pay_for_order(server, issuer, token, key, user_id, agent_id, order_id, total
   )
 end
 
-# Register PoW (KIOSK_POW_REGISTER_DEMO=1) is solved transparently by the helper;
-# each principal's private key is returned so it can sign its own pay mandates.
+# Register PoW is solved transparently by the helper; each principal's private
+# key is returned so it can sign its own pay mandates.
 require_relative "lib/equihash_register"
 
 # ── Step 1: Register Principal A ─────────────────────────────────────────────

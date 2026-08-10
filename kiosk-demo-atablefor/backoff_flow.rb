@@ -67,8 +67,7 @@ def solve(challenge)
   { "indices" => parsed.fetch("indices"), "header_nonce" => parsed.fetch("header_nonce") }
 end
 
-# ── Step 1: register a fresh agent (register PoW solved transparently when the
-#            provider gates registration — KIOSK_POW_REGISTER_DEMO=1) ─────────
+# ── Step 1: register a fresh agent (register PoW solved transparently) ───────
 
 require_relative "lib/equihash_register"
 _key, reg = equihash_register(

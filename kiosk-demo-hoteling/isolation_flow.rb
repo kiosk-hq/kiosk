@@ -62,9 +62,9 @@ end
 require_relative "lib/equihash_register"
 
 # Register a fresh principal through the proof-of-possession handshake, solving
-# the Equihash register PoW transparently when the provider gates registration
-# (KIOSK_POW_REGISTER_DEMO=1). The private key is returned so the principal can
-# sign its own pay mandates. Returns [user_id, agent_id, token, key].
+# the Equihash register PoW transparently. The private key is returned so the
+# principal can sign its own pay mandates.
+# Returns [user_id, agent_id, token, key].
 def register_principal(name:)
   key, reg = equihash_register(
     server: SERVER, issuer: ISSUER,

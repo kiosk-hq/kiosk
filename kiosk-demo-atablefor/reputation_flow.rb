@@ -127,8 +127,7 @@ def make_booking(party, token, taken)
   [[slot.fetch("restaurant_table_id"), slot.fetch("seating_at")], booking_id]
 end
 
-# ── Step 1: register a fresh principal (register PoW solved transparently when
-#            the provider gates registration — KIOSK_POW_REGISTER_DEMO=1) ─────
+# ── Step 1: register a fresh principal (register PoW solved transparently) ───
 
 require_relative "lib/equihash_register"
 _key, reg = equihash_register(

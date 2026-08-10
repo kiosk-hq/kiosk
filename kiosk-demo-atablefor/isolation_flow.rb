@@ -54,8 +54,7 @@ end
 
 require_relative "lib/equihash_register"
 
-# Register a fresh agent, solving the register PoW transparently when the
-# provider gates registration (KIOSK_POW_REGISTER_DEMO=1).
+# Register a fresh agent, solving the register PoW transparently.
 def register(server, issuer)
   _key, reg = equihash_register(
     server: server, issuer: issuer,

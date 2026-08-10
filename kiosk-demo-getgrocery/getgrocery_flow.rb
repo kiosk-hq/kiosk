@@ -46,10 +46,9 @@ end
 # -- Step 1: register (proof-of-possession handshake, + register PoW) --
 # A public key is not a credential — it's public. Prove control of the PRIVATE
 # key: fetch a single-use challenge, sign it with `aud` = the origin we dialed
-# (so the proof can't be relayed to another provider), then register. If the
-# provider gates registration (KIOSK_POW_REGISTER_DEMO=1), the helper solves the
-# Equihash register PoW and resubmits — the SAME private key is returned so it
-# can sign the payment mandates below.
+# (so the proof can't be relayed to another provider), then register. Register
+# is tolled: the helper solves the Equihash register PoW and resubmits — the
+# SAME private key is returned so it can sign the payment mandates below.
 require_relative "lib/equihash_register"
 key, reg = equihash_register(
   server: SERVER, issuer: ISSUER,

@@ -41,8 +41,7 @@ def get_json(path)
   [res.code.to_i, (JSON.parse(res.body) rescue {})]
 end
 
-# ── Register (register PoW solved transparently when the provider gates
-#    registration — KIOSK_POW_REGISTER_DEMO=1) ─────────────────────────────────
+# ── Register (register PoW solved transparently) ──────────────────────────────
 #
 # This file's post_json/get_json take a `bearer:` kwarg and relative paths, not
 # the (url, body, headers) shape the shared helper drives; give it full-URL

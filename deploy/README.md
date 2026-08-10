@@ -7,7 +7,6 @@ to survive an HN stampede.
 
 This directory is the *app-side* handoff; DNS + VPS provisioning is the operator's.
 
-// hint: Structural change (rename/retype). Check callers of this entity.
 ## Files in this directory
 
 | File | What it is |
@@ -168,6 +167,18 @@ done
 # 4. Caddy: install the edge rate-limit module, then point it at this Caddyfile.
 #    Caddy fetches a cert per subdomain on first request (HTTP-01). For a single
 #    wildcard cert instead, see the DNS-01 note in the Caddyfile header.
+
+#    STEP 4a IS REQUIRED — see "Edge rate-limit" below. Skipping it leaves
+#    /kiosk/auth/register as an unauthenticated CPU sink with nothing bounding
+#    the request rate.
+sudo caddy add-package github.com/mholt/caddy-ratelimit   # Caddy >= 2.7
+sudo systemctl restart caddy
+caddy list-modules | grep rate_limit                      # must print the module
+sudo cp /srv/kiosk/deploy/Caddyfile /etc/caddy/Caddyfile
+#    Now uncomment `import ratelimit` + the (ratelimit) snippet in
+#    /etc/caddy/Caddyfile (they ship commented so a stock binary still boots).
+sudo caddy validate --config /etc/caddy/Caddyfile
+sudo systemctl reload caddy
 
 # 5. Cron: daily housekeeping — OPTIONAL, and NOT installed on the hosted box.
 #    Deliberately skipped (deploy/CHECKLIST.md §7): the demos are per-agent
@@ -331,19 +342,3 @@ and landing tile return.
 Still open (not this change): a per-app `demo:prune` (+ idempotent `demo:seed`)
 rake task so `prune.sh` reclaims disk from throwaway registrations —
 `prune.sh` already calls these if present and no-ops safely if not.
-
-#    STEP 4a IS REQUIRED — see "Edge rate-limit" below. Skipping it leaves
-
-#    /kiosk/auth/register as an unauthenticated CPU sink with nothing bounding
-
-#    the request rate.
-sudo caddy add-package github.com/mholt/caddy-ratelimit   # Caddy >= 2.7
-sudo systemctl restart caddy
-caddy list-modules | grep rate_limit                      # must print the module
-sudo cp /srv/kiosk/deploy/Caddyfile /etc/caddy/Caddyfile
-
-#    Now uncomment `import ratelimit` + the (ratelimit) snippet in
-
-#    /etc/caddy/Caddyfile (they ship commented so a stock binary still boots).
-sudo caddy validate --config /etc/caddy/Caddyfile
-sudo systemctl reload caddy

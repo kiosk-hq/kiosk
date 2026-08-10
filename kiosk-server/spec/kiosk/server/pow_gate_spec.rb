@@ -241,6 +241,70 @@ RSpec.describe Kiosk::Server::PowGate do
 
         expect(penalty_calls).to eq([identity])
       end
+
+      # ── K-494: the 403 must be actionable ──────────────────────────────────
+      # A bare "invalid proof of work" is a dead end: a live agent that
+      # hand-rolled an Equihash solver got four independent construction
+      # errors wrong at once and this 403 told it none of that. The hint names
+      # the ONE recovery step — run the shipped solver — and nothing else.
+
+      it "carries a hint steering to the shipped reference solver" do
+        challenge = issue_challenge_via_gate(command: "query", body: { name: "menu" })
+        bad_nonce = find_bad_nonce(challenge)
+
+        error = catch_error(Kiosk::Server::Errors::Forbidden) do
+          described_class.gate(
+            identity: identity, command: "query", body: { name: "menu" },
+            pow: { challenge: challenge, nonce: bad_nonce },
+          )
+        end
+
+        # Pinned verbatim: this URL must stay identical to the solver URL the
+        # published skill pins (K-490(e)) — the two must not drift.
+        expect(error.hint).to eq(
+          "solve with the reference solver at https://kiosk.tech/pow/solve.py — " \
+          "a hand-written Equihash solver will not match this verifier",
+        )
+      end
+
+      it "renders the documented forbidden envelope, now carrying the hint" do
+        challenge = issue_challenge_via_gate(command: "query", body: { name: "menu" })
+        bad_nonce = find_bad_nonce(challenge)
+
+        error = catch_error(Kiosk::Server::Errors::Forbidden) do
+          described_class.gate(
+            identity: identity, command: "query", body: { name: "menu" },
+            pow: { challenge: challenge, nonce: bad_nonce },
+          )
+        end
+
+        expect(error.to_envelope).to eq(
+          ok: false,
+          error: {
+            code:    "forbidden",
+            message: "invalid proof of work",
+            hint:    Kiosk::Server::PowGate::POW_INVALID_HINT,
+          },
+        )
+        expect(error.http_status).to eq(403)
+      end
+
+      it "does not disclose the construction, the parameters, or which check failed" do
+        challenge = issue_challenge_via_gate(command: "query", body: { name: "menu" })
+        bad_nonce = find_bad_nonce(challenge)
+
+        error = catch_error(Kiosk::Server::Errors::Forbidden) do
+          described_class.gate(
+            identity: identity, command: "query", body: { name: "menu" },
+            pow: { challenge: challenge, nonce: bad_nonce },
+          )
+        end
+
+        wire = "#{error.message} #{error.hint}"
+        %w[wagner xor subtree endian salt header_nonce indices thumbprint expired].each do |leak|
+          expect(wire.downcase).not_to include(leak)
+        end
+      end
     end
 
     # ── proof bound to a DIFFERENT request (fingerprint mismatch) → re-challenge

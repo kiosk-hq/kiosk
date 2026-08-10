@@ -182,7 +182,13 @@ module Kiosk
             accepted[id] = challenge[:exp].to_i
           when :bad_proof
             on_bad_proof.call
-            raise Errors::Forbidden, "invalid proof of work"
+            # K-494: a bare "wrong" is a dead end — a live agent that hand-rolled
+            # its own Equihash solver got this 403 and had nothing to act on.
+            # Name the ONE recovery step (run the shipped solver) without naming
+            # WHICH check failed: the construction stays out of band, and the
+            # agent is steered away from both improvised solvers and the
+            # unvetted PyPI packages it otherwise reaches for.
+            raise Errors::Forbidden.new("invalid proof of work", hint: POW_INVALID_HINT)
           when :expired, :bad_sig
             # Doesn't count; falls through to a fresh re-challenge below if the
             # quota isn't met. No on_bad_proof (honest clock skew / retry).
@@ -256,6 +262,19 @@ module Kiosk
         "proofs [{…},{…}]. Repeated Kiosk-PoW header lines (one proof each) also " \
         "work. Solve every challenge issued in the pow_required 402 and echo it " \
         "back verbatim."
+
+      # Hint on the 403 raised for a cryptographically WRONG proof (K-494).
+      # Sibling of POW_HEADER_HINT: that one names the SHAPE a malformed proof
+      # must take (400), this one names the TOOL a wrong proof must be produced
+      # with (403). Deliberately says nothing about the Equihash construction,
+      # the parameters, or which of the verifier's checks failed — the only
+      # actionable fact is «use the shipped solver», and the solver itself is
+      # the executable spec. The URL is first-party (kiosk.tech) so skill and
+      # solver come from ONE origin we control; it MUST stay identical to the
+      # URL the skill pins (K-490(e)) or the two drift.
+      POW_INVALID_HINT =
+        "solve with the reference solver at https://kiosk.tech/pow/solve.py — " \
+        "a hand-written Equihash solver will not match this verifier"
 
       # ── Internal helpers (all module_function so they're callable from above) ──
 

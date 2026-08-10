@@ -4,8 +4,9 @@ This repo is the Kiosk OSS monorepo: core gems (`kiosk-core`, `kiosk-server`,
 `kiosk-all`, `kiosk-test-support`), opt-in RLS (`kiosk-rls`, `-rspec`,
 `-minitest`), adapters (`kiosk-pay-stripe`, `kiosk-user-idp-devise`), PoW
 (`kiosk-pow-equihash` — default, n=168 k=7; `kiosk-pow` — Argon2id legacy;
-`kiosk-pow-cuckoo`), security (`kiosk-reputation`, `kiosk-redteam`), seven
-demo Rails apps (`kiosk-demo-*`), and the `e2e/` harness. Gem table:
+`kiosk-pow-cuckoo`), security (`kiosk-reputation`, `kiosk-redteam`), eight
+demo Rails apps (`kiosk-demo-*` — seven operators plus the `kiosk-demo-prove`
+KYC broker), and the `e2e/` harness. Gem table:
 `README.md`.
 
 The normative spec lives at https://kiosk.tech (`specification.html`); the

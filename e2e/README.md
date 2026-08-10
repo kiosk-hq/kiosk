@@ -80,9 +80,13 @@ e2e/
     ├── user.rb, salon.rb, appointment.rb   # ActiveRecord models
     ├── seeds.rb                            # 2 users (Alice + Bob), 1 salon
     ├── stub_idp.rb                         # Bearer-token-parsing agent IdP
+    ├── stub_user_idp.rb                    # dev/test user-IdP: parses `user:u-<uuid>` → human Identity (account-binding pages)
     ├── jwt_or_stub_idp.rb                  # composite IdP: Kiosk-issued JWTs + StubIdp fallback
     ├── stub_psp.rb                         # deterministic in-process PSP (no real Stripe)
+    ├── equihash_register.rb                # shared register helper: challenge → PoP → register; solves the register 402 + retries with the Kiosk-PoW header
+    ├── register_pow_flow.rb                # register-PoW driver: no-proof register → 402, solve + re-POST with Kiosk-PoW header → 201, token authenticates a verb
     ├── pay_flow.rb                         # no-human AP2 pay flow: register → sign mandates → pay
+    ├── claim_flow.rb                       # account-binding claim ceremony: fresh key → verify-page approval → PoP token → bound wire call → link-code redeem → unlink
     ├── initializer_kiosk.rb                # Kiosk.configure + registered Action
     └── routes.rb                           # mounts /kiosk/{query,run,pay,schema}, /kiosk/auth/{challenge,register,login,revoke}, jwks, oauth/* device routes + /.well-known/kiosk.json
 ```

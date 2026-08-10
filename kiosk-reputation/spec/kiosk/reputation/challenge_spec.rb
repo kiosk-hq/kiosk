@@ -256,6 +256,54 @@ RSpec.describe Kiosk::Reputation::Challenge do
   end
 
   # ---------------------------------------------------------------------------
+  # Malformed params — root-cause guard (K-574)
+  # ---------------------------------------------------------------------------
+  describe "malformed (nil / non-Hash) params" do
+    # canonical_string is the first place params is touched, in BOTH issue and
+    # verify. Before the guard, a nil/non-Hash params raised a cryptic
+    # NoMethodError deep in the gem (a 500 at any surface that did not
+    # pre-guard). It now fails loud with a typed, rescuable ArgumentError —
+    # never a NoMethodError — matching Policies::Backoff's is_a?(Hash) style.
+    [nil, "n=168,k=7", [%i[n k]], 42].each do |bad|
+      it "raises a typed ArgumentError (not NoMethodError) from .issue for #{bad.inspect}" do
+        expect do
+          described_class.issue(
+            alg: alg, params: bad,
+            request_fingerprint: fingerprint,
+            secret: secret, ttl: ttl, now: now, salt: salt, id: id
+          )
+        end.to raise_error(ArgumentError, /params must be a Hash/)
+      end
+
+      it "raises a typed ArgumentError (not NoMethodError) from .verify for #{bad.inspect}" do
+        malformed = challenge.merge(params: bad)
+        expect do
+          described_class.verify(
+            challenge: malformed, nonce: "good",
+            request_fingerprint: fingerprint, secret: secret, now: now + 1
+          )
+        end.to raise_error(ArgumentError, /params must be a Hash/)
+      end
+    end
+
+    it "raises ArgumentError specifically, never the pre-guard NoMethodError" do
+      raised =
+        begin
+          described_class.issue(
+            alg: alg, params: nil,
+            request_fingerprint: fingerprint,
+            secret: secret, ttl: ttl, now: now, salt: salt, id: id
+          )
+          nil
+        rescue StandardError => e
+          e
+        end
+      expect(raised).to be_a(ArgumentError)
+      expect(raised).not_to be_a(NoMethodError)
+    end
+  end
+
+  # ---------------------------------------------------------------------------
   # Canonical string stability
   # ---------------------------------------------------------------------------
   describe "canonical string is param-key-order-independent" do

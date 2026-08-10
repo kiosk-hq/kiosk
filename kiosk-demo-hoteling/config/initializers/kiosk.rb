@@ -467,6 +467,14 @@ end
 # step. Stated even though this demo's StubPsp short-circuits it, so the
 # PUBLISHED contract is the same across all three payment demos.
 #
+# The cadence here is the skill's, verbatim (skill.md Step 5: ~5 s for the first
+# minute, then ~15 s, give up after ~5 minutes) — the skill is what assistants
+# actually follow, so a descriptor that prescribes anything else is a second,
+# losing instruction. And no CHECK COUNT is stated: a count is derived from the
+# cadence and the horizon, so it silently goes wrong the moment either moves
+# (the earlier "~60 checks" implied a flat 5 s cadence and was more than double
+# what this schedule yields). The horizon is the number an assistant needs.
+#
 # NOTE getgrocery's descriptor also promises the setup_url is stable across polls
 # (K-492 — a real-Stripe SetupIntent-reuse property). That promise is NOT
 # repeated here: StubPsp mints no setup session at all, so there is nothing to be
@@ -479,10 +487,10 @@ Kiosk::Server::Actions.register("payment_setup",
                "them to finish, then call payment_setup again before paying. " \
                "This demo's stub PSP needs no setup, so it always returns ready. " \
                "The assistant should call this before `pay`. " \
-               "POLLING: if you ever do get setup_required, re-check every ~5 seconds while your " \
-               "human is at the hosted page, and GIVE UP after about 5 minutes (~60 checks) — tell " \
-               "your human the card setup is still not finished rather than polling indefinitely; " \
-               "they can finish later and you re-check then.",
+               "POLLING: if you ever do get setup_required, re-check every ~5 seconds for the first " \
+               "minute, then every ~15 seconds, while your human is at the hosted page, and GIVE UP " \
+               "after about 5 minutes — tell your human the card setup is still not finished rather " \
+               "than polling indefinitely; they can finish later and you re-check then.",
   params: {}) do |_args|
   conn = ActiveRecord::Base.connection
   uid  = conn.execute("SELECT kiosk.current_user_id() AS uid").first["uid"]

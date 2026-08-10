@@ -466,6 +466,14 @@ end
 # terminal stop condition — without one an agent invents its own and can poll
 # forever if the human never completes the step.
 #
+# The cadence here is the skill's, verbatim (skill.md Step 5: ~5 s for the first
+# minute, then ~15 s, give up after ~5 minutes) — the skill is what assistants
+# actually follow, so a descriptor that prescribes anything else is a second,
+# losing instruction. And no CHECK COUNT is stated: a count is derived from the
+# cadence and the horizon, so it silently goes wrong the moment either moves
+# (the earlier "~60 checks" implied a flat 5 s cadence and was more than double
+# what this schedule yields). The horizon is the number an assistant needs.
+#
 # SAFE TO RE-CALL (K-492): the probe is idempotent. When setup is required the
 # Stripe adapter reuses the setup session already outstanding for this
 # principal instead of minting a new one, so every poll returns the SAME
@@ -478,11 +486,14 @@ Kiosk::Server::Actions.register("payment_setup",
                "the assistant must hand the setup_url to the human, wait for them to complete the " \
                "Stripe-hosted card entry, then call payment_setup again before paying. " \
                "The assistant should call this before every `pay` invocation on a new device or session. " \
-               "POLLING: re-check every ~5 seconds while your human is at the hosted page, and GIVE UP after " \
-               "about 5 minutes (~60 checks) — tell your human the card setup is still not finished rather " \
-               "than polling indefinitely; they can finish later and you re-check then. " \
-               "Re-checking is safe and repeatable: while one setup is outstanding this returns the SAME " \
-               "setup_url every time, so relay that one link and do NOT send your human a new one per check.",
+               "POLLING: while your human is at the hosted page, re-check every ~5 seconds for the first " \
+               "minute, then every ~15 seconds, and GIVE UP after about 5 minutes — tell your human the " \
+               "card setup is still not finished rather than polling indefinitely; they can finish later " \
+               "and you re-check then. " \
+               "Re-checking is safe and repeatable: while one setup is outstanding this normally returns " \
+               "the SAME setup_url, so relay that one link and do NOT send your human a new one per check " \
+               "— and if a check ever does come back with a different url, still leave your human on the " \
+               "page they already have open unless they tell you it stopped working.",
   params: {}) do |_args|
   conn     = ActiveRecord::Base.connection
   uid      = conn.execute("SELECT kiosk.current_user_id() AS uid").first["uid"]
@@ -951,8 +962,9 @@ Kiosk::Server::Queries.register("kyc_status",
                "POST /kiosk/agents/kyc, then retry create_order); {status: \"declined\"} if declined. " \
                "kyc_jws is a full compact JWS — a long, single-line, dot-separated token; submit the " \
                "ENTIRE value from this field, never a truncated console echo. " \
-               "POLLING: re-check every ~5 seconds while your human completes the verification, and GIVE UP " \
-               "after about 10 minutes (~120 checks) — an identity check can legitimately take that long, " \
+               "POLLING: while your human completes the verification, re-check every ~5 seconds for the " \
+               "first minute, then every ~15 seconds, and GIVE UP after about 10 minutes — an identity " \
+               "check can legitimately take that long, " \
                "but if it is still \"pending\" then, stop polling and tell your human it is not done yet " \
                "rather than polling indefinitely. The request_id stays pollable, so you can re-check later " \
                "(if the human's verification link has since expired, start a new request_kyc). " \

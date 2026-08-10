@@ -5,11 +5,21 @@ on:
     branches: [main]
   pull_request:
     branches: [main]
+  # Daily, for the `solver-pin-live` job ONLY (every other job is skipped on a
+  # schedule run — see its `if:`). That job probes what kiosk.tech actually
+  # serves, and kiosk.tech is a SEPARATE repo: a commit there can break the
+  # solver pin without ever triggering this repo's CI, so a push-triggered
+  # check would not catch the drift direction that matters most.
+  schedule:
+    - cron: "23 5 * * *"
+  workflow_dispatch:
 
 jobs:
   gems:
     name: ${{ matrix.gem }}
     runs-on: ubuntu-latest
+    # The daily schedule exists for solver-pin-live; don't rebuild the world.
+    if: github.event_name != 'schedule'
 
     strategy:
       fail-fast: false
@@ -88,6 +98,8 @@ jobs:
   demos:
     name: ${{ matrix.demo }}
     runs-on: ubuntu-latest
+    # The daily schedule exists for solver-pin-live; don't rebuild the world.
+    if: github.event_name != 'schedule'
 
     strategy:
       fail-fast: false
@@ -307,6 +319,8 @@ jobs:
   demo-production-smoke:
     name: production-boot smoke (stylish + prove)
     runs-on: ubuntu-latest
+    # The daily schedule exists for solver-pin-live; don't rebuild the world.
+    if: github.event_name != 'schedule'
 
     services:
       postgres:
@@ -373,9 +387,51 @@ jobs:
       - name: Production-boot smoke (prove.my broker)
         run: ./deploy/production-smoke.sh prove
 
+  # Live solver-pin probe (K-528). The Equihash solver exists in four copies
+  # that must never diverge — kiosk-pow-equihash/solve.py (source of truth),
+  # kiosk.tech/pow/solve.py (hosted), the sha256 the skill pins, and the URL in
+  # PowGate::POW_INVALID_HINT — because the skill instructs assistants to verify
+  # the hash and REFUSE to execute a mismatch. A drift does not error anywhere:
+  # registrations just stop working.
+  #
+  # The OFFLINE half of the guard (this repo's solve.py vs the pin, and the 403
+  # hint URL) needs no network and is already blocking on every push — it runs
+  # inside the kiosk-pow-equihash suite in the gems matrix above
+  # (spec/solver_pin_spec.rb), which is also the merge gate for a solve.py edit.
+  #
+  # This job is the half that needs the network: it fetches what kiosk.tech
+  # actually serves. Deliberately NOT run on push/pull_request:
+  #   - it would gate every merge in this repo on a third-party HTTP fetch, and
+  #     a kiosk.tech outage blocking an unrelated Ruby change is a bad trade;
+  #   - it would also be pointless there — the drift is introduced by commits in
+  #     the kiosk.tech repo, which never trigger this workflow.
+  # Instead it runs daily (and on demand), and it FAILS HARD when it fails:
+  # a scheduled workflow that goes red on the default branch notifies, whereas
+  # continue-on-error would render the whole point of the guard invisible.
+  # Transient blips are absorbed by the script's 3 attempts with backoff.
+  solver-pin-live:
+    name: solver pin (live kiosk.tech)
+    runs-on: ubuntu-latest
+    if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
+
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Set up Ruby
+        uses: ruby/setup-ruby@v1
+        with:
+          ruby-version: "4.0.1"
+          bundler-cache: false
+
+      # Stdlib only (digest + net/http) — no bundle, no services.
+      - name: Check the served solver against the pin
+        run: ./bin/check-solver-pin --network
+
   e2e:
     name: kiosk OSS end-to-end
     runs-on: ubuntu-latest
+    # The daily schedule exists for solver-pin-live; don't rebuild the world.
+    if: github.event_name != 'schedule'
 
     services:
       postgres:

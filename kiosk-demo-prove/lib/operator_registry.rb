@@ -51,25 +51,44 @@ module OperatorRegistry
     uri.host == operator[:callback_host]
   end
 
-  # The static demo registry. skooti and getgrocery are the two pre-registered
-  # operators.
-  #   - secret: shared bearer; env-overridable, else a fixed demo default.
+  # The demo registry. skooti and getgrocery are the pre-registered operators.
+  #   - secret: shared bearer. REQUIRED from the env in production (K-547) — a
+  #     shipped default is world-readable in this public repo, so anyone could
+  #     present it to drive operator intake and trigger broker→operator
+  #     callbacks. In dev/test a fixed default keeps `rails s` + the two-server
+  #     demo:kyc harness working. If a secret is not configured in production the
+  #     operator is simply NOT registered (fail-closed: no default is ever
+  #     accepted), so `authenticate` rejects it rather than honouring a guessable
+  #     token.
   #   - callback_host: the operator host prove.my may call back; env-set by the
   #     two-server harness (which knows the operator's host:port), else localhost.
   def registry
-    {
-      "skooti" => {
-        secret:        ENV.fetch("KIOSK_PROVE_SKOOTI_SECRET", "prove-skooti-demo-shared-secret"),
+    entries = {}
+    if (skooti = operator_secret("KIOSK_PROVE_SKOOTI_SECRET", "prove-skooti-demo-shared-secret"))
+      entries["skooti"] = {
+        secret:        skooti,
         callback_host: ENV.fetch("KIOSK_PROVE_SKOOTI_CALLBACK_HOST", "127.0.0.1"),
-      },
-      # getgrocery is a SECOND operator — its alcohol age-gate asks the broker
-      # for the age_over_18 claim. Registered for the two-server test harness;
-      # a standing deploy allow-list entry is a follow-up.
-      "getgrocery" => {
-        secret:        ENV.fetch("KIOSK_PROVE_GETGROCERY_SECRET", "prove-getgrocery-demo-shared-secret"),
+      }
+    end
+    # getgrocery is a SECOND operator — its alcohol age-gate asks the broker for
+    # the age_over_18 claim. Used by the two-server test harness; a standing
+    # production allow-list entry is a follow-up, so in production it registers
+    # only when KIOSK_PROVE_GETGROCERY_SECRET is explicitly set.
+    if (gg = operator_secret("KIOSK_PROVE_GETGROCERY_SECRET", "prove-getgrocery-demo-shared-secret"))
+      entries["getgrocery"] = {
+        secret:        gg,
         callback_host: ENV.fetch("KIOSK_PROVE_GETGROCERY_CALLBACK_HOST", "127.0.0.1"),
-      },
-    }
+      }
+    end
+    entries
+  end
+
+  # Resolve an operator's shared intake secret: the env value if set; else a
+  # fixed dev/test default; else (production + unset) nil, so the operator is
+  # left OUT of the registry rather than falling back to a world-readable default
+  # a public-repo reader could replay (K-547, fail-closed).
+  def operator_secret(env_var, dev_default)
+    ENV.fetch(env_var) { Rails.env.local? ? dev_default : nil }
   end
 
   # Constant-time-ish comparison so the secret check does not leak length/prefix

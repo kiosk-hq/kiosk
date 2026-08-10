@@ -56,8 +56,22 @@ module ProveTrust
     ENV.fetch("KIOSK_PROVE_OPERATOR_ID", "skooti")
   end
 
+  # The shared bearer secret skooti presents to the prove.my broker's intake
+  # (Authorization: Bearer …). REQUIRED from the env in production (K-547): a
+  # shipped default is world-readable in this public repo, so anyone could
+  # impersonate skooti's intake. Dev/test keep a fixed default so `rails s` +
+  # the two-server demo:kyc harness (which sets the SAME value on both sides)
+  # boot out of the box; the broker's KIOSK_PROVE_SKOOTI_SECRET must match.
   def intake_secret
-    ENV.fetch("KIOSK_PROVE_SKOOTI_SECRET", "prove-skooti-demo-shared-secret")
+    ENV.fetch("KIOSK_PROVE_SKOOTI_SECRET") do
+      unless Rails.env.local?
+        raise "KIOSK_PROVE_SKOOTI_SECRET is required outside development/test — it is the " \
+              "shared bearer secret skooti authenticates to the prove.my broker with; a shipped " \
+              "default in a public repo would let anyone impersonate skooti's intake (K-547). " \
+              "Set the SAME value configured on the broker (its KIOSK_PROVE_SKOOTI_SECRET)."
+      end
+      "prove-skooti-demo-shared-secret"
+    end
   end
 
   # Pinned public half of the broker's fixed dev ProveKey (kiosk-demo-prove

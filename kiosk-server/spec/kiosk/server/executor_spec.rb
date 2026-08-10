@@ -343,11 +343,21 @@ RSpec.describe Kiosk::Server::Executor do
           .to raise_error(Kiosk::Server::Errors::SpendingCapExceeded)
       end
 
-      it "passes the acting agent_id and the configured window to the settled-total query" do
+      it "passes the acting agent_id, window, and cart currency to the settled-total query" do
         Kiosk.configuration.spending_cap = ->(agent_id:) { 5000 }
         Kiosk.configuration.spending_cap_window_days = 7
         expect_any_instance_of(described_class).to receive(:settled_total_cents)
-          .with(agent_id: "a-1", window_days: 7).and_return(0)
+          .with(agent_id: "a-1", window_days: 7, currency: "eur").and_return(0)
+        described_class.call(kind: :pay, args: valid_args, identity: identity, connection: connection)
+      end
+
+      # K-551: the tally must be scoped to the cart's currency — summing cents
+      # across currencies is meaningless (4999 USD is not within a 5000 EUR cap),
+      # and a cross-currency sum could erode the cap. The cart here is EUR.
+      it "scopes the settled-total tally to the cart's currency (not currency-blind)" do
+        Kiosk.configuration.spending_cap = ->(agent_id:) { 5000 }
+        expect_any_instance_of(described_class).to receive(:settled_total_cents)
+          .with(hash_including(currency: "eur")).and_return(0)
         described_class.call(kind: :pay, args: valid_args, identity: identity, connection: connection)
       end
     end

@@ -163,7 +163,36 @@ module Kiosk
           hint: "currency is a required AP2 mandate field",
         )
       end
-      private_class_method :require_amount!
+
+      # Reject a timestamp claim that is not a number (Integer/Float NumericDate),
+      # BEFORE it reaches `Time.at` — `Time.at("...")` raises TypeError → 500.
+      def require_numeric_timestamp!(payload, field)
+        return if payload[field].is_a?(Numeric)
+
+        raise Errors::BadRequest.new(
+          "mandate #{field} must be an integer Unix timestamp",
+          hint: "#{field} was #{payload[field].class} — send #{field} as a NumericDate integer",
+        )
+      end
+
+      # A mandate authorises a single near-term transaction. Anything longer is
+      # treated as effectively non-expiring, which the spec says MUST be
+      # rejected. 24 h leaves generous headroom over the ~10 min the flows use.
+      MAX_MANDATE_LIFETIME_SECONDS = 24 * 60 * 60
+
+      # Reject a mandate whose remaining lifetime (exp − now) exceeds the maximum.
+      # Uses exp − now, not exp − iat, so a future-dated iat cannot be used to
+      # sneak an effectively non-expiring exp past the cap.
+      def enforce_max_lifetime!(payload)
+        return if payload[:exp].to_i - Time.now.to_i <= MAX_MANDATE_LIFETIME_SECONDS
+
+        raise Errors::BadRequest.new(
+          "mandate lifetime exceeds the maximum of #{MAX_MANDATE_LIFETIME_SECONDS}s",
+          hint: "exp must be at most #{MAX_MANDATE_LIFETIME_SECONDS}s in the future; " \
+                "a non-expiring mandate is rejected",
+        )
+      end
+      private_class_method :require_amount!, :require_numeric_timestamp!, :enforce_max_lifetime!
 
       # Every mandate MUST carry these claims (spec, AP2 mandate section).
       # Presence is enforced at decode time; `iss`/`user_id`/`agent_id` are
@@ -197,6 +226,18 @@ module Kiosk
             hint: "mandate must be signed for the authenticated agent/user",
           )
         end
+
+        # K-551: `iat`/`exp` reach `Time.at` in the mandate constructors. A
+        # numeric-STRING exp slips past JWT's decode-time expiry check (it
+        # coerces via to_i) and a string iat is not checked by JWT at all, so
+        # both would raise `TypeError` in `Time.at(String)` as an HTTP 500.
+        # Validate the type here → a clean 400, before any Time.at.
+        require_numeric_timestamp!(payload, :iat)
+        require_numeric_timestamp!(payload, :exp)
+        # K-551: JWT rejects an EXPIRED mandate but not an effectively
+        # non-expiring one (exp in the year 3000). The spec says a non-expiring
+        # mandate MUST be rejected — cap the lifetime.
+        enforce_max_lifetime!(payload)
 
         payload
       rescue ::JWT::ExpiredSignature

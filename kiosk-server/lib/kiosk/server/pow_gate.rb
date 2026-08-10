@@ -162,6 +162,18 @@ module Kiosk
 
           next if id.nil? || accepted.key?(id)
 
+          # K-551/K-540 cheap structural pre-check: a well-formed proof echoes
+          # the challenge object verbatim, `params` included. A missing/non-Hash
+          # `params` would blow up in the challenge sig computation
+          # (`nil.sort_by`) as an HTTP 500 — reject it here as a clean 400,
+          # before the claim or any hash work.
+          unless challenge[:params].is_a?(Hash)
+            raise Errors::BadRequest.new(
+              "malformed PoW proof: challenge.params is missing or not an object",
+              hint: POW_HEADER_HINT,
+            )
+          end
+
           # K-542: atomically claim the id as spent BEFORE the expensive verify.
           # The FIRST of N racing submitters of one valid proof wins the claim
           # and proceeds; the losers get false and treat it as a replay — a

@@ -229,6 +229,49 @@ RSpec.describe Kiosk::Server::MandateVerifier do
     end
   end
 
+  # ─── K-551: robustness — a clean 4xx, never a 500 ────────────────────
+  # A malformed input must not crash the verifier. A numeric-STRING exp slips
+  # past JWT's expiry check (it coerces via to_i) then blows up in
+  # `Time.at(String)`; a string iat blows up the same way (iat is not verified
+  # by JWT at all); and an exp far in the future is an effectively non-expiring
+  # mandate, which the spec says MUST be rejected.
+  describe "input robustness (clean 4xx, not 500)" do
+    # Hand-craft a signed JWS, bypassing JWT.encode's own claim verification —
+    # exactly what a hostile client does. A numeric-STRING exp slips past JWT's
+    # decode-time expiry check (it coerces) then 500s in Time.at(String).
+    def craft(payload)
+      require "base64"
+      header = Base64.urlsafe_encode64(JSON.generate(alg: "RS256", typ: "JWT")).delete("=")
+      body   = Base64.urlsafe_encode64(JSON.generate(payload)).delete("=")
+      input  = "#{header}.#{body}"
+      sig    = Base64.urlsafe_encode64(agent_key.sign(OpenSSL::Digest.new("SHA256"), input)).delete("=")
+      "#{input}.#{sig}"
+    end
+
+    it "rejects a numeric-string exp as bad_request instead of 500ing in Time.at" do
+      bad = intent_payload.merge(exp: (Time.now.to_i + 600).to_s)
+      expect { described_class.verify_intent(raw_jws: craft(bad), identity: identity) }
+        .to raise_error(Kiosk::Server::Errors::BadRequest, /exp/)
+    end
+
+    it "rejects a string iat as bad_request instead of 500ing in Time.at" do
+      bad = intent_payload.merge(iat: "yesterday")
+      expect { described_class.verify_intent(raw_jws: craft(bad), identity: identity) }
+        .to raise_error(Kiosk::Server::Errors::BadRequest, /iat/)
+    end
+
+    it "rejects an effectively non-expiring mandate (exp beyond the max lifetime)" do
+      forever = intent_payload.merge(exp: Time.now.to_i + (400 * 24 * 3600))
+      expect { described_class.verify_intent(raw_jws: sign(forever), identity: identity) }
+        .to raise_error(Kiosk::Server::Errors::BadRequest, /lifetime/)
+    end
+
+    it "still accepts a normal short-lived mandate (well within the max lifetime)" do
+      m = described_class.verify_intent(raw_jws: sign(intent_payload), identity: identity)
+      expect(m).to be_a(Kiosk::Mandate::IntentMandate)
+    end
+  end
+
   # ─── K-543: non-positive amounts launder the spending cap ────────────
   # A negative cart total slips under the cap (−100000 <= 5000), matches a
   # negative payment, settles, and drives the settlements SUM negative —

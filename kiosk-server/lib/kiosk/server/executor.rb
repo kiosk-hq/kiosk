@@ -356,7 +356,11 @@ module Kiosk
         return if cap.nil? # this assistant is uncapped
 
         window_days = Kiosk.configuration.spending_cap_window_days
-        spent = settled_total_cents(agent_id: identity.agent_id, window_days: window_days)
+        # K-551: scope the tally to the cart's currency — summing cents across
+        # currencies is meaningless (4999 USD is not within a 5000 EUR cap) and
+        # a cross-currency sum could erode the cap.
+        spent = settled_total_cents(agent_id: identity.agent_id, window_days: window_days,
+                                    currency: cart.currency)
         return if spent + cart.total_amount_cents.to_i <= cap.to_i
 
         window_note = window_days ? " in the last #{window_days.to_i} day(s)" : ""
@@ -366,16 +370,18 @@ module Kiosk
         )
       end
 
-      # Sums this agent's settled spend (optionally within a rolling window of
-      # `window_days`) from the settlements receipt table, under the open
-      # SessionContext. Returns cents (0 when the agent has settled nothing).
-      def settled_total_cents(agent_id:, window_days:)
+      # Sums this agent's settled spend IN A SINGLE CURRENCY (optionally within a
+      # rolling window of `window_days`) from the settlements receipt table,
+      # under the open SessionContext. Scoping by currency keeps the tally
+      # comparable to a same-currency cap (K-551) — cents are not fungible across
+      # currencies. Returns cents (0 when the agent has settled nothing).
+      def settled_total_cents(agent_id:, window_days:, currency:)
         schema = Kiosk.configuration.schema
         window = window_days ? "AND settled_at >= now() - #{window_days.to_i} * INTERVAL '1 day'" : ""
         connection.execute(<<~SQL).to_a.first.fetch("total").to_i
           SELECT COALESCE(SUM(settled_amount_cents), 0) AS total
           FROM #{schema}.settlements
-          WHERE agent_id = #{q(agent_id)} #{window}
+          WHERE agent_id = #{q(agent_id)} AND currency = #{q(currency)} #{window}
         SQL
       end
 

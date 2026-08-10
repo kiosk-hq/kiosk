@@ -1,0 +1,233 @@
+#!/usr/bin/env ruby
+# frozen_string_literal: true
+
+# Equihash solver pin drift guard (K-528).
+#
+# WHAT BREAKS IF THESE DRIFT
+# --------------------------
+# The published skill tells every assistant: fetch https://kiosk.tech/pow/solve.py,
+# verify its SHA-256 equals the pinned value, and REFUSE to execute it on a
+# mismatch. That refusal is correct behaviour — and it means the moment the
+# served file stops hashing to the pinned value, every assistant that follows
+# the skill stops being able to pay the registration toll. No error surfaces on
+# the operator side; registrations simply stall (K-490 measured what a
+# mis-steered solver costs: a whole 60-iteration budget, no token).
+#
+# The same bytes therefore exist in FOUR places that must never diverge:
+#
+#   1. reference/kiosk-pow-equihash/solve.py   — the SOURCE OF TRUTH (this repo)
+#   2. kiosk.tech/pow/solve.py                 — the first-party hosted copy
+#   3. the sha256 pinned in kiosk.tech/skill.md (+ the frozen skill-vX.Y.Z.md
+#      that carry the first-party URL)
+#   4. the URL in kiosk-server's PowGate::POW_INVALID_HINT — the 403 hint that
+#      points a stuck assistant at the solver (K-512). A hint pointing at a
+#      URL the skill does not pin is a hint that gets refused.
+#
+# Only (1) and (4) live in THIS repo. kiosk.tech is a separate repo and is NOT
+# checked out in this repo's CI, so the guard is split by what can honestly be
+# verified from where:
+#
+#   --offline  (default)  no network, no sibling checkout required.
+#                         Checks (1) against the pin below and (4) against the
+#                         URL below. If the umbrella layout happens to be
+#                         present (../kiosk.tech next to this repo), it ALSO
+#                         checks (2) and (3) — otherwise it says so and skips
+#                         them rather than pretending to have checked.
+#   --network             fetches the LIVE published surfaces and checks that
+#                         what kiosk.tech actually serves — the solver and the
+#                         skill that pins it — still agrees with (1). This is
+#                         the only check that can catch a drift introduced by a
+#                         commit in the OTHER repo, which by definition never
+#                         triggers this repo's CI.
+#   --all                 both.
+#
+# WHEN THIS FAILS ON YOU
+# ----------------------
+# If you deliberately changed solve.py, the pin below is not the thing to
+# "just update": changing the served bytes invalidates the sha256 pinned in
+# every already-published skill version, and those files are immutable. A
+# solver change means publishing kiosk.tech/pow/solve.py AND cutting a new
+# skill version AND re-pinning the demos — update PINNED_SHA256 as the LAST
+# step of that sequence, not the first.
+#
+# Usage: bin/check-solver-pin [--offline | --network | --all]
+
+require "digest"
+require "net/http"
+require "uri"
+
+# ── THE PIN ──────────────────────────────────────────────────────────────────
+# The sha256 the published skill tells assistants to verify before executing
+# the solver, and the first-party URL it tells them to fetch it from. Both are
+# published, agent-visible contract — not internal constants.
+PINNED_SHA256 = "5810e16a17b1a7a2d15013cda1c8b9f235d892fae090adb71880d4104bf13a2f"
+PINNED_URL    = "https://kiosk.tech/pow/solve.py"
+SKILL_URL     = "https://kiosk.tech/skill.md"
+# ─────────────────────────────────────────────────────────────────────────────
+
+ROOT       = File.expand_path("..", __dir__)
+SOLVER     = File.join(ROOT, "kiosk-pow-equihash", "solve.py")
+POW_GATE   = File.join(ROOT, "kiosk-server", "lib", "kiosk", "server", "pow_gate.rb")
+# Umbrella layout only: the parent of this repo also contains the kiosk.tech
+# checkout. Public CI clones this repo alone, so its absence is normal.
+SITE_ROOT  = File.expand_path("../kiosk.tech", ROOT)
+
+FAILURES = []
+SKIPS    = []
+
+def pass(msg)  = puts("  ok:   #{msg}")
+def fail!(msg) = (FAILURES << msg) && puts("  FAIL: #{msg}")
+def skip!(msg) = (SKIPS << msg) && puts("  SKIP: #{msg}")
+
+def sha256_of(path) = Digest::SHA256.hexdigest(File.binread(path))
+
+# GET with retries. A transient blip must not read as drift, so distinguish
+# "could not reach it" from "reached it and the bytes are wrong".
+def fetch(url, attempts: 3)
+  last = nil
+  attempts.times do |i|
+    sleep(2**i) if i.positive?
+    begin
+      res = Net::HTTP.get_response(URI(url))
+      return [res.body, nil] if res.is_a?(Net::HTTPOK)
+
+      last = "HTTP #{res.code}"
+    rescue StandardError => e
+      last = "#{e.class}: #{e.message}"
+    end
+  end
+  [nil, "unreachable after #{attempts} attempts (#{last})"]
+end
+
+# ── Offline: the two copies that live in THIS repo ───────────────────────────
+def check_offline
+  puts "── Offline: pinned values vs this repo ──"
+
+  if File.exist?(SOLVER)
+    actual = sha256_of(SOLVER)
+    if actual == PINNED_SHA256
+      pass "kiosk-pow-equihash/solve.py sha256 == pin (#{PINNED_SHA256[0, 12]}…)"
+    else
+      fail! "kiosk-pow-equihash/solve.py hashes to #{actual}, pin says #{PINNED_SHA256} — " \
+            "the published skill pins the OLD hash, so assistants will refuse the served copy"
+    end
+  else
+    fail! "source-of-truth solver not found at #{SOLVER}"
+  end
+
+  if File.exist?(POW_GATE)
+    src = File.read(POW_GATE)
+    if src.include?("POW_INVALID_HINT")
+      urls = src.scan(%r{https://\S*?solve\.py}).uniq
+      if urls == [PINNED_URL]
+        pass "PowGate hint points at #{PINNED_URL}"
+      else
+        fail! "kiosk-server pow_gate.rb references solver URL(s) #{urls.inspect}, expected " \
+              "[#{PINNED_URL.inspect}] — the 403 hint must send assistants to the URL the " \
+              "skill pins, or they fetch a file whose hash they cannot verify"
+      end
+    else
+      fail! "POW_INVALID_HINT is gone from #{POW_GATE} — the K-512 recovery hint no longer exists"
+    end
+  else
+    fail! "kiosk-server pow_gate.rb not found at #{POW_GATE}"
+  end
+end
+
+# ── Offline extra: the kiosk.tech copies, when the sibling checkout is here ──
+def check_sibling
+  puts
+  puts "── Offline: the kiosk.tech copies (umbrella checkout) ──"
+
+  unless File.directory?(SITE_ROOT)
+    skip! "no sibling kiosk.tech checkout at #{SITE_ROOT} — the hosted copy and the " \
+          "skill pin are NOT verified here; `--network` is what covers them in CI"
+    return
+  end
+
+  hosted = File.join(SITE_ROOT, "pow", "solve.py")
+  if !File.exist?(hosted)
+    fail! "kiosk.tech/pow/solve.py is missing — the URL the skill pins would 404"
+  elsif File.binread(hosted) == File.binread(SOLVER)
+    pass "kiosk.tech/pow/solve.py is byte-identical to the source of truth"
+  else
+    fail! "kiosk.tech/pow/solve.py differs from kiosk-pow-equihash/solve.py " \
+          "(#{sha256_of(hosted)} vs #{sha256_of(SOLVER)})"
+  end
+
+  # Only the skill files that adopted the FIRST-PARTY url are in scope. Earlier
+  # frozen versions pin a raw.githubusercontent URL that is itself immutable
+  # (commit-sha addressed), so they cannot drift and must not be touched.
+  pinning = Dir[File.join(SITE_ROOT, "*.md")].sort.select { File.read(_1).include?(PINNED_URL) }
+  if pinning.empty?
+    fail! "no kiosk.tech skill file references #{PINNED_URL} — either the URL moved or the " \
+          "skill stopped pointing at the first-party solver"
+  else
+    pinning.each do |path|
+      name = File.basename(path)
+      if File.read(path).include?(PINNED_SHA256)
+        pass "#{name} pins #{PINNED_SHA256[0, 12]}… for #{PINNED_URL}"
+      else
+        fail! "#{name} references #{PINNED_URL} but does NOT pin #{PINNED_SHA256} — " \
+              "assistants following it will refuse the file we serve"
+      end
+    end
+  end
+end
+
+# ── Network: what kiosk.tech actually serves right now ───────────────────────
+def check_network
+  puts
+  puts "── Network: the live published surfaces ──"
+
+  body, err = fetch(PINNED_URL)
+  if err
+    fail! "GET #{PINNED_URL} #{err}"
+  else
+    actual = Digest::SHA256.hexdigest(body)
+    if actual == PINNED_SHA256
+      pass "served #{PINNED_URL} hashes to the pin"
+    else
+      fail! "served #{PINNED_URL} hashes to #{actual}, pin says #{PINNED_SHA256} — " \
+            "assistants are refusing to execute it RIGHT NOW and registrations are stalling"
+    end
+  end
+
+  skill, err = fetch(SKILL_URL)
+  if err
+    fail! "GET #{SKILL_URL} #{err}"
+  elsif !skill.include?(PINNED_URL)
+    fail! "the live skill no longer points at #{PINNED_URL}"
+  elsif skill.include?(PINNED_SHA256)
+    pass "the live skill pins #{PINNED_SHA256[0, 12]}… for #{PINNED_URL}"
+  else
+    fail! "the live skill points at #{PINNED_URL} but pins a different sha256 than " \
+          "#{PINNED_SHA256} — the served solver and the instruction to verify it disagree"
+  end
+end
+
+mode = ARGV[0] || "--offline"
+case mode
+when "--offline"
+  check_offline
+  check_sibling
+when "--network"
+  check_network
+when "--all"
+  check_offline
+  check_sibling
+  check_network
+else
+  warn "usage: #{$PROGRAM_NAME} [--offline | --network | --all]"
+  exit 2
+end
+
+puts
+SKIPS.each { puts "skipped: #{_1}" }
+if FAILURES.empty?
+  puts "OK solver pin (#{mode}): no drift"
+  exit 0
+else
+  puts "x solver pin (#{mode}): #{FAILURES.size} check(s) failed"
+  exit 1
+end

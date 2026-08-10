@@ -1,0 +1,42 @@
+<!DOCTYPE html>
+<!--
+  Static 422 page (K-532/K-459). Rails' PublicExceptions serves this file when a
+  request is rejected before any controller can answer — most often the CSRF
+  forgery check on a human form. WITHOUT it the response is BODYLESS (text/html,
+  Content-Length: 0). JSON-shaped callers get the Kiosk error envelope from
+  ApplicationController's K-459 signpost instead of this page; this is the
+  fallback for everyone else. Static: keep every link relative.
+-->
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>422 — request rejected</title>
+    <style>
+      :root { color-scheme: light dark; }
+      body { margin: 0; padding: 3rem 1.5rem; font: 16px/1.6 ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; }
+      main { max-width: 42rem; margin: 0 auto; }
+      h1 { font-size: 1.5rem; margin: 0 0 1rem; }
+      code { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 0.95em; }
+      .note { border-left: 3px solid currentColor; padding-left: 1rem; opacity: 0.9; }
+    </style>
+  </head>
+  <body>
+    <main>
+      <h1>422 — the request was rejected</h1>
+      <p>
+        The change could not be applied. On a human page this usually means the
+        form was stale: reload it and submit again.
+      </p>
+      <p class="note">
+        <strong>If you are an AI assistant:</strong> the human pages need a
+        browser session and a CSRF token minted by their own form — they are not
+        the machine surface. Fetch
+        <a href="/.well-known/kiosk.json"><code>/.well-known/kiosk.json</code></a>
+        and authenticate with your own keypair against the endpoints listed
+        there; they answer with a JSON envelope, including their errors.
+      </p>
+      <p><a href="/">Back to the home page</a></p>
+    </main>
+  </body>
+</html>

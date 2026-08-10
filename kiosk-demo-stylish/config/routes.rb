@@ -36,7 +36,10 @@ Rails.application.routes.draw do
   post "/kiosk/auth/assistants/update",            to: "kiosk/server/assistants#update"
 
   # Human sign-in (Devise) — the web session that approves assistant links.
-  devise_for :users
+  # The sessions controller is overridden ONLY to answer a JSON-shaped
+  # `DELETE /users/sign_out` with the Kiosk error envelope instead of a bodyless
+  # 401 (K-533); every other Devise behaviour is inherited untouched.
+  devise_for :users, controllers: { sessions: "users/sessions" }
 
   # Public root page: what this demo is + live DOMAIN activity (appointment
   # counts read from stylish's own tables) + both doors (human sign-in +

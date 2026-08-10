@@ -1,0 +1,37 @@
+<!DOCTYPE html>
+<!--
+  Static 422 page (K-532). Rails' PublicExceptions serves this file when a
+  request is rejected before a controller can answer — for this app that is the
+  CSRF/Origin check on the single /verify form POST. WITHOUT it the response is
+  BODYLESS (text/html, Content-Length: 0). Static: relative links only.
+-->
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>422 — request rejected</title>
+    <style>
+      :root { color-scheme: light dark; }
+      body { margin: 0; padding: 3rem 1.5rem; font: 16px/1.6 ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; }
+      main { max-width: 42rem; margin: 0 auto; }
+      h1 { font-size: 1.5rem; margin: 0 0 1rem; }
+      code { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 0.95em; }
+      .note { border-left: 3px solid currentColor; padding-left: 1rem; opacity: 0.9; }
+    </style>
+  </head>
+  <body>
+    <main>
+      <h1>422 — the request was rejected</h1>
+      <p>
+        The decision could not be recorded. Reload the verification link you
+        were sent and answer again — the page it renders carries the token and
+        the form credentials this app requires.
+      </p>
+      <p class="note">
+        Nothing was disclosed and nothing was decided. A verification request
+        expires on its own if it is never answered.
+      </p>
+      <p><a href="/">Back to the home page</a></p>
+    </main>
+  </body>
+</html>

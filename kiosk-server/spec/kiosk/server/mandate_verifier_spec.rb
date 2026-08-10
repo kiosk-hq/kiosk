@@ -229,6 +229,43 @@ RSpec.describe Kiosk::Server::MandateVerifier do
     end
   end
 
+  # ─── K-543: non-positive amounts launder the spending cap ────────────
+  # A negative cart total slips under the cap (−100000 <= 5000), matches a
+  # negative payment, settles, and drives the settlements SUM negative —
+  # permanently RAISING the agent's effective cap by that amount. Zero is
+  # equally invalid. Every mandate amount MUST be a positive integer of cents.
+  describe "non-positive amounts" do
+    it "rejects a cart with a NEGATIVE total_amount_cents (the launder vector)" do
+      neg = cart_payload.merge(total_amount_cents: -100_000)
+      expect { described_class.verify_cart(raw_jws: sign(neg), identity: identity, intent: intent) }
+        .to raise_error(Kiosk::Server::Errors::Forbidden, /positive/)
+    end
+
+    it "rejects a cart with a ZERO total_amount_cents" do
+      zero = cart_payload.merge(total_amount_cents: 0)
+      expect { described_class.verify_cart(raw_jws: sign(zero), identity: identity, intent: intent) }
+        .to raise_error(Kiosk::Server::Errors::Forbidden, /positive/)
+    end
+
+    it "rejects an intent with a NEGATIVE cap_amount_cents" do
+      neg = intent_payload.merge(cap_amount_cents: -5000)
+      expect { described_class.verify_intent(raw_jws: sign(neg), identity: identity) }
+        .to raise_error(Kiosk::Server::Errors::Forbidden, /positive/)
+    end
+
+    it "rejects an intent with a ZERO cap_amount_cents" do
+      zero = intent_payload.merge(cap_amount_cents: 0)
+      expect { described_class.verify_intent(raw_jws: sign(zero), identity: identity) }
+        .to raise_error(Kiosk::Server::Errors::Forbidden, /positive/)
+    end
+
+    it "rejects a payment with a NEGATIVE amount_cents" do
+      neg = payment_payload.merge(amount_cents: -1599)
+      expect { described_class.verify_payment(raw_jws: sign(neg), identity: identity, cart: cart_mandate) }
+        .to raise_error(Kiosk::Server::Errors::Forbidden, /positive/)
+    end
+  end
+
   # ─── verify_payment ──────────────────────────────────────────────────
 
   describe ".verify_payment" do

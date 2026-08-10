@@ -9,13 +9,14 @@
 #   1. the cart is denominated in the operator's currency;
 #   2. it references exactly one of the payer's own, not-yet-settled orders
 #      (a {"order_id": ...} entry among line_items — see create_order's
-#      pay_hint);
+#      pay_hint), by a well-formed uuid;
 #   3. its item lines mirror that order exactly — same skus, same
 #      quantities, prices as in the catalog at order time;
 #   4. its total equals both the sum of those lines and the order's total.
 #
-# Any mismatch rejects the capture (403); the mandate trail is persisted,
-# nothing is charged.
+# Any mismatch rejects the capture (403 — or 400 when the order reference is
+# malformed rather than merely wrong); the mandate trail is persisted, nothing
+# is charged.
 #
 # ── Per-order serialization (K-544) ───────────────────────────────────────
 # The engine settles between two short DB transactions with the irreversible
@@ -43,6 +44,18 @@
 # `paying` so a blind retry can't double-charge (K-545). On success we flip
 # `paying → paid`.
 class ValidatingPaymentProvider
+  # Canonical 8-4-4-4-12 hex uuid — the shape `create_order` returns and stamps
+  # into its `pay_hint`. The cart's `order_id` is agent-supplied and reaches
+  # Postgres as `…::uuid` in every statement below, so its shape is checked
+  # BEFORE any SQL (K-579): a malformed value made Postgres raise
+  # InvalidTextRepresentation (SQLSTATE 22P02), which is not a
+  # Kiosk::Server::Errors::Base and so escaped the wire controller's rescue as an
+  # HTTP 500 — the same 500-not-4xx class the engine closed in K-551. Postgres
+  # would also accept a few non-canonical spellings (brace-wrapped, un-hyphenated);
+  # we deliberately require the canonical form the operator itself hands out, so
+  # the rejection message can name exactly what to send.
+  ORDER_ID_FORMAT = /\A\h{8}-\h{4}-\h{4}-\h{4}-\h{12}\z/
+
   def initialize(provider, currency:)
     @provider = provider
     @currency = currency.to_s.downcase
@@ -79,10 +92,10 @@ class ValidatingPaymentProvider
 
   # Atomically claim the referenced order for payment, then run the cashier
   # check against it. Returns the order_id (String) on success; raises
-  # Forbidden (403) on any rejection, reverting the claim first if it was taken.
+  # Forbidden (403) on a cashier rejection — reverting the claim first if it was
+  # taken — or BadRequest (400) when the cart's order reference is not even a
+  # uuid (checked before the claim, so there is nothing to revert).
   def claim_and_validate!(cart)
-    conn = ActiveRecord::Base.connection
-
     unless cart.currency.to_s.downcase == @currency
       deny "cart currency #{cart.currency.inspect} rejected — this operator prices in " \
            "#{@currency.upcase} (the catalog carries a currency field)"
@@ -92,6 +105,22 @@ class ValidatingPaymentProvider
     refs    = entries.filter_map { |li| li["order_id"] || li[:order_id] }.map(&:to_s).uniq
     deny "cart line_items must reference exactly one order_id (see create_order's pay_hint)" unless refs.size == 1
     order_id = refs.first
+
+    # K-579: shape-check the agent-supplied reference BEFORE it reaches the
+    # `::uuid` casts below — a malformed one 500s inside Postgres instead of
+    # answering the agent. A 400 (not the cashier's 403): this is a malformed
+    # argument, not a refusal to serve a well-formed one, and it says nothing
+    # about whether any order exists. The message echoes only the value the
+    # agent itself sent — no SQL, no PG error text.
+    unless ORDER_ID_FORMAT.match?(order_id)
+      raise Kiosk::Server::Errors::BadRequest.new(
+        "cart line_items order_id #{order_id.inspect} is not a uuid",
+        hint: "use the order_id create_order returned verbatim (canonical uuid, " \
+              "e.g. 3f0c1a2e-4b5d-6e7f-8a9b-0c1d2e3f4a5b) — see its pay_hint",
+      )
+    end
+
+    conn = ActiveRecord::Base.connection
 
     # CLAIM: created → paying, race-free compare-and-set. Winning this UPDATE is
     # what serializes concurrent /pay (only one can flip 'created') and, together

@@ -27,6 +27,7 @@ rake demo            # setup + shop: no-human register → order (slot+address) 
 | `rake demo:redteam` | kiosk-redteam battery — 13 attacks BLOCKED (incl. the cashier-check trio: wrong-currency, tampered-price, inflated-total carts, plus RegistrationWithoutPow — register PoW is on, `registration_pow_count=1`), 3 generic KYC scenarios skip (the age-gate is exercised by `demo:agecheck`) |
 | `rake demo:agecheck` | alcohol 18+ age-gate via the prove.my broker (two-server): alcohol order without KYC → 403 → request_kyc → broker approve → 200 → pay; non-alcohol order needs no KYC (200 directly); forged age attestation rejected |
 | `rake demo:pow` | catalog-toll PoW: 402 → solve → 200 |
+| `rake demo:cashier_spec` | DB-free unit check of the cashier's order-reference shape guard: a malformed `order_id` is a clean **400 (`bad_request`)** naming the value, never a 500, and never reaches SQL |
 
 ## Delivery address is an upfront, deliberate input (ADDRESS-UPFRONT)
 

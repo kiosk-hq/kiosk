@@ -229,6 +229,37 @@ jobs:
           echo "$(go env GOPATH)/bin" >> "$GITHUB_PATH"
           echo "STRIPE_MOCK_URL=http://127.0.0.1:12111" >> "$GITHUB_ENV"
 
+      # Production eager-load / Zeitwerk guard — EVERY demo, EVERY push (K-513).
+      #
+      # K-488: a copied lib/ helper (top-level methods, no matching constant)
+      # landed in three demos without the corresponding
+      # `config.autoload_lib(ignore:)` entry. Every gate stayed green — demo
+      # suites and flows run in development/test, where `config.eager_load` is
+      # false and Zeitwerk resolves lazily — and the bug only surfaced as a
+      # production boot crash that 502'd three hosted demos.
+      # `zeitwerk:check` eager-loads the whole app in RAILS_ENV=production and
+      # exits non-zero on the first constant/path mismatch, so it catches that
+      # class in seconds. The response to K-488 was a process rule ("run this on
+      # every changed demo before deploy") that lived only in a ledger row; this
+      # step is that rule, enforced.
+      #
+      # It needs NO database — it eager-loads code, it does not connect — so it
+      # runs BEFORE the Postgres client install and demo:setup and fails fast.
+      # It does need the two things the production env refuses to invent:
+      #   SECRET_KEY_BASE — Rails raises "Missing `secret_key_base` for
+      #     'production'" during boot; a throwaway literal is enough (nothing is
+      #     signed or served here).
+      #   STRIPE_MOCK_URL — getgrocery's initializer aborts production boot
+      #     without a Stripe key or mock URL; the stripe-mock step above already
+      #     exported it for that demo (hence this step's position after it).
+      # The signing key exported above is likewise already in the environment.
+      - name: Production eager-load check (zeitwerk:check, K-488/K-513)
+        working-directory: ${{ matrix.demo }}
+        env:
+          RAILS_ENV: production
+          SECRET_KEY_BASE: ci-zeitwerk-check-throwaway-secret-key-base
+        run: bin/rails zeitwerk:check
+
       # The committed db/structure.sql files are PG17-format (they SET
       # transaction_timeout, a v17 param); loading them needs a psql >= 17, and
       # dumping after migrate needs a pg_dump matching the postgres:17 service.

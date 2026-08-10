@@ -146,6 +146,36 @@ o_ids = (o_lists["rows"] || []).map { |r| r["list_id"] }
 record(results, "ForgedUserId", rc == 200 && rc_o == 200 && !o_ids.include?(forged_list),
        "owner's lists exclude outsider's forged list #{forged_list.inspect}")
 
+# ── MalformedUuidArg — junk ids must be a typed 400, never a 500 ────────────
+# K-581/K-582: tudu casts three wire-supplied ids `::uuid` — `list_id` (via the
+# tudu_require_membership! choke point every membership-gated verb opens with),
+# complete_todo's `todo_id`, and remove_member's `account_id`. Before the
+# UuidCheck guards, a malformed value made Postgres raise
+# InvalidTextRepresentation, which is not a Kiosk error and escaped as a raw 500
+# carrying the PG message. Three properties are asserted, not one: the status is
+# 400 (a client mistake reported as such), the envelope code is the typed
+# `bad_request` an assistant can branch on, and NO SQL internals reach the wire.
+# All three ids are probed — a guard on the choke point alone would leave
+# complete_todo and remove_member's account_id open.
+MALFORMED_IDS = ["not-a-uuid", "1; DROP TABLE todos", "", "  "].freeze
+SQL_INTERNALS = ["::uuid", "PG::", "22P02", "invalid input syntax"].freeze
+
+uuid_probes = MALFORMED_IDS.flat_map do |junk|
+  [
+    ["/kiosk/query", { name: "list_todos",     list_id: junk }],                             # list_id via the membership guard
+    ["/kiosk/run",   { name: "complete_todo",  todo_id: junk }],                             # todo_id — no other guard in front
+    ["/kiosk/run",   { name: "remove_member",  list_id: list_id, account_id: junk }],        # account_id — the second id
+  ].map do |path, body|
+    rc, resp = post_json(path, body, bearer(owner[:token]))
+    leak = SQL_INTERNALS.find { |needle| JSON.generate(resp).include?(needle) }
+    ok = rc == 400 && resp.dig("error", "code") == "bad_request" && leak.nil?
+    [ok, "#{body[:name]}(#{junk.inspect})→#{rc}/#{resp.dig('error', 'code').inspect}#{leak ? " LEAK #{leak}" : ''}"]
+  end
+end
+record(results, "MalformedUuidArg", uuid_probes.all? { |ok, _| ok },
+       "malformed list_id/todo_id/account_id → #{uuid_probes.map(&:last).join(', ')} " \
+       "(want 400/\"bad_request\" and no SQL internals)")
+
 # ── MissingAuth / GarbageToken → 401 ────────────────────────────────────────
 rc, = post_json("/kiosk/query", { name: "my_lists" })
 record(results, "MissingAuth", rc == 401, "unauthenticated request → #{rc} (want 401)")

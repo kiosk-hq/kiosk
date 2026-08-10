@@ -64,6 +64,23 @@ class ValidatingRentalProvider
     deny "cart line_items must reference exactly one reservation_id (see reserve's pay_hint)" unless refs.size == 1
     reservation_id = refs.first
 
+    # K-581: the reservation_id goes straight into an `::uuid` cast below. A
+    # malformed one made Postgres raise InvalidTextRepresentation, which escaped
+    # as a raw 500 — and on the pay path a 500 is the worst answer there is,
+    # because an assistant cannot tell "your input was wrong" from "the charge
+    # may have gone through". Reject the bad SHAPE up front, before the
+    # connection is even taken — a 400, not the cashier's 403: this is a
+    # malformed argument, not a refusal to serve a well-formed one, and it says
+    # nothing about whether any reservation exists. The message echoes only the
+    # value the agent itself sent — no SQL, no PG error text.
+    unless UuidCheck.valid?(reservation_id)
+      raise Kiosk::Server::Errors::BadRequest.new(
+        "cart line_items reservation_id #{reservation_id.inspect} is not a uuid",
+        hint: "use the `reservation_id` reserve returned, verbatim (a canonical uuid, " \
+              "e.g. 3f0c1a2e-4b5d-6e7f-8a9b-0c1d2e3f4a5b) — see its pay_hint",
+      )
+    end
+
     # Quoted total = this reservation's scooter price_per_min_cents × 1 minute
     # (the upfront hold reserve/rental_flow settle). Join reservation → scooter
     # by id; no user_id filter — ownership is a USE-time gate, not the cashier's.

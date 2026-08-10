@@ -21,6 +21,9 @@
 #   WrongCurrencyCart  — pay own reservation in usd → 403
 #   TamperedPriceCart  — pay below the operator's quoted rental price → 403
 #   InflatedTotalCart  — cart total ≠ sum of its line items → 403
+# Plus one input-shape beat:
+#   MalformedUuidArg   — a junk reservation_id, as an arg AND inside a signed
+#                        cart, is a typed 400 with no SQL internals — never a 500
 #
 # Usage (from kiosk-demo-skooti/):
 #   SERVER_URL=http://127.0.0.1:3003 KIOSK_ISSUER=http://127.0.0.1:3003 \
@@ -292,10 +295,114 @@ class InflatedTotalCart < Kiosk::Redteam::Scenario
   end
 end
 
+# A malformed reservation_id must come back as a TYPED 400, never a 500
+# (K-581/K-582). Three surfaces, one guard (UuidCheck): start_rental's and
+# rent_motorcycle's `reservation_id` args, and the `{"reservation_id":…}`
+# reference inside a signed cart mandate that the cashier prices at capture.
+# Before the guard, Postgres raised InvalidTextRepresentation on the `::uuid`
+# cast — not a Kiosk error, so it escaped as a raw 500 with the PG message
+# attached, and on the PAY path a 500 is the worst possible answer because an
+# assistant cannot tell it from "the charge may have gone through".
+#
+# Asserts three properties, not one: HTTP 400 (a client mistake reported as such),
+# `error.code == "bad_request"` (typed, so an assistant can branch on it), and no
+# SQL internals anywhere in the body. A generic `blocked?` verdict would accept a
+# 403 or a 401 here, so this scenario builds its Verdict directly.
+#
+# rent_motorcycle is probed too, and it is the interesting one: its KYC-attribute
+# gate runs FIRST, so an un-KYC'd principal gets 403 kyc_required and the uuid
+# guard is never reached. The scenario therefore submits a valid attestation
+# before probing it — otherwise the assertion would pass without exercising the
+# guard at all.
+class MalformedUuidArg < Kiosk::Redteam::Scenario
+  MALFORMED     = ["not-a-uuid", "1; DROP TABLE reservations", ""].freeze
+  SQL_INTERNALS = ["::uuid", "PG::", "22P02", "invalid input syntax"].freeze
+
+  def initialize
+    super(
+      name:        "MalformedUuidArg",
+      category:    "input",
+      description: "A malformed reservation_id — as a start_rental/rent_motorcycle arg AND inside a signed cart — must be a typed 400, never a 500",
+    )
+  end
+
+  def call(client, profile)
+    a = register_principal(client, name: "redteam-uuid-a", profile:)
+    # Clear rent_motorcycle's Gate 0 so the uuid guard BEHIND it is reachable.
+    # A plain `kyc_valid` attestation is not enough: Gate 0 tests the NAMED
+    # attributes, so without them every probe would come back 403 kyc_required
+    # and this scenario would pass while exercising nothing.
+    kyc = client.kyc(a, attestation_jws: ProveTestIssuer.attest(
+      user_id: a.user_id, attributes: { age_over_18: true, licence_a: true },
+    ))
+    raise "redteam(skooti): MalformedUuidArg fixture broken — /kyc returned #{kyc.status}" unless kyc.status == 200
+
+    failures = []
+    statuses = []
+
+    MALFORMED.each do |junk|
+      check(failures, statuses, "start_rental(#{junk.inspect})",
+            client.run(a, name: "start_rental", reservation_id: junk))
+      check(failures, statuses, "rent_motorcycle(#{junk.inspect})",
+            client.run(a, name: "rent_motorcycle", reservation_id: junk))
+      check(failures, statuses, "pay cart reservation_id=#{junk.inspect}",
+            pay_with_ref(client, a, junk))
+    end
+
+    # CONTROL — without it the pay assertion above could pass vacuously: any 400
+    # `bad_request` raised EARLIER in the pay pipeline (mandate chain, scope,
+    # amounts) would satisfy it without the cashier ever being reached. A
+    # WELL-FORMED but nonexistent reservation_id must therefore come back as the
+    # cashier's own "reservation not found" 403 — proving the request really does
+    # get that far, and that the shape check is not swallowing the authz answer.
+    control = pay_with_ref(client, a, "00000000-0000-4000-8000-000000000000")
+    unless control.status == 403
+      failures << "CONTROL well-formed-but-unknown reservation_id → HTTP #{control.status} " \
+                  "(want the cashier's 403; a 400 here means the malformed-uuid probes never reached the cashier)"
+    end
+
+    Kiosk::Redteam::Verdict.new(
+      blocked: failures.empty?,
+      skipped: false,
+      status:  statuses.find { |s| s != 400 } || 400,
+      detail:  failures.join(" | "),
+    )
+  end
+
+  private
+
+  def check(failures, statuses, label, resp)
+    statuses << resp.status
+    leak = SQL_INTERNALS.find { |needle| JSON.generate(resp.body).include?(needle) }
+    code = resp.body.is_a?(Hash) ? resp.body.dig("error", "code") : nil
+    return if resp.status == 400 && code == "bad_request" && leak.nil?
+
+    failures << "#{label} → HTTP #{resp.status} code=#{code.inspect}#{leak ? " LEAKS #{leak.inspect}" : ""}"
+  end
+
+  # Deliberately reserves NOTHING: the shape guard runs before the cashier takes
+  # a connection, so a cart naming a junk reservation_id needs no reservation
+  # behind it — and this scenario therefore takes no scooter out of the shared
+  # fleet the other scenarios draw on.
+  def pay_with_ref(client, principal, junk)
+    now       = Time.now.to_i
+    intent_id = SecureRandom.uuid
+    intent = { id: intent_id, user_id: principal.user_id, agent_id: principal.agent_id,
+               iss: ISSUER, scope: "mobility", cap_amount_cents: 200, currency: "eur",
+               exp: now + 600, iat: now }
+    cart = { id: SecureRandom.uuid, intent_mandate_id: intent_id, user_id: principal.user_id,
+             agent_id: principal.agent_id, iss: ISSUER,
+             line_items: [{ sku: "any-scooter", qty: 1, price_cents: 100, reservation_id: junk }],
+             total_amount_cents: 100, currency: "eur", exp: now + 600, iat: now }
+    client.pay(principal, intent:, cart:)
+  end
+end
+
 # ── Scenario list ─────────────────────────────────────────────────────────────
 #
-# 12 generic + 3 local cashier-check beats; skooti's full surface makes all
-# generic scenarios applicable (0 skips expected).
+# 12 generic + 3 local cashier-check beats + the K-581/K-582 malformed-uuid
+# beat; skooti's full surface makes all generic scenarios applicable (0 skips
+# expected).
 # RegistrationWithoutPow: pow_difficulty>0 (Equihash gate on) → always applicable.
 
 scenarios = [
@@ -317,6 +424,7 @@ scenarios = [
   WrongCurrencyCart.new,                                 # cashier check — currency
   TamperedPriceCart.new,                                 # cashier check — below quote
   InflatedTotalCart.new,                                 # cashier check — total ≠ line sum
+  MalformedUuidArg.new,                                  # K-581/K-582 — junk uuid → typed 400, no 500
 ]
 
 # ── Expected-applicable assertion ─────────────────────────────────────────────

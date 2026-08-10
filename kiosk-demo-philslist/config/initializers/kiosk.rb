@@ -23,6 +23,7 @@ end
 require Rails.root.join("lib/stub_idp")
 require Rails.root.join("lib/jwt_or_stub_idp")
 require Rails.root.join("lib/pow_difficulty")
+require Rails.root.join("lib/uuid_check")
 require "kiosk/user_identity_providers/devise"
 
 # Registration PoW gate — ALWAYS ON. With no payment gate, the registration PoW
@@ -352,6 +353,19 @@ Kiosk::Server::Actions.register(
 ) do |args|
   conn = ActiveRecord::Base.connection
 
+  # K-581/K-582: `listing_id` arrives from the wire and is cast `::uuid` below.
+  # A malformed one made Postgres raise InvalidTextRepresentation, which is not a
+  # Kiosk error and so surfaced as a raw 500 (leaking "invalid input syntax for
+  # type uuid") for what is plainly a client mistake. Shape first, then the
+  # owner-scoped UPDATE — a well-formed but foreign id still gets the 403, so
+  # the shape check never softens the ownership answer.
+  unless UuidCheck.valid?(args[:listing_id])
+    raise Kiosk::Server::Errors::BadRequest.new(
+      "listing_id #{args[:listing_id].to_s.inspect} is not a uuid",
+      hint: "Pass a `listing_id` from my_listings / browse_listings, verbatim.",
+    )
+  end
+
   # Only the columns the caller supplied are updated; each value is quoted
   # updated_at always bumps so a no-op patch still verifies ownership.
   set_fragments = ["updated_at = now()"]
@@ -384,6 +398,16 @@ Kiosk::Server::Actions.register(
   },
 ) do |args|
   conn = ActiveRecord::Base.connection
+
+  # K-581/K-582: same `::uuid` cast, same guard as edit_listing — malformed
+  # shape answers 400; a well-formed foreign id still answers 403.
+  unless UuidCheck.valid?(args[:listing_id])
+    raise Kiosk::Server::Errors::BadRequest.new(
+      "listing_id #{args[:listing_id].to_s.inspect} is not a uuid",
+      hint: "Pass a `listing_id` from my_listings / browse_listings, verbatim.",
+    )
+  end
+
   rows = conn.execute(
     "UPDATE listings SET status = 'closed', updated_at = now() " \
     "WHERE id = #{conn.quote(args[:listing_id].to_s)}::uuid " \

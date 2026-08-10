@@ -26,6 +26,7 @@ require Rails.root.join("lib/stub_idp")
 require Rails.root.join("lib/jwt_or_stub_idp")
 require Rails.root.join("lib/pow_difficulty")
 require Rails.root.join("lib/seatings")
+require Rails.root.join("lib/uuid_check")
 require "kiosk/user_identity_providers/devise"
 
 # ── PoW / Reputation (R2) — activated only when KIOSK_POW_DEMO=1 ──────────
@@ -739,6 +740,16 @@ Kiosk::Server::Actions.register("cancel_booking",
 
   booking_id = args[:booking_id] || args["booking_id"]
   raise Kiosk::Server::Errors::BadRequest.new("missing field: booking_id") if booking_id.nil? || booking_id.to_s.empty?
+  # K-581/K-582: this id is cast `::uuid` below — a malformed one made Postgres
+  # raise InvalidTextRepresentation, which is not a Kiosk error and so surfaced
+  # as a raw 500 (leaking "invalid input syntax for type uuid") for what is
+  # plainly a client mistake. Check the shape first, answer 400.
+  unless UuidCheck.valid?(booking_id)
+    raise Kiosk::Server::Errors::BadRequest.new(
+      "booking_id #{booking_id.to_s.inspect} is not a uuid — pass the `booking_id` " \
+      "that book_table returned (also listed by my_bookings)"
+    )
+  end
 
   conn.transaction do
     # Owner-scoped: the booking must belong to the caller and not be cancelled.

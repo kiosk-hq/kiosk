@@ -55,6 +55,23 @@ class ValidatingBookingProvider
     deny "cart line_items must reference exactly one booking_id (see reserve_room's pay_hint)" unless refs.size == 1
     booking_id = refs.first
 
+    # K-581: the booking_id goes straight into an `::uuid` cast below. A
+    # malformed one made Postgres raise InvalidTextRepresentation, which escaped
+    # as a raw 500 — and on the pay path a 500 is the worst answer there is,
+    # because an assistant cannot tell "your input was wrong" from "the charge
+    # may have gone through". Reject the bad SHAPE up front, before the
+    # connection is even taken — a 400, not the cashier's 403: this is a
+    # malformed argument, not a refusal to serve a well-formed one, and it says
+    # nothing about whether any booking exists. The message echoes only the
+    # value the agent itself sent — no SQL, no PG error text.
+    unless UuidCheck.valid?(booking_id)
+      raise Kiosk::Server::Errors::BadRequest.new(
+        "cart line_items booking_id #{booking_id.inspect} is not a uuid",
+        hint: "use the `booking_id` reserve_room returned, verbatim (a canonical uuid, " \
+              "e.g. 3f0c1a2e-4b5d-6e7f-8a9b-0c1d2e3f4a5b) — see its pay_hint",
+      )
+    end
+
     conn    = ActiveRecord::Base.connection
     booking = conn.execute(
       "SELECT total_cents FROM public.bookings " \

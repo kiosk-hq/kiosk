@@ -15,7 +15,9 @@ server round-trip.
 - `query scooters_available` — browse the fleet (scooters + motorcycles);
   `needs_licence` flags the KYC-gated combustion vehicles
 - `query my_reservations` — this principal's reservations (owner-scoped)
-- `run reserve(scooter_code)` — reserve a vehicle by its code (TTL hold)
+- `run reserve(scooter_code)` — reserve a vehicle by its code (inserts a
+  `status='reserved'` row; the hold has no expiry/TTL — it stays until
+  `start_rental` flips it to `active`)
 - `run payment_setup` — check whether the principal has a saved payment method
 - `run start_rental(reservation_id)` — verify two gates (ownership and a settled
   payment for THIS reservation) and issue an offline Ed25519 rental token

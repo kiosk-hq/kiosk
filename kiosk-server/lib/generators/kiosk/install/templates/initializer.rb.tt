@@ -36,7 +36,14 @@ Kiosk.configure do |c|
   # c.enforce_db_role = true            # SET LOCAL ROLE app_role per request
 
   # ─── Wire surface ────────────────────────────────────────────────────
-  # Issuer URL — MUST match `kiosk.issuer` in /.well-known/kiosk.json.
+  # Issuer URL — MUST match `kiosk.issuer` in /.well-known/kiosk.json AND
+  # be the exact origin assistants dial (scheme + host, no trailing slash).
+  # It is configured, not derived from the request Host, because it anchors
+  # both the AP2 mandate `iss` and the `aud` origin-binding that Kiosk checks
+  # by strict equality — derived from the request it would defend nothing.
+  # Get it wrong and the app still boots, then rejects EVERY assistant with
+  # "proof audience mismatch". One instance therefore serves exactly one
+  # origin: point aliases at it with a redirect before any Kiosk verb.
   # c.issuer = "https://<your-host>"
 
   # Role vocabulary your authz (app-layer policies, and RLS if opted in)

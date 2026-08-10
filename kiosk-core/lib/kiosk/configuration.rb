@@ -63,8 +63,39 @@ module Kiosk
     # (job-titled roles beat privilege-titled ones).
     attr_accessor :roles
 
-    # Canonical issuer URL — used in JWT `iss` claim and AP2 mandate `iss`.
-    # MUST equal `kiosk.issuer` advertised in `/.well-known/kiosk.json`.
+    # Canonical issuer URL — used in the JWT `iss` claim and the AP2 mandate
+    # `iss`. MUST equal `kiosk.issuer` advertised in
+    # `/.well-known/kiosk.json`, and MUST be the origin assistants actually
+    # dial (scheme + host + port, no trailing slash).
+    #
+    # WHY IT IS CONFIGURED AND NOT DERIVED FROM THE REQUEST HOST. This value
+    # is an anchor twice over, and both uses need it to be a fact about the
+    # deployment rather than a fact about the incoming request:
+    #
+    #   * AP2 anchor — it is the `iss` a mandate is signed under. Mandates
+    #     outlive the request that minted them, so the identity they name has
+    #     to be the operator's, not whatever Host header happened to arrive.
+    #   * Origin-binding anchor — `PopVerifier` requires the assistant's
+    #     proof-of-possession JWS to carry `aud` equal to this value by STRICT
+    #     equality. That is the relay defense: a proof minted for provider M
+    #     cannot be replayed at provider L because L checks `aud == L`. Derived
+    #     from the request host it would defend nothing — an attacker sets the
+    #     Host header, and the check compares the request against itself.
+    #
+    # CONSEQUENCE OF A WRONG VALUE: a total, silent auth outage. The app boots
+    # happily, advertises the wrong issuer in discovery, and then rejects EVERY
+    # assistant with «proof audience mismatch» — because each one correctly
+    # signed the origin it dialed and this value disagrees. Nothing is
+    # recoverable client-side; only the operator can fix it. Check the
+    # operator log for the audience-mismatch diagnostic PopVerifier writes.
+    #
+    # ONE INSTANCE SERVES EXACTLY ONE ORIGIN, by construction: the equality
+    # check accepts a single value, so vanity/alias hostnames must redirect to
+    # the canonical origin BEFORE any Kiosk verb, and hosting a second merchant
+    # means a second instance. (Rails' `config.hosts` does not help here — it
+    # governs which Host headers are ACCEPTED, not which origin the provider
+    # IS.) Per-host issuer resolution is the recorded 0.2 direction (K-507);
+    # 0.1 ships the one-origin behaviour described above.
     attr_accessor :issuer
 
     def initialize

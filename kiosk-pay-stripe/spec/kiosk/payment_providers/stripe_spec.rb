@@ -353,6 +353,50 @@ RSpec.describe Kiosk::PaymentProviders::Stripe do
         resolver_adapter.capture(cart_mandate, payment_method: "pm_explicit")
       end
     end
+
+    # ── PSP error translation (K-545) ────────────────────────────────────────
+    # A charge failure must surface as a PSP-AGNOSTIC PaymentFailed carrying a
+    # human-safe message (never raw Stripe internals) — so the executor renders
+    # a typed `payment_failed` 402 instead of leaking a raw 500.
+    context "when the charge fails at Stripe" do
+      it "translates a Stripe::CardError (declined) into a RETRYABLE PaymentFailed with a safe message" do
+        card_err = ::Stripe::CardError.new("Your card was declined.", nil, code: "card_declined")
+        allow(::Stripe::PaymentIntent).to receive(:create).and_raise(card_err)
+
+        expect { adapter.capture(cart_mandate, payment_method: "pm_card_visa") }
+          .to raise_error(Kiosk::PaymentProviders::PaymentFailed) { |e|
+            expect(e).to be_retryable
+            expect(e.reason).to eq(:card_declined)
+            expect(e.message).to eq("the payment method was declined")
+            # No raw Stripe text leaks through.
+            expect(e.message).not_to match(/Your card was declined/)
+          }
+      end
+
+      it "maps authentication_required to a distinct human-safe message (still retryable)" do
+        card_err = ::Stripe::CardError.new("auth", nil, code: "authentication_required")
+        allow(::Stripe::PaymentIntent).to receive(:create).and_raise(card_err)
+
+        expect { adapter.capture(cart_mandate, payment_method: "pm_card_visa") }
+          .to raise_error(Kiosk::PaymentProviders::PaymentFailed) { |e|
+            expect(e).to be_retryable
+            expect(e.message).to match(/authentication/i)
+          }
+      end
+
+      it "translates a non-card Stripe error (timeout/connectivity) into a NON-retryable PaymentFailed (unknown outcome)" do
+        allow(::Stripe::PaymentIntent).to receive(:create)
+          .and_raise(::Stripe::APIConnectionError.new("timed out"))
+
+        expect { adapter.capture(cart_mandate, payment_method: "pm_card_visa") }
+          .to raise_error(Kiosk::PaymentProviders::PaymentFailed) { |e|
+            expect(e).not_to be_retryable
+            expect(e.reason).to eq(:processor_unavailable)
+            expect(e.message).to match(/unknown/i)
+            expect(e.message).not_to match(/timed out/)
+          }
+      end
+    end
   end
 
   # ── attach_test_card ──────────────────────────────────────────────────────

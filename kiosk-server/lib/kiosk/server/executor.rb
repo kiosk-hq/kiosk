@@ -145,8 +145,13 @@ module Kiosk
       #       RLS policy on the mandate tables yet). No external effect yet.
       #                            FAIL ⇒ nothing charged, rows rolled back.
       #   P2  irreversible PSP capture, OUTSIDE any DB transaction, keyed for
-      #       idempotency by cart.id. FAIL ⇒ trail persisted, no charge; safe
-      #                               to retry (idempotency key).
+      #       idempotency by cart.id. A charge FAILURE (decline / auth-required /
+      #       timeout) is translated by the adapter into a PSP-agnostic
+      #       PaymentFailed and surfaced here as a typed `payment_failed` (402),
+      #       NOT a raw 500 (K-545). A DEFINITIVE decline moved no money and is
+      #       safe to retry; an UNKNOWN outcome (timeout) must be reconciled via
+      #       my_orders before any retry, so a lost-response retry can't
+      #       double-charge.
       #   P3  record the settlement (fresh GUC-scoped transaction).
       #       FAIL ⇒ charge + trail exist, payment row missing. The cart row +
       #              Stripe's cart.id-scoped idempotency key make the charge
@@ -219,10 +224,29 @@ module Kiosk
         # Belt-and-suspenders: if the PSP raises SetupRequired at capture time
         # (e.g. the on-file card was detached between the pre-check and now),
         # surface a clean 402 rather than a 500.
+        #
+        # K-545: a normal charge FAILURE (card declined, authentication
+        # required, insufficient funds, or a processor timeout) must not escape
+        # as a raw 500 with the mandate trail already burned. The adapter
+        # translates its PSP-specific error into a PSP-agnostic PaymentFailed
+        # carrying a human-safe message (no raw PSP internals); map it to the
+        # typed `payment_failed` wire error (402). The hint depends on whether
+        # the outcome was DEFINITIVE (safe to retry) or UNKNOWN (check
+        # my_orders first so a lost-response retry can't double-charge).
         settled = begin
           provider.capture(cart, payment_method: payment.payment_method)
         rescue Kiosk::PaymentProviders::SetupRequired
           raise Errors::PaymentSetupRequired
+        rescue Kiosk::PaymentProviders::PaymentFailed => e
+          hint = if e.retryable?
+                   "the charge did not go through; no money moved. The human may need to " \
+                     "update the payment method (payment_setup), then retry pay."
+                 else
+                   "the charge status is UNKNOWN (the processor did not confirm). Do NOT blindly " \
+                     "retry — first check `query my_orders` for this order's paid flag; retry only " \
+                     "if it is still unpaid."
+                 end
+          raise Errors::PaymentFailed.new(e.message, hint: hint)
         end
 
         # Phase 3 — record settlement (fresh GUC-scoped transaction; no RLS

@@ -148,18 +148,37 @@ module Kiosk
           pm = non_empty(payment_method) || non_empty(@test_payment_method) || raise(SetupRequired)
         end
 
-        intent = ::Stripe::PaymentIntent.create(
-          {
-            amount:         cart_mandate.total_amount_cents,
-            currency:       cart_mandate.currency,
-            customer:       cus_id,
-            payment_method: pm,
-            off_session:    true,
-            confirm:        true,
-            metadata:       { cart_mandate_id: cart_mandate.id },
-          }.compact,
-          { idempotency_key: "#{cart_mandate.id}-capture" },
-        )
+        intent =
+          begin
+            ::Stripe::PaymentIntent.create(
+              {
+                amount:         cart_mandate.total_amount_cents,
+                currency:       cart_mandate.currency,
+                customer:       cus_id,
+                payment_method: pm,
+                off_session:    true,
+                confirm:        true,
+                metadata:       { cart_mandate_id: cart_mandate.id },
+              }.compact,
+              { idempotency_key: "#{cart_mandate.id}-capture" },
+            )
+          rescue ::Stripe::CardError => e
+            # A card DECLINE (card_declined / expired_card / insufficient_funds /
+            # authentication_required). Stripe raises CardError only after a
+            # DEFINITIVE decision — NO money moved — so this is safe to retry.
+            # Translate to a PSP-agnostic PaymentFailed with a human-safe message
+            # (never the raw Stripe message, which can carry request ids etc.).
+            raise PaymentFailed.new(card_decline_message(e), reason: :card_declined, retryable: true)
+          rescue ::Stripe::StripeError
+            # Timeout / connectivity / API error: the charge outcome is UNKNOWN
+            # (Stripe may or may not have captured). NOT safe to blind-retry —
+            # the caller must reconcile before trying again (K-545). No raw PSP
+            # detail is surfaced.
+            raise PaymentFailed.new(
+              "the payment processor could not confirm the charge; its status is unknown",
+              reason: :processor_unavailable, retryable: false,
+            )
+          end
 
         {
           psp_reference:        intent.id,
@@ -207,6 +226,19 @@ module Kiosk
       end
 
       private
+
+      # Map a Stripe::CardError to a short, human-safe, PSP-agnostic reason.
+      # Keyed on the stable Stripe error `code` so no raw Stripe message (which
+      # can embed request ids / internal detail) reaches the wire. Falls back to
+      # a generic decline message for any unmapped code.
+      def card_decline_message(error)
+        case error.respond_to?(:code) ? error.code : nil
+        when "expired_card"            then "the payment method has expired"
+        when "insufficient_funds"      then "the payment method has insufficient funds"
+        when "authentication_required" then "the payment method needs authentication an off-session charge cannot complete"
+        else "the payment method was declined"
+        end
+      end
 
       # The `success_url` Stripe redirects the human's BROWSER to after they
       # enter a card on the hosted page. It MUST be a real, operator-owned

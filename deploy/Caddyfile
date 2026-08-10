@@ -46,20 +46,56 @@
 	email ops@kiosk.tech
 }
 
-# Reusable snippet: shared proxy + per-IP rate-limit backstop on top of PoW.
-# (PoW is the real DoS shield; this is a cheap extra guard.)
-# NOTE: native rate-limiting needs the caddy-ratelimit module in the build.
-# If your Caddy lacks it, drop the `import ratelimit` lines — the app-layer
-# PoW toll still protects the register path. Kept commented so a stock Caddy
-# `validate`s clean.
+# Reusable snippet: shared proxy + the per-IP edge rate-limit.
+#
+# ── THE EDGE RATE-LIMIT IS REQUIRED, NOT GARNISH (K-540) ─────────────────────
+# Do NOT read the commented lines below as "optional, the PoW covers it". PoW
+# does NOT cover it, and this note previously said it did.
+#
+# `POST /kiosk/auth/register` runs the PoW gate UNAUTHENTICATED, ahead of any
+# key verification: anyone can take a free 402 challenge and resubmit it with a
+# valid HMAC sig but garbage indices, and every such submission costs THIS box
+# an Equihash verify (measured ~19 ms at n=168 k=7). PoW prices the attacker's
+# SOLVE; it does not price our VERIFY — on the register path the toll is the
+# sink, not the shield. At the shipped WEB_CONCURRENCY=1 roughly 54 req/s
+# saturate a worker, and a plain flood of any other endpoint does much the same.
+# The app-side mitigations (one issued challenge drives at most one verify;
+# structural pre-checks before the hash loop) raise the cost per request; only
+# something in FRONT of the app bounds the request RATE. Deploy without one and
+# a single laptop can take the box down.
+#
+# ── Why the directive ships commented out ────────────────────────────────────
+# `rate_limit` is NOT a stock Caddy directive — it comes from the third-party
+# module github.com/mholt/caddy-ratelimit. A stock binary REFUSES to load a
+# config naming it ("unrecognized directive: rate_limit" — verified on Caddy
+# v2.11.2), so uncommenting it without the module means Caddy does not start and
+# NO site serves at all. Shipping it live would trade a DoS gap for a guaranteed
+# outage, so enabling it is a required RUNBOOK step (deploy/README.md step 4)
+# rather than a default in this file.
+#
+# TO DEPLOY — do both, before `systemctl reload caddy`:
+#
+#   1. Get a Caddy that HAS the module, e.g.
+#        sudo caddy add-package github.com/mholt/caddy-ratelimit   # Caddy >= 2.7
+#        sudo systemctl restart caddy
+#      or build one:  xcaddy build --with github.com/mholt/caddy-ratelimit
+#      Confirm:       caddy list-modules | grep rate_limit
+#   2. Uncomment `import ratelimit` in (kioskproxy) AND the whole (ratelimit)
+#      snippet below, then `caddy validate --config /etc/caddy/Caddyfile`.
+#
+# ALTERNATIVE (equally acceptable): a per-IP rate rule on `/kiosk/*` at a CDN /
+# WAF in front of this box. What is NOT acceptable is deploying with neither.
 (kioskproxy) {
 	encode zstd gzip
-	# import ratelimit          # uncomment if the ratelimit module is built in
+	# import ratelimit          # REQUIRED — uncomment once the module is installed (see above)
 	# Caddy forwards X-Forwarded-For/Proto/Host to the upstream by default.
 	reverse_proxy {args[0]}
 }
 
-# (snippet) per-IP 60 req/min backstop — requires github.com/mholt/caddy-ratelimit
+# (snippet) per-IP 60 req/min backstop — requires github.com/mholt/caddy-ratelimit.
+# Uncomment together with the `import ratelimit` line above. 60/min per IP is
+# far above any honest agent's pace (register once, then solve a ~1-10 s PoW per
+# tolled call) and far below what it takes to saturate a worker.
 # (ratelimit) {
 # 	rate_limit {
 # 		zone kiosk_per_ip {

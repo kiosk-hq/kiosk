@@ -7,11 +7,12 @@ to survive an HN stampede.
 
 This directory is the *app-side* handoff; DNS + VPS provisioning is the operator's.
 
+// hint: Structural change (rename/retype). Check callers of this entity.
 ## Files in this directory
 
 | File | What it is |
 |------|-----------|
-| `Caddyfile` | One vhost per app subdomain (8) → loopback Puma; automatic TLS. |
+| `Caddyfile` | One vhost per app subdomain (8) → loopback Puma; automatic TLS. Carries the **required** per-IP edge rate-limit, shipped commented (needs the `caddy-ratelimit` module — see below). |
 | `postgres-init.sql` | 8 databases + 8 least-privilege login roles (DB-per-app; 7 demos + the prove.my broker). Names default to the shipped ones and are overridable — see [Database names](#database-names). |
 | `kiosk-demo@.service` | Parameterised systemd unit: one Puma per app (`%i`). |
 | `env/<app>.env.example` | Per-app env template (7 demos + `kyc-demo.env.example` for the broker). Copy to `/etc/kiosk-demo/<app>.env`. |
@@ -43,8 +44,9 @@ its KYC issuer (skooti's env pins `KIOSK_PROVE_*` at this broker).
 `KIOSK_POW_DIFFICULTY` knob (low default, high opt-in) in their env file. Six run
 a low/fast toll so a poker can register in ~1 s and still SEE the toll; only
 **atablefor** — the designated production-grade showcase — ships the high
-memory+CPU-hard toll behind a "beware: intensive PoW" banner so the DoS shield is
-tangible first-hand. Any other demo is knob-adjustable: set
+memory+CPU-hard toll behind a "beware: intensive PoW" banner so the toll is
+tangible first-hand. (The toll prices abuse; it is not by itself a DoS shield —
+see "Edge rate-limit — REQUIRED" below.) Any other demo is knob-adjustable: set
 `KIOSK_POW_DIFFICULTY=high` on it too to feel its own toll.
 
 > **How it wires (WIRED).** All seven demos' initializers read
@@ -72,8 +74,10 @@ tangible first-hand. Any other demo is knob-adjustable: set
    want the flagship domain, point `atablefor.us` (+`www`) at the VPS too.
 2. **Provision the VPS** (2–4 GB; all 8 apps at the shipped `WEB_CONCURRENCY=1`
    × ~250 MB RSS ≈ 2 GB Puma, so 4 GB is comfortable once Postgres and Caddy
-   take their share). Install Postgres 17, Caddy, Ruby (`.mise.toml` pins the
-   version), and a non-login `kiosk` service user.
+   take their share). Install Postgres 17, Caddy **with the `caddy-ratelimit`
+   module** (see "Edge rate-limit — REQUIRED" below; stock Caddy has no
+   rate-limiting), Ruby (`.mise.toml` pins the version), and a non-login `kiosk`
+   service user.
 3. **Set real secrets.** Replace every `REPLACE_*` value in each
    `env/<app>.env.example` (secret key base, DB passwords, signing key, PoW
    secret, a Stripe **test** key for getgrocery only). Copy to
@@ -155,15 +159,46 @@ for app in getgrocery atablefor hoteling skooti stylish philslist tudu prove; do
 done
 #    Check: systemctl status kiosk-demo@getgrocery ; journalctl -u kiosk-demo@skooti -f
 
-# 4. Caddy: point it at this Caddyfile and reload.
-sudo cp /srv/kiosk/reference/deploy/Caddyfile /etc/caddy/Caddyfile
-sudo systemctl reload caddy
+
+# 4. Caddy: install the edge rate-limit module, then point it at this Caddyfile.
 #    Caddy fetches a cert per subdomain on first request (HTTP-01). For a single
 #    wildcard cert instead, see the DNS-01 note in the Caddyfile header.
 
 # 5. Cron: daily housekeeping.
 #    0 4 * * *  /srv/kiosk/reference/deploy/prune.sh >> /var/log/kiosk-prune.log 2>&1
 ```
+
+
+## Edge rate-limit — REQUIRED (K-540)
+
+**Proof-of-work does not remove the need for a limiter in front of the app; on
+the register path it is the thing being exploited.** `POST /kiosk/auth/register`
+runs the PoW gate **unauthenticated**, before any key verification: anyone can
+take a free 402 challenge and resubmit it with a valid HMAC sig and garbage
+indices, and each submission costs *this box* an Equihash verify (~19 ms
+measured at `n=168 k=7`). PoW prices the attacker's **solve**; it does not price
+our **verify**. At the shipped `WEB_CONCURRENCY=1`, ~54 req/s saturates a
+worker — and a plain flood of any other endpoint does much the same.
+
+The app-side half is already shipped (an issued challenge drives at most one
+verify; structural pre-checks run before the hash loop). The operator-side half
+is yours, and there is no app setting that substitutes for it. Pick one:
+
+- **Caddy module** (what step 4 above does): `caddy add-package
+  github.com/mholt/caddy-ratelimit` (Caddy ≥ 2.7 swaps in a plugin-included
+  binary from the official download API — Caddy flags the subcommand
+  EXPERIMENTAL, so `xcaddy build --with github.com/mholt/caddy-ratelimit` is the
+  stable equivalent if you compile your own), then uncomment
+  `import ratelimit` and the `(ratelimit)` snippet in the Caddyfile. They ship
+  **commented** because `rate_limit` is not a stock directive — a stock binary
+  refuses the whole config ("unrecognized directive: rate_limit") and would not
+  start at all, which is why enabling it is a runbook step and not a default.
+- **CDN / WAF** in front of the box (Cloudflare et al.) with a per-IP rate rule
+  on `/kiosk/*`. Equally acceptable; then leave the Caddy snippet commented.
+
+Deploying with **neither** is the one unacceptable option. Verify afterwards:
+hammer `/kiosk/auth/register` from one IP and confirm you are cut off (429)
+well before the box slows down.
 
 ## Payments — Stripe TEST mode
 
@@ -287,3 +322,19 @@ and landing tile return.
 Still open (not this change): a per-app `demo:prune` (+ idempotent `demo:seed`)
 rake task so `prune.sh` reclaims disk from throwaway registrations —
 `prune.sh` already calls these if present and no-ops safely if not.
+
+#    STEP 4a IS REQUIRED — see "Edge rate-limit" below. Skipping it leaves
+
+#    /kiosk/auth/register as an unauthenticated CPU sink with nothing bounding
+
+#    the request rate.
+sudo caddy add-package github.com/mholt/caddy-ratelimit   # Caddy >= 2.7
+sudo systemctl restart caddy
+caddy list-modules | grep rate_limit                      # must print the module
+sudo cp /srv/kiosk/reference/deploy/Caddyfile /etc/caddy/Caddyfile
+
+#    Now uncomment `import ratelimit` + the (ratelimit) snippet in
+
+#    /etc/caddy/Caddyfile (they ship commented so a stock binary still boots).
+sudo caddy validate --config /etc/caddy/Caddyfile
+sudo systemctl reload caddy

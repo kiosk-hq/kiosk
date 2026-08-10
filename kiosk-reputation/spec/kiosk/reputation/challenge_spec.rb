@@ -206,7 +206,137 @@ RSpec.describe Kiosk::Reputation::Challenge do
   end
 
   # ---------------------------------------------------------------------------
-  # .verify — :bad_proof (expensive check, step 3)
+  # .verify — :bad_params (cheap check, step 3 — K-541)
+  #
+  # The sig proves WE minted the challenge; it does NOT prove the params are
+  # still the difficulty this server demands. Every challenge below has a VALID
+  # sig, a live exp, and a nonce the backend accepts — the ONLY thing wrong is
+  # that its params are not what the caller re-derived from its own config.
+  # ---------------------------------------------------------------------------
+  describe ".verify — :bad_params" do
+    def verify_expecting(expect_spec, c = challenge)
+      described_class.verify(
+        challenge: c,
+        nonce: "good",
+        request_fingerprint: fingerprint,
+        secret: secret,
+        now: now + 1,
+        expect: expect_spec
+      )
+    end
+
+    it "returns :ok when the challenge names exactly the expected alg + params" do
+      expect(verify_expecting({ alg: "equihash", params: { n: 168, k: 7 } })).to eq(:ok)
+    end
+
+    it "REJECTS an HMAC-valid challenge that names cheaper params" do
+      cheap = described_class.issue(
+        alg: alg, params: { n: 8, k: 1 },
+        request_fingerprint: fingerprint,
+        secret: secret, ttl: ttl, now: now, salt: salt, id: id
+      )
+      # Signed with the REAL secret and bound to the REAL request — the exact
+      # forgery a leaked KIOSK_POW_SECRET would enable, and the exact shape of a
+      # challenge minted just before a difficulty raise.
+      expect(verify_expecting({ alg: "equihash", params: { n: 168, k: 7 } }, cheap)).to eq(:bad_params)
+    end
+
+    it "REJECTS a challenge naming a different alg (backend substitution)" do
+      expect(verify_expecting({ alg: "argon2id", params: { n: 168, k: 7 } })).to eq(:bad_params)
+    end
+
+    it "rejects a single changed param value" do
+      expect(verify_expecting({ alg: "equihash", params: { n: 168, k: 8 } })).to eq(:bad_params)
+    end
+
+    it "rejects params with an extra key the server does not demand" do
+      expect(verify_expecting({ alg: "equihash", params: { n: 168, k: 7, rounds: 3 } })).to eq(:bad_params)
+    end
+
+    it "keeps the pre-K-541 behaviour when expect: is omitted (opt-in check)" do
+      cheap = described_class.issue(
+        alg: alg, params: { n: 8, k: 1 },
+        request_fingerprint: fingerprint,
+        secret: secret, ttl: ttl, now: now, salt: salt, id: id
+      )
+      result = described_class.verify(
+        challenge: cheap, nonce: "good",
+        request_fingerprint: fingerprint, secret: secret, now: now + 1
+      )
+      expect(result).to eq(:ok)
+    end
+
+    context "equality matches exactly what the sig commits to (no false rejections)" do
+      it "ignores key ORDER in the expected params" do
+        expect(verify_expecting({ alg: alg, params: { k: 7, n: 168 } })).to eq(:ok)
+      end
+
+      it "ignores Symbol-vs-String param keys" do
+        expect(verify_expecting({ alg: alg, params: { "n" => 168, "k" => 7 } })).to eq(:ok)
+      end
+
+      it "ignores Integer-vs-String param values (one identical signed string)" do
+        expect(verify_expecting({ alg: alg, params: { n: "168", k: "7" } })).to eq(:ok)
+      end
+
+      it "accepts a String-keyed expect hash" do
+        expect(verify_expecting({ "alg" => "equihash", "params" => { n: 168, k: 7 } })).to eq(:ok)
+      end
+
+      it "skips the alg check when expect omits :alg" do
+        expect(verify_expecting({ params: { n: 168, k: 7 } })).to eq(:ok)
+      end
+
+      it "skips the params check when expect omits :params" do
+        expect(verify_expecting({ alg: "equihash" })).to eq(:ok)
+      end
+    end
+
+    context "anti-DoS ordering — backend is NOT called on :bad_params" do
+      it "rejects off-spec params without spending a backend eval (spy backend)" do
+        Kiosk::Reputation::Backends.reset!
+        Kiosk::Reputation::Backends.register("equihash", TestHelpers::SpyRaisingBackend)
+
+        c = described_class.issue(
+          alg: alg, params: { n: 8, k: 1 },
+          request_fingerprint: fingerprint,
+          secret: secret, ttl: ttl, now: now, salt: salt, id: id
+        )
+
+        result = nil
+        expect do
+          result = described_class.verify(
+            challenge: c, nonce: "good",
+            request_fingerprint: fingerprint, secret: secret, now: now + 1,
+            expect: { alg: "equihash", params: { n: 168, k: 7 } }
+          )
+        end.not_to raise_error
+        expect(result).to eq(:bad_params)
+      end
+    end
+
+    it "still reports :bad_sig (not :bad_params) when the sig is also wrong" do
+      tampered = challenge.merge(sig: "deadbeef" * 8)
+      expect(verify_expecting({ alg: "equihash", params: { n: 8, k: 1 } }, tampered)).to eq(:bad_sig)
+    end
+
+    it "still reports :expired (not :bad_params) when the challenge is also dead" do
+      cheap = described_class.issue(
+        alg: alg, params: { n: 8, k: 1 },
+        request_fingerprint: fingerprint,
+        secret: secret, ttl: ttl, now: now, salt: salt, id: id
+      )
+      result = described_class.verify(
+        challenge: cheap, nonce: "good",
+        request_fingerprint: fingerprint, secret: secret, now: now + ttl + 1,
+        expect: { alg: "equihash", params: { n: 168, k: 7 } }
+      )
+      expect(result).to eq(:expired)
+    end
+  end
+
+  # ---------------------------------------------------------------------------
+  # .verify — :bad_proof (expensive check, step 4)
   # ---------------------------------------------------------------------------
   describe ".verify — :bad_proof" do
     it "returns :bad_proof when the nonce is wrong but the challenge is valid" do

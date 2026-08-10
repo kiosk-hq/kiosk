@@ -60,7 +60,10 @@ Kiosk.configure do |c|
   c.agent_idp = JwtOrStubIdp.new(stub: Rails.env.local? ? StubIdp.new : nil)
   # The provider's own web-session channel: authenticates the approving
   # human on the account-binding pages (device verify, link mint, unlink).
-  c.user_idp = StubUserIdp.new
+  # DEV/TEST ONLY (K-555): the stub parses an UNSIGNED, self-asserted
+  # `user:u-<uuid>` bearer, so it is wired only under Rails.env.local? (the
+  # e2e harness boots in development); in production user_idp is nil.
+  c.user_idp = Rails.env.local? ? StubUserIdp.new : nil
 
   c.payment_provider = StubPsp.new
 end

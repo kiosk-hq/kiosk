@@ -124,8 +124,13 @@ Kiosk.configure do |c|
   # Devise/Warden session (the /users/sign_in cookie that approves links on
   # the verify page, mints link codes, unlinks, and drives the
   # manage-assistants page; walked by `rake demo:binding`).
+  # DEV/TEST ONLY (K-555): the StubUserIdp arm maps a self-asserted
+  # `X-Staff-Session` header to a role-carrying human identity (self-grants a
+  # staff role), so it is included ONLY under Rails.env.local?. In production
+  # the composite is Devise-only — the real, production-reachable human channel
+  # is preserved; only the un-signed SSO stand-in is dropped.
   c.user_idp = CompositeUserIdp.new(
-    StubUserIdp.new,
+    *(Rails.env.local? ? [StubUserIdp.new] : []),
     Kiosk::UserIdentityProviders::Devise.new,
   )
   # Where the engine bounces an UNAUTHENTICATED browser visitor to the

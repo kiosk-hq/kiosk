@@ -168,7 +168,11 @@ Kiosk.configure do |c|
   # unlink). A stub because this demo has no human login UI — see
   # lib/stub_user_idp.rb for the honest scope; `rake demo:claim` walks
   # the claim-rebind ceremony through it.
-  c.user_idp = StubUserIdp.new
+  # DEV/TEST ONLY (K-555): the stub parses an UNSIGNED, self-asserted
+  # `user:u-<uuid>` bearer into a human identity, so it is wired only under
+  # Rails.env.local?; in production user_idp is nil and the binding surfaces
+  # 401 until a real adapter (kiosk-user-idp-devise) is configured.
+  c.user_idp = Rails.env.local? ? StubUserIdp.new : nil
 
   # Payment provider: real Stripe in test mode (sk_test_…).
   # getgrocery uses SetupIntent card-on-file: card saved once on Stripe's

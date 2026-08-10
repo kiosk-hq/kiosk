@@ -654,6 +654,65 @@ end
 
 self_asserted_beat = self_asserted_token_forgery.call
 
+# ── SelfAssertedUserBearerForgery (K-555) — in-process, PRODUCTION-config ──────
+# The HUMAN sibling of the K-539 agent-stub forgery. skooti's StubUserIdp parses
+# an UNSIGNED, self-asserted `user:u-<uuid>` bearer into a HUMAN identity — the
+# provider's own "web session" channel that authenticates the account-binding
+# surfaces (device verify / link / unlink). This suite drives a server booted in
+# RAILS_ENV=development, where that stub is INTENTIONALLY live (the binding
+# ceremonies can be walked without a real provider login) — so the DEV wire
+# cannot demonstrate the block. This beat instead exercises the REAL shipped
+# StubUserIdp guard in-process against a stubbed PRODUCTION Rails.env: a forged
+# `user:u-…` bearer must resolve to NO identity under production (→ the binding
+# surface raises 401), while development still accepts it (or every driver + the
+# e2e harness break). Unit proof: kiosk-test-support
+# spec/stub_user_idp_env_gate_spec.rb. (skooti boots no skooti smoke; the
+# over-the-wire production 401 for the role-carrying variant is stylish's
+# production-smoke Assertion 6.)
+self_asserted_user_bearer_forgery = lambda do
+  require "kiosk"
+  lib = File.expand_path("lib", __dir__)
+  require File.join(lib, "stub_user_idp")
+
+  # Reuse the Rails.env shim the K-539 beat installed; define it if this beat
+  # ever runs first.
+  unless defined?(Rails)
+    env_klass = Struct.new(:name) do
+      def local? = %w[development test].include?(name)
+      def to_s = name.to_s
+    end
+    rails = Module.new do
+      class << self
+        attr_accessor :env
+      end
+    end
+    Object.const_set(:Rails, rails)
+    Object.const_set(:RedteamEnvShim, env_klass) unless defined?(RedteamEnvShim)
+  end
+
+  forged = Struct.new(:headers).new(
+    { "Authorization" => "user:u-#{SecureRandom.uuid}" },
+  )
+  idp = StubUserIdp.new
+
+  Rails.env = RedteamEnvShim.new("production")
+  prod_identity = idp.verify(forged)
+  Rails.env = RedteamEnvShim.new("development")
+  dev_identity = idp.verify(forged)
+
+  if prod_identity.nil? && dev_identity && dev_identity.actor.to_s == "human"
+    { blocked: true, detail: "forged self-asserted `user:u-…` human bearer → NO identity under production config (dev harness still accepts it as actor=human)" }
+  elsif prod_identity
+    { blocked: false, detail: "K-555 REGRESSION: forged self-asserted human bearer authenticated under PRODUCTION config as user_id=#{prod_identity.user_id}" }
+  else
+    { blocked: false, detail: "unexpected: development branch rejected the human stub (drivers would break): #{dev_identity.inspect}" }
+  end
+rescue StandardError => e
+  { blocked: false, detail: "beat error: #{e.class}: #{e.message}" }
+end
+
+self_asserted_user_beat = self_asserted_user_bearer_forgery.call
+
 # ── Summary ───────────────────────────────────────────────────────────────────
 
 blocked_results = results.select { |r| !r[:verdict].skipped && r[:verdict].blocked }
@@ -694,8 +753,13 @@ if self_asserted_beat[:blocked]
 else
   puts "  BREACH   ✗ SelfAssertedTokenForgery — #{self_asserted_beat[:detail]}"
 end
+if self_asserted_user_beat[:blocked]
+  puts "  BLOCKED  ✓ SelfAssertedUserBearerForgery — #{self_asserted_user_beat[:detail]}"
+else
+  puts "  BREACH   ✗ SelfAssertedUserBearerForgery — #{self_asserted_user_beat[:detail]}"
+end
 
-all_beats = [mc_beat, theft_beat, xop_beat, fcb_beat, self_asserted_beat]
+all_beats = [mc_beat, theft_beat, xop_beat, fcb_beat, self_asserted_beat, self_asserted_user_beat]
 local_beats_blocked = all_beats.count { |b| b[:blocked] }
 blocked_count = blocked_results.size + local_beats_blocked
 beat_breach   = all_beats.count { |b| !b[:blocked] }

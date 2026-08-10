@@ -32,7 +32,7 @@ Gem::Specification.new do |spec|
   spec.metadata["changelog_uri"]   = "https://github.com/kiosk-hq/kiosk/blob/main/kiosk-pow/CHANGELOG.md"
   spec.metadata["bug_tracker_uri"] = "https://github.com/kiosk-hq/kiosk/issues"
 
-  spec.files = Dir.glob("lib/**/*") + %w[solve.py requirements.txt SKILL.md README.md LICENSE.txt CHANGELOG.md]
+  spec.files = Dir.glob("lib/**/*") + %w[solve.py requirements.txt README.md LICENSE.txt CHANGELOG.md]
   spec.require_paths = ["lib"]
 
   # Raw Argon2id FFI bindings — provides Argon2::Ext.argon2id_hash_raw.

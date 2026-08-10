@@ -20,23 +20,41 @@ module Kiosk
     #   take(public_key_pem, nonce)     → Boolean  (true iff a live, matching
     #                                     challenge existed; consumes it)
     class AuthChallengeStore
-      def initialize
-        @store = {}
-        @mutex = Mutex.new
+      # Hard cap on live entries. GET /auth/challenge is unauthenticated and
+      # un-rate-limited, so pruning expired entries alone does not bound memory
+      # within the TTL window — a distinct-key flood can issue rate×TTL LIVE
+      # challenges before any expire. The cap evicts the oldest live entry once
+      # reached, so the store can never exceed this many entries (K-548).
+      # A single-process provider under real load holds far fewer; an override
+      # (Redis) enforces its own bound. Configurable via the constructor.
+      DEFAULT_MAX_ENTRIES = 50_000
+
+      def initialize(max_entries: DEFAULT_MAX_ENTRIES)
+        @store       = {}
+        @mutex       = Mutex.new
+        @max_entries = Integer(max_entries)
+        raise ArgumentError, "max_entries must be positive" if @max_entries < 1
       end
 
       # Record +nonce+ as the outstanding challenge for +public_key_pem+ until
       # Unix timestamp +exp+. Overwrites any prior challenge for the same key —
       # only the most recently issued challenge is valid.
       #
-      # Prunes expired entries opportunistically on the way in: a
-      # distinct-key challenge flood — GET /auth/challenge is unauthenticated —
-      # cannot accumulate unboundedly, since each insert first drops every
-      # already-expired entry. Without this, expired entries only cleared when a
-      # later #take ran, which never happens for keys that never register.
+      # Two bounds keep the store from growing without limit under an
+      # unauthenticated distinct-key flood (GET /auth/challenge needs no auth):
+      #   1. prune! first drops every already-EXPIRED entry;
+      #   2. a hard SIZE CAP (@max_entries) then evicts the oldest LIVE entry if
+      #      still at capacity — the piece prune! alone cannot provide, since a
+      #      flood of unexpired keys never triggers expiry.
+      # Re-issuing an existing key moves it to newest (delete-then-insert), so
+      # the eviction order is genuinely oldest-first by last issue.
       def put(public_key_pem, nonce, exp)
         prune!
-        @mutex.synchronize { @store[public_key_pem] = [nonce, exp] }
+        @mutex.synchronize do
+          @store.delete(public_key_pem)          # move-to-newest on re-issue
+          @store.shift while @store.size >= @max_entries # evict oldest at capacity
+          @store[public_key_pem] = [nonce, exp]
+        end
       end
 
       # Consume the challenge for +public_key_pem+ iff one exists, matches

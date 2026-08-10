@@ -61,6 +61,44 @@ RSpec.describe Kiosk::Server::AuthChallengeStore do
     expect(store.take("live-key", "live-nonce")).to be(true)
   end
 
+  # K-548: prune! only drops EXPIRED entries. GET /auth/challenge is
+  # unauthenticated and un-rate-limited, so a distinct-key flood of LIVE
+  # (unexpired) challenges would still accumulate rate×TTL entries before any
+  # expiry. A hard size cap bounds the store even within the TTL window: at
+  # capacity, the oldest live entry is evicted.
+  describe "size cap (bounded even within the TTL window)" do
+    let(:live) { Time.now.to_i + 300 }
+
+    it "never grows past max_entries when flooded with live distinct keys" do
+      capped = described_class.new(max_entries: 10)
+      100.times { |i| capped.put("key-#{i}", "nonce-#{i}", live) }
+      expect(store_size(capped)).to eq(10)
+    end
+
+    it "evicts the OLDEST live entry, keeping the newest" do
+      capped = described_class.new(max_entries: 3)
+      capped.put("k1", "n1", live)
+      capped.put("k2", "n2", live)
+      capped.put("k3", "n3", live)
+      capped.put("k4", "n4", live) # at capacity → evicts k1 (oldest)
+
+      expect(capped.take("k1", "n1")).to be(false) # evicted
+      expect(capped.take("k4", "n4")).to be(true)  # newest survives
+    end
+
+    it "re-issuing a key refreshes its position (not evicted as stale-oldest)" do
+      capped = described_class.new(max_entries: 3)
+      capped.put("k1", "n1", live)
+      capped.put("k2", "n2", live)
+      capped.put("k1", "n1b", live) # re-issue k1 → moves to newest
+      capped.put("k3", "n3", live)
+      capped.put("k4", "n4", live)  # evicts the now-oldest (k2), NOT k1
+
+      expect(capped.take("k2", "n2")).to be(false) # evicted
+      expect(capped.take("k1", "n1b")).to be(true) # refreshed, survives
+    end
+  end
+
   # Reach the private @store hash for a size assertion without adding a public
   # accessor to the shipped surface.
   def store_size(store)

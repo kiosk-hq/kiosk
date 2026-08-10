@@ -91,11 +91,41 @@ on retry by construction — there is no `pow` body field to exclude.
 1. Recompute + compare HMAC sig (constant-time `OpenSSL.fixed_length_secure_compare`)
    → `:bad_sig` (tampered, wrong request binding, or forged challenge)
 2. Expiry check (`exp > now`) → `:expired`
-3. **Only then**: one backend eval (equihash verify — 2^k BLAKE2b hashes, ~ms + KB)
+3. Parameter re-derivation against the caller's live config (`expect:`)
+   → `:bad_params` (see below)
+4. **Only then**: one backend eval (equihash verify — 2^k BLAKE2b hashes, ~ms + KB)
    → `:ok` / `:bad_proof`
 
-Floods of forged or expired proofs are rejected at steps 1/2 without burning a
-backend eval. This is not optional; it is tested.
+Floods of forged, expired or off-spec proofs are rejected at steps 1/2/3 without
+burning a backend eval. This is not optional; it is tested.
+
+## Server-side parameter re-derivation (`expect:`)
+
+The challenge is stateless, so `alg`/`params` travel on the wire and come back
+from the client. The HMAC sig proves *we minted them*; it does **not** prove they
+are still the difficulty this server demands. Pass `expect:` — the spec the
+caller just re-derived from its own configuration for this request — and
+`verify` refuses any challenge naming other parameters, however valid its sig:
+
+```ruby
+Kiosk::Reputation::Challenge.verify(
+  challenge: challenge, nonce: solution,
+  request_fingerprint: fp, secret: secret, now: Time.now.to_i,
+  expect: { alg: "equihash", params: { n: 168, k: 7 } }   # from YOUR config, not the wire
+)
+```
+
+Two things this buys: a challenge minted just before a difficulty raise stops
+being solvable at the old cheap parameters for the rest of its TTL, and a leaked
+HMAC secret no longer lets a self-signed `{n: 8, k: 1}` challenge turn the toll
+off — the toll degrades rather than vanishing. `kiosk-server`'s gate always
+passes `expect:`; it is optional here so an existing embedder keeps working.
+
+Comparison uses the same canonical `k=v` rendering the sig covers, so key order,
+Symbol-vs-String keys and `168` vs `"168"` are all equal — it rejects a different
+difficulty and nothing else. `:bad_params` means **re-challenge, not bad faith**:
+`kiosk-server` releases the challenge id and answers 402 at current params
+(never 403, never `on_bad_proof`).
 
 ## Components
 
@@ -139,9 +169,10 @@ result = Kiosk::Reputation::Challenge.verify(
   nonce:                client_solution,   # opaque to Challenge; passed to the backend .verify
   request_fingerprint:  "sha256:...",
   secret:               "provider-hmac-key",
-  now:                  Time.now.to_i
+  now:                  Time.now.to_i,
+  expect:               { alg: "equihash", params: { n: 168, k: 7 } }  # optional; from live config
 )
-# => :ok | :bad_sig | :expired | :bad_proof
+# => :ok | :bad_sig | :expired | :bad_params | :bad_proof
 ```
 
 ### `Factors`
@@ -298,8 +329,10 @@ there. The example policy then escalates difficulty fast on subsequent requests
 from the same principal.
 
 This is the intended signal: a correct solver never submits a wrong nonce.
-A `:bad_sig` (forged or wrong-request proof) does NOT trigger `on_bad_proof` —
-it could be an honest clock skew or retry; no evidence of bad faith.
+A `:bad_sig` (forged or wrong-request proof), `:expired` or `:bad_params`
+(off-spec difficulty) does NOT trigger `on_bad_proof` — those can be honest
+clock skew, a retry, or a challenge that outlived a difficulty change; no
+evidence of bad faith.
 
 ## kiosk-server configuration
 

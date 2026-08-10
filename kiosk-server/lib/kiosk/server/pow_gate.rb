@@ -26,11 +26,14 @@ module Kiosk
     # On a submitted proof, `Kiosk::Reputation::Challenge.verify` enforces:
     #   1. HMAC sig + request-fingerprint binding (cheap constant-time compare)
     #   2. Expiry check (integer compare)
-    #   3. Equihash backend eval (at n=168 k=7: ~16-17 ms + KB of RAM to
+    #   3. Parameter re-derivation: the challenge must name the alg/params this
+    #      server's live config demands right now, not merely params we once
+    #      signed (K-541 — see the `expect:` argument below)
+    #   4. Equihash backend eval (at n=168 k=7: ~16-17 ms + KB of RAM to
     #      verify — memory is the asymmetry, since SOLVING the same proof
     #      costs ~1.3 GiB)
-    # A flood of forged or expired proofs is rejected at step 1/2 without
-    # burning a backend evaluation.
+    # A flood of forged, expired or off-spec proofs is rejected at step 1/2/3
+    # without burning a backend evaluation.
     #
     # == Spent-id set
     #
@@ -184,14 +187,22 @@ module Kiosk
           # drive at most one verify.
           next unless config.pow_spent_store.claim(id, challenge[:exp].to_i)
 
-          # Cheap sig + expiry checks first (inside Challenge.verify), then the
-          # one cheap backend eval.
+          # Cheap sig + expiry + parameter checks first (inside
+          # Challenge.verify), then the one cheap backend eval.
+          #
+          # K-541: `expect` is the alg/params THIS request's `spec` just
+          # re-derived from live config (the policy, or
+          # `config.registration_pow_params` for register) — the same source
+          # `issue_challenges` mints from. Passing it means a challenge is
+          # honoured only at the difficulty the server demands right now, not
+          # merely at the difficulty its HMAC says we once minted.
           outcome = ::Kiosk::Reputation::Challenge.verify(
             challenge:            challenge,
             nonce:                nonce,
             request_fingerprint:  fingerprint,
             secret:               secret,
             now:                  Time.now.to_i,
+            expect:               { alg: spec[:alg] || spec["alg"], params: spec[:params] || spec["params"] },
           )
 
           case outcome
@@ -211,12 +222,18 @@ module Kiosk
             # agent is steered away from both improvised solvers and the
             # unvetted PyPI packages it otherwise reaches for.
             raise Errors::Forbidden.new("invalid proof of work", hint: POW_INVALID_HINT)
-          when :expired, :bad_sig
+          when :expired, :bad_sig, :bad_params
             # Doesn't count; falls through to a fresh re-challenge below if the
             # quota isn't met. No on_bad_proof (honest clock skew / retry). The
             # sig didn't authenticate this challenge (or it is already dead), so
             # release the claim — never retain a forged-sig id (it would let an
             # attacker fill the spent store with junk exp anchors).
+            #
+            # :bad_params (K-541) joins them deliberately: a challenge naming
+            # off-spec difficulty is either OURS from before a difficulty change
+            # (an honest client, owed a fresh challenge at the new params — 402,
+            # never 403) or forged with a leaked secret (which a 402 loop denies
+            # just as effectively, at no cost to us since no hash loop ran).
             config.pow_spent_store.release(id)
           end
         end

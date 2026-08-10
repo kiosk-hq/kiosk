@@ -23,8 +23,12 @@ module Kiosk
     # equihash verify (K-542), so a bad proof CONSUMES its challenge: a replay of
     # the same id is turned away with a fresh re-challenge (402) without a second
     # verify. One issued challenge therefore drives at most one hash-loop verify.
-    # (The operator-side half — the edge rate-limit in deploy/Caddyfile — is
-    # deploy config, out of this gem's scope.)
+    #
+    # That bounds the cost PER CHALLENGE, not the request RATE — a caller who
+    # keeps taking fresh 402s keeps buying verifies. Bounding the rate is the
+    # operator's half, and it is REQUIRED, not optional: an edge rate-limit in
+    # front of the app (see deploy/Caddyfile and deploy/README.md "Edge
+    # rate-limit"). No setting in this gem substitutes for it.
     module RegistrationPow
       module_function
 

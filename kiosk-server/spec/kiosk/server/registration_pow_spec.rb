@@ -119,6 +119,65 @@ RSpec.describe Kiosk::Server::RegistrationPow do
     expect(verify_calls).to eq(1)
   end
 
+  # K-541: the gate re-derives the demanded alg/params from live config on every
+  # verify, so an HMAC-VALID challenge is honoured only at the difficulty the
+  # server currently demands. The two examples below submit the SAME proof —
+  # real secret, real register fingerprint, live exp, and a nonce that genuinely
+  # solves it at n=8 k=1 — against two server configs. Only the params differ.
+  describe "server-side parameter re-derivation (K-541)" do
+    def trivial_proof(id:)
+      { challenge: kat_challenge(id: id), nonce: KAT_NONCE }
+    end
+
+    def configure_at(params)
+      Kiosk.configure do |c|
+        c.registration_pow_count  = 1
+        c.registration_pow_params = params
+        c.pow_secret              = secret
+      end
+    end
+
+    it "accepts the trivial proof while the server itself demands n=8 k=1" do
+      configure_at(KAT_PARAMS)
+      expect(
+        Kiosk::Server::RegistrationPow.gate(public_key_pem: PEM, pow: { proofs: [trivial_proof(id: "k541-ok")] }),
+      ).to be_nil
+    end
+
+    it "REJECTS that same proof once the server demands harder params" do
+      configure_at({ n: 96, k: 5 })
+
+      # Before K-541 this returned :proceed: the sig was ours, so the challenge
+      # was honoured at whatever difficulty it named — a leaked pow_secret (or
+      # a challenge outliving a difficulty raise) turned the toll off silently.
+      expect {
+        Kiosk::Server::RegistrationPow.gate(public_key_pem: PEM, pow: { proofs: [trivial_proof(id: "k541-stale")] })
+      }.to raise_error(Kiosk::Server::Errors::PowRequired) { |e|
+        # Re-challenged at the CURRENT difficulty, not the one it asked for.
+        expect(e.challenges.first[:params]).to eq({ n: 96, k: 5 })
+      }
+    end
+
+    it "is a re-challenge, not bad faith: the off-spec id is released, not burnt" do
+      configure_at({ n: 96, k: 5 })
+      expect {
+        Kiosk::Server::RegistrationPow.gate(public_key_pem: PEM, pow: { proofs: [trivial_proof(id: "k541-rel")] })
+      }.to raise_error(Kiosk::Server::Errors::PowRequired)
+
+      # An honest client holding a pre-raise challenge must not have its id
+      # burnt (and a forger must not be able to poison the spent store).
+      expect(Kiosk.configuration.pow_spent_store.spent?("k541-rel")).to be(false)
+    end
+
+    it "never spends a backend eval on an off-spec challenge" do
+      configure_at({ n: 96, k: 5 })
+      expect(Kiosk::Pow::Equihash).not_to receive(:verify)
+      expect {
+        Kiosk::Server::RegistrationPow.gate(public_key_pem: PEM, pow: { proofs: [trivial_proof(id: "k541-nohash")] })
+      }.to raise_error(Kiosk::Server::Errors::PowRequired)
+    end
+  end
+
   it "rejects the removed SHA256 registration_difficulty knob" do
     expect {
       Kiosk.configure { |c| c.registration_difficulty = 20 }

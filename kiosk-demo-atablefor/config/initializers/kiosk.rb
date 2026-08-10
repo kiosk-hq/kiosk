@@ -364,8 +364,11 @@ Kiosk::Server::Queries.register("availability",
                                               "per open (restaurant, table, seating): restaurant, " \
                                               "neighborhood, cuisine, restaurant_id, restaurant_table_id, " \
                                               "table_label, capacity, seating_date, seating_time, seating_at, " \
-                                              "deposit_eur. Pass restaurant_id + restaurant_table_id + " \
-                                              "seating_date + time to book_table. Seatings are the current " \
+                                              "deposit_eur. Pass restaurant_id + restaurant_table_id + date + " \
+                                              "time + party_size to book_table (all five are required) — the " \
+                                              "row field named seating_date is book_table's `date` param, and " \
+                                              "the row's seating_time is book_table's `time`: same values, " \
+                                              "different names. Seatings are the current " \
                                               "upcoming ones (Europe/Lisbon), never stale; a seating with " \
                                               "every table taken is absent (sold out). deposit_eur is the " \
                                               "no-show hold in whole EUR (0 = none), settled at the " \

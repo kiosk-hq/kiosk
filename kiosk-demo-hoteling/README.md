@@ -20,10 +20,13 @@ only confirmed once it is paid for). Payment settles through a **stub PSP**
 - `pay` — settle the AP2 mandate chain (intent → cart → payment) via the stub PSP
 - `schema` — self-discovery
 
-Advertised capabilities are `[schema, query, run, pay]`. Only the `query` verb
-(browsing) is priced with Equihash proof-of-work — a metered toll, not a wall:
-an AI assistant pays a few seconds of compute to look deeper, a bulk scraper
-pays linearly and forever.
+Advertised capabilities are `[schema, query, run, pay]`. **Registration is
+always gated by Equihash proof-of-work** (`registration_pow_count = 1`) — every
+new agent key pays one solve to register. Separately, an **opt-in** browse toll
+(off by default; enable with `KIOSK_POW_BROWSE_DEMO=1`) prices the browse-heavy
+`query` verb after the first few free availability queries — a metered toll, not
+a wall: an AI assistant pays a few seconds of compute to look deeper, a bulk
+scraper pays linearly and forever.
 
 ## Running it
 
@@ -31,8 +34,8 @@ Postgres required. From this directory:
 
 ```
 bin/rails demo:setup       # create + load schema + seed the properties and rooms
-bin/rails demo:book        # the headline: register → availability → reserve_room → payment_setup → pay → confirm_booking (plus the payment-gate negative)
-bin/rails demo:browse      # browse-only tour of the query surface
+bin/rails demo:book        # the headline: register → availability → reserve_room → pay → confirm_booking (plus the payment-gate negative)
+bin/rails demo:browse      # browse-heavy priced-pagination PoW demo — boots with the browse gate active (KIOSK_POW_BROWSE_DEMO=1); depth is priced, not banned
 bin/rails demo:isolation   # cross-tenant denial (a booking is only yours)
 bin/rails demo:redteam     # adversarial regression battery
 bin/rails demo:schema      # self-discovery over the schema verb

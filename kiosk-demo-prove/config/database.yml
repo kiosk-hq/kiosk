@@ -14,6 +14,6 @@ test:
 
 production:
   <<: *default
-  database: kiosk_prove_production
+  database: <%= ENV.fetch("KIOSK_PROVE_DB", "kiosk_prove_production") %>
   username: <%= ENV.fetch("KIOSK_PROVE_DB_USER", "kiosk_prove") %>
   password: <%= ENV["KIOSK_PROVE_DB_PASSWORD"] %>

@@ -9,8 +9,10 @@ Each operator trusts `prove.my` as an issuer once; it never registers with every
 government service (the broker does), and it never sees a document.
 
 Deploy origin: **kyc.demo.kiosk.tech** (the registered demo domain; production
-brand `prove.my`). The issuer `iss` / public URL is env-configurable
-(`KIOSK_PROVE_ISSUER`, `PROVE_PUBLIC_URL`) and defaults to that origin; the
+brand `prove.my`). The issuer `iss` is env-configurable (`KIOSK_PROVE_ISSUER`)
+and defaults to that origin (`https://kyc.demo.kiosk.tech`); the public
+verification-URL base (`PROVE_PUBLIC_URL`) defaults to the intake request's own
+`base_url` — the origin the request arrived on — **not** the deploy origin. The
 two-server harness and specs pin their own local values on both sides.
 
 ## Not a Kiosk operator — an ISSUER
@@ -54,9 +56,11 @@ The minted `kyc_jws` payload (the shape the operator's `KycVerifier` accepts):
   request); a confirmed/declined row is never re-confirmed; an expired row is
   un-confirmable.
 - **No replay across operators.** The claim carries `operator`/`aud`; the
-  operator's callback handler rejects a claim not addressed to it. (The engine
-  `KycVerifier` is unchanged — the cross-operator check lives at the operator,
-  not in the normative wire.)
+  operator's callback handler rejects a claim not addressed to it. The engine
+  `KycVerifier` **also** enforces this at the wire (ADR-0020): every
+  `POST /kiosk/agents/kyc` rejects a claim whose `aud` != the operator's
+  `kyc_audience`, so the cross-operator check lives in BOTH the operator
+  callback layer and the normative wire.
 - **No replay across subjects.** `sub` is the operator's `user_id` for the
   requesting agent; the operator's `KycVerifier` rejects a `sub` mismatch (the
   `IssuedKycJwsTheft` defense, inherited).

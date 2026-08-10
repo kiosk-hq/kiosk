@@ -314,7 +314,12 @@ jobs:
       # unnoticed only because this workflow had not run since 2026-08-09.)
       #
       # RULE OF THUMB for the next crash-if-absent config: if an initializer
-      # learns to raise outside dev/test, add it HERE in the same commit.
+      # learns to raise outside dev/test, add it HERE in the same commit — AND
+      # in deploy/CHECKLIST.md §5, which documents this exact command for a
+      # human to type before a deploy. That second half was missed when
+      # KIOSK_ISSUER was added here, so the documented command aborted (exit 1,
+      # "KIOSK_ISSUER is required outside development/test") on all seven
+      # operator demos. The two copies are one gate written twice.
       - name: Production eager-load check (zeitwerk:check, K-488/K-513)
         working-directory: ${{ matrix.demo }}
         env:

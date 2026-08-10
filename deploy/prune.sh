@@ -47,8 +47,20 @@ prune_one() {
 	# in-app, where the ownership/GUC rules live). Falls back to a generic
 	# owner-scoped delete via runner. Neither task is created by this runbook —
 	# wiring `demo:prune` into each app is the telemetry/rename follow-up (below).
+	#
+	# Load the app's env exactly as the systemd unit does (same pattern as
+	# demo-reset.sh). Any task that depends on `:environment` boots the app, and
+	# in production the initializers REFUSE to boot without KIOSK_POW_SECRET
+	# (K-541) / KIOSK_ISSUER (K-510) / SECRET_KEY_BASE — verified: a bare
+	# `RAILS_ENV=production bin/rails demo:reconcile` exits 1 with "KIOSK_POW_SECRET
+	# is required outside development/test". `bin/rails -T` alone survives without
+	# them (it never runs initializers), so the probe below would keep reporting
+	# "no demo:prune task yet" while the real invocation aborted.
 	(
 		cd "$dir"
+		if [ -f "/etc/kiosk-demo/${app}.env" ]; then
+			set -a; . "/etc/kiosk-demo/${app}.env"; set +a
+		fi
 		if RAILS_ENV=production bundle exec bin/rails -T 2>/dev/null | grep -q 'demo:prune'; then
 			RAILS_ENV=production KIOSK_PRUNE_AGE_HOURS="$PRUNE_AGE_HOURS" \
 				bundle exec bin/rails demo:prune

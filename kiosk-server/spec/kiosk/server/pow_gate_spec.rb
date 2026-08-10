@@ -242,7 +242,7 @@ RSpec.describe Kiosk::Server::PowGate do
         expect(penalty_calls).to eq([identity])
       end
 
-      # ── K-494: the 403 must be actionable ──────────────────────────────────
+      # ── K-512: the 403 must be actionable ──────────────────────────────────
       # A bare "invalid proof of work" is a dead end: a live agent that
       # hand-rolled an Equihash solver got four independent construction
       # errors wrong at once and this 403 told it none of that. The hint names

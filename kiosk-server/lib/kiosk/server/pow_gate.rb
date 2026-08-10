@@ -182,7 +182,7 @@ module Kiosk
             accepted[id] = challenge[:exp].to_i
           when :bad_proof
             on_bad_proof.call
-            # K-494: a bare "wrong" is a dead end — a live agent that hand-rolled
+            # K-512: a bare "wrong" is a dead end — a live agent that hand-rolled
             # its own Equihash solver got this 403 and had nothing to act on.
             # Name the ONE recovery step (run the shipped solver) without naming
             # WHICH check failed: the construction stays out of band, and the
@@ -263,7 +263,7 @@ module Kiosk
         "work. Solve every challenge issued in the pow_required 402 and echo it " \
         "back verbatim."
 
-      # Hint on the 403 raised for a cryptographically WRONG proof (K-494).
+      # Hint on the 403 raised for a cryptographically WRONG proof (K-512).
       # Sibling of POW_HEADER_HINT: that one names the SHAPE a malformed proof
       # must take (400), this one names the TOOL a wrong proof must be produced
       # with (403). Deliberately says nothing about the Equihash construction,

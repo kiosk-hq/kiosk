@@ -82,7 +82,7 @@ Asserts every attack is BLOCKED (0 BREACH): `CrossTenantRead`, `ForgedUserId`,
 `MissingAuth` (401), `GarbageToken` (401), `UnknownQuery` (404),
 `UnknownAction` (404), plus tudu beats — `InviteCodeReplay` (403),
 `RevokedMemberAccess` (403), `RevokedAgentKey` (404), `PreLinkTokenAfterLink`
-(403).
+(401).
 
 ### Not-only-commerce proof (`rake demo:schema`)
 

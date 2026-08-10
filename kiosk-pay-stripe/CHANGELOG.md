@@ -1,6 +1,10 @@
 # Changelog
 
 ## [Unreleased]
+- A failed lookup for the outstanding setup session is now logged instead of
+  passing for "there is none": the adapter still degrades to minting a fresh
+  session so the readiness probe keeps answering, but it says so, because the
+  degrade is otherwise byte-for-byte identical to the stable-url happy path.
 - `setup_url` is now stable across calls (K-492): it reuses the `mode:setup`
   Checkout Session already outstanding for the customer instead of creating a
   new one per call, so a host polling card-setup readiness keeps handing its

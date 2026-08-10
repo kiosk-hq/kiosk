@@ -171,6 +171,29 @@ RSpec.describe Kiosk::PaymentProviders::Stripe do
         .to eq("https://checkout.stripe.com/setup/fresh")
     end
 
+    # …and SAYS SO. Degrading to a fresh session is defensible; degrading to one
+    # SILENTLY is not, because on the wire it is byte-for-byte the happy path —
+    # a wrong filter, a renamed field or an API change would revert K-492 to a
+    # session per poll and nothing anywhere would say a word. The log line is
+    # the only difference between "no outstanding session" and "we never found out".
+    it "SAYS SO when the lookup failed, so the degrade is not mistaken for the happy path" do
+      allow(::Stripe::Checkout::Session).to receive(:list)
+        .and_raise(::Stripe::APIConnectionError.new("list timed out"))
+      allow(::Stripe::Checkout::Session).to receive(:create)
+        .and_return(double("CheckoutSession", url: "https://checkout.stripe.com/setup/fresh"))
+
+      expect { resolver_adapter.setup_url(user_id: "user-1") }
+        .to output(/could not check for an outstanding setup session.*K-492/m).to_stderr
+    end
+
+    it "says NOTHING on the ordinary no-session path (the log line means a real fault)" do
+      stub_no_outstanding_session
+      allow(::Stripe::Checkout::Session).to receive(:create)
+        .and_return(double("CheckoutSession", url: "https://checkout.stripe.com/setup/fresh"))
+
+      expect { resolver_adapter.setup_url(user_id: "user-1") }.not_to output.to_stderr
+    end
+
     it "still fails LOUD on an unconfigured return URL before any Stripe call (K-553)" do
       allow(Kiosk).to receive(:configuration).and_return(double(issuer: nil))
       adapter = described_class.new(

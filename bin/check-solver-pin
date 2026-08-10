@@ -61,7 +61,18 @@ require "uri"
 # the solver, and the first-party URL it tells them to fetch it from. Both are
 # published, agent-visible contract — not internal constants.
 PINNED_SHA256 = "5810e16a17b1a7a2d15013cda1c8b9f235d892fae090adb71880d4104bf13a2f"
-PINNED_URL    = "https://kiosk.tech/pow/solve.py"
+# TWO published URLs, on purpose (K-530):
+#   PINNED_URL  — content-addressed and therefore PERMANENT. This is what the
+#                 skill pins, so a frozen skill version's pin can never rot when
+#                 the solver is revised: a new solver gets a NEW filename and the
+#                 old file keeps being served for the skill versions that pin it.
+#   STABLE_URL  — always the CURRENT solver. Unversioned, so it is what a server
+#                 error hint can name without knowing the caller's skill version.
+#                 Never pinned by anything, because it is allowed to change.
+# Today they are byte-identical; after a solver revision they diverge, and that
+# is the point.
+PINNED_URL    = "https://kiosk.tech/pow/solve-5810e16a17b1.py"
+STABLE_URL    = "https://kiosk.tech/pow/solve.py"
 SKILL_URL     = "https://kiosk.tech/skill.md"
 # ─────────────────────────────────────────────────────────────────────────────
 
@@ -119,11 +130,11 @@ def check_offline
     src = File.read(POW_GATE)
     if src.include?("POW_INVALID_HINT")
       urls = src.scan(%r{https://\S*?solve\.py}).uniq
-      if urls == [PINNED_URL]
-        pass "PowGate hint points at #{PINNED_URL}"
+      if urls == [STABLE_URL]
+        pass "PowGate hint points at #{STABLE_URL}"
       else
         fail! "kiosk-server pow_gate.rb references solver URL(s) #{urls.inspect}, expected " \
-              "[#{PINNED_URL.inspect}] — the 403 hint must send assistants to the URL the " \
+              "[#{STABLE_URL.inspect}] — the 403 hint must send assistants to the URL the " \
               "skill pins, or they fetch a file whose hash they cannot verify"
       end
     else
@@ -145,6 +156,16 @@ def check_sibling
     return
   end
 
+  [["solve.py", STABLE_URL], [File.basename(URI(PINNED_URL).path), PINNED_URL]].each do |basename, url|
+    copy = File.join(SITE_ROOT, "pow", basename)
+    if !File.exist?(copy)
+      fail! "kiosk.tech/pow/#{basename} is missing — #{url} would 404"
+    elsif File.binread(copy) == File.binread(SOLVER)
+      pass "kiosk.tech/pow/#{basename} is byte-identical to the source of truth"
+    else
+      fail! "kiosk.tech/pow/#{basename} differs from kiosk-pow-equihash/solve.py"
+    end
+  end
   hosted = File.join(SITE_ROOT, "pow", "solve.py")
   if !File.exist?(hosted)
     fail! "kiosk.tech/pow/solve.py is missing — the URL the skill pins would 404"
@@ -179,6 +200,13 @@ end
 def check_network
   puts
   puts "── Network: the live published surfaces ──"
+
+  stable_body, stable_err = fetch(STABLE_URL)
+  if stable_err
+    fail! "GET #{STABLE_URL} #{stable_err} — the 403 hint sends assistants here"
+  else
+    pass "served #{STABLE_URL} is reachable (#{Digest::SHA256.hexdigest(stable_body)[0, 12]}…)"
+  end
 
   body, err = fetch(PINNED_URL)
   if err

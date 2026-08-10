@@ -100,7 +100,13 @@ It only reads `"salt"` and `"params"` from the challenge — the other fields
 (`id`, `alg`, `exp`, `sig`) are ignored, so the full challenge object is safe
 to pass directly.
 
-For agent skill guidance see `SKILL.md`.
+Agent-facing guidance is **not** duplicated in this gem. The canonical skill is
+[kiosk.tech/skill.md](https://kiosk.tech/skill.md); it teaches the `402
+pow_required` retry — the same request body, unchanged, with the proof(s) in a
+`Kiosk-PoW` request header as raw JSON (ADR-0022) — and it teaches it for the
+shipped Equihash default, not for this legacy backend. An operator that opts
+back into Argon2id is off that path: it must tell its own assistants to run the
+`solve.py` above and echo the challenge verbatim in the `Kiosk-PoW` header.
 
 ## Difficulty tiers (guidance)
 

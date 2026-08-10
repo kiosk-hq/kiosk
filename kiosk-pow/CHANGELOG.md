@@ -13,6 +13,5 @@ All notable changes follow [Keep a Changelog](https://keepachangelog.com/en/1.1.
 - `Kiosk::Pow.leading_zero_bits(bytes)` — counts leading zero bits spanning bytes; a nonce is valid iff this count over its digest is >= `params[:d]`.
 - `solve.py` — Python client solver (argon2-cffi); reads challenge JSON from arg/stdin, loops nonces, prints `{"nonce": "<n>"}`.  Runnable in an assistant sandbox.
 - `requirements.txt` — `argon2-cffi` (the only Python dependency).
-- `SKILL.md` — shippable skill fragment: how an assistant handles `pow_required`.
 - `Rakefile` `parity` task — cross-implementation parity proof: Ruby digest == Python digest (hex-equal) for fixed inputs; end-to-end: `solve.py` nonce accepted by Ruby `verify`.
 - RSpec suite: `leading_zero_bits` on known byte patterns; `params` shape; `verify` true/false for found/wrong nonce; known-answer determinism vector; `parity`-tagged specs that shell out to Python.

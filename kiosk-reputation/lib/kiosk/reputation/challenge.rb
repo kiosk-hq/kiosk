@@ -111,6 +111,14 @@ module Kiosk
         # Format: id|alg|k=7,n=168|<salt_b64>|<exp>|<fingerprint>
         # (params sorted by key, joined with comma; fields joined with pipe)
         def canonical_string(id, alg, params, salt_b64, exp, request_fingerprint)
+          # Guard the root-cause line: a nil/non-Hash params otherwise raises a
+          # cryptic NoMethodError deep in the gem (a 500 at any surface that does
+          # not pre-guard). Fail loud with a typed, rescuable error naming the bad
+          # value — matching Policies::Backoff's is_a?(Hash) convention (K-574).
+          unless params.is_a?(Hash)
+            raise ArgumentError, "params must be a Hash (got #{params.inspect})"
+          end
+
           params_str = params
             .sort_by { |k, _| k.to_s }
             .map { |k, v| "#{k}#{KV_DELIM}#{v}" }

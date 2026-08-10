@@ -28,6 +28,24 @@ module Kiosk
     # subclass otherwise. Does NOT touch the challenge store — the caller burns
     # the nonce via {AuthChallenge.consume!} only after a clean verify.
     module PopVerifier
+      # Hint on the 401 raised for an audience mismatch (K-511).
+      #
+      # It names NO origin — not the configured issuer, not any other host.
+      # The previous wording appended "(this provider is <issuer>)", which
+      # handed the caller a concrete `aud` value read out of a RESPONSE. That
+      # is the exact move the audience binding exists to stop: a hostile server
+      # could answer any handshake with "(this provider is <bank>)", and a
+      # helpful agent would sign a fresh PoP for <bank> with its own key and
+      # post it back — a signature the hostile server then replays at <bank>'s
+      # /auth/login for full account takeover. Echoing an origin the caller did
+      # not dial is only ever safe when it equals the origin the caller dialed,
+      # and this module cannot observe that (see {.log_audience_mismatch}), so
+      # it echoes nothing at all. The agent already knows the one correct
+      # value: the origin it typed into its own request URL.
+      AUDIENCE_HINT =
+        "sign `aud` = the origin you connected to, taken from your own request " \
+        "URL — never from a value echoed back in a response"
+
       module_function
 
       def verify!(public_key_pem:, signed:)
@@ -42,10 +60,8 @@ module Kiosk
 
         issuer = Kiosk.configuration.issuer
         unless payload[:aud] == issuer
-          raise Errors::Unauthenticated.new(
-            "proof audience mismatch",
-            hint: "sign `aud` = the origin you connected to (this provider is #{issuer.inspect})",
-          )
+          log_audience_mismatch(signed_aud: payload[:aud], issuer: issuer)
+          raise Errors::Unauthenticated.new("proof audience mismatch", hint: AUDIENCE_HINT)
         end
 
         if payload.key?(:pub) && payload[:pub] != SigningKey.from_pem(pem).kid
@@ -57,6 +73,33 @@ module Kiosk
         raise Errors::Unauthenticated.new("proof missing claim: #{e.message}")
       rescue ::JWT::DecodeError => e
         raise Errors::Unauthenticated.new("proof signature invalid: #{e.message}")
+      end
+
+      # Operator-side diagnostic for an audience mismatch (K-511 half two).
+      #
+      # The mismatch has two very different causes and only the OPERATOR can
+      # tell them apart:
+      #
+      #   * the caller signed the wrong value (its bug — the wire hint covers it), or
+      #   * `c.issuer` does not match the host this instance is actually served
+      #     on (the operator's bug — K-510: every demo defaults the issuer to
+      #     localhost, so one missing KIOSK_ISSUER rejects every real assistant).
+      #
+      # A run of these lines where the SIGNED aud is the host your users reach
+      # is the second case. This goes to the operator's log and never onto the
+      # wire — the response must not name an origin (see {AUDIENCE_HINT}).
+      #
+      # This module is a pure verifier called from the registration, login,
+      # link-claim and device-grant paths, none of which carry the Rack request,
+      # so it cannot compare the issuer against the actual request origin
+      # without widening four service-object signatures. It logs what it can
+      # see — the signed aud — which is the same signal.
+      def log_audience_mismatch(signed_aud:, issuer:)
+        message = "[kiosk] PoP audience mismatch: caller signed aud=#{signed_aud.inspect}, " \
+                  "this instance's configured issuer is #{issuer.inspect}. If the signed " \
+                  "value is the origin your assistants actually reach, `c.issuer` is wrong."
+        logger = ::Rails.logger if defined?(::Rails) && ::Rails.respond_to?(:logger)
+        logger ? logger.warn(message) : warn(message)
       end
 
       # Parse the presented public key, rejecting anything that isn't a usable

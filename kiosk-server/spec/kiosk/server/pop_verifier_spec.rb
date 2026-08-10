@@ -1,8 +1,23 @@
 # frozen_string_literal: true
 
 require "jwt"
+require "stringio"
 
 RSpec.describe Kiosk::Server::PopVerifier do
+  # PopVerifier writes its operator-side audience-mismatch diagnostic to
+  # Rails.logger when one exists and to $stderr otherwise — and this suite is
+  # plain Ruby, no Rails. Capture it so the assertions can read it and the
+  # unrelated examples don't spray the test output.
+  def capture_operator_log
+    original = $stderr
+    $stderr  = StringIO.new
+    yield
+    $stderr.string
+  ensure
+    $stderr = original
+  end
+  alias_method :silencing_operator_log, :capture_operator_log
+
   # RSA generation is expensive — cache keypairs for the whole file.
   before(:all) do
     @rsa   = OpenSSL::PKey::RSA.generate(2048)
@@ -43,8 +58,85 @@ RSpec.describe Kiosk::Server::PopVerifier do
   it "rejects a proof whose `aud` is a different origin (relay/takeover)" do
     relayed = sign(aud: "https://evil.example")
     expect {
-      described_class.verify!(public_key_pem: pem, signed: relayed)
+      silencing_operator_log { described_class.verify!(public_key_pem: pem, signed: relayed) }
     }.to raise_error(Kiosk::Server::Errors::Unauthenticated, /audience/)
+  end
+
+  # ─── K-511: the rejection must not become the relay it defends against ────
+  #
+  # The old hint appended "(this provider is <issuer>)". That handed the caller
+  # a concrete `aud` value read out of a RESPONSE — and an improvising agent
+  # uses values the server just gave it, because every other step of the flow
+  # rewards exactly that. A hostile origin could then answer any handshake with
+  # "(this provider is <bank>)", collect the freshly signed PoP for <bank>, and
+  # replay it at <bank>/auth/login for full account takeover.
+  describe "audience-mismatch rejection (K-511)" do
+    # The wire half: nothing that could be mistaken for an `aud` to sign.
+    it "names NO origin on the wire — not the configured issuer, not any other" do
+      error = nil
+      silencing_operator_log do
+        described_class.verify!(public_key_pem: pem, signed: sign(aud: "https://evil.example"))
+      rescue Kiosk::Server::Errors::Unauthenticated => e
+        error = e
+      end
+
+      wire = error.to_envelope.to_s
+      expect(wire).not_to include(issuer)
+      expect(wire).not_to include("https://")
+      expect(error.hint).to eq(
+        "sign `aud` = the origin you connected to, taken from your own request " \
+        "URL — never from a value echoed back in a response",
+      )
+    end
+
+    it "still renders the documented 401 envelope" do
+      error = nil
+      silencing_operator_log do
+        described_class.verify!(public_key_pem: pem, signed: sign(aud: "https://evil.example"))
+      rescue Kiosk::Server::Errors::Unauthenticated => e
+        error = e
+      end
+
+      expect(error.to_envelope).to eq(
+        ok: false,
+        error: {
+          code:    "unauthenticated",
+          message: "proof audience mismatch",
+          hint:    Kiosk::Server::PopVerifier::AUDIENCE_HINT,
+        },
+      )
+      expect(error.http_status).to eq(401)
+    end
+
+    # The operator half: the diagnostic the wire no longer carries still has to
+    # reach SOMEONE, or a misconfigured `c.issuer` (K-510) is undebuggable.
+    it "routes the issuer-vs-signed-aud diagnostic to the operator's log" do
+      output = capture_operator_log do
+        described_class.verify!(public_key_pem: pem, signed: sign(aud: "https://real-host.example"))
+      rescue Kiosk::Server::Errors::Unauthenticated
+        nil
+      end
+
+      expect(output).to include(issuer)                      # what we are configured as
+      expect(output).to include("https://real-host.example") # what the caller signed
+      expect(output).to include("`c.issuer` is wrong")
+    end
+
+    it "prefers Rails.logger for the diagnostic when a Rails logger is present" do
+      logged = []
+      logger = double("logger")
+      allow(logger).to receive(:warn) { |m| logged << m }
+      stub_const("Rails", double("Rails", logger: logger))
+
+      begin
+        described_class.verify!(public_key_pem: pem, signed: sign(aud: "https://real-host.example"))
+      rescue Kiosk::Server::Errors::Unauthenticated
+        nil
+      end
+
+      expect(logged.size).to eq(1)
+      expect(logged.first).to include("PoP audience mismatch")
+    end
   end
 
   it "rejects a proof signed by a different key than the one presented" do

@@ -121,7 +121,7 @@ Kiosk.configure do |c|
   # account-binding token poll mints the same JWTs) first, then falls back to
   # StubIdp's bespoke `agent:u-…:a-…:r-…` shape. One endpoint authenticates
   # both for the demo.
-  c.agent_idp = JwtOrStubIdp.new(stub: StubIdp.new)
+  c.agent_idp = JwtOrStubIdp.new(stub: Rails.env.local? ? StubIdp.new : nil)
   # The provider's own web-session channel (Devise/Warden): authenticates the
   # approving human on the account-binding surfaces — the device verify page,
   # link-code mint, unlink, and the manage-assistants page. Walked by

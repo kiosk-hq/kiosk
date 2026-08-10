@@ -181,6 +181,27 @@ smoke_stylish() {
       && pass "signed-in manage page → 200" \
       || fail "signed-in manage page expected 200, got $authed_code"
   fi
+
+  echo "── Assertion 5: forged cleartext identity bearer → 401 in production (K-539) ──"
+  # The demos' StubIdp parses `agent:u-…:a-…:r-…` into an authenticated identity
+  # at ANY role — a dev/test convenience. In production JwtOrStubIdp gates that
+  # fallback behind Rails.env.local?, so a forged self-asserted bearer resolves to
+  # NO identity and the wire raises 401. Before the K-539 fix this returned 200
+  # (authenticated as a forged owner → cross-tenant read of the public `salons`
+  # query). This is a production-config assertion, so it can catch the bug the
+  # dev-mode CI + demo:redteam gates (which run RAILS_ENV=development, where the
+  # stub is intentionally live) structurally cannot.
+  FORGED_BEARER="agent:u-11111111-1111-4111-8111-111111111111:a-forged:r-owner"
+  forged_code="$(curl -s -o /dev/null -w '%{http_code}' -X POST \
+    "${PROXY_HEADERS[@]}" -H "Content-Type: application/json" \
+    -H "Authorization: Bearer ${FORGED_BEARER}" \
+    --data '{"name":"salons"}' \
+    "${BASE}/kiosk/query")"
+  if [ "$forged_code" = "401" ]; then
+    pass "forged self-asserted bearer → 401 (cleartext stub unreachable in production)"
+  else
+    fail "forged bearer expected 401, got $forged_code (K-539: cleartext stub reachable in production — cross-tenant auth bypass!)"
+  fi
 }
 
 # ─────────────────────────────────────────────────────────────────────────────

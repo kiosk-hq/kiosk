@@ -229,7 +229,7 @@ Kiosk.configure do |c|
   # OAuth device-grant dormant) first, then falls back to StubIdp's bespoke
   # `agent:u-…:a-…:r-…` shape. One endpoint authenticates both for the demo.
   # Real providers swap in `kiosk-user-idp-devise` (or another adapter).
-  c.agent_idp = JwtOrStubIdp.new(stub: StubIdp.new)
+  c.agent_idp = JwtOrStubIdp.new(stub: Rails.env.local? ? StubIdp.new : nil)
   # The provider's own web-session channel (Devise/Warden): authenticates the
   # signed-in human diner on the account-binding surfaces — the link-code mint,
   # the device verify page, and unlink. A diner mints a link code here and their

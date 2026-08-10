@@ -599,6 +599,61 @@ end
 
 fcb_beat = forged_callback_no_sig.call
 
+# ── SelfAssertedTokenForgery (K-539) — in-process, PRODUCTION-config ───────────
+# The self-asserted plaintext-bearer forgery. This suite drives a server booted
+# in RAILS_ENV=development (demo:redteam), where the cleartext StubIdp fallback
+# is INTENTIONALLY live so drivers can skip PoP registration — so the DEV wire
+# cannot demonstrate the block. This beat instead exercises the REAL shipped
+# JwtOrStubIdp guard in-process against a stubbed PRODUCTION Rails.env: a forged
+# `agent:u-…:a-…:r-owner` bearer must resolve to NO identity under production
+# (→ the wire raises 401), while the development branch still accepts it (or every
+# driver + the e2e harness break). Over-the-wire production proof: deploy/
+# production-smoke.sh Assertion 5. Unit proof: kiosk-test-support
+# spec/jwt_or_stub_idp_env_gate_spec.rb.
+self_asserted_token_forgery = lambda do
+  require "kiosk"
+  lib = File.expand_path("lib", __dir__)
+  require File.join(lib, "stub_idp")
+  require File.join(lib, "jwt_or_stub_idp")
+
+  # The redteam client boots no Rails app, so provide a controllable Rails.env.
+  unless defined?(Rails)
+    env_klass = Struct.new(:name) do
+      def local? = %w[development test].include?(name)
+      def to_s = name.to_s
+    end
+    rails = Module.new do
+      class << self
+        attr_accessor :env
+      end
+    end
+    Object.const_set(:Rails, rails)
+    Object.const_set(:RedteamEnvShim, env_klass)
+  end
+
+  forged = Struct.new(:headers).new(
+    { "Authorization" => "Bearer agent:u-#{SecureRandom.uuid}:a-forged:r-owner" },
+  )
+  idp = JwtOrStubIdp.new(stub: StubIdp.new)
+
+  Rails.env = RedteamEnvShim.new("production")
+  prod_identity = idp.verify(forged)
+  Rails.env = RedteamEnvShim.new("development")
+  dev_identity = idp.verify(forged)
+
+  if prod_identity.nil? && dev_identity && dev_identity.role.to_s == "owner"
+    { blocked: true, detail: "forged self-asserted `agent:…:r-owner` bearer → NO identity under production config (dev harness still accepts it)" }
+  elsif prod_identity
+    { blocked: false, detail: "K-539 REGRESSION: forged self-asserted bearer authenticated under PRODUCTION config as role=#{prod_identity.role}" }
+  else
+    { blocked: false, detail: "unexpected: development branch rejected the stub (drivers would break): #{dev_identity.inspect}" }
+  end
+rescue StandardError => e
+  { blocked: false, detail: "beat error: #{e.class}: #{e.message}" }
+end
+
+self_asserted_beat = self_asserted_token_forgery.call
+
 # ── Summary ───────────────────────────────────────────────────────────────────
 
 blocked_results = results.select { |r| !r[:verdict].skipped && r[:verdict].blocked }
@@ -634,8 +689,13 @@ if fcb_beat[:blocked]
 else
   puts "  BREACH   ✗ ForgedCallbackNoSig — #{fcb_beat[:detail]}"
 end
+if self_asserted_beat[:blocked]
+  puts "  BLOCKED  ✓ SelfAssertedTokenForgery — #{self_asserted_beat[:detail]}"
+else
+  puts "  BREACH   ✗ SelfAssertedTokenForgery — #{self_asserted_beat[:detail]}"
+end
 
-all_beats = [mc_beat, theft_beat, xop_beat, fcb_beat]
+all_beats = [mc_beat, theft_beat, xop_beat, fcb_beat, self_asserted_beat]
 local_beats_blocked = all_beats.count { |b| b[:blocked] }
 blocked_count = blocked_results.size + local_beats_blocked
 beat_breach   = all_beats.count { |b| !b[:blocked] }

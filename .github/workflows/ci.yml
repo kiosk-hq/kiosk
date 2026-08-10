@@ -87,6 +87,23 @@ jobs:
         if: matrix.gem == 'kiosk-redteam' || matrix.gem == 'kiosk-pow-equihash'
         run: python -m pip install numpy
 
+      # kiosk-pay-stripe's K-492 setup-reuse spec has THREE coverage layers, and
+      # until now CI ran only the weakest: the doubles/FakeStripeApi ones.
+      # `stripe_integration_spec.rb` skips on purpose (no Stripe key in CI, ever)
+      # and the stripe-mock group skipped silently, because stripe-mock existed
+      # only on the demos matrix (getgrocery). That group is the one that pins
+      # Stripe's OWN fixture shapes — that a canned list response cannot be
+      # mistaken for a real outstanding setup session — so it is exactly the
+      # layer that must not be optional. Same install the demos job uses; the
+      # spec helper spawns the binary itself on a fixed port, so PATH is all it
+      # needs (no STRIPE_MOCK_URL, no key). Without this step the suite is
+      # green with 6 pending; with it, 4.
+      - name: Set up stripe-mock (kiosk-pay-stripe, no key in CI)
+        if: matrix.gem == 'kiosk-pay-stripe'
+        run: |
+          go install github.com/stripe/stripe-mock@latest
+          echo "$(go env GOPATH)/bin" >> "$GITHUB_PATH"
+
       - name: Install dependencies
         working-directory: ${{ matrix.gem }}
         run: bundle install
@@ -159,7 +176,32 @@ jobs:
             # and exits 0 no matter what the code does — a step that cannot go
             # red is not a gate. Its logic IS covered here, by demo:race's
             # K-578 block, which strands orders first and then sweeps.
-            tasks: demo:slots_spec demo:cashier_spec demo:shop demo:isolation demo:redteam demo:schema demo:agecheck demo:race
+            # demo:claim and demo:rls join the tail for the same reason as
+            # demo:race — each was a real assertion battery that only ran when a
+            # human remembered to type it.
+            #   demo:claim  the SECOND pay path (the first is demo:shop): a
+            #     standalone assistant is REBOUND onto the seeded human's
+            #     account by the claim ceremony and then pays off_session
+            #     against that human's saved card, asserted against the database
+            #     (agents.user_id, settlements.user_id, the stripe_customers
+            #     mapping, and the standalone order NOT migrating). It charges
+            #     stripe-mock, never Stripe — no key. ~11 s.
+            #     Watched fail: make AccountBinding.rebind's UPDATE a no-op on
+            #     user_id and the human's pay comes back 403 "mandate principal
+            #     mismatch" — the flow aborts and the task exits 1.
+            #   demo:rls    the suite's ONLY RLS *enforcement* proof. The
+            #     kiosk-rls gem suite (in the gems matrix) tests the emitter; it
+            #     is this overlay that proves FORCE + non-owner role-drop
+            #     actually blocks a raw cross-tenant SELECT, with the
+            #     owner/superuser leak as the negative control. ~3 s.
+            #     Watched fail: widen the SELECT policy to `USING (true)` and
+            #     both enforced sessions see 2 rows instead of 1.
+            # Both reseed (demo:claim invokes demo:setup, demo:rls does its own
+            # drop/create/load/seed), so they sit AFTER everything that lives off
+            # the job-level demo:setup and BEFORE demo:race, which stays last.
+            # demo:rls leaves RLS applied to `orders`; demo:race's `: :setup`
+            # drops the database, which is what clears it — do not reorder them.
+            tasks: demo:slots_spec demo:cashier_spec demo:shop demo:isolation demo:redteam demo:schema demo:agecheck demo:claim demo:rls demo:race
             # getgrocery uses the real Stripe adapter. CI carries NO Stripe key
             # (never inject keys into CI); a local stripe-mock returns
             # shaped pi_ fixtures so the full flow — including demo:shop's
@@ -168,7 +210,16 @@ jobs:
             # demo:shop/isolation/redteam/agecheck self-start the mock process.
             stripe_mock: true
           - demo: kiosk-demo-hoteling
-            tasks: demo:book demo:isolation demo:redteam demo:schema
+            # demo:search is the T-042/K-452 pagination + opaque-cursor proof
+            # over the ~100-hotel catalogue: a full page carries `next`, echoing
+            # it back as `cursor` returns a DISJOINT page, a complete (filtered)
+            # result OMITS `next`, and hotel_detail resolves a summary row's id.
+            # No PoW, no RFC 8628 poll timing, no key — ~5 s. It goes LAST
+            # because `task search: :setup` reseeds, while demo:book has no
+            # prerequisite and lives off the job-level demo:setup.
+            # Watched fail: pin the query to `OFFSET 0` (the cursor ignored) and
+            # page 2 repeats page 1 — the disjointness assertion goes red.
+            tasks: demo:book demo:isolation demo:redteam demo:schema demo:search
           - demo: kiosk-demo-prove
             # prove.my — the anonymizing KYC broker (an ISSUER, not a Kiosk
             # operator; mounts none of the four verbs). demo:test runs its own
@@ -185,7 +236,25 @@ jobs:
             prove_broker: kiosk-demo-prove
             tasks: demo:kat demo:rideflow demo:kyc demo:isolation demo:redteam demo:schema
           - demo: kiosk-demo-stylish
-            tasks: demo:walkthrough demo:isolation demo:redteam demo:schema
+            # demo:roles is the roles-from-IdP gate, and the ONLY place the
+            # prod-only K-436/K-439 class is exercised against real Devise: an
+            # owner and a customer sign in through the actual /users/sign_in
+            # session, and the inherited role is checked on the token, on the
+            # wire (owner sees the whole book + forecast, customer only their
+            # own) and against DB ground truth (kiosk.agents.allowed_roles).
+            # No PoW, no poll timing, no key — ~5 s.
+            # Watched fail: delete User#kiosk_role and the Devise adapter
+            # resolves every real sign-in to roles.first — the three REAL DEVISE
+            # assertions go red while the stub-session one still passes.
+            # demo:register is the registration-PoW gate (no proof → 402; ONE
+            # Equihash solve at the CI-default `low` → 201; the fresh token
+            # queries) — the same profile as atablefor's demo:backoff, which
+            # already runs here, ~4 s. Watched fail: set registration_pow_count
+            # to 0 and the unproven register returns 201.
+            # Both reseed (`: :setup`), so they go after demo:walkthrough, which
+            # has no prerequisite and lives off the job-level demo:setup.
+            # demo:binding stays local-only (RFC 8628 poll timing).
+            tasks: demo:walkthrough demo:isolation demo:redteam demo:schema demo:roles demo:register
           - demo: kiosk-demo-philslist
             # NON-COMMERCE classifieds board — no payments. demo:walkthrough is
             # the browse→post→edit→close happy path; demo:schema asserts `pay` is
@@ -193,7 +262,15 @@ jobs:
             # proof). Same standard task set as stylish; demo:binding is
             # timing-sensitive (RFC 8628 poll interval) so it stays local-only,
             # matching every sibling (no demo runs binding in CI).
-            tasks: demo:walkthrough demo:isolation demo:redteam demo:schema
+            # demo:register is the registration-PoW gate — no proof → 402, ONE
+            # Equihash solve at the CI-default `low` → 201, then the fresh token
+            # posts a listing and a bad category_slug gets a clean 400 naming the
+            # valid categories. Same profile as atablefor's demo:backoff, ~4 s.
+            # It reseeds (`: :setup`), so it goes after demo:walkthrough, which
+            # has no prerequisite and lives off the job-level demo:setup.
+            # Watched fail: set registration_pow_count to 0 and the unproven
+            # register returns 201 instead of 402.
+            tasks: demo:walkthrough demo:isolation demo:redteam demo:schema demo:register
           - demo: kiosk-demo-tudu
             # NON-COMMERCE collaborative todo — no payments. demo:collab is the
             # happy path (membership-based sharing + agent→agent invites +

@@ -26,9 +26,11 @@ module StripeMock
     system("command -v stripe-mock >/dev/null 2>&1")
   end
 
-  # The base URL, or nil when stripe-mock is neither running nor installed
-  # (CI's gems matrix does not install it — see the K-candidate in the K-492
-  # notes; examples that need it skip rather than pretend).
+  # The base URL, or nil when stripe-mock is neither running nor installed —
+  # examples that need it then skip rather than pretend. CI's gems matrix DOES
+  # install it for this gem (`Set up stripe-mock (kiosk-pay-stripe…)` in
+  # .github/workflows/ci.yml), so a skip there means the install step broke, not
+  # that the group is optional.
   def start
     return URL if reachable?
     return nil unless installed?

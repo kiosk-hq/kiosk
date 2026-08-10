@@ -22,6 +22,18 @@ module Kiosk
     class Stripe < Base
       VERSION = StripeVersion::VERSION
 
+      # How many open Checkout Sessions the K-492 reuse lookup asks Stripe for.
+      # Reuse only ever needs the ONE `mode:setup` session this adapter minted
+      # for this customer, and the adapter mints at most one per customer, so a
+      # single page is normally enough. But the page is a page: a principal
+      # holding more open sessions than this could have the reusable one fall
+      # off it, and "it was not on the page I asked for" is NOT the same fact as
+      # "there is none" — a second, quieter route to the wrong answer K-492 was
+      # about. It is not raised to a number that could not truncate (no such
+      # number exists) — instead a FULL page with no match is logged, see
+      # #outstanding_setup_session.
+      SETUP_SESSION_LIST_LIMIT = 10
+
       # @param api_key [String] Stripe secret key (sk_test_… for the PoC)
       # @param test_payment_method [String, nil] Stripe test PaymentMethod id
       #   used as a back-compat fallback when no customer resolver is
@@ -267,12 +279,20 @@ module Kiosk
       # the fix to one session per poll while every response still looks
       # perfectly healthy.
       def outstanding_setup_session(cus_id, success_url:)
-        listed = ::Stripe::Checkout::Session.list(customer: cus_id, status: "open", limit: 10)
-        Array(listed&.data).find do |s|
+        listed = ::Stripe::Checkout::Session.list(
+          customer: cus_id, status: "open", limit: SETUP_SESSION_LIST_LIMIT,
+        )
+        open_sessions = Array(listed&.data)
+        match = open_sessions.find do |s|
           field(s, :mode) == "setup" &&
             field(s, :success_url) == success_url &&
             !field(s, :url).to_s.empty?
         end
+        # Same reasoning as the rescue below, for the other silent route: no
+        # match on a FULL page may mean the reusable session was truncated away
+        # rather than absent, so it is logged instead of passing for "none".
+        log_setup_session_page_full(open_sessions.size) if match.nil? && open_sessions.size >= SETUP_SESSION_LIST_LIMIT
+        match
       rescue ::Stripe::StripeError => e
         log_setup_session_lookup_failed(e)
         nil
@@ -285,6 +305,18 @@ module Kiosk
         message = "[kiosk-pay-stripe] could not check for an outstanding setup session " \
                   "(#{error.class}: #{error.message}) — minting a FRESH Checkout Session, so " \
                   "setup_url is NOT stable across polls until this clears (K-492)."
+        logger = ::Rails.logger if defined?(::Rails) && ::Rails.respond_to?(:logger)
+        logger ? logger.warn(message) : warn(message)
+      end
+
+      # The lookup answered, but with a page as long as we allowed and nothing
+      # reusable in it — so the reusable session may simply not have fitted.
+      # Operator-side only; nothing here reaches the wire.
+      def log_setup_session_page_full(count)
+        message = "[kiosk-pay-stripe] no outstanding setup session among a FULL page of #{count} open " \
+                  "Checkout Sessions for this customer — the reusable one may have been truncated off " \
+                  "the page rather than absent, so a FRESH Checkout Session is being minted and " \
+                  "setup_url may not be stable across polls (K-492)."
         logger = ::Rails.logger if defined?(::Rails) && ::Rails.respond_to?(:logger)
         logger ? logger.warn(message) : warn(message)
       end

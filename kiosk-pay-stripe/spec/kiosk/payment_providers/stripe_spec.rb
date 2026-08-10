@@ -194,6 +194,32 @@ RSpec.describe Kiosk::PaymentProviders::Stripe do
       expect { resolver_adapter.setup_url(user_id: "user-1") }.not_to output.to_stderr
     end
 
+    # The OTHER silent route to "no outstanding session": the lookup asks for one
+    # page (SETUP_SESSION_LIST_LIMIT), so a principal sitting on that many open
+    # Checkout Sessions can have the reusable one truncated off it. Rare, but on
+    # the wire it is again byte-for-byte the happy path, so it is logged for the
+    # same reason the failed lookup is.
+    it "SAYS SO when a FULL page came back with nothing reusable in it" do
+      full_page = Array.new(described_class::SETUP_SESSION_LIST_LIMIT) { listed_session(mode: "payment") }
+      allow(::Stripe::Checkout::Session).to receive(:list)
+        .and_return(double("SessionList", data: full_page))
+      allow(::Stripe::Checkout::Session).to receive(:create)
+        .and_return(double("CheckoutSession", url: "https://checkout.stripe.com/setup/fresh"))
+
+      expect { resolver_adapter.setup_url(user_id: "user-1") }
+        .to output(/FULL page of #{described_class::SETUP_SESSION_LIST_LIMIT} open.*K-492/m).to_stderr
+    end
+
+    it "stays quiet when a SHORT page came back with nothing reusable (nothing was truncated)" do
+      short_page = Array.new(described_class::SETUP_SESSION_LIST_LIMIT - 1) { listed_session(mode: "payment") }
+      allow(::Stripe::Checkout::Session).to receive(:list)
+        .and_return(double("SessionList", data: short_page))
+      allow(::Stripe::Checkout::Session).to receive(:create)
+        .and_return(double("CheckoutSession", url: "https://checkout.stripe.com/setup/fresh"))
+
+      expect { resolver_adapter.setup_url(user_id: "user-1") }.not_to output.to_stderr
+    end
+
     it "still fails LOUD on an unconfigured return URL before any Stripe call (K-553)" do
       allow(Kiosk).to receive(:configuration).and_return(double(issuer: nil))
       adapter = described_class.new(

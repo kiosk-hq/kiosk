@@ -13,6 +13,7 @@
 #   rake demo:redteam    adversarial regression battery (kiosk-redteam scenarios)
 #   rake demo:pow        commerce catalog-toll PoW demo (catalog 402 → solve → 200)
 #   rake demo:slots_spec DB-free unit spec for the delivery-slot past-filter (K-480)
+#   rake demo:cashier_spec DB-free unit spec for the cashier's order-ref shape check (K-579)
 #   rake demo            setup + shop (full end-to-end proof)
 
 # Start (or reuse) a local stripe-mock; return its HTTP base URL. The adversarial
@@ -66,6 +67,13 @@ namespace :demo do
   task :slots_spec do
     spec = File.expand_path("../../spec/delivery_slots_spec.rb", __dir__)
     puts "\n── delivery_slots K-480 past-filter spec (no DB) ──"
+    sh "ruby #{spec}"
+  end
+
+  desc "DB-free unit spec for the cashier's order-reference shape check (K-579)."
+  task :cashier_spec do
+    spec = File.expand_path("../../spec/cashier_order_ref_spec.rb", __dir__)
+    puts "\n── cashier K-579 order-ref shape spec (no DB) ──"
     sh "ruby #{spec}"
   end
 

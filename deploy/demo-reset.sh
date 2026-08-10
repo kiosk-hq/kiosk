@@ -21,14 +21,26 @@ WIPE_GG=0; [ "${1:-}" = "--all" ] && WIPE_GG=1
 
 reset_fresh() {  # drop+recreate the DB as the postgres SUPERUSER (the per-app login
   local a="$1"   # role is DB-owner but not superuser/createdb, so `rails db:drop`
-  local db="kiosk_${a}_production" role="kiosk_${a}"   # can't do it), then load
-  cd "/srv/kiosk/kiosk-demo-$a" || { echo "  $a: no dir"; return; }  # schema + seed as the app role.
+  local A; A="$(printf '%s' "$a" | tr '[:lower:]' '[:upper:]')"  # can't do it),
+  local envf="/etc/kiosk-demo/$a.env"       # then load schema + seed as the app role.
+  # The DB/role names come from the app's OWN env file — the same
+  # KIOSK_<APP>_DB / KIOSK_<APP>_DB_USER that config/database.yml reads, with the
+  # same shipped defaults. Hardcoding them here would drop and recreate a
+  # database the app is not connected to whenever an operator overrides a name.
+  local names db role
+  names="$(
+    set -a; [ -f "$envf" ] && . "$envf"; set +a
+    dv="KIOSK_${A}_DB"; uv="KIOSK_${A}_DB_USER"
+    printf '%s\n%s\n' "${!dv:-kiosk_${a}_production}" "${!uv:-kiosk_${a}}"
+  )"
+  db="${names%%$'\n'*}"; role="${names##*$'\n'}"
+  cd "/srv/kiosk/kiosk-demo-$a" || { echo "  $a: no dir"; return; }
   sudo systemctl stop "kiosk-demo@$a"
   if ! sudo -u postgres psql -v ON_ERROR_STOP=1 -q >/dev/null 2>&1 <<SQL
-DROP DATABASE IF EXISTS $db WITH (FORCE);
-CREATE DATABASE $db OWNER $role;
-REVOKE CONNECT ON DATABASE $db FROM PUBLIC;
-GRANT CONNECT ON DATABASE $db TO $role;
+DROP DATABASE IF EXISTS "$db" WITH (FORCE);
+CREATE DATABASE "$db" OWNER "$role";
+REVOKE CONNECT ON DATABASE "$db" FROM PUBLIC;
+GRANT CONNECT ON DATABASE "$db" TO "$role";
 SQL
   then
     echo "  $a: DB drop/create FAILED (postgres superuser step)"

@@ -6,6 +6,9 @@ default: &default
 
 development:
   <<: *default
+  # KIOSK_GETGROCERY_DB names this app's database in whichever env is running;
+  # each env defaults to its own. Development honors it because the demo:* rake
+  # tasks shell out to psql against the same name (lib/tasks/demo.rake).
   database: <%= ENV.fetch("KIOSK_GETGROCERY_DB", "kiosk_getgrocery_development") %>
 
 test:
@@ -14,6 +17,6 @@ test:
 
 production:
   <<: *default
-  database: kiosk_getgrocery_production
+  database: <%= ENV.fetch("KIOSK_GETGROCERY_DB", "kiosk_getgrocery_production") %>
   username: <%= ENV.fetch("KIOSK_GETGROCERY_DB_USER", "kiosk_getgrocery") %>
   password: <%= ENV["KIOSK_GETGROCERY_DB_PASSWORD"] %>

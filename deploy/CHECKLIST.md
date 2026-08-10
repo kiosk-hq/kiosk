@@ -21,11 +21,12 @@ an ISSUER, not a Kiosk operator (no PoW, no `/.well-known/kiosk.json`, no agent 
 
 ## 3. Databases (one Postgres cluster)
 - [ ] `psql -v gg_pw=… -v af_pw=… -v ho_pw=… -v sk_pw=… -v st_pw=… -v pl_pw=… -v td_pw=… -v pv_pw=… -f deploy/postgres-init.sql`  → 8 app DBs + least-priv roles (7 demos + `kiosk_prove`). (Pass each RAW password unquoted — the script escapes it via `:'var'`.)
+- [ ] **Only if you renamed something:** the DB/role names default to the shipped ones. If you changed `KIOSK_<APP>_DB` / `KIOSK_<APP>_DB_USER` in an app's env (§4), pass the SAME value here as `-v <xx>_db=` / `-v <xx>_user=` (`gg af ho sk st pl td pv`) — otherwise provisioning creates one name and the app connects to another. See `deploy/README.md` §"Database names".
 - [ ] `psql -v tm_pw=… -f deploy/telemetry-init.sql`  → the shared `kiosk_demo_telemetry` DB + role.
 
 ## 4. Per-app env (copy `deploy/env/<app>.env.example` → real values)
 For EACH of the 7 apps:
-- [ ] `RAILS_ENV=production`, a generated `SECRET_KEY_BASE`, `KIOSK_<APP>_DB_{HOST,NAME,USER,PASSWORD}`, `PORT` (3001–3007).
+- [ ] `RAILS_ENV=production`, a generated `SECRET_KEY_BASE`, `PGHOST`, `KIOSK_<APP>_DB` / `KIOSK_<APP>_DB_{USER,PASSWORD}`, `PORT` (3001–3007). `KIOSK_<APP>_DB` and `KIOSK_<APP>_DB_USER` default to `kiosk_<app>_production` / `kiosk_<app>` — keep the shipped values and §3 needs no extra flags.
 - [ ] **PoW:** all 7 demos honor `KIOSK_POW_DIFFICULTY` (low default, high opt-in). Ship `high` for **atablefor** only
       (n=168/k=7, ~9–10 s / ~1.3 GiB, "beware" banner) — the production-grade showcase; `low` (or unset) for the other six
       (fast, poke-friendly; each still knob-adjustable to `high`).
@@ -43,7 +44,7 @@ For EACH of the 7 apps:
 - [ ] **Card-setup Checkout render (getgrocery, K-473):** `payment_setup`'s `setup_url` is a valid Stripe link, but a relaying agent can truncate its required `#fid…` fragment → **"Something went wrong"** (not the account/deploy — the session is valid; proven agent-side). Mitigated by skill guidance (relay the url verbatim/in full); escalate to an operator-hosted short redirect if it recurs. See `deploy/README.md` §Payments.
 
 ### 4b. prove.my KYC broker env (copy `deploy/env/kyc-demo.env.example` → `/etc/kiosk-demo/prove.env`)
-- [ ] `SECRET_KEY_BASE`, `KIOSK_PROVE_DB_{USER,PASSWORD}`, `PORT=3008`. No kiosk gem — no signing key / no PoW knob.
+- [ ] `SECRET_KEY_BASE`, `KIOSK_PROVE_DB` / `KIOSK_PROVE_DB_{USER,PASSWORD}`, `PORT=3008`. No kiosk gem — no signing key / no PoW knob.
 - [ ] **Issuer + public URL:** `KIOSK_PROVE_ISSUER=https://kyc.demo.kiosk.tech`, `PROVE_PUBLIC_URL=https://kyc.demo.kiosk.tech`.
 - [ ] **Broker signing key:** `PROVE_KEY_PEM=<fresh 2048-bit RSA private PEM>` (do NOT ship the baked-in dev key).
 - [ ] **Operator allow-list:** `KIOSK_PROVE_SKOOTI_SECRET=<shared intake secret>`, `KIOSK_PROVE_SKOOTI_CALLBACK_HOST=skooti.demo.kiosk.tech`.

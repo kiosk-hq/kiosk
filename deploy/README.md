@@ -12,7 +12,7 @@ This directory is the *app-side* handoff; DNS + VPS provisioning is the operator
 | File | What it is |
 |------|-----------|
 | `Caddyfile` | One vhost per app subdomain (8) → loopback Puma; automatic TLS. |
-| `postgres-init.sql` | 8 databases + 8 least-privilege login roles (DB-per-app; 7 demos + the prove.my broker). |
+| `postgres-init.sql` | 8 databases + 8 least-privilege login roles (DB-per-app; 7 demos + the prove.my broker). Names default to the shipped ones and are overridable — see [Database names](#database-names). |
 | `kiosk-demo@.service` | Parameterised systemd unit: one Puma per app (`%i`). |
 | `env/<app>.env.example` | Per-app env template (7 demos + `kyc-demo.env.example` for the broker). Copy to `/etc/kiosk-demo/<app>.env`. |
 | `prune.sh` | Daily cron: prune old anonymous accounts, re-seed shared catalog. |
@@ -84,7 +84,31 @@ tangible first-hand. Any other demo is knob-adjustable: set
 **Automated (this runbook provides):** the Caddy vhosts, the SQL to create all
 DBs + roles, the systemd unit template, the env templates, and the daily prune
 cron. No app code changes are required to run multi-app/one-Postgres — each
-demo already ships a production `database.yml` pointing at its own DB + role.
+demo already ships a production `database.yml` that reads its own DB + role from
+its env file (see [Database names](#database-names)).
+
+### Database names
+
+Every app's production `database.yml` resolves its database and login role from
+its env file, defaulting to the shipped names:
+
+| env var (in `env/<app>.env`) | default | psql var for `postgres-init.sql` |
+|------------------------------|---------|----------------------------------|
+| `KIOSK_<APP>_DB`             | `kiosk_<app>_production` | `-v <xx>_db=` |
+| `KIOSK_<APP>_DB_USER`        | `kiosk_<app>`            | `-v <xx>_user=` |
+| `KIOSK_<APP>_DB_PASSWORD`    | — (required)             | `-v <xx>_pw=` |
+
+`<xx>` is the two-letter prefix already used for the passwords: `gg` getgrocery ·
+`af` atablefor · `ho` hoteling · `sk` skooti · `st` stylish · `pl` philslist ·
+`td` tudu · `pv` prove.
+
+Leave the names alone and there is nothing to do — the templates ship the
+defaults and step 1 below provisions exactly those. **If you change a name, change
+it in both places**: the app's env file *and* the matching `-v` on the
+`postgres-init.sql` command line. psql cannot read the env files itself (they are
+per-app and are sourced by systemd, not by the superuser shell running the init
+script), so the two sides are kept in sync by hand. `demo-reset.sh` reads the env
+file, so it follows an override on its own.
 
 ### Steps
 
@@ -95,6 +119,9 @@ demo already ships a production `database.yml` pointing at its own DB + role.
 # 1. Postgres: create the 8 DBs + least-privilege roles (7 demos + prove).
 #    Pass each password as a plain psql variable — the RAW password, no quotes
 #    (the script quote-escapes it safely via :'var').
+#    Names default to the shipped ones; add -v <xx>_db= / -v <xx>_user= ONLY if
+#    you changed KIOSK_<APP>_DB / _DB_USER in that app's env (see "Database
+#    names" above).
 sudo -u postgres psql -v ON_ERROR_STOP=1 \
   -v gg_pw=… -v af_pw=… -v ho_pw=… -v sk_pw=… \
   -v st_pw=… -v pl_pw=… -v td_pw=… -v pv_pw=… \

@@ -41,7 +41,36 @@
 #              Verifies its four lib/ modules eager-load and /verify renders 200
 #              (live form + clean not-recognised) rather than a 500.
 #
-# Usage:  production-smoke.sh [stylish|prove]     (default: stylish)
+# ─────────────────────────────────────────────────────────────────────────────
+# THIS IS NOT A SCRIPT YOU RUN AGAINST A DEPLOYMENT (K-594)
+# ─────────────────────────────────────────────────────────────────────────────
+# "production" in the name is the Rails ENVIRONMENT this smoke boots, not a
+# machine. The script CREATES AND DROPS a database, so it may only ever touch a
+# throwaway one. Three controls enforce that — none of them is a comment:
+#
+#   1. THROWAWAY NAME. The target is PINNED to `kiosk_<app>_smoke`. A deployment
+#      uses `kiosk_<app>_production` (deploy/postgres-init.sql, deploy/env/*),
+#      so no name a deployment uses is ever targeted at all. Pinned rather than
+#      inherited (K-583) so an ambient `KIOSK_<APP>_DB` cannot redirect it.
+#   2. NAME ASSERTION. Every destructive command goes through drop_smoke_db(),
+#      which REFUSES any database whose name does not end in `_smoke`. An edit
+#      that reintroduces a deploy name fails loudly instead of running.
+#   3. FAIL-CLOSED HOST/INTENT GATE. require_disposable_host() aborts outright
+#      when the box carries deploy markers (`/srv/kiosk`, `/etc/kiosk-demo`, an
+#      installed `kiosk-demo@.service`) — nothing overrides that — and otherwise
+#      demands that the caller STATE disposability: `CI` set (the CI workflow
+#      also passes the variable explicitly), or `KIOSK_SMOKE_I_AM_DISPOSABLE=1`
+#      by hand. A bare run on an unmarked box refuses rather than guessing.
+#
+# `DISABLE_DATABASE_ENVIRONMENT_CHECK` is NOT set anywhere in this script, and
+# must not be reintroduced. Rails' protected-environments guard stays ARMED: the
+# drop is a psql `DROP DATABASE` against an asserted `_smoke` name, and the
+# freshly created database carries no stored environment, which the guard passes
+# on its own. Point this script at a real deploy database and `db:schema:load`
+# refuses — the platform control is back to being a control (K-594).
+#
+# Usage:  [KIOSK_SMOKE_I_AM_DISPOSABLE=1] production-smoke.sh [stylish|prove]
+#         (default demo: stylish)
 #
 # Requires: Postgres reachable (PGHOST), a psql/pg client, and the demo's
 # bundle installed. Env knobs: PORT, and the per-demo DB-role vars documented
@@ -49,10 +78,67 @@
 set -euo pipefail
 
 DEMO="${1:-stylish}"
+case "$DEMO" in
+  stylish | prove) ;;
+  *) echo "unknown demo '$DEMO' (expected: stylish | prove)"; exit 2 ;;
+esac
 
 FAILURES=0
 fail() { echo "  FAIL: $*"; FAILURES=$((FAILURES + 1)); }
 pass() { echo "  ok:   $*"; }
+
+# ── Safety controls (K-594) ─────────────────────────────────────────────────
+# Control 3: refuse to run anywhere the dropped database might not be throwaway.
+require_disposable_host() {
+  local marker
+  for marker in /srv/kiosk /etc/kiosk-demo /etc/systemd/system/kiosk-demo@.service; do
+    if [ -e "$marker" ]; then
+      {
+        echo "!! REFUSING TO RUN: this box looks like a Kiosk deploy host — ${marker} exists."
+        echo "!! production-smoke.sh drops and rebuilds a database. It is a CI/laptop gate,"
+        echo "!! never something to run on a machine that serves the hosted demos."
+        echo "!! There is no override for this check (K-594)."
+      } >&2
+      exit 3
+    fi
+  done
+
+  if [ -z "${CI:-}" ] && [ "${KIOSK_SMOKE_I_AM_DISPOSABLE:-}" != "1" ]; then
+    {
+      echo "!! REFUSING TO RUN: nothing here states that the target database is disposable."
+      echo "!! production-smoke.sh DROPS kiosk_${DEMO}_smoke and rebuilds it from scratch."
+      echo "!! Run it only where losing that database is fine:"
+      echo "!!     KIOSK_SMOKE_I_AM_DISPOSABLE=1 deploy/production-smoke.sh ${DEMO}"
+      echo "!! CI sets CI=true and passes the same variable explicitly (K-594)."
+    } >&2
+    exit 3
+  fi
+}
+
+# Control 2: the only destructive statement in the script, and it refuses any
+# database that is not a `_smoke` one. Deliberately psql and not `rails db:drop`
+# — that task under RAILS_ENV=production would need
+# DISABLE_DATABASE_ENVIRONMENT_CHECK, and disarming the platform guard is the
+# defect K-594 filed.
+drop_smoke_db() {
+  local db="$1" user="$2" pw="$3"
+  case "$db" in
+    *_smoke) ;;
+    *)
+      echo "!! REFUSING: '${db}' is not a *_smoke database — this script only ever drops throwaway ones (K-594)." >&2
+      exit 3
+      ;;
+  esac
+  if [ -n "$pw" ]; then
+    PGPASSWORD="$pw" psql -v ON_ERROR_STOP=1 -qtAX -U "$user" -d postgres \
+      -c "DROP DATABASE IF EXISTS \"${db}\" WITH (FORCE);" >/dev/null
+  else
+    psql -v ON_ERROR_STOP=1 -qtAX -U "$user" -d postgres \
+      -c "DROP DATABASE IF EXISTS \"${db}\" WITH (FORCE);" >/dev/null
+  fi
+}
+
+require_disposable_host
 
 # ─────────────────────────────────────────────────────────────────────────────
 # stylish: Devise sign-in + roles + manage page (the original three-bug surface)
@@ -96,9 +182,11 @@ smoke_stylish() {
   # smoke DB (CI: postgres; local: your login role). No password under trust auth.
   export KIOSK_STYLISH_DB_USER="${KIOSK_STYLISH_DB_USER:-postgres}"
   export KIOSK_STYLISH_DB_PASSWORD="${KIOSK_STYLISH_DB_PASSWORD:-}"
-  # PINNED, not inherited: the prepare step below does `db:drop`, so this smoke
-  # must never follow an ambient KIOSK_STYLISH_DB into a real deploy database.
-  export KIOSK_STYLISH_DB="kiosk_stylish_production"
+  # PINNED, not inherited: the prepare step below DROPS this database, so it must
+  # never follow an ambient KIOSK_STYLISH_DB (K-583) and must never be the deploy
+  # name `kiosk_stylish_production` (K-594). `_smoke` is a name no deployment
+  # provisions, and drop_smoke_db refuses anything else.
+  export KIOSK_STYLISH_DB="kiosk_stylish_smoke"
 
   SERVER_PID=""
   cleanup() {
@@ -108,14 +196,15 @@ smoke_stylish() {
   }
   trap cleanup EXIT
 
-  echo "── Preparing production DB (drop/create/schema:load/seed) ──"
+  echo "── Preparing the throwaway smoke DB ${KIOSK_STYLISH_DB} (drop/create/schema:load/seed) ──"
   # db:prepare would migrate; the demos are schema_format=:sql and seed via the
   # demo path, so mirror demo:setup: load structure.sql then seed. RAILS_ENV is
-  # production, so this builds kiosk_stylish_production. Rails guards destructive
-  # tasks against production DBs; this is a disposable smoke DB, so opt out of the
-  # guard for the prepare step only.
-  DISABLE_DATABASE_ENVIRONMENT_CHECK=1 \
-    bundle exec rails db:drop db:create db:schema:load db:seed >/dev/null
+  # production — the whole point — but the DATABASE is the throwaway `_smoke` one,
+  # dropped by drop_smoke_db (which refuses any non-`_smoke` name). Rails' own
+  # protected-environments guard is left ARMED: the recreated database has no
+  # stored environment, so db:schema:load passes it without being disabled.
+  drop_smoke_db "$KIOSK_STYLISH_DB" "$KIOSK_STYLISH_DB_USER" "$KIOSK_STYLISH_DB_PASSWORD"
+  bundle exec rails db:create db:schema:load db:seed >/dev/null
 
   echo "── Booting stylish in RAILS_ENV=production on ${BASE} (eager_load + assume_ssl) ──"
   bundle exec rails server -e production -b 127.0.0.1 -p "$PORT" >"$SERVER_LOG" 2>&1 &
@@ -319,9 +408,9 @@ smoke_prove() {
   # database.yml (production) connects as this role (CI: postgres; local: login).
   export KIOSK_PROVE_DB_USER="${KIOSK_PROVE_DB_USER:-postgres}"
   export KIOSK_PROVE_DB_PASSWORD="${KIOSK_PROVE_DB_PASSWORD:-}"
-  # PINNED, not inherited: the prepare step below does `db:drop` — see the
-  # stylish smoke above.
-  export KIOSK_PROVE_DB="kiosk_prove_production"
+  # PINNED, not inherited, and a throwaway `_smoke` name rather than the deploy
+  # `kiosk_prove_production` — see the stylish smoke above (K-583/K-594).
+  export KIOSK_PROVE_DB="kiosk_prove_smoke"
 
   SERVER_PID=""
   cleanup() {
@@ -331,16 +420,16 @@ smoke_prove() {
   }
   trap cleanup EXIT
 
-  echo "── Preparing production DB (drop/create/schema:load/seed) ──"
-  DISABLE_DATABASE_ENVIRONMENT_CHECK=1 \
-    bundle exec rails db:drop db:create db:schema:load db:seed >/dev/null
+  echo "── Preparing the throwaway smoke DB ${KIOSK_PROVE_DB} (drop/create/schema:load/seed) ──"
+  drop_smoke_db "$KIOSK_PROVE_DB" "$KIOSK_PROVE_DB_USER" "$KIOSK_PROVE_DB_PASSWORD"
+  bundle exec rails db:create db:schema:load db:seed >/dev/null
 
   # Seed ONE pending request so /verify?request=<id> renders the live yes/no form
   # (200) — the broker seeds no rows on its own (it is an issuer; rows appear
   # only at operator intake), so without this the live-form path is never
   # rendered under eager-load.
   echo "── Seeding one pending verification request ──"
-  REQ="$(DISABLE_DATABASE_ENVIRONMENT_CHECK=1 bundle exec rails runner '
+  REQ="$(bundle exec rails runner '
     r = ProveRequest.create!(
       request_id:       "smoke-request-token-0001",
       operator_id:      "skooti",
@@ -437,6 +526,9 @@ smoke_prove() {
   fi
 }
 
+# $DEMO was validated at the top (before the safety gate ran), so this dispatch
+# is total; the catch-all stays as a backstop if a demo is ever added to one
+# case and not the other.
 case "$DEMO" in
   stylish) smoke_stylish ;;
   prove)   smoke_prove ;;

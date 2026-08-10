@@ -3,7 +3,7 @@
 Rails.application.routes.draw do
   # Kiosk wire surface (controllers shipped by kiosk-server).
   # In a follow-up release these will be mounted via the engine's own
-  # routes drawer; for v0.1 alpha we wire them manually here.
+  # routes drawer; for now we wire them manually here.
   get  "/kiosk/schema",                            to: "kiosk/server/wire#schema"
   post "/kiosk/query",                             to: "kiosk/server/wire#query"
   post "/kiosk/run",                               to: "kiosk/server/wire#run"

@@ -57,7 +57,7 @@ Why not bundled: there is no «one PSP per provider» or «one IdP per provider�
 
 ## Status
 
-Pre-v0.1 alpha. Tracks the underlying gems' versions.
+Pre-v1.0 alpha. Tracks the underlying gems' versions.
 
 ## License
 

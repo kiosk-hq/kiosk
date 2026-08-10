@@ -86,7 +86,7 @@ A `kiosk/rls/migration` auto-inject path lands later.
 
 ## Status
 
-Pre-v0.1 alpha. The DSL surface is stable across pre-v0.1 minor bumps; SQL emission may evolve as we add corner cases (schema-qualified tables, partitioned tables, view-based column gating).
+Pre-v1.0 alpha. The DSL surface is stable across pre-v1.0 minor bumps; SQL emission may evolve as we add corner cases (schema-qualified tables, partitioned tables, view-based column gating).
 
 Out of this release: `rake kiosk:rls:show TABLE` and `rake kiosk:rls:check` (need a live PostgreSQL connection and land in a follow-up).
 

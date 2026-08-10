@@ -6,10 +6,15 @@ module Kiosk
   module Server
     # Process-wide registry of Action handlers.
     #
-    # Stub for v0.1 alpha. The full `Kiosk::Action` DSL (`description`,
-    # `accepts`, `requires_payment`, `escalate_to :system`, etc.)
-    # lands in a follow-up release. For now, register a
-    # name + callable, fetch + invoke from {Executor}.
+    # Deliberately minimal today: a name -> callable registry plus the
+    # optional descriptor metadata documented below. The richer declaration
+    # DSL once sketched here (`accepts`, `requires_payment`,
+    # `escalate_to :system`) was never built, and is NOT pending a release of
+    # this shape — it is superseded by the Rails-native redesign (K-495 /
+    # T-053): class-level macros mixed into a controller the operator owns
+    # (`include Kiosk::Action`), bound to the next-defined method via
+    # `method_added`. Until that lands, register a name + callable, then
+    # fetch + invoke from {Executor}.
     #
     # @example
     #   Kiosk::Server::Actions.register("ping") { |args| { pong: args[:name] } }

@@ -20,7 +20,7 @@ Rails.application.routes.draw do
   get  "/auth.md",                                 to: "kiosk/server/discovery#auth_md"
   # Kiosk wire surface (controllers shipped by kiosk-server).
   # In a follow-up release these will be mounted via the engine's own
-  # routes drawer; for v0.1 alpha we wire them manually here.
+  # routes drawer; for now we wire them manually here.
   # REST endpoints: one per verb, HTTP method = semantics.
   get  "/kiosk/schema",                            to: "kiosk/server/wire#schema"
   post "/kiosk/query",                             to: "kiosk/server/wire#query"

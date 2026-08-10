@@ -48,7 +48,7 @@ Kiosk.configure do |c|
   c.schema         = "kiosk"
 
   # The Rails connection's role owns the tables AND issues queries (no role
-  # separation in v0.1 alpha). This demo runs WITHOUT RLS — isolation is
+  # separation in this demo). This demo runs WITHOUT RLS — isolation is
   # enforced at the app layer (the migration + the query/Action WHERE clauses)
   # — so app_role and system_role are set to the same role only to satisfy the
   # config; no enable_rls_on / GRANT statements run here.

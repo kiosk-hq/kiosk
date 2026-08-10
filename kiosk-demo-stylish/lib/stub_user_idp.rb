@@ -20,10 +20,27 @@
 # yields nil, so this channel never mints link codes for non-staff. It is
 # wired as one arm of a composite user_idp (StubUserIdp first, then the real
 # Devise session) so demo:roles and demo:binding share one config.
+#
+# DEV/TEST ONLY (K-555): this maps a self-asserted `X-Staff-Session: <user_id>`
+# header to a HUMAN {Kiosk::Identity} carrying that staff member's role — with
+# NO signature and NO real session, so on the wire anyone could self-grant a
+# staff role. Gated to Rails.env.local? in #verify AND at the initializer (this
+# arm is dropped from the composite in production, leaving only the real Devise
+# session — the production-reachable human channel). Never reachable in
+# production. Sibling of the K-539 agent-stub fix.
 class StubUserIdp < Kiosk::UserIdentityProviders::Base
   STAFF_HEADER = "X-Staff-Session"
 
   def verify(request)
+    # SECURITY (K-555): DEV/TEST ONLY. This maps a self-asserted `X-Staff-Session`
+    # header to a role-carrying HUMAN identity — a demo:roles convenience (the
+    # SSO/Okta stand-in). It is un-signed and un-authenticated, so in production
+    # it would let anyone self-grant a staff role. The initializer drops this arm
+    # from the composite in production; this second guard is load-bearing even if
+    # it is ever wired directly. Production staff sessions come from the real
+    # Devise session, never this header.
+    return nil unless Rails.env.local?
+
     user_id = staff_session_for(request)
     return nil if user_id.nil? || user_id.empty?
 

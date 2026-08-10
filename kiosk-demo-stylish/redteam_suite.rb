@@ -185,6 +185,75 @@ record(results, "CustomerCalendarStaysOwnScoped",
        rc == 200 && no_forecast,
        "customer salon_calendar: #{rows.size} rows, forecast_hidden=#{no_forecast} (own bookings only)")
 
+# ── SelfAssertedStaffSessionForgery (K-555) — in-process, PRODUCTION-config ────
+# The HUMAN sibling of the K-539 agent-stub forgery. stylish's StubUserIdp maps a
+# self-asserted `X-Staff-Session: <user_id>` header to a role-carrying HUMAN
+# identity (the SSO/Okta stand-in) — so on the wire it SELF-GRANTS a staff role.
+# This suite drives a server booted in RAILS_ENV=development, where that stub is
+# INTENTIONALLY live (demo:roles walks the role-carrying session, and the
+# CustomerCannotMintStaffLink / OwnerLinkIgnoresForgedClaimBody beats above
+# exercise it over the wire) — so the DEV wire cannot demonstrate the block. This
+# beat exercises the REAL shipped StubUserIdp guard in-process against a stubbed
+# PRODUCTION Rails.env: a forged `X-Staff-Session` naming the seeded owner must
+# resolve to NO identity under production (→ POST /kiosk/auth/link raises 401,
+# self-grant impossible), while development still resolves the staff identity.
+# Over-the-wire production proof: deploy/production-smoke.sh Assertion 6. Unit
+# proof: kiosk-test-support spec/stub_user_idp_env_gate_spec.rb (bearer variant).
+self_asserted_staff_forgery = lambda do
+  require "kiosk"
+  require File.expand_path("lib/stub_user_idp", __dir__)
+
+  # The redteam client boots no Rails app, so provide a controllable Rails.env
+  # and a minimal ActiveRecord shim (the dev branch does a staff-row lookup).
+  unless defined?(Rails)
+    env_klass = Struct.new(:name) do
+      def local? = %w[development test].include?(name)
+      def to_s = name.to_s
+    end
+    rails = Module.new do
+      class << self
+        attr_accessor :env
+      end
+    end
+    Object.const_set(:Rails, rails)
+    Object.const_set(:RedteamEnvShim, env_klass)
+  end
+  unless defined?(ActiveRecord)
+    Object.const_set(:ActiveRecord, Module.new)
+    base = Class.new do
+      def self.connection
+        @connection ||= Object.new.tap do |c|
+          def c.quote(value) = "'#{value}'"
+          def c.execute(_sql) = [{ "id" => OWNER_ID, "staff_role" => "owner" }]
+        end
+      end
+    end
+    ActiveRecord.const_set(:Base, base)
+  end
+
+  forged = Struct.new(:headers).new({ "X-Staff-Session" => OWNER_ID })
+  idp = StubUserIdp.new
+
+  Rails.env = RedteamEnvShim.new("production")
+  prod_identity = idp.verify(forged)
+  Rails.env = RedteamEnvShim.new("development")
+  dev_identity = idp.verify(forged)
+
+  blocked = prod_identity.nil? && dev_identity && dev_identity.role.to_s == "owner"
+  detail =
+    if blocked
+      "forged `X-Staff-Session` → NO identity under production config (dev still self-grants role=owner, so the guard — not a broken stub — is what blocks)"
+    elsif prod_identity
+      "K-555 REGRESSION: forged X-Staff-Session self-granted role=#{prod_identity.role} under PRODUCTION config"
+    else
+      "unexpected: development branch rejected the staff stub (demo:roles would break): #{dev_identity.inspect}"
+    end
+  record(results, "SelfAssertedStaffSessionForgery", blocked, detail)
+rescue StandardError => e
+  record(results, "SelfAssertedStaffSessionForgery", false, "beat error: #{e.class}: #{e.message}")
+end
+self_asserted_staff_forgery.call
+
 # ── Verdict ──────────────────────────────────────────────────────────────────
 breaches = results.reject { |r| r[:blocked] }
 puts JSON.generate(scenarios: results.size, blocked: results.count { |r| r[:blocked] }, breaches: breaches.map { |r| r[:name] })

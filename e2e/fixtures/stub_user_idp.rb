@@ -6,10 +6,22 @@
 # {Kiosk::Identity} with actor=user. The account-binding pages (device
 # verify, link mint, unlink) authenticate the approving human through this
 # channel; agents never present this shape.
+#
+# DEV/TEST ONLY (K-555): this parses an UNSIGNED, self-asserted
+# `user:u-<uuid>` bearer into a HUMAN {Kiosk::Identity} with NO signature —
+# on the wire anyone could impersonate any human. Gated to Rails.env.local?
+# in #verify AND at the initializer (`c.user_idp` is nil in production). The
+# e2e harness boots in development, so the guard passes here. Never reachable
+# in production. Sibling of the K-539 agent-stub fix.
 class StubUserIdp < Kiosk::AgentIdentityProviders::Base
   USER_RE = /\Auser:u-(?<user_id>[0-9a-fA-F-]+)\z/
 
   def verify(request)
+    # SECURITY (K-555): DEV/TEST ONLY. Un-signed self-asserted human bearer —
+    # gated to Rails.env.local? (the e2e harness runs in development, so this
+    # passes) and to the initializer wiring. See the demos' stub_user_idp.rb.
+    return nil unless Rails.env.local?
+
     header = authorization_for(request)
     return nil if header.nil? || header.empty?
 

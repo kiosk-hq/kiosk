@@ -130,7 +130,11 @@ Kiosk.configure do |c|
   c.agent_idp = JwtOrStubIdp.new(stub: Rails.env.local? ? StubIdp.new : nil)
   # The web-session channel for the account-binding surfaces (verify
   # page, link mint, unlink) — see lib/stub_user_idp.rb for the scope.
-  c.user_idp = StubUserIdp.new
+  # DEV/TEST ONLY (K-555): the stub parses an UNSIGNED, self-asserted
+  # `user:u-<uuid>` bearer into a human identity, so it is wired only under
+  # Rails.env.local?; in production user_idp is nil and the binding surfaces
+  # 401 until a real adapter (kiosk-user-idp-devise) is configured.
+  c.user_idp = Rails.env.local? ? StubUserIdp.new : nil
 
   # Payment provider — stub for the demo; swap in kiosk-pay-stripe for real.
   # The cashier check: ValidatingRentalProvider verifies the agent-signed cart

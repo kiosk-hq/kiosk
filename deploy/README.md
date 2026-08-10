@@ -1,8 +1,9 @@
 # Kiosk hosted live demos — deploy runbook
 
-Runbook for hosting all 7 Kiosk demo Rails apps on **one small VPS**, one
-**Postgres** cluster (DB-per-app), fronted by **Caddy** (auto-TLS), each app a
-loopback **Puma** under **systemd** — sized to survive an HN stampede.
+Runbook for hosting the 7 Kiosk demo Rails apps **plus the prove.my KYC broker**
+— 8 apps — on **one small VPS**, one **Postgres** cluster (DB-per-app), fronted
+by **Caddy** (auto-TLS), each app a loopback **Puma** under **systemd** — sized
+to survive an HN stampede.
 
 This directory is the *app-side* handoff; DNS + VPS provisioning is the operator's.
 
@@ -10,7 +11,7 @@ This directory is the *app-side* handoff; DNS + VPS provisioning is the operator
 
 | File | What it is |
 |------|-----------|
-| `Caddyfile` | One vhost per demo subdomain → loopback Puma; automatic TLS. |
+| `Caddyfile` | One vhost per app subdomain (8) → loopback Puma; automatic TLS. |
 | `postgres-init.sql` | 8 databases + 8 least-privilege login roles (DB-per-app; 7 demos + the prove.my broker). |
 | `kiosk-demo@.service` | Parameterised systemd unit: one Puma per app (`%i`). |
 | `env/<app>.env.example` | Per-app env template (7 demos + `kyc-demo.env.example` for the broker). Copy to `/etc/kiosk-demo/<app>.env`. |
@@ -69,8 +70,9 @@ tangible first-hand. Any other demo is knob-adjustable: set
 1. **DNS.** Either a wildcard `*.demo.kiosk.tech → VPS_IP` (one A record, add
    apps later with no DNS change) or one A record per subdomain above. If you
    want the flagship domain, point `atablefor.us` (+`www`) at the VPS too.
-2. **Provision the VPS** (2–4 GB; all 7 ≈ 2 GB Puma → 4 GB
-   comfortable). Install Postgres 17, Caddy, Ruby (`.mise.toml` pins the
+2. **Provision the VPS** (2–4 GB; all 8 apps at the shipped `WEB_CONCURRENCY=1`
+   × ~250 MB RSS ≈ 2 GB Puma, so 4 GB is comfortable once Postgres and Caddy
+   take their share). Install Postgres 17, Caddy, Ruby (`.mise.toml` pins the
    version), and a non-login `kiosk` service user.
 3. **Set real secrets.** Replace every `REPLACE_*` value in each
    `env/<app>.env.example` (secret key base, DB passwords, signing key, PoW
@@ -90,7 +92,7 @@ demo already ships a production `database.yml` pointing at its own DB + role.
 # 0. Put the monorepo checkout under /srv/kiosk (owned by the kiosk user).
 #    Each app lives at /srv/kiosk/kiosk-demo-<name>.
 
-# 1. Postgres: create the 7 DBs + least-privilege roles.
+# 1. Postgres: create the 8 DBs + least-privilege roles (7 demos + prove).
 #    Pass each password as a plain psql variable — the RAW password, no quotes
 #    (the script quote-escapes it safely via :'var').
 sudo -u postgres psql -v ON_ERROR_STOP=1 \

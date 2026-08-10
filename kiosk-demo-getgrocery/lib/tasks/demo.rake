@@ -978,24 +978,30 @@ namespace :demo do
   # ── end demo:redteam ──────────────────────────────────────────────────────────
 
   desc <<~DESC
-    Pay-path concurrency regression (K-544).
+    Pay-path regression (K-544 concurrency, K-579 typed 4xx, K-578 reconciliation).
 
     Resets the DB, then runs race_flow.rb IN-PROCESS (real Postgres, real
-    threads on pooled connections, a controllable PSP stub) to prove the two
-    double-charge races are closed:
+    threads on pooled connections, a controllable PSP stub) to prove:
 
       (a) SWAP         — once a /pay for order O has begun (O is `paying`), a
                          concurrent create_order{order_id:O, items:[expensive]}
                          cannot rewrite O's items ("pay €1, get €500" is out).
       (b) AT-MOST-ONCE — under N racing /pay for one order, exactly ONE
                          captures; the rest are cleanly rejected.
+      (c) TYPED 4xx    — a malformed order_id is a 400 bad_request at each of
+                         the three sites that cast one to `::uuid` (the cart,
+                         create_order's replace path, reschedule_delivery),
+                         never a raw 500, and nothing reaches the PSP.
+      (d) RECONCILED   — an order stranded in `paying` heals to `paid` from its
+                         settlement row, while one whose outcome only the PSP
+                         knows is reported UNRESOLVED and keeps its claim.
 
-    Exits 0 iff both invariants hold; non-zero on any breach.
+    Exits 0 iff every invariant holds; non-zero on any breach.
   DESC
   task race: :setup do
     require "shellwords"
     driver = File.expand_path("../../race_flow.rb", __dir__)
-    puts "\n── Running race_flow.rb (K-544 pay-path concurrency) ──"
+    puts "\n── Running race_flow.rb (pay path: K-544 / K-578 / K-579) ──"
     # A generous pool so N racing threads each get their own real connection.
     ok = system({ "RAILS_MAX_THREADS" => "12" }, "bundle exec rails runner #{driver.shellescape}")
     exit(ok ? 0 : 1)

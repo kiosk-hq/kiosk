@@ -57,7 +57,7 @@ The shipped wire passes an `ActionDispatch::Request` (kiosk-server's `IdentityRe
 
 ## Status
 
-Pre-v0.1 alpha. API surface stable across pre-v0.1 minor bumps.
+Pre-v1.0 alpha. API surface stable across pre-v1.0 minor bumps.
 
 ## License
 

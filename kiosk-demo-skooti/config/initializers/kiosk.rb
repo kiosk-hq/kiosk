@@ -65,7 +65,7 @@ Kiosk.configure do |c|
   c.schema         = "kiosk"
 
   # The Rails connection's role owns the tables AND issues queries (no
-  # role separation in v0.1 alpha). Set app_role to the same role so the
+  # role separation in this demo). Set app_role to the same role so the
   # `GRANT TO app_role` statements in `enable_rls_on` are no-ops on a
   # role that already has all privileges via ownership.
   c.app_role    = ENV.fetch("KIOSK_APP_ROLE",    "app_role")

@@ -1,24 +1,30 @@
 # frozen_string_literal: true
 
-# Standalone (no rails boot, no DB) unit spec for the cashier's order-reference
-# shape check — the K-579 guard in ValidatingPaymentProvider. Run with:
+# Standalone (no rails boot, no DB) unit spec for the order-reference shape
+# check — the K-579 guard, `lib/uuid_check.rb`. Run with:
 #   bundle exec rake demo:cashier_spec   (or: ruby spec/cashier_order_ref_spec.rb)
 #
-# The cart's `order_id` is agent-supplied and is cast to `::uuid` in every
-# cashier statement. Before the guard a malformed value made Postgres raise
-# InvalidTextRepresentation, which is not a Kiosk::Server::Errors::Base and so
-# escaped the wire controller as an HTTP 500. This spec pins:
+# `UuidCheck` guards the three places an agent-supplied id reaches an `::uuid`
+# cast: the cashier's cart reference (here), create_order's replace path and
+# reschedule_delivery (both in config/initializers/kiosk.rb, so they need a
+# booted app — `rake demo:race` drives those over the real DB). Before the guard
+# a malformed value made Postgres raise InvalidTextRepresentation, which is not
+# a Kiosk::Server::Errors::Base and so escaped the wire controller as an HTTP
+# 500. This spec pins, without a database:
 #   • a malformed reference → a clean 400 bad_request that echoes the value and
 #     leaks no SQL / PG internals;
-#   • the guard runs BEFORE any SQL (this whole spec runs with no DB at all);
+#   • the guard runs BEFORE any SQL — this whole file runs with ActiveRecord
+#     never loaded, which is only possible if the check precedes the connection;
 #   • the pre-existing 403 cashier rejections (wrong currency, not exactly one
 #     order_id) are unchanged and still ordered ahead of the shape check;
-#   • a canonical uuid passes the guard untouched (the happy path is unchanged).
+#   • the accepted shape is exactly the one create_order hands out (every
+#     SecureRandom.uuid, case-insensitively) and nothing looser.
 # This is the DB-free test seam for the fix (getgrocery ships no rspec).
 
 require "securerandom"
 require "kiosk/server/errors"
 
+require_relative "../lib/uuid_check"
 require_relative "../lib/validating_payment_provider"
 
 FAILURES = []
@@ -80,7 +86,7 @@ end
 
 # ── The guard reaches no database ────────────────────────────────────────────
 # Nothing above touched Postgres — ActiveRecord is not even loaded here — so the
-# 400s above are proof the check precedes every ::uuid cast.
+# 400s above are proof the check precedes the connection and every ::uuid cast.
 assert(!defined?(ActiveRecord::Base),
        "the shape check ran without ActiveRecord loaded (it precedes every ::uuid cast)")
 
@@ -99,14 +105,18 @@ e = error_from(eur_cart([SecureRandom.uuid, SecureRandom.uuid]))
 assert(e.is_a?(Kiosk::Server::Errors::Forbidden),
        "a cart referencing TWO orders is still a 403 forbidden, got #{e.class}")
 
-# ── The happy shape passes the guard ─────────────────────────────────────────
-rejected = Array.new(50) { SecureRandom.uuid }
-           .reject { |id| ValidatingPaymentProvider::ORDER_ID_FORMAT.match?(id) }
+# ── The accepted shape is exactly create_order's own ─────────────────────────
+rejected = Array.new(50) { SecureRandom.uuid }.reject { |id| UuidCheck.valid?(id) }
 assert(rejected.empty?,
-       "ORDER_ID_FORMAT accepts every SecureRandom.uuid (the shape create_order returns), " \
+       "UuidCheck accepts every SecureRandom.uuid (the shape create_order returns), " \
        "rejected #{rejected.inspect}")
-assert(ValidatingPaymentProvider::ORDER_ID_FORMAT.match?("3F0C1A2E-4B5D-6E7F-8A9B-0C1D2E3F4A5B"),
-       "ORDER_ID_FORMAT accepts an upper-case uuid")
+assert(UuidCheck.valid?("3F0C1A2E-4B5D-6E7F-8A9B-0C1D2E3F4A5B"),
+       "UuidCheck accepts an upper-case uuid")
+assert(!UuidCheck.valid?(nil) && !UuidCheck.valid?(12_345) && !UuidCheck.valid?({ "a" => 1 }),
+       "UuidCheck rejects non-String junk (nil / Integer / Hash) instead of raising")
+assert(!UuidCheck.valid?(" #{SecureRandom.uuid} ") &&
+       !UuidCheck.valid?("#{SecureRandom.uuid}\n#{SecureRandom.uuid}"),
+       "UuidCheck anchors the whole string — padded and multi-line values are rejected")
 
 # A well-formed reference is NOT rejected by the guard — it falls through to the
 # DB boundary (which is absent here, so any error is a connection-level one).

@@ -44,18 +44,6 @@
 # `paying` so a blind retry can't double-charge (K-545). On success we flip
 # `paying → paid`.
 class ValidatingPaymentProvider
-  # Canonical 8-4-4-4-12 hex uuid — the shape `create_order` returns and stamps
-  # into its `pay_hint`. The cart's `order_id` is agent-supplied and reaches
-  # Postgres as `…::uuid` in every statement below, so its shape is checked
-  # BEFORE any SQL (K-579): a malformed value made Postgres raise
-  # InvalidTextRepresentation (SQLSTATE 22P02), which is not a
-  # Kiosk::Server::Errors::Base and so escaped the wire controller's rescue as an
-  # HTTP 500 — the same 500-not-4xx class the engine closed in K-551. Postgres
-  # would also accept a few non-canonical spellings (brace-wrapped, un-hyphenated);
-  # we deliberately require the canonical form the operator itself hands out, so
-  # the rejection message can name exactly what to send.
-  ORDER_ID_FORMAT = /\A\h{8}-\h{4}-\h{4}-\h{4}-\h{12}\z/
-
   def initialize(provider, currency:)
     @provider = provider
     @currency = currency.to_s.downcase
@@ -88,7 +76,86 @@ class ValidatingPaymentProvider
     @provider.respond_to?(name, include_private) || super
   end
 
+  # ── Stuck-`paying` reconciliation (K-578, LOCAL evidence only) ────────────
+  #
+  # A crash (or a failed status flip) between a successful capture and the
+  # paid-flip leaves an order `paying` forever: charged ONCE — the claim makes
+  # double-charging impossible — but unpayable until something reconciles it.
+  # This sweep resolves every case local evidence can prove and REPORTS the rest
+  # instead of guessing:
+  #
+  #   • settlement row exists  ⇒ the charge is recorded; flip `paying` → `paid`.
+  #   • no settlement row      ⇒ only the PSP knows whether money moved. We do
+  #     NOT release the claim (that is exactly the blind retry K-545 forbids) and
+  #     we do NOT invent an answer; the order is listed as UNRESOLVED with the
+  #     cart-mandate ids to look up at the processor (the Stripe adapter stamps
+  #     each PaymentIntent with `metadata.cart_mandate_id`).
+  #
+  # Callable from `rake demo:reconcile`. There is NO background worker in this
+  # demo, and querying the PSP for the unresolved half is not built — see the
+  # K-578 row.
+  #
+  # @param older_than_seconds [Integer] ignore claims young enough to be a pay
+  #   that is legitimately still in flight.
+  # @return [Hash] { healed: [order_id, …], unresolved: [{order_id:, claimed_at:, cart_mandate_ids:}, …] }
+  def self.reconcile_stuck_paying!(older_than_seconds: 900)
+    conn   = ActiveRecord::Base.connection
+    cutoff = conn.quote(Time.now.utc - older_than_seconds)
+    stuck  = conn.execute(
+      "SELECT id, updated_at FROM orders " \
+      "WHERE status = 'paying' AND updated_at < #{cutoff}::timestamptz ORDER BY updated_at"
+    ).to_a
+
+    healed     = []
+    unresolved = []
+
+    stuck.each do |row|
+      order_id = row["id"].to_s
+      if settled?(conn, order_id)
+        conn.execute(
+          "UPDATE orders SET status = 'paid', updated_at = now() " \
+          "WHERE id = #{conn.quote(order_id)}::uuid AND status = 'paying'"
+        )
+        healed << order_id
+      else
+        unresolved << {
+          order_id:         order_id,
+          claimed_at:       row["updated_at"].to_s,
+          cart_mandate_ids: cart_mandate_ids_for(conn, order_id),
+        }
+      end
+    end
+
+    { healed: healed, unresolved: unresolved }
+  end
+
+  # True iff a settlement (capture receipt) references this order — the
+  # authoritative local "this was charged" marker, written by the engine's
+  # executor phase 3.
+  def self.settled?(conn, order_id)
+    filter = [{ order_id: order_id.to_s }].to_json
+    !conn.execute(
+      "SELECT 1 AS ok FROM kiosk.settlements pm " \
+      "JOIN kiosk.cart_mandates cm ON cm.id = pm.cart_mandate_id " \
+      "WHERE cm.line_items @> #{conn.quote(filter)}::jsonb LIMIT 1"
+    ).first.nil?
+  end
+
+  # The agent-signed cart-mandate ids that referenced this order. They are
+  # persisted BEFORE the capture (executor phase 1), so they exist even when the
+  # settlement does not — which makes them the handle for looking the charge up
+  # at the processor (`metadata.cart_mandate_id`).
+  def self.cart_mandate_ids_for(conn, order_id)
+    filter = [{ order_id: order_id.to_s }].to_json
+    conn.execute(
+      "SELECT mandate_id FROM kiosk.cart_mandates " \
+      "WHERE line_items @> #{conn.quote(filter)}::jsonb ORDER BY created_at"
+    ).to_a.map { |r| r["mandate_id"].to_s }
+  end
+
   private
+
+  def settled?(conn, order_id) = self.class.settled?(conn, order_id)
 
   # Atomically claim the referenced order for payment, then run the cashier
   # check against it. Returns the order_id (String) on success; raises
@@ -106,16 +173,19 @@ class ValidatingPaymentProvider
     deny "cart line_items must reference exactly one order_id (see create_order's pay_hint)" unless refs.size == 1
     order_id = refs.first
 
-    # K-579: shape-check the agent-supplied reference BEFORE it reaches the
-    # `::uuid` casts below — a malformed one 500s inside Postgres instead of
-    # answering the agent. A 400 (not the cashier's 403): this is a malformed
-    # argument, not a refusal to serve a well-formed one, and it says nothing
-    # about whether any order exists. The message echoes only the value the
-    # agent itself sent — no SQL, no PG error text.
-    unless ORDER_ID_FORMAT.match?(order_id)
+    # K-579: the order_id goes straight into an `::uuid` cast below. A malformed
+    # one made Postgres raise InvalidTextRepresentation, which escaped as a raw
+    # 500 — and on the pay path a 500 is the worst answer there is, because an
+    # assistant cannot tell "your input was wrong" from "the charge may have
+    # gone through". Reject the bad SHAPE up front, before the connection is even
+    # taken — a 400, not the cashier's 403: this is a malformed argument, not a
+    # refusal to serve a well-formed one, and it says nothing about whether any
+    # order exists. The message echoes only the value the agent itself sent — no
+    # SQL, no PG error text.
+    unless UuidCheck.valid?(order_id)
       raise Kiosk::Server::Errors::BadRequest.new(
         "cart line_items order_id #{order_id.inspect} is not a uuid",
-        hint: "use the order_id create_order returned verbatim (canonical uuid, " \
+        hint: "use the `order_id` create_order returned, verbatim (a canonical uuid, " \
               "e.g. 3f0c1a2e-4b5d-6e7f-8a9b-0c1d2e3f4a5b) — see its pay_hint",
       )
     end
@@ -143,8 +213,30 @@ class ValidatingPaymentProvider
         "AND user_id = #{conn.quote(cart.user_id.to_s)}::uuid LIMIT 1"
       ).first
       deny "order not found or not yours" if existing.nil?
+
+      # K-578 (local half): a `paying` order that ALREADY HAS a settlement is not
+      # "in progress" — it was charged, and only the local status flip was lost
+      # (a crash, or a failed UPDATE, between capture and mark_paid!). The
+      # settlement row is decisive local evidence, so heal the status here — at
+      # the exact moment it matters — and answer with the truth rather than
+      # parking the payer behind a status that would never move.
+      if existing["status"] == "paying" && settled?(conn, order_id)
+        mark_paid!(order_id)
+        deny "order already settled"
+      end
+
+      if existing["status"] == "paying"
+        # Claimed, no settlement: either a pay is genuinely in flight, or one
+        # died at an UNKNOWN outcome and we deliberately kept the claim so a
+        # blind retry can't double-charge (K-545). Say what recovers it.
+        deny "order #{order_id} has a payment in progress — re-read `query my_orders`: " \
+             "if it shows paid, the charge went through and there is nothing to retry; " \
+             "if it stays unpaid, the operator must reconcile this order with the payment " \
+             "processor before it can be paid again"
+      end
+
       deny "order #{order_id} is not payable (status=#{existing["status"]}) — it may already be " \
-           "paid, or a payment for it is already in progress"
+           "paid, rescheduled, or otherwise past the payable state"
     end
 
     # Everything past the claim runs under the `paying` guard; any rejection
@@ -152,13 +244,7 @@ class ValidatingPaymentProvider
     begin
       # Defense-in-depth: a settlement should never exist for an order that was
       # still 'created', but reject (and don't charge) if one somehow does.
-      settled_filter = [{ order_id: order_id }].to_json
-      already = conn.execute(
-        "SELECT 1 AS ok FROM kiosk.settlements pm " \
-        "JOIN kiosk.cart_mandates cm ON cm.id = pm.cart_mandate_id " \
-        "WHERE cm.line_items @> #{conn.quote(settled_filter)}::jsonb LIMIT 1"
-      ).first
-      deny "order already settled" unless already.nil?
+      deny "order already settled" if settled?(conn, order_id)
 
       expected = conn.execute(
         "SELECT p.sku, oi.qty, p.price_cents " \

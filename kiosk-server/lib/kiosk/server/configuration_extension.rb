@@ -360,9 +360,12 @@ module Kiosk
 
       # In-process TTL store for spent challenge ids. Override with a
       # shared-store implementation (e.g. Redis-backed) in multi-process
-      # deployments to prevent replay attacks across processes.
+      # deployments to prevent replay attacks across processes. The override
+      # MUST implement #claim as ONE atomic op (Redis SETNX / SQL
+      # INSERT..ON CONFLICT DO NOTHING) — the gate claims before the verify, so a
+      # read-then-write reintroduces the replay TOCTOU (K-542).
       #
-      # @return [Kiosk::Server::PowSpentStore, #spent?(id), #mark_spent(id, exp)]
+      # @return [Kiosk::Server::PowSpentStore, #claim(id, exp), #release(id), #spent?(id), #mark_spent(id, exp)]
       attr_writer :pow_spent_store
       def pow_spent_store
         @pow_spent_store ||= Kiosk::Server::PowSpentStore.new

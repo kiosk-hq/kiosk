@@ -14,6 +14,17 @@ module Kiosk
     # fingerprint), so a proof solved for one key cannot be reused for another,
     # and there is no principal yet, so a bad proof cannot be attributed to a
     # reputation record — it is simply rejected (403).
+    #
+    # == Anti-DoS: one challenge → at most one verify (K-540)
+    #
+    # This gate runs UNAUTHENTICATED, before PopVerifier, so a caller can take a
+    # free 402 challenge and resubmit it with a valid HMAC sig but garbage
+    # indices. {PowGate.enforce} claims the challenge id atomically BEFORE the
+    # equihash verify (K-542), so a bad proof CONSUMES its challenge: a replay of
+    # the same id is turned away with a fresh re-challenge (402) without a second
+    # verify. One issued challenge therefore drives at most one hash-loop verify.
+    # (The operator-side half — the edge rate-limit in deploy/Caddyfile — is
+    # deploy config, out of this gem's scope.)
     module RegistrationPow
       module_function
 

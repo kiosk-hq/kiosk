@@ -15,7 +15,8 @@ an ISSUER, not a Kiosk operator (no PoW, no `/.well-known/kiosk.json`, no agent 
 - [ ] **No Python/numpy needed on the server** — it only *verifies* proofs (cheap, pure Ruby). numpy is
       the client's *solver* (`solve.py`); install it on the box ONLY if you want to run the solve-side
       demo smoke tests (`demo:shop`/`demo:book`/`demo:backoff`) there.
-- [ ] **Lean Puma** for a small box: `WEB_CONCURRENCY=1` (or 0) + `RAILS_MAX_THREADS=5` per app.
+- [ ] **Lean Puma** for a small box: `WEB_CONCURRENCY=1` (or 0) + `RAILS_MAX_THREADS=5` per app —
+      what every `deploy/env/*.env.example` already ships, so a copied template needs no edit here.
 - [ ] `git clone` the reference repo (or push-to-deploy — see §7).
 
 ## 3. Databases (one Postgres cluster)

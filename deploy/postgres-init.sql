@@ -95,6 +95,8 @@ GRANT CONNECT ON DATABASE kiosk_tudu_production       TO kiosk_tudu;
 GRANT CONNECT ON DATABASE kiosk_prove_production      TO kiosk_prove;
 
 -- NOTE (connections): Postgres max_connections >= Σ(app pools)
--- + headroom. Each app pool = WEB_CONCURRENCY(2) × RAILS_MAX_THREADS(5) = 10;
--- all 8 apps = 80. Set  max_connections = 100  in postgresql.conf (or front
+-- + headroom. At the shipped lean sizing each app pool =
+-- WEB_CONCURRENCY(1) × RAILS_MAX_THREADS(5) = 5; all 8 apps = 40. Set
+-- max_connections = 100 in postgresql.conf — that leaves room to double
+-- WEB_CONCURRENCY later (8 apps × 2 × 5 = 80) plus admin headroom (or front
 -- with PgBouncer if hosting all 8 on a 2 GB box). Not settable from this file.

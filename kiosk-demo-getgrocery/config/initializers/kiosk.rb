@@ -414,15 +414,20 @@ Kiosk::Server::Queries.register("delivery_slots",
 end
 
 Kiosk::Server::Queries.register("my_orders",
-  description: "List this principal's orders with delivery slot, address, and a paid flag (scoped to authenticated user via kiosk.current_user_id()). Each row carries an `order_id`; pass it to reschedule_delivery (or create_order to replace an unpaid order) as `order_id`.") do |_params|
+  description: "List this principal's orders with delivery slot, address, and a paid flag (scoped to authenticated user via kiosk.current_user_id()). Each row carries an `order_id`; pass it to reschedule_delivery (or create_order to replace an unpaid order) as `order_id`. Use the `paid` flag as a settlement lookup: after a pay whose response you did not receive, re-read my_orders and only retry pay if the order is still unpaid (K-545).") do |_params|
+  # K-545: `paid` is true when a settlement exists OR the order reached the
+  # terminal `paid` state at capture. The order flips to `paid` the instant the
+  # charge succeeds — a hair before the engine writes the settlement row — so
+  # honouring the status closes the window where a lost pay response would
+  # otherwise read paid=false and tempt a double-charging retry.
   ActiveRecord::Base.connection.execute(
     "SELECT o.id AS order_id, o.status, o.total_cents, o.slot_at, o.address, " \
-    "EXISTS (" \
+    "(o.status = 'paid' OR EXISTS (" \
     "SELECT 1 FROM kiosk.settlements pm " \
     "JOIN kiosk.cart_mandates cm ON cm.id = pm.cart_mandate_id " \
     "WHERE pm.user_id = kiosk.current_user_id() " \
     "AND cm.line_items @> json_build_array(json_build_object('order_id', o.id::text))::jsonb" \
-    ") AS paid " \
+    ")) AS paid " \
     "FROM orders o " \
     "WHERE o.user_id = kiosk.current_user_id() " \
     "ORDER BY o.created_at DESC"
@@ -626,17 +631,22 @@ Kiosk::Server::Actions.register("create_order",
 
     if given_order_id && !given_order_id.to_s.empty?
       settled_filter = [{ order_id: given_order_id.to_s }].to_json
+      # K-544: exclude `paying` (a /pay for this order is mid-flight — its items
+      # MUST NOT be swapped from under it) as well as the terminal states, and
+      # take a row lock (FOR UPDATE) so this replace serializes against the
+      # pay-path's atomic claim. Together they make "replace items" and "begin
+      # paying" mutually exclusive on the order row.
       existing = conn.execute(
         "SELECT o.id FROM orders o " \
         "WHERE o.id = #{conn.quote(given_order_id.to_s)}::uuid " \
         "AND o.user_id = #{conn.quote(uid)}::uuid " \
-        "AND o.status NOT IN ('paid', 'scheduled', 'rescheduled') " \
+        "AND o.status NOT IN ('paid', 'paying', 'scheduled', 'rescheduled') " \
         "AND NOT EXISTS (" \
         "SELECT 1 FROM kiosk.settlements pm " \
         "JOIN kiosk.cart_mandates cm ON cm.id = pm.cart_mandate_id " \
         "WHERE cm.line_items @> #{conn.quote(settled_filter)}::jsonb" \
         ") " \
-        "LIMIT 1"
+        "LIMIT 1 FOR UPDATE"
       ).first
 
       if existing

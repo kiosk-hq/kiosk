@@ -388,6 +388,24 @@ RSpec.describe Kiosk::Server::PowGate do
       end
     end
 
+    # ── malformed proof: challenge missing a params object (K-551) ───────────
+    # A challenge echoed back WITHOUT a `params` object would 500 inside the
+    # challenge sig computation (`nil.sort_by`). The gate rejects it as a clean
+    # bad_request first, before the claim or any hash work.
+
+    describe "malformed proof (challenge without params)" do
+      it "raises BadRequest (400), not a 500, when challenge.params is missing" do
+        malformed = { id: "x", alg: "argon2id", salt: "abc",
+                      exp: Time.now.to_i + 300, sig: "deadbeef" }
+        expect {
+          described_class.gate(
+            identity: identity, command: "query", body: { name: "menu" },
+            pow: { challenge: malformed, nonce: "1" },
+          )
+        }.to raise_error(Kiosk::Server::Errors::BadRequest, /params/)
+      end
+    end
+
     # ── policy that challenges only some verbs ────────────────────────────────
 
     describe "policy that returns nil for some verbs (free pass)" do

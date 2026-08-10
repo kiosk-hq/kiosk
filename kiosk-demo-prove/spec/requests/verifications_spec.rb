@@ -191,6 +191,25 @@ RSpec.describe "prove.my broker", type: :request do
       expect(payload["attributes"]).to eq({ "age_over_18" => true })
     end
 
+    # The catalog is the UNION the shared issuer can answer, not the set the
+    # demos happen to use (design §1.1). `age_over_21` is the entry no shipped
+    # operator requests; asking for it must work exactly like the ones that do,
+    # question page included — that is what makes it an extension point rather
+    # than dead surface (K-599).
+    it "answers a catalog claim no shipped operator requests (age_over_21)" do
+      rid = open_request(requested_claims: ["age_over_21"])
+
+      get "/verify", params: { request: rid }
+      expect(response).to have_http_status(:ok)
+      expect(response.body).to include("over 21")
+
+      delivered = {}
+      allow(CallbackPoster).to receive(:deliver) { |args| delivered = args; 200 }
+      post "/verify", params: { request: rid, decision: "approve" }
+
+      expect(decode(delivered[:kyc_jws])["attributes"]).to eq({ "age_over_21" => true })
+    end
+
     it "is single-use: a second approve on a confirmed request is rejected (no re-mint)" do
       rid = open_request
       allow(CallbackPoster).to receive(:deliver).and_return(200)

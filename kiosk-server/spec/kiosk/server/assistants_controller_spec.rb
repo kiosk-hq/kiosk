@@ -235,9 +235,11 @@ RSpec.describe "AssistantsController" do
 
   # ── AGENT-SIGNPOST, the forgery-protection path (K-459) ───────────────────
   # A live assistant POSTing JSON at this `/kiosk/…` page carries no CSRF
-  # token. Rails raises InvalidAuthenticityToken, and PRODUCTION turns that
-  # into a BODYLESS 422 (text/html, Content-Length 0) because a Kiosk host
-  # ships no public/422.html — the assistant is handed nothing to act on.
+  # token. Rails raises InvalidAuthenticityToken, and PRODUCTION answers it
+  # with whatever the host's PublicExceptions has: the static public/422.html
+  # every demo ships since K-532, a generic {"status":422,"error":…} echo on an
+  # explicit JSON Accept, or a bodyless 422 (text/html, Content-Length 0) on a
+  # host with no such page — never a pointer to the wire the caller wanted.
   #
   # A real Rails app installs `protect_from_forgery with: :exception` on every
   # ActionController::Base (config.action_controller.default_protect_from_forgery);

@@ -45,8 +45,9 @@ if defined?(::ActionController::Base)
         # AGENT-SIGNPOST (K-459) — same rule as {AssistantsController}, whose
         # copy carries the full explanation. Short version: an assistant that
         # POSTs JSON to this human consent page trips Rails' forgery gate, and
-        # in production that surfaces as a BODYLESS 422 (text/html,
-        # Content-Length 0) with nothing for the caller to act on. Answer a
+        # in production Rails answers with the host's generic error material —
+        # a static public/422.html, a bare status echo, or (on a host with no
+        # error page) a bodyless 422 — never a pointer to the wire. Answer a
         # JSON-shaped caller with the Kiosk error envelope + a pointer to the
         # wire; re-raise for browsers so real CSRF failures still fail.
         rescue_from ::ActionController::InvalidAuthenticityToken do |error|

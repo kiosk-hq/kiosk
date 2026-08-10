@@ -826,6 +826,44 @@ namespace :demo do
       end
     end
 
+    # K-596: both verbs that take an `order_id` must DECLARE its uuid shape, not
+    # merely describe it in prose. Nothing validates `input_schema` server-side
+    # today (`validate_requests` slice-1 covers the Kiosk-PoW header only —
+    # T-045(a) is the layer that would police args), so this is the contract an
+    # assistant reads; `UuidCheck` in the handler is what enforces it, and
+    # demo:race pins that side. Asserted by BEHAVIOUR, not by string equality:
+    # the published pattern must accept the ids create_order hands out and
+    # reject the value that used to 500.
+    require "securerandom"
+    %w[create_order reschedule_delivery].each do |aname|
+      prop = (actions.find { |a| a["name"] == aname } || {})
+             .dig("input_schema", "properties", "order_id") || {}
+      pattern = prop["pattern"]
+      if pattern.nil?
+        failures << "#{aname}.order_id declares no uuid pattern (K-596)"
+        puts "  ✗  #{aname}.order_id declares no uuid pattern"
+        next
+      end
+
+      rx = Regexp.new(pattern)
+      accepts = Array.new(20) { SecureRandom.uuid }.all? { |u| rx.match?(u) }
+      rejects = ["not-a-uuid", "12345", "'; DROP TABLE orders; --", SecureRandom.uuid.delete("-")]
+                .none? { |bad| rx.match?(bad) }
+      if accepts && rejects
+        puts "  ✓  #{aname}.order_id declares a uuid pattern that accepts real ids and rejects junk"
+      else
+        failures << "#{aname}.order_id pattern #{pattern.inspect} accepts=#{accepts} rejects_junk=#{rejects}"
+        puts "  ✗  #{aname}.order_id pattern #{pattern.inspect} does not behave as a uuid check"
+      end
+
+      if prop["format"] == "uuid"
+        puts "  ✓  #{aname}.order_id also declares format: uuid"
+      else
+        failures << "#{aname}.order_id missing format: uuid (got #{prop["format"].inspect})"
+        puts "  ✗  #{aname}.order_id missing format: uuid"
+      end
+    end
+
     # queries must NOT include old names
     %w[stores products_by_store substitution_options].each do |qname|
       if queries.any? { |q| q["name"] == qname }

@@ -14,6 +14,15 @@
 #
 # Format only — that an id is a well-formed uuid says nothing about whether the
 # row exists or belongs to the caller; the ownership/state SQL still decides that.
+#
+# A copy of this module lives in every demo that casts a wire-supplied id
+# (skooti, hoteling, atablefor, tudu, philslist — K-581/K-582); they are
+# identical apart from JSON_SCHEMA_PATTERN, which only getgrocery needs because
+# only getgrocery declares an `input_schema` for an id param today (T-050).
+# Each demo is a standalone Rails app with its own Gemfile, so the alternative to
+# a copy is publishing the guard in a shipped gem — a public-API decision, not a
+# fix-wave one. Same arrangement as lib/pow_difficulty.rb and
+# lib/equihash_register.rb.
 module UuidCheck
   # Canonical 8-4-4-4-12 hex form, the only shape Postgres' `uuid` type is fed
   # here (gen_random_uuid() output, echoed back by the agent). Postgres itself
@@ -21,6 +30,18 @@ module UuidCheck
   # un-hyphenated); we deliberately require the canonical form the operator
   # hands out, so the rejection can name exactly what to send back.
   PATTERN = /\A\h{8}-\h{4}-\h{4}-\h{4}-\h{12}\z/
+
+  # The same shape written for JSON Schema (K-596). ECMA-262, so `\h` and `\A`/`\z`
+  # are spelled out; `^…$` is anchored because json_schemer's `pattern` is a
+  # search, not a full match. Lives here, next to PATTERN, so the DECLARED
+  # contract and the RUNTIME guard cannot drift apart unnoticed.
+  #
+  # It is a declaration, NOT a second enforcement point: kiosk-server validates
+  # nothing against `input_schema` today — `c.validate_requests` (slice-1)
+  # covers the `Kiosk-PoW` header only, and policing verb arguments is T-045(a).
+  # So this tells an assistant reading GET /kiosk/schema what shape to send, and
+  # `UuidCheck.valid?` in the handler is what actually rejects a bad one.
+  JSON_SCHEMA_PATTERN = "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$"
 
   # @param value [Object] the candidate id (usually a String off the wire)
   # @return [Boolean] true iff `value` is a canonical uuid literal

@@ -1,0 +1,58 @@
+# Root ignore for the Kiosk reference monorepo (K-552 / T-011 publication hygiene).
+#
+# This repo is going PUBLIC. Until now it relied on the maintainer's
+# machine-global git ignore, so a fresh clone doing `git add -A` would commit
+# machine-local and secret-bearing files that no tracked ignore covered. This
+# file is the safety net. It is deliberately CONSERVATIVE — it must never hide a
+# file that is currently tracked-and-intended (the demos DO track their own
+# Gemfile.lock and deploy/env/*.env.example; the demo `mise.toml.example` and the
+# gems' *.gemspec are tracked). The per-gem / per-demo .gitignore files still own
+# their subtree specifics (db, log, tmp, storage, master.key/credentials).
+
+# ── Toolchain version pins (machine-local; managed per developer) ────────────
+# The maintainer uses mise; `mise.toml.example` is the tracked template — the
+# real `mise.toml` / `.mise.toml` is local and must not ship.
+.mise.toml
+mise.toml
+.ruby-version
+.ruby-gemset
+
+# ── Bundler / local gem installs ─────────────────────────────────────────────
+.bundle/
+/vendor/bundle/
+# Local gem cache dir (matches the maintainer's global ignore). Trailing slash
+# so it never touches the tracked *.gemspec files.
+.gems/
+
+# ── Secrets — never publish (defense-in-depth over the per-demo ignores) ─────
+# Rails master keys and encrypted credentials, wherever a demo app keeps them.
+**/config/master.key
+**/config/credentials.yml.enc
+**/config/credentials/*.key
+# Local environment files (real secrets); *.env.example templates stay tracked.
+.env
+.env.*
+!.env.example
+
+# ── Logs and temp ────────────────────────────────────────────────────────────
+*.log
+/tmp/
+
+# ── Test / coverage artifacts ────────────────────────────────────────────────
+/coverage/
+.rspec_status
+.rspec-local
+
+# ── Local agent / worktree scratch (maintainer machine) ──────────────────────
+**/.claude/settings.local.json
+.worktrees/
+lefthook-local.yml
+
+# ── Editor / OS cruft ────────────────────────────────────────────────────────
+.DS_Store
+.AppleDouble
+Thumbs.db
+.idea/
+.vscode/
+*.swp
+*~

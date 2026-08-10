@@ -97,6 +97,31 @@ if ENV["KIOSK_POW_BROWSE_DEMO"] == "1"
   end
 end
 
+# ── PoW HMAC secret — REQUIRED outside development/test (K-541) ────────────
+# pow_secret is the HMAC key the engine signs every PoW challenge with. This
+# repo is PUBLIC, so a shipped fallback would be world-readable: a reader could
+# mint a self-signed challenge at trivial difficulty {n:8,k:1} and forge a proof
+# the server accepts — silently turning proof-of-work OFF. It MUST come from the
+# environment in production and fail LOUD when absent, matching KIOSK_ISSUER and
+# the signing key. Dev/test keep a stable (non-secret) default so `bin/rails s`,
+# the demo drivers and e2e boot out of the box; a too-short secret is rejected.
+pow_secret = ENV.fetch("KIOSK_POW_SECRET") do
+  unless Rails.env.local?
+    raise <<~MSG
+      KIOSK_POW_SECRET is required outside development/test.
+
+      It is the HMAC key every Kiosk PoW challenge is signed with. This repo is
+      public, so a shipped fallback would be world-readable — anyone could mint a
+      self-signed challenge at trivial difficulty and forge a valid proof,
+      silently turning proof-of-work off. Generate a long random value:
+
+        KIOSK_POW_SECRET=$(openssl rand -hex 32)
+    MSG
+  end
+  "hoteling-demo-pow-secret-dev-insecure-default"
+end
+raise "KIOSK_POW_SECRET must be at least 32 bytes (got #{pow_secret.bytesize}) — generate one with `openssl rand -hex 32`." if pow_secret.bytesize < 32
+
 Kiosk.configure do |c|
   c.user_model     = "User"
   c.user_id_type   = :uuid
@@ -179,7 +204,7 @@ Kiosk.configure do |c|
   # ── Browse-heavy priced-pagination gate (KIOSK_POW_BROWSE_DEMO=1) ────────
   if ENV["KIOSK_POW_BROWSE_DEMO"] == "1"
     c.reputation_policy = HotelingBrowsePolicy.new(EQUIHASH_BROWSE_PARAMS)
-    c.pow_secret        = ENV.fetch("KIOSK_POW_SECRET", "hoteling-demo-pow-secret")
+    c.pow_secret        = pow_secret
     c.pow_ttl           = 300
 
     # Factors: count availability queries per agent in-process and report the
@@ -203,7 +228,7 @@ Kiosk.configure do |c|
   # without it).
   c.registration_pow_count  = 1
   c.registration_pow_params = HOTELING_REGISTRATION_POW_PARAMS
-  c.pow_secret              = ENV.fetch("KIOSK_POW_SECRET", "hoteling-demo-pow-secret")
+  c.pow_secret              = pow_secret
 end
 
 # Amenity vocabulary — the closed set a property MAY offer. Shared by the

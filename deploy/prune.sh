@@ -10,8 +10,12 @@
 #      (reclaim disk from a stampede's worth of throwaway registrations).
 #   2. RE-SEEDS the shared catalog if a prune (or anything) touched it.
 #
-# Run daily from cron, e.g.:
-#   0 4 * * *  /srv/kiosk/reference/deploy/prune.sh >> /var/log/kiosk-prune.log 2>&1
+# NOT INSTALLED ON THE HOSTED BOX. The daily cron is a deliberate skip
+# (deploy/CHECKLIST.md §7, deploy/README.md step 5): with per-agent isolation a
+# poker's junk is invisible to the next poker, so disk growth is the only cost
+# and a bloated demo DB can be reseeded by hand (deploy/demo-reset.sh). This
+# script is kept ready for anyone who does want the cron:
+#   0 4 * * *  /srv/kiosk/deploy/prune.sh >> /var/log/kiosk-prune.log 2>&1
 #
 # Idempotent and safe to re-run. Prunes each app's DB independently.
 

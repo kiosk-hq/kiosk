@@ -147,4 +147,51 @@ RSpec.describe "DeviceVerifyController" do
     expect(status).to eq(429)
     expect(body).to include("Too many")
   end
+
+  # ── AGENT-SIGNPOST, the forgery-protection path (K-459) ───────────────────
+  # Same story as AssistantsController (its spec carries the long version): an
+  # assistant POSTing JSON to this human consent page has no CSRF token, and in
+  # production the resulting InvalidAuthenticityToken becomes a BODYLESS 422
+  # (text/html, Content-Length 0). The harness has no Rails app, so the
+  # subclass opts into `protect_from_forgery` to reproduce that condition.
+  describe "forgery protection on a JSON POST" do
+    let(:guarded) do
+      stub_const(
+        "ForgeryGuardedDeviceVerifyController",
+        Class.new(Kiosk::Server::DeviceVerifyController) { protect_from_forgery with: :exception },
+      )
+    end
+
+    def dispatch_guarded(env_overrides)
+      env = Rack::MockRequest.env_for(
+        "https://provider.example/kiosk/oauth/device/verify", method: "POST",
+      )
+      env_overrides.each { |k, v| env[k] = v }
+      env["rack.session"] = session
+      status, headers, body = guarded.action(:create).call(env)
+      raw = +""
+      body.each { |chunk| raw << chunk }
+      [status, raw, headers]
+    end
+
+    it "answers a JSON-bodied POST with the error envelope and a pointer to the wire" do
+      status, body, headers = dispatch_guarded(
+        "CONTENT_TYPE" => "application/json", "rack.input" => StringIO.new("{}"),
+      )
+
+      expect(status).to eq(422)
+      expect(headers["Content-Type"]).to include("application/json")
+      expect(body).not_to be_empty
+      envelope = JSON.parse(body)
+      expect(envelope["ok"]).to be(false)
+      expect(envelope.dig("error", "code")).to eq("invalid_authenticity_token")
+      expect(envelope.dig("error", "hint"))
+        .to include("https://provider.example/.well-known/kiosk.json")
+    end
+
+    it "still raises for a browser form POST — the CSRF gate is unchanged" do
+      expect { dispatch_guarded("HTTP_ACCEPT" => "text/html") }
+        .to raise_error(::ActionController::InvalidAuthenticityToken)
+    end
+  end
 end

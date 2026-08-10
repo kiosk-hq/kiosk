@@ -42,6 +42,19 @@ if defined?(::ActionController::Base)
         append_view_path File.expand_path("../../../app/views", __dir__)
         layout false
 
+        # AGENT-SIGNPOST (K-459) — same rule as {AssistantsController}, whose
+        # copy carries the full explanation. Short version: an assistant that
+        # POSTs JSON to this human consent page trips Rails' forgery gate, and
+        # in production that surfaces as a BODYLESS 422 (text/html,
+        # Content-Length 0) with nothing for the caller to act on. Answer a
+        # JSON-shaped caller with the Kiosk error envelope + a pointer to the
+        # wire; re-raise for browsers so real CSRF failures still fail.
+        rescue_from ::ActionController::InvalidAuthenticityToken do |error|
+          raise error unless json_request?
+
+          render json: wrong_door_envelope, status: :unprocessable_entity
+        end
+
         def show
           return unless require_account_holder!
           return if attempt_capped!
@@ -92,6 +105,34 @@ if defined?(::ActionController::Base)
           render plain: "Sign in to your account first, then re-open this page to approve the assistant link.",
                  status: :unauthorized
           false
+        end
+
+        # A machine caller for signposting purposes: an explicit JSON `Accept`,
+        # or a JSON request body. Deliberately narrow — anything ambiguous
+        # counts as a browser and keeps today's behaviour.
+        def json_request?
+          return true if request.format.json?
+
+          !!request.content_mime_type&.json?
+        rescue StandardError
+          false
+        end
+
+        # The signpost body. Non-wire `error.code` on purpose: this endpoint is
+        # not one of the four verbs, so it must not borrow a code from the
+        # spec's wire error table — but the envelope SHAPE is the one every
+        # Kiosk client already parses.
+        def wrong_door_envelope
+          {
+            ok:    false,
+            error: {
+              code:    "invalid_authenticity_token",
+              message: "this is the account holder's browser consent page, not the Kiosk wire — " \
+                       "it needs a signed-in session and a CSRF token from its own form",
+              hint:    "assistants use the wire: GET #{request.base_url}/.well-known/kiosk.json " \
+                       "for the register/login and schema/query/run/pay endpoints",
+            },
+          }
         end
 
         def record_failed_attempt

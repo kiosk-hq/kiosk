@@ -32,6 +32,26 @@ if defined?(::ActionController::Base)
         append_view_path File.expand_path("../../../app/views", __dir__)
         layout false
 
+        # AGENT-SIGNPOST (K-459). This is a HUMAN, browser-only page that
+        # happens to sit under the `/kiosk/…` prefix an assistant is told to
+        # probe. An assistant POSTing JSON here carries no CSRF token, so Rails
+        # raises ActionController::InvalidAuthenticityToken — and in production
+        # that exception becomes a BODYLESS 422: ShowExceptions hands off to
+        # PublicExceptions, a Kiosk host ships no public/422.html, and an
+        # `Accept: */*` request has no format Rails can render the generic error
+        # in, so ShowExceptions#pass_response answers 422 + `text/html` +
+        # `Content-Length: 0`. The caller gets NOTHING to act on. Give a
+        # JSON-shaped caller the same `{ok:false,error:{…}}` envelope every
+        # Kiosk endpoint speaks, and point it at the machine surface it was
+        # actually looking for. A browser request is re-raised untouched: a
+        # genuine CSRF failure on a genuine form must keep failing exactly as
+        # it does today.
+        rescue_from ::ActionController::InvalidAuthenticityToken do |error|
+          raise error unless json_request?
+
+          render json: wrong_door_envelope, status: :unprocessable_entity
+        end
+
         def show
           return unless require_account_holder!
 
@@ -149,6 +169,36 @@ if defined?(::ActionController::Base)
           request.headers["Accept"].to_s.include?("text/html")
         rescue StandardError
           false
+        end
+
+        # A machine caller for signposting purposes: an explicit JSON `Accept`,
+        # or a JSON request body. Deliberately NARROW — anything ambiguous
+        # (`*/*`, a form post, no headers at all) counts as a browser and keeps
+        # today's behaviour, so the forgery gate stays exactly as strict as it
+        # was for the surface it protects.
+        def json_request?
+          return true if request.format.json?
+
+          !!request.content_mime_type&.json?
+        rescue StandardError
+          false
+        end
+
+        # The signpost body. Non-wire `error.code` on purpose: this endpoint is
+        # not one of the four verbs, so it must not borrow a code from the
+        # spec's wire error table — but the envelope SHAPE is the one every
+        # Kiosk client already parses.
+        def wrong_door_envelope
+          {
+            ok:    false,
+            error: {
+              code:    "invalid_authenticity_token",
+              message: "this is the account holder's browser page, not the Kiosk wire — " \
+                       "it needs a signed-in session and a CSRF token from its own form",
+              hint:    "assistants use the wire: GET #{request.base_url}/.well-known/kiosk.json " \
+                       "for the register/login and schema/query/run/pay endpoints",
+            },
+          }
         end
 
         # Flash the sign-in prompt. The flash mixin is present on

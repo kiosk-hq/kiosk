@@ -96,6 +96,9 @@ smoke_stylish() {
   # smoke DB (CI: postgres; local: your login role). No password under trust auth.
   export KIOSK_STYLISH_DB_USER="${KIOSK_STYLISH_DB_USER:-postgres}"
   export KIOSK_STYLISH_DB_PASSWORD="${KIOSK_STYLISH_DB_PASSWORD:-}"
+  # PINNED, not inherited: the prepare step below does `db:drop`, so this smoke
+  # must never follow an ambient KIOSK_STYLISH_DB into a real deploy database.
+  export KIOSK_STYLISH_DB="kiosk_stylish_production"
 
   SERVER_PID=""
   cleanup() {
@@ -316,6 +319,9 @@ smoke_prove() {
   # database.yml (production) connects as this role (CI: postgres; local: login).
   export KIOSK_PROVE_DB_USER="${KIOSK_PROVE_DB_USER:-postgres}"
   export KIOSK_PROVE_DB_PASSWORD="${KIOSK_PROVE_DB_PASSWORD:-}"
+  # PINNED, not inherited: the prepare step below does `db:drop` — see the
+  # stylish smoke above.
+  export KIOSK_PROVE_DB="kiosk_prove_production"
 
   SERVER_PID=""
   cleanup() {

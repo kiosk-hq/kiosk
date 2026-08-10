@@ -14,6 +14,6 @@ test:
 
 production:
   <<: *default
-  database: kiosk_stylish_production
+  database: <%= ENV.fetch("KIOSK_STYLISH_DB", "kiosk_stylish_production") %>
   username: <%= ENV.fetch("KIOSK_STYLISH_DB_USER", "kiosk_stylish") %>
   password: <%= ENV["KIOSK_STYLISH_DB_PASSWORD"] %>

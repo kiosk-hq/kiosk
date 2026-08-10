@@ -14,6 +14,6 @@ test:
 
 production:
   <<: *default
-  database: kiosk_atablefor_production
+  database: <%= ENV.fetch("KIOSK_ATABLEFOR_DB", "kiosk_atablefor_production") %>
   username: <%= ENV.fetch("KIOSK_ATABLEFOR_DB_USER", "kiosk_atablefor") %>
   password: <%= ENV["KIOSK_ATABLEFOR_DB_PASSWORD"] %>

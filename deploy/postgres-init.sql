@@ -2,8 +2,9 @@
 --
 -- ONE Postgres 17 cluster, one database + one least-privilege LOGIN role per
 -- hosted app (DB-per-app). Each demo's config/database.yml (production block)
--- expects db  kiosk_<app>_production  owned by role  kiosk_<app>  and
--- authenticates as KIOSK_<APP>_DB_USER / KIOSK_<APP>_DB_PASSWORD.
+-- reads its database name from  KIOSK_<APP>_DB  (default kiosk_<app>_production)
+-- and authenticates as KIOSK_<APP>_DB_USER (default kiosk_<app>) /
+-- KIOSK_<APP>_DB_PASSWORD.
 --
 -- HOW TO RUN (as the cluster superuser, e.g. postgres):
 --   psql -v ON_ERROR_STOP=1 \
@@ -16,10 +17,52 @@
 -- Use the SAME value in env/<app>.env (KIOSK_<APP>_DB_PASSWORD).
 -- Never commit real passwords.
 --
+-- NAME OVERRIDES: the database and role names below are NOT hardcoded —
+-- each is a psql variable that defaults to the shipped name, so the command
+-- above (passwords only) provisions exactly what it always did. If you change an
+-- app's KIOSK_<APP>_DB / KIOSK_<APP>_DB_USER in env/<app>.env, pass the SAME
+-- value here so provisioning creates what the app will connect to:
+--   app         env var                        psql var        default
+--   getgrocery  KIOSK_GETGROCERY_DB            -v gg_db=       kiosk_getgrocery_production
+--               KIOSK_GETGROCERY_DB_USER       -v gg_user=     kiosk_getgrocery
+--   atablefor   KIOSK_ATABLEFOR_DB / _DB_USER  -v af_db= / af_user=
+--   hoteling    KIOSK_HOTELING_DB  / _DB_USER  -v ho_db= / ho_user=
+--   skooti      KIOSK_SKOOTI_DB    / _DB_USER  -v sk_db= / sk_user=
+--   stylish     KIOSK_STYLISH_DB   / _DB_USER  -v st_db= / st_user=
+--   philslist   KIOSK_PHILSLIST_DB / _DB_USER  -v pl_db= / pl_user=
+--   tudu        KIOSK_TUDU_DB      / _DB_USER  -v td_db= / td_user=
+--   prove       KIOSK_PROVE_DB     / _DB_USER  -v pv_db= / pv_user=
+-- (psql cannot read the env files itself — they are per-app and are sourced by
+-- systemd, not by this superuser shell — so the two sides are kept in sync by
+-- hand. Override nothing and there is nothing to keep in sync.)
+--
 -- Idempotent-ish: roles/dbs are created with guards so re-running is safe.
 -- Run once at provisioning; re-run only adds what is missing.
 
 \set ON_ERROR_STOP on
+
+-- ── Name resolution (default unless overridden with -v on the command line) ──
+-- `:{?var}` is true only when the variable was supplied, so each \set below is
+-- a "default if absent". Every name is spliced into DDL with format(%I), which
+-- quotes and escapes identifiers safely.
+
+\if :{?gg_db} \else \set gg_db kiosk_getgrocery_production \endif
+\if :{?af_db} \else \set af_db kiosk_atablefor_production \endif
+\if :{?ho_db} \else \set ho_db kiosk_hoteling_production \endif
+\if :{?sk_db} \else \set sk_db kiosk_skooti_production \endif
+\if :{?st_db} \else \set st_db kiosk_stylish_production \endif
+\if :{?pl_db} \else \set pl_db kiosk_philslist_production \endif
+\if :{?td_db} \else \set td_db kiosk_tudu_production \endif
+\if :{?pv_db} \else \set pv_db kiosk_prove_production \endif
+
+\if :{?gg_user} \else \set gg_user kiosk_getgrocery \endif
+\if :{?af_user} \else \set af_user kiosk_atablefor \endif
+\if :{?ho_user} \else \set ho_user kiosk_hoteling \endif
+\if :{?sk_user} \else \set sk_user kiosk_skooti \endif
+\if :{?st_user} \else \set st_user kiosk_stylish \endif
+\if :{?pl_user} \else \set pl_user kiosk_philslist \endif
+\if :{?td_user} \else \set td_user kiosk_tudu \endif
+\if :{?pv_user} \else \set pv_user kiosk_prove \endif
 
 -- ── Roles (LOGIN, no CREATEDB/SUPERUSER — least privilege) ──────────────────
 -- Idempotent per-role create in the OUTER SQL so \gexec can interpolate the
@@ -30,44 +73,44 @@
 -- and escapes it safely; the WHERE NOT EXISTS guard skips roles that already
 -- exist, so re-running is a no-op.
 
-SELECT format('CREATE ROLE %I LOGIN PASSWORD %L', 'kiosk_getgrocery', :'gg_pw')
-  WHERE NOT EXISTS (SELECT FROM pg_roles WHERE rolname = 'kiosk_getgrocery')\gexec
-SELECT format('CREATE ROLE %I LOGIN PASSWORD %L', 'kiosk_atablefor', :'af_pw')
-  WHERE NOT EXISTS (SELECT FROM pg_roles WHERE rolname = 'kiosk_atablefor')\gexec
-SELECT format('CREATE ROLE %I LOGIN PASSWORD %L', 'kiosk_hoteling', :'ho_pw')
-  WHERE NOT EXISTS (SELECT FROM pg_roles WHERE rolname = 'kiosk_hoteling')\gexec
-SELECT format('CREATE ROLE %I LOGIN PASSWORD %L', 'kiosk_skooti', :'sk_pw')
-  WHERE NOT EXISTS (SELECT FROM pg_roles WHERE rolname = 'kiosk_skooti')\gexec
-SELECT format('CREATE ROLE %I LOGIN PASSWORD %L', 'kiosk_stylish', :'st_pw')
-  WHERE NOT EXISTS (SELECT FROM pg_roles WHERE rolname = 'kiosk_stylish')\gexec
-SELECT format('CREATE ROLE %I LOGIN PASSWORD %L', 'kiosk_philslist', :'pl_pw')
-  WHERE NOT EXISTS (SELECT FROM pg_roles WHERE rolname = 'kiosk_philslist')\gexec
-SELECT format('CREATE ROLE %I LOGIN PASSWORD %L', 'kiosk_tudu', :'td_pw')
-  WHERE NOT EXISTS (SELECT FROM pg_roles WHERE rolname = 'kiosk_tudu')\gexec
+SELECT format('CREATE ROLE %I LOGIN PASSWORD %L', :'gg_user', :'gg_pw')
+  WHERE NOT EXISTS (SELECT FROM pg_roles WHERE rolname = :'gg_user')\gexec
+SELECT format('CREATE ROLE %I LOGIN PASSWORD %L', :'af_user', :'af_pw')
+  WHERE NOT EXISTS (SELECT FROM pg_roles WHERE rolname = :'af_user')\gexec
+SELECT format('CREATE ROLE %I LOGIN PASSWORD %L', :'ho_user', :'ho_pw')
+  WHERE NOT EXISTS (SELECT FROM pg_roles WHERE rolname = :'ho_user')\gexec
+SELECT format('CREATE ROLE %I LOGIN PASSWORD %L', :'sk_user', :'sk_pw')
+  WHERE NOT EXISTS (SELECT FROM pg_roles WHERE rolname = :'sk_user')\gexec
+SELECT format('CREATE ROLE %I LOGIN PASSWORD %L', :'st_user', :'st_pw')
+  WHERE NOT EXISTS (SELECT FROM pg_roles WHERE rolname = :'st_user')\gexec
+SELECT format('CREATE ROLE %I LOGIN PASSWORD %L', :'pl_user', :'pl_pw')
+  WHERE NOT EXISTS (SELECT FROM pg_roles WHERE rolname = :'pl_user')\gexec
+SELECT format('CREATE ROLE %I LOGIN PASSWORD %L', :'td_user', :'td_pw')
+  WHERE NOT EXISTS (SELECT FROM pg_roles WHERE rolname = :'td_user')\gexec
 -- prove.my KYC broker (gem dir kiosk-demo-prove; deploy domain kyc.demo.kiosk.tech)
-SELECT format('CREATE ROLE %I LOGIN PASSWORD %L', 'kiosk_prove', :'pv_pw')
-  WHERE NOT EXISTS (SELECT FROM pg_roles WHERE rolname = 'kiosk_prove')\gexec
+SELECT format('CREATE ROLE %I LOGIN PASSWORD %L', :'pv_user', :'pv_pw')
+  WHERE NOT EXISTS (SELECT FROM pg_roles WHERE rolname = :'pv_user')\gexec
 
 -- ── Databases (one per app, owned by its role) ──────────────────────────────
 -- CREATE DATABASE cannot run inside a transaction/DO block, and \gexec lets us
 -- guard on existence. Each db is owned by its matching least-privilege role.
 
-SELECT 'CREATE DATABASE kiosk_getgrocery_production OWNER kiosk_getgrocery'
-  WHERE NOT EXISTS (SELECT FROM pg_database WHERE datname = 'kiosk_getgrocery_production')\gexec
-SELECT 'CREATE DATABASE kiosk_atablefor_production OWNER kiosk_atablefor'
-  WHERE NOT EXISTS (SELECT FROM pg_database WHERE datname = 'kiosk_atablefor_production')\gexec
-SELECT 'CREATE DATABASE kiosk_hoteling_production OWNER kiosk_hoteling'
-  WHERE NOT EXISTS (SELECT FROM pg_database WHERE datname = 'kiosk_hoteling_production')\gexec
-SELECT 'CREATE DATABASE kiosk_skooti_production OWNER kiosk_skooti'
-  WHERE NOT EXISTS (SELECT FROM pg_database WHERE datname = 'kiosk_skooti_production')\gexec
-SELECT 'CREATE DATABASE kiosk_stylish_production OWNER kiosk_stylish'
-  WHERE NOT EXISTS (SELECT FROM pg_database WHERE datname = 'kiosk_stylish_production')\gexec
-SELECT 'CREATE DATABASE kiosk_philslist_production OWNER kiosk_philslist'
-  WHERE NOT EXISTS (SELECT FROM pg_database WHERE datname = 'kiosk_philslist_production')\gexec
-SELECT 'CREATE DATABASE kiosk_tudu_production OWNER kiosk_tudu'
-  WHERE NOT EXISTS (SELECT FROM pg_database WHERE datname = 'kiosk_tudu_production')\gexec
-SELECT 'CREATE DATABASE kiosk_prove_production OWNER kiosk_prove'
-  WHERE NOT EXISTS (SELECT FROM pg_database WHERE datname = 'kiosk_prove_production')\gexec
+SELECT format('CREATE DATABASE %I OWNER %I', :'gg_db', :'gg_user')
+  WHERE NOT EXISTS (SELECT FROM pg_database WHERE datname = :'gg_db')\gexec
+SELECT format('CREATE DATABASE %I OWNER %I', :'af_db', :'af_user')
+  WHERE NOT EXISTS (SELECT FROM pg_database WHERE datname = :'af_db')\gexec
+SELECT format('CREATE DATABASE %I OWNER %I', :'ho_db', :'ho_user')
+  WHERE NOT EXISTS (SELECT FROM pg_database WHERE datname = :'ho_db')\gexec
+SELECT format('CREATE DATABASE %I OWNER %I', :'sk_db', :'sk_user')
+  WHERE NOT EXISTS (SELECT FROM pg_database WHERE datname = :'sk_db')\gexec
+SELECT format('CREATE DATABASE %I OWNER %I', :'st_db', :'st_user')
+  WHERE NOT EXISTS (SELECT FROM pg_database WHERE datname = :'st_db')\gexec
+SELECT format('CREATE DATABASE %I OWNER %I', :'pl_db', :'pl_user')
+  WHERE NOT EXISTS (SELECT FROM pg_database WHERE datname = :'pl_db')\gexec
+SELECT format('CREATE DATABASE %I OWNER %I', :'td_db', :'td_user')
+  WHERE NOT EXISTS (SELECT FROM pg_database WHERE datname = :'td_db')\gexec
+SELECT format('CREATE DATABASE %I OWNER %I', :'pv_db', :'pv_user')
+  WHERE NOT EXISTS (SELECT FROM pg_database WHERE datname = :'pv_db')\gexec
 
 -- ── Ownership / privilege hardening ─────────────────────────────────────────
 -- Each app role owns its own DB (set above) so `db:prepare` can create the
@@ -76,23 +119,23 @@ SELECT 'CREATE DATABASE kiosk_prove_production OWNER kiosk_prove'
 -- of the per-agent app-layer isolation. Revoke PUBLIC connect so
 -- only the owning role reaches each DB.
 
-REVOKE CONNECT ON DATABASE kiosk_getgrocery_production FROM PUBLIC;
-REVOKE CONNECT ON DATABASE kiosk_atablefor_production FROM PUBLIC;
-REVOKE CONNECT ON DATABASE kiosk_hoteling_production  FROM PUBLIC;
-REVOKE CONNECT ON DATABASE kiosk_skooti_production    FROM PUBLIC;
-REVOKE CONNECT ON DATABASE kiosk_stylish_production   FROM PUBLIC;
-REVOKE CONNECT ON DATABASE kiosk_philslist_production FROM PUBLIC;
-REVOKE CONNECT ON DATABASE kiosk_tudu_production      FROM PUBLIC;
-REVOKE CONNECT ON DATABASE kiosk_prove_production     FROM PUBLIC;
+SELECT format('REVOKE CONNECT ON DATABASE %I FROM PUBLIC', :'gg_db')\gexec
+SELECT format('REVOKE CONNECT ON DATABASE %I FROM PUBLIC', :'af_db')\gexec
+SELECT format('REVOKE CONNECT ON DATABASE %I FROM PUBLIC', :'ho_db')\gexec
+SELECT format('REVOKE CONNECT ON DATABASE %I FROM PUBLIC', :'sk_db')\gexec
+SELECT format('REVOKE CONNECT ON DATABASE %I FROM PUBLIC', :'st_db')\gexec
+SELECT format('REVOKE CONNECT ON DATABASE %I FROM PUBLIC', :'pl_db')\gexec
+SELECT format('REVOKE CONNECT ON DATABASE %I FROM PUBLIC', :'td_db')\gexec
+SELECT format('REVOKE CONNECT ON DATABASE %I FROM PUBLIC', :'pv_db')\gexec
 
-GRANT CONNECT ON DATABASE kiosk_getgrocery_production TO kiosk_getgrocery;
-GRANT CONNECT ON DATABASE kiosk_atablefor_production  TO kiosk_atablefor;
-GRANT CONNECT ON DATABASE kiosk_hoteling_production   TO kiosk_hoteling;
-GRANT CONNECT ON DATABASE kiosk_skooti_production     TO kiosk_skooti;
-GRANT CONNECT ON DATABASE kiosk_stylish_production    TO kiosk_stylish;
-GRANT CONNECT ON DATABASE kiosk_philslist_production  TO kiosk_philslist;
-GRANT CONNECT ON DATABASE kiosk_tudu_production       TO kiosk_tudu;
-GRANT CONNECT ON DATABASE kiosk_prove_production      TO kiosk_prove;
+SELECT format('GRANT CONNECT ON DATABASE %I TO %I', :'gg_db', :'gg_user')\gexec
+SELECT format('GRANT CONNECT ON DATABASE %I TO %I', :'af_db', :'af_user')\gexec
+SELECT format('GRANT CONNECT ON DATABASE %I TO %I', :'ho_db', :'ho_user')\gexec
+SELECT format('GRANT CONNECT ON DATABASE %I TO %I', :'sk_db', :'sk_user')\gexec
+SELECT format('GRANT CONNECT ON DATABASE %I TO %I', :'st_db', :'st_user')\gexec
+SELECT format('GRANT CONNECT ON DATABASE %I TO %I', :'pl_db', :'pl_user')\gexec
+SELECT format('GRANT CONNECT ON DATABASE %I TO %I', :'td_db', :'td_user')\gexec
+SELECT format('GRANT CONNECT ON DATABASE %I TO %I', :'pv_db', :'pv_user')\gexec
 
 -- NOTE (connections): Postgres max_connections >= Σ(app pools)
 -- + headroom. At the shipped lean sizing each app pool =

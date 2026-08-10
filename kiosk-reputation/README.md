@@ -61,23 +61,28 @@ Key properties:
 - `exp` bounds the replay window; when N > 1 the server scales the TTL with the
   count so a slow client solving proofs sequentially does not race expiry.
 
-### Proof — client re-sends the same request with `pow.proofs`
+### Proof — client re-sends the same request, proof(s) in the `Kiosk-PoW` header
 
-The client solves each challenge and re-sends the SAME request with a
-**`pow.proofs` array**, one `{challenge, nonce}` entry per solved challenge:
+The client solves each challenge and re-sends the SAME request (body unchanged)
+with the proof(s) in a **`Kiosk-PoW` request header** (ADR-0022) as raw minified
+JSON — one `{challenge, nonce}` entry per solved challenge. The body carries only
+the verb args, so a GET (`schema`) can carry its proof this way too (a GET has no
+body):
 
-```json
-{
-  "command": "query",
-  "body":    { "name": "menu_by_restaurant", "restaurant": "Mamma Pizza" },
-  "pow":     { "proofs": [ { "challenge": { "...verbatim...": true }, "nonce": "<solution>" } ] }
-}
+```http
+POST /kiosk/query
+Kiosk-PoW: [{"challenge":{ "...echoed verbatim...": true },"nonce":{"indices":[…]}}]
+Content-Type: application/json
+
+{ "name": "menu_by_restaurant", "restaurant": "Mamma Pizza" }
 ```
 
-A singular `pow: { challenge: {...}, nonce: ... }` is also accepted as the N=1
-convenience shape. The `pow` field is a sibling of `body` and is excluded from
-the request fingerprint — the fingerprint at issue time (no `pow`) and verify
-time (with `pow`) are identical by design.
+A single proof may be sent bare (`Kiosk-PoW: {"challenge":{…},"nonce":{…}}`), as a
+JSON array of N proofs, or as repeated `Kiosk-PoW` header lines (one proof each) —
+all flatten to one proofs list. Because the proof rides in the header, the body is
+byte-identical at issue time (no proof) and verify time (proof in the header), so
+the request fingerprint (`SHA256(command + "\n" + canonical_json(body))`) matches
+on retry by construction — there is no `pow` body field to exclude.
 
 ## Anti-DoS invariant: cheap checks before the expensive backend eval
 

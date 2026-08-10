@@ -21,6 +21,11 @@
 # proxy+browser-shaped requests (X-Forwarded-Proto + a real https Origin) to
 # catch all three classes at once. Any assertion miss exits non-zero.
 #
+# It also drives ASSISTANT-shaped requests at the human surfaces (K-534), for
+# the same reason: the bodyless-error class (K-459, K-532, K-533) exists ONLY
+# in production, where ShowExceptions/PublicExceptions replace the debug page,
+# so no dev-mode suite or demo rake gate can see a regression of it.
+#
 # COVERAGE (K-462)
 # ----------------
 # One demo per UNIQUE human-facing HTML surface — booting all seven in prod is
@@ -83,6 +88,10 @@ smoke_stylish() {
   # happens in dev/test), so supply an ephemeral one here or boot fails.
   export KIOSK_SIGNING_KEY_B64="${KIOSK_SIGNING_KEY_B64:-$(ruby -e 'require "openssl"; require "base64"; print Base64.strict_encode64(OpenSSL::PKey::RSA.new(2048).to_pem)')}"
   export KIOSK_ISSUER="${KIOSK_ISSUER:-$ORIGIN}"
+  # K-541 made the PoW HMAC key mandatory outside development/test — the app
+  # refuses to boot without it, so the smoke must supply an ephemeral one here
+  # exactly as it does the signing key.
+  export KIOSK_POW_SECRET="${KIOSK_POW_SECRET:-$(ruby -e 'require "securerandom"; print SecureRandom.hex(32)')}"
   # database.yml production reads these; connect as a role that can create/own the
   # smoke DB (CI: postgres; local: your login role). No password under trust auth.
   export KIOSK_STYLISH_DB_USER="${KIOSK_STYLISH_DB_USER:-postgres}"
@@ -225,6 +234,54 @@ smoke_stylish() {
   else
     fail "forged X-Staff-Session expected 401, got $staff_code (K-555: role-carrying human stub reachable in production — staff-role self-grant!)"
   fi
+
+  echo "── Assertion 7: JSON POST at the human sign-in form → 422 + Kiosk error envelope (K-459/K-534) ──"
+  # The DEMO half of the K-459 agent-signpost had no gate: the engine half is
+  # pinned by rspec, but each demo's own ApplicationController rescue was only
+  # ever exercised by a human-shaped POST here (assertion 4). A regression puts
+  # this back to a bodyless 422 — the exact unactionable answer K-459 removed.
+  # Production is the only place it reproduces (dev renders the debug page).
+  signpost="$(curl -s -X POST "${PROXY_HEADERS[@]}" \
+    -H "Content-Type: application/json" -H "Accept: application/json" \
+    --data '{"user":{"email":"probe@example.com","password":"probe"}}' \
+    "${BASE}/users/sign_in")"
+  signpost_code="$(curl -s -o /dev/null -w '%{http_code}' -X POST "${PROXY_HEADERS[@]}" \
+    -H "Content-Type: application/json" -H "Accept: application/json" \
+    --data '{"user":{"email":"probe@example.com","password":"probe"}}' \
+    "${BASE}/users/sign_in")"
+  if [ "$signpost_code" = "422" ] && printf '%s' "$signpost" | grep -q "invalid_authenticity_token"; then
+    pass "JSON sign-in POST → 422 + invalid_authenticity_token envelope"
+  else
+    fail "JSON sign-in POST expected 422 + invalid_authenticity_token envelope, got $signpost_code / '$(printf '%s' "$signpost" | head -c 120)' (K-459 signpost regressed to a bodyless error)"
+  fi
+
+  echo "── Assertion 8: JSON DELETE /users/sign_out → 401 + Kiosk error envelope (K-533) ──"
+  # Devise answers a session-less sign-out with `head :unauthorized`: 401,
+  # Content-Type: application/json, ZERO bytes — a content type promising JSON
+  # with nothing to parse. Users::SessionsController hands JSON-shaped callers
+  # the envelope instead; navigational and 204 paths stay Devise's.
+  signout="$(curl -s -X DELETE "${PROXY_HEADERS[@]}" -H "Accept: application/json" "${BASE}/users/sign_out")"
+  signout_code="$(curl -s -o /dev/null -w '%{http_code}' -X DELETE "${PROXY_HEADERS[@]}" \
+    -H "Accept: application/json" "${BASE}/users/sign_out")"
+  if [ "$signout_code" = "401" ] && printf '%s' "$signout" | grep -q "not_signed_in"; then
+    pass "JSON sign-out DELETE → 401 + not_signed_in envelope (not a bodyless 401)"
+  else
+    fail "JSON sign-out DELETE expected 401 + not_signed_in envelope, got $signout_code / '$(printf '%s' "$signout" | head -c 120)' (K-533)"
+  fi
+
+  echo "── Assertion 9: unknown path → 404 with a BODY (public/404.html, K-532) ──"
+  # Without public/404.html, PublicExceptions falls through and ShowExceptions
+  # returns text/html + Content-Length: 0 for every unhandled 404 — the answer
+  # an assistant guessing web-app paths (POST /bookings) hits most often.
+  notfound_len="$(curl -s -o /dev/null -w '%{size_download}' "${PROXY_HEADERS[@]}" \
+    -H "Accept: text/html" "${BASE}/this-path-does-not-exist")"
+  notfound_code="$(curl -s -o /dev/null -w '%{http_code}' "${PROXY_HEADERS[@]}" \
+    -H "Accept: text/html" "${BASE}/this-path-does-not-exist")"
+  if [ "$notfound_code" = "404" ] && [ "$notfound_len" -gt 0 ]; then
+    pass "unknown path → 404 with ${notfound_len} bytes of body"
+  else
+    fail "unknown path expected 404 with a non-empty body, got $notfound_code / ${notfound_len} bytes (K-532: no public/404.html → bodyless error)"
+  fi
 }
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -358,6 +415,20 @@ smoke_prove() {
   echo "── Assertion 6: GET /prove_key.pem → 200 (the ProveKey operators pin) ──"
   code="$(curl -s -o /dev/null -w '%{http_code}' "${PROXY_HEADERS[@]}" "${BASE}/prove_key.pem")"
   [ "$code" = "200" ] && pass "GET /prove_key.pem → 200" || fail "GET /prove_key.pem expected 200, got $code"
+
+  echo "── Assertion 7: unknown path → 404 with a BODY (public/404.html, K-532) ──"
+  # Same class as the stylish assertion: with no public/404.html, PublicExceptions
+  # falls through and every unhandled 404 answers text/html + Content-Length: 0.
+  # Guessed paths are the norm here — the only real URL carries a random token.
+  notfound_len="$(curl -s -o /dev/null -w '%{size_download}' "${PROXY_HEADERS[@]}" \
+    -H "Accept: text/html" "${BASE}/this-path-does-not-exist")"
+  notfound_code="$(curl -s -o /dev/null -w '%{http_code}' "${PROXY_HEADERS[@]}" \
+    -H "Accept: text/html" "${BASE}/this-path-does-not-exist")"
+  if [ "$notfound_code" = "404" ] && [ "$notfound_len" -gt 0 ]; then
+    pass "unknown path → 404 with ${notfound_len} bytes of body"
+  else
+    fail "unknown path expected 404 with a non-empty body, got $notfound_code / ${notfound_len} bytes (K-532: no public/404.html → bodyless error)"
+  fi
 }
 
 case "$DEMO" in

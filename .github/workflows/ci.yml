@@ -264,12 +264,17 @@ jobs:
       #   STRIPE_MOCK_URL — getgrocery's initializer aborts production boot
       #     without a Stripe key or mock URL; the stripe-mock step above already
       #     exported it for that demo (hence this step's position after it).
+      #   KIOSK_POW_SECRET — K-541 made the PoW HMAC key mandatory outside
+      #     dev/test, so without it every kiosk demo aborts before Zeitwerk runs
+      #     and this gate silently stops testing anything. A throwaway literal
+      #     is enough (no challenge is signed here).
       # The signing key exported above is likewise already in the environment.
       - name: Production eager-load check (zeitwerk:check, K-488/K-513)
         working-directory: ${{ matrix.demo }}
         env:
           RAILS_ENV: production
           SECRET_KEY_BASE: ci-zeitwerk-check-throwaway-secret-key-base
+          KIOSK_POW_SECRET: ci-zeitwerk-check-throwaway-pow-secret-not-a-real-key
         run: bin/rails zeitwerk:check
 
       # The committed db/structure.sql files are PG17-format (they SET
@@ -375,9 +380,9 @@ jobs:
           sudo apt-get update -qq && sudo apt-get install -y -qq postgresql-client-17
 
       # Boot stylish in production and run the four proxy+browser assertions.
-      # The script self-provides SECRET_KEY_BASE + KIOSK_SIGNING_KEY_B64 (the
-      # production initializer does NOT self-provision a key) on a fixed,
-      # collision-free port.
+      # The script self-provides SECRET_KEY_BASE + KIOSK_SIGNING_KEY_B64 + the
+      # K-541 KIOSK_POW_SECRET (the production initializer self-provisions none
+      # of them and refuses to boot without them) on a fixed, collision-free port.
       - name: Production-boot smoke (stylish)
         run: ./deploy/production-smoke.sh stylish
 

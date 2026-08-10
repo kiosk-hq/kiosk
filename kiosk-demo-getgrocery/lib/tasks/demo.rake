@@ -965,6 +965,30 @@ namespace :demo do
     end
   end
   # ── end demo:redteam ──────────────────────────────────────────────────────────
+
+  desc <<~DESC
+    Pay-path concurrency regression (K-544).
+
+    Resets the DB, then runs race_flow.rb IN-PROCESS (real Postgres, real
+    threads on pooled connections, a controllable PSP stub) to prove the two
+    double-charge races are closed:
+
+      (a) SWAP         — once a /pay for order O has begun (O is `paying`), a
+                         concurrent create_order{order_id:O, items:[expensive]}
+                         cannot rewrite O's items ("pay €1, get €500" is out).
+      (b) AT-MOST-ONCE — under N racing /pay for one order, exactly ONE
+                         captures; the rest are cleanly rejected.
+
+    Exits 0 iff both invariants hold; non-zero on any breach.
+  DESC
+  task race: :setup do
+    require "shellwords"
+    driver = File.expand_path("../../race_flow.rb", __dir__)
+    puts "\n── Running race_flow.rb (K-544 pay-path concurrency) ──"
+    # A generous pool so N racing threads each get their own real connection.
+    ok = system({ "RAILS_MAX_THREADS" => "12" }, "bundle exec rails runner #{driver.shellescape}")
+    exit(ok ? 0 : 1)
+  end
 end
 
 desc "End-to-end getgrocery demo: setup DB then run no-human catalog->create_order (slot+address)->pay (mirrored cart)."

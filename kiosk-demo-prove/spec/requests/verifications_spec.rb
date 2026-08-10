@@ -67,6 +67,30 @@ RSpec.describe "prove.my broker", type: :request do
       intake(valid_intake_body(subject_handle: ""))
       expect(response).to have_http_status(:bad_request)
     end
+
+    it "rejects an operator requesting ANOTHER operator's audience (cross-operator forgery, K-550)" do
+      # Operator B (getgrocery) authenticates with its OWN bearer secret but asks
+      # the broker to stamp operator A's (skooti's) audience into the attestation,
+      # delivered to B's own callback. The broker derives `aud` from B's
+      # REGISTRATION and rejects the mismatched body audience — B can never obtain
+      # a skooti-audience ProveKey-signed claim (the cross-operator claim the wire
+      # aud-check exists to stop). Pre-fix this stamped `aud: skooti` verbatim.
+      gg_secret = OperatorRegistry.registry["getgrocery"][:secret]
+      gg_headers = { "Authorization" => "Bearer #{gg_secret}", "Content-Type" => "application/json" }
+      intake(
+        {
+          operator_id:      "getgrocery",
+          callback_url:     "http://127.0.0.1/kyc/callback",
+          requested_claims: ["age_over_18"],
+          subject_handle:   "victim-subject",
+          audience:         "skooti", # operator A's audience — must be refused
+        },
+        headers: gg_headers,
+      )
+      expect(response).to have_http_status(:forbidden)
+      expect(JSON.parse(response.body)["error"]).to match(/audience/)
+      expect(ProveRequest.count).to eq(0)
+    end
   end
 
   describe "GET /verify (human page)" do
@@ -128,27 +152,30 @@ RSpec.describe "prove.my broker", type: :request do
       expect(row.reload.status).to eq("confirmed")
     end
 
-    it "mints aud from the operator-declared audience (operator-binding, engine-enforced)" do
-      # When the operator declares its kyc_audience at intake, the broker stamps
-      # THAT as `aud` — the value the operator's engine KycVerifier compares
-      # against, so a claim minted for operator A is rejected at operator B.
-      rid = open_request(audience: "https://skooti.app")
+    it "binds aud to the operator's REGISTERED audience, accepting a matching body declaration (K-550)" do
+      # The honest operator sends its own kyc_audience (== its registered audience)
+      # in the intake body; the broker bind-AND-verifies it against the operator's
+      # registration record and stamps THAT as `aud` — the value the operator's
+      # engine KycVerifier compares against, so a claim minted for operator A is
+      # rejected at operator B.
+      rid = open_request(audience: "skooti")
       row = ProveRequest.find(rid)
-      expect(row.audience).to eq("https://skooti.app")
+      expect(row.audience).to eq("skooti")
 
       delivered = {}
       allow(CallbackPoster).to receive(:deliver) { |args| delivered = args; 200 }
       post "/verify", params: { request: rid, decision: "approve" }
 
       payload = decode(delivered[:kyc_jws])
-      expect(payload["aud"]).to eq("https://skooti.app")
+      expect(payload["aud"]).to eq("skooti")
       # operator handle is retained separately for callback correlation/logging
       expect(payload["operator"]).to eq("skooti")
     end
 
-    it "falls back to aud == operator_id when no audience is declared (backward-compat)" do
-      rid = open_request # no audience
-      expect(ProveRequest.find(rid).audience).to be_nil
+    it "mints aud from the registration even when the body declares no audience (aud == operator_id)" do
+      rid = open_request # no audience in the body
+      # The row records the registration-derived audience, never a raw body value.
+      expect(ProveRequest.find(rid).audience).to eq("skooti")
       delivered = {}
       allow(CallbackPoster).to receive(:deliver) { |args| delivered = args; 200 }
       post "/verify", params: { request: rid, decision: "approve" }

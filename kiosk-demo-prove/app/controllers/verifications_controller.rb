@@ -39,10 +39,15 @@ class VerificationsController < ActionController::Base
     requested_claims = Array(body["requested_claims"]).map(&:to_s)
     callback_url     = body["callback_url"].to_s
     subject_handle   = body["subject_handle"].to_s
-    # The operator-binding audience the operator declares — the value its engine
-    # KycVerifier compares the minted claim's `aud` against (its `kyc_audience`).
-    # Optional: when absent the broker mints `aud` = operator_id (the handle).
-    audience         = body["audience"].to_s
+    # The operator-binding `aud` is derived from the AUTHENTICATED OPERATOR'S
+    # REGISTRATION record — the audience the broker holds for this allow-listed
+    # operator — NOT from the request body (K-550). An operator can therefore only
+    # ever obtain an attestation bound to ITS OWN audience: operator B cannot
+    # request `{audience: <operator A's audience>}` and receive an A-audience
+    # ProveKey-signed claim. Defaults to the operator_id handle when the operator
+    # registered no distinct audience.
+    audience = operator[:audience].to_s
+    audience = operator_id_param if audience.empty?
 
     if subject_handle.empty?
       return render_json({ error: "missing field: subject_handle" }, :bad_request)
@@ -61,6 +66,20 @@ class VerificationsController < ActionController::Base
         :forbidden,
       )
     end
+    # BIND-AND-VERIFY the operator's own declared audience (K-550): the honest
+    # operator still sends its kyc_audience in the body so its intent is explicit,
+    # but the broker refuses to be told a DIFFERENT audience than the one it holds
+    # for this operator. A body audience that matches the registration is accepted;
+    # a mismatch is REJECTED (fail loud on a cross-operator forgery attempt or an
+    # operator↔broker audience misconfiguration) rather than silently overriding
+    # the registration-bound value.
+    declared_audience = body["audience"].to_s
+    unless declared_audience.empty? || declared_audience == audience
+      return render_json(
+        { error: "audience does not match this operator's registration" },
+        :forbidden,
+      )
+    end
 
     request_id = SecureRandom.urlsafe_base64(32) # 256 bits
     nonce      = SecureRandom.urlsafe_base64(32)
@@ -72,6 +91,8 @@ class VerificationsController < ActionController::Base
       requested_claims: requested_claims,
       subject_handle:   subject_handle,
       nonce:            nonce,
+      # The registration-derived audience (never the raw request body) — this is
+      # what mint() stamps as the attestation `aud` (K-550).
       audience:         (audience.empty? ? nil : audience),
       status:           "pending",
       expires_at:       Time.current + REQUEST_TTL,

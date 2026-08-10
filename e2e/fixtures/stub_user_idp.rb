@@ -13,7 +13,7 @@
 # in #verify AND at the initializer (`c.user_idp` is nil in production). The
 # e2e harness boots in development, so the guard passes here. Never reachable
 # in production. Sibling of the K-539 agent-stub fix.
-class StubUserIdp < Kiosk::AgentIdentityProviders::Base
+class StubUserIdp < Kiosk::UserIdentityProviders::Base
   USER_RE = /\Auser:u-(?<user_id>[0-9a-fA-F-]+)\z/
 
   def verify(request)

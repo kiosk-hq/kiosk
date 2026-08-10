@@ -162,6 +162,25 @@ module Kiosk
         end
       end
 
+      # The PSP declined or could not complete the charge (card_declined,
+      # authentication_required, insufficient_funds, a processor timeout, …).
+      # HTTP 402 — the charge did not settle; the assistant may retry after the
+      # human corrects the payment method (payment_setup). Distinct CODE from
+      # payment_setup_required (which means «no card on file yet») and from the
+      # PoW 402. The adapter translates its PSP-specific error into a human-safe
+      # message BEFORE it reaches here, so no raw PSP internals leak to the wire
+      # (K-545). Additive to the wire contract — mirrors how PaymentSetupRequired
+      # / KycRequired were introduced.
+      class PaymentFailed < Base
+        CODE        = "payment_failed"
+        HTTP_STATUS = 402
+
+        def initialize(message = "payment failed",
+                       hint: "the charge did not settle; verify via my_orders before retrying")
+          super(message, hint: hint)
+        end
+      end
+
       # Proof-of-work required — the provider's reputation policy demands one or
       # more PoW challenges for this request. The client solves EACH challenge
       # (each has a distinct salt — no amortisation, that is the N×PoW

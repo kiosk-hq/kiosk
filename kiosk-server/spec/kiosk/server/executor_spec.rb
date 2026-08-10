@@ -474,6 +474,43 @@ RSpec.describe Kiosk::Server::Executor do
       }
     end
 
+    # K-545: a card DECLINE (retryable PaymentFailed) becomes a typed
+    # `payment_failed` 402, NOT a raw 500. The mandate trail is already
+    # persisted; the message is the adapter's human-safe string (no PSP
+    # internals) and the hint tells the agent it is safe to retry.
+    it "maps a retryable capture-time PaymentFailed to Errors::PaymentFailed (402, payment_failed)" do
+      allow(Kiosk.configuration.payment_provider).to receive(:capture)
+        .and_raise(Kiosk::PaymentProviders::PaymentFailed.new(
+                     "the payment method was declined", reason: :card_declined, retryable: true))
+
+      expect {
+        described_class.call(kind: :pay, args: valid_args, identity: identity, connection: connection)
+      }.to raise_error(Kiosk::Server::Errors::PaymentFailed) { |e|
+        expect(e.http_status).to eq(402)
+        expect(e.code).to        eq("payment_failed")
+        expect(e.message).to     eq("the payment method was declined")
+        expect(e.hint).to        match(/no money moved|update the payment method/i)
+      }
+    end
+
+    # K-545: an UNKNOWN outcome (timeout / connectivity — non-retryable
+    # PaymentFailed) is also a typed 402, but its hint steers the agent to check
+    # my_orders BEFORE retrying so a lost-response retry can't double-charge.
+    it "maps a non-retryable capture-time PaymentFailed to a 402 whose hint warns against a blind retry" do
+      allow(Kiosk.configuration.payment_provider).to receive(:capture)
+        .and_raise(Kiosk::PaymentProviders::PaymentFailed.new(
+                     "the payment processor could not confirm the charge; its status is unknown",
+                     reason: :processor_unavailable, retryable: false))
+
+      expect {
+        described_class.call(kind: :pay, args: valid_args, identity: identity, connection: connection)
+      }.to raise_error(Kiosk::Server::Errors::PaymentFailed) { |e|
+        expect(e.http_status).to eq(402)
+        expect(e.code).to        eq("payment_failed")
+        expect(e.hint).to        match(/my_orders/i)
+      }
+    end
+
     it "raises BadRequest when intent_mandate_jws is missing" do
       expect {
         described_class.call(kind: :pay,

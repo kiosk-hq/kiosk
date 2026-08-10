@@ -8,6 +8,35 @@ module Kiosk
     # assistant so the human can enter their card.
     SetupRequired = Class.new(StandardError)
 
+    # Raised by a PSP adapter when a charge attempt FAILS at the processor
+    # (rather than escaping as a raw exception → HTTP 500). A concrete adapter
+    # (e.g. kiosk-pay-stripe) translates its PSP-specific errors into this
+    # PSP-AGNOSTIC signal, carrying only a human-safe `message` (never raw PSP
+    # internals) plus a stable `reason` symbol. The executor maps it to the
+    # `payment_failed` wire error (a clean 4xx) — see K-545.
+    #
+    # `retryable?` splits the two cases that matter for double-charge safety:
+    #   true  — the processor reached a DEFINITIVE no-charge decision (card
+    #           declined / expired / insufficient funds / authentication
+    #           required). Nothing was charged, so a caller may safely release
+    #           any in-progress claim and let the human retry with a corrected
+    #           method.
+    #   false — the charge outcome is UNKNOWN (timeout / connectivity). The
+    #           charge MAY have succeeded, so a caller MUST NOT blind-retry
+    #           (that would double-charge): it should leave the order claimed
+    #           and reconcile / check the settlement first.
+    class PaymentFailed < StandardError
+      attr_reader :reason
+
+      def initialize(message = "payment failed", reason: :error, retryable: false)
+        super(message)
+        @reason    = reason
+        @retryable = retryable
+      end
+
+      def retryable? = @retryable
+    end
+
     # Abstract base for AP2 PSP (Payment Service Provider) adapters.
     # See the Payment (AP2 mandate chain) section of the spec.
     #

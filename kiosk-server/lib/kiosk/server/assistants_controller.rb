@@ -36,16 +36,20 @@ if defined?(::ActionController::Base)
         # happens to sit under the `/kiosk/…` prefix an assistant is told to
         # probe. An assistant POSTing JSON here carries no CSRF token, so Rails
         # raises ActionController::InvalidAuthenticityToken — and in production
-        # that exception becomes a BODYLESS 422: ShowExceptions hands off to
-        # PublicExceptions, a Kiosk host ships no public/422.html, and an
-        # `Accept: */*` request has no format Rails can render the generic error
-        # in, so ShowExceptions#pass_response answers 422 + `text/html` +
-        # `Content-Length: 0`. The caller gets NOTHING to act on. Give a
-        # JSON-shaped caller the same `{ok:false,error:{…}}` envelope every
-        # Kiosk endpoint speaks, and point it at the machine surface it was
-        # actually looking for. A browser request is re-raised untouched: a
-        # genuine CSRF failure on a genuine form must keep failing exactly as
-        # it does today.
+        # nothing downstream names the machine surface. ShowExceptions hands off
+        # to PublicExceptions, whose answer depends on the host and on what the
+        # caller negotiated: the host's static public/422.html — every Kiosk
+        # demo ships one since K-532 — when the request offered `*/*` or no
+        # Accept at all; a generic `{"status":422,"error":"Unprocessable
+        # Content"}` echo on an explicit JSON Accept; and, on a host shipping no
+        # such page, PublicExceptions cascades and ShowExceptions#pass_response
+        # answers a BODYLESS 422 (`text/html`, `Content-Length: 0`). A human
+        # error page, a status echo, or nothing — none of the three points the
+        # caller anywhere. Give a JSON-shaped caller the same
+        # `{ok:false,error:{…}}` envelope every Kiosk endpoint speaks, and
+        # point it at the machine surface it was actually looking for. A
+        # browser request is re-raised untouched: a genuine CSRF failure on a
+        # genuine form must keep failing exactly as it does today.
         rescue_from ::ActionController::InvalidAuthenticityToken do |error|
           raise error unless json_request?
 

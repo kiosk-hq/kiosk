@@ -151,9 +151,10 @@ RSpec.describe "DeviceVerifyController" do
   # ── AGENT-SIGNPOST, the forgery-protection path (K-459) ───────────────────
   # Same story as AssistantsController (its spec carries the long version): an
   # assistant POSTing JSON to this human consent page has no CSRF token, and in
-  # production the resulting InvalidAuthenticityToken becomes a BODYLESS 422
-  # (text/html, Content-Length 0). The harness has no Rails app, so the
-  # subclass opts into `protect_from_forgery` to reproduce that condition.
+  # production the resulting InvalidAuthenticityToken yields the host's generic
+  # error material (a static public/422.html, a status echo, or a bodyless 422),
+  # never a pointer to the wire. The harness has no Rails app, so the subclass
+  # opts into `protect_from_forgery` to reproduce that condition.
   describe "forgery protection on a JSON POST" do
     let(:guarded) do
       stub_const(

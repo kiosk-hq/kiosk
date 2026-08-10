@@ -364,6 +364,15 @@ jobs:
       # Same for the prove.my broker's production database.yml.
       KIOSK_PROVE_DB_USER: postgres
       KIOSK_PROVE_DB_PASSWORD: ""
+      # The smoke DROPS and rebuilds its database (a throwaway `kiosk_<app>_smoke`
+      # that no deployment provisions), so it refuses to run unless the caller
+      # states the target is disposable — see the safety header in
+      # deploy/production-smoke.sh (K-594). GitHub already sets CI=true, which
+      # the script also accepts; stating it here keeps the workflow explicit and
+      # independent of that ambient variable. Never set this on a deploy host —
+      # there the script refuses regardless, and this variable does not override
+      # that.
+      KIOSK_SMOKE_I_AM_DISPOSABLE: "1"
 
     steps:
       - uses: actions/checkout@v7

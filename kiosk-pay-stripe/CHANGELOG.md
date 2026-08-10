@@ -1,6 +1,10 @@
 # Changelog
 
 ## [Unreleased]
+- `setup_url` is now stable across calls (K-492): it reuses the `mode:setup`
+  Checkout Session already outstanding for the customer instead of creating a
+  new one per call, so a host polling card-setup readiness keeps handing its
+  human the same link.
 - Initial Stripe PSP adapter (test mode): SetupIntent card-on-file with
   off_session capture (`customer_resolver`/`customer_saver`, `setup_url`,
   `setup_required?`, `saved_method?`), plus a `pm_card_visa` back-compat

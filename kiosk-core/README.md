@@ -44,5 +44,5 @@ Apache-2.0 — see `LICENSE.txt`.
 ## Links
 
 - [kiosk.tech](https://kiosk.tech) — landing + docs
-- [Design spec](https://github.com/kiosk-hq) — full architecture
+- [Specification](https://kiosk.tech/specification.html) — the normative spec
 - [Issue tracker](https://github.com/kiosk-hq/kiosk-core/issues)

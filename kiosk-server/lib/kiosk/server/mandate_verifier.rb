@@ -123,17 +123,31 @@ module Kiosk
         cart
       end
 
-      # Reject a REQUIRED amount field that is ABSENT (nil) from the payload,
+      # Reject a REQUIRED amount field that is ABSENT (nil) or NON-POSITIVE,
       # BEFORE any `.to_i` coercion. `nil.to_i` is 0, so an omitted amount would
       # otherwise satisfy the spending-envelope checks vacuously (0 <= cap,
-      # 0 == 0) and persist a 0-cent row. An explicitly-present 0 is a
-      # different, non-security case and is left to the amount/cap comparisons.
+      # 0 == 0) and persist a 0-cent row.
+      #
+      # K-543: a NEGATIVE amount launders the spending cap. A negative cart total
+      # passes the cap comparison (−100000 <= 5000), matches a negative payment,
+      # settles on any PSP that echoes the amount, and drives the settlements SUM
+      # negative — permanently RAISING this agent's effective cap by that amount.
+      # Zero is equally meaningless. Every mandate amount is a positive integer
+      # number of cents; reject anything else here, before the envelope checks.
       def require_amount!(payload, field)
-        return unless payload[field].nil?
+        value = payload[field]
+        if value.nil?
+          raise Errors::Forbidden.new(
+            "mandate missing required amount field: #{field}",
+            hint: "#{field} is a required AP2 mandate field",
+          )
+        end
+
+        return if value.is_a?(Integer) && value.positive?
 
         raise Errors::Forbidden.new(
-          "mandate missing required amount field: #{field}",
-          hint: "#{field} is a required AP2 mandate field",
+          "mandate #{field} must be a positive integer number of cents",
+          hint: "#{field} was #{value.inspect}",
         )
       end
 

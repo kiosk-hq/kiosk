@@ -1,11 +1,16 @@
 <!DOCTYPE html>
 <!--
-  Static 422 page (K-532/K-459). Rails' PublicExceptions serves this file when a
-  request is rejected before any controller can answer — most often the CSRF
-  forgery check on a human form. WITHOUT it the response is BODYLESS (text/html,
-  Content-Length: 0). JSON-shaped callers get the Kiosk error envelope from
-  ApplicationController's K-459 signpost instead of this page; this is the
-  fallback for everyone else. Static: keep every link relative.
+  Static 422 page (K-532/K-459). Rails' PublicExceptions serves this file in
+  production for any 422 that reaches the middleware — in practice the CSRF
+  forgery check on a human form. That check does NOT run "before a controller":
+  it raises ActionController::InvalidAuthenticityToken from a before_action
+  INSIDE the controller. So where a demo ships the K-459 signpost (an
+  ApplicationController that rescues that exception — the Devise demos), a
+  JSON-shaped caller is answered THERE with the Kiosk error envelope and never
+  arrives here; this page is what the signpost RE-RAISES (browser-shaped
+  requests), plus every 422 in a demo that ships no signpost at all. WITHOUT
+  this file the response is BODYLESS (text/html, Content-Length: 0). Static:
+  keep every link relative.
 -->
 <html lang="en">
   <head>

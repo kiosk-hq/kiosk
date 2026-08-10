@@ -1,9 +1,13 @@
 <!DOCTYPE html>
 <!--
-  Static 422 page (K-532). Rails' PublicExceptions serves this file when a
-  request is rejected before a controller can answer — for this app that is the
-  CSRF/Origin check on the single /verify form POST. WITHOUT it the response is
-  BODYLESS (text/html, Content-Length: 0). Static: relative links only.
+  Static 422 page (K-532). Rails' PublicExceptions serves this file in production
+  for any 422 that reaches the middleware; WITHOUT it the response is BODYLESS
+  (text/html, Content-Length: 0). NOT, however, for the /verify form POST: that
+  controller sets `protect_from_forgery with: :null_session` (the verify page's
+  credential is the unguessable request token, not a session), so a missing CSRF
+  token nulls the session and the action still runs — it raises nothing and this
+  page is never reached. This is the generic fallback for whatever else Rails
+  maps to :unprocessable_entity. Static: relative links only.
 -->
 <html lang="en">
   <head>

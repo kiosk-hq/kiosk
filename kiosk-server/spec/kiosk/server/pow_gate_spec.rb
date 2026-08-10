@@ -525,6 +525,98 @@ RSpec.describe Kiosk::Server::PowGate do
     it "returns false safely for a nil id" do
       expect(store.spent?(nil)).to be(false)
     end
+
+    # ── atomic single-use claim (K-542) ────────────────────────────────────
+
+    it "#claim returns true the first time and false on a repeat of the same id" do
+      expect(store.claim(id, future_exp)).to be(true)
+      expect(store.claim(id, future_exp)).to be(false)
+    end
+
+    it "#claim returns false safely for a nil id" do
+      expect(store.claim(nil, future_exp)).to be(false)
+    end
+
+    it "#release frees a claimed id so it can be claimed again" do
+      store.claim(id, future_exp)
+      store.release(id)
+      expect(store.claim(id, future_exp)).to be(true)
+    end
+
+    # The core K-542 property, at the store contract: N threads racing to claim
+    # ONE id — exactly one wins. A non-atomic check-then-set would let several
+    # through.
+    it "lets exactly one of N racing threads claim the same id" do
+      race_id = "race-#{SecureRandom.uuid}"
+      n       = 50
+      latch   = Queue.new
+      threads = Array.new(n) do
+        Thread.new do
+          latch.pop
+          store.claim(race_id, future_exp)
+        end
+      end
+      n.times { latch.push(:go) }
+      wins = threads.map(&:value).count(true)
+      expect(wins).to eq(1)
+    end
+  end
+
+  # ─── K-542: a valid proof is single-use even under concurrency ─────────────
+  # pow_gate.rb used to `spent?` then (after the ~17 ms verify) `mark_spent`,
+  # with no atomic claim in between: M parallel submissions of ONE valid proof
+  # all passed `spent?` before any `mark_spent` and all proceeded (a probe saw
+  # 20/20). The gate now claims the id atomically BEFORE the verify, so a single
+  # proof id is accepted exactly once across N racing submissions.
+  context "concurrent submission of one valid proof (spent-store TOCTOU)" do
+    # A backend whose verify always succeeds but SLEEPS, widening the
+    # claim-vs-verify window so the race is deterministic. sleep releases the
+    # GVL, so every racing thread sits inside verify simultaneously — on the
+    # pre-fix code all of them pass the `spent?` check first.
+    let(:slow_ok_backend) do
+      Class.new do
+        def verify(salt:, params:, nonce:)
+          sleep 0.05
+          true
+        end
+      end.new
+    end
+
+    let(:slow_ok_policy) do
+      Class.new(Kiosk::Reputation::Policy) do
+        def challenge_for(identity:, verb:, factors:)
+          { alg: "slowtest", params: { d: 1 } }
+        end
+      end.new
+    end
+
+    before do
+      Kiosk::Reputation::Backends.register("slowtest", slow_ok_backend)
+      configure_with_policy(slow_ok_policy)
+    end
+
+    it "accepts one proof id exactly once across N racing submissions" do
+      challenge = issue_challenge_via_gate(command: "query", body: { name: "menu" })
+      pow       = { challenge: challenge, nonce: "n" }
+      n         = 20
+      latch     = Queue.new
+
+      threads = Array.new(n) do
+        Thread.new do
+          latch.pop
+          begin
+            described_class.gate(identity: identity, command: "query", body: { name: "menu" }, pow: pow)
+          rescue Kiosk::Server::Errors::PowRequired
+            :rechallenged
+          end
+        end
+      end
+      n.times { latch.push(:go) }
+      results = threads.map(&:value)
+
+      expect(results.count(:proceed)).to eq(1)
+      expect(results.count(:rechallenged)).to eq(n - 1)
+    end
   end
 
   # ─── configuration extension defaults ─────────────────────────────────────

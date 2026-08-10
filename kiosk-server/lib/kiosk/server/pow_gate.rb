@@ -162,10 +162,15 @@ module Kiosk
 
           next if id.nil? || accepted.key?(id)
 
-          # Replay: an already-spent proof does not count toward the quota, but
-          # it is NOT bad faith (at-least-once HTTP retry may resend a served
-          # proof) — skip it without penalty.
-          next if config.pow_spent_store.spent?(id)
+          # K-542: atomically claim the id as spent BEFORE the expensive verify.
+          # The FIRST of N racing submitters of one valid proof wins the claim
+          # and proceeds; the losers get false and treat it as a replay — a
+          # replayed/already-spent proof does not count toward the quota, but it
+          # is NOT bad faith (an at-least-once HTTP retry may resend a served
+          # proof), so skip it without penalty. Claiming before the verify also
+          # means a bad proof's id is consumed (K-540): one issued challenge can
+          # drive at most one verify.
+          next unless config.pow_spent_store.claim(id, challenge[:exp].to_i)
 
           # Cheap sig + expiry checks first (inside Challenge.verify), then the
           # one cheap backend eval.
@@ -182,6 +187,11 @@ module Kiosk
             accepted[id] = challenge[:exp].to_i
           when :bad_proof
             on_bad_proof.call
+            # The id stays CLAIMED (consumed): a proof that reached the backend
+            # had a valid sig + live expiry, i.e. it targeted a real issued
+            # challenge — burning it is what stops one free challenge from
+            # fuelling unlimited garbage-proof verifies (K-540).
+            #
             # K-512: a bare "wrong" is a dead end — a live agent that hand-rolled
             # its own Equihash solver got this 403 and had nothing to act on.
             # Name the ONE recovery step (run the shipped solver) without naming
@@ -191,16 +201,22 @@ module Kiosk
             raise Errors::Forbidden.new("invalid proof of work", hint: POW_INVALID_HINT)
           when :expired, :bad_sig
             # Doesn't count; falls through to a fresh re-challenge below if the
-            # quota isn't met. No on_bad_proof (honest clock skew / retry).
+            # quota isn't met. No on_bad_proof (honest clock skew / retry). The
+            # sig didn't authenticate this challenge (or it is already dead), so
+            # release the claim — never retain a forged-sig id (it would let an
+            # attacker fill the spent store with junk exp anchors).
+            config.pow_spent_store.release(id)
           end
         end
 
         if accepted.size >= count
-          # Spend all accepted proofs only now that the quota is met, so a
-          # partial submission can be re-tried without burning valid proofs.
-          accepted.each { |id, exp| config.pow_spent_store.mark_spent(id, exp) }
+          # Quota met: the accepted ids stay claimed → single-use is enforced.
           :proceed
         else
+          # Quota unmet: release the valid-but-insufficient proofs so a follow-up
+          # retry (which is re-issued fresh challenges) is not blocked by our own
+          # claim — preserving the no-burn-on-partial-submission property.
+          accepted.each_key { |id| config.pow_spent_store.release(id) }
           raise Errors::PowRequired.new(
             challenges: issue_challenges(count, spec, fingerprint, secret, config),
           )

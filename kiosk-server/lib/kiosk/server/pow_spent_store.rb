@@ -24,12 +24,62 @@ module Kiosk
     # `Kiosk.configure { |c| c.pow_spent_store = MyRedisSpentStore.new }`.
     # The interface contract is:
     #
-    #   spent?(id)          → Boolean
-    #   mark_spent(id, exp) → void   (exp is a Unix timestamp — the TTL anchor)
+    #   claim(id, exp)      → Boolean  (ATOMIC: true iff THIS caller claimed it;
+    #                                   false if already claimed — the single-use
+    #                                   gate, called BEFORE the expensive verify)
+    #   release(id)         → void     (undo a claim that turned out unspendable)
+    #   spent?(id)          → Boolean  (read-only membership; not on the hot path)
+    #   mark_spent(id, exp) → void     (idempotent set — retained for overrides)
     class PowSpentStore
       def initialize
         @store = {}
         @mutex = Mutex.new
+      end
+
+      # Atomically claim +id+ as spent until Unix timestamp +exp+, returning
+      # true iff THIS caller made the claim (the id was not already present).
+      #
+      # This is the single-use guard for PoW proofs and MUST be called BEFORE
+      # the (expensive) proof verify: of N submitters racing the SAME valid
+      # proof id, exactly one wins the claim and proceeds to verify; the losers
+      # get false and treat it as a replay (K-542). Because the claim precedes
+      # the verify, a bad proof's id is also consumed by the claim it already
+      # won, so one issued challenge cannot fuel unlimited garbage verifies
+      # (K-540).
+      #
+      # A shared multi-process override MUST implement this as ONE atomic op —
+      # Redis `SET id <v> NX EX <ttl>` (SETNX), or SQL
+      # `INSERT INTO pow_spent (id, exp) VALUES ($1,$2) ON CONFLICT (id) DO
+      # NOTHING` and return whether a row was inserted — NOT a read-then-write,
+      # which reintroduces the very TOCTOU this method closes.
+      #
+      # @param id  [String, nil]
+      # @param exp [Integer] Unix timestamp at or after which the entry is stale
+      # @return [Boolean] true if claimed here, false if already claimed
+      def claim(id, exp)
+        return false if id.nil?
+
+        prune!
+        @mutex.synchronize do
+          if @store.key?(id)
+            false
+          else
+            @store[id] = exp
+            true
+          end
+        end
+      end
+
+      # Release a previously-claimed +id+ (compensating op). Used when a claim
+      # cannot be spent after all — an honest-skew / forged-sig proof that failed
+      # the cheap checks, or an N-proof partial submission that did not meet the
+      # quota — so a legitimate retry is not blocked by our own claim. A shared
+      # override implements this as Redis `DEL` / SQL `DELETE`.
+      # @param id [String, nil]
+      def release(id)
+        return if id.nil?
+
+        @mutex.synchronize { @store.delete(id) }
       end
 
       # @param id [String, nil] the challenge id to check
@@ -41,7 +91,9 @@ module Kiosk
         @mutex.synchronize { @store.key?(id) }
       end
 
-      # Mark +id+ as spent until Unix timestamp +exp+.
+      # Mark +id+ as spent until Unix timestamp +exp+. Idempotent set (no
+      # claim semantics) — retained for external overrides and read-side tests;
+      # the gate itself now uses the atomic {#claim}.
       # @param id  [String]
       # @param exp [Integer] Unix timestamp at or after which the entry is stale
       def mark_spent(id, exp)

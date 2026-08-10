@@ -3,17 +3,21 @@
 # The Kiosk wire controllers ship their own bases inside kiosk-server.
 class ApplicationController < ActionController::Base
   # AGENT-SIGNPOST (K-459). Assistants guess web-app paths. A JSON POST at the
-  # human sign-in form (`/users/sign_in`) carries no CSRF token, so Rails raises
-  # ActionController::InvalidAuthenticityToken — and in PRODUCTION that never
-  # reaches a controller: ShowExceptions falls through to PublicExceptions,
-  # which serves the static public/422.html (shipped by K-532; before it, the
-  # answer was 422 + `text/html` + `Content-Length: 0` — literally nothing to
-  # act on). Prose written for a human is still not a result an assistant can
-  # branch on, so hand a JSON-shaped caller the Kiosk error envelope with a
-  # pointer to the wire instead. Browser requests re-raise untouched, so a
-  # genuine CSRF failure on a genuine form still fails exactly as before
-  # (deploy/production-smoke.sh relies on that for K-439 and pins this JSON
-  # branch for K-534).
+  # human sign-in form (`/users/sign_in`) carries no CSRF token, so Rails' forgery
+  # check raises ActionController::InvalidAuthenticityToken — INSIDE the
+  # controller, in a before_action, which is why the handler below is what sees
+  # it first, in production as anywhere else. Prose written for a human is not a
+  # result an assistant can branch on, so a JSON-shaped caller gets the Kiosk
+  # error envelope with a pointer to the wire.
+  #
+  # Everything else is re-raised untouched, and only THEN leaves the controller:
+  # in production ShowExceptions falls through to PublicExceptions, which serves
+  # the static public/422.html (shipped by K-532; before it, the answer was 422 +
+  # `text/html` + `Content-Length: 0` — literally nothing to act on). So a genuine
+  # CSRF failure on a genuine form still fails exactly as before.
+  # deploy/production-smoke.sh depends on both halves: K-439 on the browser half,
+  # K-534 on this JSON branch — and that assertion can only pass because the
+  # rescue runs, since public/422.html contains no `invalid_authenticity_token`.
   rescue_from ActionController::InvalidAuthenticityToken do |error|
     raise error unless kiosk_json_request?
 

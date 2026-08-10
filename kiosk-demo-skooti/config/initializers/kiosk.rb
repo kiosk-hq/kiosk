@@ -182,12 +182,18 @@ Kiosk::Server::Queries.register("scooters_available",
                                  },
                                  example_params: {},
                                  example_row: {
-                                   id: 1, code: "SK-001", name: "Jordaan Jet", dock: "Jordaan Dock",
+                                   code: "SK-001", name: "Jordaan Jet", dock: "Jordaan Dock",
                                    status: "available", kind: "scooter", needs_licence: false,
                                    lat: 52.3739, lng: 4.8809, price_per_min_cents: 15, currency: "eur",
                                  }) do |_params|
+  # `code` is the ONLY vehicle handle on the wire — reserve takes scooter_code.
+  # The numeric primary key is deliberately NOT selected: a row id no verb
+  # accepts is a dead field that invites the assistant to guess it is some
+  # verb's param (K-516, and K-484 for the same defect on atablefor;
+  # descriptor-house-style.md "Never expose a row id that no verb consumes").
+  # It still orders the fleet — ORDER BY needs no SELECT.
   rows = ActiveRecord::Base.connection.execute(
-    "SELECT id, code, name, dock, status, kind, needs_licence, lat, lng, price_per_min_cents " \
+    "SELECT code, name, dock, status, kind, needs_licence, lat, lng, price_per_min_cents " \
     "FROM public.scooters " \
     "WHERE status = 'available' " \
     "ORDER BY id"

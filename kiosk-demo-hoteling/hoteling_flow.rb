@@ -37,9 +37,8 @@ def get_json(url, headers = {})
   [res.code.to_i, (JSON.parse(res.body) rescue {})]
 end
 
-# ── Step 1: register (register PoW solved transparently when the provider gates
-#            registration — KIOSK_POW_REGISTER_DEMO=1). The SAME private key is
-#            returned so the payment mandates below can be signed with it. ──────
+# ── Step 1: register (register PoW solved transparently). The SAME private key
+#            is returned so the payment mandates below can be signed with it. ──
 
 require_relative "lib/equihash_register"
 key, reg = equihash_register(

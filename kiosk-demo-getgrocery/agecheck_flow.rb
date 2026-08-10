@@ -74,8 +74,7 @@ end
 require_relative "lib/equihash_register"
 
 # Register a fresh agent through the proof-of-possession handshake, solving the
-# Equihash register PoW transparently when the provider gates registration
-# (KIOSK_POW_REGISTER_DEMO=1). Returns [key, agent_id, user_id, token].
+# Equihash register PoW transparently. Returns [key, agent_id, user_id, token].
 def register_agent
   key, reg = equihash_register(
     server: SERVER, issuer: ISSUER,

@@ -40,8 +40,7 @@ def post_json(path, body, bearer: nil)
   [res.code.to_i, (JSON.parse(res.body) rescue {})]
 end
 
-# ── Register a fresh agent (register PoW solved transparently when the provider
-#    gates registration — KIOSK_POW_REGISTER_DEMO=1) ──────────────────────────
+# ── Register a fresh agent (register PoW solved transparently) ───────────────
 #
 # This file's get_json/post_json take a `bearer:` kwarg, not the (url, body,
 # headers) shape the shared helper drives; give it full-URL adapter lambdas that

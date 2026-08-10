@@ -85,9 +85,9 @@ end
 results = {}
 
 # ── Beat 1: standalone — register a fresh key, order groceries ──────────────
-# The register PoW (KIOSK_POW_REGISTER_DEMO=1) is solved transparently by the
-# helper; the SAME private key is returned so the claim ceremony (Beat 2) and
-# the payment mandates below can re-prove possession / sign with it.
+# The register PoW is solved transparently by the helper; the SAME private key
+# is returned so the claim ceremony (Beat 2) and the payment mandates below can
+# re-prove possession / sign with it.
 require_relative "lib/equihash_register"
 key, reg = equihash_register(
   server: SERVER, issuer: ISSUER,

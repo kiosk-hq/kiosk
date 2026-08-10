@@ -40,9 +40,8 @@ end
 
 require_relative "lib/equihash_register"
 
-# ── Step 1: generate keypair + self-register (no human; solving the register
-#            PoW if the provider gates registration — KIOSK_POW_REGISTER_DEMO=1
-#            turns that toll on, and the helper solves it transparently) ──────
+# ── Step 1: generate keypair + self-register (no human; register is tolled
+#            with PoW here, and the helper solves it transparently) ───────────
 
 _key, reg = equihash_register(
   server: SERVER, issuer: ISSUER,

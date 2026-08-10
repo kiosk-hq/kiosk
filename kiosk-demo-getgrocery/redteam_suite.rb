@@ -7,7 +7,7 @@
 # forge_action   : "create_order" (delivery slot + address required)
 # gated_action   : "reschedule_delivery" (ownership + settled payment; one per order)
 # requires_kyc   : false
-# pow_difficulty : 1  (register PoW ON — KIOSK_POW_REGISTER_DEMO=1)
+# pow_difficulty : 1  (register PoW ON — registration_pow_count=1)
 #
 # Every capture runs the ValidatingPaymentProvider cashier check: the cart
 # must be EUR, reference the payer's own unsettled order, mirror its items at
@@ -33,7 +33,7 @@ ISSUER   = ENV.fetch("KIOSK_ISSUER", BASE_URL)
 # ── Profile ───────────────────────────────────────────────────────────────────
 
 profile = Kiosk::Redteam::Profile.new(
-  # register PoW is ON (KIOSK_POW_REGISTER_DEMO=1): a positive difficulty makes
+  # register PoW is ON (registration_pow_count=1): a positive difficulty makes
   # RegistrationWithoutPow RUN (a missing/bad register proof must be rejected).
   # The Client ignores the magnitude (PoW solving is driven by the server's 402
   # challenges); only "> 0" matters here.

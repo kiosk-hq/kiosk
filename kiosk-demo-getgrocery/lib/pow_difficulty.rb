@@ -4,7 +4,7 @@
 #
 # Reads ENV["KIOSK_POW_DIFFICULTY"] once and maps it to concrete Equihash
 # (n, k) params so a demo's register/browse PoW can be poke-friendly on most
-# hosted apps but genuinely memory- and CPU-intensive on a couple of them —
+# hosted apps but genuinely memory- and CPU-intensive on the showcase one —
 # making the DoS-shield toll TANGIBLE to an HN reader or their agent.
 #
 # Levels (Equihash cost is driven by n_div = n/(k+1); see
@@ -16,8 +16,13 @@
 #                    pays the heavy toll and never hangs.
 #   high           — n=168, k=7 → the shipped kiosk-pow-equihash default:
 #                    ~10 s p50 / ~1.3 GiB peak on a reference (numpy) solver
-#                    — a real memory+CPU toll a poker feels first-hand. Used
-#                    on skooti + atablefor in the hosted deploy ONLY.
+#                    — a real memory+CPU toll a poker feels first-hand. It is
+#                    a per-demo knob ANY operator may set; the HOSTED deploy
+#                    ships high on ATABLEFOR ONLY (the production-grade
+#                    showcase, whose discovery owner block then carries the
+#                    "beware" notice). Every other hosted demo — skooti
+#                    included — runs the low default n=96 k=5. Ground truth:
+#                    deploy/README.md + deploy/env/*.env.example.
 #
 # This helper is OPT-IN and defaults low: a demo that never sets
 # KIOSK_POW_DIFFICULTY=high behaves EXACTLY as before this knob existed.

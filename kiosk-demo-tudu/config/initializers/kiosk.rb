@@ -24,6 +24,7 @@ end
 require Rails.root.join("lib/stub_idp")
 require Rails.root.join("lib/jwt_or_stub_idp")
 require Rails.root.join("lib/pow_difficulty")
+require Rails.root.join("lib/uuid_check")
 require "kiosk/user_identity_providers/devise"
 require "securerandom"
 require "base64"
@@ -231,6 +232,21 @@ end
 # — the philslist pattern, adapted to membership-based access. `require_owner`
 # tightens it to role='owner' (invite/remove_member authority).
 def tudu_require_membership!(conn, list_id, require_owner: false)
+  # K-581/K-582: `list_id` arrives from the wire and is cast `::uuid` below — and
+  # because every membership-gated verb (list_todos, list_members, add_todo,
+  # invite, remove_member) opens with this guard, this ONE check covers all of
+  # them. A malformed value made Postgres raise InvalidTextRepresentation, which
+  # is not a Kiosk error and so surfaced as a raw 500 (leaking "invalid input
+  # syntax for type uuid") for what is plainly a client mistake. Shape first,
+  # then the membership predicate — a well-formed but foreign id still gets the
+  # 403, so the shape check never softens the access answer.
+  unless UuidCheck.valid?(list_id)
+    raise Kiosk::Server::Errors::BadRequest.new(
+      "list_id #{list_id.to_s.inspect} is not a uuid",
+      hint: "Pass a `list_id` from my_lists (or the one create_list returned), verbatim.",
+    )
+  end
+
   role_clause = require_owner ? "AND role = 'owner'" : ""
   ok = conn.select_value(<<~SQL)
     SELECT EXISTS (
@@ -428,6 +444,15 @@ Kiosk::Server::Actions.register(
   },
 ) do |args|
   conn = ActiveRecord::Base.connection
+  # K-581/K-582: complete_todo takes no list_id, so it never passes through
+  # tudu_require_membership! — this is the one wire-supplied id in tudu with no
+  # other guard in front of its `::uuid` cast. Malformed → 400, not a raw 500.
+  unless UuidCheck.valid?(args[:todo_id])
+    raise Kiosk::Server::Errors::BadRequest.new(
+      "todo_id #{args[:todo_id].to_s.inspect} is not a uuid",
+      hint: "Pass a `todo_id` from list_todos, verbatim.",
+    )
+  end
   rows = conn.execute(<<~SQL)
     UPDATE todos SET done = true, updated_at = now()
     WHERE id = #{conn.quote(args[:todo_id].to_s)}::uuid
@@ -557,6 +582,15 @@ Kiosk::Server::Actions.register(
 
   target  = args[:account_id].to_s
   list_id = args[:list_id].to_s
+  # K-581/K-582: `list_id` was already shape-checked by the membership guard
+  # above; `account_id` is a SECOND wire-supplied id, cast `::uuid` in the
+  # last-owner probe and the DELETE. Malformed → 400, not a raw 500.
+  unless UuidCheck.valid?(target)
+    raise Kiosk::Server::Errors::BadRequest.new(
+      "account_id #{target.inspect} is not a uuid",
+      hint: "Pass an `account_id` from list_members, verbatim.",
+    )
+  end
   # Guard: never remove the list's LAST owner (would orphan the list). Refuse
   # when the target is an owner AND is the only owner remaining.
   removing_last_owner = conn.select_value(<<~SQL)

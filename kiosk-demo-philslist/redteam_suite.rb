@@ -94,6 +94,28 @@ rc, _ = post_json("/kiosk/run",
                   bearer(TOKEN_B))
 record(results, "CrossOwnerClose", rc == 403, "Bob close Alice's listing → #{rc} (want 403)")
 
+# ── MalformedUuidArg — a junk listing_id must be a typed 400, never a 500 ────
+# K-581/K-582: edit_listing and close_listing cast their listing_id `::uuid`.
+# Before the UuidCheck guard, a malformed value made Postgres raise
+# InvalidTextRepresentation, which is not a Kiosk error and escaped as a raw 500
+# carrying the PG message. Three properties are asserted, not one: the status is
+# 400 (a client mistake reported as such), the envelope code is the typed
+# `bad_request` an assistant can branch on, and NO SQL internals reach the wire.
+MALFORMED_IDS = ["not-a-uuid", "1; DROP TABLE listings", "", "  "].freeze
+SQL_INTERNALS = ["::uuid", "PG::", "22P02", "invalid input syntax"].freeze
+
+uuid_probes = %w[edit_listing close_listing].flat_map do |verb|
+  MALFORMED_IDS.map do |junk|
+    rc, body = post_json("/kiosk/run", { name: verb, listing_id: junk }, bearer(TOKEN_A))
+    leak = SQL_INTERNALS.find { |needle| JSON.generate(body).include?(needle) }
+    ok = rc == 400 && body.dig("error", "code") == "bad_request" && leak.nil?
+    [ok, "#{verb}(#{junk.inspect})→#{rc}/#{body.dig('error', 'code').inspect}#{leak ? " LEAK #{leak}" : ''}"]
+  end
+end
+record(results, "MalformedUuidArg", uuid_probes.all? { |ok, _| ok },
+       "malformed listing_id → #{uuid_probes.map(&:last).join(', ')} " \
+       "(want 400/\"bad_request\" and no SQL internals)")
+
 # ── MissingAuth — no Authorization header → 401 ──────────────────────────────
 rc, _ = post_json("/kiosk/query", { name: "browse_listings" })
 record(results, "MissingAuth", rc == 401, "unauthenticated request → #{rc} (want 401)")

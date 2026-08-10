@@ -25,6 +25,7 @@ require Rails.root.join("lib/stub_idp")
 require Rails.root.join("lib/stub_user_idp")
 require Rails.root.join("lib/jwt_or_stub_idp")
 require Rails.root.join("lib/stub_psp")
+require Rails.root.join("lib/uuid_check")
 require Rails.root.join("lib/validating_booking_provider")
 require Rails.root.join("lib/pow_difficulty")
 
@@ -457,12 +458,31 @@ end
 # `pay`. Mirrors the getgrocery registration shape; with StubPsp
 # (no SetupIntent model) setup_required? is always false, so this is an
 # immediate no-op success: {status: "ready"}.
+#
+# POLL CADENCE + STOP CONDITION (K-477/K-595): the wire has no server→assistant
+# push, so an assistant that ever DOES get a `setup_required` learns the human
+# finished the hosted card entry ONLY by re-calling this. The descriptor
+# therefore has to state a cadence AND a terminal stop condition — without one an
+# agent invents its own and can poll forever if the human never completes the
+# step. Stated even though this demo's StubPsp short-circuits it, so the
+# PUBLISHED contract is the same across all three payment demos.
+#
+# NOTE getgrocery's descriptor also promises the setup_url is stable across polls
+# (K-492 — a real-Stripe SetupIntent-reuse property). That promise is NOT
+# repeated here: StubPsp mints no setup session at all, so there is nothing to be
+# stable about and claiming it would be a claim about code this demo never runs.
 Kiosk::Server::Actions.register("payment_setup",
   description: "Check whether the authenticated principal has a saved payment method. " \
                "Returns {status: \"ready\"} when the assistant can proceed to `pay`. " \
                "Returns {status: \"setup_required\", setup_url: \"…\"} when a hosted setup flow " \
-               "must be completed by the human first. This demo's stub PSP needs no setup, " \
-               "so it always returns ready. The assistant should call this before `pay`.",
+               "must be completed by the human first — hand the setup_url to the human, wait for " \
+               "them to finish, then call payment_setup again before paying. " \
+               "This demo's stub PSP needs no setup, so it always returns ready. " \
+               "The assistant should call this before `pay`. " \
+               "POLLING: if you ever do get setup_required, re-check every ~5 seconds while your " \
+               "human is at the hosted page, and GIVE UP after about 5 minutes (~60 checks) — tell " \
+               "your human the card setup is still not finished rather than polling indefinitely; " \
+               "they can finish later and you re-check then.",
   params: {}) do |_args|
   conn = ActiveRecord::Base.connection
   uid  = conn.execute("SELECT kiosk.current_user_id() AS uid").first["uid"]
@@ -570,6 +590,16 @@ Kiosk::Server::Actions.register("confirm_booking",
   booking_id = args[:booking_id]
   if booking_id.nil? || booking_id.to_s.empty?
     raise Kiosk::Server::Errors::BadRequest.new("missing field: booking_id")
+  end
+  # K-581/K-582: this id is cast `::uuid` below — a malformed one made Postgres
+  # raise InvalidTextRepresentation, which is not a Kiosk error and so surfaced
+  # as a raw 500 (leaking "invalid input syntax for type uuid") for what is
+  # plainly a client mistake. Check the shape first, answer 400.
+  unless UuidCheck.valid?(booking_id)
+    raise Kiosk::Server::Errors::BadRequest.new(
+      "booking_id #{booking_id.to_s.inspect} is not a uuid — pass the `booking_id` " \
+      "that reserve_room returned (also listed by my_bookings)"
+    )
   end
 
   conn.transaction do

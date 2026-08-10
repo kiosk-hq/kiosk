@@ -108,6 +108,31 @@ rc, _ = post_json("/kiosk/run",
                   bearer(TOKEN_B))
 record(results, "CrossOwnerCancel", rc == 403, "Bob cancel Alice's booking → #{rc} (want 403)")
 
+# ── MalformedUuidArg — a junk booking_id must be a typed 400, never a 500 ────
+# K-581/K-582: cancel_booking casts its booking_id `::uuid`. Before the
+# UuidCheck guard, a malformed value made Postgres raise
+# InvalidTextRepresentation, which is not a Kiosk error and escaped as a raw 500
+# carrying the PG message. Three properties are asserted, not one: the status is
+# 400 (a client mistake reported as such), the envelope code is the typed
+# `bad_request` an assistant can branch on, and NO SQL internals reach the wire.
+MALFORMED_IDS = ["not-a-uuid", "1; DROP TABLE bookings", "", "  "].freeze
+SQL_INTERNALS = ["::uuid", "PG::", "22P02", "invalid input syntax"].freeze
+
+def uuid_guard_verdict(path, body_for)
+  MALFORMED_IDS.map do |junk|
+    rc, body = post_json(path, body_for.call(junk), bearer(TOKEN_A))
+    raw = JSON.generate(body)
+    leak = SQL_INTERNALS.find { |needle| raw.include?(needle) }
+    ok = rc == 400 && body.dig("error", "code") == "bad_request" && leak.nil?
+    [ok, "#{junk.inspect}→#{rc}/#{body.dig('error', 'code').inspect}#{leak ? " LEAK #{leak}" : ''}"]
+  end
+end
+
+cancel_probes = uuid_guard_verdict("/kiosk/run", ->(junk) { { name: "cancel_booking", booking_id: junk } })
+record(results, "MalformedUuidArg", cancel_probes.all? { |ok, _| ok },
+       "cancel_booking with a malformed booking_id → #{cancel_probes.map(&:last).join(', ')} " \
+       "(want 400/\"bad_request\" and no SQL internals)")
+
 # ── RegisterWithoutPoP — register with no proof-of-possession → not 201 ──────
 require "openssl"
 throwaway_pem = OpenSSL::PKey::RSA.generate(2048).public_key.to_pem

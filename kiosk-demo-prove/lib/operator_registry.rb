@@ -18,6 +18,18 @@ require "uri"
 #                   callback_url must resolve to this host or the request is
 #                   rejected. In the demo the operator host varies by port, so the
 #                   callback host is read from env (KIOSK_PROVE_<OP>_CALLBACK_HOST).
+#   audience      — the operator-binding `aud` the broker mints into this
+#                   operator's attestations (the value its engine KycVerifier
+#                   compares against its own kyc_audience). This is held at
+#                   REGISTRATION, NOT taken from the intake body (K-550): the `aud`
+#                   is derived from the authenticated operator's own record, so an
+#                   operator can only ever obtain an attestation bound to ITS OWN
+#                   audience — operator B cannot request operator A's audience.
+#                   Defaults to the operator_id handle (what the demo operators set
+#                   as c.kyc_audience); env-overridable for a distinct origin-URL
+#                   audience via KIOSK_PROVE_<OP>_AUDIENCE (kept in lockstep with
+#                   the operator's own kyc_audience so the honest bind-and-verify
+#                   at intake matches).
 #
 # Production shape: OAuth client-credentials / mTLS instead of a shared secret,
 # and a registration handshake instead of a static table (design §8.1 / Q1).
@@ -68,6 +80,7 @@ module OperatorRegistry
       entries["skooti"] = {
         secret:        skooti,
         callback_host: ENV.fetch("KIOSK_PROVE_SKOOTI_CALLBACK_HOST", "127.0.0.1"),
+        audience:      ENV.fetch("KIOSK_PROVE_SKOOTI_AUDIENCE", "skooti"),
       }
     end
     # getgrocery is a SECOND operator — its alcohol age-gate asks the broker for
@@ -78,6 +91,7 @@ module OperatorRegistry
       entries["getgrocery"] = {
         secret:        gg,
         callback_host: ENV.fetch("KIOSK_PROVE_GETGROCERY_CALLBACK_HOST", "127.0.0.1"),
+        audience:      ENV.fetch("KIOSK_PROVE_GETGROCERY_AUDIENCE", "getgrocery"),
       }
     end
     entries

@@ -129,7 +129,37 @@ jobs:
             # KYC flow (alcohol→403→broker approve→200; non-alcohol→200 no KYC;
             # forged attestation rejected). So this job also bundles the broker.
             prove_broker: kiosk-demo-prove
-            tasks: demo:shop demo:isolation demo:redteam demo:schema demo:agecheck
+            # ORDER MATTERS at both ends of this list.
+            #
+            # FIRST — the two DB-free unit specs (~0.5 s each, no server, no
+            # Postgres, no PoW): they fail in under a second on the cheapest
+            # possible signal.
+            #   demo:slots_spec   K-480 delivery-slot past-filter across DST.
+            #   demo:cashier_spec K-579 order-reference shape guard.
+            #
+            # LAST — demo:race, the pay path's ONLY permanent regression net:
+            # the K-544 double-charge/order-swap races, K-578 stuck-`paying`
+            # reconciliation, and the K-579 malformed-uuid 400 over the real
+            # database. It runs real threads on pooled connections against real
+            # Postgres row locks, with a stub PSP (never Stripe), and it is
+            # cheap — ~2.3 s locally including its own demo:setup. It goes last
+            # because `task race: :setup` DROPS and reseeds the database, which
+            # would pull the rug from under any task queued behind it.
+            #
+            # Until now none of the three was reachable from CI: the pay-path
+            # invariants were pinned only by tasks a human had to remember to
+            # type. Each was watched pass AND watched fail (weaken the atomic
+            # claim → 6 captures under 6 racing pays; drop `paying` from
+            # create_order's exclusion list → the €1.49 order becomes €1299
+            # while the PSP is charged €1.49; widen UuidCheck::PATTERN → the
+            # malformed id resurfaces as ActiveRecord::StatementInvalid).
+            #
+            # NOT wired, deliberately: demo:reconcile is the operator's manual
+            # sweep, and on a freshly seeded database it prints "nothing stuck"
+            # and exits 0 no matter what the code does — a step that cannot go
+            # red is not a gate. Its logic IS covered here, by demo:race's
+            # K-578 block, which strands orders first and then sweeps.
+            tasks: demo:slots_spec demo:cashier_spec demo:shop demo:isolation demo:redteam demo:schema demo:agecheck demo:race
             # getgrocery uses the real Stripe adapter. CI carries NO Stripe key
             # (never inject keys into CI); a local stripe-mock returns
             # shaped pi_ fixtures so the full flow — including demo:shop's

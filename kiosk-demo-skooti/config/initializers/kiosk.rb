@@ -417,7 +417,7 @@ Kiosk::Server::Actions.register("start_rental",
 
   reservation_id = args[:reservation_id]
 
-  if reservation_id.nil? || reservation_id.to_s.empty?
+  if reservation_id.blank?
     raise Kiosk::Server::Errors::BadRequest.new("missing field: reservation_id")
   end
   # K-581/K-582: this id is cast `::uuid` below — a malformed one made Postgres
@@ -558,7 +558,7 @@ Kiosk::Server::Actions.register("rent_motorcycle",
   end
 
   reservation_id = args[:reservation_id]
-  if reservation_id.nil? || reservation_id.to_s.empty?
+  if reservation_id.blank?
     raise Kiosk::Server::Errors::BadRequest.new("missing field: reservation_id")
   end
   # K-581/K-582: cast `::uuid` below — reject a malformed id as a clean 400, not
@@ -701,7 +701,7 @@ Kiosk::Server::Queries.register("kyc_status",
                                               "POST /kiosk/agents/kyc, then retry rent_motorcycle); {status: \"declined\"} if declined.",
                                  params: { request_id: "string — the request_id returned by request_kyc" }) do |params|
   request_id = params[:request_id]
-  if request_id.nil? || request_id.to_s.empty?
+  if request_id.blank?
     raise Kiosk::Server::Errors::BadRequest.new("missing field: request_id")
   end
 

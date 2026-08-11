@@ -393,8 +393,8 @@ Kiosk::Server::Queries.register("delivery_slots",
   # with a clean 400 (bad_request), never a 500. This forces the assistant to
   # obtain the address from its human before it can even see slots. The check is
   # FORMAT + ZONE only: it cannot prove a plausible in-zone address is real.
-  delivery_address = params[:delivery_address] || params["delivery_address"]
-  if delivery_address.nil? || delivery_address.to_s.strip.empty?
+  delivery_address = params[:delivery_address]
+  if delivery_address.blank?
     raise Kiosk::Server::Errors::BadRequest.new(
       DublinZones.reject_message(DublinZones::Result.new(ok: false, zone: nil, reason: :blank)),
     )
@@ -569,21 +569,21 @@ Kiosk::Server::Actions.register("create_order",
   uid = conn.execute("SELECT kiosk.current_user_id() AS uid").first["uid"]
   raise Kiosk::Server::Errors::Unauthenticated.new("no authenticated user") if uid.nil?
 
-  items = args[:items] || args["items"] || []
+  items = args[:items] || []
   raise Kiosk::Server::Errors::BadRequest.new("items must be a non-empty array") if items.empty?
 
   items = items.map do |it|
-    sku = (it[:sku] || it["sku"]).to_s
-    qty = (it[:qty] || it["qty"] || 1).to_i
+    sku = it[:sku].to_s
+    qty = (it[:qty] || 1).to_i
     raise Kiosk::Server::Errors::BadRequest.new("each item needs a sku") if sku.empty?
     raise Kiosk::Server::Errors::BadRequest.new("qty must be >= 1") if qty < 1
     { sku: sku, qty: qty }
   end
 
-  delivery_slot_id = args[:delivery_slot_id] || args["delivery_slot_id"]
-  delivery_address = args[:delivery_address] || args["delivery_address"]
+  delivery_slot_id = args[:delivery_slot_id]
+  delivery_address = args[:delivery_address]
   raise Kiosk::Server::Errors::BadRequest.new("missing field: delivery_slot_id — delivery is part of the order") if delivery_slot_id.nil?
-  raise Kiosk::Server::Errors::BadRequest.new("missing field: delivery_address — delivery is part of the order") if delivery_address.nil? || delivery_address.to_s.empty?
+  raise Kiosk::Server::Errors::BadRequest.new("missing field: delivery_address — delivery is part of the order") if delivery_address.blank?
   # ADDRESS-UPFRONT (K-468): re-validate the delivery address against the SAME
   # served-Dublin-zone rule the slots were issued under (consistency) — an
   # out-of-zone / district-less address that slipped past (or a different one
@@ -603,9 +603,9 @@ Kiosk::Server::Actions.register("create_order",
   # Backward-compat: if delivery_date is omitted, fall back to tomorrow (the
   # historical default) so callers that pre-date this field still work — but a
   # caller that saw a slot for a specific day SHOULD pass that day back.
-  raw_date = args[:delivery_date] || args["delivery_date"]
+  raw_date = args[:delivery_date]
   delivery_date =
-    if raw_date.nil? || raw_date.to_s.strip.empty?
+    if raw_date.blank?
       Date.today + 1
     else
       begin
@@ -677,10 +677,10 @@ Kiosk::Server::Actions.register("create_order",
     total_cents = items.sum { |i| by_sku[i[:sku]]["price_cents"].to_i * i[:qty] }
 
     # Optional order_id: replace items if order belongs to principal and is not yet paid/scheduled
-    given_order_id = args[:order_id] || args["order_id"]
+    given_order_id = args[:order_id]
     order_id = nil
 
-    if given_order_id && !given_order_id.to_s.empty?
+    if given_order_id.present?
       # K-579: this id is cast `::uuid` below — a malformed one made Postgres
       # raise InvalidTextRepresentation, surfacing as a raw 500 for what is
       # plainly a client mistake. Check the shape first, answer 400.
@@ -792,11 +792,11 @@ Kiosk::Server::Actions.register("reschedule_delivery",
   example_row: { order_id: "e2b1c0d4-5f6a-4b3c-8d2e-1f0a9b8c7d6e", rescheduled_at: "2026-08-10T12:00:00+01:00" }) do |args|
   conn = ActiveRecord::Base.connection
 
-  order_id         = args[:order_id]         || args["order_id"]
-  delivery_slot_id = args[:delivery_slot_id] || args["delivery_slot_id"]
-  delivery_address = args[:delivery_address] || args["delivery_address"]
+  order_id         = args[:order_id]
+  delivery_slot_id = args[:delivery_slot_id]
+  delivery_address = args[:delivery_address]
 
-  raise Kiosk::Server::Errors::BadRequest.new("missing field: order_id")         if order_id.nil? || order_id.to_s.empty?
+  raise Kiosk::Server::Errors::BadRequest.new("missing field: order_id")         if order_id.blank?
   raise Kiosk::Server::Errors::BadRequest.new("missing field: delivery_slot_id") if delivery_slot_id.nil?
   # K-579: cast `::uuid` below — reject a malformed id as a clean 400, not a 500.
   unless UuidCheck.valid?(order_id)
@@ -807,7 +807,7 @@ Kiosk::Server::Actions.register("reschedule_delivery",
 
   # ADDRESS-UPFRONT (K-468): if a NEW address is supplied, it must also be an
   # in-zone Dublin address — clean 400, not a 500. Omitted → keep the existing.
-  unless delivery_address.nil? || delivery_address.to_s.strip.empty?
+  if delivery_address.present?
     zone_result = DublinZones.check(delivery_address)
     raise Kiosk::Server::Errors::BadRequest.new(DublinZones.reject_message(zone_result)) unless zone_result.ok?
   end
@@ -817,9 +817,9 @@ Kiosk::Server::Actions.register("reschedule_delivery",
 
   # K-470: honor the chosen slot's DATE (same source of truth as delivery_slots /
   # create_order). Optional for backward compat → tomorrow. Reject a past date.
-  raw_date = args[:delivery_date] || args["delivery_date"]
+  raw_date = args[:delivery_date]
   new_date =
-    if raw_date.nil? || raw_date.to_s.strip.empty?
+    if raw_date.blank?
       Date.today + 1
     else
       begin
@@ -968,7 +968,7 @@ Kiosk::Server::Queries.register("kyc_status",
                "wants to try again.",
   params: { request_id: "string — the request_id returned by request_kyc" }) do |params|
   request_id = params[:request_id]
-  if request_id.nil? || request_id.to_s.empty?
+  if request_id.blank?
     raise Kiosk::Server::Errors::BadRequest.new("missing field: request_id")
   end
 

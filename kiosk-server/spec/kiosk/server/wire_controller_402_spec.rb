@@ -8,16 +8,13 @@
 # PoW N-challenge list / the payment_setup pointer). Both 402s render through
 # WireController#render_envelope.
 #
-# Like controller_auth_spec.rb: pull in actionpack and re-`load` the controller
-# to materialise the class; dispatch through `ActionController::Metal.action`.
+# Dispatch goes through `ActionController::Metal.action(...)`, a plain Rack
+# app — no Rails host.
 
-require "action_controller"
 require "rack/mock"
 require "json"
 require "kiosk/pow"
 require "kiosk/reputation"
-
-load File.expand_path("../../../lib/kiosk/server/wire_controller.rb", __dir__)
 
 RSpec.describe "WireController 402 WWW-Authenticate (W4)" do
   def dispatch(action, env)

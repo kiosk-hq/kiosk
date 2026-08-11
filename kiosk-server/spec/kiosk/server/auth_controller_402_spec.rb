@@ -9,16 +9,13 @@
 # (RegistrationPow.gate) runs BEFORE PoP verification, so a dummy `signed` still
 # reaches the 402.
 #
-# Like wire_controller_402_spec.rb: re-`load` the controller and dispatch through
-# ActionController::Metal.action.
+# Dispatch goes through `ActionController::Metal.action(...)`, a plain Rack
+# app — no Rails host.
 
-require "action_controller"
 require "rack/mock"
 require "json"
 require "kiosk/pow/equihash"
 require "kiosk/reputation"
-
-load File.expand_path("../../../lib/kiosk/server/auth_controller.rb", __dir__)
 
 RSpec.describe "AuthController 402 WWW-Authenticate" do
   KAT_PARAMS_REGISTER = { n: 8, k: 1 }.freeze

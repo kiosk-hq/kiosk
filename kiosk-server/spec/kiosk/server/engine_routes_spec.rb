@@ -2,22 +2,9 @@
 
 # The engine-drawn account-binding routes: a host that mounts
 # Kiosk::Server::Engine at the configured mount_path gets the full claim +
-# link surface without hand-writing routes. spec_helper requires
-# kiosk/server before Rails exists, so the Engine class is materialised here
-# by pulling in railties and re-`load`ing engine.rb — the same
-# late-materialisation pattern as the controller specs.
-
-require "active_support/all" # rails/engine leans on AS core_ext being present
-require "rails/engine"
-require "action_controller"
-
-load File.expand_path("../../../lib/kiosk/server/engine.rb", __dir__)
-# recognize_path resolves controller constants, so materialise the routed
-# controllers too (their files guard on ActionController being defined).
-%w[oauth_device_authorization_controller oauth_token_controller
-   device_verify_controller auth_controller assistants_controller].each do |file|
-  load File.expand_path("../../../lib/kiosk/server/#{file}.rb", __dir__)
-end
+# link surface without hand-writing routes. `require "kiosk/server"` in
+# spec_helper defines the Engine and the routed controllers outright —
+# recognize_path resolves controller constants, so they have to be real.
 
 RSpec.describe "Kiosk::Server::Engine routes" do
   def recognize(method, path)

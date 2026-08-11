@@ -7,7 +7,6 @@
 # rather than fails, so the suite stays green on DB-less machines; CI's gems
 # matrix provides a Postgres service, so the contract is enforced there.
 
-require "active_record"
 require "securerandom"
 
 # ─── shared contract ───────────────────────────────────────────────────────
@@ -239,9 +238,8 @@ RSpec.describe Kiosk::Server::DeviceAuthorizationStores do
   end
 
   describe "Kiosk.configuration.device_authorization_store" do
-    # ActiveRecord IS loaded in this spec process (required at the top of
-    # this file), so the lazy default resolves to the durable adapter —
-    # exactly what a Rails host gets (in-memory dies cross-process).
+    # The lazy default is the durable adapter — in-memory dies cross-process,
+    # and ActiveRecord is a declared dependency of the gem.
     it "lazy-defaults to the durable ActiveRecord store when ActiveRecord is present" do
       expect(Kiosk.configuration.device_authorization_store)
         .to be_a(Kiosk::Server::DeviceAuthorizationStores::ActiveRecord)

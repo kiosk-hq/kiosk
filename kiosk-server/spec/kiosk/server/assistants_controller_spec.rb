@@ -4,11 +4,8 @@
 # bound assistant accounts + mint/unlink, HTML shim over LinkCode /
 # AccountBinding. Same Metal-dispatch harness as the other controller specs.
 
-require "action_controller"
 require "rack/mock"
 require "openssl"
-
-load File.expand_path("../../../lib/kiosk/server/assistants_controller.rb", __dir__)
 
 RSpec.describe "AssistantsController" do
   let(:store)   { Kiosk::Server::DeviceAuthorizationStores::InMemory.new }

@@ -2,17 +2,11 @@
 
 # AuthController#revoke specs.
 #
-# Mirrors controller_auth_spec.rb: the controller guards itself behind
-# `defined?(::ActionController::API)`, and spec_helper requires kiosk/server
-# BEFORE actionpack is available — so this file pulls in actionpack and
-# re-`load`s the controller to materialise the class. Dispatch goes through
-# `ActionController::Metal.action(...)`, a plain Rack app — no Rails host.
+# Dispatch goes through `ActionController::Metal.action(...)`, a plain Rack
+# app — no Rails host.
 
-require "action_controller"
 require "rack/mock"
 require "json"
-
-load File.expand_path("../../../lib/kiosk/server/auth_controller.rb", __dir__)
 
 RSpec.describe "AuthController#revoke (revoke-all-sessions)" do
   def dispatch(controller, action, env)

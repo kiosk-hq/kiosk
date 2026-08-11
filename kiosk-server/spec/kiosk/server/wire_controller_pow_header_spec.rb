@@ -18,14 +18,11 @@
 # and see the gate PROCEED, then reach Executor. An always-challenge policy on
 # `query`/`schema` keeps the toll in play; a stub Executor answers the proceed.
 
-require "action_controller"
 require "rack/mock"
 require "base64"
 require "json"
 require "kiosk/pow"
 require "kiosk/reputation"
-
-load File.expand_path("../../../lib/kiosk/server/wire_controller.rb", __dir__)
 
 RSpec.describe "WireController Kiosk-PoW header path (ADR-0022)" do
   def dispatch(action, env)

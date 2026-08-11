@@ -2,20 +2,12 @@
 
 # Controller shims of the claim ceremony's OAuth wire.
 #
-# Mirrors controller_auth_spec.rb: the controllers guard themselves behind
-# `defined?(::ActionController::API)`, and spec_helper requires kiosk/server
-# BEFORE actionpack is available — so this file pulls in actionpack and
-# re-`load`s the controllers to materialise the classes. Dispatch goes
-# through `ActionController::Metal.action(...)`, a plain Rack app — no Rails
-# host. Requests are form-encoded, as on the real OAuth wire.
+# Dispatch goes through `ActionController::Metal.action(...)`, a plain Rack
+# app — no Rails host. Requests are form-encoded, as on the real OAuth wire.
 
-require "action_controller"
 require "rack/mock"
 require "json"
 require "openssl"
-
-load File.expand_path("../../../lib/kiosk/server/oauth_device_authorization_controller.rb", __dir__)
-load File.expand_path("../../../lib/kiosk/server/oauth_token_controller.rb", __dir__)
 
 RSpec.describe "OAuth binding controllers" do
   let(:store) { Kiosk::Server::DeviceAuthorizationStores::InMemory.new }

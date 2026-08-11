@@ -62,6 +62,14 @@
 # and the render must byte-match every demo copy — regenerating the engine's
 # schema without regenerating the demos now fails this check.
 #
+# AND ONE MORE (K-648). Both rules need a shared handle to grab a file by: the
+# lockstep rule matches copies by relative path, the template rule by the
+# basename a `.tt` emits. A HAND-WRITTEN migration that ships in two demos at
+# demo-specific timestamps has neither — every copy is a singleton path and no
+# template renders it — so the pair was compared to NOTHING. Those basenames
+# are declared in MIGRATION_PAIRS below and compared across all their copies,
+# and an undeclared one fails the build, same as an undeclared path.
+#
 # WHAT THIS IS NOT. It is not an argument that copying is right. Promoting
 # UuidCheck or DemoTelemetry into a shipped gem is a public-API decision (K-607,
 # K-495/K-502) and this check does not pre-empt it — it only makes the interim
@@ -587,6 +595,48 @@ GENERATOR_TEMPLATES = {
   },
 }.freeze
 
+# ── Cross-demo singleton pairs (K-648) ───────────────────────────────────────
+#
+# The db/migrate blind spot left open after K-640: a HAND-WRITTEN migration
+# that ships in two or more demos at demo-specific timestamps. Every copy is a
+# singleton relative path, so the lockstep rule never fires; no `.tt` emits it,
+# so the template rule cannot reach it either — the copies were compared to
+# NOTHING, which is the exact shape the equihash_register constant rename
+# exploited (K-623), one directory over. Declared here by timestamp-stripped
+# basename and compared across ALL copies. Fields:
+#   rule:  :identical | :code — how the copies must agree (same meaning as in
+#          COPIES).
+#   drift: the copies KNOWINGLY disagree in code, pending triage: the reason
+#          says what differs and why no side was picked, and the entry errors
+#          the day the copies converge, so it cannot outlive the divergence it
+#          records. Honest scope: unlike a template drift there is no third
+#          artifact to hold either side against, so a drifting pair is
+#          RECORDED, not guarded, until the triage lands.
+#   why:   why two demos share the file at all.
+MIGRATION_PAIRS = {
+  "create_kyc_verification_requests.rb" => {
+    rule:  :code,
+    drift: "pending triage (K-648): getgrocery's create_table declares `t.string :broker_nonce` " \
+           "inline (the prove.my callback anti-replay nonce) and skooti's does not — skooti adds " \
+           "the identical column in its own " \
+           "20260804000002_add_broker_nonce_to_kyc_verification_requests.rb, so the two TABLES " \
+           "converge while the two create migrations cannot without one demo rewriting shipped " \
+           "history; which side's layout wins is a direction call this check does not make. The " \
+           "headers also tell different stories: skooti's still narrates the demo-local " \
+           "stub-issuer flow (K-440/K-443) its own routes.rb marks RETIRED.",
+    why:   "the pending age/licence verification a demo starts at the prove.my broker — the table " \
+           "behind app/models/kyc_verification_request.rb, whose model copies ARE held in :code " \
+           "lockstep above.",
+  },
+  "add_devise_columns_to_users.rb" => {
+    rule: :code,
+    why:  "the human-login columns for the four Devise demos. philslist, stylish and tudu were " \
+          "generated together, so their byte-identical copies share the 20260718000001 path the " \
+          "lockstep rule compares; atablefor grew its login later at 20260721000001 — a singleton " \
+          "path only this rule sees. Prose names each demo's own persona (Alice vs the diner).",
+  },
+}.freeze
+
 # ── Normalisation ────────────────────────────────────────────────────────────
 #
 # Ripper rather than a regex: `#` inside a string, a regex or a heredoc is not a
@@ -701,6 +751,13 @@ if ARGV.include?("--list")
     shipped = (migrations[entry[:shipped_as] || entry[:emits]] || {}).keys
     puts format("%-44s %-42s %s%s", name, entry[:emits] || "—", state,
                 shipped.empty? ? "" : " (#{shipped.map { |d| d.delete_prefix('kiosk-demo-') }.sort.join(' ')})")
+  end
+  puts
+  puts format("%-44s %-9s %s", "MIGRATION PAIR (K-648, sans timestamp)", "RULE", "STATE")
+  MIGRATION_PAIRS.sort.each do |base, entry|
+    state  = entry[:drift] ? "drift pending triage" : "held"
+    spread = (migrations[base] || {}).map { |d, p| "#{d.delete_prefix('kiosk-demo-')}@#{File.basename(p)[/\A\d+/]}" }.sort
+    puts format("%-44s %-9s %s (%s)", base, entry[:rule], state, spread.join(" "))
   end
   exit 0
 end
@@ -901,6 +958,88 @@ GENERATOR_TEMPLATES.each do |name, entry|
   end
 end
 
+# ── Cross-demo singleton pairs: the migrations neither rule above sees (K-648)
+#
+# Matched by timestamp-stripped basename, like the template rule — but these
+# have no template, so the copies are held against EACH OTHER, like the
+# lockstep rule. Detection first: an undeclared pair fails, so a hand-written
+# migration copied into a second demo at its own timestamp cannot appear
+# silently — the same property the path rule gives paths.
+template_basenames = GENERATOR_TEMPLATES.filter_map { |_name, e| e[:shipped_as] || e[:emits] }
+
+migrations.each do |base, copies|
+  next if copies.size < 2
+  next if template_basenames.include?(base)
+  # Copies all at ONE shared relative path are the lockstep rule's territory —
+  # declared in COPIES, or already failed above as an undeclared duplicate.
+  next if copies.values.map { |p| File.basename(p) }.uniq.size == 1
+  next if MIGRATION_PAIRS.key?(base)
+
+  spread = copies.map { |d, p| "#{short.(d)}@#{File.basename(p)[/\A\d+/]}" }.sort
+  errors << "db/migrate/*_#{base}: ships in #{copies.size} demos at demo-specific timestamps " \
+            "(#{spread.join(', ')}) — invisible to the relative-path rule and emitted by no " \
+            "install-generator template, so the copies are compared to NOTHING. Declare the " \
+            "basename in MIGRATION_PAIRS with a rule and a reason."
+end
+
+MIGRATION_PAIRS.each do |base, entry|
+  copies = migrations[base] || {}
+  label = "db/migrate/*_#{base}"
+
+  errors << "#{label}: MIGRATION_PAIRS entry carries no `why:` reason" if entry[:why].to_s.strip.empty?
+  unless %i[identical code].include?(entry[:rule])
+    errors << "#{label}: unknown rule #{entry[:rule].inspect} — MIGRATION_PAIRS takes :identical " \
+              "or :code (a :per_demo migration pair would be two unrelated files sharing a name; " \
+              "record that in the entry's why: by splitting the basenames instead)."
+    next
+  end
+  if copies.size < 2
+    errors << "#{label}: declared in MIGRATION_PAIRS but " +
+              (copies.empty? ? "no demo ships it any more — drop the entry." \
+                             : "only #{copies.keys.map(&short).join(', ')} ships it — drop the entry.")
+    next
+  end
+  if template_basenames.include?(base)
+    errors << "#{label}: declared in MIGRATION_PAIRS but GENERATOR_TEMPLATES already holds every " \
+              "copy against its template — drop the entry, one declaration per file."
+    next
+  end
+  if copies.values.map { |p| File.basename(p) }.uniq.size == 1
+    errors << "#{label}: declared in MIGRATION_PAIRS but every copy now sits at the same relative " \
+              "path, which the lockstep rule compares — declare the path in COPIES and drop this " \
+              "entry."
+    next
+  end
+
+  digest = entry[:rule] == :identical ? method(:byte_digest) : method(:code_digest)
+  groups = copies.group_by { |_demo, path| digest.call(path) }
+  how    = entry[:rule] == :identical ? "byte-for-byte" : "once comments and whitespace are ignored"
+  if entry[:drift]
+    errors << "#{label}: `drift:` carries no reason" if entry[:drift].to_s.strip.empty?
+    if groups.size == 1
+      errors << "#{label}: `drift:` is stale — the copies now agree #{how}. Drop the drift so the " \
+                "pair is guarded."
+    end
+  elsif groups.size > 1
+    listed = groups.values.map { |g| "[#{g.map { |d, _| short.(d) }.sort.join(',')}]" }.join(" ")
+    errors << "#{label}: declared :#{entry[:rule]} — the copies must agree #{how}, and they do " \
+              "not: #{listed}. Propagate the edit to every copy, or, if the divergence is " \
+              "deliberate, record it as a `drift:` reason with what differs and why."
+  end
+
+  # Same K-628 rule as the lockstep loop: prose may differ, MAGIC comments not.
+  if entry[:rule] == :code
+    magic_groups = copies.group_by { |_demo, path| magic_comments(path) }
+    if magic_groups.size > 1
+      listed = magic_groups.map do |comments, g|
+        "[#{g.map { |d, _| short.(d) }.sort.join(',')}] #{comments.empty? ? '(none)' : comments.join(', ')}"
+      end.join(" vs ")
+      errors << "#{label}: declared :code — prose may differ per demo, MAGIC comments may not, " \
+                "because they change how the file runs: #{listed}."
+    end
+  end
+end
+
 # ── The telemetry cluster's own wiring (K-623, K-624) ────────────────────────
 #
 # Byte-identity of the module and the controller extends getgrocery's two
@@ -961,9 +1100,11 @@ if errors.empty?
   guarded = COPIES.count { |_, e| e[:rule] != :per_demo }
   tpl_checked = GENERATOR_TEMPLATES.count { |_, e| !e[:not_compared] }
   tpl_drift   = GENERATOR_TEMPLATES.count { |_, e| e[:drift] }
+  pair_drift  = MIGRATION_PAIRS.count { |_, e| e[:drift] }
   puts "check-demo-copies: OK — #{dups.size} duplicated paths declared, #{guarded} kept in lockstep, " \
        "#{tpl_checked} install-generator templates held against their demo copies " \
        "(#{tpl_drift} with drift pending triage), " \
+       "#{MIGRATION_PAIRS.size} cross-demo migration pairs (#{pair_drift} with drift pending triage), " \
        "telemetry wired in #{(dups['lib/demo_telemetry.rb'] || {}).size} demos"
   exit 0
 end

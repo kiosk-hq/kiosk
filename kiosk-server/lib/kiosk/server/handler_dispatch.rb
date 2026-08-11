@@ -33,15 +33,27 @@ module Kiosk
     # method name recorded THERE is dispatched. `action_methods` is re-checked
     # at dispatch as a second, Rails-native gate (K-495).
     #
-    # ── Errors ───────────────────────────────────────────────────────────
-    # A handler that renders a non-2xx gets that status mapped to the wire error
-    # whose CODE matches (400 → bad_request, 403 → forbidden, …). The mapping is
-    # deliberately thin: it covers the Rails-idiomatic `render json:, status:`
-    # and nothing else. A handler needing a wire code no HTTP status can carry
-    # (`pow_required`, `payment_setup_required`, `spending_cap_exceeded`, …)
-    # raises the {Errors} class instead — the raise propagates out of the
-    # sub-dispatch untouched and the Executor re-raises it as-is. Consolidating
-    # this into ONE `rescue_from` seam is T-054, which owns the taxonomy.
+    # ── Errors (T-054: the wire contract, consumed Rails-natively) ───────
+    # A handler that renders a non-2xx answers the wire like this:
+    #
+    #   * the body names an explicit vocabulary `error.code` whose canonical
+    #     status ({Errors::CODES}) matches the rendered status → that code
+    #     travels verbatim, extra envelope fields (`challenges`, …) included.
+    #     This is how a plain `render json:, status:` says `rls_denied`, or a
+    #     SPECIFIC 402 — naming, not guessing.
+    #   * otherwise the status' lone wire code decides
+    #     ({Errors::STATUS_CODES}; 402 and 500 deliberately have none) —
+    #     400 → bad_request, 403 → forbidden, …
+    #   * a status with no lone code is `action_failed`: the seam refuses to
+    #     guess between codes that share a status.
+    #
+    # A handler may still RAISE a wire-only {Errors} class (a gate-style
+    # `Errors::KycRequired`, say) — the raise propagates out of the
+    # sub-dispatch untouched and the Executor re-raises it as-is. Rails-native
+    # raises (`ActiveRecord::RecordNotFound`, `params.require`, anything the
+    # host registered in `config.action_dispatch.rescue_responses`) are
+    # mapped by the one `rescue_from` seam the mixin installs — see
+    # {HandlerMixin::InstanceMethods#kiosk_rescue_to_wire}.
     class HandlerDispatch
       # Rack env keys this seam sets on the SUB-request (never on the wire
       # request). `kiosk.dispatch` is the marker HandlerMixin's guard checks so
@@ -60,20 +72,6 @@ module Kiosk
         rack.url_scheme rack.session rack.errors
         action_dispatch.request_id action_dispatch.remote_ip
       ].freeze
-
-      # Rails-idiomatic statuses a handler renders → the wire error carrying the
-      # matching CODE. 402 is absent ON PURPOSE: three different wire codes use
-      # it (pow_required / payment_setup_required / payment_failed) and guessing
-      # between them would put the wrong code on the wire.
-      STATUS_ERRORS = {
-        400 => Errors::BadRequest,
-        401 => Errors::Unauthenticated,
-        403 => Errors::Forbidden,
-        404 => Errors::NotFound,
-        409 => Errors::Conflict,
-        422 => Errors::BadRequest,
-        429 => Errors::QuotaExceeded,
-      }.freeze
 
       attr_reader :method_name, :wire_name, :kind
 
@@ -196,17 +194,41 @@ module Kiosk
       end
 
       # 2xx → the parsed JSON the handler rendered. Anything else → the wire
-      # error for that status (see {STATUS_ERRORS}).
+      # error the answer NAMES (an explicit vocabulary `error.code` matching
+      # the rendered status), or failing that the status' lone wire code
+      # ({Errors::STATUS_CODES}) — see the Errors section of the class doc.
       def decode(status, raw)
         return parse_json(raw) if status >= 200 && status < 300
 
-        error_class = STATUS_ERRORS[status] || Errors::ActionFailed
-        parsed      = begin
+        parsed = begin
           parse_json(raw)
         rescue Errors::Base
           nil
         end
-        raise error_class.new(error_message(parsed, status), hint: error_hint(parsed))
+        raise wire_error(status, parsed)
+      end
+
+      # The {Errors::Base} a rendered non-2xx becomes. An explicit body code
+      # must be IN the closed vocabulary AND agree with the rendered status —
+      # anything else (an operator's own `code` field, a mislabelled status)
+      # falls back to the status mapping, so the wire never carries an
+      # invented code. A status with no lone code (402, 500, or anything
+      # unmapped) is `action_failed`: refusing to guess is the contract.
+      def wire_error(status, parsed)
+        error_obj = parsed.is_a?(Hash) && parsed["error"].is_a?(Hash) ? parsed["error"] : nil
+        rendered  = error_obj && error_obj["code"].to_s
+        code      = if rendered && Errors::CODES[rendered] == status
+                      rendered
+                    else
+                      Errors::STATUS_CODES[status]
+                    end
+        if code.nil?
+          return Errors::ActionFailed.new(error_message(parsed, status), hint: error_hint(parsed))
+        end
+
+        extra = error_obj && error_obj.except("code", "message", "hint").transform_keys(&:to_sym)
+        Errors::WireError.new(error_message(parsed, status),
+                              code: code, hint: error_hint(parsed), extra: extra)
       end
 
       def parse_json(raw)

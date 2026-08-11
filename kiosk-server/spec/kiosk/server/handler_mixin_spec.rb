@@ -207,16 +207,20 @@ RSpec.describe "Kiosk::Query / Kiosk::Action (the operator mixin)" do
   describe "errors" do
     it "maps a rendered 400 to bad_request, keeping the handler's message and hint" do
       expect { execute(:run, { name: "create_order" }) }
-        .to raise_error(Kiosk::Server::Errors::BadRequest) { |e|
+        .to raise_error(Kiosk::Server::Errors::Base) { |e|
           expect(e.message).to eq("at least one item is required")
           expect(e.hint).to eq("pass items: [{sku:, quantity:}]")
           expect(e.code).to eq("bad_request")
+          expect(e.http_status).to eq(400)
         }
     end
 
     it "maps a rendered 403 to forbidden" do
       expect { execute(:run, { name: "cancel_everything" }) }
-        .to raise_error(Kiosk::Server::Errors::Forbidden, /may not cancel/)
+        .to raise_error(Kiosk::Server::Errors::Base, /may not cancel/) { |e|
+          expect(e.code).to eq("forbidden")
+          expect(e.http_status).to eq(403)
+        }
     end
 
     it "lets a handler raise a wire error no HTTP status can carry" do

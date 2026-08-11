@@ -2,16 +2,78 @@
 
 module Kiosk
   module Server
-    # Exception classes the {Executor} raises and {WireController}
-    # serialises to error envelopes — see the response-envelope section of
-    # the spec.
+    # THE WIRE ERROR CONTRACT (T-054, K-495 sub-decision 4).
     #
-    # Each subclass declares two constants used by the wire envelope and
-    # HTTP serialisation:
+    # The taxonomy is the closed, stable `error.code` VOCABULARY the spec's
+    # "Error vocabulary" section publishes — {CODES}, a table, because the
+    # contract is data: an assistant branches on the code string, and a code
+    # exists precisely where an HTTP status alone cannot carry the meaning
+    # (four codes share 403, three share 402). It is NOT a class hierarchy
+    # mirroring Rails/HTTP: handler controllers express errors in Rails'
+    # own idiom — `render json:, status:` or a Rails-registered raise — and
+    # the mapping onto codes happens in one seam
+    # ({HandlerMixin::InstanceMethods#kiosk_rescue_to_wire} +
+    # {HandlerDispatch#decode}).
     #
-    #   CODE        — stable string for the JSON envelope's `error.code`
-    #   HTTP_STATUS — HTTP response status the controller renders
+    # Exception classes exist in two tiers, each annotated below with its
+    # T-054 audit verdict:
+    #
+    #   * WIRE-ONLY codes — a bare status cannot name them, and gate-style
+    #     internals raise them (some carry payload or a fixed hint). These
+    #     stay.
+    #   * RAILS-DUPLICATE codes — each merely restates what its bare HTTP
+    #     status already says. New code must not raise them; they remain
+    #     only for the gem's own pre-T-054 internals and the demo
+    #     initializers T-057 migrates.
+    #
+    # Each subclass declares CODE (the envelope's `error.code`) and
+    # HTTP_STATUS; both MUST agree with {CODES}, and the suite asserts it.
     module Errors
+      # `error.code` → canonical HTTP status. The closed vocabulary — the
+      # spec's "Error vocabulary" table plus `payment_failed`, which shipped
+      # additively the way payment_setup_required/kyc_required did. Adding a
+      # code here is a WIRE change: spec first (rule 1).
+      CODES = {
+        "bad_request"            => 400,
+        "unauthenticated"        => 401,
+        "pow_required"           => 402,
+        "payment_setup_required" => 402,
+        "payment_failed"         => 402,
+        "forbidden"              => 403,
+        "rls_denied"             => 403,
+        "spending_cap_exceeded"  => 403,
+        "kyc_required"           => 403,
+        "not_found"              => 404,
+        "conflict"               => 409,
+        "quota_exceeded"         => 429,
+        "action_failed"          => 500,
+        "internal_error"         => 500,
+      }.freeze
+
+      # HTTP status → the ONE code a bare status carries by itself. This is
+      # the whole Rails-native mapping: a handler's rendered status, or the
+      # status Rails' own `config.action_dispatch.rescue_responses` assigns
+      # a raised exception, answers the wire with this code.
+      #
+      # Deliberate absences, never to be "completed":
+      #   402 — three codes share it (pow_required / payment_setup_required /
+      #         payment_failed); guessing would put the wrong one on the
+      #         wire. A handler meaning a specific 402 names the code.
+      #   500 — action_failed vs internal_error is the same ambiguity, and an
+      #         unhandled exception must keep its {Executor} `action_failed`
+      #         wrap.
+      # 422 answers `bad_request`: Rails' validation-failure status, one wire
+      # code (the canonical status stays 400 — {CODES} decides what is
+      # rendered).
+      STATUS_CODES = {
+        400 => "bad_request",
+        401 => "unauthenticated",
+        403 => "forbidden",
+        404 => "not_found",
+        409 => "conflict",
+        422 => "bad_request",
+        429 => "quota_exceeded",
+      }.freeze
       # Cap on how many registered names a not-found hint enumerates before it
       # truncates with "…". Keeps the error envelope small on a large surface
       # while still naming enough for an assistant to spot a near-miss typo.
@@ -68,27 +130,86 @@ module Kiosk
         end
       end
 
-      # Bad client request — malformed body, unknown verb, missing required
-      # arg, SQL syntax error.
+      # A wire error named by CODE, not by class (T-054). The carrier the
+      # handler seam raises when a rendered non-2xx has to travel to the wire
+      # as a coded envelope: the code is data (any {CODES} key), the status
+      # comes from the table, and `extra:` carries additional envelope
+      # fields (a rendered `challenges`, say) through verbatim. One class for
+      # the whole vocabulary — this is what "taxonomy as contract, not as
+      # hierarchy" looks like at the raise site.
+      class WireError < Base
+        def initialize(message = nil, code:, hint: nil, extra: nil)
+          code = code.to_s
+          unless CODES.key?(code)
+            raise ArgumentError,
+              "unknown wire code #{code.inspect} — the vocabulary is Errors::CODES, closed by the spec"
+          end
+
+          super(message, hint: hint)
+          @wire_code = code
+          @extra     = extra || {}
+        end
+
+        def code        = @wire_code
+        def http_status = CODES.fetch(@wire_code)
+
+        def to_envelope
+          { ok: false, error: { code: code, message: message, hint: hint }.merge(@extra).compact }
+        end
+      end
+
+      # ── RAILS-DUPLICATE CODES ─────────────────────────────────────────
+      # T-054 audit verdict: each of the five classes below restates what
+      # its bare HTTP status already says, i.e. exactly the parallel
+      # framework K-495 killed. Do not raise them from new code — render the
+      # status (handlers) or raise {WireError} / the Rails exception. They
+      # survive only because the gem's own protocol internals and the
+      # pre-T-057 demo initializers still raise them; QuotaExceeded, which
+      # nothing raised, is already gone (the code stays reserved in {CODES}).
+
+      # DUPLICATE of a bare 400. Malformed body, unknown verb, missing
+      # required arg.
       class BadRequest < Base
         CODE        = "bad_request"
         HTTP_STATUS = 400
       end
 
-      # Missing or invalid identity — no token, expired token, wrong issuer.
+      # DUPLICATE of a bare 401. Missing or invalid identity — no token,
+      # expired token, wrong issuer.
       class Unauthenticated < Base
         CODE        = "unauthenticated"
         HTTP_STATUS = 401
       end
 
-      # Identity valid but not permitted at the resource level.
+      # DUPLICATE of a bare 403. Identity valid but not permitted.
       class Forbidden < Base
         CODE        = "forbidden"
         HTTP_STATUS = 403
       end
 
+      # DUPLICATE of a bare 404. Unknown table, unknown Action name.
+      class NotFound < Base
+        CODE        = "not_found"
+        HTTP_STATUS = 404
+      end
+
+      # DUPLICATE of a bare 409. Request collides with existing state — e.g.
+      # a mandate already processed (unique violation on a per-principal
+      # signed-id index, the idempotency anchor).
+      class Conflict < Base
+        CODE        = "conflict"
+        HTTP_STATUS = 409
+      end
+
+      # ── WIRE-ONLY CODES ───────────────────────────────────────────────
+      # T-054 audit verdict: these codes are why the vocabulary exists — a
+      # bare status cannot name them. The classes stay because gate-style
+      # internals raise them; a handler can just as well RENDER the code
+      # (`render json: {ok: false, error: {code: "rls_denied", …}},
+      # status: :forbidden`) and the seam carries it verbatim.
+
       # Row-level-security rejected the request. HTTP 403 but a distinct CODE
-      # from Forbidden so agents can tell «policy excluded this row» from
+      # from `forbidden` so agents can tell «policy excluded this row» from
       # «you can't reach this endpoint».
       class RLSDenied < Base
         CODE        = "rls_denied"
@@ -117,32 +238,10 @@ module Kiosk
         HTTP_STATUS = 403
       end
 
-      # Resource lookup failed — unknown table, unknown Action name.
-      class NotFound < Base
-        CODE        = "not_found"
-        HTTP_STATUS = 404
-      end
-
-      # Request collides with existing state — e.g. a mandate already
-      # processed (unique violation on a per-principal signed-id index, the
-      # idempotency anchor). HTTP 409.
-      class Conflict < Base
-        CODE        = "conflict"
-        HTTP_STATUS = 409
-      end
-
-      # Rate limit hit. No raiser in the shipped executor yet — kiosk-server
-      # ships no quota/rate-limit enforcement and the spec documents no
-      # quota_exceeded/429 error code. The class exists to reserve the CODE +
-      # HTTP_STATUS for a future quota gate and to keep the error hierarchy
-      # complete; the exercised quota-denial path lives in kiosk-test-support
-      # (NullExecutor + the be_quota_exceeded / assert_quota_exceeded helpers).
-      class QuotaExceeded < Base
-        CODE        = "quota_exceeded"
-        HTTP_STATUS = 429
-      end
-
-      # Action raised an unhandled exception.
+      # Action raised an unhandled exception. HTTP 500 — but a distinct CODE
+      # from `internal_error` (the two share the status, which is exactly why
+      # 500 is absent from {STATUS_CODES}): «the operator's handler blew up»
+      # is actionable differently from «the platform did».
       class ActionFailed < Base
         CODE        = "action_failed"
         HTTP_STATUS = 500

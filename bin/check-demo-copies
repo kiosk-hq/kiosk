@@ -1,0 +1,464 @@
+#!/usr/bin/env ruby
+# frozen_string_literal: true
+
+# Cross-demo copy check (K-623, K-607, K-624).
+#
+# WHY THIS EXISTS. The eight demos are eight standalone Rails apps, so shared
+# application code is not shared at all — it is HAND-COPIED. `lib/demo_telemetry.rb`
+# ships in seven demos, `app/controllers/demo_activity_controller.rb` in seven,
+# `lib/pow_difficulty.rb` in seven, `lib/uuid_check.rb` in six, and eleven
+# db/migrate files in up to seven. Nothing checked that the copies still agree.
+#
+# They drift, and the drift is invisible. `lib/demo_telemetry.rb` carried a stale
+# `schedule_delivery` comment in six of its seven copies for weeks — corrected
+# only by accident, when the K-622 fix happened to touch all seven at once. That
+# left the seven byte-identical again, which is a STATE, not a GUARD: the next
+# edit that lands in one copy and not the others is exactly as undetectable, and
+# the next one may be executable rather than a comment. `lib/equihash_register.rb`
+# is the proof that it need not be a comment — a constant rename reached three of
+# its five copies (dbeeb97) and stopped there, unnoticed, until this check was
+# written.
+#
+# So this is a CHECK, not a convention: it derives every relative path that
+# exists in two or more demos, and fails when a copy disagrees with its siblings
+# in a way nobody declared. "Someone must remember to propagate the edit" becomes
+# "CI notices when they did not". Same shape, and the same reason, as
+# bin/check-ci-tasks (K-619) — this is a SIBLING rather than a new mode of that
+# script because the two answer different questions from different inputs: that
+# one compares ci.yml against each demo's rake tasks, this one compares demo
+# files against each other, and folding them together would put two unrelated
+# invariants behind one exit code and one --write contract.
+#
+# THE RULE IT ENFORCES. Every relative path found in >= 2 demos must appear in
+# the COPIES manifest below with a rule and a reason:
+#
+#   :identical — byte-for-byte in every demo that ships it.
+#   :code      — identical once comments and whitespace are normalised away, so
+#                each copy's header prose may name its own demo. Ripper does the
+#                stripping, so a `#` inside a string or regex is not a comment.
+#   :per_demo  — a genuine per-demo implementation that shares only a filename.
+#                Not compared; the manifest entry records WHY they differ, so the
+#                next reader does not have to diff seven files to find out.
+#
+# `except:` is the escape hatch for one copy that legitimately differs from its
+# siblings (getgrocery's uuid_check declares an extra JSON-Schema constant;
+# stylish's stub_user_idp is a DB-backed staff IdP). It is a demo => reason map,
+# the same shape as `ungated:` in ci.yml's demos matrix, and it is checked too:
+# an exception for a demo that no longer ships the file, or whose copy has since
+# converged on its siblings, is an error rather than a comfortable lie.
+#
+# A path that turns up in a second demo with no manifest entry fails the build.
+# That is the property that matters: a NEW copy cannot appear silently, which is
+# how six of these got here.
+#
+# WHAT THIS IS NOT. It is not an argument that copying is right. Promoting
+# UuidCheck or DemoTelemetry into a shipped gem is a public-API decision (K-607,
+# K-495/K-502) and this check does not pre-empt it — it only makes the interim
+# state honest, and it is what should be deleted the day the extraction lands.
+#
+# LIMITATION, STATED: `:code` ignores ALL comments, magic comments included, so a
+# copy that lost `# frozen_string_literal: true` compares equal here.
+#
+# Stdlib only (digest + ripper), no bundle, no database, ~0.2 s on a bare
+# checkout — the same profile as bin/check-ci-tasks.
+#
+# Usage:
+#   bin/check-demo-copies          # check
+#   bin/check-demo-copies --list   # print the manifest as a table
+
+require "digest"
+require "ripper"
+
+ROOT = File.expand_path("..", __dir__)
+
+# Where hand-written demo code lives. Deliberately NOT the Rails skeleton
+# (bin/, config/, public/, Rakefile, config.ru): those are generator output that
+# each demo edits for its own port, host and initializer, and comparing them
+# would drown the signal this check exists for. `lib/tasks/*.rake` is excluded
+# too — per-demo by construction, and already covered by bin/check-ci-tasks.
+SCAN_ROOTS = ["lib", "app", "script", "db/migrate"].freeze
+
+# ── The manifest ─────────────────────────────────────────────────────────────
+COPIES = {
+  # ── The telemetry cluster (K-623) ──────────────────────────────────────────
+  "lib/demo_telemetry.rb" => {
+    rule: :identical,
+    why:  "The live-activity telemetry module. It owns the INSERT column list (which must " \
+          "match deploy/telemetry-init.sql), the agent_hash privacy salt, the 10-minute and " \
+          "1-hour aggregate windows, and the Rack middleware. Only getgrocery's copy is " \
+          "executed by a CI gate (demo:telemetry, demo:telemetry_spec); byte-identity is what " \
+          "extends those two gates to the other six copies.",
+  },
+  "app/controllers/demo_activity_controller.rb" => {
+    rule: :identical,
+    why:  "GET /demo/activity.json — the read half of the telemetry surface, and the half " \
+          "kiosk.tech's landing tile calls. Same argument as lib/demo_telemetry.rb: getgrocery's " \
+          "copy is the only one any gate boots.",
+  },
+
+  # ── Shared demo helpers under lib/ ─────────────────────────────────────────
+  "lib/pow_difficulty.rb" => {
+    rule: :identical,
+    why:  "The KIOSK_POW_DIFFICULTY -> Equihash (n, k) map. A demo whose copy drifts advertises " \
+          "a toll it does not charge.",
+  },
+  "lib/equihash_register.rb" => {
+    rule: :code,
+    why:  "The register handshake with the Equihash toll (challenge -> PoP -> 402 -> solve.py -> " \
+          "retry). Each copy's header names its own demo and port; the handshake must not vary.",
+  },
+  "lib/uuid_check.rb" => {
+    rule:   :code,
+    except: {
+      "getgrocery" => "adds JSON_SCHEMA_PATTERN — the same shape written for JSON Schema, which " \
+                      "only getgrocery needs today because only getgrocery declares an " \
+                      "`input_schema` for an id param (T-050). PATTERN and valid? are identical " \
+                      "to the five compared copies; drop this exception when another demo " \
+                      "declares one, or when the module is promoted (K-607).",
+    },
+    why:  "Shape guard for uuids that arrive from the wire, so a malformed literal is a typed 400 " \
+          "instead of a PG::InvalidTextRepresentation 500 that leaks SQL. Each copy's prose names " \
+          "the verbs THAT demo casts; the guard itself must be one thing.",
+  },
+  "lib/stub_idp.rb" => {
+    rule: :code,
+    why:  "DEV/TEST agent-IdP parsing `agent:u-…:a-…:r-…` bearers (K-539). Per-demo prose only.",
+  },
+  "lib/jwt_or_stub_idp.rb" => {
+    rule: :code,
+    why:  "Composite IdP: Kiosk-issued JWTs first, StubIdp's synthetic shape as fallback. Per-demo " \
+          "prose only.",
+  },
+  "lib/stub_user_idp.rb" => {
+    rule:   :code,
+    except: {
+      "stylish" => "not the same component: stylish authenticates a STAFF human by X-Staff-Session " \
+                   "against the users table (it ships a real Devise UI), where the other three " \
+                   "parse an unsigned `user:u-<uuid>` bearer because they have no human login. " \
+                   "Shares the filename and the Kiosk::Identity return type, nothing else.",
+    },
+    why:  "DEV/TEST user-IdP — the 'provider's own web session' channel the human-approval " \
+          "surfaces authenticate through (K-555).",
+  },
+  "lib/stub_psp.rb" => {
+    rule: :code,
+    why:  "Controllable payment-provider stub for the pay-path flows. Per-demo prose only.",
+  },
+  "lib/prove_broker_client.rb" => {
+    rule: :code,
+    why:  "The operator -> prove.my broker intake leg. Per-demo prose only: the operator id and " \
+          "the requested claims arrive as arguments, not as literals.",
+  },
+  "lib/prove_trust.rb" => {
+    rule: :per_demo,
+    why:  "Per-operator by construction: each copy bakes in its own operator id and its own shared " \
+          "intake-secret variable (KIOSK_PROVE_GETGROCERY_SECRET vs KIOSK_PROVE_SKOOTI_SECRET), " \
+          "which is exactly the cross-operator binding the demo exists to show (K-547).",
+  },
+  "lib/prove_broker_boot.rb" => {
+    rule: :per_demo,
+    why:  "Boots the broker app for that operator's flow: the operator's callback-host and secret " \
+          "variables and its shared-secret literal are baked in. Same reason as lib/prove_trust.rb.",
+  },
+
+  # ── app/ ───────────────────────────────────────────────────────────────────
+  "app/controllers/application_controller.rb" => {
+    rule: :code,
+    why:  "ActionController::Base (not API) so the human-facing Devise pages get cookies, flash " \
+          "and CSRF. Per-demo prose only.",
+  },
+  "app/controllers/users/sessions_controller.rb" => {
+    rule: :identical,
+    why:  "The K-533 sign-OUT signpost: Devise answers a session-less DELETE with a zero-byte " \
+          "401 claiming to be JSON, and this hands the caller the Kiosk error envelope instead. " \
+          "The four Devise demos must give an agent the SAME answer.",
+  },
+  "app/controllers/kyc_callback_controller.rb" => {
+    rule: :code,
+    why:  "POST /kyc/callback — the broker -> operator leg: JWS verify, request correlation, nonce " \
+          "echo, and the cross-operator `operator` binding. Per-demo prose only; the operator id " \
+          "is read from configuration.",
+  },
+  "app/controllers/home_controller.rb" => {
+    rule: :per_demo,
+    why:  "Each demo's own landing page — a different storefront with different instance " \
+          "variables. Shares only the Rails-conventional name.",
+  },
+  "app/jobs/application_job.rb" => {
+    rule: :identical,
+    why:  "Untouched Rails skeleton. Identical because nothing has ever needed to edit it; if a " \
+          "demo ever does, this line is where the divergence gets declared.",
+  },
+  "app/models/application_record.rb" => {
+    rule: :code,
+    why:  "Rails skeleton (primary_abstract_class). prove's header comment differs; the class body " \
+          "must not.",
+  },
+  "app/models/user.rb" => {
+    rule: :per_demo,
+    why:  "Each demo's own account model — different associations, roles and Devise modules per " \
+          "storefront.",
+  },
+  "app/models/booking.rb" => {
+    rule: :per_demo,
+    why:  "Same word, different domain: atablefor books a restaurant_table, hoteling books a " \
+          "room_type.",
+  },
+  "app/models/kyc_verification_request.rb" => {
+    rule: :code,
+    why:  "The pending age/licence verification a demo started at the broker. Per-demo prose only.",
+  },
+
+  # ── db/migrate — output of kiosk-server's install generator ────────────────
+  #
+  # These are not hand-written: `rails g kiosk:install` emits them
+  # (kiosk-server/lib/generators/kiosk/install). A demo whose copy differs is a
+  # demo that was not regenerated when the engine's schema moved — which is the
+  # nastiest drift in this list, because it only surfaces as a runtime column
+  # error in whichever demo nobody ran.
+  "db/migrate/20260618131457_create_kiosk_schema.rb" => {
+    rule: :identical, why: "kiosk:install generator output — the engine's own tables.",
+  },
+  "db/migrate/20260618131458_create_kiosk_identity_tables.rb" => {
+    rule: :identical, why: "kiosk:install generator output — agents and identity.",
+  },
+  "db/migrate/20260618131459_create_kiosk_actions_log.rb" => {
+    rule: :identical, why: "kiosk:install generator output — the actions log.",
+  },
+  "db/migrate/20260618131460_create_kiosk_reservations.rb" => {
+    rule: :identical, why: "kiosk:install generator output — reservations (demos that hold stock).",
+  },
+  "db/migrate/20260618131461_create_kiosk_device_authorizations.rb" => {
+    rule: :identical, why: "kiosk:install generator output — device-authorization grants.",
+  },
+  "db/migrate/20260618131462_create_kiosk_mandates.rb" => {
+    rule: :identical, why: "kiosk:install generator output — payment mandates (the pay demos).",
+  },
+  "db/migrate/20260618131463_add_kyc_verified_at.rb" => {
+    rule: :identical, why: "kiosk:install generator output — KYC timestamp (the broker demos).",
+  },
+  "db/migrate/20260717000001_rebuild_kiosk_device_authorizations.rb" => {
+    rule: :identical, why: "kiosk:install generator output — the device-authorization rebuild.",
+  },
+  "db/migrate/20260718000001_add_devise_columns_to_users.rb" => {
+    rule: :identical, why: "Devise columns for the demos that ship a human login.",
+  },
+  "db/migrate/20260718000002_add_kiosk_agent_governance_columns.rb" => {
+    rule: :identical, why: "kiosk:install generator output — agent governance columns (K-436).",
+  },
+  "db/migrate/20260101000000_create_users.rb" => {
+    rule: :code,
+    why:  "The demo's own users table, which the engine expects to exist. Two comment variants, " \
+          "one schema.",
+  },
+
+  # ── script/ — the per-demo flow drivers ────────────────────────────────────
+  #
+  # Each of these is the DEMO's own walkthrough of its own verbs; they share a
+  # filename because the rake tasks that invoke them share a name. Declared here
+  # so the shared names are on the record as deliberate rather than as seven
+  # copies nobody compared.
+  "script/schema_flow.rb" => {
+    rule: :per_demo, why: "asserts THAT demo's declared capabilities and verb set.",
+  },
+  "script/isolation_flow.rb" => {
+    rule: :per_demo, why: "asserts cross-agent isolation over THAT demo's own rows.",
+  },
+  "script/redteam_suite.rb" => {
+    rule: :per_demo, why: "THAT demo's attack battery, against its own verbs and its own bugs.",
+  },
+  "script/binding_flow.rb" => {
+    rule: :per_demo, why: "THAT demo's account-linking beat, against its own human-IdP surface.",
+  },
+  "script/pow_flow.rb" => {
+    rule: :per_demo, why: "THAT demo's toll flow — atablefor tolls register, getgrocery the catalog.",
+  },
+  "script/register_flow.rb" => {
+    rule: :per_demo, why: "THAT demo's register walkthrough.",
+  },
+}.freeze
+
+# ── Normalisation ────────────────────────────────────────────────────────────
+#
+# Ripper rather than a regex: `#` inside a string, a regex or a heredoc is not a
+# comment, and a regex that thinks otherwise fails OPEN — it would report two
+# copies as agreeing when they do not, which is the one failure mode this check
+# must not have. :on_sp is whitespace BETWEEN tokens, so collapsing it ignores
+# indentation and hash alignment while leaving string and heredoc content alone.
+COMMENT_TOKENS = %i[on_comment on_embdoc on_embdoc_beg on_embdoc_end].freeze
+
+def code_digest(path)
+  src = File.read(path)
+  body = Ripper.lex(src).filter_map do |(_pos, type, tok)|
+    next if COMMENT_TOKENS.include?(type)
+
+    type == :on_sp ? " " : tok
+  end.join
+  Digest::SHA256.hexdigest(body.lines.map(&:strip).reject(&:empty?).join("\n"))
+end
+
+def byte_digest(path) = Digest::SHA256.file(path).hexdigest
+
+# ── Discovery ────────────────────────────────────────────────────────────────
+demos = Dir[File.join(ROOT, "kiosk-demo-*")].select { |d| File.directory?(d) }.sort
+abort "check-demo-copies: no kiosk-demo-* directories under #{ROOT}" if demos.empty?
+
+found = Hash.new { |h, k| h[k] = {} } # relative path => demo name => absolute path
+demos.each do |dir|
+  demo = File.basename(dir)
+  SCAN_ROOTS.each do |sub|
+    Dir[File.join(dir, sub, "**", "*.rb")].sort.each do |path|
+      rel = path.delete_prefix("#{dir}/")
+      next if rel.start_with?("lib/tasks/")
+
+      found[rel][demo] = path
+    end
+  end
+end
+dups = found.select { |_rel, copies| copies.size >= 2 }
+
+if ARGV.include?("--list")
+  puts format("%-64s %-9s %s", "PATH", "RULE", "DEMOS")
+  COPIES.sort.each do |rel, entry|
+    copies = dups[rel] || {}
+    marks  = copies.keys.map { |d| d.delete_prefix("kiosk-demo-") + (entry[:except]&.key?(d.delete_prefix("kiosk-demo-")) ? "*" : "") }
+    puts format("%-64s %-9s %s", rel, entry[:rule], marks.join(" "))
+  end
+  puts "\n* = declared exception (see the `except:` reason in bin/check-demo-copies)"
+  exit 0
+end
+
+errors = []
+short = ->(demo) { demo.delete_prefix("kiosk-demo-") }
+
+# ── Undeclared and stale manifest entries ────────────────────────────────────
+(dups.keys - COPIES.keys).sort.each do |rel|
+  copies = dups[rel]
+  groups = copies.group_by { |_demo, path| code_digest(path) }
+                 .values.map { |g| "[#{g.map { |d, _| short.(d) }.sort.join(',')}]" }
+  errors << "#{rel}: exists in #{copies.size} demos (#{copies.keys.map(&short).sort.join(', ')}) but is not " \
+            "declared in bin/check-demo-copies. Add an entry with a rule and a reason " \
+            "(:identical / :code / :per_demo). Ignoring comments and whitespace the copies group as " \
+            "#{groups.join(' ')}."
+end
+
+(COPIES.keys - dups.keys).sort.each do |rel|
+  where = found[rel]&.keys&.map(&short) || []
+  errors << "#{rel}: declared in bin/check-demo-copies but " +
+            (where.empty? ? "no demo ships it any more — drop the entry." \
+                          : "only #{where.join(', ')} ships it — drop the entry.")
+end
+
+# ── The one comparison this whole file exists for ────────────────────────────
+COPIES.each do |rel, entry|
+  copies = dups[rel] or next
+
+  errors << "#{rel}: manifest entry carries no `why:` reason" if entry[:why].to_s.strip.empty?
+  unless %i[identical code per_demo].include?(entry[:rule])
+    errors << "#{rel}: unknown rule #{entry[:rule].inspect}"
+    next
+  end
+
+  present = copies.keys.map(&short)
+  excepted = entry[:except] || {}
+  excepted.each do |demo, reason|
+    errors << "#{rel}: `except:` reason for #{demo} is blank" if reason.to_s.strip.empty?
+    errors << "#{rel}: stale `except:` entry for #{demo} — that demo does not ship this file" \
+      unless present.include?(demo)
+  end
+  if entry[:rule] == :per_demo
+    errors << "#{rel}: :per_demo entries are not compared, so `except:` means nothing here" if excepted.any?
+    next
+  end
+
+  digest = entry[:rule] == :identical ? method(:byte_digest) : method(:code_digest)
+  compared, skipped = copies.partition { |demo, _| !excepted.key?(short.(demo)) }.map(&:to_h)
+
+  if compared.size < 2
+    errors << "#{rel}: every copy but one is excepted — the entry guards nothing. Either drop an " \
+              "exception or make the rule :per_demo."
+    next
+  end
+
+  groups = compared.group_by { |_demo, path| digest.call(path) }
+  if groups.size > 1
+    how = entry[:rule] == :identical ? "byte-for-byte" : "once comments and whitespace are ignored"
+    listed = groups.values.map { |g| "[#{g.map { |d, _| short.(d) }.sort.join(',')}]" }.join(" ")
+    errors << "#{rel}: declared :#{entry[:rule]} — the copies must agree #{how}, and they do not: " \
+              "#{listed}. Propagate the edit to every copy, or, if the divergence is deliberate, " \
+              "record it in this file's `except:` map with the reason."
+  end
+
+  # An exception that is no longer needed is a lie the next reader will believe.
+  next unless groups.size == 1
+
+  canonical = groups.keys.first
+  skipped.each do |demo, path|
+    next unless digest.call(path) == canonical
+
+    errors << "#{rel}: `except:` for #{short.(demo)} is stale — its copy now agrees with the others. " \
+              "Drop the exception so the file is guarded."
+  end
+end
+
+# ── The telemetry cluster's own wiring (K-623, K-624) ────────────────────────
+#
+# Byte-identity of the module and the controller extends getgrocery's two
+# telemetry gates to the other six copies of that CODE. It says nothing about
+# the per-demo WIRING, which lives in config/routes.rb and
+# config/initializers/kiosk.rb — files that legitimately differ per demo and so
+# cannot be compared byte-for-byte. Without this block a demo could lose its
+# route, its middleware or its require and stay green: the four pieces are only
+# ever exercised together in getgrocery.
+#
+# The `require` is load-bearing and is asserted deliberately (K-624). lib/ is a
+# Zeitwerk autoload path, so requiring a managed file looks redundant — but
+# lib/demo_telemetry.rb declares THREE top-level constants and only
+# `DemoTelemetry` matches its path. `DemoTelemetryMiddleware`, which the
+# initializer names, is unreachable by autoload. Delete the require and the
+# middleware wiring breaks. Whoever eventually extracts this cluster should split
+# the middleware and the record into path-matching files rather than carry the
+# require along.
+#
+# Honest scope: this is a static assertion that the four pieces are present, not
+# a boot of the six. Booting seven apps to GET /demo/activity.json is what
+# getgrocery's demo:telemetry_spec already does, twice, over byte-identical code.
+TELEMETRY_WIRING = [
+  ["app/controllers/demo_activity_controller.rb", nil,
+   "the GET /demo/activity.json controller is missing"],
+  ["config/routes.rb", %r{get\s+"/demo/activity\.json",\s*to:\s*"demo_activity#show"},
+   "config/routes.rb does not draw GET /demo/activity.json -> demo_activity#show"],
+  ["config/initializers/kiosk.rb", /require\s+Rails\.root\.join\("lib\/demo_telemetry"\)/,
+   "config/initializers/kiosk.rb does not require lib/demo_telemetry — DemoTelemetryMiddleware " \
+   "does not match its path, so Zeitwerk cannot autoload it and the require is load-bearing (K-624)"],
+  ["config/initializers/kiosk.rb", /middleware\.use\(\s*DemoTelemetryMiddleware/m,
+   "config/initializers/kiosk.rb does not insert DemoTelemetryMiddleware — the module is shipped " \
+   "but never records anything"],
+].freeze
+
+(dups["lib/demo_telemetry.rb"] || {}).each_key do |demo|
+  TELEMETRY_WIRING.each do |rel, pattern, message|
+    path = File.join(ROOT, demo, rel)
+    unless File.exist?(path)
+      errors << "#{short.(demo)}: ships lib/demo_telemetry.rb but #{rel} does not exist — #{message}"
+      next
+    end
+    next if pattern.nil? || File.read(path).match?(pattern)
+
+    errors << "#{short.(demo)}: ships lib/demo_telemetry.rb but #{message}"
+  end
+end
+
+if errors.empty?
+  guarded = COPIES.count { |_, e| e[:rule] != :per_demo }
+  puts "check-demo-copies: OK — #{dups.size} duplicated paths declared, #{guarded} kept in lockstep, " \
+       "telemetry wired in #{(dups['lib/demo_telemetry.rb'] || {}).size} demos"
+  exit 0
+end
+
+warn "\ncheck-demo-copies FAILED:\n"
+errors.each { |e| warn "  ✗ #{e}" }
+warn "\nThe demos are separate Rails apps, so shared code is hand-copied. Every file that exists in " \
+     "two or more of them must be declared in bin/check-demo-copies — kept identical, kept identical " \
+     "modulo prose, or recorded as a deliberate per-demo variant with the reason."
+exit 1

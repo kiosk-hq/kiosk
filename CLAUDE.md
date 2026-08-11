@@ -39,5 +39,9 @@ universal agent skill is `skill.md` on the same site.
   (`demo:walkthrough`/`shop`/`book`/`rideflow`/`collab`, `demo:isolation`,
   `demo:redteam`). Postgres required.
 - Full e2e: `./e2e/run.sh` (Postgres + jq). CI: `.github/workflows/ci.yml`
-  (gems matrix + demos matrix + e2e).
+  (gems matrix + demos matrix + e2e). Which `demo:` tasks CI runs — and the
+  recorded reason for each one it does not — is enforced by `bin/check-ci-tasks`
+  and published in every demo README's "Which of these run in CI" table; adding
+  a `demo:` task means adding it to the matrix `tasks:` list or to that entry's
+  `ungated:` map, then `bin/check-ci-tasks --write`.
 - Inline `TODO`/`FIXME` must state a concrete rationale, not a bare marker.

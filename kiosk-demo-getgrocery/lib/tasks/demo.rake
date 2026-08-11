@@ -80,6 +80,35 @@ namespace :demo do
     sh "ruby #{spec}"
   end
 
+  desc <<~DESC
+    Spec for the telemetry REQUEST path — the Rack middleware and the
+    /demo/activity.json endpoint the kiosk.tech landing tile fetches (K-622).
+    Complements demo:telemetry, which gates the store round-trip only.
+
+    Three parts, cheapest first:
+      1. spec/telemetry_middleware_spec.rb — DB-free, no boot. The K-622
+         regression (a telemetry failure must never re-dispatch the request),
+         plus the recording rules: the four-path filter, 2xx-only, the per-app
+         verb_map, the register body-buffering, the agent refs.
+      2/3. spec/demo_activity_spec.rb under a real boot, ONCE WITH
+         KIOSK_TELEMETRY=1 and once without — the route is drawn and the
+         middleware inserted at boot time, so "present" and "absent" are two
+         processes. Needs the demo database (demo:setup); no server, no port.
+  DESC
+  task :telemetry_spec do
+    mw   = File.expand_path("../../spec/telemetry_middleware_spec.rb", __dir__)
+    ctrl = File.expand_path("../../spec/demo_activity_spec.rb", __dir__)
+
+    puts "\n── DemoTelemetryMiddleware K-622 spec (no DB, no boot) ──"
+    sh "ruby #{mw}"
+
+    puts "\n── GET /demo/activity.json — telemetry ON ──"
+    sh({ "KIOSK_TELEMETRY" => "1" }, "bundle exec rails runner #{ctrl}")
+
+    puts "\n── GET /demo/activity.json — telemetry OFF (404 by absence) ──"
+    sh({ "KIOSK_TELEMETRY" => nil }, "bundle exec rails runner #{ctrl}")
+  end
+
   desc "Boot the server, run script/getgrocery_flow.rb end-to-end (no-human happy path: register→catalog→delivery_slots→create_order (delivery slot+address required)→payment_setup→pay (cart mirrors the order, EUR)→my_orders (paid)), assert."
   task :shop do
     require "resolv"

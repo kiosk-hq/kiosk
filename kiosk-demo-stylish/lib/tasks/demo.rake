@@ -41,7 +41,7 @@ namespace :demo do
   desc <<~DESC
     Adversarial cross-tenant isolation test.
 
-    Runs demo:setup (clean DB + seed), boots the server, runs isolation_flow.rb
+    Runs demo:setup (clean DB + seed), boots the server, runs script/isolation_flow.rb
     with the two seeded principals (Alice and Bob), and asserts all cross-tenant
     denial properties:
 
@@ -106,9 +106,9 @@ namespace :demo do
     abort "Server did not become ready — see #{log}" unless ready
     puts "  Server up at #{server_url}"
 
-    # ── run isolation_flow.rb ──────────────────────────────────────────
-    flow_rb = File.expand_path("../../isolation_flow.rb", __dir__)
-    puts "\n── Running isolation_flow.rb (adversarial cross-tenant) ──"
+    # ── run script/isolation_flow.rb ──────────────────────────────────────────
+    flow_rb = File.expand_path("../../script/isolation_flow.rb", __dir__)
+    puts "\n── Running script/isolation_flow.rb (adversarial cross-tenant) ──"
     raw = `SERVER_URL=#{server_url} KIOSK_ISSUER=#{kiosk_issuer} bundle exec ruby #{flow_rb} 2>&1`
     puts raw
 
@@ -116,7 +116,7 @@ namespace :demo do
     begin
       result = JSON.parse(raw.lines.grep(/^\{/).last || raw)
     rescue JSON::ParserError => e
-      abort "isolation_flow.rb did not produce valid JSON: #{e.message}\nOutput:\n#{raw}"
+      abort "script/isolation_flow.rb did not produce valid JSON: #{e.message}\nOutput:\n#{raw}"
     end
 
     failures = []
@@ -193,7 +193,7 @@ namespace :demo do
     Registration-PoW demo.
 
     Register-PoW is ALWAYS ON (wired in the app config, no env flag), so the
-    default server already gates registration. Runs register_flow.rb: register
+    default server already gates registration. Runs script/register_flow.rb: register
     with no proof → 402; solve the Equihash challenge and resubmit →
     201; the fresh token queries `salons` → 200. Requires python3 + numpy.
   DESC
@@ -205,7 +205,7 @@ namespace :demo do
     port         = ENV.fetch("PORT", "3001")
     server_url   = "http://127.0.0.1:#{port}"
     log          = "/tmp/kiosk-stylish-register.log"
-    flow_rb      = File.expand_path("../../register_flow.rb", __dir__)
+    flow_rb      = File.expand_path("../../script/register_flow.rb", __dir__)
     failures     = []
 
     File.truncate(log, 0) if File.exist?(log)
@@ -233,7 +233,7 @@ namespace :demo do
       json_line = raw.lines.grep(/^\{/).last
       puts raw.lines.reject { |l| l.start_with?("{") }.join
       puts json_line if json_line
-      result = JSON.parse(json_line || raw) rescue abort("register_flow.rb produced no JSON:\n#{raw}")
+      result = JSON.parse(json_line || raw) rescue abort("script/register_flow.rb produced no JSON:\n#{raw}")
 
       puts "\n══ Registration PoW assertions ══"
       check = lambda do |label, ok|
@@ -264,7 +264,7 @@ namespace :demo do
   desc <<~DESC
     Account-binding walkthrough — both binding flows against the live app.
 
-    Boots the server and runs binding_flow.rb, which drives BOTH sides of
+    Boots the server and runs script/binding_flow.rb, which drives BOTH sides of
     the ceremony over plain HTTP:
 
       FIRST CONTACT (claim): an assistant with a fresh key opens the claim
@@ -286,7 +286,7 @@ namespace :demo do
     port         = ENV.fetch("PORT", "3001")
     server_url   = "http://127.0.0.1:#{port}"
     log          = "/tmp/kiosk-stylish-binding.log"
-    flow_rb      = File.expand_path("../../binding_flow.rb", __dir__)
+    flow_rb      = File.expand_path("../../script/binding_flow.rb", __dir__)
     db           = "kiosk_stylish_development"
     failures     = []
 
@@ -324,7 +324,7 @@ namespace :demo do
       json_line = raw.lines.grep(/^\{/).last
       puts raw.lines.reject { |l| l.start_with?("{") }.join
       puts json_line if json_line
-      result = JSON.parse(json_line || raw) rescue abort("binding_flow.rb produced no JSON:\n#{raw}")
+      result = JSON.parse(json_line || raw) rescue abort("script/binding_flow.rb produced no JSON:\n#{raw}")
 
       puts "\n══ Account-binding assertions ══"
       check = lambda do |label, ok|
@@ -379,7 +379,7 @@ namespace :demo do
   desc <<~DESC
     roles-from-IdP demo (Path A — indirect, via the bound human).
 
-    Boots the server and runs roles_flow.rb. A salon OWNER links their
+    Boots the server and runs script/roles_flow.rb. A salon OWNER links their
     assistant over a role-carrying session (the StubUserIdp SSO/Okta
     stand-in); the assistant INHERITS the owner role and `salon_calendar`
     returns the WHOLE book (every visitor's booking) + a FORECASTED revenue
@@ -406,7 +406,7 @@ namespace :demo do
     server_url   = "http://127.0.0.1:#{port}"
     kiosk_issuer = server_url
     log          = "/tmp/kiosk-stylish-roles.log"
-    flow_rb      = File.expand_path("../../roles_flow.rb", __dir__)
+    flow_rb      = File.expand_path("../../script/roles_flow.rb", __dir__)
     db           = "kiosk_stylish_development"
     failures     = []
 
@@ -439,7 +439,7 @@ namespace :demo do
       json_line = raw.lines.grep(/^\{/).last
       puts raw.lines.reject { |l| l.start_with?("{") }.join
       puts json_line if json_line
-      result = JSON.parse(json_line || raw) rescue abort("roles_flow.rb produced no JSON:\n#{raw}")
+      result = JSON.parse(json_line || raw) rescue abort("script/roles_flow.rb produced no JSON:\n#{raw}")
 
       puts "\n══ roles-from-IdP assertions ══"
       check = lambda do |label, ok|
@@ -491,7 +491,7 @@ namespace :demo do
   desc <<~DESC
     Adversarial regression battery — attacks stylish's live surface.
 
-    Boots the server and runs redteam_suite.rb against the salon-booking
+    Boots the server and runs script/redteam_suite.rb against the salon-booking
     surface (salons / my_appointments queries, book_appointment action),
     asserting each attack is BLOCKED:
 
@@ -558,8 +558,8 @@ namespace :demo do
     abort "Server did not become ready — see #{log}" unless ready
     puts "  Server up at #{server_url}"
 
-    suite_rb = File.expand_path("../../redteam_suite.rb", __dir__)
-    puts "\n── Running redteam_suite.rb ──"
+    suite_rb = File.expand_path("../../script/redteam_suite.rb", __dir__)
+    puts "\n── Running script/redteam_suite.rb ──"
     system("SERVER_URL=#{server_url} KIOSK_ISSUER=#{kiosk_issuer} bundle exec ruby #{suite_rb}")
     exit_status = $?.exitstatus
 
@@ -634,15 +634,15 @@ namespace :demo do
     abort "Server did not become ready — see #{log}" unless ready
     puts "  Server up at #{server_url}"
 
-    flow_rb = File.expand_path("../../schema_flow.rb", __dir__)
-    puts "\n── Running schema_flow.rb ──"
+    flow_rb = File.expand_path("../../script/schema_flow.rb", __dir__)
+    puts "\n── Running script/schema_flow.rb ──"
     raw = `SERVER_URL=#{server_url} KIOSK_ISSUER=#{kiosk_issuer} bundle exec ruby #{flow_rb} 2>&1`
     puts raw
 
     begin
       result = JSON.parse(raw.lines.grep(/^\{/).last || raw)
     rescue JSON::ParserError => e
-      abort "schema_flow.rb did not produce valid JSON: #{e.message}\nOutput:\n#{raw}"
+      abort "script/schema_flow.rb did not produce valid JSON: #{e.message}\nOutput:\n#{raw}"
     end
 
     puts "\n── Schema assertions ──"

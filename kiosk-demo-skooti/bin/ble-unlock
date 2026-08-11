@@ -55,7 +55,7 @@ def parse_args():
     source.add_argument("--token", metavar="TOKEN",
                         help="Wire rental token (explicit)")
     source.add_argument("--from-server", action="store_true",
-                        help="Run rental_flow.rb to obtain a fresh token (SERVER_URL must be set)")
+                        help="Run script/rental_flow.rb to obtain a fresh token (SERVER_URL must be set)")
 
     p.add_argument("--timeout", type=float, default=SCAN_TIMEOUT, metavar="SECS",
                    help=f"BLE scan timeout in seconds (default: {SCAN_TIMEOUT})")
@@ -63,12 +63,12 @@ def parse_args():
 
 
 def obtain_token_from_server(scooter_code: str) -> str:
-    """Run rental_flow.rb, parse its JSON stdout, return the rental_token."""
+    """Run script/rental_flow.rb, parse its JSON stdout, return the rental_token."""
     demo_root = Path(__file__).parent.parent
-    flow_rb   = demo_root / "rental_flow.rb"
+    flow_rb   = demo_root / "script/rental_flow.rb"
 
     if not flow_rb.exists():
-        sys.exit(f"Error: rental_flow.rb not found at {flow_rb}")
+        sys.exit(f"Error: script/rental_flow.rb not found at {flow_rb}")
 
     server_url   = os.environ.get("SERVER_URL")
     kiosk_issuer = os.environ.get("KIOSK_ISSUER")
@@ -81,7 +81,7 @@ def obtain_token_from_server(scooter_code: str) -> str:
     if kiosk_issuer:
         env["KIOSK_ISSUER"] = kiosk_issuer
 
-    print("  Running rental_flow.rb ...", flush=True)
+    print("  Running script/rental_flow.rb ...", flush=True)
     result = subprocess.run(
         ["bundle", "exec", "ruby", str(flow_rb)],
         cwd=str(demo_root),
@@ -91,16 +91,16 @@ def obtain_token_from_server(scooter_code: str) -> str:
         env=env,
     )
     if result.returncode != 0:
-        sys.exit(f"rental_flow.rb exited with status {result.returncode}.")
+        sys.exit(f"script/rental_flow.rb exited with status {result.returncode}.")
 
     json_line = result.stdout.strip()
     if not json_line:
-        sys.exit("rental_flow.rb produced no output.")
+        sys.exit("script/rental_flow.rb produced no output.")
 
     data = json.loads(json_line)
     token = data.get("rental_token")
     if token is None:
-        sys.exit("rental_flow.rb returned null rental_token (start_rental may have returned 403).")
+        sys.exit("script/rental_flow.rb returned null rental_token (start_rental may have returned 403).")
 
     reservation_id = data.get("reservation_id", "?")
     print(f"  Got token for reservation {reservation_id}.", flush=True)

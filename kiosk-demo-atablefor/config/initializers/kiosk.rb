@@ -33,7 +33,7 @@ require "kiosk/user_identity_providers/devise"
 #
 # Gate: the Equihash PoW challenge is issued ONLY for the :query verb.
 # The :run verb is left ungated so the existing no-human booking flow
-# (book_flow.rb / rake demo:book) continues to pass without any PoW handling.
+# (script/book_flow.rb / rake demo:book) continues to pass without any PoW handling.
 #
 # The guard is intentional:
 #   - rake demo:book boots the server WITHOUT KIOSK_POW_DEMO=1 → no PoW.
@@ -157,7 +157,7 @@ when :demo
   end
 
   # ⚠ TOY COUNTER — NOT a reputation signal (K-498). Its ONLY job is to let the
-  # local `pow_flow.rb` driver print "the server counted my bad proof"; nothing
+  # local `script/pow_flow.rb` driver print "the server counted my bad proof"; nothing
   # reads it for policy (`reputation_factors` below feeds a hardcoded
   # `bad_proof_count: 0`). Do NOT copy this into a real provider — it is
   # deliberately wrong in three ways:
@@ -334,7 +334,7 @@ Kiosk.configure do |c|
     c.reputation_factors = ->(**) { Kiosk::Reputation::Factors.empty }
 
     # on_bad_proof: bump the TOY counter file (see its definition above — global,
-    # boot-truncated, TTL-less, K-498) so pow_flow.rb can assert the rejection
+    # boot-truncated, TTL-less, K-498) so script/pow_flow.rb can assert the rejection
     # happened. `identity:` is deliberately ignored: this is demo instrumentation,
     # not a per-principal signal, and it must never be read as one.
     c.on_bad_proof = ->(identity:) {

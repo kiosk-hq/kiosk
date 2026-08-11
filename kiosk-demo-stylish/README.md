@@ -73,8 +73,8 @@ The role rides the token, sourced from the operator's identity system — never 
 | `lib/jwt_or_stub_idp.rb` | Composite agent-IdP: tries Kiosk-issued JWTs first, falls back to StubIdp |
 | `lib/stub_user_idp.rb` | Role-carrying **user**-IdP (SSO/Okta stand-in): an `X-Staff-Session` header names a staff member; the session identity carries their `staff_role` |
 | `lib/composite_user_idp.rb` | Composite user-IdP: the role-carrying StubUserIdp first, then the real Devise session |
-| `binding_flow.rb` | Account-binding driver: claim ceremony over the real Devise session, link-code redeem, unlink |
-| `roles_flow.rb` | roles-from-IdP driver: the owner links an assistant + a customer signs in, `salon_calendar` gates on the inherited role |
+| `script/binding_flow.rb` | Account-binding driver: claim ceremony over the real Devise session, link-code redeem, unlink |
+| `script/roles_flow.rb` | roles-from-IdP driver: the owner links an assistant + a customer signs in, `salon_calendar` gates on the inherited role |
 | `bin/demo` | The walkthrough — POSIX shell, curl-driven, no Ruby in the loop |
 | `lib/tasks/demo.rake` | `rake demo:setup`, `rake demo:walkthrough`, `rake demo`, `rake demo:isolation`, `rake demo:register`, `rake demo:binding`, `rake demo:roles`, `rake demo:redteam`, `rake demo:schema` |
 

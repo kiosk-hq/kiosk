@@ -20,8 +20,8 @@ module Kiosk
     #     assert a rejection (e.g. RegistrationWithoutPow).
     #   - {#register!}    — returns a {Principal} on HTTP 201; raises otherwise.
     #
-    # Wire formats mirror kiosk-demo-skooti/rental_flow.rb and
-    # kiosk-demo-getgrocery/getgrocery_flow.rb exactly.
+    # Wire formats mirror kiosk-demo-skooti/script/rental_flow.rb and
+    # kiosk-demo-getgrocery/script/getgrocery_flow.rb exactly.
     class Client
       # Raised by {#register!} when the server does not respond 201.
       class RegistrationError < StandardError; end

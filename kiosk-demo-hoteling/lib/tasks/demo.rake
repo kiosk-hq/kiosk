@@ -4,7 +4,7 @@
 # Tasks:
 #
 #   rake demo:setup      idempotent db:drop / create / schema:load / seed
-#   rake demo:book       boots the server, runs hoteling_flow.rb (no-human full
+#   rake demo:book       boots the server, runs script/hoteling_flow.rb (no-human full
 #                        booking chain), asserts happy path + negative gate
 #   rake demo:isolation  adversarial cross-tenant isolation test
 #   rake demo:redteam    adversarial regression battery (kiosk-redteam)
@@ -27,7 +27,7 @@ namespace :demo do
     end
   end
 
-  desc "Boot the server, run hoteling_flow.rb end-to-end (happy + payment-gate negative), assert."
+  desc "Boot the server, run script/hoteling_flow.rb end-to-end (happy + payment-gate negative), assert."
   task :book do
     require "resolv"
     require "net/http"
@@ -56,7 +56,7 @@ namespace :demo do
     server_url   = "http://#{host}:#{port}"
     kiosk_issuer = server_url
     db           = "kiosk_hoteling_development"
-    flow_rb      = File.expand_path("../../hoteling_flow.rb", __dir__)
+    flow_rb      = File.expand_path("../../script/hoteling_flow.rb", __dir__)
 
     failures = []
 
@@ -98,7 +98,7 @@ namespace :demo do
       end
     end
 
-    # Helper: run hoteling_flow.rb with the given env vars; return parsed JSON result.
+    # Helper: run script/hoteling_flow.rb with the given env vars; return parsed JSON result.
     run_flow = lambda do |extra_env = {}|
       env = {
         "SERVER_URL"   => server_url,
@@ -114,7 +114,7 @@ namespace :demo do
       begin
         JSON.parse(json_line || raw)
       rescue JSON::ParserError => e
-        abort "hoteling_flow.rb did not produce valid JSON: #{e.message}\nOutput:\n#{raw}"
+        abort "script/hoteling_flow.rb did not produce valid JSON: #{e.message}\nOutput:\n#{raw}"
       end
     end
 
@@ -204,7 +204,7 @@ namespace :demo do
   desc <<~DESC
     Adversarial cross-tenant isolation test.
 
-    Runs demo:setup (clean DB + seed), boots the server, runs isolation_flow.rb
+    Runs demo:setup (clean DB + seed), boots the server, runs script/isolation_flow.rb
     with two fresh principals (A and B), and asserts all cross-tenant denial
     properties:
 
@@ -285,15 +285,15 @@ namespace :demo do
     abort "Server did not become ready — see #{log}" unless ready
     puts "  Server up at #{server_url}"
 
-    flow_rb = File.expand_path("../../isolation_flow.rb", __dir__)
-    puts "\n── Running isolation_flow.rb (adversarial cross-tenant) ──"
+    flow_rb = File.expand_path("../../script/isolation_flow.rb", __dir__)
+    puts "\n── Running script/isolation_flow.rb (adversarial cross-tenant) ──"
     raw = `SERVER_URL=#{server_url} KIOSK_ISSUER=#{kiosk_issuer} bundle exec ruby #{flow_rb} 2>&1`
     puts raw
 
     begin
       result = JSON.parse(raw.lines.grep(/^\{/).last || raw)
     rescue JSON::ParserError => e
-      abort "isolation_flow.rb did not produce valid JSON: #{e.message}\nOutput:\n#{raw}"
+      abort "script/isolation_flow.rb did not produce valid JSON: #{e.message}\nOutput:\n#{raw}"
     end
 
     failures = []
@@ -450,8 +450,8 @@ namespace :demo do
     abort "Server did not become ready — see #{log}" unless ready
     puts "  Server up at #{server_url}"
 
-    suite_rb = File.expand_path("../../redteam_suite.rb", __dir__)
-    puts "\n── Running redteam_suite.rb ──"
+    suite_rb = File.expand_path("../../script/redteam_suite.rb", __dir__)
+    puts "\n── Running script/redteam_suite.rb ──"
 
     env_str = "SERVER_URL=#{server_url} KIOSK_ISSUER=#{kiosk_issuer}"
 
@@ -539,15 +539,15 @@ namespace :demo do
     abort "Server did not become ready — see #{log}" unless ready
     puts "  Server up at #{server_url}"
 
-    flow_rb = File.expand_path("../../schema_flow.rb", __dir__)
-    puts "\n── Running schema_flow.rb ──"
+    flow_rb = File.expand_path("../../script/schema_flow.rb", __dir__)
+    puts "\n── Running script/schema_flow.rb ──"
     raw = `SERVER_URL=#{server_url} KIOSK_ISSUER=#{kiosk_issuer} bundle exec ruby #{flow_rb} 2>&1`
     puts raw
 
     begin
       result = JSON.parse(raw.lines.grep(/^\{/).last || raw)
     rescue JSON::ParserError => e
-      abort "schema_flow.rb did not produce valid JSON: #{e.message}\nOutput:\n#{raw}"
+      abort "script/schema_flow.rb did not produce valid JSON: #{e.message}\nOutput:\n#{raw}"
     end
 
     puts "\n── Schema assertions ──"
@@ -638,7 +638,7 @@ namespace :demo do
     Pagination + detail-by-id proof (T-042 / K-452).
 
     Boots the server over the ~100-hotel catalogue, registers a fresh agent, and
-    runs search_flow.rb to PROVE the data-plane pagination shape:
+    runs script/search_flow.rb to PROVE the data-plane pagination shape:
 
       • search_hotels with a small limit returns a FULL page carrying a top-level
         `next` cursor (the result was truncated — silent truncation is now visible).
@@ -706,15 +706,15 @@ namespace :demo do
     abort "Server did not become ready — see #{log}" unless ready
     puts "  Server up at #{server_url}"
 
-    flow_rb = File.expand_path("../../search_flow.rb", __dir__)
-    puts "\n── Running search_flow.rb ──"
+    flow_rb = File.expand_path("../../script/search_flow.rb", __dir__)
+    puts "\n── Running script/search_flow.rb ──"
     raw = `SERVER_URL=#{server_url} KIOSK_ISSUER=#{kiosk_issuer} bundle exec ruby #{flow_rb} 2>&1`
     puts raw
 
     begin
       result = JSON.parse(raw.lines.grep(/^\{/).last || raw)
     rescue JSON::ParserError => e
-      abort "search_flow.rb did not produce valid JSON: #{e.message}\nOutput:\n#{raw}"
+      abort "script/search_flow.rb did not produce valid JSON: #{e.message}\nOutput:\n#{raw}"
     end
 
     puts "\n── Pagination + detail assertions ──"
@@ -768,7 +768,7 @@ namespace :demo do
   desc <<~DESC
     Browse-heavy priced-pagination PoW demo (KIOSK_POW_BROWSE_DEMO=1).
 
-    Boots the server with the browse gate active and runs browse_flow.rb: a
+    Boots the server with the browse gate active and runs script/browse_flow.rb: a
     burst of `properties` queries where the first few are free and each extra
     one costs escalating proof-of-work (price depth, don't ban it).
 
@@ -785,7 +785,7 @@ namespace :demo do
     server_url   = "http://127.0.0.1:#{port}"
     kiosk_issuer = server_url
     log          = "/tmp/kiosk-hoteling-browse.log"
-    flow_rb      = File.expand_path("../../browse_flow.rb", __dir__)
+    flow_rb      = File.expand_path("../../script/browse_flow.rb", __dir__)
     failures     = []
 
     File.truncate(log, 0) if File.exist?(log)
@@ -813,7 +813,7 @@ namespace :demo do
       json_line = raw.lines.grep(/^\{/).last
       puts raw.lines.reject { |l| l.start_with?("{") }.join
       puts json_line if json_line
-      result = JSON.parse(json_line || raw) rescue abort("browse_flow.rb produced no JSON:\n#{raw}")
+      result = JSON.parse(json_line || raw) rescue abort("script/browse_flow.rb produced no JSON:\n#{raw}")
 
       puts "\n══ Browse priced-pagination assertions ══"
       puts "  Proof-count curve: #{result["curve"].inspect}"

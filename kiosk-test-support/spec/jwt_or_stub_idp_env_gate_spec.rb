@@ -12,7 +12,7 @@ require "kiosk"
 #   - production  → resolves to NO identity (→ the wire raises 401)
 #   - development/test → still accepted (or every demo driver + e2e break)
 # The over-the-wire production-config counterpart lives in
-# deploy/production-smoke.sh (Assertion 5) and skooti's redteam_suite.rb.
+# deploy/production-smoke.sh (Assertion 5) and skooti's script/redteam_suite.rb.
 demo_lib       = File.expand_path("../../kiosk-demo-stylish/lib", __dir__)
 stub_idp_path  = File.join(demo_lib, "stub_idp.rb")
 composite_path = File.join(demo_lib, "jwt_or_stub_idp.rb")

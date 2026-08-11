@@ -72,7 +72,7 @@ if ENV["KIOSK_POW_DEMO"] == "1"
   Kiosk::Reputation::Backends.register(Kiosk::Pow::Equihash::NAME, Kiosk::Pow::Equihash)
 
   # ⚠ TOY COUNTER — NOT a reputation signal (K-590, the atablefor K-498 sibling).
-  # Its ONLY job is to let the local `pow_flow.rb` driver print "the server
+  # Its ONLY job is to let the local `script/pow_flow.rb` driver print "the server
   # counted my bad proof"; nothing reads it for policy (`reputation_factors`
   # below is `Factors.empty`). Do NOT copy this into a real provider — it is
   # deliberately wrong in three ways:
@@ -290,7 +290,7 @@ Kiosk.configure do |c|
     # this lambda IS handed `identity:` and drops it on the floor: that is what
     # makes the file global, and why wiring it into a real `bad_proof_count`
     # factor would ship collective punishment. Its only consumer is the local
-    # driver pow_flow.rb; `reputation_factors` right above feeds the policy
+    # driver script/pow_flow.rb; `reputation_factors` right above feeds the policy
     # `Factors.empty`, so nothing this counts changes any toll.
     c.on_bad_proof = ->(identity:) {
       n = (File.read(GETGROCERY_BAD_PROOF_FILE).to_i rescue 0)

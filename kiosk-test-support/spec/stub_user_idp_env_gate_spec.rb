@@ -13,7 +13,7 @@ require "kiosk"
 #   - development/test → still accepted (or every demo driver + e2e break)
 # The over-the-wire production-config counterpart for the role-carrying
 # X-Staff-Session variant lives in deploy/production-smoke.sh (stylish
-# Assertion 6); the demos' redteam_suite.rb carry in-process beats too.
+# Assertion 6); the demos' script/redteam_suite.rb carry in-process beats too.
 demo_lib      = File.expand_path("../../kiosk-demo-skooti/lib", __dir__)
 stub_idp_path = File.join(demo_lib, "stub_user_idp.rb")
 have_source   = File.exist?(stub_idp_path)

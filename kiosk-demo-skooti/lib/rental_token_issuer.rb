@@ -128,7 +128,7 @@ module RentalTokenIssuer
     # The public key PEM string derived from the CONFIGURED signing key.
     #
     # KAT-anchor surface: production provisioning reads the public key from the
-    # fixed dev keypair via {DevUnlockKey.public_key_pem} (see rental_flow.rb /
+    # fixed dev keypair via {DevUnlockKey.public_key_pem} (see script/rental_flow.rb /
     # demo.rake) — that path does not depend on a configured signing key. This
     # helper derives the same value from `Kiosk.configuration.unlock_signing_key`
     # so the KAT can assert the configured-key round-trip matches the firmware

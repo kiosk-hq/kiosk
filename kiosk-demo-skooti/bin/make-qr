@@ -17,7 +17,7 @@
 #   bin/make-qr --token "<wire token>" [--scooter SK-001]
 #   bin/make-qr --from-server [--scooter SK-001]
 #
-# --from-server: runs rental_flow.rb as a subprocess (SERVER_URL and
+# --from-server: runs script/rental_flow.rb as a subprocess (SERVER_URL and
 #   KIOSK_ISSUER must be set; the server must be running), parses
 #   `rental_token` and `reservation_id` from its JSON stdout line.
 #
@@ -43,7 +43,7 @@ OptionParser.new do |opts|
   opts.banner = "Usage: bin/make-qr [--token TOKEN | --from-server] [--scooter CODE]"
 
   opts.on("--token TOKEN", "Wire rental token (explicit)") { |t| options[:token] = t }
-  opts.on("--from-server", "Run rental_flow.rb to obtain a fresh token") { options[:from_server] = true }
+  opts.on("--from-server", "Run script/rental_flow.rb to obtain a fresh token") { options[:from_server] = true }
   opts.on("--scooter CODE", "Scooter code (default: SK-001)") { |c| options[:scooter] = c }
   opts.on("-h", "--help", "Print this help") { puts opts; exit }
 end.parse!
@@ -62,8 +62,8 @@ rental_token    = nil
 reservation_id  = nil
 
 if options[:from_server]
-  STDERR.puts "  Running rental_flow.rb (SERVER_URL=#{ENV["SERVER_URL"]})..."
-  flow_rb = File.join(DEMO_ROOT, "rental_flow.rb")
+  STDERR.puts "  Running script/rental_flow.rb (SERVER_URL=#{ENV["SERVER_URL"]})..."
+  flow_rb = File.join(DEMO_ROOT, "script/rental_flow.rb")
   env_passthrough = {}
   env_passthrough["SERVER_URL"]    = ENV["SERVER_URL"]    if ENV["SERVER_URL"]
   env_passthrough["KIOSK_ISSUER"]  = ENV["KIOSK_ISSUER"] if ENV["KIOSK_ISSUER"]
@@ -71,19 +71,19 @@ if options[:from_server]
   cmd = [env_passthrough, RbConfig.ruby, flow_rb, { err: :err }]
   stdout_str = IO.popen(cmd) { |io| io.read }
   unless $?.success?
-    abort "rental_flow.rb exited with status #{$?.exitstatus}."
+    abort "script/rental_flow.rb exited with status #{$?.exitstatus}."
   end
 
   # rental_flow prints exactly ONE JSON line on stdout.
   json_line = stdout_str.strip
-  abort "rental_flow.rb produced no output." if json_line.empty?
+  abort "script/rental_flow.rb produced no output." if json_line.empty?
 
   result = JSON.parse(json_line)
-  rental_token   = result.fetch("rental_token") { abort "rental_flow.rb output missing `rental_token`." }
+  rental_token   = result.fetch("rental_token") { abort "script/rental_flow.rb output missing `rental_token`." }
   reservation_id = result["reservation_id"]
 
   if rental_token.nil?
-    abort "rental_flow.rb returned null rental_token (start_rental may have returned 403 — check gates)."
+    abort "script/rental_flow.rb returned null rental_token (start_rental may have returned 403 — check gates)."
   end
   STDERR.puts "  Got token for reservation #{reservation_id}."
 else

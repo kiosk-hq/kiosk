@@ -172,6 +172,27 @@ jobs:
             # possible signal.
             #   demo:slots_spec   K-480 delivery-slot past-filter across DST.
             #   demo:cashier_spec K-579 order-reference shape guard.
+            # demo:telemetry rides with them (~0.5 s, no server, no PoW, no
+            # Stripe, no network — it only needs the job-level demo:setup to have
+            # created a database; it does not need the seed and does not reseed).
+            # It is the ONLY executable check anywhere of lib/demo_telemetry.rb,
+            # which is copied byte-for-byte into all seven operator demos and is
+            # best-effort by design: DemoTelemetry.record, .aggregates and the
+            # middleware each `rescue StandardError` and carry on, so a broken
+            # telemetry module does not raise anywhere — it silently records
+            # nothing while the landing tile reads zeros. This task's assertion is
+            # what converts that swallowed failure into a red build (K-620).
+            # Watched fail: rename the `at` column in DemoTelemetry.record's
+            # INSERT (a drift against deploy/telemetry-init.sql) and every insert
+            # is swallowed — `simulate!` still prints "wrote 40 rows" while the
+            # aggregate comes back all-zero, and the task exits 1.
+            # Honest scope: it seeds its own rows and reads them back, so it gates
+            # the telemetry STORE round-trip, not any Kiosk wire behaviour.
+            # It writes, so its write target is guarded IN THE TASK rather than by
+            # this workflow happening not to set KIOSK_TELEMETRY_DB_URL: with that
+            # variable set the task aborts unless SEED_SHARED=1, so a future
+            # workflow edit cannot quietly seed synthetic activity into the shared
+            # hosted store behind the public kiosk.tech landing tile.
             #
             # LAST — demo:race, the pay path's ONLY permanent regression net:
             # the K-544 double-charge/order-swap races, K-578 stuck-`paying`
@@ -217,7 +238,7 @@ jobs:
             # the job-level demo:setup and BEFORE demo:race, which stays last.
             # demo:rls leaves RLS applied to `orders`; demo:race's `: :setup`
             # drops the database, which is what clears it — do not reorder them.
-            tasks: demo:slots_spec demo:cashier_spec demo:shop demo:isolation demo:redteam demo:schema demo:agecheck demo:claim demo:rls demo:race
+            tasks: demo:slots_spec demo:cashier_spec demo:telemetry demo:shop demo:isolation demo:redteam demo:schema demo:agecheck demo:claim demo:rls demo:race
             ungated:
               demo:pow: >-
                 the catalog toll — it solves real memory-hard Equihash
@@ -228,12 +249,6 @@ jobs:
                 and a step that cannot go red is not a gate (K-616). Its logic is
                 gated here anyway, by demo:race's K-578 block, which strands
                 orders first and then sweeps.
-              demo:telemetry: >-
-                a landing-tile data showcase rather than a gate on the Kiosk
-                wire — it seeds synthetic events into the telemetry store and
-                reads its own writes back, and it targets the SHARED hosted store
-                when KIOSK_TELEMETRY_DB_URL is set. Whether its aggregate
-                assertion earns a CI slot is unassessed (K-620).
             # getgrocery uses the real Stripe adapter. CI carries NO Stripe key
             # (never inject keys into CI); a local stripe-mock returns
             # shaped pi_ fixtures so the full flow — including demo:shop's

@@ -28,6 +28,7 @@ PATH
     kiosk-redteam (0.0.1)
       base64
       jwt (>= 2.0, < 4.0)
+      kiosk-pow-equihash (~> 0.0)
 
 PATH
   remote: ../kiosk-reputation

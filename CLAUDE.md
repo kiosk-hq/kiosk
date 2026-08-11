@@ -46,4 +46,10 @@ universal agent skill is `skill.md` on the same site.
   `ungated:` map, naming it in that README's own hand-written task list (the
   same check asserts presence, never the prose), then `bin/check-ci-tasks
   --write`.
+- The demos are separate Rails apps, so shared code is HAND-COPIED.
+  `bin/check-demo-copies` (its own CI job) declares every file that exists in
+  two or more demos as `:identical`, `:code` (identical modulo comments and
+  whitespace) or `:per_demo`, with a reason; editing one copy of a lockstep
+  file means editing all of them, and a NEW duplicate fails the build until it
+  is declared. Copy a file between demos → add it to that manifest.
 - Inline `TODO`/`FIXME` must state a concrete rationale, not a bare marker.

@@ -32,6 +32,12 @@ module Kiosk
     # endpoints). Adapter `#verify(request)` returns a {Kiosk::Identity}
     # or `nil`; nothing resolved becomes 401.
     class WireController < ::ActionController::API
+      # Every Kiosk wire error — raised by the Executor, a gate, a verifier
+      # or a handler dispatch — renders as the spec's error envelope from
+      # this ONE seam (T-054), Rails' own idiom rather than a hand-rolled
+      # rescue inside each action.
+      rescue_from Errors::Base, with: :render_wire_error
+
       # REST verb: GET /kiosk/schema
       def schema
         run_command(:schema)
@@ -55,10 +61,11 @@ module Kiosk
       private
 
       def run_command(command)
-        # parse_body! runs INSIDE the rescue below: a malformed body raises
-        # Errors::BadRequest, which must render a 400 envelope, not escape as
-        # an uncaught 500 (the same parse-outside-rescue class fixed
-        # for AuthController/KycAttestationController).
+        # parse_body! runs inside the action, so the rescue_from above covers
+        # it: a malformed body raises Errors::BadRequest, which must render a
+        # 400 envelope, not escape as an uncaught 500 (the same
+        # parse-outside-rescue class fixed for
+        # AuthController/KycAttestationController).
         body     = parse_body!
         identity = resolve_identity!
 
@@ -106,8 +113,10 @@ module Kiosk
         end
 
         render_envelope(result.to_envelope, status: result.http_status)
-      rescue Errors::Base => e
-        render_envelope(e.to_envelope, status: e.http_status, error: e)
+      end
+
+      def render_wire_error(error)
+        render_envelope(error.to_envelope, status: error.http_status, error: error)
       end
 
       def resolve_identity!
@@ -153,18 +162,21 @@ module Kiosk
 
       # RFC 7235 challenge header that de-overloads the two 402 gates:
       # the header NAMES the gate, the JSON body still CARRIES the payload
-      # (the PoW N-challenge list / the payment_setup pointer). Keyed purely on
-      # the error class; nil for every non-402 error (no header emitted).
+      # (the PoW N-challenge list / the payment_setup pointer). Keyed on the
+      # wire CODE, not the exception class (T-054) — so a handler that
+      # RENDERS `payment_setup_required` gets the same challenge header as
+      # the gate that raises it. nil for every other code (no header
+      # emitted; `payment_failed` deliberately bare — no scheme names it).
       #
       # The `Payment` scheme params (`realm`, `method`) are isolated here so a
       # change in the still-draft IETF scheme (draft-ryan-httpauth-payment) is
       # a one-place edit.
       def www_authenticate_for(error)
         issuer = Kiosk.configuration.issuer
-        case error
-        when Errors::PowRequired
+        case error.code
+        when "pow_required"
           %(Kiosk-PoW realm="#{issuer}")
-        when Errors::PaymentSetupRequired
+        when "payment_setup_required"
           %(Payment realm="#{issuer}", method="ap2")
         end
       end

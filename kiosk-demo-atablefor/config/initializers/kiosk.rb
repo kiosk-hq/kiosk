@@ -504,9 +504,9 @@ Kiosk::Server::Queries.register("availability",
   party_size = (params.fetch(:party_size) { raise Kiosk::Server::Errors::BadRequest.new("missing param: party_size") }).to_i
   raise Kiosk::Server::Errors::BadRequest.new("party_size must be >= 1") if party_size < 1
 
-  nbhd_filter = (params[:neighborhood] || params["neighborhood"]).to_s
-  time_filter = (params[:time]         || params["time"]).to_s
-  date_filter = (params[:date]         || params["date"]).to_s
+  nbhd_filter = params[:neighborhood].to_s
+  time_filter = params[:time].to_s
+  date_filter = params[:date].to_s
 
   conn = ActiveRecord::Base.connection
 
@@ -643,11 +643,11 @@ Kiosk::Server::Actions.register("book_table",
                                   }) do |args|
   conn = ActiveRecord::Base.connection
 
-  restaurant_id       = (args[:restaurant_id]       || args["restaurant_id"]).to_i
-  restaurant_table_id = (args[:restaurant_table_id] || args["restaurant_table_id"]).to_i
-  date                = (args[:date]                || args["date"]).to_s
-  time                = (args[:time]                || args["time"]).to_s
-  party_size          = (args[:party_size]          || args["party_size"]).to_i
+  restaurant_id       = args[:restaurant_id].to_i
+  restaurant_table_id = args[:restaurant_table_id].to_i
+  date                = args[:date].to_s
+  time                = args[:time].to_s
+  party_size          = args[:party_size].to_i
   raise Kiosk::Server::Errors::BadRequest.new("missing param: restaurant_id")       if restaurant_id < 1
   raise Kiosk::Server::Errors::BadRequest.new("missing param: restaurant_table_id") if restaurant_table_id < 1
   raise Kiosk::Server::Errors::BadRequest.new("missing param: date")                if date.empty?
@@ -736,8 +736,8 @@ Kiosk::Server::Actions.register("cancel_booking",
   }) do |args|
   conn = ActiveRecord::Base.connection
 
-  booking_id = args[:booking_id] || args["booking_id"]
-  raise Kiosk::Server::Errors::BadRequest.new("missing field: booking_id") if booking_id.nil? || booking_id.to_s.empty?
+  booking_id = args[:booking_id]
+  raise Kiosk::Server::Errors::BadRequest.new("missing field: booking_id") if booking_id.blank?
   # K-581/K-582: this id is cast `::uuid` below — a malformed one made Postgres
   # raise InvalidTextRepresentation, which is not a Kiosk error and so surfaced
   # as a raw 500 (leaking "invalid input syntax for type uuid") for what is

@@ -591,7 +591,7 @@ Kiosk::Server::Actions.register("confirm_booking",
   conn = ActiveRecord::Base.connection
 
   booking_id = args[:booking_id]
-  if booking_id.nil? || booking_id.to_s.empty?
+  if booking_id.blank?
     raise Kiosk::Server::Errors::BadRequest.new("missing field: booking_id")
   end
   # K-581/K-582: this id is cast `::uuid` below — a malformed one made Postgres

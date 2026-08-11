@@ -33,9 +33,12 @@ require "openssl"
 require "open3"
 require "securerandom"
 
-SERVER   = ENV.fetch("SERVER_URL")
-ISSUER   = ENV.fetch("KIOSK_ISSUER")
-SOLVE_PY = File.expand_path("../../kiosk-pow-equihash/solve.py", __dir__)
+SERVER = ENV.fetch("SERVER_URL")
+ISSUER = ENV.fetch("KIOSK_ISSUER")
+
+# equihash_solve / equihash_register come from the shared helper; the solver
+# location is Kiosk::Pow::Equihash.solver_path, owned by the gem (K-627).
+require_relative "../lib/equihash_register"
 
 # The TOY counter the demo initializer's on_bad_proof writes (K-498): global,
 # truncated at boot, no TTL, and read by nothing but this driver. It exists so
@@ -57,20 +60,8 @@ def get_json(url, headers = {})
   [res.code.to_i, (JSON.parse(res.body) rescue {})]
 end
 
-# Solve one equihash challenge with the shipped Python solver. solve.py reads
-# challenge["salt"] (or salt_b64) and challenge["params"]; returns the proof
-# nonce {indices:, header_nonce:}.
-def solve(challenge)
-  out, status = Open3.capture2("python3", SOLVE_PY, JSON.generate(challenge))
-  abort "solve.py exited non-zero: #{out}" unless status.success?
-  parsed = JSON.parse(out)
-  abort "solve.py error: #{parsed["error"]}" if parsed.key?("error")
-  { "indices" => parsed.fetch("indices"), "header_nonce" => parsed.fetch("header_nonce") }
-end
-
 # ── Step 1: register an agent (register PoW solved transparently) ────────────
 
-require_relative "../lib/equihash_register"
 _key, reg = equihash_register(
   server: SERVER, issuer: ISSUER,
   get_json: method(:get_json), post_json: method(:post_json),
@@ -96,7 +87,7 @@ abort "no challenges[] in 402 response" unless challenges.is_a?(Array) && challe
 
 # ── Step 3: solve every challenge with the real shipped Python solver ───────
 
-proofs = challenges.map { |c| { challenge: c, nonce: solve(c) } }
+proofs = challenges.map { |c| { challenge: c, nonce: equihash_solve(c) } }
 
 # ── Step 5 (negative — before spending): wrong nonce → 403 ─────────────────
 

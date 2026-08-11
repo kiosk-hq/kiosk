@@ -19,9 +19,14 @@ require "openssl"
 require "open3"
 require "securerandom"
 
-SERVER   = ENV.fetch("SERVER_URL")
-ISSUER   = ENV.fetch("KIOSK_ISSUER")
-SOLVE_PY = File.expand_path("../../kiosk-pow-equihash/solve.py", __dir__)
+SERVER = ENV.fetch("SERVER_URL")
+ISSUER = ENV.fetch("KIOSK_ISSUER")
+
+# equihash_solve comes from the shared helper (solver location owned by the
+# kiosk-pow-equihash gem, K-627). The full equihash_register handshake it also
+# defines is deliberately NOT used here: this driver spells out the 402 →
+# solve → resubmit choreography step by step and asserts each status.
+require_relative "../lib/equihash_register"
 
 def post_json(url, body, headers = {})
   uri = URI(url)
@@ -35,14 +40,6 @@ def get_json(url, headers = {})
   uri = URI(url)
   res = Net::HTTP.new(uri.host, uri.port).request(Net::HTTP::Get.new(uri, headers))
   [res.code.to_i, (JSON.parse(res.body) rescue {})]
-end
-
-def solve(challenge)
-  out, status = Open3.capture2("python3", SOLVE_PY, JSON.generate(challenge))
-  abort "solve.py exited non-zero: #{out}" unless status.success?
-  parsed = JSON.parse(out)
-  abort "solve.py error: #{parsed["error"]}" if parsed.key?("error")
-  { "indices" => parsed.fetch("indices"), "header_nonce" => parsed.fetch("header_nonce") }
 end
 
 # ── Challenge + PoP ─────────────────────────────────────────────────────────
@@ -60,7 +57,7 @@ challenges = resp_nopow.dig("error", "challenges")
 abort "402 without challenges[]" unless challenges.is_a?(Array) && challenges.any?
 
 # ── Solve and resubmit the SAME signed body → expect 201 ────────────────────
-proofs = challenges.map { |c| { challenge: c, nonce: solve(c) } }
+proofs = challenges.map { |c| { challenge: c, nonce: equihash_solve(c) } }
 rc_reg, reg = post_json("#{SERVER}/kiosk/auth/register", reg_body, { "Kiosk-PoW" => JSON.generate(proofs) })
 abort "register with proof failed (#{rc_reg}): #{JSON.generate(reg)}" unless rc_reg == 201
 token = reg.fetch("access_token")

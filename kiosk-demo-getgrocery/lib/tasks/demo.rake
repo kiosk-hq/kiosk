@@ -1298,9 +1298,30 @@ namespace :demo do
       EVENTS=100 AGENTS=20 rake demo:telemetry
 
     No server boot; talks to the telemetry store directly (the demo's own DB
-    locally, or KIOSK_TELEMETRY_DB_URL if the shared hosted DB is set).
+    locally, or KIOSK_TELEMETRY_DB_URL if the shared hosted DB is set — the
+    latter needs SEED_SHARED=1, see the guard below).
+
+      KIOSK_TELEMETRY_DB_URL=… SEED_SHARED=1 rake demo:telemetry   # hosted tile
   DESC
   task telemetry: :environment do
+    # K-620 write-target guard. This task WRITES synthetic rows, and which store
+    # it writes them into is decided by an environment variable: unset ⇒ this
+    # demo's own database (a throwaway, which is what CI has); set ⇒ the SHARED
+    # hosted store the public kiosk.tech landing tile reads, where 40 fabricated
+    # events would surface as "live activity". The task is safe in CI today only
+    # because that variable happens to be unset — one workflow edit away from not
+    # being safe. So refuse the shared target unless an operator asks for it by
+    # name; the pre-launch seeding in deploy/README.md passes SEED_SHARED=1.
+    if !ENV["KIOSK_TELEMETRY_DB_URL"].to_s.empty? && ENV["SEED_SHARED"] != "1"
+      abort <<~MSG
+        demo:telemetry refuses to seed SYNTHETIC events into the SHARED telemetry
+        store: KIOSK_TELEMETRY_DB_URL is set, and that store feeds the public
+        kiosk.tech landing tile.
+          SEED_SHARED=1 rake demo:telemetry   # seed the shared store deliberately
+          unset KIOSK_TELEMETRY_DB_URL        # seed this demo's own database
+      MSG
+    end
+
     ENV["KIOSK_TELEMETRY"] ||= "1"
     require Rails.root.join("lib/demo_telemetry")
 

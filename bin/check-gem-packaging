@@ -46,10 +46,12 @@
 #      written, without anyone having to think about packaging at all.
 #
 # WHY BOTH. A alone passes a gem that packages every file it owns and then
-# reaches for a file it does not own (kiosk-redteam does exactly this — see
-# OUT_OF_GEM). B alone passes a gem whose runtime paths all resolve but whose
-# README, generator templates or data files were dropped. Neither subsumes the
-# other, and the defect that motivated this was in the intersection.
+# reaches for a file it does not own (kiosk-redteam did exactly this until its
+# solver reach moved behind Kiosk::Pow::Equihash.solver_path on a declared
+# dependency — see OUT_OF_GEM). B alone passes a gem whose runtime paths all
+# resolve but whose README, generator templates or data files were dropped.
+# Neither subsumes the other, and the defect that motivated this was in the
+# intersection.
 #
 # WHAT THIS IS NOT. It is not proof the gem WORKS when installed — nothing here
 # boots Rails against an installed gem or renders a template. It asserts the
@@ -76,8 +78,9 @@
 # that no longer guards anything is an entry nobody will re-read, and it is a
 # standing lie about the state of the tree. A NOT_PACKAGED pattern matching no
 # file, and an OUT_OF_GEM literal no packaged file reaches for any more, are
-# both errors. OUT_OF_GEM especially: its one entry exists to be DELETED when a
-# decision lands, and if the code changed first nothing else would notice.
+# both errors. OUT_OF_GEM especially: its entries exist to be DELETED when the
+# decision they record lands, and if the code changed first nothing else would
+# notice.
 #
 # Stdlib only (rubygems + tmpdir), no bundle, no database. It shells out to
 # `gem build` once per gem — deliberately the real builder rather than a
@@ -139,17 +142,11 @@ NOT_PACKAGED = {
 # ci.yml's demos matrix and `except:` in bin/check-demo-copies: the divergence is
 # recorded rather than invisible.
 OUT_OF_GEM = {
-  "kiosk-redteam" => {
-    "../../../../kiosk-pow-equihash/solve.py" =>
-      "client.rb:282 shells out to the Equihash solver by MONOREPO-RELATIVE " \
-      "path (four levels up, into a sibling gem's directory). That resolves in " \
-      "this checkout and nowhere else: an installed kiosk-redteam raises Errno " \
-      "the first time a scenario needs a registration PoW. Recorded, not fixed, " \
-      "because fixing it is a decision and not a packaging edit — kiosk-redteam " \
-      "would gain a runtime dependency on kiosk-pow-equihash, and that gem " \
-      "would gain a public API for the solver's installed location (it exposes " \
-      "none today). Filed for Phil; delete this entry when the decision lands.",
-  },
+  # Empty today. The one entry this manifest was born with — kiosk-redteam
+  # shelling out to ../../../../kiosk-pow-equihash/solve.py — was closed the
+  # way its reason foretold: kiosk-redteam now declares kiosk-pow-equihash as
+  # a runtime dependency and asks Kiosk::Pow::Equihash.solver_path for the
+  # solver's installed location. The mechanism stays for the next escape.
 }.freeze
 
 # Shapes of `__dir__`-relative path resolution this checker understands. Every

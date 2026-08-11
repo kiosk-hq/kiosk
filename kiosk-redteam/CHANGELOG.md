@@ -22,3 +22,4 @@ All notable changes follow [Keep a Changelog](https://keepachangelog.com/en/1.1.
 ### Fixed
 
 - A skipped scenario reports a real skipped state instead of a pass, an inapplicable scenario is asserted as such, and `bad_request` no longer counts as "blocked" — three ways the harness could previously report green without having proved anything.
+- The client locates the Equihash solver through `Kiosk::Pow::Equihash.solver_path`, with `kiosk-pow-equihash` now a declared runtime dependency — the previous monorepo-relative filesystem reach meant an installed `kiosk-redteam` raised `Errno::ENOENT` the first time a scenario had to solve a registration challenge.

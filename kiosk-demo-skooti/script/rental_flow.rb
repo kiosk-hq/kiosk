@@ -5,8 +5,8 @@
 # Flow: register (PoW) → KYC → reserve → pay → start_rental → LockSim.unlock
 #
 # Usage:
-#   SERVER_URL=http://127.0.0.1:3003 \
-#   KIOSK_ISSUER=http://127.0.0.1:3003 \
+#   SERVER_URL=http://127.0.0.1:3004 \
+#   KIOSK_ISSUER=http://127.0.0.1:3004 \
 #   bundle exec ruby script/rental_flow.rb
 #
 # Optional env:

@@ -26,7 +26,7 @@
 #                        cart, is a typed 400 with no SQL internals — never a 500
 #
 # Usage (from kiosk-demo-skooti/):
-#   SERVER_URL=http://127.0.0.1:3003 KIOSK_ISSUER=http://127.0.0.1:3003 \
+#   SERVER_URL=http://127.0.0.1:3004 KIOSK_ISSUER=http://127.0.0.1:3004 \
 #   bundle exec ruby script/redteam_suite.rb
 #
 # Exits non-zero if any applicable scenario reports a BREACH or if the
@@ -52,7 +52,7 @@ $LOAD_PATH.unshift File.expand_path("../lib", __dir__)
 require "prove_test_issuer"
 require "prove_trust"
 
-BASE_URL   = ENV.fetch("SERVER_URL", "http://127.0.0.1:3003")
+BASE_URL   = ENV.fetch("SERVER_URL", "http://127.0.0.1:3004")
 ISSUER     = ENV.fetch("KIOSK_ISSUER", BASE_URL)
 # The broker's base URL (set by the two-server demo:redteam harness). The
 # broker-flavored beats (theft / cross-operator / forged-callback) drive it.

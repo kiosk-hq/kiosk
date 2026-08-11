@@ -311,9 +311,10 @@ end
 
 # ─── Actions ────────────────────────────────────────────────────────────────
 
-# Register the demo Action. In production, providers use the full
-# `Kiosk::Action` DSL (post-v0.1); for this demo a simple registered
-# block is sufficient.
+# Register the demo Action. A registered name + block IS the shipped Action
+# API — the same `Kiosk::Server::Actions.register` call every demo uses. The
+# richer `Kiosk::Action` DSL (accepts/requires_payment/escalate_to) is a
+# follow-up and does not exist yet.
 Kiosk::Server::Actions.register("book_appointment",
                                  description: "Book a service for the authenticated visitor. Pick a service from the `availability`/`service_menu` query and pass its `service_id` — its name + EUR price are captured on the booking. Every service is always bookable (overbooking allowed; the salon never fills up), so this always succeeds. (A bare `salon_id` booking without a service is also accepted.)",
                                  params: {

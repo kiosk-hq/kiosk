@@ -117,10 +117,10 @@ end
 
 # ─── Actions ────────────────────────────────────────────────────────────────
 
-# Register the demo Action. A registered name + block IS the shipped v0.1
+# Register the demo Action. A registered name + block IS the shipped
 # Action API — the same `Kiosk::Server::Actions.register` call the five demo
 # apps use. The richer `Kiosk::Action` DSL (accepts/requires_payment/
-# escalate_to) is a post-v0.1 follow-up and does not exist yet.
+# escalate_to) is a follow-up and does not exist yet.
 Kiosk::Server::Actions.register("book_appointment", description: "Book an appointment at a salon for a given slot.", params: {
   salon_id: "integer — id of the salon (from the `salons` query)",
   slot:     "string — appointment time as an ISO 8601 timestamp",

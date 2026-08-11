@@ -27,8 +27,9 @@ module Kiosk
     # kiosk-user-idp-devise adapter is installed.
     attr_accessor :user_idp
 
-    # Agent-IdP adapter instance — verifies agent tokens (and, from 0.2,
-    # mints them). OPTIONAL override: when nil,
+    # Agent-IdP adapter instance — verifies agent tokens (minting through an
+    # adapter is a seam, not yet wired; see
+    # Kiosk::AgentIdentityProviders::Base#issue). OPTIONAL override: when nil,
     # kiosk-server uses its bundled kiosk-pop engine
     # (`Kiosk::Server::AgentIdentityProviders::DefaultAgentIdp`) — the same
     # engine whose tokens the built-in register/login/revoke endpoints mint,
@@ -94,8 +95,8 @@ module Kiosk
     # the canonical origin BEFORE any Kiosk verb, and hosting a second merchant
     # means a second instance. (Rails' `config.hosts` does not help here — it
     # governs which Host headers are ACCEPTED, not which origin the provider
-    # IS.) Per-host issuer resolution is the recorded 0.2 direction (K-507);
-    # 0.1 ships the one-origin behaviour described above.
+    # IS.) Per-host issuer resolution is the recorded future direction
+    # (K-507); what ships is the one-origin behaviour described above.
     attr_accessor :issuer
 
     def initialize

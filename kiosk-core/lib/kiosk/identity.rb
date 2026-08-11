@@ -13,8 +13,8 @@ module Kiosk
   #   depending on the user-IdP adapter.
   # @!attribute [r] role
   #   The active role for this token — one of the configured `Kiosk.roles`,
-  #   or +nil+ for a role-less principal (roles are hook-or-absent
-  #   in 0.1; single-role providers need no role at all).
+  #   or +nil+ for a role-less principal (roles are hook-or-absent;
+  #   single-role providers need no role at all).
   # @!attribute [r] actor
   #   `"agent"` | `"human"` | `"service"` — channel kind, recorded for
   #   audit and Action-level gating; NEVER appears in RLS policies.

@@ -3,7 +3,7 @@
 Cuckatoo-Cycle proof-of-work backend for [Kiosk](https://kiosk.tech).
 
 > **Shelved / optional.** The shipped default PoW backend is
-> [`kiosk-pow-equihash`](../kiosk-pow-equihash) — one PoW backend, Equihash.
+> [`kiosk-pow-equihash`](https://github.com/kiosk-hq/kiosk/tree/main/kiosk-pow-equihash) — one PoW backend, Equihash.
 > Cuckatoo meets the asymmetric-verify bar, but needs
 > ~4 GiB solves and heavier solver tooling (this gem ships only a toy solver),
 > so it is not the default. It stays in the repo as an opt-in backend and may

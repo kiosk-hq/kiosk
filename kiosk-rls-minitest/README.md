@@ -76,5 +76,5 @@ Apache-2.0 — see `LICENSE.txt`.
 ## Links
 
 - [kiosk.tech](https://kiosk.tech)
-- [kiosk-test-support](../kiosk-test-support) — shared DSL
-- [kiosk-rls-rspec](../kiosk-rls-rspec) — RSpec analogue
+- [kiosk-test-support](https://github.com/kiosk-hq/kiosk/tree/main/kiosk-test-support) — shared DSL
+- [kiosk-rls-rspec](https://github.com/kiosk-hq/kiosk/tree/main/kiosk-rls-rspec) — RSpec analogue

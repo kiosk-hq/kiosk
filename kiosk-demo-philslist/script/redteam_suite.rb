@@ -19,7 +19,7 @@
 #   UnknownAction    — an unregistered action name → 404
 #
 # Usage:
-#   SERVER_URL=http://127.0.0.1:3001 KIOSK_ISSUER=http://127.0.0.1:3001 \
+#   SERVER_URL=http://127.0.0.1:3006 KIOSK_ISSUER=http://127.0.0.1:3006 \
 #   bundle exec ruby script/redteam_suite.rb
 #
 # Exits 0 when every scenario is BLOCKED (0 BREACH); exits 1 on any BREACH.

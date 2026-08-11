@@ -85,7 +85,7 @@ namespace :demo do
   DESC
   task isolation: :setup do
     require "json"
-    port = ENV.fetch("PORT", "3001")
+    port = ENV.fetch("PORT", "3006")
     log  = "/tmp/kiosk-philslist-isolation.log"
     db   = "kiosk_philslist_development"
 
@@ -199,7 +199,7 @@ namespace :demo do
     require "json"; require "shellwords"
     abort "numpy not found (pip install numpy)" unless system("python3 -c 'import numpy' 2>/dev/null")
 
-    port    = ENV.fetch("PORT", "3001")
+    port    = ENV.fetch("PORT", "3006")
     log     = "/tmp/kiosk-philslist-register.log"
     flow_rb = File.expand_path("../../script/register_flow.rb", __dir__)
     failures = []
@@ -265,7 +265,7 @@ namespace :demo do
   task binding: :setup do
     require "json"; require "shellwords"
 
-    port    = ENV.fetch("PORT", "3001")
+    port    = ENV.fetch("PORT", "3006")
     log     = "/tmp/kiosk-philslist-binding.log"
     flow_rb = File.expand_path("../../script/binding_flow.rb", __dir__)
     db      = "kiosk_philslist_development"
@@ -355,7 +355,7 @@ namespace :demo do
     a real hole — fix the app, not the scenario.
   DESC
   task redteam: :setup do
-    port = ENV.fetch("PORT", "3001")
+    port = ENV.fetch("PORT", "3006")
     log  = "/tmp/kiosk-philslist-redteam.log"
 
     puts "\n── Starting philslist (redteam battery) ──"
@@ -409,7 +409,7 @@ namespace :demo do
   DESC
   task schema: :setup do
     require "json"
-    port = ENV.fetch("PORT", "3001")
+    port = ENV.fetch("PORT", "3006")
     log  = "/tmp/kiosk-philslist-schema.log"
 
     puts "\n── Starting philslist (schema proof) ──"

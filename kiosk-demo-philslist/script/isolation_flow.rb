@@ -20,7 +20,7 @@
 # needed. Users/listings pre-seeded by demo:setup (db/seeds.rb).
 #
 # Usage:
-#   SERVER_URL=http://127.0.0.1:3001 KIOSK_ISSUER=http://127.0.0.1:3001 \
+#   SERVER_URL=http://127.0.0.1:3006 KIOSK_ISSUER=http://127.0.0.1:3006 \
 #   bundle exec ruby script/isolation_flow.rb
 #
 # Prints ONE JSON line on stdout; non-zero exit on any hard transport failure.

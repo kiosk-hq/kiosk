@@ -4,17 +4,16 @@ require "kiosk/server/errors"
 
 module Kiosk
   module Server
-    # Process-wide registry of Action handlers.
+    # Process-wide registry of Action handlers: a name -> callable map plus the
+    # descriptor metadata documented below.
     #
-    # Deliberately minimal today: a name -> callable registry plus the
-    # optional descriptor metadata documented below. The richer declaration
-    # DSL once sketched here (`accepts`, `requires_payment`,
-    # `escalate_to :system`) was never built, and is NOT pending a release of
-    # this shape — it is superseded by the Rails-native redesign (K-495 /
-    # T-053): class-level macros mixed into a controller the operator owns
-    # (`include Kiosk::Action`), bound to the next-defined method via
-    # `method_added`. Until that lands, register a name + callable, then
-    # fetch + invoke from {Executor}.
+    # TWO WAYS IN, one registry. The Rails-native one (K-495 / T-053) is
+    # `include Kiosk::Action` in a controller the operator owns, where
+    # class-level macros bind to the next-defined method and the handler is an
+    # ordinary controller action; see {Kiosk::Action}. The direct one is the
+    # `register` call below — a name + callable — which is what the demo
+    # initializers still use until they migrate (T-057). Both land here, and
+    # {Executor} cannot tell them apart.
     #
     # @example
     #   Kiosk::Server::Actions.register("ping") { |args| { pong: args[:name] } }
@@ -30,9 +29,14 @@ module Kiosk
     # Machine-readable descriptor extensions (ADR-0021 / T-042, all OPTIONAL and
     # ADDITIVE — a descriptor that sets none of them is byte-for-byte unchanged):
     #   input_schema:   a JSON-Schema object describing this action's INPUTS
-    #                   (required/optional, types, enums, ranges). Supersedes the
-    #                   free-text `params` hint for machine validation; `params`
-    #                   stays for prose/back-compat. Emitted as `input_schema`.
+    #                   (required/optional, types, enums, ranges). Under ADR-0023
+    #                   this is THE input contract — every name and type lives
+    #                   here, and `params` (free text) is retired, surviving only
+    #                   for the not-yet-migrated callers. Emitted as `input_schema`.
+    #   output_schema:  a JSON Schema for what the action RETURNS, so an assistant
+    #                   knows the result shape without a call-and-observe probe
+    #                   (ADR-0023 / K-500). Its exact envelope composition is
+    #                   settled when T-050 lands the first one.
     #   example_params: an example params object an assistant can copy verbatim.
     #   example_row:    an example of this action's return value, so an assistant
     #                   learns the result shape without a call-and-observe probe.
@@ -40,17 +44,20 @@ module Kiosk
       # Internal entry holding a handler (callable) plus optional discovery metadata.
       # Defined at module scope so reset! can replace @registry without affecting the
       # constant. Not part of the public API — callers always go through fetch/describe/catalog.
-      Entry = Data.define(:handler, :description, :params, :input_schema, :example_params, :example_row)
+      Entry = Data.define(:handler, :description, :params, :input_schema, :output_schema,
+                          :example_params, :example_row)
 
       class << self
         def register(name, callable = nil, description: nil, params: nil,
-                     input_schema: nil, example_params: nil, example_row: nil, &block)
+                     input_schema: nil, output_schema: nil,
+                     example_params: nil, example_row: nil, &block)
           handler = callable || block
           raise ArgumentError, "register requires a callable or a block" if handler.nil?
 
           registry[name.to_s] = Entry.new(
             handler: handler, description: description, params: params,
-            input_schema: input_schema, example_params: example_params, example_row: example_row,
+            input_schema: input_schema, output_schema: output_schema,
+            example_params: example_params, example_row: example_row,
           )
         end
 
@@ -78,6 +85,7 @@ module Kiosk
           end
           descriptor = { name: name.to_s, description: entry.description, params: entry.params }
           descriptor[:input_schema]   = entry.input_schema   unless entry.input_schema.nil?
+          descriptor[:output_schema]  = entry.output_schema  unless entry.output_schema.nil?
           descriptor[:example_params] = entry.example_params unless entry.example_params.nil?
           descriptor[:example_row]    = entry.example_row    unless entry.example_row.nil?
           descriptor

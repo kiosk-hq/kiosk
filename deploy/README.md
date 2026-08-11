@@ -17,7 +17,6 @@ This directory is the *app-side* handoff; DNS + VPS provisioning is the operator
 | `env/<app>.env.example` | Per-app env template (7 demos + `kyc-demo.env.example` for the broker). Copy to `/etc/kiosk-demo/<app>.env`. |
 | `telemetry-init.sql` | The ONE shared live-activity store: `kiosk_demo_telemetry` DB + `kiosk_telemetry` login role + the append-only events table. Only needed if you turn telemetry on — see [Live-activity telemetry](#live-activity-telemetry--wired-opt-in). |
 | `demo-reset.sh` | Run ON THE BOX to put demo data back to a clean, freshly-seeded state: drops + reseeds the six non-getgrocery demos, additively reseeds getgrocery (keeps the order the landing cites); `--all` wipes getgrocery too. This is the disk-reclaim tool. |
-| `prune.sh` | Optional daily-cron script: additive re-seed of each app's shared catalog. It does **NOT** prune accounts — no demo ships a retention task (see step 5). **Available but NOT installed** on the hosted box — the cron is deliberately skipped. |
 | `production-smoke.sh` | **Not a deployment tool — do not run it on a deploy host.** A `RAILS_ENV=production` boot smoke for one demo per unique HTML surface (`stylish` \| `prove`), catching the eager-load / proxy-CSRF / assistant-shaped-error classes that dev-mode CI cannot see. CI is its caller. It CREATES AND DROPS `kiosk_<app>_smoke`, so `require_disposable_host()` aborts outright when the box carries deploy markers (`/srv/kiosk`, `/etc/kiosk-demo`, an installed `kiosk-demo@.service`) and otherwise demands `CI` or `KIOSK_SMOKE_I_AM_DISPOSABLE=1` (K-594). |
 | `CHECKLIST.md` | The tick-through version of this runbook — what an operator actually ticks off on deploy day, incl. the recorded skips. |
 | `README.md` | This runbook. |
@@ -89,10 +88,10 @@ see "Edge rate-limit — REQUIRED" below.) Any other demo is knob-adjustable: se
 4. **Run the steps below**, or hand over shell access.
 
 **Automated (this runbook provides):** the Caddy vhosts, the SQL to create all
-DBs + roles, the systemd unit template, and the env templates. (`prune.sh` is
-shipped but its cron is deliberately NOT installed — see step 5. Nothing here
-reclaims demo accounts on a schedule; `demo-reset.sh` is the reclaim tool and
-you run it by hand.)
+DBs + roles, the systemd unit template, and the env templates. (Nothing in this
+directory runs on a schedule — no cron, no timer — and nothing reclaims demo
+accounts. `demo-reset.sh` is the disk-reclaim tool and you run it by hand; the
+catalog re-seed is the push-to-deploy hook's job. See step 5.)
 No app code changes are required to run multi-app/one-Postgres — each
 demo already ships a production `database.yml` that reads its own DB + role from
 its env file (see [Database names](#database-names)).
@@ -127,8 +126,8 @@ file, so it follows an override on its own.
 #    ROOT is /srv/kiosk itself, not a subdirectory of it. So each app lives at
 #    /srv/kiosk/kiosk-demo-<name> and this runbook's own files are at
 #    /srv/kiosk/deploy/<file>. That is the layout the shipped units and scripts
-#    hardcode: kiosk-demo@.service's WorkingDirectory=/srv/kiosk/kiosk-demo-%i,
-#    prune.sh's APPS_ROOT, and demo-reset.sh's /srv/kiosk/deploy/demo-reset.sh.
+#    hardcode: kiosk-demo@.service's WorkingDirectory=/srv/kiosk/kiosk-demo-%i
+#    and demo-reset.sh's /srv/kiosk/deploy/demo-reset.sh.
 
 # 1. Postgres: create the 8 DBs + least-privilege roles (7 demos + prove).
 #    Pass each password as a plain psql variable — the RAW password, no quotes
@@ -186,18 +185,20 @@ sudo cp /srv/kiosk/deploy/Caddyfile /etc/caddy/Caddyfile
 sudo caddy validate --config /etc/caddy/Caddyfile
 sudo systemctl reload caddy
 
-# 5. Cron: nightly catalog re-seed — OPTIONAL, and NOT installed on the hosted
-#    box. Deliberately skipped (deploy/CHECKLIST.md §7): the demos are per-agent
-#    isolated, so a poker's junk is invisible to the next poker and disk growth
-#    is the only cost — reseed a bloated demo DB by hand (deploy/demo-reset.sh)
-#    if it ever matters. prune.sh ships ready to use for anyone who does want it:
-#    0 4 * * *  /srv/kiosk/deploy/prune.sh >> /var/log/kiosk-prune.log 2>&1
+# 5. Housekeeping: NOTHING TO INSTALL. There is no cron and no timer here, and
+#    nothing in this repo reclaims demo ACCOUNTS — on a schedule or otherwise.
+#    No demo ships a retention task. The two jobs a nightly cron would have done
+#    are each already covered by something you run or already ran:
 #
-#    Read prune.sh's header before you trust its name: it PRUNES NOTHING
-#    (K-615). No demo ships an account-retention task and nothing in this repo
-#    reclaims accounts on a schedule; the script re-seeds each app's shared
-#    catalog (`db:seed`, additive) and that is all — which, on a box whose
-#    deploy hook already seeds on every push, is a top-up between deploys.
+#      * RE-SEEDING the shared catalog — the push-to-deploy hook does it, running
+#        `db:seed` on every push (K-464). Every demo's seeds are idempotent and
+#        additive (zero delete_all, verified live on all seven), so a push tops
+#        the catalog up and deletes nothing.
+#
+#      * RECLAIMING DISK — deploy/demo-reset.sh, by hand on the box, when a demo
+#        DB has grown from poking. On demand rather than nightly because the
+#        demos are per-agent isolated: a poker's junk is invisible to the next
+#        poker, so disk is the only cost it imposes.
 ```
 
 

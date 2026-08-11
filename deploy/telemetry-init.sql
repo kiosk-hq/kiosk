@@ -54,8 +54,8 @@ GRANT CONNECT ON DATABASE kiosk_demo_telemetry TO kiosk_telemetry;
 GRANT SELECT, INSERT ON demo_telemetry_events TO kiosk_telemetry;
 GRANT USAGE, SELECT ON SEQUENCE demo_telemetry_events_id_seq TO kiosk_telemetry;
 
--- Housekeeping (optional) is MANUAL — nothing trims this table on a schedule
--- (deploy/prune.sh does not touch it, and prunes nothing anywhere: K-615). The
+-- Housekeeping (optional) is MANUAL — nothing trims this table on a schedule,
+-- and nothing in deploy/ runs on a schedule at all (K-630). The
 -- aggregates only look back 10 min / 1 h / all-time-registered, so rows past the
 -- registered-count horizon can be DELETEd to reclaim disk. Note the app role
 -- above holds SELECT+INSERT only, so that DELETE is a DB-owner/superuser job.

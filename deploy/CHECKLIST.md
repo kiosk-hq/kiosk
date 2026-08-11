@@ -103,12 +103,12 @@ For EACH of the 7 apps:
 - [ ] **git push-to-deploy** (mirrors narrathon): a bare repo per box with an ISOLATED `post-receive` hook
       (own work-tree/service names/deploy user — never touches `/opt/narrathon`) that checks out `main`,
       `bundle install`, `db:prepare`, and restarts each app's service.
-- [ ] ~~Prune cron~~ — **SKIPPED** (Phil): not essential; reseed a bloated demo DB by hand if ever needed
-      (`deploy/demo-reset.sh`). `deploy/prune.sh` stays in the repo as an available-but-uninstalled tool —
-      `deploy/README.md` step 5 documents the crontab line for anyone who does want it. Nothing installs it.
-      Note what it is, despite the name: it PRUNES NOTHING (K-615) — no demo ships an account-retention
-      task and nothing here reclaims accounts on a schedule. All it does is re-seed each app's shared
-      catalog (`db:seed`, additive) — reclaiming disk is `deploy/demo-reset.sh`, by hand.
+- [ ] ~~Prune cron~~ — **SKIPPED** (Phil), and as of K-630 there is nothing left to install: the script it
+      would have run, `deploy/prune.sh`, is **deleted**. It had no unique job — its prune half was a
+      permanent no-op (no demo ships an account-retention task, K-615) and its re-seed half is already
+      covered. Nothing in this repo reclaims demo accounts, on a schedule or otherwise. **Reclaiming disk
+      is `deploy/demo-reset.sh`, run by hand**; for what covers the catalog re-seed instead, see
+      `deploy/README.md` step 5.
 
 ## 8. Verify (per subdomain)
 - [ ] `GET https://<app>.demo.kiosk.tech/.well-known/kiosk.json` returns discovery (atablefor shows the "beware" PoW notice).

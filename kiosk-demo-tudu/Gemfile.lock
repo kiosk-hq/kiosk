@@ -31,8 +31,12 @@ PATH
   remote: ../kiosk-server
   specs:
     kiosk-server (0.0.1)
+      actionpack (~> 8.1)
+      activerecord (~> 8.1)
+      activesupport (~> 8.1)
       jwt (>= 2.8, < 4.0)
       kiosk-core (~> 0.0)
+      railties (~> 8.1)
 
 PATH
   remote: ../kiosk-user-idp-devise

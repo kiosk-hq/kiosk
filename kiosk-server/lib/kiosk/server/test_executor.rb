@@ -12,6 +12,7 @@
 #   Kiosk::TestHelpers.executor = Kiosk::Server::TestExecutor.new
 require "date"
 require "active_record"
+require "kiosk/server/current_request"
 require "kiosk/test_helpers/errors"
 
 module Kiosk
@@ -156,11 +157,19 @@ module Kiosk
 
       # Invoke an Action by name within the active scope. Returns
       # whatever the Action returns.
+      #
+      # `CurrentRequest.with` makes the scope's identity visible to a handler
+      # registered as a controller action (`include Kiosk::Action`), which reads
+      # it as `kiosk_identity`. There is no Rack env here — a journey test is not
+      # an HTTP request — so such a handler sees no request headers, exactly as
+      # its docstring says.
       def run_action(name, args)
         require_scope!
         action = Kiosk::Server::Actions.fetch(name)
         rescue_rls_denials do
-          action.call(args)
+          Kiosk::Server::CurrentRequest.with(identity: current_identity) do
+            action.call(args)
+          end
         end
       end
 

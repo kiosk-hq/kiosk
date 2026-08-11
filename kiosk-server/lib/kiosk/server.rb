@@ -35,6 +35,11 @@ require "kiosk/server/result"
 require "kiosk/server/session_context"
 require "kiosk/server/actions"
 require "kiosk/server/queries"
+require "kiosk/server/current_request"
+require "kiosk/server/handler_dispatch"
+require "kiosk/server/handler_mixin"
+require "kiosk/action"
+require "kiosk/query"
 require "kiosk/server/executor"
 require "kiosk/server/column_spending_cap"
 require "kiosk/server/agent_identity_providers/default_agent_idp"
@@ -78,8 +83,11 @@ module Kiosk
     #   Wire plane:
     #   - {Kiosk::Server::Executor}         — wire dispatch (query/run/pay/schema)
     #   - {Kiosk::Server::WireController}   — Rails controller wrapping Executor
-    #   - {Kiosk::Server::Actions}          — minimal Action registry (full DSL later)
+    #   - {Kiosk::Server::Actions}          — Action registry (name → handler + descriptor)
     #   - {Kiosk::Server::Queries}          — read-side query registry
+    #   - {Kiosk::Action} / {Kiosk::Query}  — the mixins an operator includes into
+    #                                         a controller of their own to declare
+    #                                         verbs as ordinary Rails actions
     #   - {Kiosk::Server::Result}           — success envelope value type
     #   - {Kiosk::Server::Errors}           — exception hierarchy + envelope serialisation
     #   - {Kiosk::Server::SessionContext}   — transaction + four SET LOCAL GUCs

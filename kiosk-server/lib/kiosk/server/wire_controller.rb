@@ -4,6 +4,7 @@
 
 require "action_controller"
 require "json"
+require "kiosk/server/current_request"
 require "kiosk/server/executor"
 require "kiosk/server/errors"
 require "kiosk/server/headers"
@@ -89,12 +90,20 @@ module Kiosk
           pow:      pow,
         )
 
-        result = Executor.call(
-          kind:       command,
-          args:       body,
-          identity:   identity,
-          connection: connection_for(identity),
-        )
+        # Carry the resolved identity and the wire request down to the handler
+        # layer. A handler registered as a controller action (`include
+        # Kiosk::Action`) is dispatched as a Rails sub-request built from these:
+        # the identity lands in `env["kiosk.identity"]` (readable as
+        # `kiosk_identity`), and the caller's headers/address are seeded from
+        # this env. Block handlers registered the old way ignore both.
+        result = CurrentRequest.with(identity: identity, env: request.env) do
+          Executor.call(
+            kind:       command,
+            args:       body,
+            identity:   identity,
+            connection: connection_for(identity),
+          )
+        end
 
         render_envelope(result.to_envelope, status: result.http_status)
       rescue Errors::Base => e

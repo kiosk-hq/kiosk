@@ -2,6 +2,7 @@
 
 The Kiosk Rails engine — host-side surface for [Kiosk](https://kiosk.tech).
 
+
 ## What's in this release
 
 The full host-side surface is shipped and covered by the gem's own suite (500+ passing specs):
@@ -9,6 +10,26 @@ The full host-side surface is shipped and covered by the gem's own suite (500+ p
 - **Wire-protocol controllers** — `WireController` serves the `/kiosk/query`, `/kiosk/run`, `/kiosk/pay`, `/kiosk/schema` verbs; `AuthController` runs the register/login proof-of-possession challenge-response (kiosk-pop — the auth story); JWKS backs stateless token verification.
 - **Account binding** — the claim/link ceremonies bind an agent's public key to an existing assistant-account holder's account: OAuth/RFC 8628-shaped device authorization + possession-proof-gated token poll, a session-authenticated verify page and «Link an assistant» page (minimal overridable engine views), link-code mint/redeem, and unlink. Tokens stay kiosk-pop-minted; the durable `DeviceAuthorizationStores::ActiveRecord` store (migration 008) is the default.
 - **`Kiosk::Server::Executor`** — dispatches resolved commands to the host's registered queries and Actions.
+- **`Kiosk::Query` / `Kiosk::Action`** — the mixins an operator includes into a controller of their own to declare verbs as ordinary Rails actions (see [Declaring queries and actions](#declaring-queries-and-actions)).
+- **Agent registration & login** — `AgentRegistration`, `AgentLogin`, `RegistrationPow`, and the pluggable agent-IdP resolve and mint per-agent identities.
+- **PoW gate** — `PowGate` enforces the reputation policy's N×PoW challenge-response (soft dependency on `kiosk-reputation`; zero overhead when no policy is set).
+- **`Kiosk::Server::WellKnown`** — pure-Ruby builder for `/.well-known/kiosk.json`.
+- **`Kiosk::Server::Headers`** + **`HeadersMiddleware`** — Rack middleware that injects `Kiosk-Server-Version`, `Kiosk-API-Version`, `Kiosk-Min-Client` on `/kiosk/*` responses.
+- **`Kiosk::Server::SchemaDefinitions`** — SQL generators for the canonical migrations (schema + helpers, identity tables, actions log, reservations, device authorizations, mandates).
+- **`Kiosk::Server::Engine`** — the Rails engine; auto-mounts the headers middleware and draws the account-binding routes.
+- **`Kiosk::Server::ConfigurationExtension`** — adds `mount_path`, `capabilities`, `owner`, `min_client` (and the reputation/PoW slots) to `Kiosk::Configuration`.
+- **`bin/rails g kiosk:install`** — the install generator lays down the initializer and migrations.
+
+kiosk-server is a Rails gem: it depends on railties, actionpack, activerecord and activesupport (`~> 8.1`), and `require "kiosk/server"` loads them. Pieces such as `WellKnown` and `SchemaDefinitions` still work without a BOOTED Rails app — they just need the framework on the load path.
+
+## What's in this release
+
+The full host-side surface is shipped and covered by the gem's own suite (500+ passing specs):
+
+- **Wire-protocol controllers** — `WireController` serves the `/kiosk/query`, `/kiosk/run`, `/kiosk/pay`, `/kiosk/schema` verbs; `AuthController` runs the register/login proof-of-possession challenge-response (kiosk-pop — the auth story); JWKS backs stateless token verification.
+- **Account binding** — the claim/link ceremonies bind an agent's public key to an existing assistant-account holder's account: OAuth/RFC 8628-shaped device authorization + possession-proof-gated token poll, a session-authenticated verify page and «Link an assistant» page (minimal overridable engine views), link-code mint/redeem, and unlink. Tokens stay kiosk-pop-minted; the durable `DeviceAuthorizationStores::ActiveRecord` store (migration 008) is the default.
+- **`Kiosk::Server::Executor`** — dispatches resolved commands to the host's registered queries and Actions.
+- **`Kiosk::Query` / `Kiosk::Action`** — the mixins an operator includes into a controller of their own to declare verbs as ordinary Rails actions (see [Declaring queries and actions](#declaring-queries-and-actions)).
 - **Agent registration & login** — `AgentRegistration`, `AgentLogin`, `RegistrationPow`, and the pluggable agent-IdP resolve and mint per-agent identities.
 - **PoW gate** — `PowGate` enforces the reputation policy's N×PoW challenge-response (soft dependency on `kiosk-reputation`; zero overhead when no policy is set).
 - **`Kiosk::Server::WellKnown`** — pure-Ruby builder for `/.well-known/kiosk.json`.
@@ -47,6 +68,18 @@ Kiosk.configure do |c|
 end
 ```
 
+
+## Declaring queries and actions
+
+An assistant reaches a provider through four verbs. Two of them —
+`POST <mount>/query` and `POST <mount>/run` — carry a NAME, and the operator
+decides what those names mean. `Kiosk::Query` and `Kiosk::Action` are the
+modules that let a controller answer them.
+
+Kiosk ships a **mixin, not a base class**. Which superclass a handler controller
+has is your decision; the `include` is the whole contract.
+
+```ruby
 ## Well-known endpoint (no booted Rails app required)
 
 ```ruby
@@ -65,3 +98,105 @@ Apache-2.0 — see `LICENSE.txt`.
 
 - [kiosk.tech](https://kiosk.tech)
 - [Issue tracker](https://github.com/kiosk-hq/kiosk/issues)
+
+# app/controllers/kiosk/orders_controller.rb
+class Kiosk::OrdersController < ApplicationController
+  include Kiosk::Action
+
+  description "Places an order for the assistant's human and reserves the " \
+              "chosen delivery window. Nothing is charged until `pay`."
+  input_schema type: "object",
+               properties: { items: { type: "array" }, delivery_slot_id: { type: "integer" } },
+               required: %w[items delivery_slot_id]
+  def create_order
+    order = Orders::Place.call(user_id: kiosk_identity.user_id, params: params)
+    render json: { order_id: order.id, total_cents: order.total_cents }
+  rescue Orders::SlotTaken => e
+    render json: { error: e.message, hint: "call delivery_slots again" }, status: :conflict
+  end
+end
+```
+
+
+# app/controllers/kiosk/catalog_controller.rb
+class Kiosk::CatalogController < ApplicationController   # your base class, your call
+  include Kiosk::Query
+
+  description "Lists what the shop has in stock right now, so the assistant " \
+              "can decide what to put in a basket."
+  input_schema  type: "object", additionalProperties: false,
+                properties: { q: { type: "string" } }
+  output_schema type: "array",
+                items: { type: "object",
+                         properties: { sku:         { type: "string" },
+                                       price_cents: { type: "integer" } } }
+  example_params({ q: "milk" })
+  def catalog
+    render json: Product.in_stock.search(params[:q]).as_json
+  end
+end
+```
+
+```ruby
+
+### What the macros do
+
+Each macro records a declaration; the **next `def`** claims all pending ones and
+becomes a wire verb. A method with no declarations above it is not a verb, so
+helper methods stay invisible to the wire.
+
+| macro | what it declares |
+| --- | --- |
+| `description` | Semantics **only**: what the verb does, how, and what it returns *in meaning*. Never a field list, a type, a required marker or a param name — those live in the schemas (ADR-0023). |
+| `input_schema` | JSON Schema for the params. The input contract: every name, type, enum and range. |
+| `output_schema` | JSON Schema for what comes back, so an assistant knows the result shape without a call-and-observe probe. |
+| `example_params` | A params object an assistant can copy verbatim. |
+| `example_row` | A worked example of the result. |
+| `wire_name` | Optional. The name agents call the verb by, when it cannot be the method name. |
+
+All of them surface in `GET <mount>/schema`, which is how an assistant discovers
+the surface.
+
+
+### Two things to know
+
+**Handler controllers are not routable.** Do not draw a route at one. They are
+reached only through the wire, which is where authentication, the proof-of-work
+gate and the transaction live; a direct request answers 404.
+
+**Declaration happens when the class is loaded.** Rails eager-loads
+`app/controllers` in production, so the schema catalog is complete at boot. In
+development (`config.eager_load = false`) a handler controller Rails has not
+autoloaded yet is not yet in the catalog; it registers as soon as anything
+touches the class, and handler edits are picked up without a restart.
+
+
+### What you get inside a handler
+
+It is an ordinary Rails action. `before_action` filters run, `rescue_from`
+applies, `params` is `ActionController::Parameters`, and the answer is whatever
+you `render`. On top of that:
+
+- `kiosk_identity` — the `Kiosk::Identity` the wire resolved (`user_id`,
+  `agent_id`, `role`, `actor`). The four `SET LOCAL` GUCs are already applied to
+  the connection, so SQL-side and RLS scoping work whether or not you read it.
+- `render_kiosk_page(rows, next_cursor:)` — answer one page of a large query;
+  the cursor reaches the envelope's `next` field. `Kiosk::Server::Cursor` has an
+  offset helper.
+- The handler runs inside the wire's GUC-scoped transaction, so raising rolls
+  back — and so does rendering a non-2xx, which the seam converts into a raise.
+
+Errors: `render json: {...}, status: :bad_request` is the idiom, and the status
+becomes the wire error code (400 `bad_request`, 401 `unauthenticated`,
+403 `forbidden`, 404 `not_found`, 409 `conflict`, 422 `bad_request`,
+429 `quota_exceeded`). For a wire code no HTTP status can carry —
+`payment_setup_required`, `kyc_required`, `spending_cap_exceeded` — raise the
+`Kiosk::Server::Errors` class instead; it reaches the envelope unchanged.
+
+
+### The initializer still exists
+
+`Kiosk::Server::Queries.register(name) { |args| … }` and its `Actions`
+counterpart are unchanged and keep working — the two ways in share one registry,
+and the executor cannot tell them apart. The bundled demos still register that
+way; they move onto the mixin in a later slice.

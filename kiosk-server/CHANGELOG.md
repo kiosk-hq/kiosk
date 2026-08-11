@@ -4,6 +4,20 @@ All notable changes follow [Keep a Changelog](https://keepachangelog.com/en/1.1.
 
 ## [Unreleased]
 
+### Added
+
+- **`Kiosk::Query` and `Kiosk::Action` — declare wire verbs as ordinary Rails
+  controller actions.** An operator includes one of the two modules into a
+  controller they own (Kiosk imposes no superclass) and declares each verb with
+  class-level macros — `description`, `input_schema`, `output_schema`,
+  `example_params`, `example_row`, `wire_name` — bound to the method that
+  follows. Handlers become plain actions: filters and `rescue_from` run,
+  `params` is `ActionController::Parameters`, and the answer is whatever they
+  `render`. The intent is that a provider's application layer stop living in an
+  initializer, where nothing is reloadable, inheritable or testable as Rails
+  code. The existing `Queries.register` / `Actions.register` calls are
+  unchanged, share the same registry, and keep working (K-495, T-053).
+
 ### Changed
 
 - **kiosk-server declares Rails.** New runtime dependencies: `railties`,

@@ -196,8 +196,8 @@ sudo systemctl reload caddy
 #    Read prune.sh's header before you trust its name: it PRUNES NOTHING
 #    (K-615). No demo ships an account-retention task and nothing in this repo
 #    reclaims accounts on a schedule; the script re-seeds each app's shared
-#    catalog (`db:seed`, additive) and that is all. Since the push-to-deploy
-#    hook already seeds on every push, the cron only helps between deploys.
+#    catalog (`db:seed`, additive) and that is all — which, on a box whose
+#    deploy hook already seeds on every push, is a top-up between deploys.
 ```
 
 

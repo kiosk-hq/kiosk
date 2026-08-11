@@ -18,9 +18,8 @@ gem "kiosk-reputation",   path: "../kiosk-reputation"
 # is on). A host that enables validate_requests adds it to its own Gemfile.
 gem "json_schemer"
 
-# Durable-store contract specs (DeviceAuthorizationStores::ActiveRecord) —
-# available in specs; NOT hard-required in lib code. A Rails host brings its
-# own ActiveRecord + PG driver. The store spec SKIPS its ActiveRecord
-# context when no local Postgres is reachable.
-gem "activerecord", "~> 8.1"
-gem "pg",           "~> 1.5"
+# ActiveRecord is a RUNTIME dependency of the gem (see the gemspec); only the
+# database DRIVER is test-side here. The durable-store contract spec
+# (DeviceAuthorizationStores::ActiveRecord) SKIPS its ActiveRecord context when
+# no local Postgres is reachable, so the suite stays green on DB-less machines.
+gem "pg", "~> 1.5"

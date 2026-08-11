@@ -24,8 +24,8 @@
 #     is provider-controlled and un-bypassable
 #
 # Usage:
-#   SERVER_URL=http://127.0.0.1:3001 \
-#   KIOSK_ISSUER=http://127.0.0.1:3001 \
+#   SERVER_URL=http://127.0.0.1:3005 \
+#   KIOSK_ISSUER=http://127.0.0.1:3005 \
 #   bundle exec ruby script/redteam_suite.rb
 #
 # Exits 0 when every scenario is BLOCKED; exits 1 on any BREACH.

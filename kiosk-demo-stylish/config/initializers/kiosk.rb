@@ -106,7 +106,7 @@ Kiosk.configure do |c|
       MSG
     end
 
-    "http://localhost:#{ENV.fetch("PORT", "3001")}"
+    "http://localhost:#{ENV.fetch("PORT", "3005")}"
   end
 
   # UNIFORM-VALIDATION slice-1 (K-479): validate a PRESENT `pow` field against

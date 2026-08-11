@@ -60,7 +60,7 @@ namespace :demo do
   task isolation: :setup do
     require "json"
 
-    port = ENV.fetch("PORT", "3001")
+    port = ENV.fetch("PORT", "3005")
     log  = "/tmp/kiosk-stylish-isolation.log"
     db   = "kiosk_stylish_development"
 
@@ -202,7 +202,7 @@ namespace :demo do
 
     abort "numpy not found (pip install numpy)" unless system("python3 -c 'import numpy' 2>/dev/null")
 
-    port         = ENV.fetch("PORT", "3001")
+    port         = ENV.fetch("PORT", "3005")
     server_url   = "http://127.0.0.1:#{port}"
     log          = "/tmp/kiosk-stylish-register.log"
     flow_rb      = File.expand_path("../../script/register_flow.rb", __dir__)
@@ -283,7 +283,7 @@ namespace :demo do
   task binding: :setup do
     require "net/http"; require "uri"; require "json"; require "shellwords"
 
-    port         = ENV.fetch("PORT", "3001")
+    port         = ENV.fetch("PORT", "3005")
     server_url   = "http://127.0.0.1:#{port}"
     log          = "/tmp/kiosk-stylish-binding.log"
     flow_rb      = File.expand_path("../../script/binding_flow.rb", __dir__)
@@ -402,7 +402,7 @@ namespace :demo do
   task roles: :setup do
     require "net/http"; require "uri"; require "json"; require "shellwords"
 
-    port         = ENV.fetch("PORT", "3001")
+    port         = ENV.fetch("PORT", "3005")
     server_url   = "http://127.0.0.1:#{port}"
     kiosk_issuer = server_url
     log          = "/tmp/kiosk-stylish-roles.log"
@@ -518,7 +518,7 @@ namespace :demo do
     require "net/http"
     require "uri"
 
-    port         = ENV.fetch("PORT", "3001")
+    port         = ENV.fetch("PORT", "3005")
     log          = "/tmp/kiosk-stylish-redteam.log"
     server_url   = "http://127.0.0.1:#{port}"
     kiosk_issuer = server_url
@@ -594,7 +594,7 @@ namespace :demo do
     require "uri"
     require "json"
 
-    port         = ENV.fetch("PORT", "3001")
+    port         = ENV.fetch("PORT", "3005")
     log          = "/tmp/kiosk-stylish-schema.log"
     server_url   = "http://127.0.0.1:#{port}"
     kiosk_issuer = server_url

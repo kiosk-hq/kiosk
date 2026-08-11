@@ -374,6 +374,21 @@ smoke_stylish() {
   else
     fail "unknown path expected 404 with a non-empty body, got $notfound_code / ${notfound_len} bytes (K-532: no public/404.html → bodyless error)"
   fi
+
+  echo "── Assertion 10: GET /robots.txt and /favicon.ico → 200 statics (T-048) ──"
+  # Caddy proxies EVERYTHING to Puma (no file_server in deploy/Caddyfile), so
+  # these serve only if ActionDispatch::Static answers them ahead of routing —
+  # Rails 8 defaults config.public_file_server.enabled to true and the demos'
+  # production.rb leaves it on (it only sets headers). Before T-048 the files
+  # did not exist, so every crawler hit raised ActionController::RoutingError
+  # into the production journal; this pins the 200s so that noise cannot return.
+  robots_code="$(curl -s -o /dev/null -w '%{http_code}' "${PROXY_HEADERS[@]}" "${BASE}/robots.txt")"
+  favicon_code="$(curl -s -o /dev/null -w '%{http_code}' "${PROXY_HEADERS[@]}" "${BASE}/favicon.ico")"
+  if [ "$robots_code" = "200" ] && [ "$favicon_code" = "200" ]; then
+    pass "GET /robots.txt → 200, GET /favicon.ico → 200"
+  else
+    fail "statics expected 200/200, got robots.txt=$robots_code favicon.ico=$favicon_code (T-048: a missing public/ static puts RoutingError noise back in the journal)"
+  fi
 }
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -523,6 +538,19 @@ smoke_prove() {
     pass "unknown path → 404 with ${notfound_len} bytes of body"
   else
     fail "unknown path expected 404 with a non-empty body, got $notfound_code / ${notfound_len} bytes (K-532: no public/404.html → bodyless error)"
+  fi
+
+  echo "── Assertion 8: GET /robots.txt and /favicon.ico → 200 statics (T-048) ──"
+  # Same mechanism as the stylish assertion: Caddy proxies everything to Puma,
+  # so only ActionDispatch::Static (on by default in Rails 8 production) stands
+  # between a crawler and a logged RoutingError. The broker shares the eight-app
+  # robots.txt policy and the one Kiosk favicon.
+  robots_code="$(curl -s -o /dev/null -w '%{http_code}' "${PROXY_HEADERS[@]}" "${BASE}/robots.txt")"
+  favicon_code="$(curl -s -o /dev/null -w '%{http_code}' "${PROXY_HEADERS[@]}" "${BASE}/favicon.ico")"
+  if [ "$robots_code" = "200" ] && [ "$favicon_code" = "200" ]; then
+    pass "GET /robots.txt → 200, GET /favicon.ico → 200"
+  else
+    fail "statics expected 200/200, got robots.txt=$robots_code favicon.ico=$favicon_code (T-048: a missing public/ static puts RoutingError noise back in the journal)"
   fi
 }
 

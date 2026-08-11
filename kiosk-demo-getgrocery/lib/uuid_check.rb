@@ -19,6 +19,8 @@
 # (skooti, hoteling, atablefor, tudu, philslist — K-581/K-582); they are
 # identical apart from JSON_SCHEMA_PATTERN, which only getgrocery needs because
 # only getgrocery declares an `input_schema` for an id param today (T-050).
+# bin/check-demo-copies holds the other five to each other and records THIS copy
+# as the one declared exception, so the divergence stays the one we chose.
 # Each demo is a standalone Rails app with its own Gemfile, so the alternative to
 # a copy is publishing the guard in a shipped gem — a public-API decision, not a
 # fix-wave one. Same arrangement as lib/pow_difficulty.rb and

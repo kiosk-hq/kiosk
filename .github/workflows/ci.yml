@@ -566,6 +566,38 @@ jobs:
       - name: Every demo task is either gated or opted out with a reason
         run: ./bin/check-ci-tasks
 
+  # The demos are eight standalone Rails apps, so shared application code is not
+  # shared — it is HAND-COPIED, and until now nothing checked the copies still
+  # agreed. lib/demo_telemetry.rb carried a stale comment in six of its seven
+  # copies until a fix propagated it by accident (K-623); the solver-path
+  # constant in lib/equihash_register.rb was renamed in three of its five copies
+  # and nobody noticed for three weeks. bin/check-demo-copies makes both of those
+  # a red build: every relative path present in two or more demos must be
+  # declared identical, identical-modulo-prose, or a deliberate per-demo variant
+  # with the reason — and an UNDECLARED duplicate fails too, so a new copy cannot
+  # appear silently, which is how six of them got here.
+  #
+  # It is a separate job rather than a step in ci-task-coverage so the two
+  # invariants (is every task gated / do the copies agree) fail with their own
+  # names. Stdlib Ruby only: no bundle, no services, no database, ~0.2 s.
+  demo-file-sync:
+    name: duplicated demo files agree (bin/check-demo-copies)
+    runs-on: ubuntu-latest
+    # The daily schedule exists for solver-pin-live; don't rebuild the world.
+    if: github.event_name != 'schedule'
+
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Set up Ruby
+        uses: ruby/setup-ruby@v1
+        with:
+          ruby-version: "4.0.1"
+          bundler-cache: false
+
+      - name: Hand-copied demo files agree, or the divergence is declared
+        run: ./bin/check-demo-copies
+
   # Production-boot smoke — the guard for the prod-only bug class that the
   # dev-mode gems/demos/e2e jobs are all blind to. Three shipped bugs (K-422
   # eager-load Zeitwerk crash, K-436 missing governance columns → manage-page

@@ -4,7 +4,7 @@
 # Flow: register → query properties → query availability → run reserve_room → pay → run confirm_booking
 #
 # Usage:
-#   SERVER_URL=http://127.0.0.1:3004 KIOSK_ISSUER=http://127.0.0.1:3004 bundle exec ruby script/hoteling_flow.rb
+#   SERVER_URL=http://127.0.0.1:3003 KIOSK_ISSUER=http://127.0.0.1:3003 bundle exec ruby script/hoteling_flow.rb
 #
 # Optional env:
 #   SKIP_PAY=1  — skip pay (confirm_booking should return 403)

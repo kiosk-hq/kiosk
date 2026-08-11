@@ -6,8 +6,8 @@
 # calls `schema` (GET /kiosk/schema), prints one JSON line on stdout.
 #
 # Usage (invoked by rake demo:schema — do not run standalone without the server):
-#   SERVER_URL=http://127.0.0.1:3004 \
-#   KIOSK_ISSUER=http://127.0.0.1:3004 \
+#   SERVER_URL=http://127.0.0.1:3003 \
+#   KIOSK_ISSUER=http://127.0.0.1:3003 \
 #   bundle exec ruby script/schema_flow.rb
 #
 # Prints ONE JSON line on stdout; non-zero exit on any HTTP failure.

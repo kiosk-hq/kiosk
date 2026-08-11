@@ -54,6 +54,13 @@ See `kiosk-pow-equihash/README.md` for the full comparison and rationale.
 | `kiosk-demo-prove` | `prove.my` anonymizing KYC broker (deploys at `kyc.demo.kiosk.tech`) — an ISSUER, not a Kiosk operator (no verbs) | active |
 | `e2e` | End-to-end test fixtures, stub PSP, AI-assistant pay flow | active |
 
+Each demo exposes a set of `rake demo:*` tasks. Not all of them are CI gates —
+some are heavy or timing-sensitive local showcases. Which is which is stated in
+every demo README's **"Which of these run in CI"** table, generated from
+`.github/workflows/ci.yml` by `bin/check-ci-tasks`; that script also runs as its
+own CI job and fails the build when a `demo:` task is neither gated nor recorded
+with the reason it is not.
+
 ## Contributing
 
 - One `bundle install` at the gem root covers that gem

@@ -80,9 +80,10 @@ def demo_tasks(dir)
 
       in_demo_ns = false if line.start_with?("end")
       next unless in_demo_ns
-      next unless (m = line.match(/^  task[\s(]+(?::(\w+)|(\w+):)/))
+      # `task :name`, `task name: :prereq`, `task "name"`, `task "name" => :prereq`.
+      next unless (m = line.match(/^  task[\s(]+(?::(\w+)|(\w+):|["'](\w+)["'])/))
 
-      names << "demo:#{m[1] || m[2]}"
+      names << "demo:#{m[1] || m[2] || m[3]}"
     end
   end
   names

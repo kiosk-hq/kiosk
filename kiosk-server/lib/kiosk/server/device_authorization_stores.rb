@@ -39,7 +39,7 @@ module Kiosk
       # nature — one row per request, then consumed). Suitable for
       # development, unit tests, and single-process deployments; a
       # multi-process deployment uses the {ActiveRecord} adapter (the
-      # default when ActiveRecord is present).
+      # default).
       class InMemory < Base
         def initialize
           @by_id = {}
@@ -104,10 +104,8 @@ module Kiosk
       # neutrality holds (Kiosk never defines records over provider
       # tables, and this one lives in the kiosk schema).
       #
-      # Requires ActiveRecord in the host process; the class itself is
-      # defined unconditionally (nothing references ActiveRecord until an
-      # operation runs), matching the conditional-use pattern of the rest
-      # of the gem.
+      # ActiveRecord is a declared dependency of the gem; nothing here
+      # touches it until an operation runs.
       class ActiveRecord < Base
         def create(da)
           conn = connection

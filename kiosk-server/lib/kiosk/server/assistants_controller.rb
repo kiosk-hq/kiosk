@@ -141,8 +141,8 @@ module Kiosk
       # a human who bookmarked the manage page lands on the operator's login
       # and is bounced back after signing in (MANAGE-PAGE-UNAUTH-UX). For a
       # non-HTML/API request, or when no sign_in_path is configured, keep the
-      # bare 401 — this preserves the API contract and AR-less/plain-Rack
-      # hosts (the engine stays IdP-neutral).
+      # bare 401 — this preserves the API contract (the engine stays
+      # IdP-neutral).
       def require_account_holder!
         @identity = Kiosk.configuration.user_idp&.verify(request)
         return true if @identity

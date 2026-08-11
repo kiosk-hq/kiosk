@@ -32,9 +32,9 @@ module Kiosk
     #
     # Controllers in this gem are thin shims over these methods — the
     # same way {WireController} is a shim over {Executor}. Logic lives
-    # here so unit tests don't require a Rails environment, and so the
-    # service is reachable from non-Rails hosts (Rack apps, batch jobs,
-    # tests that simulate the OAuth interactions in-process).
+    # here so it can be unit-tested and driven in-process without a BOOTED
+    # Rails app (rake tasks, batch jobs, tests that simulate the OAuth
+    # interactions).
     module DeviceCodeGrant
       # OAuth grant_type literal per RFC 8628 §3.4.
       GRANT_TYPE = "urn:ietf:params:oauth:grant-type:device_code"

@@ -4,9 +4,9 @@
 #
 #   rake demo:setup        idempotent db:drop / create / schema:load / seed
 #   rake demo:walkthrough  boots the server, runs a curl-driven showcase, tears down
-#   rake demo:book         boots the server, runs book_flow.rb (no-human table booking),
+#   rake demo:book         boots the server, runs script/book_flow.rb (no-human table booking),
 #                          asserts the confirmed booking, tears down
-#   rake demo:pow          boots with KIOSK_POW_DEMO=1, runs pow_flow.rb (402→solve→200)
+#   rake demo:pow          boots with KIOSK_POW_DEMO=1, runs script/pow_flow.rb (402→solve→200)
 #   rake demo:reputation   anti-scalping PoW demo (cost drops as bookings accrue)
 #   rake demo:backoff      count-based PoW backoff (solve once → next N calls free →
 #                          re-challenge; KIOSK_POW_BACKOFF_DEMO=1)
@@ -40,7 +40,7 @@ namespace :demo do
     exec File.expand_path("../../bin/demo", __dir__)
   end
 
-  desc "Boot the server, run the no-human book_flow.rb end-to-end, assert the booking."
+  desc "Boot the server, run the no-human script/book_flow.rb end-to-end, assert the booking."
   task :book do
     require "resolv"
 
@@ -101,9 +101,9 @@ namespace :demo do
     abort "Server did not become ready — see #{log}" unless ready
     puts "  Server up at #{server_url}"
 
-    # ── run book_flow.rb ───────────────────────────────────────────────
-    flow_rb = File.expand_path("../../book_flow.rb", __dir__)
-    puts "\n── Running book_flow.rb ──"
+    # ── run script/book_flow.rb ───────────────────────────────────────────────
+    flow_rb = File.expand_path("../../script/book_flow.rb", __dir__)
+    puts "\n── Running script/book_flow.rb ──"
     raw = `SERVER_URL=#{server_url} KIOSK_ISSUER=#{kiosk_issuer} bundle exec ruby #{flow_rb} 2>&1`
     puts raw
 
@@ -111,7 +111,7 @@ namespace :demo do
     begin
       result = JSON.parse(raw.lines.grep(/^\{/).last || raw)
     rescue JSON::ParserError => e
-      abort "book_flow.rb did not produce valid JSON: #{e.message}\nOutput:\n#{raw}"
+      abort "script/book_flow.rb did not produce valid JSON: #{e.message}\nOutput:\n#{raw}"
     end
 
     # ── assertions: HTTP + JSON ────────────────────────────────────────
@@ -184,7 +184,7 @@ namespace :demo do
     end
   end
 
-  desc "Boot the server with KIOSK_POW_DEMO=1, run pow_flow.rb (402→solve.py→200 + wrong-nonce→403)."
+  desc "Boot the server with KIOSK_POW_DEMO=1, run script/pow_flow.rb (402→solve.py→200 + wrong-nonce→403)."
   task :pow do
     # Requirement: python3 with numpy (the equihash solver is vectorised).
     # Install with: pip install numpy
@@ -247,16 +247,16 @@ namespace :demo do
     abort "Server did not become ready — see #{log}" unless ready
     puts "  Server up at #{server_url} (PoW active)"
 
-    # Run pow_flow.rb.
-    flow_rb = File.expand_path("../../pow_flow.rb", __dir__)
-    puts "\n── Running pow_flow.rb ──"
+    # Run script/pow_flow.rb.
+    flow_rb = File.expand_path("../../script/pow_flow.rb", __dir__)
+    puts "\n── Running script/pow_flow.rb ──"
     raw = `SERVER_URL=#{server_url} KIOSK_ISSUER=#{kiosk_issuer} bundle exec ruby #{flow_rb} 2>&1`
     puts raw
 
     begin
       result = JSON.parse(raw.lines.grep(/^\{/).last || raw)
     rescue JSON::ParserError => e
-      abort "pow_flow.rb did not produce valid JSON: #{e.message}\nOutput:\n#{raw}"
+      abort "script/pow_flow.rb did not produce valid JSON: #{e.message}\nOutput:\n#{raw}"
     end
 
     # ── Assertions ──
@@ -305,7 +305,7 @@ namespace :demo do
   desc <<~DESC
     Anti-scalping reputation PoW demo (trust earned by booking).
 
-    Boots the server with KIOSK_POW_REPUTATION_DEMO=1, runs reputation_flow.rb:
+    Boots the server with KIOSK_POW_REPUTATION_DEMO=1, runs script/reputation_flow.rb:
       0 confirmed bookings → 402 with 2 equihash challenges (unproven)
       1 confirmed booking  → 402 with 1 challenge (a booking earns relief)
       2 confirmed bookings → 200 served directly, NO challenge (proven — free pass)
@@ -391,16 +391,16 @@ namespace :demo do
     abort "Server did not become ready — see #{log}" unless ready
     puts "  Server up at #{server_url} (Reputation PoW active)"
 
-    # Run reputation_flow.rb.
-    flow_rb = File.expand_path("../../reputation_flow.rb", __dir__)
-    puts "\n── Running reputation_flow.rb ──"
+    # Run script/reputation_flow.rb.
+    flow_rb = File.expand_path("../../script/reputation_flow.rb", __dir__)
+    puts "\n── Running script/reputation_flow.rb ──"
     raw = `SERVER_URL=#{server_url} KIOSK_ISSUER=#{kiosk_issuer} bundle exec ruby #{flow_rb} 2>&1`
     puts raw
 
     begin
       result = JSON.parse(raw.lines.grep(/^\{/).last || raw)
     rescue JSON::ParserError => e
-      abort "reputation_flow.rb did not produce valid JSON: #{e.message}\nOutput:\n#{raw}"
+      abort "script/reputation_flow.rb did not produce valid JSON: #{e.message}\nOutput:\n#{raw}"
     end
 
     # ── Assertions ──
@@ -443,7 +443,7 @@ namespace :demo do
   desc <<~DESC
     COUNT-BASED PoW backoff demo — "solve once, next N calls free" (POW-RECENCY-GRACE).
 
-    Boots the server with KIOSK_POW_BACKOFF_DEMO=1, runs backoff_flow.rb:
+    Boots the server with KIOSK_POW_BACKOFF_DEMO=1, runs script/backoff_flow.rb:
       fresh identity queries → 402 (pow_required, no grant yet)
       solves via the bundled solver, resubmits → 200 (proof verified → grant set to 3)
       the NEXT 3 requests are served WITHOUT a challenge (200 — the grant consumed)
@@ -528,15 +528,15 @@ namespace :demo do
     abort "Server did not become ready — see #{log}" unless ready
     puts "  Server up at #{server_url} (backoff PoW active)"
 
-    flow_rb = File.expand_path("../../backoff_flow.rb", __dir__)
-    puts "\n── Running backoff_flow.rb ──"
+    flow_rb = File.expand_path("../../script/backoff_flow.rb", __dir__)
+    puts "\n── Running script/backoff_flow.rb ──"
     raw = `SERVER_URL=#{server_url} KIOSK_ISSUER=#{kiosk_issuer} bundle exec ruby #{flow_rb} 2>&1`
     puts raw
 
     begin
       result = JSON.parse(raw.lines.grep(/^\{/).last || raw)
     rescue JSON::ParserError => e
-      abort "backoff_flow.rb did not produce valid JSON: #{e.message}\nOutput:\n#{raw}"
+      abort "script/backoff_flow.rb did not produce valid JSON: #{e.message}\nOutput:\n#{raw}"
     end
 
     # ── Assertions ──
@@ -588,7 +588,7 @@ namespace :demo do
     Account-binding walkthrough — a diner links their AI assistant to their
     restaurant account, and the assistant's booking then ties to that account.
 
-    Runs demo:setup (clean DB + seed), boots the server, and runs binding_flow.rb,
+    Runs demo:setup (clean DB + seed), boots the server, and runs script/binding_flow.rb,
     which drives BOTH sides of the ceremony over plain HTTP:
 
       1. The human diner (Diego) signs in through the REAL Devise form
@@ -619,7 +619,7 @@ namespace :demo do
     port = ENV.fetch("PORT", "3002")
     log  = "/tmp/kiosk-atablefor-binding.log"
     db   = "kiosk_atablefor_development"
-    flow_rb = File.expand_path("../../binding_flow.rb", __dir__)
+    flow_rb = File.expand_path("../../script/binding_flow.rb", __dir__)
     failures = []
 
     # The seeded diner (db/seeds.rb) — Diego signs in and mints the link code.
@@ -662,7 +662,7 @@ namespace :demo do
       abort "Server did not become ready — see #{log}" unless ready
       puts "  Server up at #{server_url}"
 
-      puts "\n── Running binding_flow.rb ──"
+      puts "\n── Running script/binding_flow.rb ──"
       env = "SERVER_URL=#{server_url.shellescape} KIOSK_ISSUER=#{kiosk_issuer.shellescape} " \
             "HOLDER_ID=#{holder_id.shellescape} HOLDER_EMAIL=#{holder_email.shellescape} " \
             "HOLDER_PASSWORD=#{holder_password.shellescape}"
@@ -672,7 +672,7 @@ namespace :demo do
       begin
         result = JSON.parse(raw.lines.grep(/^\{/).last || raw)
       rescue JSON::ParserError => e
-        abort "binding_flow.rb did not produce valid JSON: #{e.message}\nOutput:\n#{raw}"
+        abort "script/binding_flow.rb did not produce valid JSON: #{e.message}\nOutput:\n#{raw}"
       end
 
       puts "\n══ Account-binding assertions ══"
@@ -717,7 +717,7 @@ namespace :demo do
   desc <<~DESC
     Adversarial cross-tenant isolation test (table-booking domain).
 
-    Boots the server, runs isolation_flow.rb with two fresh principals (A and B),
+    Boots the server, runs script/isolation_flow.rb with two fresh principals (A and B),
     and asserts all cross-tenant denial properties:
 
       HEADLINE (owner-scoped cancel): B cannot cancel_booking A's booking.
@@ -791,15 +791,15 @@ namespace :demo do
     abort "Server did not become ready — see #{log}" unless ready
     puts "  Server up at #{server_url}"
 
-    flow_rb = File.expand_path("../../isolation_flow.rb", __dir__)
-    puts "\n── Running isolation_flow.rb (adversarial cross-tenant) ──"
+    flow_rb = File.expand_path("../../script/isolation_flow.rb", __dir__)
+    puts "\n── Running script/isolation_flow.rb (adversarial cross-tenant) ──"
     raw = `SERVER_URL=#{server_url} KIOSK_ISSUER=#{kiosk_issuer} bundle exec ruby #{flow_rb} 2>&1`
     puts raw
 
     begin
       result = JSON.parse(raw.lines.grep(/^\{/).last || raw)
     rescue JSON::ParserError => e
-      abort "isolation_flow.rb did not produce valid JSON: #{e.message}\nOutput:\n#{raw}"
+      abort "script/isolation_flow.rb did not produce valid JSON: #{e.message}\nOutput:\n#{raw}"
     end
 
     failures = []
@@ -872,7 +872,7 @@ namespace :demo do
   desc <<~DESC
     Self-discovery proof — verifies the schema verb AND the pay-absent capability set.
 
-    Boots the server, runs schema_flow.rb (GET /kiosk/schema + /.well-known/kiosk.json
+    Boots the server, runs script/schema_flow.rb (GET /kiosk/schema + /.well-known/kiosk.json
     + /agents.json + /agents.txt).
 
     Asserts:
@@ -934,15 +934,15 @@ namespace :demo do
     abort "Server did not become ready — see #{log}" unless ready
     puts "  Server up at #{server_url}"
 
-    flow_rb = File.expand_path("../../schema_flow.rb", __dir__)
-    puts "\n── Running schema_flow.rb ──"
+    flow_rb = File.expand_path("../../script/schema_flow.rb", __dir__)
+    puts "\n── Running script/schema_flow.rb ──"
     raw = `SERVER_URL=#{server_url} KIOSK_ISSUER=#{kiosk_issuer} bundle exec ruby #{flow_rb} 2>&1`
     puts raw
 
     begin
       result = JSON.parse(raw.lines.grep(/^\{/).last || raw)
     rescue JSON::ParserError => e
-      abort "schema_flow.rb did not produce valid JSON: #{e.message}\nOutput:\n#{raw}"
+      abort "script/schema_flow.rb did not produce valid JSON: #{e.message}\nOutput:\n#{raw}"
     end
 
     puts "\n── Schema assertions ──"
@@ -1038,7 +1038,7 @@ namespace :demo do
   desc <<~DESC
     Adversarial regression battery.
 
-    Boots atablefor, runs redteam_suite.rb and asserts each applicable attack is
+    Boots atablefor, runs script/redteam_suite.rb and asserts each applicable attack is
     BLOCKED:
 
       BLOCKED  CrossTenantRead    — B's my_bookings must not include A's booking
@@ -1105,8 +1105,8 @@ namespace :demo do
     abort "Server did not become ready — see #{log}" unless ready
     puts "  Server up at #{server_url}"
 
-    suite_rb = File.expand_path("../../redteam_suite.rb", __dir__)
-    puts "\n── Running redteam_suite.rb ──"
+    suite_rb = File.expand_path("../../script/redteam_suite.rb", __dir__)
+    puts "\n── Running script/redteam_suite.rb ──"
 
     env_str = "SERVER_URL=#{server_url} KIOSK_ISSUER=#{kiosk_issuer}"
 

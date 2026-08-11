@@ -64,7 +64,7 @@ namespace :demo do
   desc <<~DESC
     Adversarial cross-owner isolation test.
 
-    Runs demo:setup (clean DB + seed), boots the server, runs isolation_flow.rb
+    Runs demo:setup (clean DB + seed), boots the server, runs script/isolation_flow.rb
     with the two seeded principals (Alice and Bob), and asserts all cross-owner
     denial properties:
 
@@ -100,15 +100,15 @@ namespace :demo do
       puts "  Server stopped."
     end
 
-    flow_rb = File.expand_path("../../isolation_flow.rb", __dir__)
-    puts "\n── Running isolation_flow.rb (adversarial cross-owner) ──"
+    flow_rb = File.expand_path("../../script/isolation_flow.rb", __dir__)
+    puts "\n── Running script/isolation_flow.rb (adversarial cross-owner) ──"
     raw = `SERVER_URL=#{server_url} KIOSK_ISSUER=#{server_url} bundle exec ruby #{flow_rb} 2>&1`
     puts raw
 
     begin
       result = JSON.parse(raw.lines.grep(/^\{/).last || raw)
     rescue JSON::ParserError => e
-      abort "isolation_flow.rb did not produce valid JSON: #{e.message}\nOutput:\n#{raw}"
+      abort "script/isolation_flow.rb did not produce valid JSON: #{e.message}\nOutput:\n#{raw}"
     end
 
     failures = []
@@ -191,7 +191,7 @@ namespace :demo do
 
     With no payment gate, the registration PoW is a FREE-board anti-spam toll.
     Register-PoW is ALWAYS ON (wired in the app config, no env flag), so the
-    default server already gates registration. Runs register_flow.rb: register
+    default server already gates registration. Runs script/register_flow.rb: register
     with no proof → 402; solve the Equihash challenge and resubmit → 201; the
     fresh token posts a listing → 200. Requires python3 + numpy.
   DESC
@@ -201,7 +201,7 @@ namespace :demo do
 
     port    = ENV.fetch("PORT", "3001")
     log     = "/tmp/kiosk-philslist-register.log"
-    flow_rb = File.expand_path("../../register_flow.rb", __dir__)
+    flow_rb = File.expand_path("../../script/register_flow.rb", __dir__)
     failures = []
 
     server_pid, server_url = philslist_boot_server(log: log, port: port)
@@ -212,7 +212,7 @@ namespace :demo do
       json_line = raw.lines.grep(/^\{/).last
       puts raw.lines.reject { |l| l.start_with?("{") }.join
       puts json_line if json_line
-      result = JSON.parse(json_line || raw) rescue abort("register_flow.rb produced no JSON:\n#{raw}")
+      result = JSON.parse(json_line || raw) rescue abort("script/register_flow.rb produced no JSON:\n#{raw}")
 
       puts "\n══ Registration PoW assertions ══"
       check = lambda do |label, ok|
@@ -245,7 +245,7 @@ namespace :demo do
   desc <<~DESC
     Account-binding walkthrough — the binding ceremony + MULTI-ACCOUNT proof.
 
-    Boots the server and runs binding_flow.rb, which drives BOTH sides of the
+    Boots the server and runs script/binding_flow.rb, which drives BOTH sides of the
     ceremony over plain HTTP:
 
       FIRST CONTACT (claim): an assistant with a fresh key opens the claim
@@ -267,7 +267,7 @@ namespace :demo do
 
     port    = ENV.fetch("PORT", "3001")
     log     = "/tmp/kiosk-philslist-binding.log"
-    flow_rb = File.expand_path("../../binding_flow.rb", __dir__)
+    flow_rb = File.expand_path("../../script/binding_flow.rb", __dir__)
     db      = "kiosk_philslist_development"
     failures = []
 
@@ -286,7 +286,7 @@ namespace :demo do
       json_line = raw.lines.grep(/^\{/).last
       puts raw.lines.reject { |l| l.start_with?("{") }.join
       puts json_line if json_line
-      result = JSON.parse(json_line || raw) rescue abort("binding_flow.rb produced no JSON:\n#{raw}")
+      result = JSON.parse(json_line || raw) rescue abort("script/binding_flow.rb produced no JSON:\n#{raw}")
 
       puts "\n══ Account-binding assertions ══"
       check = lambda do |label, ok|
@@ -340,7 +340,7 @@ namespace :demo do
   desc <<~DESC
     Adversarial regression battery — attacks philslist's live surface.
 
-    Boots the server and runs redteam_suite.rb, asserting each attack is BLOCKED:
+    Boots the server and runs script/redteam_suite.rb, asserting each attack is BLOCKED:
 
       BLOCKED  CrossTenantRead   — Bob's my_listings excludes Alice's listing
       BLOCKED  ForgedUserId      — forged owner_id on post_listing ignored
@@ -369,8 +369,8 @@ namespace :demo do
       puts "  Server stopped."
     end
 
-    suite_rb = File.expand_path("../../redteam_suite.rb", __dir__)
-    puts "\n── Running redteam_suite.rb ──"
+    suite_rb = File.expand_path("../../script/redteam_suite.rb", __dir__)
+    puts "\n── Running script/redteam_suite.rb ──"
     system("SERVER_URL=#{server_url} KIOSK_ISSUER=#{server_url} bundle exec ruby #{suite_rb}")
     exit_status = $?.exitstatus
 
@@ -423,15 +423,15 @@ namespace :demo do
       puts "  Server stopped."
     end
 
-    flow_rb = File.expand_path("../../schema_flow.rb", __dir__)
-    puts "\n── Running schema_flow.rb ──"
+    flow_rb = File.expand_path("../../script/schema_flow.rb", __dir__)
+    puts "\n── Running script/schema_flow.rb ──"
     raw = `SERVER_URL=#{server_url} KIOSK_ISSUER=#{server_url} bundle exec ruby #{flow_rb} 2>&1`
     puts raw
 
     begin
       result = JSON.parse(raw.lines.grep(/^\{/).last || raw)
     rescue JSON::ParserError => e
-      abort "schema_flow.rb did not produce valid JSON: #{e.message}\nOutput:\n#{raw}"
+      abort "script/schema_flow.rb did not produce valid JSON: #{e.message}\nOutput:\n#{raw}"
     end
 
     puts "\n── Schema + discovery assertions ──"

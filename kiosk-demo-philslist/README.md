@@ -123,7 +123,7 @@ for **both** bound keys equals the human's id, and the posted listing's
 | `app/models/{user,category,listing}.rb` | `User` is the account principal and `database_authenticatable`; `Listing.owner_id` is the load-bearing isolation predicate |
 | `config/initializers/kiosk.rb` | `Kiosk.configure` (NO `payment_provider`) + the browse/my queries and post/edit/close actions |
 | `lib/stub_idp.rb` / `lib/jwt_or_stub_idp.rb` | Demo IdP: Kiosk JWTs first, bespoke `agent:u-…:a-…:r-…` fallback |
-| `isolation_flow.rb` / `redteam_suite.rb` / `schema_flow.rb` / `binding_flow.rb` / `register_flow.rb` | One-JSON-line flow drivers the rake tasks assert on |
+| `script/isolation_flow.rb` / `script/redteam_suite.rb` / `script/schema_flow.rb` / `script/binding_flow.rb` / `script/register_flow.rb` | One-JSON-line flow drivers the rake tasks assert on |
 | `bin/demo` | The browse→post→edit→close walkthrough (POSIX shell, curl-driven) |
 | `lib/tasks/demo.rake` | `rake demo:setup`, `:walkthrough`, `demo`, `:isolation`, `:redteam`, `:schema`, `:binding`, `:register` |
 

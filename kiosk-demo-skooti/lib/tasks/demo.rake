@@ -6,7 +6,7 @@
 #   rake demo:setup      idempotent db:drop / create / migrate / seed
 #   rake demo:kat        DB-free known-answer test for the RentalTokenIssuer
 #                        demo lib (byte-exact wire vector the firmware mirrors)
-#   rake demo:rideflow   boots the server, runs rental_flow.rb (no-human full
+#   rake demo:rideflow   boots the server, runs script/rental_flow.rb (no-human full
 #                        rental chain), asserts happy path + all negative gates,
 #                        tears down
 #   rake demo:isolation  adversarial cross-tenant + ownership isolation test
@@ -38,7 +38,7 @@ namespace :demo do
     sh "bundle exec rails db:drop db:create db:schema:load db:seed"
   end
 
-  desc "Boot the server, run rental_flow.rb end-to-end (happy + all negative gates), assert."
+  desc "Boot the server, run script/rental_flow.rb end-to-end (happy + all negative gates), assert."
   task :rideflow do
     require "resolv"
     require "net/http"
@@ -74,7 +74,7 @@ namespace :demo do
     server_url   = "http://#{host}:#{port}"
     kiosk_issuer = server_url
     db           = "kiosk_skooti_development"
-    flow_rb      = File.expand_path("../../rental_flow.rb", __dir__)
+    flow_rb      = File.expand_path("../../script/rental_flow.rb", __dir__)
 
     failures = []
 
@@ -116,7 +116,7 @@ namespace :demo do
       end
     end
 
-    # Helper: run rental_flow.rb with the given env vars; return parsed JSON result.
+    # Helper: run script/rental_flow.rb with the given env vars; return parsed JSON result.
     run_flow = lambda do |extra_env = {}|
       env = {
         "SERVER_URL"   => server_url,
@@ -132,7 +132,7 @@ namespace :demo do
       begin
         JSON.parse(json_line || raw)
       rescue JSON::ParserError => e
-        abort "rental_flow.rb did not produce valid JSON: #{e.message}\nOutput:\n#{raw}"
+        abort "script/rental_flow.rb did not produce valid JSON: #{e.message}\nOutput:\n#{raw}"
       end
     end
 
@@ -312,7 +312,7 @@ namespace :demo do
       # Second run: fresh agent (new register+KYC+pay) but REUSE_RESERVATION
       # so no new reserve; status='active' → Gate 1 rejects with 403.
       # We use a separate script invocation so the agent token is fresh.
-      # We pass REUSE_RESERVATION which rental_flow.rb does NOT support natively —
+      # We pass REUSE_RESERVATION which script/rental_flow.rb does NOT support natively —
       # so instead we implement this directly here (no second flow invocation needed):
       # just call start_rental again with the same reservation_id using a NEW agent.
       #
@@ -533,7 +533,7 @@ namespace :demo do
   desc <<~DESC
     Adversarial cross-tenant isolation test.
 
-    Runs demo:setup (clean DB + seed), boots the server, runs isolation_flow.rb
+    Runs demo:setup (clean DB + seed), boots the server, runs script/isolation_flow.rb
     with two fresh principals (A and B), and asserts all cross-tenant denial properties:
 
       Assertion 1 (ownership denial — Gate-1 isolated): B satisfies Gate-2 (KYC)
@@ -616,9 +616,9 @@ namespace :demo do
     abort "Server did not become ready — see #{log}" unless ready
     puts "  Server up at #{server_url}"
 
-    # ── run isolation_flow.rb ──────────────────────────────────────────────
-    flow_rb = File.expand_path("../../isolation_flow.rb", __dir__)
-    puts "\n── Running isolation_flow.rb (adversarial cross-tenant) ──"
+    # ── run script/isolation_flow.rb ──────────────────────────────────────────────
+    flow_rb = File.expand_path("../../script/isolation_flow.rb", __dir__)
+    puts "\n── Running script/isolation_flow.rb (adversarial cross-tenant) ──"
     raw = `SERVER_URL=#{server_url} KIOSK_ISSUER=#{kiosk_issuer} bundle exec ruby #{flow_rb} 2>&1`
     puts raw
 
@@ -626,7 +626,7 @@ namespace :demo do
     begin
       result = JSON.parse(raw.lines.grep(/^\{/).last || raw)
     rescue JSON::ParserError => e
-      abort "isolation_flow.rb did not produce valid JSON: #{e.message}\nOutput:\n#{raw}"
+      abort "script/isolation_flow.rb did not produce valid JSON: #{e.message}\nOutput:\n#{raw}"
     end
 
     failures = []
@@ -788,9 +788,9 @@ namespace :demo do
       abort "Server did not become ready — see #{log}" unless ready
       puts "  Server up at #{server_url}"
 
-      # ── run redteam_suite.rb ─────────────────────────────────────────────
-      suite_rb = File.expand_path("../../redteam_suite.rb", __dir__)
-      puts "\n── Running redteam_suite.rb (skooti + prove.my broker) ──"
+      # ── run script/redteam_suite.rb ─────────────────────────────────────────────
+      suite_rb = File.expand_path("../../script/redteam_suite.rb", __dir__)
+      puts "\n── Running script/redteam_suite.rb (skooti + prove.my broker) ──"
 
       # The driver mints valid/expired attestations via ProveTestIssuer (iss =
       # ProveKey.issuer) and forged ones via ProveTrust.issuer — both read
@@ -888,15 +888,15 @@ namespace :demo do
     abort "Server did not become ready — see #{log}" unless ready
     puts "  Server up at #{server_url}"
 
-    flow_rb = File.expand_path("../../schema_flow.rb", __dir__)
-    puts "\n── Running schema_flow.rb ──"
+    flow_rb = File.expand_path("../../script/schema_flow.rb", __dir__)
+    puts "\n── Running script/schema_flow.rb ──"
     raw = `SERVER_URL=#{server_url} KIOSK_ISSUER=#{kiosk_issuer} bundle exec ruby #{flow_rb} 2>&1`
     puts raw
 
     begin
       result = JSON.parse(raw.lines.grep(/^\{/).last || raw)
     rescue JSON::ParserError => e
-      abort "schema_flow.rb did not produce valid JSON: #{e.message}\nOutput:\n#{raw}"
+      abort "script/schema_flow.rb did not produce valid JSON: #{e.message}\nOutput:\n#{raw}"
     end
 
     puts "\n── Schema assertions ──"
@@ -1001,7 +1001,7 @@ namespace :demo do
     KYC named-anonymized-attribute gate proof — via the EXTERNAL stub issuer.
 
     Runs demo:setup (clean DB + seed SK-001 scooter + MC-001 motorcycle), boots
-    the server, runs kyc_flow.rb and asserts a fresh EXTERNAL agent (own keypair
+    the server, runs script/kyc_flow.rb and asserts a fresh EXTERNAL agent (own keypair
     only, NO pre-shared issuer key) drives motorcycle KYC to success by relaying
     a human-approve link, plus the KYC-free scooter positive control:
 
@@ -1080,8 +1080,8 @@ namespace :demo do
       abort "Server did not become ready — see #{log}" unless ready
       puts "  Server up at #{server_url}"
 
-      flow_rb = File.expand_path("../../kyc_flow.rb", __dir__)
-      puts "\n── Running kyc_flow.rb (skooti + prove.my broker) ──"
+      flow_rb = File.expand_path("../../script/kyc_flow.rb", __dir__)
+      puts "\n── Running script/kyc_flow.rb (skooti + prove.my broker) ──"
       driver_env = "SERVER_URL=#{server_url} KIOSK_ISSUER=#{kiosk_issuer} " \
                    "KIOSK_PROVE_BROKER_URL=#{broker[:broker_url]}"
       raw = `#{driver_env} bundle exec ruby #{flow_rb.shellescape} 2>&1`
@@ -1093,7 +1093,7 @@ namespace :demo do
       begin
         result = JSON.parse(json_line || raw)
       rescue JSON::ParserError => e
-        abort "kyc_flow.rb did not produce valid JSON: #{e.message}\nOutput:\n#{raw}"
+        abort "script/kyc_flow.rb did not produce valid JSON: #{e.message}\nOutput:\n#{raw}"
       end
     end
 

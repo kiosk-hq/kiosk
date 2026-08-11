@@ -3,12 +3,12 @@
 # Kiosk demo orchestration for kiosk-demo-getgrocery.
 # Tasks:
 #   rake demo:setup      idempotent db:drop / create / migrate / seed
-#   rake demo:shop       boots the server, runs getgrocery_flow.rb, asserts happy path
+#   rake demo:shop       boots the server, runs script/getgrocery_flow.rb, asserts happy path
 #   rake demo:claim      claim-rebind walkthrough: a standalone assistant's key is
 #                        re-bound to the human's account, then pays with its saved card
 #   rake demo:isolation  adversarial cross-tenant + order-ownership isolation test
 #   rake demo:rls        opt-in Postgres RLS showcase — enforced-session three-way
-#                        proof (rls_proof.rb) that a non-owner app_role is order-scoped
+#                        proof (script/rls_proof.rb) that a non-owner app_role is order-scoped
 #   rake demo:schema     self-discovery proof over the schema verb
 #   rake demo:redteam    adversarial regression battery (kiosk-redteam scenarios)
 #   rake demo:pow        commerce catalog-toll PoW demo (catalog 402 → solve → 200)
@@ -80,7 +80,7 @@ namespace :demo do
     sh "ruby #{spec}"
   end
 
-  desc "Boot the server, run getgrocery_flow.rb end-to-end (no-human happy path: register→catalog→delivery_slots→create_order (delivery slot+address required)→payment_setup→pay (cart mirrors the order, EUR)→my_orders (paid)), assert."
+  desc "Boot the server, run script/getgrocery_flow.rb end-to-end (no-human happy path: register→catalog→delivery_slots→create_order (delivery slot+address required)→payment_setup→pay (cart mirrors the order, EUR)→my_orders (paid)), assert."
   task :shop do
     require "resolv"
     require "net/http"
@@ -102,7 +102,7 @@ namespace :demo do
     port         = ENV.fetch("PORT", "3005")
     log          = "/tmp/kiosk-getgrocery-demo.log"
     db           = ENV.fetch("KIOSK_GETGROCERY_DB", "kiosk_getgrocery_development")
-    flow_rb      = File.expand_path("../../getgrocery_flow.rb", __dir__)
+    flow_rb      = File.expand_path("../../script/getgrocery_flow.rb", __dir__)
     failures     = []
 
     # -- host resolution --
@@ -167,8 +167,8 @@ namespace :demo do
     abort "Server did not become ready -- see #{log}" unless ready
     puts "  Server up at #{server_url}"
 
-    # -- run getgrocery_flow.rb --
-    puts "\n-- Running getgrocery_flow.rb --"
+    # -- run script/getgrocery_flow.rb --
+    puts "\n-- Running script/getgrocery_flow.rb --"
     env_str = "SERVER_URL=#{server_url} KIOSK_ISSUER=#{kiosk_issuer}"
     raw     = `#{env_str} bundle exec ruby #{flow_rb.shellescape} 2>&1`
     puts raw
@@ -176,7 +176,7 @@ namespace :demo do
     begin
       result = JSON.parse(raw.lines.grep(/^\{/).last || raw)
     rescue JSON::ParserError => e
-      abort "getgrocery_flow.rb did not produce valid JSON: #{e.message}\nOutput:\n#{raw}"
+      abort "script/getgrocery_flow.rb did not produce valid JSON: #{e.message}\nOutput:\n#{raw}"
     end
 
     # -- assertions: HTTP status --
@@ -234,7 +234,7 @@ namespace :demo do
 
     # K-480: if the flow ran late enough that some of today's windows had already
     # started, delivery_slots hid them AND create_order rejected a past one with a
-    # clean 400 bad_request (the negative control in getgrocery_flow.rb only fires
+    # clean 400 bad_request (the negative control in script/getgrocery_flow.rb only fires
     # when a genuine past slot exists — a no-op before 08:00 Dublin or when booking
     # tomorrow, in which case this asserts nothing).
     psc = result["past_slot_check"]
@@ -334,7 +334,7 @@ namespace :demo do
 
     Boots the server against stripe-mock (the walkthrough charges a SEEDED
     card-on-file mapping — a mock fixture, no real key, no real charge; run
-    demo:shop for the real-Stripe path) and runs claim_flow.rb:
+    demo:shop for the real-Stripe path) and runs script/claim_flow.rb:
 
       1. A standalone assistant self-registers (fresh key, own synthetic
          account), orders groceries, and hits payment_setup → setup_required
@@ -429,16 +429,16 @@ namespace :demo do
     abort "Server did not become ready — see #{log}" unless ready
     puts "  Server up at #{server_url}"
 
-    # ── run claim_flow.rb ──────────────────────────────────────────────
-    flow_rb = File.expand_path("../../claim_flow.rb", __dir__)
-    puts "\n── Running claim_flow.rb ──"
+    # ── run script/claim_flow.rb ──────────────────────────────────────────────
+    flow_rb = File.expand_path("../../script/claim_flow.rb", __dir__)
+    puts "\n── Running script/claim_flow.rb ──"
     env_str = "SERVER_URL=#{server_url.shellescape} KIOSK_ISSUER=#{kiosk_issuer.shellescape} " \
               "HUMAN_USER_ID=#{human_id.shellescape}"
     raw = `#{env_str} bundle exec ruby #{flow_rb.shellescape} 2>&1`
     json_line = raw.lines.grep(/^\{/).last
     puts raw.lines.reject { |l| l.start_with?("{") }.join
     puts json_line if json_line
-    result = JSON.parse(json_line || raw) rescue abort("claim_flow.rb produced no JSON:\n#{raw}")
+    result = JSON.parse(json_line || raw) rescue abort("script/claim_flow.rb produced no JSON:\n#{raw}")
 
     puts "\n══ Claim-rebind assertions ══"
     check = lambda do |label, ok|
@@ -481,7 +481,7 @@ namespace :demo do
   desc <<~DESC
     Adversarial cross-tenant isolation test.
 
-    Boots the server, runs isolation_flow.rb with two fresh principals (A and B),
+    Boots the server, runs script/isolation_flow.rb with two fresh principals (A and B),
     and asserts all cross-tenant denial properties including getgrocery's
     distinctive order-ownership mutation gates:
 
@@ -567,9 +567,9 @@ namespace :demo do
     abort "Server did not become ready — see #{log}" unless ready
     puts "  Server up at #{server_url}"
 
-    # ── run isolation_flow.rb ──────────────────────────────────────────
-    flow_rb = File.expand_path("../../isolation_flow.rb", __dir__)
-    puts "\n── Running isolation_flow.rb (adversarial cross-tenant + order-ownership) ──"
+    # ── run script/isolation_flow.rb ──────────────────────────────────────────
+    flow_rb = File.expand_path("../../script/isolation_flow.rb", __dir__)
+    puts "\n── Running script/isolation_flow.rb (adversarial cross-tenant + order-ownership) ──"
     env_str = "SERVER_URL=#{server_url} KIOSK_ISSUER=#{kiosk_issuer}"
     raw     = `#{env_str} bundle exec ruby #{flow_rb.shellescape} 2>&1`
     puts raw
@@ -578,7 +578,7 @@ namespace :demo do
     begin
       result = JSON.parse(raw.lines.grep(/^\{/).last || raw)
     rescue JSON::ParserError => e
-      abort "isolation_flow.rb did not produce valid JSON: #{e.message}\nOutput:\n#{raw}"
+      abort "script/isolation_flow.rb did not produce valid JSON: #{e.message}\nOutput:\n#{raw}"
     end
 
     user_id_b              = result["user_id_b"]
@@ -738,8 +738,8 @@ namespace :demo do
     abort "Server did not become ready — see #{log}" unless ready
     puts "  Server up at #{server_url}"
 
-    flow_rb = File.expand_path("../../schema_flow.rb", __dir__)
-    puts "\n── Running schema_flow.rb ──"
+    flow_rb = File.expand_path("../../script/schema_flow.rb", __dir__)
+    puts "\n── Running script/schema_flow.rb ──"
     env_str = "SERVER_URL=#{server_url} KIOSK_ISSUER=#{kiosk_issuer}"
     raw     = `#{env_str} bundle exec ruby #{flow_rb.shellescape} 2>&1`
     puts raw
@@ -747,7 +747,7 @@ namespace :demo do
     begin
       result = JSON.parse(raw.lines.grep(/^\{/).last || raw)
     rescue JSON::ParserError => e
-      abort "schema_flow.rb did not produce valid JSON: #{e.message}\nOutput:\n#{raw}"
+      abort "script/schema_flow.rb did not produce valid JSON: #{e.message}\nOutput:\n#{raw}"
     end
 
     puts "\n── Schema assertions ──"
@@ -997,9 +997,9 @@ namespace :demo do
     abort "Server did not become ready — see #{log}" unless ready
     puts "  Server up at #{server_url}"
 
-    # ── run redteam_suite.rb ───────────────────────────────────────────
-    suite_rb = File.expand_path("../../redteam_suite.rb", __dir__)
-    puts "\n── Running redteam_suite.rb ──"
+    # ── run script/redteam_suite.rb ───────────────────────────────────────────
+    suite_rb = File.expand_path("../../script/redteam_suite.rb", __dir__)
+    puts "\n── Running script/redteam_suite.rb ──"
 
     env_str = "SERVER_URL=#{server_url} KIOSK_ISSUER=#{kiosk_issuer}"
 
@@ -1018,7 +1018,7 @@ namespace :demo do
   desc <<~DESC
     Pay-path regression (K-544 concurrency, K-579 typed 4xx, K-578 reconciliation).
 
-    Resets the DB, then runs race_flow.rb IN-PROCESS (real Postgres, real
+    Resets the DB, then runs script/race_flow.rb IN-PROCESS (real Postgres, real
     threads on pooled connections, a controllable PSP stub) to prove:
 
       (a) SWAP         — once a /pay for order O has begun (O is `paying`), a
@@ -1038,8 +1038,8 @@ namespace :demo do
   DESC
   task race: :setup do
     require "shellwords"
-    driver = File.expand_path("../../race_flow.rb", __dir__)
-    puts "\n── Running race_flow.rb (pay path: K-544 / K-578 / K-579) ──"
+    driver = File.expand_path("../../script/race_flow.rb", __dir__)
+    puts "\n── Running script/race_flow.rb (pay path: K-544 / K-578 / K-579) ──"
     # A generous pool so N racing threads each get their own real connection.
     ok = system({ "RAILS_MAX_THREADS" => "12" }, "bundle exec rails runner #{driver.shellescape}")
     exit(ok ? 0 : 1)
@@ -1097,7 +1097,7 @@ namespace :demo do
   desc <<~DESC
     Commerce catalog-toll PoW demo (KIOSK_POW_DEMO=1).
 
-    Boots the server with the catalog gate active and runs pow_flow.rb:
+    Boots the server with the catalog gate active and runs script/pow_flow.rb:
     catalog query → 402 equihash → solve.py → 200; wrong nonce → 403 + penalty.
     Requires python3 + numpy.
   DESC
@@ -1114,7 +1114,7 @@ namespace :demo do
     port         = ENV.fetch("PORT", "3005")
     server_url   = "http://127.0.0.1:#{port}"
     log          = "/tmp/kiosk-getgrocery-pow.log"
-    flow_rb      = File.expand_path("../../pow_flow.rb", __dir__)
+    flow_rb      = File.expand_path("../../script/pow_flow.rb", __dir__)
     failures     = []
 
     # The catalog-toll flow never pays, so a dummy test key is enough to boot the
@@ -1148,7 +1148,7 @@ namespace :demo do
       json_line = raw.lines.grep(/^\{/).last
       puts raw.lines.reject { |l| l.start_with?("{") }.join
       puts json_line if json_line
-      result = JSON.parse(json_line || raw) rescue abort("pow_flow.rb produced no JSON:\n#{raw}")
+      result = JSON.parse(json_line || raw) rescue abort("script/pow_flow.rb produced no JSON:\n#{raw}")
 
       puts "\n══ Catalog PoW assertions ══"
       check = lambda do |label, ok|
@@ -1195,7 +1195,7 @@ namespace :demo do
       c.app_role        = "kiosk_getgrocery_app"
     SessionContext.open appends SET LOCAL ROLE "kiosk_getgrocery_app" after GUCs.
 
-    Three-way proof (rls_proof.rb):
+    Three-way proof (script/rls_proof.rb):
       1. Negative control: owner/superuser WITHOUT SessionContext sees BOTH rows
          (superuser bypasses RLS — the pre-fix no-op / leak).
       2. Enforced session for A: raw unscoped SELECT * FROM orders → only A's row.
@@ -1230,12 +1230,12 @@ namespace :demo do
 
     # ── Step 4: Apply RLS overlay via kiosk-rls Emitter (dogfooded) ─────────
     # Run WITHOUT KIOSK_RLS_ENFORCE — overlay setup is privileged (owner connection).
-    overlay_rb = File.expand_path("../../rls_overlay.rb", __dir__)
+    overlay_rb = File.expand_path("../../script/rls_overlay.rb", __dir__)
     puts "\n── Applying RLS overlay ──"
     sh "bundle exec rails runner #{overlay_rb}"
 
     # ── Step 5: Run the three-way isolation proof (KIOSK_RLS_ENFORCE=1) ─────
-    proof_rb = File.expand_path("../../rls_proof.rb", __dir__)
+    proof_rb = File.expand_path("../../script/rls_proof.rb", __dir__)
     puts "\n── Running RLS isolation proof (KIOSK_RLS_ENFORCE=1) ──"
     raw = `KIOSK_RLS_ENFORCE=1 bundle exec rails runner #{proof_rb} 2>&1`
     puts raw
@@ -1244,7 +1244,7 @@ namespace :demo do
     begin
       result = JSON.parse(raw.lines.grep(/^\{/).last || raw)
     rescue JSON::ParserError => e
-      abort "rls_proof.rb did not produce valid JSON: #{e.message}\nOutput:\n#{raw}"
+      abort "script/rls_proof.rb did not produce valid JSON: #{e.message}\nOutput:\n#{raw}"
     end
 
     puts "\n── RLS proof assertions ──"
@@ -1337,7 +1337,7 @@ namespace :demo do
 
     A TWO-SERVER integration: boots the prove.my broker (kiosk-demo-prove) on its
     own port — getgrocery is a SECOND registered operator alongside skooti — then
-    boots getgrocery and drives agecheck_flow.rb across both apps:
+    boots getgrocery and drives script/agecheck_flow.rb across both apps:
 
       A1  create_order WITH the alcohol item, no KYC → 403 kyc_required, and the
           error.hint points the agent at `request_kyc`.
@@ -1437,8 +1437,8 @@ namespace :demo do
       abort "Server did not become ready — see #{log}" unless ready
       puts "  Server up at #{server_url}"
 
-      flow_rb = File.expand_path("../../agecheck_flow.rb", __dir__)
-      puts "\n── Running agecheck_flow.rb (getgrocery + prove.my broker) ──"
+      flow_rb = File.expand_path("../../script/agecheck_flow.rb", __dir__)
+      puts "\n── Running script/agecheck_flow.rb (getgrocery + prove.my broker) ──"
       driver_env = "SERVER_URL=#{server_url} KIOSK_ISSUER=#{kiosk_issuer} " \
                    "KIOSK_PROVE_BROKER_URL=#{broker[:broker_url]} " \
                    "KIOSK_PROVE_ISSUER=#{broker[:wiring]["KIOSK_PROVE_ISSUER"]}"
@@ -1450,7 +1450,7 @@ namespace :demo do
       begin
         result = JSON.parse(json_line || raw)
       rescue JSON::ParserError => e
-        abort "agecheck_flow.rb did not produce valid JSON: #{e.message}\nOutput:\n#{raw}"
+        abort "script/agecheck_flow.rb did not produce valid JSON: #{e.message}\nOutput:\n#{raw}"
       end
     end
 

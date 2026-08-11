@@ -84,8 +84,8 @@ namespace :demo do
     server_pid, server_url = tudu_boot_server(log: log, port: port)
     at_exit { tudu_stop(server_pid) }
 
-    flow = File.expand_path("../../collab_flow.rb", __dir__)
-    puts "\n── Running collab_flow.rb ──"
+    flow = File.expand_path("../../script/collab_flow.rb", __dir__)
+    puts "\n── Running script/collab_flow.rb ──"
     r = tudu_run_flow(flow, server_url)
 
     failures = []
@@ -135,8 +135,8 @@ namespace :demo do
     server_pid, server_url = tudu_boot_server(log: log, port: port)
     failures = []
     begin
-      flow = File.expand_path("../../link_flow.rb", __dir__)
-      puts "\n── Running link_flow.rb ──"
+      flow = File.expand_path("../../script/link_flow.rb", __dir__)
+      puts "\n── Running script/link_flow.rb ──"
       r = tudu_run_flow(flow, server_url,
                         "HOLDER_ID" => holder_id, "HOLDER_EMAIL" => holder_email, "HOLDER_PASSWORD" => holder_password)
 
@@ -190,8 +190,8 @@ namespace :demo do
     server_pid, server_url = tudu_boot_server(log: log, port: port)
     at_exit { tudu_stop(server_pid) }
 
-    flow = File.expand_path("../../isolation_flow.rb", __dir__)
-    puts "\n── Running isolation_flow.rb ──"
+    flow = File.expand_path("../../script/isolation_flow.rb", __dir__)
+    puts "\n── Running script/isolation_flow.rb ──"
     r = tudu_run_flow(flow, server_url)
 
     failures = []
@@ -239,8 +239,8 @@ namespace :demo do
     server_pid, server_url = tudu_boot_server(log: log, port: port)
     at_exit { tudu_stop(server_pid) }
 
-    suite = File.expand_path("../../redteam_suite.rb", __dir__)
-    puts "\n── Running redteam_suite.rb ──"
+    suite = File.expand_path("../../script/redteam_suite.rb", __dir__)
+    puts "\n── Running script/redteam_suite.rb ──"
     ok = system({ "SERVER_URL" => server_url, "KIOSK_ISSUER" => server_url,
                   "HOLDER_ID" => holder_id, "HOLDER_EMAIL" => holder_email, "HOLDER_PASSWORD" => holder_password },
                 "bundle", "exec", "ruby", suite)
@@ -270,8 +270,8 @@ namespace :demo do
     server_pid, server_url = tudu_boot_server(log: log, port: port)
     at_exit { tudu_stop(server_pid) }
 
-    flow = File.expand_path("../../schema_flow.rb", __dir__)
-    puts "\n── Running schema_flow.rb ──"
+    flow = File.expand_path("../../script/schema_flow.rb", __dir__)
+    puts "\n── Running script/schema_flow.rb ──"
     r = tudu_run_flow(flow, server_url)
 
     failures = []

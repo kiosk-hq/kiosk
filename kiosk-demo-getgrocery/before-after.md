@@ -32,7 +32,7 @@ The reason incumbents stay at discovery is economic, not technical. Grocery reta
 
 ## With Kiosk — getgrocery (`rake demo` output)
 
-getgrocery is a Rails 8 app that speaks Kiosk. The following is representative output of `rake demo` (from `getgrocery_flow.rb`), run against the real Stripe adapter in test mode — `psp_reference` is a genuine Stripe test-mode `pi_…` PaymentIntent and settlement is recorded in `kiosk.settlements`:
+getgrocery is a Rails 8 app that speaks Kiosk. The following is representative output of `rake demo` (from `script/getgrocery_flow.rb`), run against the real Stripe adapter in test mode — `psp_reference` is a genuine Stripe test-mode `pi_…` PaymentIntent and settlement is recorded in `kiosk.settlements`:
 
 ```
 {"http_register":201,"http_catalog":200,"http_order":200,"http_slots":200,"http_payment_setup":200,"http_pay":200,"http_schedule":200,"http_my_orders":200,"user_id":"a7f3c291-1b2e-4d8a-9cf1-3e507b824f16","agent_id":"b2e94107-3a1c-4f8d-bc2e-91d4a53c7e28","order_id":"d4f81c3e-7b2a-4e9c-af13-62d7b4c8e509","total_cents":847,"scheduled_at":"2026-07-13T08:00:00.000Z","psp_reference":"pi_3Qk9fLR2bkGb2V0T1aX7dZ8p","pay":{"ok":true,"kind":"value","value":{"settlement_id":"f1b3e259-8c4d-4a7f-9e12-84b5c7d2a963","psp_reference":"pi_3Qk9fLR2bkGb2V0T1aX7dZ8p","settled_amount_cents":847,"currency":"eur"}}}
@@ -210,7 +210,7 @@ This demo uses the **real Stripe adapter in test mode** (`STRIPE_SECRET_KEY=sk_t
 
 **What this enables:** any personal AI assistant that discovers the `issuer` and `endpoint` via `/.well-known/kiosk.json` and reads the served surface via `GET /kiosk/schema` (see `rake demo:schema`) can complete a grocery order without the user having an account at the operator and without the user being present. The operator drops its anti-bot wall for sanctioned AI-assistant traffic; the anti-bot wall stays in place for everything else.
 
-See `getgrocery_flow.rb` in this directory for the full worked example.
+See `script/getgrocery_flow.rb` in this directory for the full worked example.
 
 ---
 

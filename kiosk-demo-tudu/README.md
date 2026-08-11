@@ -108,7 +108,7 @@ no `Protocols: ap2` / `Payments:` directives.
 
 Human↔assistant linking is **not** a run action — it's the W5 ceremony
 (`POST /kiosk/auth/link` mint → `POST /kiosk/auth/claim` redeem), driven by
-`link_flow.rb`.
+`script/link_flow.rb`.
 
 ## Repo tour
 
@@ -119,7 +119,7 @@ Human↔assistant linking is **not** a run action — it's the W5 ceremony
 | `config/initializers/kiosk.rb` | `Kiosk.configure` (NO `payment_provider`) + the `assistant_creation`/`assistant_claimed` hooks + the 4 queries and 6 actions |
 | `app/controllers/lists_controller.rb`, `todos_controller.rb` | The human web UI, running the SAME registered actions as the wire (one shared world) |
 | `lib/stub_idp.rb` / `lib/jwt_or_stub_idp.rb` | Demo IdP: Kiosk JWTs first, bespoke `agent:u-…:a-…:r-…` fallback |
-| `collab_flow.rb` / `link_flow.rb` / `isolation_flow.rb` / `redteam_suite.rb` / `schema_flow.rb` | One-JSON-line flow drivers the rake tasks assert on |
+| `script/collab_flow.rb` / `script/link_flow.rb` / `script/isolation_flow.rb` / `script/redteam_suite.rb` / `script/schema_flow.rb` | One-JSON-line flow drivers the rake tasks assert on |
 | `lib/tasks/demo.rake` | `rake demo:setup`, `:collab`, `:link`, `:isolation`, `:redteam`, `:schema`, `demo` |
 
 ## Make it real

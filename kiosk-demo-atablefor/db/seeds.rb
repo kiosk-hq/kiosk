@@ -9,7 +9,7 @@
 # lib/seatings.rb), so it is never stale, yet the tables are FINITE and CAN sell
 # out for a given seating.
 #
-# The book_flow.rb / demo:book path self-registers agents via
+# The script/book_flow.rb / demo:book path self-registers agents via
 # /kiosk/auth/register (proof-of-possession handshake), which inserts a fresh
 # users row — those principals need no seed. The bin/demo walkthrough instead
 # books under one STABLE stub principal (StubIdp token, no PoP round-trip so the
@@ -19,7 +19,7 @@
 # carries. (stylish seeds its stub users for the identical reason.)
 #
 # Two stable stub principals: one for the walkthrough / schema probe, and a
-# second so the redteam battery (redteam_suite.rb) can drive a cross-owner probe
+# second so the redteam battery (script/redteam_suite.rb) can drive a cross-owner probe
 # with two known identities. Both need a users row because
 # `Booking belongs_to :user`.
 require Rails.root.join("lib/seatings")

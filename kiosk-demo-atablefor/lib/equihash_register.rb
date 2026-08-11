@@ -9,15 +9,18 @@
 # (ADR-0022). Replaces the old inline SHA256 hashcash.
 #
 # Requires: json, jwt, net/http, uri, openssl, open3, securerandom (the caller
-# already requires most of these).
+# already requires most of these) plus the kiosk-pow-equihash gem, which owns
+# the solver's location.
 
 require "open3"
-
-EQUIHASH_REGISTER_SOLVE_PY = File.expand_path("../../kiosk-pow-equihash/solve.py", __dir__)
+require "kiosk/pow/equihash"
 
 # Solve one Equihash challenge with the shipped solver → proof nonce hash.
+# The solver path comes from Kiosk::Pow::Equihash.solver_path — the gem's
+# documented accessor for solve.py inside its own package — instead of a
+# checkout-relative constant here (K-627/K-632: one owner for the location).
 def equihash_solve(challenge)
-  out, status = Open3.capture2("python3", EQUIHASH_REGISTER_SOLVE_PY, JSON.generate(challenge))
+  out, status = Open3.capture2("python3", Kiosk::Pow::Equihash.solver_path, JSON.generate(challenge))
   abort "solve.py exited non-zero: #{out}" unless status.success?
   parsed = JSON.parse(out)
   abort "solve.py error: #{parsed["error"]}" if parsed.key?("error")

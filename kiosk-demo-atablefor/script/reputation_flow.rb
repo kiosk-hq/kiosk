@@ -42,9 +42,12 @@ require "open3"
 require "securerandom"
 require "jwt"
 
-SERVER   = ENV.fetch("SERVER_URL")
-ISSUER   = ENV.fetch("KIOSK_ISSUER")
-SOLVE_PY = File.expand_path("../../kiosk-pow-equihash/solve.py", __dir__)
+SERVER = ENV.fetch("SERVER_URL")
+ISSUER = ENV.fetch("KIOSK_ISSUER")
+
+# equihash_solve / equihash_register come from the shared helper; the solver
+# location is Kiosk::Pow::Equihash.solver_path, owned by the gem (K-627).
+require_relative "../lib/equihash_register"
 
 # ── Shared helpers ─────────────────────────────────────────────────────────
 
@@ -60,15 +63,6 @@ def get_json(url, headers = {})
   uri = URI(url)
   res = Net::HTTP.new(uri.host, uri.port).request(Net::HTTP::Get.new(uri, headers))
   [res.code.to_i, (JSON.parse(res.body) rescue {})]
-end
-
-# Solve one equihash challenge with the shipped Python solver → proof nonce.
-def solve_challenge(challenge)
-  out, status = Open3.capture2("python3", SOLVE_PY, JSON.generate(challenge))
-  abort "solve.py failed for challenge #{challenge["id"]}: #{out}" unless status.success?
-  parsed = JSON.parse(out)
-  abort "solve.py error: #{parsed["error"]}" if parsed.key?("error")
-  { "indices" => parsed.fetch("indices"), "header_nonce" => parsed.fetch("header_nonce") }
 end
 
 # Execute a Kiosk verb with automatic PoW handling.
@@ -87,7 +81,7 @@ def exec_with_pow(command, body, token)
   if rc == 402
     challenges = resp.dig("error", "challenges")
     abort "missing challenges[] in 402 for #{command}" unless challenges.is_a?(Array) && challenges.any?
-    proofs = challenges.map { |c| { challenge: c, nonce: solve_challenge(c) } }
+    proofs = challenges.map { |c| { challenge: c, nonce: equihash_solve(c) } }
 
     # Re-submit the IDENTICAL body; the solved proof(s) ride in the Kiosk-PoW
     # request header as raw JSON (ADR-0022) — the body stays byte-identical so
@@ -129,7 +123,6 @@ end
 
 # ── Step 1: register a fresh principal (register PoW solved transparently) ───
 
-require_relative "../lib/equihash_register"
 _key, reg = equihash_register(
   server: SERVER, issuer: ISSUER,
   get_json: method(:get_json), post_json: method(:post_json),

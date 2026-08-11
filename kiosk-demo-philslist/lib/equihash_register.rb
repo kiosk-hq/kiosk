@@ -1,6 +1,6 @@
 # frozen_string_literal: true
 
-# Shared registration helper for the getgrocery demo flows.
+# Shared registration helper for the philslist demo flows.
 #
 # Registration is gated by ONE Equihash proof (see config/initializers/kiosk.rb).
 # This helper does the full handshake: challenge → sign PoP → register; on a 402

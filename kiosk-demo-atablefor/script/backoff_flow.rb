@@ -38,9 +38,12 @@ require "openssl"
 require "open3"
 require "securerandom"
 
-SERVER   = ENV.fetch("SERVER_URL")
-ISSUER   = ENV.fetch("KIOSK_ISSUER")
-SOLVE_PY = File.expand_path("../../kiosk-pow-equihash/solve.py", __dir__)
+SERVER = ENV.fetch("SERVER_URL")
+ISSUER = ENV.fetch("KIOSK_ISSUER")
+
+# equihash_solve / equihash_register come from the shared helper; the solver
+# location is Kiosk::Pow::Equihash.solver_path, owned by the gem (K-627).
+require_relative "../lib/equihash_register"
 
 GRANT_COUNT = 3 # must match the Backoff policy's count: in config/initializers/kiosk.rb
 
@@ -58,18 +61,8 @@ def get_json(url, headers = {})
   [res.code.to_i, (JSON.parse(res.body) rescue {})]
 end
 
-# Solve one equihash challenge with the shipped Python solver → proof nonce.
-def solve(challenge)
-  out, status = Open3.capture2("python3", SOLVE_PY, JSON.generate(challenge))
-  abort "solve.py exited non-zero: #{out}" unless status.success?
-  parsed = JSON.parse(out)
-  abort "solve.py error: #{parsed["error"]}" if parsed.key?("error")
-  { "indices" => parsed.fetch("indices"), "header_nonce" => parsed.fetch("header_nonce") }
-end
-
 # ── Step 1: register a fresh agent (register PoW solved transparently) ───────
 
-require_relative "../lib/equihash_register"
 _key, reg = equihash_register(
   server: SERVER, issuer: ISSUER,
   get_json: method(:get_json), post_json: method(:post_json),
@@ -101,7 +94,7 @@ abort "no challenges[] in 402 response" unless challenges.is_a?(Array) && challe
 
 # ── Step 3: solve → resubmit → expect 200 (grant set to GRANT_COUNT) ────────
 
-proofs = challenges.map { |c| { challenge: c, nonce: solve(c) } }
+proofs = challenges.map { |c| { challenge: c, nonce: equihash_solve(c) } }
 # PoW proof(s) ride in the Kiosk-PoW request header as raw JSON (ADR-0022), not
 # the body — the body stays byte-identical so the challenge fingerprint matches.
 rc_solved, resp_solved = post_json(

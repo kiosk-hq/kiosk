@@ -18,10 +18,13 @@ require "openssl"
 require "open3"
 require "securerandom"
 
-SERVER   = ENV.fetch("SERVER_URL")
-ISSUER   = ENV.fetch("KIOSK_ISSUER")
-SOLVE_PY = File.expand_path("../../kiosk-pow-equihash/solve.py", __dir__)
+SERVER = ENV.fetch("SERVER_URL")
+ISSUER = ENV.fetch("KIOSK_ISSUER")
 BAD_PROOF_FILE = "/tmp/kiosk-getgrocery-bad-proof.count"
+
+# equihash_solve / equihash_register come from the shared helper; the solver
+# location is Kiosk::Pow::Equihash.solver_path, owned by the gem (K-627).
+require_relative "../lib/equihash_register"
 
 def post_json(url, body, headers = {})
   uri = URI(url)
@@ -37,16 +40,7 @@ def get_json(url, headers = {})
   [res.code.to_i, (JSON.parse(res.body) rescue {})]
 end
 
-def solve(challenge)
-  out, status = Open3.capture2("python3", SOLVE_PY, JSON.generate(challenge))
-  abort "solve.py exited non-zero: #{out}" unless status.success?
-  parsed = JSON.parse(out)
-  abort "solve.py error: #{parsed["error"]}" if parsed.key?("error")
-  { "indices" => parsed.fetch("indices"), "header_nonce" => parsed.fetch("header_nonce") }
-end
-
 # ── Register (register PoW solved transparently) ──────────────────────────────
-require_relative "../lib/equihash_register"
 _key, reg = equihash_register(
   server: SERVER, issuer: ISSUER,
   get_json: method(:get_json), post_json: method(:post_json),
@@ -60,7 +54,7 @@ rc_challenge, resp = post_json("#{SERVER}/kiosk/query", QUERY, auth)
 abort "expected 402, got #{rc_challenge}: #{JSON.generate(resp)}" unless rc_challenge == 402
 abort "expected pow_required" unless resp.dig("error", "code") == "pow_required"
 challenges = resp.dig("error", "challenges")
-proofs = challenges.map { |c| { challenge: c, nonce: solve(c) } }
+proofs = challenges.map { |c| { challenge: c, nonce: equihash_solve(c) } }
 
 # ── Wrong nonce → 403 + penalty ─────────────────────────────────────────────
 _, neg = post_json("#{SERVER}/kiosk/query", QUERY, auth)

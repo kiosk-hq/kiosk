@@ -23,6 +23,20 @@ RSpec.configure do |config|
   end
 end
 
+# Stand-in for the host application's base controller — the fake
+# `ApplicationController` the Kiosk::Action / Kiosk::Query specs include the
+# mixin into. Kiosk imposes no superclass on operators (K-495: inheritance is
+# the operator's call), so its own specs must exercise the mixin against a base
+# class it does not own.
+#
+# `protect_from_forgery` is here because every real Rails app installs it on
+# ActionController::Base (config.action_controller.default_protect_from_forgery),
+# and a handler sub-dispatch can never present a CSRF token — so the mixin has
+# to skip it, and these specs have to prove it does.
+class ApplicationController < ActionController::Base
+  protect_from_forgery with: :exception
+end
+
 # Minimal database-connection stub. Records every #execute call as a SQL
 # string. Pretends to support transactions (yields the block, no rollback
 # semantics — the real ActiveRecord::Base.connection.transaction handles

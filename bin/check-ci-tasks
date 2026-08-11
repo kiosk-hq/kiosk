@@ -32,6 +32,13 @@
 # never open. Without `--write` the same table is CHECKED, so an edit to ci.yml
 # that does not refresh the READMEs fails here rather than rotting.
 #
+# AND IS IT DOCUMENTED? (K-621) The generated table says whether CI runs a task;
+# the README's own hand-written list says what the task PROVES, which cannot be
+# generated. That hand list had drifted in four demos, so this also asserts that
+# every defined task is NAMED somewhere in its README outside the generated
+# block — presence only, never the prose, and blind to which shape the demo
+# documents tasks in.
+#
 # THE PARSER'S OWN GUARD. The task inventory is derived statically (stdlib only,
 # no bundle, runs in ~0.1 s on a bare checkout). A static parser can go blind to
 # a task defined in a shape it does not recognise — which would fail OPEN, the
@@ -104,8 +111,10 @@ on_disk = Dir[File.join(ROOT, "kiosk-demo-*")].select { |d| File.directory?(d) }
 
 # ── The one comparison this whole file exists for ────────────────────────────
 tables = {}
+defined_by_demo = {}
 (matrix.keys & on_disk).sort.each do |demo|
   defined_tasks = demo_tasks(File.join(ROOT, demo))
+  defined_by_demo[demo] = defined_tasks
   errors << "#{demo}: no demo: tasks found in lib/tasks/*.rake" if defined_tasks.empty?
 
   ci      = matrix[demo][:tasks]
@@ -161,6 +170,33 @@ tables.each do |demo, table|
     next
   end
   current = body[/#{Regexp.escape(BEGIN_MARK)}.*?#{Regexp.escape(END_MARK)}/m]
+
+  # ── Is the task DOCUMENTED at all? (K-621) ────────────────────────────────
+  #
+  # The generated table above answers "does CI run it". Every demo README also
+  # carries a HAND-WRITTEN list answering the other half — what the task proves
+  # — and that half cannot be generated, because only a human knows it. But the
+  # hand list drifted: four demos had grown tasks nobody added to it, and once
+  # the generated table landed directly beneath, each README visibly
+  # contradicted itself (`demo:rls | yes` in the table, no demo:rls at all in
+  # the prose above it, and no way for a reader to tell which is authoritative).
+  #
+  # So assert PRESENCE only, never the prose: every task the demo defines must
+  # be named somewhere in its README outside the generated block. That is the
+  # weakest check that makes "a task shipped undocumented" impossible, and it is
+  # shape-agnostic on purpose — the eight READMEs document tasks as a markdown
+  # table, an annotated `sh` block, or a `### heading (rake demo:x)` per task,
+  # and all three shapes are fine. Abbreviated forms (`:walkthrough` after a
+  # spelled-out `demo:setup`) do NOT count: a reader searching for the task name
+  # must find it.
+  prose = current ? body.sub(current, "") : body
+  (defined_by_demo[demo] - ["demo:setup"]).each do |t|
+    next if prose.match?(/#{Regexp.escape(t)}(?![\w])/)
+
+    errors << "#{demo}/README.md: `#{t}` is defined in lib/tasks/*.rake but never named in the README " \
+              "outside the generated CI-TASKS table — say what it proves in the hand-written task list"
+  end
+
   next if current == table
 
   if write

@@ -57,6 +57,7 @@ bin/rails demo:isolation   # cross-tenant denial (an operator's booking is only 
 bin/rails demo:redteam     # adversarial regression battery
 bin/rails demo:schema      # self-discovery; asserts `pay` is absent
 bin/rails demo:pow         # Equihash PoW gate (prices reservation-scalping at the door)
+bin/rails demo:backoff     # count-based PoW backoff: solve once → the next 3 calls are free → the 4th is challenged again
 bin/rails demo:reputation  # anti-scalping: PoW cost drops as a real booking history accrues
 bin/rails demo:walkthrough # curl-driven tour of the wire surface
 ```

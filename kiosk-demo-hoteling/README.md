@@ -39,6 +39,7 @@ bin/rails demo:browse      # browse-heavy priced-pagination PoW demo — boots w
 bin/rails demo:isolation   # cross-tenant denial (a booking is only yours)
 bin/rails demo:redteam     # adversarial regression battery
 bin/rails demo:schema      # self-discovery over the schema verb
+bin/rails demo:search      # pagination over the ~100-hotel catalogue: a truncated page carries an opaque `next` cursor, echoing it back returns a DISJOINT page, a complete result omits it, and hotel_detail resolves a summary row's id
 ```
 
 `bin/rails demo` runs `demo:setup` then `demo:book`.

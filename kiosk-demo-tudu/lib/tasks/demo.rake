@@ -78,7 +78,7 @@ namespace :demo do
       • list_members shows an owner + a member
   DESC
   task collab: :setup do
-    port = ENV.fetch("PORT", "3001")
+    port = ENV.fetch("PORT", "3007")
     log  = "/tmp/kiosk-tudu-collab.log"
     puts "\n── Starting tudu (collaboration happy path) ──"
     server_pid, server_url = tudu_boot_server(log: log, port: port)
@@ -124,7 +124,7 @@ namespace :demo do
     Alice ends with >=2 non-revoked agents.
   DESC
   task link: :setup do
-    port = ENV.fetch("PORT", "3001")
+    port = ENV.fetch("PORT", "3007")
     log  = "/tmp/kiosk-tudu-link.log"
     db   = "kiosk_tudu_development"
     holder_id       = "00000000-0000-0000-0000-000000000001"
@@ -182,7 +182,7 @@ namespace :demo do
       • after remove_member, the member's next read → 403 (access gone)
   DESC
   task isolation: :setup do
-    port = ENV.fetch("PORT", "3001")
+    port = ENV.fetch("PORT", "3007")
     log  = "/tmp/kiosk-tudu-isolation.log"
     db   = "kiosk_tudu_development"
 
@@ -229,7 +229,7 @@ namespace :demo do
     RevokedAgentKey (404), PreLinkTokenAfterLink (403).
   DESC
   task redteam: :setup do
-    port = ENV.fetch("PORT", "3001")
+    port = ENV.fetch("PORT", "3007")
     log  = "/tmp/kiosk-tudu-redteam.log"
     holder_id       = "00000000-0000-0000-0000-000000000001"
     holder_email    = "alice@example.com"
@@ -263,7 +263,7 @@ namespace :demo do
     no `Protocols: ap2` / `Payments:` directives.
   DESC
   task schema: :setup do
-    port = ENV.fetch("PORT", "3001")
+    port = ENV.fetch("PORT", "3007")
     log  = "/tmp/kiosk-tudu-schema.log"
 
     puts "\n── Starting tudu (schema proof) ──"

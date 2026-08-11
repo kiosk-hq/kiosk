@@ -227,23 +227,19 @@ module Kiosk
       end
 
       # Storage adapter for {Kiosk::Server::DeviceAuthorization} rows (the
-      # account-binding ceremony state machine). Lazy default:
-      # the durable {DeviceAuthorizationStores::ActiveRecord} store (over
-      # `kiosk.device_authorizations`, migration 008) whenever ActiveRecord
-      # is present — the ceremony is cross-process by nature (the human
-      # approves in a browser while the agent polls from another process;
-      # cross-process by nature). Falls back to {DeviceAuthorizationStores::InMemory} in
-      # AR-less contexts (unit tests, plain Rack hosts without a DB).
+      # account-binding ceremony state machine). Lazy default: the durable
+      # {DeviceAuthorizationStores::ActiveRecord} store (over
+      # `kiosk.device_authorizations`, migration 008) — the ceremony is
+      # cross-process by nature (the human approves in a browser while the
+      # agent polls from another process), so an in-memory store cannot serve
+      # it. {DeviceAuthorizationStores::InMemory} stays shipped for tests and
+      # is assigned explicitly through the writer.
       #
       # @return [DeviceAuthorizationStores::Base]
       attr_writer :device_authorization_store
       def device_authorization_store
         @device_authorization_store ||=
-          if defined?(::ActiveRecord::Base)
-            Kiosk::Server::DeviceAuthorizationStores::ActiveRecord.new
-          else
-            Kiosk::Server::DeviceAuthorizationStores::InMemory.new
-          end
+          Kiosk::Server::DeviceAuthorizationStores::ActiveRecord.new
       end
 
       # Operator sign-in path the engine redirects a browser to when an

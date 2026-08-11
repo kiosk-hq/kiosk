@@ -1,10 +1,19 @@
 # frozen_string_literal: true
 
-# kiosk-server — Rails engine (when in a Rails host) + pure-Ruby pieces
-# (well-known doc builder, headers, schema-migration SQL) that don't need
-# a host. See https://kiosk.tech.
+# kiosk-server — the Rails engine, the nine wire/auth/discovery controllers,
+# the install generator, and the pure-Ruby pieces they build on (well-known
+# doc builder, headers, schema-migration SQL). See https://kiosk.tech.
+#
+# This is a Rails gem: railties, actionpack, activerecord and activesupport
+# are declared runtime dependencies (see the gemspec) and are loaded here
+# unconditionally. Individual files require the framework piece they use.
 
 require "kiosk"
+
+# ActiveRecord::Base.connection is how the auth plane and the durable
+# device-authorization store reach the database; nothing in this gem
+# provides an alternative for those paths.
+require "active_record"
 
 require "kiosk/server/version"
 require "kiosk/server/signing_key"
@@ -43,13 +52,10 @@ require "kiosk/server/agent_login"
 require "kiosk/server/kyc_verifier"
 require "kiosk/server/mandate_verifier"
 
-# Optional Rails engine — only defines itself if Rails::Engine is loaded.
 require "kiosk/server/engine"
 
-# Controllers — each file defines its controller only when
-# ActionController::API (or ::Base for the HTML pages) is available (i.e., a
-# Rails host); safe to require in plain Ruby contexts. This block loads the
-# wire surface (WireController), the discovery surface (DiscoveryController —
+# Controllers. This block loads the wire surface (WireController), the
+# discovery surface (DiscoveryController —
 # agents.txt/json, agent-configuration, kiosk.json, api-catalog, auth.md),
 # JWKS (JwksController), the kiosk-pop auth surface (AuthController — NOT
 # OAuth — plus the link/claim/unlink binding endpoints), the KYC attestation
@@ -71,7 +77,7 @@ module Kiosk
     #
     #   Wire plane:
     #   - {Kiosk::Server::Executor}         — wire dispatch (query/run/pay/schema)
-    #   - {Kiosk::Server::WireController}   — Rails controller wrapping Executor (only when Rails loaded)
+    #   - {Kiosk::Server::WireController}   — Rails controller wrapping Executor
     #   - {Kiosk::Server::Actions}          — minimal Action registry (full DSL later)
     #   - {Kiosk::Server::Queries}          — read-side query registry
     #   - {Kiosk::Server::Result}           — success envelope value type
@@ -82,7 +88,7 @@ module Kiosk
     #   - {Kiosk::Server::AgentRegistration} — register an agent key (POW-gated)
     #   - {Kiosk::Server::AgentLogin}        — challenge/response login → access token
     #   - {Kiosk::Server::PopVerifier}       — verifies the proof-of-possession signature
-    #   - {Kiosk::Server::AuthController}    — Rails controller for the kiosk-pop surface (only when Rails loaded)
+    #   - {Kiosk::Server::AuthController}    — Rails controller for the kiosk-pop surface
     #   - {Kiosk::Server::IdentityResolution} — resolves agent_idp then user_idp → Identity
     #   - {Kiosk::Server::PowGate}           — gates verbs behind a proof-of-work toll
     #   - {Kiosk::Server::RegistrationPow}   — proof-of-work check for registration
@@ -90,21 +96,21 @@ module Kiosk
     #   Payment / KYC plane:
     #   - {Kiosk::Server::MandateVerifier}  — verifies agent-signed AP2 mandate JWS
     #   - {Kiosk::Server::KycVerifier}      — verifies a KYC attestation JWS
-    #   - {Kiosk::Server::KycAttestationController} — Rails controller for the KYC surface (only when Rails loaded)
+    #   - {Kiosk::Server::KycAttestationController} — Rails controller for the KYC surface
     #
     #   Signing / discovery:
     #   - {Kiosk::Server::WellKnown}        — discovery generator: kiosk.json (build), agents.txt, agents.json, agent-configuration, api-catalog (RFC 9727), auth.md
-    #   - {Kiosk::Server::DiscoveryController} — serves those six discovery docs (only when Rails loaded)
+    #   - {Kiosk::Server::DiscoveryController} — serves those six discovery docs
     #   - {Kiosk::Server::SigningKey}       — RSA keypair value object
     #   - {Kiosk::Server::Jwks}             — JWKS document builder (RFC 7517)
     #   - {Kiosk::Server::JwtIssuer}        — RS256 sign / verify (kiosk-pop access tokens)
-    #   - {Kiosk::Server::JwksController}   — Rails controller serving /.well-known/jwks.json (only when Rails loaded)
+    #   - {Kiosk::Server::JwksController}   — Rails controller serving /.well-known/jwks.json
     #
     #   Infra:
     #   - {Kiosk::Server::Headers}          — composes the three response headers
     #   - {Kiosk::Server::HeadersMiddleware}— Rack middleware that injects them
     #   - {Kiosk::Server::SchemaDefinitions}— SQL for migrations 001-009
-    #   - {Kiosk::Server::Engine}           — Rails engine (only when Rails loaded)
+    #   - {Kiosk::Server::Engine}           — Rails engine
     #
     #   Account-binding ceremony (the RFC 8628 machinery revived
     #   as the key-bound claim/link surface; kiosk-pop stays the only token

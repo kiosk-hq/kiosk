@@ -84,6 +84,41 @@ RSpec.describe Kiosk::Server::HandlerDispatch do
         .to raise_error(Kiosk::Server::Errors::ActionFailed, /pay up/)
     end
 
+    it "falls back to the status when a rendered code does not belong to it" do
+      # pow_required is a 402 code; rendered on a 403 it is a handler bug, and
+      # the seam answers with what the status alone says rather than putting a
+      # mislabelled code on the wire.
+      klass = Class.new(ApplicationController) do
+        include Kiosk::Query
+        description "Renders a 402 code on a 403 status."
+        def mislabelled
+          render json: { ok: false, error: { code: "pow_required", message: "nope" } },
+                 status: :forbidden
+        end
+      end
+      stub_const("SpecMislabelledController", klass)
+
+      expect { execute(:query, { name: "mislabelled" }) }
+        .to raise_error(Kiosk::Server::Errors::Base) { |e| expect(e.code).to eq("forbidden") }
+    end
+
+    it "never mistakes an operator's own code field for the wire vocabulary" do
+      klass = Class.new(ApplicationController) do
+        include Kiosk::Action
+        description "Answers a domain refusal with the app's own error code."
+        def sold_out
+          render json: { error: { code: "out_of_stock", message: "sold out" } }, status: :conflict
+        end
+      end
+      stub_const("SpecSoldOutController", klass)
+
+      expect { execute(:run, { name: "sold_out" }) }
+        .to raise_error(Kiosk::Server::Errors::Base) { |e|
+          expect(e.code).to eq("conflict")
+          expect(e.message).to eq("sold out")
+        }
+    end
+
     it "rejects a page marker with no rows" do
       klass = Class.new(ApplicationController) do
         include Kiosk::Query

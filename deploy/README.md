@@ -337,7 +337,16 @@ no raw agent id, no per-assistant detail.
 
 **Demonstrate before real traffic.** `rake demo:telemetry` (in getgrocery)
 seeds simulated events and prints both aggregates — the exact JSON the endpoint
-and landing tile return.
+and landing tile return. It also runs in CI against the job's throwaway
+database, so seeding the SHARED store is deliberate rather than incidental: with
+`KIOSK_TELEMETRY_DB_URL` set the task ABORTS unless you also pass
+`SEED_SHARED=1` (K-620). To seed the hosted store:
+
+    KIOSK_TELEMETRY_DB_URL=postgres://kiosk_telemetry:<pw>@127.0.0.1/kiosk_demo_telemetry \
+      SEED_SHARED=1 bundle exec rake demo:telemetry
+
+Those rows are SYNTHETIC and indistinguishable from real activity in the
+aggregate — seed once before launch, not after there is traffic to report.
 
 Still open (not this change): a per-app `demo:prune` (+ idempotent `demo:seed`)
 rake task so `prune.sh` reclaims disk from throwaway registrations —

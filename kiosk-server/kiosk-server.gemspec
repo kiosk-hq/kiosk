@@ -8,17 +8,28 @@ Gem::Specification.new do |spec|
 
   spec.summary       = "Rails engine + Rack middleware + pure-Ruby helpers for the Kiosk framework"
   spec.description   = <<~DESC
-    kiosk-server is the host-side surface for Kiosk: a Rails engine that
-    mounts the wire endpoints (/kiosk/{schema,query,run,pay},
-    /kiosk/auth/*, /kiosk/oauth/*), a Rack middleware that injects the
-    Kiosk-Server-Version / Kiosk-API-Version / Kiosk-Min-Client response
-    headers, a pure-Ruby builder for /.well-known/kiosk.json, and SQL
-    generators for the four canonical schema migrations.
+    kiosk-server is the host-side surface for Kiosk. The full surface ships:
 
-    Pre-v0.1: ships with the configuration surface, well-known doc
-    builder, headers middleware, and schema migration SQL. Controllers
-    (the Executor, OAuth surface, agent registration endpoints) land in
-    follow-up releases.
+      - Nine controllers — the wire verbs (/kiosk/{schema,query,run,pay}),
+        the register/login proof-of-possession auth plane, JWKS, the KYC
+        attestation endpoint, agents.txt / agents.json / kiosk.json
+        discovery, and the account-binding ceremony (RFC 8628-shaped device
+        authorization, the possession-proof-gated token poll, the verify and
+        «Link an assistant» pages).
+      - Kiosk::Server::Executor — dispatches a resolved command to the
+        queries and actions the host registered.
+      - Agent registration and login, with a pluggable agent-IdP.
+      - The PoW gate that enforces a kiosk-reputation policy's challenge
+        (soft dependency; zero overhead when no policy is set).
+      - A Rack middleware injecting the Kiosk-Server-Version /
+        Kiosk-API-Version / Kiosk-Min-Client response headers, a pure-Ruby
+        builder for the discovery documents, SQL generators for the
+        canonical schema migrations, and a `kiosk:install` generator that
+        lays down the initializer and the migrations.
+
+    A Rails engine draws the account-binding routes and auto-injects the
+    headers middleware; hosts mount the wire, auth, JWKS, KYC and discovery
+    routes in their own config/routes.rb.
   DESC
   spec.homepage      = "https://kiosk.tech"
   spec.license       = "Apache-2.0"
@@ -29,7 +40,16 @@ Gem::Specification.new do |spec|
   spec.metadata["changelog_uri"]    = "https://github.com/kiosk-hq/kiosk/blob/main/kiosk-server/CHANGELOG.md"
   spec.metadata["bug_tracker_uri"]  = "https://github.com/kiosk-hq/kiosk/issues"
 
-  spec.files = Dir.glob("lib/**/*") + %w[README.md LICENSE.txt CHANGELOG.md]
+  # `app/` is NOT optional. Two controllers resolve their templates by path —
+  # `append_view_path File.expand_path("../../../app/views", __dir__)` in
+  # device_verify_controller.rb:38 and assistants_controller.rb:28 — so a gem
+  # built without app/views answers BOTH HTML pages of the account-binding
+  # ceremony with ActionView::MissingTemplate. It shipped that way because
+  # every consumer in this monorepo uses `path:`, which serves the working
+  # tree: no test here could have noticed, and only someone installing from
+  # RubyGems would have. bin/check-gem-packaging is the standing guard.
+  spec.files = Dir.glob("app/**/*") + Dir.glob("lib/**/*") +
+               %w[README.md LICENSE.txt CHANGELOG.md]
   spec.require_paths = ["lib"]
 
   spec.add_dependency "kiosk-core", "~> 0.0"

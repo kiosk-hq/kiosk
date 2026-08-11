@@ -90,7 +90,9 @@ see "Edge rate-limit — REQUIRED" below.) Any other demo is knob-adjustable: se
 
 **Automated (this runbook provides):** the Caddy vhosts, the SQL to create all
 DBs + roles, the systemd unit template, and the env templates. (`prune.sh` is
-shipped but its cron is deliberately NOT installed — see step 5.)
+shipped but its cron is deliberately NOT installed — see step 5. Nothing here
+reclaims demo accounts on a schedule; `demo-reset.sh` is the reclaim tool and
+you run it by hand.)
 No app code changes are required to run multi-app/one-Postgres — each
 demo already ships a production `database.yml` that reads its own DB + role from
 its env file (see [Database names](#database-names)).
@@ -184,12 +186,18 @@ sudo cp /srv/kiosk/deploy/Caddyfile /etc/caddy/Caddyfile
 sudo caddy validate --config /etc/caddy/Caddyfile
 sudo systemctl reload caddy
 
-# 5. Cron: daily housekeeping — OPTIONAL, and NOT installed on the hosted box.
-#    Deliberately skipped (deploy/CHECKLIST.md §7): the demos are per-agent
+# 5. Cron: nightly catalog re-seed — OPTIONAL, and NOT installed on the hosted
+#    box. Deliberately skipped (deploy/CHECKLIST.md §7): the demos are per-agent
 #    isolated, so a poker's junk is invisible to the next poker and disk growth
 #    is the only cost — reseed a bloated demo DB by hand (deploy/demo-reset.sh)
 #    if it ever matters. prune.sh ships ready to use for anyone who does want it:
 #    0 4 * * *  /srv/kiosk/deploy/prune.sh >> /var/log/kiosk-prune.log 2>&1
+#
+#    Read prune.sh's header before you trust its name: it PRUNES NOTHING
+#    (K-615). No demo ships an account-retention task and nothing in this repo
+#    reclaims accounts on a schedule; the script re-seeds each app's shared
+#    catalog (`db:seed`, additive) and that is all. Since the push-to-deploy
+#    hook already seeds on every push, the cron only helps between deploys.
 ```
 
 
@@ -352,6 +360,7 @@ database, so seeding the SHARED store is deliberate rather than incidental: with
 Those rows are SYNTHETIC and indistinguishable from real activity in the
 aggregate — seed once before launch, not after there is traffic to report.
 
-Still open (not this change): a per-app `demo:prune` (+ idempotent `demo:seed`)
-rake task so `prune.sh` reclaims disk from throwaway registrations —
-`prune.sh` already calls these if present and no-ops safely if not.
+Housekeeping of this store is manual: the aggregates look back 10 min / 1 h /
+all-time-registered, so rows past the registered-count horizon can be trimmed to
+reclaim disk. Nothing does it for you — `kiosk_telemetry` is granted only SELECT
+and INSERT, so a trim is a DB-owner/superuser `DELETE`, run by hand.

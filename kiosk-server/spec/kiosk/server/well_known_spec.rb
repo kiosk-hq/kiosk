@@ -189,9 +189,13 @@ RSpec.describe Kiosk::Server::WellKnown do
     end
 
     it "emits a Skills directive pointing at the configured skill URL" do
-      Kiosk.configure { |c| c.skill_url = "https://kiosk.tech/skill-v0.1.2.md" }
+      # Deliberately synthetic (not a published kiosk.tech artifact): this is a
+      # round-trip on whatever skill_url is configured, and a synthetic value
+      # cannot go stale — and cannot be mistaken for the shipped default, which
+      # is asserted separately above (K-641).
+      Kiosk.configure { |c| c.skill_url = "https://example.test/skill.md" }
       d = directives(described_class.agents_txt(base_url: "https://api.acme.example"))
-      expect(d["Skills"]).to eq("https://kiosk.tech/skill-v0.1.2.md")
+      expect(d["Skills"]).to eq("https://example.test/skill.md")
     end
 
     it "has a `#` comment header and a JSON pointer comment" do
@@ -264,9 +268,12 @@ RSpec.describe Kiosk::Server::WellKnown do
     end
 
     it "lists the configured skill" do
-      Kiosk.configure { |c| c.skill_url = "https://kiosk.tech/skill-v0.1.2.md" }
+      # Synthetic on purpose — round-trip of the configured value, immune to
+      # published-skill version bumps (K-641). The shipped default is pinned
+      # and asserted in the skill-descriptor example above.
+      Kiosk.configure { |c| c.skill_url = "https://example.test/skill.md" }
       d = described_class.agents_json(base_url: "https://api.acme.example")
-      expect(d[:skills].first[:url]).to eq("https://kiosk.tech/skill-v0.1.2.md")
+      expect(d[:skills].first[:url]).to eq("https://example.test/skill.md")
     end
 
     it "carries the six-verb contract under the x-kiosk extension" do

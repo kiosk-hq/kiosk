@@ -6,6 +6,18 @@ All notable changes follow [Keep a Changelog](https://keepachangelog.com/en/1.1.
 
 ### Changed
 
+- **kiosk-server declares Rails.** New runtime dependencies: `railties`,
+  `actionpack`, `activerecord` and `activesupport`, all `~> 8.1` — the four
+  components the gem references. Deliberately not the `rails` meta-gem: nothing
+  here touches Action Mailer, Action Cable, Active Job, Active Storage, Action
+  Text or Action Mailbox. The engine and the nine controllers no longer hide
+  behind `if defined?(::ActionController::API)` / `if defined?(::Rails::Engine)`
+  — `require "kiosk/server"` defines all ten unconditionally, so a missing
+  framework is a LoadError at require time rather than a NameError at request
+  time. Consequences: `Kiosk.configuration.device_authorization_store` always
+  lazy-defaults to the durable ActiveRecord adapter (it already did in every
+  Rails host), and `TestExecutor` no longer offers an "ActiveRecord absent"
+  error path. Rails < 8.1 is untested and therefore not claimed (K-495, T-052).
 - **PoW proof moves to the `Kiosk-PoW` request header.** `WireController` and
   `AuthController#register` now read the proof(s) from the `Kiosk-PoW` request
   header as raw JSON (`HTTP_KIOSK_POW`) instead of a `pow` body field (ADR-0022,

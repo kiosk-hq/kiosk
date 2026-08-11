@@ -32,6 +32,11 @@ Gem::Specification.new do |spec|
 
   # RS256 mandate signing / verification in specs
   spec.add_dependency "jwt", ">= 2.0", "< 4.0"
+  # base64 was a default gem through Ruby 3.3 but became a BUNDLED gem in 3.4,
+  # so it has to be declared. Required at load time by scenario.rb and
+  # scenarios/privilege_self_selection.rb; until now it arrived only by
+  # accident, as a transitive dependency of jwt.
+  spec.add_dependency "base64"
 
   spec.add_development_dependency "rspec",   "~> 3.13"
   spec.add_development_dependency "webmock", "~> 3.0"

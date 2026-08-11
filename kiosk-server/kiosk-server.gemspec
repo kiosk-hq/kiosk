@@ -36,6 +36,11 @@ Gem::Specification.new do |spec|
   # JWT issue/verify for the OAuth surface and access tokens.
   # ruby-jwt is the de-facto Ruby JOSE library — small, MIT, no transitive deps.
   spec.add_dependency "jwt", ">= 2.8", "< 4.0"
+  # base64 was a default gem through Ruby 3.3 but became a BUNDLED gem in 3.4,
+  # so it has to be declared. Required at load time by signing_key.rb,
+  # result.rb and configuration_extension.rb; until now it arrived only by
+  # accident, as a transitive dependency of jwt.
+  spec.add_dependency "base64"
 
   # ── Rails ──────────────────────────────────────────────────────────────
   # kiosk-server IS a Rails gem: it ships an engine, nine controllers, an

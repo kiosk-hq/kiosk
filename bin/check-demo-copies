@@ -36,6 +36,7 @@
 #   :code      — identical once comments and whitespace are normalised away, so
 #                each copy's header prose may name its own demo. Ripper does the
 #                stripping, so a `#` inside a string or regex is not a comment.
+#                MAGIC comments are the exception and are compared (K-628).
 #   :per_demo  — a genuine per-demo implementation that shares only a filename.
 #                Not compared; the manifest entry records WHY they differ, so the
 #                next reader does not have to diff seven files to find out.
@@ -56,8 +57,14 @@
 # K-495/K-502) and this check does not pre-empt it — it only makes the interim
 # state honest, and it is what should be deleted the day the extraction lands.
 #
-# LIMITATION, STATED: `:code` ignores ALL comments, magic comments included, so a
-# copy that lost `# frozen_string_literal: true` compares equal here.
+# MAGIC COMMENTS ARE THE ONE COMMENT `:code` STILL COMPARES (K-628). Ripper drops
+# every comment, magic ones included, so until this was added a copy that lost
+# `# frozen_string_literal: true` compared equal to one that had it — and three of
+# the four application_controller.rb copies had lost it, unnoticed, because a
+# magic comment is the one comment that changes how the file RUNS. So the leading
+# magic-comment block is extracted and compared separately, on the recognised
+# Ruby set only (see MAGIC_COMMENTS): prose stays ignored, `# frozen_string_literal`
+# does not. `:identical` needs nothing here — byte equality already covers it.
 #
 # Stdlib only (digest + ripper), no bundle, no database, ~0.2 s on a bare
 # checkout — the same profile as bin/check-ci-tasks.
@@ -190,9 +197,10 @@ COPIES = {
           "demo ever does, this line is where the divergence gets declared.",
   },
   "app/models/application_record.rb" => {
-    rule: :code,
-    why:  "Rails skeleton (primary_abstract_class). prove's header comment differs; the class body " \
-          "must not.",
+    rule: :identical,
+    why:  "Rails skeleton (primary_abstract_class). Was :code while prove alone carried " \
+          "`# frozen_string_literal: true`; all eight carry it since K-628, so there is nothing " \
+          "left for prose to differ by and the stronger rule is the honest one.",
   },
   "app/models/user.rb" => {
     rule: :per_demo,
@@ -299,6 +307,34 @@ end
 
 def byte_digest(path) = Digest::SHA256.file(path).hexdigest
 
+# ── Magic comments (K-628) ───────────────────────────────────────────────────
+#
+# The ONLY comments Ruby acts on. Restricted to the recognised set on purpose: a
+# generic "leading `word: value` comment" rule would swallow ordinary prose
+# ("# NOTE: ...") and start failing builds over wording, which is exactly what
+# :code exists to avoid. Anything outside this list is inert to Ruby and stays
+# invisible here.
+#
+# Only comments BEFORE the first real token count, because that is the only place
+# Ruby honours them — a `# frozen_string_literal: true` further down is a plain
+# comment and is correctly ignored.
+MAGIC_COMMENTS = %w[encoding coding frozen_string_literal warn_indent shareable_constant_value].freeze
+MAGIC_RE = /\A#\s*(?:-\*-\s*)?(#{Regexp.union(MAGIC_COMMENTS)})\s*:\s*([^\s;]+)/i
+
+def magic_comments(path)
+  found = []
+  Ripper.lex(File.read(path)).each do |(_pos, type, tok)|
+    case type
+    when :on_sp, :on_nl, :on_ignored_nl then next
+    when :on_comment
+      m = tok.strip.match(MAGIC_RE)
+      found << "#{m[1].downcase}: #{m[2].downcase}" if m
+    else break # first real token: anything after this is inert to Ruby
+    end
+  end
+  found.sort
+end
+
 # ── Discovery ────────────────────────────────────────────────────────────────
 demos = Dir[File.join(ROOT, "kiosk-demo-*")].select { |d| File.directory?(d) }.sort
 abort "check-demo-copies: no kiosk-demo-* directories under #{ROOT}" if demos.empty?
@@ -389,12 +425,33 @@ COPIES.each do |rel, entry|
               "record it in this file's `except:` map with the reason."
   end
 
+  # ── The comment `:code` does NOT ignore (K-628) ────────────────────────────
+  #
+  # code_digest cannot see this: Ripper drops magic comments with every other
+  # comment, so a copy that lost `# frozen_string_literal: true` groups with one
+  # that kept it. :identical is not checked here — byte equality already implies
+  # it, and a second error saying the same thing helps nobody.
+  magic = ->(path) { magic_comments(path) }
+  if entry[:rule] == :code
+    magic_groups = compared.group_by { |_demo, path| magic.call(path) }
+    if magic_groups.size > 1
+      listed = magic_groups.map do |comments, g|
+        "[#{g.map { |d, _| short.(d) }.sort.join(',')}] #{comments.empty? ? '(none)' : comments.join(', ')}"
+      end.join(" vs ")
+      errors << "#{rel}: declared :code — prose may differ per demo, MAGIC comments may not, because " \
+                "they change how the file runs: #{listed}. Add the missing one to every copy (or " \
+                "remove it from all of them); `except:` is for real per-demo behaviour, not for this."
+    end
+  end
+
   # An exception that is no longer needed is a lie the next reader will believe.
   next unless groups.size == 1
 
   canonical = groups.keys.first
+  canonical_magic = entry[:rule] == :code ? magic.call(compared.values.first) : nil
   skipped.each do |demo, path|
     next unless digest.call(path) == canonical
+    next if canonical_magic && magic.call(path) != canonical_magic
 
     errors << "#{rel}: `except:` for #{short.(demo)} is stale — its copy now agrees with the others. " \
               "Drop the exception so the file is guarded."

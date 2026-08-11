@@ -62,6 +62,13 @@ own CI job and fails the build when a `demo:` task is neither gated nor recorded
 with the reason it is not — or when a task the demo defines is not named in that
 README's own hand-written list of what each task proves.
 
+The demos are standalone Rails apps, so a helper two of them need is COPIED, not
+shared. `bin/check-demo-copies` — its own CI job too — declares every file that
+exists in more than one demo as kept identical, kept identical apart from its
+header prose, or a deliberate per-demo variant, each with the reason; it fails
+the build when copies that must agree stop agreeing, and when a new duplicate
+turns up undeclared.
+
 ## Contributing
 
 - One `bundle install` at the gem root covers that gem

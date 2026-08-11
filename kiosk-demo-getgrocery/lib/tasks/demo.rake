@@ -1077,6 +1077,13 @@ namespace :demo do
   desc <<~DESC
     Reconcile orders stuck in `paying` (K-578) — LOCAL evidence only.
 
+    OPERATOR UTILITY, NOT A GATE (K-616). Every other task in this namespace
+    asserts an invariant and exits non-zero when it breaks. This one reports:
+    on a freshly seeded database it prints "nothing stuck" and exits 0 no
+    matter what the code does, so it can never go red and CI does not run it.
+    The logic below IS gated — by demo:race's K-578 block, which strands
+    orders first and then sweeps them.
+
     A crash (or a failed status flip) between a successful capture and the
     paid-flip leaves an order `paying`: charged ONCE (the atomic claim makes a
     double charge impossible) but unpayable until reconciled. This sweep:

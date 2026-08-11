@@ -12,8 +12,8 @@
 # so there is no card-setup step (the live flow uses the real hosted page).
 #
 # Usage:
-#   SERVER_URL=http://127.0.0.1:3005 \
-#   KIOSK_ISSUER=http://127.0.0.1:3005 \
+#   SERVER_URL=http://127.0.0.1:3001 \
+#   KIOSK_ISSUER=http://127.0.0.1:3001 \
 #   bundle exec ruby script/getgrocery_flow.rb
 #
 # Prints ONE JSON line on stdout; non-zero exit on any failure.

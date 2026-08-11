@@ -128,7 +128,7 @@ namespace :demo do
       puts "  (no STRIPE_SECRET_KEY — running against stripe-mock at #{mock_url}, no real charge)"
     end
 
-    port         = ENV.fetch("PORT", "3005")
+    port         = ENV.fetch("PORT", "3001")
     log          = "/tmp/kiosk-getgrocery-demo.log"
     db           = ENV.fetch("KIOSK_GETGROCERY_DB", "kiosk_getgrocery_development")
     flow_rb      = File.expand_path("../../script/getgrocery_flow.rb", __dir__)
@@ -391,7 +391,7 @@ namespace :demo do
     puts "  (stripe-mock at #{mock_url} — seeded saved-card fixture, no real Stripe)"
     Rake::Task["demo:setup"].invoke
 
-    port = ENV.fetch("PORT", "3005")
+    port = ENV.fetch("PORT", "3001")
     log  = "/tmp/kiosk-getgrocery-claim.log"
     db   = ENV.fetch("KIOSK_GETGROCERY_DB", "kiosk_getgrocery_development")
 
@@ -537,7 +537,7 @@ namespace :demo do
     mock_url = start_stripe_mock
     puts "  (stripe-mock at #{mock_url} — adversarial suite, no real Stripe)"
 
-    port = ENV.fetch("PORT", "3005")
+    port = ENV.fetch("PORT", "3001")
     log  = "/tmp/kiosk-getgrocery-isolation.log"
     db   = ENV.fetch("KIOSK_GETGROCERY_DB", "kiosk_getgrocery_development")
 
@@ -717,7 +717,7 @@ namespace :demo do
     require "uri"
     require "json"
 
-    port = ENV.fetch("PORT", "3005")
+    port = ENV.fetch("PORT", "3001")
     log  = "/tmp/kiosk-getgrocery-schema.log"
 
     host = begin
@@ -966,7 +966,7 @@ namespace :demo do
     mock_url = start_stripe_mock
     puts "  (stripe-mock at #{mock_url} — adversarial battery, no real Stripe)"
 
-    port = ENV.fetch("PORT", "3005")
+    port = ENV.fetch("PORT", "3001")
     log  = "/tmp/kiosk-getgrocery-redteam.log"
 
     # ── host resolution ────────────────────────────────────────────────
@@ -1147,7 +1147,7 @@ namespace :demo do
     ENV["STRIPE_SECRET_KEY"] = "sk_test_dummy" if ENV["STRIPE_SECRET_KEY"].to_s.empty?
     Rake::Task["demo:setup"].invoke
 
-    port         = ENV.fetch("PORT", "3005")
+    port         = ENV.fetch("PORT", "3001")
     server_url   = "http://127.0.0.1:#{port}"
     log          = "/tmp/kiosk-getgrocery-pow.log"
     flow_rb      = File.expand_path("../../script/pow_flow.rb", __dir__)
@@ -1433,7 +1433,7 @@ namespace :demo do
     mock_url = start_stripe_mock
     puts "  (stripe-mock at #{mock_url} — age-gate flow, no real Stripe)"
 
-    port = ENV.fetch("PORT", "3005")
+    port = ENV.fetch("PORT", "3001")
     log  = "/tmp/kiosk-getgrocery-agecheck.log"
 
     host = begin

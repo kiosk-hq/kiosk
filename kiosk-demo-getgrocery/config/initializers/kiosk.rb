@@ -67,10 +67,6 @@ require "kiosk/reputation"
 Kiosk::Reputation::Backends.register(Kiosk::Pow::Equihash::NAME, Kiosk::Pow::Equihash)
 
 if ENV["KIOSK_POW_DEMO"] == "1"
-  require "kiosk/pow/equihash"
-  require "kiosk/reputation"
-  Kiosk::Reputation::Backends.register(Kiosk::Pow::Equihash::NAME, Kiosk::Pow::Equihash)
-
   # ⚠ TOY COUNTER — NOT a reputation signal (K-590, the atablefor K-498 sibling).
   # Its ONLY job is to let the local `script/pow_flow.rb` driver print "the server
   # counted my bad proof"; nothing reads it for policy (`reputation_factors`
@@ -282,7 +278,6 @@ Kiosk.configure do |c|
   # ── Catalog-toll PoW gate (active only when KIOSK_POW_DEMO=1) ────────────
   if ENV["KIOSK_POW_DEMO"] == "1"
     c.reputation_policy  = GetgroceryCatalogPowPolicy.new(Kiosk::Pow::Equihash.params(**EQUIHASH_DEMO_PARAMS))
-    c.pow_secret         = pow_secret
     c.pow_ttl            = 300
     c.reputation_factors = ->(**) { Kiosk::Reputation::Factors.empty }
     # ⚠ TOY COUNTER — the write side of the demo counter defined above, and every
@@ -300,8 +295,9 @@ Kiosk.configure do |c|
 
   # ── Registration PoW gate — ALWAYS ON (register is uniformly tolled) ──────
   # Price fresh-identity minting: registering an agent costs ONE Equihash proof.
-  # Independent of the catalog toll above; pow_secret is set here too so the gate
-  # works even when KIOSK_POW_DEMO is off (RegistrationPow.gate raises without it).
+  # Independent of the catalog toll above; pow_secret is set unconditionally so the
+  # gate works even when KIOSK_POW_DEMO is off (RegistrationPow.gate raises without
+  # it) — the catalog-toll branch above shares this one assignment.
   c.registration_pow_count  = 1
   c.registration_pow_params = GETGROCERY_REGISTRATION_POW_PARAMS
   c.pow_secret              = pow_secret

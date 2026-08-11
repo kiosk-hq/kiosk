@@ -102,7 +102,13 @@ For EACH of the 7 apps:
 ## 7. Deploy new code (push-to-deploy) + housekeeping
 - [ ] **git push-to-deploy** (mirrors narrathon): a bare repo per box with an ISOLATED `post-receive` hook
       (own work-tree/service names/deploy user — never touches `/opt/narrathon`) that checks out `main`,
-      `bundle install`, `db:prepare`, and restarts each app's service.
+      `bundle install`, `db:prepare`, **`db:seed`**, and restarts each app's service.
+- [ ] ⚠ **`db:seed` is not optional — omit it and the demos serve empty catalogs.** `db:prepare` seeds only a
+      database it has just CREATED, so on every push after the first it is a no-op for content: K-464 records
+      live hoteling showing 5 properties instead of 100 and skooti's fleet missing, because the hook ran
+      `db:prepare` alone. Seeding on every push is safe — every demo's seeds are idempotent-additive (zero
+      `delete_all`, verified live on all seven), so a push tops the catalog up and deletes nothing. This is
+      also the only thing that re-seeds the catalog; see `deploy/README.md` step 5.
 - [ ] ~~Prune cron~~ — **SKIPPED** (Phil, K-593/K-630) and there is nothing to install: this repo ships no
       scheduled housekeeping at all, and nothing in it reclaims demo accounts — no demo ships a retention
       task. **Reclaiming disk is `deploy/demo-reset.sh`, run by hand**; for what covers the catalog

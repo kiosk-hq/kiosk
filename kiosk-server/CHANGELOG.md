@@ -20,6 +20,18 @@ All notable changes follow [Keep a Changelog](https://keepachangelog.com/en/1.1.
 
 ### Changed
 
+- **The error taxonomy is the wire contract, not a parallel class hierarchy.**
+  The `error.code` vocabulary now lives in one table, and handlers express
+  errors in Rails' own idiom: a rendered status becomes its wire code, an
+  exception registered in `config.action_dispatch.rescue_responses` is mapped
+  by a single `rescue_from` the mixin installs (the operator's own handlers
+  win over it), and an explicitly rendered vocabulary code — including a
+  specific 402 — travels verbatim. Intent: an operator should never need a
+  Kiosk exception class to say what a bare `render json:, status:` already
+  says; the classes that restated HTTP statuses are deprecated for handler
+  code, and the unused `QuotaExceeded` class is gone (the code stays
+  reserved in the vocabulary).
+
 - **kiosk-server declares Rails.** New runtime dependencies: `railties`,
   `actionpack`, `activerecord` and `activesupport`, all `~> 8.1` — the four
   components the gem references. Deliberately not the `rails` meta-gem: nothing

@@ -186,12 +186,25 @@ you `render`. On top of that:
 - The handler runs inside the wire's GUC-scoped transaction, so raising rolls
   back — and so does rendering a non-2xx, which the seam converts into a raise.
 
-Errors: `render json: {...}, status: :bad_request` is the idiom, and the status
-becomes the wire error code (400 `bad_request`, 401 `unauthenticated`,
-403 `forbidden`, 404 `not_found`, 409 `conflict`, 422 `bad_request`,
-429 `quota_exceeded`). For a wire code no HTTP status can carry —
-`payment_setup_required`, `kyc_required`, `spending_cap_exceeded` — raise the
-`Kiosk::Server::Errors` class instead; it reaches the envelope unchanged.
+Errors are Rails' idiom, end to end. The `error.code` vocabulary is the wire
+contract — a closed table, not a class hierarchy — and three Rails-native
+moves cover all of it:
+
+- `render json: {...}, status: :bad_request` — the status becomes its wire
+  code (400 `bad_request`, 401 `unauthenticated`, 403 `forbidden`,
+  404 `not_found`, 409 `conflict`, 422 `bad_request`, 429 `quota_exceeded`).
+- Raise what you would raise anyway. Any exception Rails knows a status for —
+  `params.require`, `ActiveRecord::RecordNotFound`, anything your app
+  registered in `config.action_dispatch.rescue_responses` (the same registry
+  policy libraries use) — is mapped to that status' wire code by one
+  `rescue_from` the include installs. Your own `rescue_from` declarations win
+  over it. Anything unregistered stays a 500 `action_failed`.
+- For a code a bare status cannot name — `rls_denied`, or a *specific* 402
+  (`payment_setup_required` vs `payment_failed` vs `pow_required`) — render
+  the envelope with the code explicit:
+  `render json: { ok: false, error: { code: "rls_denied", message: "…" } },
+  status: :forbidden`. It travels verbatim; a bare 402/500 is never guessed
+  at. (The gate-style `Kiosk::Server::Errors` classes remain raisable too.)
 
 
 ### The initializer still exists

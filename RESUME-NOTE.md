@@ -61,6 +61,14 @@ A handler controller that Rails has not loaded yet is not in the registry, so
 class is first referenced. Production eager-loads `app/controllers`. Documented
 in the README; filed as a K-candidate in the final report.
 
+## K-candidates found (report only — scope rule)
+
+- minor / D7 — four demos ship NO `app/controllers/application_controller.rb`
+  (getgrocery, hoteling, prove, skooti); their controllers inherit
+  `ActionController::Base` / `::API` directly, e.g.
+  `kiosk-demo-getgrocery/app/controllers/home_controller.rb:1`. T-057's
+  migration and T-056's generator both assume a host base class exists.
+
 ## Status
 
 - [x] registries gain `output_schema:` (ADR-0023 / K-500), additive

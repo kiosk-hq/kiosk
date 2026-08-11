@@ -52,4 +52,11 @@ universal agent skill is `skill.md` on the same site.
   whitespace) or `:per_demo`, with a reason; editing one copy of a lockstep
   file means editing all of them, and a NEW duplicate fails the build until it
   is declared. Copy a file between demos → add it to that manifest.
+- The gems are meant to be installable, but every consumer here uses `path:`,
+  which reads the working tree — so a file missing from `spec.files` is
+  invisible locally and fatal from RubyGems. `bin/check-gem-packaging` (its own
+  CI job) builds all 14 gems and asserts every tracked file is packaged or
+  declared in its `NOT_PACKAGED` manifest with a reason, and that every
+  `__dir__`-relative path resolves inside the package. Adding an asset a gem
+  reads at runtime means adding it to `spec.files`.
 - Inline `TODO`/`FIXME` must state a concrete rationale, not a bare marker.

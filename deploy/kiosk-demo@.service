@@ -11,7 +11,6 @@
 # ── How %i maps to app + port ───────────────────────────────────────────────
 # %i selects BOTH the app dir and its port, via two conventions:
 #   1. WorkingDirectory = /srv/kiosk/kiosk-demo-%i   (the gem checkout)
-#      NOTE: atablefor's gem dir is kiosk-demo-atablefor (renamed from
 #      All apps: kiosk-demo-<name>.
 #   2. PORT is supplied by that app's EnvironmentFile (/etc/kiosk-demo/%i.env),
 #      set from env/<app>.env — the single source of truth for the port.

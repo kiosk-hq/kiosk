@@ -179,7 +179,7 @@ Kiosk.configure do |c|
       MSG
     end
 
-    "http://localhost:#{ENV.fetch("PORT", "3005")}"
+    "http://localhost:#{ENV.fetch("PORT", "3001")}"
   end
   c.roles  = %i[customer]
 

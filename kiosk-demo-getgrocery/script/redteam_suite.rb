@@ -21,13 +21,13 @@
 #   SKIPPED : MissingKyc, ExpiredKyc, ForgedKyc (no KYC)
 #
 # Usage:
-#   SERVER_URL=http://127.0.0.1:3005 KIOSK_ISSUER=http://127.0.0.1:3005 \
+#   SERVER_URL=http://127.0.0.1:3001 KIOSK_ISSUER=http://127.0.0.1:3001 \
 #   bundle exec ruby script/redteam_suite.rb
 
 require "kiosk/redteam"
 require "securerandom"
 
-BASE_URL = ENV.fetch("SERVER_URL", "http://127.0.0.1:3005")
+BASE_URL = ENV.fetch("SERVER_URL", "http://127.0.0.1:3001")
 ISSUER   = ENV.fetch("KIOSK_ISSUER", BASE_URL)
 
 # ── Profile ───────────────────────────────────────────────────────────────────

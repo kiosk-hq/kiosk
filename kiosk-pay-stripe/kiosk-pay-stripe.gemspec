@@ -10,12 +10,29 @@ Gem::Specification.new do |spec|
 
   spec.summary     = "Stripe PSP adapter for the Kiosk framework"
   spec.description = <<~DESC
-    kiosk-pay-stripe is the open-source Stripe payment adapter for Kiosk.
-    It implements Kiosk::PaymentProviders::Base#capture over Stripe
-    PaymentIntents, settling AP2 cart mandates. Today only kiosk-pay-stripe
-    ships; there is no default PSP (Configuration#payment_provider is nil).
-    Further open adapters (e.g. Paddle) and commercial regional PSPs are
-    planned on customer demand — none exist yet.
+    kiosk-pay-stripe is the open-source Stripe payment adapter for Kiosk. It
+    implements both halves of the provider-acquired, card-on-file model:
+
+      - Card acquisition. `setup_url(user_id:)` returns a hosted Stripe
+        Checkout session in `mode: "setup"` that saves the buyer's card on the
+        PROVIDER's own Stripe account (an existing open setup session is
+        reused, so the url is stable across polls); `setup_required?` tells the
+        wire whether a principal still has to complete it, backed by
+        `saved_method?`, which asks Stripe whether the resolved Customer has a
+        usable card.
+      - Charging. `Kiosk::PaymentProviders::Base#capture` settles an AP2 cart
+        mandate as an `off_session` (merchant-initiated) PaymentIntent against
+        that saved card — the assistant authorizes the cart, it never presents
+        a card.
+
+    The gem stays app-agnostic: the principal-to-Stripe-Customer mapping is
+    injected by the host through `customer_resolver:` / `customer_saver:`
+    callables, and no application table is read inside the gem.
+
+    Today only kiosk-pay-stripe ships; there is no default PSP
+    (Configuration#payment_provider is nil). Further open adapters (e.g.
+    Paddle) and commercial regional PSPs are planned on customer demand —
+    none exist yet.
   DESC
   spec.homepage    = "https://kiosk.tech"
   spec.license     = "Apache-2.0"

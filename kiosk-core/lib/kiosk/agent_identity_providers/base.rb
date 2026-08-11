@@ -25,10 +25,11 @@ module Kiosk
 
       # Issue a fresh agent token for a registered agent at the chosen role.
       #
-      # 0.1: the built-in kiosk-pop endpoints (register / login / revoke)
+      # Today the built-in kiosk-pop endpoints (register / login / revoke)
       # mint via the bundled DefaultAgentIdp by design and do NOT
       # call a custom adapter's #issue; adapter-supplied issuance (Entra /
-      # Okta / Passport-style, roles-from-IdP) is the 0.2 seam.
+      # Okta / Passport-style, roles-from-IdP) is the seam this method
+      # exists for, and nothing calls it yet.
       #
       # @param agent_id [String] UUID in the provider's `agents` table
       # @param role [String, Symbol] active role for the issued token

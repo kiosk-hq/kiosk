@@ -2,7 +2,7 @@
 
 The Kiosk Rails engine — host-side surface for [Kiosk](https://kiosk.tech).
 
-## What's in this release (pre-v0.1)
+## What's in this release
 
 The full host-side surface is shipped and covered by the gem's own suite (500+ passing specs):
 

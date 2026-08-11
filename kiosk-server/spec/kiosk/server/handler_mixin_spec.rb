@@ -237,6 +237,109 @@ RSpec.describe "Kiosk::Query / Kiosk::Action (the operator mixin)" do
     end
   end
 
+  describe "Rails-native raises (the T-054 rescue_from seam)" do
+    it "maps params.require's ParameterMissing to bad_request — no Kiosk classes in the handler" do
+      klass = Class.new(ApplicationController) do
+        include Kiosk::Action
+        description "Requires a param the caller did not send."
+        def strict
+          params.require(:sku)
+          render json: { ok: true }
+        end
+      end
+      stub_const("SpecStrictController", klass)
+
+      expect { execute(:run, { name: "strict" }) }
+        .to raise_error(Kiosk::Server::Errors::Base) { |e|
+          expect(e.code).to eq("bad_request")
+          expect(e.http_status).to eq(400)
+          expect(e.message).to include("sku")
+        }
+    end
+
+    it "maps an exception the HOST registered in rescue_responses, Pundit-style" do
+      # This is the whole point of reusing Rails' own table: the host app's
+      # `config.action_dispatch.rescue_responses` entries (a policy library's
+      # NotAuthorizedError → :forbidden, Active Record's RecordNotFound →
+      # :not_found) reach the wire with zero Kiosk configuration.
+      stub_const("SpecVetoError", Class.new(StandardError))
+      ActionDispatch::ExceptionWrapper.rescue_responses["SpecVetoError"] = :forbidden
+      klass = Class.new(ApplicationController) do
+        include Kiosk::Action
+        description "Raises the host's own policy error."
+        def vetoed = raise(SpecVetoError, "policy said no")
+      end
+      stub_const("SpecVetoedController", klass)
+
+      expect { execute(:run, { name: "vetoed" }) }
+        .to raise_error(Kiosk::Server::Errors::Base) { |e|
+          expect(e.code).to eq("forbidden")
+          expect(e.http_status).to eq(403)
+          expect(e.message).to eq("policy said no")
+        }
+    ensure
+      ActionDispatch::ExceptionWrapper.rescue_responses.delete("SpecVetoError")
+    end
+
+    it "lets the operator's own rescue_from win over the mixin's floor" do
+      stub_const("SpecTeapotError", Class.new(StandardError))
+      klass = Class.new(ApplicationController) do
+        include Kiosk::Action
+        rescue_from(SpecTeapotError) do
+          render json: { error: "handled by the operator" }, status: :conflict
+        end
+        description "Raises an error the operator's own rescue_from handles."
+        def brew = raise(SpecTeapotError)
+      end
+      stub_const("SpecTeapotController", klass)
+
+      expect { execute(:run, { name: "brew" }) }
+        .to raise_error(Kiosk::Server::Errors::Base) { |e|
+          expect(e.code).to eq("conflict")
+          expect(e.message).to eq("handled by the operator")
+        }
+    end
+  end
+
+  describe "rendering an explicit wire code" do
+    it "carries a 403 code a bare status cannot name (rls_denied)" do
+      klass = Class.new(ApplicationController) do
+        include Kiosk::Query
+        description "Answers with the RLS denial code, Rails-natively."
+        def blocked
+          render json: { ok: false, error: { code: "rls_denied", message: "row policy said no" } },
+                 status: :forbidden
+        end
+      end
+      stub_const("SpecBlockedController", klass)
+
+      expect { execute(:query, { name: "blocked" }) }
+        .to raise_error(Kiosk::Server::Errors::Base) { |e|
+          expect(e.code).to eq("rls_denied")
+          expect(e.http_status).to eq(403)
+          expect(e.message).to eq("row policy said no")
+        }
+    end
+
+    it "carries a SPECIFIC 402 — named by the handler, never guessed by the seam" do
+      klass = Class.new(ApplicationController) do
+        include Kiosk::Action
+        description "Needs a card on file before it can run."
+        def needs_card
+          render json: { ok: false, error: { code: "payment_setup_required", message: "no card on file" } },
+                 status: :payment_required
+        end
+      end
+      stub_const("SpecNeedsCardController", klass)
+
+      expect { execute(:run, { name: "needs_card" }) }
+        .to raise_error(Kiosk::Server::Errors::Base) { |e|
+          expect(e.code).to eq("payment_setup_required")
+          expect(e.http_status).to eq(402)
+        }
+    end
+  end
+
   describe "the end-to-end wire path" do
     let(:token) do
       Kiosk::Server::JwtIssuer.issue(

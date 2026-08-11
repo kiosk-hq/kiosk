@@ -1,7 +1,9 @@
 # frozen_string_literal: true
 
 require "action_controller"
+require "action_dispatch"
 require "kiosk/server/actions"
+require "kiosk/server/errors"
 require "kiosk/server/queries"
 require "kiosk/server/handler_dispatch"
 
@@ -35,6 +37,16 @@ module Kiosk
     #   wire_name      — OPTIONAL. The name agents call it by, when it cannot be
     #                    the method name (a Ruby keyword, or a name that would
     #                    collide with a controller method).
+    #
+    # ── Errors ───────────────────────────────────────────────────────────
+    # Rails' idiom, end to end (T-054): `render json:, status:` answers the
+    # wire with the status' lone code; a body naming an explicit vocabulary
+    # `error.code` (a 403 `rls_denied`, a SPECIFIC 402) travels verbatim; and
+    # a raise Rails knows a status for — `params.require`, RecordNotFound,
+    # anything in `config.action_dispatch.rescue_responses` — is mapped by
+    # the one `rescue_from` this include installs
+    # ({InstanceMethods#kiosk_rescue_to_wire}). No Kiosk error classes in
+    # handler code; the wire-only gate classes remain raisable.
     #
     # ── What is NOT here ─────────────────────────────────────────────────
     # `params:` (the free-text name → hint hash) is retired by ADR-0023 and has
@@ -81,6 +93,13 @@ module Kiosk
         # controller, that route must not become an unauthenticated, CSRF-exempt
         # way in. Only a dispatch through the Kiosk seam sets the marker.
         base.before_action(:kiosk_require_wire_dispatch!) if base.respond_to?(:before_action)
+
+        # THE ONE Rails-raise → wire-code seam (T-054, K-495 sub-decision 4).
+        # Registered at include time, so any `rescue_from` the operator
+        # declares later — below the include, or in a subclass — matches
+        # first and wins; this is the floor, not a ceiling. See
+        # {InstanceMethods#kiosk_rescue_to_wire} for what it maps.
+        base.rescue_from(StandardError, with: :kiosk_rescue_to_wire) if base.respond_to?(:rescue_from)
       end
 
       # Registry for a kind. Not a constant map: `Actions`/`Queries` must be
@@ -218,6 +237,36 @@ module Kiosk
         def render_kiosk_page(rows, next_cursor: nil)
           request.env[HandlerDispatch::PAGE_KEY] = true
           render json: { rows: rows, next_cursor: next_cursor }
+        end
+
+        # T-054: the one place a Rails-native raise becomes a wire code.
+        # Three kinds of raise reach it:
+        #
+        #   * a Kiosk wire error ({Errors::Base}) — re-raised untouched: it
+        #     already names its code, and the Kiosk seam renders it.
+        #   * an exception Rails knows a status for — looked up in Rails' OWN
+        #     table (`config.action_dispatch.rescue_responses`, the registry
+        #     the host app already extends for its libraries: Pundit's
+        #     NotAuthorizedError → :forbidden and so on; Active Record adds
+        #     RecordNotFound → :not_found when it boots). The status' lone
+        #     wire code ({Errors::STATUS_CODES}) is rendered as the ordinary
+        #     error envelope — so `params.require` answers `bad_request` and
+        #     a model lookup miss answers `not_found` with no Kiosk classes
+        #     in the handler. 402 and 500 have no lone code and are never
+        #     guessed.
+        #   * anything else — re-raised, so the {Executor} wraps it as
+        #     `action_failed` exactly as it always has.
+        def kiosk_rescue_to_wire(exception)
+          raise exception if exception.is_a?(Kiosk::Server::Errors::Base)
+
+          status = ::ActionDispatch::ExceptionWrapper.rescue_responses[exception.class.name]
+          code   = Kiosk::Server::Errors::STATUS_CODES[::Rack::Utils.status_code(status)]
+          raise exception if code.nil?
+
+          render json: {
+            ok:    false,
+            error: { code: code, message: exception.message },
+          }, status: Kiosk::Server::Errors::CODES.fetch(code)
         end
 
         # Handler controllers are reachable ONLY through the Kiosk wire, which

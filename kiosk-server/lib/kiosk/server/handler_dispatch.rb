@@ -157,7 +157,9 @@ module Kiosk
           outer.each { |key, value| env[key] = value if key.is_a?(String) && key.start_with?("HTTP_") }
         end
 
-        env["action_dispatch.request.request_parameters"] = args.is_a?(Hash) ? args : {}
+        # `dup`: the sub-request must not be able to mutate the args hash the
+        # Executor still holds.
+        env["action_dispatch.request.request_parameters"] = args.is_a?(Hash) ? args.dup : {}
         env["action_dispatch.request.query_parameters"]   = {}
         env["action_dispatch.request.path_parameters"]    = {
           controller: controller.respond_to?(:controller_path) ? controller.controller_path : nil,

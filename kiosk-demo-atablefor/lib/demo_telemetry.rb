@@ -217,7 +217,7 @@ module DemoTelemetry
   # Map a wire request → a generic action_kind (or nil to skip). The optional
   # per-app override maps concrete action verb names onto ACTION_KINDS so the
   # aggregate reads the same across verticals (e.g. getgrocery's create_order →
-  # "ordered", schedule_delivery → "scheduled"; atablefor's book_table →
+  # "ordered", reschedule_delivery → "scheduled"; atablefor's book_table →
   # "booked"; skooti's reserve → "reserved"). Unknown run-verbs fall back to
   # "ran".
   #
@@ -260,46 +260,84 @@ class DemoTelemetryMiddleware
     @verb_map = verb_map
   end
 
+  # Telemetry must never break a wire action — but "never break it" has TWO
+  # different safe recoveries, and using the wrong one is how K-622 happened.
+  # BEFORE the app has run, the safe recovery is to hand the request to the app.
+  # AFTER it has run, the ONLY safe recovery is the response already in hand:
+  # calling the app again does not retry a failed request, it DISPATCHES A
+  # SECOND ONE. On /auth/register that mints a second agent. So `@app.call`
+  # appears exactly twice below, both of them above the single dispatch line,
+  # and nothing under that line may reach it.
   def call(env)
-    return @app.call(env) unless DemoTelemetry.enabled?
+    # ── Before the app runs ───────────────────────────────────────────────
+    begin
+      return @app.call(env) unless DemoTelemetry.enabled?
 
-    path = env["PATH_INFO"].to_s
-    # Only the four write-ish wire surfaces are candidates; skip everything
-    # else (discovery, JWKS, admin, home) without reading the body.
-    unless path.match?(%r{/(auth/register|query|run|pay)\z})
+      path = env["PATH_INFO"].to_s
+      # Only the four write-ish wire surfaces are candidates; skip everything
+      # else (discovery, JWKS, admin, home) without reading the body.
+      return @app.call(env) unless path.match?(%r{/(auth/register|query|run|pay)\z})
+
+      # Reads (and rewinds) rack.input, so it MUST happen before the app.
+      verb = run_verb(env, path)
+    rescue StandardError => e
+      warn "[demo_telemetry] middleware error before dispatch (ignored): #{e.class}: #{e.message}"
       return @app.call(env)
     end
 
-    verb = run_verb(env, path)
+    # ── The one and only dispatch ─────────────────────────────────────────
     status, headers, body = @app.call(env)
 
     # Only record on success (2xx). A 402 pow_required / 403 gate rejection is
     # not a completed action.
     return [status, headers, body] unless status.to_i >= 200 && status.to_i < 300
 
-    kind = DemoTelemetry.action_kind_for(path: path, verb: verb, verb_map: @verb_map)
+    kind = best_effort { DemoTelemetry.action_kind_for(path: path, verb: verb, verb_map: @verb_map) }
     return [status, headers, body] unless kind
 
     # For /auth/register we need the response agent_id, so buffer the body once
     # and hand a re-enumerable copy downstream (safe for Rack). For the other
     # verbs the agent comes from the request Bearer, so no body read is needed.
     if path.end_with?("/auth/register")
-      buffered = []
-      body.each { |c| buffered << c }
-      body.close if body.respond_to?(:close)
-      agent = register_agent_ref(buffered)
-      DemoTelemetry.record(action_kind: kind, agent: agent)
+      buffered = buffer(body)
+      best_effort { DemoTelemetry.record(action_kind: kind, agent: register_agent_ref(buffered)) }
       [status, headers, buffered]
     else
-      DemoTelemetry.record(action_kind: kind, agent: bearer_agent_ref(env))
+      best_effort { DemoTelemetry.record(action_kind: kind, agent: bearer_agent_ref(env)) }
       [status, headers, body]
     end
-  rescue StandardError => e
-    warn "[demo_telemetry] middleware error (ignored): #{e.class}: #{e.message}"
-    @app.call(env)
   end
 
   private
+
+  # Run one piece of telemetry work after the app has already answered. A
+  # failure here is swallowed (the request is not telemetry's to break) and the
+  # caller carries on with the response it is already holding. There is no
+  # "retry" at this point and there must never look like one.
+  def best_effort
+    yield
+  rescue StandardError => e
+    warn "[demo_telemetry] telemetry error after dispatch (ignored): #{e.class}: #{e.message}"
+    nil
+  end
+
+  # Read the app's response body into an Array so /auth/register's agent_id can
+  # be recovered and a re-enumerable copy handed downstream. Closes the original
+  # either way (Rack contract: whoever consumes a body closes it).
+  #
+  # Deliberately NOT best_effort. A body that raises mid-enumeration is the
+  # APP's failure, not telemetry's — it would have raised in the server just the
+  # same — and swallowing it here would turn that failure into a silently
+  # TRUNCATED 200, which is worse than the failure it hides. So it propagates.
+  # What must never happen, and what K-622 was, is "recovering" by dispatching
+  # the request again.
+  def buffer(body)
+    buffered = []
+    body.each { |c| buffered << c }
+    buffered
+  ensure
+    body.close if body.respond_to?(:close)
+  end
 
   # Extract the `name` verb from a /run (or /query) JSON body without consuming
   # the stream for the downstream app (rewind after read).

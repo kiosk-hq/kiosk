@@ -364,10 +364,10 @@ RSpec.describe "Kiosk::Query / Kiosk::Action (the operator mixin)" do
         method: "POST", input: JSON.generate(payload),
         "CONTENT_TYPE" => "application/json", "HTTP_AUTHORIZATION" => "Bearer #{token}", **opts
       )
-      status, _headers, body = Kiosk::Server::WireController.action(verb).call(env)
+      status, headers, body = Kiosk::Server::WireController.action(verb).call(env)
       raw = +""
       body.each { |chunk| raw << chunk }
-      [status, JSON.parse(raw)]
+      [status, JSON.parse(raw), headers]
     end
 
     it "answers a query with the ordinary success envelope" do
@@ -393,6 +393,26 @@ RSpec.describe "Kiosk::Query / Kiosk::Action (the operator mixin)" do
       expect(envelope["error"]).to eq("code" => "bad_request",
                                       "message" => "at least one item is required",
                                       "hint" => "pass items: [{sku:, quantity:}]")
+    end
+
+    it "gives a RENDERED payment_setup_required the same WWW-Authenticate as a raised one" do
+      # The challenge header is keyed on the wire CODE (T-054), so the
+      # Rails-native way of saying a specific 402 loses nothing.
+      klass = Class.new(ApplicationController) do
+        include Kiosk::Action
+        description "Needs a card on file before it can run."
+        def needs_card
+          render json: { ok: false, error: { code: "payment_setup_required", message: "no card on file" } },
+                 status: :payment_required
+        end
+      end
+      stub_const("SpecNeedsCardController", klass)
+
+      status, envelope, headers = post_wire(:run, { name: "needs_card" })
+
+      expect(status).to eq(402)
+      expect(envelope["error"]["code"]).to eq("payment_setup_required")
+      expect(headers["WWW-Authenticate"]).to eq(%(Payment realm="https://provider.example", method="ap2"))
     end
 
     it "survives the host app's forgery protection" do

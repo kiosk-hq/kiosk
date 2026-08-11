@@ -11,7 +11,15 @@ Gem::Specification.new do |spec|
   spec.license = "Apache-2.0"
   spec.required_ruby_version = ">= 3.2.0"
 
-  spec.files = Dir.glob("lib/**/*.rb") + %w[solve.py README.md LICENSE.txt] +
+  # `lib/**/*` rather than `lib/**/*.rb`: a `*.rb`-shaped glob silently drops the
+  # first data file anyone puts under lib/ (a KAT vector, a JSON Schema), which
+  # is how kiosk-server lost its app/views. Nothing under lib/ is non-Ruby today,
+  # so this changes no byte of the current package — it removes the trap.
+  #
+  # `bench/` ships because README.md links bench/README.md twice as the evidence
+  # for the n=168, k=7 default; without it the shipped README has dead links.
+  spec.files = Dir.glob("lib/**/*") + Dir.glob("bench/**/*") +
+               %w[solve.py README.md LICENSE.txt] +
                (File.exist?("CHANGELOG.md") ? %w[CHANGELOG.md] : [])
 
   spec.add_development_dependency "rspec", "~> 3.13"

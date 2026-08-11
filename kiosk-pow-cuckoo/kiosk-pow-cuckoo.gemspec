@@ -36,10 +36,13 @@ Gem::Specification.new do |spec|
   spec.metadata["bug_tracker_uri"] = "https://github.com/kiosk-hq/kiosk/issues"
 
   # Ship the reference Python solver alongside the Ruby verifier (README calls
-  # it "included"; the Rakefile's parity check requires it). Guarded by
-  # File.exist? so packaging never fails if a sibling file is absent.
+  # it "included"; the repo's parity check runs it). Listed UNGUARDED on
+  # purpose: the previous `.select { File.exist?(f) }` made packaging fail OPEN,
+  # so renaming or losing the solver would have produced a green build and a gem
+  # whose README points at a file that is not in it. A missing solver must break
+  # the build.
   spec.files         = Dir.glob("lib/**/*") + %w[README.md LICENSE.txt CHANGELOG.md] +
-                       %w[solve_cuckoo.py requirements.txt].select { |f| File.exist?(f) }
+                       %w[solve_cuckoo.py requirements.txt]
   spec.require_paths = ["lib"]
 
   # No runtime dependencies — pure Ruby, no native extensions.

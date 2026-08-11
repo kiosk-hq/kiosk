@@ -21,10 +21,12 @@ Gem::Specification.new do |spec|
     BEFORE the one expensive backend eval, so floods of forged/expired proofs are
     rejected without running a proof check.
 
-    Ships a configurable example policy (Policies::RateAndReputation) that, since
+    Ships two configurable example policies. Policies::RateAndReputation, since
     Equihash has no continuous difficulty dial, escalates by PROOF COUNT (a
     count-curve) on high request rate, unproven principals, and bad-proof history.
-    Providers are expected to replace or subclass it.
+    Policies::Backoff is the "solve once, next N calls free" grant: one solve buys
+    a fixed COUNT of subsequent ungated requests, then the identity is
+    re-challenged. Providers are expected to replace or subclass either.
   DESC
   spec.homepage      = "https://kiosk.tech"
   spec.license       = "Apache-2.0"

@@ -12,6 +12,7 @@ All notable changes follow [Keep a Changelog](https://keepachangelog.com/en/1.1.
 - `Kiosk::Pow::Equihash.verify(salt:, params:, nonce:)` — recomputes the `2^k` BLAKE2b-256 leaf hashes named by the proof's indices, checks their XOR is zero over all `n` bits, and walks the Wagner collision tree (per-level XOR cancellation plus the Zcash-canonical subtree ordering). Difficulty is set by `(n, k)` alone — there is no post-hoc target check.
 - `Kiosk::Pow::Equihash.blake2b256` — public so specs can check it directly against Python `hashlib.blake2b` vectors.
 - `solve.py` — reference Python + numpy solver (a correct full-Wagner implementation, not a tuned miner), with a `--toy` `(n=24, k=3)` mode for tests.
+- `Kiosk::Pow::Equihash.solver_path` — public accessor returning the absolute path of the packaged `solve.py`, so consumers (the `kiosk-redteam` client first) shell out to the shipped solver by asking this gem instead of hardcoding a checkout-relative path that breaks in an installed gem.
 - `bench/bench.py` and `bench/README.md` — the `(n, k)` sweep behind the default, reporting p50/p95 solve time and peak RSS.
 - Known-answer tests frozen at the SHIPPED production parameters (n=168, k=7), not only at toy params — a toy-only KAT is what let a broken verifier pass, and `k=2`/`k=3` vectors now cover the tree check the old one could not see.
 - Live solver-to-verifier parity spec at 168/7 — `solve.py` produces a proof and `.verify` accepts it; CI installs numpy so the job actually runs it rather than skipping.

@@ -33,6 +33,23 @@ RSpec.describe Kiosk::Pow::Equihash do
     end
   end
 
+  describe ".solver_path" do
+    # The accessor is the PUBLIC contract consumers (kiosk-redteam's client
+    # first) shell out to instead of reaching into this gem's directory by a
+    # checkout-relative path — so it must name a file that actually exists,
+    # inside this gem's own root, wherever the gem is installed.
+    it "returns the absolute path of an existing solve.py inside the gem root" do
+      path = described_class.solver_path
+
+      expect(path).to eq(File.expand_path(path))                      # absolute
+      expect(File.basename(path)).to eq("solve.py")
+      expect(File.file?(path)).to be(true)
+
+      gem_root = File.expand_path("../../..", __dir__)                # spec/kiosk/pow → gem dir
+      expect(path).to eq(File.join(gem_root, "solve.py"))
+    end
+  end
+
   # ─────────────────────────────────────────────────────────────────────
   # .blake2b256 — known-answer vectors cross-referenced with Python hashlib
   #

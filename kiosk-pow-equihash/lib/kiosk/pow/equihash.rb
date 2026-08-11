@@ -50,6 +50,25 @@ module Kiosk
       DEFAULT_N = 168
       DEFAULT_K = 7
 
+      # Absolute path of the reference Python solver, +solve.py+, as shipped
+      # INSIDE this gem's package (it is listed in the gemspec's spec.files).
+      #
+      # PUBLIC API: anything that shells out to the solver — the kiosk-redteam
+      # client, a demo script, an assistant runtime — asks this gem for the
+      # location instead of hardcoding a checkout-relative path, which resolves
+      # only in the monorepo working tree and raises Errno::ENOENT from an
+      # installed gem:
+      #
+      #   Open3.capture2("python3", Kiosk::Pow::Equihash.solver_path, payload)
+      #
+      # This method only names the file; RUNNING it needs python3 + numpy
+      # (see README, "Solver (Python + numpy)").
+      #
+      # @return [String] absolute path of solve.py inside the installed gem
+      def self.solver_path
+        File.expand_path("../../../solve.py", __dir__)
+      end
+
       # ───────────────────────────────────────────────────────────────────
       # BLAKE2b-256 — pure Ruby, clean-room from the public-domain BLAKE2 spec.
       # Identical to the implementation in kiosk-pow-cuckoo; copied here

@@ -11,6 +11,7 @@
 #
 #   Kiosk::TestHelpers.executor = Kiosk::Server::TestExecutor.new
 require "date"
+require "active_record"
 require "kiosk/test_helpers/errors"
 
 module Kiosk
@@ -190,12 +191,7 @@ module Kiosk
 
       private
 
-      def default_connection
-        return ::ActiveRecord::Base.connection if defined?(::ActiveRecord::Base)
-
-        raise ArgumentError,
-          "no connection: pass `connection:` explicitly or load ActiveRecord"
-      end
+      def default_connection = ::ActiveRecord::Base.connection
 
       def require_scope!
         return if in_scope?

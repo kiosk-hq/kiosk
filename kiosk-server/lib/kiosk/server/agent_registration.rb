@@ -1,5 +1,8 @@
 # frozen_string_literal: true
 
+require "active_record"
+require "active_support/core_ext/string/inflections" # String#constantize
+
 module Kiosk
   module Server
     # Greenfield self-registration: provision the assistant account backing the

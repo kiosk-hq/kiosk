@@ -2,6 +2,7 @@
 
 require "jwt"
 require "openssl"
+require "rails" # Rails.logger, in #log_audience_mismatch
 
 module Kiosk
   module Server
@@ -98,7 +99,9 @@ module Kiosk
         message = "[kiosk] PoP audience mismatch: caller signed aud=#{signed_aud.inspect}, " \
                   "this instance's configured issuer is #{issuer.inspect}. If the signed " \
                   "value is the origin your assistants actually reach, `c.issuer` is wrong."
-        logger = ::Rails.logger if defined?(::Rails) && ::Rails.respond_to?(:logger)
+        # Rails.logger is nil until the host app boots (rake tasks, console
+        # helpers, the gem's own specs), so keep the Kernel#warn fallback.
+        logger = ::Rails.logger
         logger ? logger.warn(message) : warn(message)
       end
 

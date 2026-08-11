@@ -22,6 +22,7 @@ module Kiosk
     #   - db/migrate/<ts+6>_add_kyc_verified_at_to_kiosk_agents.rb
     #   - db/migrate/<ts+7>_rebuild_kiosk_device_authorizations.rb
     #   - db/migrate/<ts+8>_add_kyc_attributes_to_kiosk_agents.rb
+    #   - db/migrate/<ts+9>_add_kiosk_agent_governance_columns.rb
     #
     # Each migration file is a thin wrapper that calls into
     # {Kiosk::Server::SchemaDefinitions} at host-app runtime, so the SQL
@@ -37,7 +38,7 @@ module Kiosk
 
       source_root File.expand_path("templates", __dir__)
 
-      desc "Generate Kiosk initializer and the nine base migrations (001-009)."
+      desc "Generate Kiosk initializer and the ten base migrations (001-010)."
 
       class_option :user_table,    type: :string, default: "users",
                                    desc: "Provider's user table name"
@@ -49,7 +50,7 @@ module Kiosk
                                    desc: "GUC namespace prefix used in SET LOCAL statements"
 
       # Rails::Generators::Migration requires a class-level
-      # next_migration_number. We bump a counter so the nine migrations
+      # next_migration_number. We bump a counter so the ten migrations
       # created in one invocation get strictly-ascending UTC timestamps
       # (otherwise `db/migrate` glob sort is non-deterministic).
       @migration_counter = 0
@@ -109,6 +110,11 @@ module Kiosk
       def create_kyc_attributes_migration
         migration_template "add_kyc_attributes_to_kiosk_agents.rb.tt",
                            "db/migrate/add_kyc_attributes_to_kiosk_agents.rb"
+      end
+
+      def create_agent_governance_columns_migration
+        migration_template "add_kiosk_agent_governance_columns.rb.tt",
+                           "db/migrate/add_kiosk_agent_governance_columns.rb"
       end
     end
   end

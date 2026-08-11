@@ -373,10 +373,10 @@ COPIES = {
     rule: :identical, why: "Devise columns for the demos that ship a human login.",
   },
   "db/migrate/20260718000002_add_kiosk_agent_governance_columns.rb" => {
-    rule: :identical, why: "agent governance columns (K-436) — NOT generator output, despite the " \
-                           "company it keeps here: kiosk:install has no template for it (see " \
-                           "GENERATOR_TEMPLATES), the four Devise demos carry it by hand. Whether " \
-                           "the generator should emit it is a K-640 triage question.",
+    rule: :identical, why: "kiosk:install generator output — the K-436 agent governance columns " \
+                           "(spending_cap_cents + human_label). The four Devise demos wrote it by " \
+                           "hand first; the template was lifted from their proven copies at K-647, " \
+                           "so a fresh install finally emits the columns ColumnSpendingCap reads.",
   },
   "db/migrate/20260101000000_create_users.rb" => {
     rule: :code,
@@ -575,6 +575,15 @@ GENERATOR_TEMPLATES = {
     drift: "pending triage (K-640): same shape as add_kyc_verified_at above — the two copies " \
            "carry a shorter basename and class (AddKycAttributes), per-demo prose and a one-line " \
            "kyc_attributes_sql call. Same column, same SQL, different class name.",
+  },
+  # The direction K-640 left open, taken at K-647: the four Devise demos carried
+  # this migration by hand while kiosk:install emitted nothing, so a fresh
+  # adopter enabling the K-436 spending-cap surface hit missing-column failures
+  # only the demos never saw. The template was lifted verbatim from the demos'
+  # byte-identical copies (schema parameterised), so the render byte-matches
+  # with no drift to record.
+  "add_kiosk_agent_governance_columns.rb.tt" => {
+    emits: "add_kiosk_agent_governance_columns.rb",
   },
 }.freeze
 

@@ -2,8 +2,8 @@
 
 module Kiosk
   module Server
-    # Pure SQL generators for the nine canonical Kiosk migrations.
-    # Migrations 001-009:
+    # Pure SQL generators for the ten canonical Kiosk migrations.
+    # Migrations 001-010:
     #
     #   001 create_kiosk_schema                → schema + four current_*() helpers
     #   002 create_kiosk_identity_tables       → agents, agent_tokens, agent_mappings
@@ -16,6 +16,8 @@ module Kiosk
     #       account-binding shape (public_key_pem, kind, hashed user_code)
     #   009 add_kyc_attributes                  → kiosk.agents.kyc_attributes jsonb
     #       (named anonymized boolean attributes; additive, opt-in)
+    #   010 add_kiosk_agent_governance_columns  → kiosk.agents.spending_cap_cents +
+    #       .human_label (per-assistant governance; additive, opt-in)
     #
     # Pure functions: no database connection, no Rails dependency. Output
     # is SQL strings the host migration framework (`ActiveRecord::Migration#execute`)

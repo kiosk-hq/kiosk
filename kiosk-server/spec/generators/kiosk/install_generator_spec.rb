@@ -79,9 +79,9 @@ RSpec.describe Kiosk::Generators::InstallGenerator do
   end
 
   describe "migrations" do
-    it "creates exactly the nine canonical migrations (001-009)" do
+    it "creates exactly the ten canonical migrations (001-010)" do
       invoke!
-      expect(migrations.size).to eq(9)
+      expect(migrations.size).to eq(10)
       basenames = migrations.map { |p| File.basename(p) }
       expect(basenames).to include(
         a_string_ending_with("_create_kiosk_schema.rb"),
@@ -93,14 +93,15 @@ RSpec.describe Kiosk::Generators::InstallGenerator do
         a_string_ending_with("_add_kyc_verified_at_to_kiosk_agents.rb"),
         a_string_ending_with("_rebuild_kiosk_device_authorizations.rb"),
         a_string_ending_with("_add_kyc_attributes_to_kiosk_agents.rb"),
+        a_string_ending_with("_add_kiosk_agent_governance_columns.rb"),
       )
     end
 
-    it "orders the migration timestamps in 001 → 009 sequence" do
+    it "orders the migration timestamps in 001 → 010 sequence" do
       invoke!
       timestamps = migrations.map { |p| File.basename(p).split("_").first.to_i }
       expect(timestamps).to eq(timestamps.sort)
-      expect(timestamps.uniq.size).to eq(9) # strictly ascending, no collisions
+      expect(timestamps.uniq.size).to eq(10) # strictly ascending, no collisions
     end
 
     describe "001 create_kiosk_schema" do
@@ -301,6 +302,31 @@ RSpec.describe Kiosk::Generators::InstallGenerator do
       it "drops the column in #down" do
         invoke!(%w[--schema=ksk])
         expect(File.read(file)).to include("DROP COLUMN IF EXISTS kyc_attributes")
+      end
+    end
+
+    describe "010 add_kiosk_agent_governance_columns" do
+      let(:file) { migrations.find { |p| p.end_with?("_add_kiosk_agent_governance_columns.rb") } }
+
+      it "calls SchemaDefinitions.agent_governance_columns_sql with the configured schema" do
+        invoke!(%w[--schema=ksk])
+        body = File.read(file)
+        expect(body).to include("Kiosk::Server::SchemaDefinitions.agent_governance_columns_sql(")
+        expect(body).to include('schema: "ksk"')
+      end
+
+      it "sorts after 002 (the agents table it alters)" do
+        invoke!
+        identity_idx   = migrations.index { |p| p.end_with?("_create_kiosk_identity_tables.rb") }
+        governance_idx = migrations.index { |p| p.end_with?("_add_kiosk_agent_governance_columns.rb") }
+        expect(governance_idx).to be > identity_idx
+      end
+
+      it "drops both governance columns in #down" do
+        invoke!(%w[--schema=ksk])
+        body = File.read(file)
+        expect(body).to include("DROP COLUMN IF EXISTS spending_cap_cents")
+        expect(body).to include("DROP COLUMN IF EXISTS human_label")
       end
     end
   end

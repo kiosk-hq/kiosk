@@ -103,12 +103,10 @@ For EACH of the 7 apps:
 - [ ] **git push-to-deploy** (mirrors narrathon): a bare repo per box with an ISOLATED `post-receive` hook
       (own work-tree/service names/deploy user — never touches `/opt/narrathon`) that checks out `main`,
       `bundle install`, `db:prepare`, and restarts each app's service.
-- [ ] ~~Prune cron~~ — **SKIPPED** (Phil), and as of K-630 there is nothing left to install: the script it
-      would have run, `deploy/prune.sh`, is **deleted**. It had no unique job — its prune half was a
-      permanent no-op (no demo ships an account-retention task, K-615) and its re-seed half is already
-      covered. Nothing in this repo reclaims demo accounts, on a schedule or otherwise. **Reclaiming disk
-      is `deploy/demo-reset.sh`, run by hand**; for what covers the catalog re-seed instead, see
-      `deploy/README.md` step 5.
+- [ ] ~~Prune cron~~ — **SKIPPED** (Phil, K-593/K-630) and there is nothing to install: this repo ships no
+      scheduled housekeeping at all, and nothing in it reclaims demo accounts — no demo ships a retention
+      task. **Reclaiming disk is `deploy/demo-reset.sh`, run by hand**; for what covers the catalog
+      re-seed instead, see `deploy/README.md` step 5.
 
 ## 8. Verify (per subdomain)
 - [ ] `GET https://<app>.demo.kiosk.tech/.well-known/kiosk.json` returns discovery (atablefor shows the "beware" PoW notice).

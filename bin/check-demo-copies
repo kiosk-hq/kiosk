@@ -83,10 +83,28 @@ ROOT = File.expand_path("..", __dir__)
 # each demo edits for its own port, host and initializer, and comparing them
 # would drown the signal this check exists for. `lib/tasks/*.rake` is excluded
 # too — per-demo by construction, and already covered by bin/check-ci-tasks.
+# What that leaves out, and why, is recorded in SKELETON_NOT_COMPARED below.
 SCAN_ROOTS = ["lib", "app", "script", "db/migrate"].freeze
+
+# Named one by one because they are the exceptions: files outside SCAN_ROOTS
+# (and outside `*.rb`) that ARE compared. A path only earns a place here when it
+# has no per-demo dimension at all — see the `.gitignore` entry in COPIES.
+EXTRA_SCANNED = [".gitignore"].freeze
 
 # ── The manifest ─────────────────────────────────────────────────────────────
 COPIES = {
+  # ── Outside the scan roots, compared anyway (K-629) ────────────────────────
+  ".gitignore" => {
+    rule: :identical,
+    why:  "The one skeleton file with no per-demo dimension: nothing in a .gitignore is per-port, " \
+          "per-host or per-app-name, so the four variants this had grown (getgrocery repeating the " \
+          "root ignore's `mise.toml`, tudu alone ignoring `/config/*.key`, prove missing the " \
+          "sqlite/storage/spring blocks) were drift, not intent. It is also the skeleton file where " \
+          "drift is dangerous rather than untidy: K-404 was a `credentials.yml.enc` reaching CI " \
+          "without its key, and the fix was a line in every demo's ignore. Machine-local files " \
+          "(mise.toml, .bundle, .env) belong in the ROOT .gitignore instead (K-552).",
+  },
+
   # ── The telemetry cluster (K-623) ──────────────────────────────────────────
   "lib/demo_telemetry.rb" => {
     rule: :identical,
@@ -286,6 +304,94 @@ COPIES = {
   },
 }.freeze
 
+# ── What is NOT compared, and why (K-629) ────────────────────────────────────
+#
+# SCAN_ROOTS leaves the Rails skeleton out. That was a decision, but it was never
+# written down anywhere, so the next reader had to re-derive it from the absence
+# of an entry — and "no entry" reads the same whether a path was considered and
+# excluded or simply never noticed. These are the ~40 paths that exist in two or
+# more demos and that nothing above compares. Each line says what the copies are
+# allowed to differ by; measured, not assumed.
+#
+# HONEST SCOPE, twice over.
+#
+# (1) These entries are DOCUMENTARY. Only their staleness is checked (a declared
+#     path that no longer exists in two demos is an error), not their
+#     completeness: proving no OTHER skeleton path is duplicated would mean
+#     walking the whole demo tree, which is full of gitignored local scratch
+#     (log/, tmp/, .bundle/, node_modules/), and filtering that needs `git
+#     ls-files` — an external process, in a check that deliberately runs on a
+#     bare checkout with nothing but stdlib. The scan roots keep their
+#     undeclared-copy guard; the skeleton has a record instead.
+#
+# (2) "Not compared" is not "not covered". config/routes.rb and
+#     config/initializers/kiosk.rb ARE asserted, on the four telemetry-wiring
+#     patterns at the bottom of this file; db/structure.sql is the output of
+#     migrations this check compares byte-for-byte; and every demo's whole
+#     skeleton is exercised by that demo's CI job, which boots the app.
+#
+# One recurring shape, stated once instead of forty times: kiosk-demo-prove is a
+# smaller, API-only Rails app generated on its own, so on a whole family of
+# generator-output paths the seven operator demos agree byte-for-byte and prove
+# alone differs. Where a reason below says "prove differs", that is what it means.
+SKELETON_NOT_COMPARED = {
+  "config/environments/development.rb" =>
+    "Per-demo by construction: atablefor, getgrocery, hoteling and skooti each append their own " \
+    "/etc/hosts domain for `rake demo` (config.hosts << \"<app>.app\", each on its own dev port), " \
+    "philslist/stylish/tudu have no such domain and so no block at all, and prove differs. " \
+    "Every variant is explained by that. Verified at K-629, where the one true drift was found and " \
+    "fixed: hoteling's comment named skooti's host and port.",
+  "config/environments/production.rb" => "Identical in the seven operator demos; prove differs.",
+  "config/environments/test.rb" => "Identical in the seven operator demos; prove differs.",
+  "config/puma.rb" =>
+    "Identical in the seven operator demos (the port comes from PORT, not from this file); prove differs.",
+  "config/application.rb" => "Per-demo: the module name IS the demo name.",
+  "config/boot.rb" => "Rails generator output, four lines, identical in all eight.",
+  "config/environment.rb" => "Rails generator output, five lines, identical in all eight.",
+  "config/database.yml" => "Per-demo: each resolves its own KIOSK_<APP>_DB / _DB_USER (deploy/README).",
+  "config/routes.rb" => "Per-demo: each demo's own verbs and pages. The telemetry route IS asserted below.",
+  "config/initializers/kiosk.rb" =>
+    "Per-demo: capabilities, verbs, PoW policy and adapters differ per storefront. The telemetry " \
+    "require and middleware insertion ARE asserted below.",
+  "config/initializers/devise.rb" => "Only the demos with a human login ship it, with per-demo settings.",
+  "config/initializers/cors.rb" =>
+    "Rails generator output, identical, and inert: every line in it is commented out.",
+  "config/initializers/inflections.rb" =>
+    "Rails generator output, identical, and inert: every line in it is commented out.",
+  "config/initializers/filter_parameter_logging.rb" => "Rails generator output, identical where shipped.",
+  "config/locales/en.yml" => "Rails generator output, identical where shipped.",
+  "config.ru" => "Rails generator output, identical in all eight.",
+  "Rakefile" => "Rails generator output, identical in all eight.",
+  "Gemfile" => "Per-demo: each pulls only the kiosk gems and adapters it uses.",
+  "Gemfile.lock" => "Resolver output, tracked on purpose; follows the Gemfile.",
+  "README.md" => "Per-demo prose. The task list inside it is asserted by bin/check-ci-tasks.",
+  "CHANGELOG.md" => "Per-demo history.",
+  "before-after.md" => "Per-demo narrative: that storefront's before/after contrast.",
+  "db/seeds.rb" => "Per-demo catalog — the whole point of each demo.",
+  "db/structure.sql" =>
+    "Generated from the migrations, which this check DOES compare byte-for-byte; comparing the " \
+    "output as well would only restate that, and each demo's own tables differ anyway.",
+  "bin/rails" => "Rails generator output, identical in all eight.",
+  "bin/rake" => "Rails generator output, identical in all eight.",
+  "bin/setup" =>
+    "Rails generator output. Two variants, differing only by a five-line commented-out \"Copying " \
+    "sample files\" block that hoteling's and skooti's generator did not emit — inert either way.",
+  "bin/dev" => "Rails generator output, identical where shipped (a one-line exec of bin/rails server).",
+  "bin/demo" => "Per-demo entry point into that demo's own flow tasks.",
+  "public/404.html" => "Static Rails error page; identical in the seven operator demos, prove differs.",
+  "public/422.html" =>
+    "Static error page, load-bearing for the K-532/K-534 CSRF signpost; identical in the seven " \
+    "operator demos, prove differs.",
+  "public/500.html" => "Static Rails error page; identical in the seven operator demos, prove differs.",
+  "public/robots.txt" => "Rails generator output, identical in all eight.",
+  "public/favicon.ico" => "Binary asset; identical today, per-demo branding would be legitimate.",
+  "log/.keep" => "Empty placeholder.",
+  "tmp/.keep" => "Empty placeholder.",
+  "tmp/pids/.keep" => "Empty placeholder.",
+  "storage/.keep" => "Empty placeholder.",
+  "vendor/.keep" => "Empty placeholder.",
+}.freeze
+
 # ── Normalisation ────────────────────────────────────────────────────────────
 #
 # Ripper rather than a regex: `#` inside a string, a regex or a heredoc is not a
@@ -350,6 +456,10 @@ demos.each do |dir|
       found[rel][demo] = path
     end
   end
+  EXTRA_SCANNED.each do |rel|
+    path = File.join(dir, rel)
+    found[rel][demo] = path if File.file?(path)
+  end
 end
 dups = found.select { |_rel, copies| copies.size >= 2 }
 
@@ -377,6 +487,24 @@ short = ->(demo) { demo.delete_prefix("kiosk-demo-") }
             "(:identical / :code / :per_demo). Ignoring comments and whitespace the copies group as " \
             "#{groups.join(' ')}."
 end
+
+# ── The recorded exclusion must stay true (K-629) ────────────────────────────
+#
+# Documentary, but not unchecked: an entry naming a path no longer duplicated,
+# or one carrying no reason, is the record turning back into an assumption.
+SKELETON_NOT_COMPARED.each do |rel, why|
+  errors << "#{rel}: SKELETON_NOT_COMPARED entry carries no reason" if why.to_s.strip.empty?
+
+  ships = demos.count { |dir| File.exist?(File.join(dir, rel)) }
+  next if ships >= 2
+
+  errors << "#{rel}: recorded in SKELETON_NOT_COMPARED as a skeleton file this check does not " \
+            "compare, but only #{ships} demo ships it — it is not a duplicate any more. Drop the entry."
+end
+
+overlap = SKELETON_NOT_COMPARED.keys & COPIES.keys
+errors << "#{overlap.join(', ')}: declared BOTH in COPIES and in SKELETON_NOT_COMPARED — a path is " \
+          "either compared or recorded as not compared, not both." if overlap.any?
 
 (COPIES.keys - dups.keys).sort.each do |rel|
   where = found[rel]&.keys&.map(&short) || []

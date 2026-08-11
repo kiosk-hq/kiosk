@@ -47,11 +47,16 @@ universal agent skill is `skill.md` on the same site.
   same check asserts presence, never the prose), then `bin/check-ci-tasks
   --write`.
 - The demos are separate Rails apps, so shared code is HAND-COPIED.
-  `bin/check-demo-copies` (its own CI job) declares every file that exists in
-  two or more demos as `:identical`, `:code` (identical modulo comments and
-  whitespace) or `:per_demo`, with a reason; editing one copy of a lockstep
-  file means editing all of them, and a NEW duplicate fails the build until it
-  is declared. Copy a file between demos → add it to that manifest.
+  `bin/check-demo-copies` (its own CI job) declares every hand-written Ruby file
+  that exists in two or more demos — plus `.gitignore` — as `:identical`,
+  `:code` (identical modulo comments and whitespace, MAGIC comments excepted:
+  those are compared) or `:per_demo`, with a reason; editing one copy of a
+  lockstep file means editing all of them, and a NEW duplicate fails the build
+  until it is declared. Copy a file between demos → add it to that manifest.
+  The Rails skeleton (`bin/`, `config/`, `public/`, `Rakefile`, `config.ru`,
+  `db/seeds.rb`) is deliberately NOT compared — each demo edits it for its own
+  port and host — and that exclusion is recorded, path by path with its reason,
+  in the same file's `SKELETON_NOT_COMPARED`.
 - The gems are meant to be installable, but every consumer here uses `path:`,
   which reads the working tree — so a file missing from `spec.files` is
   invisible locally and fatal from RubyGems. `bin/check-gem-packaging` (its own

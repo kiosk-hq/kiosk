@@ -252,7 +252,7 @@ module Kiosk
       # redirects a browser visitor there (with a flash alert + a stored
       # return-to) instead of rendering the bare 401. When left nil — or for a
       # non-HTML/API request — the plain 401 is preserved, so the API contract
-      # and AR-less/plain-Rack hosts are unaffected.
+      # is unaffected.
       attr_accessor :sign_in_path
 
       # ── Account-binding hooks ──────────────────────────────────

@@ -366,7 +366,7 @@ module Kiosk
 
       # Rebuilds `kiosk.device_authorizations` in the account-binding shape
       # read/written by {DeviceAuthorizationStores::ActiveRecord},
-      # the default store when ActiveRecord is present:
+      # the default store:
       #
       #   - `user_code` (plaintext) → `user_code_hash` — codes are stored
       #     hashed ONLY (SHA-256 hex, matching `agent_tokens.token_hash`);

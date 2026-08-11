@@ -240,7 +240,7 @@ RSpec.describe Kiosk::Server::DeviceAuthorizationStores do
   describe "Kiosk.configuration.device_authorization_store" do
     # The lazy default is the durable adapter — in-memory dies cross-process,
     # and ActiveRecord is a declared dependency of the gem.
-    it "lazy-defaults to the durable ActiveRecord store when ActiveRecord is present" do
+    it "lazy-defaults to the durable ActiveRecord store" do
       expect(Kiosk.configuration.device_authorization_store)
         .to be_a(Kiosk::Server::DeviceAuthorizationStores::ActiveRecord)
     end

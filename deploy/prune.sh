@@ -22,9 +22,10 @@
 # additively re-seeds getgrocery). A per-account retention job would be new
 # destructive production code in seven apps for a job that tool already does.
 #
-# WORTH KNOWING: the push-to-deploy hook already runs `db:seed` on every push
-# (K-464), so this script only adds anything if you want a top-up BETWEEN
-# deploys.
+# WORTH KNOWING: K-464 records the hosted box's push-to-deploy hook being
+# extended to run `db:seed` on every push (deploy/CHECKLIST.md §7's description
+# of that hook predates it and still lists only `db:prepare`). On a box wired
+# that way this cron is at most a top-up BETWEEN deploys.
 #
 # NOT INSTALLED ON THE HOSTED BOX. The cron is a deliberate skip
 # (deploy/CHECKLIST.md §7, deploy/README.md step 5). This script is kept ready

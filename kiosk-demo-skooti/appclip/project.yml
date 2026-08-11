@@ -37,9 +37,9 @@
 #
 #   1. Xcode → Skooti target → Signing & Capabilities → set your Team.
 #   2. Xcode → SkootiClip target → Signing & Capabilities → set the same Team.
-#   3. Associated Domains (appclips:skooti.app) requires the domain to serve
+#   3. Associated Domains (appclips:skooti.demo.kiosk.tech) requires the domain to serve
 #      an apple-app-site-association file in production.  For local demo:
-#      Settings → Developer → Local Experiences → prefix https://skooti.app/unlock.
+#      Settings → Developer → Local Experiences → prefix https://skooti.demo.kiosk.tech/unlock.
 #   See README.md for full provisioning steps.
 
 name: SkootiDemo
@@ -91,7 +91,7 @@ targets:
       path: Skooti/Skooti.entitlements
       properties:
         com.apple.developer.associated-domains:
-          - "appclips:skooti.app"
+          - "appclips:skooti.demo.kiosk.tech"
 
     settings:
       base:
@@ -149,7 +149,7 @@ targets:
         # Required for NFC / App Clip Code / QR launch.  Without this the system
         # will not launch the clip when a user taps the scooter tag.
         com.apple.developer.associated-domains:
-          - "appclips:skooti.app"
+          - "appclips:skooti.demo.kiosk.tech"
         # Marks this target as an App Clip — required entitlement.
         # Only available with a paid Apple Developer Program account.
         com.apple.developer.on-demand-install-capable: true

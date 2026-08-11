@@ -34,10 +34,6 @@
 #     handle @getgrocery { reverse_proxy 127.0.0.1:3001 }
 #     ... one matcher per app ...
 #   }
-#
-# atablefor (the flagship "book a table for two") MAY instead live at its own
-# apex atablefor.us rather than under *.demo.kiosk.tech. To do that, replace the
-# atablefor.demo.kiosk.tech block with:  atablefor.us, www.atablefor.us { ... }
 # ─────────────────────────────────────────────────────────────────────────────
 
 # Global options: contact address for Let's Encrypt expiry notices.
@@ -112,7 +108,6 @@ getgrocery.demo.kiosk.tech {
 
 atablefor.demo.kiosk.tech {
 	# Flagship "book a table for two".
-	# Alt: serve at the apex atablefor.us instead — see header note.
 	import kioskproxy 127.0.0.1:3002
 }
 

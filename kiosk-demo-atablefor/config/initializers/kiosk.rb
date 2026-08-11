@@ -281,7 +281,7 @@ Kiosk.configure do |c|
   # KIOSK_POW_DIFFICULTY=high, surface an honest "beware: intensive PoW" notice
   # here so an agent/reader sees the anti-scalping toll up front (the 402
   # challenge params carry the same heavy n/k).
-  c.owner  = { name: "atablefor", support: "help@atablefor.app" }
+  c.owner  = { name: "atablefor", support: "demo@kiosk.tech" }
   if (notice = PowDifficulty.pow_notice)
     c.owner = c.owner.merge(pow_difficulty: PowDifficulty.level, pow_notice: notice)
   end

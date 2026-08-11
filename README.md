@@ -63,11 +63,15 @@ with the reason it is not — or when a task the demo defines is not named in th
 README's own hand-written list of what each task proves.
 
 The demos are standalone Rails apps, so a helper two of them need is COPIED, not
-shared. `bin/check-demo-copies` — its own CI job too — declares every file that
-exists in more than one demo as kept identical, kept identical apart from its
-header prose, or a deliberate per-demo variant, each with the reason; it fails
-the build when copies that must agree stop agreeing, and when a new duplicate
-turns up undeclared.
+shared. `bin/check-demo-copies` — its own CI job too — declares every
+hand-written Ruby file that exists in more than one demo, plus `.gitignore`, as
+kept identical, kept identical apart from its header prose, or a deliberate
+per-demo variant, each with the reason; it fails the build when copies that must
+agree stop agreeing, and when a new duplicate turns up undeclared. Header prose
+may vary, but a magic comment may not: `# frozen_string_literal: true` changes
+how the file runs, so it is compared. The Rails skeleton each demo edits for its
+own port and host is out of scope on purpose, and that exclusion is recorded
+file by file, with its reason, in the same script.
 
 Everything in this repo consumes the gems by `path:`, which serves the working
 tree — so nothing here can tell a file that EXISTS from a file that is

@@ -1,17 +1,16 @@
 # RESUME NOTE — demo-hygiene-0811 (T-060)
 
-Agent scope: K-626 (deploy/CHECKLIST hook description), K-628 (frozen_string_literal
-in demos), K-629 (.gitignore + config/environments/development.rb exclusion record).
-Owns: demos + `deploy/**`. NEVER touch reference/ main checkout or sibling worktrees.
+Agent scope: K-626, K-628, K-629. Owns demos + `deploy/**`.
 
 ## Status
-- [x] K-626 — CHECKLIST.md §7 now lists `db:seed` + the K-464 reason; changelog line added.
-- [ ] K-628 — frozen_string_literal scope survey + decision.
-- [ ] K-629 — .gitignore 4 variants + development.rb 6 variants; converge drift, record exclusion.
+- [x] K-626 — CHECKLIST.md §7 lists `db:seed` + the K-464 reason (commit da85fe9).
+- [x] K-628 — 13 demo files gained `# frozen_string_literal: true`; guard extended (commit 7ac618e).
+- [x] K-629 — 8 `.gitignore` converged + guarded `:identical`; SKELETON_NOT_COMPARED
+      records 40 uncompared skeleton paths; hoteling development.rb comment drift fixed.
 
-## Gates still to run
-- bin/check-demo-copies, bin/check-ci-tasks, bin/check-gem-packaging
-- ruby -c on touched files; zeitwerk:check per touched demo
-- git ls-files proof for any .gitignore change
+All three gates green. Remaining: delete this file, report.
 
-DELETE THIS FILE IN THE FINAL COMMIT.
+## K-candidates to report (do NOT fix)
+- minor D7: the seven operator demos are byte-identical on six skeleton paths
+  (config/puma.rb, config/environments/{test,production}.rb, public/{404,422,500}.html)
+  with prove the only outlier — guardable as `:identical` + a prove `except:`.

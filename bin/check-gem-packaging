@@ -1,0 +1,341 @@
+#!/usr/bin/env ruby
+# frozen_string_literal: true
+
+# Gem packaging check.
+#
+# WHY THIS EXISTS. `kiosk-server.gemspec` said
+# `spec.files = Dir.glob("lib/**/*") + %w[README.md LICENSE.txt CHANGELOG.md]`.
+# It omitted `app/`, so the three ERB templates under
+# `app/views/kiosk/server/{device_verify,assistants}/` were not in the built gem
+# — while `device_verify_controller.rb:38` and `assistants_controller.rb:28`
+# `append_view_path` at exactly that directory. Every consumer installing from
+# RubyGems got `ActionView::MissingTemplate` on BOTH HTML pages of the
+# account-binding ceremony: the entire human-facing half of the flow, gone.
+#
+# It shipped that way, and every suite in this repo stayed green, because THIS
+# CLASS OF DEFECT IS INVISIBLE BY CONSTRUCTION HERE. Every consumer in the
+# monorepo — the eight demos, the e2e fixture, the sibling gems — uses `path:`,
+# which serves files straight from the working tree. The working tree always has
+# app/views. No test in this repo can distinguish "the file is there" from "the
+# file is packaged", so no test can notice, and none did. The only observer is
+# someone who installs the gem, and there is not one of those inside CI.
+#
+# So this is a CHECK, not a convention. It BUILDS each gem the way RubyGems
+# builds it, reads the file list back out of the resulting `.gem`, and compares
+# it against what the repo contains and what the gem's own Ruby reaches for.
+# "Someone must remember that spec.files is a hand-maintained list" becomes
+# "CI notices when it stopped being complete".
+#
+# THE TWO RULES IT ENFORCES. They approach the same invariant from opposite
+# ends, and the kiosk-server defect was visible from both:
+#
+#   A. COMPLETENESS — from the FILES.  Every git-tracked file under a gem
+#      directory must be either in the built package, or matched by a pattern in
+#      the NOT_PACKAGED manifest below, whose value is the REASON that kind of
+#      file has no business in a gem. A file in neither fails. So does a
+#      manifest pattern that matches nothing anywhere (a rule guarding nothing
+#      is a rule nobody will re-read). This is what makes a NEW unpackaged file
+#      impossible to add silently — the failure mode that produced the defect,
+#      where `app/` was created long after `spec.files` was written and nothing
+#      connected the two.
+#
+#   B. REACHABILITY — from the CODE.  Every path literal that packaged Ruby
+#      resolves against `__dir__` must land on something that is also packaged.
+#      That is the assertion that would have failed the moment
+#      `append_view_path File.expand_path("../../../app/views", __dir__)` was
+#      written, without anyone having to think about packaging at all.
+#
+# WHY BOTH. A alone passes a gem that packages every file it owns and then
+# reaches for a file it does not own (kiosk-redteam does exactly this — see
+# OUT_OF_GEM). B alone passes a gem whose runtime paths all resolve but whose
+# README, generator templates or data files were dropped. Neither subsumes the
+# other, and the defect that motivated this was in the intersection.
+#
+# WHAT THIS IS NOT. It is not proof the gem WORKS when installed — nothing here
+# boots Rails against an installed gem or renders a template. It asserts the
+# bytes are in the package. That is the whole distance between the tree and
+# RubyGems, and it is the distance the defect lived in; a full install-and-boot
+# gate is a different, much heavier check, and this one running in 4 s on every
+# push is worth more than that one running never.
+#
+# THE FAIL-OPEN GUARD. Rule B reads source with regexes, and a regex that does
+# not recognise a shape reports success — the exact failure mode this file
+# exists to prevent. So an occurrence of `__dir__` or `__FILE__` in packaged
+# Ruby that does NOT match one of the resolvable shapes is a HARD ERROR, not a
+# skip: the checker says out loud that it cannot see, instead of passing.
+#
+# For the same reason it reads every packaged file that CAN contain Ruby, not
+# just `*.rb`: a `.erb` view or a `.rake` task resolving a path against __dir__
+# is the same defect wearing a different extension, and "the regex found nothing
+# because it never opened the file" is precisely the shape of failure this
+# guard exists to make impossible. `.tt` is deliberately NOT read — those are
+# generator templates whose OUTPUT lands in the host application, so a __dir__
+# in one resolves against the host's db/migrate, not against this package.
+#
+# BOTH MANIFESTS ARE CHECKED FOR STALENESS, and for the same reason: an entry
+# that no longer guards anything is an entry nobody will re-read, and it is a
+# standing lie about the state of the tree. A NOT_PACKAGED pattern matching no
+# file, and an OUT_OF_GEM literal no packaged file reaches for any more, are
+# both errors. OUT_OF_GEM especially: its one entry exists to be DELETED when a
+# decision lands, and if the code changed first nothing else would notice.
+#
+# Stdlib only (rubygems + tmpdir), no bundle, no database. It shells out to
+# `gem build` once per gem — deliberately the real builder rather than a
+# re-implementation of `spec.files`, since trusting the glob is what went wrong.
+# ~4 s for 14 gems. Same profile and same reason as bin/check-ci-tasks and
+# bin/check-demo-copies.
+#
+# Usage:
+#   bin/check-gem-packaging          # check
+#   bin/check-gem-packaging --list   # print what each gem packages and reaches for
+
+require "rubygems/package"
+require "tmpdir"
+require "shellwords"
+
+ROOT = File.expand_path("..", __dir__)
+
+# ── Manifest A: what may legitimately stay out of a gem ──────────────────────
+#
+# Keys are fnmatch patterns against the path RELATIVE to the gem directory.
+# Values are the reason that kind of file is development scaffolding rather
+# than something a consumer installs. Anything not matched here must ship.
+NOT_PACKAGED = {
+  ".gitignore" => "git metadata. Nothing loads it, and RubyGems never consults it.",
+
+  ".rspec" => "RSpec CLI defaults for running THIS gem's own suite in this " \
+              "checkout. Consumers do not run it.",
+
+  "Gemfile" => "the DEVELOPMENT bundle for this gem's own suite (path: entries " \
+               "pointing at sibling gems in this monorepo, dev-only gems). A " \
+               "consumer resolves against the gemspec's declared dependencies; " \
+               "shipping this file would resolve nothing and mislead everything.",
+
+  "Gemfile.lock" => "the lock for that development bundle. A LIBRARY must not " \
+                    "ship a lock — the consumer's resolver owns version choice.",
+
+  "Rakefile" => "the dev task entry point (rake spec, rake parity). Its tasks " \
+                "need spec/ and the development bundle, neither of which ships, " \
+                "so it would be a broken file in an installed gem.",
+
+  "*.gemspec" => "RubyGems stores the built specification inside the .gem's own " \
+                 "metadata. The source gemspec is not needed, and would be " \
+                 "actively wrong to ship: its Dir.glob calls would re-run " \
+                 "against the installed tree.",
+
+  "spec/**/*" => "the gem's own RSpec suite, plus its fixtures and stubs. " \
+                 "Consumers do not run it; shipping it puts spec_helper and " \
+                 "test doubles on their load path.",
+
+  "test/**/*" => "same as spec/**/*, for kiosk-rls-minitest, which uses the " \
+                 "Minitest layout.",
+}.freeze
+
+# ── Manifest B: declared reaches outside the package ─────────────────────────
+#
+# gem => { literal path as written in the source => reason }. An entry here says
+# "yes, this gem resolves a path that is not in its own package, and here is why
+# that is known and accepted". Same shape, and the same intent, as `ungated:` in
+# ci.yml's demos matrix and `except:` in bin/check-demo-copies: the divergence is
+# recorded rather than invisible.
+OUT_OF_GEM = {
+  "kiosk-redteam" => {
+    "../../../../kiosk-pow-equihash/solve.py" =>
+      "client.rb:282 shells out to the Equihash solver by MONOREPO-RELATIVE " \
+      "path (four levels up, into a sibling gem's directory). That resolves in " \
+      "this checkout and nowhere else: an installed kiosk-redteam raises Errno " \
+      "the first time a scenario needs a registration PoW. Recorded, not fixed, " \
+      "because fixing it is a decision and not a packaging edit — kiosk-redteam " \
+      "would gain a runtime dependency on kiosk-pow-equihash, and that gem " \
+      "would gain a public API for the solver's installed location (it exposes " \
+      "none today). Filed for Phil; delete this entry when the decision lands.",
+  },
+}.freeze
+
+# Shapes of `__dir__`-relative path resolution this checker understands. Every
+# other occurrence of __dir__/__FILE__ in packaged Ruby is a hard error — see
+# THE FAIL-OPEN GUARD in the header.
+RESOLVABLE = [
+  /File\.expand_path\(\s*"([^"#]*)"\s*,\s*__dir__\s*\)/,
+  /File\.expand_path\(\s*"([^"#]*)"\s*,\s*File\.dirname\(__FILE__\)\s*\)/,
+  /File\.join\(\s*__dir__\s*,\s*"([^"#]*)"\s*\)/,
+].freeze
+
+# Packaged files Rule B reads. Everything here executes as Ruby inside the
+# INSTALLED gem, so a __dir__ in one resolves against the package. `.tt` is
+# excluded on purpose — see THE FAIL-OPEN GUARD in the header.
+RUBY_BEARING = /\.(rb|erb|rake|ru|gemspec)\z/.freeze
+
+errors = []
+used_patterns = {}
+used_out_of_gem = {}
+listing = []
+packaged_index = {}
+
+gemspecs = Dir[File.join(ROOT, "*", "*.gemspec")].sort
+abort "check-gem-packaging: no */*.gemspec under #{ROOT}" if gemspecs.empty?
+
+Dir.mktmpdir do |tmp|
+  gemspecs.each do |gemspec|
+    dir  = File.dirname(gemspec)
+    gem  = File.basename(dir)
+    out  = File.join(tmp, "#{gem}.gem")
+    log  = File.join(tmp, "#{gem}.log")
+
+    # `gem build` does NOT chdir into the gemspec's directory — every gemspec
+    # here calls Dir.glob, which resolves against CWD, so building from the repo
+    # root produces a spec whose files do not exist. Build from the gem dir,
+    # exactly as a release would.
+    unless system("cd #{dir.shellescape} && gem build #{File.basename(gemspec).shellescape} " \
+                  "-o #{out.shellescape} >#{log.shellescape} 2>&1")
+      errors << "#{gem}: `gem build` FAILED — the gem cannot be packaged at all:\n" \
+                "#{File.read(log).lines.map { |l| "      #{l}" }.join}"
+      next
+    end
+
+    # Read the file list back OUT of the built package rather than off the
+    # gemspec: `spec.files` is a promise, the tar is the artifact. (RubyGems
+    # silently drops directory entries at build time, so the two already differ.)
+    package  = Gem::Package.new(out)
+    packaged = package.contents.sort
+    unpacked = File.join(tmp, "#{gem}-unpacked")
+    package.extract_files(unpacked)
+
+    tracked  = `cd #{ROOT.shellescape} && git ls-files -- #{gem.shellescape}`
+               .lines.map { |l| l.chomp.delete_prefix("#{gem}/") }
+    if tracked.empty?
+      errors << "#{gem}: `git ls-files` returned nothing — is this a checkout?"
+      next
+    end
+
+    # ── Rule A: completeness ──────────────────────────────────────────────
+    (tracked - packaged).each do |rel|
+      pattern = NOT_PACKAGED.keys.find do |pat|
+        File.fnmatch?(pat, rel, File::FNM_PATHNAME | File::FNM_DOTMATCH)
+      end
+      if pattern
+        (used_patterns[pattern] ||= []) << gem
+        next
+      end
+      errors << "#{gem}: `#{rel}` is tracked in this repo but is NOT in the built gem. " \
+                "Someone installing #{gem} from RubyGems does not get it. Either add it to " \
+                "`spec.files` in #{gem}.gemspec, or — if it is development scaffolding — add " \
+                "a pattern for it to NOT_PACKAGED in bin/check-gem-packaging with the reason."
+    end
+
+    # ── Rule B: reachability ──────────────────────────────────────────────
+    reaches = []
+    packaged.grep(RUBY_BEARING).each do |rel|
+      src  = File.read(File.join(unpacked, rel))
+      here = File.dirname(rel)
+
+      literals = RESOLVABLE.flat_map { |re| src.scan(re).map(&:first) }
+
+      literals.each do |literal|
+        # Resolve against a sentinel root so escaping the gem is detectable.
+        abs    = File.expand_path(literal, File.join("/GEM", here))
+        inside = abs.start_with?("/GEM/") || abs == "/GEM"
+        target = inside ? abs.delete_prefix("/GEM/") : literal
+        reaches << [rel, literal, target, inside]
+
+        if (reason = OUT_OF_GEM.dig(gem, literal))
+          errors << "#{gem}: OUT_OF_GEM entry for `#{literal}` carries no reason" if reason.strip.empty?
+          (used_out_of_gem[gem] ||= []) << literal
+          next
+        end
+
+        unless inside
+          errors << "#{gem}: `#{rel}` resolves `#{literal}` against __dir__, which escapes the " \
+                    "gem root entirely — it can only exist in this monorepo checkout, never in an " \
+                    "installed gem. Depend on whatever owns that file and ask it for the path, or " \
+                    "declare it in OUT_OF_GEM in bin/check-gem-packaging with the reason."
+          next
+        end
+
+        ok = packaged.include?(target) ||
+             packaged.any? { |f| f.start_with?("#{target}/") }
+        next if ok
+
+        errors << "#{gem}: `#{rel}` resolves `#{literal}` against __dir__ to `#{target}`, which is " \
+                  "NOT in the built gem. It works here only because every consumer in this repo " \
+                  "uses `path:` and reads the working tree; from RubyGems this file is missing at " \
+                  "runtime. Add it to `spec.files` in #{gem}.gemspec."
+      end
+
+      # Fail-open guard: every __dir__/__FILE__ occurrence must be one we read.
+      seen = src.scan(/__dir__|__FILE__/).size
+      next if seen <= literals.size
+
+      errors << "#{gem}: `#{rel}` contains #{seen} __dir__/__FILE__ occurrence(s) but " \
+                "bin/check-gem-packaging could only resolve #{literals.size}. It does not " \
+                "understand the shape used here, so it cannot tell whether the path it builds is " \
+                "packaged — and an unreadable shape must not pass silently. Write the path as " \
+                "`File.expand_path(\"literal\", __dir__)`, or teach RESOLVABLE the new shape."
+    end
+
+    packaged_index[gem] = packaged
+    listing << [gem, packaged.size, tracked.size, reaches]
+  end
+end
+
+# A pattern that guards nothing is a pattern nobody will re-read.
+(NOT_PACKAGED.keys - used_patterns.keys).each do |pat|
+  errors << "NOT_PACKAGED pattern `#{pat}` matched no tracked-but-unpackaged file in any gem — " \
+            "it is stale. Drop it from bin/check-gem-packaging."
+end
+NOT_PACKAGED.each do |pat, reason|
+  errors << "NOT_PACKAGED pattern `#{pat}` carries no reason" if reason.to_s.strip.empty?
+end
+OUT_OF_GEM.each do |gem, literals|
+  unless listing.any? { |(g, *)| g == gem }
+    errors << "OUT_OF_GEM names #{gem}, which has no gemspec in this repo — stale entry."
+    next
+  end
+
+  # The same argument as the NOT_PACKAGED staleness check above, and it bites
+  # harder here: this manifest's entries exist to be DELETED once the escape is
+  # fixed or decided, so an entry whose literal nobody reaches for any more is a
+  # recorded exception for a problem that no longer exists.
+  (literals.keys - (used_out_of_gem[gem] || [])).each do |literal|
+    errors << "OUT_OF_GEM declares `#{literal}` for #{gem}, but no packaged file in #{gem} " \
+              "resolves that literal against __dir__ any more. Either the escape was fixed — " \
+              "delete the entry — or the code moved to a shape bin/check-gem-packaging cannot " \
+              "read, which is worse than the escape."
+  end
+end
+
+if ARGV.include?("--list")
+  puts format("%-22s %5s %5s  %-46s %s", "GEM", "PKG", "REPO", "REACHED FROM __dir__", "IN THE GEM?")
+  listing.each do |(gem, npkg, ntracked, reaches)|
+    rows = reaches.uniq { |(_rel, _lit, target, _inside)| target }
+    puts format("%-22s %5d %5d  %-46s %s", gem, npkg, ntracked,
+                rows.empty? ? "—" : "", rows.empty? ? "—" : "")
+    rows.each do |(_rel, literal, target, inside)|
+      status =
+        if !inside                                                            then "no — ESCAPES the gem root (declared in OUT_OF_GEM)"
+        elsif packaged_index[gem].include?(target)                            then "yes (file)"
+        elsif packaged_index[gem].any? { |f| f.start_with?("#{target}/") }    then "yes (directory, #{packaged_index[gem].count { |f| f.start_with?("#{target}/") }} files)"
+        else                                                                       "NO"
+        end
+      puts format("%-22s %5s %5s  %-46s %s", "", "", "", inside ? target : literal, status)
+    end
+  end
+  puts "\nPKG = files in the built .gem, REPO = files git tracks under the gem directory; the " \
+       "difference is declared in NOT_PACKAGED."
+  # Deliberately falls through to the verdict below rather than exiting here:
+  # `--list` that returned 1 without printing WHY would be a check that fails
+  # silently, which is the one thing this file must never do.
+end
+
+if errors.empty?
+  puts "check-gem-packaging: OK — #{listing.size} gems build; every tracked file is packaged or " \
+       "declared, and every __dir__-relative path resolves inside the package"
+  exit 0
+end
+
+warn "\ncheck-gem-packaging FAILED:\n"
+errors.each { |e| warn "  ✗ #{e}" }
+warn "\nA gem is what the .gem file contains, not what the working tree contains. Every consumer " \
+     "in this repo uses `path:`, so nothing here can tell the two apart — this check is the only " \
+     "thing standing between a missing file and someone's `gem install`."
+exit 1

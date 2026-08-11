@@ -598,6 +598,42 @@ jobs:
       - name: Hand-copied demo files agree, or the divergence is declared
         run: ./bin/check-demo-copies
 
+  # What a `gem install` gets is NOT what this repo contains, and until now
+  # nothing checked the difference. kiosk-server's spec.files globbed lib/ only,
+  # so the three ERB templates under app/views/kiosk/server/ were absent from
+  # the built gem while two controllers append_view_path at exactly that
+  # directory: anyone installing kiosk-server from RubyGems got
+  # ActionView::MissingTemplate on BOTH HTML pages of the account-binding
+  # ceremony. Every job above stayed green throughout, and could not have done
+  # otherwise — every consumer in this monorepo (the demos, the e2e fixture, the
+  # sibling gems) uses `path:`, which serves the working tree, so no suite here
+  # can tell "the file exists" from "the file is packaged". CI had no observer
+  # who installs a gem. This job is that observer: it builds all 14 gems and
+  # fails when a tracked file is neither packaged nor declared scaffolding, or
+  # when packaged Ruby resolves a __dir__-relative path to something the package
+  # does not contain.
+  #
+  # Its own job, alongside ci-task-coverage and demo-file-sync, for the same
+  # reason those two are separate: one invariant, one exit code, one name in the
+  # checks list. Stdlib Ruby only: no bundle, no services, no database, ~2 s.
+  gem-packaging:
+    name: gems package what they need (bin/check-gem-packaging)
+    runs-on: ubuntu-latest
+    # The daily schedule exists for solver-pin-live; don't rebuild the world.
+    if: github.event_name != 'schedule'
+
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Set up Ruby
+        uses: ruby/setup-ruby@v1
+        with:
+          ruby-version: "4.0.1"
+          bundler-cache: false
+
+      - name: Every gem ships the files its own code reaches for
+        run: ./bin/check-gem-packaging
+
   # Production-boot smoke — the guard for the prod-only bug class that the
   # dev-mode gems/demos/e2e jobs are all blind to. Three shipped bugs (K-422
   # eager-load Zeitwerk crash, K-436 missing governance columns → manage-page

@@ -13,11 +13,11 @@
 
 require "open3"
 
-SOLVE_PY = File.expand_path("../../kiosk-pow-equihash/solve.py", __dir__)
+EQUIHASH_REGISTER_SOLVE_PY = File.expand_path("../../kiosk-pow-equihash/solve.py", __dir__)
 
 # Solve one Equihash challenge with the shipped solver → proof nonce hash.
 def equihash_solve(challenge)
-  out, status = Open3.capture2("python3", SOLVE_PY, JSON.generate(challenge))
+  out, status = Open3.capture2("python3", EQUIHASH_REGISTER_SOLVE_PY, JSON.generate(challenge))
   abort "solve.py exited non-zero: #{out}" unless status.success?
   parsed = JSON.parse(out)
   abort "solve.py error: #{parsed["error"]}" if parsed.key?("error")

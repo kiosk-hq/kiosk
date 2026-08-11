@@ -15,11 +15,14 @@
 # Format only — that an id is a well-formed uuid says nothing about whether the
 # row exists or is reachable by the caller; the membership SQL still decides that.
 #
-# A byte-identical copy of this module lives in every demo that casts a
-# wire-supplied id (getgrocery, skooti, hoteling, atablefor, philslist). Each demo
-# is a standalone Rails app with its own Gemfile, so the alternative to a copy is
-# publishing the guard in a shipped gem — a public-API decision, not a fix-wave
-# one. Same arrangement as lib/pow_difficulty.rb and lib/equihash_register.rb.
+# A copy of this module lives in every demo that casts a wire-supplied id. They
+# are identical apart from getgrocery's, which adds a JSON_SCHEMA_PATTERN constant
+# it alone needs (T-050) — and until bin/check-demo-copies was written they were
+# identical only by habit, with nothing failing the build when a copy drifted.
+# Each demo is a standalone Rails app with its own Gemfile, so the alternative to
+# a copy is publishing the guard in a shipped gem — a public-API decision, not a
+# fix-wave one (K-607). Same arrangement as lib/pow_difficulty.rb and
+# lib/equihash_register.rb.
 module UuidCheck
   # Canonical 8-4-4-4-12 hex form, the only shape Postgres' `uuid` type is fed
   # here (gen_random_uuid() output, echoed back by the agent). Postgres itself

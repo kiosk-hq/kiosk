@@ -1,7 +1,7 @@
 #!/usr/bin/env ruby
 # frozen_string_literal: true
 
-# Cross-demo copy check (K-623, K-607, K-624).
+# Cross-demo copy check (K-623, K-607, K-624, K-640).
 #
 # WHY THIS EXISTS. The eight demos are eight standalone Rails apps, so shared
 # application code is not shared at all — it is HAND-COPIED. `lib/demo_telemetry.rb`
@@ -52,6 +52,16 @@
 # That is the property that matters: a NEW copy cannot appear silently, which is
 # how six of these got here.
 #
+# ONE AXIS THE LOCKSTEP RULE CANNOT SEE (K-640). The db/migrate entries keep the
+# demos' generator-output migrations identical to EACH OTHER — but those files
+# are not hand-written: `rails g kiosk:install` emits them from kiosk-server's
+# templates, and all seven demos can drift from the ENGINE together and stay
+# green, because they only ever agree with each other. So every install-generator
+# template is also declared, in GENERATOR_TEMPLATES below, rendered with the
+# generator's own default options (the values every demo was generated with),
+# and the render must byte-match every demo copy — regenerating the engine's
+# schema without regenerating the demos now fails this check.
+#
 # WHAT THIS IS NOT. It is not an argument that copying is right. Promoting
 # UuidCheck or DemoTelemetry into a shipped gem is a public-API decision (K-607,
 # K-495/K-502) and this check does not pre-empt it — it only makes the interim
@@ -66,14 +76,15 @@
 # Ruby set only (see MAGIC_COMMENTS): prose stays ignored, `# frozen_string_literal`
 # does not. `:identical` needs nothing here — byte equality already covers it.
 #
-# Stdlib only (digest + ripper), no bundle, no database, ~0.2 s on a bare
+# Stdlib only (digest + ripper + erb), no bundle, no database, ~0.2 s on a bare
 # checkout — the same profile as bin/check-ci-tasks.
 #
 # Usage:
 #   bin/check-demo-copies          # check
-#   bin/check-demo-copies --list   # print the manifest as a table
+#   bin/check-demo-copies --list   # print the manifests as tables
 
 require "digest"
+require "erb"
 require "ripper"
 
 ROOT = File.expand_path("..", __dir__)
@@ -261,7 +272,9 @@ COPIES = {
     rule: :identical, why: "kiosk:install generator output — payment mandates (the pay demos).",
   },
   "db/migrate/20260618131463_add_kyc_verified_at.rb" => {
-    rule: :identical, why: "kiosk:install generator output — KYC timestamp (the broker demos).",
+    rule: :identical, why: "the KYC timestamp (the broker demos). kiosk:install emits this content " \
+                           "as add_kyc_verified_at_to_kiosk_agents.rb; the demos ship it renamed " \
+                           "and reworded — recorded as drift in GENERATOR_TEMPLATES (K-640).",
   },
   "db/migrate/20260717000001_rebuild_kiosk_device_authorizations.rb" => {
     rule: :identical, why: "kiosk:install generator output — the device-authorization rebuild.",
@@ -270,7 +283,10 @@ COPIES = {
     rule: :identical, why: "Devise columns for the demos that ship a human login.",
   },
   "db/migrate/20260718000002_add_kiosk_agent_governance_columns.rb" => {
-    rule: :identical, why: "kiosk:install generator output — agent governance columns (K-436).",
+    rule: :identical, why: "agent governance columns (K-436) — NOT generator output, despite the " \
+                           "company it keeps here: kiosk:install has no template for it (see " \
+                           "GENERATOR_TEMPLATES), the four Devise demos carry it by hand. Whether " \
+                           "the generator should emit it is a K-640 triage question.",
   },
   "db/migrate/20260101000000_create_users.rb" => {
     rule: :code,
@@ -392,6 +408,95 @@ SKELETON_NOT_COMPARED = {
   "vendor/.keep" => "Empty placeholder.",
 }.freeze
 
+# ── The engine side of the generator output (K-640) ──────────────────────────
+#
+# The db/migrate entries in COPIES hold the demos' copies in lockstep with each
+# other, which is necessary and not sufficient: `rails g kiosk:install` emits
+# those files from these templates, and nothing in the sibling rule ever looks
+# at them — the K-580 rebuild was the concrete near-miss, where template and
+# copies had to move as one change and a partial move would have stayed green.
+#
+# So every template under GENERATOR_TEMPLATES_DIR is declared here, rendered
+# with plain ERB and the generator's own default options (GENERATOR_DEFAULTS —
+# the values every demo was generated with; the templates' only ERB is
+# `<%= options[:…] %>` substitution), and the render must byte-match every demo
+# copy of that migration. Copies are matched by timestamp-stripped basename,
+# because migration_template stamps each demo's copy with its own UTC timestamp
+# — which is also why four copies (getgrocery's mandates and its two kyc
+# migrations, skooti's kyc_attributes — each at its own timestamp) are
+# INVISIBLE to the sibling rule above: a path shipped by one demo is never a
+# duplicate, so the two add_kyc_attributes copies were compared to NOTHING
+# before this rule.
+#
+# Entry fields:
+#   emits:        — the basename the generator writes (sans timestamp).
+#   shipped_as:   — the basename the demos actually ship, when that differs
+#                   from emits: (a rename is drift too — recorded, not hidden).
+#   drift:        — the render and the copies KNOWINGLY disagree, pending
+#                   triage: the reason says what differs and why no side was
+#                   picked. The copies must still agree with EACH OTHER
+#                   (comments/whitespace ignored) so the pending state cannot
+#                   rot further, and the entry errors the day the copies match
+#                   the render — a stale exception is a lie, same as `except:`.
+#   not_compared: — the template's output has a per-demo dimension; the reason
+#                   says where that is recorded.
+#
+# Staleness is checked both ways, per this file's house rule: a template with
+# no entry fails, an entry with no template fails, an emits:/shipped_as:
+# basename no demo ships fails, a drift: whose copies have converged fails.
+GENERATOR_TEMPLATES_DIR = "kiosk-server/lib/generators/kiosk/install/templates"
+
+# The generator's own class_option defaults (install_generator.rb) — the
+# values every demo was generated with.
+GENERATOR_DEFAULTS = {
+  schema: "kiosk", user_id_type: "uuid", user_table: "users", guc_namespace: "app",
+}.freeze
+
+GENERATOR_TEMPLATES = {
+  "initializer.rb.tt" => {
+    not_compared: "emits config/initializers/kiosk.rb — per-demo by design (capabilities, verbs, " \
+                  "PoW policy, adapters), recorded in SKELETON_NOT_COMPARED; its telemetry wiring " \
+                  "IS asserted at the bottom of this file.",
+  },
+  "create_kiosk_schema.rb.tt"                => { emits: "create_kiosk_schema.rb" },
+  "create_kiosk_identity_tables.rb.tt"       => { emits: "create_kiosk_identity_tables.rb" },
+  "create_kiosk_actions_log.rb.tt"           => { emits: "create_kiosk_actions_log.rb" },
+  "create_kiosk_reservations.rb.tt"          => { emits: "create_kiosk_reservations.rb" },
+  "create_kiosk_device_authorizations.rb.tt" => { emits: "create_kiosk_device_authorizations.rb" },
+  "create_kiosk_mandates.rb.tt" => {
+    emits: "create_kiosk_mandates.rb",
+    drift: "pending triage (K-640): comment-only — 75a917b reworded the template's header and " \
+           "added the reverse-FK-order note engine-side (the K-137 reopen), and the three " \
+           "byte-identical copies still carry the older prose; the demos got the settlements DROP " \
+           "itself separately (68dab09), so the executable body agrees on both sides. Which side's " \
+           "prose wins is a direction call this check does not make.",
+  },
+  "add_kyc_verified_at_to_kiosk_agents.rb.tt" => {
+    emits:      "add_kyc_verified_at_to_kiosk_agents.rb",
+    shipped_as: "add_kyc_verified_at.rb",
+    drift: "pending triage (K-640): the three copies were never this template's literal output — " \
+           "hand-derived at demo birth with a shorter basename and class (AddKycVerifiedAt), " \
+           "per-demo prose (getgrocery's names its alcohol age-gate), and a one-line " \
+           "kyc_verified_at_sql call against the template's multi-line form. Same column, same " \
+           "SQL, different class name; which side converges is a direction call this check does " \
+           "not make.",
+  },
+  "rebuild_kiosk_device_authorizations.rb.tt" => {
+    emits: "rebuild_kiosk_device_authorizations.rb",
+    drift: "pending triage (K-640): comment-only — both sides dropped the header's ADR reference " \
+           "in the T-011 scrub era but re-wrapped the surviving prose differently (template " \
+           "edited in 0effbcd, the seven byte-identical copies not re-emitted). The executable " \
+           "body agrees on both sides.",
+  },
+  "add_kyc_attributes_to_kiosk_agents.rb.tt" => {
+    emits:      "add_kyc_attributes_to_kiosk_agents.rb",
+    shipped_as: "add_kyc_attributes.rb",
+    drift: "pending triage (K-640): same shape as add_kyc_verified_at above — the two copies " \
+           "carry a shorter basename and class (AddKycAttributes), per-demo prose and a one-line " \
+           "kyc_attributes_sql call. Same column, same SQL, different class name.",
+  },
+}.freeze
+
 # ── Normalisation ────────────────────────────────────────────────────────────
 #
 # Ripper rather than a regex: `#` inside a string, a regex or a heredoc is not a
@@ -412,6 +517,17 @@ def code_digest(path)
 end
 
 def byte_digest(path) = Digest::SHA256.file(path).hexdigest
+
+# What the install generator would write today. `options` is the name the
+# templates reference (the generator's Thor options hash); binding hands it to
+# the ERB, so `<%= options[:schema].inspect %>` renders exactly as it does in
+# `rails g kiosk:install` with no flags. Plain ERB, no trim mode — the
+# templates use bare `<%= %>` substitution only.
+def render_template(path)
+  b = binding
+  b.local_variable_set(:options, GENERATOR_DEFAULTS)
+  ERB.new(File.read(path)).result(b)
+end
 
 # ── Magic comments (K-628) ───────────────────────────────────────────────────
 #
@@ -463,6 +579,20 @@ demos.each do |dir|
 end
 dups = found.select { |_rel, copies| copies.size >= 2 }
 
+# db/migrate again, grouped by timestamp-stripped basename this time (K-640):
+# migration_template stamps each demo's copy with its own UTC timestamp, so the
+# same logical migration sits at different relative paths in different demos
+# (getgrocery's create_kiosk_mandates is at …131463 where hoteling's is
+# …131462) — grouping by basename is what lets the template rule see them as
+# one file where the relative-path rule above cannot.
+migrations = Hash.new { |h, k| h[k] = {} } # basename sans timestamp => demo name => absolute path
+demos.each do |dir|
+  Dir[File.join(dir, "db/migrate", "*.rb")].sort.each do |path|
+    migrations[File.basename(path).sub(/\A\d+_/, "")][File.basename(dir)] = path
+  end
+end
+migrations.default_proc = nil
+
 if ARGV.include?("--list")
   puts format("%-64s %-9s %s", "PATH", "RULE", "DEMOS")
   COPIES.sort.each do |rel, entry|
@@ -471,6 +601,17 @@ if ARGV.include?("--list")
     puts format("%-64s %-9s %s", rel, entry[:rule], marks.join(" "))
   end
   puts "\n* = declared exception (see the `except:` reason in bin/check-demo-copies)"
+  puts
+  puts format("%-44s %-42s %s", "TEMPLATE (kiosk:install)", "EMITS", "STATE")
+  GENERATOR_TEMPLATES.sort.each do |name, entry|
+    state = if entry[:not_compared] then "not compared"
+            elsif entry[:drift]     then "drift pending triage"
+            else                         "byte-match"
+            end
+    shipped = (migrations[entry[:shipped_as] || entry[:emits]] || {}).keys
+    puts format("%-44s %-42s %s%s", name, entry[:emits] || "—", state,
+                shipped.empty? ? "" : " (#{shipped.map { |d| d.delete_prefix('kiosk-demo-') }.sort.join(' ')})")
+  end
   exit 0
 end
 
@@ -586,6 +727,90 @@ COPIES.each do |rel, entry|
   end
 end
 
+# ── Template ↔ copy: the drift the lockstep rule cannot see (K-640) ──────────
+#
+# For each declared template, render it with the generator defaults and require
+# every demo copy to byte-match the render — so an engine-side schema edit that
+# is not propagated to the demos (or a hand-edit to a copy that is not lifted
+# back into the template) fails here instead of surfacing as a runtime column
+# error in whichever demo nobody ran.
+tpl_files = Dir[File.join(ROOT, GENERATOR_TEMPLATES_DIR, "*.tt")].map { |p| File.basename(p) }
+
+(tpl_files - GENERATOR_TEMPLATES.keys).sort.each do |name|
+  errors << "#{GENERATOR_TEMPLATES_DIR}/#{name}: new install-generator template not declared in " \
+            "bin/check-demo-copies GENERATOR_TEMPLATES. Add an entry saying what it emits (or why " \
+            "it is not compared), so the demos cannot skip regenerating it silently."
+end
+(GENERATOR_TEMPLATES.keys - tpl_files).sort.each do |name|
+  errors << "#{name}: declared in GENERATOR_TEMPLATES but #{GENERATOR_TEMPLATES_DIR} has no such " \
+            "template any more — drop the entry."
+end
+
+GENERATOR_TEMPLATES.each do |name, entry|
+  next unless tpl_files.include?(name)
+
+  if entry[:not_compared]
+    errors << "#{name}: `not_compared:` carries no reason" if entry[:not_compared].to_s.strip.empty?
+    next
+  end
+  if entry[:emits].to_s.strip.empty?
+    errors << "#{name}: entry declares neither `emits:` nor `not_compared:` — say what the " \
+              "template emits, or why its output is not compared."
+    next
+  end
+
+  if entry[:shipped_as] && (migrations[entry[:emits]] || {}).any?
+    errors << "#{name}: `shipped_as: #{entry[:shipped_as]}` recorded a rename, but " \
+              "#{(migrations[entry[:emits]] || {}).keys.map(&short).sort.join(', ')} now ships " \
+              "#{entry[:emits]} directly — the rename is converging; update or drop `shipped_as:`."
+  end
+  shipped_as = entry[:shipped_as] || entry[:emits]
+  copies = migrations[shipped_as] || {}
+  if copies.empty?
+    errors << "#{name}: no demo ships a db/migrate copy of #{shipped_as} — if the demos dropped " \
+              "the migration, drop (or `not_compared:`) the entry with the reason; if they " \
+              "renamed it, record the new basename as `shipped_as:`."
+    next
+  end
+
+  rendered = render_template(File.join(ROOT, GENERATOR_TEMPLATES_DIR, name))
+  mismatched = copies.reject { |_demo, path| File.read(path) == rendered }
+
+  if entry[:drift]
+    errors << "#{name}: `drift:` carries no reason" if entry[:drift].to_s.strip.empty?
+    if mismatched.empty?
+      errors << "#{name}: `drift:` is stale — every demo copy of #{shipped_as} now byte-matches " \
+                "the rendered template. Drop the drift entry so the file is guarded."
+    else
+      # The recorded drift covers copies-vs-TEMPLATE only. The copies must
+      # still agree with each other (comments and whitespace aside), so the
+      # pending state cannot quietly grow an executable divergence too.
+      groups = copies.group_by { |_demo, path| code_digest(path) }
+      if groups.size > 1
+        listed = groups.values.map { |g| "[#{g.map { |d, _| short.(d) }.sort.join(',')}]" }.join(" ")
+        errors << "#{name}: the recorded `drift:` covers the copies disagreeing with the template, " \
+                  "not with each other — and ignoring comments and whitespace the copies of " \
+                  "#{shipped_as} group as #{listed}. Propagate whichever is right before the " \
+                  "pending triage rots further."
+      end
+    end
+  elsif mismatched.any?
+    demo, path = mismatched.first
+    a = rendered.lines
+    b = File.read(path).lines
+    i = (0...[a.size, b.size].max).find { |j| a[j] != b[j] }
+    errors << "#{GENERATOR_TEMPLATES_DIR}/#{name}: rendered with the generator's default options " \
+              "it must byte-match every demo copy of #{shipped_as}, and " \
+              "#{mismatched.keys.map(&short).sort.join(', ')} " \
+              "#{mismatched.size == 1 ? 'disagrees' : 'disagree'} (first difference at line " \
+              "#{i + 1}: template renders #{(a[i] || '<nothing>').chomp.strip.inspect}, " \
+              "#{short.(demo)} has #{(b[i] || '<nothing>').chomp.strip.inspect}). The engine's " \
+              "generator output and the demos moved apart — regenerate the demos' copies, or lift " \
+              "the copies' edit back into the template, so they move as ONE change; if the " \
+              "divergence is deliberate, record it as a `drift:` reason in GENERATOR_TEMPLATES."
+  end
+end
+
 # ── The telemetry cluster's own wiring (K-623, K-624) ────────────────────────
 #
 # Byte-identity of the module and the controller extends getgrocery's two
@@ -644,7 +869,11 @@ end
 
 if errors.empty?
   guarded = COPIES.count { |_, e| e[:rule] != :per_demo }
+  tpl_checked = GENERATOR_TEMPLATES.count { |_, e| !e[:not_compared] }
+  tpl_drift   = GENERATOR_TEMPLATES.count { |_, e| e[:drift] }
   puts "check-demo-copies: OK — #{dups.size} duplicated paths declared, #{guarded} kept in lockstep, " \
+       "#{tpl_checked} install-generator templates held against their demo copies " \
+       "(#{tpl_drift} with drift pending triage), " \
        "telemetry wired in #{(dups['lib/demo_telemetry.rb'] || {}).size} demos"
   exit 0
 end

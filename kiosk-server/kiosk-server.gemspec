@@ -37,13 +37,37 @@ Gem::Specification.new do |spec|
   # ruby-jwt is the de-facto Ruby JOSE library — small, MIT, no transitive deps.
   spec.add_dependency "jwt", ">= 2.8", "< 4.0"
 
+  # ── Rails ──────────────────────────────────────────────────────────────
+  # kiosk-server IS a Rails gem: it ships an engine, nine controllers, an
+  # install generator and nine ActiveRecord migration templates. Until
+  # 2026-08-11 that dependency was undeclared and satisfied only by accident,
+  # because every consumer happens to be a Rails app.
+  #
+  # We depend on the four Rails components we actually reference, not on the
+  # `rails` meta-gem: nothing here touches Action Mailer, Action Cable, Active
+  # Job, Active Storage, Action Text or Action Mailbox, so requiring a host to
+  # install them would be a false claim.
+  #
+  # `~> 8.1` is the version the demos, the e2e fixture and CI actually run
+  # (Rails 8.1.3 on Ruby 4.0.1). Older Rails lines are untested, so they are
+  # not claimed; widening the floor means adding a CI matrix leg first.
+  #
+  # railties      — Kiosk::Server::Engine, Rails::Generators::{Base,Migration},
+  #                 Rails.logger.
+  spec.add_dependency "railties",      "~> 8.1"
+  # actionpack    — ActionController::{API,Base,InvalidAuthenticityToken}.
+  spec.add_dependency "actionpack",    "~> 8.1"
+  # activerecord  — ActiveRecord::Base.connection is how the auth plane and the
+  #                 device-authorization store reach the database, plus
+  #                 ActiveRecord::{RecordNotUnique,StatementInvalid,Migration}.
+  spec.add_dependency "activerecord",  "~> 8.1"
+  # activesupport — String#constantize (agent_registration) and String#classify
+  #                 (generator template).
+  spec.add_dependency "activesupport", "~> 8.1"
+
   spec.add_development_dependency "rspec",    "~> 3.13"
   spec.add_development_dependency "rake",     "~> 13.2"
   spec.add_development_dependency "rack",     "~> 3.0"
-  # Needed by spec/generators — `Rails::Generators::Base` + Thor shell.
-  # Host apps already have Rails loaded; we only require it for the
-  # install-generator unit tests.
-  spec.add_development_dependency "railties", "~> 8.1"
   # TestExecutor (lib/kiosk/server/test_executor.rb) implements the
   # Kiosk::TestHelpers::Journey contract; we need the error classes
   # at test time. Host apps depending on TestExecutor will have

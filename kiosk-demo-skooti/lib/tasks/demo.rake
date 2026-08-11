@@ -53,7 +53,7 @@ namespace :demo do
     require "lock_sim"
     require "dev_unlock_key"
 
-    port = ENV.fetch("PORT", "3003")
+    port = ENV.fetch("PORT", "3004")
     log  = "/tmp/kiosk-skooti-demo.log"
 
     # ── host resolution ────────────────────────────────────────────────────
@@ -555,7 +555,7 @@ namespace :demo do
     require "resolv"
     require "json"
 
-    port = ENV.fetch("PORT", "3003")
+    port = ENV.fetch("PORT", "3004")
     log  = "/tmp/kiosk-skooti-isolation.log"
 
     # ── host resolution ────────────────────────────────────────────────────
@@ -723,7 +723,7 @@ namespace :demo do
     require "uri"
     require_relative "../prove_broker_boot"
 
-    port = ENV.fetch("PORT", "3003")
+    port = ENV.fetch("PORT", "3004")
     log  = "/tmp/kiosk-skooti-redteam.log"
 
     # ── host resolution ────────────────────────────────────────────────────
@@ -838,7 +838,7 @@ namespace :demo do
     require "uri"
     require "json"
 
-    port = ENV.fetch("PORT", "3003")
+    port = ENV.fetch("PORT", "3004")
     log  = "/tmp/kiosk-skooti-schema.log"
 
     host = begin
@@ -1026,7 +1026,7 @@ namespace :demo do
     require "shellwords"
     require_relative "../prove_broker_boot"
 
-    port = ENV.fetch("PORT", "3003")
+    port = ENV.fetch("PORT", "3004")
     log  = "/tmp/kiosk-skooti-kyc.log"
 
     host = begin

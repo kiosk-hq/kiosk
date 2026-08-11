@@ -130,13 +130,32 @@ jobs:
             # their assistant via the real Devise session, and the assistant's
             # booking ties to the diner's account); unlike the sibling binding
             # demos it carries no RFC 8628 poll timing, so it runs in CI.
-            # demo:pow/demo:reputation (the heavy anti-scalping toll) run locally,
-            # not in CI (demo:pow is excluded everywhere). demo:backoff, however,
-            # is PoW-only (no RFC 8628 timing) and solves exactly ONE small
-            # Equihash proof at the CI-default `low` difficulty (n=96 k=5,
-            # sub-second) before asserting the count-based grant, so it runs in
-            # CI. demo:rls moved to getgrocery.
-            tasks: demo:backoff demo:book demo:binding demo:isolation demo:redteam demo:schema
+            # demo:backoff is PoW-only (no RFC 8628 timing) and solves exactly
+            # ONE small Equihash proof at the CI-default `low` difficulty (n=96
+            # k=5, sub-second) before asserting the count-based grant, so it runs
+            # in CI. demo:rls moved to getgrocery.
+            # demo:walkthrough is the curl tour of the wire surface (bin/demo):
+            # no PoW, no RFC 8628 timing, no key — the same profile as the
+            # stylish/philslist walkthroughs already here, ~4 s. It was the one
+            # walkthrough no gate reached (K-618). It is NOT redundant with
+            # demo:book: watched fail — point db/seeds.rb's WALKTHROUGH_STUB_USER_ID
+            # at a uuid with no users row and book_table comes back an
+            # ActiveRecord::InvalidForeignKey error envelope, so the tour exits 1
+            # while demo:book, which registers its own agent, stays green.
+            # It goes LAST because `task walkthrough: :setup` reseeds, while
+            # demo:backoff and demo:book have no prerequisite and live off the
+            # job-level demo:setup.
+            tasks: demo:backoff demo:book demo:binding demo:isolation demo:redteam demo:schema demo:walkthrough
+            # Tasks deliberately NOT gated, and why. bin/check-ci-tasks fails the
+            # build if a demo: task is in neither this map nor `tasks:` above.
+            ungated:
+              demo:pow: >-
+                the heavy anti-scalping toll — it solves real memory-hard
+                Equihash batteries, not the single sub-second register proof
+                demo:backoff pays. demo:pow is excluded on every demo.
+              demo:reputation: >-
+                same heavy-PoW family as demo:pow — it solves several escalating
+                Equihash tolls to show the cost dropping as bookings accrue.
           - demo: kiosk-demo-getgrocery
             # demo:agecheck = the alcohol 18+ age-gate (create_order rejects a
             # cart with an age_restricted item unless the agent carries
@@ -171,11 +190,8 @@ jobs:
             # while the PSP is charged €1.49; widen UuidCheck::PATTERN → the
             # malformed id resurfaces as ActiveRecord::StatementInvalid).
             #
-            # NOT wired, deliberately: demo:reconcile is the operator's manual
-            # sweep, and on a freshly seeded database it prints "nothing stuck"
-            # and exits 0 no matter what the code does — a step that cannot go
-            # red is not a gate. Its logic IS covered here, by demo:race's
-            # K-578 block, which strands orders first and then sweeps.
+            # What is NOT wired, and why, is in the `ungated:` map below — one
+            # place, checked by bin/check-ci-tasks rather than remembered.
             # demo:claim and demo:rls join the tail for the same reason as
             # demo:race — each was a real assertion battery that only ran when a
             # human remembered to type it.
@@ -202,6 +218,22 @@ jobs:
             # demo:rls leaves RLS applied to `orders`; demo:race's `: :setup`
             # drops the database, which is what clears it — do not reorder them.
             tasks: demo:slots_spec demo:cashier_spec demo:shop demo:isolation demo:redteam demo:schema demo:agecheck demo:claim demo:rls demo:race
+            ungated:
+              demo:pow: >-
+                the catalog toll — it solves real memory-hard Equihash
+                batteries. demo:pow is excluded on every demo.
+              demo:reconcile: >-
+                the operator's MANUAL sweep: on a freshly seeded database it
+                prints "nothing stuck" and exits 0 no matter what the code does,
+                and a step that cannot go red is not a gate (K-616). Its logic is
+                gated here anyway, by demo:race's K-578 block, which strands
+                orders first and then sweeps.
+              demo:telemetry: >-
+                a landing-tile data showcase rather than a gate on the Kiosk
+                wire — it seeds synthetic events into the telemetry store and
+                reads its own writes back, and it targets the SHARED hosted store
+                when KIOSK_TELEMETRY_DB_URL is set. Whether its aggregate
+                assertion earns a CI slot is unassessed (K-620).
             # getgrocery uses the real Stripe adapter. CI carries NO Stripe key
             # (never inject keys into CI); a local stripe-mock returns
             # shaped pi_ fixtures so the full flow — including demo:shop's
@@ -219,7 +251,20 @@ jobs:
             # prerequisite and lives off the job-level demo:setup.
             # Watched fail: pin the query to `OFFSET 0` (the cursor ignored) and
             # page 2 repeats page 1 — the disjointness assertion goes red.
-            tasks: demo:book demo:isolation demo:redteam demo:schema demo:search
+            #
+            # demo:browse is the ONLY proof anywhere that hoteling's "price
+            # depth, don't ban it" model holds — the vertical's differentiator.
+            # It was excluded as part of the demo:pow family because it solves
+            # ESCALATING browse PoW, but at the CI-default `low` difficulty
+            # (n=96 k=5) that is 10 sub-second proofs plus the register proof:
+            # MEASURED at 6.9 s end to end including its own reseed (K-617), i.e.
+            # the same per-proof cost this workflow already pays for atablefor's
+            # demo:backoff, and the numpy solver is already installed below.
+            # Watched fail: raise HOTELING_FREE_BROWSES above the driver's
+            # BROWSES=7 and the curve stays [0,0,0,0,0,0,0] — "browsing never got
+            # priced" goes red, exit 1.
+            # It goes last with demo:search; both reseed via `: :setup`.
+            tasks: demo:book demo:isolation demo:redteam demo:schema demo:search demo:browse
           - demo: kiosk-demo-prove
             # prove.my — the anonymizing KYC broker (an ISSUER, not a Kiosk
             # operator; mounts none of the four verbs). demo:test runs its own
@@ -253,15 +298,19 @@ jobs:
             # to 0 and the unproven register returns 201.
             # Both reseed (`: :setup`), so they go after demo:walkthrough, which
             # has no prerequisite and lives off the job-level demo:setup.
-            # demo:binding stays local-only (RFC 8628 poll timing).
             tasks: demo:walkthrough demo:isolation demo:redteam demo:schema demo:roles demo:register
+            ungated:
+              demo:binding: >-
+                timing-sensitive: the account-binding ceremony polls on the
+                advertised RFC 8628 device-grant interval, which flakes on a
+                shared runner. Local-only on every demo that has a poll-timed
+                binding task; atablefor's demo:binding carries no such timing and
+                does run in CI.
           - demo: kiosk-demo-philslist
             # NON-COMMERCE classifieds board — no payments. demo:walkthrough is
             # the browse→post→edit→close happy path; demo:schema asserts `pay` is
             # ABSENT from the advertised capabilities (the not-only-commerce
-            # proof). Same standard task set as stylish; demo:binding is
-            # timing-sensitive (RFC 8628 poll interval) so it stays local-only,
-            # matching every sibling (no demo runs binding in CI).
+            # proof). Same standard task set as stylish.
             # demo:register is the registration-PoW gate — no proof → 402, ONE
             # Equihash solve at the CI-default `low` → 201, then the fresh token
             # posts a listing and a bad category_slug gets a clean 400 naming the
@@ -271,15 +320,28 @@ jobs:
             # Watched fail: set registration_pow_count to 0 and the unproven
             # register returns 201 instead of 402.
             tasks: demo:walkthrough demo:isolation demo:redteam demo:schema demo:register
+            ungated:
+              demo:binding: >-
+                timing-sensitive: the account-binding ceremony polls on the
+                advertised RFC 8628 device-grant interval, which flakes on a
+                shared runner — the same exclusion as stylish's.
           - demo: kiosk-demo-tudu
             # NON-COMMERCE collaborative todo — no payments. demo:collab is the
             # happy path (membership-based sharing + agent→agent invites +
             # per-agent attribution); demo:schema asserts `pay` ABSENT like
-            # philslist. demo:link (the W5 rebind/assistant_claimed ceremony) is
-            # timing-sensitive (RFC 8628 poll) so it stays local-only, matching
-            # every sibling (no demo runs binding in CI).
+            # philslist.
             tasks: demo:collab demo:isolation demo:redteam demo:schema
-          # demo:pow excluded everywhere: solves real memory-hard PoW
+            ungated:
+              demo:link: >-
+                the W5 rebind/assistant_claimed ceremony — timing-sensitive on
+                the RFC 8628 device-grant poll interval, the same exclusion as
+                the sibling demo:binding tasks.
+          # Every demo: task a demo defines must appear either in its `tasks:`
+          # list above (or be demo:setup, which the "Set up demo" step runs) or
+          # in its `ungated:` map with the reason it is not a gate. That is not a
+          # convention anyone has to remember: bin/check-ci-tasks enforces it in
+          # the ci-task-coverage job below, and generates the "Which of these run
+          # in CI" table in each demo's README from these very lists (K-619).
 
     services:
       postgres:
@@ -322,6 +384,16 @@ jobs:
       - name: Install dependencies
         working-directory: ${{ matrix.demo }}
         run: bundle install
+
+      # Parser guard for the K-619 coverage check. bin/check-ci-tasks derives
+      # each demo's task inventory statically from lib/tasks/*.rake so it can run
+      # on a bare checkout with no bundle; a static parser that goes blind to a
+      # task shape would fail OPEN — precisely the failure mode the check exists
+      # to prevent. Here the bundle is already installed, so re-derive the same
+      # inventory from Rake's own table (`bin/rails -AT`) and assert the two
+      # agree. ~0.3 s, no database.
+      - name: Task inventory matches Rake (bin/check-ci-tasks parser guard)
+        run: ./bin/check-ci-tasks --verify-inventory ${{ matrix.demo }}
 
       # skooti's demo:kyc / demo:redteam and getgrocery's demo:agecheck are
       # two-server integrations that boot the prove.my broker (kiosk-demo-prove)
@@ -432,6 +504,36 @@ jobs:
             bin/rails "$task"
             echo "::endgroup::"
           done
+
+  # Does CI actually run the tasks the demos define? (K-619)
+  #
+  # Five ledger rows (K-602/K-614/K-616/K-617/K-618) were spent re-deriving BY
+  # HAND, one rake file at a time, which assertion-bearing `demo:` tasks no gate
+  # invoked — a list no artifact published. The workflow's own comments were the
+  # sole record and had already drifted (they asserted "demo:rls moved to
+  # getgrocery" for the whole period before the move happened). This job is the
+  # replacement for remembering: bin/check-ci-tasks reads the demos matrix above
+  # and every demo's lib/tasks/*.rake, and fails when a task is in neither the
+  # `tasks:` list nor the entry's `ungated:` map with a reason — and when the
+  # "Which of these run in CI" table it generates in each demo README is stale.
+  # Stdlib Ruby only: no bundle, no services, no database, ~0.1 s.
+  ci-task-coverage:
+    name: CI task coverage (bin/check-ci-tasks)
+    runs-on: ubuntu-latest
+    # The daily schedule exists for solver-pin-live; don't rebuild the world.
+    if: github.event_name != 'schedule'
+
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Set up Ruby
+        uses: ruby/setup-ruby@v1
+        with:
+          ruby-version: "4.0.1"
+          bundler-cache: false
+
+      - name: Every demo task is either gated or opted out with a reason
+        run: ./bin/check-ci-tasks
 
   # Production-boot smoke — the guard for the prod-only bug class that the
   # dev-mode gems/demos/e2e jobs are all blind to. Three shipped bugs (K-422

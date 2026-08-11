@@ -25,8 +25,8 @@
 #   7. Emit ONE JSON line with the proof-count curve.
 #
 # Usage (invoked by rake demo:reputation — do not run standalone without the server):
-#   SERVER_URL=http://127.0.0.1:3004 \
-#   KIOSK_ISSUER=http://127.0.0.1:3004 \
+#   SERVER_URL=http://127.0.0.1:3104 \
+#   KIOSK_ISSUER=http://127.0.0.1:3104 \
 #   bundle exec ruby script/reputation_flow.rb
 #
 # Requirements:

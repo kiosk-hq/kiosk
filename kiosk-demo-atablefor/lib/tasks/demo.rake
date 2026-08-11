@@ -337,7 +337,7 @@ namespace :demo do
 
     require "resolv"
 
-    port = ENV.fetch("PORT", "3004")  # port 3004 to avoid conflict with demo:pow (3002)
+    port = ENV.fetch("PORT", "3104")  # distinct from the dev port (3002, where demo:pow runs) AND outside the 3001-3008 band the sibling demos' dev ports occupy (K-649)
     log  = "/tmp/kiosk-atablefor-reputation-demo.log"
 
     host = begin
@@ -476,7 +476,7 @@ namespace :demo do
 
     require "resolv"
 
-    port = ENV.fetch("PORT", "3006")  # distinct port (pow=3002, reputation=3004)
+    port = ENV.fetch("PORT", "3106")  # distinct port (pow=3002, reputation=3104), outside the sibling demos' 3001-3008 dev-port band (K-649)
     log  = "/tmp/kiosk-atablefor-backoff-demo.log"
 
     host = begin

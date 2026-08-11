@@ -1,3 +1,6 @@
 source "https://rubygems.org"
 
 gemspec
+
+# Local-development override — the sibling gem hasn't shipped to RubyGems yet.
+gem "kiosk-pow-equihash", path: "../kiosk-pow-equihash"

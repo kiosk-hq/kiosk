@@ -7,6 +7,7 @@ require "openssl"
 require "securerandom"
 require "uri"
 require "jwt"
+require "kiosk/pow/equihash"
 
 module Kiosk
   module Redteam
@@ -272,15 +273,16 @@ module Kiosk
         )
       end
 
-      # Solve one Equihash registration challenge with the shipped Python solver.
-      # Registration PoW is the SAME Equihash machinery as the query/run gate
-      # (one PoW backend: Equihash).
+      # Solve one Equihash registration challenge with the reference Python
+      # solver that ships inside kiosk-pow-equihash, located via that gem's
+      # public accessor — so it resolves from an installed gem, not only in a
+      # monorepo checkout. Registration PoW is the SAME Equihash machinery as
+      # the query/run gate (one PoW backend: Equihash).
       #
       # @param challenge [Hash] a challenge from the 402 error.challenges[]
       # @return [Hash] the proof nonce {"indices"=>[...], "header_nonce"=>N}
       def equihash_solve(challenge)
-        solve_py = File.expand_path("../../../../kiosk-pow-equihash/solve.py", __dir__)
-        out, status = Open3.capture2("python3", solve_py, JSON.generate(challenge))
+        out, status = Open3.capture2("python3", Kiosk::Pow::Equihash.solver_path, JSON.generate(challenge))
         raise "equihash solve.py failed: #{out}" unless status.success?
         parsed = JSON.parse(out)
         raise "equihash solve.py error: #{parsed["error"]}" if parsed.key?("error")

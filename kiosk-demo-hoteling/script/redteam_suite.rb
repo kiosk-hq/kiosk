@@ -21,7 +21,7 @@
 # must be rejected.
 #
 # Usage (from kiosk-demo-hoteling/):
-#   SERVER_URL=http://127.0.0.1:3004 KIOSK_ISSUER=http://127.0.0.1:3004 \
+#   SERVER_URL=http://127.0.0.1:3003 KIOSK_ISSUER=http://127.0.0.1:3003 \
 #   bundle exec ruby script/redteam_suite.rb
 #
 # Exits non-zero if any applicable scenario reports a BREACH or if the
@@ -32,7 +32,7 @@ require "jwt"
 require "securerandom"
 require "date"
 
-BASE_URL = ENV.fetch("SERVER_URL", "http://127.0.0.1:3004")
+BASE_URL = ENV.fetch("SERVER_URL", "http://127.0.0.1:3003")
 ISSUER   = ENV.fetch("KIOSK_ISSUER", BASE_URL)
 
 # Dates far enough in the future to avoid conflicts with existing data.

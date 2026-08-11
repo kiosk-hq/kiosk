@@ -10,7 +10,7 @@
 #   4. hotel_detail on a summary row's property_id → the full property (rooms present).
 #
 # Usage (invoked by rake demo:search — do not run standalone without the server):
-#   SERVER_URL=http://127.0.0.1:3004 KIOSK_ISSUER=http://127.0.0.1:3004 \
+#   SERVER_URL=http://127.0.0.1:3003 KIOSK_ISSUER=http://127.0.0.1:3003 \
 #   bundle exec ruby script/search_flow.rb
 #
 # Prints ONE JSON line on stdout; non-zero exit on unexpected HTTP failures.

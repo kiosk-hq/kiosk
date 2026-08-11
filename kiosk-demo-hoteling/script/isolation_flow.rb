@@ -25,8 +25,8 @@
 #       ignores agent-supplied user_id). Verified by DB SELECT.
 #
 # Usage:
-#   SERVER_URL=http://127.0.0.1:3004 \
-#   KIOSK_ISSUER=http://127.0.0.1:3004 \
+#   SERVER_URL=http://127.0.0.1:3003 \
+#   KIOSK_ISSUER=http://127.0.0.1:3003 \
 #   bundle exec ruby script/isolation_flow.rb
 #
 # Prints ONE JSON line on stdout; non-zero exit on any failure.

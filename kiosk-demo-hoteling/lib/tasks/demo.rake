@@ -35,7 +35,7 @@ namespace :demo do
     require "json"
     require "openssl"
 
-    port = ENV.fetch("PORT", "3004")
+    port = ENV.fetch("PORT", "3003")
     log  = "/tmp/kiosk-hoteling-demo.log"
 
     # ── host resolution ────────────────────────────────────────────────────
@@ -227,7 +227,7 @@ namespace :demo do
     require "resolv"
     require "json"
 
-    port = ENV.fetch("PORT", "3004")
+    port = ENV.fetch("PORT", "3003")
     log  = "/tmp/kiosk-hoteling-isolation.log"
 
     host = begin
@@ -393,7 +393,7 @@ namespace :demo do
     require "net/http"
     require "uri"
 
-    port = ENV.fetch("PORT", "3004")
+    port = ENV.fetch("PORT", "3003")
     log  = "/tmp/kiosk-hoteling-redteam.log"
 
     host = begin
@@ -489,7 +489,7 @@ namespace :demo do
     require "uri"
     require "json"
 
-    port = ENV.fetch("PORT", "3004")
+    port = ENV.fetch("PORT", "3003")
     log  = "/tmp/kiosk-hoteling-schema.log"
 
     host = begin
@@ -656,7 +656,7 @@ namespace :demo do
     require "uri"
     require "json"
 
-    port = ENV.fetch("PORT", "3004")
+    port = ENV.fetch("PORT", "3003")
     log  = "/tmp/kiosk-hoteling-search.log"
 
     host = begin
@@ -781,7 +781,7 @@ namespace :demo do
     python_ok = system("python3 -c 'import numpy' 2>/dev/null")
     abort "numpy not found. Install with: pip install numpy" unless python_ok
 
-    port         = ENV.fetch("PORT", "3004")
+    port         = ENV.fetch("PORT", "3003")
     server_url   = "http://127.0.0.1:#{port}"
     kiosk_issuer = server_url
     log          = "/tmp/kiosk-hoteling-browse.log"

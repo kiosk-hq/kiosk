@@ -59,7 +59,8 @@ some are heavy or timing-sensitive local showcases. Which is which is stated in
 every demo README's **"Which of these run in CI"** table, generated from
 `.github/workflows/ci.yml` by `bin/check-ci-tasks`; that script also runs as its
 own CI job and fails the build when a `demo:` task is neither gated nor recorded
-with the reason it is not.
+with the reason it is not — or when a task the demo defines is not named in that
+README's own hand-written list of what each task proves.
 
 ## Contributing
 

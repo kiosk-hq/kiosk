@@ -64,7 +64,8 @@ output — no payment step, the visible contrast.
 
 ## What the demo shows
 
-The walkthrough (`bin/demo`) prints:
+The walkthrough (`rake demo:walkthrough` — what `rake demo` runs after
+`demo:setup`; `bin/demo` under the hood) prints:
 
 1. **Discovery** — the well-known capabilities, asserting `pay` is **absent**
 2. **Browse** — `browse_listings` across the open, cross-owner board
@@ -95,6 +96,16 @@ payments block, and `agents.txt` carries no `Protocols: ap2` / `Payments:`
 directives. (The `schema` verb's `verbs` field is the fixed four-verb wire
 surface and always lists `pay`; the honest pay-absent signal is the computed
 capability set, which drops `pay` when no `payment_provider` is configured.)
+
+### Registration PoW (`rake demo:register`)
+
+Registration is priced even where nothing is sold: a fresh key registering with
+no proof gets **402 (`pow_required`)**, solving the challenge with the bundled
+solver and resubmitting gets **201**, and the minted token posts a listing
+(**200**) — while a bad `category_slug` on that post comes back as a clean
+**400** naming the valid categories, not a 500. The point is that the anti-flood
+toll is part of the four-verb contract, not a commerce feature — a free
+classifieds board wants it as much as a shop does. Needs python3 + numpy.
 
 ### Account binding + multi-account household (`rake demo:binding`)
 

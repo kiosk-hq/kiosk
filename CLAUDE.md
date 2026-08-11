@@ -43,5 +43,7 @@ universal agent skill is `skill.md` on the same site.
   recorded reason for each one it does not — is enforced by `bin/check-ci-tasks`
   and published in every demo README's "Which of these run in CI" table; adding
   a `demo:` task means adding it to the matrix `tasks:` list or to that entry's
-  `ungated:` map, then `bin/check-ci-tasks --write`.
+  `ungated:` map, naming it in that README's own hand-written task list (the
+  same check asserts presence, never the prose), then `bin/check-ci-tasks
+  --write`.
 - Inline `TODO`/`FIXME` must state a concrete rationale, not a bare marker.

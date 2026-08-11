@@ -2,19 +2,11 @@
 
 # Wire-level controller specs.
 #
-# The controllers guard themselves behind `defined?(::ActionController::API)`,
-# and spec_helper requires kiosk/server BEFORE actionpack is available — so
-# this file pulls in actionpack (a dev dependency via railties) and re-`load`s
-# the controller files to materialise them. Dispatch goes through
-# `ActionController::Metal.action(...)`, a plain Rack app — no Rails host.
+# Dispatch goes through `ActionController::Metal.action(...)`, a plain Rack
+# app — no Rails host.
 
-require "action_controller"
 require "rack/mock"
 require "json"
-
-load File.expand_path("../../../lib/kiosk/server/wire_controller.rb", __dir__)
-load File.expand_path("../../../lib/kiosk/server/kyc_attestation_controller.rb", __dir__)
-load File.expand_path("../../../lib/kiosk/server/oauth_device_authorization_controller.rb", __dir__)
 
 RSpec.describe "wire-surface controller auth" do
   def dispatch(controller, action, env)

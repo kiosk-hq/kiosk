@@ -4,17 +4,12 @@
 # authenticated via user_idp, shows what is being linked (key fingerprint +
 # requested-at), approve/deny, attempt-capped code entry.
 #
-# Mirrors controller_auth_spec.rb: actionpack is pulled in here and the
-# controller re-`load`ed to materialise the class (spec_helper requires
-# kiosk/server before actionpack exists). Dispatch goes through
-# `ActionController::Metal.action(...)` — no Rails host; the engine views
-# under app/views are resolved via the controller's append_view_path.
+# Dispatch goes through `ActionController::Metal.action(...)` — no Rails
+# host; the engine views under app/views are resolved via the controller's
+# append_view_path.
 
-require "action_controller"
 require "rack/mock"
 require "openssl"
-
-load File.expand_path("../../../lib/kiosk/server/device_verify_controller.rb", __dir__)
 
 RSpec.describe "DeviceVerifyController" do
   let(:store)   { Kiosk::Server::DeviceAuthorizationStores::InMemory.new }

@@ -6,14 +6,10 @@
 # account_binding_spec.rb; here the controller contract is pinned — auth,
 # envelopes, statuses.
 #
-# Mirrors controller_auth_spec.rb: actionpack pulled in, controller
-# re-`load`ed, dispatch via `ActionController::Metal.action(...)`.
+# Dispatch via `ActionController::Metal.action(...)`.
 
-require "action_controller"
 require "rack/mock"
 require "json"
-
-load File.expand_path("../../../lib/kiosk/server/auth_controller.rb", __dir__)
 
 RSpec.describe "AuthController binding endpoints" do
   let(:store)   { Kiosk::Server::DeviceAuthorizationStores::InMemory.new }

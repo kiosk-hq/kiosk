@@ -11,16 +11,13 @@
 # re-issued a fresh 402 on every retry — an infinite loop with no diagnostic.
 # This layer turns that silent re-challenge into a clear 400 hint.
 #
-# Like wire_controller_402_spec.rb: pull in actionpack and re-`load` the
-# controller, then dispatch through ActionController::Metal.action.
+# Dispatch goes through `ActionController::Metal.action(...)`, a plain Rack
+# app — no Rails host.
 
-require "action_controller"
 require "rack/mock"
 require "json"
 require "kiosk/pow"
 require "kiosk/reputation"
-
-load File.expand_path("../../../lib/kiosk/server/wire_controller.rb", __dir__)
 
 RSpec.describe "WireController opt-in request validation (slice-1, K-479)" do
   def dispatch(action, env)

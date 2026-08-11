@@ -58,10 +58,13 @@ universal agent skill is `skill.md` on the same site.
   editing a template in kiosk-server without regenerating the demos — or
   vice versa — fails the build; known divergences live in `GENERATOR_TEMPLATES`
   as `drift:` records that error the day their copies converge.
-  The Rails skeleton (`bin/`, `config/`, `public/`, `Rakefile`, `config.ru`,
-  `db/seeds.rb`) is deliberately NOT compared — each demo edits it for its own
-  port and host — and that exclusion is recorded, path by path with its reason,
-  in the same file's `SKELETON_NOT_COMPARED`.
+  Most of the Rails skeleton (`bin/`, `config/`, `public/`, `Rakefile`,
+  `config.ru`, `db/seeds.rb`) is deliberately NOT compared — each demo edits it
+  for its own port and host — and that exclusion is recorded, path by path with
+  its reason, in the same file's `SKELETON_NOT_COMPARED`; the skeleton paths
+  with no per-demo dimension (the T-048 statics, the three error pages,
+  `puma.rb`, `environments/{test,production}.rb`) ARE declared in the manifest,
+  `:identical` with prove as the stated exception (K-643).
 - The gems are meant to be installable, but every consumer here uses `path:`,
   which reads the working tree — so a file missing from `spec.files` is
   invisible locally and fatal from RubyGems. `bin/check-gem-packaging` (its own

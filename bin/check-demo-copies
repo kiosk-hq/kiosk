@@ -97,23 +97,113 @@ ROOT = File.expand_path("..", __dir__)
 # What that leaves out, and why, is recorded in SKELETON_NOT_COMPARED below.
 SCAN_ROOTS = ["lib", "app", "script", "db/migrate"].freeze
 
-# Named one by one because they are the exceptions: files outside SCAN_ROOTS
-# (and outside `*.rb`) that ARE compared. A path only earns a place here when it
-# has no per-demo dimension at all — see the `.gitignore` entry in COPIES.
-EXTRA_SCANNED = [".gitignore"].freeze
+# Named one by one because they are the exceptions: paths outside SCAN_ROOTS
+# (or outside `*.rb`) that ARE compared. A path earns a place here either when
+# its copies have no per-demo dimension at all (`.gitignore`, the T-048
+# statics), or when the single copy that legitimately differs is carried by the
+# entry's `except:` map — the six skeleton paths where prove, the API-only
+# broker generated on its own, is the sole outlier (K-643).
+EXTRA_SCANNED = [
+  ".gitignore",
+  "public/robots.txt",
+  "public/favicon.ico",
+  "public/404.html",
+  "public/422.html",
+  "public/500.html",
+  "config/puma.rb",
+  "config/environments/test.rb",
+  "config/environments/production.rb",
+].freeze
+
+# The one reason six `except:` entries below share (K-643): prove is not a
+# divergent COPY of the operator skeleton, it is a different, smaller API-only
+# Rails app generated on its own — the recurring shape described atop
+# SKELETON_NOT_COMPARED. Stated once so six copies of the sentence cannot
+# drift apart.
+PROVE_SKELETON =
+  "prove is a smaller API-only Rails app generated on its own; its whole skeleton differs from " \
+  "the operator seven (the recurring shape noted atop SKELETON_NOT_COMPARED)"
 
 # ── The manifest ─────────────────────────────────────────────────────────────
 COPIES = {
-  # ── Outside the scan roots, compared anyway (K-629) ────────────────────────
+  # ── Outside the scan roots, compared anyway (K-629, T-048, K-643) ──────────
   ".gitignore" => {
     rule: :identical,
-    why:  "The one skeleton file with no per-demo dimension: nothing in a .gitignore is per-port, " \
+    why:  "A skeleton file with no per-demo dimension: nothing in a .gitignore is per-port, " \
           "per-host or per-app-name, so the four variants this had grown (getgrocery repeating the " \
           "root ignore's `mise.toml`, tudu alone ignoring `/config/*.key`, prove missing the " \
           "sqlite/storage/spring blocks) were drift, not intent. It is also the skeleton file where " \
           "drift is dangerous rather than untidy: K-404 was a `credentials.yml.enc` reaching CI " \
           "without its key, and the fix was a line in every demo's ignore. Machine-local files " \
           "(mise.toml, .bundle, .env) belong in the ROOT .gitignore instead (K-552).",
+  },
+  "public/robots.txt" => {
+    rule: :identical,
+    why:  "The T-048 crawling policy: allow everything (these are public demos we want indexed) " \
+          "and point the crawler-turned-agent at the agent surface (/.well-known/kiosk.json, " \
+          "/agents.txt). One policy statement for all eight apps; a copy that drifts advertises " \
+          "a policy the launch story does not make. Its existence is also log hygiene: " \
+          "ActionDispatch::Static answers it ahead of routing, where every hit used to raise " \
+          "ActionController::RoutingError into the production journal.",
+  },
+  "public/favicon.ico" => {
+    rule: :identical,
+    why:  "The Kiosk glyph (cut from kiosk.tech's wordmark) — one shared mark for the eight apps " \
+          "and the site (T-048). Binary, so only :identical can hold it. Per-demo branding would " \
+          "be a legitimate future divergence; that day the divergent demo gets an `except:` here, " \
+          "not a silent edit.",
+  },
+
+  # ── The K-643 promotion: recorded exclusions become enforced lockstep ──────
+  #
+  # K-629 recorded each of these six in SKELETON_NOT_COMPARED with the measured
+  # observation "identical in the seven operator demos; prove differs" — a true
+  # statement nothing enforced, so a seventh copy drifting would have been
+  # silent. The observation is now the rule: :identical across the operator
+  # seven, prove the declared exception.
+  "config/puma.rb" => {
+    rule:   :identical,
+    except: { "prove" => PROVE_SKELETON },
+    why:  "Identical in the operator seven — the port comes from PORT, the worker/thread counts " \
+          "from WEB_CONCURRENCY/RAILS_MAX_THREADS, so nothing in the file is per-demo; a copy " \
+          "that grows its own settings is a deploy behaving unlike the other six (K-643).",
+  },
+  "config/environments/test.rb" => {
+    rule:   :identical,
+    except: { "prove" => PROVE_SKELETON },
+    why:  "One test posture for the operator seven (eager_load in CI, null cache store, " \
+          "deprecations to stderr); a demo whose test env drifts is a demo whose green means " \
+          "something different (K-643).",
+  },
+  "config/environments/production.rb" => {
+    rule:   :identical,
+    except: { "prove" => PROVE_SKELETON },
+    why:  "The deploy posture itself: assume_ssl (whose absence WAS the K-439 sign-in breakage), " \
+          "eager_load, STDOUT logging, and the public_file_server headers that serve the T-048 " \
+          "statics. Exactly the file where one demo drifting reintroduces a production-only bug " \
+          "class the dev-mode gates structurally cannot see (K-643).",
+  },
+  "public/404.html" => {
+    rule:   :identical,
+    except: { "prove" => PROVE_SKELETON },
+    why:  "The static page behind every unhandled 404 — the answer an assistant guessing web-app " \
+          "paths hits most often; without it PublicExceptions serves a BODYLESS error (K-532 " \
+          "class). production-smoke asserts it has a body in two apps; byte-identity extends " \
+          "that to the copies no gate boots (K-643).",
+  },
+  "public/422.html" => {
+    rule:   :identical,
+    except: { "prove" => PROVE_SKELETON },
+    why:  "Load-bearing for the K-532/K-534 CSRF signpost: this is the page an operator's " \
+          "misconfigured CSRF setup actually renders, and K-604/K-611 already had to correct a " \
+          "false claim repeated across all eight copies of it. A seventh copy drifting is " \
+          "exactly how that class regrows (K-643).",
+  },
+  "public/500.html" => {
+    rule:   :identical,
+    except: { "prove" => PROVE_SKELETON },
+    why:  "The static page behind every production 500 — same bodyless-error class as 404.html " \
+          "(K-532); kept in lockstep for the same reason (K-643).",
   },
 
   # ── The telemetry cluster (K-623) ──────────────────────────────────────────
@@ -325,9 +415,11 @@ COPIES = {
 # SCAN_ROOTS leaves the Rails skeleton out. That was a decision, but it was never
 # written down anywhere, so the next reader had to re-derive it from the absence
 # of an entry — and "no entry" reads the same whether a path was considered and
-# excluded or simply never noticed. These are the ~40 paths that exist in two or
-# more demos and that nothing above compares. Each line says what the copies are
-# allowed to differ by; measured, not assumed.
+# excluded or simply never noticed. These are the ~30 paths that exist in two or
+# more demos and that nothing above compares (eight of the original set — the
+# T-048 statics, the three error pages, puma.rb and the test/production envs —
+# have since been PROMOTED into COPIES above: K-643). Each line says what the
+# copies are allowed to differ by; measured, not assumed.
 #
 # HONEST SCOPE, twice over.
 #
@@ -357,10 +449,6 @@ SKELETON_NOT_COMPARED = {
     "philslist/stylish/tudu have no such domain and so no block at all, and prove differs. " \
     "Every variant is explained by that. Verified at K-629, where the one true drift was found and " \
     "fixed: hoteling's comment named skooti's host and port.",
-  "config/environments/production.rb" => "Identical in the seven operator demos; prove differs.",
-  "config/environments/test.rb" => "Identical in the seven operator demos; prove differs.",
-  "config/puma.rb" =>
-    "Identical in the seven operator demos (the port comes from PORT, not from this file); prove differs.",
   "config/application.rb" => "Per-demo: the module name IS the demo name.",
   "config/boot.rb" => "Rails generator output, four lines, identical in all eight.",
   "config/environment.rb" => "Rails generator output, five lines, identical in all eight.",
@@ -394,13 +482,6 @@ SKELETON_NOT_COMPARED = {
     "sample files\" block that hoteling's and skooti's generator did not emit — inert either way.",
   "bin/dev" => "Rails generator output, identical where shipped (a one-line exec of bin/rails server).",
   "bin/demo" => "Per-demo entry point into that demo's own flow tasks.",
-  "public/404.html" => "Static Rails error page; identical in the seven operator demos, prove differs.",
-  "public/422.html" =>
-    "Static error page, load-bearing for the K-532/K-534 CSRF signpost; identical in the seven " \
-    "operator demos, prove differs.",
-  "public/500.html" => "Static Rails error page; identical in the seven operator demos, prove differs.",
-  "public/robots.txt" => "Rails generator output, identical in all eight.",
-  "public/favicon.ico" => "Binary asset; identical today, per-demo branding would be legitimate.",
   "log/.keep" => "Empty placeholder.",
   "tmp/.keep" => "Empty placeholder.",
   "tmp/pids/.keep" => "Empty placeholder.",

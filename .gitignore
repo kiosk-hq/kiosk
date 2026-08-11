@@ -23,6 +23,13 @@ mise.toml
 # Local gem cache dir (matches the maintainer's global ignore). Trailing slash
 # so it never touches the tracked *.gemspec files.
 .gems/
+# `gem build` output. Every gem here builds to <name>-<version>.gem in its own
+# directory, and bin/check-gem-packaging builds all 14 on every run — one
+# interrupted run leaves the artifacts behind, and a `git add -A` in a repo
+# going public would commit a binary package of the source next to it. The glob
+# ends in `.gem`, so it does NOT match the tracked `*.gemspec` files (verified:
+# `git check-ignore` clears all 14) and nothing currently tracked matches it.
+*.gem
 
 # ── Secrets — never publish (defense-in-depth over the per-demo ignores) ─────
 # Rails master keys and encrypted credentials, wherever a demo app keeps them.

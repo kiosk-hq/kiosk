@@ -1,0 +1,31 @@
+# Changelog
+
+All notable changes follow [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and [Semantic Versioning](https://semver.org/).
+
+## [Unreleased]
+
+### Added
+
+- `Kiosk::Pow::Equihash` — pure-Ruby Equihash (Biryukov & Khovratovich) verifier, the shipped default Kiosk PoW backend. No runtime dependencies: BLAKE2b-256 is clean-room pure Ruby from the public-domain BLAKE2 spec, and the gem depends on neither `kiosk-core` nor Rails.
+- `Kiosk::Pow::Equihash::NAME = "equihash"` — algorithm identifier for the challenge wire format.
+- `Kiosk::Pow::Equihash.params(n: 168, k: 7)` — challenge params; `DEFAULT_N` / `DEFAULT_K` carry the shipped defaults.
+- `Kiosk::Pow::Equihash.verify(salt:, params:, nonce:)` — recomputes the `2^k` BLAKE2b-256 leaf hashes named by the proof's indices, checks their XOR is zero over all `n` bits, and walks the Wagner collision tree (per-level XOR cancellation plus the Zcash-canonical subtree ordering). Difficulty is set by `(n, k)` alone — there is no post-hoc target check.
+- `Kiosk::Pow::Equihash.blake2b256` — public so specs can check it directly against Python `hashlib.blake2b` vectors.
+- `solve.py` — reference Python + numpy solver (a correct full-Wagner implementation, not a tuned miner), with a `--toy` `(n=24, k=3)` mode for tests.
+- `bench/bench.py` and `bench/README.md` — the `(n, k)` sweep behind the default, reporting p50/p95 solve time and peak RSS.
+- Known-answer tests frozen at the SHIPPED production parameters (n=168, k=7), not only at toy params — a toy-only KAT is what let a broken verifier pass, and `k=2`/`k=3` vectors now cover the tree check the old one could not see.
+- Live solver-to-verifier parity spec at 168/7 — `solve.py` produces a proof and `.verify` accepts it; CI installs numpy so the job actually runs it rather than skipping.
+- `spec/solver_pin_spec.rb` — runs `bin/check-solver-pin` from this gem's own suite, so editing `solve.py` fails here rather than silently breaking every assistant that verifies the file's SHA-256 against the pin published in the skill. Skips, stating why, in a gem-only checkout where the script is absent.
+
+### Changed
+
+- Default parameters retuned from n=192, k=7 to **n=168, k=7** after benchmarking: 192/7 measured ~155 s and ~5.4 GiB on the reference solver, too heavy for a consumer laptop; 168/7 lands at p95 ~10 s and ~1.3 GiB.
+- README and docstrings state what the gem actually is — a cheap-to-verify metered toll at ~17 ms and a few KB per verify, priced by the reputation policy's N-proofs knob. The ASIC-/GPU-resistance claims and the microsecond-verify figure are gone: Equihash was ASIC'd on Zcash, and neither claim was supportable.
+- `DEFAULT = true` removed — defaultness is established by registry wiring, not by a constant on this module.
+- `bench/` and everything under `lib/` ship unconditionally, so the packaged README's links to the benchmark evidence resolve inside the gem. `CHANGELOG.md` is listed the same way: the file list has no `File.exist?` guard, so a file this gemspec names and cannot find breaks the build instead of going quiet.
+- The gemspec declares a description, a homepage and the `homepage_uri` / `source_code_uri` / `bug_tracker_uri` / `changelog_uri` metadata, which it had never carried — the default PoW backend used to render on RubyGems as a bare summary line with no prose and no links.
+
+### Fixed
+
+- Verifier rewritten to the Zcash-canonical collision-tree check. The previous one checked leaf-prefix *equality* plus a global ascending sort; both are invisible at k=1, which is all the tests exercised, so it never accepted a real proof at the production parameters.
+- `verify` returns `false` instead of raising on a malformed proof — a non-Integer or negative index, a duplicate index, a wrong-length index list, or a non-numeric `header_nonce`.

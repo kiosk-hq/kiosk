@@ -25,9 +25,10 @@ Gem::Specification.new do |spec|
 
   spec.metadata["homepage_uri"]    = spec.homepage
   spec.metadata["source_code_uri"] = "https://github.com/kiosk-hq/kiosk"
+  spec.metadata["changelog_uri"]   = "https://github.com/kiosk-hq/kiosk/blob/main/kiosk-redteam/CHANGELOG.md"
   spec.metadata["bug_tracker_uri"] = "https://github.com/kiosk-hq/kiosk/issues"
 
-  spec.files         = Dir.glob("lib/**/*") + %w[README.md LICENSE.txt]
+  spec.files         = Dir.glob("lib/**/*") + %w[README.md LICENSE.txt CHANGELOG.md]
   spec.require_paths = ["lib"]
 
   # RS256 mandate signing / verification in specs

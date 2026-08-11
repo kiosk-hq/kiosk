@@ -326,7 +326,6 @@ Kiosk.configure do |c|
     pow_params = Kiosk::Pow::Equihash.params(**EQUIHASH_DEMO_PARAMS)
 
     c.reputation_policy = AtableforDemoPowPolicy.new(pow_params)
-    c.pow_secret        = pow_secret
     c.pow_ttl           = 300
 
     # Factors: always return empty (the demo policy ignores factors and
@@ -360,8 +359,7 @@ Kiosk.configure do |c|
       equihash_n:                 EQUIHASH_DEMO_PARAMS[:n],
       equihash_k:                 EQUIHASH_DEMO_PARAMS[:k],
     )
-    c.pow_secret = pow_secret
-    c.pow_ttl    = 300
+    c.pow_ttl = 300
 
     # Factors: REAL DB lookup — COUNT(*) of the principal's CONFIRMED bookings.
     # This is what makes the flagship a demo OF reputation (K-517=b); it MUST NOT
@@ -409,8 +407,7 @@ Kiosk.configure do |c|
         count:  1,
       },
     )
-    c.pow_secret = pow_secret
-    c.pow_ttl    = 300
+    c.pow_ttl = 300
 
     # The Backoff strategy ignores factors, but the gate still gathers them
     # (config.reputation_factors is called before challenge_for). Return empty.
@@ -419,8 +416,9 @@ Kiosk.configure do |c|
 
   # ── Registration PoW gate — ALWAYS ON (register is uniformly tolled) ──────
   # Price fresh-identity minting: registering an agent costs ONE Equihash proof.
-  # Independent of the verb toll above; pow_secret is set here too so the gate
-  # works even in :off mode (RegistrationPow.gate raises without it).
+  # Independent of the verb toll above; pow_secret is set unconditionally so the
+  # gate works even in :off mode (RegistrationPow.gate raises without it) — the
+  # mode branches above share this one assignment.
   c.registration_pow_count  = 1
   c.registration_pow_params = ATABLEFOR_REGISTRATION_POW_PARAMS
   c.pow_secret              = pow_secret

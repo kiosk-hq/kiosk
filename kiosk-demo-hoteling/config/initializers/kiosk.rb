@@ -72,10 +72,6 @@ require "kiosk/reputation"
 Kiosk::Reputation::Backends.register(Kiosk::Pow::Equihash::NAME, Kiosk::Pow::Equihash)
 
 if ENV["KIOSK_POW_BROWSE_DEMO"] == "1"
-  require "kiosk/pow/equihash"
-  require "kiosk/reputation"
-  Kiosk::Reputation::Backends.register(Kiosk::Pow::Equihash::NAME, Kiosk::Pow::Equihash)
-
   HOTELING_BROWSE_COUNT = Hash.new(0)  # agent_id => availability queries so far
 
   # Priced-pagination policy: free below the allowance, then proof count rises
@@ -205,7 +201,6 @@ Kiosk.configure do |c|
   # ── Browse-heavy priced-pagination gate (KIOSK_POW_BROWSE_DEMO=1) ────────
   if ENV["KIOSK_POW_BROWSE_DEMO"] == "1"
     c.reputation_policy = HotelingBrowsePolicy.new(EQUIHASH_BROWSE_PARAMS)
-    c.pow_secret        = pow_secret
     c.pow_ttl           = 300
 
     # Factors: count availability queries per agent in-process and report the
@@ -224,9 +219,9 @@ Kiosk.configure do |c|
 
   # ── Registration PoW gate — ALWAYS ON (register is uniformly tolled) ──────
   # Price fresh-identity minting: registering an agent costs ONE Equihash proof.
-  # Independent of the browse gate above; pow_secret is set here too so the gate
-  # works even when KIOSK_POW_BROWSE_DEMO is off (RegistrationPow.gate raises
-  # without it).
+  # Independent of the browse gate above; pow_secret is set unconditionally so the
+  # gate works even when KIOSK_POW_BROWSE_DEMO is off (RegistrationPow.gate raises
+  # without it) — the browse-gate branch above shares this one assignment.
   c.registration_pow_count  = 1
   c.registration_pow_params = HOTELING_REGISTRATION_POW_PARAMS
   c.pow_secret              = pow_secret

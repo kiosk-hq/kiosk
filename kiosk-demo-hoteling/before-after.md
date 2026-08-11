@@ -176,7 +176,7 @@ Gate 1 (ownership) and Gate 2 (payment binding) together form the C2 defense: B 
 ```ruby
 # config/initializers/kiosk.rb
 Kiosk.configure do |c|
-  c.issuer           = "https://hoteling.app"
+  c.issuer           = "https://hoteling.demo.kiosk.tech"
   c.payment_provider = Kiosk::PaymentProviders::Stripe.new(api_key: ENV["STRIPE_SECRET_KEY"])
 end
 ```

@@ -55,6 +55,6 @@ Rails.application.configure do
 
   # Permit the demo's realistic /etc/hosts domain. Rails 8 HostAuthorization
   # otherwise 403s any request whose Host header isn't localhost/127.0.0.1,
-  # which blocks `rake demo` when it runs on http://getgrocery.app:3001.
-  config.hosts << "getgrocery.app"
+  # which blocks `rake demo` when it runs on http://getgrocery.demo.kiosk.tech:3001.
+  config.hosts << "getgrocery.demo.kiosk.tech"
 end

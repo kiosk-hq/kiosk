@@ -26,7 +26,7 @@ This directory is the *app-side* handoff; DNS + VPS provisioning is the operator
 | Demo | Subdomain | Port | PoW difficulty | Stripe (test) |
 |------|-----------|------|----------------|---------------|
 | getgrocery | `getgrocery.demo.kiosk.tech` | 3001 | **low** (~1 s, poke-friendly) | yes |
-| atablefor  | `atablefor.demo.kiosk.tech` (or apex `atablefor.us`) | 3002 | **HIGH** (~9–10 s, "beware: intensive PoW") | — (no payment provider) |
+| atablefor  | `atablefor.demo.kiosk.tech` | 3002 | **HIGH** (~9–10 s, "beware: intensive PoW") | — (no payment provider) |
 | hoteling   | `hoteling.demo.kiosk.tech` | 3003 | **low** | — |
 | skooti     | `skooti.demo.kiosk.tech` | 3004 | **low** | — |
 | stylish    | `stylish.demo.kiosk.tech` | 3005 | **low** | — |
@@ -72,8 +72,7 @@ see "Edge rate-limit — REQUIRED" below.) Any other demo is knob-adjustable: se
 
 **Operator (manual):**
 1. **DNS.** Either a wildcard `*.demo.kiosk.tech → VPS_IP` (one A record, add
-   apps later with no DNS change) or one A record per subdomain above. If you
-   want the flagship domain, point `atablefor.us` (+`www`) at the VPS too.
+   apps later with no DNS change) or one A record per subdomain above.
 2. **Provision the VPS** (2–4 GB; all 8 apps at the shipped `WEB_CONCURRENCY=1`
    × ~250 MB RSS ≈ 2 GB Puma, so 4 GB is comfortable once Postgres and Caddy
    take their share). Install Postgres 17, Caddy **with the `caddy-ratelimit`

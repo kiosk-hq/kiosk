@@ -62,7 +62,7 @@ Assistant (agent token → Kiosk API)
        │
        ▼
   Assistant puts rental_token into App Clip launch URL:
-    https://skooti.app/unlock?scooter=SK-001&rt=<percent-encoded token>
+    https://skooti.demo.kiosk.tech/unlock?scooter=SK-001&rt=<percent-encoded token>
        │
        ▼
   App Clip launches (NFC / QR / push)

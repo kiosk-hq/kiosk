@@ -199,7 +199,7 @@ end
 ```ruby
 # config/initializers/kiosk.rb
 Kiosk.configure do |c|
-  c.issuer           = "https://getgrocery.app"
+  c.issuer           = "https://getgrocery.demo.kiosk.tech"
   c.payment_provider = Kiosk::PaymentProviders::Stripe.new(api_key: ENV["STRIPE_SECRET_KEY"])
 end
 ```

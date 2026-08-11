@@ -142,7 +142,7 @@ Kiosk.configure do |c|
   # KIOSK_POW_DIFFICULTY=high, surface an honest "beware: intensive PoW" notice
   # here so an agent/reader sees the toll BEFORE it dials register (the 402
   # challenge params say the same, this is the up-front discovery signal).
-  c.owner  = { name: "skooti", support: "help@skooti.app" }
+  c.owner  = { name: "skooti", support: "demo@kiosk.tech" }
   if (notice = PowDifficulty.pow_notice)
     c.owner = c.owner.merge(pow_difficulty: PowDifficulty.level, pow_notice: notice)
   end
@@ -192,7 +192,7 @@ Kiosk.configure do |c|
   # callback-layer operator check runs. skooti declares its stable broker handle
   # ("skooti") as the audience (the broker mints `aud` = the audience skooti sends
   # at intake), not its per-deploy origin URL, so the value is stable across the
-  # 127.0.0.1 / skooti.app harness ports.
+  # 127.0.0.1 / skooti.demo.kiosk.tech harness ports.
   c.kyc_audience  = ProveTrust.operator_id
 
   # Ed25519 rental-token signing key (offline token).

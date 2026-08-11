@@ -17,7 +17,7 @@
 
 ```
 NFC tag / QR code
-  URL: https://skooti.app/unlock?scooter=SK-001&rt=<percent-encoded-wire-token>
+  URL: https://skooti.demo.kiosk.tech/unlock?scooter=SK-001&rt=<percent-encoded-wire-token>
        │                           │               │
        │                    scooter code       rental token
        │                    (for BLE scan)     (provider-signed, Ed25519)
@@ -142,12 +142,12 @@ BUNDLE_PREFIX=app.skooti.personal DEVELOPMENT_TEAM=ABCDE12345 make project
 
 ## Launch trigger reality — what you need and how to test
 
-### Production path (requires skooti.app AASA)
+### Production path (requires skooti.demo.kiosk.tech AASA)
 
 For an NFC tap or App Clip Code scan to launch the clip, iOS fetches
-`https://skooti.app/.well-known/apple-app-site-association` and checks that the
+`https://skooti.demo.kiosk.tech/.well-known/apple-app-site-association` and checks that the
 `appclips` key matches your App Clip bundle ID.  This requires controlling the
-`skooti.app` domain.
+`skooti.demo.kiosk.tech` domain.
 
 Minimal AASA:
 
@@ -171,7 +171,7 @@ Use a **Local Experience** to bypass the AASA lookup entirely:
 
 1. Build and run the **SkootiClip** target to a registered device from Xcode
 2. On the device: **Settings → Developer → Local Experiences → Add Local Experience**
-   - URL prefix: `https://skooti.app/unlock`
+   - URL prefix: `https://skooti.demo.kiosk.tech/unlock`
    - Bundle ID: `app.skooti.demo.Clip`
    - Title: `Skooti Unlock`
 3. Launch by scanning a **QR code** that encodes the full token URL
@@ -183,7 +183,7 @@ It CANNOT be a static sticker on the scooter.  The flow is:
 
 ```
 Server start_rental → issues rental token
-  → assistant encodes: https://skooti.app/unlock?scooter=SK-001&rt=<percent-encoded token>
+  → assistant encodes: https://skooti.demo.kiosk.tech/unlock?scooter=SK-001&rt=<percent-encoded token>
   → generates a QR code from that URL
   → user scans the QR → iOS shows App Clip banner → clip launches
 ```
@@ -194,7 +194,7 @@ The `|` characters in the token must be percent-encoded (`%7C`) in the URL.
 On the server side (Ruby):
 ```ruby
 rt_encoded = CGI.escape(rental_token)
-url = "https://skooti.app/unlock?scooter=#{scooter_code}&rt=#{rt_encoded}"
+url = "https://skooti.demo.kiosk.tech/unlock?scooter=#{scooter_code}&rt=#{rt_encoded}"
 ```
 
 ### NFC tag
@@ -246,7 +246,7 @@ The unlock flow (~5 s) must complete in the foreground.
 
 The App Clip target requires a **paid Apple Developer Program account** ($99/year):
 - `com.apple.developer.on-demand-install-capable` entitlement is not available to free teams
-- Associated Domains (`appclips:skooti.app`) requires a paid team
+- Associated Domains (`appclips:skooti.demo.kiosk.tech`) requires a paid team
 - Local Experience testing requires a device registered to a paid team
 
 A **physical iPhone** is required — the Simulator does not support CoreBluetooth
@@ -262,7 +262,7 @@ connections to real BLE hardware.
 
 **App Clip never launches from QR / NFC**
 → AASA not served, or the Local Experience prefix doesn't match the URL exactly.
-  Ensure the URL prefix in Local Experience is `https://skooti.app/unlock` (no trailing slash).
+  Ensure the URL prefix in Local Experience is `https://skooti.demo.kiosk.tech/unlock` (no trailing slash).
 
 **BLE scan times out / wrong scooter connected**
 → The peripheral's advertised name doesn't match `skooti-<scooterCode>`.

@@ -7,7 +7,7 @@ an ISSUER, not a Kiosk operator (no PoW, no `/.well-known/kiosk.json`, no agent 
 
 ## 1. DNS (you)
 - [ ] Wildcard `*.demo.kiosk.tech` → VPS_IP (one A record; add apps without DNS changes).
-      Or per-app A records (`getgrocery.demo.kiosk.tech`, …). Optionally `atablefor.us` apex.
+      Or per-app A records (`getgrocery.demo.kiosk.tech`, …).
 
 ## 2. Provision the VPS (one small box, ~2–4 GB)
 - [ ] Install: **Caddy**, **PostgreSQL** (17 preferred; on 16 strip the one `SET transaction_timeout`

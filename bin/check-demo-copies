@@ -436,7 +436,15 @@ TELEMETRY_WIRING = [
    "but never records anything"],
 ].freeze
 
-(dups["lib/demo_telemetry.rb"] || {}).each_key do |demo|
+telemetry_demos = (dups["lib/demo_telemetry.rb"] || {}).keys
+(dups["app/controllers/demo_activity_controller.rb"] || {}).each_key do |demo|
+  next if telemetry_demos.include?(demo)
+
+  errors << "#{short.(demo)}: ships app/controllers/demo_activity_controller.rb but not " \
+            "lib/demo_telemetry.rb — GET /demo/activity.json would 500 on the require"
+end
+
+telemetry_demos.each do |demo|
   TELEMETRY_WIRING.each do |rel, pattern, message|
     path = File.join(ROOT, demo, rel)
     unless File.exist?(path)

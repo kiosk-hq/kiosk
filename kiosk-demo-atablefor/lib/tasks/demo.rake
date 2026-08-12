@@ -49,12 +49,25 @@ namespace :demo do
     log  = "/tmp/kiosk-atablefor-demo.log"
 
     # ── host resolution ────────────────────────────────────────────────
+    # The domain here MUST be one config/environments/development.rb permits
+    # (config.hosts) — that is the whole point of the lookup. Until K-695 it was
+    # <demo>.app, which config.hosts has never listed, so the ONE branch this
+    # block exists to offer was the one that broke: a developer who followed the
+    # printed /etc/hosts line got Rails 8 HostAuthorization 403s, the 200-only
+    # readiness poll below burned its 40 seconds, and the run aborted naming the
+    # wrong cause. CI never saw it — with no hosts entry the lookup fails and
+    # everything dials 127.0.0.1.
+    #
+    # This name resolves PUBLICLY to the live demo box, so a bare lookup returns
+    # a public IP, not an error. Only 127.0.0.1 is accepted, which is exactly
+    # what an /etc/hosts entry produces: a local harness can never be steered
+    # onto the deployed host by whatever DNS happens to answer.
     host = begin
-      addr = Resolv.getaddress("atablefor.app") rescue ""
+      addr = Resolv.getaddress("atablefor.demo.kiosk.tech") rescue ""
       if addr == "127.0.0.1"
-        "atablefor.app"
+        "atablefor.demo.kiosk.tech"
       else
-        puts "  add to /etc/hosts:  127.0.0.1 atablefor.app" if addr.empty?
+        puts "  add to /etc/hosts:  127.0.0.1 atablefor.demo.kiosk.tech"
         "127.0.0.1"
       end
     end
@@ -201,8 +214,8 @@ namespace :demo do
     log  = "/tmp/kiosk-atablefor-pow-demo.log"
 
     host = begin
-      addr = Resolv.getaddress("atablefor.app") rescue ""
-      addr == "127.0.0.1" ? "atablefor.app" : "127.0.0.1"
+      addr = Resolv.getaddress("atablefor.demo.kiosk.tech") rescue ""
+      addr == "127.0.0.1" ? "atablefor.demo.kiosk.tech" : "127.0.0.1"
     end
 
     server_url   = "http://#{host}:#{port}"
@@ -353,8 +366,8 @@ namespace :demo do
     log  = "/tmp/kiosk-atablefor-reputation-demo.log"
 
     host = begin
-      addr = Resolv.getaddress("atablefor.app") rescue ""
-      addr == "127.0.0.1" ? "atablefor.app" : "127.0.0.1"
+      addr = Resolv.getaddress("atablefor.demo.kiosk.tech") rescue ""
+      addr == "127.0.0.1" ? "atablefor.demo.kiosk.tech" : "127.0.0.1"
     end
 
     server_url   = "http://#{host}:#{port}"
@@ -493,8 +506,8 @@ namespace :demo do
     log  = "/tmp/kiosk-atablefor-backoff-demo.log"
 
     host = begin
-      addr = Resolv.getaddress("atablefor.app") rescue ""
-      addr == "127.0.0.1" ? "atablefor.app" : "127.0.0.1"
+      addr = Resolv.getaddress("atablefor.demo.kiosk.tech") rescue ""
+      addr == "127.0.0.1" ? "atablefor.demo.kiosk.tech" : "127.0.0.1"
     end
 
     server_url   = "http://#{host}:#{port}"
@@ -641,8 +654,8 @@ namespace :demo do
     holder_password = "atablefor-demo-password"
 
     host = begin
-      addr = Resolv.getaddress("atablefor.app") rescue ""
-      addr == "127.0.0.1" ? "atablefor.app" : "127.0.0.1"
+      addr = Resolv.getaddress("atablefor.demo.kiosk.tech") rescue ""
+      addr == "127.0.0.1" ? "atablefor.demo.kiosk.tech" : "127.0.0.1"
     end
 
     server_url   = "http://#{host}:#{port}"
@@ -756,11 +769,11 @@ namespace :demo do
     log  = "/tmp/kiosk-atablefor-isolation.log"
 
     host = begin
-      addr = Resolv.getaddress("atablefor.app") rescue ""
+      addr = Resolv.getaddress("atablefor.demo.kiosk.tech") rescue ""
       if addr == "127.0.0.1"
-        "atablefor.app"
+        "atablefor.demo.kiosk.tech"
       else
-        puts "  add to /etc/hosts:  127.0.0.1 atablefor.app" if addr.empty?
+        puts "  add to /etc/hosts:  127.0.0.1 atablefor.demo.kiosk.tech"
         "127.0.0.1"
       end
     end
@@ -907,8 +920,8 @@ namespace :demo do
     log  = "/tmp/kiosk-atablefor-schema.log"
 
     host = begin
-      addr = Resolv.getaddress("atablefor.app") rescue ""
-      addr == "127.0.0.1" ? "atablefor.app" : "127.0.0.1"
+      addr = Resolv.getaddress("atablefor.demo.kiosk.tech") rescue ""
+      addr == "127.0.0.1" ? "atablefor.demo.kiosk.tech" : "127.0.0.1"
     end
 
     server_url   = "http://#{host}:#{port}"
@@ -1076,8 +1089,8 @@ namespace :demo do
     log  = "/tmp/kiosk-atablefor-redteam.log"
 
     host = begin
-      addr = Resolv.getaddress("atablefor.app") rescue ""
-      addr == "127.0.0.1" ? "atablefor.app" : "127.0.0.1"
+      addr = Resolv.getaddress("atablefor.demo.kiosk.tech") rescue ""
+      addr == "127.0.0.1" ? "atablefor.demo.kiosk.tech" : "127.0.0.1"
     end
 
     server_url   = "http://#{host}:#{port}"

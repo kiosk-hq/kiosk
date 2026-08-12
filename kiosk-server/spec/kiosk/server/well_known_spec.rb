@@ -361,6 +361,35 @@ RSpec.describe Kiosk::Server::WellKnown do
       expect(body).to match(/Link code.*Kiosk extension/m)
     end
 
+    # ── K-675: the register step must teach the ADR-0022 PoW transport ──────
+    #
+    # This is not a doc nit. The server reads registration proofs ONLY from
+    # the `Kiosk-PoW` request header ({AuthController#register} →
+    # {PowGate.proofs_from_header}); a `pow` key in the register BODY is
+    # silently ignored. Every pow demo tolls registration unconditionally, so
+    # an assistant that follows a body-pow auth.md 402-loops forever on the
+    # very first call it makes. These two examples pin the served bytes.
+    describe "the Register step (PoW transport)" do
+      subject(:register) { body[/^## Register$.*?(?=^## )/m] }
+
+      it "renders the register body as `{ public_key, signed }` — no body `pow`" do
+        expect(register).to include("`{ public_key, signed }`")
+        # No JSON-ish body example anywhere in the file may pair `signed`
+        # with a `pow` field — that is the retired pre-ADR-0022 wire.
+        expect(body).not_to match(/\{[^}]*\bsigned\b[^}]*\bpow\b/)
+      end
+
+      it "sends the proof in the `Kiosk-PoW` request header, never the body" do
+        expect(register).to match(/`Kiosk-PoW`\s+request header/i)
+        expect(register).to include("Kiosk-PoW: {")
+        expect(register).to match(/NEVER travels in the\s+request body/)
+        # The RFC 7235 pair: the 402 names the scheme, the client answers in
+        # the matching request header.
+        expect(register).to include("402 pow_required")
+        expect(register).to include(%(WWW-Authenticate: Kiosk-PoW realm="<issuer>"))
+      end
+    end
+
     it "advertises the ceremony endpoints as absolute URLs under the mount" do
       expect(body).to include("https://api.acme.example/kiosk/oauth/device_authorization")
       expect(body).to include("https://api.acme.example/kiosk/auth/claim")

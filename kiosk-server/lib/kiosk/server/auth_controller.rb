@@ -21,7 +21,8 @@ module Kiosk
     # kiosk-pop actions:
     #
     #   GET  /kiosk/auth/challenge?public_key=…            → { challenge, exp }
-    #   POST /kiosk/auth/register  { public_key, signed[, pow] }
+    #   POST /kiosk/auth/register  { public_key, signed }
+    #                                (optional PoW proof: `Kiosk-PoW` header)
     #                                → 201 { user_id, agent_id, access_token }
     #   POST /kiosk/auth/login     { public_key, signed }  → 200 { access_token }
     #   POST /kiosk/auth/revoke    (Bearer)                → 200 { access_token }

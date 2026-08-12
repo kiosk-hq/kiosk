@@ -301,11 +301,26 @@ module Kiosk
           2. Sign a compact RS256 JWS over `{aud, nonce, jti}` with the
              private key (`aud` = the origin you dialed; `nonce` = the
              challenge).
-          3. `POST #{urls[:register]}` `{ public_key, signed[, pow] }`
+          3. `POST #{urls[:register]}` `{ public_key, signed }`
              → `201 { agent_id, user_id, access_token }`
 
-          Registration may be priced with an Equihash proof-of-work
-          (`402 pow_required` carries the challenges).
+          Registration may be priced with an Equihash proof-of-work. When it
+          is, step 3 answers `402 pow_required` with
+          `WWW-Authenticate: Kiosk-PoW realm="<issuer>"` and the body carries
+          the `challenges` array; the toll binds to the public key you are
+          registering. Solve EVERY challenge and resubmit the SAME body — the
+          possession proof is NOT consumed by the 402, so reuse the same
+          `signed` — carrying the proof(s) in a `Kiosk-PoW` REQUEST HEADER as
+          raw minified JSON (no base64):
+
+              Kiosk-PoW: {"challenge":{…},"nonce":{"indices":[…],"header_nonce":0}}
+
+          Send N proofs as a JSON array in that one header, or as one repeated
+          `Kiosk-PoW` header line per proof. The proof NEVER travels in the
+          request body: a body `pow` field is ignored, and changing the body
+          invalidates the proofs. The same header answers a `402 pow_required`
+          on the wire verbs too — there is no verb exemption, including the
+          `schema` GET.
 
           ## Claim ceremony
 

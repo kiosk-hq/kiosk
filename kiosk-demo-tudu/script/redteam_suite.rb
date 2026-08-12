@@ -199,18 +199,33 @@ record(results, "RevokedMemberAccess", rc == 403, "removed member's next read �
 
 # ── Session-channel scenarios: Alice signs in for unlink + link ─────────────
 signin = get_html("/users/sign_in")
-post_form("/users/sign_in",
+signin_res = post_form("/users/sign_in",
           "authenticity_token" => csrf_token(signin.body),
           "user[email]" => EMAIL, "user[password]" => PASSWORD)
+abort "session sign-in failed (#{signin_res.code}) — RevokedAgentKey needs a live Devise session" \
+  unless [302, 303].include?(signin_res.code.to_i)
 
 # RevokedAgentKey — link a fresh assistant to Alice, unlink it, login → 404.
-rc, link = post_json("/kiosk/auth/link", {}, { session: true })
+# K-688: a bare terminal 404 does not discriminate — AgentLogin's lookup
+# (`WHERE public_key = … AND revoked_at IS NULL`) returns the identical 404
+# for a key that was NEVER linked, so a beat that only checks the last status
+# would still "pass" if link/claim silently failed. Assert every precondition
+# on the way in (link 201, claim 201, an agent_id back), and add a POSITIVE
+# CONTROL — login on the freshly-claimed key succeeds (200) BEFORE unlink —
+# so the terminal 404 can only be read as "this key was just revoked".
+rc_link, link = post_json("/kiosk/auth/link", {}, { session: true })
 rk = OpenSSL::PKey::RSA.generate(2048); rpem = rk.public_key.to_pem
-rc, claimed = post_json("/kiosk/auth/claim", { code: link["link_code"], public_key: rpem, signed: pop_proof(rk, rpem) })
+rc_claim, claimed = post_json("/kiosk/auth/claim", { code: link["link_code"], public_key: rpem, signed: pop_proof(rk, rpem) })
 revoked_agent_id = claimed["agent_id"]
-post_json("/kiosk/auth/unlink", { agent_id: revoked_agent_id }, { session: true })
+rc_prelogin, = post_json("/kiosk/auth/login", { public_key: rpem, signed: pop_proof(rk, rpem) })
+rc_unlink, = post_json("/kiosk/auth/unlink", { agent_id: revoked_agent_id }, { session: true })
 rc, = post_json("/kiosk/auth/login", { public_key: rpem, signed: pop_proof(rk, rpem) })
-record(results, "RevokedAgentKey", rc == 404, "unlinked agent login → #{rc} (want 404)")
+record(results, "RevokedAgentKey",
+       rc_link == 201 && rc_claim == 201 && !revoked_agent_id.nil? &&
+       rc_prelogin == 200 && rc_unlink == 200 && rc == 404,
+       "link=#{rc_link} claim=#{rc_claim} agent_id=#{revoked_agent_id.inspect} " \
+       "pre-revoke login=#{rc_prelogin} (want 200) unlink=#{rc_unlink} (want 200) " \
+       "post-revoke login=#{rc} (want 404)")
 
 # PreLinkTokenAfterLink — an agent registers headless, creates a list, then
 # rebinds to Alice (assistant_claimed migrates the list). A rebind is a

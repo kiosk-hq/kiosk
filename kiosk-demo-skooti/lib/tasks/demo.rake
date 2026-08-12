@@ -96,6 +96,34 @@ namespace :demo do
     # ships a pinned dev ProveKey (K-650).
     require_relative "../../lib/prove_test_issuer"
 
+    # Registration goes through the SHIPPED helper (K-696), never a local copy:
+    # lib/equihash_register.rb owns the challenge → PoP → 402 → solve → retry
+    # handshake and asks Kiosk::Pow::Equihash.solver_path where solve.py lives,
+    # so the gem that packages the solver stays the only thing that knows its
+    # location (K-627/K-632). The two hand-rolled copies this replaces named
+    # ../../../kiosk-pow-equihash/solve.py — a path that resolves in a monorepo
+    # checkout and nowhere else — and were weaker than the helper besides: one
+    # NoMethodError'd on any 402 whose body carried no error.challenges, and one
+    # read access_token with no status assertion at all, so a failed register
+    # yielded `Bearer ` and the 403 that earned was reported as the expected 403.
+    require_relative "../../lib/equihash_register"
+
+    # The transport slots the helper takes: ->(url) and ->(url, body, headers = {}),
+    # each returning [status, parsed_body]. The header slot carries Kiosk-PoW on
+    # the retry (ADR-0022).
+    reg_get = lambda do |url, headers = {}|
+      uri = URI(url)
+      res = Net::HTTP.new(uri.host, uri.port).request(Net::HTTP::Get.new(uri, headers))
+      [res.code.to_i, (JSON.parse(res.body) rescue {})]
+    end
+    reg_post = lambda do |url, body, headers = {}|
+      uri = URI(url)
+      req = Net::HTTP::Post.new(uri, { "Content-Type" => "application/json" }.merge(headers))
+      req.body = JSON.generate(body)
+      res = Net::HTTP.new(uri.host, uri.port).request(req)
+      [res.code.to_i, (JSON.parse(res.body) rescue {})]
+    end
+
     # Helper: spawn the server, wait for readiness, yield, then kill.
     boot_server = lambda do |&blk|
       File.truncate(log, 0) if File.exist?(log)
@@ -337,42 +365,19 @@ namespace :demo do
       #
       # Simpler: call the server directly in this Rake task.
       require "net/http"
-      require "open3"
       require "openssl"
       require "securerandom"
 
       # Re-register a fresh agent via the proof-of-possession handshake
       # (challenge → sign → register), solving the Equihash registration gate.
-      solve_py = File.expand_path("../../../kiosk-pow-equihash/solve.py", __dir__)
-      agent_key = OpenSSL::PKey::RSA.generate(2048)
-      agent_pem = agent_key.public_key.to_pem
-
-      ch_uri  = URI("#{server_url}/kiosk/auth/challenge?public_key=#{URI.encode_www_form_component(agent_pem)}")
-      ch_data = JSON.parse(Net::HTTP.get_response(ch_uri).body)
-      pop = JWT.encode(
-        { aud: kiosk_issuer, nonce: ch_data.fetch("challenge"), jti: SecureRandom.uuid, iat: Time.now.to_i },
-        agent_key, "RS256",
+      # The shared helper aborts unless the register comes back 201, so an
+      # agent_token here is always a real one (K-696).
+      _agent_key, reg_data = equihash_register(
+        server: server_url, issuer: kiosk_issuer,
+        get_json: reg_get, post_json: reg_post,
       )
-      reg_body = { public_key: agent_pem, signed: pop }
-      do_register = lambda do |body, pow = nil|
-        uri = URI("#{server_url}/kiosk/auth/register")
-        req = Net::HTTP::Post.new(uri, "Content-Type" => "application/json")
-        req["Kiosk-PoW"] = JSON.generate(pow) if pow
-        req.body = JSON.generate(body)
-        res = Net::HTTP.new(uri.host, uri.port).request(req)
-        [res.code.to_i, (JSON.parse(res.body) rescue {})]
-      end
-      rc_reg, reg_data = do_register.call(reg_body)
-      if rc_reg == 402
-        proofs = reg_data.dig("error", "challenges").map do |c|
-          out, st = Open3.capture2("python3", solve_py, JSON.generate(c))
-          raise "register solve.py failed: #{out}" unless st.success?
-          { challenge: c, nonce: JSON.parse(out).slice("indices", "header_nonce") }
-        end
-        rc_reg, reg_data = do_register.call(reg_body, proofs)
-      end
-      agent_token = reg_data["access_token"]
-      new_user_id = reg_data["user_id"]
+      agent_token = reg_data.fetch("access_token")
+      new_user_id = reg_data.fetch("user_id")
 
       # KYC the new agent (valid attestation signed with the shared broker
       # ProveKey via ProveTestIssuer — the retired StubKyc's replacement).
@@ -405,7 +410,6 @@ namespace :demo do
     #             principal's reservation (app-layer per-user isolation, no RLS).
     puts "\n══ RUN 6: Query-verb assertions (scooters_available + my_reservations per-user) ══"
     boot_server.call do
-      require "open3"
       require "net/http"
       require "openssl"
       require "securerandom"
@@ -420,29 +424,15 @@ namespace :demo do
         [res.code.to_i, JSON.parse(res.body)]
       end
 
-      # Register a fresh agent through the Equihash-gated /auth/register.
-      q_solve_py = File.expand_path("../../../kiosk-pow-equihash/solve.py", __dir__)
-      q_key = OpenSSL::PKey::RSA.generate(2048)
-      q_pem = q_key.public_key.to_pem
-      q_ch_uri  = URI("#{server_url}/kiosk/auth/challenge?public_key=#{URI.encode_www_form_component(q_pem)}")
-      q_ch_data = JSON.parse(Net::HTTP.get_response(q_ch_uri).body)
-      q_pop = JWT.encode(
-        { aud: kiosk_issuer, nonce: q_ch_data.fetch("challenge"), jti: SecureRandom.uuid, iat: Time.now.to_i },
-        q_key, "RS256",
+      # Register a fresh agent through the Equihash-gated /auth/register — the
+      # shared helper again (K-696), which asserts the 201 this block used to
+      # assert for itself.
+      _q_key, reg_data = equihash_register(
+        server: server_url, issuer: kiosk_issuer,
+        get_json: reg_get, post_json: reg_post,
       )
-      q_reg_body = { public_key: q_pem, signed: q_pop }
-      reg_rc, reg_data = q_post.call("/kiosk/auth/register", q_reg_body, "")
-      if reg_rc == 402
-        q_proofs = reg_data.dig("error", "challenges").map do |c|
-          out, st = Open3.capture2("python3", q_solve_py, JSON.generate(c))
-          raise "RUN6 register solve.py failed: #{out}" unless st.success?
-          { challenge: c, nonce: JSON.parse(out).slice("indices", "header_nonce") }
-        end
-        reg_rc, reg_data = q_post.call("/kiosk/auth/register", q_reg_body, "", q_proofs)
-      end
-      abort "RUN6 register failed (#{reg_rc})" unless reg_rc == 201
-      q_token   = reg_data["access_token"]
-      q_user_id = reg_data["user_id"]
+      q_token   = reg_data.fetch("access_token")
+      q_user_id = reg_data.fetch("user_id")
 
       # KYC the agent (valid attestation via ProveTestIssuer — ProveKey-signed).
       require_relative "../../lib/prove_test_issuer"

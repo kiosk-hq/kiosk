@@ -5,9 +5,12 @@
 # the KYC broker as the trusted KYC issuer, Actions (reserve, start_rental,
 # payment_setup) + named queries (scooters_available, my_reservations).
 
-# Env posture (ephemeral dev signing key, PoW secret, issuer, test flags) lives
-# in config/environments/{development,test,production}.rb (K-650); this file
-# reads the resolved values from Rails.configuration.x.kiosk.*.
+# Env posture (ephemeral dev signing key, PoW secret, issuer, unlock signing
+# key, test flags) lives in config/environments/{development,test,production}.rb
+# (K-650/K-686); this file reads the resolved values from
+# Rails.configuration.x.kiosk.*.
+
+require "openssl"
 
 require Rails.root.join("lib/stub_idp")
 require Rails.root.join("lib/stub_user_idp")
@@ -17,7 +20,6 @@ require Rails.root.join("lib/uuid_check")
 require Rails.root.join("lib/validating_rental_provider")
 require Rails.root.join("lib/prove_trust")
 require Rails.root.join("lib/prove_broker_client")
-require Rails.root.join("lib/dev_unlock_key")
 require Rails.root.join("lib/rental_token_issuer")
 require Rails.root.join("lib/pow_difficulty")
 
@@ -55,6 +57,14 @@ SKOOTI_REGISTRATION_POW_PARAMS = PowDifficulty.params
 # production, stable (non-secret) default in dev/test — that posture lives in
 # config/environments/*; here we only read the resolved value.
 pow_secret = Rails.configuration.x.kiosk.pow_secret
+
+# ── Ed25519 unlock signing key (K-686/K-650) ────────────────────────────────
+# Same shape: the PEM is resolved per environment (dev/test read the shipped
+# config/dev_unlock_key.pem, production requires KIOSK_UNLOCK_SIGNING_KEY_PEM
+# and crash-checks it at boot), and this file only parses the resolved value.
+# Never DevUnlockKey and never ENV here — the posture is the environment
+# file's to state, not an initializer's.
+unlock_signing_key = OpenSSL::PKey.read(Rails.configuration.x.kiosk.unlock_signing_key_pem)
 
 Kiosk.configure do |c|
   c.user_model     = "User"
@@ -145,9 +155,20 @@ Kiosk.configure do |c|
   # 127.0.0.1 / skooti.demo.kiosk.tech harness ports.
   c.kyc_audience  = ProveTrust.operator_id
 
-  # Ed25519 rental-token signing key (offline token).
-  # Fixed dev keypair — stable vectors; swap for env-loaded PEM in production.
-  c.unlock_signing_key = DevUnlockKey.private_key
+  # ── Ed25519 rental-token signing key (K-686/K-650) ────────────────────────
+  # The key every offline rental token is signed with, and whose public half is
+  # baked into each lock at provisioning. Resolved per environment
+  # (config/environments/*, read as config.x.kiosk above): dev/test load the
+  # fixed keypair shipped at config/dev_unlock_key.pem — stable vectors, and
+  # the lock the flow drivers provision matches — while production REFUSES TO
+  # BOOT without KIOSK_UNLOCK_SIGNING_KEY_PEM.
+  #
+  # It read `DevUnlockKey.private_key` here until K-686 — unconditionally, in
+  # every environment, under a comment promising an env-loaded PEM in
+  # production that nothing ever supplied. The private half of the key every
+  # provisioned lock trusts therefore shipped in this public repo AND was the
+  # live production signer: any clone could mint a token that opens a scooter.
+  c.unlock_signing_key = unlock_signing_key
 end
 
 # ── Live-activity telemetry — opt-in, app-layer, privacy-safe ───

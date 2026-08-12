@@ -55,4 +55,14 @@ Rails.application.configure do
   config.x.kiosk.prove_public_key_pem = ENV["KIOSK_PROVE_PUBLIC_KEY_PEM"]
   config.x.kiosk.prove_intake_secret =
     ENV["KIOSK_PROVE_GETGROCERY_SECRET"] || ENV["KIOSK_PROVE_SKOOTI_SECRET"]
+
+  # The Ed25519 unlock/rental-token signing key: the FIXED dev keypair the demo
+  # ships at config/dev_unlock_key.pem, where it ships one. Fixed rather than
+  # ephemeral because the known-answer vector, the firmware fixtures and the
+  # lock the flow drivers provision are all pinned to it. Its private half is
+  # world-readable in this public repo, which is why production refuses to boot
+  # without an explicit KIOSK_UNLOCK_SIGNING_KEY_PEM (K-686).
+  dev_unlock_key_file = Rails.root.join("config/dev_unlock_key.pem")
+  config.x.kiosk.unlock_signing_key_pem =
+    ENV.fetch("KIOSK_UNLOCK_SIGNING_KEY_PEM") { dev_unlock_key_file.read if dev_unlock_key_file.exist? }
 end

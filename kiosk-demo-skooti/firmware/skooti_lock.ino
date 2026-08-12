@@ -57,7 +57,7 @@
  *
  * Example (known-answer vector v2, Plan 4.3 T1):
  *   message = "kiosk-rental-v1|SK-001|resv-1|1750000000|1750000900|aabbccddeeff00112233445566778899"
- *   token   = "<message>.1Vx7nv8xgznLwWgdsS_MhWi1W1fhMQQWSgi1CPRVO3osohmlw_PhaTS9ZJaBOx9yeQZfzn2k8J4JjSXPd12SBA"
+ *   token   = "<message>.SDKHoyU3zzqvpVCwOcKf75EMJCyNKaxuRbvY3HmuM-q--ZaMEdeSmBi40JgZyhvBuL4A15xlupYqlGMfCnROCg"
  *
  * This matches:
  *   Ruby server:  RentalTokenIssuer.issue  (kiosk-demo-skooti/lib/rental_token_issuer.rb)
@@ -141,15 +141,22 @@
 
 /*
  * SKOOTI_PUBKEY — skooti Ed25519 public key (32 raw bytes).
- * = 8857880d21f87b85872f31aeea8d0024acebb2fdf933b25a479f4f9e80babefd
+ * = b39f3a0333c662d3937684f21c91f7722161f8b0b4f4a79b336b463eb8f570f4
  * One key for all locks.  The lock only holds the PUBLIC key.
  * The private signing key stays on the server (never in firmware).
+ *
+ * This is the DEV key (config/dev_unlock_key.pem) — the value the host test
+ * and the demo drivers use.  A REAL deployment flashes the public half of the
+ * server's own KIOSK_UNLOCK_SIGNING_KEY_PEM here instead (K-686).  The value
+ * that stood here before K-686 (8857880d…) is BURNED: its private half was
+ * published in the repo, so any lock still carrying it accepts tokens anyone
+ * can mint and must be reflashed.
  */
 static const uint8_t SKOOTI_PUBKEY[32] = {
-    0x88, 0x57, 0x88, 0x0d, 0x21, 0xf8, 0x7b, 0x85,
-    0x87, 0x2f, 0x31, 0xae, 0xea, 0x8d, 0x00, 0x24,
-    0xac, 0xeb, 0xb2, 0xfd, 0xf9, 0x33, 0xb2, 0x5a,
-    0x47, 0x9f, 0x4f, 0x9e, 0x80, 0xba, 0xbe, 0xfd
+    0xb3, 0x9f, 0x3a, 0x03, 0x33, 0xc6, 0x62, 0xd3,
+    0x93, 0x76, 0x84, 0xf2, 0x1c, 0x91, 0xf7, 0x72,
+    0x21, 0x61, 0xf8, 0xb0, 0xb4, 0xf4, 0xa7, 0x9b,
+    0x33, 0x6b, 0x46, 0x3e, 0xb8, 0xf5, 0x70, 0xf4
 };
 
 /* --------------------------------------------------------------------------

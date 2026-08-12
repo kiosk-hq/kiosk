@@ -1,4 +1,5 @@
 require "active_support/core_ext/integer/time"
+require "openssl"
 
 Rails.application.configure do
   # Settings specified here will take precedence over those in config/application.rb.
@@ -125,4 +126,48 @@ Rails.application.configure do
   config.x.kiosk.prove_public_key_pem = ENV["KIOSK_PROVE_PUBLIC_KEY_PEM"]
   config.x.kiosk.prove_intake_secret =
     ENV["KIOSK_PROVE_GETGROCERY_SECRET"] || ENV["KIOSK_PROVE_SKOOTI_SECRET"]
+
+  # The Ed25519 key offline unlock/rental tokens are signed with — REQUIRED by
+  # the demos that issue them (K-686). This file is byte-identical across the
+  # seven operator demos, so what makes the variable required here is not a
+  # demo name but the marker every issuing demo carries: a shipped dev keypair
+  # at config/dev_unlock_key.pem. A demo with no lock ships no such file,
+  # requires no variable, and reads nil.
+  #
+  # There is deliberately NO fallback to that dev keypair. Its private half is
+  # world-readable in this public repo, so signing production tokens with it
+  # would let anyone with a clone mint a token every provisioned lock accepts —
+  # past reserve, past payment, past the ownership check, past KYC. It is a
+  # physical-access credential: the blast radius is a vehicle, not a row. That
+  # is exactly what shipped until K-686, under a comment promising an
+  # env-loaded PEM that never arrived.
+  dev_unlock_key_file = Rails.root.join("config/dev_unlock_key.pem")
+  if dev_unlock_key_file.exist?
+    config.x.kiosk.unlock_signing_key_pem = ENV.fetch("KIOSK_UNLOCK_SIGNING_KEY_PEM") do
+      raise <<~MSG
+        KIOSK_UNLOCK_SIGNING_KEY_PEM is required in production.
+
+        It is the Ed25519 key this operator signs offline unlock/rental tokens
+        with; every lock verifies against its public half. The dev keypair at
+        config/dev_unlock_key.pem ships in this public repo, so falling back to
+        it would let anyone with a clone mint a token every provisioned lock
+        accepts. Generate a fresh key — and provision the locks with ITS public
+        half:
+
+          KIOSK_UNLOCK_SIGNING_KEY_PEM=$(openssl genpkey -algorithm ed25519)
+      MSG
+    end
+    # Fail at boot, not at the first unlock: a value that does not parse — or
+    # carries only the public half — would otherwise 500 the first start_rental,
+    # which is a request some human is standing next to a scooter waiting on.
+    begin
+      unlock_key = OpenSSL::PKey.read(config.x.kiosk.unlock_signing_key_pem)
+      unless unlock_key.oid == "ED25519"
+        raise "KIOSK_UNLOCK_SIGNING_KEY_PEM must be an Ed25519 key (got #{unlock_key.oid}) — the locks verify Ed25519 signatures; generate one with `openssl genpkey -algorithm ed25519`."
+      end
+      unlock_key.private_to_pem # raises unless the PRIVATE half is there
+    rescue OpenSSL::PKey::PKeyError => e
+      raise "KIOSK_UNLOCK_SIGNING_KEY_PEM does not parse as an Ed25519 PRIVATE key PEM (#{e.message}) — generate one with `openssl genpkey -algorithm ed25519`."
+    end
+  end
 end

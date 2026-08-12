@@ -43,6 +43,13 @@ For EACH of the 7 apps:
 - [ ] **PoW secret (all 7 demos, K-541):** set `KIOSK_POW_SECRET=$(openssl rand -hex 32)` — REQUIRED; the app refuses to boot
       without it outside dev/test (a shipped default would be world-readable in the public repo, letting anyone forge a
       trivial-difficulty challenge and turn PoW off). Must be ≥ 32 bytes.
+- [ ] **Rental-token signing key (skooti only, K-686):** set `KIOSK_UNLOCK_SIGNING_KEY_PEM="$(openssl genpkey -algorithm ed25519)"`
+      — REQUIRED, enforced at boot: skooti refuses to start in production without it (and rejects a value that does not
+      parse as an Ed25519 **private** key), because the dev keypair it used to sign with unconditionally ships in this
+      public repo — anyone with a clone could mint an unlock token every provisioned lock accepts, past reserve, payment,
+      ownership and KYC. Provision/flash the locks with the matching public half
+      (`openssl pkey -in key.pem -pubout -outform DER | tail -c 32 | xxd -p -c 32`); any lock still carrying the old
+      repo key (`8857880d…`) must be reflashed. The other six operator demos have no locks and need nothing here.
 - [ ] **Telemetry:** `KIOSK_TELEMETRY=1`, `KIOSK_TELEMETRY_DB_URL=postgres://kiosk_telemetry:…@…/kiosk_demo_telemetry`,
       and a **distinct** `KIOSK_TELEMETRY_SALT=<random>` per app (keeps the per-app agent hashes non-joinable).
 - [ ] **Stripe (getgrocery only):** `STRIPE_SECRET_KEY=sk_test_…` (TEST mode — no real charges). getgrocery is the only demo with a payment provider; atablefor takes no money (no `pay` capability).
@@ -68,6 +75,9 @@ For EACH of the 7 apps:
                                                      # prove: add PROVE_KEY_PEM="$(openssl genrsa 2048)" — it must PARSE
                                                      #   as an RSA private key (K-673), a throwaway literal will not do;
                                                      #   the kiosk vars above are ignored by the broker (harmless)
+                                                     # skooti: add KIOSK_UNLOCK_SIGNING_KEY_PEM="$(openssl genpkey \
+                                                     #   -algorithm ed25519)" — same rule, it must PARSE as an Ed25519
+                                                     #   PRIVATE key (K-686)
       ```
       It eager-loads the whole app the way production does and exits non-zero on the first constant/path mismatch — the
       class that 502'd three demos in the K-487 deploy, invisible to every dev-mode gate. Needs no database (it loads
@@ -75,7 +85,7 @@ For EACH of the 7 apps:
       The three env vars are not optional decoration — each is crash-if-absent in `production`, and a missing one aborts
       in the initializer BEFORE Zeitwerk runs, so the command exits 1 for a reason that has nothing to do with eager
       loading (`KIOSK_POW_SECRET` K-541, `KIOSK_ISSUER` K-510, getgrocery's Stripe key/mock URL, the broker's
-      `PROVE_KEY_PEM` K-673). Verified on all 8 apps.
+      `PROVE_KEY_PEM` K-673, skooti's `KIOSK_UNLOCK_SIGNING_KEY_PEM` K-686). Verified on all 8 apps.
       CI runs the same gate for all 8 apps on every push, so a green CI on the exact commit you are deploying is the same
       gate; run it by hand whenever you deploy a tree CI has not seen. **If an initializer ever learns to raise outside
       dev/test, add the variable HERE and in `.github/workflows/ci.yml` in the same commit** — these two are one gate

@@ -19,121 +19,87 @@
 #                       dispatches the first match), so a half-migrated app
 #                       cannot break.
 #
-# The probe app is a real, booted Rails::Application (one per process — Rails
-# allows no second), so the engine's initializers run exactly as they do in a
-# host: middleware injection and the root-discovery append registration both
-# happen through the boot path, not through test doubles.
+# The probe app is a real, booted Rails::Application run ONCE as a SUBPROCESS
+# (spec/support/engine_mount_probe_app.rb — see its header for why a
+# subprocess: booting Rails inside the suite process leaks Rails.logger and
+# ActionDispatch::Flash into unrelated controller specs). The engine's
+# initializers run through the genuine boot path; this file asserts on the
+# probe's JSON report.
 
-require "rack/mock"
+require "open3"
 
 module EngineMountProbe
-  # Boots the probe application once per process, lazily, so suite runs that
-  # never execute this file pay nothing. Routes are (re)drawn per example —
-  # RouteSet#draw clears and re-finalizes, re-running append blocks, which is
-  # exactly the dev-mode reload semantics.
-  def self.app
-    @app ||= begin
-      probe = Class.new(Rails::Application) do
-        config.eager_load = false
-        config.hosts.clear
-        config.secret_key_base = "engine-mount-spec"
-        config.logger = Logger.new(IO::NULL)
+  PROBE = File.expand_path("../../support/engine_mount_probe_app.rb", __dir__)
+
+  def self.report
+    @report ||= begin
+      stdout, stderr, status = Open3.capture3(RbConfig.ruby, PROBE)
+      unless status.success?
+        raise "engine mount probe app failed (#{status.exitstatus}):\n" \
+              "--- stdout ---\n#{stdout}\n--- stderr ---\n#{stderr}"
       end
-      Object.const_set(:KioskEngineMountProbeApp, probe)
-      probe.initialize!
-      Rails.application
+      JSON.parse(stdout)
     end
   end
 end
 
 RSpec.describe "mount Kiosk::Server::Engine (the one-line surface)" do
-  let(:app) { EngineMountProbe.app }
-
-  def draw(&block)
-    block ||= proc {}
-    app.routes.draw(&block)
+  def probe(scenario, key = nil)
+    scenario_report = EngineMountProbe.report.fetch(scenario)
+    key ? scenario_report.fetch(key) : scenario_report
   end
-
-  def request(method, path, body: nil)
-    env = Rack::MockRequest.env_for(
-      "http://localhost#{path}",
-      method: method,
-      input: body,
-    )
-    status, headers, raw = app.call(env)
-    payload = +""
-    raw.each { |chunk| payload << chunk }
-    raw.close if raw.respond_to?(:close)
-    [status, headers, payload]
-  end
-
-  before do
-    Kiosk.configure do |c|
-      c.issuer      = "http://localhost"
-      c.user_model  = "User"
-      c.signing_key = Kiosk::Server::SigningKey.generate
-    end
-    Kiosk::Server::Queries.register(
-      "ping", ->(_args, _identity) { [] },
-      description: "probe query",
-    )
-  end
-
-  # Routes drawn by one example must not leak into the next file's examples.
-  after { draw }
-
-  # Booting the probe app sets Rails.logger process-wide (to this file's null
-  # logger). The rest of this suite relies on the gem's documented posture
-  # that Rails.logger is nil until a host app boots — pop_verifier_spec
-  # captures the Kernel#warn fallback of the audience-mismatch diagnostic —
-  # so restore the invariant once this group is done. (Rails.application
-  # itself cannot be un-booted; nothing else in the suite reads it.)
-  after(:context) { Rails.logger = nil }
 
   context "when the engine is mounted (fresh app, one line)" do
-    before { draw { mount Kiosk::Server::Engine => "/kiosk" } }
+    it "reports itself mounted" do
+      expect(probe("mounted", "mounted_in?")).to be(true)
+    end
 
     it "serves the root discovery documents end-to-end" do
-      status, _headers, body = request("GET", "/agents.txt")
-      expect(status).to eq(200)
-      expect(body).to include("http://localhost/agents.json")
+      res = probe("mounted", "GET /agents.txt")
+      expect(res["status"]).to eq(200)
+      expect(res["body"]).to include("http://localhost/agents.json")
 
-      status, _headers, body = request("GET", "/agents.json")
-      expect(status).to eq(200)
-      expect(JSON.parse(body).dig("x-kiosk", "wire", "schema")).to eq("/kiosk/schema")
+      res = probe("mounted", "GET /agents.json")
+      expect(res["status"]).to eq(200)
+      expect(JSON.parse(res["body"]).dig("x-kiosk", "wire", "schema"))
+        .to eq("/kiosk/schema")
 
-      status, _headers, body = request("GET", "/.well-known/kiosk.json")
-      expect(status).to eq(200)
-      expect(JSON.parse(body).dig("kiosk", "capabilities")).to include("query")
+      res = probe("mounted", "GET /.well-known/kiosk.json")
+      expect(res["status"]).to eq(200)
+      expect(JSON.parse(res["body"]).dig("kiosk", "capabilities")).to include("query")
 
-      status, _headers, body = request("GET", "/.well-known/agent-configuration")
-      expect(status).to eq(200)
-      expect(JSON.parse(body)).to be_a(Hash)
+      res = probe("mounted", "GET /.well-known/agent-configuration")
+      expect(res["status"]).to eq(200)
+      expect(JSON.parse(res["body"])).to be_a(Hash)
 
-      status, headers, _body = request("GET", "/.well-known/api-catalog")
-      expect(status).to eq(200)
-      expect(headers["Content-Type"]).to include("linkset+json")
+      res = probe("mounted", "GET /.well-known/api-catalog")
+      expect(res["status"]).to eq(200)
+      expect(res["headers"]["content-type"]).to include("linkset+json")
 
-      status, headers, _body = request("GET", "/auth.md")
-      expect(status).to eq(200)
-      expect(headers["Content-Type"]).to include("markdown")
+      res = probe("mounted", "GET /auth.md")
+      expect(res["status"]).to eq(200)
+      expect(res["headers"]["content-type"]).to include("markdown")
     end
 
     it "serves JWKS under the mount, stamped by the auto-injected middleware" do
-      status, headers, body = request("GET", "/kiosk/.well-known/jwks.json")
-      expect(status).to eq(200)
-      expect(JSON.parse(body).fetch("keys")).not_to be_empty
+      res = probe("mounted", "GET /kiosk/.well-known/jwks.json")
+      expect(res["status"]).to eq(200)
+      expect(JSON.parse(res["body"]).fetch("keys")).not_to be_empty
       # HeadersMiddleware was injected by the engine initializer at boot; it
-      # stamps mount-prefixed responses (Rack 3 downcases header names).
-      expect(headers.keys.map(&:downcase)).to include("kiosk-server-version")
+      # stamps mount-prefixed responses.
+      expect(res["headers"]).to have_key("kiosk-server-version")
     end
 
     it "routes the wire verbs into WireController (401 envelope, not 404)" do
-      %w[schema query run pay].each do |verb|
-        method = verb == "schema" ? "GET" : "POST"
-        status, _headers, body = request(method, "/kiosk/#{verb}")
-        expect(status).to eq(401), "#{verb}: expected 401, got #{status}"
-        expect(JSON.parse(body).dig("error", "code")).to eq("unauthenticated")
+      {
+        "GET /kiosk/schema" => "schema",
+        "POST /kiosk/query" => "query",
+        "POST /kiosk/run"   => "run",
+        "POST /kiosk/pay"   => "pay",
+      }.each do |request_line, verb|
+        res = probe("mounted", request_line)
+        expect(res["status"]).to eq(401), "#{verb}: expected 401, got #{res["status"]}"
+        expect(JSON.parse(res["body"]).dig("error", "code")).to eq("unauthenticated")
       end
     end
 
@@ -141,105 +107,82 @@ RSpec.describe "mount Kiosk::Server::Engine (the one-line surface)" do
       # A malformed register/login/revoke answers with the wire envelope —
       # reaching the controller at all is what this route proof needs.
       %w[register login revoke].each do |action|
-        status, _headers, body = request("POST", "/kiosk/auth/#{action}")
-        expect(status).to be_between(400, 401), "#{action}: got #{status}"
-        expect(JSON.parse(body)).to have_key("error")
+        res = probe("mounted", "POST /kiosk/auth/#{action}")
+        expect(res["status"]).to be_between(400, 401), "#{action}: got #{res["status"]}"
+        expect(JSON.parse(res["body"])).to have_key("error")
       end
-      status, _headers, body = request("GET", "/kiosk/auth/challenge")
-      expect(status).to eq(400)
-      expect(JSON.parse(body)).to have_key("error")
+      res = probe("mounted", "GET /kiosk/auth/challenge")
+      expect(res["status"]).to eq(400)
+      expect(JSON.parse(res["body"])).to have_key("error")
     end
 
     it "routes the KYC attestation endpoint" do
-      status, _headers, body = request("POST", "/kiosk/agents/kyc")
-      expect(status).to eq(401)
-      expect(JSON.parse(body)).to have_key("error")
+      res = probe("mounted", "POST /kiosk/agents/kyc")
+      expect(res["status"]).to eq(401)
+      expect(JSON.parse(res["body"])).to have_key("error")
     end
 
     it "routes the binding ceremony: claim wire + link surface + HTML pages" do
-      status, _headers, body = request("POST", "/kiosk/oauth/device_authorization")
-      expect(status).to eq(400)
-      expect(JSON.parse(body)).to have_key("error")
+      res = probe("mounted", "POST /kiosk/oauth/device_authorization")
+      expect(res["status"]).to eq(400)
+      expect(JSON.parse(res["body"])).to have_key("error")
 
-      status, _headers, _body = request("POST", "/kiosk/oauth/token")
-      expect(status).to eq(400)
+      expect(probe("mounted", "POST /kiosk/oauth/token")["status"]).to eq(400)
 
-      status, _headers, _body = request("GET", "/kiosk/oauth/device/verify")
-      expect(status).to eq(401) # no signed-in human; the page demands one
+      # No signed-in human; the two HTML pages demand one.
+      expect(probe("mounted", "GET /kiosk/oauth/device/verify")["status"]).to eq(401)
+      expect(probe("mounted", "GET /kiosk/auth/assistants")["status"]).to eq(401)
 
       %w[link claim unlink].each do |action|
-        status, _headers, body = request("POST", "/kiosk/auth/#{action}")
-        expect(status).to be_between(400, 401), "#{action}: got #{status}"
-        expect(JSON.parse(body)).to have_key("error")
+        res = probe("mounted", "POST /kiosk/auth/#{action}")
+        expect(res["status"]).to be_between(400, 401), "#{action}: got #{res["status"]}"
+        expect(JSON.parse(res["body"])).to have_key("error")
       end
-
-      status, _headers, _body = request("GET", "/kiosk/auth/assistants")
-      expect(status).to eq(401) # ditto: account-holder page
 
       # The page's own forms post to these three; the engine must route them
       # all (update was missing from the pre-T-055 drawer).
       %w[link update unlink].each do |action|
-        status, _headers, _body = request("POST", "/kiosk/auth/assistants/#{action}")
-        expect(status).to eq(401), "assistants/#{action}: got #{status}"
+        res = probe("mounted", "POST /kiosk/auth/assistants/#{action}")
+        expect(res["status"]).to eq(401), "assistants/#{action}: got #{res["status"]}"
       end
     end
   end
 
   context "when the engine is NOT mounted" do
-    before { draw }
-
     it "installs no root discovery routes — loading the gem is inert" do
-      status, = request("GET", "/agents.txt")
-      expect(status).to eq(404)
-      status, = request("GET", "/.well-known/kiosk.json")
-      expect(status).to eq(404)
+      expect(probe("unmounted", "GET /agents.txt")["status"]).to eq(404)
+      expect(probe("unmounted", "GET /.well-known/kiosk.json")["status"]).to eq(404)
     end
 
     it "serves no wire routes" do
-      status, = request("GET", "/kiosk/schema")
-      expect(status).to eq(404)
+      expect(probe("unmounted", "GET /kiosk/schema")["status"]).to eq(404)
     end
 
     it "reports itself unmounted" do
-      expect(Kiosk::Server::Engine.mounted_in?(app.routes)).to be(false)
+      expect(probe("unmounted", "mounted_in?")).to be(false)
     end
   end
 
   context "when the host BOTH mounts the engine and hand-draws the same paths" do
-    # A stub distinguishable from the shipped DiscoveryController, so the
-    # winner of a double-draw is observable.
-    before do
-      stub = Class.new(ActionController::API) do
-        def hand = render(plain: "HAND-DRAWN")
-      end
-      stub_const("HandDrawnController", stub)
-
-      draw do
-        get "/agents.txt",   to: "hand_drawn#hand"
-        get "/kiosk/schema", to: "hand_drawn#hand"
-        mount Kiosk::Server::Engine => "/kiosk"
-      end
-    end
-
     it "the hand-drawn ROOT route wins: config/routes.rb precedes routes.append" do
-      status, _headers, body = request("GET", "/agents.txt")
-      expect(status).to eq(200)
-      expect(body).to eq("HAND-DRAWN")
+      res = probe("double_draw", "GET /agents.txt")
+      expect(res["status"]).to eq(200)
+      expect(res["body"]).to eq("HAND-DRAWN")
     end
 
     it "the hand-drawn MOUNT-PREFIXED route wins when drawn before the mount" do
-      status, _headers, body = request("GET", "/kiosk/schema")
-      expect(status).to eq(200)
-      expect(body).to eq("HAND-DRAWN")
+      res = probe("double_draw", "GET /kiosk/schema")
+      expect(res["status"]).to eq(200)
+      expect(res["body"]).to eq("HAND-DRAWN")
     end
 
     it "paths only the engine draws still resolve through the mount" do
-      status, _headers, body = request("GET", "/agents.json")
-      expect(status).to eq(200)
-      expect(JSON.parse(body).dig("x-kiosk", "wire", "schema")).to eq("/kiosk/schema")
+      res = probe("double_draw", "GET /agents.json")
+      expect(res["status"]).to eq(200)
+      expect(JSON.parse(res["body"]).dig("x-kiosk", "wire", "schema"))
+        .to eq("/kiosk/schema")
 
-      status, = request("GET", "/kiosk/.well-known/jwks.json")
-      expect(status).to eq(200)
+      expect(probe("double_draw", "GET /kiosk/.well-known/jwks.json")["status"]).to eq(200)
     end
   end
 end

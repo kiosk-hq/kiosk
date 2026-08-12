@@ -734,6 +734,7 @@ namespace :demo do
     require "net/http"
     require "uri"
     require_relative "../prove_broker_boot"
+    require_relative "../prove_test_issuer"
 
     port = ENV.fetch("PORT", "3004")
     log  = "/tmp/kiosk-skooti-redteam.log"
@@ -761,6 +762,13 @@ namespace :demo do
     # boot the broker first and wire skooti's trust/intake config at it.
     exit_status = nil
     ProveBrokerBoot.with_broker(skooti_host: host, log: "/tmp/kiosk-prove-broker-redteam.log") do |broker|
+      # The one gate that runs BOTH issuance paths — the running broker's key
+      # (fetched at /prove_key.pem and pinned as skooti's trust anchor) and the
+      # driver's own ProveTestIssuer — so it is where their lockstep is checked
+      # (K-681). A drift makes every valid-KYC control look like a forgery;
+      # this says which two files disagree instead.
+      ProveTestIssuer.assert_matches_broker!(broker[:wiring]["KIOSK_PROVE_PUBLIC_KEY_PEM"])
+
       puts "\n── Starting skooti (redteam battery) on #{server_url} ──"
 
       # ── boot the server ──────────────────────────────────────────────────
@@ -804,11 +812,11 @@ namespace :demo do
       suite_rb = File.expand_path("../../script/redteam_suite.rb", __dir__)
       puts "\n── Running script/redteam_suite.rb (skooti + KYC broker) ──"
 
-      # The driver mints valid/expired attestations via ProveTestIssuer (iss =
-      # ProveKey.issuer) and forged ones via ProveTrust.issuer — both read
-      # KIOSK_PROVE_ISSUER, so it MUST carry the same pinned iss the broker
-      # stamps and skooti's server verifies against, or the valid-KYC control
-      # mismatches iss.
+      # The driver mints valid/expired attestations via ProveTestIssuer and
+      # forged ones via ProveTrust.issuer — both now read the same
+      # ProveTrust.issuer (K-681), i.e. KIOSK_PROVE_ISSUER, so it MUST carry the
+      # same pinned iss the broker stamps and skooti's server verifies against,
+      # or the valid-KYC control mismatches iss.
       env_str = "SERVER_URL=#{server_url} KIOSK_ISSUER=#{kiosk_issuer} " \
                 "KIOSK_PROVE_BROKER_URL=#{broker[:broker_url]} " \
                 "KIOSK_PROVE_ISSUER=#{broker[:wiring]['KIOSK_PROVE_ISSUER']} " \

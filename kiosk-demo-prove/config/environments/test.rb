@@ -33,4 +33,12 @@ Rails.application.configure do
   config.x.prove.getgrocery_audience = ENV.fetch("KIOSK_PROVE_GETGROCERY_AUDIENCE", "getgrocery")
   config.x.prove.issuer = ENV.fetch("KIOSK_PROVE_ISSUER", "https://kyc.demo.kiosk.tech")
   config.x.prove.public_url = ENV["PROVE_PUBLIC_URL"]
+
+  # The broker's RSA signing key: the FIXED baked dev/test keypair
+  # (config/dev_prove_key.pem). The request specs mint claims with it and
+  # decode them against ProveKey.public_key in-process, so any parseable
+  # private key would do — but its private half ships in this public repo,
+  # which is why production refuses to boot without an explicit
+  # PROVE_KEY_PEM (K-673).
+  config.x.prove.key_pem = ENV.fetch("PROVE_KEY_PEM") { File.read(Rails.root.join("config/dev_prove_key.pem")) }
 end

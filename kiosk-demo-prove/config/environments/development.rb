@@ -64,4 +64,14 @@ Rails.application.configure do
   # intake (the link the human opens). Unset → the controller falls back to
   # the intake request's own base_url, which is right for local runs.
   config.x.prove.public_url = ENV["PROVE_PUBLIC_URL"]
+
+  # The broker's RSA signing key (the "ProveKey" — operators trust its
+  # public half). Development uses the FIXED baked keypair in
+  # config/dev_prove_key.pem: fixed (not per-boot ephemeral) so a broker
+  # restart keeps the key a hand-wired local operator has pinned; the
+  # two-server harnesses fetch the public half from the running broker
+  # (GET /prove_key.pem, K-650) and so work with ANY key here. Its private
+  # half ships in this public repo, which is why production refuses to boot
+  # without an explicit PROVE_KEY_PEM (K-673).
+  config.x.prove.key_pem = ENV.fetch("PROVE_KEY_PEM") { File.read(Rails.root.join("config/dev_prove_key.pem")) }
 end

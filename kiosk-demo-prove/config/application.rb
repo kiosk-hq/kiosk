@@ -16,8 +16,10 @@ module KioskDemoProve
     # Initialize configuration defaults for originally generated Rails version.
     config.load_defaults 8.1
 
-    # prove_key.rb holds the RSA issuer key (the "ProveKey" skooti trusts). It is
-    # a plain constant carrier, autoloaded by Zeitwerk — no ignore needed here.
+    # prove_key.rb is the RSA issuer-key module (the "ProveKey" skooti trusts);
+    # the key MATERIAL comes from per-environment config (K-673 — production
+    # requires PROVE_KEY_PEM, dev/test bake config/dev_prove_key.pem). Plain
+    # module, autoloaded by Zeitwerk — no ignore needed here.
     config.autoload_lib(ignore: %w[assets tasks])
 
     # This is a small web app (an ISSUER, not a Kiosk operator): it renders the

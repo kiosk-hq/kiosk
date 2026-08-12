@@ -37,10 +37,23 @@ module ProveBrokerClient
       audience:         Kiosk.configuration.kyc_audience,
     )
 
+    # The shared intake bearer comes from Rails custom config (K-650): set in
+    # config/environments/*.rb from this operator's own env variable, with NO
+    # shipped default anywhere (K-547 — a default in a public repo would let
+    # anyone impersonate the operator's intake). The harness pins it on both
+    # sides; a deploy that has not configured it fails HERE, loudly, at the
+    # first request_kyc rather than presenting a guessable token.
+    secret = Rails.configuration.x.kiosk.prove_intake_secret
+    if secret.to_s.empty?
+      raise "KYC broker intake secret is not configured — set this operator's own intake-secret " \
+            "variable (KIOSK_PROVE_GETGROCERY_SECRET / KIOSK_PROVE_SKOOTI_SECRET) to the SAME " \
+            "value registered at the broker; there is no shipped default (K-547/K-650)."
+    end
+
     req = Net::HTTP::Post.new(
       uri,
       "Content-Type"  => "application/json",
-      "Authorization" => "Bearer #{ProveTrust.intake_secret}",
+      "Authorization" => "Bearer #{secret}",
     )
     req.body = body
 

@@ -11,9 +11,11 @@ require "uri"
 # skooti), waits for readiness, and returns the env getgrocery (and the flow
 # driver) need to reach and trust the broker.
 #
-# The trust anchors line up out of the box: getgrocery's ProveTrust pins the
-# broker's fixed dev ProveKey public half, so only the URLs + the shared intake
-# secret + the callback host need wiring here.
+# Every trust anchor is wired EXPLICITLY here (K-650 — getgrocery no longer
+# ships a pinned dev ProveKey): the broker's public key is fetched from the
+# running broker's own GET /prove_key.pem and handed to getgrocery as
+# KIOSK_PROVE_PUBLIC_KEY_PEM, alongside the URLs, the shared intake secret and
+# the callback host.
 #
 # DEPLOY FOLLOW-UP: getgrocery is allow-listed at the broker only by THIS test
 # harness (via KIOSK_PROVE_GETGROCERY_* env). Registering getgrocery as a
@@ -83,13 +85,16 @@ module ProveBrokerBoot
     end
     at_exit { stop_broker.call }
 
-    # ── Wait for the broker to answer ──────────────────────────────────────
-    ready = false
+    # ── Wait for the broker to answer (and capture its public key) ─────────
+    # The readiness probe doubles as the trust-anchor fetch: GET /prove_key.pem
+    # returns the PUBLIC half of the key the running broker signs with, and
+    # THAT is what getgrocery is told to trust — no pinned copy (K-650).
+    prove_public_pem = nil
     40.times do
       begin
         res = Net::HTTP.get_response(URI("#{broker_url}/prove_key.pem"))
         if res.code.to_i == 200
-          ready = true
+          prove_public_pem = res.body
           break
         end
       rescue Errno::ECONNREFUSED, Errno::EADDRNOTAVAIL, SocketError
@@ -97,7 +102,7 @@ module ProveBrokerBoot
       end
       sleep 1
     end
-    abort "KYC broker did not become ready — see #{log}" unless ready
+    abort "KYC broker did not become ready — see #{log}" unless prove_public_pem
     puts "  KYC broker up at #{broker_url}"
 
     # The env getgrocery's server + the driver must carry to reach/trust the
@@ -109,6 +114,8 @@ module ProveBrokerBoot
       "KIOSK_PROVE_ISSUER"            => SHARED_ISSUER,
       "KIOSK_PROVE_GETGROCERY_SECRET" => SHARED_SECRET,
       "KIOSK_PROVE_OPERATOR_ID"       => "getgrocery",
+      # The running broker's OWN public key, fetched above (K-650).
+      "KIOSK_PROVE_PUBLIC_KEY_PEM"    => prove_public_pem,
     }
 
     begin

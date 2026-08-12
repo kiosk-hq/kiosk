@@ -57,4 +57,49 @@ Rails.application.configure do
   # otherwise 403s any request whose Host header isn't localhost/127.0.0.1,
   # which blocks `rake demo` when it runs on http://skooti.demo.kiosk.tech:3004.
   config.hosts << "skooti.demo.kiosk.tech"
+
+  # ── Kiosk env inputs (K-650) ────────────────────────────────────────────
+  # ENV is read HERE, per environment, and published as Rails custom config
+  # (Rails.configuration.x.kiosk.*); initializers and lib code read the
+  # config, never ENV. Development keeps the out-of-the-box fallbacks
+  # production refuses to invent; the block is kept textually identical
+  # across the demos even though this file is not lockstep-guarded.
+
+  # Ephemeral dev signing key: the JWT/register flows need one, so when none
+  # is provided self-provision an EPHEMERAL RSA key and `demo:setup`/the flow
+  # drivers run out of the box. Production never does this — kiosk-server
+  # raises its clear KIOSK_SIGNING_KEY_PEM/_B64 message at first use.
+  if ENV["KIOSK_SIGNING_KEY_B64"].nil? && ENV["KIOSK_SIGNING_KEY_PEM"].nil?
+    require "openssl"
+    require "base64"
+    ENV["KIOSK_SIGNING_KEY_B64"] = Base64.strict_encode64(OpenSSL::PKey::RSA.new(2048).to_pem)
+    warn "[kiosk] WARNING: generated an EPHEMERAL signing key (#{Rails.env}); set KIOSK_SIGNING_KEY_B64/PEM for a stable key."
+  end
+
+  # Stable (non-secret) PoW HMAC default so `bin/rails s` and the demo
+  # drivers boot with no env; production REQUIRES the variable (K-541). A
+  # too-short override is rejected here exactly as in production.
+  config.x.kiosk.pow_secret = ENV.fetch("KIOSK_POW_SECRET", "kiosk-demo-pow-secret-dev-insecure-default")
+  raise "KIOSK_POW_SECRET must be at least 32 bytes (got #{config.x.kiosk.pow_secret.bytesize}) — generate one with `openssl rand -hex 32`." if config.x.kiosk.pow_secret.bytesize < 32
+
+  # Issuer origin: defaults to the local server origin. PORT defaults to 3000
+  # to match config/puma.rb; the demo rake tasks always pass KIOSK_ISSUER
+  # explicitly, so the default only serves a bare `rails s`. Production
+  # REQUIRES the variable (K-510).
+  config.x.kiosk.issuer = ENV.fetch("KIOSK_ISSUER") { "http://localhost:#{ENV.fetch("PORT", "3000")}" }
+
+  # KIOSK_TEST_AUTOCARD=1 (set by the pay demos' rake suites) makes the
+  # Stripe adapter simulate a completed SetupIntent — no hosted card-entry
+  # step, no server-side test route. Honoured in dev/test only; production
+  # pins it OFF.
+  config.x.kiosk.test_autocard = ENV["KIOSK_TEST_AUTOCARD"] == "1"
+
+  # KYC broker trust — read by the broker-integrated demos (getgrocery,
+  # skooti); inert in the others. No pinned dev broker key and no default
+  # intake secret (K-650): the two-server harnesses and the KYC rake tasks
+  # pin both sides explicitly (ProveBrokerBoot wiring / the ProveKey public
+  # half), so nothing here needs to line up "out of the box".
+  config.x.kiosk.prove_public_key_pem = ENV["KIOSK_PROVE_PUBLIC_KEY_PEM"]
+  config.x.kiosk.prove_intake_secret =
+    ENV["KIOSK_PROVE_GETGROCERY_SECRET"] || ENV["KIOSK_PROVE_SKOOTI_SECRET"]
 end

@@ -39,4 +39,20 @@ Rails.application.configure do
 
   # Raise error when a before_action's only/except options reference missing actions.
   config.action_controller.raise_on_missing_callback_actions = true
+
+  # ── Kiosk env inputs (K-650) ────────────────────────────────────────────
+  # Same relaxed posture as development (see that file's block): ENV is read
+  # HERE and published as Rails.configuration.x.kiosk.*; initializers and lib
+  # code read the config, never ENV. No ephemeral signing key is provisioned
+  # in test — nothing in the demos' test gates signs a JWT; kiosk-server
+  # raises its clear KIOSK_SIGNING_KEY_PEM/_B64 message at first use if a
+  # test ever does. This file is byte-identical across the seven operator
+  # demos (bin/check-demo-copies).
+  config.x.kiosk.pow_secret = ENV.fetch("KIOSK_POW_SECRET", "kiosk-demo-pow-secret-dev-insecure-default")
+  raise "KIOSK_POW_SECRET must be at least 32 bytes (got #{config.x.kiosk.pow_secret.bytesize}) — generate one with `openssl rand -hex 32`." if config.x.kiosk.pow_secret.bytesize < 32
+  config.x.kiosk.issuer = ENV.fetch("KIOSK_ISSUER") { "http://localhost:#{ENV.fetch("PORT", "3000")}" }
+  config.x.kiosk.test_autocard = ENV["KIOSK_TEST_AUTOCARD"] == "1"
+  config.x.kiosk.prove_public_key_pem = ENV["KIOSK_PROVE_PUBLIC_KEY_PEM"]
+  config.x.kiosk.prove_intake_secret =
+    ENV["KIOSK_PROVE_GETGROCERY_SECRET"] || ENV["KIOSK_PROVE_SKOOTI_SECRET"]
 end

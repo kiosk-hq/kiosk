@@ -78,11 +78,17 @@ namespace :demo do
 
     failures = []
 
+    # This task attests agents with ProveTestIssuer (the ProveKey), so the
+    # server must be told to TRUST that key explicitly — skooti no longer
+    # ships a pinned dev ProveKey (K-650).
+    require_relative "../../lib/prove_test_issuer"
+
     # Helper: spawn the server, wait for readiness, yield, then kill.
     boot_server = lambda do |&blk|
       File.truncate(log, 0) if File.exist?(log)
       server_pid = spawn(
-        { "KIOSK_ISSUER" => kiosk_issuer },
+        { "KIOSK_ISSUER"               => kiosk_issuer,
+          "KIOSK_PROVE_PUBLIC_KEY_PEM" => ProveTestIssuer.public_key_pem },
         "bundle exec rails s -p #{port} -b 127.0.0.1 -e development",
         out: log, err: log,
       )
@@ -579,10 +585,16 @@ namespace :demo do
 
     puts "\n── Starting skooti (isolation test) on #{server_url} ──"
 
+    # The isolation driver attests agents with ProveTestIssuer (the ProveKey),
+    # so the server must be told to TRUST that key explicitly — skooti no
+    # longer ships a pinned dev ProveKey (K-650).
+    require_relative "../../lib/prove_test_issuer"
+
     # ── boot the server ────────────────────────────────────────────────────
     File.truncate(log, 0) if File.exist?(log)
     server_pid = spawn(
-      { "KIOSK_ISSUER" => kiosk_issuer },
+      { "KIOSK_ISSUER"               => kiosk_issuer,
+        "KIOSK_PROVE_PUBLIC_KEY_PEM" => ProveTestIssuer.public_key_pem },
       "bundle exec rails s -p #{port} -b 127.0.0.1 -e development",
       out: log, err: log,
     )

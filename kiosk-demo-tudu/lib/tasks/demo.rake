@@ -59,9 +59,28 @@ namespace :demo do
     sh "psql -d postgres -tAc 'GRANT app_role TO CURRENT_USER' >/dev/null"
     # Path C: schema_format = :sql, so db:schema:load loads structure.sql
     # directly (no RLS). Generate encrypted credentials on first run so the dev
-    # secret_key_base exists (Devise sessions need it) — idempotent.
-    sh "test -f config/credentials.yml.enc && test -f config/master.key || " \
-       "EDITOR=true bundle exec rails credentials:edit >/dev/null 2>&1 || true"
+    # secret_key_base exists (Devise sessions need it) — idempotent. Done
+    # directly (NOT via `rails credentials:edit`): the credentials generator's
+    # master-key step appends its own ignore block to .gitignore, silently
+    # regrowing the K-629-unified file on every fresh-machine run (K-666); the
+    # unified .gitignore already covers /config/master.key and /config/*.key.
+    enc_path, key_path = "config/credentials.yml.enc", "config/master.key"
+    if File.exist?(enc_path) && !File.exist?(key_path)
+      # Same dead end as before this task existed: nothing can decrypt the enc.
+      warn "#{enc_path} exists but #{key_path} is missing — cannot decrypt; " \
+           "delete #{enc_path} and re-run demo:setup to regenerate both"
+    elsif !File.exist?(enc_path)
+      require "securerandom"
+      require "active_support/encrypted_configuration"
+      unless File.exist?(key_path)
+        File.write(key_path, ActiveSupport::EncryptedFile.generate_key)
+        File.chmod(0o600, key_path)
+      end
+      ActiveSupport::EncryptedConfiguration.new(
+        config_path: enc_path, key_path: key_path,
+        env_key: "RAILS_MASTER_KEY", raise_if_missing_key: true,
+      ).write("secret_key_base: #{SecureRandom.hex(64)}")
+    end
     sh "bundle exec rails db:drop db:create db:migrate db:seed"
   end
 end

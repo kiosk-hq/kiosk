@@ -107,7 +107,11 @@ module ProveBrokerBoot
       # Same `iss` the broker (broker_env above) stamps — skooti's KycVerifier
       # compares the minted `iss` against this, so both must line up.
       "KIOSK_PROVE_ISSUER"        => SHARED_ISSUER,
-      "KIOSK_PROVE_SKOOTI_SECRET" => SHARED_SECRET,
+      # The operator side reads ONE role-named variable (K-694); the broker
+      # side above reads its per-operator KIOSK_PROVE_SKOOTI_SECRET. Same
+      # VALUE on both sides is what pairs them — the broker looks the operator
+      # up by the operator_id in the intake body, not by a variable name.
+      "KIOSK_PROVE_INTAKE_SECRET" => SHARED_SECRET,
       "KIOSK_PROVE_OPERATOR_ID"   => "skooti",
       # The running broker's OWN public key, fetched above (K-650).
       "KIOSK_PROVE_PUBLIC_KEY_PEM" => prove_public_pem,

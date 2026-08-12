@@ -90,9 +90,10 @@ end
 # the theft / cross-operator / forged-callback beats.
 
 # The intake secret arrives in this driver's env (the rake task passes the
-# broker wiring through — KIOSK_PROVE_SKOOTI_SECRET); there is no shipped
-# default anywhere any more (K-547/K-650).
-def broker_start_verification(callback_url:, subject_handle:, requested_claims: %w[age_over_18 licence_category:A], operator_id: ProveTrust.operator_id, secret: ENV.fetch("KIOSK_PROVE_SKOOTI_SECRET"))
+# broker wiring through — KIOSK_PROVE_INTAKE_SECRET, the operator side's one
+# role-named variable, K-694); there is no shipped default anywhere any more
+# (K-547/K-650).
+def broker_start_verification(callback_url:, subject_handle:, requested_claims: %w[age_over_18 licence_category:A], operator_id: ProveTrust.operator_id, secret: ENV.fetch("KIOSK_PROVE_INTAKE_SECRET"))
   uri = URI("#{BROKER_URL}/verifications")
   req = Net::HTTP::Post.new(uri, "Content-Type" => "application/json", "Authorization" => "Bearer #{secret}")
   req.body = JSON.generate(operator_id:, callback_url:, requested_claims:, subject_handle:)

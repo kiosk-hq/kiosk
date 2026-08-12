@@ -117,15 +117,24 @@ Rails.application.configure do
   # here — the live demo runs the real hosted flow. Dev/test honour the flag.
   config.x.kiosk.test_autocard = false
 
-  # KYC broker trust — read by the broker-integrated demos (getgrocery,
-  # skooti); inert in the others. NO pinned fallback key in production: the
-  # operator trusts ONLY an explicitly supplied broker public key, and with
-  # none set the engine's KycVerifier fails closed at the wire. The intake
-  # secret has no shipped default either (K-547) — each deploy sets its own
-  # operator's variable and leaves the other unset.
+  # KYC broker trust — read by whichever demos ship a broker client
+  # (lib/prove_broker_client.rb); inert in the others, which never look at it.
+  # NO pinned fallback key in production: the operator trusts ONLY an
+  # explicitly supplied broker public key, and with none set the engine's
+  # KycVerifier fails closed at the wire.
+  #
+  # The intake secret is ONE variable named for the ROLE it plays here, not
+  # for the operator that plays it (K-694) — the same discipline the unlock
+  # key below keeps by keying off a marker file. It has no shipped default
+  # (K-547). A per-operator name would have to be picked with an `||` chain
+  # in this byte-identical file, and a process that carried two operators'
+  # secrets would then present the wrong one to the broker and be rejected
+  # (or, worse, accepted) with nothing to say why. Each deploy sets its own
+  # KIOSK_PROVE_INTAKE_SECRET to the value the broker holds for THAT
+  # operator; the broker keys its registry by the operator_id the intake body
+  # carries, so the two sides pair by value, never by variable name.
   config.x.kiosk.prove_public_key_pem = ENV["KIOSK_PROVE_PUBLIC_KEY_PEM"]
-  config.x.kiosk.prove_intake_secret =
-    ENV["KIOSK_PROVE_GETGROCERY_SECRET"] || ENV["KIOSK_PROVE_SKOOTI_SECRET"]
+  config.x.kiosk.prove_intake_secret  = ENV["KIOSK_PROVE_INTAKE_SECRET"]
 
   # The Ed25519 key offline unlock/rental tokens are signed with — REQUIRED by
   # the demos that issue them (K-686). This file is byte-identical across the

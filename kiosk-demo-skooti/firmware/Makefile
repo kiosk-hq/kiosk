@@ -55,16 +55,19 @@ test: build
 # --------------------------------------------------------------------------
 # make crosscheck: Ruby OpenSSL Ed25519 sign → C verify MATCH
 #
-# Loads the dev private key from lib/dev_unlock_key.rb (same key the server
-# uses), signs a fresh message, and passes the wire token to the C verifier.
-# Proves that C correctly verifies a live server-issued token — not just the
-# static test vector.
+# READS the dev private key from ../config/dev_unlock_key.pem — the one file
+# the server, the KAT and the flow drivers all read (K-686). It used to inline
+# a COPY of that PEM here, which was both a second place the burned key was
+# published and a silent drift hazard: regenerating the key would have left
+# this target signing with the old one, and the header comment already claimed
+# it loaded the key from elsewhere. Signs a fresh message and passes the wire
+# token to the C verifier, proving C verifies a LIVE server-issued token, not
+# just the static vector. Relative path: make runs recipes in this directory.
 # --------------------------------------------------------------------------
 crosscheck: $(TARGET)_crosscheck
 	@echo "--- Ruby ↔ C crosscheck ---"
 	@CROSSCHECK_RESULT=$$(ruby -r openssl -r base64 -e ' \
-	  pem = "-----BEGIN PRIVATE KEY-----\nMC4CAQAwBQYDK2VwBCIEINeFKJGXag/XX62rnmCiS2NKnbvRliRBDuuTbrxQ/n3R\n-----END PRIVATE KEY-----\n"; \
-	  key = OpenSSL::PKey.read(pem); \
+	  key = OpenSSL::PKey.read(File.read("../config/dev_unlock_key.pem")); \
 	  msg = "kiosk-rental-v1|SK-001|resv-live|1750001000|1750001900|deadbeef00112233445566778899aabb"; \
 	  sig = key.sign(nil, msg); \
 	  sig_b64 = Base64.urlsafe_encode64(sig, padding: false); \

@@ -454,6 +454,22 @@ jobs:
             echo "PEM_EOF"
           } >> "$GITHUB_ENV"
 
+      # skooti only: its production.rb refuses to boot without the Ed25519
+      # rental-token signing key (KIOSK_UNLOCK_SIGNING_KEY_PEM, K-686) and
+      # validates that it parses as an Ed25519 PRIVATE key, so the
+      # zeitwerk:check step below needs a real throwaway keypair — a literal
+      # string will not do. Generated per run rather than pinned in this file:
+      # K-686 is precisely a key that was published by being written down.
+      # Multi-line value, hence the GITHUB_ENV heredoc form.
+      - name: Generate ephemeral unlock signing key (skooti, K-686)
+        if: matrix.demo == 'kiosk-demo-skooti'
+        run: |
+          {
+            echo "KIOSK_UNLOCK_SIGNING_KEY_PEM<<PEM_EOF"
+            ruby -e 'require "openssl"; puts OpenSSL::PKey.generate_key("ED25519").private_to_pem'
+            echo "PEM_EOF"
+          } >> "$GITHUB_ENV"
+
       # getgrocery only: install stripe-mock on PATH and advertise its URL so
       # the real-Stripe-adapter demo runs against canned pi_ fixtures with NO
       # key. demo:setup/demo:schema boot on STRIPE_MOCK_URL; the
@@ -504,6 +520,13 @@ jobs:
       #     in prove's production.rb (prove only; the operator demos ignore
       #     it). It must PARSE as an RSA private key, so the generate step
       #     above exports a throwaway keypair instead of a literal here.
+      #   KIOSK_UNLOCK_SIGNING_KEY_PEM — K-686 made the Ed25519 rental-token
+      #     signing key crash-if-absent in production for the demos that issue
+      #     unlock tokens, which is skooti alone (the shared production.rb
+      #     keys the requirement off the demo shipping a
+      #     config/dev_unlock_key.pem, not off its name, so the other six are
+      #     unaffected). It must PARSE as an Ed25519 private key, so the
+      #     skooti-only generate step above exports a throwaway keypair.
       # The signing key exported above is likewise already in the environment.
       #
       # A missing one of these does NOT silently pass: `bin/rails zeitwerk:check`

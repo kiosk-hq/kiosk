@@ -48,7 +48,7 @@ Expected output (23 assertions pass, crosscheck MATCH):
 ```
 --- C host test ---
 === skooti firmware Ed25519 host test (offline Ed25519, token v2) ===
-Public key : 8857880d21f87b85872f31aeea8d0024acebb2fdf933b25a479f4f9e80babefd
+Public key : b39f3a0333c662d3937684f21c91f7722161f8b0b4f4a79b336b463eb8f570f4
 Scooter    : SK-001
 ...
 === Results: 23 passed, 0 failed ===
@@ -147,6 +147,21 @@ Every physical lock is provisioned with:
 The private signing key **never leaves the server**.  Compromising a lock's
 firmware exposes only the public key (already semi-public) — no signing capability,
 no other lock compromised.
+
+The key baked into the sources here is the **dev** key
+(`../config/dev_unlock_key.pem`), so `make test` and the demo drivers agree out of
+the box.  A real deployment flashes the public half of the server's own
+`KIOSK_UNLOCK_SIGNING_KEY_PEM` instead:
+
+```sh
+openssl pkey -in unlock_key.pem -pubout -outform DER | tail -c 32 | xxd -p -c 32
+```
+
+That property — "the private key never leaves the server" — only became true at
+K-686.  Until then the signing key was hard-coded in the repo AND wired in
+production, so the previous public key (`8857880d…`) is **burned**: any lock
+still holding it accepts tokens anyone with a clone of this repo can mint, and
+must be reflashed.
 
 ---
 

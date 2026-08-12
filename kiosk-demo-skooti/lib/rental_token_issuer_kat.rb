@@ -12,16 +12,25 @@
 # Run it directly (`ruby lib/rental_token_issuer_kat.rb`) or via the wired
 # rake task (`rake demo:kat`). Exit status is nonzero on any failed assertion.
 #
-# Known-answer vector (firmware host-test fixtures — MUST NOT CHANGE):
-#   dev_private_pem  = DevUnlockKey::DEV_PRIVATE_PEM
+# Known-answer vector (firmware host-test fixtures — MUST NOT CHANGE, and the
+# one time it did change is recorded below):
+#   dev_private_pem  = config/dev_unlock_key.pem (via DevUnlockKey.private_key)
 #   scooter_code     = "SK-001"
 #   reservation_id   = "resv-1"
 #   now              = 1750000000
 #   jti (stubbed)    = "aabbccddeeff00112233445566778899"
 #
 #   message         : kiosk-rental-v1|SK-001|resv-1|1750000000|1750000900|aabbccddeeff00112233445566778899
-#   signature b64url: 1Vx7nv8xgznLwWgdsS_MhWi1W1fhMQQWSgi1CPRVO3osohmlw_PhaTS9ZJaBOx9yeQZfzn2k8J4JjSXPd12SBA
-#   pubkey hex      : 8857880d21f87b85872f31aeea8d0024acebb2fdf933b25a479f4f9e80babefd
+#   signature b64url: SDKHoyU3zzqvpVCwOcKf75EMJCyNKaxuRbvY3HmuM-q--ZaMEdeSmBi40JgZyhvBuL4A15xlupYqlGMfCnROCg
+#   pubkey hex      : b39f3a0333c662d3937684f21c91f7722161f8b0b4f4a79b336b463eb8f570f4
+#
+# THE VECTOR MOVED ONCE, at K-686, and every site below moved with it: the dev
+# keypair was REGENERATED because the old private half (public 8857880d…) had
+# shipped hard-coded in lib/dev_unlock_key.rb of a PUBLIC repo *and* was wired
+# as the production signer, so it is burned. The signature and pubkey here, the
+# byte arrays and wire tokens in firmware/{host_test.c,skooti_lock.ino,
+# crosscheck_main.c}, and firmware/README.md were recomputed from the new key —
+# never hand-edited. Any lock still provisioned with 8857880d… must be reflashed.
 
 require "openssl"
 require "base64"
@@ -55,9 +64,9 @@ require "dev_unlock_key"
 require "rental_token_issuer"
 
 module RentalTokenIssuerKAT
-  DEV_PUBKEY_HEX  = "8857880d21f87b85872f31aeea8d0024acebb2fdf933b25a479f4f9e80babefd"
+  DEV_PUBKEY_HEX  = "b39f3a0333c662d3937684f21c91f7722161f8b0b4f4a79b336b463eb8f570f4"
   KNOWN_MESSAGE   = "kiosk-rental-v1|SK-001|resv-1|1750000000|1750000900|aabbccddeeff00112233445566778899"
-  KNOWN_SIG_B64   = "1Vx7nv8xgznLwWgdsS_MhWi1W1fhMQQWSgi1CPRVO3osohmlw_PhaTS9ZJaBOx9yeQZfzn2k8J4JjSXPd12SBA"
+  KNOWN_SIG_B64   = "SDKHoyU3zzqvpVCwOcKf75EMJCyNKaxuRbvY3HmuM-q--ZaMEdeSmBi40JgZyhvBuL4A15xlupYqlGMfCnROCg"
   KNOWN_JTI       = "aabbccddeeff00112233445566778899"
 
   class << self

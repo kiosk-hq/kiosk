@@ -13,7 +13,7 @@
  * =========================================================================
  *
  * Dev public key (32 bytes hex):
- *   8857880d21f87b85872f31aeea8d0024acebb2fdf933b25a479f4f9e80babefd
+ *   b39f3a0333c662d3937684f21c91f7722161f8b0b4f4a79b336b463eb8f570f4
  *
  * Fixed inputs:
  *   scooter_code   = "SK-001"
@@ -26,7 +26,7 @@
  *   "kiosk-rental-v1|SK-001|resv-1|1750000000|1750000900|aabbccddeeff00112233445566778899"
  *
  * signature (base64url, no padding):
- *   1Vx7nv8xgznLwWgdsS_MhWi1W1fhMQQWSgi1CPRVO3osohmlw_PhaTS9ZJaBOx9yeQZfzn2k8J4JjSXPd12SBA
+ *   SDKHoyU3zzqvpVCwOcKf75EMJCyNKaxuRbvY3HmuM-q--ZaMEdeSmBi40JgZyhvBuL4A15xlupYqlGMfCnROCg
  *
  * wire token = "<message>.<sig>"
  */
@@ -62,10 +62,10 @@ static void check(int condition, const char *description)
 
 /* Dev public key — 32 raw bytes (matches hex above) */
 static const uint8_t SKOOTI_PUBKEY[32] = {
-    0x88, 0x57, 0x88, 0x0d, 0x21, 0xf8, 0x7b, 0x85,
-    0x87, 0x2f, 0x31, 0xae, 0xea, 0x8d, 0x00, 0x24,
-    0xac, 0xeb, 0xb2, 0xfd, 0xf9, 0x33, 0xb2, 0x5a,
-    0x47, 0x9f, 0x4f, 0x9e, 0x80, 0xba, 0xbe, 0xfd
+    0xb3, 0x9f, 0x3a, 0x03, 0x33, 0xc6, 0x62, 0xd3,
+    0x93, 0x76, 0x84, 0xf2, 0x1c, 0x91, 0xf7, 0x72,
+    0x21, 0x61, 0xf8, 0xb0, 0xb4, 0xf4, 0xa7, 0x9b,
+    0x33, 0x6b, 0x46, 0x3e, 0xb8, 0xf5, 0x70, 0xf4
 };
 
 #define SCOOTER_CODE "SK-001"
@@ -74,7 +74,7 @@ static const uint8_t SKOOTI_PUBKEY[32] = {
 #define WIRE_TOKEN \
     "kiosk-rental-v1|SK-001|resv-1|1750000000|1750000900|aabbccddeeff00112233445566778899" \
     "." \
-    "1Vx7nv8xgznLwWgdsS_MhWi1W1fhMQQWSgi1CPRVO3osohmlw_PhaTS9ZJaBOx9yeQZfzn2k8J4JjSXPd12SBA"
+    "SDKHoyU3zzqvpVCwOcKf75EMJCyNKaxuRbvY3HmuM-q--ZaMEdeSmBi40JgZyhvBuL4A15xlupYqlGMfCnROCg"
 
 /* Timestamp inside the validity window (exp=1750000900, now=1750000800) */
 #define NOW_FRESH   ((uint64_t)1750000800ULL)
@@ -294,7 +294,7 @@ static void test_wrong_domain_tag(void)
     result = skooti_verify_token(SKOOTI_PUBKEY,
         "kiosk-rental-v0|SK-001|resv-1|1750000000|1750000900|aabbccddeeff00112233445566778899"
         "."
-        "1Vx7nv8xgznLwWgdsS_MhWi1W1fhMQQWSgi1CPRVO3osohmlw_PhaTS9ZJaBOx9yeQZfzn2k8J4JjSXPd12SBA",
+        "SDKHoyU3zzqvpVCwOcKf75EMJCyNKaxuRbvY3HmuM-q--ZaMEdeSmBi40JgZyhvBuL4A15xlupYqlGMfCnROCg",
         SCOOTER_CODE, NOW_FRESH);
     printf("  result: %d\n", result);
     check(result == 0, "wrong tag (kiosk-rental-v0) → 0");
@@ -303,7 +303,7 @@ static void test_wrong_domain_tag(void)
     result = skooti_verify_token(SKOOTI_PUBKEY,
         "evil|SK-001|resv-1|1750000000|1750000900|aabbccddeeff00112233445566778899"
         "."
-        "1Vx7nv8xgznLwWgdsS_MhWi1W1fhMQQWSgi1CPRVO3osohmlw_PhaTS9ZJaBOx9yeQZfzn2k8J4JjSXPd12SBA",
+        "SDKHoyU3zzqvpVCwOcKf75EMJCyNKaxuRbvY3HmuM-q--ZaMEdeSmBi40JgZyhvBuL4A15xlupYqlGMfCnROCg",
         SCOOTER_CODE, NOW_FRESH);
     printf("  result: %d\n", result);
     check(result == 0, "arbitrary tag (\"evil\") → 0");
@@ -396,7 +396,7 @@ static void test_jti_store(void)
 int main(void)
 {
     printf("=== skooti firmware Ed25519 host test (offline Ed25519, token v2) ===\n");
-    printf("Public key : 8857880d21f87b85872f31aeea8d0024acebb2fdf933b25a479f4f9e80babefd\n");
+    printf("Public key : b39f3a0333c662d3937684f21c91f7722161f8b0b4f4a79b336b463eb8f570f4\n");
     printf("Scooter    : %s\n", SCOOTER_CODE);
 
     test_correct_token_fresh();

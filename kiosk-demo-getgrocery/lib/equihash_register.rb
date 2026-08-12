@@ -29,7 +29,7 @@ end
 
 # Register a fresh agent through the Equihash-gated /auth/register.
 #
-# @param server [String] base URL (e.g. http://skooti.app:3004)
+# @param server [String] base URL (e.g. http://localhost:3001)
 # @param issuer [String] issuer origin for the PoP `aud` claim
 # @param get_json [#call] ->(url) { [code, body] }
 # @param post_json [#call] ->(url, body, headers = {}) { [code, body] }

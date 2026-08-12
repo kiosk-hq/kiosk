@@ -1194,6 +1194,10 @@ namespace :demo do
       check.call("served after solve (200 + rows)",  result["served"] == true && result["catalog_rows"].to_i >= 1)
       check.call("wrong nonce rejected (403)",       result["http_wrong_nonce"] == 403)
       check.call("on_bad_proof penalized",           result["bad_proof_count"].to_i >= 1)
+      # PER-IDENTITY (K-498): the flow's second, innocent identity must be
+      # untouched by the first identity's wrong nonce.
+      check.call("per-identity counter: innocent identity stays 0 (K-498)",
+                 result.key?("other_bad_proof_count") && result["other_bad_proof_count"].to_i.zero?)
     ensure
       begin
         Process.kill("TERM", server_pid); Process.wait(server_pid)

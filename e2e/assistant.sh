@@ -268,7 +268,8 @@ assert "binding: login after unlink → 404"    "$(echo "$bind_out" | jq -r '.lo
 # Equihash proof-of-work (registration_pow_count=1, n=96 k=5), not a toll-free
 # shortcut. register_pow_flow.rb proves, in one run: (1) a no-proof register is
 # REJECTED 402 pow_required with challenges[], (2) solving each challenge with
-# the bundled numpy solver and re-POSTing with pow:{proofs:[...]} SUCCEEDS 201,
+# the bundled numpy solver and re-POSTing the SAME body with the proof(s) in the
+# `Kiosk-PoW` request header (ADR-0022 — never a body `pow` field) SUCCEEDS 201,
 # (3) the PoW-minted token authenticates a real wire verb. Same mechanism the
 # demos use (kiosk-demo-skooti).
 printf "\n\033[1m=== register-PoW golden path: no-proof 402 → solve Equihash → 201 → wire ===\033[0m\n"

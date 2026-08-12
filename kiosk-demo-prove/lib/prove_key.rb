@@ -24,8 +24,43 @@ require "jwt"
 #   ProveKey.public_key        → PEM string (operators pin this)
 #   ProveKey.mint(...)         → compact RS256 JWS (posted to the operator callback)
 #   ProveKey.issuer            → the `iss` value operators configure as c.kyc_issuer
+#
+# BROKER-ONLY (K-681). Because the key and the issuer now come from the
+# broker's own per-environment config, this file works ONLY inside the booted
+# kiosk-demo-prove app, and must not be required across the app boundary. It
+# was — skooti's ProveTestIssuer loaded it in-process back when it was a
+# self-contained constant carrier — and K-672 turned that into a silent trap:
+# nil key_pem inside skooti's Rails (whose config has no `x.prove`), and
+# `uninitialized constant ProveKey::Rails` in the bare-Ruby drivers. The
+# drivers now resolve their own key (kiosk-demo-skooti/lib/prove_test_issuer.rb
+# reads the SAME config/dev_prove_key.pem, no Rails); #config below makes a
+# repeat of that mistake say so, instead of surfacing as a nil TypeError.
 module ProveKey
   module_function
+
+  # The broker's own prove config, or a signpost. Rails being loaded is NOT
+  # enough: a sibling demo's Rails answers `configuration.x.prove` with an
+  # empty OrderedOptions, so every read comes back nil — hence the key_pem
+  # probe, which only the broker's environment files satisfy (K-672/K-673).
+  # Deliberately no fallback key here: the point of K-673 is that this module
+  # signs with the key its environment supplied and nothing else, so an
+  # unconfigured process must fail rather than mint.
+  def config
+    cfg = ::Rails.configuration.x.prove if defined?(::Rails) && ::Rails.respond_to?(:configuration)
+    return cfg if cfg && cfg.key_pem
+
+    raise <<~MSG
+      ProveKey reads the broker's per-environment config
+      (Rails.configuration.x.prove — K-672/K-673) and therefore only works
+      inside the booted kiosk-demo-prove broker.
+
+      It was reached from a process that is not that broker: either no Rails
+      at all (a standalone driver), or a DIFFERENT app's Rails, whose config
+      has no `x.prove` block. Flow/redteam drivers must NOT load this file —
+      they mint with kiosk-demo-skooti/lib/prove_test_issuer.rb, which reads
+      the same config/dev_prove_key.pem without the Rails dependency (K-681).
+    MSG
+  end
 
   # The `iss` the broker stamps into every claim. Operators set c.kyc_issuer
   # to the SAME value (their KycVerifier compares the minted `iss` against it);
@@ -33,14 +68,14 @@ module ProveKey
   # the two-server harnesses pin a matching value on both sides. Configured per
   # environment (KIOSK_PROVE_ISSUER, read in config/environments/*.rb — K-672).
   def issuer
-    Rails.configuration.x.prove.issuer
+    config.issuer
   end
 
   # The signing keypair, from per-environment config (K-673): dev/test load
   # the baked config/dev_prove_key.pem; production's env file has already
   # crash-checked that PROVE_KEY_PEM is set, parses, and is a private key.
   def keypair
-    @keypair ||= OpenSSL::PKey::RSA.new(Rails.configuration.x.prove.key_pem)
+    @keypair ||= OpenSSL::PKey::RSA.new(config.key_pem)
   end
 
   # The RSA public key PEM — operators pin this as c.kyc_public_key.

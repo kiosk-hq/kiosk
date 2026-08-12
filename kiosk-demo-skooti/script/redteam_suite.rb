@@ -40,9 +40,9 @@ require "net/http"
 require "uri"
 require "json"
 
-# ── KYC helpers (redteam-only) — the prove.my broker rewire ───────────────────
+# ── KYC helpers (redteam-only) — the KYC broker rewire ───────────────────
 #
-# skooti's self-hosted stub KYC issuer retired; the SHARED prove.my broker is now
+# skooti's self-hosted stub KYC issuer retired; the SHARED KYC broker is now
 # the trusted issuer. Valid/expired attestations are minted with the broker's
 # ProveKey (ProveTestIssuer, signing with the key skooti trusts); the forged
 # variant signs with a DIFFERENT key but the TRUSTED issuer so signature
@@ -80,7 +80,7 @@ def attest_forged(user_id)
   )
 end
 
-# ── prove.my broker driver (redteam-only) ─────────────────────────────────────
+# ── KYC broker driver (redteam-only) ─────────────────────────────────────
 # Start a real verification at the broker and approve it as the human would, so
 # the broker mints a REAL signed claim and POSTs it to skooti's callback. Used by
 # the theft / cross-operator / forged-callback beats.
@@ -205,7 +205,7 @@ profile = Kiosk::Redteam::Profile.new(
   },
 
   # ── KYC attestation variants ──────────────────────────────────────────────
-  # Valid/expired minted with the shared prove.my ProveKey (the key skooti now
+  # Valid/expired minted with the shared broker ProveKey (the key skooti now
   # trusts); forged signs with a wrong key under the trusted issuer.
   kyc_valid:   ->(user_id) { ProveTestIssuer.attest(user_id: user_id) },
   kyc_expired: ->(user_id) { ProveTestIssuer.attest_expired(user_id: user_id) },

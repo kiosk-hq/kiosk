@@ -22,5 +22,5 @@ Rails.application.configure do
   # production brand; in local runs the broker answers on 127.0.0.1). Rails 8
   # HostAuthorization otherwise 403s any Host that isn't localhost/127.0.0.1.
   config.hosts << "prove.demo.kiosk.tech"
-  config.hosts << "prove.my"
+  config.hosts << "kyc.demo.kiosk.tech"
 end

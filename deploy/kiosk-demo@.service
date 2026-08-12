@@ -19,11 +19,11 @@
 #   stylish 3005 · philslist 3006 · tudu 3007 · prove 3008
 #
 # EXCEPTION (prove): the gem dir is kiosk-demo-prove but the app serves the
-# kyc.demo.kiosk.tech domain (it is the prove.my KYC broker). Instance name is
+# kyc.demo.kiosk.tech domain (it is the KYC broker). Instance name is
 # `prove` — %i resolves WorkingDirectory=/srv/kiosk/kiosk-demo-prove and
 # EnvironmentFile=/etc/kiosk-demo/prove.env, so copy env/kyc-demo.env.example to
 # /etc/kiosk-demo/prove.env. The Caddy vhost (kyc.demo.kiosk.tech) proxies to
-# the same port 3008. prove.my is an ISSUER, not a Kiosk operator.
+# the same port 3008. the broker is an ISSUER, not a Kiosk operator.
 #
 # ExecStart binds Rails' server to 127.0.0.1 explicitly (loopback only; Caddy
 # is the sole public ingress). Puma reads WEB_CONCURRENCY / RAILS_MAX_THREADS

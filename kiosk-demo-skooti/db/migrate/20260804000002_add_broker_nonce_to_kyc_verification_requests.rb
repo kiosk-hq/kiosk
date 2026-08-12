@@ -1,6 +1,6 @@
 # frozen_string_literal: true
 
-# Rewire to the prove.my broker (design §5): skooti no longer hosts its own KYC
+# Rewire to the KYC broker (design §5): skooti no longer hosts its own KYC
 # issuer. request_kyc now calls the broker's intake, stores the BROKER's
 # request_id as this row's request_token, and stores the broker's per-request
 # nonce so the async POST /kyc/callback can check the callback echoes it

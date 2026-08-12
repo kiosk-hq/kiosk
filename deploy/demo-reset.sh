@@ -13,7 +13,7 @@
 #   bash demo-reset.sh          # reset the 6; getgrocery additive (keeps the order)
 #   bash demo-reset.sh --all    # ALSO wipe+reseed getgrocery (loses the cited order)
 #
-# The prove.my broker (kyc.demo) has no demo content and is left untouched.
+# The KYC broker (kyc.demo) has no demo content and is left untouched.
 set -uo pipefail
 export PATH="/home/ubuntu/.local/bin:/home/ubuntu/.local/share/mise/installs/ruby/4.0.1/bin:$PATH"
 

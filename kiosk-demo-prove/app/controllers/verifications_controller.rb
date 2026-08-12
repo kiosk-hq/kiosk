@@ -2,7 +2,7 @@
 
 require "securerandom"
 
-# prove.my's three legs (design §4):
+# The broker's three legs (design §4):
 #
 #   POST /verifications  — INTAKE (operator → broker, server-to-server). The
 #     operator authenticates with its shared bearer secret, names the requested

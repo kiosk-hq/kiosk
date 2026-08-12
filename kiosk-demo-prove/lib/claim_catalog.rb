@@ -1,6 +1,6 @@
 # frozen_string_literal: true
 
-# ClaimCatalog — the anonymized facts prove.my knows how to confirm, and how
+# ClaimCatalog — the anonymized facts the broker knows how to confirm, and how
 # each maps to (a) a human-legible yes/no question on the verification page and
 # (b) the boolean attribute name the minted claim carries (the name the
 # operator's gate reads, e.g. rent_motorcycle checks age_over_18 + licence_a).

@@ -1,6 +1,6 @@
 source "https://rubygems.org"
 
-# prove.my — the anonymizing KYC broker demo (kiosk-demo-prove). This is NOT a
+# kiosk-demo-prove — the anonymizing KYC broker demo. This is NOT a
 # Kiosk operator: it mounts NONE of the four verbs and depends on NO kiosk gem.
 # It is the smallest possible Rails app — a request table, an RSA issuer key,
 # an intake controller, a human verification page, and a callback poster.

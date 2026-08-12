@@ -35,7 +35,7 @@
 #   stylish  — Devise sign-in, roles, the manage page. Exercises the exact
 #              surfaces the three original bugs touched (assume_ssl sign-in +
 #              the governance-column render). The default when no arg is given.
-#   prove    — the prove.my broker (kiosk-demo-prove): a NEW, distinct HTML
+#   prove    — the KYC broker (kiosk-demo-prove): a NEW, distinct HTML
 #              surface (the /verify human page) with a token-capability form
 #              POST and NO login. Depends on no kiosk gem, seeds no signing key.
 #              Verifies its four lib/ modules eager-load and /verify renders 200
@@ -392,7 +392,7 @@ smoke_stylish() {
 }
 
 # ─────────────────────────────────────────────────────────────────────────────
-# prove: the prove.my broker (kiosk-demo-prove). A distinct HTML surface — the
+# prove: the KYC broker (kiosk-demo-prove). A distinct HTML surface — the
 # /verify human page — reached by an unguessable token capability, with a form
 # POST but NO login. This app depends on NO kiosk gem and seeds NO signing key.
 # The K-462 gap the stylish-only smoke did not cover.
@@ -459,7 +459,7 @@ smoke_prove() {
   ')"
   [ -n "$REQ" ] && pass "seeded pending request ${REQ}" || fail "could not seed a pending request"
 
-  echo "── Booting prove.my broker in RAILS_ENV=production on ${BASE} (eager_load + assume_ssl) ──"
+  echo "── Booting KYC broker in RAILS_ENV=production on ${BASE} (eager_load + assume_ssl) ──"
   bundle exec rails server -e production -b 127.0.0.1 -p "$PORT" >"$SERVER_LOG" 2>&1 &
   SERVER_PID=$!
 

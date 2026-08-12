@@ -1,6 +1,6 @@
 # frozen_string_literal: true
 
-# A pending KYC verification skooti started at the prove.my broker (design §5).
+# A pending KYC verification skooti started at the KYC broker (design §5).
 # request_kyc calls the broker's intake and stores the BROKER's request_id here
 # as `request_token`, plus the broker's per-request `broker_nonce`. The agent
 # relays the broker's verification_url to a human; on approve the broker POSTs

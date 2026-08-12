@@ -25,7 +25,7 @@ rake demo            # setup + shop: no-human register → order (slot+address) 
 | `rake demo:isolation` | adversarial cross-tenant + order-ownership denial |
 | `rake demo:schema` | self-discovery over the schema verb |
 | `rake demo:redteam` | kiosk-redteam battery — 13 attacks BLOCKED (incl. the cashier-check trio: wrong-currency, tampered-price, inflated-total carts, plus RegistrationWithoutPow — register PoW is on, `registration_pow_count=1`), 3 generic KYC scenarios skip (the age-gate is exercised by `demo:agecheck`) |
-| `rake demo:agecheck` | alcohol 18+ age-gate via the prove.my broker (two-server): alcohol order without KYC → 403 → request_kyc → broker approve → 200 → pay; non-alcohol order needs no KYC (200 directly); forged age attestation rejected |
+| `rake demo:agecheck` | alcohol 18+ age-gate via the KYC broker (two-server): alcohol order without KYC → 403 → request_kyc → broker approve → 200 → pay; non-alcohol order needs no KYC (200 directly); forged age attestation rejected |
 | `rake demo:pow` | catalog-toll PoW: 402 → solve → 200 |
 | `rake demo:race` | pay-path regression (real DB, real threads): an in-flight `/pay` can't have its order's items swapped out from under it and N racing `/pay` capture at most once (K-544); a malformed cart `order_id` is a typed 400, not a 500 (K-579); an order stranded in `paying` heals from its settlement row while an unprovable one keeps its claim (K-578) |
 | `rake demo:reconcile` | **operator utility, not a gate** (K-616) — it reports rather than asserts, and cannot go red; resolves orders stuck in `paying` from local evidence — settled ones flip to `paid`, the rest are listed as UNRESOLVED with the cart-mandate ids to check at the processor, and are never blind-released (K-578) |
@@ -102,7 +102,7 @@ silently booked. `demo:shop` asserts a past slot is both hidden and rejected;
 
 One catalog item is age-restricted (a coined wine — no real brand). A cart
 containing it can only be ordered (`create_order`) by an agent that has
-completed an 18+ anonymized-KYC check via the shared **prove.my** broker
+completed an 18+ anonymized-KYC check via the shared **KYC broker** (kyc.demo.kiosk.tech)
 (`run request_kyc` → human approves a broker link → the broker signs an
 anonymized `{age_over_18}` claim → submit it to `POST /kiosk/agents/kyc`).
 Non-restricted groceries need no KYC. `rake demo:agecheck` drives the full

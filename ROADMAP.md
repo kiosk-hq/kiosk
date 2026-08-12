@@ -26,7 +26,7 @@ demonstrated behavior, adversarial coverage, spec text where the wire changes.
   example; Warden, OIDC, SAML, and custom-session adapters are the same
   small shape.
 - **KYC as anonymized minimal claims.** The attestation verifier and attribute
-  gates are shipped, and a demo issuer (`prove.my`, at kyc.demo.kiosk.tech)
+  gates are shipped, and a demo issuer (`kiosk-demo-prove`, at kyc.demo.kiosk.tech)
   mints signed anonymized booleans ("over 18", "holds a category-A licence")
   from a human's yes/no confirmation — the operator never sees the documents.
   Operators need only these minimal facts, never full identity, so the missing

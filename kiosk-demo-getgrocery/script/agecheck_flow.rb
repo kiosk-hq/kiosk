@@ -9,7 +9,7 @@
 #   PART A — alcohol (KYC-gated on age_over_18):
 #     register → catalog (find the age_restricted wine) → create_order WITH the
 #     wine, NO KYC → 403 kyc_required (error.hint points to `request_kyc`) → run
-#     request_kyc (getgrocery calls the prove.my broker; get a broker
+#     request_kyc (getgrocery calls the KYC broker; get a broker
 #     verification_url) → SIMULATE the human approving on the BROKER page → the
 #     broker POSTs its signed {age_over_18} claim to getgrocery's /kyc/callback →
 #     poll `query kyc_status` until approved → submit the broker kyc_jws to POST
@@ -17,7 +17,7 @@
 #     pay (cart mirrors the order at catalog EUR prices) → settle.
 #
 #   The agent NEVER holds the broker's signing key: the claim is minted by the
-#   prove.my broker when the human approves, delivered to getgrocery's callback,
+#   KYC broker when the human approves, delivered to getgrocery's callback,
 #   and relayed back through kyc_status.
 #
 #   PART B — non-alcohol positive control (NO KYC at all):
@@ -158,12 +158,12 @@ STDERR.puts "  request_kyc: http=#{rc_req} verification_url=#{verification_url.i
 abort "request_kyc did not return a verification_url (#{rc_req}): #{JSON.generate(req_body)}" \
   if verification_url.nil? || verification_url.empty?
 
-# A3: SIMULATE the human approving on the prove.my BROKER page. Derive the broker
+# A3: SIMULATE the human approving on the KYC BROKER page. Derive the broker
 # origin from the verification_url so the driver need not know the broker port.
 approve_uri  = URI(verification_url)
 approve_base = "#{approve_uri.scheme}://#{approve_uri.host}:#{approve_uri.port}"
 approve_rc, _html = post_form("#{approve_base}/verify", { request: request_id, decision: "approve" })
-STDERR.puts "  human approved prove.my broker page: http=#{approve_rc}"
+STDERR.puts "  human approved KYC broker page: http=#{approve_rc}"
 abort "approve page POST failed (#{approve_rc})" unless approve_rc == 200
 
 # A4: poll query kyc_status until approved → returns the signed kyc_jws.

@@ -2,9 +2,9 @@
 
 require "openssl"
 
-# ProveTrust — skooti's TRUST configuration for the prove.my broker (the shared
-# anonymizing KYC issuer). skooti no longer hosts its own KYC issuer: it points
-# c.kyc_issuer / c.kyc_public_key at prove.my and trusts prove.my's signing key
+# ProveTrust — skooti's TRUST configuration for the KYC broker demo at
+# kyc.demo.kiosk.tech (the shared anonymizing KYC issuer). skooti no longer hosts its own KYC issuer: it points
+# c.kyc_issuer / c.kyc_public_key at the broker and trusts the broker's signing key
 # (the "ProveKey") once. This is the whole point of a shared broker — trust it
 # once, ask it for exactly the claims skooti needs.
 #
@@ -13,7 +13,7 @@ require "openssl"
 # key) can wire them in, with a pinned fallback that matches the broker's fixed
 # dev ProveKey so plain `rails s` / specs still boot coherently.
 #
-#   ProveTrust.issuer     — the `iss` value prove.my signs into every claim;
+#   ProveTrust.issuer     — the `iss` value the broker signs into every claim;
 #                           skooti sets c.kyc_issuer to this.
 #   ProveTrust.public_key — the ProveKey RSA public PEM; skooti sets
 #                           c.kyc_public_key to this so KycVerifier accepts the
@@ -56,7 +56,7 @@ module ProveTrust
     ENV.fetch("KIOSK_PROVE_OPERATOR_ID", "skooti")
   end
 
-  # The shared bearer secret skooti presents to the prove.my broker's intake
+  # The shared bearer secret skooti presents to the KYC broker's intake
   # (Authorization: Bearer …). REQUIRED from the env in production (K-547): a
   # shipped default is world-readable in this public repo, so anyone could
   # impersonate skooti's intake. Dev/test keep a fixed default so `rails s` +
@@ -66,7 +66,7 @@ module ProveTrust
     ENV.fetch("KIOSK_PROVE_SKOOTI_SECRET") do
       unless Rails.env.local?
         raise "KIOSK_PROVE_SKOOTI_SECRET is required outside development/test — it is the " \
-              "shared bearer secret skooti authenticates to the prove.my broker with; a shipped " \
+              "shared bearer secret skooti authenticates to the KYC broker with; a shipped " \
               "default in a public repo would let anyone impersonate skooti's intake (K-547). " \
               "Set the SAME value configured on the broker (its KIOSK_PROVE_SKOOTI_SECRET)."
       end

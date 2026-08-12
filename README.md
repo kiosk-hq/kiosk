@@ -51,7 +51,7 @@ See `kiosk-pow-equihash/README.md` for the full comparison and rationale.
 | `kiosk-demo-stylish` | Salon/appointment booking (Combette on Park) | alpha |
 | `kiosk-demo-philslist` | Classifieds board — non-commerce (no payments) | active |
 | `kiosk-demo-tudu` | Collaborative todo — non-commerce (no payments) | active |
-| `kiosk-demo-prove` | `prove.my` anonymizing KYC broker (deploys at `kyc.demo.kiosk.tech`) — an ISSUER, not a Kiosk operator (no verbs) | active |
+| `kiosk-demo-prove` | anonymizing KYC broker (deploys at `kyc.demo.kiosk.tech`) — an ISSUER, not a Kiosk operator (no verbs) | active |
 | `e2e` | End-to-end test fixtures, stub PSP, AI-assistant pay flow | active |
 
 Each demo exposes a set of `rake demo:*` tasks. Not all of them are CI gates —

@@ -38,7 +38,7 @@ require "uri"
 require "jwt"
 
 $LOAD_PATH.unshift File.expand_path("../lib", __dir__)
-# Valid attestations are now minted with the SHARED prove.my broker key
+# Valid attestations are now minted with the SHARED KYC broker key
 # (ProveTestIssuer, signing with the ProveKey skooti trusts) — the self-hosted
 # StubKyc retired when issuance moved to the broker.
 require "prove_test_issuer"

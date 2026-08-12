@@ -2,7 +2,7 @@
 
 require "uri"
 
-# OperatorRegistry — the broker's intake trust model (design §4.7). prove.my only
+# OperatorRegistry — the broker's intake trust model (design §4.7). The broker only
 # serves operators it has been configured with. This is what refuses arbitrary
 # callers and arbitrary callback_urls (the SSRF / open-relay guard §4.7): the
 # broker NEVER POSTs a callback to a URL a caller supplied free-form — it POSTs
@@ -13,7 +13,7 @@ require "uri"
 # licence + age gate) and getgrocery (alcohol age gate). Each entry pins:
 #   secret        — the shared bearer secret the operator sends on intake
 #                   (Authorization: Bearer <secret>). Authenticates the operator.
-#   callback_host — the ONLY host prove.my will POST a callback to for this
+#   callback_host — the ONLY host the broker will POST a callback to for this
 #                   operator (host allow-list — an SSRF guard). The intake's
 #                   callback_url must resolve to this host or the request is
 #                   rejected. In the demo the operator host varies by port, so the
@@ -72,7 +72,7 @@ module OperatorRegistry
   #     operator is simply NOT registered (fail-closed: no default is ever
   #     accepted), so `authenticate` rejects it rather than honouring a guessable
   #     token.
-  #   - callback_host: the operator host prove.my may call back; env-set by the
+  #   - callback_host: the operator host the broker may call back; env-set by the
   #     two-server harness (which knows the operator's host:port), else localhost.
   def registry
     entries = {}

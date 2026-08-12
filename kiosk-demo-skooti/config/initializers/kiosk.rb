@@ -2,7 +2,7 @@
 
 # Kiosk-demo (skooti-shape) configuration. Concrete values for the
 # scooter-rental reference shape: uuid users, JWT-or-stub IdP, StubPsp,
-# the prove.my broker as the trusted KYC issuer, Actions (reserve, start_rental,
+# the KYC broker as the trusted KYC issuer, Actions (reserve, start_rental,
 # payment_setup) + named queries (scooters_available, my_reservations).
 
 # ── Ephemeral dev signing key ────────────────────────────────────────────
@@ -177,9 +177,9 @@ Kiosk.configure do |c|
   c.registration_pow_params = SKOOTI_REGISTRATION_POW_PARAMS
   c.pow_secret              = pow_secret
 
-  # KYC attestation verifier — trusts the prove.my broker (the shared
+  # KYC attestation verifier — trusts the KYC broker (the shared
   # anonymizing KYC issuer). skooti no longer hosts its own issuer: it configures
-  # prove.my as its kyc_issuer + kyc_public_key ONCE (design §5.3) and asks the
+  # the broker as its kyc_issuer + kyc_public_key ONCE (design §5.3) and asks the
   # broker for exactly the claims it needs (age_over_18 + licence_a). The trust
   # anchors come from ProveTrust (env-overridable by the two-server harness,
   # pinned dev fallback for plain boot). No new framework surface — the same two
@@ -626,11 +626,11 @@ Kiosk::Server::Actions.register("rent_motorcycle",
   }
 end
 
-# request_kyc — start a verification at the prove.my broker an EXTERNAL agent can
+# request_kyc — start a verification at the KYC broker an EXTERNAL agent can
 # COMPLETE without any pre-shared issuer key (K-440/K-443, design §5.1).
 #
 # Rewired to the shared broker: instead of minting a LOCAL stub token, skooti
-# calls prove.my's intake (server-to-server) with its own callback_url, the two
+# calls the broker's intake (server-to-server) with its own callback_url, the two
 # claims it needs (age_over_18 + licence_category:A), and the agent's user_id as
 # the subject the claim must bind to. The broker returns an unguessable
 # verification_url (on the BROKER) and a request_id; skooti stores that

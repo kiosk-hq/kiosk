@@ -39,7 +39,7 @@ module CallbackPoster
     res = http.request(req)
     res.code.to_i
   rescue StandardError => e
-    Rails.logger.warn("[prove.my] callback POST to #{callback_url} failed: #{e.class}: #{e.message}")
+    Rails.logger.warn("[kiosk-demo-prove] callback POST to #{callback_url} failed: #{e.class}: #{e.message}")
     nil
   end
 end

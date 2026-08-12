@@ -53,8 +53,7 @@ Rails.application.configure do
   config.x.kiosk.issuer = ENV.fetch("KIOSK_ISSUER") { "http://localhost:#{ENV.fetch("PORT", "3000")}" }
   config.x.kiosk.test_autocard = ENV["KIOSK_TEST_AUTOCARD"] == "1"
   config.x.kiosk.prove_public_key_pem = ENV["KIOSK_PROVE_PUBLIC_KEY_PEM"]
-  config.x.kiosk.prove_intake_secret =
-    ENV["KIOSK_PROVE_GETGROCERY_SECRET"] || ENV["KIOSK_PROVE_SKOOTI_SECRET"]
+  config.x.kiosk.prove_intake_secret  = ENV["KIOSK_PROVE_INTAKE_SECRET"]
 
   # The Ed25519 unlock/rental-token signing key: the FIXED dev keypair the demo
   # ships at config/dev_unlock_key.pem, where it ships one. Fixed rather than

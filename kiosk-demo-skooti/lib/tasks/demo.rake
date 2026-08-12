@@ -820,7 +820,7 @@ namespace :demo do
       env_str = "SERVER_URL=#{server_url} KIOSK_ISSUER=#{kiosk_issuer} " \
                 "KIOSK_PROVE_BROKER_URL=#{broker[:broker_url]} " \
                 "KIOSK_PROVE_ISSUER=#{broker[:wiring]['KIOSK_PROVE_ISSUER']} " \
-                "KIOSK_PROVE_SKOOTI_SECRET=#{broker[:wiring]['KIOSK_PROVE_SKOOTI_SECRET']} " \
+                "KIOSK_PROVE_INTAKE_SECRET=#{broker[:wiring]['KIOSK_PROVE_INTAKE_SECRET']} " \
                 "KIOSK_PROVE_OPERATOR_ID=#{broker[:wiring]['KIOSK_PROVE_OPERATOR_ID']}"
 
       system("#{env_str} bundle exec ruby #{suite_rb}")

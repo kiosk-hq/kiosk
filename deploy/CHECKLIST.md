@@ -63,7 +63,12 @@ For EACH of the 7 apps:
       the baked-in dev key's private half is world-readable in the public repo — silently signing with it would let anyone
       forge attestations, and the pin flows below would faithfully pin its forgeable public half.
 - [ ] **Operator allow-list:** `KIOSK_PROVE_SKOOTI_SECRET=<shared intake secret>`, `KIOSK_PROVE_SKOOTI_CALLBACK_HOST=skooti.demo.kiosk.tech`.
-- [ ] **Wire skooti to it:** in skooti's env set `KIOSK_PROVE_ISSUER` + `KIOSK_PROVE_BROKER_URL` = `https://kyc.demo.kiosk.tech`, the SAME `KIOSK_PROVE_SKOOTI_SECRET`, and `KIOSK_PROVE_PUBLIC_KEY_PEM=<public half of PROVE_KEY_PEM>` (or fetch once from `https://kyc.demo.kiosk.tech/prove_key.pem`).
+- [ ] **Wire skooti to it:** in skooti's env set `KIOSK_PROVE_ISSUER` + `KIOSK_PROVE_BROKER_URL` = `https://kyc.demo.kiosk.tech`, `KIOSK_PROVE_INTAKE_SECRET=<the SAME value as the broker's KIOSK_PROVE_SKOOTI_SECRET>`, and `KIOSK_PROVE_PUBLIC_KEY_PEM=<public half of PROVE_KEY_PEM>` (or fetch once from `https://kyc.demo.kiosk.tech/prove_key.pem`).
+      The names differ by design (K-694): every OPERATOR app reads one role-named `KIOSK_PROVE_INTAKE_SECRET` — their
+      `config/environments/production.rb` is byte-identical across the seven demos and so must not name a demo — while
+      the BROKER keeps a per-operator name for each registry entry. The two sides pair by VALUE; the broker resolves the
+      operator from the `operator_id` in the intake body. Same for getgrocery when it is allow-listed
+      (`KIOSK_PROVE_GETGROCERY_SECRET` at the broker ↔ `KIOSK_PROVE_INTAKE_SECRET` in getgrocery's env).
 
 ## 5. Build + boot each app
 - [ ] **Eager-load gate FIRST, on every changed app (K-488/K-513):**

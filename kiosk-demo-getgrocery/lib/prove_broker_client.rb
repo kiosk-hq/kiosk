@@ -47,9 +47,8 @@ module ProveBrokerClient
     # first request_kyc rather than presenting a guessable token.
     secret = Rails.configuration.x.kiosk.prove_intake_secret
     if secret.to_s.empty?
-      raise "KYC broker intake secret is not configured — set this operator's own intake-secret " \
-            "variable (KIOSK_PROVE_GETGROCERY_SECRET / KIOSK_PROVE_SKOOTI_SECRET) to the SAME " \
-            "value registered at the broker; there is no shipped default (K-547/K-650)."
+      raise "KYC broker intake secret is not configured — set KIOSK_PROVE_INTAKE_SECRET to the SAME " \
+            "value the broker holds for this operator; there is no shipped default (K-547/K-650/K-694)."
     end
 
     req = Net::HTTP::Post.new(

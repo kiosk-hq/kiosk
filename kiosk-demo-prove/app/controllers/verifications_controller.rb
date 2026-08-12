@@ -214,8 +214,10 @@ class VerificationsController < ActionController::Base
     @intake_body.is_a?(Hash) ? @intake_body : {}
   end
 
+  # The link base: PROVE_PUBLIC_URL when the deploy pins one (read in
+  # config/environments/*.rb — K-672), else this intake request's own origin.
   def verification_url_for(request_id)
-    base = ENV.fetch("PROVE_PUBLIC_URL", request.base_url).to_s.chomp("/")
+    base = (Rails.configuration.x.prove.public_url || request.base_url).to_s.chomp("/")
     "#{base}/verify?request=#{request_id}"
   end
 

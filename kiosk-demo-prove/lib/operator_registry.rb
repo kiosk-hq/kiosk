@@ -16,8 +16,10 @@ require "uri"
 #   callback_host — the ONLY host the broker will POST a callback to for this
 #                   operator (host allow-list — an SSRF guard). The intake's
 #                   callback_url must resolve to this host or the request is
-#                   rejected. In the demo the operator host varies by port, so the
-#                   callback host is read from env (KIOSK_PROVE_<OP>_CALLBACK_HOST).
+#                   rejected. In the demo the operator host varies by port, so
+#                   the callback host is configured per environment
+#                   (KIOSK_PROVE_<OP>_CALLBACK_HOST, read in
+#                   config/environments/*.rb — K-672).
 #   audience      — the operator-binding `aud` the broker mints into this
 #                   operator's attestations (the value its engine KycVerifier
 #                   compares against its own kyc_audience). This is held at
@@ -26,7 +28,7 @@ require "uri"
 #                   operator can only ever obtain an attestation bound to ITS OWN
 #                   audience — operator B cannot request operator A's audience.
 #                   Defaults to the operator_id handle (what the demo operators set
-#                   as c.kyc_audience); env-overridable for a distinct origin-URL
+#                   as c.kyc_audience); overridable for a distinct origin-URL
 #                   audience via KIOSK_PROVE_<OP>_AUDIENCE (kept in lockstep with
 #                   the operator's own kyc_audience so the honest bind-and-verify
 #                   at intake matches).
@@ -63,46 +65,44 @@ module OperatorRegistry
     uri.host == operator[:callback_host]
   end
 
-  # The demo registry. skooti and getgrocery are the pre-registered operators.
-  #   - secret: shared bearer. REQUIRED from the env in production (K-547) — a
-  #     shipped default is world-readable in this public repo, so anyone could
-  #     present it to drive operator intake and trigger broker→operator
-  #     callbacks. In dev/test a fixed default keeps `rails s` + the two-server
-  #     demo:kyc harness working. If a secret is not configured in production the
-  #     operator is simply NOT registered (fail-closed: no default is ever
-  #     accepted), so `authenticate` rejects it rather than honouring a guessable
-  #     token.
-  #   - callback_host: the operator host the broker may call back; env-set by the
-  #     two-server harness (which knows the operator's host:port), else localhost.
+  # The demo registry, built from Rails custom config — the env vars behind
+  # these values are read in config/environments/{development,test,production}.rb
+  # and published as Rails.configuration.x.prove.* (K-672); this lib never
+  # reads ENV, and each environment's posture lives in that environment's file:
+  #   - secret: shared bearer. An operator with NO configured secret is simply
+  #     NOT registered (fail-closed, K-547: a shipped default is world-readable
+  #     in this public repo, so anyone could present it to drive operator intake
+  #     and trigger broker→operator callbacks) — `authenticate` then rejects it
+  #     rather than honouring a guessable token. Production and development are
+  #     both env-or-nothing (the two-server harnesses pin the secret explicitly
+  #     on both sides — since K-650 there is no operator-side dev default to
+  #     pair with); test registers both demo operators with fixture literals
+  #     because the request specs drive real intake auth.
+  #   - callback_host: the operator host the broker may call back (SSRF guard);
+  #     set by the two-server harness (which knows the operator's host:port),
+  #     loopback in dev/test, deploy-set in production.
   def registry
+    cfg = Rails.configuration.x.prove
     entries = {}
-    if (skooti = operator_secret("KIOSK_PROVE_SKOOTI_SECRET", "prove-skooti-demo-shared-secret"))
+    if (skooti = cfg.skooti_secret.presence)
       entries["skooti"] = {
         secret:        skooti,
-        callback_host: ENV.fetch("KIOSK_PROVE_SKOOTI_CALLBACK_HOST", "127.0.0.1"),
-        audience:      ENV.fetch("KIOSK_PROVE_SKOOTI_AUDIENCE", "skooti"),
+        callback_host: cfg.skooti_callback_host,
+        audience:      cfg.skooti_audience,
       }
     end
     # getgrocery is a SECOND operator — its alcohol age-gate asks the broker for
     # the age_over_18 claim. Used by the two-server test harness; a standing
     # production allow-list entry is a follow-up, so in production it registers
     # only when KIOSK_PROVE_GETGROCERY_SECRET is explicitly set.
-    if (gg = operator_secret("KIOSK_PROVE_GETGROCERY_SECRET", "prove-getgrocery-demo-shared-secret"))
+    if (gg = cfg.getgrocery_secret.presence)
       entries["getgrocery"] = {
         secret:        gg,
-        callback_host: ENV.fetch("KIOSK_PROVE_GETGROCERY_CALLBACK_HOST", "127.0.0.1"),
-        audience:      ENV.fetch("KIOSK_PROVE_GETGROCERY_AUDIENCE", "getgrocery"),
+        callback_host: cfg.getgrocery_callback_host,
+        audience:      cfg.getgrocery_audience,
       }
     end
     entries
-  end
-
-  # Resolve an operator's shared intake secret: the env value if set; else a
-  # fixed dev/test default; else (production + unset) nil, so the operator is
-  # left OUT of the registry rather than falling back to a world-readable default
-  # a public-repo reader could replay (K-547, fail-closed).
-  def operator_secret(env_var, dev_default)
-    ENV.fetch(env_var) { Rails.env.local? ? dev_default : nil }
   end
 
   # Constant-time-ish comparison so the secret check does not leak length/prefix

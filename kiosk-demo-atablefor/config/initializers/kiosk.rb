@@ -11,16 +11,9 @@
 # (lib/seatings.rb), never stale, but the tables are FINITE and CAN sell out
 # for a given seating.
 
-# ── Ephemeral dev signing key ─────────────────────────────────────────────
-# JWT / register flows need a signing key. In development or test, if none is
-# provided, self-provision an EPHEMERAL RSA key so `demo:setup` and the flows
-# run out-of-the-box. Never do this in production — a real key must be set.
-if ENV["KIOSK_SIGNING_KEY_B64"].nil? && ENV["KIOSK_SIGNING_KEY_PEM"].nil? && Rails.env.local?
-  require "openssl"
-  require "base64"
-  ENV["KIOSK_SIGNING_KEY_B64"] = Base64.strict_encode64(OpenSSL::PKey::RSA.new(2048).to_pem)
-  warn "[kiosk] WARNING: generated an EPHEMERAL signing key (#{Rails.env}); set KIOSK_SIGNING_KEY_B64/PEM for a stable key."
-end
+# Env posture (ephemeral dev signing key, PoW secret, issuer, test flags) lives
+# in config/environments/{development,test,production}.rb (K-650); this file
+# reads the resolved values from Rails.configuration.x.kiosk.*.
 
 require Rails.root.join("lib/stub_idp")
 require Rails.root.join("lib/jwt_or_stub_idp")
@@ -194,30 +187,11 @@ end
 # task — booking has no apt RLS beat. The kiosk-rls README documents this opt-in.
 ActiveRecord::Migration.include(Kiosk::RLS::DSL)
 
-# ── PoW HMAC secret — REQUIRED outside development/test (K-541) ────────────
-# pow_secret is the HMAC key the engine signs every PoW challenge with. This
-# repo is PUBLIC, so a shipped fallback would be world-readable: a reader could
-# mint a self-signed challenge at trivial difficulty {n:8,k:1} and forge a proof
-# the server accepts — silently turning proof-of-work OFF. It MUST come from the
-# environment in production and fail LOUD when absent, matching KIOSK_ISSUER and
-# the signing key. Dev/test keep a stable (non-secret) default so `bin/rails s`,
-# the demo drivers and e2e boot out of the box; a too-short secret is rejected.
-pow_secret = ENV.fetch("KIOSK_POW_SECRET") do
-  unless Rails.env.local?
-    raise <<~MSG
-      KIOSK_POW_SECRET is required outside development/test.
-
-      It is the HMAC key every Kiosk PoW challenge is signed with. This repo is
-      public, so a shipped fallback would be world-readable — anyone could mint a
-      self-signed challenge at trivial difficulty and forge a valid proof,
-      silently turning proof-of-work off. Generate a long random value:
-
-        KIOSK_POW_SECRET=$(openssl rand -hex 32)
-    MSG
-  end
-  "atablefor-demo-pow-secret-dev-insecure-default"
-end
-raise "KIOSK_POW_SECRET must be at least 32 bytes (got #{pow_secret.bytesize}) — generate one with `openssl rand -hex 32`." if pow_secret.bytesize < 32
+# ── PoW HMAC secret (K-541/K-650) ───────────────────────────────────────────
+# The HMAC key the engine signs every PoW challenge with. Required in
+# production, stable (non-secret) default in dev/test — that posture lives in
+# config/environments/*; here we only read the resolved value.
+pow_secret = Rails.configuration.x.kiosk.pow_secret
 
 Kiosk.configure do |c|
   c.user_model     = "User"
@@ -236,37 +210,12 @@ Kiosk.configure do |c|
   c.app_role    = ENV.fetch("KIOSK_APP_ROLE",    "app_role")
   c.system_role = ENV.fetch("KIOSK_SYSTEM_ROLE", "app_role")
 
-  # ── Issuer origin — REQUIRED outside development/test (K-510) ────────────
-  # `issuer` is this operator's canonical origin, and it is load-bearing three
-  # times over: it is advertised in /.well-known/kiosk.json, it is the `iss` of
-  # every JWT this app mints, and PopVerifier enforces it as the `aud` of every
-  # assistant proof. A deployment that silently fell back to localhost would
-  # boot HAPPILY and then reject every assistant that dialed the real host with
-  # "proof audience mismatch" — a total, silent auth outage from one unset
-  # variable, whose error text points the agent at an origin it never visited.
-  # So it fails LOUD at boot, matching the signing key (kiosk-server's
-  # default_signing_key raises when KIOSK_SIGNING_KEY_PEM/_B64 is absent).
-  # Development and test keep a localhost default so `bin/rails s` and the demo
-  # flows run out of the box; the port follows the one the server actually
-  # binds (PORT, the same variable lib/tasks/demo.rake and `rails s` read).
-  c.issuer = ENV.fetch("KIOSK_ISSUER") do
-    unless Rails.env.local?
-      raise <<~MSG
-        KIOSK_ISSUER is required outside development/test.
-
-        It is this operator's canonical origin: advertised in
-        /.well-known/kiosk.json, minted as the `iss` of every Kiosk JWT, and
-        enforced as the `aud` of every assistant proof-of-possession. Falling
-        back to localhost here would reject EVERY assistant with "proof
-        audience mismatch".
-
-        Set it to the origin agents actually dial:
-          KIOSK_ISSUER=https://atablefor.demo.kiosk.tech
-      MSG
-    end
-
-    "http://localhost:#{ENV.fetch("PORT", "3002")}"
-  end
+  # ── Issuer origin (K-510/K-650) ───────────────────────────────────────────
+  # This operator's canonical origin — advertised in /.well-known/kiosk.json,
+  # minted as the `iss` of every Kiosk JWT, and enforced as the `aud` of every
+  # assistant proof-of-possession. Required in production, localhost default
+  # in dev/test — the posture lives in config/environments/*.
+  c.issuer = Rails.configuration.x.kiosk.issuer
 
   # UNIFORM-VALIDATION slice-1 (K-479): validate a PRESENT `pow` field against
   # the normative PoW schema at the wire choke point, so a malformed pow gets a

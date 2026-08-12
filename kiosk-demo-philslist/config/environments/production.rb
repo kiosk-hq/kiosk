@@ -64,4 +64,65 @@ Rails.application.configure do
   #
   # Skip DNS rebinding protection for the default health check endpoint.
   # config.host_authorization = { exclude: ->(request) { request.path == "/up" } }
+
+  # ── Kiosk env inputs (K-650) ────────────────────────────────────────────
+  # ENV is read HERE, per environment, and published as Rails custom config
+  # (Rails.configuration.x.kiosk.*); initializers and lib code read the
+  # config, never ENV, and never raise — each environment's posture lives in
+  # that environment's file. This file is byte-identical across the seven
+  # operator demos (bin/check-demo-copies), so nothing in this block may name
+  # a single demo.
+
+  # The HMAC key every Kiosk PoW challenge is signed with — REQUIRED (K-541).
+  # This repo is public, so a shipped fallback would be world-readable:
+  # anyone could mint a self-signed challenge at trivial difficulty and forge
+  # a valid proof, silently turning proof-of-work off.
+  config.x.kiosk.pow_secret = ENV.fetch("KIOSK_POW_SECRET") do
+    raise <<~MSG
+      KIOSK_POW_SECRET is required in production.
+
+      It is the HMAC key every Kiosk PoW challenge is signed with. This repo is
+      public, so a shipped fallback would be world-readable — anyone could mint a
+      self-signed challenge at trivial difficulty and forge a valid proof,
+      silently turning proof-of-work off. Generate a long random value:
+
+        KIOSK_POW_SECRET=$(openssl rand -hex 32)
+    MSG
+  end
+  raise "KIOSK_POW_SECRET must be at least 32 bytes (got #{config.x.kiosk.pow_secret.bytesize}) — generate one with `openssl rand -hex 32`." if config.x.kiosk.pow_secret.bytesize < 32
+
+  # This operator's canonical origin — REQUIRED (K-510). It is advertised in
+  # /.well-known/kiosk.json, minted as the `iss` of every Kiosk JWT, and
+  # enforced as the `aud` of every assistant proof-of-possession; a silent
+  # localhost fallback would reject EVERY assistant with "proof audience
+  # mismatch" — a total, silent auth outage from one unset variable.
+  config.x.kiosk.issuer = ENV.fetch("KIOSK_ISSUER") do
+    raise <<~MSG
+      KIOSK_ISSUER is required in production.
+
+      It is this operator's canonical origin: advertised in
+      /.well-known/kiosk.json, minted as the `iss` of every Kiosk JWT, and
+      enforced as the `aud` of every assistant proof-of-possession. Falling
+      back to localhost here would reject EVERY assistant with "proof
+      audience mismatch".
+
+      Set it to the origin agents actually dial:
+        KIOSK_ISSUER=https://<this-demo>.demo.kiosk.tech
+    MSG
+  end
+
+  # NEVER in production (K-650): the Stripe autocard test shim (a completed
+  # SetupIntent simulated without a hosted card-entry step) is pinned OFF
+  # here — the live demo runs the real hosted flow. Dev/test honour the flag.
+  config.x.kiosk.test_autocard = false
+
+  # KYC broker trust — read by the broker-integrated demos (getgrocery,
+  # skooti); inert in the others. NO pinned fallback key in production: the
+  # operator trusts ONLY an explicitly supplied broker public key, and with
+  # none set the engine's KycVerifier fails closed at the wire. The intake
+  # secret has no shipped default either (K-547) — each deploy sets its own
+  # operator's variable and leaves the other unset.
+  config.x.kiosk.prove_public_key_pem = ENV["KIOSK_PROVE_PUBLIC_KEY_PEM"]
+  config.x.kiosk.prove_intake_secret =
+    ENV["KIOSK_PROVE_GETGROCERY_SECRET"] || ENV["KIOSK_PROVE_SKOOTI_SECRET"]
 end

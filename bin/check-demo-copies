@@ -285,9 +285,10 @@ COPIES = {
   },
   "lib/prove_trust.rb" => {
     rule: :per_demo,
-    why:  "Per-operator by construction: each copy bakes in its own operator id and its own shared " \
-          "intake-secret variable (KIOSK_PROVE_GETGROCERY_SECRET vs KIOSK_PROVE_SKOOTI_SECRET), " \
-          "which is exactly the cross-operator binding the demo exists to show (K-547).",
+    why:  "Per-operator by construction: each copy bakes in its own operator id (getgrocery vs " \
+          "skooti) — the cross-operator binding the demo exists to show (K-547). The intake secret " \
+          "and broker public key moved to Rails custom config set in config/environments/*.rb " \
+          "(K-650), so only the env-independent identity values remain here.",
   },
   "lib/prove_broker_boot.rb" => {
     rule: :per_demo,

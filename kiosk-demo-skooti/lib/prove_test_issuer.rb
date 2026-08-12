@@ -8,8 +8,9 @@ require "jwt"
 # needs a VALID (or expired) attestation for a given user_id WITHOUT driving the
 # full broker HTTP round-trip (e.g. "KYC a fresh agent so only the gate under
 # test can block"). It is the direct analogue of the retired StubKyc.attest —
-# but now signing with the SHARED broker key skooti trusts (c.kyc_public_key =
-# ProveTrust.public_key = the ProveKey public half).
+# but now signing with the SHARED broker key skooti trusts (the KYC rake tasks
+# pin c.kyc_public_key to ProveTestIssuer.public_key_pem — the ProveKey public
+# half — via KIOSK_PROVE_PUBLIC_KEY_PEM on the server they spawn; K-650).
 #
 # This reaches into the sibling kiosk-demo-prove app's ProveKey to get the
 # private key — acceptable because it is TEST scaffolding in the same monorepo,
@@ -35,6 +36,14 @@ module ProveTestIssuer
   def issuer
     require PROVE_KEY_PATH unless defined?(::ProveKey)
     ProveKey.issuer
+  end
+
+  # The ProveKey PUBLIC half, PEM-encoded. The single-server KYC rake tasks
+  # (rideflow, isolation) pin this on the server they spawn as
+  # KIOSK_PROVE_PUBLIC_KEY_PEM, so the server trusts exactly the key this
+  # test issuer signs with — there is no pinned fallback in the app (K-650).
+  def public_key_pem
+    keypair.public_key.to_pem
   end
 
   # The operator-binding audience the minted claims carry as `aud`. Sourced from

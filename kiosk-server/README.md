@@ -16,7 +16,7 @@ The full host-side surface is shipped and covered by the gem's own suite (500+ p
 - **`Kiosk::Server::WellKnown`** — pure-Ruby builder for `/.well-known/kiosk.json`.
 - **`Kiosk::Server::Headers`** + **`HeadersMiddleware`** — Rack middleware that injects `Kiosk-Server-Version`, `Kiosk-API-Version`, `Kiosk-Min-Client` on `/kiosk/*` responses.
 - **`Kiosk::Server::SchemaDefinitions`** — SQL generators for the canonical migrations (schema + helpers, identity tables, actions log, reservations, device authorizations, mandates).
-- **`Kiosk::Server::Engine`** — the Rails engine; auto-mounts the headers middleware and draws the account-binding routes.
+- **`Kiosk::Server::Engine`** — the Rails engine: one `mount` line draws the full mount-prefixed surface (wire, auth, JWKS, KYC, account binding), installs the root discovery routes when mounted, and auto-injects the headers middleware (see [Mount the routes](#mount-the-routes)).
 - **`Kiosk::Server::ConfigurationExtension`** — adds `mount_path`, `capabilities`, `owner`, `min_client` (and the reputation/PoW slots) to `Kiosk::Configuration`.
 - **`bin/rails g kiosk:install`** — the install generator lays down the initializer and migrations.
 
@@ -35,7 +35,7 @@ The full host-side surface is shipped and covered by the gem's own suite (500+ p
 - **`Kiosk::Server::WellKnown`** — pure-Ruby builder for `/.well-known/kiosk.json`.
 - **`Kiosk::Server::Headers`** + **`HeadersMiddleware`** — Rack middleware that injects `Kiosk-Server-Version`, `Kiosk-API-Version`, `Kiosk-Min-Client` on `/kiosk/*` responses.
 - **`Kiosk::Server::SchemaDefinitions`** — SQL generators for the canonical migrations (schema + helpers, identity tables, actions log, reservations, device authorizations, mandates).
-- **`Kiosk::Server::Engine`** — the Rails engine; auto-mounts the headers middleware and draws the account-binding routes.
+- **`Kiosk::Server::Engine`** — the Rails engine: one `mount` line draws the full mount-prefixed surface (wire, auth, JWKS, KYC, account binding), installs the root discovery routes when mounted, and auto-injects the headers middleware (see [Mount the routes](#mount-the-routes)).
 - **`Kiosk::Server::ConfigurationExtension`** — adds `mount_path`, `capabilities`, `owner`, `min_client` (and the reputation/PoW slots) to `Kiosk::Configuration`.
 - **`bin/rails g kiosk:install`** — the install generator lays down the initializer and migrations.
 
@@ -67,6 +67,32 @@ Kiosk.configure do |c|
   # c.capabilities = %w[schema query run pay]   # optional override; computed from the registry by default
 end
 ```
+
+
+## Mount the routes
+
+One line. The engine draws the entire surface:
+
+```ruby
+# config/routes.rb
+mount Kiosk::Server::Engine => Kiosk.configuration.mount_path
+```
+
+Under the mount that is the wire (`schema`/`query`/`run`/`pay`), the kiosk-pop
+auth plane (`auth/challenge`, `auth/register`, `auth/login`, `auth/revoke`),
+JWKS (`.well-known/jwks.json`), KYC attestation (`agents/kyc`) and the whole
+account-binding ceremony (the RFC 8628 claim wire, `auth/link`/`claim`/`unlink`,
+the verify and «Link an assistant» pages). The engine also installs the
+ROOT-relative discovery documents — `/agents.txt`, `/agents.json`, `/auth.md`,
+`/.well-known/{agent-configuration,kiosk.json,api-catalog}` — into the host app
+via `routes.append`, because the agents.txt standard and RFC 8615 place them at
+the origin root, outside any mount prefix. That install happens ONLY when the
+engine is mounted: merely bundling the gem adds no routes.
+
+Hand-drawing the same routes in `config/routes.rb` remains the escape hatch —
+for a partial surface, or mid-migration. Hand-drawn lines win over the engine's
+(Rails dispatches the first matching route), and either path reaches the same
+shipped controllers.
 
 
 ## Declaring queries and actions

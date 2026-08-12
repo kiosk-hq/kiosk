@@ -27,9 +27,13 @@ Gem::Specification.new do |spec|
         canonical schema migrations, and a `kiosk:install` generator that
         lays down the initializer and the migrations.
 
-    A Rails engine draws the account-binding routes and auto-injects the
-    headers middleware; hosts mount the wire, auth, JWKS, KYC and discovery
-    routes in their own config/routes.rb.
+    The Rails engine serves that whole surface from one line — `mount
+    Kiosk::Server::Engine => Kiosk.configuration.mount_path` — drawing the
+    wire/auth/JWKS/KYC/binding routes under the mount and installing the
+    root-relative discovery routes (agents.txt, .well-known) into the host
+    when mounted; it also auto-injects the headers middleware. Hand-drawing
+    the same routes in config/routes.rb remains supported as the escape
+    hatch.
   DESC
   spec.homepage      = "https://kiosk.tech"
   spec.license       = "Apache-2.0"

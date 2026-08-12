@@ -293,6 +293,17 @@ namespace :demo do
       puts "  ✗  bad_proof_count=#{bpc} (expected >=1)"
     end
 
+    # PER-IDENTITY (K-498): a second, innocent identity registered by the flow
+    # must be untouched by the first identity's wrong nonce — one bad client
+    # must not raise anyone else's count.
+    obpc = result["other_bad_proof_count"].to_i
+    if obpc.zero?
+      puts "  ✓  per-identity counter: innocent identity's bad_proof_count=0"
+    else
+      failures << "expected other_bad_proof_count=0 (per-identity, K-498), got #{obpc}"
+      puts "  ✗  other_bad_proof_count=#{obpc} (expected 0 — counter not per-identity)"
+    end
+
     if failures.empty?
       puts "\n  All PoW assertions passed."
     else

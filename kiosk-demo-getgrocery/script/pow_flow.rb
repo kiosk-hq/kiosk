@@ -20,11 +20,15 @@ require "securerandom"
 
 SERVER = ENV.fetch("SERVER_URL")
 ISSUER = ENV.fetch("KIOSK_ISSUER")
-BAD_PROOF_FILE = "/tmp/kiosk-getgrocery-bad-proof.count"
+# The TOY counter the initializer's on_bad_proof writes (K-590/K-498):
+# PER-IDENTITY in sqlite — this driver asserts its own wrong nonce was counted
+# against ITS identity and that an innocent second identity stayed at 0.
+BAD_PROOF_DB = "/tmp/kiosk-getgrocery-bad-proof.sqlite3"
 
 # equihash_solve / equihash_register come from the shared helper; the solver
 # location is Kiosk::Pow::Equihash.solver_path, owned by the gem (K-627).
 require_relative "../lib/equihash_register"
+require_relative "../lib/bad_proof_counter"
 
 def post_json(url, body, headers = {})
   uri = URI(url)
@@ -45,7 +49,16 @@ _key, reg = equihash_register(
   server: SERVER, issuer: ISSUER,
   get_json: method(:get_json), post_json: method(:post_json),
 )
-auth = { "Authorization" => "Bearer #{reg.fetch("access_token")}" }
+auth     = { "Authorization" => "Bearer #{reg.fetch("access_token")}" }
+agent_id = reg.fetch("agent_id")
+
+# A second, INNOCENT identity (K-498): registers, never submits a bad proof —
+# its per-identity count must still be 0 after this flow's wrong nonce.
+_key2, reg2 = equihash_register(
+  server: SERVER, issuer: ISSUER,
+  get_json: method(:get_json), post_json: method(:post_json),
+)
+other_agent_id = reg2.fetch("agent_id")
 
 QUERY = { name: "catalog" }
 
@@ -64,7 +77,12 @@ bad = { "indices" => (1..proofs.first[:nonce]["indices"].length).to_a, "header_n
 rc_wrong, _ = post_json("#{SERVER}/kiosk/query", QUERY,
   auth.merge("Kiosk-PoW" => JSON.generate([{ challenge: neg.dig("error", "challenges").first, nonce: bad }])))
 abort "expected 403 for wrong nonce, got #{rc_wrong}" unless rc_wrong == 403
-bad_proof_count = File.read(BAD_PROOF_FILE).to_i rescue 0
+# PER-IDENTITY (K-498): the offender's count moved, the innocent one's did not.
+bad_proof_count       = BadProofCounter.count(BAD_PROOF_DB, agent_id)
+other_bad_proof_count = BadProofCounter.count(BAD_PROOF_DB, other_agent_id)
+unless other_bad_proof_count.zero?
+  abort "expected bad_proof_count == 0 for the innocent identity, got #{other_bad_proof_count} — the counter is not per-identity (K-498)"
+end
 
 # ── Correct proof → 200 served ──────────────────────────────────────────────
 rc_served, served_resp = post_json("#{SERVER}/kiosk/query", QUERY, auth.merge("Kiosk-PoW" => JSON.generate(proofs)))
@@ -78,5 +96,6 @@ puts JSON.generate(
   served:                  true,
   proofs_solved:           proofs.size,
   bad_proof_count:         bad_proof_count,
+  other_bad_proof_count:   other_bad_proof_count,
   catalog_rows:            rows.size,
 )

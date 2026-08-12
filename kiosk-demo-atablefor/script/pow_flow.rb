@@ -10,7 +10,9 @@
 #   3. Extract the challenge(s); shell out to solve.py → {indices, header_nonce}.
 #   4. Re-POST the SAME query with the Kiosk-PoW header: [{challenge, nonce}] → 200 + rows.
 #   5. Submit a deliberately wrong nonce against a fresh challenge → expect
-#      HTTP 403 (forbidden / invalid proof); assert on_bad_proof incremented.
+#      HTTP 403 (forbidden / invalid proof); assert on_bad_proof incremented
+#      FOR THIS IDENTITY, and that a second, innocent identity's count stayed 0
+#      (K-498 — the counter is per-identity, not one shared tally).
 #
 # Reservation-scalping is the abuse this prices at the door: PoW makes a
 # script that mass-probes prime-time availability pay a metered toll per query.
@@ -40,11 +42,14 @@ ISSUER = ENV.fetch("KIOSK_ISSUER")
 # location is Kiosk::Pow::Equihash.solver_path, owned by the gem (K-627).
 require_relative "../lib/equihash_register"
 
-# The TOY counter the demo initializer's on_bad_proof writes (K-498): global,
-# truncated at boot, no TTL, and read by nothing but this driver. It exists so
-# step 3 below can assert the server actually counted the rejected proof — it is
-# NOT the per-identity, decayed bad_proof_count a real provider needs.
-BAD_PROOF_FILE = "/tmp/kiosk-atablefor-bad-proof.count"
+# The TOY counter the demo initializer's on_bad_proof writes (K-498):
+# PER-IDENTITY in sqlite (one abuser's rejections never appear in anyone
+# else's count), but still truncated at boot, no TTL, and read by nothing but
+# this driver. It exists so step 5 below can assert the server counted the
+# rejected proof against THIS identity and nobody else's — it is NOT the
+# decayed, durable bad_proof_count a real provider needs.
+require_relative "../lib/bad_proof_counter"
+BAD_PROOF_DB = "/tmp/kiosk-atablefor-bad-proof.sqlite3"
 
 def post_json(url, body, headers = {})
   uri = URI(url)
@@ -66,7 +71,17 @@ _key, reg = equihash_register(
   server: SERVER, issuer: ISSUER,
   get_json: method(:get_json), post_json: method(:post_json),
 )
-token = reg.fetch("access_token")
+token    = reg.fetch("access_token")
+agent_id = reg.fetch("agent_id")
+
+# A second, INNOCENT identity (K-498): it registers and never submits a bad
+# proof, so its per-identity count must still be 0 after this flow's wrong
+# nonce lands on the first identity's tally.
+_key2, reg2 = equihash_register(
+  server: SERVER, issuer: ISSUER,
+  get_json: method(:get_json), post_json: method(:post_json),
+)
+other_agent_id = reg2.fetch("agent_id")
 
 # The request we prove. The identical body is sent on every retry so the server
 # computes the same request_fingerprint; the proof is a top-level `pow` sibling.
@@ -106,9 +121,15 @@ rc_wrong, resp_wrong = post_json(
 unless rc_wrong == 403
   abort "expected HTTP 403 for wrong nonce, got #{rc_wrong}: #{JSON.generate(resp_wrong)}"
 end
-bad_proof_count = File.read(BAD_PROOF_FILE).to_i rescue 0
+# PER-IDENTITY (K-498): the offender's count moved, the innocent identity's
+# did not — one bad client must not make everyone else suffer.
+bad_proof_count = BadProofCounter.count(BAD_PROOF_DB, agent_id)
 unless bad_proof_count >= 1
-  abort "expected bad_proof_count >= 1 after wrong nonce, got #{bad_proof_count}"
+  abort "expected bad_proof_count >= 1 for the offending identity after wrong nonce, got #{bad_proof_count}"
+end
+other_bad_proof_count = BadProofCounter.count(BAD_PROOF_DB, other_agent_id)
+unless other_bad_proof_count.zero?
+  abort "expected bad_proof_count == 0 for the innocent identity, got #{other_bad_proof_count} — the counter is not per-identity (K-498)"
 end
 
 # ── Step 4: re-POST with correct proof(s) → expect 200 served ──────────────
@@ -133,5 +154,6 @@ puts JSON.generate(
   served:                  served,
   proofs_solved:           proofs.size,
   bad_proof_count:         bad_proof_count,
+  other_bad_proof_count:   other_bad_proof_count,
   availability_rows:       rows.size,
 )

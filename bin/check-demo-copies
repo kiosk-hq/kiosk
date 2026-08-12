@@ -236,6 +236,14 @@ COPIES = {
     why:  "The KIOSK_POW_DIFFICULTY -> Equihash (n, k) map. A demo whose copy drifts advertises " \
           "a toll it does not charge.",
   },
+  "lib/bad_proof_counter.rb" => {
+    rule: :identical,
+    why:  "The K-498 PER-IDENTITY bad-proof tally (sqlite, keyed by agent credential id) behind " \
+          "the two PoW demos' on_bad_proof wiring — atablefor and getgrocery are the only demos " \
+          "that toll queries and count rejected proofs. The per-identity keying IS the fix (one " \
+          "abuser must not inflate anyone else's count), so a copy that drifts could silently " \
+          "regrow the shared-counter bug.",
+  },
   "lib/equihash_register.rb" => {
     rule: :code,
     why:  "The register handshake with the Equihash toll (challenge -> PoP -> 402 -> solve.py -> " \

@@ -28,6 +28,7 @@ require Rails.root.join("lib/pow_difficulty")
 require Rails.root.join("lib/dublin_zones")
 require Rails.root.join("lib/delivery_slots")
 require Rails.root.join("lib/uuid_check")
+require Rails.root.join("lib/bad_proof_counter")
 require Rails.root.join("lib/validating_payment_provider")
 require Rails.root.join("lib/prove_trust")
 require Rails.root.join("lib/prove_broker_client")
@@ -60,22 +61,22 @@ require "kiosk/reputation"
 Kiosk::Reputation::Backends.register(Kiosk::Pow::Equihash::NAME, Kiosk::Pow::Equihash)
 
 if ENV["KIOSK_POW_DEMO"] == "1"
-  # ⚠ TOY COUNTER — NOT a reputation signal (K-590, the atablefor K-498 sibling).
-  # Its ONLY job is to let the local `script/pow_flow.rb` driver print "the server
-  # counted my bad proof"; nothing reads it for policy (`reputation_factors`
-  # below is `Factors.empty`). Do NOT copy this into a real provider — it is
-  # deliberately wrong in three ways:
-  #   · GLOBAL — the on_bad_proof lambda is handed `identity:` and ignores it,
-  #     so wiring this file into `bad_proof_count_factor` would let ONE abusive
-  #     assistant raise the toll for EVERY assistant on the provider;
+  # ⚠ TOY COUNTER — NOT a reputation signal (K-590, the atablefor K-498
+  # sibling). Its ONLY job is to let the local `script/pow_flow.rb` driver
+  # print "the server counted MY bad proof"; nothing reads it for policy
+  # (`reputation_factors` below is `Factors.empty`). Since K-498's re-decision
+  # it counts PER IDENTITY in sqlite (lib/bad_proof_counter.rb): one abusive
+  # assistant can no longer inflate anyone else's count, and concurrent server
+  # processes no longer fight over one flat file. Two toy aspects REMAIN,
+  # deliberately, labelled:
   #   · TRUNCATED AT BOOT — a redeploy silently zeroes the accumulated signal;
   #   · NO TTL — and never resetting is equally wrong: a count that only grows
   #     condemns an identity for something a year old.
-  # A production bad-proof count is per-identity, decayed over a window, and
-  # durable across restarts (the same gap as the in-process revocation
+  # A production bad-proof count keeps the per-identity keying and adds decay
+  # plus durability across restarts (the same gap as the in-process revocation
   # watermark). It must be specified before it is built, not bolted on here.
-  GETGROCERY_BAD_PROOF_FILE = "/tmp/kiosk-getgrocery-bad-proof.count"
-  File.write(GETGROCERY_BAD_PROOF_FILE, "0")
+  GETGROCERY_BAD_PROOF_DB = "/tmp/kiosk-getgrocery-bad-proof.sqlite3"
+  BadProofCounter.reset!(GETGROCERY_BAD_PROOF_DB)
 
   class GetgroceryCatalogPowPolicy < Kiosk::Reputation::Policy
     def initialize(params)
@@ -232,16 +233,15 @@ Kiosk.configure do |c|
     c.reputation_policy  = GetgroceryCatalogPowPolicy.new(Kiosk::Pow::Equihash.params(**EQUIHASH_DEMO_PARAMS))
     c.pow_ttl            = 300
     c.reputation_factors = ->(**) { Kiosk::Reputation::Factors.empty }
-    # ⚠ TOY COUNTER — the write side of the demo counter defined above, and every
-    # caveat there applies verbatim (global, boot-truncated, no TTL, K-590). Note
-    # this lambda IS handed `identity:` and drops it on the floor: that is what
-    # makes the file global, and why wiring it into a real `bad_proof_count`
-    # factor would ship collective punishment. Its only consumer is the local
-    # driver script/pow_flow.rb; `reputation_factors` right above feeds the policy
-    # `Factors.empty`, so nothing this counts changes any toll.
+    # ⚠ TOY COUNTER — the write side of the demo counter defined above; the
+    # two remaining caveats there apply verbatim (boot-truncated, no TTL —
+    # K-590/K-498). PER IDENTITY since K-498's re-decision: keyed by the
+    # verified agent credential id the gate hands in, so one abuser's
+    # rejections never appear in anyone else's count. Its only consumer is the
+    # local driver script/pow_flow.rb; `reputation_factors` right above feeds
+    # the policy `Factors.empty`, so nothing this counts changes any toll.
     c.on_bad_proof = ->(identity:) {
-      n = (File.read(GETGROCERY_BAD_PROOF_FILE).to_i rescue 0)
-      File.write(GETGROCERY_BAD_PROOF_FILE, (n + 1).to_s)
+      BadProofCounter.increment(GETGROCERY_BAD_PROOF_DB, identity.agent_id)
     }
   end
 

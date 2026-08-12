@@ -23,6 +23,15 @@
 # a copy is publishing the guard in a shipped gem — a public-API decision, not a
 # fix-wave one (K-607). Same arrangement as lib/pow_difficulty.rb and
 # lib/equihash_register.rb.
+#
+# K-661: shape recognition below delegates to the `uuid` gem (pinned 2.3.9 —
+# see the Gemfile comment for why). Its own `UUID.validate` is looser than
+# this guard has ever been (it also accepts compact/un-hyphenated and
+# `urn:uuid:` spellings), so PATTERN stays as the second, narrowing check —
+# `valid?` requires both, which keeps the canonical-only rejection this
+# module has always enforced (K-579) unchanged.
+require "uuid"
+
 module UuidCheck
   # Canonical 8-4-4-4-12 hex form, the only shape Postgres' `uuid` type is fed
   # here (gen_random_uuid() output, echoed back by the agent). Postgres itself
@@ -34,6 +43,7 @@ module UuidCheck
   # @param value [Object] the candidate id (usually a String off the wire)
   # @return [Boolean] true iff `value` is a canonical uuid literal
   def self.valid?(value)
-    PATTERN.match?(value.to_s)
+    str = value.to_s
+    !!(UUID.validate(str) && PATTERN.match?(str))
   end
 end

@@ -4,7 +4,7 @@ require "net/http"
 require "uri"
 require "json"
 
-# ProveBrokerClient — skooti's server-to-server client for the prove.my broker
+# ProveBrokerClient — skooti's server-to-server client for the KYC broker
 # intake (design §4.1 / §5.1). On `run request_kyc`, skooti calls the broker
 # here (NOT the human) to START a verification, handing the broker skooti's
 # callback_url, the claims it needs, and the agent's user_id as the subject the
@@ -51,7 +51,7 @@ module ProveBrokerClient
 
     res = http.request(req)
     unless res.code.to_i == 201
-      raise "prove.my intake failed (#{res.code}): #{res.body}"
+      raise "KYC broker intake failed (#{res.code}): #{res.body}"
     end
 
     JSON.parse(res.body)

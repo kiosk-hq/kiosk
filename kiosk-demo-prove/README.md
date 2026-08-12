@@ -1,15 +1,14 @@
-# kiosk-demo-prove — the `prove.my` anonymizing KYC broker (demo)
+# kiosk-demo-prove — the anonymizing KYC broker demo (kyc.demo.kiosk.tech)
 
 A standalone **anonymizing KYC broker**. Operators need only MINIMAL, ANONYMIZED
 facts — "over 18", "holds a category-A driving licence" — never identity or PII.
-`prove.my` sits between the many government age/licence services and the many
+The broker sits between the many government age/licence services and the many
 Kiosk operators: a human authorizes it once, and it returns to the requesting
 operator a **signed, anonymized, single-use** claim, bound to that one request.
-Each operator trusts `prove.my` as an issuer once; it never registers with every
+Each operator trusts the broker as an issuer once; it never registers with every
 government service (the broker does), and it never sees a document.
 
-Deploy origin: **kyc.demo.kiosk.tech** (the registered demo domain; production
-brand `prove.my`). The issuer `iss` is env-configurable (`KIOSK_PROVE_ISSUER`)
+Deploy origin: **kyc.demo.kiosk.tech** (the registered demo domain). The issuer `iss` is env-configurable (`KIOSK_PROVE_ISSUER`)
 and defaults to that origin (`https://kyc.demo.kiosk.tech`); the public
 verification-URL base (`PROVE_PUBLIC_URL`) defaults to the intake request's own
 `base_url` — the origin the request arrived on — **not** the deploy origin. The
@@ -17,7 +16,7 @@ two-server harness and specs pin their own local values on both sides.
 
 ## Not a Kiosk operator — an ISSUER
 
-`prove.my` exposes **none** of the four Kiosk verbs (`schema`/`query`/`run`/`pay`),
+The broker exposes **none** of the four Kiosk verbs (`schema`/`query`/`run`/`pay`),
 has no PoW gate, and serves no `/.well-known/kiosk.json`. It is the mirror ISSUER
 side of the Kiosk trust primitives an operator's `Kiosk::Server::KycVerifier`
 already accepts: it signs anonymized attestations that the operator trusts via
@@ -85,7 +84,7 @@ such on the page. It proves the *protocol* — per-request binding, no replay,
 anti-mass-confirm, signed anonymized callback — not that the human is actually
 over 18, and it makes **no liveness claim**. In production the verification page
 is replaced by a **government identity service** login (an mDL / ISO-18013-5
-mobile driving licence, an EUDI wallet, or a national IdP), from which `prove.my`
+mobile driving licence, an EUDI wallet, or a national IdP), from which the broker
 derives the booleans it was asked for. The real broker closes two gaps the stub
 leaves open: it verifies the human **possesses a government account** (the
 account-possession assurance level adopted for now, DECISIONS-LOG

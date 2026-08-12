@@ -355,7 +355,7 @@ namespace :demo do
       agent_token = reg_data["access_token"]
       new_user_id = reg_data["user_id"]
 
-      # KYC the new agent (valid attestation signed with the shared prove.my
+      # KYC the new agent (valid attestation signed with the shared broker
       # ProveKey via ProveTestIssuer — the retired StubKyc's replacement).
       require_relative "../../lib/prove_test_issuer"
       att = ProveTestIssuer.attest(user_id: new_user_id)
@@ -745,7 +745,7 @@ namespace :demo do
     kiosk_issuer = server_url
 
     # TWO-SERVER GATE: the broker-flavored beats (IssuedKycJwsTheft via the
-    # broker, CrossOperatorClaimReplay, ForgedCallbackNoSig) drive prove.my, so
+    # broker, CrossOperatorClaimReplay, ForgedCallbackNoSig) drive the broker, so
     # boot the broker first and wire skooti's trust/intake config at it.
     exit_status = nil
     ProveBrokerBoot.with_broker(skooti_host: host, log: "/tmp/kiosk-prove-broker-redteam.log") do |broker|
@@ -790,7 +790,7 @@ namespace :demo do
 
       # ── run script/redteam_suite.rb ─────────────────────────────────────────────
       suite_rb = File.expand_path("../../script/redteam_suite.rb", __dir__)
-      puts "\n── Running script/redteam_suite.rb (skooti + prove.my broker) ──"
+      puts "\n── Running script/redteam_suite.rb (skooti + KYC broker) ──"
 
       # The driver mints valid/expired attestations via ProveTestIssuer (iss =
       # ProveKey.issuer) and forged ones via ProveTrust.issuer — both read
@@ -1041,7 +1041,7 @@ namespace :demo do
     server_url   = "http://#{host}:#{port}"
     kiosk_issuer = server_url
 
-    # TWO-SERVER GATE: boot the prove.my broker first, wire skooti's trust +
+    # TWO-SERVER GATE: boot the KYC broker first, wire skooti's trust +
     # intake config at it, then boot skooti and drive the cross-app KYC flow.
     result = nil
     ProveBrokerBoot.with_broker(skooti_host: host) do |broker|
@@ -1081,7 +1081,7 @@ namespace :demo do
       puts "  Server up at #{server_url}"
 
       flow_rb = File.expand_path("../../script/kyc_flow.rb", __dir__)
-      puts "\n── Running script/kyc_flow.rb (skooti + prove.my broker) ──"
+      puts "\n── Running script/kyc_flow.rb (skooti + KYC broker) ──"
       driver_env = "SERVER_URL=#{server_url} KIOSK_ISSUER=#{kiosk_issuer} " \
                    "KIOSK_PROVE_BROKER_URL=#{broker[:broker_url]}"
       raw = `#{driver_env} bundle exec ruby #{flow_rb.shellescape} 2>&1`
@@ -1116,7 +1116,7 @@ namespace :demo do
     end
 
     # A2: the SHARED-BROKER issuer path — request_kyc returned a verification_url
-    # on the prove.my BROKER host, the broker approve page accepted the token,
+    # on the KYC BROKER host, the broker approve page accepted the token,
     # the broker POSTed its signed claim to skooti's callback, kyc_status reached
     # approved, and the broker-signed jws was relayed back (the agent never held
     # the signing key).

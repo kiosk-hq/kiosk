@@ -3,10 +3,10 @@
 require "openssl"
 require "jwt"
 
-# ProveKey — prove.my's RSA issuer key ("the ProveKey"). This is the key each
+# ProveKey — the broker's RSA issuer key ("the ProveKey"). This is the key each
 # operator TRUSTS once (skooti sets c.kyc_public_key = ProveKey.public_key). The
 # broker signs every anonymized claim with it; the operator's
-# Kiosk::Server::KycVerifier accepts the claim because prove.my is its configured
+# Kiosk::Server::KycVerifier accepts the claim because this broker is its configured
 # c.kyc_issuer and the signature verifies against this key.
 #
 # Fixed dev RSA-2048 keypair — stable across processes so the Rails server (which
@@ -30,8 +30,8 @@ module ProveKey
   # matching value on BOTH sides. Deploy default is the registered demo origin
   # kyc.demo.kiosk.tech; skooti's ProveTrust.issuer defaults to the SAME value
   # (they must line up — the operator's KycVerifier compares the minted `iss`
-  # against its configured c.kyc_issuer). The far-future production brand is
-  # prove.my; DECISIONS-LOG PROVE-MY-BUILD-FORKS put the demo at kyc.demo.
+  # against its configured c.kyc_issuer). DECISIONS-LOG PROVE-MY-BUILD-FORKS
+  # put the demo at kyc.demo.kiosk.tech.
   DEFAULT_ISSUER = "https://kyc.demo.kiosk.tech"
 
   # Fixed dev RSA-2048 keypair — stable for the demo. DO NOT use in production.

@@ -4,7 +4,7 @@ require "net/http"
 require "uri"
 require "json"
 
-# ProveBrokerClient — getgrocery's server-to-server client for the prove.my
+# ProveBrokerClient — getgrocery's server-to-server client for the KYC
 # broker intake (design §4.1 / §5.1). On `run request_kyc`, getgrocery calls the
 # broker here (NOT the human) to START an age verification, handing the broker
 # getgrocery's callback_url, the SINGLE claim it needs (age_over_18 — NOT a
@@ -53,7 +53,7 @@ module ProveBrokerClient
 
     res = http.request(req)
     unless res.code.to_i == 201
-      raise "prove.my intake failed (#{res.code}): #{res.body}"
+      raise "KYC broker intake failed (#{res.code}): #{res.body}"
     end
 
     JSON.parse(res.body)

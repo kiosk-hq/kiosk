@@ -159,7 +159,7 @@ jobs:
           - demo: kiosk-demo-getgrocery
             # demo:agecheck = the alcohol 18+ age-gate (create_order rejects a
             # cart with an age_restricted item unless the agent carries
-            # age_over_18) — a TWO-SERVER integration: it boots the prove.my
+            # age_over_18) — a TWO-SERVER integration: it boots the KYC
             # broker (kiosk-demo-prove) on its own port, with getgrocery
             # registered as a SECOND broker operator, and drives the cross-app
             # KYC flow (alcohol→403→broker approve→200; non-alcohol→200 no KYC;
@@ -297,7 +297,7 @@ jobs:
             # It goes last with demo:search; both reseed via `: :setup`.
             tasks: demo:book demo:isolation demo:redteam demo:schema demo:search demo:browse
           - demo: kiosk-demo-prove
-            # prove.my — the anonymizing KYC broker (an ISSUER, not a Kiosk
+            # kiosk-demo-prove — the anonymizing KYC broker (an ISSUER, not a Kiosk
             # operator; mounts none of the four verbs). demo:test runs its own
             # rspec suite (intake auth + allow-list, per-request/operator/subject
             # binding, single-use, TTL, SSRF/open-relay guard, signed claim).
@@ -305,7 +305,7 @@ jobs:
           - demo: kiosk-demo-skooti
             # demo:kyc = the KYC attribute gate (combustion motorcycle needs
             # age_over_18 + licence_a; the electric scooter is licence-free) — now
-            # a TWO-SERVER integration: it boots the prove.my broker
+            # a TWO-SERVER integration: it boots the KYC broker
             # (kiosk-demo-prove) on its own port and drives the cross-app flow, as
             # does demo:redteam (the broker-flavored theft/cross-operator/forged-
             # callback beats). So this job also bundles the sibling broker app.
@@ -427,10 +427,10 @@ jobs:
         run: ./bin/check-ci-tasks --verify-inventory ${{ matrix.demo }}
 
       # skooti's demo:kyc / demo:redteam and getgrocery's demo:agecheck are
-      # two-server integrations that boot the prove.my broker (kiosk-demo-prove)
+      # two-server integrations that boot the KYC broker (kiosk-demo-prove)
       # on its own port; that sibling app needs its own bundle installed for the
       # boot helper to `rails s` it.
-      - name: Install prove.my broker deps (two-server KYC gates)
+      - name: Install KYC broker deps (two-server KYC gates)
         if: matrix.prove_broker
         working-directory: ${{ matrix.prove_broker }}
         run: bundle install
@@ -645,7 +645,7 @@ jobs:
   # a simulated proxy+browser, and curl-asserts the surfaces those bugs broke:
   #   stylish — Devise sign-in, roles, the manage page (the original three-bug
   #             surface).
-  #   prove   — the prove.my broker's /verify human page (K-462): a distinct
+  #   prove   — the KYC broker's /verify human page (K-462): a distinct
   #             token-capability HTML surface with a form POST and no login,
   #             depending on no kiosk gem. The stylish-only smoke never covered
   #             it. Booting all seven demos in prod would be heavier CI for
@@ -680,7 +680,7 @@ jobs:
       # runs trust auth as `postgres`, so no password is needed.
       KIOSK_STYLISH_DB_USER: postgres
       KIOSK_STYLISH_DB_PASSWORD: ""
-      # Same for the prove.my broker's production database.yml.
+      # Same for the KYC broker's production database.yml.
       KIOSK_PROVE_DB_USER: postgres
       KIOSK_PROVE_DB_PASSWORD: ""
       # The smoke DROPS and rebuilds its database (a throwaway `kiosk_<app>_smoke`
@@ -706,7 +706,7 @@ jobs:
         working-directory: kiosk-demo-stylish
         run: bundle install
 
-      - name: Install prove.my broker dependencies
+      - name: Install KYC broker dependencies
         working-directory: kiosk-demo-prove
         run: bundle install
 
@@ -725,10 +725,10 @@ jobs:
       - name: Production-boot smoke (stylish)
         run: ./deploy/production-smoke.sh stylish
 
-      # Boot the prove.my broker in production and assert its /verify HTML page
+      # Boot the KYC broker in production and assert its /verify HTML page
       # (live form + clean not-recognised + form POST behind the proxy) renders
       # rather than 500 — the K-462 gap the stylish-only smoke did not cover.
-      - name: Production-boot smoke (prove.my broker)
+      - name: Production-boot smoke (KYC broker)
         run: ./deploy/production-smoke.sh prove
 
   # Live solver-pin probe (K-528). The Equihash solver exists in four copies

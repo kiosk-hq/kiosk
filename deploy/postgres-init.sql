@@ -87,7 +87,7 @@ SELECT format('CREATE ROLE %I LOGIN PASSWORD %L', :'pl_user', :'pl_pw')
   WHERE NOT EXISTS (SELECT FROM pg_roles WHERE rolname = :'pl_user')\gexec
 SELECT format('CREATE ROLE %I LOGIN PASSWORD %L', :'td_user', :'td_pw')
   WHERE NOT EXISTS (SELECT FROM pg_roles WHERE rolname = :'td_user')\gexec
--- prove.my KYC broker (gem dir kiosk-demo-prove; deploy domain kyc.demo.kiosk.tech)
+-- KYC broker (gem dir kiosk-demo-prove; deploy domain kyc.demo.kiosk.tech)
 SELECT format('CREATE ROLE %I LOGIN PASSWORD %L', :'pv_user', :'pv_pw')
   WHERE NOT EXISTS (SELECT FROM pg_roles WHERE rolname = :'pv_user')\gexec
 

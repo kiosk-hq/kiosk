@@ -2,7 +2,7 @@
 
 Concise, ordered. Detail + file contents: `deploy/README.md`. Operator actions.
 Seven demos: getgrocery · atablefor · hoteling · skooti · stylish · philslist · tudu.
-Plus the prove.my KYC broker (`kiosk-demo-prove` → `kyc.demo.kiosk.tech`, port 3008) —
+Plus the KYC broker (`kiosk-demo-prove` → `kyc.demo.kiosk.tech`, port 3008) —
 an ISSUER, not a Kiosk operator (no PoW, no `/.well-known/kiosk.json`, no agent surface).
 
 ## 1. DNS (you)
@@ -48,7 +48,7 @@ For EACH of the 7 apps:
 - [ ] **Stripe (getgrocery only):** `STRIPE_SECRET_KEY=sk_test_…` (TEST mode — no real charges). getgrocery is the only demo with a payment provider; atablefor takes no money (no `pay` capability).
 - [ ] **Card-setup Checkout render (getgrocery, K-473):** `payment_setup`'s `setup_url` is a valid Stripe link, but a relaying agent can truncate its required `#fid…` fragment → **"Something went wrong"** (not the account/deploy — the session is valid; proven agent-side). Mitigated by skill guidance (relay the url verbatim/in full); escalate to an operator-hosted short redirect if it recurs. See `deploy/README.md` §Payments.
 
-### 4b. prove.my KYC broker env (copy `deploy/env/kyc-demo.env.example` → `/etc/kiosk-demo/prove.env`)
+### 4b. KYC broker env (copy `deploy/env/kyc-demo.env.example` → `/etc/kiosk-demo/prove.env`)
 - [ ] `SECRET_KEY_BASE`, `KIOSK_PROVE_DB` / `KIOSK_PROVE_DB_{USER,PASSWORD}`, `PORT=3008`. No kiosk gem — no signing key / no PoW knob.
 - [ ] **Issuer + public URL:** `KIOSK_PROVE_ISSUER=https://kyc.demo.kiosk.tech`, `PROVE_PUBLIC_URL=https://kyc.demo.kiosk.tech`.
 - [ ] **Broker signing key:** `PROVE_KEY_PEM=<fresh 2048-bit RSA private PEM>` (do NOT ship the baked-in dev key).
@@ -88,7 +88,7 @@ For EACH of the 7 apps:
       skip the module and leave the Caddy snippet commented. Deploying with **neither** is the one
       unacceptable option. Detail: `deploy/README.md` §"Edge rate-limit — REQUIRED".
 - [ ] Install `deploy/Caddyfile` (**8** vhosts → loopback ports: getgrocery/atablefor/hoteling/skooti/
-      stylish/philslist/tudu + `kyc` for the prove.my broker). Certs issue automatically.
+      stylish/philslist/tudu + `kyc` for the KYC broker). Certs issue automatically.
 - [ ] **Uncomment the rate-limit (only after the module is installed):** in `/etc/caddy/Caddyfile` uncomment
       `import ratelimit` inside `(kioskproxy)` AND the whole `(ratelimit)` snippet. They ship **commented**
       because `rate_limit` is not a stock directive — a stock binary refuses the WHOLE config
@@ -119,7 +119,7 @@ For EACH of the 7 apps:
 - [ ] The demo **root page** loads (what it is + a curl one-liner + the live activity counters).
 - [ ] `GET https://<app>.demo.kiosk.tech/demo/activity.json` returns aggregates.
 - [ ] getgrocery: a Stripe test card `4242 4242 4242 4242` completes a real test-mode pay (the only demo with a payment provider).
-- [ ] prove.my broker: `GET https://kyc.demo.kiosk.tech/` renders the human explainer (STUB-KYC notice; NO agent/kiosk signal); `GET /prove_key.pem` returns the public key; `GET /.well-known/kiosk.json` is **absent** (404 — it is an issuer, not an operator).
+- [ ] KYC broker: `GET https://kyc.demo.kiosk.tech/` renders the human explainer (STUB-KYC notice; NO agent/kiosk signal); `GET /prove_key.pem` returns the public key; `GET /.well-known/kiosk.json` is **absent** (404 — it is an issuer, not an operator).
 
 ## Notes
 - Everything is OFF by default in code — nothing here changes local/CI behavior.

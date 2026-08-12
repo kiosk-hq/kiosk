@@ -257,11 +257,11 @@ Kiosk.configure do |c|
     currency: "eur",
   )
 
-  # ── KYC attestation verifier — trusts the prove.my broker ────────────────
+  # ── KYC attestation verifier — trusts the KYC broker ────────────────
   # The alcohol age-gate (create_order rejecting a cart with an age_restricted
   # item unless the agent carries age_over_18) reads the engine-verified
   # kyc_attributes. getgrocery does NOT host its own issuer: it configures the
-  # SHARED prove.my broker as its kyc_issuer + kyc_public_key ONCE and asks the
+  # SHARED KYC broker as its kyc_issuer + kyc_public_key ONCE and asks the
   # broker for exactly the ONE claim it needs (age_over_18 — NOT a driving
   # licence). Trust anchors come from ProveTrust (env-overridable by the
   # two-server harness, pinned dev fallback for plain boot). Same two config
@@ -887,9 +887,9 @@ Kiosk::Server::Actions.register("reschedule_delivery",
   end
 end
 
-# request_kyc — start an 18+ verification at the prove.my broker an EXTERNAL
+# request_kyc — start an 18+ verification at the KYC broker an EXTERNAL
 # agent can COMPLETE without any pre-shared issuer key (design §5.1). Instead of
-# minting a local token, getgrocery calls prove.my's intake (server-to-server)
+# minting a local token, getgrocery calls the broker's intake (server-to-server)
 # with its own callback_url, the SINGLE claim it needs (age_over_18 — NOT a
 # driving licence), and the agent's user_id as the subject the claim must bind
 # to. The broker returns an unguessable verification_url (on the BROKER) and a

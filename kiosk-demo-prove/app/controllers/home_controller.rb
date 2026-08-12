@@ -1,6 +1,6 @@
 # frozen_string_literal: true
 
-# prove.my's public root — what this demo is: an anonymizing KYC broker that
+# The broker's public root — what this demo is: an anonymizing KYC broker that
 # sits between the many government age/licence services and the many operators,
 # handing an operator only the minimal anonymized booleans it asked for and
 # nothing that identifies the human. This is an ISSUER, not a Kiosk operator: it

@@ -1,7 +1,7 @@
 # frozen_string_literal: true
 
 Rails.application.routes.draw do
-  # Public root: what prove.my is (an anonymizing KYC broker) + the privacy
+  # Public root: what this broker is (an anonymizing KYC broker) + the privacy
   # thesis. Rendered HTML — this app keeps the full middleware stack.
   root "home#index"
 

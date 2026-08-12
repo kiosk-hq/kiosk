@@ -4,7 +4,7 @@ require "net/http"
 require "uri"
 
 # ProveBrokerBoot — shared helper for getgrocery's two-server age-gate gate
-# (demo:agecheck). The prove.my broker is a SEPARATE Rails app
+# (demo:agecheck). The KYC broker (kyc.demo.kiosk.tech) is a SEPARATE Rails app
 # (kiosk-demo-prove); this gate is a genuine two-server integration. This helper
 # boots the broker on its own port, sets up its DB, wires the intake allow-list
 # to getgrocery's host (getgrocery is a SECOND registered operator alongside
@@ -44,12 +44,12 @@ module ProveBrokerBoot
     broker_url  = "http://#{broker_host}:#{BROKER_PORT}"
 
     # ── Set up the broker DB (idempotent) ──────────────────────────────────
-    puts "\n── Setting up prove.my broker DB (#{BROKER_APP}) ──"
+    puts "\n── Setting up KYC broker DB (#{BROKER_APP}) ──"
     system(
       { "RAILS_ENV" => "development" },
       "bundle exec rails db:drop db:create db:schema:load db:seed",
       chdir: BROKER_APP,
-    ) || abort("prove.my broker DB setup failed")
+    ) || abort("KYC broker DB setup failed")
 
     # ── Boot the broker ────────────────────────────────────────────────────
     File.truncate(log, 0) if File.exist?(log)
@@ -97,8 +97,8 @@ module ProveBrokerBoot
       end
       sleep 1
     end
-    abort "prove.my broker did not become ready — see #{log}" unless ready
-    puts "  prove.my broker up at #{broker_url}"
+    abort "KYC broker did not become ready — see #{log}" unless ready
+    puts "  KYC broker up at #{broker_url}"
 
     # The env getgrocery's server + the driver must carry to reach/trust the
     # broker.
@@ -115,7 +115,7 @@ module ProveBrokerBoot
       yield({ broker_url: broker_url, wiring: wiring })
     ensure
       stop_broker.call
-      puts "  prove.my broker stopped."
+      puts "  KYC broker stopped."
     end
   end
 end

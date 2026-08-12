@@ -7,7 +7,7 @@ require "openssl"
 # Exercises the broker's security model (design §4) end to end over HTTP:
 # intake auth + allow-list, unguessable capability, single-use, TTL, the signed
 # anonymized per-request/operator/subject claim, and the SSRF/open-relay guard.
-RSpec.describe "prove.my broker", type: :request do
+RSpec.describe "KYC broker (kiosk-demo-prove)", type: :request do
   let(:operator_secret) { OperatorRegistry.registry["skooti"][:secret] }
   let(:callback_url)    { "http://127.0.0.1:3004/kyc/callback" }
   let(:intake_headers)  { { "Authorization" => "Bearer #{operator_secret}", "Content-Type" => "application/json" } }

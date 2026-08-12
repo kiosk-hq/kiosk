@@ -4,15 +4,15 @@ require "net/http"
 require "uri"
 
 # ProveBrokerBoot — shared helper for skooti's two-server demo gates (demo:kyc
-# and demo:redteam). The prove.my broker is a SEPARATE Rails app
+# and demo:redteam). The KYC broker (kyc.demo.kiosk.tech) is a SEPARATE Rails app
 # (kiosk-demo-prove); these gates are now genuine two-server integrations. This
 # helper boots the broker on its own port, sets up its DB, wires the intake
 # allow-list to skooti's host, waits for readiness, and returns the env skooti
 # (and the flow/redteam drivers) need to reach and trust the broker.
 #
 # The trust anchors line up out of the box: skooti's ProveTrust pins the broker's
-# fixed dev ProveKey public half and defaults its issuer to "https://prove.my"
-# (== the broker's ProveKey::ISSUER), so only the URLs + the shared intake secret
+# fixed dev ProveKey public half and defaults its issuer to "https://kyc.demo.kiosk.tech"
+# (== the broker's ProveKey default issuer), so only the URLs + the shared intake secret
 # + the callback host need wiring here.
 module ProveBrokerBoot
   BROKER_APP  = File.expand_path("../../kiosk-demo-prove", __dir__)
@@ -41,12 +41,12 @@ module ProveBrokerBoot
     broker_url  = "http://#{broker_host}:#{BROKER_PORT}"
 
     # ── Set up the broker DB (idempotent) ──────────────────────────────────
-    puts "\n── Setting up prove.my broker DB (#{BROKER_APP}) ──"
+    puts "\n── Setting up KYC broker DB (#{BROKER_APP}) ──"
     system(
       { "RAILS_ENV" => "development" },
       "bundle exec rails db:drop db:create db:schema:load db:seed",
       chdir: BROKER_APP,
-    ) || abort("prove.my broker DB setup failed")
+    ) || abort("KYC broker DB setup failed")
 
     # ── Boot the broker ────────────────────────────────────────────────────
     File.truncate(log, 0) if File.exist?(log)
@@ -94,8 +94,8 @@ module ProveBrokerBoot
       end
       sleep 1
     end
-    abort "prove.my broker did not become ready — see #{log}" unless ready
-    puts "  prove.my broker up at #{broker_url}"
+    abort "KYC broker did not become ready — see #{log}" unless ready
+    puts "  KYC broker up at #{broker_url}"
 
     # The env skooti's server + the drivers must carry to reach/trust the broker.
     wiring = {
@@ -111,7 +111,7 @@ module ProveBrokerBoot
       yield({ broker_url: broker_url, wiring: wiring })
     ensure
       stop_broker.call
-      puts "  prove.my broker stopped."
+      puts "  KYC broker stopped."
     end
   end
 end

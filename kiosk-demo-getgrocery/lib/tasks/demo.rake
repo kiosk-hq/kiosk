@@ -1392,7 +1392,7 @@ namespace :demo do
     showcase for anonymized KYC (KYC-DEMO-SCOPE (b): the gate lives on the
     PURCHASE where the transaction closes, not on a high-liability rental).
 
-    A TWO-SERVER integration: boots the prove.my broker (kiosk-demo-prove) on its
+    A TWO-SERVER integration: boots the KYC broker (kiosk-demo-prove) on its
     own port — getgrocery is a SECOND registered operator alongside skooti — then
     boots getgrocery and drives script/agecheck_flow.rb across both apps:
 
@@ -1448,7 +1448,7 @@ namespace :demo do
     server_url   = "http://#{host}:#{port}"
     kiosk_issuer = server_url
 
-    # TWO-SERVER GATE: boot the prove.my broker first (with getgrocery's callback
+    # TWO-SERVER GATE: boot the KYC broker first (with getgrocery's callback
     # host allow-listed + its shared secret), wire getgrocery's trust + intake
     # config at it, then boot getgrocery and drive the cross-app age-gate flow.
     result = nil
@@ -1495,7 +1495,7 @@ namespace :demo do
       puts "  Server up at #{server_url}"
 
       flow_rb = File.expand_path("../../script/agecheck_flow.rb", __dir__)
-      puts "\n── Running script/agecheck_flow.rb (getgrocery + prove.my broker) ──"
+      puts "\n── Running script/agecheck_flow.rb (getgrocery + KYC broker) ──"
       driver_env = "SERVER_URL=#{server_url} KIOSK_ISSUER=#{kiosk_issuer} " \
                    "KIOSK_PROVE_BROKER_URL=#{broker[:broker_url]} " \
                    "KIOSK_PROVE_ISSUER=#{broker[:wiring]["KIOSK_PROVE_ISSUER"]}"

@@ -1,6 +1,6 @@
 # Kiosk hosted live demos — deploy runbook
 
-Runbook for hosting the 7 Kiosk demo Rails apps **plus the prove.my KYC broker**
+Runbook for hosting the 7 Kiosk demo Rails apps **plus the KYC broker**
 — 8 apps — on **one small VPS**, one **Postgres** cluster (DB-per-app), fronted
 by **Caddy** (auto-TLS), each app a loopback **Puma** under **systemd** — sized
 to survive an HN stampede.
@@ -12,7 +12,7 @@ This directory is the *app-side* handoff; DNS + VPS provisioning is the operator
 | File | What it is |
 |------|-----------|
 | `Caddyfile` | One vhost per app subdomain (8) → loopback Puma; automatic TLS. Carries the **required** per-IP edge rate-limit, shipped commented (needs the `caddy-ratelimit` module — see below). |
-| `postgres-init.sql` | 8 databases + 8 least-privilege login roles (DB-per-app; 7 demos + the prove.my broker). Names default to the shipped ones and are overridable — see [Database names](#database-names). |
+| `postgres-init.sql` | 8 databases + 8 least-privilege login roles (DB-per-app; 7 demos + the KYC broker). Names default to the shipped ones and are overridable — see [Database names](#database-names). |
 | `kiosk-demo@.service` | Parameterised systemd unit: one Puma per app (`%i`). |
 | `env/<app>.env.example` | Per-app env template (7 demos + `kyc-demo.env.example` for the broker). Copy to `/etc/kiosk-demo/<app>.env`. |
 | `telemetry-init.sql` | The ONE shared live-activity store: `kiosk_demo_telemetry` DB + `kiosk_telemetry` login role + the append-only events table. Only needed if you turn telemetry on — see [Live-activity telemetry](#live-activity-telemetry--wired-opt-in). |
@@ -34,7 +34,7 @@ This directory is the *app-side* handoff; DNS + VPS provisioning is the operator
 | tudu       | `tudu.demo.kiosk.tech` | 3007 | **low** | — |
 | prove (KYC broker) | `kyc.demo.kiosk.tech` | 3008 | — (not a Kiosk operator) | — |
 
-**prove.my is the odd one out**: the gem dir is `kiosk-demo-prove` but it serves
+**The KYC broker is the odd one out**: the gem dir is `kiosk-demo-prove` but it serves
 `kyc.demo.kiosk.tech` and is an **ISSUER, not a Kiosk operator** — no PoW gate,
 no `/.well-known/kiosk.json`, no agent surface, no payment provider. It depends
 on no kiosk gem. Its env template is `env/kyc-demo.env.example` → copy to
@@ -150,7 +150,7 @@ done
 #    db:prepare creates the schema, runs migrations (incl. the kiosk schema +
 #    opt-in RLS), and seeds the shared catalog on first run.
 
-# 2b. The prove.my broker (kiosk-demo-prove; serves kyc.demo.kiosk.tech). It is
+# 2b. The KYC broker (kiosk-demo-prove; serves kyc.demo.kiosk.tech). It is
 #     an ISSUER, not a Kiosk operator — no kiosk gem, no assets manifest — so
 #     prepare it on its own (db:prepare only; assets:precompile is a no-op/absent).
 cd /srv/kiosk/kiosk-demo-prove

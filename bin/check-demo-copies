@@ -280,7 +280,7 @@ COPIES = {
   },
   "lib/prove_broker_client.rb" => {
     rule: :code,
-    why:  "The operator -> prove.my broker intake leg. Per-demo prose only: the operator id and " \
+    why:  "The operator -> KYC broker intake leg. Per-demo prose only: the operator id and " \
           "the requested claims arrive as arguments, not as literals.",
   },
   "lib/prove_trust.rb" => {
@@ -617,14 +617,14 @@ MIGRATION_PAIRS = {
   "create_kyc_verification_requests.rb" => {
     rule:  :code,
     drift: "pending triage (K-648): getgrocery's create_table declares `t.string :broker_nonce` " \
-           "inline (the prove.my callback anti-replay nonce) and skooti's does not — skooti adds " \
+           "inline (the KYC-broker callback anti-replay nonce) and skooti's does not — skooti adds " \
            "the identical column in its own " \
            "20260804000002_add_broker_nonce_to_kyc_verification_requests.rb, so the two TABLES " \
            "converge while the two create migrations cannot without one demo rewriting shipped " \
            "history; which side's layout wins is a direction call this check does not make. The " \
            "headers also tell different stories: skooti's still narrates the demo-local " \
            "stub-issuer flow (K-440/K-443) its own routes.rb marks RETIRED.",
-    why:   "the pending age/licence verification a demo starts at the prove.my broker — the table " \
+    why:   "the pending age/licence verification a demo starts at the KYC broker — the table " \
            "behind app/models/kyc_verification_request.rb, whose model copies ARE held in :code " \
            "lockstep above.",
   },

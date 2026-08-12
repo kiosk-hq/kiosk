@@ -34,7 +34,7 @@ Rails.application.routes.draw do
   # broker-signed age_over_18 claim here after kyc_status returns approved.
   post "/kiosk/agents/kyc",                        to: "kiosk/server/kyc_attestation#create"
 
-  # prove.my broker callback (design §5.2) — the broker → operator leg. `run
+  # KYC broker callback (design §5.2) — the broker → operator leg. `run
   # request_kyc` calls the broker's intake with THIS callback; on the human's
   # approve, the broker POSTs the signed anonymized {age_over_18} claim here.
   # getgrocery verifies it against the trusted ProveKey, checks the

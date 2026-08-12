@@ -133,7 +133,7 @@ tudu.demo.kiosk.tech {
 }
 
 kyc.demo.kiosk.tech {
-	# prove.my anonymizing KYC broker (kiosk-demo-prove). An ISSUER, not a Kiosk
+	# anonymizing KYC broker (kiosk-demo-prove). An ISSUER, not a Kiosk
 	# operator — a human explainer + the /verify page + the operator intake/
 	# callback JSON. No PoW, no /.well-known/kiosk.json, no agent surface.
 	import kioskproxy 127.0.0.1:3008

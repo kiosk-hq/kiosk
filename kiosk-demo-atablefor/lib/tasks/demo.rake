@@ -9,7 +9,8 @@
 #   rake demo:pow          boots with KIOSK_POW_DEMO=1, runs script/pow_flow.rb (402→solve→200)
 #   rake demo:reputation   anti-scalping PoW demo (cost drops as bookings accrue)
 #   rake demo:backoff      count-based PoW backoff (solve once → next N calls free →
-#                          re-challenge; KIOSK_POW_BACKOFF_DEMO=1)
+#                          re-challenge; sets KIOSK_POW_BACKOFF_DEMO=3 — the value
+#                          is the free-call count)
 #   rake demo:binding      account-binding: a diner links their assistant, whose
 #                          booking then ties to the diner's account
 #   rake demo:isolation    adversarial cross-tenant isolation test
@@ -443,7 +444,8 @@ namespace :demo do
   desc <<~DESC
     COUNT-BASED PoW backoff demo — "solve once, next N calls free" (POW-RECENCY-GRACE).
 
-    Boots the server with KIOSK_POW_BACKOFF_DEMO=1, runs script/backoff_flow.rb:
+    Boots the server with KIOSK_POW_BACKOFF_DEMO=3 (the value is the free-call
+    count, not a boolean), runs script/backoff_flow.rb:
       fresh identity queries → 402 (pow_required, no grant yet)
       solves via the bundled solver, resubmits → 200 (proof verified → grant set to 3)
       the NEXT 3 requests are served WITHOUT a challenge (200 — the grant consumed)

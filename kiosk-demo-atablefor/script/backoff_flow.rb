@@ -26,7 +26,9 @@
 #   bundle exec ruby script/backoff_flow.rb
 #
 # Requirements:
-#   - The server must be running with KIOSK_POW_BACKOFF_DEMO=1.
+#   - The server must be running with KIOSK_POW_BACKOFF_DEMO=3 — the value is
+#     the free-call COUNT (not a boolean), and this flow asserts EXACTLY 3
+#     free calls, so any other count fails the assertions below.
 #   - python3 with numpy: pip install numpy
 
 require "date"

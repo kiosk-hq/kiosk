@@ -177,13 +177,29 @@ record(results, "OwnerLinkIgnoresForgedClaimBody",
 # CustomerCalendarStaysOwnScoped — a plain customer (Alice) calls salon_calendar
 # with her own customer-role token; she must see ONLY her own bookings and NO
 # forecast total (owner-only). The role gate is provider-controlled.
+#
+# K-689: `kind == "booking"` proves nothing — config/initializers/kiosk.rb
+# stamps `"kind" => "booking"` on EVERY appointment row unconditionally
+# (owner-scoped or not), so a leaked owner-scope row is indistinguishable from
+# an own row by that test. Book a SECOND customer's (Bob's) appointment here,
+# then assert Alice's calendar EXCLUDES that specific booking id — the only
+# thing that actually demonstrates scoping.
+rc_b3, appt_b3 = post_json(
+  "/kiosk/run",
+  { name: "book_appointment", salon_id: salon_id, slot: "2026-10-03T09:00:00Z" },
+  bearer(TOKEN_B),
+)
+appt_id_b3 = appt_b3.dig("value", "appointment_id")
+
 rc, cal = post_json("/kiosk/query", { name: "salon_calendar" }, bearer(TOKEN_A))
 rows = (cal["rows"] || [])
-own_only    = rows.reject { |r| r["summary"] }.all? { |r| r["kind"] == "booking" }
+own_ids     = rows.reject { |r| r["summary"] }.map { |r| r["id"] }
+own_only    = !own_ids.include?(appt_id_b3)
 no_forecast = rows.none? { |r| r["summary"] == "forecast" }
 record(results, "CustomerCalendarStaysOwnScoped",
-       rc == 200 && no_forecast,
-       "customer salon_calendar: #{rows.size} rows, forecast_hidden=#{no_forecast} (own bookings only)")
+       rc == 200 && rc_b3 == 200 && own_only && no_forecast,
+       "customer salon_calendar: #{rows.size} rows #{own_ids.inspect}, excludes B's #{appt_id_b3.inspect} " \
+       "(own_only=#{own_only}), forecast_hidden=#{no_forecast}")
 
 # ── SelfAssertedStaffSessionForgery (K-555) — in-process, PRODUCTION-config ────
 # The HUMAN sibling of the K-539 agent-stub forgery. stylish's StubUserIdp maps a

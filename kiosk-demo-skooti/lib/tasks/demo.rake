@@ -344,65 +344,21 @@ namespace :demo do
       end
     end
 
-    # ── RUN 5: C3 — re-start_rental on already-active reservation → 403 ───
-    # Happy run makes the reservation active; second start_rental must fail.
-    puts "\n══ RUN 5: C3 — re-start_rental on active reservation → 403 ══"
-    boot_server.call do
-      # First run: full happy path to make the reservation active.
-      inner = run_flow.call
-      unless inner["http_start_rental"] == 200
-        abort "C3 inner happy run unexpectedly failed: http_start_rental=#{inner["http_start_rental"]}"
-      end
-      active_reservation_id = inner["reservation_id"]
-      puts "  Active reservation: #{active_reservation_id}"
-
-      # Second run: fresh agent (new register+KYC+pay) but REUSE_RESERVATION
-      # so no new reserve; status='active' → Gate 1 rejects with 403.
-      # We use a separate script invocation so the agent token is fresh.
-      # We pass REUSE_RESERVATION which script/rental_flow.rb does NOT support natively —
-      # so instead we implement this directly here (no second flow invocation needed):
-      # just call start_rental again with the same reservation_id using a NEW agent.
-      #
-      # Simpler: call the server directly in this Rake task.
-      require "net/http"
-      require "openssl"
-      require "securerandom"
-
-      # Re-register a fresh agent via the proof-of-possession handshake
-      # (challenge → sign → register), solving the Equihash registration gate.
-      # The shared helper aborts unless the register comes back 201, so an
-      # agent_token here is always a real one (K-696).
-      _agent_key, reg_data = equihash_register(
-        server: server_url, issuer: kiosk_issuer,
-        get_json: reg_get, post_json: reg_post,
-      )
-      agent_token = reg_data.fetch("access_token")
-      new_user_id = reg_data.fetch("user_id")
-
-      # KYC the new agent (valid attestation signed with the shared broker
-      # ProveKey via ProveTestIssuer — the retired StubKyc's replacement).
-      require_relative "../../lib/prove_test_issuer"
-      att = ProveTestIssuer.attest(user_id: new_user_id)
-      kyc_uri = URI("#{server_url}/kiosk/agents/kyc")
-      kyc_req = Net::HTTP::Post.new(kyc_uri, "Content-Type" => "application/json", "Authorization" => "Bearer #{agent_token}")
-      kyc_req.body = JSON.generate(kyc_jws: att)
-      Net::HTTP.new(kyc_uri.host, kyc_uri.port).request(kyc_req)
-
-      # Attempt start_rental on the ALREADY ACTIVE reservation — Gate 1 rejects.
-      run_uri = URI("#{server_url}/kiosk/run")
-      run_req = Net::HTTP::Post.new(run_uri, "Content-Type" => "application/json", "Authorization" => "Bearer #{agent_token}")
-      run_req.body = JSON.generate(name: "start_rental", reservation_id: active_reservation_id)
-      run_res = Net::HTTP.new(run_uri.host, run_uri.port).request(run_req)
-      rc_c3 = run_res.code.to_i
-
-      if rc_c3 == 403
-        puts "  OK  C3 re-start_rental: http == 403 (reservation already active)"
-      else
-        failures << "c3_relock: http_start_rental expected 403, got #{rc_c3.inspect}"
-        puts "  FAIL  C3 re-start_rental: expected 403, got #{rc_c3.inspect}"
-        puts "       Response: #{run_res.body}"
-      end
-    end
+    # RUN 5 (C3 — re-start_rental on an already-active reservation) was
+    # removed here (K-697): it minted a NEW principal each time and called
+    # start_rental on the INNER run's own reservation, so Gate 1's ownership
+    # predicate (`user_id = kiosk.current_user_id()`) alone emptied the row
+    # set — deleting the `status = 'reserved'` clause it claimed to cover
+    # left it green (verified). Its KYC round-trips also discarded their
+    # responses (a 4xx KYC failure was invisible) and gated nothing, and
+    # register's response was checked only for `== 402`, so a failed
+    # register could report a `Bearer ` 403 as a pass. The property it
+    # claimed — a spent/active resource cannot be re-activated by the SAME
+    # principal — is covered soundly by demo:redteam's
+    # Kiosk::Redteam::Scenarios::SpentResourceReuse (script/redteam_suite.rb),
+    # which drives ONE principal against the SAME owned_ref twice. See K-712
+    # for the pre-existing RUN-numbering gap (RUN 3 absent, RUN 4 duplicate
+    # of RUN 2) this leaves unchanged.
 
     # ── RUN 6: Query-verb assertions — scooters_available + per-user my_reservations ──
     # Proves: (a) query scooters_available returns SK-001;

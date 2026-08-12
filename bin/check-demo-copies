@@ -621,9 +621,8 @@ MIGRATION_PAIRS = {
            "the identical column in its own " \
            "20260804000002_add_broker_nonce_to_kyc_verification_requests.rb, so the two TABLES " \
            "converge while the two create migrations cannot without one demo rewriting shipped " \
-           "history; which side's layout wins is a direction call this check does not make. The " \
-           "headers also tell different stories: skooti's still narrates the demo-local " \
-           "stub-issuer flow (K-440/K-443) its own routes.rb marks RETIRED.",
+           "history; which side's layout wins is a direction call this check does not make. " \
+           "(Both headers narrate the broker flow since K-668.)",
     why:   "the pending age/licence verification a demo starts at the KYC broker — the table " \
            "behind app/models/kyc_verification_request.rb, whose model copies ARE held in :code " \
            "lockstep above.",

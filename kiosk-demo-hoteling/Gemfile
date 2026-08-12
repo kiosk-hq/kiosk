@@ -30,6 +30,14 @@ gem "kiosk-redteam",            path: "../kiosk-redteam"
 # slice-1, K-479).
 gem "json_schemer"
 
+# K-661: `UUID.validate` backs UuidCheck's canonical-uuid guard (K-579/K-596).
+# Pinned to the final release (2.3.9, 2018-05-15) — upstream repo archived
+# 2024-01-01, nothing newer to move to. `require: false`: UuidCheck requires
+# it explicitly rather than at boot. Pulls macaddr -> systemu (MAC-address
+# reading for v1 UUID generation, a code path UuidCheck never calls) as
+# transitive runtime deps.
+gem "uuid", "= 2.3.9", require: false
+
 group :development, :test do
   # See https://guides.rubyonrails.org/debugging_rails_applications.html#debugging-with-the-debug-gem
   gem "debug", platforms: %i[ mri windows ], require: "debug/prelude"

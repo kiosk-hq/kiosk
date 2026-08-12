@@ -23,4 +23,45 @@ Rails.application.configure do
   # HostAuthorization otherwise 403s any Host that isn't localhost/127.0.0.1.
   config.hosts << "prove.demo.kiosk.tech"
   config.hosts << "kyc.demo.kiosk.tech"
+
+  # ── Prove env inputs (K-672) ────────────────────────────────────────────
+  # ENV is read HERE, per environment, and published as Rails custom config
+  # (Rails.configuration.x.prove.*); lib code and controllers read the
+  # config, never ENV — the same shape as the operator demos' K-650 blocks.
+  # prove is the API-only broker and the declared exception to their env-file
+  # lockstep (K-643), so this block carries broker config, not operator config.
+
+  # Operator intake allow-list — ENV-only, the SAME fail-closed posture as
+  # production (K-547): an operator whose secret is unset is simply NOT
+  # registered. The old shipped dev defaults are gone (K-672): since K-650
+  # the operator side reads its own KIOSK_PROVE_*_SECRET with NO fallback,
+  # so a default here paired with nothing — the two-server harnesses
+  # (ProveBrokerBoot) pin the secret explicitly on both sides, and a bare
+  # `rails s` broker still serves its human /verify page and /prove_key.pem
+  # with no operator registered (intake then answers 401, as it should).
+  config.x.prove.skooti_secret     = ENV["KIOSK_PROVE_SKOOTI_SECRET"]
+  config.x.prove.getgrocery_secret = ENV["KIOSK_PROVE_GETGROCERY_SECRET"]
+
+  # The ONLY host the broker will POST each operator's callback to (the
+  # SSRF / open-relay guard, design §4.7). Non-secret: the harnesses pin the
+  # operator's real host; loopback serves any hand-driven local intake.
+  config.x.prove.skooti_callback_host     = ENV.fetch("KIOSK_PROVE_SKOOTI_CALLBACK_HOST", "127.0.0.1")
+  config.x.prove.getgrocery_callback_host = ENV.fetch("KIOSK_PROVE_GETGROCERY_CALLBACK_HOST", "127.0.0.1")
+
+  # The operator-binding `aud` minted into each operator's attestations —
+  # defaults to the operator_id handle (what the demo operators set as
+  # c.kyc_audience); overridable for a distinct origin-URL audience, kept in
+  # lockstep with the operator's own kyc_audience (K-550).
+  config.x.prove.skooti_audience     = ENV.fetch("KIOSK_PROVE_SKOOTI_AUDIENCE", "skooti")
+  config.x.prove.getgrocery_audience = ENV.fetch("KIOSK_PROVE_GETGROCERY_AUDIENCE", "getgrocery")
+
+  # The `iss` stamped into every claim; operators pin the SAME value as
+  # c.kyc_issuer (their ProveTrust.issuer defaults to the same deploy
+  # origin), and the two-server harnesses pin it explicitly on both sides.
+  config.x.prove.issuer = ENV.fetch("KIOSK_PROVE_ISSUER", "https://kyc.demo.kiosk.tech")
+
+  # The public origin stamped into the verification_url handed back at
+  # intake (the link the human opens). Unset → the controller falls back to
+  # the intake request's own base_url, which is right for local runs.
+  config.x.prove.public_url = ENV["PROVE_PUBLIC_URL"]
 end

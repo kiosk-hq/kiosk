@@ -1,4 +1,5 @@
 require "active_support/core_ext/integer/time"
+require "openssl"
 
 Rails.application.configure do
   config.enable_reloading = false
@@ -54,4 +55,34 @@ Rails.application.configure do
   # intake — pinned by the deploy so links are correct behind the
   # TLS-terminating proxy; unset → the intake request's own base_url.
   config.x.prove.public_url = ENV["PROVE_PUBLIC_URL"]
+
+  # The broker's RSA signing key — REQUIRED (K-673). Every KYC attestation
+  # is minted with it and operators pin its public half as c.kyc_public_key,
+  # so it IS the trust root. This repo is public, so the baked-in dev key's
+  # PRIVATE half is world-readable: silently falling back to it would let
+  # anyone with the repo forge age/licence attestations that operators
+  # accept — and the recommended pin flows (fetch once from
+  # GET /prove_key.pem) would faithfully pin the forgeable public half.
+  config.x.prove.key_pem = ENV.fetch("PROVE_KEY_PEM") do
+    raise <<~MSG
+      PROVE_KEY_PEM is required in production.
+
+      It is the broker's RSA signing key (the "ProveKey"): every KYC
+      attestation is minted with it, and operators pin its public half as
+      c.kyc_public_key. This repo is public, so the baked-in dev key's
+      private half is world-readable — signing with it would let anyone
+      with the repo forge attestations operators trust. Generate a fresh
+      key and give operators the matching public half (GET /prove_key.pem):
+
+        PROVE_KEY_PEM=$(openssl genrsa 2048)
+    MSG
+  end
+  # Fail at boot, not at first mint: a key that does not parse (or is only
+  # the public half) would otherwise 500 the first approve.
+  begin
+    prove_key = OpenSSL::PKey::RSA.new(config.x.prove.key_pem)
+    raise "PROVE_KEY_PEM must be an RSA PRIVATE key (got a public-only PEM) — the broker signs with it; generate one with `openssl genrsa 2048`." unless prove_key.private?
+  rescue OpenSSL::PKey::RSAError => e
+    raise "PROVE_KEY_PEM does not parse as an RSA private key PEM (#{e.message}) — generate one with `openssl genrsa 2048`."
+  end
 end

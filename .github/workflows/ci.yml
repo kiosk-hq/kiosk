@@ -440,6 +440,20 @@ jobs:
       - name: Generate ephemeral signing key
         run: echo "KIOSK_SIGNING_KEY_B64=$(ruby -e 'require %{openssl}; require %{base64}; puts Base64.strict_encode64(OpenSSL::PKey::RSA.new(2048).to_pem)')" >> "$GITHUB_ENV"
 
+      # prove only: the broker's production.rb refuses to boot without its RSA
+      # signing key (PROVE_KEY_PEM, K-673) and validates that it parses as a
+      # private key, so the zeitwerk:check step below needs a real throwaway
+      # keypair — a literal string will not do. Multi-line value, hence the
+      # GITHUB_ENV heredoc form.
+      - name: Generate ephemeral broker signing key (prove, K-673)
+        if: matrix.demo == 'kiosk-demo-prove'
+        run: |
+          {
+            echo "PROVE_KEY_PEM<<PEM_EOF"
+            ruby -e 'require "openssl"; puts OpenSSL::PKey::RSA.new(2048).to_pem'
+            echo "PEM_EOF"
+          } >> "$GITHUB_ENV"
+
       # getgrocery only: install stripe-mock on PATH and advertise its URL so
       # the real-Stripe-adapter demo runs against canned pi_ fixtures with NO
       # key. demo:setup/demo:schema boot on STRIPE_MOCK_URL; the
@@ -486,6 +500,10 @@ jobs:
       #     secret, so all seven operator demos still aborted. Any
       #     syntactically valid absolute origin does; nothing is signed or
       #     dialed here.
+      #   PROVE_KEY_PEM — K-673 made the broker's signing key crash-if-absent
+      #     in prove's production.rb (prove only; the operator demos ignore
+      #     it). It must PARSE as an RSA private key, so the generate step
+      #     above exports a throwaway keypair instead of a literal here.
       # The signing key exported above is likewise already in the environment.
       #
       # A missing one of these does NOT silently pass: `bin/rails zeitwerk:check`

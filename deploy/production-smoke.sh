@@ -417,9 +417,15 @@ smoke_prove() {
   cd "$DEMO_DIR"
 
   # ── Production env the broker needs. It has NO kiosk-gem dependency, so no
-  # signing-key initializer, no PoW knobs — only SECRET_KEY_BASE + the DB role. ─
+  # kiosk signing-key initializer, no PoW knobs — SECRET_KEY_BASE, the DB role,
+  # and its OWN RSA signing key (the ProveKey). ─
   export RAILS_ENV=production
   export SECRET_KEY_BASE="${SECRET_KEY_BASE:-$(ruby -e 'require "securerandom"; print SecureRandom.hex(64)')}"
+  # The broker refuses to boot in production without PROVE_KEY_PEM (K-673), and
+  # the env file validates that it parses as an RSA PRIVATE key — so generate a
+  # throwaway keypair (nothing pins it: assertion 6 only asserts /prove_key.pem
+  # serves ITS public half).
+  export PROVE_KEY_PEM="${PROVE_KEY_PEM:-$(ruby -e 'require "openssl"; print OpenSSL::PKey::RSA.new(2048).to_pem')}"
   # database.yml (production) connects as this role (CI: postgres; local: login).
   export KIOSK_PROVE_DB_USER="${KIOSK_PROVE_DB_USER:-postgres}"
   export KIOSK_PROVE_DB_PASSWORD="${KIOSK_PROVE_DB_PASSWORD:-}"

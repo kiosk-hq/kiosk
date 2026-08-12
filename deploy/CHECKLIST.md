@@ -51,7 +51,10 @@ For EACH of the 7 apps:
 ### 4b. KYC broker env (copy `deploy/env/kyc-demo.env.example` → `/etc/kiosk-demo/prove.env`)
 - [ ] `SECRET_KEY_BASE`, `KIOSK_PROVE_DB` / `KIOSK_PROVE_DB_{USER,PASSWORD}`, `PORT=3008`. No kiosk gem — no signing key / no PoW knob.
 - [ ] **Issuer + public URL:** `KIOSK_PROVE_ISSUER=https://kyc.demo.kiosk.tech`, `PROVE_PUBLIC_URL=https://kyc.demo.kiosk.tech`.
-- [ ] **Broker signing key:** `PROVE_KEY_PEM=<fresh 2048-bit RSA private PEM>` (do NOT ship the baked-in dev key).
+- [ ] **Broker signing key:** `PROVE_KEY_PEM=<fresh 2048-bit RSA private PEM>` — REQUIRED, enforced at boot (K-673): the
+      broker refuses to start in production without it (and rejects a PEM that does not parse as a private key), because
+      the baked-in dev key's private half is world-readable in the public repo — silently signing with it would let anyone
+      forge attestations, and the pin flows below would faithfully pin its forgeable public half.
 - [ ] **Operator allow-list:** `KIOSK_PROVE_SKOOTI_SECRET=<shared intake secret>`, `KIOSK_PROVE_SKOOTI_CALLBACK_HOST=skooti.demo.kiosk.tech`.
 - [ ] **Wire skooti to it:** in skooti's env set `KIOSK_PROVE_ISSUER` + `KIOSK_PROVE_BROKER_URL` = `https://kyc.demo.kiosk.tech`, the SAME `KIOSK_PROVE_SKOOTI_SECRET`, and `KIOSK_PROVE_PUBLIC_KEY_PEM=<public half of PROVE_KEY_PEM>` (or fetch once from `https://kyc.demo.kiosk.tech/prove_key.pem`).
 
@@ -62,13 +65,17 @@ For EACH of the 7 apps:
         KIOSK_POW_SECRET=throwaway-at-least-32-bytes-long-xxxx \
         KIOSK_ISSUER=https://throwaway.example.test \
         bin/rails zeitwerk:check                     # getgrocery: add STRIPE_SECRET_KEY=sk_test_throwaway
+                                                     # prove: add PROVE_KEY_PEM="$(openssl genrsa 2048)" — it must PARSE
+                                                     #   as an RSA private key (K-673), a throwaway literal will not do;
+                                                     #   the kiosk vars above are ignored by the broker (harmless)
       ```
       It eager-loads the whole app the way production does and exits non-zero on the first constant/path mismatch — the
       class that 502'd three demos in the K-487 deploy, invisible to every dev-mode gate. Needs no database (it loads
       code, it does not connect). Every value here is a throwaway: nothing is signed, served or dialed.
       The three env vars are not optional decoration — each is crash-if-absent in `production`, and a missing one aborts
       in the initializer BEFORE Zeitwerk runs, so the command exits 1 for a reason that has nothing to do with eager
-      loading (`KIOSK_POW_SECRET` K-541, `KIOSK_ISSUER` K-510, getgrocery's Stripe key/mock URL). Verified on all 8 apps.
+      loading (`KIOSK_POW_SECRET` K-541, `KIOSK_ISSUER` K-510, getgrocery's Stripe key/mock URL, the broker's
+      `PROVE_KEY_PEM` K-673). Verified on all 8 apps.
       CI runs the same gate for all 8 apps on every push, so a green CI on the exact commit you are deploying is the same
       gate; run it by hand whenever you deploy a tree CI has not seen. **If an initializer ever learns to raise outside
       dev/test, add the variable HERE and in `.github/workflows/ci.yml` in the same commit** — these two are one gate

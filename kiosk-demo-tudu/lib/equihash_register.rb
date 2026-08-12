@@ -1,6 +1,6 @@
 # frozen_string_literal: true
 
-# Shared registration helper for the skooti demo flows.
+# Shared registration helper for the tudu demo flows.
 #
 # Registration is gated by ONE Equihash proof (see config/initializers/kiosk.rb).
 # This helper does the full handshake: challenge → sign PoP → register; on a 402
@@ -29,7 +29,7 @@ end
 
 # Register a fresh agent through the Equihash-gated /auth/register.
 #
-# @param server [String] base URL (e.g. http://skooti.app:3004)
+# @param server [String] base URL (e.g. http://localhost:3007)
 # @param issuer [String] issuer origin for the PoP `aud` claim
 # @param get_json [#call] ->(url) { [code, body] }
 # @param post_json [#call] ->(url, body, headers = {}) { [code, body] }

@@ -374,15 +374,21 @@ end
 # args: { reservation_id: }
 # scooter_code is NOT accepted from the client — it is derived server-side from
 # the reservation row, preventing cross-scooter unlock attacks.
-# Gates (both must pass, else 403 Forbidden):
-#   1. reservation exists and belongs to the principal AND status = 'reserved'
-#   2. principal has a settled payment (settlement) for THIS reservation
-# Licence-free scooters need NO KYC (K-442, DECISIONS-LOG KYC-MODEL) — only the
-# combustion motorcycle (rent_motorcycle) is KYC-gated. "Ride even if you can't
-# walk yet, just pay the fare."
+# Gates (all must pass, else 4xx):
+#   1.  reservation exists and belongs to the principal AND status = 'reserved'
+#   1b. the reserved vehicle is licence-FREE — a needs_licence motorcycle is
+#       refused here and sent to rent_motorcycle (K-687)
+#   2.  principal has a settled payment (settlement) for THIS reservation
+# Licence-free scooters need NO KYC (K-442, DECISIONS-LOG KYC-MODEL) — "ride
+# even if you can't walk yet, just pay the fare". That is a statement about
+# SCOOTERS, and gate 1b is what makes it one: the combustion motorcycle is
+# KYC-gated on rent_motorcycle, and before K-687 this verb would happily
+# activate a motorcycle reservation and hand back an unlock token, so the
+# licence gate was one verb name away from being optional.
 # Returns: { scooter_code:, rental_token:, exp: }
 Kiosk::Server::Actions.register("start_rental",
-                                  description: "Verify gates (ownership, payment) and issue an Ed25519 offline rental token for a licence-free scooter (no KYC)",
+                                  description: "Verify gates (ownership, licence-free vehicle, payment) and issue an Ed25519 offline rental token for a licence-free scooter (no KYC). " \
+                                               "Refuses a KYC-gated motorcycle (needs_licence in scooters_available) — use rent_motorcycle for those",
                                   params: { reservation_id: "uuid — the reservation to activate" }) do |args|
   conn = ActiveRecord::Base.connection
 
@@ -419,12 +425,37 @@ Kiosk::Server::Actions.register("start_rental",
 
   # Derive the authoritative scooter code from the reservation's FK.
   # This binds the token to the ACTUAL reserved scooter, not any client value.
+  # `needs_licence` comes with it — see the vehicle-kind gate below.
   scooter_row = conn.execute(
-    "SELECT code FROM scooters WHERE id = #{conn.quote(reservation["scooter_id"].to_s)} LIMIT 1"
+    "SELECT code, needs_licence FROM scooters WHERE id = #{conn.quote(reservation["scooter_id"].to_s)} LIMIT 1"
   ).first
   raise Kiosk::Server::Errors::Forbidden.new("scooter not found for reservation") if scooter_row.nil?
 
   code = scooter_row["code"]
+
+  # ── Gate 1b: the reserved vehicle must be licence-FREE (K-687) ───────────
+  # The exact inverse of rent_motorcycle's Gate 2, and the reason it must
+  # exist: the two verbs share one reservations table, so without this check an
+  # agent reserves the KYC-gated motorcycle and activates it with the
+  # licence-free verb — reserve(MC-001) → pay → start_rental returned a signed
+  # unlock token to an agent that had never attested anything, bypassing the
+  # age_over_18 + licence_a gate entirely. It went unseen because every driver
+  # called start_rental with SK-001. `reserve` deliberately stays open to every
+  # vehicle (one reservation shape, both verbs); the licence check belongs at
+  # USE time, here, next to the ownership and payment gates.
+  needs_licence = scooter_row["needs_licence"] == true ||
+                  scooter_row["needs_licence"] == "t" ||
+                  scooter_row["needs_licence"] == "true"
+  if needs_licence
+    raise Kiosk::Server::Errors::BadRequest.new(
+      "#{code} is a licence-required motorcycle — use rent_motorcycle for licence-required vehicles",
+      # Point at the completable path, as the KYC gate's own hint does: the
+      # right verb, and the KYC it will demand, so an assistant does not simply
+      # retry this one.
+      hint: "call `run rent_motorcycle` with this reservation_id instead; it requires the KYC attributes " \
+            "age_over_18 and licence_a — if you do not have them yet, `run request_kyc` first",
+    )
+  end
 
   # ── Gate 2: settled payment whose cart references THIS reservation ───────
   # C2: join settlements → cart_mandates and require that line_items

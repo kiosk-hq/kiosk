@@ -19,9 +19,10 @@ server round-trip.
   `status='reserved'` row; the hold has no expiry/TTL — it stays until
   `start_rental` flips it to `active`)
 - `run payment_setup` — check whether the principal has a saved payment method
-- `run start_rental(reservation_id)` — verify two gates (ownership and a settled
-  payment for THIS reservation) and issue an offline Ed25519 rental token
-  (licence-free scooters need no KYC)
+- `run start_rental(reservation_id)` — verify three gates (ownership, the
+  vehicle being licence-free, and a settled payment for THIS reservation) and
+  issue an offline Ed25519 rental token (licence-free scooters need no KYC; a
+  `needs_licence` vehicle is refused here and sent to `rent_motorcycle`)
 - `run rent_motorcycle(reservation_id)` — the combustion motorcycle; KYC-gated
   on `age_over_18` AND `licence_a` (category-A licence) before it issues a token
 - `pay` — settle the AP2 mandate chain (intent → cart → payment) via the stub PSP

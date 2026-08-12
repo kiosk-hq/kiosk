@@ -3,14 +3,18 @@
 # skooti redteam battery
 #
 # Exercises the full skooti chain: Equihash PoW n=96 k=5 → reserve → pay →
-# start_rental (2-gate ownership/payment; licence-free scooters are NOT KYC-gated,
-# K-442).  Headline scenarios:
+# start_rental (ownership/licence-free-vehicle/payment gates; licence-free
+# scooters are NOT KYC-gated, K-442).  Headline scenarios:
 #   C2  PayForOtherUseSelf  — B pays for A's reservation, B tries start_rental
 #   C3  SpentResourceReuse  — re-start_rental on an active reservation
 #       KYC verifier variants — expired / forged attestation rejected at /kyc
 #   MotorcycleForgedKyc      — a forged attestation self-asserting
 #                              {age_over_18, licence_a} is rejected, so the
 #                              KYC-attribute-gated rent_motorcycle stays 403.
+#   MotorcycleViaStartRental — the KYC gate cannot be walked around by VERB:
+#                              reserve(MC-001) → pay → start_rental must be
+#                              refused, not answered with an unlock token
+#                              (K-687 — it was answered with one).
 #   IssuedKycJwsTheft        — a REAL issuer-signed jws minted for victim B via
 #                              the stub-issuer approve page cannot be replayed by
 #                              attacker A (KycVerifier binds sub to the caller),
@@ -116,7 +120,7 @@ end
 
 profile = Kiosk::Redteam::Profile.new(
   pow_difficulty: 20,     # >0 flips on the /register gate; skooti gates with an Equihash proof (n=96 k=5) and the client solves the real 402 challenge — the numeric value is not an Equihash param
-  requires_kyc:   true,   # skooti has a KYC verifier — rent_motorcycle is attribute-gated and ExpiredKyc/ForgedKyc exercise /kyc; start_rental itself is NOT KYC-gated (K-442)
+  requires_kyc:   true,   # skooti has a KYC verifier — rent_motorcycle is attribute-gated and ExpiredKyc/ForgedKyc exercise /kyc; start_rental itself is NOT KYC-gated (K-442) because it only ever activates licence-free vehicles: since K-687 it REFUSES a needs_licence one instead of quietly unlocking it (MotorcycleViaStartRental)
 
   # ── per-user query — CrossTenantRead ─────────────────────────────────────
   per_user_query: "my_reservations",
@@ -405,7 +409,7 @@ end
 #
 # 12 generic + 3 local cashier-check beats + the K-581/K-582 malformed-uuid
 # beat; skooti's full surface makes all generic scenarios applicable (0 skips
-# expected).
+# expected). Seven further skooti-local beats run after the runner, below.
 # RegistrationWithoutPow: pow_difficulty>0 (Equihash gate on) → always applicable.
 
 scenarios = [
@@ -413,7 +417,12 @@ scenarios = [
   Kiosk::Redteam::Scenarios::SpentResourceReuse.new,     # C3
   # MissingKyc removed (K-442): start_rental (scooter) is no longer KYC-gated,
   # so "no KYC -> gated action blocked" no longer holds for it. The motorcycle's
-  # missing-KYC block is covered by MotorcycleForgedKyc + kyc_flow A1.
+  # missing-KYC block is covered by MotorcycleForgedKyc + kyc_flow A1 — and,
+  # since K-687, by MotorcycleViaStartRental, which is the beat that would have
+  # caught what removing MissingKyc left uncovered: this generic scenario drove
+  # the profile's gated_action (start_rental) against whatever create_owned
+  # reserved, i.e. always a SCOOTER, so no scenario ever pointed start_rental at
+  # the motorcycle until that beat did.
   Kiosk::Redteam::Scenarios::ExpiredKyc.new,
   Kiosk::Redteam::Scenarios::ForgedKyc.new,
   Kiosk::Redteam::Scenarios::UnpaidGatedAction.new,
@@ -513,6 +522,107 @@ motorcycle_forged_kyc = lambda do
 end
 
 mc_beat = motorcycle_forged_kyc.call
+
+# ── skooti-local beat: the KYC gate cannot be walked around by verb ───────────
+#
+# MotorcycleForgedKyc above proves the attestation cannot be FORGED. This beat
+# proves the gate cannot simply be BYPASSED — by calling the other verb.
+#
+# skooti has two rental verbs on one reservations table: start_rental (the
+# licence-free electric scooter, no KYC by design — K-442) and rent_motorcycle
+# (the combustion motorcycle, gated on age_over_18 AND licence_a). Nothing on
+# the wire stops an assistant from reserving the MOTORCYCLE and then activating
+# it with the SCOOTER verb, and until K-687 nothing in start_rental stopped it
+# either: it selected `code` from the vehicle row and never looked at
+# `needs_licence`, so reserve(MC-001) → pay → start_rental returned a signed
+# Ed25519 unlock token for the KYC-gated motorcycle to an agent that had never
+# attested anything. Every KYC driver called start_rental with SK-001 only, so
+# no gate saw it.
+#
+# The agent here submits NO attestation at all — that is the point. It reserves
+# and PAYS for MC-001 so nothing but the vehicle-kind check can be what blocks,
+# then calls start_rental. A rental_token in the answer is a BREACH: it opens a
+# real motorcycle to an unlicensed rider.
+#
+# CONTROL, in the same beat: the identical sequence on the licence-free SK-001
+# must still return a token. Without it this beat would pass just as happily if
+# start_rental were broken outright, or if pay/reserve had silently failed —
+# "blocked" would prove nothing about the gate.
+motorcycle_via_start_rental = lambda do
+  client = Kiosk::Redteam::Client.new(base_url: BASE_URL)
+  a = client.register!(name: "redteam-mc-verbswap", pow_difficulty: 20)
+
+  # Reserve + pay for a vehicle, and return its reservation_id.
+  reserve_and_pay = lambda do |code|
+    rsv = client.run(a, name: "reserve", scooter_code: code)
+    raise "redteam(skooti): reserve #{code} failed (#{rsv.status})" unless rsv.status == 200
+    reservation_id = rsv.body.dig("value", "reservation_id")
+    price_min      = rsv.body.dig("value", "price_per_min_cents").to_i
+
+    now       = Time.now.to_i
+    intent_id = SecureRandom.uuid
+    total     = price_min.positive? ? price_min : 100
+    intent = { id: intent_id, user_id: a.user_id, agent_id: a.agent_id, iss: ISSUER,
+               scope: "mobility", cap_amount_cents: total + 100, currency: "eur",
+               exp: now + 600, iat: now }
+    cart = { id: SecureRandom.uuid, intent_mandate_id: intent_id, user_id: a.user_id,
+             agent_id: a.agent_id, iss: ISSUER,
+             line_items: [{ sku: code, qty: 1, price_cents: total, reservation_id: }],
+             total_amount_cents: total, currency: "eur", exp: now + 600, iat: now }
+    pay_resp = client.pay(a, intent:, cart:)
+    raise "redteam(skooti): pay #{code} failed (#{pay_resp.status})" unless pay_resp.status == 200
+
+    reservation_id
+  end
+
+  fleet = client.query(a, name: "scooters_available")
+  rows  = fleet.body["rows"] || []
+  raise "redteam(skooti): MC-001 not in fleet (verb-swap beat)" unless rows.any? { |r| r["code"] == "MC-001" }
+
+  # THE ATTACK — motorcycle reservation, scooter verb, no attestation anywhere.
+  mc_resv = reserve_and_pay.call("MC-001")
+  attack  = client.run(a, name: "start_rental", reservation_id: mc_resv)
+  token   = attack.body.is_a?(Hash) ? attack.body.dig("value", "rental_token") : nil
+  err     = attack.body.is_a?(Hash) ? attack.body.dig("error", "code") : nil
+  # The generic Kiosk::Redteam.blocked? is not the right judge here (the
+  # MalformedUuidArg reasoning): it would call a 500 or an incidental "no
+  # settlement" 403 a block. The refusal has to be TYPED — one of the wire
+  # vocabulary's client-error codes, never a 5xx — and it has to be THIS gate,
+  # which is what naming the other verb proves.
+  refusal_text  = attack.body.is_a?(Hash) ? JSON.generate(attack.body["error"]) : attack.body.to_s
+  typed_refusal = [400, 403].include?(attack.status) &&
+                  %w[bad_request forbidden kyc_required].include?(err)
+  names_verb    = refusal_text.include?("rent_motorcycle")
+
+  # THE CONTROL — same agent, same sequence, licence-free vehicle.
+  sc_resv    = reserve_and_pay.call("SK-001")
+  control    = client.run(a, name: "start_rental", reservation_id: sc_resv)
+  sc_token   = control.body.is_a?(Hash) ? control.body.dig("value", "rental_token") : nil
+  control_ok = control.status == 200 && !sc_token.to_s.empty?
+
+  if token && !token.to_s.empty?
+    { blocked: false,
+      detail:  "start_rental issued an unlock token for the KYC-GATED MC-001 to an agent with no attestation " \
+               "(HTTP #{attack.status}, token #{token.to_s[0, 32]}…) — the licence gate was walked around by verb" }
+  elsif !typed_refusal
+    { blocked: false,
+      detail:  "start_rental on MC-001 answered HTTP #{attack.status} code=#{err.inspect} — no token, but not a typed client-error refusal either" }
+  elsif !names_verb
+    { blocked: false,
+      detail:  "start_rental on MC-001 refused (HTTP #{attack.status} #{err.inspect}) but never names rent_motorcycle — " \
+               "an assistant is left with no completable path, and this may not even be the licence gate: #{refusal_text}" }
+  elsif !control_ok
+    { blocked: false,
+      detail:  "CONTROL FAILED: start_rental on the licence-free SK-001 returned HTTP #{control.status} with no token — " \
+               "the MC-001 refusal proves nothing (the verb, the payment or the harness is broken)" }
+  else
+    { blocked: true,
+      detail:  "start_rental refuses the KYC-gated MC-001 (HTTP #{attack.status} #{err.inspect}), no rental_token; " \
+               "control: the licence-free SK-001 still unlocks (HTTP #{control.status})" }
+  end
+end
+
+mc_verbswap_beat = motorcycle_via_start_rental.call
 
 # ── skooti-local beat: issued-jws cannot be stolen across agents ──────
 #
@@ -844,6 +954,11 @@ if mc_beat[:blocked]
 else
   puts "  BREACH   ✗ MotorcycleForgedKyc — #{mc_beat[:detail]}"
 end
+if mc_verbswap_beat[:blocked]
+  puts "  BLOCKED  ✓ MotorcycleViaStartRental — #{mc_verbswap_beat[:detail]}"
+else
+  puts "  BREACH   ✗ MotorcycleViaStartRental — #{mc_verbswap_beat[:detail]}"
+end
 if theft_beat[:blocked]
   puts "  BLOCKED  ✓ IssuedKycJwsTheft — #{theft_beat[:detail]}"
 else
@@ -870,7 +985,8 @@ else
   puts "  BREACH   ✗ SelfAssertedUserBearerForgery — #{self_asserted_user_beat[:detail]}"
 end
 
-all_beats = [mc_beat, theft_beat, xop_beat, fcb_beat, self_asserted_beat, self_asserted_user_beat]
+all_beats = [mc_beat, mc_verbswap_beat, theft_beat, xop_beat, fcb_beat,
+             self_asserted_beat, self_asserted_user_beat]
 local_beats_blocked = all_beats.count { |b| b[:blocked] }
 blocked_count = blocked_results.size + local_beats_blocked
 beat_breach   = all_beats.count { |b| !b[:blocked] }

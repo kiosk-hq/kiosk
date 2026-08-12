@@ -24,6 +24,12 @@
 #     register (PoW) → reserve(SK-001) → pay → start_rental → 200, with NO KYC
 #     submitted. A licence-free scooter needs no attestation whatsoever — the
 #     only KYC gate in skooti lives on rent_motorcycle (age_over_18 + licence_a).
+#     That is true of the VEHICLE, not of the verb: since K-687 start_rental
+#     refuses a needs_licence vehicle outright and sends the caller to
+#     rent_motorcycle, because otherwise reserve(MC-001) → pay → start_rental
+#     minted an unlock token for the motorcycle with no attestation at all
+#     (redteam MotorcycleViaStartRental covers that path; this driver only ever
+#     drove start_rental with SK-001, which is why it never saw it).
 #
 # Prints ONE JSON line on stdout; non-zero exit on unexpected failures.
 

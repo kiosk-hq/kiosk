@@ -22,25 +22,6 @@ The full host-side surface is shipped and covered by the gem's own suite (500+ p
 
 kiosk-server is a Rails gem: it depends on railties, actionpack, activerecord and activesupport (`~> 8.1`), and `require "kiosk/server"` loads them. Pieces such as `WellKnown` and `SchemaDefinitions` still work without a BOOTED Rails app — they just need the framework on the load path.
 
-## What's in this release
-
-The full host-side surface is shipped and covered by the gem's own suite (500+ passing specs):
-
-- **Wire-protocol controllers** — `WireController` serves the `/kiosk/query`, `/kiosk/run`, `/kiosk/pay`, `/kiosk/schema` verbs; `AuthController` runs the register/login proof-of-possession challenge-response (kiosk-pop — the auth story); JWKS backs stateless token verification.
-- **Account binding** — the claim/link ceremonies bind an agent's public key to an existing assistant-account holder's account: OAuth/RFC 8628-shaped device authorization + possession-proof-gated token poll, a session-authenticated verify page and «Link an assistant» page (minimal overridable engine views), link-code mint/redeem, and unlink. Tokens stay kiosk-pop-minted; the durable `DeviceAuthorizationStores::ActiveRecord` store (migration 008) is the default.
-- **`Kiosk::Server::Executor`** — dispatches resolved commands to the host's registered queries and Actions.
-- **`Kiosk::Query` / `Kiosk::Action`** — the mixins an operator includes into a controller of their own to declare verbs as ordinary Rails actions (see [Declaring queries and actions](#declaring-queries-and-actions)).
-- **Agent registration & login** — `AgentRegistration`, `AgentLogin`, `RegistrationPow`, and the pluggable agent-IdP resolve and mint per-agent identities.
-- **PoW gate** — `PowGate` enforces the reputation policy's N×PoW challenge-response (soft dependency on `kiosk-reputation`; zero overhead when no policy is set).
-- **`Kiosk::Server::WellKnown`** — pure-Ruby builder for `/.well-known/kiosk.json`.
-- **`Kiosk::Server::Headers`** + **`HeadersMiddleware`** — Rack middleware that injects `Kiosk-Server-Version`, `Kiosk-API-Version`, `Kiosk-Min-Client` on `/kiosk/*` responses.
-- **`Kiosk::Server::SchemaDefinitions`** — SQL generators for the canonical migrations (schema + helpers, identity tables, actions log, reservations, device authorizations, mandates).
-- **`Kiosk::Server::Engine`** — the Rails engine: one `mount` line draws the full mount-prefixed surface (wire, auth, JWKS, KYC, account binding), installs the root discovery routes when mounted, and auto-injects the headers middleware (see [Mount the routes](#mount-the-routes)).
-- **`Kiosk::Server::ConfigurationExtension`** — adds `mount_path`, `capabilities`, `owner`, `min_client` (and the reputation/PoW slots) to `Kiosk::Configuration`.
-- **`bin/rails g kiosk:install`** — the install generator lays down the initializer and migrations.
-
-kiosk-server is a Rails gem: it depends on railties, actionpack, activerecord and activesupport (`~> 8.1`), and `require "kiosk/server"` loads them. Pieces such as `WellKnown` and `SchemaDefinitions` still work without a BOOTED Rails app — they just need the framework on the load path.
-
 ## Install
 
 ```ruby
@@ -106,44 +87,6 @@ Kiosk ships a **mixin, not a base class**. Which superclass a handler controller
 has is your decision; the `include` is the whole contract.
 
 ```ruby
-## Well-known endpoint (no booted Rails app required)
-
-```ruby
-require "kiosk/server"
-require "json"
-
-doc = Kiosk::Server::WellKnown.build_json(base_url: "https://api.acme.example")
-# => '{"kiosk":{"version":"1.0","endpoint":"https://api.acme.example/kiosk",...}}'
-```
-
-## License
-
-Apache-2.0 — see `LICENSE.txt`.
-
-## Links
-
-- [kiosk.tech](https://kiosk.tech)
-- [Issue tracker](https://github.com/kiosk-hq/kiosk/issues)
-
-# app/controllers/kiosk/orders_controller.rb
-class Kiosk::OrdersController < ApplicationController
-  include Kiosk::Action
-
-  description "Places an order for the assistant's human and reserves the " \
-              "chosen delivery window. Nothing is charged until `pay`."
-  input_schema type: "object",
-               properties: { items: { type: "array" }, delivery_slot_id: { type: "integer" } },
-               required: %w[items delivery_slot_id]
-  def create_order
-    order = Orders::Place.call(user_id: kiosk_identity.user_id, params: params)
-    render json: { order_id: order.id, total_cents: order.total_cents }
-  rescue Orders::SlotTaken => e
-    render json: { error: e.message, hint: "call delivery_slots again" }, status: :conflict
-  end
-end
-```
-
-
 # app/controllers/kiosk/catalog_controller.rb
 class Kiosk::CatalogController < ApplicationController   # your base class, your call
   include Kiosk::Query
@@ -164,6 +107,24 @@ end
 ```
 
 ```ruby
+# app/controllers/kiosk/orders_controller.rb
+class Kiosk::OrdersController < ApplicationController
+  include Kiosk::Action
+
+  description "Places an order for the assistant's human and reserves the " \
+              "chosen delivery window. Nothing is charged until `pay`."
+  input_schema type: "object",
+               properties: { items: { type: "array" }, delivery_slot_id: { type: "integer" } },
+               required: %w[items delivery_slot_id]
+  def create_order
+    order = Orders::Place.call(user_id: kiosk_identity.user_id, params: params)
+    render json: { order_id: order.id, total_cents: order.total_cents }
+  rescue Orders::SlotTaken => e
+    render json: { error: e.message, hint: "call delivery_slots again" }, status: :conflict
+  end
+end
+```
+
 
 ### What the macros do
 
@@ -239,3 +200,23 @@ moves cover all of it:
 counterpart are unchanged and keep working — the two ways in share one registry,
 and the executor cannot tell them apart. The bundled demos still register that
 way; they move onto the mixin in a later slice.
+
+
+## Well-known endpoint (no booted Rails app required)
+
+```ruby
+require "kiosk/server"
+require "json"
+
+doc = Kiosk::Server::WellKnown.build_json(base_url: "https://api.acme.example")
+# => '{"kiosk":{"version":"1.0","endpoint":"https://api.acme.example/kiosk",...}}'
+```
+
+## License
+
+Apache-2.0 — see `LICENSE.txt`.
+
+## Links
+
+- [kiosk.tech](https://kiosk.tech)
+- [Issue tracker](https://github.com/kiosk-hq/kiosk/issues)

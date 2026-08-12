@@ -474,15 +474,18 @@ jobs:
       #   STRIPE_MOCK_URL — getgrocery's initializer aborts production boot
       #     without a Stripe key or mock URL; the stripe-mock step above already
       #     exported it for that demo (hence this step's position after it).
-      #   KIOSK_POW_SECRET — K-541 made the PoW HMAC key mandatory outside
-      #     dev/test, so without it every kiosk demo aborts in the initializer
-      #     before Zeitwerk runs. A throwaway literal is enough (no challenge is
-      #     signed here).
-      #   KIOSK_ISSUER — K-510 made the issuer crash-if-absent outside dev/test
-      #     for the same reason, and it aborts at the same point. The K-541 fix
-      #     above added only the PoW secret, so all seven operator demos still
-      #     aborted. Any syntactically valid absolute origin does; nothing is
-      #     signed or dialed here.
+      #   KIOSK_POW_SECRET — K-541 made the PoW HMAC key mandatory in
+      #     production, so without it every kiosk demo aborts before Zeitwerk
+      #     runs (since K-650 the fetch-with-raise lives in
+      #     config/environments/production.rb rather than the initializer —
+      #     same abort, one file earlier). A throwaway literal is enough (no
+      #     challenge is signed here).
+      #   KIOSK_ISSUER — K-510 made the issuer crash-if-absent in production
+      #     for the same reason, and it aborts at the same point (also moved
+      #     to production.rb by K-650). The K-541 fix above added only the PoW
+      #     secret, so all seven operator demos still aborted. Any
+      #     syntactically valid absolute origin does; nothing is signed or
+      #     dialed here.
       # The signing key exported above is likewise already in the environment.
       #
       # A missing one of these does NOT silently pass: `bin/rails zeitwerk:check`
@@ -493,8 +496,9 @@ jobs:
       # discover it was only a missing env var. (Both omissions above went
       # unnoticed only because this workflow had not run since 2026-08-09.)
       #
-      # RULE OF THUMB for the next crash-if-absent config: if an initializer
-      # learns to raise outside dev/test, add it HERE in the same commit — AND
+      # RULE OF THUMB for the next crash-if-absent config: if a demo's
+      # config/environments/production.rb (the K-650 home of such raises)
+      # learns to require a new variable, add it HERE in the same commit — AND
       # in deploy/CHECKLIST.md §5, which documents this exact command for a
       # human to type before a deploy. That second half was missed when
       # KIOSK_ISSUER was added here, so the documented command aborted (exit 1,

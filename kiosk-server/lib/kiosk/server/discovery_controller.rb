@@ -1,6 +1,10 @@
 # frozen_string_literal: true
 
-# The discovery surface. Hosts mount the routes in their own config/routes.rb.
+# The discovery surface. The engine installs these routes at the HOST ROOT
+# (routes.append, gated on the engine being mounted) — the agents.txt v1.0
+# standard and RFC 8615 place them at the origin root, outside any mount
+# prefix. Hand-drawing them in the host's config/routes.rb remains the
+# escape hatch.
 
 require "action_controller"
 require "kiosk/server/well_known"

@@ -1,4 +1,3 @@
-// hint: Logic changed on both sides. Requires understanding intent of each change.
 # Changelog
 
 Significant changes only (CLAUDE.md rule 5): one line per change, 1–2

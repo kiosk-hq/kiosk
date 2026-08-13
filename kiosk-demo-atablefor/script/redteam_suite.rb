@@ -17,6 +17,8 @@
 #   GarbageToken      — an unparseable bearer token → 401
 #   UnknownQuery      — an unregistered query name → 404
 #   UnknownAction     — an unregistered action name → 404
+#   EmptyAvailabilityIsNotACrash — a schema-VALID filter that matches no seating
+#     is 200 with an empty rows array, not a 500 (K-691)
 #
 # Usage:
 #   SERVER_URL=http://127.0.0.1:3002 KIOSK_ISSUER=http://127.0.0.1:3002 \
@@ -155,6 +157,38 @@ record(results, "UnknownQuery", rc == 404, "unknown query → #{rc} (want 404)")
 # ── UnknownAction — unregistered action name → 404 ───────────────────────────
 rc, _ = post_json("/kiosk/run", { name: "nope" }, bearer(TOKEN_A))
 record(results, "UnknownAction", rc == 404, "unknown action → #{rc} (want 404)")
+
+# ── EmptyAvailabilityIsNotACrash (K-691) ─────────────────────────────────────
+# `availability`'s empty-result path used to be a top-level `return [] if
+# seatings.empty?` inside the block the registry STORES and the Executor
+# `.call`s, so it raised LocalJumpError → ActionFailed → HTTP 500. It was
+# reachable with input the descriptor's own input_schema ACCEPTS, which is what
+# made it live rather than theoretical: `time` only has to match
+# "^[0-2][0-9]:[0-5][0-9]$" (so "18:00" passes and is not a seating), and `date`
+# only has to be a `format: "date"` string (so any day outside the rolling
+# horizon passes). Nothing validates the schema server-side.
+#
+# The assertion is HTTP 200 with an EMPTY rows array — not merely "not 500":
+# a 404 or a 400 would also stop being a crash while still being the wrong
+# answer for "nothing matches your filter". A positive control keeps it from
+# passing against a handler that returns nothing for everything.
+FAR_FUTURE = (Date.today + 3650).iso8601
+empty_probes = [
+  ["time=18:00 (valid pattern, not a seating)", { name: "availability", party_size: 2, time: "18:00" }],
+  ["date=#{FAR_FUTURE} (valid date, past the horizon)", { name: "availability", party_size: 2, date: FAR_FUTURE }],
+  ["both filters, no overlap", { name: "availability", party_size: 2, time: "18:00", date: FAR_FUTURE }],
+].map do |label, body|
+  rc, resp = post_json("/kiosk/query", body, bearer(TOKEN_A))
+  rows = resp.is_a?(Hash) ? resp["rows"] : nil
+  ok = rc == 200 && rows.is_a?(Array) && rows.empty?
+  [ok, "#{label} → #{rc}#{ok ? "/[]" : "/#{JSON.generate(resp)[0, 120]}"}"]
+end
+rc_ctl, ctl = post_json("/kiosk/query", { name: "availability", party_size: 2 }, bearer(TOKEN_A))
+control_ok = rc_ctl == 200 && (ctl["rows"] || []).any?
+record(results, "EmptyAvailabilityIsNotACrash",
+       empty_probes.all? { |ok, _| ok } && control_ok,
+       "#{empty_probes.map(&:last).join(', ')}; CONTROL unfiltered → #{rc_ctl}/#{(ctl["rows"] || []).size} rows " \
+       "(want 200 + [] for each filter, and a non-empty control)")
 
 # ── Verdict ──────────────────────────────────────────────────────────────────
 breaches = results.reject { |r| r[:blocked] }

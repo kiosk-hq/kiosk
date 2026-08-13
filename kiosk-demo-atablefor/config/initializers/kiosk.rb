@@ -464,7 +464,21 @@ Kiosk::Server::Queries.register("availability",
   seatings = Seatings.upcoming
   seatings = seatings.select { |_d, t|   t == time_filter } unless time_filter.empty?
   seatings = seatings.select { |d, _t| d.iso8601 == date_filter } unless date_filter.empty?
-  return [] if seatings.empty?
+  # `next`, NOT `return` (K-691). Everything from `do |params|` down is a block
+  # the registry STORES (queries.rb: `handler = callable || block`) and the
+  # Executor `.call`s long after this file's frame is gone, so a top-level
+  # `return` here raised LocalJumpError — rescued into ActionFailed, i.e. HTTP
+  # 500 — and it was reachable with input the descriptor's own input_schema
+  # ACCEPTS: `time: "18:00"` matches the declared pattern but is not one of
+  # Seatings::TIMES, and any `date` outside the rolling horizon is a valid
+  # `format: "date"`. Both empty the list here. Nothing validates the schema
+  # server-side, so both reach the handler.
+  #
+  # An empty list is the right answer for both: the filters name a seating that
+  # does not exist right now, which is the same thing as sold out from the
+  # assistant's side — and `book_table` still rejects either with a typed 400
+  # if the assistant tries to book one anyway.
+  next [] if seatings.empty?
 
   # Every physical table seating >= party, optionally in one neighbourhood.
   where_nbhd = nbhd_filter.empty? ? "" : "AND r.neighborhood = #{conn.quote(nbhd_filter)} "

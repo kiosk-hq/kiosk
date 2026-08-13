@@ -521,10 +521,34 @@ Kiosk::Server::Actions.register("create_order",
   uid = conn.execute("SELECT kiosk.current_user_id() AS uid").first["uid"]
   raise Kiosk::Server::Errors::Unauthenticated.new("no authenticated user") if uid.nil?
 
-  items = args[:items] || []
+  # K-693: the guard here used to be `items = args[:items] || []` followed by an
+  # `empty?` check whose MESSAGE promised "a non-empty array" — an emptiness
+  # check wearing a type check's words. The declared input_schema says
+  # `array of {sku, qty}`, but nothing enforces it at the wire
+  # (request_validation.rb: "ONLY the PoW proof(s) are validated"), so
+  # `items: "x"`, `items: {sku:…}` and `items: ["bread"]` all walked past it into
+  # `.map` / `it[:sku]` and raised NoMethodError or TypeError, which
+  # executor.rb rescues into ActionFailed — a 500 for a plain client type error,
+  # on the flagship demo's headline action. `items: 5` did not even reach that
+  # far: `empty?` itself blew up. The guard now checks the type its message
+  # always claimed, and an element that is not a {sku, qty} object is a typed
+  # 400 rather than something `it[:sku]` gets to decide.
+  items = args[:items]
+  unless items.is_a?(Array)
+    raise Kiosk::Server::Errors::BadRequest.new(
+      "items must be an array of {sku, qty} objects — got " \
+      "#{items.nil? ? "nothing" : items.class}"
+    )
+  end
   raise Kiosk::Server::Errors::BadRequest.new("items must be a non-empty array") if items.empty?
 
   items = items.map do |it|
+    unless it.is_a?(Hash)
+      raise Kiosk::Server::Errors::BadRequest.new(
+        "each item must be a {sku, qty} object — got #{it.class} (#{it.inspect}); " \
+        "e.g. {\"sku\": \"sourdough-bread\", \"qty\": 2}"
+      )
+    end
     sku = it[:sku].to_s
     qty = (it[:qty] || 1).to_i
     raise Kiosk::Server::Errors::BadRequest.new("each item needs a sku") if sku.empty?

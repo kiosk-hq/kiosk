@@ -941,7 +941,7 @@ namespace :demo do
     Adversarial regression battery — kiosk-redteam.
 
     Boots getgrocery, runs all generic Kiosk::Redteam scenarios and asserts
-    each applicable attack is BLOCKED (13 BLOCKED, 3 SKIPPED):
+    each applicable attack is BLOCKED (14 BLOCKED, 3 SKIPPED):
 
       BLOCKED  CrossTenantRead        — B's my_orders must not include A's orders
       BLOCKED  ForgedUserId           — forged user_id in create_order ignored; order stays B's
@@ -955,6 +955,8 @@ namespace :demo do
       BLOCKED  WrongCurrencyCart      — usd cart at a EUR operator rejected at capture
       BLOCKED  TamperedPriceCart      — line price differing from the catalog rejected
       BLOCKED  InflatedTotalCart      — total above the sum of the lines rejected
+      BLOCKED  MalformedItemsCart     — a non-array (or non-object-element) `items` is a
+                                        typed 400, never a 500 (K-693)
       BLOCKED  RegistrationWithoutPow — register without a valid PoW proof rejected
 
     Scenarios that require a surface getgrocery does not expose SKIP cleanly:

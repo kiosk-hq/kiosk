@@ -2,8 +2,8 @@
 
 # hoteling redteam battery
 #
-# Exercises the hoteling chain: no PoW → no KYC → reserve_room → pay →
-# confirm_booking (2-gate: ownership / payment). Headline scenarios:
+# Exercises the hoteling chain: register (PoW-gated) → no KYC → reserve_room →
+# pay → confirm_booking (2-gate: ownership / payment). Headline scenarios:
 #   C2  PayForOtherUseSelf  — B pays for A's booking, B tries confirm_booking
 #   C3  SpentResourceReuse  — re-confirm an already-confirmed booking
 #
@@ -484,9 +484,10 @@ end
 
 # ── Scenario list ─────────────────────────────────────────────────────────────
 #
-# 13 generic + 3 local cashier-check beats + 2 local input/inventory beats;
-# 3 generic (KYC variants) are expected to be skipped. 10 generic + 5 local are
-# applicable (RegistrationWithoutPow now runs because register PoW is ON).
+# 13 generic + 5 local beats (3 cashier-check + 1 input-shape + 1 inventory, per
+# the header above); 3 generic (KYC variants) are expected to be skipped. 10
+# generic + 5 local are applicable (RegistrationWithoutPow now runs because
+# register PoW is ON).
 
 scenarios = [
   Kiosk::Redteam::Scenarios::PayForOtherUseSelf.new,      # C2 — headline

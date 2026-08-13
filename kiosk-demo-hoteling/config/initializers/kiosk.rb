@@ -226,9 +226,14 @@ end
 
 Kiosk::Server::Queries.register("my_bookings",
   description: "List this principal's hotel bookings (scoped to authenticated user). " \
-               "Each row carries a `booking_id`; pass it to confirm_booking as `booking_id`.") do |_params|
+               "Each row carries a `booking_id`; pass it to confirm_booking as `booking_id`. " \
+               "A confirmed row also carries the `confirmation_code` the hotel has on " \
+               "file for it — the reference the guest gives at the desk — so it can be " \
+               "read back at any time, not only in the confirm_booking response. " \
+               "It is null until the booking is confirmed.") do |_params|
   ActiveRecord::Base.connection.execute(
-    "SELECT b.id AS booking_id, b.property_id, b.room_type_id, b.check_in, b.check_out, b.total_cents, b.status " \
+    "SELECT b.id AS booking_id, b.property_id, b.room_type_id, b.check_in, b.check_out, " \
+    "b.total_cents, b.status, b.confirmation_code " \
     "FROM public.bookings b " \
     "WHERE b.user_id = kiosk.current_user_id() " \
     "ORDER BY b.created_at DESC"
@@ -628,7 +633,10 @@ Kiosk::Server::Actions.register("reserve_room",
 end
 
 Kiosk::Server::Actions.register("confirm_booking",
-  description: "Confirm a reserved booking (requires payment mandate referencing this booking)",
+  description: "Confirm a reserved booking (requires payment mandate referencing this booking). " \
+               "Returns the `confirmation_code` the hotel stores against the booking — the " \
+               "reference the guest gives at the desk. It is durable: the same code is listed " \
+               "by my_bookings afterwards, and confirming again never mints a different one.",
   params: {
     booking_id: "uuid — the booking to confirm",
   }) do |args|
@@ -673,18 +681,28 @@ Kiosk::Server::Actions.register("confirm_booking",
     raise Kiosk::Server::Errors::Forbidden.new("no settlement for this booking") if paid.nil?
 
     # ── All gates passed: confirm ─────────────────────────────────────────
-    confirmation_code = SecureRandom.uuid
-    conn.execute(
-      "UPDATE public.bookings SET status = 'confirmed', updated_at = now() " \
+    # K-698: the code is PERSISTED in the same UPDATE and read back out of it,
+    # so what the assistant is handed is provably what the hotel stored. It used
+    # to be a `SecureRandom.uuid` minted for the response only, against a table
+    # with no such column — a booking reference the desk could never match.
+    # COALESCE so an already-coded booking keeps its code: today Gate 1 above
+    # makes a re-confirm a 403, but the reference has to be stable no matter
+    # what that gate does later.
+    confirmed = conn.execute(
+      "UPDATE public.bookings " \
+      "SET status = 'confirmed', " \
+      "    confirmation_code = COALESCE(confirmation_code, #{conn.quote(SecureRandom.uuid)}), " \
+      "    updated_at = now() " \
       "WHERE id = #{conn.quote(booking_id.to_s)}::uuid " \
       "AND user_id = kiosk.current_user_id() " \
-      "AND status = 'reserved'"
-    )
+      "AND status = 'reserved' " \
+      "RETURNING confirmation_code"
+    ).first
 
     {
       booking_id:        booking_id,
       status:            "confirmed",
-      confirmation_code: confirmation_code,
+      confirmation_code: confirmed["confirmation_code"],
     }
   end
 end

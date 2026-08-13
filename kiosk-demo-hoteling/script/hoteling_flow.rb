@@ -179,6 +179,19 @@ rc_confirm, confirm_resp = post_json(
   { "Authorization" => "Bearer #{token}" },
 )
 
+# ── Step 6b: read the confirmation code back (K-698) ──────────────────────
+# The code confirm_booking hands over is only a booking reference if the hotel
+# KEPT it. It used to be a SecureRandom.uuid minted for the response against a
+# table with no such column, so a guest quoting it at the desk could not be
+# matched. Re-query my_bookings for this booking and report the stored code, so
+# demo:book can assert the two are the same string.
+rc_mine, mine_resp = post_json(
+  "#{SERVER}/kiosk/query",
+  { name: "my_bookings" },
+  { "Authorization" => "Bearer #{token}" },
+)
+stored_row = (mine_resp["rows"] || []).find { |r| r["booking_id"] == booking_id }
+
 # ── Step 7: print ONE JSON line ───────────────────────────────────────────
 
 puts JSON.generate(
@@ -194,4 +207,6 @@ puts JSON.generate(
   total_cents:          total_cents,
   confirm_status:       confirm_resp.dig("value", "status"),
   confirmation_code:    confirm_resp.dig("value", "confirmation_code"),
+  http_my_bookings:     rc_mine,
+  stored_confirmation_code: stored_row && stored_row["confirmation_code"],
 )

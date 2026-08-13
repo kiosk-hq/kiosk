@@ -56,7 +56,7 @@ hoteling is a Rails 8.1 app that speaks Kiosk. The following is the recorded out
 3. **Browse** — `POST /kiosk/query {name:"properties"}` returned 5 hotel properties (ordered by name; the flow uses the first, Bosphorus Palace, id=4). `POST /kiosk/query {name:"availability", property_id:4, check_in:"2026-07-28", check_out:"2026-07-31"}` returned available room types with nightly prices (ordered by price; the flow uses the first, Classic).
 4. **Reserve** — `POST /kiosk/run {name:"reserve_room", property_id:4, room_type_id:<id>, check_in:"2026-07-28", check_out:"2026-07-31"}` → HTTP 200, `booking_id:<uuid>`, `total_cents:45000`. A TTL hold was created in `kiosk.reservations`.
 5. **Pay** — signed an AP2 intent mandate (`cap_amount_cents:45100`, `scope:"lodging"`, `iss:<issuer>`) and a cart mandate (`total_amount_cents:45000`, `line_items:[{sku:"Classic", qty:3, booking_id:<uuid>}]`, bound to the intent via `intent_mandate_id`) as RS256 JWS with the registered keypair, then `POST /kiosk/pay {intent_mandate_jws:…, cart_mandate_jws:…, payment_mandate_jws:…}` → `settled_amount_cents:45000`, `ok:true`.
-6. **Confirm** — `POST /kiosk/run {name:"confirm_booking", booking_id:<uuid>}` → HTTP 200, `status:"confirmed"`, `confirmation_code:<uuid>`. The server verified ownership (Gate 1) and the settled mandate referencing this booking (Gate 2) before confirming.
+6. **Confirm** — `POST /kiosk/run {name:"confirm_booking", booking_id:<uuid>}` → HTTP 200, `status:"confirmed"`, `confirmation_code:<uuid>`. The server verified ownership (Gate 1) and the settled mandate referencing this booking (Gate 2) before confirming. The code is stored on the booking row — it is the reference the guest gives at the desk, and `my_bookings` reports the same one afterwards.
 
 The database confirmed: one row in `bookings` with `status='confirmed'`, one row in `kiosk.settlements`, one row in `kiosk.reservations`.
 
@@ -165,7 +165,11 @@ Kiosk::Server::Actions.register("confirm_booking",
   # Gate 1: ownership — booking.user_id must equal kiosk.current_user_id() AND status='reserved'
   # Gate 2: payment  — a settled payment_mandate whose cart line_items @> [{booking_id:}]
   # Both must pass; else Forbidden.
-  { booking_id:, status: "confirmed", confirmation_code: SecureRandom.uuid }
+  # The confirmation code is WRITTEN in the same UPDATE and read back from it,
+  # so the reference handed to the assistant is the one the hotel has on file.
+  # ... UPDATE bookings SET status='confirmed',
+  #     confirmation_code = COALESCE(confirmation_code, <uuid>) ... RETURNING confirmation_code
+  { booking_id:, status: "confirmed", confirmation_code: stored_code }
 end
 ```
 

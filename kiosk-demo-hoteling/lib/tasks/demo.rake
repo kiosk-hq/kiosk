@@ -161,6 +161,30 @@ namespace :demo do
         puts "  FAIL  booking_id missing or empty"
       end
 
+      # ── confirmation_code is PERSISTED, not minted for the response (K-698)
+      # It was a fresh SecureRandom.uuid handed to the assistant while the
+      # UPDATE wrote only status — against a table with no such column — so the
+      # hotel issued a reference it kept no record of and could not match at
+      # the desk. Three assertions, because "present" was already true before
+      # the fix and proved nothing: the code comes back, my_bookings reports the
+      # SAME string afterwards, and the bookings row actually holds it.
+      code        = result["confirmation_code"].to_s
+      stored_code = result["stored_confirmation_code"].to_s
+      if !code.empty? && stored_code == code
+        puts "  OK  confirmation_code round-trips through my_bookings (#{code})"
+      else
+        failures << "happy: confirmation_code #{code.inspect} != my_bookings' #{stored_code.inspect}"
+        puts "  FAIL  confirmation_code #{code.inspect} != my_bookings' #{stored_code.inspect}"
+      end
+
+      db_code = `psql -X -d #{db} -tAc "SELECT confirmation_code FROM public.bookings WHERE id = '#{booking_id}'" 2>&1`.strip
+      if !code.empty? && db_code == code
+        puts "  OK  bookings.confirmation_code == the code returned (#{db_code})"
+      else
+        failures << "happy: bookings.confirmation_code #{db_code.inspect} != returned #{code.inspect}"
+        puts "  FAIL  bookings.confirmation_code #{db_code.inspect} != returned #{code.inspect}"
+      end
+
       # ── psql assertions ──────────────────────────────────────────────
       b_count = `psql -X -d #{db} -tAc "SELECT COUNT(*) FROM public.bookings WHERE status='confirmed'" 2>&1`.strip
       if b_count.to_i >= 1

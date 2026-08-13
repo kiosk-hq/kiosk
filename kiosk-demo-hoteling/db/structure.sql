@@ -306,7 +306,8 @@ CREATE TABLE public.bookings (
     total_cents integer NOT NULL,
     status character varying DEFAULT 'reserved'::character varying NOT NULL,
     created_at timestamp(6) without time zone NOT NULL,
-    updated_at timestamp(6) without time zone NOT NULL
+    updated_at timestamp(6) without time zone NOT NULL,
+    confirmation_code character varying
 );
 
 
@@ -554,7 +555,7 @@ ALTER TABLE ONLY public.ar_internal_metadata
 --
 
 ALTER TABLE ONLY public.bookings
-    ADD CONSTRAINT bookings_no_overlapping_room_nights EXCLUDE USING gist (room_type_id WITH =, daterange(check_in, check_out) WITH &&) WHERE (((status)::text = ANY ((ARRAY['reserved'::character varying, 'confirmed'::character varying])::text[])));
+    ADD CONSTRAINT bookings_no_overlapping_room_nights EXCLUDE USING gist (room_type_id WITH =, daterange(check_in, check_out) WITH &&) WHERE (((status)::text = ANY (ARRAY[('reserved'::character varying)::text, ('confirmed'::character varying)::text])));
 
 
 --
@@ -731,6 +732,13 @@ CREATE INDEX idx_settlements_user_id ON kiosk.settlements USING btree (user_id);
 
 
 --
+-- Name: index_bookings_on_confirmation_code; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE UNIQUE INDEX index_bookings_on_confirmation_code ON public.bookings USING btree (confirmation_code);
+
+
+--
 -- Name: index_bookings_on_property_id; Type: INDEX; Schema: public; Owner: -
 --
 
@@ -867,6 +875,7 @@ ALTER TABLE ONLY public.bookings
 SET search_path TO "$user", public;
 
 INSERT INTO "schema_migrations" (version) VALUES
+('20260813000002'),
 ('20260813000001'),
 ('20260804000001'),
 ('20260717000001'),

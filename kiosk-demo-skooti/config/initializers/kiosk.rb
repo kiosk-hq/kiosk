@@ -64,7 +64,42 @@ pow_secret = Rails.configuration.x.kiosk.pow_secret
 # and crash-checks it at boot), and this file only parses the resolved value.
 # Never DevUnlockKey and never ENV here — the posture is the environment
 # file's to state, not an initializer's.
-unlock_signing_key = OpenSSL::PKey.read(Rails.configuration.x.kiosk.unlock_signing_key_pem)
+#
+# The empty case gets a SIGNPOST, not a nil TypeError — the ProveKey.config
+# shape (kiosk-demo-prove/lib/prove_key.rb). Every environment's resolution
+# hangs off config/dev_unlock_key.pem: dev/test read it, and production keys
+# the KIOSK_UNLOCK_SIGNING_KEY_PEM requirement off its mere existence (that
+# byte-identical file may not name a demo, so the marker stands in for the
+# name). Strip that file from a deploy artifact — a plausible reaction to
+# "stop shipping a dev private key" — and production stops ASKING for the
+# variable, leaves the config nil, and this line used to die with
+# `TypeError: no implicit conversion of nil into String`, naming neither the
+# file nor the fix. That is the K-681 failure mode, one app over.
+unlock_signing_key_pem = Rails.configuration.x.kiosk.unlock_signing_key_pem
+if unlock_signing_key_pem.to_s.strip.empty?
+  raise <<~MSG
+    No unlock/rental-token signing key is configured, so this demo cannot
+    sign the Ed25519 tokens its locks verify (K-686).
+
+    config/environments/#{Rails.env}.rb resolves it, and every path it has
+    came back empty:
+
+      * production REQUIRES KIOSK_UNLOCK_SIGNING_KEY_PEM — but only for a
+        demo that ships config/dev_unlock_key.pem, the marker it keys that
+        requirement off. If that file was stripped from the deploy artifact,
+        the variable is silently no longer demanded and you land HERE.
+        Restore the tracked file (it is a marker, not a fallback — its key is
+        never loaded in production) and set the variable.
+      * development/test fall back to reading that same file, so a deleted
+        or emptied copy lands here too. Restore it with
+        `git checkout config/dev_unlock_key.pem`.
+
+    Either way an explicit key also satisfies this line:
+
+      KIOSK_UNLOCK_SIGNING_KEY_PEM=$(openssl genpkey -algorithm ed25519)
+  MSG
+end
+unlock_signing_key = OpenSSL::PKey.read(unlock_signing_key_pem)
 
 Kiosk.configure do |c|
   c.user_model     = "User"

@@ -40,6 +40,26 @@ RSpec.describe "Kiosk::Redteam.blocked?" do
     expect(Kiosk::Redteam.blocked?(response(503))).to be(false)
   end
 
+  # K-728: the denial-code branch used to run with no status guard, so a 500
+  # rendering the envelope a crashing authorization filter renders was counted
+  # as a block — the exact masquerade the 5xx rule exists to forbid.
+  it "returns false for HTTP 500 carrying a recognised denial code (crash-masquerade guard)" do
+    body = { "error" => { "code" => "forbidden" } }
+    expect(Kiosk::Redteam.blocked?(response(500, body))).to be(false)
+  end
+
+  it "returns false for HTTP 502 carrying 'rls_denied'" do
+    body = { "error" => { "code" => "rls_denied" } }
+    expect(Kiosk::Redteam.blocked?(response(502, body))).to be(false)
+  end
+
+  # status 0 is the connection-error sentinel: nothing answered, so nothing
+  # was enforced, whatever a body claims.
+  it "returns false for a connection error (status 0) even with a denial code" do
+    body = { "error" => { "code" => "unauthenticated" } }
+    expect(Kiosk::Redteam.blocked?(response(0, body))).to be(false)
+  end
+
   it "returns false for HTTP 422 (unprocessable entity is not a security block)" do
     expect(Kiosk::Redteam.blocked?(response(422, { "error" => { "code" => "unprocessable" } }))).to be(false)
   end

@@ -9,10 +9,16 @@ module Kiosk
     #
     #   runner = Kiosk::Redteam::Runner.new(base_url: server_url, profile: profile)
     #   runner.run(scenarios)
-    #   exit 1 if runner.breaches.any?
+    #   exit 1 unless runner.all_blocked?
+    #
+    # Use THAT form, not `exit 1 if runner.breaches.any?` (which this docstring
+    # taught until K-728): `breaches` answers `[]` when `run` never happened, so
+    # the `if` idiom exits 0 for a battery that never ran — fail-open, on the
+    # gate whose whole job is to fail closed.  `all_blocked?` is false until a
+    # non-empty run has produced verdicts.
     #
     # Output per scenario:
-    #   "  BLOCKED ✓ <name>"              — attack correctly blocked
+    #   "  BLOCKED ✓ <name> (HTTP <status>)" — attack correctly blocked
     #   "  SKIP    — <name> (<reason>)"   — profile lacks the surface (not a pass)
     #   "  BREACH  ✗ <name> — <detail>"   — attack NOT blocked (real finding)
     class Runner
@@ -34,7 +40,11 @@ module Kiosk
             reason = verdict.detail.delete_prefix("SKIP — ")
             puts "  SKIP    — #{scenario.name} (#{reason})"
           elsif verdict.blocked
-            puts "  BLOCKED ✓ #{scenario.name}"
+            # The status is part of the claim: "BLOCKED" alone does not say
+            # WHICH gate answered, so a battery that went green because an
+            # unrelated 404 or 402 satisfied a permissive check reads exactly
+            # like one that proved the gate (K-728).
+            puts "  BLOCKED ✓ #{scenario.name} (HTTP #{verdict.status})"
           else
             puts "  BREACH  ✗ #{scenario.name} — #{verdict.detail}"
           end

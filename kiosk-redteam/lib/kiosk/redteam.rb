@@ -61,11 +61,17 @@ module Kiosk
     # Determine whether a provider response constitutes a successful block.
     #
     # Returns false for 5xx and connection-error responses so that a crash
-    # can never be counted as "blocked" and mask a real breach.
+    # can never be counted as "blocked" and mask a real breach.  The status
+    # test comes FIRST and is absolute: until K-728 the denial-code branch had
+    # no status guard, so a 500 whose body happened to carry `forbidden` — the
+    # shape a crashing authorization filter renders — was counted as a block,
+    # which is the one thing the paragraph above promises cannot happen.
     #
     # @param response [Response]
     # @return [Boolean]
     def self.blocked?(response)
+      # status 0 is this gem's connection-error sentinel; >= 500 is a crash.
+      return false if response.status >= 500 || response.status.zero?
       return true if BLOCKED_STATUSES.include?(response.status)
 
       # Safely navigate body["error"]["code"] — body["error"] may be a String

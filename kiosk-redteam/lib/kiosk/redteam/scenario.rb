@@ -57,19 +57,69 @@ module Kiosk
         Verdict.new(blocked: false, skipped: true, status: 0, detail: "SKIP — #{reason}")
       end
 
-      # Wrap a server Response into a Verdict using the canonical blocked? helper.
+      # Wrap a server Response into a Verdict.
       #
-      # @param response [Response]
-      # @param detail   [String] extra context to append on breach
+      # A scenario that knows WHICH gate must fire says so with +expect+ /
+      # +expect_code+: only those status(es) and denial code(s) count as a
+      # genuine refusal of THIS attack, and anything else — a refusal from an
+      # unrelated gate, a mis-routed 404, a crash — is not a pass. The failing
+      # detail names what was demanded and what came back, so a verdict that
+      # moves is auditable without re-running the battery by hand.
+      #
+      # With neither given, the verdict delegates to {Kiosk::Redteam.blocked?},
+      # which admits ANY of 401/402/403 or any recognised denial code. That is
+      # honest ONLY for a scenario whose attack several different gates may
+      # legitimately refuse; every such call site states which gates it admits.
+      #
+      # 5xx is never blocked, whatever is asked for — a crash cannot masquerade
+      # as enforcement (see {Kiosk::Redteam.blocked?}).
+      #
+      # @param response    [Response]
+      # @param expect      [Integer, Array<Integer>, nil] status(es) that count
+      #   as a refusal of this attack; nil admits the whole blocked? set.
+      # @param expect_code [String, Array<String>, nil] `body["error"]["code"]`
+      #   value(s) that count; nil does not inspect the code.
+      # @param detail      [String] extra context to append on breach
       # @return [Verdict]
-      def verdict_from(response, detail: nil)
-        blocked = Kiosk::Redteam.blocked?(response)
+      def verdict_from(response, expect: nil, expect_code: nil, detail: nil)
+        if expect.nil? && expect_code.nil?
+          blocked = Kiosk::Redteam.blocked?(response)
+          return Verdict.new(
+            blocked: blocked,
+            skipped: false,
+            status:  response.status,
+            detail:  blocked ? "" : (detail || "HTTP #{response.status}: #{response.body.inspect}"),
+          )
+        end
+
+        code   = error_code(response)
+        misses = []
+        misses << "want status #{Array(expect).join("/")}" if expect && !Array(expect).include?(response.status)
+        misses << "want error.code #{Array(expect_code).map(&:inspect).join("/")}" \
+          if expect_code && !Array(expect_code).include?(code)
+        misses << "5xx is never a block" if response.status >= 500
+
         Verdict.new(
-          blocked: blocked,
+          blocked: misses.empty?,
           skipped: false,
           status:  response.status,
-          detail:  blocked ? "" : (detail || "HTTP #{response.status}: #{response.body.inspect}"),
+          detail:  misses.empty? ? "" : "#{detail || "attack was not refused by the named gate"} " \
+                                        "[#{misses.join("; ")}; got HTTP #{response.status} " \
+                                        "code=#{code.inspect}, body=#{response.body.inspect}]",
         )
+      end
+
+      # Read `body["error"]["code"]` defensively — `body["error"]` may be a
+      # plain String, and the body itself may not be a Hash at all.
+      #
+      # @param response [Response]
+      # @return [String, nil]
+      def error_code(response)
+        body = response.body
+        return nil unless body.is_a?(Hash)
+
+        error = body["error"]
+        error.is_a?(Hash) ? error["code"] : nil
       end
 
       # Register a principal.  Any PoW solving is driven entirely by the

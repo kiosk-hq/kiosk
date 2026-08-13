@@ -52,6 +52,23 @@ RSpec.describe Kiosk::Redteam::Runner do
       expect { described_class.new(base_url:, profile:).run([s]) }.to output(/BLOCKED.*ForgedUserId/).to_stdout
     end
 
+    # K-728: "BLOCKED ✓ X" alone does not say which gate answered, so a run that
+    # went green off an unrelated 404 reads exactly like one that proved the
+    # gate. The status is part of the claim.
+    it "prints the status on the BLOCKED line" do
+      s = make_scenario("ForgedUserId", blocked_verdict(status: 403))
+      expect {
+        described_class.new(base_url:, profile:).run([s])
+      }.to output(/BLOCKED ✓ ForgedUserId \(HTTP 403\)/).to_stdout
+    end
+
+    it "prints the status a permissive verdict actually got, not a fixed one" do
+      s = make_scenario("TokenTampering", blocked_verdict(status: 401))
+      expect {
+        described_class.new(base_url:, profile:).run([s])
+      }.to output(/BLOCKED ✓ TokenTampering \(HTTP 401\)/).to_stdout
+    end
+
     it "prints BREACH for an unblocked verdict and includes the detail" do
       s = make_scenario("MandateSwap", breach_verdict(detail: "200 — data returned"))
       expect {
@@ -81,6 +98,61 @@ RSpec.describe Kiosk::Redteam::Runner do
         blocked_verdict
       end
       described_class.new(base_url:, profile:).run([s])
+    end
+  end
+
+  # ── the abort path ───────────────────────────────────────────────────────
+  #
+  # Every profile callable in the three consuming demos raises on a bad setup
+  # step ("redteam: create_order failed (500)"), so the whole battery rests on
+  # what a raising scenario does — and none of it was covered (K-728). It must
+  # ABORT, loudly, and must never leave a caller able to read the run as clean.
+  describe "a scenario that raises" do
+    def raising_scenario(name, error = RuntimeError.new("redteam: create_owned failed (500)"))
+      s = instance_double(Kiosk::Redteam::Scenario, name:)
+      allow(s).to receive(:call).and_raise(error)
+      s
+    end
+
+    it "propagates out of #run rather than scoring a verdict" do
+      runner = described_class.new(base_url:, profile:)
+      expect { runner.run([raising_scenario("CrossTenantRead")]) }
+        .to raise_error(RuntimeError, /create_owned failed/)
+    end
+
+    it "does not run the scenarios queued after it" do
+      later = make_scenario("Later", blocked_verdict)
+      runner = described_class.new(base_url:, profile:)
+      expect { runner.run([raising_scenario("Boom"), later]) }.to raise_error(RuntimeError)
+      expect(later).not_to have_received(:call)
+    end
+
+    it "leaves all_blocked? false — an aborted battery proved nothing" do
+      runner = described_class.new(base_url:, profile:)
+      suppress = ->(&blk) { begin; blk.call; rescue RuntimeError; end }
+      suppress.call { runner.run([raising_scenario("Boom")]) }
+      expect(runner.all_blocked?).to be(false)
+    end
+
+    # The reason the quick-start idiom had to change: `breaches` is EMPTY after
+    # an abort (there are no results to reject), so `exit 1 if breaches.any?`
+    # exits 0 on a battery that never ran. `unless all_blocked?` exits 1.
+    it "leaves breaches empty, so only the all_blocked? idiom fails closed" do
+      runner = described_class.new(base_url:, profile:)
+      begin
+        runner.run([raising_scenario("Boom")])
+      rescue RuntimeError
+        nil
+      end
+      expect(runner.breaches).to eq([])
+      expect(runner.all_blocked?).to be(false)
+    end
+
+    it "aborts on a mid-battery raise even after earlier scenarios were blocked" do
+      first  = make_scenario("First", blocked_verdict)
+      runner = described_class.new(base_url:, profile:)
+      expect { runner.run([first, raising_scenario("Boom")]) }.to raise_error(RuntimeError)
+      expect(runner.all_blocked?).to be(false)
     end
   end
 

@@ -41,11 +41,25 @@ module Kiosk
           # if the gate catches it there.
           owned_ref  = profile.create_owned.call(client, a)
           mandates   = profile.pay_for.call(client, a, owned_ref)
-          client.pay(a, intent: mandates[:intent], cart: mandates[:cart])
+          pay_resp   = client.pay(a, intent: mandates[:intent], cart: mandates[:cart])
+
+          # SETUP, not the attack: a refused payment leaves the gated action to
+          # be refused by the payment gate, which this scenario would then read
+          # as the expiry check (K-731).
+          failure = setup_failure(
+            pay_resp,
+            step:    "the payment this scenario stages before the gated action",
+            because: "The gated action would then be refused by the payment gate, and this " \
+                     "scenario would credit that refusal to the KYC expiry check.",
+          )
+          return failure if failure
 
           gated_args = profile.gated_args ? profile.gated_args.call(owned_ref) : { id: owned_ref[:id] }
           resp       = client.run(a, name: profile.gated_action, **gated_args)
 
+          # Admits several gates deliberately: an expired attestation may be
+          # refused as kyc_required (403) or as unauthenticated (401) depending
+          # on where the provider checks `exp`.
           verdict_from(resp, detail: "expired KYC accepted everywhere; gated action returned #{resp.status}")
         end
       end

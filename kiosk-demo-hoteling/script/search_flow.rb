@@ -2,7 +2,8 @@
 #
 # Agent-side driver: PROVE search_hotels pagination + hotel_detail (T-042 / K-452).
 #
-# Registers a fresh agent (no PoW for hoteling), then:
+# Registers a fresh agent (registration IS PoW-gated; equihash_register
+# solves it transparently), then:
 #   1. search_hotels with a small limit over the ~100-hotel catalogue → a FULL
 #      page that carries a top-level `next` (truncated).
 #   2. Echo `next` back as `cursor` → the FOLLOWING page (different rows).

@@ -18,10 +18,10 @@ Rails.application.configure do
   config.active_record.verbose_query_logs = true
   config.action_controller.raise_on_missing_callback_actions = true
 
-  # Permit the demo's realistic /etc/hosts domain (prove.demo.kiosk.tech is the
-  # production brand; in local runs the broker answers on 127.0.0.1). Rails 8
-  # HostAuthorization otherwise 403s any Host that isn't localhost/127.0.0.1.
-  config.hosts << "prove.demo.kiosk.tech"
+  # Permit the demo's realistic /etc/hosts domain (kyc.demo.kiosk.tech is the
+  # served broker origin; in local runs the broker answers on 127.0.0.1).
+  # Rails 8 HostAuthorization otherwise 403s any Host that isn't
+  # localhost/127.0.0.1.
   config.hosts << "kyc.demo.kiosk.tech"
 
   # ── Prove env inputs (K-672) ────────────────────────────────────────────

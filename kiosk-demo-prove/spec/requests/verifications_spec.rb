@@ -221,6 +221,61 @@ RSpec.describe "KYC broker (kiosk-demo-prove)", type: :request do
       expect(response).to have_http_status(:unprocessable_entity)
     end
 
+    # K-705: the sequential test above only proves the FIRST-LEVEL guard
+    # (#confirmable? on a row already flipped). It does NOT catch a
+    # check-then-write TOCTOU, where two concurrent approvals both read the
+    # row as pending BEFORE either has written — exactly the shape K-542
+    # closed in kiosk-server's PoW spent-store. This test drives real
+    # concurrency: N genuinely racing POST /verify against the SAME pending
+    # row, over separate connections/threads, so the DB (not an in-process
+    # mock) is what serializes the claim. It needs the row to be actually
+    # committed — see the `:real_concurrency` exception in spec_helper.rb —
+    # and cleans up its own row since no transaction rolls it back.
+    it "is single-use under concurrency: N racing approvals mint exactly once (K-705)", :real_concurrency do
+      rid = open_request
+      begin
+        # Widen the claim-vs-mint window deterministically (same technique as
+        # kiosk-server's pow_gate_spec slow_ok_backend for K-542): with no
+        # delay the window is sub-millisecond and the race is a timing
+        # coin-flip rather than a reliable assertion.
+        allow(ProveKey).to receive(:mint).and_wrap_original do |original, **kwargs|
+          sleep 0.15
+          original.call(**kwargs)
+        end
+
+        deliveries = []
+        delivery_mutex = Mutex.new
+        allow(CallbackPoster).to receive(:deliver) do |**kwargs|
+          delivery_mutex.synchronize { deliveries << kwargs[:kyc_jws] }
+          200
+        end
+
+        # One single-threaded request first: with eager_load off, Rails
+        # finalizes routes lazily on first dispatch, and that finalization
+        # is not itself safe against simultaneous first-dispatches — a
+        # harness artifact (spurious ActionController::RoutingError),
+        # unrelated to the app, that a warm-up avoids.
+        ActionDispatch::Integration::Session.new(Rails.application).get("/prove_key.pem")
+
+        n = 6
+        threads = Array.new(n) do
+          Thread.new do
+            session = ActionDispatch::Integration::Session.new(Rails.application)
+            session.post("/verify", params: { request: rid, decision: "approve" })
+            session.response.status
+          end
+        end
+        statuses = threads.map(&:value)
+
+        expect(statuses.count(200)).to eq(1)
+        expect(statuses.count(422)).to eq(n - 1)
+        expect(deliveries.size).to eq(1) # exactly one mint+deliver from N racing approvals
+        expect(ProveRequest.find(rid).status).to eq("confirmed")
+      ensure
+        ProveRequest.delete(rid)
+      end
+    end
+
     it "is un-confirmable once past its TTL" do
       rid = open_request
       ProveRequest.find(rid).update!(expires_at: 1.hour.ago)

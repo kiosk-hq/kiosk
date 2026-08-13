@@ -13,3 +13,11 @@ sentences — essence and intent, not content.
   booleans and never integrating a government identity service itself. The demo
   self-asserts (a labelled stub); the security model (per-request binding, no
   replay, anti-mass-confirm, SSRF guard) is the point.
+
+- 2026-08-13: closed a TOCTOU race in the human approve action (K-705): two
+  concurrent approvals of the same pending request used to both pass the
+  in-memory single-use check and both mint + deliver a signed claim before
+  either write landed. The decision is now an atomic conditional UPDATE
+  (`WHERE status = "pending"`) that only the first racer wins; minting only
+  ever happens after that claim succeeds, so the "single-use" guarantee the
+  schema already documented is now actually enforced under concurrency.

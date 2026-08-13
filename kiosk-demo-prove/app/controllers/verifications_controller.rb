@@ -131,11 +131,18 @@ class VerificationsController < ActionController::Base
 
     case params[:decision].to_s
     when "approve"
-      approve!(@request)
+      if claim!(@request, "confirmed")
+        approve!(@request)
+      else
+        lost_race_response
+      end
     when "decline"
-      @request.update!(status: "declined")
-      @decision = :declined
-      render :decided
+      if claim!(@request, "declined")
+        @decision = :declined
+        render :decided
+      else
+        lost_race_response
+      end
     else
       render plain: "decision must be approve or decline", status: :bad_request
     end
@@ -148,8 +155,11 @@ class VerificationsController < ActionController::Base
 
   private
 
-  # Mint the signed anonymized claim bound to (subject + operator + request),
-  # flip the row to confirmed (single-use), and POST it to the operator callback.
+  # Mint the signed anonymized claim bound to (subject + operator + request)
+  # and POST it to the operator callback. Only ever reached AFTER {#claim!}
+  # has already, atomically, flipped the row pending → confirmed (K-705) — so
+  # by the time this method's expensive work runs, this request has already
+  # won the single-use guard and no concurrent approve can duplicate it.
   def approve!(prove_request)
     attributes = ClaimCatalog.attributes_for(prove_request.requested_claims)
 
@@ -161,10 +171,6 @@ class VerificationsController < ActionController::Base
       request_id: prove_request.request_id,
       nonce:      prove_request.nonce,
     )
-
-    # Single-use: flip pending → confirmed BEFORE delivery so a re-post cannot
-    # re-confirm even if the callback is retried.
-    prove_request.update!(status: "confirmed")
 
     delivery_status = CallbackPoster.deliver(
       callback_url: prove_request.callback_url,
@@ -184,6 +190,43 @@ class VerificationsController < ActionController::Base
     @delivered  = delivery_status.is_a?(Integer) && (200..299).cover?(delivery_status)
     @attributes = attributes
     render :decided
+  end
+
+  # ── K-705: the burn IS the single-use guard ────────────────────────────────
+  # The old code read #confirmable? in memory, THEN (after minting — an
+  # expensive RSA sign + network POST) wrote the row unconditionally. Two
+  # concurrent POST /verify on the same pending row both passed the read,
+  # both minted, both delivered: a check-then-write TOCTOU, the same class as
+  # K-542 (kiosk-server's PoW spent-store race). K-542's fix was to make a
+  # single atomic claim op — succeed-or-fail — happen BEFORE the expensive
+  # work, instead of a plain check followed by a later plain write. This is
+  # that same shape at the SQL layer: ONE conditional UPDATE, scoped to
+  # `WHERE status = "pending"`, executed BEFORE any minting. Postgres
+  # serializes concurrent UPDATEs against the same row, so of N racing
+  # decisions on one row, `update_all` returns 1 for exactly one caller and 0
+  # for every other — that boolean IS the claim, and approve!/decline are only
+  # ever reached by the winner.
+  #
+  # @param prove_request [ProveRequest]
+  # @param new_status     ["confirmed", "declined"]
+  # @return [Boolean] true iff THIS request won the race (and prove_request's
+  #   in-memory #status now reflects it); false if a concurrent decision
+  #   already claimed the row first.
+  def claim!(prove_request, new_status)
+    claimed = ProveRequest
+      .where(request_id: prove_request.request_id, status: "pending")
+      .update_all(status: new_status, updated_at: Time.current) == 1
+    prove_request.status = new_status if claimed
+    claimed
+  end
+
+  # A decision lost the claim race (or the row moved on between the initial
+  # #confirmable? read and the claim attempt) — re-render exactly what the
+  # pre-check at the top of {#decide} would have for an already-decided row.
+  def lost_race_response
+    @request.reload
+    @entries = ClaimCatalog.entries_for(@request.requested_claims)
+    render(:show, status: :unprocessable_entity)
   end
 
   # Look the request up by its unguessable token. Blank/unknown yields nil → the

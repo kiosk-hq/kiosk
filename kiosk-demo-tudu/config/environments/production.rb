@@ -178,5 +178,44 @@ Rails.application.configure do
     rescue OpenSSL::PKey::PKeyError => e
       raise "KIOSK_UNLOCK_SIGNING_KEY_PEM does not parse as an Ed25519 PRIVATE key PEM (#{e.message}) — generate one with `openssl genpkey -algorithm ed25519`."
     end
+
+    # And refuse the SHIPPED DEV KEY ITSELF. The three checks above only prove
+    # the supplied value is *an* Ed25519 private key — pasting the world-
+    # readable config/dev_unlock_key.pem into the variable satisfies every one
+    # of them, and production boots signing tokens anyone with a clone can
+    # mint. Requiring the variable (above) closed the SILENT path to that key;
+    # this closes the explicit one, which is a plausible reaction to a boot
+    # that demands a PEM nobody has generated yet. Same refusal the demo's own
+    # test issuer keeps (lib/prove_test_issuer.rb, where a dev-key fallback
+    # will not arm under a production env), one layer down.
+    #
+    # Compared on the PUBLIC half in DER, never on PEM text: one key
+    # re-serialised (raw vs PKCS#8, CRLF, a stray trailing newline) is a
+    # different string and the same credential.
+    dev_unlock_key_der =
+      begin
+        OpenSSL::PKey.read(dev_unlock_key_file.read).public_to_der
+      rescue OpenSSL::PKey::PKeyError
+        # A marker file that is not a parseable key is not a key anything can
+        # sign with either, so there is nothing here for the check to catch.
+        nil
+      end
+    if unlock_key.public_to_der == dev_unlock_key_der
+      raise <<~MSG
+        KIOSK_UNLOCK_SIGNING_KEY_PEM is the DEV keypair shipped at
+        config/dev_unlock_key.pem — refusing to boot production with it.
+
+        Its PRIVATE half is world-readable in this public repo, so every
+        unlock/rental token signed with it can be forged by anyone with a
+        clone — past reserve, past payment, past the ownership check, past
+        KYC. It is a physical-access credential: the blast radius is a
+        vehicle, not a row. Supplying that key explicitly re-opens exactly
+        what requiring this variable closed.
+
+        Generate a FRESH key — and provision the locks with ITS public half:
+
+          KIOSK_UNLOCK_SIGNING_KEY_PEM=$(openssl genpkey -algorithm ed25519)
+      MSG
+    end
   end
 end

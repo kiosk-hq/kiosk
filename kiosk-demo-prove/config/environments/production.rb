@@ -85,4 +85,43 @@ Rails.application.configure do
   rescue OpenSSL::PKey::RSAError => e
     raise "PROVE_KEY_PEM does not parse as an RSA private key PEM (#{e.message}) — generate one with `openssl genrsa 2048`."
   end
+
+  # And refuse the SHIPPED DEV KEY ITSELF. The two checks above only prove the
+  # supplied value is *an* RSA private key — pasting the world-readable
+  # config/dev_prove_key.pem into PROVE_KEY_PEM satisfies both, and the broker
+  # boots minting attestations anyone with a clone can forge, which is the one
+  # outcome requiring the variable exists to prevent. Requiring it closed the
+  # SILENT path to that key; this closes the explicit one, a plausible reaction
+  # to a boot that demands a PEM nobody has generated yet. Same refusal
+  # kiosk-demo-skooti's ProveTestIssuer keeps for this very key under a
+  # production env.
+  #
+  # Compared on the PUBLIC half in DER, never on PEM text: one key
+  # re-serialised (PKCS#1 vs PKCS#8, CRLF, a stray trailing newline) is a
+  # different string and the same credential.
+  dev_prove_key_file = Rails.root.join("config/dev_prove_key.pem")
+  dev_prove_key_der =
+    begin
+      OpenSSL::PKey::RSA.new(dev_prove_key_file.read).public_to_der if dev_prove_key_file.exist?
+    rescue OpenSSL::PKey::RSAError
+      # A shipped file that is not a parseable key is not a key anything can
+      # sign with either, so there is nothing here for the check to catch.
+      nil
+    end
+  if prove_key.public_to_der == dev_prove_key_der
+    raise <<~MSG
+      PROVE_KEY_PEM is the DEV keypair shipped at config/dev_prove_key.pem —
+      refusing to boot production with it.
+
+      Its PRIVATE half is world-readable in this public repo, so every
+      operator that trusts this broker — by pinning c.kyc_public_key, or by
+      the recommended fetch of GET /prove_key.pem — would accept age and
+      licence attestations forged by anyone with a clone. Supplying that key
+      explicitly re-opens exactly what requiring this variable closed.
+
+      Generate a FRESH key and give operators the matching public half:
+
+        PROVE_KEY_PEM=$(openssl genrsa 2048)
+    MSG
+  end
 end

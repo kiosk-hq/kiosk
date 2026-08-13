@@ -13,6 +13,8 @@
 # Standard scenarios (each must be BLOCKED):
 #   CrossTenantRead   — a non-member's list_todos on a private list → 403
 #   ForgedUserId      — forged account_id on create_list ignored (belongs to caller)
+#   MalformedUuidArg  — a junk list_id/todo_id/account_id on the wire-facing
+#                       verbs is a typed 400 with no SQL internals — never a 500
 #   MissingAuth       — a request with no Authorization → 401
 #   GarbageToken      — an unparseable bearer token → 401
 #   UnknownQuery      — an unregistered query name → 404

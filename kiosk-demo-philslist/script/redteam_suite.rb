@@ -13,6 +13,8 @@
 #   ForgedUserId     — forged owner_id on post_listing ignored (belongs to Bob)
 #   CrossOwnerEdit   — Bob edit_listing on Alice's listing → 403
 #   CrossOwnerClose  — Bob close_listing on Alice's listing → 403
+#   MalformedUuidArg — a junk listing_id on edit_listing/close_listing is a
+#                      typed 400 with no SQL internals on the wire — never a 500
 #   MissingAuth      — a request with no Authorization → 401
 #   GarbageToken     — an unparseable bearer token → 401
 #   UnknownQuery     — an unregistered query name → 404

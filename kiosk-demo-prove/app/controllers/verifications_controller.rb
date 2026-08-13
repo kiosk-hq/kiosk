@@ -166,14 +166,22 @@ class VerificationsController < ActionController::Base
     # re-confirm even if the callback is retried.
     prove_request.update!(status: "confirmed")
 
-    CallbackPoster.deliver(
+    delivery_status = CallbackPoster.deliver(
       callback_url: prove_request.callback_url,
       request_id:   prove_request.request_id,
       kyc_jws:      kyc_jws,
       nonce:        prove_request.nonce,
     )
 
+    # CallbackPoster.deliver returns the raw HTTP status or nil on a transport
+    # error (see its own comment: "delivery is best-effort in the demo"). The
+    # human-facing page must not claim delivery succeeded when it did not —
+    # @delivered drives which of the two "Confirmed" messages decided.html.erb
+    # renders. The row itself is already flipped to confirmed above and stays
+    # that way either way (K-706 fixes the claim, not the retryability — see
+    # K-705 for making an undelivered row retryable).
     @decision   = :approved
+    @delivered  = delivery_status.is_a?(Integer) && (200..299).cover?(delivery_status)
     @attributes = attributes
     render :decided
   end

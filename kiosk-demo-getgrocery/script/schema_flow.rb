@@ -2,8 +2,8 @@
 
 # Self-discovery proof driver — the schema verb over HTTP.
 #
-# Registers a fresh agent (no PoW — getgrocery has no registration gate),
-# calls `schema`, prints one JSON line on stdout.
+# Registers a fresh agent (registration IS PoW-gated; equihash_register
+# solves it transparently), calls `schema`, prints one JSON line on stdout.
 #
 # Usage (invoked by rake demo:schema — do not run standalone without the server):
 #   SERVER_URL=http://127.0.0.1:3001 \

@@ -5,7 +5,8 @@
 # Proves the full PoW challenge-response loop using the REAL shipped Python
 # solver (kiosk-pow-equihash/solve.py). Steps:
 #
-#   1. Register an agent (no PoW on registration).
+#   1. Register an agent (registration is PoW-gated too; equihash_register
+#      solves it transparently before returning).
 #   2. POST query availability → expect HTTP 402 (pow_required).
 #   3. Extract the challenge(s); shell out to solve.py → {indices, header_nonce}.
 #   4. Re-POST the SAME query with the Kiosk-PoW header: [{challenge, nonce}] → 200 + rows.

@@ -9,7 +9,8 @@
 # a count caps exactly how many free calls one solve buys.
 #
 # Sequence (the load-bearing proof):
-#   1. Register a fresh agent (no PoW on registration).
+#   1. Register a fresh agent (registration is PoW-gated too; equihash_register
+#      solves it transparently before returning).
 #   2. POST query availability → expect HTTP 402 (pow_required) — no grant yet.
 #   3. Solve the challenge(s) with solve.py, resubmit the SAME query →
 #      expect HTTP 200 (proof verified; the gate's on_proof_verified sets the

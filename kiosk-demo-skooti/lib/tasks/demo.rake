@@ -331,7 +331,7 @@ namespace :demo do
     end
 
     # ── RUN 4: C2 — unpaid second reservation → 403 ───────────────────────
-    # A fresh reservation with no payment — Gate 3 must reject.
+    # A fresh reservation with no payment — Gate 2 must reject.
     puts "\n══ RUN 4: C2 — unpaid second reservation → 403 ══"
     boot_server.call do
       result = run_flow.call("SKIP_PAY" => "1")
@@ -501,11 +501,13 @@ namespace :demo do
     Runs demo:setup (clean DB + seed), boots the server, runs script/isolation_flow.rb
     with two fresh principals (A and B), and asserts all cross-tenant denial properties:
 
-      Assertion 1 (ownership denial — Gate-1 isolated): B satisfies Gate-2 (KYC)
-        and Gate-3 (settles a payment mandate referencing rA) then calls
-        start_rental on A's reservation_id. Gate-1 (user_id = kiosk.current_user_id()
-        AND status='reserved') finds nothing → 403. The 403 isolates Gate-1 ownership
-        because Gate-2 and Gate-3 are both genuinely satisfied by B.
+      Assertion 1 (ownership denial — Gate 1 isolated): B rides a licence-free
+        scooter (Gate 1b) and settles a payment mandate referencing rA (Gate 2)
+        then calls start_rental on A's reservation_id. Gate 1
+        (user_id = kiosk.current_user_id() AND status='reserved') finds
+        nothing → 403. The 403 isolates Gate 1 ownership because Gate 1b and
+        Gate 2 are both genuinely satisfied by B (start_rental has no KYC gate
+        — K-442).
       Assertion 2a (exclusion): B's my_reservations does NOT contain A's reservation.
       Assertion 2b (positive control): B's my_reservations DOES contain B's own
         reservation, proving the exclusion is not vacuous.
@@ -611,12 +613,13 @@ namespace :demo do
     b_reservation_ids       = result["b_reservation_ids"] || []
 
     # ── Assertion 1: B's start_rental on A's reservation → 403 ──────────
-    # B passed Gate-2 (KYC) and Gate-3 (payment for rA) before this attempt;
-    # the 403 therefore isolates Gate-1 ownership exclusively.
+    # B passed Gate 1b (licence-free vehicle) and Gate 2 (payment for rA)
+    # before this attempt; the 403 therefore isolates Gate 1 ownership
+    # exclusively (start_rental has no KYC gate — K-442).
     if b_start_rental_rc == 403
-      puts "  OK  Assertion 1: B's start_rental on A's rA #{reservation_id_a} → 403 (Gate-1 ownership denied; Gate-2+3 passed)"
+      puts "  OK  Assertion 1: B's start_rental on A's rA #{reservation_id_a} → 403 (Gate 1 ownership denied; Gate 1b+2 passed)"
     else
-      failures << "ISOLATION HOLE: B's start_rental on A's reservation returned #{b_start_rental_rc.inspect} (expected 403) — Gate-1 ownership bypass"
+      failures << "ISOLATION HOLE: B's start_rental on A's reservation returned #{b_start_rental_rc.inspect} (expected 403) — Gate 1 ownership bypass"
       puts "  FAIL  Assertion 1: B's start_rental on A's rA expected 403, got #{b_start_rental_rc.inspect} — isolation hole"
     end
 
@@ -672,10 +675,9 @@ namespace :demo do
 
       BLOCKED  PayForOtherUseSelf    — C2: B pays for A's reservation, tries start_rental
       BLOCKED  SpentResourceReuse    — C3: re-start_rental on already-active reservation
-      BLOCKED  MissingKyc            — start_rental without any KYC → Gate-2 fires
-      BLOCKED  ExpiredKyc            — expired attestation rejected at /kyc or Gate-2
+      BLOCKED  ExpiredKyc            — expired attestation rejected at /kyc
       BLOCKED  ForgedKyc             — wrong-key attestation rejected at /kyc
-      BLOCKED  UnpaidGatedAction     — start_rental without payment → Gate-3 fires
+      BLOCKED  UnpaidGatedAction     — start_rental without payment → Gate 2 fires
       BLOCKED  CrossTenantRead       — B's my_reservations excludes A's rows
       BLOCKED  ForgedUserId          — agent-supplied user_id in reserve args ignored
       BLOCKED  RegistrationWithoutPow — /register without a valid Equihash proof rejected

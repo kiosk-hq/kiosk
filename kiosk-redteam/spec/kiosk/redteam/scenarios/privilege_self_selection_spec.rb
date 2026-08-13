@@ -67,11 +67,71 @@ RSpec.describe Kiosk::Redteam::Scenarios::PrivilegeSelfSelection do
     end
   end
 
-  context "when the server refuses the registration outright" do
-    it "returns blocked: true (no escalation possible)" do
-      stub_register_returning(nil, status: 400)
+  # ── K-730 ────────────────────────────────────────────────────────────────
+  #
+  # A refusal of the injected registration is role-pinning only if an HONEST
+  # registration would have succeeded. This block overturns the bare
+  # "refuses outright → blocked: true" assertion below it: that reading was
+  # demonstrated scoring BLOCKED against a server answering 404 on every path,
+  # where no role is pinned because no agent is ever registered.
+  context "when the server refuses the injected registration" do
+    def register_returns(*responses)
+      stub_request(:post, "#{BASE_URL}/kiosk/auth/register").to_return(*responses)
+    end
+
+    def refused(status, body = {})
+      { status: status, body: JSON.generate(body), headers: { "Content-Type" => "application/json" } }
+    end
+
+    def issued
+      { status:  201,
+        body:    JSON.generate("agent_id" => "a1", "user_id" => "u1",
+                               "access_token" => token_with_role("customer")),
+        headers: { "Content-Type" => "application/json" } }
+    end
+
+    it "returns blocked: true when the CONTROL registration succeeds (no escalation possible)" do
+      register_returns(refused(400, "error" => { "code" => "bad_request" }), issued)
+
       verdict = scenario.call(client, profile)
+
       expect(verdict.blocked).to be(true)
+      expect(verdict.status).to eq(400)
+    end
+
+    it "returns blocked: false when the server 404s every path" do
+      register_returns(refused(404, "error" => { "code" => "not_found" }))
+
+      verdict = scenario.call(client, profile)
+
+      expect(verdict.blocked).to be(false)
+      expect(verdict.detail).to include("CONTROL FAILED")
+    end
+
+    it "returns blocked: false when the control is refused too" do
+      register_returns(refused(400), refused(400))
+
+      verdict = scenario.call(client, profile)
+
+      expect(verdict.blocked).to be(false)
+      expect(verdict.detail).to include("CONTROL FAILED")
+    end
+
+    it "returns blocked: false on a 500 without spending a control registration" do
+      stub = register_returns(refused(500, "error" => "boom"))
+
+      verdict = scenario.call(client, profile)
+
+      expect(verdict.blocked).to be(false)
+      expect(verdict.detail).to include("a crash is not a gate")
+      expect(stub).to have_been_requested.once
+    end
+
+    it "does not spend a control registration when the server issues a token" do
+      stub = register_returns(issued)
+
+      expect(scenario.call(client, profile).blocked).to be(true)
+      expect(stub).to have_been_requested.once
     end
   end
 end

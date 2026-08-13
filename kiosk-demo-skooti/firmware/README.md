@@ -43,7 +43,7 @@ cd firmware
 make test
 ```
 
-Expected output (23 assertions pass, crosscheck MATCH):
+Expected output (22 assertions pass, crosscheck MATCH):
 
 ```
 --- C host test ---
@@ -51,7 +51,7 @@ Expected output (23 assertions pass, crosscheck MATCH):
 Public key : b39f3a0333c662d3937684f21c91f7722161f8b0b4f4a79b336b463eb8f570f4
 Scooter    : SK-001
 ...
-=== Results: 23 passed, 0 failed ===
+=== Results: 22 passed, 0 failed ===
 ALL PASS
 
 --- Ruby <-> C crosscheck ---

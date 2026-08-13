@@ -34,6 +34,12 @@ module Kiosk
 
           kyc_resp = client.kyc(a, attestation_jws: profile.kyc_forged.call(a.user_id))
 
+          # Left permissive on purpose (K-728): this branch genuinely admits
+          # several gates — an untrusted issuer is rejected as 403 forbidden by
+          # a verifier that checks `iss`, as 401 by one that treats an
+          # unverifiable signature as a failed authentication, and as 402 by a
+          # metered /kyc. All three mean the forged attestation did not take
+          # effect, which is all this branch claims.
           return verdict_from(kyc_resp, detail: "forged KYC was accepted by /kyc endpoint") if Kiosk::Redteam.blocked?(kyc_resp)
 
           owned_ref  = profile.create_owned.call(client, a)

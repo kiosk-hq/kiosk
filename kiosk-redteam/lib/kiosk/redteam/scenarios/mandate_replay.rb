@@ -47,7 +47,15 @@ module Kiosk
           # B re-submits A's exact JWS under B's token using the public pay_raw API.
           resp = client.pay_raw(b, intent_jws:, cart_jws:, payment_jws:)
 
-          verdict_from(resp, detail: "mandate replay accepted under B's token (HTTP #{resp.status})")
+          # Same gate as MandatePrincipalSwap: mandate binding is authorization,
+          # refused 403 forbidden/rls_denied. A 402 decline would mean the
+          # replay was never verified, only unfunded.
+          verdict_from(
+            resp,
+            expect:      403,
+            expect_code: %w[forbidden rls_denied],
+            detail:      "mandate replay accepted under B's token (HTTP #{resp.status})",
+          )
         end
       end
     end

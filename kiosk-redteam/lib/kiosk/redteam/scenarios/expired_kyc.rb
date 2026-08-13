@@ -35,6 +35,13 @@ module Kiosk
           kyc_resp = client.kyc(a, attestation_jws: profile.kyc_expired.call(a.user_id))
 
           # If the KYC endpoint itself rejected the expired attestation → BLOCKED.
+          # Left permissive on purpose (K-728): this branch genuinely admits
+          # several gates — a provider that verifies `exp` inside its attestation
+          # verifier answers 403 forbidden, one that treats a dead attestation as
+          # a failed authentication answers 401, and a metered /kyc answers 402
+          # before either. All three mean the same thing here — the expired
+          # attestation did not take effect — and the scenario is not trying to
+          # distinguish them.
           return verdict_from(kyc_resp, detail: "expired KYC was accepted by /kyc endpoint") if Kiosk::Redteam.blocked?(kyc_resp)
 
           # KYC call succeeded despite expiry — proceed to gated action to see

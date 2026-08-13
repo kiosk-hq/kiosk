@@ -61,6 +61,42 @@ RSpec.describe Kiosk::Redteam::Scenarios::TokenTampering do
     end
   end
 
+  # ── K-728 ────────────────────────────────────────────────────────────────
+  #
+  # A signature that no longer matches its payload is an AUTHENTICATION
+  # failure. A 403 means the token was accepted and then authorized against; a
+  # 402 means a toll fired ahead of the signature check. Both used to score
+  # BLOCKED off the permissive blocked? set.
+  describe "#call — only a 401 proves the signature was checked (K-728)" do
+    def stub_register_with_real_jwt
+      stub_request(:post, "#{BASE_URL}/kiosk/auth/register")
+        .to_return(status:  201,
+                   body:    JSON.generate("agent_id" => "agent-b", "user_id" => "user-b",
+                                          "access_token" => valid_token),
+                   headers: { "Content-Type" => "application/json" })
+    end
+
+    [403, 402].each do |status|
+      it "returns blocked: false when the tampered token is answered #{status}" do
+        stub_register_with_real_jwt
+        stub_exec_any(status: status)
+
+        verdict = scenario.call(client, profile)
+
+        expect(verdict.blocked).to be(false)
+        expect(verdict.status).to eq(status)
+        expect(verdict.detail).to include("want status 401")
+      end
+    end
+
+    it "returns blocked: false on a 500" do
+      stub_register_with_real_jwt
+      stub_exec_any(status: 500, body: { "error" => { "code" => "forbidden" } })
+
+      expect(scenario.call(client, profile).blocked).to be(false)
+    end
+  end
+
   describe "tamper_token (private helper)" do
     let(:scenario_instance) { described_class.new }
 

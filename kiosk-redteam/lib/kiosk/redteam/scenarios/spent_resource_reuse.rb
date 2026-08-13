@@ -62,10 +62,22 @@ module Kiosk
             )
           end
 
-          # Second use — must be denied.
+          # Second use — must be denied by the RESOURCE-STATE gate: the resource
+          # is no longer in a usable state for this principal, which all three
+          # consuming demos render as 403 forbidden. A 402 here would mean the
+          # payment gate answered — but A paid, and the first use succeeded —
+          # and a 401 would mean A's token died mid-scenario. Both used to score
+          # BLOCKED. A provider that models re-use as 409 `conflict` instead
+          # would have to widen this deliberately; note that 409 does not count
+          # as blocked today either, so nothing silently changed for it.
           second_resp = client.run(a, name: profile.gated_action, **gated_args)
 
-          verdict_from(second_resp, detail: "spent resource re-activated (HTTP #{second_resp.status})")
+          verdict_from(
+            second_resp,
+            expect:      403,
+            expect_code: %w[forbidden rls_denied],
+            detail:      "spent resource re-activated (HTTP #{second_resp.status})",
+          )
         end
       end
     end

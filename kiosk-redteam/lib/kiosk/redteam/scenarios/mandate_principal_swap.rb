@@ -41,7 +41,18 @@ module Kiosk
           # authenticated agent) and reject.
           resp = client.pay(b, intent: mandates[:intent], cart: mandates[:cart])
 
-          verdict_from(resp, detail: "principal-swap mandate accepted (HTTP #{resp.status})")
+          # Mandate verification is an AUTHORIZATION decision: the claimed
+          # principal is not the signer, so the pay is refused 403
+          # forbidden/rls_denied. A 402 would mean the payment instrument was
+          # declined before the mandates were ever verified — the swap
+          # unexamined — and a 401 would mean B's own token was rejected. Both
+          # used to score BLOCKED.
+          verdict_from(
+            resp,
+            expect:      403,
+            expect_code: %w[forbidden rls_denied],
+            detail:      "principal-swap mandate accepted (HTTP #{resp.status})",
+          )
         end
       end
     end

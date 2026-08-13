@@ -101,6 +101,33 @@ RSpec.describe Kiosk::Redteam::Scenarios::ForgedUserId do
     end
   end
 
+  # ── K-728 ────────────────────────────────────────────────────────────────
+  #
+  # "The server caught it" means an auth/authz refusal. A 402 is a toll firing
+  # ahead of the handler and says nothing about whether the injected user_id
+  # would have been honoured; it used to score BLOCKED.
+  describe "#call — the outright rejection must be an auth/authz refusal (K-728)" do
+    def stub_forge(status, body)
+      stub_registers("a", "b")
+      stub_request(:post, "#{BASE_URL}/kiosk/run")
+        .with { |req| JSON.parse(req.body)["name"] == "reserve" }
+        .to_return(status: status, body: JSON.generate(body),
+                   headers: { "Content-Type" => "application/json" })
+    end
+
+    it "blocks when the forge call is refused 401 (identity claim rejected)" do
+      stub_forge(401, "error" => { "code" => "unauthenticated" })
+      expect(scenario.call(client, profile).blocked).to be(true)
+    end
+
+    it "does not block when a 402 toll answers instead" do
+      stub_forge(402, "error" => { "code" => "pow_required" })
+      verdict = scenario.call(client, profile)
+      expect(verdict.blocked).to be(false)
+      expect(verdict.detail).to include("want status 401/403")
+    end
+  end
+
   describe "#call — skip conditions" do
     it "skips when forge_action is nil" do
       p = Kiosk::Redteam::Profile.new(create_owned: ->(_c, _p) { { id: "x" } })

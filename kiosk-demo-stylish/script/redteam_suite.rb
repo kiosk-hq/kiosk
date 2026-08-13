@@ -22,6 +22,10 @@
 #   CustomerCalendarStaysOwnScoped — that customer's agent sees only its OWN
 #     bookings (no whole-book, no forecast) in salon_calendar — the role gate
 #     is provider-controlled and un-bypassable
+#   UntypedBookingInput — nine bad-input shapes to book_appointment (unparseable
+#     / fuzzy / missing / non-string slot, unknown & missing salon_id, unknown
+#     service_id) are each a typed 400 with no PG internals — never a 500 and
+#     never a silent booking — while a bare and a priced booking still succeed
 #
 # Usage:
 #   SERVER_URL=http://127.0.0.1:3005 \
@@ -269,6 +273,73 @@ rescue StandardError => e
   record(results, "SelfAssertedStaffSessionForgery", false, "beat error: #{e.class}: #{e.message}")
 end
 self_asserted_staff_forgery.call
+
+# ── UntypedBookingInput (K-692) — bad input is a typed 400, never a 500 and ──
+# never a silent booking.
+#
+# `book_appointment` used to validate NOTHING, and the three ways that failed
+# were not equally visible. An unparseable `slot` and an unknown `salon_id`
+# blew up as opaque 500s with PG internals in the message; an unknown
+# `service_id` was the worst of the three, because it SUCCEEDED — HTTP 200,
+# an appointment with no service and `price_cents` NULL, which the owner's
+# revenue forecast then summed as €0 while the calendar rendered it as an
+# ordinary booking. Nothing anywhere surfaced it, which is exactly why it
+# survived: a silent wrong answer has no failing test to write itself.
+#
+# The catalogue of shapes is deliberately wider than the three named cases,
+# because ActiveRecord's timestamp cast fails in two directions: "banana"
+# casts to nil (→ NOT NULL violation), while "next tuesday" cast to TODAY AT
+# MIDNIGHT and booked a real appointment in the past.
+#
+# Each probe asserts HTTP 400 AND `error.code == "bad_request"` AND no PG
+# internals in the body — a "not 200" assertion would accept the 500s this
+# beat exists to forbid.
+BAD_INPUTS = [
+  ["unparseable slot",        { salon_id: :seeded, slot: "banana" }],
+  ["fuzzy slot (silent past booking)", { salon_id: :seeded, slot: "next tuesday" }],
+  ["empty slot",              { salon_id: :seeded, slot: "" }],
+  ["missing slot",            { salon_id: :seeded }],
+  ["non-string slot",         { salon_id: :seeded, slot: 12345 }],
+  ["out-of-range slot",       { salon_id: :seeded, slot: "2026-13-45T99:00:00Z" }],
+  ["unknown salon_id",        { salon_id: 999_999, slot: "2026-10-01T09:00:00Z" }],
+  ["missing salon_id",        { slot: "2026-10-01T09:00:00Z" }],
+  ["unknown service_id",      { salon_id: :seeded, slot: "2026-10-01T09:00:00Z", service_id: 999_999 }],
+].freeze
+PG_INTERNALS = ["PG::", "NotNullViolation", "RecordInvalid", "DatatypeMismatch", "violates not-null"].freeze
+
+bad_failures = []
+BAD_INPUTS.each do |label, args|
+  body = { name: "book_appointment" }.merge(args)
+  body[:salon_id] = salon_id if body[:salon_id] == :seeded
+  rc, resp = post_json("/kiosk/run", body, bearer(TOKEN_A))
+  code = resp.is_a?(Hash) ? resp.dig("error", "code") : nil
+  leak = PG_INTERNALS.find { |needle| JSON.generate(resp).include?(needle) }
+  next if rc == 400 && code == "bad_request" && leak.nil?
+
+  bad_failures << "#{label} → HTTP #{rc} code=#{code.inspect}" \
+                  "#{leak ? " LEAKS #{leak.inspect}" : ""}#{rc == 200 ? " (SILENTLY BOOKED)" : ""}"
+end
+
+# POSITIVE CONTROLS — without them the block above would pass against a handler
+# that simply refused every booking. A bare salon booking (no service_id at all)
+# is legitimate and the descriptor promises it; a full booking must still
+# capture the service price the forecast is summed from.
+rc_bare, bare = post_json("/kiosk/run",
+  { name: "book_appointment", salon_id: salon_id, slot: "2026-10-03T09:00:00Z" }, bearer(TOKEN_A))
+bad_failures << "CONTROL bare salon booking → HTTP #{rc_bare} #{JSON.generate(bare)[0, 160]}" unless rc_bare == 200
+
+rc_menu, menu = post_json("/kiosk/query", { name: "service_menu" }, bearer(TOKEN_A))
+service = (menu["rows"] || []).find { |r| r["price_cents"].to_i.positive? }
+rc_full, full = post_json("/kiosk/run",
+  { name: "book_appointment", salon_id: salon_id, slot: "2026-10-04T09:00:00Z",
+    service_id: service && service["service_id"] }, bearer(TOKEN_A))
+unless rc_menu == 200 && rc_full == 200 && full.dig("value", "price_cents").to_i == service["price_cents"].to_i
+  bad_failures << "CONTROL priced booking → HTTP #{rc_full} price_cents=#{full.dig("value", "price_cents").inspect} " \
+                  "(want #{service && service["price_cents"].inspect})"
+end
+
+record(results, "UntypedBookingInput", bad_failures.empty?,
+       bad_failures.empty? ? "#{BAD_INPUTS.size} bad-input shapes → typed 400 bad_request, no PG internals; bare + priced bookings still succeed" : bad_failures.join(" | "))
 
 # ── Verdict ──────────────────────────────────────────────────────────────────
 breaches = results.reject { |r| r[:blocked] }

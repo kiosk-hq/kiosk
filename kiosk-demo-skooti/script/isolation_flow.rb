@@ -4,13 +4,16 @@
 #
 # Proves skooti app-layer predicates enforce cross-tenant denial:
 #
-#   Assertion 1 — start_rental ownership denial (Gate-1 isolated):
+#   Assertion 1 — start_rental ownership denial (Gate 1 isolated):
 #     Principal A reserves scooter → reservation_id rA.
-#     Principal B satisfies Gate-2 (KYC) and Gate-3 (settles a payment mandate
-#     whose cart references rA) then calls run start_rental {reservation_id: rA}.
-#     → Must be denied (HTTP 403). Gate-1 WHERE user_id = kiosk.current_user_id()
+#     Principal B satisfies Gate 1b (licence-free vehicle) and Gate 2 (settles
+#     a payment mandate whose cart references rA) then calls run start_rental
+#     {reservation_id: rA}. start_rental has no KYC gate (K-442 abolished the
+#     scooter KYC gate; see register_principal below) — the only gates are
+#     ownership, vehicle kind and payment.
+#     → Must be denied (HTTP 403). Gate 1 WHERE user_id = kiosk.current_user_id()
 #       AND status='reserved' finds nothing because rA.user_id = A ≠ B.
-#     The 403 now genuinely isolates Gate-1 ownership: Gate-2 and Gate-3 are
+#     The 403 now genuinely isolates Gate 1 ownership: Gate 1b and Gate 2 are
 #     both satisfied by B before the attempt, so neither could be the real blocker.
 #
 #   Assertion 2 — my_reservations: exclusion + positive control:
@@ -67,10 +70,14 @@ require_relative "../lib/equihash_register"
 # Register a fresh principal through the Equihash-gated /auth/register, then KYC.
 # Returns [user_id, agent_id, token, key].
 #
-# KYC is done for BOTH principals so that Gate-2 does not block B when B
-# later attempts start_rental on A's reservation rA. B also settles a payment
-# mandate referencing rA in Step 3b, so Gate-3 does not block B either. After
-# both gates are satisfied, the ONLY gate that can deny B is Gate-1 (ownership
+# NOT A GATE: start_rental (the licence-free scooter verb this driver
+# exercises) has no KYC gate — K-442 dropped it for scooters, and start_rental's
+# actual gates are 1 (ownership), 1b (vehicle kind, K-687) and 2 (payment). The
+# KYC submission below is kept only so both principals carry a real attestation,
+# matching a normally-onboarded agent; abort-on-failure here proves attestation
+# issuance itself works, not that it is consulted by anything below. B also
+# settles a payment mandate referencing rA in Step 3b, so Gate 2 does not block
+# B either. After that, the ONLY gate that can deny B is Gate 1 (ownership
 # predicate: rA.user_id = A ≠ B). This makes Assertion 1 genuinely isolate
 # the ownership predicate rather than an incidental payment gap.
 def register_principal(name:)
@@ -116,13 +123,13 @@ price_per_min_a  = reserve_a_resp.dig("value", "price_per_min_cents").to_i
 abort "A's reservation_id missing from response: #{JSON.generate(reserve_a_resp)}" unless reservation_id_a
 STDERR.puts "  A reserved #{scooter_code_a}: reservation_id=#{reservation_id_a}"
 
-# ── Step 3b: B settles a payment mandate referencing rA (satisfies Gate-3) ──
+# ── Step 3b: B settles a payment mandate referencing rA (satisfies Gate 2) ──
 # B signs intent + cart + payment mandates with B's registered RSA key (key_b).
-# The cart's line_items contain {reservation_id: rA} so that Gate-3's jsonb-
+# The cart's line_items contain {reservation_id: rA} so that Gate 2's jsonb-
 # containment check (cm.line_items @> [{reservation_id: rA}]::jsonb) passes for B.
 # settlements.user_id is written from the GUC (kiosk.current_user_id() = B),
-# so Gate-3's s.user_id = kiosk.current_user_id() also passes.
-# After this step, only Gate-1 can deny B's start_rental(rA).
+# so Gate 2's s.user_id = kiosk.current_user_id() also passes.
+# After this step, only Gate 1 can deny B's start_rental(rA).
 now_b        = Time.now.to_i
 intent_id_b  = SecureRandom.uuid
 cart_id_b    = SecureRandom.uuid
@@ -179,7 +186,7 @@ rc_pay_b, pay_b_resp = post_json(
   { "Authorization" => "Bearer #{token_b}" },
 )
 abort "B pay (for rA) failed (#{rc_pay_b}): #{JSON.generate(pay_b_resp)}" unless rc_pay_b == 200
-STDERR.puts "  B paid for rA: settlement_id=#{pay_b_resp.dig("value", "settlement_id")} — Gate-3 now passes for B"
+STDERR.puts "  B paid for rA: settlement_id=#{pay_b_resp.dig("value", "settlement_id")} — Gate 2 now passes for B"
 
 # ── Step 4: B calls reserve with forged user_id arg (Assertion 3) ───────────
 # B supplies user_id: user_id_a adversarially. The server ignores it —
@@ -217,10 +224,11 @@ b_reservation_ids = (b_rsv_resp["rows"] || []).map { |r| r["reservation_id"] }
 STDERR.puts "  B my_reservations: #{b_reservation_ids.inspect}"
 
 # ── Step 6: B calls start_rental on A's reservation_id (Assertion 1) ────────
-# B is KYC-verified (Gate-2 ✓) and has a settled payment for rA (Gate-3 ✓).
-# Gate-1 WHERE user_id = kiosk.current_user_id() AND status='reserved' finds
+# B rides a licence-free scooter (Gate 1b ✓, no KYC gate applies) and has a
+# settled payment for rA (Gate 2 ✓).
+# Gate 1 WHERE user_id = kiosk.current_user_id() AND status='reserved' finds
 # nothing because rA.user_id = A ≠ B → 403.
-# The 403 now genuinely isolates Gate-1 ownership, not a Gate-3 payment gap.
+# The 403 now genuinely isolates Gate 1 ownership, not a Gate 2 payment gap.
 rc_start_b, start_b_resp = post_json(
   "#{SERVER}/kiosk/run",
   { name: "start_rental", reservation_id: reservation_id_a },

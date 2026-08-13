@@ -12,9 +12,11 @@
 #   WrongCurrencyCart  — pay own booking in usd → 403
 #   TamperedPriceCart  — pay below the operator's quoted booking price → 403
 #   InflatedTotalCart  — cart total ≠ sum of its line items → 403
-# Plus one input-shape beat:
+# Plus one input-shape beat and one inventory beat:
 #   MalformedUuidArg   — a junk booking_id, as an arg AND inside a signed cart,
 #                        is a typed 400 with no SQL internals — never a 500
+#   DoubleBookedRoom   — a room-night already held cannot be reserved again by
+#                        anyone, on the same or overlapping dates → 409
 #
 # KYC scenarios are SKIPPED (hoteling has no KYC). RegistrationWithoutPow RUNS:
 # register PoW is ON (registration_pow_count=1), so a missing/bad register proof
@@ -344,11 +346,147 @@ class MalformedUuidArg < Kiosk::Redteam::Scenario
   end
 end
 
+# Two principals must not be able to hold the same room-night (K-690).
+# `reserve_room` used to validate exactly two things — room-type↔property and
+# check_out > check_in — and never re-applied the overlap exclusion its OWN
+# `availability` query defines; no database constraint stood behind it either.
+# So A and B could both reserve, and both PAY for, one physical room, and the
+# operator would owe two guests one bed. Nothing exercised it, which is why it
+# survived: every other scenario picks its room FROM availability, where the
+# exclusion is applied, so none of them ever asked for a room that was gone.
+#
+# Four probes, because the interesting failures sit on both sides of the guard:
+#   1. same nights, DIFFERENT principal        → 409 (the headline: two settlements, one bed)
+#   2. OVERLAPPING nights, SAME principal      → 409 (overlap is a range test, not equality)
+#   3. ABUTTING nights (checkout day == next check-in day) → 200 (the guard must
+#      not be over-broad: a hotel does sell that bed to the next guest)
+#   4. hotel_detail for those dates omits the taken room type, while the
+#      undated call still lists it and SAYS the list is a catalogue
+#
+# It uses its own dates, deliberately disjoint from CHECK_IN..CHECK_OUT, so it
+# neither consumes nor depends on the inventory the other scenarios share.
+class DoubleBookedRoom < Kiosk::Redteam::Scenario
+  DBL_IN       = (Date.today + 60).to_s.freeze
+  DBL_OUT      = (Date.today + 63).to_s.freeze
+  DBL_IN_OVL   = (Date.today + 61).to_s.freeze   # overlaps DBL_IN..DBL_OUT
+  DBL_OUT_OVL  = (Date.today + 64).to_s.freeze
+  DBL_OUT_ADJ  = (Date.today + 66).to_s.freeze   # DBL_OUT..DBL_OUT_ADJ abuts, no overlap
+
+  def initialize
+    super(
+      name:        "DoubleBookedRoom",
+      category:    "inventory",
+      description: "A room-night already held must not be reservable again — same or overlapping dates, same or another principal",
+    )
+  end
+
+  def call(client, profile)
+    a = register_principal(client, name: "redteam-dbl-a", profile:)
+    b = register_principal(client, name: "redteam-dbl-b", profile:)
+    failures = []
+    statuses = []
+
+    found = free_room(client, a)
+    return Kiosk::Redteam::Verdict.new(
+      blocked: false, skipped: false, status: 0,
+      detail:  "no room available at any property for #{DBL_IN}..#{DBL_OUT} — cannot test the overlap guard",
+    ) if found.nil?
+
+    pid = found[:property_id]
+    rid = found[:room_type_id]
+
+    held = reserve(client, a, pid, rid, DBL_IN, DBL_OUT)
+    statuses << held.status
+    failures << "setup: A's first reserve_room → HTTP #{held.status} #{held.body.inspect}" unless held.status == 200
+
+    # 1 — the headline: another principal takes the identical room-night.
+    conflict(failures, statuses, "B reserve_room same nights",
+             reserve(client, b, pid, rid, DBL_IN, DBL_OUT))
+
+    # 2 — overlap, not equality: one night in common is one night too many.
+    conflict(failures, statuses, "A reserve_room overlapping nights",
+             reserve(client, a, pid, rid, DBL_IN_OVL, DBL_OUT_OVL))
+
+    # 3 — POSITIVE CONTROL. Without it probes 1-2 would pass against a handler
+    # that simply refused every reservation. Check-out day is the next guest's
+    # check-in day, so this must still succeed.
+    adjacent = reserve(client, b, pid, rid, DBL_OUT, DBL_OUT_ADJ)
+    statuses << adjacent.status
+    unless adjacent.status == 200
+      failures << "CONTROL abutting nights #{DBL_OUT}..#{DBL_OUT_ADJ} → HTTP #{adjacent.status} " \
+                  "(want 200; a checkout day is the next guest's check-in day)"
+    end
+
+    # 4 — the other way in: hotel_detail listed every room type with no date and
+    # no booking filter, so an assistant going search → hotel_detail →
+    # reserve_room read a catalogue as if it were an offer.
+    dated = client.query(a, name: "hotel_detail", property_id: pid,
+                            check_in: DBL_IN, check_out: DBL_OUT)
+    statuses << dated.status
+    if room_ids(dated).include?(rid)
+      failures << "hotel_detail(#{DBL_IN}..#{DBL_OUT}) still offers the taken room_type #{rid}"
+    end
+    undated = client.query(a, name: "hotel_detail", property_id: pid)
+    scope   = detail(undated)["room_types_scope"].to_s
+    unless room_ids(undated).include?(rid) && scope.include?("catalogue")
+      failures << "undated hotel_detail must still list the full catalogue AND say so " \
+                  "(room #{rid} listed: #{room_ids(undated).include?(rid)}, scope: #{scope.inspect})"
+    end
+
+    Kiosk::Redteam::Verdict.new(
+      blocked: failures.empty?,
+      skipped: false,
+      status:  statuses.find { |s| s == 409 } || statuses.last.to_i,
+      detail:  failures.join(" | "),
+    )
+  end
+
+  private
+
+  def reserve(client, principal, property_id, room_type_id, check_in, check_out)
+    client.run(principal, name: "reserve_room", property_id:, room_type_id:,
+                          check_in:, check_out:)
+  end
+
+  # A 409 `conflict` — not merely "not 200": a 500 also fails to create the row,
+  # and would satisfy any weaker assertion while telling an assistant nothing.
+  def conflict(failures, statuses, label, resp)
+    statuses << resp.status
+    code = resp.body.is_a?(Hash) ? resp.body.dig("error", "code") : nil
+    return if resp.status == 409 && code == "conflict"
+
+    failures << "#{label} → HTTP #{resp.status} code=#{code.inspect} (want 409 conflict)"
+  end
+
+  def free_room(client, principal)
+    rows = client.query(principal, name: "properties").body["rows"] || []
+    rows.each do |p|
+      avail = client.query(principal, name: "availability", property_id: p["property_id"],
+                                      check_in: DBL_IN, check_out: DBL_OUT)
+      first = (avail.body["rows"] || []).first
+      next if first.nil?
+
+      return { property_id: p["property_id"], room_type_id: first["room_type_id"] }
+    end
+    nil
+  end
+
+  # hotel_detail answers one object, which the wire carries under "rows".
+  def detail(resp)
+    body = resp.body
+    body.is_a?(Hash) ? (body["rows"] || body["value"] || {}) : {}
+  end
+
+  def room_ids(resp)
+    Array(detail(resp)["room_types"]).map { |r| r["room_type_id"] }
+  end
+end
+
 # ── Scenario list ─────────────────────────────────────────────────────────────
 #
-# 13 generic + 3 local cashier-check beats; 3 generic (KYC variants) are expected
-# to be skipped. 10 generic + 3 local are applicable (RegistrationWithoutPow now
-# runs because register PoW is ON).
+# 13 generic + 3 local cashier-check beats + 2 local input/inventory beats;
+# 3 generic (KYC variants) are expected to be skipped. 10 generic + 5 local are
+# applicable (RegistrationWithoutPow now runs because register PoW is ON).
 
 scenarios = [
   Kiosk::Redteam::Scenarios::PayForOtherUseSelf.new,      # C2 — headline
@@ -364,6 +502,7 @@ scenarios = [
   TamperedPriceCart.new,                                  # cashier check — below quote
   InflatedTotalCart.new,                                  # cashier check — total ≠ line sum
   MalformedUuidArg.new,                                   # K-581/K-582 — junk uuid → typed 400, no 500
+  DoubleBookedRoom.new,                                   # K-690 — one room-night, one booking
   Kiosk::Redteam::Scenarios::MissingKyc.new,              # → SKIP (no KYC)
   Kiosk::Redteam::Scenarios::ExpiredKyc.new,              # → SKIP (no KYC)
   Kiosk::Redteam::Scenarios::ForgedKyc.new,               # → SKIP (no KYC)

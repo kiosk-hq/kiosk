@@ -337,28 +337,41 @@ end
 Kiosk::Server::Queries.register("hotel_detail",
   description: "Fetch the full detail for ONE hotel by its `property_id` (the same " \
                "`property_id` a search_hotels row carries): name, neighbourhood, stars, " \
-               "address, amenities, and every room type (each carries a `room_type_id` for " \
-               "reserve_room) with its nightly rate. This is " \
+               "address, amenities, and its room types (each carries a `room_type_id` for " \
+               "reserve_room) with their nightly rates. This is " \
                "the \"search returns summaries, fetch detail on demand\" pattern — call it " \
                "for the one or few hotels the user is choosing between, not for the whole " \
-               "result set. nightly_price_cents is EUR cents (carts are signed in eur).",
+               "result set. nightly_price_cents is EUR cents (carts are signed in eur). " \
+               "DATES: pass check_in AND check_out (both, YYYY-MM-DD) to get only the room " \
+               "types still FREE for those nights — the same rule `availability` applies and " \
+               "reserve_room enforces. WITHOUT dates the room_types list is this property's " \
+               "full CATALOGUE, not a statement about what is bookable: a room type listed " \
+               "there may already be taken for your nights, and reserve_room will answer 409.",
   params: {
     property_id: "integer — the `property_id` from a search_hotels row",
+    check_in:    "date string YYYY-MM-DD, optional — with check_out, list only room types free for these nights",
+    check_out:   "date string YYYY-MM-DD, optional — with check_in, list only room types free for these nights",
   },
   input_schema: {
     type: "object",
     additionalProperties: false,
     properties: {
       property_id: { type: "integer", description: "`property_id` from a search_hotels row." },
+      check_in:    { type: "string", format: "date",
+                     description: "Optional first night (YYYY-MM-DD); pass with check_out to list only free room types." },
+      check_out:   { type: "string", format: "date",
+                     description: "Optional checkout day (YYYY-MM-DD, exclusive); pass with check_in to list only free room types." },
     },
     required: ["property_id"],
   },
-  example_params: { property_id: 4 },
+  example_params: { property_id: 4, check_in: "2026-09-01", check_out: "2026-09-04" },
   example_row: {
     property_id: 4, name: "Bosphorus Palace", neighbourhood: "Beşiktaş", stars: 5,
     address: "Çırağan Cd. 88, Beşiktaş, Istanbul",
     amenities: %w[wifi breakfast pool spa sea_view airport_shuttle],
     currency: "eur",
+    room_types_scope: "free 2026-09-01..2026-09-04",
+    check_in: "2026-09-01", check_out: "2026-09-04",
     room_types: [
       { room_type_id: 7, name: "Classic",   nightly_price_cents: 15000 },
       { room_type_id: 8, name: "Bosphorus", nightly_price_cents: 25000 },
@@ -369,15 +382,54 @@ Kiosk::Server::Queries.register("hotel_detail",
     raise Kiosk::Server::Errors::BadRequest.new("missing field: property_id")
   end
 
+  # ── Optional date filter (K-690) ─────────────────────────────────────────
+  # Without dates this query listed EVERY room type of a property with no
+  # booking filter at all, so an assistant that went search → hotel_detail →
+  # reserve_room (skipping `availability`) was reading a catalogue as if it
+  # were an offer, and reserved rooms that were already sold. Given both dates
+  # it now re-applies `availability`'s exclusion verbatim; given neither it says
+  # so in the descriptor and in the response.
+  ci_raw = params[:check_in].to_s.strip
+  co_raw = params[:check_out].to_s.strip
+  dated  = !ci_raw.empty? && !co_raw.empty?
+  if !dated && (!ci_raw.empty? || !co_raw.empty?)
+    raise Kiosk::Server::Errors::BadRequest.new(
+      "check_in and check_out go together — pass both (YYYY-MM-DD) for a free-rooms " \
+      "list, or neither for the property's full catalogue"
+    )
+  end
+  if dated
+    ci, co = begin
+      [Date.parse(ci_raw), Date.parse(co_raw)]
+    rescue ArgumentError, TypeError
+      raise Kiosk::Server::Errors::BadRequest.new(
+        "invalid check_in/check_out: #{ci_raw.inspect}/#{co_raw.inspect} — use YYYY-MM-DD"
+      )
+    end
+    raise Kiosk::Server::Errors::BadRequest.new("check_out must be after check_in") unless co > ci
+  end
+
   prop = conn.execute(
     "SELECT id, name, neighbourhood, stars, address, amenities " \
     "FROM public.properties WHERE id = #{conn.quote(pid.to_s)}::integer LIMIT 1"
   ).first
   raise Kiosk::Server::Errors::NotFound.new("hotel not found: #{pid}") if prop.nil?
 
+  free_only =
+    if dated
+      "AND id NOT IN (" \
+      "SELECT room_type_id FROM public.bookings " \
+      "WHERE property_id = #{conn.quote(pid.to_s)}::integer " \
+      "AND status IN ('reserved', 'confirmed') " \
+      "AND check_in < #{conn.quote(co.to_s)}::date " \
+      "AND check_out > #{conn.quote(ci.to_s)}::date) "
+    else
+      ""
+    end
   rooms = conn.execute(
     "SELECT id AS room_type_id, name, nightly_price_cents FROM public.room_types " \
-    "WHERE property_id = #{conn.quote(pid.to_s)}::integer ORDER BY nightly_price_cents"
+    "WHERE property_id = #{conn.quote(pid.to_s)}::integer #{free_only}" \
+    "ORDER BY nightly_price_cents"
   ).to_a
 
   # amenities is jsonb — normalise to a Ruby array regardless of driver decoding.
@@ -385,14 +437,19 @@ Kiosk::Server::Queries.register("hotel_detail",
   amenities = JSON.parse(amenities) if amenities.is_a?(String)
 
   {
-    property_id:   prop["id"],
-    name:          prop["name"],
-    neighbourhood: prop["neighbourhood"],
-    stars:         prop["stars"],
-    address:       prop["address"],
-    amenities:     amenities,
-    currency:      "eur",
-    room_types:    rooms,
+    property_id:      prop["id"],
+    name:             prop["name"],
+    neighbourhood:    prop["neighbourhood"],
+    stars:            prop["stars"],
+    address:          prop["address"],
+    amenities:        amenities,
+    currency:         "eur",
+    # Says which of the two things the list is, so a reader of the response
+    # alone (not the descriptor) cannot mistake a catalogue for an offer.
+    room_types_scope: dated ? "free #{ci}..#{co}" : "catalogue (no dates given — not an availability statement)",
+    check_in:         dated ? ci.to_s : nil,
+    check_out:        dated ? co.to_s : nil,
+    room_types:       rooms,
   }
 end
 
@@ -486,21 +543,59 @@ Kiosk::Server::Actions.register("reserve_room",
   total_cents = nights * rt["nightly_price_cents"].to_i
 
   conn.transaction do
-    # INSERT booking row
-    booking = conn.execute(<<~SQL).first
-      INSERT INTO public.bookings (user_id, property_id, room_type_id, check_in, check_out, total_cents, status, created_at, updated_at)
-      VALUES (
-        #{conn.quote(uid)}::uuid,
-        #{conn.quote(property_id.to_s)}::integer,
-        #{conn.quote(room_type_id.to_s)}::integer,
-        #{conn.quote(check_in.to_s)}::date,
-        #{conn.quote(check_out.to_s)}::date,
-        #{conn.quote(total_cents.to_s)}::integer,
-        'reserved',
-        now(), now()
-      )
-      RETURNING id
+    # ── Finite inventory: the room-night must still be free (K-690) ─────────
+    # `availability` (above) defines the invariant this action sells against —
+    # a room type is offered only while no live booking overlaps the requested
+    # nights — but nothing here re-applied it, so two assistants reading the
+    # same availability page could both reserve and both PAY for one room, and
+    # the operator would owe two guests one bed. Same three-part shape
+    # atablefor's `book_table` uses, and for the same reason: a pre-check that
+    # answers a clean 409 an assistant can act on, a database EXCLUDE
+    # constraint that makes the race unrepresentable, and a rescue that turns
+    # the lost race into that same 409. Nights are half-open — a checkout day
+    # is the next guest's check-in day — which is exactly `availability`'s
+    # `check_in < …check_out AND check_out > …check_in` test.
+    clash = conn.execute(<<~SQL).first
+      SELECT id FROM public.bookings
+      WHERE room_type_id = #{conn.quote(room_type_id.to_s)}::integer
+        AND status IN ('reserved', 'confirmed')
+        AND check_in  < #{conn.quote(check_out.to_s)}::date
+        AND check_out > #{conn.quote(check_in.to_s)}::date
+      LIMIT 1
     SQL
+    if clash
+      raise Kiosk::Server::Errors::Conflict.new(
+        "room type #{room_type_id} is already booked for #{check_in}..#{check_out} — " \
+        "call availability again for the room types still free on those dates"
+      )
+    end
+
+    # INSERT booking row
+    booking =
+      begin
+        conn.execute(<<~SQL).first
+          INSERT INTO public.bookings (user_id, property_id, room_type_id, check_in, check_out, total_cents, status, created_at, updated_at)
+          VALUES (
+            #{conn.quote(uid)}::uuid,
+            #{conn.quote(property_id.to_s)}::integer,
+            #{conn.quote(room_type_id.to_s)}::integer,
+            #{conn.quote(check_in.to_s)}::date,
+            #{conn.quote(check_out.to_s)}::date,
+            #{conn.quote(total_cents.to_s)}::integer,
+            'reserved',
+            now(), now()
+          )
+          RETURNING id
+        SQL
+      rescue ActiveRecord::ExclusionViolation
+        # Lost the race for the same room-night — bookings_no_overlapping_room_nights
+        # caught it. Same answer as the pre-check, so a concurrent caller and a
+        # slow caller cannot tell the two apart.
+        raise Kiosk::Server::Errors::Conflict.new(
+          "room type #{room_type_id} is already booked for #{check_in}..#{check_out} — " \
+          "call availability again for the room types still free on those dates"
+        )
+      end
 
     booking_id = booking["id"]
 

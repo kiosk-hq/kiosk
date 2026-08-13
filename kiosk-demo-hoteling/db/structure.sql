@@ -18,6 +18,20 @@ CREATE SCHEMA kiosk;
 
 
 --
+-- Name: btree_gist; Type: EXTENSION; Schema: -; Owner: -
+--
+
+CREATE EXTENSION IF NOT EXISTS btree_gist WITH SCHEMA public;
+
+
+--
+-- Name: EXTENSION btree_gist; Type: COMMENT; Schema: -; Owner: -
+--
+
+COMMENT ON EXTENSION btree_gist IS 'support for indexing common datatypes in GiST';
+
+
+--
 -- Name: pgcrypto; Type: EXTENSION; Schema: -; Owner: -
 --
 
@@ -536,6 +550,14 @@ ALTER TABLE ONLY public.ar_internal_metadata
 
 
 --
+-- Name: bookings bookings_no_overlapping_room_nights; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.bookings
+    ADD CONSTRAINT bookings_no_overlapping_room_nights EXCLUDE USING gist (room_type_id WITH =, daterange(check_in, check_out) WITH &&) WHERE (((status)::text = ANY ((ARRAY['reserved'::character varying, 'confirmed'::character varying])::text[])));
+
+
+--
 -- Name: bookings bookings_pkey; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -845,6 +867,7 @@ ALTER TABLE ONLY public.bookings
 SET search_path TO "$user", public;
 
 INSERT INTO "schema_migrations" (version) VALUES
+('20260813000001'),
 ('20260804000001'),
 ('20260717000001'),
 ('20260628000001'),

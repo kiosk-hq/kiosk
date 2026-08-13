@@ -114,6 +114,33 @@ module Kiosk
         )
       end
 
+      # Assert a SETUP step succeeded — a call a scenario makes to reach the
+      # state it means to attack, as opposed to the attack itself.  Returns a
+      # diagnostic non-blocked Verdict when it did not, or nil to continue.
+      #
+      # Discarding a setup response is how one gate ends up certifying another
+      # (K-731).  If the payment a KYC scenario stages is itself refused 402,
+      # the gated action that follows is refused by the PAYMENT gate — and that
+      # refusal is what gets printed as "BLOCKED ✓ MissingKyc".  The KYC gate
+      # could be deleted outright and the line would not change.
+      #
+      # @param response [Response, nil] nil (a setup step that is a no-op for
+      #   this profile) passes
+      # @param step     [String] what was being staged, e.g. "the payment ..."
+      # @param because  [String] what a downstream refusal would be misread as
+      # @return [Verdict, nil]
+      def setup_failure(response, step:, because:)
+        return nil if response.nil? || response.status == 200
+
+        Verdict.new(
+          blocked: false,
+          skipped: false,
+          status:  response.status,
+          detail:  "SETUP FAILED: #{step} returned HTTP #{response.status} " \
+                   "#{response.body.inspect}. #{because}",
+        )
+      end
+
       # Read `body["error"]["code"]` defensively — `body["error"]` may be a
       # plain String, and the body itself may not be a Hash at all.
       #

@@ -28,14 +28,28 @@ module Kiosk
           a = register_principal(client, name: "redteam-uga-a", profile:)
 
           # KYC if the provider requires it (so the gated action is only
-          # blocked by missing payment, not by missing KYC).
-          submit_valid_kyc(client, a, profile) if profile.requires_kyc
+          # blocked by missing payment, not by missing KYC).  That result used
+          # to be discarded (K-731) — and it is the ONLY thing separating this
+          # scenario from MissingKyc: if the attestation was not accepted, the
+          # refusal below is the KYC gate wearing the payment gate's name.
+          kyc_resp = (submit_valid_kyc(client, a, profile) if profile.requires_kyc)
+          failure  = setup_failure(
+            kyc_resp,
+            step:    "the valid KYC attestation this scenario stages",
+            because: "Without it the principal is also un-attested, so the refusal below " \
+                     "would be the KYC gate rather than the payment gate under test.",
+          )
+          return failure if failure
 
           owned_ref = profile.create_owned.call(client, a)
           gated_args = profile.gated_args ? profile.gated_args.call(owned_ref) : { id: owned_ref[:id] }
 
           resp = client.run(a, name: profile.gated_action, **gated_args)
 
+          # Admits several gates deliberately: an unpaid gated action comes back
+          # 402 from a toll-style gate and 403 from an ownership-and-settlement
+          # gate that finds no settlement row (all three demos take the latter
+          # route). The KYC confusion is ruled out by the setup assertion above.
           verdict_from(resp, detail: "gated action succeeded without payment (HTTP #{resp.status})")
         end
       end

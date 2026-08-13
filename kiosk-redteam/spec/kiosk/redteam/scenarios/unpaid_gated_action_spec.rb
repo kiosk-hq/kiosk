@@ -84,6 +84,80 @@ RSpec.describe Kiosk::Redteam::Scenarios::UnpaidGatedAction do
     end
   end
 
+  # ── K-731 ────────────────────────────────────────────────────────────────
+  #
+  # The staged KYC is the ONLY thing separating this scenario from MissingKyc.
+  # Its response was discarded, so an attestation the provider refused left the
+  # gated action to be denied for want of KYC — scored here as the payment gate.
+  describe "#call — the staged KYC must be accepted (K-731)" do
+    let(:kyc_profile) do
+      minimal_profile(
+        gated_action: "start_rental",
+        gated_args:   ->(ref) { { reservation_id: ref[:id] } },
+        requires_kyc: true,
+        kyc_valid:    ->(user_id) { "valid-kyc-jws-for-#{user_id}" },
+      )
+    end
+
+    [403, 401, 500].each do |status|
+      it "reports SETUP FAILED when the valid attestation is refused #{status}" do
+        stub_registers("a")
+        stub_exec_run(status: 200, body: { "value" => { "id" => "res-1" } })
+        stub_request(:post, "#{BASE_URL}/kiosk/agents/kyc")
+          .to_return(status: status, body: JSON.generate("error" => { "code" => "forbidden" }),
+                     headers: { "Content-Type" => "application/json" })
+
+        verdict = scenario.call(client, kyc_profile)
+
+        expect(verdict.blocked).to be(false)
+        expect(verdict.status).to eq(status)
+        expect(verdict.detail).to include("SETUP FAILED")
+        expect(verdict.detail).to include("KYC gate")
+      end
+    end
+
+    it "does not run the gated action once the KYC setup has failed" do
+      stub_registers("a")
+      run_stub = stub_exec_run(status: 200, body: { "value" => { "id" => "res-1" } })
+      stub_kyc(status: 403)
+
+      scenario.call(client, kyc_profile)
+
+      # create_owned is called AFTER the setup assertion, so no /run at all.
+      expect(run_stub).not_to have_been_requested
+    end
+
+    it "proceeds normally when the attestation is accepted" do
+      stub_registers("a")
+      stub_kyc(status: 200)
+      stub_request(:post, "#{BASE_URL}/kiosk/run")
+        .with { |req| JSON.parse(req.body)["name"] == "reserve" }
+        .to_return(status: 200, body: JSON.generate("value" => { "id" => "res-1" }),
+                   headers: { "Content-Type" => "application/json" })
+      stub_request(:post, "#{BASE_URL}/kiosk/run")
+        .with { |req| JSON.parse(req.body)["name"] == "start_rental" }
+        .to_return(status: 403, body: JSON.generate("error" => { "code" => "forbidden" }),
+                   headers: { "Content-Type" => "application/json" })
+
+      expect(scenario.call(client, kyc_profile).blocked).to be(true)
+    end
+
+    # A profile with no KYC surface has no setup step to assert.
+    it "is unaffected when requires_kyc is false (no setup call to check)" do
+      stub_registers("a")
+      stub_request(:post, "#{BASE_URL}/kiosk/run")
+        .with { |req| JSON.parse(req.body)["name"] == "reserve" }
+        .to_return(status: 200, body: JSON.generate("value" => { "id" => "res-1" }),
+                   headers: { "Content-Type" => "application/json" })
+      stub_request(:post, "#{BASE_URL}/kiosk/run")
+        .with { |req| JSON.parse(req.body)["name"] == "start_rental" }
+        .to_return(status: 403, body: JSON.generate("error" => { "code" => "forbidden" }),
+                   headers: { "Content-Type" => "application/json" })
+
+      expect(scenario.call(client, profile).blocked).to be(true)
+    end
+  end
+
   describe "#call — skip conditions" do
     it "skips when gated_action is nil" do
       p = minimal_profile

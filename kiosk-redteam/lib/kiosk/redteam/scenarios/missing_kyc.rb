@@ -33,11 +33,27 @@ module Kiosk
 
           owned_ref  = profile.create_owned.call(client, a)
           mandates   = profile.pay_for.call(client, a, owned_ref)
-          client.pay(a, intent: mandates[:intent], cart: mandates[:cart])
+          pay_resp   = client.pay(a, intent: mandates[:intent], cart: mandates[:cart])
+
+          # The payment is SETUP: "after payment" is half this scenario's claim.
+          # Its response used to be discarded, so a pay that came back 402 left
+          # the gated action to be refused by the PAYMENT gate — and that
+          # refusal printed as BLOCKED ✓ MissingKyc (K-731, demonstrated).
+          failure = setup_failure(
+            pay_resp,
+            step:    "the payment this scenario stages before the gated action",
+            because: "The gated action would then be refused by the payment gate, and this " \
+                     "scenario would credit that refusal to the KYC gate it is meant to prove.",
+          )
+          return failure if failure
 
           gated_args = profile.gated_args ? profile.gated_args.call(owned_ref) : { id: owned_ref[:id] }
           resp       = client.run(a, name: profile.gated_action, **gated_args)
 
+          # Admits several gates deliberately: providers refuse a KYC-less
+          # principal with 403 kyc_required, and some answer 401 by treating an
+          # unattested principal as unauthenticated. The payment gate is the one
+          # confusion that mattered, and the setup assertion above rules it out.
           verdict_from(resp, detail: "gated action succeeded without KYC (HTTP #{resp.status})")
         end
       end

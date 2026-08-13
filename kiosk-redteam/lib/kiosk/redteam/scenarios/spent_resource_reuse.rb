@@ -30,7 +30,19 @@ module Kiosk
           return skip_verdict("no pay_for")      unless profile.pay_for
 
           a = register_principal(client, name: "redteam-srr-a", profile:)
-          submit_valid_kyc(client, a, profile) if profile.requires_kyc
+
+          # Same discarded-setup class as K-731's four named sites: an
+          # attestation that was not accepted makes the first use fail for a
+          # reason that has nothing to do with C3.  (The pay below needs no such
+          # assertion — the first-use control already requires a 200.)
+          kyc_resp = (submit_valid_kyc(client, a, profile) if profile.requires_kyc)
+          failure  = setup_failure(
+            kyc_resp,
+            step:    "the valid KYC attestation this scenario stages",
+            because: "The first, legitimate use below would then fail for want of KYC, and " \
+                     "the re-use this scenario tests would never be reached.",
+          )
+          return failure if failure
 
           owned_ref  = profile.create_owned.call(client, a)
           mandates   = profile.pay_for.call(client, a, owned_ref)

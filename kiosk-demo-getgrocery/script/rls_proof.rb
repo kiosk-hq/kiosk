@@ -43,25 +43,18 @@ USER_B_ID  = "bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb"
 ORDER_A_ID = "aaa00000-0000-0000-0000-000000000001"
 ORDER_B_ID = "bbb00000-0000-0000-0000-000000000001"
 
-[USER_A_ID, USER_B_ID].each do |uid|
-  conn.execute(<<~SQL)
-    INSERT INTO users (id, created_at, updated_at)
-    VALUES ('#{uid}', NOW(), NOW())
-    ON CONFLICT (id) DO NOTHING
-  SQL
-end
+[USER_A_ID, USER_B_ID].each { |uid| User.find_or_create_by!(id: uid) }
 
 [
   [ORDER_A_ID, USER_A_ID, "12 Camden Street, Dublin 2"],
   [ORDER_B_ID, USER_B_ID, "34 Camden Street, Dublin 2"],
 ].each do |oid, uid, addr|
-  conn.execute(<<~SQL)
-    INSERT INTO orders
-      (id, user_id, status, total_cents, address, created_at, updated_at)
-    VALUES
-      ('#{oid}', '#{uid}', 'created', 1599, '#{addr}', NOW(), NOW())
-    ON CONFLICT (id) DO NOTHING
-  SQL
+  Order.find_or_create_by!(id: oid) do |order|
+    order.user_id     = uid
+    order.status      = "created"
+    order.total_cents = 1599
+    order.address     = addr
+  end
 end
 
 total = conn.execute("SELECT COUNT(*) FROM orders").first["count"].to_i

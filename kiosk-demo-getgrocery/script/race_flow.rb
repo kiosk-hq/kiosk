@@ -44,6 +44,14 @@ end
 
 conn = ActiveRecord::Base.connection
 
+# Shared quoting helper for every raw SQL string built below (K-715). A plain
+# top-level local wouldn't reach the `def` methods further down — Ruby method
+# bodies don't close over top-level locals — so this is a top-level method,
+# callable from anywhere in this file.
+def q(value)
+  ActiveRecord::Base.connection.quote(value)
+end
+
 # ── Fixtures ────────────────────────────────────────────────────────────────
 # One synthetic principal; a cheap and an (inflated-qty) expensive line drawn
 # from the seeded catalog.
@@ -88,7 +96,7 @@ end
 
 def order_row(order_id)
   ActiveRecord::Base.connection.execute(
-    "SELECT status, total_cents FROM orders WHERE id = '#{order_id}'::uuid LIMIT 1"
+    "SELECT status, total_cents FROM orders WHERE id = #{q(order_id)}::uuid LIMIT 1"
   ).first
 end
 
@@ -299,33 +307,33 @@ puts "\n== K-578: an order stuck in `paying` is reconciled from local evidence =
 # forever, unpayable.
 def forge_settlement!(order_id, cart_mandate_id:)
   conn = ActiveRecord::Base.connection
-  q    = ->(v) { conn.quote(v) }
   intent_row = conn.execute(
     "INSERT INTO kiosk.intent_mandates (mandate_id, user_id, agent_id, issuer, scope, " \
     "cap_amount_cents, currency, expires_at, created_at, raw_jws) " \
-    "VALUES (#{q.call("intent-#{cart_mandate_id}")}, #{q.call(USER_ID)}::uuid, #{q.call(AGENT_ID)}::uuid, " \
-    "'https://getgrocery.demo', 'grocery', 100000, 'eur', now() + interval '1 hour', now(), 'jws') RETURNING id"
+    "VALUES (#{q("intent-#{cart_mandate_id}")}, #{q(USER_ID)}::uuid, #{q(AGENT_ID)}::uuid, " \
+    "#{q('https://getgrocery.demo')}, #{q('grocery')}, #{q(100_000)}, #{q('eur')}, " \
+    "now() + interval '1 hour', now(), #{q('jws')}) RETURNING id"
   ).first["id"]
   cart_row = conn.execute(
     "INSERT INTO kiosk.cart_mandates (mandate_id, intent_mandate_id, user_id, agent_id, issuer, " \
     "line_items, total_amount_cents, currency, expires_at, created_at, raw_jws) " \
-    "VALUES (#{q.call(cart_mandate_id)}, #{q.call(intent_row.to_s)}::uuid, #{q.call(USER_ID)}::uuid, " \
-    "#{q.call(AGENT_ID)}::uuid, 'https://getgrocery.demo', " \
-    "#{q.call([{ order_id: order_id }].to_json)}::jsonb, #{CHEAP_PRICE}, 'eur', " \
-    "now() + interval '1 hour', now(), 'jws') RETURNING id"
+    "VALUES (#{q(cart_mandate_id)}, #{q(intent_row.to_s)}::uuid, #{q(USER_ID)}::uuid, " \
+    "#{q(AGENT_ID)}::uuid, #{q('https://getgrocery.demo')}, " \
+    "#{q([{ order_id: order_id }].to_json)}::jsonb, #{q(CHEAP_PRICE)}, #{q('eur')}, " \
+    "now() + interval '1 hour', now(), #{q('jws')}) RETURNING id"
   ).first["id"]
   conn.execute(
     "INSERT INTO kiosk.settlements (cart_mandate_id, user_id, agent_id, issuer, psp_reference, " \
     "settled_amount_cents, currency, settled_at, raw_jws) " \
-    "VALUES (#{q.call(cart_row.to_s)}::uuid, #{q.call(USER_ID)}::uuid, #{q.call(AGENT_ID)}::uuid, " \
-    "'https://getgrocery.demo', 'pi_forged_receipt', #{CHEAP_PRICE}, 'eur', now(), 'jws')"
+    "VALUES (#{q(cart_row.to_s)}::uuid, #{q(USER_ID)}::uuid, #{q(AGENT_ID)}::uuid, " \
+    "#{q('https://getgrocery.demo')}, #{q('pi_forged_receipt')}, #{q(CHEAP_PRICE)}, #{q('eur')}, now(), #{q('jws')})"
   )
 end
 
 def strand_as_paying!(order_id, age: "1 hour")
   ActiveRecord::Base.connection.execute(
-    "UPDATE orders SET status = 'paying', updated_at = now() - interval '#{age}' " \
-    "WHERE id = '#{order_id}'::uuid"
+    "UPDATE orders SET status = 'paying', updated_at = now() - #{q(age)}::interval " \
+    "WHERE id = #{q(order_id)}::uuid"
   )
 end
 

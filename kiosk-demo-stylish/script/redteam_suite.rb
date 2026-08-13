@@ -16,12 +16,22 @@
 #   GarbageToken       — an unparseable bearer token → 401
 #   UnknownQuery       — an unregistered query name → 404
 #   UnknownAction      — an unregistered action name → 404
-#   CustomerCannotSelfSelectOwnerAtBinding — a self-registered CUSTOMER cannot
-#     smuggle an `owner` role into the register/claim body; the role is pinned
-#     by the provider (registration_role), so the token stays `customer`
-#   CustomerCalendarStaysOwnScoped — that customer's agent sees only its OWN
+#   CustomerCannotMintStaffLink — a CUSTOMER (non-staff) session cannot mint an
+#     assistant link over the staff channel; StubUserIdp resolves only staff,
+#     so the mint is rejected outright — owner scope is unreachable from one
+#   OwnerLinkIgnoresForgedClaimBody — a genuine OWNER link smuggles a wider
+#     role into the claim body; the bound token role comes from the IdP
+#     session, not the body, so the forged role is ignored
+#   CustomerCalendarStaysOwnScoped — a customer's agent sees only its OWN
 #     bookings (no whole-book, no forecast) in salon_calendar — the role gate
 #     is provider-controlled and un-bypassable
+#   SelfAssertedStaffSessionForgery — a forged `X-Staff-Session` header naming
+#     the seeded owner resolves to NO identity under a PRODUCTION-config
+#     StubUserIdp (K-555), even though the DEV stub this suite runs against
+#     intentionally self-grants it — proven in-process against a stubbed
+#     Rails.env, since the dev wire this suite drives cannot demonstrate the
+#     block
+#
 #   UntypedBookingInput — nine bad-input shapes to book_appointment (unparseable
 #     / fuzzy / missing / non-string slot, unknown & missing salon_id, unknown
 #     service_id) are each a typed 400 with no PG internals — never a 500 and

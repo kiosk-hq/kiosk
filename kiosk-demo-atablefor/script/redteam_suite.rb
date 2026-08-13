@@ -12,6 +12,8 @@
 #   CrossTenantRead   — Bob's my_bookings must NOT contain Alice's booking
 #   ForgedUserId      — forged user_id on book_table ignored (booking belongs to Bob)
 #   CrossOwnerCancel  — Bob cancel_booking on Alice's booking → 403
+#   MalformedUuidArg  — a junk booking_id on cancel_booking is a typed 400
+#                       with no SQL internals on the wire — never a 500
 #   RegisterWithoutPoP — register with no proof-of-possession JWS → not 201
 #   MissingAuth       — a request with no Authorization → 401
 #   GarbageToken      — an unparseable bearer token → 401

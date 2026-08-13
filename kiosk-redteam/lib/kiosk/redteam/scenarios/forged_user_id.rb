@@ -37,8 +37,15 @@ module Kiosk
 
           resp = client.run(b, name: profile.forge_action, **forged_args)
 
-          # If the call was rejected outright, the server caught it.
-          return verdict_from(resp, detail: "forge_action rejected") if Kiosk::Redteam.blocked?(resp)
+          # If the call was rejected outright, the server caught it — but only
+          # an auth/authz refusal is "caught it" (K-728). A 402 here is a toll
+          # firing ahead of the handler, which says nothing about whether the
+          # injected user_id would have been honoured; it used to score BLOCKED.
+          # 401 and 403 are both admitted: a provider may treat a caller
+          # claiming another principal as unauthenticated rather than forbidden.
+          if Kiosk::Redteam.blocked?(resp)
+            return verdict_from(resp, expect: [401, 403], detail: "forge_action rejected")
+          end
 
           # Call succeeded — check whether A's per_user_query now contains the
           # resource.  If per_user_query is unavailable, we cannot verify

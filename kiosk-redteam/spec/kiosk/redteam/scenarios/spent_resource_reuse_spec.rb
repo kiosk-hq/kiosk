@@ -82,6 +82,52 @@ RSpec.describe Kiosk::Redteam::Scenarios::SpentResourceReuse do
     end
   end
 
+  # ── K-728 ────────────────────────────────────────────────────────────────
+  #
+  # The gate here is resource STATE: already consumed. A 402 on the second use
+  # means the payment gate answered — but A paid, and the first use succeeded —
+  # and a 401 means A's token died mid-scenario. Both used to score BLOCKED.
+  describe "#call — only a 403 forbidden/rls_denied proves the state gate (K-728)" do
+    def stub_second_use(status, body)
+      stub_registers("a")
+      stub_request(:post, "#{BASE_URL}/kiosk/run")
+        .with { |req| JSON.parse(req.body)["name"] == "reserve" }
+        .to_return(status: 200, body: JSON.generate("value" => { "id" => "res-1" }),
+                   headers: { "Content-Type" => "application/json" })
+      stub_exec_pay(status: 200)
+      stub_request(:post, "#{BASE_URL}/kiosk/run")
+        .with { |req| JSON.parse(req.body)["name"] == "start_rental" }
+        .to_return(
+          { status: 200, body: JSON.generate("value" => { "rental_token" => "tok1" }),
+            headers: { "Content-Type" => "application/json" } },
+          { status: status, body: JSON.generate(body),
+            headers: { "Content-Type" => "application/json" } },
+        )
+    end
+
+    it "blocks on 403 rls_denied" do
+      stub_second_use(403, "error" => { "code" => "rls_denied" })
+      expect(scenario.call(client, profile).blocked).to be(true)
+    end
+
+    it "does not block when the second use is answered 402" do
+      stub_second_use(402, "error" => { "code" => "payment_setup_required" })
+      verdict = scenario.call(client, profile)
+      expect(verdict.blocked).to be(false)
+      expect(verdict.detail).to include("want status 403")
+    end
+
+    it "does not block when the second use is answered 401" do
+      stub_second_use(401, "error" => { "code" => "unauthenticated" })
+      expect(scenario.call(client, profile).blocked).to be(false)
+    end
+
+    it "does not block when the second use crashes 500" do
+      stub_second_use(500, "error" => { "code" => "forbidden" })
+      expect(scenario.call(client, profile).blocked).to be(false)
+    end
+  end
+
   describe "#call — skip conditions" do
     it "skips when gated_action is nil" do
       p = minimal_profile(pay_for: pay_for_callable)

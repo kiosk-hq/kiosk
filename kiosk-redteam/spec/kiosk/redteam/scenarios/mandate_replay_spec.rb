@@ -59,6 +59,46 @@ RSpec.describe Kiosk::Redteam::Scenarios::MandateReplay do
     end
   end
 
+  # ── K-728 ────────────────────────────────────────────────────────────────
+  #
+  # The replay is refused because the mandate binds to its signer — a 403
+  # forbidden/rls_denied. A 402 on the replay means it was never verified, only
+  # unfunded; that used to score BLOCKED.
+  describe "#call — only a 403 forbidden/rls_denied proves the binding was checked (K-728)" do
+    def stub_replay(status, body)
+      stub_registers("a", "b")
+      stub_exec_run(status: 200, body: { "value" => { "id" => "res-1" } })
+      stub_request(:post, "#{BASE_URL}/kiosk/pay").to_return(
+        { status: 200, body: JSON.generate("value" => { "payment_mandate_id" => "pm-1" }),
+          headers: { "Content-Type" => "application/json" } },
+        { status: status, body: JSON.generate(body),
+          headers: { "Content-Type" => "application/json" } },
+      )
+    end
+
+    it "blocks on 403 rls_denied" do
+      stub_replay(403, "error" => { "code" => "rls_denied" })
+      expect(scenario.call(client, profile).blocked).to be(true)
+    end
+
+    it "does not block when the replay is merely declined 402" do
+      stub_replay(402, "error" => { "code" => "payment_failed" })
+      verdict = scenario.call(client, profile)
+      expect(verdict.blocked).to be(false)
+      expect(verdict.detail).to include("want status 403")
+    end
+
+    it "does not block on a 401" do
+      stub_replay(401, "error" => { "code" => "unauthenticated" })
+      expect(scenario.call(client, profile).blocked).to be(false)
+    end
+
+    it "does not block on a 500" do
+      stub_replay(500, "error" => { "code" => "forbidden" })
+      expect(scenario.call(client, profile).blocked).to be(false)
+    end
+  end
+
   describe "#call — skip conditions" do
     it "skips when pay_for is nil" do
       p = Kiosk::Redteam::Profile.new(create_owned: ->(_c, _pr) { { id: "x" } })

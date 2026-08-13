@@ -54,7 +54,12 @@ module Kiosk
       # Return a skip Verdict when the profile lacks the surface this scenario
       # exercises.  A skip is NOT a pass — it is a distinct third state that
       # does not count towards the blocked count and does not fail the battery.
-      # The expected-applicable assertion in each demo catches spurious skips.
+      #
+      # Two things catch a spurious skip.  {Runner#all_blocked?} refuses to go
+      # green on a battery with no proofs at all, so a profile that skips
+      # EVERYTHING cannot exit 0 (K-734).  Above that floor, the
+      # expected-applicable assertion in each demo names which skips are
+      # expected for that provider and fails when the set changes.
       #
       # @param reason [String] human-readable reason, e.g. "no per_user_query"
       # @return [Verdict]

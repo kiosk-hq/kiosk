@@ -63,12 +63,33 @@ module Kiosk
         @results.reject { |r| r[:verdict].skipped || r[:verdict].blocked }
       end
 
+      # Results where the attack WAS rejected — the proofs the battery earned.
+      #
+      # @return [Array<Hash{scenario: Scenario, verdict: Verdict}>]
+      def blocked
+        return [] unless @results
+
+        @results.select { |r| !r[:verdict].skipped && r[:verdict].blocked }
+      end
+
       # @return [Boolean] true only when every non-skipped scenario was blocked
-      #   (i.e. no breaches).  Skipped scenarios do NOT count as passes.
+      #   (i.e. no breaches) AND at least one scenario actually ran.  Skipped
+      #   scenarios do NOT count as passes.
+      #
+      # That second clause is the K-734 floor.  "No breaches" is satisfied by a
+      # battery in which NOTHING was exercised: skip every scenario — one nil
+      # profile key does it — and this answered true, so `exit 1 unless
+      # all_blocked?` exited 0 on a run that proved nothing.  The safeguard
+      # cited for that (each demo's EXPECTED_SKIP_NAMES assertion) lives in the
+      # consuming demos, hand-copied per demo, and cannot protect a consumer
+      # that has not written it; this gem's own exit predicate can.  The demos
+      # keep their assertion — it names WHICH skips are expected, which is
+      # genuinely per-provider data — but the floor beneath it is now the gem's:
+      # never green without at least one proof.
       def all_blocked?
         return false if @results.nil? || @results.empty?
 
-        breaches.empty?
+        breaches.empty? && blocked.any?
       end
     end
   end

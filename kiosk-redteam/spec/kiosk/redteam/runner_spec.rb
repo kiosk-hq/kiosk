@@ -206,6 +206,50 @@ RSpec.describe Kiosk::Redteam::Runner do
       runner.run([s_blocked, s_skipped])
       expect(runner.all_blocked?).to be(true)
     end
+
+    # ── K-734: the floor ──────────────────────────────────────────────────
+    #
+    # "No breaches" is satisfied by a battery in which nothing was exercised.
+    # One nil profile key can skip a whole family; a wrong base_url or a
+    # profile built from an empty config can skip the lot — and this used to
+    # answer true, so the caller's `exit 1 unless all_blocked?` exited 0.
+    it "returns false when EVERY scenario was skipped (nothing was proved)" do
+      runner = described_class.new(base_url:, profile:)
+      runner.run([make_scenario("A", skip_verdict), make_scenario("B", skip_verdict)])
+      expect(runner.breaches).to be_empty
+      expect(runner.all_blocked?).to be(false)
+    end
+
+    it "returns false for a single skipped scenario" do
+      runner = described_class.new(base_url:, profile:)
+      runner.run([make_scenario("A", skip_verdict)])
+      expect(runner.all_blocked?).to be(false)
+    end
+
+    it "returns true as soon as one scenario is genuinely blocked among skips" do
+      runner = described_class.new(base_url:, profile:)
+      runner.run([make_scenario("A", skip_verdict),
+                  make_scenario("B", blocked_verdict),
+                  make_scenario("C", skip_verdict)])
+      expect(runner.all_blocked?).to be(true)
+    end
+  end
+
+  # ── #blocked ────────────────────────────────────────────────────────────
+
+  describe "#blocked" do
+    it "returns an empty array before any run" do
+      expect(described_class.new(base_url:, profile:).blocked).to eq([])
+    end
+
+    it "returns only the results that proved a refusal" do
+      s_blocked = make_scenario("A", blocked_verdict)
+      s_breach  = make_scenario("B", breach_verdict)
+      s_skipped = make_scenario("C", skip_verdict)
+      runner = described_class.new(base_url:, profile:)
+      runner.run([s_blocked, s_breach, s_skipped])
+      expect(runner.blocked.map { |r| r[:scenario] }).to eq([s_blocked])
+    end
   end
 
   # ── #breaches ───────────────────────────────────────────────────────────────

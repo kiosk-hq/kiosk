@@ -478,9 +478,20 @@ Kiosk::Server::Actions.register("start_rental",
   # called start_rental with SK-001. `reserve` deliberately stays open to every
   # vehicle (one reservation shape, both verbs); the licence check belongs at
   # USE time, here, next to the ownership and payment gates.
-  needs_licence = scooter_row["needs_licence"] == true ||
-                  scooter_row["needs_licence"] == "t" ||
-                  scooter_row["needs_licence"] == "true"
+  #
+  # Coerced through ActiveRecord's OWN boolean cast, and fail-closed by
+  # construction: only a value Rails recognises as literally FALSE (false, "f",
+  # "false", "0", 0) lets the licence-free verb proceed — NULL, an unexpected
+  # spelling, a `needs_licence` that stopped being a boolean column all read as
+  # "licence required" and are sent to rent_motorcycle. The check used to
+  # enumerate the truthy spellings it knew by hand (== true || == "t" ||
+  # == "true"), which is correct against today's pg adapter (it returns real
+  # TrueClass/FalseClass) and fails OPEN against any other: one adapter, cast
+  # or schema change yielding "TRUE" or 1 and the unrecognised value is treated
+  # as licence-free, silently unlocking the KYC-gated motorcycle this whole
+  # gate exists to hold. A gate on a physical vehicle does not get to be right
+  # only for the values someone remembered.
+  needs_licence = ActiveRecord::Type::Boolean.new.cast(scooter_row["needs_licence"]) != false
   if needs_licence
     raise Kiosk::Server::Errors::BadRequest.new(
       "#{code} is a licence-required motorcycle — use rent_motorcycle for licence-required vehicles",
@@ -623,7 +634,11 @@ Kiosk::Server::Actions.register("rent_motorcycle",
   ).first
   raise Kiosk::Server::Errors::Forbidden.new("vehicle not found for reservation") if vehicle.nil?
 
-  needs_licence = vehicle["needs_licence"] == true || vehicle["needs_licence"] == "t" || vehicle["needs_licence"] == "true"
+  # Same cast as start_rental's Gate 1b, closed in THIS gate's direction: this
+  # verb is the one that unlocks a licence-required vehicle, so only a value
+  # Rails casts to literal TRUE counts as one; anything ambiguous is refused
+  # here and refused there too, so no reading of the column opens both doors.
+  needs_licence = ActiveRecord::Type::Boolean.new.cast(vehicle["needs_licence"]) == true
   unless needs_licence
     raise Kiosk::Server::Errors::BadRequest.new(
       "#{vehicle["code"]} is not a licence-required motorcycle — use start_rental for licence-free vehicles",

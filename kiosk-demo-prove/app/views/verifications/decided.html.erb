@@ -3,12 +3,22 @@
   <h1>kyc.demo.kiosk.tech</h1>
   <% if @decision == :approved %>
     <h2>Confirmed</h2>
-    <p>
-      We confirmed the requested facts and sent
-      <strong><%= @request.operator_id %></strong> a signed, anonymized answer —
-      only the yes/no booleans, nothing that identifies you. The assistant can
-      now complete its task. You can close this page.
-    </p>
+    <% if @delivered %>
+      <p>
+        We confirmed the requested facts and sent
+        <strong><%= @request.operator_id %></strong> a signed, anonymized answer —
+        only the yes/no booleans, nothing that identifies you. The assistant can
+        now complete its task. You can close this page.
+      </p>
+    <% else %>
+      <p>
+        We confirmed the requested facts, but could not reach
+        <strong><%= @request.operator_id %></strong> to deliver the signed
+        answer just now. Nothing that identifies you was shared either way.
+        Your assistant may retry on its own; if its task does not complete
+        shortly, ask it to try again. You can close this page.
+      </p>
+    <% end %>
   <% else %>
     <h2>Declined</h2>
     <p>

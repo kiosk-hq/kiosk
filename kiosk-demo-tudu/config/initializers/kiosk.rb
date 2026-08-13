@@ -169,7 +169,8 @@ end
 # The acting agent_id as a plain STRING (attribution for created_by_agent_id).
 # Read the raw GUC — NOT kiosk.current_agent_id(), which casts to ::uuid and so
 # would fail for the demo's stub tokens (agent_id like "alice-collab").
-# Returns nil for the human web surface (no agent) and for uuid or stub agents.
+# Returns nil only when the GUC is unset or empty (the human web surface);
+# deliberately returns the raw value for stub agents so non-uuid ids survive.
 def tudu_current_agent_id
   ActiveRecord::Base.connection.select_value(
     "SELECT NULLIF(current_setting('app.current_agent_id', true), '')",

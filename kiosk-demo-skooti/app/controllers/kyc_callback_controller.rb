@@ -77,19 +77,24 @@ class KycCallbackController < ActionController::API
   private
 
   # Verify the broker's claim exactly as the engine KycVerifier would: RS256
-  # against the trusted ProveKey, iss == the configured broker issuer, level ==
-  # "verified", not expired. Renders a 403 and returns nil on any failure.
+  # against the trusted ProveKey, iss == the configured broker issuer,
+  # aud == this operator's kyc_audience, level == "verified", not expired.
+  # Renders a 403 and returns nil on any failure.
   def verify_broker_claim(raw_jws)
     key = OpenSSL::PKey::RSA.new(Kiosk.configuration.kyc_public_key)
     payload, = JWT.decode(
       raw_jws, key, true,
       algorithms:        ["RS256"],
       verify_expiration: true,
-      required_claims:   ["exp", "iss", "sub"],
+      required_claims:   ["exp", "iss", "aud", "sub"],
     )
 
     if payload["iss"] != Kiosk.configuration.kyc_issuer
       render(json: { error: "issuer mismatch" }, status: :forbidden)
+      return nil
+    end
+    if payload["aud"].to_s != Kiosk.configuration.kyc_audience.to_s
+      render(json: { error: "audience mismatch" }, status: :forbidden)
       return nil
     end
     if payload["level"] != "verified"

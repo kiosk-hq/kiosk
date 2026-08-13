@@ -11,13 +11,14 @@
 #
 # Every capture runs the ValidatingPaymentProvider cashier check: the cart
 # must be EUR, reference the payer's own unsettled order, mirror its items at
-# catalog prices, and sum correctly. Three local scenarios attack exactly that.
+# catalog prices, and sum correctly. Three local scenarios attack exactly that,
+# and a fourth (MalformedItemsCart) attacks the input shape create_order takes.
 #
-# Scenarios (13 BLOCKED, 3 SKIPPED):
+# Scenarios (14 BLOCKED, 3 SKIPPED):
 #   BLOCKED : CrossTenantRead, ForgedUserId, UnpaidGatedAction, SpentResourceReuse,
 #             PayForOtherUseSelf, MandatePrincipalSwap, MandateReplay, TokenTampering,
 #             PrivilegeSelfSelection, WrongCurrencyCart, TamperedPriceCart,
-#             InflatedTotalCart, RegistrationWithoutPow
+#             InflatedTotalCart, MalformedItemsCart, RegistrationWithoutPow
 #   SKIPPED : MissingKyc, ExpiredKyc, ForgedKyc (no KYC)
 #
 # Usage:
@@ -227,6 +228,81 @@ class InflatedTotalCart < Kiosk::Redteam::Scenario
   end
 end
 
+# A cart of the wrong SHAPE is a client mistake and must come back as a typed
+# 400, never as a 500 (K-693). The shipped guard was `items.empty?` under a
+# message promising "a non-empty array": an emptiness check wearing a type
+# check's words. `items` is not validated at the wire either
+# (request_validation.rb: "ONLY the PoW proof(s) are validated"), so a String, a
+# Hash, or an array of Strings each reached `.map` / `it[:sku]` and raised a raw
+# NoMethodError or TypeError that executor.rb turned into ActionFailed — a 500
+# on the flagship demo's headline action, the one the onboarding page is
+# modelled on (which is how K-645 came to cite this handler as the CORRECT
+# contrast it was not).
+#
+# Asserts HTTP 400 AND `error.code == "bad_request"` AND no Ruby internals in
+# the body: "not 200" would accept exactly the 500s at issue.
+class MalformedItemsCart < Kiosk::Redteam::Scenario
+  ADDRESS = "1 Redteam St, Dublin 1"
+  RUBY_INTERNALS = ["NoMethodError", "TypeError", "undefined method", "no implicit conversion"].freeze
+
+  # Each is a shape an assistant can plausibly send: the whole cart as one
+  # object, a bare list of skus, a stringified cart, a count.
+  BAD_ITEMS = [
+    ["a String",             "sourdough-bread"],
+    ["a Hash (one item, unwrapped)", { sku: "sourdough-bread", qty: 1 }],
+    ["an array of Strings",  ["sourdough-bread"]],
+    ["an array of Integers", [1, 2]],
+    ["an Integer",           5],
+    ["an array with null",   [nil]],
+    ["an empty array",       []],
+    ["absent",               nil],
+  ].freeze
+
+  def initialize
+    super(
+      name:        "MalformedItemsCart",
+      category:    "input",
+      description: "A non-array (or non-object-element) `items` must be a typed 400, never a 500",
+    )
+  end
+
+  def call(client, profile)
+    a        = register_principal(client, name: "redteam-items-a", profile:)
+    failures = []
+    statuses = []
+
+    BAD_ITEMS.each do |label, items|
+      args = { delivery_slot_id: 1, delivery_address: ADDRESS }
+      args[:items] = items unless items.nil?
+      resp = client.run(a, name: "create_order", **args)
+      statuses << resp.status
+      code = resp.body.is_a?(Hash) ? resp.body.dig("error", "code") : nil
+      leak = RUBY_INTERNALS.find { |needle| JSON.generate(resp.body).include?(needle) }
+      next if resp.status == 400 && code == "bad_request" && leak.nil?
+
+      failures << "items #{label} → HTTP #{resp.status} code=#{code.inspect}#{leak ? " LEAKS #{leak.inspect}" : ""}"
+    end
+
+    # CONTROL — a well-formed cart must still place an order. Without it every
+    # probe above would pass against a handler that rejected all input.
+    catalog = client.query(a, name: "catalog").body["rows"] || []
+    control = client.run(a, name: "create_order",
+                            items: [{ sku: catalog.first["sku"], qty: 1 }],
+                            delivery_slot_id: 1, delivery_address: ADDRESS)
+    statuses << control.status
+    unless control.status == 200
+      failures << "CONTROL well-formed items → HTTP #{control.status} #{control.body.inspect} (want 200)"
+    end
+
+    Kiosk::Redteam::Verdict.new(
+      blocked: failures.empty?,
+      skipped: false,
+      status:  statuses.find { |s| s != 400 && s != 200 } || 400,
+      detail:  failures.join(" | "),
+    )
+  end
+end
+
 # ── Scenarios ─────────────────────────────────────────────────────────────────
 
 scenarios = [
@@ -243,6 +319,7 @@ scenarios = [
   WrongCurrencyCart.new,
   TamperedPriceCart.new,
   InflatedTotalCart.new,
+  MalformedItemsCart.new,   # K-693 — a mis-shaped `items` is a typed 400, never a 500
   # register PoW is ON — a missing/bad register proof must be rejected (runs
   # because pow_difficulty > 0).
   Kiosk::Redteam::Scenarios::RegistrationWithoutPow.new,

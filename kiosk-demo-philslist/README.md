@@ -152,7 +152,9 @@ assertions cannot go ungated and unexplained.
 |---|---|
 | `db/migrate/` | The pruned canonical kiosk migrations (schema, identity, actions_log, device_authorizations, governance columns) — **no** reservations/mandates/settlements — plus `categories` + `listings` |
 | `app/models/{user,category,listing}.rb` | `User` is the account principal and `database_authenticatable`; `Listing.owner_id` is the load-bearing isolation predicate |
-| `config/initializers/kiosk.rb` | `Kiosk.configure` (NO `payment_provider`) + the browse/my queries and post/edit/close actions |
+| `config/initializers/kiosk.rb` | `Kiosk.configure` (NO `payment_provider`) — configuration only; it names the two handler controllers, it does not contain them |
+| `app/controllers/kiosk/board_controller.rb` | The `browse_listings` / `my_listings` queries — an ordinary Rails controller with `include Kiosk::Query`, declared with the class-level macros. Not routable: handlers are reached only through the wire |
+| `app/controllers/kiosk/listings_controller.rb` | The `post_listing` / `edit_listing` / `close_listing` actions — same shape with `include Kiosk::Action`; refusals are plain `render json:, status:` naming a wire `error.code` |
 | `lib/stub_idp.rb` / `lib/jwt_or_stub_idp.rb` | Demo IdP: Kiosk JWTs first, bespoke `agent:u-…:a-…:r-…` fallback |
 | `script/isolation_flow.rb` / `script/redteam_suite.rb` / `script/schema_flow.rb` / `script/binding_flow.rb` / `script/register_flow.rb` | One-JSON-line flow drivers the rake tasks assert on |
 | `bin/demo` | The browse→post→edit→close walkthrough (POSIX shell, curl-driven) |

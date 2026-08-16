@@ -345,7 +345,7 @@ The server gate (`Kiosk::Server::PowGate`) reads these config slots:
 | `pow_ttl` | Integer (seconds) | `300` | Challenge validity window. |
 | `reputation_factors` | `(identity:, verb:) → Factors` callable | returns `Factors.empty` | Host-supplied callable that gathers reputation context per request. |
 | `on_bad_proof` | `(identity:) → void` callable | no-op | Called when a submitted proof has a wrong nonce. Increment `bad_proof_count` here. |
-| `pow_spent_store` | `PowSpentStore`-compatible | in-process TTL store | Tracks spent challenge ids to prevent proof replay. Override with a shared store (e.g. Redis-backed) in multi-process deployments. |
+| `pow_spent_store` | `PowSpentStore`-compatible | in-process TTL store | Tracks spent challenge ids to prevent proof replay. The default holds single-use PER PROCESS, so a multi-process deployment **MUST** override it with a shared store — `Kiosk::Server::PowSpentStores::ActiveRecord.new` ships for this; see kiosk-server's README, "Multi-process deployments". |
 
 ```ruby
 Kiosk.configure do |c|

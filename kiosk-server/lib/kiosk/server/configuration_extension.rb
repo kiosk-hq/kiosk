@@ -354,12 +354,16 @@ module Kiosk
         @on_bad_proof ||= ->(**) {}
       end
 
-      # In-process TTL store for spent challenge ids. Override with a
-      # shared-store implementation (e.g. Redis-backed) in multi-process
-      # deployments to prevent replay attacks across processes. The override
-      # MUST implement #claim as ONE atomic op (Redis SETNX / SQL
-      # INSERT..ON CONFLICT DO NOTHING) — the gate claims before the verify, so a
-      # read-then-write reintroduces the replay TOCTOU (K-542).
+      # In-process TTL store for spent challenge ids. A multi-process
+      # deployment (`WEB_CONCURRENCY > 1`, or several app hosts) **MUST**
+      # override this with a store shared by every process — with the default,
+      # PoW single-use holds per worker, so one proof is accepted once per
+      # worker (K-738; protocol.md Section 15.2 + the Section 16.1 operator
+      # profile state the requirement). {Kiosk::Server::PowSpentStores::ActiveRecord}
+      # ships as the ready override. The override MUST implement #claim as ONE
+      # atomic op (Redis SETNX / SQL INSERT..ON CONFLICT) — the gate claims
+      # before the verify, so a read-then-write reintroduces the replay TOCTOU
+      # (K-542).
       #
       # @return [Kiosk::Server::PowSpentStore, #claim(id, exp), #release(id), #spent?(id), #mark_spent(id, exp)]
       attr_writer :pow_spent_store

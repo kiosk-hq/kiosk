@@ -232,6 +232,23 @@ Deploying with **neither** is the one unacceptable option. Verify afterwards:
 hammer `/kiosk/auth/register` from one IP and confirm you are cut off (429)
 well before the box slows down.
 
+## Scaling past one worker — shared stores REQUIRED (K-738)
+
+Everything above assumes the shipped `WEB_CONCURRENCY=1`. Raising it (or putting
+a second app host behind the balancer) changes one security property: the PoW
+**spent-id set** is in-process by default, so single-use — which the protocol
+states normatively (`protocol.md` §15.2, §16.1) — degrades to *once per worker*,
+and N workers accept the same proof N times. The auth-challenge store is
+in-process for the same reason, and breaks the register/login handshake outright
+(challenge on worker A, redeem on worker B).
+
+So before you raise the number: add the `pow_spent` table and set
+`c.pow_spent_store = Kiosk::Server::PowSpentStores::ActiveRecord.new`, and give
+`c.auth_challenge_store` a shared implementation. Both are ~5 lines in the
+initializer — see kiosk-server's README, "Multi-process deployments". This is
+the same class of operator obligation as the edge rate-limit above: the app
+cannot do it for you.
+
 ## Payments — Stripe TEST mode
 
 getgrocery (SetupIntent card-on-file) runs Stripe in **test mode** — it is the

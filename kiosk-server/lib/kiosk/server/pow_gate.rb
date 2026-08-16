@@ -38,8 +38,13 @@ module Kiosk
     # == Spent-id set
     #
     # Valid proofs are recorded in `config.pow_spent_store` (in-process TTL
-    # store by default). Providers running multiple processes must override with
-    # a shared store — see {PowSpentStore}.
+    # store by default). That default makes single-use hold PER PROCESS only, so
+    # a provider running MULTIPLE processes (`WEB_CONCURRENCY > 1`, or several
+    # app hosts) **MUST** override it with a store shared by all of them —
+    # otherwise one proof is accepted once per worker. This is a normative
+    # requirement on the operator, not a tuning suggestion: protocol.md
+    # Section 15.2 and the Section 16.1 operator profile state it. Ship-ready
+    # override: {PowSpentStores::ActiveRecord} (K-738).
     module PowGate
       module_function
 

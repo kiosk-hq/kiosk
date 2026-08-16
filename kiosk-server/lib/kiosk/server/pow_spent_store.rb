@@ -20,8 +20,18 @@ module Kiosk
     #
     # This in-process store does NOT share state across web workers / Puma
     # processes — a replayed proof submitted to a different worker would be
-    # accepted. Providers running multiple processes MUST override
-    # `Kiosk.configure { |c| c.pow_spent_store = MyRedisSpentStore.new }`.
+    # accepted, once per worker. Providers running multiple processes MUST
+    # override it with a store shared by all of them; protocol.md Section 15.2
+    # and the Section 16.1 operator profile make that a requirement, not a
+    # tuning knob (K-738). A ready implementation ships in this gem:
+    #
+    #   Kiosk.configure do |c|
+    #     c.pow_spent_store = Kiosk::Server::PowSpentStores::ActiveRecord.new
+    #   end
+    #
+    # (one table, `SchemaDefinitions.pow_spent_sql` — see the kiosk-server
+    # README, "Multi-process deployments"). Any other backend works too, e.g. a
+    # Redis-backed store of your own; it just has to satisfy the contract below.
     # The interface contract is:
     #
     #   claim(id, exp)      → Boolean  (ATOMIC: true iff THIS caller claimed it;

@@ -50,6 +50,51 @@ end
 ```
 
 
+## Multi-process deployments
+
+One setting is **not** optional once you run more than one process.
+
+The PoW gate enforces that a proof is single-use by recording spent challenge
+ids in `c.pow_spent_store`, and the default
+(`Kiosk::Server::PowSpentStore`) is an **in-process** Hash. With
+`WEB_CONCURRENCY > 1`, or several app hosts behind a load balancer, each worker
+keeps its own spent set — so one proof is accepted **once per worker**, and the
+single-use property the protocol states (kiosk.tech `protocol.md` §15.2, and the
+§16.1 operator profile) no longer holds. An operator running multiple processes
+**MUST** point every one of them at the same spent-id store.
+
+A ready one ships in this gem, backed by a single table:
+
+```ruby
+# db/migrate/…_create_kiosk_pow_spent.rb
+class CreateKioskPowSpent < ActiveRecord::Migration[8.1]
+  def up   = execute(Kiosk::Server::SchemaDefinitions.pow_spent_sql)
+  def down = execute(%(DROP TABLE IF EXISTS "#{Kiosk.configuration.schema}".pow_spent))
+end
+```
+
+```ruby
+# config/initializers/kiosk.rb
+Kiosk.configure do |c|
+  c.pow_spent_store = Kiosk::Server::PowSpentStores::ActiveRecord.new
+end
+```
+
+This table is **not** part of `bin/rails g kiosk:install` — a single-process
+operator does not need it, so it is added deliberately when you scale out.
+
+Any other backend works: the contract is `claim(id, exp) → Boolean`,
+`release(id)`, `spent?(id)`, `mark_spent(id, exp)`, and `claim` **MUST** be one
+atomic operation (Redis `SET … NX EX`, or SQL `INSERT … ON CONFLICT`). A
+read-then-write reintroduces exactly the replay race the gate closes.
+
+`c.auth_challenge_store` is in-process too, and needs the same treatment for a
+different reason: a challenge issued by one worker is invisible to the worker
+that gets the `register`/`login`, so the handshake fails *closed*. No shared
+adapter ships for it yet — the setter takes any object answering
+`put(public_key_pem, nonce, exp)` / `take(public_key_pem, nonce)`.
+
+
 ## Mount the routes
 
 One line. The engine draws the entire surface:

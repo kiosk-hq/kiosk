@@ -419,6 +419,41 @@ module Kiosk
         SQL
       end
 
+      # ─── optional: shared PoW spent-id table (NOT a canonical migration) ─
+
+      # Table backing {PowSpentStores::ActiveRecord}, the shared spent-id
+      # store a MULTI-PROCESS operator must configure so that PoW single-use
+      # holds across web workers (K-738).
+      #
+      # This is deliberately NOT one of the ten canonical migrations and the
+      # `kiosk:install` generator does not lay it down: the shipped default
+      # store is in-process ({PowSpentStore}) and a single-process operator
+      # needs no table at all. An operator raising `WEB_CONCURRENCY` above 1
+      # adds a one-line migration of their own that calls this — see the
+      # "Multi-process deployments" section of the kiosk-server README.
+      #
+      # `id` is the opaque challenge id (Section 10 of the protocol), so the
+      # PRIMARY KEY is the single-use gate itself: the store's `claim` is one
+      # `INSERT … ON CONFLICT (id) DO UPDATE … WHERE expires_at <= now()`
+      # statement, and the unique index — not application code — decides who
+      # won. `expires_at` mirrors the challenge `exp`; rows past it are
+      # reclaimable (challenge ids are random, so this only matters for
+      # pruning) and {PowSpentStores::ActiveRecord#prune!} deletes them.
+      def pow_spent_sql(schema: nil)
+        schema ||= Kiosk.configuration.schema
+
+        <<~SQL.strip
+          CREATE TABLE "#{schema}".pow_spent (
+            id         text        PRIMARY KEY,
+            expires_at timestamptz NOT NULL
+          );
+          -- Supports the TTL sweep only; the PK above is what enforces
+          -- single-use.
+          CREATE INDEX idx_pow_spent_expires_at
+            ON "#{schema}".pow_spent (expires_at);
+        SQL
+      end
+
       # ─── helpers ───────────────────────────────────────────────────────
 
       def user_id_cast(user_id_type)

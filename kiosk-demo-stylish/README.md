@@ -88,7 +88,9 @@ assertions cannot go ungated and unexplained.
 |---|---|
 | `db/migrate/` | Generator-produced kiosk migrations + the Stylish schema (users carry Devise login columns + a `staff_role`; `services` is the evergreen menu; `appointments` accumulate real bookings, capturing the booked `service_id` + `price_cents`) |
 | `app/models/{user,salon,service,appointment}.rb` | Trivial AR models; `User` is `database_authenticatable` for the human sign-in and carries `staff_role` (owner); `Service` is a menu item priced in EUR cents |
-| `config/initializers/kiosk.rb` | `Kiosk.configure` block + the `book_appointment` Action + the `availability`/`service_menu` queries + the role-gated `salon_calendar` forecast query |
+| `config/initializers/kiosk.rb` | `Kiosk.configure` block — configuration only; it names the two handler controllers, it does not contain them |
+| `app/controllers/kiosk/front_desk_controller.rb` | The `salons` / `service_menu` / `availability` / `my_appointments` queries and the role-gated `salon_calendar` forecast — an ordinary Rails controller with `include Kiosk::Query`, declared with the class-level macros. Not routable: handlers are reached only through the wire |
+| `app/controllers/kiosk/appointments_controller.rb` | The `book_appointment` action — same shape with `include Kiosk::Action`; refusals are plain `render json:, status:` naming a wire `error.code` |
 | `config/initializers/devise.rb` | Minimal Devise setup — the human session that approves assistant links |
 | `lib/stub_idp.rb` | Bespoke synthetic-token agent-IdP for the demo's hard-coded Alice + Bob |
 | `lib/jwt_or_stub_idp.rb` | Composite agent-IdP: tries Kiosk-issued JWTs first, falls back to StubIdp |

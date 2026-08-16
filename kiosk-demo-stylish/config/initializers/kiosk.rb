@@ -1,8 +1,8 @@
 # frozen_string_literal: true
 
 # Kiosk-demo (stylish — Combette-shape) configuration. Concrete values for
-# the salon-booking reference shape: uuid users, JWT-or-stub IdP, one
-# Action registered (book_appointment).
+# the salon-booking reference shape: uuid users, JWT-or-stub IdP, five queries
+# and one action, all of them ordinary Rails controllers named below.
 
 # Env posture (ephemeral dev signing key, PoW secret, issuer, test flags) lives
 # in config/environments/{development,test,production}.rb (K-650); this file
@@ -40,14 +40,24 @@ Kiosk.configure do |c|
   c.user_id_type   = :uuid
   c.user_id_column = :id
 
+  # ── Where the wire verbs live (T-053 mixin / T-057) ────────────────────────
+  # The queries and actions are ordinary Rails controllers under
+  # app/controllers/kiosk/ — `include Kiosk::Query` / `include Kiosk::Action`,
+  # class-level macros, plain `render json:`. Nothing about them belongs in an
+  # initializer, and nothing about them is here: this line only NAMES them, and
+  # the engine loads and registers them (once in production, again after every
+  # reload in development, so an edited/added/removed verb needs no restart).
+  c.handlers = %w[Kiosk::FrontDeskController Kiosk::AppointmentsController]
+
   c.guc_namespace  = "app"
   c.schema         = "kiosk"
 
   # The Rails connection's role owns the tables AND issues queries (no
   # role separation in this demo). This demo runs WITHOUT RLS — isolation
-  # is enforced at the app layer (see the migration and the query/Action
-  # WHERE clauses) — so app_role and system_role are set to the same role
-  # only to satisfy the config; no `enable_rls_on`/GRANT statements run here.
+  # is enforced at the app layer (see the migration and the WHERE clauses in
+  # the two handler controllers) — so app_role and system_role are set to the
+  # same role only to satisfy the config; no `enable_rls_on`/GRANT statements
+  # run here.
   c.app_role    = ENV.fetch("KIOSK_APP_ROLE",    "app_role")
   c.system_role = ENV.fetch("KIOSK_SYSTEM_ROLE", "app_role")
 
@@ -66,9 +76,10 @@ Kiosk.configure do |c|
   c.validate_requests = true
   # stylish is dual-audience: VISITORS book a service off the menu (customer),
   # salon STAFF view the forecasted revenue (owner). The owner role is sourced
-  # from the provider's own IdP (roles-from-IdP) — see the StubUserIdp and the
-  # `salon_calendar` query below. (No stylist roster — the menu is evergreen and
-  # infinite-capacity, so there is nothing per-stylist to scope.)
+  # from the provider's own IdP (roles-from-IdP) — see the StubUserIdp below and
+  # the `salon_calendar` query in Kiosk::FrontDeskController. (No stylist roster
+  # — the menu is evergreen and infinite-capacity, so there is nothing
+  # per-stylist to scope.)
   c.roles  = %i[customer owner]
   # Role pinned to every SELF-registered agent (agents cannot choose their
   # own). Staff assistants get their role indirectly, from the bound human's
@@ -122,253 +133,6 @@ Kiosk.configure do |c|
   c.registration_pow_count  = 1
   c.registration_pow_params = STYLISH_REGISTRATION_POW_PARAMS
   c.pow_secret              = pow_secret
-end
-
-# ─── Queries ────────────────────────────────────────────────────────────────
-
-# salons — full salon catalogue; no per-user scoping, any authenticated
-# principal may browse (mirrors the public SELECT policy previously in RLS).
-Kiosk::Server::Queries.register("salons",
-                                 description: "Browse the public salon catalogue. Each row carries a `salon_id`; pass it to book_appointment as `salon_id`.",
-                                 params: {}) do |_params|
-  ActiveRecord::Base.connection.execute(
-    "SELECT id AS salon_id, name FROM salons ORDER BY id"
-  ).to_a
-end
-
-# service_menu — the salon's public service menu with EUR prices. Any
-# authenticated principal may read it; an assistant uses it to pick a
-# service_id (and see the € price) before booking.
-Kiosk::Server::Queries.register("service_menu",
-                                 description: "Browse the salon's service menu with EUR prices (name, price_cents, price_eur). " \
-                                              "Takes no parameters and returns the whole menu (small; not paginated); each row carries a " \
-                                              "`service_id` — pass it to book_appointment as `service_id`, where its EUR price is captured on the booking.",
-                                 params: {},
-                                 input_schema: {
-                                   type: "object",
-                                   additionalProperties: false,
-                                   properties: {},
-                                   required: [],
-                                 },
-                                 example_params: {},
-                                 example_row: {
-                                   service_id: 1, name: "Cut", price_cents: 3500,
-                                   currency: "EUR", price_eur: "€35",
-                                 }) do |_params|
-  ActiveRecord::Base.connection.execute(
-    "SELECT id AS service_id, name, price_cents FROM services ORDER BY price_cents"
-  ).to_a.map do |row|
-    row.merge("currency" => "EUR", "price_eur" => Service.format_eur(row["price_cents"]))
-  end
-end
-
-# availability — the salon's EVERGREEN availability (K-446). Every service on
-# the menu is ALWAYS bookable: infinite capacity, overbooking allowed, nothing
-# to fill up or go stale, no reseed cron. So availability IS the service menu,
-# every row flagged `open: true`. Any authenticated principal (a visitor's
-# assistant) reads it to pick a service to book. Each row carries a `service_id`
-# — pass it to book_appointment to book that service (its EUR price is captured).
-Kiosk::Server::Queries.register("availability",
-                                 description: "Browse the salon's OPEN services — every menu service is always bookable (evergreen, infinite capacity; the salon never fills up). " \
-                                              "Takes no parameters. Each row carries a `service_id` and `open: true` — pass the id to " \
-                                              "book_appointment to book that service (its EUR price is captured on the booking).",
-                                 params: {},
-                                 input_schema: {
-                                   type: "object",
-                                   additionalProperties: false,
-                                   properties: {},
-                                   required: [],
-                                 },
-                                 example_params: {},
-                                 example_row: {
-                                   service_id: 3, service: "Colour", open: true,
-                                   currency: "EUR", price_cents: 9000, price_eur: "€90",
-                                 }) do |_params|
-  ActiveRecord::Base.connection.execute(
-    "SELECT id AS service_id, name AS service, price_cents FROM services ORDER BY price_cents"
-  ).to_a.map do |row|
-    row.merge("open" => true, "currency" => "EUR",
-              "price_eur" => Service.format_eur(row["price_cents"]))
-  end
-end
-
-# my_appointments — per-user appointment list scoped by the session GUC.
-# App-layer isolation: the agent supplies no filter; the WHERE is
-# provider-controlled and cannot be bypassed by the caller.
-Kiosk::Server::Queries.register("my_appointments",
-                                 description: "List this principal's appointments (scoped to authenticated user via kiosk.current_user_id())",
-                                 params: {}) do |_params|
-  ActiveRecord::Base.connection.execute(
-    "SELECT id, salon_id, slot FROM appointments " \
-    "WHERE user_id = kiosk.current_user_id() " \
-    "ORDER BY id"
-  ).to_a
-end
-
-# salon_calendar — STAFF forecast, role-gated (roles-from-IdP).
-# Reads kiosk.current_role() (the GUC set from the token's role claim, which a
-# staff assistant inherited from the bound human's IdP role):
-#
-#   owner → the WHOLE book: every booking made so far (across all visitors),
-#           plus a FORECAST summary — the € revenue SUMMED from those bookings'
-#           captured prices. Starts at €0 and grows as visitors book.
-#   any other role (customer, or none) → ONLY their OWN bookings
-#           (rows WHERE user_id = kiosk.current_user_id()), and NO forecast.
-#
-# The gate is un-bypassable: an agent can neither self-select `owner` at binding
-# nor pass a wider filter — the role rides the token (from the bound human's
-# IdP), not the request args, and the WHERE is provider-controlled. The forecast
-# is computed live from the real per-booking prices — never a hardcoded number.
-Kiosk::Server::Queries.register("salon_calendar",
-                                 description: "Staff forecast — role-gated: owner sees ALL bookings + a FORECASTED € revenue total (summed from the actual bookings' prices, growing from €0 as visitors book); any other role sees only their own bookings and no forecast (role from the bound human's IdP)",
-                                 params: {}) do |_params|
-  role = ActiveRecord::Base.connection.execute(
-    "SELECT kiosk.current_role() AS role"
-  ).first["role"]
-
-  # owner → the whole book; anyone else → only their own bookings.
-  appt_scope = role == "owner" ? "TRUE" : "a.user_id = kiosk.current_user_id()"
-
-  # BOOKINGS made so far (accumulate as visitors book — zero at the start).
-  appt_rows = ActiveRecord::Base.connection.execute(
-    "SELECT a.id, a.salon_id, a.slot, " \
-    "       a.service_id, s.name AS service, a.price_cents " \
-    "FROM appointments a LEFT JOIN services s ON s.id = a.service_id " \
-    "WHERE #{appt_scope} ORDER BY a.slot"
-  ).to_a.map do |row|
-    row.merge("kind" => "booking", "currency" => "EUR",
-              "price_eur" => Service.format_eur(row["price_cents"]))
-  end
-
-  rows = appt_rows
-
-  # Owner also gets a FORECAST summary: the € revenue summed from the real
-  # per-booking prices. A live figure from real rows — not a fixed number; it is
-  # €0 before any booking and grows with each one.
-  if role == "owner"
-    booked_cents = appt_rows.sum { |r| r["price_cents"].to_i }
-    rows += [{
-      "summary"        => "forecast",
-      "bookings"       => appt_rows.size,
-      "currency"       => "EUR",
-      "forecast_cents" => booked_cents,
-      "forecast_eur"   => Service.format_eur(booked_cents),
-    }]
-  end
-  rows
-end
-
-# ─── Actions ────────────────────────────────────────────────────────────────
-
-# Register the demo Action. A registered name + block IS the shipped Action
-# API — the same `Kiosk::Server::Actions.register` call every demo uses. The
-# richer `Kiosk::Action` DSL (accepts/requires_payment/escalate_to) is a
-# follow-up and does not exist yet.
-Kiosk::Server::Actions.register("book_appointment",
-                                 description: "Book a service for the authenticated visitor. Pick a service from the `availability`/`service_menu` query and pass its `service_id` — its name + EUR price are captured on the booking. Every service is always bookable (overbooking allowed; the salon never fills up), so a well-formed booking never fails for lack of capacity. (A bare `salon_id` booking without a service is also accepted — OMIT service_id for that; an unknown service_id is a 400, never a silently service-less booking.) A missing/unknown salon_id, an unparseable slot, or an unknown service_id each return 400 naming what was wrong.",
-                                 params: {
-                                   salon_id:   "integer — id of the salon (from the `salons` query); must exist",
-                                   slot:       "string — appointment time as an ISO 8601 timestamp, e.g. \"2026-10-01T14:00:00Z\"",
-                                   service_id: "integer — optional id of a service (from the `availability`/`service_menu` query); its EUR price is captured on the booking. Omit it entirely for a bare salon booking; an id that names no service is rejected",
-                                 },
-                                 input_schema: {
-                                   type: "object",
-                                   additionalProperties: false,
-                                   properties: {
-                                     salon_id:   { type: "integer",
-                                                   description: "Salon id from the salons query." },
-                                     slot:       { type: "string", format: "date-time",
-                                                   description: "Appointment time, ISO 8601 timestamp." },
-                                     service_id: { type: "integer",
-                                                   description: "Optional service id from availability/service_menu; its EUR price is captured." },
-                                   },
-                                   required: ["salon_id", "slot"],
-                                 },
-                                 example_params: { salon_id: 1, service_id: 3, slot: "2026-08-05T14:00:00Z" },
-                                 example_row: {
-                                   appointment_id: 1, salon_id: 1,
-                                   slot: "2026-08-05T14:00:00Z", service: "Colour",
-                                   currency: "EUR", price_cents: 9000, price_eur: "€90",
-                                 }) do |args|
-  # Identity is set via Kiosk::Server::SessionContext SET LOCAL —
-  # current_user_id() helper returns the principal. ActiveRecord doesn't
-  # have direct access; pull from PG.
-  user_id = ActiveRecord::Base.connection.execute(
-    "SELECT kiosk.current_user_id() AS uid"
-  ).first["uid"]
-
-  # ── Input guards (K-692) ─────────────────────────────────────────────────
-  # Validate the inputs with clean 400s instead of letting create! (or the
-  # column's NOT NULL) raise a RecordInvalid/NotNullViolation that surfaces as
-  # an opaque 500. philslist's `post_listing` is the in-repo model and its
-  # reason applies verbatim: the error must name what was wrong, and what the
-  # valid values are, so an assistant that guessed can recover without fetching
-  # the schema first.
-  salon_id = args[:salon_id]
-  raise Kiosk::Server::Errors::BadRequest.new(
-    "missing field: salon_id — pass the `salon_id` from the `salons` query"
-  ) if salon_id.blank?
-  raise Kiosk::Server::Errors::BadRequest.new(
-    "unknown salon_id #{salon_id.inspect} — call the `salons` query for the bookable salons"
-  ) unless Salon.exists?(id: salon_id)
-
-  # `slot` needs a guard philslist has no equivalent for, because ActiveRecord's
-  # timestamp cast does not fail loudly and fails in TWO different directions:
-  # "banana" casts to nil and detonates the column's NOT NULL as a 500, while
-  # "next tuesday" casts to TODAY AT MIDNIGHT and was booked silently — a real
-  # appointment, in the past, that the agent never asked for. Parse it here,
-  # strictly, and say what shape was wanted.
-  raw_slot = args[:slot]
-  raise Kiosk::Server::Errors::BadRequest.new(
-    "missing field: slot — an ISO 8601 timestamp, e.g. \"2026-10-01T14:00:00Z\""
-  ) if raw_slot.blank?
-  slot = begin
-    Time.iso8601(raw_slot.to_s)
-  rescue ArgumentError, TypeError
-    raise Kiosk::Server::Errors::BadRequest.new(
-      "invalid slot #{raw_slot.inspect} — pass an ISO 8601 timestamp, e.g. \"2026-10-01T14:00:00Z\""
-    )
-  end
-
-  # The chosen service (its price is captured at book time — the menu can change
-  # later; the booked price is what the calendar and forecast report).
-  # service_id is OPTIONAL — a bare salon_id booking is legitimate and the
-  # descriptor says so — but a service_id that names NOTHING must not be
-  # silently dropped: that booked an appointment with no service and
-  # price_cents NULL, which the owner's revenue forecast then summed as €0
-  # while the calendar rendered it as an ordinary row. Nothing surfaced it.
-  service = nil
-  unless args[:service_id].nil? || args[:service_id].to_s.strip.empty?
-    service = Service.find_by(id: args[:service_id])
-    raise Kiosk::Server::Errors::BadRequest.new(
-      "unknown service_id #{args[:service_id].inspect} — bookable services: " \
-      "#{Service.order(:id).pluck(:id, :name).map { |id, n| "#{id} (#{n})" }.join(', ')}; " \
-      "or omit service_id for a bare salon booking"
-    ) unless service
-  end
-
-  appointment = Appointment.create!(
-    user_id:     user_id,
-    salon_id:    salon_id,
-    slot:        slot,
-    service_id:  service&.id,
-    price_cents: service&.price_cents,
-  )
-
-  result = {
-    appointment_id: appointment.id,
-    salon_id:       appointment.salon_id,
-    slot:           appointment.slot.iso8601,
-  }
-  if service
-    result.merge!(
-      service:     service.name,
-      currency:    "EUR",
-      price_cents: service.price_cents,
-      price_eur:   service.price_eur,
-    )
-  end
-  result
 end
 
 # ── Live-activity telemetry — opt-in, app-layer, privacy-safe ───

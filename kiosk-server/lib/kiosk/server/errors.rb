@@ -29,10 +29,14 @@ module Kiosk
     # Each subclass declares CODE (the envelope's `error.code`) and
     # HTTP_STATUS; both MUST agree with {CODES}, and the suite asserts it.
     module Errors
-      # `error.code` → canonical HTTP status. The closed vocabulary — the
-      # spec's "Error vocabulary" table plus `payment_failed`, which shipped
-      # additively the way payment_setup_required/kyc_required did. Adding a
-      # code here is a WIRE change: spec first (rule 1).
+      # `error.code` → canonical HTTP status. The closed vocabulary: these
+      # fourteen codes ARE the spec's "Error vocabulary" table — narrative
+      # (specification.html), formal (protocol.md §9) and `error.schema.json`
+      # all carry the same fourteen, `payment_failed` among them since
+      # kiosk.tech a2f4089. Not a superset of the published table and not a
+      # subset of it; the two are the same list, and a schema-validating
+      # client rejects anything else. Adding a code here is a WIRE change:
+      # spec first (rule 1).
       CODES = {
         "bad_request"            => 400,
         "unauthenticated"        => 401,
@@ -268,8 +272,10 @@ module Kiosk
       # payment_setup_required (which means «no card on file yet») and from the
       # PoW 402. The adapter translates its PSP-specific error into a human-safe
       # message BEFORE it reaches here, so no raw PSP internals leak to the wire
-      # (K-545). Additive to the wire contract — mirrors how PaymentSetupRequired
-      # / KycRequired were introduced.
+      # (K-545). In the published error vocabulary since kiosk.tech a2f4089 —
+      # the spec's own table, not an extension of it — and specified there as
+      # the one 402 that is NOT a gate: no `challenges`, and deliberately no
+      # `WWW-Authenticate`, so a client MUST branch on `code`.
       class PaymentFailed < Base
         CODE        = "payment_failed"
         HTTP_STATUS = 402

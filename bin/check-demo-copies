@@ -349,17 +349,64 @@ COPIES = {
           "room_type.",
   },
   "app/models/kyc_verification_request.rb" => {
+    rule: :per_demo,
+    why:  "The pending age/licence verification a demo started at the broker. It was :code — same " \
+          "class, per-demo prose — and it is :per_demo only because the T-057 migration is HALF " \
+          "DONE across its two copies: skooti's has migrated and now carries the query scoping its " \
+          "`kyc_status` handler needs (an `owned_by_current_principal` scope over a frozen " \
+          "`Arel.sql(\"kiosk.current_user_id()\")` literal, plus the status constants that scope's " \
+          "readers name), while getgrocery's identical verb still spells that predicate inline in " \
+          "an initializer SELECT. `except:` cannot say this — with exactly two copies, excepting " \
+          "one leaves nothing compared, which this file rejects. WHEN getgrocery's T-057 slice " \
+          "lands its copy gains the same scope and the two converge: put this entry back to :code " \
+          "then, and delete this paragraph.",
+  },
+  "app/controllers/concerns/kiosk_refusals.rb" => {
     rule: :code,
-    why:  "The pending age/licence verification a demo started at the broker. Per-demo prose only.",
+    why:  "The one place an OperationResult becomes a `render json:, status:` (T-057/K-654). Both " \
+          "halves of a demo's wire surface refuse with the same sentences, so both include it. " \
+          "Per-demo prose only — the code is two renderers, and it MUST stay identical: it is " \
+          "what keeps a migrated demo's refusal envelopes byte-identical to the `Errors::` ones " \
+          "they replace.",
+  },
+  "app/models/settlement.rb" => {
+    rule: :code,
+    why:  "kiosk.settlements — the engine's capture receipt, which the engine ships no reader for. " \
+          "Every demo that gates a verb on \"has this principal actually paid\" needs the same two " \
+          "lines: the association to the cart mandate, and the identity predicate as a scope over " \
+          "a frozen `Arel.sql` literal. Per-demo prose only; the demo-specific half of that gate " \
+          "is in cart_mandate.rb, which is why THAT one is :per_demo and this one is not.",
+  },
+  "app/models/cart_mandate.rb" => {
+    rule: :per_demo,
+    why:  "kiosk.cart_mandates, read for one thing: does a settled cart reference THIS row. The " \
+          "jsonb containment key is the demo's own line-item vocabulary — hoteling asks for " \
+          "`booking_id`, skooti for `reservation_id` — so the scope cannot be shared without " \
+          "one of them asserting the other's field name.",
+  },
+  "app/operations/wire_arguments.rb" => {
+    rule: :per_demo,
+    why:  "The shape guard a demo's verbs open with (T-057/K-654) — same filename, same job, and " \
+          "nothing else in common: the guards ARE the demo's argument vocabulary. hoteling checks " \
+          "integers and an ISO check-in/check-out pair; skooti checks one uuid. Sharing them would " \
+          "mean shipping each demo guards for arguments it does not take.",
   },
   "app/operations/operation_result.rb" => {
     rule: :per_demo,
     why:  "The answer-or-refusal a write Operation returns (T-057/K-654). The seam is the same in " \
-          "both demos, but its STATUSES map is not shared and must not be: the class's own rule is " \
-          "that a code an app never produces has no business having a mapping, so tudu lists the " \
-          "two codes its writes refuse with and hoteling the four its verbs refuse with. Making " \
-          "them agree would mean giving each demo mappings for refusals it cannot make, which is " \
-          "the opposite of what the `fetch` in there is for.",
+          "all three demos, but its STATUSES map is not shared and must not be: the class's own " \
+          "rule is that a code an app never produces has no business having a mapping, so tudu " \
+          "lists the two codes its writes refuse with, hoteling the four its verbs refuse with, " \
+          "and skooti four that are NOT hoteling's four — `kyc_required` instead of `conflict`, " \
+          "and it is the sharpest case for the rule: `kyc_required` and `forbidden` are both 403, " \
+          "so on skooti the code is not derivable from the status at all. Making the three agree " \
+          "would mean giving each demo mappings for refusals it cannot make, which is the opposite " \
+          "of what the `fetch` in there is for. THE THIRD COPY IS EVIDENCE, NOT A VERDICT (K-607): " \
+          "the ~55 lines around STATUSES are now written out three times, which strengthens the " \
+          "\"should this be a gem\" question — and answers it no more than it did at two, because " \
+          "the part that repeats is the part with no decisions in it (ok/refused/status) while the " \
+          "table, which is the only thing an operator must think about, is exactly the part that " \
+          "differs. An extraction would ship the constructor and leave STATUSES per-app.",
   },
 
   # ── db/migrate — output of kiosk-server's install generator ────────────────

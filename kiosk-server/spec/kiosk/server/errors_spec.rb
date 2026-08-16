@@ -152,6 +152,14 @@ RSpec.describe Kiosk::Server::Errors do
       hint = described_class.unknown_name_hint("x", "action", [])
       expect(hint).to eq("unknown action 'x'. No actions are registered. Call GET .../schema for the full catalog.")
     end
+
+    it "pluralises the other half of the vocabulary as English does" do
+      # This branch is reachable ONLY when nothing is registered for the kind,
+      # which until the T-057 pilot hit that state meant nobody had read
+      # "No querys are registered" out loud.
+      hint = described_class.unknown_name_hint("x", "query", [])
+      expect(hint).to eq("unknown query 'x'. No queries are registered. Call GET .../schema for the full catalog.")
+    end
   end
 
   describe "rescue-by-Base contract" do

@@ -82,6 +82,11 @@ module Kiosk
       # truncates with "…". Keeps the error envelope small on a large surface
       # while still naming enough for an assistant to spot a near-miss typo.
       MAX_HINT_NAMES = 20
+      # Plural of each wire-name kind, for the hint below. Only reachable when
+      # NOTHING is registered for that kind, which is why "No querys are
+      # registered" survived to the T-057 pilot: `"#{verb}s"` is wrong for
+      # exactly one of the two words this vocabulary has.
+      HINT_PLURALS = { "query" => "queries", "action" => "actions" }.freeze
 
       # Builds the `hint` for a NotFound raised on an unknown query/action name.
       # Names the available names for that verb so an assistant that mistyped
@@ -100,7 +105,11 @@ module Kiosk
       def self.unknown_name_hint(name, verb, names)
         listed  = names.first(MAX_HINT_NAMES).join(", ")
         listed += ", …" if names.size > MAX_HINT_NAMES
-        available = names.empty? ? "No #{verb}s are registered." : "Available: #{listed}."
+        available = if names.empty?
+                      "No #{HINT_PLURALS.fetch(verb, "#{verb}s")} are registered."
+                    else
+                      "Available: #{listed}."
+                    end
         "unknown #{verb} '#{name}'. #{available} Call GET .../schema for the full catalog."
       end
 

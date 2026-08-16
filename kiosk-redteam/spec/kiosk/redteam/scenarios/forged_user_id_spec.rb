@@ -120,11 +120,24 @@ RSpec.describe Kiosk::Redteam::Scenarios::ForgedUserId do
       expect(scenario.call(client, profile).blocked).to be(true)
     end
 
+    # K-736: a 402 answered nothing at all — the toll fired ahead of the
+    # handler, so neither the outright-rejection branch nor the ownership
+    # check below it learned anything. Say could-not-test and name the code.
     it "does not block when a 402 toll answers instead" do
       stub_forge(402, "error" => { "code" => "pow_required" })
       verdict = scenario.call(client, profile)
       expect(verdict.blocked).to be(false)
-      expect(verdict.detail).to include("want status 401/403")
+      expect(verdict.skipped).to be(false)
+      expect(verdict.detail).to include("COULD NOT TEST")
+      expect(verdict.detail).to include("the forged-user_id reserve call")
+      expect(verdict.detail).to include('"pow_required"')
+    end
+
+    it "does not block when the forge call comes back 402 payment_setup_required" do
+      stub_forge(402, "error" => { "code" => "payment_setup_required" })
+      verdict = scenario.call(client, profile)
+      expect(verdict.blocked).to be(false)
+      expect(verdict.detail).to include('"payment_setup_required"')
     end
   end
 

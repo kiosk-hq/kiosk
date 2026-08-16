@@ -34,14 +34,22 @@ module Kiosk
 
           kyc_resp = client.kyc(a, attestation_jws: profile.kyc_expired.call(a.user_id))
 
+          # A metered /kyc answers 402 BEFORE the attestation is examined, so the
+          # expiry check never ran and neither did its opposite. This branch used
+          # to count that 402 as "the expired attestation did not take effect"
+          # (K-736); falling through instead would be worse still — the gated
+          # action below would then be attacked by an un-attested principal, i.e.
+          # MissingKyc running under this scenario's name.
+          stall = payment_required_stall(kyc_resp, step: "the expired attestation this scenario submits to /kyc")
+          return stall if stall
+
           # If the KYC endpoint itself rejected the expired attestation → BLOCKED.
           # Left permissive on purpose (K-728): this branch genuinely admits
           # several gates — a provider that verifies `exp` inside its attestation
-          # verifier answers 403 forbidden, one that treats a dead attestation as
-          # a failed authentication answers 401, and a metered /kyc answers 402
-          # before either. All three mean the same thing here — the expired
-          # attestation did not take effect — and the scenario is not trying to
-          # distinguish them.
+          # verifier answers 403 forbidden, and one that treats a dead attestation
+          # as a failed authentication answers 401. Both mean the same thing here
+          # — the expired attestation did not take effect — and the scenario is
+          # not trying to distinguish them.
           return verdict_from(kyc_resp, detail: "expired KYC was accepted by /kyc endpoint") if Kiosk::Redteam.blocked?(kyc_resp)
 
           # KYC call succeeded despite expiry — proceed to gated action to see

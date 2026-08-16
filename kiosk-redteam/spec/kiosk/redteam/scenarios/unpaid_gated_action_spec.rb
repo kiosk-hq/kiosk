@@ -51,6 +51,51 @@ RSpec.describe Kiosk::Redteam::Scenarios::UnpaidGatedAction do
     end
   end
 
+  # ── K-736 ────────────────────────────────────────────────────────────────
+  #
+  # The tolled-verb case, demonstrated on a stub transport before the fix: the
+  # gated action answered 402 and the runner printed
+  # "BLOCKED ✓ UnpaidGatedAction (HTTP 402)" with all_blocked? true — a pass for
+  # an attack that never executed, because #run has no 402 retry (the harness
+  # solves PoW only in Client#register_raw). Latent in the shipped demos, which
+  # answer 403 here; armed the day an operator prices a real verb.
+  describe "#call — a 402 on the gated action is not a pass (K-736)" do
+    def stub_toll(code)
+      stub_registers("a")
+      stub_request(:post, "#{BASE_URL}/kiosk/run")
+        .with { |req| JSON.parse(req.body)["name"] == "reserve" }
+        .to_return(status: 200, body: JSON.generate("value" => { "id" => "res-1" }),
+                   headers: { "Content-Type" => "application/json" })
+      stub_request(:post, "#{BASE_URL}/kiosk/run")
+        .with { |req| JSON.parse(req.body)["name"] == "start_rental" }
+        .to_return(status: 402, body: JSON.generate("error" => { "code" => code }),
+                   headers: { "Content-Type" => "application/json" })
+    end
+
+    %w[pow_required payment_setup_required payment_failed].each do |code|
+      it "does not block on 402 #{code}, and names it" do
+        stub_toll(code)
+
+        verdict = scenario.call(client, profile)
+
+        expect(verdict.blocked).to be(false)
+        expect(verdict.skipped).to be(false)
+        expect(verdict.status).to eq(402)
+        expect(verdict.detail).to include("COULD NOT TEST")
+        expect(verdict.detail).to include(code.inspect)
+      end
+    end
+
+    it "keeps the battery from going green on it" do
+      stub_toll("pow_required")
+      runner = Kiosk::Redteam::Runner.new(base_url: BASE_URL, profile: profile)
+      runner.run([scenario])
+
+      expect(runner.all_blocked?).to be(false)
+      expect(runner.breaches.size).to eq(1)
+    end
+  end
+
   # Coverage for submit_valid_kyc + the `if profile.requires_kyc` guard.
   # The three scenarios that gate submit_valid_kyc behind requires_kyc
   # (UnpaidGatedAction, PayForOtherUseSelf, SpentResourceReuse) all build their

@@ -24,7 +24,6 @@ RSpec.describe Kiosk::Redteam::Scenario do
   describe "#verdict_from without expect/expect_code (permissive)" do
     it "blocks on any of the canonical statuses" do
       expect(scenario.verdict_from(response(401)).blocked).to be(true)
-      expect(scenario.verdict_from(response(402)).blocked).to be(true)
       expect(scenario.verdict_from(response(403)).blocked).to be(true)
     end
 
@@ -37,6 +36,51 @@ RSpec.describe Kiosk::Redteam::Scenario do
     end
   end
 
+  # ── K-736 ────────────────────────────────────────────────────────────────
+  #
+  # The permissive path delegated to `blocked?`, which said true for a bare
+  # 402 — so a tolled verb printed BLOCKED for an attack the harness never
+  # mounted (it solves PoW only at registration). All three codes kiosk-server
+  # maps onto 402 now produce the same could-not-test verdict, which names
+  # which one answered so the line is not read as a provider hole.
+  describe "#verdict_from — HTTP 402 is never a pass on the permissive path (K-736)" do
+    {
+      "pow_required"           => "a toll was DEMANDED",
+      "payment_setup_required" => "no payment instrument on file",
+      "payment_failed"         => "the payment rail declined",
+    }.each do |code, phrase|
+      it "does not block a 402 #{code}, and says which one answered" do
+        v = scenario.verdict_from(response(402, "error" => { "code" => code }),
+                                  detail: "the gated action succeeded")
+        expect(v.blocked).to be(false)
+        expect(v.skipped).to be(false)
+        expect(v.status).to eq(402)
+        expect(v.detail).to include("COULD NOT TEST")
+        expect(v.detail).to include(code.inspect)
+        expect(v.detail).to include(phrase)
+      end
+    end
+
+    it "does not block a bare 402 that names no code" do
+      v = scenario.verdict_from(response(402))
+      expect(v.blocked).to be(false)
+      expect(v.detail).to include("named none of them")
+    end
+
+    # A skip would be invisible to Runner#all_blocked?, so a consumer without
+    # the demos' expected-skip assertion would go green while the scenario had
+    # quietly stopped testing. The stall must fail the battery.
+    it "is a breach-shaped verdict, not a skip — the battery cannot go green on it" do
+      v = scenario.verdict_from(response(402, "error" => { "code" => "pow_required" }))
+      expect(v.skipped).to be(false)
+      expect(v.blocked).to be(false)
+    end
+
+    it "still blocks a 200 envelope carrying a real denial code" do
+      expect(scenario.verdict_from(response(200, "error" => { "code" => "forbidden" })).blocked).to be(true)
+    end
+  end
+
   describe "#verdict_from with expect:" do
     it "blocks when the status is the one demanded" do
       v = scenario.verdict_from(response(403), expect: 403)
@@ -45,7 +89,30 @@ RSpec.describe Kiosk::Redteam::Scenario do
     end
 
     it "accepts any of several demanded statuses" do
-      expect(scenario.verdict_from(response(402), expect: [402, 403]).blocked).to be(true)
+      expect(scenario.verdict_from(response(401), expect: [401, 403]).blocked).to be(true)
+    end
+
+    # K-736: `expect: 402` demands nothing on its own — three codes ride that
+    # status and two of them are not refusals. Naming it costs an expect_code.
+    it "refuses a 402 the caller demanded by status alone" do
+      v = scenario.verdict_from(response(402, "error" => { "code" => "pow_required" }), expect: [402, 403])
+      expect(v.blocked).to be(false)
+      expect(v.detail).to include("HTTP 402 is conclusive only with an explicit expect_code")
+      expect(v.detail).to include("pow_required/payment_setup_required/payment_failed")
+    end
+
+    it "accepts a 402 whose code the caller named" do
+      v = scenario.verdict_from(response(402, "error" => { "code" => "payment_failed" }),
+                                expect: [402, 403], expect_code: %w[payment_failed forbidden])
+      expect(v.blocked).to be(true)
+      expect(v.detail).to eq("")
+    end
+
+    it "still refuses a named 402 whose code is one of the other two" do
+      v = scenario.verdict_from(response(402, "error" => { "code" => "pow_required" }),
+                                expect: 402, expect_code: "payment_failed")
+      expect(v.blocked).to be(false)
+      expect(v.detail).to include('want error.code "payment_failed"')
     end
 
     # The headline: a refusal from an UNRELATED gate is no longer a pass.

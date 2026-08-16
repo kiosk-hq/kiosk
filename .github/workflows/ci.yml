@@ -440,36 +440,6 @@ jobs:
       - name: Generate ephemeral signing key
         run: echo "KIOSK_SIGNING_KEY_B64=$(ruby -e 'require %{openssl}; require %{base64}; puts Base64.strict_encode64(OpenSSL::PKey::RSA.new(2048).to_pem)')" >> "$GITHUB_ENV"
 
-      # prove only: the broker's production.rb refuses to boot without its RSA
-      # signing key (PROVE_KEY_PEM, K-673) and validates that it parses as a
-      # private key, so the zeitwerk:check step below needs a real throwaway
-      # keypair — a literal string will not do. Multi-line value, hence the
-      # GITHUB_ENV heredoc form.
-      - name: Generate ephemeral broker signing key (prove, K-673)
-        if: matrix.demo == 'kiosk-demo-prove'
-        run: |
-          {
-            echo "PROVE_KEY_PEM<<PEM_EOF"
-            ruby -e 'require "openssl"; puts OpenSSL::PKey::RSA.new(2048).to_pem'
-            echo "PEM_EOF"
-          } >> "$GITHUB_ENV"
-
-      # skooti only: its production.rb refuses to boot without the Ed25519
-      # rental-token signing key (KIOSK_UNLOCK_SIGNING_KEY_PEM, K-686) and
-      # validates that it parses as an Ed25519 PRIVATE key, so the
-      # zeitwerk:check step below needs a real throwaway keypair — a literal
-      # string will not do. Generated per run rather than pinned in this file:
-      # K-686 is precisely a key that was published by being written down.
-      # Multi-line value, hence the GITHUB_ENV heredoc form.
-      - name: Generate ephemeral unlock signing key (skooti, K-686)
-        if: matrix.demo == 'kiosk-demo-skooti'
-        run: |
-          {
-            echo "KIOSK_UNLOCK_SIGNING_KEY_PEM<<PEM_EOF"
-            ruby -e 'require "openssl"; puts OpenSSL::PKey.generate_key("ED25519").private_to_pem'
-            echo "PEM_EOF"
-          } >> "$GITHUB_ENV"
-
       # getgrocery only: install stripe-mock on PATH and advertise its URL so
       # the real-Stripe-adapter demo runs against canned pi_ fixtures with NO
       # key. demo:setup/demo:schema boot on STRIPE_MOCK_URL; the
@@ -518,16 +488,31 @@ jobs:
       #     dialed here.
       #   PROVE_KEY_PEM — K-673 made the broker's signing key crash-if-absent
       #     in prove's production.rb (prove only; the operator demos ignore
-      #     it). It must PARSE as an RSA private key, so the generate step
-      #     above exports a throwaway keypair instead of a literal here.
+      #     it). It must PARSE as an RSA private key, so a literal will not do:
+      #     the `run:` below mints a throwaway keypair.
       #   KIOSK_UNLOCK_SIGNING_KEY_PEM — K-686 made the Ed25519 rental-token
       #     signing key crash-if-absent in production for the demos that issue
       #     unlock tokens, which is skooti alone (the shared production.rb
       #     keys the requirement off the demo shipping a
       #     config/dev_unlock_key.pem, not off its name, so the other six are
       #     unaffected). It must PARSE as an Ed25519 private key, so the
-      #     skooti-only generate step above exports a throwaway keypair.
+      #     `run:` below mints a throwaway keypair for skooti too.
       # The signing key exported above is likewise already in the environment.
+      #
+      # THE TWO KEYPAIRS ARE MINTED INSIDE THIS STEP, NOT EXPORTED TO THE JOB
+      # (K-756). They were written to $GITHUB_ENV by two steps of their own,
+      # which is job-wide: every LATER step inherited them, including "Run demo
+      # flows". skooti's server then signed rental tokens with the ephemeral
+      # Ed25519 key — its dev/test env files resolve
+      # `ENV.fetch("KIOSK_UNLOCK_SIGNING_KEY_PEM") { config/dev_unlock_key.pem }`
+      # — while the lock simulator the flow drivers provision reads the BAKED
+      # public half straight off that file (lib/dev_unlock_key.rb deliberately
+      # never consults ENV, because its other callers are bare-Ruby drivers).
+      # Signer and verifier drifted apart, every unlock returned false, and
+      # demo:rideflow went red on `happy: unlocked expected true, got false`
+      # for five heads. A variable that exists for ONE step belongs in that
+      # step's `env:`, never in $GITHUB_ENV — the blast radius of the heredoc
+      # form is the whole job, and nothing in the job says so.
       #
       # A missing one of these does NOT silently pass: `bin/rails zeitwerk:check`
       # exits 1 on the initializer's raise and this step has no
@@ -552,7 +537,19 @@ jobs:
           SECRET_KEY_BASE: ci-zeitwerk-check-throwaway-secret-key-base
           KIOSK_POW_SECRET: ci-zeitwerk-check-throwaway-pow-secret-not-a-real-key
           KIOSK_ISSUER: https://ci-zeitwerk-check.example.test
-        run: bin/rails zeitwerk:check
+        run: |
+          # Minted here and exported to `bin/rails` alone: these two live for
+          # the length of this one command. Generated per run rather than
+          # pinned in this file — K-686 is precisely a key that was published
+          # by being written down — and NOT echoed, so the runner log never
+          # carries a private half.
+          if [ "${{ matrix.demo }}" = "kiosk-demo-prove" ]; then
+            export PROVE_KEY_PEM="$(ruby -e 'require "openssl"; puts OpenSSL::PKey::RSA.new(2048).to_pem')"
+          fi
+          if [ "${{ matrix.demo }}" = "kiosk-demo-skooti" ]; then
+            export KIOSK_UNLOCK_SIGNING_KEY_PEM="$(ruby -e 'require "openssl"; puts OpenSSL::PKey.generate_key("ED25519").private_to_pem')"
+          fi
+          bin/rails zeitwerk:check
 
       # The committed db/structure.sql files are PG17-format (they SET
       # transaction_timeout, a v17 param); loading them needs a psql >= 17, and

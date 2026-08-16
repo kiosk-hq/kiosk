@@ -10,7 +10,7 @@ The full host-side surface is shipped and covered by the gem's own suite (500+ p
 - **Wire-protocol controllers** — `WireController` serves the `/kiosk/query`, `/kiosk/run`, `/kiosk/pay`, `/kiosk/schema` verbs; `AuthController` runs the register/login proof-of-possession challenge-response (kiosk-pop — the auth story); JWKS backs stateless token verification.
 - **Account binding** — the claim/link ceremonies bind an agent's public key to an existing assistant-account holder's account: OAuth/RFC 8628-shaped device authorization + possession-proof-gated token poll, a session-authenticated verify page and «Link an assistant» page (minimal overridable engine views), link-code mint/redeem, and unlink. Tokens stay kiosk-pop-minted; the durable `DeviceAuthorizationStores::ActiveRecord` store (migration 008) is the default.
 - **`Kiosk::Server::Executor`** — dispatches resolved commands to the host's registered queries and Actions.
-- **`Kiosk::Query` / `Kiosk::Action`** — the mixins an operator includes into a controller of their own to declare verbs as ordinary Rails actions (see [Declaring queries and actions](#declaring-queries-and-actions)).
+- **`Kiosk::Query` / `Kiosk::Action`** — the mixins an operator includes into a controller of their own to declare verbs as ordinary Rails actions; the engine registers the controllers named in `c.handlers` at boot and after every reload (see [Declaring queries and actions](#declaring-queries-and-actions)).
 - **Agent registration & login** — `AgentRegistration`, `AgentLogin`, `RegistrationPow`, and the pluggable agent-IdP resolve and mint per-agent identities.
 - **PoW gate** — `PowGate` enforces the reputation policy's N×PoW challenge-response (soft dependency on `kiosk-reputation`; zero overhead when no policy is set).
 - **`Kiosk::Server::WellKnown`** — pure-Ruby builder for `/.well-known/kiosk.json`.
@@ -44,6 +44,9 @@ Kiosk.configure do |c|
   c.user_id_type  = :uuid
   c.roles         = %i[customer master support]
   c.owner         = { name: "Acme Inc.", support: "support@acme.example" }
+  # The controllers that declare this origin's verbs — see
+  # "Declaring queries and actions". Without them the origin serves no verbs.
+  c.handlers      = %w[Kiosk::CatalogController Kiosk::OrdersController]
   # c.mount_path  = "/kiosk"   # default
   # c.capabilities = %w[schema query run pay]   # optional override; computed from the registry by default
 end
@@ -170,6 +173,31 @@ class Kiosk::OrdersController < ApplicationController
 end
 ```
 
+Then **name them in the initializer**. That line is what puts the verbs on the
+wire:
+
+```ruby
+# config/initializers/kiosk.rb
+Kiosk.configure do |c|
+  c.handlers = %w[Kiosk::CatalogController Kiosk::OrdersController]
+end
+```
+
+A verb registers when its controller's class body is read, and nothing in your
+app ever references a handler controller — the wire reaches it *through* the
+registry. Name them and the engine takes it from there: it loads and registers
+them once at boot in production, and again after every code reload in
+development, so an edited, added or removed verb lands without restarting the
+server. You never write reload plumbing, and the catalog is identical in every
+environment.
+
+Name the classes as **strings**, not constants: the list is re-resolved on each
+reload, and a constant written here is the boot generation of the class, stale
+the moment Rails reloads it. A name that does not resolve, or a class that
+includes neither mixin, fails the boot loudly rather than serving a silent
+half-catalog. Handlers put in the registry the other way in
+([the initializer API](#the-initializer-still-exists)) need no entry.
+
 
 ### What the macros do
 
@@ -196,11 +224,17 @@ the surface.
 reached only through the wire, which is where authentication, the proof-of-work
 gate and the transaction live; a direct request answers 404.
 
-**Declaration happens when the class is loaded.** Rails eager-loads
-`app/controllers` in production, so the schema catalog is complete at boot. In
-development (`config.eager_load = false`) a handler controller Rails has not
-autoloaded yet is not yet in the catalog; it registers as soon as anything
-touches the class, and handler edits are picked up without a restart.
+**A handler that is not declared is not there at all.** Declaration happens when
+the class body is read. Rails eager-loads `app/controllers` in production, so a
+handler registers at boot whether or not you listed it — but development
+(`config.eager_load = false`) autoloads on first reference, and nothing
+references a handler controller, so an origin that names none of them serves
+**no verbs at all**: `GET <mount>/schema` returns an empty catalog, every
+`query`/`run` answers 404, and `/.well-known/kiosk.json` advertises
+`"capabilities": []` (they are computed from the live registry). `c.handlers` is
+what closes that: the engine registers the listed classes in both load modes and
+rebuilds them on every reload. When neither the list nor the initializer API has
+put anything in the registry, the gem says so on the log at boot.
 
 
 ### What you get inside a handler
@@ -243,8 +277,10 @@ moves cover all of it:
 
 `Kiosk::Server::Queries.register(name) { |args| … }` and its `Actions`
 counterpart are unchanged and keep working — the two ways in share one registry,
-and the executor cannot tell them apart. The bundled demos still register that
-way; they move onto the mixin in a later slice.
+and the executor cannot tell them apart. A registration made this way needs no
+`c.handlers` entry and is never touched by the reload rebuild — it comes from an
+initializer, which runs once. The bundled demos are mid-migration: philslist's
+verbs are controllers, the other six still register here.
 
 
 ## Well-known endpoint (no booted Rails app required)

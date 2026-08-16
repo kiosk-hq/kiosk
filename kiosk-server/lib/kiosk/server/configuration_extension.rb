@@ -29,6 +29,36 @@ module Kiosk
         @enforce_db_role ||= false
       end
 
+      # The handler controllers that declare this origin's wire verbs — the
+      # classes that `include Kiosk::Query` / `include Kiosk::Action`. NAME
+      # them; Kiosk loads and registers them.
+      #
+      #   Kiosk.configure do |c|
+      #     c.handlers = %w[Kiosk::CatalogController Kiosk::OrdersController]
+      #   end
+      #
+      # A verb registers when its class body is read, and development does not
+      # eager-load `app/` — nothing would reference a handler controller,
+      # because the wire reaches it THROUGH the registry. Without this list the
+      # catalog is empty, the first `query`/`run` 404s, and the discovery
+      # documents (whose `capabilities` are computed from the live registry)
+      # advertise nothing. The engine drives the list from a `to_prepare` block
+      # ({HandlerRegistrations}), so registration is complete at boot in every
+      # environment and rebuilt after every reload in development — an edited,
+      # added or REMOVED verb all land without a restart.
+      #
+      # Strings, not constants, are the intended form: the list is re-resolved
+      # by name on each reload, and a Class object handed over here belongs to
+      # the boot generation. A class is accepted and reduced to its name.
+      #
+      # Handlers registered the other way in — `Queries.register(name) { … }`
+      # from an initializer — need no entry here and are never touched by the
+      # rebuild.
+      attr_writer :handlers
+      def handlers
+        @handlers ||= []
+      end
+
       # Capabilities the server advertises in `/.well-known/kiosk.json`.
       #
       # Members are VERB NAMES the endpoint actually serves, drawn from the

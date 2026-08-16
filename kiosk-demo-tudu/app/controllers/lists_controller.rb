@@ -1,8 +1,10 @@
 # frozen_string_literal: true
 
-# The tutorial-plain tudu web UI for a signed-in human. Every action runs
-# through the SAME registered Kiosk queries/actions the agent wire runs (via
-# KioskSessionable), so the human and their assistants share one world:
+# The tutorial-plain tudu web UI for a signed-in human. Every action runs the
+# SAME domain code the agent wire runs, as the signed-in human (via
+# KioskSessionable), so the human and their assistants share one world — reads
+# through the registered Kiosk queries, writes through the Operations the wire
+# handlers call:
 #   index  — the human's lists (owner or member) — my_lists
 #   show   — a list's todos + members + the Invite button — list_todos/list_members
 #   create — a new list (owner) — create_list
@@ -51,10 +53,12 @@ class ListsController < ApplicationController
   end
 
   # The three actions below branch on the wire CODE rather than on an exception
-  # class: since T-057 the handlers are Rails controllers that RENDER their
-  # refusals, so what reaches here is Errors::WireError carrying `code`, never
-  # Errors::Forbidden/BadRequest. Anything else re-raises, so an unexpected
-  # refusal still surfaces instead of being swallowed by a friendly redirect.
+  # class, and anything else re-raises so an unexpected refusal still surfaces
+  # instead of being swallowed by a friendly redirect. The code arrives two ways
+  # and they are the same vocabulary (T-054): a READ still runs through the wire
+  # registry, so its refusal is an Errors::WireError carrying `code`; a WRITE
+  # calls its Operation directly (K-654) and gets an OperationResult carrying
+  # the same string.
   def show
     @list_id = params[:id]
     @todos   = kiosk_query("list_todos",   list_id: @list_id)
@@ -66,22 +70,24 @@ class ListsController < ApplicationController
   end
 
   def create
-    value = kiosk_run("create_list", title: params.require(:title))
-    redirect_to list_path(value["list_id"]), notice: "List created."
-  rescue Kiosk::Server::Errors::Base => e
-    raise unless e.code == "bad_request"
+    title  = params.require(:title)
+    result = kiosk_as_human { |identity| CreateListOperation.call(principal_id: identity.user_id, title: title) }
+    return redirect_to list_path(result.value["list_id"]), notice: "List created." if result.ok?
 
-    redirect_to lists_path, alert: e.message
+    kiosk_refusal!(result) unless result.code == "bad_request"
+    redirect_to lists_path, alert: result.message
   end
 
   def invite
-    value = kiosk_run("invite", list_id: params[:id])
-    redirect_to list_path(params[:id]),
-                notice: "Invite code (share it, expires in #{value['expires_in'] / 60} min): #{value['code']}"
-  rescue Kiosk::Server::Errors::Base => e
-    raise unless e.code == "forbidden"
+    result = kiosk_as_human { |identity| InviteOperation.call(principal_id: identity.user_id, list_id: params[:id]) }
+    if result.ok?
+      return redirect_to list_path(params[:id]),
+                         notice: "Invite code (share it, expires in " \
+                                 "#{result.value['expires_in'] / 60} min): #{result.value['code']}"
+    end
 
-    redirect_to list_path(params[:id]), alert: e.message
+    kiosk_refusal!(result) unless result.code == "forbidden"
+    redirect_to list_path(params[:id]), alert: result.message
   end
 
   private

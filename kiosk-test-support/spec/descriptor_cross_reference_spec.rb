@@ -12,11 +12,18 @@
 # `date`).
 #
 # This lint resolves every such cross-reference against the target verb's own
-# declared params, across all seven demo initializers, so that whole class of
-# drift fails the suite instead of an assistant's first call.
+# declared params, across all seven demos, so that whole class of drift fails
+# the suite instead of an assistant's first call.
 #
-# It reads the initializers as TEXT (no Rails boot, no DB), the same technique
-# as skill_pin_spec.rb. Two cross-reference shapes are recognised:
+# It reads the sources as TEXT (no Rails boot, no DB), the same technique as
+# skill_pin_spec.rb, and a demo declares its verbs in one of TWO places, so both
+# are read and merged: the initializer's `Kiosk::Server::{Queries,Actions}
+# .register(…)` calls, and — since T-053/T-057 — the class-level macros of the
+# handler controllers under `app/controllers/kiosk/`. A migrating demo has some
+# of each, and a cross-reference points across the query/action controller
+# split, so the two lists are ONE list per demo.
+#
+# Two cross-reference shapes are recognised:
 #
 #   A. prose  — "<pass|send|…> <span> to <verb>[ / <verb>]…[ as <tail>]"
 #   B. call   — "<verb>(arg, arg, …)"
@@ -69,19 +76,34 @@ RSpec.describe "demo descriptor cross-references" do
       m = header.match(/(?<![a-z_])#{key}:\s*/)
       return nil unless m
 
-      i = m.end(0)
+      adjacent_strings(header, m.end(0))
+    end
+
+    # Same, for the MACRO spelling a handler controller uses: `description "…"`
+    # on its own line, no colon. Anchored to the start of a line so a
+    # `description:` INSIDE an input_schema property, and the word in a comment,
+    # are both ignored.
+    def macro_string_value(header, key)
+      m = header.match(/^[ \t]*#{key}[ \t]+(?=")/)
+      return nil unless m
+
+      adjacent_strings(header, m.end(0))
+    end
+
+    # One or more adjacent double-quoted literals starting at `i`, joined.
+    def adjacent_strings(text, i)
       parts = []
       loop do
-        i += 1 while i < header.length && (header[i].match?(/\s/) || header[i] == "\\")
-        break unless header[i] == '"'
+        i += 1 while i < text.length && (text[i].match?(/\s/) || text[i] == "\\")
+        break unless text[i] == '"'
 
         i += 1
         buf = +""
-        while i < header.length
-          case header[i]
-          when "\\" then buf << header[i + 1]; i += 2
+        while i < text.length
+          case text[i]
+          when "\\" then buf << text[i + 1]; i += 2
           when '"' then i += 1; break
-          else buf << header[i]; i += 1
+          else buf << text[i]; i += 1
           end
         end
         parts << buf
@@ -184,6 +206,59 @@ RSpec.describe "demo descriptor cross-references" do
           params: declared.uniq }
       end
     end
+
+    # The same, read out of a HANDLER CONTROLLER (T-053 mixin / T-057). There
+    # the descriptor is not a `register(…)` argument list but class-level macros
+    # that the NEXT `def` claims:
+    #
+    #   description "…"
+    #   input_schema type: "object", …, properties: { … }
+    #   def availability
+    #
+    # So a "header" is the macro run immediately above a `def`, and a method
+    # with no macros above it is not a verb — the mixin's own rule, which is
+    # what keeps the private `render_*` refusal helpers out of the catalog.
+    #
+    # The macro run is isolated by cutting at the previous method's `  end`
+    # (two-space `end` at method depth, the convention every handler controller
+    # in this repo follows). If that convention ever breaks, the header grows to
+    # include the previous method's body — harmless for extraction, and the
+    # non-vacuity example below is what would notice a real regression.
+    def controller_verbs(src)
+      out = []
+      offset = 0
+      previous_end = 0
+      while (m = src.match(/^[ \t]*def[ \t]+([a-z_][a-zA-Z0-9_]*)[ \t!?(\n]/, offset))
+        method_name = m[1]
+        region      = src[previous_end...m.begin(0)].to_s
+        # Everything after the previous method's terminator — the macro run.
+        header       = region[/(?:\A|^  end\n)((?:(?!^  end\n).)*)\z/m, 1] || region
+        offset       = m.end(0)
+        previous_end = offset
+
+        description  = macro_string_value(header, "description")
+        schema_props = schema_property_names(header)
+        next if description.nil? && schema_props.empty?
+
+        name = macro_string_value(header, "wire_name") || method_name
+        out << { name: name, description: description.to_s, params: schema_props.uniq }
+      end
+      out
+    end
+
+    # Every verb a demo publishes, whichever way it declares them: the
+    # initializer's surviving `register(…)` calls PLUS every handler controller
+    # under app/controllers/kiosk/. Merged into ONE list per demo because a
+    # cross-reference routinely points across the split — atablefor's
+    # `availability` (a query controller) names `book_table` (an action
+    # controller), which is exactly the K-494 drift this lint exists for.
+    def demo_verbs(demo_dir)
+      initializer = File.join(demo_dir, "config/initializers/kiosk.rb")
+      from_init   = File.exist?(initializer) ? verbs(File.read(initializer)) : []
+      from_ctrls  = Dir[File.join(demo_dir, "app/controllers/kiosk/**/*.rb")].sort
+                       .flat_map { |path| controller_verbs(File.read(path)) }
+      from_init + from_ctrls
+    end
   end
 
   # ── Cross-reference detection ─────────────────────────────────────────────
@@ -279,36 +354,49 @@ RSpec.describe "demo descriptor cross-references" do
   end
 
   monorepo_root = File.expand_path("../..", __dir__) # spec/ -> kiosk-test-support/ -> reference/
-  initializers  = Dir[File.join(monorepo_root, "kiosk-demo-*/config/initializers/kiosk.rb")].sort
+  # …/kiosk-demo-X/config/initializers/kiosk.rb → …/kiosk-demo-X
+  demo_dirs = Dir[File.join(monorepo_root, "kiosk-demo-*/config/initializers/kiosk.rb")]
+              .sort.map { |path| File.expand_path("../../..", path) }
 
-  it "finds the demo initializers" do
-    expect(initializers).not_to be_empty
+  it "finds the demo descriptor sources" do
+    expect(demo_dirs).not_to be_empty
   end
 
   # Non-vacuity guard. The lint is a text matcher; if the descriptors are
-  # reworded into a shape it stops recognising, every per-demo example would go
-  # green while checking NOTHING. Assert it still resolves a substantial body of
-  # real cross-references (17 across the seven demos at the time of writing).
+  # reworded into a shape it stops recognising — or MOVED to a file it does not
+  # read — every per-demo example would go green while checking NOTHING. That is
+  # not hypothetical: T-057 walks the verbs out of the initializers and into
+  # handler controllers one demo at a time, and while this lint read only
+  # initializers, each migrated demo silently dropped to zero. philslist and
+  # stylish went first and this floor absorbed them; atablefor — the very demo
+  # K-494 was FOUND on — was the third, and tripped it. Assert the lint still
+  # resolves a substantial body of real cross-references (17 across the seven
+  # demos, the same total as before the migrations started).
   it "actually resolves cross-references (the lint is not vacuous)" do
-    counts = initializers.to_h do |path|
-      verbs   = DescriptorSource.verbs(File.read(path))
+    counts = demo_dirs.to_h do |dir|
+      verbs   = DescriptorSource.demo_verbs(dir)
       by_name = verbs.to_h { |v| [v[:name], v] }
       known   = verbs.flat_map { |v| v[:params] }.uniq
       total   = verbs.sum { |v| self.class.cross_references(v, by_name, known).size }
-      [path[%r{(kiosk-demo-[^/]+)}, 1], total]
+      [File.basename(dir), total]
     end
 
     expect(counts.values.sum).to be >= 12,
                                 "the lint resolved only #{counts.values.sum} cross-reference(s) " \
                                 "#{counts.inspect} — it has stopped recognising the descriptors' " \
                                 "\"pass X to <verb>\" shape and is no longer checking anything"
+    # …and no demo may go dark on its own: a zero here is the migration-shaped
+    # failure above, seen one demo before it can hide behind the others' total.
+    expect(counts.reject { |_demo, n| n.positive? }.keys).to be_empty,
+                                                            "these demos resolved ZERO cross-references: " \
+                                                            "#{counts.inspect} — their descriptors moved somewhere this lint does not read"
   end
 
-  initializers.each do |path|
-    demo = path[%r{(kiosk-demo-[^/]+)}, 1]
+  demo_dirs.each do |dir|
+    demo = File.basename(dir)
 
     it "#{demo}: every verb description's cross-reference names params the target verb declares" do
-      verbs   = DescriptorSource.verbs(File.read(path))
+      verbs   = DescriptorSource.demo_verbs(dir)
       by_name = verbs.to_h { |v| [v[:name], v] }
       known   = verbs.flat_map { |v| v[:params] }.uniq
 

@@ -64,6 +64,38 @@ module Kiosk
         app.middleware.use Kiosk::Server::HeadersMiddleware
       end
 
+      # THE VERBS ARE REGISTERED BY THE ENGINE, not by the operator — the hole
+      # the T-057 pilot measured (empty catalog, 404 wire, empty capabilities).
+      # `to_prepare` runs once at boot in production and again after every code
+      # reload in development, which is exactly the cadence a registry built
+      # from reloadable classes needs: the operator NAMES their handler
+      # controllers (`c.handlers`) and never writes reload plumbing.
+      # {HandlerRegistrations} rebuilds — drop, then re-register — so a verb
+      # deleted from a controller leaves the catalog and stops being served,
+      # which a re-register-only pass would miss. Runs for every host: with no
+      # handlers declared it is a no-op, and `register`-installed entries are
+      # never touched.
+      config.to_prepare do
+        Kiosk::Server::HandlerRegistrations.reload!
+      end
+
+      # One honest line when this origin has NO verbs at all — the state that
+      # answers `GET <mount>/schema` with an empty catalog and advertises
+      # `"capabilities": []`. Emitted from `after_initialize`, which runs AFTER
+      # eager loading, so a production app whose handlers register by being
+      # eager-loaded is not falsely accused.
+      config.after_initialize do
+        next unless Kiosk.configuration.handlers.empty?
+        next unless Kiosk::Server::Actions.known.empty? && Kiosk::Server::Queries.known.empty?
+
+        message =
+          "[kiosk-server] no queries or actions are registered: GET " \
+          "#{Kiosk.configuration.mount_path}/schema will answer with an empty catalog and the " \
+          "discovery documents will advertise no capabilities. Name your handler controllers " \
+          "in the initializer — Kiosk.configure { |c| c.handlers = %w[Kiosk::CatalogController] }."
+        ::Rails.logger ? ::Rails.logger.warn(message) : warn(message)
+      end
+
       # Root-relative discovery surface. `routes.append` blocks run when the
       # host's route set is FINALIZED — after config/routes.rb has been
       # drawn — so the mount (and any hand-drawn duplicate, which then wins

@@ -100,6 +100,15 @@ module Kiosk
           registry.keys
         end
 
+        # Removes ONE registration, if it is there. The mixin's rebuild
+        # ({HandlerRegistrations}) is the caller: a verb deleted from a handler
+        # controller has to leave the catalog AND stop being served, and
+        # `register` alone can only overwrite. Returns the dropped Entry, or
+        # nil when the name was not registered.
+        def unregister(name)
+          registry.delete(name.to_s)
+        end
+
         def reset!
           @registry = nil
         end

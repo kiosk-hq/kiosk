@@ -76,6 +76,33 @@ RSpec.describe Kiosk::Generators::InstallGenerator do
       expect(body).to include("# c.user_idp")
       expect(body).to include("# c.agent_idp")
     end
+
+    it "emits an active, empty c.handlers slot (K-761 class: a fresh app has no handler " \
+       "controllers yet, so the generator cannot name real classes without breaking boot)" do
+      invoke!
+      body = read("config/initializers/kiosk.rb")
+      expect(body).to include("c.handlers = []")
+    end
+
+    it "does not comment out the c.handlers assignment — a commented line risks being " \
+       "skipped, leaving the origin in the dead-catalog state this line exists to prevent" do
+      invoke!
+      body = read("config/initializers/kiosk.rb")
+      expect(body).not_to match(/^\s*#\s*c\.handlers\s*=\s*\[\]/)
+    end
+
+    it "explains the dead-origin consequence of leaving c.handlers empty" do
+      invoke!
+      body = read("config/initializers/kiosk.rb")
+      expect(body).to include("serves NO verbs")
+      expect(body).to include('"capabilities": []')
+    end
+
+    it "shows the fill-in-later syntax with example handler class names" do
+      invoke!
+      body = read("config/initializers/kiosk.rb")
+      expect(body).to include("c.handlers = %w[Kiosk::CatalogController Kiosk::OrdersController]")
+    end
   end
 
   describe "migrations" do

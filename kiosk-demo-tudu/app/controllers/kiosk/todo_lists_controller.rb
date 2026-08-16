@@ -1,32 +1,27 @@
 # frozen_string_literal: true
 
-# `invite` mints its collaboration code here, so the two libraries that takes
-# are required where they are used rather than in an initializer that no longer
-# holds any handler.
-require "base64"
-require "securerandom"
-
 # tudu's WRITE surface: the six verbs an assistant reaches with
 # `POST /kiosk/run` — the most of any demo. Same shape as
 # Kiosk::HouseholdController — this app's own ApplicationController plus
 # `include Kiosk::Action` — because a controller declares queries OR actions,
 # never both.
 #
+# EVERY ACTION BELOW IS FOUR LINES: read the arguments off the request, hand
+# them to an Operation, render what it answers. That is deliberate and it is
+# what K-654 changed here beyond swapping SQL for ActiveRecord. tudu is the one
+# demo whose HUMAN web UI drives the same writes (app/controllers/lists_ and
+# todos_controller), and while the write logic lived in these methods the only
+# way for the web UI to reach it was to dispatch a synthetic Rack sub-request at
+# this controller. The logic moved to app/operations/, both surfaces call it
+# directly, and what is left here is genuinely a controller's job: params in,
+# `render json:` out.
+#
 # Errors are Rails' idiom end to end: the wire's `error.code` vocabulary is a
 # closed table, not a class hierarchy, so a refusal is an ordinary
 # `render json:, status:` naming the code, and the wire carries it verbatim. No
-# Kiosk error classes appear below — the ten `Errors::BadRequest` /
-# `Errors::Forbidden` raises this file replaces are now the two shared renderers
-# in {KioskMembershipGate} plus three private ones here. The lambda
-# `accept_invite` used to hold — a closure whose only job was to `raise` the same
-# 403 from four places inside a transaction — is one of those three, and reads as
-# an ordinary guard clause now that a handler is a method with a `return`.
-#
-# The membership guard every verb but `create_list` and `accept_invite` opens
-# with is {KioskMembershipGate}, shared with the query half: tudu is the demo
-# where the guard is needed on BOTH sides of the query/action split, so the
-# access decision is a model predicate (`Membership.reachable?`) and the refusal
-# is a concern. See the note on either one for why the seam runs there.
+# Kiosk error classes appear below — an Operation answers with an
+# {OperationResult}, and {KioskMembershipGate#render_operation} is the one place
+# that becomes a status.
 #
 # tudu advertises NO `pay` verb and configures no payment provider, so nothing
 # here means a 402: the wire's three payment/PoW codes share that status and
@@ -56,28 +51,9 @@ class Kiosk::TodoListsController < ApplicationController
   example_params({ title: "Hike" })
   example_row({ list_id: "d4e5f6a7-8b9c-4d0e-9f1a-2b3c4d5e6f70" })
   def create_list
-    conn       = ActiveRecord::Base.connection
-    account_id = kiosk_identity.user_id
-    return render_bad_request("title required") if params[:title].to_s.strip.empty?
-
-    # This `transaction` JOINS the one Kiosk::Server::SessionContext already
-    # opened around the whole wire request (the GUCs are SET LOCAL in it), so it
-    # opens no second transaction — but the list and its owner membership still
-    # land together or not at all, which is the invariant it is written for.
-    list_id = conn.transaction do
-      id = conn.select_value(<<~SQL)
-        INSERT INTO lists (account_id, title, created_at, updated_at)
-        VALUES (#{conn.quote(account_id)}::uuid, #{conn.quote(params[:title].to_s)}, now(), now())
-        RETURNING id
-      SQL
-      conn.execute(<<~SQL)
-        INSERT INTO memberships (list_id, account_id, role, created_at)
-        VALUES (#{conn.quote(id)}::uuid, #{conn.quote(account_id)}::uuid, 'owner', now())
-      SQL
-      id
-    end
-
-    render json: { list_id: list_id }
+    render_operation CreateListOperation.call(
+      principal_id: kiosk_identity.user_id, title: params[:title],
+    )
   end
 
   # add_todo(list_id, title) — membership-gated; records the acting agent as
@@ -95,24 +71,14 @@ class Kiosk::TodoListsController < ApplicationController
                },
                required: ["list_id", "title"]
   def add_todo
-    return unless kiosk_membership_gate(params[:list_id])
-    return render_bad_request("title required") if params[:title].to_s.strip.empty?
-
-    conn      = ActiveRecord::Base.connection
-    agent_id  = kiosk_identity.agent_id
-    agent_sql = agent_id.nil? ? "NULL" : conn.quote(agent_id)
-    todo_id = conn.select_value(<<~SQL)
-      INSERT INTO todos (list_id, title, done, created_by_agent_id, created_at, updated_at)
-      VALUES (#{conn.quote(params[:list_id].to_s)}::uuid, #{conn.quote(params[:title].to_s)},
-              false, #{agent_sql}, now(), now())
-      RETURNING id
-    SQL
-
-    render json: { todo_id: todo_id }
+    render_operation AddTodoOperation.call(
+      agent_id: kiosk_identity.agent_id, list_id: params[:list_id], title: params[:title],
+    )
   end
 
-  # complete_todo(todo_id) — membership-gated via the todo's list. UPDATE …
-  # WHERE EXISTS(membership); zero rows → 403 (probing can't enumerate ids).
+  # complete_todo(todo_id) — membership-gated via the todo's list. One UPDATE
+  # scoped to the caller's memberships; zero rows → 403 (probing can't
+  # enumerate ids).
   description "Mark a todo done. Allowed only if the caller is a member of the " \
               "todo's list; otherwise forbidden (403). Returns { todo_id, done }."
   input_schema type: "object",
@@ -123,36 +89,7 @@ class Kiosk::TodoListsController < ApplicationController
                },
                required: ["todo_id"]
   def complete_todo
-    # K-581/K-582: complete_todo takes no list_id, so it never passes through
-    # the membership gate — this is the one wire-supplied id in tudu with no
-    # other guard in front of its `::uuid` cast. Malformed → 400, not a raw 500.
-    unless UuidCheck.valid?(params[:todo_id])
-      return render_bad_request(
-        "todo_id #{params[:todo_id].to_s.inspect} is not a uuid",
-        hint: "Pass a `todo_id` from list_todos, verbatim.",
-      )
-    end
-
-    conn = ActiveRecord::Base.connection
-    rows = conn.execute(<<~SQL)
-      UPDATE todos SET done = true, updated_at = now()
-      WHERE id = #{conn.quote(params[:todo_id].to_s)}::uuid
-        AND EXISTS (
-          SELECT 1 FROM memberships
-          WHERE memberships.list_id = todos.list_id
-            AND memberships.account_id = kiosk.current_user_id()
-        )
-      RETURNING id
-    SQL
-
-    if rows.ntuples.zero?
-      return render_forbidden(
-        "todo not on a list the authenticated principal is a member of",
-        hint: "You may only complete todos on lists you are a member of.",
-      )
-    end
-
-    render json: { todo_id: params[:todo_id], done: true }
+    render_operation CompleteTodoOperation.call(todo_id: params[:todo_id])
   end
 
   # invite(list_id) — OWNER-ONLY. Mint a single-use, TTL'd (10 min) collaboration
@@ -173,21 +110,9 @@ class Kiosk::TodoListsController < ApplicationController
                },
                required: ["list_id"]
   def invite
-    return unless kiosk_membership_gate(params[:list_id], require_owner: true)
-
-    conn = ActiveRecord::Base.connection
-    # A device_code-grade secret: 256 bits of entropy, base64url. Only the digest
-    # is persisted (the kiosk-server LinkCode hygiene, adapted to the domain).
-    code   = Base64.urlsafe_encode64(SecureRandom.random_bytes(32), padding: false)
-    digest = Invite.digest(code)
-    ttl    = 600 # seconds (10 minutes)
-    conn.execute(<<~SQL)
-      INSERT INTO invites (list_id, code_digest, created_by_account_id, expires_at, created_at)
-      VALUES (#{conn.quote(params[:list_id].to_s)}::uuid, #{conn.quote(digest)},
-              #{conn.quote(kiosk_identity.user_id)}::uuid, now() + interval '#{ttl} seconds', now())
-    SQL
-
-    render json: { code: code, expires_in: ttl }
+    render_operation InviteOperation.call(
+      principal_id: kiosk_identity.user_id, list_id: params[:list_id],
+    )
   end
 
   # accept_invite(code) — look up by digest; reject foreign/expired/redeemed (403);
@@ -204,50 +129,9 @@ class Kiosk::TodoListsController < ApplicationController
                },
                required: ["code"]
   def accept_invite
-    code = params[:code].to_s
-    # Every refusal below is the SAME sentence on purpose — unknown, expired,
-    # already-redeemed and someone-else's are one answer, so a caller holding a
-    # bad code learns nothing about which codes exist.
-    return render_invite_refused if code.empty?
-
-    conn   = ActiveRecord::Base.connection
-    digest = Invite.digest(code)
-
-    # Joins the wire request's SessionContext transaction (see create_list), so
-    # each `return` below is an ordinary method return, not a non-local exit
-    # from a real transaction block.
-    conn.transaction do
-      row = conn.execute(<<~SQL).first
-        SELECT id, list_id, expires_at, redeemed_at
-          FROM invites
-         WHERE code_digest = #{conn.quote(digest)}
-         FOR UPDATE
-      SQL
-      return render_invite_refused if row.nil?
-      return render_invite_refused unless row["redeemed_at"].nil?
-
-      expired = conn.select_value(
-        "SELECT #{conn.quote(row['expires_at'])}::timestamptz < now()",
-      )
-      return render_invite_refused if expired == true || expired == "t"
-
-      account = kiosk_identity.user_id
-      list_id = row["list_id"]
-      # Idempotent membership: UNIQUE(list_id, account_id) — if the caller is
-      # already a member (e.g. the owner redeeming their own code), do nothing.
-      conn.execute(<<~SQL)
-        INSERT INTO memberships (list_id, account_id, role, created_at)
-        VALUES (#{conn.quote(list_id)}::uuid, #{conn.quote(account)}::uuid, 'member', now())
-        ON CONFLICT (list_id, account_id) DO NOTHING
-      SQL
-      conn.execute(<<~SQL)
-        UPDATE invites
-           SET redeemed_at = now(), redeemed_by_account_id = #{conn.quote(account)}::uuid
-         WHERE id = #{conn.quote(row['id'])}::uuid
-      SQL
-
-      render json: { list_id: list_id, joined: true }
-    end
+    render_operation AcceptInviteOperation.call(
+      principal_id: kiosk_identity.user_id, code: params[:code],
+    )
   end
 
   # remove_member(list_id, account_id) — OWNER-ONLY. DELETE the target's
@@ -268,60 +152,8 @@ class Kiosk::TodoListsController < ApplicationController
                },
                required: ["list_id", "account_id"]
   def remove_member
-    return unless kiosk_membership_gate(params[:list_id], require_owner: true)
-
-    target  = params[:account_id].to_s
-    list_id = params[:list_id].to_s
-    # K-581/K-582: `list_id` was already shape-checked by the membership gate
-    # above; `account_id` is a SECOND wire-supplied id, cast `::uuid` in the
-    # last-owner probe and the DELETE. Malformed → 400, not a raw 500.
-    unless UuidCheck.valid?(target)
-      return render_bad_request(
-        "account_id #{target.inspect} is not a uuid",
-        hint: "Pass an `account_id` from list_members, verbatim.",
-      )
-    end
-
-    conn = ActiveRecord::Base.connection
-    # Guard: never remove the list's LAST owner (would orphan the list). Refuse
-    # when the target is an owner AND is the only owner remaining.
-    removing_last_owner = conn.select_value(<<~SQL)
-      SELECT
-        EXISTS (SELECT 1 FROM memberships
-                  WHERE list_id = #{conn.quote(list_id)}::uuid
-                    AND account_id = #{conn.quote(target)}::uuid
-                    AND role = 'owner')
-        AND (SELECT count(*) FROM memberships
-               WHERE list_id = #{conn.quote(list_id)}::uuid
-                 AND role = 'owner') <= 1
-    SQL
-    if removing_last_owner == true || removing_last_owner == "t"
-      return render_forbidden("cannot remove the list's last owner",
-                              hint: "A list must keep at least one owner.")
-    end
-
-    rows = conn.execute(<<~SQL)
-      DELETE FROM memberships
-      WHERE list_id = #{conn.quote(list_id)}::uuid
-        AND account_id = #{conn.quote(target)}::uuid
-      RETURNING id
-    SQL
-
-    if rows.ntuples.zero?
-      return render_forbidden("no such membership on this list",
-                              hint: "The account is not a member of this list.")
-    end
-
-    render json: { removed: true }
-  end
-
-  private
-
-  # The one refusal this controller adds to the two {KioskMembershipGate}
-  # shares. `accept_invite` reaches it from four places and every one of them
-  # must say the SAME thing — see the note at the call sites.
-  def render_invite_refused
-    render_forbidden("invite code is invalid, expired, or already used",
-                     hint: "Ask the list owner for a fresh code.")
+    render_operation RemoveMemberOperation.call(
+      list_id: params[:list_id], account_id: params[:account_id],
+    )
   end
 end

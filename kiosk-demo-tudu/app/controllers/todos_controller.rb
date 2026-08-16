@@ -1,31 +1,34 @@
 # frozen_string_literal: true
 
-# Add + complete todos from the web UI, through the same registered actions the
-# agent wire uses. Membership is enforced by the action (403 → redirect).
+# Add + complete todos from the web UI, through the same Operations the agent
+# wire's handlers call (K-654). Membership is enforced inside the Operation, so
+# the human and the assistant meet the identical refusal; here it becomes a
+# flash instead of a 403 body.
 #
-# Both actions branch on the wire CODE, not on an exception class — since T-057
-# the handlers render their refusals, so a refusal arrives as Errors::WireError
-# carrying `code`. See ListsController for the same note at length.
+# Both actions branch on the wire CODE, not on an exception class — see
+# ListsController for the same note at length. A code neither action knows how
+# to show re-raises through {KioskSessionable#kiosk_refusal!}.
 class TodosController < ApplicationController
   include KioskSessionable
 
   before_action :authenticate_user!
 
   def create
-    kiosk_run("add_todo", list_id: params[:list_id], title: params.require(:title))
-    redirect_to list_path(params[:list_id]), notice: "Todo added."
-  rescue Kiosk::Server::Errors::Base => e
-    raise unless %w[bad_request forbidden].include?(e.code)
+    title  = params.require(:title)
+    result = kiosk_as_human do |identity|
+      AddTodoOperation.call(agent_id: identity.agent_id, list_id: params[:list_id], title: title)
+    end
+    return redirect_to list_path(params[:list_id]), notice: "Todo added." if result.ok?
 
-    redirect_to list_path(params[:list_id]), alert: e.message
+    kiosk_refusal!(result) unless %w[bad_request forbidden].include?(result.code)
+    redirect_to list_path(params[:list_id]), alert: result.message
   end
 
   def complete
-    kiosk_run("complete_todo", todo_id: params[:id])
-    redirect_to list_path(params[:list_id]), notice: "Todo completed."
-  rescue Kiosk::Server::Errors::Base => e
-    raise unless e.code == "forbidden"
+    result = kiosk_as_human { CompleteTodoOperation.call(todo_id: params[:id]) }
+    return redirect_to list_path(params[:list_id]), notice: "Todo completed." if result.ok?
 
-    redirect_to list_path(params[:list_id]), alert: e.message
+    kiosk_refusal!(result) unless result.code == "forbidden"
+    redirect_to list_path(params[:list_id]), alert: result.message
   end
 end

@@ -3,10 +3,11 @@
 # A todo list. `account_id` is the OWNER account (users.id) — but access is NOT
 # owner-scoped: a list is reachable by every account with a `memberships` row for
 # it. The owner is just the member whose role is 'owner' (invite/remove_member
-# authority). The load-bearing isolation predicate is `Membership.reachable?`:
-# `EXISTS (SELECT 1 FROM memberships WHERE list_id = :id AND account_id =
-# kiosk.current_user_id())`, called by every list-scoped verb through
-# KioskMembershipGate.
+# authority). The load-bearing isolation predicate is `Membership.reachable?` —
+# a `memberships` row for this list whose `account_id` is
+# `kiosk.current_user_id()` — reached by every list-scoped verb through
+# {ListAccess}: the write half's Operations consult it directly, the read half's
+# handlers through {KioskMembershipGate}.
 class List < ApplicationRecord
   belongs_to :account, class_name: "User", foreign_key: :account_id, inverse_of: :lists
   has_many :memberships, dependent: :destroy

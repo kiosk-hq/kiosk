@@ -47,14 +47,10 @@ class Kiosk::HouseholdController < ApplicationController
   # assistant has to interpret.
   input_schema type: "object", additionalProperties: false, properties: {}, required: []
   def whoami
-    conn       = ActiveRecord::Base.connection
     account_id = kiosk_identity.user_id
-    handle     = conn.select_value(
-      "SELECT email FROM users WHERE id = #{conn.quote(account_id.to_s)}::uuid",
-    )
     render json: [{ "account_id" => account_id,
                     "agent_id"   => kiosk_identity.agent_id,
-                    "handle"     => handle }]
+                    "handle"     => User.where(id: account_id).pick(:email) }]
   end
 
   # my_lists — the lists the caller is a MEMBER of (owner OR member), via the
@@ -75,14 +71,19 @@ class Kiosk::HouseholdController < ApplicationController
   example_row({
     list_id: "d4e5f6a7-8b9c-4d0e-9f1a-2b3c4d5e6f70", title: "Flat 3B", role: "owner",
   })
+  # The membership predicate is `Membership.of_current_principal` — a scope, not
+  # a Ruby comparison; see the long note on it for why that one fragment stays
+  # SQL. The column ALIASES the old `SELECT` carried (`l.id AS list_id`) become
+  # an explicit `map`: `pluck` returns bare tuples, so the published row shape is
+  # written out here rather than being a side effect of how the SELECT was
+  # spelled. The two orderings are unchanged, tiebreaker included — `l.id` is
+  # what keeps two lists created in the same microsecond from swapping places
+  # between runs.
   def my_lists
-    render json: ActiveRecord::Base.connection.execute(<<~SQL).to_a
-      SELECT l.id AS list_id, l.title, m.role
-        FROM lists l
-        JOIN memberships m ON m.list_id = l.id
-       WHERE m.account_id = kiosk.current_user_id()
-       ORDER BY l.created_at DESC, l.id
-    SQL
+    render json: List.joins(:memberships).merge(Membership.of_current_principal)
+                     .order(created_at: :desc, id: :asc)
+                     .pluck(:id, :title, Membership.arel_table[:role])
+                     .map { |id, title, role| { "list_id" => id, "title" => title, "role" => role } }
   end
 
   # list_todos(list_id) — membership-gated: 403 unless the caller is a member.
@@ -101,13 +102,12 @@ class Kiosk::HouseholdController < ApplicationController
   def list_todos
     return unless kiosk_membership_gate(params[:list_id])
 
-    conn = ActiveRecord::Base.connection
-    render json: conn.execute(<<~SQL).to_a
-      SELECT id AS todo_id, title, done, created_by_agent_id
-        FROM todos
-       WHERE list_id = #{conn.quote(params[:list_id].to_s)}::uuid
-       ORDER BY created_at, id
-    SQL
+    render json: Todo.where(list_id: params[:list_id]).order(:created_at, :id)
+                     .pluck(:id, :title, :done, :created_by_agent_id)
+                     .map { |id, title, done, agent_id|
+                       { "todo_id" => id, "title" => title,
+                         "done" => done, "created_by_agent_id" => agent_id }
+                     }
   end
 
   # list_members(list_id) — membership-gated; returns the members + roles so a
@@ -126,13 +126,11 @@ class Kiosk::HouseholdController < ApplicationController
   def list_members
     return unless kiosk_membership_gate(params[:list_id])
 
-    conn = ActiveRecord::Base.connection
-    render json: conn.execute(<<~SQL).to_a
-      SELECT m.account_id, u.email AS handle, m.role
-        FROM memberships m
-        JOIN users u ON u.id = m.account_id
-       WHERE m.list_id = #{conn.quote(params[:list_id].to_s)}::uuid
-       ORDER BY m.role DESC, m.created_at
-    SQL
+    render json: Membership.where(list_id: params[:list_id]).joins(:account)
+                           .order(role: :desc, created_at: :asc)
+                           .pluck(:account_id, User.arel_table[:email], :role)
+                           .map { |account_id, handle, role|
+                             { "account_id" => account_id, "handle" => handle, "role" => role }
+                           }
   end
 end

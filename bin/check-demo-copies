@@ -352,6 +352,15 @@ COPIES = {
     rule: :code,
     why:  "The pending age/licence verification a demo started at the broker. Per-demo prose only.",
   },
+  "app/operations/operation_result.rb" => {
+    rule: :per_demo,
+    why:  "The answer-or-refusal a write Operation returns (T-057/K-654). The seam is the same in " \
+          "both demos, but its STATUSES map is not shared and must not be: the class's own rule is " \
+          "that a code an app never produces has no business having a mapping, so tudu lists the " \
+          "two codes its writes refuse with and hoteling the four its verbs refuse with. Making " \
+          "them agree would mean giving each demo mappings for refusals it cannot make, which is " \
+          "the opposite of what the `fetch` in there is for.",
+  },
 
   # ── db/migrate — output of kiosk-server's install generator ────────────────
   #

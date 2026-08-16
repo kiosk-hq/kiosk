@@ -679,6 +679,42 @@ jobs:
       - name: Every gem ships the files its own code reaches for
         run: ./bin/check-gem-packaging
 
+  # protocol.md §14.1 is normative and says the protocol, this implementation
+  # and the AI assistant skill share their MAJOR.MINOR version. It was false
+  # about the implementation on every request for months (K-748): the protocol
+  # was 0.3.0 and the skill 0.3.11 while thirteen gems were 0.0.1 and
+  # kiosk-pow-equihash 0.1.0 — and kiosk-server emits the gem version, so one
+  # response carried `Kiosk-API-Version: 0.3.0` next to
+  # `Kiosk-Server-Version: 0.0.1`. Nothing was red, and nothing could be: the
+  # version is an input to no assertion in this repo, the specs that touch it
+  # match /\A\d+\.\d+\.\d+\z/ or compare the constant against itself. Phil's
+  # answer was to honour the rule and stop it being prose, so this job is the
+  # rule: every gemspec's version, every `~> ` constraint between our own gems,
+  # and every pinned skill_url must share MAJOR.MINOR with
+  # Kiosk::Protocol::API_VERSION. PATCH is deliberately NOT compared — a
+  # per-gem patch release is legitimate and §14.1 binds MAJOR.MINOR only.
+  #
+  # Its own job, alongside the three checks above, for the same reason they are
+  # separate: one invariant, one exit code, one name in the checks list. Stdlib
+  # Ruby only: no bundle, no services, no database, no network, ~0.1 s.
+  version-parity:
+    name: version parity (bin/check-version-parity)
+    runs-on: ubuntu-latest
+    # The daily schedule exists for solver-pin-live; don't rebuild the world.
+    if: github.event_name != 'schedule'
+
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Set up Ruby
+        uses: ruby/setup-ruby@v1
+        with:
+          ruby-version: "4.0.1"
+          bundler-cache: false
+
+      - name: Gems, constraints and the skill pin share the protocol's MAJOR.MINOR
+        run: ./bin/check-version-parity
+
   # Production-boot smoke — the guard for the prod-only bug class that the
   # dev-mode gems/demos/e2e jobs are all blind to. Three shipped bugs (K-422
   # eager-load Zeitwerk crash, K-436 missing governance columns → manage-page

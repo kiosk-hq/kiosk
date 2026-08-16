@@ -18,6 +18,23 @@ Kiosk.configure do |c|
   # Column on `users` that holds the principal id. Default :id.
   c.user_id_column = :id
 
+  # ─── Handler controllers ─────────────────────────────────────────────
+  # The controllers that declare this origin's wire verbs — classes that
+  # `include Kiosk::Query` / `include Kiosk::Action`. NAME them here; the
+  # engine loads and registers them once at boot and again after every
+  # reload in development.
+  #
+  # Empty because this generator runs before you have written any. Leave it
+  # empty and this origin serves NO verbs: a handler registers when its
+  # class body is read, nothing in your app ever references one on its own
+  # (the wire reaches it THROUGH the registry), so GET <mount>/schema
+  # answers with an empty catalog, every query/run answers 404, and
+  # /.well-known/kiosk.json advertises "capabilities": []. Fill this in as
+  # you add handler controllers — see "Declaring queries and actions" in
+  # the kiosk-server README, e.g.:
+  #   c.handlers = %w[Kiosk::CatalogController Kiosk::OrdersController]
+  c.handlers = []
+
   # ─── Postgres surface ────────────────────────────────────────────────
   # GUC namespace used in SET LOCAL statements (and RLS policies, if you
   # opt in). Default "app" — change if your backend already uses app.*.

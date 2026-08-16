@@ -20,9 +20,10 @@ class Kiosk::BoardController < ApplicationController
   # browse_listings — the OPEN board. Any authenticated principal sees ALL
   # matching listings across ALL owners (no owner_id filter). Optional
   # category_slug + keyword filters; status clamps to open|closed (defaults
-  # open). All caller input is passed through conn.quote (parameterized ILIKE on
-  # title/body) — no raw interpolation (raw-pipe hygiene, the sibling-demo
-  # quoting pattern).
+  # open). No caller value is ever spliced into SQL: the filters are ordinary
+  # ActiveRecord conditions and the keyword search is an Arel `matches` (which
+  # is Postgres ILIKE), so the escaping is the adapter's job, not the handler's
+  # (K-654).
   description "Browse the public classifieds board across all sellers. Optional " \
               "category_slug and keyword filters; status defaults to open. All " \
               "filters are optional and AND together; each row carries a " \
@@ -49,33 +50,37 @@ class Kiosk::BoardController < ApplicationController
     owner_handle: "alice@example.com",
   })
   def browse_listings
-    conn = ActiveRecord::Base.connection
-
     status = params[:status].to_s
     status = "open" unless Listing::STATUSES.include?(status)
 
-    sql = +<<~SQL
-      SELECT l.id AS listing_id, l.title, l.body, l.price_text, c.slug AS category_slug,
-             l.status, u.email AS owner_handle
-        FROM listings l
-        JOIN categories c ON c.id = l.category_id
-        JOIN users u ON u.id = l.owner_id
-       WHERE l.status = #{conn.quote(status)}
-    SQL
-
-    sql << " AND c.slug = #{conn.quote(params[:category_slug].to_s)}" if params[:category_slug].present?
+    board = Listing.joins(:category, :owner)
+                   .where(status: status)
+                   .order(created_at: :desc, id: :asc)
+    board = board.where(categories: { slug: params[:category_slug].to_s }) if params[:category_slug].present?
     if params[:keyword].present?
-      like = conn.quote("%#{params[:keyword]}%")
-      sql << " AND (l.title ILIKE #{like} OR l.body ILIKE #{like})"
+      pattern = "%#{params[:keyword]}%"
+      board = board.where(
+        Listing.arel_table[:title].matches(pattern).or(Listing.arel_table[:body].matches(pattern)),
+      )
     end
-    sql << " ORDER BY l.created_at DESC, l.id"
 
-    render json: conn.execute(sql).to_a
+    # `pluck` rather than loading models: this is a projection, and naming the
+    # columns is what keeps the wire's field names and their order a decision
+    # this handler makes rather than a side effect of the schema. One query, no
+    # N+1 — the joins above already carry the category slug and the owner handle.
+    render json: board.pluck(
+      "listings.id", "listings.title", "listings.body", "listings.price_text",
+      "categories.slug", "listings.status", "users.email",
+    ).map { |id, title, body, price_text, category_slug, row_status, owner_handle|
+      { listing_id: id, title: title, body: body, price_text: price_text,
+        category_slug: category_slug, status: row_status, owner_handle: owner_handle }
+    }
   end
 
   # my_listings — per-identity: the caller's OWN listings only. Caller supplies
-  # no filter; the WHERE is provider-controlled and un-bypassable (the saas
-  # my_appointments pattern).
+  # no filter; the scope is provider-controlled and un-bypassable (the saas
+  # my_appointments pattern). `owned_by_current_principal` is the ONE place the
+  # identity predicate is written — see Listing for why it stays SQL-side.
   description "List the listings owned by the authenticated principal " \
               "(scoped to kiosk.current_user_id())."
   # A verb that takes nothing still declares the empty closed object, so "this
@@ -83,11 +88,14 @@ class Kiosk::BoardController < ApplicationController
   # assistant has to interpret.
   input_schema type: "object", additionalProperties: false, properties: {}, required: []
   def my_listings
-    render json: ActiveRecord::Base.connection.execute(
-      "SELECT l.id AS listing_id, l.title, l.price_text, l.status, c.slug AS category_slug " \
-      "FROM listings l JOIN categories c ON c.id = l.category_id " \
-      "WHERE l.owner_id = kiosk.current_user_id() " \
-      "ORDER BY l.created_at DESC, l.id",
-    ).to_a
+    render json: Listing.owned_by_current_principal
+                        .joins(:category)
+                        .order(created_at: :desc, id: :asc)
+                        .pluck("listings.id", "listings.title", "listings.price_text",
+                               "listings.status", "categories.slug")
+                        .map { |id, title, price_text, row_status, category_slug|
+                          { listing_id: id, title: title, price_text: price_text,
+                            status: row_status, category_slug: category_slug }
+                        }
   end
 end

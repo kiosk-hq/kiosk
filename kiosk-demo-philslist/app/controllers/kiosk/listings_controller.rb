@@ -18,6 +18,15 @@ class Kiosk::ListingsController < ApplicationController
   # agent-supplied owner_id in params is IGNORED (the forged-principal beat):
   # owner_id is read from the identity the wire resolved. created_by_agent_id
   # records the acting agent from the token (attribution).
+  #
+  # The one asymmetry worth naming: edit/close scope with
+  # `Listing.owned_by_current_principal`, which never names the principal in
+  # Ruby, while an INSERT has no predicate to hide it in and must supply the
+  # value. Both are un-forgeable for the same reason — `kiosk_identity` is read
+  # from the Rack env the wire built, which no request argument can write — but
+  # only the first keeps the DB as the authority. Moving the column's DEFAULT to
+  # `kiosk.current_user_id()` would close the gap; that is a migration, so it is
+  # not part of the K-654 handler conversion.
   description "Post a new classifieds listing owned by the authenticated principal. " \
               "price_text is free-form display text (e.g. \"€300\" or \"Free\"), not a " \
               "cents amount. Any owner_id passed in args is ignored — the listing is " \
@@ -70,9 +79,11 @@ class Kiosk::ListingsController < ApplicationController
     render json: { listing_id: listing.id, status: listing.status }
   end
 
-  # edit_listing — OWNER-ONLY. UPDATE … WHERE id AND owner_id =
-  # kiosk.current_user_id(); zero rows affected → 403 (answer forbidden, not
-  # not-found, so cross-owner probing can't enumerate which ids exist).
+  # edit_listing — OWNER-ONLY. The UPDATE is scoped by
+  # `Listing.owned_by_current_principal`, i.e. Postgres still evaluates
+  # `owner_id = kiosk.current_user_id()` against the transaction GUC; zero rows
+  # affected → 403 (answer forbidden, not not-found, so cross-owner probing
+  # can't enumerate which ids exist).
   description "Edit one of the authenticated principal's own listings " \
               "(owner-only; editing another owner's listing is forbidden)."
   input_schema type: "object",
@@ -87,29 +98,38 @@ class Kiosk::ListingsController < ApplicationController
                },
                required: ["listing_id"]
   def edit_listing
-    # K-581/K-582: `listing_id` arrives from the wire and is cast `::uuid` below.
-    # A malformed one made Postgres raise InvalidTextRepresentation, which is not a
-    # Kiosk error and so surfaced as a raw 500 (leaking "invalid input syntax for
-    # type uuid") for what is plainly a client mistake. Shape first, then the
-    # owner-scoped UPDATE — a well-formed but foreign id still gets the 403, so
-    # the shape check never softens the ownership answer.
+    # K-581/K-582, and the guard got MORE load-bearing when the SQL became
+    # ActiveRecord (K-654). It was written because a malformed `listing_id` cast
+    # `::uuid` made Postgres raise InvalidTextRepresentation, which is not a
+    # Kiosk error and so escaped as a raw 500 leaking "invalid input syntax for
+    # type uuid". `where(id:)` does not raise on junk — ActiveRecord's uuid type
+    # quietly casts an unparseable value to NULL, which would match no row and
+    # answer 403, i.e. a client's typo reported as an ownership refusal. Shape
+    # first, then the owner-scoped UPDATE; a well-formed but foreign id still
+    # gets the 403, so the shape check never softens the ownership answer.
     return render_malformed_listing_id unless UuidCheck.valid?(params[:listing_id])
 
-    conn = ActiveRecord::Base.connection
+    # An allowlist, not a loop over caller keys: `permit` is what keeps
+    # `status`, `owner_id` and `created_by_agent_id` unwritable from the wire.
+    # `update_all` (not `update!`) is deliberate — it is one statement, so the
+    # ownership test and the write cannot be separated by another transaction,
+    # and it skips validations exactly as the previous UPDATE did.
+    # All three are declared `type: "string"`, so a scalar that arrives as a
+    # JSON number or boolean is coerced HERE rather than wherever the
+    # persistence layer would do it: ActiveModel's String type renders `true` as
+    # Postgres' "t", which is not what a free-form display price should say.
+    # nil is preserved as nil — supplying an explicit null is how a caller
+    # clears price_text.
+    changes = params.permit(:title, :body, :price_text)
+                    .to_h
+                    .transform_values { |value| value.nil? ? nil : value.to_s }
+    # updated_at always bumps, so a patch that supplies nothing still proves
+    # ownership through the row count.
+    updated = Listing.owned_by_current_principal
+                     .where(id: params[:listing_id])
+                     .update_all(changes.merge(updated_at: Time.current))
 
-    # Only the columns the caller supplied are updated; each value is quoted
-    # updated_at always bumps so a no-op patch still verifies ownership.
-    set_fragments = ["updated_at = now()"]
-    %i[title body price_text].each do |col|
-      set_fragments << "#{col} = #{conn.quote(params[col])}" if params.key?(col)
-    end
-
-    sql = "UPDATE listings SET #{set_fragments.join(', ')} " \
-          "WHERE id = #{conn.quote(params[:listing_id].to_s)}::uuid " \
-          "AND owner_id = kiosk.current_user_id() RETURNING id"
-    rows = conn.execute(sql)
-
-    return render_not_owner("edit") if rows.ntuples.zero?
+    return render_not_owner("edit") if updated.zero?
 
     render json: { listing_id: params[:listing_id], updated: true }
   end
@@ -126,18 +146,15 @@ class Kiosk::ListingsController < ApplicationController
                },
                required: ["listing_id"]
   def close_listing
-    # K-581/K-582: same `::uuid` cast, same guard as edit_listing — malformed
+    # K-581/K-582: same guard as edit_listing, for the same reason — malformed
     # shape answers 400; a well-formed foreign id still answers 403.
     return render_malformed_listing_id unless UuidCheck.valid?(params[:listing_id])
 
-    conn = ActiveRecord::Base.connection
-    rows = conn.execute(
-      "UPDATE listings SET status = 'closed', updated_at = now() " \
-      "WHERE id = #{conn.quote(params[:listing_id].to_s)}::uuid " \
-      "AND owner_id = kiosk.current_user_id() RETURNING id",
-    )
+    updated = Listing.owned_by_current_principal
+                     .where(id: params[:listing_id])
+                     .update_all(status: "closed", updated_at: Time.current)
 
-    return render_not_owner("close") if rows.ntuples.zero?
+    return render_not_owner("close") if updated.zero?
 
     render json: { listing_id: params[:listing_id], status: "closed" }
   end

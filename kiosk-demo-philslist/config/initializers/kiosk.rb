@@ -43,6 +43,15 @@ Kiosk.configure do |c|
   c.user_id_type   = :uuid
   c.user_id_column = :id
 
+  # ── Where the wire verbs live (T-053 mixin / T-057) ────────────────────────
+  # The queries and actions are ordinary Rails controllers under
+  # app/controllers/kiosk/ — `include Kiosk::Query` / `include Kiosk::Action`,
+  # class-level macros, plain `render json:`. Nothing about them belongs in an
+  # initializer, and nothing about them is here: this line only NAMES them, and
+  # the engine loads and registers them (once in production, again after every
+  # reload in development, so an edited/added/removed verb needs no restart).
+  c.handlers = %w[Kiosk::BoardController Kiosk::ListingsController]
+
   c.guc_namespace  = "app"
   c.schema         = "kiosk"
 
@@ -108,25 +117,6 @@ Kiosk.configure do |c|
   c.registration_pow_count  = 1
   c.registration_pow_params = PHILSLIST_REGISTRATION_POW_PARAMS
   c.pow_secret              = pow_secret
-end
-
-# ── Where the wire verbs live (T-053 mixin / T-057) ──────────────────────────
-# The queries and actions are ordinary Rails controllers under
-# app/controllers/kiosk/ — `include Kiosk::Query` / `include Kiosk::Action`,
-# class-level macros, plain `render json:`. Nothing about them belongs in an
-# initializer, and nothing about them is here: this block only NAMES them.
-#
-# It is needed because a verb registers when its class is LOADED, and
-# development does not eager-load app/ (config.eager_load = false). Without
-# this, `GET /kiosk/schema` would answer with an empty catalog and the first
-# query/run would 404 until something else happened to touch the class.
-# `to_prepare` runs once at boot in production and again after every reload in
-# development, so the catalog is complete either way AND a handler edit is still
-# picked up without restarting the server (K-495 charge 2 — the whole reason the
-# handlers left this file).
-Rails.application.config.to_prepare do
-  Kiosk::BoardController.kiosk_register!
-  Kiosk::ListingsController.kiosk_register!
 end
 
 # ── Live-activity telemetry — opt-in, app-layer, privacy-safe ───

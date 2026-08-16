@@ -1,57 +1,57 @@
 PATH
   remote: ../kiosk-all
   specs:
-    kiosk-all (0.0.1)
-      kiosk-core (~> 0.0)
-      kiosk-server (~> 0.0)
+    kiosk-all (0.3.0)
+      kiosk-core (~> 0.3.0)
+      kiosk-server (~> 0.3.0)
 
 PATH
   remote: ../kiosk-core
   specs:
-    kiosk-core (0.0.1)
+    kiosk-core (0.3.0)
 
 PATH
   remote: ../kiosk-pow-equihash
   specs:
-    kiosk-pow-equihash (0.1.0)
+    kiosk-pow-equihash (0.3.0)
 
 PATH
   remote: ../kiosk-redteam
   specs:
-    kiosk-redteam (0.0.1)
+    kiosk-redteam (0.3.0)
       base64
       jwt (>= 2.0, < 4.0)
-      kiosk-pow-equihash (~> 0.0)
+      kiosk-pow-equihash (~> 0.3.0)
 
 PATH
   remote: ../kiosk-reputation
   specs:
-    kiosk-reputation (0.0.1)
+    kiosk-reputation (0.3.0)
       base64
 
 PATH
   remote: ../kiosk-rls
   specs:
-    kiosk-rls (0.0.1)
-      kiosk-core (~> 0.0)
+    kiosk-rls (0.3.0)
+      kiosk-core (~> 0.3.0)
 
 PATH
   remote: ../kiosk-server
   specs:
-    kiosk-server (0.0.1)
+    kiosk-server (0.3.0)
       actionpack (~> 8.1)
       activerecord (~> 8.1)
       activesupport (~> 8.1)
       base64
       jwt (>= 2.8, < 4.0)
-      kiosk-core (~> 0.0)
+      kiosk-core (~> 0.3.0)
       railties (~> 8.1)
 
 PATH
   remote: ../kiosk-user-idp-devise
   specs:
-    kiosk-user-idp-devise (0.0.1)
-      kiosk-core (~> 0.0)
+    kiosk-user-idp-devise (0.3.0)
+      kiosk-core (~> 0.3.0)
 
 GEM
   remote: https://rubygems.org/
@@ -378,14 +378,14 @@ CHECKSUMS
   json (2.20.0) sha256=9362bc6e55a952b056abf9167cf053358181c904cb70cd6eee0808ea830fc32b
   json_schemer (2.5.0) sha256=2f01fb4cce721a4e08dd068fc2030cffd0702a7f333f1ea2be6e8991f00ae396
   jwt (2.10.3) sha256=e4d9352fbc7309b1a7448c7dd713dfe4d8c47077af80759cdbed8f878ea0b484
-  kiosk-all (0.0.1)
-  kiosk-core (0.0.1)
-  kiosk-pow-equihash (0.1.0)
-  kiosk-redteam (0.0.1)
-  kiosk-reputation (0.0.1)
-  kiosk-rls (0.0.1)
-  kiosk-server (0.0.1)
-  kiosk-user-idp-devise (0.0.1)
+  kiosk-all (0.3.0)
+  kiosk-core (0.3.0)
+  kiosk-pow-equihash (0.3.0)
+  kiosk-redteam (0.3.0)
+  kiosk-reputation (0.3.0)
+  kiosk-rls (0.3.0)
+  kiosk-server (0.3.0)
+  kiosk-user-idp-devise (0.3.0)
   logger (1.7.0) sha256=196edec7cc44b66cfb40f9755ce11b392f21f7967696af15d274dde7edff0203
   loofah (2.25.1) sha256=d436c73dbd0c1147b16c4a41db097942d217303e1f7728704b37e4df9f6d2e04
   macaddr (1.7.2) sha256=da377809968bbc1160bf02a999e916bb3255000007291d9d1a49a93ceedadf82

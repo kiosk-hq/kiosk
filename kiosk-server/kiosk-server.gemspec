@@ -56,7 +56,7 @@ Gem::Specification.new do |spec|
                %w[README.md LICENSE.txt CHANGELOG.md]
   spec.require_paths = ["lib"]
 
-  spec.add_dependency "kiosk-core", "~> 0.0"
+  spec.add_dependency "kiosk-core", "~> 0.3.0"
   # JWT issue/verify for the OAuth surface and access tokens.
   # ruby-jwt is the de-facto Ruby JOSE library — small, MIT, no transitive deps.
   spec.add_dependency "jwt", ">= 2.8", "< 4.0"
@@ -101,5 +101,5 @@ Gem::Specification.new do |spec|
   # Kiosk::TestHelpers::Journey contract; we need the error classes
   # at test time. Host apps depending on TestExecutor will have
   # kiosk-test-support loaded transitively via kiosk-rls-{rspec,minitest}.
-  spec.add_development_dependency "kiosk-test-support", "~> 0.0"
+  spec.add_development_dependency "kiosk-test-support", "~> 0.3.0"
 end

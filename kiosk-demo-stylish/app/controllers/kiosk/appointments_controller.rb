@@ -33,14 +33,19 @@ class Kiosk::AppointmentsController < ApplicationController
     currency: "EUR", price_cents: 9000, price_eur: "€90",
   })
   def book_appointment
-    # Identity is set via Kiosk::Server::SessionContext SET LOCAL —
-    # current_user_id() helper returns the principal. ActiveRecord doesn't
-    # have direct access; pull from PG. (The mixin's `kiosk_identity` carries the
-    # same principal, but the GUC is what the queries next door scope on, so the
-    # write side reads the same source rather than a second one that could drift.)
-    user_id = ActiveRecord::Base.connection.execute(
-      "SELECT kiosk.current_user_id() AS uid",
-    ).first["uid"]
+    # The principal, from the identity the WIRE resolved — never from an
+    # argument. This used to be `SELECT kiosk.current_user_id()`, and K-654 is
+    # where the asymmetry got named rather than papered over: the queries next
+    # door scope with `Appointment.owned_by_current_principal`, which never
+    # spells the principal in Ruby because a WHERE has a predicate to hide it in.
+    # An INSERT has no predicate, so it must supply the value. Both are
+    # un-forgeable for the same reason — `kiosk_identity` is read from the Rack
+    # env the wire built, which no request argument can write, and the GUC is set
+    # by SET LOCAL from that same resolved identity — but only the first keeps
+    # the DB as the authority. Moving the column's DEFAULT to
+    # `kiosk.current_user_id()` would close the gap; that is a migration, so it
+    # is not part of the handler conversion.
+    user_id = kiosk_identity.user_id
 
     # ── Input guards (K-692) ─────────────────────────────────────────────────
     # Validate the inputs with clean 400s instead of letting create! (or the

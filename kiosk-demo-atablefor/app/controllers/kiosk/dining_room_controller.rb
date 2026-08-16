@@ -32,7 +32,12 @@ class Kiosk::DiningRoomController < ApplicationController
   # that exact (table, seating_at); when every table for a seating is taken,
   # availability is legitimately EMPTY for it (honest sell-out).
   #
-  # Optional filters (all agent input goes through conn.quote — data, never SQL):
+  # Optional filters. No caller value is ever spliced into SQL: they are ordinary
+  # ActiveRecord conditions, so the escaping is the adapter's job and not this
+  # handler's (K-654). What that replaced is worth naming, because it is the
+  # idiom the review calls "the reference pattern the whole ecosystem copies":
+  # `where_nbhd = "AND r.neighborhood = #{conn.quote(nbhd_filter)} "` concatenated
+  # into a SELECT, and an `IN (…)` list BUILT by joining quoted timestamps.
   #   :party_size   — only tables seating at least this many (used to size the party)
   #   :neighborhood — restrict to one Lisbon neighbourhood (e.g. "Alfama")
   #   :time         — restrict to one seating time ("19:00" | "20:00" | "21:00")
@@ -89,8 +94,6 @@ class Kiosk::DiningRoomController < ApplicationController
     time_filter = params[:time].to_s
     date_filter = params[:date].to_s
 
-    conn = ActiveRecord::Base.connection
-
     # The rolling upcoming seatings (Europe/Lisbon, past filtered, tonight→tomorrow),
     # each optionally narrowed by the agent's time/date filter.
     seatings = Seatings.upcoming
@@ -116,50 +119,63 @@ class Kiosk::DiningRoomController < ApplicationController
     return render(json: []) if seatings.empty?
 
     # Every physical table seating >= party, optionally in one neighbourhood.
-    where_nbhd = nbhd_filter.empty? ? "" : "AND r.neighborhood = #{conn.quote(nbhd_filter)} "
-    tables = conn.execute(
-      "SELECT rt.id AS restaurant_table_id, rt.label AS table_label, rt.capacity, rt.deposit_eur, " \
-      "r.id AS restaurant_id, r.name AS restaurant, r.neighborhood, r.cuisine " \
-      "FROM restaurant_tables rt " \
-      "JOIN restaurants r ON r.id = rt.restaurant_id " \
-      "WHERE rt.capacity >= #{party_size} #{where_nbhd}" \
-      "ORDER BY r.name, rt.capacity, rt.label",
-    ).to_a
+    # The ORDER BY is Arel rather than a string so the three sort columns stay
+    # attributes of the two tables and cannot be mistaken for an injection point.
+    catalogue = RestaurantTable
+                .joins(:restaurant)
+                .where(RestaurantTable.arel_table[:capacity].gteq(party_size))
+                .order(Restaurant.arel_table[:name].asc,
+                       RestaurantTable.arel_table[:capacity].asc,
+                       RestaurantTable.arel_table[:label].asc)
+    catalogue = catalogue.where(restaurants: { neighborhood: nbhd_filter }) unless nbhd_filter.empty?
+
+    # `pluck` rather than loading models: this is a projection, and naming the
+    # columns is what keeps the wire's field names and their order a decision
+    # this handler makes rather than a side effect of the schema. One query, no
+    # N+1 — the join above already carries the restaurant's name/neighborhood.
+    tables = catalogue.pluck(
+      "restaurant_tables.id", "restaurant_tables.label", "restaurant_tables.capacity",
+      "restaurant_tables.deposit_eur", "restaurants.id", "restaurants.name",
+      "restaurants.neighborhood", "restaurants.cuisine",
+    )
 
     # Confirmed holds on any of the upcoming seatings — used to subtract taken
     # (table, seating) pairs so availability sells out honestly. Keyed on the
     # ABSOLUTE instant (UTC epoch seconds) so the match is timezone-agnostic — the
     # seating_at column is timestamptz, and Seatings.seating_at is a zoned Lisbon
     # Time; both reduce to the same epoch, sidestepping session-TZ formatting.
-    seating_epochs = seatings.map { |d, t| Seatings.seating_at(d, t).to_i }
+    # The epoch used to be computed by Postgres (`EXTRACT(EPOCH FROM seating_at)`)
+    # over an `IN (…)` list this method built by joining quoted literals; the
+    # instants are now bound values and `Time#to_i` does the same reduction.
+    seating_instants = seatings.map { |d, t| Seatings.seating_at(d, t) }
     taken = {}
-    unless seating_epochs.empty?
-      in_list = seatings.map { |d, t| "#{conn.quote(Seatings.seating_at(d, t).iso8601)}::timestamptz" }.join(", ")
-      conn.execute(
-        "SELECT restaurant_table_id, EXTRACT(EPOCH FROM seating_at)::bigint AS epoch " \
-        "FROM bookings WHERE status = 'confirmed' AND seating_at IN (#{in_list})",
-      ).each { |row| taken["#{row["restaurant_table_id"]}@#{row["epoch"]}"] = true }
+    unless seating_instants.empty?
+      Booking.confirmed
+             .where(seating_at: seating_instants)
+             .pluck(:restaurant_table_id, :seating_at)
+             .each { |table_id, at| taken["#{table_id}@#{at.to_i}"] = true }
     end
 
     rows = []
     seatings.each do |date, time|
       seating_at = Seatings.seating_at(date, time)
       key_epoch  = seating_at.to_i
-      tables.each do |t|
-        next if taken["#{t["restaurant_table_id"]}@#{key_epoch}"]
+      tables.each do |table_id, table_label, capacity, deposit_eur,
+                      restaurant_id, restaurant, neighborhood, cuisine|
+        next if taken["#{table_id}@#{key_epoch}"]
 
         rows << {
-          "restaurant"          => t["restaurant"],
-          "neighborhood"        => t["neighborhood"],
-          "cuisine"             => t["cuisine"],
-          "restaurant_id"       => t["restaurant_id"],
-          "restaurant_table_id" => t["restaurant_table_id"],
-          "table_label"         => t["table_label"],
-          "capacity"            => t["capacity"],
-          "seating_date"        => date.iso8601,
-          "seating_time"        => time,
-          "seating_at"          => seating_at.iso8601,
-          "deposit_eur"         => t["deposit_eur"],
+          restaurant:          restaurant,
+          neighborhood:        neighborhood,
+          cuisine:             cuisine,
+          restaurant_id:       restaurant_id,
+          restaurant_table_id: table_id,
+          table_label:         table_label,
+          capacity:            capacity,
+          seating_date:        date.iso8601,
+          seating_time:        time,
+          seating_at:          seating_at.iso8601,
+          deposit_eur:         deposit_eur,
         }
       end
     end
@@ -168,9 +184,11 @@ class Kiosk::DiningRoomController < ApplicationController
   end
 
   # my_bookings — per-user booking list scoped by the session GUC.
-  # The WHERE is provider-controlled; the agent supplies no filter. This
+  # The scope is provider-controlled; the agent supplies no filter. This
   # demonstrates app-layer per-user isolation: the principal can only see rows
-  # where user_id matches kiosk.current_user_id(), enforced in the query itself.
+  # where user_id matches kiosk.current_user_id(), enforced in the query itself —
+  # `owned_by_current_principal` is the ONE place that predicate is written, and
+  # Booking records why it stays SQL-side (K-654).
   description "List this principal's table bookings across all restaurants " \
               "(scoped to the authenticated user via kiosk.current_user_id()). " \
               "Each row carries a `booking_id`; pass it to cancel_booking as " \
@@ -180,18 +198,34 @@ class Kiosk::DiningRoomController < ApplicationController
   # assistant has to interpret.
   input_schema type: "object", additionalProperties: false, properties: {}, required: []
   def my_bookings
-    render json: ActiveRecord::Base.connection.execute(
-      "SELECT b.id AS booking_id, b.restaurant_id, r.name AS restaurant, r.neighborhood, " \
-      "b.restaurant_table_id, rt.label AS table_label, b.party_size, b.status, " \
-      "to_char(b.seating_at AT TIME ZONE 'Europe/Lisbon', 'YYYY-MM-DD') AS seating_date, " \
-      "to_char(b.seating_at AT TIME ZONE 'Europe/Lisbon', 'HH24:MI')    AS seating_time, " \
-      "b.seating_at " \
-      "FROM bookings b " \
-      "JOIN restaurant_tables rt ON rt.id = b.restaurant_table_id " \
-      "JOIN restaurants r        ON r.id  = b.restaurant_id " \
-      "WHERE b.user_id = kiosk.current_user_id() " \
-      "ORDER BY b.seating_at",
-    ).to_a
+    render json: Booking.owned_by_current_principal
+                        .joins(:restaurant, :restaurant_table)
+                        .order(:seating_at)
+                        .pluck("bookings.id", "bookings.restaurant_id", "restaurants.name",
+                               "restaurants.neighborhood", "bookings.restaurant_table_id",
+                               "restaurant_tables.label", "bookings.party_size", "bookings.status",
+                               "bookings.seating_at")
+                        .map { |id, restaurant_id, restaurant, neighborhood,
+                                 table_id, table_label, party_size, status, seating_at|
+                          # The seating's LOCAL date and time. This was
+                          # `to_char(b.seating_at AT TIME ZONE 'Europe/Lisbon', …)`
+                          # — the zone spelled a second time, in SQL, where a
+                          # change to lib/seatings.rb could not reach it. It is
+                          # now the same `Seatings.zone` that decides which
+                          # seatings exist at all, so the two cannot drift.
+                          local = seating_at.in_time_zone(Seatings.zone)
+                          { booking_id:          id,
+                            restaurant_id:       restaurant_id,
+                            restaurant:          restaurant,
+                            neighborhood:        neighborhood,
+                            restaurant_table_id: table_id,
+                            table_label:         table_label,
+                            party_size:          party_size,
+                            status:              status,
+                            seating_date:        local.strftime("%Y-%m-%d"),
+                            seating_time:        local.strftime("%H:%M"),
+                            seating_at:          Booking.publish_instant(seating_at) }
+                        }
   end
 
   private

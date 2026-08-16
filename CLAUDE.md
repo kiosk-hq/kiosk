@@ -72,4 +72,11 @@ universal agent skill is `skill.md` on the same site.
   declared in its `NOT_PACKAGED` manifest with a reason, and that every
   `__dir__`-relative path resolves inside the package. Adding an asset a gem
   reads at runtime means adding it to `spec.files`.
+- Version parity is a build gate, not prose. The spec (§14.1) binds the
+  protocol, this implementation and the skill to one MAJOR.MINOR — currently
+  0.3 — so `bin/check-version-parity` (its own CI job) asserts every gemspec
+  version, every `kiosk-*` inter-gem constraint (`~> <series>.0`) and every
+  pinned `skill_url`'s version share that series with
+  `Kiosk::Protocol::API_VERSION`. PATCH stays free per gem and per skill cut.
+  Bumping the protocol series means bumping the gems in the same change.
 - Inline `TODO`/`FIXME` must state a concrete rationale, not a bare marker.

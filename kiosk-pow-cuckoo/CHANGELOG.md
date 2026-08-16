@@ -1,6 +1,6 @@
 # Changelog
 
-## [0.0.1] - 2026-06-26
+## [Unreleased]
 
 ### Added
 - Clean-room Cuckatoo-Cycle verifier

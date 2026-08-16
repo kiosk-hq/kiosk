@@ -50,26 +50,37 @@ class ListsController < ApplicationController
     response.set_header("Link", '<https://kiosk.tech/skill.md>; rel="kiosk"')
   end
 
+  # The three actions below branch on the wire CODE rather than on an exception
+  # class: since T-057 the handlers are Rails controllers that RENDER their
+  # refusals, so what reaches here is Errors::WireError carrying `code`, never
+  # Errors::Forbidden/BadRequest. Anything else re-raises, so an unexpected
+  # refusal still surfaces instead of being swallowed by a friendly redirect.
   def show
     @list_id = params[:id]
     @todos   = kiosk_query("list_todos",   list_id: @list_id)
     @members = kiosk_query("list_members", list_id: @list_id)
-  rescue Kiosk::Server::Errors::Forbidden
+  rescue Kiosk::Server::Errors::Base => e
+    raise unless e.code == "forbidden"
+
     redirect_to lists_path, alert: "That list is not shared with you."
   end
 
   def create
     value = kiosk_run("create_list", title: params.require(:title))
-    redirect_to list_path(value[:list_id]), notice: "List created."
-  rescue Kiosk::Server::Errors::BadRequest => e
+    redirect_to list_path(value["list_id"]), notice: "List created."
+  rescue Kiosk::Server::Errors::Base => e
+    raise unless e.code == "bad_request"
+
     redirect_to lists_path, alert: e.message
   end
 
   def invite
     value = kiosk_run("invite", list_id: params[:id])
     redirect_to list_path(params[:id]),
-                notice: "Invite code (share it, expires in #{value[:expires_in] / 60} min): #{value[:code]}"
-  rescue Kiosk::Server::Errors::Forbidden => e
+                notice: "Invite code (share it, expires in #{value['expires_in'] / 60} min): #{value['code']}"
+  rescue Kiosk::Server::Errors::Base => e
+    raise unless e.code == "forbidden"
+
     redirect_to list_path(params[:id]), alert: e.message
   end
 

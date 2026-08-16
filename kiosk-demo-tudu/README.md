@@ -135,7 +135,10 @@ assertions cannot go ungated and unexplained.
 |---|---|
 | `db/migrate/` | The pruned canonical kiosk migrations — **no** reservations/mandates/settlements — plus `create_tudu_domain` (lists/memberships/todos/invites) |
 | `app/models/{user,list,membership,todo,invite}.rb` | `User` is the account principal (Devise, reused for headless assistant accounts); `memberships` is the many-to-many access surface |
-| `config/initializers/kiosk.rb` | `Kiosk.configure` (NO `payment_provider`) + the `assistant_creation`/`assistant_claimed` hooks + the 4 queries and 6 actions |
+| `config/initializers/kiosk.rb` | `Kiosk.configure` (NO `payment_provider`) + the `assistant_creation`/`assistant_claimed` hooks — configuration only; it names the two handler controllers, it does not contain them |
+| `app/controllers/kiosk/household_controller.rb` | The `whoami` / `my_lists` / `list_todos` / `list_members` queries — an ordinary Rails controller with `include Kiosk::Query`, declared with the class-level macros. Not routable: handlers are reached only through the wire |
+| `app/controllers/kiosk/todo_lists_controller.rb` | The six actions (`create_list`, `add_todo`, `complete_todo`, `invite`, `accept_invite`, `remove_member`) — same shape with `include Kiosk::Action`; refusals are plain `render json:, status:` naming a wire `error.code` |
+| `app/models/membership.rb`, `app/controllers/concerns/kiosk_membership_gate.rb` | The membership check both wire halves need: `Membership.reachable?` is the access decision (a predicate, no request in it), the concern is the 400/403 refusal around it |
 | `app/controllers/lists_controller.rb`, `todos_controller.rb` | The human web UI, running the SAME registered actions as the wire (one shared world) |
 | `lib/stub_idp.rb` / `lib/jwt_or_stub_idp.rb` | Demo IdP: Kiosk JWTs first, bespoke `agent:u-…:a-…:r-…` fallback |
 | `script/collab_flow.rb` / `script/link_flow.rb` / `script/isolation_flow.rb` / `script/redteam_suite.rb` / `script/schema_flow.rb` | One-JSON-line flow drivers the rake tasks assert on |

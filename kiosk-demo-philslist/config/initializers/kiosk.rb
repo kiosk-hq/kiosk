@@ -16,7 +16,6 @@
 require Rails.root.join("lib/stub_idp")
 require Rails.root.join("lib/jwt_or_stub_idp")
 require Rails.root.join("lib/pow_difficulty")
-require Rails.root.join("lib/uuid_check")
 require "kiosk/user_identity_providers/devise"
 
 # Registration PoW gate — ALWAYS ON. With no payment gate, the registration PoW
@@ -111,267 +110,23 @@ Kiosk.configure do |c|
   c.pow_secret              = pow_secret
 end
 
-# ─── Helpers ──────────────────────────────────────────────────────────────────
-
-# The authenticated principal (accounts.id). Identity is set via
-# Kiosk::Server::SessionContext SET LOCAL, so current_user_id() resolves it.
-# ActiveRecord has no direct access — pull it from PG.
-def philslist_current_user_id
-  ActiveRecord::Base.connection.select_value("SELECT kiosk.current_user_id()")
-end
-
-# The acting agent_id as a plain STRING (attribution for created_by_agent_id).
-# Read the raw GUC — NOT kiosk.current_agent_id(), which casts to ::uuid and so
-# would fail for the demo's stub tokens (agent_id like "alice-isolation").
-# Returns nil only when the GUC is unset or empty (the human web surface);
-# deliberately returns the raw value for stub agents so non-uuid ids survive.
-def philslist_current_agent_id
-  ActiveRecord::Base.connection.select_value(
-    "SELECT NULLIF(current_setting('app.current_agent_id', true), '')",
-  )
-end
-
-# ─── Queries (the `query` verb) ───────────────────────────────────────────────
-
-# browse_listings — the OPEN board. Any authenticated principal sees ALL
-# matching listings across ALL owners (no owner_id filter). Optional
-# category_slug + keyword filters; status clamps to open|closed (defaults open).
-# All caller input is passed through conn.quote (parameterized ILIKE on
-# title/body) — no raw interpolation (raw-pipe hygiene, the sibling-demo
-# quoting pattern).
-Kiosk::Server::Queries.register(
-  "browse_listings",
-  description: "Browse the public classifieds board across all sellers. Optional " \
-               "category_slug and keyword filters; status defaults to open. All " \
-               "filters are optional and AND together; each row carries a " \
-               "`listing_id` (pass it to edit_listing / close_listing as `listing_id`), " \
-               "title, body, free-form price_text, category_slug, status, and " \
-               "owner_handle. Returns all matching listings (small board; not " \
-               "paginated); prices are free-form text (e.g. \"€300\"), not cents.",
-  params: {
-    category_slug: "string (optional) — restrict to one category (a listing's category_slug)",
-    keyword:       "string (optional) — case-insensitive match on title or body",
-    status:        "string (optional) — 'open' (default) or 'closed'",
-  },
-  input_schema: {
-    type: "object",
-    additionalProperties: false,
-    properties: {
-      category_slug: { type: "string",
-                       enum: %w[furniture bikes electronics housing free],
-                       description: "Restrict to one category." },
-      keyword:       { type: "string", description: "Case-insensitive match on title or body." },
-      status:        { type: "string", enum: %w[open closed], default: "open",
-                       description: "Listing status filter." },
-    },
-    required: [],
-  },
-  example_params: { category_slug: "bikes", keyword: "road", status: "open" },
-  example_row: {
-    listing_id: "9c1d2e3f-4a5b-4c6d-8e7f-0a1b2c3d4e5f", title: "Carbon road bike — €300",
-    body: "Lightweight carbon road bike, 54cm, Shimano 105 groupset.",
-    price_text: "€300", category_slug: "bikes", status: "open",
-    owner_handle: "alice@example.com",
-  },
-) do |params|
-  conn = ActiveRecord::Base.connection
-
-  status = params[:status].to_s
-  status = "open" unless Listing::STATUSES.include?(status)
-
-  sql = +<<~SQL
-    SELECT l.id AS listing_id, l.title, l.body, l.price_text, c.slug AS category_slug,
-           l.status, u.email AS owner_handle
-      FROM listings l
-      JOIN categories c ON c.id = l.category_id
-      JOIN users u ON u.id = l.owner_id
-     WHERE l.status = #{conn.quote(status)}
-  SQL
-
-  if params[:category_slug] && !params[:category_slug].to_s.empty?
-    sql << " AND c.slug = #{conn.quote(params[:category_slug].to_s)}"
-  end
-  if params[:keyword] && !params[:keyword].to_s.empty?
-    like = conn.quote("%#{params[:keyword]}%")
-    sql << " AND (l.title ILIKE #{like} OR l.body ILIKE #{like})"
-  end
-  sql << " ORDER BY l.created_at DESC, l.id"
-
-  conn.execute(sql).to_a
-end
-
-# my_listings — per-identity: the caller's OWN listings only. Caller supplies no
-# filter; the WHERE is provider-controlled and un-bypassable (the saas
-# my_appointments pattern).
-Kiosk::Server::Queries.register(
-  "my_listings",
-  description: "List the listings owned by the authenticated principal " \
-               "(scoped to kiosk.current_user_id()).",
-  params: {},
-) do |_params|
-  ActiveRecord::Base.connection.execute(
-    "SELECT l.id AS listing_id, l.title, l.price_text, l.status, c.slug AS category_slug " \
-    "FROM listings l JOIN categories c ON c.id = l.category_id " \
-    "WHERE l.owner_id = kiosk.current_user_id() " \
-    "ORDER BY l.created_at DESC, l.id",
-  ).to_a
-end
-
-# ─── Actions (the `run` verb) ─────────────────────────────────────────────────
-
-# post_listing — create a listing under the AUTHENTICATED principal. Any
-# agent-supplied owner_id in args is IGNORED (the forged-principal beat):
-# owner_id is read from kiosk.current_user_id(). created_by_agent_id records the
-# acting agent from the token (attribution).
-Kiosk::Server::Actions.register(
-  "post_listing",
-  description: "Post a new classifieds listing owned by the authenticated principal. " \
-               "price_text is free-form display text (e.g. \"€300\" or \"Free\"), not a " \
-               "cents amount. Any owner_id passed in args is ignored — the listing is " \
-               "owned by the authenticated principal.",
-  params: {
-    category_slug: "string (required) — the section to post in (see browse_listings)",
-    title:         "string (required) — short headline",
-    body:          "string (required) — the listing description",
-    price_text:    "string (optional) — free-form display price, e.g. '€300' or 'Free'",
-  },
-  input_schema: {
-    type: "object",
-    additionalProperties: false,
-    properties: {
-      category_slug: { type: "string",
-                       enum: %w[furniture bikes electronics housing free],
-                       description: "The section to post in (see browse_listings)." },
-      title:         { type: "string", description: "Short headline." },
-      body:          { type: "string", description: "The listing description." },
-      price_text:    { type: "string", description: "Free-form display price, e.g. \"€300\" or \"Free\"." },
-    },
-    required: ["category_slug", "title", "body"],
-  },
-  example_params: {
-    category_slug: "bikes", title: "Carbon road bike — €300",
-    body: "Lightweight carbon road bike, 54cm, Shimano 105 groupset.",
-    price_text: "€300",
-  },
-  example_row: { listing_id: "9c1d2e3f-4a5b-4c6d-8e7f-0a1b2c3d4e5f", status: "open" },
-) do |args|
-  owner_id = philslist_current_user_id
-
-  # Validate the inputs with clean 400s instead of letting find_by!/create!
-  # raise a RecordNotFound/RecordInvalid that surfaces as an opaque 500. The
-  # error names the valid categories so an assistant that guessed a slug (or
-  # omitted it) can recover without fetching the schema first.
-  slug  = args[:category_slug].to_s
-  valid = Category.order(:slug).pluck(:slug)
-  raise Kiosk::Server::Errors::BadRequest.new(
-    "category_slug is required — one of: #{valid.join(', ')}"
-  ) if slug.empty?
-  category = Category.find_by(slug: slug)
-  raise Kiosk::Server::Errors::BadRequest.new(
-    "unknown category_slug #{slug.inspect} — valid categories: #{valid.join(', ')}"
-  ) unless category
-  raise Kiosk::Server::Errors::BadRequest.new(
-    "title and body are required"
-  ) if args[:title].to_s.strip.empty? || args[:body].to_s.strip.empty?
-
-  listing = Listing.create!(
-    owner_id:            owner_id,       # forged args[:owner_id] never consulted
-    category:            category,
-    title:               args[:title],
-    body:                args[:body],
-    price_text:          args[:price_text],
-    status:              "open",
-    created_by_agent_id: philslist_current_agent_id,
-  )
-
-  { listing_id: listing.id, status: listing.status }
-end
-
-# edit_listing — OWNER-ONLY. UPDATE … WHERE id AND owner_id =
-# kiosk.current_user_id(); zero rows affected → 403 (return forbidden, not
-# not-found, so cross-owner probing can't enumerate which ids exist).
-Kiosk::Server::Actions.register(
-  "edit_listing",
-  description: "Edit one of the authenticated principal's own listings " \
-               "(owner-only; editing another owner's listing is forbidden).",
-  params: {
-    listing_id: "uuid (required) — the listing to edit",
-    title:      "string (optional) — new headline",
-    body:       "string (optional) — new description",
-    price_text: "string (optional) — new display price",
-  },
-) do |args|
-  conn = ActiveRecord::Base.connection
-
-  # K-581/K-582: `listing_id` arrives from the wire and is cast `::uuid` below.
-  # A malformed one made Postgres raise InvalidTextRepresentation, which is not a
-  # Kiosk error and so surfaced as a raw 500 (leaking "invalid input syntax for
-  # type uuid") for what is plainly a client mistake. Shape first, then the
-  # owner-scoped UPDATE — a well-formed but foreign id still gets the 403, so
-  # the shape check never softens the ownership answer.
-  unless UuidCheck.valid?(args[:listing_id])
-    raise Kiosk::Server::Errors::BadRequest.new(
-      "listing_id #{args[:listing_id].to_s.inspect} is not a uuid",
-      hint: "Pass a `listing_id` from my_listings / browse_listings, verbatim.",
-    )
-  end
-
-  # Only the columns the caller supplied are updated; each value is quoted
-  # updated_at always bumps so a no-op patch still verifies ownership.
-  set_fragments = ["updated_at = now()"]
-  %i[title body price_text].each do |col|
-    set_fragments << "#{col} = #{conn.quote(args[col])}" if args.key?(col)
-  end
-
-  sql = "UPDATE listings SET #{set_fragments.join(', ')} " \
-        "WHERE id = #{conn.quote(args[:listing_id].to_s)}::uuid " \
-        "AND owner_id = kiosk.current_user_id() RETURNING id"
-  rows = conn.execute(sql)
-
-  if rows.ntuples.zero?
-    raise Kiosk::Server::Errors::Forbidden.new(
-      "listing not owned by the authenticated principal",
-      hint: "You may only edit your own listings.",
-    )
-  end
-
-  { listing_id: args[:listing_id], updated: true }
-end
-
-# close_listing — OWNER-ONLY, same owner-scoped WHERE; zero rows → 403.
-Kiosk::Server::Actions.register(
-  "close_listing",
-  description: "Close one of the authenticated principal's own listings " \
-               "(owner-only; closing another owner's listing is forbidden).",
-  params: {
-    listing_id: "uuid (required) — the listing to close",
-  },
-) do |args|
-  conn = ActiveRecord::Base.connection
-
-  # K-581/K-582: same `::uuid` cast, same guard as edit_listing — malformed
-  # shape answers 400; a well-formed foreign id still answers 403.
-  unless UuidCheck.valid?(args[:listing_id])
-    raise Kiosk::Server::Errors::BadRequest.new(
-      "listing_id #{args[:listing_id].to_s.inspect} is not a uuid",
-      hint: "Pass a `listing_id` from my_listings / browse_listings, verbatim.",
-    )
-  end
-
-  rows = conn.execute(
-    "UPDATE listings SET status = 'closed', updated_at = now() " \
-    "WHERE id = #{conn.quote(args[:listing_id].to_s)}::uuid " \
-    "AND owner_id = kiosk.current_user_id() RETURNING id",
-  )
-
-  if rows.ntuples.zero?
-    raise Kiosk::Server::Errors::Forbidden.new(
-      "listing not owned by the authenticated principal",
-      hint: "You may only close your own listings.",
-    )
-  end
-
-  { listing_id: args[:listing_id], status: "closed" }
+# ── Where the wire verbs live (T-053 mixin / T-057) ──────────────────────────
+# The queries and actions are ordinary Rails controllers under
+# app/controllers/kiosk/ — `include Kiosk::Query` / `include Kiosk::Action`,
+# class-level macros, plain `render json:`. Nothing about them belongs in an
+# initializer, and nothing about them is here: this block only NAMES them.
+#
+# It is needed because a verb registers when its class is LOADED, and
+# development does not eager-load app/ (config.eager_load = false). Without
+# this, `GET /kiosk/schema` would answer with an empty catalog and the first
+# query/run would 404 until something else happened to touch the class.
+# `to_prepare` runs once at boot in production and again after every reload in
+# development, so the catalog is complete either way AND a handler edit is still
+# picked up without restarting the server (K-495 charge 2 — the whole reason the
+# handlers left this file).
+Rails.application.config.to_prepare do
+  Kiosk::BoardController.kiosk_register!
+  Kiosk::ListingsController.kiosk_register!
 end
 
 # ── Live-activity telemetry — opt-in, app-layer, privacy-safe ───

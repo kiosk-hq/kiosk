@@ -27,9 +27,12 @@ class Kiosk::FrontDeskController < ApplicationController
   # assistant has to interpret.
   input_schema type: "object", additionalProperties: false, properties: {}, required: []
   def salons
-    render json: ActiveRecord::Base.connection.execute(
-      "SELECT id AS salon_id, name FROM salons ORDER BY id",
-    ).to_a
+    # `pluck` rather than loading models: this is a projection, and naming the
+    # columns is what keeps the wire's field names and their order a decision
+    # this handler makes rather than a side effect of the schema (K-654).
+    render json: Salon.order(:id).pluck(:id, :name).map { |id, name|
+      { salon_id: id, name: name }
+    }
   end
 
   # service_menu — the salon's public service menu with EUR prices. Any
@@ -48,11 +51,11 @@ class Kiosk::FrontDeskController < ApplicationController
     currency: "EUR", price_eur: "€35",
   })
   def service_menu
-    render json: ActiveRecord::Base.connection.execute(
-      "SELECT id AS service_id, name, price_cents FROM services ORDER BY price_cents",
-    ).to_a.map { |row|
-      row.merge("currency" => "EUR", "price_eur" => Service.format_eur(row["price_cents"]))
-    }
+    render json: Service.order(:price_cents).pluck(:id, :name, :price_cents)
+                        .map { |id, name, price_cents|
+                          { service_id: id, name: name, price_cents: price_cents,
+                            currency: "EUR", price_eur: Service.format_eur(price_cents) }
+                        }
   end
 
   # availability — the salon's EVERGREEN availability (K-446). Every service on
@@ -74,25 +77,31 @@ class Kiosk::FrontDeskController < ApplicationController
     currency: "EUR", price_cents: 9000, price_eur: "€90",
   })
   def availability
-    render json: ActiveRecord::Base.connection.execute(
-      "SELECT id AS service_id, name AS service, price_cents FROM services ORDER BY price_cents",
-    ).to_a.map { |row|
-      row.merge("open" => true, "currency" => "EUR",
-                "price_eur" => Service.format_eur(row["price_cents"]))
-    }
+    # Same projection as service_menu, published under this verb's own field
+    # names (`service`, plus the evergreen `open: true`) — the two verbs stay
+    # separate because their CONTRACTS differ, not their query.
+    render json: Service.order(:price_cents).pluck(:id, :name, :price_cents)
+                        .map { |id, name, price_cents|
+                          { service_id: id, service: name, price_cents: price_cents,
+                            open: true, currency: "EUR",
+                            price_eur: Service.format_eur(price_cents) }
+                        }
   end
 
   # my_appointments — per-user appointment list scoped by the session GUC.
-  # App-layer isolation: the agent supplies no filter; the WHERE is
+  # App-layer isolation: the agent supplies no filter; the scope is
   # provider-controlled and cannot be bypassed by the caller.
+  # `owned_by_current_principal` is ONE of the two places this demo writes the
+  # identity predicate — see Appointment for why it stays SQL-side (K-654).
   description "List this principal's appointments (scoped to authenticated user via kiosk.current_user_id())"
   input_schema type: "object", additionalProperties: false, properties: {}, required: []
   def my_appointments
-    render json: ActiveRecord::Base.connection.execute(
-      "SELECT id, salon_id, slot FROM appointments " \
-      "WHERE user_id = kiosk.current_user_id() " \
-      "ORDER BY id",
-    ).to_a
+    render json: Appointment.owned_by_current_principal
+                            .order(:id)
+                            .pluck(:id, :salon_id, :slot)
+                            .map { |id, salon_id, slot|
+                              { id: id, salon_id: salon_id, slot: slot }
+                            }
   end
 
   # salon_calendar — STAFF forecast, role-gated (roles-from-IdP).
@@ -110,31 +119,37 @@ class Kiosk::FrontDeskController < ApplicationController
   # IdP), not the request args, and the WHERE is provider-controlled. The forecast
   # is computed live from the real per-booking prices — never a hardcoded number.
   #
-  # The gate reads the GUC in SQL rather than the mixin's `kiosk_identity`, and
+  # The gate reads the GUC rather than the mixin's `kiosk_identity`, and
   # deliberately stays that way: the scoping predicate and the branch then agree
   # by construction, and the query keeps working when it is reached outside a wire
   # request (an RLS journey test), where kiosk_identity is nil but the four GUCs
-  # are set regardless.
+  # are set regardless. K-654 moved the read itself into
+  # `Appointment.current_principal_role` — this handler writes no SQL — and
+  # retired the part that was indefensible: `appt_scope` used to be a WHERE
+  # clause BUILT as a Ruby string and spliced into `execute`, which is the exact
+  # idiom a reader would copy into a query that does take caller input. The
+  # branch now picks between two relations.
   description "Staff forecast — role-gated: owner sees ALL bookings + a FORECASTED € revenue total (summed from the actual bookings' prices, growing from €0 as visitors book); any other role sees only their own bookings and no forecast (role from the bound human's IdP)"
   input_schema type: "object", additionalProperties: false, properties: {}, required: []
   def salon_calendar
-    role = ActiveRecord::Base.connection.execute(
-      "SELECT kiosk.current_role() AS role",
-    ).first["role"]
+    role = Appointment.current_principal_role
 
     # owner → the whole book; anyone else → only their own bookings.
-    appt_scope = role == "owner" ? "TRUE" : "a.user_id = kiosk.current_user_id()"
+    book = role == "owner" ? Appointment.all : Appointment.owned_by_current_principal
 
     # BOOKINGS made so far (accumulate as visitors book — zero at the start).
-    appt_rows = ActiveRecord::Base.connection.execute(
-      "SELECT a.id, a.salon_id, a.slot, " \
-      "       a.service_id, s.name AS service, a.price_cents " \
-      "FROM appointments a LEFT JOIN services s ON s.id = a.service_id " \
-      "WHERE #{appt_scope} ORDER BY a.slot",
-    ).to_a.map { |row|
-      row.merge("kind" => "booking", "currency" => "EUR",
-                "price_eur" => Service.format_eur(row["price_cents"]))
-    }
+    # `left_joins` because a bare salon booking carries no service: the row must
+    # still appear, with a null service and a null captured price.
+    appt_rows = book.left_joins(:service)
+                    .order(:slot)
+                    .pluck("appointments.id", "appointments.salon_id", "appointments.slot",
+                           "appointments.service_id", "services.name", "appointments.price_cents")
+                    .map { |id, salon_id, slot, service_id, service, price_cents|
+                      { id: id, salon_id: salon_id, slot: slot, service_id: service_id,
+                        service: service, price_cents: price_cents,
+                        kind: "booking", currency: "EUR",
+                        price_eur: Service.format_eur(price_cents) }
+                    }
 
     rows = appt_rows
 
@@ -142,13 +157,13 @@ class Kiosk::FrontDeskController < ApplicationController
     # per-booking prices. A live figure from real rows — not a fixed number; it is
     # €0 before any booking and grows with each one.
     if role == "owner"
-      booked_cents = appt_rows.sum { |r| r["price_cents"].to_i }
+      booked_cents = appt_rows.sum { |r| r[:price_cents].to_i }
       rows += [{
-        "summary"        => "forecast",
-        "bookings"       => appt_rows.size,
-        "currency"       => "EUR",
-        "forecast_cents" => booked_cents,
-        "forecast_eur"   => Service.format_eur(booked_cents),
+        summary:        "forecast",
+        bookings:       appt_rows.size,
+        currency:       "EUR",
+        forecast_cents: booked_cents,
+        forecast_eur:   Service.format_eur(booked_cents),
       }]
     end
 

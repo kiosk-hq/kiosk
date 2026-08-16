@@ -63,8 +63,6 @@ class Kiosk::BookingsController < ApplicationController
     seating_at: "2026-08-08T20:00:00+01:00", status: "confirmed",
   })
   def book_table
-    conn = ActiveRecord::Base.connection
-
     restaurant_id       = params[:restaurant_id].to_i
     restaurant_table_id = params[:restaurant_table_id].to_i
     date                = params[:date].to_s
@@ -93,52 +91,70 @@ class Kiosk::BookingsController < ApplicationController
     end
     seating_at = Seatings.seating_at(parsed_date, time)
 
-    # Identity is set via Kiosk::Server::SessionContext SET LOCAL —
-    # current_user_id() returns the principal. ActiveRecord doesn't have direct
-    # access; pull from PG. (The mixin's `kiosk_identity` carries the same
-    # principal, but the GUC is what my_bookings scopes on next door, so the write
-    # side reads the same source rather than a second one that could drift.)
-    uid = conn.execute("SELECT kiosk.current_user_id() AS uid").first["uid"]
+    # The principal, from the identity the WIRE resolved — never from an
+    # argument. This used to be `SELECT kiosk.current_user_id()`, and K-654 is
+    # where the asymmetry got named rather than papered over: my_bookings and
+    # cancel_booking scope with `Booking.owned_by_current_principal`, which never
+    # spells the principal in Ruby because a WHERE has a predicate to hide it in.
+    # An INSERT has no predicate, so it must supply the value. Both are
+    # un-forgeable for the same reason — `kiosk_identity` is read from the Rack
+    # env the wire built, which no request argument can write, and the GUC is set
+    # by SET LOCAL from that same resolved identity — but only the first keeps
+    # the DB as the authority. Moving the column's DEFAULT to
+    # `kiosk.current_user_id()` would close the gap; that is a migration, so it
+    # is not part of the handler conversion.
+    uid = kiosk_identity.user_id
 
     # This `transaction` JOINS the one Kiosk::Server::SessionContext already
-    # opened around the whole wire request (the GUCs above are SET LOCAL in it),
-    # so it opens no second transaction and a `return` out of it is an ordinary
-    # method return, not a non-local exit from a real transaction block.
-    conn.transaction do
+    # opened around the whole wire request (the GUCs are SET LOCAL in it), so it
+    # opens no second transaction and a `return` out of it is an ordinary method
+    # return, not a non-local exit from a real transaction block.
+    Booking.transaction do
       # The chosen table must exist at the chosen restaurant and seat the party.
-      table = conn.execute(
-        "SELECT rt.id, rt.capacity FROM restaurant_tables rt " \
-        "WHERE rt.id = #{restaurant_table_id} AND rt.restaurant_id = #{restaurant_id} " \
-        "AND rt.capacity >= #{party_size} " \
-        "LIMIT 1",
-      ).first
-      if table.nil?
+      unless RestaurantTable.where(id: restaurant_table_id, restaurant_id: restaurant_id)
+                            .where(RestaurantTable.arel_table[:capacity].gteq(party_size))
+                            .exists?
         return render_bad_request(
           "no such table #{restaurant_table_id} at restaurant #{restaurant_id} seating #{party_size}",
         )
       end
 
-      # Finite contention: is this exact (table, seating) already held? A clean
-      # 409 Conflict, mirrored by the unique partial index (the index is the
-      # authoritative guard even under concurrency).
-      held = conn.execute(
-        "SELECT 1 FROM bookings WHERE status = 'confirmed' " \
-        "AND restaurant_table_id = #{restaurant_table_id} " \
-        "AND seating_at = #{conn.quote(seating_at.iso8601)}::timestamptz LIMIT 1",
-      ).first
-      return render_already_booked(restaurant_table_id, date, time) if held
+      # ── The double-booking 409, guarded TWICE ────────────────────────────
+      # First half: is this exact (table, seating) already held? A committed
+      # conflict is answered here, before anything is written.
+      if Booking.confirmed.where(restaurant_table_id: restaurant_table_id, seating_at: seating_at).exists?
+        return render_already_booked(restaurant_table_id, date, time)
+      end
 
       booking =
         begin
-          conn.execute(
-            "INSERT INTO bookings " \
-            "(id, user_id, restaurant_id, restaurant_table_id, party_size, seating_at, status, created_at, updated_at) " \
-            "VALUES (gen_random_uuid(), #{conn.quote(uid.to_s)}::uuid, #{restaurant_id}, #{restaurant_table_id}, " \
-            "#{party_size}, #{conn.quote(seating_at.iso8601)}::timestamptz, 'confirmed', now(), now()) " \
-            "RETURNING id, party_size, status",
+          # Second half, and the authoritative one: the UNIQUE PARTIAL INDEX. The
+          # pre-check above runs at READ COMMITTED, so it cannot see a competing
+          # booking that has not committed yet — under real concurrency the index
+          # is the only thing that can say no.
+          #
+          # `insert!` and NOT `create!`, deliberately. The rescue below depends on
+          # WHICH exception class arrives, and that is exactly what changes when a
+          # raw INSERT becomes a model write: `create!` interposes validations, so
+          # `belongs_to :user` would turn a principal with no `users` row from the
+          # `ActiveRecord::InvalidForeignKey` Postgres raises into a
+          # `RecordInvalid` — a different answer on the wire for an unrelated
+          # input. `insert!` is the faithful translation: one INSERT … RETURNING,
+          # the database constraints as the sole authority, `RecordNotUnique`
+          # still raised by the index, timestamps still written.
+          Booking.insert!(
+            { user_id:             uid,
+              restaurant_id:       restaurant_id,
+              restaurant_table_id: restaurant_table_id,
+              party_size:          party_size,
+              seating_at:          seating_at,
+              status:              Booking::CONFIRMED },
+            returning: %i[id party_size status],
           ).first
         rescue ActiveRecord::RecordNotUnique
-          # Lost a race for the same (table, seating) — the unique index caught it.
+          # Lost a race for the same (table, seating) — the unique index caught
+          # it. The SAME sentence as the pre-check, so an assistant cannot tell
+          # (and need not care) which half refused.
           return render_already_booked(restaurant_table_id, date, time)
         end
 
@@ -172,15 +188,18 @@ class Kiosk::BookingsController < ApplicationController
                },
                required: ["booking_id"]
   def cancel_booking
-    conn = ActiveRecord::Base.connection
-
     booking_id = params[:booking_id]
     return render_bad_request("missing field: booking_id") if booking_id.blank?
 
-    # K-581/K-582: this id is cast `::uuid` below — a malformed one made Postgres
-    # raise InvalidTextRepresentation, which is not a Kiosk error and so surfaced
-    # as a raw 500 (leaking "invalid input syntax for type uuid") for what is
-    # plainly a client mistake. Check the shape first, answer 400.
+    # K-581/K-582, and the guard got MORE load-bearing once the SQL became
+    # ActiveRecord (K-654). It was written because this id was cast `::uuid`, and
+    # a malformed one made Postgres raise InvalidTextRepresentation — not a Kiosk
+    # error, so it escaped as a raw 500 leaking "invalid input syntax for type
+    # uuid". `where(id:)` does not raise on junk: ActiveRecord's uuid type quietly
+    # casts an unparseable value to NULL, which matches no row and would answer
+    # 403 — a client's typo reported as an ownership refusal. Check the shape
+    # first, answer 400; a well-formed but foreign id still gets the 403, so the
+    # shape check never softens the ownership answer.
     unless UuidCheck.valid?(booking_id)
       return render_bad_request(
         "booking_id #{booking_id.to_s.inspect} is not a uuid — pass the `booking_id` " \
@@ -188,28 +207,21 @@ class Kiosk::BookingsController < ApplicationController
       )
     end
 
-    # Joins the wire request's SessionContext transaction — see book_table.
-    conn.transaction do
-      # Owner-scoped: the booking must belong to the caller and not be cancelled.
-      booking = conn.execute(
-        "SELECT id FROM bookings " \
-        "WHERE id = #{conn.quote(booking_id.to_s)}::uuid " \
-        "AND user_id = kiosk.current_user_id() " \
-        "AND status <> 'cancelled' " \
-        "LIMIT 1",
-      ).first
-      return render_not_owner if booking.nil?
+    # Owner-scoped, in ONE statement. It was two — a SELECT that decided the 403
+    # and an UPDATE that did the work — and collapsing them is not just tidier:
+    # the ownership test and the write can no longer be separated by another
+    # transaction. `update_all` (not `update!`) keeps that single-statement
+    # property and skips validations exactly as the previous UPDATE did; the row
+    # count IS the answer. Cancelling drops the row out of the confirmed set, so
+    # the unique partial index frees the (table, seating) for a fresh booking.
+    cancelled = Booking.owned_by_current_principal
+                       .where(id: booking_id)
+                       .where.not(status: Booking::CANCELLED)
+                       .update_all(status: Booking::CANCELLED, updated_at: Time.current)
 
-      # Cancelling drops the row out of the confirmed set, so the unique partial
-      # index frees the (table, seating) for a fresh booking.
-      conn.execute(
-        "UPDATE bookings SET status = 'cancelled', updated_at = now() " \
-        "WHERE id = #{conn.quote(booking_id.to_s)}::uuid " \
-        "AND user_id = kiosk.current_user_id()",
-      )
+    return render_not_owner if cancelled.zero?
 
-      render json: { booking_id: booking_id, status: "cancelled" }
-    end
+    render json: { booking_id: booking_id, status: "cancelled" }
   end
 
   private

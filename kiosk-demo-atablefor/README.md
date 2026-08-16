@@ -45,6 +45,15 @@ diner's name.
 
 There is **no `pay`**: the advertised capabilities are `[schema, query, run]`.
 
+The four verbs are ordinary Rails controllers, not initializer blocks:
+`app/controllers/kiosk/dining_room_controller.rb` holds the two queries
+(`include Kiosk::Query`) and `app/controllers/kiosk/bookings_controller.rb` the
+two actions (`include Kiosk::Action`), each declared with the class-level
+descriptor macros; refusals are plain `render json:, status:` naming a wire
+`error.code`. Neither is routable — a handler is reached only through the wire.
+`config/initializers/kiosk.rb` is configuration only: it *names* the two
+controllers in `c.handlers`, it does not contain them.
+
 ## Running it
 
 Postgres required. From this directory:

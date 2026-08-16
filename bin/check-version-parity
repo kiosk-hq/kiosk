@@ -1,0 +1,281 @@
+#!/usr/bin/env ruby
+# frozen_string_literal: true
+
+# Version-parity check (K-748).
+#
+# WHY THIS EXISTS. `kiosk.tech/spec/protocol.md` §14.1 is normative and says:
+#
+#     Version parity (MAJOR.MINOR only). The protocol, the reference
+#     implementation, and the AI assistant skill share their MAJOR.MINOR
+#     version — currently 0.3. An operator on Kiosk 0.3 pins a 0.3 skill
+#     against a 0.3 wire.
+#
+# For months that sentence was false about one of its three subjects, on every
+# request. The protocol was 0.3.0 and the skill was 0.3.11, but thirteen gems
+# were `VERSION = "0.0.1"` and kiosk-pow-equihash was `"0.1.0"` — the gems did
+# not even agree with each other — and `Kiosk-Server-Version` emits the gem
+# version, so a server advertising `Kiosk-API-Version: 0.3.0` answered
+# `Kiosk-Server-Version: 0.0.1` on the same response. Nothing was red. Every
+# suite in this repo passes at any version number, because the version is an
+# input to no assertion: the specs that touch it match `/\A\d+\.\d+\.\d+\z/`
+# or compare the constant against itself.
+#
+# Phil's answer (2026-08-16) was to honour the published rule rather than
+# weaken it — and to stop the rule being prose. So this is a CHECK, not a
+# convention: it reads the protocol version out of kiosk-core, reads every
+# gem's version out of its own gemspec the way RubyGems would, and fails the
+# build when they no longer speak the same MAJOR.MINOR.
+#
+# THE RULE IT ENFORCES — and the half of it that is easy to get wrong. §14.1
+# binds MAJOR.MINOR **only**. A per-gem PATCH release is legitimate and
+# expected: kiosk-server may ship 0.3.4 while kiosk-rls-minitest sits at
+# 0.3.0, because a fix in one gem is not a protocol event. So this check must
+# NOT demand identical versions — a check that did would be wrong about the
+# spec and would be silenced the first time someone needed a patch release.
+# Four things are asserted, and none of them looks at PATCH:
+#
+#   A. GEM VERSIONS.  Every gemspec's `spec.version` shares MAJOR.MINOR with
+#      `Kiosk::Protocol::API_VERSION`. That constant is the source of truth —
+#      it is what `Kiosk-API-Version` puts on the wire, so it is the number
+#      the spec sentence is about.
+#
+#   B. INTER-GEM CONSTRAINTS.  Every `kiosk-*` dependency any gemspec declares
+#      must be `~> MAJOR.MINOR.0`, which is exactly `>= 0.3.0, < 0.4.0` — the
+#      parity rule written where the RESOLVER can read it. This matters
+#      off-tree, not here: everything in this monorepo consumes siblings by
+#      `path:`, so the constraint is never exercised locally and a stale one
+#      cannot fail any suite. The constraints really were stale — `~> 0.0`
+#      (i.e. `>= 0.0, < 1.0`) would have let someone `gem install kiosk-server`
+#      0.3 against kiosk-core 0.1 and get a resolution the spec forbids.
+#
+#   C. THE SKILL PIN.  §14.1's third subject. The `skill_url` each demo pins,
+#      and kiosk-server's default, names `skill-vMAJOR.MINOR.PATCH.md`; that
+#      MAJOR.MINOR must be the protocol's too. PATCH is deliberately ignored
+#      — §14.4 makes the skill's PATCH an independent, skill-only revision
+#      line (0.3.11 today, eleven cuts into protocol 0.3).
+#
+#      THIS IS NOT WHAT kiosk-test-support/spec/skill_pin_spec.rb COVERS, and
+#      the two do not overlap. That spec asserts INTEGRITY — that the pinned
+#      `skill_sha256` equals the SHA-256 of the pinned file's bytes — and it
+#      reads those bytes out of a sibling `../kiosk.tech` checkout, so it
+#      SKIPS ENTIRELY in public CI, where that sibling does not exist. It
+#      never looks at the version number in the filename. A demo could pin
+#      skill-v0.2.0.md with a perfectly correct sha256 and that spec would be
+#      green (and, in public CI, would not even run). This check reads only
+#      the URL string, needs no sibling checkout and no network, and asserts
+#      only the number that spec ignores.
+#
+#   D. THE SINGLE EDIT POINT.  Each gem's `lib/**/version.rb` must declare
+#      exactly one `VERSION` and the gemspec's `spec.version` must equal it.
+#      Without this, a gemspec that stopped reading its own version.rb — a
+#      hardcoded `spec.version = "0.3.9"` — would pass A while the file every
+#      human edits became decoration.
+#
+# THE FAIL-OPEN GUARD. Rule A reads `spec.version` by LOADING each gemspec
+# (`Gem::Specification.load`, the same evaluation `gem build` performs) rather
+# than by regexing `spec.version =`, because a regex that does not recognise a
+# shape reports success — the failure mode this file exists to prevent. Same
+# for rule B: it reads `spec.dependencies`, the resolved requirement objects,
+# not the source text. Where text IS parsed (the protocol constant, the
+# version.rb literal, the skill URLs) an unparseable shape is a HARD ERROR,
+# never a skip: the checker says out loud that it cannot see.
+#
+# WHEN THIS FAILS ON YOU. Cutting a new protocol MINOR means moving all of it
+# together, in one commit: `API_VERSION` (and `MIN_CLIENT`) in
+# kiosk-core/lib/kiosk/protocol.rb, all 14 version.rb files, the `~>`
+# constraints in the gemspecs, every Gemfile.lock that pins them (`bundle lock`
+# per demo — do not hand-edit), and the demos' `skill_url` pins once the new
+# skill is cut and published. This check is the list of what "together" means.
+#
+# Stdlib only (rubygems), no bundle, no database, no network. ~0.2 s for 14
+# gems. Same profile and same reason as bin/check-ci-tasks, bin/check-demo-copies
+# and bin/check-gem-packaging.
+#
+# Usage:
+#   bin/check-version-parity          # check
+#   bin/check-version-parity --list   # print every version this check compares
+
+require "rubygems"
+
+ROOT            = File.expand_path("..", __dir__)
+PROTOCOL_SOURCE = File.join(ROOT, "kiosk-core", "lib", "kiosk", "protocol.rb")
+SERVER_DEFAULTS = File.join(ROOT, "kiosk-server", "lib", "kiosk", "server", "configuration_extension.rb")
+
+errors = []
+
+# ── The source of truth ──────────────────────────────────────────────────────
+#
+# Kiosk::Protocol::API_VERSION is what `Kiosk-API-Version` puts on every
+# /kiosk/* response, so it is the number §14.1's sentence is about. Read as
+# text, not by require: this must run on a bare checkout with nothing loaded.
+abort "check-version-parity: #{PROTOCOL_SOURCE} not found — is this a checkout?" unless File.exist?(PROTOCOL_SOURCE)
+api_version = File.read(PROTOCOL_SOURCE)[/^\s*API_VERSION\s*=\s*"(\d+\.\d+\.\d+)"/, 1]
+abort "check-version-parity: could not read `API_VERSION = \"X.Y.Z\"` from #{PROTOCOL_SOURCE}. " \
+      "That constant is the source of truth for this check; if it moved or changed shape, this " \
+      "file must be taught the new one rather than left guessing." unless api_version
+
+major, minor, = api_version.split(".").map(&:to_i)
+SERIES      = "#{major}.#{minor}"                             # "0.3.0" -> "0.3"
+NEXT_SERIES = "#{major}.#{minor + 1}.0"                       # the exclusive upper bound
+WANT        = Gem::Requirement.new("~> #{SERIES}.0")          # >= 0.3.0, < 0.4.0
+
+def series_of(version) = version.to_s.split(".").first(2).join(".")
+
+listing = []
+
+# ── Rules A and D: gem versions, and the file humans edit ────────────────────
+gemspecs = Dir[File.join(ROOT, "*", "*.gemspec")].sort
+abort "check-version-parity: no */*.gemspec under #{ROOT}" if gemspecs.empty?
+
+specs = {}
+gemspecs.each do |gemspec|
+  dir  = File.dirname(gemspec)
+  gem  = File.basename(dir)
+
+  spec = Gem::Specification.load(gemspec)
+  unless spec
+    errors << "#{gem}: `Gem::Specification.load` returned nil for #{File.basename(gemspec)} — the " \
+              "gemspec does not evaluate, so its version cannot be read at all."
+    next
+  end
+  specs[spec.name] = spec
+
+  # ── A ──
+  if series_of(spec.version) == SERIES
+    # ok
+  else
+    errors << "#{gem}: packages as version #{spec.version}, whose MAJOR.MINOR is " \
+              "#{series_of(spec.version)}, but the protocol is #{api_version} (#{SERIES}). " \
+              "protocol.md §14.1 promises the protocol, this implementation and the skill share " \
+              "MAJOR.MINOR — and kiosk-server puts this number on every response as " \
+              "`Kiosk-Server-Version`. Set VERSION to #{SERIES}.<patch> in #{gem}'s version.rb, or " \
+              "— if the PROTOCOL moved — move API_VERSION and all 14 gems together (see the header)."
+  end
+
+  # ── D ──
+  version_files = Dir[File.join(dir, "lib", "**", "version.rb")].sort
+  if version_files.size != 1
+    errors << "#{gem}: expected exactly one lib/**/version.rb, found #{version_files.size} " \
+              "(#{version_files.map { |f| f.delete_prefix("#{ROOT}/") }.join(', ')}). This check " \
+              "asserts the gemspec's version comes from that one file; with none or several it " \
+              "cannot tell which one a human is supposed to edit."
+  else
+    rel      = version_files.first.delete_prefix("#{ROOT}/")
+    literals = File.read(version_files.first).scan(/^\s*VERSION\s*=\s*"([^"]*)"/).flatten
+    if literals.size != 1
+      errors << "#{rel}: found #{literals.size} `VERSION = \"…\"` declarations, expected exactly one. " \
+                "An unreadable shape must not pass silently — this check would otherwise be blind to " \
+                "the file it is meant to police."
+    elsif literals.first != spec.version.to_s
+      errors << "#{gem}: #{rel} says VERSION = \"#{literals.first}\" but the gemspec packages " \
+                "#{spec.version} — the gemspec is not reading its own version file, so editing " \
+                "version.rb changes nothing that ships. Restore `spec.version = <the VERSION constant>`."
+    end
+  end
+
+  listing << [gem, spec.version.to_s]
+end
+
+# ── Rule B: the constraints the RESOLVER reads ───────────────────────────────
+own_gems = specs.keys.to_a
+constraints = []
+specs.each_value do |spec|
+  spec.dependencies.select { |d| d.name.start_with?("kiosk-") }.each do |dep|
+    constraints << [spec.name, dep.name, dep.requirement.to_s, dep.type]
+
+    unless own_gems.include?(dep.name)
+      errors << "#{spec.name}: depends on `#{dep.name}`, which is not a gem in this repo — either " \
+                "the name is wrong or this manifest is stale."
+      next
+    end
+    next if dep.requirement == WANT
+
+    errors << "#{spec.name}: declares `#{dep.name}` as `#{dep.requirement}`, expected " \
+              "`~> #{SERIES}.0`. Everything in this monorepo consumes siblings by `path:`, so this " \
+              "constraint is never exercised here and no suite can go red on it — but it is what " \
+              "RubyGems resolves for someone installing the gem, and `~> #{SERIES}.0` " \
+              "(>= #{SERIES}.0, < #{NEXT_SERIES}) is the parity rule stated to the resolver: " \
+              "same MAJOR.MINOR, any PATCH."
+  end
+end
+
+# ── Rule C: the third subject of the parity sentence ─────────────────────────
+#
+# One default in kiosk-server plus one pin per operator demo. The URL string is
+# all this reads; skill_pin_spec owns the sha256 half (see the header).
+skill_pins = []
+unless File.exist?(SERVER_DEFAULTS)
+  errors << "kiosk-server/lib/kiosk/server/configuration_extension.rb is missing — the default " \
+            "skill_url every demo inherits cannot be checked."
+end
+if File.exist?(SERVER_DEFAULTS)
+  default_url = File.read(SERVER_DEFAULTS)[/@skill_url\s*\|\|=\s*"([^"]+)"/, 1]
+  if default_url
+    skill_pins << ["kiosk-server (default)", default_url]
+  else
+    errors << "kiosk-server/lib/kiosk/server/configuration_extension.rb: no `@skill_url ||= \"…\"` " \
+              "default found. Either the default moved — teach this check where — or kiosk-server " \
+              "stopped shipping one, which is a wire-visible change."
+  end
+end
+
+initializers = Dir[File.join(ROOT, "kiosk-demo-*", "config", "initializers", "kiosk.rb")].sort
+if initializers.empty?
+  errors << "no kiosk-demo-*/config/initializers/kiosk.rb found — the demos' skill pins cannot be " \
+            "checked, and this check must not pass by finding nothing."
+end
+initializers.each do |path|
+  demo = path[%r{(kiosk-demo-[^/]+)}, 1]
+  url  = File.read(path)[/skill_url\s*=\s*"([^"]+)"/, 1]
+  # A demo with no explicit pin inherits kiosk-server's default, already checked.
+  skill_pins << [demo, url] if url
+end
+
+skill_pins.each do |where, url|
+  version = File.basename(url)[/\Askill-v(\d+\.\d+\.\d+)\.md\z/, 1]
+  unless version
+    errors << "#{where}: skill_url `#{url}` does not name a `skill-vMAJOR.MINOR.PATCH.md` file, so " \
+              "its version cannot be read. protocol.md §14.4 makes that filename the skill's version; " \
+              "an unparseable pin must fail rather than pass unchecked."
+    next
+  end
+  next if series_of(version) == SERIES
+
+  errors << "#{where}: pins skill v#{version} (#{series_of(version)}) against protocol " \
+            "#{api_version} (#{SERIES}). protocol.md §14.1: an operator on Kiosk #{SERIES} pins a " \
+            "#{SERIES} skill against a #{SERIES} wire. Re-pin to the published #{SERIES} skill — " \
+            "URL and skill_sha256 move together (ADR-0012)."
+end
+
+# ── --list ───────────────────────────────────────────────────────────────────
+if ARGV.include?("--list")
+  puts "protocol  Kiosk::Protocol::API_VERSION = #{api_version}   (series #{SERIES})"
+  puts
+  puts format("%-24s %-10s %s", "GEM", "VERSION", "SERIES")
+  listing.each { |(gem, v)| puts format("%-24s %-10s %s", gem, v, series_of(v)) }
+  puts
+  puts format("%-24s %-24s %-12s %s", "GEM", "DEPENDS ON", "REQUIREMENT", "KIND")
+  constraints.sort.each do |(from, to, req, type)|
+    puts format("%-24s %-24s %-12s %s", from, to, req, type == :development ? "development" : "runtime")
+  end
+  puts
+  puts format("%-24s %s", "SKILL PINNED BY", "URL")
+  skill_pins.each { |(where, url)| puts format("%-24s %s", where, url) }
+  # Deliberately falls through to the verdict below rather than exiting here,
+  # for the same reason bin/check-gem-packaging's --list does: a mode that
+  # returned 1 without printing WHY would be a check that fails silently.
+end
+
+if errors.empty?
+  puts "check-version-parity: OK — protocol #{api_version}; #{listing.size} gems, " \
+       "#{constraints.size} inter-gem constraints and #{skill_pins.size} skill pins all on #{SERIES}"
+  exit 0
+end
+
+warn "\ncheck-version-parity FAILED:\n"
+errors.each { |e| warn "  ✗ #{e}" }
+warn "\nprotocol.md §14.1 is normative: the protocol, this reference implementation and the AI " \
+     "assistant skill share their MAJOR.MINOR version. PATCH is free — per-gem patch releases are " \
+     "legitimate and this check never compares them — but the #{SERIES} line is a promise every " \
+     "response carries in its `Kiosk-Server-Version` header."
+exit 1

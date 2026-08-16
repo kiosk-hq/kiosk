@@ -37,10 +37,17 @@ module Kiosk
 
           resp = client.run(b, name: profile.forge_action, **forged_args)
 
+          # A 402 answered nothing: a toll fires ahead of the handler, and a
+          # payment_setup_required means B never had a card. Neither says
+          # whether the injected user_id would have been honoured, and the
+          # ownership check below cannot run either — there is no new resource
+          # to look for. Say could-not-test rather than reading the rest of this
+          # method's silence as a pass (K-736).
+          stall = payment_required_stall(resp, step: "the forged-user_id #{profile.forge_action} call")
+          return stall if stall
+
           # If the call was rejected outright, the server caught it — but only
-          # an auth/authz refusal is "caught it" (K-728). A 402 here is a toll
-          # firing ahead of the handler, which says nothing about whether the
-          # injected user_id would have been honoured; it used to score BLOCKED.
+          # an auth/authz refusal is "caught it" (K-728).
           # 401 and 403 are both admitted: a provider may treat a caller
           # claiming another principal as unauthenticated rather than forbidden.
           if Kiosk::Redteam.blocked?(resp)

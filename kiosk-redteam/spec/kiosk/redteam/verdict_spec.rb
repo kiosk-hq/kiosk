@@ -13,12 +13,60 @@ RSpec.describe "Kiosk::Redteam.blocked?" do
     expect(Kiosk::Redteam.blocked?(response(401))).to be(true)
   end
 
-  it "returns true for HTTP 402" do
-    expect(Kiosk::Redteam.blocked?(response(402))).to be(true)
-  end
-
   it "returns true for HTTP 403" do
     expect(Kiosk::Redteam.blocked?(response(403))).to be(true)
+  end
+
+  # ── HTTP 402: the overloaded status (K-736) ──────────────────────────────
+  #
+  # kiosk-server maps THREE codes onto 402 (Errors::CODES) and this predicate
+  # answered true for the bare status, so a tolled verb printed
+  # "BLOCKED ✓ … (HTTP 402)" for an attack that never executed. Pin all three
+  # plus the bare status: none of them is a refusal this predicate can read.
+  it "returns false for HTTP 402 pow_required (a toll defers, it does not refuse)" do
+    body = { "error" => { "code" => "pow_required" } }
+    expect(Kiosk::Redteam.blocked?(response(402, body))).to be(false)
+  end
+
+  it "returns false for HTTP 402 payment_setup_required (no card on file is the attacker's gap)" do
+    body = { "error" => { "code" => "payment_setup_required" } }
+    expect(Kiosk::Redteam.blocked?(response(402, body))).to be(false)
+  end
+
+  it "returns false for HTTP 402 payment_failed (the rail declined; every gate had said yes)" do
+    body = { "error" => { "code" => "payment_failed" } }
+    expect(Kiosk::Redteam.blocked?(response(402, body))).to be(false)
+  end
+
+  it "returns false for a bare HTTP 402 naming no code at all" do
+    expect(Kiosk::Redteam.blocked?(response(402))).to be(false)
+  end
+
+  # The three codes disqualify a response whatever status carries them: a
+  # status and an envelope that disagree are the least conclusive answer there
+  # is, and `pow_required` on a 200 was a block until K-736.
+  it "returns false for a 403 whose envelope says payment_failed (status and code disagree)" do
+    body = { "error" => { "code" => "payment_failed" } }
+    expect(Kiosk::Redteam.blocked?(response(403, body))).to be(false)
+  end
+
+  describe ".payment_required_reason" do
+    it "names which of the three answered" do
+      Kiosk::Redteam::PAYMENT_REQUIRED_CODES.each_key do |code|
+        reason = Kiosk::Redteam.payment_required_reason(response(402, "error" => { "code" => code }))
+        expect(reason).to include(code.inspect)
+        expect(reason).to include("HTTP 402")
+      end
+    end
+
+    it "says the bare status named none of them" do
+      expect(Kiosk::Redteam.payment_required_reason(response(402))).to include("named none of them")
+    end
+
+    it "is nil for anything that is not a 402 answer" do
+      expect(Kiosk::Redteam.payment_required_reason(response(403, "error" => { "code" => "forbidden" }))).to be_nil
+      expect(Kiosk::Redteam.payment_required_reason(response(200))).to be_nil
+    end
   end
 
   # ── Not blocked ──────────────────────────────────────────────────────────
@@ -76,9 +124,11 @@ RSpec.describe "Kiosk::Redteam.blocked?" do
     expect(Kiosk::Redteam.blocked?(response(200, body))).to be(true)
   end
 
-  it "returns true for error code 'pow_required'" do
+  # pow_required was in BLOCKED_ERROR_CODES until K-736 — so a provider that
+  # answered 200 with a toll envelope scored a block for a deferred request.
+  it "returns false for error code 'pow_required' (a demanded toll is not a denial)" do
     body = { "error" => { "code" => "pow_required" } }
-    expect(Kiosk::Redteam.blocked?(response(200, body))).to be(true)
+    expect(Kiosk::Redteam.blocked?(response(200, body))).to be(false)
   end
 
   it "returns true for error code 'rls_denied'" do

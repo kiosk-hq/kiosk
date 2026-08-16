@@ -34,12 +34,19 @@ module Kiosk
 
           kyc_resp = client.kyc(a, attestation_jws: profile.kyc_forged.call(a.user_id))
 
+          # A metered /kyc answers 402 BEFORE the issuer/signature is examined,
+          # so the forgery was neither caught nor accepted. This branch used to
+          # count that 402 as "the forged attestation did not take effect"
+          # (K-736); falling through instead would attack the gated action with
+          # an un-attested principal, i.e. MissingKyc under this scenario's name.
+          stall = payment_required_stall(kyc_resp, step: "the forged attestation this scenario submits to /kyc")
+          return stall if stall
+
           # Left permissive on purpose (K-728): this branch genuinely admits
           # several gates — an untrusted issuer is rejected as 403 forbidden by
-          # a verifier that checks `iss`, as 401 by one that treats an
-          # unverifiable signature as a failed authentication, and as 402 by a
-          # metered /kyc. All three mean the forged attestation did not take
-          # effect, which is all this branch claims.
+          # a verifier that checks `iss`, and as 401 by one that treats an
+          # unverifiable signature as a failed authentication. Both mean the
+          # forged attestation did not take effect, which is all this claims.
           return verdict_from(kyc_resp, detail: "forged KYC was accepted by /kyc endpoint") if Kiosk::Redteam.blocked?(kyc_resp)
 
           owned_ref  = profile.create_owned.call(client, a)

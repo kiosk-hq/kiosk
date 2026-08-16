@@ -77,12 +77,19 @@ module Kiosk
       # moves is auditable without re-running the battery by hand.
       #
       # With neither given, the verdict delegates to {Kiosk::Redteam.blocked?},
-      # which admits ANY of 401/402/403 or any recognised denial code. That is
+      # which admits either of 401/403 or any recognised denial code. That is
       # honest ONLY for a scenario whose attack several different gates may
       # legitimately refuse; every such call site states which gates it admits.
       #
       # 5xx is never blocked, whatever is asked for — a crash cannot masquerade
       # as enforcement (see {Kiosk::Redteam.blocked?}).
+      #
+      # HTTP 402 is never blocked unless `expect_code:` names the code that came
+      # back (K-736). Three wire codes share that status and two of them are not
+      # refusals at all, so `expect: 402` alone demands nothing; on the
+      # permissive path a 402 returns the "could not test" verdict
+      # {#payment_required_stall} builds, which is not a pass and not a breach
+      # laid at the provider's door.
       #
       # @param response    [Response]
       # @param expect      [Integer, Array<Integer>, nil] status(es) that count
@@ -93,6 +100,13 @@ module Kiosk
       # @return [Verdict]
       def verdict_from(response, expect: nil, expect_code: nil, detail: nil)
         if expect.nil? && expect_code.nil?
+          # A bare 402 delegation is the K-736 defect itself: `blocked?` used to
+          # answer true for all three of pow_required / payment_setup_required /
+          # payment_failed, so a tolled verb printed BLOCKED for an attack that
+          # never executed. Name which one answered instead of guessing.
+          stall = payment_required_stall(response)
+          return stall if stall
+
           blocked = Kiosk::Redteam.blocked?(response)
           return Verdict.new(
             blocked: blocked,
@@ -108,6 +122,10 @@ module Kiosk
         misses << "want error.code #{Array(expect_code).map(&:inspect).join("/")}" \
           if expect_code && !Array(expect_code).include?(code)
         misses << "5xx is never a block" if response.status >= 500
+        # Naming 402 without naming the code names nothing (K-736).
+        misses << "HTTP 402 is conclusive only with an explicit expect_code — " \
+                  "#{Kiosk::Redteam::PAYMENT_REQUIRED_CODES.keys.join("/")} all ride that status" \
+          if response.status == 402 && expect_code.nil?
 
         Verdict.new(
           blocked: misses.empty?,
@@ -116,6 +134,44 @@ module Kiosk
           detail:  misses.empty? ? "" : "#{detail || "attack was not refused by the named gate"} " \
                                         "[#{misses.join("; ")}; got HTTP #{response.status} " \
                                         "code=#{code.inspect}, body=#{response.body.inspect}]",
+        )
+      end
+
+      # A 402 answer means the attack was NOT evaluated — say so, rather than
+      # scoring it either way (K-736).
+      #
+      # `Kiosk::Server::Errors::CODES` maps three codes onto HTTP 402 and
+      # `blocked?` counted all three as "explicit auth/authz rejection".  Two of
+      # them are nothing of the sort: `pow_required` says "pay the toll and
+      # retry" — and this harness solves tolls only at registration
+      # ({Client#register_raw}), so `#query`/`#run`/`#pay` never do — while
+      # `payment_setup_required` says the attacker never put a card on file.
+      # Both were printed as `BLOCKED ✓ … (HTTP 402)` for an attack that never
+      # ran.  Demonstrated on a stub transport before the fix.
+      #
+      # The verdict is NOT blocked (a battery cannot claim a proof it did not
+      # earn) and NOT skipped (a skip is invisible to `all_blocked?`, so a
+      # consumer without the demos' expected-skip assertion would go green while
+      # a scenario quietly stopped testing).  It reads as a breach line carrying
+      # a detail that says which of the three answered and that this is a
+      # could-not-test, so the operator is not sent hunting for a hole.
+      #
+      # @param response [Response]
+      # @param step     [String, nil] what was being attempted, e.g. "the
+      #   expired attestation this scenario submits to /kyc"
+      # @return [Verdict, nil] nil when the response is not a 402 answer
+      def payment_required_stall(response, step: nil)
+        reason = Kiosk::Redteam.payment_required_reason(response)
+        return nil unless reason
+
+        Verdict.new(
+          blocked: false,
+          skipped: false,
+          status:  response.status,
+          detail:  "COULD NOT TEST: #{step || "the attack under test"} was answered #{reason}. " \
+                   "That is neither a refusal of this attack nor a breach — nothing was proved " \
+                   "either way. A provider that means a payment gate HERE must have the scenario " \
+                   "name the code it accepts (verdict_from expect_code:).",
         )
       end
 
@@ -152,11 +208,7 @@ module Kiosk
       # @param response [Response]
       # @return [String, nil]
       def error_code(response)
-        body = response.body
-        return nil unless body.is_a?(Hash)
-
-        error = body["error"]
-        error.is_a?(Hash) ? error["code"] : nil
+        Kiosk::Redteam.error_code(response)
       end
 
       # Register a principal.  Any PoW solving is driven entirely by the

@@ -41,22 +41,79 @@ module Kiosk
   # == Blocked? semantics
   #
   # A Response is "blocked" when:
-  #   - HTTP status is 401, 402, or 403  (explicit auth/authz rejection), OR
+  #   - HTTP status is 401 or 403  (explicit auth/authz rejection), OR
   #   - body["error"]["code"] is one of the recognised domain denial codes
   #
   # A 5xx or connection error is NOT blocked — a crash cannot masquerade as a
-  # successful enforcement gate.  Non-2xx / non-{401-403} responses are
-  # INDETERMINATE; scenarios should surface them as leaks, not blocks.
+  # successful enforcement gate.  Neither is a 402: see {PAYMENT_REQUIRED_CODES}.
+  # Every other non-2xx is INDETERMINATE; scenarios should surface those as
+  # leaks, not blocks.
   module Redteam
     # Canonical set of HTTP statuses that constitute a deliberate block.
-    BLOCKED_STATUSES = [401, 402, 403].freeze
+    #
+    # 402 is deliberately ABSENT (K-736) — see {PAYMENT_REQUIRED_CODES}.
+    BLOCKED_STATUSES = [401, 403].freeze
+
+    # The THREE `error.code`s kiosk-server maps onto HTTP 402
+    # (`Kiosk::Server::Errors::CODES`), each with the reason it cannot be read
+    # as "this attack was refused".  A bare 402 names none of them, and the
+    # wire contract says so itself: `Errors::STATUS_CODES` deliberately omits
+    # 402 because "three codes share it; guessing would put the wrong one on
+    # the wire".  A harness that reads a refusal out of the bare status is
+    # making exactly the inference the server refuses to make.
+    PAYMENT_REQUIRED_CODES = {
+      "pow_required" =>
+        "a toll was DEMANDED, not a refusal — the request was deferred until a proof is " \
+        "supplied, and this harness solves PoW only during registration " \
+        "(Client#register_raw); #query/#run/#pay never retry, so the attack was never run",
+      "payment_setup_required" =>
+        "the principal has no payment instrument on file — a gap in the ATTACKER's setup, " \
+        "not a decision about the attack",
+      "payment_failed" =>
+        "the payment rail declined the charge AFTER the mandate trail verified — every " \
+        "authorization gate the request passed through said yes; a declined card is not a gate",
+    }.freeze
 
     # Domain error codes that constitute a deliberate block regardless of HTTP
     # status (some providers return 200 with an error envelope).
     # Note: "bad_request" (400) is intentionally excluded — a validation error
     # is NOT evidence of an auth/authz gate.  RegistrationWithoutPow uses its
     # own self-sufficient check instead of delegating to blocked?.
-    BLOCKED_ERROR_CODES = %w[forbidden unauthenticated pow_required rls_denied].freeze
+    # "pow_required" is excluded for the reason 402 is (K-736): a toll defers a
+    # request, it does not refuse it.
+    BLOCKED_ERROR_CODES = %w[forbidden unauthenticated rls_denied].freeze
+
+    # Read `body["error"]["code"]` defensively — the body may not be a Hash at
+    # all, and `body["error"]` may be a plain String rather than an envelope.
+    #
+    # @param response [Response]
+    # @return [String, nil]
+    def self.error_code(response)
+      body = response.body
+      return nil unless body.is_a?(Hash)
+
+      error = body["error"]
+      error.is_a?(Hash) ? error["code"] : nil
+    end
+
+    # Why this answer cannot settle a verdict on its own, or nil when it is not
+    # a payment-required answer at all.
+    #
+    # Triggered by HTTP 402 whatever the envelope says, and by any of
+    # {PAYMENT_REQUIRED_CODES} whatever the status says — a response whose
+    # status and code disagree is the least conclusive of all.
+    #
+    # @param response [Response]
+    # @return [String, nil]
+    def self.payment_required_reason(response)
+      code = error_code(response)
+      return nil unless response.status == 402 || PAYMENT_REQUIRED_CODES.key?(code)
+
+      why = PAYMENT_REQUIRED_CODES[code] ||
+            "kiosk-server maps three codes onto 402 — #{PAYMENT_REQUIRED_CODES.keys.join(", ")} — " \
+            "and this answer named none of them, so which gate fired (if any did) is unknowable"
+      "HTTP #{response.status} code=#{code.inspect}: #{why}"
+    end
 
     # Determine whether a provider response constitutes a successful block.
     #
@@ -67,25 +124,22 @@ module Kiosk
     # shape a crashing authorization filter renders — was counted as a block,
     # which is the one thing the paragraph above promises cannot happen.
     #
+    # 402 answers false for the same family of reasons (K-736): two of the
+    # three codes behind that status are not refusals of anything, and the
+    # third is the payment rail's verdict rather than a gate's.  A scenario
+    # that genuinely means a payment gate names the code it accepts —
+    # {Scenario#verdict_from}'s `expect_code:` — instead of leaning on this
+    # predicate, which has no way to tell the three apart for it.
+    #
     # @param response [Response]
     # @return [Boolean]
     def self.blocked?(response)
       # status 0 is this gem's connection-error sentinel; >= 500 is a crash.
       return false if response.status >= 500 || response.status.zero?
+      return false if payment_required_reason(response)
       return true if BLOCKED_STATUSES.include?(response.status)
 
-      # Safely navigate body["error"]["code"] — body["error"] may be a String
-      # (plain message) rather than a Hash when the server returns a simple
-      # error envelope.  Guard against TypeError from String#dig absence.
-      body = response.body
-      if body.is_a?(Hash)
-        error = body["error"]
-        if error.is_a?(Hash)
-          return true if BLOCKED_ERROR_CODES.include?(error["code"])
-        end
-      end
-
-      false
+      BLOCKED_ERROR_CODES.include?(error_code(response))
     end
   end
 end

@@ -150,7 +150,7 @@ record(results, "ForgedUserId", rc == 200 && rc_o == 200 && !o_ids.include?(forg
 
 # ── MalformedUuidArg — junk ids must be a typed 400, never a 500 ────────────
 # K-581/K-582: tudu casts three wire-supplied ids `::uuid` — `list_id` (via the
-# tudu_require_membership! choke point every membership-gated verb opens with),
+# KioskMembershipGate choke point every membership-gated verb opens with),
 # complete_todo's `todo_id`, and remove_member's `account_id`. Before the
 # UuidCheck guards, a malformed value made Postgres raise
 # InvalidTextRepresentation, which is not a Kiosk error and escaped as a raw 500

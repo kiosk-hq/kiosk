@@ -3,8 +3,8 @@
 # Shape check for the uuids that arrive from the wire (K-581/K-582).
 #
 # tudu's SQL builds `'<value>'::uuid` casts from agent-supplied ids — the
-# `list_id` every membership-gated verb takes (the tudu_require_membership!
-# choke point), complete_todo's `todo_id`, and remove_member's `account_id`.
+# `list_id` every membership-gated verb takes (the KioskMembershipGate choke
+# point), complete_todo's `todo_id`, and remove_member's `account_id`.
 # Postgres rejects a malformed literal with `PG::InvalidTextRepresentation`
 # (SQLSTATE 22P02), which is not a `Kiosk::Server::Errors::Base` and so escapes
 # the wire controller's rescue as a raw HTTP 500: a CLIENT mistake reported as a

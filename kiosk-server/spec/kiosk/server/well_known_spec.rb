@@ -101,11 +101,26 @@ RSpec.describe Kiosk::Server::WellKnown do
       expect(doc[:kiosk]).not_to have_key(:skill)
     end
 
+    # The default URL literal lives in exactly ONE place — kiosk-server's own
+    # `@skill_url ||=` in configuration_extension.rb (K-750). Restating it here
+    # made a second copy that had to be hand-chased on every skill cut, and it
+    # went red exactly that way; nothing guarded it, because the pin guard
+    # reads initializers, not specs. What this example is actually about is the
+    # WIRING — the discovery document advertises the configured default,
+    # whatever it currently is — plus the one property that makes a pin
+    # verifiable at all: the default names an IMMUTABLE versioned cut, never
+    # the mutable `skill.md` alias, whose bytes change under a pin.
+    #
+    # Which version that is belongs to the two guards that can see it:
+    # bin/check-version-parity holds it against the protocol's MAJOR.MINOR,
+    # and kiosk-test-support's skill_pin_spec holds it against the bytes
+    # kiosk.tech actually publishes.
     it "advertises the skill descriptor when skill_sha256 is set" do
       Kiosk.configure { |c| c.skill_sha256 = "abc123" }
       d = described_class.build(base_url: "https://api.acme.example")
-      # Default skill URL is the immutable versioned artifact.
-      expect(d[:kiosk][:skill]).to eq(url: "https://kiosk.tech/skill-v0.3.11.md", sha256: "abc123")
+      expect(d[:kiosk][:skill]).to eq(url: Kiosk.configuration.skill_url, sha256: "abc123")
+      expect(Kiosk.configuration.skill_url)
+        .to match(%r{\Ahttps://kiosk\.tech/skill-v\d+\.\d+\.\d+\.md\z})
     end
 
     it "respects an overridden skill_url" do

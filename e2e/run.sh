@@ -190,6 +190,12 @@ cp "$FIXTURES/user.rb"               app/models/user.rb
 cp "$FIXTURES/salon.rb"              app/models/salon.rb
 cp "$FIXTURES/appointment.rb"        app/models/appointment.rb
 cp "$FIXTURES/seeds.rb"              db/seeds.rb
+# The three wire verbs are ordinary Rails controllers (T-081), named in
+# `c.handlers` in the initializer below. `rails new --api` does not create
+# app/controllers/kiosk/, so make it before copying into it.
+mkdir -p app/controllers/kiosk
+cp "$FIXTURES/catalog_controller.rb"  app/controllers/kiosk/catalog_controller.rb
+cp "$FIXTURES/bookings_controller.rb" app/controllers/kiosk/bookings_controller.rb
 mkdir -p lib
 cp "$FIXTURES/stub_idp.rb"           lib/stub_idp.rb
 cp "$FIXTURES/stub_user_idp.rb"      lib/stub_user_idp.rb

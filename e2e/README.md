@@ -9,8 +9,9 @@ Reproducible end-to-end test of the Kiosk OSS gems. The same script (`run.sh`) r
 - `/.well-known/kiosk.json` discovery endpoint returns a valid document
 - Response headers (`Kiosk-Server-Version`, `Kiosk-API-Version`, `Kiosk-Min-Client`) are injected on `/kiosk/*`
 - `POST /kiosk/{query,run,pay}` accept JSON requests and dispatch through `Kiosk::Server::Executor`
-- The `query` verb calls provider-registered named queries (`salons`, `my_appointments`) and returns rows
-- The `run` verb dispatches to registered Actions
+- The `query` verb calls the origin's named queries (`salons`, `my_appointments`) and returns rows
+- The `run` verb dispatches to the origin's named Actions
+- Handler controllers declared with `include Kiosk::Query` / `Kiosk::Action` and named in `c.handlers` are registered and served in DEVELOPMENT, where nothing eager-loads `app/` (K-761)
 - Error envelopes have the right shape and HTTP status (`NotFound` → 404 for unknown query/action, `Unauthenticated` → 401 for missing/garbage token)
 - The `/kiosk/.well-known/jwks.json` endpoint publishes exactly one RSA/RS256 signing key (kty/use/alg/kid/n/e) and never leaks private parameters (`d`, `p`)
 - The partial UNIQUE index on `kiosk.agents.public_key` (WHERE `revoked_at IS NULL`) rejects a second LIVE row for one key at the DB level while allowing a revoked re-registration
@@ -19,7 +20,7 @@ Reproducible end-to-end test of the Kiosk OSS gems. The same script (`run.sh`) r
 
 ## What it does NOT verify (deferred)
 
-- **RLS.** Path C removes raw SQL entirely — there is no arbitrary-SQL surface. Per-user isolation is enforced app-layer in registered query definitions (the `WHERE user_id = kiosk.current_user_id()` in `my_appointments`). RLS is optional and its enforcement is not exercised in this fixture; satellite-mode role separation lands in a follow-up. The `app_role` pre-creation in `run.sh` is kept harmless for forward compatibility. Note: the `kiosk-rls` gem is still installed (see `run.sh`), because it is the only source of `Configuration#system_role=`, which `initializer_kiosk.rb` assigns — the gem is a mandatory boot dependency here even though RLS itself is off.
+- **RLS.** Path C removes raw SQL entirely — there is no arbitrary-SQL surface. Per-user isolation is enforced app-layer in the handler controllers (the `WHERE user_id = kiosk.current_user_id()` in `my_appointments`). RLS is optional and its enforcement is not exercised in this fixture; satellite-mode role separation lands in a follow-up. The `app_role` pre-creation in `run.sh` is kept harmless for forward compatibility. Note: the `kiosk-rls` gem is still installed (see `run.sh`), because it is the only source of `Configuration#system_role=`, which `initializer_kiosk.rb` assigns — the gem is a mandatory boot dependency here even though RLS itself is off.
 - **Live PSP capture.** The pay flow runs against `StubPsp` (deterministic in-process provider) — no real Stripe call here; the Stripe adapter is `kiosk-pay-stripe`.
 - **Streaming.** There is no streaming/events verb; the wire surface is `query`, `run`, `pay`, `schema`.
 - **Multi-agent revocation** flows.
@@ -47,7 +48,7 @@ The script:
 4. Stages the `User` model migration (UUID PK)
 5. Runs `bin/rails g kiosk:install --user-id-type=uuid` (the kiosk-server generator)
 6. Stages the demo migration (`salons` + `appointments`; RLS not used — app-layer isolation via named queries)
-7. Stages models, seeds, stub IdP, initializer, routes
+7. Stages models, handler controllers, seeds, stub IdP, initializer, routes
 8. `rails db:create db:migrate db:seed`
 9. Starts `rails s` on port 3001 in the background
 10. Runs `assistant.sh` — a series of `curl + jq` calls that assert on the responses
@@ -87,6 +88,8 @@ e2e/
     ├── register_pow_flow.rb                # register-PoW driver: no-proof register → 402, solve + re-POST with Kiosk-PoW header → 201, token authenticates a verb
     ├── pay_flow.rb                         # no-human AP2 pay flow: register → sign mandates → pay
     ├── claim_flow.rb                       # account-binding claim ceremony: fresh key → verify-page approval → PoP token → bound wire call → link-code redeem → unlink
-    ├── initializer_kiosk.rb                # Kiosk.configure + registered Action
+    ├── catalog_controller.rb               # Kiosk::CatalogController — `include Kiosk::Query`: the salons + my_appointments verbs
+    ├── bookings_controller.rb              # Kiosk::BookingsController — `include Kiosk::Action`: the book_appointment verb
+    ├── initializer_kiosk.rb                # Kiosk.configure, including `c.handlers` naming the two controllers above
     └── routes.rb                           # mounts /kiosk/{query,run,pay,schema}, /kiosk/auth/{challenge,register,login,revoke}, jwks, oauth/* device routes + /.well-known/kiosk.json
 ```

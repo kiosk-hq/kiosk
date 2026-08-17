@@ -25,10 +25,14 @@ RSpec.describe Kiosk::Server::Executor do
       declare_query("probe") { render json: [{ ok: 1 }] }
       described_class.call(kind: :query, args: { name: "probe" }, identity: identity, connection: connection)
 
-      # 4 SET LOCAL GUCs only (the handler renders rows without hitting connection)
-      expect(connection.executed_sql.size).to eq(4)
-      expect(connection.executed_sql[0]).to start_with(%(SET LOCAL "app"."current_user_id"))
-      expect(connection.executed_sql[3]).to start_with(%(SET LOCAL "app"."current_agent_id"))
+      # 4 GUC statements only (the handler renders rows without hitting
+      # connection). They are `set_config` binds since K-789, so the GUC name
+      # is the first bind rather than part of the statement text.
+      gucs = connection.bound(/set_config/)
+      expect(gucs.size).to eq(4)
+      expect(gucs.first.last.first).to eq("app.current_user_id")
+      expect(gucs.last.last.first).to eq("app.current_agent_id")
+      expect(connection.executed_sql).to be_empty
       expect(connection.in_transaction?).to be(false) # closed after call
     end
   end
@@ -230,6 +234,7 @@ RSpec.describe Kiosk::Server::Executor do
     it "does not open a SessionContext (zero DB calls)" do
       described_class.call(kind: :schema, args: {}, identity: identity, connection: connection)
       expect(connection.executed_sql).to be_empty
+      expect(connection.exec_queries).to be_empty
     end
 
     it "includes entries declared without a description (description/params nil)" do

@@ -93,7 +93,7 @@ module Kiosk
     #                                         verbs as ordinary Rails actions
     #   - {Kiosk::Server::Result}           — success envelope value type
     #   - {Kiosk::Server::Errors}           — exception hierarchy + envelope serialisation
-    #   - {Kiosk::Server::SessionContext}   — transaction + four SET LOCAL GUCs
+    #   - {Kiosk::Server::SessionContext}   — transaction + four transaction-local GUCs
     #
     #   Auth plane (kiosk-pop proof-of-possession — the default IdP):
     #   - {Kiosk::Server::AgentRegistration} — register an agent key (POW-gated)

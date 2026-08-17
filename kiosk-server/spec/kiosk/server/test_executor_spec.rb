@@ -10,8 +10,11 @@ RSpec.describe Kiosk::Server::TestExecutor do
   class TestableConnection
     attr_reader :executed_sql, :transactions_opened
 
+    attr_reader :exec_queries
+
     def initialize
       @executed_sql        = []
+      @exec_queries        = []
       @transactions_opened = 0
       @queued_results      = []
       @queued_errors       = []
@@ -25,14 +28,17 @@ RSpec.describe Kiosk::Server::TestExecutor do
     def execute(sql)
       @executed_sql << sql
 
-      # SET LOCAL is a side-effect DDL — never returns rows and must
-      # NOT consume from the queue (which is staged for the SQL under
-      # test, not the housekeeping GUCs).
-      return [] if sql.start_with?("SET LOCAL")
-
       raise @queued_errors.shift if @queued_errors.any?
 
       @queued_results.empty? ? [] : @queued_results.shift
+    end
+
+    # The identity GUCs travel as bind parameters (K-789), so they arrive
+    # here and NOT through `#execute`. They are housekeeping — they must not
+    # consume from the queue, which is staged for the SQL under test.
+    def exec_query(sql, name = "SQL", binds = [])
+      @exec_queries << [sql, name, binds]
+      []
     end
 
     # Test rig:
@@ -53,10 +59,10 @@ RSpec.describe Kiosk::Server::TestExecutor do
 
     it "sets the four canonical GUCs before yielding" do
       executor.with_identity(identity) { :inside }
-      gucs = connection.executed_sql.select { |s| s.start_with?("SET LOCAL") }
+      gucs = connection.exec_queries.select { |sql, _name, _binds| sql.include?("set_config") }
       expect(gucs.size).to eq(4)
-      expect(gucs.map { |s| s[/"app"\."(\w+)"/, 1] })
-        .to match_array(%w[current_user_id current_role current_actor current_agent_id])
+      expect(gucs.map { |_sql, _name, binds| binds.first })
+        .to match_array(%w[app.current_user_id app.current_role app.current_actor app.current_agent_id])
     end
 
     it "exposes the identity inside the block (#current_identity)" do
@@ -89,7 +95,7 @@ RSpec.describe Kiosk::Server::TestExecutor do
 
     it "skips GUC setup when identity is nil (as_anonymous semantics)" do
       executor.with_identity(nil) { :inside }
-      expect(connection.executed_sql.select { |s| s.start_with?("SET LOCAL") }).to be_empty
+      expect(connection.exec_queries.select { |sql, _n, _b| sql.include?("set_config") }).to be_empty
     end
 
     it "requires a block" do

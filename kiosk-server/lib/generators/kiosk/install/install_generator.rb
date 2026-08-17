@@ -47,7 +47,7 @@ module Kiosk
       class_option :schema,        type: :string, default: "kiosk",
                                    desc: "Postgres schema name for Kiosk helpers and tables"
       class_option :guc_namespace, type: :string, default: "app",
-                                   desc: "GUC namespace prefix used in SET LOCAL statements"
+                                   desc: "GUC namespace prefix used in the session GUC names"
 
       # Rails::Generators::Migration requires a class-level
       # next_migration_number. We bump a counter so the ten migrations

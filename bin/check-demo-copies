@@ -349,17 +349,26 @@ COPIES = {
           "room_type.",
   },
   "app/models/kyc_verification_request.rb" => {
-    rule: :per_demo,
-    why:  "The pending age/licence verification a demo started at the broker. It was :code — same " \
-          "class, per-demo prose — and it is :per_demo only because the T-057 migration is HALF " \
-          "DONE across its two copies: skooti's has migrated and now carries the query scoping its " \
-          "`kyc_status` handler needs (an `owned_by_current_principal` scope over a frozen " \
-          "`Arel.sql(\"kiosk.current_user_id()\")` literal, plus the status constants that scope's " \
-          "readers name), while getgrocery's identical verb still spells that predicate inline in " \
-          "an initializer SELECT. `except:` cannot say this — with exactly two copies, excepting " \
-          "one leaves nothing compared, which this file rejects. WHEN getgrocery's T-057 slice " \
-          "lands its copy gains the same scope and the two converge: put this entry back to :code " \
-          "then, and delete this paragraph.",
+    rule: :code,
+    why:  "The pending age/licence verification a demo started at the broker — same class, " \
+          "per-demo prose (skooti's row carries a licence claim, getgrocery's an age gate). Both " \
+          "copies carry the query scoping their `kyc_status` handler needs: an " \
+          "`owned_by_current_principal` scope over a frozen `Arel.sql(\"kiosk.current_user_id()\")` " \
+          "literal, plus the status constants that scope's readers name. It was briefly :per_demo " \
+          "while T-057 had migrated skooti and not getgrocery and the two genuinely disagreed; the " \
+          "last slice converged them, which is what this entry is now guarding.",
+  },
+  "app/models/agent.rb" => {
+    rule: :code,
+    why:  "kiosk.agents — the ENGINE's own table, read by the two demos that gate a verb on an " \
+          "anonymized KYC attribute, and shipped with no engine-side reader. The code is one scope " \
+          "(the acting, non-revoked agent, via the `kiosk.current_agent_id()` GUC) plus the `->>` " \
+          "extraction expressed as Arel, and it MUST stay identical: both copies are the same " \
+          "argument about not re-implementing a Postgres operator in Ruby inside a KYC gate " \
+          "(K-724), and a copy that drifted would be one gate reading a granted boolean " \
+          "differently from the other. Only the attributes asked for differ — skooti wants " \
+          "age_over_18 AND licence_a, getgrocery age_over_18 — and those live at the CALL sites, " \
+          "not here, which is why this file can be held identical at all.",
   },
   "app/controllers/concerns/kiosk_refusals.rb" => {
     rule: :code,
@@ -381,15 +390,29 @@ COPIES = {
     rule: :per_demo,
     why:  "kiosk.cart_mandates, read for one thing: does a settled cart reference THIS row. The " \
           "jsonb containment key is the demo's own line-item vocabulary — hoteling asks for " \
-          "`booking_id`, skooti for `reservation_id` — so the scope cannot be shared without " \
-          "one of them asserting the other's field name.",
+          "`booking_id`, skooti for `reservation_id`, getgrocery for `order_id` — so the scope " \
+          "cannot be shared without one of them asserting the other's field name. getgrocery's " \
+          "copy also documents a SECOND spelling of its own predicate, correlated rather than " \
+          "value-bound, which lives on Order because that is the table it correlates to.",
   },
   "app/operations/wire_arguments.rb" => {
     rule: :per_demo,
     why:  "The shape guard a demo's verbs open with (T-057/K-654) — same filename, same job, and " \
           "nothing else in common: the guards ARE the demo's argument vocabulary. hoteling checks " \
-          "integers and an ISO check-in/check-out pair; skooti checks one uuid. Sharing them would " \
-          "mean shipping each demo guards for arguments it does not take.",
+          "integers and an ISO check-in/check-out pair; skooti checks one uuid; getgrocery checks " \
+          "a cart of {sku, qty} objects, a delivery window, a date and a served Dublin district. " \
+          "Sharing them would mean shipping each demo guards for arguments it does not take.",
+  },
+  "app/operations/request_kyc_operation.rb" => {
+    rule: :per_demo,
+    why:  "The two demos that open a verification at the shared broker. The surrounding call is " \
+          "the same shape — intake, store the broker's request_id, hand back its verification_url " \
+          "— but the one thing an operator must decide is WHICH CLAIMS to ask for, and that is " \
+          "exactly what differs: skooti asks for age_over_18 AND licence_category:A because it is " \
+          "unlocking a motorcycle, getgrocery for age_over_18 alone because it is selling a " \
+          "bottle of wine. Holding these to :code would compare everything except the decision, " \
+          "and asking a grocery for a driving licence is the anti-pattern the KYC demo exists to " \
+          "argue against.",
   },
   "app/operations/operation_result.rb" => {
     rule: :per_demo,
@@ -401,12 +424,16 @@ COPIES = {
           "and it is the sharpest case for the rule: `kyc_required` and `forbidden` are both 403, " \
           "so on skooti the code is not derivable from the status at all. Making the three agree " \
           "would mean giving each demo mappings for refusals it cannot make, which is the opposite " \
-          "of what the `fetch` in there is for. THE THIRD COPY IS EVIDENCE, NOT A VERDICT (K-607): " \
-          "the ~55 lines around STATUSES are now written out three times, which strengthens the " \
-          "\"should this be a gem\" question — and answers it no more than it did at two, because " \
-          "the part that repeats is the part with no decisions in it (ok/refused/status) while the " \
-          "table, which is the only thing an operator must think about, is exactly the part that " \
-          "differs. An extraction would ship the constructor and leave STATUSES per-app.",
+          "of what the `fetch` in there is for. THE FOURTH COPY IS EVIDENCE, NOT A VERDICT " \
+          "(K-607): the ~55 lines around STATUSES are now written out four times, which " \
+          "strengthens the \"should this be a gem\" question — and answers it no more than it did " \
+          "at two or three, because the part that repeats is the part with no decisions in it " \
+          "(ok/refused/status) while the table, which is the only thing an operator must think " \
+          "about, is exactly the part that differs. getgrocery is the sharpest illustration " \
+          "available: its four codes are the SAME four as skooti's, and they are the same four " \
+          "for entirely unrelated reasons — a `kyc_required` that gates alcohol against one that " \
+          "gates a motorcycle — so even the one pair that coincides today would be a coincidence " \
+          "to enshrine. An extraction would ship the constructor and leave STATUSES per-app.",
   },
 
   # ── db/migrate — output of kiosk-server's install generator ────────────────

@@ -197,10 +197,15 @@ end
 **5. Wire a payment-provider adapter**
 
 ```ruby
-# config/initializers/kiosk.rb
+# config/environments/production.rb — ENV is read per environment, once
+config.x.kiosk.stripe_secret_key = ENV["STRIPE_SECRET_KEY"].presence
+
+# config/initializers/kiosk.rb — the initializer reads the resolved value
 Kiosk.configure do |c|
-  c.issuer           = "https://getgrocery.demo.kiosk.tech"
-  c.payment_provider = Kiosk::PaymentProviders::Stripe.new(api_key: ENV["STRIPE_SECRET_KEY"])
+  c.issuer           = Rails.configuration.x.kiosk.issuer
+  c.payment_provider = Kiosk::PaymentProviders::Stripe.new(
+    api_key: Rails.configuration.x.kiosk.stripe_secret_key,
+  )
 end
 ```
 

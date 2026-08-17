@@ -77,11 +77,26 @@ def identity
 end
 
 # Invoke the REAL create_order action with the GUCs set, exactly as the wire
-# would. Returns the action's result hash.
+# would. Returns the action's result hash, with STRING keys.
+#
+# TWO THINGS THE T-057 MIGRATION CHANGED HERE, both of them properties of
+# driving a CONTROLLER instead of a block, and both of them things a second
+# surface on any demo has to get right (tudu found them first):
+#
+#   · `CurrentRequest.with` is now required as well as `SessionContext.open`.
+#     The GUCs are what the SQL-side scoping reads; the IDENTITY CARRIER is what
+#     `kiosk_identity` reads, and an INSERT has no predicate to hide the
+#     principal in, so `create_order` needs both. The wire sets the two together;
+#     a driver that sets only the GUCs gets a nil identity.
+#   · the result comes back with STRING keys. A controller answers `render
+#     json:`, and the dispatch seam parses that JSON — so `result["order_id"]`,
+#     never `result[:order_id]`, which would be silently nil.
 def create_order!(args)
   result = nil
-  Kiosk::Server::SessionContext.open(connection: ActiveRecord::Base.connection, identity: identity) do
-    result = Kiosk::Server::Actions.fetch("create_order").call(args)
+  Kiosk::Server::CurrentRequest.with(identity: identity) do
+    Kiosk::Server::SessionContext.open(connection: ActiveRecord::Base.connection, identity: identity) do
+      result = Kiosk::Server::Actions.fetch("create_order").call(args)
+    end
   end
   result
 end
@@ -142,8 +157,8 @@ puts "\n== K-544 (a): items cannot be swapped once /pay has begun =="
 # Create the cheap order O.
 o = create_order!(items: [{ sku: CHEAP_SKU, qty: 1 }], delivery_slot_id: 3,
                   delivery_date: FUTURE, delivery_address: ADDRESS)
-order_id = o[:order_id]
-puts "  order O=#{order_id} total=#{o[:total_cents]}c (cheap)"
+order_id = o["order_id"]
+puts "  order O=#{order_id} total=#{o["total_cents"]}c (cheap)"
 
 blocking = BlockingPsp.new
 vpp      = ValidatingPaymentProvider.new(blocking, currency: "eur")
@@ -173,8 +188,8 @@ swap = create_order!(items: [{ sku: DEAR_SKU, qty: 100 }], delivery_slot_id: 3,
 o_after = order_row(order_id)
 check(o_after["total_cents"].to_i == CHEAP_PRICE,
       "order O still holds the CHEAP total (#{o_after["total_cents"]}c == #{CHEAP_PRICE}c) — swap rejected")
-check(swap[:order_id] != order_id,
-      "create_order did NOT mutate O — it minted a separate order (#{swap[:order_id]}) instead of rewriting the in-flight one")
+check(swap["order_id"] != order_id,
+      "create_order did NOT mutate O — it minted a separate order (#{swap["order_id"]}) instead of rewriting the in-flight one")
 
 blocking.release!
 pay_thread.join
@@ -188,7 +203,7 @@ puts "\n== K-544 (b): one order captures at most once under N racing /pay =="
 n = 6
 o2 = create_order!(items: [{ sku: CHEAP_SKU, qty: 1 }], delivery_slot_id: 3,
                    delivery_date: FUTURE, delivery_address: ADDRESS)
-order2 = o2[:order_id]
+order2 = o2["order_id"]
 puts "  order O2=#{order2}; firing #{n} concurrent /pay"
 
 counting = CountingPsp.new
@@ -280,8 +295,10 @@ check(unknown_error.is_a?(Kiosk::Server::Errors::Forbidden),
 # so drive them through the real registry here rather than trusting the shape of
 # the code. (A DB-free unit pass over the guard itself is `rake demo:cashier_spec`.)
 def action_error(name, args)
-  Kiosk::Server::SessionContext.open(connection: ActiveRecord::Base.connection, identity: identity) do
-    Kiosk::Server::Actions.fetch(name).call(args)
+  Kiosk::Server::CurrentRequest.with(identity: identity) do
+    Kiosk::Server::SessionContext.open(connection: ActiveRecord::Base.connection, identity: identity) do
+      Kiosk::Server::Actions.fetch(name).call(args)
+    end
   end
   nil
 rescue StandardError => e
@@ -291,13 +308,18 @@ end
 replace_error = action_error("create_order",
                              { order_id: "not-a-uuid", items: [{ sku: CHEAP_SKU, qty: 1 }],
                                delivery_slot_id: 3, delivery_date: FUTURE, delivery_address: ADDRESS })
-check(replace_error.is_a?(Kiosk::Server::Errors::BadRequest) && replace_error.http_status == 400,
-      "create_order's replace path rejects a malformed order_id with a 400 (got #{replace_error.class})")
+# The CODE and the STATUS are the contract, not the exception class (T-054): a
+# migrated handler RENDERS its refusal and the dispatch seam turns that into a
+# `WireError` carrying the same code and status the raised `Errors::BadRequest`
+# used to. Asserting the class here would be asserting how the answer is
+# constructed rather than what it says.
+check(replace_error.respond_to?(:code) && replace_error.code == "bad_request" && replace_error.http_status == 400,
+      "create_order's replace path rejects a malformed order_id with a 400 bad_request (got #{replace_error.class})")
 
 reschedule_error = action_error("reschedule_delivery",
                                 { order_id: "not-a-uuid", delivery_slot_id: 3, delivery_date: FUTURE })
-check(reschedule_error.is_a?(Kiosk::Server::Errors::BadRequest) && reschedule_error.http_status == 400,
-      "reschedule_delivery rejects a malformed order_id with a 400 (got #{reschedule_error.class})")
+check(reschedule_error.respond_to?(:code) && reschedule_error.code == "bad_request" && reschedule_error.http_status == 400,
+      "reschedule_delivery rejects a malformed order_id with a 400 bad_request (got #{reschedule_error.class})")
 
 puts "\n== K-578: an order stuck in `paying` is reconciled from local evidence =="
 
@@ -339,7 +361,7 @@ end
 
 o3 = create_order!(items: [{ sku: CHEAP_SKU, qty: 1 }], delivery_slot_id: 3,
                    delivery_date: FUTURE, delivery_address: ADDRESS)
-charged_order = o3[:order_id]
+charged_order = o3["order_id"]
 strand_as_paying!(charged_order)
 forge_settlement!(charged_order, cart_mandate_id: "cart-CHARGED")
 check(order_row(charged_order)["status"] == "paying", "order is stranded in `paying` with a settlement on file")
@@ -365,12 +387,12 @@ strand_as_paying!(charged_order) # strand it again for the sweep
 
 o4 = create_order!(items: [{ sku: CHEAP_SKU, qty: 1 }], delivery_slot_id: 3,
                    delivery_date: FUTURE, delivery_address: ADDRESS)
-unknown_order = o4[:order_id]
+unknown_order = o4["order_id"]
 strand_as_paying!(unknown_order) # claimed, NO settlement — only the PSP knows
 
 o5 = create_order!(items: [{ sku: CHEAP_SKU, qty: 1 }], delivery_slot_id: 3,
                    delivery_date: FUTURE, delivery_address: ADDRESS)
-young_order = o5[:order_id]
+young_order = o5["order_id"]
 strand_as_paying!(young_order, age: "1 second") # a pay legitimately in flight
 
 sweep = ValidatingPaymentProvider.reconcile_stuck_paying!(older_than_seconds: 600)

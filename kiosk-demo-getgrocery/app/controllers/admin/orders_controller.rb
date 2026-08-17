@@ -4,6 +4,18 @@ module Admin
   # Read-only orders view for the GetGrocery provider operator.
   # Shows recent orders with payment status, address, slot, and line items.
   #
+  # THE SECOND SURFACE, and the reason this file changed with the wire (T-057 /
+  # K-654). "Is this order paid" is a fact BOTH an assistant and the operator ask
+  # for, and until the handlers left the initializer the two asked it in two
+  # hand-written SQL strings — the same jsonb containment over
+  # kiosk.settlements → kiosk.cart_mandates, spelled twice, free to drift.
+  # It is now {Order.settling}, once, and each surface hands it the settlements
+  # it is entitled to read: the wire passes `Settlement.of_current_principal`, so
+  # an assistant learns only its own orders' paid state; this page passes
+  # `Settlement.all`, because a back office that could see one principal's
+  # settlements would show every order unpaid. The AUTHORITY differs and must;
+  # the CONTAINMENT does not, and cannot any more.
+  #
   # NOTE: No authentication — public by design: an operator-view showcase on a
   # sandbox with synthetic data. Delivery addresses are visitor-typed free
   # text, so they are masked server-side to a short head + tail.
@@ -16,11 +28,14 @@ module Admin
   # are the booted-server flow drivers, Postgres-gated); the underlying read
   # correctness — paid-status via kiosk.settlements→cart_mandates and the items
   # join — is already exercised end-to-end by demo:shop (settlement + order_items
-  # row-count assertions) and demo:isolation. Adding a booted-server assertion for
-  # this visualization surface alone would be disproportionate, so it is left
-  # documented-uncovered rather than asserted.
+  # row-count assertions) and demo:isolation, and since the containment is now
+  # shared with `my_orders`, those gates cover this page's half of it too.
+  # Adding a booted-server assertion for this visualization surface alone would be
+  # disproportionate, so it is left documented-uncovered rather than asserted.
   class OrdersController < ActionController::Base
     layout false
+
+    RECENT = 50
 
     def index
       @orders = load_orders
@@ -29,58 +44,43 @@ module Admin
     private
 
     def load_orders
-      conn = ActiveRecord::Base.connection
-
-      orders = conn.execute(<<~SQL).to_a
-        SELECT
-          o.id,
-          LEFT(o.id::text, 8)           AS short_id,
-          o.status,
-          o.total_cents,
-          o.slot_at,
-          o.address,
-          o.created_at,
-          (
-            SELECT pm.currency
-            FROM kiosk.cart_mandates cm
-            JOIN kiosk.settlements pm ON pm.cart_mandate_id = cm.id
-            WHERE cm.line_items @> json_build_array(
-              json_build_object('order_id', o.id::text)
-            )::jsonb
-            LIMIT 1
-          ) AS settled_currency
-        FROM orders o
-        ORDER BY o.created_at DESC
-        LIMIT 50
-      SQL
-
+      # `Settlement.all`: the operator sees every principal's receipts. This page
+      # runs OUTSIDE the wire, so no `SET LOCAL` GUC has been issued and
+      # `kiosk.current_user_id()` would be NULL — which is exactly why the
+      # principal scope is a PARAMETER of the shared seam rather than baked into
+      # it. The `settled_currency` scalar drives the glyph in the view, and its
+      # presence IS the paid flag: an unpaid order has no settlement to read a
+      # currency from.
+      orders = Order.order(created_at: :desc)
+                    .limit(RECENT)
+                    .pluck(:id, :status, :total_cents, :slot_at, :address, :created_at,
+                           Order.settled_currency(Settlement.all))
       return [] if orders.empty?
 
-      order_ids = orders.map { |o| o["id"] }.compact.uniq
-                        .select { |id| id.to_s.match?(/\A[0-9a-f\-]{36}\z/i) }
+      # The raw version filtered these ids through a uuid regex before
+      # interpolating them into an `IN (…)` list. They are this table's own
+      # primary keys and were never caller-supplied; the filter was defending the
+      # string-building, and the string-building is gone.
+      products = Product.arel_table
+      items_by_order = OrderItem.joins(:product)
+                                .where(order_id: orders.map(&:first))
+                                .order(products[:name].asc)
+                                .pluck(:order_id, :qty, products[:name], products[:price_cents])
+                                .group_by(&:first)
 
-      items_by_order = {}
-      unless order_ids.empty?
-        quoted_ids = order_ids.map { |id| conn.quote(id) }.join(", ")
-        conn.execute(<<~SQL).each { |r| (items_by_order[r["order_id"]] ||= []) << r }
-          SELECT
-            oi.order_id::text AS order_id,
-            oi.qty,
-            p.name            AS product_name,
-            p.price_cents
-          FROM order_items oi
-          JOIN products p ON p.id = oi.product_id
-          WHERE oi.order_id::text IN (#{quoted_ids})
-          ORDER BY p.name ASC
-        SQL
-      end
-
-      orders.map do |o|
-        o.merge(
-          "items"   => (items_by_order[o["id"]] || []),
-          "paid"    => !o["settled_currency"].nil?,
-          "address" => mask_address(o["address"])
-        )
+      orders.map do |id, status, total_cents, slot_at, address, created_at, settled_currency|
+        { "id"               => id,
+          "short_id"         => id.to_s[0, 8],
+          "status"           => status,
+          "total_cents"      => total_cents,
+          "slot_at"          => slot_at,
+          "created_at"       => created_at,
+          "settled_currency" => settled_currency,
+          "items"            => (items_by_order[id] || []).map { |_order_id, qty, name, price_cents|
+            { "qty" => qty, "product_name" => name, "price_cents" => price_cents }
+          },
+          "paid"             => !settled_currency.nil?,
+          "address"          => mask_address(address) }
       end
     end
 

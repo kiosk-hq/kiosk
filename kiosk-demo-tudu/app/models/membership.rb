@@ -68,4 +68,28 @@ class Membership < ApplicationRecord
     scope = scope.where(role: OWNER) if require_owner
     scope.exists?
   end
+
+  # ── THE PROJECTION BOTH OF tudu's DOORS READ (T-082) ───────────────────────
+  # Who else is on one list, in the shape `list_members` publishes — the
+  # collaboration surface a member is entitled to see once access is granted.
+  #
+  # ACCESS IS NOT ASKED HERE for the same reason it is not asked in
+  # {Todo.rows_on}: the caller has already been through {ListAccess.check}, and
+  # putting the membership predicate in the projection too would leave two copies
+  # of one test and invite a future caller to mistake this for the guard. Note
+  # that the rows are NOT `of_current_principal` — the point of the verb is the
+  # OTHER members — which is exactly why the gate in front of it is the only thing
+  # standing between a caller and a foreign list's roster, and why it answers 403
+  # rather than 404. See {List.reachable_rows} for why the shape lives on the
+  # model at all.
+  #
+  # @return [Array<Hash>]
+  def self.rows_on(list_id)
+    where(list_id: list_id).joins(:account)
+      .order(role: :desc, created_at: :asc)
+      .pluck(:account_id, User.arel_table[:email], :role)
+      .map { |account_id, handle, role|
+        { "account_id" => account_id, "handle" => handle, "role" => role }
+      }
+  end
 end

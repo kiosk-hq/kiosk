@@ -71,19 +71,16 @@ class Kiosk::HouseholdController < ApplicationController
   example_row({
     list_id: "d4e5f6a7-8b9c-4d0e-9f1a-2b3c4d5e6f70", title: "Flat 3B", role: "owner",
   })
-  # The membership predicate is `Membership.of_current_principal` — a scope, not
-  # a Ruby comparison; see the long note on it for why that one fragment stays
-  # SQL. The column ALIASES the old `SELECT` carried (`l.id AS list_id`) become
-  # an explicit `map`: `pluck` returns bare tuples, so the published row shape is
-  # written out here rather than being a side effect of how the SELECT was
-  # spelled. The two orderings are unchanged, tiebreaker included — `l.id` is
-  # what keeps two lists created in the same microsecond from swapping places
-  # between runs.
+  # The rows themselves are {List.reachable_rows} — a MODEL PROJECTION, because
+  # the human web UI's `/lists` page publishes exactly these rows and used to get
+  # them by dispatching a synthetic Rack sub-request at this very action (T-082).
+  # The wire is for assistants; the page now reads the same projection directly, so
+  # there is one definition of a list row instead of two surfaces to keep in
+  # agreement. The membership predicate inside it is
+  # `Membership.of_current_principal` — a scope, not a Ruby comparison; see the
+  # long note on it for why that one fragment stays SQL.
   def my_lists
-    render json: List.joins(:memberships).merge(Membership.of_current_principal)
-                     .order(created_at: :desc, id: :asc)
-                     .pluck(:id, :title, Membership.arel_table[:role])
-                     .map { |id, title, role| { "list_id" => id, "title" => title, "role" => role } }
+    render json: List.reachable_rows
   end
 
   # list_todos(list_id) — membership-gated: 403 unless the caller is a member.
@@ -99,15 +96,13 @@ class Kiosk::HouseholdController < ApplicationController
                                          "from my_lists, verbatim." },
                },
                required: ["list_id"]
+  # Gate, then {Todo.rows_on} — the projection tudu's `/lists/:id` page renders
+  # too (T-082). Both doors run the SAME gate and then the SAME projection, which
+  # is what stops the page and the verb from drifting apart.
   def list_todos
     return unless kiosk_membership_gate(params[:list_id])
 
-    render json: Todo.where(list_id: params[:list_id]).order(:created_at, :id)
-                     .pluck(:id, :title, :done, :created_by_agent_id)
-                     .map { |id, title, done, agent_id|
-                       { "todo_id" => id, "title" => title,
-                         "done" => done, "created_by_agent_id" => agent_id }
-                     }
+    render json: Todo.rows_on(params[:list_id])
   end
 
   # list_members(list_id) — membership-gated; returns the members + roles so a
@@ -123,14 +118,11 @@ class Kiosk::HouseholdController < ApplicationController
                                          "from my_lists, verbatim." },
                },
                required: ["list_id"]
+  # Gate, then {Membership.rows_on} — the projection the web page's member list
+  # renders too (T-082).
   def list_members
     return unless kiosk_membership_gate(params[:list_id])
 
-    render json: Membership.where(list_id: params[:list_id]).joins(:account)
-                           .order(role: :desc, created_at: :asc)
-                           .pluck(:account_id, User.arel_table[:email], :role)
-                           .map { |account_id, handle, role|
-                             { "account_id" => account_id, "handle" => handle, "role" => role }
-                           }
+    render json: Membership.rows_on(params[:list_id])
   end
 end

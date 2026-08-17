@@ -372,11 +372,19 @@ COPIES = {
   },
   "app/controllers/concerns/kiosk_refusals.rb" => {
     rule: :code,
-    why:  "The one place an OperationResult becomes a `render json:, status:` (T-057/K-654). Both " \
-          "halves of a demo's wire surface refuse with the same sentences, so both include it. " \
-          "Per-demo prose only — the code is two renderers, and it MUST stay identical: it is " \
-          "what keeps a migrated demo's refusal envelopes byte-identical to the `Errors::` ones " \
-          "they replace.",
+    why:  "The one place an OperationResult becomes a `render json:, status:` (T-057/K-654, " \
+          "extended fleet-wide by T-083). On hoteling, skooti, getgrocery and atablefor BOTH " \
+          "halves of the wire surface refuse with the same sentences, so both controllers " \
+          "include it; on philslist and stylish the query half refuses nothing and there is one " \
+          "includer, which is why the file is here rather than being a private renderer per " \
+          "controller — six copies of two renderers with nothing comparing them is precisely " \
+          "how lib/equihash_register.rb drifted in three of five. Per-demo prose only — the " \
+          "code is two renderers, and it MUST stay identical: it is what keeps every migrated " \
+          "demo's refusal envelopes byte-identical to the `Errors::` ones they replace. tudu " \
+          "shipped this same pair under a name only it used (inside KioskMembershipGate), where " \
+          "the lockstep rule — which pairs copies by relative PATH — compared it to NOTHING; " \
+          "T-083 split the renderers out to this path so all seven are under the gate, and left " \
+          "the membership guard, which is tudu's alone, next door.",
   },
   "app/models/settlement.rb" => {
     rule: :code,
@@ -397,11 +405,16 @@ COPIES = {
   },
   "app/operations/wire_arguments.rb" => {
     rule: :per_demo,
-    why:  "The shape guard a demo's verbs open with (T-057/K-654) — same filename, same job, and " \
-          "nothing else in common: the guards ARE the demo's argument vocabulary. hoteling checks " \
-          "integers and an ISO check-in/check-out pair; skooti checks one uuid; getgrocery checks " \
-          "a cart of {sku, qty} objects, a delivery window, a date and a served Dublin district. " \
-          "Sharing them would mean shipping each demo guards for arguments it does not take.",
+    why:  "The shape guard a demo's verbs open with (T-057/K-654, fleet-wide since T-083) — same " \
+          "filename, same job, and nothing else in common: the guards ARE the demo's argument " \
+          "vocabulary. hoteling checks integers and an ISO check-in/check-out pair; skooti checks " \
+          "one uuid; getgrocery checks a cart of {sku, qty} objects, a delivery window, a date " \
+          "and a served Dublin district; atablefor checks a party size (the one guard on that " \
+          "origin genuinely shared between a query and an action) and a booking uuid. Sharing " \
+          "them would mean shipping each demo guards for arguments it does not take. tudu and " \
+          "philslist have no copy at all and correctly so — their shared precondition is an " \
+          "ACCESS answer rather than a shape one, so it is named for what it decides " \
+          "(list_access.rb / listing_access.rb) and is a singleton path.",
   },
   "app/operations/request_kyc_operation.rb" => {
     rule: :per_demo,
@@ -416,24 +429,33 @@ COPIES = {
   },
   "app/operations/operation_result.rb" => {
     rule: :per_demo,
-    why:  "The answer-or-refusal a write Operation returns (T-057/K-654). The seam is the same in " \
-          "all three demos, but its STATUSES map is not shared and must not be: the class's own " \
-          "rule is that a code an app never produces has no business having a mapping, so tudu " \
-          "lists the two codes its writes refuse with, hoteling the four its verbs refuse with, " \
-          "and skooti four that are NOT hoteling's four — `kyc_required` instead of `conflict`, " \
-          "and it is the sharpest case for the rule: `kyc_required` and `forbidden` are both 403, " \
-          "so on skooti the code is not derivable from the status at all. Making the three agree " \
-          "would mean giving each demo mappings for refusals it cannot make, which is the opposite " \
-          "of what the `fetch` in there is for. THE FOURTH COPY IS EVIDENCE, NOT A VERDICT " \
-          "(K-607): the ~55 lines around STATUSES are now written out four times, which " \
-          "strengthens the \"should this be a gem\" question — and answers it no more than it did " \
-          "at two or three, because the part that repeats is the part with no decisions in it " \
-          "(ok/refused/status) while the table, which is the only thing an operator must think " \
-          "about, is exactly the part that differs. getgrocery is the sharpest illustration " \
-          "available: its four codes are the SAME four as skooti's, and they are the same four " \
-          "for entirely unrelated reasons — a `kyc_required` that gates alcohol against one that " \
-          "gates a motorcycle — so even the one pair that coincides today would be a coincidence " \
-          "to enshrine. An extraction would ship the constructor and leave STATUSES per-app.",
+    why:  "The answer-or-refusal a write Operation returns (T-057/K-654; in all SEVEN operator " \
+          "demos since T-083 — prove registers no wire verbs and correctly has none). The seam is " \
+          "the same everywhere, but its STATUSES map is not shared and must not be: the class's " \
+          "own rule is that a code an app never produces has no business having a mapping, and " \
+          "the seven maps are seven different sets. stylish lists ONE (nothing on that origin " \
+          "ever fills up and its write is caller-scoped by construction, so `bad_request` is the " \
+          "only refusal it can make); tudu and philslist two; atablefor three; hoteling four " \
+          "ending in `conflict`; skooti and getgrocery four ending in `kyc_required` instead. " \
+          "That last pair is the sharpest case for the rule twice over: `kyc_required` and " \
+          "`forbidden` are BOTH 403, so the code is not derivable from the status at all — and " \
+          "the two demos' four codes coincide for entirely unrelated reasons, a gate on alcohol " \
+          "against a gate on a motorcycle, so even the one match today would be a coincidence to " \
+          "enshrine. Making them agree would mean giving each demo mappings for refusals it " \
+          "cannot make, which is the opposite of what the `fetch` in there is for. " \
+          "SEVEN COPIES ARE EVIDENCE, NOT A VERDICT (K-607, and K-792 now carries the question " \
+          "itself): the ~40 lines around STATUSES are written out seven times, which strengthens " \
+          "the \"should this be a gem\" question — and answers it no more than it did at two, " \
+          "three or four, because the part that repeats is the part with no decisions in it " \
+          "(ok/refused/status) while the table, the only thing an operator must think about, is " \
+          "exactly the part that differs. An extraction would ship the constructor and leave " \
+          "STATUSES per-app, and WHERE it would ship to is a public-API decision this check does " \
+          "not pre-empt (rule 2). WHAT THIS DECLARATION DOES NOT DO, said plainly because the " \
+          "count is now the largest in this file: `:per_demo` means NOT COMPARED, so a drift in " \
+          "the shared 40 lines is invisible here. `:code` cannot be used instead — the divergence " \
+          "is in all seven copies, not in one, which is the only shape `except:` records — and " \
+          "closing that gap means either promoting the shared half (the K-792 decision) or " \
+          "teaching this check a partial-compare rule, which is a second undecided question.",
   },
 
   # ── db/migrate — output of kiosk-server's install generator ────────────────

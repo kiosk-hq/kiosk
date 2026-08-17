@@ -218,4 +218,26 @@ alice_after = get_html("/lists")
 results[:human_keeps_all_lists] =
   alice_after.code.to_i == 200 && alice_after.body.include?("Hike") && alice_after.body.include?("Flat 3B")
 
+# ── 5. THE LIST'S OWN PAGE — the READ half of the human UI (T-082) ───────────
+# /lists renders one projection (List.reachable_rows); /lists/:id renders the
+# other two (Todo.rows_on, Membership.rows_on) BEHIND the same ListAccess gate the
+# wire's query handlers use. Until T-082 that page reached its rows by dispatching
+# a synthetic Rack sub-request at those handlers — the human UI travelling through
+# the wire dispatcher — and nothing anywhere covered it, so the conversion off it
+# had no regression net. This is that net, and it is two beats because the page
+# has two answers: the roster a member may read, and the refusal a non-member
+# earns.
+list_page = get_html("/lists/#{list_id}")
+results[:human_reads_list_page] =
+  list_page.code.to_i == 200 && list_page.body.include?("Members") && list_page.body.include?(EMAIL)
+
+# A well-formed list id Alice is not a member of: the gate answers `forbidden`,
+# which this page presents as a redirect back to /lists with a flash — never a
+# 500, and never somebody else's roster. The id is a valid uuid that no seed or
+# beat creates, so the only thing standing between it and the page is the
+# membership predicate.
+foreign_page = get_html("/lists/00000000-0000-0000-0000-0000000000ff")
+results[:human_foreign_list_refused] =
+  [302, 303].include?(foreign_page.code.to_i) && !foreign_page.body.to_s.include?("Members")
+
 puts JSON.generate(results)

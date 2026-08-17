@@ -68,15 +68,15 @@ RSpec.describe Kiosk::Server::WellKnown do
     end
 
     it "advertises the computed verb names (schema/query/run/pay) from the registry" do
-      Kiosk::Server::Queries.register("catalog") { [] }
-      Kiosk::Server::Actions.register("checkout") { {} }
+      declare_query("catalog")
+      declare_action("checkout")
       Kiosk.configure { |c| c.payment_provider = Object.new }
       d = described_class.build(base_url: "https://api.acme.example")
       expect(d[:kiosk][:capabilities]).to eq(%w[schema query run pay])
     end
 
     it "passes through an explicitly pinned capability list" do
-      Kiosk::Server::Queries.register("catalog") { [] }
+      declare_query("catalog")
       Kiosk.configure { |c| c.capabilities = %w[schema query] }
       d = described_class.build(base_url: "https://api.acme.example")
       expect(d[:kiosk][:capabilities]).to eq(%w[schema query])
@@ -292,7 +292,7 @@ RSpec.describe Kiosk::Server::WellKnown do
     end
 
     it "carries the six-verb contract under the x-kiosk extension" do
-      Kiosk::Server::Queries.register("catalog") { [] }
+      declare_query("catalog")
       d = described_class.agents_json(base_url: "https://api.acme.example")
       xk = d[:"x-kiosk"]
       expect(xk[:wire][:verbs]).to eq(Array(Kiosk.configuration.capabilities))
@@ -456,8 +456,8 @@ RSpec.describe Kiosk::Server::WellKnown do
     end
 
     it "links the wire endpoints present in capabilities" do
-      Kiosk::Server::Queries.register("catalog") { [] }
-      Kiosk::Server::Actions.register("checkout") { {} }
+      declare_query("catalog")
+      declare_action("checkout")
       Kiosk.configure { |c| c.payment_provider = Object.new }
       d = described_class.api_catalog(base_url: "https://api.acme.example")
       hrefs = member(d)[:item].map { |i| i[:href] }
@@ -469,7 +469,7 @@ RSpec.describe Kiosk::Server::WellKnown do
 
     it "omits wire endpoints not present in capabilities" do
       # Register only a query → capabilities = [schema, query]; run/pay absent.
-      Kiosk::Server::Queries.register("catalog") { [] }
+      declare_query("catalog")
       d = described_class.api_catalog(base_url: "https://api.acme.example")
       hrefs = member(d)[:item].map { |i| i[:href] }
       expect(hrefs).to include("https://api.acme.example/kiosk/schema")
@@ -486,14 +486,14 @@ RSpec.describe Kiosk::Server::WellKnown do
     end
 
     it "tags the schema endpoint as the machine-readable service-desc" do
-      Kiosk::Server::Queries.register("catalog") { [] }
+      declare_query("catalog")
       d = described_class.api_catalog(base_url: "https://api.acme.example")
       schema = member(d)[:item].find { |i| i[:href].end_with?("/schema") }
       expect(schema[:rel]).to eq("service-desc")
     end
 
     it "tags the non-schema wire endpoints with rel=item" do
-      Kiosk::Server::Actions.register("checkout") { {} }
+      declare_action("checkout")
       d = described_class.api_catalog(base_url: "https://api.acme.example")
       run = d[:linkset].first[:item].find { |i| i[:href].end_with?("/run") }
       expect(run[:rel]).to eq("item")
@@ -505,7 +505,7 @@ RSpec.describe Kiosk::Server::WellKnown do
     end
 
     it "respects an overridden mount_path for the wire endpoints" do
-      Kiosk::Server::Queries.register("catalog") { [] }
+      declare_query("catalog")
       Kiosk.configure { |c| c.mount_path = "/agent-surface" }
       d = described_class.api_catalog(base_url: "https://api.acme.example")
       hrefs = d[:linkset].first[:item].map { |i| i[:href] }

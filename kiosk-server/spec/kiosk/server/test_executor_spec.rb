@@ -177,9 +177,10 @@ RSpec.describe Kiosk::Server::TestExecutor do
     end
 
     it "fetches the action from the registry and calls it with args" do
-      Kiosk::Server::Actions.register(:ping) { |args| { pong: args[:msg] } }
+      declare_action("ping") { render json: { pong: params[:msg] } }
       result = executor.with_identity(identity) { executor.run_action(:ping, msg: "hi") }
-      expect(result).to eq(pong: "hi")
+      # String keys: the handler renders, so the value makes a JSON round trip.
+      expect(result).to eq("pong" => "hi")
     end
 
     it "raises Errors::NotFound for an unregistered action (via Actions.fetch)" do

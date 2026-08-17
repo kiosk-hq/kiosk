@@ -86,20 +86,11 @@ RSpec.describe Kiosk::Server::HandlerRegistrations do
       expect(queries.known).to be_empty
     end
 
-    it "leaves registrations made through the direct register API alone" do
-      queries.register("legacy_block", ->(_args, _identity) { [] }, description: "an initializer's own")
-
-      described_class.reload!(%w[SpecRegistrationsQueriesController])
-
-      expect(queries.known).to contain_exactly("legacy_block", "spec_browse")
-    end
-
-    it "registers nothing and removes nothing when no handlers are declared" do
-      queries.register("legacy_block", ->(_args, _identity) { [] })
-
+    it "registers nothing when no handlers are declared" do
       described_class.reload!([])
 
-      expect(queries.known).to eq(["legacy_block"])
+      expect(queries.known).to be_empty
+      expect(actions.known).to be_empty
     end
 
     it "reads Kiosk.configuration.handlers when given no argument" do
@@ -131,22 +122,22 @@ RSpec.describe Kiosk::Server::HandlerRegistrations do
   end
 
   describe ".clear!" do
-    it "drops mixin registrations and keeps directly registered ones" do
+    it "empties both registries" do
       described_class.reload!(%w[SpecRegistrationsQueriesController SpecRegistrationsActionsController])
-      queries.register("legacy_query", ->(_args, _identity) { [] })
-      actions.register("legacy_action", ->(_args, _identity) { {} })
+      expect(queries.known).not_to be_empty
+      expect(actions.known).not_to be_empty
 
       described_class.clear!
 
-      expect(queries.known).to eq(["legacy_query"])
-      expect(actions.known).to eq(["legacy_action"])
+      expect(queries.known).to be_empty
+      expect(actions.known).to be_empty
     end
   end
 end
 
 RSpec.describe "the registries' #unregister" do
   it "removes the entry so the wire stops serving it" do
-    Kiosk::Server::Queries.register("gone", ->(_args, _identity) { [] })
+    declare_query("gone")
 
     expect(Kiosk::Server::Queries.unregister("gone")).to be_a(Kiosk::Server::Queries::Entry)
     expect(Kiosk::Server::Queries.known).to be_empty

@@ -22,10 +22,10 @@ RSpec.describe Kiosk::Server::Executor do
 
   describe "transaction discipline" do
     it "wraps the verb in a single transaction with GUCs set" do
-      Kiosk::Server::Queries.register("probe") { |_p| [{ ok: 1 }] }
+      declare_query("probe") { render json: [{ ok: 1 }] }
       described_class.call(kind: :query, args: { name: "probe" }, identity: identity, connection: connection)
 
-      # 4 SET LOCAL GUCs only (the query block returns rows without hitting connection)
+      # 4 SET LOCAL GUCs only (the handler renders rows without hitting connection)
       expect(connection.executed_sql.size).to eq(4)
       expect(connection.executed_sql[0]).to start_with(%(SET LOCAL "app"."current_user_id"))
       expect(connection.executed_sql[3]).to start_with(%(SET LOCAL "app"."current_agent_id"))
@@ -35,7 +35,7 @@ RSpec.describe Kiosk::Server::Executor do
 
   describe "verb :query" do
     before do
-      Kiosk::Server::Queries.register("menu") { |_p| [{ "id" => 1, "name" => "Margherita" }] }
+      declare_query("menu") { render json: [{ "id" => 1, "name" => "Margherita" }] }
     end
 
     it "looks up the query by name and returns :rows Result" do
@@ -50,12 +50,14 @@ RSpec.describe Kiosk::Server::Executor do
     end
 
     it "passes params (args minus name) to the query handler" do
-      Kiosk::Server::Queries.register("items") { |p| [{ filter: p[:category] }] }
+      declare_query("items") { render json: [{ filter: params[:category] }] }
       result = described_class.call(
         kind: :query, args: { name: "items", category: "pizza" },
         identity: identity, connection: connection,
       )
-      expect(result.payload).to eq([{ filter: "pizza" }])
+      # String keys: a handler RENDERS, so the row makes a JSON round trip
+      # before the Executor sees it — which is what reaches the agent.
+      expect(result.payload).to eq([{ "filter" => "pizza" }])
     end
 
     it "raises BadRequest when name is missing" do
@@ -72,7 +74,7 @@ RSpec.describe Kiosk::Server::Executor do
     end
 
     it "lets Kiosk::Server::Errors raised inside the query propagate unchanged" do
-      Kiosk::Server::Queries.register("denied") { raise Kiosk::Server::Errors::RLSDenied, "no" }
+      declare_query("denied") { raise Kiosk::Server::Errors::RLSDenied, "no" }
 
       expect {
         described_class.call(kind: :query, args: { name: "denied" },
@@ -81,7 +83,7 @@ RSpec.describe Kiosk::Server::Executor do
     end
 
     it "wraps StandardError raised inside the query as ActionFailed" do
-      Kiosk::Server::Queries.register("boom") { raise "kaboom" }
+      declare_query("boom") { raise "kaboom" }
 
       expect {
         described_class.call(kind: :query, args: { name: "boom" },
@@ -92,7 +94,7 @@ RSpec.describe Kiosk::Server::Executor do
     # ── cursor pagination seam (ADR-0021 / T-042) ─────────────────────────
 
     it "leaves next_cursor nil when the handler returns a bare Array (back-compat)" do
-      Kiosk::Server::Queries.register("flat") { |_p| [{ "id" => 1 }, { "id" => 2 }] }
+      declare_query("flat") { render json: [{ "id" => 1 }, { "id" => 2 }] }
       result = described_class.call(kind: :query, args: { name: "flat" },
                                     identity: identity, connection: connection)
 
@@ -103,12 +105,10 @@ RSpec.describe Kiosk::Server::Executor do
     end
 
     it "threads a Page's next_cursor into the result envelope as `next`" do
-      Kiosk::Server::Queries.register("paged") do |params|
+      declare_query("paged") do
         offset = Kiosk::Server::Cursor.decode_offset(params[:cursor])
-        Kiosk::Server::Page.new(
-          rows: [{ "id" => offset + 1 }],
-          next_cursor: Kiosk::Server::Cursor.encode_offset(offset + 1),
-        )
+        render_kiosk_page([{ "id" => offset + 1 }],
+                          next_cursor: Kiosk::Server::Cursor.encode_offset(offset + 1))
       end
 
       result = described_class.call(kind: :query, args: { name: "paged", limit: 1 },
@@ -121,8 +121,8 @@ RSpec.describe Kiosk::Server::Executor do
     end
 
     it "omits `next` when a paginating handler signals the last page (Page with nil cursor)" do
-      Kiosk::Server::Queries.register("last") do |_p|
-        Kiosk::Server::Page.new(rows: [{ "id" => 99 }]) # no next_cursor => complete
+      declare_query("last") do
+        render_kiosk_page([{ "id" => 99 }]) # no next_cursor => complete
       end
       result = described_class.call(kind: :query, args: { name: "last" },
                                     identity: identity, connection: connection)
@@ -135,7 +135,7 @@ RSpec.describe Kiosk::Server::Executor do
 
   describe "verb :run" do
     before do
-      Kiosk::Server::Actions.register("ping") { |args| { pong: args[:greeting] } }
+      declare_action("ping") { render json: { pong: params[:greeting] } }
     end
 
     it "looks up the action by name and calls it with sym-keyed args" do
@@ -145,16 +145,17 @@ RSpec.describe Kiosk::Server::Executor do
       )
 
       expect(result.kind).to    eq(:value)
-      expect(result.payload).to eq(pong: "world")
+      # String keys: the handler renders, so the value makes a JSON round trip.
+      expect(result.payload).to eq("pong" => "world")
     end
 
     it "passes through args (except name) to the action handler" do
-      Kiosk::Server::Actions.register("echo") { |args| args }
+      declare_action("echo") { render json: { a: params[:a], b: params[:b] } }
       result = described_class.call(
         kind: :run, args: { name: "echo", a: 1, b: "x" },
         identity: identity, connection: connection,
       )
-      expect(result.payload).to eq(a: 1, b: "x")
+      expect(result.payload).to eq("a" => 1, "b" => "x")
     end
 
     it "raises BadRequest when name is missing" do
@@ -171,7 +172,7 @@ RSpec.describe Kiosk::Server::Executor do
     end
 
     it "lets Kiosk::Server::Errors raised inside the action propagate unchanged" do
-      Kiosk::Server::Actions.register("denied") { raise Kiosk::Server::Errors::RLSDenied, "no" }
+      declare_action("denied") { raise Kiosk::Server::Errors::RLSDenied, "no" }
 
       expect {
         described_class.call(kind: :run, args: { name: "denied" },
@@ -180,7 +181,7 @@ RSpec.describe Kiosk::Server::Executor do
     end
 
     it "wraps StandardError raised inside the action as ActionFailed" do
-      Kiosk::Server::Actions.register("boom") { raise "kaboom" }
+      declare_action("boom") { raise "kaboom" }
 
       expect {
         described_class.call(kind: :run, args: { name: "boom" },
@@ -201,8 +202,10 @@ RSpec.describe Kiosk::Server::Executor do
 
   describe "verb :schema" do
     before do
-      Kiosk::Server::Queries.register("menu", description: "Browse the menu", params: { restaurant_id: "string" }) { |_| [] }
-      Kiosk::Server::Actions.register("place_order", description: "Place an order", params: { items: "array" }) { |_| {} }
+      declare_query("menu", description: "Browse the menu",
+        input_schema: { type: "object", properties: { restaurant_id: { type: "string" } } })
+      declare_action("place_order", description: "Place an order",
+        input_schema: { type: "object", properties: { items: { type: "array" } } })
     end
 
     it "returns a :value Result with verbs, queries catalog, and actions catalog" do
@@ -212,11 +215,15 @@ RSpec.describe Kiosk::Server::Executor do
       expect(result.kind).to eq(:value)
       expect(result.payload[:verbs]).to include("query", "run", "pay", "schema")
       expect(result.payload[:verbs]).not_to include("help", "events")
+      # `params` is retired (ADR-0023): the shape lives in input_schema and the
+      # descriptor publishes the retired slot as null.
       expect(result.payload[:queries]).to include(
-        hash_including(name: "menu", description: "Browse the menu", params: { restaurant_id: "string" }),
+        hash_including(name: "menu", description: "Browse the menu", params: nil,
+                       input_schema: { type: "object", properties: { restaurant_id: { type: "string" } } }),
       )
       expect(result.payload[:actions]).to include(
-        hash_including(name: "place_order", description: "Place an order", params: { items: "array" }),
+        hash_including(name: "place_order", description: "Place an order", params: nil,
+                       input_schema: { type: "object", properties: { items: { type: "array" } } }),
       )
     end
 
@@ -225,8 +232,8 @@ RSpec.describe Kiosk::Server::Executor do
       expect(connection.executed_sql).to be_empty
     end
 
-    it "includes entries registered without metadata (description/params nil)" do
-      Kiosk::Server::Queries.register("bare") { |_| [] }
+    it "includes entries declared without a description (description/params nil)" do
+      declare_query("bare", input_schema: { type: "object" })
       result = described_class.call(kind: :schema, args: {}, identity: identity, connection: connection)
 
       bare = result.payload[:queries].find { |q| q[:name] == "bare" }

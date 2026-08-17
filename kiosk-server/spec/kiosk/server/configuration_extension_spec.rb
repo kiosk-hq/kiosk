@@ -59,7 +59,7 @@ RSpec.describe Kiosk::Server::ConfigurationExtension do
     end
 
     it "lets capabilities be pinned explicitly (returned verbatim, bypasses computation)" do
-      Kiosk::Server::Queries.register("q") { [] }
+      declare_query("q")
       Kiosk.configure { |c| c.capabilities = %w[schema query] }
       expect(Kiosk.configuration.capabilities).to eq(%w[schema query])
     end
@@ -81,12 +81,12 @@ RSpec.describe Kiosk::Server::ConfigurationExtension do
   # never advertises a verb the provider has not wired.
   describe "#capabilities (computed)" do
     it "includes schema + query when only a query is registered" do
-      Kiosk::Server::Queries.register("catalog") { [] }
+      declare_query("catalog")
       expect(Kiosk.configuration.capabilities).to eq(%w[schema query])
     end
 
     it "includes schema + run when only an action is registered" do
-      Kiosk::Server::Actions.register("checkout") { {} }
+      declare_action("checkout")
       expect(Kiosk.configuration.capabilities).to eq(%w[schema run])
     end
 
@@ -96,14 +96,14 @@ RSpec.describe Kiosk::Server::ConfigurationExtension do
     end
 
     it "emits the full set in canonical order schema, query, run, pay" do
-      Kiosk::Server::Queries.register("catalog") { [] }
-      Kiosk::Server::Actions.register("checkout") { {} }
+      declare_query("catalog")
+      declare_action("checkout")
       Kiosk.configure { |c| c.payment_provider = Object.new }
       expect(Kiosk.configuration.capabilities).to eq(%w[schema query run pay])
     end
 
     it "never encodes HTTP methods" do
-      Kiosk::Server::Queries.register("catalog") { [] }
+      declare_query("catalog")
       expect(Kiosk.configuration.capabilities).not_to include("GET", "POST")
     end
   end

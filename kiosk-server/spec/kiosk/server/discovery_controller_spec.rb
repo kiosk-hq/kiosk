@@ -97,7 +97,7 @@ RSpec.describe "DiscoveryController" do
     it "returns 200 application/linkset+json (RFC 9727) with a non-empty item list" do
       # A registered query makes `schema` a live capability, so the linkset
       # catalogues the wire endpoints (not just the discovery companion).
-      Kiosk::Server::Queries.register("catalog") { [] }
+      declare_query("catalog")
       status, headers, raw = dispatch(:api_catalog, "/.well-known/api-catalog")
       expect(status).to eq(200)
       expect(headers["Content-Type"]).to include("application/linkset+json")

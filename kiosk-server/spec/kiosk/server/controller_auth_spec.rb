@@ -268,8 +268,9 @@ RSpec.describe "wire-surface controller auth" do
       # ONE reader now: `lease_connection` for the whole dispatch — the wire
       # controller (K-654) and the bundled DefaultAgentIdp (K-782) agree, and
       # `connection` is deliberately absent so a survivor would fail loudly.
-      # `execute` stays because SessionContext's `SET LOCAL` GUCs cannot be
-      # parameterised (Postgres takes no binds in SET).
+      # `execute` is kept only so a stray caller does not NoMethodError: since
+      # K-789 even SessionContext's GUCs go through `exec_query` binds
+      # (`SELECT set_config($1, $2, true)` — `SET` itself takes no binds).
       ar_base = Class.new do
         define_singleton_method(:lease_connection) { fake_conn }
       end

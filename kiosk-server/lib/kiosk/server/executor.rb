@@ -10,7 +10,7 @@ module Kiosk
   module Server
     # Central dispatcher. Receives a verb (one of {VERBS}) + args +
     # {Kiosk::Identity} + a database connection. Opens {SessionContext}
-    # (transaction + four `SET LOCAL` GUCs), routes to the
+    # (transaction + four transaction-local GUCs), routes to the
     # appropriate verb method, returns {Result} on success or raises
     # {Errors::Base} subclass on failure.
     #

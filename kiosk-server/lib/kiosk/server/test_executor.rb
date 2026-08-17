@@ -218,10 +218,13 @@ module Kiosk
           "call from inside as_user / as_agent / as_anonymous block (default-deny)"
       end
 
+      # `[sql, binds]` pairs through `exec_query` — the identity GUCs travel as
+      # bind parameters (K-789), so this mirrors `SessionContext#apply_gucs`
+      # rather than re-implementing it.
       def apply_gucs(identity)
         SessionContext.new(connection: connection, identity: identity)
                       .guc_statements
-                      .each { |sql| connection.execute(sql) }
+                      .each { |sql, binds| connection.exec_query(sql, "Kiosk GUC", binds) }
       end
 
       def normalize_rows(result)

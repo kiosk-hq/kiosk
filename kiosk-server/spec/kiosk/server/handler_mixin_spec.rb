@@ -186,7 +186,7 @@ RSpec.describe "Kiosk::Query / Kiosk::Action (the operator mixin)" do
     it "runs inside the wire's GUC-scoped transaction" do
       execute(:query, { name: "catalog" })
 
-      expect(connection.executed_sql.first).to start_with(%(SET LOCAL "app"."current_user_id"))
+      expect(connection.bound(/set_config/).first.last.first).to eq("app.current_user_id")
     end
   end
 

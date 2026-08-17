@@ -10,6 +10,8 @@ All notable changes follow [Keep a Changelog](https://keepachangelog.com/en/1.1.
 
 ### Security
 
+- **The identity GUCs are set through bind parameters (K-789).** `SessionContext` built `SET LOCAL <name> = '<value>'` with a hand-rolled quote-doubler — the last value escaped by hand anywhere in the gem, and the one value every predicate and every RLS policy trusts. Postgres takes no binds in `SET`, so the statement is now `SELECT set_config($1, $2, true)`, whose third argument IS `LOCAL`; equivalence (same value in the transaction, gone after COMMIT and after ROLLBACK) is asserted against a real database rather than argued. `SessionContext`'s connection contract moves from `#execute` to `#exec_query`, and `#guc_statements` returns `[sql, binds]` pairs.
+
 - **The pay path writes through bind parameters, not assembled SQL (K-654).** `Executor`'s four `persist_*` helpers and its spending-cap tally were heredocs with every value spliced in through a private `connection.quote` wrapper; they now pass `$1…$N` binds to `exec_query`, so a value can no longer be read as SQL and there is no quote call left to omit. Nothing on the wire changes — this closes the gap between what the engine ships and what it asks operators to do, since the same idiom was removed from all seven demos first. `WireController` also stops calling the Rails-8.1 soft-deprecated `ActiveRecord::Base.connection`, which raises outright under `permanent_connection_checkout = :disallowed`.
 
 ### Removed

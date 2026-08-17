@@ -244,7 +244,7 @@ applies, `params` is `ActionController::Parameters`, and the answer is whatever
 you `render`. On top of that:
 
 - `kiosk_identity` — the `Kiosk::Identity` the wire resolved (`user_id`,
-  `agent_id`, `role`, `actor`). The four `SET LOCAL` GUCs are already applied to
+  `agent_id`, `role`, `actor`). The four transaction-local GUCs are already applied to
   the connection, so SQL-side and RLS scoping work whether or not you read it.
 - `render_kiosk_page(rows, next_cursor:)` — answer one page of a large query;
   the cursor reaches the envelope's `next` field. `Kiosk::Server::Cursor` has an

@@ -156,7 +156,7 @@ module Kiosk
       # RAISES — so the whole wire surface would 500 on a host that has opted
       # into the new default. The lease is the semantics this seam needs and
       # `with_connection` is deliberately not used: {SessionContext} sets four
-      # GUCs with `SET LOCAL`, and `pay` spans THREE separate transactions
+      # transaction-local GUCs, and `pay` spans THREE separate transactions
       # around an irreversible capture, so every one of them must land on the
       # same connection for the whole request — which is exactly what a lease
       # held "for the entire duration of the request" guarantees and what a

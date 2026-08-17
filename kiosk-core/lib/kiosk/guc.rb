@@ -16,7 +16,8 @@ module Kiosk
     ACTOR    = "current_actor"
     AGENT_ID = "current_agent_id"
 
-    # Compose the full GUC name for `SET LOCAL` statements.
+    # Compose the full GUC name for the transaction-local session settings
+    # (`SELECT set_config($1, $2, true)` — kiosk-server's SessionContext).
     #
     # @example
     #   Kiosk::GUC.for("app", Kiosk::GUC::USER_ID) #=> "app.current_user_id"

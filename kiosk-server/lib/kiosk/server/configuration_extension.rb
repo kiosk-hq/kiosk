@@ -188,7 +188,7 @@ module Kiosk
       # Role assigned to every self-registered agent. Self-registration mints a
       # Bearer token with no human in the loop, so the role is pinned by the
       # provider server-side — an agent CANNOT choose its own role (that would
-      # be a privilege-selection primitive: the role lands in a `SET LOCAL` GUC
+      # be a privilege-selection primitive: the role lands in a transaction-local GUC
       # every RLS policy trusts). Privileged roles are obtainable only through
       # the human-approved device-grant flow.
       #

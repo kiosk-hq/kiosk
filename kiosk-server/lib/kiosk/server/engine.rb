@@ -70,11 +70,13 @@ module Kiosk
       # reload in development, which is exactly the cadence a registry built
       # from reloadable classes needs: the operator NAMES their handler
       # controllers (`c.handlers`) and never writes reload plumbing.
-      # {HandlerRegistrations} rebuilds — drop, then re-register — so a verb
+      # {HandlerRegistrations} rebuilds — drop, then re-declare — so a verb
       # deleted from a controller leaves the catalog and stops being served,
-      # which a re-register-only pass would miss. Runs for every host: with no
-      # handlers declared it is a no-op, and `register`-installed entries are
-      # never touched.
+      # which a re-declare-only pass would miss. Runs for every host: with no
+      # handlers declared it empties the registries. Note the order Rails fixes
+      # — this runs BEFORE `eager_load!` — so in production a handler left out
+      # of the list is still registered afterwards, by being read; it is
+      # development, and every reload, where the omission shows.
       config.to_prepare do
         Kiosk::Server::HandlerRegistrations.reload!
       end

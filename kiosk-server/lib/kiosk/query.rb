@@ -27,7 +27,9 @@ module Kiosk
   # declared method is registered in {Kiosk::Server::Queries} and dispatched
   # through Rails' own `Controller.action(…)`; it runs inside the wire's
   # GUC-scoped transaction, so per-principal scoping (and RLS, where the
-  # operator opted in) applies exactly as it does to a registered block.
+  # operator opted in) applies to it like any other statement on that
+  # connection. Name the class in `Kiosk.configuration.handlers` — that list is
+  # how the engine finds it, and since T-081 it is the only way in.
   #
   # A large result opts into cursor pagination with `render_kiosk_page(rows,
   # next_cursor:)` instead of `render json:`.

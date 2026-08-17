@@ -94,40 +94,99 @@ rails g kiosk:install
 
 This emits `config/initializers/kiosk.rb` (a `Kiosk.configure` block) and the `kiosk.*` schema migrations. Run `bin/rails db:migrate` to apply them. The generator does **not** touch your routes; `kiosk-server` ships the wire controllers and you mount them yourself (see `config/routes.rb`).
 
-**3. Register named queries**
+**3. Declare the read verbs in a controller**
+
+The verbs an assistant may call are ordinary Rails controller actions. Kiosk
+ships a MIXIN, not a base class — which superclass a handler has is your
+decision — and each class-level macro is claimed by the next `def`, so a method
+with no macros above it is a helper the wire cannot see.
 
 ```ruby
-Kiosk::Server::Queries.register("availability") do |args|
-  # open tables across all restaurants for the upcoming (rolling, Lisbon-tz)
-  # seatings that seat args[:party_size]; optional neighborhood/time/date filters
-end
+# app/controllers/kiosk/dining_room_controller.rb
+class Kiosk::DiningRoomController < ActionController::API
+  include Kiosk::Query
 
-Kiosk::Server::Queries.register("my_bookings") do |_params|
-  Booking.where("user_id = kiosk.current_user_id()")
+  description "Find tables still open across all restaurants for the upcoming " \
+              "(rolling, Lisbon-tz) seatings that seat a given party."
+  input_schema type: "object", additionalProperties: false,
+               required: %w[party_size],
+               properties: {
+                 party_size:   { type: "integer", minimum: 1 },
+                 neighborhood: { type: "string" },
+                 date:         { type: "string", format: "date" },
+                 time:         { type: "string" },
+               }
+  def availability
+    render json: Seating.open_for(**availability_params)
+  end
+
+  description "List the bookings belonging to the authenticated principal."
+  input_schema type: "object", additionalProperties: false, properties: {}, required: []
+  def my_bookings
+    render json: Booking.owned_by_current_principal
+  end
 end
 ```
 
 AI assistants call these by name only (`POST /kiosk/query {name:"availability", party_size:2}`). They never supply SQL. App-layer isolation lives here: owner-scoped queries filter by `kiosk.current_user_id()` (operator-derived from the session, never an AI-assistant param); the availability catalogue is open to all authenticated AI assistants.
 
-**4. Register Actions (`book_table` and `cancel_booking`)**
+**4. Declare the write verbs next door (`book_table`, `cancel_booking`)**
+
+A controller declares queries OR actions, never both — the verb it is reached by
+is a property of the class.
 
 ```ruby
-Kiosk::Server::Actions.register("book_table") do |args|
-  uid = ActiveRecord::Base.connection.execute("SELECT kiosk.current_user_id() AS uid").first["uid"]
-  # reserve args[:restaurant_table_id] at args[:restaurant_id] for the chosen
-  # (date, time) seating, then create a confirmed booking under uid. A table
-  # already held for that seating is a clean 409 (finite). No payment.
-end
+# app/controllers/kiosk/bookings_controller.rb
+class Kiosk::BookingsController < ActionController::API
+  include Kiosk::Action
 
-Kiosk::Server::Actions.register("cancel_booking") do |args|
-  # owner-scoped: WHERE user_id = kiosk.current_user_id() — a cross-principal
-  # cancel is a clean 403, and the freed (table, seating) returns to availability.
+  description "Reserve one table at one restaurant for one seating. This is a " \
+              "COMMITMENT, not a quote. No payment is taken."
+  input_schema type: "object", additionalProperties: false,
+               required: %w[restaurant_id restaurant_table_id date time],
+               properties: {
+                 restaurant_id:       { type: "integer" },
+                 restaurant_table_id: { type: "integer" },
+                 date:                { type: "string", format: "date" },
+                 time:                { type: "string" },
+               }
+  def book_table
+    # A table already held for that seating is a clean 409 (the supply is finite):
+    #   render json: { ok: false, error: { code: "conflict", … } }, status: :conflict
+    booking = BookTable.call(**booking_params)
+    render json: { booking_id: booking.id, status: booking.status }
+  end
+
+  description "Cancel one of the authenticated principal's own bookings, " \
+              "returning the table to availability."
+  input_schema type: "object", additionalProperties: false,
+               required: %w[booking_id],
+               properties: { booking_id: { type: "string", format: "uuid" } }
+  def cancel_booking
+    # Owner-scoped: a cross-principal cancel is a clean 403.
+    booking = CancelBooking.call(booking_id: params[:booking_id])
+    render json: { booking_id: booking.id, status: "cancelled" }
+  end
 end
 ```
 
-Actions are plain Ruby blocks. The `kiosk.current_user_id()` Postgres function returns the synthetic principal's ID; the action enforces owner-scope in the block, so an AI assistant cannot cancel or read another principal's booking.
+Handlers are plain Rails actions: your filters, your `rescue_from`, your `params`. The `kiosk.current_user_id()` Postgres function returns the synthetic principal's ID, and the handler enforces owner-scope with it, so an AI assistant cannot cancel or read another principal's booking.
 
-**5. No payment adapter**
+**5. Name the controllers in the initializer**
+
+```ruby
+Kiosk.configure do |c|
+  c.handlers = %w[Kiosk::DiningRoomController Kiosk::BookingsController]
+end
+```
+
+This line is load-bearing. The wire reaches a handler through the registry and
+nothing else in the app references these classes, so in development — where
+Rails does not eager-load `app/` — an origin that names none of them serves no
+verbs at all. There is no second way in: `Kiosk::Server::Queries.register` was
+removed in 0.3.
+
+**6. No payment adapter**
 
 There is nothing to wire. atablefor configures no `payment_provider`, so `pay` drops out of the advertised capabilities and the discovery documents carry no payments block. A reservation takes no money — the operator's concern is accountability and anti-scalping, which PoW and reputation handle.
 

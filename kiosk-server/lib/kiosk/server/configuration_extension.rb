@@ -51,9 +51,13 @@ module Kiosk
       # by name on each reload, and a Class object handed over here belongs to
       # the boot generation. A class is accepted and reduced to its name.
       #
-      # Handlers registered the other way in — `Queries.register(name) { … }`
-      # from an initializer — need no entry here and are never touched by the
-      # rebuild.
+      # Do not rely on eager loading instead of this list. Rails runs the
+      # engine's `to_prepare` BEFORE `eager_load!` (Finisher:
+      # `run_prepare_callbacks` then `eager_load!`), so in production an
+      # unlisted handler still registers — by being read — and appears to work,
+      # while the same app in development serves it not at all and every reload
+      # drops it again. List every handler controller and the two environments
+      # agree.
       attr_writer :handlers
       def handlers
         @handlers ||= []

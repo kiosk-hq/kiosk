@@ -116,66 +116,110 @@ get "/.well-known/kiosk.json", to: ->(env) {
 
 (A follow-up release will mount these via the engine's own routes drawer so this block collapses to one line.)
 
-**3. Register named queries**
+**3. Declare the read verbs in a controller**
 
-Register the queries you want to expose to AI assistants:
+The verbs an assistant may call are ordinary Rails controller actions. Kiosk
+ships a MIXIN, not a base class — which superclass a handler has is your
+decision — and each class-level macro is claimed by the next `def`, so a method
+with no macros above it is a helper the wire cannot see.
 
 ```ruby
-Kiosk::Server::Queries.register("properties",
-  description: "Browse all available hotel properties") do |_params|
-  Property.select(:id, :name, :city).order(:name)
-end
+# app/controllers/kiosk/hotels_controller.rb
+class Kiosk::HotelsController < ActionController::API
+  include Kiosk::Query
 
-Kiosk::Server::Queries.register("availability",
-  description: "Check room availability at a property for given dates",
-  params: { property_id: "integer", check_in: "date YYYY-MM-DD", check_out: "date YYYY-MM-DD" }) do |params|
-  RoomType.where(property_id: params[:property_id])
-          .where.not(id: Booking.where(property_id: params[:property_id],
-                                       status: %w[reserved confirmed])
-                                .where("check_in < ? AND check_out > ?",
-                                       params[:check_out], params[:check_in])
-                                .select(:room_type_id))
-          .select(:id, :name, :nightly_price_cents)
-end
+  description "Browse the hotels this operator takes bookings for."
+  input_schema type: "object", additionalProperties: false, properties: {}, required: []
+  def properties
+    render json: Property.order(:name).pluck(:id, :name, :city)
+                         .map { |id, name, city| { id:, name:, city: } }
+  end
 
-Kiosk::Server::Queries.register("my_bookings",
-  description: "List this principal's hotel bookings (scoped to authenticated user)") do |_params|
-  Booking.where("user_id = kiosk.current_user_id()")
-         .select(:id, :property_id, :room_type_id, :check_in, :check_out, :total_cents, :status)
+  description "Check which room types are free at one hotel for a date range."
+  input_schema type: "object", additionalProperties: false,
+               required: %w[property_id check_in check_out],
+               properties: {
+                 property_id: { type: "integer" },
+                 check_in:    { type: "string", format: "date" },
+                 check_out:   { type: "string", format: "date" },
+               }
+  def availability
+    render json: RoomType.available_at(params[:property_id], params[:check_in], params[:check_out])
+                         .select(:id, :name, :nightly_price_cents)
+  end
+
+  description "List the bookings belonging to the authenticated principal."
+  input_schema type: "object", additionalProperties: false, properties: {}, required: []
+  def my_bookings
+    render json: Booking.owned_by_current_principal
+                        .select(:id, :property_id, :room_type_id, :check_in, :check_out,
+                                :total_cents, :status)
+  end
 end
 ```
 
-The handler block receives only AI-assistant-supplied params and runs inside a session whose `kiosk.current_user_id()` is the authenticated principal. `my_bookings` scopes by the server-derived user UUID — AI assistants cannot inject a different `user_id` to read other users' bookings.
+A handler sees only assistant-supplied params and runs inside a session whose
+`kiosk.current_user_id()` is the authenticated principal. `my_bookings` scopes
+by that server-derived UUID — an assistant cannot inject a different `user_id`
+to read another principal's bookings.
 
-**4. Register Actions (`reserve_room` and `confirm_booking`)**
+**4. Declare the write verbs next door (`reserve_room`, `confirm_booking`)**
+
+A controller declares queries OR actions, never both — the verb it is reached by
+is a property of the class.
 
 ```ruby
-Kiosk::Server::Actions.register("reserve_room",
-  description: "Reserve a room for the authenticated principal (creates a TTL hold)",
-  params: { property_id: "integer", room_type_id: "integer",
-            check_in: "date YYYY-MM-DD", check_out: "date YYYY-MM-DD" }) do |args|
-  uid = ActiveRecord::Base.connection.execute("SELECT kiosk.current_user_id() AS uid").first["uid"]
-  # ... calculate nights, total_cents, INSERT booking + kiosk.reservations TTL row
-  { booking_id: booking.id, total_cents: total_cents }
-end
+# app/controllers/kiosk/reservations_controller.rb
+class Kiosk::ReservationsController < ActionController::API
+  include Kiosk::Action
 
-Kiosk::Server::Actions.register("confirm_booking",
-  description: "Confirm a reserved booking (requires payment mandate referencing this booking)",
-  params: { booking_id: "uuid" }) do |args|
-  # Gate 1: ownership — booking.user_id must equal kiosk.current_user_id() AND status='reserved'
-  # Gate 2: payment  — a settled payment_mandate whose cart line_items @> [{booking_id:}]
-  # Both must pass; else Forbidden.
-  # The confirmation code is WRITTEN in the same UPDATE and read back from it,
-  # so the reference handed to the assistant is the one the hotel has on file.
-  # ... UPDATE bookings SET status='confirmed',
-  #     confirmation_code = COALESCE(confirmation_code, <uuid>) ... RETURNING confirmation_code
-  { booking_id:, status: "confirmed", confirmation_code: stored_code }
+  description "Hold a room for the authenticated principal. Creates a TTL hold, " \
+              "not a confirmed stay — confirm_booking finishes it."
+  input_schema type: "object", additionalProperties: false,
+               required: %w[property_id room_type_id check_in check_out],
+               properties: {
+                 property_id:  { type: "integer" },
+                 room_type_id: { type: "integer" },
+                 check_in:     { type: "string", format: "date" },
+                 check_out:    { type: "string", format: "date" },
+               }
+  def reserve_room
+    hold = ReserveRoom.call(**reservation_params)   # INSERT booking + kiosk.reservations TTL row
+    render json: { booking_id: hold.booking_id, total_cents: hold.total_cents }
+  end
+
+  description "Confirm a held booking. Requires a settled payment mandate that " \
+              "references this booking, and returns the hotel's confirmation code."
+  input_schema type: "object", additionalProperties: false,
+               required: %w[booking_id],
+               properties: { booking_id: { type: "string", format: "uuid" } }
+  def confirm_booking
+    # Gate 1: ownership — booking.user_id must equal kiosk.current_user_id() AND status='reserved'
+    # Gate 2: payment  — a settled payment_mandate whose cart line_items @> [{booking_id:}]
+    # A refusal is Rails' idiom, not a Kiosk class:
+    #   render json: { ok: false, error: { code: "forbidden", … } }, status: :forbidden
+    booking = ConfirmBooking.call(booking_id: params[:booking_id])
+    render json: { booking_id: booking.id, status: "confirmed",
+                   confirmation_code: booking.confirmation_code }
+  end
 end
 ```
 
-Gate 1 (ownership) and Gate 2 (payment binding) together form the C2 defense: B cannot confirm A's booking even if B paid a mandate referencing A's booking_id. The ownership check fires first.
+**5. Name the controllers in the initializer**
 
-**5. Wire a payment-provider adapter**
+```ruby
+Kiosk.configure do |c|
+  c.handlers = %w[Kiosk::HotelsController Kiosk::ReservationsController]
+end
+```
+
+This line is load-bearing. The wire reaches a handler through the registry and
+nothing else in the app references these classes, so in development — where
+Rails does not eager-load `app/` — an origin that names none of them serves no
+verbs at all. There is no second way in: `Kiosk::Server::Queries.register` was
+removed in 0.3.
+
+**6. Wire a payment-provider adapter**
 
 ```ruby
 # config/initializers/kiosk.rb

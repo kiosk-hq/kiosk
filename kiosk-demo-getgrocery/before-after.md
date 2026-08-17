@@ -129,72 +129,125 @@ get "/.well-known/kiosk.json", to: ->(env) {
 
 AI assistants call named queries by name (`query` verb) — never raw SQL. The operator registers the queries it wishes to expose; isolation is enforced at the app layer in the query definitions and in Actions, with RLS available as optional defense-in-depth.
 
-**3. Register named queries (and optionally apply RLS)**
+**3. Declare the read verbs in a controller (and optionally apply RLS)**
 
-Register the queries you want to expose to AI assistants:
-
-```ruby
-Kiosk::Server::Queries.register("catalog") do |_args|
-  Product.where("stock > 0")
-    .select(:id, :name, :price_cents)
-end
-
-Kiosk::Server::Queries.register("delivery_slots") do |args|
-  DeliverySlot.where(date: args[:date], available: true)
-    .select(:id, :date, :label, :start_time, :end_time)
-end
-
-Kiosk::Server::Queries.register("my_orders") do |_args|
-  Order.where("user_id = kiosk.current_user_id()")
-    .select(:id, :status, :total_cents, :slot_at, :address, :created_at)
-end
-```
-
-The handler block receives only the AI-assistant-supplied params and runs inside a session whose `kiosk.current_user_id()` is the authenticated principal. `my_orders` scopes by `kiosk.current_user_id()` (server-derived from the session, never an AI-assistant param). Catalogue queries are open to all authenticated AI assistants.
-
-RLS is available as optional defense-in-depth via `enable_rls_on` — useful if you want a Postgres-level backstop in addition to the app-layer checks. It is not required for Kiosk's isolation model.
-
-**4. Register Actions (with ownership checks)**
-
-`reschedule_delivery` is **payment-binding gated** — the server must verify a settled mandate exists for the order before mutating. `create_order` attaches ownership via `kiosk.current_user_id()` and requires the delivery slot + address up front (delivery is part of the order). Register them:
+The verbs an assistant may call are ordinary Rails controller actions. Kiosk
+ships a MIXIN, not a base class — which superclass a handler has is your
+decision — and each class-level macro is claimed by the next `def`, so a method
+with no macros above it is a helper the wire cannot see.
 
 ```ruby
-Kiosk::Server::Actions.register("create_order") do |args|
-  uid   = ActiveRecord::Base.connection.execute("SELECT kiosk.current_user_id() AS uid").first["uid"]
-  order = Order.create!(user_id: uid, status: "created")
-  args[:items].each do |item|
-    product = Product.find_by!(sku: item[:sku])   # agents reference products by sku
-    order.order_items.create!(product: product, qty: item[:qty])
+# app/controllers/kiosk/storefront_controller.rb
+class Kiosk::StorefrontController < ActionController::API
+  include Kiosk::Query
+
+  description "Browse in-stock products from the catalog. Prices are EUR cents; " \
+              "reference a product by its stable `sku`, never a numeric id."
+  input_schema type: "object", additionalProperties: false, properties: {}, required: []
+  def catalog
+    render json: Product.in_stock.order(:name)
+                        .pluck(:sku, :name, :price_cents)
+                        .map { |sku, name, price_cents| { sku:, name:, price_cents: } }
   end
-  order.update!(total_cents: order.order_items.sum { |i| i.product.price_cents * i.qty })
-  { order_id: order.id, total_cents: order.total_cents, status: order.status }
-end
 
-Kiosk::Server::Actions.register("reschedule_delivery") do |args|
-  uid  = ActiveRecord::Base.connection.execute("SELECT kiosk.current_user_id() AS uid").first["uid"]
-  # Payment-binding gate: verify a settlement (capture receipt) references this order
-  paid = ActiveRecord::Base.connection.execute(<<~SQL).first["paid"]
-    SELECT EXISTS (
-      SELECT 1 FROM kiosk.settlements pm
-      JOIN kiosk.cart_mandates cm ON cm.id = pm.cart_mandate_id
-      WHERE cm.line_items @> json_build_array(
-        json_build_object('order_id', #{ActiveRecord::Base.connection.quote(args[:order_id])})
-      )::jsonb
-    ) AS paid
-  SQL
-  raise Kiosk::Server::Errors::Forbidden, "no settlement for this order" unless paid == "t" || paid == true
+  description "List the delivery slots still open for a date, for an in-zone address."
+  input_schema type: "object", additionalProperties: false,
+               required: %w[delivery_address],
+               properties: {
+                 delivery_address: { type: "string" },
+                 date:             { type: "string", format: "date" },
+               }
+  def delivery_slots
+    return render_out_of_zone unless DublinZones.serves?(params[:delivery_address])
 
-  order = Order.find_by!("id = ? AND user_id = ?", args[:order_id], uid)
-  slot  = DeliverySlot.find(args[:delivery_slot_id])
-  order.update!(
-    status:   "rescheduled",
-    slot_at:  slot.start_time,
-  )
-  { order_id: order.id, rescheduled_at: order.slot_at, status: order.status }
+    render json: DeliverySlot.open_on(params[:date])
+                             .select(:id, :date, :label, :start_time, :end_time)
+  end
+
+  description "List the orders belonging to the authenticated principal."
+  input_schema type: "object", additionalProperties: false, properties: {}, required: []
+  def my_orders
+    render json: Order.owned_by_current_principal
+                      .select(:id, :status, :total_cents, :slot_at, :address, :created_at)
+  end
 end
 ```
 
-**5. Wire a payment-provider adapter**
+A handler sees only assistant-supplied params and runs inside a session whose
+`kiosk.current_user_id()` is the authenticated principal. `my_orders` scopes by
+that server-derived UUID, never by an assistant-supplied one; the catalogue is
+open to every authenticated assistant.
+
+RLS is available as optional defense-in-depth via `enable_rls_on` — useful if
+you want a Postgres-level backstop in addition to the app-layer checks. It is
+not required for Kiosk's isolation model.
+
+**4. Declare the write verbs next door (with ownership checks)**
+
+A controller declares queries OR actions, never both. `reschedule_delivery` is
+**payment-binding gated** — the server verifies a settled mandate references the
+order before mutating. `create_order` attaches ownership via
+`kiosk.current_user_id()` and requires the delivery slot + address up front.
+
+```ruby
+# app/controllers/kiosk/orders_controller.rb
+class Kiosk::OrdersController < ActionController::API
+  include Kiosk::Action
+
+  description "Place an order for the authenticated principal. This RESERVES stock; " \
+              "nothing is charged until the cart is settled with `pay`."
+  input_schema type: "object", additionalProperties: false,
+               required: %w[items delivery_slot_id delivery_address],
+               properties: {
+                 items: { type: "array", items: {
+                   type: "object", required: %w[sku qty],
+                   properties: { sku: { type: "string" }, qty: { type: "integer", minimum: 1 } },
+                 } },
+                 delivery_slot_id: { type: "integer" },
+                 delivery_address: { type: "string" },
+               }
+  def create_order
+    order = CreateOrder.call(**order_params)   # an Operation, so the back office reuses it
+    render json: { order_id: order.id, total_cents: order.total_cents, status: order.status }
+  end
+
+  description "Move a PAID order to a different delivery slot. Refuses until the " \
+              "order has been settled."
+  input_schema type: "object", additionalProperties: false,
+               required: %w[order_id delivery_slot_id],
+               properties: {
+                 order_id:         { type: "string", format: "uuid" },
+                 delivery_slot_id: { type: "integer" },
+               }
+  def reschedule_delivery
+    # A refusal is Rails' idiom, not a Kiosk class — the code travels verbatim:
+    unless Settlement.covers_order?(params[:order_id])
+      return render json: { ok: false,
+                            error: { code: "forbidden", message: "no settlement for this order" } },
+                    status: :forbidden
+    end
+
+    order = RescheduleDelivery.call(**reschedule_params)
+    render json: { order_id: order.id, rescheduled_at: order.slot_at, status: order.status }
+  end
+end
+```
+
+**5. Name the controllers in the initializer**
+
+```ruby
+Kiosk.configure do |c|
+  c.handlers = %w[Kiosk::StorefrontController Kiosk::OrdersController]
+end
+```
+
+This line is load-bearing. The wire reaches a handler through the registry and
+nothing else in the app references these classes, so in development — where
+Rails does not eager-load `app/` — an origin that names none of them serves no
+verbs at all. There is no second way in: `Kiosk::Server::Queries.register` was
+removed in 0.3.
+
+**6. Wire a payment-provider adapter**
 
 ```ruby
 # config/environments/production.rb — ENV is read per environment, once

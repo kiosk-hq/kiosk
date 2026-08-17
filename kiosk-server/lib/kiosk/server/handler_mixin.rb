@@ -51,8 +51,9 @@ module Kiosk
     # ── What is NOT here ─────────────────────────────────────────────────
     # `params:` (the free-text name → hint hash) is retired by ADR-0023 and has
     # no macro: a hint is either a constraint (schema) or a meaning
-    # (description), and there is no third thing. It survives on the registry's
-    # `register` call only because the demos still pass it until T-057.
+    # (description), and there is no third thing. Since T-081 there is no way to
+    # set one at all — the registry publishes the retired descriptor slot as
+    # null, which is what the spec asks a post-retirement descriptor to do.
     module HandlerMixin
       KINDS = %i[action query].freeze
 
@@ -199,7 +200,7 @@ module Kiosk
             wire_name:   declaration[:wire_name],
             kind:        declaration[:kind],
           )
-          HandlerMixin.registry_for(declaration[:kind]).register(
+          HandlerMixin.registry_for(declaration[:kind]).declare(
             declaration[:wire_name], handler,
             description:    declaration[:description],
             input_schema:   declaration[:input_schema],

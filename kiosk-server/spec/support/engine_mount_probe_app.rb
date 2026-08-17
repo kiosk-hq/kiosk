@@ -33,10 +33,17 @@ Kiosk.configure do |c|
   c.user_model  = "User"
   c.signing_key = Kiosk::Server::SigningKey.generate
 end
-Kiosk::Server::Queries.register(
-  "ping", ->(_args, _identity) { [] },
-  description: "probe query",
-)
+# One verb, so this origin has a live capability set for the discovery
+# documents to advertise. Declared the shipped way — a controller with the
+# mixin, registering as its class body is read (T-081). `c.handlers` is not
+# needed here: the engine's `to_prepare` rebuild already ran during
+# `initialize!` above, and this probe has no reloader.
+class ProbeCatalogController < ActionController::API
+  include Kiosk::Query
+
+  description "probe query"
+  def ping = render(json: [])
+end
 
 # A stub distinguishable from the shipped DiscoveryController, so the winner
 # of a double-draw is observable.

@@ -37,6 +37,47 @@ class ApplicationController < ActionController::Base
   protect_from_forgery with: :exception
 end
 
+# ── Declaring a verb, the one way there is (T-081) ──────────────────────────
+#
+# A verb reaches the Actions/Queries registry through a controller that
+# includes {Kiosk::Query} / {Kiosk::Action}, where class-level macros are
+# claimed by the next `def`. These helpers build exactly that — an anonymous
+# controller on the fake ApplicationController above — so a spec that needs
+# "a registered query named X" gets one through the shipped shape rather than
+# through a back door of its own.
+#
+# What that costs, and why it is the right price: a handler RENDERS, so its
+# result makes a JSON round trip before the {Kiosk::Server::Executor} sees it,
+# and symbol keys come back as strings. Specs assert the string keys — which
+# is what an agent on the wire actually receives.
+#
+# The macros ARE the opt-in: a method declared with none of them is a helper
+# the wire cannot see. So at least one is always passed, and `description:`
+# is the default when a spec does not care which.
+#
+# @param name [String, Symbol] the wire name (also the controller method name)
+# @param macros [Hash] descriptor macros — description:, input_schema:,
+#   output_schema:, example_params:, example_row:
+# @param body [Proc] the controller action; defaults to an empty render
+# @return [Class] the handler controller, already registered
+def declare_query(name, **macros, &body)
+  declare_verb(Kiosk::Query, name, macros, body || -> { render json: [] })
+end
+
+def declare_action(name, **macros, &body)
+  declare_verb(Kiosk::Action, name, macros, body || -> { render json: {} })
+end
+
+def declare_verb(mixin, name, macros, body)
+  macros = { description: "the #{name} verb" } if macros.empty?
+
+  Class.new(ApplicationController) do
+    include mixin
+    macros.each { |macro, value| public_send(macro, value) }
+    define_method(name.to_s, &body)
+  end
+end
+
 # Minimal database-connection stub. Records every #execute call as a SQL
 # string. Pretends to support transactions (yields the block, no rollback
 # semantics — the real ActiveRecord::Base.connection.transaction handles

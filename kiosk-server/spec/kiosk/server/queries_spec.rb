@@ -1,37 +1,32 @@
 # frozen_string_literal: true
 
+# The read-side registry, exercised the ONE way a verb gets into it (T-081):
+# a controller that includes Kiosk::Query, with class-level macros claimed by
+# the next `def`. `declare_query` (spec_helper) builds exactly that.
+#
+# The examples that used to live here for `.register` itself — that it takes a
+# block, that it takes an explicit callable, that it raises without either —
+# went with the API in the same change. What is left is the registry's OWN
+# surface: fetch, describe, catalog, known, reset!.
 RSpec.describe Kiosk::Server::Queries do
-  describe ".register + .fetch" do
-    it "registers a block and fetches it back" do
-      described_class.register("menu") { |params| [{ id: 1, name: "Margherita" }] }
-      handler = described_class.fetch("menu")
+  describe ".fetch" do
+    it "returns the registered handler" do
+      declare_query("menu")
 
-      expect(handler.call({})).to eq([{ id: 1, name: "Margherita" }])
+      expect(described_class.fetch("menu")).to be_a(Kiosk::Server::HandlerDispatch)
     end
 
-    it "registers an explicit callable" do
-      callable = ->(params) { [{ result: params[:x] * 2 }] }
-      described_class.register("double", callable)
+    it "accepts a symbol name (registry keys are strings)" do
+      declare_query("menu")
 
-      expect(described_class.fetch("double").call(x: 3)).to eq([{ result: 6 }])
-    end
-
-    it "accepts symbol names (stored as strings)" do
-      described_class.register(:menu) { [] }
-      expect(described_class.fetch("menu")).to be_a(Proc)
-      expect(described_class.fetch(:menu)).to  be_a(Proc)
-    end
-
-    it "raises ArgumentError without a block or callable" do
-      expect { described_class.register("naked") }
-        .to raise_error(ArgumentError, /callable or a block/)
+      expect(described_class.fetch(:menu)).to eq(described_class.fetch("menu"))
     end
   end
 
   describe ".fetch unknown name" do
     it "raises NotFound whose hint names the available queries and points at the schema" do
-      described_class.register("browse_listings") { [] }
-      described_class.register("listing_detail") { [] }
+      declare_query("browse_listings")
+      declare_query("listing_detail")
 
       expect { described_class.fetch("listings") }
         .to raise_error(Kiosk::Server::Errors::NotFound) { |e|
@@ -46,7 +41,7 @@ RSpec.describe Kiosk::Server::Queries do
     end
 
     it "caps a very long hint list at 20 names + an ellipsis, still pointing at the schema" do
-      30.times { |i| described_class.register(format("q%02d", i)) { [] } }
+      30.times { |i| declare_query(format("q%02d", i)) }
 
       expect { described_class.fetch("nope") }
         .to raise_error(Kiosk::Server::Errors::NotFound) { |e|
@@ -61,48 +56,59 @@ RSpec.describe Kiosk::Server::Queries do
 
   describe ".known" do
     it "lists registered query names" do
-      described_class.register("a") { }
-      described_class.register("b") { }
+      declare_query("a")
+      declare_query("b")
       expect(described_class.known).to contain_exactly("a", "b")
     end
 
     it "is empty after reset!" do
-      described_class.register("a") { }
+      declare_query("a")
       described_class.reset!
       expect(described_class.known).to be_empty
     end
   end
 
-  describe "metadata (description: / params:)" do
-    it "register with description: and params: exposes them via describe" do
-      described_class.register("menu", description: "Browse the menu", params: { restaurant_id: "string" }) { [] }
+  describe ".describe" do
+    it "carries the declared description into the descriptor" do
+      declare_query("menu", description: "Browse the menu")
 
       descriptor = described_class.describe("menu")
       expect(descriptor[:name]).to        eq("menu")
       expect(descriptor[:description]).to eq("Browse the menu")
-      expect(descriptor[:params]).to      eq({ restaurant_id: "string" })
     end
 
-    it "fetch still returns the callable (not the Entry)" do
-      handler = ->(p) { [{ id: 1 }] }
-      described_class.register("items", handler, description: "List items")
+    # ADR-0023 retired the free-text `params` hint and the mixin has no macro
+    # for it, so every descriptor this implementation publishes carries null.
+    # The KEY stays on the wire (the spec keeps the slot for descriptors
+    # written before the retirement) — dropping it would be a wire change.
+    it "always publishes params as nil — retired by ADR-0023, no macro declares it" do
+      declare_query("menu", description: "Browse the menu")
 
-      fetched = described_class.fetch("items")
-      expect(fetched).to eq(handler)
-      expect(fetched.call({})).to eq([{ id: 1 }])
+      expect(described_class.describe("menu")).to have_key(:params)
+      expect(described_class.describe("menu")[:params]).to be_nil
     end
 
-    it "register without metadata leaves description and params nil" do
-      described_class.register("bare") { [] }
+    it "leaves description nil when the verb opted in with another macro" do
+      declare_query("bare", input_schema: { type: "object" })
 
       descriptor = described_class.describe("bare")
       expect(descriptor[:description]).to be_nil
       expect(descriptor[:params]).to      be_nil
     end
 
-    it "catalog returns all descriptors sorted by name" do
-      described_class.register("zebra", description: "Last") { }
-      described_class.register("apple", description: "First") { }
+    it "fetch returns the handler, not the Entry" do
+      declare_query("items", description: "List items") { render json: [{ id: 1 }] }
+
+      fetched = described_class.fetch("items")
+      expect(fetched).not_to be_a(described_class::Entry)
+      expect(fetched).to respond_to(:call)
+    end
+  end
+
+  describe ".catalog" do
+    it "returns all descriptors sorted by name" do
+      declare_query("zebra", description: "Last")
+      declare_query("apple", description: "First")
 
       cat = described_class.catalog
       expect(cat.map { |d| d[:name] }).to eq(%w[apple zebra])
@@ -110,14 +116,14 @@ RSpec.describe Kiosk::Server::Queries do
       expect(cat.last[:description]).to   eq("Last")
     end
 
-    it "catalog is empty after reset!" do
-      described_class.register("a") { }
+    it "is empty after reset!" do
+      declare_query("a")
       described_class.reset!
       expect(described_class.catalog).to be_empty
     end
 
-    it "known is unchanged (still returns names only)" do
-      described_class.register("x", description: "Something") { }
+    it "leaves known returning names only" do
+      declare_query("x", description: "Something")
       expect(described_class.known).to eq(["x"])
     end
   end
@@ -134,13 +140,12 @@ RSpec.describe Kiosk::Server::Queries do
       }
     end
 
-    it "register accepts input_schema:/example_params:/example_row: and exposes them via describe" do
-      described_class.register("search",
+    it "carries the declared schemas and examples into the descriptor" do
+      declare_query("search",
         description: "Search hotels",
-        params: { city: "string" },
         input_schema: input_schema,
         example_params: { city: "Lisbon", limit: 20 },
-        example_row: { id: 7, name: "Grand Aljube", city: "Lisbon" }) { [] }
+        example_row: { id: 7, name: "Grand Aljube", city: "Lisbon" })
 
       d = described_class.describe("search")
       expect(d[:input_schema]).to   eq(input_schema)
@@ -148,19 +153,22 @@ RSpec.describe Kiosk::Server::Queries do
       expect(d[:example_row]).to    eq({ id: 7, name: "Grand Aljube", city: "Lisbon" })
     end
 
-    # Back-compat: a descriptor with no extensions is byte-for-byte the old shape.
-    it "OMITS the new keys entirely when they are not supplied (existing descriptors unchanged)" do
-      described_class.register("plain", description: "Browse", params: { x: "string" }) { [] }
+    # A descriptor that declares none of the extensions publishes none of the
+    # keys — an absent extension is absent, never a null an assistant has to
+    # interpret.
+    it "OMITS the extension keys entirely when they are not declared" do
+      declare_query("plain", description: "Browse")
 
       d = described_class.describe("plain")
-      expect(d).to eq({ name: "plain", description: "Browse", params: { x: "string" } })
+      expect(d).to eq({ name: "plain", description: "Browse", params: nil })
       expect(d).not_to have_key(:input_schema)
+      expect(d).not_to have_key(:output_schema)
       expect(d).not_to have_key(:example_params)
       expect(d).not_to have_key(:example_row)
     end
 
-    it "emits only the extension keys that were supplied" do
-      described_class.register("partial", example_params: { city: "Porto" }) { [] }
+    it "emits only the extension keys that were declared" do
+      declare_query("partial", example_params: { city: "Porto" })
 
       d = described_class.describe("partial")
       expect(d).to have_key(:example_params)

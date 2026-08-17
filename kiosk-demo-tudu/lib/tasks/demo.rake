@@ -180,6 +180,13 @@ namespace :demo do
       check.call("the assistant still sees 'Hike' after the re-link (membership survived)", r["relink_keeps_list_access"])
       check.call("Alice's browser still sees BOTH 'Hike' and the seeded 'Flat 3B'", r["human_keeps_all_lists"])
 
+      # T-082: the human UI's READ half no longer goes through the wire
+      # dispatcher — /lists/:id runs ListAccess + the model projections directly.
+      # Both answers are asserted, because the page has two: the roster, and the
+      # refusal a non-member earns.
+      check.call("Alice's browser reads the list's own page (members roster rendered)", r["human_reads_list_page"])
+      check.call("a list Alice is not a member of redirects instead of rendering a roster", r["human_foreign_list_refused"])
+
       # DB ground truth: the list was migrated to Alice; Alice has >=2 live agents.
       list_owner = `psql -X -d #{db} -tAc "SELECT account_id FROM lists WHERE id = '#{r["list_id"]}'" 2>&1`.strip
       check.call("DB lists.account_id for 'Hike' == Alice (#{holder_id}) — assistant_claimed migrated it", list_owner == holder_id)

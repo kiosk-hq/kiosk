@@ -12,9 +12,11 @@
 # rolling upcoming seatings, was already a library module (lib/seatings.rb) and
 # never controller code: `availability` offers a seating and `book_table`
 # re-validates against the SAME helper, so the day+time an assistant is shown is
-# exactly the one it can book. The only thing written twice is the four-line
-# `render_bad_request` refusal below, which each controller keeps private —
-# atablefor is the first demo whose READ half refuses at all.
+# exactly the one it can book. atablefor is the first demo whose READ half refuses
+# at all, and since T-083 nothing about a refusal is written twice: the SENTENCE
+# is {WireArguments} (reachable from the write Operations, which render nothing)
+# and the RENDERER is {KioskRefusals}, held identical fleet-wide by
+# bin/check-demo-copies.
 #
 # NOT ROUTABLE. config/routes.rb draws nothing at this controller: handlers are
 # reached only through the wire, which is where authentication, the anti-scalping
@@ -22,6 +24,7 @@
 # bypass all three, and the mixin answers such a request 404.
 class Kiosk::DiningRoomController < ApplicationController
   include Kiosk::Query
+  include KioskRefusals
 
   # availability — open tables ACROSS the restaurant aggregator for the upcoming
   # rolling seatings that seat the party. Public (no per-user scoping): any
@@ -84,11 +87,13 @@ class Kiosk::DiningRoomController < ApplicationController
     # An ABSENT party_size and a party_size that is present but unusable are two
     # different mistakes and keep their two different messages: the key check is
     # what the retired `params.fetch(:party_size) { raise }` did, and a present
-    # nil still falls through to the >= 1 refusal below exactly as it did.
-    return render_bad_request("missing param: party_size") unless params.key?(:party_size)
+    # nil still falls through to the >= 1 refusal below exactly as it did. Both
+    # sentences live in {WireArguments} — the second one because `book_table`
+    # answers with it too, and this half must not be able to drift from that one.
+    return render_refusal(WireArguments.missing_party_size) unless params.key?(:party_size)
 
-    party_size = params[:party_size].to_i
-    return render_bad_request("party_size must be >= 1") if party_size < 1
+    party_size, refusal = WireArguments.party_size(params[:party_size])
+    return render_refusal(refusal) if refusal
 
     nbhd_filter = params[:neighborhood].to_s
     time_filter = params[:time].to_s
@@ -228,14 +233,4 @@ class Kiosk::DiningRoomController < ApplicationController
                         }
   end
 
-  private
-
-  # The whole error surface of this controller is one refusal, and it is a plain
-  # `render json:, status:` naming a code from the wire's closed vocabulary.
-  # Naming it is what lets an assistant branch; the status alone would already
-  # imply this one, but writing it keeps the answer explicit.
-  def render_bad_request(message)
-    render json: { error: { code: "bad_request", message: message } },
-           status: :bad_request
-  end
 end

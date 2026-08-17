@@ -8,22 +8,38 @@
 # `kiosk.current_user_id()` resolves to the signed-in human and every membership
 # check works identically to an agent call.
 #
-# WRITES NO LONGER GO THROUGH THE WIRE DISPATCHER (K-654). They used to:
-# `kiosk_run(name, args)` looked the verb up in the process-wide Action registry
-# and dispatched a synthetic Rack sub-request at the handler controller, purely
-# because that controller was where the write logic lived. The logic is in
-# app/operations/ now, so a web action calls the Operation directly inside
-# {#kiosk_as_human} — same GUC, same transaction, same principal, one less
-# round trip through a serialize/parse boundary that existed only to reach code
-# on the other side of it. `kiosk_run` is gone with its last caller.
+# THE HUMAN WEB UI NO LONGER TOUCHES THE WIRE DISPATCHER AT ALL — writes since
+# K-654, reads since T-082 — and that is the whole point of this file's current
+# size. What is left is session/identity plumbing: build the human's identity,
+# open the GUC transaction, and turn a refusal this surface cannot present into an
+# exception. Nothing here looks a verb up in a registry, and nothing here
+# dispatches a synthetic Rack sub-request.
 #
-# QUERIES still go through the registry ({#kiosk_query}). They are reads: their
-# logic is a scope on a model plus a `pluck`, there is nothing to extract, and
-# the handler controller IS the natural home for a projection. A refusal from
-# one therefore still arrives as {Kiosk::Server::Errors::WireError} carrying the
-# wire CODE — the taxonomy was never the contract (T-054), the code table is —
-# so the read actions rescue the base class and branch on `e.code`. The WRITE
-# actions branch on {OperationResult#code}, which is the same string.
+# HOW IT USED TO WORK, recorded because the cost is the argument for the seam:
+# `kiosk_run(name, args)` and `kiosk_query(name, params)` looked the verb up in
+# the process-wide Action/Query registry and ran the handler — the write half by
+# dispatching a synthetic sub-request at the handler controller, purely because
+# that controller was where the write logic lived. It produced three real breaks
+# that existed ONLY because a human request travelled through the wire:
+# `kiosk_identity` was nil there (no `Kiosk::Server::CurrentRequest`), results came
+# back STRING-keyed because the handler answered `render json:` and the caller
+# re-parsed it, and a refusal arrived as `Errors::WireError` carrying a wire code
+# rather than as the `Errors::Forbidden` class an existing `rescue` matched on.
+#
+# WHAT REPLACED EACH HALF. A write is an Operation in app/operations/, called
+# directly inside {#kiosk_as_human} — same GUC, same transaction, same principal.
+# A read is a MODEL PROJECTION ({List.reachable_rows}, {Todo.rows_on},
+# {Membership.rows_on}), called the same way, with the SAME precondition the
+# handler uses ({ListAccess}) in front of it. The shared thing is the operation or
+# the projection, never the dispatcher — which is exactly what Phil's 2026-08-17
+# WRITE-OPERATIONS-SEAM decision asked for, and what leaves the string keys as a
+# deliberate published shape rather than an artefact of a JSON round trip.
+#
+# `Kiosk::Server::CurrentRequest` is gone with the dispatcher: it existed to make
+# an identity visible to a handler controller reached through
+# `Kiosk::Server::HandlerDispatch`, and nothing on this door is reached that way
+# any more. The Operations and projections take their principal from the GUC (or
+# from the identity this file yields), which is the authority in both doors.
 module KioskSessionable
   extend ActiveSupport::Concern
 
@@ -39,23 +55,16 @@ module KioskSessionable
     )
   end
 
-  # Run a registered query handler as the human, returning its rows.
-  def kiosk_query(name, params = {})
-    kiosk_as_human { Kiosk::Server::Queries.fetch(name).call(params) }
-  end
-
-  # The GUC transaction and the identity carrier, together — the same two things
-  # WireController establishes around a wire dispatch, so the domain cannot tell
-  # which door it was reached through. Yields the identity, because an Operation
-  # takes its principal as an argument rather than reading request state.
+  # The GUC transaction — the same one WireController establishes around a wire
+  # dispatch, so the domain cannot tell which door it was reached through. Yields
+  # the identity, because an Operation takes its principal as an argument rather
+  # than reading request state.
   def kiosk_as_human
     identity = human_identity
     result   = nil
-    Kiosk::Server::CurrentRequest.with(identity: identity) do
-      Kiosk::Server::SessionContext.open(
-        connection: ActiveRecord::Base.connection, identity: identity,
-      ) { result = yield identity }
-    end
+    Kiosk::Server::SessionContext.open(
+      connection: ActiveRecord::Base.connection, identity: identity,
+    ) { result = yield identity }
     result
   end
 

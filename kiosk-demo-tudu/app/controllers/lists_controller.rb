@@ -2,11 +2,13 @@
 
 # The tutorial-plain tudu web UI for a signed-in human. Every action runs the
 # SAME domain code the agent wire runs, as the signed-in human (via
-# KioskSessionable), so the human and their assistants share one world — reads
-# through the registered Kiosk queries, writes through the Operations the wire
-# handlers call:
-#   index  — the human's lists (owner or member) — my_lists
-#   show   — a list's todos + members + the Invite button — list_todos/list_members
+# KioskSessionable), so the human and their assistants share one world — and
+# since T-082 it runs that code DIRECTLY: reads are model projections, writes are
+# the Operations the wire handlers call. Nothing here goes through the wire
+# dispatcher, which is for assistants.
+#   index  — the human's lists (owner or member) — List.reachable_rows
+#   show   — a list's todos + members + the Invite button — ListAccess.check then
+#            Todo.rows_on / Membership.rows_on
 #   create — a new list (owner) — create_list
 #   invite — mint a collaboration code, shown once — invite
 #   shared — the PUBLIC, read-only housemate view — the collaboration reveal
@@ -28,7 +30,7 @@ class ListsController < ApplicationController
   # pointing at both doors (sign-in + the Kiosk wire) plus the public housemate
   # board (the collaboration reveal) — the philslist-style api-in-spirit root.
   def index
-    @lists = user_signed_in? ? kiosk_query("my_lists") : nil
+    @lists = user_signed_in? ? kiosk_as_human { List.reachable_rows } : nil
     @housemate_board = housemate_board unless user_signed_in?
 
     # App-wide live DOMAIN activity summary (real counts, not telemetry, and
@@ -54,18 +56,32 @@ class ListsController < ApplicationController
 
   # The three actions below branch on the wire CODE rather than on an exception
   # class, and anything else re-raises so an unexpected refusal still surfaces
-  # instead of being swallowed by a friendly redirect. The code arrives two ways
-  # and they are the same vocabulary (T-054): a READ still runs through the wire
-  # registry, so its refusal is an Errors::WireError carrying `code`; a WRITE
-  # calls its Operation directly (K-654) and gets an OperationResult carrying
-  # the same string.
+  # instead of being swallowed by a friendly redirect. Since T-082 the code
+  # arrives ONE way on both halves — an {OperationResult} carrying a string from
+  # the wire's closed vocabulary (T-054: the code table is the contract, not a
+  # hierarchy) — because the read half no longer travels through the dispatcher
+  # that used to wrap it in an `Errors::WireError` on the way back.
+  #
+  # ONE gate for the page, where the wire runs its gate once per verb: the two
+  # queries this replaces each called {ListAccess.check} themselves, so the page
+  # asked the same question twice. Same answer, one question — and it is the SAME
+  # {ListAccess.check} the handlers call, so the page cannot come to disagree with
+  # the wire about who may read a list. A malformed id still re-raises (it is a
+  # `bad_request`, which this page has no way to show), and a foreign one still
+  # redirects with the flash.
   def show
     @list_id = params[:id]
-    @todos   = kiosk_query("list_todos",   list_id: @list_id)
-    @members = kiosk_query("list_members", list_id: @list_id)
-  rescue Kiosk::Server::Errors::Base => e
-    raise unless e.code == "forbidden"
+    refusal  = kiosk_as_human do
+      refused = ListAccess.check(@list_id)
+      unless refused
+        @todos   = Todo.rows_on(@list_id)
+        @members = Membership.rows_on(@list_id)
+      end
+      refused
+    end
+    return unless refusal
 
+    kiosk_refusal!(refusal) unless refusal.code == "forbidden"
     redirect_to lists_path, alert: "That list is not shared with you."
   end
 

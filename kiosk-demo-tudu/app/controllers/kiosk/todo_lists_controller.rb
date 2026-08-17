@@ -20,7 +20,7 @@
 # closed table, not a class hierarchy, so a refusal is an ordinary
 # `render json:, status:` naming the code, and the wire carries it verbatim. No
 # Kiosk error classes appear below — an Operation answers with an
-# {OperationResult}, and {KioskMembershipGate#render_operation} is the one place
+# {OperationResult}, and {KioskRefusals#render_operation} is the one place
 # that becomes a status.
 #
 # tudu advertises NO `pay` verb and configures no payment provider, so nothing
@@ -32,7 +32,7 @@
 # NOT ROUTABLE — see Kiosk::HouseholdController.
 class Kiosk::TodoListsController < ApplicationController
   include Kiosk::Action
-  include KioskMembershipGate
+  include KioskRefusals
 
   # create_list(title) — INSERT a list owned by the AUTHENTICATED principal and,
   # in the SAME transaction, an `owner` membership for the caller. Any forged

@@ -193,15 +193,19 @@ module Kiosk
         # Fresh key: a new linked assistant account under the approving
         # human's principal. Role: the ceremony's requested_role (the bound
         # human's role under roles-from-IdP, validated against the provider's
-        # declared roles) or the provider's registration_role default; NULL
-        # when neither is set (roles are hook-or-absent).
+        # declared roles) or the provider's registration_role default; the
+        # EMPTY role set when neither is set (roles are hook-or-absent).
         def register_linked(conn, config, pem, user_id, requested_role)
           role = validated_role(config, requested_role || config.registration_role)
 
-          # `NULL` is a statement shape (no role at all), `ARRAY[$3]::text[]` a
-          # bound value — same split as the rebind UPDATE above.
+          # `'{}'::text[]` is a statement shape (no role at all),
+          # `ARRAY[$3]::text[]` a bound value — same split as the rebind UPDATE
+          # above. The empty array and NOT `NULL` for the reason spelled out on
+          # `agent_registration.rb`'s copy of this branch (K-788): the column is
+          # `NOT NULL`, so a literal NULL 500'd every fresh-key bind for a
+          # provider that configures no role.
           allowed_roles_sql, role_binds =
-            role ? ["ARRAY[$3]::text[]", [role]] : ["NULL", []]
+            role ? ["ARRAY[$3]::text[]", [role]] : ["'{}'::text[]", []]
           sql = <<~SQL
             INSERT INTO #{config.schema}.agents (user_id, allowed_roles, public_key)
             VALUES ($1, #{allowed_roles_sql}, $2)

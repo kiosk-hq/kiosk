@@ -22,8 +22,9 @@ module Kiosk
         # The role is pinned server-side when configured — the agent never
         # sends one (that would be a privilege-selection primitive). OPTIONAL
         # (roles are hook-or-absent in 0.1): when unset, the agent
-        # row gets NO role, and the provider may instead assign roles inside
-        # its `assistant_creation` hook. A CONFIGURED role that is not among
+        # row gets NO role — an EMPTY `allowed_roles`, see the INSERT below —
+        # and the provider may instead assign roles inside its
+        # `assistant_creation` hook. A CONFIGURED role that is not among
         # the declared roles is still a provider error (loud 500).
         if role && !config.roles.map(&:to_s).include?(role)
           raise Errors::ConfigurationError,
@@ -89,12 +90,24 @@ module Kiosk
           # exactly why `assistant_creation` exists.
           assistant_account_id = create_assistant_account(config, public_key_pem)
 
-          # NULL allowed_roles when no registration_role is configured
-          # (single-role providers need no role at all). That is a statement
-          # SHAPE — there is no value to bind — while the role itself, when
-          # there is one, is `$3`.
+          # No registration_role configured → the EMPTY SET of roles, written
+          # explicitly. That is a statement SHAPE — there is no value to bind —
+          # while the role itself, when there is one, is `$3`.
+          #
+          # `'{}'::text[]` and NOT `NULL` (K-788): the shipped migration
+          # declares `allowed_roles text[] NOT NULL DEFAULT '{}'::text[]`, so a
+          # literal NULL here made every register and every fresh-key bind 500
+          # on a not-null violation for exactly the operator ADR-0011 protects
+          # — "registration MUST NOT fail when [registration_role] is unset".
+          # No demo could reach it (all seven configure a role) and a fake
+          # accepted the statement, so the suite vouched for it for a series.
+          # Not `DEFAULT` either: that defers to whatever default the operator's
+          # own table happens to carry, and one that has none puts the NULL
+          # straight back. An empty array SAYS "no roles" — the same move
+          # `executor.rb` makes with its `"on_file"` sentinel rather than
+          # writing NULL into a NOT NULL column.
           allowed_roles_sql, role_binds =
-            role ? ["ARRAY[$3]::text[]", [role]] : ["NULL", []]
+            role ? ["ARRAY[$3]::text[]", [role]] : ["'{}'::text[]", []]
           sql = <<~SQL
             INSERT INTO #{config.schema}.agents (user_id, allowed_roles, public_key)
             VALUES ($1, #{allowed_roles_sql}, $2)

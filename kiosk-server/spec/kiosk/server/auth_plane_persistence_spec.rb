@@ -93,12 +93,10 @@ RSpec.describe "auth plane persistence (real Postgres)" do
       c.schema = AUTH_PLANE_SPEC_SCHEMA
       c.issuer = "https://provider.example"
       c.roles  = %i[customer owner]
-      # A role is configured throughout, and that is not incidental: with NO
-      # `registration_role` the shipped code inserts a literal `NULL` into
-      # `allowed_roles`, which the shipped migration declares `NOT NULL`. See
-      # the "no registration_role at all" example below — the bug is filed as
-      # K-788 and characterised here rather than fixed, because it is not this
-      # row's charge.
+      # A role is configured throughout; the two examples that turn it OFF say
+      # so themselves and assert the empty-`text[]` shape the role-less path
+      # writes (K-788 — it used to write a literal `NULL` into a `NOT NULL`
+      # column and 500 the register door for every role-less provider).
       c.registration_role = :customer
     end
     connection.execute(%(TRUNCATE #{table('agents')} CASCADE))
@@ -161,6 +159,22 @@ RSpec.describe "auth plane persistence (real Postgres)" do
       expect(second[:fresh]).to be(false)              # found the SAME row
       expect(second[:agent_id]).to eq(first[:agent_id])
       expect(value(%(SELECT count(*) FROM #{table('agents')}))).to eq(1)
+    end
+
+    # The other half of K-788: the claim ceremony's fresh-key branch runs the
+    # SAME INSERT, so a provider with no `registration_role` could not complete
+    # an account binding either.
+    it "binds a fresh key with no role at all — an empty text[], not NULL (K-788)" do
+      Kiosk.configure { |c| c.registration_role = nil }
+
+      result = Kiosk::Server::AccountBinding.bind!(public_key_pem: pem, user_id: holder)
+
+      expect(result[:fresh]).to be(true)
+      agent_id = result.fetch(:agent_id)
+      expect(value(%(SELECT pg_typeof(allowed_roles)::text FROM #{table('agents')} WHERE id = $1),
+                   [agent_id])).to eq("text[]")
+      expect(value(%(SELECT cardinality(allowed_roles) FROM #{table('agents')} WHERE id = $1),
+                   [agent_id])).to eq(0)
     end
   end
 
@@ -252,27 +266,47 @@ RSpec.describe "auth plane persistence (real Postgres)" do
         .to raise_error(Kiosk::Server::Errors::Conflict)
     end
 
-    # ── A CHARACTERISATION OF A BUG, NOT AN ENDORSEMENT (K-788) ─────────────
+    # ── THE ROLE-LESS PROVIDER, END TO END (K-788) ──────────────────────────
     #
-    # Roles are "hook-or-absent" in this series: `registration_role` is
-    # OPTIONAL and the code deliberately writes `allowed_roles = NULL` when it
-    # is unset. The SHIPPED migration declares that column `text[] NOT NULL
-    # DEFAULT '{}'`, so an operator who leaves the role unset cannot register
-    # ANY assistant — `/auth/register` 500s on the NOT NULL constraint, and so
-    # does a fresh-key bind.
+    # Roles are "hook-or-absent" in this series and ADR-0011 is explicit that
+    # «registration MUST NOT fail when [registration_role] is unset»; the spec
+    # says a single-role operator simply omits the role. The code used to write
+    # a literal `NULL` into `allowed_roles`, which the SHIPPED migration
+    # declares `text[] NOT NULL DEFAULT '{}'`, so every register and every
+    # fresh-key bind 500'd for exactly the operator the ADR protects. No demo
+    # could reach it (all seven configure a role) and `agent_registration_spec`
+    # asserted the OPPOSITE through a fake that accepts any statement — which
+    # is why these two examples live HERE, against a database that can say no.
     #
-    # It survived because `agent_registration_spec.rb` asserts the opposite
-    # ("succeeds with registration_role unset, writing NULL allowed_roles")
-    # through a FakeConnection that accepts any statement — the same
-    # zero-real-coverage hole this file exists to close. Filed as K-788 and
-    # deliberately NOT fixed here (scope rule 3); pinned so that whoever fixes
-    # it is told exactly which behaviour they changed.
-    it "cannot register at all with no registration_role — NOT NULL on allowed_roles (K-788)" do
+    # "No role" is now the EMPTY SET, written explicitly, the same way
+    # `executor.rb` writes its `"on_file"` sentinel rather than a NULL into a
+    # NOT NULL column.
+    it "registers with no registration_role at all, and the row LOGS IN (K-788)" do
       Kiosk.configure { |c| c.registration_role = nil }
+      issued = []
+      allow_any_instance_of(Kiosk::Server::AgentIdentityProviders::DefaultAgentIdp)
+        .to receive(:issue) { |_instance, **kw| issued << kw; "kiosk-pop-jwt" }
 
-      expect { Kiosk::Server::AgentRegistration.call(public_key_pem: pem, signed: "sig") }
-        .to raise_error(::ActiveRecord::NotNullViolation, /allowed_roles/)
-      expect(value(%(SELECT count(*) FROM #{table('agents')}))).to eq(0)
+      result = Kiosk::Server::AgentRegistration.call(public_key_pem: pem, signed: "sig")
+
+      agent_id = result.fetch(:agent_id)
+      # A real `text[]`, not NULL and not the string "{}" — the column type is
+      # the whole point, and `array_length` of an empty array is NULL in
+      # Postgres, so `cardinality` is what says "zero elements".
+      expect(value(%(SELECT pg_typeof(allowed_roles)::text FROM #{table('agents')} WHERE id = $1),
+                   [agent_id])).to eq("text[]")
+      expect(value(%(SELECT cardinality(allowed_roles) FROM #{table('agents')} WHERE id = $1),
+                   [agent_id])).to eq(0)
+      expect(value(%(SELECT allowed_roles IS NULL FROM #{table('agents')} WHERE id = $1),
+                   [agent_id])).to be(false)
+      # The token carries NO role, exactly as before the fix intended to.
+      expect(issued.last).to eq(agent_id: agent_id, role: nil)
+
+      # And the row is usable: `/auth/login` reads `allowed_roles` back and
+      # `primary_role` must turn the empty array into nil, not into "".
+      expect(Kiosk::Server::AgentLogin.call(public_key_pem: pem, signed: "sig"))
+        .to eq(access_token: "kiosk-pop-jwt")
+      expect(issued.last).to eq(agent_id: agent_id, role: nil)
     end
   end
 

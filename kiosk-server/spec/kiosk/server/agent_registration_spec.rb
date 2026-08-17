@@ -95,16 +95,19 @@ RSpec.describe Kiosk::Server::AgentRegistration do
     end
 
     # Roles are hook-or-absent in 0.1. registration_role is OPTIONAL — when
-    # unset, the code writes NO role.
+    # unset, the code writes the EMPTY role set.
     #
     # WHAT THIS EXAMPLE DOES NOT PROVE, and the reason it is named here rather
-    # than left implied: the SHIPPED migration declares `allowed_roles text[]
-    # NOT NULL`, so this branch cannot reach a real database at all — a provider
-    # with no `registration_role` gets a NOT NULL violation on every register.
-    # A fake accepts any statement, which is exactly how that survived. Filed as
-    # K-788 and characterised against a real Postgres in
-    # auth_plane_persistence_spec.rb.
-    it "writes NULL allowed_roles with registration_role unset (see K-788)" do
+    # than left implied: a fake accepts any statement, so nothing here can tell
+    # you the row is acceptable to a real `agents` table. It used to assert the
+    # opposite of the truth for that exact reason — the shipped migration
+    # declares `allowed_roles text[] NOT NULL`, and the code emitted a literal
+    # `NULL`, so this branch 500'd against every real database while this
+    # example stayed green (K-788). The behaviour is now proven where it can be:
+    # "registers with no registration_role at all, and the row LOGS IN" in
+    # auth_plane_persistence_spec.rb. All that survives here is the STATEMENT
+    # SHAPE — that no role means no third bind.
+    it "writes an empty allowed_roles with registration_role unset (K-788)" do
       Kiosk.configure { |c| c.registration_role = nil }
       results = [[], [{ "id" => "agent-1" }]] # SELECT empty → INSERT returns id
       route_exec_query(con) { |_sql, _binds| results.shift || [] }
@@ -114,9 +117,10 @@ RSpec.describe Kiosk::Server::AgentRegistration do
       expect(result[:access_token]).to eq("fake-token")
 
       insert_sql, binds = con.bound(/INSERT INTO kiosk\.agents/).first
-      expect(insert_sql).to include("NULL")
+      expect(insert_sql).to include("'{}'::text[]")
+      expect(insert_sql).not_to match(/NULL/)
       expect(insert_sql).not_to match(/ARRAY\[/)
-      expect(binds).to eq([42, pem]) # no third bind: NULL is a shape, not a value
+      expect(binds).to eq([42, pem]) # no third bind: the empty set is a shape
     end
 
     it "treats an empty-string registration_role as unset (no ConfigurationError)" do

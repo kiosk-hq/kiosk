@@ -86,7 +86,7 @@ assertions cannot go ungated and unexplained.
 | `demo:walkthrough` | yes |  |
 | `demo:book` | yes |  |
 | `demo:pow` | no | the heavy anti-scalping toll — it solves real memory-hard Equihash batteries, not the single sub-second register proof demo:backoff pays. demo:pow is excluded on every demo. |
-| `demo:reputation` | no | same heavy-PoW family as demo:pow — it solves several escalating Equihash tolls to show the cost dropping as bookings accrue. |
+| `demo:reputation` | yes |  |
 | `demo:backoff` | yes |  |
 | `demo:binding` | yes |  |
 | `demo:isolation` | yes |  |

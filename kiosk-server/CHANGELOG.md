@@ -4,6 +4,10 @@ All notable changes follow [Keep a Changelog](https://keepachangelog.com/en/1.1.
 
 ## [Unreleased]
 
+### Removed
+
+- **`Kiosk::Server::Queries.register` / `Kiosk::Server::Actions.register` are gone (T-081).** A shipped public API of the 0.3 series is removed with no deprecation shim: an initializer that calls one now raises NoMethodError. A verb is declared one way — a controller that `include`s `Kiosk::Query` / `Kiosk::Action`, named in `c.handlers` — because the second shape could not be reloaded, could not be reached by the host's filters, `rescue_from` or strong parameters, and taught, in the file an adopter copies first, that Rails does not apply to the surface they expose to assistants. The registries' read surface (`fetch`, `describe`, `catalog`, `known`) is unchanged and the wire is byte-identical, including the ADR-0023-retired `params` descriptor slot, which no macro can set and which keeps publishing null.
+
 ### Added
 
 - **The install generator now emits the `c.handlers` slot.** `rails generate kiosk:install` previously produced an initializer that never mentioned `c.handlers`, so a fresh operator following the generator — rather than the onboarding page — landed in exactly the dead-origin state that hole causes (empty schema catalog, 404 on `query`/`run`, `"capabilities": []`). The template now emits an active `c.handlers = []` (empty because no handler controllers exist yet at generation time — naming one would fail boot) with a comment stating the consequence of leaving it empty and the fill-in syntax for when handlers exist.

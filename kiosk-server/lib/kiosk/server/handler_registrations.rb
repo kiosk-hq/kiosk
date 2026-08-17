@@ -2,15 +2,14 @@
 
 require "kiosk/server/actions"
 require "kiosk/server/errors"
-require "kiosk/server/handler_dispatch"
 require "kiosk/server/queries"
 
 module Kiosk
   module Server
-    # Rebuilds the MIXIN-OWNED half of the Actions/Queries registries from the
-    # operator's `Kiosk.configuration.handlers` declaration. The engine drives
-    # it from a `to_prepare` block, so it runs once at boot in production and
-    # again after every code reload in development.
+    # Rebuilds the Actions/Queries registries from the operator's
+    # `Kiosk.configuration.handlers` declaration. The engine drives it from a
+    # `to_prepare` block, so it runs once at boot in production and again after
+    # every code reload in development.
     #
     # ── The hole this closes ─────────────────────────────────────────────
     # A {HandlerMixin} verb registers when its class BODY IS READ. Rails
@@ -36,25 +35,23 @@ module Kiosk
     # composes with any layout, and it stays true when 0.4 (T-067) turns the
     # verbs into per-verb REST endpoints.
     #
-    # ── Why a full REBUILD and not "register once more" ──────────────────
-    # Registration is idempotent per name, so re-registering would cover an
-    # ADDED or EDITED verb — but not a REMOVED one: the entry from the
-    # previous generation of the class would linger in the registry and the
-    # wire would keep serving a verb whose method no longer exists. So each
-    # pass first DROPS every entry the mixin installed (an entry is the
-    # mixin's iff its handler is a {HandlerDispatch} — nothing else can build
-    # one) and then re-registers from the declared classes. Entries installed
-    # by the direct `Actions.register(name) { … }` API are left alone: those
-    # come from initializers, which run once, so clearing them would delete
-    # them for good.
+    # ── Why a full REBUILD and not "declare once more" ───────────────────
+    # Declaring is idempotent per name, so re-declaring would cover an ADDED or
+    # EDITED verb — but not a REMOVED one: the entry from the previous
+    # generation of the class would linger in the registry and the wire would
+    # keep serving a verb whose method no longer exists. So each pass first
+    # DROPS every entry and then re-declares from the listed classes. Since
+    # T-081 an entry can only have come from the mixin — the `register` API
+    # that used to install unreloadable entries alongside these is gone — so
+    # the drop needs no test for what it is dropping.
     #
     # Classes are resolved BY NAME on every pass. Holding a Class object
     # across a reload pins the stale, unloaded generation — the same fork
     # {HandlerDispatch} settled for dispatch (T-053).
     module HandlerRegistrations
       class << self
-        # Drops the mixin's registrations and rebuilds them from +handlers+
-        # (default: the configured list). Called by the engine's `to_prepare`.
+        # Drops every registration and rebuilds from +handlers+ (default: the
+        # configured list). Called by the engine's `to_prepare`.
         #
         # @param handlers [Array<String, Class>] class names (preferred) or classes
         # @return [Array<Class>] the handler classes registered this pass
@@ -65,15 +62,13 @@ module Kiosk
           Array(handlers).map { |handler| resolve(handler).kiosk_register! }
         end
 
-        # Removes every registry entry the mixin installed, leaving entries
-        # registered directly through `Actions.register` / `Queries.register`
-        # untouched.
+        # Empties both registries. Every entry in them was installed by the
+        # mixin — there is no other way in — so nothing here needs to tell one
+        # kind of entry from another.
         def clear!
           [Actions, Queries].each do |registry|
             # `known` returns a fresh Array, so deleting while iterating is safe.
-            registry.known.each do |name|
-              registry.unregister(name) if registry.fetch(name).is_a?(HandlerDispatch)
-            end
+            registry.known.each { |name| registry.unregister(name) }
           end
         end
 

@@ -273,14 +273,19 @@ moves cover all of it:
   at. (The gate-style `Kiosk::Server::Errors` classes remain raisable too.)
 
 
-### The initializer still exists
+### The initializer holds configuration, not verbs
 
-`Kiosk::Server::Queries.register(name) { |args| … }` and its `Actions`
-counterpart are unchanged and keep working — the two ways in share one registry,
-and the executor cannot tell them apart. A registration made this way needs no
-`c.handlers` entry and is never touched by the reload rebuild — it comes from an
-initializer, which runs once. The bundled demos are mid-migration: philslist's
-verbs are controllers, the other six still register here.
+There is no second way to declare a verb. `Kiosk::Server::Queries.register(name)
+{ |args| … }` and its `Actions` counterpart were removed in 0.3 (T-081): a block
+in an initializer cannot be reloaded, cannot be reached by your filters,
+`rescue_from` or strong parameters, and taught — in the very file an adopter
+copies — that Rails does not apply to the surface you expose to assistants.
+Write a controller, name it in `c.handlers`, and the initializer keeps what an
+initializer is for: the identity providers, the payment provider, the PoW gates.
+
+Every registration is now rebuilt from `c.handlers` on each `to_prepare` pass,
+so a handler class you forget to list stops being served even if something else
+in your app loads it. The list is the whole truth about what this origin serves.
 
 
 ## Well-known endpoint (no booted Rails app required)

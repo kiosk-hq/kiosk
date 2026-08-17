@@ -10,9 +10,8 @@ require "kiosk/server/result"
 module Kiosk
   module Server
     # The callable a {HandlerMixin} declaration puts in the Actions/Queries
-    # registry. Registered like any other handler, so it coexists with the
-    # `register(name) { |args| … }` blocks the demos still use; the {Executor}
-    # cannot tell the two apart and needs no change to run either.
+    # registry — since T-081 the ONLY thing that goes in one. The {Executor}
+    # calls it like any other handler and needs to know nothing about it.
     #
     # Calling it dispatches ONE controller action through the router's own
     # mechanism — `Controller.action(:name).call(env)` — so the handler is a

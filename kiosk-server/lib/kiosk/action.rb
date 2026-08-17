@@ -32,7 +32,9 @@ module Kiosk
   # Kiosk imposes no superclass — the include is the whole contract. Each
   # declared method is registered in {Kiosk::Server::Actions} and dispatched
   # through Rails' own `Controller.action(…)`, so filters, `rescue_from` and
-  # `params` all behave as they do anywhere else in the app.
+  # `params` all behave as they do anywhere else in the app. Name the class in
+  # `Kiosk.configuration.handlers` — that list is how the engine finds it, and
+  # since T-081 it is the only way in.
   #
   # See {Kiosk::Server::HandlerMixin} for the macros, and {Kiosk::Query} for
   # the read side.

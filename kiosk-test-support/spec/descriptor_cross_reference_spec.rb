@@ -16,12 +16,10 @@
 # the suite instead of an assistant's first call.
 #
 # It reads the sources as TEXT (no Rails boot, no DB), the same technique as
-# skill_pin_spec.rb, and a demo declares its verbs in one of TWO places, so both
-# are read and merged: the initializer's `Kiosk::Server::{Queries,Actions}
-# .register(…)` calls, and — since T-053/T-057 — the class-level macros of the
-# handler controllers under `app/controllers/kiosk/`. A migrating demo has some
-# of each, and a cross-reference points across the query/action controller
-# split, so the two lists are ONE list per demo.
+# skill_pin_spec.rb. A demo declares its verbs in ONE place — the class-level
+# macros of the handler controllers under `app/controllers/kiosk/` (T-053 /
+# T-057, and since T-081 the only way in). A cross-reference points across the
+# query/action controller split, so a demo's controllers are read as ONE list.
 #
 # Two cross-reference shapes are recognised:
 #
@@ -37,47 +35,6 @@ RSpec.describe "demo descriptor cross-references" do
   # ── Source-text extraction ────────────────────────────────────────────────
   module DescriptorSource
     module_function
-
-    # Every `Kiosk::Server::{Queries,Actions}.register(…)` argument list in the
-    # file, as raw source text (a string-aware balanced-paren scan, so parens
-    # and quotes inside descriptions do not derail it).
-    def registrations(src)
-      out = []
-      offset = 0
-      while (m = src.match(/Kiosk::Server::(?:Queries|Actions)\.register\(/, offset))
-        start = m.end(0)
-        i = start
-        depth = 1
-        in_str = false
-        while i < src.length && depth.positive?
-          ch = src[i]
-          if in_str
-            if ch == "\\" then i += 1
-            elsif ch == '"' then in_str = false
-            end
-          else
-            case ch
-            when '"' then in_str = true
-            when "(" then depth += 1
-            when ")" then depth -= 1
-            end
-          end
-          i += 1
-        end
-        out << src[start...(i - 1)]
-        offset = i
-      end
-      out
-    end
-
-    # The value of a `key:` whose value is one or more adjacent double-quoted
-    # string literals (Ruby's `"a" \` + newline + `"b"` continuation), joined.
-    def string_value(header, key)
-      m = header.match(/(?<![a-z_])#{key}:\s*/)
-      return nil unless m
-
-      adjacent_strings(header, m.end(0))
-    end
 
     # Same, for the MACRO spelling a handler controller uses: `description "…"`
     # on its own line, no colon. Anchored to the start of a line so a
@@ -141,11 +98,6 @@ RSpec.describe "demo descriptor cross-references" do
       [text[start...(i - 1)], i]
     end
 
-    def brace_body(text, key)
-      found = brace_body_at(text, key)
-      found && found.first
-    end
-
     # `key:` symbol keys at brace/bracket depth 0 of a hash body.
     def top_level_keys(body)
       return [] if body.nil?
@@ -193,23 +145,9 @@ RSpec.describe "demo descriptor cross-references" do
       names
     end
 
-    # {name:, description:, params: [declared param names]} per registration.
-    def verbs(src)
-      registrations(src).filter_map do |header|
-        name = header[/\A\s*"([^"]+)"/, 1]
-        next if name.nil?
-
-        schema = brace_body(header, "input_schema")
-        declared = top_level_keys(brace_body(header, "params")) +
-                   schema_property_names(schema)
-        { name: name, description: string_value(header, "description").to_s,
-          params: declared.uniq }
-      end
-    end
-
-    # The same, read out of a HANDLER CONTROLLER (T-053 mixin / T-057). There
-    # the descriptor is not a `register(…)` argument list but class-level macros
-    # that the NEXT `def` claims:
+    # {name:, description:, params: [declared param names]} per verb, read out
+    # of a HANDLER CONTROLLER (T-053 mixin / T-057). The descriptor is a run of
+    # class-level macros that the NEXT `def` claims:
     #
     #   description "…"
     #   input_schema type: "object", …, properties: { … }
@@ -246,18 +184,14 @@ RSpec.describe "demo descriptor cross-references" do
       out
     end
 
-    # Every verb a demo publishes, whichever way it declares them: the
-    # initializer's surviving `register(…)` calls PLUS every handler controller
-    # under app/controllers/kiosk/. Merged into ONE list per demo because a
-    # cross-reference routinely points across the split — atablefor's
+    # Every verb a demo publishes: the handler controllers under
+    # app/controllers/kiosk/. ONE list per demo, because a cross-reference
+    # routinely points across the query/action split — atablefor's
     # `availability` (a query controller) names `book_table` (an action
     # controller), which is exactly the K-494 drift this lint exists for.
     def demo_verbs(demo_dir)
-      initializer = File.join(demo_dir, "config/initializers/kiosk.rb")
-      from_init   = File.exist?(initializer) ? verbs(File.read(initializer)) : []
-      from_ctrls  = Dir[File.join(demo_dir, "app/controllers/kiosk/**/*.rb")].sort
-                       .flat_map { |path| controller_verbs(File.read(path)) }
-      from_init + from_ctrls
+      Dir[File.join(demo_dir, "app/controllers/kiosk/**/*.rb")].sort
+         .flat_map { |path| controller_verbs(File.read(path)) }
     end
   end
 

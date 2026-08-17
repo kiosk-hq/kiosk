@@ -255,7 +255,13 @@ RSpec.describe "wire-surface controller auth" do
         conn.define_singleton_method(:quote) { |v| "'#{v}'" }
         conn.define_singleton_method(:quote_table_name) { |n| n }
       end
-      ar_base = Class.new { define_singleton_method(:connection) { fake_conn } }
+      # BOTH readers: WireController#connection_for calls the non-deprecated
+      # `lease_connection` (K-654), while the bundled DefaultAgentIdp on the
+      # same dispatch still reaches for `connection`.
+      ar_base = Class.new do
+        define_singleton_method(:connection)       { fake_conn }
+        define_singleton_method(:lease_connection) { fake_conn }
+      end
       stub_const("ActiveRecord::Base", ar_base)
     end
 

@@ -272,15 +272,17 @@ module Kiosk
       # the cart row references by FK.
       def persist_intent_mandate(intent)
         schema = Kiosk.configuration.schema
-        connection.execute(<<~SQL).to_a.first.fetch("id")
+        sql = <<~SQL
           INSERT INTO #{schema}.intent_mandates
             (mandate_id, user_id, agent_id, issuer, scope, cap_amount_cents,
              currency, expires_at, created_at, raw_jws)
-          VALUES (#{q(intent.id)}, #{q(intent.user_id)}, #{q(intent.agent_id)},
-             #{q(intent.issuer)}, #{q(intent.scope)}, #{intent.cap_amount_cents.to_i},
-             #{q(intent.currency)}, #{q(intent.expires_at)}, now(), #{q(intent.raw_jws)})
+          VALUES ($1, $2, $3, $4, $5, $6, $7, $8, now(), $9)
           RETURNING id
         SQL
+        insert_returning_id("Kiosk intent_mandate insert", sql, [
+          intent.id, intent.user_id, intent.agent_id, intent.issuer, intent.scope,
+          intent.cap_amount_cents.to_i, intent.currency, intent.expires_at, intent.raw_jws,
+        ])
       end
 
       # Inserts the cart-mandate row under the open SessionContext (GUC-scoped
@@ -293,16 +295,24 @@ module Kiosk
       # `expires_at`. Returns the server id the payment row references by FK.
       def persist_cart_mandate(cart, intent_row_id:)
         schema = Kiosk.configuration.schema
-        connection.execute(<<~SQL).to_a.first.fetch("id")
+        # `$6::jsonb` is the ONE hand-written cast in these four statements.
+        # Every other placeholder takes its type from the INSERT's target
+        # column, but `line_items` arrives as JSON *text* and the cast is what
+        # says "parse this, do not store it as a json string" — the difference
+        # between a jsonb array a `@> '[…]'::jsonb` containment can match and a
+        # scalar string it never will.
+        sql = <<~SQL
           INSERT INTO #{schema}.cart_mandates
             (mandate_id, intent_mandate_id, user_id, agent_id, issuer, line_items,
              total_amount_cents, currency, expires_at, created_at, raw_jws)
-          VALUES (#{q(cart.id)}, #{q(intent_row_id)}, #{q(cart.user_id)},
-             #{q(cart.agent_id)}, #{q(cart.issuer)}, #{q(cart.line_items.to_json)}::jsonb,
-             #{cart.total_amount_cents.to_i}, #{q(cart.currency)}, #{q(cart.expires_at)},
-             now(), #{q(cart.raw_jws)})
+          VALUES ($1, $2, $3, $4, $5, $6::jsonb, $7, $8, $9, now(), $10)
           RETURNING id
         SQL
+        insert_returning_id("Kiosk cart_mandate insert", sql, [
+          cart.id, intent_row_id, cart.user_id, cart.agent_id, cart.issuer,
+          cart.line_items.to_json, cart.total_amount_cents.to_i, cart.currency,
+          cart.expires_at, cart.raw_jws,
+        ])
       end
 
       # Inserts the signed payment-mandate row under the open SessionContext
@@ -318,16 +328,18 @@ module Kiosk
         # "on_file" as a clear audit sentinel when absent — the column is NOT
         # NULL and "on_file" is unambiguous: funded from the on-file card.
         pm_db = payment.payment_method.to_s.empty? ? "on_file" : payment.payment_method
-        connection.execute(<<~SQL).to_a.first.fetch("id")
+        sql = <<~SQL
           INSERT INTO #{schema}.payment_mandates
             (mandate_id, cart_mandate_id, user_id, agent_id, issuer,
              payment_method, amount_cents, currency, expires_at, created_at, raw_jws)
-          VALUES (#{q(payment.id)}, #{q(cart_row_id)}, #{q(payment.user_id)},
-             #{q(payment.agent_id)}, #{q(payment.issuer)}, #{q(pm_db)},
-             #{payment.amount_cents.to_i}, #{q(payment.currency)}, #{q(payment.expires_at)},
-             now(), #{q(payment.raw_jws)})
+          VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, now(), $10)
           RETURNING id
         SQL
+        insert_returning_id("Kiosk payment_mandate insert", sql, [
+          payment.id, cart_row_id, payment.user_id, payment.agent_id, payment.issuer,
+          pm_db, payment.amount_cents.to_i, payment.currency, payment.expires_at,
+          payment.raw_jws,
+        ])
       end
 
       # Inserts the settlement receipt row under the open SessionContext
@@ -339,15 +351,17 @@ module Kiosk
       # Returns the new settlement server id.
       def persist_settlement(cart_row_id:, cart:, settled:)
         schema = Kiosk.configuration.schema
-        connection.execute(<<~SQL).to_a.first.fetch("id")
+        sql = <<~SQL
           INSERT INTO #{schema}.settlements
             (cart_mandate_id, user_id, agent_id, issuer, psp_reference,
              settled_amount_cents, currency, settled_at, raw_jws)
-          VALUES (#{q(cart_row_id)}, #{q(cart.user_id)}, #{q(cart.agent_id)},
-             #{q(cart.issuer)}, #{q(settled[:psp_reference])}, #{settled[:settled_amount_cents].to_i},
-             #{q(cart.currency)}, now(), '')
+          VALUES ($1, $2, $3, $4, $5, $6, $7, now(), '')
           RETURNING id
         SQL
+        insert_returning_id("Kiosk settlement insert", sql, [
+          cart_row_id, cart.user_id, cart.agent_id, cart.issuer,
+          settled[:psp_reference], settled[:settled_amount_cents].to_i, cart.currency,
+        ])
       end
 
       # True when `error` is a DB unique-constraint violation. Matched by class
@@ -360,7 +374,45 @@ module Kiosk
         %w[ActiveRecord::RecordNotUnique PG::UniqueViolation].include?(error.class.name)
       end
 
-      def q(value) = connection.quote(value)
+      # Runs an `INSERT … RETURNING id` with BIND PARAMETERS and returns the
+      # server-generated uuid PK.
+      #
+      # THE POINT (K-654). Every value the pay path writes travels as `$1…$N`,
+      # OUT of the SQL text — so there is no `connection.quote` left to forget,
+      # and no reading of a value as SQL is possible in the first place. The
+      # helpers this replaced were heredocs with every field spliced through a
+      # private `q()`; they were safe, but they were also the idiom the demos
+      # ship as the reference others copy, which is why the engine could not
+      # keep it after the demos gave it up.
+      #
+      # TYPES. Postgres infers each parameter's type from the INSERT's target
+      # column (uuid / bigint / timestamptz / text), exactly as it inferred the
+      # unknown-typed literals the interpolated form produced — so uuid columns
+      # still reject a non-uuid, and a `Time` still lands as the same instant.
+      # The single exception is `line_items`, whose argument is JSON text and
+      # therefore carries an explicit `::jsonb` cast; see
+      # {#persist_cart_mandate}. `spec/kiosk/server/executor_persistence_spec.rb`
+      # asserts all three against a real Postgres, because none of it is
+      # visible in the SQL text or to a FakeConnection.
+      #
+      # `exec_query`, NOT `exec_insert`: `exec_insert` rewrites the statement —
+      # `sql_for_insert` looks the table's primary key up and appends its OWN
+      # `RETURNING "id"` — which would both duplicate the clause these
+      # statements already carry and cost a schema round trip.
+      #
+      # WHAT IS STILL INTERPOLATED, and why it is not the same thing: the
+      # SCHEMA NAME (`Kiosk.configuration.schema`). That is an identifier the
+      # operator sets in their own initializer, not a value any caller can
+      # reach — an identifier cannot be a bind parameter in Postgres, so no
+      # amount of binding would move it.
+      #
+      # @param name [String] statement label for the query log
+      # @param sql [String] statement carrying `$N` placeholders and `RETURNING id`
+      # @param binds [Array] one value per placeholder, in order
+      # @return [String] the server-generated uuid primary key
+      def insert_returning_id(name, sql, binds)
+        connection.exec_query(sql, name, binds).to_a.first.fetch("id")
+      end
 
       # ─── spending cap ───────────────────────────────────────
 
@@ -401,12 +453,23 @@ module Kiosk
       # currencies. Returns cents (0 when the agent has settled nothing).
       def settled_total_cents(agent_id:, window_days:, currency:)
         schema = Kiosk.configuration.schema
-        window = window_days ? "AND settled_at >= now() - #{window_days.to_i} * INTERVAL '1 day'" : ""
-        connection.execute(<<~SQL).to_a.first.fetch("total").to_i
+        binds  = [agent_id, currency]
+        # The window is a STATEMENT SHAPE, not a value: with no window there is
+        # no predicate at all, so that stays a branch on the SQL text. The
+        # number of days is a third BIND (`make_interval(days => $3)` rather
+        # than the old `#{window_days.to_i} * INTERVAL '1 day'`), which is what
+        # lets the last `connection.quote` in this file go.
+        window = ""
+        if window_days
+          binds << window_days.to_i
+          window = "AND settled_at >= now() - make_interval(days => $3)"
+        end
+        sql = <<~SQL
           SELECT COALESCE(SUM(settled_amount_cents), 0) AS total
           FROM #{schema}.settlements
-          WHERE agent_id = #{q(agent_id)} AND currency = #{q(currency)} #{window}
+          WHERE agent_id = $1 AND currency = $2 #{window}
         SQL
+        connection.exec_query(sql, "Kiosk settled total", binds).to_a.first.fetch("total").to_i
       end
 
       # ─── schema ────────────────────────────────────────────────────────

@@ -4,6 +4,10 @@ All notable changes follow [Keep a Changelog](https://keepachangelog.com/en/1.1.
 
 ## [Unreleased]
 
+### Security
+
+- **The pay path writes through bind parameters, not assembled SQL (K-654).** `Executor`'s four `persist_*` helpers and its spending-cap tally were heredocs with every value spliced in through a private `connection.quote` wrapper; they now pass `$1…$N` binds to `exec_query`, so a value can no longer be read as SQL and there is no quote call left to omit. Nothing on the wire changes — this closes the gap between what the engine ships and what it asks operators to do, since the same idiom was removed from all seven demos first. `WireController` also stops calling the Rails-8.1 soft-deprecated `ActiveRecord::Base.connection`, which raises outright under `permanent_connection_checkout = :disallowed`.
+
 ### Removed
 
 - **`Kiosk::Server::Queries.register` / `Kiosk::Server::Actions.register` are gone (T-081).** A shipped public API of the 0.3 series is removed with no deprecation shim: an initializer that calls one now raises NoMethodError. A verb is declared one way — a controller that `include`s `Kiosk::Query` / `Kiosk::Action`, named in `c.handlers` — because the second shape could not be reloaded, could not be reached by the host's filters, `rescue_from` or strong parameters, and taught, in the file an adopter copies first, that Rails does not apply to the surface they expose to assistants. The registries' read surface (`fetch`, `describe`, `catalog`, `known`) is unchanged and the wire is byte-identical, including the ADR-0023-retired `params` descriptor slot, which no macro can set and which keeps publishing null.

@@ -228,6 +228,38 @@ RSpec.describe Kiosk::Server::DeviceAuthorizationStores do
 
     it_behaves_like "a device-authorization store"
 
+    # ── TYPES, which only a real Postgres can answer (K-782) ────────────────
+    #
+    # Every value this store writes now travels as a BIND PARAMETER, and a bind
+    # carries its value out-of-band — so the one thing that can go wrong
+    # SILENTLY is the TYPE. `id` and `user_id` are uuid columns and the three
+    # instants are timestamptz; none of that is visible in the SQL text, and a
+    # fake would accept any of it.
+    #
+    # `expires_at` is pinned to a NON-UTC, non-whole-hour offset on purpose: a
+    # coercion that drops the zone lands 5h30m away, which the epoch assertion
+    # catches and a string comparison would not.
+    it "stores uuids as uuids and instants to the same epoch, zone and all" do
+      moment = Time.at(1_800_000_071).localtime("+05:30")
+      user   = SecureRandom.uuid
+      _plain, _user_code, da = Kiosk::Server::DeviceAuthorization.generate(client_id: "kiosk-cli")
+      da = da.with(expires_at: moment, user_id: user, status: :approved)
+      store.create(da)
+
+      row = ::ActiveRecord::Base.connection.exec_query(<<~SQL, "spec types", [da.id]).to_a.first
+        SELECT pg_typeof(id)::text          AS id_type,
+               pg_typeof(user_id)::text     AS user_type,
+               pg_typeof(expires_at)::text  AS at_type,
+               extract(epoch FROM expires_at)::bigint AS at_epoch
+        FROM "#{SPEC_SCHEMA}".device_authorizations
+        WHERE id = $1
+      SQL
+      expect(row.values_at("id_type", "user_type", "at_type"))
+        .to eq(["uuid", "uuid", "timestamp with time zone"])
+      expect(row.fetch("at_epoch")).to eq(1_800_000_071)
+      expect(store.find_by_device_code_hash(da.device_code_hash).user_id).to eq(user)
+    end
+
     it "translates the PG unique_violation into UniqueConstraintError (real constraint, not a pre-check)" do
       _plain, _user, da = Kiosk::Server::DeviceAuthorization.generate(client_id: "kiosk-cli")
       store.create(da)

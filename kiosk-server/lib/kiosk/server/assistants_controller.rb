@@ -86,11 +86,26 @@ module Kiosk
       def update
         return unless require_account_holder!
 
-        conn = ::ActiveRecord::Base.connection
+        # `lease_connection`, not `connection` (K-782, following
+        # `wire_controller.rb`): `ActiveRecord::Base.connection` is
+        # soft-deprecated in Rails 8.1 and RAISES under
+        # `permanent_connection_checkout = :disallowed`, which would turn this
+        # governance page into a 500 on a host that took the new default.
+        conn = ::ActiveRecord::Base.lease_connection
+
+        # WHICH COLUMNS are assigned is a statement SHAPE — the form decides it
+        # and the column names are literals in this file. WHAT they are assigned
+        # is a value, and `human_label` in particular is FREE TEXT off a form,
+        # so it is the most caller-reachable value in the auth plane: `$N`,
+        # never text. `NULL` has no value to bind; the integer branch keeps its
+        # `Integer()` guard, which is now about answering 400 rather than about
+        # safety.
         assignments = []
+        binds       = []
 
         if params.key?(:human_label)
-          assignments << "human_label = #{conn.quote(params[:human_label].to_s)}"
+          binds << params[:human_label].to_s
+          assignments << "human_label = $#{binds.size}"
         end
 
         if params.key?(:spending_cap_cents)
@@ -101,16 +116,20 @@ module Kiosk
             cents = Integer(raw, exception: false)
             raise Errors::BadRequest, "spending_cap_cents must be an integer" if cents.nil?
 
-            assignments << "spending_cap_cents = #{cents}"
+            binds << cents
+            assignments << "spending_cap_cents = $#{binds.size}"
           end
         end
 
         if assignments.any?
-          conn.execute(<<~SQL)
+          # The ownership predicate is the security boundary of this action:
+          # the caller supplies `agent_id`, the session supplies `user_id`.
+          binds.concat([params[:agent_id].to_s, @identity.user_id])
+          conn.exec_query(<<~SQL, "Kiosk assistant update", binds)
             UPDATE #{Kiosk.configuration.schema}.agents
             SET #{assignments.join(", ")}
-            WHERE id = #{conn.quote(params[:agent_id].to_s)}
-              AND user_id = #{conn.quote(@identity.user_id)}
+            WHERE id = $#{binds.size - 1}
+              AND user_id = $#{binds.size}
               AND revoked_at IS NULL
           SQL
         end
@@ -232,36 +251,52 @@ module Kiosk
       # governance page still works.
       def bound_assistants
         config = Kiosk.configuration
-        conn   = ::ActiveRecord::Base.connection
+        # `lease_connection` for the reason `#update` records above.
+        conn   = ::ActiveRecord::Base.lease_connection
         rows =
           begin
-            conn.execute(bound_assistants_sql(config, conn, settled_spend: true))
+            sql, binds = bound_assistants_query(config, settled_spend: true)
+            conn.exec_query(sql, "Kiosk bound assistants", binds)
           rescue ::ActiveRecord::StatementInvalid
-            conn.execute(bound_assistants_sql(config, conn, settled_spend: false))
+            sql, binds = bound_assistants_query(config, settled_spend: false)
+            conn.exec_query(sql, "Kiosk bound assistants", binds)
           end
-        rows.map { |row| present(row) }
+        rows.to_a.map { |row| present(row) }
       end
 
       # `settled_spend:` toggles the correlated settlements subquery. false
       # (or a schema with no settlements table) yields a constant 0.
-      def bound_assistants_sql(config, conn, settled_spend:)
-        <<~SQL
+      #
+      # Returns `[sql, binds]` together rather than the SQL alone: the two
+      # branches declare DIFFERENT numbers of parameters (the spend-free one has
+      # no window), and Postgres rejects a bind list that does not match the
+      # statement it is sent with — so the statement and its arguments have to
+      # be built in one place or the fallback breaks the moment a window is
+      # configured.
+      def bound_assistants_query(config, settled_spend:)
+        window_days = settled_spend ? config.spending_cap_window_days&.to_i : nil
+        sql = <<~SQL
           SELECT id, public_key, created_at, human_label, spending_cap_cents,
                  #{settled_cents_expr(config, settled_spend: settled_spend)} AS settled_cents
           FROM #{config.schema}.agents
-          WHERE user_id = #{conn.quote(@identity.user_id)} AND revoked_at IS NULL
+          WHERE user_id = $1 AND revoked_at IS NULL
           ORDER BY created_at
         SQL
+        [sql, [@identity.user_id, *Array(window_days)]]
       end
 
       # Correlated subquery summing this agent's settled spend from the
       # settlements table (COALESCE → 0 when it has settled nothing, or the
       # table has no rows), honouring spending_cap_window_days when set.
+      #
+      # WHETHER there is a window is a statement shape (no predicate at all
+      # when there is none); HOW MANY DAYS is a value, so it is `$2` through
+      # `make_interval` — the same treatment `executor.rb#settled_total_cents`
+      # gives the identical expression.
       def settled_cents_expr(config, settled_spend:)
         return "0" unless settled_spend
 
-        window_days = config.spending_cap_window_days
-        window = window_days ? "AND settled_at >= now() - #{window_days.to_i} * INTERVAL '1 day'" : ""
+        window = config.spending_cap_window_days ? "AND settled_at >= now() - make_interval(days => $2)" : ""
         <<~SQL.strip
           (SELECT COALESCE(SUM(settled_amount_cents), 0)
            FROM #{config.schema}.settlements

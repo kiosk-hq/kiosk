@@ -45,10 +45,23 @@ module Kiosk
         pem    = public_key_pem.to_s.strip
         raise ArgumentError, "user_id required" if user_id.nil? || user_id.to_s.empty?
 
-        conn = ActiveRecord::Base.connection
-        existing = conn.execute(<<~SQL).first
+        # `lease_connection`, not `connection` (K-782, following
+        # `wire_controller.rb`): `ActiveRecord::Base.connection` is
+        # soft-deprecated in Rails 8.1 and RAISES under
+        # `permanent_connection_checkout = :disallowed`. Not `with_connection`
+        # either — `rebind` and `register_linked` open a transaction on this
+        # object and run the operator's `assistant_claimed` /
+        # `assistant_creation` hook inside it, and those hooks reach the
+        # database through the host's own models. All of it has to land on the
+        # ONE connection the request holds, or "a raising hook rolls the
+        # binding back atomically" stops being true.
+        conn = ::ActiveRecord::Base.lease_connection
+        # The presented key is CALLER-SUPPLIED (the wire body's `public_key`,
+        # or the device-authorization row the caller populated), so it travels
+        # as a bind and never as SQL text.
+        existing = conn.exec_query(<<~SQL, "Kiosk agent lookup by key", [pem]).to_a.first
           SELECT id, user_id, allowed_roles FROM #{config.schema}.agents
-          WHERE public_key = #{conn.quote(pem)} AND revoked_at IS NULL
+          WHERE public_key = $1 AND revoked_at IS NULL
           LIMIT 1
         SQL
 
@@ -72,12 +85,15 @@ module Kiosk
         config = Kiosk.configuration
         raise Errors::BadRequest.new("agent_id required") if agent_id.nil? || agent_id.to_s.empty?
 
-        conn = ActiveRecord::Base.connection
-        row = conn.execute(<<~SQL).first
+        # `agent_id` is CALLER-SUPPLIED (the manage-page form field); `user_id`
+        # comes off the authenticated session. Both are binds — the ownership
+        # predicate is the security boundary here, so neither may be text.
+        conn = ::ActiveRecord::Base.lease_connection
+        row = conn.exec_query(<<~SQL, "Kiosk agent unlink", [agent_id, user_id]).to_a.first
           UPDATE #{config.schema}.agents
           SET revoked_at = now()
-          WHERE id = #{conn.quote(agent_id)}
-            AND user_id = #{conn.quote(user_id)}
+          WHERE id = $1
+            AND user_id = $2
             AND revoked_at IS NULL
           RETURNING id
         SQL
@@ -142,12 +158,17 @@ module Kiosk
           # wire moved. Whether an idempotent re-bind SHOULD still revoke is
           # spec-silent and left to Phil — K-787.
           transition = previous.to_s != user_id.to_s
+          # The role remap is a STATEMENT SHAPE, not a value (the same
+          # distinction `executor.rb#settled_total_cents` draws about its
+          # window): a role-less ceremony has no assignment at all, so THAT
+          # stays a branch on the text while the role itself is `$3`.
+          role_set, role_binds =
+            new_role ? [", allowed_roles = ARRAY[$3]::text[]", [new_role]] : ["", []]
           conn.transaction do
-            role_set = new_role ? ", allowed_roles = ARRAY[#{conn.quote(new_role)}]::text[]" : ""
-            conn.execute(<<~SQL)
+            conn.exec_query(<<~SQL, "Kiosk agent rebind", [user_id, agent_id, *role_binds])
               UPDATE #{config.schema}.agents
-              SET user_id = #{conn.quote(user_id)}#{role_set}
-              WHERE id = #{conn.quote(agent_id)}
+              SET user_id = $1#{role_set}
+              WHERE id = $2
             SQL
             if transition
               config.assistant_claimed&.call(
@@ -177,13 +198,18 @@ module Kiosk
         def register_linked(conn, config, pem, user_id, requested_role)
           role = validated_role(config, requested_role || config.registration_role)
 
-          allowed_roles_sql = role ? "ARRAY[#{conn.quote(role)}]::text[]" : "NULL"
+          # `NULL` is a statement shape (no role at all), `ARRAY[$3]::text[]` a
+          # bound value — same split as the rebind UPDATE above.
+          allowed_roles_sql, role_binds =
+            role ? ["ARRAY[$3]::text[]", [role]] : ["NULL", []]
+          sql = <<~SQL
+            INSERT INTO #{config.schema}.agents (user_id, allowed_roles, public_key)
+            VALUES ($1, #{allowed_roles_sql}, $2)
+            RETURNING id
+          SQL
           agent_id = conn.transaction do
-            conn.execute(<<~SQL).first.fetch("id")
-              INSERT INTO #{config.schema}.agents (user_id, allowed_roles, public_key)
-              VALUES (#{conn.quote(user_id)}, #{allowed_roles_sql}, #{conn.quote(pem)})
-              RETURNING id
-            SQL
+            conn.exec_query(sql, "Kiosk linked agent insert", [user_id, pem, *role_binds])
+                .to_a.first.fetch("id")
           end
 
           token = issue_token(agent_id, role)

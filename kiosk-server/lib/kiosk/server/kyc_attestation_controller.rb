@@ -74,13 +74,26 @@ module Kiosk
       # — the underlying documents never reach this layer. Written together
       # so a downstream attribute gate and the binary gate stay consistent.
       def mark_kyc_verified!(agent_id, attributes: {})
-        conn   = ActiveRecord::Base.connection
+        # `lease_connection`, not `connection` (K-782, following
+        # `wire_controller.rb`): `ActiveRecord::Base.connection` is
+        # soft-deprecated in Rails 8.1 and RAISES under
+        # `permanent_connection_checkout = :disallowed`.
+        conn   = ::ActiveRecord::Base.lease_connection
         schema = Kiosk.configuration.schema
-        conn.execute(
+        # `$1::jsonb` carries the SAME hand-written cast, for the same reason,
+        # as `executor.rb#persist_cart_mandate`'s line_items: the argument is
+        # JSON *text* and the cast is what says "parse this, do not store it as
+        # a json string". A jsonb column holding a string would make every
+        # `->>` attribute gate downstream answer NULL for attributes that ARE
+        # there. `$1` is the attesting broker's payload and `$2` is the agent id
+        # off the verified token — the payload is caller-supplied, so it never
+        # reaches the statement text.
+        conn.exec_query(
           "UPDATE #{conn.quote_table_name("#{schema}.agents")} " \
-          "SET kyc_verified_at = now(), " \
-          "kyc_attributes = #{conn.quote(JSON.generate(attributes))}::jsonb " \
-          "WHERE id = #{conn.quote(agent_id)} AND revoked_at IS NULL",
+          "SET kyc_verified_at = now(), kyc_attributes = $1::jsonb " \
+          "WHERE id = $2 AND revoked_at IS NULL",
+          "Kiosk KYC attestation",
+          [JSON.generate(attributes), agent_id],
         )
       end
 

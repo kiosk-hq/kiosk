@@ -39,7 +39,8 @@ RSpec.describe Kiosk::Server::AgentRegistration do
 
     before do
       ar_base = class_double("ActiveRecord::Base").as_stubbed_const
-      allow(ar_base).to receive(:connection).and_return(con)
+      allow(ar_base).to receive(:lease_connection).and_return(con)
+      allow(con).to receive(:quote).and_call_original
       allow(Kiosk.configuration).to receive(:user_model).and_return(
         double(constantize: double(create!: double(id: 42)))
       )
@@ -56,24 +57,28 @@ RSpec.describe Kiosk::Server::AgentRegistration do
     end
 
     it "provisions a new agent and never writes a client-supplied name column" do
-      results  = [[], [{ "id" => "agent-1" }]] # SELECT empty → INSERT returns id
-      executed = []
-      allow(con).to receive(:execute) { |sql| executed << sql; results.shift || [] }
+      results = [[], [{ "id" => "agent-1" }]] # SELECT empty → INSERT returns id
+      route_exec_query(con) { |_sql, _binds| results.shift || [] }
 
       first = described_class.call(public_key_pem: pem, signed: "sig")
       expect(first[:user_id]).to eq("42")
       expect(first[:agent_id]).to eq("agent-1")
 
-      insert_sql = executed.find { |s| s =~ /INSERT INTO kiosk\.agents/ }
+      insert_sql, binds = con.bound(/INSERT INTO kiosk\.agents/).first
       expect(insert_sql).not_to be_nil
       # `name` was removed from the wire + the row: the INSERT must not reference it.
       expect(insert_sql).not_to match(/\bname\b/)
-      # The role written is the server-pinned config role.
-      expect(insert_sql).to match(/ARRAY\['customer'\]/)
+      # K-782: the principal, the key and the role are `$1..$3` and NONE of them
+      # is in the statement text — the register door is where a caller-supplied
+      # key first reaches the database.
+      expect(insert_sql).to include("VALUES ($1, ARRAY[$3]::text[], $2)")
+      expect(binds).to eq([42, pem, "customer"])
+      expect(con.all_sql).not_to include(pem)
+      expect(con).not_to have_received(:quote)
     end
 
     it "burns the challenge and proves possession before touching the database" do
-      allow(con).to receive(:execute) { |sql| sql =~ /INSERT/ ? [{ "id" => "a" }] : [] }
+      route_exec_query(con) { |sql, _binds| sql =~ /INSERT/ ? [{ "id" => "a" }] : [] }
       described_class.call(public_key_pem: pem, signed: "sig")
       expect(Kiosk::Server::PopVerifier).to have_received(:verify!)
       expect(Kiosk::Server::AuthChallenge).to have_received(:consume!).with(
@@ -83,33 +88,41 @@ RSpec.describe Kiosk::Server::AgentRegistration do
 
     it "raises Conflict on an already-registered public key (use /auth/login)" do
       # SELECT returns an existing agent row → register must refuse, not re-issue.
-      allow(con).to receive(:execute).and_return([{ "id" => "agent-1" }])
+      route_exec_query(con) { [{ "id" => "agent-1" }] }
       expect {
         described_class.call(public_key_pem: pem, signed: "sig")
       }.to raise_error(Kiosk::Server::Errors::Conflict, /already registered/)
     end
 
-    # Roles are hook-or-absent in 0.1. registration_role is OPTIONAL —
-    # when unset, registration MUST NOT fail and the agent row carries NO role.
-    it "succeeds with registration_role unset, writing NULL allowed_roles" do
+    # Roles are hook-or-absent in 0.1. registration_role is OPTIONAL — when
+    # unset, the code writes NO role.
+    #
+    # WHAT THIS EXAMPLE DOES NOT PROVE, and the reason it is named here rather
+    # than left implied: the SHIPPED migration declares `allowed_roles text[]
+    # NOT NULL`, so this branch cannot reach a real database at all — a provider
+    # with no `registration_role` gets a NOT NULL violation on every register.
+    # A fake accepts any statement, which is exactly how that survived. Filed as
+    # K-788 and characterised against a real Postgres in
+    # auth_plane_persistence_spec.rb.
+    it "writes NULL allowed_roles with registration_role unset (see K-788)" do
       Kiosk.configure { |c| c.registration_role = nil }
-      results  = [[], [{ "id" => "agent-1" }]] # SELECT empty → INSERT returns id
-      executed = []
-      allow(con).to receive(:execute) { |sql| executed << sql; results.shift || [] }
+      results = [[], [{ "id" => "agent-1" }]] # SELECT empty → INSERT returns id
+      route_exec_query(con) { |_sql, _binds| results.shift || [] }
 
       result = described_class.call(public_key_pem: pem, signed: "sig")
       expect(result[:agent_id]).to eq("agent-1")
       expect(result[:access_token]).to eq("fake-token")
 
-      insert_sql = executed.find { |s| s =~ /INSERT INTO kiosk\.agents/ }
+      insert_sql, binds = con.bound(/INSERT INTO kiosk\.agents/).first
       expect(insert_sql).to include("NULL")
       expect(insert_sql).not_to match(/ARRAY\[/)
+      expect(binds).to eq([42, pem]) # no third bind: NULL is a shape, not a value
     end
 
     it "treats an empty-string registration_role as unset (no ConfigurationError)" do
       Kiosk.configure { |c| c.registration_role = "" }
       results = [[], [{ "id" => "agent-1" }]]
-      allow(con).to receive(:execute) { |_sql| results.shift || [] }
+      route_exec_query(con) { |_sql, _binds| results.shift || [] }
 
       expect(described_class.call(public_key_pem: pem, signed: "sig")[:agent_id])
         .to eq("agent-1")
@@ -127,14 +140,15 @@ RSpec.describe Kiosk::Server::AgentRegistration do
 
     before do
       ar_base = class_double("ActiveRecord::Base").as_stubbed_const
-      allow(ar_base).to receive(:connection).and_return(con)
+      allow(ar_base).to receive(:lease_connection).and_return(con)
+      allow(con).to receive(:quote).and_call_original
       allow_any_instance_of(Kiosk::Server::AgentIdentityProviders::DefaultAgentIdp)
         .to receive(:issue).and_return("fake-token")
       allow(Kiosk::Server::PopVerifier).to receive(:verify!).and_return({ nonce: "nonce-1" })
       allow(Kiosk::Server::AuthChallenge).to receive(:consume!).and_return(true)
       # SELECT (dup check) empty → INSERT returns the agent id.
       results = [[], [{ "id" => "agent-1" }]]
-      allow(con).to receive(:execute) { |_sql| results.shift || [] }
+      route_exec_query(con) { |_sql, _binds| results.shift || [] }
     end
 
     it "calls the factory with ONLY the pubkey and uses its RETURN as the principal" do
@@ -158,17 +172,19 @@ RSpec.describe Kiosk::Server::AgentRegistration do
     end
 
     it "flows a bigint principal id straight through to agents.user_id (no uuid coercion)" do
-      executed = []
-      results  = [[], [{ "id" => "agent-1" }]]
-      allow(con).to receive(:execute) { |sql| executed << sql; results.shift || [] }
+      results = [[], [{ "id" => "agent-1" }]]
+      route_exec_query(con) { |_sql, _binds| results.shift || [] }
       Kiosk.configure { |c| c.assistant_creation = ->(_pubkey) { 42 } }
 
       described_class.call(public_key_pem: pem, signed: "sig")
 
-      insert_sql = executed.find { |s| s =~ /INSERT INTO kiosk\.agents/ }
-      # The integer id — NOT a uuid — is what lands in the row.
-      expect(insert_sql).to match(/VALUES \('42'/)
-      expect(insert_sql).not_to match(/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}/)
+      _insert_sql, binds = con.bound(/INSERT INTO kiosk\.agents/).first
+      # The integer id — NOT a uuid, and NOT stringified on the way in — is what
+      # lands in the row. It reaches Postgres as a bind, so the COLUMN's type
+      # decides how it is read, which is what lets one engine serve bigint and
+      # uuid principals alike.
+      expect(binds.first).to eq(42)
+      expect(con.all_sql).not_to match(/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}/)
     end
 
     it "raises ConfigurationError when the factory returns nil (must return an id)" do

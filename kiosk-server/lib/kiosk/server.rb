@@ -10,9 +10,10 @@
 
 require "kiosk"
 
-# ActiveRecord::Base.connection is how the auth plane and the durable
+# ActiveRecord::Base.lease_connection is how the auth plane and the durable
 # device-authorization store reach the database; nothing in this gem
-# provides an alternative for those paths.
+# provides an alternative for those paths. Every statement they run carries
+# BIND PARAMETERS (K-654, K-782) — this gem calls `connection.quote` nowhere.
 require "active_record"
 
 require "kiosk/server/version"

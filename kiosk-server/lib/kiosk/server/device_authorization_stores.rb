@@ -98,44 +98,50 @@ module Kiosk
       end
 
       # Durable store over the `kiosk.device_authorizations` table
-      # (schema_definitions migration 008). Raw SQL through the host's
-      # `::ActiveRecord::Base.connection` — the same access idiom as
-      # {AgentRegistration} / {AgentLogin}; no model class, so satellite
-      # neutrality holds (Kiosk never defines records over provider
+      # (schema_definitions migration 008). SQL with BIND PARAMETERS through
+      # the host's `::ActiveRecord::Base.lease_connection` — the same access
+      # idiom as {AgentRegistration} / {AgentLogin}; no model class, so
+      # satellite neutrality holds (Kiosk never defines records over provider
       # tables, and this one lives in the kiosk schema).
+      #
+      # Every value here reaches the row from a request: the public key and
+      # `client_id` are the caller's own fields, the code hashes are digests of
+      # codes the caller presents. None of them is ever concatenated into a
+      # statement — see {#connection} for why the acquisition changed too.
       #
       # ActiveRecord is a declared dependency of the gem; nothing here
       # touches it until an operation runs.
       class ActiveRecord < Base
         def create(da)
-          conn = connection
-          conn.execute(<<~SQL)
+          sql = <<~SQL
             INSERT INTO #{table} (id, device_code_hash, user_code_hash, public_key_pem, kind,
                                   client_id, requested_role, status, user_id,
                                   expires_at, consumed_at, created_at)
-            VALUES (#{conn.quote(da.id)}, #{conn.quote(da.device_code_hash)},
-                    #{conn.quote(da.user_code_hash)}, #{conn.quote(da.public_key_pem)},
-                    #{conn.quote(da.kind.to_s)}, #{conn.quote(da.client_id)},
-                    #{conn.quote(da.requested_role)}, #{conn.quote(da.status.to_s)},
-                    #{conn.quote(da.user_id)}, #{conn.quote(da.expires_at)},
-                    #{conn.quote(da.consumed_at)}, #{conn.quote(da.created_at)})
+            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
           SQL
+          connection.exec_query(sql, "Kiosk device_authorization insert", [
+            da.id, da.device_code_hash, da.user_code_hash, da.public_key_pem,
+            da.kind.to_s, da.client_id, da.requested_role, da.status.to_s,
+            da.user_id, da.expires_at, da.consumed_at, da.created_at,
+          ])
           da
         rescue ::ActiveRecord::RecordNotUnique => e
           raise UniqueConstraintError, e.message
         end
 
         def update(da)
-          conn = connection
-          updated = conn.execute(<<~SQL).to_a
+          sql = <<~SQL
             UPDATE #{table}
-            SET public_key_pem = #{conn.quote(da.public_key_pem)},
-                status         = #{conn.quote(da.status.to_s)},
-                user_id        = #{conn.quote(da.user_id)},
-                consumed_at    = #{conn.quote(da.consumed_at)}
-            WHERE id = #{conn.quote(da.id)}
+            SET public_key_pem = $1,
+                status         = $2,
+                user_id        = $3,
+                consumed_at    = $4
+            WHERE id = $5
             RETURNING id
           SQL
+          updated = connection.exec_query(sql, "Kiosk device_authorization update", [
+            da.public_key_pem, da.status.to_s, da.user_id, da.consumed_at, da.id,
+          ]).to_a
           if updated.empty?
             raise NotFoundError, "device_authorization #{da.id} not found"
           end
@@ -144,30 +150,41 @@ module Kiosk
         end
 
         def find_by_device_code_hash(hash)
-          conn = connection
-          row = conn.execute(<<~SQL).first
+          sql = <<~SQL
             SELECT * FROM #{table}
-            WHERE device_code_hash = #{conn.quote(hash)}
+            WHERE device_code_hash = $1
             LIMIT 1
           SQL
+          row = connection.exec_query(sql, "Kiosk device_authorization by device code", [hash]).to_a.first
           row && row_to_authorization(row)
         end
 
         # Pending-only, mirroring {InMemory#find_by_user_code_hash}: the
         # partial unique index guarantees at most one pending row per code.
+        # `'pending'` stays a literal — it is a state name written in this file,
+        # not a value anyone supplies.
         def find_by_user_code_hash(hash)
-          conn = connection
-          row = conn.execute(<<~SQL).first
+          sql = <<~SQL
             SELECT * FROM #{table}
-            WHERE user_code_hash = #{conn.quote(hash)} AND status = 'pending'
+            WHERE user_code_hash = $1 AND status = 'pending'
             LIMIT 1
           SQL
+          row = connection.exec_query(sql, "Kiosk device_authorization by user code", [hash]).to_a.first
           row && row_to_authorization(row)
         end
 
         private
 
-        def connection = ::ActiveRecord::Base.connection
+        # `lease_connection`, not `connection` (K-782, following
+        # `wire_controller.rb`): `ActiveRecord::Base.connection` is
+        # soft-deprecated in Rails 8.1 and RAISES under
+        # `permanent_connection_checkout = :disallowed`, which would 500 the
+        # whole binding ceremony on a host that took the new default. Each
+        # method here is one statement in no transaction of its own, so
+        # `with_connection` would also be correct; the lease is taken because
+        # every call site is inside a Rails request that already holds one, and
+        # because two connection idioms in one engine is what K-782 closes.
+        def connection = ::ActiveRecord::Base.lease_connection
         def table = %("#{Kiosk.configuration.schema}".device_authorizations)
 
         def row_to_authorization(row)

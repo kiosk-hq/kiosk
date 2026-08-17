@@ -116,16 +116,18 @@ RSpec.describe "wire-surface controller auth" do
         define_method(:verify) { |_request| fixed }
       end.new
     end
+    # `[sql, binds]` per statement, not SQL alone: since K-782 the attestation
+    # UPDATE carries its agent id and its jsonb payload as `$1`/`$2`, so the id
+    # this surface writes to is only visible in the binds.
     let(:executed_sql) { [] }
 
     before do
-      sql_log = executed_sql
+      log = executed_sql
       fake_conn = Object.new.tap do |conn|
-        conn.define_singleton_method(:execute) { |sql| sql_log << sql; [] }
-        conn.define_singleton_method(:quote)   { |v| "'#{v}'" }
+        conn.define_singleton_method(:exec_query) { |sql, _name = nil, binds = []| log << [sql, binds]; [] }
         conn.define_singleton_method(:quote_table_name) { |n| n }
       end
-      ar_base = Class.new { define_singleton_method(:connection) { fake_conn } }
+      ar_base = Class.new { define_singleton_method(:lease_connection) { fake_conn } }
       stub_const("ActiveRecord::Base", ar_base)
 
       Kiosk.configure do |c|
@@ -160,8 +162,10 @@ RSpec.describe "wire-surface controller auth" do
       expect(body).to eq(kyc_verified: true, attributes: {})
       # The row updated is the one for the CUSTOM idp's identity, and now also
       # persists the (empty) kyc_attributes jsonb alongside kyc_verified_at.
-      expect(executed_sql.last).to include("'a-custom'")
-      expect(executed_sql.last).to include("kyc_attributes")
+      sql, binds = executed_sql.last
+      expect(sql).to include("kyc_attributes = $1::jsonb")
+      expect(sql).to include("WHERE id = $2")
+      expect(binds).to eq(["{}", "a-custom"])
     end
 
     it "records the named anonymized attributes an attestation carries" do
@@ -181,9 +185,15 @@ RSpec.describe "wire-surface controller auth" do
       # NB: the wire body is String-keyed JSON ({"age_over_18": true}); the
       # dispatch harness re-parses it with symbolize_names, hence Symbol keys here.
       expect(body).to eq(kyc_verified: true, attributes: { age_over_18: true, licence_a: true })
-      # The persisted jsonb carries exactly the granted booleans — never a document.
-      expect(executed_sql.last).to include("age_over_18")
-      expect(executed_sql.last).to include("licence_a")
+      # The persisted jsonb carries exactly the granted booleans — never a
+      # document. It arrives as a BIND (K-782), so the payload is in the binds
+      # and NOT in the statement text, and the `::jsonb` cast on the placeholder
+      # is what makes it an object rather than a stored json string
+      # (auth_plane_persistence_spec.rb proves that against a real Postgres).
+      sql, binds = executed_sql.last
+      expect(sql).to include("kyc_attributes = $1::jsonb")
+      expect(sql).not_to include("age_over_18")
+      expect(binds.first).to eq(JSON.generate("age_over_18" => true, "licence_a" => true))
     end
 
     it "does NOT fall back to user_idp — KYC is an agent-only surface" do
@@ -251,15 +261,16 @@ RSpec.describe "wire-surface controller auth" do
 
       fake_conn = Object.new.tap do |conn|
         conn.define_singleton_method(:execute) { |_sql| [] }
+        conn.define_singleton_method(:exec_query) { |_sql, _name = nil, _binds = []| [] }
         conn.define_singleton_method(:transaction) { |&blk| blk.call }
-        conn.define_singleton_method(:quote) { |v| "'#{v}'" }
         conn.define_singleton_method(:quote_table_name) { |n| n }
       end
-      # BOTH readers: WireController#connection_for calls the non-deprecated
-      # `lease_connection` (K-654), while the bundled DefaultAgentIdp on the
-      # same dispatch still reaches for `connection`.
+      # ONE reader now: `lease_connection` for the whole dispatch — the wire
+      # controller (K-654) and the bundled DefaultAgentIdp (K-782) agree, and
+      # `connection` is deliberately absent so a survivor would fail loudly.
+      # `execute` stays because SessionContext's `SET LOCAL` GUCs cannot be
+      # parameterised (Postgres takes no binds in SET).
       ar_base = Class.new do
-        define_singleton_method(:connection)       { fake_conn }
         define_singleton_method(:lease_connection) { fake_conn }
       end
       stub_const("ActiveRecord::Base", ar_base)

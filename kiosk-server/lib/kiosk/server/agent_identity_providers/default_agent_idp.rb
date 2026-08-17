@@ -41,9 +41,7 @@ module Kiosk
         end
 
         def agent_payment_key(agent_id)
-          pem = ActiveRecord::Base.connection.execute(
-            "SELECT public_key FROM #{schema}.agents WHERE id = #{quote(agent_id)} AND revoked_at IS NULL",
-          ).first&.fetch("public_key", nil)
+          pem = agents_column("public_key", agent_id)&.fetch("public_key", nil)
           raise Kiosk::AgentIdentityProviders::InvalidToken, "no key for agent #{agent_id}" if pem.nil?
 
           OpenSSL::PKey::RSA.new(pem)
@@ -54,9 +52,7 @@ module Kiosk
         # `rent_motorcycle`) calls this, or the finer-grained
         # {#kyc_has_attributes?} when it needs specific booleans.
         def kyc_verified?(agent_id)
-          row = ActiveRecord::Base.connection.execute(
-            "SELECT kyc_verified_at FROM #{schema}.agents WHERE id = #{quote(agent_id)} AND revoked_at IS NULL",
-          ).first
+          row = agents_column("kyc_verified_at", agent_id)
           return false if row.nil?
 
           !row.fetch("kyc_verified_at", nil).nil?
@@ -69,9 +65,7 @@ module Kiosk
         # is on file / the agent is unknown. Only booleans were ever stored —
         # never the DOB, licence number, or any document (the anonymized point).
         def kyc_attributes(agent_id)
-          row = ActiveRecord::Base.connection.execute(
-            "SELECT kyc_attributes FROM #{schema}.agents WHERE id = #{quote(agent_id)} AND revoked_at IS NULL",
-          ).first
+          row = agents_column("kyc_attributes", agent_id)
           return {} if row.nil?
 
           raw = row.fetch("kyc_attributes", nil)
@@ -93,16 +87,38 @@ module Kiosk
         private
 
         def lookup_user_id(agent_id)
-          row = ActiveRecord::Base.connection.execute(
-            "SELECT user_id FROM #{schema}.agents WHERE id = #{quote(agent_id)} AND revoked_at IS NULL",
-          ).first
+          row = agents_column("user_id", agent_id)
           raise Kiosk::AgentIdentityProviders::InvalidToken, "unknown agent #{agent_id}" if row.nil?
 
           row.fetch("user_id")
         end
 
+        # ONE live-agent lookup for all four callers (K-782). Four copies of the
+        # same statement were four places to forget a `quote`; the private
+        # `def quote` that fed them is gone with them.
+        #
+        # `column` is an IDENTIFIER chosen from the four literals above — never
+        # an argument, never caller-reachable — and Postgres cannot bind an
+        # identifier anyway. `agent_id` is a VALUE and travels as `$1`. It comes
+        # off a verified JWT claim or a row this engine wrote, so it was not
+        # attacker-reachable before either; it binds because "safe today because
+        # of who calls it" is what this row exists to stop shipping.
+        #
+        # `lease_connection`, not `connection`: `ActiveRecord::Base.connection`
+        # is soft-deprecated in Rails 8.1 and RAISES under
+        # `permanent_connection_checkout = :disallowed`, and this IdP is on the
+        # path of every authenticated request there is. `with_connection` is not
+        # used because `agent_payment_key` is called from inside the pay path's
+        # open transaction, where the mandate rows being verified live.
+        def agents_column(column, agent_id)
+          ::ActiveRecord::Base.lease_connection.exec_query(
+            "SELECT #{column} FROM #{schema}.agents WHERE id = $1 AND revoked_at IS NULL",
+            "Kiosk agent #{column}",
+            [agent_id],
+          ).to_a.first
+        end
+
         def schema = Kiosk.configuration.schema
-        def quote(value) = ActiveRecord::Base.connection.quote(value)
 
         def authorization_for(request)
           if request.respond_to?(:headers)

@@ -56,13 +56,16 @@ RSpec.describe "Kiosk::Server KYC attestation logic (unit)" do
   describe "DefaultAgentIdp.kyc_verified?" do
     let(:idp) { Kiosk::Server::AgentIdentityProviders::DefaultAgentIdp.new }
 
+    # K-782: the IdP's four agent lookups became ONE bind-parameterised
+    # statement on `lease_connection`, so the fake answers `exec_query` and
+    # offers no `quote` at all — a call to it would now be a NoMethodError,
+    # which is the point.
     def stub_ar(result)
       fake_conn = Object.new.tap do |c|
-        row = result
-        c.define_singleton_method(:execute) { |_sql| row }
-        c.define_singleton_method(:quote)   { |v| "'#{v}'" }
+        rows = result
+        c.define_singleton_method(:exec_query) { |_sql, _name = nil, _binds = []| rows }
       end
-      ar_base = Class.new { define_singleton_method(:connection) { fake_conn } }
+      ar_base = Class.new { define_singleton_method(:lease_connection) { fake_conn } }
       stub_const("ActiveRecord::Base", ar_base)
     end
 
@@ -86,13 +89,16 @@ RSpec.describe "Kiosk::Server KYC attestation logic (unit)" do
   describe "DefaultAgentIdp KYC attributes" do
     let(:idp) { Kiosk::Server::AgentIdentityProviders::DefaultAgentIdp.new }
 
+    # K-782: the IdP's four agent lookups became ONE bind-parameterised
+    # statement on `lease_connection`, so the fake answers `exec_query` and
+    # offers no `quote` at all — a call to it would now be a NoMethodError,
+    # which is the point.
     def stub_ar(result)
       fake_conn = Object.new.tap do |c|
-        row = result
-        c.define_singleton_method(:execute) { |_sql| row }
-        c.define_singleton_method(:quote)   { |v| "'#{v}'" }
+        rows = result
+        c.define_singleton_method(:exec_query) { |_sql, _name = nil, _binds = []| rows }
       end
-      ar_base = Class.new { define_singleton_method(:connection) { fake_conn } }
+      ar_base = Class.new { define_singleton_method(:lease_connection) { fake_conn } }
       stub_const("ActiveRecord::Base", ar_base)
     end
 

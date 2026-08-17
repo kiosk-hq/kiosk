@@ -49,15 +49,26 @@ module Kiosk
         payload = PopVerifier.verify!(public_key_pem: public_key_pem, signed: signed)
         AuthChallenge.consume!(public_key_pem: public_key_pem, nonce: payload.fetch(:nonce))
 
-        conn = ActiveRecord::Base.connection
+        # `lease_connection`, not `connection` (K-782, following
+        # `wire_controller.rb`): `ActiveRecord::Base.connection` is
+        # soft-deprecated in Rails 8.1 and RAISES under
+        # `permanent_connection_checkout = :disallowed`. Not `with_connection`
+        # either — the transaction below runs the operator's
+        # `assistant_creation` factory, which persists through the host's own
+        # models, and the factory's row and the agent row must land on the same
+        # connection or they are not in the same transaction.
+        conn = ::ActiveRecord::Base.lease_connection
 
         # A known public key is NOT re-registered — that would be a second way to
         # mint an identity for an existing key (and the old idempotent re-issue
         # blurred register vs. login). Existing keys refresh their token through
         # POST /auth/login instead.
-        existing = conn.execute(<<~SQL).first
+        #
+        # The key is CALLER-SUPPLIED — it is the request body — so it travels as
+        # a bind, here and in the INSERT below.
+        existing = conn.exec_query(<<~SQL, "Kiosk agent lookup by key", [public_key_pem]).to_a.first
           SELECT id FROM #{config.schema}.agents
-          WHERE public_key = #{conn.quote(public_key_pem)} AND revoked_at IS NULL
+          WHERE public_key = $1 AND revoked_at IS NULL
           LIMIT 1
         SQL
         if existing
@@ -79,14 +90,19 @@ module Kiosk
           assistant_account_id = create_assistant_account(config, public_key_pem)
 
           # NULL allowed_roles when no registration_role is configured
-          # (single-role providers need no role at all).
-          allowed_roles_sql = role ? "ARRAY[#{conn.quote(role)}]::text[]" : "NULL"
-          agent_id = conn.execute(<<~SQL).first.fetch("id")
+          # (single-role providers need no role at all). That is a statement
+          # SHAPE — there is no value to bind — while the role itself, when
+          # there is one, is `$3`.
+          allowed_roles_sql, role_binds =
+            role ? ["ARRAY[$3]::text[]", [role]] : ["NULL", []]
+          sql = <<~SQL
             INSERT INTO #{config.schema}.agents (user_id, allowed_roles, public_key)
-            VALUES (#{conn.quote(assistant_account_id)},
-                    #{allowed_roles_sql}, #{conn.quote(public_key_pem)})
+            VALUES ($1, #{allowed_roles_sql}, $2)
             RETURNING id
           SQL
+          agent_id = conn.exec_query(
+            sql, "Kiosk agent insert", [assistant_account_id, public_key_pem, *role_binds],
+          ).to_a.first.fetch("id")
           token = AgentIdentityProviders::DefaultAgentIdp.new.issue(agent_id: agent_id, role: role)
           # Wire key stays `user_id`: the factory-surface rename touches only that,
           # not the existing user_id / kiosk.current_user_id() GUC surface.

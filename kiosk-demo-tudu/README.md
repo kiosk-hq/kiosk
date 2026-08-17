@@ -123,7 +123,7 @@ assertions cannot go ungated and unexplained.
 |---|---|---|
 | `demo:setup` | yes — the job's own setup step |  |
 | `demo:collab` | yes |  |
-| `demo:link` | no | the W5 rebind/assistant_claimed ceremony — timing-sensitive on the RFC 8628 device-grant poll interval, the same exclusion as the sibling demo:binding tasks. |
+| `demo:link` | yes |  |
 | `demo:isolation` | yes |  |
 | `demo:redteam` | yes |  |
 | `demo:schema` | yes |  |

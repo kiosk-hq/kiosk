@@ -145,7 +145,24 @@ jobs:
             # It goes LAST because `task walkthrough: :setup` reseeds, while
             # demo:backoff and demo:book have no prerequisite and live off the
             # job-level demo:setup.
-            tasks: demo:backoff demo:book demo:binding demo:isolation demo:redteam demo:schema demo:walkthrough
+            # demo:reputation is the ONLY task anywhere that boots the
+            # `:reputation` branch of ATABLEFOR_POW_MODE (dev/test resolve the
+            # mode to `:off`), and therefore the only thing that executes
+            # `c.reputation_factors` — the gate's DB read path, evaluated on
+            # every gated request of the flagship reputation demo. It was
+            # excluded as "the same heavy-PoW family as demo:pow", and that is
+            # true only at KIOSK_POW_DIFFICULTY=high, which the hosted deploy
+            # sets and CI does not: at the CI-default `low` (n=96 k=5) the whole
+            # curve is six sub-second proofs, MEASURED at 4.1 s end to end
+            # including its own server boot (K-786) — cheaper than demo:book.
+            # Same correction, same reasoning and the same measurement discipline
+            # as hoteling's demo:browse (K-617). It has no `: :setup`
+            # prerequisite and books two tables, so it sits with the other
+            # prerequisite-free tasks, ahead of everything that reseeds.
+            # Watched fail: drop the `status: "confirmed"` from the
+            # reputation_factors count and the curve stays 2 → 2, so "proof count
+            # dropped after the first booking" goes red.
+            tasks: demo:backoff demo:book demo:reputation demo:binding demo:isolation demo:redteam demo:schema demo:walkthrough
             # Tasks deliberately NOT gated, and why. bin/check-ci-tasks fails the
             # build if a demo: task is in neither this map nor `tasks:` above.
             ungated:
@@ -153,9 +170,6 @@ jobs:
                 the heavy anti-scalping toll — it solves real memory-hard
                 Equihash batteries, not the single sub-second register proof
                 demo:backoff pays. demo:pow is excluded on every demo.
-              demo:reputation: >-
-                same heavy-PoW family as demo:pow — it solves several escalating
-                Equihash tolls to show the cost dropping as bookings accrue.
           - demo: kiosk-demo-getgrocery
             # demo:agecheck = the alcohol 18+ age-gate (create_order rejects a
             # cart with an age_restricted item unless the agent carries
@@ -361,12 +375,23 @@ jobs:
             # happy path (membership-based sharing + agent→agent invites +
             # per-agent attribution); demo:schema asserts `pay` ABSENT like
             # philslist.
-            tasks: demo:collab demo:isolation demo:redteam demo:schema
-            ungated:
-              demo:link: >-
-                the W5 rebind/assistant_claimed ceremony — timing-sensitive on
-                the RFC 8628 device-grant poll interval, the same exclusion as
-                the sibling demo:binding tasks.
+            # demo:link is the W5 rebind beat, and since K-783 it is the only
+            # end-to-end regression for a DATA-LOSS bug: re-linking an already
+            # bound key used to run tudu's assistant_claimed hook on a no-op
+            # transition and DELETE every one of the human's list memberships.
+            # It was excluded as "timing-sensitive on the RFC 8628 device-grant
+            # poll interval, the same exclusion as the sibling demo:binding
+            # tasks", and that reason was simply wrong: script/link_flow.rb runs
+            # the LINK-CODE ceremony (POST /auth/link → POST /auth/claim) and
+            # polls nothing at all — its only sleep is a deliberate 1.1 s to
+            # cross a second boundary so the JWT `iat` watermark is unambiguous.
+            # stylish's and philslist's demo:binding DO poll (`sleep(interval +
+            # 1)` around the device-grant token poll); tudu's demo:link never
+            # touches that endpoint, so their exclusion does not extend to it
+            # (K-786). MEASURED at 4.8 s end to end including its own reseed and
+            # server boot. It reseeds (`: :setup`), like every other tudu task
+            # here, so its position is free.
+            tasks: demo:collab demo:link demo:isolation demo:redteam demo:schema
           # Every demo: task a demo defines must appear either in its `tasks:`
           # list above (or be demo:setup, which the "Set up demo" step runs) or
           # in its `ungated:` map with the reason it is not a gate. That is not a

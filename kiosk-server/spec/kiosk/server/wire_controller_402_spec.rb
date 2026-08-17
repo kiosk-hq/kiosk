@@ -87,8 +87,10 @@ RSpec.describe "WireController 402 WWW-Authenticate (W4)" do
 
       # connection_for(identity) touches ActiveRecord::Base.connection; the pay
       # verb only USES it after the setup check, so a bare stub suffices.
-      fake_conn = Object.new
-      ar_base = Class.new { define_singleton_method(:connection) { Object.new } }
+      ar_base = Class.new do
+        define_singleton_method(:connection)       { Object.new }
+        define_singleton_method(:lease_connection) { Object.new }
+      end
       stub_const("ActiveRecord::Base", ar_base)
     end
 

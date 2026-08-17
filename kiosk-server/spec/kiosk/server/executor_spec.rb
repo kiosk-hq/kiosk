@@ -548,4 +548,154 @@ RSpec.describe Kiosk::Server::Executor do
         .to raise_error(Kiosk::Server::Errors::Forbidden, /payment_provider/)
     end
   end
+
+  # ── The pay path's statements carry BIND PARAMETERS, not spliced values ───
+  #
+  # K-654: these four INSERTs (and the spending-cap SELECT) used to be heredocs
+  # with every field run through a private `q()` = `connection.quote`. This
+  # group asserts the shape that replaced it — `$N` placeholders, values handed
+  # over separately and in order — and, above all, that `connection.quote` is
+  # not reachable from the pay path at all. A quoted value inside an assembled
+  # string is safe exactly as long as nobody forgets one; there is now nothing
+  # to forget, and that is the property worth a test.
+  #
+  # What this group deliberately does NOT claim is that the values are STORED
+  # correctly: a fake connection cannot know what Postgres makes of a bind's
+  # type. That is `executor_persistence_spec.rb`, against a real database.
+  describe "pay-path persistence (bind parameters)" do
+    subject(:executor) { described_class.new(connection: connection, identity: identity) }
+
+    let(:expires_at) { Time.at(1_800_000_071) }
+    let(:intent) do
+      Kiosk::Mandate::IntentMandate.new(
+        id: "intent-1", user_id: "u-1", agent_id: "a-1", issuer: "https://demo.example",
+        scope: "groceries", cap_amount_cents: 5000, currency: "eur",
+        expires_at: expires_at, created_at: expires_at, raw_jws: "intent-jws",
+      )
+    end
+    let(:cart) do
+      Kiosk::Mandate::CartMandate.new(
+        id: "cart-1", intent_mandate_id: "intent-1", user_id: "u-1", agent_id: "a-1",
+        issuer: "https://demo.example", line_items: [{ "sku" => "pizza", "qty" => 1 }],
+        total_amount_cents: 1599, currency: "eur", expires_at: expires_at,
+        created_at: expires_at, raw_jws: "cart-jws",
+      )
+    end
+    let(:payment) do
+      Kiosk::Mandate::PaymentMandate.new(
+        id: "pay-1", cart_mandate_id: "cart-1", user_id: "u-1", agent_id: "a-1",
+        issuer: "https://demo.example", payment_method: "pm_card_visa",
+        amount_cents: 1599, currency: "eur", expires_at: expires_at,
+        created_at: expires_at, raw_jws: "payment-jws",
+      )
+    end
+
+    before { Kiosk.configure { |c| c.schema = "kiosk" } }
+
+    # [sql, name, binds] of the single statement the call under test ran.
+    def last_statement = connection.exec_queries.last
+
+    it "binds every intent-mandate value and splices none of them into the SQL" do
+      id = executor.send(:persist_intent_mandate, intent)
+      sql, name, binds = last_statement
+
+      expect(id).to   eq("row-1") # the RETURNING id the fake hands back
+      expect(name).to eq("Kiosk intent_mandate insert")
+      expect(sql).to  include("VALUES ($1, $2, $3, $4, $5, $6, $7, $8, now(), $9)")
+      expect(binds).to eq([
+        "intent-1", "u-1", "a-1", "https://demo.example", "groceries",
+        5000, "eur", expires_at, "intent-jws",
+      ])
+    end
+
+    it "binds every cart-mandate value, with line_items as JSON text under an explicit ::jsonb cast" do
+      executor.send(:persist_cart_mandate, cart, intent_row_id: "intent-row")
+      sql, name, binds = last_statement
+
+      expect(name).to eq("Kiosk cart_mandate insert")
+      expect(sql).to  include("VALUES ($1, $2, $3, $4, $5, $6::jsonb, $7, $8, $9, now(), $10)")
+      expect(binds).to eq([
+        "cart-1", "intent-row", "u-1", "a-1", "https://demo.example",
+        %([{"sku":"pizza","qty":1}]), 1599, "eur", expires_at, "cart-jws",
+      ])
+    end
+
+    it "binds every payment-mandate value" do
+      executor.send(:persist_payment_mandate, cart_row_id: "cart-row", payment: payment)
+      sql, name, binds = last_statement
+
+      expect(name).to eq("Kiosk payment_mandate insert")
+      expect(sql).to  include("VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, now(), $10)")
+      expect(binds).to eq([
+        "pay-1", "cart-row", "u-1", "a-1", "https://demo.example",
+        "pm_card_visa", 1599, "eur", expires_at, "payment-jws",
+      ])
+    end
+
+    it "binds the 'on_file' sentinel rather than an empty payment_method" do
+      on_file = Kiosk::Mandate::PaymentMandate.new(**payment.to_h, payment_method: "")
+      executor.send(:persist_payment_mandate, cart_row_id: "cart-row", payment: on_file)
+
+      expect(last_statement[2][5]).to eq("on_file")
+    end
+
+    it "binds every settlement value" do
+      executor.send(:persist_settlement, cart_row_id: "cart-row", cart: cart,
+                                         settled: { psp_reference: "pi_1", settled_amount_cents: 1599 })
+      sql, name, binds = last_statement
+
+      expect(name).to eq("Kiosk settlement insert")
+      expect(sql).to  include("VALUES ($1, $2, $3, $4, $5, $6, $7, now(), '')")
+      expect(binds).to eq(["cart-row", "u-1", "a-1", "https://demo.example", "pi_1", 1599, "eur"])
+    end
+
+    # The regression guard the row is actually about: no value — not even a
+    # harmless one — may appear in the statement text, and `quote` must never
+    # be called. Written over all four helpers so a future fifth statement
+    # that forgets is caught by the same assertion.
+    it "never calls connection.quote and never lets a value reach the SQL text" do
+      expect(connection).not_to receive(:quote)
+
+      intent_row = executor.send(:persist_intent_mandate, intent)
+      cart_row   = executor.send(:persist_cart_mandate, cart, intent_row_id: intent_row)
+      executor.send(:persist_payment_mandate, cart_row_id: cart_row, payment: payment)
+      executor.send(:persist_settlement, cart_row_id: cart_row, cart: cart,
+                                         settled: { psp_reference: "pi_1", settled_amount_cents: 1599 })
+
+      expect(connection.exec_queries.size).to eq(4)
+      connection.exec_queries.each do |sql, _name, binds|
+        binds.each do |value|
+          next if value.is_a?(Integer) # a bare number is not evidence of splicing
+
+          expect(sql).not_to include(value.to_s)
+        end
+      end
+    end
+
+    describe "#settled_total_cents" do
+      before { connection.next_exec_result = [{ "total" => 0 }] }
+
+      it "binds the agent and the currency, with no window predicate when uncapped by time" do
+        executor.send(:settled_total_cents, agent_id: "a-1", window_days: nil, currency: "eur")
+        sql, name, binds = last_statement
+
+        expect(name).to eq("Kiosk settled total")
+        expect(sql).to  include("WHERE agent_id = $1 AND currency = $2")
+        expect(sql).not_to include("settled_at")
+        expect(binds).to eq(["a-1", "eur"])
+      end
+
+      # The window used to be `#{window_days.to_i} * INTERVAL '1 day'` — the
+      # last interpolation in the file, and the one the third-party review
+      # missed. It is a bind now.
+      it "binds the window length rather than interpolating the day count" do
+        executor.send(:settled_total_cents, agent_id: "a-1", window_days: 7, currency: "eur")
+        sql, _name, binds = last_statement
+
+        expect(sql).to include("AND settled_at >= now() - make_interval(days => $3)")
+        expect(sql).not_to include("7")
+        expect(binds).to eq(["a-1", "eur", 7])
+      end
+    end
+  end
 end

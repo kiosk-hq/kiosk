@@ -82,13 +82,24 @@ end
 # string. Pretends to support transactions (yields the block, no rollback
 # semantics — the real ActiveRecord::Base.connection.transaction handles
 # rollback in production).
+#
+# `#exec_query` is the BIND-PARAMETER half of the same seam (K-654): the
+# Executor's mandate/settlement statements carry `$1…$N` and hand their values
+# alongside, so a fake that only recorded SQL text could no longer see them.
+# Each call is recorded as `[sql, name, binds]` — the SQL to assert that no
+# value was spliced into it, the binds to assert order and content. What this
+# fake can NEVER assert is what Postgres makes of a bind's TYPE; that is
+# `spec/kiosk/server/executor_persistence_spec.rb`'s job, against a real
+# database.
 class FakeConnection
-  attr_reader :executed_sql
-  attr_accessor :next_result
+  attr_reader :executed_sql, :exec_queries
+  attr_accessor :next_result, :next_exec_result
 
-  def initialize(next_result: [])
-    @executed_sql = []
-    @next_result  = next_result
+  def initialize(next_result: [], next_exec_result: [{ "id" => "row-1" }])
+    @executed_sql      = []
+    @exec_queries      = []
+    @next_result       = next_result
+    @next_exec_result  = next_exec_result
     @transaction_depth = 0
   end
 
@@ -102,6 +113,11 @@ class FakeConnection
   def execute(sql)
     @executed_sql << sql
     @next_result
+  end
+
+  def exec_query(sql, name = "SQL", binds = [])
+    @exec_queries << [sql, name, binds]
+    @next_exec_result
   end
 
   def quote(value)

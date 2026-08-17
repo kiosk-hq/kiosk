@@ -133,29 +133,40 @@ Kiosk.configure do |c|
   # `user_id` = the human account. tudu migrates the headless account's domain
   # rows to the human. First real use of this hook in the repo (core never
   # touches provider rows). A raise here rolls the whole rebind back atomically.
+  #
+  # K-781: this was the last hand-quoted SQL in tudu — three `exec_update`
+  # heredocs with six `conn.quote` interpolations, which seven passes of handler
+  # migration walked past because a CONFIG HOOK is not a verb. It reads through
+  # the models now, in the same `where(...).update_all` / `.delete_all` shape
+  # tudu's Operations use: no callbacks, no rows loaded, the affected count IS
+  # the answer — which is what the raw UPDATEs did.
+  #
+  # THE TRANSACTION IS NOT THIS HOOK'S: `AccountBinding.rebind` opened it on
+  # `ActiveRecord::Base.connection` and calls this inside it. `update_all` and
+  # `delete_all` are single statements that start no transaction of their own,
+  # and `ApplicationRecord` leases the same connection, so all three JOIN the
+  # rebind rather than nesting under it — a raise here still rolls the whole
+  # rebind back atomically, exactly as before.
   c.assistant_claimed = ->(agent:, previous_user_id:, user_id:) do
-    conn = ActiveRecord::Base.connection
     # Lists owned by the headless account become the human's.
-    conn.exec_update(<<~SQL, "assistant_claimed lists")
-      UPDATE lists SET account_id = #{conn.quote(user_id)}
-      WHERE account_id = #{conn.quote(previous_user_id)}
-    SQL
-    # Memberships too — but skip any list the human is ALREADY a member of
-    # (the UNIQUE(list_id, account_id) index would otherwise collide); drop the
+    List.where(account_id: previous_user_id).update_all(account_id: user_id)
+
+    # Memberships too — but skip any list the human is ALREADY a member of (the
+    # UNIQUE(list_id, account_id) index would otherwise collide); drop the
     # now-redundant headless membership instead.
-    conn.exec_update(<<~SQL, "assistant_claimed memberships")
-      UPDATE memberships SET account_id = #{conn.quote(user_id)}
-      WHERE account_id = #{conn.quote(previous_user_id)}
-        AND NOT EXISTS (
-          SELECT 1 FROM memberships m2
-          WHERE m2.list_id = memberships.list_id
-            AND m2.account_id = #{conn.quote(user_id)}
-        )
-    SQL
-    conn.exec_update(<<~SQL, "assistant_claimed drop dup memberships")
-      DELETE FROM memberships
-      WHERE account_id = #{conn.quote(previous_user_id)}
-    SQL
+    #
+    # The guard was a correlated `NOT EXISTS`; it is a `NOT IN (SELECT list_id
+    # …)` anti-join now, which is the same set here and only here: BOTH
+    # `memberships.list_id` and `memberships.account_id` are `NOT NULL`, so the
+    # subquery can never yield a NULL and turn `NOT IN` into "no rows". It stays
+    # ONE statement for the reason RemoveMemberOperation gives — at READ
+    # COMMITTED a two-statement read-then-write would straddle two snapshots.
+    already_a_member = Membership.where(account_id: user_id).select(:list_id)
+    Membership.where(account_id: previous_user_id)
+              .where.not(list_id: already_a_member)
+              .update_all(account_id: user_id)
+    Membership.where(account_id: previous_user_id).delete_all
+
     _ = agent # attribution available to the hook; not needed for the migration
   end
 

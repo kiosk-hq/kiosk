@@ -325,13 +325,26 @@ Kiosk.configure do |c|
     # be reset to Factors.empty (the last-block-wins reset K-497 eliminated) or
     # the policy can never grant relief. A confirmed reservation is this
     # provider's "proven completed action", mapped into settled_purchases_count.
+    #
+    # K-781: this was the last hand-quoted SQL in atablefor — a
+    # `conn.execute("… WHERE user_id = #{conn.quote(uid)}::uuid …")` that seven
+    # passes of handler migration walked past, because a CONFIG HOOK is not a
+    # verb. It is a projection, so it reads through the model like every other
+    # atablefor read, reusing {Booking.confirmed} rather than restating what
+    # "confirmed" means beside the unique partial index that enforces it.
+    #
+    # `where(user_id:)` and NOT `Booking.owned_by_current_principal`, which is
+    # sitting right there and is the wrong tool: the gate runs BEFORE the
+    # Executor opens its SessionContext, so `kiosk.current_user_id()` is not set
+    # yet. The principal arrives as the hook's `identity:` argument instead.
+    #
+    # Shape: the raw form cast to `::uuid`, so a malformed id raised
+    # InvalidTextRepresentation (→ 500 inside the gate); `where(user_id:)` casts
+    # an unparseable value to NULL and simply counts zero — i.e. the assistant
+    # is asked for MORE proof, never less. `identity.user_id` is server-derived
+    # from the verified token, so neither branch is caller-reachable.
     c.reputation_factors = ->(identity:, **) {
-      uid  = identity.user_id
-      conn = ActiveRecord::Base.connection
-      count = conn.execute(
-        "SELECT COUNT(*) AS confirmed_count FROM bookings " \
-        "WHERE user_id = #{conn.quote(uid.to_s)}::uuid AND status = 'confirmed'"
-      ).first["confirmed_count"].to_i
+      count = Booking.confirmed.where(user_id: identity.user_id).count
       Kiosk::Reputation::Factors.new(
         kyc_level:               nil,
         settled_purchases_count: count,

@@ -79,7 +79,7 @@ module Kiosk
       attr_reader :connection, :system_connection
 
       # @param connection [#execute, #transaction] RLS-protected app
-      #   connection. Defaults to `ActiveRecord::Base.connection` when
+      #   connection. Defaults to `ActiveRecord::Base.lease_connection` when
       #   Rails is loaded.
       # @param system_connection [#execute, #transaction] connection
       #   used by {#seed} to populate tables irrespective of RLS.
@@ -200,7 +200,16 @@ module Kiosk
 
       private
 
-      def default_connection = ::ActiveRecord::Base.connection
+      # `lease_connection`, not `connection` (K-782): the LAST
+      # `ActiveRecord::Base.connection` in this gem. It is soft-deprecated in
+      # Rails 8.1 and RAISES under `permanent_connection_checkout =
+      # :disallowed`, so a host on the new default could not build a
+      # TestExecutor without injecting a connection by hand — and one survivor
+      # is enough to keep teaching the idiom the rest of the engine just gave
+      # up. Not `with_connection`: this object holds its connection across many
+      # `as_user`/`as_agent` blocks, each of which opens its own GUC-scoped
+      # transaction on it, so the connection outlives any single block.
+      def default_connection = ::ActiveRecord::Base.lease_connection
 
       def require_scope!
         return if in_scope?

@@ -7,8 +7,9 @@ module Kiosk
     # etc.), yields the block, releases on commit/rollback.
     #
     # Connection-agnostic: works with anything responding to `#execute(sql)`
-    # and `#transaction { ... }`. `ActiveRecord::Base.connection` fits; in
-    # tests a `FakeConnection` recording calls works.
+    # and `#transaction { ... }`. `ActiveRecord::Base.lease_connection` fits
+    # (and is what `wire_controller.rb` hands it); in tests a `FakeConnection`
+    # recording calls works.
     #
     # The transaction is the natural scope for `SET LOCAL` — values vanish
     # at COMMIT/ROLLBACK, so no leak between requests on a shared

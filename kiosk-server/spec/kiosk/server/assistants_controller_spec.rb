@@ -12,7 +12,11 @@ RSpec.describe "AssistantsController" do
   let(:user_id) { "11111111-1111-1111-1111-111111111111" }
   let(:human)   { build_identity(actor: "human", agent_id: nil, user_id: user_id) }
   let(:pem)     { OpenSSL::PKey::RSA.generate(2048).public_key.to_pem }
-  let(:con)     { FakeConnection.new }
+  # `next_exec_result: []` — an empty listing unless an example says otherwise.
+  # The fake's default row exists for the Executor's `INSERT … RETURNING id`;
+  # handing it to this page's listing SELECT would present a row with no
+  # public_key.
+  let(:con)     { FakeConnection.new(next_exec_result: []) }
   let(:session) { {} }
 
   def wire_user_idp(identity)
@@ -31,7 +35,8 @@ RSpec.describe "AssistantsController" do
     end
     wire_user_idp(human)
     ar_base = class_double("ActiveRecord::Base").as_stubbed_const
-    allow(ar_base).to receive(:connection).and_return(con)
+    allow(ar_base).to receive(:lease_connection).and_return(con)
+    allow(con).to receive(:quote).and_call_original
   end
 
   def dispatch(action, method:, params: {}, headers: {})
@@ -100,7 +105,7 @@ RSpec.describe "AssistantsController" do
   end
 
   it "lists the holder's bound assistant accounts with key fingerprints" do
-    con.next_result = [
+    con.next_exec_result = [
       { "id" => "agent-1", "public_key" => pem, "created_at" => "2026-07-17 12:00:00+00" },
     ]
     status, html = dispatch(:show, method: "GET")
@@ -109,10 +114,14 @@ RSpec.describe "AssistantsController" do
     expect(html).to include("Linked assistant accounts")
     expect(html).to include(Kiosk::Server::SigningKey.from_pem(pem).kid)
     expect(html).to include(%(value="agent-1"))
-    # The SELECT is scoped to the session holder's live rows.
-    select = con.executed_sql.grep(/SELECT/i).first
-    expect(select).to include("user_id = '#{user_id}'")
+    # The SELECT is scoped to the session holder's live rows — through a bind
+    # (K-782), so the holder's id is nowhere in the statement text.
+    select, binds = con.bound(/SELECT/i).first
+    expect(select).to include("WHERE user_id = $1")
     expect(select).to include("revoked_at IS NULL")
+    expect(binds).to eq([user_id])
+    expect(con.all_sql).not_to include(user_id)
+    expect(con).not_to have_received(:quote)
   end
 
   it "mints a link code and shows it exactly once" do
@@ -154,7 +163,7 @@ RSpec.describe "AssistantsController" do
   end
 
   it "surfaces the label, settled spend, and cap for each bound assistant (show)" do
-    con.next_result = [
+    con.next_exec_result = [
       { "id" => "agent-1", "public_key" => pem, "created_at" => "2026-07-17 12:00:00+00",
         "human_label" => "Alice shopper", "spending_cap_cents" => 5000, "settled_cents" => 1200 },
     ]
@@ -165,14 +174,35 @@ RSpec.describe "AssistantsController" do
     expect(html).to include("spent: 1200 cents")
     expect(html).to include("cap: 5000 cents")
     # The SELECT reaches for the new governance columns + the settled-spend subquery.
-    select = con.executed_sql.grep(/SELECT/i).first
+    select, binds = con.bound(/SELECT/i).first
     expect(select).to include("human_label")
     expect(select).to include("spending_cap_cents")
     expect(select).to include("settled_amount_cents")
+    # No window configured → the statement declares ONE parameter and is sent
+    # ONE argument. Postgres rejects a mismatch, which is why the statement and
+    # its binds are built together (see #bound_assistants_query).
+    expect(select).not_to include("$2")
+    expect(binds).to eq([user_id])
+  end
+
+  # The rolling window is a VALUE, so it is `$2` through `make_interval` — the
+  # same treatment executor.rb#settled_total_cents gives the same expression.
+  it "binds the spending-cap window rather than splicing the day count" do
+    Kiosk.configure { |c| c.spending_cap_window_days = 30 }
+    con.next_exec_result = [
+      { "id" => "agent-1", "public_key" => pem, "created_at" => "2026-07-17 12:00:00+00",
+        "human_label" => nil, "spending_cap_cents" => nil, "settled_cents" => 0 },
+    ]
+    dispatch(:show, method: "GET")
+
+    select, binds = con.bound(/SELECT/i).first
+    expect(select).to include("make_interval(days => $2)")
+    expect(select).not_to include("INTERVAL '1 day'")
+    expect(binds).to eq([user_id, 30])
   end
 
   it "shows «(unnamed)» / «cap: none» when the label and cap are unset" do
-    con.next_result = [
+    con.next_exec_result = [
       { "id" => "agent-1", "public_key" => pem, "created_at" => "2026-07-17 12:00:00+00",
         "human_label" => nil, "spending_cap_cents" => nil, "settled_cents" => 0 },
     ]
@@ -183,7 +213,7 @@ RSpec.describe "AssistantsController" do
   end
 
   it "shows «cap: disabled» when the cap is zero" do
-    con.next_result = [
+    con.next_exec_result = [
       { "id" => "agent-1", "public_key" => pem, "created_at" => "2026-07-17 12:00:00+00",
         "human_label" => "Bot", "spending_cap_cents" => 0, "settled_cents" => 0 },
     ]
@@ -200,13 +230,20 @@ RSpec.describe "AssistantsController" do
 
     expect(status).to eq(200)
     expect(html).to include("Assistant settings saved")
-    upd = con.executed_sql.grep(/UPDATE/i).first
-    expect(upd).to include("human_label = 'Alice's shopper'")
-    expect(upd).to include("spending_cap_cents = 5000")
+    upd, binds = con.bound(/UPDATE/i).first
+    # WHICH columns are assigned is a statement shape the form decides; WHAT
+    # they are assigned is a bind. `human_label` is free text off a form — the
+    # most caller-reachable value in the auth plane — and the apostrophe in
+    # "Alice's shopper" is exactly the character that used to need a `quote`.
+    expect(upd).to include("human_label = $1")
+    expect(upd).to include("spending_cap_cents = $2")
     # Ownership scoping: the WHERE pins BOTH the agent id and the session holder.
-    expect(upd).to include("id = 'agent-1'")
-    expect(upd).to include("user_id = '#{user_id}'")
+    expect(upd).to include("WHERE id = $3")
+    expect(upd).to include("AND user_id = $4")
     expect(upd).to include("revoked_at IS NULL")
+    expect(binds).to eq(["Alice's shopper", 5000, "agent-1", user_id])
+    expect(con.all_sql).not_to include("Alice")
+    expect(con).not_to have_received(:quote)
   end
 
   it "clears the cap (unlimited) when spending_cap_cents is blank" do
@@ -215,8 +252,13 @@ RSpec.describe "AssistantsController" do
       params: { "agent_id" => "agent-1", "spending_cap_cents" => "" },
     )
 
-    upd = con.executed_sql.grep(/UPDATE/i).first
+    upd, binds = con.bound(/UPDATE/i).first
+    # NULL is a statement shape (there is no value), so it takes no bind and the
+    # ownership pair shifts down to $1/$2.
     expect(upd).to include("spending_cap_cents = NULL")
+    expect(upd).to include("WHERE id = $1")
+    expect(upd).to include("AND user_id = $2")
+    expect(binds).to eq(["agent-1", user_id])
   end
 
   it "rejects a non-integer spending cap with 400 and writes no UPDATE" do
@@ -227,7 +269,7 @@ RSpec.describe "AssistantsController" do
 
     expect(status).to eq(400)
     expect(html).to include("must be an integer")
-    expect(con.executed_sql.grep(/UPDATE/i)).to be_empty
+    expect(con.bound(/UPDATE/i)).to be_empty
   end
 
   # ── AGENT-SIGNPOST, the forgery-protection path (K-459) ───────────────────

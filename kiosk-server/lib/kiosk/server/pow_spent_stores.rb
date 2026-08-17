@@ -25,8 +25,8 @@ module Kiosk
     module PowSpentStores
       # Spent-id store backed by the `<schema>.pow_spent` table
       # ({SchemaDefinitions.pow_spent_sql}), shared by every process pointed at
-      # the same database. Raw SQL through the host's
-      # `::ActiveRecord::Base.connection` — the same access idiom as
+      # the same database. SQL with BIND PARAMETERS through the host's
+      # `::ActiveRecord::Base.lease_connection` — the same access idiom as
       # {DeviceAuthorizationStores::ActiveRecord}, so no model class is defined
       # and satellite neutrality holds. ActiveRecord is a declared dependency of
       # this gem; nothing here touches it until an operation runs.
@@ -79,15 +79,18 @@ module Kiosk
           return false if id.nil?
 
           prune_if_due!
-          conn = connection
-          rows = conn.execute(<<~SQL).to_a
+          # The challenge id is CALLER-SUPPLIED — it is the `jti`-shaped id off
+          # the presented proof — so it is `$1`. `exp` is derived server-side
+          # but is still a value, so it is `$2` inside `to_timestamp`.
+          sql = <<~SQL
             INSERT INTO #{table} AS s (id, expires_at)
-            VALUES (#{conn.quote(id)}, to_timestamp(#{exp.to_i}))
+            VALUES ($1, to_timestamp($2))
             ON CONFLICT (id) DO UPDATE
               SET expires_at = EXCLUDED.expires_at
               WHERE s.expires_at <= now()
             RETURNING s.id
           SQL
+          rows = connection.exec_query(sql, "Kiosk pow_spent claim", [id, exp.to_i]).to_a
           !rows.empty?
         end
 
@@ -98,8 +101,7 @@ module Kiosk
         def release(id)
           return if id.nil?
 
-          conn = connection
-          conn.execute(%(DELETE FROM #{table} WHERE id = #{conn.quote(id)}))
+          connection.exec_query(%(DELETE FROM #{table} WHERE id = $1), "Kiosk pow_spent release", [id])
           nil
         end
 
@@ -108,12 +110,12 @@ module Kiosk
         def spent?(id)
           return false if id.nil?
 
-          conn = connection
-          row = conn.execute(<<~SQL).first
+          sql = <<~SQL
             SELECT 1 FROM #{table}
-            WHERE id = #{conn.quote(id)} AND expires_at > now()
+            WHERE id = $1 AND expires_at > now()
             LIMIT 1
           SQL
+          row = connection.exec_query(sql, "Kiosk pow_spent lookup", [id]).to_a.first
           !row.nil?
         end
 
@@ -125,12 +127,12 @@ module Kiosk
         def mark_spent(id, exp)
           return if id.nil?
 
-          conn = connection
-          conn.execute(<<~SQL)
+          sql = <<~SQL
             INSERT INTO #{table} (id, expires_at)
-            VALUES (#{conn.quote(id)}, to_timestamp(#{exp.to_i}))
+            VALUES ($1, to_timestamp($2))
             ON CONFLICT (id) DO UPDATE SET expires_at = EXCLUDED.expires_at
           SQL
+          connection.exec_query(sql, "Kiosk pow_spent mark", [id, exp.to_i])
           nil
         end
 
@@ -138,7 +140,9 @@ module Kiosk
         # by {#claim} at most once per +prune_interval+ per process; also safe
         # to schedule as a periodic job instead.
         def prune!
-          connection.execute(%(DELETE FROM #{table} WHERE expires_at <= now()))
+          # No values at all — `now()` is the server's, so this one carries no
+          # binds and never did.
+          connection.exec_query(%(DELETE FROM #{table} WHERE expires_at <= now()), "Kiosk pow_spent prune")
           nil
         end
 
@@ -157,7 +161,19 @@ module Kiosk
           prune! if due
         end
 
-        def connection = ::ActiveRecord::Base.connection
+        # `lease_connection`, not `connection` (K-782, following
+        # `wire_controller.rb`): `ActiveRecord::Base.connection` is
+        # soft-deprecated in Rails 8.1 and RAISES under
+        # `permanent_connection_checkout = :disallowed` — and this store sits in
+        # front of `/auth/register` and every tolled verb, so that would be a
+        # 500 on the gate itself. `with_connection` would also be correct here
+        # (each method is one statement, deliberately outside any transaction);
+        # the lease is taken so the engine has ONE acquisition idiom, which is
+        # half of what K-782 asks, and it does not change the transaction story
+        # either way — the claim's durability comes from the call sites running
+        # before any transaction opens, not from which method fetched the
+        # connection.
+        def connection = ::ActiveRecord::Base.lease_connection
         def table = %("#{Kiosk.configuration.schema}".pow_spent)
       end
     end

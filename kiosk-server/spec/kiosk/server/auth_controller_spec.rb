@@ -22,14 +22,15 @@ RSpec.describe "AuthController#revoke (revoke-all-sessions)" do
     Rack::MockRequest.env_for("/kiosk/auth/revoke", **opts)
   end
 
-  # A fake connection whose #execute always answers the DefaultAgentIdp's
-  # `SELECT user_id …` lookup (issue/verify both call it) with a user row.
+  # A fake connection whose #exec_query always answers the DefaultAgentIdp's
+  # `SELECT user_id … WHERE id = $1` lookup (issue/verify both call it) with a
+  # user row. No `quote`: since K-782 the IdP binds instead of quoting, so a
+  # fake that offered one would hide a regression rather than catch it.
   def stub_agents_lookup(user_id: "u-1")
     fake_conn = Object.new.tap do |conn|
-      conn.define_singleton_method(:execute) { |_sql| [{ "user_id" => user_id }] }
-      conn.define_singleton_method(:quote)   { |v| "'#{v}'" }
+      conn.define_singleton_method(:exec_query) { |_sql, _name = nil, _binds = []| [{ "user_id" => user_id }] }
     end
-    ar_base = Class.new { define_singleton_method(:connection) { fake_conn } }
+    ar_base = Class.new { define_singleton_method(:lease_connection) { fake_conn } }
     stub_const("ActiveRecord::Base", ar_base)
   end
 

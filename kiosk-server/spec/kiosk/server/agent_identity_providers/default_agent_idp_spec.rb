@@ -68,37 +68,53 @@ RSpec.describe Kiosk::Server::AgentIdentityProviders::DefaultAgentIdp do
   end
 
   # I1 — a revoked agent must not be able to authenticate or sign mandates.
-  # Both agent lookups must scope to `revoked_at IS NULL`. We record the SQL
-  # via a minimal ActiveRecord::Base.connection stub (AR isn't loaded here).
+  # Both agent lookups must scope to `revoked_at IS NULL`. We record the
+  # statement AND ITS BINDS via a minimal `ActiveRecord::Base.lease_connection`
+  # stub (AR isn't loaded here). The stub offers no `quote`, so a lookup that
+  # reached for one would be a NoMethodError — K-782 replaced all four with one
+  # bind-parameterised statement.
   describe "honors agent revocation" do
     let(:recorder) { [] }
     let(:fake_conn) do
-      sql_log = recorder
+      log = recorder
       Object.new.tap do |conn|
-        conn.define_singleton_method(:execute) do |sql|
-          sql_log << sql
+        conn.define_singleton_method(:exec_query) do |sql, _name = nil, binds = []|
+          log << [sql, binds]
           [{ "public_key" => SAMPLE_PEM, "user_id" => "u-1" }]
         end
-        conn.define_singleton_method(:quote) { |v| "'#{v}'" }
       end
     end
 
     before do
       conn = fake_conn
       ar_base = Class.new do
-        define_singleton_method(:connection) { conn }
+        define_singleton_method(:lease_connection) { conn }
       end
       stub_const("ActiveRecord::Base", ar_base)
     end
 
     it "scopes agent_payment_key lookups to non-revoked agents" do
       idp.agent_payment_key("agent-1")
-      expect(recorder.last).to match(/FROM kiosk\.agents WHERE id = 'agent-1' AND revoked_at IS NULL/)
+      sql, binds = recorder.last
+      expect(sql).to match(/FROM kiosk\.agents WHERE id = \$1 AND revoked_at IS NULL/)
+      expect(binds).to eq(["agent-1"])
     end
 
     it "scopes lookup_user_id lookups to non-revoked agents" do
       idp.send(:lookup_user_id, "agent-1")
-      expect(recorder.last).to match(/FROM kiosk\.agents WHERE id = 'agent-1' AND revoked_at IS NULL/)
+      sql, binds = recorder.last
+      expect(sql).to match(/FROM kiosk\.agents WHERE id = \$1 AND revoked_at IS NULL/)
+      expect(binds).to eq(["agent-1"])
+    end
+
+    # The COLUMN is the only thing still interpolated, and it is one of four
+    # literals in the file rather than anything a caller can reach — Postgres
+    # cannot bind an identifier in any case.
+    it "selects only the column its caller asked for" do
+      idp.send(:lookup_user_id, "agent-1")
+      expect(recorder.last.first).to start_with("SELECT user_id FROM")
+      idp.agent_payment_key("agent-1")
+      expect(recorder.last.first).to start_with("SELECT public_key FROM")
     end
   end
   describe "#issue (role-less path)" do

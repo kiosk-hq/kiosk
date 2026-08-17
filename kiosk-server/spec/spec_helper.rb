@@ -124,7 +124,36 @@ class FakeConnection
     "'#{value}'"
   end
 
+  def quote_table_name(name) = name.split(".").map { |part| %("#{part}") }.join(".")
+
   def in_transaction? = @transaction_depth > 0
+
+  # Every statement that carried a bind, as `[sql, binds]`, filtered by shape.
+  # A spec asserts on BOTH halves: the text to prove no value was spliced into
+  # it, the binds to prove order and content.
+  def bound(pattern)
+    exec_queries.select { |sql, _name, _binds| sql =~ pattern }
+                .map { |sql, _name, binds| [sql, binds] }
+  end
+
+  # The whole statement text this fake ever saw, for "no value appears here"
+  # assertions.
+  def all_sql = (executed_sql + exec_queries.map(&:first)).join("\n")
+end
+
+# Route `FakeConnection#exec_query` by statement shape while keeping the fake's
+# own recording, so a spec can say "the SELECT finds nothing, the INSERT returns
+# this id" without re-implementing the recorder (and without a router silently
+# dropping the binds the assertions need).
+#
+# @yieldparam sql [String]
+# @yieldparam binds [Array]
+# @yieldreturn [Array<Hash>] rows; production code calls `.to_a.first` on it
+def route_exec_query(con, &router)
+  allow(con).to receive(:exec_query) do |sql, name = "SQL", binds = []|
+    con.exec_queries << [sql, name, binds]
+    router.call(sql, binds)
+  end
 end
 
 # Build a valid Kiosk::Identity for testing. Defaults to an agent so the

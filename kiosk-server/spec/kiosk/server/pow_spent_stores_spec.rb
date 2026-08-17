@@ -107,6 +107,35 @@ RSpec.describe Kiosk::Server::PowSpentStores do
         expect(store.claim("a", live)).to be(false)
       end
 
+      # ── TYPES, which only a real Postgres can answer (K-782) ─────────────
+      #
+      # The id and the expiry now travel as BIND PARAMETERS, and a bind carries
+      # its value out-of-band — so the one thing that can go wrong SILENTLY is
+      # the type. `to_timestamp($2)` is load-bearing and was proven so by
+      # deliberately deleting it: with a bare `$2` the epoch INTEGER is offered
+      # to a timestamptz column and Postgres answers `PG::DatetimeFieldOverflow:
+      # date/time field value out of range: "1800000071"`. (A `.to_s` on the
+      # bind, by contrast, is harmless — the single-argument `to_timestamp` has
+      # only the numeric overload, so the string parses. Recorded because it is
+      # the break that did NOT work.) A challenge id carrying a quote character
+      # is stored verbatim rather than ending a literal.
+      it "writes the expiry to the exact epoch and stores a hostile id verbatim" do
+        hostile = "jti-' OR 1=1 --"
+        moment  = 1_800_000_071
+        expect(store.claim(hostile, moment)).to be(true)
+
+        row = ::ActiveRecord::Base.connection.exec_query(<<~SQL, "spec types", [hostile]).to_a.first
+          SELECT pg_typeof(expires_at)::text AS at_type,
+                 extract(epoch FROM expires_at)::bigint AS at_epoch
+          FROM "#{POW_SPENT_SPEC_SCHEMA}".pow_spent
+          WHERE id = $1
+        SQL
+        expect(row.fetch("at_type")).to eq("timestamp with time zone")
+        expect(row.fetch("at_epoch")).to eq(moment)
+        # The whole point of the table: the same hostile id cannot be spent twice.
+        expect(store.claim(hostile, live)).to be(false)
+      end
+
       it "returns false for a nil id without touching the database" do
         expect(store.claim(nil, live)).to be(false)
       end

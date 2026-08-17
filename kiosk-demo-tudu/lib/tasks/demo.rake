@@ -140,7 +140,9 @@ namespace :demo do
     migrates the list to Alice. Asserts the list moved (psql ground truth), the
     pre-link token's principal owns nothing after migration, the assistant
     re-logs in and sees the list under Alice, Alice's browser sees it too, and
-    Alice ends with >=2 non-revoked agents.
+    Alice ends with >=2 non-revoked agents. Then RE-LINKS the same, already-
+    bound key: nothing transitions, so nothing may be migrated or destroyed
+    (K-783 — that beat used to delete every membership Alice had).
   DESC
   task link: :setup do
     port = ENV.fetch("PORT", "3007")
@@ -170,11 +172,23 @@ namespace :demo do
       check.call("Alice's browser session sees 'Hike'",             r["human_sees_migrated_list"])
       check.call("a SECOND assistant links to Alice (multi-agent)", r["second_bound_to_holder"])
 
+      # K-783: re-linking an ALREADY-bound key transitions nothing, so it must
+      # migrate nothing and destroy nothing. It used to delete every membership
+      # Alice had — the lists stayed hers and she could no longer reach one.
+      check.call("re-linking the already-bound key still answers 201, same agent_id, same holder",
+                 r["relink_status"] == 201 && r["relink_same_agent_id"] && r["relink_still_holder"])
+      check.call("the assistant still sees 'Hike' after the re-link (membership survived)", r["relink_keeps_list_access"])
+      check.call("Alice's browser still sees BOTH 'Hike' and the seeded 'Flat 3B'", r["human_keeps_all_lists"])
+
       # DB ground truth: the list was migrated to Alice; Alice has >=2 live agents.
       list_owner = `psql -X -d #{db} -tAc "SELECT account_id FROM lists WHERE id = '#{r["list_id"]}'" 2>&1`.strip
       check.call("DB lists.account_id for 'Hike' == Alice (#{holder_id}) — assistant_claimed migrated it", list_owner == holder_id)
       agent_count = `psql -X -d #{db} -tAc "SELECT count(*) FROM kiosk.agents WHERE user_id = '#{holder_id}' AND revoked_at IS NULL" 2>&1`.strip
       check.call("DB: Alice has >=2 non-revoked agents (multi-agent identity)", agent_count.to_i >= 2)
+      # The membership rows themselves, not just what a query renders: Alice
+      # holds 'Hike' (migrated) and 'Flat 3B' (seeded) after the re-link.
+      membership_count = `psql -X -d #{db} -tAc "SELECT count(*) FROM memberships WHERE account_id = '#{holder_id}'" 2>&1`.strip
+      check.call("DB: Alice still holds >=2 memberships after the re-link (K-783 destroyed all of them)", membership_count.to_i >= 2)
     ensure
       tudu_stop(server_pid)
     end

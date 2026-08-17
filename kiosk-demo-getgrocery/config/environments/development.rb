@@ -94,6 +94,25 @@ Rails.application.configure do
   # pins it OFF.
   config.x.kiosk.test_autocard = ENV["KIOSK_TEST_AUTOCARD"] == "1"
 
+  # Payment-provider credentials (K-700). getgrocery is the one demo that wires a
+  # REAL payment adapter, and this block is the whole of its out-of-the-box
+  # posture — the initializer reads the resolved values and never ENV. With a
+  # local stripe-mock the key is irrelevant (the mock accepts any); with neither
+  # variable set the app still boots on a placeholder, so db:setup, the schema
+  # proof, isolation and redteam all run with no payment config at all. Only a
+  # real charge (demo:shop) needs a live key, and it fails clearly at charge time
+  # if there is none. Production invents nothing — see production.rb.
+  config.x.kiosk.stripe_mock_url   = ENV["STRIPE_MOCK_URL"].presence
+  config.x.kiosk.stripe_secret_key = ENV["STRIPE_SECRET_KEY"].presence
+  if config.x.kiosk.stripe_secret_key.nil?
+    if config.x.kiosk.stripe_mock_url
+      config.x.kiosk.stripe_secret_key = "sk_test_mock"
+    else
+      config.x.kiosk.stripe_secret_key = "sk_test_placeholder"
+      warn "[getgrocery] no STRIPE_SECRET_KEY/STRIPE_MOCK_URL set — using a placeholder key; demo:shop needs one to charge."
+    end
+  end
+
   # KYC broker trust — read by whichever demos ship a broker client
   # (lib/prove_broker_client.rb); inert in the others. No pinned dev broker
   # key and no default intake secret (K-650): the two-server harnesses and

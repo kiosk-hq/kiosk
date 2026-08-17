@@ -19,9 +19,11 @@ module Kiosk
     # TWO WAYS IN, one registry. The Rails-native one (K-495 / T-053) is
     # `include Kiosk::Query` in a controller the operator owns, where
     # class-level macros bind to the next-defined method and the handler is an
-    # ordinary controller action; see {Kiosk::Query}. The direct one is the
-    # `register` call below, which is what the demo initializers still use until
-    # they migrate (T-057). Both land here, and {Executor} cannot tell them apart.
+    # ordinary controller action; see {Kiosk::Query}. It is what all seven demo
+    # apps use since T-057, and what the install generator scaffolds. The direct
+    # one is the `register` call below, which needs no controller and no Rails at
+    # all; it remains supported, and the e2e harness fixture is what keeps it
+    # exercised. Both land here, and {Executor} cannot tell them apart.
     #
     # @example
     #   Kiosk::Server::Queries.register("menu") { |p| Menu.where(active: true).as_json }

@@ -24,4 +24,26 @@ class KycVerificationRequest < ApplicationRecord
   self.primary_key = "request_token"
 
   STATUSES = %w[pending approved declined].freeze
+  # The two `request_kyc` writes and `kyc_status` branches on. `declined` is a
+  # real state the broker can reach and is listed above; it is not named here
+  # because nothing in this app compares against it.
+  PENDING, APPROVED = STATUSES
+
+  # ── THE isolation predicate, the {Order} one on this table ────────────────
+  # `kyc_status` is bound to it: an agent only ever sees the status — and the
+  # jws — of a request IT opened, so it cannot poll (or lift the attestation
+  # from) another agent's verification. Kept SQL-side over a frozen
+  # `Arel.sql` literal for the reason written out in
+  # {Order.owned_by_current_principal}: it is the expression an RLS policy is
+  # written in.
+  #
+  # POST /kyc/callback deliberately does NOT use it. The broker is not a
+  # principal — no GUC is set on that request at all — so the callback looks
+  # the row up by its unguessable `request_token` and proves its right to it
+  # with the signed claim, the stored nonce, the operator binding and the `sub`
+  # match instead. That is why the two surfaces share this MODEL and no
+  # behaviour: they answer to different authorities.
+  scope :owned_by_current_principal, lambda {
+    where(arel_table[:user_id].eq(Arel.sql("kiosk.current_user_id()")))
+  }
 end

@@ -52,6 +52,16 @@ Rails.application.configure do
   raise "KIOSK_POW_SECRET must be at least 32 bytes (got #{config.x.kiosk.pow_secret.bytesize}) — generate one with `openssl rand -hex 32`." if config.x.kiosk.pow_secret.bytesize < 32
   config.x.kiosk.issuer = ENV.fetch("KIOSK_ISSUER") { "http://localhost:#{ENV.fetch("PORT", "3000")}" }
   config.x.kiosk.test_autocard = ENV["KIOSK_TEST_AUTOCARD"] == "1"
+
+  # Payment-provider credentials (K-700) — read by whichever demos configure a
+  # REAL payment adapter, and never looked at by the others. Same relaxed
+  # posture as development: a mock base URL implies a mock key, and with neither
+  # variable set a placeholder is enough for everything that does not actually
+  # charge, so a suite runs with no payment config at all. Production supplies no
+  # placeholder — see production.rb.
+  config.x.kiosk.stripe_mock_url   = ENV["STRIPE_MOCK_URL"].presence
+  config.x.kiosk.stripe_secret_key = ENV["STRIPE_SECRET_KEY"].presence ||
+                                     (config.x.kiosk.stripe_mock_url ? "sk_test_mock" : "sk_test_placeholder")
   config.x.kiosk.prove_public_key_pem = ENV["KIOSK_PROVE_PUBLIC_KEY_PEM"]
   config.x.kiosk.prove_intake_secret  = ENV["KIOSK_PROVE_INTAKE_SECRET"]
 

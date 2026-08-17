@@ -117,10 +117,17 @@ end
 
 # ─── Actions ────────────────────────────────────────────────────────────────
 
-# Register the demo Action. A registered name + block IS the shipped
-# Action API — the same `Kiosk::Server::Actions.register` call the five demo
-# apps use. The richer `Kiosk::Action` DSL (accepts/requires_payment/
-# escalate_to) is a follow-up and does not exist yet.
+# Register the demo Action. A registered name + block is ONE of the two shipped
+# ways in, and as of T-057 this fixture is the LAST consumer of it: all seven
+# demo apps now declare their verbs as controller actions with
+# `include Kiosk::Action` (`c.handlers` names the classes; kiosk-server registers
+# them). `register` is still fully supported — the Executor cannot tell the two
+# apart — and this fixture deliberately stays on it, for two reasons. It is the
+# regression test that the direct path KEEPS working now that nothing else
+# exercises it; and it is CLAUDE.md rule 4's merge gate, so migrating it in the
+# same change that migrates the last demo would leave the gate re-proving the
+# change rather than checking it. Whoever retires `register` from the gems
+# migrates this file first — see kiosk/server/actions.rb.
 Kiosk::Server::Actions.register("book_appointment", description: "Book an appointment at a salon for a given slot.", params: {
   salon_id: "integer — id of the salon (from the `salons` query)",
   slot:     "string — appointment time as an ISO 8601 timestamp",

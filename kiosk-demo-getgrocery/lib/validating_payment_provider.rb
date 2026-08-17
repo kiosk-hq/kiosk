@@ -92,26 +92,37 @@ class ValidatingPaymentProvider
   #     each PaymentIntent with `metadata.cart_mandate_id`).
   #
   # Callable from `rake demo:reconcile`. There is NO background worker in this
-  # demo, and querying the PSP for the unresolved half is not built — see the
-  # K-578 row.
+  # demo, and querying the PSP for the unresolved half is not built.
+  #
+  # WHY THE THREE STATUS STATEMENTS BELOW AND IN `claim_and_validate!` STAY RAW
+  # SQL where every READ on this origin became a model call (K-654). The claim is
+  # `UPDATE orders SET status = 'paying' … WHERE status = 'created' RETURNING id,
+  # total_cents` — a compare-and-set whose ATOMICITY is the K-544/K-545 fix, and
+  # `update_all` has no RETURNING in Rails 8.1, so an ActiveRecord spelling would
+  # be a SELECT then an UPDATE and the race would be back. The release and the
+  # paid-flip are that claim read backwards and belong beside it: splitting the
+  # trio across two idioms would make the one place a reader must see all three
+  # together harder to read, not safer. None of them interpolates anything a
+  # caller controls — the order id is through {UuidCheck} and the statuses are
+  # literals.
   #
   # @param older_than_seconds [Integer] ignore claims young enough to be a pay
   #   that is legitimately still in flight.
   # @return [Hash] { healed: [order_id, …], unresolved: [{order_id:, claimed_at:, cart_mandate_ids:}, …] }
   def self.reconcile_stuck_paying!(older_than_seconds: 900)
     conn   = ActiveRecord::Base.connection
-    cutoff = conn.quote(Time.now.utc - older_than_seconds)
-    stuck  = conn.execute(
-      "SELECT id, updated_at FROM orders " \
-      "WHERE status = 'paying' AND updated_at < #{cutoff}::timestamptz ORDER BY updated_at"
-    ).to_a
+    orders = Order.arel_table
+    stuck  = Order.where(status: Order::PAYING)
+                  .where(orders[:updated_at].lt(Time.now.utc - older_than_seconds))
+                  .order(:updated_at)
+                  .pluck(:id, :updated_at)
 
     healed     = []
     unresolved = []
 
-    stuck.each do |row|
-      order_id = row["id"].to_s
-      if settled?(conn, order_id)
+    stuck.each do |id, updated_at|
+      order_id = id.to_s
+      if settled?(order_id)
         conn.execute(
           "UPDATE orders SET status = 'paid', updated_at = now() " \
           "WHERE id = #{conn.quote(order_id)}::uuid AND status = 'paying'"
@@ -120,8 +131,8 @@ class ValidatingPaymentProvider
       else
         unresolved << {
           order_id:         order_id,
-          claimed_at:       row["updated_at"].to_s,
-          cart_mandate_ids: cart_mandate_ids_for(conn, order_id),
+          claimed_at:       updated_at.to_s,
+          cart_mandate_ids: cart_mandate_ids_for(order_id),
         }
       end
     end
@@ -132,30 +143,29 @@ class ValidatingPaymentProvider
   # True iff a settlement (capture receipt) references this order — the
   # authoritative local "this was charged" marker, written by the engine's
   # executor phase 3.
-  def self.settled?(conn, order_id)
-    filter = [{ order_id: order_id.to_s }].to_json
-    !conn.execute(
-      "SELECT 1 AS ok FROM kiosk.settlements pm " \
-      "JOIN kiosk.cart_mandates cm ON cm.id = pm.cart_mandate_id " \
-      "WHERE cm.line_items @> #{conn.quote(filter)}::jsonb LIMIT 1"
-    ).first.nil?
+  #
+  # ONE CONTAINMENT FOR THE WHOLE ORIGIN (K-654). This used to be a third
+  # hand-written copy of `line_items @> …::jsonb`, next to the two in the
+  # initializer and the one in the back office. It is now
+  # {CartMandate.referencing}, the same scope `create_order`'s K-544 replace
+  # guard and `reschedule_delivery`'s payment gate read — which matters here more
+  # than anywhere, because THIS is the reader the K-545 race fix consults before
+  # deciding whether money has already moved.
+  def self.settled?(order_id)
+    Settlement.joins(:cart_mandate).merge(CartMandate.referencing(order_id)).exists?
   end
 
   # The agent-signed cart-mandate ids that referenced this order. They are
   # persisted BEFORE the capture (executor phase 1), so they exist even when the
   # settlement does not — which makes them the handle for looking the charge up
   # at the processor (`metadata.cart_mandate_id`).
-  def self.cart_mandate_ids_for(conn, order_id)
-    filter = [{ order_id: order_id.to_s }].to_json
-    conn.execute(
-      "SELECT mandate_id FROM kiosk.cart_mandates " \
-      "WHERE line_items @> #{conn.quote(filter)}::jsonb ORDER BY created_at"
-    ).to_a.map { |r| r["mandate_id"].to_s }
+  def self.cart_mandate_ids_for(order_id)
+    CartMandate.referencing(order_id).order(:created_at).pluck(:mandate_id).map(&:to_s)
   end
 
   private
 
-  def settled?(conn, order_id) = self.class.settled?(conn, order_id)
+  def settled?(order_id) = self.class.settled?(order_id)
 
   # Atomically claim the referenced order for payment, then run the cashier
   # check against it. Returns the order_id (String) on success; raises
@@ -207,12 +217,11 @@ class ValidatingPaymentProvider
     if claimed.nil?
       # Distinguish "not yours / missing" from "not in a payable state" so the
       # assistant gets an actionable message instead of a bare 403.
-      existing = conn.execute(
-        "SELECT status FROM orders " \
-        "WHERE id = #{conn.quote(order_id)}::uuid " \
-        "AND user_id = #{conn.quote(cart.user_id.to_s)}::uuid LIMIT 1"
-      ).first
-      deny "order not found or not yours" if existing.nil?
+      # A plain read, so a model call: the order id is already through
+      # {UuidCheck} and the payer comes off the SIGNED mandate, never off a
+      # request argument.
+      existing_status = Order.where(id: order_id, user_id: cart.user_id.to_s).pick(:status)
+      deny "order not found or not yours" if existing_status.nil?
 
       # K-578 (local half): a `paying` order that ALREADY HAS a settlement is not
       # "in progress" — it was charged, and only the local status flip was lost
@@ -220,12 +229,12 @@ class ValidatingPaymentProvider
       # settlement row is decisive local evidence, so heal the status here — at
       # the exact moment it matters — and answer with the truth rather than
       # parking the payer behind a status that would never move.
-      if existing["status"] == "paying" && settled?(conn, order_id)
+      if existing_status == Order::PAYING && settled?(order_id)
         mark_paid!(order_id)
         deny "order already settled"
       end
 
-      if existing["status"] == "paying"
+      if existing_status == Order::PAYING
         # Claimed, no settlement: either a pay is genuinely in flight, or one
         # died at an UNKNOWN outcome and we deliberately kept the claim so a
         # blind retry can't double-charge (K-545). Say what recovers it.
@@ -235,7 +244,7 @@ class ValidatingPaymentProvider
              "processor before it can be paid again"
       end
 
-      deny "order #{order_id} is not payable (status=#{existing["status"]}) — it may already be " \
+      deny "order #{order_id} is not payable (status=#{existing_status}) — it may already be " \
            "paid, rescheduled, or otherwise past the payable state"
     end
 
@@ -244,13 +253,14 @@ class ValidatingPaymentProvider
     begin
       # Defense-in-depth: a settlement should never exist for an order that was
       # still 'created', but reject (and don't charge) if one somehow does.
-      deny "order already settled" if settled?(conn, order_id)
+      deny "order already settled" if settled?(order_id)
 
-      expected = conn.execute(
-        "SELECT p.sku, oi.qty, p.price_cents " \
-        "FROM order_items oi JOIN products p ON p.id = oi.product_id " \
-        "WHERE oi.order_id = #{conn.quote(order_id)}::uuid"
-      ).to_a.map { |r| [r["sku"].to_s, r["qty"].to_i, r["price_cents"].to_i] }.sort
+      products = Product.arel_table
+      expected = OrderItem.joins(:product)
+                          .where(order_id: order_id)
+                          .pluck(products[:sku], :qty, products[:price_cents])
+                          .map { |sku, qty, price_cents| [sku.to_s, qty.to_i, price_cents.to_i] }
+                          .sort
 
       presented = entries.reject { |li| li["order_id"] || li[:order_id] }.map do |li|
         sku   = (li["sku"] || li[:sku]).to_s

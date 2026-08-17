@@ -117,6 +117,22 @@ Rails.application.configure do
   # here — the live demo runs the real hosted flow. Dev/test honour the flag.
   config.x.kiosk.test_autocard = false
 
+  # Payment-provider credentials (K-700) — REQUIRED by whichever demos configure
+  # a REAL payment adapter, and never looked at by the others. Deliberately NO
+  # placeholder here, unlike dev and test: a shipped `sk_test_…` placeholder
+  # boots an origin that ADVERTISES `pay` in its discovery document and then
+  # fails at the first charge, with a human waiting on it. A configured mock
+  # base URL is the one exception, and it is not a fallback — pointing a
+  # production process at a local stripe-mock is an explicit act, and it is what
+  # the eager-load gate does to boot a payment demo without carrying a key.
+  # This file is byte-identical across the seven operator demos, so it cannot
+  # name the one demo that takes money: it publishes what the environment
+  # supplied, and the app that wires a payment provider is the one that refuses
+  # to boot with neither, by name, in its own initializer.
+  config.x.kiosk.stripe_mock_url   = ENV["STRIPE_MOCK_URL"].presence
+  config.x.kiosk.stripe_secret_key = ENV["STRIPE_SECRET_KEY"].presence ||
+                                     (config.x.kiosk.stripe_mock_url ? "sk_test_mock" : nil)
+
   # KYC broker trust — read by whichever demos ship a broker client
   # (lib/prove_broker_client.rb); inert in the others, which never look at it.
   # NO pinned fallback key in production: the operator trusts ONLY an

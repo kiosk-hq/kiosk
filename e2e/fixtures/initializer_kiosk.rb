@@ -2,7 +2,13 @@
 
 # E2E-specific Kiosk configuration. Overrides the generator-produced
 # initializer (which has commented-out fields) with concrete values for
-# the demo: synthetic users (uuid), stub IdP, one Action registered.
+# the demo: synthetic users (uuid), stub IdP, two handler controllers.
+#
+# THE VERBS ARE NOT HERE (T-081). They are ordinary Rails controllers under
+# app/controllers/kiosk/ — Kiosk::CatalogController (salons, my_appointments)
+# and Kiosk::BookingsController (book_appointment) — named in `c.handlers`
+# below, which is how the engine finds them. What is left in this file is
+# configuration, which is what an initializer is for.
 
 require Rails.root.join("lib/stub_idp")
 require Rails.root.join("lib/stub_user_idp")
@@ -91,59 +97,13 @@ Kiosk.configure do |c|
   c.user_idp = Rails.env.local? ? StubUserIdp.new : nil
 
   c.payment_provider = StubPsp.new
-end
 
-# ─── Queries ────────────────────────────────────────────────────────────────
-
-# salons — public catalog. Any authenticated agent can browse.
-# No per-user scoping: the WHERE is provider-controlled and always TRUE.
-Kiosk::Server::Queries.register("salons", description: "List all bookable salons (public catalog).", params: {}) do |_params|
-  ActiveRecord::Base.connection.execute(
-    "SELECT id, name FROM salons ORDER BY id"
-  ).to_a
-end
-
-# my_appointments — per-user appointment list scoped by the session GUC.
-# The WHERE is provider-controlled; the agent supplies no user filter.
-# App-layer per-user isolation without RLS: the principal sees only rows
-# where user_id matches kiosk.current_user_id(), enforced in the query.
-Kiosk::Server::Queries.register("my_appointments", description: "List the calling principal's own appointments.", params: {}) do |_params|
-  ActiveRecord::Base.connection.execute(
-    "SELECT id, salon_id, slot FROM appointments " \
-    "WHERE user_id = kiosk.current_user_id() " \
-    "ORDER BY id"
-  ).to_a
-end
-
-# ─── Actions ────────────────────────────────────────────────────────────────
-
-# Register the demo Action. A registered name + block is ONE of the two shipped
-# ways in, and as of T-057 this fixture is the LAST consumer of it: all seven
-# demo apps now declare their verbs as controller actions with
-# `include Kiosk::Action` (`c.handlers` names the classes; kiosk-server registers
-# them). `register` is still fully supported — the Executor cannot tell the two
-# apart — and this fixture deliberately stays on it, for two reasons. It is the
-# regression test that the direct path KEEPS working now that nothing else
-# exercises it; and it is CLAUDE.md rule 4's merge gate, so migrating it in the
-# same change that migrates the last demo would leave the gate re-proving the
-# change rather than checking it. Whoever retires `register` from the gems
-# migrates this file first — see kiosk/server/actions.rb.
-Kiosk::Server::Actions.register("book_appointment", description: "Book an appointment at a salon for a given slot.", params: {
-  salon_id: "integer — id of the salon (from the `salons` query)",
-  slot:     "string — appointment time as an ISO 8601 timestamp",
-}) do |args|
-  # Identity is set via Kiosk::Server::SessionContext SET LOCAL —
-  # current_user_id() helper returns the principal. ActiveRecord doesn't
-  # have direct access; pull from PG.
-  user_id = ActiveRecord::Base.connection.execute(
-    "SELECT kiosk.current_user_id() AS uid"
-  ).first["uid"]
-
-  appointment = Appointment.create!(
-    user_id:  user_id,
-    salon_id: args[:salon_id],
-    slot:     args[:slot],
-  )
-
-  { appointment_id: appointment.id, salon_id: appointment.salon_id, slot: appointment.slot.iso8601 }
+  # The handler controllers, by NAME. This line is load-bearing and there is no
+  # convention that replaces it: the wire reaches a handler through the
+  # registry, nothing else in the app ever references these classes, and this
+  # harness boots DEVELOPMENT (eager_load = false), so without it Zeitwerk never
+  # loads them, the registry stays empty, and the origin answers `GET
+  # /kiosk/schema` with `queries=[] actions=[]`, 404s every query and run, and
+  # advertises `"capabilities": []` (K-761).
+  c.handlers = %w[Kiosk::CatalogController Kiosk::BookingsController]
 end

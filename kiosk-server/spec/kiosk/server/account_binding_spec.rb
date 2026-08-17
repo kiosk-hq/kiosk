@@ -40,7 +40,7 @@ RSpec.describe Kiosk::Server::AccountBinding do
       # K-782: the principal is `$1`, the key `$2` — and neither appears in the
       # statement text, which is the property that makes a forgotten `quote`
       # impossible rather than merely absent.
-      expect(sql).to include("VALUES ($1, NULL, $2)")
+      expect(sql).to include("VALUES ($1, '{}'::text[], $2)")
       expect(binds).to eq([user_id, pem])
       expect(con.all_sql).not_to include(user_id)
       expect(con).not_to have_received(:quote)
@@ -84,14 +84,15 @@ RSpec.describe Kiosk::Server::AccountBinding do
       expect(binds).to eq([user_id, pem, "customer"])
     end
 
-    it "falls back to registration_role, and NULL when neither is set" do
+    it "falls back to registration_role, and the empty role set when neither is set" do
       described_class.bind!(public_key_pem: pem, user_id: user_id)
       sql, binds = con.bound(/INSERT/i).first
-      # NULL is a statement SHAPE (no role at all), so it has no bind. NOTE
-      # K-788: the shipped migration declares allowed_roles NOT NULL, so this
-      # branch cannot actually reach a real database — characterised against
-      # one in auth_plane_persistence_spec.rb.
-      expect(sql).to include("NULL")
+      # The empty array is a statement SHAPE (no role at all), so it has no
+      # bind. It used to be a literal `NULL`, which the shipped migration's
+      # `NOT NULL` rejected on every role-less fresh-key bind (K-788) — a fake
+      # cannot see that, so the real proof is in auth_plane_persistence_spec.rb.
+      expect(sql).to include("'{}'::text[]")
+      expect(sql).not_to include("NULL")
       expect(binds).to eq([user_id, pem])
 
       Kiosk.configure { |c| c.registration_role = :customer }

@@ -192,9 +192,12 @@ module Kiosk
       # every RLS policy trusts). Privileged roles are obtainable only through
       # the human-approved device-grant flow.
       #
-      # OPTIONAL (roles are hook-or-absent in 0.1). When unset,
-      # self-registered agents get NO role (`agents.allowed_roles` stays NULL);
-      # a provider that needs roles may assign them inside its
+      # OPTIONAL (roles are hook-or-absent in 0.1, and ADR-0011 is explicit
+      # that registration MUST NOT fail when this is unset). When unset,
+      # self-registered agents get NO role — `agents.allowed_roles` is the
+      # EMPTY array, never NULL, because the shipped migration declares that
+      # column `NOT NULL` (K-788) — and a provider that needs roles may
+      # assign them inside its
       # `assistant_creation` hook instead. When set, it must be one of {#roles}.
       #   Kiosk.configure { |c| c.registration_role = :customer }
       attr_accessor :registration_role

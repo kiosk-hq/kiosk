@@ -4,6 +4,10 @@ All notable changes follow [Keep a Changelog](https://keepachangelog.com/en/1.1.
 
 ## [Unreleased]
 
+### Fixed
+
+- **A provider that configures no `registration_role` can register assistants again (K-788).** Roles are optional by decision (ADR-0011: "registration MUST NOT fail when it is unset"), but the register door and the fresh-key binding branch wrote a literal `NULL` into `agents.allowed_roles`, which the shipped migration declares `NOT NULL` — so both 500'd for exactly the single-role operator the decision protects, while every shipped demo configures a role and never saw it. "No role" is now the empty role set.
+
 ### Security
 
 - **The pay path writes through bind parameters, not assembled SQL (K-654).** `Executor`'s four `persist_*` helpers and its spending-cap tally were heredocs with every value spliced in through a private `connection.quote` wrapper; they now pass `$1…$N` binds to `exec_query`, so a value can no longer be read as SQL and there is no quote call left to omit. Nothing on the wire changes — this closes the gap between what the engine ships and what it asks operators to do, since the same idiom was removed from all seven demos first. `WireController` also stops calling the Rails-8.1 soft-deprecated `ActiveRecord::Base.connection`, which raises outright under `permanent_connection_checkout = :disallowed`.

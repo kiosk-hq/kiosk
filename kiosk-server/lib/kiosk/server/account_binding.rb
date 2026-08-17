@@ -25,7 +25,9 @@ module Kiosk
     #     the same "adopt the new principal's context" rule reputation-carry
     #     follows; a role-less ceremony leaves `allowed_roles` untouched. The
     #     `assistant_claimed` hook then lets the vertical migrate domain data
-    #     (core never touches provider rows).
+    #     (core never touches provider rows) — but ONLY when the holder
+    #     actually changed: re-binding a key to the human it is already bound
+    #     to transitions nothing and fires no hook (K-783).
     #
     # Tokens are ALWAYS minted through the same {AgentIdentityProviders::
     # DefaultAgentIdp}/{JwtIssuer} path as `/auth/login` — the ceremony is
@@ -116,6 +118,30 @@ module Kiosk
           # nil requested_role → keep the agent's own registered role.
           effective_role = new_role || primary_role(existing.fetch("allowed_roles"))
 
+          # A re-bind to the SAME principal transitions nothing, so the hook
+          # does not fire (K-783). `assistant_claimed` is a NOTIFICATION —
+          # "this key's holder changed from A to B, migrate A's domain rows to
+          # B" — and every host that acts on it is entitled to believe it. Call
+          # it with `previous_user_id == user_id` and the host is being told a
+          # migration is due when there is nothing to migrate: tudu's hook, the
+          # only one in the fleet, then found the human already a member of all
+          # her own lists, moved nothing, and ran its "drop the now-redundant
+          # HEADLESS memberships" DELETE against her own rows — deleting every
+          # membership she had while leaving her owning the lists.
+          #
+          # The engine cannot fix that in the host: a hook is the operator's
+          # code, and a no-op transition is not a thing an operator should have
+          # to defend against. So the guard is here, at the one place that knows
+          # whether a transition happened.
+          #
+          # ONLY the hook is skipped. The UPDATE still runs (it carries the
+          # roles-from-IdP `allowed_roles` remap — re-binding a key to the same
+          # human under a NEW role is a real change, and a blanket no-op on
+          # `bind!` would silently drop it), and the watermark revocation +
+          # fresh token still happen, so nothing an assistant can observe on the
+          # wire moved. Whether an idempotent re-bind SHOULD still revoke is
+          # spec-silent and left to Phil — K-787.
+          transition = previous.to_s != user_id.to_s
           conn.transaction do
             role_set = new_role ? ", allowed_roles = ARRAY[#{conn.quote(new_role)}]::text[]" : ""
             conn.execute(<<~SQL)
@@ -123,9 +149,11 @@ module Kiosk
               SET user_id = #{conn.quote(user_id)}#{role_set}
               WHERE id = #{conn.quote(agent_id)}
             SQL
-            config.assistant_claimed&.call(
-              agent: agent_id, previous_user_id: previous, user_id: user_id,
-            )
+            if transition
+              config.assistant_claimed&.call(
+                agent: agent_id, previous_user_id: previous, user_id: user_id,
+              )
+            end
           end
 
           # A rebind is a principal change: the key's pre-link tokens still

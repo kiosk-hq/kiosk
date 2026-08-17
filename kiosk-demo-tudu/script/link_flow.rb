@@ -23,7 +23,9 @@
 #   (c) after the assistant RE-LOGS IN (fresh token, sub=Alice), it sees "Hike"
 #       under Alice — and Alice's browser session (my_lists as the human) sees
 #       the same list. One shared world.
-#   (d) Alice ends with the linked agent bound to her (DB ground truth).
+#   (d) Alice ends with the linked agent bound to her (DB ground truth);
+#   (e) RE-LINKING the same, already-bound key is a NO-OP — it migrates
+#       nothing and, above all, destroys nothing (K-783).
 
 require "date"
 require "json"
@@ -179,5 +181,41 @@ rc, claimed2 = post_json("/kiosk/auth/claim",
                          { code: link2.fetch("link_code", ""), public_key: pem2, signed: pop_proof(key2, pem2) })
 results[:second_agent_id]        = claimed2["agent_id"]
 results[:second_bound_to_holder] = claimed2["user_id"] == HOLDER
+
+# ── 4. RE-LINKING AN ALREADY-BOUND KEY IS A NO-OP, NOT A MIGRATION (K-783) ───
+# Alice mints one more link code and the FIRST key — already bound to her by
+# beat 3 — redeems it. Nothing transitions: `previous_user_id == user_id`, so
+# there is no headless account to migrate from and no principal change to
+# notify anyone about.
+#
+# Why this beat exists: before K-783 the engine called `assistant_claimed`
+# anyway, and tudu's hook then DESTROYED the human's access to every list she
+# was a member of. The migration UPDATE moved nothing (she is already a member
+# of her own lists, so the "skip what they already have" guard skipped
+# everything) and the trailing DELETE — whose only job is to drop the now-
+# redundant HEADLESS memberships — deleted all of Alice's instead. She kept
+# owning the rows and could no longer see them.
+rc, link3 = post_json("/kiosk/auth/link", {}, { session: true })
+results[:relink_mint] = rc
+abort "re-link mint failed (#{rc}): #{JSON.generate(link3)}" unless rc == 201
+rc, claimed3 = post_json("/kiosk/auth/claim",
+                         { code: link3.fetch("link_code", ""), public_key: pem, signed: pop_proof(key, pem) })
+results[:relink_status]        = rc
+results[:relink_same_agent_id] = claimed3["agent_id"] == agent_id
+results[:relink_still_holder]  = claimed3["user_id"] == HOLDER
+abort "re-link claim failed (#{rc}): #{JSON.generate(claimed3)}" unless rc == 201
+
+# The assistant's OWN view is what an agent can actually see, and it is
+# membership-scoped: "Hike" comes back only while Alice's membership row
+# survives. The claim's token is the current one (a re-bind still watermark-
+# revokes, so `new_token` from beat (c) is dead by now).
+rc, after_relink = post_json("/kiosk/query", { name: "my_lists" }, bearer(claimed3["access_token"]))
+results[:relink_keeps_list_access] =
+  rc == 200 && (after_relink["rows"] || []).any? { |r| r["list_id"] == list_id && r["role"] == "owner" }
+# The human's browser sees BOTH her lists: the migrated "Hike" and the seeded
+# "Flat 3B" household she was a member of long before any assistant existed.
+alice_after = get_html("/lists")
+results[:human_keeps_all_lists] =
+  alice_after.code.to_i == 200 && alice_after.body.include?("Hike") && alice_after.body.include?("Flat 3B")
 
 puts JSON.generate(results)

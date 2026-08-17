@@ -148,6 +148,20 @@ Kiosk.configure do |c|
   # rebind rather than nesting under it — a raise here still rolls the whole
   # rebind back atomically, exactly as before.
   c.assistant_claimed = ->(agent:, previous_user_id:, user_id:) do
+    # BELT AND BRACES (K-783). kiosk-server no longer calls this hook when the
+    # holder did not actually change, and that engine guard is the fix. This
+    # line is here because of what happens if it ever regresses: every
+    # statement below reads "move the HEADLESS account's rows to the human",
+    # and with previous_user_id == user_id the last one becomes "delete the
+    # human's own memberships" — the migration UPDATE matches nothing (she is
+    # already a member of her own lists) and the DELETE that exists only to
+    # drop the now-redundant headless rows takes hers instead. She keeps
+    # owning every list and can reach none of them.
+    #
+    # A destructive hook that is safe only because its caller is careful is
+    # not safe. This one costs a comparison.
+    next if previous_user_id.to_s == user_id.to_s
+
     # Lists owned by the headless account become the human's.
     List.where(account_id: previous_user_id).update_all(account_id: user_id)
 

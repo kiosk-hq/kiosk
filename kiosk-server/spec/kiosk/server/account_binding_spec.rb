@@ -189,6 +189,93 @@ RSpec.describe Kiosk::Server::AccountBinding do
 
       described_class.bind!(public_key_pem: pem, user_id: user_id)
     end
+
+    # ── K-783: a re-bind that re-binds nothing is not a re-bind ──────────────
+    #
+    # A human who mints a fresh link code and claims it with a key ALREADY
+    # bound to them reaches this path with previous_user_id == user_id.
+    # `assistant_claimed` says "the holder changed from A to B, migrate A's
+    # rows to B"; firing it when A IS B is the engine telling its host a
+    # transition happened when none did, and a host is entitled to act on it.
+    # tudu's hook — the only one in the fleet — acted by DELETING every
+    # membership the human had.
+    #
+    # What this guard does NOT touch is as deliberate as what it does: the
+    # UPDATE still runs (it carries the roles-from-IdP `allowed_roles` remap,
+    # which a same-principal ceremony can legitimately change), and the
+    # revocation + fresh token are untouched, so nothing an assistant sees on
+    # the wire moved. K-787 carries the spec-silent question of whether an
+    # idempotent re-bind should still revoke.
+    context "when the key is ALREADY bound to this same human (re-link, K-783)" do
+      before do
+        allow(con).to receive(:execute) do |sql|
+          con.executed_sql << sql
+          if sql =~ /SELECT/i
+            [{ "id" => "agent-known", "user_id" => user_id, "allowed_roles" => "{customer}" }]
+          else
+            []
+          end
+        end
+      end
+
+      it "does NOT fire assistant_claimed (nothing transitioned)" do
+        fired = nil
+        Kiosk.configure do |c|
+          c.assistant_claimed = ->(agent:, previous_user_id:, user_id:) {
+            fired = { agent: agent, previous_user_id: previous_user_id, user_id: user_id }
+          }
+        end
+
+        described_class.bind!(public_key_pem: pem, user_id: user_id)
+        expect(fired).to be_nil
+      end
+
+      # The regression in one line: a hook that destroys on a no-op transition
+      # must never be reached with one.
+      it "never hands the hook a previous_user_id equal to user_id" do
+        seen = []
+        Kiosk.configure do |c|
+          c.assistant_claimed = ->(agent:, previous_user_id:, user_id:) {
+            seen << [previous_user_id, user_id]
+          }
+        end
+
+        described_class.bind!(public_key_pem: pem, user_id: user_id)
+        expect(seen).to be_empty
+      end
+
+      # A string/uuid-object mismatch must not defeat the comparison — the
+      # incoming user_id comes off a device-authorization row, the existing one
+      # off the agents SELECT, and the two need not be the same class.
+      it "compares by value, not identity (a non-String user_id still counts as the same holder)" do
+        fired = false
+        Kiosk.configure { |c| c.assistant_claimed = ->(**) { fired = true } }
+
+        uid        = user_id # a local: `self` is rebound inside the block below
+        same_value = Object.new
+        same_value.define_singleton_method(:to_s) { uid }
+        described_class.bind!(public_key_pem: pem, user_id: same_value)
+        expect(fired).to be(false)
+      end
+
+      it "still answers the caller exactly as a rebind does (no new wire semantics)" do
+        result = described_class.bind!(public_key_pem: pem, user_id: user_id)
+
+        expect(result).to eq(
+          agent_id: "agent-known", user_id: user_id, access_token: "kiosk-pop-jwt", fresh: false,
+        )
+        expect(con.executed_sql.grep(/INSERT/i)).to be_empty
+      end
+
+      # roles-from-IdP: the human's role can change under a stable binding, so
+      # the same-principal ceremony is NOT a blanket no-op — the remap lands.
+      it "still remaps allowed_roles when the ceremony carries a new role" do
+        Kiosk.configure { |c| c.roles = %i[customer owner] }
+
+        described_class.bind!(public_key_pem: pem, user_id: user_id, requested_role: "owner")
+        expect(con.executed_sql.grep(/UPDATE/i).first).to include("allowed_roles = ARRAY['owner']::text[]")
+      end
+    end
   end
 
   # End-to-end watermark ordering with the REAL RevocationStore + JwtIssuer:

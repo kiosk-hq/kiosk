@@ -511,6 +511,13 @@ RSpec.describe Kiosk::Server::WellKnown do
     # the `item` link array.
     def member(d) = d[:linkset].first
 
+    # THE `?v=` BOTH DESCRIPTIONS NOW CARRY (K-804). This document is a
+    # pointer with a short TTL; the two it points at are immutable at their
+    # versioned url, so linking the bare path would hand a reader the one url
+    # that may not be cached. Derived here rather than pasted, because the
+    # digest moves with the registry these examples register into.
+    def v = "?v=#{Kiosk::Server::SchemaDocument.digest}"
+
     it "returns an RFC 9727 linkset anchored at the api-catalog URL" do
       expect(doc).to have_key(:linkset)
       expect(member(doc)[:anchor]).to eq("https://api.acme.example/.well-known/api-catalog")
@@ -542,8 +549,8 @@ RSpec.describe Kiosk::Server::WellKnown do
       # `service-desc` members are UNCHANGED by T-093 (the strict RFC 9727
       # reading survives); what is new is one `item` per registered verb,
       # ALONGSIDE them, at the real 0.4 endpoint the verb answers on.
-      expect(hrefs).to eq(["https://api.acme.example/kiosk/schema",
-                           "https://api.acme.example/kiosk/openapi.json",
+      expect(hrefs).to eq(["https://api.acme.example/kiosk/schema#{v}",
+                           "https://api.acme.example/kiosk/openapi.json#{v}",
                            "https://api.acme.example/kiosk/catalog",
                            "https://api.acme.example/kiosk/checkout",
                            "https://api.acme.example/kiosk/pay",
@@ -558,7 +565,7 @@ RSpec.describe Kiosk::Server::WellKnown do
       declare_query("catalog")
       d = described_class.api_catalog(base_url: "https://api.acme.example")
       hrefs = member(d)[:item].map { |i| i[:href] }
-      expect(hrefs).to include("https://api.acme.example/kiosk/schema")
+      expect(hrefs).to include("https://api.acme.example/kiosk/schema#{v}")
       expect(hrefs).not_to include("https://api.acme.example/kiosk/pay")
     end
 
@@ -602,7 +609,7 @@ RSpec.describe Kiosk::Server::WellKnown do
       expect(by_href["https://api.acme.example/kiosk/catalog"]).to eq(["GET"])
       expect(by_href["https://api.acme.example/kiosk/checkout"]).to eq(["POST"])
       # A service description is not an operation and carries no method.
-      expect(by_href["https://api.acme.example/kiosk/schema"]).to be_nil
+      expect(by_href["https://api.acme.example/kiosk/schema#{v}"]).to be_nil
     end
 
     # The RFC question T-093 re-settled: Phil overruled the SECURITY objection,
@@ -613,8 +620,8 @@ RSpec.describe Kiosk::Server::WellKnown do
       declare_query("catalog")
       d = described_class.api_catalog(base_url: "https://api.acme.example")
       descs = member(d)[:item].select { |i| i[:rel] == "service-desc" }.map { |i| i[:href] }
-      expect(descs).to eq(["https://api.acme.example/kiosk/schema",
-                           "https://api.acme.example/kiosk/openapi.json"])
+      expect(descs).to eq(["https://api.acme.example/kiosk/schema#{v}",
+                           "https://api.acme.example/kiosk/openapi.json#{v}"])
     end
 
     # THE CONDITION ON THE K-799 ANSWER, which is a condition and not a
@@ -640,7 +647,8 @@ RSpec.describe Kiosk::Server::WellKnown do
     it "tags the schema endpoint as the machine-readable service-desc" do
       declare_query("catalog")
       d = described_class.api_catalog(base_url: "https://api.acme.example")
-      schema = member(d)[:item].find { |i| i[:href].end_with?("/schema") }
+      schema = member(d)[:item].find { |i| i[:href].start_with?("https://api.acme.example/kiosk/schema") }
+      expect(schema[:href]).to eq("https://api.acme.example/kiosk/schema#{v}")
       expect(schema[:rel]).to eq("service-desc")
     end
 
@@ -653,13 +661,13 @@ RSpec.describe Kiosk::Server::WellKnown do
       d = described_class.api_catalog(base_url: "https://api.acme.example")
       descs = member(d)[:item].select { |i| i[:rel] == "service-desc" }.map { |i| i[:href] }
 
-      expect(descs).to eq(["https://api.acme.example/kiosk/schema",
-                           "https://api.acme.example/kiosk/openapi.json"])
+      expect(descs).to eq(["https://api.acme.example/kiosk/schema#{v}",
+                           "https://api.acme.example/kiosk/openapi.json#{v}"])
     end
 
     it "advertises no openapi.json when there is nothing to describe" do
       hrefs = member(doc)[:item].map { |i| i[:href] }
-      expect(hrefs).not_to include("https://api.acme.example/kiosk/openapi.json")
+      expect(hrefs.grep(%r{/kiosk/openapi\.json})).to be_empty
     end
 
     it "tags the one remaining non-description wire endpoint — `pay` — with rel=item" do
@@ -683,7 +691,7 @@ RSpec.describe Kiosk::Server::WellKnown do
       Kiosk.configure { |c| c.mount_path = "/agent-surface" }
       d = described_class.api_catalog(base_url: "https://api.acme.example")
       hrefs = d[:linkset].first[:item].map { |i| i[:href] }
-      expect(hrefs).to include("https://api.acme.example/agent-surface/schema")
+      expect(hrefs).to include("https://api.acme.example/agent-surface/schema#{v}")
     end
 
     it "strips trailing slashes from base_url" do

@@ -1,12 +1,12 @@
 # frozen_string_literal: true
 
-# `GET <endpoint>/openapi.json` at the wire level (T-068 slice 4).
+# `GET <endpoint>/openapi.json` at the wire level (T-068 slice 4, K-804).
 #
 # The document itself is proved next door in `open_api_spec.rb`. What is
-# proved here is that the ENDPOINT behaves like the wire it describes:
-# Bearer-gated before it says anything, tolled as `schema` because it renders
-# the same catalog, refusing in the 0.4 problem shape, and carrying the cache
-# policy every wire response carries.
+# proved here is that the ENDPOINT behaves like the OTHER public description
+# of the same registry: no credential, no toll, a public cache policy with a
+# strong ETag and a 304, a year at the versioned url — and NO `Vary`, which is
+# the half a `Rack::MockRequest` cannot see unless it is made to negotiate.
 
 require "json"
 require "rack/mock"
@@ -31,10 +31,10 @@ RSpec.describe Kiosk::Server::OpenApiController do
     )
   end
 
-  def get_document(auth: true, headers: {})
+  def get_document(auth: false, path: "/kiosk/openapi.json", headers: {})
     opts = headers.dup
     opts["HTTP_AUTHORIZATION"] = "Bearer #{token}" if auth
-    env = Rack::MockRequest.env_for("/kiosk/openapi.json", method: "GET", **opts)
+    env = Rack::MockRequest.env_for(path, method: "GET", **opts)
     env["action_dispatch.request.path_parameters"] =
       { controller: "kiosk/server/open_api", action: "show" }
 
@@ -44,7 +44,16 @@ RSpec.describe Kiosk::Server::OpenApiController do
     [status, raw.empty? ? {} : JSON.parse(raw, symbolize_names: true), response_headers]
   end
 
-  it "answers the derived document to an authenticated caller" do
+  # ─── public (K-804) ──────────────────────────────────────────────────────
+  #
+  # Until 2026-08-19 the first four examples in this file asserted the
+  # opposite: 401 to an anonymous caller, a `:schema` toll, and the wire's
+  # `private, no-store` + `Vary: Authorization, Kiosk-PoW`. The reason given
+  # for the gate — that an anonymous read hands out the catalog enumeration —
+  # had been retired for `GET <endpoint>/schema` (T-094) and for
+  # `/.well-known/api-catalog` (T-093) on the same day. Phil: «K-804
+  # открывать».
+  it "answers the derived document to a caller with NO credential" do
     status, body, = get_document
 
     expect(status).to eq(200)
@@ -61,38 +70,17 @@ RSpec.describe Kiosk::Server::OpenApiController do
     expect(headers["Content-Type"]).to include("application/vnd.oai.openapi+json")
   end
 
-  it "refuses an UNAUTHENTICATED caller before it will name a single verb" do
-    # The document publishes the whole catalog. Serving it publicly would
-    # hand an anonymous caller exactly the enumeration the per-verb wire
-    # orders its gates (401 before 404) to withhold, and `GET
-    # <endpoint>/schema` — the canonical spelling of the same information —
-    # is Bearer-gated too.
-    status, body, headers = get_document(auth: false)
+  it "does not read a Bearer token even when one is sent" do
+    with, = get_document(auth: true)
+    without, = get_document
 
-    expect(status).to eq(401)
-    expect(body[:code]).to eq("unauthenticated")
-    expect(headers["Content-Type"]).to include(Kiosk::Server::Errors::PROBLEM_CONTENT_TYPE)
+    expect([with, without]).to eq([200, 200])
   end
 
-  it "refuses in the 0.4 problem shape, not the 0.3 envelope" do
-    _status, body, = get_document(auth: false)
-
-    expect(body).to include(:type, :title, :status, :code)
-    expect(body).not_to have_key(:ok)
-    expect(body).not_to have_key(:error)
-  end
-
-  it "carries the cache policy every wire response carries" do
-    _status, _body, headers = get_document
-
-    expect(headers["Vary"]).to eq("Authorization, Kiosk-PoW")
-    expect(headers["Cache-Control"]).to eq("private, no-store")
-  end
-
-  it "pays the SAME toll `schema` pays, so a priced catalog cannot be read around" do
+  it "is NOT tolled — a toll needs an identity, and there is none here" do
     # The shipped RateAndReputation policy ignores `verb:` and prices every
-    # wire call, `schema` included. An untolled description of the same
-    # catalog would be a free path around that price.
+    # wire call it is asked about. This endpoint no longer asks: the gate that
+    # would have charged `:schema` is gone with the identity it charged.
     Kiosk::Reputation::Backends.register("argon2id", Kiosk::Pow)
     seen   = []
     policy = Class.new(Kiosk::Reputation::Policy) do
@@ -106,10 +94,73 @@ RSpec.describe Kiosk::Server::OpenApiController do
       c.pow_secret        = "test-pow-secret"
     end
 
-    status, body, = get_document
+    status, = get_document
 
-    expect(status).to eq(402)
-    expect(body[:code]).to eq("pow_required")
-    expect(seen).to eq([:schema])
+    expect(status).to eq(200)
+    expect(seen).to be_empty
+  end
+
+  # ─── the cache policy, which came in the gate's place ────────────────────
+  it "carries the PUBLIC cache policy and a strong ETag" do
+    _status, _body, headers = get_document
+
+    expect(headers["Cache-Control"]).to eq("max-age=60, public")
+    expect(headers["ETag"]).to match(/\A"[0-9a-f]{32}"\z/)
+  end
+
+  # A REAL CLIENT SENDS AN ACCEPT HEADER, AND RAILS REACTS TO IT.
+  # `ActionController::Rendering#_set_vary_header` stamps `Vary: Accept` on a
+  # negotiated render. Left in place it would split a shared cache by Accept
+  # string — the same damage `Vary: Authorization` would do, by another route.
+  # A bare `MockRequest` sends no `Accept`, so both examples are needed.
+  it "emits no Vary at all, negotiated or not" do
+    _status, _body, plain = get_document
+    _status, _body, negotiated = get_document(headers: { "HTTP_ACCEPT" => "application/json" })
+
+    expect(plain["Vary"]).to be_nil
+    expect(negotiated["Vary"]).to be_nil
+  end
+
+  it "serves ?v=<version> immutable, and a stale ?v= short-lived" do
+    # The version is the ORIGIN's — {SchemaDocument.digest} — because the
+    # api-catalog hangs one value on both description links.
+    version = Kiosk::Server::SchemaDocument.digest
+
+    _status, _body, fresh = get_document(path: "/kiosk/openapi.json?v=#{version}")
+    expect(fresh["Cache-Control"]).to eq("max-age=31536000, public, immutable")
+
+    status, body, stale = get_document(path: "/kiosk/openapi.json?v=deadbeef")
+    expect(status).to eq(200)
+    expect(body[:openapi]).to eq(Kiosk::Server::OpenApi::OPENAPI_VERSION)
+    expect(stale["Cache-Control"]).to eq("max-age=60, public")
+  end
+
+  it "answers 304 to If-None-Match on its own ETag" do
+    _status, _body, headers = get_document
+    etag = headers["ETag"]
+
+    status, _body, again = get_document(headers: { "HTTP_IF_NONE_MATCH" => etag })
+    expect(status).to eq(304)
+    expect(again["ETag"]).to eq(etag)
+
+    status, = get_document(headers: { "HTTP_IF_NONE_MATCH" => %("stale") })
+    expect(status).to eq(200)
+  end
+
+  # The ETag is this document's OWN bytes, not the shared `?v=` version: two
+  # origins render different documents under one version, and an entity tag
+  # names the representation at ONE url.
+  it "carries an ETag distinct from the catalog's, because the bytes differ" do
+    _status, _body, headers = get_document
+
+    expect(headers["ETag"]).not_to eq(Kiosk::Server::SchemaDocument.etag)
+  end
+
+  it "describes the origin the request arrived at, not a memoized other one" do
+    _status, first, = get_document
+    _status, second, = get_document(path: "http://other.example/kiosk/openapi.json")
+
+    expect(first[:servers].first[:url]).to eq("http://example.org/kiosk")
+    expect(second[:servers].first[:url]).to eq("http://other.example/kiosk")
   end
 end

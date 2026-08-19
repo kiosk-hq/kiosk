@@ -62,13 +62,14 @@ module Kiosk
         headers
       end
 
-      # ── THE ONE WRITTEN EXCEPTION to the policy above (T-094) ────────────
+      # ── THE WRITTEN EXCEPTION to the policy above (T-094, K-804) ─────────
       #
-      # `GET <endpoint>/schema` is PUBLIC since T-094: it carries verb names,
-      # descriptions and schemas, nothing per-agent and no secret, and it is
-      # rendered from memory. So the two rules the default encodes stop
-      # applying to it, and both must be actively UNDONE rather than merely
-      # relaxed:
+      # `GET <endpoint>/schema` is PUBLIC since T-094, and
+      # `GET <endpoint>/openapi.json` joined it at K-804: both carry verb
+      # names, descriptions and schemas, nothing per-agent and no secret, and
+      # both are rendered from in-process state. So the two rules the default
+      # encodes stop applying to them, and both must be actively UNDONE rather
+      # than merely relaxed:
       #
       #   * `private, no-store` becomes `public, max-age=…`. A shared cache is
       #     the point — an origin that answers every assistant with the same
@@ -90,19 +91,43 @@ module Kiosk
       # that changes the catalogue changes the digest, the discovery documents
       # (short TTL) publish the new link, and nothing is pointed at the old one
       # any more. It is the asset-pipeline pattern, and it is what makes a
-      # week — a year, here — safe rather than a bug.
-      SHORT_MAX_AGE     = 300         # 5 minutes — the fixed, unversioned URL
+      # year safe rather than a bug.
+      #
+      # WHY THE SHORT ONE IS SIXTY SECONDS AND NOT FIVE MINUTES (Phil,
+      # 2026-08-19). The number is not a cache-efficiency knob; it is the
+      # length of time an operator has to live with AFTER A DEPLOY, during
+      # which some callers still hold the previous pointer document and follow
+      # the previous `?v=` link. Phil weighed exactly that: «это после деплоя
+      # придётся … мириться с тем, что все будут получать старый документ. На
+      # другой стороне весов — чтобы не слишком часто дёргался backend.
+      # Кажется, max-age в 1m будет сносным компромиссом.» A minute of
+      # post-deploy staleness is tolerable; five was chosen when nobody had
+      # asked that question. The load side of the trade is NOT paid by this
+      # number — it is paid by {IMMUTABLE_MAX_AGE} on the versioned URL, which
+      # is where the bytes actually are, because an assistant follows the link
+      # from the pointer rather than re-fetching the catalogue itself.
+      SHORT_MAX_AGE     = 60          # one minute — the fixed, unversioned URL
       IMMUTABLE_MAX_AGE = 31_536_000  # a year — a digest-versioned URL
 
       # Written in Rails' own directive order (`max-age` first, then the
       # cacheability, then the extras) because ActionDispatch REGENERATES this
-      # header on commit from its parsed form — writing "public, max-age=300"
-      # here produces "max-age=300, public" on the wire. Spelling it the way it
+      # header on commit from its parsed form — writing "public, max-age=60"
+      # here produces "max-age=60, public" on the wire. Spelling it the way it
       # is emitted keeps a grep of this file and a grep of a response agreeing.
       PUBLIC_SHORT     = "max-age=#{SHORT_MAX_AGE}, public"
       PUBLIC_IMMUTABLE = "max-age=#{IMMUTABLE_MAX_AGE}, public, immutable"
 
       # Apply the public policy to ONE response.
+      #
+      # IT SETS NO `Vary`, AND THAT IS THE POINT — Phil, 2026-08-19, on the
+      # discovery documents: «А Vary зачем? Это паблик, общедоступная инфа.»
+      # `Vary` belongs on the per-identity plane, where the answer really does
+      # depend on `Authorization` and `Kiosk-PoW`, and those answers are
+      # `private, no-store` anyway. A public document has one answer for
+      # everyone; naming a header it does not read would state a variance that
+      # does not exist. Note this method cannot DELETE what Rails adds after
+      # it — `_set_vary_header` stamps `Vary: Accept` at render time — so a
+      # public action must drop the header itself, AFTER the render.
       #
       # @param headers   [Hash] the response headers to mutate
       # @param etag      [String] the STRONG entity tag, already quoted

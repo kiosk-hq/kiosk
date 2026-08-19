@@ -98,8 +98,9 @@ module Kiosk
       #   * THE TOLL. `schema` was tolled as `:schema` so that ENUMERATING the
       #     catalogue cost something. That warrant died with the gate — a toll
       #     needs an identity to charge, and there is none here. `:schema`
-      #     survives as a POLICY verb for `/kiosk/openapi.json`, which is still
-      #     gated and still tolled (K-804 is where that is decided, not here).
+      #     stopped being a policy verb altogether at K-804, when
+      #     `/kiosk/openapi.json` — the one surface still paying that toll —
+      #     went public for the same reasons; see {Executor::VERBS}.
       #   * `Vary: Authorization, Kiosk-PoW`. See {Headers.add_public_cache_policy}:
       #     a public document that varies on headers it does not read is one a
       #     shared cache can never reuse.
@@ -110,30 +111,9 @@ module Kiosk
       # stale link gets a true answer with a short TTL rather than a 404 it
       # cannot act on.
       def schema
-        digest = SchemaDocument.digest
-        etag   = SchemaDocument.etag
-
-        Kiosk::Server::Headers.add_to(response.headers)
-        Kiosk::Server::Headers.add_public_cache_policy(
-          response.headers, etag: etag, immutable: params[:v].to_s == digest
+        render_public_document(
+          SchemaDocument.json, version: SchemaDocument.digest, etag: SchemaDocument.etag
         )
-
-        if if_none_match?(etag)
-          head :not_modified
-        else
-          render json: SchemaDocument.json, status: :ok
-        end
-
-        # LAST, and it exists to undo one line of Rails.
-        # `ActionController::Rendering#_set_vary_header` stamps `Vary: Accept`
-        # on any render whose format was negotiated from the request's `Accept`
-        # header — a sound default, and wrong here: this endpoint answers
-        # `application/json` to every caller whatever they ask for, so the
-        # header states a variance that does not exist and splits a shared
-        # cache by Accept string for nothing. It fires only when the header is
-        # BLANK at render time, so it cannot be pre-empted by setting the value
-        # we want, which is none.
-        response.headers.delete("Vary")
       end
 
       # POST <endpoint>/pay
@@ -142,6 +122,46 @@ module Kiosk
       end
 
       private
+
+      # THE ONE PLACE A PUBLIC KIOSK DOCUMENT IS WRITTEN — the mirror of
+      # {#render_wire_body}, and the two are deliberately not the same seam.
+      #
+      # Shared by `schema` here and by {OpenApiController#show}, which K-804
+      # moved onto this path: two derived, identity-free descriptions of the
+      # same registry, so anything either does about caching the other must do
+      # too. Before K-804 the openapi document rendered through the WIRE seam,
+      # and "give it the same treatment as `schema`" would have meant copying
+      # four steps and the Rails workaround below into a second controller.
+      #
+      # @param json    [String] the serialized body, already JSON
+      # @param version [String] the digest this URL's `?v=` is compared against
+      # @param etag    [String] the STRONG entity tag, already quoted
+      # @param content_type [String, nil] overrides `application/json`
+      def render_public_document(json, version:, etag:, content_type: nil)
+        Kiosk::Server::Headers.add_to(response.headers)
+        Kiosk::Server::Headers.add_public_cache_policy(
+          response.headers, etag: etag, immutable: params[:v].to_s == version
+        )
+
+        if if_none_match?(etag)
+          head :not_modified
+        else
+          options = { json: json, status: :ok }
+          options[:content_type] = content_type if content_type
+          render(**options)
+        end
+
+        # LAST, and it exists to undo one line of Rails.
+        # `ActionController::Rendering#_set_vary_header` stamps `Vary: Accept`
+        # on any render whose format was negotiated from the request's `Accept`
+        # header — a sound default, and wrong here: these endpoints answer the
+        # same bytes to every caller whatever they ask for, so the header
+        # states a variance that does not exist and splits a shared cache by
+        # Accept string for nothing. It fires only when the header is BLANK at
+        # render time, so it cannot be pre-empted by setting the value we want,
+        # which is none.
+        response.headers.delete("Vary")
+      end
 
       # RFC 9110 §13.1.2 — does the caller already hold these bytes? Written
       # out rather than taken from `fresh_when`, which hashes the validator it
@@ -181,11 +201,11 @@ module Kiosk
       # arguments arrive in the query string, so it does its own parsing and
       # then hands the result here.
       #
-      # @param command [Symbol] the gate/policy verb — one of {Executor::POLICY_VERBS},
+      # @param command [Symbol] the gate/policy verb — one of {Executor::VERBS},
       #   because `reputation_factors` and `Policy#challenge_for` both take it
-      #   as `verb:` and every shipped policy branches on those four symbols.
-      # @param name [String] the WIRE name — the path segment. `schema` and
-      #   `pay` pass their own; a per-verb call passes the registered verb.
+      #   as `verb:` and every shipped policy branches on those three symbols.
+      # @param name [String] the WIRE name — the path segment. `pay` passes its
+      #   own; a per-verb call passes the registered verb.
       def execute_wire(command:, args:, identity:, name:)
         # §3.4's fingerprint: SHA256("<METHOD> <verb>\n<canonical args>").
         #
@@ -222,18 +242,17 @@ module Kiosk
       # THE TOLL, on its own — the whole of what a caller pays before a Kiosk
       # surface answers, and nothing else.
       #
-      # It is its own method because {OpenApiController} has to pay it with no
-      # {Executor} call behind it: the derived OpenAPI document renders the
-      # SAME catalog `GET <endpoint>/schema` renders, so it is tolled as
-      # `:schema`. Left untolled it would be a free path to information a
-      # reputation policy is charging for — the shipped
-      # {Kiosk::Reputation::Policies::RateAndReputation} ignores `verb:` and
-      # prices every wire call, `schema` included.
+      # It is still its own method, one caller below, because the toll is one
+      # idea and {#execute_wire} is four. It had a SECOND caller until K-804:
+      # {OpenApiController} paid it with no {Executor} call behind it, tolled
+      # as `:schema` so a second spelling of the catalog could not be read
+      # around the price. That endpoint is public and untolled now, for the
+      # same reasons `schema` is, and `:schema` is not a policy verb any more.
       #
       # @param identity [Kiosk::Identity] the resolved caller
-      # @param command [Symbol] the gate/policy verb — one of {Executor::POLICY_VERBS},
+      # @param command [Symbol] the gate/policy verb — one of {Executor::VERBS},
       #   because `reputation_factors` and `Policy#challenge_for` both take it
-      #   as `verb:` and every shipped policy branches on those four symbols
+      #   as `verb:` and every shipped policy branches on those three symbols
       # @param name [String] the WIRE verb name, as it appears in the path —
       #   half of §3.4's fingerprint, with the request method
       # @param body [Hash] the arguments the fingerprint binds to

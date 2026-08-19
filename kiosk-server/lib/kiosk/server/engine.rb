@@ -88,6 +88,13 @@ module Kiosk
         # re-derivation itself is below, in `after_initialize`, and lazily on
         # first read afterwards; this is only the drop.
         Kiosk::Server::SchemaDocument.reset!
+        # And the derived OpenAPI document, which is memoized per origin off
+        # the same registry (K-804). Its memo key already carries
+        # {SchemaDocument.digest}, so this drop is belt-and-braces rather than
+        # load-bearing — but a reload that leaves EITHER derived document in
+        # memory is the bug this hook exists to prevent, and the two should be
+        # dropped in the same breath they are derived from.
+        Kiosk::Server::OpenApi.reset!
       end
 
       # THE `schema` CATALOG AND ITS DIGEST, DERIVED ONCE, AT BOOT, BY THE
@@ -170,11 +177,12 @@ module Kiosk
         # configured"), and discovery already drops `pay` from the advertised
         # capabilities.
         #
-        # `schema` is the ONE route under this mount that resolves no identity
-        # (T-094): it answers {SchemaDocument}, derived at boot, under a public
-        # cache policy. It is still drawn HERE rather than beside the discovery
-        # routes because it is mount-relative — it describes THIS wire, and its
-        # URL derives from the discovery document's `endpoint`.
+        # `schema` is one of the TWO routes under this mount that resolve no
+        # identity (T-094, and `openapi.json` below since K-804): it answers
+        # {SchemaDocument}, derived at boot, under a public cache policy. It is
+        # still drawn HERE rather than beside the discovery routes because it
+        # is mount-relative — it describes THIS wire, and its URL derives from
+        # the discovery document's `endpoint`.
         #
         # `POST query` and `POST run` — 0.3's multiplexed pair — are GONE
         # (T-074 = A, the hard cut). Not tombstoned, not 404-with-a-hint:
@@ -203,7 +211,8 @@ module Kiosk
         # {HandlerMixin::RESERVED_NAMES}: `openapi.json` is not a legal verb
         # name (§8.1 forbids the dot), so no declaration can collide with it,
         # and an operator verb literally called `openapi` stays reachable at
-        # `<endpoint>/openapi`. PROVISIONAL — this line and
+        # `<endpoint>/openapi`. PUBLIC since K-804, on the same terms as
+        # `schema` above. PROVISIONAL — this line and
         # `open_api{,_controller}.rb` are the whole of it.
         get "openapi.json", to: "open_api#show"
 

@@ -1,11 +1,13 @@
 # frozen_string_literal: true
 
+require "digest"
 require "json"
 require "kiosk/server/actions"
 require "kiosk/server/argument_decoder"
 require "kiosk/server/errors"
 require "kiosk/server/handler_mixin"
 require "kiosk/server/queries"
+require "kiosk/server/schema_document"
 require "kiosk/server/well_known"
 
 module Kiosk
@@ -231,9 +233,70 @@ module Kiosk
         }
       end
 
-      # JSON-encoded form of {.build}.
+      # JSON-encoded form of {.build}. Unmemoized on purpose — it is the seam a
+      # spec or a script uses to render one document for one base URL without
+      # touching process state. The SERVED bytes come from {.json}.
       def self.build_json(**kwargs)
         JSON.generate(build(**kwargs))
+      end
+
+      # ── WHAT THE ENDPOINT SERVES, AND ITS VALIDATOR (K-804) ─────────────
+      #
+      # `GET <endpoint>/openapi.json` is public and cacheable now, so it owes a
+      # caller a strong `ETag` and a 304 — and neither is affordable if the
+      # document is re-derived on every request just to be hashed. Same memo
+      # {SchemaDocument} keeps, with ONE difference that is worth stating
+      # because it is the reason this document is not derived at boot beside
+      # the catalog: THIS ONE DEPENDS ON `base_url`. `servers[0].url` names the
+      # origin the request arrived at, so a staging host describes itself and
+      # not production — and no boot hook knows what host a request will use.
+      # First request per origin pays; every later one is a string write.
+      #
+      # THE MEMO KEY IS `[base_url, SchemaDocument.digest]`, and that is a
+      # claim worth checking rather than trusting: every input of {.build}
+      # other than `base_url` — the two registries, `capabilities`,
+      # `mount_path`, `owner`, `issuer`, the protocol version, this gem's
+      # version — is an input of {SchemaDocument.digest_inputs}. So the
+      # catalog's digest is the ORIGIN'S DOCUMENT VERSION, not the catalog's
+      # alone, which is also why it is what the api-catalog hangs on BOTH
+      # `?v=` links ({WellKnown.api_catalog}).
+      #
+      # The ETAG IS THIS DOCUMENT'S OWN BYTES, not that shared version: an
+      # entity tag identifies the representation at ONE url, and two origins
+      # (or a staging host and production) render different bytes under the
+      # same version. Hashing what we are about to write is exact and costs
+      # nothing extra — we have just serialized it.
+      DIGEST_LENGTH = 32
+
+      class << self
+        # The serialized document for this origin.
+        def json(base_url:, config: Kiosk.configuration)
+          derive(base_url: base_url, config: config).fetch(:json)
+        end
+
+        # The strong HTTP entity tag: SHA-256 of {json}, truncated and quoted.
+        def etag(base_url:, config: Kiosk.configuration)
+          %("#{derive(base_url: base_url, config: config).fetch(:digest)}")
+        end
+
+        # Drop the memo. {Engine} calls this from `to_prepare`, beside
+        # {SchemaDocument.reset!}, so a development reload cannot serve a
+        # document describing verbs that have just been renamed.
+        def reset!
+          @memo = nil
+          self
+        end
+
+        private
+
+        def derive(base_url:, config:)
+          key = [base_url.to_s, SchemaDocument.digest(config: config)]
+          return @memo if @memo && @memo[:key] == key
+
+          json = build_json(base_url: base_url, config: config)
+          @memo = { key: key, json: json.freeze,
+                    digest: Digest::SHA256.hexdigest(json)[0, DIGEST_LENGTH].freeze }.freeze
+        end
       end
 
       # ── the model ───────────────────────────────────────────────────────

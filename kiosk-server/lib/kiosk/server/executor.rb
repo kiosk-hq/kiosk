@@ -19,30 +19,31 @@ module Kiosk
     # {VerbController} wrap, factored out of the controller so it is testable
     # without Rails.
     class Executor
-      # The four GATE/POLICY verbs — the coarse kind of a call, NOT wire paths.
+      # The three GATE/POLICY verbs — the coarse kind of a call, NOT wire
+      # paths — and what THIS dispatcher serves. ONE list, because since K-804
+      # the two sets are the same one.
       #
-      # Since the 0.4 cutover none of these four is a URL: `query` and `run`
+      # Since the 0.4 cutover none of these three is a URL: `query` and `run`
       # are how a per-verb GET and a per-verb POST are classified for the toll
-      # and the session, and `schema`/`pay` are both a classification and a
-      # reserved path segment. They stay symbols rather than becoming path
-      # names because `reputation_factors` and `Policy#challenge_for` both take
-      # one as `verb:` and every shipped policy branches on these four.
+      # and the session, and `pay` is both a classification and a reserved path
+      # segment. They stay symbols rather than becoming path names because
+      # `reputation_factors` and `Policy#challenge_for` both take one as
+      # `verb:` and every shipped policy branches on these three.
+      #
+      # THERE USED TO BE A SECOND CONSTANT, `POLICY_VERBS`, which was this list
+      # plus `:schema`. `schema` left the DISPATCHER when T-094 made
+      # `GET <endpoint>/schema` public — it resolves no identity, and an
+      # {Executor} cannot be built without one — and stayed a POLICY verb for
+      # exactly one caller: `/kiosk/openapi.json`, still gated, tolled as
+      # `:schema` so a second spelling of the catalog could not be read around
+      # the price. K-804 made that endpoint public too, so nothing tolls as
+      # `:schema` and the second constant had become a byte-identical copy of
+      # this one under another name — the same one-value-two-names shape K-801
+      # retired from the wire. Deleted rather than left as documentation.
       #
       # `events` was removed long before: it was never a capability, the
       # Kiosk::Event type is gone, and the stub only ever raised a raw
       # NotImplementedError. An unknown kind is a clean 400.
-      POLICY_VERBS = %i[query run pay schema].freeze
-
-      # What THIS dispatcher serves — three of the four.
-      #
-      # `schema` left when T-094 made `GET <endpoint>/schema` public: it
-      # resolves no identity, and an {Executor} cannot be built without one.
-      # The catalog is now rendered by {SchemaDocument}, derived at boot by the
-      # engine and served from memory, so there is nothing to dispatch. It
-      # stays in {POLICY_VERBS} because it is still the policy verb
-      # `/kiosk/openapi.json` is TOLLED as — that endpoint is still gated
-      # (K-804), still renders the same registry, and must not become a free
-      # second spelling of a priced document.
       VERBS = %i[query run pay].freeze
 
       # Verbs that open their own transaction boundaries because they perform

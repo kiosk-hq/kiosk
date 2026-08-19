@@ -222,13 +222,14 @@ RSpec.describe Kiosk::Server::Executor do
       }.to raise_error(Kiosk::Server::Errors::BadRequest, /Unknown verb: :schema/)
     end
 
-    # It is still a POLICY verb: `/kiosk/openapi.json` renders the same
-    # registry, is still Bearer-gated (K-804), and is still tolled as
-    # `:schema` — so a reputation policy branching on the symbol must keep
-    # seeing it.
-    it "remains in POLICY_VERBS, which is what a toll and a policy branch on" do
-      expect(described_class::POLICY_VERBS).to include(:schema)
-      expect(described_class::VERBS).not_to include(:schema)
+    # And it is no longer a POLICY verb either. `POLICY_VERBS` existed for one
+    # caller — `/kiosk/openapi.json`, tolled as `:schema` while it was still
+    # Bearer-gated. K-804 made that endpoint public, nothing tolls as
+    # `:schema`, and a constant that was a byte-identical copy of {VERBS}
+    # under another name was deleted rather than left as documentation.
+    it "is gone from the vocabulary entirely — one list, not two" do
+      expect(described_class::VERBS).to eq(%i[query run pay])
+      expect(described_class.const_defined?(:POLICY_VERBS)).to be(false)
     end
   end
 

@@ -9,9 +9,9 @@ require "rack/mock"
 require "json"
 
 RSpec.describe "DiscoveryController" do
-  def dispatch(action, path)
+  def dispatch(action, path, **opts)
     status, headers, body = Kiosk::Server::DiscoveryController.action(action).call(
-      Rack::MockRequest.env_for("https://api.acme.example#{path}"),
+      Rack::MockRequest.env_for("https://api.acme.example#{path}", **opts),
     )
     raw = +""
     body.each { |chunk| raw << chunk }
@@ -107,9 +107,50 @@ RSpec.describe "DiscoveryController" do
       doc = JSON.parse(raw)
       items = doc.dig("linkset", 0, "item")
       expect(items).not_to be_empty
-      # The schema endpoint is tagged as the machine-readable service-desc.
-      schema = items.find { |i| i["href"].end_with?("/schema") }
+      # The schema endpoint is tagged as the machine-readable service-desc,
+      # at the VERSIONED url (K-804) — a pointer document links the url that
+      # is safe to cache, not the bare path.
+      schema = items.find { |i| i["href"].start_with?("https://api.acme.example/kiosk/schema") }
+      expect(schema["href"])
+        .to eq("https://api.acme.example/kiosk/schema?v=#{Kiosk::Server::SchemaDocument.digest}")
       expect(schema["rel"]).to eq("service-desc")
+    end
+  end
+
+  # ─── the cache policy of the POINTER documents ───────────────────────────
+  #
+  # `max-age=60` (Phil, 2026-08-19), not because a minute is efficient but
+  # because a minute is how long an operator must live with the previous
+  # document after a deploy. The load these documents would otherwise carry is
+  # carried by the immutable `?v=` url they point at.
+  describe "the public cache policy" do
+    it "serves the three pointer documents public, one minute" do
+      declare_query("catalog")
+      %i[agents_json kiosk_json api_catalog].each do |action|
+        _status, headers, = dispatch(action, "/x")
+        expect(headers["Cache-Control"]).to eq(Kiosk::Server::Headers::PUBLIC_SHORT)
+        expect(headers["Cache-Control"]).to eq("max-age=60, public")
+      end
+    end
+
+    # «А Vary зачем? Это паблик, общедоступная инфа.» — Phil, 2026-08-19.
+    # None of these six reads a request header, so none of them varies. Rails
+    # disagrees unless stopped: `_set_vary_header` stamps `Vary: Accept` on
+    # any render negotiated from a non-blank `Accept`, which is what a real
+    # client sends and what a bare MockRequest does NOT — so the negotiated
+    # half is the half that matters.
+    it "emits no Vary on any of the six, negotiated or not" do
+      declare_query("catalog")
+      actions = { agents_txt: "/agents.txt", agents_json: "/agents.json",
+                  agent_configuration: "/.well-known/agent-configuration",
+                  kiosk_json: "/.well-known/kiosk.json",
+                  api_catalog: "/.well-known/api-catalog", auth_md: "/auth.md" }
+      actions.each do |action, path|
+        _status, plain, = dispatch(action, path)
+        _status, negotiated, = dispatch(action, path, "HTTP_ACCEPT" => "application/json")
+        expect(plain["Vary"]).to be_nil, "#{action} varies (unnegotiated)"
+        expect(negotiated["Vary"]).to be_nil, "#{action} varies (Accept: application/json)"
+      end
     end
   end
 end

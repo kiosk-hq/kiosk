@@ -305,7 +305,17 @@ module Kiosk
         items = []
         # schema is the machine-readable service description (service-desc).
         if modules.include?("schema")
-          items << { href: "#{endpoint}/schema", rel: "service-desc" }
+          # BOTH DESCRIPTIONS ARE LINKED AT `?v=<version>` (K-804). This
+          # document is a POINTER — short TTL, re-read often — and the two it
+          # points at are large, identical for every caller and immutable at a
+          # versioned url. A pointer that links the BARE path hands its reader
+          # the one url that may not be cached, which is the whole conflict
+          # `schema_url` was introduced to resolve in {build}; the api-catalog
+          # had simply never been given the same treatment. One version serves
+          # both links: {SchemaDocument.digest} covers every input of either
+          # renderer (see {SchemaDocument.digest_inputs}).
+          version = SchemaDocument.digest(config: config)
+          items << { href: "#{endpoint}/schema?v=#{version}", rel: "service-desc" }
           # ONE LINE, AND IT IS THE WHOLE ADVERTISEMENT of the derived OpenAPI
           # document (T-071 = C). RFC 8631 allows more than one `service-desc`,
           # and there genuinely are two descriptions of one API here: `schema`
@@ -319,7 +329,7 @@ module Kiosk
           # advertised anywhere — the skill names it nowhere, so no assistant
           # pays cold-start context for it. Deleting the provisional renderer
           # deletes this one `items <<`.
-          items << { href: "#{endpoint}/openapi.json", rel: "service-desc" }
+          items << { href: "#{endpoint}/openapi.json?v=#{version}", rel: "service-desc" }
         end
         # EVERY REGISTERED VERB, at its own 0.4 endpoint, with the method that
         # reaches it: a query is a GET, an action is a POST. Sorted by name

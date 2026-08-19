@@ -109,11 +109,12 @@ RSpec.describe Kiosk::Server::ConfigurationExtension do
     end
 
     # THE PROPERTY THE MODULE-NAME ANSWER BOUGHT (T-075 = A rejected B for
-    # exactly this): `/.well-known/kiosk.json` is unauthenticated, so whatever
-    # lands in `capabilities` is public. A registered verb NAME must never be
-    # among it — the catalog is Bearer-gated behind `GET <endpoint>/schema`,
-    # and a discovery document that leaked the names would hand an anonymous
-    # prober the enumeration three separate defences exist to withhold.
+    # exactly this). The REASON changed on 2026-08-19 and the property did
+    # not: the verb names are public now (`GET <endpoint>/schema` at T-094,
+    # `openapi.json` at K-804, `/.well-known/api-catalog` at T-093), so this
+    # example is no longer about withholding anything. It is about there being
+    # ONE source of truth for the verb list — the catalog — which this
+    # document points at rather than copies.
     it "never leaks a registered verb name" do
       declare_query("secret_pricing_tiers")
       declare_action("cancel_enterprise_contract")

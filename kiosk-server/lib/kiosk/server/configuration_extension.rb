@@ -76,15 +76,19 @@ module Kiosk
       #   * `actions` — present iff ≥1 action is registered.
       #   * `pay`     — present iff a payment provider (AP2) is configured.
       #
-      # WHY MODULES AND NOT VERB NAMES, since 0.4 gives every verb its own
-      # endpoint and "the verbs this endpoint serves" would now be readable
-      # literally: enumerating the registered verb names HERE would publish
-      # the whole catalog on an UNAUTHENTICATED surface. `GET
-      # <endpoint>/schema` is Bearer-gated, {OpenApiController} is Bearer-gated
-      # for the same reason, and {VerbController} answers `401` before `404`
-      # precisely so an anonymous prober cannot enumerate names. A module set
-      # tells an assistant which branches of the skill apply — which is what
-      # its Step 1 actually needs — and leaks nothing.
+      # WHY MODULES AND NOT VERB NAMES — AND IT IS A MODELLING RULE, NOT A
+      # SECURITY ONE. It used to be the other way round: `GET
+      # <endpoint>/schema` was Bearer-gated, {OpenApiController} was gated for
+      # the same reason, and {VerbController} answers `401` before `404` so an
+      # anonymous prober could not enumerate names. All three defences are
+      # retired (T-094, K-804, T-093) — the catalog is public, the derived
+      # OpenAPI document is public, and `/.well-known/api-catalog` hyperlinks
+      # every verb unauthenticated — so there is nothing here left to withhold.
+      # What survives is that a second copy of the verb list would be a second
+      # SOURCE OF TRUTH for it, and the two would drift; the catalog is the
+      # contract and this document is the pointer. A module set tells an
+      # assistant which branches of the skill apply, which is what its Step 1
+      # actually needs.
       #
       # HTTP methods are never encoded here: in 0.4 the method follows the
       # KIND of the verb (a query is GET, an action is POST), which the

@@ -110,7 +110,7 @@ RSpec.describe "mount Kiosk::Server::Engine (the one-line surface)" do
     it "routes the RESERVED `schema` into WireController and answers it PUBLIC" do
       res = probe("mounted", "GET /kiosk/schema")
       expect(res["status"]).to eq(200)
-      expect(res["headers"]["cache-control"]).to eq("max-age=300, public")
+      expect(res["headers"]["cache-control"]).to eq("max-age=60, public")
       expect(res["headers"]["etag"]).to match(/\A"[0-9a-f]{32}"\z/)
       # A public document must not vary on headers it does not read.
       expect(res["headers"]).not_to have_key("vary")

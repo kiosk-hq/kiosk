@@ -73,7 +73,7 @@ RSpec.describe "wire-surface controller auth" do
                               Rack::MockRequest.env_for("/kiosk/schema"))
       expect(status).to eq(200)
       expect(body[:queries].map { |q| q[:name] }).to include("probe")
-      expect(last_headers["Cache-Control"]).to eq("max-age=300, public")
+      expect(last_headers["Cache-Control"]).to eq("max-age=60, public")
       expect(last_headers["ETag"]).to match(/\A"[0-9a-f]{32}"\z/)
       # A public document that varied on a header it does not read would be
       # uncacheable by every shared cache — see Headers.add_public_cache_policy.
@@ -105,7 +105,7 @@ RSpec.describe "wire-surface controller auth" do
 
       expect(status).to eq(200)
       expect(last_headers["Vary"]).to be_nil
-      expect(last_headers["Cache-Control"]).to eq("max-age=300, public")
+      expect(last_headers["Cache-Control"]).to eq("max-age=60, public")
     end
 
     # The digest-versioned URL, which is the only one that may be cached long.
@@ -121,7 +121,7 @@ RSpec.describe "wire-surface controller auth" do
                               Rack::MockRequest.env_for("/kiosk/schema?v=deadbeef"))
       expect(status).to eq(200)
       expect(body[:queries].map { |q| q[:name] }).to include("probe")
-      expect(last_headers["Cache-Control"]).to eq("max-age=300, public")
+      expect(last_headers["Cache-Control"]).to eq("max-age=60, public")
     end
 
     it "answers 304 to If-None-Match on the current digest" do

@@ -211,29 +211,34 @@ RSpec.describe Kiosk::Redteam::Scenario do
   # CrossTenantRead's control and attack legs, ForgedUserId's ownership check —
   # so what it can and cannot read decides what those scenarios can prove.
   describe "#rows_from" do
-    it "reads the rows of a truncated page" do
-      page = { "rows" => [{ "id" => "r1" }, { "id" => "r2" }], "next" => "b2Zmc2V0OjI" }
-      expect(scenario.rows_from(response(200, page))).to eq([{ "id" => "r1" }, { "id" => "r2" }])
-    end
-
-    it "answers [] for a page with no rows" do
-      expect(scenario.rows_from(response(200, "rows" => []))).to eq([])
-    end
-
-    # A query that does NOT paginate — and a paginating one whose page was not
-    # truncated — answers a BARE JSON ARRAY (Kiosk::Server::Result#to_payload
-    # returns the payload verbatim unless a next_cursor is set). That is the
-    # ORDINARY answer on this wire, and reading only `body["rows"]` drops it:
-    # on a non-Hash body that yields [], which reads identically to correct
-    # isolation. CrossTenantRead's control would then fail loudly (safe), but
+    # THE SHAPE THAT SHIPS (spec §8.2, T-092): EVERY query answers a bare JSON
+    # array, paginating or not — truncation is an RFC 8288 `Link` header, not a
+    # body field. Reading only `body["rows"]` would drop it: on a non-Hash body
+    # that yields [], which reads identically to correct isolation.
+    # CrossTenantRead's control would then fail loudly (safe), but
     # ForgedUserId's ownership check would answer "not leaked" and score a
     # VACUOUS BLOCKED — a security scenario passing an origin it never tested.
-    it "reads a non-paginating query's BARE ARRAY answer" do
+    it "reads a query's BARE ARRAY answer" do
       expect(scenario.rows_from(response(200, [{ "id" => "r1" }]))).to eq([{ "id" => "r1" }])
     end
 
     it "answers [] for an empty bare array, without confusing it with a hash" do
       expect(scenario.rows_from(response(200, []))).to eq([])
+    end
+
+    # THE COMPATIBILITY BRANCH, kept deliberately. This battery is pointed at
+    # THIRD-PARTY origins, and one still serving a pre-T-092 cut answers a
+    # truncated page as `{"rows": …, "next": …}`. Scoring such an origin
+    # BLOCKED because we could not parse its answer is the worst outcome
+    # available here; two lines buy the parse and cannot produce a false
+    # ATTACK.
+    it "still reads the rows of a legacy truncated page" do
+      page = { "rows" => [{ "id" => "r1" }, { "id" => "r2" }], "next" => "b2Zmc2V0OjI" }
+      expect(scenario.rows_from(response(200, page))).to eq([{ "id" => "r1" }, { "id" => "r2" }])
+    end
+
+    it "answers [] for a legacy page with no rows" do
+      expect(scenario.rows_from(response(200, "rows" => []))).to eq([])
     end
 
     it "answers [] when `rows` is present but is not an array" do

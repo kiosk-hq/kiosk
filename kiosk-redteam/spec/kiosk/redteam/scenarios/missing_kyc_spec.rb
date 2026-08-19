@@ -17,13 +17,18 @@ RSpec.describe Kiosk::Redteam::Scenarios::MissingKyc do
     )
   end
 
+  # The wire traffic is register → POST /kiosk/pay → POST /kiosk/start_rental.
+  # (minimal_profile's create_owned is a plain lambda, so nothing calls an
+  # action to make the resource.)
+  RENTAL_TOKEN_BODY = { "scooter_code" => "SK-001", "rental_token" => "rt-1",
+                        "exp" => 4_102_444_800 }.freeze
+
   describe "#call — non-vacuity" do
     context "when the server allows gated action without KYC (broken — BREACH)" do
       it "returns blocked: false" do
         stub_registers("a")
-        # reserve, pay, start_rental all return 200 — no KYC gate
-        stub_exec_run(status: 200, body: { "value" => { "id" => "res-1" } })
-        stub_exec_pay(status: 200)
+        stub_pay(status: 200)
+        stub_action("start_rental", status: 200, body: RENTAL_TOKEN_BODY)
 
         verdict = scenario.call(client, profile)
 
@@ -34,17 +39,8 @@ RSpec.describe Kiosk::Redteam::Scenarios::MissingKyc do
     context "when the server blocks the gated action (correct — BLOCKED)" do
       it "returns blocked: true" do
         stub_registers("a")
-        stub_request(:post, "#{BASE_URL}/kiosk/run")
-          .with { |req| JSON.parse(req.body)["name"] == "reserve" }
-          .to_return(status: 200,
-                     body:   JSON.generate({ "value" => { "id" => "res-1" } }),
-                     headers: { "Content-Type" => "application/json" })
-        stub_exec_pay(status: 200)
-        stub_request(:post, "#{BASE_URL}/kiosk/run")
-          .with { |req| JSON.parse(req.body)["name"] == "start_rental" }
-          .to_return(status: 403,
-                     body:   JSON.generate({ "error" => { "code" => "forbidden" } }),
-                     headers: { "Content-Type" => "application/json" })
+        stub_pay(status: 200)
+        stub_action("start_rental", status: 403, code: "kyc_required")
 
         verdict = scenario.call(client, profile)
 
@@ -59,21 +55,10 @@ RSpec.describe Kiosk::Redteam::Scenarios::MissingKyc do
   # KYC gate. Demonstrated: pay → 402, gated action → 402, printed
   # "BLOCKED ✓ MissingKyc" — a line the KYC gate's deletion would not change.
   describe "#call — the staged payment must actually settle (K-731)" do
-    def stub_reserve_then_gated(gated_status:, gated_body: { "error" => { "code" => "forbidden" } })
-      stub_request(:post, "#{BASE_URL}/kiosk/run")
-        .with { |req| JSON.parse(req.body)["name"] == "reserve" }
-        .to_return(status: 200, body: JSON.generate("value" => { "id" => "res-1" }),
-                   headers: { "Content-Type" => "application/json" })
-      stub_request(:post, "#{BASE_URL}/kiosk/run")
-        .with { |req| JSON.parse(req.body)["name"] == "start_rental" }
-        .to_return(status: gated_status, body: JSON.generate(gated_body),
-                   headers: { "Content-Type" => "application/json" })
-    end
-
     it "reports SETUP FAILED when pay is refused 402 and the gated action then 402s" do
       stub_registers("a")
-      stub_reserve_then_gated(gated_status: 402, gated_body: { "error" => { "code" => "payment_setup_required" } })
-      stub_exec_pay(status: 402)
+      stub_pay(status: 402, code: "payment_setup_required")
+      stub_action("start_rental", status: 402, code: "payment_setup_required")
 
       verdict = scenario.call(client, profile)
 
@@ -85,8 +70,8 @@ RSpec.describe Kiosk::Redteam::Scenarios::MissingKyc do
 
     it "reports SETUP FAILED when pay 403s, even though the gated action 403s too" do
       stub_registers("a")
-      stub_reserve_then_gated(gated_status: 403)
-      stub_exec_pay(status: 403)
+      stub_pay(status: 403, code: "forbidden")
+      stub_action("start_rental", status: 403, code: "forbidden")
 
       verdict = scenario.call(client, profile)
 
@@ -96,10 +81,8 @@ RSpec.describe Kiosk::Redteam::Scenarios::MissingKyc do
 
     it "reports SETUP FAILED when pay crashes 500" do
       stub_registers("a")
-      stub_reserve_then_gated(gated_status: 403)
-      stub_request(:post, "#{BASE_URL}/kiosk/pay")
-        .to_return(status: 500, body: JSON.generate("error" => "boom"),
-                   headers: { "Content-Type" => "application/json" })
+      stub_pay(status: 500, code: "internal_error")
+      stub_action("start_rental", status: 403, code: "forbidden")
 
       verdict = scenario.call(client, profile)
 
@@ -109,8 +92,8 @@ RSpec.describe Kiosk::Redteam::Scenarios::MissingKyc do
 
     it "still scores BLOCKED when the payment settles and the KYC gate refuses" do
       stub_registers("a")
-      stub_reserve_then_gated(gated_status: 403, gated_body: { "error" => { "code" => "kyc_required" } })
-      stub_exec_pay(status: 200)
+      stub_pay(status: 200)
+      stub_action("start_rental", status: 403, code: "kyc_required")
 
       expect(scenario.call(client, profile).blocked).to be(true)
     end

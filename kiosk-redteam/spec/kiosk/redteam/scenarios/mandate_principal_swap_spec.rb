@@ -12,12 +12,16 @@ RSpec.describe Kiosk::Redteam::Scenarios::MandatePrincipalSwap do
     minimal_profile(pay_for: pay_for_callable)
   end
 
+  # `POST /kiosk/pay` is a RESERVED endpoint the cutover did not touch: same
+  # path, same success body shape. Only the error shape moved (problem document).
+  # minimal_profile's create_owned is a plain lambda, so the only wire traffic
+  # is register ×2 and the single pay.
+
   describe "#call — non-vacuity" do
     context "when the server accepts a cross-principal mandate (broken — BREACH)" do
       it "returns blocked: false" do
         stub_registers("a", "b")
-        stub_exec_run(status: 200, body: { "value" => { "id" => "res-1" } })
-        stub_exec_pay(status: 200)  # server accepts the swapped mandate
+        stub_pay(status: 200)  # server accepts the swapped mandate
 
         verdict = scenario.call(client, profile)
 
@@ -29,8 +33,7 @@ RSpec.describe Kiosk::Redteam::Scenarios::MandatePrincipalSwap do
     context "when the server rejects the cross-principal mandate (correct — BLOCKED)" do
       it "returns blocked: true" do
         stub_registers("a", "b")
-        stub_exec_run(status: 200, body: { "value" => { "id" => "res-1" } })
-        stub_exec_pay(status: 403)  # server rejects on principal mismatch
+        stub_pay(status: 403, code: "forbidden")  # rejects on principal mismatch
 
         verdict = scenario.call(client, profile)
 
@@ -47,40 +50,37 @@ RSpec.describe Kiosk::Redteam::Scenarios::MandatePrincipalSwap do
   # verified at all — the swap unexamined — and a 401 means B's own token was
   # rejected. Both used to score BLOCKED.
   describe "#call — only a 403 forbidden/rls_denied proves the binding was checked (K-728)" do
-    def stub_pay(status, body)
+    def stub_refused_pay(status, code)
       stub_registers("a", "b")
-      stub_exec_run(status: 200, body: { "value" => { "id" => "res-1" } })
-      stub_request(:post, "#{BASE_URL}/kiosk/pay")
-        .to_return(status: status, body: JSON.generate(body),
-                   headers: { "Content-Type" => "application/json" })
+      stub_pay(status: status, code: code)
     end
 
     it "blocks on 403 rls_denied" do
-      stub_pay(403, "error" => { "code" => "rls_denied" })
+      stub_refused_pay(403, "rls_denied")
       expect(scenario.call(client, profile).blocked).to be(true)
     end
 
     it "does not block on a 402 decline" do
-      stub_pay(402, "error" => { "code" => "payment_failed" })
+      stub_refused_pay(402, "payment_failed")
       verdict = scenario.call(client, profile)
       expect(verdict.blocked).to be(false)
       expect(verdict.detail).to include("want status 403")
     end
 
     it "does not block on a 401" do
-      stub_pay(401, "error" => { "code" => "unauthenticated" })
+      stub_refused_pay(401, "unauthenticated")
       expect(scenario.call(client, profile).blocked).to be(false)
     end
 
     it "does not block on a 403 carrying an unrelated code" do
-      stub_pay(403, "error" => { "code" => "kyc_required" })
+      stub_refused_pay(403, "kyc_required")
       verdict = scenario.call(client, profile)
       expect(verdict.blocked).to be(false)
       expect(verdict.detail).to include("want error.code")
     end
 
     it "does not block on a 500" do
-      stub_pay(500, "error" => { "code" => "forbidden" })
+      stub_refused_pay(500, "forbidden")
       expect(scenario.call(client, profile).blocked).to be(false)
     end
   end

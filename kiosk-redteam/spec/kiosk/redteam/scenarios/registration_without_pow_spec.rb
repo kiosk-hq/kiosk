@@ -15,15 +15,15 @@ RSpec.describe Kiosk::Redteam::Scenarios::RegistrationWithoutPow do
     stub_request(:post, "#{BASE_URL}/kiosk/auth/register").to_return(*responses)
   end
 
-  def refused(status, body = {})
-    { status: status, body: JSON.generate(body), headers: { "Content-Type" => "application/json" } }
+  # The auth plane kept its paths and its SUCCESS bodies across the cutover;
+  # its refusals are RFC 9457 problem documents like every other error.
+  def refused(status, code = nil)
+    problem_return(code || STATUS_DEFAULT_CODE.fetch(status), status: status)
   end
 
   def issued(suffix = "ctl")
-    { status:  201,
-      body:    JSON.generate("agent_id" => "a-#{suffix}", "user_id" => "u-#{suffix}",
-                             "access_token" => "tok-#{suffix}"),
-      headers: { "Content-Type" => "application/json" } }
+    json_return(201, "agent_id" => "a-#{suffix}", "user_id" => "u-#{suffix}",
+                     "access_token" => "tok-#{suffix}")
   end
 
   describe "#call — non-vacuity" do
@@ -32,13 +32,7 @@ RSpec.describe Kiosk::Redteam::Scenarios::RegistrationWithoutPow do
     context "when the server accepts registration without PoW (broken — BREACH)" do
       it "returns blocked: false" do
         # Both :skip and "0" succeed — server has no PoW gate
-        stub_request(:post, "#{BASE_URL}/kiosk/auth/register")
-          .to_return(
-            { status: 201, body: JSON.generate("agent_id" => "a1", "user_id" => "u1", "access_token" => "t1"),
-              headers: { "Content-Type" => "application/json" } },
-            { status: 201, body: JSON.generate("agent_id" => "a2", "user_id" => "u2", "access_token" => "t2"),
-              headers: { "Content-Type" => "application/json" } },
-          )
+        register_returns(issued("1"), issued("2"))
 
         verdict = scenario.call(client, profile)
 
@@ -52,11 +46,7 @@ RSpec.describe Kiosk::Redteam::Scenarios::RegistrationWithoutPow do
         # The scenario uses its own rejection check (status != 201, no token, not
         # a crash) so it does NOT rely on Kiosk::Redteam.blocked? or on the
         # bad_request code.
-        register_returns(
-          refused(422, "error" => { "code" => "pow_required" }),
-          refused(400, "error" => { "code" => "bad_request" }),
-          issued,
-        )
+        register_returns(refused(422), refused(400), issued)
 
         verdict = scenario.call(client, profile)
 
@@ -83,13 +73,7 @@ RSpec.describe Kiosk::Redteam::Scenarios::RegistrationWithoutPow do
 
     context "when only one attempt is blocked but not both (partial gate)" do
       it "returns blocked: false" do
-        stub_request(:post, "#{BASE_URL}/kiosk/auth/register")
-          .to_return(
-            { status: 422, body: JSON.generate("error" => { "code" => "pow_required" }),
-              headers: { "Content-Type" => "application/json" } },
-            { status: 201, body: JSON.generate("agent_id" => "a2", "user_id" => "u2", "access_token" => "t2"),
-              headers: { "Content-Type" => "application/json" } },
-          )
+        register_returns(refused(422), issued("2"))
 
         verdict = scenario.call(client, profile)
 
@@ -110,7 +94,7 @@ RSpec.describe Kiosk::Redteam::Scenarios::RegistrationWithoutPow do
 
     context "when the server 404s every path (no register endpoint at all)" do
       it "returns blocked: false with a CONTROL FAILED detail" do
-        register_returns(refused(404, "error" => { "code" => "not_found" }))
+        register_returns(refused(404))
 
         verdict = scenario.call(client, profile)
 
@@ -133,9 +117,7 @@ RSpec.describe Kiosk::Redteam::Scenarios::RegistrationWithoutPow do
 
     context "when the control answers 201 but hands back no access_token" do
       it "returns blocked: false" do
-        register_returns(refused(422), refused(400),
-                         { status: 201, body: JSON.generate("agent_id" => "a1"),
-                           headers: { "Content-Type" => "application/json" } })
+        register_returns(refused(422), refused(400), json_return(201, "agent_id" => "a1"))
 
         verdict = scenario.call(client, profile)
 
@@ -148,7 +130,7 @@ RSpec.describe Kiosk::Redteam::Scenarios::RegistrationWithoutPow do
     # PoW check deleted — so it is not a rejection by a gate.
     [500, 502, 503].each do |status|
       it "returns blocked: false when the pow: :skip attempt crashes #{status}" do
-        register_returns(refused(status, "error" => "boom"), refused(400), issued)
+        register_returns(refused(status), refused(400), issued)
 
         verdict = scenario.call(client, profile)
 
@@ -159,7 +141,7 @@ RSpec.describe Kiosk::Redteam::Scenarios::RegistrationWithoutPow do
     end
 
     it "returns blocked: false when the pow: \"0\" attempt crashes 500" do
-      register_returns(refused(422), refused(500, "error" => "boom"), issued)
+      register_returns(refused(422), refused(500), issued)
 
       verdict = scenario.call(client, profile)
 

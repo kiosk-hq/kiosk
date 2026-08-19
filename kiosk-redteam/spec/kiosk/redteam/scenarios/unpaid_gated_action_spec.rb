@@ -15,12 +15,16 @@ RSpec.describe Kiosk::Redteam::Scenarios::UnpaidGatedAction do
     )
   end
 
+  # The gated action is `POST /kiosk/start_rental` — the verb name is the path
+  # segment, and `{reservation_id: …}` is the WHOLE body.
+  # (minimal_profile's create_owned is a plain lambda, so it makes no wire call.)
+  RENTAL_OK = { "scooter_code" => "SK-001", "rental_token" => "rt-1", "exp" => 4_102_444_800 }.freeze
+
   describe "#call — non-vacuity" do
     context "when the server allows the gated action without payment (broken — BREACH)" do
       it "returns blocked: false" do
         stub_registers("a")
-        # create_owned (reserve) + gated_action (start_rental) both return 200
-        stub_exec_run(status: 200, body: { "value" => { "id" => "res-1" } })
+        stub_action("start_rental", status: 200, body: RENTAL_OK)
 
         verdict = scenario.call(client, profile)
 
@@ -32,22 +36,27 @@ RSpec.describe Kiosk::Redteam::Scenarios::UnpaidGatedAction do
     context "when the server blocks the gated action (correct — BLOCKED)" do
       it "returns blocked: true" do
         stub_registers("a")
-        stub_request(:post, "#{BASE_URL}/kiosk/run")
-          .with { |req| JSON.parse(req.body)["name"] == "reserve" }
-          .to_return(status: 200,
-                     body: JSON.generate({ "value" => { "id" => "res-1" } }),
-                     headers: { "Content-Type" => "application/json" })
-        stub_request(:post, "#{BASE_URL}/kiosk/run")
-          .with { |req| JSON.parse(req.body)["name"] == "start_rental" }
-          .to_return(status: 403,
-                     body: JSON.generate({ "error" => { "code" => "forbidden" } }),
-                     headers: { "Content-Type" => "application/json" })
+        stub_action("start_rental", status: 403, code: "forbidden")
 
         verdict = scenario.call(client, profile)
 
         expect(verdict.blocked).to be(true)
         expect(verdict.status).to eq(403)
       end
+    end
+
+    it "sends the gated args as the body of POST /kiosk/start_rental, with no `name` field" do
+      stub_registers("a")
+      captured = nil
+      stub_request(:post, verb_url("start_rental"))
+        .with { |req| captured = req; true }
+        .to_return(problem_return("forbidden"))
+
+      scenario.call(client, profile)
+
+      expect(captured.uri.path).to eq("/kiosk/start_rental")
+      expect(captured.headers["Authorization"]).to eq("Bearer tok-a")
+      expect(JSON.parse(captured.body)).to eq("reservation_id" => "res-1")
     end
   end
 
@@ -62,14 +71,7 @@ RSpec.describe Kiosk::Redteam::Scenarios::UnpaidGatedAction do
   describe "#call — a 402 on the gated action is not a pass (K-736)" do
     def stub_toll(code)
       stub_registers("a")
-      stub_request(:post, "#{BASE_URL}/kiosk/run")
-        .with { |req| JSON.parse(req.body)["name"] == "reserve" }
-        .to_return(status: 200, body: JSON.generate("value" => { "id" => "res-1" }),
-                   headers: { "Content-Type" => "application/json" })
-      stub_request(:post, "#{BASE_URL}/kiosk/run")
-        .with { |req| JSON.parse(req.body)["name"] == "start_rental" }
-        .to_return(status: 402, body: JSON.generate("error" => { "code" => code }),
-                   headers: { "Content-Type" => "application/json" })
+      stub_action("start_rental", status: 402, code: code)
     end
 
     %w[pow_required payment_setup_required payment_failed].each do |code|
@@ -114,12 +116,10 @@ RSpec.describe Kiosk::Redteam::Scenarios::UnpaidGatedAction do
 
     it "submits the kyc_valid attestation for the registered principal" do
       stub_registers("a")
-      stub_exec_run(status: 200, body: { "value" => { "id" => "res-1" } })
+      stub_action("start_rental", status: 200, body: RENTAL_OK)
       kyc_stub = stub_request(:post, "#{BASE_URL}/kiosk/agents/kyc")
         .with { |req| JSON.parse(req.body)["kyc_jws"] == "valid-kyc-jws-for-user-a" }
-        .to_return(status: 200,
-                   body: JSON.generate({ "ok" => true }),
-                   headers: { "Content-Type" => "application/json" })
+        .to_return(json_return(200, "kyc_verified" => true, "attributes" => {}))
 
       scenario.call(client, kyc_profile)
 
@@ -147,10 +147,8 @@ RSpec.describe Kiosk::Redteam::Scenarios::UnpaidGatedAction do
     [403, 401, 500].each do |status|
       it "reports SETUP FAILED when the valid attestation is refused #{status}" do
         stub_registers("a")
-        stub_exec_run(status: 200, body: { "value" => { "id" => "res-1" } })
-        stub_request(:post, "#{BASE_URL}/kiosk/agents/kyc")
-          .to_return(status: status, body: JSON.generate("error" => { "code" => "forbidden" }),
-                     headers: { "Content-Type" => "application/json" })
+        stub_action("start_rental", status: 200, body: RENTAL_OK)
+        stub_kyc(status: status)
 
         verdict = scenario.call(client, kyc_profile)
 
@@ -163,26 +161,18 @@ RSpec.describe Kiosk::Redteam::Scenarios::UnpaidGatedAction do
 
     it "does not run the gated action once the KYC setup has failed" do
       stub_registers("a")
-      run_stub = stub_exec_run(status: 200, body: { "value" => { "id" => "res-1" } })
+      run_stub = stub_action("start_rental", status: 200, body: RENTAL_OK)
       stub_kyc(status: 403)
 
       scenario.call(client, kyc_profile)
 
-      # create_owned is called AFTER the setup assertion, so no /run at all.
       expect(run_stub).not_to have_been_requested
     end
 
     it "proceeds normally when the attestation is accepted" do
       stub_registers("a")
       stub_kyc(status: 200)
-      stub_request(:post, "#{BASE_URL}/kiosk/run")
-        .with { |req| JSON.parse(req.body)["name"] == "reserve" }
-        .to_return(status: 200, body: JSON.generate("value" => { "id" => "res-1" }),
-                   headers: { "Content-Type" => "application/json" })
-      stub_request(:post, "#{BASE_URL}/kiosk/run")
-        .with { |req| JSON.parse(req.body)["name"] == "start_rental" }
-        .to_return(status: 403, body: JSON.generate("error" => { "code" => "forbidden" }),
-                   headers: { "Content-Type" => "application/json" })
+      stub_action("start_rental", status: 403, code: "forbidden")
 
       expect(scenario.call(client, kyc_profile).blocked).to be(true)
     end
@@ -190,14 +180,7 @@ RSpec.describe Kiosk::Redteam::Scenarios::UnpaidGatedAction do
     # A profile with no KYC surface has no setup step to assert.
     it "is unaffected when requires_kyc is false (no setup call to check)" do
       stub_registers("a")
-      stub_request(:post, "#{BASE_URL}/kiosk/run")
-        .with { |req| JSON.parse(req.body)["name"] == "reserve" }
-        .to_return(status: 200, body: JSON.generate("value" => { "id" => "res-1" }),
-                   headers: { "Content-Type" => "application/json" })
-      stub_request(:post, "#{BASE_URL}/kiosk/run")
-        .with { |req| JSON.parse(req.body)["name"] == "start_rental" }
-        .to_return(status: 403, body: JSON.generate("error" => { "code" => "forbidden" }),
-                   headers: { "Content-Type" => "application/json" })
+      stub_action("start_rental", status: 403, code: "forbidden")
 
       expect(scenario.call(client, profile).blocked).to be(true)
     end

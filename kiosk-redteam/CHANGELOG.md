@@ -4,6 +4,16 @@ All notable changes follow [Keep a Changelog](https://keepachangelog.com/en/1.1.
 
 ## [Unreleased]
 
+### Changed
+
+- The client speaks protocol 0.4: `#query` is `GET <endpoint>/<query-name>` with its arguments in the query string, `#run` is `POST <endpoint>/<action-name>` with the arguments as the whole body, and there is no `name` field on the wire. Error codes are read off the top level of an RFC 9457 problem document rather than out of the retired `error` envelope.
+
+### Fixed
+
+- `Scenario#rows_from` read only the paginated `{rows:, next:}` shape, so a non-paginating query's BARE ARRAY answer — the ordinary one on the 0.4 wire — decoded as no rows at all. `ForgedUserId`'s ownership check would then have read "not leaked" and scored a **vacuous BLOCKED** against an origin it never tested.
+- `ForgedUserId#extract_id` read the deleted 0.3 `value` wrapper, so on any real origin it found no resource id and every run ended "cannot confirm ownership was enforced".
+- `ForgedUserId` now scores the typed `400 bad_request` a 0.4 origin answers — the refusal that NAMES the injected `user_id`, because a verb whose principal comes from the token does not declare it — as BLOCKED. Without that branch the scenario reported a BREACH against a provider doing exactly the right thing. The check is in the scenario, not in `blocked?`: what makes this 400 evidence is that it names the property we injected, which a generic predicate cannot see.
+
 ### Added
 
 - `Kiosk::Redteam::Client` — HTTP client for the wire surface an attacker sees: agent register/login (solving the Equihash registration toll), KYC attestation, and the `query` / `run` / `pay` verbs with RS256 mandate signing.

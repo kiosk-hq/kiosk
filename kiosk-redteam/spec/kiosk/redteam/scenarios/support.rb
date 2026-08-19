@@ -2,13 +2,27 @@
 
 # Shared helpers for scenario specs.
 #
-# Included in all scenario specs via RSpec shared context.
+# ── The 0.4 per-verb wire ────────────────────────────────────────────────────
+#
+#   GET  <mount>/<query-name>?<args>   a query  — arguments in the QUERY STRING
+#   POST <mount>/<action-name>         an action — the arguments ARE the body
+#   POST <mount>/pay                   reserved, unchanged
+#   POST <mount>/agents/kyc            reserved, unchanged
+#   POST <mount>/auth/register         reserved, unchanged
+#
+# There is no `<mount>/query` and no `<mount>/run` — they were deleted at the
+# cutover — and there is no `name` field anywhere: the verb name is a PATH
+# SEGMENT, which is also what the PoW fingerprint binds to. A stub written
+# against a `name` body field therefore matches nothing at all.
+#
+# SUCCESS has no envelope: a paginating query answers `{"rows": …, "next": …}`,
+# a non-paginating one a BARE JSON ARRAY, and an action or `pay` answers its own
+# object. ERRORS are RFC 9457 problem documents — see spec_helper's `problem`.
+#
 # Provides:
-#   - BASE_URL constant
-#   - client   — Kiosk::Redteam::Client pointed at BASE_URL (WebMock)
-#   - stub_register(n) — stub n successive /register calls
-#   - stub_exec_run / stub_exec_query / stub_exec_pay
-#   - blocked_response / breach_response helpers
+#   - BASE_URL constant + verb_url(name)
+#   - stub_registers(*suffixes) — successive /auth/register calls
+#   - stub_action / stub_query / stub_pay / stub_kyc
 #   - minimal Profile factories
 
 require "openssl"
@@ -16,16 +30,20 @@ require "json"
 
 BASE_URL = "http://kiosk.test"
 
+# The endpoint of one verb — its name IS the path segment.
+def verb_url(name)
+  "#{BASE_URL}/kiosk/#{name}"
+end
+
 # ── Stub builders ───────────────────────────────────────────────────────────
 
 def reg_response(suffix)
-  { status: 201,
-    body: JSON.generate(
-      "agent_id"     => "agent-#{suffix}",
-      "user_id"      => "user-#{suffix}",
-      "access_token" => "tok-#{suffix}",
-    ),
-    headers: { "Content-Type" => "application/json" } }
+  json_return(
+    201,
+    "agent_id"     => "agent-#{suffix}",
+    "user_id"      => "user-#{suffix}",
+    "access_token" => "tok-#{suffix}",
+  )
 end
 
 # Stub successive register calls; pass suffixes in order of expected calls.
@@ -34,50 +52,50 @@ def stub_registers(*suffixes)
     .to_return(*suffixes.map { |s| reg_response(s) })
 end
 
-def stub_kyc(status: 200)
+# POST <mount>/agents/kyc — a reserved endpoint the cutover did not touch.
+# Success is the verifier's own object; a refusal is a problem document.
+def stub_kyc(status: 200, code: nil)
   stub_request(:post, "#{BASE_URL}/kiosk/agents/kyc")
-    .to_return(
-      status:  status,
-      body:    JSON.generate(status == 200 ? { "ok" => true } : { "error" => { "code" => "forbidden" } }),
-      headers: { "Content-Type" => "application/json" },
-    )
+    .to_return(wire_return(status: status, code: code,
+                           body: { "kyc_verified" => true, "attributes" => {} }))
 end
 
-# REST surface: the verb is the path, not a `command` field in the body.
-def stub_exec_run(status: 200, body: { "value" => { "id" => "res-1" } })
-  stub_request(:post, "#{BASE_URL}/kiosk/run")
-    .to_return(
-      status:  status,
-      body:    JSON.generate(body),
-      headers: { "Content-Type" => "application/json" },
-    )
+# The default object an action answers with. An action's payload reaches the
+# wire VERBATIM, so this is the whole body — there is no wrapper around it.
+ACTION_OK = { "id" => "res-1" }.freeze
+
+# POST <mount>/<action-name>. `args` are the body, so a stub that wants to
+# assert them matches on the body directly.
+def stub_action(name, status: 200, body: nil, code: nil)
+  stub_request(:post, verb_url(name))
+    .to_return(wire_return(status: status, body: body || ACTION_OK, code: code))
 end
 
-def stub_exec_query(status: 200, rows: [])
-  stub_request(:post, "#{BASE_URL}/kiosk/query")
-    .to_return(
-      status:  status,
-      body:    JSON.generate({ "rows" => rows }),
-      headers: { "Content-Type" => "application/json" },
-    )
+# One page of query rows: `{"rows": …, "next": <opaque cursor>}` — the answer a
+# TRUNCATED paginating query gives (Kiosk::Server::Result#to_payload). This is
+# the shape Scenario#rows_from reads.
+def page(rows)
+  { "rows" => rows, "next" => "b2Zmc2V0OjE" }
 end
 
-def stub_exec_pay(status: 200)
+# GET <mount>/<query-name>. Scenario queries carry no arguments, so the URL is
+# exact; a query WITH arguments is matched with `.with(query: …)`.
+def stub_query(name, status: 200, rows: [], body: nil, code: nil)
+  stub_request(:get, verb_url(name))
+    .to_return(wire_return(status: status, body: body || page(rows), code: code))
+end
+
+# The settlement object `POST <mount>/pay` answers (Executor#pay).
+PAY_OK = {
+  "settlement_id"        => "stl-1",
+  "psp_reference"        => "pi_test_1",
+  "settled_amount_cents" => 100,
+  "currency"             => "eur",
+}.freeze
+
+def stub_pay(status: 200, body: nil, code: nil)
   stub_request(:post, "#{BASE_URL}/kiosk/pay")
-    .to_return(
-      status:  status,
-      body:    JSON.generate(status == 200 ? { "value" => { "payment_mandate_id" => "pm-1" } } : { "error" => { "code" => "forbidden" } }),
-      headers: { "Content-Type" => "application/json" },
-    )
-end
-
-# Stub all read/write verbs to return the same response.
-def stub_exec_any(status:, body: nil)
-  body ||= status >= 400 ? { "error" => { "code" => "forbidden" } } : { "value" => {} }
-  ret = { status: status, body: JSON.generate(body), headers: { "Content-Type" => "application/json" } }
-  stub_request(:post, "#{BASE_URL}/kiosk/query").to_return(ret)
-  stub_request(:post, "#{BASE_URL}/kiosk/run").to_return(ret)
-  stub_request(:post, "#{BASE_URL}/kiosk/pay").to_return(ret)
+    .to_return(wire_return(status: status, body: body || PAY_OK, code: code))
 end
 
 # ── Minimal profile factories ───────────────────────────────────────────────

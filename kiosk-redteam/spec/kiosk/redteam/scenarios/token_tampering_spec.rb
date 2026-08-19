@@ -32,8 +32,9 @@ RSpec.describe Kiosk::Redteam::Scenarios::TokenTampering do
                                    "access_token" => valid_token),
             headers: { "Content-Type" => "application/json" },
           )
-        # Server accepts any bearer token (broken auth middleware)
-        stub_exec_any(status: 200, body: { "rows" => [] })
+        # Server accepts any bearer token (broken auth middleware).
+        # The scenario probes with `client.query(name: "ping")` — GET /kiosk/ping.
+        stub_query("ping", rows: [])
 
         verdict = scenario.call(client, profile)
 
@@ -51,12 +52,19 @@ RSpec.describe Kiosk::Redteam::Scenarios::TokenTampering do
                                    "access_token" => valid_token),
             headers: { "Content-Type" => "application/json" },
           )
-        stub_exec_any(status: 401)
+        captured = nil
+        stub_request(:get, verb_url("ping"))
+          .with { |req| captured = req; true }
+          .to_return(problem_return("unauthenticated"))
 
         verdict = scenario.call(client, profile)
 
         expect(verdict.blocked).to be(true)
         expect(verdict.status).to eq(401)
+        # The probe carried the TAMPERED token, not the issued one.
+        bearer = captured.headers["Authorization"].sub("Bearer ", "")
+        expect(bearer).not_to eq(valid_token)
+        expect(bearer.split(".").last).to eq(valid_token.split(".").last)
       end
     end
   end
@@ -76,10 +84,10 @@ RSpec.describe Kiosk::Redteam::Scenarios::TokenTampering do
                    headers: { "Content-Type" => "application/json" })
     end
 
-    [403, 402].each do |status|
+    { 403 => "forbidden", 402 => "pow_required" }.each do |status, code|
       it "returns blocked: false when the tampered token is answered #{status}" do
         stub_register_with_real_jwt
-        stub_exec_any(status: status)
+        stub_query("ping", status: status, code: code)
 
         verdict = scenario.call(client, profile)
 
@@ -91,7 +99,7 @@ RSpec.describe Kiosk::Redteam::Scenarios::TokenTampering do
 
     it "returns blocked: false on a 500" do
       stub_register_with_real_jwt
-      stub_exec_any(status: 500, body: { "error" => { "code" => "forbidden" } })
+      stub_query("ping", status: 500, code: "forbidden")
 
       expect(scenario.call(client, profile).blocked).to be(false)
     end

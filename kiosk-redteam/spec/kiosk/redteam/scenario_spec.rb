@@ -50,7 +50,7 @@ RSpec.describe Kiosk::Redteam::Scenario do
       "payment_failed"         => "the payment rail declined",
     }.each do |code, phrase|
       it "does not block a 402 #{code}, and says which one answered" do
-        v = scenario.verdict_from(response(402, "error" => { "code" => code }),
+        v = scenario.verdict_from(response(402, problem(code)),
                                   detail: "the gated action succeeded")
         expect(v.blocked).to be(false)
         expect(v.skipped).to be(false)
@@ -71,13 +71,13 @@ RSpec.describe Kiosk::Redteam::Scenario do
     # the demos' expected-skip assertion would go green while the scenario had
     # quietly stopped testing. The stall must fail the battery.
     it "is a breach-shaped verdict, not a skip — the battery cannot go green on it" do
-      v = scenario.verdict_from(response(402, "error" => { "code" => "pow_required" }))
+      v = scenario.verdict_from(response(402, problem("pow_required")))
       expect(v.skipped).to be(false)
       expect(v.blocked).to be(false)
     end
 
     it "still blocks a 200 envelope carrying a real denial code" do
-      expect(scenario.verdict_from(response(200, "error" => { "code" => "forbidden" })).blocked).to be(true)
+      expect(scenario.verdict_from(response(200, problem("forbidden", status: 200))).blocked).to be(true)
     end
   end
 
@@ -95,21 +95,21 @@ RSpec.describe Kiosk::Redteam::Scenario do
     # K-736: `expect: 402` demands nothing on its own — three codes ride that
     # status and two of them are not refusals. Naming it costs an expect_code.
     it "refuses a 402 the caller demanded by status alone" do
-      v = scenario.verdict_from(response(402, "error" => { "code" => "pow_required" }), expect: [402, 403])
+      v = scenario.verdict_from(response(402, problem("pow_required")), expect: [402, 403])
       expect(v.blocked).to be(false)
       expect(v.detail).to include("HTTP 402 is conclusive only with an explicit expect_code")
       expect(v.detail).to include("pow_required/payment_setup_required/payment_failed")
     end
 
     it "accepts a 402 whose code the caller named" do
-      v = scenario.verdict_from(response(402, "error" => { "code" => "payment_failed" }),
+      v = scenario.verdict_from(response(402, problem("payment_failed")),
                                 expect: [402, 403], expect_code: %w[payment_failed forbidden])
       expect(v.blocked).to be(true)
       expect(v.detail).to eq("")
     end
 
     it "still refuses a named 402 whose code is one of the other two" do
-      v = scenario.verdict_from(response(402, "error" => { "code" => "pow_required" }),
+      v = scenario.verdict_from(response(402, problem("pow_required")),
                                 expect: 402, expect_code: "payment_failed")
       expect(v.blocked).to be(false)
       expect(v.detail).to include('want error.code "payment_failed"')
@@ -129,7 +129,7 @@ RSpec.describe Kiosk::Redteam::Scenario do
     end
 
     it "does NOT block a 404 (a mis-routed path is not a gate)" do
-      v = scenario.verdict_from(response(404, "error" => { "code" => "not_found" }), expect: 403)
+      v = scenario.verdict_from(response(404, problem("not_found")), expect: 403)
       expect(v.blocked).to be(false)
       expect(v.detail).to include("not_found")
     end
@@ -148,50 +148,96 @@ RSpec.describe Kiosk::Redteam::Scenario do
 
   describe "#verdict_from with expect_code:" do
     it "blocks when status AND code both match" do
-      body = { "error" => { "code" => "forbidden" } }
+      body = problem("forbidden")
       expect(scenario.verdict_from(response(403, body), expect: 403, expect_code: "forbidden").blocked).to be(true)
     end
 
     it "accepts any of several demanded codes" do
-      body = { "error" => { "code" => "rls_denied" } }
+      body = problem("rls_denied")
       v = scenario.verdict_from(response(403, body), expect: 403, expect_code: %w[forbidden rls_denied])
       expect(v.blocked).to be(true)
     end
 
     it "does NOT block when the status matches but the code does not" do
-      body = { "error" => { "code" => "kyc_required" } }
+      body = problem("kyc_required")
       v = scenario.verdict_from(response(403, body), expect: 403, expect_code: "forbidden")
       expect(v.blocked).to be(false)
       expect(v.detail).to include('want error.code "forbidden"')
     end
 
-    it "does NOT block when there is no error envelope at all" do
+    it "does NOT block when the body carries no code at all" do
       v = scenario.verdict_from(response(403, {}), expect: 403, expect_code: "forbidden")
       expect(v.blocked).to be(false)
       expect(v.detail).to include("code=nil")
     end
 
-    it "does NOT block when error is a bare String rather than an envelope" do
-      v = scenario.verdict_from(response(403, "error" => "nope"), expect: 403, expect_code: "forbidden")
+    it "does NOT block when the body is not a problem document (not a Hash)" do
+      v = scenario.verdict_from(response(403, ["nope"]), expect: 403, expect_code: "forbidden")
       expect(v.blocked).to be(false)
     end
 
+    # The cutover moved the branch point out of a nested object. A stub — or an
+    # origin — still speaking 0.3 must read as "no code", never as a match.
+    it "does NOT block on a 0.3 `error` envelope carrying the demanded code" do
+      nested = { "ok" => false, "error" => { "code" => "forbidden" } }
+      v = scenario.verdict_from(response(403, nested), expect: 403, expect_code: "forbidden")
+      expect(v.blocked).to be(false)
+      expect(v.detail).to include("code=nil")
+    end
+
     it "can demand a code without pinning the status" do
-      body = { "error" => { "code" => "forbidden" } }
+      body = problem("forbidden", status: 200)
       expect(scenario.verdict_from(response(200, body), expect_code: "forbidden").blocked).to be(true)
       expect(scenario.verdict_from(response(200, {}), expect_code: "forbidden").blocked).to be(false)
     end
   end
 
   describe "#error_code" do
-    it "reads body.error.code" do
-      expect(scenario.error_code(response(403, "error" => { "code" => "forbidden" }))).to eq("forbidden")
+    it "reads the problem document's top-level code" do
+      expect(scenario.error_code(response(403, problem("forbidden")))).to eq("forbidden")
     end
 
-    it "answers nil for a String error, a non-Hash body, and an absent envelope" do
-      expect(scenario.error_code(response(403, "error" => "plain"))).to be_nil
-      expect(scenario.error_code(response(403, []))).to be_nil
+    it "answers nil for a bare-array body, an empty body, and a 0.3 envelope" do
+      # A non-paginating query answers a BARE ARRAY — not a Hash at all.
+      expect(scenario.error_code(response(200, [{ "id" => "r1" }]))).to be_nil
       expect(scenario.error_code(response(403, {}))).to be_nil
+      expect(scenario.error_code(response(403, "error" => { "code" => "forbidden" }))).to be_nil
+    end
+  end
+
+  # ── #rows_from ───────────────────────────────────────────────────────────
+  #
+  # Every leak check in the library reads its rows through this one helper —
+  # CrossTenantRead's control and attack legs, ForgedUserId's ownership check —
+  # so what it can and cannot read decides what those scenarios can prove.
+  describe "#rows_from" do
+    it "reads the rows of a truncated page" do
+      page = { "rows" => [{ "id" => "r1" }, { "id" => "r2" }], "next" => "b2Zmc2V0OjI" }
+      expect(scenario.rows_from(response(200, page))).to eq([{ "id" => "r1" }, { "id" => "r2" }])
+    end
+
+    it "answers [] for a page with no rows" do
+      expect(scenario.rows_from(response(200, "rows" => []))).to eq([])
+    end
+
+    # A query that does NOT paginate — and a paginating one whose page was not
+    # truncated — answers a BARE JSON ARRAY (Kiosk::Server::Result#to_payload
+    # returns the payload verbatim unless a next_cursor is set). That is the
+    # ORDINARY answer on this wire, and reading only `body["rows"]` drops it:
+    # on a non-Hash body that yields [], which reads identically to correct
+    # isolation. CrossTenantRead's control would then fail loudly (safe), but
+    # ForgedUserId's ownership check would answer "not leaked" and score a
+    # VACUOUS BLOCKED — a security scenario passing an origin it never tested.
+    it "reads a non-paginating query's BARE ARRAY answer" do
+      expect(scenario.rows_from(response(200, [{ "id" => "r1" }]))).to eq([{ "id" => "r1" }])
+    end
+
+    it "answers [] for an empty bare array, without confusing it with a hash" do
+      expect(scenario.rows_from(response(200, []))).to eq([])
+    end
+
+    it "answers [] when `rows` is present but is not an array" do
+      expect(scenario.rows_from(response(200, "rows" => "nope"))).to eq([])
     end
   end
 

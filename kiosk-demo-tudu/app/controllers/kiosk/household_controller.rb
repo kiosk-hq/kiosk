@@ -46,6 +46,22 @@ class Kiosk::HouseholdController < ApplicationController
   # verb takes no arguments" is a published fact rather than an absence an
   # assistant has to interpret.
   input_schema type: "object", additionalProperties: false, properties: {}, required: []
+  # A ONE-ROW array: this is a query and a query answers with rows. `agent_id`
+  # is null when the principal is a human web session rather than an assistant,
+  # and `handle` is null when the account has no email on file — both are real
+  # states of this demo's own tables, not defensive nulls.
+  output_schema type: "array",
+                description: "Exactly one row: the authenticated principal.",
+                minItems: 1, maxItems: 1,
+                items: {
+                  type: "object", additionalProperties: false,
+                  properties: {
+                    account_id: { type: "string", description: "uuid — the principal, from kiosk.current_user_id(). Pass it to remove_member as `account_id`." },
+                    agent_id:   { type: %w[string null], description: "The acting assistant, or null when a human session is calling." },
+                    handle:     { type: %w[string null], description: "The account's email handle, or null when it has none." },
+                  },
+                  required: %w[account_id agent_id handle],
+                }
   def whoami
     account_id = kiosk_identity.user_id
     render json: [{ "account_id" => account_id,
@@ -67,6 +83,17 @@ class Kiosk::HouseholdController < ApplicationController
                additionalProperties: false,
                properties: {},
                required: []
+  output_schema type: "array",
+                description: "The lists the caller is a member of, newest first.",
+                items: {
+                  type: "object", additionalProperties: false,
+                  properties: {
+                    list_id: { type: "string", description: "uuid. Pass to list_todos / list_members / add_todo / invite / remove_member as `list_id`." },
+                    title:   { type: "string", description: "The list title." },
+                    role:    { enum: %w[owner member], description: "The CALLER's role on this list — `invite` and `remove_member` are owner-only." },
+                  },
+                  required: %w[list_id title role],
+                }
   example_params({})
   example_row({
     list_id: "d4e5f6a7-8b9c-4d0e-9f1a-2b3c4d5e6f70", title: "Flat 3B", role: "owner",
@@ -96,6 +123,18 @@ class Kiosk::HouseholdController < ApplicationController
                                          "from my_lists, verbatim." },
                },
                required: ["list_id"]
+  output_schema type: "array",
+                description: "The list's todos, oldest first.",
+                items: {
+                  type: "object", additionalProperties: false,
+                  properties: {
+                    todo_id:             { type: "string", description: "uuid. Pass to complete_todo as `todo_id`." },
+                    title:               { type: "string", description: "The todo text." },
+                    done:                { type: "boolean", description: "Whether it has been completed." },
+                    created_by_agent_id: { type: %w[string null], description: "The assistant that added it (attribution), or null when a human did." },
+                  },
+                  required: %w[todo_id title done created_by_agent_id],
+                }
   # Gate, then {Todo.rows_on} — the projection tudu's `/lists/:id` page renders
   # too (T-082). Both doors run the SAME gate and then the SAME projection, which
   # is what stops the page and the verb from drifting apart.
@@ -118,6 +157,17 @@ class Kiosk::HouseholdController < ApplicationController
                                          "from my_lists, verbatim." },
                },
                required: ["list_id"]
+  output_schema type: "array",
+                description: "The list's members, owners first.",
+                items: {
+                  type: "object", additionalProperties: false,
+                  properties: {
+                    account_id: { type: "string", description: "uuid. Pass to remove_member as `account_id`." },
+                    handle:     { type: %w[string null], description: "The member's email handle, or null when the account has none." },
+                    role:       { enum: %w[owner member], description: "Their role on this list. The last owner cannot be removed." },
+                  },
+                  required: %w[account_id handle role],
+                }
   # Gate, then {Membership.rows_on} — the projection the web page's member list
   # renders too (T-082).
   def list_members

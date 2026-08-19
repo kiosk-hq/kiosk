@@ -16,8 +16,10 @@ two-server harness and specs pin their own local values on both sides.
 
 ## Not a Kiosk operator — an ISSUER
 
-The broker exposes **none** of the four Kiosk verbs (`schema`/`query`/`run`/`pay`),
-has no PoW gate, and serves no `/.well-known/kiosk.json`. It is the mirror ISSUER
+The broker mounts **no** Kiosk wire at all — neither of the two reserved
+endpoints (`GET <endpoint>/schema`, `POST <endpoint>/pay`) and not one
+per-verb endpoint, because it registers no verb. It has no PoW gate, and it
+serves no `/.well-known/kiosk.json`. It is the mirror ISSUER
 side of the Kiosk trust primitives an operator's `Kiosk::Server::KycVerifier`
 already accepts: it signs anonymized attestations that the operator trusts via
 the existing `c.kyc_issuer` / `c.kyc_public_key` config — no new framework

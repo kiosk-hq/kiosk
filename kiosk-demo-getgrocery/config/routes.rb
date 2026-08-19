@@ -55,8 +55,10 @@ Rails.application.routes.draw do
   # served at the guessable conventional URL. It advertises `capabilities`,
   # the MODULES actually served (schema/queries/actions/pay), computed from the
   # live registry, so discovery and the live surface never drift. Never the
-  # registered verb NAMES: this document is unauthenticated and the catalog is
-  # Bearer-gated behind GET /kiosk/schema.
+  # registered verb NAMES — a MODELLING rule, not a security one (spec 4.2):
+  # GET /kiosk/schema is public, so there is nothing to withhold. This document
+  # is a POINTER, the catalog is the CONTRACT, and a second copy of the verb
+  # list would be a second source of truth for it.
   get "/.well-known/kiosk.json",            to: "kiosk/server/discovery#kiosk_json"
 
   # /.well-known/api-catalog — RFC 9727 linkset of the live wire endpoints

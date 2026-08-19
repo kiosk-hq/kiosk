@@ -156,12 +156,11 @@ RSpec.describe "Kiosk::Query / Kiosk::Action (the operator mixin)" do
       expect(Kiosk::Server::Queries.describe("catalog")[:params]).to be_nil
     end
 
-    it "reaches the wire catalog through the schema verb" do
-      result = execute(:schema, {})
+    it "reaches the wire catalog the public `schema` endpoint serves" do
+      document = Kiosk::Server::SchemaDocument.document
 
-      names = result.payload[:queries].map { |d| d[:name] }
-      expect(names).to include("catalog")
-      expect(result.payload[:actions].map { |d| d[:name] }).to include("create_order")
+      expect(document[:queries].map { |d| d[:name] }).to include("catalog")
+      expect(document[:actions].map { |d| d[:name] }).to include("create_order")
     end
 
     it "inherits the kind from the operator's own base class" do

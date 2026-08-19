@@ -51,14 +51,27 @@ module Kiosk
     #   3. the arguments       400  ArgumentDecoder + the declared input_schema
     #   4. the toll            402  PowGate, via WireController#execute_wire
     #
-    # Design §3.5 lists the declared-verb check BEFORE authentication. Serving
-    # it in that order would answer an UNAUTHENTICATED probe 404 for a name
-    # that does not exist and 401 for one that does — enumerating the catalog
-    # to anyone who can reach the origin, on a surface that is Bearer-gated
-    # today (`GET <endpoint>/schema` requires an identity). Authenticating
-    # first keeps that closed: every single-segment path under the mount
-    # answers 401 to an unauthenticated caller, whether or not a verb by that
-    # name exists.
+    # Design §3.5 lists the declared-verb check BEFORE authentication. This
+    # order is the one that ships, and the reason is now ORDINARY GATE ORDER
+    # rather than a security defence — which is a change of justification, not
+    # of behaviour, and it is written down because the old reason is dead.
+    #
+    # IT WAS an anti-enumeration measure: §3.5's order answers an anonymous
+    # probe 404 for a name that does not exist and 401 for one that does, which
+    # is an enumeration oracle, and the catalogue was behind a Bearer token.
+    # BOTH halves of that are gone (2026-08-19). `GET <endpoint>/schema` is
+    # PUBLIC (T-094) and `/.well-known/api-catalog` hyperlinks every verb
+    # unauthenticated (T-093), so the complete list is one anonymous GET away
+    # and there is nothing left for this ordering to withhold — not narrowed to
+    # "one at a time", gone.
+    #
+    # WHAT KEEPS IT: identity is a precondition of every gate below it. The
+    # toll is priced against the caller's reputation, the argument check runs
+    # against a descriptor the caller may or may not be allowed to reach, and
+    # the handler runs inside a session bound to the identity — so resolving it
+    # first is the straight code path and any other order re-derives it later
+    # anyway. It costs nothing and it explains itself; that is the whole of the
+    # case now.
     #
     # ── The answer ───────────────────────────────────────────────────────
     #
@@ -106,9 +119,9 @@ module Kiosk
       # A name registered as the OTHER KIND is `405 method_not_allowed` with
       # `Allow:` naming the method the verb does accept. The resource EXISTS —
       # answering 404 would be a lie about it, and RFC 9110 §15.5.6 already
-      # has the status for exactly this. It discloses nothing: identity is
-      # resolved first (401 above), and `GET <endpoint>/schema` already lists
-      # every name to an authenticated caller.
+      # has the status for exactly this. It discloses nothing: `GET
+      # <endpoint>/schema` publishes every name and its kind to ANYONE, so a
+      # 405 tells a caller only what it could have read first.
       def descriptor_for!(command, name)
         registry, other = command == :query ? [Queries, Actions] : [Actions, Queries]
         return registry.describe(name) if registry.known.include?(name)

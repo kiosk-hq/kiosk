@@ -13,14 +13,21 @@ module Kiosk
     # behave like the wire it describes is INHERITED from {VerbController}
     # rather than restated here, and that is deliberate:
     #
-    #   * IDENTITY FIRST. Bearer, exactly like `GET <endpoint>/schema`. The
-    #     document publishes the whole catalog — every verb name, every
-    #     argument, every result shape — so serving it unauthenticated would
-    #     hand an anonymous caller the enumeration slice 1 ordered its gates
-    #     (401 before 404) specifically to withhold.
+    #   * IDENTITY FIRST. Bearer. This is now the ONE surface still gated for a
+    #     reason the rest of the fleet retired: `GET <endpoint>/schema` went
+    #     PUBLIC in T-094 (the catalogue is not a secret, and it is a static
+    #     answer), and `/.well-known/api-catalog` hyperlinks every verb
+    #     unauthenticated (T-093). This document describes the SAME verbs, so
+    #     the enumeration argument that gated it in slice 4 no longer holds
+    #     here either — but Phil has not been asked about this endpoint, and
+    #     rule 2 says an undecided conflict is filed, not picked. It is filed:
+    #     **K-804**. Until it is answered the gate STAYS. Do not "make it
+    #     consistent" in passing.
     #   * THE SAME TOLL. `:schema`, via {WireController#toll!} — it renders the
-    #     same catalog from the same registry, and a policy pricing `schema`
-    #     must not be walkable around by asking for the other spelling.
+    #     same catalog from the same registry, and while this spelling costs an
+    #     identity, a policy pricing it must still be able to. (The canonical
+    #     `schema` endpoint pays no toll any more: it has no identity to charge
+    #     and costs the origin nothing to serve.)
     #   * THE SAME FAILURE SHAPE. An RFC 9457 problem document under
     #     `application/problem+json`, from the seam {VerbController} already
     #     overrides. A second copy of that seam here is exactly the drift this

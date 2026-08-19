@@ -61,6 +61,57 @@ module Kiosk
         end
         headers
       end
+
+      # ── THE ONE WRITTEN EXCEPTION to the policy above (T-094) ────────────
+      #
+      # `GET <endpoint>/schema` is PUBLIC since T-094: it carries verb names,
+      # descriptions and schemas, nothing per-agent and no secret, and it is
+      # rendered from memory. So the two rules the default encodes stop
+      # applying to it, and both must be actively UNDONE rather than merely
+      # relaxed:
+      #
+      #   * `private, no-store` becomes `public, max-age=…`. A shared cache is
+      #     the point — an origin that answers every assistant with the same
+      #     bytes should answer most of them from a CDN edge.
+      #   * `Vary: Authorization, Kiosk-PoW` is NOT emitted. This is the half
+      #     that would silently undo the other: a public document that varies
+      #     on a header it no longer reads is, to a shared cache, a different
+      #     document per caller — cacheable in theory and never hit in
+      #     practice. The endpoint reads neither header, so naming them would
+      #     also be a lie.
+      #
+      # TWO TTLs, because a fixed URL cannot safely carry a long one. Ask for
+      # `/kiosk/schema` and you get {SHORT_MAX_AGE}: the path never changes, so
+      # anything longer means a CDN serving a catalogue from before the last
+      # deploy, invisibly, to an assistant that then calls verbs which no
+      # longer exist. Ask for `/kiosk/schema?v=<digest>` — the URL the
+      # discovery documents link, digest from {SchemaDocument} — and you get
+      # {IMMUTABLE_MAX_AGE}, because that URL's answer cannot change: a deploy
+      # that changes the catalogue changes the digest, the discovery documents
+      # (short TTL) publish the new link, and nothing is pointed at the old one
+      # any more. It is the asset-pipeline pattern, and it is what makes a
+      # week — a year, here — safe rather than a bug.
+      SHORT_MAX_AGE     = 300         # 5 minutes — the fixed, unversioned URL
+      IMMUTABLE_MAX_AGE = 31_536_000  # a year — a digest-versioned URL
+
+      # Written in Rails' own directive order (`max-age` first, then the
+      # cacheability, then the extras) because ActionDispatch REGENERATES this
+      # header on commit from its parsed form — writing "public, max-age=300"
+      # here produces "max-age=300, public" on the wire. Spelling it the way it
+      # is emitted keeps a grep of this file and a grep of a response agreeing.
+      PUBLIC_SHORT     = "max-age=#{SHORT_MAX_AGE}, public"
+      PUBLIC_IMMUTABLE = "max-age=#{IMMUTABLE_MAX_AGE}, public, immutable"
+
+      # Apply the public policy to ONE response.
+      #
+      # @param headers   [Hash] the response headers to mutate
+      # @param etag      [String] the STRONG entity tag, already quoted
+      # @param immutable [Boolean] true when the URL carries the matching digest
+      def self.add_public_cache_policy(headers, etag:, immutable:)
+        headers["Cache-Control"] = immutable ? PUBLIC_IMMUTABLE : PUBLIC_SHORT
+        headers["ETag"] = etag
+        headers
+      end
     end
   end
 end

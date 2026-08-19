@@ -204,69 +204,27 @@ RSpec.describe Kiosk::Server::Executor do
     end
   end
 
-  describe "verb :schema" do
-    before do
-      declare_query("menu", description: "Browse the menu",
-        input_schema: { type: "object", properties: { restaurant_id: { type: "string" } } })
-      declare_action("place_order", description: "Place an order",
-        input_schema: { type: "object", properties: { items: { type: "array" } } })
+  # ── `:schema` LEFT THIS DISPATCHER (T-094) ────────────────────────────
+  #
+  # `GET <endpoint>/schema` is PUBLIC now: it resolves no identity, and an
+  # Executor cannot be built without one. The catalog it used to render lives
+  # in {Kiosk::Server::SchemaDocument}, derived at boot and specced next door
+  # in schema_document_spec.rb. What stays here is the pair of facts that keep
+  # the two vocabularies honest.
+  describe "verb :schema (no longer dispatchable)" do
+    it "is refused as an unknown verb, with the valid three named" do
+      expect {
+        described_class.call(kind: :schema, args: {}, identity: identity, connection: connection)
+      }.to raise_error(Kiosk::Server::Errors::BadRequest, /Unknown verb: :schema/)
     end
 
-    it "returns a :value Result with verbs, queries catalog, and actions catalog" do
-      result = described_class.call(kind: :schema, args: {}, identity: identity, connection: connection)
-
-      expect(result).to be_a(Kiosk::Server::Result)
-      expect(result.kind).to eq(:value)
-      expect(result.payload[:verbs]).to eq(%w[schema queries actions])
-      expect(result.payload[:verbs]).not_to include("help", "events")
-      # `params` is retired (ADR-0023): the shape lives in input_schema and the
-      # descriptor publishes the retired slot as null.
-      expect(result.payload[:queries]).to include(
-        hash_including(name: "menu", description: "Browse the menu", params: nil,
-                       input_schema: { type: "object", properties: { restaurant_id: { type: "string" } } }),
-      )
-      expect(result.payload[:actions]).to include(
-        hash_including(name: "place_order", description: "Place an order", params: nil,
-                       input_schema: { type: "object", properties: { items: { type: "array" } } }),
-      )
-    end
-
-    # ── K-740 / VERBS-EQ-CAPABILITIES (ADR-0025) ────────────────────────
-    #
-    # `verbs` used to be the constant %i[query run pay schema] — it named
-    # `pay` on an origin with no payment provider while the discovery document
-    # dropped it, and the spec carried a paragraph telling readers to distrust
-    # it. It is now the SAME array `/.well-known/kiosk.json` publishes.
-    it "answers `verbs` with exactly the advertised capabilities" do
-      result = described_class.call(kind: :schema, args: {}, identity: identity, connection: connection)
-      expect(result.payload[:verbs]).to eq(Array(Kiosk.configuration.capabilities))
-    end
-
-    it "drops `pay` from `verbs` when no payment provider is configured" do
-      result = described_class.call(kind: :schema, args: {}, identity: identity, connection: connection)
-      expect(result.payload[:verbs]).not_to include("pay")
-    end
-
-    it "carries `pay` in `verbs` when one is" do
-      Kiosk.configure { |c| c.payment_provider = Object.new }
-      result = described_class.call(kind: :schema, args: {}, identity: identity, connection: connection)
-      expect(result.payload[:verbs]).to eq(%w[schema queries actions pay])
-    end
-
-    it "does not open a SessionContext (zero DB calls)" do
-      described_class.call(kind: :schema, args: {}, identity: identity, connection: connection)
-      expect(connection.executed_sql).to be_empty
-      expect(connection.exec_queries).to be_empty
-    end
-
-    it "includes entries declared without a description (description/params nil)" do
-      declare_query("bare", input_schema: { type: "object" })
-      result = described_class.call(kind: :schema, args: {}, identity: identity, connection: connection)
-
-      bare = result.payload[:queries].find { |q| q[:name] == "bare" }
-      expect(bare).not_to be_nil
-      expect(bare[:description]).to be_nil
-      expect(bare[:params]).to be_nil
+    # It is still a POLICY verb: `/kiosk/openapi.json` renders the same
+    # registry, is still Bearer-gated (K-804), and is still tolled as
+    # `:schema` — so a reputation policy branching on the symbol must keep
+    # seeing it.
+    it "remains in POLICY_VERBS, which is what a toll and a policy branch on" do
+      expect(described_class::POLICY_VERBS).to include(:schema)
+      expect(described_class::VERBS).not_to include(:schema)
     end
   end
 

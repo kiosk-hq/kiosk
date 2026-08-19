@@ -73,6 +73,32 @@ RSpec.describe "handler registration in a booted app" do
       # disappears while the previous generation's handler stays callable.
       expect(probe("development", "after_remove")["browse_fetches"]).to start_with("NotFound:")
     end
+
+    # ── THE BOOT DIGEST (T-094) ─────────────────────────────────────────
+    #
+    # The catalog `GET <mount>/schema` serves is derived ONCE, by the engine,
+    # in `after_initialize`, and served from memory afterwards. Phil asked for
+    # the check to run in tests as well as in production («И на тестах чтобы
+    # тоже»), and this is the only place in the suite that boots a real app —
+    # so this is where it runs.
+    it "derives the digest AT BOOT, not on the first request that asks" do
+      expect(probe("development")["derived_at_boot"]).to be(true)
+      expect(probe("development")["schema_digest"]).to match(/\A[0-9a-f]{32}\z/)
+    end
+
+    it "moves the digest on every reload that changes the catalog" do
+      at_boot   = probe("development")["schema_digest"]
+      edited    = probe("development", "after_edit")["schema_digest"]
+      added     = probe("development", "after_add")["schema_digest"]
+      removed   = probe("development", "after_remove")["schema_digest"]
+
+      # A DESCRIPTION edit is the case a digest over verb NAMES alone would
+      # miss — the roster is identical across this reload.
+      expect(edited).not_to eq(at_boot)
+      expect(added).not_to  eq(edited)
+      expect(removed).not_to eq(added)
+      expect([at_boot, edited, added, removed].uniq.size).to eq(4)
+    end
   end
 
   context "in development with NO handlers declared" do

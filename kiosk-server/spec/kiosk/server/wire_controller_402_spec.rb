@@ -168,8 +168,14 @@ RSpec.describe "WireController 402 WWW-Authenticate (W4)" do
   end
 
   # ─── non-402 errors carry NO WWW-Authenticate header ───────────────────
+  #
+  # Dialed at `pay` rather than at `schema`: T-094 made `GET /kiosk/schema`
+  # public, so it resolves no identity and can no longer produce a 401 to
+  # check the header against. `pay` is the other reserved endpoint and reaches
+  # the same `resolve_identity!`.
   it "does not emit WWW-Authenticate on a non-402 error (e.g. 401)" do
-    status, headers, = dispatch(:schema, bearer_env("/kiosk/schema", "garbage"))
+    status, headers, = dispatch(:pay, bearer_env("/kiosk/pay", "garbage", method: "POST",
+                                                 input: "{}", "CONTENT_TYPE" => "application/json"))
     expect(status).to eq(401)
     expect(headers).not_to have_key("WWW-Authenticate")
   end

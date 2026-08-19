@@ -4,6 +4,14 @@ All notable changes follow [Keep a Changelog](https://keepachangelog.com/en/1.1.
 
 ## [Unreleased]
 
+### Changed
+
+- **`GET <endpoint>/schema` is PUBLIC, cacheable, and no longer tolled (T-094).** The verb catalogue holds no per-agent value and no secret, so gating it while `/.well-known/*` stood open bought nothing and cost an explanation; it is now served from a document derived once at boot by the engine, under `public` caching with a strong `ETag`, and the discovery documents link it at `?v=<digest>` so a deploy invalidates every cache by changing the URL rather than by hoping a TTL expires. `/kiosk/openapi.json` is deliberately left gated.
+
+- **`/.well-known/api-catalog` hyperlinks every verb the origin serves, unauthenticated (T-093).** The RFC 9727 linkset used to name one endpoint per module because the verb roster was treated as something to withhold; it is not a secret, and a document composed from in-process state caches behind a CDN, so the catalog now lists the real per-verb endpoints with the method each one answers, alongside the two service descriptions it already carried.
+
+- **The `schema` descriptor drops `verbs` and the module set has ONE home (T-095).** `verbs` rendered the very call `/.well-known/kiosk.json` renders as `capabilities`, so it was one value published twice under two names rather than two facts; `capabilities` is the single spelling, and a client reads it from the discovery document it already fetches first.
+
 ### Fixed
 
 - **A provider that configures no `registration_role` can register assistants again (K-788).** Roles are optional by decision (ADR-0011: "registration MUST NOT fail when it is unset"), but the register door and the fresh-key binding branch wrote a literal `NULL` into `agents.allowed_roles`, which the shipped migration declares `NOT NULL` — so both 500'd for exactly the single-role operator the decision protects, while every shipped demo configures a role and never saw it. "No role" is now the empty role set.

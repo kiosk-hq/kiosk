@@ -51,10 +51,41 @@ RSpec.describe "wire-surface controller auth" do
       end
     end
 
-    def schema_status_for(token)
+    # THE ENDPOINT THESE FOUR DIAL, and why it is `pay` rather than `schema`.
+    # `GET /kiosk/schema` used to be the cheapest identity-resolving endpoint
+    # in the gem, which made it the natural probe for "a bad token is a 401,
+    # never a 500". T-094 made it PUBLIC — it resolves no identity at all any
+    # more — so it cannot answer this question, and `POST /kiosk/pay` is the
+    # other RESERVED endpoint reaching the same `resolve_identity!`.
+    def wire_status_for(token)
+      dispatch(Kiosk::Server::WireController, :pay,
+               bearer_env("/kiosk/pay", token, method: "POST",
+                          input: "{}", "CONTENT_TYPE" => "application/json"))
+    end
+
+    # THE INVERSE OF THE FOUR BELOW, and the reason they moved (T-094).
+    # `GET /kiosk/schema` answers an ANONYMOUS caller, under a public cache
+    # policy, and does not read `Authorization` even when one is sent.
+    it "serves GET /kiosk/schema with no credential whatsoever" do
+      declare_query("probe")
+
       status, body = dispatch(Kiosk::Server::WireController, :schema,
-                              bearer_env("/kiosk/schema", token))
-      [status, body]
+                              Rack::MockRequest.env_for("/kiosk/schema"))
+      expect(status).to eq(200)
+      expect(body[:queries].map { |q| q[:name] }).to include("probe")
+      expect(last_headers["Cache-Control"]).to eq("max-age=300, public")
+      expect(last_headers["ETag"]).to match(/\A"[0-9a-f]{32}"\z/)
+      # A public document that varied on a header it does not read would be
+      # uncacheable by every shared cache — see Headers.add_public_cache_policy.
+      expect(last_headers["Vary"]).to be_nil
+    end
+
+    it "…and a token it cannot verify changes nothing, because it is not read" do
+      declare_query("probe")
+
+      status, = dispatch(Kiosk::Server::WireController, :schema,
+                         bearer_env("/kiosk/schema", "garbage-not-a-jwt"))
+      expect(status).to eq(200)
     end
 
     it "returns 401 Unauthenticated (not 500) for an EXPIRED token" do
@@ -63,12 +94,12 @@ RSpec.describe "wire-surface controller auth" do
         audience: "https://demo.example",
         now:      Time.now - 7200,
       )
-      status, body = schema_status_for(token)
+      status, body = wire_status_for(token)
       expect_problem(status, body, http: 401, code: "unauthenticated")
     end
 
     it "returns 401 Unauthenticated (not 500) for a GARBAGE token" do
-      status, body = schema_status_for("garbage-not-a-jwt")
+      status, body = wire_status_for("garbage-not-a-jwt")
       expect_problem(status, body, http: 401, code: "unauthenticated")
     end
 
@@ -79,7 +110,7 @@ RSpec.describe "wire-surface controller auth" do
         now:      Time.now - 10,
       )
       Kiosk.configuration.revocation_store.revoke_all("a-rev", at: Time.now.to_i)
-      status, body = schema_status_for(token)
+      status, body = wire_status_for(token)
       expect_problem(status, body, http: 401, code: "unauthenticated")
     end
 
@@ -89,7 +120,7 @@ RSpec.describe "wire-surface controller auth" do
         claims:   { sub: "u-1", agent_id: "a-1", role: "customer", actor: "agent" },
         audience: "https://demo.example", signing_key: other,
       )
-      status, body = schema_status_for(token)
+      status, body = wire_status_for(token)
       expect_problem(status, body, http: 401, code: "unauthenticated")
     end
 
@@ -313,28 +344,42 @@ RSpec.describe "wire-surface controller auth" do
       stub_const("ActiveRecord::Base", ar_base)
     end
 
+    # THE PROBE, and why it is a per-verb call. `GET /kiosk/schema` served
+    # this block until T-094 made it public: an endpoint that resolves no
+    # identity cannot show that one WAS resolved, and a 200 from it would pass
+    # whether the idp worked or not. A registered query on the per-verb wire
+    # reaches exactly the same {IdentityResolution}.
+    def probe_env(**opts)
+      env = Rack::MockRequest.env_for("/kiosk/probe", **opts)
+      env["action_dispatch.request.path_parameters"] =
+        { controller: "kiosk/server/verb", action: "show", kiosk_verb: "probe" }
+      env
+    end
+
     it "verifies a self-minted token with NO idp configured (bundled kiosk-pop default)" do
+      declare_query("probe")
       token = Kiosk::Server::JwtIssuer.issue(
         claims:   { sub: "u-1", agent_id: "a-1", role: "customer", actor: "agent" },
         audience: "https://demo.example",
       )
-      status, = dispatch(Kiosk::Server::WireController, :schema,
-                         bearer_env("/kiosk/schema", token))
+      status, = dispatch(Kiosk::Server::VerbController, :show,
+                         probe_env("HTTP_AUTHORIZATION" => "Bearer #{token}"))
       expect(status).to eq(200)
     end
 
     it "still 401s garbage under the zero-config default" do
-      status, body = dispatch(Kiosk::Server::WireController, :schema,
-                              bearer_env("/kiosk/schema", "garbage"))
+      declare_query("probe")
+      status, body = dispatch(Kiosk::Server::VerbController, :show,
+                              probe_env("HTTP_AUTHORIZATION" => "Bearer garbage"))
       expect_problem(status, body, http: 401, code: "unauthenticated")
     end
 
     it "falls through to user_idp when the agent idp resolves nothing (no Authorization header)" do
+      declare_query("probe")
       fixed = build_identity(actor: "human", agent_id: nil, user_id: "u-web")
       Kiosk.configure { |c| c.user_idp = Class.new { define_method(:verify) { |_r| fixed } }.new }
 
-      status, = dispatch(Kiosk::Server::WireController, :schema,
-                         Rack::MockRequest.env_for("/kiosk/schema"))
+      status, = dispatch(Kiosk::Server::VerbController, :show, probe_env)
       expect(status).to eq(200)
     end
   end

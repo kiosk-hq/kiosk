@@ -105,14 +105,17 @@ RSpec.describe Kiosk::Server::Executor do
       expect(result.kind).to        eq(:rows)
       expect(result.payload).to     eq([{ "id" => 1 }, { "id" => 2 }])
       expect(result.next_cursor).to be_nil
-      expect(result.to_payload).to be_an(Array)  # a bare array: nowhere to put `next`
+      expect(result.to_payload).to be_an(Array)  # a bare array, like every query
     end
 
-    it "threads a Page's next_cursor into the answer as `next`" do
+    # T-092: the cursor reaches the RESULT, never the body. The wire turns it
+    # into `Link: …; rel="next"`; the Executor's job ends at carrying it.
+    it "threads a Page's next_cursor and total onto the Result, not into the body" do
       declare_query("paged") do
         offset = Kiosk::Server::Cursor.decode_offset(params[:cursor])
         render_kiosk_page([{ "id" => offset + 1 }],
-                          next_cursor: Kiosk::Server::Cursor.encode_offset(offset + 1))
+                          next_cursor: Kiosk::Server::Cursor.encode_offset(offset + 1),
+                          total:       42)
       end
 
       result = described_class.call(kind: :query, args: { limit: 1 }, name: "paged",
@@ -121,7 +124,8 @@ RSpec.describe Kiosk::Server::Executor do
       expect(result.kind).to        eq(:rows)
       expect(result.payload).to     eq([{ "id" => 1 }])
       expect(result.next_cursor).to eq(Kiosk::Server::Cursor.encode_offset(1))
-      expect(result.to_payload[:next]).to eq(result.next_cursor)
+      expect(result.total).to       eq(42)
+      expect(result.to_payload).to  eq([{ "id" => 1 }])
     end
 
     it "omits `next` when a paginating handler signals the last page (Page with nil cursor)" do
@@ -133,7 +137,7 @@ RSpec.describe Kiosk::Server::Executor do
 
       expect(result.payload).to     eq([{ "id" => 99 }])
       expect(result.next_cursor).to be_nil
-      expect(result.to_payload).to be_an(Array)  # a bare array: nowhere to put `next`
+      expect(result.to_payload).to be_an(Array)  # a bare array, like every query
     end
   end
 

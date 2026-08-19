@@ -315,9 +315,23 @@ module Kiosk
         # assistant echoes back in `cursor` to fetch the next one. A nil
         # next_cursor means this is the last page. See {Kiosk::Server::Cursor}
         # for the offset-cursor helper.
-        def render_kiosk_page(rows, next_cursor: nil)
+        #
+        # `total` is how many rows MATCH the query across all pages, not how
+        # many this page carries. It becomes the `X-Total-Count` response
+        # header. Pass it only if you know it: nil omits the header, which is
+        # the honest answer for a keyset cursor over an uncounted set, and is
+        # why this is not defaulted to `rows.length` — on a TRUNCATED page that
+        # would state the page size as the total.
+        #
+        # WHAT THE ASSISTANT SEES (T-092). Not this hash: the body is the bare
+        # `rows` array, exactly like a non-paginating query's, and the two page
+        # facts leave as response headers — `Link: <…?cursor=…>; rel="next"`
+        # (RFC 8288) and `X-Total-Count`. The hash below is the INTERNAL
+        # carrier between a Rails-dispatched handler and {HandlerDispatch},
+        # which rebuilds the {Kiosk::Server::Page} from it.
+        def render_kiosk_page(rows, next_cursor: nil, total: nil)
           request.env[HandlerDispatch::PAGE_KEY] = true
-          render json: { rows: rows, next_cursor: next_cursor }
+          render json: { rows: rows, next_cursor: next_cursor, total: total }
         end
 
         # T-054: the one place a Rails-native raise becomes a wire code.

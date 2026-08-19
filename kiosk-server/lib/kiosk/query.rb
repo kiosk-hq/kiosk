@@ -32,7 +32,9 @@ module Kiosk
   # how the engine finds it, and since T-081 it is the only way in.
   #
   # A large result opts into cursor pagination with `render_kiosk_page(rows,
-  # next_cursor:)` instead of `render json:`.
+  # next_cursor:, total:)` instead of `render json:`. The BODY is the same bare
+  # array either way — the cursor leaves as an RFC 8288 `Link: …; rel="next"`
+  # response header and the total as `X-Total-Count` (spec §8.4).
   #
   # See {Kiosk::Server::HandlerMixin} for the macros, and {Kiosk::Action} for
   # the write side.

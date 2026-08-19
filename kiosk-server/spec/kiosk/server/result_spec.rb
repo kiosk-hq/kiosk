@@ -51,16 +51,27 @@ RSpec.describe Kiosk::Server::Result do
   end
 
   # THE 0.4 SUCCESS BODY (T-072 = C). Whatever the handler rendered is what
-  # the wire carries; the ONE composite shape is the paginating query, and it
-  # is the shape `render_kiosk_page` already produces.
+  # the wire carries — and since T-092 there is no composite shape left at all:
+  # a paginating query answers the same bare array as any other, with its two
+  # page facts on the `Link` and `X-Total-Count` response headers.
   describe "#to_payload" do
     it "is the handler's rows, bare, when nothing paginated" do
       expect(described_class.new(kind: :rows, payload: [{ a: 1 }]).to_payload).to eq([{ a: 1 }])
     end
 
-    it "is {rows, next} when the query paginated" do
-      r = described_class.new(kind: :rows, payload: [{ a: 1 }], next_cursor: "b2Zmc2V0OjQw")
-      expect(r.to_payload).to eq(rows: [{ a: 1 }], next: "b2Zmc2V0OjQw")
+    it "is STILL the bare rows when the query paginated — the cursor is a header now" do
+      r = described_class.new(kind: :rows, payload: [{ a: 1 }],
+                              next_cursor: "b2Zmc2V0OjQw", total: 97)
+      expect(r.to_payload).to eq([{ a: 1 }])
+      expect(r.next_cursor).to eq("b2Zmc2V0OjQw")
+      expect(r.total).to eq(97)
+    end
+
+    # The shape that is GONE, pinned so a re-added body wrapper cannot slip
+    # back in unnoticed (RFC 8288 adoption, T-092).
+    it "never renders a {rows, next} object" do
+      r = described_class.new(kind: :rows, payload: [{ a: 1 }], next_cursor: "c")
+      expect(r.to_payload).not_to be_a(Hash)
     end
 
     it "is the action's own object, bare" do
@@ -75,6 +86,11 @@ RSpec.describe Kiosk::Server::Result do
   end
 
   describe "next_cursor validation" do
+    it "rejects a total on a non-:rows result" do
+      expect { described_class.new(kind: :value, payload: {}, total: 3) }
+        .to raise_error(ArgumentError, /only valid on a :rows result/)
+    end
+
     it "rejects a next_cursor on a non-:rows result" do
       expect { described_class.new(kind: :value, payload: {}, next_cursor: "x") }
         .to raise_error(ArgumentError, /only valid on a :rows result/)

@@ -83,8 +83,15 @@ def post_json(path, body, headers = {})
   [res.code.to_i, (JSON.parse(res.body) rescue {})]
 end
 
-def get_json(path)
-  res = request(Net::HTTP::Get.new(URI("#{SERVER}#{path}")))
+# THE 0.4 WIRE. A query is `GET <mount>/<query-name>` with its arguments in the
+# query string; an action is `POST <mount>/<action-name>` with its arguments as
+# the JSON body. A success body IS the result (a bare array from a
+# non-paginating query, the action's own object from an action) and an error is
+# an RFC 9457 problem document whose branch point is the top-level `code`.
+def get_json(path, params = {}, headers = {})
+  uri = URI("#{SERVER}#{path}")
+  uri.query = URI.encode_www_form(params) unless params.empty?
+  res = request(Net::HTTP::Get.new(uri, headers))
   [res.code.to_i, (JSON.parse(res.body) rescue {})]
 end
 
@@ -121,9 +128,9 @@ results[:headless_agent_id]    = agent_id
 results[:headless_user_id]     = headless_user_id
 STDERR.puts "  Assistant registered headless: agent_id=#{agent_id} user_id=#{headless_user_id}"
 
-rc, created = post_json("/kiosk/run", { name: "create_list", title: "Hike" }, bearer(headless_token))
+rc, created = post_json("/kiosk/create_list", { title: "Hike" }, bearer(headless_token))
 abort "headless create_list failed (#{rc}): #{JSON.generate(created)}" unless rc == 200
-list_id = created.dig("value", "list_id")
+list_id = created["list_id"]
 results[:list_id] = list_id
 STDERR.puts "  Headless assistant created list #{list_id}"
 
@@ -157,7 +164,7 @@ STDERR.puts "  Rebind: agent_id=#{claimed['agent_id']} now user_id=#{claimed['us
 
 # (b) The PRE-LINK token is watermark-revoked by the rebind (principal change ⇒
 #     the agent must re-login) — its next call is rejected 401, not merely empty.
-rc, _prelink = post_json("/kiosk/query", { name: "my_lists" }, bearer(headless_token))
+rc, _prelink = get_json("/kiosk/my_lists", {}, bearer(headless_token))
 results[:prelink_status]   = rc
 results[:prelink_revoked]  = rc == 401
 
@@ -166,8 +173,8 @@ rc, relog = post_json("/kiosk/auth/login", { public_key: pem, signed: pop_proof(
 abort "re-login failed (#{rc}): #{JSON.generate(relog)}" unless rc == 200
 new_token = relog.fetch("access_token")
 results[:relogin_sub_is_holder] = jwt_claims(new_token)["sub"] == HOLDER
-rc, after = post_json("/kiosk/query", { name: "my_lists" }, bearer(new_token))
-results[:agent_sees_migrated_list] = rc == 200 && (after["rows"] || []).any? { |r| r["list_id"] == list_id && r["role"] == "owner" }
+rc, after = get_json("/kiosk/my_lists", {}, bearer(new_token))
+results[:agent_sees_migrated_list] = rc == 200 && Array(after).any? { |r| r["list_id"] == list_id && r["role"] == "owner" }
 
 # Alice's browser session sees the same list over the web (my_lists as human).
 alice_view = get_html("/lists")
@@ -209,9 +216,9 @@ abort "re-link claim failed (#{rc}): #{JSON.generate(claimed3)}" unless rc == 20
 # membership-scoped: "Hike" comes back only while Alice's membership row
 # survives. The claim's token is the current one (a re-bind still watermark-
 # revokes, so `new_token` from beat (c) is dead by now).
-rc, after_relink = post_json("/kiosk/query", { name: "my_lists" }, bearer(claimed3["access_token"]))
+rc, after_relink = get_json("/kiosk/my_lists", {}, bearer(claimed3["access_token"]))
 results[:relink_keeps_list_access] =
-  rc == 200 && (after_relink["rows"] || []).any? { |r| r["list_id"] == list_id && r["role"] == "owner" }
+  rc == 200 && Array(after_relink).any? { |r| r["list_id"] == list_id && r["role"] == "owner" }
 # The human's browser sees BOTH her lists: the migrated "Hike" and the seeded
 # "Flat 3B" household she was a member of long before any assistant existed.
 alice_after = get_html("/lists")

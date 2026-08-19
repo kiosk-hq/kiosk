@@ -45,7 +45,9 @@ end
 # ── The schema verb ─────────────────────────────────────────────────────────
 rc, body = get_json("#{SERVER}/kiosk/schema", { "Authorization" => "Bearer #{TOKEN_A}" })
 abort "schema call failed (#{rc}): #{JSON.generate(body)}" unless rc == 200
-schema_value = body["value"] || {}
+# `GET <mount>/schema` answers `{verbs, queries, actions}` DIRECTLY — the 0.3
+# `{ok, kind, value}` envelope was retired at the cutover.
+schema_value = body || {}
 STDERR.puts "  schema.verbs=#{(schema_value['verbs'] || []).inspect}"
 
 # ── /.well-known/kiosk.json — the advertised capability set ──────────────────

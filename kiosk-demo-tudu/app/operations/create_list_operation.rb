@@ -3,16 +3,21 @@
 # create_list — a new list owned by the authenticated principal, plus the owner
 # membership that makes it reachable, in one transaction.
 #
-# Reached from BOTH surfaces: `POST /kiosk/run {name: "create_list"}` and the
-# human web UI's "New list" form. That is the whole reason it is an Operation
-# and not a controller method — before this, the web form reached the wire
-# handler by dispatching a synthetic Rack sub-request at it.
+# Reached from BOTH surfaces: `POST /kiosk/create_list` (the 0.4 per-verb wire —
+# one endpoint per verb, the arguments ARE the JSON body, no `name` field) and
+# the human web UI's "New list" form. That is the whole reason it is an
+# Operation and not a controller method — before this, the web form reached the
+# wire handler by dispatching a synthetic Rack sub-request at it.
 class CreateListOperation
   # @param principal_id [String] the account the wire (or the Devise session)
-  #   resolved. NEVER an argument off the request: `create_list` deliberately
-  #   IGNORES a forged `account_id`/`owner_id`/`id` in the body, and it can do
-  #   that precisely because the value is passed in from the identity rather
-  #   than read out of the params.
+  #   resolved. NEVER an argument off the request: this method never reads
+  #   `account_id`/`owner_id`/`id` out of the params, and it can be written that
+  #   way precisely because the value is passed in from the identity. Since 0.4
+  #   a forged one does not even reach here — `create_list` publishes
+  #   `additionalProperties: false` with `title` as its only property, and
+  #   `input_schema` is validated on every call, so the wire answers a typed 400
+  #   naming the offending parameter. That is the outer guard; this is the one
+  #   that would still hold if the schema were ever loosened.
   #
   #   An INSERT is the one place the principal must be spelled in Ruby. Every
   #   READ scopes with `Membership.of_current_principal`, which never names the

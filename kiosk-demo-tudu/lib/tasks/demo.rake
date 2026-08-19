@@ -216,7 +216,8 @@ namespace :demo do
     genuine-member positive control so the exclusions aren't vacuous:
       • Mallory's my_lists is EMPTY
       • Mallory list_todos / list_members on the private list → 403
-      • forged account_id on Mallory's create_list ignored (DB truth via psql)
+      • forged account_id on Mallory's create_list REFUSED (400 bad_request
+        naming it), and her legitimate list is hers in the DB (psql truth)
       • a used/garbage invite code → 403
       • POSITIVE CONTROL: the genuine member DOES see + read the list
       • after remove_member, the member's next read → 403 (access gone)
@@ -247,9 +248,20 @@ namespace :demo do
     check.call("remove_member → 200",                            r["remove_member_status"] == 200)
     check.call("after removal, member's next read → 403 (access gone)", r["member_after_removal"] == 403)
 
-    # Forged account_id ground truth: the created list belongs to Mallory, not owner.
-    forged_owner = `psql -X -d #{db} -tAc "SELECT account_id FROM lists WHERE id = '#{r["forged_list_id"]}'" 2>&1`.strip
-    check.call("forged account_id ignored: DB lists.account_id == Mallory (#{r["mallory_user_id"]})", forged_owner == r["mallory_user_id"])
+    # The principal is not an input, asserted in two halves.
+    #
+    # (a) The forged account_id is REFUSED by the published contract: create_list
+    #     declares `additionalProperties: false` and only `title`, and since 0.4
+    #     input_schema is validated on every call, so the wire answers a typed
+    #     400 naming the parameter instead of accepting and ignoring it.
+    forged_rc, forged_code, forged_detail = r["forged_refusal"] || []
+    check.call("forged account_id → 400 bad_request naming account_id (refused by input_schema before the handler runs)",
+               forged_rc == 400 && forged_code == "bad_request" && forged_detail.to_s.include?("account_id"))
+    # (b) …and ownership comes from the TOKEN, which the refusal alone does not
+    #     prove: Mallory's legitimate list is hers in the DB.
+    probe_owner = `psql -X -d #{db} -tAc "SELECT account_id FROM lists WHERE id = '#{r["owner_probe_list_id"]}'" 2>&1`.strip
+    check.call("ownership taken from the identity: DB lists.account_id == Mallory (#{r["mallory_user_id"]})",
+               probe_owner == r["mallory_user_id"])
 
     if failures.empty?
       puts "\n  All membership isolation assertions passed — non-members are walled out."
@@ -263,10 +275,14 @@ namespace :demo do
   desc <<~DESC
     Adversarial regression battery — attacks tudu's live surface.
 
-    Asserts each attack is BLOCKED (0 BREACH): CrossTenantRead, ForgedUserId,
-    MissingAuth (401), GarbageToken (401), UnknownQuery (404), UnknownAction
-    (404), plus tudu beats — InviteCodeReplay (403), RevokedMemberAccess (403),
-    RevokedAgentKey (404), PreLinkTokenAfterLink (403).
+    Asserts each attack is BLOCKED (0 BREACH): CrossTenantRead, ForgedUserId
+    (the forged account_id is now REFUSED 400, not accepted-and-ignored),
+    MalformedUuidArg (400), MissingAuth (401), GarbageToken (401), UnknownQuery
+    (404), UnknownAction (404), RetiredWire (the deleted 0.3 /kiosk/query and
+    /kiosk/run are an ordinary 404), MethodMismatch (a GET at an action's path
+    is 405 + Allow, never a silent 404), plus tudu beats — InviteCodeReplay
+    (403), RevokedMemberAccess (403), RevokedAgentKey (404),
+    PreLinkTokenAfterLink (401).
   DESC
   task redteam: :setup do
     port = ENV.fetch("PORT", "3007")

@@ -1,7 +1,9 @@
 # frozen_string_literal: true
 
 # tudu's READ surface: the four verbs an assistant reaches with
-# `POST /kiosk/query`. Kiosk ships a MIXIN, not a base class — the superclass is
+# `GET /kiosk/<query-name>` — one endpoint per verb (protocol 0.4), arguments in
+# the query string, and the success body IS the rows array. Kiosk ships a MIXIN,
+# not a base class — the superclass is
 # this app's own ApplicationController, and `include Kiosk::Query` is the whole
 # contract. Each class-level macro records a declaration and the NEXT `def`
 # claims it, so a method with no macros above it is a helper the wire cannot see.

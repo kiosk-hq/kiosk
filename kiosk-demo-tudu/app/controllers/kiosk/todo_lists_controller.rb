@@ -1,7 +1,9 @@
 # frozen_string_literal: true
 
 # tudu's WRITE surface: the six verbs an assistant reaches with
-# `POST /kiosk/run` — the most of any demo. Same shape as
+# `POST /kiosk/<action-name>` — one endpoint per verb (protocol 0.4), and the
+# most of any demo. The arguments ARE the JSON body; there is no `name` field
+# and no multiplexed `/kiosk/run`. Same shape as
 # Kiosk::HouseholdController — this app's own ApplicationController plus
 # `include Kiosk::Action` — because a controller declares queries OR actions,
 # never both.
@@ -16,9 +18,10 @@
 # directly, and what is left here is genuinely a controller's job: params in,
 # `render json:` out.
 #
-# Errors are Rails' idiom end to end: the wire's `error.code` vocabulary is a
+# Errors are Rails' idiom end to end: the wire's error-code vocabulary is a
 # closed table, not a class hierarchy, so a refusal is an ordinary
-# `render json:, status:` naming the code, and the wire carries it verbatim. No
+# `render json:, status:` naming the code, and the wire carries it verbatim into
+# the RFC 9457 problem document's top-level `code` member. No
 # Kiosk error classes appear below — an Operation answers with an
 # {OperationResult}, and {KioskRefusals#render_operation} is the one place
 # that becomes a status.
@@ -35,13 +38,18 @@ class Kiosk::TodoListsController < ApplicationController
   include KioskRefusals
 
   # create_list(title) — INSERT a list owned by the AUTHENTICATED principal and,
-  # in the SAME transaction, an `owner` membership for the caller. Any forged
-  # account_id/owner_id arg is IGNORED: the owner is read from the identity the
-  # wire resolved, never from params.
+  # in the SAME transaction, an `owner` membership for the caller. The owner is
+  # read from the identity the wire resolved, never from params — and since 0.4
+  # a forged account_id/owner_id cannot even be sent: `input_schema` is validated
+  # on every call and the closed object below declares only `title`, so the wire
+  # answers 400 bad_request naming the parameter. The description says so,
+  # because "this argument is ignored" and "this argument is refused" are
+  # different instructions to an assistant.
   description "Create a new todo list owned by the authenticated principal. The " \
-              "caller becomes its owner (an owner membership is created). Any forged " \
-              "account_id/owner_id arg is ignored (owner is the authenticated " \
-              "principal). Returns { list_id }."
+              "caller becomes its owner (an owner membership is created). The owner " \
+              "is the authenticated principal and is not an input: this verb takes " \
+              "`title` and nothing else, so an account_id/owner_id argument is " \
+              "refused (400). Returns { list_id }."
   input_schema type: "object",
                additionalProperties: false,
                properties: {

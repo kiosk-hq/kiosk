@@ -17,8 +17,8 @@ Demonstrates:
 - **AI-assistant→AI-assistant invites, pure app-layer** — an owner mints a single-use, TTL'd,
   hashed collaboration code (`invite`); the recipient's assistant redeems it
   (`accept_invite`) to join as a member; `remove_member` cuts access instantly.
-  The spec stays silent on invites *by design* — this proves the query/run
-  surface is expressive enough for collaboration with **zero protocol change**.
+  The spec stays silent on invites *by design* — this proves the per-verb wire
+  is expressive enough for collaboration with **zero protocol change**.
 - **W5 rebind + domain migration** — an assistant works as a HEADLESS account
   (creates the "Hike" list), the human links it, and the shipped
   `assistant_claimed` hook **migrates the list to the human**. First real use of
@@ -72,17 +72,24 @@ in and sees the list under Alice; Alice's browser sees it too; Alice ends with
 
 Mallory (a non-member) is walled out: her `my_lists` is empty; `list_todos` /
 `list_members` on a private list → 403; a forged `account_id` on her
-`create_list` is ignored (the created row belongs to Mallory); used/garbage
-invite codes → 403. A genuine member is the positive control (she DOES see and
-read the list), and after `remove_member` her next read → 403.
+`create_list` is **refused** — `create_list` declares `additionalProperties:
+false` and the principal is not one of its inputs, so the wire answers `400
+bad_request` naming the parameter, and her legitimate list still belongs to her
+in the DB; used/garbage invite codes → 403. A genuine member is the positive
+control (she DOES see and read the list), and after `remove_member` her next
+read → 403.
 
 ### Adversarial battery (`rake demo:redteam`)
 
-Asserts every attack is BLOCKED (0 BREACH): `CrossTenantRead`, `ForgedUserId`,
-`MissingAuth` (401), `GarbageToken` (401), `UnknownQuery` (404),
-`UnknownAction` (404), plus tudu beats — `InviteCodeReplay` (403),
-`RevokedMemberAccess` (403), `RevokedAgentKey` (404), `PreLinkTokenAfterLink`
-(401).
+Asserts every attack is BLOCKED (0 BREACH): `CrossTenantRead`, `ForgedUserId`
+(the forged `account_id` is refused `400`, not accepted-and-ignored),
+`MalformedUuidArg` (400, no SQL internals), `MissingAuth` (401), `GarbageToken`
+(401), `UnknownQuery` (404), `UnknownAction` (404), `RetiredWire` (the deleted
+0.3 `POST /kiosk/query` and `POST /kiosk/run` are an ordinary 404 — no
+tombstone, no second conformance surface), `MethodMismatch` (a `GET` at an
+action's path is `405` + `Allow: POST`, never a silent 404), plus tudu beats —
+`InviteCodeReplay` (403), `RevokedMemberAccess` (403), `RevokedAgentKey` (404),
+`PreLinkTokenAfterLink` (401).
 
 ### Not-only-commerce proof (`rake demo:schema`)
 
@@ -93,20 +100,25 @@ no `Protocols: ap2` / `Payments:` directives.
 
 ## AI-assistant surface
 
-| Verb | Name | What it does |
-|---|---|---|
-| query | `whoami` | The GUC principal + acting AI assistant |
-| query | `my_lists` | Lists the caller is a member of (owner or member) |
-| query | `list_todos(list_id)` | A member-list's todos, with attribution |
-| query | `list_members(list_id)` | A member-list's members + roles |
-| run | `create_list(title)` | Create a list; caller becomes owner |
-| run | `add_todo(list_id, title)` | Add a todo (attributed to the acting AI assistant) |
-| run | `complete_todo(todo_id)` | Mark a todo done (member-gated) |
-| run | `invite(list_id)` | Owner-only: mint a single-use, TTL'd invite code |
-| run | `accept_invite(code)` | Redeem a code → join as a member |
-| run | `remove_member(list_id, account_id)` | Owner-only: cut a member's access |
+Ten verbs, each its own endpoint. A query is a `GET` whose arguments are the
+query string and whose success body is a bare JSON array; an action is a `POST`
+whose arguments are the JSON body and whose success body is its own object. A
+refusal is an RFC 9457 problem document — branch on its top-level `code`.
 
-Human↔assistant linking is **not** a run action — it's the W5 ceremony
+| Endpoint | Name | What it does |
+|---|---|---|
+| `GET /kiosk/whoami` | `whoami` | The GUC principal + acting AI assistant |
+| `GET /kiosk/my_lists` | `my_lists` | Lists the caller is a member of (owner or member) |
+| `GET /kiosk/list_todos?list_id=…` | `list_todos(list_id)` | A member-list's todos, with attribution |
+| `GET /kiosk/list_members?list_id=…` | `list_members(list_id)` | A member-list's members + roles |
+| `POST /kiosk/create_list` | `create_list(title)` | Create a list; caller becomes owner |
+| `POST /kiosk/add_todo` | `add_todo(list_id, title)` | Add a todo (attributed to the acting AI assistant) |
+| `POST /kiosk/complete_todo` | `complete_todo(todo_id)` | Mark a todo done (member-gated) |
+| `POST /kiosk/invite` | `invite(list_id)` | Owner-only: mint a single-use, TTL'd invite code |
+| `POST /kiosk/accept_invite` | `accept_invite(code)` | Redeem a code → join as a member |
+| `POST /kiosk/remove_member` | `remove_member(list_id, account_id)` | Owner-only: cut a member's access |
+
+Human↔assistant linking is **not** one of the ten verbs — it's the W5 ceremony
 (`POST /kiosk/auth/link` mint → `POST /kiosk/auth/claim` redeem), driven by
 `script/link_flow.rb`.
 
@@ -137,7 +149,7 @@ assertions cannot go ungated and unexplained.
 | `app/models/{user,list,membership,todo,invite}.rb` | `User` is the account principal (Devise, reused for headless assistant accounts); `memberships` is the many-to-many access surface |
 | `config/initializers/kiosk.rb` | `Kiosk.configure` (NO `payment_provider`) + the `assistant_creation`/`assistant_claimed` hooks — configuration only; it names the two handler controllers, it does not contain them |
 | `app/controllers/kiosk/household_controller.rb` | The `whoami` / `my_lists` / `list_todos` / `list_members` queries — an ordinary Rails controller with `include Kiosk::Query`, declared with the class-level macros. Not routable: handlers are reached only through the wire |
-| `app/controllers/kiosk/todo_lists_controller.rb` | The six actions (`create_list`, `add_todo`, `complete_todo`, `invite`, `accept_invite`, `remove_member`) — same shape with `include Kiosk::Action`; refusals are plain `render json:, status:` naming a wire `error.code` |
+| `app/controllers/kiosk/todo_lists_controller.rb` | The six actions (`create_list`, `add_todo`, `complete_todo`, `invite`, `accept_invite`, `remove_member`) — same shape with `include Kiosk::Action`; refusals are plain `render json:, status:` naming a wire error code, which the wire renders as the problem document's top-level `code` |
 | `app/models/membership.rb`, `app/controllers/concerns/kiosk_membership_gate.rb` | The membership check both wire halves need: `Membership.reachable?` is the access decision (a predicate, no request in it), the concern is the 400/403 refusal around it |
 | `app/controllers/lists_controller.rb`, `todos_controller.rb` | The human web UI, running the SAME registered actions as the wire (one shared world) |
 | `lib/stub_idp.rb` / `lib/jwt_or_stub_idp.rb` | Demo IdP: Kiosk JWTs first, bespoke `agent:u-…:a-…:r-…` fallback |

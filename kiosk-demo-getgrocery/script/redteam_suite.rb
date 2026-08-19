@@ -14,11 +14,23 @@
 # catalog prices, and sum correctly. Three local scenarios attack exactly that,
 # and a fourth (MalformedItemsCart) attacks the input shape create_order takes.
 #
-# Scenarios (14 BLOCKED, 3 SKIPPED):
+# THE 0.4 WIRE. A query is `GET /kiosk/<query-name>` with its arguments in the
+# query string, an action is `POST /kiosk/<action-name>` with its arguments as
+# the JSON body, and `POST /kiosk/{query,run}` no longer exist. A success body
+# IS the result (a bare array from a non-paginating query, the action's own
+# object from an action, the settlement object from `pay`), and an error is an
+# RFC 9457 problem document whose branch point is the TOP-LEVEL `code`. Two of
+# the scenarios below are only expressible after that cut — RetiredWire and
+# MethodMismatch — and both are here because a wire surface that quietly
+# survives a deletion, or lies about a resource that exists, is an attack
+# surface.
+#
+# Scenarios (16 BLOCKED, 3 SKIPPED):
 #   BLOCKED : CrossTenantRead, ForgedUserId, UnpaidGatedAction, SpentResourceReuse,
 #             PayForOtherUseSelf, MandatePrincipalSwap, MandateReplay, TokenTampering,
 #             PrivilegeSelfSelection, WrongCurrencyCart, TamperedPriceCart,
-#             InflatedTotalCart, MalformedItemsCart, RegistrationWithoutPow
+#             InflatedTotalCart, MalformedItemsCart, RetiredWire, MethodMismatch,
+#             RegistrationWithoutPow
 #   SKIPPED : MissingKyc, ExpiredKyc, ForgedKyc (no KYC)
 #
 # Usage:
@@ -26,7 +38,9 @@
 #   bundle exec ruby script/redteam_suite.rb
 
 require "kiosk/redteam"
+require "net/http"
 require "securerandom"
+require "uri"
 
 BASE_URL = ENV.fetch("SERVER_URL", "http://127.0.0.1:3001")
 ISSUER   = ENV.fetch("KIOSK_ISSUER", BASE_URL)
@@ -42,7 +56,8 @@ profile = Kiosk::Redteam::Profile.new(
   requires_kyc:   false,
   per_user_query: "my_orders",
 
-  # result_id_key: create_order response body["value"]["order_id"]
+  # result_id_key: create_order's response body IS the order object, so the key
+  #                is read straight off it — body["order_id"] (0.4: no envelope)
   # row_id_key:    my_orders rows carry an "order_id" field (K-482: matches the
   #                consumer param name so an assistant copies the same key)
   result_id_key: "order_id",
@@ -55,7 +70,8 @@ profile = Kiosk::Redteam::Profile.new(
   # prices (the ValidatingPaymentProvider cashier check requires it).
   create_owned: ->(client, principal) {
     catalog_resp = client.query(principal, name: "catalog")
-    catalog = catalog_resp.body.is_a?(Hash) ? (catalog_resp.body["rows"] || []) : []
+    # A non-paginating query answers a BARE ARRAY — there is no `rows` to unwrap.
+    catalog = catalog_resp.body.is_a?(Array) ? catalog_resp.body : []
     raise "redteam: catalog returned empty" if catalog.empty?
     product = catalog.first
 
@@ -69,8 +85,8 @@ profile = Kiosk::Redteam::Profile.new(
     raise "redteam: create_order failed (#{order_resp.status}): #{order_resp.body.inspect}" \
       unless order_resp.status == 200
 
-    order_id    = order_resp.body.dig("value", "order_id")
-    total_cents = order_resp.body.dig("value", "total_cents").to_i
+    order_id    = order_resp.body["order_id"]
+    total_cents = order_resp.body["total_cents"].to_i
     raise "redteam: create_order missing order_id" unless order_id
 
     {
@@ -85,8 +101,15 @@ profile = Kiosk::Redteam::Profile.new(
   forge_args: ->(client, _principal_a, _principal_b) {
     # Query the catalog as B to get a valid sku for create_order; the
     # ForgedUserId scenario adds user_id: A's UUID on top of these args.
+    #
+    # WHAT THAT BEAT NOW PROVES. `create_order` publishes
+    # `additionalProperties: false` and does not declare `user_id` — the
+    # principal is not one of its inputs — and 0.4 validates `input_schema` on
+    # every call, so the forged argument is REFUSED (400 bad_request naming it)
+    # instead of being accepted and silently ignored. Stricter than 0.3, and the
+    # ownership half is still proved: nothing B creates ever appears under A.
     catalog_resp = client.query(_principal_b, name: "catalog")
-    catalog = catalog_resp.body.is_a?(Hash) ? (catalog_resp.body["rows"] || []) : []
+    catalog = catalog_resp.body.is_a?(Array) ? catalog_resp.body : []
     raise "redteam: catalog empty for forge_args" if catalog.empty?
     product = catalog.first
     {
@@ -239,8 +262,17 @@ end
 # modelled on (which is how K-645 came to cite this handler as the CORRECT
 # contrast it was not).
 #
-# Asserts HTTP 400 AND `error.code == "bad_request"` AND no Ruby internals in
-# the body: "not 200" would accept exactly the 500s at issue.
+# Since 0.4 the FIRST of these refusals comes from the schema layer rather than
+# from the handler: `input_schema` is validated on every call and `items`
+# declares `{type: "array", minItems: 1, items: {…}}`, so a String, an Integer
+# or an array of Strings is refused before {WireArguments.items} runs. The
+# assertion is unchanged and still worth making — what it pins is that a
+# mis-shaped cart is a TYPED 400 an assistant can act on, not which layer
+# produced it, and the handler guard stays as the floor for shapes the schema
+# admits.
+#
+# Asserts HTTP 400 AND a top-level `code == "bad_request"` AND no Ruby internals
+# in the body: "not 200" would accept exactly the 500s at issue.
 class MalformedItemsCart < Kiosk::Redteam::Scenario
   ADDRESS = "1 Redteam St, Dublin 1"
   RUBY_INTERNALS = ["NoMethodError", "TypeError", "undefined method", "no implicit conversion"].freeze
@@ -276,7 +308,7 @@ class MalformedItemsCart < Kiosk::Redteam::Scenario
       args[:items] = items unless items.nil?
       resp = client.run(a, name: "create_order", **args)
       statuses << resp.status
-      code = resp.body.is_a?(Hash) ? resp.body.dig("error", "code") : nil
+      code = resp.body.is_a?(Hash) ? resp.body["code"] : nil
       leak = RUBY_INTERNALS.find { |needle| JSON.generate(resp.body).include?(needle) }
       next if resp.status == 400 && code == "bad_request" && leak.nil?
 
@@ -285,7 +317,8 @@ class MalformedItemsCart < Kiosk::Redteam::Scenario
 
     # CONTROL — a well-formed cart must still place an order. Without it every
     # probe above would pass against a handler that rejected all input.
-    catalog = client.query(a, name: "catalog").body["rows"] || []
+    catalog_body = client.query(a, name: "catalog").body
+    catalog = catalog_body.is_a?(Array) ? catalog_body : []
     control = client.run(a, name: "create_order",
                             items: [{ sku: catalog.first["sku"], qty: 1 }],
                             delivery_slot_id: 1, delivery_address: ADDRESS)
@@ -299,6 +332,90 @@ class MalformedItemsCart < Kiosk::Redteam::Scenario
       skipped: false,
       status:  statuses.find { |s| s != 400 && s != 200 } || 400,
       detail:  failures.join(" | "),
+    )
+  end
+end
+
+# ── The cut itself: two scenarios only expressible after 0.4 ─────────────────
+#
+# Both dial raw paths, so they use Net::HTTP directly rather than the Client's
+# verb helpers — the Client speaks REGISTERED verbs, and what is under test here
+# is what happens at a path that is not one.
+
+# A retired endpoint that still answers is a second conformance surface, and a
+# second conformance surface is somewhere an attacker looks for the gate the
+# first one has. T-074 = A was a HARD CUT: `POST /kiosk/query` and
+# `POST /kiosk/run` now reach the per-verb controller as verbs literally named
+# "query" and "run", which nobody registered, so they answer the ordinary 404 —
+# no privileged endpoint left, no compatibility payload, no tombstone naming a
+# replacement an attacker could probe.
+class RetiredWire < Kiosk::Redteam::Scenario
+  RETIRED = %w[query run].freeze
+
+  def initialize
+    super(
+      name:        "RetiredWire",
+      category:    "surface",
+      description: "The deleted 0.3 multiplexed endpoints are GONE — an ordinary 404, not a tombstone",
+    )
+  end
+
+  def call(client, profile)
+    a       = register_principal(client, name: "redteam-retired-a", profile:)
+    results = RETIRED.map do |name|
+      uri = URI("#{BASE_URL}/kiosk/#{name}")
+      req = Net::HTTP::Post.new(uri, "Content-Type" => "application/json",
+                                     "Authorization" => "Bearer #{a.token}")
+      req.body = JSON.generate(name: "catalog")
+      res  = Net::HTTP.new(uri.host, uri.port).request(req)
+      body = (JSON.parse(res.body) rescue {})
+      [res.code.to_i == 404 && body["code"] == "not_found",
+       "POST /kiosk/#{name} → #{res.code}/#{body["code"].inspect}"]
+    end
+
+    Kiosk::Redteam::Verdict.new(
+      blocked: results.all? { |ok, _| ok },
+      skipped: false,
+      status:  404,
+      detail:  results.all? { |ok, _| ok } ? "" :
+                 "0.3 endpoints still answer: #{results.map(&:last).join(", ")} " \
+                 "(want 404/\"not_found\")",
+    )
+  end
+end
+
+# A GET at an ACTION's path must be 405 with `Allow: POST`, never a silent 404.
+# It matters that this is not a 404: the resource EXISTS, and an assistant that
+# read 404 would conclude "this operator cannot do that" and abandon a verb it
+# could have called correctly — a denial of service the operator inflicted on
+# itself. RFC 9110 §15.5.6 already has the status; 0.4 added the matching
+# `method_not_allowed` code so an assistant can branch on it.
+class MethodMismatch < Kiosk::Redteam::Scenario
+  def initialize
+    super(
+      name:        "MethodMismatch",
+      category:    "surface",
+      description: "A GET at an action's path is 405 + Allow: POST, never a silent 404",
+    )
+  end
+
+  def call(client, profile)
+    a   = register_principal(client, name: "redteam-method-a", profile:)
+    uri = URI("#{BASE_URL}/kiosk/create_order")
+    res = Net::HTTP.new(uri.host, uri.port)
+                   .request(Net::HTTP::Get.new(uri, "Authorization" => "Bearer #{a.token}"))
+    body    = (JSON.parse(res.body) rescue {})
+    allow   = res["allow"].to_s
+    blocked = res.code.to_i == 405 && body["code"] == "method_not_allowed" &&
+              allow.upcase.include?("POST")
+
+    Kiosk::Redteam::Verdict.new(
+      blocked: blocked,
+      skipped: false,
+      status:  res.code.to_i,
+      detail:  blocked ? "" :
+                 "GET /kiosk/create_order → #{res.code}/#{body["code"].inspect} " \
+                 "Allow=#{allow.inspect} (want 405/\"method_not_allowed\"/POST)",
     )
   end
 end
@@ -320,6 +437,8 @@ scenarios = [
   TamperedPriceCart.new,
   InflatedTotalCart.new,
   MalformedItemsCart.new,   # K-693 — a mis-shaped `items` is a typed 400, never a 500
+  RetiredWire.new,          # T-074 = A — the 0.3 pair is deleted, not tombstoned
+  MethodMismatch.new,       # 0.4 — a GET at an action is 405, never a silent 404
   # register PoW is ON — a missing/bad register proof must be rejected (runs
   # because pow_difficulty > 0).
   Kiosk::Redteam::Scenarios::RegistrationWithoutPow.new,

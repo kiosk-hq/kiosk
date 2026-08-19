@@ -1,13 +1,13 @@
 # frozen_string_literal: true
 
 # Agent-side driver: no-human grocery order end-to-end.
-# Flow: register → query catalog → query delivery_slots (delivery ADDRESS/zone is
+# Flow: register → GET catalog → GET delivery_slots (delivery ADDRESS/zone is
 #         a REQUIRED early input, validated against served Dublin districts — an
 #         out-of-zone / district-less address → clean 400, asserted here)
-#       → run create_order (items + delivery slot + in-zone address — delivery is
-#         part of the order) → payment_setup (verify "ready") → pay (cart mirrors
-#         the order at catalog prices, EUR; off_session → real pi_…)
-#       → query my_orders (own order present, paid: true)
+#       → POST create_order (items + delivery slot + in-zone address — delivery
+#         is part of the order) → POST payment_setup (verify "ready") → POST pay
+#         (cart mirrors the order at catalog prices, EUR; off_session → real pi_…)
+#       → GET my_orders (own order present, paid: true)
 # Runs with KIOSK_TEST_AUTOCARD=1: the adapter simulates a completed SetupIntent,
 # so there is no card-setup step (the live flow uses the real hosted page).
 #
@@ -29,6 +29,13 @@ require "securerandom"
 SERVER = ENV.fetch("SERVER_URL")
 ISSUER = ENV.fetch("KIOSK_ISSUER")
 
+# THE 0.4 WIRE. A query is `GET <endpoint>/<query-name>` with its arguments in
+# the QUERY STRING; an action is `POST <endpoint>/<action-name>` with its
+# arguments as the JSON BODY. There is no `name` field and no /query or /run
+# endpoint. A success body IS the result — a bare array from a non-paginating
+# query, the action's own object from an action, the settlement object from
+# `pay` — and an error is an RFC 9457 problem document whose branch point is
+# the TOP-LEVEL `code` (`message` is now `detail`).
 def post_json(url, body, headers = {})
   uri = URI(url)
   req = Net::HTTP::Post.new(uri, { "Content-Type" => "application/json" }.merge(headers))
@@ -37,8 +44,9 @@ def post_json(url, body, headers = {})
   [res.code.to_i, (JSON.parse(res.body) rescue {})]
 end
 
-def get_json(url, headers = {})
+def get_json(url, headers = {}, params = {})
   uri = URI(url)
+  uri.query = URI.encode_www_form(params) unless params.empty?
   res = Net::HTTP.new(uri.host, uri.port).request(Net::HTTP::Get.new(uri, headers))
   [res.code.to_i, (JSON.parse(res.body) rescue {})]
 end
@@ -65,13 +73,12 @@ STDERR.puts "  Registered: user_id=#{user_id}"
 # the live demo the human completes the real hosted SetupIntent once instead.
 
 # -- Step 2: query catalog --
-rc_catalog, catalog_resp = post_json(
-  "#{SERVER}/kiosk/query",
-  { name: "catalog" },
+rc_catalog, catalog_resp = get_json(
+  "#{SERVER}/kiosk/catalog",
   { "Authorization" => "Bearer #{token}" },
 )
 abort "query catalog failed (#{rc_catalog}): #{JSON.generate(catalog_resp)}" unless rc_catalog == 200
-catalog = catalog_resp.fetch("rows", [])
+catalog = Array(catalog_resp)
 abort "catalog returned empty rows" if catalog.empty?
 abort "catalog rows must carry currency=eur" unless catalog.all? { |p| p["currency"] == "eur" }
 abort "catalog rows must carry a price_eur display string" unless catalog.all? { |p| p["price_eur"].to_s.start_with?("€") }
@@ -100,25 +107,25 @@ delivery_date    = Date.today.to_s
 
 # Negative control: an out-of-zone / district-less address → clean 400 (bad_request),
 # NOT a 500. Proves the address gate rejects gross fakes with a clear message.
-rc_bad, bad_resp = post_json(
-  "#{SERVER}/kiosk/query",
-  { name: "delivery_slots", date: delivery_date, delivery_address: "123 Demo Street, Dublin" },
+rc_bad, bad_resp = get_json(
+  "#{SERVER}/kiosk/delivery_slots",
   { "Authorization" => "Bearer #{token}" },
+  { date: delivery_date, delivery_address: "123 Demo Street, Dublin" },
 )
-bad_code = bad_resp.dig("error", "code")
+bad_code = bad_resp["code"]
 abort "out-of-zone delivery_slots expected 400 bad_request, got #{rc_bad} #{bad_code.inspect}" \
   unless rc_bad == 400 && bad_code == "bad_request"
 STDERR.puts "  delivery_slots (district-less address): http=#{rc_bad} code=#{bad_code} (rejected, as expected)"
 
 rc_slots = nil
 query_slots = lambda do |date_str|
-  rc_slots, resp = post_json(
-    "#{SERVER}/kiosk/query",
-    { name: "delivery_slots", date: date_str, delivery_address: delivery_address },
+  rc_slots, resp = get_json(
+    "#{SERVER}/kiosk/delivery_slots",
     { "Authorization" => "Bearer #{token}" },
+    { date: date_str, delivery_address: delivery_address },
   )
   abort "query delivery_slots failed (#{rc_slots}): #{JSON.generate(resp)}" unless rc_slots == 200
-  resp.fetch("rows", [])
+  Array(resp)
 end
 
 slots = query_slots.call(delivery_date)
@@ -149,14 +156,14 @@ past_slot_check = nil
 unless missing_ids.empty?
   past_id = missing_ids.min
   rc_past, past_resp = post_json(
-    "#{SERVER}/kiosk/run",
-    { name: "create_order", items: items,
+    "#{SERVER}/kiosk/create_order",
+    { items: items,
       delivery_slot_id: past_id,
       delivery_date:    slot_date,
       delivery_address: delivery_address },
     { "Authorization" => "Bearer #{token}" },
   )
-  past_code = past_resp.dig("error", "code")
+  past_code = past_resp["code"]
   abort "K-480: create_order on a PAST slot (#{past_id} on #{slot_date}) expected 400 bad_request, got #{rc_past} #{past_code.inspect}" \
     unless rc_past == 400 && past_code == "bad_request"
   past_slot_check = { id: past_id, http: rc_past, code: past_code }
@@ -167,15 +174,16 @@ end
 # K-470: pass back the DATE of the slot we chose so create_order books the day
 # we saw, not a fixed +1.
 rc_order, order_resp = post_json(
-  "#{SERVER}/kiosk/run",
-  { name: "create_order", items: items,
+  "#{SERVER}/kiosk/create_order",
+  { items: items,
     delivery_slot_id: slot_id,
     delivery_date:    slot_date,
     delivery_address: delivery_address },
   { "Authorization" => "Bearer #{token}" },
 )
 abort "create_order failed (#{rc_order}): #{JSON.generate(order_resp)}" unless rc_order == 200
-order_value = order_resp.fetch("value")
+# An action's success body IS its own object — there is no `value` to unwrap.
+order_value = order_resp
 order_id    = order_value.fetch("order_id")
 total_cents = order_value.fetch("total_cents")
 slot_at     = order_value.fetch("slot_at")
@@ -193,12 +201,12 @@ STDERR.puts "  create_order: order_id=#{order_id} total=#{order_value["total_eur
 # it hands the human the setup_url. Under KIOSK_TEST_AUTOCARD the provider
 # reports {status:"ready"} (card auto-provisioned at capture).
 rc_setup, setup_resp = post_json(
-  "#{SERVER}/kiosk/run",
-  { name: "payment_setup" },
+  "#{SERVER}/kiosk/payment_setup",
+  {},
   { "Authorization" => "Bearer #{token}" },
 )
 abort "payment_setup failed (#{rc_setup}): #{JSON.generate(setup_resp)}" unless rc_setup == 200
-setup_status = setup_resp.dig("value", "status")
+setup_status = setup_resp["status"]
 abort "payment_setup status expected 'ready', got #{setup_status.inspect}" unless setup_status == "ready"
 STDERR.puts "  payment_setup: #{setup_status}"
 
@@ -267,18 +275,20 @@ rc_pay, pay_resp = post_json(
   { "Authorization" => "Bearer #{token}" },
 )
 abort "pay failed (#{rc_pay}): #{JSON.generate(pay_resp)}" unless rc_pay == 200
-psp_ref = pay_resp.dig("value", "psp_reference").to_s
+# `POST /kiosk/pay` keeps its path; its SUCCESS body is the SETTLEMENT OBJECT
+# itself — {settlement_id, psp_reference, settled_amount_cents, currency} — not
+# a `{ok, kind, value}` wrapper.
+psp_ref = pay_resp["psp_reference"].to_s
 abort "pay: psp_reference expected 'pi_…' (real Stripe), got #{psp_ref.inspect}" unless psp_ref.start_with?("pi_")
-STDERR.puts "  pay: settlement_id=#{pay_resp.dig("value", "settlement_id")} psp_reference=#{psp_ref}"
+STDERR.puts "  pay: settlement_id=#{pay_resp["settlement_id"]} psp_reference=#{psp_ref}"
 
 # -- Step 7: query my_orders to confirm (own order present, paid) --
-rc_my, my_resp = post_json(
-  "#{SERVER}/kiosk/query",
-  { name: "my_orders" },
+rc_my, my_resp = get_json(
+  "#{SERVER}/kiosk/my_orders",
   { "Authorization" => "Bearer #{token}" },
 )
 abort "my_orders failed (#{rc_my}): #{JSON.generate(my_resp)}" unless rc_my == 200
-my_orders = my_resp.fetch("rows", [])
+my_orders = Array(my_resp)
 own = my_orders.find { |o| o["order_id"] == order_id }
 abort "my_orders does not contain own order #{order_id}" if own.nil?
 paid = own["paid"] == true || own["paid"] == "t"

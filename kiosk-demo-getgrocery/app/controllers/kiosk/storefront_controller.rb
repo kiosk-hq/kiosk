@@ -1,7 +1,8 @@
 # frozen_string_literal: true
 
 # getgrocery's READ surface: the four verbs an assistant reaches with
-# `POST /kiosk/query`. Kiosk ships a MIXIN, not a base class — `include
+# `GET /kiosk/<query-name>`, arguments in the query string. Kiosk ships a
+# MIXIN, not a base class — `include
 # Kiosk::Query` is the whole contract — and each class-level macro records a
 # declaration that the NEXT `def` claims, so a method with no macros above it is
 # a helper the wire cannot see.
@@ -25,8 +26,9 @@
 #
 # NOT ROUTABLE. config/routes.rb draws nothing at this controller: handlers are
 # reached only through the wire, which is where authentication, the registration
-# PoW gate and the GUC-scoped transaction live. A route drawn straight here would
-# bypass all three, and the mixin answers such a request 404.
+# PoW gate, the declared-input_schema check and the GUC-scoped transaction live.
+# A route drawn straight here would bypass all four, and the mixin answers such a
+# request 404.
 class Kiosk::StorefrontController < ActionController::API
   include Kiosk::Query
   include KioskRefusals

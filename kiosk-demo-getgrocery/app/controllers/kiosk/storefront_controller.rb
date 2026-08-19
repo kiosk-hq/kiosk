@@ -109,7 +109,9 @@ class Kiosk::StorefrontController < ActionController::API
               "district — e.g. \"42 Camden Street, Dublin 2\" or an Eircode like \"D02 XY45\"). " \
               "getgrocery routes by district and delivers only within its served Dublin zones; " \
               "an out-of-zone or district-less address returns 400 (bad_request) naming what is " \
-              "needed. Obtain the real address from your human FIRST — the same address is required " \
+              "needed, and so does a `date` before today. An EMPTY array means every window on " \
+              "that (valid) day has already begun — try a later date. " \
+              "Obtain the real address from your human FIRST — the same address is required " \
               "again at create_order. NOTE: the operator validates format + zone only; it cannot " \
               "verify a plausible in-zone address is real, so confirm it with your human. " \
               "Each row carries a `delivery_slot_id` (and its `date`); pass both to create_order " \
@@ -117,13 +119,18 @@ class Kiosk::StorefrontController < ActionController::API
   input_schema type: "object",
                additionalProperties: false,
                properties: {
-                 date:             { type: "string", description: "Delivery date, YYYY-MM-DD." },
+                 date:             { type: "string", format: "date",
+                                     description: "Delivery date, YYYY-MM-DD. TODAY or later " \
+                                                  "(Europe/Dublin); an earlier date is refused " \
+                                                  "with the earliest bookable one named." },
                  delivery_address: { type: "string", description: "Dublin delivery address naming a served postal district." },
                },
                required: ["date", "delivery_address"]
   # A bare array of the still-bookable windows for that date. EMPTY is an
-  # honest answer here and only here: every one of today's windows may already
-  # have begun, in which case the earliest bookable slot is on a later date.
+  # honest answer here and, since T-090, ONLY here: every one of today's
+  # windows may already have begun, in which case the earliest bookable slot is
+  # on a later date. A date BEFORE today used to answer the same `[]` and now
+  # answers 400 — the two questions deserve two answers.
   output_schema type: "array",
                 description: "The still-bookable delivery windows for the requested date and zone.",
                 items: {
@@ -163,6 +170,14 @@ class Kiosk::StorefrontController < ActionController::API
         code: "bad_request", message: "invalid date: #{params[:date]}",
       ))
     end
+
+    # T-090 / spec §9.1: a date BEFORE today is outside this verb's domain and
+    # is refused by name, because `200 []` for it is indistinguishable from the
+    # honest empty case immediately below. The two failure modes that already
+    # answered 400 (an out-of-zone address, an unparseable date) are above; this
+    # is the third and it is the same kind of statement.
+    refusal = WireArguments.past_date(date)
+    return render_refusal(refusal) if refusal
 
     # PAST-SLOT FILTER (K-480): return ONLY still-bookable windows. For TODAY,
     # drop any slot whose start has already passed in the operator's locale

@@ -26,8 +26,9 @@
 #   MethodMismatch    — a GET at an action's path is 405 + `Allow: POST`, never
 #                       a silent 404
 #   InvalidFilterIsNotAnEmptyList — an availability filter naming a seating
-#     that does not exist is a typed 400 NAMING the valid values, never a
-#     200 with an empty rows array and never a 500 (K-717, and K-691 before it)
+#     time, a date or a NEIGHBOURHOOD that does not exist is a typed 400
+#     NAMING the valid values, never a 200 with an empty rows array and never
+#     a 500 (K-717 and T-090, and K-691 before them)
 #
 # THE 0.4 WIRE. A query is `GET <endpoint>/<query-name>` carrying its arguments
 # in the query string; an action is `POST <endpoint>/<action-name>` carrying
@@ -263,12 +264,22 @@ record(results, "MethodMismatch",
 # still covered: a 500 fails this just as it failed the old one. The
 # non-empty positive control stays, and it is what keeps the beat from passing
 # against a handler that refuses everything.
+#
+# THE THIRD FILTER JOINED THE BEAT UNDER T-090. `neighborhood` was the last of
+# `availability`'s three arguments still answering `200 []` to a value the
+# aggregator does not serve, which is the same indistinguishable-from-sold-out
+# answer the other two stopped giving under K-717. Its served set is
+# DB-DERIVED, so it can never be an `enum` — the refusal comes from
+# {WireArguments.neighborhood} and names the neighbourhoods that exist, exactly
+# as the `date` guard names the horizon.
 FAR_FUTURE = (Date.today + 3650).iso8601
 invalid_filter_probes = [
   ["time=18:00 (valid pattern, not a seating)",
    { party_size: 2, time: "18:00" }, %w[19:00 20:00 21:00]],
   ["date=#{FAR_FUTURE} (valid date, past the horizon)",
    { party_size: 2, date: FAR_FUTURE }, ["upcoming seatings"]],
+  ["neighborhood=Atlantis (well-formed, unserved — T-090)",
+   { party_size: 2, neighborhood: "Atlantis" }, ["Alfama"]],
   ["both filters, no overlap",
    { party_size: 2, time: "18:00", date: FAR_FUTURE }, %w[19:00 20:00 21:00]],
 ].map do |label, args, named|

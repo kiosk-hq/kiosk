@@ -19,13 +19,15 @@ class Kiosk::BoardController < ApplicationController
 
   # browse_listings — the OPEN board. Any authenticated principal sees ALL
   # matching listings across ALL owners (no owner_id filter). Optional
-  # category_slug + keyword filters; status clamps to open|closed (defaults
-  # open). No caller value is ever spliced into SQL: the filters are ordinary
+  # category_slug + keyword filters; `status` defaults to open and is one of
+  # open|closed. No caller value is ever spliced into SQL: the filters are ordinary
   # ActiveRecord conditions and the keyword search is an Arel `matches` (which
   # is Postgres ILIKE), so the escaping is the adapter's job, not the handler's
   # (K-654).
   description "Browse the public classifieds board across all sellers. Optional " \
-              "category_slug and keyword filters; status defaults to open. All " \
+              "category_slug and keyword filters; status defaults to open and must be " \
+              "open or closed — any other value is refused 400, never silently " \
+              "reinterpreted. All " \
               "filters are optional and AND together; each row carries a " \
               "`listing_id` (pass it to edit_listing / close_listing as `listing_id`), " \
               "title, body, free-form price_text, category_slug, status, and " \
@@ -39,7 +41,8 @@ class Kiosk::BoardController < ApplicationController
                                   description: "Restrict to one category." },
                  keyword:       { type: "string", description: "Case-insensitive match on title or body." },
                  status:        { type: "string", enum: %w[open closed], default: "open",
-                                  description: "Listing status filter." },
+                                  description: "Listing status filter. Omit it for open; any value " \
+                                               "outside the enum is a 400 naming these two." },
                },
                required: []
   output_schema type: "array",
@@ -74,8 +77,26 @@ class Kiosk::BoardController < ApplicationController
     owner_handle: "alice@example.com",
   })
   def browse_listings
-    status = params[:status].to_s
-    status = "open" unless Listing::STATUSES.include?(status)
+    # T-090: THE CLAMP IS GONE, and deleting it is the whole fix.
+    #
+    # This used to read `status = "open" unless Listing::STATUSES.include?(status)`,
+    # so `status="deleted"` came back 200 with the OPEN listings — not an empty
+    # list but something worse: a successful-looking answer to a DIFFERENT
+    # QUESTION, with nothing in the response saying the filter had been
+    # discarded. An assistant relaying it told its human "here are the deleted
+    # listings" and was wrong.
+    #
+    # Nothing replaces it, because `status` already DECLARES `enum: [open,
+    # closed]` and since 0.4 `input_schema` is validated on every per-verb call
+    # (spec §8.1 item 5) — so an out-of-enum value never reaches this method:
+    # the schema layer answers `400 bad_request` naming the two it accepts.
+    # That is §9.1's first branch falling out of a declaration rather than a
+    # guard, which is the shape the rule prefers.
+    #
+    # What IS still the handler's job is the DEFAULT. `default: "open"` in the
+    # schema documents the intent; nothing on this wire injects it, so an
+    # ABSENT (or empty) `status` is filled in here.
+    status = params[:status].presence || "open"
 
     board = Listing.joins(:category, :owner)
                    .where(status: status)

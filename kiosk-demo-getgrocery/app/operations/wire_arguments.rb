@@ -126,6 +126,43 @@ module WireArguments
     )
   end
 
+  # ── T-090: A DELIVERY DATE IN THE PAST IS OUTSIDE ITS DOMAIN ─────────────
+  #
+  # Spec §9.1's FIRST branch: a value the verb's domain does not contain is
+  # `400 bad_request` NAMING what is acceptable, never an empty list.
+  #
+  # WHY THIS ONE NEEDED A GUARD RATHER THAN AN `enum`. The domain is "today or
+  # later, in Europe/Dublin" and it rolls forward every midnight, so no enum
+  # written at declaration time can name it — the same reason atablefor's
+  # seating horizon keeps a guard. `format: "date"` can only say the string is
+  # a calendar date.
+  #
+  # WHAT IT REPLACES, and why the old answer was indefensible. A date thirty
+  # days back returned `200 []`, because {DeliverySlots.bookable_ids} rejects
+  # every window whose start has passed — and every window of a past day has.
+  # That is byte-identical to the answer for TODAY once the last window has
+  # begun, which is the honest empty case this verb must keep. An assistant
+  # reading `[]` could not tell "you asked for last month" from "today is sold
+  # out, try tomorrow", and only one of those is worth retrying.
+  #
+  # TODAY IS NOT REFUSED. The boundary is deliberately the DAY and not the
+  # window: today with every window begun is still a real question with a real
+  # empty answer.
+  #
+  # @return [OperationResult, nil] a refusal, or nil when the date is bookable
+  def past_date(date)
+    today = DeliverySlots.now.to_date
+    return nil if date >= today
+
+    OperationResult.refused(
+      code:    "bad_request",
+      message: "date #{date.iso8601} is in the past — getgrocery delivers from #{today.iso8601} " \
+               "onwards (Europe/Dublin)",
+      hint:    "pass #{today.iso8601} or a later date; an EMPTY list means that day's windows " \
+               "have all begun, which is a different answer from this one.",
+    )
+  end
+
   # ADDRESS-UPFRONT (K-468). Every surface that takes a delivery address
   # validates it against the SAME served-Dublin-district rule, so an address
   # that got slots can always be ordered to and one that cannot is refused with

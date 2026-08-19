@@ -25,18 +25,19 @@
 # survives a deletion, or lies about a resource that exists, is an attack
 # surface.
 #
-# Scenarios (16 BLOCKED, 3 SKIPPED):
+# Scenarios (17 BLOCKED, 3 SKIPPED):
 #   BLOCKED : CrossTenantRead, ForgedUserId, UnpaidGatedAction, SpentResourceReuse,
 #             PayForOtherUseSelf, MandatePrincipalSwap, MandateReplay, TokenTampering,
 #             PrivilegeSelfSelection, WrongCurrencyCart, TamperedPriceCart,
 #             InflatedTotalCart, MalformedItemsCart, RetiredWire, MethodMismatch,
-#             RegistrationWithoutPow
+#             PastDeliveryDate, RegistrationWithoutPow
 #   SKIPPED : MissingKyc, ExpiredKyc, ForgedKyc (no KYC)
 #
 # Usage:
 #   SERVER_URL=http://127.0.0.1:3001 KIOSK_ISSUER=http://127.0.0.1:3001 \
 #   bundle exec ruby script/redteam_suite.rb
 
+require "date"
 require "kiosk/redteam"
 require "net/http"
 require "securerandom"
@@ -420,6 +421,64 @@ class MethodMismatch < Kiosk::Redteam::Scenario
   end
 end
 
+# A `date` in the PAST on `delivery_slots` must be a typed 400 naming the
+# earliest bookable day — not `200 []` (T-090, spec §9.1).
+#
+# WHY THE ADVERSARIAL BATTERY OWNS THIS. The empty list this replaces was not a
+# missing check, it was an AMBIGUOUS ANSWER: `DeliverySlots.bookable_ids`
+# rejects every window whose start has passed, and every window of a past day
+# has, so a date thirty days back returned byte-identical bytes to TODAY once
+# the last window has begun. One of those two is worth retrying tomorrow and
+# the other never will be, and an assistant reading `[]` could not tell which
+# it had. Two answers that cannot be told apart is the shape this battery
+# exists to catch.
+#
+# The CONTROL is what makes the beat non-vacuous: a FUTURE date at the same
+# in-zone address must still be ANSWERED, or a handler that refused every date
+# would pass.
+class PastDeliveryDate < Kiosk::Redteam::Scenario
+  ADDRESS = "1 Redteam St, Dublin 1"
+
+  def initialize
+    super(
+      name:        "PastDeliveryDate",
+      category:    "surface",
+      description: "A delivery date before today is a typed 400 naming the earliest bookable day, never 200 []",
+    )
+  end
+
+  def call(client, profile)
+    a = register_principal(client, name: "redteam-pastdate-a", profile:)
+
+    past   = (Date.today - 30).iso8601
+    future = (Date.today + 7).iso8601
+
+    bad = client.query(a, name: "delivery_slots", date: past, delivery_address: ADDRESS)
+    ctl = client.query(a, name: "delivery_slots", date: future, delivery_address: ADDRESS)
+
+    # The refusal must NAME the earliest bookable day, and that day is read in
+    # the OPERATOR's locale (Europe/Dublin) — which is not necessarily the
+    # runner's. So the assertion is "a calendar date is named", not a literal
+    # equal to this machine's `Date.today`: pinning the runner's clock into the
+    # expectation would make the beat fail across a timezone boundary for a
+    # reason that has nothing to do with the behaviour under test.
+    detail  = bad.body.is_a?(Hash) ? bad.body["detail"].to_s : ""
+    named   = detail.include?("in the past") && detail.match?(/\d{4}-\d{2}-\d{2}/)
+    refused = bad.status == 400 && error_code(bad) == "bad_request" && named
+    control = ctl.status == 200 && ctl.body.is_a?(Array) && ctl.body.any?
+
+    Kiosk::Redteam::Verdict.new(
+      blocked: refused && control,
+      skipped: false,
+      status:  bad.status,
+      detail:  refused && control ? "" :
+                 "date=#{past} → #{bad.status}/#{error_code(bad).inspect} detail=#{detail[0, 120].inspect}; " \
+                 "CONTROL date=#{future} → #{ctl.status}/#{ctl.body.is_a?(Array) ? ctl.body.size : 0} rows " \
+                 "(want 400 bad_request naming the earliest bookable date, and a non-empty control)",
+    )
+  end
+end
+
 # ── Scenarios ─────────────────────────────────────────────────────────────────
 
 scenarios = [
@@ -439,6 +498,7 @@ scenarios = [
   MalformedItemsCart.new,   # K-693 — a mis-shaped `items` is a typed 400, never a 500
   RetiredWire.new,          # T-074 = A — the 0.3 pair is deleted, not tombstoned
   MethodMismatch.new,       # 0.4 — a GET at an action is 405, never a silent 404
+  PastDeliveryDate.new,     # T-090 — a past date is a named 400, not an ambiguous 200 []
   # register PoW is ON — a missing/bad register proof must be rejected (runs
   # because pow_difficulty > 0).
   Kiosk::Redteam::Scenarios::RegistrationWithoutPow.new,

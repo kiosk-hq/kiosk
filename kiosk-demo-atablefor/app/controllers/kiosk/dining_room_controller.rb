@@ -45,7 +45,8 @@ class Kiosk::DiningRoomController < ApplicationController
   # `where_nbhd = "AND r.neighborhood = #{conn.quote(nbhd_filter)} "` concatenated
   # into a SELECT, and an `IN (…)` list BUILT by joining quoted timestamps.
   #   :party_size   — only tables seating at least this many (used to size the party)
-  #   :neighborhood — restrict to one Lisbon neighbourhood (e.g. "Alfama")
+  #   :neighborhood — restrict to one SERVED Lisbon neighbourhood (e.g. "Alfama");
+  #                   one nobody serves is a 400 naming the served set (T-090)
   #   :time         — restrict to one seating time ("19:00" | "20:00" | "21:00")
   #   :date         — restrict to one date (YYYY-MM-DD) among the upcoming seatings
   # The result is small (~5 restaurants × a handful of tables × ≤ a few seatings),
@@ -58,6 +59,10 @@ class Kiosk::DiningRoomController < ApplicationController
               "table_label, capacity, seating_date, seating_time, seating_at, " \
               "deposit_eur. Pass restaurant_id + restaurant_table_id + date + " \
               "time + party_size to book_table (all five are required) — the " \
+              "an unserved neighborhood, a non-seating time or a date outside the " \
+              "horizon is refused 400 with the valid values named — an EMPTY array " \
+              "means the seatings you asked for are genuinely sold out. " \
+              "The " \
               "row field named seating_date is book_table's `date` param, and " \
               "the row's seating_time is book_table's `time`: same values, " \
               "different names. Seatings are the current " \
@@ -70,8 +75,14 @@ class Kiosk::DiningRoomController < ApplicationController
                properties: {
                  party_size:   { type: "integer", minimum: 1,
                                  description: "Number of guests." },
+                 # T-090: the served set is DB-derived (an operator adds one by
+                 # inserting a restaurant), so it cannot be an `enum` here and
+                 # the handler guard is the only place the refusal can live —
+                 # the same standing `date` has, for the same reason.
                  neighborhood: { type: "string",
-                                 description: "Optional Lisbon neighbourhood filter, e.g. \"Alfama\"." },
+                                 description: "Optional Lisbon neighbourhood filter, e.g. \"Alfama\". " \
+                                              "Must be one this aggregator serves — an unserved name is " \
+                                              "refused with the current ones named." },
                  # K-717: a CLOSED SET, so it is an `enum` and not a pattern.
                  # The pattern it replaces accepted "18:00" — a well-formed
                  # time that is not a seating — and the handler answered it
@@ -130,7 +141,13 @@ class Kiosk::DiningRoomController < ApplicationController
     party_size, refusal = WireArguments.party_size(params[:party_size])
     return render_refusal(refusal) if refusal
 
-    nbhd_filter = params[:neighborhood].to_s
+    # T-090: an unserved neighbourhood is a typed 400 naming the served ones,
+    # not `200 []`. `Restaurant.served_neighborhoods` is the DB-derived set —
+    # the same set the filter below matches against, read once so the refusal
+    # and the query can never name different things.
+    nbhd_filter, refusal = WireArguments.neighborhood(params[:neighborhood],
+                                                      Restaurant.served_neighborhoods)
+    return render_refusal(refusal) if refusal
 
     # The rolling upcoming seatings (Europe/Lisbon, past filtered, tonight→tomorrow).
     upcoming = Seatings.upcoming

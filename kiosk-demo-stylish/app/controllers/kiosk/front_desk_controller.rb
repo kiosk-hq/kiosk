@@ -26,6 +26,16 @@ class Kiosk::FrontDeskController < ApplicationController
   # verb takes no arguments" is a published fact rather than an absence an
   # assistant has to interpret.
   input_schema type: "object", additionalProperties: false, properties: {}, required: []
+  output_schema type: "array",
+                description: "The whole salon catalogue.",
+                items: {
+                  type: "object", additionalProperties: false,
+                  properties: {
+                    salon_id: { type: "integer", description: "Pass to book_appointment as `salon_id`." },
+                    name:     { type: "string", description: "Salon name." },
+                  },
+                  required: %w[salon_id name],
+                }
   def salons
     # `pluck` rather than loading models: this is a projection, and naming the
     # columns is what keeps the wire's field names and their order a decision
@@ -45,6 +55,19 @@ class Kiosk::FrontDeskController < ApplicationController
                additionalProperties: false,
                properties: {},
                required: []
+  output_schema type: "array",
+                description: "The whole service menu, cheapest first.",
+                items: {
+                  type: "object", additionalProperties: false,
+                  properties: {
+                    service_id:  { type: "integer", description: "Pass to book_appointment as `service_id`; its EUR price is captured on the booking." },
+                    name:        { type: "string", description: "Service name." },
+                    price_cents: { type: "integer", description: "EUR cents." },
+                    currency:    { type: "string", description: "EUR." },
+                    price_eur:   { type: "string", description: "The same price rendered for a human, e.g. \"€35\"." },
+                  },
+                  required: %w[service_id name price_cents currency price_eur],
+                }
   example_params({})
   example_row({
     service_id: 1, name: "Cut", price_cents: 3500,
@@ -71,6 +94,24 @@ class Kiosk::FrontDeskController < ApplicationController
                additionalProperties: false,
                properties: {},
                required: []
+  # The same projection as service_menu under this verb's own field names —
+  # `service` rather than `name`, plus the evergreen `open`. The two verbs stay
+  # separate because their CONTRACTS differ, not their query, and these two
+  # schemas are where that difference is now readable without calling both.
+  output_schema type: "array",
+                description: "Every menu service, always bookable, cheapest first.",
+                items: {
+                  type: "object", additionalProperties: false,
+                  properties: {
+                    service_id:  { type: "integer", description: "Pass to book_appointment as `service_id`; its EUR price is captured on the booking." },
+                    service:     { type: "string", description: "Service name." },
+                    price_cents: { type: "integer", description: "EUR cents." },
+                    open:        { const: true, description: "Always true — capacity is infinite, so the salon never fills up." },
+                    currency:    { type: "string", description: "EUR." },
+                    price_eur:   { type: "string", description: "The same price rendered for a human, e.g. \"€90\"." },
+                  },
+                  required: %w[service_id service price_cents open currency price_eur],
+                }
   example_params({})
   example_row({
     service_id: 3, service: "Colour", open: true,
@@ -95,6 +136,21 @@ class Kiosk::FrontDeskController < ApplicationController
   # identity predicate — see Appointment for why it stays SQL-side (K-654).
   description "List this principal's appointments (scoped to authenticated user via kiosk.current_user_id())"
   input_schema type: "object", additionalProperties: false, properties: {}, required: []
+  # `id`, not `appointment_id`, and that is published behaviour rather than an
+  # inconsistency this declaration gets to tidy away — book_appointment answers
+  # `appointment_id` for the same value. Named here so an assistant reads the
+  # mismatch off the schema instead of meeting it.
+  output_schema type: "array",
+                description: "The principal's appointments, oldest id first.",
+                items: {
+                  type: "object", additionalProperties: false,
+                  properties: {
+                    id:       { type: "string", description: "uuid — the appointment. book_appointment calls the same value `appointment_id`." },
+                    salon_id: { type: "integer", description: "The salon booked." },
+                    slot:     { type: "string", description: "Appointment time, ISO 8601." },
+                  },
+                  required: %w[id salon_id slot],
+                }
   def my_appointments
     render json: Appointment.owned_by_current_principal
                             .order(:id)
@@ -131,6 +187,43 @@ class Kiosk::FrontDeskController < ApplicationController
   # branch now picks between two relations.
   description "Staff forecast — role-gated: owner sees ALL bookings + a FORECASTED € revenue total (summed from the actual bookings' prices, growing from €0 as visitors book); any other role sees only their own bookings and no forecast (role from the bound human's IdP)"
   input_schema type: "object", additionalProperties: false, properties: {}, required: []
+  # TWO ROW SHAPES IN ONE ARRAY, and the discriminator is the field each one
+  # has that the other does not: a booking carries `kind: "booking"`, the
+  # owner-only trailer carries `summary: "forecast"`. That is what the handler
+  # renders — the forecast is APPENDED to the booking rows rather than sitting
+  # beside them in an envelope — so the schema declares the union rather than
+  # pretending the array is homogeneous. A non-owner never sees the second
+  # shape at all, which is the role gate, not an option of the format.
+  output_schema type: "array",
+                description: "The bookings this caller may see, slot-ordered; for an owner, a forecast row after them.",
+                items: {
+                  oneOf: [
+                    { type: "object", additionalProperties: false,
+                      description: "One booking.",
+                      properties: {
+                        id:          { type: "string", description: "uuid — the appointment." },
+                        salon_id:    { type: "integer", description: "The salon booked." },
+                        slot:        { type: "string", description: "Appointment time, ISO 8601." },
+                        service_id:  { type: %w[integer null], description: "The booked service, or null for a bare salon booking." },
+                        service:     { type: %w[string null], description: "The booked service's name, or null." },
+                        price_cents: { type: %w[integer null], description: "EUR cents CAPTURED on the booking, or null when no service was booked." },
+                        kind:        { const: "booking", description: "booking — this row is an appointment." },
+                        currency:    { type: "string", description: "EUR." },
+                        price_eur:   { type: "string", description: "The captured price rendered for a human; \"€0\" when none was captured." },
+                      },
+                      required: %w[id salon_id slot service_id service price_cents kind currency price_eur] },
+                    { type: "object", additionalProperties: false,
+                      description: "The owner-only forecast trailer, appended after the bookings.",
+                      properties: {
+                        summary:        { const: "forecast", description: "forecast — this row is the summary, not an appointment." },
+                        bookings:       { type: "integer", description: "How many booking rows this forecast sums." },
+                        currency:       { type: "string", description: "EUR." },
+                        forecast_cents: { type: "integer", description: "EUR cents summed from the real captured per-booking prices — €0 before any booking, growing with each one." },
+                        forecast_eur:   { type: "string", description: "The same total rendered for a human." },
+                      },
+                      required: %w[summary bookings currency forecast_cents forecast_eur] },
+                  ],
+                }
   def salon_calendar
     role = Appointment.current_principal_role
 

@@ -16,9 +16,10 @@
 # composite body shape left at all. `POST /kiosk/{query,run}` do not exist;
 # `schema` and `pay` answer the same shape as the per-verb wire.
 #
-# ONE AUTH SHAPE, WITH ONE DELIBERATE EXCEPTION. Everything under the mount is
-# Bearer-gated except `GET /kiosk/schema`, which is public (T-094) — and
-# `/kiosk/openapi.json`, which is still gated on purpose while K-804 is open.
+# ONE AUTH SHAPE, WITH TWO DELIBERATE EXCEPTIONS. Everything under the mount is
+# Bearer-gated except the two DESCRIPTIONS of this origin's wire —
+# `GET /kiosk/schema` (T-094) and `GET /kiosk/openapi.json` (K-804) — which are
+# public, untolled and cacheable, and are the same registry in two dresses.
 #
 # Env (all set by run.sh; the pay-flow + DB assertions dereference them
 # under `set -u`, so all are required):
@@ -113,12 +114,19 @@ assert "kiosk.issuer set"          "$(echo "$wk" | jq -r '.kiosk.issuer')"      
 # (T-068 slice 5, T-075 = A, ADR-0025).
 assert "kiosk.capabilities[]"      "$(echo "$wk" | jq -r '.kiosk.capabilities | join(",")')" "schema,queries,actions,pay"
 # THE CACHE-BUSTED CATALOG LINK (T-094). This document is the SHORT-lived half
-# of the pair: it expires in minutes and republishes the link, which is what
-# lets the link itself be cached for a year.
+# of the pair: it expires in ONE MINUTE (Phil, 2026-08-19 — the length of the
+# post-deploy staleness window, not a load knob) and republishes the link,
+# which is what lets the link itself be cached for a year.
 assert "kiosk.schema_url is digest-versioned" \
   "$(echo "$wk" | jq -r '.kiosk.schema_url' | grep -Ec "^$SERVER_URL/kiosk/schema\?v=[0-9a-f]{32}\$")" "1"
 assert "…and kiosk.json itself expires quickly" \
-  "$(curl -sS -o /dev/null -D - "$SERVER_URL/.well-known/kiosk.json" | grep -ic '^Cache-Control: max-age=300, public')" "1"
+  "$(curl -sS -o /dev/null -D - "$SERVER_URL/.well-known/kiosk.json" | grep -ic '^Cache-Control: max-age=60, public')" "1"
+# «А Vary зачем? Это паблик, общедоступная инфа.» — a public document that
+# varies on anything is one a shared cache splits for nothing. Rails stamps
+# `Vary: Accept` on a negotiated render, which is why the Accept header below
+# is SENT rather than omitted: without it this assertion cannot fail.
+assert "…and carries NO Vary, even when the request negotiates" \
+  "$(curl -sS -o /dev/null -D - -H 'Accept: application/json' "$SERVER_URL/.well-known/kiosk.json" | grep -ic '^Vary:')" "0"
 
 # THE FLEET OF PUBLIC DOCUMENTS, SPLIT IN TWO — and the split is the point
 # (T-093, 2026-08-19).
@@ -161,6 +169,16 @@ assert "…a query is advertised GET" \
 assert "…an action is advertised POST" \
   "$(echo "$apc_body" | jq -r --arg h "$SERVER_URL/kiosk/book_appointment" \
       '.linkset[0].item[] | select(.href == $h) | ."kiosk-method" | join(",")')" "POST"
+# THE TWO DESCRIPTIONS ARE LINKED AT `?v=<version>` (K-804): this document is a
+# pointer with a one-minute TTL, so what it hands a reader is the url that may
+# be cached for a year.
+assert "…and links the catalog at its versioned url" \
+  "$(echo "$apc_body" | jq -r '[.linkset[0].item[] | select(.rel == "service-desc") | .href] | map(test("\\?v=[0-9a-f]{32}$")) | all')" "true"
+apc_headers=$(curl -sS -o /dev/null -D - -H 'Accept: application/json' "$SERVER_URL/.well-known/api-catalog")
+assert "…served public, one minute" \
+  "$(echo "$apc_headers" | grep -ic '^Cache-Control: max-age=60, public')" "1"
+assert "…and carries NO Vary, even when the request negotiates" \
+  "$(echo "$apc_headers" | grep -ic '^Vary:')" "0"
 
 # ─── native discovery: agents.txt / agents.json / agent-configuration ───
 #
@@ -192,7 +210,7 @@ assert "agents.json auth.discovery"  "$(echo "$aj" | jq -r '.authorization.disco
 # `capabilities` under `wire.verbs` (T-075 = A).
 assert "agents.json x-kiosk keys"    "$(echo "$aj" | jq -r '."x-kiosk" | keys_unsorted | join(",")')" "schema,api_catalog,mount_path,api_version"
 # The pointer carries the boot digest as `?v=` (T-094) — the cache-busting
-# half, without which a week-long TTL on a fixed URL is a stale catalogue.
+# half, without which a year-long TTL on a fixed URL is a stale catalogue.
 assert "agents.json x-kiosk.schema is digest-versioned" \
   "$(echo "$aj" | jq -r '."x-kiosk".schema' | grep -Ec '^/kiosk/schema\?v=[0-9a-f]{32}$')" "1"
 assert "agents.json x-kiosk has no wire.verbs echo" "$(echo "$aj" | jq -r '."x-kiosk" | has("wire")')" "false"
@@ -223,26 +241,42 @@ assert "api-catalog items non-empty" "$(echo "$apc" | jq -r '.linkset[0].item | 
 
 printf "\n\033[1m=== GET /kiosk/openapi.json (derived, RFC 9727 service-desc) ===\033[0m\n"
 
+# THE api-catalog LINKS IT AT ITS VERSIONED URL (K-804) — this document is a
+# pointer with a one-minute TTL, so the url it hands a reader is the one that
+# may be cached for a year, not the bare path.
 assert "api-catalog advertises it as a service-desc" \
-  "$(echo "$apc" | jq -r '[.linkset[0].item[] | select(.rel == "service-desc") | .href] | map(endswith("/kiosk/openapi.json")) | any')" \
+  "$(echo "$apc" | jq -r '[.linkset[0].item[] | select(.rel == "service-desc") | .href] | map(test("/kiosk/openapi\\.json\\?v=[0-9a-f]{32}$")) | any')" \
   "true"
 
-# STILL Bearer-gated — and it is now the ONLY surface that is, for a reason the
-# rest of the fleet retired the same day. `GET /kiosk/schema` went public
-# (T-094) and the api-catalog hyperlinks every verb (T-093), so this document
-# describes nothing an anonymous caller cannot already read. Phil was not asked
-# about THIS endpoint, so rule 2 applies: it is filed as K-804 and the gate
-# stays until it is answered. This assertion is what stops it drifting open by
-# accident.
+# PUBLIC SINCE K-804 (Phil: «K-804 открывать»), and this block is the inverse
+# of what it asserted the day before. The gate's stated reason — that an
+# anonymous read hands out the catalog enumeration — was retired for `GET
+# /kiosk/schema` (T-094) and for the api-catalog's per-verb links (T-093) on
+# the same day; this document is the same registry in another dress, so it
+# withheld nothing. The toll went with the gate: a toll is charged against an
+# identity this endpoint no longer resolves.
 oa_anon=$(curl -sS -o /dev/null -w "%{http_code}" "$SERVER_URL/kiosk/openapi.json")
-assert "unauthenticated → 401"      "$oa_anon" "401"
+assert "no Authorization header → 200"  "$oa_anon" "200"
 
-oa_headers=$(curl -sS -o /dev/null -D - "$SERVER_URL/kiosk/openapi.json" \
-  -H "Authorization: Bearer $ALICE_AGENT_TOKEN")
-oa=$(curl -sf "$SERVER_URL/kiosk/openapi.json" -H "Authorization: Bearer $ALICE_AGENT_TOKEN")
+oa_headers=$(curl -sS -o /dev/null -D - -H 'Accept: application/json' "$SERVER_URL/kiosk/openapi.json")
+oa=$(curl -sf "$SERVER_URL/kiosk/openapi.json")
 
 assert "served as an OpenAPI document" \
   "$(echo "$oa_headers" | grep -i '^Content-Type:' | grep -ic 'application/vnd.oai.openapi+json')" "1"
+# The same cache treatment `schema` gets, from the same seam. The Accept header
+# above is sent deliberately: `Vary: Accept` is what Rails adds to a negotiated
+# render, and it is invisible to a request that negotiates nothing.
+assert "…public, one minute at the bare path" \
+  "$(echo "$oa_headers" | grep -ic '^Cache-Control: max-age=60, public')" "1"
+assert "…with a STRONG ETag (no W/)" \
+  "$(echo "$oa_headers" | tr -d '\r' | grep -Eci '^ETag: "[0-9a-f]{32}"$')" "1"
+assert "…and NO Vary at all"        "$(echo "$oa_headers" | grep -ic '^Vary:')" "0"
+oa_etag=$(echo "$oa_headers" | tr -d '\r' | grep -i '^ETag:' | sed 's/.*"\(.*\)"/\1/')
+assert "If-None-Match on its ETag → 304" \
+  "$(curl -sS -o /dev/null -w "%{http_code}" "$SERVER_URL/kiosk/openapi.json" -H "If-None-Match: \"$oa_etag\"")" "304"
+oa_v=$(echo "$apc" | jq -r '[.linkset[0].item[] | select(.rel == "service-desc") | .href] | map(select(test("openapi"))) | .[0]' | sed 's/.*v=//')
+assert "?v=<version> is immutable for a year" \
+  "$(curl -sS -o /dev/null -D - "$SERVER_URL/kiosk/openapi.json?v=$oa_v" | grep -ic '^Cache-Control: max-age=31536000, public, immutable')" "1"
 assert "declares OpenAPI 3.1"        "$(echo "$oa" | jq -r '.openapi')" "3.1.0"
 assert "server is this origin's endpoint" \
   "$(echo "$oa" | jq -r '.servers[0].url')" "$SERVER_URL/kiosk"
@@ -369,18 +403,22 @@ assert "…and NO Link header, because there is no next page" \
 #
 # T-094. The two assertions above are the fleet-wide policy: every wire
 # response is identity-scoped, so it varies on `Authorization` and is never
-# stored by a shared cache. `schema` is the ONE endpoint under the mount that
-# is none of those things — no identity, no toll, the same bytes for everyone,
-# derived once at boot — so it gets the opposite policy, and BOTH halves are
-# asserted here because getting only one right is worse than neither: `public`
-# with a `Vary: Authorization` is a document no CDN will ever reuse.
+# stored by a shared cache. `schema` is one of TWO endpoints under the mount
+# that are none of those things — no identity, no toll, the same bytes for
+# everyone, derived once at boot (`openapi.json` is the other, K-804) — so it
+# gets the opposite policy, and BOTH halves are asserted here because getting
+# only one right is worse than neither: `public` with a `Vary: Authorization`
+# is a document no CDN will ever reuse.
 
 printf "\n\033[1m=== GET /kiosk/schema (public, cacheable) ===\033[0m\n"
 
 sch_status=$(curl -sS -o /dev/null -w "%{http_code}" "$SERVER_URL/kiosk/schema")
-sch_headers=$(curl -sS -o /dev/null -D - "$SERVER_URL/kiosk/schema")
+# `Accept` is SENT on purpose: `Vary: Accept` is what Rails stamps on a
+# negotiated render, so a probe that negotiates nothing cannot see the header
+# the assertion below is about.
+sch_headers=$(curl -sS -o /dev/null -D - -H 'Accept: application/json' "$SERVER_URL/kiosk/schema")
 assert "no Authorization header → 200"  "$sch_status" "200"
-assert "…served public, short TTL"      "$(echo "$sch_headers" | grep -ic '^Cache-Control: max-age=300, public')" "1"
+assert "…served public, one minute"     "$(echo "$sch_headers" | grep -ic '^Cache-Control: max-age=60, public')" "1"
 assert "…with a STRONG ETag (no W/)"    "$(echo "$sch_headers" | tr -d '\r' | grep -Eci '^ETag: "[0-9a-f]{32}"$')" "1"
 # NOT EVEN `Vary: Accept`, which Rails stamps on any negotiated render: this
 # endpoint answers application/json to every caller, so a Vary of any kind
@@ -399,7 +437,7 @@ assert "?v=<digest> is immutable for a year" \
 assert "…and the boot digest IS the ETag" \
   "$(echo "$sch_headers" | tr -d '\r' | grep -i '^ETag:' | sed 's/.*"\(.*\)"/\1/')" "$sch_digest"
 assert "…a stale ?v= still answers the CURRENT catalogue, short-lived" \
-  "$(curl -sS -o /dev/null -D - "$SERVER_URL/kiosk/schema?v=deadbeef" | grep -ic '^Cache-Control: max-age=300, public')" "1"
+  "$(curl -sS -o /dev/null -D - "$SERVER_URL/kiosk/schema?v=deadbeef" | grep -ic '^Cache-Control: max-age=60, public')" "1"
 assert "If-None-Match on the digest → 304" \
   "$(curl -sS -o /dev/null -w "%{http_code}" "$SERVER_URL/kiosk/schema" -H "If-None-Match: \"$sch_digest\"")" "304"
 

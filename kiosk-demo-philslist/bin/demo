@@ -38,10 +38,14 @@ require_tool() {
 require_tool curl
 require_tool jq
 
-q()   { curl -sS -X POST "$SERVER_URL/kiosk/query" -H "Authorization: Bearer $1" \
-          -H "Content-Type: application/json" -d "$2"; }
-run() { curl -sS -X POST "$SERVER_URL/kiosk/run"   -H "Authorization: Bearer $1" \
-          -H "Content-Type: application/json" -d "$2"; }
+# The 0.4 wire: one endpoint per verb. A query is a GET whose arguments are the
+# query string; an action is a POST whose arguments are the JSON body. A success
+# body IS the result — no envelope to unwrap, so no `.rows`/`.value` below.
+#   q  <token> <query-name> [query-string]
+#   run <token> <action-name> <json-body>
+q()   { curl -sS "$SERVER_URL/kiosk/$2${3:+?$3}" -H "Authorization: Bearer $1"; }
+run() { curl -sS -X POST "$SERVER_URL/kiosk/$2" -H "Authorization: Bearer $1" \
+          -H "Content-Type: application/json" -d "$3"; }
 
 # ─── boot ────────────────────────────────────────────────────────────
 
@@ -77,8 +81,8 @@ say "✓ 'pay' is ABSENT from capabilities — not-only-commerce, demonstrably"
 heading "Alice's agent browses the open board (browse_listings)"
 
 step "browse_listings — all sellers, open board"
-q "$ALICE_TOKEN" '{"name":"browse_listings"}' | jq '.rows | map({title, price_text, category_slug, owner_handle})'
-COUNT=$(q "$ALICE_TOKEN" '{"name":"browse_listings"}' | jq '.rows | length')
+q "$ALICE_TOKEN" browse_listings | jq 'map({title, price_text, category_slug, owner_handle})'
+COUNT=$(q "$ALICE_TOKEN" browse_listings | jq 'length')
 [[ "$COUNT" -ge 2 ]] || fail "expected the seeded cross-owner board (>=2 listings), got $COUNT"
 say "✓ browse sees $COUNT listings across owners"
 
@@ -87,25 +91,25 @@ say "✓ browse sees $COUNT listings across owners"
 heading "Alice's agent posts a listing (post_listing) — no card, no checkout"
 
 step "run post_listing (desk for sale)"
-POST=$(run "$ALICE_TOKEN" '{"name":"post_listing","category_slug":"furniture","title":"Oak desk","body":"Solid oak, moving sale","price_text":"€150"}')
-echo "$POST" | jq '.value'
-LISTING_ID=$(echo "$POST" | jq -r '.value.listing_id')
+POST=$(run "$ALICE_TOKEN" post_listing '{"category_slug":"furniture","title":"Oak desk","body":"Solid oak, moving sale","price_text":"€150"}')
+echo "$POST" | jq '.'
+LISTING_ID=$(echo "$POST" | jq -r '.listing_id')
 [[ "$LISTING_ID" != "null" && -n "$LISTING_ID" ]] || fail "post_listing did not return a listing_id"
 say "✓ posted listing $LISTING_ID"
 
 step "run edit_listing (drop the price)"
-run "$ALICE_TOKEN" "{\"name\":\"edit_listing\",\"listing_id\":\"$LISTING_ID\",\"price_text\":\"€120\"}" | jq '.value'
+run "$ALICE_TOKEN" edit_listing "{\"listing_id\":\"$LISTING_ID\",\"price_text\":\"€120\"}" | jq '.'
 
 step "run close_listing (it sold)"
-CLOSE=$(run "$ALICE_TOKEN" "{\"name\":\"close_listing\",\"listing_id\":\"$LISTING_ID\"}")
-echo "$CLOSE" | jq '.value'
-[[ "$(echo "$CLOSE" | jq -r '.value.status')" == "closed" ]] || fail "close_listing did not close the listing"
+CLOSE=$(run "$ALICE_TOKEN" close_listing "{\"listing_id\":\"$LISTING_ID\"}")
+echo "$CLOSE" | jq '.'
+[[ "$(echo "$CLOSE" | jq -r '.status')" == "closed" ]] || fail "close_listing did not close the listing"
 say "✓ closed listing $LISTING_ID"
 
 step "my_listings reflects the final state (the desk is now closed)"
-MINE=$(q "$ALICE_TOKEN" '{"name":"my_listings"}')
-echo "$MINE" | jq '.rows | map({title, status, price_text})'
-echo "$MINE" | jq -e --arg id "$LISTING_ID" '.rows[] | select(.listing_id == $id) | .status == "closed"' >/dev/null \
+MINE=$(q "$ALICE_TOKEN" my_listings)
+echo "$MINE" | jq 'map({title, status, price_text})'
+echo "$MINE" | jq -e --arg id "$LISTING_ID" '.[] | select(.listing_id == $id) | .status == "closed"' >/dev/null \
   || fail "my_listings does not show the posted desk as closed"
 say "✓ my_listings shows the desk closed at €120"
 

@@ -62,6 +62,66 @@ module WireArguments
     OperationResult.refused(code: "bad_request", message: "missing param: party_size")
   end
 
+  # ── K-717: AN INVALID FILTER VALUE IS A TYPED 400, NEVER AN EMPTY LIST ────
+  #
+  # Phil's house rule for every filter-shaped query in the fleet, decided
+  # 2026-08-19: «если передан неверный входной параметр, ответ должен быть http
+  # 400 bad request, не пустой список, и должна быть ошибка с описанием».
+  # `availability` used to answer BOTH of these with `200 []`, which from the
+  # assistant's side is indistinguishable from a sold-out night — so an
+  # assistant that typed 18:00 for 19:00 could not tell a typo from a full
+  # house, and the descriptor's own «must be among the upcoming seatings» was
+  # advisory prose nothing enforced.
+  #
+  # THE EMPTY LIST SURVIVES FOR ITS HONEST CASE ONLY: "matched nothing that is
+  # actually available".
+  #
+  # WHY THESE ARE HANDLER GUARDS AND NOT ONLY SCHEMA. `time` IS a closed set
+  # and IS declared as an `enum` on the descriptor, which is the better
+  # spelling Phil named (T-073 = C) — on the 0.4 per-verb wire the 400 falls
+  # out of the schema layer before the handler runs, for free. But this demo
+  # still serves the 0.3 `POST /kiosk/query`, where no `input_schema` is
+  # executed at all, so a guard here is what makes the rule true on the wire
+  # this origin actually answers today. After the cutover it is defence in
+  # depth: the schema refuses first and this never fires.
+  #
+  # `date` cannot be a schema constraint in either version — the horizon rolls
+  # forward every day, so no `enum` written at declaration time can name it —
+  # and that is exactly the case the decision says keeps an explicit guard
+  # returning the SAME typed 400.
+
+  # A seating TIME the roster actually offers.
+  #
+  # @return [Array(String, nil), Array(nil, OperationResult)]
+  def seating_time(raw)
+    time = raw.to_s
+    return [time, nil] if time.empty? || Seatings::TIMES.include?(time)
+
+    [nil, OperationResult.refused(
+      code:    "bad_request",
+      message: "time #{time.inspect} is not a seating — this restaurant seats at " \
+               "#{Seatings::TIMES.join(", ")}",
+    )]
+  end
+
+  # A seating DATE inside the rolling upcoming horizon. The valid values are
+  # NAMED in the refusal, so an assistant recovers without a second fetch —
+  # the recoverability principle philslist's `post_listing` states, which is
+  # the house position everywhere since K-717.
+  #
+  # @return [Array(String, nil), Array(nil, OperationResult)]
+  def seating_date(raw, upcoming)
+    date = raw.to_s
+    dates = upcoming.map { |d, _t| d.iso8601 }.uniq
+    return [date, nil] if date.empty? || dates.include?(date)
+
+    [nil, OperationResult.refused(
+      code:    "bad_request",
+      message: "date #{date.inspect} is not among the upcoming seatings — " \
+               "currently #{dates.join(", ")}",
+    )]
+  end
+
   # The booking `cancel_booking` acts on: PRESENT, then shaped like an id.
   #
   # Two refusals, and the split between them is BEHAVIOUR, not taste. `blank?`

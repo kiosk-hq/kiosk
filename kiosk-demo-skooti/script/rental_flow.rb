@@ -60,8 +60,9 @@ def post_json(url, body, headers = {})
   [res.code.to_i, (JSON.parse(res.body) rescue {})]
 end
 
-def get_json(url, headers = {})
+def get_json(url, headers = {}, params = {})
   uri = URI(url)
+  uri.query = URI.encode_www_form(params) unless params.empty?
   res = Net::HTTP.new(uri.host, uri.port).request(Net::HTTP::Get.new(uri, headers))
   [res.code.to_i, (JSON.parse(res.body) rescue {})]
 end
@@ -90,14 +91,19 @@ token    = reg.fetch("access_token")
 # Path C: agents call named queries (never raw SQL). Browse the available
 # fleet first; find SK-001's code, then reserve it.
 
-rc_browse, browse_resp = post_json(
-  "#{SERVER}/kiosk/query",
-  { name: "scooters_available" },
+# THE 0.4 WIRE. A query is `GET <endpoint>/<query-name>` with its arguments in
+# the QUERY STRING; an action is `POST <endpoint>/<action-name>` with its
+# arguments as the JSON BODY. There is no `name` field and no /query or /run
+# endpoint. A success body IS the result — a bare array from a non-paginating
+# query, the action's own object from an action — and an error is an RFC 9457
+# problem document whose branch point is the TOP-LEVEL `code`.
+rc_browse, browse_resp = get_json(
+  "#{SERVER}/kiosk/scooters_available",
   { "Authorization" => "Bearer #{token}" },
 )
 abort "query scooters_available failed (#{rc_browse}): #{JSON.generate(browse_resp)}" unless rc_browse == 200
 
-browse_rows = browse_resp.fetch("rows")
+browse_rows = Array(browse_resp)
 abort "query scooters_available returned empty rows" if browse_rows.empty?
 
 # Pick the first available scooter (seeded as SK-001).
@@ -106,16 +112,15 @@ target_code    = target_scooter.fetch("code")
 STDERR.puts "  Browsed fleet: #{browse_rows.size} scooter(s) available, picking #{target_code}"
 
 rc_rsv, rsv = post_json(
-  "#{SERVER}/kiosk/run",
-  { name: "reserve", scooter_code: target_code },
+  "#{SERVER}/kiosk/reserve",
+  { scooter_code: target_code },
   { "Authorization" => "Bearer #{token}" },
 )
 abort "reserve failed (#{rc_rsv}): #{JSON.generate(rsv)}" unless rc_rsv == 200
 
-rsv_value      = rsv.fetch("value")
-reservation_id = rsv_value.fetch("reservation_id")
-scooter_code   = rsv_value.fetch("scooter_code")
-price_per_min  = rsv_value.fetch("price_per_min_cents")
+reservation_id = rsv.fetch("reservation_id")
+scooter_code   = rsv.fetch("scooter_code")
+price_per_min  = rsv.fetch("price_per_min_cents")
 # Human-facing rate in EUR (€0.15/min), never raw cents; the wire stays cents.
 price_per_min_eur = format("€%.2f", price_per_min.to_i / 100.0)
 
@@ -186,17 +191,14 @@ unless SKIP_PAY
     { "Authorization" => "Bearer #{token}" },
   )
   abort "pay failed (#{rc_pay}): #{JSON.generate(pay_resp)}" unless rc_pay == 200
-  STDERR.puts "  Payment settled: settlement_id=#{pay_resp.dig("value", "settlement_id")}"
+  STDERR.puts "  Payment settled: settlement_id=#{pay_resp["settlement_id"]}"
 end
 
 # ── Step 5: start_rental — server verifies gates + issues Ed25519 rental token ─
 
 rc_rental, rental_resp = post_json(
-  "#{SERVER}/kiosk/run",
-  {
-    name:           "start_rental",
-    reservation_id: reservation_id,
-  },
+  "#{SERVER}/kiosk/start_rental",
+  { reservation_id: reservation_id },
   { "Authorization" => "Bearer #{token}" },
 )
 
@@ -211,10 +213,9 @@ exp          = nil
 unlocked     = false
 
 if rc_rental == 200
-  rental_value = rental_resp.fetch("value", rental_resp)
-  rental_token = rental_value["rental_token"]
-  exp          = rental_value["exp"]
-  sc           = rental_value["scooter_code"]
+  rental_token = rental_resp["rental_token"]
+  exp          = rental_resp["exp"]
+  sc           = rental_resp["scooter_code"]
 
   # Provision the lock sim with skooti's public key from DevUnlockKey.
   # DevUnlockKey.private_key is an OpenSSL Ed25519 private key; read its

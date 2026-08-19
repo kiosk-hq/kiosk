@@ -8,7 +8,8 @@
 #
 #   MOTORCYCLE (KYC-gated on age_over_18 AND licence_a):
 #     register (PoW) → reserve(MC-001) → pay → rent_motorcycle WITHOUT KYC → 403
-#     kyc_required (error.hint points to `request_kyc`) → run request_kyc (skooti
+#     kyc_required (the problem document's `hint` points to `request_kyc`) →
+#     POST /kiosk/request_kyc (skooti
 #     calls the KYC broker; get a broker verification_url) → SIMULATE the
 #     human approving on the BROKER page (POST <broker>/verify with the request
 #     token) → the broker POSTs its signed claim to skooti's /kyc/callback → poll
@@ -58,8 +59,9 @@ def post_json(url, body, headers = {})
   [res.code.to_i, (JSON.parse(res.body) rescue {})]
 end
 
-def get_json(url, headers = {})
+def get_json(url, headers = {}, params = {})
   uri = URI(url)
+  uri.query = URI.encode_www_form(params) unless params.empty?
   res = Net::HTTP.new(uri.host, uri.port).request(Net::HTTP::Get.new(uri, headers))
   [res.code.to_i, (JSON.parse(res.body) rescue {})]
 end
@@ -84,13 +86,20 @@ def register_agent
   [key, reg.fetch("agent_id"), reg.fetch("user_id"), reg.fetch("access_token")]
 end
 
+# THE 0.4 WIRE. A query is `GET <endpoint>/<query-name>` with its arguments in
+# the QUERY STRING; an action is `POST <endpoint>/<action-name>` with its
+# arguments as the JSON BODY. There is no `name` field and no /query or /run
+# endpoint. A success body IS the result — a bare array from a non-paginating
+# query, the action's own object from an action — and an error is an RFC 9457
+# problem document whose branch point is the TOP-LEVEL `code` (`message` became
+# `detail`; `hint` keeps its name and its remediation contract).
+#
 # Reserve a vehicle by code → reservation_id.
 def reserve(token, code)
-  rc, rsv = post_json("#{SERVER}/kiosk/run", { name: "reserve", scooter_code: code },
+  rc, rsv = post_json("#{SERVER}/kiosk/reserve", { scooter_code: code },
                       { "Authorization" => "Bearer #{token}" })
   abort "reserve #{code} failed (#{rc}): #{JSON.generate(rsv)}" unless rc == 200
-  v = rsv.fetch("value")
-  [v.fetch("reservation_id"), v.fetch("price_per_min_cents")]
+  [rsv.fetch("reservation_id"), rsv.fetch("price_per_min_cents")]
 end
 
 # Sign + settle a payment for a reservation (mirrors script/rental_flow.rb's pay step).
@@ -119,13 +128,18 @@ def pay(token, key, user_id, agent_id, code, reservation_id, price_per_min)
   abort "pay for #{code} failed (#{rc}): #{JSON.generate(resp)}" unless rc == 200
 end
 
-def run_action(token, name, reservation_id)
-  post_json("#{SERVER}/kiosk/run", { name:, reservation_id: },
+# An action: its name is the PATH SEGMENT, its arguments are the whole body.
+# `request_kyc` declares the closed empty object, so it is called with NO
+# arguments at all — a `reservation_id: nil` it never declared is now a typed
+# 400, not a field the handler ignores.
+def run_action(token, name, args = {})
+  post_json("#{SERVER}/kiosk/#{name}", args,
             { "Authorization" => "Bearer #{token}" })
 end
 
-def query(token, body)
-  post_json("#{SERVER}/kiosk/query", body, { "Authorization" => "Bearer #{token}" })
+# A query: name in the path, arguments in the query string, answer a bare array.
+def query(token, name, params = {})
+  get_json("#{SERVER}/kiosk/#{name}", { "Authorization" => "Bearer #{token}" }, params)
 end
 
 # ── PART A: motorcycle — KYC-gated on age_over_18 AND licence_a ──────────────
@@ -142,20 +156,19 @@ STDERR.puts "  Reserved + paid MC-001 (reservation #{mc_resv})"
 
 # A1: rent_motorcycle WITHOUT KYC → 403 kyc_required (Gate 0 fires first).
 # The 403 hint must point the agent at request_kyc (the K-440/K-443 fix).
-rc_mc_nokyc, mc_nokyc_body = run_action(mc_token, "rent_motorcycle", mc_resv)
-mc_nokyc_code = mc_nokyc_body.dig("error", "code")
-mc_nokyc_hint = mc_nokyc_body.dig("error", "hint").to_s
+rc_mc_nokyc, mc_nokyc_body = run_action(mc_token, "rent_motorcycle", { reservation_id: mc_resv })
+mc_nokyc_code = mc_nokyc_body["code"]
+mc_nokyc_hint = mc_nokyc_body["hint"].to_s
 hint_points_to_request_kyc = mc_nokyc_hint.include?("request_kyc")
 STDERR.puts "  rent_motorcycle (no KYC): http=#{rc_mc_nokyc} code=#{mc_nokyc_code.inspect}"
 STDERR.puts "  403 hint points to request_kyc: #{hint_points_to_request_kyc} (#{mc_nokyc_hint.inspect})"
 
 # A2: the agent discovers request_kyc from the hint and starts verification.
 # It gets back a verification_url to relay to the human — NO issuer key involved.
-rc_req, req_body = run_action(mc_token, "request_kyc", nil)
-req_val          = req_body.fetch("value", {})
-verification_url = req_val["verification_url"]
-request_id       = req_val["request_id"]
-STDERR.puts "  request_kyc: http=#{rc_req} status=#{req_val["status"].inspect}"
+rc_req, req_body = run_action(mc_token, "request_kyc")
+verification_url = req_body["verification_url"]
+request_id       = req_body["request_id"]
+STDERR.puts "  request_kyc: http=#{rc_req} status=#{req_body["status"].inspect}"
 STDERR.puts "  verification_url=#{verification_url.inspect}"
 abort "request_kyc did not return a verification_url (#{rc_req}): #{JSON.generate(req_body)}" \
   if verification_url.nil? || verification_url.empty?
@@ -176,9 +189,9 @@ abort "approve page POST failed (#{approve_rc})" unless approve_rc == 200
 kyc_jws     = nil
 kyc_status  = nil
 20.times do
-  rc_st, st_body = query(mc_token, { name: "kyc_status", request_id: request_id })
+  rc_st, st_body = query(mc_token, "kyc_status", { request_id: request_id })
   abort "kyc_status query failed (#{rc_st}): #{JSON.generate(st_body)}" unless rc_st == 200
-  row        = (st_body["rows"] || []).first || {}
+  row        = Array(st_body).first || {}
   kyc_status = row["status"]
   if kyc_status == "approved"
     kyc_jws = row["kyc_jws"]
@@ -199,15 +212,14 @@ abort "kyc submit failed (#{rc_kyc}): #{JSON.generate(kyc_body)}" unless rc_kyc 
 STDERR.puts "  KYC accepted: attributes=#{kyc_body["attributes"].inspect}"
 
 # A6: retry rent_motorcycle WITH the granted KYC attributes → 200.
-rc_mc_kyc, mc_kyc_body = run_action(mc_token, "rent_motorcycle", mc_resv)
+rc_mc_kyc, mc_kyc_body = run_action(mc_token, "rent_motorcycle", { reservation_id: mc_resv })
 STDERR.puts "  rent_motorcycle (with KYC): http=#{rc_mc_kyc}"
 
 mc_unlocked = false
 if rc_mc_kyc == 200
-  v = mc_kyc_body.fetch("value", mc_kyc_body)
   skooti_pub = OpenSSL::PKey.read(DevUnlockKey.public_key_pem)
-  lock = LockSim.new(scooter_code: v["scooter_code"], skooti_public_key: skooti_pub)
-  mc_unlocked = lock.unlock(token: v["rental_token"], now: Time.now.to_i)
+  lock = LockSim.new(scooter_code: mc_kyc_body["scooter_code"], skooti_public_key: skooti_pub)
+  mc_unlocked = lock.unlock(token: mc_kyc_body["rental_token"], now: Time.now.to_i)
   STDERR.puts "  motorcycle unlocked=#{mc_unlocked}"
 end
 
@@ -219,7 +231,7 @@ sc_resv, sc_price = reserve(sc_token, "SK-001")
 pay(sc_token, sc_key, sc_user, sc_agent, "SK-001", sc_resv, sc_price)
 # NO KYC submitted at all — a fresh agent that has never attested rents a
 # licence-free scooter. Proves start_rental carries NO KYC gate (K-442).
-rc_sc, sc_body = run_action(sc_token, "start_rental", sc_resv)
+rc_sc, _sc_body = run_action(sc_token, "start_rental", { reservation_id: sc_resv })
 STDERR.puts "  start_rental SK-001 (NO KYC submitted at all): http=#{rc_sc}"
 
 # ── print ONE JSON line ──────────────────────────────────────────────────────

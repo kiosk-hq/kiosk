@@ -5,7 +5,7 @@ require "uri"
 require "json"
 
 # ProveBrokerClient — skooti's server-to-server client for the KYC broker
-# intake (design §4.1 / §5.1). On `run request_kyc`, skooti calls the broker
+# intake (design §4.1 / §5.1). On POST <endpoint>/request_kyc, skooti calls the broker
 # here (NOT the human) to START a verification, handing the broker skooti's
 # callback_url, the claims it needs, and the agent's user_id as the subject the
 # claim must bind to. The broker returns a verification_url skooti relays to the

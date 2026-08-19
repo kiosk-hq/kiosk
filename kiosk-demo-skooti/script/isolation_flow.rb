@@ -21,10 +21,18 @@
 #     2b (positive control): B's query must contain rB (B's own reservation),
 #         proving the exclusion is not vacuous (the query returns rows for B).
 #
-#   Assertion 3 — forged user_id ignored on reserve:
-#     B calls run reserve with a forged user_id arg (A's UUID).
-#     → The created reservation's user_id is B (server uses kiosk.current_user_id(),
-#       ignores agent-supplied user_id). Verified by DB SELECT.
+#   Assertion 3 — the principal is not an input to reserve:
+#     3a: B calls reserve with a forged user_id arg (A's UUID).
+#         → 400 bad_request naming user_id. `reserve` publishes
+#           `additionalProperties: false` and does not declare user_id — the
+#           principal is not one of its inputs — so the declared input contract
+#           refuses the forgery before the handler runs. (Through 0.3 the wire
+#           ACCEPTED the argument and the handler ignored it; refusing it is the
+#           stricter answer and the one the published contract requires.)
+#     3b: B then reserves LEGITIMATELY. → That reservation's DB user_id is B
+#         (the server writes kiosk.current_user_id()), which is the property the
+#         beat is really about and which the refusal alone does not prove.
+#         Verified by DB SELECT.
 #
 # Usage:
 #   SERVER_URL=http://127.0.0.1:3004 \
@@ -59,8 +67,9 @@ def post_json(url, body, headers = {})
   [res.code.to_i, (JSON.parse(res.body) rescue {})]
 end
 
-def get_json(url, headers = {})
+def get_json(url, headers = {}, params = {})
   uri = URI(url)
+  uri.query = URI.encode_www_form(params) unless params.empty?
   res = Net::HTTP.new(uri.host, uri.port).request(Net::HTTP::Get.new(uri, headers))
   [res.code.to_i, (JSON.parse(res.body) rescue {})]
 end
@@ -103,6 +112,13 @@ def register_principal(name:)
   [user_id, agent_id, token, key]
 end
 
+# THE 0.4 WIRE. An action is `POST <endpoint>/<action-name>` with its arguments
+# as the JSON body; a query is `GET <endpoint>/<query-name>` with its arguments
+# in the query string. There is no `name` field and no /query or /run endpoint.
+# A success body IS the result — a bare array from a non-paginating query, the
+# action's own object from an action — and an error is an RFC 9457 problem
+# document whose branch point is the TOP-LEVEL `code`.
+
 # ── Step 1: Register Principal A ─────────────────────────────────────────────
 user_id_a, agent_id_a, token_a, _key_a = register_principal(name: "alice-agent")
 
@@ -111,15 +127,15 @@ user_id_b, agent_id_b, token_b, key_b = register_principal(name: "bob-agent")
 
 # ── Step 3: A reserves SK-001 → reservation_id rA ───────────────────────────
 rc, reserve_a_resp = post_json(
-  "#{SERVER}/kiosk/run",
-  { name: "reserve", scooter_code: "SK-001" },
+  "#{SERVER}/kiosk/reserve",
+  { scooter_code: "SK-001" },
   { "Authorization" => "Bearer #{token_a}" },
 )
 abort "A reserve failed (#{rc}): #{JSON.generate(reserve_a_resp)}" unless rc == 200
 
-reservation_id_a = reserve_a_resp.dig("value", "reservation_id")
-scooter_code_a   = reserve_a_resp.dig("value", "scooter_code")
-price_per_min_a  = reserve_a_resp.dig("value", "price_per_min_cents").to_i
+reservation_id_a = reserve_a_resp["reservation_id"]
+scooter_code_a   = reserve_a_resp["scooter_code"]
+price_per_min_a  = reserve_a_resp["price_per_min_cents"].to_i
 abort "A's reservation_id missing from response: #{JSON.generate(reserve_a_resp)}" unless reservation_id_a
 STDERR.puts "  A reserved #{scooter_code_a}: reservation_id=#{reservation_id_a}"
 
@@ -186,41 +202,53 @@ rc_pay_b, pay_b_resp = post_json(
   { "Authorization" => "Bearer #{token_b}" },
 )
 abort "B pay (for rA) failed (#{rc_pay_b}): #{JSON.generate(pay_b_resp)}" unless rc_pay_b == 200
-STDERR.puts "  B paid for rA: settlement_id=#{pay_b_resp.dig("value", "settlement_id")} — Gate 2 now passes for B"
+STDERR.puts "  B paid for rA: settlement_id=#{pay_b_resp["settlement_id"]} — Gate 2 now passes for B"
 
-# ── Step 4: B calls reserve with forged user_id arg (Assertion 3) ───────────
-# B supplies user_id: user_id_a adversarially. The server ignores it —
-# the INSERT uses kiosk.current_user_id() (B's UUID). Verified via DB query.
-# Done before the my_reservations query so B has its own row for the
-# positive-control half of Assertion 2b.
-rc, forged_resp = post_json(
-  "#{SERVER}/kiosk/run",
+# ── Step 4a: B calls reserve with a forged user_id arg (Assertion 3a) ───────
+# B supplies user_id: user_id_a adversarially. On the 0.4 wire this is REFUSED
+# before the handler runs: `reserve` publishes `additionalProperties: false` and
+# declares only `scooter_code` — the principal is not one of its inputs — so the
+# declared input contract answers a typed 400 naming the offending parameter.
+# The rake task asserts the status, the top-level `code` and that `detail` names
+# `user_id`; nothing here is loosened to let the forgery through.
+forged_rc, forged_resp = post_json(
+  "#{SERVER}/kiosk/reserve",
   {
-    name:         "reserve",
     scooter_code: "SK-001",
     user_id:      user_id_a,  # adversarial: B supplies A's user_id
   },
   { "Authorization" => "Bearer #{token_b}" },
 )
-abort "B forged reserve failed (#{rc}): #{JSON.generate(forged_resp)}" unless rc == 200
+STDERR.puts "  B reserve with a forged user_id → #{forged_rc} #{forged_resp["code"].inspect}"
 
-reservation_id_b_forged = forged_resp.dig("value", "reservation_id")
-abort "B's forged reservation_id missing: #{JSON.generate(forged_resp)}" unless reservation_id_b_forged
-STDERR.puts "  B forged reserve: reservation_id=#{reservation_id_b_forged}"
+# ── Step 4b: B reserves LEGITIMATELY (Assertions 2b + 3b) ───────────────────
+# The half the refusal does not prove: ownership is taken from the
+# AUTHENTICATED identity, not from anything the caller sent. B's own row is also
+# the positive control for Assertion 2b, so it is created before the
+# my_reservations query below.
+rc, legit_resp = post_json(
+  "#{SERVER}/kiosk/reserve",
+  { scooter_code: "SK-001" },
+  { "Authorization" => "Bearer #{token_b}" },
+)
+abort "B reserve failed (#{rc}): #{JSON.generate(legit_resp)}" unless rc == 200
+
+reservation_id_b = legit_resp["reservation_id"]
+abort "B's reservation_id missing: #{JSON.generate(legit_resp)}" unless reservation_id_b
+STDERR.puts "  B reserved (owner from token): reservation_id=#{reservation_id_b}"
 
 # ── Step 5: B queries my_reservations (Assertion 2) ─────────────────────────
-# B now has reservation_id_b_forged as its own row (Step 4). Two assertions:
+# B now has reservation_id_b as its own row (Step 4b). Two assertions:
 #   2a exclusion:       b_reservation_ids must NOT contain rA.
-#   2b positive control: b_reservation_ids MUST contain rB_forged, proving
-#     the exclusion is non-vacuous (the query actually returns B's own rows).
-rc, b_rsv_resp = post_json(
-  "#{SERVER}/kiosk/query",
-  { name: "my_reservations" },
+#   2b positive control: b_reservation_ids MUST contain rB, proving the
+#     exclusion is non-vacuous (the query actually returns B's own rows).
+rc, b_rsv_resp = get_json(
+  "#{SERVER}/kiosk/my_reservations",
   { "Authorization" => "Bearer #{token_b}" },
 )
 abort "B my_reservations failed (#{rc}): #{JSON.generate(b_rsv_resp)}" unless rc == 200
 
-b_reservation_ids = (b_rsv_resp["rows"] || []).map { |r| r["reservation_id"] }
+b_reservation_ids = Array(b_rsv_resp).map { |r| r["reservation_id"] }
 STDERR.puts "  B my_reservations: #{b_reservation_ids.inspect}"
 
 # ── Step 6: B calls start_rental on A's reservation_id (Assertion 1) ────────
@@ -229,21 +257,22 @@ STDERR.puts "  B my_reservations: #{b_reservation_ids.inspect}"
 # Gate 1 WHERE user_id = kiosk.current_user_id() AND status='reserved' finds
 # nothing because rA.user_id = A ≠ B → 403.
 # The 403 now genuinely isolates Gate 1 ownership, not a Gate 2 payment gap.
-rc_start_b, start_b_resp = post_json(
-  "#{SERVER}/kiosk/run",
-  { name: "start_rental", reservation_id: reservation_id_a },
+rc_start_b, _start_b_resp = post_json(
+  "#{SERVER}/kiosk/start_rental",
+  { reservation_id: reservation_id_a },
   { "Authorization" => "Bearer #{token_b}" },
 )
 STDERR.puts "  B start_rental on A's rA: HTTP #{rc_start_b} (expected 403)"
 
 # ── Output ONE JSON line ──────────────────────────────────────────────────────
 puts JSON.generate(
-  user_id_a:               user_id_a,
-  user_id_b:               user_id_b,
-  agent_id_a:              agent_id_a,
-  agent_id_b:              agent_id_b,
-  reservation_id_a:        reservation_id_a,
-  reservation_id_b_forged: reservation_id_b_forged,
-  b_start_rental_rc:       rc_start_b,
-  b_reservation_ids:       b_reservation_ids,
+  user_id_a:         user_id_a,
+  user_id_b:         user_id_b,
+  agent_id_a:        agent_id_a,
+  agent_id_b:        agent_id_b,
+  reservation_id_a:  reservation_id_a,
+  reservation_id_b:  reservation_id_b,
+  forged_refusal:    [forged_rc, forged_resp["code"], forged_resp["detail"]],
+  b_start_rental_rc: rc_start_b,
+  b_reservation_ids: b_reservation_ids,
 )

@@ -1,7 +1,9 @@
 # frozen_string_literal: true
 
 # skooti's READ surface: the three verbs an assistant reaches with
-# `POST /kiosk/query`. Kiosk ships a MIXIN, not a base class — `include
+# `GET /kiosk/<query-name>`, one endpoint per verb, arguments in the query
+# string (protocol 0.4 deleted the multiplexed `POST /kiosk/query`). Kiosk
+# ships a MIXIN, not a base class — `include
 # Kiosk::Query` is the whole contract — and each class-level macro records a
 # declaration that the NEXT `def` claims, so a method with no macros above it is
 # a helper the wire cannot see.

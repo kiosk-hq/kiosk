@@ -42,14 +42,15 @@ class RentMotorcycleOperation
       return OperationResult.refused(
         code:    "kyc_required",
         message: "motorcycle rental requires KYC attributes age_over_18 and licence_a",
-        # Point an external agent at the completable path: `run request_kyc`
-        # returns a verification_url the human approves, then poll `query
-        # kyc_status` for the signed attestation and submit it to
-        # POST /kiosk/agents/kyc — no pre-shared issuer key needed (K-440/K-443).
-        hint:    "call `run request_kyc` to start age≥18 + category-A licence verification: " \
+        # Point an external agent at the completable path, in the spelling the
+        # 0.4 wire actually uses: POST <endpoint>/request_kyc returns a
+        # verification_url the human approves, then GET <endpoint>/kyc_status
+        # carries the signed attestation, submitted to POST <endpoint>/agents/kyc
+        # — no pre-shared issuer key needed (K-440/K-443).
+        hint:    "POST <endpoint>/request_kyc to start age≥18 + category-A licence verification: " \
                  "it returns a verification_url for the human to approve; then poll " \
-                 "`query kyc_status` for the signed attestation and submit it to " \
-                 "POST /kiosk/agents/kyc, then retry rent_motorcycle",
+                 "GET <endpoint>/kyc_status for the signed attestation and submit it to " \
+                 "POST <endpoint>/agents/kyc, then retry rent_motorcycle",
       )
     end
 

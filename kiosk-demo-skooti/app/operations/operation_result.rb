@@ -19,7 +19,7 @@
 # the Ed25519 activation (see {RentalActivation}), which is a physical-lock
 # contract that must not be able to drift between two verbs.
 #
-# A refusal carries the wire's `error.code` STRING rather than an exception
+# A refusal carries the wire's `code` STRING rather than an exception
 # class, for the reason T-054 settled: the code table is the contract, not a
 # hierarchy.
 class OperationResult

@@ -340,8 +340,10 @@ module Kiosk
       # T-054 audit verdict: these codes are why the vocabulary exists — a
       # bare status cannot name them. The classes stay because gate-style
       # internals raise them; a handler can just as well RENDER the code
-      # (`render json: {ok: false, error: {code: "rls_denied", …}},
-      # status: :forbidden`) and the seam carries it verbatim.
+      # (`render json: {error: {code: "rls_denied", …}}, status: :forbidden`)
+      # and the seam carries the code into the problem document verbatim.
+      # `error.code` is the HANDLER-side spelling; what travels is the flat
+      # top-level `code` of an RFC 9457 document.
 
       # Row-level-security rejected the request. HTTP 403 but a distinct CODE
       # from `forbidden` so agents can tell «policy excluded this row» from

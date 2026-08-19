@@ -77,6 +77,26 @@ class Kiosk::ReservationsController < ActionController::API
   # verb takes no arguments" is a published fact rather than an absence an
   # assistant has to interpret.
   input_schema type: "object", additionalProperties: false, properties: {}, required: []
+  # TWO shapes, and the branch is `status`. Declared as a `oneOf` rather than
+  # one open object with an optional `setup_url`, because the pairing is the
+  # contract: `setup_required` without a url is an answer the assistant cannot
+  # act on. This demo's stub PSP only ever produces the first branch — the
+  # second is declared anyway, so the PUBLISHED contract is the same across all
+  # three payment demos and an operator swapping in a real PSP changes no
+  # descriptor.
+  output_schema oneOf: [
+    { type: "object", additionalProperties: false,
+      description: "A payment method is on file — proceed to `pay`.",
+      properties: { status: { const: "ready", description: "ready." } },
+      required: ["status"] },
+    { type: "object", additionalProperties: false,
+      description: "A hosted setup flow must be completed by the human first.",
+      properties: {
+        status:    { const: "setup_required", description: "setup_required." },
+        setup_url: { type: "string", description: "The hosted setup page to hand to your human." },
+      },
+      required: %w[status setup_url] },
+  ]
   def payment_setup
     # The principal, from the identity the WIRE resolved. This used to be a
     # `SELECT kiosk.current_user_id()` round trip followed by a nil check that
@@ -120,6 +140,18 @@ class Kiosk::ReservationsController < ActionController::API
                                               "another booking's check_in." },
                },
                required: ["property_id", "room_type_id", "check_in", "check_out"]
+  output_schema type: "object",
+                description: "The TTL hold, and the quote the cart must be signed against.",
+                additionalProperties: false,
+                properties: {
+                  booking_id:          { type: "string", description: "uuid. Name it in the cart mandate's line item, and pass it to confirm_booking as `booking_id`." },
+                  total_cents:         { type: "integer", description: "EUR cents for the WHOLE stay — sign the cart at exactly this total." },
+                  currency:            { type: "string", description: "eur — the currency the cart must be signed in." },
+                  nights:              { type: "integer", description: "Nights the hold covers." },
+                  nightly_price_cents: { type: "integer", description: "EUR cents per night; nights × this is total_cents." },
+                  pay_hint:            { type: "string", description: "The mandate this hold expects, in words." },
+                },
+                required: %w[booking_id total_cents currency nights nightly_price_cents pay_hint]
   def reserve_room
     render_operation ReserveRoomOperation.call(
       principal_id: kiosk_identity.user_id,
@@ -148,6 +180,15 @@ class Kiosk::ReservationsController < ActionController::API
                                             "belong to the principal and still be reserved." },
                },
                required: ["booking_id"]
+  output_schema type: "object",
+                description: "The confirmed booking and its durable desk reference.",
+                additionalProperties: false,
+                properties: {
+                  booking_id:        { type: "string", description: "The booking that was confirmed, echoed." },
+                  status:            { const: "confirmed", description: "confirmed." },
+                  confirmation_code: { type: "string", description: "The reference the guest gives at the desk. Durable: my_bookings lists the same code afterwards, and confirming again never mints a different one." },
+                },
+                required: %w[booking_id status confirmation_code]
   def confirm_booking
     render_operation ConfirmBookingOperation.call(booking_id: params[:booking_id])
   end

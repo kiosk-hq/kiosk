@@ -40,6 +40,17 @@ class Kiosk::HotelsController < ActionController::API
   # verb takes no arguments" is a published fact rather than an absence an
   # assistant has to interpret.
   input_schema type: "object", additionalProperties: false, properties: {}, required: []
+  output_schema type: "array",
+                description: "The whole (small) catalogue of properties, name-ordered.",
+                items: {
+                  type: "object", additionalProperties: false,
+                  properties: {
+                    property_id: { type: "integer", description: "Pass to availability, hotel_detail and reserve_room as `property_id`." },
+                    name:        { type: "string", description: "Hotel name." },
+                    city:        { type: "string", description: "City the property is in." },
+                  },
+                  required: %w[property_id name city],
+                }
   def properties
     # `pluck` rather than loading models: this is a projection, and naming the
     # columns is what keeps the wire's field names and their order a decision
@@ -71,6 +82,22 @@ class Kiosk::HotelsController < ActionController::API
                                              "the next guest's check-in day." },
                },
                required: ["property_id", "check_in", "check_out"]
+  # A bare array of the room types with NO live booking overlapping the nights
+  # asked for — the OFFER, not the catalogue. Empty means the property is sold
+  # out for those nights, which is an honest answer and the only thing an empty
+  # array means here.
+  output_schema type: "array",
+                description: "Room types free for the requested nights, cheapest first.",
+                items: {
+                  type: "object", additionalProperties: false,
+                  properties: {
+                    room_type_id:        { type: "integer", description: "Pass to reserve_room as `room_type_id`, with the same `property_id`." },
+                    name:                { type: "string", description: "Room-type name." },
+                    nightly_price_cents: { type: "integer", description: "EUR cents PER NIGHT — the stay total is nights × this." },
+                    currency:            { type: "string", description: "eur — the currency the cart must be signed in." },
+                  },
+                  required: %w[room_type_id name nightly_price_cents currency],
+                }
   def availability
     return unless kiosk_present?(params[:property_id], "property_id")
     return unless kiosk_present?(params[:check_in], "check_in")
@@ -107,6 +134,23 @@ class Kiosk::HotelsController < ActionController::API
               "read back at any time, not only in the confirm_booking response. " \
               "It is null until the booking is confirmed."
   input_schema type: "object", additionalProperties: false, properties: {}, required: []
+  output_schema type: "array",
+                description: "The principal's bookings, newest first.",
+                items: {
+                  type: "object", additionalProperties: false,
+                  properties: {
+                    booking_id:        { type: "string", description: "uuid. Pass to confirm_booking as `booking_id`." },
+                    property_id:       { type: "integer", description: "The property booked." },
+                    room_type_id:      { type: "integer", description: "The room type held." },
+                    check_in:          { type: "string", description: "First night, YYYY-MM-DD." },
+                    check_out:         { type: "string", description: "Checkout day (exclusive), YYYY-MM-DD." },
+                    total_cents:       { type: "integer", description: "EUR cents for the whole stay." },
+                    status:            { type: "string", description: "reserved | confirmed | cancelled." },
+                    confirmation_code: { type: %w[string null], description: "The reference the guest gives at the desk. Null until the booking is confirmed; durable afterwards." },
+                  },
+                  required: %w[booking_id property_id room_type_id check_in check_out
+                               total_cents status confirmation_code],
+                }
   def my_bookings
     # `created_at DESC` with no tiebreaker is what this verb has always ordered
     # by, and it is kept rather than quietly improved: two bookings written in
@@ -168,6 +212,46 @@ class Kiosk::HotelsController < ActionController::API
                  cursor:          { type: "string", description: "Opaque `next` cursor from a prior page." },
                },
                required: []
+  # THE FLEET'S ONLY PAGINATING VERB, and its output_schema is the only one in
+  # the fleet with two branches — because the wire has two spellings for a page
+  # and both are conformant (spec §8.4). A TRUNCATED page is the object
+  # `{rows, next}`; a COMPLETE one is a bare array, because `next` ABSENT is
+  # what "this is the last page" means and an array has nowhere to put a cursor.
+  # An assistant that always pages until `next` is gone reads both correctly;
+  # one that assumed an object would break on the last page, which is exactly
+  # what a declaration is for.
+  output_schema "$defs": {
+                  hotel: {
+                    type: "object", additionalProperties: false,
+                    description: "One SUMMARY row — one property, its cheapest room's rate.",
+                    properties: {
+                      property_id:      { type: "integer", description: "Pass to hotel_detail (and reserve_room) as `property_id`." },
+                      name:             { type: "string", description: "Hotel name." },
+                      neighbourhood:    { type: %w[string null], description: "Istanbul area, or null." },
+                      stars:            { type: "integer", description: "Star rating, 1..5." },
+                      from_price_cents: { type: %w[integer null], description: "EUR cents per night for the CHEAPEST room type; null when the property lists none." },
+                      room_type_count:  { type: "integer", description: "How many room types this property lists." },
+                      currency:         { type: "string", description: "eur — the currency the cart must be signed in." },
+                    },
+                    required: %w[property_id name neighbourhood stars from_price_cents
+                                 room_type_count currency],
+                  },
+                },
+                description: "One page of matching hotels.",
+                oneOf: [
+                  { type: "array",
+                    description: "The last (or only) page: no `next`, so no more hotels match.",
+                    items: { "$ref": "#/$defs/hotel" } },
+                  { type: "object", additionalProperties: false,
+                    description: "A truncated page: more hotels match.",
+                    properties: {
+                      rows: { type: "array", items: { "$ref": "#/$defs/hotel" },
+                              description: "This page's hotels." },
+                      next: { type: "string",
+                              description: "An OPAQUE cursor. Echo it back verbatim as `cursor` for the following page; never parse or construct it." },
+                    },
+                    required: %w[rows next] },
+                ]
   example_params({ neighbourhood: "Beşiktaş", min_stars: 4, max_price_cents: 20000, limit: 20 })
   example_row({
     property_id: 4, name: "Bosphorus Palace", neighbourhood: "Beşiktaş", stars: 5,
@@ -248,6 +332,47 @@ class Kiosk::HotelsController < ActionController::API
                                 description: "Optional checkout day (YYYY-MM-DD, exclusive); pass with check_in to list only free room types." },
                },
                required: ["property_id"]
+  # THIS ONE ANSWERS A BARE OBJECT, NOT AN ARRAY, AND THE SCHEMA SAYS SO
+  # BECAUSE THAT IS WHAT THE HANDLER RENDERS. It is also the one verb in the
+  # fleet whose answer shape spec §8.2 does not allow — "a query that does not
+  # paginate answers a JSON array of rows" — and the two other fetch-one
+  # queries in the fleet (getgrocery's and skooti's `kyc_status`) already wrap
+  # their single result in a ONE-ROW array for exactly that reason. Recorded as
+  # K-794 rather than fixed here: changing what this verb answers is a wire
+  # change on a live demo, and it rides the cutover slice that migrates the
+  # eight demos anyway. A schema that lied about it would be worse than the
+  # discrepancy — that is the whole argument for declaring one.
+  output_schema type: "object",
+                description: "ONE property in full, with its room types.",
+                additionalProperties: false,
+                properties: {
+                  property_id:      { type: "integer", description: "The property, echoed." },
+                  name:             { type: "string", description: "Hotel name." },
+                  neighbourhood:    { type: %w[string null], description: "Istanbul area, or null." },
+                  stars:            { type: "integer", description: "Star rating, 1..5." },
+                  address:          { type: %w[string null], description: "Street address, or null." },
+                  amenities:        { type: "array", items: { type: "string" },
+                                      description: "Amenity slugs this property offers." },
+                  currency:         { type: "string", description: "eur — the currency the cart must be signed in." },
+                  room_types_scope: { type: "string", description: "WHICH list `room_types` is: free for the given nights, or the property's full catalogue when no dates were passed. Read it before treating the list as an offer." },
+                  check_in:         { type: %w[string null], description: "The first night the list was computed for, YYYY-MM-DD; null when no dates were passed." },
+                  check_out:        { type: %w[string null], description: "The checkout day the list was computed for, YYYY-MM-DD; null when no dates were passed." },
+                  room_types:       {
+                    type: "array",
+                    description: "The property's room types, cheapest first.",
+                    items: {
+                      type: "object", additionalProperties: false,
+                      properties: {
+                        room_type_id:        { type: "integer", description: "Pass to reserve_room as `room_type_id`." },
+                        name:                { type: "string", description: "Room-type name." },
+                        nightly_price_cents: { type: "integer", description: "EUR cents PER NIGHT." },
+                      },
+                      required: %w[room_type_id name nightly_price_cents],
+                    },
+                  },
+                },
+                required: %w[property_id name neighbourhood stars address amenities currency
+                             room_types_scope check_in check_out room_types]
   example_params({ property_id: 4, check_in: "2026-09-01", check_out: "2026-09-04" })
   example_row({
     property_id: 4, name: "Bosphorus Palace", neighbourhood: "Beşiktaş", stars: 5,

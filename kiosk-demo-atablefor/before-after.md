@@ -198,7 +198,7 @@ class Kiosk::BookingsController < ActionController::API
                 required: %w[booking_id status]
   def book_table
     # A table already held for that seating is a clean 409 (the supply is finite):
-    #   render json: { ok: false, error: { code: "conflict", … } }, status: :conflict
+    #   render json: { error: { code: "conflict", … } }, status: :conflict
     booking = BookTable.call(**booking_params)
     render json: { booking_id: booking.id, status: booking.status }
   end

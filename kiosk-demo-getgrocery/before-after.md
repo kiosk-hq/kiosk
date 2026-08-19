@@ -273,8 +273,7 @@ class Kiosk::OrdersController < ActionController::API
   def reschedule_delivery
     # A refusal is Rails' idiom, not a Kiosk class — the code travels verbatim:
     unless Settlement.covers_order?(params[:order_id])
-      return render json: { ok: false,
-                            error: { code: "forbidden", message: "no settlement for this order" } },
+      return render json: { error: { code: "forbidden", message: "no settlement for this order" } },
                     status: :forbidden
     end
 

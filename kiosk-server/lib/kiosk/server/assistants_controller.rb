@@ -41,9 +41,11 @@ module Kiosk
       # such page, PublicExceptions cascades and ShowExceptions#pass_response
       # answers a BODYLESS 422 (`text/html`, `Content-Length: 0`). A human
       # error page, a status echo, or nothing — none of the three points the
-      # caller anywhere. Give a JSON-shaped caller the same
-      # `{ok:false,error:{…}}` envelope every Kiosk endpoint speaks, and
-      # point it at the machine surface it was actually looking for. A
+      # caller anywhere. Give a JSON-shaped caller a body that at least NAMES
+      # a code and says where the wire is, and point it at the machine surface
+      # it was actually looking for. Not a problem document: this is not a
+      # wire endpoint and its code is not in the wire's closed vocabulary, so
+      # borrowing the shape would claim a contract this page does not have. A
       # browser request is re-raised untouched: a genuine CSRF failure on a
       # genuine form must keep failing exactly as it does today.
       rescue_from ::ActionController::InvalidAuthenticityToken do |error|

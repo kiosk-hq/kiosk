@@ -106,4 +106,13 @@ Kiosk.configure do |c|
   # /kiosk/schema` with `queries=[] actions=[]`, 404s every query and run, and
   # advertises `"capabilities": []` (K-761).
   c.handlers = %w[Kiosk::CatalogController Kiosk::BookingsController]
+
+  # Request-shape validation ON, as all seven demos have it. Two things ride
+  # on it: a malformed Kiosk-PoW proof answers a clear 400 instead of a silent
+  # re-challenge loop (K-479), and — since the 0.4 per-verb wire — a verb's
+  # declared `input_schema` VALIDATES the arguments of every request to it
+  # rather than merely describing them, so the harness's reserved-name and
+  # closed-schema assertions are testing the real path. Needs `json_schemer`,
+  # which run.sh adds to the generated app's Gemfile.
+  c.validate_requests = true
 end

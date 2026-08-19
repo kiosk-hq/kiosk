@@ -134,6 +134,15 @@ gem "kiosk-rls",           path: "$KIOSK_OSS/kiosk-rls"
 gem "kiosk-server",        path: "$KIOSK_OSS/kiosk-server"
 gem "kiosk-reputation",    path: "$KIOSK_OSS/kiosk-reputation"
 gem "kiosk-pow-equihash",  path: "$KIOSK_OSS/kiosk-pow-equihash"
+
+# json_schemer backs `c.validate_requests = true` in the initializer, which is
+# what makes a verb's declared input_schema EXECUTABLE — the arguments of a
+# per-verb request are validated against it, not merely published. It is an
+# OPTIONAL dependency of kiosk-server (lazily required only when the flag is
+# on), so a host that turns the flag on adds it to its own Gemfile, exactly as
+# all seven demos do. Without it the flag raises a ConfigurationError naming
+# the gem at the first validation — deliberately fail-loud.
+gem "json_schemer"
 RUBY
 
 log "bundle install (this can take a moment on a cold cache)"

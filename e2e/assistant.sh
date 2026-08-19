@@ -187,6 +187,14 @@ status=$(curl -sS -o /dev/null -w "%{http_code}" "$SERVER_URL/kiosk/salons?limit
   -H "Authorization: Bearer $ALICE_AGENT_TOKEN")
 assert "reserved limit/cursor accepted → 200" "$status" "200"
 
+# The contrast that keeps the assertion above honest: this origin runs with
+# `validate_requests = true`, so `salons`'s closed schema DOES refuse an
+# undeclared parameter. `limit` is accepted because it is reserved, not
+# because nothing is checking.
+r=$(query_call "$ALICE_AGENT_TOKEN" "salons" "nope=1")
+assert "an undeclared parameter → bad_request"  "$(echo "$r" | jq -r '.error.code')" "bad_request"
+assert "…and the refusal names it"              "$(echo "$r" | jq -r '.error.message | test("nope")')" "true"
+
 # ─── an action is a POST at its own path ────────────────────────────────
 
 printf "\n\033[1m=== POST /kiosk/book_appointment ===\033[0m\n"

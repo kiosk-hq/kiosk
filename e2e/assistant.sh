@@ -6,7 +6,7 @@
 # Asserts on responses from the REST wire surface: the 0.4 per-verb endpoints
 # (GET /kiosk/<query-name>, POST /kiosk/<action-name>), /kiosk/pay, and —
 # until the 0.4 cutover slice deletes them — the 0.3 name-dispatch endpoints
-# /kiosk/query and /kiosk/run. Exits non-zero on any failure.
+# one endpoint per verb. Exits non-zero on any failure.
 #
 # TWO ANSWER SHAPES ARE ASSERTED HERE, ON PURPOSE (T-068 slice 2). The
 # per-verb endpoints answer the 0.4 shape: the handler's payload VERBATIM on
@@ -78,20 +78,6 @@ action_call() {
   local name="$2"
   local body="$3"
   curl -sS -X POST "$SERVER_URL/kiosk/$name" \
-    -H "Authorization: Bearer $token" \
-    -H "Content-Type: application/json" \
-    -d "$body"
-}
-
-# The 0.3 name-dispatch wire. Still served — the hard cut is the 0.4 cutover
-# slice, not this one — and asserted below so a premature deletion is caught
-# by the harness rather than by the demo fleet.
-exec_call() {
-  local token="$1"
-  local verb="$2"
-  local body="$3"
-  local url="$SERVER_URL/kiosk/$verb"
-  curl -sS -X POST "$url" \
     -H "Authorization: Bearer $token" \
     -H "Content-Type: application/json" \
     -d "$body"
@@ -215,23 +201,39 @@ assert "declares OpenAPI 3.1"        "$(echo "$oa" | jq -r '.openapi')" "3.1.0"
 assert "server is this origin's endpoint" \
   "$(echo "$oa" | jq -r '.servers[0].url')" "$SERVER_URL/kiosk"
 
-# DERIVED, and this is the assertion that says so: the paths are exactly the
-# verbs the canonical catalog publishes, in the same order, with the query
-# half at GET and the action half at POST.
+# DERIVED, and this is the assertion that says so: the operator paths are
+# exactly the verbs the canonical catalog publishes, with the query half at GET
+# and the action half at POST. `/schema` and `/pay` are the wire's OWN reserved
+# endpoints — the protocol's, not the operator's — and joined the document at
+# the cutover, when they left the 0.3 envelope.
 schema_doc=$(curl -sf "$SERVER_URL/kiosk/schema" -H "Authorization: Bearer $ALICE_AGENT_TOKEN")
 assert "one path per verb the canonical catalog publishes" \
-  "$(echo "$oa" | jq -r '.paths | keys_unsorted | map(ltrimstr("/")) | join(",")')" \
-  "$(echo "$schema_doc" | jq -r '[.value.queries[].name, .value.actions[].name] | sort | join(",")')"
+  "$(echo "$oa" | jq -r '.paths | keys_unsorted | map(ltrimstr("/")) | map(select(. != "schema" and . != "pay")) | sort | join(",")')" \
+  "$(echo "$schema_doc" | jq -r '[.queries[].name, .actions[].name] | sort | join(",")')"
 assert "a query is a GET"            "$(echo "$oa" | jq -r '.paths."/salons" | keys | join(",")')" "get"
 assert "an action is a POST"         "$(echo "$oa" | jq -r '.paths."/book_appointment" | keys | join(",")')" "post"
-assert "no /schema, no /pay (they still answer the 0.3 envelope)" \
-  "$(echo "$oa" | jq -r '.paths | has("/schema") or has("/pay")')" "false"
+assert "the reserved /schema is described, as a GET" \
+  "$(echo "$oa" | jq -r '.paths."/schema" | keys | join(",")')" "get"
+assert "…tagged wire, not queries"   "$(echo "$oa" | jq -r '.paths."/schema".get.tags | join(",")')" "wire"
+# `/pay` is described because THIS origin serves it — it wires a payment
+# provider, so `pay` is in its capabilities. The renderer gates both reserved
+# paths on the live capability set, so the document describes what this origin
+# ANSWERS rather than what the protocol allows in general. (The absent case is
+# pinned by kiosk-server's own unit spec, which can register an origin without
+# a provider; this harness only ever boots one fixture app.)
+assert "the reserved /pay is described, as a POST" \
+  "$(echo "$oa" | jq -r '.paths."/pay" | keys | join(",")')" "post"
+assert "…also tagged wire"           "$(echo "$oa" | jq -r '.paths."/pay".post.tags | join(",")')" "wire"
+assert "pay's capability is advertised" \
+  "$(echo "$schema_doc" | jq -r '.verbs | index("pay") != null')" "true"
+assert "…and no /query or /run, ever again" \
+  "$(echo "$oa" | jq -r '.paths | has("/query") or has("/run")')" "false"
 
 # The verb's prose semantics travel VERBATIM — ADR-0021 stays the authority on
 # meaning, and ADR-0024 narrows it rather than reversing it.
 assert "the descriptor's description travels verbatim" \
   "$(echo "$oa" | jq -r '.paths."/salons".get.description')" \
-  "$(echo "$schema_doc" | jq -r '.value.queries[] | select(.name == "salons") | .description')"
+  "$(echo "$schema_doc" | jq -r '.queries[] | select(.name == "salons") | .description')"
 
 # `style` and `explode` EXPLICIT on every parameter (Prism ignores the
 # defaults), and `limit`/`cursor` INJECTED because no input_schema declares
@@ -414,38 +416,52 @@ assert "garbage token → 401"       "$status" "401"
 status=$(curl -sS -o /dev/null -w "%{http_code}" "$SERVER_URL/kiosk/Salons")
 assert "a non-verb-shaped path → 404" "$status" "404"
 
-# ─── the 0.3 name-dispatch wire is still served ─────────────────────────
+# ─── the 0.3 wire is GONE (T-074 = A) ───────────────────────────────────
 #
-# 0.4's cut is HARD (T-074 = A) but it lands in the CUTOVER slice, after the
-# eight demos migrate. Until then both wires are served and must agree, so a
-# premature deletion is caught here rather than by the fleet.
+# A hard cut: no route, no tombstone, no 404 hint payload naming the retired
+# endpoints, no second conformance surface. `POST /kiosk/query` now reaches the
+# PER-VERB controller as a verb literally named `query`, which nobody
+# registered — so it answers the ordinary `not_found`, exactly as any other
+# unregistered name does. That is the assertion: not that the old endpoint is
+# special-cased, but that it is not special at all.
 
-printf "\n\033[1m=== the 0.3 wire, still served ===\033[0m\n"
+printf "\n\033[1m=== the 0.3 wire is gone ===\033[0m\n"
 
-old=$(exec_call "$ALICE_AGENT_TOKEN" "query" '{"name":"salons"}')
-new=$(query_call "$ALICE_AGENT_TOKEN" "salons")
-assert "POST /kiosk/query still answers"  "$(echo "$old" | jq -r '.ok')" "true"
-assert "…still in the 0.3 envelope"       "$(echo "$old" | jq -r '.kind')" "rows"
-# The envelope is now the ONLY difference between the two answers — slice 2
-# ended byte-identity on purpose, and what has to survive is that both wires
-# reach the same handler and carry the same rows.
-assert "both wires carry the same rows"   "$(jq -S '.rows' <<<"$old")" "$(jq -S . <<<"$new")"
+for retired in query run; do
+  body=$(curl -sS -X POST "$SERVER_URL/kiosk/$retired" \
+           -H "Authorization: Bearer $ALICE_AGENT_TOKEN" \
+           -H "Content-Type: application/json" -d '{"name":"salons"}')
+  code=$(curl -sS -o /dev/null -w "%{http_code}" -X POST "$SERVER_URL/kiosk/$retired" \
+           -H "Authorization: Bearer $ALICE_AGENT_TOKEN" \
+           -H "Content-Type: application/json" -d '{"name":"salons"}')
+  assert "POST /kiosk/$retired → 404"        "$code" "404"
+  assert "…as an ordinary not_found"         "$(echo "$body" | jq -r '.code')" "not_found"
+  assert "…with no 0.3 envelope residue"     "$(echo "$body" | jq -r 'has("ok") or has("error")')" "false"
+done
 
-old_run=$(exec_call "$ALICE_AGENT_TOKEN" "run" '{"name":"nope"}')
-assert "POST /kiosk/run still answers"    "$(echo "$old_run" | jq -r '.error.code')" "not_found"
-assert "…still the 0.3 error envelope"    "$(echo "$old_run" | jq -r '.ok')" "false"
-
-# `schema` and `pay` keep the envelope too, for the same reason: the eight
-# demos read `.value` off both, and they move in one wave at the cutover.
+# `schema` answers the payload VERBATIM now — it moved off the envelope with
+# `pay` and the auth plane in the cutover wave.
 old_schema=$(curl -sS "$SERVER_URL/kiosk/schema" -H "Authorization: Bearer $ALICE_AGENT_TOKEN")
-assert "GET /kiosk/schema still enveloped" "$(echo "$old_schema" | jq -r '.kind')" "value"
-assert "…with the catalog under value"     "$(echo "$old_schema" | jq -r '.value.queries | length > 0')" "true"
+assert "GET /kiosk/schema is unenveloped"  "$(echo "$old_schema" | jq -r 'has("ok") or has("kind") or has("value")')" "false"
+assert "…the catalog is the body itself"   "$(echo "$old_schema" | jq -r '.queries | length > 0')" "true"
+
+# A GET at an action's path is 405 with `Allow`, never a silent 404 — the
+# resource EXISTS, and an assistant that read 404 would give up on a verb it
+# could have called correctly.
+mna_code=$(curl -sS -o /dev/null -w "%{http_code}" "$SERVER_URL/kiosk/book_appointment" \
+             -H "Authorization: Bearer $ALICE_AGENT_TOKEN")
+mna_allow=$(curl -sS -o /dev/null -D - "$SERVER_URL/kiosk/book_appointment" \
+              -H "Authorization: Bearer $ALICE_AGENT_TOKEN" | tr -d '\r' | awk 'tolower($1)=="allow:"{print $2}')
+mna_body=$(curl -sS "$SERVER_URL/kiosk/book_appointment" -H "Authorization: Bearer $ALICE_AGENT_TOKEN")
+assert "GET an action → 405"               "$mna_code" "405"
+assert "…carrying Allow: POST"             "$mna_allow" "POST"
+assert "…coded method_not_allowed"         "$(echo "$mna_body" | jq -r '.code')" "method_not_allowed"
 
 # K-740 / VERBS-EQ-CAPABILITIES: the catalog's `verbs` IS the discovery
 # document's `capabilities` — the same array, not a fixed four that named `pay`
 # whether or not the origin took payments.
 assert "schema.verbs == kiosk.json capabilities" \
-  "$(echo "$old_schema" | jq -cS '.value.verbs')" \
+  "$(echo "$old_schema" | jq -cS '.verbs')" \
   "$(echo "$wk" | jq -cS '.kiosk.capabilities')"
 
 # ─── JWKS endpoint ──────────────────────────────────────────────────────
@@ -525,11 +541,12 @@ pay_out=$( cd "$APP_DIR" && SERVER_URL="$SERVER_URL" KIOSK_ISSUER="$KIOSK_ISSUER
              bundle exec ruby "$FIXTURES/pay_flow.rb" )
 
 assert "pay: http 200"                "$(echo "$pay_out" | jq -r '.http_code')"                       "200"
-assert "pay: ok=true"                 "$(echo "$pay_out" | jq -r '.response.ok')"                     "true"
-assert "pay: kind=value"              "$(echo "$pay_out" | jq -r '.response.kind')"                   "value"
-assert "pay: psp_reference present"   "$(echo "$pay_out" | jq -r '.response.value.psp_reference | length > 0')" "true"
-assert "pay: settled 1599"            "$(echo "$pay_out" | jq -r '.response.value.settled_amount_cents')" "1599"
-assert "pay: settlement_id"           "$(echo "$pay_out" | jq -r '.response.value.settlement_id | length > 0')" "true"
+# `pay` answers the settlement object VERBATIM since the cutover — no
+# `ok`/`kind`/`value` wrapper to unwrap.
+assert "pay: unenveloped"             "$(echo "$pay_out" | jq -r '.response | has("ok") or has("kind") or has("value")')" "false"
+assert "pay: psp_reference present"   "$(echo "$pay_out" | jq -r '.response.psp_reference | length > 0')" "true"
+assert "pay: settled 1599"            "$(echo "$pay_out" | jq -r '.response.settled_amount_cents')" "1599"
+assert "pay: settlement_id"           "$(echo "$pay_out" | jq -r '.response.settlement_id | length > 0')" "true"
 
 # The full AP2 trail landed in Postgres — one row each, no human anywhere.
 assert "db: 1 intent_mandate"         "$(psql -X -d "$DB_NAME" -tAc 'SELECT COUNT(*) FROM kiosk.intent_mandates')"   "1"

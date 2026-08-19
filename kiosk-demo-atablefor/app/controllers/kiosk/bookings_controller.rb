@@ -62,6 +62,25 @@ class Kiosk::BookingsController < ApplicationController
                                         description: "Number of guests." },
                },
                required: ["restaurant_id", "restaurant_table_id", "date", "time", "party_size"]
+  # An action answers its own object. The five arguments come back echoed
+  # because a confirmation an assistant can read back to its human has to name
+  # WHAT was booked, not only that something was; `seating_at` is the absolute
+  # instant behind the (date, time) pair.
+  output_schema type: "object",
+                description: "The confirmed booking.",
+                additionalProperties: false,
+                properties: {
+                  booking_id:          { type: "string", description: "Pass to cancel_booking as `booking_id`." },
+                  restaurant_id:       { type: "integer", description: "The restaurant booked." },
+                  restaurant_table_id: { type: "integer", description: "The table held." },
+                  party_size:          { type: "integer", description: "Guests the booking holds the table for." },
+                  date:                { type: "string", description: "The seating date, YYYY-MM-DD." },
+                  time:                { type: "string", description: "The seating time, HH:MM (24-hour)." },
+                  seating_at:          { type: "string", description: "The seating instant, ISO 8601 with offset." },
+                  status:              { type: "string", description: "confirmed." },
+                },
+                required: %w[booking_id restaurant_id restaurant_table_id party_size
+                             date time seating_at status]
   example_params({
     restaurant_id: 1, restaurant_table_id: 1,
     date: "2026-08-08", time: "20:00", party_size: 2,
@@ -99,6 +118,14 @@ class Kiosk::BookingsController < ApplicationController
                                             "belong to the principal." },
                },
                required: ["booking_id"]
+  output_schema type: "object",
+                description: "The cancelled booking.",
+                additionalProperties: false,
+                properties: {
+                  booking_id: { type: "string", description: "The booking that was cancelled, echoed." },
+                  status:     { type: "string", description: "cancelled." },
+                },
+                required: %w[booking_id status]
   def cancel_booking
     render_operation CancelBookingOperation.call(booking_id: params[:booking_id])
   end

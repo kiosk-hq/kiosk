@@ -75,6 +75,32 @@ class Kiosk::DiningRoomController < ApplicationController
                                  description: "Optional date filter, YYYY-MM-DD (must be among the upcoming seatings)." },
                },
                required: ["party_size"]
+  # One row per open (restaurant, table, seating). A bare array: this verb is
+  # small by construction (~5 restaurants × a handful of tables × ≤ a few
+  # seatings) and does not paginate, so there is no `next` and nothing to echo
+  # back. `neighborhood` and `cuisine` are the two nullable columns on
+  # `restaurants`, and they travel as null rather than being dropped.
+  output_schema type: "array",
+                description: "Open (restaurant, table, seating) triples, restaurant name then " \
+                             "capacity then table label.",
+                items: {
+                  type: "object", additionalProperties: false,
+                  properties: {
+                    restaurant:          { type: "string", description: "Restaurant name." },
+                    neighborhood:        { type: %w[string null], description: "Lisbon neighbourhood, or null." },
+                    cuisine:             { type: %w[string null], description: "Cuisine label, or null." },
+                    restaurant_id:       { type: "integer", description: "Pass to book_table as `restaurant_id`." },
+                    restaurant_table_id: { type: "integer", description: "Pass to book_table as `restaurant_table_id`." },
+                    table_label:         { type: "string", description: "The table's in-house label." },
+                    capacity:            { type: "integer", description: "Seats at this table." },
+                    seating_date:        { type: "string", description: "YYYY-MM-DD — book_table's `date`." },
+                    seating_time:        { type: "string", description: "HH:MM (24-hour) — book_table's `time`." },
+                    seating_at:          { type: "string", description: "The seating instant, ISO 8601 with offset." },
+                    deposit_eur:         { type: "integer", description: "No-show hold in whole EUR (0 = none), settled at the restaurant." },
+                  },
+                  required: %w[restaurant neighborhood cuisine restaurant_id restaurant_table_id
+                               table_label capacity seating_date seating_time seating_at deposit_eur],
+                }
   example_params({ party_size: 2, neighborhood: "Alfama" })
   example_row({
     restaurant: "Tasca do Tejo", neighborhood: "Alfama",
@@ -202,6 +228,30 @@ class Kiosk::DiningRoomController < ApplicationController
   # verb takes no arguments" is a published fact rather than an absence an
   # assistant has to interpret.
   input_schema type: "object", additionalProperties: false, properties: {}, required: []
+  # A bare array, seating-time ordered. `seating_date`/`seating_time` are the
+  # seating's LOCAL (Europe/Lisbon) spelling of the same instant `seating_at`
+  # carries, which is why all three are always present rather than one being
+  # derivable by the assistant.
+  output_schema type: "array",
+                description: "The principal's bookings, earliest seating first.",
+                items: {
+                  type: "object", additionalProperties: false,
+                  properties: {
+                    booking_id:          { type: "string", description: "Pass to cancel_booking as `booking_id`." },
+                    restaurant_id:       { type: "integer", description: "The restaurant the table belongs to." },
+                    restaurant:          { type: "string", description: "Restaurant name." },
+                    neighborhood:        { type: %w[string null], description: "Lisbon neighbourhood, or null." },
+                    restaurant_table_id: { type: "integer", description: "The booked table." },
+                    table_label:         { type: "string", description: "The table's in-house label." },
+                    party_size:          { type: "integer", description: "Guests the booking holds the table for." },
+                    status:              { type: "string", description: "confirmed | cancelled." },
+                    seating_date:        { type: "string", description: "YYYY-MM-DD, Europe/Lisbon." },
+                    seating_time:        { type: "string", description: "HH:MM (24-hour), Europe/Lisbon." },
+                    seating_at:          { type: "string", description: "The seating instant, ISO 8601 with offset." },
+                  },
+                  required: %w[booking_id restaurant_id restaurant neighborhood restaurant_table_id
+                               table_label party_size status seating_date seating_time seating_at],
+                }
   def my_bookings
     render json: Booking.owned_by_current_principal
                         .joins(:restaurant, :restaurant_table)

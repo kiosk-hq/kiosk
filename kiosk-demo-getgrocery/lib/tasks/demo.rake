@@ -297,21 +297,45 @@ namespace :demo do
       puts "  FAIL  my_orders paid flag got #{result["paid"].inspect}"
     end
 
-    # pay.ok == true
+    # THE PAY BODY IS THE SETTLEMENT (0.4). `POST /kiosk/pay` keeps its path,
+    # but its success body is the settlement object itself — there is no `ok`
+    # flag left to read, and "did it settle?" is the 200 status plus a
+    # settlement that names itself and its currency. Asserting the fields is
+    # STRICTLY MORE than the retired `ok == true` was: a wrapper saying `true`
+    # never proved the operator had booked anything.
     pay = result["pay"] || {}
-    if pay["ok"] == true
-      puts "  OK  pay.ok == true"
+    %w[settlement_id psp_reference settled_amount_cents currency].each do |field|
+      value = pay[field]
+      if value.nil? || value.to_s.empty?
+        failures << "pay body missing #{field} (got #{pay.inspect})"
+        puts "  FAIL  pay body missing #{field}"
+      else
+        puts "  OK  pay.#{field} present (#{value})"
+      end
+    end
+    if pay["currency"] == "eur"
+      puts "  OK  the settlement is denominated in the operator's own currency (eur)"
     else
-      failures << "pay.ok not true (got #{pay["ok"].inspect})"
-      puts "  FAIL  pay.ok got #{pay["ok"].inspect}"
+      failures << "settlement currency #{pay["currency"].inspect}, want \"eur\""
+      puts "  FAIL  settlement currency #{pay["currency"].inspect} (want eur)"
     end
 
-    pm_id = pay.dig("value", "settlement_id")
-    if pm_id && !pm_id.to_s.empty?
-      puts "  OK  pay.value.settlement_id present (#{pm_id})"
+    # THE AMOUNT, on the REAL-STRIPE PATH ONLY. `settled_amount_cents` is the
+    # PSP's `amount_received`, not something this app computes — which is what
+    # makes it worth asserting, and also why it cannot be asserted against
+    # stripe-mock: the mock's PaymentIntent fixture reports `amount_received: 0`
+    # for every charge, so demanding the order's total here would fail on a
+    # correct system for a reason that has nothing to do with getgrocery. The
+    # mock path keeps the presence checks above; the cashier check
+    # (ValidatingPaymentProvider) is what pins the amount BEFORE capture, and
+    # demo:redteam's TamperedPriceCart / InflatedTotalCart run it under the mock.
+    if use_mock
+      puts "  OK  (settled amount not asserted under stripe-mock — its fixture always reports amount_received=0)"
+    elsif pay["settled_amount_cents"].to_i == result["total_cents"].to_i
+      puts "  OK  Stripe settled the order's own total (#{pay["settled_amount_cents"]} eur)"
     else
-      failures << "pay.value.settlement_id missing"
-      puts "  FAIL  pay.value.settlement_id missing"
+      failures << "pay settled #{pay["settled_amount_cents"].inspect}, want the order's total #{result["total_cents"].inspect}"
+      puts "  FAIL  pay settled #{pay["settled_amount_cents"].inspect} (want #{result["total_cents"].inspect})"
     end
 
     # psp_reference must start with pi_ — a real Stripe (or stripe-mock)
@@ -532,7 +556,10 @@ namespace :demo do
       Assertion 2: B's my_orders includes own order (positive control)
       Assertion 3: B's my_orders still excludes A's order after positive control
       Assertion 4: A's my_orders excludes B's order
-      Assertion 5: DB orders.user_id for forged order == B (forged arg ignored)
+      Assertion 5 (the principal is not an input): B's create_order with a
+        forged user_id arg (A's UUID) → 400 bad_request naming user_id, refused
+        by the published input_schema before the handler runs; and B's
+        legitimate order has DB user_id == B, so ownership comes from the token.
       Assertion 6: a re-pay of an already-settled order → 403 WITH a body (K-472)
 
     Exits 0 if all assertions hold (isolation works); exits 1 on failure.
@@ -626,7 +653,8 @@ namespace :demo do
     user_id_b              = result["user_id_b"]
     order_id_a             = result["order_id_a"]
     order_id_b             = result["order_id_b"]
-    order_id_b_forged      = result["order_id_b_forged"]
+    forged_refusal         = result["forged_refusal"] || []
+    owner_probe_order_id   = result["owner_probe_order_id"]
     b_reschedule_on_a_status = result["b_reschedule_on_a_status"]
     b_my_orders_before     = result["b_my_orders_before"] || []
     b_my_orders_after      = result["b_my_orders_after"]  || []
@@ -678,24 +706,40 @@ namespace :demo do
       puts "  ✓  Assertion 4: A's my_orders excludes B's order #{order_id_b}"
     end
 
-    # Assertion 5: DB — forged user_id in create_order ignored (order.user_id = B's)
-    db_user_id = `psql -X -d #{db} -tAc "SELECT user_id FROM orders WHERE id = '#{order_id_b_forged}'" 2>&1`.strip
-    if db_user_id == user_id_b
-      puts "  ✓  Assertion 5: DB orders.user_id for forged order == user_id_b (#{user_id_b}) — forged arg ignored"
+    # Assertion 5a: the forged user_id is REFUSED by the published contract.
+    # `create_order` declares `additionalProperties: false` and does not declare
+    # `user_id` — the principal is not one of its inputs — so on the 0.4 wire the
+    # schema layer answers a typed 400 NAMING the parameter before the handler
+    # runs. Through 0.3 the argument reached the handler and was silently
+    # ignored; refusing it is the stricter answer, and "ignored" is now false.
+    forged_rc, forged_code, forged_detail = forged_refusal
+    if forged_rc == 400 && forged_code == "bad_request" && forged_detail.to_s.include?("user_id")
+      puts "  ✓  Assertion 5a: forged user_id → 400 bad_request naming user_id " \
+           "(refused by input_schema before the handler runs)"
     else
-      failures << "ISOLATION HOLE or unexpected: DB orders.user_id for forged order is #{db_user_id.inspect}, expected B's #{user_id_b}"
-      puts "  ✗  Assertion 5 FAILED: unexpected user_id #{db_user_id.inspect} for forged order (expected B's)"
+      failures << "forged user_id not refused: #{forged_refusal.inspect}, want [400, \"bad_request\", …user_id…]"
+      puts "  ✗  Assertion 5a FAILED: forged user_id → #{forged_refusal.inspect}"
+    end
+
+    # Assertion 5b: ownership comes from the TOKEN — the property the refusal
+    # alone does not prove. B's LEGITIMATE order is B's in the database.
+    db_user_id = `psql -X -d #{db} -tAc "SELECT user_id FROM orders WHERE id = '#{owner_probe_order_id}'" 2>&1`.strip
+    if db_user_id == user_id_b
+      puts "  ✓  Assertion 5b: DB orders.user_id == user_id_b (#{user_id_b}) — ownership is taken from the identity"
+    else
+      failures << "owner not taken from identity: DB orders.user_id is #{db_user_id.inspect}, expected B's #{user_id_b}"
+      puts "  ✗  Assertion 5b FAILED: unexpected user_id #{db_user_id.inspect} (expected B's)"
     end
 
     # Assertion 6 (K-472): re-paying an ALREADY-SETTLED order is rejected WITH A
-    # BODY. Every /pay error must carry the JSON error envelope (a real
-    # error.code) — never an empty/bodiless response — so an agent can branch on
-    # it. Guards the K-471 detour: a mistaken second /pay for a paid order.
+    # BODY. Every /pay error must carry an RFC 9457 problem document whose
+    # TOP-LEVEL `code` an agent can branch on — never an empty/bodiless
+    # response. Guards the K-471 detour: a mistaken second /pay for a paid order.
     if repay_settled_status == 403 && repay_body_len > 0 && repay_error_code == "forbidden"
-      puts "  ✓  Assertion 6: re-pay of a settled order → 403 with a body (error.code=#{repay_error_code.inspect}, #{repay_body_len} bytes) — no empty pay error"
+      puts "  ✓  Assertion 6: re-pay of a settled order → 403 with a problem document (code=#{repay_error_code.inspect}, #{repay_body_len} bytes) — no empty pay error"
     else
-      failures << "PAY-ERROR HOLE: re-pay of a settled order returned status=#{repay_settled_status.inspect} body_len=#{repay_body_len} error.code=#{repay_error_code.inspect} (expected 403, non-empty body, error.code=\"forbidden\")"
-      puts "  ✗  Assertion 6 FAILED: re-pay error status=#{repay_settled_status.inspect} body_len=#{repay_body_len} error.code=#{repay_error_code.inspect}"
+      failures << "PAY-ERROR HOLE: re-pay of a settled order returned status=#{repay_settled_status.inspect} body_len=#{repay_body_len} code=#{repay_error_code.inspect} (expected 403, non-empty body, code=\"forbidden\")"
+      puts "  ✗  Assertion 6 FAILED: re-pay error status=#{repay_settled_status.inspect} body_len=#{repay_body_len} code=#{repay_error_code.inspect}"
     end
 
     if failures.empty?
@@ -871,11 +915,12 @@ namespace :demo do
     end
 
     # K-596: both verbs that take an `order_id` must DECLARE its uuid shape, not
-    # merely describe it in prose. Nothing validates `input_schema` server-side
-    # today (`validate_requests` slice-1 covers the Kiosk-PoW header only —
-    # T-045(a) is the layer that would police args), so this is the contract an
-    # assistant reads; `UuidCheck` in the handler is what enforces it, and
-    # demo:race pins that side. Asserted by BEHAVIOUR, not by string equality:
+    # merely describe it in prose. Since 0.4 the declaration is also ENFORCED:
+    # `input_schema` is validated on every call, unconditionally, so the pattern
+    # asserted below is what refuses a malformed order_id at the wire.
+    # `UuidCheck` in the handler remains the floor for the values the pattern
+    # admits — demo:race pins that side, in-process. Asserted by BEHAVIOUR,
+    # not by string equality:
     # the published pattern must accept the ids create_order hands out and
     # reject the value that used to 500.
     require "securerandom"
@@ -943,10 +988,12 @@ namespace :demo do
     Adversarial regression battery — kiosk-redteam.
 
     Boots getgrocery, runs all generic Kiosk::Redteam scenarios and asserts
-    each applicable attack is BLOCKED (14 BLOCKED, 3 SKIPPED):
+    each applicable attack is BLOCKED (16 BLOCKED, 3 SKIPPED):
 
       BLOCKED  CrossTenantRead        — B's my_orders must not include A's orders
-      BLOCKED  ForgedUserId           — forged user_id in create_order ignored; order stays B's
+      BLOCKED  ForgedUserId           — a forged user_id in create_order is REFUSED
+                                        (400 bad_request: the principal is not a
+                                        declared input), and B's own order stays B's
       BLOCKED  UnpaidGatedAction      — reschedule_delivery without a settled mandate rejected
       BLOCKED  SpentResourceReuse     — a paid order reschedules once; the second attempt rejected
       BLOCKED  PayForOtherUseSelf     — mandate paid for one order cannot gate another
@@ -959,6 +1006,12 @@ namespace :demo do
       BLOCKED  InflatedTotalCart      — total above the sum of the lines rejected
       BLOCKED  MalformedItemsCart     — a non-array (or non-object-element) `items` is a
                                         typed 400, never a 500 (K-693)
+      BLOCKED  RetiredWire            — POST /kiosk/query and POST /kiosk/run answer an
+                                        ordinary 404 not_found: the 0.3 pair was DELETED
+                                        (T-074 = A), leaving no second conformance surface
+      BLOCKED  MethodMismatch         — a GET at an action's path answers 405
+                                        method_not_allowed with Allow: POST, never a silent
+                                        404 an assistant would read as "cannot do that"
       BLOCKED  RegistrationWithoutPow — register without a valid PoW proof rejected
 
     Scenarios that require a surface getgrocery does not expose SKIP cleanly:
@@ -1417,8 +1470,9 @@ namespace :demo do
     own port — getgrocery is a SECOND registered operator alongside skooti — then
     boots getgrocery and drives script/agecheck_flow.rb across both apps:
 
-      A1  create_order WITH the alcohol item, no KYC → 403 kyc_required, and the
-          error.hint points the agent at `request_kyc`.
+      A1  create_order WITH the alcohol item, no KYC → 403 kyc_required — an RFC
+          9457 problem document whose top-level `code` carries that name and
+          whose `hint` points the agent at `request_kyc`.
       A2  run request_kyc → 200 with a broker verification_url; human approves the
           broker page; the broker POSTs its signed {age_over_18} claim to
           /kyc/callback; poll kyc_status → approved returns the broker jws.

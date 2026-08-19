@@ -71,7 +71,9 @@ abort "schema call failed (#{schema_rc}): #{JSON.generate(schema_body)}" unless 
 
 # ── Emit structured JSON for the rake task to assert ────────────────────────
 
-schema_value = schema_body["value"] || {}
+# `GET <endpoint>/schema` answers `{verbs, queries, actions}` DIRECTLY — the
+# 0.3 `{ok, kind, value}` envelope was retired at the cutover.
+schema_value = schema_body || {}
 
 puts JSON.generate({
   schema_status:  schema_rc,

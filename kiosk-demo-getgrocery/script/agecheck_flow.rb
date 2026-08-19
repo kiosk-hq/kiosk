@@ -7,14 +7,16 @@
 # high-liability rental.
 #
 #   PART A — alcohol (KYC-gated on age_over_18):
-#     register → catalog (find the age_restricted wine) → create_order WITH the
-#     wine, NO KYC → 403 kyc_required (error.hint points to `request_kyc`) → run
-#     request_kyc (getgrocery calls the KYC broker; get a broker
-#     verification_url) → SIMULATE the human approving on the BROKER page → the
-#     broker POSTs its signed {age_over_18} claim to getgrocery's /kyc/callback →
-#     poll `query kyc_status` until approved → submit the broker kyc_jws to POST
-#     /kiosk/agents/kyc → retry create_order WITH the wine → 200 → payment_setup →
-#     pay (cart mirrors the order at catalog EUR prices) → settle.
+#     register → GET /kiosk/catalog (find the age_restricted wine) → POST
+#     /kiosk/create_order WITH the wine, NO KYC → 403 kyc_required (the problem
+#     document's `hint` points to `request_kyc`) → POST /kiosk/request_kyc
+#     (getgrocery calls the KYC broker; get a broker verification_url) →
+#     SIMULATE the human approving on the BROKER page → the broker POSTs its
+#     signed {age_over_18} claim to getgrocery's /kyc/callback → poll
+#     `GET /kiosk/kyc_status?request_id=…` until approved → submit the broker
+#     kyc_jws to POST /kiosk/agents/kyc → retry create_order WITH the wine →
+#     200 → payment_setup → pay (cart mirrors the order at catalog EUR prices)
+#     → settle.
 #
 #   The agent NEVER holds the broker's signing key: the claim is minted by the
 #   KYC broker when the human approves, delivered to getgrocery's callback,
@@ -47,6 +49,12 @@ ISSUER = ENV.fetch("KIOSK_ISSUER")
 
 # ── helpers ─────────────────────────────────────────────────────────────────
 
+# THE 0.4 WIRE. A query is `GET <endpoint>/<query-name>` with its arguments in
+# the QUERY STRING; an action is `POST <endpoint>/<action-name>` with its
+# arguments as the JSON BODY. There is no `name` field and no /query or /run
+# endpoint. A success body IS the result, and `pay` answers the settlement
+# object itself; an error is an RFC 9457 problem document whose branch point is
+# the TOP-LEVEL `code` — the KYC refusal included, whose `hint` is unchanged.
 def post_json(url, body, headers = {})
   uri = URI(url)
   req = Net::HTTP::Post.new(uri, { "Content-Type" => "application/json" }.merge(headers))
@@ -55,8 +63,9 @@ def post_json(url, body, headers = {})
   [res.code.to_i, (JSON.parse(res.body) rescue {})]
 end
 
-def get_json(url, headers = {})
+def get_json(url, headers = {}, params = {})
   uri = URI(url)
+  uri.query = URI.encode_www_form(params) unless params.empty?
   res = Net::HTTP.new(uri.host, uri.port).request(Net::HTTP::Get.new(uri, headers))
   [res.code.to_i, (JSON.parse(res.body) rescue {})]
 end
@@ -83,21 +92,21 @@ def register_agent
   [key, reg.fetch("agent_id"), reg.fetch("user_id"), reg.fetch("access_token")]
 end
 
-def query(token, body)
-  post_json("#{SERVER}/kiosk/query", body, { "Authorization" => "Bearer #{token}" })
+def query(token, name, params = {})
+  get_json("#{SERVER}/kiosk/#{name}", { "Authorization" => "Bearer #{token}" }, params)
 end
 
 def catalog(token)
-  rc, resp = query(token, { name: "catalog" })
+  rc, resp = query(token, "catalog")
   abort "catalog failed (#{rc}): #{JSON.generate(resp)}" unless rc == 200
-  resp.fetch("rows", [])
+  Array(resp)
 end
 
 # create_order with a given item set (each {sku, qty:1}). Returns [http, body].
 def create_order(token, items, address: "42 Camden Street, Dublin 2", slot_id: 1)
   post_json(
-    "#{SERVER}/kiosk/run",
-    { name: "create_order", items: items, delivery_slot_id: slot_id, delivery_address: address },
+    "#{SERVER}/kiosk/create_order",
+    { items: items, delivery_slot_id: slot_id, delivery_address: address },
     { "Authorization" => "Bearer #{token}" },
   )
 end
@@ -142,18 +151,19 @@ alcohol_items = [{ sku: wine["sku"], qty: 1 }]
 
 # A1: create_order WITH the wine, no KYC → 403 kyc_required, hint → request_kyc.
 rc_a_nokyc, a_nokyc_body = create_order(a_token, alcohol_items)
-a_nokyc_code = a_nokyc_body.dig("error", "code")
-a_nokyc_hint = a_nokyc_body.dig("error", "hint").to_s
+# The KYC refusal is a problem document: `code` at the TOP LEVEL, `hint`
+# unchanged (it is what tells the assistant which verb recovers from this).
+a_nokyc_code = a_nokyc_body["code"]
+a_nokyc_hint = a_nokyc_body["hint"].to_s
 hint_points_to_request_kyc = a_nokyc_hint.include?("request_kyc")
 STDERR.puts "  create_order (alcohol, no KYC): http=#{rc_a_nokyc} code=#{a_nokyc_code.inspect}"
 STDERR.puts "  403 hint points to request_kyc: #{hint_points_to_request_kyc}"
 
 # A2: discover request_kyc from the hint; get a broker verification_url.
-rc_req, req_body = post_json("#{SERVER}/kiosk/run", { name: "request_kyc" },
+rc_req, req_body = post_json("#{SERVER}/kiosk/request_kyc", {},
                              { "Authorization" => "Bearer #{a_token}" })
-req_val          = req_body.fetch("value", {})
-verification_url = req_val["verification_url"]
-request_id       = req_val["request_id"]
+verification_url = req_body["verification_url"]
+request_id       = req_body["request_id"]
 STDERR.puts "  request_kyc: http=#{rc_req} verification_url=#{verification_url.inspect}"
 abort "request_kyc did not return a verification_url (#{rc_req}): #{JSON.generate(req_body)}" \
   if verification_url.nil? || verification_url.empty?
@@ -170,9 +180,10 @@ abort "approve page POST failed (#{approve_rc})" unless approve_rc == 200
 kyc_jws    = nil
 kyc_status = nil
 20.times do
-  rc_st, st_body = query(a_token, { name: "kyc_status", request_id: request_id })
+  rc_st, st_body = query(a_token, "kyc_status", { request_id: request_id })
   abort "kyc_status failed (#{rc_st}): #{JSON.generate(st_body)}" unless rc_st == 200
-  row = (st_body["rows"] || []).first || {}
+  # kyc_status is a query, so its body is the ROW ARRAY itself (one row).
+  row = Array(st_body).first || {}
   kyc_status = row["status"]
   if kyc_status == "approved"
     kyc_jws = row["kyc_jws"]
@@ -190,19 +201,18 @@ STDERR.puts "  KYC submit: http=#{rc_kyc} attributes=#{kyc_body["attributes"].in
 
 # A6: retry create_order WITH the wine → 200 now that age_over_18 is on file.
 rc_a_kyc, a_kyc_body = create_order(a_token, alcohol_items)
-a_order   = a_kyc_body.fetch("value", {})
-a_order_id = a_order["order_id"]
-a_total    = a_order["total_cents"].to_i
+a_order_id = a_kyc_body["order_id"]
+a_total    = a_kyc_body["total_cents"].to_i
 STDERR.puts "  create_order (alcohol, WITH KYC): http=#{rc_a_kyc} order_id=#{a_order_id.inspect}"
 
 # A7: payment_setup + pay (cart mirrors the alcohol order at catalog prices).
-rc_setup, setup_resp = post_json("#{SERVER}/kiosk/run", { name: "payment_setup" },
+rc_setup, setup_resp = post_json("#{SERVER}/kiosk/payment_setup", {},
                                  { "Authorization" => "Bearer #{a_token}" })
-STDERR.puts "  payment_setup: http=#{rc_setup} status=#{setup_resp.dig("value", "status").inspect}"
+STDERR.puts "  payment_setup: http=#{rc_setup} status=#{setup_resp["status"].inspect}"
 
 mirror = [{ sku: wine["sku"], qty: 1, price_cents: wine["price_cents"].to_i }]
 rc_pay, pay_body = a_order_id ? pay_for_order(a_token, a_key, a_user, a_agent, a_order_id, a_total, mirror) : [0, {}]
-psp_ref = pay_body.dig("value", "psp_reference").to_s
+psp_ref = pay_body["psp_reference"].to_s
 STDERR.puts "  pay: http=#{rc_pay} psp_reference=#{psp_ref.inspect}"
 
 # ── PART B: non-alcohol positive control — NO KYC at all ──────────────────────
@@ -212,7 +222,7 @@ b_key, b_agent, b_user, b_token = register_agent
 b_rows  = catalog(b_token)
 b_item  = b_rows.find { |r| !r["age_restricted"] }
 rc_b, b_body = create_order(b_token, [{ sku: b_item["sku"], qty: 1 }])
-b_order_id = b_body.dig("value", "order_id")
+b_order_id = b_body["order_id"]
 STDERR.puts "  create_order (#{b_item["sku"]}, NO KYC submitted): http=#{rc_b} order_id=#{b_order_id.inspect}"
 
 # ── REDTEAM ───────────────────────────────────────────────────────────────────

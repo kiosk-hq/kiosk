@@ -17,7 +17,7 @@
 # {Order.settling}), which is only expressible once the write half has stopped
 # being a block in an initializer.
 #
-# A refusal carries the wire's `error.code` STRING rather than an exception
+# A refusal carries the wire's error-code STRING rather than an exception
 # class, for the reason T-054 settled: the code table is the contract, not a
 # hierarchy.
 class OperationResult

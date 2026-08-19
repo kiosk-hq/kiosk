@@ -1,7 +1,8 @@
 # frozen_string_literal: true
 
 # getgrocery's WRITE surface: the four verbs an assistant reaches with
-# `POST /kiosk/run`. Same shape as Kiosk::StorefrontController —
+# `POST /kiosk/<action-name>`, arguments as the JSON body. Same shape as
+# Kiosk::StorefrontController —
 # `ActionController::API` plus `include Kiosk::Action` — because a controller
 # declares queries OR actions, never both.
 #
@@ -19,9 +20,10 @@
 # same reason tudu left its queries in the handler — a call plus a literal has
 # nothing to extract.
 #
-# Errors are Rails' idiom end to end: the wire's `error.code` vocabulary is a
+# Errors are Rails' idiom end to end: the wire's error-code vocabulary is a
 # closed table, not a class hierarchy, so a refusal is an ordinary `render json:,
-# status:` naming the code, and the wire carries it verbatim. No Kiosk error
+# status:` naming the code, and the wire re-renders it as the RFC 9457 problem
+# document 0.4 answers with — same code, now a top-level member. No Kiosk error
 # classes appear below — an Operation answers with an {OperationResult}, and
 # {KioskRefusals#render_operation} is the one place that becomes a status. That
 # matters more here than on most siblings: `kyc_required` and `forbidden` are
@@ -117,7 +119,10 @@ class Kiosk::OrdersController < ActionController::API
 
   # create_order — the flagship verb. See {CreateOrderOperation} for the six
   # gates; the principal below is read from the identity the wire resolved rather
-  # than from arguments, which is what makes a forged `user_id` in the body inert.
+  # than from arguments. `user_id` is therefore NOT a declared input, and since
+  # `input_schema` closes the object (`additionalProperties: false`) and is
+  # validated on every 0.4 call, a forged one is refused with a typed 400 naming
+  # it — where 0.3 accepted the argument and silently ignored it.
   description "Create (or replace) a grocery order for the authenticated principal. " \
               "Delivery is part of the order: delivery_slot_id and delivery_address are REQUIRED. " \
               "To pay, sign your AP2 cart mandate in EUR with line_items that mirror the order — " \

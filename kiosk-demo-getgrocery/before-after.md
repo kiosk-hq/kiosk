@@ -35,7 +35,7 @@ The reason incumbents stay at discovery is economic, not technical. Grocery reta
 getgrocery is a Rails 8 app that speaks Kiosk. The following is representative output of `rake demo` (from `script/getgrocery_flow.rb`), run against the real Stripe adapter in test mode — `psp_reference` is a genuine Stripe test-mode `pi_…` PaymentIntent and settlement is recorded in `kiosk.settlements`:
 
 ```
-{"http_register":201,"http_catalog":200,"http_order":200,"http_slots":200,"http_payment_setup":200,"http_pay":200,"http_schedule":200,"http_my_orders":200,"user_id":"a7f3c291-1b2e-4d8a-9cf1-3e507b824f16","agent_id":"b2e94107-3a1c-4f8d-bc2e-91d4a53c7e28","order_id":"d4f81c3e-7b2a-4e9c-af13-62d7b4c8e509","total_cents":847,"scheduled_at":"2026-07-13T08:00:00.000Z","psp_reference":"pi_3Qk9fLR2bkGb2V0T1aX7dZ8p","pay":{"ok":true,"kind":"value","value":{"settlement_id":"f1b3e259-8c4d-4a7f-9e12-84b5c7d2a963","psp_reference":"pi_3Qk9fLR2bkGb2V0T1aX7dZ8p","settled_amount_cents":847,"currency":"eur"}}}
+{"http_register":201,"http_catalog":200,"http_order":200,"http_slots":200,"http_payment_setup":200,"http_pay":200,"http_schedule":200,"http_my_orders":200,"user_id":"a7f3c291-1b2e-4d8a-9cf1-3e507b824f16","agent_id":"b2e94107-3a1c-4f8d-bc2e-91d4a53c7e28","order_id":"d4f81c3e-7b2a-4e9c-af13-62d7b4c8e509","total_cents":847,"scheduled_at":"2026-07-13T08:00:00.000Z","psp_reference":"pi_3Qk9fLR2bkGb2V0T1aX7dZ8p","pay":{"settlement_id":"f1b3e259-8c4d-4a7f-9e12-84b5c7d2a963","psp_reference":"pi_3Qk9fLR2bkGb2V0T1aX7dZ8p","settled_amount_cents":847,"currency":"eur"}}
 
 -- Assertions --
   OK  http_register == 201
@@ -48,8 +48,12 @@ getgrocery is a Rails 8 app that speaks Kiosk. The following is representative o
   OK  http_my_orders == 200
   OK  order_id present (d4f81c3e-7b2a-4e9c-af13-62d7b4c8e509)
   OK  scheduled_at present (2026-07-13T08:00:00.000Z)
-  OK  pay.ok == true
-  OK  pay.value.settlement_id present (f1b3e259-8c4d-4a7f-9e12-84b5c7d2a963)
+  OK  pay.settlement_id present (f1b3e259-8c4d-4a7f-9e12-84b5c7d2a963)
+  OK  pay.psp_reference present (pi_3Qk9fLR2bkGb2V0T1aX7dZ8p)
+  OK  pay.settled_amount_cents present (847)
+  OK  pay.currency present (eur)
+  OK  the settlement is denominated in the operator's own currency (eur)
+  OK  Stripe settled the order's own total (847 eur)
   OK  psp_reference is a real Stripe PaymentIntent (pi_3Qk9fLR2bkGb2V0T1aX7dZ8p)
   OK  orders[status=scheduled] count >= 1 (got 1)
   OK  kiosk.settlements >= 1 (got 1)
@@ -63,11 +67,11 @@ getgrocery is a Rails 8 app that speaks Kiosk. The following is representative o
 
 1. **Discover** — `GET /.well-known/kiosk.json` returns the GetGrocery issuer and surface.
 2. **Self-register** — generated an RSA-2048 keypair, proved possession of the private key (`GET /kiosk/auth/challenge` → signed the nonce as an origin-bound RS256 JWS → `POST /kiosk/auth/register {public_key:<pem>, signed:<jws>}`) → HTTP 201 → `agent_id`, `user_id`, `access_token`. No existing account. No human login. No OTP. No bot screen.
-3. **Browse catalog** — `POST /kiosk/query {name:"catalog"}` returned 15 in-stock products, sorted by name (Milk 1 L and Chocolate Spread 400g are out of stock, so the catalog hides them — see `db/seeds.rb`). This worked example's driver builds the cart from the first three in-stock rows: Apple Juice (349c), Banana (149c), Butter 250g (349c), one of each.
-4. **Query delivery slots** — `POST /kiosk/query {name:"delivery_slots", date:"2026-07-13"}` → returned 6 available time slots; the driver picked the first, 08:00–10:00.
-5. **Create order** — `POST /kiosk/run {name:"create_order", items:[{sku:"apple-juice", qty:1}, {sku:"banana", qty:1}, {sku:"butter-250g", qty:1}], delivery_slot_id:<slot_id>, delivery_address:"42 Camden Street, Dublin 2"}` → HTTP 200, `order_id`, `total_cents:847`, `slot_at`, and a `pay_hint`. Delivery is part of the order — slot and address are REQUIRED; the assistant composed the full cart (products referenced by `sku`).
-6. **Pay** — signed an AP2 intent mandate (`cap_amount_cents:1047`, `scope:"grocery"`, `iss:<issuer>`) and a cart mandate (`total_amount_cents:847`, `line_items:[{order_id:<order_id>}, {sku:"apple-juice", qty:1, price_cents:349}, {sku:"banana", qty:1, price_cents:149}, {sku:"butter-250g", qty:1, price_cents:349}]` — mirroring the order per the `pay_hint`, bound to the intent via `intent_mandate_id`) as RS256 JWS with the registered keypair, then `POST /kiosk/pay {intent_mandate_jws, cart_mandate_jws, payment_mandate_jws}` → `settled_amount_cents:847`, `ok:true`.
-7. **(Optional) Move the delivery** — a PAID order's slot can be changed once via `POST /kiosk/run {name:"reschedule_delivery", order_id:<order_id>, delivery_slot_id:<new_slot_id>}`. The operator's cashier check ran at capture: currency (EUR), each line against the catalog, and the total were verified before charging.
+3. **Browse catalog** — `GET /kiosk/catalog` returned 15 in-stock products, sorted by name (Milk 1 L and Chocolate Spread 400g are out of stock, so the catalog hides them — see `db/seeds.rb`). This worked example's driver builds the cart from the first three in-stock rows: Apple Juice (349c), Banana (149c), Butter 250g (349c), one of each.
+4. **Query delivery slots** — `GET /kiosk/delivery_slots?date=2026-07-13&delivery_address=42%20Camden%20Street%2C%20Dublin%202` → returned 6 available time slots; the driver picked the first, 08:00–10:00.
+5. **Create order** — `POST /kiosk/create_order {items:[{sku:"apple-juice", qty:1}, {sku:"banana", qty:1}, {sku:"butter-250g", qty:1}], delivery_slot_id:<slot_id>, delivery_address:"42 Camden Street, Dublin 2"}` → HTTP 200, `order_id`, `total_cents:847`, `slot_at`, and a `pay_hint`. Delivery is part of the order — slot and address are REQUIRED; the assistant composed the full cart (products referenced by `sku`).
+6. **Pay** — signed an AP2 intent mandate (`cap_amount_cents:1047`, `scope:"grocery"`, `iss:<issuer>`) and a cart mandate (`total_amount_cents:847`, `line_items:[{order_id:<order_id>}, {sku:"apple-juice", qty:1, price_cents:349}, {sku:"banana", qty:1, price_cents:149}, {sku:"butter-250g", qty:1, price_cents:349}]` — mirroring the order per the `pay_hint`, bound to the intent via `intent_mandate_id`) as RS256 JWS with the registered keypair, then `POST /kiosk/pay {intent_mandate_jws, cart_mandate_jws, payment_mandate_jws}` → the settlement itself: `{settlement_id, psp_reference, settled_amount_cents:847, currency:"eur"}`.
+7. **(Optional) Move the delivery** — a PAID order's slot can be changed once via `POST /kiosk/reschedule_delivery {order_id:<order_id>, delivery_slot_id:<new_slot_id>}`. The operator's cashier check ran at capture: currency (EUR), each line against the catalog, and the total were verified before charging.
 
 The database confirmed: one row in `orders` with its delivery slot set (`slot_at`), one row in `kiosk.settlements`.
 
@@ -106,15 +110,21 @@ The generator does **not** touch your routes. `kiosk-server` ships the wire cont
 
 ```ruby
 # config/routes.rb — the wire surface, mounted manually.
-# REST endpoints: one per verb, HTTP method carries the semantics.
+# ONE ENDPOINT PER VERB, and the HTTP method carries the semantics: a query is
+# a GET whose arguments are the query string, an action a POST whose arguments
+# are the JSON body. The reserved lines come first so they win by first-match;
+# the per-verb pair is drawn LAST.
 get  "/kiosk/schema",         to: "kiosk/server/wire#schema"
-post "/kiosk/query",          to: "kiosk/server/wire#query"
-post "/kiosk/run",            to: "kiosk/server/wire#run"
 post "/kiosk/pay",            to: "kiosk/server/wire#pay"
 get  "/kiosk/auth/challenge", to: "kiosk/server/auth#challenge"
 post "/kiosk/auth/register",  to: "kiosk/server/auth#register"
 post "/kiosk/auth/login",     to: "kiosk/server/auth#login"
 post "/kiosk/auth/revoke",    to: "kiosk/server/auth#revoke"
+
+get  "/kiosk/:kiosk_verb", to: "kiosk/server/verb#show",
+     constraints: { kiosk_verb: Kiosk::Server::VerbController::NAME_SEGMENT }
+post "/kiosk/:kiosk_verb", to: "kiosk/server/verb#create",
+     constraints: { kiosk_verb: Kiosk::Server::VerbController::NAME_SEGMENT }
 
 # /.well-known/kiosk.json is built on the fly from Kiosk.configuration;
 # kiosk-server does not yet ship a controller for it, so it is inlined here.

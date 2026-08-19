@@ -276,7 +276,7 @@ check(bad_error.is_a?(Kiosk::Server::Errors::BadRequest),
 check(bad_error.respond_to?(:http_status) && bad_error.http_status == 400,
       "…rendered as HTTP 400 (got #{bad_error.respond_to?(:http_status) ? bad_error.http_status : "n/a"})")
 check(bad_error.respond_to?(:code) && bad_error.code == "bad_request",
-      "…with error.code=bad_request (got #{bad_error.respond_to?(:code) ? bad_error.code : "n/a"})")
+      "…carrying the wire code bad_request (got #{bad_error.respond_to?(:code) ? bad_error.code : "n/a"})")
 check(bad_psp.count.zero?, "…and NOTHING was sent to the PSP (captures=#{bad_psp.count})")
 
 # A well-formed uuid that is not the payer's order still gets the ownership

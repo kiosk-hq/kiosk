@@ -6,6 +6,14 @@
 # HTTP 402, the agent solves an Equihash challenge and retries. Proves the loop
 # end-to-end with the real shipped solver. One JSON line on stdout.
 #
+# THE 0.4 WIRE. `catalog` is a QUERY, so it is `GET /kiosk/catalog` with no
+# arguments — the toll's §3.4 fingerprint is now SHA256("GET catalog\n{}"),
+# which is why every call below dials the SAME url with the SAME (empty) query
+# string: the challenge binds to the exact request. The proof still rides in the
+# `Kiosk-PoW` request HEADER (ADR-0022), which is what lets a GET carry one at
+# all. The 402 is an RFC 9457 problem document: `code` and `challenges` are
+# TOP-LEVEL members, not nested under an `error` object.
+#
 # Usage (invoked by rake demo:pow — needs the server with KIOSK_POW_DEMO=1):
 #   SERVER_URL=… KIOSK_ISSUER=… bundle exec ruby script/pow_flow.rb
 # Requires: python3 with numpy.
@@ -44,6 +52,9 @@ def get_json(url, headers = {})
   [res.code.to_i, (JSON.parse(res.body) rescue {})]
 end
 
+# The tolled call, dialled identically every time so the fingerprint matches.
+CATALOG_URL = "#{SERVER}/kiosk/catalog"
+
 # ── Register (register PoW solved transparently) ──────────────────────────────
 _key, reg = equihash_register(
   server: SERVER, issuer: ISSUER,
@@ -60,22 +71,21 @@ _key2, reg2 = equihash_register(
 )
 other_agent_id = reg2.fetch("agent_id")
 
-QUERY = { name: "catalog" }
-
 # ── Initial catalog query → 402 ─────────────────────────────────────────────
-rc_challenge, resp = post_json("#{SERVER}/kiosk/query", QUERY, auth)
+rc_challenge, resp = get_json(CATALOG_URL, auth)
 abort "expected 402, got #{rc_challenge}: #{JSON.generate(resp)}" unless rc_challenge == 402
-abort "expected pow_required" unless resp.dig("error", "code") == "pow_required"
-challenges = resp.dig("error", "challenges")
+abort "expected pow_required" unless resp["code"] == "pow_required"
+challenges = resp["challenges"]
 proofs = challenges.map { |c| { challenge: c, nonce: equihash_solve(c) } }
 
 # ── Wrong nonce → 403 + penalty ─────────────────────────────────────────────
-_, neg = post_json("#{SERVER}/kiosk/query", QUERY, auth)
+_, neg = get_json(CATALOG_URL, auth)
 bad = { "indices" => (1..proofs.first[:nonce]["indices"].length).to_a, "header_nonce" => 0 }
-# PoW proof rides in the Kiosk-PoW request header as raw JSON (ADR-0022), not
-# the body — the body stays byte-identical so the challenge fingerprint matches.
-rc_wrong, _ = post_json("#{SERVER}/kiosk/query", QUERY,
-  auth.merge("Kiosk-PoW" => JSON.generate([{ challenge: neg.dig("error", "challenges").first, nonce: bad }])))
+# PoW proof rides in the Kiosk-PoW request header as raw JSON (ADR-0022), never
+# in the request — the request stays byte-identical so the challenge fingerprint
+# matches, and a GET has no body to put a proof in anyway.
+rc_wrong, _ = get_json(CATALOG_URL,
+  auth.merge("Kiosk-PoW" => JSON.generate([{ challenge: neg["challenges"].first, nonce: bad }])))
 abort "expected 403 for wrong nonce, got #{rc_wrong}" unless rc_wrong == 403
 # PER-IDENTITY (K-498): the offender's count moved, the innocent one's did not.
 bad_proof_count       = BadProofCounter.count(BAD_PROOF_DB, agent_id)
@@ -85,8 +95,11 @@ unless other_bad_proof_count.zero?
 end
 
 # ── Correct proof → 200 served ──────────────────────────────────────────────
-rc_served, served_resp = post_json("#{SERVER}/kiosk/query", QUERY, auth.merge("Kiosk-PoW" => JSON.generate(proofs)))
-rows = served_resp.fetch("rows", [])
+rc_served, served_resp = get_json(CATALOG_URL, auth.merge("Kiosk-PoW" => JSON.generate(proofs)))
+# A non-paginating query answers a BARE ARRAY — the whole in-stock shelf. Read it
+# as one only when the call actually succeeded, so a refusal (a problem document,
+# i.e. a Hash) reaches the abort below verbatim rather than as coerced pairs.
+rows = served_resp.is_a?(Array) ? served_resp : []
 abort "expected 200 + rows, got #{rc_served}: #{JSON.generate(served_resp)}" unless rc_served == 200 && rows.any?
 
 puts JSON.generate(

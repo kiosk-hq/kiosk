@@ -43,6 +43,13 @@ module WireArguments
   # answered both with this one. Folding presence in here would give book_table a
   # sentence it never had.
   #
+  # Both verbs also declare `party_size` as `{type: "integer", minimum: 1}`, and
+  # since 0.4 that declaration is executed on every call — so on the WIRE the
+  # schema layer refuses a zero party first and this is defence in depth, the
+  # same standing {#seating_time} has. It stays because the Operations call it
+  # directly: {BookTableOperation} is reachable with no descriptor in front of
+  # it, and it must not be able to open a transaction on a party of zero.
+  #
   # @return [Array(Integer, nil), Array(nil, OperationResult)]
   def party_size(raw)
     size = raw.to_i
@@ -58,6 +65,10 @@ module WireArguments
   # shares with `book_table`, and so the controller needs no refusal vocabulary of
   # its own beyond `render_refusal`. `book_table` deliberately does not use it: it
   # has always answered an absent party the same way it answers a zero one.
+  #
+  # `required: ["party_size"]` says the same thing in the published contract, and
+  # since 0.4 the schema layer answers it first, so this sentence is now the
+  # handler's fallback rather than what an assistant reads.
   def missing_party_size
     OperationResult.refused(code: "bad_request", message: "missing param: party_size")
   end
@@ -76,19 +87,24 @@ module WireArguments
   # THE EMPTY LIST SURVIVES FOR ITS HONEST CASE ONLY: "matched nothing that is
   # actually available".
   #
-  # WHY THESE ARE HANDLER GUARDS AND NOT ONLY SCHEMA. `time` IS a closed set
-  # and IS declared as an `enum` on the descriptor, which is the better
-  # spelling Phil named (T-073 = C) — on the 0.4 per-verb wire the 400 falls
-  # out of the schema layer before the handler runs, for free. But this demo
-  # still serves the 0.3 `POST /kiosk/query`, where no `input_schema` is
-  # executed at all, so a guard here is what makes the rule true on the wire
-  # this origin actually answers today. After the cutover it is defence in
-  # depth: the schema refuses first and this never fires.
+  # WHICH LAYER ANSWERS, SINCE THE CUTOVER. `time` IS a closed set and IS
+  # declared as an `enum` on the descriptor, which is the better spelling Phil
+  # named (T-073 = C). On the 0.4 per-verb wire — the only wire this origin
+  # serves now that `POST /kiosk/query` and `POST /kiosk/run` are deleted
+  # (T-074 = A) — `input_schema` is validated on EVERY call, so the 400 falls
+  # out of the schema layer before the handler runs: an assistant that sends
+  # `time=18:00` reads ``value at `/time` is not one of: ["19:00", "20:00",
+  # "21:00"]``. {#seating_time} therefore no longer fires on the wire and is
+  # kept as defence in depth — the Operations reach these guards directly,
+  # without a controller or a descriptor in between, and a guard that only
+  # exists in a declaration is not one they can use.
   #
-  # `date` cannot be a schema constraint in either version — the horizon rolls
-  # forward every day, so no `enum` written at declaration time can name it —
-  # and that is exactly the case the decision says keeps an explicit guard
-  # returning the SAME typed 400.
+  # `date` is the case that still genuinely needs a guard and always will: the
+  # horizon rolls forward every day, so no `enum` written at declaration time
+  # can name it, and `format: "date"` can only say the string is a calendar
+  # date. That is exactly the case K-717 says keeps an explicit guard returning
+  # the SAME typed 400 — and it is the one probe in the redteam battery whose
+  # refusal still comes from this file.
 
   # A seating TIME the roster actually offers.
   #
@@ -130,6 +146,13 @@ module WireArguments
   # which is the sentence this verb has always answered with. Anything else that
   # is not a uuid is "you gave me the wrong thing", and that sentence names where
   # a right one comes from.
+  #
+  # `cancel_booking` declares `booking_id` as a REQUIRED `{type: "string",
+  # format: "uuid"}`, so since 0.4 the schema layer refuses both classes first
+  # (``value at `/booking_id` does not match format: uuid``) and this is defence
+  # in depth. It stays for {CancelBookingOperation}, which is called directly and
+  # must not hand an unparseable id to ActiveRecord — see the K-654 paragraph
+  # above for why losing the database's own refusal is what makes that dangerous.
   #
   # @return [Array(String, nil), Array(nil, OperationResult)]
   def booking_id(raw)

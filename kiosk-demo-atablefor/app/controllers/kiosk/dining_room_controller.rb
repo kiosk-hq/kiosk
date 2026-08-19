@@ -1,7 +1,8 @@
 # frozen_string_literal: true
 
 # atablefor's READ surface: the two verbs an assistant reaches with
-# `POST /kiosk/query`. Kiosk ships a MIXIN, not a base class — the superclass is
+# `GET /kiosk/<query-name>` — one endpoint per verb since 0.4, arguments in the
+# query string. Kiosk ships a MIXIN, not a base class — the superclass is
 # this app's own ApplicationController, and `include Kiosk::Query` is the whole
 # contract. Each class-level macro records a declaration and the NEXT `def`
 # claims it, so a method with no macros above it is a helper the wire cannot see.
@@ -19,9 +20,11 @@
 # bin/check-demo-copies.
 #
 # NOT ROUTABLE. config/routes.rb draws nothing at this controller: handlers are
-# reached only through the wire, which is where authentication, the anti-scalping
-# PoW toll and the GUC-scoped transaction live. A route drawn straight here would
-# bypass all three, and the mixin answers such a request 404.
+# reached only through the wire, which is where authentication, the declared
+# `input_schema`, the anti-scalping PoW toll and the GUC-scoped transaction
+# live. A route drawn straight here would bypass all four, and the mixin answers
+# such a request 404. The per-verb pair at the bottom of routes.rb resolves the
+# name against the registry at request time — it never names this class.
 class Kiosk::DiningRoomController < ApplicationController
   include Kiosk::Query
   include KioskRefusals

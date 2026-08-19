@@ -3,8 +3,9 @@
 # Reference agent driver: no-human restaurant table booking end-to-end.
 #
 # The "book a table for two tomorrow at 8" story, with NO human and NO payment:
-#   register (proof-of-possession) → query availability → book_table(party 2)
-#   → my_bookings shows the confirmed booking.
+#   register (proof-of-possession) → GET /kiosk/availability → POST
+#   /kiosk/book_table(party 2) → GET /kiosk/my_bookings shows the confirmed
+#   booking.
 #
 # Usage:
 #   SERVER_URL=http://127.0.0.1:3002 \
@@ -32,8 +33,15 @@ def post_json(url, body, headers = {})
   [res.code.to_i, (JSON.parse(res.body) rescue {})]
 end
 
-def get_json(url, headers = {})
+# THE 0.4 WIRE. A query is `GET <endpoint>/<query-name>` with its arguments in
+# the QUERY STRING; an action is `POST <endpoint>/<action-name>` with its
+# arguments as the JSON body. There is no `name` field and no /query or /run
+# endpoint. A success body IS the result — a bare array from a non-paginating
+# query, the action's own object from an action — and an error is an RFC 9457
+# problem document whose branch point is the top-level `code`.
+def get_json(url, params = {}, headers = {})
   uri = URI(url)
+  uri.query = URI.encode_www_form(params) unless params.empty?
   res = Net::HTTP.new(uri.host, uri.port).request(Net::HTTP::Get.new(uri, headers))
   [res.code.to_i, (JSON.parse(res.body) rescue {})]
 end
@@ -56,14 +64,14 @@ token    = reg.fetch("access_token")
 
 party = 2
 
-rc, avail = post_json(
-  "#{SERVER}/kiosk/query",
-  { name: "availability", party_size: party },
+rc, avail = get_json(
+  "#{SERVER}/kiosk/availability",
+  { party_size: party },
   { "Authorization" => "Bearer #{token}" },
 )
 abort "availability failed (#{rc}): #{JSON.generate(avail)}" unless rc == 200
 
-slots = avail.fetch("rows", [])
+slots = Array(avail)
 # The headline: a 2-top at tonight's 20:00 seating ("a table for two tonight at 8").
 slot = slots.find { |r| r["seating_time"] == "20:00" && r["capacity"].to_i >= party } || slots.first
 abort "no open table for a party of #{party} tonight: #{JSON.generate(slots)}" unless slot
@@ -73,29 +81,28 @@ time = slot.fetch("seating_time")
 
 # ── Step 3: book that specific table for that seating (run book_table) ───────
 
-rc, run_resp = post_json(
-  "#{SERVER}/kiosk/run",
-  { name: "book_table", restaurant_id: slot.fetch("restaurant_id"),
+rc, booking_value = post_json(
+  "#{SERVER}/kiosk/book_table",
+  { restaurant_id: slot.fetch("restaurant_id"),
     restaurant_table_id: slot.fetch("restaurant_table_id"),
     date: date, time: time, party_size: party },
   { "Authorization" => "Bearer #{token}" },
 )
-abort "book_table failed (#{rc}): #{JSON.generate(run_resp)}" unless rc == 200
+abort "book_table failed (#{rc}): #{JSON.generate(booking_value)}" unless rc == 200
 
-booking_value = run_resp.fetch("value")
-booking_id    = booking_value.fetch("booking_id")
+booking_id = booking_value.fetch("booking_id")
 abort "book_table returned no booking_id: #{JSON.generate(booking_value)}" if booking_id.to_s.empty?
 
 # ── Step 4: my_bookings shows the confirmed booking ──────────────────────────
 
-rc, mine = post_json(
-  "#{SERVER}/kiosk/query",
-  { name: "my_bookings" },
+rc, mine = get_json(
+  "#{SERVER}/kiosk/my_bookings",
+  {},
   { "Authorization" => "Bearer #{token}" },
 )
 abort "my_bookings failed (#{rc}): #{JSON.generate(mine)}" unless rc == 200
 
-booking_rows = mine.fetch("rows", [])
+booking_rows = Array(mine)
 
 # ── Step 5: print ONE JSON line ──────────────────────────────────────────────
 

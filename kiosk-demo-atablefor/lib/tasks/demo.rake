@@ -751,10 +751,13 @@ namespace :demo do
         403: cancel_booking gates on booking-ownership, so a cross-principal
         cancel is rejected and A's booking stays confirmed.
       Assertion 1 (exclusion): B's my_bookings does NOT contain A's booking oA.
-      Assertion 2 (forged user_id ignored): B calls book_table with a forged
-        user_id arg (A's UUID). The created booking belongs to B (server uses
-        kiosk.current_user_id(), ignores agent-supplied user_id). Verified by:
-          - the booking's DB user_id column == B's user_id (not A's)
+      Assertion 2 (the principal is not an input): B calls book_table with a
+        forged user_id arg (A's UUID) → 400 bad_request naming user_id,
+        refused by the published input_schema before the handler runs; and B's
+        LEGITIMATE booking belongs to B, because ownership comes from the
+        token. Verified by:
+          - the forged call is refused: 400, code bad_request, detail names user_id
+          - the legitimate booking's DB user_id column == B's user_id (not A's)
           - B's my_bookings contains the booking
           - A's my_bookings does NOT contain it
 
@@ -836,6 +839,7 @@ namespace :demo do
     booking_id_a          = result["booking_id_a"]
     booking_id_b          = result["booking_id_b"]
     b_cancel_on_a_status  = result["b_cancel_on_a_status"]
+    forged_refusal        = result["forged_refusal"] || []
     b_before              = result["b_booking_ids_before"] || []
     b_after               = result["b_booking_ids_after"]  || []
     a_after               = result["a_booking_ids_after"]  || []
@@ -856,33 +860,43 @@ namespace :demo do
       puts "  ✓  Assertion 1: B's my_bookings (before) excludes A's booking #{booking_id_a} (app-layer isolation)"
     end
 
-    # ── Assertion 2a: B's my_bookings (after forged booking) contains oB ──
+    # ── Assertion 2a: the forged user_id is REFUSED by the published contract ──
+    forged_rc, forged_code, forged_detail = forged_refusal
+    if forged_rc == 400 && forged_code == "bad_request" && forged_detail.to_s.include?("user_id")
+      puts "  ✓  Assertion 2a: forged user_id → 400 bad_request naming user_id " \
+           "(refused by input_schema before the handler runs)"
+    else
+      failures << "forged user_id not refused: #{forged_refusal.inspect}, want [400, \"bad_request\", …user_id…]"
+      puts "  ✗  Assertion 2a FAILED: forged user_id → #{forged_refusal.inspect}"
+    end
+
+    # ── Assertion 2b: B's my_bookings (after B's own booking) contains oB ──
     if b_after.include?(booking_id_b)
-      puts "  ✓  Assertion 2a: B's my_bookings (after forged booking) includes oB #{booking_id_b}"
+      puts "  ✓  Assertion 2b: B's my_bookings includes B's own booking oB #{booking_id_b}"
     else
-      failures << "B's my_bookings (after forged booking) does not contain oB #{booking_id_b}; got #{b_after.inspect}"
-      puts "  ✗  Assertion 2a FAILED: B's my_bookings missing oB #{booking_id_b}"
+      failures << "B's my_bookings does not contain oB #{booking_id_b}; got #{b_after.inspect}"
+      puts "  ✗  Assertion 2b FAILED: B's my_bookings missing oB #{booking_id_b}"
     end
 
-    # ── Assertion 2b: A's my_bookings (after B's forged booking) excludes oB ──
+    # ── Assertion 2c: A's my_bookings excludes B's booking ──
     if a_after.include?(booking_id_b)
-      failures << "ISOLATION HOLE: A's my_bookings contains B's forged booking #{booking_id_b} — cross-tenant leak"
-      puts "  ✗  Assertion 2b FAILED: A sees B's booking #{booking_id_b} — isolation hole"
+      failures << "ISOLATION HOLE: A's my_bookings contains B's booking #{booking_id_b} — cross-tenant leak"
+      puts "  ✗  Assertion 2c FAILED: A sees B's booking #{booking_id_b} — isolation hole"
     else
-      puts "  ✓  Assertion 2b: A's my_bookings excludes B's forged booking #{booking_id_b}"
+      puts "  ✓  Assertion 2c: A's my_bookings excludes B's booking #{booking_id_b}"
     end
 
-    # ── Assertion 2c: DB user_id on oB is B's, not A's (forged arg ignored) ──
+    # ── Assertion 2d: ownership comes from the TOKEN — DB user_id on oB is B's ──
     db = "kiosk_atablefor_development"
     db_user_id = `psql -X -d #{db} -tAc "SELECT user_id FROM bookings WHERE id = '#{booking_id_b}'" 2>&1`.strip
     if db_user_id == user_id_b
-      puts "  ✓  Assertion 2c: DB bookings.user_id for oB == user_id_b (#{user_id_b}) — forged arg ignored"
+      puts "  ✓  Assertion 2d: DB bookings.user_id for oB == user_id_b (#{user_id_b}) — ownership is taken from the identity"
     elsif db_user_id == user_id_a
-      failures << "ISOLATION HOLE: DB bookings.user_id for oB is A's user_id (#{user_id_a}) — forged user_id arg was NOT ignored"
-      puts "  ✗  Assertion 2c FAILED: server used forged user_id arg (booking belongs to A, not B)"
+      failures << "ISOLATION HOLE: DB bookings.user_id for oB is A's user_id (#{user_id_a}) — the owner did not come from the token"
+      puts "  ✗  Assertion 2d FAILED: the booking belongs to A, not to the authenticated B"
     else
       failures << "Unexpected user_id for oB: got #{db_user_id.inspect}, expected B's #{user_id_b}"
-      puts "  ✗  Assertion 2c FAILED: unexpected user_id #{db_user_id.inspect} for oB"
+      puts "  ✗  Assertion 2d FAILED: unexpected user_id #{db_user_id.inspect} for oB"
     end
 
     if failures.empty?
@@ -1080,13 +1094,21 @@ namespace :demo do
     BLOCKED:
 
       BLOCKED  CrossTenantRead    — B's my_bookings must not include A's booking
-      BLOCKED  ForgedUserId       — agent-supplied user_id arg ignored on book_table
+      BLOCKED  ForgedUserId       — a forged user_id arg on book_table is REFUSED
+                                    (400 bad_request naming it), and B's own
+                                    booking never surfaces under A
       BLOCKED  CrossOwnerCancel   — B cancel_booking on A's booking → 403
+      BLOCKED  MalformedUuidArg   — a junk booking_id is a typed 400, no SQL leak
       BLOCKED  RegisterWithoutPoP — register without a signed PoP → not 201
       BLOCKED  MissingAuth        — no Authorization → 401
       BLOCKED  GarbageToken       — unparseable bearer → 401
       BLOCKED  UnknownQuery       — unregistered query name → 404
       BLOCKED  UnknownAction      — unregistered action name → 404
+      BLOCKED  RetiredWire        — the deleted 0.3 POST /kiosk/{query,run} → 404
+      BLOCKED  MethodMismatch     — GET at an action's path → 405 + Allow: POST
+      BLOCKED  InvalidFilterIsNotAnEmptyList — an availability filter naming a
+                                    seating that does not exist is a typed 400
+                                    NAMING the valid values, never 200 []
 
     Exits 0 when all scenarios are BLOCKED (0 BREACH); exits 1 on any BREACH.
     A BREACH = a real hole in atablefor — fix the app, not the scenario.

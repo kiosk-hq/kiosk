@@ -11,14 +11,21 @@
 # Sequence (the load-bearing proof):
 #   1. Register a fresh agent (registration is PoW-gated too; equihash_register
 #      solves it transparently before returning).
-#   2. POST query availability → expect HTTP 402 (pow_required) — no grant yet.
-#   3. Solve the challenge(s) with solve.py, resubmit the SAME query →
+#   2. GET /kiosk/availability?party_size=2 → expect HTTP 402 (pow_required) —
+#      no grant yet.
+#   3. Solve the challenge(s) with solve.py, resubmit the SAME request →
 #      expect HTTP 200 (proof verified; the gate's on_proof_verified sets the
 #      grant to 3).
 #   4. The NEXT 3 identical requests are served WITHOUT a challenge (HTTP 200,
 #      no 402) — the grant is consumed one per call.
 #   5. The 4th follow-up request is challenged again (HTTP 402) — the grant is
 #      exhausted, so the toll returns.
+#
+# THE 0.4 WIRE. `availability` is a QUERY, so it is `GET <endpoint>/availability`
+# with its arguments in the query string — there is no `name` field and no
+# `POST /kiosk/query`. A 402 is an RFC 9457 problem document whose `code` and
+# `challenges` are TOP-LEVEL members, and a served non-paginating query is a
+# bare JSON array.
 #
 # Prints ONE JSON line on stdout; non-zero exit on any assertion failure.
 #
@@ -58,8 +65,9 @@ def post_json(url, body, headers = {})
   [res.code.to_i, (JSON.parse(res.body) rescue {})]
 end
 
-def get_json(url, headers = {})
+def get_json(url, params = {}, headers = {})
   uri = URI(url)
+  uri.query = URI.encode_www_form(params) unless params.empty?
   res = Net::HTTP.new(uri.host, uri.port).request(Net::HTTP::Get.new(uri, headers))
   [res.code.to_i, (JSON.parse(res.body) rescue {})]
 end
@@ -72,14 +80,27 @@ _key, reg = equihash_register(
 )
 token = reg.fetch("access_token")
 
-# The request we prove. The identical body is sent on every retry so the server
-# computes the same request_fingerprint; the proof is a top-level `pow` sibling.
-QUERY_BODY  = { name: "availability", party_size: 2 }
+# The request we prove. §3.4's fingerprint is
+# `SHA256("<METHOD> <verb>\n<canonical args>")` — the HTTP method, the verb name
+# as it appears in the PATH, and the canonical JSON of the arguments — so an
+# identical retry means the same method, the same path AND the same query
+# string. Every call below is built from these two constants by
+# `availability_once`, so no retry can drift from the challenged request. The
+# proof rides in the `Kiosk-PoW` header, never in the request.
+QUERY_URL   = "#{SERVER}/kiosk/availability"
+QUERY_ARGS  = { party_size: 2 }
 AUTH_HEADER = { "Authorization" => "Bearer #{token}" }
+
+# One availability call, optionally carrying proof(s). Identical method, path
+# and query string every time — only the header differs.
+def availability_once(proofs = nil)
+  headers = proofs ? AUTH_HEADER.merge("Kiosk-PoW" => JSON.generate(proofs)) : AUTH_HEADER
+  get_json(QUERY_URL, QUERY_ARGS, headers)
+end
 
 # Perform one availability query. Returns the HTTP status only (no PoW handling).
 def query_once
-  rc, _resp = post_json("#{SERVER}/kiosk/query", QUERY_BODY, AUTH_HEADER)
+  rc, _resp = availability_once
   rc
 end
 
@@ -90,22 +111,21 @@ abort "expected HTTP 402 (pow_required) on the first query, got #{rc_first}" unl
 
 # Re-issue to grab the challenge to solve (the first call above did not carry a
 # proof; ask again to obtain fresh challenges).
-rc_issue, resp_issue = post_json("#{SERVER}/kiosk/query", QUERY_BODY, AUTH_HEADER)
+rc_issue, resp_issue = availability_once
 abort "expected 402 when issuing challenge, got #{rc_issue}" unless rc_issue == 402
-challenges = resp_issue.dig("error", "challenges")
+challenges = resp_issue["challenges"]
 abort "no challenges[] in 402 response" unless challenges.is_a?(Array) && challenges.any?
 
 # ── Step 3: solve → resubmit → expect 200 (grant set to GRANT_COUNT) ────────
 
 proofs = challenges.map { |c| { challenge: c, nonce: equihash_solve(c) } }
 # PoW proof(s) ride in the Kiosk-PoW request header as raw JSON (ADR-0022), not
-# the body — the body stays byte-identical so the challenge fingerprint matches.
-rc_solved, resp_solved = post_json(
-  "#{SERVER}/kiosk/query",
-  QUERY_BODY,
-  AUTH_HEADER.merge("Kiosk-PoW" => JSON.generate(proofs)),
-)
-rows = resp_solved.fetch("rows", [])
+# in the request — the method, path and query string stay identical so the
+# challenge fingerprint matches.
+rc_solved, resp_solved = availability_once(proofs)
+# A non-paginating query answers a BARE JSON ARRAY; the `{rows: […]}` envelope
+# was retired at the cutover.
+rows = rc_solved == 200 ? Array(resp_solved) : []
 unless rc_solved == 200
   abort "expected HTTP 200 after solve, got #{rc_solved}: #{JSON.generate(resp_solved)}"
 end

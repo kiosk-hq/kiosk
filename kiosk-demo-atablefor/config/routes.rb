@@ -46,8 +46,9 @@ Rails.application.routes.draw do
   # In a follow-up release these will be mounted via the engine's own
   # routes drawer; for now we wire them manually here.
   get  "/kiosk/schema",                            to: "kiosk/server/wire#schema"
-  post "/kiosk/query",                             to: "kiosk/server/wire#query"
-  post "/kiosk/run",                               to: "kiosk/server/wire#run"
+  # NO `POST /kiosk/query` or `POST /kiosk/run` — protocol 0.4 deleted the
+  # multiplexed pair outright (T-074 = A). Every verb is its own endpoint; the
+  # pair that serves them is drawn LAST, at the bottom of this file.
   post "/kiosk/pay",                               to: "kiosk/server/wire#pay"
   get  "/kiosk/.well-known/jwks.json",             to: "kiosk/server/jwks#show"
   post "/kiosk/oauth/device_authorization",        to: "kiosk/server/oauth_device_authorization#create"
@@ -71,6 +72,25 @@ Rails.application.routes.draw do
   # /.well-known/api-catalog — RFC 9727 linkset of the live wire endpoints
   # (schema tagged service-desc), served by the same DiscoveryController.
   get "/.well-known/api-catalog",           to: "kiosk/server/discovery#api_catalog"
+
+  # /kiosk/openapi.json — the DERIVED OpenAPI description of the per-verb wire
+  # (T-071 = C). It MUST be drawn above the per-verb pair: Rails appends
+  # `(.:format)` to `/kiosk/:kiosk_verb`, so without this line the path reads as
+  # the verb `openapi` in the `json` format and answers 404.
+  get "/kiosk/openapi.json",                to: "kiosk/server/open_api#show"
+
+  # ── The 0.4 per-verb wire ────────────────────────────────────────────────
+  #
+  # One endpoint per registered verb: GET /kiosk/<query-name>,
+  # POST /kiosk/<action-name>. atablefor hand-draws its routes rather than
+  # mounting the engine (that IS the escape hatch the engine documents), so the
+  # pair the engine would have drawn is written out here — and, like the
+  # engine's, LAST, so every reserved line above wins by first-match and no
+  # operator verb can shadow `schema`, `pay` or the auth plane.
+  get  "/kiosk/:kiosk_verb", to: "kiosk/server/verb#show",
+       constraints: { kiosk_verb: Kiosk::Server::VerbController::NAME_SEGMENT }
+  post "/kiosk/:kiosk_verb", to: "kiosk/server/verb#create",
+       constraints: { kiosk_verb: Kiosk::Server::VerbController::NAME_SEGMENT }
 
   # ─── Live-activity telemetry aggregate (opt-in) ─────────────────
   # Privacy-safe counts for the demo page + the kiosk.tech landing tile.

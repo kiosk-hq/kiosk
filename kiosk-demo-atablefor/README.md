@@ -32,16 +32,20 @@ diner's name.
 
 ## Wire surface
 
-- `query availability(party_size [, neighborhood, time, date])` — open tables
-  **across all restaurants** for the upcoming seatings that seat the party; each
-  row carries `restaurant_id`, `restaurant_table_id`, `seating_date`,
-  `seating_time`, `seating_at`, and any EUR no-show hold
-- `query my_bookings` — this principal's bookings (owner-scoped), with table + restaurant
-- `run book_table(restaurant_id, restaurant_table_id, date, time, party_size)` —
+One endpoint per verb: a query is a `GET` whose arguments are the query string,
+an action is a `POST` whose arguments are the JSON body, and a success body IS
+the result (no envelope).
+
+- `GET /kiosk/availability?party_size=2[&neighborhood=&time=&date=]` — open tables
+  **across all restaurants** for the upcoming seatings that seat the party;
+  answers a bare array whose rows carry `restaurant_id`, `restaurant_table_id`,
+  `seating_date`, `seating_time`, `seating_at`, and any EUR no-show hold
+- `GET /kiosk/my_bookings` — this principal's bookings (owner-scoped), with table + restaurant
+- `POST /kiosk/book_table {restaurant_id, restaurant_table_id, date, time, party_size}` —
   reserve a specific table at a chosen restaurant for a chosen seating; a table
   already taken for that seating (or a seating that has passed) is rejected cleanly
-- `run cancel_booking(booking_id)` — cancel one of your own bookings (owner-scoped)
-- `schema` — self-discovery
+- `POST /kiosk/cancel_booking {booking_id}` — cancel one of your own bookings (owner-scoped)
+- `GET /kiosk/schema` — self-discovery
 
 There is **no `pay`**: the advertised capabilities are `[schema, queries, actions]`.
 
@@ -50,7 +54,10 @@ The four verbs are ordinary Rails controllers, not initializer blocks:
 (`include Kiosk::Query`) and `app/controllers/kiosk/bookings_controller.rb` the
 two actions (`include Kiosk::Action`), each declared with the class-level
 descriptor macros; refusals are plain `render json:, status:` naming a wire
-`error.code`. Neither is routable — a handler is reached only through the wire.
+error `code`, which the wire carries into the RFC 9457 problem document an
+assistant branches on. Every verb's `input_schema` is validated on every call,
+so an undeclared argument is a typed `400` naming it. Neither controller is
+routable — a handler is reached only through the wire.
 `config/initializers/kiosk.rb` is configuration only: it *names* the two
 controllers in `c.handlers`, it does not contain them.
 

@@ -204,9 +204,11 @@ module Kiosk
       end
 
       # The signpost body. Non-wire `error.code` on purpose: this endpoint is
-      # not one of the four verbs, so it must not borrow a code from the
-      # spec's wire error table — but the envelope SHAPE is the one every
-      # Kiosk client already parses.
+      # not a wire verb, so it must not borrow a code from the spec's closed
+      # error table. The SHAPE is deliberately not the wire's either — the
+      # wire answers RFC 9457 problem documents, and this is an HTML page for
+      # a signed-in human, so a JSON body here is a courtesy to an assistant
+      # that dialed the wrong door rather than a contract anything parses.
       def wrong_door_envelope
         {
           ok:    false,
@@ -215,7 +217,8 @@ module Kiosk
             message: "this is the account holder's browser page, not the Kiosk wire — " \
                      "it needs a signed-in session and a CSRF token from its own form",
             hint:    "assistants use the wire: GET #{request.base_url}/.well-known/kiosk.json " \
-                     "for the register/login and schema/query/run/pay endpoints",
+                     "for the register/login endpoints, then GET <endpoint>/schema " \
+                     "(public) for the verbs this origin serves",
           },
         }
       end

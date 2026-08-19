@@ -138,6 +138,35 @@ module WireArguments
     )]
   end
 
+  # A NEIGHBOURHOOD the aggregator actually serves.
+  #
+  # The third argument of `availability`, and the last of its three to get the
+  # K-717 treatment (T-090). `neighborhood="Atlantis"` answered `200 []` — the
+  # same answer as a fully-booked Alfama on a busy Friday — so an assistant
+  # that mistyped a Lisbon district read it as "no tables tonight" and moved
+  # on. The set is DB-DERIVED (five restaurants, and an operator adds one by
+  # inserting a row), so no static `enum` in `input_schema` can name it and
+  # this guard is the only place the refusal can live; it names the served
+  # neighbourhoods exactly as {#seating_time} and {#seating_date} name theirs.
+  #
+  # It is a FILTER over a collection in the §9.1 sense, so why not `200 []`?
+  # Because the value is outside its DOMAIN — the aggregator has a closed set
+  # of neighbourhoods and "Atlantis" is not one of them, which is §9.1's first
+  # branch, not its third. The third branch is what a SERVED neighbourhood with
+  # every table taken still gets.
+  #
+  # @return [Array(String, nil), Array(nil, OperationResult)]
+  def neighborhood(raw, served)
+    value = raw.to_s
+    return [value, nil] if value.empty? || served.include?(value)
+
+    [nil, OperationResult.refused(
+      code:    "bad_request",
+      message: "neighborhood #{value.inspect} is not one this aggregator serves — " \
+               "currently #{served.join(", ")}",
+    )]
+  end
+
   # The booking `cancel_booking` acts on: PRESENT, then shaped like an id.
   #
   # Two refusals, and the split between them is BEHAVIOUR, not taste. `blank?`

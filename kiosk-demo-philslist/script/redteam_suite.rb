@@ -19,6 +19,9 @@
 #   GarbageToken     — an unparseable bearer token → 401
 #   UnknownQuery     — an unregistered query name → 404
 #   UnknownAction    — an unregistered action name → 404
+#   OutOfEnumFilterIsNotSilentlyReinterpreted — a browse_listings `status`
+#                      outside open|closed is a typed 400 naming the two,
+#                      NEVER a 200 answering a different question (T-090)
 #
 # Usage:
 #   SERVER_URL=http://127.0.0.1:3006 KIOSK_ISSUER=http://127.0.0.1:3006 \
@@ -189,6 +192,35 @@ record(results, "MethodMismatch",
          res405["allow"].to_s.upcase.include?("POST"),
        "GET an action → #{res405.code}/#{body405['code'].inspect} Allow=#{res405['allow'].inspect} " \
        "(want 405/\"method_not_allowed\"/POST)")
+
+# ── OutOfEnumFilterIsNotSilentlyReinterpreted (T-090) ────────────────────────
+#
+# THE WORST OF THE FOUR CASES T-090's SURVEY FOUND, and the reason it is in the
+# ADVERSARIAL battery rather than in a flow test. `browse_listings` used to run
+# `status = "open" unless Listing::STATUSES.include?(status)` — so
+# `status=deleted` came back 200 with the OPEN board. Not an empty list: a
+# successful-looking answer to a DIFFERENT QUESTION, with nothing in the
+# response saying the filter had been discarded. An assistant relaying it told
+# its human "here are the deleted listings" and was confidently wrong, which is
+# a worse failure than any refusal.
+#
+# The clamp is deleted and nothing replaced it: `status` declares
+# `enum: [open, closed]` and `input_schema` is validated on every per-verb call
+# (spec §8.1 item 5), so the schema layer refuses first and NAMES both values —
+# spec §9.1's first branch falling out of a declaration.
+#
+# The positive control is what keeps this honest: `status=closed` must still be
+# ANSWERED (200), or a handler that refused everything would pass.
+rc_bad, bad_status = get_json("/kiosk/browse_listings", { status: "deleted" }, bearer(TOKEN_A))
+detail_bad = bad_status.is_a?(Hash) ? bad_status["detail"].to_s : ""
+rc_ctl, ctl_rows = get_json("/kiosk/browse_listings", { status: "closed" }, bearer(TOKEN_A))
+record(results, "OutOfEnumFilterIsNotSilentlyReinterpreted",
+       rc_bad == 400 && bad_status["code"] == "bad_request" &&
+         detail_bad.include?("open") && detail_bad.include?("closed") &&
+         rc_ctl == 200 && ctl_rows.is_a?(Array),
+       "status=deleted → #{rc_bad}/#{bad_status['code'].inspect} detail=#{detail_bad[0, 120].inspect}; " \
+       "CONTROL status=closed → #{rc_ctl}/#{ctl_rows.is_a?(Array) ? "array" : ctl_rows.class} " \
+       "(want 400 bad_request naming open and closed, and an ANSWERED control)")
 
 # ── Verdict ──────────────────────────────────────────────────────────────────
 breaches = results.reject { |r| r[:blocked] }

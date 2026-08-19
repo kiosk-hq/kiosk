@@ -115,4 +115,12 @@ Kiosk.configure do |c|
   # closed-schema assertions are testing the real path. Needs `json_schemer`,
   # which run.sh adds to the generated app's Gemfile.
   c.validate_requests = true
+
+  # T-068 slice 3: every query/action answer is validated against the
+  # `output_schema` that verb declares, and a mismatch is a loud 500 rather
+  # than a lie shipped to an assistant. A DEVELOPMENT/CI assertion, not a
+  # request check — nothing a caller sends can trigger it — and it is what
+  # makes this demo's own CI task list a per-verb conformance proof of the
+  # descriptors rather than a smoke test.
+  c.validate_responses = true
 end

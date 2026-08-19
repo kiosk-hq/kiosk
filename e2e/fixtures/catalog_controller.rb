@@ -41,6 +41,16 @@ class Kiosk::CatalogController < ApplicationController
   # verb takes no arguments" is a published fact rather than an absence an
   # assistant has to interpret.
   input_schema type: "object", additionalProperties: false, properties: {}, required: []
+  output_schema type: "array",
+                description: "The complete public catalogue.",
+                items: {
+                  type: "object", additionalProperties: false,
+                  properties: {
+                    id:   { type: "integer", description: "Pass to book_appointment as `salon_id`." },
+                    name: { type: "string", description: "Salon name." },
+                  },
+                  required: %w[id name],
+                }
   example_params({})
   example_row({ id: 1, name: "Combette on Park" })
   def salons
@@ -58,6 +68,17 @@ class Kiosk::CatalogController < ApplicationController
               "from the authenticated session, so another principal's bookings " \
               "are never returned. Returns the complete set (not paginated)."
   input_schema type: "object", additionalProperties: false, properties: {}, required: []
+  output_schema type: "array",
+                description: "The principal's own appointments, complete and not paginated.",
+                items: {
+                  type: "object", additionalProperties: false,
+                  properties: {
+                    id:       { type: "string", description: "uuid — the appointment. book_appointment calls the same value `appointment_id`." },
+                    salon_id: { type: "integer", description: "The salon booked." },
+                    slot:     { type: "string", description: "Appointment time, ISO 8601." },
+                  },
+                  required: %w[id salon_id slot],
+                }
   example_params({})
   example_row({ id: 1, salon_id: 1, slot: "2026-06-15T14:00:00Z" })
   def my_appointments

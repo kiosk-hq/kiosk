@@ -24,6 +24,15 @@ class Kiosk::BookingsController < ApplicationController
                              description: "Appointment time as an ISO 8601 timestamp, e.g. 2026-06-15T14:00:00Z." },
                },
                required: %w[salon_id slot]
+  output_schema type: "object",
+                description: "The booking that was just created.",
+                additionalProperties: false,
+                properties: {
+                  appointment_id: { type: "string", description: "uuid — the booking. my_appointments calls the same value `id`." },
+                  salon_id:       { type: "integer", description: "The salon booked, echoed." },
+                  slot:           { type: "string", description: "Appointment time, ISO 8601." },
+                },
+                required: %w[appointment_id salon_id slot]
   example_params({ salon_id: 1, slot: "2026-06-15T14:00:00Z" })
   example_row({ appointment_id: 1, salon_id: 1, slot: "2026-06-15T14:00:00Z" })
   def book_appointment

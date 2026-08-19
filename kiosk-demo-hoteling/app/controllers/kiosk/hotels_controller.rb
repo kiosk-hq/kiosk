@@ -1,7 +1,9 @@
 # frozen_string_literal: true
 
 # hoteling's READ surface: the five verbs an assistant reaches with
-# `POST /kiosk/query`. Kiosk ships a MIXIN, not a base class — `include
+# `GET /kiosk/<query-name>`, arguments in the QUERY STRING (protocol 0.4 — the
+# multiplexed `POST /kiosk/query` and its `name` field are deleted, not
+# deprecated). Kiosk ships a MIXIN, not a base class — `include
 # Kiosk::Query` is the whole contract — and each class-level macro records a
 # declaration that the NEXT `def` claims, so a method with no macros above it is
 # a helper the wire cannot see.
@@ -179,7 +181,11 @@ class Kiosk::HotelsController < ActionController::API
   # The reference exemplar for the "~100 hotels would overwhelm an unpaginated
   # list" case, and the fleet's ONLY paginating verb: this is the one handler that
   # answers with `render_kiosk_page` instead of a bare array, which is how the
-  # opaque `next` cursor reaches the envelope.
+  # opaque `next` cursor reaches the response at all. 0.4 retired the envelope
+  # but not the page: a TRUNCATED answer is the object `{"rows": …, "next": …}`
+  # and a COMPLETE one is the bare array every other query answers, because
+  # `next` ABSENT is what "last page" means and an array has nowhere to put a
+  # cursor ({Kiosk::Server::Result#to_payload}).
   HOTELING_SEARCH_PAGE = 20  # default page size (assistant may override via `limit`)
   HOTELING_SEARCH_MAX  = 50  # cap so `limit` can't defeat pagination
 
@@ -189,7 +195,8 @@ class Kiosk::HotelsController < ActionController::API
               "the whole catalogue. All filters are optional and AND together: " \
               "neighbourhood (exact area name), max_price_cents (cheapest room ≤ this, " \
               "EUR cents), min_stars (star rating ≥ this), amenity (property must offer " \
-              "it). Page size defaults to 20 (override with limit, capped at 50); when " \
+              "it). Page size defaults to 20 and is CLAMPED to 1..50 — send `limit` to " \
+              "override it (a value outside that range is clamped, never refused); when " \
               "the response carries a top-level `next`, more hotels match — echo it back " \
               "verbatim as `cursor` to fetch the following page, and keep paging until " \
               "`next` is absent. from_price_cents is EUR cents (carts are signed in eur). " \
@@ -207,10 +214,23 @@ class Kiosk::HotelsController < ActionController::API
                  max_price_cents: { type: "integer", minimum: 0, description: "Cheapest room ≤ this, EUR cents." },
                  min_stars:       { type: "integer", minimum: 1, maximum: 5, description: "Star-rating floor." },
                  amenity:         { type: "string", enum: AMENITY_POOL, description: "Property must offer this amenity." },
-                 limit:           { type: "integer", minimum: 1, maximum: HOTELING_SEARCH_MAX,
-                                    default: HOTELING_SEARCH_PAGE, description: "Page size." },
-                 cursor:          { type: "string", description: "Opaque `next` cursor from a prior page." },
                },
+               # `limit` and `cursor` ARE NOT DECLARED HERE, and their absence is the
+               # declaration (K-798). Spec §8.1 item 6 and §8.4 make them RESERVED names
+               # the wire always accepts and a verb never declares, precisely so a
+               # schema shows an assistant this verb's BUSINESS parameters only (T-087,
+               # 2026-08-19). The engine honours a declaration as the more specific
+               # statement, so declaring them was never broken — it just made the fleet's
+               # one paginating verb the one place the text and the tree disagreed, and
+               # made the derived OpenAPI document publish hoteling's own pair instead of
+               # the generic injected one. Nothing about the handler changed: the decoder
+               # still coerces `limit` to an integer and `cursor` to a string from
+               # ArgumentDecoder::RESERVED, the validator exempts an UNDECLARED reserved
+               # name from `additionalProperties: false`, and the OpenAPI renderer injects
+               # both into this operation. The 1..50 clamp the declaration used to carry
+               # lives where an assistant reads it — in `description` above, next to the
+               # 20/50 defaults — and, as before, in the handler, which clamps rather
+               # than refuses.
                required: []
   # THE FLEET'S ONLY PAGINATING VERB, and its output_schema is the only one in
   # the fleet with two branches — because the wire has two spellings for a page
@@ -313,7 +333,8 @@ class Kiosk::HotelsController < ActionController::API
   description "Fetch the full detail for ONE hotel by its `property_id` (the same " \
               "`property_id` a search_hotels row carries): name, neighbourhood, stars, " \
               "address, amenities, and its room types (each carries a `room_type_id` for " \
-              "reserve_room) with their nightly rates. This is " \
+              "reserve_room) with their nightly rates. Answers a ONE-ROW array; an EMPTY " \
+              "array means no property has that id. This is " \
               "the \"search returns summaries, fetch detail on demand\" pattern — call it " \
               "for the one or few hotels the user is choosing between, not for the whole " \
               "result set. nightly_price_cents is EUR cents (carts are signed in eur). " \
@@ -332,47 +353,55 @@ class Kiosk::HotelsController < ActionController::API
                                 description: "Optional checkout day (YYYY-MM-DD, exclusive); pass with check_in to list only free room types." },
                },
                required: ["property_id"]
-  # THIS ONE ANSWERS A BARE OBJECT, NOT AN ARRAY, AND THE SCHEMA SAYS SO
-  # BECAUSE THAT IS WHAT THE HANDLER RENDERS. It is also the one verb in the
-  # fleet whose answer shape spec §8.2 does not allow — "a query that does not
-  # paginate answers a JSON array of rows" — and the two other fetch-one
-  # queries in the fleet (getgrocery's and skooti's `kyc_status`) already wrap
-  # their single result in a ONE-ROW array for exactly that reason. Recorded as
-  # K-794 rather than fixed here: changing what this verb answers is a wire
-  # change on a live demo, and it rides the cutover slice that migrates the
-  # eight demos anyway. A schema that lied about it would be worse than the
-  # discrepancy — that is the whole argument for declaring one.
-  output_schema type: "object",
-                description: "ONE property in full, with its room types.",
-                additionalProperties: false,
-                properties: {
-                  property_id:      { type: "integer", description: "The property, echoed." },
-                  name:             { type: "string", description: "Hotel name." },
-                  neighbourhood:    { type: %w[string null], description: "Istanbul area, or null." },
-                  stars:            { type: "integer", description: "Star rating, 1..5." },
-                  address:          { type: %w[string null], description: "Street address, or null." },
-                  amenities:        { type: "array", items: { type: "string" },
-                                      description: "Amenity slugs this property offers." },
-                  currency:         { type: "string", description: "eur — the currency the cart must be signed in." },
-                  room_types_scope: { type: "string", description: "WHICH list `room_types` is: free for the given nights, or the property's full catalogue when no dates were passed. Read it before treating the list as an offer." },
-                  check_in:         { type: %w[string null], description: "The first night the list was computed for, YYYY-MM-DD; null when no dates were passed." },
-                  check_out:        { type: %w[string null], description: "The checkout day the list was computed for, YYYY-MM-DD; null when no dates were passed." },
-                  room_types:       {
-                    type: "array",
-                    description: "The property's room types, cheapest first.",
-                    items: {
-                      type: "object", additionalProperties: false,
-                      properties: {
-                        room_type_id:        { type: "integer", description: "Pass to reserve_room as `room_type_id`." },
-                        name:                { type: "string", description: "Room-type name." },
-                        nightly_price_cents: { type: "integer", description: "EUR cents PER NIGHT." },
+  # A ONE-ROW ARRAY, not a bare object (K-794, fixed at the 0.4 cutover). Spec
+  # §8.2: a query that does not paginate answers a JSON ARRAY of rows — and a
+  # detail-by-id query is still a query. Through slice 3 this verb rendered the
+  # property object itself and DECLARED `type: "object"`, which was the honest
+  # thing to publish about a handler that did that, but it left one verb out of
+  # step with its own fleet: getgrocery's and skooti's `kyc_status` each already
+  # wrap a single result in a one-row array with the comment «this is a query,
+  # and a query answers with rows».
+  #
+  # The array is not bookkeeping. "No such hotel" now has an answer inside the
+  # contract — the EMPTY array — instead of needing a 404 or a null the schema
+  # would have to admit; and an assistant that reads every query the same way
+  # (iterate the rows) does not need a special case for this one.
+  output_schema type: "array",
+                description: "ONE property in full, with its room types — a one-row array, " \
+                             "empty when no property has that id.",
+                items: {
+                  type: "object",
+                  description: "The property.",
+                  additionalProperties: false,
+                  properties: {
+                    property_id:      { type: "integer", description: "The property, echoed." },
+                    name:             { type: "string", description: "Hotel name." },
+                    neighbourhood:    { type: %w[string null], description: "Istanbul area, or null." },
+                    stars:            { type: "integer", description: "Star rating, 1..5." },
+                    address:          { type: %w[string null], description: "Street address, or null." },
+                    amenities:        { type: "array", items: { type: "string" },
+                                        description: "Amenity slugs this property offers." },
+                    currency:         { type: "string", description: "eur — the currency the cart must be signed in." },
+                    room_types_scope: { type: "string", description: "WHICH list `room_types` is: free for the given nights, or the property's full catalogue when no dates were passed. Read it before treating the list as an offer." },
+                    check_in:         { type: %w[string null], description: "The first night the list was computed for, YYYY-MM-DD; null when no dates were passed." },
+                    check_out:        { type: %w[string null], description: "The checkout day the list was computed for, YYYY-MM-DD; null when no dates were passed." },
+                    room_types:       {
+                      type: "array",
+                      description: "The property's room types, cheapest first.",
+                      items: {
+                        type: "object", additionalProperties: false,
+                        properties: {
+                          room_type_id:        { type: "integer", description: "Pass to reserve_room as `room_type_id`." },
+                          name:                { type: "string", description: "Room-type name." },
+                          nightly_price_cents: { type: "integer", description: "EUR cents PER NIGHT." },
+                        },
+                        required: %w[room_type_id name nightly_price_cents],
                       },
-                      required: %w[room_type_id name nightly_price_cents],
                     },
                   },
-                },
-                required: %w[property_id name neighbourhood stars address amenities currency
-                             room_types_scope check_in check_out room_types]
+                  required: %w[property_id name neighbourhood stars address amenities currency
+                               room_types_scope check_in check_out room_types],
+                }
   example_params({ property_id: 4, check_in: "2026-09-01", check_out: "2026-09-04" })
   example_row({
     property_id: 4, name: "Bosphorus Palace", neighbourhood: "Beşiktaş", stars: 5,
@@ -434,22 +463,29 @@ class Kiosk::HotelsController < ActionController::API
     return render_refusal(refusal) if refusal
 
     # `pick`, not `find_by!`: the bang form raises RecordNotFound, which Rails
-    # maps to 404 and the mixin's `rescue_from` floor would render — the same
-    # status this handler answers, but with Rails' message instead of the
-    # operator's, so the answer would silently change wording.
+    # maps to a 404 the mixin's `rescue_from` floor would render — and since
+    # K-794 an unknown id is not an error on this verb at all, so a raise here
+    # would put back exactly the answer the array shape removed.
     prop = Property.where(id: property_id).pick(:id, :name, :neighbourhood, :stars, :address, :amenities)
-    if prop.nil?
-      return render_refusal(OperationResult.refused(
-        code: "not_found", message: "hotel not found: #{property_id}",
-      ))
-    end
+    # NO SUCH HOTEL IS THE EMPTY ARRAY, not a 404 (K-794). This verb used to
+    # refuse `not_found` — the only `not_found` hoteling ever produced. On a
+    # query that answers rows, "nothing matched the id you filtered by" is what
+    # an empty result MEANS, and it is the same sentence `availability` already
+    # speaks when a property is sold out. An assistant that iterates the rows
+    # of every query needs no branch for this one, and there is no status to
+    # confuse with the 404 the wire itself answers for an UNREGISTERED VERB.
+    return render json: [] if prop.nil?
 
     rooms = RoomType.where(property_id: property_id)
     rooms = rooms.free_for(property_id, ci, co) if dated
     # `amenities` is jsonb; ActiveRecord's type already hands back a Ruby Array,
     # so the "normalise regardless of driver decoding" JSON.parse the raw handler
     # carried has no work left to do.
-    render json: {
+    #
+    # ONE ROW IN AN ARRAY (K-794) — the brackets are the whole fix. §8.2 says a
+    # query that does not paginate answers an array of rows, and one row is
+    # still rows.
+    render json: [{
       property_id:      prop[0],
       name:             prop[1],
       neighbourhood:    prop[2],
@@ -467,7 +503,7 @@ class Kiosk::HotelsController < ActionController::API
                              .map { |id, name, cents|
                                { room_type_id: id, name: name, nightly_price_cents: cents }
                              },
-    }
+    }]
   end
 
   private

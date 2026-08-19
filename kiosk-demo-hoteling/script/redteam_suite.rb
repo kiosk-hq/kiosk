@@ -18,6 +18,22 @@
 #   DoubleBookedRoom   — a room-night already held cannot be reserved again by
 #                        anyone, on the same or overlapping dates → 409
 #
+# And two beats that are only expressible after the 0.4 cutover (T-074 = A):
+#   RetiredWire        — POST /kiosk/query and POST /kiosk/run are an ordinary
+#                        404 / not_found: the multiplexed pair was DELETED, so
+#                        there is no privileged endpoint left, no compatibility
+#                        payload, and no second conformance surface to attack.
+#   MethodMismatch     — a GET at an action's path is 405 / method_not_allowed
+#                        with `Allow: POST`, never a silent 404 an assistant
+#                        would read as "this operator cannot do that".
+#
+# THE 0.4 WIRE, throughout: a query is `GET <endpoint>/<query-name>` with its
+# arguments in the query string, an action is `POST <endpoint>/<action-name>`
+# with its arguments as the JSON body, a success body IS the result (a bare
+# array from a non-paginating query, the action's own object from an action),
+# and an error is an RFC 9457 problem document whose branch point is the
+# TOP-LEVEL `code` (`message` became `detail`).
+#
 # KYC scenarios are SKIPPED (hoteling has no KYC). RegistrationWithoutPow RUNS:
 # register PoW is ON (registration_pow_count=1), so a missing/bad register proof
 # must be rejected.
@@ -31,7 +47,9 @@
 
 require "kiosk/redteam"
 require "jwt"
+require "net/http"
 require "securerandom"
+require "uri"
 require "date"
 
 BASE_URL = ENV.fetch("SERVER_URL", "http://127.0.0.1:3003")
@@ -48,13 +66,14 @@ NIGHTS    = 3
 # exhaust room types at one property, so we iterate until availability is found.
 find_available = lambda { |client, principal|
   props_resp = client.query(principal, name: "properties")
-  all_props  = props_resp.body.is_a?(Hash) ? (props_resp.body["rows"] || []) : []
+  # A non-paginating query answers a BARE ARRAY — the rows themselves.
+  all_props  = props_resp.body.is_a?(Array) ? props_resp.body : []
   raise "redteam(hoteling): no properties in catalog" if all_props.empty?
 
   all_props.each do |p|
     avail_resp = client.query(principal, name: "availability",
       property_id: p["property_id"], check_in: CHECK_IN, check_out: CHECK_OUT)
-    avail_rows = avail_resp.body.is_a?(Hash) ? (avail_resp.body["rows"] || []) : []
+    avail_rows = avail_resp.body.is_a?(Array) ? avail_resp.body : []
     next if avail_rows.empty?
 
     return { prop: p, room: avail_rows.first }
@@ -79,7 +98,8 @@ profile = Kiosk::Redteam::Profile.new(
 
   # ── row_id_key / result_id_key ────────────────────────────────────────────
   # Query rows (my_bookings) carry "booking_id" (the same name confirm_booking takes).
-  # The reserve_room action response uses "booking_id" in body["value"].
+  # The reserve_room action answers its OWN object, whose "booking_id" is a
+  # top-level member — 0.4 retired the `{value: …}` wrapper.
   row_id_key:    "booking_id",
   result_id_key: "booking_id",
 
@@ -100,9 +120,9 @@ profile = Kiosk::Redteam::Profile.new(
     raise "redteam(hoteling): reserve_room failed (#{rsv_resp.status}): #{rsv_resp.body.inspect}" \
       unless rsv_resp.status == 200
 
-    booking_id    = rsv_resp.body.dig("value", "booking_id")
-    total_cents   = rsv_resp.body.dig("value", "total_cents").to_i
-    nightly_price = rsv_resp.body.dig("value", "nightly_price_cents").to_i
+    booking_id    = rsv_resp.body["booking_id"]
+    total_cents   = rsv_resp.body["total_cents"].to_i
+    nightly_price = rsv_resp.body["nightly_price_cents"].to_i
 
     {
       id:            booking_id,
@@ -114,8 +134,12 @@ profile = Kiosk::Redteam::Profile.new(
   },
 
   # ── forge_action / forge_args — ForgedUserId ─────────────────────────────
-  # B calls reserve_room with user_id: A.user_id injected. The server must
-  # derive the owning user from the GUC (kiosk.current_user_id()), not args.
+  # B calls reserve_room with user_id: A.user_id injected. Since 0.4 the wire
+  # itself REFUSES it: `reserve_room` publishes `additionalProperties: false`
+  # and does not declare `user_id`, so the injected principal is a typed 400
+  # before the handler runs. (Through 0.3 the argument was accepted and the
+  # handler derived the owner from the GUC instead; the generic scenario accepts
+  # either — a 4xx refusal, or a 200 whose row never surfaces under A.)
   forge_action: "reserve_room",
   forge_args:   lambda { |client, principal_a, _principal_b|
     found = find_available.call(client, principal_a)
@@ -270,9 +294,17 @@ end
 # because an assistant cannot tell it from "the charge may have gone through".
 #
 # Asserts three properties, not one: HTTP 400 (a client mistake reported as such),
-# `error.code == "bad_request"` (typed, so an assistant can branch on it), and no
-# SQL internals anywhere in the body. A generic `blocked?` verdict would accept a
-# 403 or a 401 here, so this scenario builds its Verdict directly.
+# the problem document's top-level `code == "bad_request"` (typed, so an
+# assistant can branch on it), and no SQL internals anywhere in the body. A
+# generic `blocked?` verdict would accept a 403 or a 401 here, so this scenario
+# builds its Verdict directly.
+#
+# Since 0.4 the ARG-shaped probes are refused one layer EARLIER — `booking_id`
+# declares `format: "uuid"` and `input_schema` is validated on every call — so
+# that half now comes from the declared contract rather than from UuidCheck
+# inside the handler. Same status, same code, same no-leak property; the guard
+# behind it still stands for what reaches it, which is the signed-cart probe
+# below that no input_schema covers.
 class MalformedUuidArg < Kiosk::Redteam::Scenario
   MALFORMED     = ["not-a-uuid", "1; DROP TABLE bookings", ""].freeze
   SQL_INTERNALS = ["::uuid", "PG::", "22P02", "invalid input syntax"].freeze
@@ -322,7 +354,7 @@ class MalformedUuidArg < Kiosk::Redteam::Scenario
   def check(failures, statuses, label, resp)
     statuses << resp.status
     leak = SQL_INTERNALS.find { |needle| JSON.generate(resp.body).include?(needle) }
-    code = resp.body.is_a?(Hash) ? resp.body.dig("error", "code") : nil
+    code = resp.body.is_a?(Hash) ? resp.body["code"] : nil
     return if resp.status == 400 && code == "bad_request" && leak.nil?
 
     failures << "#{label} → HTTP #{resp.status} code=#{code.inspect}#{leak ? " LEAKS #{leak.inspect}" : ""}"
@@ -452,18 +484,18 @@ class DoubleBookedRoom < Kiosk::Redteam::Scenario
   # and would satisfy any weaker assertion while telling an assistant nothing.
   def conflict(failures, statuses, label, resp)
     statuses << resp.status
-    code = resp.body.is_a?(Hash) ? resp.body.dig("error", "code") : nil
+    code = resp.body.is_a?(Hash) ? resp.body["code"] : nil
     return if resp.status == 409 && code == "conflict"
 
     failures << "#{label} → HTTP #{resp.status} code=#{code.inspect} (want 409 conflict)"
   end
 
   def free_room(client, principal)
-    rows = client.query(principal, name: "properties").body["rows"] || []
+    rows = Array(client.query(principal, name: "properties").body)
     rows.each do |p|
       avail = client.query(principal, name: "availability", property_id: p["property_id"],
                                       check_in: DBL_IN, check_out: DBL_OUT)
-      first = (avail.body["rows"] || []).first
+      first = Array(avail.body).first
       next if first.nil?
 
       return { property_id: p["property_id"], room_type_id: first["room_type_id"] }
@@ -471,10 +503,12 @@ class DoubleBookedRoom < Kiosk::Redteam::Scenario
     nil
   end
 
-  # hotel_detail answers one object, which the wire carries under "rows".
+  # hotel_detail answers a ONE-ROW ARRAY (K-794): it is a query, and a query
+  # that does not paginate answers rows. `.first` is the whole unwrap, and an
+  # EMPTY array — no property with that id — falls through to `{}` here rather
+  # than needing a 404 branch.
   def detail(resp)
-    body = resp.body
-    body.is_a?(Hash) ? (body["rows"] || body["value"] || {}) : {}
+    Array(resp.body).first || {}
   end
 
   def room_ids(resp)
@@ -482,12 +516,114 @@ class DoubleBookedRoom < Kiosk::Redteam::Scenario
   end
 end
 
+# ── The shape of the wire itself — two beats the cutover made expressible ─────
+#
+# Both dial paths and methods the redteam Client will not construct (it only
+# ever builds a legal per-verb call), so they issue one raw request each. They
+# stage nothing and touch no inventory: the point is what the ROUTER answers,
+# not what any handler does.
+module RawWire
+  # One raw request under the given principal's bearer.
+  # @return [Array(Net::HTTPResponse, Hash)] the response and its parsed body
+  def raw(principal, method, path, body = nil)
+    uri = URI("#{BASE_URL}#{path}")
+    req = (method == :get ? Net::HTTP::Get : Net::HTTP::Post).new(
+      uri, { "Content-Type" => "application/json",
+             "Authorization" => "Bearer #{principal.token}" },
+    )
+    req.body = JSON.generate(body) if body
+    res = Net::HTTP.new(uri.host, uri.port).request(req)
+    [res, (JSON.parse(res.body) rescue {})]
+  end
+end
+
+# The 0.3 multiplexed pair was DELETED, not tombstoned (T-074 = A). `POST
+# /kiosk/query` now reaches the per-verb controller as a verb literally named
+# "query", which nobody registered, so it answers the ordinary 404 — no
+# privileged endpoint left, no compatibility payload keeping the 0.3 argument
+# channel alive, and no second conformance surface to attack. A deprecation shim
+# here is exactly what an attacker would reach for, because it took the verb
+# name from the BODY, where no route constraint and no input_schema could see it.
+class RetiredWire < Kiosk::Redteam::Scenario
+  include RawWire
+
+  def initialize
+    super(
+      name:        "RetiredWire",
+      category:    "wire",
+      description: "The retired 0.3 endpoints POST /kiosk/query and POST /kiosk/run must be an ordinary 404, not a compatibility surface",
+    )
+  end
+
+  def call(client, profile)
+    a = register_principal(client, name: "redteam-retired-wire", profile:)
+
+    probes = %w[query run].map do |name|
+      res, body = raw(a, :post, "/kiosk/#{name}", { name: "properties" })
+      [res.code.to_i == 404 && body["code"] == "not_found",
+       "POST /kiosk/#{name} → #{res.code}/#{body["code"].inspect}"]
+    end
+
+    Kiosk::Redteam::Verdict.new(
+      blocked: probes.all? { |ok, _| ok },
+      skipped: false,
+      status:  404,
+      detail:  probes.all? { |ok, _| ok } ? "" : "a retired 0.3 endpoint still answers: " \
+                                                 "#{probes.map(&:last).join(", ")} " \
+                                                 "(want 404/\"not_found\" for both)",
+    )
+  end
+end
+
+# A GET at an action's path is 405 with `Allow: POST`, never a silent 404. The
+# resource EXISTS; answering 404 would be a lie about it, and an assistant that
+# read that 404 as "this operator cannot do that" would abandon a verb it could
+# have called correctly. Probed in BOTH directions, because the fork is
+# symmetric: a GET at the action `reserve_room`, and a POST at the query
+# `my_bookings`.
+class MethodMismatch < Kiosk::Redteam::Scenario
+  include RawWire
+
+  def initialize
+    super(
+      name:        "MethodMismatch",
+      category:    "wire",
+      description: "The wrong HTTP method on a registered verb must be 405 method_not_allowed with Allow:, never a silent 404",
+    )
+  end
+
+  def call(client, profile)
+    a = register_principal(client, name: "redteam-method-mismatch", profile:)
+
+    probes = [
+      [:get,  "/kiosk/reserve_room", "POST", nil],
+      [:post, "/kiosk/my_bookings",  "GET",  {}],
+    ].map do |method, path, wanted, body|
+      res, doc = raw(a, method, path, body)
+      ok = res.code.to_i == 405 && doc["code"] == "method_not_allowed" &&
+           res["allow"].to_s.upcase.include?(wanted)
+      [ok, "#{method.to_s.upcase} #{path} → #{res.code}/#{doc["code"].inspect} " \
+           "Allow=#{res["allow"].inspect} (want 405/method_not_allowed/#{wanted})"]
+    end
+
+    Kiosk::Redteam::Verdict.new(
+      blocked: probes.all? { |ok, _| ok },
+      skipped: false,
+      status:  405,
+      detail:  probes.all? { |ok, _| ok } ? "" : "a method mismatch is not answered " \
+                                                 "405/method_not_allowed with Allow: " \
+                                                 "#{probes.map(&:last).join("; ")}",
+    )
+  end
+end
+
 # ── Scenario list ─────────────────────────────────────────────────────────────
 #
-# 13 generic + 5 local beats (3 cashier-check + 1 input-shape + 1 inventory, per
-# the header above); 3 generic (KYC variants) are expected to be skipped. 10
-# generic + 5 local are applicable (RegistrationWithoutPow now runs because
-# register PoW is ON).
+# 13 generic + 7 local beats (3 cashier-check + 1 input-shape + 1 inventory +
+# the 2 wire-shape beats the 0.4 cutover made expressible, per the header
+# above); 3 generic (KYC variants) are expected to be skipped. 10 generic + 7
+# local are applicable (RegistrationWithoutPow now runs because register PoW is
+# ON).
 
 scenarios = [
   Kiosk::Redteam::Scenarios::PayForOtherUseSelf.new,      # C2 — headline
@@ -504,6 +640,8 @@ scenarios = [
   InflatedTotalCart.new,                                  # cashier check — total ≠ line sum
   MalformedUuidArg.new,                                   # K-581/K-582 — junk uuid → typed 400, no 500
   DoubleBookedRoom.new,                                   # K-690 — one room-night, one booking
+  RetiredWire.new,                                        # T-074 = A — the 0.3 pair is 404, not a shim
+  MethodMismatch.new,                                     # 0.4 — wrong method is 405 + Allow, not 404
   Kiosk::Redteam::Scenarios::MissingKyc.new,              # → SKIP (no KYC)
   Kiosk::Redteam::Scenarios::ExpiredKyc.new,              # → SKIP (no KYC)
   Kiosk::Redteam::Scenarios::ForgedKyc.new,               # → SKIP (no KYC)

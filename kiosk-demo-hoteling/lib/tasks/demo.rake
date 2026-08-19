@@ -253,9 +253,12 @@ namespace :demo do
       Assertion 2a (exclusion): B's my_bookings does NOT contain A's booking.
       Assertion 2b (positive control): B's my_bookings DOES contain B's own
         booking, proving the exclusion is not vacuous.
-      Assertion 3 (forged user_id ignored): B calls reserve_room with
-        user_id: A's UUID. The created booking's DB user_id is B (server uses
-        kiosk.current_user_id(), ignores agent-supplied user_id).
+      Assertion 3a (the principal is not an input): B calls reserve_room with a
+        forged user_id arg (A's UUID) -> 400 bad_request naming user_id,
+        refused by the published input_schema before the handler runs.
+      Assertion 3b (ownership comes from the token): B's legitimate booking has
+        DB user_id == B, because the INSERT reads kiosk.current_user_id() and
+        never an argument — the property the refusal alone does not prove.
 
     Exits 0 if all assertions hold (isolation works); exits 1 on failure.
     A red assertion = real isolation hole: fix the app, not the test.
@@ -339,7 +342,8 @@ namespace :demo do
     user_id_a            = result["user_id_a"]
     user_id_b            = result["user_id_b"]
     booking_id_a         = result["booking_id_a"]
-    booking_id_b_forged  = result["booking_id_b_forged"]
+    booking_id_b         = result["booking_id_b"]
+    forged_refusal       = result["forged_refusal"] || []
     b_confirm_booking_rc = result["b_confirm_booking_rc"]
     b_booking_ids        = result["b_booking_ids"] || []
 
@@ -364,27 +368,43 @@ namespace :demo do
     end
 
     # ── Assertion 2b: B's my_bookings includes B's own booking ───────────
-    if b_booking_ids.include?(booking_id_b_forged)
-      puts "  OK  Assertion 2b: B's my_bookings includes B's own #{booking_id_b_forged} " \
+    if b_booking_ids.include?(booking_id_b)
+      puts "  OK  Assertion 2b: B's my_bookings includes B's own #{booking_id_b} " \
            "(positive control — exclusion non-vacuous)"
     else
-      failures << "B's my_bookings does not include B's own booking #{booking_id_b_forged}; " \
+      failures << "B's my_bookings does not include B's own booking #{booking_id_b}; " \
                   "got #{b_booking_ids.inspect} — positive control failed (vacuous exclusion)"
-      puts "  FAIL  Assertion 2b: B's my_bookings missing B's own #{booking_id_b_forged} " \
+      puts "  FAIL  Assertion 2b: B's my_bookings missing B's own #{booking_id_b} " \
            "— positive control failed"
     end
 
-    # ── Assertion 3: DB user_id on B's forged booking == user_id_b ───────
-    db_user_id = `psql -X -d #{db} -tAc "SELECT user_id FROM public.bookings WHERE id = '#{booking_id_b_forged}'" 2>&1`.strip
-    if db_user_id == user_id_b
-      puts "  OK  Assertion 3: DB bookings.user_id for rB_forged == user_id_b (#{user_id_b}) — forged arg ignored"
-    elsif db_user_id == user_id_a
-      failures << "ISOLATION HOLE: DB bookings.user_id for rB_forged is A's user_id (#{user_id_a}) " \
-                  "— forged user_id arg was NOT ignored"
-      puts "  FAIL  Assertion 3: server used forged user_id arg (booking belongs to A, not B)"
+    # ── Assertion 3a: the forged user_id is REFUSED by the published contract.
+    # On the 0.4 wire `reserve_room` publishes `additionalProperties: false` and
+    # does not declare `user_id` — the principal is not one of its inputs — so
+    # the forgery is a typed 400 naming the parameter, before the handler runs.
+    # (Through 0.3 the argument was accepted and silently ignored, and the desc
+    # said so; that sentence is now false.)
+    forged_rc, forged_code, forged_detail = forged_refusal
+    if forged_rc == 400 && forged_code == "bad_request" && forged_detail.to_s.include?("user_id")
+      puts "  OK  Assertion 3a: forged user_id → 400 bad_request naming user_id " \
+           "(refused by input_schema before the handler runs)"
     else
-      failures << "Unexpected user_id for rB_forged: got #{db_user_id.inspect}, expected B's #{user_id_b}"
-      puts "  FAIL  Assertion 3: unexpected user_id #{db_user_id.inspect} for rB_forged"
+      failures << "forged user_id not refused: #{forged_refusal.inspect}, " \
+                  "want [400, \"bad_request\", …user_id…]"
+      puts "  FAIL  Assertion 3a: forged user_id → #{forged_refusal.inspect}"
+    end
+
+    # ── Assertion 3b: ownership comes from the TOKEN — DB user_id == B ───
+    db_user_id = `psql -X -d #{db} -tAc "SELECT user_id FROM public.bookings WHERE id = '#{booking_id_b}'" 2>&1`.strip
+    if db_user_id == user_id_b
+      puts "  OK  Assertion 3b: DB bookings.user_id for rB == user_id_b (#{user_id_b}) — ownership taken from the identity"
+    elsif db_user_id == user_id_a
+      failures << "ISOLATION HOLE: DB bookings.user_id for rB is A's user_id (#{user_id_a}) " \
+                  "— ownership was not taken from the authenticated identity"
+      puts "  FAIL  Assertion 3b: booking belongs to A, not B"
+    else
+      failures << "Unexpected user_id for rB: got #{db_user_id.inspect}, expected B's #{user_id_b}"
+      puts "  FAIL  Assertion 3b: unexpected user_id #{db_user_id.inspect} for rB"
     end
 
     if failures.empty?
@@ -403,23 +423,33 @@ namespace :demo do
   desc <<~DESC
     Adversarial regression battery — kiosk-redteam.
 
-    Boots hoteling, runs all 13 Kiosk::Redteam scenarios against the chain
-    (no PoW → no KYC → reserve_room → pay → confirm_booking) and asserts
-    each applicable attack is BLOCKED:
+    Boots hoteling, runs the 13 generic Kiosk::Redteam scenarios plus 7 hoteling
+    beats against the chain (register PoW → no KYC → reserve_room → pay →
+    confirm_booking) and asserts each applicable attack is BLOCKED:
 
       BLOCKED  PayForOtherUseSelf    — C2: B pays for A's booking, tries confirm_booking
       BLOCKED  SpentResourceReuse    — C3: re-confirm an already-confirmed booking
       BLOCKED  UnpaidGatedAction     — confirm_booking without payment → Gate-2 fires
       BLOCKED  CrossTenantRead       — B's my_bookings excludes A's rows
-      BLOCKED  ForgedUserId          — agent-supplied user_id in reserve_room args ignored
+      BLOCKED  ForgedUserId          — agent-supplied user_id in reserve_room args refused
+                                       (0.4: undeclared argument → typed 400 before the handler)
       BLOCKED  MandatePrincipalSwap  — B signs mandate with A's identity; rejected
       BLOCKED  MandateReplay         — B re-submits A's JWS; rejected
       BLOCKED  TokenTampering        — altered JWT claim rejected 401
       BLOCKED  PrivilegeSelfSelection — client-chosen registration role ignored (server-pinned)
+      BLOCKED  RegistrationWithoutPow — register without a proof rejected (register PoW is ON)
+      BLOCKED  WrongCurrencyCart     — usd cart at a EUR operator refused at capture
+      BLOCKED  TamperedPriceCart     — below-quote total refused at capture
+      BLOCKED  InflatedTotalCart     — total above the line-item sum refused at capture
+      BLOCKED  MalformedUuidArg      — junk booking_id → typed 400, no SQL internals, never a 500
+      BLOCKED  DoubleBookedRoom      — a held room-night cannot be re-reserved → 409
+      BLOCKED  RetiredWire           — POST /kiosk/query and /kiosk/run are an ordinary 404
+                                       (the 0.3 pair was DELETED, not shimmed — T-074 = A)
+      BLOCKED  MethodMismatch        — a GET at an action's path is 405 method_not_allowed
+                                       with Allow:, never a silent 404
       SKIPPED  MissingKyc            — hoteling has no KYC gate
       SKIPPED  ExpiredKyc            — hoteling has no KYC gate
       SKIPPED  ForgedKyc             — hoteling has no KYC gate
-      SKIPPED  RegistrationWithoutPow — hoteling has no PoW gate
 
     Exits 0 when all applicable scenarios are BLOCKED and skips match expectations.
     A BREACH = a real hole in hoteling — fix the app, not the scenario.
@@ -510,7 +540,8 @@ namespace :demo do
   desc <<~DESC
     Self-discovery proof — verifies the schema verb over HTTP.
 
-    Boots the server, registers a fresh agent (no PoW for hoteling), calls:
+    Boots the server, registers a fresh agent (registration IS PoW-gated —
+    registration_pow_count = 1 — and the flow solves it transparently), calls:
       GET /kiosk/schema
 
     Asserts:
@@ -683,9 +714,13 @@ namespace :demo do
         `next` cursor (the result was truncated — silent truncation is now visible).
       • echoing that `next` back as `cursor` returns the FOLLOWING page, and the
         two pages are DISJOINT (real paging, not the same slice).
-      • a filtered search that fits in one page OMITS `next` (complete result).
-      • hotel_detail on a summary row's id returns the full property with rooms
-        (the "search returns summaries, fetch detail on demand" pattern).
+      • a filtered search that fits in one page is a BARE ARRAY and omits `next`
+        (complete result — an array has nowhere to put a cursor).
+      • hotel_detail on a summary row's id returns a ONE-ROW ARRAY carrying the
+        full property with rooms (the "search returns summaries, fetch detail on
+        demand" pattern; K-794 made it answer rows like every other
+        non-paginating query), and an id nobody has returns the EMPTY array
+        rather than a 404.
 
     Exits 0 if all assertions pass; exits 1 on any miss.
   DESC
@@ -780,14 +815,33 @@ namespace :demo do
     check.call(result["page2_count"].to_i >= 1 && result["pages_disjoint"] == true,
                "echoing `next` as `cursor` returns a DISJOINT next page (#{result["page2_count"]} rows)",
                "next page empty or overlapping (count=#{result["page2_count"].inspect}, disjoint=#{result["pages_disjoint"].inspect})")
-    check.call(result["filtered_has_next"] == false,
-               "the filtered (complete) search OMITS `next` (#{result["filtered_count"]} rows)",
-               "filtered search still carries `next` — cannot signal completeness")
+    check.call(result["filtered_has_next"] == false && result["filtered_is_array"] == true,
+               "the filtered (complete) search is a BARE ARRAY and omits `next` " \
+               "(#{result["filtered_count"]} rows)",
+               "filtered search is not a bare array without `next` " \
+               "(array=#{result["filtered_is_array"].inspect}, next=#{result["filtered_has_next"].inspect}) " \
+               "— cannot signal completeness")
 
     # detail-by-id: search returns summaries, fetch detail on demand.
     check.call(result["http_detail"] == 200 && result["detail_room_count"].to_i >= 1,
                "hotel_detail(id=#{result["detail_id"]}) → full property, #{result["detail_room_count"]} room type(s)",
                "hotel_detail failed (http=#{result["http_detail"].inspect}, rooms=#{result["detail_room_count"].inspect})")
+
+    # K-794: a detail-by-id query is still a query, so it answers ROWS — a
+    # one-element array, not a bare object. Both halves are asserted, because
+    # the shape without the empty case would leave "no such hotel" undefined.
+    check.call(result["detail_is_array"] == true && result["detail_row_count"] == 1,
+               "hotel_detail answers a ONE-ROW ARRAY (spec §8.2)",
+               "hotel_detail is not a one-row array " \
+               "(array=#{result["detail_is_array"].inspect}, rows=#{result["detail_row_count"].inspect})")
+    check.call(result["http_unknown_detail"] == 200 &&
+               result["unknown_detail_is_array"] == true &&
+               result["unknown_detail_row_count"] == 0,
+               "hotel_detail for an id nobody has → 200 with the EMPTY array",
+               "hotel_detail for an unknown id answered " \
+               "http=#{result["http_unknown_detail"].inspect} " \
+               "array=#{result["unknown_detail_is_array"].inspect} " \
+               "rows=#{result["unknown_detail_row_count"].inspect} (want 200 / [])")
 
     if failures.empty?
       puts "\n  All pagination + detail assertions passed."

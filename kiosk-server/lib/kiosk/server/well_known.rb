@@ -31,6 +31,13 @@ module Kiosk
       AGENTS_VERSION  = "1.0"
       AGENTS_STANDARD = "https://agents-txt.com/standard"
 
+      # Module name → the endpoint that module answers on, under `endpoint`,
+      # for the modules the RFC 9727 catalog links as plain `item`s. `schema`
+      # is absent because it is linked as a `service-desc` instead. Ordered:
+      # the linkset's item order follows the canonical capability order.
+      MODULE_ENDPOINTS = { "queries" => "query", "actions" => "run",
+                           "pay" => "pay" }.freeze
+
       # Build the well-known document as a Hash, ready to JSON-serialize.
       #
       # @param config [Kiosk::Configuration] active config (default
@@ -63,8 +70,10 @@ module Kiosk
             device_authorization_url: "#{endpoint}/oauth/device_authorization",
             claim_url:                "#{endpoint}/auth/claim",
           },
-          # Verb names the endpoint actually serves — subset of
-          # schema/query/run/pay, computed from the live registry.
+          # The MODULES this origin serves — subset of
+          # schema/queries/actions/pay, computed from the live registry
+          # (T-075 = A, ADR-0025). Never the registered verb NAMES: this
+          # document is unauthenticated, and the catalog is Bearer-gated.
           capabilities: Array(config.capabilities),
           min_client:   config.min_client,
           issuer:       config.issuer,
@@ -123,10 +132,10 @@ module Kiosk
       #
       # Structured companion at `<origin>/agents.json` (schema
       # agents-txt.com/schema/agents-json/v1.0.json). Required keys:
-      # `version`, `standard`, `site{name,url}`. The Kiosk six-verb wire
-      # contract rides the sanctioned `x-kiosk` experimental extension
-      # (agents.json ignores unknown top-level keys), so it cannot force our
-      # runtime shape into a standard field.
+      # `version`, `standard`, `site{name,url}`. The Kiosk wire POINTERS ride
+      # the sanctioned `x-kiosk` experimental extension (agents.json ignores
+      # unknown top-level keys), so it cannot force our runtime shape into a
+      # standard field.
       #
       # @return [Hash]
       def self.agents_json(base_url:, config: Kiosk.configuration)
@@ -155,18 +164,28 @@ module Kiosk
           identity:  "required",
         }
         doc[:skills] = skills_list(config)
-        # Kiosk extension: the structured six-verb contract the envelope
-        # points at. `x-` is the sanctioned experimental prefix.
+        # Kiosk extension: WHERE to read the contract, not a copy of it
+        # (T-075 = A, ADR-0025). `x-` is the sanctioned experimental prefix.
+        #
+        # This block used to echo `capabilities` under `wire.verbs`. It stops:
+        # a discovery envelope that restates the catalog is a second source of
+        # truth for it, and in 0.4 the honest literal reading of "the verbs
+        # this origin serves" is the registered NAMES — which would publish
+        # the whole catalog on an unauthenticated surface that `GET
+        # <endpoint>/schema` deliberately Bearer-gates. So the block carries
+        # two POINTERS (the catalog and the RFC 9727 linkset) and the two
+        # facts a client needs before it can dial either (where the wire is
+        # mounted, which protocol series it speaks). `min_client` went with
+        # `wire.verbs` for the same reason: it is `kiosk.json`'s field, and
+        # `kiosk.json` is canonical.
         doc[:"x-kiosk"] = {
-          wire:        { verbs: Array(config.capabilities),
-                         schema: "#{config.mount_path}/schema" },
-          min_client:  config.min_client,
-          api_version: Kiosk::Protocol::API_VERSION,
-          mount_path:  config.mount_path,
+          schema:      "#{config.mount_path}/schema",
           # RFC 9727 API Catalog pointer (root-served linkset). Lives under
           # the experimental `x-kiosk` namespace — agents.json v1.0 has no
           # standard link-catalog key, so we do NOT force a top-level field.
           api_catalog: "/.well-known/api-catalog",
+          mount_path:  config.mount_path,
+          api_version: Kiosk::Protocol::API_VERSION,
         }
 
         doc
@@ -201,10 +220,9 @@ module Kiosk
       #
       # RFC 9727 "API Catalog" served as an `application/linkset+json` body: a
       # single linkset member, `anchor`ed at the api-catalog URL, whose `item`
-      # array hyperlinks the live API endpoints. Kiosk's "APIs" are the wire
-      # verbs — `<endpoint>/{schema,query,run,pay}` — filtered to the verbs the
-      # deployment actually serves (`config.capabilities`, computed from the
-      # live registry), plus the agents.json discovery companion.
+      # array hyperlinks the live API endpoints — one link per MODULE the
+      # deployment serves (`config.capabilities`, computed from the live
+      # registry), plus the agents.json discovery companion.
       #
       # The `schema` endpoint is the machine-readable surface description, so it
       # carries the RFC 9727 `service-desc` relation (SHOULD); so does the
@@ -212,16 +230,31 @@ module Kiosk
       # verbs in a form generic OpenAPI tooling can consume. Every other link is
       # a plain `item`.
       #
+      # ── WHY THIS DOES NOT HYPERLINK EVERY REGISTERED VERB (K-799) ────────
+      #
+      # T-075's answer carries a sibling clause saying this catalog should link
+      # every verb the origin serves. It does not, and the reason is the SAME
+      # reason that answer rejected option B: this document is served
+      # UNAUTHENTICATED at the origin root, so a per-verb linkset would publish
+      # the operator's whole catalog to an anonymous caller — the enumeration
+      # `GET <endpoint>/schema` is Bearer-gated against, that
+      # {OpenApiController} is Bearer-gated against, and that
+      # {VerbController}'s deliberate `401`-before-`404` gate order exists to
+      # withhold. Shipping it would have made those three defences pointless.
+      # An API catalog lists APIs and points at their DESCRIPTIONS; both
+      # descriptions are linked below, and both require a Bearer token. Filed
+      # as K-799 for Phil rather than decided here.
+      #
       # @return [Hash]
       def self.api_catalog(base_url:, config: Kiosk.configuration)
         validate_issuer!(config)
         base = base_url.to_s.chomp("/")
         endpoint = base + config.mount_path
-        verbs = Array(config.capabilities)
+        modules = Array(config.capabilities)
 
         items = []
         # schema is the machine-readable service description (service-desc).
-        if verbs.include?("schema")
+        if modules.include?("schema")
           items << { href: "#{endpoint}/schema", rel: "service-desc" }
           # ONE LINE, AND IT IS THE WHOLE ADVERTISEMENT of the derived OpenAPI
           # document (T-071 = C). RFC 8631 allows more than one `service-desc`,
@@ -238,9 +271,15 @@ module Kiosk
           # deletes this one `items <<`.
           items << { href: "#{endpoint}/openapi.json", rel: "service-desc" }
         end
-        # The remaining wire verbs are plain catalogued APIs.
-        %w[query run pay].each do |verb|
-          items << { href: "#{endpoint}/#{verb}", rel: "item" } if verbs.include?(verb)
+        # The remaining modules are plain catalogued APIs, one link each.
+        #
+        # `queries` and `actions` map to the 0.3 MULTIPLEXED endpoints, which
+        # are still served alongside the per-verb wire until the cutover
+        # (T-074 = A) — catalogue what is answered, not what is planned. The
+        # cutover deletes those two routes and these two mappings together;
+        # `pay` outlives them.
+        MODULE_ENDPOINTS.each do |mod, path|
+          items << { href: "#{endpoint}/#{path}", rel: "item" } if modules.include?(mod)
         end
         # The agents.json discovery companion (root-served).
         items << { href: "#{base}/agents.json", rel: "item" }
@@ -415,9 +454,9 @@ module Kiosk
       end
       private_class_method :auth_urls
 
-      # Whether this deployment serves the `pay` verb — the canonical gate for
-      # advertising AP2/payments across the discovery surfaces.
-      # `capabilities` is the computed set; `pay` drops out when no
+      # Whether this deployment serves the `pay` MODULE — the canonical gate
+      # for advertising AP2/payments across the discovery surfaces.
+      # `capabilities` is the computed module set; `pay` drops out when no
       # payment provider is configured, so this is false for payment-less
       # providers.
       def self.pay_served?(config)

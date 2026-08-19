@@ -65,18 +65,30 @@ module Kiosk
 
       # Capabilities the server advertises in `/.well-known/kiosk.json`.
       #
-      # Members are VERB NAMES the endpoint actually serves, drawn from the
-      # canonical set `schema`, `query`, `run`, `pay` and emitted in that
-      # order. Computed from the live registry — NOT a static
-      # list — so the document never advertises a verb the provider hasn't
-      # wired:
-      #   * `schema` — present whenever ≥1 query OR ≥1 action is registered
+      # Members are MODULE NAMES — the parts of the protocol this origin
+      # serves — drawn from the canonical set `schema`, `queries`, `actions`,
+      # `pay` and emitted in that order (T-068 slice 5, decision T-075 = A,
+      # ADR-0025). Computed from the live registry — NOT a static list — so
+      # the document never advertises a module the provider hasn't wired:
+      #   * `schema`  — present whenever ≥1 query OR ≥1 action is registered
       #     (schema is the self-description of those).
-      #   * `query`  — present iff ≥1 named query is registered.
-      #   * `run`    — present iff ≥1 action is registered.
-      #   * `pay`    — present iff a payment provider (AP2) is configured.
-      # HTTP methods are never encoded here; the verb→method binding is fixed
-      # and known to agents.
+      #   * `queries` — present iff ≥1 named query is registered.
+      #   * `actions` — present iff ≥1 action is registered.
+      #   * `pay`     — present iff a payment provider (AP2) is configured.
+      #
+      # WHY MODULES AND NOT VERB NAMES, since 0.4 gives every verb its own
+      # endpoint and "the verbs this endpoint serves" would now be readable
+      # literally: enumerating the registered verb names HERE would publish
+      # the whole catalog on an UNAUTHENTICATED surface. `GET
+      # <endpoint>/schema` is Bearer-gated, {OpenApiController} is Bearer-gated
+      # for the same reason, and {VerbController} answers `401` before `404`
+      # precisely so an anonymous prober cannot enumerate names. A module set
+      # tells an assistant which branches of the skill apply — which is what
+      # its Step 1 actually needs — and leaks nothing.
+      #
+      # HTTP methods are never encoded here: in 0.4 the method follows the
+      # KIND of the verb (a query is GET, an action is POST), which the
+      # catalog states per verb.
       #
       # A provider may still pin an explicit list via `c.capabilities = [...]`;
       # that override is returned verbatim.
@@ -469,18 +481,22 @@ module Kiosk
 
       private
 
-      # Compute the advertised capability list from the live registry, in the
-      # canonical order schema, query, run, pay. See {#capabilities}.
+      # Compute the advertised module list from the live registry, in the
+      # canonical order schema, queries, actions, pay. See {#capabilities}.
+      #
+      # The COMPUTATION is unchanged from the verb-name era — same three
+      # questions of the same registry — only the names it emits moved from
+      # verbs to modules.
       def computed_capabilities
         has_queries = Kiosk::Server::Queries.known.any?
         has_actions = Kiosk::Server::Actions.known.any?
         has_pay     = !payment_provider.nil?
 
         caps = []
-        caps << "schema" if has_queries || has_actions
-        caps << "query"  if has_queries
-        caps << "run"    if has_actions
-        caps << "pay"    if has_pay
+        caps << "schema"  if has_queries || has_actions
+        caps << "queries" if has_queries
+        caps << "actions" if has_actions
+        caps << "pay"     if has_pay
         caps.freeze
       end
 

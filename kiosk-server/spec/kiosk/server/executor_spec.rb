@@ -217,7 +217,7 @@ RSpec.describe Kiosk::Server::Executor do
 
       expect(result).to be_a(Kiosk::Server::Result)
       expect(result.kind).to eq(:value)
-      expect(result.payload[:verbs]).to include("query", "run", "pay", "schema")
+      expect(result.payload[:verbs]).to eq(%w[schema queries actions])
       expect(result.payload[:verbs]).not_to include("help", "events")
       # `params` is retired (ADR-0023): the shape lives in input_schema and the
       # descriptor publishes the retired slot as null.
@@ -229,6 +229,28 @@ RSpec.describe Kiosk::Server::Executor do
         hash_including(name: "place_order", description: "Place an order", params: nil,
                        input_schema: { type: "object", properties: { items: { type: "array" } } }),
       )
+    end
+
+    # ── K-740 / VERBS-EQ-CAPABILITIES (ADR-0025) ────────────────────────
+    #
+    # `verbs` used to be the constant %i[query run pay schema] — it named
+    # `pay` on an origin with no payment provider while the discovery document
+    # dropped it, and the spec carried a paragraph telling readers to distrust
+    # it. It is now the SAME array `/.well-known/kiosk.json` publishes.
+    it "answers `verbs` with exactly the advertised capabilities" do
+      result = described_class.call(kind: :schema, args: {}, identity: identity, connection: connection)
+      expect(result.payload[:verbs]).to eq(Array(Kiosk.configuration.capabilities))
+    end
+
+    it "drops `pay` from `verbs` when no payment provider is configured" do
+      result = described_class.call(kind: :schema, args: {}, identity: identity, connection: connection)
+      expect(result.payload[:verbs]).not_to include("pay")
+    end
+
+    it "carries `pay` in `verbs` when one is" do
+      Kiosk.configure { |c| c.payment_provider = Object.new }
+      result = described_class.call(kind: :schema, args: {}, identity: identity, connection: connection)
+      expect(result.payload[:verbs]).to eq(%w[schema queries actions pay])
     end
 
     it "does not open a SessionContext (zero DB calls)" do

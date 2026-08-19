@@ -77,8 +77,11 @@ namespace :demo do
         the headline.
       Assertion 4 (cross-owner WRITE denial): Bob close_listing on Alice's
         listing → 403.
-      Assertion 5 (forged owner_id ignored): Bob post_listing with a forged
-        owner_id arg (Alice's UUID) → the created listing's DB owner_id is Bob.
+      Assertion 5 (the principal is not an input): Bob post_listing with a
+        forged owner_id arg (Alice's UUID) → 400 bad_request naming owner_id,
+        refused by the published input_schema before the handler runs; and
+        Bob's legitimate listing has DB owner_id == Bob, so ownership comes
+        from the token.
 
     Exits 0 if all assertions hold; exits 1 on failure. A red assertion = a real
     isolation hole: fix the app, not the test.
@@ -121,7 +124,8 @@ namespace :demo do
     b_my_ids         = result["b_my_ids"]   || []
     edit_rc          = (result["cross_owner_edit"]  || []).first
     close_rc         = (result["cross_owner_close"] || []).first
-    forged_id        = result["forged_listing_id"]
+    forged_refusal   = result["forged_refusal"] || []
+    owner_probe_id   = result["owner_probe_listing_id"]
 
     # Assertion 1: browse is cross-owner.
     if browse_ids.include?(alice_listing_id) && browse_ids.include?(bob_listing_id)
@@ -163,13 +167,23 @@ namespace :demo do
       puts "  x  Assertion 4 FAILED: cross-owner close returned #{close_rc.inspect} (want 403)"
     end
 
-    # Assertion 5: forged owner_id ignored — DB owner_id == Bob.
-    db_owner = `psql -X -d #{db} -tAc "SELECT owner_id FROM listings WHERE id = '#{forged_id}'" 2>&1`.strip
-    if db_owner == user_id_b
-      puts "  OK  Assertion 5: DB listings.owner_id for the forged post == Bob (#{user_id_b}) — forged owner_id ignored"
+    # Assertion 5a: the forged owner_id is REFUSED by the published contract.
+    forged_rc, forged_code, forged_detail = forged_refusal
+    if forged_rc == 400 && forged_code == "bad_request" && forged_detail.to_s.include?("owner_id")
+      puts "  OK  Assertion 5a: forged owner_id → 400 bad_request naming owner_id " \
+           "(refused by input_schema before the handler runs)"
     else
-      failures << "forged owner_id NOT ignored: DB owner_id #{db_owner.inspect}, want Bob #{user_id_b}"
-      puts "  x  Assertion 5 FAILED: forged listing owner_id #{db_owner.inspect} (want Bob #{user_id_b})"
+      failures << "forged owner_id not refused: #{forged_refusal.inspect}, want [400, \"bad_request\", …owner_id…]"
+      puts "  x  Assertion 5a FAILED: forged owner_id → #{forged_refusal.inspect}"
+    end
+
+    # Assertion 5b: ownership comes from the TOKEN — DB owner_id == Bob.
+    db_owner = `psql -X -d #{db} -tAc "SELECT owner_id FROM listings WHERE id = '#{owner_probe_id}'" 2>&1`.strip
+    if db_owner == user_id_b
+      puts "  OK  Assertion 5b: DB listings.owner_id == Bob (#{user_id_b}) — ownership is taken from the identity"
+    else
+      failures << "owner not taken from identity: DB owner_id #{db_owner.inspect}, want Bob #{user_id_b}"
+      puts "  x  Assertion 5b FAILED: listing owner_id #{db_owner.inspect} (want Bob #{user_id_b})"
     end
 
     if failures.empty?
@@ -223,7 +237,7 @@ namespace :demo do
       check.call("solved 1 proof",                    result["proofs_solved"].to_i >= 1)
       check.call("fresh token posts a listing → 200", result["http_post"] == 200 && !result["listing_id"].to_s.empty?)
       check.call("bad category_slug → clean 400 (not 500)", result["http_post_bad_cat"] == 400)
-      check.call("bad-category error names the valid categories", result["bad_cat_lists_valid"] == true)
+      check.call("bad-category 400 names every valid category slug", result["bad_cat_lists_valid"] == true)
     ensure
       begin
         Process.kill("TERM", server_pid); Process.wait(server_pid)
@@ -343,7 +357,7 @@ namespace :demo do
     Boots the server and runs script/redteam_suite.rb, asserting each attack is BLOCKED:
 
       BLOCKED  CrossTenantRead   — Bob's my_listings excludes Alice's listing
-      BLOCKED  ForgedUserId      — forged owner_id on post_listing ignored
+      BLOCKED  ForgedUserId      — forged owner_id on post_listing refused (400)
       BLOCKED  CrossOwnerEdit    — Bob edit_listing on Alice's listing → 403
       BLOCKED  CrossOwnerClose   — Bob close_listing on Alice's listing → 403
       BLOCKED  MissingAuth       — request with no Authorization → 401

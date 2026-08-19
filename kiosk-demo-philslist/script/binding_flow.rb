@@ -87,8 +87,10 @@ def post_json(path, body, headers = {})
   [res.code.to_i, (JSON.parse(res.body) rescue {})]
 end
 
-def get_json(path)
-  res = request(Net::HTTP::Get.new(URI("#{SERVER}#{path}")))
+def get_json(path, params = {}, headers = {})
+  uri = URI("#{SERVER}#{path}")
+  uri.query = URI.encode_www_form(params) unless params.empty?
+  res = request(Net::HTTP::Get.new(uri, headers))
   [res.code.to_i, (JSON.parse(res.body) rescue {})]
 end
 
@@ -165,15 +167,15 @@ results[:agent_id_1] = agent1
 STDERR.puts "  Token minted: sub=#{claims["sub"]} agent_id=#{agent1}"
 
 # Wire verbs as the human's account: post a listing, list.
-rc, posted = post_json("/kiosk/run",
-                       { name: "post_listing", category_slug: "furniture",
+rc, posted = post_json("/kiosk/post_listing",
+                       { category_slug: "furniture",
                          title: "Household desk", body: "Posted by assistant 1", price_text: "€150" },
                        { "Authorization" => "Bearer #{token1}" })
 results[:wire_post] = rc
-listing_id = posted.dig("value", "listing_id")
+listing_id = posted["listing_id"]
 results[:listing_id] = listing_id
-rc, mine = post_json("/kiosk/query", { name: "my_listings" }, { "Authorization" => "Bearer #{token1}" })
-results[:a1_sees_listing] = rc == 200 && mine.fetch("rows", []).any? { |r| r["listing_id"] == listing_id }
+rc, mine = get_json("/kiosk/my_listings", {}, { "Authorization" => "Bearer #{token1}" })
+results[:a1_sees_listing] = rc == 200 && Array(mine).any? { |r| r["listing_id"] == listing_id }
 STDERR.puts "  Posted listing #{listing_id} as the account holder"
 
 # ══ MANAGE ASSISTANTS page: the signed-in human sees assistant 1 listed. ═════
@@ -197,12 +199,12 @@ results[:agent_id_2] = agent2
 STDERR.puts "  Second assistant redeemed the link code: agent_id=#{agent2}"
 
 # The second assistant sees the SAME account: assistant 1's listing.
-rc, mine2 = post_json("/kiosk/query", { name: "my_listings" }, { "Authorization" => "Bearer #{token2}" })
-results[:a2_sees_listing] = rc == 200 && mine2.fetch("rows", []).any? { |r| r["listing_id"] == listing_id }
+rc, mine2 = get_json("/kiosk/my_listings", {}, { "Authorization" => "Bearer #{token2}" })
+results[:a2_sees_listing] = rc == 200 && Array(mine2).any? { |r| r["listing_id"] == listing_id }
 
 # And the second assistant can EDIT the household listing (multi-account write).
-rc, = post_json("/kiosk/run",
-                { name: "edit_listing", listing_id: listing_id, price_text: "€140" },
+rc, = post_json("/kiosk/edit_listing",
+                { listing_id: listing_id, price_text: "€140" },
                 { "Authorization" => "Bearer #{token2}" })
 results[:a2_edit] = rc
 STDERR.puts "  Second assistant edited the household listing → #{rc}"

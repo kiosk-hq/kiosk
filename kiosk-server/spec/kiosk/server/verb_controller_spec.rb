@@ -237,8 +237,24 @@ RSpec.describe Kiosk::Server::VerbController do
     end
   end
 
-  describe "input_schema is executable when validate_requests is on" do
-    before { Kiosk.configuration.validate_requests = true }
+  # T-068 SLICE 3. `validate_requests` is deliberately NOT set anywhere in this
+  # block — it defaults to false, and every example below still gets its 400.
+  # That is the slice-3 change: `input_schema` is REQUIRED on every 0.4 verb
+  # (T-073 = A) and §8.1 item 5 makes the operator coerce-then-validate before
+  # the handler sees an argument, so a per-verb endpoint that validated only
+  # behind a flag would be non-conformant with the flag off — and K-717's typed
+  # 400 would fall out of the schema layer on some origins and not others.
+  describe "input_schema is executable UNCONDITIONALLY on the per-verb wire" do
+    it "validates with validate_requests OFF — the flag no longer gates arguments" do
+      expect(Kiosk.configuration.validate_requests).to be(false)
+
+      declare_query("catalog", input_schema: { type: "object", additionalProperties: false,
+                                               properties: {}, required: [] }) { render json: [] }
+      status, body = call_verb(:get, "catalog", query: "nope=1")
+      expect(status).to eq(400)
+      expect(body[:code]).to   eq("bad_request")
+      expect(body[:detail]).to include("nope")
+    end
 
     it "accepts limit and cursor on a verb that declares neither, with a CLOSED schema" do
       # T-070 rule (7). getgrocery's `catalog` is exactly this schema, and

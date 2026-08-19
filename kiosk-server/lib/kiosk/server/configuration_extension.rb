@@ -347,6 +347,23 @@ module Kiosk
         @validate_requests ||= false
       end
 
+      # When true, every query/action answer is validated against the
+      # `output_schema` that verb DECLARES, and a mismatch raises — see
+      # {ResponseValidation} for why the check exists and where it runs.
+      #
+      # DEFAULT FALSE, and deliberately NOT the flag above. `validate_requests`
+      # polices what a CALLER sent; this polices what the OPERATOR's own handler
+      # rendered. Nothing a caller does can trigger it, the failure it reports is
+      # always an operator-side bug, and it costs one schema validation per
+      # answer — so it belongs in development and CI, where a descriptor that
+      # lies about its handler is cheap to fix, and not in front of a production
+      # caller who did nothing wrong. Requires the OPTIONAL `json_schemer` gem
+      # on the same terms as `validate_requests`.
+      attr_writer :validate_responses
+      def validate_responses
+        @validate_responses ||= false
+      end
+
       # ── PoW challenge-response gate (R2) ──────────────────────────────────
 
       # Reputation policy that decides when and how hard to challenge a request.

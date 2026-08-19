@@ -1,6 +1,7 @@
 # frozen_string_literal: true
 
 require "kiosk/server/errors"
+require "kiosk/server/response_validation"
 require "kiosk/server/result"
 require "kiosk/server/session_context"
 require "kiosk/server/actions"
@@ -108,11 +109,12 @@ module Kiosk
                                          hint: "See server logs for the backtrace.")
         end
 
-        if returned.is_a?(Page)
-          Result.new(kind: :rows, payload: returned.rows, next_cursor: returned.next_cursor)
-        else
-          Result.new(kind: :rows, payload: returned)
-        end
+        result = if returned.is_a?(Page)
+                   Result.new(kind: :rows, payload: returned.rows, next_cursor: returned.next_cursor)
+                 else
+                   Result.new(kind: :rows, payload: returned)
+                 end
+        validate_response!(Queries, :query, name, result)
       end
 
       # ─── run ───────────────────────────────────────────────────────────
@@ -134,7 +136,29 @@ module Kiosk
           )
         end
 
-        Result.new(kind: :value, payload: value)
+        validate_response!(Actions, :action, name, Result.new(kind: :value, payload: value))
+      end
+
+      # ─── the declared output shape (T-073 = A) ─────────────────────────
+
+      # Checks the answer against the `output_schema` the verb published, when
+      # the operator asked for it (`Kiosk.configuration.validate_responses`;
+      # default off — see {ResponseValidation} for why it is a
+      # development/CI assertion rather than a request check).
+      #
+      # It validates {Result#to_payload} — the 0.4 answer shape — so the check
+      # is the same one whichever wire asked, and it survives the cutover that
+      # deletes the other. Returns the Result so it can wrap the return value.
+      def validate_response!(registry, kind, name, result)
+        return result unless Kiosk.configuration.validate_responses
+
+        ResponseValidation.validate_payload!(
+          result.to_payload,
+          output_schema: registry.describe(name)[:output_schema],
+          verb:          name.to_s,
+          kind:          kind,
+        )
+        result
       end
 
       # ─── pay ───────────────────────────────────────────────────────────

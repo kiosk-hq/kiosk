@@ -309,11 +309,18 @@ TOKEN=$(curl -s -X POST "$BASE/kiosk/auth/register" \
 curl -s "$BASE/kiosk/schema" \
   -H "authorization: Bearer $TOKEN" | jq .
 
-#    e) call a query as the registered assistant (same: Bearer required, MAY 402)
-curl -s -X POST "$BASE/kiosk/query" \
+#    e) call a query as the registered assistant — protocol 0.4: one endpoint
+#       per verb, a query is a GET whose arguments are the query string, and the
+#       success body IS the result (no envelope to unwrap). Same as above:
+#       Bearer required, MAY 402.
+curl -s "$BASE/kiosk/catalog" \
+  -H "authorization: Bearer $TOKEN" | jq .
+
+#    f) …and an action is a POST at its own path, with the arguments as the body
+curl -s -X POST "$BASE/kiosk/create_order" \
   -H "authorization: Bearer $TOKEN" \
   -H 'content-type: application/json' \
-  -d '{"name":"catalog","params":{}}' | jq .
+  -d '{"items":[{"sku":"milk","qty":2}]}' | jq .
 ```
 
 > The exact challenge/proof JSON shape is what the demo's `/kiosk/auth/challenge`

@@ -42,6 +42,21 @@ class Kiosk::BoardController < ApplicationController
                                   description: "Listing status filter." },
                },
                required: []
+  output_schema type: "array",
+                description: "Matching listings across all sellers, newest first.",
+                items: {
+                  type: "object", additionalProperties: false,
+                  properties: {
+                    listing_id:    { type: "string", description: "uuid. Pass to edit_listing / close_listing as `listing_id`." },
+                    title:         { type: "string", description: "The seller's headline." },
+                    body:          { type: "string", description: "The listing description." },
+                    price_text:    { type: %w[string null], description: "FREE-FORM display text, e.g. \"€300\" or \"Free\" — never a cents amount, and null when the seller gave none." },
+                    category_slug: { type: "string", description: "The section it is posted in." },
+                    status:        { type: "string", description: "open | closed." },
+                    owner_handle:  { type: "string", description: "The seller's handle." },
+                  },
+                  required: %w[listing_id title body price_text category_slug status owner_handle],
+                }
   example_params({ category_slug: "bikes", keyword: "road", status: "open" })
   example_row({
     listing_id: "9c1d2e3f-4a5b-4c6d-8e7f-0a1b2c3d4e5f", title: "Carbon road bike — €300",
@@ -87,6 +102,23 @@ class Kiosk::BoardController < ApplicationController
   # verb takes no arguments" is a published fact rather than an absence an
   # assistant has to interpret.
   input_schema type: "object", additionalProperties: false, properties: {}, required: []
+  # NARROWER than a browse_listings row on purpose: an owner reading their own
+  # board does not need the body or their own handle back, so this projection
+  # is four fields rather than seven and the schema is where an assistant reads
+  # that difference instead of discovering it.
+  output_schema type: "array",
+                description: "The principal's own listings, newest first.",
+                items: {
+                  type: "object", additionalProperties: false,
+                  properties: {
+                    listing_id:    { type: "string", description: "uuid. Pass to edit_listing / close_listing as `listing_id`." },
+                    title:         { type: "string", description: "The headline." },
+                    price_text:    { type: %w[string null], description: "FREE-FORM display text, never a cents amount; null when none was given." },
+                    status:        { type: "string", description: "open | closed." },
+                    category_slug: { type: "string", description: "The section it is posted in." },
+                  },
+                  required: %w[listing_id title price_text status category_slug],
+                }
   def my_listings
     render json: Listing.owned_by_current_principal
                         .joins(:category)

@@ -20,27 +20,30 @@ Cuckatoo Cycle (opt-in, registers as `cuckatoo`).
 ### Challenge — HTTP 402 `pow_required`
 
 When the provider's reputation policy decides to challenge a request, the server
-responds with HTTP 402 instead of serving. The body carries a **`challenges`
-array** (plural) — the policy demands `count` independent proofs (N×PoW). A
+responds with HTTP 402 instead of serving. The answer is an RFC 9457 problem
+document (`application/problem+json`, accompanied by
+`WWW-Authenticate: Kiosk-PoW realm="<issuer>"`) whose flat top-level `code` is
+`pow_required` and which carries a **`challenges` array** (plural) as an
+extension member — the policy demands `count` independent proofs (N×PoW). A
 normal request gets one challenge; a suspicious one gets several:
 
 ```json
 {
-  "ok": false,
-  "error": {
-    "code":    "pow_required",
-    "message": "proof-of-work required",
-    "challenges": [
-      {
-        "id":     "<uuid>",
-        "alg":    "equihash",
-        "params": { "n": 168, "k": 7 },
-        "salt":   "<base64 of 16 raw bytes, fresh per challenge>",
-        "exp":    1750000600,
-        "sig":    "<HMAC-SHA256 hex over canonical(id|alg|params|salt|exp|request_fingerprint)>"
-      }
-    ]
-  }
+  "type":   "https://kiosk.tech/problems/pow_required",
+  "title":  "Proof-of-work required",
+  "status": 402,
+  "detail": "proof-of-work required",
+  "code":   "pow_required",
+  "challenges": [
+    {
+      "id":     "<uuid>",
+      "alg":    "equihash",
+      "params": { "n": 168, "k": 7 },
+      "salt":   "<base64 of 16 raw bytes, fresh per challenge>",
+      "exp":    1750000600,
+      "sig":    "<HMAC-SHA256 hex over canonical(id|alg|params|salt|exp|request_fingerprint)>"
+    }
+  ]
 }
 ```
 
@@ -54,7 +57,9 @@ Key properties:
   is the shipped default; `argon2id` is legacy.
 - `salt` is fresh per challenge — prevents precomputation / rainbow tables.
 - `sig` is HMAC-SHA256 (provider `pow_secret`) over the challenge fields **and
-  a fingerprint of the original request** (`SHA256(command + "\n" + canonical_json(body))`).
+  a fingerprint of the original request**
+  (`SHA256(METHOD + " " + verb + "\n" + canonical_json(args))` — see the retry
+  section below for why that formula matches on retry by construction).
   Each challenge is stateless-verifiable (no server storage needed to trust it)
   and bound to that specific request (a proof cannot be replayed against a
   different call).

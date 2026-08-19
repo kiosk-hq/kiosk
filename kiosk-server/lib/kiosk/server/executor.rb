@@ -34,8 +34,15 @@ module Kiosk
       # database connection and must NOT open a SessionContext.
       NO_DB_VERBS = %i[schema].freeze
 
-      def self.call(kind:, args:, identity:, connection:)
-        new(connection: connection, identity: identity).call(kind: kind, args: args)
+      # @param name [String, nil] the query/action wire name, when the CALLER
+      #   already knows it. The 0.4 per-verb endpoints do — it is a path
+      #   segment, not a body field — and passing it here rather than smuggling
+      #   it back into `args` means a verb is free to declare an argument
+      #   literally called `name` (none does today; the old wire could never
+      #   have allowed one). nil keeps the 0.3 behaviour: the name is popped
+      #   out of `args`.
+      def self.call(kind:, args:, identity:, connection:, name: nil)
+        new(connection: connection, identity: identity).call(kind: kind, args: args, name: name)
       end
 
       attr_reader :connection, :identity
@@ -47,7 +54,7 @@ module Kiosk
         @identity   = identity
       end
 
-      def call(kind:, args:)
+      def call(kind:, args:, name: nil)
         verb = kind.to_sym
         unless VERBS.include?(verb)
           raise Errors::BadRequest.new(
@@ -57,22 +64,22 @@ module Kiosk
         end
 
         if NO_DB_VERBS.include?(verb)
-          dispatch(verb, args) # catalog-only verbs — no DB or SessionContext needed
+          dispatch(verb, args, name) # catalog-only verbs — no DB or SessionContext needed
         elsif SELF_MANAGED_VERBS.include?(verb)
-          dispatch(verb, args) # the verb manages its own SessionContext(s)
+          dispatch(verb, args, name) # the verb manages its own SessionContext(s)
         else
           SessionContext.open(connection: connection, identity: identity) do
-            dispatch(verb, args)
+            dispatch(verb, args, name)
           end
         end
       end
 
       private
 
-      def dispatch(verb, args)
+      def dispatch(verb, args, name = nil)
         case verb
-        when :query  then verb_query(args)
-        when :run    then verb_run(args)
+        when :query  then verb_query(args, name)
+        when :run    then verb_run(args, name)
         when :pay    then verb_pay(args)
         when :schema then verb_schema(args)
         end
@@ -86,9 +93,9 @@ module Kiosk
       # itself; the Executor only threads the resulting cursor into the envelope.
       # Any other return value (e.g. a Hash from an idiosyncratic query) is
       # passed through as the rows payload unchanged, preserving back-compat.
-      def verb_query(args)
+      def verb_query(args, name = nil)
         args = symbolize(args)
-        name = args.delete(:name)
+        name ||= args.delete(:name)
         raise Errors::BadRequest, "args.name (query) required" if name.nil? || name.to_s.empty?
 
         handler = Queries.fetch(name)
@@ -110,9 +117,9 @@ module Kiosk
 
       # ─── run ───────────────────────────────────────────────────────────
 
-      def verb_run(args)
+      def verb_run(args, name = nil)
         args = symbolize(args)
-        name = args.delete(:name)
+        name ||= args.delete(:name)
         raise Errors::BadRequest, "args.name (action) required" if name.nil? || name.to_s.empty?
 
         handler = Actions.fetch(name)

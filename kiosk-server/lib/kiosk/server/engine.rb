@@ -7,6 +7,7 @@
 # in its config/routes.rb gets the ENTIRE shipped surface:
 #
 #   * the wire verbs        — GET schema, POST query / run / pay
+#   * the per-verb wire     — GET <query-name>, POST <action-name> (0.4)
 #   * the kiosk-pop plane   — GET auth/challenge, POST auth/{register,login,revoke}
 #   * JWKS                  — GET .well-known/jwks.json (under the mount)
 #   * KYC attestation       — POST agents/kyc
@@ -167,6 +168,31 @@ module Kiosk
         post "auth/assistants/link",   to: "assistants#link"
         post "auth/assistants/update", to: "assistants#update"
         post "auth/assistants/unlink", to: "assistants#unlink"
+
+        # ── The 0.4 per-verb wire (T-068 slice 1) ─────────────────────────
+        #
+        # One endpoint per registered verb — GET <endpoint>/<query-name>,
+        # POST <endpoint>/<action-name> — served from ONE constrained
+        # single-segment pair that resolves the name against the registry at
+        # request time, exactly as `GET <endpoint>/schema` renders the
+        # descriptors from it. See {VerbController} for why the engine draws
+        # these rather than the operator.
+        #
+        # DRAWN LAST, and that placement is the design's reserved-word rule
+        # (§3.2) enforced by Rails' own first-match: every route above owns
+        # its first path segment, so an operator who declares a verb called
+        # `schema` or `pay` cannot shadow the wire — the wire answers. A
+        # declaration-time REFUSAL of such a name (so the operator learns at
+        # boot rather than by their verb being unreachable) rides the
+        # descriptor slice with `bin/check-kiosk-names`.
+        #
+        # The constraint keeps a path that cannot be a verb name out of the
+        # controller entirely, so it stays a routing 404 rather than becoming
+        # a 401 from the wire.
+        get  "/:kiosk_verb", to: "verb#show",
+             constraints: { kiosk_verb: Kiosk::Server::VerbController::NAME_SEGMENT }
+        post "/:kiosk_verb", to: "verb#create",
+             constraints: { kiosk_verb: Kiosk::Server::VerbController::NAME_SEGMENT }
       end
     end
   end

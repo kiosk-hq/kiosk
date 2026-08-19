@@ -721,17 +721,19 @@ namespace :demo do
     Boots the server over the ~100-hotel catalogue, registers a fresh agent, and
     runs script/search_flow.rb to PROVE the data-plane pagination shape:
 
-      • search_hotels with a small limit returns a FULL page carrying a top-level
-        `next` cursor (the result was truncated — silent truncation is now visible).
-      • echoing that `next` back as `cursor` returns the FOLLOWING page, and the
-        two pages are DISJOINT (real paging, not the same slice).
-      • a filtered search that fits in one page is a BARE ARRAY and omits `next`
-        (complete result — an array has nowhere to put a cursor).
+      • search_hotels with a small limit returns a FULL page — a BARE ARRAY —
+        carrying an RFC 8288 `Link: <…>; rel="next"` header (truncated) and an
+        `X-Total-Count` larger than the page.
+      • FOLLOWING that link verbatim returns the FOLLOWING page, and the two
+        pages are DISJOINT (real paging, not the same slice).
+      • a filtered search that fits in one page is the SAME bare array with no
+        `Link` at all (complete result — the link's absence is the signal).
       • hotel_detail on a summary row's id returns a ONE-ROW ARRAY carrying the
         full property with rooms (the "search returns summaries, fetch detail on
-        demand" pattern; K-794 made it answer rows like every other
-        non-paginating query), and an id nobody has returns the EMPTY array
-        rather than a 404.
+        demand" pattern; K-794 made it answer rows like every other query), and
+        an id nobody has is 404 not_found on BOTH hotel_detail and availability
+        (T-090: that argument addresses a property, so an empty list would be a
+        false statement rather than an empty result).
 
     Exits 0 if all assertions pass; exits 1 on any miss.
   DESC
@@ -816,22 +818,36 @@ namespace :demo do
 
     check.call(result["http_page1"] == 200, "search_hotels page 1 → 200", "page 1 HTTP #{result["http_page1"].inspect}")
 
-    # THE pagination proof: a full page carries `next`; echoing it returns a
-    # DISJOINT next page; the last (filtered, complete) page omits `next`.
+    # THE pagination proof (T-092): every page is a BARE ARRAY; a truncated one
+    # carries `Link: …; rel="next"`; following that link verbatim returns a
+    # DISJOINT next page; the last (filtered, complete) page carries no link.
     check.call(result["page1_count"] == 20,
                "page 1 is a full page of 20 rows", "page 1 count #{result["page1_count"].inspect} (expected 20)")
+    check.call(result["page1_is_array"] == true,
+               "page 1 is a BARE ARRAY — a paginating query has no shape of its own",
+               "page 1 is not a bare array (#{result["page1_is_array"].inspect}) — the " \
+               "`{rows, next}` object was supposed to go with RFC 8288")
     check.call(!result["page1_next"].to_s.empty?,
-               "page 1 carries `next` (truncated) — #{result["page1_next"].inspect}",
-               "page 1 missing `next` — truncation is silent")
+               "page 1 carries Link rel=\"next\" (truncated) — #{result["page1_next"].inspect}",
+               "page 1 has no Link rel=\"next\" — truncation is silent")
+    check.call(result["page1_total"].to_i > result["page1_count"].to_i,
+               "X-Total-Count (#{result["page1_total"].inspect}) counts the MATCHING set, " \
+               "not the page (#{result["page1_count"]})",
+               "X-Total-Count #{result["page1_total"].inspect} is not larger than the page " \
+               "#{result["page1_count"].inspect} — it must count matching rows, never returned ones")
     check.call(result["page2_count"].to_i >= 1 && result["pages_disjoint"] == true,
-               "echoing `next` as `cursor` returns a DISJOINT next page (#{result["page2_count"]} rows)",
+               "FOLLOWING the Link target returns a DISJOINT next page (#{result["page2_count"]} rows)",
                "next page empty or overlapping (count=#{result["page2_count"].inspect}, disjoint=#{result["pages_disjoint"].inspect})")
     check.call(result["filtered_has_next"] == false && result["filtered_is_array"] == true,
-               "the filtered (complete) search is a BARE ARRAY and omits `next` " \
+               "the filtered (complete) search is the SAME bare array and carries no Link " \
                "(#{result["filtered_count"]} rows)",
-               "filtered search is not a bare array without `next` " \
-               "(array=#{result["filtered_is_array"].inspect}, next=#{result["filtered_has_next"].inspect}) " \
+               "filtered search is not a bare array without a `next` link " \
+               "(array=#{result["filtered_is_array"].inspect}, link=#{result["filtered_has_next"].inspect}) " \
                "— cannot signal completeness")
+    check.call(result["filtered_total"].to_i == result["filtered_count"].to_i,
+               "a COMPLETE answer's X-Total-Count equals its row count (#{result["filtered_count"]})",
+               "complete answer X-Total-Count #{result["filtered_total"].inspect} != " \
+               "row count #{result["filtered_count"].inspect}")
 
     # detail-by-id: search returns summaries, fetch detail on demand.
     check.call(result["http_detail"] == 200 && result["detail_room_count"].to_i >= 1,
@@ -845,14 +861,21 @@ namespace :demo do
                "hotel_detail answers a ONE-ROW ARRAY (spec §8.2)",
                "hotel_detail is not a one-row array " \
                "(array=#{result["detail_is_array"].inspect}, rows=#{result["detail_row_count"].inspect})")
-    check.call(result["http_unknown_detail"] == 200 &&
-               result["unknown_detail_is_array"] == true &&
-               result["unknown_detail_row_count"] == 0,
-               "hotel_detail for an id nobody has → 200 with the EMPTY array",
+    # T-090 / spec §9.1: `property_id` ADDRESSES a property, so an id nobody has
+    # is 404 — on BOTH verbs that take it. The pair used to disagree, which is
+    # what made the rule Phil's call.
+    check.call(result["http_unknown_detail"] == 404 &&
+               result["unknown_detail_code"] == "not_found",
+               "hotel_detail for an id nobody has → 404 not_found",
                "hotel_detail for an unknown id answered " \
                "http=#{result["http_unknown_detail"].inspect} " \
-               "array=#{result["unknown_detail_is_array"].inspect} " \
-               "rows=#{result["unknown_detail_row_count"].inspect} (want 200 / [])")
+               "code=#{result["unknown_detail_code"].inspect} (want 404 / not_found)")
+    check.call(result["http_unknown_availability"] == 404 &&
+               result["unknown_availability_code"] == "not_found",
+               "availability for the SAME unknown id → 404 not_found (the two verbs agree)",
+               "availability for an unknown id answered " \
+               "http=#{result["http_unknown_availability"].inspect} " \
+               "code=#{result["unknown_availability_code"].inspect} (want 404 / not_found)")
 
     if failures.empty?
       puts "\n  All pagination + detail assertions passed."

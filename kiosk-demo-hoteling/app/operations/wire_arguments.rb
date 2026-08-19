@@ -87,6 +87,42 @@ module WireArguments
     )]
   end
 
+  # ── T-090: A `property_id` THAT ADDRESSES NOTHING IS 404, NOT AN EMPTY LIST ──
+  #
+  # Spec §9.1's three-way rule, and this is its second branch: an argument that
+  # names a SPECIFIC RESOURCE gets `404 not_found` when the resource does not
+  # exist, because an empty list would assert it exists and merely has no rows.
+  # Two verbs call this — `hotel_detail`, which addresses a property outright,
+  # and `availability`, whose room types belong to that one property — and they
+  # get the SAME sentence from here, which is the whole reason it lives in this
+  # file rather than in either controller. Until today they disagreed: one
+  # answered 404 and the other `200 []` for the same unknown id on the same
+  # origin, which is the pair that made this Phil's call.
+  #
+  # NOT a `bad_request`. The value is well-formed and inside its declared type;
+  # nothing about the request is malformed. What is absent is the thing it
+  # points at, and that distinction is the difference between "fix your call"
+  # and "that hotel is not here".
+  #
+  # @return [OperationResult, nil] a refusal, or nil when the property exists
+  def existing_property(property_id)
+    return nil if Property.exists?(id: property_id)
+
+    property_not_found(property_id)
+  end
+
+  # The refusal itself, with no lookup. `hotel_detail` has ALREADY established
+  # the property is absent (its own `pick` came back nil), and paying for a
+  # second `SELECT 1` to learn the same thing would be the price of sharing a
+  # sentence. This is how the sentence is shared instead.
+  def property_not_found(property_id)
+    OperationResult.refused(
+      code:    "not_found",
+      message: "hotel not found: #{property_id}",
+      hint:    "call search_hotels (or properties) and pass a `property_id` from a row.",
+    )
+  end
+
   # The sentence the raw handlers raised for an absent argument, unchanged. An
   # argument that is PRESENT but null or empty now lands here too: it used to
   # reach Postgres as `''::integer` / `''::date` and come back a 500.

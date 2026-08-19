@@ -41,6 +41,26 @@ class Kiosk::StorefrontController < ActionController::API
               "age_restricted item can only be ORDERED (create_order) by an agent that has completed an " \
               "18+ anonymized-KYC check (run request_kyc first); non-restricted items need no KYC."
   input_schema type: "object", additionalProperties: false, properties: {}, required: []
+  # A bare array — the whole in-stock shelf, name-ordered, not paginated.
+  # `low` and `age_restricted` are OPTIONAL by construction: the handler appends
+  # each only when it is true, because publishing `false` on every ordinary
+  # grocery would be noise in the largest catalogue in the fleet. So an ABSENT
+  # flag means false, which is what the `required` list below says.
+  output_schema type: "array",
+                description: "In-stock products, name-ordered.",
+                items: {
+                  type: "object", additionalProperties: false,
+                  properties: {
+                    sku:            { type: "string", description: "The stable product handle — reference products by this, never by a numeric id." },
+                    name:           { type: "string", description: "Display name." },
+                    price_cents:    { type: "integer", description: "EUR cents. Sign carts at exactly this price." },
+                    price_eur:      { type: "string", description: "The same price rendered for a human, e.g. \"€4.49\"." },
+                    currency:       { type: "string", description: "eur." },
+                    low:            { type: "boolean", description: "Present and true only when stock is running out; absent means it is not." },
+                    age_restricted: { type: "boolean", description: "Present and true only on alcohol, which create_order accepts only after an 18+ KYC check; absent means unrestricted." },
+                  },
+                  required: %w[sku name price_cents price_eur currency],
+                }
   example_params({})
   example_row({
     sku: "sourdough-bread", name: "Sourdough Bread", price_cents: 449,
@@ -99,6 +119,22 @@ class Kiosk::StorefrontController < ActionController::API
                  delivery_address: { type: "string", description: "Dublin delivery address naming a served postal district." },
                },
                required: ["date", "delivery_address"]
+  # A bare array of the still-bookable windows for that date. EMPTY is an
+  # honest answer here and only here: every one of today's windows may already
+  # have begun, in which case the earliest bookable slot is on a later date.
+  output_schema type: "array",
+                description: "The still-bookable delivery windows for the requested date and zone.",
+                items: {
+                  type: "object", additionalProperties: false,
+                  properties: {
+                    delivery_slot_id: { type: "integer", description: "Pass to create_order as `delivery_slot_id`." },
+                    date:             { type: "string", description: "YYYY-MM-DD — pass to create_order as `delivery_date` so the booking lands on the day you saw." },
+                    slot_at:          { type: "string", description: "The window's start instant, ISO 8601 with offset." },
+                    label:            { type: "string", description: "The window rendered for a human, e.g. \"08:00–10:00\"." },
+                    zone:             { type: "string", description: "The served Dublin postal district the address routed to." },
+                  },
+                  required: %w[delivery_slot_id date slot_at label zone],
+                }
   example_params({ date: "2026-08-10", delivery_address: "42 Camden Street, Dublin 2" })
   example_row({ delivery_slot_id: 1, date: "2026-08-10", slot_at: "2026-08-10T08:00:00+01:00",
                 label: "08:00–10:00", zone: "D02" })
@@ -147,6 +183,23 @@ class Kiosk::StorefrontController < ActionController::API
   # supplies no filter; the scope is provider-controlled and un-bypassable.
   description "List this principal's orders with delivery slot, address, and a paid flag (scoped to authenticated user via kiosk.current_user_id()). Each row carries an `order_id`; pass it to reschedule_delivery (or create_order to replace an unpaid order) as `order_id`. Use the `paid` flag as a settlement lookup: after a pay whose response you did not receive, re-read my_orders and only retry pay if the order is still unpaid (K-545)."
   input_schema type: "object", additionalProperties: false, properties: {}, required: []
+  # A bare array, newest first. `slot_at` and `address` are the two nullable
+  # columns on `orders` and travel as null rather than being dropped, so the
+  # row shape does not change with the order's completeness.
+  output_schema type: "array",
+                description: "The principal's orders, newest first.",
+                items: {
+                  type: "object", additionalProperties: false,
+                  properties: {
+                    order_id:    { type: "string", description: "Pass to reschedule_delivery (or to create_order, to replace an unpaid order) as `order_id`." },
+                    status:      { type: "string", description: "The operator's order status." },
+                    total_cents: { type: "integer", description: "EUR cents." },
+                    slot_at:     { type: %w[string null], description: "The booked delivery window's start instant, ISO 8601 with offset, or null." },
+                    address:     { type: %w[string null], description: "The delivery address on the order, or null." },
+                    paid:        { type: "boolean", description: "The settlement lookup: after a pay whose response you did not receive, re-read this and retry pay only if it is still false." },
+                  },
+                  required: %w[order_id status total_cents slot_at address paid],
+                }
   def my_orders
     # `paid` is {Order.paid_flag} over the CALLER's settlements — the same
     # containment the operator's back office reads over ALL of them, which is
@@ -198,6 +251,28 @@ class Kiosk::StorefrontController < ActionController::API
                                description: "The verification to poll — the `request_id` request_kyc returned." },
                },
                required: ["request_id"]
+  # A ONE-ROW array: this is a query and a query answers with rows. The two
+  # shapes are the two states, and `kyc_jws` exists only in the approved one —
+  # there is nothing to hand back before the human acts, and nothing to leak.
+  output_schema type: "array",
+                description: "Exactly one row: the verification's current state.",
+                minItems: 1, maxItems: 1,
+                items: {
+                  oneOf: [
+                    { type: "object", additionalProperties: false,
+                      description: "Not yet approved.",
+                      properties: { status: { enum: %w[pending declined],
+                                              description: "pending = the human has not acted; declined is TERMINAL — start a new request_kyc instead of polling." } },
+                      required: ["status"] },
+                    { type: "object", additionalProperties: false,
+                      description: "Approved — the signed attestation is here.",
+                      properties: {
+                        status:  { const: "approved", description: "approved." },
+                        kyc_jws: { type: "string", description: "A full compact JWS. Submit the ENTIRE value to POST /kiosk/agents/kyc, then retry create_order." },
+                      },
+                      required: %w[status kyc_jws] },
+                  ],
+                }
   def kyc_status
     return render_refusal(WireArguments.missing("request_id")) if params[:request_id].blank?
 

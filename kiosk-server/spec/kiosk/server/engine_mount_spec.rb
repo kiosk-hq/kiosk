@@ -61,12 +61,15 @@ RSpec.describe "mount Kiosk::Server::Engine (the one-line surface)" do
 
       res = probe("mounted", "GET /agents.json")
       expect(res["status"]).to eq(200)
+      # The pointer carries the boot digest as `?v=` (T-094).
       expect(JSON.parse(res["body"]).dig("x-kiosk", "schema"))
-        .to eq("/kiosk/schema")
+        .to match(%r{\A/kiosk/schema\?v=[0-9a-f]{32}\z})
 
       res = probe("mounted", "GET /.well-known/kiosk.json")
       expect(res["status"]).to eq(200)
       expect(JSON.parse(res["body"]).dig("kiosk", "capabilities")).to include("queries")
+      expect(JSON.parse(res["body"]).dig("kiosk", "schema_url"))
+        .to match(%r{\Ahttp://localhost/kiosk/schema\?v=[0-9a-f]{32}\z})
 
       res = probe("mounted", "GET /.well-known/agent-configuration")
       expect(res["status"]).to eq(200)
@@ -90,18 +93,30 @@ RSpec.describe "mount Kiosk::Server::Engine (the one-line surface)" do
       expect(res["headers"]).to have_key("kiosk-server-version")
     end
 
-    it "routes the two RESERVED wire endpoints into WireController (401 problem, not 404)" do
-      # Two, not four: `POST <endpoint>/{query,run}` were DELETED at the 0.4
-      # cutover (T-074 = A) — see the example below for what answers there now.
-      {
-        "GET /kiosk/schema" => "schema",
-        "POST /kiosk/pay"   => "pay",
-      }.each do |request_line, verb|
-        res = probe("mounted", request_line)
-        expect(res["status"]).to eq(401), "#{verb}: expected 401, got #{res["status"]}"
-        expect(res["headers"]["content-type"]).to include("application/problem+json")
-        expect(JSON.parse(res["body"])["code"]).to eq("unauthenticated")
-      end
+    it "routes the RESERVED `pay` into WireController (401 problem, not 404)" do
+      # `POST <endpoint>/{query,run}` were DELETED at the 0.4 cutover
+      # (T-074 = A) — see the example below for what answers there now.
+      res = probe("mounted", "POST /kiosk/pay")
+      expect(res["status"]).to eq(401)
+      expect(res["headers"]["content-type"]).to include("application/problem+json")
+      expect(JSON.parse(res["body"])["code"]).to eq("unauthenticated")
+    end
+
+    # THE OTHER RESERVED ENDPOINT, AND IT ANSWERS THE OPPOSITE (T-094).
+    # `GET /kiosk/schema` was in the loop above until 2026-08-19. It is public
+    # now — routed into the same controller, resolving no identity — so the
+    # end-to-end proof that the route reaches the engine is a 200 CATALOG
+    # rather than a 401 problem document.
+    it "routes the RESERVED `schema` into WireController and answers it PUBLIC" do
+      res = probe("mounted", "GET /kiosk/schema")
+      expect(res["status"]).to eq(200)
+      expect(res["headers"]["cache-control"]).to eq("max-age=300, public")
+      expect(res["headers"]["etag"]).to match(/\A"[0-9a-f]{32}"\z/)
+      # A public document must not vary on headers it does not read.
+      expect(res["headers"]).not_to have_key("vary")
+      body = JSON.parse(res["body"])
+      expect(body.keys).to eq(%w[queries actions])
+      expect(body["queries"]).not_to be_empty
     end
 
     it "has no 0.3 multiplexed wire left: /query and /run are unregistered verb NAMES" do
@@ -205,7 +220,7 @@ RSpec.describe "mount Kiosk::Server::Engine (the one-line surface)" do
       res = probe("double_draw", "GET /agents.json")
       expect(res["status"]).to eq(200)
       expect(JSON.parse(res["body"]).dig("x-kiosk", "schema"))
-        .to eq("/kiosk/schema")
+        .to match(%r{\A/kiosk/schema\?v=[0-9a-f]{32}\z})
 
       expect(probe("double_draw", "GET /kiosk/.well-known/jwks.json")["status"]).to eq(200)
     end

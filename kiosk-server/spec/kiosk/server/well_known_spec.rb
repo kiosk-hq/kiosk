@@ -75,15 +75,47 @@ RSpec.describe Kiosk::Server::WellKnown do
       expect(d[:kiosk][:capabilities]).to eq(%w[schema queries actions pay])
     end
 
-    # This document is served UNAUTHENTICATED at the origin root. The module
-    # answer (T-075 = A) exists so that fact costs the operator nothing: the
-    # verb names stay behind the Bearer gate on `GET <endpoint>/schema`.
-    it "never names a registered verb in the unauthenticated document" do
+    # STILL TRUE, FOR A DIFFERENT REASON (T-093, 2026-08-19). It was a
+    # SECURITY property — the verb names stayed behind the Bearer gate on
+    # `GET <endpoint>/schema`. That gate is gone and the api-catalog now
+    # hyperlinks every verb, so nothing is being withheld here. What holds the
+    # rule up is T-075 = A: `kiosk.json` is a POINTER, not a copy of the
+    # contract. An assistant reads the module set here and the names from the
+    # catalog, and there is exactly one place each of those is published.
+    it "never names a registered verb in this document — pointer, not copy" do
       declare_query("secret_pricing_tiers")
       declare_action("cancel_enterprise_contract")
       d = described_class.build(base_url: "https://api.acme.example")
       expect(JSON.generate(d)).not_to include("secret_pricing_tiers")
       expect(JSON.generate(d)).not_to include("cancel_enterprise_contract")
+    end
+
+    # ── THE CACHE-BUSTED CATALOG LINK (T-094) ────────────────────────────
+    #
+    # This document is the SHORT-lived half of the asset-pipeline pair: it
+    # expires in minutes and republishes the link, which is what lets
+    # `/kiosk/schema?v=<digest>` be cached for a year. Without the digest in
+    # the URL a week-long TTL on a FIXED path means a CDN serving a catalogue
+    # from before the last deploy — invisibly, to an assistant that then calls
+    # verbs which no longer exist.
+    it "links the catalog at its digest-versioned, immutable URL" do
+      declare_query("catalog")
+      d = described_class.build(base_url: "https://api.acme.example")
+      digest = Kiosk::Server::SchemaDocument.digest
+
+      expect(d[:kiosk][:schema_url])
+        .to eq("https://api.acme.example/kiosk/schema?v=#{digest}")
+      expect(digest).to match(/\A[0-9a-f]{32}\z/)
+    end
+
+    it "moves that link when the catalog moves — that is the whole mechanism" do
+      declare_query("catalog")
+      before_add = described_class.build(base_url: "https://api.acme.example")[:kiosk][:schema_url]
+
+      declare_action("checkout")
+      after_add = described_class.build(base_url: "https://api.acme.example")[:kiosk][:schema_url]
+
+      expect(after_add).not_to eq(before_add)
     end
 
     it "passes through an explicitly pinned capability list" do
@@ -309,7 +341,10 @@ RSpec.describe Kiosk::Server::WellKnown do
       d = described_class.agents_json(base_url: "https://api.acme.example")
       xk = d[:"x-kiosk"]
       expect(xk.keys).to eq(%i[schema api_catalog mount_path api_version])
-      expect(xk[:schema]).to eq("/kiosk/schema")
+      # The pointer carries the same `?v=<digest>` cache-buster `kiosk.json`
+      # publishes (T-094): a pointer a client may follow must point at the URL
+      # that is safe to cache.
+      expect(xk[:schema]).to eq("/kiosk/schema?v=#{Kiosk::Server::SchemaDocument.digest}")
       expect(xk[:api_catalog]).to eq("/.well-known/api-catalog")
       expect(xk[:mount_path]).to eq("/kiosk")
       expect(xk[:api_version]).to eq(Kiosk::Protocol::API_VERSION)
@@ -328,7 +363,8 @@ RSpec.describe Kiosk::Server::WellKnown do
       expect(xk).not_to have_key(:min_client)
     end
 
-    it "never names a registered verb in the unauthenticated companion" do
+    # Same rule, same NEW reason as kiosk.json above: a pointer, not a copy.
+    it "never names a registered verb in this companion — pointer, not copy" do
       declare_query("secret_pricing_tiers")
       d = described_class.agents_json(base_url: "https://api.acme.example")
       expect(JSON.generate(d)).not_to include("secret_pricing_tiers")
@@ -489,25 +525,27 @@ RSpec.describe Kiosk::Server::WellKnown do
 
     it "maps only the modules that still HAVE a single endpoint" do
       # `queries` and `actions` LEFT this table at the 0.4 cutover, with the
-      # two multiplexed endpoints they named (T-074 = A). They have no
-      # replacement here by design: their 0.4 endpoints are one per verb, and
-      # this document is unauthenticated (K-799).
+      # two multiplexed endpoints they named (T-074 = A), and they do not come
+      # back: a module holding N verbs has N endpoints, so the catalog links
+      # THE VERBS (below) rather than inventing a module URL that answers
+      # nothing.
       expect(described_class::MODULE_ENDPOINTS).to eq("pay" => "pay")
     end
 
-    it "links one endpoint per module that still has one, and nothing else" do
+    it "links the two descriptions, THEN every registered verb, then pay" do
       declare_query("catalog")
       declare_action("checkout")
       Kiosk.configure { |c| c.payment_provider = Object.new }
       d = described_class.api_catalog(base_url: "https://api.acme.example")
       hrefs = member(d)[:item].map { |i| i[:href] }
-      # Every module is live here — schema, queries, actions AND pay — and the
-      # whole linkset is still these four links: the two Bearer-gated service
-      # descriptions, the one fixed `pay` endpoint, and the agents.json
-      # companion. `queries`/`actions` contribute nothing, because the
-      # endpoints they used to name no longer exist.
+      # Every module is live here — schema, queries, actions AND pay. The two
+      # `service-desc` members are UNCHANGED by T-093 (the strict RFC 9727
+      # reading survives); what is new is one `item` per registered verb,
+      # ALONGSIDE them, at the real 0.4 endpoint the verb answers on.
       expect(hrefs).to eq(["https://api.acme.example/kiosk/schema",
                            "https://api.acme.example/kiosk/openapi.json",
+                           "https://api.acme.example/kiosk/catalog",
+                           "https://api.acme.example/kiosk/checkout",
                            "https://api.acme.example/kiosk/pay",
                            "https://api.acme.example/agents.json"])
       expect(hrefs).not_to include("https://api.acme.example/kiosk/query")
@@ -524,29 +562,72 @@ RSpec.describe Kiosk::Server::WellKnown do
       expect(hrefs).not_to include("https://api.acme.example/kiosk/pay")
     end
 
-    # ── K-799: the catalog is UNAUTHENTICATED, so it links descriptions, not
-    # verbs. T-075's sibling clause asked for a link per registered verb; that
-    # is option B by another name, on the same public plane, and it would undo
-    # the Bearer gate on `schema`, the Bearer gate on `openapi.json` and
-    # VerbController's 401-before-404 ordering in one document. Filed for Phil.
-    it "never hyperlinks a registered verb name" do
+    # ── K-799 = (b), T-093: THE INVERSE OF WHAT THIS FILE ASSERTED ───────
+    #
+    # This example is the same two fixture verbs as before — deliberately
+    # named to sound like secrets — with the expectation turned around. Until
+    # 2026-08-19 the catalog was required NOT to contain them, because it is
+    # unauthenticated and the catalogue was behind a Bearer token. Phil
+    # answered the premise: «на статичных GET endpoint'ах — пожалуйста…
+    # Пускай долбятся в них сколько хотят без аутентификации». The names are
+    # not secret, and this document is a render of in-process state, so it
+    # caches behind a CDN and anonymous enumeration costs the origin nothing.
+    #
+    # It is written as the POSITIVE assertion rather than as the removal of a
+    # negative one: "does not refuse to publish" is a green nothing, and this
+    # has to fail if the widening is ever quietly reverted.
+    it "hyperlinks EVERY registered verb, at its own endpoint, unauthenticated" do
       declare_query("secret_pricing_tiers")
       declare_action("cancel_enterprise_contract")
       d = described_class.api_catalog(base_url: "https://api.acme.example")
-      body = JSON.generate(d)
-      expect(body).not_to include("secret_pricing_tiers")
-      expect(body).not_to include("cancel_enterprise_contract")
+      items = member(d)[:item]
+
+      expect(items).to include(
+        { href: "https://api.acme.example/kiosk/secret_pricing_tiers",
+          rel: "item", "kiosk-method": ["GET"] },
+        { href: "https://api.acme.example/kiosk/cancel_enterprise_contract",
+          rel: "item", "kiosk-method": ["POST"] },
+      )
     end
 
-    # Both descriptions that DO enumerate the verbs are linked — and both
-    # answer 401 without a Bearer token. That is the trade this shape makes:
-    # discoverable location, gated content.
-    it "links both verb-enumerating descriptions, each of them Bearer-gated" do
+    # The METHOD is the half a bare href cannot carry, and it is not decorative:
+    # a GET at an action's path is a 405. `kiosk-method` is an EXTENSION target
+    # attribute, so RFC 9264 §4.2.4.3 serializes it as an array of strings.
+    it "says which METHOD reaches each verb — GET a query, POST an action" do
+      declare_query("catalog")
+      declare_action("checkout")
+      d = described_class.api_catalog(base_url: "https://api.acme.example")
+      by_href = member(d)[:item].to_h { |i| [i[:href], i[:"kiosk-method"]] }
+
+      expect(by_href["https://api.acme.example/kiosk/catalog"]).to eq(["GET"])
+      expect(by_href["https://api.acme.example/kiosk/checkout"]).to eq(["POST"])
+      # A service description is not an operation and carries no method.
+      expect(by_href["https://api.acme.example/kiosk/schema"]).to be_nil
+    end
+
+    # The RFC question T-093 re-settled: Phil overruled the SECURITY objection,
+    # not slice 5's reading of RFC 9727 (a catalog lists APIs and points at
+    # their DESCRIPTIONS). So both members survive, unchanged, and the
+    # operations were ADDED alongside them rather than replacing them.
+    it "keeps both service-desc members — the operations are added, not swapped in" do
       declare_query("catalog")
       d = described_class.api_catalog(base_url: "https://api.acme.example")
       descs = member(d)[:item].select { |i| i[:rel] == "service-desc" }.map { |i| i[:href] }
       expect(descs).to eq(["https://api.acme.example/kiosk/schema",
                            "https://api.acme.example/kiosk/openapi.json"])
+    end
+
+    # THE CONDITION ON THE K-799 ANSWER, which is a condition and not a
+    # footnote: it covers documents that are CHEAP AND STATIC to compose.
+    # Widening the loop is only in scope while every member comes from
+    # in-process state.
+    it "composes from the registry alone — no per-request work to widen it" do
+      declare_query("catalog")
+      declare_action("checkout")
+
+      expect(Kiosk::Server::Queries).to receive(:known).at_least(:once).and_call_original
+      expect(Kiosk::Server::Actions).to receive(:known).at_least(:once).and_call_original
+      described_class.api_catalog(base_url: "https://api.acme.example")
     end
 
     it "links no wire endpoints when nothing is registered (schema module absent)" do

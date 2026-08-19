@@ -7,6 +7,7 @@
 # escape hatch.
 
 require "action_controller"
+require "kiosk/server/headers"
 require "kiosk/server/well_known"
 
 module Kiosk
@@ -40,6 +41,7 @@ module Kiosk
       # GET /agents.json — native agents.json v1.0 companion.
       def agents_json
         allow_cors
+        short_ttl
         render json: WellKnown.agents_json(base_url: request.base_url)
       end
 
@@ -52,6 +54,7 @@ module Kiosk
       # alias). Renders the WellKnown.build_json string verbatim so the alias
       # stays byte-identical to the canonical document.
       def kiosk_json
+        short_ttl
         render json: WellKnown.build_json(base_url: request.base_url)
       end
 
@@ -61,6 +64,7 @@ module Kiosk
       # profile parameter.
       def api_catalog
         allow_cors
+        short_ttl
         render json: WellKnown.api_catalog(base_url: request.base_url),
                content_type: 'application/linkset+json; ' \
                              'profile="https://www.rfc-editor.org/info/rfc9727"'
@@ -82,6 +86,23 @@ module Kiosk
       # `Access-Control-Allow-Origin: *`.
       def allow_cors
         response.set_header("Access-Control-Allow-Origin", "*")
+      end
+
+      # THE SHORT HALF OF THE CACHE-BUSTING PAIR (T-094).
+      #
+      # These three documents carry the `?v=<digest>` link to
+      # `<endpoint>/schema`, which is cacheable for a YEAR precisely because
+      # nothing is pointed at a stale copy of it. That property is only true
+      # while the POINTER expires quickly: a deploy changes the digest, and a
+      # client re-reads this document within {Headers::SHORT_MAX_AGE} seconds
+      # to find the new link. A long TTL here would move the staleness rather
+      # than remove it.
+      #
+      # `public`, because these documents are the same bytes for every caller
+      # and are meant to be absorbed by a CDN — which is exactly what the
+      # K-799 answer leans on when it accepts anonymous enumeration.
+      def short_ttl
+        response.set_header("Cache-Control", Headers::PUBLIC_SHORT)
       end
     end
   end

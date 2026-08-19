@@ -11,8 +11,8 @@
 #   * the controller feeds the gate the METHOD and the PATH-SEGMENT verb, so a
 #     proof solved for `GET /kiosk/catalog?q=milk` is spendable there and on no
 #     other endpoint;
-#   * the reserved `GET <endpoint>/schema` carries its proof the same way, and
-#     answers a bare request with the pow_required PROBLEM DOCUMENT;
+#   * the reserved `GET <endpoint>/schema` is NEVER tolled — it went public in
+#     T-094, and a toll needs an identity to charge;
 #   * every accepted header form (single proof, JSON array, repeated
 #     `\n`-joined lines, proxy comma-combined) reaches the gate;
 #   * a proof placed in an action's BODY is not a proof — the gate re-challenges;
@@ -209,21 +209,33 @@ RSpec.describe "Kiosk-PoW header path (ADR-0022)" do
     expect(status).to eq(200)
   end
 
-  # ── the reserved GET schema carries its proof via the header ───────────────
-  it "carries the schema (GET) proof via the header and proceeds" do
-    ch    = issue_challenge(command: :schema, method: "GET", verb: "schema", body: {})
-    proof = { challenge: ch, nonce: solve_nonce(ch) }
-
-    status, = dispatch_reserved(
-      :schema, env_for("/kiosk/schema", method: "GET", pow_header: JSON.generate(proof)),
-    )
+  # ── the reserved GET schema is PUBLIC AND FREE (T-094) ─────────────────────
+  #
+  # This pair asserted the OPPOSITE until 2026-08-19: `schema` was tolled as
+  # `:schema`, so one example proved a proof travelled in the header on a GET
+  # and the other proved a bare request was re-challenged. Both statements are
+  # now false OF `schema` — and NEITHER PROPERTY IS LOST, which is why they are
+  # replaced rather than deleted: the header-on-a-GET half is asserted at the
+  # top of this file on a per-verb query, and the re-challenge SHAPE is
+  # asserted immediately below on one. What goes in their place is the fact
+  # that made them false.
+  #
+  # The toll was the gate's one substantive warrant — enumerating the
+  # catalogue should cost something — and it died with the gate: the document
+  # is a cacheable static answer, so serving it costs the origin nothing, and
+  # a toll has no identity to charge. The policy in this file challenges EVERY
+  # verb, which is what makes the 200 below mean something.
+  it "never tolls GET /kiosk/schema, under a policy that challenges everything" do
+    status, headers, body =
+      dispatch_reserved(:schema, Rack::MockRequest.env_for("/kiosk/schema"))
 
     expect(status).to eq(200)
+    expect(headers).not_to have_key("WWW-Authenticate")
+    expect(body).to have_key(:queries)
   end
 
-  it "re-challenges the schema GET with a fresh 402 problem document when no header is sent" do
-    status, headers, problem =
-      dispatch_reserved(:schema, env_for("/kiosk/schema", method: "GET"))
+  it "re-challenges a per-verb GET with a fresh 402 problem document when no header is sent" do
+    status, headers, problem = get_verb("catalog", query: "q=milk")
 
     expect(status).to eq(402)
     expect(headers["WWW-Authenticate"]).to eq('Kiosk-PoW realm="https://demo.example"')

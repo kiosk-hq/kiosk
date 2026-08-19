@@ -1,6 +1,9 @@
 # frozen_string_literal: true
 
 require "json"
+require "kiosk/server/actions"
+require "kiosk/server/queries"
+require "kiosk/server/schema_document"
 
 module Kiosk
   module Server
@@ -36,12 +39,11 @@ module Kiosk
       # is absent because it is linked as a `service-desc` instead.
       #
       # `queries` and `actions` LEFT this table at the 0.4 cutover, with the
-      # two multiplexed endpoints they mapped to (T-074 = A). They have no
-      # replacement here BY DESIGN: their 0.4 endpoints are one per verb, and
-      # linking those from an UNAUTHENTICATED document is exactly the
-      # enumeration K-799 is open about and slice 5 declined to ship. So the
-      # catalog links the two service DESCRIPTIONS (both Bearer-gated) and
-      # `pay`, which is a single fixed endpoint and outlives them.
+      # two multiplexed endpoints they mapped to (T-074 = A), and they do not
+      # come back: a module that holds N verbs has N endpoints, so the catalog
+      # links THE VERBS (see {api_catalog}, T-093) rather than inventing a
+      # module-level URL that answers nothing. `pay` stays because it really is
+      # one fixed endpoint.
       MODULE_ENDPOINTS = { "pay" => "pay" }.freeze
 
       # Build the well-known document as a Hash, ready to JSON-serialize.
@@ -78,9 +80,29 @@ module Kiosk
           },
           # The MODULES this origin serves — subset of
           # schema/queries/actions/pay, computed from the live registry
-          # (T-075 = A, ADR-0025). Never the registered verb NAMES: this
-          # document is unauthenticated, and the catalog is Bearer-gated.
+          # (T-075 = A, ADR-0025). Not the registered verb NAMES, and since
+          # T-094 that is a MODELLING statement rather than a security one: the
+          # catalog is public now, so the names are one hop away at
+          # `schema_url` below. What the module set buys is what an assistant
+          # can act on BEFORE it fetches anything — which branches of its own
+          # instructions apply: is there a catalog at all, are there writes,
+          # can this origin take money.
+          #
+          # It is also the ONE place the module set is published. `schema`'s
+          # descriptor carried a byte-identical copy under `verbs` until T-095;
+          # it was the same `Array(config.capabilities)` call, so it was one
+          # value with two names rather than two facts.
           capabilities: Array(config.capabilities),
+          # THE CACHE-BUSTED LINK TO THE CATALOG (T-094). The digest is
+          # {SchemaDocument}'s, derived at boot from the registry + this config
+          # + the gem version, so it moves on any deploy that changes what
+          # `schema` answers. That is what lets the catalog be cached for a
+          # YEAR at this URL while THIS document — short-lived, and the only
+          # thing a client must re-read — publishes the new link. The bare
+          # `<endpoint>/schema` stays served and stays documented; it just
+          # cannot be cached for long, because its bytes change under a fixed
+          # URL.
+          schema_url:   "#{endpoint}/schema?v=#{SchemaDocument.digest(config: config)}",
           min_client:   config.min_client,
           issuer:       config.issuer,
           owner:        config.owner,
@@ -175,17 +197,18 @@ module Kiosk
         #
         # This block used to echo `capabilities` under `wire.verbs`. It stops:
         # a discovery envelope that restates the catalog is a second source of
-        # truth for it, and in 0.4 the honest literal reading of "the verbs
-        # this origin serves" is the registered NAMES — which would publish
-        # the whole catalog on an unauthenticated surface that `GET
-        # <endpoint>/schema` deliberately Bearer-gates. So the block carries
-        # two POINTERS (the catalog and the RFC 9727 linkset) and the two
-        # facts a client needs before it can dial either (where the wire is
-        # mounted, which protocol series it speaks). `min_client` went with
-        # `wire.verbs` for the same reason: it is `kiosk.json`'s field, and
-        # `kiosk.json` is canonical.
+        # truth for it, and `kiosk.json` is canonical for the module set. So
+        # the block carries two POINTERS (the catalog and the RFC 9727
+        # linkset) and the two facts a client needs before it can dial either
+        # (where the wire is mounted, which protocol series it speaks).
+        # `min_client` went with `wire.verbs` for the same reason: it is
+        # `kiosk.json`'s field.
+        #
+        # The `schema` pointer carries the same `?v=<digest>` cache-buster
+        # `kiosk.json` publishes, for the same reason — a pointer that a
+        # client may follow must point at the URL that is safe to cache.
         doc[:"x-kiosk"] = {
-          schema:      "#{config.mount_path}/schema",
+          schema:      "#{config.mount_path}/schema?v=#{SchemaDocument.digest(config: config)}",
           # RFC 9727 API Catalog pointer (root-served linkset). Lives under
           # the experimental `x-kiosk` namespace — agents.json v1.0 has no
           # standard link-catalog key, so we do NOT force a top-level field.
@@ -226,9 +249,9 @@ module Kiosk
       #
       # RFC 9727 "API Catalog" served as an `application/linkset+json` body: a
       # single linkset member, `anchor`ed at the api-catalog URL, whose `item`
-      # array hyperlinks the live API endpoints — one link per MODULE the
-      # deployment serves (`config.capabilities`, computed from the live
-      # registry), plus the agents.json discovery companion.
+      # array hyperlinks the live API endpoints — the two service
+      # DESCRIPTIONS, then EVERY REGISTERED VERB at its own 0.4 endpoint, then
+      # `pay` and the agents.json discovery companion.
       #
       # The `schema` endpoint is the machine-readable surface description, so it
       # carries the RFC 9727 `service-desc` relation (SHOULD); so does the
@@ -236,20 +259,41 @@ module Kiosk
       # verbs in a form generic OpenAPI tooling can consume. Every other link is
       # a plain `item`.
       #
-      # ── WHY THIS DOES NOT HYPERLINK EVERY REGISTERED VERB (K-799) ────────
+      # ── WHY IT HYPERLINKS EVERY REGISTERED VERB (K-799 = b, T-093) ───────
       #
-      # T-075's answer carries a sibling clause saying this catalog should link
-      # every verb the origin serves. It does not, and the reason is the SAME
-      # reason that answer rejected option B: this document is served
-      # UNAUTHENTICATED at the origin root, so a per-verb linkset would publish
-      # the operator's whole catalog to an anonymous caller — the enumeration
-      # `GET <endpoint>/schema` is Bearer-gated against, that
-      # {OpenApiController} is Bearer-gated against, and that
-      # {VerbController}'s deliberate `401`-before-`404` gate order exists to
-      # withhold. Shipping it would have made those three defences pointless.
-      # An API catalog lists APIs and points at their DESCRIPTIONS; both
-      # descriptions are linked below, and both require a Bearer token. Filed
-      # as K-799 for Phil rather than decided here.
+      # It did not, until 2026-08-19. Slice 5 withheld the verb names because
+      # this document is served UNAUTHENTICATED at the origin root, and three
+      # separate places had paid a design cost to keep the catalogue behind a
+      # token. Phil overruled the premise rather than the arithmetic: «на
+      # статичных GET endpoint'ах — пожалуйста… Пускай долбятся в них сколько
+      # хотят без аутентификации». The verb roster is not a secret, and a
+      # document composed from in-process state caches behind a CDN, so
+      # anonymous enumeration costs this origin nothing.
+      #
+      # THE ACCEPTANCE HAS A CONDITION, and this renderer is what keeps it
+      # true: it covers documents that are CHEAP AND STATIC TO COMPOSE. Every
+      # value below comes from `config` or from the two registries — no query,
+      # no per-request work, no caller-dependent branch. A future member that
+      # needed a backend call would NOT be covered by that answer and would be
+      # a fresh question, not a bigger loop.
+      #
+      # ── The RFC reading, re-settled (T-093) ──────────────────────────────
+      #
+      # Slice 5 read RFC 9727 strictly: a catalog lists APIs and points at
+      # their DESCRIPTIONS, so members were `service-desc` links. Phil's answer
+      # overruled the security objection, not that reading — so BOTH survive
+      # here. The two `service-desc` members stay exactly as they were, and the
+      # per-verb operations are added ALONGSIDE them as plain `item`s. A
+      # consumer that only understands `service-desc` still finds the whole
+      # surface described; one that wants the operations finds them hyperlinked
+      # without parsing a description first.
+      #
+      # A verb's METHOD rides an EXTENSION target attribute, `kiosk-method`,
+      # serialized as an array of strings per RFC 9264 §4.2.4.3 (that is how a
+      # linkset+json document carries a non-registered attribute). It is needed
+      # because a query and an action differ only by method — `rel` cannot say
+      # it, and a bare href would invite a `GET` at an action's path, which is
+      # a `405`.
       #
       # @return [Hash]
       def self.api_catalog(base_url:, config: Kiosk.configuration)
@@ -277,11 +321,20 @@ module Kiosk
           # deletes this one `items <<`.
           items << { href: "#{endpoint}/openapi.json", rel: "service-desc" }
         end
+        # EVERY REGISTERED VERB, at its own 0.4 endpoint, with the method that
+        # reaches it: a query is a GET, an action is a POST. Sorted by name
+        # within each kind so the document is byte-stable across boots — a
+        # linkset whose member order wobbled would break its own ETag for no
+        # reason. Queries before actions, which is `capabilities`' order too.
+        Queries.known.sort.each do |name|
+          items << verb_item(endpoint, name, "GET")
+        end
+        Actions.known.sort.each do |name|
+          items << verb_item(endpoint, name, "POST")
+        end
         # The remaining modules are plain catalogued APIs, one link each —
-        # which since the cutover means `pay` and nothing else. A `queries` or
-        # `actions` module has no single endpoint to link any more, and
-        # linking every verb it holds would publish the catalog on an
-        # unauthenticated surface (see MODULE_ENDPOINTS, and K-799).
+        # which since the cutover means `pay` and nothing else (see
+        # MODULE_ENDPOINTS).
         MODULE_ENDPOINTS.each do |mod, path|
           items << { href: "#{endpoint}/#{path}", rel: "item" } if modules.include?(mod)
         end
@@ -335,6 +388,7 @@ module Kiosk
           - This file: `#{base}/auth.md`
           - Agent auth configuration: `#{base}/.well-known/agent-configuration`
           - Kiosk discovery document: `#{base}/.well-known/kiosk.json`
+          - Verb catalogue (PUBLIC, no token): `#{endpoint}/schema`
           - Token-verification keys (JWKS): `#{endpoint}/.well-known/jwks.json`
 
           ## Pick a method
@@ -378,8 +432,10 @@ module Kiosk
           `Kiosk-PoW` header line per proof. The proof NEVER travels in the
           request body: a body `pow` field is ignored, and changing the body
           invalidates the proofs. The same header answers a `402 pow_required`
-          on the wire verbs too — there is no verb exemption, including the
-          `schema` GET.
+          on the wire verbs too, and most of them are GETs, which have no body
+          to carry a proof. The ONE endpoint under `#{endpoint}` that is never
+          tolled is `GET #{endpoint}/schema`: it is public, it is served from
+          memory, and a toll needs an identity to charge.
 
           ## Claim ceremony
 
@@ -418,8 +474,10 @@ module Kiosk
           ## Use the access_token
 
           Send `Authorization: Bearer <access_token>` to the wire verbs
-          under `#{endpoint}` (`schema`, `query`, `run`, `pay`). Tokens are
-          RS256 JWTs verifiable against the JWKS above.
+          under `#{endpoint}` — every query, every action, and `pay`. Tokens
+          are RS256 JWTs verifiable against the JWKS above.
+          `GET #{endpoint}/schema` is the exception: it is PUBLIC, so read
+          the catalogue before you register if you like.
 
           ## Errors
 
@@ -444,6 +502,15 @@ module Kiosk
             standalone account.
         MARKDOWN
       end
+
+      # One linkset member for one registered verb (T-093). `rel: "item"` is
+      # RFC 9727's catalogued-API relation; `kiosk-method` is the extension
+      # target attribute carrying the HTTP method, an ARRAY OF STRINGS because
+      # RFC 9264 §4.2.4.3 serializes every extension attribute that way.
+      def self.verb_item(endpoint, name, method)
+        { href: "#{endpoint}/#{name}", rel: "item", "kiosk-method": [method] }
+      end
+      private_class_method :verb_item
 
       # Absolute URLs of the four kiosk-pop auth endpoints under `endpoint`
       # (= base_url + mount_path). DRY seam shared by {#build} (which reshapes

@@ -31,7 +31,19 @@ module Kiosk
       # `events` was removed long before: it was never a capability, the
       # Kiosk::Event type is gone, and the stub only ever raised a raw
       # NotImplementedError. An unknown kind is a clean 400.
-      VERBS = %i[query run pay schema].freeze
+      POLICY_VERBS = %i[query run pay schema].freeze
+
+      # What THIS dispatcher serves — three of the four.
+      #
+      # `schema` left when T-094 made `GET <endpoint>/schema` public: it
+      # resolves no identity, and an {Executor} cannot be built without one.
+      # The catalog is now rendered by {SchemaDocument}, derived at boot by the
+      # engine and served from memory, so there is nothing to dispatch. It
+      # stays in {POLICY_VERBS} because it is still the policy verb
+      # `/kiosk/openapi.json` is TOLLED as — that endpoint is still gated
+      # (K-804), still renders the same registry, and must not become a free
+      # second spelling of a priced document.
+      VERBS = %i[query run pay].freeze
 
       # Verbs that open their own transaction boundaries because they perform
       # an irreversible external side effect (a PSP capture) that a DB
@@ -39,15 +51,11 @@ module Kiosk
       # SessionContext; these manage their own SessionContext(s) instead.
       SELF_MANAGED_VERBS = %i[pay].freeze
 
-      # Verbs that enumerate the in-process registry only — they need no
-      # database connection and must NOT open a SessionContext.
-      NO_DB_VERBS = %i[schema].freeze
-
       # @param name [String, nil] the query/action wire name. Always supplied
       #   on the wire — it is a PATH SEGMENT, not a body field — which is why a
       #   verb is free to declare an argument literally called `name` (none
-      #   does; 0.3's wire could never have allowed one). Only `pay` and
-      #   `schema` ignore it: their name is their kind.
+      #   does; 0.3's wire could never have allowed one). Only `pay` ignores
+      #   it: its name is its kind.
       def self.call(kind:, args:, identity:, connection:, name: nil)
         new(connection: connection, identity: identity).call(kind: kind, args: args, name: name)
       end
@@ -70,9 +78,7 @@ module Kiosk
           )
         end
 
-        if NO_DB_VERBS.include?(verb)
-          dispatch(verb, args, name) # catalog-only verbs — no DB or SessionContext needed
-        elsif SELF_MANAGED_VERBS.include?(verb)
+        if SELF_MANAGED_VERBS.include?(verb)
           dispatch(verb, args, name) # the verb manages its own SessionContext(s)
         else
           SessionContext.open(connection: connection, identity: identity) do
@@ -88,7 +94,6 @@ module Kiosk
         when :query  then verb_query(args, name)
         when :run    then verb_run(args, name)
         when :pay    then verb_pay(args)
-        when :schema then verb_schema(args)
         end
       end
 
@@ -505,32 +510,6 @@ module Kiosk
           WHERE agent_id = $1 AND currency = $2 #{window}
         SQL
         connection.exec_query(sql, "Kiosk settled total", binds).to_a.first.fetch("total").to_i
-      end
-
-      # ─── schema ────────────────────────────────────────────────────────
-
-      # Returns the provider's in-process catalog so an agent can self-discover
-      # available queries and actions without relying solely on a static skill file.
-      # Never opens a SessionContext or touches the DB.
-      #
-      # `verbs` IS `capabilities` (K-740, decision VERBS-EQ-CAPABILITIES,
-      # ADR-0025) — literally the same array, read from the same config, so
-      # the two self-descriptions of one origin cannot disagree and the spec
-      # needs no paragraph teaching readers which one to believe.
-      #
-      # It used to be the constant {VERBS}, which listed `pay` on an origin
-      # with no payment provider wired while `/.well-known/kiosk.json` dropped
-      # it — a wire that describes itself twice, differently, and then
-      # footnotes the difference. Now it names the MODULES this origin serves
-      # (`schema`, `queries`, `actions`, `pay`); which VERBS it serves is the
-      # `queries` and `actions` catalogs right beside it, which is where a
-      # caller was always meant to read them, and which stays Bearer-gated.
-      def verb_schema(_args)
-        Result.new(kind: :value, payload: {
-          verbs:   Array(Kiosk.configuration.capabilities),
-          queries: Queries.catalog,
-          actions: Actions.catalog,
-        })
       end
 
       # ─── helpers ───────────────────────────────────────────────────────

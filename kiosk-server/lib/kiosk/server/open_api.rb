@@ -15,7 +15,7 @@ module Kiosk
     #
     # A SECOND RENDERER over the SAME model `GET <endpoint>/schema` renders:
     # {Queries.catalog} and {Actions.catalog}, read exactly as
-    # {Executor#verb_schema} reads them. Nothing here holds a declaration of
+    # {SchemaDocument} reads them. Nothing here holds a declaration of
     # its own, and nothing here may be edited to say something the descriptors
     # do not — that is the whole property the decision bought, and it is the
     # same one {WellKnown} already proves across six discovery surfaces.
@@ -455,10 +455,17 @@ module Kiosk
         {
           operationId: "schema",
           tags:        ["wire"],
-          description: "This origin's catalog: the modules it serves and every query " \
-                       "and action it publishes, with their descriptions and schemas. " \
-                       "THE canonical surface description — this OpenAPI document is " \
-                       "derived from it.",
+          description: "This origin's catalog: every query and action it publishes, " \
+                       "with their descriptions and schemas. THE canonical surface " \
+                       "description — this OpenAPI document is derived from it. " \
+                       "PUBLIC: no credential is required. The MODULE set this origin " \
+                       "serves is `capabilities` in /.well-known/kiosk.json.",
+          # The document declares `bearerAuth` globally; this ONE operation
+          # opts out. An empty `security` array is OpenAPI's way of saying
+          # "no credential required" (T-094), and getting it wrong here would
+          # make a generated client send a token this endpoint never reads —
+          # or, worse, refuse to call it without one.
+          security:    [],
           responses:   {
             "200" => {
               description: "The catalog.",
@@ -484,13 +491,10 @@ module Kiosk
             type:                 "object",
             title:                "The `schema` catalog",
             properties:           {
-              verbs:   { type: "array", items: { type: "string" },
-                         description: "The MODULES this origin serves — byte-identical to " \
-                                      "`capabilities` in /.well-known/kiosk.json." },
               queries: { type: "array", items: { "$ref": "#/components/schemas/schema.descriptor" } },
               actions: { type: "array", items: { "$ref": "#/components/schemas/schema.descriptor" } },
             },
-            required:             %w[verbs queries actions],
+            required:             %w[queries actions],
             additionalProperties: false,
           },
           "schema.descriptor" => {

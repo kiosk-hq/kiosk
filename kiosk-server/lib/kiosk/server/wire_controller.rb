@@ -12,14 +12,21 @@ require "kiosk/server/errors"
 require "kiosk/server/headers"
 require "kiosk/server/pow_gate"
 require "kiosk/server/request_validation"
+require "kiosk/server/schema_document"
 
 module Kiosk
   module Server
     # The wire's own two RESERVED endpoints, and the base class every other
     # wire surface inherits its seams from:
     #
-    #   GET  <endpoint>/schema   the catalog
+    #   GET  <endpoint>/schema   the catalog     — PUBLIC (T-094)
     #   POST <endpoint>/pay      settle an AP2 cart
+    #
+    # The two no longer share a request path. `schema` resolves no identity,
+    # pays no toll and never reaches the {Executor}; it writes {SchemaDocument}
+    # straight out under a public cache policy. Everything below the `pay`
+    # action — parse, resolve, toll, execute, render — is the wire the rest of
+    # this class and {VerbController} are about.
     #
     # Every OTHER verb is one endpoint per verb, served by {VerbController},
     # which subclasses this one. `POST <endpoint>/query` and
@@ -71,9 +78,45 @@ module Kiosk
         )
       end
 
-      # GET <endpoint>/schema
+      # GET <endpoint>/schema — THE ONE PUBLIC ENDPOINT UNDER THE MOUNT
+      # (T-094, Phil 2026-08-19).
+      #
+      # No identity, no toll, and it does not go through {Executor} at all: the
+      # answer is {SchemaDocument}'s bytes, derived at boot, written straight
+      # out. Three things went at once and they went together:
+      #
+      #   * THE BEARER GATE. The document holds verb names, descriptions,
+      #     input/output schemas and examples — nothing per-agent and no
+      #     secret. Gating it while `/.well-known/*` is wide open was an
+      #     inconsistency that raised a question instead of answering one, and
+      #     the decisive test is «does this need the backend, or is it a static
+      #     file?»: it is a static file.
+      #   * THE TOLL. `schema` was tolled as `:schema` so that ENUMERATING the
+      #     catalogue cost something. That warrant died with the gate — a toll
+      #     needs an identity to charge, and there is none here. `:schema`
+      #     survives as a POLICY verb for `/kiosk/openapi.json`, which is still
+      #     gated and still tolled (K-804 is where that is decided, not here).
+      #   * `Vary: Authorization, Kiosk-PoW`. See {Headers.add_public_cache_policy}:
+      #     a public document that varies on headers it does not read is one a
+      #     shared cache can never reuse.
+      #
+      # The `?v=<digest>` fork is the cache-busting half, not a second
+      # endpoint: same bytes either way, only the TTL differs. A `v` that does
+      # NOT match still answers the CURRENT catalogue — an assistant holding a
+      # stale link gets a true answer with a short TTL rather than a 404 it
+      # cannot act on.
       def schema
-        run_command(:schema)
+        digest = SchemaDocument.digest
+        etag   = SchemaDocument.etag
+
+        Kiosk::Server::Headers.add_to(response.headers)
+        Kiosk::Server::Headers.add_public_cache_policy(
+          response.headers, etag: etag, immutable: params[:v].to_s == digest
+        )
+
+        return head(:not_modified) if if_none_match?(etag)
+
+        render json: SchemaDocument.json, status: :ok
       end
 
       # POST <endpoint>/pay
@@ -83,17 +126,30 @@ module Kiosk
 
       private
 
-      # The two reserved endpoints. Their wire NAME is their command name —
-      # `schema` and `pay` are both the gate/policy verb and the path segment
-      # — so the name travels to the fingerprint exactly as a per-verb call's
-      # does, and §3.4's `"<METHOD> <verb>"` formula needs no special case.
+      # RFC 9110 §13.1.2 — does the caller already hold these bytes? Written
+      # out rather than taken from `fresh_when`, which hashes the validator it
+      # is given: the ETag here IS the digest the discovery documents publish,
+      # and an operator comparing the two by eye should find the same string.
+      def if_none_match?(etag)
+        raw = request.get_header("HTTP_IF_NONE_MATCH").to_s
+        return false if raw.empty?
+        return true  if raw.strip == "*"
+
+        raw.split(",").any? { |tag| tag.strip.delete_prefix("W/") == etag }
+      end
+
+      # `pay`, the one reserved endpoint left on this path. Its wire NAME is
+      # its command name, so the name travels to the fingerprint exactly as a
+      # per-verb call's does and §3.4's `"<METHOD> <verb>"` formula needs no
+      # special case. (`schema` shared this path until T-094 made it public;
+      # it resolves no identity and pays no toll, so it has nothing left to
+      # share.)
       def run_command(command)
         # parse_body! runs inside the action, so the rescue_from above covers
         # it: a malformed body raises Errors::BadRequest, which must render a
         # 400 problem document, not escape as an uncaught 500 (the same
         # parse-outside-rescue class fixed for
-        # AuthController/KycAttestationController). `schema` is a GET and has
-        # no body; raw_post is empty and this yields {}.
+        # AuthController/KycAttestationController).
         body     = parse_body!
         identity = resolve_identity!
 
@@ -108,7 +164,7 @@ module Kiosk
       # arguments arrive in the query string, so it does its own parsing and
       # then hands the result here.
       #
-      # @param command [Symbol] the gate/policy verb — one of {Executor::VERBS},
+      # @param command [Symbol] the gate/policy verb — one of {Executor::POLICY_VERBS},
       #   because `reputation_factors` and `Policy#challenge_for` both take it
       #   as `verb:` and every shipped policy branches on those four symbols.
       # @param name [String] the WIRE name — the path segment. `schema` and
@@ -158,7 +214,7 @@ module Kiosk
       # prices every wire call, `schema` included.
       #
       # @param identity [Kiosk::Identity] the resolved caller
-      # @param command [Symbol] the gate/policy verb — one of {Executor::VERBS},
+      # @param command [Symbol] the gate/policy verb — one of {Executor::POLICY_VERBS},
       #   because `reputation_factors` and `Policy#challenge_for` both take it
       #   as `verb:` and every shipped policy branches on those four symbols
       # @param name [String] the WIRE verb name, as it appears in the path —

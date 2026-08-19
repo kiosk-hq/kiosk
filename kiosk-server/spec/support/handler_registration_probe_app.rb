@@ -85,8 +85,16 @@ end
 
 Rails.application.initialize!
 
+# THE BOOT DIGEST CHECK, IN A TEST (T-094 obligation 5, «И на тестах чтобы
+# тоже»). Read BEFORE anything asks for the digest: `derived?` is true only
+# because the engine's `after_initialize` hook derived it, so this is the one
+# reading that distinguishes "computed at boot" from "computed by whoever
+# asked first". Everything after this line would make it true.
+DERIVED_AT_BOOT = Kiosk::Server::SchemaDocument.derived?
+
 def snapshot
   {
+    "schema_digest" => Kiosk::Server::SchemaDocument.digest,
     "queries" => Kiosk::Server::Queries.known.sort,
     "actions" => Kiosk::Server::Actions.known.sort,
     "descriptions" => Kiosk::Server::Queries.catalog.to_h { |d| [d[:name], d[:description]] },
@@ -104,7 +112,7 @@ def snapshot
   }
 end
 
-report = { "boot" => snapshot }
+report = { "boot" => snapshot.merge("derived_at_boot" => DERIVED_AT_BOOT) }
 
 if SCENARIO == "development"
   # A dev reload cycle, three times — exactly what Rails runs when a file

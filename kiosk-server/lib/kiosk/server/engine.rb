@@ -6,7 +6,7 @@
 #
 # in its config/routes.rb gets the ENTIRE shipped surface:
 #
-#   * the reserved wire     — GET schema, POST pay
+#   * the reserved wire     — GET schema (PUBLIC), POST pay
 #   * the per-verb wire     — GET <query-name>, POST <action-name>
 #   * the kiosk-pop plane   — GET auth/challenge, POST auth/{register,login,revoke}
 #   * JWKS                  — GET .well-known/jwks.json (under the mount)
@@ -80,6 +80,41 @@ module Kiosk
       # development, and every reload, where the omission shows.
       config.to_prepare do
         Kiosk::Server::HandlerRegistrations.reload!
+        # The catalog `GET <mount>/schema` serves is DERIVED from the registry
+        # that line just rebuilt (T-094), so it is invalidated in the same
+        # breath — a development reload that adds, renames or re-describes a
+        # verb must not leave the previous document (or its digest, which is
+        # the cache-busting version in every discovery link) in memory. The
+        # re-derivation itself is below, in `after_initialize`, and lazily on
+        # first read afterwards; this is only the drop.
+        Kiosk::Server::SchemaDocument.reset!
+      end
+
+      # THE `schema` CATALOG AND ITS DIGEST, DERIVED ONCE, AT BOOT, BY THE
+      # PROCESS THAT WILL SERVE THEM (T-094, Phil 2026-08-19: «дайджест реестра
+      # на буте — Да. И на тестах чтобы тоже»).
+      #
+      # HERE, not in each demo, and not at deploy time:
+      #
+      #   * IN THE GEM. One host is one demo, so per-process derivation is
+      #     per-host derivation for free, and seven demos do not each carry a
+      #     copy of this (the K-792 rule).
+      #   * AT `after_initialize`, which Rails runs AFTER eager loading — so a
+      #     production host whose handler controllers register by being READ is
+      #     fully registered by now. `to_prepare` alone would derive from a
+      #     half-built registry in production.
+      #   * NOT PRE-GENERATED AND NOT COMMITTED. The verb roster is not the
+      #     only input: a `kiosk-server` PATCH bump can change the bytes too,
+      #     so the digest covers the registry, the origin config AND the gem
+      #     version ({SchemaDocument.digest_inputs}). Deriving in-process means
+      #     there is no second artefact on disk to drift from — drift is
+      #     impossible by construction rather than caught by a guard.
+      #
+      # It runs in EVERY environment, test included, deliberately: an
+      # initializer that skipped the test env would switch the check off in the
+      # one place it catches a mistake early.
+      config.after_initialize do
+        Kiosk::Server::SchemaDocument.derive!
       end
 
       # One honest line when this origin has NO verbs at all — the state that
@@ -134,6 +169,12 @@ module Kiosk
         # answers it with the wire's own 403 ("no payment_provider
         # configured"), and discovery already drops `pay` from the advertised
         # capabilities.
+        #
+        # `schema` is the ONE route under this mount that resolves no identity
+        # (T-094): it answers {SchemaDocument}, derived at boot, under a public
+        # cache policy. It is still drawn HERE rather than beside the discovery
+        # routes because it is mount-relative — it describes THIS wire, and its
+        # URL derives from the discovery document's `endpoint`.
         #
         # `POST query` and `POST run` — 0.3's multiplexed pair — are GONE
         # (T-074 = A, the hard cut). Not tombstoned, not 404-with-a-hint:

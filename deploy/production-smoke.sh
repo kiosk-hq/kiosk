@@ -292,12 +292,15 @@ smoke_stylish() {
   # query). This is a production-config assertion, so it can catch the bug the
   # dev-mode CI + demo:redteam gates (which run RAILS_ENV=development, where the
   # stub is intentionally live) structurally cannot.
+  # Protocol 0.4: a query is `GET <endpoint>/<query-name>`. Identity resolves
+  # BEFORE the verb is looked up, so this probe is a 401 whether or not the
+  # name exists — which is exactly the property being asserted, and also why an
+  # unauthenticated caller cannot enumerate the catalog one path at a time.
   FORGED_BEARER="agent:u-11111111-1111-4111-8111-111111111111:a-forged:r-owner"
-  forged_code="$(curl -s -o /dev/null -w '%{http_code}' -X POST \
-    "${PROXY_HEADERS[@]}" -H "Content-Type: application/json" \
+  forged_code="$(curl -s -o /dev/null -w '%{http_code}' \
+    "${PROXY_HEADERS[@]}" \
     -H "Authorization: Bearer ${FORGED_BEARER}" \
-    --data '{"name":"salons"}' \
-    "${BASE}/kiosk/query")"
+    "${BASE}/kiosk/salons")"
   if [ "$forged_code" = "401" ]; then
     pass "forged self-asserted bearer → 401 (cleartext stub unreachable in production)"
   else

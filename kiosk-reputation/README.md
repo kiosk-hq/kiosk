@@ -63,26 +63,28 @@ Key properties:
 
 ### Proof — client re-sends the same request, proof(s) in the `Kiosk-PoW` header
 
-The client solves each challenge and re-sends the SAME request (body unchanged)
-with the proof(s) in a **`Kiosk-PoW` request header** (ADR-0022) as raw minified
-JSON — one `{challenge, nonce}` entry per solved challenge. The body carries only
-the verb args, so a GET (`schema`) can carry its proof this way too (a GET has no
-body):
+The client solves each challenge and re-sends the SAME request — same method,
+same path, same query string, same body — with the proof(s) in a **`Kiosk-PoW`
+request header** (ADR-0022) as raw minified JSON, one `{challenge, nonce}` entry
+per solved challenge. Protocol 0.4 makes most calls GETs (a query is
+`GET <endpoint>/<query-name>`), and a GET has no body, so the header is the ONLY
+channel a proof can travel on:
 
 ```http
-POST /kiosk/query
+GET /kiosk/menu_by_restaurant?restaurant=Mamma%20Pizza
 Kiosk-PoW: [{"challenge":{ "...echoed verbatim...": true },"nonce":{"indices":[…]}}]
-Content-Type: application/json
-
-{ "name": "menu_by_restaurant", "restaurant": "Mamma Pizza" }
 ```
 
 A single proof may be sent bare (`Kiosk-PoW: {"challenge":{…},"nonce":{…}}`), as a
 JSON array of N proofs, or as repeated `Kiosk-PoW` header lines (one proof each) —
-all flatten to one proofs list. Because the proof rides in the header, the body is
-byte-identical at issue time (no proof) and verify time (proof in the header), so
-the request fingerprint (`SHA256(command + "\n" + canonical_json(body))`) matches
-on retry by construction — there is no `pow` body field to exclude.
+all flatten to one proofs list. Because the proof rides in the header, the
+request is byte-identical at issue time (no proof) and verify time (proof in the
+header), so the request fingerprint —
+`SHA256(METHOD + " " + verb + "\n" + canonical_json(args))` — matches on retry by
+construction; there is no `pow` body field to exclude. That formula binds a proof
+to the exact call: the method, the verb as it appears in the path, and the
+canonical arguments, so a proof solved for `GET /catalog?city=Lisbon` is
+spendable on nothing else.
 
 ## Anti-DoS invariant: cheap checks before the expensive backend eval
 

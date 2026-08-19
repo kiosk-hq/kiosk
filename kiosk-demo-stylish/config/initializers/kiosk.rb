@@ -74,6 +74,14 @@ Kiosk.configure do |c|
   # loop. Needs the json_schemer gem (in the Gemfile). Absent/valid pow paths
   # unchanged.
   c.validate_requests = true
+
+  # T-068 slice 3: every query/action answer is validated against the
+  # `output_schema` that verb declares, and a mismatch is a loud 500 rather
+  # than a lie shipped to an assistant. A DEVELOPMENT/CI assertion, not a
+  # request check — nothing a caller sends can trigger it — and it is what
+  # makes this demo's own CI task list a per-verb conformance proof of the
+  # descriptors rather than a smoke test.
+  c.validate_responses = true
   # stylish is dual-audience: VISITORS book a service off the menu (customer),
   # salon STAFF view the forecasted revenue (owner). The owner role is sourced
   # from the provider's own IdP (roles-from-IdP) — see the StubUserIdp below and

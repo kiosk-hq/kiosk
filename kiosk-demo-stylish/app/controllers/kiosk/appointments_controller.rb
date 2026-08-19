@@ -36,6 +36,32 @@ class Kiosk::AppointmentsController < ApplicationController
                                description: "Optional service id from availability/service_menu; its EUR price is captured." },
                },
                required: ["salon_id", "slot"]
+  # The four price fields are present ONLY when a service was booked — a bare
+  # salon booking captures no price, so publishing `null`s for it would invent
+  # a price of nothing. The `oneOf` is what says that, and it is why `service`
+  # and `currency`/`price_cents`/`price_eur` travel together or not at all.
+  output_schema oneOf: [
+    { type: "object", additionalProperties: false,
+      description: "A booking WITH a service — its name and EUR price were captured.",
+      properties: {
+        appointment_id: { type: "string", description: "uuid — the booking. my_appointments calls the same value `id`." },
+        salon_id:       { type: "integer", description: "The salon booked." },
+        slot:           { type: "string", description: "Appointment time, ISO 8601." },
+        service:        { type: "string", description: "The booked service's name, captured at booking time." },
+        currency:       { type: "string", description: "EUR." },
+        price_cents:    { type: "integer", description: "EUR cents captured on the booking." },
+        price_eur:      { type: "string", description: "The same price rendered for a human, e.g. \"€90\"." },
+      },
+      required: %w[appointment_id salon_id slot service currency price_cents price_eur] },
+    { type: "object", additionalProperties: false,
+      description: "A bare salon booking — no service_id was passed, so nothing was priced.",
+      properties: {
+        appointment_id: { type: "string", description: "uuid — the booking." },
+        salon_id:       { type: "integer", description: "The salon booked." },
+        slot:           { type: "string", description: "Appointment time, ISO 8601." },
+      },
+      required: %w[appointment_id salon_id slot] },
+  ]
   example_params({ salon_id: 1, service_id: 3, slot: "2026-08-05T14:00:00Z" })
   example_row({
     appointment_id: 1, salon_id: 1,

@@ -110,6 +110,25 @@ All notable changes follow [Keep a Changelog](https://keepachangelog.com/en/1.1.
 
 ### Changed
 
+- **Discovery advertises MODULES, and the catalog's `verbs` IS `capabilities`
+  (T-068 slice 5; T-075 = A, K-740, ADR-0025).** `Kiosk.configuration
+  .capabilities` — and therefore `/.well-known/kiosk.json` — now computes
+  `["schema", "queries", "actions", "pay"]` from the same three questions of
+  the same registry it always asked; only the names it emits moved from verbs
+  to modules. `Executor#verb_schema` stops emitting the `VERBS` constant and
+  answers with that same array, so an origin with no payment provider no
+  longer advertises `pay` in one self-description and omits it from the other.
+  `agents.json`'s `x-kiosk` block stops echoing the capability list: it is now
+  `{schema, api_catalog, mount_path, api_version}` — pointers, not a copy of
+  the contract — and `min_client` went with the echo (`kiosk.json` is
+  canonical for it). `/.well-known/api-catalog` maps one link per module.
+  Intent: none of these documents requires a token, and the verb list is
+  deliberately behind one — `GET <endpoint>/schema` and
+  `GET <endpoint>/openapi.json` both demand Bearer, and the per-verb wire
+  answers `401` before `404` so an anonymous prober cannot enumerate names.
+  BREAKING for anything that read the old spellings: the member values change,
+  the field names do not.
+
 - **The error taxonomy is the wire contract, not a parallel class hierarchy.**
   The `error.code` vocabulary now lives in one table, and handlers express
   errors in Rails' own idiom: a rendered status becomes its wire code, an

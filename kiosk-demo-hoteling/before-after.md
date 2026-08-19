@@ -128,7 +128,9 @@ get "/.well-known/kiosk.json", to: ->(env) {
 The verbs an assistant may call are ordinary Rails controller actions. Kiosk
 ships a MIXIN, not a base class — which superclass a handler has is your
 decision — and each class-level macro is claimed by the next `def`, so a method
-with no macros above it is a helper the wire cannot see.
+with no macros above it is a helper the wire cannot see. `input_schema` and
+`output_schema` are REQUIRED on every verb: a declaration missing either raises
+as the class body is read, so the app does not boot.
 
 ```ruby
 # app/controllers/kiosk/hotels_controller.rb
@@ -136,7 +138,15 @@ class Kiosk::HotelsController < ActionController::API
   include Kiosk::Query
 
   description "Browse the hotels this operator takes bookings for."
-  input_schema type: "object", additionalProperties: false, properties: {}, required: []
+  input_schema  type: "object", additionalProperties: false, properties: {}, required: []
+  output_schema type: "array",
+                items: {
+                  type: "object", additionalProperties: false,
+                  properties: { id:   { type: "integer" },
+                                name: { type: "string" },
+                                city: { type: "string" } },
+                  required: %w[id name city],
+                }
   def properties
     render json: Property.order(:name).pluck(:id, :name, :city)
                          .map { |id, name, city| { id:, name:, city: } }
@@ -150,13 +160,34 @@ class Kiosk::HotelsController < ActionController::API
                  check_in:    { type: "string", format: "date" },
                  check_out:   { type: "string", format: "date" },
                }
+  output_schema type: "array",
+                items: {
+                  type: "object", additionalProperties: false,
+                  properties: { id:                  { type: "integer" },
+                                name:                { type: "string" },
+                                nightly_price_cents: { type: "integer" } },
+                  required: %w[id name nightly_price_cents],
+                }
   def availability
     render json: RoomType.available_at(params[:property_id], params[:check_in], params[:check_out])
                          .select(:id, :name, :nightly_price_cents)
   end
 
   description "List the bookings belonging to the authenticated principal."
-  input_schema type: "object", additionalProperties: false, properties: {}, required: []
+  input_schema  type: "object", additionalProperties: false, properties: {}, required: []
+  output_schema type: "array",
+                items: {
+                  type: "object", additionalProperties: false,
+                  properties: { id:           { type: "string", format: "uuid" },
+                                property_id:  { type: "integer" },
+                                room_type_id: { type: "integer" },
+                                check_in:     { type: "string" },
+                                check_out:    { type: "string" },
+                                total_cents:  { type: "integer" },
+                                status:       { type: "string" } },
+                  required: %w[id property_id room_type_id check_in check_out
+                               total_cents status],
+                }
   def my_bookings
     render json: Booking.owned_by_current_principal
                         .select(:id, :property_id, :room_type_id, :check_in, :check_out,
@@ -190,6 +221,10 @@ class Kiosk::ReservationsController < ActionController::API
                  check_in:     { type: "string", format: "date" },
                  check_out:    { type: "string", format: "date" },
                }
+  output_schema type: "object", additionalProperties: false,
+                properties: { booking_id:  { type: "string" },
+                              total_cents: { type: "integer" } },
+                required: %w[booking_id total_cents]
   def reserve_room
     hold = ReserveRoom.call(**reservation_params)   # INSERT booking + kiosk.reservations TTL row
     render json: { booking_id: hold.booking_id, total_cents: hold.total_cents }
@@ -197,9 +232,14 @@ class Kiosk::ReservationsController < ActionController::API
 
   description "Confirm a held booking. Requires a settled payment mandate that " \
               "references this booking, and returns the hotel's confirmation code."
-  input_schema type: "object", additionalProperties: false,
-               required: %w[booking_id],
-               properties: { booking_id: { type: "string", format: "uuid" } }
+  input_schema  type: "object", additionalProperties: false,
+                required: %w[booking_id],
+                properties: { booking_id: { type: "string", format: "uuid" } }
+  output_schema type: "object", additionalProperties: false,
+                properties: { booking_id:        { type: "string" },
+                              status:            { const: "confirmed" },
+                              confirmation_code: { type: "string" } },
+                required: %w[booking_id status confirmation_code]
   def confirm_booking
     # Gate 1: ownership — booking.user_id must equal kiosk.current_user_id() AND status='reserved'
     # Gate 2: payment  — a settled payment_mandate whose cart line_items @> [{booking_id:}]

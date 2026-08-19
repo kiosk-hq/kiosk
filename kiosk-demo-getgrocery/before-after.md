@@ -135,16 +135,18 @@ get "/.well-known/kiosk.json", to: ->(env) {
 }
 ```
 
-`query`, `run`, `pay`, and `schema` are wired end-to-end (AI-assistant self-discovery works — see `rake demo:schema`). (A follow-up release will mount these via the engine's own routes drawer so this block collapses to one line.)
+Every registered verb, `pay`, and the public `schema` catalogue are wired end-to-end (AI-assistant self-discovery works — see `rake demo:schema`). (Mounting the engine draws all of this in one line; the block above is the hand-drawn equivalent, kept here because it shows what the mount actually installs.)
 
-AI assistants call named queries by name (`query` verb) — never raw SQL. The operator registers the queries it wishes to expose; isolation is enforced at the app layer in the query definitions and in Actions, with RLS available as optional defense-in-depth.
+AI assistants call named queries BY NAME — `GET /kiosk/<query-name>` — never raw SQL. The operator registers the queries it wishes to expose; isolation is enforced at the app layer in the handler and in Actions, with RLS available as optional defense-in-depth.
 
 **3. Declare the read verbs in a controller (and optionally apply RLS)**
 
 The verbs an assistant may call are ordinary Rails controller actions. Kiosk
 ships a MIXIN, not a base class — which superclass a handler has is your
 decision — and each class-level macro is claimed by the next `def`, so a method
-with no macros above it is a helper the wire cannot see.
+with no macros above it is a helper the wire cannot see. `input_schema` and
+`output_schema` are REQUIRED on every verb: a declaration missing either raises
+as the class body is read, so the app does not boot.
 
 ```ruby
 # app/controllers/kiosk/storefront_controller.rb
@@ -153,7 +155,15 @@ class Kiosk::StorefrontController < ActionController::API
 
   description "Browse in-stock products from the catalog. Prices are EUR cents; " \
               "reference a product by its stable `sku`, never a numeric id."
-  input_schema type: "object", additionalProperties: false, properties: {}, required: []
+  input_schema  type: "object", additionalProperties: false, properties: {}, required: []
+  output_schema type: "array",
+                items: {
+                  type: "object", additionalProperties: false,
+                  properties: { sku:         { type: "string" },
+                                name:        { type: "string" },
+                                price_cents: { type: "integer" } },
+                  required: %w[sku name price_cents],
+                }
   def catalog
     render json: Product.in_stock.order(:name)
                         .pluck(:sku, :name, :price_cents)
@@ -167,6 +177,16 @@ class Kiosk::StorefrontController < ActionController::API
                  delivery_address: { type: "string" },
                  date:             { type: "string", format: "date" },
                }
+  output_schema type: "array",
+                items: {
+                  type: "object", additionalProperties: false,
+                  properties: { id:         { type: "integer" },
+                                date:       { type: "string" },
+                                label:      { type: "string" },
+                                start_time: { type: "string" },
+                                end_time:   { type: "string" } },
+                  required: %w[id date label start_time end_time],
+                }
   def delivery_slots
     return render_out_of_zone unless DublinZones.serves?(params[:delivery_address])
 
@@ -175,7 +195,18 @@ class Kiosk::StorefrontController < ActionController::API
   end
 
   description "List the orders belonging to the authenticated principal."
-  input_schema type: "object", additionalProperties: false, properties: {}, required: []
+  input_schema  type: "object", additionalProperties: false, properties: {}, required: []
+  output_schema type: "array",
+                items: {
+                  type: "object", additionalProperties: false,
+                  properties: { id:          { type: "string", format: "uuid" },
+                                status:      { type: "string" },
+                                total_cents: { type: "integer" },
+                                slot_at:     { type: %w[string null] },
+                                address:     { type: %w[string null] },
+                                created_at:  { type: "string" } },
+                  required: %w[id status total_cents slot_at address created_at],
+                }
   def my_orders
     render json: Order.owned_by_current_principal
                       .select(:id, :status, :total_cents, :slot_at, :address, :created_at)
@@ -216,6 +247,11 @@ class Kiosk::OrdersController < ActionController::API
                  delivery_slot_id: { type: "integer" },
                  delivery_address: { type: "string" },
                }
+  output_schema type: "object", additionalProperties: false,
+                properties: { order_id:    { type: "string" },
+                              total_cents: { type: "integer" },
+                              status:      { type: "string" } },
+                required: %w[order_id total_cents status]
   def create_order
     order = CreateOrder.call(**order_params)   # an Operation, so the back office reuses it
     render json: { order_id: order.id, total_cents: order.total_cents, status: order.status }
@@ -229,6 +265,11 @@ class Kiosk::OrdersController < ActionController::API
                  order_id:         { type: "string", format: "uuid" },
                  delivery_slot_id: { type: "integer" },
                }
+  output_schema type: "object", additionalProperties: false,
+                properties: { order_id:       { type: "string" },
+                              rescheduled_at: { type: "string" },
+                              status:         { type: "string" } },
+                required: %w[order_id rescheduled_at status]
   def reschedule_delivery
     # A refusal is Rails' idiom, not a Kiosk class — the code travels verbatim:
     unless Settlement.covers_order?(params[:order_id])

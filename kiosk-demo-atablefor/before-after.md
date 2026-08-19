@@ -99,7 +99,9 @@ This emits `config/initializers/kiosk.rb` (a `Kiosk.configure` block) and the `k
 The verbs an assistant may call are ordinary Rails controller actions. Kiosk
 ships a MIXIN, not a base class — which superclass a handler has is your
 decision — and each class-level macro is claimed by the next `def`, so a method
-with no macros above it is a helper the wire cannot see.
+with no macros above it is a helper the wire cannot see. `input_schema` and
+`output_schema` are REQUIRED on every verb: a declaration missing either raises
+as the class body is read, so the app does not boot.
 
 ```ruby
 # app/controllers/kiosk/dining_room_controller.rb
@@ -116,12 +118,52 @@ class Kiosk::DiningRoomController < ActionController::API
                  date:         { type: "string", format: "date" },
                  time:         { type: "string" },
                }
+  output_schema type: "array",
+                items: {
+                  type: "object", additionalProperties: false,
+                  properties: {
+                    restaurant:          { type: "string" },
+                    neighborhood:        { type: %w[string null] },
+                    cuisine:             { type: %w[string null] },
+                    restaurant_id:       { type: "integer" },
+                    restaurant_table_id: { type: "integer" },
+                    table_label:         { type: "string" },
+                    capacity:            { type: "integer" },
+                    seating_date:        { type: "string" },
+                    seating_time:        { type: "string" },
+                    seating_at:          { type: "string" },
+                    deposit_eur:         { type: "integer" },
+                  },
+                  required: %w[restaurant neighborhood cuisine restaurant_id
+                               restaurant_table_id table_label capacity
+                               seating_date seating_time seating_at deposit_eur],
+                }
   def availability
     render json: Seating.open_for(**availability_params)
   end
 
   description "List the bookings belonging to the authenticated principal."
-  input_schema type: "object", additionalProperties: false, properties: {}, required: []
+  input_schema  type: "object", additionalProperties: false, properties: {}, required: []
+  output_schema type: "array",
+                items: {
+                  type: "object", additionalProperties: false,
+                  properties: {
+                    booking_id:          { type: "string" },
+                    restaurant_id:       { type: "integer" },
+                    restaurant:          { type: "string" },
+                    neighborhood:        { type: %w[string null] },
+                    restaurant_table_id: { type: "integer" },
+                    table_label:         { type: "string" },
+                    party_size:          { type: "integer" },
+                    status:              { type: "string" },
+                    seating_date:        { type: "string" },
+                    seating_time:        { type: "string" },
+                    seating_at:          { type: "string" },
+                  },
+                  required: %w[booking_id restaurant_id restaurant neighborhood
+                               restaurant_table_id table_label party_size status
+                               seating_date seating_time seating_at],
+                }
   def my_bookings
     render json: Booking.owned_by_current_principal
   end
@@ -150,6 +192,10 @@ class Kiosk::BookingsController < ActionController::API
                  date:                { type: "string", format: "date" },
                  time:                { type: "string" },
                }
+  output_schema type: "object", additionalProperties: false,
+                properties: { booking_id: { type: "string" },
+                              status:     { type: "string" } },
+                required: %w[booking_id status]
   def book_table
     # A table already held for that seating is a clean 409 (the supply is finite):
     #   render json: { ok: false, error: { code: "conflict", … } }, status: :conflict
@@ -159,9 +205,13 @@ class Kiosk::BookingsController < ActionController::API
 
   description "Cancel one of the authenticated principal's own bookings, " \
               "returning the table to availability."
-  input_schema type: "object", additionalProperties: false,
-               required: %w[booking_id],
-               properties: { booking_id: { type: "string", format: "uuid" } }
+  input_schema  type: "object", additionalProperties: false,
+                required: %w[booking_id],
+                properties: { booking_id: { type: "string", format: "uuid" } }
+  output_schema type: "object", additionalProperties: false,
+                properties: { booking_id: { type: "string" },
+                              status:     { type: "string" } },
+                required: %w[booking_id status]
   def cancel_booking
     # Owner-scoped: a cross-principal cancel is a clean 403.
     booking = CancelBooking.call(booking_id: params[:booking_id])

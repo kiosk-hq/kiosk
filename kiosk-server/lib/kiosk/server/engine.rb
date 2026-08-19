@@ -144,6 +144,17 @@ module Kiosk
         # there).
         get ".well-known/jwks.json", to: "jwks#show"
 
+        # The DERIVED OpenAPI description (T-068 slice 4, T-071 = C). Drawn
+        # here, above the per-verb pair, so the literal `.json` path wins by
+        # first-match — `/:kiosk_verb(.:format)` would otherwise swallow it as
+        # the verb `openapi` in the `json` format. It needs no entry in
+        # {HandlerMixin::RESERVED_NAMES}: `openapi.json` is not a legal verb
+        # name (§8.1 forbids the dot), so no declaration can collide with it,
+        # and an operator verb literally called `openapi` stays reachable at
+        # `<endpoint>/openapi`. PROVISIONAL — this line and
+        # `open_api{,_controller}.rb` are the whole of it.
+        get "openapi.json", to: "open_api#show"
+
         # KYC attestation. Unconditional for the same reason as `pay`: with
         # no kyc_public_key configured the verifier rejects with the wire's
         # 403 envelope, and hosts that never advertise KYC lose nothing.

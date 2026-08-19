@@ -68,8 +68,28 @@ def declare_action(name, **macros, &body)
   declare_verb(Kiosk::Action, name, macros, body || -> { render json: {} })
 end
 
+# The two REQUIRED declarations (T-073 = A), defaulted so a spec that is not
+# about descriptors does not have to write them — and so that every verb these
+# helpers build is one the mixin will actually accept, which is the point:
+# since T-068 slice 3 a declaration missing either schema RAISES at class-body
+# load. `output_schema true` is the "accepts anything" boolean schema, which is
+# the honest declaration for a fixture that makes no claim about its shape;
+# a spec that IS about the shape passes its own.
+#
+# The default `input_schema` is the OPEN object, not the closed empty one a
+# real "takes nothing" verb declares: argument validation runs UNCONDITIONALLY
+# on the per-verb wire now, so a closed default would 400 every fixture that
+# passes an argument it never meant to constrain. A spec that is ABOUT the
+# input contract declares its own closed schema, which is where the refusals
+# are asserted.
+DEFAULT_REQUIRED_MACROS = {
+  input_schema:  { type: "object" },
+  output_schema: true,
+}.freeze
+
 def declare_verb(mixin, name, macros, body)
   macros = { description: "the #{name} verb" } if macros.empty?
+  macros = DEFAULT_REQUIRED_MACROS.merge(macros)
 
   Class.new(ApplicationController) do
     include mixin

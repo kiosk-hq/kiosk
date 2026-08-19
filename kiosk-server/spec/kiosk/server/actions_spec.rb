@@ -132,8 +132,13 @@ RSpec.describe Kiosk::Server::Actions do
       expect(d[:example_row]).to    eq({ order_id: "abc", status: "placed" })
     end
 
+    # Through `declare` rather than the mixin: T-073 = A makes both schemas
+    # REQUIRED, so {HandlerMixin} raises on a declaration missing either and no
+    # operator can produce one. The omission behaviour is this REGISTRY's, and
+    # it still matters for `example_params`/`example_row`, which stay optional —
+    # an absent extension is absent, never a null an assistant has to interpret.
     it "OMITS the extension keys entirely when they are not declared" do
-      declare_action("plain", description: "Do")
+      described_class.declare("plain", ->(_args) { {} }, description: "Do")
 
       d = described_class.describe("plain")
       expect(d).to eq({ name: "plain", description: "Do", params: nil })

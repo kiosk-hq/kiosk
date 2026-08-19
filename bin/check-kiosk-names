@@ -1,0 +1,175 @@
+#!/usr/bin/env ruby
+# frozen_string_literal: true
+
+# Kiosk verb-name check (T-068 slice 3, design §3.2).
+#
+# WHY THIS EXISTS. On the 0.4 wire a verb name IS a path segment, so three
+# properties that used to be cosmetic are now load-bearing:
+#
+#   (i)   the RESERVED list the engine refuses declarations against
+#         ({Kiosk::Server::HandlerMixin::RESERVED_NAMES}) must be exactly the
+#         set of first path segments the engine's own route table draws under
+#         the mount. The engine draws its per-verb pair LAST, so every route
+#         above it wins by first-match — a route added to engine.rb without a
+#         name added to RESERVED_NAMES silently re-opens a name an operator can
+#         declare and never be reached at. That is the check nothing else can
+#         make: the mixin cannot read the route table (it is required first),
+#         and the route table cannot read the mixin's list without a cycle.
+#
+#   (ii)  every verb name a demo (or the e2e origin) declares matches §8.1's
+#         `^[a-z][a-z0-9_]*$` and is not reserved. The engine RAISES on both at
+#         declaration time, so this is a second, boot-free reading of the same
+#         rule — it fails in seconds, over the whole fleet at once, without a
+#         database or a Rails boot behind it.
+#
+#   (iii) no name is declared as BOTH a query and an action within one origin.
+#         {Kiosk::Server::HandlerRegistrations} raises on this at reload, which
+#         needs the app to boot; here it is a text pass over the sources.
+#
+# WHAT IT IS NOT. The T-067 design invents this check to catch "declared but
+# unrouted / routed but undeclared". That bug class cannot occur in this
+# implementation at all — the engine resolves a verb name against the registry
+# AT REQUEST TIME from the same registry the descriptors come from, so there is
+# nothing to keep in sync (see {Kiosk::Server::VerbController}). What survives
+# of the design's intent is (i), which is about the RESERVED PLANE rather than
+# about individual verbs, plus the two boot-free readings above.
+#
+# Usage:  bin/check-kiosk-names [--list]
+# Exit:   0 OK, 1 on any violation.
+
+require "pathname"
+
+ROOT = Pathname.new(File.expand_path("..", __dir__))
+
+# §8.1: a verb is ONE path segment.
+NAME_PATTERN = /\A[a-z][a-z0-9_]*\z/
+
+errors = []
+listing = []
+
+# ── (i) RESERVED_NAMES == the engine's drawn first segments ─────────────────
+#
+# Both sides are read as TEXT: requiring kiosk-server would drag Rails in for a
+# check whose whole value is that it runs anywhere, in a second.
+
+mixin_source  = (ROOT + "kiosk-server/lib/kiosk/server/handler_mixin.rb").read
+engine_source = (ROOT + "kiosk-server/lib/kiosk/server/engine.rb").read
+
+declared_reserved = mixin_source[/RESERVED_NAMES\s*=\s*%w\[([^\]]*)\]/m, 1].to_s.split
+if declared_reserved.empty?
+  errors << "could not read RESERVED_NAMES out of handler_mixin.rb — has the constant moved?"
+end
+
+# The `routes do … end` block of the engine, i.e. everything drawn UNDER the
+# mount. The root-relative discovery routes are deliberately excluded: they are
+# appended to the HOST's route set at the origin root, never under <endpoint>,
+# so they can never shadow a verb.
+routes_block = engine_source[/^      routes do$(.*?)^      end$/m, 1].to_s
+if routes_block.empty?
+  errors << "could not read the engine's `routes do` block out of engine.rb — has it moved?"
+end
+
+drawn = routes_block.scan(/^\s*(?:get|post|put|patch|delete)\s+"([^"]+)"/).flatten
+first_segments = drawn.map { |path| path.delete_prefix("/").split("/").first.to_s }
+# `:kiosk_verb` is the per-verb pair itself — the thing the reserved plane sits
+# above — and `.well-known` cannot match a verb name, so neither is reservable.
+reservable = first_segments.reject { |seg| seg.start_with?(":") }
+                           .select { |seg| NAME_PATTERN.match?(seg) }
+                           .uniq.sort
+
+listing << ["engine routes", drawn.length.to_s]
+listing << ["reservable first segments", reservable.join(" ")]
+listing << ["RESERVED_NAMES", declared_reserved.sort.join(" ")]
+
+unless declared_reserved.empty? || routes_block.empty?
+  if (missing = reservable - declared_reserved).any?
+    errors << "the engine draws #{missing.join(", ")} under the mount but " \
+              "HandlerMixin::RESERVED_NAMES does not list #{missing.one? ? "it" : "them"} — " \
+              "an operator could declare that verb and never be reached at, because the " \
+              "engine's route wins by first-match"
+  end
+  if (extra = declared_reserved - reservable).any?
+    errors << "HandlerMixin::RESERVED_NAMES reserves #{extra.join(", ")}, which the engine no " \
+              "longer draws — a name refused for a reason that has gone away"
+  end
+end
+
+# ── The declared verbs, read out of the handler controllers ─────────────────
+#
+# A demo declares its verbs in ONE place: the class-level macro run above each
+# `def` in `app/controllers/kiosk/*.rb` (and the e2e origin's fixtures, which
+# are the same files by another path). The kind comes from the include —
+# `Kiosk::Query` or `Kiosk::Action` — which is a property of the CLASS.
+def verbs_in(source)
+  kind = if source.match?(/include\s+Kiosk::Query\b/)  then :query
+         elsif source.match?(/include\s+Kiosk::Action\b/) then :action
+         end
+  return [] if kind.nil?
+
+  out = []
+  previous_end = 0
+  offset = 0
+  while (m = source.match(/^[ \t]*def[ \t]+([a-z_][a-zA-Z0-9_]*)[ \t!?(\n]/, offset))
+    method_name  = m[1]
+    region       = source[previous_end...m.begin(0)].to_s
+    header       = region[/(?:\A|^  end\n)((?:(?!^  end\n).)*)\z/m, 1] || region
+    offset       = m.end(0)
+    previous_end = offset
+
+    # A `def` with no macro run above it is not a verb — the mixin's own rule.
+    next unless header.match?(/^[ \t]*(?:description|input_schema|output_schema|wire_name)[ \t]/)
+
+    wire = header[/^[ \t]*wire_name[ \t]+"([^"]*)"/, 1] || method_name
+    out << [wire, kind]
+  end
+  out
+end
+
+origins = Dir[(ROOT + "kiosk-demo-*/app/controllers/kiosk/*.rb").to_s].group_by { |path|
+  path[%r{/(kiosk-demo-[^/]+)/}, 1]
+}
+origins["e2e"] = Dir[(ROOT + "e2e/fixtures/*_controller.rb").to_s]
+
+origins.sort.each do |origin, paths|
+  verbs = paths.sort.flat_map { |path| verbs_in(File.read(path)) }
+  listing << [origin, verbs.map(&:first).sort.join(" ")]
+
+  verbs.each do |(name, _kind)|
+    unless NAME_PATTERN.match?(name)
+      errors << "#{origin}: #{name.inspect} is not a legal verb name (§8.1 " \
+                "#{NAME_PATTERN.source})"
+    end
+    if declared_reserved.include?(name)
+      errors << "#{origin}: #{name.inspect} is RESERVED — the engine draws that path itself " \
+                "and wins by first-match, so the verb would never be reached"
+    end
+  end
+
+  # (iii) one name, one kind.
+  by_name = verbs.group_by(&:first)
+  by_name.each do |name, entries|
+    kinds = entries.map(&:last).uniq
+    next if kinds.one?
+
+    errors << "#{origin}: #{name.inspect} is declared as BOTH a query and an action — a verb " \
+              "name is one path segment and one kind"
+  end
+end
+
+if ARGV.include?("--list")
+  listing.each { |(label, value)| puts format("%-28s %s", label, value) }
+end
+
+if errors.empty?
+  total = origins.sum { |_origin, paths| paths.sum { |p| verbs_in(File.read(p)).length } }
+  puts "check-kiosk-names: OK — #{total} verbs across #{origins.size} origins; " \
+       "#{declared_reserved.length} reserved names match the engine's route table"
+  exit 0
+end
+
+warn "\ncheck-kiosk-names FAILED:\n"
+errors.each { |e| warn "  ✗ #{e}" }
+warn "\nspec §8.1: a verb is ONE path segment matching ^[a-z][a-z0-9_]*$, and the engine owns " \
+     "the first segments it draws under the mount. The engine refuses a bad declaration at boot; " \
+     "this check says the same thing over the whole fleet without booting anything."
+exit 1

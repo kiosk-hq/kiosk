@@ -59,7 +59,33 @@ module Kiosk
         #   or a class that includes neither Kiosk::Action nor Kiosk::Query
         def reload!(handlers = Kiosk.configuration.handlers)
           clear!
-          Array(handlers).map { |handler| resolve(handler).kiosk_register! }
+          registered = Array(handlers).map { |handler| resolve(handler).kiosk_register! }
+          refuse_cross_kind_collisions!
+          registered
+        end
+
+        # ONE NAME, ONE KIND (§3.2). A name that is both a query and an action
+        # is a path with two meanings: `GET <endpoint>/<name>` and
+        # `POST <endpoint>/<name>` would reach different handlers, and the 405
+        # {VerbController} answers for a method mismatch — which is the whole
+        # reason that status exists on this wire — could never be right for it.
+        #
+        # Checked HERE and not at declaration time on purpose: the collision is
+        # between two SEPARATE controller classes (a demo declares its queries
+        # and its actions in different files, and must), so no single class body
+        # can see it. This pass has just rebuilt both registries from a cleared
+        # state, so it is the first moment the whole surface exists at once.
+        def refuse_cross_kind_collisions!
+          both = Actions.known & Queries.known
+          return if both.empty?
+
+          raise Errors::ConfigurationError,
+            "#{both.sort.join(", ")} #{both.one? ? "is" : "are"} declared as BOTH a query and " \
+            "an action. A verb name is one path segment and one kind: " \
+            "GET #{Kiosk.configuration.mount_path}/<name> is a query and " \
+            "POST #{Kiosk.configuration.mount_path}/<name> is an action, so a name that is " \
+            "both leaves the wire with no honest answer for either. Rename one of them, or " \
+            "give it a `wire_name` of its own."
         end
 
         # Empties both registries. Every entry in them was installed by the

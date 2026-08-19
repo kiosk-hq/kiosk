@@ -1,8 +1,8 @@
 # frozen_string_literal: true
 
 # The e2e origin's WRITE surface: the one verb an assistant reaches with
-# `POST /kiosk/run`. See Kiosk::CatalogController for why the two halves are
-# separate classes and why neither is routable.
+# `POST /kiosk/<action-name>`. See Kiosk::CatalogController for why the two
+# halves are separate classes and why neither is routed by hand.
 class Kiosk::BookingsController < ApplicationController
   include Kiosk::Action
 

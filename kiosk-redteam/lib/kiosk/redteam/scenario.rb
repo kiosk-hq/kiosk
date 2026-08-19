@@ -274,19 +274,19 @@ module Kiosk
       #
       # @param response [Response]
       # @return [Array<Hash>]
-      # THE TWO SHAPES A 0.4 QUERY ANSWERS, and it matters that both are read
-      # here rather than one (spec §8.2/§8.4):
+      # ONE SHAPE (spec §8.2, since T-092): a query answers a BARE JSON ARRAY
+      # of rows, paginating or not. Truncation is an RFC 8288 `Link` header,
+      # not a body field, so there is nothing left to unwrap.
       #
-      #   a query that does NOT paginate  ->  a BARE JSON ARRAY of rows
-      #   a query that DOES paginate      ->  {"rows": [...], "next": "<cursor>"}
-      #
-      # Reading only the second is how a scenario scores a VACUOUS PASS: an
-      # ownership check that asks "does A's list contain the row B created"
-      # gets `[]` from every non-paginating query, concludes "not leaked", and
-      # reports BLOCKED for an origin it never actually tested. That is the
-      # exact defect class T-076 found six of, and the 0.4 cutover would have
-      # introduced a seventh — through 0.3 EVERY query answered `{"rows": …}`,
-      # so `body["rows"]` was total and is now the minority case.
+      # THE `{"rows": …}` BRANCH IS KEPT, AND ON PURPOSE. What this method
+      # defends against is a VACUOUS PASS: an ownership check that asks "does
+      # A's list contain the row B created" reads `[]` off a shape it does not
+      # understand, concludes "not leaked", and reports BLOCKED for an origin
+      # it never actually tested — the exact defect class T-076 found six of.
+      # A redteam battery is pointed at THIRD-PARTY origins, including ones
+      # still serving an older cut, and silently scoring such an origin BLOCKED
+      # is far worse than reading a shape the current spec no longer produces.
+      # It costs two lines and it cannot produce a false ATTACK.
       def rows_from(response)
         body = response.body
         return body if body.is_a?(Array)

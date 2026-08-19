@@ -8,12 +8,13 @@
 # until the 0.4 cutover slice deletes them — the 0.3 name-dispatch endpoints
 # one endpoint per verb. Exits non-zero on any failure.
 #
-# ONE ANSWER SHAPE (T-074 = A, the cutover). Every endpoint answers the 0.4
-# shape: the handler's payload VERBATIM on success (a bare array, `{rows,
-# next}` when paginated, the action's own object), an RFC 9457 problem document
-# on an error. `POST /kiosk/{query,run}` do not exist; `schema` and `pay`
-# answer the same shape as the per-verb wire. (This header described a
-# two-shape intermediate until the cutover landed.)
+# ONE ANSWER SHAPE (T-074 = A, the cutover; narrowed further by T-092). Every
+# endpoint answers the handler's payload VERBATIM on success — a query a BARE
+# ARRAY whether or not it paginates, an action its own object — and an RFC 9457
+# problem document on an error. A paginated page says so in an RFC 8288 `Link:
+# …; rel="next"` HEADER, with `X-Total-Count` beside it, so there is no
+# composite body shape left at all. `POST /kiosk/{query,run}` do not exist;
+# `schema` and `pay` answer the same shape as the per-verb wire.
 #
 # ONE AUTH SHAPE, WITH ONE DELIBERATE EXCEPTION. Everything under the mount is
 # Bearer-gated except `GET /kiosk/schema`, which is public (T-094) — and
@@ -294,6 +295,23 @@ assert "the reserved parameters are form/explode:true" \
 assert "an action gets no query parameters" \
   "$(echo "$oa" | jq -r '.paths."/book_appointment".post | has("parameters")')" "false"
 
+# T-092. The two pagination facts are RESPONSE HEADERS (RFC 8288 `Link`,
+# `X-Total-Count`), and OpenAPI declares a response header under
+# `responses.<code>.headers` — never as a body property. A generator pointed at
+# this document must emit a header read, not a field read.
+assert "a query's 200 declares Link and X-Total-Count as HEADERS" \
+  "$(echo "$oa" | jq -r '[.paths."/salons".get.responses."200".headers | keys[]] | join(",")')" \
+  "Link,X-Total-Count"
+assert "…by \$ref into components.headers" \
+  "$(echo "$oa" | jq -r '.paths."/salons".get.responses."200".headers.Link."$ref"')" \
+  "#/components/headers/Link"
+assert "…and NOT as a body property" \
+  "$(echo "$oa" | jq -r '.components.schemas."salons.response" | (.properties // {}) | has("Link")')" "false"
+assert "an action declares no pagination headers" \
+  "$(echo "$oa" | jq -r '.paths."/book_appointment".post.responses."200" | has("headers")')" "false"
+assert "X-Total-Count is not dressed up as a standard" \
+  "$(echo "$oa" | jq -r '.components.headers."X-Total-Count".description | test("DE-FACTO CONVENTION") and test("no RFC")')" "true"
+
 # The closed error vocabulary is the `code` enum, and 405 is deliberately not
 # a response of a declared operation — it is what the OTHER method answers.
 assert "the code enum is the closed vocabulary" \
@@ -337,6 +355,15 @@ assert "Vary names both request headers" \
   "$(echo "$cache_headers" | grep -ic '^Vary: Authorization, Kiosk-PoW')" "1"
 assert "a 200 defaults to private, no-store" \
   "$(echo "$cache_headers" | grep -ic '^Cache-Control: private, no-store')" "1"
+
+# T-092, on the wire rather than in the document. `salons` does not paginate,
+# so its answer is COMPLETE: the wire states the matching total (which for a
+# complete array is its own length) and sends NO `Link` at all — the link's
+# absence is the only completeness signal an assistant may rely on.
+assert "a COMPLETE answer carries X-Total-Count" \
+  "$(echo "$cache_headers" | tr -d '\r' | grep -i '^X-Total-Count:' | awk '{print $2}')" "1"
+assert "…and NO Link header, because there is no next page" \
+  "$(echo "$cache_headers" | grep -ic '^Link:')" "0"
 
 # ─── GET /kiosk/schema — PUBLIC, AND THE ONE EXCEPTION TO THE LINE ABOVE ───
 #

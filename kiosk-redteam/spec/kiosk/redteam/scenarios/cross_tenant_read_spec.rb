@@ -25,8 +25,8 @@ RSpec.describe Kiosk::Redteam::Scenarios::CrossTenantRead do
   def stub_control_then_attack(control_rows:, attack_rows: nil, attack_status: 200,
                                attack_code: nil, control_status: 200)
     stub_request(:get, verb_url("my_orders")).to_return(
-      wire_return(status: control_status, body: page(control_rows)),
-      wire_return(status: attack_status, body: page(attack_rows || []), code: attack_code),
+      wire_return(status: control_status, body: control_rows),
+      wire_return(status: attack_status, body: attack_rows || [], code: attack_code),
     )
   end
 

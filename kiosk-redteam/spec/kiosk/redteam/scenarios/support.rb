@@ -15,9 +15,10 @@
 # SEGMENT, which is also what the PoW fingerprint binds to. A stub written
 # against a `name` body field therefore matches nothing at all.
 #
-# SUCCESS has no envelope: a paginating query answers `{"rows": …, "next": …}`,
-# a non-paginating one a BARE JSON ARRAY, and an action or `pay` answers its own
-# object. ERRORS are RFC 9457 problem documents — see spec_helper's `problem`.
+# SUCCESS has no envelope, and since T-092 no second shape either: EVERY query
+# answers a BARE JSON ARRAY (a truncated page says so in an RFC 8288 `Link`
+# header, not in the body), and an action or `pay` answers its own object.
+# ERRORS are RFC 9457 problem documents — see spec_helper's `problem`.
 #
 # Provides:
 #   - BASE_URL constant + verb_url(name)
@@ -71,18 +72,25 @@ def stub_action(name, status: 200, body: nil, code: nil)
     .to_return(wire_return(status: status, body: body || ACTION_OK, code: code))
 end
 
-# One page of query rows: `{"rows": …, "next": <opaque cursor>}` — the answer a
-# TRUNCATED paginating query gives (Kiosk::Server::Result#to_payload). This is
-# the shape Scenario#rows_from reads.
-def page(rows)
+# The LEGACY page object `{"rows": …, "next": <opaque cursor>}` — what a
+# TRUNCATED paginating query answered before T-092 moved the cursor into an RFC
+# 8288 `Link` header. A current origin never sends it; it is kept because
+# `Scenario#rows_from` still reads it (a third-party origin on an older cut
+# must not be scored BLOCKED for a shape this battery failed to parse) and this
+# is what proves that branch is live.
+def legacy_page(rows)
   { "rows" => rows, "next" => "b2Zmc2V0OjE" }
 end
 
 # GET <mount>/<query-name>. Scenario queries carry no arguments, so the URL is
 # exact; a query WITH arguments is matched with `.with(query: …)`.
+# The default body is the BARE ARRAY every 0.4.1 query answers (T-092), not
+# the retired page object — a stub that answered a shape no origin sends would
+# be exercising the compatibility branch of `rows_from` on every scenario and
+# never the shape that ships.
 def stub_query(name, status: 200, rows: [], body: nil, code: nil)
   stub_request(:get, verb_url(name))
-    .to_return(wire_return(status: status, body: body || page(rows), code: code))
+    .to_return(wire_return(status: status, body: body || rows, code: code))
 end
 
 # The settlement object `POST <mount>/pay` answers (Executor#pay).

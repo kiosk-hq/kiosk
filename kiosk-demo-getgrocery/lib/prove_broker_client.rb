@@ -5,7 +5,7 @@ require "uri"
 require "json"
 
 # ProveBrokerClient — getgrocery's server-to-server client for the KYC
-# broker intake (design §4.1 / §5.1). On `run request_kyc`, getgrocery calls the
+# broker intake (design §4.1 / §5.1). On POST <endpoint>/request_kyc, getgrocery calls the
 # broker here (NOT the human) to START an age verification, handing the broker
 # getgrocery's callback_url, the SINGLE claim it needs (age_over_18 — NOT a
 # driving licence), and the agent's user_id as the subject the claim must bind

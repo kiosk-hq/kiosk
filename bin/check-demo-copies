@@ -435,8 +435,9 @@ COPIES = {
           "own rule is that a code an app never produces has no business having a mapping, and " \
           "the seven maps are seven different sets. stylish lists ONE (nothing on that origin " \
           "ever fills up and its write is caller-scoped by construction, so `bad_request` is the " \
-          "only refusal it can make); tudu and philslist two; atablefor three; hoteling four " \
-          "ending in `conflict`; skooti and getgrocery four ending in `kyc_required` instead. " \
+          "only refusal it can make); tudu and philslist two; atablefor and hoteling three, " \
+          "both ending in `conflict`; skooti and getgrocery four, ending in `kyc_required` " \
+          "instead. " \
           "That last pair is the sharpest case for the rule twice over: `kyc_required` and " \
           "`forbidden` are BOTH 403, so the code is not derivable from the status at all — and " \
           "the two demos' four codes coincide for entirely unrelated reasons, a gate on alcohol " \

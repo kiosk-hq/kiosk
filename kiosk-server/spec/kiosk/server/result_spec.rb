@@ -71,6 +71,30 @@ RSpec.describe Kiosk::Server::Result do
     end
   end
 
+  # THE 0.4 SUCCESS BODY (T-072 = C). Whatever the handler rendered is what
+  # the wire carries; the ONE composite shape is the paginating query, and it
+  # is the shape `render_kiosk_page` already produces.
+  describe "#to_payload" do
+    it "is the handler's rows, bare, when nothing paginated" do
+      expect(described_class.new(kind: :rows, payload: [{ a: 1 }]).to_payload).to eq([{ a: 1 }])
+    end
+
+    it "is {rows, next} when the query paginated" do
+      r = described_class.new(kind: :rows, payload: [{ a: 1 }], next_cursor: "b2Zmc2V0OjQw")
+      expect(r.to_payload).to eq(rows: [{ a: 1 }], next: "b2Zmc2V0OjQw")
+    end
+
+    it "is the action's own object, bare" do
+      expect(described_class.new(kind: :value, payload: { id: 7 }).to_payload).to eq(id: 7)
+    end
+
+    it "carries no `ok` and no `kind` — the status line and output_schema do that" do
+      payload = described_class.new(kind: :value, payload: { id: 7 }).to_payload
+      expect(payload).not_to have_key(:ok)
+      expect(payload).not_to have_key(:kind)
+    end
+  end
+
   describe "next_cursor validation" do
     it "rejects a next_cursor on a non-:rows result" do
       expect { described_class.new(kind: :value, payload: {}, next_cursor: "x") }

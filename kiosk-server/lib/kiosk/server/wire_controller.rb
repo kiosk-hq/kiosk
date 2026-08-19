@@ -24,7 +24,12 @@ module Kiosk
     #   POST /kiosk/pay    { "intent_mandate_jws": "...", ... }
     #
     # Wire response (JSON): success per {Result#to_envelope}, error per
-    # {Errors::Base#to_envelope}.
+    # {Errors::Base#to_envelope} — the 0.3 envelope. These four endpoints keep
+    # it until the cutover slice, which deletes `query`/`run` and moves
+    # `schema`/`pay` onto the 0.4 shape together with the eight demos that
+    # read it (T-074 = A). The 0.4 shape — payload verbatim, errors as RFC
+    # 9457 problem documents — is served TODAY by {VerbController}, which
+    # subclasses this one and overrides only the two render seams.
     #
     # Identity resolution: {IdentityResolution.resolve} — the
     # agent IdP first (`Kiosk.configuration.agent_idp`, defaulting to the
@@ -143,11 +148,23 @@ module Kiosk
           )
         end
 
-        render_envelope(result.to_envelope, status: result.http_status)
+        render_result(result)
       end
 
+      # How a SUCCESS reaches the wire. Its own method because the two wires
+      # answer differently and this is the whole of the difference:
+      # `POST <endpoint>/{query,run}`, `GET <endpoint>/schema` and
+      # `POST <endpoint>/pay` answer the 0.3 envelope (here);
+      # {VerbController} overrides it with the 0.4 shape — the handler's
+      # rendered payload, verbatim (T-072 = C).
+      def render_result(result)
+        render_wire_body(result.to_envelope, status: result.http_status)
+      end
+
+      # How an ERROR reaches the wire. Same split: the 0.3 error envelope
+      # here, an RFC 9457 problem document in {VerbController}.
       def render_wire_error(error)
-        render_envelope(error.to_envelope, status: error.http_status, error: error)
+        render_wire_body(error.to_envelope, status: error.http_status, error: error)
       end
 
       def resolve_identity!
@@ -195,12 +212,32 @@ module Kiosk
         ::ActiveRecord::Base.lease_connection
       end
 
-      def render_envelope(envelope, status:, error: nil)
+      # The ONE place a wire response is written. Everything both wires must
+      # carry regardless of body shape lives here: the three version-handshake
+      # headers, the cache policy (design §3.3 — `Vary: Authorization,
+      # Kiosk-PoW` on every wire response, `no-store` on a 402), the RFC 7235
+      # challenge that de-overloads the two 402 gates, and any header the
+      # error itself requires (`Allow` on a 405, RFC 9110 §15.5.6).
+      #
+      # @param body [Hash, Array] the response body, already in its final shape
+      # @param status [Integer, Symbol] the HTTP status
+      # @param error [Errors::Base, nil] the error being rendered, when it is one
+      # @param content_type [String, nil] overrides `application/json` — the
+      #   0.4 error path renders `application/problem+json`
+      def render_wire_body(body, status:, error: nil, content_type: nil)
         Kiosk::Server::Headers.add_to(response.headers)
-        if error && (challenge = www_authenticate_for(error))
-          response.set_header("WWW-Authenticate", challenge)
+        Kiosk::Server::Headers.add_cache_policy(
+          response.headers, status: ::Rack::Utils.status_code(status)
+        )
+        if error
+          error.response_headers.each { |name, value| response.set_header(name, value) }
+          if (challenge = www_authenticate_for(error))
+            response.set_header("WWW-Authenticate", challenge)
+          end
         end
-        render json: envelope, status: status
+        options = { json: body, status: status }
+        options[:content_type] = content_type if content_type
+        render(**options)
       end
 
       # RFC 7235 challenge header that de-overloads the two 402 gates:

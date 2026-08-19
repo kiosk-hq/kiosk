@@ -46,6 +46,7 @@ module Kiosk
     #
     #   1. identity            401  IdentityResolution
     #   2. the verb exists     404  the registry (with the name-hint)
+    #      …or wrong method    405  the OTHER registry, carrying `Allow:`
     #   3. the arguments       400  ArgumentDecoder + the declared input_schema
     #   4. the toll            402  PowGate, via WireController#execute_wire
     #
@@ -58,16 +59,32 @@ module Kiosk
     # answers 401 to an unauthenticated caller, whether or not a verb by that
     # name exists.
     #
-    # ── What this controller does NOT do yet ─────────────────────────────
+    # ── The answer, and it is the whole answer (T-068 slice 2) ───────────
     #
-    # The response is still the 0.3 envelope (`{ok, kind, rows|value, next?}`)
-    # and errors are still the 0.3 error envelope: retiring the envelope and
-    # moving errors to RFC 9457 `application/problem+json` is the NEXT slice
-    # (T-072 = C), and doing it here would have made this slice a wire break
-    # rather than an addition. `POST <endpoint>/query` and `POST
-    # <endpoint>/run` therefore keep working, unchanged, for exactly as long
-    # as it takes the demos to migrate — the hard cut (T-074 = A) is the
-    # cutover slice, not this one.
+    # SUCCESS is the handler's rendered payload, VERBATIM (T-072 = C). A
+    # non-paginating query answers a bare array, a paginating one
+    # `{"rows": …, "next": …}` — which is what `render_kiosk_page` already
+    # produces internally — and an action answers its own object. There is no
+    # `ok`, no `kind` and no wrapper: the status line carries success, and
+    # `output_schema` carries the shape (slice 3 writes the 52 declarations;
+    # until then the shape is discriminable from the HTTP method plus the one
+    # structural rule above, which is why that rule is normative rather than a
+    # convention).
+    #
+    # ERRORS are RFC 9457 problem documents, served as
+    # `application/problem+json`, with the closed `error.code` vocabulary
+    # surviving twice: as the `type` URI naming the problem and as the `code`
+    # extension member an assistant branches on. See {Errors::Base#to_problem}.
+    #
+    # ── What this controller still leaves to the cutover ─────────────────
+    #
+    # `POST <endpoint>/{query,run}` keep working, unchanged, for exactly as
+    # long as it takes the eight demos to migrate, and `GET <endpoint>/schema`
+    # + `POST <endpoint>/pay` keep the 0.3 envelope for the same reason — the
+    # demo flow scripts read `.value` off both. That is a build-time
+    # intermediate inside an unreleased protocol, NOT a shipped dual stack:
+    # the hard cut (T-074 = A) is the cutover slice, which deletes the first
+    # pair and moves the other two onto the shape below.
     class VerbController < WireController
       # A verb name (design §3.2). Also the route constraint, so a path that
       # cannot be a verb name never reaches this controller and stays a routing
@@ -95,26 +112,34 @@ module Kiosk
         execute_wire(command: command, args: args, identity: identity, name: name)
       end
 
-      # The verb's published descriptor, or a 404 that says something useful.
+      # The verb's published descriptor, or a refusal that says something
+      # useful — and the two refusals are deliberately DIFFERENT STATUSES.
       #
-      # Two 404s, deliberately different: a name nobody registered gets the
-      # registry's own hint (which lists the registered names, so a mistyped
-      # `listings` for `browse_listings` self-corrects without a schema
-      # round-trip), while a name registered as the OTHER KIND gets the method
-      # it should have been called with. The second one is new to this wire —
-      # under 0.3 a query and an action were different endpoints with the same
-      # shape, and confusing them was a bare "unknown query".
+      # A name nobody registered is `404 not_found` with the registry's own
+      # hint, which lists the registered names so a mistyped `listings` for
+      # `browse_listings` self-corrects without a schema round-trip.
+      #
+      # A name registered as the OTHER KIND is `405 method_not_allowed` with
+      # `Allow:` naming the method the verb does accept. The resource EXISTS —
+      # answering 404 would be a lie about it, and RFC 9110 §15.5.6 already
+      # has the status for exactly this. Slice 1 shipped 404-with-a-hint here
+      # only because 405 was not in the closed vocabulary and adding a code is
+      # spec-first (rule 1); slice 2 IS the spec change, so this is now what
+      # the vocabulary says. It discloses nothing: identity is resolved first
+      # (401 above), and `GET <endpoint>/schema` already lists every name to
+      # an authenticated caller.
       def descriptor_for!(command, name)
         registry, other = command == :query ? [Queries, Actions] : [Actions, Queries]
         return registry.describe(name) if registry.known.include?(name)
 
         if other.known.include?(name)
-          raise Errors::NotFound.new(
+          wanted = command == :query ? "POST" : "GET"
+          raise Errors::MethodNotAllowed.new(
             command == :query ? "#{name.inspect} is an action, not a query"
                               : "#{name.inspect} is a query, not an action",
-            hint: "call #{command == :query ? "POST" : "GET"} " \
-                  "#{Kiosk.configuration.mount_path}/#{name} instead — " \
-                  "queries are GET, actions are POST.",
+            allow: wanted,
+            hint:  "call #{wanted} #{Kiosk.configuration.mount_path}/#{name} instead — " \
+                   "queries are GET, actions are POST.",
           )
         end
 
@@ -141,6 +166,29 @@ module Kiosk
         end
 
         args
+      end
+
+      # ── The 0.4 answer shapes (T-072 = C) ────────────────────────────────
+
+      # Success: the handler's payload, verbatim. {Result} still travels from
+      # the {Executor} because the 0.3 endpoints next door still need it; here
+      # it is unwrapped rather than serialised, and it disappears entirely at
+      # the cutover.
+      def render_result(result)
+        render_wire_body(result.to_payload, status: result.http_status)
+      end
+
+      # Errors: an RFC 9457 problem document under its own media type. The
+      # media type is the half a generic client reads — `application/json`
+      # with a `title` field would be indistinguishable from any other JSON —
+      # and the `code` extension member is the half an assistant reads.
+      def render_wire_error(error)
+        render_wire_body(
+          error.to_problem,
+          status:       error.http_status,
+          error:        error,
+          content_type: Errors::PROBLEM_CONTENT_TYPE,
+        )
       end
     end
   end

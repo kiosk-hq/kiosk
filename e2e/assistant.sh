@@ -4,9 +4,10 @@
 # start (not sourced — it runs under its own `set -euo pipefail`).
 #
 # Asserts on responses from the REST wire surface: the 0.4 per-verb endpoints
-# (GET /kiosk/<query-name>, POST /kiosk/<action-name>), /kiosk/pay, and —
-# until the 0.4 cutover slice deletes them — the 0.3 name-dispatch endpoints
-# one endpoint per verb. Exits non-zero on any failure.
+# (GET /kiosk/<query-name>, POST /kiosk/<action-name>), /kiosk/pay, and the
+# two public catalogue documents (/kiosk/schema, /kiosk/openapi.json). The 0.3
+# name-dispatch endpoints are gone and are asserted to answer an ordinary 404.
+# Exits non-zero on any failure.
 #
 # ONE ANSWER SHAPE (T-074 = A, the cutover; narrowed further by T-092). Every
 # endpoint answers the handler's payload VERBATIM on success — a query a BARE

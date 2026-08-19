@@ -8,21 +8,21 @@ Reproducible end-to-end test of the Kiosk OSS gems. The same script (`run.sh`) r
 - `kiosk-server` Rails engine boots inside a fresh app
 - `/.well-known/kiosk.json` discovery endpoint returns a valid document
 - Response headers (`Kiosk-Server-Version`, `Kiosk-API-Version`, `Kiosk-Min-Client`) are injected on `/kiosk/*`
-- `POST /kiosk/{query,run,pay}` accept JSON requests and dispatch through `Kiosk::Server::Executor`
-- The `query` verb calls the origin's named queries (`salons`, `my_appointments`) and returns rows
-- The `run` verb dispatches to the origin's named Actions
+- The 0.4 per-verb endpoints (`GET /kiosk/<query-name>`, `POST /kiosk/<action-name>`) and `POST /kiosk/pay` dispatch through `Kiosk::Server::Executor` — a query's arguments ride in the query string, an action's in the JSON body
+- `GET /kiosk/salons` and `GET /kiosk/my_appointments` reach the origin's named queries and answer a bare JSON array of rows (no envelope; a page's cursor is an RFC 8288 `Link` header and its row count `X-Total-Count`)
+- `POST /kiosk/book_appointment` reaches the origin's named Action and answers that handler's own JSON object
 - Handler controllers declared with `include Kiosk::Query` / `Kiosk::Action` and named in `c.handlers` are registered and served in DEVELOPMENT, where nothing eager-loads `app/` (K-761)
-- Error envelopes have the right shape and HTTP status (`NotFound` → 404 for unknown query/action, `Unauthenticated` → 401 for missing/garbage token)
+- Errors are RFC 9457 problem documents — `application/problem+json`, `type`/`title`/`status`/`code`/`hint`, the branch point a FLAT top-level `code` — with the right HTTP status (unknown verb name → 404 `not_found`, missing/garbage token → 401 `unauthenticated`)
 - The `/kiosk/.well-known/jwks.json` endpoint publishes exactly one RSA/RS256 signing key (kty/use/alg/kid/n/e) and never leaks private parameters (`d`, `p`)
 - The partial UNIQUE index on `kiosk.agents.public_key` (WHERE `revoked_at IS NULL`) rejects a second LIVE row for one key at the DB level while allowing a revoked re-registration
 - `SET LOCAL` GUCs flow correctly: the `book_appointment` Action reads `kiosk.current_user_id()` and the `my_appointments` query returns only the calling principal's rows (app-layer isolation via `WHERE user_id = kiosk.current_user_id()`)
-- The `pay` verb settles a full AP2 mandate trail: `pay_flow.rb` self-registers a synthetic principal, signs intent → cart → payment mandates (JWS), pays against a stub PSP; assertions cover the response envelope and all four DB tables (`intent_mandates`, `cart_mandates`, `payment_mandates`, `settlements`)
+- The `pay` verb settles a full AP2 mandate trail: `pay_flow.rb` self-registers a synthetic principal, signs intent → cart → payment mandates (JWS), pays against a stub PSP; assertions cover the unenveloped `pay` response body and all four DB tables (`intent_mandates`, `cart_mandates`, `payment_mandates`, `settlements`)
 
 ## What it does NOT verify (deferred)
 
 - **RLS.** Path C removes raw SQL entirely — there is no arbitrary-SQL surface. Per-user isolation is enforced app-layer in the handler controllers (the `WHERE user_id = kiosk.current_user_id()` in `my_appointments`). RLS is optional and its enforcement is not exercised in this fixture; satellite-mode role separation lands in a follow-up. The `app_role` pre-creation in `run.sh` is kept harmless for forward compatibility. Note: the `kiosk-rls` gem is still installed (see `run.sh`), because it is the only source of `Configuration#system_role=`, which `initializer_kiosk.rb` assigns — the gem is a mandatory boot dependency here even though RLS itself is off.
 - **Live PSP capture.** The pay flow runs against `StubPsp` (deterministic in-process provider) — no real Stripe call here; the Stripe adapter is `kiosk-pay-stripe`.
-- **Streaming.** There is no streaming/events verb; the wire surface is `query`, `run`, `pay`, `schema`.
+- **Streaming.** There is no streaming/events verb; the wire surface is one endpoint per registered verb, plus `pay` and the public `schema` / `openapi.json` catalogue.
 - **Multi-agent revocation** flows.
 - **Live LLM agent integration** — this fixture drives the wire surface with deterministic `curl`/`jq` calls, not a real model; a live-LLM driver would be a future companion gem (`kiosk-agent-test` does not exist yet).
 
@@ -91,5 +91,5 @@ e2e/
     ├── catalog_controller.rb               # Kiosk::CatalogController — `include Kiosk::Query`: the salons + my_appointments verbs
     ├── bookings_controller.rb              # Kiosk::BookingsController — `include Kiosk::Action`: the book_appointment verb
     ├── initializer_kiosk.rb                # Kiosk.configure, including `c.handlers` naming the two controllers above
-    └── routes.rb                           # mounts /kiosk/{query,run,pay,schema}, /kiosk/auth/{challenge,register,login,revoke}, jwks, oauth/* device routes + /.well-known/kiosk.json
+    └── routes.rb                           # hand-draws /kiosk/schema, /kiosk/pay, /kiosk/openapi.json, /kiosk/auth/{challenge,register,login,revoke,link,claim,unlink}, jwks, oauth/* device + verify routes, the root discovery documents (/agents.{txt,json}, /auth.md, /.well-known/{agent-configuration,kiosk.json,api-catalog}) and — LAST, so every reserved line above wins — the per-verb `GET|POST /kiosk/:kiosk_verb` pair
 ```

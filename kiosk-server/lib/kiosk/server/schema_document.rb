@@ -48,8 +48,15 @@ module Kiosk
     #
     # It travels two ways: as the strong `ETag` of the response, and as the
     # `?v=` on the URL the discovery documents link ({WellKnown}). The second
-    # is what makes a week-long TTL safe — see {Headers} for the two cache
+    # is what makes a year-long TTL safe — see {Headers} for the two cache
     # policies and why a fixed URL cannot carry the long one.
+    #
+    # SINCE K-804 IT IS THE ORIGIN'S DOCUMENT VERSION, not this document's.
+    # `GET <endpoint>/openapi.json` went public in the same shape, and the
+    # api-catalog hangs THIS value on the `?v=` of both links, because
+    # {digest_inputs} covers every input of either renderer. The two documents
+    # keep their own `ETag`s — an entity tag identifies bytes at one url — but
+    # they share one version, and a deploy that moves either moves it.
     module SchemaDocument
       # Hex characters of SHA-256 kept. 128 bits: collision-free for a
       # cache-busting version, and short enough to read in a URL.
@@ -147,6 +154,16 @@ module Kiosk
         #   * the VERSIONS — `kiosk-server`'s own, because the renderer lives
         #     in this gem and a PATCH bump can change what it emits, and the
         #     protocol's, for the same reason one level up.
+        #
+        # `owner` IS ONE OF THEM, and it joined at K-804 rather than at T-094.
+        # This digest stopped being the catalog's alone the day the api-catalog
+        # began hanging it on the `?v=` of BOTH derived documents: {OpenApi}
+        # renders `info.title` from `WellKnown.site_name`, which reads
+        # `owner[:name]`. Leaving it out would have let an operator rename
+        # itself, publish an unchanged version, and have a year-long cache
+        # keep serving the old title. It is a cheap read and it makes the one
+        # sentence this constant depends on — "every input of either document
+        # is an input here" — true rather than nearly true.
         def digest_inputs(config, document)
           {
             gem_version:      Kiosk::Server::VERSION,
@@ -155,6 +172,7 @@ module Kiosk
             mount_path:       config.mount_path.to_s,
             capabilities:     Array(config.capabilities),
             min_client:       config.min_client.to_s,
+            owner:            config.owner,
             skill:            [config.skill_url.to_s, config.skill_sha256.to_s],
             document:         document,
           }

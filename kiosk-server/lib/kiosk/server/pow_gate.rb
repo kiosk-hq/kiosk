@@ -82,7 +82,7 @@ module Kiosk
       #
       # @param identity [Kiosk::Identity]
       # @param command  [String, Symbol]  the gate/POLICY verb — one of
-      #   {Executor::POLICY_VERBS}; this is what `reputation_factors` and
+      #   {Executor::VERBS}; this is what `reputation_factors` and
       #   `Policy#challenge_for` branch on, and it is NOT what the fingerprint
       #   binds to
       # @param method   [String]          the HTTP request method — half of the

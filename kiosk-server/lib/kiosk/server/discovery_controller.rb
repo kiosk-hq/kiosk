@@ -31,6 +31,28 @@ module Kiosk
     # provider that mounts these routes serves the correct origin without
     # extra config. Unauthenticated by design — discovery is public.
     class DiscoveryController < ::ActionController::API
+      # NO `Vary`, ON ANY OF THE SIX (Phil, 2026-08-19: «А Vary зачем? Это
+      # паблик, общедоступная инфа.»).
+      #
+      # None of these documents reads a request header — every one of them is
+      # composed from `Kiosk.configuration` plus `request.base_url` — so there
+      # is no variance to declare. But Rails declares one anyway:
+      # `ActionController::Rendering#_set_vary_header` stamps `Vary: Accept` on
+      # any render whose format was negotiated from a non-blank `Accept`, which
+      # is what a real client sends and what `curl -H 'Accept: application/json'`
+      # sends. To a shared cache that splits one document into one entry per
+      # Accept string — the same damage `Vary: Authorization` would do, arriving
+      # by a different route, and it would quietly undo the `public` these
+      # documents are served with.
+      #
+      # AN `after_action`, not six `response.headers.delete` lines: the header
+      # is written BY the render, so it can only be removed afterwards, and a
+      # per-action copy is a line the seventh document would forget. It fires
+      # for every action in this controller, which is correct — all six are
+      # public. (`WireController#schema` does the same thing inline; it is one
+      # public action in a class whose other actions are identity-scoped.)
+      after_action :drop_vary
+
       # GET /agents.txt — native agents.txt v1.0 envelope.
       def agents_txt
         allow_cors
@@ -95,14 +117,22 @@ module Kiosk
       # nothing is pointed at a stale copy of it. That property is only true
       # while the POINTER expires quickly: a deploy changes the digest, and a
       # client re-reads this document within {Headers::SHORT_MAX_AGE} seconds
-      # to find the new link. A long TTL here would move the staleness rather
-      # than remove it.
+      # — sixty of them, since Phil weighed post-deploy staleness against
+      # backend load and picked a minute — to find the new link. A long TTL
+      # here would move the staleness rather than remove it, and the load it
+      # would save is not saved here anyway: the bytes live behind the
+      # versioned URL, which is immutable.
       #
       # `public`, because these documents are the same bytes for every caller
       # and are meant to be absorbed by a CDN — which is exactly what the
       # K-799 answer leans on when it accepts anonymous enumeration.
       def short_ttl
         response.set_header("Cache-Control", Headers::PUBLIC_SHORT)
+      end
+
+      # See the `after_action` at the top of this class.
+      def drop_vary
+        response.headers.delete("Vary")
       end
     end
   end

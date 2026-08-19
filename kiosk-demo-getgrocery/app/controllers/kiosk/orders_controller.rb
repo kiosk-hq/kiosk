@@ -76,6 +76,24 @@ class Kiosk::OrdersController < ActionController::API
   # verb takes no arguments" is a published fact rather than an absence an
   # assistant has to interpret.
   input_schema type: "object", additionalProperties: false, properties: {}, required: []
+  # TWO shapes, and the branch is `status`. Declared as a `oneOf` rather than
+  # one open object with an optional `setup_url`, because the pairing is the
+  # contract: `setup_required` without a url would be an answer the assistant
+  # cannot act on, and `ready` with one would invite it to send its human to a
+  # page there is no reason to open.
+  output_schema oneOf: [
+    { type: "object", additionalProperties: false,
+      description: "A card is on file — proceed to `pay`.",
+      properties: { status: { const: "ready", description: "ready." } },
+      required: ["status"] },
+    { type: "object", additionalProperties: false,
+      description: "No card on file — the human must complete the hosted card entry first.",
+      properties: {
+        status:    { const: "setup_required", description: "setup_required." },
+        setup_url: { type: "string", description: "The Stripe-hosted card-entry page to hand to your human. Stable across polls while one setup is outstanding — relay this one link rather than a new one per check." },
+      },
+      required: %w[status setup_url] },
+  ]
   def payment_setup
     # The principal, from the identity the WIRE resolved. This used to be a
     # `SELECT kiosk.current_user_id()` round trip followed by a nil check that
@@ -135,6 +153,18 @@ class Kiosk::OrdersController < ActionController::API
                                      description: "Optional uuid of an unpaid order to replace." },
                },
                required: ["items", "delivery_slot_id", "delivery_address"]
+  output_schema type: "object",
+                description: "The created (or replaced) order, priced.",
+                additionalProperties: false,
+                properties: {
+                  order_id:    { type: "string", description: "uuid. Name it in the cart mandate's `order_id` line item, and pass it to reschedule_delivery as `order_id`." },
+                  total_cents: { type: "integer", description: "EUR cents. Sign the cart at exactly this total." },
+                  total_eur:   { type: "string", description: "The same total rendered for a human, e.g. \"€12.87\"." },
+                  currency:    { type: "string", description: "eur — the currency the cart must be signed in." },
+                  slot_at:     { type: "string", description: "The booked delivery window's start instant, ISO 8601 with offset." },
+                  pay_hint:    { type: "string", description: "The mandate this order expects, in words." },
+                },
+                required: %w[order_id total_cents total_eur currency slot_at pay_hint]
   example_params({
     items: [{ sku: "sourdough-bread", qty: 2 }, { sku: "greek-yogurt", qty: 1 }],
     delivery_slot_id: 3, delivery_date: "2026-08-10", delivery_address: "42 Camden Street, Dublin 2",
@@ -180,6 +210,16 @@ class Kiosk::OrdersController < ActionController::API
                                      description: "Optional new in-zone Dublin delivery address; unchanged if omitted." },
                },
                required: ["order_id", "delivery_slot_id"]
+  # No price and no pay_hint, and that absence is the contract: a reschedule
+  # REUSES the order's existing payment, so there is no new mandate to sign.
+  output_schema type: "object",
+                description: "The rescheduled order.",
+                additionalProperties: false,
+                properties: {
+                  order_id:       { type: "string", description: "The order that moved, echoed." },
+                  rescheduled_at: { type: "string", description: "The NEW delivery window's start instant, ISO 8601 with offset." },
+                },
+                required: %w[order_id rescheduled_at]
   example_params({ order_id: "e2b1c0d4-5f6a-4b3c-8d2e-1f0a9b8c7d6e", delivery_slot_id: 3,
                    delivery_date: "2026-08-10" })
   example_row({ order_id: "e2b1c0d4-5f6a-4b3c-8d2e-1f0a9b8c7d6e",
@@ -202,6 +242,15 @@ class Kiosk::OrdersController < ActionController::API
               "request_id for the signed attestation, submit it to POST /kiosk/agents/kyc, then retry " \
               "create_order. No pre-shared issuer key needed."
   input_schema type: "object", additionalProperties: false, properties: {}, required: []
+  output_schema type: "object",
+                description: "The opened verification.",
+                additionalProperties: false,
+                properties: {
+                  request_id:       { type: "string", description: "Pass to kyc_status as `request_id` to poll for the signed attestation." },
+                  verification_url: { type: "string", description: "The broker page to relay to your human to approve." },
+                  status:           { const: "pending", description: "pending — a freshly opened request is always this." },
+                },
+                required: %w[request_id verification_url status]
   def request_kyc
     render_operation RequestKycOperation.call(principal_id: kiosk_identity.user_id)
   end

@@ -163,6 +163,79 @@ assert "api-catalog → 200"           "$apc_status" "200"
 assert "api-catalog Content-Type"    "$(echo "$apc_headers" | grep -i '^Content-Type:' | grep -ic 'application/linkset+json')" "1"
 assert "api-catalog items non-empty" "$(echo "$apc" | jq -r '.linkset[0].item | length > 0')" "true"
 
+# ─── the DERIVED OpenAPI document (T-068 slice 4, T-071 = C) ────────────
+#
+# A SECOND renderer over the registry `GET /kiosk/schema` renders. It is for
+# TOOLING, it is named nowhere in skill.md, and it is PROVISIONAL — so what is
+# asserted here is only that it is served, that it is gated exactly as the
+# canonical catalog is, and that it says the four things the T-086 research
+# measured it must. Nothing in this harness may come to DEPEND on it.
+
+printf "\n\033[1m=== GET /kiosk/openapi.json (derived, RFC 9727 service-desc) ===\033[0m\n"
+
+assert "api-catalog advertises it as a service-desc" \
+  "$(echo "$apc" | jq -r '[.linkset[0].item[] | select(.rel == "service-desc") | .href] | map(endswith("/kiosk/openapi.json")) | any')" \
+  "true"
+
+# Bearer-gated, like GET /kiosk/schema: the document names every verb, every
+# argument and every result shape, so an anonymous read would hand out the
+# catalog enumeration the per-verb wire orders its gates (401 before 404) to
+# withhold.
+oa_anon=$(curl -sS -o /dev/null -w "%{http_code}" "$SERVER_URL/kiosk/openapi.json")
+assert "unauthenticated → 401"      "$oa_anon" "401"
+
+oa_headers=$(curl -sS -o /dev/null -D - "$SERVER_URL/kiosk/openapi.json" \
+  -H "Authorization: Bearer $ALICE_AGENT_TOKEN")
+oa=$(curl -sf "$SERVER_URL/kiosk/openapi.json" -H "Authorization: Bearer $ALICE_AGENT_TOKEN")
+
+assert "served as an OpenAPI document" \
+  "$(echo "$oa_headers" | grep -i '^Content-Type:' | grep -ic 'application/vnd.oai.openapi+json')" "1"
+assert "declares OpenAPI 3.1"        "$(echo "$oa" | jq -r '.openapi')" "3.1.0"
+assert "server is this origin's endpoint" \
+  "$(echo "$oa" | jq -r '.servers[0].url')" "$SERVER_URL/kiosk"
+
+# DERIVED, and this is the assertion that says so: the paths are exactly the
+# verbs the canonical catalog publishes, in the same order, with the query
+# half at GET and the action half at POST.
+schema_doc=$(curl -sf "$SERVER_URL/kiosk/schema" -H "Authorization: Bearer $ALICE_AGENT_TOKEN")
+assert "one path per verb the canonical catalog publishes" \
+  "$(echo "$oa" | jq -r '.paths | keys_unsorted | map(ltrimstr("/")) | join(",")')" \
+  "$(echo "$schema_doc" | jq -r '[.value.queries[].name, .value.actions[].name] | sort | join(",")')"
+assert "a query is a GET"            "$(echo "$oa" | jq -r '.paths."/salons" | keys | join(",")')" "get"
+assert "an action is a POST"         "$(echo "$oa" | jq -r '.paths."/book_appointment" | keys | join(",")')" "post"
+assert "no /schema, no /pay (they still answer the 0.3 envelope)" \
+  "$(echo "$oa" | jq -r '.paths | has("/schema") or has("/pay")')" "false"
+
+# The verb's prose semantics travel VERBATIM — ADR-0021 stays the authority on
+# meaning, and ADR-0024 narrows it rather than reversing it.
+assert "the descriptor's description travels verbatim" \
+  "$(echo "$oa" | jq -r '.paths."/salons".get.description')" \
+  "$(echo "$schema_doc" | jq -r '.value.queries[] | select(.name == "salons") | .description')"
+
+# `style` and `explode` EXPLICIT on every parameter (Prism ignores the
+# defaults), and `limit`/`cursor` INJECTED because no input_schema declares
+# them (a strict validator 400s the pagination the contract invites).
+assert "every parameter writes style and explode" \
+  "$(echo "$oa" | jq -r '[.paths[][] | .parameters // [] | .[] | select(has("$ref") | not)] | map(has("style") and has("explode")) | all')" \
+  "true"
+assert "limit and cursor are injected into a query" \
+  "$(echo "$oa" | jq -r '[.paths."/salons".get.parameters[]."$ref"] | join(",")')" \
+  "#/components/parameters/limit,#/components/parameters/cursor"
+assert "the reserved parameters are form/explode:true" \
+  "$(echo "$oa" | jq -r '[.components.parameters[] | .style == "form" and .explode == true] | all')" "true"
+assert "an action gets no query parameters" \
+  "$(echo "$oa" | jq -r '.paths."/book_appointment".post | has("parameters")')" "false"
+
+# The closed error vocabulary is the `code` enum, and 405 is deliberately not
+# a response of a declared operation — it is what the OTHER method answers.
+assert "the code enum is the closed vocabulary" \
+  "$(echo "$oa" | jq -r '.components.schemas.Problem.properties.code.enum | length')" "15"
+assert "problems are application/problem+json" \
+  "$(echo "$oa" | jq -r '.components.responses.problem404.content | keys | join(",")')" \
+  "application/problem+json"
+assert "405 is not a declared response" \
+  "$(echo "$oa" | jq -r '.paths."/salons".get.responses | has("405")')" "false"
+
 # ─── Kiosk-* response headers ───────────────────────────────────────────
 
 printf "\n\033[1m=== response headers ===\033[0m\n"

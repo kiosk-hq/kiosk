@@ -217,6 +217,10 @@ RSpec.describe Kiosk::Server::OpenApi do
 
       expect(params.count { |p| p[:name] == "limit" }).to eq(1)
       expect(params.find { |p| p[:name] == "limit" }[:schema]).to eq(type: "integer", maximum: 50)
+      # And the injected one is GONE, not merely outvoted — two parameters
+      # sharing a name+in is an invalid document, and a `$ref`'d duplicate
+      # hides behind a `name`-keyed count.
+      expect(params).not_to include({ "$ref": "#/components/parameters/limit" })
       expect(params).to include({ "$ref": "#/components/parameters/cursor" })
     end
 

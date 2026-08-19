@@ -14,11 +14,23 @@ RSpec.describe Kiosk::Server::Errors do
         "spending_cap_exceeded"  => 403,
         "kyc_required"           => 403,
         "not_found"              => 404,
+        "method_not_allowed"     => 405,
         "conflict"               => 409,
         "quota_exceeded"         => 429,
         "action_failed"          => 500,
         "internal_error"         => 500,
       )
+    end
+
+    it "names every code in TITLES — a problem document without a title is not one" do
+      expect(described_class::TITLES.keys).to match_array(described_class::CODES.keys)
+      expect(described_class::TITLES.values).to all(be_a(String))
+    end
+
+    it "mints one problem type URI per code and nothing else" do
+      types = described_class::CODES.keys.map { described_class.problem_type(_1) }
+      expect(types.uniq.size).to eq(described_class::CODES.size)
+      expect(types).to all(start_with("https://kiosk.tech/problems/"))
     end
   end
 
@@ -105,6 +117,59 @@ RSpec.describe Kiosk::Server::Errors do
 
     it "rescues as Base, like every wire error" do
       expect(described_class::WireError.new("x", code: "conflict")).to be_a(described_class::Base)
+    end
+  end
+
+  describe "MethodNotAllowed — the 0.4 addition to a closed vocabulary" do
+    it "carries the method the verb DOES accept, as the header RFC 9110 makes mandatory" do
+      e = described_class::MethodNotAllowed.new('"book" is an action, not a query', allow: "POST")
+      expect(e.code).to             eq("method_not_allowed")
+      expect(e.http_status).to      eq(405)
+      expect(e.response_headers).to eq("Allow" => "POST")
+    end
+
+    it "refuses to exist without one — a 405 with no Allow is not a 405" do
+      expect { described_class::MethodNotAllowed.new("x") }.to raise_error(ArgumentError)
+    end
+  end
+
+  describe "#to_problem — the 0.4 error shape (RFC 9457)" do
+    it "carries the vocabulary code TWICE: as the type URI and as the branch point" do
+      e = Kiosk::Server::Errors::KycRequired.new("needs age_over_18", hint: "attest, then retry")
+      expect(e.to_problem).to eq(
+        type:   "https://kiosk.tech/problems/kyc_required",
+        title:  "KYC attestation required",
+        status: 403,
+        detail: "needs age_over_18",
+        code:   "kyc_required",
+        hint:   "attest, then retry",
+      )
+    end
+
+    it "drops a nil hint and never emits `instance`" do
+      problem = Kiosk::Server::Errors::BadRequest.new("nope").to_problem
+      expect(problem).to eq(type: "https://kiosk.tech/problems/bad_request",
+                            title: "Malformed request", status: 400,
+                            detail: "nope", code: "bad_request")
+      expect(problem).not_to have_key(:instance)
+    end
+
+    it "carries the PoW challenges as an extension member, exactly as the envelope did" do
+      e = described_class::PowRequired.new(challenges: [{ salt: "a" }])
+      expect(e.to_problem[:challenges]).to eq([{ salt: "a" }])
+      expect(e.to_problem[:status]).to     eq(402)
+      expect(e.to_envelope[:error][:challenges]).to eq([{ salt: "a" }])
+    end
+
+    it "carries a handler's own extra fields through, exactly as the envelope did" do
+      e = described_class::WireError.new("gate", code: "pow_required", extra: { challenges: [1] })
+      expect(e.to_problem[:challenges]).to eq([1])
+    end
+
+    it "agrees with to_envelope on code, message and hint for every shape" do
+      e = described_class::WireError.new("row policy said no", code: "rls_denied", hint: "check policy")
+      expect(e.to_problem.values_at(:code, :detail, :hint))
+        .to eq(e.to_envelope[:error].values_at(:code, :message, :hint))
     end
   end
 

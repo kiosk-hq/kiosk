@@ -1,12 +1,13 @@
 # frozen_string_literal: true
 
-# THE 0.4 PER-VERB WIRE at the wire level (T-068 slice 1).
+# THE 0.4 PER-VERB WIRE at the wire level (T-068 slices 1 and 2).
 #
 # `GET <endpoint>/<query-name>` and `POST <endpoint>/<action-name>`, resolved
 # against the same registry `GET <endpoint>/schema` renders its descriptors
 # from. The argument ENCODING is unit-tested next door in
 # `argument_decoder_spec.rb`; what is proved here is that a real request
-# reaches it, that a refusal comes back as the wire's own 400, and that the
+# reaches it, that the answer is the handler's payload VERBATIM, that a
+# refusal comes back as an RFC 9457 problem document (T-072 = C), and that the
 # 0.3 wire is untouched — because 0.4's hard cut (T-074 = A) is the CUTOVER
 # slice, and cutting `POST /kiosk/{query,run}` here would have broken the
 # eight demos mid-build.
@@ -71,12 +72,18 @@ RSpec.describe Kiosk::Server::VerbController do
     dispatch(Kiosk::Server::WireController, action, env)
   end
 
+  # Returns [status, parsed body, headers] — the headers matter now: the media
+  # type is half of what makes a problem document one, and the cache policy is
+  # response shape (design §3.3).
   def dispatch(controller, action, env)
-    status, _headers, body = controller.action(action).call(env)
+    status, headers, body = controller.action(action).call(env)
     raw = +""
     body.each { |chunk| raw << chunk }
-    [status, raw.empty? ? {} : JSON.parse(raw, symbolize_names: true)]
+    @last_headers = headers
+    [status, raw.empty? ? {} : JSON.parse(raw, symbolize_names: true), headers]
   end
+
+  def last_headers = @last_headers
 
   # A query whose handler reports back what it was actually handed, so an
   # assertion about coercion is an assertion about what the HANDLER sees —
@@ -95,12 +102,16 @@ RSpec.describe Kiosk::Server::VerbController do
   describe "a query is a GET at its own path" do
     before { declare_query("salons") { render json: [{ id: 1, name: "Combette on Park" }] } }
 
-    it "serves it and answers with the wire envelope" do
+    it "answers with the handler's payload VERBATIM — a bare array, no envelope" do
       status, body = call_verb(:get, "salons")
       expect(status).to eq(200)
-      expect(body[:ok]).to be(true)
-      expect(body[:kind]).to eq("rows")
-      expect(body[:rows]).to eq([{ id: 1, name: "Combette on Park" }])
+      expect(body).to eq([{ id: 1, name: "Combette on Park" }])
+    end
+
+    it "carries the cache policy every wire response must carry" do
+      call_verb(:get, "salons")
+      expect(last_headers["Vary"]).to eq("Authorization, Kiosk-PoW")
+      expect(last_headers["Cache-Control"]).to eq("private, no-store")
     end
 
     it "answers 401 before it will say whether the verb exists" do
@@ -112,11 +123,15 @@ RSpec.describe Kiosk::Server::VerbController do
       expect(call_verb(:get, "frobnicate", auth: false).first).to eq(401)
     end
 
-    it "answers an unknown name 404, naming what IS registered" do
+    it "answers an unknown name a problem document, naming what IS registered" do
       status, body = call_verb(:get, "frobnicate")
       expect(status).to eq(404)
-      expect(body.dig(:error, :code)).to eq("not_found")
-      expect(body.dig(:error, :hint)).to include("salons")
+      expect(last_headers["Content-Type"]).to include("application/problem+json")
+      expect(body[:type]).to   eq("https://kiosk.tech/problems/not_found")
+      expect(body[:title]).to  eq("Not found")
+      expect(body[:status]).to eq(404)
+      expect(body[:code]).to   eq("not_found")
+      expect(body[:hint]).to   include("salons")
     end
   end
 
@@ -127,11 +142,27 @@ RSpec.describe Kiosk::Server::VerbController do
       end
     end
 
-    it "serves it with a JSON body" do
+    it "answers with the handler's object VERBATIM — no `value` wrapper" do
       status, body = call_verb(:post, "book_appointment", body: JSON.generate(salon_id: 3))
       expect(status).to eq(200)
-      expect(body[:kind]).to eq("value")
-      expect(body[:value]).to eq(appointment_id: 7, salon_id: 3)
+      expect(body).to eq(appointment_id: 7, salon_id: 3)
+    end
+  end
+
+  describe "a paginating query is the one composite success shape" do
+    it "answers {rows, next} — what render_kiosk_page already produces internally" do
+      declare_query("listings") do
+        render_kiosk_page([{ id: 1 }], next_cursor: Kiosk::Server::Cursor.encode_offset(20))
+      end
+      status, body = call_verb(:get, "listings")
+      expect(status).to eq(200)
+      expect(body).to eq(rows: [{ id: 1 }], next: Kiosk::Server::Cursor.encode_offset(20))
+    end
+
+    it "answers a bare array when the same handler emits no cursor" do
+      declare_query("listings") { render_kiosk_page([{ id: 1 }]) }
+      _status, body = call_verb(:get, "listings")
+      expect(body).to eq([{ id: 1 }])
     end
   end
 
@@ -141,18 +172,27 @@ RSpec.describe Kiosk::Server::VerbController do
       declare_action("book_appointment") { render json: {} }
     end
 
-    it "answers a GET at an ACTION's name with the method it wanted" do
+    # Slice 1 answered these 404 because 405 was not in the closed vocabulary
+    # and adding a code is spec-first. Slice 2 is that spec change: the
+    # resource EXISTS and refuses the method, which is what 405 means, and
+    # RFC 9110 §15.5.6 makes `Allow` mandatory on one.
+    it "answers a GET at an ACTION's name 405, with Allow: POST" do
       status, body = call_verb(:get, "book_appointment")
-      expect(status).to eq(404)
-      expect(body.dig(:error, :message)).to include("is an action, not a query")
-      expect(body.dig(:error, :hint)).to include("POST /kiosk/book_appointment")
+      expect(status).to eq(405)
+      expect(last_headers["Allow"]).to eq("POST")
+      expect(body[:code]).to   eq("method_not_allowed")
+      expect(body[:type]).to   eq("https://kiosk.tech/problems/method_not_allowed")
+      expect(body[:detail]).to include("is an action, not a query")
+      expect(body[:hint]).to   include("POST /kiosk/book_appointment")
     end
 
-    it "answers a POST at a QUERY's name with the method it wanted" do
+    it "answers a POST at a QUERY's name 405, with Allow: GET" do
       status, body = call_verb(:post, "salons", body: "{}")
-      expect(status).to eq(404)
-      expect(body.dig(:error, :message)).to include("is a query, not an action")
-      expect(body.dig(:error, :hint)).to include("GET /kiosk/salons")
+      expect(status).to eq(405)
+      expect(last_headers["Allow"]).to eq("GET")
+      expect(body[:code]).to   eq("method_not_allowed")
+      expect(body[:detail]).to include("is a query, not an action")
+      expect(body[:hint]).to   include("GET /kiosk/salons")
     end
   end
 
@@ -165,35 +205,35 @@ RSpec.describe Kiosk::Server::VerbController do
 
     it "hands the handler an Integer, not the query string's String" do
       _status, body = call_verb(:get, "echo", query: "min_stars=4")
-      expect(body[:rows].first[:min_stars]).to eq(4)
-      expect(body[:rows].first[:klass]).to eq("Integer")
+      expect(body.first[:min_stars]).to eq(4)
+      expect(body.first[:klass]).to eq("Integer")
     end
 
     it "decodes the percent-encoded and the raw bracket spellings identically" do
       _s1, percent = call_verb(:get, "echo", query: "amenity%5B%5D=pool&amenity%5B%5D=spa")
       _s2, raw     = call_verb(:get, "echo", query: "amenity[]=pool&amenity[]=spa")
-      expect(percent[:rows].first[:amenity]).to eq(%w[pool spa])
-      expect(raw[:rows]).to eq(percent[:rows])
+      expect(percent.first[:amenity]).to eq(%w[pool spa])
+      expect(raw).to eq(percent)
     end
 
     it "refuses a value that will not coerce with a 400 naming the parameter" do
       status, body = call_verb(:get, "echo", query: "min_stars=four")
       expect(status).to eq(400)
-      expect(body.dig(:error, :code)).to eq("bad_request")
-      expect(body.dig(:error, :message)).to include("min_stars")
+      expect(body[:code]).to   eq("bad_request")
+      expect(body[:detail]).to include("min_stars")
     end
 
     it "refuses a shape a query cannot carry with a 400 that names the ACTION remedy" do
       status, body = call_verb(:get, "echo", query: "price%5Brange%5D%5Bmin%5D=1")
       expect(status).to eq(400)
-      expect(body.dig(:error, :message)).to include("price")
-      expect(body.dig(:error, :hint)).to include("ACTION")
+      expect(body[:detail]).to include("price")
+      expect(body[:hint]).to   include("ACTION")
     end
 
     it "does not read a query string on a POST — an action's arguments are its body" do
       declare_action("noop") { render json: { seen: params.to_unsafe_h.keys.sort } }
       _status, body = call_verb(:post, "noop", query: "sneaky=1", body: "{}")
-      expect(body[:value][:seen]).not_to include("sneaky")
+      expect(body[:seen]).not_to include("sneaky")
     end
   end
 
@@ -219,8 +259,8 @@ RSpec.describe Kiosk::Server::VerbController do
 
       status, body = call_verb(:get, "availability", query: "time=19:00")
       expect(status).to eq(400)
-      expect(body.dig(:error, :code)).to eq("bad_request")
-      expect(body.dig(:error, :message)).to include("time")
+      expect(body[:code]).to   eq("bad_request")
+      expect(body[:detail]).to include("time")
     end
 
     it "still refuses an undeclared parameter under additionalProperties: false" do
@@ -228,7 +268,7 @@ RSpec.describe Kiosk::Server::VerbController do
                                                properties: {}, required: [] }) { render json: [] }
       status, body = call_verb(:get, "catalog", query: "nope=1")
       expect(status).to eq(400)
-      expect(body.dig(:error, :message)).to include("nope")
+      expect(body[:detail]).to include("nope")
     end
   end
 
@@ -241,10 +281,26 @@ RSpec.describe Kiosk::Server::VerbController do
       expect(body[:rows]).to eq([{ id: 1 }])
     end
 
-    it "answers both wires with byte-identical bodies for the same call" do
+    it "answers both wires with the SAME payload — only the wrapper differs" do
+      # Slice 1 asserted byte-identity; slice 2 is precisely the change that
+      # ends it. What must still hold — and what would catch a per-verb
+      # endpoint silently diverging from the handler the 0.3 wire reaches — is
+      # that the ROWS are the same rows. The 0.3 envelope is now the only
+      # difference between the two answers.
       _old_status, old_body = call_wire(:query, JSON.generate(name: "salons"))
       _new_status, new_body = call_verb(:get, "salons")
-      expect(new_body).to eq(old_body)
+      expect(new_body).to eq(old_body[:rows])
+      expect(old_body).to eq(ok: true, kind: "rows", rows: new_body)
+    end
+
+    it "still answers the 0.3 wire with the 0.3 ERROR envelope, not a problem document" do
+      status, body, headers = call_wire(:query, JSON.generate(name: "frobnicate"))
+      expect(status).to eq(404)
+      expect(body).to eq(ok: false, error: { code: "not_found",
+                                             message: body.dig(:error, :message),
+                                             hint: body.dig(:error, :hint) })
+      expect(headers["Content-Type"]).to include("application/json")
+      expect(headers["Content-Type"]).not_to include("problem")
     end
 
     it "computes the SAME PoW fingerprint on both wires, so a proof is spendable on either" do

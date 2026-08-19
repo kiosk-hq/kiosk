@@ -30,13 +30,21 @@ module Kiosk
     # HTTP_STATUS; both MUST agree with {CODES}, and the suite asserts it.
     module Errors
       # `error.code` → canonical HTTP status. The closed vocabulary: these
-      # fourteen codes ARE the spec's "Error vocabulary" table — narrative
-      # (specification.html), formal (protocol.md §9) and `error.schema.json`
-      # all carry the same fourteen, `payment_failed` among them since
-      # kiosk.tech a2f4089. Not a superset of the published table and not a
-      # subset of it; the two are the same list, and a schema-validating
-      # client rejects anything else. Adding a code here is a WIRE change:
-      # spec first (rule 1).
+      # fifteen codes ARE the spec's "Error vocabulary" table — narrative
+      # (specification.html), formal (protocol.md §9) and `problem.schema.json`
+      # all carry the same fifteen, `payment_failed` among them since
+      # kiosk.tech a2f4089 and `method_not_allowed` since 0.4 (T-068 slice 2).
+      # Not a superset of the published table and not a subset of it; the two
+      # are the same list, and a schema-validating client rejects anything
+      # else. Adding a code here is a WIRE change: spec first (rule 1).
+      #
+      # `method_not_allowed` is the 0.4 addition and the reason it exists is
+      # the per-verb wire: once the HTTP METHOD carries the read/write
+      # semantics, `GET <endpoint>/<action-name>` is a resource that EXISTS
+      # and refuses this method, which is a different fact from "no such
+      # verb" and RFC 9110 §15.5.6 already has a status for it. Slice 1
+      # answered it `404 not_found` with a hint because adding to a closed
+      # vocabulary is spec-first; slice 2 is the spec change.
       CODES = {
         "bad_request"            => 400,
         "unauthenticated"        => 401,
@@ -48,11 +56,65 @@ module Kiosk
         "spending_cap_exceeded"  => 403,
         "kyc_required"           => 403,
         "not_found"              => 404,
+        "method_not_allowed"     => 405,
         "conflict"               => 409,
         "quota_exceeded"         => 429,
         "action_failed"          => 500,
         "internal_error"         => 500,
       }.freeze
+
+      # RFC 9457 `title` per code — "a short, human-readable summary of the
+      # problem type" that, per §3.1.3, "SHOULD NOT change from occurrence to
+      # occurrence". So it is a CONSTANT of the code, never of the incident:
+      # the incident-specific sentence is `detail` (the `message`). One entry
+      # per {CODES} key, asserted by the suite, because a problem document
+      # whose title is missing is not a problem document.
+      TITLES = {
+        "bad_request"            => "Malformed request",
+        "unauthenticated"        => "Not authenticated",
+        "pow_required"           => "Proof-of-work required",
+        "payment_setup_required" => "Payment setup required",
+        "payment_failed"         => "Payment failed",
+        "forbidden"              => "Forbidden",
+        "rls_denied"             => "Row-level security denied the statement",
+        "spending_cap_exceeded"  => "Spending cap exceeded",
+        "kyc_required"           => "KYC attestation required",
+        "not_found"              => "Not found",
+        "method_not_allowed"     => "Method not allowed",
+        "conflict"               => "State conflict",
+        "quota_exceeded"         => "Quota exceeded",
+        "action_failed"          => "Action failed",
+        "internal_error"         => "Internal error",
+      }.freeze
+
+      # The RFC 9457 `type` namespace. A problem document's `type` is
+      # `PROBLEM_TYPE_BASE + code`, so the closed vocabulary IS the type
+      # space: one URI per code, minted nowhere else, never parameterised.
+      #
+      # It is an IDENTIFIER, not a document locator. RFC 9457 §3.1.1 only
+      # ENCOURAGES dereferencing ("when dereferenced, it might provide
+      # human-readable documentation"); the normative documentation for every
+      # code is the spec's own error-vocabulary table. Publishing a page per
+      # code on kiosk.tech is a site-side follow-up (K-793), and because the
+      # URI is fixed here it can be done later without touching the wire.
+      #
+      # An AI assistant MUST branch on the `code` extension member, never on
+      # this URI: the code is the contract, the URI is its name.
+      PROBLEM_TYPE_BASE = "https://kiosk.tech/problems/"
+
+      # The RFC 9457 media type. Every error on the per-verb wire is served
+      # with it — that is what makes the document a problem document to a
+      # generic client rather than just JSON that happens to have a `title`.
+      PROBLEM_CONTENT_TYPE = "application/problem+json"
+
+      # @param code [String] a {CODES} key
+      # @return [String] the problem `type` URI naming it
+      def self.problem_type(code) = "#{PROBLEM_TYPE_BASE}#{code}"
+
+      # @param code [String] a {CODES} key
+      # @return [String] the problem `title` for it, falling back to the code
+      #   itself so an unlisted code still yields a well-formed document.
+      def self.problem_title(code) = TITLES.fetch(code, code)
 
       # HTTP status → the ONE code a bare status carries by itself. This is
       # the whole Rails-native mapping: a handler's rendered status, or the
@@ -74,6 +136,7 @@ module Kiosk
         401 => "unauthenticated",
         403 => "forbidden",
         404 => "not_found",
+        405 => "method_not_allowed",
         409 => "conflict",
         422 => "bad_request",
         429 => "quota_exceeded",
@@ -129,17 +192,66 @@ module Kiosk
         def code        = self.class.const_get(:CODE)
         def http_status = self.class.const_get(:HTTP_STATUS)
 
-        # Envelope shape — structured body with `code`, `message`, `hint`.
+        # Fields BEYOND `code`/`message`/`hint` that belong in the answer —
+        # {PowRequired}'s `challenges`, a handler's own rendered extras
+        # carried through by {WireError}. One hook, so the two renderings
+        # below cannot disagree about what an error carries.
+        def extensions = {}
+
+        # Response headers this error requires. RFC 9110 §15.5.6 makes `Allow`
+        # MANDATORY on a 405, so it cannot be left to the caller to remember;
+        # `WWW-Authenticate` is added at the render seam because it is built
+        # from configuration ({WireController#www_authenticate_for}).
+        def response_headers = {}
+
+        # 0.3 ENVELOPE shape — structured body with `code`, `message`, `hint`.
         # nil fields are dropped for compactness.
+        #
+        # Served by `POST <endpoint>/{query,run}`, `GET <endpoint>/schema` and
+        # `POST <endpoint>/pay` only. The per-verb 0.4 endpoints answer
+        # {#to_problem} instead, and this method dies with those four at the
+        # cutover slice (T-074 = A) — it is not a second supported shape.
         def to_envelope
           {
             ok: false,
-            error: {
-              code:    code,
-              message: message,
-              hint:    hint,
-            }.compact,
+            error: { code: code, message: message, hint: hint }.merge(extensions).compact,
           }
+        end
+
+        # RFC 9457 problem document — the 0.4 error shape (T-072 = C), served
+        # as `application/problem+json`.
+        #
+        # THE CLOSED VOCABULARY SURVIVES TWICE OVER, deliberately:
+        #
+        #   * `type` is {Errors.problem_type} — one URI per code, so the
+        #     vocabulary is also the RFC's type space and a generic
+        #     problem-aware client sees a real problem type rather than a
+        #     single catch-all URI.
+        #   * `code` is an RFC 9457 EXTENSION MEMBER (§3.2) carrying the bare
+        #     token. This is the branch point: an assistant reads `code` and
+        #     matches the same fifteen strings it always did. Branching on
+        #     `type` would mean string-surgery on a URI, so the spec forbids
+        #     it and this member is why it can.
+        #
+        # `message` becomes the RFC's `detail` (the incident-specific
+        # sentence); `hint` and `challenges` stay extension members under
+        # their own names, so `hint`'s remediation contract is untouched.
+        # `instance` is deliberately NOT emitted: it would restate the request
+        # URL the client just dialed, and RFC 9457 makes it OPTIONAL.
+        #
+        # One JSON-path change comes with the move and is not hidden: the
+        # branch point is `code`, not `error.code` — a problem document is
+        # flat, and BOTH spellings the decision offered (`type` URI or
+        # extension member) put it at the top level.
+        def to_problem
+          {
+            type:   Errors.problem_type(code),
+            title:  Errors.problem_title(code),
+            status: http_status,
+            detail: message,
+            code:   code,
+            hint:   hint,
+          }.merge(extensions).compact
         end
       end
 
@@ -165,10 +277,7 @@ module Kiosk
 
         def code        = @wire_code
         def http_status = CODES.fetch(@wire_code)
-
-        def to_envelope
-          { ok: false, error: { code: code, message: message, hint: hint }.merge(@extra).compact }
-        end
+        def extensions  = @extra
       end
 
       # ── RAILS-DUPLICATE CODES ─────────────────────────────────────────
@@ -204,6 +313,31 @@ module Kiosk
       class NotFound < Base
         CODE        = "not_found"
         HTTP_STATUS = 404
+      end
+
+      # The verb EXISTS at this path but not for this method — `GET` at an
+      # action's name, `POST` at a query's. New in 0.4 and meaningless before
+      # it: under the 0.3 name-dispatch wire a query and an action were the
+      # same POST endpoint distinguished by a body field, so getting them the
+      # wrong way round could only ever be "unknown query".
+      #
+      # `allow` is REQUIRED — RFC 9110 §15.5.6 makes the `Allow` header
+      # mandatory on a 405, and a caller who has to remember it eventually
+      # will not, so the error carries it and the render seam emits it.
+      class MethodNotAllowed < Base
+        CODE        = "method_not_allowed"
+        HTTP_STATUS = 405
+
+        # @return [String] the `Allow` header value — the method this verb
+        #   does accept ("GET" for a query, "POST" for an action).
+        attr_reader :allow
+
+        def initialize(message = nil, allow:, hint: nil)
+          super(message, hint: hint)
+          @allow = allow.to_s
+        end
+
+        def response_headers = { "Allow" => allow }
       end
 
       # DUPLICATE of a bare 409. Request collides with existing state — e.g.
@@ -312,11 +446,10 @@ module Kiosk
           @challenges = challenges
         end
 
-        # Override: embed the challenges in the error envelope so the client
-        # can solve them without a second round-trip.
-        def to_envelope
-          { ok: false, error: { code: code, message: message, challenges: challenges } }
-        end
+        # Embed the challenges in the answer — envelope or problem document,
+        # whichever the endpoint serves — so the client can solve them
+        # without a second round-trip.
+        def extensions = { challenges: challenges }
       end
 
       # Misconfiguration of the Kiosk::Server integration — raised at

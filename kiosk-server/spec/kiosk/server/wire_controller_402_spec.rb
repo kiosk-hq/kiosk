@@ -74,6 +74,37 @@ RSpec.describe "WireController 402 WWW-Authenticate (W4)" do
       expect(body.dig(:error, :challenges)).to be_an(Array)
       expect(body.dig(:error, :challenges)).not_to be_empty
     end
+
+    # THE SAME GATE ON THE 0.4 PER-VERB WIRE (T-068 slice 2). Everything that
+    # de-overloads the three 402s survives the move to RFC 9457: the header
+    # still names the gate, the challenges still ride in the body, and the
+    # code an assistant branches on is still `pow_required` — now a top-level
+    # `code` member rather than `error.code`, and also the `type` URI.
+    it "answers a per-verb GET the same gate as a problem document, uncacheable" do
+      declare_query("menu") { render json: [] }
+      env = bearer_env("/kiosk/menu", agent_token)
+      env["action_dispatch.request.path_parameters"] =
+        { controller: "kiosk/server/verb", action: "show", kiosk_verb: "menu" }
+      status, headers, body = Kiosk::Server::VerbController.action(:show).call(env)
+                                                           .then { |s, h, b|
+                                                             raw = +""
+                                                             b.each { |c| raw << c }
+                                                             [s, h, JSON.parse(raw, symbolize_names: true)]
+                                                           }
+
+      expect(status).to eq(402)
+      expect(headers["WWW-Authenticate"]).to eq('Kiosk-PoW realm="https://demo.example"')
+      expect(headers["Content-Type"]).to include("application/problem+json")
+      # Rule 2 of design §3.3: a single-use challenge is never cacheable, and
+      # `no-store` is the one directive an operator cannot relax.
+      expect(headers["Cache-Control"]).to eq("no-store")
+      expect(headers["Vary"]).to eq("Authorization, Kiosk-PoW")
+      expect(body[:code]).to   eq("pow_required")
+      expect(body[:type]).to   eq("https://kiosk.tech/problems/pow_required")
+      expect(body[:status]).to eq(402)
+      expect(body[:challenges]).to be_an(Array)
+      expect(body[:challenges]).not_to be_empty
+    end
   end
 
   # ─── Payment-setup gate → WWW-Authenticate: Payment ────────────────────

@@ -4,7 +4,7 @@
 #
 # The whole point of this demo: the same four-verb wire the commerce demos use
 # for money carries a services/data surface with NO payment at all. There is NO
-# `payment_provider` here, so `capabilities` computes to schema/query/run and
+# `payment_provider` here, so `capabilities` computes to schema/queries/actions and
 # DROPS `pay` — `/.well-known/kiosk.json`, `agents.json` and
 # `agents.txt` all advertise no payments. That absence is the not-only-commerce
 # proof (`demo:schema` asserts it).

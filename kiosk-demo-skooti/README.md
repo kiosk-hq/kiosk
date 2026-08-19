@@ -28,7 +28,9 @@ server round-trip.
 - `pay` — settle the AP2 mandate chain (intent → cart → payment) via the stub PSP
 - `schema` — self-discovery
 
-Advertised capabilities are `[schema, query, run, pay]`. Registration is priced
+Advertised capabilities are `[schema, queries, actions, pay]` — the MODULES
+this origin serves, never the registered verb names (the catalog is Bearer-gated
+behind `GET /kiosk/schema`). Registration is priced
 with one Equihash proof-of-work (lighter than the default; see
 `before-after.md`) — the "I'm not a fly-by bot" cost. Renting the motorcycle
 additionally demands a signed KYC attestation carrying the required boolean

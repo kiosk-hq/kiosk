@@ -582,7 +582,7 @@ namespace :demo do
       GET /kiosk/schema
 
     Asserts:
-      • schema.verbs includes query/run/pay/schema and NOT events
+      • schema.verbs is the MODULE set schema/queries/actions (== discovery capabilities) and NOT events
       • schema.queries includes salons and my_appointments
       • schema.actions includes book_appointment
       • every query/action entry carries a non-empty description
@@ -654,8 +654,10 @@ namespace :demo do
     queries = query_specs.map  { |q| q["name"] }
     actions = action_specs.map { |a| a["name"] }
 
-    # Verbs: query/run/pay/schema present; events absent.
-    %w[query run pay schema].each do |v|
+    # Verbs: the MODULES this origin serves, which since T-068 slice 5 is
+    # exactly what /.well-known/kiosk.json advertises as `capabilities`
+    # (K-740); events absent.
+    %w[schema queries actions].each do |v|
       if verbs.include?(v)
         puts "  ✓  schema.verbs includes #{v}"
       else

@@ -10,12 +10,12 @@
 #   GET /agents.txt
 # and emits ONE JSON line the demo:schema rake task asserts on.
 #
-# The `pay`-absent proof is against the DISCOVERY documents, NOT schema.verbs:
-# schema.verbs is the FIXED four-verb wire surface and lists `pay`
-# unconditionally. The advertised capability set is what drops `pay` when no
-# payment_provider is configured — so the honest assertion is
-# `/.well-known/kiosk.json` capabilities == [schema, query, run], and no
-# payments block in agents.json / agents.txt.
+# The `pay`-absent proof reads BOTH self-descriptions, and since T-068 slice 5
+# they are one array (K-740): `schema.verbs` no longer emits the fixed four
+# with `pay` in it unconditionally — it emits the MODULES this origin serves,
+# which is exactly what `/.well-known/kiosk.json` advertises as
+# `capabilities`. So the honest assertion is capabilities == [schema, queries,
+# actions] on both, and no payments block in agents.json / agents.txt.
 #
 # Usage:
 #   SERVER_URL=… KIOSK_ISSUER=… bundle exec ruby script/schema_flow.rb

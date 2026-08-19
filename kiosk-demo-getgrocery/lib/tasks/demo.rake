@@ -716,7 +716,7 @@ namespace :demo do
       GET /kiosk/schema
 
     Asserts:
-      • schema.verbs includes query/run/pay/schema and NOT events
+      • schema.verbs is the MODULE set schema/queries/actions/pay (== discovery capabilities) and NOT events
       • schema.queries includes catalog, delivery_slots, my_orders (each with description)
       • schema.actions includes create_order, reschedule_delivery (each with description)
       • schema.queries does NOT include stores, products_by_store, substitution_options
@@ -799,8 +799,10 @@ namespace :demo do
     queries = result["schema_queries"] || []
     actions = result["schema_actions"] || []
 
-    # Verbs: query/run/pay/schema present; events absent
-    %w[query run pay schema].each do |v|
+    # Verbs: the MODULES this origin serves, which since T-068 slice 5 is
+    # exactly what /.well-known/kiosk.json advertises as `capabilities`
+    # (K-740); events absent.
+    %w[schema queries actions pay].each do |v|
       if verbs.include?(v)
         puts "  ✓  schema.verbs includes #{v}"
       else

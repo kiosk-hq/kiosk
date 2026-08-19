@@ -902,7 +902,7 @@ namespace :demo do
     + /agents.json + /agents.txt).
 
     Asserts:
-      • discovery capabilities == [schema, query, run] and do NOT include `pay`
+      • discovery capabilities == [schema, queries, actions] and do NOT include `pay`
         (atablefor takes no payments — a reservation needs none)
       • agents.json carries NO payments block; agents.txt has no ap2 / Payments
       • schema.queries includes availability + my_bookings with descriptions
@@ -979,6 +979,18 @@ namespace :demo do
     actions      = result["schema_actions"]        || []
     capabilities = result["discovery_capabilities"] || []
 
+    # ── K-740: one origin, one self-description ──────────────────────────
+    # `schema.verbs` used to be the invariant four and named `pay` here, on a
+    # demo that takes no payments, while discovery correctly dropped it. Since
+    # T-068 slice 5 the two fields ARE the same array, so a `pay` that leaks
+    # back into either is caught by this one comparison.
+    if verbs == capabilities
+      puts "  ✓  schema.verbs == discovery capabilities (#{verbs.inspect})"
+    else
+      failures << "schema.verbs #{verbs.inspect} != discovery capabilities #{capabilities.inspect}"
+      puts "  ✗  schema.verbs #{verbs.inspect} != discovery capabilities #{capabilities.inspect}"
+    end
+
     # ── NOT-ONLY-COMMERCE: pay absent from the ADVERTISED capability set ──
     if capabilities.include?("pay")
       failures << "discovery capabilities advertise `pay` (got #{capabilities.inspect}) — atablefor takes no payments"
@@ -986,7 +998,7 @@ namespace :demo do
     else
       puts "  ✓  discovery capabilities do NOT include `pay` (#{capabilities.inspect}) — a reservation needs no payment"
     end
-    %w[schema query run].each do |cap|
+    %w[schema queries actions].each do |cap|
       if capabilities.include?(cap)
         puts "  ✓  discovery capabilities include #{cap}"
       else

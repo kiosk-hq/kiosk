@@ -7,7 +7,7 @@
 # AGENT→AGENT invites expressed entirely at the app layer, and the W5 rebind
 # hook (an agent works headless, the human links it, the hook migrates its
 # lists). Like philslist there is NO `payment_provider`, so `capabilities`
-# computes to schema/query/run and DROPS `pay` — the discovery documents
+# computes to schema/queries/actions and DROPS `pay` — the discovery documents
 # advertise no payments (`demo:schema` asserts it).
 
 # Env posture (ephemeral dev signing key, PoW secret, issuer, test flags) lives

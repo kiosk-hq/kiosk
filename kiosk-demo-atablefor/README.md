@@ -43,7 +43,7 @@ diner's name.
 - `run cancel_booking(booking_id)` — cancel one of your own bookings (owner-scoped)
 - `schema` — self-discovery
 
-There is **no `pay`**: the advertised capabilities are `[schema, query, run]`.
+There is **no `pay`**: the advertised capabilities are `[schema, queries, actions]`.
 
 The four verbs are ordinary Rails controllers, not initializer blocks:
 `app/controllers/kiosk/dining_room_controller.rb` holds the two queries

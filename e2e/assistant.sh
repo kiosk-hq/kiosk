@@ -118,7 +118,23 @@ assert "kiosk.endpoint correct"    "$(echo "$wk" | jq -r '.kiosk.endpoint')"    
 assert "kiosk.auth.kind kiosk-pop" "$(echo "$wk" | jq -r '.kiosk.auth.kind')"   "kiosk-pop"
 assert "kiosk.auth.challenge_url"  "$(echo "$wk" | jq -r '.kiosk.auth.challenge_url')" "$SERVER_URL/kiosk/auth/challenge"
 assert "kiosk.issuer set"          "$(echo "$wk" | jq -r '.kiosk.issuer')"      "$SERVER_URL"
-assert "kiosk.capabilities[]"      "$(echo "$wk" | jq -r '.kiosk.capabilities | join(",")')" "schema,query,run,pay"
+# `capabilities` names the MODULES this origin serves, not its verbs
+# (T-068 slice 5, T-075 = A, ADR-0025).
+assert "kiosk.capabilities[]"      "$(echo "$wk" | jq -r '.kiosk.capabilities | join(",")')" "schema,queries,actions,pay"
+
+# THE PROPERTY THE MODULE ANSWER BOUGHT. Every one of these documents is
+# served UNAUTHENTICATED at the origin root, and none of them may name a verb:
+# the catalog is Bearer-gated behind GET /kiosk/schema, /kiosk/openapi.json is
+# gated for the same reason, and the per-verb wire answers 401 before 404 so an
+# anonymous prober learns nothing. A discovery document that enumerated the
+# names would have undone all three at once.
+for public_doc in "/.well-known/kiosk.json" "/agents.json" "/agents.txt" "/.well-known/api-catalog" "/.well-known/agent-configuration"; do
+  body=$(curl -sf "$SERVER_URL$public_doc")
+  for verb_name in salons my_appointments book_appointment; do
+    assert "$public_doc leaks no verb name ($verb_name)" \
+      "$(echo "$body" | grep -c "$verb_name" || true)" "0"
+  done
+done
 
 # ─── native discovery: agents.txt / agents.json / agent-configuration ───
 #
@@ -146,6 +162,11 @@ aj=$(curl -sf "$SERVER_URL/agents.json")
 assert "agents.json → 200"           "$aj_status" "200"
 assert "agents.json Content-Type"    "$(echo "$aj_headers" | grep -i '^Content-Type:' | grep -ic 'application/json')" "1"
 assert "agents.json auth.discovery"  "$(echo "$aj" | jq -r '.authorization.discovery')" "/.well-known/agent-configuration"
+# x-kiosk carries POINTERS, not a copy of the contract: it stopped echoing
+# `capabilities` under `wire.verbs` (T-075 = A).
+assert "agents.json x-kiosk keys"    "$(echo "$aj" | jq -r '."x-kiosk" | keys_unsorted | join(",")')" "schema,api_catalog,mount_path,api_version"
+assert "agents.json x-kiosk.schema"  "$(echo "$aj" | jq -r '."x-kiosk".schema')" "/kiosk/schema"
+assert "agents.json x-kiosk has no wire.verbs echo" "$(echo "$aj" | jq -r '."x-kiosk" | has("wire")')" "false"
 
 printf "\n\033[1m=== /.well-known/agent-configuration (agent-auth discovery) ===\033[0m\n"
 
@@ -419,6 +440,13 @@ assert "…still the 0.3 error envelope"    "$(echo "$old_run" | jq -r '.ok')" "
 old_schema=$(curl -sS "$SERVER_URL/kiosk/schema" -H "Authorization: Bearer $ALICE_AGENT_TOKEN")
 assert "GET /kiosk/schema still enveloped" "$(echo "$old_schema" | jq -r '.kind')" "value"
 assert "…with the catalog under value"     "$(echo "$old_schema" | jq -r '.value.queries | length > 0')" "true"
+
+# K-740 / VERBS-EQ-CAPABILITIES: the catalog's `verbs` IS the discovery
+# document's `capabilities` — the same array, not a fixed four that named `pay`
+# whether or not the origin took payments.
+assert "schema.verbs == kiosk.json capabilities" \
+  "$(echo "$old_schema" | jq -cS '.value.verbs')" \
+  "$(echo "$wk" | jq -cS '.kiosk.capabilities')"
 
 # ─── JWKS endpoint ──────────────────────────────────────────────────────
 #

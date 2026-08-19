@@ -277,7 +277,7 @@ Kiosk.configure do |c|
   # This is deliberate and load-bearing: with no AP2 provider configured,
   # `pay` drops out of `capabilities` and the discovery documents carry no
   # payments block. atablefor books restaurant tables — a reservation takes
-  # no money. The advertised capabilities are [schema, query, run].
+  # no money. The advertised capabilities are [schema, queries, actions].
 
   # ── PoW verb-toll gate — exactly one mode (K-497) ───────────────────────
   # ATABLEFOR_POW_MODE (resolved at the top of this file) selects exactly one

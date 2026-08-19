@@ -52,8 +52,10 @@ Rails.application.routes.draw do
   # /.well-known/kiosk.json discovery endpoint — the machine-readable
   # HANDSHAKE: who/where/which version + issuer (the AP2 `iss` anchor) + auth,
   # served at the guessable conventional URL. It advertises `capabilities`,
-  # the verb names actually served (schema/query/run/pay), computed from the
-  # live registry, so discovery and the live surface never drift.
+  # the MODULES actually served (schema/queries/actions/pay), computed from the
+  # live registry, so discovery and the live surface never drift. Never the
+  # registered verb NAMES: this document is unauthenticated and the catalog is
+  # Bearer-gated behind GET /kiosk/schema.
   get "/.well-known/kiosk.json",            to: "kiosk/server/discovery#kiosk_json"
 
   # /.well-known/api-catalog — RFC 9727 linkset of the live wire endpoints

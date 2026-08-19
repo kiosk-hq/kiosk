@@ -39,6 +39,13 @@ Rails.application.routes.draw do
   # (schema tagged service-desc), served by the same DiscoveryController.
   get "/.well-known/api-catalog",           to: "kiosk/server/discovery#api_catalog"
 
+  # /kiosk/openapi.json — the DERIVED OpenAPI description of the per-verb wire
+  # (T-068 slice 4, T-071 = C), which the api-catalog above advertises as a
+  # second `service-desc`. It MUST be drawn above the per-verb pair: Rails
+  # appends `(.:format)` to `/kiosk/:kiosk_verb`, so without this line the
+  # path is read as the verb `openapi` in the `json` format and answers 404.
+  get "/kiosk/openapi.json",                to: "kiosk/server/open_api#show"
+
   # ── The 0.4 per-verb wire (T-068 slice 1) ────────────────────────────────
   #
   # One endpoint per registered verb: GET /kiosk/<query-name>,

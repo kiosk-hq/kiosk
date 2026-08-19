@@ -49,6 +49,7 @@ require "kiosk/server/identity_resolution"
 require "kiosk/server/pow_spent_store"
 require "kiosk/server/pow_spent_stores"
 require "kiosk/server/pow_gate"
+require "kiosk/server/argument_decoder"
 require "kiosk/server/request_validation"
 require "kiosk/server/registration_pow"
 require "kiosk/server/agent_registration"
@@ -70,6 +71,7 @@ require "kiosk/server/engine"
 # surface (KycAttestationController), and the account-binding ceremony's
 # OAuth-wire + HTML controllers.
 require "kiosk/server/wire_controller"
+require "kiosk/server/verb_controller"
 require "kiosk/server/discovery_controller"
 require "kiosk/server/jwks_controller"
 require "kiosk/server/oauth_device_authorization_controller"
@@ -86,6 +88,11 @@ module Kiosk
     #   Wire plane:
     #   - {Kiosk::Server::Executor}         — wire dispatch (query/run/pay/schema)
     #   - {Kiosk::Server::WireController}   — Rails controller wrapping Executor
+    #   - {Kiosk::Server::VerbController}   — the 0.4 per-verb wire:
+    #                                         GET <endpoint>/<query-name>,
+    #                                         POST <endpoint>/<action-name>
+    #   - {Kiosk::Server::ArgumentDecoder}  — a query string → typed arguments,
+    #                                         per the T-070/T-087 encoding rule
     #   - {Kiosk::Server::Actions}          — Action registry (name → handler + descriptor)
     #   - {Kiosk::Server::Queries}          — read-side query registry
     #   - {Kiosk::Action} / {Kiosk::Query}  — the mixins an operator includes into

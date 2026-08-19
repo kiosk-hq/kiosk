@@ -48,6 +48,14 @@ class Kiosk::ListingsController < ApplicationController
                                   description: "Free-form display price, e.g. \"€300\" or \"Free\"." },
                },
                required: ["category_slug", "title", "body"]
+  output_schema type: "object",
+                description: "The posted listing.",
+                additionalProperties: false,
+                properties: {
+                  listing_id: { type: "string", description: "uuid. Pass to edit_listing / close_listing as `listing_id`." },
+                  status:     { type: "string", description: "open — a new listing is posted open." },
+                },
+                required: %w[listing_id status]
   example_params({
     category_slug: "bikes", title: "Carbon road bike — €300",
     body: "Lightweight carbon road bike, 54cm, Shimano 105 groupset.",
@@ -83,6 +91,14 @@ class Kiosk::ListingsController < ApplicationController
                  price_text: { type: "string", description: "New display price." },
                },
                required: ["listing_id"]
+  output_schema type: "object",
+                description: "The edited listing.",
+                additionalProperties: false,
+                properties: {
+                  listing_id: { type: "string", description: "The listing that was edited, echoed." },
+                  updated:    { const: true, description: "true — a refusal is an error, never `updated: false`." },
+                },
+                required: %w[listing_id updated]
   def edit_listing
     # An ALLOWLIST, not a loop over caller keys: `permit` is what keeps `status`,
     # `owner_id` and `created_by_agent_id` unwritable from the wire. It stays
@@ -110,6 +126,14 @@ class Kiosk::ListingsController < ApplicationController
                                             "my_listings or browse_listings, verbatim." },
                },
                required: ["listing_id"]
+  output_schema type: "object",
+                description: "The closed listing.",
+                additionalProperties: false,
+                properties: {
+                  listing_id: { type: "string", description: "The listing that was closed, echoed." },
+                  status:     { const: "closed", description: "closed." },
+                },
+                required: %w[listing_id status]
   def close_listing
     render_operation CloseListingOperation.call(listing_id: params[:listing_id])
   end

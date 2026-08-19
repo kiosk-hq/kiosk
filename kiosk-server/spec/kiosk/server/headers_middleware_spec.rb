@@ -23,7 +23,10 @@ RSpec.describe Kiosk::Server::HeadersMiddleware do
     end
 
     it "injects the headers on any /kiosk/* sub-path" do
-      _, headers, _ = call("/kiosk/query")
+      # Any path under the mount — the middleware matches on the PREFIX and
+      # never consults the route table, which is the whole point: it stamps a
+      # 404 from a mistyped verb as readily as a 200 from a real one.
+      _, headers, _ = call("/kiosk/catalog")
       expect(headers[Kiosk::Protocol::HEADER_API_VERSION]).to eq(Kiosk::Protocol::API_VERSION)
     end
 

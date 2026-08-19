@@ -33,10 +33,16 @@ module Kiosk
 
       # Module name → the endpoint that module answers on, under `endpoint`,
       # for the modules the RFC 9727 catalog links as plain `item`s. `schema`
-      # is absent because it is linked as a `service-desc` instead. Ordered:
-      # the linkset's item order follows the canonical capability order.
-      MODULE_ENDPOINTS = { "queries" => "query", "actions" => "run",
-                           "pay" => "pay" }.freeze
+      # is absent because it is linked as a `service-desc` instead.
+      #
+      # `queries` and `actions` LEFT this table at the 0.4 cutover, with the
+      # two multiplexed endpoints they mapped to (T-074 = A). They have no
+      # replacement here BY DESIGN: their 0.4 endpoints are one per verb, and
+      # linking those from an UNAUTHENTICATED document is exactly the
+      # enumeration K-799 is open about and slice 5 declined to ship. So the
+      # catalog links the two service DESCRIPTIONS (both Bearer-gated) and
+      # `pay`, which is a single fixed endpoint and outlives them.
+      MODULE_ENDPOINTS = { "pay" => "pay" }.freeze
 
       # Build the well-known document as a Hash, ready to JSON-serialize.
       #
@@ -271,13 +277,11 @@ module Kiosk
           # deletes this one `items <<`.
           items << { href: "#{endpoint}/openapi.json", rel: "service-desc" }
         end
-        # The remaining modules are plain catalogued APIs, one link each.
-        #
-        # `queries` and `actions` map to the 0.3 MULTIPLEXED endpoints, which
-        # are still served alongside the per-verb wire until the cutover
-        # (T-074 = A) — catalogue what is answered, not what is planned. The
-        # cutover deletes those two routes and these two mappings together;
-        # `pay` outlives them.
+        # The remaining modules are plain catalogued APIs, one link each —
+        # which since the cutover means `pay` and nothing else. A `queries` or
+        # `actions` module has no single endpoint to link any more, and
+        # linking every verb it holds would publish the catalog on an
+        # unauthenticated surface (see MODULE_ENDPOINTS, and K-799).
         MODULE_ENDPOINTS.each do |mod, path|
           items << { href: "#{endpoint}/#{path}", rel: "item" } if modules.include?(mod)
         end

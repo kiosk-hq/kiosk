@@ -46,13 +46,19 @@ module Kiosk
     # Still out of scope: response-conformance CI and the vendored-schema
     # sync-check (T-045).
     #
-    # == Lazy / optional dependency
+    # == Lazy require, real dependency
     #
-    # `json_schemer` is NOT a runtime dependency of kiosk-server (the core stays
-    # dep-light). It is required lazily, inside this module, only on the first
-    # validation. If `validate_requests` is on but the gem is not loadable, a
-    # {Errors::ConfigurationError} naming the gem is raised — fail-loud rather
-    # than silently skipping validation.
+    # `json_schemer` became a RUNTIME dependency of kiosk-server at 0.4. It had
+    # been optional while `input_schema` validation was opt-in; §8.1 item 5
+    # makes coerce-then-validate an operator obligation on every per-verb call,
+    # so an origin that cannot load a validator cannot serve a conformant wire
+    # — and an install-time optional that fails on the first request is a lie
+    # told at the wrong moment.
+    #
+    # It is still required LAZILY, inside this module, on the first validation,
+    # and a missing gem is still an {Errors::ConfigurationError} naming it:
+    # a vendored checkout without it should say so rather than LoadError at
+    # boot.
     module RequestValidation
       module_function
 

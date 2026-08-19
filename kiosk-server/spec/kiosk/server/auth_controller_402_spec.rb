@@ -53,8 +53,25 @@ RSpec.describe "AuthController 402 WWW-Authenticate" do
 
     expect(status).to eq(402)
     expect(headers["WWW-Authenticate"]).to eq('Kiosk-PoW realm="https://demo.example"')
-    expect(body.dig(:error, :code)).to eq("pow_required")
-    expect(body.dig(:error, :challenges)).to be_an(Array)
-    expect(body.dig(:error, :challenges)).not_to be_empty
+
+    # The auth plane answers the SAME RFC 9457 problem document the wire does
+    # (0.4 cutover): the media type is half of what makes it one, and the
+    # closed-vocabulary token moved from `error.code` to the top level.
+    expect(headers["Content-Type"]).to include("application/problem+json")
+    expect(body[:type]).to   eq("https://kiosk.tech/problems/pow_required")
+    expect(body[:title]).to  eq("Proof-of-work required")
+    expect(body[:status]).to eq(402)
+    expect(body[:code]).to   eq("pow_required")
+
+    # `challenges` is an RFC 9457 EXTENSION MEMBER now — top level, no longer
+    # nested under `error` — and still the full set the client must solve.
+    expect(body[:challenges]).to be_an(Array)
+    expect(body[:challenges]).not_to be_empty
+
+    # The render seam applies the wire cache policy to the auth plane too, and
+    # a 402 carries a challenge that is single-use and request-bound: caching
+    # one either defeats the toll or loops the retry forever.
+    expect(headers["Cache-Control"]).to eq("no-store")
+    expect(headers["Vary"]).to eq("Authorization, Kiosk-PoW")
   end
 end

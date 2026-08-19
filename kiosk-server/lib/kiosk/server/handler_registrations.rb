@@ -18,7 +18,7 @@ module Kiosk
     # references a handler controller — the wire reaches it through the
     # registry, and the registry is what is missing. Measured on the T-057
     # pilot before this shipped: `GET /kiosk/schema` → `queries=[] actions=[]`,
-    # `POST /kiosk/query` → 404, `/.well-known/kiosk.json` →
+    # every verb path → 404, `/.well-known/kiosk.json` →
     # `"capabilities": []` (computed from the live registry). An operator
     # following the published onboarding got a DEAD ORIGIN in development —
     # every verb missing, discovery advertising nothing.

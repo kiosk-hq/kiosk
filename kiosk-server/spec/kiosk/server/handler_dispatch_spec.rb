@@ -25,9 +25,15 @@ RSpec.describe Kiosk::Server::HandlerDispatch do
   let(:identity)   { build_identity(user_id: "u-1", agent_id: "a-1") }
   let(:connection) { FakeConnection.new }
 
+  # The wire NAME is its own argument — a path segment on the 0.4 wire, never
+  # a body field — so it is lifted out of `args` here exactly as
+  # {Kiosk::Server::VerbController} lifts it out of `params[:kiosk_verb]`.
   def execute(kind, args)
+    args = args.dup
+    name = (args.delete(:name) || args.delete("name")).to_s
     Kiosk::Server::CurrentRequest.with(identity: identity) do
-      Kiosk::Server::Executor.call(kind: kind, args: args, identity: identity, connection: connection)
+      Kiosk::Server::Executor.call(kind: kind, args: args, identity: identity,
+                                   connection: connection, name: name.empty? ? nil : name)
     end
   end
 

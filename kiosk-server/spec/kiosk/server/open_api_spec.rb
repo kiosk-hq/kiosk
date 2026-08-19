@@ -64,11 +64,17 @@ RSpec.describe Kiosk::Server::OpenApi do
   end
 
   describe "it is a DERIVATION of the registry, not a second catalog" do
-    it "has one path per registered verb, and nothing else" do
+    it "has one path per registered verb, plus the reserved wire, and nothing else" do
       declare_query("salons")
       declare_action("book_appointment")
 
-      expect(document[:paths].keys).to eq(["/book_appointment", "/salons"])
+      # `/schema` is the protocol's own endpoint, not an operator verb — it is
+      # here because the cutover made it answer the same 0.4 shapes everything
+      # else does (see "the reserved wire endpoints" below). `/pay` is absent:
+      # this origin has no payment provider, so `pay` is not in its
+      # capabilities. Everything after the reserved block is one path per
+      # registered verb and nothing more.
+      expect(document[:paths].keys).to eq(["/schema", "/book_appointment", "/salons"])
     end
 
     it "loses a path when the verb leaves the registry" do
@@ -115,11 +121,68 @@ RSpec.describe Kiosk::Server::OpenApi do
       expect(document.dig(:paths, "/salons").keys).to eq([:get])
       expect(document.dig(:paths, "/book_appointment").keys).to eq([:post])
     end
+  end
 
-    it "describes ONLY the per-verb wire — `schema` and `pay` answer the 0.3 envelope until the cutover" do
+  # THE RESERVED WIRE. Until the cutover this document described the per-verb
+  # wire and NOTHING else, because `schema` and `pay` still answered 0.3's
+  # envelope — a shape none of the components below can express. They answer
+  # the same problem documents and the same verbatim payloads as every other
+  # endpoint now (T-074 = A), so a description that left them out would be
+  # describing less than this origin serves.
+  #
+  # Describing them does not make this a second source of truth: no
+  # declaration produces them, nobody can register their names, and their
+  # contract is fixed by the SPECIFICATION (§8.3, §11.3) rather than by
+  # anything on this origin. The invariant that matters is untouched —
+  # nothing here says anything about an OPERATOR verb that the verb's own
+  # three fields do not.
+  describe "the reserved wire endpoints" do
+    it "describes `schema` as a GET under the `wire` tag, with its own components" do
       declare_query("salons")
 
-      expect(document[:paths].keys).not_to include("/schema", "/pay")
+      expect(document.dig(:paths, "/schema").keys).to eq([:get])
+      expect(document.dig(:paths, "/schema", :get, :operationId)).to eq("schema")
+      expect(document.dig(:paths, "/schema", :get, :tags)).to eq(["wire"])
+      expect(document.dig(:components, :schemas))
+        .to include("schema.response", "schema.descriptor")
+    end
+
+    it "describes `pay` as a POST when this origin serves the pay module" do
+      declare_query("salons")
+      Kiosk.configure { |c| c.payment_provider = Object.new }
+
+      expect(Kiosk.configuration.capabilities).to include("pay")
+      expect(document.dig(:paths, "/pay").keys).to eq([:post])
+      expect(document.dig(:paths, "/pay", :post, :operationId)).to eq("pay")
+      expect(document.dig(:paths, "/pay", :post, :tags)).to eq(["wire"])
+      expect(document.dig(:components, :schemas)).to include("pay.request", "pay.response")
+    end
+
+    it "OMITS `/pay` on an origin whose capabilities lack it — the gate is real" do
+      # `capabilities` is computed from the live registry and drops `pay` when
+      # no payment provider is configured. The document describes what this
+      # origin ANSWERS, never what the protocol allows in general — and an
+      # unconditional `/pay` would put a permanently-403 operation into every
+      # client generated against a payment-less porter.
+      declare_query("salons")
+
+      expect(Kiosk.configuration.capabilities).not_to include("pay")
+      expect(document[:paths]).not_to have_key("/pay")
+      expect(document.dig(:components, :schemas).keys).not_to include("pay.request", "pay.response")
+    end
+
+    it "omits `/schema` too when there is no catalog to describe" do
+      # Nothing registered → capabilities is empty → not even the reserved
+      # block survives, which is the same gate `WellKnown.api_catalog` applies
+      # to its two `service-desc` links.
+      expect(Kiosk.configuration.capabilities).to eq([])
+      expect(document[:paths]).to be_empty
+    end
+
+    it "sorts its operations into three tags — the wire's own, then the two verb kinds" do
+      declare_query("salons")
+
+      expect(document[:tags].map { |tag| tag[:name] }).to eq(%w[wire queries actions])
     end
   end
 
@@ -386,8 +449,12 @@ RSpec.describe Kiosk::Server::OpenApi do
       Rack::Response[status, { "content-type" => content_type }, [JSON.generate(payload)]]
     end
 
-    it "parses as a valid OpenAPI 3.1 document" do
-      expect(definition.routes.count).to eq(1)
+    it "parses as a valid OpenAPI 3.1 document, reserved endpoints and all" do
+      # Two routes: the one declared verb, and `/schema` — the reserved
+      # endpoint the cutover brought into this document. A third-party parser
+      # reading both is the check that the hand-written reserved components
+      # are as well-formed as the derived ones.
+      expect(definition.routes.map(&:path).sort).to eq(["/schema", "/search_hotels"])
     end
 
     it "accepts a scalar query and coerces it to the declared type" do

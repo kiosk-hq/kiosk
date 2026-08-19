@@ -40,35 +40,14 @@ RSpec.describe Kiosk::Server::Result do
     end
   end
 
-  describe "#to_envelope" do
-    it "puts :rows payload under `rows` key" do
-      r = described_class.new(kind: :rows, payload: [{ a: 1 }])
-      expect(r.to_envelope).to eq(ok: true, kind: :rows, rows: [{ a: 1 }])
-    end
-
-    it "puts :value payload under `value` key" do
-      r = described_class.new(kind: :value, payload: { ok: 1 })
-      expect(r.to_envelope).to eq(ok: true, kind: :value, value: { ok: 1 })
-    end
-
-    # ── pagination cursor (ADR-0021 / T-042) ──────────────────────────────
-    # ABSENT `next` = complete; PRESENT `next` = truncated (more rows exist).
-
-    it "omits `next` entirely when the query did not paginate (back-compat)" do
-      r = described_class.new(kind: :rows, payload: [{ a: 1 }])
-      expect(r.to_envelope).not_to have_key(:next)
-      expect(r.to_envelope).to eq(ok: true, kind: :rows, rows: [{ a: 1 }])
-    end
-
-    it "emits `next` (the opaque cursor) when the result was truncated" do
-      r = described_class.new(kind: :rows, payload: [{ a: 1 }], next_cursor: "b2Zmc2V0OjQw")
-      expect(r.to_envelope).to eq(ok: true, kind: :rows, rows: [{ a: 1 }], next: "b2Zmc2V0OjQw")
-    end
-
-    it "a :value result never carries `next` (single-object/action results)" do
-      r = described_class.new(kind: :value, payload: { id: 7 })
-      expect(r.to_envelope).not_to have_key(:next)
-    end
+  # THE ENVELOPE IS GONE (T-074 = A). `to_envelope` was the 0.3 success
+  # wrapper — `{ok:, kind:, rows|value:, next:}` — and it was deleted with the
+  # two endpoints that served it. Pinned here because a re-added wrapper would
+  # otherwise be invisible: nothing else in the suite would notice a second
+  # answer shape appearing beside {#to_payload}.
+  it "has no 0.3 envelope left to render" do
+    r = described_class.new(kind: :rows, payload: [{ a: 1 }])
+    expect(r).not_to respond_to(:to_envelope)
   end
 
   # THE 0.4 SUCCESS BODY (T-072 = C). Whatever the handler rendered is what

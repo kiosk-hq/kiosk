@@ -10,7 +10,9 @@ Gem::Specification.new do |spec|
   spec.description   = <<~DESC
     kiosk-server is the host-side surface for Kiosk. The full surface ships:
 
-      - Nine controllers — the wire verbs (/kiosk/{schema,query,run,pay}),
+      - Eleven controllers — the per-verb wire (GET <endpoint>/<query-name>,
+        POST <endpoint>/<action-name>) and the two reserved endpoints
+        (/kiosk/schema, /kiosk/pay), a derived OpenAPI description of both,
         the register/login proof-of-possession auth plane, JWKS, the KYC
         attestation endpoint, agents.txt / agents.json / kiosk.json
         discovery, and the account-binding ceremony (RFC 8628-shaped device
@@ -56,7 +58,7 @@ Gem::Specification.new do |spec|
                %w[README.md LICENSE.txt CHANGELOG.md]
   spec.require_paths = ["lib"]
 
-  spec.add_dependency "kiosk-core", "~> 0.3.0"
+  spec.add_dependency "kiosk-core", "~> 0.4.0"
   # JWT issue/verify for the OAuth surface and access tokens.
   # ruby-jwt is the de-facto Ruby JOSE library — small, MIT, no transitive deps.
   spec.add_dependency "jwt", ">= 2.8", "< 4.0"
@@ -65,9 +67,23 @@ Gem::Specification.new do |spec|
   # result.rb and configuration_extension.rb; until now it arrived only by
   # accident, as a transitive dependency of jwt.
   spec.add_dependency "base64"
+  # json_schemer — a RUNTIME dependency since 0.4, not an optional extra.
+  #
+  # §8.1 item 5 makes coerce-then-validate an OPERATOR OBLIGATION: every
+  # per-verb call is checked against the verb's declared `input_schema` before
+  # the handler sees an argument, unconditionally. An origin that could not
+  # load a JSON Schema validator could not serve a conformant 0.4 wire at all,
+  # so declaring it optional and failing on the first request would be an
+  # install-time lie paid for at request time. `validate_responses` (the
+  # development/CI output check) uses the same validator.
+  #
+  # It stays LAZILY REQUIRED in the code — the ConfigurationError naming the
+  # gem is still there — because a host may vendor a checkout without it, and
+  # a clear message beats a LoadError at boot.
+  spec.add_dependency "json_schemer", ">= 2.3", "< 3.0"
 
   # ── Rails ──────────────────────────────────────────────────────────────
-  # kiosk-server IS a Rails gem: it ships an engine, nine controllers, an
+  # kiosk-server IS a Rails gem: it ships an engine, eleven controllers, an
   # install generator and nine ActiveRecord migration templates. Until
   # 2026-08-11 that dependency was undeclared and satisfied only by accident,
   # because every consumer happens to be a Rails app.
@@ -101,5 +117,5 @@ Gem::Specification.new do |spec|
   # Kiosk::TestHelpers::Journey contract; we need the error classes
   # at test time. Host apps depending on TestExecutor will have
   # kiosk-test-support loaded transitively via kiosk-rls-{rspec,minitest}.
-  spec.add_development_dependency "kiosk-test-support", "~> 0.3.0"
+  spec.add_development_dependency "kiosk-test-support", "~> 0.4.0"
 end

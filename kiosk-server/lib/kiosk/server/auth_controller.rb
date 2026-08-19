@@ -207,12 +207,26 @@ module Kiosk
         render json: payload, status: status
       end
 
+      # The auth plane answers the SAME RFC 9457 problem document the wire
+      # does (spec §9: "the auth endpoints answer the same problem documents").
+      # It moved here at the 0.4 cutover with `schema` and `pay`, in one wave —
+      # not earlier, because every demo's auth flow reads a code off a 402 or a
+      # 409 and half the fleet would have gone red mid-build.
+      #
+      # The `/oauth/*` pair is the one deliberate exception on this wire and
+      # lives in its own controllers: RFC 8628 defines its own error object,
+      # and answering a problem document there would break the device grant.
       def render_error(err)
         Kiosk::Server::Headers.add_to(response.headers)
+        Kiosk::Server::Headers.add_cache_policy(
+          response.headers, status: err.http_status
+        )
+        err.response_headers.each { |name, value| response.set_header(name, value) }
         if (challenge = www_authenticate_for(err))
           response.set_header("WWW-Authenticate", challenge)
         end
-        render json: err.to_envelope, status: err.http_status
+        render json: err.to_problem, status: err.http_status,
+               content_type: Errors::PROBLEM_CONTENT_TYPE
       end
 
       # RFC 7235 gate header, mirroring WireController#www_authenticate_for.

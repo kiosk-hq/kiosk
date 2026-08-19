@@ -13,6 +13,7 @@
 # because every real Rails app does.
 
 require "rack/mock"
+require "uri"
 require "json"
 
 # An operator's OWN base class — the shape K-495 describes and T-056 will
@@ -111,10 +112,16 @@ RSpec.describe "Kiosk::Query / Kiosk::Action (the operator mixin)" do
     [SpecCatalogController, SpecOrdersController].each(&:kiosk_register!)
   end
 
-  # The REAL dispatch path, minus HTTP: exactly what WireController calls.
+  # The REAL dispatch path, minus HTTP: exactly what VerbController calls.
+  # The wire NAME is an argument of its own — it is a path segment on the 0.4
+  # wire, never a body field — so it is lifted out of `args` here the way the
+  # controller lifts it out of `params[:kiosk_verb]`.
   def execute(kind, args)
+    args = args.dup
+    name = (args.delete(:name) || args.delete("name")).to_s
     Kiosk::Server::CurrentRequest.with(identity: identity) do
-      Kiosk::Server::Executor.call(kind: kind, args: args, identity: identity, connection: connection)
+      Kiosk::Server::Executor.call(kind: kind, args: args, identity: identity,
+                                   connection: connection, name: name.empty? ? nil : name)
     end
   end
 
@@ -185,13 +192,13 @@ RSpec.describe "Kiosk::Query / Kiosk::Action (the operator mixin)" do
       expect(result.payload["agent_id"]).to eq("a-1")
     end
 
-    it "carries the cursor of a paginated page into the envelope" do
+    it "carries the cursor of a paginated page into the answer" do
       result = execute(:query, { name: "my_orders" })
 
       expect(result.kind).to eq(:rows)
       expect(result.payload).to eq([{ "order_id" => "o-1", "for" => "u-1" }])
       expect(Kiosk::Server::Cursor.decode_offset(result.next_cursor)).to eq(1)
-      expect(result.to_envelope[:next]).to eq(result.next_cursor)
+      expect(result.to_payload[:next]).to eq(result.next_cursor)
     end
 
     it "runs inside the wire's GUC-scoped transaction" do
@@ -377,43 +384,67 @@ RSpec.describe "Kiosk::Query / Kiosk::Action (the operator mixin)" do
       end
       [SpecCatalogController, SpecOrdersController].each(&:kiosk_register!)
       allow(::ActiveRecord::Base).to receive(:connection).and_return(connection)
+      allow(::ActiveRecord::Base).to receive(:lease_connection).and_return(connection)
     end
 
-    def post_wire(verb, payload, **opts)
+    # The 0.4 wire, exercised the way a router reaches it: the verb NAME is a
+    # path segment (`params[:kiosk_verb]`), a query is a GET whose arguments
+    # are the query string and an action is a POST whose arguments are the
+    # body. There is no `name` field and no /query or /run endpoint to post to.
+    def get_wire(name, args = {}, **opts)
+      query = args.empty? ? "" : "?#{URI.encode_www_form(args)}"
       env = Rack::MockRequest.env_for(
-        "https://provider.example/kiosk/#{verb}",
+        "https://provider.example/kiosk/#{name}#{query}",
+        method: "GET",
+        "HTTP_AUTHORIZATION" => "Bearer #{token}", **opts
+      )
+      dispatch(:show, name, env)
+    end
+
+    def post_wire(name, payload = {}, **opts)
+      env = Rack::MockRequest.env_for(
+        "https://provider.example/kiosk/#{name}",
         method: "POST", input: JSON.generate(payload),
         "CONTENT_TYPE" => "application/json", "HTTP_AUTHORIZATION" => "Bearer #{token}", **opts
       )
-      status, headers, body = Kiosk::Server::WireController.action(verb).call(env)
+      dispatch(:create, name, env)
+    end
+
+    def dispatch(action, name, env)
+      env["action_dispatch.request.path_parameters"] =
+        { controller: "kiosk/server/verb", action: action.to_s, kiosk_verb: name.to_s }
+      status, headers, body = Kiosk::Server::VerbController.action(action).call(env)
       raw = +""
       body.each { |chunk| raw << chunk }
       [status, JSON.parse(raw), headers]
     end
 
-    it "answers a query with the ordinary success envelope" do
-      status, envelope = post_wire(:query, { name: "catalog", q: "milk" })
+    it "answers a query with the rendered rows, verbatim" do
+      status, payload = get_wire("catalog", { q: "milk" })
 
       expect(status).to eq(200)
-      expect(envelope).to eq("ok" => true, "kind" => "rows",
-                             "rows" => [{ "sku" => "MILK-1L", "price_cents" => 199 }])
+      expect(payload).to eq([{ "sku" => "MILK-1L", "price_cents" => 199 }])
     end
 
-    it "answers an action with the ordinary success envelope" do
-      status, envelope = post_wire(:run, { name: "create_order", items: [{ sku: "MILK-1L" }] })
+    it "answers an action with its own object, verbatim" do
+      status, payload = post_wire("create_order", { items: [{ sku: "MILK-1L" }] })
 
       expect(status).to eq(200)
-      expect(envelope["kind"]).to eq("value")
-      expect(envelope["value"]).to eq("order_id" => "o-1", "item_count" => 1, "for" => "u-1")
+      expect(payload).to eq("order_id" => "o-1", "item_count" => 1, "for" => "u-1")
     end
 
-    it "renders a handler's refusal as the ordinary error envelope" do
-      status, envelope = post_wire(:run, { name: "create_order" })
+    it "renders a handler's refusal as a problem document" do
+      # `items: []` satisfies the declared input_schema (an array, present) and
+      # is refused by the HANDLER's own emptiness guard — so this exercises the
+      # handler's refusal reaching the wire, not the schema layer's.
+      status, problem, headers = post_wire("create_order", { items: [] })
 
       expect(status).to eq(400)
-      expect(envelope["error"]).to eq("code" => "bad_request",
-                                      "message" => "at least one item is required",
-                                      "hint" => "pass items: [{sku:, quantity:}]")
+      expect(headers["Content-Type"]).to start_with("application/problem+json")
+      expect(problem["code"]).to eq("bad_request")
+      expect(problem["type"]).to eq("https://kiosk.tech/problems/bad_request")
+      expect(problem["detail"]).to eq("at least one item is required")
+      expect(problem["hint"]).to eq("pass items: [{sku:, quantity:}]")
     end
 
     it "gives a RENDERED payment_setup_required the same WWW-Authenticate as a raised one" do
@@ -431,10 +462,10 @@ RSpec.describe "Kiosk::Query / Kiosk::Action (the operator mixin)" do
       end
       stub_const("SpecNeedsCardController", klass)
 
-      status, envelope, headers = post_wire(:run, { name: "needs_card" })
+      status, problem, headers = post_wire("needs_card")
 
       expect(status).to eq(402)
-      expect(envelope["error"]["code"]).to eq("payment_setup_required")
+      expect(problem["code"]).to eq("payment_setup_required")
       expect(headers["WWW-Authenticate"]).to eq(%(Payment realm="https://provider.example", method="ap2"))
     end
 
@@ -447,14 +478,14 @@ RSpec.describe "Kiosk::Query / Kiosk::Action (the operator mixin)" do
       expect(ApplicationController._process_action_callbacks.map(&:filter))
         .to include(:verify_authenticity_token)
 
-      expect(post_wire(:run, { name: "create_order", items: [1] }).first).to eq(200)
+      expect(post_wire("create_order", { items: [1] }).first).to eq(200)
     end
 
     it "seeds the handler's request with the caller's headers" do
-      _status, envelope = post_wire(:query, { name: "whoami" }, "HTTP_USER_AGENT" => "kiosk-cli/1.0")
+      _status, payload = get_wire("whoami", {}, "HTTP_USER_AGENT" => "kiosk-cli/1.0")
 
-      expect(envelope["rows"]["user_agent"]).to eq("kiosk-cli/1.0")
-      expect(envelope["rows"]["wire_name"]).to eq("whoami")
+      expect(payload["user_agent"]).to eq("kiosk-cli/1.0")
+      expect(payload["wire_name"]).to eq("whoami")
     end
   end
 
@@ -541,7 +572,7 @@ RSpec.describe "Kiosk::Query / Kiosk::Action (the operator mixin)" do
     # pins the names the mixin refuses today so a silent shrink is visible.
     it "reserves every first path segment the engine draws under the mount" do
       expect(Kiosk::Server::HandlerMixin::RESERVED_NAMES)
-        .to contain_exactly("agents", "auth", "oauth", "pay", "query", "run", "schema")
+        .to contain_exactly("agents", "auth", "oauth", "pay", "schema")
     end
 
     it "404s a verb whose method stopped being a public action" do

@@ -487,27 +487,40 @@ RSpec.describe Kiosk::Server::WellKnown do
       expect(items).to all(include(:href, :rel))
     end
 
-    it "links one endpoint per module present in capabilities" do
+    it "maps only the modules that still HAVE a single endpoint" do
+      # `queries` and `actions` LEFT this table at the 0.4 cutover, with the
+      # two multiplexed endpoints they named (T-074 = A). They have no
+      # replacement here by design: their 0.4 endpoints are one per verb, and
+      # this document is unauthenticated (K-799).
+      expect(described_class::MODULE_ENDPOINTS).to eq("pay" => "pay")
+    end
+
+    it "links one endpoint per module that still has one, and nothing else" do
       declare_query("catalog")
       declare_action("checkout")
       Kiosk.configure { |c| c.payment_provider = Object.new }
       d = described_class.api_catalog(base_url: "https://api.acme.example")
       hrefs = member(d)[:item].map { |i| i[:href] }
-      expect(hrefs).to include("https://api.acme.example/kiosk/schema")
-      expect(hrefs).to include("https://api.acme.example/kiosk/query")
-      expect(hrefs).to include("https://api.acme.example/kiosk/run")
-      expect(hrefs).to include("https://api.acme.example/kiosk/pay")
+      # Every module is live here — schema, queries, actions AND pay — and the
+      # whole linkset is still these four links: the two Bearer-gated service
+      # descriptions, the one fixed `pay` endpoint, and the agents.json
+      # companion. `queries`/`actions` contribute nothing, because the
+      # endpoints they used to name no longer exist.
+      expect(hrefs).to eq(["https://api.acme.example/kiosk/schema",
+                           "https://api.acme.example/kiosk/openapi.json",
+                           "https://api.acme.example/kiosk/pay",
+                           "https://api.acme.example/agents.json"])
+      expect(hrefs).not_to include("https://api.acme.example/kiosk/query")
+      expect(hrefs).not_to include("https://api.acme.example/kiosk/run")
     end
 
     it "omits the endpoints of modules not present in capabilities" do
-      # Register only a query → capabilities = [schema, queries]; the actions
-      # and pay modules are absent, so their endpoints are not catalogued.
+      # Register only a query → capabilities = [schema, queries]; the pay
+      # module is absent, so its endpoint is not catalogued.
       declare_query("catalog")
       d = described_class.api_catalog(base_url: "https://api.acme.example")
       hrefs = member(d)[:item].map { |i| i[:href] }
       expect(hrefs).to include("https://api.acme.example/kiosk/schema")
-      expect(hrefs).to include("https://api.acme.example/kiosk/query")
-      expect(hrefs).not_to include("https://api.acme.example/kiosk/run")
       expect(hrefs).not_to include("https://api.acme.example/kiosk/pay")
     end
 
@@ -568,11 +581,15 @@ RSpec.describe Kiosk::Server::WellKnown do
       expect(hrefs).not_to include("https://api.acme.example/kiosk/openapi.json")
     end
 
-    it "tags the non-schema wire endpoints with rel=item" do
+    it "tags the one remaining non-description wire endpoint — `pay` — with rel=item" do
+      # `service-desc` is for the two documents that DESCRIBE the API; a live
+      # API endpoint is a plain catalogued `item`. Since the cutover `pay` is
+      # the only one of those left with a single URL to link.
       declare_action("checkout")
+      Kiosk.configure { |c| c.payment_provider = Object.new }
       d = described_class.api_catalog(base_url: "https://api.acme.example")
-      run = d[:linkset].first[:item].find { |i| i[:href].end_with?("/run") }
-      expect(run[:rel]).to eq("item")
+      pay = d[:linkset].first[:item].find { |i| i[:href].end_with?("/pay") }
+      expect(pay[:rel]).to eq("item")
     end
 
     it "links the agents.json discovery companion" do

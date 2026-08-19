@@ -7,7 +7,7 @@ The Kiosk Rails engine — host-side surface for [Kiosk](https://kiosk.tech).
 
 The full host-side surface is shipped and covered by the gem's own suite (500+ passing specs):
 
-- **Wire-protocol controllers** — `WireController` serves the `/kiosk/query`, `/kiosk/run`, `/kiosk/pay`, `/kiosk/schema` verbs; `AuthController` runs the register/login proof-of-possession challenge-response (kiosk-pop — the auth story); JWKS backs stateless token verification.
+- **Wire-protocol controllers** — `VerbController` serves ONE ENDPOINT PER VERB (`GET <mount>/<query-name>`, `POST <mount>/<action-name>`); `WireController` serves the two reserved endpoints `GET <mount>/schema` and `POST <mount>/pay`; `OpenApiController` serves a derived OpenAPI description of both at `GET <mount>/openapi.json`; `AuthController` runs the register/login proof-of-possession challenge-response (kiosk-pop — the auth story); JWKS backs stateless token verification. (Protocol 0.4 deleted 0.3's multiplexed `POST <mount>/query` and `POST <mount>/run` outright — there is no route left at either path.)
 - **Account binding** — the claim/link ceremonies bind an agent's public key to an existing assistant-account holder's account: OAuth/RFC 8628-shaped device authorization + possession-proof-gated token poll, a session-authenticated verify page and «Link an assistant» page (minimal overridable engine views), link-code mint/redeem, and unlink. Tokens stay kiosk-pop-minted; the durable `DeviceAuthorizationStores::ActiveRecord` store (migration 008) is the default.
 - **`Kiosk::Server::Executor`** — dispatches resolved commands to the host's registered queries and Actions.
 - **`Kiosk::Query` / `Kiosk::Action`** — the mixins an operator includes into a controller of their own to declare verbs as ordinary Rails actions; the engine registers the controllers named in `c.handlers` at boot and after every reload (see [Declaring queries and actions](#declaring-queries-and-actions)).
@@ -126,10 +126,12 @@ shipped controllers.
 
 ## Declaring queries and actions
 
-An assistant reaches a provider through four verbs. Two of them —
-`POST <mount>/query` and `POST <mount>/run` — carry a NAME, and the operator
-decides what those names mean. `Kiosk::Query` and `Kiosk::Action` are the
-modules that let a controller answer them.
+An assistant reaches a provider at ONE ENDPOINT PER VERB: a query is
+`GET <mount>/<query-name>` with its arguments in the query string, an action is
+`POST <mount>/<action-name>` with its arguments in a JSON body. The operator
+decides what those names are and what they mean. `Kiosk::Query` and
+`Kiosk::Action` are the modules that let a controller answer them; the engine
+routes every registered name without a routes-file edit.
 
 Kiosk ships a **mixin, not a base class**. Which superclass a handler controller
 has is your decision; the `include` is the whole contract.

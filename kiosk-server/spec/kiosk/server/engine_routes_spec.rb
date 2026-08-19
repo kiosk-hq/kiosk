@@ -17,15 +17,33 @@ RSpec.describe "Kiosk::Server::Engine routes" do
     routes.recognize_path(path, method: method)
   end
 
-  it "draws the four wire verbs" do
+  it "draws the two RESERVED wire endpoints — and the wire has no others" do
     expect(recognize(:get, "/schema"))
       .to include(controller: "kiosk/server/wire", action: "schema")
-    expect(recognize(:post, "/query"))
-      .to include(controller: "kiosk/server/wire", action: "query")
-    expect(recognize(:post, "/run"))
-      .to include(controller: "kiosk/server/wire", action: "run")
     expect(recognize(:post, "/pay"))
       .to include(controller: "kiosk/server/wire", action: "pay")
+    # `POST query` and `POST run` — 0.3's multiplexed pair — were DELETED at
+    # the cutover (T-074 = A), so the controller they were drawn into has
+    # exactly the two actions above left.
+    expect(Kiosk::Server::WireController.action_methods.to_a).to match_array(%w[schema pay])
+  end
+
+  it "draws NO /query and NO /run: the 0.3 multiplexed pair is gone (T-074 = A)" do
+    # Not tombstoned, not 404-with-a-hint — absent from the table. Both names
+    # therefore fall through to the constrained per-verb pair at the bottom
+    # and are resolved against the registry like any other name, which is what
+    # "there is exactly ONE wire surface" means at the routing layer.
+    routes = Kiosk::Server::Engine.routes
+    routes.finalize!
+    paths = routes.routes.map { |route| route.path.spec.to_s }
+
+    expect(paths).to include("/schema(.:format)", "/pay(.:format)")
+    expect(paths.grep(%r{\A/(query|run)\b})).to be_empty
+
+    expect(recognize(:post, "/query"))
+      .to include(controller: "kiosk/server/verb", action: "create", kiosk_verb: "query")
+    expect(recognize(:post, "/run"))
+      .to include(controller: "kiosk/server/verb", action: "create", kiosk_verb: "run")
   end
 
   it "draws the kiosk-pop auth plane" do
@@ -99,8 +117,14 @@ RSpec.describe "Kiosk::Server::Engine routes" do
       # slice's job.
       expect(recognize(:get,  "/schema")).to include(controller: "kiosk/server/wire")
       expect(recognize(:post, "/pay")).to    include(controller: "kiosk/server/wire")
-      expect(recognize(:post, "/query")).to  include(controller: "kiosk/server/wire")
-      expect(recognize(:post, "/run")).to    include(controller: "kiosk/server/wire")
+    end
+
+    it "reserves exactly the first segments it draws — and `query`/`run` left both" do
+      # `RESERVED_NAMES` is the declaration-time half of the same rule, and
+      # `bin/check-kiosk-names` holds it equal to the engine's drawn first
+      # segments. The cutover deleted two routes, so it shed the two names.
+      expect(Kiosk::Server::HandlerMixin::RESERVED_NAMES)
+        .to eq(%w[agents auth oauth pay schema])
     end
 
     it "does not swallow the multi-segment reserved routes" do

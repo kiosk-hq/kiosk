@@ -66,43 +66,78 @@ RSpec.describe Kiosk::Server::PowGate do
   end
 
   # Issue the challenge from the gate — extract from the PowRequired exception.
-  def issue_challenge_via_gate(command: "query", body: { name: "menu" })
-    described_class.gate(identity: identity, command: command, body: body, pow: nil)
+  #
+  # `command` is the gate/POLICY verb the policy branches on; `method` and
+  # `verb` are what §3.4's fingerprint binds to and default exactly as
+  # {PowGate.gate} defaults them (POST, and the command as the wire name), so a
+  # caller that only cares about the policy verb passes neither.
+  def issue_challenge_via_gate(command: "query", body: { name: "menu" },
+                               method: "POST", verb: nil)
+    described_class.gate(identity: identity, command: command, method: method,
+                         verb: verb, body: body, pow: nil)
   rescue Kiosk::Server::Errors::PowRequired => e
     e.challenges.first
   end
 
   # ─── request_fingerprint ──────────────────────────────────────────────────
 
+  # ─── the §3.4 digest: SHA256("<METHOD> <verb>\n<canonical args>") ─────────
+  #
+  # 0.3 hashed `"<command>\n<body>"`: with every read multiplexed through
+  # `POST <endpoint>/query` the method was a constant and the verb name only
+  # reached the digest because the wire smuggled it back into the body. On the
+  # per-verb wire the method carries the read/write fork and the name is a path
+  # segment, so BOTH are hashed directly — and each of the three inputs is
+  # separately load-bearing, which is what the four examples below pin.
   describe ".request_fingerprint" do
     it "is deterministic: same inputs → same fingerprint" do
-      fp1 = described_class.request_fingerprint(command: "query", body: { name: "menu" })
-      fp2 = described_class.request_fingerprint(command: "query", body: { name: "menu" })
+      fp1 = described_class.request_fingerprint(method: "GET", verb: "catalog", body: { q: "milk" })
+      fp2 = described_class.request_fingerprint(method: "GET", verb: "catalog", body: { q: "milk" })
       expect(fp1).to eq(fp2)
     end
 
-    it "changes when the command changes" do
-      fp1 = described_class.request_fingerprint(command: "query", body: { name: "menu" })
-      fp2 = described_class.request_fingerprint(command: "run",   body: { name: "menu" })
+    it "changes when the HTTP METHOD changes (GET catalog is not POST catalog)" do
+      fp_get  = described_class.request_fingerprint(method: "GET",  verb: "catalog", body: { q: "milk" })
+      fp_post = described_class.request_fingerprint(method: "POST", verb: "catalog", body: { q: "milk" })
+      expect(fp_get).not_to eq(fp_post)
+    end
+
+    it "changes when the VERB changes (the path segment, no longer a body field)" do
+      fp1 = described_class.request_fingerprint(method: "GET", verb: "catalog", body: { q: "milk" })
+      fp2 = described_class.request_fingerprint(method: "GET", verb: "orders",  body: { q: "milk" })
       expect(fp1).not_to eq(fp2)
     end
 
     it "changes when the body changes" do
-      fp1 = described_class.request_fingerprint(command: "query", body: { name: "menu" })
-      fp2 = described_class.request_fingerprint(command: "query", body: { name: "items" })
+      fp1 = described_class.request_fingerprint(method: "GET", verb: "catalog", body: { q: "milk" })
+      fp2 = described_class.request_fingerprint(method: "GET", verb: "catalog", body: { q: "bread" })
       expect(fp1).not_to eq(fp2)
     end
 
+    it "upcases the method, so a lower-case spelling is the SAME request" do
+      fp_lower = described_class.request_fingerprint(method: "get", verb: "catalog", body: { q: "milk" })
+      fp_upper = described_class.request_fingerprint(method: "GET", verb: "catalog", body: { q: "milk" })
+      expect(fp_lower).to eq(fp_upper)
+    end
+
     it "is canonical (key-order-independent)" do
-      fp1 = described_class.request_fingerprint(command: "query", body: { a: 1, b: 2 })
-      fp2 = described_class.request_fingerprint(command: "query", body: { b: 2, a: 1 })
+      fp1 = described_class.request_fingerprint(method: "GET", verb: "catalog", body: { a: 1, b: 2 })
+      fp2 = described_class.request_fingerprint(method: "GET", verb: "catalog", body: { b: 2, a: 1 })
       expect(fp1).to eq(fp2)
     end
 
     it "treats nil body the same as an empty hash" do
-      fp_nil   = described_class.request_fingerprint(command: "query", body: nil)
-      fp_empty = described_class.request_fingerprint(command: "query", body: {})
+      fp_nil   = described_class.request_fingerprint(method: "GET", verb: "catalog", body: nil)
+      fp_empty = described_class.request_fingerprint(method: "GET", verb: "catalog", body: {})
       expect(fp_nil).to eq(fp_empty)
+    end
+
+    # The formula itself, pinned: a client solving a challenge has to reproduce
+    # this digest byte for byte, so the separator and the ordering are wire
+    # contract, not an implementation detail.
+    it "is exactly SHA256(\"<METHOD> <verb>\\n<canonical args>\")" do
+      expect(described_class.request_fingerprint(method: "get", verb: "catalog", body: { b: 2, a: 1 }))
+        .to eq(Digest::SHA256.hexdigest(%(GET catalog\n{"a":1,"b":2})))
     end
   end
 
@@ -170,17 +205,28 @@ RSpec.describe Kiosk::Server::PowGate do
         expect(ch[:sig]).not_to  be_nil
       end
 
-      it "PowRequired#to_envelope renders a pow_required 402 envelope" do
+      # The 0.3 `{ok:false, error:{…}}` envelope was DELETED at the cutover.
+      # The gate's 402 is an RFC 9457 problem document: the branch point is the
+      # TOP-LEVEL `code`, the message is `detail`, and `challenges` survives as
+      # an extension member so the client still solves without a second trip.
+      it "PowRequired#to_problem renders a pow_required 402 problem document" do
         error = catch_error(Kiosk::Server::Errors::PowRequired) do
           described_class.gate(identity: identity, command: "query", body: { name: "menu" }, pow: nil)
         end
 
-        envelope = error.to_envelope
-        expect(envelope[:ok]).to be(false)
-        expect(envelope.dig(:error, :code)).to    eq("pow_required")
-        expect(envelope.dig(:error, :message)).to eq("proof-of-work required")
-        expect(envelope.dig(:error, :challenges)).to be_an(Array)
-        expect(envelope.dig(:error, :challenges).first).not_to be_nil
+        problem = error.to_problem
+        expect(problem[:type]).to   eq("https://kiosk.tech/problems/pow_required")
+        expect(problem[:title]).to  eq("Proof-of-work required")
+        expect(problem[:status]).to eq(402)
+        expect(problem[:detail]).to eq("proof-of-work required")
+        expect(problem[:code]).to   eq("pow_required")
+        expect(problem[:challenges]).to be_an(Array)
+        expect(problem[:challenges].first).not_to be_nil
+        # No trace of the retired envelope, at either nesting.
+        expect(problem).not_to have_key(:ok)
+        expect(problem).not_to have_key(:error)
+        expect(problem).not_to have_key(:message)
+        expect(error).not_to respond_to(:to_envelope)
       end
 
       it "PowRequired has HTTP status 402" do
@@ -267,7 +313,7 @@ RSpec.describe Kiosk::Server::PowGate do
         )
       end
 
-      it "renders the documented forbidden envelope, now carrying the hint" do
+      it "renders the documented forbidden problem document, carrying the hint" do
         challenge = issue_challenge_via_gate(command: "query", body: { name: "menu" })
         bad_nonce = find_bad_nonce(challenge)
 
@@ -278,13 +324,15 @@ RSpec.describe Kiosk::Server::PowGate do
           )
         end
 
-        expect(error.to_envelope).to eq(
-          ok: false,
-          error: {
-            code:    "forbidden",
-            message: "invalid proof of work",
-            hint:    Kiosk::Server::PowGate::POW_INVALID_HINT,
-          },
+        # Whole-document equality, as the envelope assertion was: nothing else
+        # rides along, and `hint` keeps its own member name under RFC 9457.
+        expect(error.to_problem).to eq(
+          type:   "https://kiosk.tech/problems/forbidden",
+          title:  "Forbidden",
+          status: 403,
+          detail: "invalid proof of work",
+          code:   "forbidden",
+          hint:   Kiosk::Server::PowGate::POW_INVALID_HINT,
         )
         expect(error.http_status).to eq(403)
       end
@@ -308,20 +356,60 @@ RSpec.describe Kiosk::Server::PowGate do
     end
 
     # ── proof bound to a DIFFERENT request (fingerprint mismatch) → re-challenge
+    #
+    # The sig covers §3.4's digest, so a genuinely solved proof is spendable on
+    # ONE call and nothing else. All three halves of that digest are exercised
+    # here — the method and the verb became bindable only at the 0.4 cutover —
+    # and the control example at the end proves the three refusals are not
+    # passing for some trivial reason.
 
     describe "proof issued for a different request" do
-      it "re-challenges (raises PowRequired) because the sig covers the fingerprint" do
-        # Challenge issued for body A; submitted for body B (different fingerprint).
-        challenge_a = issue_challenge_via_gate(command: "query", body: { name: "menu" })
-        nonce_a     = solve_nonce(challenge_a)
+      # `GET catalog?q=milk`, the call every example below mints its proof for.
+      def catalog_proof(body: { q: "milk" })
+        challenge = issue_challenge_via_gate(
+          command: "query", method: "GET", verb: "catalog", body: body,
+        )
+        { challenge: challenge, nonce: solve_nonce(challenge) }
+      end
 
-        # Submit the valid proof for A but against body B → sig mismatch → re-challenge
+      it "verifies for the identical method + verb + args (the control)" do
+        result = described_class.gate(
+          identity: identity, command: "query", method: "GET", verb: "catalog",
+          body: { q: "milk" }, pow: catalog_proof,
+        )
+        expect(result).to eq(:proceed)
+      end
+
+      it "re-challenges when the ARGUMENTS differ" do
+        proof = catalog_proof(body: { q: "milk" })
+
         expect {
           described_class.gate(
-            identity: identity,
-            command:  "query",
-            body:     { name: "items" },   # different body!
-            pow:      { challenge: challenge_a, nonce: nonce_a },
+            identity: identity, command: "query", method: "GET", verb: "catalog",
+            body: { q: "bread" },              # different args!
+            pow:  proof,
+          )
+        }.to raise_error(Kiosk::Server::Errors::PowRequired)
+      end
+
+      it "re-challenges when the METHOD differs (a GET catalog proof on POST catalog)" do
+        proof = catalog_proof(body: {})
+
+        expect {
+          described_class.gate(
+            identity: identity, command: "run", method: "POST", verb: "catalog",
+            body: {}, pow: proof,
+          )
+        }.to raise_error(Kiosk::Server::Errors::PowRequired)
+      end
+
+      it "re-challenges when the VERB differs (a catalog proof is not an orders proof)" do
+        proof = catalog_proof(body: {})
+
+        expect {
+          described_class.gate(
+            identity: identity, command: "query", method: "GET", verb: "orders",
+            body: {}, pow: proof,
           )
         }.to raise_error(Kiosk::Server::Errors::PowRequired)
       end
@@ -790,12 +878,15 @@ RSpec.describe Kiosk::Server::PowGate do
       expect(err.challenges).to eq([challenge_hash, c2])
     end
 
-    it "serialises to the correct envelope (plural challenges)" do
-      envelope = error.to_envelope
-      expect(envelope[:ok]).to be(false)
-      expect(envelope.dig(:error, :code)).to    eq("pow_required")
-      expect(envelope.dig(:error, :message)).to eq("proof-of-work required")
-      expect(envelope.dig(:error, :challenges)).to eq([challenge_hash])
+    it "serialises to the correct problem document (plural challenges)" do
+      expect(error.to_problem).to eq(
+        type:       "https://kiosk.tech/problems/pow_required",
+        title:      "Proof-of-work required",
+        status:     402,
+        detail:     "proof-of-work required",
+        code:       "pow_required",
+        challenges: [challenge_hash],
+      )
     end
   end
 

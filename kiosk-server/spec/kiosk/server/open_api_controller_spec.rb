@@ -49,7 +49,10 @@ RSpec.describe Kiosk::Server::OpenApiController do
 
     expect(status).to eq(200)
     expect(body[:openapi]).to eq(Kiosk::Server::OpenApi::OPENAPI_VERSION)
-    expect(body[:paths].keys).to eq([:"/salons"])
+    # `/schema` rides along since the cutover — it answers the same 0.4 shapes
+    # every other endpoint does, so the derived description covers it too.
+    # `/pay` does not: this origin has no payment provider.
+    expect(body[:paths].keys).to eq([:"/schema", :"/salons"])
   end
 
   it "serves it under the OAI-registered media type" do

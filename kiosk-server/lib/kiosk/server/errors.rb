@@ -204,22 +204,10 @@ module Kiosk
         # from configuration ({WireController#www_authenticate_for}).
         def response_headers = {}
 
-        # 0.3 ENVELOPE shape — structured body with `code`, `message`, `hint`.
-        # nil fields are dropped for compactness.
-        #
-        # Served by `POST <endpoint>/{query,run}`, `GET <endpoint>/schema` and
-        # `POST <endpoint>/pay` only. The per-verb 0.4 endpoints answer
-        # {#to_problem} instead, and this method dies with those four at the
-        # cutover slice (T-074 = A) — it is not a second supported shape.
-        def to_envelope
-          {
-            ok: false,
-            error: { code: code, message: message, hint: hint }.merge(extensions).compact,
-          }
-        end
-
-        # RFC 9457 problem document — the 0.4 error shape (T-072 = C), served
-        # as `application/problem+json`.
+        # RFC 9457 problem document — THE error shape (T-072 = C), served as
+        # `application/problem+json`. It is the only one: 0.3's
+        # `{ok:false, error:{…}}` envelope was deleted with the endpoints that
+        # served it at the cutover (T-074 = A).
         #
         # THE CLOSED VOCABULARY SURVIVES TWICE OVER, deliberately:
         #

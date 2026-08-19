@@ -4,6 +4,7 @@
 # host's config/routes.rb remains the escape hatch.
 
 require "action_controller"
+require "action_dispatch/http/parameters"
 require "json"
 require "kiosk/server/current_request"
 require "kiosk/server/executor"
@@ -14,22 +15,24 @@ require "kiosk/server/request_validation"
 
 module Kiosk
   module Server
-    # REST wire surface — Rails controller wrapping {Executor}.
-    # See the Endpoints section of the spec for the contract.
+    # The wire's own two RESERVED endpoints, and the base class every other
+    # wire surface inherits its seams from:
     #
-    # REST endpoints (one per verb):
-    #   GET  /kiosk/schema
-    #   POST /kiosk/query  { "name": "catalog", ... }
-    #   POST /kiosk/run    { "name": "create_order", ... }
-    #   POST /kiosk/pay    { "intent_mandate_jws": "...", ... }
+    #   GET  <endpoint>/schema   the catalog
+    #   POST <endpoint>/pay      settle an AP2 cart
     #
-    # Wire response (JSON): success per {Result#to_envelope}, error per
-    # {Errors::Base#to_envelope} — the 0.3 envelope. These four endpoints keep
-    # it until the cutover slice, which deletes `query`/`run` and moves
-    # `schema`/`pay` onto the 0.4 shape together with the eight demos that
-    # read it (T-074 = A). The 0.4 shape — payload verbatim, errors as RFC
-    # 9457 problem documents — is served TODAY by {VerbController}, which
-    # subclasses this one and overrides only the two render seams.
+    # Every OTHER verb is one endpoint per verb, served by {VerbController},
+    # which subclasses this one. `POST <endpoint>/query` and
+    # `POST <endpoint>/run` — 0.3's multiplexed pair — were DELETED at the 0.4
+    # cutover (T-074 = A). There is no route left, no tombstone and no hint
+    # payload: one wire, one conformance surface.
+    #
+    # Wire response (JSON): success is the handler's payload VERBATIM
+    # ({Result#to_payload}), error is an RFC 9457 problem document
+    # ({Errors::Base#to_problem}) under `application/problem+json`. Both seams
+    # live HERE, not in the subclass, because after the cutover there is only
+    # one answer shape — the two-shapes split that put them in
+    # {VerbController} was the build-time intermediate, and it is over.
     #
     # Identity resolution: {IdentityResolution.resolve} — the
     # agent IdP first (`Kiosk.configuration.agent_idp`, defaulting to the
@@ -39,76 +42,90 @@ module Kiosk
     # or `nil`; nothing resolved becomes 401.
     class WireController < ::ActionController::API
       # Every Kiosk wire error — raised by the Executor, a gate, a verifier
-      # or a handler dispatch — renders as the spec's error envelope from
+      # or a handler dispatch — renders as the spec's problem document from
       # this ONE seam (T-054), Rails' own idiom rather than a hand-rolled
       # rescue inside each action.
       rescue_from Errors::Base, with: :render_wire_error
 
-      # REST verb: GET /kiosk/schema
+      # A body that is not JSON at all, answered as a Kiosk `bad_request`
+      # rather than as Rails' generic 400.
+      #
+      # WHY IT NEEDS ITS OWN LINE. {#parse_body!} already turns a
+      # `JSON::ParserError` into {Errors::BadRequest} — but on the per-verb
+      # wire it never gets the chance: {VerbController#serve} reads
+      # `params[:kiosk_verb]` first, and touching `params` makes Rails parse
+      # the body, so a malformed body raises out of the PARAMETER layer before
+      # any Kiosk code runs. A Rails host's `rescue_responses` maps that to
+      # 400, but renders it through PublicExceptions — an HTML or plain-text
+      # body with no `code`. Every other refusal on this wire is a problem
+      # document; without this line, malformed JSON would be the one hole in
+      # the error contract, and the shape of the hole depends on the host's
+      # exception app rather than on the protocol.
+      rescue_from ::ActionDispatch::Http::Parameters::ParseError do |error|
+        render_wire_error(
+          Errors::BadRequest.new(
+            "invalid JSON body: #{error.message}",
+            hint: "an action's arguments are a JSON object in the request body; " \
+                  "a query's are in the query string.",
+          ),
+        )
+      end
+
+      # GET <endpoint>/schema
       def schema
         run_command(:schema)
       end
 
-      # REST verb: POST /kiosk/query
-      def query
-        run_command(:query)
-      end
-
-      # REST verb: POST /kiosk/run
-      def run
-        run_command(:run)
-      end
-
-      # REST verb: POST /kiosk/pay
+      # POST <endpoint>/pay
       def pay
         run_command(:pay)
       end
 
       private
 
+      # The two reserved endpoints. Their wire NAME is their command name —
+      # `schema` and `pay` are both the gate/policy verb and the path segment
+      # — so the name travels to the fingerprint exactly as a per-verb call's
+      # does, and §3.4's `"<METHOD> <verb>"` formula needs no special case.
       def run_command(command)
         # parse_body! runs inside the action, so the rescue_from above covers
         # it: a malformed body raises Errors::BadRequest, which must render a
-        # 400 envelope, not escape as an uncaught 500 (the same
+        # 400 problem document, not escape as an uncaught 500 (the same
         # parse-outside-rescue class fixed for
-        # AuthController/KycAttestationController).
+        # AuthController/KycAttestationController). `schema` is a GET and has
+        # no body; raw_post is empty and this yields {}.
         body     = parse_body!
         identity = resolve_identity!
 
-        execute_wire(command: command, args: body, identity: identity)
+        execute_wire(command: command, args: body, identity: identity, name: command.to_s)
       end
 
       # The toll, the session and the render — everything after the arguments
       # are in hand and the identity is resolved.
       #
-      # Shared with {VerbController}, the 0.4 per-verb wire, which reaches the
-      # same three gates by a different route: its verb name is a PATH SEGMENT
-      # and a query's arguments arrive in the query string, so it does its own
-      # parsing and then hands the result here. Both wires therefore compute
-      # the SAME PoW fingerprint for the same call, which is what lets a proof
-      # issued on one be spent on the other while both are served.
+      # Shared with {VerbController}, which reaches the same three gates by a
+      # different route: its verb name is a PATH SEGMENT and a query's
+      # arguments arrive in the query string, so it does its own parsing and
+      # then hands the result here.
       #
-      # @param command [Symbol] the gate/policy verb — still one of
-      #   {Executor::VERBS}, because `reputation_factors` and
-      #   `Policy#challenge_for` both take it as `verb:` and every shipped
-      #   policy branches on those four symbols.
-      # @param name [String, nil] the query/action wire name when the caller
-      #   knows it (the per-verb wire), nil when it is inside `args` (0.3).
-      def execute_wire(command:, args:, identity:, name: nil)
-        # The fingerprint binds the challenge to `command` + the canonical JSON
-        # of the arguments. On the per-verb wire the name is not IN the
-        # arguments, so it is folded back in HERE — for the digest only, never
-        # for the handler — which reproduces the 0.3 fingerprint byte for byte.
-        # (Widening the formula to `"<METHOD> <verb>\n<args>"`, which design
-        # §3.4 recommends and which stops depending on there being a `name`
-        # slot at all, rides the 0.4 cutover slice with the rest of the wire
-        # break. No verb in the tree declares an argument called `name`, so
-        # nothing is shadowed by the merge today.)
-        toll!(
-          identity: identity,
-          command:  command,
-          body:     name.nil? ? args : args.merge(name: name),
-        )
+      # @param command [Symbol] the gate/policy verb — one of {Executor::VERBS},
+      #   because `reputation_factors` and `Policy#challenge_for` both take it
+      #   as `verb:` and every shipped policy branches on those four symbols.
+      # @param name [String] the WIRE name — the path segment. `schema` and
+      #   `pay` pass their own; a per-verb call passes the registered verb.
+      def execute_wire(command:, args:, identity:, name:)
+        # §3.4's fingerprint: SHA256("<METHOD> <verb>\n<canonical args>").
+        #
+        # It binds a challenge to the exact call — the HTTP method, the verb
+        # name as it appears in the path, and the canonical JSON of the
+        # arguments — so a proof solved for `GET /catalog?city=Lisbon` is
+        # spendable on nothing else. 0.3's formula could not say this: with
+        # every read multiplexed through one POST, the method was a constant
+        # and the verb name had to be smuggled back INTO the arguments to
+        # reach the digest at all. Widening it is the cutover's, because
+        # reproducing the old digest byte for byte was what let one proof be
+        # spent on either wire while both were served, and only one is now.
+        toll!(identity: identity, command: command, name: name, body: args)
 
         # Carry the resolved identity and the wire request down to the handler
         # layer. A handler registered as a controller action (`include
@@ -144,8 +161,10 @@ module Kiosk
       # @param command [Symbol] the gate/policy verb — one of {Executor::VERBS},
       #   because `reputation_factors` and `Policy#challenge_for` both take it
       #   as `verb:` and every shipped policy branches on those four symbols
-      # @param body [Hash] what the challenge fingerprint binds to
-      def toll!(identity:, command:, body:)
+      # @param name [String] the WIRE verb name, as it appears in the path —
+      #   half of §3.4's fingerprint, with the request method
+      # @param body [Hash] the arguments the fingerprint binds to
+      def toll!(identity:, command:, name:, body:)
         # Read the submitted proof(s) from the `Kiosk-PoW` request HEADER
         # (ADR-0022), NOT the body: the body is now ONLY verb args, so the
         # challenge fingerprint binds to the plain body untouched, and a GET
@@ -167,23 +186,37 @@ module Kiosk
           RequestValidation.validate_proofs!(pow)
         end
 
-        PowGate.gate(identity: identity, command: command, body: body, pow: pow)
+        PowGate.gate(
+          identity: identity, command: command, method: request.request_method,
+          verb: name, body: body, pow: pow
+        )
       end
 
-      # How a SUCCESS reaches the wire. Its own method because the two wires
-      # answer differently and this is the whole of the difference:
-      # `POST <endpoint>/{query,run}`, `GET <endpoint>/schema` and
-      # `POST <endpoint>/pay` answer the 0.3 envelope (here);
-      # {VerbController} overrides it with the 0.4 shape — the handler's
-      # rendered payload, verbatim (T-072 = C).
+      # How a SUCCESS reaches the wire: the handler's payload, VERBATIM
+      # (T-072 = C). No `ok`, no `kind`, no wrapper — the status line says
+      # success and `output_schema` says what the shape is.
+      #
+      # ONE seam for every endpoint. Until the cutover this was overridden in
+      # {VerbController} because `schema`/`pay` still answered 0.3's envelope
+      # and the demo flow scripts read `.value` off them; they answer this
+      # shape now, so the override is gone and there is nowhere left for the
+      # two to disagree.
       def render_result(result)
-        render_wire_body(result.to_envelope, status: result.http_status)
+        render_wire_body(result.to_payload, status: result.http_status)
       end
 
-      # How an ERROR reaches the wire. Same split: the 0.3 error envelope
-      # here, an RFC 9457 problem document in {VerbController}.
+      # How an ERROR reaches the wire: an RFC 9457 problem document under its
+      # own media type. The media type is the half a generic client reads —
+      # `application/json` with a `title` field would be indistinguishable
+      # from any other JSON — and the top-level `code` extension member is the
+      # half an assistant branches on.
       def render_wire_error(error)
-        render_wire_body(error.to_envelope, status: error.http_status, error: error)
+        render_wire_body(
+          error.to_problem,
+          status:       error.http_status,
+          error:        error,
+          content_type: Errors::PROBLEM_CONTENT_TYPE,
+        )
       end
 
       def resolve_identity!

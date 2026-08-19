@@ -40,11 +40,11 @@ module Kiosk
     # `default` (0) rather than raising, so a garbage `cursor` param yields the
     # first page instead of a 500.
     #
-    # THIS MODULE SURVIVES 0.4 (T-072 = C) while {Result} and {Page} do not.
+    # THIS MODULE SURVIVED THE 0.4 CUTOVER while the envelope did not.
     # Nothing about an opaque offset cursor was ever about the envelope: the
-    # 0.4 wire still has `limit`/`cursor` as reserved request parameters and
-    # still answers a truncated page with a `next` token, so a handler
-    # encoding an offset behind one needs exactly this helper.
+    # wire still has `limit`/`cursor` as reserved request parameters and still
+    # answers a truncated page with a `next` token, so a handler encoding an
+    # offset behind one needs exactly this helper.
     module Cursor
       PREFIX = "offset:"
 
@@ -68,19 +68,20 @@ module Kiosk
       end
     end
 
-    # Success-side envelope returned from {Executor} and serialised by
-    # {WireController}. Errors use {Errors::Base#to_envelope}.
+    # The {Executor}'s internal carrier for a successful call, serialised by
+    # {WireController#render_result}. Errors travel as {Errors::Base#to_problem}.
     #
-    # `kind` distinguishes the payload shape:
+    # It is INTERNAL, and since the 0.4 cutover that is the whole of what it
+    # is: nothing it holds reaches the wire as a field. `kind` distinguishes
+    # the payload shape for the Executor's own bookkeeping —
     #
-    #   :rows   — SQL result rows (Array<Hash>); serialised under `rows`
-    #   :value  — single value returned by an Action; under `value`
+    #   :rows   — a query's rows (Array<Hash>, or whatever the handler rendered)
+    #   :value  — a single value returned by an Action or by `pay`
     #
-    # `next_cursor` is OPTIONAL and only ever set on a :rows Result whose query
-    # handler paginated (returned a {Page} with a next_cursor). When present it
-    # is serialised as the top-level `next` envelope field — an opaque cursor the
-    # assistant echoes back in `cursor` to fetch the following page. ABSENT means
-    # the result is complete (ADR-0021 / T-042).
+    # — and `next_cursor` is OPTIONAL, only ever set on a :rows Result whose
+    # query handler paginated (returned a {Page} with a next_cursor). Present
+    # means the answer was truncated; {#to_payload} is where either fact
+    # becomes a response body.
     #
     # The `:stream` kind (events, NDJSON) was removed with the `events` verb:
     # it was never a capability and had no producer.
@@ -103,9 +104,9 @@ module Kiosk
 
       def http_status = 200
 
-      # THE 0.4 SUCCESS BODY (T-072 = C): the handler's rendered payload,
+      # THE SUCCESS BODY (T-072 = C): the handler's rendered payload,
       # VERBATIM. No `ok`, no `kind`, no wrapper — the status line already
-      # says "success" and `output_schema` (slice 3) says what the shape is.
+      # says "success" and `output_schema` says what the shape is.
       #
       # The one composite case is pagination, and it is the shape the handler
       # already renders internally: `render_kiosk_page(rows, next_cursor:)`
@@ -120,29 +121,6 @@ module Kiosk
         { rows: payload, next: next_cursor }
       end
 
-      # THE 0.3 ENVELOPE. Served by `POST <endpoint>/{query,run}`,
-      # `GET <endpoint>/schema` and `POST <endpoint>/pay` until the cutover
-      # slice deletes the first pair and moves the other two onto
-      # {#to_payload} with the demo fleet (T-074 = A). Not a second supported
-      # shape — a build-time intermediate in an unreleased protocol.
-      def to_envelope
-        envelope = { ok: true, kind: kind }
-        envelope[payload_key] = payload
-        # PRESENT `next` = truncated (more rows exist); ABSENT = complete. Only
-        # emitted when the handler paginated, so every existing (non-paginating)
-        # response is byte-for-byte unchanged.
-        envelope[:next] = next_cursor unless next_cursor.nil?
-        envelope
-      end
-
-      private
-
-      def payload_key
-        case kind
-        when :rows  then :rows
-        when :value then :value
-        end
-      end
     end
   end
 end

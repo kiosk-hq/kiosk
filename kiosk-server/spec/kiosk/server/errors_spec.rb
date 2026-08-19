@@ -98,16 +98,20 @@ RSpec.describe Kiosk::Server::Errors do
       e = described_class::WireError.new("row policy said no", code: "rls_denied", hint: "check policy")
       expect(e.code).to        eq("rls_denied")
       expect(e.http_status).to eq(403)
-      expect(e.to_envelope).to eq(
-        ok:    false,
-        error: { code: "rls_denied", message: "row policy said no", hint: "check policy" },
+      expect(e.to_problem).to eq(
+        type:   "https://kiosk.tech/problems/rls_denied",
+        title:  described_class.problem_title("rls_denied"),
+        status: 403,
+        detail: "row policy said no",
+        code:   "rls_denied",
+        hint:   "check policy",
       )
     end
 
-    it "carries extra envelope fields through verbatim" do
+    it "carries extra fields through verbatim, as top-level extension members" do
       e = described_class::WireError.new("proof-of-work required",
                                          code: "pow_required", extra: { challenges: [{ n: 1 }] })
-      expect(e.to_envelope[:error][:challenges]).to eq([{ n: 1 }])
+      expect(e.to_problem[:challenges]).to eq([{ n: 1 }])
     end
 
     it "refuses a code outside the closed vocabulary" do
@@ -154,44 +158,39 @@ RSpec.describe Kiosk::Server::Errors do
       expect(problem).not_to have_key(:instance)
     end
 
-    it "carries the PoW challenges as an extension member, exactly as the envelope did" do
+    it "carries the PoW challenges as a TOP-LEVEL extension member" do
       e = described_class::PowRequired.new(challenges: [{ salt: "a" }])
       expect(e.to_problem[:challenges]).to eq([{ salt: "a" }])
       expect(e.to_problem[:status]).to     eq(402)
-      expect(e.to_envelope[:error][:challenges]).to eq([{ salt: "a" }])
+      # Flat: `challenges` is a member of the problem document itself, not of
+      # a nested `error` object. A client reading `error.challenges` finds
+      # nothing.
+      expect(e.to_problem).not_to have_key(:error)
     end
 
-    it "carries a handler's own extra fields through, exactly as the envelope did" do
+    it "carries a handler's own extra fields through" do
       e = described_class::WireError.new("gate", code: "pow_required", extra: { challenges: [1] })
       expect(e.to_problem[:challenges]).to eq([1])
     end
 
-    it "agrees with to_envelope on code, message and hint for every shape" do
-      e = described_class::WireError.new("row policy said no", code: "rls_denied", hint: "check policy")
-      expect(e.to_problem.values_at(:code, :detail, :hint))
-        .to eq(e.to_envelope[:error].values_at(:code, :message, :hint))
+    it "drops a nil hint" do
+      expect(Kiosk::Server::Errors::BadRequest.new("nope").to_problem).to eq(
+        type:   "https://kiosk.tech/problems/bad_request",
+        title:  described_class.problem_title("bad_request"),
+        status: 400,
+        detail: "nope",
+        code:   "bad_request",
+      )
     end
   end
 
-  describe "Base#to_envelope" do
-    it "produces a structured ok:false envelope" do
-      e = Kiosk::Server::Errors::RLSDenied.new("denied", hint: "check policy")
-      expect(e.to_envelope).to eq(
-        ok: false,
-        error: {
-          code:    "rls_denied",
-          message: "denied",
-          hint:    "check policy",
-        },
-      )
-    end
-
-    it "drops nil hint from the envelope" do
-      e = Kiosk::Server::Errors::BadRequest.new("nope")
-      expect(e.to_envelope).to eq(
-        ok: false,
-        error: { code: "bad_request", message: "nope" },
-      )
+  # THE 0.3 ERROR ENVELOPE IS GONE (T-074 = A). It was
+  # `{ok: false, error: {code:, message:, hint:}}`, and it was deleted with the
+  # two endpoints that served it. Pinned because a re-added second error shape
+  # would otherwise be invisible to this suite.
+  describe "the retired 0.3 envelope" do
+    it "is not renderable from any error" do
+      expect(Kiosk::Server::Errors::RLSDenied.new("denied")).not_to respond_to(:to_envelope)
     end
   end
 

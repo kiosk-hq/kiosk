@@ -92,13 +92,13 @@ means adding it to that gem's `spec.files`.
 
 Every gem shares the protocol's MAJOR.MINOR — the version parity the spec
 promises ([protocol §14.1](https://kiosk.tech/spec/protocol.md)): the protocol,
-this reference implementation and the published skill all read `0.3` today, so
+this reference implementation and the published skill all read `0.4` today, so
 `Kiosk-Server-Version` and `Kiosk-API-Version` agree on the line they speak.
-PATCH stays per-gem, so one gem can ship `0.3.4` while its sibling sits at
-`0.3.0`. `bin/check-version-parity` — its own CI job — enforces exactly that
-against `Kiosk::Protocol::API_VERSION`, including the `~> 0.3.0` inter-gem
+PATCH stays per-gem, so one gem can ship `0.4.4` while its sibling sits at
+`0.4.0`. `bin/check-version-parity` — its own CI job — enforces exactly that
+against `Kiosk::Protocol::API_VERSION`, including the `~> 0.4.0` inter-gem
 constraints in the gemspecs and the pinned `skill_url`. Releases are cut as
-path-scoped git tags (e.g. `kiosk-core/v0.3.0`) off each subdir's authoritative
+path-scoped git tags (e.g. `kiosk-core/v0.4.0`) off each subdir's authoritative
 `*.gemspec`.
 
 ## License

@@ -916,6 +916,7 @@ namespace :demo do
     + /agents.json + /agents.txt).
 
     Asserts:
+      • `GET /kiosk/schema` answers 200 with NO Authorization header (public since T-094)
       • discovery capabilities == [schema, queries, actions] and do NOT include `pay`
         (atablefor takes no payments — a reservation needs none)
       • agents.json carries NO payments block; agents.txt has no ap2 / Payments
@@ -988,22 +989,25 @@ namespace :demo do
     puts "\n── Schema assertions ──"
     failures = []
 
-    verbs        = result["schema_verbs"]          || []
     queries      = result["schema_queries"]        || []
     actions      = result["schema_actions"]        || []
     capabilities = result["discovery_capabilities"] || []
 
-    # ── K-740: one origin, one self-description ──────────────────────────
-    # `schema.verbs` used to be the invariant four and named `pay` here, on a
-    # demo that takes no payments, while discovery correctly dropped it. Since
-    # T-068 slice 5 the two fields ARE the same array, so a `pay` that leaks
-    # back into either is caught by this one comparison.
-    if verbs == capabilities
-      puts "  ✓  schema.verbs == discovery capabilities (#{verbs.inspect})"
+    # ── T-094: the catalogue is PUBLIC, and this is what says so ─────────
+    # The flow driver sends NO Authorization header, so this status is the
+    # whole access proof; a regression to the Bearer gate reads back as a 401.
+    if result["schema_status"] == 200
+      puts "  ✓  GET /kiosk/schema answered 200 with NO Authorization header"
     else
-      failures << "schema.verbs #{verbs.inspect} != discovery capabilities #{capabilities.inspect}"
-      puts "  ✗  schema.verbs #{verbs.inspect} != discovery capabilities #{capabilities.inspect}"
+      failures << "unauthenticated GET /kiosk/schema returned #{result["schema_status"].inspect}, want 200"
+      puts "  ✗  unauthenticated GET /kiosk/schema returned #{result["schema_status"].inspect}"
     end
+
+    # ── T-095: ONE origin, ONE publication of the module set ─────────────
+    # This used to compare `schema.verbs` with discovery `capabilities` — two
+    # fields rendered from the SAME `Array(config.capabilities)` call, so the
+    # comparison could only ever pass. `verbs` is gone; the `pay`-absent proof
+    # below is against the one document that still carries the set.
 
     # ── NOT-ONLY-COMMERCE: pay absent from the ADVERTISED capability set ──
     if capabilities.include?("pay")

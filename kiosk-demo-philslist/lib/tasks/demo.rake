@@ -406,7 +406,9 @@ namespace :demo do
 
     Boots the server, authenticates a seeded principal, calls GET /kiosk/schema,
     /.well-known/kiosk.json, /agents.json, /agents.txt, and asserts:
-      • schema.verbs is the MODULE set schema/queries/actions (== discovery capabilities)
+      • `GET /kiosk/schema` answers 200 with NO Authorization header (public since T-094)
+      • the MODULE set lives in /.well-known/kiosk.json `capabilities` (`verbs` dropped, T-095)
+      • capabilities is the MODULE set schema/queries/actions
       • schema.queries includes browse_listings and my_listings
       • schema.actions includes post_listing/edit_listing/close_listing
       • every query/action entry carries a non-empty description
@@ -414,10 +416,6 @@ namespace :demo do
         proof — pay drops out with no payment_provider)
       • agents.json carries NO payments block
       • agents.txt carries NO `Protocols: ap2` / `Payments:` directives
-
-    (schema.verbs is the FIXED four-verb wire surface and lists `pay`
-    unconditionally — it is NOT the advertised capability set, so the pay-absent
-    assertion is against the discovery documents, not the schema verb.)
 
     Exits 0 if all assertions pass; exits 1 on any miss.
   DESC
@@ -451,21 +449,29 @@ namespace :demo do
     puts "\n── Schema + discovery assertions ──"
     failures = []
 
-    verbs        = result["schema_verbs"]   || []
     query_specs  = result["schema_queries"] || []
     action_specs = result["schema_actions"] || []
     queries = query_specs.map  { |q| q["name"] }
     actions = action_specs.map { |a| a["name"] }
     capabilities = result["discovery_capabilities"] || []
 
-    # schema.verbs: the MODULES this origin serves, which since T-068 slice 5
-    # is exactly what discovery advertises as `capabilities` (K-740).
+    # THE SCHEMA CALL WAS MADE WITHOUT A CREDENTIAL (T-094). The flow driver
+    # sends no Authorization header, so this status IS the public-access proof.
+    if result["schema_status"] == 200
+      puts "  ✓  GET /kiosk/schema answered 200 with NO Authorization header"
+    else
+      failures << "unauthenticated GET /kiosk/schema returned #{result["schema_status"].inspect}, want 200"
+      puts "  ✗  unauthenticated GET /kiosk/schema returned #{result["schema_status"].inspect}"
+    end
+
+    # THE MODULE SET, at its one remaining home: `schema` published a
+    # byte-identical copy as `verbs` until T-095 dropped it.
     %w[schema queries actions].each do |v|
-      if verbs.include?(v)
-        puts "  ✓  schema.verbs includes #{v}"
+      if capabilities.include?(v)
+        puts "  ✓  capabilities includes #{v}"
       else
-        failures << "schema.verbs missing #{v} (got #{verbs.inspect})"
-        puts "  ✗  schema.verbs missing #{v}"
+        failures << "capabilities missing #{v} (got #{capabilities.inspect})"
+        puts "  ✗  capabilities missing #{v}"
       end
     end
 

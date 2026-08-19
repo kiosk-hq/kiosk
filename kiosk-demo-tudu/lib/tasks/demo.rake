@@ -334,14 +334,17 @@ namespace :demo do
     check = ->(label, ok) { ok ? puts("  ✓  #{label}") : (failures << label; puts("  ✗  #{label}")) }
     puts "\n── Schema + discovery assertions ──"
 
-    verbs        = r["schema_verbs"]   || []
     query_specs  = r["schema_queries"] || []
     action_specs = r["schema_actions"] || []
     queries = query_specs.map  { |q| q["name"] }
     actions = action_specs.map { |a| a["name"] }
     capabilities = r["discovery_capabilities"] || []
 
-    %w[schema queries actions].each { |v| check.call("schema.verbs includes #{v}", verbs.include?(v)) }
+    # The schema call carried NO Authorization header (T-094): this status IS
+    # the public-access proof. And the MODULE set is asserted at its one
+    # remaining home — `schema.verbs` was a byte-identical copy until T-095.
+    check.call("GET /kiosk/schema answered 200 with NO Authorization header", r["schema_status"] == 200)
+    %w[schema queries actions].each { |v| check.call("capabilities includes #{v}", capabilities.include?(v)) }
     %w[whoami my_lists list_todos list_members].each { |q| check.call("schema.queries includes #{q}", queries.include?(q)) }
     %w[create_list add_todo complete_todo invite accept_invite remove_member].each { |a| check.call("schema.actions includes #{a}", actions.include?(a)) }
 

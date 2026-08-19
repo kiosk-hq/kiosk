@@ -8,12 +8,16 @@
 # until the 0.4 cutover slice deletes them — the 0.3 name-dispatch endpoints
 # one endpoint per verb. Exits non-zero on any failure.
 #
-# TWO ANSWER SHAPES ARE ASSERTED HERE, ON PURPOSE (T-068 slice 2). The
-# per-verb endpoints answer the 0.4 shape: the handler's payload VERBATIM on
-# success (a bare array, `{rows, next}` when paginated, the action's own
-# object), an RFC 9457 problem document on an error. `/kiosk/{query,run,
-# schema,pay}` still answer the 0.3 envelope, because the eight demos still
-# read it — those four move at the cutover slice, in one wave with the fleet.
+# ONE ANSWER SHAPE (T-074 = A, the cutover). Every endpoint answers the 0.4
+# shape: the handler's payload VERBATIM on success (a bare array, `{rows,
+# next}` when paginated, the action's own object), an RFC 9457 problem document
+# on an error. `POST /kiosk/{query,run}` do not exist; `schema` and `pay`
+# answer the same shape as the per-verb wire. (This header described a
+# two-shape intermediate until the cutover landed.)
+#
+# ONE AUTH SHAPE, WITH ONE DELIBERATE EXCEPTION. Everything under the mount is
+# Bearer-gated except `GET /kiosk/schema`, which is public (T-094) — and
+# `/kiosk/openapi.json`, which is still gated on purpose while K-804 is open.
 #
 # Env (all set by run.sh; the pay-flow + DB assertions dereference them
 # under `set -u`, so all are required):
@@ -107,20 +111,55 @@ assert "kiosk.issuer set"          "$(echo "$wk" | jq -r '.kiosk.issuer')"      
 # `capabilities` names the MODULES this origin serves, not its verbs
 # (T-068 slice 5, T-075 = A, ADR-0025).
 assert "kiosk.capabilities[]"      "$(echo "$wk" | jq -r '.kiosk.capabilities | join(",")')" "schema,queries,actions,pay"
+# THE CACHE-BUSTED CATALOG LINK (T-094). This document is the SHORT-lived half
+# of the pair: it expires in minutes and republishes the link, which is what
+# lets the link itself be cached for a year.
+assert "kiosk.schema_url is digest-versioned" \
+  "$(echo "$wk" | jq -r '.kiosk.schema_url' | grep -Ec "^$SERVER_URL/kiosk/schema\?v=[0-9a-f]{32}\$")" "1"
+assert "…and kiosk.json itself expires quickly" \
+  "$(curl -sS -o /dev/null -D - "$SERVER_URL/.well-known/kiosk.json" | grep -ic '^Cache-Control: max-age=300, public')" "1"
 
-# THE PROPERTY THE MODULE ANSWER BOUGHT. Every one of these documents is
-# served UNAUTHENTICATED at the origin root, and none of them may name a verb:
-# the catalog is Bearer-gated behind GET /kiosk/schema, /kiosk/openapi.json is
-# gated for the same reason, and the per-verb wire answers 401 before 404 so an
-# anonymous prober learns nothing. A discovery document that enumerated the
-# names would have undone all three at once.
-for public_doc in "/.well-known/kiosk.json" "/agents.json" "/agents.txt" "/.well-known/api-catalog" "/.well-known/agent-configuration"; do
+# THE FLEET OF PUBLIC DOCUMENTS, SPLIT IN TWO — and the split is the point
+# (T-093, 2026-08-19).
+#
+# Until that date this was ONE loop over FIVE documents asserting that none of
+# them named a verb, because the catalogue was Bearer-gated and three separate
+# defences depended on it staying that way. Phil retired the premise: «на
+# статичных GET endpoint'ах — пожалуйста… Пускай долбятся в них сколько хотят
+# без аутентификации». So the api-catalog now MUST name every verb, and the
+# other four still must not — for a different reason, which is that they are
+# POINTERS and not copies of the contract (T-075 = A). Both halves are asserted
+# POSITIVELY below; "no longer refuses to publish" would be a green nothing.
+#
+# NON-VACUITY, COMMITTED RATHER THAN PROVED ONCE BY HAND. Slice 5 checked this
+# loop was not vacuous by temporarily adding a token that IS present and
+# watching it fail. That property is now a permanent CONTROL: every one of
+# these documents names this origin, so if a fetch or a grep silently stopped
+# working the control fails and the "0" assertions stop meaning nothing.
+for public_doc in "/.well-known/kiosk.json" "/agents.json" "/agents.txt" "/.well-known/agent-configuration"; do
   body=$(curl -sf "$SERVER_URL$public_doc")
+  assert "$public_doc is really being read (control token)" \
+    "$(echo "$body" | grep -qF "$SERVER_URL" && echo present || echo MISSING)" "present"
   for verb_name in salons my_appointments book_appointment; do
-    assert "$public_doc leaks no verb name ($verb_name)" \
+    assert "$public_doc names no verb ($verb_name) — pointer, not copy" \
       "$(echo "$body" | grep -c "$verb_name" || true)" "0"
   done
 done
+
+# THE INVERSE, on the fifth document. Every verb, at its real per-verb 0.4
+# endpoint, with the method that reaches it — anonymously.
+apc_body=$(curl -sf "$SERVER_URL/.well-known/api-catalog")
+for verb_name in salons my_appointments book_appointment; do
+  assert "api-catalog hyperlinks $verb_name, unauthenticated" \
+    "$(echo "$apc_body" | jq -r --arg h "$SERVER_URL/kiosk/$verb_name" \
+        '[.linkset[0].item[] | select(.href == $h)] | length')" "1"
+done
+assert "…a query is advertised GET" \
+  "$(echo "$apc_body" | jq -r --arg h "$SERVER_URL/kiosk/salons" \
+      '.linkset[0].item[] | select(.href == $h) | ."kiosk-method" | join(",")')" "GET"
+assert "…an action is advertised POST" \
+  "$(echo "$apc_body" | jq -r --arg h "$SERVER_URL/kiosk/book_appointment" \
+      '.linkset[0].item[] | select(.href == $h) | ."kiosk-method" | join(",")')" "POST"
 
 # ─── native discovery: agents.txt / agents.json / agent-configuration ───
 #
@@ -151,7 +190,10 @@ assert "agents.json auth.discovery"  "$(echo "$aj" | jq -r '.authorization.disco
 # x-kiosk carries POINTERS, not a copy of the contract: it stopped echoing
 # `capabilities` under `wire.verbs` (T-075 = A).
 assert "agents.json x-kiosk keys"    "$(echo "$aj" | jq -r '."x-kiosk" | keys_unsorted | join(",")')" "schema,api_catalog,mount_path,api_version"
-assert "agents.json x-kiosk.schema"  "$(echo "$aj" | jq -r '."x-kiosk".schema')" "/kiosk/schema"
+# The pointer carries the boot digest as `?v=` (T-094) — the cache-busting
+# half, without which a week-long TTL on a fixed URL is a stale catalogue.
+assert "agents.json x-kiosk.schema is digest-versioned" \
+  "$(echo "$aj" | jq -r '."x-kiosk".schema' | grep -Ec '^/kiosk/schema\?v=[0-9a-f]{32}$')" "1"
 assert "agents.json x-kiosk has no wire.verbs echo" "$(echo "$aj" | jq -r '."x-kiosk" | has("wire")')" "false"
 
 printf "\n\033[1m=== /.well-known/agent-configuration (agent-auth discovery) ===\033[0m\n"
@@ -184,10 +226,13 @@ assert "api-catalog advertises it as a service-desc" \
   "$(echo "$apc" | jq -r '[.linkset[0].item[] | select(.rel == "service-desc") | .href] | map(endswith("/kiosk/openapi.json")) | any')" \
   "true"
 
-# Bearer-gated, like GET /kiosk/schema: the document names every verb, every
-# argument and every result shape, so an anonymous read would hand out the
-# catalog enumeration the per-verb wire orders its gates (401 before 404) to
-# withhold.
+# STILL Bearer-gated — and it is now the ONLY surface that is, for a reason the
+# rest of the fleet retired the same day. `GET /kiosk/schema` went public
+# (T-094) and the api-catalog hyperlinks every verb (T-093), so this document
+# describes nothing an anonymous caller cannot already read. Phil was not asked
+# about THIS endpoint, so rule 2 applies: it is filed as K-804 and the gate
+# stays until it is answered. This assertion is what stops it drifting open by
+# accident.
 oa_anon=$(curl -sS -o /dev/null -w "%{http_code}" "$SERVER_URL/kiosk/openapi.json")
 assert "unauthenticated → 401"      "$oa_anon" "401"
 
@@ -206,7 +251,7 @@ assert "server is this origin's endpoint" \
 # and the action half at POST. `/schema` and `/pay` are the wire's OWN reserved
 # endpoints — the protocol's, not the operator's — and joined the document at
 # the cutover, when they left the 0.3 envelope.
-schema_doc=$(curl -sf "$SERVER_URL/kiosk/schema" -H "Authorization: Bearer $ALICE_AGENT_TOKEN")
+schema_doc=$(curl -sf "$SERVER_URL/kiosk/schema")
 assert "one path per verb the canonical catalog publishes" \
   "$(echo "$oa" | jq -r '.paths | keys_unsorted | map(ltrimstr("/")) | map(select(. != "schema" and . != "pay")) | sort | join(",")')" \
   "$(echo "$schema_doc" | jq -r '[.queries[].name, .actions[].name] | sort | join(",")')"
@@ -225,7 +270,7 @@ assert "the reserved /pay is described, as a POST" \
   "$(echo "$oa" | jq -r '.paths."/pay" | keys | join(",")')" "post"
 assert "…also tagged wire"           "$(echo "$oa" | jq -r '.paths."/pay".post.tags | join(",")')" "wire"
 assert "pay's capability is advertised" \
-  "$(echo "$schema_doc" | jq -r '.verbs | index("pay") != null')" "true"
+  "$(echo "$wk" | jq -r '.kiosk.capabilities | index("pay") != null')" "true"
 assert "…and no /query or /run, ever again" \
   "$(echo "$oa" | jq -r '.paths | has("/query") or has("/run")')" "false"
 
@@ -292,6 +337,41 @@ assert "Vary names both request headers" \
   "$(echo "$cache_headers" | grep -ic '^Vary: Authorization, Kiosk-PoW')" "1"
 assert "a 200 defaults to private, no-store" \
   "$(echo "$cache_headers" | grep -ic '^Cache-Control: private, no-store')" "1"
+
+# ─── GET /kiosk/schema — PUBLIC, AND THE ONE EXCEPTION TO THE LINE ABOVE ───
+#
+# T-094. The two assertions above are the fleet-wide policy: every wire
+# response is identity-scoped, so it varies on `Authorization` and is never
+# stored by a shared cache. `schema` is the ONE endpoint under the mount that
+# is none of those things — no identity, no toll, the same bytes for everyone,
+# derived once at boot — so it gets the opposite policy, and BOTH halves are
+# asserted here because getting only one right is worse than neither: `public`
+# with a `Vary: Authorization` is a document no CDN will ever reuse.
+
+printf "\n\033[1m=== GET /kiosk/schema (public, cacheable) ===\033[0m\n"
+
+sch_status=$(curl -sS -o /dev/null -w "%{http_code}" "$SERVER_URL/kiosk/schema")
+sch_headers=$(curl -sS -o /dev/null -D - "$SERVER_URL/kiosk/schema")
+assert "no Authorization header → 200"  "$sch_status" "200"
+assert "…served public, short TTL"      "$(echo "$sch_headers" | grep -ic '^Cache-Control: max-age=300, public')" "1"
+assert "…with a STRONG ETag (no W/)"    "$(echo "$sch_headers" | tr -d '\r' | grep -Ec '^ETag: "[0-9a-f]{32}"$')" "1"
+assert "…and NO Vary at all"            "$(echo "$sch_headers" | grep -ic '^Vary:')" "0"
+assert "…and never a 402: the toll went with the gate" \
+  "$(curl -sS -o /dev/null -w "%{http_code}" "$SERVER_URL/kiosk/schema")" "200"
+
+# THE CACHE-BUSTING SHAPE. The digest-versioned URL — the one the discovery
+# documents publish — is immutable for a year; the bare path is not, because
+# its bytes change under a fixed URL. Same document either way.
+sch_digest=$(echo "$wk" | jq -r '.kiosk.schema_url' | sed 's/.*v=//')
+sch_v_headers=$(curl -sS -o /dev/null -D - "$SERVER_URL/kiosk/schema?v=$sch_digest")
+assert "?v=<digest> is immutable for a year" \
+  "$(echo "$sch_v_headers" | grep -ic '^Cache-Control: max-age=31536000, public, immutable')" "1"
+assert "…and the boot digest IS the ETag" \
+  "$(echo "$sch_headers" | tr -d '\r' | grep -i '^ETag:' | sed 's/.*"\(.*\)"/\1/')" "$sch_digest"
+assert "…a stale ?v= still answers the CURRENT catalogue, short-lived" \
+  "$(curl -sS -o /dev/null -D - "$SERVER_URL/kiosk/schema?v=deadbeef" | grep -ic '^Cache-Control: max-age=300, public')" "1"
+assert "If-None-Match on the digest → 304" \
+  "$(curl -sS -o /dev/null -w "%{http_code}" "$SERVER_URL/kiosk/schema" -H "If-None-Match: \"$sch_digest\"")" "304"
 
 # `limit` and `cursor` are RESERVED parameter names (T-070 rule 7): always
 # accepted, never declared. `salons` declares the CLOSED empty object
@@ -440,8 +520,8 @@ for retired in query run; do
 done
 
 # `schema` answers the payload VERBATIM now — it moved off the envelope with
-# `pay` and the auth plane in the cutover wave.
-old_schema=$(curl -sS "$SERVER_URL/kiosk/schema" -H "Authorization: Bearer $ALICE_AGENT_TOKEN")
+# `pay` and the auth plane in the cutover wave — and it answers it to ANYONE.
+old_schema=$(curl -sS "$SERVER_URL/kiosk/schema")
 assert "GET /kiosk/schema is unenveloped"  "$(echo "$old_schema" | jq -r 'has("ok") or has("kind") or has("value")')" "false"
 assert "…the catalog is the body itself"   "$(echo "$old_schema" | jq -r '.queries | length > 0')" "true"
 
@@ -457,12 +537,15 @@ assert "GET an action → 405"               "$mna_code" "405"
 assert "…carrying Allow: POST"             "$mna_allow" "POST"
 assert "…coded method_not_allowed"         "$(echo "$mna_body" | jq -r '.code')" "method_not_allowed"
 
-# K-740 / VERBS-EQ-CAPABILITIES: the catalog's `verbs` IS the discovery
-# document's `capabilities` — the same array, not a fixed four that named `pay`
-# whether or not the origin took payments.
-assert "schema.verbs == kiosk.json capabilities" \
-  "$(echo "$old_schema" | jq -cS '.verbs')" \
-  "$(echo "$wk" | jq -cS '.kiosk.capabilities')"
+# T-095 / K-801: the catalog's `verbs` is GONE. It rendered
+# `Array(config.capabilities)` — the same call `/.well-known/kiosk.json` makes
+# for `capabilities` — so it was ONE value published under two names, and the
+# beat that used to compare them could only ever pass. The module set has one
+# home now, and this asserts the field did not come back.
+assert "schema publishes {queries, actions} and nothing else" \
+  "$(echo "$old_schema" | jq -r 'keys_unsorted | join(",")')" "queries,actions"
+assert "…and the module set lives in kiosk.json alone" \
+  "$(echo "$wk" | jq -r '.kiosk.capabilities | join(",")')" "schema,queries,actions,pay"
 
 # ─── JWKS endpoint ──────────────────────────────────────────────────────
 #

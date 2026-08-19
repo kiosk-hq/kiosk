@@ -93,9 +93,11 @@ Asserts every attack is BLOCKED (0 BREACH): `CrossTenantRead`, `ForgedUserId`,
 Asserts the schema catalog (queries/actions + descriptions) **and** that the
 advertised `capabilities` do **not** include `pay`, `agents.json` carries no
 payments block, and `agents.txt` carries no `Protocols: ap2` / `Payments:`
-directives. (Since the 0.4 build the `schema` verb's `verbs` field IS the
-computed capability set rather than a fixed four-verb constant, so both
-self-descriptions drop `pay` together and `demo:schema` asserts they are equal.)
+directives. The `schema` verb published a byte-identical copy of that set as
+`verbs` until it was dropped (T-095) — the two fields were rendered by the same
+call, so the module set now has exactly one home. The same beat also asserts
+that `GET /kiosk/schema` answers **with no Authorization header at all**: the
+catalogue went public in T-094.
 
 ### Registration PoW (`rake demo:register`)
 

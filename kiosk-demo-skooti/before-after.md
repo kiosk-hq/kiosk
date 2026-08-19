@@ -34,7 +34,7 @@ skooti is a Rails app that speaks Kiosk. The following is a recorded no-human ru
 3. **Prove identity once** — submitted a **KYC attestation** (a signed credential from a trusted broker) → HTTP 200. Reusable across rentals; the human is never in the loop.
 4. **Browse + reserve** — `GET /kiosk/scooters_available` → picked `SK-001`; `POST /kiosk/reserve` → a `reservation_id` with a TTL hold.
 5. **Pay** — signed an AP2 intent mandate + a cart mandate (RS256 JWS, `iss` = skooti's issuer, cart `line_items` bound to the `reservation_id`), `pay` → settled.
-6. **Start rental + unlock offline** — `run start_rental`; the server verified three gates (the reservation is the principal's, KYC cleared, payment settled *for this reservation*) and issued a short-lived **Ed25519 rental token** (`kiosk-rental-v1|SK-001|…|exp|jti`). The lock verified it **offline — no server round-trip** — checking the signature against a baked-in public key, the scooter code, the 15-minute expiry, and a one-shot `jti`. Lock opened.
+6. **Start rental + unlock offline** — `POST /kiosk/start_rental`; the server verified three gates (the reservation is the principal's, KYC cleared, payment settled *for this reservation*) and issued a short-lived **Ed25519 rental token** (`kiosk-rental-v1|SK-001|…|exp|jti`). The lock verified it **offline — no server round-trip** — checking the signature against a baked-in public key, the scooter code, the 15-minute expiry, and a one-shot `jti`. Lock opened.
 
 Two things skooti does that the incumbent flow cannot:
 

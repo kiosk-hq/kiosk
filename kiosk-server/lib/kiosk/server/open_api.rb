@@ -1,0 +1,534 @@
+# frozen_string_literal: true
+
+require "json"
+require "kiosk/server/actions"
+require "kiosk/server/argument_decoder"
+require "kiosk/server/errors"
+require "kiosk/server/queries"
+require "kiosk/server/well_known"
+
+module Kiosk
+  module Server
+    # THE DERIVED OPENAPI RENDERER (T-068 slice 4, decision T-071 = C,
+    # ADR-0024).
+    #
+    # A SECOND RENDERER over the SAME model `GET <endpoint>/schema` renders:
+    # {Queries.catalog} and {Actions.catalog}, read exactly as
+    # {Executor#verb_schema} reads them. Nothing here holds a declaration of
+    # its own, and nothing here may be edited to say something the descriptors
+    # do not — that is the whole property the decision bought, and it is the
+    # same one {WellKnown} already proves across six discovery surfaces.
+    #
+    # ── What this is FOR, and what it is not ─────────────────────────────
+    #
+    # `/kiosk/schema` stays CANONICAL. It is what `skill.md` teaches, it is
+    # what an AI assistant reads, and it is the only catalog the spec makes
+    # normative. `/kiosk/openapi.json` is for TOOLING — a porter pointing a
+    # code generator, a mock server or a request validator at a Kiosk origin —
+    # and it is named NOWHERE in the skill, so no assistant pays cold-start
+    # context for it. That property is the reason the decision went to C
+    # rather than to "OpenAPI replaces the catalog"; do not undermine it by
+    # teaching this document anywhere an assistant reads.
+    #
+    # ADR-0021 («Explicitly NOT OpenAPI») is NARROWED by this, not reversed:
+    # OpenAPI is an ADDITIONAL DESCRIPTION surface. The prose `description`
+    # remains the authoritative SEMANTICS and `input_schema` the authoritative
+    # INPUT CONTRACT — both travel into this document verbatim rather than
+    # being restated in it.
+    #
+    # ── PROVISIONAL, by Phil's own revisit clause ────────────────────────
+    #
+    # «Если не понадобится, уберём». So: nothing else may come to depend on
+    # this document. It is a pure derivation with no independent source of
+    # truth, and removing it stays ONE FILE plus ONE `items <<` line in
+    # {WellKnown.api_catalog} plus the route and the controller. Do not let a
+    # demo, the e2e harness, the skill or the normative spec require it.
+    #
+    # ── The four things the T-086 research says this must get right ──────
+    #
+    #   1. `style` and `explode` are written EXPLICITLY on every parameter.
+    #      Stoplight Prism 5.16.0 ignores the spec's defaults (`el.explode ||
+    #      false`), and `deepObject` + `explode: false` is UNDEFINED per OAS
+    #      3.1.2 — so a document that omits them is a document that disagrees
+    #      with us in someone else's tool.
+    #   2. Parameter NAMES are the honest declared names — never `a[]`. The
+    #      bracket name is legal OpenAPI and every generator measured
+    #      serialises it, but ten of the twelve validators surveyed reject or
+    #      break on it, and a renderer that renamed `amenity` to `amenity[]`
+    #      would have stopped being a derivation of the descriptor. The
+    #      BRACKETS ARE A WIRE SPELLING, not a name: `style: form, explode:
+    #      true` emits `?a=1&a=2`, which {ArgumentDecoder#fold_declared_arrays}
+    #      reads as an array precisely because the schema declares one, and
+    #      the `a%5B%5D=` form the skill teaches parses to the same arguments.
+    #      One taught form, one tolerated form, one declared name.
+    #   3. An OBJECT parameter is `style: deepObject, explode: true` — the one
+    #      query style OpenAPI defines that Rails already speaks — and it is
+    #      ONE LEVEL WITH SCALAR LEAVES (T-087). The decoder refuses anything
+    #      richer, so no such shape can reach a descriptor and be published.
+    #   4. `limit` and `cursor` are INJECTED into every query operation. They
+    #      are reserved names the wire always accepts and a verb never has to
+    #      declare (§8.1 item 6), so they appear in no `input_schema` — and a
+    #      strict validator in front of a porter's server answers `400 Unknown
+    #      query parameter 'limit'` to the very pagination §8.4 invites unless
+    #      the derived document declares them. Measured on
+    #      express-openapi-validator 5.6.2. A verb that DOES declare one wins:
+    #      its own declaration is the more specific statement and the
+    #      injection stands down, because two parameters with the same
+    #      `name`+`in` is an invalid document.
+    #
+    # ── What the document describes, and what it deliberately omits ──────
+    #
+    # ONLY the per-verb wire: `GET <endpoint>/<query-name>` and
+    # `POST <endpoint>/<action-name>`. `schema` and `pay` are NOT in it,
+    # because until the cutover slice they still answer the 0.3 envelope
+    # (T-074 = A) — describing them today would mean publishing an envelope
+    # that is being deleted, which is exactly the drift this renderer exists
+    # to make impossible. They join the document in the same wave that moves
+    # them onto the 0.4 shape.
+    module OpenApi
+      # The OAS version the document declares. 3.1.x is the line whose Schema
+      # Objects ARE JSON Schema 2020-12, which is what makes embedding a
+      # descriptor's `input_schema`/`output_schema` VERBATIM possible at all —
+      # under 3.0 they would have to be translated into its schema dialect,
+      # and a translation is not a derivation. `3.1.0` rather than `3.1.2`
+      # because it is the patch the surveyed tooling was measured against and
+      # the deltas since are editorial.
+      OPENAPI_VERSION = "3.1.0"
+
+      # Written EXPLICITLY even though 3.1 defaults to it: the descriptors are
+      # draft 2020-12 (§8.3) and a document that leaves its dialect implicit
+      # invites a consumer to guess.
+      JSON_SCHEMA_DIALECT = "https://json-schema.org/draft/2020-12/schema"
+
+      # The OAI-registered media type for an OpenAPI document in JSON. The
+      # `+json` structured suffix means a generic JSON client handles it
+      # unchanged, while a tool that cares can tell an API description from
+      # any other JSON body.
+      CONTENT_TYPE = "application/vnd.oai.openapi+json;version=3.1"
+
+      # `405 method_not_allowed` is in the vocabulary (slice 2) but is NOT a
+      # response of any operation HERE: it is what the OTHER method at a
+      # verb's path answers, and that method is not a declared operation.
+      # Declaring it as an operation that always fails would put a broken
+      # client method in every generated SDK. The rule is stated once in
+      # `info.description` instead.
+      METHOD_NOT_ALLOWED = "method_not_allowed"
+
+      # Prose the RENDERER owns — about the protocol, never about a verb. A
+      # verb's meaning comes from its own `description` and travels verbatim.
+      INFO_DESCRIPTION = <<~TEXT.strip
+        A DERIVED description of this origin's Kiosk verbs, generated from the
+        same registry `GET <endpoint>/schema` renders. `schema` is the
+        canonical catalog and this document is a convenience for tooling; where
+        the two could ever disagree, `schema` is right.
+
+        Every verb is its own endpoint: a query is a GET whose arguments are in
+        the query string, an action is a POST whose arguments are a JSON body.
+        There is no third channel. Calling a verb with the other method answers
+        `405` with an `Allow` header naming the one it accepts — that is a
+        different answer from `404`, because the resource exists.
+
+        A success body is the verb's result and nothing else: no envelope, no
+        `ok` flag, no `kind`. An error body is an RFC 9457 problem document
+        served as `application/problem+json`; branch on its `code` member, not
+        on the HTTP status alone.
+
+        `limit` and `cursor` are reserved parameter names this wire always
+        accepts on a query, whether or not the verb declares them, and they
+        drive the cursor pagination of the specification's Section 8.4.
+
+        Normative specification: https://kiosk.tech/specification.html
+      TEXT
+
+      # Build the document as a Hash, ready to JSON-serialize.
+      #
+      # @param base_url [String] the origin the request arrived at
+      #   (`request.base_url`), so a document served from a staging host names
+      #   the staging host
+      # @param config [Kiosk::Configuration]
+      # @return [Hash]
+      def self.build(base_url:, config: Kiosk.configuration)
+        endpoint = base_url.to_s.chomp("/") + config.mount_path
+
+        schemas = { "Problem" => problem_schema }
+        paths   = {}
+
+        entries.each do |kind, descriptor|
+          name = descriptor[:name].to_s
+          schemas.merge!(components_for(descriptor[:output_schema], "#{name}.response"))
+          if request_component?(kind, descriptor[:input_schema])
+            schemas.merge!(components_for(descriptor[:input_schema], "#{name}.request"))
+          end
+          paths["/#{name}"] = { http_method(kind) => operation(kind, descriptor) }
+        end
+
+        {
+          openapi:           OPENAPI_VERSION,
+          jsonSchemaDialect: JSON_SCHEMA_DIALECT,
+          info:              {
+            title:       "#{WellKnown.site_name(config)} — Kiosk",
+            version:     Kiosk::Protocol::API_VERSION,
+            description: INFO_DESCRIPTION,
+          },
+          externalDocs:      {
+            description: "The Kiosk specification (normative)",
+            url:         "https://kiosk.tech/specification.html",
+          },
+          servers:           [{ url: endpoint, description: "This origin's Kiosk endpoint." }],
+          security:          [{ bearerAuth: [] }],
+          tags:              [
+            { name: "queries", description: "Reads. GET, arguments in the query string." },
+            { name: "actions", description: "Writes. POST, arguments in a JSON body." },
+          ],
+          paths:             paths,
+          components:        {
+            securitySchemes: { bearerAuth: bearer_scheme },
+            parameters:      reserved_parameters,
+            responses:       problem_responses,
+            schemas:         schemas,
+          },
+        }
+      end
+
+      # JSON-encoded form of {.build}.
+      def self.build_json(**kwargs)
+        JSON.generate(build(**kwargs))
+      end
+
+      # ── the model ───────────────────────────────────────────────────────
+
+      # THE one model, read the one way. `[[:query, descriptor], …]` sorted by
+      # wire name across both registries — which is a total order, because one
+      # name is one kind ({HandlerRegistrations.refuse_cross_kind_collisions!}).
+      def self.entries
+        (Queries.catalog.map { |d| [:query, d] } + Actions.catalog.map { |d| [:action, d] })
+          .sort_by { |(_kind, descriptor)| descriptor[:name].to_s }
+      end
+      private_class_method :entries
+
+      def self.http_method(kind) = kind == :query ? :get : :post
+      private_class_method :http_method
+
+      # ── one operation ───────────────────────────────────────────────────
+
+      def self.operation(kind, descriptor)
+        name = descriptor[:name].to_s
+        op = {
+          operationId: name,
+          tags:        [kind == :query ? "queries" : "actions"],
+        }
+        # A descriptor's `description` is the AUTHORITATIVE SEMANTICS
+        # (ADR-0021/0023) and travels VERBATIM. It is `String|nil` on the wire;
+        # an absent one is omitted rather than emitted as an empty string.
+        op[:description] = descriptor[:description] unless descriptor[:description].nil?
+
+        if kind == :query
+          op[:parameters] = query_parameters(name, descriptor[:input_schema])
+        else
+          op[:requestBody] = request_body(name, descriptor[:input_schema])
+        end
+
+        op[:responses] = responses(descriptor)
+        op
+      end
+      private_class_method :operation
+
+      # A query's arguments, one OpenAPI parameter per declared property, plus
+      # the two reserved names the verb did not declare itself.
+      def self.query_parameters(name, input_schema)
+        properties = ArgumentDecoder.fetch(input_schema, :properties) || {}
+        required   = Array(ArgumentDecoder.fetch(input_schema, :required)).map(&:to_s)
+        declared   = properties.keys.map(&:to_s)
+        base       = "#{name}.request"
+        map        = ref_map(input_schema, base)
+
+        parameters = properties.map do |property, schema|
+          {
+            name:     property.to_s,
+            in:       "query",
+            required: required.include?(property.to_s),
+            # EXPLICIT, both of them, on every parameter. See the module note.
+            style:    style_for(schema),
+            explode:  true,
+            schema:   rewrite_refs(schema, map, base),
+          }
+        end
+
+        # The injection (research finding 4). Skipped for a name the verb
+        # declared itself — that declaration is the more specific statement,
+        # the decoder already honours it, and two parameters sharing a
+        # `name`+`in` would be an invalid document.
+        ArgumentDecoder::RESERVED.each_key do |reserved|
+          next if declared.include?(reserved)
+
+          parameters << { "$ref": "#/components/parameters/#{reserved}" }
+        end
+
+        parameters
+      end
+      private_class_method :query_parameters
+
+      # `deepObject` is for objects and ONLY for objects (OAS 3.1.1 §4.8.12.3:
+      # its `type` column is `object`, its `array` cell is *n/a*). Everything
+      # else — scalars and arrays of scalars — is `form`. The type is read with
+      # the DECODER's own reader, so a nullable union (`["string","null"]`)
+      # answers the same here as it does when the wire coerces it.
+      def self.style_for(schema)
+        ArgumentDecoder.declared_type(schema) == "object" ? "deepObject" : "form"
+      end
+      private_class_method :style_for
+
+      # An action's body IS its `input_schema`, referenced rather than inlined
+      # so the one declaration has one home in the document.
+      #
+      # `required` is DERIVED: a body is required exactly when the schema
+      # requires at least one property. A verb declaring the closed empty
+      # object takes nothing, and the wire reads an absent body as `{}` — so
+      # claiming the body is mandatory there would be a claim the server does
+      # not enforce.
+      def self.request_body(name, input_schema)
+        {
+          required: !Array(ArgumentDecoder.fetch(input_schema, :required)).empty?,
+          content:  {
+            "application/json" => { schema: { "$ref": "#/components/schemas/#{name}.request" } },
+          },
+        }
+      end
+      private_class_method :request_body
+
+      def self.responses(descriptor)
+        name   = descriptor[:name].to_s
+        output = descriptor[:output_schema]
+        out = {
+          "200" => {
+            # The Response Object's `description` is REQUIRED by OAS. Use the
+            # operator's own words for the answer when the declaration carries
+            # them; fall back to a neutral sentence, never to invented prose.
+            description: ArgumentDecoder.fetch(output, :description) || "The verb's result.",
+            content:     {
+              "application/json" => { schema: { "$ref": "#/components/schemas/#{name}.response" } },
+            },
+          },
+        }
+        problem_statuses.each do |status|
+          out[status.to_s] = { "$ref": "#/components/responses/problem#{status}" }
+        end
+        out
+      end
+      private_class_method :responses
+
+      # ── embedded schemas ────────────────────────────────────────────────
+
+      # A `$ref` inside a descriptor's schema is written against THAT schema's
+      # own root — hoteling's `search_hotels` says `#/$defs/hotel`. Embedded in
+      # an OpenAPI document, `#` is the DOCUMENT root, so the pointer would
+      # dangle.
+      #
+      # THE ROOT `$defs` IS HOISTED into `components/schemas` — one component
+      # per definition, `<verb>.<slot>.<name>` — and the pointers are rewritten
+      # to name it. The obvious cheaper fix is to leave `$defs` where the
+      # operator wrote it and just re-base the pointer into the component
+      # (`#/components/schemas/search_hotels.response/$defs/hotel`), which is a
+      # legal JSON Pointer and which json_schemer resolves — but MEASURED,
+      # `openapi_parser` 2.3.1 (the parser `committee` 5.6.3 is built on)
+      # answers `MissingReferenceError` to it, because it resolves only
+      # pointers that land on a known component container. Hoisting costs ten
+      # lines and lands every pointer on a plain top-level component, which
+      # nothing surveyed stumbles on. Definitions keep their names; only their
+      # address changes.
+      #
+      # @return [Hash] `{"<verb>.<slot>" => schema, "<verb>.<slot>.<def>" => …}`
+      def self.components_for(schema, base)
+        defs = ArgumentDecoder.fetch(schema, :"$defs")
+        map  = ref_map(schema, base)
+
+        body = schema.is_a?(::Hash) ? schema.reject { |key, _| key.to_s == "$defs" } : schema
+        out  = { base => rewrite_refs(body, map, base) }
+        return out unless defs.is_a?(::Hash)
+
+        defs.each do |name, definition|
+          out["#{base}.#{name}"] = rewrite_refs(definition, map, "#{base}.#{name}")
+        end
+        out
+      end
+      private_class_method :components_for
+
+      # `{"#/$defs/hotel" => "#/components/schemas/search_hotels.response.hotel"}`
+      # — the new address of every hoisted definition, computed once per schema
+      # so a parameter inlined out of it points at the same place its component
+      # does.
+      def self.ref_map(schema, base)
+        defs = ArgumentDecoder.fetch(schema, :"$defs")
+        return {} unless defs.is_a?(::Hash)
+
+        defs.keys.each_with_object({}) do |name, out|
+          out["#/$defs/#{name}"] = "#/components/schemas/#{base}.#{name}"
+        end
+      end
+      private_class_method :ref_map
+
+      # Deep-copies +node+, rewriting every document-relative `$ref`:
+      # a pointer at (or into) a hoisted definition follows it to its new
+      # component; anything else document-relative is re-based onto the
+      # component named by +base+, which is where the enclosing schema now
+      # lives. External refs (`https://…`, `other.json#/x`) are left alone —
+      # they were never relative to the descriptor's root.
+      def self.rewrite_refs(node, map, base)
+        case node
+        when ::Hash
+          node.each_with_object({}) do |(key, value), out|
+            out[key] =
+              if key.to_s == "$ref" && value.is_a?(::String) && value.start_with?("#")
+                rewrite_ref(value, map, "#/components/schemas/#{base}")
+              else
+                rewrite_refs(value, map, base)
+              end
+          end
+        when ::Array then node.map { |element| rewrite_refs(element, map, base) }
+        else node
+        end
+      end
+      private_class_method :rewrite_refs
+
+      def self.rewrite_ref(ref, map, prefix)
+        return prefix if ref == "#"
+
+        hit = map.keys.find { |pointer| ref == pointer || ref.start_with?("#{pointer}/") }
+        return "#{map.fetch(hit)}#{ref.delete_prefix(hit)}" if hit
+
+        "#{prefix}#{ref.delete_prefix("#")}"
+      end
+      private_class_method :rewrite_ref
+
+      # A query publishes its `input_schema` as a component only when
+      # something in the document points INTO it — i.e. when one of its
+      # parameter schemas carries a re-based `$ref`. An action always does
+      # (the request body is that reference). Publishing it unconditionally
+      # would leave 27 components nothing links to, which every OpenAPI linter
+      # reports.
+      def self.request_component?(kind, input_schema)
+        kind == :action || contains_ref?(input_schema)
+      end
+      private_class_method :request_component?
+
+      def self.contains_ref?(node)
+        case node
+        when ::Hash  then node.any? { |key, value| key.to_s == "$ref" || contains_ref?(value) }
+        when ::Array then node.any? { |element| contains_ref?(element) }
+        else false
+        end
+      end
+      private_class_method :contains_ref?
+
+      # ── components that are the same for every origin ───────────────────
+
+      def self.bearer_scheme
+        {
+          type:         "http",
+          scheme:       "bearer",
+          bearerFormat: "JWT",
+          description:  "An access token from the kiosk-pop auth plane " \
+                        "(`POST <endpoint>/auth/register` or `/auth/login`), " \
+                        "verifiable against `<endpoint>/.well-known/jwks.json`.",
+        }
+      end
+      private_class_method :bearer_scheme
+
+      # The two reserved parameters, declared once and referenced from every
+      # query. Types come from the DECODER's own table, so the document cannot
+      # say `limit` is a string while the wire coerces it to an integer.
+      def self.reserved_parameters
+        {
+          "limit"  => {
+            name:        "limit",
+            in:          "query",
+            required:    false,
+            style:       "form",
+            explode:     true,
+            description: "Maximum rows in one page. The operator MAY clamp it. " \
+                         "Reserved: always accepted, never required to be declared.",
+            schema:      { type: ArgumentDecoder::RESERVED.fetch("limit"), minimum: 1 },
+          },
+          "cursor" => {
+            name:        "cursor",
+            in:          "query",
+            required:    false,
+            style:       "form",
+            explode:     true,
+            description: "The OPAQUE `next` token from the previous page, echoed back " \
+                         "verbatim. Never parse or construct one. " \
+                         "Reserved: always accepted, never required to be declared.",
+            schema:      { type: ArgumentDecoder::RESERVED.fetch("cursor") },
+          },
+        }
+      end
+      private_class_method :reserved_parameters
+
+      # Statuses an operation can actually answer with, derived from the closed
+      # vocabulary. 405 is excluded — see {METHOD_NOT_ALLOWED}.
+      def self.problem_statuses
+        Errors::CODES.reject { |code, _| code == METHOD_NOT_ALLOWED }.values.uniq.sort
+      end
+      private_class_method :problem_statuses
+
+      def self.problem_responses
+        problem_statuses.each_with_object({}) do |status, out|
+          codes = Errors::CODES.select { |_, value| value == status }.keys
+          response = {
+            description: "#{codes.join(" · ")} — see the problem document's `code`.",
+            content:     {
+              Errors::PROBLEM_CONTENT_TYPE => {
+                schema: { "$ref": "#/components/schemas/Problem" },
+              },
+            },
+          }
+          # RFC 7235: the two 402 gates are told apart by the challenge header,
+          # not by the status. The wire emits it, so the document says so.
+          if status == 402
+            response[:headers] = {
+              "WWW-Authenticate" => {
+                description: "`Kiosk-PoW realm=\"<issuer>\"` for a proof-of-work toll, " \
+                             "`Payment realm=\"<issuer>\", method=\"ap2\"` for payment setup.",
+                schema:      { type: "string" },
+              },
+            }
+          end
+          out["problem#{status}"] = response
+        end
+      end
+      private_class_method :problem_responses
+
+      # RFC 9457 problem document. The `code` enum IS {Errors::CODES} — the
+      # closed vocabulary, published here as the branch point an assistant (and
+      # a validator) reads, exactly as the spec's error table publishes it.
+      def self.problem_schema
+        {
+          type:        "object",
+          title:       "Problem document (RFC 9457)",
+          description: "Every error on this wire. Branch on `code`.",
+          properties:  {
+            type:       {
+              type: "string", format: "uri",
+              description: "`#{Errors::PROBLEM_TYPE_BASE}<code>` — an IDENTIFIER for the " \
+                           "problem type, not a document to fetch. Never branch on it.",
+            },
+            title:      { type: "string",
+                          description: "A constant summary of the problem TYPE, not of this incident." },
+            status:     { type: "integer", description: "The HTTP status, repeated." },
+            detail:     { type: "string",  description: "What went wrong THIS time." },
+            code:       { type: "string", enum: Errors::CODES.keys,
+                          description: "THE BRANCH POINT: the closed Kiosk error vocabulary." },
+            hint:       { type: "string",
+                          description: "How to recover, when the error knows. Present on the errors " \
+                                       "a caller can do something about." },
+            challenges: { type: "array",
+                          description: "On a `pow_required` 402: the proof-of-work challenges to " \
+                                       "solve and echo back in the `Kiosk-PoW` request header." },
+          },
+          required:    %w[type title status code],
+        }
+      end
+      private_class_method :problem_schema
+    end
+  end
+end

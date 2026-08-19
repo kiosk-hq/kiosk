@@ -109,6 +109,17 @@ RSpec.describe "Kiosk::Server::Engine routes" do
       expect(recognize(:get,  "/.well-known/jwks.json")).to include(controller: "kiosk/server/jwks")
     end
 
+    it "does not swallow openapi.json as the verb `openapi` in the `json` format" do
+      # `/:kiosk_verb(.:format)` would match it. The derived document's route
+      # is drawn above the pair, so the literal path wins — and an operator
+      # verb literally called `openapi` still answers at `/openapi`, because
+      # the reserved route needs the `.json`.
+      expect(recognize(:get, "/openapi.json"))
+        .to include(controller: "kiosk/server/open_api", action: "show")
+      expect(recognize(:get, "/openapi"))
+        .to include(controller: "kiosk/server/verb", action: "show", kiosk_verb: "openapi")
+    end
+
     it "leaves a path that cannot be a verb name a routing 404" do
       # The constraint keeps it out of the controller entirely, so it never
       # becomes a 401 from the wire.

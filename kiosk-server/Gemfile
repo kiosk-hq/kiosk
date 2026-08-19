@@ -18,6 +18,14 @@ gem "kiosk-reputation",   path: "../kiosk-reputation"
 # is on). A host that enables validate_requests adds it to its own Gemfile.
 gem "json_schemer"
 
+# THE CONFORMANCE TEST for the derived OpenAPI document (T-068 slice 4,
+# T-071 = C). A THIRD-PARTY OpenAPI 3.1 implementation, so `open_api_spec.rb`
+# proves the document with somebody else's parser rather than with our own
+# eyes: it parses `/kiosk/openapi.json`, then validates real Kiosk requests and
+# real Kiosk answers against it. Test-only, and it goes when the provisional
+# renderer goes.
+gem "openapi_first"
+
 # ActiveRecord is a RUNTIME dependency of the gem (see the gemspec); only the
 # database DRIVER is test-side here. The durable-store contract spec
 # (DeviceAuthorizationStores::ActiveRecord) SKIPS its ActiveRecord context when

@@ -207,8 +207,10 @@ module Kiosk
       # live registry), plus the agents.json discovery companion.
       #
       # The `schema` endpoint is the machine-readable surface description, so it
-      # carries the RFC 9727 `service-desc` relation (SHOULD); every other link
-      # is a plain `item`.
+      # carries the RFC 9727 `service-desc` relation (SHOULD); so does the
+      # DERIVED `openapi.json` beside it ({OpenApi}), which describes the same
+      # verbs in a form generic OpenAPI tooling can consume. Every other link is
+      # a plain `item`.
       #
       # @return [Hash]
       def self.api_catalog(base_url:, config: Kiosk.configuration)
@@ -221,6 +223,20 @@ module Kiosk
         # schema is the machine-readable service description (service-desc).
         if verbs.include?("schema")
           items << { href: "#{endpoint}/schema", rel: "service-desc" }
+          # ONE LINE, AND IT IS THE WHOLE ADVERTISEMENT of the derived OpenAPI
+          # document (T-071 = C). RFC 8631 allows more than one `service-desc`,
+          # and there genuinely are two descriptions of one API here: `schema`
+          # is CANONICAL and is what the skill teaches an assistant to read;
+          # `openapi.json` is the derived one a code generator, a mock server or
+          # a request validator can consume. The bespoke one stays first.
+          #
+          # Gated on the same condition, because it derives from the same
+          # registry: an origin with nothing registered has nothing to describe
+          # either way. This is deliberately the ONLY place the document is
+          # advertised anywhere — the skill names it nowhere, so no assistant
+          # pays cold-start context for it. Deleting the provisional renderer
+          # deletes this one `items <<`.
+          items << { href: "#{endpoint}/openapi.json", rel: "service-desc" }
         end
         # The remaining wire verbs are plain catalogued APIs.
         %w[query run pay].each do |verb|
@@ -411,13 +427,17 @@ module Kiosk
 
       # site.name for agents.json: the provider's owner name when set, else the
       # issuer host (a stable, always-present fallback).
+      #
+      # PUBLIC because {OpenApi} titles the derived document with it. Naming
+      # the origin is a model question, not a per-renderer one — a second
+      # implementation of "what is this provider called" is precisely the drift
+      # this module's one-model/many-renderers shape exists to prevent.
       def self.site_name(config)
         name = config.owner.is_a?(Hash) ? config.owner[:name] : nil
         return name if name && !name.to_s.empty?
 
         host_of(config.issuer)
       end
-      private_class_method :site_name
 
       def self.host_of(issuer)
         require "uri"

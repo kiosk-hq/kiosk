@@ -492,6 +492,24 @@ RSpec.describe Kiosk::Server::WellKnown do
       expect(schema[:rel]).to eq("service-desc")
     end
 
+    it "advertises the DERIVED openapi.json beside it — the only place it is advertised" do
+      # T-071 = C. RFC 8631 allows more than one `service-desc`; the canonical
+      # bespoke catalog stays FIRST, and the derived document — which the skill
+      # names nowhere — follows it. This item and the renderer are the whole of
+      # the provisional surface.
+      declare_query("catalog")
+      d = described_class.api_catalog(base_url: "https://api.acme.example")
+      descs = member(d)[:item].select { |i| i[:rel] == "service-desc" }.map { |i| i[:href] }
+
+      expect(descs).to eq(["https://api.acme.example/kiosk/schema",
+                           "https://api.acme.example/kiosk/openapi.json"])
+    end
+
+    it "advertises no openapi.json when there is nothing to describe" do
+      hrefs = member(doc)[:item].map { |i| i[:href] }
+      expect(hrefs).not_to include("https://api.acme.example/kiosk/openapi.json")
+    end
+
     it "tags the non-schema wire endpoints with rel=item" do
       declare_action("checkout")
       d = described_class.api_catalog(base_url: "https://api.acme.example")

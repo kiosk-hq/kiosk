@@ -95,27 +95,6 @@ module Kiosk
       # @param name [String, nil] the query/action wire name when the caller
       #   knows it (the per-verb wire), nil when it is inside `args` (0.3).
       def execute_wire(command:, args:, identity:, name: nil)
-        # Read the submitted proof(s) from the `Kiosk-PoW` request HEADER
-        # (ADR-0022), NOT the body: the body is now ONLY verb args, so the
-        # challenge fingerprint binds to the plain body untouched, and a GET
-        # (schema) can carry its proof via the header too (a GET has no body).
-        # proofs_from_header raises Errors::BadRequest (→ 400) on malformed
-        # header JSON, inside this rescue.
-        pow = PowGate.proofs_from_header(request.get_header("HTTP_KIOSK_POW"))
-
-        # Opt-in request-shape validation (UNIFORM-VALIDATION slice-1, K-479).
-        # Only when the flag is on AND a proof was actually submitted: validate
-        # each parsed proof against the vendored normative schema so a MALFORMED
-        # proof (e.g. `{solutions:[…]}` instead of `{challenge:,nonce:}`) raises
-        # a clear 400 with a shape hint — instead of PowGate silently ignoring
-        # it and re-issuing a fresh 402 on every retry. An ABSENT proof is left
-        # untouched (the initial request must still get its normal 402
-        # challenge), and a WELL-FORMED proof passes through unchanged to the
-        # gate below, which still does the real cryptographic check.
-        if Kiosk.configuration.validate_requests && !PowGate.blank?(pow)
-          RequestValidation.validate_proofs!(pow)
-        end
-
         # The fingerprint binds the challenge to `command` + the canonical JSON
         # of the arguments. On the per-verb wire the name is not IN the
         # arguments, so it is folded back in HERE — for the digest only, never
@@ -125,11 +104,10 @@ module Kiosk
         # slot at all, rides the 0.4 cutover slice with the rest of the wire
         # break. No verb in the tree declares an argument called `name`, so
         # nothing is shadowed by the merge today.)
-        PowGate.gate(
+        toll!(
           identity: identity,
           command:  command,
           body:     name.nil? ? args : args.merge(name: name),
-          pow:      pow,
         )
 
         # Carry the resolved identity and the wire request down to the handler
@@ -149,6 +127,47 @@ module Kiosk
         end
 
         render_result(result)
+      end
+
+      # THE TOLL, on its own — the whole of what a caller pays before a Kiosk
+      # surface answers, and nothing else.
+      #
+      # It is its own method because {OpenApiController} has to pay it with no
+      # {Executor} call behind it: the derived OpenAPI document renders the
+      # SAME catalog `GET <endpoint>/schema` renders, so it is tolled as
+      # `:schema`. Left untolled it would be a free path to information a
+      # reputation policy is charging for — the shipped
+      # {Kiosk::Reputation::Policies::RateAndReputation} ignores `verb:` and
+      # prices every wire call, `schema` included.
+      #
+      # @param identity [Kiosk::Identity] the resolved caller
+      # @param command [Symbol] the gate/policy verb — one of {Executor::VERBS},
+      #   because `reputation_factors` and `Policy#challenge_for` both take it
+      #   as `verb:` and every shipped policy branches on those four symbols
+      # @param body [Hash] what the challenge fingerprint binds to
+      def toll!(identity:, command:, body:)
+        # Read the submitted proof(s) from the `Kiosk-PoW` request HEADER
+        # (ADR-0022), NOT the body: the body is now ONLY verb args, so the
+        # challenge fingerprint binds to the plain body untouched, and a GET
+        # (schema) can carry its proof via the header too (a GET has no body).
+        # proofs_from_header raises Errors::BadRequest (→ 400) on malformed
+        # header JSON, inside the caller's rescue.
+        pow = PowGate.proofs_from_header(request.get_header("HTTP_KIOSK_POW"))
+
+        # Opt-in request-shape validation (UNIFORM-VALIDATION slice-1, K-479).
+        # Only when the flag is on AND a proof was actually submitted: validate
+        # each parsed proof against the vendored normative schema so a MALFORMED
+        # proof (e.g. `{solutions:[…]}` instead of `{challenge:,nonce:}`) raises
+        # a clear 400 with a shape hint — instead of PowGate silently ignoring
+        # it and re-issuing a fresh 402 on every retry. An ABSENT proof is left
+        # untouched (the initial request must still get its normal 402
+        # challenge), and a WELL-FORMED proof passes through unchanged to the
+        # gate below, which still does the real cryptographic check.
+        if Kiosk.configuration.validate_requests && !PowGate.blank?(pow)
+          RequestValidation.validate_proofs!(pow)
+        end
+
+        PowGate.gate(identity: identity, command: command, body: body, pow: pow)
       end
 
       # How a SUCCESS reaches the wire. Its own method because the two wires

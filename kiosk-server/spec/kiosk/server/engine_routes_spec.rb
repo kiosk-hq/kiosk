@@ -79,4 +79,42 @@ RSpec.describe "Kiosk::Server::Engine routes" do
     expect(recognize(:post, "/auth/assistants/unlink"))
       .to include(controller: "kiosk/server/assistants", action: "unlink")
   end
+
+  # ── the 0.4 per-verb wire (T-068 slice 1) ────────────────────────────────
+
+  describe "the per-verb wire" do
+    it "draws GET <name> at the query half and POST <name> at the action half" do
+      expect(recognize(:get, "/catalog"))
+        .to include(controller: "kiosk/server/verb", action: "show", kiosk_verb: "catalog")
+      expect(recognize(:post, "/create_order"))
+        .to include(controller: "kiosk/server/verb", action: "create", kiosk_verb: "create_order")
+    end
+
+    it "lets EVERY reserved-plane route win by first-match" do
+      # This IS design §3.2's reserved-word rule, enforced by Rails' own
+      # route ordering rather than by a hand-kept literal list: the per-verb
+      # pair is drawn last, so an operator who declares a verb called
+      # `schema` or `pay` cannot shadow the wire — the wire answers, and the
+      # declaration-time refusal (so they learn at boot) is the descriptor
+      # slice's job.
+      expect(recognize(:get,  "/schema")).to include(controller: "kiosk/server/wire")
+      expect(recognize(:post, "/pay")).to    include(controller: "kiosk/server/wire")
+      expect(recognize(:post, "/query")).to  include(controller: "kiosk/server/wire")
+      expect(recognize(:post, "/run")).to    include(controller: "kiosk/server/wire")
+    end
+
+    it "does not swallow the multi-segment reserved routes" do
+      expect(recognize(:get,  "/auth/challenge")).to include(controller: "kiosk/server/auth")
+      expect(recognize(:post, "/agents/kyc")).to include(controller: "kiosk/server/kyc_attestation")
+      expect(recognize(:get,  "/.well-known/jwks.json")).to include(controller: "kiosk/server/jwks")
+    end
+
+    it "leaves a path that cannot be a verb name a routing 404" do
+      # The constraint keeps it out of the controller entirely, so it never
+      # becomes a 401 from the wire.
+      ["/Catalog", "/create-order", "/9lives", "/_hidden"].each do |path|
+        expect { recognize(:get, path) }.to raise_error(ActionController::RoutingError)
+      end
+    end
+  end
 end

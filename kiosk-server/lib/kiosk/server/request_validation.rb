@@ -1,5 +1,8 @@
 # frozen_string_literal: true
 
+require "kiosk/server/errors"
+require "kiosk/server/argument_decoder"
+
 module Kiosk
   module Server
     # Opt-in request-shape validation (slice-1 of the UNIFORM-VALIDATION
@@ -15,14 +18,26 @@ module Kiosk
     # an infinite loop with no diagnostic. With this on, a malformed proof raises
     # {Errors::BadRequest} carrying a hint that names the expected shape.
     #
-    # == Scope (slice-1)
+    # == Scope
     #
-    # ONLY the PoW proof(s) are validated, and ONLY when present. This is NOT the
-    # gate: a well-formed-but-forged proof still fails the real cryptographic
-    # check inside {PowGate.gate}. This layer converts a SILENT re-challenge on a
-    # malformed shape into a CLEAR 400. The fuller uniform-validation layer
-    # (query/run bodies, envelope, auth schemas, response-conformance CI, vendored
-    # schema sync-check) is v0.5 / T-045.
+    # SLICE-1 validated the PoW proof(s) only, and only when present. This is NOT
+    # the gate: a well-formed-but-forged proof still fails the real cryptographic
+    # check inside {PowGate.gate}. That layer converts a SILENT re-challenge on a
+    # malformed shape into a CLEAR 400.
+    #
+    # T-068 SLICE 1 (the 0.4 per-verb wire) adds the second consumer,
+    # {.validate_arguments!}: a verb's own `input_schema` validating the
+    # ARGUMENTS of a request to `<endpoint>/<verb-name>`, which is what T-073's
+    # «`input_schema` becomes REQUIRED» buys — an executable input contract
+    # rather than a published one. It runs behind the SAME `validate_requests`
+    # flag, on the same lazily-required json_schemer, and it runs on the
+    # COERCED arguments ({ArgumentDecoder}) because json_schemer cannot check a
+    # query string's `"4"` against `{type: "integer"}`. Flipping the flag on by
+    # default — which is what makes K-717's typed 400 fall out of the schema
+    # layer everywhere — is the 0.4 DESCRIPTOR slice, not this one.
+    #
+    # Still out of scope: response-conformance CI and the vendored-schema
+    # sync-check (T-045).
     #
     # == Lazy / optional dependency
     #
@@ -57,6 +72,51 @@ module Kiosk
             hint: POW_SHAPE_HINT,
           )
         end
+      end
+
+      # Validate one verb's ARGUMENTS against the `input_schema` it declares.
+      #
+      # Called from {VerbController} on the 0.4 per-verb wire, AFTER
+      # {ArgumentDecoder} has recovered the declared types (a query string
+      # carries strings, and `"4"` is not an `integer` to any validator) and
+      # BEFORE the handler runs.
+      #
+      # RESERVED NAMES (T-070 rule 7). `limit` and `cursor` are always accepted
+      # and never required to be declared, so a verb that does not declare them
+      # never sees them here — otherwise getgrocery's `catalog`, whose schema is
+      # the closed empty object `{additionalProperties: false, properties: {}}`,
+      # would 400 on the very `?limit=` the pagination contract invites. A verb
+      # that DOES declare one is validated against its own declaration, which is
+      # the more specific statement.
+      #
+      # @param arguments [Hash] the decoded, COERCED arguments
+      # @param input_schema [Hash, nil] the verb's declaration; nil skips
+      # @param verb [String] the wire name, for the message
+      # @raise [Errors::BadRequest] naming the parameter that failed
+      # @raise [Errors::ConfigurationError] when json_schemer is not loadable
+      def validate_arguments!(arguments, input_schema:, verb:)
+        return if input_schema.nil?
+
+        require_schemer!
+        payload = normalize(arguments)
+        exempt  = ArgumentDecoder::RESERVED.keys - declared_property_names(input_schema)
+        payload = payload.reject { |name, _| exempt.include?(name) }
+
+        errors = JSONSchemer.schema(normalize(input_schema)).validate(payload).to_a
+        return if errors.empty?
+
+        raise Errors::BadRequest.new(
+          "#{verb}: #{errors.map { |error| error["error"] }.compact.join("; ")}",
+          hint: "GET <endpoint>/schema publishes this verb's input_schema; the " \
+                "arguments must satisfy it. `limit` and `cursor` are always accepted.",
+        )
+      end
+
+      # The property names a declaration actually declares, as Strings. Used
+      # only to decide whether a reserved name is exempt.
+      def declared_property_names(input_schema)
+        properties = ArgumentDecoder.fetch(input_schema, :properties)
+        properties.is_a?(Hash) ? properties.keys.map(&:to_s) : []
       end
 
       # Human-readable description of the expected proof shape, echoed in the 400

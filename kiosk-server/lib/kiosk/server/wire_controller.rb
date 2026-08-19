@@ -70,6 +70,26 @@ module Kiosk
         body     = parse_body!
         identity = resolve_identity!
 
+        execute_wire(command: command, args: body, identity: identity)
+      end
+
+      # The toll, the session and the render — everything after the arguments
+      # are in hand and the identity is resolved.
+      #
+      # Shared with {VerbController}, the 0.4 per-verb wire, which reaches the
+      # same three gates by a different route: its verb name is a PATH SEGMENT
+      # and a query's arguments arrive in the query string, so it does its own
+      # parsing and then hands the result here. Both wires therefore compute
+      # the SAME PoW fingerprint for the same call, which is what lets a proof
+      # issued on one be spent on the other while both are served.
+      #
+      # @param command [Symbol] the gate/policy verb — still one of
+      #   {Executor::VERBS}, because `reputation_factors` and
+      #   `Policy#challenge_for` both take it as `verb:` and every shipped
+      #   policy branches on those four symbols.
+      # @param name [String, nil] the query/action wire name when the caller
+      #   knows it (the per-verb wire), nil when it is inside `args` (0.3).
+      def execute_wire(command:, args:, identity:, name: nil)
         # Read the submitted proof(s) from the `Kiosk-PoW` request HEADER
         # (ADR-0022), NOT the body: the body is now ONLY verb args, so the
         # challenge fingerprint binds to the plain body untouched, and a GET
@@ -91,10 +111,19 @@ module Kiosk
           RequestValidation.validate_proofs!(pow)
         end
 
+        # The fingerprint binds the challenge to `command` + the canonical JSON
+        # of the arguments. On the per-verb wire the name is not IN the
+        # arguments, so it is folded back in HERE — for the digest only, never
+        # for the handler — which reproduces the 0.3 fingerprint byte for byte.
+        # (Widening the formula to `"<METHOD> <verb>\n<args>"`, which design
+        # §3.4 recommends and which stops depending on there being a `name`
+        # slot at all, rides the 0.4 cutover slice with the rest of the wire
+        # break. No verb in the tree declares an argument called `name`, so
+        # nothing is shadowed by the merge today.)
         PowGate.gate(
           identity: identity,
           command:  command,
-          body:     body,
+          body:     name.nil? ? args : args.merge(name: name),
           pow:      pow,
         )
 
@@ -107,9 +136,10 @@ module Kiosk
         result = CurrentRequest.with(identity: identity, env: request.env) do
           Executor.call(
             kind:       command,
-            args:       body,
+            args:       args,
             identity:   identity,
             connection: connection_for(identity),
+            name:       name,
           )
         end
 

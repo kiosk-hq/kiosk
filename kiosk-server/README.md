@@ -107,9 +107,11 @@ One line. The engine draws the entire surface:
 mount Kiosk::Server::Engine => Kiosk.configuration.mount_path
 ```
 
-Under the mount that is the wire (`schema`/`query`/`run`/`pay`), the kiosk-pop
-auth plane (`auth/challenge`, `auth/register`, `auth/login`, `auth/revoke`),
-JWKS (`.well-known/jwks.json`), KYC attestation (`agents/kyc`) and the whole
+Under the mount that is the wire — one endpoint per registered verb
+(`GET <mount>/<query-name>`, `POST <mount>/<action-name>`) plus the reserved
+`schema`, `openapi.json` and `pay` — the kiosk-pop auth plane
+(`auth/challenge`, `auth/register`, `auth/login`, `auth/revoke`), JWKS
+(`.well-known/jwks.json`), KYC attestation (`agents/kyc`) and the whole
 account-binding ceremony (the RFC 8628 claim wire, `auth/link`/`claim`/`unlink`,
 the verify and «Link an assistant» pages). The engine also installs the
 ROOT-relative discovery documents — `/agents.txt`, `/agents.json`, `/auth.md`,
@@ -163,9 +165,13 @@ class Kiosk::OrdersController < ApplicationController
 
   description "Places an order for the assistant's human and reserves the " \
               "chosen delivery window. Nothing is charged until `pay`."
-  input_schema type: "object",
-               properties: { items: { type: "array" }, delivery_slot_id: { type: "integer" } },
-               required: %w[items delivery_slot_id]
+  input_schema  type: "object",
+                properties: { items: { type: "array" }, delivery_slot_id: { type: "integer" } },
+                required: %w[items delivery_slot_id]
+  output_schema type: "object",
+                properties: { order_id:    { type: "string" },
+                              total_cents: { type: "integer" } },
+                required: %w[order_id total_cents]
   def create_order
     order = Orders::Place.call(user_id: kiosk_identity.user_id, params: params)
     render json: { order_id: order.id, total_cents: order.total_cents }
@@ -210,11 +216,15 @@ helper methods stay invisible to the wire.
 | macro | what it declares |
 | --- | --- |
 | `description` | Semantics **only**: what the verb does, how, and what it returns *in meaning*. Never a field list, a type, a required marker or a param name — those live in the schemas (ADR-0023). |
-| `input_schema` | JSON Schema for the params. The input contract: every name, type, enum and range. |
-| `output_schema` | JSON Schema for what comes back, so an assistant knows the result shape without a call-and-observe probe. |
+| `input_schema` | **Required.** JSON Schema for the params. The input contract: every name, type, enum and range — and the wire coerces and validates every call against it. A verb that takes nothing still declares the empty closed object. |
+| `output_schema` | **Required.** JSON Schema for what comes back, so an assistant knows the result shape without a call-and-observe probe — the only machine-readable statement of the answer, now that there is no response envelope. |
 | `example_params` | A params object an assistant can copy verbatim. |
 | `example_row` | A worked example of the result. |
 | `wire_name` | Optional. The name agents call the verb by, when it cannot be the method name. |
+
+The two **Required** rows are enforced at declaration time, not at request time:
+a verb that omits either raises an `ArgumentError` as its class body is read, so
+the app fails to boot instead of publishing an incomplete contract.
 
 All of them surface in `GET <mount>/schema`, which is how an assistant discovers
 the surface.
@@ -231,8 +241,8 @@ the class body is read. Rails eager-loads `app/controllers` in production, so a
 handler registers at boot whether or not you listed it — but development
 (`config.eager_load = false`) autoloads on first reference, and nothing
 references a handler controller, so an origin that names none of them serves
-**no verbs at all**: `GET <mount>/schema` returns an empty catalog, every
-`query`/`run` answers 404, and `/.well-known/kiosk.json` advertises
+**no verbs at all**: `GET <mount>/schema` returns an empty catalog, every verb
+path answers 404, and `/.well-known/kiosk.json` advertises
 `"capabilities": []` (they are computed from the live registry). `c.handlers` is
 what closes that: the engine registers the listed classes in both load modes and
 rebuilds them on every reload. When neither the list nor the initializer API has
@@ -256,9 +266,13 @@ you `render`. On top of that:
 - The handler runs inside the wire's GUC-scoped transaction, so raising rolls
   back — and so does rendering a non-2xx, which the seam converts into a raise.
 
-Errors are Rails' idiom, end to end. The `error.code` vocabulary is the wire
-contract — a closed table, not a class hierarchy — and three Rails-native
-moves cover all of it:
+Errors are Rails' idiom, end to end. The error-**code** vocabulary is the wire
+contract — a closed table, not a class hierarchy. Mind which side of the seam
+you are on: a handler names a code the Rails way, under `error.code` in the body
+it renders, and the wire re-renders that as an RFC 9457
+`application/problem+json` document whose `code` is a FLAT top-level member —
+`error.code` is the handler-side spelling, `code` is what travels and what an
+assistant branches on. Three Rails-native moves cover all of it:
 
 - `render json: {...}, status: :bad_request` — the status becomes its wire
   code (400 `bad_request`, 401 `unauthenticated`, 403 `forbidden`,
@@ -271,10 +285,12 @@ moves cover all of it:
   over it. Anything unregistered stays a 500 `action_failed`.
 - For a code a bare status cannot name — `rls_denied`, or a *specific* 402
   (`payment_setup_required` vs `payment_failed` vs `pow_required`) — render
-  the envelope with the code explicit:
-  `render json: { ok: false, error: { code: "rls_denied", message: "…" } },
-  status: :forbidden`. It travels verbatim; a bare 402/500 is never guessed
-  at. (The gate-style `Kiosk::Server::Errors` classes remain raisable too.)
+  the code explicitly:
+  `render json: { error: { code: "rls_denied", message: "…" } },
+  status: :forbidden`. It travels verbatim — the code becomes the problem
+  document's top-level `code`, the message its `detail` — while a bare 402/500
+  is never guessed at. (The gate-style `Kiosk::Server::Errors` classes remain
+  raisable too.)
 
 
 ### The initializer holds configuration, not verbs

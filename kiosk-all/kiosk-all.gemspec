@@ -12,7 +12,9 @@ Gem::Specification.new do |spec|
     framework. Installing it pulls in the production data-plane gems:
     kiosk-core (value types, abstract bases, configuration) and
     kiosk-server — the whole host-side surface: the wire controllers
-    (/kiosk/{schema,query,run,pay}), the register/login auth plane, JWKS,
+    (one endpoint per verb — GET /kiosk/<query-name>, POST
+    /kiosk/<action-name> — plus /kiosk/{schema,openapi.json,pay}), the
+    register/login auth plane, JWKS,
     KYC attestation, discovery, the account-binding ceremony, the
     Executor, the PoW gate, the headers middleware and the `kiosk:install`
     generator.

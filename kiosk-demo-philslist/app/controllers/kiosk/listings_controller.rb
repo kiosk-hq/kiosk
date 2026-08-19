@@ -26,16 +26,20 @@ class Kiosk::ListingsController < ApplicationController
   include Kiosk::Action
   include KioskRefusals
 
-  # post_listing — create a listing under the AUTHENTICATED principal. Any
-  # agent-supplied owner_id in params is IGNORED (the forged-principal beat):
-  # owner_id is read from the identity the wire resolved. created_by_agent_id
-  # records the acting agent from the token (attribution). See
-  # {PostListingOperation}, which is where both of those decisions are written
-  # out at length.
+  # post_listing — create a listing under the AUTHENTICATED principal. The
+  # owner is NOT an input: it is read from the identity the wire resolved, and
+  # since 0.4 an agent-supplied `owner_id` does not even reach the handler —
+  # `additionalProperties: false` below plus §8.1 item 5's mandatory argument
+  # validation refuse it with a typed 400 naming the parameter. (Through 0.3 it
+  # was accepted and silently ignored; the description said so, and that
+  # sentence is now false, which is why it moved.) The handler guard survives
+  # anyway as the second layer — see {PostListingOperation}, where it and
+  # created_by_agent_id (the acting agent, for attribution) are written out at
+  # length.
   description "Post a new classifieds listing owned by the authenticated principal. " \
               "price_text is free-form display text (e.g. \"€300\" or \"Free\"), not a " \
-              "cents amount. Any owner_id passed in args is ignored — the listing is " \
-              "owned by the authenticated principal."
+              "cents amount. The owner is not an argument — it comes from your " \
+              "access token, and sending an owner_id is refused."
   input_schema type: "object",
                additionalProperties: false,
                properties: {

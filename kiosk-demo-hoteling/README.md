@@ -37,12 +37,15 @@ RFC 9457 problem document.
   tooling; the catalog at `/kiosk/schema` stays canonical
 
 Advertised capabilities are `[schema, queries, actions, pay]` — the MODULES
-this origin serves, never the registered verb names (the catalog is Bearer-gated
-behind `GET /kiosk/schema`). **Registration is
+this origin serves, never the registered verb names. That is a MODELLING rule,
+not a security one (spec §4.2): `GET /kiosk/schema` is public, so there is
+nothing to withhold — this document is a POINTER and the catalog is the
+CONTRACT, and a second copy of the verb list would be a second source of truth
+for it. **Registration is
 always gated by Equihash proof-of-work** (`registration_pow_count = 1`) — every
 new agent key pays one solve to register. Separately, an **opt-in** browse toll
 (off by default; enable with `KIOSK_POW_BROWSE_DEMO=1`) prices the browse-heavy
-`query` verb after the first few free availability queries — a metered toll, not
+QUERY endpoints after the first few free availability queries — a metered toll, not
 a wall: an AI assistant pays a few seconds of compute to look deeper, a bulk
 scraper pays linearly and forever.
 

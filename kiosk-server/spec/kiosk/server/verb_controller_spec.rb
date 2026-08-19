@@ -103,9 +103,12 @@ RSpec.describe Kiosk::Server::VerbController do
 
     it "answers 401 before it will say whether the verb exists" do
       # Design §3.5 lists the declared-verb check BEFORE authentication;
-      # serving it that way would enumerate the catalog to an unauthenticated
-      # probe (404 for a name that does not exist, 401 for one that does) on a
-      # surface that is Bearer-gated today. Both answer 401 here.
+      # this controller resolves identity first, so an unauthenticated probe
+      # cannot tell a registered name from an unregistered one. That is
+      # ordinary gate ORDER, not an anti-enumeration defence — spec §4.2 and
+      # {VerbController}'s own comment record that warrant as RETIRED, because
+      # `GET <endpoint>/schema` is public and publishes the whole catalog to
+      # anyone who asks. Both answer 401 here.
       expect(call_verb(:get, "salons",     auth: false).first).to eq(401)
       expect(call_verb(:get, "frobnicate", auth: false).first).to eq(401)
     end

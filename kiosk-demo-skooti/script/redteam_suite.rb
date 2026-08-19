@@ -29,6 +29,21 @@
 #   MalformedUuidArg   — a junk reservation_id, as an arg AND inside a signed
 #                        cart, is a typed 400 with no SQL internals — never a 500
 #
+# And two beats that are only expressible after the 0.4 cutover (T-074 = A):
+#   RetiredWire        — POST /kiosk/query and POST /kiosk/run are an ordinary
+#                        404 / not_found: the multiplexed pair was DELETED, so
+#                        there is no privileged endpoint left, no compatibility
+#                        payload, and no second conformance surface to attack.
+#   MethodMismatch     — a GET at an action's path is 405 / method_not_allowed
+#                        with `Allow: POST`, never a silent 404 an assistant
+#                        would read as "this operator cannot do that".
+#
+# THE 0.4 WIRE, throughout: a query is `GET <endpoint>/<query-name>` with its
+# arguments in the query string, an action is `POST <endpoint>/<action-name>`
+# with its arguments as the JSON body, a success body IS the result, and an
+# error is an RFC 9457 problem document whose branch point is the TOP-LEVEL
+# `code` (`message` became `detail`).
+#
 # Usage (from kiosk-demo-skooti/):
 #   SERVER_URL=http://127.0.0.1:3004 KIOSK_ISSUER=http://127.0.0.1:3004 \
 #   bundle exec ruby script/redteam_suite.rb
@@ -140,7 +155,7 @@ profile = Kiosk::Redteam::Profile.new(
   # reserve needs no KYC — it only requires an authenticated agent token.
   create_owned: lambda { |client, principal|
     fleet_resp = client.query(principal, name: "scooters_available")
-    rows       = fleet_resp.body.is_a?(Hash) ? (fleet_resp.body["rows"] || []) : []
+    rows       = fleet_resp.body.is_a?(Array) ? fleet_resp.body : []
     scooter    = rows.first
     raise "redteam(skooti): no available scooters in scooters_available" unless scooter
 
@@ -149,19 +164,23 @@ profile = Kiosk::Redteam::Profile.new(
       unless rsv_resp.status == 200
 
     {
-      id:                  rsv_resp.body.dig("value", "reservation_id"),
-      code:                rsv_resp.body.dig("value", "scooter_code"),
-      price_per_min_cents: rsv_resp.body.dig("value", "price_per_min_cents").to_i,
+      id:                  rsv_resp.body["reservation_id"],
+      code:                rsv_resp.body["scooter_code"],
+      price_per_min_cents: rsv_resp.body["price_per_min_cents"].to_i,
     }
   },
 
   # ── forge_action / forge_args — ForgedUserId ─────────────────────────────
-  # B calls reserve with user_id: A.user_id injected.  The server must derive
-  # the owning user from the GUC (kiosk.current_user_id()), not from args.
+  # B calls reserve with user_id: A.user_id injected. Since 0.4 the wire itself
+  # REFUSES it: `reserve` publishes `additionalProperties: false` and declares
+  # only `scooter_code`, so the injected principal is a typed 400 before the
+  # handler runs. (Through 0.3 the argument was accepted and the handler derived
+  # the owner from the GUC instead; the generic scenario accepts either — a 4xx
+  # refusal, or a 200 whose row never surfaces under A.)
   forge_action: "reserve",
   forge_args:   lambda { |client, principal_a, _principal_b|
     fleet_resp = client.query(principal_a, name: "scooters_available")
-    rows       = fleet_resp.body.is_a?(Hash) ? (fleet_resp.body["rows"] || []) : []
+    rows       = fleet_resp.body.is_a?(Array) ? fleet_resp.body : []
     scooter    = rows.first
     raise "redteam(skooti): no scooters for forge_args" unless scooter
 
@@ -313,9 +332,17 @@ end
 # assistant cannot tell it from "the charge may have gone through".
 #
 # Asserts three properties, not one: HTTP 400 (a client mistake reported as such),
-# `error.code == "bad_request"` (typed, so an assistant can branch on it), and no
-# SQL internals anywhere in the body. A generic `blocked?` verdict would accept a
-# 403 or a 401 here, so this scenario builds its Verdict directly.
+# the problem document's top-level `code == "bad_request"` (typed, so an
+# assistant can branch on it), and no SQL internals anywhere in the body. A
+# generic `blocked?` verdict would accept a 403 or a 401 here, so this scenario
+# builds its Verdict directly.
+#
+# Since 0.4 the arg-shaped probes are refused one layer EARLIER — `reservation_id`
+# declares `format: "uuid"` and `input_schema` is validated on every call — so the
+# refusal now comes from the declared contract rather than from UuidCheck inside
+# the handler. Same status, same code, same no-leak property; the guard behind it
+# still stands for anything that reaches it (the signed-cart probe below, which
+# no input_schema covers).
 #
 # rent_motorcycle is probed too, and it is the interesting one: its KYC-attribute
 # gate runs FIRST, so an un-KYC'd principal gets 403 kyc_required and the uuid
@@ -382,7 +409,7 @@ class MalformedUuidArg < Kiosk::Redteam::Scenario
   def check(failures, statuses, label, resp)
     statuses << resp.status
     leak = SQL_INTERNALS.find { |needle| JSON.generate(resp.body).include?(needle) }
-    code = resp.body.is_a?(Hash) ? resp.body.dig("error", "code") : nil
+    code = resp.body.is_a?(Hash) ? resp.body["code"] : nil
     return if resp.status == 400 && code == "bad_request" && leak.nil?
 
     failures << "#{label} → HTTP #{resp.status} code=#{code.inspect}#{leak ? " LEAKS #{leak.inspect}" : ""}"
@@ -410,7 +437,8 @@ end
 #
 # 12 generic + 3 local cashier-check beats + the K-581/K-582 malformed-uuid
 # beat; skooti's full surface makes all generic scenarios applicable (0 skips
-# expected). Seven further skooti-local beats run after the runner, below.
+# expected). Nine further skooti-local beats run after the runner, below —
+# seven of them, plus the two 0.4-cutover beats (RetiredWire, MethodMismatch).
 # RegistrationWithoutPow: pow_difficulty>0 (Equihash gate on) → always applicable.
 
 scenarios = [
@@ -474,13 +502,13 @@ motorcycle_forged_kyc = lambda do
   # Reserve + pay for the motorcycle so ONLY the KYC-attribute gate can be the
   # thing that blocks (isolates Gate 0, exactly like the demo:kyc happy path).
   fleet = client.query(a, name: "scooters_available")
-  mc    = (fleet.body["rows"] || []).find { |r| r["code"] == "MC-001" }
+  mc    = Array(fleet.body).find { |r| r["code"] == "MC-001" }
   raise "redteam(skooti): MC-001 not in fleet" unless mc
 
   rsv = client.run(a, name: "reserve", scooter_code: "MC-001")
   raise "redteam(skooti): reserve MC-001 failed (#{rsv.status})" unless rsv.status == 200
-  reservation_id = rsv.body.dig("value", "reservation_id")
-  price_min      = rsv.body.dig("value", "price_per_min_cents").to_i
+  reservation_id = rsv.body["reservation_id"]
+  price_min      = rsv.body["price_per_min_cents"].to_i
 
   now = Time.now.to_i
   intent_id = SecureRandom.uuid
@@ -510,7 +538,7 @@ motorcycle_forged_kyc = lambda do
   rent = client.run(a, name: "rent_motorcycle", reservation_id:)
 
   kyc_blocked  = Kiosk::Redteam.blocked?(kyc_resp)
-  rent_blocked = rent.status == 403 && rent.body.is_a?(Hash) && rent.body.dig("error", "code") == "kyc_required"
+  rent_blocked = rent.status == 403 && rent.body.is_a?(Hash) && rent.body["code"] == "kyc_required"
 
   if kyc_blocked && rent_blocked
     { blocked: true, detail: "forged attestation rejected at /kyc (#{kyc_resp.status}); rent_motorcycle stays 403 kyc_required" }
@@ -557,8 +585,8 @@ motorcycle_via_start_rental = lambda do
   reserve_and_pay = lambda do |code|
     rsv = client.run(a, name: "reserve", scooter_code: code)
     raise "redteam(skooti): reserve #{code} failed (#{rsv.status})" unless rsv.status == 200
-    reservation_id = rsv.body.dig("value", "reservation_id")
-    price_min      = rsv.body.dig("value", "price_per_min_cents").to_i
+    reservation_id = rsv.body["reservation_id"]
+    price_min      = rsv.body["price_per_min_cents"].to_i
 
     now       = Time.now.to_i
     intent_id = SecureRandom.uuid
@@ -577,20 +605,22 @@ motorcycle_via_start_rental = lambda do
   end
 
   fleet = client.query(a, name: "scooters_available")
-  rows  = fleet.body["rows"] || []
+  rows  = Array(fleet.body)
   raise "redteam(skooti): MC-001 not in fleet (verb-swap beat)" unless rows.any? { |r| r["code"] == "MC-001" }
 
   # THE ATTACK — motorcycle reservation, scooter verb, no attestation anywhere.
   mc_resv = reserve_and_pay.call("MC-001")
   attack  = client.run(a, name: "start_rental", reservation_id: mc_resv)
-  token   = attack.body.is_a?(Hash) ? attack.body.dig("value", "rental_token") : nil
-  err     = attack.body.is_a?(Hash) ? attack.body.dig("error", "code") : nil
+  token   = attack.body.is_a?(Hash) ? attack.body["rental_token"] : nil
+  err     = attack.body.is_a?(Hash) ? attack.body["code"] : nil
   # The generic Kiosk::Redteam.blocked? is not the right judge here (the
   # MalformedUuidArg reasoning): it would call a 500 or an incidental "no
   # settlement" 403 a block. The refusal has to be TYPED — one of the wire
   # vocabulary's client-error codes, never a 5xx — and it has to be THIS gate,
   # which is what naming the other verb proves.
-  refusal_text  = attack.body.is_a?(Hash) ? JSON.generate(attack.body["error"]) : attack.body.to_s
+  # The whole problem document is the refusal now — `detail` and `hint` are its
+  # top-level members, so there is no nested `error` object to serialize.
+  refusal_text  = JSON.generate(attack.body)
   typed_refusal = [400, 403].include?(attack.status) &&
                   %w[bad_request forbidden kyc_required].include?(err)
   names_verb    = refusal_text.include?("rent_motorcycle")
@@ -598,7 +628,7 @@ motorcycle_via_start_rental = lambda do
   # THE CONTROL — same agent, same sequence, licence-free vehicle.
   sc_resv    = reserve_and_pay.call("SK-001")
   control    = client.run(a, name: "start_rental", reservation_id: sc_resv)
-  sc_token   = control.body.is_a?(Hash) ? control.body.dig("value", "rental_token") : nil
+  sc_token   = control.body.is_a?(Hash) ? control.body["rental_token"] : nil
   control_ok = control.status == 200 && !sc_token.to_s.empty?
 
   if token && !token.to_s.empty?
@@ -647,7 +677,7 @@ kyc_jws_theft = lambda do
   b = client.register!(name: "redteam-kyc-victim-b", pow_difficulty: 20)
   req_b = client.run(b, name: "request_kyc")
   raise "redteam(skooti): request_kyc(B) failed (#{req_b.status})" unless req_b.status == 200
-  token_b = req_b.body.dig("value", "request_id")
+  token_b = req_b.body["request_id"]
   approve_rc = broker_approve(token_b)
   raise "redteam(skooti): approve(B) on broker failed (#{approve_rc})" unless approve_rc == 200
 
@@ -655,7 +685,7 @@ kyc_jws_theft = lambda do
   victim_jws = nil
   20.times do
     status_b = client.query(b, name: "kyc_status", request_id: token_b)
-    victim_jws = (status_b.body["rows"] || []).first&.dig("kyc_jws")
+    victim_jws = Array(status_b.body).first&.dig("kyc_jws")
     break if victim_jws && !victim_jws.empty?
     sleep 0.2
   end
@@ -664,13 +694,13 @@ kyc_jws_theft = lambda do
   # Attacker A reserves + pays its OWN motorcycle so ONLY the KYC gate can block.
   a = client.register!(name: "redteam-kyc-attacker-a", pow_difficulty: 20)
   fleet = client.query(a, name: "scooters_available")
-  mc    = (fleet.body["rows"] || []).find { |r| r["code"] == "MC-001" }
+  mc    = Array(fleet.body).find { |r| r["code"] == "MC-001" }
   raise "redteam(skooti): MC-001 not in fleet (theft beat)" unless mc
 
   rsv = client.run(a, name: "reserve", scooter_code: "MC-001")
   raise "redteam(skooti): reserve MC-001(A) failed (#{rsv.status})" unless rsv.status == 200
-  reservation_id = rsv.body.dig("value", "reservation_id")
-  price_min      = rsv.body.dig("value", "price_per_min_cents").to_i
+  reservation_id = rsv.body["reservation_id"]
+  price_min      = rsv.body["price_per_min_cents"].to_i
 
   now = Time.now.to_i
   intent_id = SecureRandom.uuid
@@ -690,7 +720,7 @@ kyc_jws_theft = lambda do
   rent     = client.run(a, name: "rent_motorcycle", reservation_id:)
 
   kyc_blocked  = Kiosk::Redteam.blocked?(kyc_resp)
-  rent_blocked = rent.status == 403 && rent.body.is_a?(Hash) && rent.body.dig("error", "code") == "kyc_required"
+  rent_blocked = rent.status == 403 && rent.body.is_a?(Hash) && rent.body["code"] == "kyc_required"
 
   if kyc_blocked && rent_blocked
     { blocked: true, detail: "B's issued jws rejected for A at /kyc (#{kyc_resp.status}); A's rent_motorcycle stays 403 kyc_required" }
@@ -722,7 +752,7 @@ cross_operator_replay = lambda do
   # Open a real skooti request so the callback correlates to a pending row.
   req = client.run(a, name: "request_kyc")
   raise "redteam(skooti): request_kyc(xop) failed (#{req.status})" unless req.status == 200
-  request_id = req.body.dig("value", "request_id")
+  request_id = req.body["request_id"]
 
   # Read the nonce skooti stored (the broker returned it to skooti at intake and
   # echoes it in a real callback). We fetch it from the broker's intake response
@@ -750,7 +780,7 @@ cross_operator_replay = lambda do
   # The callback must reject (403/404). The agent's rent stays blocked because
   # kyc_status never reaches approved.
   st = client.query(a, name: "kyc_status", request_id:)
-  status = (st.body["rows"] || []).first&.dig("status")
+  status = Array(st.body).first&.dig("status")
   callback_rejected = cb_rc != 200
   still_pending     = status != "approved"
 
@@ -789,7 +819,7 @@ forged_callback_no_sig = lambda do
 
   req = client.run(a, name: "request_kyc")
   raise "redteam(skooti): request_kyc(fcb) failed (#{req.status})" unless req.status == 200
-  request_id = req.body.dig("value", "request_id")
+  request_id = req.body["request_id"]
 
   now = Time.now.to_i
   # Wrong key, trusted issuer, addressed to skooti — ONLY the signature is bad.
@@ -806,7 +836,7 @@ forged_callback_no_sig = lambda do
   cb_missing = post_kyc_callback(request_id:, nonce: "any")
 
   st = client.query(a, name: "kyc_status", request_id:)
-  status = (st.body["rows"] || []).first&.dig("status")
+  status = Array(st.body).first&.dig("status")
 
   wrong_rejected   = cb_wrong != 200
   missing_rejected = cb_missing != 200
@@ -820,6 +850,85 @@ forged_callback_no_sig = lambda do
 end
 
 fcb_beat = forged_callback_no_sig.call
+
+# ── 0.4-cutover beats: the shape of the wire itself ──────────────────────────
+#
+# Two beats that could not be written before the cutover (T-074 = A), because
+# before it both answers were something else. They share one principal: neither
+# touches the fleet or the reservations table, so nothing is staged and there is
+# nothing for a second identity to isolate.
+wire_probe = Kiosk::Redteam::Client.new(base_url: BASE_URL)
+                                   .register!(name: "redteam-wire-shape", pow_difficulty: 20)
+
+# One raw request, bypassing the redteam Client — the whole point is to dial
+# paths and methods the Client will not construct.
+raw_wire = lambda do |method, path, body = nil|
+  uri = URI("#{BASE_URL}#{path}")
+  req = (method == :get ? Net::HTTP::Get : Net::HTTP::Post)
+          .new(uri, { "Content-Type" => "application/json",
+                      "Authorization" => "Bearer #{wire_probe.token}" })
+  req.body = JSON.generate(body) if body
+  res = Net::HTTP.new(uri.host, uri.port).request(req)
+  [res, (JSON.parse(res.body) rescue {})]
+end
+
+# RetiredWire — `POST /kiosk/query` and `POST /kiosk/run` are DELETED, not
+# tombstoned. They now reach the per-verb controller as verbs literally named
+# "query" and "run", which nobody registered, so they answer the ordinary 404:
+# no privileged endpoint left, no compatibility payload that would keep the 0.3
+# argument channel alive, and no second conformance surface to attack. A
+# deprecation shim here would be exactly that second surface — and it is the one
+# an attacker would reach for, because it took the verb name from the BODY.
+retired_wire = lambda do
+  probes = %w[query run].map do |name|
+    res, body = raw_wire.call(:post, "/kiosk/#{name}", { name: "scooters_available" })
+    [res.code.to_i == 404 && body["code"] == "not_found",
+     "POST /kiosk/#{name} → #{res.code}/#{body["code"].inspect}"]
+  end
+
+  if probes.all? { |ok, _| ok }
+    { blocked: true,
+      detail:  "the 0.3 multiplexed pair is gone: #{probes.map(&:last).join(", ")} " \
+               "(an ordinary not_found, with no compatibility payload)" }
+  else
+    { blocked: false,
+      detail:  "a retired 0.3 endpoint still answers: #{probes.map(&:last).join(", ")} " \
+               "(want 404/\"not_found\" for both)" }
+  end
+end
+
+retired_wire_beat = retired_wire.call
+
+# MethodMismatch — a GET at an action's path is 405 with `Allow: POST`, never a
+# silent 404. The resource EXISTS; answering 404 would be a lie about it, and an
+# assistant that read the 404 as "this operator cannot do that" would abandon a
+# verb it could have called correctly. Probed in BOTH directions, because the
+# fork is symmetric and only one half is interesting to get right by accident:
+# a GET at the action `reserve`, and a POST at the query `my_reservations`.
+method_mismatch = lambda do
+  probes = [
+    [:get,  "/kiosk/reserve",         "POST", nil],
+    [:post, "/kiosk/my_reservations", "GET",  {}],
+  ].map do |method, path, wanted, body|
+    res, doc = raw_wire.call(method, path, body)
+    ok = res.code.to_i == 405 && doc["code"] == "method_not_allowed" &&
+         res["allow"].to_s.upcase.include?(wanted)
+    [ok, "#{method.to_s.upcase} #{path} → #{res.code}/#{doc["code"].inspect} " \
+         "Allow=#{res["allow"].inspect} (want 405/method_not_allowed/#{wanted})"]
+  end
+
+  if probes.all? { |ok, _| ok }
+    { blocked: true,
+      detail:  "the wrong method on a real verb is a 405 that names the right one: " \
+               "#{probes.map(&:last).join("; ")}" }
+  else
+    { blocked: false,
+      detail:  "a method mismatch is not answered 405/method_not_allowed with Allow: " \
+               "#{probes.map(&:last).join("; ")}" }
+  end
+end
+
+method_mismatch_beat = method_mismatch.call
 
 # ── SelfAssertedTokenForgery (K-539) — in-process, PRODUCTION-config ───────────
 # The self-asserted plaintext-bearer forgery. This suite drives a server booted
@@ -975,6 +1084,16 @@ if fcb_beat[:blocked]
 else
   puts "  BREACH   ✗ ForgedCallbackNoSig — #{fcb_beat[:detail]}"
 end
+if retired_wire_beat[:blocked]
+  puts "  BLOCKED  ✓ RetiredWire — #{retired_wire_beat[:detail]}"
+else
+  puts "  BREACH   ✗ RetiredWire — #{retired_wire_beat[:detail]}"
+end
+if method_mismatch_beat[:blocked]
+  puts "  BLOCKED  ✓ MethodMismatch — #{method_mismatch_beat[:detail]}"
+else
+  puts "  BREACH   ✗ MethodMismatch — #{method_mismatch_beat[:detail]}"
+end
 if self_asserted_beat[:blocked]
   puts "  BLOCKED  ✓ SelfAssertedTokenForgery — #{self_asserted_beat[:detail]}"
 else
@@ -987,6 +1106,7 @@ else
 end
 
 all_beats = [mc_beat, mc_verbswap_beat, theft_beat, xop_beat, fcb_beat,
+             retired_wire_beat, method_mismatch_beat,
              self_asserted_beat, self_asserted_user_beat]
 local_beats_blocked = all_beats.count { |b| b[:blocked] }
 blocked_count = blocked_results.size + local_beats_blocked

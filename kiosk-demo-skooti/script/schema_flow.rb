@@ -59,7 +59,9 @@ STDERR.puts "  Registering (solving 1 Equihash PoW)..."
 reg_body = { public_key: pem, signed: pop }
 rc, reg  = post_json("/kiosk/auth/register", reg_body)
 if rc == 402
-  challenges = reg.dig("error", "challenges")
+  # The 402 is an RFC 9457 problem document since 0.4: `challenges` is a
+  # TOP-LEVEL extension member, not nested under an `error` object.
+  challenges = reg["challenges"]
   abort "402 without challenges[]: #{JSON.generate(reg)}" unless challenges.is_a?(Array) && challenges.any?
   proofs = challenges.map { |c| { challenge: c, nonce: equihash_solve(c) } }
   rc, reg = post_json("/kiosk/auth/register", reg_body, pow: JSON.generate(proofs))
@@ -74,7 +76,9 @@ abort "schema call failed (#{schema_rc}): #{JSON.generate(schema_body)}" unless 
 
 # ── Emit structured JSON for the rake task to assert ────────────────────────
 
-schema_value = schema_body["value"] || {}
+# `GET <endpoint>/schema` answers `{verbs, queries, actions}` DIRECTLY — the
+# 0.3 `{ok, kind, value}` envelope was retired at the cutover (T-074 = A).
+schema_value = schema_body || {}
 
 puts JSON.generate({
   schema_status:  schema_rc,

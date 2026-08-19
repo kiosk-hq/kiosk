@@ -370,12 +370,27 @@ namespace :demo do
       require "openssl"
       require "securerandom"
 
+      # THE 0.4 WIRE. An action is `POST <endpoint>/<action-name>` carrying its
+      # arguments as the JSON body; a query is `GET <endpoint>/<query-name>`
+      # carrying them in the query string. There is no `name` field and no
+      # /query or /run endpoint, and a success body IS the result — a bare array
+      # from a non-paginating query, the action's own object from an action.
+      #
       # Helper: one POST and return [status_int, parsed_body].
       q_post = lambda do |path, body_hash, bearer, pow = nil|
         uri = URI("#{server_url}#{path}")
         req = Net::HTTP::Post.new(uri, "Content-Type" => "application/json", "Authorization" => "Bearer #{bearer}")
         req["Kiosk-PoW"] = JSON.generate(pow) if pow
         req.body = JSON.generate(body_hash)
+        res = Net::HTTP.new(uri.host, uri.port).request(req)
+        [res.code.to_i, JSON.parse(res.body)]
+      end
+
+      # Helper: one GET (a query) and return [status_int, parsed_body].
+      q_get = lambda do |path, params, bearer|
+        uri = URI("#{server_url}#{path}")
+        uri.query = URI.encode_www_form(params) unless params.empty?
+        req = Net::HTTP::Get.new(uri, "Authorization" => "Bearer #{bearer}")
         res = Net::HTTP.new(uri.host, uri.port).request(req)
         [res.code.to_i, JSON.parse(res.body)]
       end
@@ -396,14 +411,9 @@ namespace :demo do
       q_post.call("/kiosk/agents/kyc", { kyc_jws: q_att }, q_token)
 
       # ── QA1: query scooters_available — SK-001 must be present ──────────
-      qa1_rc, qa1_resp = q_post.call(
-        "/kiosk/query",
-        { name: "scooters_available" },
-        q_token,
-      )
+      qa1_rc, qa1_resp = q_get.call("/kiosk/scooters_available", {}, q_token)
       if qa1_rc == 200
-        rows = qa1_resp["rows"] || []
-        codes = rows.map { |r| r["code"] }
+        codes = Array(qa1_resp).map { |r| r["code"] }
         if codes.include?("SK-001")
           puts "  OK  QA1 scooters_available: SK-001 present (#{codes.inspect})"
         else
@@ -416,13 +426,9 @@ namespace :demo do
       end
 
       # ── QA2: query my_reservations before reservation — must be empty ────
-      qa2_rc, qa2_resp = q_post.call(
-        "/kiosk/query",
-        { name: "my_reservations" },
-        q_token,
-      )
+      qa2_rc, qa2_resp = q_get.call("/kiosk/my_reservations", {}, q_token)
       if qa2_rc == 200
-        rows_before = qa2_resp["rows"] || []
+        rows_before = Array(qa2_resp)
         if rows_before.empty?
           puts "  OK  QA2 my_reservations (before reserve): empty for fresh principal"
         else
@@ -436,24 +442,20 @@ namespace :demo do
 
       # Reserve SK-001 for this principal.
       rsv_rc, rsv_data = q_post.call(
-        "/kiosk/run",
-        { name: "reserve", scooter_code: "SK-001" },
+        "/kiosk/reserve",
+        { scooter_code: "SK-001" },
         q_token,
       )
       abort "RUN6 reserve failed (#{rsv_rc}): #{rsv_data.inspect}" unless rsv_rc == 200
-      q_reservation_id = rsv_data.dig("value", "reservation_id")
+      q_reservation_id = rsv_data["reservation_id"]
       puts "  Reserved: #{q_reservation_id}"
 
       # ── QA3: query my_reservations after reservation — exactly 1 row ─────
       # Demonstrates app-layer per-user isolation: only this principal's
       # reservation is visible; not rows from other principals (RUN 1 etc.).
-      qa3_rc, qa3_resp = q_post.call(
-        "/kiosk/query",
-        { name: "my_reservations" },
-        q_token,
-      )
+      qa3_rc, qa3_resp = q_get.call("/kiosk/my_reservations", {}, q_token)
       if qa3_rc == 200
-        rows_after = qa3_resp["rows"] || []
+        rows_after = Array(qa3_resp)
         if rows_after.size == 1 && rows_after.first["reservation_id"] == q_reservation_id
           puts "  OK  QA3 my_reservations (after reserve): exactly 1 row, reservation_id matches"
         else
@@ -511,9 +513,11 @@ namespace :demo do
       Assertion 2a (exclusion): B's my_reservations does NOT contain A's reservation.
       Assertion 2b (positive control): B's my_reservations DOES contain B's own
         reservation, proving the exclusion is not vacuous.
-      Assertion 3 (forged user_id ignored): B calls reserve with user_id: A's UUID.
-        The created reservation's DB user_id is B (server uses kiosk.current_user_id(),
-        ignores agent-supplied user_id).
+      Assertion 3a (the principal is not an input): B calls reserve with a
+        forged user_id arg (A's UUID) → 400 bad_request naming user_id, refused
+        by the published input_schema before the handler runs.
+      Assertion 3b (ownership comes from the token): B's LEGITIMATE reservation
+        has DB user_id == B (the server writes kiosk.current_user_id()).
 
     Exits 0 if all assertions hold (isolation works); exits 1 on failure.
     A red assertion = real isolation hole: fix the app, not the test.
@@ -605,12 +609,13 @@ namespace :demo do
     failures = []
     puts "\n── Adversarial isolation assertions ──"
 
-    user_id_a               = result["user_id_a"]
-    user_id_b               = result["user_id_b"]
-    reservation_id_a        = result["reservation_id_a"]
-    reservation_id_b_forged = result["reservation_id_b_forged"]
-    b_start_rental_rc       = result["b_start_rental_rc"]
-    b_reservation_ids       = result["b_reservation_ids"] || []
+    user_id_a         = result["user_id_a"]
+    user_id_b         = result["user_id_b"]
+    reservation_id_a  = result["reservation_id_a"]
+    reservation_id_b  = result["reservation_id_b"]
+    forged_refusal    = result["forged_refusal"] || []
+    b_start_rental_rc = result["b_start_rental_rc"]
+    b_reservation_ids = result["b_reservation_ids"] || []
 
     # ── Assertion 1: B's start_rental on A's reservation → 403 ──────────
     # B passed Gate 1b (licence-free vehicle) and Gate 2 (payment for rA)
@@ -635,23 +640,35 @@ namespace :demo do
     # Positive control: proves the exclusion above is not vacuous (the query
     # returns rows for B; if it always returned empty, Assertion 2a would
     # pass spuriously).
-    if b_reservation_ids.include?(reservation_id_b_forged)
-      puts "  OK  Assertion 2b: B's my_reservations includes B's own #{reservation_id_b_forged} (positive control — exclusion non-vacuous)"
+    if b_reservation_ids.include?(reservation_id_b)
+      puts "  OK  Assertion 2b: B's my_reservations includes B's own #{reservation_id_b} (positive control — exclusion non-vacuous)"
     else
-      failures << "B's my_reservations does not include B's own reservation #{reservation_id_b_forged}; got #{b_reservation_ids.inspect} — positive control failed (vacuous exclusion)"
-      puts "  FAIL  Assertion 2b: B's my_reservations missing B's own rB_forged #{reservation_id_b_forged} — positive control failed"
+      failures << "B's my_reservations does not include B's own reservation #{reservation_id_b}; got #{b_reservation_ids.inspect} — positive control failed (vacuous exclusion)"
+      puts "  FAIL  Assertion 2b: B's my_reservations missing B's own rB #{reservation_id_b} — positive control failed"
     end
 
-    # ── Assertion 3: DB user_id on B's forged reservation == user_id_b ───
-    db_user_id = `psql -X -d #{db} -tAc "SELECT user_id FROM public.reservations WHERE id = '#{reservation_id_b_forged}'" 2>&1`.strip
+    # ── Assertion 3a: the forged user_id is REFUSED by the published contract ──
+    forged_rc, forged_code, forged_detail = forged_refusal
+    if forged_rc == 400 && forged_code == "bad_request" && forged_detail.to_s.include?("user_id")
+      puts "  OK  Assertion 3a: forged user_id → 400 bad_request naming user_id " \
+           "(refused by input_schema before the handler runs)"
+    else
+      failures << "forged user_id not refused: #{forged_refusal.inspect}, want [400, \"bad_request\", …user_id…]"
+      puts "  FAIL  Assertion 3a: forged user_id → #{forged_refusal.inspect} (want 400/bad_request naming user_id)"
+    end
+
+    # ── Assertion 3b: DB user_id on B's LEGITIMATE reservation == user_id_b ──
+    # The half the refusal does not prove: ownership is taken from the
+    # authenticated identity (kiosk.current_user_id()), never from an argument.
+    db_user_id = `psql -X -d #{db} -tAc "SELECT user_id FROM public.reservations WHERE id = '#{reservation_id_b}'" 2>&1`.strip
     if db_user_id == user_id_b
-      puts "  OK  Assertion 3: DB reservations.user_id for rB == user_id_b (#{user_id_b}) — forged arg ignored"
+      puts "  OK  Assertion 3b: DB reservations.user_id for rB == user_id_b (#{user_id_b}) — ownership is taken from the identity"
     elsif db_user_id == user_id_a
-      failures << "ISOLATION HOLE: DB reservations.user_id for rB is A's user_id (#{user_id_a}) — forged user_id arg was NOT ignored"
-      puts "  FAIL  Assertion 3: server used forged user_id arg (reservation belongs to A, not B)"
+      failures << "ISOLATION HOLE: DB reservations.user_id for rB is A's user_id (#{user_id_a}) — ownership did not come from the token"
+      puts "  FAIL  Assertion 3b: reservation belongs to A, not B"
     else
       failures << "Unexpected user_id for rB: got #{db_user_id.inspect}, expected B's #{user_id_b}"
-      puts "  FAIL  Assertion 3: unexpected user_id #{db_user_id.inspect} for rB"
+      puts "  FAIL  Assertion 3b: unexpected user_id #{db_user_id.inspect} for rB"
     end
 
     if failures.empty?
@@ -679,12 +696,19 @@ namespace :demo do
       BLOCKED  ForgedKyc             — wrong-key attestation rejected at /kyc
       BLOCKED  UnpaidGatedAction     — start_rental without payment → Gate 2 fires
       BLOCKED  CrossTenantRead       — B's my_reservations excludes A's rows
-      BLOCKED  ForgedUserId          — agent-supplied user_id in reserve args ignored
+      BLOCKED  ForgedUserId          — agent-supplied user_id in reserve args refused (400)
       BLOCKED  RegistrationWithoutPow — /register without a valid Equihash proof rejected
       BLOCKED  MandatePrincipalSwap  — B signs mandate with A's identity; rejected
       BLOCKED  MandateReplay         — B re-submits A's JWS; rejected
       BLOCKED  TokenTampering        — altered JWT claim rejected 401
       BLOCKED  PrivilegeSelfSelection — agent cannot self-assign elevated privilege
+      BLOCKED  RetiredWire           — POST /kiosk/query and POST /kiosk/run are an
+                                       ordinary 404 not_found: the 0.3 pair was DELETED,
+                                       so no privileged endpoint and no second
+                                       conformance surface remain
+      BLOCKED  MethodMismatch        — a GET at an action's path (and a POST at a
+                                       query's) is 405 method_not_allowed with Allow,
+                                       never a silent 404
 
     Exits 0 when all scenarios are BLOCKED; exits 1 on any BREACH.
     A BREACH = a real hole in skooti — fix the app, not the scenario.
@@ -988,11 +1012,12 @@ namespace :demo do
     only, NO pre-shared issuer key) drives motorcycle KYC to success by relaying
     a human-approve link, plus the KYC-free scooter positive control:
 
-      A1  rent_motorcycle WITHOUT KYC        → 403, error.code == "kyc_required"
-          and error.hint points the agent at `request_kyc` (K-440/K-443 fix)
-      A2  run request_kyc                    → 200, returns a verification_url on
+      A1  rent_motorcycle WITHOUT KYC        → 403 whose RFC 9457 problem document
+          carries the TOP-LEVEL code "kyc_required", and whose `hint` points the
+          agent at `request_kyc` (K-440/K-443 fix)
+      A2  POST /kiosk/request_kyc            → 200, returns a verification_url on
           the skooti host; human approves the stub KYC-provider page; poll
-          query kyc_status → approved returns the issuer-signed kyc_jws
+          GET /kiosk/kyc_status?request_id=… → approved returns the signed kyc_jws
       A3  submit the relayed kyc_jws to      → 200 (attributes {age_over_18,
           POST /agents/kyc                      licence_a} recorded)
       A4  rent_motorcycle WITH KYC           → 200, offline token unlocks the lock

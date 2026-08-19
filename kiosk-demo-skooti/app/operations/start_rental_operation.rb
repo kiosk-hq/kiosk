@@ -69,9 +69,9 @@ class StartRentalOperation
         # Point at the completable path, as the KYC gate's own hint does: the
         # right verb, and the KYC it will demand, so an assistant does not
         # simply retry this one.
-        hint:    "call `run rent_motorcycle` with this reservation_id instead; it requires the " \
-                 "KYC attributes age_over_18 and licence_a — if you do not have them yet, " \
-                 "`run request_kyc` first",
+        hint:    "POST <endpoint>/rent_motorcycle with this reservation_id instead; it requires " \
+                 "the KYC attributes age_over_18 and licence_a — if you do not have them yet, " \
+                 "POST <endpoint>/request_kyc first",
       )
     end
 

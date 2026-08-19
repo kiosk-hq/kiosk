@@ -1,7 +1,9 @@
 # frozen_string_literal: true
 
 # skooti's WRITE surface: the five verbs an assistant reaches with
-# `POST /kiosk/run`. Same shape as Kiosk::FleetController — `ActionController::API`
+# `POST /kiosk/<action-name>`, one endpoint per verb, arguments as the JSON body
+# (protocol 0.4 deleted the multiplexed `POST /kiosk/run`).
+# Same shape as Kiosk::FleetController — `ActionController::API`
 # plus `include Kiosk::Action` — because a controller declares queries OR
 # actions, never both.
 #
@@ -19,7 +21,7 @@
 # same reason tudu left its queries in the handler — a call plus a literal has
 # nothing to extract.
 #
-# Errors are Rails' idiom end to end: the wire's `error.code` vocabulary is a
+# Errors are Rails' idiom end to end: the wire's `code` vocabulary is a
 # closed table, not a class hierarchy, so a refusal is an ordinary `render json:,
 # status:` naming the code, and the wire carries it verbatim. No Kiosk error
 # classes appear below — an Operation answers with an {OperationResult}, and

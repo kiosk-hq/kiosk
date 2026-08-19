@@ -148,6 +148,14 @@ Kiosk.configure do |c|
   # loop. Needs the json_schemer gem (in the Gemfile). Absent/valid pow paths
   # unchanged.
   c.validate_requests = true
+
+  # T-068 slice 3: every query/action answer is validated against the
+  # `output_schema` that verb declares, and a mismatch is a loud 500 rather
+  # than a lie shipped to an assistant. A DEVELOPMENT/CI assertion, not a
+  # request check — nothing a caller sends can trigger it — and it is what
+  # makes this demo's own CI task list a per-verb conformance proof of the
+  # descriptors rather than a smoke test.
+  c.validate_responses = true
   c.roles  = %i[customer]
   # Role pinned to every self-registered agent (agents cannot choose their own).
   c.registration_role = :customer

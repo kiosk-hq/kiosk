@@ -40,11 +40,36 @@ class Kiosk::FleetController < ActionController::API
   # verb takes no arguments" is a published fact rather than an absence an
   # assistant has to interpret.
   input_schema type: "object", additionalProperties: false, properties: {}, required: []
+  # `lat`/`lng` are `numeric(10,6)` columns, so ActiveRecord hands back a
+  # BigDecimal and Rails renders a BigDecimal as a JSON **string** — the wire
+  # really does carry `"52.3739"`, not `52.3739`. The example below said
+  # otherwise until this schema was written from the handler rather than from
+  # the description; an assistant that trusted it would have fed a string to
+  # arithmetic. Both are nullable columns.
+  output_schema type: "array",
+                description: "The whole available fleet, small and not paginated.",
+                items: {
+                  type: "object", additionalProperties: false,
+                  properties: {
+                    code:                { type: "string", description: "The ONLY vehicle handle on the wire — pass it to reserve as `scooter_code`." },
+                    name:                { type: %w[string null], description: "The vehicle's given name, or null." },
+                    dock:                { type: %w[string null], description: "Pickup dock/location, or null." },
+                    status:              { type: "string", description: "available — this verb lists only what is." },
+                    kind:                { type: "string", description: "scooter | motorcycle." },
+                    needs_licence:       { type: "boolean", description: "True for the KYC-gated combustion motorcycle: rent it with rent_motorcycle, not start_rental." },
+                    lat:                 { type: %w[string null], description: "Latitude as a decimal STRING (e.g. \"52.3739\"), or null." },
+                    lng:                 { type: %w[string null], description: "Longitude as a decimal STRING (e.g. \"4.8809\"), or null." },
+                    price_per_min_cents: { type: "integer", description: "EUR cents PER MINUTE." },
+                    currency:            { type: "string", description: "eur — the currency the cart must be signed in." },
+                  },
+                  required: %w[code name dock status kind needs_licence lat lng
+                               price_per_min_cents currency],
+                }
   example_params({})
   example_row({
     code: "SK-001", name: "Jordaan Jet", dock: "Jordaan Dock",
     status: "available", kind: "scooter", needs_licence: false,
-    lat: 52.3739, lng: 4.8809, price_per_min_cents: 15, currency: "eur",
+    lat: "52.3739", lng: "4.8809", price_per_min_cents: 15, currency: "eur",
   })
   def scooters_available
     # `pluck` rather than loading models: this is a projection, and naming the
@@ -89,6 +114,17 @@ class Kiosk::FleetController < ActionController::API
               "Each row carries a `reservation_id`; pass it to start_rental / rent_motorcycle as `reservation_id`. " \
               "Each row also carries the vehicle's `scooter_code` — the same handle scooters_available shows and reserve takes."
   input_schema type: "object", additionalProperties: false, properties: {}, required: []
+  output_schema type: "array",
+                description: "The principal's reservations, newest first.",
+                items: {
+                  type: "object", additionalProperties: false,
+                  properties: {
+                    reservation_id: { type: "string", description: "uuid. Pass to start_rental / rent_motorcycle as `reservation_id`." },
+                    scooter_code:   { type: "string", description: "The vehicle's `code` — the same handle scooters_available shows and reserve takes." },
+                    status:         { type: "string", description: "reserved | active." },
+                  },
+                  required: %w[reservation_id scooter_code status],
+                }
   def my_reservations
     # The vehicle is identified by its `code`, never by the numeric scooters.id:
     # that primary key is not a param of any verb, so emitting it would be a
@@ -125,6 +161,28 @@ class Kiosk::FleetController < ActionController::API
                                description: "The verification to poll — the `request_id` request_kyc returned." },
                },
                required: ["request_id"]
+  # A ONE-ROW array: this is a query and a query answers with rows. The two
+  # shapes are the two states, and `kyc_jws` exists only in the approved one —
+  # there is nothing to hand back before the human acts, and nothing to leak.
+  output_schema type: "array",
+                description: "Exactly one row: the verification's current state.",
+                minItems: 1, maxItems: 1,
+                items: {
+                  oneOf: [
+                    { type: "object", additionalProperties: false,
+                      description: "Not yet approved.",
+                      properties: { status: { enum: %w[pending declined],
+                                              description: "pending = the human has not acted; declined is terminal." } },
+                      required: ["status"] },
+                    { type: "object", additionalProperties: false,
+                      description: "Approved — the signed attestation is here.",
+                      properties: {
+                        status:  { const: "approved", description: "approved." },
+                        kyc_jws: { type: "string", description: "A full compact JWS. Submit the ENTIRE value to POST /kiosk/agents/kyc, then retry rent_motorcycle." },
+                      },
+                      required: %w[status kyc_jws] },
+                  ],
+                }
   def kyc_status
     return render_refusal(WireArguments.missing("request_id")) if params[:request_id].blank?
 

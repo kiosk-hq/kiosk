@@ -74,6 +74,24 @@ class Kiosk::RentalsController < ActionController::API
               "after about 5 minutes — tell your human the card setup is still not finished rather " \
               "than polling indefinitely; they can finish later and you re-check then."
   input_schema type: "object", additionalProperties: false, properties: {}, required: []
+  # TWO shapes, and the branch is `status`. Declared as a `oneOf` rather than
+  # one open object with an optional `setup_url`, because the pairing is the
+  # contract. This demo's stub PSP only ever produces the first branch — the
+  # second is declared anyway, so the PUBLISHED contract is the same across all
+  # three payment demos.
+  output_schema oneOf: [
+    { type: "object", additionalProperties: false,
+      description: "A payment method is on file — proceed to `pay`.",
+      properties: { status: { const: "ready", description: "ready." } },
+      required: ["status"] },
+    { type: "object", additionalProperties: false,
+      description: "A hosted setup flow must be completed by the human first.",
+      properties: {
+        status:    { const: "setup_required", description: "setup_required." },
+        setup_url: { type: "string", description: "The hosted setup page to hand to your human." },
+      },
+      required: %w[status setup_url] },
+  ]
   def payment_setup
     # The principal, from the identity the WIRE resolved. This used to be a
     # `SELECT kiosk.current_user_id()` round trip followed by a nil check that
@@ -107,6 +125,17 @@ class Kiosk::RentalsController < ActionController::API
                                  description: "Vehicle code from a scooters_available row, e.g. \"SK-001\"." },
                },
                required: ["scooter_code"]
+  output_schema type: "object",
+                description: "The hold, and the quote the cart must be signed against.",
+                additionalProperties: false,
+                properties: {
+                  reservation_id:      { type: "string", description: "uuid. Name it in the cart mandate's line item, and pass it to start_rental / rent_motorcycle as `reservation_id`." },
+                  scooter_code:        { type: "string", description: "The vehicle held, echoed." },
+                  price_per_min_cents: { type: "integer", description: "EUR cents — the quoted UPFRONT MINUTE, which is the cart's total." },
+                  currency:            { type: "string", description: "eur — the currency the cart must be signed in." },
+                  pay_hint:            { type: "string", description: "The mandate this hold expects, in words." },
+                },
+                required: %w[reservation_id scooter_code price_per_min_cents currency pay_hint]
   example_params({ scooter_code: "SK-001" })
   example_row({
     reservation_id: "a3f9c1e2-7b4d-4e8a-9c1f-2d6e5b0a3c7f",
@@ -134,6 +163,18 @@ class Kiosk::RentalsController < ActionController::API
                                                 "reserve or my_reservations, verbatim." },
                },
                required: ["reservation_id"]
+  # The SAME three fields rent_motorcycle answers with: both verbs end in one
+  # activation ({RentalActivation}), and two verbs that share a code path must
+  # not publish two different result contracts.
+  output_schema type: "object",
+                description: "The activated rental and its offline unlock token.",
+                additionalProperties: false,
+                properties: {
+                  scooter_code: { type: "string", description: "The vehicle unlocked." },
+                  rental_token: { type: "string", description: "An Ed25519-signed OFFLINE unlock token — present it to the vehicle; it verifies without reaching this origin." },
+                  exp:          { type: "integer", description: "Unix seconds at which the token stops being accepted." },
+                },
+                required: %w[scooter_code rental_token exp]
   def start_rental
     render_operation StartRentalOperation.call(reservation_id: params[:reservation_id])
   end
@@ -149,6 +190,17 @@ class Kiosk::RentalsController < ActionController::API
                                                 "`reservation_id` from reserve or my_reservations, verbatim." },
                },
                required: ["reservation_id"]
+  # Identical to start_rental's: both verbs end in the same activation
+  # ({RentalActivation}). What differs between them is the GATE, not the answer.
+  output_schema type: "object",
+                description: "The activated rental and its offline unlock token.",
+                additionalProperties: false,
+                properties: {
+                  scooter_code: { type: "string", description: "The vehicle unlocked." },
+                  rental_token: { type: "string", description: "An Ed25519-signed OFFLINE unlock token — present it to the vehicle; it verifies without reaching this origin." },
+                  exp:          { type: "integer", description: "Unix seconds at which the token stops being accepted." },
+                },
+                required: %w[scooter_code rental_token exp]
   def rent_motorcycle
     render_operation RentMotorcycleOperation.call(reservation_id: params[:reservation_id])
   end
@@ -160,6 +212,15 @@ class Kiosk::RentalsController < ActionController::API
               "approves, poll `query kyc_status` with the request_id for the signed attestation, submit it " \
               "to POST /kiosk/agents/kyc, then retry rent_motorcycle. No pre-shared issuer key needed."
   input_schema type: "object", additionalProperties: false, properties: {}, required: []
+  output_schema type: "object",
+                description: "The opened verification.",
+                additionalProperties: false,
+                properties: {
+                  request_id:       { type: "string", description: "Pass to kyc_status as `request_id` to poll for the signed attestation." },
+                  verification_url: { type: "string", description: "The broker page to relay to your human to approve." },
+                  status:           { const: "pending", description: "pending — a freshly opened request is always this." },
+                },
+                required: %w[request_id verification_url status]
   def request_kyc
     render_operation RequestKycOperation.call(principal_id: kiosk_identity.user_id)
   end

@@ -52,18 +52,24 @@ token = reg.fetch("access_token")
 auth  = { "Authorization" => "Bearer #{token}" }
 
 # ── Burst of `properties` browses; record proofs demanded per browse ────────
-QUERY = { name: "properties" }
+#
+# THE 0.4 WIRE: a query is `GET <endpoint>/<query-name>`. `properties` takes no
+# arguments, so the URL is the whole call — there is no `name` field and no
+# `POST /kiosk/query` to send it to.
+BROWSE_URL = "#{SERVER}/kiosk/properties"
 curve = []
 BROWSES.times do |i|
-  rc, resp = post_json("#{SERVER}/kiosk/query", QUERY, auth)
+  rc, resp = get_json(BROWSE_URL, auth)
   if rc == 402
-    challenges = resp.dig("error", "challenges")
+    # The 402 is an RFC 9457 problem document: `challenges` is a TOP-LEVEL
+    # extension member, not nested under an `error` object.
+    challenges = resp["challenges"]
     abort "browse #{i}: 402 without challenges[]" unless challenges.is_a?(Array) && challenges.any?
     proofs = challenges.map { |c| { challenge: c, nonce: equihash_solve(c) } }
     # PoW proof rides in the Kiosk-PoW request header as raw JSON (ADR-0022),
-    # not the body — the body stays byte-identical so the challenge fingerprint
-    # matches on retry.
-    rc, resp = post_json("#{SERVER}/kiosk/query", QUERY, auth.merge("Kiosk-PoW" => JSON.generate(proofs)))
+    # not the body — the REQUEST LINE and the arguments stay byte-identical so
+    # the §3.4 fingerprint (`SHA256("GET properties\n{}")`) matches on retry.
+    rc, resp = get_json(BROWSE_URL, auth.merge("Kiosk-PoW" => JSON.generate(proofs)))
     curve << proofs.size
   else
     curve << 0

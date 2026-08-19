@@ -53,10 +53,10 @@ hoteling is a Rails 8.1 app that speaks Kiosk. The following is the recorded out
 
 1. **Discover** — `GET /.well-known/kiosk.json` returns the hoteling issuer and surface.
 2. **Self-register** — generated an RSA-2048 keypair, then completed the proof-of-possession handshake: `GET /kiosk/auth/challenge` → signed the challenge as an RS256 JWS (`aud` = the hoteling issuer) → `POST /kiosk/auth/register {public_key:<pem>, signed:<jws>}` → HTTP 201 → `agent_id`, `user_id`, `access_token`. No existing account. No human login. No bot check.
-3. **Browse** — `POST /kiosk/query {name:"properties"}` returned 5 hotel properties (ordered by name; the flow uses the first, Bosphorus Palace, id=4). `POST /kiosk/query {name:"availability", property_id:4, check_in:"2026-07-28", check_out:"2026-07-31"}` returned available room types with nightly prices (ordered by price; the flow uses the first, Classic).
-4. **Reserve** — `POST /kiosk/run {name:"reserve_room", property_id:4, room_type_id:<id>, check_in:"2026-07-28", check_out:"2026-07-31"}` → HTTP 200, `booking_id:<uuid>`, `total_cents:45000`. A TTL hold was created in `kiosk.reservations`.
+3. **Browse** — `GET /kiosk/properties` returned 5 hotel properties as a bare JSON array (ordered by name; the flow uses the first, Bosphorus Palace, id=4). `GET /kiosk/availability?property_id=4&check_in=2026-07-28&check_out=2026-07-31` returned available room types with nightly prices (ordered by price; the flow uses the first, Classic).
+4. **Reserve** — `POST /kiosk/reserve_room {property_id:4, room_type_id:<id>, check_in:"2026-07-28", check_out:"2026-07-31"}` → HTTP 200, and the body IS the result: `booking_id:<uuid>`, `total_cents:45000`. A TTL hold was created in `kiosk.reservations`.
 5. **Pay** — signed an AP2 intent mandate (`cap_amount_cents:45100`, `scope:"lodging"`, `iss:<issuer>`) and a cart mandate (`total_amount_cents:45000`, `line_items:[{sku:"Classic", qty:3, booking_id:<uuid>}]`, bound to the intent via `intent_mandate_id`) as RS256 JWS with the registered keypair, then `POST /kiosk/pay {intent_mandate_jws:…, cart_mandate_jws:…, payment_mandate_jws:…}` → `settled_amount_cents:45000`, `ok:true`.
-6. **Confirm** — `POST /kiosk/run {name:"confirm_booking", booking_id:<uuid>}` → HTTP 200, `status:"confirmed"`, `confirmation_code:<uuid>`. The server verified ownership (Gate 1) and the settled mandate referencing this booking (Gate 2) before confirming. The code is stored on the booking row — it is the reference the guest gives at the desk, and `my_bookings` reports the same one afterwards.
+6. **Confirm** — `POST /kiosk/confirm_booking {booking_id:<uuid>}` → HTTP 200, `status:"confirmed"`, `confirmation_code:<uuid>`. The server verified ownership (Gate 1) and the settled mandate referencing this booking (Gate 2) before confirming. The code is stored on the booking row — it is the reference the guest gives at the desk, and `my_bookings` reports the same one afterwards.
 
 The database confirmed: one row in `bookings` with `status='confirmed'`, one row in `kiosk.settlements`, one row in `kiosk.reservations`.
 
@@ -95,15 +95,22 @@ The generator does **not** touch your routes. `kiosk-server` ships the wire cont
 
 ```ruby
 # config/routes.rb — the wire surface, mounted manually.
-# REST endpoints: one per verb, HTTP method carries the semantics.
+# The RESERVED endpoints first, so first-match protects them.
 get  "/kiosk/schema",         to: "kiosk/server/wire#schema"
-post "/kiosk/query",          to: "kiosk/server/wire#query"
-post "/kiosk/run",            to: "kiosk/server/wire#run"
 post "/kiosk/pay",            to: "kiosk/server/wire#pay"
 get  "/kiosk/auth/challenge", to: "kiosk/server/auth#challenge"
 post "/kiosk/auth/register",  to: "kiosk/server/auth#register"
 post "/kiosk/auth/login",     to: "kiosk/server/auth#login"
 post "/kiosk/auth/revoke",    to: "kiosk/server/auth#revoke"
+
+# Then, LAST, the per-verb pair: one endpoint per registered verb, resolved
+# against the registry at request time. GET /kiosk/<query-name>,
+# POST /kiosk/<action-name>. There is no /kiosk/query and no /kiosk/run —
+# protocol 0.4 deleted the multiplexed pair outright.
+get  "/kiosk/:kiosk_verb", to: "kiosk/server/verb#show",
+     constraints: { kiosk_verb: Kiosk::Server::VerbController::NAME_SEGMENT }
+post "/kiosk/:kiosk_verb", to: "kiosk/server/verb#create",
+     constraints: { kiosk_verb: Kiosk::Server::VerbController::NAME_SEGMENT }
 
 # /.well-known/kiosk.json is built on the fly from Kiosk.configuration;
 # kiosk-server does not yet ship a controller for it, so it is inlined here.
@@ -197,7 +204,9 @@ class Kiosk::ReservationsController < ActionController::API
     # Gate 1: ownership — booking.user_id must equal kiosk.current_user_id() AND status='reserved'
     # Gate 2: payment  — a settled payment_mandate whose cart line_items @> [{booking_id:}]
     # A refusal is Rails' idiom, not a Kiosk class:
-    #   render json: { ok: false, error: { code: "forbidden", … } }, status: :forbidden
+    #   render json: { error: { code: "forbidden", … } }, status: :forbidden
+    #   — the wire turns that into an RFC 9457 problem document whose
+    #     top-level `code` is the token an assistant branches on
     booking = ConfirmBooking.call(booking_id: params[:booking_id])
     render json: { booking_id: booking.id, status: "confirmed",
                    confirmation_code: booking.confirmation_code }

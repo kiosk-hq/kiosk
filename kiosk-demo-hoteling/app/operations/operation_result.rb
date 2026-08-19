@@ -23,13 +23,15 @@ class OperationResult
   # renders as. Deliberately NOT the full fourteen-code wire vocabulary: a code
   # this app never produces has no business having a mapping here, and `fetch`
   # turning a typo into a loud KeyError is the point of writing it out. tudu's
-  # copy lists two; hoteling's four are the four its handlers actually raised
-  # before the conversion (bad_request, forbidden, conflict) plus the not_found
-  # `hotel_detail` answers for an unknown property.
+  # copy lists two; hoteling's three are the three its handlers actually raise.
+  # `not_found` was a fourth until K-794: `hotel_detail` answered it for an
+  # unknown property, and at the 0.4 cutover that verb started answering rows
+  # like every other non-paginating query, where an unknown id is the EMPTY
+  # array. Nothing on this origin refuses `not_found` any more, so nothing here
+  # maps it — the rule this table is written out to enforce, applied to itself.
   STATUSES = {
     "bad_request" => :bad_request,
     "forbidden"   => :forbidden,
-    "not_found"   => :not_found,
     "conflict"    => :conflict,
   }.freeze
 

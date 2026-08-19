@@ -1,7 +1,14 @@
 # frozen_string_literal: true
 #
 # Agent-side driver: no-human hotel booking end-to-end.
-# Flow: register → query properties → query availability → run reserve_room → pay → run confirm_booking
+# Flow: register → properties → availability → reserve_room → pay → confirm_booking
+#
+# THE 0.4 WIRE. A query is `GET <endpoint>/<query-name>` with its arguments in
+# the QUERY STRING; an action is `POST <endpoint>/<action-name>` with its
+# arguments as the JSON BODY. There is no `name` field and no /query or /run
+# endpoint. A success body IS the result — a bare array from a non-paginating
+# query, the action's own object from an action — and an error is an RFC 9457
+# problem document whose branch point is the TOP-LEVEL `code`.
 #
 # Usage:
 #   SERVER_URL=http://127.0.0.1:3003 KIOSK_ISSUER=http://127.0.0.1:3003 bundle exec ruby script/hoteling_flow.rb
@@ -37,6 +44,14 @@ def get_json(url, headers = {})
   [res.code.to_i, (JSON.parse(res.body) rescue {})]
 end
 
+# One query call: the verb NAME is the path segment, its arguments are the
+# query string.
+def query_json(name, params = {}, headers = {})
+  uri = URI("#{SERVER}/kiosk/#{name}")
+  uri.query = URI.encode_www_form(params) unless params.empty?
+  get_json(uri.to_s, headers)
+end
+
 # ── Step 1: register (register PoW solved transparently). The SAME private key
 #            is returned so the payment mandates below can be signed with it. ──
 
@@ -54,14 +69,15 @@ STDERR.puts "  Registered: user_id=#{user_id}"
 
 # ── Step 2: query properties ─────────────────────────────────────────────
 
-rc_props, props_resp = post_json(
-  "#{SERVER}/kiosk/query",
-  { name: "properties" },
+rc_props, props_resp = query_json(
+  "properties", {},
   { "Authorization" => "Bearer #{token}" },
 )
 abort "query properties failed (#{rc_props}): #{JSON.generate(props_resp)}" unless rc_props == 200
 
-props = props_resp.fetch("rows")
+# A non-paginating query answers a BARE ARRAY — the rows, with nothing around
+# them (0.4 retired the `{rows: …}` envelope).
+props = Array(props_resp)
 abort "properties returned empty rows" if props.empty?
 target_property = props.first
 property_id     = target_property.fetch("property_id")
@@ -72,14 +88,14 @@ STDERR.puts "  Properties: #{props.size} found, using property_id=#{property_id}
 check_in  = (Date.today + 30).to_s
 check_out = (Date.today + 33).to_s
 
-rc_avail, avail_resp = post_json(
-  "#{SERVER}/kiosk/query",
-  { name: "availability", property_id: property_id, check_in: check_in, check_out: check_out },
+rc_avail, avail_resp = query_json(
+  "availability",
+  { property_id: property_id, check_in: check_in, check_out: check_out },
   { "Authorization" => "Bearer #{token}" },
 )
 abort "query availability failed (#{rc_avail}): #{JSON.generate(avail_resp)}" unless rc_avail == 200
 
-avail_rows = avail_resp.fetch("rows")
+avail_rows = Array(avail_resp)
 abort "availability returned empty rows" if avail_rows.empty?
 target_room = avail_rows.first
 room_type_id   = target_room.fetch("room_type_id")
@@ -92,16 +108,16 @@ STDERR.puts "  Availability: #{avail_rows.size} room type(s) available, using ro
 # ── Step 4: reserve_room ──────────────────────────────────────────────────
 
 rc_rsv, rsv_resp = post_json(
-  "#{SERVER}/kiosk/run",
-  { name: "reserve_room", property_id: property_id, room_type_id: room_type_id,
+  "#{SERVER}/kiosk/reserve_room",
+  { property_id: property_id, room_type_id: room_type_id,
     check_in: check_in, check_out: check_out },
   { "Authorization" => "Bearer #{token}" },
 )
 abort "reserve_room failed (#{rc_rsv}): #{JSON.generate(rsv_resp)}" unless rc_rsv == 200
 
-rsv_value   = rsv_resp.fetch("value")
-booking_id  = rsv_value.fetch("booking_id")
-total_cents = rsv_value.fetch("total_cents")
+# An action's success body IS its own object — the `{value: …}` wrapper is gone.
+booking_id  = rsv_resp.fetch("booking_id")
+total_cents = rsv_resp.fetch("total_cents")
 # Human-facing total in EUR (€120.00), never raw cents; the wire stays cents.
 STDERR.puts "  Reserved: booking_id=#{booking_id} total=#{format("€%.2f", total_cents.to_i / 100.0)}"
 
@@ -168,14 +184,14 @@ unless SKIP_PAY
     { "Authorization" => "Bearer #{token}" },
   )
   abort "pay failed (#{rc_pay}): #{JSON.generate(pay_resp)}" unless rc_pay == 200
-  STDERR.puts "  Payment settled: settlement_id=#{pay_resp.dig("value", "settlement_id")}"
+  STDERR.puts "  Payment settled: settlement_id=#{pay_resp["settlement_id"]}"
 end
 
 # ── Step 6: confirm_booking ───────────────────────────────────────────────
 
 rc_confirm, confirm_resp = post_json(
-  "#{SERVER}/kiosk/run",
-  { name: "confirm_booking", booking_id: booking_id },
+  "#{SERVER}/kiosk/confirm_booking",
+  { booking_id: booking_id },
   { "Authorization" => "Bearer #{token}" },
 )
 
@@ -185,12 +201,11 @@ rc_confirm, confirm_resp = post_json(
 # table with no such column, so a guest quoting it at the desk could not be
 # matched. Re-query my_bookings for this booking and report the stored code, so
 # demo:book can assert the two are the same string.
-rc_mine, mine_resp = post_json(
-  "#{SERVER}/kiosk/query",
-  { name: "my_bookings" },
+rc_mine, mine_resp = query_json(
+  "my_bookings", {},
   { "Authorization" => "Bearer #{token}" },
 )
-stored_row = (mine_resp["rows"] || []).find { |r| r["booking_id"] == booking_id }
+stored_row = Array(mine_resp).find { |r| r["booking_id"] == booking_id }
 
 # ── Step 7: print ONE JSON line ───────────────────────────────────────────
 
@@ -205,8 +220,12 @@ puts JSON.generate(
   agent_id:             agent_id,
   booking_id:           booking_id,
   total_cents:          total_cents,
-  confirm_status:       confirm_resp.dig("value", "status"),
-  confirmation_code:    confirm_resp.dig("value", "confirmation_code"),
+  # Only on a 200, because an RFC 9457 problem document ALSO carries a top-level
+  # `status` — the HTTP one. Reading it unconditionally would report the
+  # SKIP_PAY refusal as `confirm_status: 403`, a booking status that does not
+  # exist, where the honest answer is "the booking was never confirmed".
+  confirm_status:       (confirm_resp["status"] if rc_confirm == 200),
+  confirmation_code:    confirm_resp["confirmation_code"],
   http_my_bookings:     rc_mine,
   stored_confirmation_code: stored_row && stored_row["confirmation_code"],
 )

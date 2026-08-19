@@ -1,7 +1,9 @@
 # frozen_string_literal: true
 
 # hoteling's WRITE surface: the three verbs an assistant reaches with
-# `POST /kiosk/run`. Same shape as Kiosk::HotelsController — `ActionController::API`
+# `POST /kiosk/<action-name>`, arguments as the JSON BODY (protocol 0.4 — the
+# multiplexed `POST /kiosk/run` and its `name` field are deleted, not
+# deprecated). Same shape as Kiosk::HotelsController — `ActionController::API`
 # plus `include Kiosk::Action` — because a controller declares queries OR actions,
 # never both.
 #

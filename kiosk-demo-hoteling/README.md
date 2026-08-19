@@ -10,15 +10,30 @@ only confirmed once it is paid for). Payment settles through a **stub PSP**
 
 ## Wire surface
 
-- `query properties` — browse all available hotel properties
-- `query availability(property, dates)` — check room availability for a stay
-- `query my_bookings` — this principal's bookings (owner-scoped)
-- `run reserve_room(...)` — reserve a room for the principal (creates a TTL hold)
-- `run payment_setup` — check whether the principal has a saved payment method
-- `run confirm_booking(booking_id)` — confirm a reserved booking; requires a
+One endpoint per verb (protocol 0.4): a query is `GET /kiosk/<query-name>` with
+its arguments in the query string, an action is `POST /kiosk/<action-name>` with
+its arguments as the JSON body. A success body IS the result — a bare array of
+rows from a query, the action's own object from an action — and an error is an
+RFC 9457 problem document.
+
+- `GET /kiosk/properties` — browse all available hotel properties
+- `GET /kiosk/availability?property_id=&check_in=&check_out=` — check room
+  availability for a stay
+- `GET /kiosk/my_bookings` — this principal's bookings (owner-scoped)
+- `GET /kiosk/search_hotels?...` — paginated search over the ~100-hotel
+  catalogue; the only paginating verb here, so a truncated page answers
+  `{rows, next}` and a complete one the bare array
+- `GET /kiosk/hotel_detail?property_id=` — ONE property in full, as a one-row
+  array (empty when no property has that id)
+- `POST /kiosk/reserve_room` — reserve a room for the principal (creates a TTL hold)
+- `POST /kiosk/payment_setup` — check whether the principal has a saved payment method
+- `POST /kiosk/confirm_booking` — confirm a reserved booking; requires a
   settled payment whose cart mandate references this booking
-- `pay` — settle the AP2 mandate chain (intent → cart → payment) via the stub PSP
-- `schema` — self-discovery
+- `POST /kiosk/pay` — settle the AP2 mandate chain (intent → cart → payment)
+  via the stub PSP
+- `GET /kiosk/schema` — self-discovery
+- `GET /kiosk/openapi.json` — the DERIVED OpenAPI description of the above, for
+  tooling; the catalog at `/kiosk/schema` stays canonical
 
 Advertised capabilities are `[schema, queries, actions, pay]` — the MODULES
 this origin serves, never the registered verb names (the catalog is Bearer-gated

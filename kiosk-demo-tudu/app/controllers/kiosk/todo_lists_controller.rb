@@ -48,6 +48,13 @@ class Kiosk::TodoListsController < ApplicationController
                  title: { type: "string", minLength: 1, description: "The list title." },
                },
                required: ["title"]
+  output_schema type: "object",
+                description: "The created list.",
+                additionalProperties: false,
+                properties: {
+                  list_id: { type: "string", description: "uuid. Pass to list_todos / add_todo / invite as `list_id`." },
+                },
+                required: ["list_id"]
   example_params({ title: "Hike" })
   example_row({ list_id: "d4e5f6a7-8b9c-4d0e-9f1a-2b3c4d5e6f70" })
   def create_list
@@ -70,6 +77,13 @@ class Kiosk::TodoListsController < ApplicationController
                  title:   { type: "string", minLength: 1, description: "The todo text." },
                },
                required: ["list_id", "title"]
+  output_schema type: "object",
+                description: "The added todo.",
+                additionalProperties: false,
+                properties: {
+                  todo_id: { type: "string", description: "uuid. Pass to complete_todo as `todo_id`." },
+                },
+                required: ["todo_id"]
   def add_todo
     render_operation AddTodoOperation.call(
       agent_id: kiosk_identity.agent_id, list_id: params[:list_id], title: params[:title],
@@ -88,6 +102,14 @@ class Kiosk::TodoListsController < ApplicationController
                             description: "The todo to complete — a `todo_id` from list_todos, verbatim." },
                },
                required: ["todo_id"]
+  output_schema type: "object",
+                description: "The completed todo.",
+                additionalProperties: false,
+                properties: {
+                  todo_id: { type: "string", description: "The todo that was completed, echoed." },
+                  done:    { const: true, description: "true — a refusal is an error, never `done: false`." },
+                },
+                required: %w[todo_id done]
   def complete_todo
     render_operation CompleteTodoOperation.call(todo_id: params[:todo_id])
   end
@@ -109,6 +131,14 @@ class Kiosk::TodoListsController < ApplicationController
                                          "that you own, verbatim." },
                },
                required: ["list_id"]
+  output_schema type: "object",
+                description: "The minted collaboration code — returned ONCE.",
+                additionalProperties: false,
+                properties: {
+                  code:       { type: "string", description: "The PLAINTEXT code, returned once and never again (only its hash is stored). Hand it to the other person; their assistant redeems it with accept_invite." },
+                  expires_in: { type: "integer", description: "Seconds from now until the code stops being redeemable." },
+                },
+                required: %w[code expires_in]
   def invite
     render_operation InviteOperation.call(
       principal_id: kiosk_identity.user_id, list_id: params[:list_id],
@@ -128,6 +158,14 @@ class Kiosk::TodoListsController < ApplicationController
                          description: "The plaintext invite code you were given." },
                },
                required: ["code"]
+  output_schema type: "object",
+                description: "The list just joined.",
+                additionalProperties: false,
+                properties: {
+                  list_id: { type: "string", description: "uuid — the list you are now a member of. Pass it to list_todos / add_todo as `list_id`." },
+                  joined:  { const: true, description: "true — a used, expired or unknown code is a 403, never `joined: false`." },
+                },
+                required: %w[list_id joined]
   def accept_invite
     render_operation AcceptInviteOperation.call(
       principal_id: kiosk_identity.user_id, code: params[:code],
@@ -151,6 +189,13 @@ class Kiosk::TodoListsController < ApplicationController
                                             "from list_members, verbatim." },
                },
                required: ["list_id", "account_id"]
+  output_schema type: "object",
+                description: "The removal.",
+                additionalProperties: false,
+                properties: {
+                  removed: { const: true, description: "true — a refusal (not the owner, or the last owner) is a 403, never `removed: false`." },
+                },
+                required: ["removed"]
   def remove_member
     render_operation RemoveMemberOperation.call(
       list_id: params[:list_id], account_id: params[:account_id],

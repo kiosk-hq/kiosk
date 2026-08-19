@@ -273,20 +273,22 @@ Publish the test card on getgrocery's landing:
 
 ## Poke it — the "curl one-liner"
 
-Only the top-level **discovery** document is always free. Every Kiosk verb —
-`schema`, `query`, `run`, `pay` — as well as `register` requires a Bearer token
-and MAY toll proof-of-work (there is no verb exemption; even a public "read the
-schema" can be tolled, the way Cloudflare puts a challenge in front of a public
-page). So the register gate is a memory-hard PoW by design, and the "true"
-one-liner ships a copy-paste **solver** (`kiosk-pow-equihash/solve.py`). Hosted
-difficulty is low (~1 s) on six demos; atablefor is intentionally ~9–10 s
-(you'll feel it — that's the point). Flow: **discover (free) → register (solve
-PoW) → schema / query (each MAY toll PoW too)**.
+Three documents are always free: the top-level **discovery** document, and the
+two catalogue documents `GET /kiosk/schema` and `GET /kiosk/openapi.json` — no
+Bearer, no toll, and `Cache-Control: max-age=60, public` so a poker (or an
+assistant) can read what the origin offers before it registers. Everything else
+— every query, every action, `pay` — needs a Bearer token and MAY toll
+proof-of-work, and so may `register`. So the register gate is a memory-hard PoW
+by design, and the "true" one-liner ships a copy-paste **solver**
+(`kiosk-pow-equihash/solve.py`). Hosted difficulty is low (~1 s) on six demos;
+atablefor is intentionally ~9–10 s (you'll feel it — that's the point). Flow:
+**discover (free) → read the schema (free) → register (solve PoW) → call a verb
+(each MAY toll PoW too)**.
 
 ```sh
-# 0. Discover: who/where/which verbs. The ONLY always-free entrypoint — no auth,
-#    no PoW. (The /kiosk/* verbs below are NOT free: each needs a Bearer token
-#    and MAY answer 402 pow_required — solve and retry.)
+# 0. Discover: who/where/which capabilities. Free — no auth, no PoW, same as the
+#    schema in step (d). (The queries and actions in (e)/(f) are NOT free: each
+#    needs a Bearer token and MAY answer 402 pow_required — solve and retry.)
 curl -s https://getgrocery.demo.kiosk.tech/.well-known/kiosk.json | jq .
 
 # 1. Full flow — register with the bundled solver, then read schema + query.
@@ -304,23 +306,31 @@ TOKEN=$(curl -s -X POST "$BASE/kiosk/auth/register" \
   -H 'content-type: application/json' \
   -d "$PROOF" | jq -r .token)
 
-#    d) read the schema as the registered assistant (Bearer required; MAY 402 —
-#       solve like register and retry with the pow field)
-curl -s "$BASE/kiosk/schema" \
-  -H "authorization: Bearer $TOKEN" | jq .
+#    d) read the schema — PUBLIC and cacheable, so no Bearer and no toll here;
+#       this one answers just as well before step (c) as after it.
+curl -s "$BASE/kiosk/schema" | jq .
 
 #    e) call a query as the registered assistant — protocol 0.4: one endpoint
 #       per verb, a query is a GET whose arguments are the query string, and the
-#       success body IS the result (no envelope to unwrap). Same as above:
-#       Bearer required, MAY 402.
+#       success body IS the result: a bare JSON array, no envelope to unwrap
+#       (the matching-row count rides in the X-Total-Count response header).
+#       Bearer required, MAY 402 — solve like register and re-send the SAME
+#       request with the proof in the Kiosk-PoW header.
 curl -s "$BASE/kiosk/catalog" \
   -H "authorization: Bearer $TOKEN" | jq .
 
-#    f) …and an action is a POST at its own path, with the arguments as the body
+#    f) …and an action is a POST at its own path, with the arguments as the body.
+#       Send everything the verb's input_schema requires — create_order needs
+#       delivery_slot_id and delivery_address as well as items (delivery is part
+#       of the order), and a call missing one is a typed 400 naming it. The
+#       slot id is a `delivery_slot_id` from the delivery_slots query;
+#       delivery_date is optional and omitting it books tomorrow.
 curl -s -X POST "$BASE/kiosk/create_order" \
   -H "authorization: Bearer $TOKEN" \
   -H 'content-type: application/json' \
-  -d '{"items":[{"sku":"milk","qty":2}]}' | jq .
+  -d '{"items":[{"sku":"milk-0.5l","qty":2}],
+       "delivery_slot_id":3,
+       "delivery_address":"42 Camden Street, Dublin 2"}' | jq .
 ```
 
 > The exact challenge/proof JSON shape is what the demo's `/kiosk/auth/challenge`

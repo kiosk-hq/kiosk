@@ -42,6 +42,8 @@ class ProbeCatalogController < ActionController::API
   include Kiosk::Query
 
   description "probe query"
+  input_schema type: "object", additionalProperties: false, properties: {}, required: []
+  output_schema true
   def ping = render(json: [])
 end
 

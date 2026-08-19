@@ -16,6 +16,8 @@ class SpecReloadableController < ApplicationController
   include Kiosk::Query
 
   description "Lists the shop's stock."
+  input_schema type: "object", additionalProperties: false, properties: {}, required: []
+  output_schema true
   def reloadable = render(json: [{ "sku" => "ORIGINAL" }])
 end
 
@@ -41,6 +43,8 @@ RSpec.describe Kiosk::Server::HandlerDispatch do
       reloaded = Class.new(ApplicationController) do
         include Kiosk::Query
         description "The edited handler."
+        input_schema type: "object", additionalProperties: false, properties: {}, required: []
+        output_schema true
         def reloadable = render(json: [{ "sku" => "EDITED" }])
       end
       stub_const("SpecReloadableController", reloaded)
@@ -61,6 +65,8 @@ RSpec.describe Kiosk::Server::HandlerDispatch do
       klass = Class.new(ApplicationController) do
         include Kiosk::Query
         description "Renders HTML, which the wire cannot carry."
+        input_schema type: "object", additionalProperties: false, properties: {}, required: []
+        output_schema true
         def html_query = render(html: "<p>nope</p>".html_safe)
       end
       stub_const("SpecHtmlController", klass)
@@ -76,6 +82,8 @@ RSpec.describe Kiosk::Server::HandlerDispatch do
       klass = Class.new(ApplicationController) do
         include Kiosk::Action
         description "Renders a bare 402."
+        input_schema type: "object", additionalProperties: false, properties: {}, required: []
+        output_schema true
         def bare_402 = render(json: { error: "pay up" }, status: :payment_required)
       end
       stub_const("SpecBare402Controller", klass)
@@ -91,6 +99,8 @@ RSpec.describe Kiosk::Server::HandlerDispatch do
       klass = Class.new(ApplicationController) do
         include Kiosk::Query
         description "Renders a 402 code on a 403 status."
+        input_schema type: "object", additionalProperties: false, properties: {}, required: []
+        output_schema true
         def mislabelled
           render json: { ok: false, error: { code: "pow_required", message: "nope" } },
                  status: :forbidden
@@ -106,6 +116,8 @@ RSpec.describe Kiosk::Server::HandlerDispatch do
       klass = Class.new(ApplicationController) do
         include Kiosk::Action
         description "Answers a domain refusal with the app's own error code."
+        input_schema type: "object", additionalProperties: false, properties: {}, required: []
+        output_schema true
         def sold_out
           render json: { error: { code: "out_of_stock", message: "sold out" } }, status: :conflict
         end
@@ -123,6 +135,8 @@ RSpec.describe Kiosk::Server::HandlerDispatch do
       klass = Class.new(ApplicationController) do
         include Kiosk::Query
         description "Sets the pagination marker by hand and renders the wrong shape."
+        input_schema type: "object", additionalProperties: false, properties: {}, required: []
+        output_schema true
         def bad_page
           request.env[Kiosk::Server::HandlerDispatch::PAGE_KEY] = true
           render json: { items: [] }
@@ -140,6 +154,8 @@ RSpec.describe Kiosk::Server::HandlerDispatch do
       klass = Class.new(ApplicationController) do
         include Kiosk::Query
         description "Reports what it can see."
+        input_schema type: "object", additionalProperties: false, properties: {}, required: []
+        output_schema true
         def bare = render(json: { identity: kiosk_identity, ua: request.headers["User-Agent"] })
       end
       stub_const("SpecBareController", klass)
@@ -155,6 +171,8 @@ RSpec.describe Kiosk::Server::HandlerDispatch do
       klass = Class.new(ApplicationController) do
         include Kiosk::Action
         description "Acknowledges and returns nothing."
+        input_schema type: "object", additionalProperties: false, properties: {}, required: []
+        output_schema true
         def ack = head(:ok)
       end
       stub_const("SpecAckController", klass)

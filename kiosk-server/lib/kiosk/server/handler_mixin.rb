@@ -57,6 +57,41 @@ module Kiosk
     module HandlerMixin
       KINDS = %i[action query].freeze
 
+      # ── §3.2, enforced where the mistake is made ─────────────────────────
+      #
+      # A verb name is ONE path segment on the 0.4 wire, so the three rules the
+      # spec states about names are properties a DECLARATION either has or does
+      # not, and all three are checked here — at class-body load, naming the
+      # class and the method — rather than discovered later as a verb that is
+      # merely unreachable.
+      #
+      # `NAME_PATTERN` is §8.1's `^[a-z][a-z0-9_]*$`, the same expression the
+      # engine's route constraint uses; a name that fails it could never be
+      # routed at all.
+      NAME_PATTERN = /\A[a-z][a-z0-9_]*\z/
+
+      # `RESERVED_NAMES` are the first path segments the ENGINE itself draws
+      # under the mount, above the per-verb pair. Rails' first-match already
+      # protects them — an operator verb called `schema` is shadowed, never
+      # shadowing — but being silently unreachable is a worse answer than a
+      # boot-time refusal that says which name is taken and why. `.well-known`
+      # is drawn too and is deliberately absent: it cannot match NAME_PATTERN,
+      # so no declaration can collide with it.
+      #
+      # `bin/check-kiosk-names` holds this list against the engine's own route
+      # table, so a route added there without a name added here fails the build
+      # instead of quietly re-opening a shadowed name.
+      RESERVED_NAMES = %w[agents auth oauth pay query run schema].freeze
+
+      # The descriptor fields 0.4 makes REQUIRED on every verb (T-073 = A,
+      # Phil 2026-08-17). Both are contracts a caller acts on — `input_schema`
+      # is what the wire coerces and validates arguments against (§8.1 item 5),
+      # `output_schema` is the ONLY machine-readable statement of the answer
+      # shape now that the envelope's `kind` is gone (§8.2) — so a verb that
+      # omits either publishes an incomplete contract, and the engine refuses
+      # to register one rather than serving it.
+      REQUIRED_DECLARATIONS = %i[input_schema output_schema].freeze
+
       # Installs the mixin. Called from Kiosk::Action.included / Kiosk::Query.included.
       def self.install(base, kind:)
         raise ArgumentError, "unknown handler kind #{kind.inspect}" unless KINDS.include?(kind)
@@ -189,8 +224,45 @@ module Kiosk
             method_name: method_name.to_s,
             wire_name:   (pending[:wire_name] || method_name).to_s,
           )
+          kiosk_refuse_bad_declaration!(declaration)
           kiosk_declarations[declaration[:wire_name]] = declaration
           kiosk_register_one(declaration)
+        end
+
+        # §3.2's name rules and T-073's required descriptor fields, raised at
+        # DECLARATION time so the operator meets them at boot with the class and
+        # the method in hand.
+        def kiosk_refuse_bad_declaration!(declaration)
+          name = declaration[:wire_name]
+          where = "#{self}##{declaration[:method_name]}"
+
+          unless HandlerMixin::NAME_PATTERN.match?(name)
+            raise ArgumentError,
+              "#{where} declares the Kiosk verb #{name.inspect}, which is not a legal verb " \
+              "name. A verb is ONE path segment matching #{HandlerMixin::NAME_PATTERN.source} " \
+              "(spec §8.1) — lower case, starting with a letter, digits and underscores after " \
+              "that. Rename the method, or give it a legal `wire_name`."
+          end
+
+          if HandlerMixin::RESERVED_NAMES.include?(name)
+            raise ArgumentError,
+              "#{where} declares the Kiosk verb #{name.inspect}, which is RESERVED: the engine " \
+              "draws #{Kiosk.configuration.mount_path}/#{name} itself, and that route wins by " \
+              "first-match — the verb would never be reached. Reserved: " \
+              "#{HandlerMixin::RESERVED_NAMES.join(", ")}. Give it a `wire_name` of its own."
+          end
+
+          missing = HandlerMixin::REQUIRED_DECLARATIONS.reject { |key| declaration.key?(key) }
+          return if missing.empty?
+
+          raise ArgumentError,
+            "#{where} declares the Kiosk verb #{name.inspect} without #{missing.join(" and ")}. " \
+            "Both are REQUIRED on every 0.4 verb: `input_schema` is the contract the wire " \
+            "coerces and validates arguments against, and `output_schema` is the only " \
+            "machine-readable statement of what the call returns now that the response " \
+            "envelope is gone. A verb that takes nothing still declares " \
+            "`input_schema type: \"object\", additionalProperties: false, properties: {}, " \
+            "required: []`."
         end
 
         def kiosk_register_one(declaration)

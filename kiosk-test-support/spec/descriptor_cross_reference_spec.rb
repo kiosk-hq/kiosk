@@ -145,6 +145,32 @@ RSpec.describe "demo descriptor cross-references" do
       names
     end
 
+    # The text of ONE macro's argument list — everything from `<macro>` up to
+    # the next class-level macro or the `def` that claims the run.
+    #
+    # THE LINT IS ABOUT INPUTS, and since T-068 slice 3 every verb also
+    # declares an `output_schema` with `properties:` of its own. Scanning the
+    # whole macro run for `properties:` would take a verb's RESULT fields for
+    # its accepted params, which breaks the lint in both directions: a
+    # cross-reference naming a result field would wrongly resolve, and a prose
+    # word that happens to be a result field name ("pass the id to
+    # book_appointment") would wrongly become param-like and fail. So the
+    # params are read out of the `input_schema` macro and nowhere else.
+    MACRO_NAMES = %w[description input_schema output_schema example_params example_row wire_name].freeze
+
+    def macro_region(header, macro)
+      start = header.index(/^[ \t]*#{macro}[ \t]/)
+      return nil if start.nil?
+
+      rest  = header[start..]
+      body  = rest[/\A[^\n]*\n/] ? rest : rest
+      # The next macro at line start, after this one's first line.
+      first_line_end = rest.index("\n") || rest.length
+      following = rest[first_line_end..].to_s
+      stop = following.index(/^[ \t]*(?:#{MACRO_NAMES.join("|")})[ \t]|^[ \t]*def[ \t]/)
+      stop.nil? ? body : rest[0, first_line_end + stop]
+    end
+
     # {name:, description:, params: [declared param names]} per verb, read out
     # of a HANDLER CONTROLLER (T-053 mixin / T-057). The descriptor is a run of
     # class-level macros that the NEXT `def` claims:
@@ -175,7 +201,7 @@ RSpec.describe "demo descriptor cross-references" do
         previous_end = offset
 
         description  = macro_string_value(header, "description")
-        schema_props = schema_property_names(header)
+        schema_props = schema_property_names(macro_region(header, "input_schema"))
         next if description.nil? && schema_props.empty?
 
         name = macro_string_value(header, "wire_name") || method_name

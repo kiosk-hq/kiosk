@@ -39,12 +39,16 @@ class SpecCatalogController < SpecKioskQueriesController
   end
 
   description "Lists the caller's own orders, one page at a time."
+  input_schema type: "object", additionalProperties: false, properties: {}, required: []
+  output_schema true
   def my_orders
     render_kiosk_page([{ "order_id" => "o-1", "for" => kiosk_identity&.user_id }],
                       next_cursor: Kiosk::Server::Cursor.encode_offset(1))
   end
 
   description "Reports who the wire says is calling."
+  input_schema type: "object", additionalProperties: false, properties: {}, required: []
+  output_schema true
   def whoami
     render json: { user_id: kiosk_identity&.user_id, agent_id: kiosk_identity&.agent_id,
                    wire_name: kiosk_wire_name, user_agent: request.headers["User-Agent"] }
@@ -64,6 +68,7 @@ class SpecOrdersController < ApplicationController
   input_schema type: "object", properties: { items: { type: "array" } }, required: %w[items]
   # The Ruby method is `place`; agents call it `create_order`.
   wire_name "create_order"
+  output_schema true
   def place
     items = params[:items]
     if items.blank?
@@ -75,16 +80,22 @@ class SpecOrdersController < ApplicationController
   end
 
   description "Refuses, to show a policy refusal reaching the wire as forbidden."
+  input_schema type: "object", additionalProperties: false, properties: {}, required: []
+  output_schema true
   def cancel_everything
     render json: { error: "assistants may not cancel every order at once" }, status: :forbidden
   end
 
   description "Raises the wire error whose code no HTTP status can carry."
+  input_schema type: "object", additionalProperties: false, properties: {}, required: []
+  output_schema true
   def request_kyc
     raise Kiosk::Server::Errors::KycRequired, "attestation missing: over_18"
   end
 
   description "Blows up, to show an unhandled exception is not a silent 200."
+  input_schema type: "object", additionalProperties: false, properties: {}, required: []
+  output_schema true
   def explode
     raise "boom"
   end
@@ -242,6 +253,8 @@ RSpec.describe "Kiosk::Query / Kiosk::Action (the operator mixin)" do
       klass = Class.new(ApplicationController) do
         include Kiosk::Action
         description "Requires a param the caller did not send."
+        input_schema type: "object", additionalProperties: false, properties: {}, required: []
+        output_schema true
         def strict
           params.require(:sku)
           render json: { ok: true }
@@ -267,6 +280,8 @@ RSpec.describe "Kiosk::Query / Kiosk::Action (the operator mixin)" do
       klass = Class.new(ApplicationController) do
         include Kiosk::Action
         description "Raises the host's own policy error."
+        input_schema type: "object", additionalProperties: false, properties: {}, required: []
+        output_schema true
         def vetoed = raise(SpecVetoError, "policy said no")
       end
       stub_const("SpecVetoedController", klass)
@@ -289,6 +304,8 @@ RSpec.describe "Kiosk::Query / Kiosk::Action (the operator mixin)" do
           render json: { error: "handled by the operator" }, status: :conflict
         end
         description "Raises an error the operator's own rescue_from handles."
+        input_schema type: "object", additionalProperties: false, properties: {}, required: []
+        output_schema true
         def brew = raise(SpecTeapotError)
       end
       stub_const("SpecTeapotController", klass)
@@ -306,6 +323,8 @@ RSpec.describe "Kiosk::Query / Kiosk::Action (the operator mixin)" do
       klass = Class.new(ApplicationController) do
         include Kiosk::Query
         description "Answers with the RLS denial code, Rails-natively."
+        input_schema type: "object", additionalProperties: false, properties: {}, required: []
+        output_schema true
         def blocked
           render json: { ok: false, error: { code: "rls_denied", message: "row policy said no" } },
                  status: :forbidden
@@ -325,6 +344,8 @@ RSpec.describe "Kiosk::Query / Kiosk::Action (the operator mixin)" do
       klass = Class.new(ApplicationController) do
         include Kiosk::Action
         description "Needs a card on file before it can run."
+        input_schema type: "object", additionalProperties: false, properties: {}, required: []
+        output_schema true
         def needs_card
           render json: { ok: false, error: { code: "payment_setup_required", message: "no card on file" } },
                  status: :payment_required
@@ -401,6 +422,8 @@ RSpec.describe "Kiosk::Query / Kiosk::Action (the operator mixin)" do
       klass = Class.new(ApplicationController) do
         include Kiosk::Action
         description "Needs a card on file before it can run."
+        input_schema type: "object", additionalProperties: false, properties: {}, required: []
+        output_schema true
         def needs_card
           render json: { ok: false, error: { code: "payment_setup_required", message: "no card on file" } },
                  status: :payment_required
@@ -460,10 +483,73 @@ RSpec.describe "Kiosk::Query / Kiosk::Action (the operator mixin)" do
       }.to raise_error(ArgumentError, /queries OR actions, never both/)
     end
 
+    # ── §3.2 + T-073 = A, refused where the mistake is made ──────────────
+    #
+    # All four raise at CLASS-BODY LOAD, so an operator meets them at boot with
+    # the class and the method in hand — not as a verb that turns out to be
+    # unreachable, or a descriptor an assistant finds incomplete.
+
+    it "refuses a verb name that is not one legal path segment" do
+      expect {
+        Class.new(ApplicationController) do
+          include Kiosk::Query
+          description "Shouty."
+          input_schema type: "object"
+          output_schema true
+          wire_name "Browse-Listings"
+          def browse = render(json: [])
+        end
+      }.to raise_error(ArgumentError, /not a legal verb name/)
+    end
+
+    it "refuses a verb name the engine draws itself" do
+      expect {
+        Class.new(ApplicationController) do
+          include Kiosk::Query
+          description "Would be shadowed by the wire's own route."
+          input_schema type: "object"
+          output_schema true
+          def schema = render(json: [])
+        end
+      }.to raise_error(ArgumentError, /RESERVED/)
+    end
+
+    it "refuses a declaration with no input_schema" do
+      expect {
+        Class.new(ApplicationController) do
+          include Kiosk::Query
+          description "Publishes no input contract."
+          output_schema true
+          def browse = render(json: [])
+        end
+      }.to raise_error(ArgumentError, /without input_schema/)
+    end
+
+    it "refuses a declaration with no output_schema" do
+      expect {
+        Class.new(ApplicationController) do
+          include Kiosk::Query
+          description "Publishes no result contract."
+          input_schema type: "object"
+          def browse = render(json: [])
+        end
+      }.to raise_error(ArgumentError, /without output_schema/)
+    end
+
+    # The reserved list is the engine's own route table, and it must stay that
+    # way: `bin/check-kiosk-names` holds the two against each other, and this
+    # pins the names the mixin refuses today so a silent shrink is visible.
+    it "reserves every first path segment the engine draws under the mount" do
+      expect(Kiosk::Server::HandlerMixin::RESERVED_NAMES)
+        .to contain_exactly("agents", "auth", "oauth", "pay", "query", "run", "schema")
+    end
+
     it "404s a verb whose method stopped being a public action" do
       klass = Class.new(ApplicationController) do
         include Kiosk::Query
         description "Goes private."
+        input_schema type: "object", additionalProperties: false, properties: {}, required: []
+        output_schema true
         def vanishing = render(json: [])
       end
       klass.send(:private, :vanishing)

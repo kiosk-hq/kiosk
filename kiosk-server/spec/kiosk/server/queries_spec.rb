@@ -156,8 +156,17 @@ RSpec.describe Kiosk::Server::Queries do
     # A descriptor that declares none of the extensions publishes none of the
     # keys — an absent extension is absent, never a null an assistant has to
     # interpret.
+    #
+    # THESE TWO GO THROUGH `declare` RATHER THAN THE MIXIN, and that is the
+    # T-073 = A change rather than a shortcut: both schemas are REQUIRED on
+    # every 0.4 verb, so {HandlerMixin} now RAISES on a declaration missing
+    # either and no operator can produce a descriptor without them. The
+    # omission behaviour is a property of this REGISTRY, which still takes nil
+    # for every optional field, and it is still worth holding: `example_params`
+    # and `example_row` remain optional, and the rule "absent, never null" is
+    # what a reader of a partial descriptor relies on.
     it "OMITS the extension keys entirely when they are not declared" do
-      declare_query("plain", description: "Browse")
+      described_class.declare("plain", ->(_args) { [] }, description: "Browse")
 
       d = described_class.describe("plain")
       expect(d).to eq({ name: "plain", description: "Browse", params: nil })
@@ -168,7 +177,7 @@ RSpec.describe Kiosk::Server::Queries do
     end
 
     it "emits only the extension keys that were declared" do
-      declare_query("partial", example_params: { city: "Porto" })
+      described_class.declare("partial", ->(_args) { [] }, example_params: { city: "Porto" })
 
       d = described_class.describe("partial")
       expect(d).to have_key(:example_params)

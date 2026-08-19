@@ -13,6 +13,8 @@ class SpecRegistrationsQueriesController < ApplicationController
   include Kiosk::Query
 
   description "Lists the board."
+  input_schema type: "object", additionalProperties: false, properties: {}, required: []
+  output_schema true
   def spec_browse
     render json: []
   end
@@ -22,6 +24,8 @@ class SpecRegistrationsActionsController < ApplicationController
   include Kiosk::Action
 
   description "Posts to the board."
+  input_schema type: "object", additionalProperties: false, properties: {}, required: []
+  output_schema true
   def spec_post
     render json: {}
   end
@@ -34,6 +38,8 @@ class SpecRegistrationsDoomedController < ApplicationController
   include Kiosk::Query
 
   description "A verb about to be deleted from its controller."
+  input_schema type: "object", additionalProperties: false, properties: {}, required: []
+  output_schema true
   def spec_doomed
     render json: []
   end
@@ -118,6 +124,44 @@ RSpec.describe Kiosk::Server::HandlerRegistrations do
 
       expect { described_class.reload!([anonymous]) }
         .to raise_error(Kiosk::Server::Errors::ConfigurationError, /anonymous class/)
+    end
+  end
+
+  # ── ONE NAME, ONE KIND (§3.2) ────────────────────────────────────────────
+  #
+  # The collision is between two SEPARATE controller classes — a demo declares
+  # its queries and its actions in different files, and must — so no class body
+  # can see it. This pass has just rebuilt both registries from a cleared
+  # state, which is the first moment the whole surface exists at once.
+  describe "one name, one kind" do
+    it "refuses a name declared as both a query and an action" do
+      Object.const_set(:SpecCollidingQueriesController, Class.new(ApplicationController) do
+        include Kiosk::Query
+        description "A name two kinds want."
+        input_schema type: "object"
+        output_schema true
+        def spec_collide = render(json: [])
+      end)
+      Object.const_set(:SpecCollidingActionsController, Class.new(ApplicationController) do
+        include Kiosk::Action
+        description "The same name, the other kind."
+        input_schema type: "object"
+        output_schema true
+        def spec_collide = render(json: {})
+      end)
+
+      expect {
+        described_class.reload!(%w[SpecCollidingQueriesController SpecCollidingActionsController])
+      }.to raise_error(Kiosk::Server::Errors::ConfigurationError, /spec_collide.*BOTH a query and an action/m)
+    ensure
+      Object.send(:remove_const, :SpecCollidingQueriesController)
+      Object.send(:remove_const, :SpecCollidingActionsController)
+    end
+
+    it "is silent when the two registries share no name" do
+      expect {
+        described_class.reload!(%w[SpecRegistrationsQueriesController SpecRegistrationsActionsController])
+      }.not_to raise_error
     end
   end
 

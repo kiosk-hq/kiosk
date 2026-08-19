@@ -38,17 +38,24 @@ at_exit { FileUtils.remove_entry(ROOT) if File.directory?(ROOT) }
 CONTROLLER = File.join(ROOT, "app/controllers/kiosk/probe_controller.rb")
 FileUtils.mkdir_p(File.dirname(CONTROLLER))
 
+# The two REQUIRED descriptor declarations (T-073 = A). Written into every
+# generated verb because the mixin REFUSES a declaration without them — which
+# is exactly what a real operator's controller has to carry.
+SCHEMAS =
+  %(  input_schema type: "object", additionalProperties: false, properties: {}, required: []\n) +
+  %(  output_schema type: "array", items: { type: "object" }\n)
+
 # Generation 1 of the operator's handler controller: two verbs.
 def write_controller(verbs:, browse_description: "Generation 1 description.")
   body = +"class Kiosk::ProbeController < ActionController::Base\n  include Kiosk::Query\n"
   if verbs.include?(:browse)
-    body << "\n  description #{browse_description.inspect}\n  def probe_browse\n    render json: []\n  end\n"
+    body << "\n  description #{browse_description.inspect}\n#{SCHEMAS}  def probe_browse\n    render json: []\n  end\n"
   end
   if verbs.include?(:detail)
-    body << "\n  description \"The second verb.\"\n  def probe_detail\n    render json: []\n  end\n"
+    body << "\n  description \"The second verb.\"\n#{SCHEMAS}  def probe_detail\n    render json: []\n  end\n"
   end
   if verbs.include?(:added)
-    body << "\n  description \"Added while the app was running.\"\n  def probe_added\n    render json: []\n  end\n"
+    body << "\n  description \"Added while the app was running.\"\n#{SCHEMAS}  def probe_added\n    render json: []\n  end\n"
   end
   body << "end\n"
   File.write(CONTROLLER, body)

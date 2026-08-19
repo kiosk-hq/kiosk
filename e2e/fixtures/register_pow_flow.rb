@@ -46,8 +46,10 @@ abort "challenge failed: #{rc_ch} #{ch}" unless rc_ch == 200
 pop = JWT.encode({ aud: ISSUER, nonce: ch.fetch("challenge"), jti: SecureRandom.uuid, iat: Time.now.to_i }, key, "RS256")
 rc_noproof, reg_noproof = post_json("#{SERVER}/kiosk/auth/register", { public_key: pem, signed: pop })
 results[:no_proof_status] = rc_noproof
-results[:no_proof_code]   = reg_noproof.dig("error", "code")
-results[:challenges_len]  = Array(reg_noproof.dig("error", "challenges")).length
+# RFC 9457: the branch point is the TOP-LEVEL `code`, and `challenges` is a
+# top-level extension member beside it.
+results[:no_proof_code]   = reg_noproof["code"]
+results[:challenges_len]  = Array(reg_noproof["challenges"]).length
 
 # ── 2. Solve the toll + register succeeds (fresh key via the shared helper) ──
 reg_key, reg = equihash_register(

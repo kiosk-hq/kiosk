@@ -3,7 +3,7 @@
 # Composite IdP for the e2e: tries Kiosk-issued JWTs first (the
 # kiosk-pop register/login output), falls back to the bespoke
 # `agent:u-…:a-…:r-…` shape that StubIdp parses.
-# Lets the REST wire surface (/kiosk/query, /kiosk/run, /kiosk/pay)
+# Lets the REST wire surface (the per-verb endpoints, /kiosk/schema, /kiosk/pay)
 # authenticate both bespoke synthetic tokens AND real kiosk-pop JWTs
 # in the same test run.
 #

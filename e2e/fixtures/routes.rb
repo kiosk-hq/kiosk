@@ -4,9 +4,10 @@ Rails.application.routes.draw do
   # Kiosk wire surface (controllers shipped by kiosk-server).
   # REST endpoints — HTTP method carries semantics (GET = read, POST = write).
   get  "/kiosk/schema",                             to: "kiosk/server/wire#schema"
-  post "/kiosk/query",                              to: "kiosk/server/wire#query"
-  post "/kiosk/run",                                to: "kiosk/server/wire#run"
   post "/kiosk/pay",                                to: "kiosk/server/wire#pay"
+  # NO `POST /kiosk/query` or `POST /kiosk/run` — protocol 0.4 deleted the
+  # multiplexed pair outright (T-074 = A). Every verb is its own endpoint,
+  # served by the pair drawn LAST at the bottom of this file.
   get  "/kiosk/auth/challenge",                     to: "kiosk/server/auth#challenge"
   post "/kiosk/auth/register",                      to: "kiosk/server/auth#register"
   post "/kiosk/auth/login",                         to: "kiosk/server/auth#login"
@@ -53,8 +54,7 @@ Rails.application.routes.draw do
   # mounting the engine (that IS the escape hatch the engine documents), so
   # the pair the engine would have drawn is written out here — and, like the
   # engine's, LAST, so every reserved line above wins by first-match and no
-  # operator verb can shadow `schema`, `query`, `run`, `pay` or the auth
-  # plane.
+  # operator verb can shadow `schema`, `pay` or the auth plane.
   get  "/kiosk/:kiosk_verb", to: "kiosk/server/verb#show",
        constraints: { kiosk_verb: Kiosk::Server::VerbController::NAME_SEGMENT }
   post "/kiosk/:kiosk_verb", to: "kiosk/server/verb#create",

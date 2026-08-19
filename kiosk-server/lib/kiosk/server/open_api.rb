@@ -66,6 +66,15 @@ module Kiosk
     #      query style OpenAPI defines that Rails already speaks — and it is
     #      ONE LEVEL WITH SCALAR LEAVES (T-087). The decoder refuses anything
     #      richer, so no such shape can reach a descriptor and be published.
+    #   5. THE TWO PAGINATION FACTS ARE RESPONSE HEADERS, and OpenAPI declares
+    #      a response header in `responses.<code>.headers` — NOT as a property
+    #      of the body schema. Getting that wrong would publish `Link` and
+    #      `X-Total-Count` as fields of a row array, which is not merely
+    #      useless to a generator: it is a false statement about the body, and
+    #      this document's whole warrant is that it says only what the
+    #      descriptors say. The two live in `components.headers` and are
+    #      `$ref`d from every QUERY's `200`; actions never paginate (spec
+    #      §8.4), so their operations do not carry them.
     #   4. `limit` and `cursor` are INJECTED into every query operation. They
     #      are reserved names the wire always accepts and a verb never has to
     #      declare (§8.1 item 6), so they appear in no `input_schema` — and a
@@ -152,7 +161,10 @@ module Kiosk
 
         `limit` and `cursor` are reserved parameter names this wire always
         accepts on a query, whether or not the verb declares them, and they
-        drive the cursor pagination of the specification's Section 8.4.
+        drive the cursor pagination of the specification's Section 8.4. A
+        paginated answer is still a bare array: the next page's URI arrives in
+        an RFC 8288 `Link` response header with `rel="next"`, and the count of
+        matching rows in `X-Total-Count`.
 
         Normative specification: https://kiosk.tech/specification.html
       TEXT
@@ -212,6 +224,7 @@ module Kiosk
           components:        {
             securitySchemes: { bearerAuth: bearer_scheme },
             parameters:      reserved_parameters,
+            headers:         PAGINATION_HEADERS,
             responses:       problem_responses,
             schemas:         schemas,
           },
@@ -256,7 +269,7 @@ module Kiosk
           op[:requestBody] = request_body(name, descriptor[:input_schema])
         end
 
-        op[:responses] = responses(descriptor)
+        op[:responses] = responses(kind, descriptor)
         op
       end
       private_class_method :operation
@@ -324,21 +337,24 @@ module Kiosk
       end
       private_class_method :request_body
 
-      def self.responses(descriptor)
+      def self.responses(kind, descriptor)
         name   = descriptor[:name].to_s
         output = descriptor[:output_schema]
-        out = {
-          "200" => {
-            # The Response Object's `description` is REQUIRED by OAS. Use the
-            # operator's own words for the answer when the declaration carries
-            # them; fall back to a neutral sentence, never to invented prose.
-            description: ArgumentDecoder.fetch(output, :description) || "The verb's result.",
-            content:     {
-              "application/json" => { schema: { "$ref": "#/components/schemas/#{name}.response" } },
-            },
+        ok = {
+          # The Response Object's `description` is REQUIRED by OAS. Use the
+          # operator's own words for the answer when the declaration carries
+          # them; fall back to a neutral sentence, never to invented prose.
+          description: ArgumentDecoder.fetch(output, :description) || "The verb's result.",
+          content:     {
+            "application/json" => { schema: { "$ref": "#/components/schemas/#{name}.response" } },
           },
         }
-        out.merge(problem_refs)
+        # The pagination pair, on QUERIES ONLY (research point 5). Declared as
+        # RESPONSE HEADERS, which is where OpenAPI puts one; a query that never
+        # paginates simply never sends them, and both are `required: false`.
+        ok[:headers] = PAGINATION_HEADERS.keys.to_h { |h| [h, { "$ref": "#/components/headers/#{h}" }] } if kind == :query
+
+        { "200" => ok }.merge(problem_refs)
       end
       private_class_method :responses
 
@@ -606,6 +622,37 @@ module Kiosk
       # The two reserved parameters, declared once and referenced from every
       # query. Types come from the DECODER's own table, so the document cannot
       # say `limit` is a string while the wire coerces it to an integer.
+      # THE PAGINATION RESPONSE HEADERS (spec §8.4), as OAS Header Objects.
+      # `name` and `in` are deliberately ABSENT: OAS 3.1 §4.8.21.1 says a
+      # Header Object is a Parameter Object minus those two, because the map
+      # key already names the header. A generator that saw them would reject
+      # the document.
+      #
+      # THE HONESTY THE SPEC INSISTS ON travels with them: `Link` cites RFC
+      # 8288 because there IS one; `X-Total-Count` says in its own description
+      # that it is a widely-used convention with no standard behind it, and it
+      # says what it counts — matching rows, not returned rows — because those
+      # two differ on every page but the last.
+      PAGINATION_HEADERS = {
+        "Link"          => {
+          description: "RFC 8288 (Web Linking). Carries `rel=\"next\"` when this answer was " \
+                       "TRUNCATED: fetch that target URI verbatim for the following page. " \
+                       "ABSENT means this is the last (or only) page. The target repeats this " \
+                       "request with the reserved `cursor` parameter set to an OPAQUE token — " \
+                       "follow it, do not parse it.",
+          required:    false,
+          schema:      { type: "string" },
+        },
+        "X-Total-Count" => {
+          description: "How many rows MATCH the query across all pages — not how many this " \
+                       "response carries. A DE-FACTO CONVENTION, not a standard: no RFC " \
+                       "defines it. Omitted when the operator does not know the total, so " \
+                       "treat it as advisory and never as a loop bound.",
+          required:    false,
+          schema:      { type: "integer", minimum: 0 },
+        },
+      }.freeze
+
       def self.reserved_parameters
         {
           "limit"  => {

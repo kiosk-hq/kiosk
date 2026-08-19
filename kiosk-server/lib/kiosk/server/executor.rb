@@ -100,9 +100,12 @@ module Kiosk
       # ─── query ─────────────────────────────────────────────────────────
 
       # A query handler returns either a bare Array of rows (the unchanged,
-      # unpaginated case) or a {Page} (rows + an opaque next_cursor) to opt into
-      # cursor pagination. The handler reads the optional `limit`/`cursor` args
-      # itself; the Executor only threads the resulting cursor into the envelope.
+      # unpaginated case) or a {Page} (rows + an opaque next_cursor, and
+      # optionally the matching-row total) to opt into cursor pagination. The
+      # handler reads the optional `limit`/`cursor` args itself; the Executor
+      # only threads the two page facts onto the {Result}, from which the wire
+      # writes them as the `Link` and `X-Total-Count` response headers. The
+      # BODY is the rows either way (spec §8.2).
       # Any other return value (e.g. a Hash from an idiosyncratic query) is
       # passed through as the rows payload unchanged, preserving back-compat.
       def verb_query(args, name = nil)
@@ -120,7 +123,10 @@ module Kiosk
         end
 
         result = if returned.is_a?(Page)
-                   Result.new(kind: :rows, payload: returned.rows, next_cursor: returned.next_cursor)
+                   Result.new(kind:        :rows,
+                              payload:     returned.rows,
+                              next_cursor: returned.next_cursor,
+                              total:       returned.total)
                  else
                    Result.new(kind: :rows, payload: returned)
                  end

@@ -191,13 +191,14 @@ RSpec.describe "Kiosk::Query / Kiosk::Action (the operator mixin)" do
       expect(result.payload["agent_id"]).to eq("a-1")
     end
 
-    it "carries the cursor of a paginated page into the answer" do
+    it "carries the cursor of a paginated page onto the Result, not into the body" do
       result = execute(:query, { name: "my_orders" })
 
       expect(result.kind).to eq(:rows)
       expect(result.payload).to eq([{ "order_id" => "o-1", "for" => "u-1" }])
       expect(Kiosk::Server::Cursor.decode_offset(result.next_cursor)).to eq(1)
-      expect(result.to_payload[:next]).to eq(result.next_cursor)
+      # T-092: the body is the bare rows; the cursor leaves as a `Link` header.
+      expect(result.to_payload).to eq([{ "order_id" => "o-1", "for" => "u-1" }])
     end
 
     it "runs inside the wire's GUC-scoped transaction" do

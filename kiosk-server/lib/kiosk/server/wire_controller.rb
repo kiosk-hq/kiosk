@@ -5,6 +5,7 @@
 
 require "action_controller"
 require "action_dispatch/http/parameters"
+require "cgi"
 require "json"
 require "kiosk/server/current_request"
 require "kiosk/server/executor"
@@ -39,7 +40,10 @@ module Kiosk
     # ({Errors::Base#to_problem}) under `application/problem+json`. Both seams
     # live HERE, not in the subclass, because after the cutover there is only
     # one answer shape — the two-shapes split that put them in
-    # {VerbController} was the build-time intermediate, and it is over.
+    # {VerbController} was the build-time intermediate, and it is over. A
+    # paginating query is not a third shape either: since T-092 its page facts
+    # ride the `Link` (RFC 8288) and `X-Total-Count` response headers and its
+    # body is the same bare array — see {#add_pagination_headers}.
     #
     # Identity resolution: {IdentityResolution.resolve} — the
     # agent IdP first (`Kiosk.configuration.agent_idp`, defaulting to the
@@ -271,7 +275,84 @@ module Kiosk
       # shape now, so the override is gone and there is nowhere left for the
       # two to disagree.
       def render_result(result)
+        add_pagination_headers(result)
         render_wire_body(result.to_payload, status: result.http_status)
+      end
+
+      # PAGINATION LEAVES THE BODY (T-092, spec §8.4). The two facts a page
+      # carries about itself are transport metadata, so they travel as response
+      # headers and the body stays the bare array every other query answers:
+      #
+      #   Link: <…?limit=20&cursor=b2Zmc2V0OjIw>; rel="next"   RFC 8288
+      #   X-Total-Count: 97
+      #
+      # `Link` is RFC 8288 (Web Linking) and is the reason a paginating query
+      # no longer needs a body shape of its own. `X-Total-Count` is NOT a
+      # standard — no RFC defines it — it is a de-facto convention adopted here
+      # because it is widely used and immediately understood; the spec says so
+      # in those words rather than citing an RFC that does not exist.
+      #
+      # WHEN EACH IS EMITTED, and both rules are about not stating something
+      # untrue:
+      #
+      #   * `Link` — only on a TRUNCATED page. Its absence is what "this is the
+      #     last page" means, which is the same signal an absent `next` field
+      #     used to carry.
+      #   * `X-Total-Count` — the number of rows MATCHING the query, across all
+      #     pages. On a COMPLETE array answer that is the array's own length and
+      #     the wire fills it in for every query, paginating or not. On a
+      #     TRUNCATED page only the handler can know it, so it is emitted only
+      #     when the handler passed `total:` to `render_kiosk_page`; defaulting
+      #     to the payload length there would publish the PAGE size as the
+      #     total, which is worse than saying nothing.
+      #
+      # Not cached, and that needs no special case: {Headers.add_cache_policy}
+      # already puts `private, no-store` on every verb response (design §3.3
+      # rule 4), so a page cannot be served to a second caller, and §3.3 rule 3
+      # forbids `public`/`s-maxage` on this plane outright. The CDN story T-094
+      # shipped is for `GET <endpoint>/schema` alone.
+      def add_pagination_headers(result)
+        return unless result.kind == :rows
+
+        if (cursor = result.next_cursor)
+          add_link_header(next_page_link(cursor))
+        end
+
+        total = result.total
+        total = result.payload.length if total.nil? && result.next_cursor.nil? &&
+                                         result.payload.is_a?(::Array)
+        response.headers["X-Total-Count"] = total.to_s unless total.nil?
+      end
+
+      # RFC 8288 §3: a `Link` field value is a comma-separated list, so an
+      # operator that already set one keeps it and ours is appended. Ours is
+      # always the only `rel="next"` — nothing else on this wire emits one.
+      def add_link_header(value)
+        existing = response.headers["Link"].to_s
+        response.headers["Link"] = existing.empty? ? value : "#{existing}, #{value}"
+      end
+
+      # The next page's URI, built from THIS request: the same path and the
+      # same arguments, with `cursor` replaced by the new opaque token.
+      #
+      # Built by editing the RAW query string rather than by re-serialising
+      # parsed params, because a query's arguments include the bracket spellings
+      # §8.1 defines (`amenity%5B%5D=`, `filter%5Bcity%5D=`) and a round trip
+      # through a parser is a chance to hand back something the caller did not
+      # send. Dropping the incoming `cursor` and appending the new one is the
+      # whole edit.
+      #
+      # ABSOLUTE, not relative. RFC 8288 permits a URI-Reference resolved
+      # against the request URI, and an assistant that follows the target
+      # verbatim — which is the point of a Link header — is better served by a
+      # URI it can fetch without a resolution step.
+      def next_page_link(cursor)
+        pairs = request.query_string.to_s.split("&").reject do |pair|
+          pair.split("=", 2).first == "cursor"
+        end
+        pairs << "cursor=#{CGI.escape(cursor.to_s)}"
+
+        %(<#{request.base_url}#{request.path}?#{pairs.join("&")}>; rel="next")
       end
 
       # How an ERROR reaches the wire: an RFC 9457 problem document under its

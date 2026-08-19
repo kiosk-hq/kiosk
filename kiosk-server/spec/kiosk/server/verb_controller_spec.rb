@@ -136,20 +136,80 @@ RSpec.describe Kiosk::Server::VerbController do
     end
   end
 
-  describe "a paginating query is the one composite success shape" do
-    it "answers {rows, next} — what render_kiosk_page already produces internally" do
+  # RFC 8288 (T-092). A paginating query stopped being a shape: the body is the
+  # bare array every query answers and the two page facts are response headers.
+  describe "a paginating query answers a bare array with Link + X-Total-Count" do
+    let(:cursor) { Kiosk::Server::Cursor.encode_offset(20) }
+
+    it "puts the next page in a Link header with rel=next, not in the body" do
       declare_query("listings") do
         render_kiosk_page([{ id: 1 }], next_cursor: Kiosk::Server::Cursor.encode_offset(20))
       end
-      status, body = call_verb(:get, "listings")
+      status, body = call_verb(:get, "listings", query: "limit=1")
       expect(status).to eq(200)
-      expect(body).to eq(rows: [{ id: 1 }], next: Kiosk::Server::Cursor.encode_offset(20))
+      expect(body).to eq([{ id: 1 }])
+      expect(last_headers["Link"])
+        .to eq(%(<http://example.org/kiosk/listings?limit=1&cursor=#{cursor}>; rel="next"))
     end
 
-    it "answers a bare array when the same handler emits no cursor" do
+    it "replaces an incoming cursor rather than appending a second one" do
+      declare_query("listings") do
+        render_kiosk_page([{ id: 1 }], next_cursor: Kiosk::Server::Cursor.encode_offset(20))
+      end
+      call_verb(:get, "listings", query: "limit=1&cursor=b2Zmc2V0OjEw&min_stars=4")
+      expect(last_headers["Link"]).to eq(
+        %(<http://example.org/kiosk/listings?limit=1&min_stars=4&cursor=#{cursor}>; rel="next"),
+      )
+    end
+
+    it "sends NO Link on the last page — its absence is what completeness means" do
       declare_query("listings") { render_kiosk_page([{ id: 1 }]) }
       _status, body = call_verb(:get, "listings")
       expect(body).to eq([{ id: 1 }])
+      expect(last_headers["Link"]).to be_nil
+    end
+
+    # The total is the handler's to state on a truncated page, and the wire's
+    # to derive on a complete one. It is never guessed from the page.
+    it "emits the handler's total on a truncated page" do
+      declare_query("listings") do
+        render_kiosk_page([{ id: 1 }], next_cursor: Kiosk::Server::Cursor.encode_offset(20),
+                                       total:       97)
+      end
+      call_verb(:get, "listings")
+      expect(last_headers["X-Total-Count"]).to eq("97")
+    end
+
+    it "omits X-Total-Count on a truncated page whose handler gave no total" do
+      declare_query("listings") do
+        render_kiosk_page([{ id: 1 }], next_cursor: Kiosk::Server::Cursor.encode_offset(20))
+      end
+      call_verb(:get, "listings")
+      expect(last_headers["X-Total-Count"]).to be_nil
+    end
+
+    it "derives X-Total-Count from a COMPLETE array answer, paginating or not" do
+      declare_query("salons") { render json: [{ id: 1 }, { id: 2 }] }
+      call_verb(:get, "salons")
+      expect(last_headers["X-Total-Count"]).to eq("2")
+    end
+
+    it "sends neither header for an action" do
+      declare_action("book_appointment") { render json: { ok: 1 } }
+      call_verb(:post, "book_appointment", body: "{}")
+      expect(last_headers["Link"]).to be_nil
+      expect(last_headers["X-Total-Count"]).to be_nil
+    end
+
+    # §3.3 rule 3/4: a page is a per-caller answer. Nothing about adopting a
+    # cacheable-looking `Link` header may relax that.
+    it "is still private, no-store — a page is never shared-cacheable" do
+      declare_query("listings") do
+        render_kiosk_page([{ id: 1 }], next_cursor: Kiosk::Server::Cursor.encode_offset(20))
+      end
+      call_verb(:get, "listings")
+      expect(last_headers["Cache-Control"]).to eq("private, no-store")
+      expect(last_headers["Vary"]).to eq("Authorization, Kiosk-PoW")
     end
   end
 

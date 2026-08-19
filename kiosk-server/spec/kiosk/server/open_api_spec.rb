@@ -319,6 +319,49 @@ RSpec.describe Kiosk::Server::OpenApi do
   end
 
   describe "responses" do
+    # T-092. A response HEADER is declared under `responses.<code>.headers`,
+    # never as a body property — publishing `Link` as a field of a row array
+    # would be a false statement about the body in a document whose entire
+    # warrant is that it restates the descriptors.
+    it "declares the two pagination headers on a QUERY's 200, by $ref" do
+      declare_query("salons", output_schema: { type: "array" })
+
+      headers = document.dig(:paths, "/salons", :get, :responses, "200", :headers)
+      expect(headers).to eq("Link"          => { "$ref": "#/components/headers/Link" },
+                            "X-Total-Count" => { "$ref": "#/components/headers/X-Total-Count" })
+      expect(document.dig(:components, :headers, "Link", :description)).to include("RFC 8288")
+      expect(document.dig(:components, :headers, "Link", :schema)).to eq(type: "string")
+      expect(document.dig(:components, :headers, "X-Total-Count", :schema))
+        .to eq(type: "integer", minimum: 0)
+    end
+
+    # The Header Object is a Parameter Object MINUS `name` and `in` (OAS 3.1
+    # §4.8.21.1): the map key names the header, and a generator rejects a
+    # document that repeats it.
+    it "writes the header objects without `name`/`in`" do
+      declare_query("salons", output_schema: { type: "array" })
+
+      document.dig(:components, :headers).each_value do |header|
+        expect(header).not_to have_key(:name)
+        expect(header).not_to have_key(:in)
+      end
+    end
+
+    # `X-Total-Count` is a convention, not a standard. The document must not
+    # imply otherwise — the spec makes the same point in its own words.
+    it "does not cite an RFC behind X-Total-Count" do
+      declare_query("salons", output_schema: { type: "array" })
+
+      expect(document.dig(:components, :headers, "X-Total-Count", :description))
+        .to match(/DE-FACTO CONVENTION/i).and(match(/no RFC/i))
+    end
+
+    it "does NOT declare them on an action — actions never paginate" do
+      declare_action("book") { render json: {} }
+
+      expect(document.dig(:paths, "/book", :post, :responses, "200")).not_to have_key(:headers)
+    end
+
     it "publishes the `output_schema` VERBATIM as the 200 body" do
       declare_query("salons",
                     output_schema: { type: "array", description: "The complete public catalogue.",
@@ -327,7 +370,9 @@ RSpec.describe Kiosk::Server::OpenApi do
       expect(document.dig(:paths, "/salons", :get, :responses, "200"))
         .to eq(description: "The complete public catalogue.",
                content: { "application/json" =>
-                 { schema: { "$ref": "#/components/schemas/salons.response" } } })
+                 { schema: { "$ref": "#/components/schemas/salons.response" } } },
+               headers: { "Link"          => { "$ref": "#/components/headers/Link" },
+                          "X-Total-Count" => { "$ref": "#/components/headers/X-Total-Count" } })
       expect(document.dig(:components, :schemas, "salons.response", :items))
         .to eq(type: "object", properties: { id: { type: "integer" } })
     end

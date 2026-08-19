@@ -11,17 +11,28 @@ module Kiosk
     #                 request's `cursor` param to fetch the following page.
     #                 PRESENT (non-nil) means the result was truncated (more
     #                 rows exist); nil/absent means this is the last page.
+    #   total       — OPTIONAL: how many rows MATCH the query across all pages,
+    #                 not how many this page carries. It becomes
+    #                 `X-Total-Count`. nil means "this handler does not know",
+    #                 and nil is the honest answer for a keyset cursor over a
+    #                 set nobody counted — the header is then omitted rather
+    #                 than filled with the page size, which would be a lie.
     #
     # The cursor is opaque BY CONTRACT: the assistant never parses it, it only
     # round-trips it. A handler is free to encode an offset, a keyset token, or
     # anything else behind it. {Cursor} provides a base64 offset helper for the
     # common case; a handler MAY use its own scheme.
     #
+    # SINCE T-092 NEITHER FIELD REACHES THE BODY. The rows ARE the body — a
+    # bare JSON array, the same shape every other query answers — and the two
+    # facts about the page travel as RESPONSE HEADERS: `Link: <…>; rel="next"`
+    # (RFC 8288) and `X-Total-Count`. See {WireController#add_pagination_headers}.
+    #
     # Pagination applies to LIST results only. Single-object/action/pay results
     # (kind: :value) never carry a cursor.
-    Page = Data.define(:rows, :next_cursor) do
-      def initialize(rows:, next_cursor: nil)
-        super(rows: rows, next_cursor: next_cursor)
+    Page = Data.define(:rows, :next_cursor, :total) do
+      def initialize(rows:, next_cursor: nil, total: nil)
+        super(rows: rows, next_cursor: next_cursor, total: total)
       end
 
       # True when the result was truncated (more rows exist beyond this page).
@@ -40,11 +51,12 @@ module Kiosk
     # `default` (0) rather than raising, so a garbage `cursor` param yields the
     # first page instead of a 500.
     #
-    # THIS MODULE SURVIVED THE 0.4 CUTOVER while the envelope did not.
-    # Nothing about an opaque offset cursor was ever about the envelope: the
-    # wire still has `limit`/`cursor` as reserved request parameters and still
-    # answers a truncated page with a `next` token, so a handler encoding an
-    # offset behind one needs exactly this helper.
+    # THIS MODULE SURVIVED THE 0.4 CUTOVER, AND IT SURVIVED T-092 TOO. Nothing
+    # about an opaque offset cursor was ever about the envelope or about where
+    # the cursor travels: the wire still has `limit`/`cursor` as reserved
+    # request parameters, and a truncated page still hands back an opaque token
+    # — inside a `Link` header's target URI now instead of a body field — so a
+    # handler encoding an offset behind one needs exactly this helper.
     module Cursor
       PREFIX = "offset:"
 
@@ -78,17 +90,17 @@ module Kiosk
     #   :rows   — a query's rows (Array<Hash>, or whatever the handler rendered)
     #   :value  — a single value returned by an Action or by `pay`
     #
-    # — and `next_cursor` is OPTIONAL, only ever set on a :rows Result whose
-    # query handler paginated (returned a {Page} with a next_cursor). Present
-    # means the answer was truncated; {#to_payload} is where either fact
-    # becomes a response body.
+    # — and `next_cursor`/`total` are OPTIONAL, only ever set on a :rows Result
+    # whose query handler paginated (returned a {Page}). They do not become
+    # body fields: {#to_payload} is the payload and nothing else, and the two
+    # page facts are written as RESPONSE HEADERS by the wire controller.
     #
     # The `:stream` kind (events, NDJSON) was removed with the `events` verb:
     # it was never a capability and had no producer.
-    Result = Data.define(:kind, :payload, :next_cursor) do
+    Result = Data.define(:kind, :payload, :next_cursor, :total) do
       KINDS = %i[rows value].freeze
 
-      def initialize(kind:, payload:, next_cursor: nil)
+      def initialize(kind:, payload:, next_cursor: nil, total: nil)
         kind = kind.to_sym
         unless KINDS.include?(kind)
           raise ArgumentError, "kind must be one of #{KINDS.inspect}, got #{kind.inspect}"
@@ -96,8 +108,11 @@ module Kiosk
         if next_cursor && kind != :rows
           raise ArgumentError, "next_cursor is only valid on a :rows result (got #{kind.inspect})"
         end
+        if total && kind != :rows
+          raise ArgumentError, "total is only valid on a :rows result (got #{kind.inspect})"
+        end
 
-        super(kind: kind, payload: payload, next_cursor: next_cursor)
+        super(kind: kind, payload: payload, next_cursor: next_cursor, total: total)
       end
 
       def ok? = true
@@ -105,22 +120,17 @@ module Kiosk
       def http_status = 200
 
       # THE SUCCESS BODY (T-072 = C): the handler's rendered payload,
-      # VERBATIM. No `ok`, no `kind`, no wrapper — the status line already
-      # says "success" and `output_schema` says what the shape is.
+      # VERBATIM. No `ok`, no `kind`, no wrapper, and since T-092 no composite
+      # case either — the status line already says "success" and
+      # `output_schema` says what the shape is.
       #
-      # The one composite case is pagination, and it is the shape the handler
-      # already renders internally: `render_kiosk_page(rows, next_cursor:)`
-      # produces `{rows:, next_cursor:}`, so a PAGINATING query answers
-      # `{"rows": …, "next": …}` and declares exactly that in `output_schema`.
-      # A non-paginating query answers a BARE ARRAY; an action answers its own
-      # object. That is why `next` is not merged into a bare array here —
-      # there is nowhere on an array to put it.
-      def to_payload
-        return payload if next_cursor.nil?
-
-        { rows: payload, next: next_cursor }
-      end
-
+      # A PAGINATING QUERY ANSWERS THE SAME BARE ARRAY AS EVERY OTHER QUERY.
+      # It used to answer `{"rows": …, "next": …}`, which was the one body
+      # shape on this wire that existed to carry a piece of TRANSPORT
+      # metadata; adopting RFC 8288 (Web Linking) moved that metadata to where
+      # HTTP already keeps it — the `Link` response header, `rel="next"` — and
+      # took the second query shape with it (spec §8.2/§8.4).
+      def to_payload = payload
     end
   end
 end

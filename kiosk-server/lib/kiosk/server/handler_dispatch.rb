@@ -24,7 +24,8 @@ module Kiosk
     # Executor wraps in a {Result} exactly as it wraps a block handler's:
     # a query's array of rows lands under `rows`, an action's object under
     # `value`. A query that called `render_kiosk_page` comes back as a {Page}
-    # so the `next` cursor still reaches the envelope.
+    # so the opaque cursor and the total still reach the wire — as the `Link`
+    # and `X-Total-Count` response headers since T-092, never as body fields.
     #
     # ── Two gates on the method name ─────────────────────────────────────
     # The agent-supplied WIRE name never reaches Ruby: it is looked up in the
@@ -259,9 +260,9 @@ module Kiosk
         hint&.to_s
       end
 
-      # `render_kiosk_page` rendered `{rows:, next_cursor:}`; rebuild the {Page}
-      # the Executor understands so the opaque cursor reaches the envelope's
-      # `next` field.
+      # `render_kiosk_page` rendered `{rows:, next_cursor:, total:}`; rebuild
+      # the {Page} the Executor understands, so the opaque cursor and the total
+      # reach the wire's `Link` and `X-Total-Count` headers (spec §8.4).
       def paginate(payload)
         unless payload.is_a?(Hash) && payload.key?("rows")
           raise Errors::ActionFailed.new(
@@ -270,7 +271,9 @@ module Kiosk
           )
         end
 
-        Page.new(rows: payload["rows"], next_cursor: payload["next_cursor"])
+        Page.new(rows:        payload["rows"],
+                 next_cursor: payload["next_cursor"],
+                 total:       payload["total"])
       end
     end
   end

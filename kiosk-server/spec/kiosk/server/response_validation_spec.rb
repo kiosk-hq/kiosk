@@ -74,29 +74,40 @@ RSpec.describe Kiosk::Server::ResponseValidation do
     end
 
     # THE SHAPE THE WIRE ANSWERS, not the one the handler wrote: a paginating
-    # query renders `{rows:, next_cursor:}` internally and the wire publishes
-    # `{rows:, next:}`, so the declaration is checked against the published
-    # spelling. A declaration written against the internal one would pass here
-    # and be wrong on the wire, which is the whole reason this hook sits on
-    # {Result#to_payload} rather than on what the handler rendered.
-    it "checks a paginating query against the PUBLISHED {rows, next}" do
-      schema = { type: "object", additionalProperties: false,
-                 properties: { rows: { type: "array" }, next: { type: "string" } },
-                 required: %w[rows next] }
+    # query renders `{rows:, next_cursor:, total:}` internally and the wire
+    # publishes the ROWS — a bare array, the cursor and the total having left
+    # as the `Link` and `X-Total-Count` response headers (T-092). The
+    # declaration is checked against the PUBLISHED spelling, which is the whole
+    # reason this hook sits on {Result#to_payload} rather than on what the
+    # handler rendered. Before T-092 this example asserted the opposite shape;
+    # that it had to be rewritten is the check doing its job.
+    it "checks a paginating query against the PUBLISHED bare array" do
+      schema = { type: "array", items: { type: "object" } }
       declare_query("search", output_schema: schema) do
-        render_kiosk_page([{ id: 1 }], next_cursor: "b2Zmc2V0OjIw")
+        render_kiosk_page([{ id: 1 }], next_cursor: "b2Zmc2V0OjIw", total: 9)
       end
 
-      expect(query("search").to_payload).to eq(rows: [{ "id" => 1 }], next: "b2Zmc2V0OjIw")
+      expect(query("search").to_payload).to eq([{ "id" => 1 }])
     end
 
-    # …and the corollary the schema has to allow for: the SAME handler answers
-    # a BARE ARRAY on its last page, because `next` ABSENT is what "complete"
-    # means (spec §8.4). A single-branch object schema is therefore wrong for a
-    # paginating verb, and this is the example that says so.
-    it "sees the bare array a paginating query answers on its last page" do
+    # The corollary, and it is what the shape collapse BOUGHT: a paginating
+    # verb's truncated page and its last page are the SAME shape now, so ONE
+    # unbranched array schema describes both. The `oneOf` a paginating
+    # descriptor used to need went with the object.
+    it "accepts the same array schema on the last page of the same verb" do
+      schema = { type: "array", items: { type: "object" } }
+      declare_query("search", output_schema: schema) { render_kiosk_page([{ id: 1 }]) }
+
+      expect(query("search").to_payload).to eq([{ "id" => 1 }])
+    end
+
+    # …and an object schema, which a paginating verb used to REQUIRE, is now
+    # exactly what a paginating verb must not declare.
+    it "refuses an object schema on a paginating verb" do
       object_only = { type: "object", required: %w[rows next] }
-      declare_query("search", output_schema: object_only) { render_kiosk_page([{ id: 1 }]) }
+      declare_query("search", output_schema: object_only) do
+        render_kiosk_page([{ id: 1 }], next_cursor: "b2Zmc2V0OjIw")
+      end
 
       expect { query("search") }.to raise_error(Kiosk::Server::Errors::ActionFailed,
                                                 /output_schema rejects/)

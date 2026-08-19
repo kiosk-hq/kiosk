@@ -248,9 +248,11 @@ you `render`. On top of that:
 - `kiosk_identity` — the `Kiosk::Identity` the wire resolved (`user_id`,
   `agent_id`, `role`, `actor`). The four transaction-local GUCs are already applied to
   the connection, so SQL-side and RLS scoping work whether or not you read it.
-- `render_kiosk_page(rows, next_cursor:)` — answer one page of a large query;
-  the cursor reaches the envelope's `next` field. `Kiosk::Server::Cursor` has an
-  offset helper.
+- `render_kiosk_page(rows, next_cursor:, total:)` — answer one page of a large
+  query. The body stays the bare array every query answers: the cursor leaves as
+  an RFC 8288 `Link: <…?cursor=…>; rel="next"` response header and the
+  matching-row count as `X-Total-Count`. `Kiosk::Server::Cursor` has an offset
+  helper; pass `total:` only when you know it.
 - The handler runs inside the wire's GUC-scoped transaction, so raising rolls
   back — and so does rendering a non-2xx, which the seam converts into a raise.
 

@@ -480,11 +480,25 @@ RSpec.describe Kiosk::Server::WellKnown do
       expect(body).to include("https://api.acme.example/kiosk/auth/unlink")
     end
 
-    it "documents the OAuth error vocabulary as the envelope exception" do
+    it "documents the OAuth error vocabulary as the one exception" do
       %w[authorization_pending slow_down expired_token access_denied
          invalid_grant invalid_client].each do |code|
         expect(body).to include(code)
       end
+    end
+
+    # This section described the 0.3 `{ ok: false, error: {…} }` envelope until
+    # T-068 slice 7 — a wrong error contract in a document EVERY operator
+    # serves, and the one an assistant reads to learn how a refusal is shaped.
+    # Pinned by shape, not by prose, so it cannot drift back.
+    it "teaches the RFC 9457 problem document, with the code FLAT" do
+      expect(body).to include("RFC 9457 problem document")
+      expect(body).to include("application/problem+json")
+      expect(body).to include("https://kiosk.tech/problems/<code>")
+      expect(body).to match(/`code`.*FLAT member/)
+      # The retired envelope must not survive anywhere in the document.
+      expect(body).not_to include("ok: false")
+      expect(body).not_to match(/JSON envelope/)
     end
 
     it "requires the possession proof in the token poll (BIND-POP is not optional)" do

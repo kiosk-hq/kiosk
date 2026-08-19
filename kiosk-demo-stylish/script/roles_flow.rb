@@ -60,8 +60,13 @@ def post_json(path, body, headers = {})
   [res.code.to_i, (JSON.parse(res.body) rescue {})]
 end
 
-def get_json(path, headers = {})
+# THE 0.4 WIRE. A query is `GET <endpoint>/<query-name>` carrying its arguments
+# in the query string; there is no `name` field and no /query endpoint. A
+# success body IS the result — `salon_calendar` answers a bare JSON array of
+# rows, not `{"rows": …}`.
+def get_json(path, headers = {}, params = {})
   uri = URI("#{SERVER}#{path}")
+  uri.query = URI.encode_www_form(params) unless params.empty?
   req = Net::HTTP::Get.new(uri, headers)
   res = Net::HTTP.new(uri.host, uri.port).request(req)
   [res.code.to_i, (JSON.parse(res.body) rescue {})]
@@ -161,10 +166,10 @@ results = {}
 # ══ OWNER links an assistant → role owner → salon_calendar = whole book ═════
 owner = link_assistant_as(OWNER_ID, "OWNER")
 results[:owner_token_role] = owner[:claims]["role"]
-rc, cal = post_json("/kiosk/query", { name: "salon_calendar" },
-                    { "Authorization" => "Bearer #{owner[:token]}" })
+rc, cal = get_json("/kiosk/salon_calendar",
+                   { "Authorization" => "Bearer #{owner[:token]}" })
 abort "OWNER salon_calendar failed (#{rc}): #{JSON.generate(cal)}" unless rc == 200
-owner_rows     = cal.fetch("rows", [])
+owner_rows     = Array(cal)
 owner_summary  = owner_rows.find { |r| r["summary"] == "forecast" }
 owner_bookings = owner_rows.select { |r| r["kind"] == "booking" }
 results[:owner_booking_count]   = owner_bookings.size
@@ -182,20 +187,20 @@ STDERR.puts "  OWNER sees #{owner_bookings.size} bookings; forecast=#{results[:o
 # OWNER through the real Devise session → role owner, whole book + forecast.
 d_owner = link_assistant_via_devise(OWNER_EMAIL, DEMO_PASSWORD, "OWNER")
 results[:devise_owner_token_role] = d_owner[:claims]["role"]
-rc, cal = post_json("/kiosk/query", { name: "salon_calendar" },
-                    { "Authorization" => "Bearer #{d_owner[:token]}" })
+rc, cal = get_json("/kiosk/salon_calendar",
+                   { "Authorization" => "Bearer #{d_owner[:token]}" })
 abort "OWNER (real Devise) salon_calendar failed (#{rc}): #{JSON.generate(cal)}" unless rc == 200
-d_owner_rows = cal.fetch("rows", [])
+d_owner_rows = Array(cal)
 results[:devise_owner_sees_forecast] = d_owner_rows.any? { |r| r["summary"] == "forecast" }
 STDERR.puts "  OWNER (real Devise) role=#{results[:devise_owner_token_role].inspect} forecast_row=#{results[:devise_owner_sees_forecast]}"
 
 # CUSTOMER through the real Devise session → role customer, own bookings, no forecast.
 d_customer = link_assistant_via_devise(CUSTOMER_EMAIL, DEMO_PASSWORD, "CUSTOMER")
 results[:devise_customer_token_role] = d_customer[:claims]["role"]
-rc, cal = post_json("/kiosk/query", { name: "salon_calendar" },
-                    { "Authorization" => "Bearer #{d_customer[:token]}" })
+rc, cal = get_json("/kiosk/salon_calendar",
+                   { "Authorization" => "Bearer #{d_customer[:token]}" })
 abort "CUSTOMER (real Devise) salon_calendar failed (#{rc}): #{JSON.generate(cal)}" unless rc == 200
-c_rows = cal.fetch("rows", [])
+c_rows = Array(cal)
 results[:devise_customer_sees_forecast] = c_rows.any? { |r| r["summary"] == "forecast" }
 results[:devise_customer_row_count]     = c_rows.size
 STDERR.puts "  CUSTOMER (real Devise) role=#{results[:devise_customer_token_role].inspect} sees #{c_rows.size} rows, forecast_row=#{results[:devise_customer_sees_forecast]}"

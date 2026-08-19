@@ -53,7 +53,9 @@ reg_body = { public_key: pem, signed: pop }
 # ── Register with no proof → expect 402 pow_required ────────────────────────
 rc_nopow, resp_nopow = post_json("#{SERVER}/kiosk/auth/register", reg_body)
 abort "expected 402 without proof, got #{rc_nopow}: #{JSON.generate(resp_nopow)}" unless rc_nopow == 402
-challenges = resp_nopow.dig("error", "challenges")
+# The 402 is an RFC 9457 problem document: `challenges` is a TOP-LEVEL
+# extension member, not nested under an `error` object.
+challenges = resp_nopow["challenges"]
 abort "402 without challenges[]" unless challenges.is_a?(Array) && challenges.any?
 
 # ── Solve and resubmit the SAME signed body → expect 201 ────────────────────
@@ -63,9 +65,11 @@ abort "register with proof failed (#{rc_reg}): #{JSON.generate(reg)}" unless rc_
 token = reg.fetch("access_token")
 
 # ── Use the fresh token: query salons → 200 ─────────────────────────────────
-rc_q, q = post_json("#{SERVER}/kiosk/query", { name: "salons" }, { "Authorization" => "Bearer #{token}" })
-salons = q.fetch("rows", q.fetch("salons", []))
+# A query is a GET at its own endpoint and its answer IS the rows — a bare JSON
+# array, with no `{"rows": …}` envelope to unwrap.
+rc_q, q = get_json("#{SERVER}/kiosk/salons", { "Authorization" => "Bearer #{token}" })
 abort "salons query failed (#{rc_q}): #{JSON.generate(q)}" unless rc_q == 200
+salons = Array(q)
 
 puts JSON.generate(
   http_register_no_pow: rc_nopow,

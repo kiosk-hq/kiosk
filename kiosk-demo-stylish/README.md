@@ -4,7 +4,7 @@ Stylish is a hair-styling salon-booking service (stylish.example), Kiosk-enabled
 
 - `/.well-known/kiosk.json` discovery
 - JWKS endpoint for JWT verification
-- Authenticated REST wire surface (`/kiosk/query`, `/kiosk/run`, `/kiosk/pay`, `/kiosk/schema`) — query + run verbs
+- Authenticated REST wire surface — **one endpoint per verb**: a query is a `GET /kiosk/<query-name>` with its arguments in the query string, an action is a `POST /kiosk/<action-name>` with its arguments as the JSON body, and the success body IS the result (no envelope). `GET /kiosk/schema`, `GET /kiosk/openapi.json` and `POST /kiosk/pay` keep their own paths; errors are RFC 9457 problem documents whose top-level `code` is what an assistant branches on
 - App-layer data isolation (two users, two views of the same table); RLS available as optional defense-in-depth
 - A `book_appointment` Action + an `availability`/`service_menu` query — an **evergreen service menu**: a small set of services, each with a EUR price, all always bookable (infinite capacity, overbooking allowed — the salon never fills up, so the demo never goes empty or stale and needs no reseed cron). The salon starts with zero bookings; real bookings accumulate as visitors book.
 - Human↔assistant account binding over real Devise sessions — the claim ceremony (verify page) and human-minted link codes, walked by `rake demo:binding`
@@ -37,8 +37,8 @@ rake demo
 The walkthrough (`bin/demo`) prints four sections:
 
 1. **Discovery** — well-known + JWKS payloads, so an AI-assistant host like claude.ai sees what's behind the URL
-2. **Named query** — `POST /kiosk/query` with `{name: ...}`, returning rows scoped by app-layer authz
-3. **Run an Action** — `POST /kiosk/run` invoking `book_appointment` (the demo's lone registered Action)
+2. **A query** — `GET /kiosk/salons` and `GET /kiosk/availability`, each answering a bare JSON array scoped by app-layer authz
+3. **An Action** — `POST /kiosk/book_appointment` (the demo's lone registered Action), arguments in the JSON body, answering the booking object itself
 4. **Isolation** — same query run as Alice vs Bob; each sees only their own (enforced in the query block, RLS optional)
 
 After the walkthrough finishes, the server is torn down cleanly. Server logs are at `/tmp/kiosk-demo.log` if you want to inspect what hit the HTTP surface.
@@ -90,7 +90,7 @@ assertions cannot go ungated and unexplained.
 | `app/models/{user,salon,service,appointment}.rb` | Trivial AR models; `User` is `database_authenticatable` for the human sign-in and carries `staff_role` (owner); `Service` is a menu item priced in EUR cents |
 | `config/initializers/kiosk.rb` | `Kiosk.configure` block — configuration only; it names the two handler controllers, it does not contain them |
 | `app/controllers/kiosk/front_desk_controller.rb` | The `salons` / `service_menu` / `availability` / `my_appointments` queries and the role-gated `salon_calendar` forecast — an ordinary Rails controller with `include Kiosk::Query`, declared with the class-level macros. Not routable: handlers are reached only through the wire |
-| `app/controllers/kiosk/appointments_controller.rb` | The `book_appointment` action — same shape with `include Kiosk::Action`; refusals are plain `render json:, status:` naming a wire `error.code` |
+| `app/controllers/kiosk/appointments_controller.rb` | The `book_appointment` action — same shape with `include Kiosk::Action`; refusals are plain `render json:, status:` naming a wire error code, which the wire re-renders as an RFC 9457 problem document |
 | `config/initializers/devise.rb` | Minimal Devise setup — the human session that approves assistant links |
 | `lib/stub_idp.rb` | Bespoke synthetic-token agent-IdP for the demo's hard-coded Alice + Bob |
 | `lib/jwt_or_stub_idp.rb` | Composite agent-IdP: tries Kiosk-issued JWTs first, falls back to StubIdp |

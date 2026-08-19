@@ -33,6 +33,15 @@ require_tool() {
 require_tool curl
 require_tool jq
 
+# The 0.4 wire: one endpoint per verb. A query is a GET whose arguments are the
+# query string; an action is a POST whose arguments are the JSON body. A success
+# body IS the result — no envelope to unwrap, so no `.rows`/`.value` below.
+#   q  <token> <query-name> [query-string]
+#   run <token> <action-name> <json-body>
+q()   { curl -sS "$SERVER_URL/kiosk/$2${3:+?$3}" -H "Authorization: Bearer $1"; }
+run() { curl -sS -X POST "$SERVER_URL/kiosk/$2" -H "Authorization: Bearer $1" \
+          -H "Content-Type: application/json" -d "$3"; }
+
 # ─── boot ────────────────────────────────────────────────────────────
 
 heading "Starting Combette (the demo provider) on port $PORT"
@@ -71,67 +80,37 @@ curl -sf "$SERVER_URL/kiosk/.well-known/jwks.json" \
 heading "Alice's agent reads data (named queries)"
 
 step "List salons (publicly visible)"
-curl -sS -X POST "$SERVER_URL/kiosk/query" \
-  -H "Authorization: Bearer $ALICE_TOKEN" \
-  -H "Content-Type: application/json" \
-  -d '{"name":"salons"}' \
-  | jq '.rows'
+q "$ALICE_TOKEN" salons | jq '.'
 
 step "Browse the salon's OPEN services (evergreen menu — always bookable, infinite capacity)"
-curl -sS -X POST "$SERVER_URL/kiosk/query" \
-  -H "Authorization: Bearer $ALICE_TOKEN" \
-  -H "Content-Type: application/json" \
-  -d '{"name":"availability"}' \
-  | jq '.rows | map({service, open, price_eur})'
+q "$ALICE_TOKEN" availability | jq 'map({service, open, price_eur})'
 
 step "Count appointments visible to Alice (initially 0 — bookings accumulate during the demo)"
-curl -sS -X POST "$SERVER_URL/kiosk/query" \
-  -H "Authorization: Bearer $ALICE_TOKEN" \
-  -H "Content-Type: application/json" \
-  -d '{"name":"my_appointments"}' \
-  | jq '.rows | length'
+q "$ALICE_TOKEN" my_appointments | jq 'length'
 
 # ─── run an Action ───────────────────────────────────────────────────
 
 heading "Alice's agent books a haircut — picks a service off the menu"
 
-SALON_ID=$(curl -sS -X POST "$SERVER_URL/kiosk/query" \
-  -H "Authorization: Bearer $ALICE_TOKEN" \
-  -H "Content-Type: application/json" \
-  -d '{"name":"salons"}' \
-  | jq -r '.rows[0].salon_id')
+SALON_ID=$(q "$ALICE_TOKEN" salons | jq -r '.[0].salon_id')
 
 # Pick the first open service from the availability query (all always bookable).
-SERVICE_ID=$(curl -sS -X POST "$SERVER_URL/kiosk/query" \
-  -H "Authorization: Bearer $ALICE_TOKEN" \
-  -H "Content-Type: application/json" \
-  -d '{"name":"availability"}' \
-  | jq -r '.rows[0].service_id')
+SERVICE_ID=$(q "$ALICE_TOKEN" availability | jq -r '.[0].service_id')
 
-step "run book_appointment for salon $SALON_ID with service $SERVICE_ID"
-curl -sS -X POST "$SERVER_URL/kiosk/run" \
-  -H "Authorization: Bearer $ALICE_TOKEN" \
-  -H "Content-Type: application/json" \
-  -d "{\"name\":\"book_appointment\",\"salon_id\":$SALON_ID,\"service_id\":$SERVICE_ID,\"slot\":\"2026-07-01T14:00:00Z\"}" \
-  | jq '.value'
+step "POST /kiosk/book_appointment for salon $SALON_ID with service $SERVICE_ID"
+run "$ALICE_TOKEN" book_appointment \
+  "{\"salon_id\":$SALON_ID,\"service_id\":$SERVICE_ID,\"slot\":\"2026-07-01T14:00:00Z\"}" \
+  | jq '.'
 
 # ─── App-layer isolation ─────────────────────────────────────────────
 
 heading "App-layer isolation: Alice and Bob can only see their own"
 
 step "Alice sees her appointment (count = 1)"
-curl -sS -X POST "$SERVER_URL/kiosk/query" \
-  -H "Authorization: Bearer $ALICE_TOKEN" \
-  -H "Content-Type: application/json" \
-  -d '{"name":"my_appointments"}' \
-  | jq '.rows | length'
+q "$ALICE_TOKEN" my_appointments | jq 'length'
 
 step "Bob sees 0 (same query, different identity)"
-curl -sS -X POST "$SERVER_URL/kiosk/query" \
-  -H "Authorization: Bearer $BOB_TOKEN" \
-  -H "Content-Type: application/json" \
-  -d '{"name":"my_appointments"}' \
-  | jq '.rows | length'
+q "$BOB_TOKEN" my_appointments | jq 'length'
 
 # ─── done ────────────────────────────────────────────────────────────
 
@@ -140,11 +119,14 @@ say "Server log:        /tmp/kiosk-demo.log"
 say "DB:                kiosk_stylish_development"
 say ""
 say "Try it yourself (the wire is plain HTTP — curl + jq):"
-say "  run a named query:"
-say "    curl -sS -X POST $SERVER_URL/kiosk/query \\"
+say "  a query is a GET at its own endpoint, and the body IS the result:"
+say "    curl -sS $SERVER_URL/kiosk/salons \\"
+say "      -H 'Authorization: Bearer $ALICE_TOKEN' | jq '.'"
+say "  an action is a POST at its own endpoint, arguments in the JSON body:"
+say "    curl -sS -X POST $SERVER_URL/kiosk/book_appointment \\"
 say "      -H 'Authorization: Bearer $ALICE_TOKEN' \\"
 say "      -H 'Content-Type: application/json' \\"
-say "      -d '{\"name\":\"salons\"}' | jq '.rows'"
+say "      -d '{\"salon_id\":1,\"slot\":\"2026-07-01T14:00:00Z\"}' | jq '.'"
 say ""
 say "Swap the demo stubs for production-shape auth (two DIFFERENT seams):"
 say "  • AGENT-IdP (c.agent_idp): registered assistants already flow through real"

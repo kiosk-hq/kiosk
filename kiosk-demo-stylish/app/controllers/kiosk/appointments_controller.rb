@@ -1,13 +1,15 @@
 # frozen_string_literal: true
 
 # stylish's WRITE surface: the one verb an assistant reaches with
-# `POST /kiosk/run`. Same shape as Kiosk::FrontDeskController — this app's own
+# `POST /kiosk/book_appointment` — its own endpoint, arguments in the JSON body.
+# Same shape as Kiosk::FrontDeskController — this app's own
 # ApplicationController plus `include Kiosk::Action` — because a controller
 # declares queries OR actions, never both.
 #
-# Errors are Rails' idiom end to end: the wire's `error.code` vocabulary is a
+# Errors are Rails' idiom end to end: the wire's error-code vocabulary is a
 # closed table, not a class hierarchy, so a refusal is an ordinary
-# `render json:, status:` naming the code, and the wire carries it verbatim. No
+# `render json:, status:` naming the code, and the wire re-renders it as the
+# RFC 9457 problem document whose TOP-LEVEL `code` an assistant branches on. No
 # Kiosk error classes appear below — the Operation answers with an
 # {OperationResult} and {KioskRefusals#render_operation} is the one place that
 # becomes a status.

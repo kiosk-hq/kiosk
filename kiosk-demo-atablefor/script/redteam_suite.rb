@@ -19,8 +19,9 @@
 #   GarbageToken      — an unparseable bearer token → 401
 #   UnknownQuery      — an unregistered query name → 404
 #   UnknownAction     — an unregistered action name → 404
-#   EmptyAvailabilityIsNotACrash — a schema-VALID filter that matches no seating
-#     is 200 with an empty rows array, not a 500 (K-691)
+#   InvalidFilterIsNotAnEmptyList — an availability filter naming a seating
+#     that does not exist is a typed 400 NAMING the valid values, never a
+#     200 with an empty rows array and never a 500 (K-717, and K-691 before it)
 #
 # Usage:
 #   SERVER_URL=http://127.0.0.1:3002 KIOSK_ISSUER=http://127.0.0.1:3002 \
@@ -160,37 +161,54 @@ record(results, "UnknownQuery", rc == 404, "unknown query → #{rc} (want 404)")
 rc, _ = post_json("/kiosk/run", { name: "nope" }, bearer(TOKEN_A))
 record(results, "UnknownAction", rc == 404, "unknown action → #{rc} (want 404)")
 
-# ── EmptyAvailabilityIsNotACrash (K-691) ─────────────────────────────────────
-# `availability`'s empty-result path used to be a top-level `return [] if
-# seatings.empty?` inside the block the registry STORES and the Executor
-# `.call`s, so it raised LocalJumpError → ActionFailed → HTTP 500. It was
-# reachable with input the descriptor's own input_schema ACCEPTS, which is what
-# made it live rather than theoretical: `time` only has to match
-# "^[0-2][0-9]:[0-5][0-9]$" (so "18:00" passes and is not a seating), and `date`
-# only has to be a `format: "date"` string (so any day outside the rolling
-# horizon passes). Nothing validates the schema server-side.
+# ── InvalidFilterIsNotAnEmptyList (K-717, was EmptyAvailabilityIsNotACrash) ──
+# THE BEAT FLIPPED, AND THE FLIP IS THE POINT. These three probes used to
+# assert HTTP 200 with an empty rows array. Phil's K-717 decision (2026-08-19)
+# makes that the wrong answer: «если передан неверный входной параметр, ответ
+# должен быть http 400 bad request, не пустой список, и должна быть ошибка с
+# описанием». From the assistant's side `200 []` for a mistyped filter is
+# indistinguishable from a sold-out night, so a typo and a full house read the
+# same — which is exactly what philslist's `post_listing` refuses to do, and
+# that is now the house position fleet-wide.
 #
-# The assertion is HTTP 200 with an EMPTY rows array — not merely "not 500":
-# a 404 or a 400 would also stop being a crash while still being the wrong
-# answer for "nothing matches your filter". A positive control keeps it from
-# passing against a handler that returns nothing for everything.
+# What each probe sends is unchanged, and both are still values the OLD
+# descriptor accepted: `time: "18:00"` matched the retired
+# "^[0-2][0-9]:[0-5][0-9]$" pattern without being a seating, and any date past
+# the rolling horizon is a valid `format: "date"`. `time` is now an `enum` on
+# the descriptor and `date` keeps an explicit handler guard, because a horizon
+# that rolls forward daily cannot be named in a schema written at declaration
+# time.
+#
+# The assertion is a TYPED 400 that NAMES the valid values — not merely
+# "not 200". An unnamed 400 would refuse correctly and still leave the
+# assistant fetching the schema to find out what it should have sent, and the
+# K-691 property this beat was born for (the empty path is not a crash) is
+# still covered: a 500 fails this just as it failed the old one. The
+# non-empty positive control stays, and it is what keeps the beat from passing
+# against a handler that refuses everything.
 FAR_FUTURE = (Date.today + 3650).iso8601
-empty_probes = [
-  ["time=18:00 (valid pattern, not a seating)", { name: "availability", party_size: 2, time: "18:00" }],
-  ["date=#{FAR_FUTURE} (valid date, past the horizon)", { name: "availability", party_size: 2, date: FAR_FUTURE }],
-  ["both filters, no overlap", { name: "availability", party_size: 2, time: "18:00", date: FAR_FUTURE }],
-].map do |label, body|
+invalid_filter_probes = [
+  ["time=18:00 (valid pattern, not a seating)",
+   { name: "availability", party_size: 2, time: "18:00" }, %w[19:00 20:00 21:00]],
+  ["date=#{FAR_FUTURE} (valid date, past the horizon)",
+   { name: "availability", party_size: 2, date: FAR_FUTURE }, ["upcoming seatings"]],
+  ["both filters, no overlap",
+   { name: "availability", party_size: 2, time: "18:00", date: FAR_FUTURE }, %w[19:00 20:00 21:00]],
+].map do |label, body, named|
   rc, resp = post_json("/kiosk/query", body, bearer(TOKEN_A))
-  rows = resp.is_a?(Hash) ? resp["rows"] : nil
-  ok = rc == 200 && rows.is_a?(Array) && rows.empty?
-  [ok, "#{label} → #{rc}#{ok ? "/[]" : "/#{JSON.generate(resp)[0, 120]}"}"]
+  code    = resp.is_a?(Hash) ? resp.dig("error", "code") : nil
+  message = resp.is_a?(Hash) ? resp.dig("error", "message").to_s : ""
+  names   = named.all? { |value| message.include?(value) }
+  ok = rc == 400 && code == "bad_request" && names
+  [ok, "#{label} → #{rc}/#{code.inspect}#{ok ? " naming #{named.join(", ")}" : "/#{JSON.generate(resp)[0, 160]}"}"]
 end
 rc_ctl, ctl = post_json("/kiosk/query", { name: "availability", party_size: 2 }, bearer(TOKEN_A))
 control_ok = rc_ctl == 200 && (ctl["rows"] || []).any?
-record(results, "EmptyAvailabilityIsNotACrash",
-       empty_probes.all? { |ok, _| ok } && control_ok,
-       "#{empty_probes.map(&:last).join(', ')}; CONTROL unfiltered → #{rc_ctl}/#{(ctl["rows"] || []).size} rows " \
-       "(want 200 + [] for each filter, and a non-empty control)")
+record(results, "InvalidFilterIsNotAnEmptyList",
+       invalid_filter_probes.all? { |ok, _| ok } && control_ok,
+       "#{invalid_filter_probes.map(&:last).join(', ')}; CONTROL unfiltered → " \
+       "#{rc_ctl}/#{(ctl["rows"] || []).size} rows " \
+       "(want 400 bad_request naming the valid values for each filter, and a non-empty control)")
 
 # ── Verdict ──────────────────────────────────────────────────────────────────
 breaches = results.reject { |r| r[:blocked] }

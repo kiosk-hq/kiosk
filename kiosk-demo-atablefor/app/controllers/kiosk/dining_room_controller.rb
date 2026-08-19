@@ -69,10 +69,16 @@ class Kiosk::DiningRoomController < ApplicationController
                                  description: "Number of guests." },
                  neighborhood: { type: "string",
                                  description: "Optional Lisbon neighbourhood filter, e.g. \"Alfama\"." },
-                 time:         { type: "string", pattern: "^[0-2][0-9]:[0-5][0-9]$",
-                                 description: "Optional seating-time filter, \"19:00\" | \"20:00\" | \"21:00\"." },
+                 # K-717: a CLOSED SET, so it is an `enum` and not a pattern.
+                 # The pattern it replaces accepted "18:00" — a well-formed
+                 # time that is not a seating — and the handler answered it
+                 # with an empty list, which an assistant cannot tell from a
+                 # sold-out night. Declared this way the refusal is the schema
+                 # layer's, uniformly, on every verb that names a closed set.
+                 time:         { type: "string", enum: Seatings::TIMES,
+                                 description: "Optional seating-time filter; one of the seatings this restaurant offers." },
                  date:         { type: "string", format: "date",
-                                 description: "Optional date filter, YYYY-MM-DD (must be among the upcoming seatings)." },
+                                 description: "Optional date filter, YYYY-MM-DD. Must be among the UPCOMING seatings — the horizon rolls forward daily, so a date outside it is refused with the current ones named." },
                },
                required: ["party_size"]
   # One row per open (restaurant, table, seating). A bare array: this verb is
@@ -122,12 +128,21 @@ class Kiosk::DiningRoomController < ApplicationController
     return render_refusal(refusal) if refusal
 
     nbhd_filter = params[:neighborhood].to_s
-    time_filter = params[:time].to_s
-    date_filter = params[:date].to_s
 
-    # The rolling upcoming seatings (Europe/Lisbon, past filtered, tonight→tomorrow),
-    # each optionally narrowed by the agent's time/date filter.
-    seatings = Seatings.upcoming
+    # The rolling upcoming seatings (Europe/Lisbon, past filtered, tonight→tomorrow).
+    upcoming = Seatings.upcoming
+
+    # K-717: AN INVALID FILTER VALUE IS A TYPED 400 NAMING THE VALID VALUES,
+    # NEVER AN EMPTY LIST. Both refusals live in {WireArguments} — see the long
+    # note there for why `time` is guarded here as well as declared as an
+    # `enum`, and why `date` can only ever be guarded.
+    time_filter, refusal = WireArguments.seating_time(params[:time])
+    return render_refusal(refusal) if refusal
+
+    date_filter, refusal = WireArguments.seating_date(params[:date], upcoming)
+    return render_refusal(refusal) if refusal
+
+    seatings = upcoming
     seatings = seatings.select { |_d, t|   t == time_filter } unless time_filter.empty?
     seatings = seatings.select { |d, _t| d.iso8601 == date_filter } unless date_filter.empty?
     # `return`, and this time it is the RIGHT keyword (K-691). This used to be a
@@ -137,16 +152,14 @@ class Kiosk::DiningRoomController < ApplicationController
     # controller action is an ordinary method, so `return` returns from it: the
     # hazard is gone with the block, and the guard is written the plain way.
     #
-    # It stays reachable with input the descriptor's own input_schema ACCEPTS:
-    # `time: "18:00"` matches the declared pattern but is not one of
-    # Seatings::TIMES, and any `date` outside the rolling horizon is a valid
-    # `format: "date"`. Both empty the list here. Nothing validates the schema
-    # server-side, so both reach the handler.
-    #
-    # An empty list is the right answer for both: the filters name a seating that
-    # does not exist right now, which is the same thing as sold out from the
-    # assistant's side — and `book_table` still rejects either with a typed 400
-    # if the assistant tries to book one anyway.
+    # WHAT REACHES IT NOW is only the honest case. The two ways an INVALID
+    # filter used to arrive here — a well-formed `time` that is not a seating,
+    # a well-formed `date` past the horizon — are refused above with a typed
+    # 400 (K-717). What is left is a filter naming a seating that EXISTS and
+    # has simply been overtaken: every one of today's remaining seatings can
+    # start while a request is in flight, and then the roster is legitimately
+    # empty for a moment. An empty list is the right answer for that, and only
+    # for that.
     return render(json: []) if seatings.empty?
 
     # Every physical table seating >= party, optionally in one neighbourhood.

@@ -102,8 +102,8 @@ Kiosk.configure do |c|
     c.owner = c.owner.merge(pow_difficulty: PowDifficulty.level, pow_notice: notice)
   end
   # Dual-check (skill.md): canonical skill URL + SHA-256 of its content.
-  c.skill_url    = "https://kiosk.tech/skill-v0.3.11.md"
-  c.skill_sha256 = "179b2320198c7a6a192f01df4555f604dca0cb90f0026827ded5b8eb277916b0"
+  c.skill_url    = "https://kiosk.tech/skill-v0.4.0.md"
+  c.skill_sha256 = "1c9e52059e11b02154b7afa1d0c50bcd575d54cdc45dee47dfd45c573b48fcb7"
 
   # JwtOrStubIdp tries Kiosk-issued JWTs (kiosk-pop register/login output;
   # the account-binding token poll mints the same JWTs) first, then falls

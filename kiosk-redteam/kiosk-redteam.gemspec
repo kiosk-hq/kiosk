@@ -34,7 +34,7 @@ Gem::Specification.new do |spec|
   # The Equihash reference solver (solve.py) the client shells out to on a
   # 402 registration challenge ships inside kiosk-pow-equihash; the client
   # locates it via that gem's public Kiosk::Pow::Equihash.solver_path.
-  spec.add_dependency "kiosk-pow-equihash", "~> 0.3.0"
+  spec.add_dependency "kiosk-pow-equihash", "~> 0.4.0"
   # RS256 mandate signing / verification in specs
   spec.add_dependency "jwt", ">= 2.0", "< 4.0"
   # base64 was a default gem through Ruby 3.3 but became a BUNDLED gem in 3.4,

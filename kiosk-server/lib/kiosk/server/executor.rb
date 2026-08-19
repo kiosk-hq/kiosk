@@ -509,15 +509,21 @@ module Kiosk
       # available queries and actions without relying solely on a static skill file.
       # Never opens a SessionContext or touches the DB.
       #
-      # `verbs` is the full fixed wire surface ({VERBS}) — `pay` is always
-      # listed here even when no payment_provider is wired. This is NOT the
-      # advertised capability set: `/.well-known/kiosk.json` computes its
-      # `capabilities` from the live registry and DROPS `pay` when no provider
-      # is configured (see Configuration#computed_capabilities). Do not treat
-      # these `verbs` as mirroring what the origin advertises.
+      # `verbs` IS `capabilities` (K-740, decision VERBS-EQ-CAPABILITIES,
+      # ADR-0025) — literally the same array, read from the same config, so
+      # the two self-descriptions of one origin cannot disagree and the spec
+      # needs no paragraph teaching readers which one to believe.
+      #
+      # It used to be the constant {VERBS}, which listed `pay` on an origin
+      # with no payment provider wired while `/.well-known/kiosk.json` dropped
+      # it — a wire that describes itself twice, differently, and then
+      # footnotes the difference. Now it names the MODULES this origin serves
+      # (`schema`, `queries`, `actions`, `pay`); which VERBS it serves is the
+      # `queries` and `actions` catalogs right beside it, which is where a
+      # caller was always meant to read them, and which stays Bearer-gated.
       def verb_schema(_args)
         Result.new(kind: :value, payload: {
-          verbs:   VERBS.map(&:to_s),
+          verbs:   Array(Kiosk.configuration.capabilities),
           queries: Queries.catalog,
           actions: Actions.catalog,
         })

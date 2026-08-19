@@ -50,7 +50,7 @@ RSpec.describe "handler registration in a booted app" do
     end
 
     it "advertises the capabilities computed from that catalog" do
-      expect(probe("development")["capabilities"]).to include("schema", "query")
+      expect(probe("development")["capabilities"]).to include("schema", "queries")
     end
 
     it "picks up an EDITED description on reload, with no restart" do

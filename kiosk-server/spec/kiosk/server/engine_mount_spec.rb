@@ -61,12 +61,12 @@ RSpec.describe "mount Kiosk::Server::Engine (the one-line surface)" do
 
       res = probe("mounted", "GET /agents.json")
       expect(res["status"]).to eq(200)
-      expect(JSON.parse(res["body"]).dig("x-kiosk", "wire", "schema"))
+      expect(JSON.parse(res["body"]).dig("x-kiosk", "schema"))
         .to eq("/kiosk/schema")
 
       res = probe("mounted", "GET /.well-known/kiosk.json")
       expect(res["status"]).to eq(200)
-      expect(JSON.parse(res["body"]).dig("kiosk", "capabilities")).to include("query")
+      expect(JSON.parse(res["body"]).dig("kiosk", "capabilities")).to include("queries")
 
       res = probe("mounted", "GET /.well-known/agent-configuration")
       expect(res["status"]).to eq(200)
@@ -179,7 +179,7 @@ RSpec.describe "mount Kiosk::Server::Engine (the one-line surface)" do
     it "paths only the engine draws still resolve through the mount" do
       res = probe("double_draw", "GET /agents.json")
       expect(res["status"]).to eq(200)
-      expect(JSON.parse(res["body"]).dig("x-kiosk", "wire", "schema"))
+      expect(JSON.parse(res["body"]).dig("x-kiosk", "schema"))
         .to eq("/kiosk/schema")
 
       expect(probe("double_draw", "GET /kiosk/.well-known/jwks.json")["status"]).to eq(200)

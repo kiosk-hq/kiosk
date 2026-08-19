@@ -67,19 +67,30 @@ RSpec.describe Kiosk::Server::WellKnown do
       expect(doc[:kiosk][:capabilities]).to eq([])
     end
 
-    it "advertises the computed verb names (schema/query/run/pay) from the registry" do
+    it "advertises the computed module names (schema/queries/actions/pay)" do
       declare_query("catalog")
       declare_action("checkout")
       Kiosk.configure { |c| c.payment_provider = Object.new }
       d = described_class.build(base_url: "https://api.acme.example")
-      expect(d[:kiosk][:capabilities]).to eq(%w[schema query run pay])
+      expect(d[:kiosk][:capabilities]).to eq(%w[schema queries actions pay])
+    end
+
+    # This document is served UNAUTHENTICATED at the origin root. The module
+    # answer (T-075 = A) exists so that fact costs the operator nothing: the
+    # verb names stay behind the Bearer gate on `GET <endpoint>/schema`.
+    it "never names a registered verb in the unauthenticated document" do
+      declare_query("secret_pricing_tiers")
+      declare_action("cancel_enterprise_contract")
+      d = described_class.build(base_url: "https://api.acme.example")
+      expect(JSON.generate(d)).not_to include("secret_pricing_tiers")
+      expect(JSON.generate(d)).not_to include("cancel_enterprise_contract")
     end
 
     it "passes through an explicitly pinned capability list" do
       declare_query("catalog")
-      Kiosk.configure { |c| c.capabilities = %w[schema query] }
+      Kiosk.configure { |c| c.capabilities = %w[schema queries] }
       d = described_class.build(base_url: "https://api.acme.example")
-      expect(d[:kiosk][:capabilities]).to eq(%w[schema query])
+      expect(d[:kiosk][:capabilities]).to eq(%w[schema queries])
     end
 
     it "passes through configured min_client" do
@@ -291,15 +302,36 @@ RSpec.describe Kiosk::Server::WellKnown do
       expect(d[:skills].first[:url]).to eq("https://example.test/skill.md")
     end
 
-    it "carries the six-verb contract under the x-kiosk extension" do
+    # T-075 = A / ADR-0025: the block carries POINTERS, not a copy of the
+    # contract. Four keys, exactly.
+    it "carries the wire pointers under the x-kiosk extension" do
       declare_query("catalog")
       d = described_class.agents_json(base_url: "https://api.acme.example")
       xk = d[:"x-kiosk"]
-      expect(xk[:wire][:verbs]).to eq(Array(Kiosk.configuration.capabilities))
-      expect(xk[:wire][:schema]).to eq("/kiosk/schema")
+      expect(xk.keys).to eq(%i[schema api_catalog mount_path api_version])
+      expect(xk[:schema]).to eq("/kiosk/schema")
+      expect(xk[:api_catalog]).to eq("/.well-known/api-catalog")
       expect(xk[:mount_path]).to eq("/kiosk")
       expect(xk[:api_version]).to eq(Kiosk::Protocol::API_VERSION)
-      expect(xk[:min_client]).to eq(Kiosk.configuration.min_client)
+    end
+
+    # It stopped echoing `capabilities` (the `wire.verbs` key is GONE): a
+    # discovery envelope that restates the catalog is a second source of truth
+    # for it, and `kiosk.json` is canonical. `min_client` went the same way.
+    it "does not echo capabilities or min_client under x-kiosk" do
+      declare_query("catalog")
+      d = described_class.agents_json(base_url: "https://api.acme.example")
+      xk = d[:"x-kiosk"]
+      expect(xk).not_to have_key(:wire)
+      expect(xk).not_to have_key(:verbs)
+      expect(xk).not_to have_key(:capabilities)
+      expect(xk).not_to have_key(:min_client)
+    end
+
+    it "never names a registered verb in the unauthenticated companion" do
+      declare_query("secret_pricing_tiers")
+      d = described_class.agents_json(base_url: "https://api.acme.example")
+      expect(JSON.generate(d)).not_to include("secret_pricing_tiers")
     end
 
     it "points at the RFC 9727 api-catalog under the x-kiosk extension" do
@@ -455,7 +487,7 @@ RSpec.describe Kiosk::Server::WellKnown do
       expect(items).to all(include(:href, :rel))
     end
 
-    it "links the wire endpoints present in capabilities" do
+    it "links one endpoint per module present in capabilities" do
       declare_query("catalog")
       declare_action("checkout")
       Kiosk.configure { |c| c.payment_provider = Object.new }
@@ -467,8 +499,9 @@ RSpec.describe Kiosk::Server::WellKnown do
       expect(hrefs).to include("https://api.acme.example/kiosk/pay")
     end
 
-    it "omits wire endpoints not present in capabilities" do
-      # Register only a query → capabilities = [schema, query]; run/pay absent.
+    it "omits the endpoints of modules not present in capabilities" do
+      # Register only a query → capabilities = [schema, queries]; the actions
+      # and pay modules are absent, so their endpoints are not catalogued.
       declare_query("catalog")
       d = described_class.api_catalog(base_url: "https://api.acme.example")
       hrefs = member(d)[:item].map { |i| i[:href] }
@@ -478,7 +511,32 @@ RSpec.describe Kiosk::Server::WellKnown do
       expect(hrefs).not_to include("https://api.acme.example/kiosk/pay")
     end
 
-    it "links no wire endpoints when nothing is registered (schema absent)" do
+    # ── K-799: the catalog is UNAUTHENTICATED, so it links descriptions, not
+    # verbs. T-075's sibling clause asked for a link per registered verb; that
+    # is option B by another name, on the same public plane, and it would undo
+    # the Bearer gate on `schema`, the Bearer gate on `openapi.json` and
+    # VerbController's 401-before-404 ordering in one document. Filed for Phil.
+    it "never hyperlinks a registered verb name" do
+      declare_query("secret_pricing_tiers")
+      declare_action("cancel_enterprise_contract")
+      d = described_class.api_catalog(base_url: "https://api.acme.example")
+      body = JSON.generate(d)
+      expect(body).not_to include("secret_pricing_tiers")
+      expect(body).not_to include("cancel_enterprise_contract")
+    end
+
+    # Both descriptions that DO enumerate the verbs are linked — and both
+    # answer 401 without a Bearer token. That is the trade this shape makes:
+    # discoverable location, gated content.
+    it "links both verb-enumerating descriptions, each of them Bearer-gated" do
+      declare_query("catalog")
+      d = described_class.api_catalog(base_url: "https://api.acme.example")
+      descs = member(d)[:item].select { |i| i[:rel] == "service-desc" }.map { |i| i[:href] }
+      expect(descs).to eq(["https://api.acme.example/kiosk/schema",
+                           "https://api.acme.example/kiosk/openapi.json"])
+    end
+
+    it "links no wire endpoints when nothing is registered (schema module absent)" do
       # Bare config registers no queries/actions → capabilities = []; only the
       # agents.json discovery companion is catalogued.
       hrefs = member(doc)[:item].map { |i| i[:href] }

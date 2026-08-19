@@ -7,7 +7,7 @@ RSpec.describe Kiosk::Server::ConfigurationExtension do
     end
 
     # capabilities is COMPUTED from the live registry: with nothing
-    # registered and no payment provider, the endpoint advertises no verbs.
+    # registered and no payment provider, the endpoint advertises no modules.
     it "computes capabilities as empty when no queries/actions/payments exist" do
       expect(Kiosk.configuration.capabilities).to eq([])
     end
@@ -76,18 +76,19 @@ RSpec.describe Kiosk::Server::ConfigurationExtension do
   end
 
   # ─── computed capabilities ──────────────────────────────────
-  # Members are verb names actually served, drawn from schema/query/run/pay
-  # and emitted in that order. Derived from the live registry so discovery
-  # never advertises a verb the provider has not wired.
+  # Members are MODULE names actually served, drawn from
+  # schema/queries/actions/pay and emitted in that order (T-075 = A,
+  # ADR-0025). Derived from the live registry so discovery never advertises a
+  # module the provider has not wired.
   describe "#capabilities (computed)" do
-    it "includes schema + query when only a query is registered" do
+    it "includes schema + queries when only a query is registered" do
       declare_query("catalog")
-      expect(Kiosk.configuration.capabilities).to eq(%w[schema query])
+      expect(Kiosk.configuration.capabilities).to eq(%w[schema queries])
     end
 
-    it "includes schema + run when only an action is registered" do
+    it "includes schema + actions when only an action is registered" do
       declare_action("checkout")
-      expect(Kiosk.configuration.capabilities).to eq(%w[schema run])
+      expect(Kiosk.configuration.capabilities).to eq(%w[schema actions])
     end
 
     it "includes pay when a payment provider is configured" do
@@ -95,16 +96,31 @@ RSpec.describe Kiosk::Server::ConfigurationExtension do
       expect(Kiosk.configuration.capabilities).to eq(%w[pay])
     end
 
-    it "emits the full set in canonical order schema, query, run, pay" do
+    it "emits the full set in canonical order schema, queries, actions, pay" do
       declare_query("catalog")
       declare_action("checkout")
       Kiosk.configure { |c| c.payment_provider = Object.new }
-      expect(Kiosk.configuration.capabilities).to eq(%w[schema query run pay])
+      expect(Kiosk.configuration.capabilities).to eq(%w[schema queries actions pay])
     end
 
     it "never encodes HTTP methods" do
       declare_query("catalog")
       expect(Kiosk.configuration.capabilities).not_to include("GET", "POST")
+    end
+
+    # THE PROPERTY THE MODULE-NAME ANSWER BOUGHT (T-075 = A rejected B for
+    # exactly this): `/.well-known/kiosk.json` is unauthenticated, so whatever
+    # lands in `capabilities` is public. A registered verb NAME must never be
+    # among it — the catalog is Bearer-gated behind `GET <endpoint>/schema`,
+    # and a discovery document that leaked the names would hand an anonymous
+    # prober the enumeration three separate defences exist to withhold.
+    it "never leaks a registered verb name" do
+      declare_query("secret_pricing_tiers")
+      declare_action("cancel_enterprise_contract")
+      Kiosk.configure { |c| c.payment_provider = Object.new }
+      caps = Kiosk.configuration.capabilities
+      expect(caps).to eq(%w[schema queries actions pay])
+      expect(caps).not_to include("secret_pricing_tiers", "cancel_enterprise_contract")
     end
   end
 

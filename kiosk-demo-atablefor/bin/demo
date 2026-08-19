@@ -42,6 +42,15 @@ require_tool() {
 require_tool curl
 require_tool jq
 
+# The 0.4 wire: one endpoint per verb. A query is a GET whose arguments are the
+# query string; an action is a POST whose arguments are the JSON body. A success
+# body IS the result — no envelope to unwrap, so no `.rows`/`.value` below.
+#   q   <token> <query-name> [query-string]
+#   run <token> <action-name> <json-body>
+q()   { curl -sS "$SERVER_URL/kiosk/$2${3:+?$3}" -H "Authorization: Bearer $1"; }
+run() { curl -sS -X POST "$SERVER_URL/kiosk/$2" -H "Authorization: Bearer $1" \
+          -H "Content-Type: application/json" -d "$3"; }
+
 # ─── boot ────────────────────────────────────────────────────────────
 
 heading "Starting atablefor (the demo provider) on port $PORT"
@@ -68,7 +77,7 @@ curl -sf "$SERVER_URL/.well-known/kiosk.json" >/dev/null || {
 heading "Discovery: what is this provider?"
 
 step "GET /.well-known/kiosk.json"
-# capabilities are [schema, query, run] — no `pay` (a reservation takes no money).
+# capabilities are [schema, queries, actions] — no `pay` (a reservation takes no money).
 curl -sf "$SERVER_URL/.well-known/kiosk.json" \
   | jq '.kiosk | {version, endpoint, issuer, capabilities, owner}'
 
@@ -80,12 +89,8 @@ curl -sf "$SERVER_URL/kiosk/.well-known/jwks.json" \
 
 heading "Agent checks availability via a named query"
 
-step "Open tables across the aggregator for a party of $PARTY (upcoming seatings) — query: availability"
-curl -sS -X POST "$SERVER_URL/kiosk/query" \
-  -H "Authorization: Bearer $AGENT_TOKEN" \
-  -H "Content-Type: application/json" \
-  -d "{\"name\":\"availability\",\"party_size\":$PARTY}" \
-  | jq '.rows'
+step "Open tables across the aggregator for a party of $PARTY (upcoming seatings) — GET /kiosk/availability"
+q "$AGENT_TOKEN" availability "party_size=$PARTY" | jq '.'
 
 # ─── run an Action ───────────────────────────────────────────────────
 
@@ -94,11 +99,8 @@ heading "Agent books a table via Action (no human at the provider)"
 # Pick a 20:00 2-top ("a table for two tonight at 8"); fall back to the first
 # open table if the headline seating is gone. Read the whole row so we can pass
 # restaurant_id + restaurant_table_id + seating_date back to book_table.
-SLOT=$(curl -sS -X POST "$SERVER_URL/kiosk/query" \
-  -H "Authorization: Bearer $AGENT_TOKEN" \
-  -H "Content-Type: application/json" \
-  -d "{\"name\":\"availability\",\"party_size\":$PARTY}" \
-  | jq -c '([.rows[] | select(.seating_time=="20:00")] + .rows)[0] // empty')
+SLOT=$(q "$AGENT_TOKEN" availability "party_size=$PARTY" \
+  | jq -c '([.[] | select(.seating_time=="20:00")] + .)[0] // empty')
 
 if [[ -z "$SLOT" ]]; then
   echo "✗ no open table for a party of $PARTY in the upcoming seatings" >&2
@@ -109,19 +111,18 @@ TABLE_ID=$(printf '%s' "$SLOT" | jq -r '.restaurant_table_id')
 SLOT_DATE=$(printf '%s' "$SLOT" | jq -r '.seating_date')
 SLOT_TIME=$(printf '%s' "$SLOT" | jq -r '.seating_time')
 
-step "run book_table at restaurant $RESTAURANT_ID table $TABLE_ID for $SLOT_DATE $SLOT_TIME, party of $PARTY"
-BOOK_RESP=$(curl -sS -X POST "$SERVER_URL/kiosk/run" \
-  -H "Authorization: Bearer $AGENT_TOKEN" \
-  -H "Content-Type: application/json" \
-  -d "{\"name\":\"book_table\",\"restaurant_id\":$RESTAURANT_ID,\"restaurant_table_id\":$TABLE_ID,\"date\":\"$SLOT_DATE\",\"time\":\"$SLOT_TIME\",\"party_size\":$PARTY}")
-printf '%s\n' "$BOOK_RESP" | jq '.value'
+step "POST /kiosk/book_table at restaurant $RESTAURANT_ID table $TABLE_ID for $SLOT_DATE $SLOT_TIME, party of $PARTY"
+BOOK_RESP=$(run "$AGENT_TOKEN" book_table \
+  "{\"restaurant_id\":$RESTAURANT_ID,\"restaurant_table_id\":$TABLE_ID,\"date\":\"$SLOT_DATE\",\"time\":\"$SLOT_TIME\",\"party_size\":$PARTY}")
+printf '%s\n' "$BOOK_RESP" | jq '.'
 
-# Assert: a success envelope carries a .value object with a booking_id. A broken
-# showcase (e.g. missing users row → Booking belongs_to :user fails) returns an
-# error envelope with .value == null; catch it here and fail the script.
-BOOKING_ID=$(printf '%s\n' "$BOOK_RESP" | jq -r '.value.booking_id // empty')
+# Assert: an action's success body IS its own object, carrying a booking_id. A
+# broken showcase (e.g. missing users row → Booking belongs_to :user fails)
+# answers an RFC 9457 problem document with no booking_id at all; catch it here
+# and fail the script.
+BOOKING_ID=$(printf '%s\n' "$BOOK_RESP" | jq -r '.booking_id // empty')
 if [[ -z "$BOOKING_ID" ]]; then
-  echo "✗ book_table did not return a value.booking_id — got: $BOOK_RESP" >&2
+  echo "✗ book_table did not return a booking_id — got: $BOOK_RESP" >&2
   exit 1
 fi
 say "✓ book_table succeeded (booking_id=$BOOKING_ID)"
@@ -130,12 +131,9 @@ say "✓ book_table succeeded (booking_id=$BOOKING_ID)"
 
 heading "App-layer isolation: agent sees only their own bookings"
 
-step "List bookings visible to this agent's user (should be 1) — query: my_bookings"
-MY_RESP=$(curl -sS -X POST "$SERVER_URL/kiosk/query" \
-  -H "Authorization: Bearer $AGENT_TOKEN" \
-  -H "Content-Type: application/json" \
-  -d '{"name":"my_bookings"}')
-MY_COUNT=$(printf '%s\n' "$MY_RESP" | jq '.rows | length')
+step "List bookings visible to this agent's user (should be 1) — GET /kiosk/my_bookings"
+MY_RESP=$(q "$AGENT_TOKEN" my_bookings)
+MY_COUNT=$(printf '%s\n' "$MY_RESP" | jq 'length')
 printf '%s\n' "$MY_COUNT"
 
 # Assert: exactly the one booking just made is visible to this principal
@@ -145,7 +143,7 @@ if [[ "$MY_COUNT" != "1" ]]; then
   echo "✗ my_bookings expected exactly 1 row, got ${MY_COUNT} — response: $MY_RESP" >&2
   exit 1
 fi
-MY_BOOKING_ID=$(printf '%s\n' "$MY_RESP" | jq -r '.rows[0].booking_id // empty')
+MY_BOOKING_ID=$(printf '%s\n' "$MY_RESP" | jq -r '.[0].booking_id // empty')
 if [[ "$MY_BOOKING_ID" != "$BOOKING_ID" ]]; then
   echo "✗ my_bookings row id ($MY_BOOKING_ID) != booking id ($BOOKING_ID) — response: $MY_RESP" >&2
   exit 1

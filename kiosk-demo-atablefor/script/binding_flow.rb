@@ -83,8 +83,15 @@ def post_json(path, body, headers = {})
   [res.code.to_i, (JSON.parse(res.body) rescue {})]
 end
 
-def get_json(path)
-  res = request(Net::HTTP::Get.new(URI("#{SERVER}#{path}")))
+# THE 0.4 WIRE. A query is `GET <endpoint>/<query-name>` with its arguments in
+# the query string; an action is `POST <endpoint>/<action-name>` with them as
+# the JSON body. There is no `name` field and no /query or /run endpoint, and a
+# success body IS the result — a bare array from a non-paginating query, the
+# action's own object from an action.
+def get_json(path, params = {}, headers = {})
+  uri = URI("#{SERVER}#{path}")
+  uri.query = URI.encode_www_form(params) unless params.empty?
+  res = request(Net::HTTP::Get.new(uri, headers))
   [res.code.to_i, (JSON.parse(res.body) rescue {})]
 end
 
@@ -133,31 +140,29 @@ STDERR.puts "  Assistant redeemed the code: agent_id=#{agent_id} now bound to us
 
 # ══ 4. As the bound assistant, book a table for two tonight at 8 ════════════
 party = 2
-rc, avail = post_json("/kiosk/query",
-                      { name: "availability", party_size: party }, bearer(token))
+rc, avail = get_json("/kiosk/availability", { party_size: party }, bearer(token))
 abort "availability failed (#{rc}): #{JSON.generate(avail)}" unless rc == 200
-slots = avail.fetch("rows", [])
+slots = Array(avail)
 slot  = slots.find { |r| r["seating_time"] == "20:00" && r["capacity"].to_i >= party } || slots.first
 abort "no open table for a party of #{party} tonight: #{JSON.generate(slots)}" unless slot
 date  = slot.fetch("seating_date")
 time  = slot.fetch("seating_time")
 
-rc, run_resp = post_json("/kiosk/run",
-                         { name: "book_table", restaurant_id: slot.fetch("restaurant_id"),
-                           restaurant_table_id: slot.fetch("restaurant_table_id"),
-                           date: date, time: time, party_size: party }, bearer(token))
+rc, booking = post_json("/kiosk/book_table",
+                        { restaurant_id: slot.fetch("restaurant_id"),
+                          restaurant_table_id: slot.fetch("restaurant_table_id"),
+                          date: date, time: time, party_size: party }, bearer(token))
 results[:wire_book] = rc
-abort "book_table failed (#{rc}): #{JSON.generate(run_resp)}" unless rc == 200
-booking    = run_resp.fetch("value", {})
+abort "book_table failed (#{rc}): #{JSON.generate(booking)}" unless rc == 200
 booking_id = booking["booking_id"].to_s
 results[:booking_id]     = booking_id
 results[:booking_status] = booking["status"]
 STDERR.puts "  Assistant booked table #{booking_id} (#{date} #{time}, party #{party}) as Diego's account"
 
 # ══ 5. The assistant's my_bookings shows the reservation ════════════════════
-rc, mine = post_json("/kiosk/query", { name: "my_bookings" }, bearer(token))
+rc, mine = get_json("/kiosk/my_bookings", {}, bearer(token))
 abort "my_bookings failed (#{rc}): #{JSON.generate(mine)}" unless rc == 200
-rows = mine.fetch("rows", [])
+rows = Array(mine)
 results[:my_bookings_has_it] = rows.any? { |r| r["booking_id"] == booking_id && r["status"] == "confirmed" }
 STDERR.puts "  my_bookings (assistant token) shows the booking: #{results[:my_bookings_has_it]}"
 

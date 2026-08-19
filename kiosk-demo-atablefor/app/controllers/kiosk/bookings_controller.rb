@@ -1,7 +1,8 @@
 # frozen_string_literal: true
 
 # atablefor's WRITE surface: the two verbs an assistant reaches with
-# `POST /kiosk/run`. Same shape as Kiosk::DiningRoomController — this app's own
+# `POST /kiosk/<action-name>` — one endpoint per verb since 0.4, arguments as
+# the JSON body. Same shape as Kiosk::DiningRoomController — this app's own
 # ApplicationController plus `include Kiosk::Action` — because a controller
 # declares queries OR actions, never both.
 #
@@ -13,9 +14,12 @@
 # INSERT, and a `render` in the middle of that is what every T-057 slice had to
 # reason about.
 #
-# Errors are Rails' idiom end to end: the wire's `error.code` vocabulary is a
+# Errors are Rails' idiom end to end: the wire's error-`code` vocabulary is a
 # closed table, not a class hierarchy, so a refusal is an ordinary
-# `render json:, status:` naming the code, and the wire carries it verbatim. No
+# `render json:, status:` naming the code, and the wire carries the code
+# verbatim into the RFC 9457 problem document it answers with (0.4 moved the
+# branch point to the document's TOP-LEVEL `code`; a handler still names it the
+# same way). No
 # Kiosk error classes appear below — the sixteen `Errors::BadRequest` /
 # `Errors::Conflict` / `Errors::Forbidden` raises this file once replaced are now
 # {OperationResult} refusals, and {KioskRefusals#render_operation} is the one

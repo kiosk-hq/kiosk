@@ -1,10 +1,10 @@
 # philslist — Kiosk reference demo (NON-COMMERCE)
 
 A free classifieds board, Kiosk-enabled. This is the demo that proves Kiosk is
-**not only for commerce**: it exercises the full `query` + `run` + `schema` +
+**not only for commerce**: it exercises the full query + action + `schema` +
 identity-binding surface with **no money on the wire at all** — no `pay` verb,
 no PSP adapter, no mandate/settlement tables, no `payment_setup_required` gate.
-The same four-verb contract the commerce demos use for checkout carries a plain
+The same wire contract the commerce demos use for checkout carries a plain
 services/data use here.
 
 Demonstrates:
@@ -12,8 +12,11 @@ Demonstrates:
 - `/.well-known/kiosk.json` discovery **with `pay` absent** from capabilities —
   and `agents.json` / `agents.txt` carrying no payments block (the honest
   signal this operator takes no money)
-- Authenticated REST wire surface (`/kiosk/query`, `/kiosk/run`,
-  `/kiosk/schema`) — and deliberately **no `/kiosk/pay` route**
+- Authenticated REST wire surface — one endpoint per verb
+  (`GET /kiosk/browse_listings`, `GET /kiosk/my_listings`,
+  `POST /kiosk/post_listing`, `POST /kiosk/edit_listing`,
+  `POST /kiosk/close_listing`) beside the public `GET /kiosk/schema` — and
+  deliberately **no `/kiosk/pay` route**
 - App-layer data isolation on an **owned resource**: any principal may
   `browse_listings` across all sellers, but `my_listings` /
   `edit_listing` / `close_listing` are scoped to
@@ -35,8 +38,8 @@ Demonstrates:
 Today you post to a classifieds site through its web form and answer email; a
 personal assistant can't. (The craigslist pattern is the shape here — named
 only as this contrast, never as the demo.) With Kiosk, the same board exposes
-browse / post / edit / close to your assistant over four verbs — and it can
-only touch listings you own.
+browse / post / edit / close to your assistant as named wire verbs, one
+endpoint each — and it can only touch listings you own.
 
 `price_text` is a plain nullable **string** (`"€300"`, `"Free"`, or `NULL`)
 — display metadata the board never transacts on. A reviewer looking for a
@@ -69,8 +72,8 @@ The walkthrough (`rake demo:walkthrough` — what `rake demo` runs after
 
 1. **Discovery** — the well-known capabilities, asserting `pay` is **absent**
 2. **Browse** — `browse_listings` across the open, cross-owner board
-3. **Post → edit → close** — the full owned-listing lifecycle over `run`, with
-   `my_listings` reflecting the final state
+3. **Post → edit → close** — the full owned-listing lifecycle over the three
+   action endpoints, with `my_listings` reflecting the final state
 
 After the walkthrough finishes, the server is torn down cleanly. Server logs
 are at `/tmp/kiosk-philslist-demo.log`.
@@ -106,7 +109,7 @@ no proof gets **402 (`pow_required`)**, solving the challenge with the bundled
 solver and resubmitting gets **201**, and the minted token posts a listing
 (**200**) — while a bad `category_slug` on that post comes back as a clean
 **400** naming the valid categories, not a 500. The point is that the anti-flood
-toll is part of the four-verb contract, not a commerce feature — a free
+toll is part of the wire contract, not a commerce feature — a free
 classifieds board wants it as much as a shop does. Needs python3 + numpy.
 
 ### Account binding + multi-account household (`rake demo:binding`)
@@ -156,7 +159,7 @@ assertions cannot go ungated and unexplained.
 | `app/models/{user,category,listing}.rb` | `User` is the account principal and `database_authenticatable`; `Listing.owner_id` is the load-bearing isolation predicate |
 | `config/initializers/kiosk.rb` | `Kiosk.configure` (NO `payment_provider`) — configuration only; it names the two handler controllers, it does not contain them |
 | `app/controllers/kiosk/board_controller.rb` | The `browse_listings` / `my_listings` queries — an ordinary Rails controller with `include Kiosk::Query`, declared with the class-level macros. Not routable: handlers are reached only through the wire |
-| `app/controllers/kiosk/listings_controller.rb` | The `post_listing` / `edit_listing` / `close_listing` actions — same shape with `include Kiosk::Action`; refusals are plain `render json:, status:` naming a wire `error.code` |
+| `app/controllers/kiosk/listings_controller.rb` | The `post_listing` / `edit_listing` / `close_listing` actions — same shape with `include Kiosk::Action`; refusals are plain `render json:, status:` naming a wire error `code`, which the wire carries into the RFC 9457 problem document an assistant branches on |
 | `lib/stub_idp.rb` / `lib/jwt_or_stub_idp.rb` | Demo IdP: Kiosk JWTs first, bespoke `agent:u-…:a-…:r-…` fallback |
 | `script/isolation_flow.rb` / `script/redteam_suite.rb` / `script/schema_flow.rb` / `script/binding_flow.rb` / `script/register_flow.rb` | One-JSON-line flow drivers the rake tasks assert on |
 | `bin/demo` | The browse→post→edit→close walkthrough (POSIX shell, curl-driven) |

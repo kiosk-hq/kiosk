@@ -12,21 +12,27 @@ server round-trip.
 
 ## Wire surface
 
-- `query scooters_available` — browse the fleet (scooters + motorcycles);
-  `needs_licence` flags the KYC-gated combustion vehicles
-- `query my_reservations` — this principal's reservations (owner-scoped)
-- `run reserve(scooter_code)` — reserve a vehicle by its code (inserts a
-  `status='reserved'` row; the hold has no expiry/TTL — it stays until
-  `start_rental` flips it to `active`)
-- `run payment_setup` — check whether the principal has a saved payment method
-- `run start_rental(reservation_id)` — verify three gates (ownership, the
-  vehicle being licence-free, and a settled payment for THIS reservation) and
-  issue an offline Ed25519 rental token (licence-free scooters need no KYC; a
-  `needs_licence` vehicle is refused here and sent to `rent_motorcycle`)
-- `run rent_motorcycle(reservation_id)` — the combustion motorcycle; KYC-gated
-  on `age_over_18` AND `licence_a` (category-A licence) before it issues a token
-- `pay` — settle the AP2 mandate chain (intent → cart → payment) via the stub PSP
-- `schema` — self-discovery
+One endpoint per verb: a read is a `GET` at its own name with arguments in the
+query string, a write is a `POST` at its own name with a JSON body. Success is
+the handler's payload with no envelope around it (a query always answers an
+array); a refusal is an RFC 9457 problem document whose `code` is a flat
+member. The 0.3 `POST /kiosk/query` and `POST /kiosk/run` are an ordinary 404.
+
+| Endpoint | Verb | What it does |
+|---|---|---|
+| `GET /kiosk/scooters_available` | `scooters_available` | Browse the fleet (scooters + motorcycles); `needs_licence` flags the KYC-gated combustion vehicles |
+| `GET /kiosk/my_reservations` | `my_reservations` | This principal's reservations (owner-scoped) |
+| `GET /kiosk/kyc_status` | `kyc_status` | Which anonymized attributes this principal has already attested |
+| `POST /kiosk/reserve` | `reserve(scooter_code)` | Reserve a vehicle by its code (inserts a `status='reserved'` row; the hold has no expiry/TTL — it stays until `start_rental` flips it to `active`) |
+| `POST /kiosk/payment_setup` | `payment_setup` | Check whether the principal has a saved payment method |
+| `POST /kiosk/start_rental` | `start_rental(reservation_id)` | Verify three gates (ownership, the vehicle being licence-free, and a settled payment for THIS reservation) and issue an offline Ed25519 rental token (licence-free scooters need no KYC; a `needs_licence` vehicle is refused here and sent to `rent_motorcycle`) |
+| `POST /kiosk/rent_motorcycle` | `rent_motorcycle(reservation_id)` | The combustion motorcycle; KYC-gated on `age_over_18` AND `licence_a` (category-A licence) before it issues a token |
+| `POST /kiosk/request_kyc` | `request_kyc` | Hand back the broker link the human completes to obtain the attestation |
+
+Plus the two reserved endpoints every origin serves: `POST /kiosk/pay` —
+settle the AP2 mandate chain (intent → cart → payment) via the stub PSP — and
+`GET /kiosk/schema`, the public catalog of everything above (no token, no
+toll), with `GET /kiosk/openapi.json` rendering the same registry as OpenAPI.
 
 Advertised capabilities are `[schema, queries, actions, pay]` — the MODULES
 this origin serves, never the registered verb names. That is a MODELLING rule,

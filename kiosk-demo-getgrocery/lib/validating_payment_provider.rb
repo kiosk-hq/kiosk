@@ -238,7 +238,7 @@ class ValidatingPaymentProvider
         # Claimed, no settlement: either a pay is genuinely in flight, or one
         # died at an UNKNOWN outcome and we deliberately kept the claim so a
         # blind retry can't double-charge (K-545). Say what recovers it.
-        deny "order #{order_id} has a payment in progress — re-read `query my_orders`: " \
+        deny "order #{order_id} has a payment in progress — re-read GET <endpoint>/my_orders: " \
              "if it shows paid, the charge went through and there is nothing to retry; " \
              "if it stays unpaid, the operator must reconcile this order with the payment " \
              "processor before it can be paid again"

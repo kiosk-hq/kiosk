@@ -11,7 +11,7 @@
 # request_token (+ the broker's nonce for callback anti-replay) and returns the
 # broker's verification_url for the agent to relay to its human. On approve, the
 # BROKER signs an anonymized {age_over_18} claim and POSTs it to getgrocery's
-# POST /kyc/callback; the agent then polls `query kyc_status` and submits the
+# POST /kyc/callback; the agent then polls GET <endpoint>/kyc_status and submits the
 # returned jws to POST /kiosk/agents/kyc, then retries create_order for the
 # alcohol cart.
 #

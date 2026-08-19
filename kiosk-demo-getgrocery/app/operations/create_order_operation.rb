@@ -123,14 +123,15 @@ class CreateOrderOperation
           code:    "kyc_required",
           message: "this cart contains an age-restricted (alcohol) item — an 18+ verification " \
                    "is required to order it",
-          # Point an external agent at the completable path: `run request_kyc`
-          # returns a verification_url the human approves, then poll `query
-          # kyc_status` for the signed attestation and submit it to POST
-          # /kiosk/agents/kyc — no pre-shared issuer key needed.
-          hint:    "call `run request_kyc` to start an 18+ (age_over_18) verification: " \
+          # Point an external agent at the completable path, in the spelling
+          # the 0.4 wire actually uses: POST <endpoint>/request_kyc returns a
+          # verification_url the human approves, then GET <endpoint>/kyc_status
+          # carries the signed attestation, which is submitted to
+          # POST <endpoint>/agents/kyc — no pre-shared issuer key needed.
+          hint:    "POST <endpoint>/request_kyc to start an 18+ (age_over_18) verification: " \
                    "it returns a verification_url for the human to approve; then poll " \
-                   "`query kyc_status` for the signed attestation and submit it to " \
-                   "POST /kiosk/agents/kyc, then retry create_order",
+                   "GET <endpoint>/kyc_status for the signed attestation and submit it to " \
+                   "POST <endpoint>/agents/kyc, then retry create_order",
         )
       end
 

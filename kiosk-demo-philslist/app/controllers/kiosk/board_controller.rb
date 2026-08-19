@@ -53,7 +53,16 @@ class Kiosk::BoardController < ApplicationController
                     price_text:    { type: %w[string null], description: "FREE-FORM display text, e.g. \"€300\" or \"Free\" — never a cents amount, and null when the seller gave none." },
                     category_slug: { type: "string", description: "The section it is posted in." },
                     status:        { type: "string", description: "open | closed." },
-                    owner_handle:  { type: "string", description: "The seller's handle." },
+                    # NULLABLE, and it took a real 500 from `validate_responses`
+                    # to say so. `users.email` is nullable, and a PoW-REGISTERED
+                    # assistant's account has none — so every listing posted
+                    # through `demo:register` publishes a null handle. The
+                    # seeded board has emails on every row, which is why no
+                    # flow had ever rendered one and why the first draft of
+                    # this schema said `string`. The check that caught it is the
+                    # whole argument for turning a declaration into an
+                    # assertion.
+                    owner_handle:  { type: %w[string null], description: "The seller's handle, or null for an account with no email on file (a self-registered assistant)." },
                   },
                   required: %w[listing_id title body price_text category_slug status owner_handle],
                 }

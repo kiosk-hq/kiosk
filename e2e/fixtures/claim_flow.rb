@@ -95,7 +95,9 @@ agent_id = claims.fetch("agent_id")
 
 # Wire verb as the bound assistant account — a query is a GET at its own path.
 rc, q = get_json("#{SERVER}/kiosk/my_appointments", { "Authorization" => "Bearer #{token}" })
-results[:wire_as_bound] = [rc, q["ok"]]
+# 0.4: the answer IS the rows (T-068 slice 2), so "the wire served it" is "a
+# list came back", not "ok was true".
+results[:wire_as_bound] = [rc, q.is_a?(Array)]
 
 # kiosk-pop login stays the refresh path for the bound key.
 rc, = post_json("#{SERVER}/kiosk/auth/login", { public_key: pem, signed: pop_proof(key, pem) })

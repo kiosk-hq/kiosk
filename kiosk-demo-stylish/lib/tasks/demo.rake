@@ -46,11 +46,13 @@ namespace :demo do
     denial properties:
 
       Assertion 1 (exclusion): B's my_appointments does NOT contain A's appointment aA.
-      Assertion 2 (forged user_id ignored): B calls book_appointment with a forged
-        user_id arg (A's UUID). The created appointment's DB user_id is B (server
-        uses kiosk.current_user_id(), ignores agent-supplied user_id). Verified by:
+      Assertion 2 (the principal is not an input): B calls book_appointment with a
+        forged user_id arg (A's UUID) -> 400 bad_request naming user_id, refused by
+        the published input_schema before the handler runs; and on B's LEGITIMATE
+        booking, ownership comes from the token. Verified by:
+          - the forged call's status/code/detail (400 / bad_request / names user_id)
           - the appointment's DB user_id column == B's user_id (not A's)
-          - A's my_appointments does NOT contain B's forged appointment
+          - A's my_appointments does NOT contain B's appointment
       Note: book_appointment takes salon_id (open catalogue); no user-owned
         resource target -> ownership-denial assertion does not apply to this surface.
 
@@ -129,6 +131,7 @@ namespace :demo do
     b_appt_ids       = result["b_appt_ids"]       || []
     b_appt_ids_after = result["b_appt_ids_after"] || []
     a_appt_ids_after = result["a_appt_ids_after"] || []
+    forged_refusal   = result["forged_refusal"]   || []
 
     # ── Assertion 1a: B's my_appointments excludes A's appointment ────
     if b_appt_ids.include?(appt_id_a)
@@ -149,24 +152,34 @@ namespace :demo do
       puts "  x  Assertion 1b FAILED: B's my_appointments missing B's own appt_id_b #{appt_id_b} — positive control failed"
     end
 
-    # ── Assertion 2a: A's my_appointments excludes B's forged appointment ──
-    if a_appt_ids_after.include?(appt_id_b)
-      failures << "ISOLATION HOLE: A's my_appointments contains B's forged appointment #{appt_id_b} — cross-tenant leak"
-      puts "  x  Assertion 2a FAILED: A sees B's forged appointment #{appt_id_b} — isolation hole"
+    # ── Assertion 2a: the forged user_id is REFUSED by the published contract ──
+    forged_rc, forged_code, forged_detail = forged_refusal
+    if forged_rc == 400 && forged_code == "bad_request" && forged_detail.to_s.include?("user_id")
+      puts "  OK  Assertion 2a: forged user_id → 400 bad_request naming user_id " \
+           "(refused by input_schema before the handler runs)"
     else
-      puts "  OK  Assertion 2a: A's my_appointments excludes B's forged appointment #{appt_id_b}"
+      failures << "forged user_id not refused: #{forged_refusal.inspect}, want [400, \"bad_request\", …user_id…]"
+      puts "  x  Assertion 2a FAILED: forged user_id → #{forged_refusal.inspect}"
     end
 
-    # ── Assertion 2b: DB user_id on B's forged appointment == B's UUID ──
+    # ── Assertion 2b: A's my_appointments excludes B's appointment ──
+    if a_appt_ids_after.include?(appt_id_b)
+      failures << "ISOLATION HOLE: A's my_appointments contains B's appointment #{appt_id_b} — cross-tenant leak"
+      puts "  x  Assertion 2b FAILED: A sees B's appointment #{appt_id_b} — isolation hole"
+    else
+      puts "  OK  Assertion 2b: A's my_appointments excludes B's appointment #{appt_id_b}"
+    end
+
+    # ── Assertion 2c: ownership comes from the TOKEN — DB user_id on aB == B ──
     db_user_id = `psql -X -d #{db} -tAc "SELECT user_id FROM appointments WHERE id = '#{appt_id_b}'" 2>&1`.strip
     if db_user_id == user_id_b
-      puts "  OK  Assertion 2b: DB appointments.user_id for aB == user_id_b (#{user_id_b}) — forged arg ignored"
+      puts "  OK  Assertion 2c: DB appointments.user_id for aB == user_id_b (#{user_id_b}) — ownership is taken from the identity"
     elsif db_user_id == user_id_a
-      failures << "ISOLATION HOLE: DB appointments.user_id for aB is A's user_id (#{user_id_a}) — forged user_id arg was NOT ignored"
-      puts "  x  Assertion 2b FAILED: server used forged user_id arg (appointment belongs to A, not B)"
+      failures << "ISOLATION HOLE: DB appointments.user_id for aB is A's user_id (#{user_id_a}) — ownership NOT taken from the identity"
+      puts "  x  Assertion 2c FAILED: appointment belongs to A, not B"
     else
       failures << "Unexpected user_id for aB: got #{db_user_id.inspect}, expected B's #{user_id_b}"
-      puts "  x  Assertion 2b FAILED: unexpected user_id #{db_user_id.inspect} for aB"
+      puts "  x  Assertion 2c FAILED: unexpected user_id #{db_user_id.inspect} for aB"
     end
 
     # ── Note: book_appointment surface — no ownership-denial test ─────
@@ -496,11 +509,15 @@ namespace :demo do
     asserting each attack is BLOCKED:
 
       BLOCKED  CrossTenantRead  — B's my_appointments excludes A's appointment
-      BLOCKED  ForgedUserId     — agent-supplied user_id in book args ignored
+      BLOCKED  ForgedUserId     — agent-supplied user_id in book args refused (400)
       BLOCKED  MissingAuth      — request with no Authorization → 401
       BLOCKED  GarbageToken     — unparseable bearer token → 401
       BLOCKED  UnknownQuery     — unregistered query name → 404
       BLOCKED  UnknownAction    — unregistered action name → 404
+      BLOCKED  RetiredWire      — the deleted 0.3 POST /kiosk/query and
+               POST /kiosk/run answer an ordinary 404 (no compatibility surface)
+      BLOCKED  MethodMismatch   — a GET at an action's path → 405
+               method_not_allowed with Allow: POST, never a silent 404
       BLOCKED  CustomerCannotMintStaffLink — a customer session cannot mint an
                owner link over the staff channel (non-staff → no link)
       BLOCKED  OwnerLinkIgnoresForgedClaimBody — an owner-linking assistant

@@ -11,11 +11,16 @@
 #
 # Scenarios (each must be BLOCKED):
 #   CrossTenantRead    — B's my_appointments must NOT contain A's appointment
-#   ForgedUserId       — agent-supplied user_id in book_appointment args ignored
+#   ForgedUserId       — an agent-supplied user_id in book_appointment args is
+#     REFUSED (400 bad_request naming it) and B's own booking never lands under A
 #   MissingAuth        — a request with no Authorization → 401
 #   GarbageToken       — an unparseable bearer token → 401
 #   UnknownQuery       — an unregistered query name → 404
 #   UnknownAction      — an unregistered action name → 404
+#   RetiredWire        — the deleted 0.3 `POST /kiosk/query` and `POST /kiosk/run`
+#     answer an ordinary 404: no privileged endpoint, no compatibility payload
+#   MethodMismatch     — a GET at an action's path → 405 method_not_allowed with
+#     `Allow: POST`, never a silent 404
 #   CustomerCannotMintStaffLink — a CUSTOMER (non-staff) session cannot mint an
 #     assistant link over the staff channel; StubUserIdp resolves only staff,
 #     so the mint is rejected outright — owner scope is unreachable from one
@@ -66,6 +71,10 @@ TOKEN_B    = "agent:u-#{BOB_UUID}:a-bob-redteam:r-customer"
 # staff now (no stylist roster); Alice is a plain customer.
 OWNER_ID = "00000000-0000-0000-0000-0000000000a0"
 
+# THE 0.4 WIRE. An action is `POST <endpoint>/<action-name>` carrying its
+# arguments as the JSON body; a query is `GET <endpoint>/<query-name>` carrying
+# them in the query string. A success body IS the result; an error is an RFC
+# 9457 problem document whose branch point is the TOP-LEVEL `code`.
 def post_json(path, body, headers = {})
   uri = URI("#{SERVER}#{path}")
   req = Net::HTTP::Post.new(uri, { "Content-Type" => "application/json" }.merge(headers))
@@ -74,8 +83,9 @@ def post_json(path, body, headers = {})
   [res.code.to_i, (JSON.parse(res.body) rescue {})]
 end
 
-def get_json(path, headers = {})
+def get_json(path, headers = {}, params = {})
   uri = URI("#{SERVER}#{path}")
+  uri.query = URI.encode_www_form(params) unless params.empty?
   res = Net::HTTP.new(uri.host, uri.port).request(Net::HTTP::Get.new(uri, headers))
   [res.code.to_i, (JSON.parse(res.body) rescue {})]
 end
@@ -111,55 +121,100 @@ def record(results, name, blocked, detail)
 end
 
 # ── Fixture: A books an appointment (target for cross-tenant probes) ──────────
-rc, salons = post_json("/kiosk/query", { name: "salons" }, bearer(TOKEN_A))
+rc, salons = get_json("/kiosk/salons", bearer(TOKEN_A))
 abort "salons query failed (#{rc}): #{JSON.generate(salons)} — run rake demo:setup" unless rc == 200
-salon_id = (salons["rows"] || []).first&.fetch("salon_id")
+salon_id = Array(salons).first&.fetch("salon_id")
 abort "no salons seeded — run rake demo:setup" unless salon_id
 
 rc, appt_a = post_json(
-  "/kiosk/run",
-  { name: "book_appointment", salon_id: salon_id, slot: "2026-10-01T09:00:00Z" },
+  "/kiosk/book_appointment",
+  { salon_id: salon_id, slot: "2026-10-01T09:00:00Z" },
   bearer(TOKEN_A),
 )
 abort "A book_appointment failed (#{rc}): #{JSON.generate(appt_a)}" unless rc == 200
-appt_id_a = appt_a.dig("value", "appointment_id")
+appt_id_a = appt_a["appointment_id"]
 
 # ── CrossTenantRead — B must not see A's appointment ─────────────────────────
-rc, b_appts = post_json("/kiosk/query", { name: "my_appointments" }, bearer(TOKEN_B))
-b_ids = (b_appts["rows"] || []).map { |r| r["id"] }
+rc, b_appts = get_json("/kiosk/my_appointments", bearer(TOKEN_B))
+b_ids = Array(b_appts).map { |r| r["id"] }
 record(results, "CrossTenantRead",
        rc == 200 && !b_ids.include?(appt_id_a),
        "B's my_appointments #{b_ids.inspect} excludes A's #{appt_id_a}")
 
-# ── ForgedUserId — B books with A's user_id in args; server must ignore it ────
+# ── ForgedUserId — B books with A's user_id in the args ──────────────────────
+#
+# THIS BEAT CHANGED SHAPE AT 0.4 AND GOT STRONGER, so it is worth saying what it
+# now proves. Through 0.3 the forged argument was ACCEPTED by the wire and
+# IGNORED by the handler, and the proof was indirect: the created appointment
+# did not surface in A's my_appointments. On the 0.4 wire `input_schema` is
+# validated on every call and `book_appointment` declares
+# `additionalProperties: false` — the principal is not one of its inputs — so
+# the forgery is REFUSED before the handler runs, with a typed 400 naming the
+# offending parameter. Both halves are asserted: the wire refuses it, AND
+# nothing belonging to B appears under A.
 rc, forged = post_json(
-  "/kiosk/run",
-  { name: "book_appointment", salon_id: salon_id, slot: "2026-10-02T09:00:00Z", user_id: ALICE_UUID },
+  "/kiosk/book_appointment",
+  { salon_id: salon_id, slot: "2026-10-02T09:00:00Z", user_id: ALICE_UUID },
   bearer(TOKEN_B),
 )
-appt_id_forged = forged.dig("value", "appointment_id")
-# The forged appointment must NOT surface in A's list (it belongs to B).
-rc_a, a_appts = post_json("/kiosk/query", { name: "my_appointments" }, bearer(TOKEN_A))
-a_ids = (a_appts["rows"] || []).map { |r| r["id"] }
+refused = rc == 400 && forged["code"] == "bad_request" && forged["detail"].to_s.include?("user_id")
+
+# And the principal really does come from the token, not from anything the
+# caller sent: B's LEGITIMATE booking lands under B and never under A.
+rc_b, bobs = post_json(
+  "/kiosk/book_appointment",
+  { salon_id: salon_id, slot: "2026-10-02T10:00:00Z" },
+  bearer(TOKEN_B),
+)
+appt_id_bob = bobs["appointment_id"]
+rc_a, a_appts = get_json("/kiosk/my_appointments", bearer(TOKEN_A))
+a_ids = Array(a_appts).map { |r| r["id"] }
 record(results, "ForgedUserId",
-       rc == 200 && rc_a == 200 && !a_ids.include?(appt_id_forged),
-       "A's list #{a_ids.inspect} excludes B's forged appt #{appt_id_forged.inspect}")
+       refused && rc_b == 200 && rc_a == 200 && !a_ids.include?(appt_id_bob),
+       "forged user_id → #{rc}/#{forged['code'].inspect} (want 400/bad_request naming user_id); " \
+       "A's list #{a_ids.inspect} excludes B's #{appt_id_bob.inspect}")
 
 # ── MissingAuth — no Authorization header → 401 ──────────────────────────────
-rc, _ = post_json("/kiosk/query", { name: "salons" })
+rc, _ = get_json("/kiosk/salons")
 record(results, "MissingAuth", rc == 401, "unauthenticated request → #{rc} (want 401)")
 
 # ── GarbageToken — unparseable bearer → 401 ──────────────────────────────────
-rc, _ = post_json("/kiosk/query", { name: "salons" }, bearer("not-a-real-token"))
+rc, _ = get_json("/kiosk/salons", bearer("not-a-real-token"))
 record(results, "GarbageToken", rc == 401, "garbage token → #{rc} (want 401)")
 
 # ── UnknownQuery — unregistered query name → 404 ─────────────────────────────
-rc, _ = post_json("/kiosk/query", { name: "frobnicate" }, bearer(TOKEN_A))
+rc, _ = get_json("/kiosk/frobnicate", bearer(TOKEN_A))
 record(results, "UnknownQuery", rc == 404, "unknown query → #{rc} (want 404)")
 
 # ── UnknownAction — unregistered action name → 404 ───────────────────────────
-rc, _ = post_json("/kiosk/run", { name: "nope" }, bearer(TOKEN_A))
+rc, _ = post_json("/kiosk/nope", {}, bearer(TOKEN_A))
 record(results, "UnknownAction", rc == 404, "unknown action → #{rc} (want 404)")
+
+# ── RetiredWire — the deleted 0.3 endpoints are GONE, not tombstoned ─────────
+# T-074 = A was a hard cut. `POST /kiosk/query` now reaches the per-verb
+# controller as a verb literally named "query", which nobody registered, so it
+# answers the ordinary 404 — no privileged endpoint, no compatibility payload,
+# no second conformance surface to attack.
+retired = %w[query run].map do |name|
+  rc_r, body_r = post_json("/kiosk/#{name}", { name: "salons" }, bearer(TOKEN_A))
+  [rc_r == 404 && body_r["code"] == "not_found", "#{name}→#{rc_r}/#{body_r['code'].inspect}"]
+end
+record(results, "RetiredWire", retired.all? { |ok, _| ok },
+       "0.3 endpoints #{retired.map(&:last).join(', ')} (want 404/\"not_found\")")
+
+# ── MethodMismatch — a GET at an action's path is 405, never a silent 404 ────
+# The resource EXISTS; answering 404 would be a lie about it, and a caller that
+# read 404 as "this operator cannot do that" would give up on a verb it could
+# have called correctly.
+uri405 = URI("#{SERVER}/kiosk/book_appointment")
+res405 = Net::HTTP.new(uri405.host, uri405.port)
+                  .request(Net::HTTP::Get.new(uri405, bearer(TOKEN_A)))
+body405 = (JSON.parse(res405.body) rescue {})
+record(results, "MethodMismatch",
+       res405.code.to_i == 405 && body405["code"] == "method_not_allowed" &&
+         res405["allow"].to_s.upcase.include?("POST"),
+       "GET an action → #{res405.code}/#{body405['code'].inspect} Allow=#{res405['allow'].inspect} " \
+       "(want 405/\"method_not_allowed\"/POST)")
 
 # ── roles-from-IdP escalation beats (Path A) ──────────────────────────
 # A customer's agent must NOT be able to obtain owner-scope. Owner scope is
@@ -199,14 +254,14 @@ record(results, "OwnerLinkIgnoresForgedClaimBody",
 # then assert Alice's calendar EXCLUDES that specific booking id — the only
 # thing that actually demonstrates scoping.
 rc_b3, appt_b3 = post_json(
-  "/kiosk/run",
-  { name: "book_appointment", salon_id: salon_id, slot: "2026-10-03T09:00:00Z" },
+  "/kiosk/book_appointment",
+  { salon_id: salon_id, slot: "2026-10-03T09:00:00Z" },
   bearer(TOKEN_B),
 )
-appt_id_b3 = appt_b3.dig("value", "appointment_id")
+appt_id_b3 = appt_b3["appointment_id"]
 
-rc, cal = post_json("/kiosk/query", { name: "salon_calendar" }, bearer(TOKEN_A))
-rows = (cal["rows"] || [])
+rc, cal = get_json("/kiosk/salon_calendar", bearer(TOKEN_A))
+rows = Array(cal)
 own_ids     = rows.reject { |r| r["summary"] }.map { |r| r["id"] }
 own_only    = !own_ids.include?(appt_id_b3)
 no_forecast = rows.none? { |r| r["summary"] == "forecast" }
@@ -301,9 +356,16 @@ self_asserted_staff_forgery.call
 # casts to nil (→ NOT NULL violation), while "next tuesday" cast to TODAY AT
 # MIDNIGHT and booked a real appointment in the past.
 #
-# Each probe asserts HTTP 400 AND `error.code == "bad_request"` AND no PG
-# internals in the body — a "not 200" assertion would accept the 500s this
-# beat exists to forbid.
+# Each probe asserts HTTP 400 AND the problem document's TOP-LEVEL
+# `code == "bad_request"` AND no PG internals in the body — a "not 200"
+# assertion would accept the 500s this beat exists to forbid.
+#
+# Since 0.4 some of these shapes are refused one layer earlier: `input_schema`
+# is validated on every call, so a non-string or missing `slot` and a missing
+# `salon_id` are caught by the declaration before the handler's guards run.
+# The verdict an assistant sees is the same typed 400 either way, which is why
+# the assertion is written against the STATUS and CODE rather than against a
+# sentence one particular layer happened to phrase.
 BAD_INPUTS = [
   ["unparseable slot",        { salon_id: :seeded, slot: "banana" }],
   ["fuzzy slot (silent past booking)", { salon_id: :seeded, slot: "next tuesday" }],
@@ -319,10 +381,10 @@ PG_INTERNALS = ["PG::", "NotNullViolation", "RecordInvalid", "DatatypeMismatch",
 
 bad_failures = []
 BAD_INPUTS.each do |label, args|
-  body = { name: "book_appointment" }.merge(args)
+  body = args.dup
   body[:salon_id] = salon_id if body[:salon_id] == :seeded
-  rc, resp = post_json("/kiosk/run", body, bearer(TOKEN_A))
-  code = resp.is_a?(Hash) ? resp.dig("error", "code") : nil
+  rc, resp = post_json("/kiosk/book_appointment", body, bearer(TOKEN_A))
+  code = resp.is_a?(Hash) ? resp["code"] : nil
   leak = PG_INTERNALS.find { |needle| JSON.generate(resp).include?(needle) }
   next if rc == 400 && code == "bad_request" && leak.nil?
 
@@ -334,17 +396,17 @@ end
 # that simply refused every booking. A bare salon booking (no service_id at all)
 # is legitimate and the descriptor promises it; a full booking must still
 # capture the service price the forecast is summed from.
-rc_bare, bare = post_json("/kiosk/run",
-  { name: "book_appointment", salon_id: salon_id, slot: "2026-10-03T09:00:00Z" }, bearer(TOKEN_A))
+rc_bare, bare = post_json("/kiosk/book_appointment",
+  { salon_id: salon_id, slot: "2026-10-03T09:00:00Z" }, bearer(TOKEN_A))
 bad_failures << "CONTROL bare salon booking → HTTP #{rc_bare} #{JSON.generate(bare)[0, 160]}" unless rc_bare == 200
 
-rc_menu, menu = post_json("/kiosk/query", { name: "service_menu" }, bearer(TOKEN_A))
-service = (menu["rows"] || []).find { |r| r["price_cents"].to_i.positive? }
-rc_full, full = post_json("/kiosk/run",
-  { name: "book_appointment", salon_id: salon_id, slot: "2026-10-04T09:00:00Z",
+rc_menu, menu = get_json("/kiosk/service_menu", bearer(TOKEN_A))
+service = Array(menu).find { |r| r["price_cents"].to_i.positive? }
+rc_full, full = post_json("/kiosk/book_appointment",
+  { salon_id: salon_id, slot: "2026-10-04T09:00:00Z",
     service_id: service && service["service_id"] }, bearer(TOKEN_A))
-unless rc_menu == 200 && rc_full == 200 && full.dig("value", "price_cents").to_i == service["price_cents"].to_i
-  bad_failures << "CONTROL priced booking → HTTP #{rc_full} price_cents=#{full.dig("value", "price_cents").inspect} " \
+unless rc_menu == 200 && rc_full == 200 && full["price_cents"].to_i == service["price_cents"].to_i
+  bad_failures << "CONTROL priced booking → HTTP #{rc_full} price_cents=#{full["price_cents"].inspect} " \
                   "(want #{service && service["price_cents"].inspect})"
 end
 

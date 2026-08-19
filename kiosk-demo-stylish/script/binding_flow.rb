@@ -87,8 +87,14 @@ def post_json(path, body, headers = {})
   [res.code.to_i, (JSON.parse(res.body) rescue {})]
 end
 
-def get_json(path)
-  res = request(Net::HTTP::Get.new(URI("#{SERVER}#{path}")))
+# THE 0.4 WIRE. A query is `GET <endpoint>/<query-name>` with its arguments in
+# the query string, an action is `POST <endpoint>/<action-name>` with its
+# arguments as the JSON body; there is no `name` field and no /query or /run
+# endpoint, and a success body IS the result (no `rows`/`value` envelope).
+def get_json(path, params = {}, headers = {})
+  uri = URI("#{SERVER}#{path}")
+  uri.query = URI.encode_www_form(params) unless params.empty?
+  res = request(Net::HTTP::Get.new(uri, headers))
   [res.code.to_i, (JSON.parse(res.body) rescue {})]
 end
 
@@ -165,18 +171,18 @@ results[:agent_id_1] = agent1
 STDERR.puts "  Token minted: sub=#{claims["sub"]} agent_id=#{agent1}"
 
 # Wire verbs as the human's account: pick a salon, book, list.
-rc, q = post_json("/kiosk/query", { name: "salons" }, { "Authorization" => "Bearer #{token1}" })
+rc, q = get_json("/kiosk/salons", {}, { "Authorization" => "Bearer #{token1}" })
 abort "salons query failed (#{rc})" unless rc == 200
-salon_id = q.fetch("rows").first.fetch("salon_id")
+salon_id = Array(q).first.fetch("salon_id")
 slot     = "#{(Date.today + 1).iso8601}T10:00:00Z"
-rc, booked = post_json("/kiosk/run",
-                       { name: "book_appointment", salon_id: salon_id, slot: slot },
+rc, booked = post_json("/kiosk/book_appointment",
+                       { salon_id: salon_id, slot: slot },
                        { "Authorization" => "Bearer #{token1}" })
 results[:wire_book] = rc
-appointment_id = booked.dig("value", "appointment_id")
+appointment_id = booked["appointment_id"]
 results[:appointment_id] = appointment_id
-rc, mine = post_json("/kiosk/query", { name: "my_appointments" }, { "Authorization" => "Bearer #{token1}" })
-results[:a1_sees_booking] = rc == 200 && mine.fetch("rows", []).any? { |r| r["id"] == appointment_id }
+rc, mine = get_json("/kiosk/my_appointments", {}, { "Authorization" => "Bearer #{token1}" })
+results[:a1_sees_booking] = rc == 200 && Array(mine).any? { |r| r["id"] == appointment_id }
 STDERR.puts "  Booked appointment #{appointment_id} as the account holder"
 
 # ══ MANAGE ASSISTANTS page: the signed-in human opens the HTML
@@ -216,8 +222,8 @@ token2 = claimed["access_token"].to_s
 STDERR.puts "  Second assistant redeemed the link code: agent_id=#{agent2}"
 
 # The second assistant sees the same account: the first one's booking.
-rc, mine2 = post_json("/kiosk/query", { name: "my_appointments" }, { "Authorization" => "Bearer #{token2}" })
-results[:a2_sees_booking] = rc == 200 && mine2.fetch("rows", []).any? { |r| r["id"] == appointment_id }
+rc, mine2 = get_json("/kiosk/my_appointments", {}, { "Authorization" => "Bearer #{token2}" })
+results[:a2_sees_booking] = rc == 200 && Array(mine2).any? { |r| r["id"] == appointment_id }
 
 # Unlink the first assistant (session channel) — its login dies, the
 # second assistant's does not.

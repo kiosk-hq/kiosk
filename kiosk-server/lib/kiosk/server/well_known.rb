@@ -491,14 +491,24 @@ module Kiosk
 
           ## Errors
 
-          - Kiosk endpoints (`/auth/*`, wire verbs) use the JSON envelope:
-            `{ ok: false, error: { code, message, hint } }` (codes such as
-            `unauthenticated`, `not_found`, `conflict`, `pow_required`).
+          - Kiosk endpoints (`/auth/*`, `pay`, every query and every action)
+            answer an error as an RFC 9457 problem document, served as
+            `application/problem+json`:
+
+                {"type":"https://kiosk.tech/problems/pow_required",
+                 "title":"Proof-of-work required","status":402,
+                 "detail":"proof-of-work required","code":"pow_required"}
+
+            Branch on `code` — a FLAT member of the document, not nested — from
+            the closed vocabulary (`unauthenticated`, `not_found`, `conflict`,
+            `pow_required`, …); `type` is `https://kiosk.tech/problems/<code>`
+            and names the same fact. Some codes add members of their own, such
+            as the `challenges` array on a `402 pow_required`.
           - The claim ceremony's OAuth endpoints use the OAuth error shape
             `{ error, error_description }` with the RFC 8628 vocabulary:
             `authorization_pending`, `slow_down`, `expired_token`,
             `access_denied`, `invalid_grant`, `invalid_client` — a
-            documented exception to the envelope.
+            documented exception, and the only one.
 
           ## Revocation
 

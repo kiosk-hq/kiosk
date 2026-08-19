@@ -32,6 +32,12 @@ require "securerandom"
 SERVER = ENV.fetch("SERVER_URL")
 ISSUER = ENV.fetch("KIOSK_ISSUER")
 
+# THE 0.4 WIRE. An action is `POST <mount>/<action-name>` with its arguments as
+# the JSON body; a query is `GET <mount>/<query-name>` with its arguments in the
+# query string. There is no `name` field and no /query or /run endpoint. A
+# success body IS the result — a bare array from a non-paginating query, the
+# action's own object from an action — and an error is an RFC 9457 problem
+# document whose branch point is the top-level `code`.
 def post_json(path, body, headers = {})
   uri = URI("#{SERVER}#{path}")
   req = Net::HTTP::Post.new(uri, { "Content-Type" => "application/json" }.merge(headers))
@@ -40,8 +46,9 @@ def post_json(path, body, headers = {})
   [res.code.to_i, (JSON.parse(res.body) rescue {})]
 end
 
-def get_json(path, headers = {})
+def get_json(path, params = {}, headers = {})
   uri = URI("#{SERVER}#{path}")
+  uri.query = URI.encode_www_form(params) unless params.empty?
   res = Net::HTTP.new(uri.host, uri.port).request(Net::HTTP::Get.new(uri, headers))
   [res.code.to_i, (JSON.parse(res.body) rescue {})]
 end
@@ -69,21 +76,21 @@ results = {}
 alice = register_agent("alice")
 results[:alice_agent_id] = alice[:agent_id]
 
-rc, created = post_json("/kiosk/run", { name: "create_list", title: "Hike" }, bearer(alice[:token]))
+rc, created = post_json("/kiosk/create_list", { title: "Hike" }, bearer(alice[:token]))
 abort "create_list failed (#{rc}): #{JSON.generate(created)}" unless rc == 200
-list_id = created.dig("value", "list_id")
+list_id = created["list_id"]
 results[:list_id] = list_id
 STDERR.puts "  Alice's agent created list #{list_id}"
 
-rc, atodo = post_json("/kiosk/run",
-                      { name: "add_todo", list_id: list_id, title: "Book campsite" },
+rc, atodo = post_json("/kiosk/add_todo",
+                      { list_id: list_id, title: "Book campsite" },
                       bearer(alice[:token]))
 abort "alice add_todo failed (#{rc}): #{JSON.generate(atodo)}" unless rc == 200
-alice_todo_id = atodo.dig("value", "todo_id")
+alice_todo_id = atodo["todo_id"]
 
-rc, inv = post_json("/kiosk/run", { name: "invite", list_id: list_id }, bearer(alice[:token]))
+rc, inv = post_json("/kiosk/invite", { list_id: list_id }, bearer(alice[:token]))
 abort "invite failed (#{rc}): #{JSON.generate(inv)}" unless rc == 200
-code = inv.dig("value", "code")
+code = inv["code"]
 results[:invite_returned_code] = !code.to_s.empty?
 STDERR.puts "  Alice's agent minted an invite code"
 
@@ -91,27 +98,27 @@ STDERR.puts "  Alice's agent minted an invite code"
 bob = register_agent("bob")
 results[:bob_agent_id] = bob[:agent_id]
 
-rc, acc = post_json("/kiosk/run", { name: "accept_invite", code: code }, bearer(bob[:token]))
+rc, acc = post_json("/kiosk/accept_invite", { code: code }, bearer(bob[:token]))
 results[:accept_status]  = rc
-results[:accept_joined]  = acc.dig("value", "joined") == true
-results[:accept_list_id] = acc.dig("value", "list_id")
+results[:accept_joined]  = acc["joined"] == true
+results[:accept_list_id] = acc["list_id"]
 abort "accept_invite failed (#{rc}): #{JSON.generate(acc)}" unless rc == 200
 STDERR.puts "  Bob's agent accepted the invite and joined list #{results[:accept_list_id]}"
 
-rc, btodo = post_json("/kiosk/run",
-                      { name: "add_todo", list_id: list_id, title: "Bring tent" },
+rc, btodo = post_json("/kiosk/add_todo",
+                      { list_id: list_id, title: "Bring tent" },
                       bearer(bob[:token]))
 abort "bob add_todo failed (#{rc}): #{JSON.generate(btodo)}" unless rc == 200
-bob_todo_id = btodo.dig("value", "todo_id")
+bob_todo_id = btodo["todo_id"]
 
 # ── Assert the shared world ──────────────────────────────────────────────────
-rc, a_lists = post_json("/kiosk/query", { name: "my_lists" }, bearer(alice[:token]))
-results[:alice_sees_hike] = rc == 200 && (a_lists["rows"] || []).any? { |r| r["list_id"] == list_id && r["role"] == "owner" }
-rc, b_lists = post_json("/kiosk/query", { name: "my_lists" }, bearer(bob[:token]))
-results[:bob_sees_hike] = rc == 200 && (b_lists["rows"] || []).any? { |r| r["list_id"] == list_id && r["role"] == "member" }
+rc, a_lists = get_json("/kiosk/my_lists", {}, bearer(alice[:token]))
+results[:alice_sees_hike] = rc == 200 && Array(a_lists).any? { |r| r["list_id"] == list_id && r["role"] == "owner" }
+rc, b_lists = get_json("/kiosk/my_lists", {}, bearer(bob[:token]))
+results[:bob_sees_hike] = rc == 200 && Array(b_lists).any? { |r| r["list_id"] == list_id && r["role"] == "member" }
 
-rc, todos = post_json("/kiosk/query", { name: "list_todos", list_id: list_id }, bearer(bob[:token]))
-rows = todos["rows"] || []
+rc, todos = get_json("/kiosk/list_todos", { list_id: list_id }, bearer(bob[:token]))
+rows = Array(todos)
 results[:shared_todo_count] = rows.size
 # Attribution: each todo's created_by_agent_id is the agent that added it.
 alice_row = rows.find { |r| r["todo_id"] == alice_todo_id }
@@ -119,8 +126,8 @@ bob_row   = rows.find { |r| r["todo_id"] == bob_todo_id }
 results[:alice_todo_attributed] = alice_row && alice_row["created_by_agent_id"] == alice[:agent_id]
 results[:bob_todo_attributed]   = bob_row   && bob_row["created_by_agent_id"]   == bob[:agent_id]
 
-rc, members = post_json("/kiosk/query", { name: "list_members", list_id: list_id }, bearer(alice[:token]))
-mrows = members["rows"] || []
+rc, members = get_json("/kiosk/list_members", { list_id: list_id }, bearer(alice[:token]))
+mrows = Array(members)
 results[:member_count]  = mrows.size
 results[:has_owner]     = mrows.any? { |m| m["role"] == "owner" }
 results[:has_member]    = mrows.any? { |m| m["role"] == "member" }

@@ -12,13 +12,18 @@
 #
 # Standard scenarios (each must be BLOCKED):
 #   CrossTenantRead   — a non-member's list_todos on a private list → 403
-#   ForgedUserId      — forged account_id on create_list ignored (belongs to caller)
+#   ForgedUserId      — forged account_id on create_list REFUSED (400), and the
+#                       caller's own list still belongs to the caller
 #   MalformedUuidArg  — a junk list_id/todo_id/account_id on the wire-facing
 #                       verbs is a typed 400 with no SQL internals — never a 500
 #   MissingAuth       — a request with no Authorization → 401
 #   GarbageToken      — an unparseable bearer token → 401
 #   UnknownQuery      — an unregistered query name → 404
 #   UnknownAction     — an unregistered action name → 404
+#   RetiredWire       — the deleted 0.3 /kiosk/query + /kiosk/run endpoints are
+#                       an ordinary 404, not a tombstone or a second surface
+#   MethodMismatch    — a GET at an action's path → 405 + `Allow: POST`, never a
+#                       silent 404 an assistant would read as "cannot do that"
 # tudu-specific scenarios:
 #   InviteCodeReplay      — an already-used invite code is rejected → 403
 #   RevokedMemberAccess   — a removed member's next read is blocked → 403
@@ -85,8 +90,14 @@ def post_json(path, body, headers = {})
   [res.code.to_i, (JSON.parse(res.body) rescue {})]
 end
 
-def get_json(path)
-  res = request(Net::HTTP::Get.new(URI("#{SERVER}#{path}")))
+# THE 0.4 WIRE. An action is `POST <mount>/<action-name>` carrying its arguments
+# as the JSON body; a query is `GET <mount>/<query-name>` carrying them in the
+# query string. A success body IS the result; an error is an RFC 9457 problem
+# document whose branch point is the TOP-LEVEL `code`.
+def get_json(path, params = {}, headers = {})
+  uri = URI("#{SERVER}#{path}")
+  uri.query = URI.encode_www_form(params) unless params.empty?
+  res = request(Net::HTTP::Get.new(uri, headers))
   [res.code.to_i, (JSON.parse(res.body) rescue {})]
 end
 
@@ -126,27 +137,41 @@ owner    = register_agent("owner")
 member   = register_agent("member")
 outsider = register_agent("outsider")
 
-rc, created = post_json("/kiosk/run", { name: "create_list", title: "Redteam target" }, bearer(owner[:token]))
+rc, created = post_json("/kiosk/create_list", { title: "Redteam target" }, bearer(owner[:token]))
 abort "owner create_list failed (#{rc}) — run rake demo:setup" unless rc == 200
-list_id = created.dig("value", "list_id")
-rc, inv = post_json("/kiosk/run", { name: "invite", list_id: list_id }, bearer(owner[:token]))
-invite_code = inv.dig("value", "code")
-post_json("/kiosk/run", { name: "accept_invite", code: invite_code }, bearer(member[:token]))
+list_id = created["list_id"]
+rc, inv = post_json("/kiosk/invite", { list_id: list_id }, bearer(owner[:token]))
+invite_code = inv["code"]
+post_json("/kiosk/accept_invite", { code: invite_code }, bearer(member[:token]))
 
 # ── CrossTenantRead — outsider list_todos on the private list → 403 ──────────
-rc, = post_json("/kiosk/query", { name: "list_todos", list_id: list_id }, bearer(outsider[:token]))
+rc, = get_json("/kiosk/list_todos", { list_id: list_id }, bearer(outsider[:token]))
 record(results, "CrossTenantRead", rc == 403, "outsider list_todos → #{rc} (want 403)")
 
-# ── ForgedUserId — outsider create_list with a forged account_id → ignored ──
-rc, forged = post_json("/kiosk/run",
-                       { name: "create_list", title: "Forged", account_id: owner[:user_id] },
+# ── ForgedUserId — outsider create_list with a forged account_id ─────────────
+#
+# THIS BEAT CHANGED SHAPE AT 0.4 AND GOT STRONGER, so it is worth saying what it
+# now proves. Through 0.3 the forged argument was ACCEPTED by the wire and
+# IGNORED by the handler, and the proof was indirect: the created list did not
+# surface in the owner's my_lists. On the 0.4 wire `input_schema` is validated on
+# every call and `create_list` declares `additionalProperties: false` with
+# `title` as its only property — the principal is not one of its inputs — so the
+# forgery is REFUSED before the handler runs, with a typed 400 naming the
+# offending parameter. Both halves are asserted: the wire refuses it, AND the
+# outsider's LEGITIMATE list lands under the outsider and never under the owner.
+rc, forged = post_json("/kiosk/create_list",
+                       { title: "Forged", account_id: owner[:user_id] },
                        bearer(outsider[:token]))
-forged_list = forged.dig("value", "list_id")
-# The forged list must NOT appear in the owner's my_lists (it belongs to outsider).
-rc_o, o_lists = post_json("/kiosk/query", { name: "my_lists" }, bearer(owner[:token]))
-o_ids = (o_lists["rows"] || []).map { |r| r["list_id"] }
-record(results, "ForgedUserId", rc == 200 && rc_o == 200 && !o_ids.include?(forged_list),
-       "owner's lists exclude outsider's forged list #{forged_list.inspect}")
+refused = rc == 400 && forged["code"] == "bad_request" && forged["detail"].to_s.include?("account_id")
+
+rc_x, outsiders = post_json("/kiosk/create_list", { title: "Outsider's own" }, bearer(outsider[:token]))
+outsider_list = outsiders["list_id"]
+rc_o, o_lists = get_json("/kiosk/my_lists", {}, bearer(owner[:token]))
+o_ids = Array(o_lists).map { |r| r["list_id"] }
+record(results, "ForgedUserId",
+       refused && rc_x == 200 && rc_o == 200 && !o_ids.include?(outsider_list),
+       "forged account_id → #{rc}/#{forged['code'].inspect} (want 400/bad_request naming account_id); " \
+       "owner's lists #{o_ids.inspect} exclude the outsider's #{outsider_list.inspect}")
 
 # ── MalformedUuidArg — junk ids must be a typed 400, never a 500 ────────────
 # K-581/K-582: tudu casts three wire-supplied ids `::uuid` — `list_id` (via the
@@ -155,23 +180,27 @@ record(results, "ForgedUserId", rc == 200 && rc_o == 200 && !o_ids.include?(forg
 # UuidCheck guards, a malformed value made Postgres raise
 # InvalidTextRepresentation, which is not a Kiosk error and escaped as a raw 500
 # carrying the PG message. Three properties are asserted, not one: the status is
-# 400 (a client mistake reported as such), the envelope code is the typed
-# `bad_request` an assistant can branch on, and NO SQL internals reach the wire.
-# All three ids are probed — a guard on the choke point alone would leave
-# complete_todo and remove_member's account_id open.
+# 400 (a client mistake reported as such), the problem document's top-level
+# `code` is the typed `bad_request` an assistant can branch on, and NO SQL
+# internals reach the wire. All three ids are probed — a guard on the choke point
+# alone would leave complete_todo and remove_member's account_id open.
 MALFORMED_IDS = ["not-a-uuid", "1; DROP TABLE todos", "", "  "].freeze
 SQL_INTERNALS = ["::uuid", "PG::", "22P02", "invalid input syntax"].freeze
 
 uuid_probes = MALFORMED_IDS.flat_map do |junk|
   [
-    ["/kiosk/query", { name: "list_todos",     list_id: junk }],                             # list_id via the membership guard
-    ["/kiosk/run",   { name: "complete_todo",  todo_id: junk }],                             # todo_id — no other guard in front
-    ["/kiosk/run",   { name: "remove_member",  list_id: list_id, account_id: junk }],        # account_id — the second id
-  ].map do |path, body|
-    rc, resp = post_json(path, body, bearer(owner[:token]))
+    # list_id via the membership guard — a QUERY, so the junk rides the query string.
+    [-> { get_json("/kiosk/list_todos", { list_id: junk }, bearer(owner[:token])) },     "list_todos"],
+    # todo_id — no other guard in front of the cast.
+    [-> { post_json("/kiosk/complete_todo", { todo_id: junk }, bearer(owner[:token])) }, "complete_todo"],
+    # account_id — the second id, on a verb whose FIRST id is well-formed.
+    [-> { post_json("/kiosk/remove_member", { list_id: list_id, account_id: junk }, bearer(owner[:token])) },
+     "remove_member"],
+  ].map do |probe, verb|
+    rc, resp = probe.call
     leak = SQL_INTERNALS.find { |needle| JSON.generate(resp).include?(needle) }
-    ok = rc == 400 && resp.dig("error", "code") == "bad_request" && leak.nil?
-    [ok, "#{body[:name]}(#{junk.inspect})→#{rc}/#{resp.dig('error', 'code').inspect}#{leak ? " LEAK #{leak}" : ''}"]
+    ok = rc == 400 && resp["code"] == "bad_request" && leak.nil?
+    [ok, "#{verb}(#{junk.inspect})→#{rc}/#{resp['code'].inspect}#{leak ? " LEAK #{leak}" : ''}"]
   end
 end
 record(results, "MalformedUuidArg", uuid_probes.all? { |ok, _| ok },
@@ -179,24 +208,48 @@ record(results, "MalformedUuidArg", uuid_probes.all? { |ok, _| ok },
        "(want 400/\"bad_request\" and no SQL internals)")
 
 # ── MissingAuth / GarbageToken → 401 ────────────────────────────────────────
-rc, = post_json("/kiosk/query", { name: "my_lists" })
+rc, = get_json("/kiosk/my_lists")
 record(results, "MissingAuth", rc == 401, "unauthenticated request → #{rc} (want 401)")
-rc, = post_json("/kiosk/query", { name: "my_lists" }, bearer("not-a-real-token"))
+rc, = get_json("/kiosk/my_lists", {}, bearer("not-a-real-token"))
 record(results, "GarbageToken", rc == 401, "garbage token → #{rc} (want 401)")
 
 # ── UnknownQuery / UnknownAction → 404 ──────────────────────────────────────
-rc, = post_json("/kiosk/query", { name: "frobnicate" }, bearer(owner[:token]))
+rc, = get_json("/kiosk/frobnicate", {}, bearer(owner[:token]))
 record(results, "UnknownQuery", rc == 404, "unknown query → #{rc} (want 404)")
-rc, = post_json("/kiosk/run", { name: "nope" }, bearer(owner[:token]))
+rc, = post_json("/kiosk/nope", {}, bearer(owner[:token]))
 record(results, "UnknownAction", rc == 404, "unknown action → #{rc} (want 404)")
 
+# ── RetiredWire — the deleted 0.3 endpoints are GONE, not tombstoned ─────────
+# T-074 = A was a hard cut. `POST /kiosk/query` now reaches the per-verb
+# controller as a verb literally named "query", which nobody registered, so it
+# answers the ordinary 404 — no privileged endpoint, no compatibility payload,
+# no second conformance surface to attack.
+retired = %w[query run].map do |name|
+  rc, body = post_json("/kiosk/#{name}", { name: "my_lists" }, bearer(owner[:token]))
+  [rc == 404 && body["code"] == "not_found", "#{name}→#{rc}/#{body['code'].inspect}"]
+end
+record(results, "RetiredWire", retired.all? { |ok, _| ok },
+       "0.3 endpoints #{retired.map(&:last).join(', ')} (want 404/\"not_found\")")
+
+# ── MethodMismatch — a GET at an action's path is 405, never a silent 404 ────
+# The resource EXISTS; answering 404 would be a lie about it, and a caller that
+# read 404 as "this operator cannot do that" would give up on a verb it could
+# have called correctly.
+res405 = request(Net::HTTP::Get.new(URI("#{SERVER}/kiosk/create_list"), bearer(owner[:token])))
+body405 = (JSON.parse(res405.body) rescue {})
+record(results, "MethodMismatch",
+       res405.code.to_i == 405 && body405["code"] == "method_not_allowed" &&
+         res405["allow"].to_s.upcase.include?("POST"),
+       "GET an action → #{res405.code}/#{body405['code'].inspect} Allow=#{res405['allow'].inspect} " \
+       "(want 405/\"method_not_allowed\"/POST)")
+
 # ── InviteCodeReplay — the member's used code, replayed by outsider → 403 ────
-rc, = post_json("/kiosk/run", { name: "accept_invite", code: invite_code }, bearer(outsider[:token]))
+rc, = post_json("/kiosk/accept_invite", { code: invite_code }, bearer(outsider[:token]))
 record(results, "InviteCodeReplay", rc == 403, "replay of used invite code → #{rc} (want 403)")
 
 # ── RevokedMemberAccess — remove the member, its next read is blocked → 403 ─
-post_json("/kiosk/run", { name: "remove_member", list_id: list_id, account_id: member[:user_id] }, bearer(owner[:token]))
-rc, = post_json("/kiosk/query", { name: "list_todos", list_id: list_id }, bearer(member[:token]))
+post_json("/kiosk/remove_member", { list_id: list_id, account_id: member[:user_id] }, bearer(owner[:token]))
+rc, = get_json("/kiosk/list_todos", { list_id: list_id }, bearer(member[:token]))
 record(results, "RevokedMemberAccess", rc == 403, "removed member's next read → #{rc} (want 403)")
 
 # ── Session-channel scenarios: Alice signs in for unlink + link ─────────────
@@ -234,14 +287,14 @@ record(results, "RevokedAgentKey",
 # principal change, so — like unlink — it watermark-revokes the key's pre-link
 # tokens. The PRE-LINK token no longer authenticates at all → 401.
 pl = register_agent("prelink")
-rc, plc = post_json("/kiosk/run", { name: "create_list", title: "Pre-link list" }, bearer(pl[:token]))
-pl_list = plc.dig("value", "list_id")
+rc, plc = post_json("/kiosk/create_list", { title: "Pre-link list" }, bearer(pl[:token]))
+pl_list = plc["list_id"]
 rc, link2 = post_json("/kiosk/auth/link", {}, { session: true })
 # Cross a second boundary so the pre-link token (minted at register above) is
 # unambiguously older than the rebind watermark — JWT iat is second-resolution.
 sleep 1.1
 rc, = post_json("/kiosk/auth/claim", { code: link2["link_code"], public_key: pl[:pem], signed: pop_proof(pl[:key], pl[:pem]) })
-rc, = post_json("/kiosk/query", { name: "list_todos", list_id: pl_list }, bearer(pl[:token]))
+rc, = get_json("/kiosk/list_todos", { list_id: pl_list }, bearer(pl[:token]))
 record(results, "PreLinkTokenAfterLink", rc == 401,
        "pre-link token after rebind → #{rc} (want 401 — watermark-revoked)")
 

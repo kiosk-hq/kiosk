@@ -4,8 +4,9 @@
 # bundled kiosk-pop IdP via register/login; the OAuth device-grant surface
 # is dormant), falls back to the bespoke
 # `agent:u-…:a-…:r-…` shape that StubIdp parses.
-# Lets the REST wire surface (/kiosk/query, /kiosk/run, /kiosk/pay,
-# /kiosk/schema) authenticate both legacy synthetic tokens AND real
+# Lets the REST wire surface (the per-verb endpoints GET/POST
+# /kiosk/<verb-name>, plus /kiosk/schema — tudu draws no /kiosk/pay)
+# authenticate both legacy synthetic tokens AND real
 # Kiosk-issued JWTs in the same test run.
 #
 # In production, a host app would pick ONE of these (or a real adapter

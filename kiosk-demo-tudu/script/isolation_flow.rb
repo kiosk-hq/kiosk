@@ -16,8 +16,10 @@
 #   1  Mallory's my_lists is EMPTY (she is a member of nothing).
 #   2  Mallory list_todos on the owner's list → 403 (non-member read denial).
 #   3  Mallory list_members on the owner's list → 403.
-#   4  Forged account_id arg on Mallory's create_list is IGNORED — the created
-#      list's DB account_id == Mallory (verified via psql in the rake task).
+#   4  Forged account_id arg on Mallory's create_list is REFUSED at the declared
+#      input contract (400 bad_request naming account_id), and Mallory's
+#      legitimate list is owned by Mallory in the DB (verified via psql in the
+#      rake task) — the principal comes from the token, and is not an input.
 #   5  A FOREIGN/used invite code — Mallory replays the Member's already-used
 #      code → 403 (single-use). A garbage code → 403.
 #   6  POSITIVE CONTROL: the Member (genuinely invited) DOES see the list in
@@ -39,6 +41,12 @@ require "securerandom"
 SERVER = ENV.fetch("SERVER_URL")
 ISSUER = ENV.fetch("KIOSK_ISSUER")
 
+# THE 0.4 WIRE. An action is `POST <mount>/<action-name>` with its arguments as
+# the JSON body; a query is `GET <mount>/<query-name>` with its arguments in the
+# query string. There is no `name` field and no /query or /run endpoint. A
+# success body IS the result — a bare array from a non-paginating query, the
+# action's own object from an action — and an error is an RFC 9457 problem
+# document whose branch point is the top-level `code`.
 def post_json(path, body, headers = {})
   uri = URI("#{SERVER}#{path}")
   req = Net::HTTP::Post.new(uri, { "Content-Type" => "application/json" }.merge(headers))
@@ -47,8 +55,9 @@ def post_json(path, body, headers = {})
   [res.code.to_i, (JSON.parse(res.body) rescue {})]
 end
 
-def get_json(path, headers = {})
+def get_json(path, params = {}, headers = {})
   uri = URI("#{SERVER}#{path}")
+  uri.query = URI.encode_www_form(params) unless params.empty?
   res = Net::HTTP.new(uri.host, uri.port).request(Net::HTTP::Get.new(uri, headers))
   [res.code.to_i, (JSON.parse(res.body) rescue {})]
 end
@@ -77,54 +86,68 @@ mallory = register_agent("mallory")
 results[:mallory_user_id] = mallory[:user_id]
 
 # Owner creates a private list.
-rc, created = post_json("/kiosk/run", { name: "create_list", title: "Private" }, bearer(owner[:token]))
+rc, created = post_json("/kiosk/create_list", { title: "Private" }, bearer(owner[:token]))
 abort "create_list failed (#{rc}): #{JSON.generate(created)}" unless rc == 200
-list_id = created.dig("value", "list_id")
+list_id = created["list_id"]
 results[:list_id] = list_id
 
 # Owner mints an invite; the Member (genuine) accepts it (positive control).
-rc, inv = post_json("/kiosk/run", { name: "invite", list_id: list_id }, bearer(owner[:token]))
+rc, inv = post_json("/kiosk/invite", { list_id: list_id }, bearer(owner[:token]))
 abort "invite failed (#{rc})" unless rc == 200
-member_code = inv.dig("value", "code")
-rc, acc = post_json("/kiosk/run", { name: "accept_invite", code: member_code }, bearer(member[:token]))
+member_code = inv["code"]
+rc, acc = post_json("/kiosk/accept_invite", { code: member_code }, bearer(member[:token]))
 abort "member accept failed (#{rc}): #{JSON.generate(acc)}" unless rc == 200
 
 # ── Assertion 1: Mallory's my_lists is empty ────────────────────────────────
-rc, m_lists = post_json("/kiosk/query", { name: "my_lists" }, bearer(mallory[:token]))
-results[:mallory_my_lists_empty] = rc == 200 && (m_lists["rows"] || []).empty?
+rc, m_lists = get_json("/kiosk/my_lists", {}, bearer(mallory[:token]))
+results[:mallory_my_lists_empty] = rc == 200 && Array(m_lists).empty?
 
 # ── Assertions 2 & 3: Mallory non-member reads → 403 ────────────────────────
-rc, = post_json("/kiosk/query", { name: "list_todos", list_id: list_id }, bearer(mallory[:token]))
+rc, = get_json("/kiosk/list_todos", { list_id: list_id }, bearer(mallory[:token]))
 results[:mallory_list_todos] = rc
-rc, = post_json("/kiosk/query", { name: "list_members", list_id: list_id }, bearer(mallory[:token]))
+rc, = get_json("/kiosk/list_members", { list_id: list_id }, bearer(mallory[:token]))
 results[:mallory_list_members] = rc
 
-# ── Assertion 4: forged account_id on Mallory's create_list is IGNORED ──────
-rc, forged = post_json("/kiosk/run",
-                       { name: "create_list", title: "Forged owner test", account_id: owner[:user_id] },
-                       bearer(mallory[:token]))
-abort "mallory forged create failed (#{rc})" unless rc == 200
-results[:forged_list_id] = forged.dig("value", "list_id")
+# ── Assertion 4: the principal is NOT an input ──────────────────────────────
+#
+# Mallory's token identifies Mallory; the forged arg supplies the owner's UUID.
+# On the 0.4 wire this is REFUSED before the handler runs: `create_list`
+# publishes `additionalProperties: false` and declares only `title` — the
+# principal is not one of its inputs — so the declared input contract answers a
+# typed 400 naming the parameter. (Through 0.3 the argument was accepted and
+# silently ignored; refusing it is the stricter answer and the one the published
+# contract requires.)
+forged_rc, forged = post_json("/kiosk/create_list",
+                              { title: "Forged owner test", account_id: owner[:user_id] },
+                              bearer(mallory[:token]))
+results[:forged_refusal] = [forged_rc, forged["code"], forged["detail"]]
+
+# And the second half, which the refusal does not by itself prove: ownership is
+# taken from the AUTHENTICATED identity. Mallory creates a list legitimately;
+# the rake task reads the row back and asserts account_id == Mallory.
+rc, legit = post_json("/kiosk/create_list", { title: "Owner-from-token test" }, bearer(mallory[:token]))
+abort "mallory create_list failed (#{rc}): #{JSON.generate(legit)}" unless rc == 200
+results[:owner_probe_list_id] = legit["list_id"]
 
 # ── Assertion 5: replayed (used) invite code + garbage code → 403 ───────────
-rc, = post_json("/kiosk/run", { name: "accept_invite", code: member_code }, bearer(mallory[:token]))
+rc, = post_json("/kiosk/accept_invite", { code: member_code }, bearer(mallory[:token]))
 results[:mallory_replay_used_code] = rc
-rc, = post_json("/kiosk/run", { name: "accept_invite", code: "not-a-real-code" }, bearer(mallory[:token]))
+rc, = post_json("/kiosk/accept_invite", { code: "not-a-real-code" }, bearer(mallory[:token]))
 results[:mallory_garbage_code] = rc
 
 # ── Assertion 6: POSITIVE CONTROL — the Member DOES see + read the list ─────
-rc, mem_lists = post_json("/kiosk/query", { name: "my_lists" }, bearer(member[:token]))
-results[:member_sees_list] = rc == 200 && (mem_lists["rows"] || []).any? { |r| r["list_id"] == list_id }
-rc, = post_json("/kiosk/query", { name: "list_todos", list_id: list_id }, bearer(member[:token]))
+rc, mem_lists = get_json("/kiosk/my_lists", {}, bearer(member[:token]))
+results[:member_sees_list] = rc == 200 && Array(mem_lists).any? { |r| r["list_id"] == list_id }
+rc, = get_json("/kiosk/list_todos", { list_id: list_id }, bearer(member[:token]))
 results[:member_reads_todos] = rc
 
 # ── Assertion 7: after remove_member, the Member's next read → 403 ──────────
-rc, rem = post_json("/kiosk/run",
-                    { name: "remove_member", list_id: list_id, account_id: member[:user_id] },
+rc, rem = post_json("/kiosk/remove_member",
+                    { list_id: list_id, account_id: member[:user_id] },
                     bearer(owner[:token]))
 results[:remove_member_status] = rc
 abort "remove_member failed (#{rc}): #{JSON.generate(rem)}" unless rc == 200
-rc, = post_json("/kiosk/query", { name: "list_todos", list_id: list_id }, bearer(member[:token]))
+rc, = get_json("/kiosk/list_todos", { list_id: list_id }, bearer(member[:token]))
 results[:member_after_removal] = rc
 
 puts JSON.generate(results)

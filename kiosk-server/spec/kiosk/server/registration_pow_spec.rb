@@ -31,10 +31,13 @@ RSpec.describe Kiosk::Server::RegistrationPow do
     end
   end
 
-  # A KAT challenge bound to the register fingerprint (public key), exactly what
-  # the gate itself emits.
+  # A KAT challenge bound to the register fingerprint, exactly what the gate
+  # itself emits. Since the 0.4 cutover that fingerprint is §3.4's
+  # SHA256("<METHOD> <verb>\n<canonical args>") — here `POST auth/register`
+  # over the public key being registered.
   def kat_challenge(id:, pem: PEM)
-    fp = Kiosk::Server::PowGate.request_fingerprint(command: "auth/register", body: { public_key: pem })
+    fp = Kiosk::Server::PowGate.request_fingerprint(method: "POST", verb: "auth/register",
+                                                    body: { public_key: pem })
     Kiosk::Reputation::Challenge.issue(
       alg: "equihash", params: KAT_PARAMS, request_fingerprint: fp,
       secret: secret, ttl: 300, salt: "kat".b, id: id,
@@ -77,6 +80,27 @@ RSpec.describe Kiosk::Server::RegistrationPow do
               nonce: KAT_NONCE }
     expect {
       Kiosk::Server::RegistrationPow.gate(public_key_pem: PEM, pow: { proofs: [other] })
+    }.to raise_error(Kiosk::Server::Errors::PowRequired)
+  end
+
+  # §3.4 binds the toll to the CALL, not only to its arguments: the registration
+  # challenge is minted for `POST auth/register`, so a challenge carrying the
+  # same public key under any other method/verb pair is not spendable here even
+  # though its HMAC is genuinely ours.
+  it "binds proofs to POST auth/register (the same key under another call re-challenges)" do
+    configure(count: 1)
+    elsewhere_fp = Kiosk::Server::PowGate.request_fingerprint(
+      method: "GET", verb: "auth/register", body: { public_key: PEM },
+    )
+    elsewhere = Kiosk::Reputation::Challenge.issue(
+      alg: "equihash", params: KAT_PARAMS, request_fingerprint: elsewhere_fp,
+      secret: secret, ttl: 300, salt: "kat".b, id: "r-elsewhere",
+    )
+
+    expect {
+      Kiosk::Server::RegistrationPow.gate(
+        public_key_pem: PEM, pow: { proofs: [{ challenge: elsewhere, nonce: KAT_NONCE }] },
+      )
     }.to raise_error(Kiosk::Server::Errors::PowRequired)
   end
 

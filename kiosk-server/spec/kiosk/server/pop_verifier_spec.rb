@@ -72,6 +72,12 @@ RSpec.describe Kiosk::Server::PopVerifier do
   # replay it at <bank>/auth/login for full account takeover.
   describe "audience-mismatch rejection (K-511)" do
     # The wire half: nothing that could be mistaken for an `aud` to sign.
+    #
+    # The 0.4 problem document carries ONE URL of its own — `type`, the
+    # per-code constant minted from {Errors::PROBLEM_TYPE_BASE}. It is the
+    # name of the code, never anything the caller sent, and it is the same
+    # string on every occurrence, so it cannot carry an origin back. Take it
+    # out and NO origin may remain anywhere in the document.
     it "names NO origin on the wire — not the configured issuer, not any other" do
       error = nil
       silencing_operator_log do
@@ -80,7 +86,9 @@ RSpec.describe Kiosk::Server::PopVerifier do
         error = e
       end
 
-      wire = error.to_envelope.to_s
+      problem = error.to_problem
+      expect(problem[:type]).to eq("https://kiosk.tech/problems/unauthenticated")
+      wire = problem.except(:type).to_s
       expect(wire).not_to include(issuer)
       expect(wire).not_to include("https://")
       expect(error.hint).to eq(
@@ -89,7 +97,7 @@ RSpec.describe Kiosk::Server::PopVerifier do
       )
     end
 
-    it "still renders the documented 401 envelope" do
+    it "still renders the documented 401 problem document" do
       error = nil
       silencing_operator_log do
         described_class.verify!(public_key_pem: pem, signed: sign(aud: "https://evil.example"))
@@ -97,13 +105,16 @@ RSpec.describe Kiosk::Server::PopVerifier do
         error = e
       end
 
-      expect(error.to_envelope).to eq(
-        ok: false,
-        error: {
-          code:    "unauthenticated",
-          message: "proof audience mismatch",
-          hint:    Kiosk::Server::PopVerifier::AUDIENCE_HINT,
-        },
+      # RFC 9457 (T-072 = C): the old envelope's `message` is `detail`, the
+      # closed-vocabulary token stays verbatim as the TOP-LEVEL `code`, and
+      # `hint` — the whole subject of K-511 — is untouched.
+      expect(error.to_problem).to eq(
+        type:   "https://kiosk.tech/problems/unauthenticated",
+        title:  "Not authenticated",
+        status: 401,
+        detail: "proof audience mismatch",
+        code:   "unauthenticated",
+        hint:   Kiosk::Server::PopVerifier::AUDIENCE_HINT,
       )
       expect(error.http_status).to eq(401)
     end

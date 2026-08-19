@@ -10,14 +10,34 @@ require "json"
 
 RSpec.describe "wire-surface controller auth" do
   def dispatch(controller, action, env)
-    status, _headers, body = controller.action(action).call(env)
+    status, headers, body = controller.action(action).call(env)
     raw = +""
     body.each { |chunk| raw << chunk }
+    @last_headers = headers
     [status, raw.empty? ? {} : JSON.parse(raw, symbolize_names: true)]
   end
 
+  def last_headers = @last_headers
+
   def bearer_env(path, token, **opts)
     Rack::MockRequest.env_for(path, "HTTP_AUTHORIZATION" => "Bearer #{token}", **opts)
+  end
+
+  # EVERY refusal on the wire and the auth plane is an RFC 9457 problem
+  # document since the 0.4 cutover: `application/problem+json` (the media type
+  # is half of what makes it one), a per-code `type` URI and `title`, the
+  # status restated in the body, and the SAME closed-vocabulary token — moved
+  # from `error.code` to the TOP-LEVEL `code`, with the old `message` as
+  # `detail`. The one deliberate exception is `/oauth/*`, which keeps RFC
+  # 8628's own error object; that block below asserts it unchanged.
+  def expect_problem(status, body, http:, code:, detail: nil)
+    expect(status).to eq(http)
+    expect(last_headers["Content-Type"]).to include("application/problem+json")
+    expect(body[:type]).to   eq("https://kiosk.tech/problems/#{code}")
+    expect(body[:title]).to  eq(Kiosk::Server::Errors::TITLES.fetch(code))
+    expect(body[:status]).to eq(http)
+    expect(body[:code]).to   eq(code)
+    expect(body[:detail]).to include(detail) if detail
   end
 
   # ─── bad tokens on a wire endpoint are 401, never 500 ────────────
@@ -44,14 +64,12 @@ RSpec.describe "wire-surface controller auth" do
         now:      Time.now - 7200,
       )
       status, body = schema_status_for(token)
-      expect(status).to eq(401)
-      expect(body.dig(:error, :code)).to eq("unauthenticated")
+      expect_problem(status, body, http: 401, code: "unauthenticated")
     end
 
     it "returns 401 Unauthenticated (not 500) for a GARBAGE token" do
       status, body = schema_status_for("garbage-not-a-jwt")
-      expect(status).to eq(401)
-      expect(body.dig(:error, :code)).to eq("unauthenticated")
+      expect_problem(status, body, http: 401, code: "unauthenticated")
     end
 
     it "returns 401 Unauthenticated (not 500) for a REVOKED token" do
@@ -62,8 +80,7 @@ RSpec.describe "wire-surface controller auth" do
       )
       Kiosk.configuration.revocation_store.revoke_all("a-rev", at: Time.now.to_i)
       status, body = schema_status_for(token)
-      expect(status).to eq(401)
-      expect(body.dig(:error, :code)).to eq("unauthenticated")
+      expect_problem(status, body, http: 401, code: "unauthenticated")
     end
 
     it "returns 401 Unauthenticated (not 500) for a WRONGLY-SIGNED token" do
@@ -73,32 +90,57 @@ RSpec.describe "wire-surface controller auth" do
         audience: "https://demo.example", signing_key: other,
       )
       status, body = schema_status_for(token)
-      expect(status).to eq(401)
-      expect(body.dig(:error, :code)).to eq("unauthenticated")
+      expect_problem(status, body, http: 401, code: "unauthenticated")
     end
 
-    # parse_body! raises Errors::BadRequest on a malformed body; it must
-    # render a 400 envelope, not escape run_command's rescue as an uncaught 500.
-    def query_status_for(raw_body)
-      token = Kiosk::Server::JwtIssuer.issue(
+    def wire_token
+      Kiosk::Server::JwtIssuer.issue(
         claims:   { sub: "u-1", agent_id: "a-1", role: "customer", actor: "agent" },
         audience: "https://demo.example",
       )
-      dispatch(Kiosk::Server::WireController, :query,
-               bearer_env("/kiosk/query", token, method: "POST",
+    end
+
+    # parse_body! raises Errors::BadRequest on a malformed body; it must render
+    # a 400 problem document, not escape the action's rescue as an uncaught 500.
+    #
+    # `POST /kiosk/query`, the 0.3 endpoint this pair dialed, was DELETED at
+    # the cutover (T-074 = A). Its successor is the per-verb wire — `POST
+    # <endpoint>/<action-name>`, the verb as a PATH SEGMENT — and the verb has
+    # to be REGISTERED for a request to reach the body at all, because name
+    # resolution runs before the arguments are read.
+    def post_verb(name, raw_body)
+      env = bearer_env("/kiosk/#{name}", wire_token, method: "POST",
+                       input: raw_body, "CONTENT_TYPE" => "application/json")
+      env["action_dispatch.request.path_parameters"] =
+        { controller: "kiosk/server/verb", action: "create", kiosk_verb: name }
+      dispatch(Kiosk::Server::VerbController, :create, env)
+    end
+
+    # The other surviving body-reading POST, and the SAME
+    # WireController#parse_body! the deleted `query` action ran — literally the
+    # same seam in the same class.
+    def post_pay(raw_body)
+      dispatch(Kiosk::Server::WireController, :pay,
+               bearer_env("/kiosk/pay", wire_token, method: "POST",
                           input: raw_body, "CONTENT_TYPE" => "application/json"))
     end
 
+    # Dialed at `pay` rather than at a verb path, deliberately: a per-verb call
+    # reads its name off `params[:kiosk_verb]`, and touching `params` makes
+    # Rails parse the body FIRST — so syntactically invalid JSON there is
+    # ActionDispatch::Http::Parameters::ParseError out of the parameter layer
+    # (which a Rails host maps to 400 via rescue_responses) and never reaches
+    # Kiosk's own guard. `pay` runs that guard, so this proves it where it runs.
     it "returns 400 bad_request (not 500) for INVALID JSON on a wire POST" do
-      status, body = query_status_for("{not valid json")
-      expect(status).to eq(400)
-      expect(body.dig(:error, :code)).to eq("bad_request")
+      status, body = post_pay("{not valid json")
+      expect_problem(status, body, http: 400, code: "bad_request", detail: "invalid JSON")
     end
 
     it "returns 400 bad_request (not 500) for a non-object JSON body on a wire POST" do
-      status, body = query_status_for("[1, 2, 3]")
-      expect(status).to eq(400)
-      expect(body.dig(:error, :code)).to eq("bad_request")
+      declare_action("place_order") { render json: {} }
+      status, body = post_verb("place_order", "[1, 2, 3]")
+      expect_problem(status, body, http: 400, code: "bad_request",
+                     detail: "must be a JSON object")
     end
   end
 
@@ -200,14 +242,12 @@ RSpec.describe "wire-surface controller auth" do
       Kiosk.configure { |c| c.user_idp = custom_idp }
 
       status, body = dispatch(Kiosk::Server::KycAttestationController, :create, kyc_env)
-      expect(status).to eq(401)
-      expect(body.dig(:error, :code)).to eq("unauthenticated")
+      expect_problem(status, body, http: 401, code: "unauthenticated")
     end
 
     it "returns 401 for a foreign token under the zero-config default (bundled kiosk-pop idp)" do
       status, body = dispatch(Kiosk::Server::KycAttestationController, :create, kyc_env)
-      expect(status).to eq(401)
-      expect(body.dig(:error, :code)).to eq("unauthenticated")
+      expect_problem(status, body, http: 401, code: "unauthenticated")
     end
 
     # An authenticated request with a malformed body must be a clean 400
@@ -222,8 +262,7 @@ RSpec.describe "wire-surface controller auth" do
       Kiosk.configure { |c| c.agent_idp = custom_idp }
 
       status, body = dispatch(Kiosk::Server::KycAttestationController, :create, kyc_env_with_body(""))
-      expect(status).to eq(400)
-      expect(body.dig(:error, :code)).to eq("bad_request")
+      expect_problem(status, body, http: 400, code: "bad_request")
     end
 
     it "returns 400 BadRequest (not 500) for a scalar/array body (TypeError on body[:kyc_jws])" do
@@ -231,8 +270,7 @@ RSpec.describe "wire-surface controller auth" do
 
       status, body = dispatch(Kiosk::Server::KycAttestationController, :create,
                               kyc_env_with_body("[1,2,3]"))
-      expect(status).to eq(400)
-      expect(body.dig(:error, :code)).to eq("bad_request")
+      expect_problem(status, body, http: 400, code: "bad_request")
     end
 
     # A well-formed JSON OBJECT that simply omits kyc_jws is a distinct
@@ -243,9 +281,7 @@ RSpec.describe "wire-surface controller auth" do
 
       status, body = dispatch(Kiosk::Server::KycAttestationController, :create,
                               kyc_env_with_body(JSON.generate(not_kyc_jws: "x")))
-      expect(status).to eq(400)
-      expect(body.dig(:error, :code)).to eq("bad_request")
-      expect(body.dig(:error, :message)).to include("kyc_jws")
+      expect_problem(status, body, http: 400, code: "bad_request", detail: "kyc_jws")
     end
   end
 
@@ -290,8 +326,7 @@ RSpec.describe "wire-surface controller auth" do
     it "still 401s garbage under the zero-config default" do
       status, body = dispatch(Kiosk::Server::WireController, :schema,
                               bearer_env("/kiosk/schema", "garbage"))
-      expect(status).to eq(401)
-      expect(body.dig(:error, :code)).to eq("unauthenticated")
+      expect_problem(status, body, http: 401, code: "unauthenticated")
     end
 
     it "falls through to user_idp when the agent idp resolves nothing (no Authorization header)" do

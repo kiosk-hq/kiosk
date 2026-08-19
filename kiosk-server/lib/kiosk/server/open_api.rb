@@ -4,6 +4,7 @@ require "json"
 require "kiosk/server/actions"
 require "kiosk/server/argument_decoder"
 require "kiosk/server/errors"
+require "kiosk/server/handler_mixin"
 require "kiosk/server/queries"
 require "kiosk/server/well_known"
 
@@ -76,15 +77,31 @@ module Kiosk
     #      injection stands down, because two parameters with the same
     #      `name`+`in` is an invalid document.
     #
-    # ── What the document describes, and what it deliberately omits ──────
+    # ── What the document describes ──────────────────────────────────────
     #
-    # ONLY the per-verb wire: `GET <endpoint>/<query-name>` and
-    # `POST <endpoint>/<action-name>`. `schema` and `pay` are NOT in it,
-    # because until the cutover slice they still answer the 0.3 envelope
-    # (T-074 = A) — describing them today would mean publishing an envelope
-    # that is being deleted, which is exactly the drift this renderer exists
-    # to make impossible. They join the document in the same wave that moves
-    # them onto the 0.4 shape.
+    # The whole wire: `GET <endpoint>/<query-name>`,
+    # `POST <endpoint>/<action-name>`, and the two RESERVED endpoints
+    # `GET <endpoint>/schema` and `POST <endpoint>/pay`, which joined at the
+    # 0.4 cutover in the same wave that moved them onto the payload-verbatim
+    # shape (T-074 = A). Before that they still answered the 0.3 envelope, and
+    # describing them would have published an envelope that was being deleted.
+    #
+    # THE TWO RESERVED OPERATIONS ARE THE ONE PLACE THIS RENDERER SPEAKS FOR
+    # ITSELF, and it is worth being precise about why that is not the drift
+    # the file exists to prevent. `schema` and `pay` are not the OPERATOR's
+    # verbs: no `Kiosk::Query`/`Kiosk::Action` declaration produces them,
+    # nobody can register them (they are in
+    # {HandlerMixin::RESERVED_NAMES}), and their contract is fixed by the
+    # SPECIFICATION — §8.3 for the catalog, §11.3 for the settlement — not by
+    # anything on this origin. So describing them here restates the protocol,
+    # exactly as {INFO_DESCRIPTION} already does, and the invariant that
+    # matters is untouched: nothing here may say anything about an OPERATOR
+    # verb that the verb's own three fields do not.
+    #
+    # Both are gated on `config.capabilities`, which is computed from the live
+    # registry and drops `pay` on an origin with no payment provider — so the
+    # document describes what this origin ANSWERS, never what the protocol
+    # allows in general.
     module OpenApi
       # The OAS version the document declares. 3.1.x is the line whose Schema
       # Objects ARE JSON Schema 2020-12, which is what makes embedding a
@@ -150,8 +167,18 @@ module Kiosk
       def self.build(base_url:, config: Kiosk.configuration)
         endpoint = base_url.to_s.chomp("/") + config.mount_path
 
+        modules = Array(config.capabilities).map(&:to_s)
         schemas = { "Problem" => problem_schema }
         paths   = {}
+
+        if modules.include?("schema")
+          schemas.merge!(schema_components)
+          paths["/schema"] = { get: schema_operation }
+        end
+        if modules.include?("pay")
+          schemas.merge!(pay_components)
+          paths["/pay"] = { post: pay_operation }
+        end
 
         entries.each do |kind, descriptor|
           name = descriptor[:name].to_s
@@ -177,6 +204,7 @@ module Kiosk
           servers:           [{ url: endpoint, description: "This origin's Kiosk endpoint." }],
           security:          [{ bearerAuth: [] }],
           tags:              [
+            { name: "wire",    description: "The protocol's own reserved endpoints." },
             { name: "queries", description: "Reads. GET, arguments in the query string." },
             { name: "actions", description: "Writes. POST, arguments in a JSON body." },
           ],
@@ -310,10 +338,7 @@ module Kiosk
             },
           },
         }
-        problem_statuses.each do |status|
-          out[status.to_s] = { "$ref": "#/components/responses/problem#{status}" }
-        end
-        out
+        out.merge(problem_refs)
       end
       private_class_method :responses
 
@@ -419,6 +444,146 @@ module Kiosk
         end
       end
       private_class_method :contains_ref?
+
+      # ── the two RESERVED endpoints (spec §8.3 and §11.3) ────────────────
+      #
+      # See the module note for why these are declared here rather than
+      # derived: they are the PROTOCOL's verbs, not the operator's, and no
+      # declaration on this origin describes them.
+
+      def self.schema_operation
+        {
+          operationId: "schema",
+          tags:        ["wire"],
+          description: "This origin's catalog: the modules it serves and every query " \
+                       "and action it publishes, with their descriptions and schemas. " \
+                       "THE canonical surface description — this OpenAPI document is " \
+                       "derived from it.",
+          responses:   {
+            "200" => {
+              description: "The catalog.",
+              content:     {
+                "application/json" => {
+                  schema: { "$ref": "#/components/schemas/schema.response" },
+                },
+              },
+            },
+          }.merge(problem_refs),
+        }
+      end
+      private_class_method :schema_operation
+
+      # The descriptor shape §8.3 fixes. `params` is the RETIRED slot and is
+      # published as null; `input_schema`/`output_schema` are REQUIRED and are
+      # arbitrary draft-2020-12 documents, so they are described as objects
+      # rather than constrained — a schema for a schema would be a second
+      # statement of what draft 2020-12 already says.
+      def self.schema_components
+        {
+          "schema.response" => {
+            type:                 "object",
+            title:                "The `schema` catalog",
+            properties:           {
+              verbs:   { type: "array", items: { type: "string" },
+                         description: "The MODULES this origin serves — byte-identical to " \
+                                      "`capabilities` in /.well-known/kiosk.json." },
+              queries: { type: "array", items: { "$ref": "#/components/schemas/schema.descriptor" } },
+              actions: { type: "array", items: { "$ref": "#/components/schemas/schema.descriptor" } },
+            },
+            required:             %w[verbs queries actions],
+            additionalProperties: false,
+          },
+          "schema.descriptor" => {
+            type:       "object",
+            title:      "One verb descriptor",
+            properties: {
+              name:           { type: "string", pattern: HandlerMixin::NAME_PATTERN.source },
+              description:    { type: %w[string null],
+                                description: "The verb's SEMANTICS, in prose. Authoritative." },
+              params:         { type: "null", description: "Retired (spec §8.3); always null." },
+              input_schema:   { type: "object",
+                                description: "JSON Schema (draft 2020-12) for this verb's inputs. " \
+                                             "The authoritative input contract." },
+              output_schema:  { type: "object",
+                                description: "JSON Schema (draft 2020-12) for what this verb returns." },
+              example_params: { description: "OPTIONAL example inputs." },
+              example_row:    { description: "OPTIONAL example of one result element." },
+            },
+            required:   %w[name description input_schema output_schema],
+          },
+        }
+      end
+      private_class_method :schema_components
+
+      def self.pay_operation
+        {
+          operationId: "pay",
+          tags:        ["wire"],
+          description: "Settle an AP2 cart: submit the signed intent -> cart -> payment " \
+                       "mandate chain. Answers 402 `payment_setup_required` when the " \
+                       "identity has no card on file and 402 `payment_failed` when the " \
+                       "charge did not settle — branch on the problem document's `code`.",
+          requestBody: {
+            required: true,
+            content:  {
+              "application/json" => {
+                schema: { "$ref": "#/components/schemas/pay.request" },
+              },
+            },
+          },
+          responses:   {
+            "200" => {
+              description: "The settlement receipt.",
+              content:     {
+                "application/json" => {
+                  schema: { "$ref": "#/components/schemas/pay.response" },
+                },
+              },
+            },
+          }.merge(problem_refs),
+        }
+      end
+      private_class_method :pay_operation
+
+      # Request: §11's three mandates. Response: the four fields
+      # {Executor#verb_pay} renders, and only those.
+      def self.pay_components
+        jws = ->(what) { { type: "string", description: "Compact RS256 JWS: the signed #{what} mandate." } }
+        {
+          "pay.request"  => {
+            type:                 "object",
+            title:                "The AP2 mandate chain",
+            properties:           {
+              intent_mandate_jws:  jws.call("intent"),
+              cart_mandate_jws:    jws.call("cart"),
+              payment_mandate_jws: jws.call("payment"),
+            },
+            required:             %w[intent_mandate_jws cart_mandate_jws payment_mandate_jws],
+            additionalProperties: false,
+          },
+          "pay.response" => {
+            type:                 "object",
+            title:                "Settlement receipt",
+            properties:           {
+              settlement_id:        { type: "string", description: "This origin's settlement row id." },
+              psp_reference:        { type: "string", description: "The processor's own reference." },
+              settled_amount_cents: { type: "integer" },
+              currency:             { type: "string" },
+            },
+            required:             %w[settlement_id psp_reference settled_amount_cents currency],
+            additionalProperties: false,
+          },
+        }
+      end
+      private_class_method :pay_components
+
+      # The problem responses every operation carries, as `$ref`s.
+      def self.problem_refs
+        problem_statuses.each_with_object({}) do |status, out|
+          out[status.to_s] = { "$ref": "#/components/responses/problem#{status}" }
+        end
+      end
+      private_class_method :problem_refs
 
       # ── components that are the same for every origin ───────────────────
 

@@ -6,8 +6,8 @@
 #
 # in its config/routes.rb gets the ENTIRE shipped surface:
 #
-#   * the wire verbs        — GET schema, POST query / run / pay
-#   * the per-verb wire     — GET <query-name>, POST <action-name> (0.4)
+#   * the reserved wire     — GET schema, POST pay
+#   * the per-verb wire     — GET <query-name>, POST <action-name>
 #   * the kiosk-pop plane   — GET auth/challenge, POST auth/{register,login,revoke}
 #   * JWKS                  — GET .well-known/jwks.json (under the mount)
 #   * KYC attestation       — POST agents/kyc
@@ -121,16 +121,27 @@ module Kiosk
       end
 
       # Everything mount-prefixed. `isolate_namespace` scopes the drawer to
-      # the kiosk/server controller namespace, so "wire#run" resolves to
-      # Kiosk::Server::WireController#run.
+      # the kiosk/server controller namespace, so "wire#schema" resolves to
+      # Kiosk::Server::WireController#schema.
       routes do
-        # Wire verbs. `pay` is drawn unconditionally: a host with no
-        # payment_provider answers it with the wire's own 403 envelope
-        # ("no payment_provider configured"), and discovery already drops
-        # `pay` from the advertised capabilities.
+        # The two RESERVED wire endpoints. Every OTHER verb is served by the
+        # per-verb pair at the bottom of this table, so these two are drawn
+        # here for one reason only: they are the wire's own, not the
+        # operator's, and drawing them first is what makes them unshadowable
+        # (see the per-verb block below).
+        #
+        # `pay` is drawn unconditionally: a host with no payment_provider
+        # answers it with the wire's own 403 ("no payment_provider
+        # configured"), and discovery already drops `pay` from the advertised
+        # capabilities.
+        #
+        # `POST query` and `POST run` — 0.3's multiplexed pair — are GONE
+        # (T-074 = A, the hard cut). Not tombstoned, not 404-with-a-hint:
+        # there is no route, so an origin serving 0.4 has exactly ONE wire
+        # surface and exactly one conformance surface. A caller still speaking
+        # 0.3 gets a routing 404 with no Kiosk body, which is the honest
+        # answer — that endpoint does not exist here.
         get  "schema", to: "wire#schema"
-        post "query",  to: "wire#query"
-        post "run",    to: "wire#run"
         post "pay",    to: "wire#pay"
 
         # kiosk-pop auth plane (challenge-response proof-of-possession).

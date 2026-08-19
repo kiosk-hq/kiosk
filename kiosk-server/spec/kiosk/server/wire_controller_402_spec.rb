@@ -6,7 +6,11 @@
 # NAMES the gate (Kiosk-PoW vs Payment) so a client can disambiguate at the
 # header level, while the JSON body STILL carries the structured payload (the
 # PoW N-challenge list / the payment_setup pointer). Both 402s render through
-# WireController#render_envelope.
+# WireController#render_wire_error — since the 0.4 cutover that is an RFC 9457
+# problem document served as `application/problem+json`, so the code a client
+# branches on is the TOP-LEVEL `code` member and the hint/challenges payload
+# rides alongside it as extension members. Neither half of the de-overloading
+# moved: the header still names the gate, the body still carries the payload.
 #
 # Dispatch goes through `ActionController::Metal.action(...)`, a plain Rack
 # app — no Rails host.
@@ -61,18 +65,33 @@ RSpec.describe "WireController 402 WWW-Authenticate (W4)" do
 
     after { Kiosk::Reputation::Backends.reset! }
 
-    it "carries WWW-Authenticate: Kiosk-PoW AND the challenges body" do
-      status, headers, body = dispatch(
-        :query,
-        bearer_env("/kiosk/query", agent_token, method: "POST",
-                   input: JSON.generate(name: "menu"), "CONTENT_TYPE" => "application/json"),
+    # THE RESERVED PLANE pays the same toll and answers the same way. `pay` is
+    # not a per-verb endpoint — it is one of the two the engine draws itself —
+    # and through 0.3 it answered the envelope while the per-verb wire answered
+    # a problem document. The cutover deleted that split: there is one answer
+    # shape on every Kiosk endpoint now, and this is `POST <endpoint>/pay`
+    # proving it for the PoW gate.
+    it "carries WWW-Authenticate: Kiosk-PoW AND the challenges, on the reserved POST pay" do
+      status, headers, problem = dispatch(
+        :pay,
+        bearer_env("/kiosk/pay", agent_token, method: "POST",
+                   input: JSON.generate(
+                     intent_mandate_jws: "x", cart_mandate_jws: "y", payment_mandate_jws: "z",
+                   ),
+                   "CONTENT_TYPE" => "application/json"),
       )
       expect(status).to eq(402)
       expect(headers["WWW-Authenticate"]).to eq('Kiosk-PoW realm="https://demo.example"')
+      expect(headers["Content-Type"]).to include("application/problem+json")
       # Body payload preserved (header names, body carries).
-      expect(body.dig(:error, :code)).to eq("pow_required")
-      expect(body.dig(:error, :challenges)).to be_an(Array)
-      expect(body.dig(:error, :challenges)).not_to be_empty
+      expect(problem[:code]).to   eq("pow_required")
+      expect(problem[:type]).to   eq("https://kiosk.tech/problems/pow_required")
+      expect(problem[:status]).to eq(402)
+      expect(problem[:challenges]).to be_an(Array)
+      expect(problem[:challenges]).not_to be_empty
+      # The retired envelope leaves no residue at either nesting.
+      expect(problem).not_to have_key(:ok)
+      expect(problem).not_to have_key(:error)
     end
 
     # THE SAME GATE ON THE 0.4 PER-VERB WIRE (T-068 slice 2). Everything that
@@ -126,7 +145,7 @@ RSpec.describe "WireController 402 WWW-Authenticate (W4)" do
     end
 
     it "carries WWW-Authenticate: Payment ... method=\"ap2\" AND the body pointer" do
-      status, headers, body = dispatch(
+      status, headers, problem = dispatch(
         :pay,
         bearer_env("/kiosk/pay", agent_token, method: "POST",
                    input: JSON.generate(
@@ -136,9 +155,15 @@ RSpec.describe "WireController 402 WWW-Authenticate (W4)" do
       )
       expect(status).to eq(402)
       expect(headers["WWW-Authenticate"]).to eq('Payment realm="https://demo.example", method="ap2"')
+      expect(headers["Content-Type"]).to include("application/problem+json")
       # Body payload preserved: the payment_setup_required code + hint pointer.
-      expect(body.dig(:error, :code)).to eq("payment_setup_required")
-      expect(body.dig(:error, :hint)).to include("payment_setup")
+      # The OTHER 402 of the pair — same status, same endpoint, different code —
+      # which is exactly why the code member is the branch point.
+      expect(problem[:code]).to   eq("payment_setup_required")
+      expect(problem[:type]).to   eq("https://kiosk.tech/problems/payment_setup_required")
+      expect(problem[:status]).to eq(402)
+      expect(problem[:hint]).to include("payment_setup")
+      expect(problem).not_to have_key(:challenges)
     end
   end
 

@@ -53,8 +53,19 @@ class HandDrawnController < ActionController::API
   def hand = render(plain: "HAND-DRAWN")
 end
 
-def request(method, path)
+# A Bearer token the bundled kiosk-pop IdP accepts: the probe configured the
+# signing key and the issuer above, and DefaultAgentIdp#verify checks nothing
+# else — no database is touched. It exists so the probe can reach a gate PAST
+# `401`, which is the only way to tell "this path is the 0.3 wire" apart from
+# "this path is an unregistered verb name" through the real Rack stack.
+TOKEN = Kiosk::Server::JwtIssuer.issue(
+  claims:   { sub: "u-1", agent_id: "a-1", actor: "agent" },
+  audience: "http://localhost",
+).freeze
+
+def request(method, path, auth: false)
   env = Rack::MockRequest.env_for("http://localhost#{path}", method: method)
+  env["HTTP_AUTHORIZATION"] = "Bearer #{TOKEN}" if auth
   status, headers, raw = Rails.application.call(env)
   body = +""
   raw.each { |chunk| body << chunk }
@@ -75,8 +86,6 @@ SURFACE = [
   ["GET",  "/.well-known/kiosk.json"],
   ["GET",  "/.well-known/api-catalog"],
   ["GET",  "/kiosk/schema"],
-  ["POST", "/kiosk/query"],
-  ["POST", "/kiosk/run"],
   ["POST", "/kiosk/pay"],
   ["GET",  "/kiosk/auth/challenge"],
   ["POST", "/kiosk/auth/register"],
@@ -96,8 +105,22 @@ SURFACE = [
   ["POST", "/kiosk/auth/assistants/unlink"],
 ].freeze
 
+# The 0.3 multiplexed pair, dialed WITH a Bearer token (T-074 = A). Anonymous
+# these two answer `401`, exactly like every other single-segment path under
+# the mount — which proves nothing about whether the old wire is still there.
+# Authenticated, the answer is the per-verb wire's ordinary `404 not_found`
+# for a name nobody registered, and that is the cut.
+AUTHENTICATED = [
+  ["POST", "/kiosk/query"],
+  ["POST", "/kiosk/run"],
+].freeze
+
 def surface_snapshot
-  SURFACE.to_h { |method, path| ["#{method} #{path}", request(method, path)] }
+  snapshot = SURFACE.to_h { |method, path| ["#{method} #{path}", request(method, path)] }
+  AUTHENTICATED.each do |method, path|
+    snapshot["#{method} #{path} (bearer)"] = request(method, path, auth: true)
+  end
+  snapshot
 end
 
 report = {}

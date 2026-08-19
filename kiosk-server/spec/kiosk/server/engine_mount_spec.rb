@@ -90,36 +90,57 @@ RSpec.describe "mount Kiosk::Server::Engine (the one-line surface)" do
       expect(res["headers"]).to have_key("kiosk-server-version")
     end
 
-    it "routes the wire verbs into WireController (401 envelope, not 404)" do
+    it "routes the two RESERVED wire endpoints into WireController (401 problem, not 404)" do
+      # Two, not four: `POST <endpoint>/{query,run}` were DELETED at the 0.4
+      # cutover (T-074 = A) — see the example below for what answers there now.
       {
         "GET /kiosk/schema" => "schema",
-        "POST /kiosk/query" => "query",
-        "POST /kiosk/run"   => "run",
         "POST /kiosk/pay"   => "pay",
       }.each do |request_line, verb|
         res = probe("mounted", request_line)
         expect(res["status"]).to eq(401), "#{verb}: expected 401, got #{res["status"]}"
-        expect(JSON.parse(res["body"]).dig("error", "code")).to eq("unauthenticated")
+        expect(res["headers"]["content-type"]).to include("application/problem+json")
+        expect(JSON.parse(res["body"])["code"]).to eq("unauthenticated")
+      end
+    end
+
+    it "has no 0.3 multiplexed wire left: /query and /run are unregistered verb NAMES" do
+      # Anonymous, these answer 401 like every other single-segment path under
+      # the mount, which proves nothing. WITH a Bearer token the per-verb wire
+      # gets past its first gate and answers what it answers for any name
+      # nobody declared — `404 not_found`, as an RFC 9457 problem document,
+      # with no tombstone and no hint that a wire ever lived there.
+      ["POST /kiosk/query (bearer)", "POST /kiosk/run (bearer)"].each do |request_line|
+        res = probe("mounted", request_line)
+        expect(res["status"]).to eq(404), "#{request_line}: got #{res["status"]}"
+        expect(res["headers"]["content-type"]).to include("application/problem+json")
+
+        body = JSON.parse(res["body"])
+        expect(body["code"]).to eq("not_found")
+        expect(body).not_to have_key("ok")
+        expect(body).not_to have_key("error")
       end
     end
 
     it "routes the kiosk-pop auth plane into AuthController" do
-      # A malformed register/login/revoke answers with the wire envelope —
-      # reaching the controller at all is what this route proof needs.
+      # A malformed register/login/revoke answers with the wire's RFC 9457
+      # problem document — reaching the controller at all is what this route
+      # proof needs, and a top-level `code` is what says a Kiosk controller
+      # answered rather than the router.
       %w[register login revoke].each do |action|
         res = probe("mounted", "POST /kiosk/auth/#{action}")
         expect(res["status"]).to be_between(400, 401), "#{action}: got #{res["status"]}"
-        expect(JSON.parse(res["body"])).to have_key("error")
+        expect(JSON.parse(res["body"])).to have_key("code")
       end
       res = probe("mounted", "GET /kiosk/auth/challenge")
       expect(res["status"]).to eq(400)
-      expect(JSON.parse(res["body"])).to have_key("error")
+      expect(JSON.parse(res["body"])).to have_key("code")
     end
 
     it "routes the KYC attestation endpoint" do
       res = probe("mounted", "POST /kiosk/agents/kyc")
       expect(res["status"]).to eq(401)
-      expect(JSON.parse(res["body"])).to have_key("error")
+      expect(JSON.parse(res["body"])["code"]).to eq("unauthenticated")
     end
 
     it "routes the binding ceremony: claim wire + link surface + HTML pages" do
@@ -136,7 +157,11 @@ RSpec.describe "mount Kiosk::Server::Engine (the one-line surface)" do
       %w[link claim unlink].each do |action|
         res = probe("mounted", "POST /kiosk/auth/#{action}")
         expect(res["status"]).to be_between(400, 401), "#{action}: got #{res["status"]}"
-        expect(JSON.parse(res["body"])).to have_key("error")
+        # The Kiosk-native half of the ceremony answers the 0.4 problem
+        # document (top-level `code`); the OAuth endpoints above keep the
+        # RFC 8628 `{error, error_description}` shape, which is why only they
+        # are asserted with `error`.
+        expect(JSON.parse(res["body"])).to have_key("code")
       end
 
       # The page's own forms post to these three; the engine must route them

@@ -1,22 +1,27 @@
 # frozen_string_literal: true
 
-# WireController Kiosk-PoW HEADER path (ADR-0022).
+# The Kiosk-PoW HEADER path (ADR-0022), driven through the FULL controllers.
 #
-# The PoW proof is carried in the `Kiosk-PoW` request HEADER as raw JSON, NOT in
-# the request body. This spec drives the FULL controller (not just PowGate) to
-# prove:
-#   * a well-formed proof in the header passes the gate → the request proceeds;
-#   * the same proof placed in the BODY is NO LONGER accepted (the body-pow path
-#     is gone) — the gate re-issues a fresh 402;
-#   * the GET `schema` verb carries its proof via the header too (a GET has no
-#     body-proof channel — that is the whole point of the header move);
-#   * the accepted header forms (single proof, JSON array, repeated `\n`-joined
-#     lines, proxy comma-combined) all reach the gate;
-#   * a malformed header → 400 bad_request with a Kiosk-PoW hint.
+# The proof is carried in the `Kiosk-PoW` request HEADER as raw JSON, never in
+# the request body. On the 0.4 per-verb wire that is not a convenience but the
+# only workable channel: a query is a `GET <endpoint>/<query-name>` and a GET
+# has no body to put a proof in. This spec proves, end to end:
 #
-# Uses the real Argon2id backend at d=4, m=8 (fast) so we can solve a real proof
-# and see the gate PROCEED, then reach Executor. An always-challenge policy on
-# `query`/`schema` keeps the toll in play; a stub Executor answers the proceed.
+#   * a well-formed proof in the header passes the gate → the call proceeds;
+#   * the controller feeds the gate the METHOD and the PATH-SEGMENT verb, so a
+#     proof solved for `GET /kiosk/catalog?q=milk` is spendable there and on no
+#     other endpoint;
+#   * the reserved `GET <endpoint>/schema` carries its proof the same way, and
+#     answers a bare request with the pow_required PROBLEM DOCUMENT;
+#   * every accepted header form (single proof, JSON array, repeated
+#     `\n`-joined lines, proxy comma-combined) reaches the gate;
+#   * a proof placed in an action's BODY is not a proof — the gate re-challenges;
+#   * a malformed header → 400 bad_request problem document with a Kiosk-PoW hint.
+#
+# Uses the real Argon2id backend at d=4, m=8 (fast) so a real proof can be
+# solved and the gate seen to PROCEED, then reach Executor. An always-challenge
+# policy keeps the toll in play on every verb; a stubbed Executor answers the
+# proceed without touching ActiveRecord.
 
 require "rack/mock"
 require "base64"
@@ -24,9 +29,23 @@ require "json"
 require "kiosk/pow"
 require "kiosk/reputation"
 
-RSpec.describe "WireController Kiosk-PoW header path (ADR-0022)" do
-  def dispatch(action, env)
-    status, headers, body = Kiosk::Server::WireController.action(action).call(env)
+RSpec.describe "Kiosk-PoW header path (ADR-0022)" do
+  # ── dispatch ───────────────────────────────────────────────────────────────
+  # A per-verb call is `VerbController#show` / `#create` with the verb name in
+  # `params[:kiosk_verb]`; `schema` is still a reserved WireController action.
+
+  def dispatch_verb(action, name, env)
+    env["action_dispatch.request.path_parameters"] =
+      { controller: "kiosk/server/verb", action: action.to_s, kiosk_verb: name.to_s }
+    finish(Kiosk::Server::VerbController.action(action).call(env))
+  end
+
+  def dispatch_reserved(action, env)
+    finish(Kiosk::Server::WireController.action(action).call(env))
+  end
+
+  def finish(rack_triplet)
+    status, headers, body = rack_triplet
     raw = +""
     body.each { |chunk| raw << chunk }
     [status, headers, raw.empty? ? {} : JSON.parse(raw, symbolize_names: true)]
@@ -42,8 +61,23 @@ RSpec.describe "WireController Kiosk-PoW header path (ADR-0022)" do
     Rack::MockRequest.env_for(path, **opts)
   end
 
+  # `GET /kiosk/<name>?<args>` — a query.
+  def get_verb(name, query: nil, pow_header: nil)
+    path = query.nil? ? "/kiosk/#{name}" : "/kiosk/#{name}?#{query}"
+    dispatch_verb(:show, name, env_for(path, method: "GET", pow_header: pow_header))
+  end
+
+  # `POST /kiosk/<name>` — an action.
+  def post_verb(name, body, pow_header: nil)
+    dispatch_verb(
+      :create, name,
+      env_for("/kiosk/#{name}", method: "POST",
+              input: JSON.generate(body), pow_header: pow_header),
+    )
+  end
+
   def agent_token
-    Kiosk::Server::JwtIssuer.issue(
+    @agent_token ||= Kiosk::Server::JwtIssuer.issue(
       claims:   { sub: "u-1", agent_id: "a-1", role: "customer", actor: "agent" },
       audience: "https://demo.example",
     )
@@ -58,11 +92,19 @@ RSpec.describe "WireController Kiosk-PoW header path (ADR-0022)" do
     nonce.to_s
   end
 
-  # Issue a real gate-signed challenge for (command, body) by driving the gate.
-  def issue_challenge(command:, body:)
-    Kiosk::Server::PowGate.gate(identity: fake_identity, command: command, body: body, pow: nil)
+  # A real gate-signed challenge for the exact call the controller will
+  # fingerprint — §3.4's `"<METHOD> <verb>\n<canonical args>"`.
+  def issue_challenge(command:, method:, verb:, body: {})
+    Kiosk::Server::PowGate.gate(identity: fake_identity, command: command,
+                                method: method, verb: verb, body: body, pow: nil)
   rescue Kiosk::Server::Errors::PowRequired => e
     e.challenges.first
+  end
+
+  # A solved proof for `GET /kiosk/catalog?q=milk`, the call most examples make.
+  def catalog_proof
+    ch = issue_challenge(command: "query", method: "GET", verb: "catalog", body: { q: "milk" })
+    { challenge: ch, nonce: solve_nonce(ch) }
   end
 
   let(:fake_identity) { build_identity(user_id: "u-1", agent_id: "a-1", role: "customer") }
@@ -84,12 +126,16 @@ RSpec.describe "WireController Kiosk-PoW header path (ADR-0022)" do
       c.pow_secret        = "test-pow-secret"
     end
 
+    # The verbs this spec dials. Two queries, so a proof for one can be shown
+    # NOT to work on the other; one action, for the body-is-not-the-channel case.
+    declare_query("catalog")      { render json: [] }
+    declare_query("availability") { render json: [] }
+    declare_action("place_order") { render json: {} }
+
     # Stub Executor so a request that PROCEEDS past the gate returns a clean 200
     # instead of touching ActiveRecord.
-    result = Object.new
-    result.define_singleton_method(:to_envelope) { { ok: true, rows: [] } }
-    result.define_singleton_method(:http_status) { 200 }
-    allow(Kiosk::Server::Executor).to receive(:call).and_return(result)
+    allow(Kiosk::Server::Executor).to receive(:call)
+      .and_return(Kiosk::Server::Result.new(kind: :rows, payload: []))
     allow_any_instance_of(Kiosk::Server::WireController)
       .to receive(:connection_for).and_return(Object.new)
   end
@@ -100,109 +146,119 @@ RSpec.describe "WireController Kiosk-PoW header path (ADR-0022)" do
   end
 
   # ── proof in the header → proceeds ─────────────────────────────────────────
-  it "accepts a single-proof Kiosk-PoW header and proceeds (200)" do
-    body = { name: "menu" }
-    ch   = issue_challenge(command: "query", body: body)
-    proof = { challenge: ch, nonce: solve_nonce(ch) }
+  it "accepts a single-proof Kiosk-PoW header on a per-verb GET and proceeds (200)" do
+    status, = get_verb("catalog", query: "q=milk", pow_header: JSON.generate(catalog_proof))
 
-    status, = dispatch(
-      :query,
-      env_for("/kiosk/query", method: "POST",
-              input: JSON.generate(body), pow_header: JSON.generate(proof)),
-    )
     expect(status).to eq(200)
   end
 
   it "accepts a JSON-array Kiosk-PoW header (proceeds)" do
-    body = { name: "menu" }
-    ch   = issue_challenge(command: "query", body: body)
-    proof = { challenge: ch, nonce: solve_nonce(ch) }
+    status, = get_verb("catalog", query: "q=milk", pow_header: JSON.generate([catalog_proof]))
 
-    status, = dispatch(
-      :query,
-      env_for("/kiosk/query", method: "POST",
-              input: JSON.generate(body), pow_header: JSON.generate([proof])),
-    )
     expect(status).to eq(200)
   end
 
-  it "accepts a proxy comma-combined header value {A} (single element still fine)" do
-    body = { name: "menu" }
-    ch   = issue_challenge(command: "query", body: body)
-    proof = { challenge: ch, nonce: solve_nonce(ch) }
+  it "accepts a proxy comma-combined header value {A},{B} (RFC 7230)" do
+    # Two independently issued proofs for the SAME call, joined the way a proxy
+    # collapses duplicate header lines. Both must reach the gate.
+    combined = "#{JSON.generate(catalog_proof)},#{JSON.generate(catalog_proof)}"
 
-    # Emulate a proxy that comma-joined a single duplicate header — the wrap-in-[]
-    # path handles it identically.
-    status, = dispatch(
-      :query,
-      env_for("/kiosk/query", method: "POST",
-              input: JSON.generate(body), pow_header: JSON.generate(proof)),
-    )
+    status, = get_verb("catalog", query: "q=milk", pow_header: combined)
+
     expect(status).to eq(200)
   end
 
   it "accepts repeated header lines joined by \\n (Rack duplicate presentation)" do
-    body = { name: "menu" }
-    ch   = issue_challenge(command: "query", body: body)
-    proof = { challenge: ch, nonce: solve_nonce(ch) }
+    lines = "#{JSON.generate(catalog_proof)}\n#{JSON.generate(catalog_proof)}"
 
-    # A single valid proof presented as one line; the \n-split path is exercised
-    # directly in pow_gate_spec — here we confirm a \n-terminated value still
-    # reaches the gate.
-    status, = dispatch(
-      :query,
-      env_for("/kiosk/query", method: "POST",
-              input: JSON.generate(body), pow_header: "#{JSON.generate(proof)}\n"),
-    )
+    status, = get_verb("catalog", query: "q=milk", pow_header: lines)
+
     expect(status).to eq(200)
   end
 
-  # ── the GET schema verb carries its proof via the header ───────────────────
+  # ── the controller feeds METHOD and PATH SEGMENT to the fingerprint ────────
+  #
+  # These are the controller-level half of the §3.4 binding proved against the
+  # gate in pow_gate_spec: the wire name the endpoint tolls under is the PATH
+  # SEGMENT it was reached by, and the method is the request's own.
+
+  it "does NOT accept a catalog proof on another query's endpoint" do
+    status, _headers, problem =
+      get_verb("availability", query: "q=milk", pow_header: JSON.generate(catalog_proof))
+
+    expect(status).to eq(402)
+    expect(problem[:code]).to eq("pow_required")
+  end
+
+  it "does NOT accept a GET proof on the POST endpoint of the same name" do
+    ch    = issue_challenge(command: "query", method: "GET", verb: "place_order", body: {})
+    proof = { challenge: ch, nonce: solve_nonce(ch) }
+
+    status, _headers, problem = post_verb("place_order", {}, pow_header: JSON.generate(proof))
+
+    expect(status).to eq(402)
+    expect(problem[:code]).to eq("pow_required")
+  end
+
+  it "accepts the matching POST proof on that same action (the control)" do
+    ch    = issue_challenge(command: "run", method: "POST", verb: "place_order", body: {})
+    proof = { challenge: ch, nonce: solve_nonce(ch) }
+
+    status, = post_verb("place_order", {}, pow_header: JSON.generate(proof))
+
+    expect(status).to eq(200)
+  end
+
+  # ── the reserved GET schema carries its proof via the header ───────────────
   it "carries the schema (GET) proof via the header and proceeds" do
-    ch    = issue_challenge(command: "schema", body: {})
+    ch    = issue_challenge(command: :schema, method: "GET", verb: "schema", body: {})
     proof = { challenge: ch, nonce: solve_nonce(ch) }
 
-    status, = dispatch(
-      :schema,
-      env_for("/kiosk/schema", method: "GET", pow_header: JSON.generate(proof)),
+    status, = dispatch_reserved(
+      :schema, env_for("/kiosk/schema", method: "GET", pow_header: JSON.generate(proof)),
     )
+
     expect(status).to eq(200)
   end
 
-  it "re-challenges the schema GET with a fresh 402 when no header is sent" do
-    status, headers, body = dispatch(:schema, env_for("/kiosk/schema", method: "GET"))
+  it "re-challenges the schema GET with a fresh 402 problem document when no header is sent" do
+    status, headers, problem =
+      dispatch_reserved(:schema, env_for("/kiosk/schema", method: "GET"))
+
     expect(status).to eq(402)
     expect(headers["WWW-Authenticate"]).to eq('Kiosk-PoW realm="https://demo.example"')
-    expect(body.dig(:error, :code)).to eq("pow_required")
+    expect(headers["Content-Type"]).to include("application/problem+json")
+    expect(problem[:code]).to   eq("pow_required")
+    expect(problem[:type]).to   eq("https://kiosk.tech/problems/pow_required")
+    expect(problem[:status]).to eq(402)
+    expect(problem[:challenges]).to be_an(Array)
+    expect(problem[:challenges]).not_to be_empty
   end
 
-  # ── a body-pow is NO LONGER accepted ───────────────────────────────────────
-  it "does NOT accept a proof placed in the BODY (the body-pow path is gone)" do
-    body  = { name: "menu" }
-    ch    = issue_challenge(command: "query", body: body)
+  # ── a body-pow is NOT a proof ──────────────────────────────────────────────
+  it "does NOT accept a proof placed in an action's BODY (the header is the channel)" do
+    ch    = issue_challenge(command: "run", method: "POST", verb: "place_order", body: {})
     proof = { challenge: ch, nonce: solve_nonce(ch) }
 
-    # Proof in the body (old shape) — the header is absent, so the gate sees no
-    # proof and re-issues a fresh 402. (The body now also changes the fingerprint,
-    # so even the challenge would not match — either way, NOT a 200.)
-    status, _headers, resp = dispatch(
-      :query,
-      env_for("/kiosk/query", method: "POST",
-              input: JSON.generate(body.merge(pow: { proofs: [proof] }))),
-    )
+    # Old shape: the proof travels in the body and no header is sent. The gate
+    # sees no proof and re-issues. (The body is also part of the fingerprint
+    # now, so the challenge could not have matched either — both roads lead
+    # away from a 200, which is the point.)
+    status, _headers, problem = post_verb("place_order", { pow: { proofs: [proof] } })
+
     expect(status).to eq(402)
-    expect(resp.dig(:error, :code)).to eq("pow_required")
+    expect(problem[:code]).to eq("pow_required")
   end
 
-  # ── malformed header → 400 ─────────────────────────────────────────────────
-  it "rejects a malformed Kiosk-PoW header with 400 + hint" do
-    status, _headers, body = dispatch(
-      :query,
-      env_for("/kiosk/query", method: "POST",
-              input: JSON.generate(name: "menu"), pow_header: "{broken"),
-    )
+  # ── malformed header → 400 problem document ────────────────────────────────
+  it "rejects a malformed Kiosk-PoW header with a 400 problem document + hint" do
+    status, headers, problem = get_verb("catalog", pow_header: "{broken")
+
     expect(status).to eq(400)
-    expect(body.dig(:error, :code)).to eq("bad_request")
-    expect(body.dig(:error, :hint)).to include("Kiosk-PoW")
+    expect(headers["Content-Type"]).to include("application/problem+json")
+    expect(problem[:code]).to   eq("bad_request")
+    expect(problem[:type]).to   eq("https://kiosk.tech/problems/bad_request")
+    expect(problem[:status]).to eq(400)
+    expect(problem[:hint]).to include("Kiosk-PoW")
   end
 end

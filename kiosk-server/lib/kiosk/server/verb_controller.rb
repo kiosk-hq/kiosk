@@ -10,15 +10,16 @@ require "kiosk/server/wire_controller"
 
 module Kiosk
   module Server
-    # THE 0.4 PER-VERB WIRE (T-068 slice 1). One endpoint per registered verb,
-    # under the same mount the 0.3 wire uses:
+    # THE PER-VERB WIRE. One endpoint per registered verb, under the mount:
     #
     #   GET  <endpoint>/<query-name>?<args>    a query  — safe, no body
     #   POST <endpoint>/<action-name>          an action — JSON body
     #
     # so `curl -H "Authorization: Bearer …" https://…/kiosk/catalog` is the
     # whole invocation, and the HTTP method carries the read/write semantics
-    # the 0.3 wire spelled out in a `name` field.
+    # the retired 0.3 wire spelled out in a `name` field. Since the cutover
+    # this is the ONLY way to reach an operator verb: `POST <endpoint>/query`
+    # and `POST <endpoint>/run` have no route (T-074 = A).
     #
     # ── Where the routes come from, and the design delta it carries ──────
     #
@@ -59,32 +60,15 @@ module Kiosk
     # answers 401 to an unauthenticated caller, whether or not a verb by that
     # name exists.
     #
-    # ── The answer, and it is the whole answer (T-068 slice 2) ───────────
+    # ── The answer ───────────────────────────────────────────────────────
     #
-    # SUCCESS is the handler's rendered payload, VERBATIM (T-072 = C). A
-    # non-paginating query answers a bare array, a paginating one
-    # `{"rows": …, "next": …}` — which is what `render_kiosk_page` already
-    # produces internally — and an action answers its own object. There is no
-    # `ok`, no `kind` and no wrapper: the status line carries success, and
-    # `output_schema` carries the shape (slice 3 writes the 52 declarations;
-    # until then the shape is discriminable from the HTTP method plus the one
-    # structural rule above, which is why that rule is normative rather than a
-    # convention).
-    #
-    # ERRORS are RFC 9457 problem documents, served as
-    # `application/problem+json`, with the closed `error.code` vocabulary
-    # surviving twice: as the `type` URI naming the problem and as the `code`
-    # extension member an assistant branches on. See {Errors::Base#to_problem}.
-    #
-    # ── What this controller still leaves to the cutover ─────────────────
-    #
-    # `POST <endpoint>/{query,run}` keep working, unchanged, for exactly as
-    # long as it takes the eight demos to migrate, and `GET <endpoint>/schema`
-    # + `POST <endpoint>/pay` keep the 0.3 envelope for the same reason — the
-    # demo flow scripts read `.value` off both. That is a build-time
-    # intermediate inside an unreleased protocol, NOT a shipped dual stack:
-    # the hard cut (T-074 = A) is the cutover slice, which deletes the first
-    # pair and moves the other two onto the shape below.
+    # SUCCESS is the handler's rendered payload, VERBATIM (T-072 = C); ERRORS
+    # are RFC 9457 problem documents. Neither is here: both seams live in
+    # {WireController}, because since the cutover (T-074 = A) there is exactly
+    # ONE answer shape on this wire and `GET <endpoint>/schema` and
+    # `POST <endpoint>/pay` answer it too. What this class adds to its parent
+    # is the name resolution, the method fork and the argument channel —
+    # nothing about how a response is written.
     class VerbController < WireController
       # A verb name (design §3.2). Also the route constraint, so a path that
       # cannot be a verb name never reaches this controller and stays a routing
@@ -122,12 +106,9 @@ module Kiosk
       # A name registered as the OTHER KIND is `405 method_not_allowed` with
       # `Allow:` naming the method the verb does accept. The resource EXISTS —
       # answering 404 would be a lie about it, and RFC 9110 §15.5.6 already
-      # has the status for exactly this. Slice 1 shipped 404-with-a-hint here
-      # only because 405 was not in the closed vocabulary and adding a code is
-      # spec-first (rule 1); slice 2 IS the spec change, so this is now what
-      # the vocabulary says. It discloses nothing: identity is resolved first
-      # (401 above), and `GET <endpoint>/schema` already lists every name to
-      # an authenticated caller.
+      # has the status for exactly this. It discloses nothing: identity is
+      # resolved first (401 above), and `GET <endpoint>/schema` already lists
+      # every name to an authenticated caller.
       def descriptor_for!(command, name)
         registry, other = command == :query ? [Queries, Actions] : [Actions, Queries]
         return registry.describe(name) if registry.known.include?(name)
@@ -168,13 +149,11 @@ module Kiosk
         # origins and not others. `validate_requests` stays what it always was:
         # the opt-in PoW-SHAPE check on the 0.3 wire and the auth plane.
         #
-        # The cost, stated rather than hidden: `json_schemer` becomes a
-        # practical requirement for serving 0.4, though it is still lazily
-        # required and still an optional gemspec dependency. An origin without
-        # it gets {Errors::ConfigurationError} naming the gem on the first call
-        # — loud, once, at the top of the log — rather than silently serving an
-        # unvalidated wire. Promoting it to a real runtime dependency belongs to
-        # the cutover slice, which edits every gemspec anyway.
+        # Which is why `json_schemer` is a REAL runtime dependency of this gem
+        # since 0.4 (see the gemspec): an origin that cannot load a validator
+        # cannot serve a conformant wire. It is still required lazily, and a
+        # vendored checkout without it still gets {Errors::ConfigurationError}
+        # naming the gem rather than a LoadError at boot.
         RequestValidation.validate_arguments!(
           args, input_schema: descriptor[:input_schema], verb: name
         )
@@ -182,28 +161,6 @@ module Kiosk
         args
       end
 
-      # ── The 0.4 answer shapes (T-072 = C) ────────────────────────────────
-
-      # Success: the handler's payload, verbatim. {Result} still travels from
-      # the {Executor} because the 0.3 endpoints next door still need it; here
-      # it is unwrapped rather than serialised, and it disappears entirely at
-      # the cutover.
-      def render_result(result)
-        render_wire_body(result.to_payload, status: result.http_status)
-      end
-
-      # Errors: an RFC 9457 problem document under its own media type. The
-      # media type is the half a generic client reads — `application/json`
-      # with a `title` field would be indistinguishable from any other JSON —
-      # and the `code` extension member is the half an assistant reads.
-      def render_wire_error(error)
-        render_wire_body(
-          error.to_problem,
-          status:       error.http_status,
-          error:        error,
-          content_type: Errors::PROBLEM_CONTENT_TYPE,
-        )
-      end
     end
   end
 end

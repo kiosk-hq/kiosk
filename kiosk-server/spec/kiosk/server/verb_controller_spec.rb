@@ -1,16 +1,15 @@
 # frozen_string_literal: true
 
-# THE 0.4 PER-VERB WIRE at the wire level (T-068 slices 1 and 2).
+# THE 0.4 PER-VERB WIRE at the wire level (T-068 slices 1 and 2, T-074 = A).
 #
 # `GET <endpoint>/<query-name>` and `POST <endpoint>/<action-name>`, resolved
 # against the same registry `GET <endpoint>/schema` renders its descriptors
 # from. The argument ENCODING is unit-tested next door in
 # `argument_decoder_spec.rb`; what is proved here is that a real request
 # reaches it, that the answer is the handler's payload VERBATIM, that a
-# refusal comes back as an RFC 9457 problem document (T-072 = C), and that the
-# 0.3 wire is untouched — because 0.4's hard cut (T-074 = A) is the CUTOVER
-# slice, and cutting `POST /kiosk/{query,run}` here would have broken the
-# eight demos mid-build.
+# refusal comes back as an RFC 9457 problem document (T-072 = C), and — in the
+# last block — that this is now the ONLY way to reach an operator verb,
+# because the cutover DELETED `POST /kiosk/{query,run}` outright.
 #
 # Dispatch goes through `ActionController::Metal.action(...)`, a plain Rack
 # app — no Rails host, so `path_parameters` is set by hand exactly as the
@@ -32,8 +31,6 @@ RSpec.describe Kiosk::Server::VerbController do
     # No database in the gem's own env; SessionContext only needs a connection
     # that answers #transaction and #exec_query.
     allow_any_instance_of(described_class).to receive(:connection_for).and_return(connection)
-    allow_any_instance_of(Kiosk::Server::WireController)
-      .to receive(:connection_for).and_return(connection)
   end
 
   def token
@@ -60,16 +57,6 @@ RSpec.describe Kiosk::Server::VerbController do
       { controller: "kiosk/server/verb", action: action.to_s, kiosk_verb: name }
 
     dispatch(described_class, action, env)
-  end
-
-  # The 0.3 wire, for the "still working" half.
-  def call_wire(action, body)
-    env = Rack::MockRequest.env_for(
-      "/kiosk/#{action}", method: "POST", input: body,
-      "CONTENT_TYPE" => "application/json",
-      "HTTP_AUTHORIZATION" => "Bearer #{token}"
-    )
-    dispatch(Kiosk::Server::WireController, action, env)
   end
 
   # Returns [status, parsed body, headers] — the headers matter now: the media
@@ -288,47 +275,117 @@ RSpec.describe Kiosk::Server::VerbController do
     end
   end
 
-  describe "the 0.3 wire is untouched — the hard cut is the CUTOVER slice" do
+  # THE HARD CUT (T-074 = A). While the per-verb wire was being built this
+  # block proved the OPPOSITE of what it proves now: that `POST
+  # <endpoint>/query` still answered, that both wires agreed on the payload,
+  # that the old one still spoke the 0.3 error envelope, and that one PoW
+  # proof was spendable on either. All four were true on purpose — cutting the
+  # multiplexed pair mid-build would have broken the eight demos — and all
+  # four are false on purpose now. What replaces them is the deletion itself:
+  # no action, no route, and nothing privileged left at the path.
+  # A body that is not JSON at all never reaches Kiosk's own parse guard on
+  # this wire: `serve` reads `params[:kiosk_verb]` first, and touching `params`
+  # makes Rails parse the body — so the raise comes out of the PARAMETER layer.
+  # Without the `rescue_from ActionDispatch::Http::Parameters::ParseError` in
+  # {WireController} it escapes to the host's exception app, which renders an
+  # HTML or plain-text 400 with no `code`: the one hole in an error contract
+  # that is otherwise problem documents all the way down.
+  describe "a malformed request body" do
+    before { declare_action("place_order") { render json: { ok: 1 } } }
+
+    it "is a bad_request problem document, not the host's generic 400" do
+      status, problem = call_verb(:post, "place_order", body: "{not valid json")
+
+      expect(status).to eq(400)
+      expect(last_headers["Content-Type"]).to include("application/problem+json")
+      expect(problem[:code]).to   eq("bad_request")
+      expect(problem[:type]).to   eq("https://kiosk.tech/problems/bad_request")
+      expect(problem[:status]).to eq(400)
+      expect(problem[:detail]).to include("invalid JSON body")
+      expect(problem[:hint]).to   include("query string")
+    end
+  end
+
+  describe "the 0.3 wire is GONE — one wire, one conformance surface" do
     before { declare_query("salons") { render json: [{ id: 1 }] } }
 
-    it "still serves POST <endpoint>/query by name" do
-      status, body = call_wire(:query, JSON.generate(name: "salons"))
-      expect(status).to eq(200)
-      expect(body[:rows]).to eq([{ id: 1 }])
+    it "leaves WireController with exactly two actions — schema and pay" do
+      actions = Kiosk::Server::WireController.action_methods.to_a
+
+      expect(actions).to match_array(%w[schema pay])
+      expect(actions).not_to include("query", "run")
+      expect(Kiosk::Server::WireController.instance_methods(false)).not_to include(:query, :run)
     end
 
-    it "answers both wires with the SAME payload — only the wrapper differs" do
-      # Slice 1 asserted byte-identity; slice 2 is precisely the change that
-      # ends it. What must still hold — and what would catch a per-verb
-      # endpoint silently diverging from the handler the 0.3 wire reaches — is
-      # that the ROWS are the same rows. The 0.3 envelope is now the only
-      # difference between the two answers.
-      _old_status, old_body = call_wire(:query, JSON.generate(name: "salons"))
-      _new_status, new_body = call_verb(:get, "salons")
-      expect(new_body).to eq(old_body[:rows])
-      expect(old_body).to eq(ok: true, kind: "rows", rows: new_body)
+    it "draws no /query and no /run — the route table has no such paths" do
+      routes = Kiosk::Server::Engine.routes
+      routes.finalize!
+      paths = routes.routes.map { |route| route.path.spec.to_s }
+
+      # The two RESERVED endpoints are still literally drawn…
+      expect(paths).to include("/schema(.:format)", "/pay(.:format)")
+      # …and the multiplexed pair is not drawn at all: not as a route, not as
+      # a tombstone. The only thing that can match those paths now is the
+      # constrained per-verb pair at the bottom of the table.
+      expect(paths.grep(%r{\A/(query|run)\b})).to be_empty
+      expect(paths.last(2)).to eq(["/:kiosk_verb(.:format)", "/:kiosk_verb(.:format)"])
     end
 
-    it "still answers the 0.3 wire with the 0.3 ERROR envelope, not a problem document" do
-      status, body, headers = call_wire(:query, JSON.generate(name: "frobnicate"))
+    it "answers POST <endpoint>/query as the VERB named `query` — 404, nobody registered one" do
+      # The sharpest statement of the cut. The path still resolves, but it
+      # resolves through the SAME constrained per-verb pair every other name
+      # goes through, and answers the ordinary `not_found` problem document
+      # naming what IS registered. There is no privileged 0.3 endpoint left
+      # here — `query` is now just a name an operator has not used.
+      status, body, headers = call_verb(:post, "query", body: JSON.generate(name: "salons"))
+
       expect(status).to eq(404)
-      expect(body).to eq(ok: false, error: { code: "not_found",
-                                             message: body.dig(:error, :message),
-                                             hint: body.dig(:error, :hint) })
-      expect(headers["Content-Type"]).to include("application/json")
-      expect(headers["Content-Type"]).not_to include("problem")
+      expect(headers["Content-Type"]).to include("application/problem+json")
+      expect(body[:type]).to   eq("https://kiosk.tech/problems/not_found")
+      expect(body[:status]).to eq(404)
+      expect(body[:code]).to   eq("not_found")
+      # Not the 0.3 envelope, and not a hint that the old wire moved: the
+      # answer is indistinguishable from any other unregistered action.
+      expect(body).not_to have_key(:ok)
+      expect(body).not_to have_key(:error)
+      expect(JSON.generate(body)).not_to include("0.3")
     end
 
-    it "computes the SAME PoW fingerprint on both wires, so a proof is spendable on either" do
+    it "answers POST <endpoint>/run the same way — one unregistered name among others" do
+      status, body, headers = call_verb(:post, "run", body: "{}")
+
+      expect(status).to eq(404)
+      expect(headers["Content-Type"]).to include("application/problem+json")
+      expect(body[:code]).to eq("not_found")
+      expect(body).not_to have_key(:ok)
+    end
+
+    it "leaves both names REGISTRABLE — they stopped being reserved with the routes that named them" do
+      # `RESERVED_NAMES` is the engine's drawn first segments, and `query`/`run`
+      # are no longer among them (`bin/check-kiosk-names` holds the two sides
+      # equal). So an operator may now declare a verb called `query`, and it is
+      # served at `<endpoint>/query` like any other.
+      expect(Kiosk::Server::HandlerMixin::RESERVED_NAMES).to eq(%w[agents auth oauth pay schema])
+
+      declare_action("query") { render json: { queued: 1 } }
+      status, body = call_verb(:post, "query", body: "{}")
+
+      expect(status).to eq(200)
+      expect(body).to eq(queued: 1)
+    end
+
+    it "fingerprints a call from the METHOD and the PATH SEGMENT (§3.4), not from a body field" do
+      # 0.3 could not say this: every read was multiplexed through one POST,
+      # so the method was a constant and the verb name had to be smuggled back
+      # INTO the arguments to reach the digest. Reproducing that digest byte
+      # for byte was the only reason one proof was spendable on either wire,
+      # and only one is served now.
       seen = []
-      allow(Kiosk::Server::PowGate).to receive(:gate) { |**kwargs| seen << kwargs.slice(:command, :body) }
+      allow(Kiosk::Server::PowGate).to receive(:gate) { |**kwargs| seen << kwargs.slice(:method, :verb, :body) }
 
-      call_wire(:query, JSON.generate(name: "salons"))
-      call_verb(:get, "salons")
+      call_verb(:get, "salons", query: "city=Lisbon")
 
-      expect(seen.length).to eq(2)
-      expect(seen[1]).to eq(seen[0])
-      expect(seen[0]).to eq(command: :query, body: { name: "salons" })
+      expect(seen).to eq([{ method: "GET", verb: "salons", body: { city: "Lisbon" } }])
     end
   end
 end

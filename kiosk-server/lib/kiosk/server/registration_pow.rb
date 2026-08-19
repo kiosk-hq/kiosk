@@ -61,7 +61,8 @@ module Kiosk
         spec   = { alg: "equihash", params: params, count: count }
         # Bind the challenges to THIS public key — a proof for one key is useless
         # for another. `pow` is excluded from the fingerprint (added on retry).
-        fp = PowGate.request_fingerprint(command: "auth/register", body: { public_key: public_key_pem })
+        fp = PowGate.request_fingerprint(method: "POST", verb: "auth/register",
+                                         body: { public_key: public_key_pem })
 
         PowGate.enforce(
           spec:         spec,

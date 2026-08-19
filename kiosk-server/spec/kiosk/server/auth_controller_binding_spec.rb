@@ -4,7 +4,7 @@
 # mint), claim (register-shaped redeem), unlink (registration-layer
 # revocation). Service semantics live in link_code_spec.rb /
 # account_binding_spec.rb; here the controller contract is pinned — auth,
-# envelopes, statuses.
+# statuses, and the RFC 9457 problem document every refusal is since 0.4.
 #
 # Dispatch via `ActionController::Metal.action(...)`.
 
@@ -40,10 +40,28 @@ RSpec.describe "AuthController binding endpoints" do
       opts["CONTENT_TYPE"] = "application/json"
     end
     env = Rack::MockRequest.env_for("https://provider.example/kiosk/auth/#{action}", **opts)
-    status, _headers, raw_body = Kiosk::Server::AuthController.action(action).call(env)
+    status, headers, raw_body = Kiosk::Server::AuthController.action(action).call(env)
     raw = +""
     raw_body.each { |chunk| raw << chunk }
+    @last_headers = headers
     [status, raw.empty? ? {} : JSON.parse(raw, symbolize_names: true)]
+  end
+
+  def last_headers = @last_headers
+
+  # Every REFUSAL on this surface is an RFC 9457 problem document since the
+  # 0.4 cutover — `application/problem+json`, a per-code `type` and `title`,
+  # the status restated in the body, and the SAME closed-vocabulary token,
+  # now at the TOP level as `code` rather than under `error.code`. The old
+  # `message` is `detail`. Successes are untouched: they were never enveloped.
+  def expect_problem(status, body, http:, code:, detail: nil)
+    expect(status).to eq(http)
+    expect(last_headers["Content-Type"]).to include("application/problem+json")
+    expect(body[:type]).to   eq("https://kiosk.tech/problems/#{code}")
+    expect(body[:title]).to  eq(Kiosk::Server::Errors::TITLES.fetch(code))
+    expect(body[:status]).to eq(http)
+    expect(body[:code]).to   eq(code)
+    expect(body[:detail]).to match(detail) if detail
   end
 
   describe "POST /auth/link" do
@@ -65,8 +83,7 @@ RSpec.describe "AuthController binding endpoints" do
     it "401s without a provider session — agent Bearer tokens do not open this door" do
       wire_user_idp(nil)
       status, body = dispatch(:link)
-      expect(status).to eq(401)
-      expect(body.dig(:error, :code)).to eq("unauthenticated")
+      expect_problem(status, body, http: 401, code: "unauthenticated")
     end
 
     # roles-from-IdP (Path A): the human's role — as the provider's
@@ -110,17 +127,16 @@ RSpec.describe "AuthController binding endpoints" do
 
     it "400s on a missing field (register-shaped body: code, public_key, signed)" do
       status, body = dispatch(:claim, body: { code: "c", public_key: "PEM" })
-      expect(status).to eq(400)
-      expect(body.dig(:error, :message)).to match(/signed/)
+      expect_problem(status, body, http: 400, code: "bad_request", detail: /signed/)
     end
 
-    it "maps a failed possession proof to the 401 envelope — code stays live" do
+    it "maps a failed possession proof to the 401 problem document — code stays live" do
       allow(Kiosk::Server::LinkCode).to receive(:redeem)
         .and_raise(Kiosk::Server::Errors::Unauthenticated.new("proof signature invalid"))
 
       status, body = dispatch(:claim, body: { code: "c", public_key: "PEM", signed: "bad" })
-      expect(status).to eq(401)
-      expect(body.dig(:error, :code)).to eq("unauthenticated")
+      expect_problem(status, body, http: 401, code: "unauthenticated",
+                     detail: /proof signature invalid/)
     end
   end
 
@@ -138,14 +154,13 @@ RSpec.describe "AuthController binding endpoints" do
 
     it "401s without a provider session" do
       wire_user_idp(nil)
-      status, = dispatch(:unlink, body: { agent_id: "a-1" })
-      expect(status).to eq(401)
+      status, body = dispatch(:unlink, body: { agent_id: "a-1" })
+      expect_problem(status, body, http: 401, code: "unauthenticated")
     end
 
     it "400s on a missing agent_id" do
       status, body = dispatch(:unlink, body: {})
-      expect(status).to eq(400)
-      expect(body.dig(:error, :message)).to match(/agent_id/)
+      expect_problem(status, body, http: 400, code: "bad_request", detail: /agent_id/)
     end
 
     it "404s for an agent not bound to this holder" do
@@ -153,8 +168,8 @@ RSpec.describe "AuthController binding endpoints" do
         .and_raise(Kiosk::Server::Errors::NotFound.new("no linked assistant account with this agent_id"))
 
       status, body = dispatch(:unlink, body: { agent_id: "foreign" })
-      expect(status).to eq(404)
-      expect(body.dig(:error, :code)).to eq("not_found")
+      expect_problem(status, body, http: 404, code: "not_found",
+                     detail: /no linked assistant account/)
     end
   end
 end

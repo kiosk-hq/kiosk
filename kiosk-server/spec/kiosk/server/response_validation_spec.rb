@@ -13,12 +13,12 @@ RSpec.describe Kiosk::Server::ResponseValidation do
   let(:identity)   { build_identity(actor: "agent") }
 
   def query(name, args = {})
-    Kiosk::Server::Executor.call(kind: :query, args: args.merge(name: name),
+    Kiosk::Server::Executor.call(kind: :query, args: args, name: name,
                                  identity: identity, connection: connection)
   end
 
   def action(name, args = {})
-    Kiosk::Server::Executor.call(kind: :run, args: args.merge(name: name),
+    Kiosk::Server::Executor.call(kind: :run, args: args, name: name,
                                  identity: identity, connection: connection)
   end
 

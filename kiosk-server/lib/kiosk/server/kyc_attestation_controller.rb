@@ -97,9 +97,16 @@ module Kiosk
         )
       end
 
+      # RFC 9457 problem document, like every other error on this wire
+      # (spec §9). Moved here with the auth plane at the 0.4 cutover.
       def render_error(err)
         Kiosk::Server::Headers.add_to(response.headers)
-        render json: err.to_envelope, status: err.http_status
+        Kiosk::Server::Headers.add_cache_policy(
+          response.headers, status: err.http_status
+        )
+        err.response_headers.each { |name, value| response.set_header(name, value) }
+        render json: err.to_problem, status: err.http_status,
+               content_type: Errors::PROBLEM_CONTENT_TYPE
       end
     end
   end

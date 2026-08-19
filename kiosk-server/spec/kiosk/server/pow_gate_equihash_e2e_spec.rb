@@ -50,11 +50,25 @@ RSpec.describe "PowGate × equihash (real backend, real gate)" do
     end.new
   end
 
-  # Hand-mint a signed challenge bound to (command, body) with salt=KAT so the
-  # KAT nonce verifies through the real backend. This is exactly what the gate
-  # itself emits (same Challenge.issue), but with a controlled salt + id.
-  def kat_challenge(id:, command: "query", body: { name: "menu" })
-    fp = Kiosk::Server::PowGate.request_fingerprint(command: command, body: body)
+  # The call under test, as a router reaches it on the 0.4 wire:
+  # `GET <endpoint>/catalog?q=milk`. `command:` is the gate/POLICY verb the
+  # policy branches on; `method:`/`verb:` are the two halves §3.4's fingerprint
+  # binds to alongside the arguments.
+  ARGS = { q: "milk" }.freeze
+
+  # Drive the gate for that call. `command:` stays the POLICY verb; any of the
+  # three fingerprint inputs can be overridden to build a MISMATCHED submission.
+  def gate(pow:, command: "query", method: "GET", verb: "catalog", body: ARGS)
+    Kiosk::Server::PowGate.gate(
+      identity: identity, command: command, method: method, verb: verb, body: body, pow: pow,
+    )
+  end
+
+  # Hand-mint a signed challenge bound to (method, verb, args) with salt=KAT so
+  # the KAT nonce verifies through the real backend. This is exactly what the
+  # gate itself emits (same Challenge.issue), but with a controlled salt + id.
+  def kat_challenge(id:, method: "GET", verb: "catalog", body: ARGS)
+    fp = Kiosk::Server::PowGate.request_fingerprint(method: method, verb: verb, body: body)
     Kiosk::Reputation::Challenge.issue(
       alg:                 "equihash",
       params:              KAT_PARAMS,
@@ -69,7 +83,7 @@ RSpec.describe "PowGate × equihash (real backend, real gate)" do
   it "issues `count` equihash challenges on an unproven request (the 402 shape)" do
     err = nil
     begin
-      Kiosk::Server::PowGate.gate(identity: identity, command: "query", body: { name: "menu" }, pow: nil)
+      gate(pow: nil)
     rescue Kiosk::Server::Errors::PowRequired => e
       err = e
     end
@@ -83,11 +97,7 @@ RSpec.describe "PowGate × equihash (real backend, real gate)" do
   it "proceeds when the real equihash verifier accepts the submitted proof (N=1)" do
     proof = { challenge: kat_challenge(id: "c1"), nonce: KAT_NONCE }
 
-    result = Kiosk::Server::PowGate.gate(
-      identity: identity, command: "query", body: { name: "menu" },
-      pow: { proofs: [proof] },
-    )
-    expect(result).to eq(:proceed)
+    expect(gate(pow: { proofs: [proof] })).to eq(:proceed)
   end
 
   it "rejects a WRONG nonce through the real verifier (403 + penalty)" do
@@ -97,10 +107,7 @@ RSpec.describe "PowGate × equihash (real backend, real gate)" do
     proof = { challenge: kat_challenge(id: "c1"), nonce: { indices: [3, 10] } } # not a valid solution
 
     expect {
-      Kiosk::Server::PowGate.gate(
-        identity: identity, command: "query", body: { name: "menu" },
-        pow: { proofs: [proof] },
-      )
+      gate(pow: { proofs: [proof] })
     }.to raise_error(Kiosk::Server::Errors::Forbidden, /invalid proof/)
     expect(penalty).to eq([identity])
   end
@@ -112,29 +119,43 @@ RSpec.describe "PowGate × equihash (real backend, real gate)" do
       proofs = %w[c1 c2 c3].map { |id| { challenge: kat_challenge(id: id), nonce: KAT_NONCE } }
 
       expect {
-        Kiosk::Server::PowGate.gate(
-          identity: identity, command: "query", body: { name: "menu" },
-          pow: { proofs: proofs.first(2) },
-        )
+        gate(pow: { proofs: proofs.first(2) })
       }.to raise_error(Kiosk::Server::Errors::PowRequired)
 
-      result = Kiosk::Server::PowGate.gate(
-        identity: identity, command: "query", body: { name: "menu" },
-        pow: { proofs: proofs },
-      )
-      expect(result).to eq(:proceed)
+      expect(gate(pow: { proofs: proofs })).to eq(:proceed)
     end
   end
 
-  it "rejects a valid proof submitted against a DIFFERENT request (fingerprint binding)" do
-    # Challenge minted for body {name: menu}; submitted against {name: items}.
-    proof = { challenge: kat_challenge(id: "c1", body: { name: "menu" }), nonce: KAT_NONCE }
+  # ── fingerprint binding, through the real crypto ─────────────────────────
+  #
+  # §3.4 hashes "<METHOD> <verb>\n<canonical args>", so a proof solved for
+  # `GET catalog?q=milk` is spendable on that call and on nothing else. Each
+  # example below mints its challenge for THAT call and submits it against a
+  # request differing in exactly ONE of the three inputs; the N=1 example above
+  # is the matching control that shows the proof itself is good.
+  describe "a valid proof submitted against a DIFFERENT request" do
+    it "re-challenges when the ARGUMENTS differ" do
+      proof = { challenge: kat_challenge(id: "c1"), nonce: KAT_NONCE }
 
-    expect {
-      Kiosk::Server::PowGate.gate(
-        identity: identity, command: "query", body: { name: "items" },
-        pow: { proofs: [proof] },
-      )
-    }.to raise_error(Kiosk::Server::Errors::PowRequired)
+      expect {
+        gate(pow: { proofs: [proof] }, body: { q: "bread" })
+      }.to raise_error(Kiosk::Server::Errors::PowRequired)
+    end
+
+    it "re-challenges when the METHOD differs (a GET catalog proof on POST catalog)" do
+      proof = { challenge: kat_challenge(id: "c1"), nonce: KAT_NONCE }
+
+      expect {
+        gate(pow: { proofs: [proof] }, command: "run", method: "POST")
+      }.to raise_error(Kiosk::Server::Errors::PowRequired)
+    end
+
+    it "re-challenges when the VERB differs (a catalog proof is not an orders proof)" do
+      proof = { challenge: kat_challenge(id: "c1"), nonce: KAT_NONCE }
+
+      expect {
+        gate(pow: { proofs: [proof] }, verb: "orders")
+      }.to raise_error(Kiosk::Server::Errors::PowRequired)
+    end
   end
 end

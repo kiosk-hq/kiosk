@@ -36,7 +36,13 @@ module Kiosk
       # GET <endpoint>/openapi.json
       def show
         identity = resolve_identity!
-        toll!(identity: identity, command: :schema, body: {})
+        # Tolled as the POLICY verb `:schema` — it renders the same catalog, so
+        # an untolled second spelling of it would be a way to read around the
+        # price. But the FINGERPRINT binds to this call's own path segment, not
+        # to `schema`'s: §3.4 digests `"<METHOD> <verb>"`, and passing
+        # `verb: "schema"` here would make one solved proof spendable on both
+        # endpoints — a discount nobody decided on.
+        toll!(identity: identity, command: :schema, name: "openapi.json", body: {})
 
         render_wire_body(
           OpenApi.build(base_url: request.base_url),

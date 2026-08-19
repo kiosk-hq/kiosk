@@ -81,7 +81,15 @@ module Kiosk
       # `bin/check-kiosk-names` holds this list against the engine's own route
       # table, so a route added there without a name added here fails the build
       # instead of quietly re-opening a shadowed name.
-      RESERVED_NAMES = %w[agents auth oauth pay query run schema].freeze
+      #
+      # `query` and `run` LEFT this list at the 0.4 cutover, and that is the
+      # check earning its keep in the other direction: the engine no longer
+      # draws those segments (T-074 = A deleted the multiplexed pair), so
+      # reserving them would be reserving nothing — a boot-time refusal for a
+      # name that is, in fact, free. An operator may now declare a verb called
+      # `query` or `run`; none does, and one that did would be served at
+      # `<endpoint>/query` like any other.
+      RESERVED_NAMES = %w[agents auth oauth pay schema].freeze
 
       # The descriptor fields 0.4 makes REQUIRED on every verb (T-073 = A,
       # Phil 2026-08-17). Both are contracts a caller acts on — `input_schema`

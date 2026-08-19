@@ -10,10 +10,30 @@ require "json"
 
 RSpec.describe "AuthController#revoke (revoke-all-sessions)" do
   def dispatch(controller, action, env)
-    status, _headers, body = controller.action(action).call(env)
+    status, headers, body = controller.action(action).call(env)
     raw = +""
     body.each { |chunk| raw << chunk }
+    @last_headers = headers
     [status, raw.empty? ? {} : JSON.parse(raw, symbolize_names: true)]
+  end
+
+  def last_headers = @last_headers
+
+  # The auth plane answers the SAME RFC 9457 problem document the wire does
+  # since the 0.4 cutover: `application/problem+json` (the media type is half
+  # of what makes a document a problem document), a per-code `type` URI and
+  # `title`, the status restated in the body, and the SAME closed-vocabulary
+  # token — moved from `error.code` to the TOP-LEVEL `code`, with the old
+  # `message` as `detail`. SUCCESS bodies are untouched; they were never
+  # enveloped.
+  def expect_problem(status, body, http:, code:, detail: nil)
+    expect(status).to eq(http)
+    expect(last_headers["Content-Type"]).to include("application/problem+json")
+    expect(body[:type]).to   eq("https://kiosk.tech/problems/#{code}")
+    expect(body[:title]).to  eq(Kiosk::Server::Errors::TITLES.fetch(code))
+    expect(body[:status]).to eq(http)
+    expect(body[:code]).to   eq(code)
+    expect(body[:detail]).to include(detail) if detail
   end
 
   def revoke_env(token = nil)
@@ -46,14 +66,12 @@ RSpec.describe "AuthController#revoke (revoke-all-sessions)" do
   # ─── 401 guard: nothing resolves (no / garbage token → nil identity) ─────
   it "returns 401 Unauthenticated when NO Authorization header is present" do
     status, body = dispatch(Kiosk::Server::AuthController, :revoke, revoke_env)
-    expect(status).to eq(401)
-    expect(body.dig(:error, :code)).to eq("unauthenticated")
+    expect_problem(status, body, http: 401, code: "unauthenticated")
   end
 
   it "returns 401 Unauthenticated for a GARBAGE token (nil identity, not 500)" do
     status, body = dispatch(Kiosk::Server::AuthController, :revoke, revoke_env("garbage-not-a-jwt"))
-    expect(status).to eq(401)
-    expect(body.dig(:error, :code)).to eq("unauthenticated")
+    expect_problem(status, body, http: 401, code: "unauthenticated")
   end
 
   # ─── 401 guard: identity resolves but carries NO agent_id ───────────────
@@ -69,8 +87,7 @@ RSpec.describe "AuthController#revoke (revoke-all-sessions)" do
     expect(Kiosk.configuration.revocation_store).not_to receive(:revoke_all)
 
     status, body = dispatch(Kiosk::Server::AuthController, :revoke, revoke_env("some-token"))
-    expect(status).to eq(401)
-    expect(body.dig(:error, :code)).to eq("unauthenticated")
+    expect_problem(status, body, http: 401, code: "unauthenticated")
   end
 
   # ─── happy path: revoke_all called, fresh token re-issued ───────────────
@@ -119,13 +136,33 @@ end
 # The success paths of these actions are covered end-to-end by the auth-flow
 # and e2e specs; these examples pin the controller's OWN error guards — the
 # missing-public_key 400, missing-field 400, and malformed-body 400 — so they
-# render a clean 4xx envelope rather than escaping as a 500.
+# render a clean 4xx problem document rather than escaping as a 500.
 RSpec.describe "AuthController auth-surface error branches" do
   def dispatch(controller, action, env)
-    status, _headers, body = controller.action(action).call(env)
+    status, headers, body = controller.action(action).call(env)
     raw = +""
     body.each { |chunk| raw << chunk }
+    @last_headers = headers
     [status, raw.empty? ? {} : JSON.parse(raw, symbolize_names: true)]
+  end
+
+  def last_headers = @last_headers
+
+  # The auth plane answers the SAME RFC 9457 problem document the wire does
+  # since the 0.4 cutover: `application/problem+json` (the media type is half
+  # of what makes a document a problem document), a per-code `type` URI and
+  # `title`, the status restated in the body, and the SAME closed-vocabulary
+  # token — moved from `error.code` to the TOP-LEVEL `code`, with the old
+  # `message` as `detail`. SUCCESS bodies are untouched; they were never
+  # enveloped.
+  def expect_problem(status, body, http:, code:, detail: nil)
+    expect(status).to eq(http)
+    expect(last_headers["Content-Type"]).to include("application/problem+json")
+    expect(body[:type]).to   eq("https://kiosk.tech/problems/#{code}")
+    expect(body[:title]).to  eq(Kiosk::Server::Errors::TITLES.fetch(code))
+    expect(body[:status]).to eq(http)
+    expect(body[:code]).to   eq(code)
+    expect(body[:detail]).to include(detail) if detail
   end
 
   def post_env(path, raw_body)
@@ -147,16 +184,13 @@ RSpec.describe "AuthController auth-surface error branches" do
     it "returns 400 bad_request when public_key is absent" do
       env = Rack::MockRequest.env_for("/kiosk/auth/challenge")
       status, body = dispatch(Kiosk::Server::AuthController, :challenge, env)
-      expect(status).to eq(400)
-      expect(body.dig(:error, :code)).to eq("bad_request")
-      expect(body.dig(:error, :message)).to include("public_key")
+      expect_problem(status, body, http: 400, code: "bad_request", detail: "public_key")
     end
 
     it "returns 400 bad_request when public_key is blank" do
       env = Rack::MockRequest.env_for("/kiosk/auth/challenge?public_key=")
       status, body = dispatch(Kiosk::Server::AuthController, :challenge, env)
-      expect(status).to eq(400)
-      expect(body.dig(:error, :code)).to eq("bad_request")
+      expect_problem(status, body, http: 400, code: "bad_request")
     end
   end
 
@@ -164,38 +198,31 @@ RSpec.describe "AuthController auth-surface error branches" do
   describe "#register" do
     it "returns 400 bad_request for an EMPTY body (not 500)" do
       status, body = dispatch(Kiosk::Server::AuthController, :register, post_env("/kiosk/auth/register", ""))
-      expect(status).to eq(400)
-      expect(body.dig(:error, :code)).to eq("bad_request")
+      expect_problem(status, body, http: 400, code: "bad_request")
     end
 
     it "returns 400 bad_request for INVALID JSON (not 500)" do
       status, body = dispatch(Kiosk::Server::AuthController, :register,
                               post_env("/kiosk/auth/register", "{not valid json"))
-      expect(status).to eq(400)
-      expect(body.dig(:error, :code)).to eq("bad_request")
+      expect_problem(status, body, http: 400, code: "bad_request")
     end
 
     it "returns 400 bad_request for a non-object JSON body (not 500)" do
       status, body = dispatch(Kiosk::Server::AuthController, :register,
                               post_env("/kiosk/auth/register", "[1,2,3]"))
-      expect(status).to eq(400)
-      expect(body.dig(:error, :code)).to eq("bad_request")
+      expect_problem(status, body, http: 400, code: "bad_request")
     end
 
     it "returns 400 bad_request naming the missing field when public_key is omitted" do
       status, body = dispatch(Kiosk::Server::AuthController, :register,
                               post_env("/kiosk/auth/register", JSON.generate(signed: "x")))
-      expect(status).to eq(400)
-      expect(body.dig(:error, :code)).to eq("bad_request")
-      expect(body.dig(:error, :message)).to include("public_key")
+      expect_problem(status, body, http: 400, code: "bad_request", detail: "public_key")
     end
 
     it "returns 400 bad_request naming the missing field when signed is omitted" do
       status, body = dispatch(Kiosk::Server::AuthController, :register,
                               post_env("/kiosk/auth/register", JSON.generate(public_key: "x")))
-      expect(status).to eq(400)
-      expect(body.dig(:error, :code)).to eq("bad_request")
-      expect(body.dig(:error, :message)).to include("signed")
+      expect_problem(status, body, http: 400, code: "bad_request", detail: "signed")
     end
 
     # A wrong-TYPED public_key (not just a missing one — the missing-field
@@ -206,22 +233,19 @@ RSpec.describe "AuthController auth-surface error branches" do
     it "returns 400 bad_request (not 500) when public_key is a NUMBER" do
       status, body = dispatch(Kiosk::Server::AuthController, :register,
                               post_env("/kiosk/auth/register", JSON.generate(public_key: 12_345, signed: "x")))
-      expect(status).to eq(400)
-      expect(body.dig(:error, :code)).to eq("bad_request")
+      expect_problem(status, body, http: 400, code: "bad_request")
     end
 
     it "returns 400 bad_request (not 500) when public_key is an OBJECT" do
       status, body = dispatch(Kiosk::Server::AuthController, :register,
                               post_env("/kiosk/auth/register", JSON.generate(public_key: { k: "v" }, signed: "x")))
-      expect(status).to eq(400)
-      expect(body.dig(:error, :code)).to eq("bad_request")
+      expect_problem(status, body, http: 400, code: "bad_request")
     end
 
     it "returns 400 bad_request (not 500) when public_key is an ARRAY" do
       status, body = dispatch(Kiosk::Server::AuthController, :register,
                               post_env("/kiosk/auth/register", JSON.generate(public_key: [1, 2], signed: "x")))
-      expect(status).to eq(400)
-      expect(body.dig(:error, :code)).to eq("bad_request")
+      expect_problem(status, body, http: 400, code: "bad_request")
     end
   end
 
@@ -229,38 +253,32 @@ RSpec.describe "AuthController auth-surface error branches" do
   describe "#login" do
     it "returns 400 bad_request for an EMPTY body (not 500)" do
       status, body = dispatch(Kiosk::Server::AuthController, :login, post_env("/kiosk/auth/login", ""))
-      expect(status).to eq(400)
-      expect(body.dig(:error, :code)).to eq("bad_request")
+      expect_problem(status, body, http: 400, code: "bad_request")
     end
 
     it "returns 400 bad_request for INVALID JSON (not 500)" do
       status, body = dispatch(Kiosk::Server::AuthController, :login,
                               post_env("/kiosk/auth/login", "{not valid json"))
-      expect(status).to eq(400)
-      expect(body.dig(:error, :code)).to eq("bad_request")
+      expect_problem(status, body, http: 400, code: "bad_request")
     end
 
     it "returns 400 bad_request naming the missing field when signed is omitted" do
       status, body = dispatch(Kiosk::Server::AuthController, :login,
                               post_env("/kiosk/auth/login", JSON.generate(public_key: "x")))
-      expect(status).to eq(400)
-      expect(body.dig(:error, :code)).to eq("bad_request")
-      expect(body.dig(:error, :message)).to include("signed")
+      expect_problem(status, body, http: 400, code: "bad_request", detail: "signed")
     end
 
     # The same wrong-typed-field guard on the login sibling.
     it "returns 400 bad_request (not 500) when public_key is a NUMBER" do
       status, body = dispatch(Kiosk::Server::AuthController, :login,
                               post_env("/kiosk/auth/login", JSON.generate(public_key: 12_345, signed: "x")))
-      expect(status).to eq(400)
-      expect(body.dig(:error, :code)).to eq("bad_request")
+      expect_problem(status, body, http: 400, code: "bad_request")
     end
 
     it "returns 400 bad_request (not 500) when public_key is an OBJECT" do
       status, body = dispatch(Kiosk::Server::AuthController, :login,
                               post_env("/kiosk/auth/login", JSON.generate(public_key: { k: "v" }, signed: "x")))
-      expect(status).to eq(400)
-      expect(body.dig(:error, :code)).to eq("bad_request")
+      expect_problem(status, body, http: 400, code: "bad_request")
     end
   end
 end

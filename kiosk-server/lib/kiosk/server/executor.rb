@@ -15,14 +15,22 @@ module Kiosk
     # appropriate verb method, returns {Result} on success or raises
     # {Errors::Base} subclass on failure.
     #
-    # This implements the per-verb
-    # dispatch that {WireController} wraps, factored out of the controller
-    # so it's testable without Rails.
+    # This implements the dispatch that {WireController} and
+    # {VerbController} wrap, factored out of the controller so it is testable
+    # without Rails.
     class Executor
-      # The fixed wire-surface verbs — see the Endpoints section of the spec.
-      # `events` was removed: it was never a capability, the
+      # The four GATE/POLICY verbs — the coarse kind of a call, NOT wire paths.
+      #
+      # Since the 0.4 cutover none of these four is a URL: `query` and `run`
+      # are how a per-verb GET and a per-verb POST are classified for the toll
+      # and the session, and `schema`/`pay` are both a classification and a
+      # reserved path segment. They stay symbols rather than becoming path
+      # names because `reputation_factors` and `Policy#challenge_for` both take
+      # one as `verb:` and every shipped policy branches on these four.
+      #
+      # `events` was removed long before: it was never a capability, the
       # Kiosk::Event type is gone, and the stub only ever raised a raw
-      # NotImplementedError. An unknown verb now returns a clean 400 envelope.
+      # NotImplementedError. An unknown kind is a clean 400.
       VERBS = %i[query run pay schema].freeze
 
       # Verbs that open their own transaction boundaries because they perform
@@ -35,13 +43,11 @@ module Kiosk
       # database connection and must NOT open a SessionContext.
       NO_DB_VERBS = %i[schema].freeze
 
-      # @param name [String, nil] the query/action wire name, when the CALLER
-      #   already knows it. The 0.4 per-verb endpoints do — it is a path
-      #   segment, not a body field — and passing it here rather than smuggling
-      #   it back into `args` means a verb is free to declare an argument
-      #   literally called `name` (none does today; the old wire could never
-      #   have allowed one). nil keeps the 0.3 behaviour: the name is popped
-      #   out of `args`.
+      # @param name [String, nil] the query/action wire name. Always supplied
+      #   on the wire — it is a PATH SEGMENT, not a body field — which is why a
+      #   verb is free to declare an argument literally called `name` (none
+      #   does; 0.3's wire could never have allowed one). Only `pay` and
+      #   `schema` ignore it: their name is their kind.
       def self.call(kind:, args:, identity:, connection:, name: nil)
         new(connection: connection, identity: identity).call(kind: kind, args: args, name: name)
       end
@@ -96,8 +102,7 @@ module Kiosk
       # passed through as the rows payload unchanged, preserving back-compat.
       def verb_query(args, name = nil)
         args = symbolize(args)
-        name ||= args.delete(:name)
-        raise Errors::BadRequest, "args.name (query) required" if name.nil? || name.to_s.empty?
+        raise Errors::BadRequest, "query name required" if name.nil? || name.to_s.empty?
 
         handler = Queries.fetch(name)
         begin
@@ -121,8 +126,7 @@ module Kiosk
 
       def verb_run(args, name = nil)
         args = symbolize(args)
-        name ||= args.delete(:name)
-        raise Errors::BadRequest, "args.name (action) required" if name.nil? || name.to_s.empty?
+        raise Errors::BadRequest, "action name required" if name.nil? || name.to_s.empty?
 
         handler = Actions.fetch(name)
         begin
@@ -146,9 +150,9 @@ module Kiosk
       # default off — see {ResponseValidation} for why it is a
       # development/CI assertion rather than a request check).
       #
-      # It validates {Result#to_payload} — the 0.4 answer shape — so the check
-      # is the same one whichever wire asked, and it survives the cutover that
-      # deletes the other. Returns the Result so it can wrap the return value.
+      # It validates {Result#to_payload} — the answer shape — so the check is
+      # exactly the body the caller receives. Returns the Result so it can wrap
+      # the return value.
       def validate_response!(registry, kind, name, result)
         return result unless Kiosk.configuration.validate_responses
 

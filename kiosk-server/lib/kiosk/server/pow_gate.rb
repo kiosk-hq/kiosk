@@ -48,25 +48,47 @@ module Kiosk
     module PowGate
       module_function
 
-      # Compute the request fingerprint used for challenge binding.
+      # Compute the request fingerprint used for challenge binding — spec
+      # design §3.4:
       #
-      # Covers `command` and the canonical (key-order-independent) JSON
-      # serialisation of `body`. The proof travels in the `Kiosk-PoW` HEADER
-      # (ADR-0022), NOT in the body, so the body is identical at issue time
-      # (no proof) and verify time (proof in the header) — the fingerprint
-      # matches on retry.
+      #     SHA256("<METHOD> <verb>\n<canonical args>")
       #
-      # @param command [String, Symbol]
-      # @param body    [Hash, nil]
+      # It covers the HTTP METHOD, the VERB NAME as it appears in the path,
+      # and the canonical (key-order-independent) JSON serialisation of the
+      # arguments. The proof travels in the `Kiosk-PoW` HEADER (ADR-0022), NOT
+      # in the body, so all three are identical at issue time (no proof) and
+      # verify time (proof in the header) — the fingerprint matches on retry.
+      #
+      # WHY METHOD AND VERB, AND NOT 0.3's `command`. Through 0.3 every read
+      # was `POST <endpoint>/query` and every write `POST <endpoint>/run`, so
+      # the method was a constant and the verb name lived INSIDE the arguments
+      # — the digest could only reach it because the wire smuggled it back in
+      # there. On the per-verb wire the name is a path segment and the method
+      # carries the read/write fork, so both belong in the digest directly and
+      # a proof solved for `GET /catalog?city=Lisbon` is spendable on nothing
+      # else — not on `POST /catalog`, not on another verb with the same args.
+      #
+      # @param method [String] the HTTP request method ("GET", "POST", …)
+      # @param verb   [String, Symbol] the wire verb name (the path segment)
+      # @param body   [Hash, nil] the arguments
       # @return [String] SHA-256 hex digest
-      def request_fingerprint(command:, body:)
-        Digest::SHA256.hexdigest("#{command}\n#{canonical_json(body || {})}")
+      def request_fingerprint(method:, verb:, body:)
+        Digest::SHA256.hexdigest(
+          "#{method.to_s.upcase} #{verb}\n#{canonical_json(body || {})}"
+        )
       end
 
       # Gate a request through the reputation policy.
       #
       # @param identity [Kiosk::Identity]
-      # @param command  [String, Symbol]  the Kiosk verb
+      # @param command  [String, Symbol]  the gate/POLICY verb — one of
+      #   {Executor::VERBS}; this is what `reputation_factors` and
+      #   `Policy#challenge_for` branch on, and it is NOT what the fingerprint
+      #   binds to
+      # @param method   [String]          the HTTP request method — half of the
+      #   §3.4 fingerprint
+      # @param verb     [String, Symbol]  the WIRE verb name (the path segment)
+      #   — the other half
       # @param body     [Hash, nil]       the verb args (the proof rides in the header, never here)
       # @param pow      [Array, Hash, nil] proof(s) parsed from the `Kiosk-PoW` header, or nil
       #
@@ -74,7 +96,7 @@ module Kiosk
       # @raise  [Errors::PowRequired]       (HTTP 402) when a challenge must be solved
       # @raise  [Errors::Forbidden]         (HTTP 403) when a submitted proof is invalid
       # @raise  [Errors::ConfigurationError] when the policy is set but pow_secret is missing
-      def gate(identity:, command:, body:, pow:)
+      def gate(identity:, command:, body:, pow:, method: "POST", verb: nil)
         config = Kiosk.configuration
         policy = config.reputation_policy
 
@@ -100,7 +122,7 @@ module Kiosk
 
         # ── Ask the policy ───────────────────────────────────────────────────
 
-        fp      = request_fingerprint(command: command, body: body)
+        fp      = request_fingerprint(method: method, verb: verb || command, body: body)
         factors = config.reputation_factors.call(identity: identity, verb: command.to_sym)
         spec    = policy.challenge_for(identity: identity, verb: command.to_sym, factors: factors)
 

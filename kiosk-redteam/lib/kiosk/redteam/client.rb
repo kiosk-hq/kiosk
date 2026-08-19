@@ -101,30 +101,30 @@ module Kiosk
 
       # Execute a named query (read-only).
       #
+      # PROTOCOL 0.4: a query is `GET <endpoint>/<query-name>` with its
+      # arguments in the QUERY STRING. There is no `/kiosk/query` endpoint and
+      # no `name` field — the name is the path segment, which is also what the
+      # PoW fingerprint binds to.
+      #
       # @param principal [Principal]
       # @param name      [String]  query name registered by the provider
       # @param params    [Hash]    additional query parameters
       # @return [Response]
       def query(principal, name:, **params)
-        post_json(
-          "/kiosk/query",
-          { name: name }.merge(params),
-          bearer: principal.token,
-        )
+        get_json("/kiosk/#{name}", params: params, bearer: principal.token)
       end
 
       # Execute a named action (write).
+      #
+      # PROTOCOL 0.4: an action is `POST <endpoint>/<action-name>` whose body
+      # is the arguments and nothing else.
       #
       # @param principal [Principal]
       # @param name      [String] action name registered by the provider
       # @param args      [Hash]   action arguments
       # @return [Response]
       def run(principal, name:, **args)
-        post_json(
-          "/kiosk/run",
-          { name: name }.merge(args),
-          bearer: principal.token,
-        )
+        post_json("/kiosk/#{name}", args, bearer: principal.token)
       end
 
       # Sign and POST a pay command with RS256-signed intent + cart + payment mandates.
@@ -252,7 +252,9 @@ module Kiosk
         # in the Kiosk-PoW request header as raw JSON.
         resp = post_json("/kiosk/auth/register", body)
         if resp.status == 402
-          challenges = resp.body.dig("error", "challenges") rescue nil
+          # RFC 9457: `challenges` is a TOP-LEVEL extension member of the
+          # problem document, not a field of a nested `error` object.
+          challenges = resp.body["challenges"] rescue nil
           if challenges.is_a?(Array) && challenges.any?
             proofs = challenges.map { |c| { challenge: c, nonce: equihash_solve(c) } }
             resp = post_json("/kiosk/auth/register", body, pow: JSON.generate(proofs))
@@ -319,10 +321,27 @@ module Kiosk
       end
 
       # GET the given path; returns a {Response}. Used for the auth-challenge
-      # fetch that opens the registration handshake.
-      def get_json(path)
+      # fetch that opens the registration handshake AND, since 0.4, for every
+      # query — a query's arguments are the query string.
+      #
+      # @param path   [String]      URL path (including leading slash)
+      # @param params [Hash]        query-string parameters
+      # @param bearer [String, nil] Bearer token for Authorization header
+      # @param pow    [String, nil] raw Kiosk-PoW header value. A GET has no
+      #   body, so the header is the ONLY channel a proof can travel on — which
+      #   is why ADR-0022 moved it there before the wire needed it. Nothing in
+      #   this gem passes it yet: {#query} has no 402 retry, because a tolled
+      #   query is `payment_required_stall`'s job (a toll DEFERS a request, it
+      #   does not refuse it — K-736) and solving one would change what a
+      #   scenario measures. The channel is here because a GET cannot carry a
+      #   proof any other way, so a retry added later has nowhere else to put it.
+      def get_json(path, params: {}, bearer: nil, pow: nil)
         uri = URI("#{@base_url}#{path}")
-        res = Net::HTTP.new(uri.host, uri.port).request(Net::HTTP::Get.new(uri))
+        uri.query = URI.encode_www_form(params) unless params.nil? || params.empty?
+        headers = {}
+        headers["Authorization"] = "Bearer #{bearer}" if bearer
+        headers["Kiosk-PoW"] = pow if pow
+        res = Net::HTTP.new(uri.host, uri.port).request(Net::HTTP::Get.new(uri, headers))
 
         parsed = begin
           JSON.parse(res.body)

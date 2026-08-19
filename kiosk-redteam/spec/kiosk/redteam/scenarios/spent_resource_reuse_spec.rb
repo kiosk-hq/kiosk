@@ -16,13 +16,20 @@ RSpec.describe Kiosk::Redteam::Scenarios::SpentResourceReuse do
     )
   end
 
+  # Both invocations are the SAME endpoint — `POST /kiosk/start_rental` with
+  # `{reservation_id: …}` as the body — so the two uses are one stub answering
+  # twice, in order.
+  def rental_ok(token)
+    { "scooter_code" => "SK-001", "rental_token" => token, "exp" => 4_102_444_800 }
+  end
+
   describe "#call — non-vacuity" do
     context "when the server allows the gated action twice (broken — BREACH, C3)" do
       it "returns blocked: false" do
         stub_registers("a")
-        stub_exec_run(status: 200, body: { "value" => { "id" => "res-1" } })
-        stub_exec_pay(status: 200)
+        stub_pay(status: 200)
         # start_rental succeeds TWICE — no spent-resource guard
+        stub_action("start_rental", status: 200, body: rental_ok("rt-1"))
 
         verdict = scenario.call(client, profile)
 
@@ -34,22 +41,11 @@ RSpec.describe Kiosk::Redteam::Scenarios::SpentResourceReuse do
     context "when the server blocks the second invocation (correct — BLOCKED)" do
       it "returns blocked: true" do
         stub_registers("a")
-        stub_request(:post, "#{BASE_URL}/kiosk/run")
-          .with { |req| JSON.parse(req.body)["name"] == "reserve" }
-          .to_return(status: 200,
-                     body:   JSON.generate({ "value" => { "id" => "res-1" } }),
-                     headers: { "Content-Type" => "application/json" })
-        stub_exec_pay(status: 200)
-        stub_request(:post, "#{BASE_URL}/kiosk/run")
-          .with { |req| JSON.parse(req.body)["name"] == "start_rental" }
-          .to_return(
-            # First call succeeds
-            { status: 200, body: JSON.generate({ "value" => { "rental_token" => "tok1" } }),
-              headers: { "Content-Type" => "application/json" } },
-            # Second call is blocked
-            { status: 403, body: JSON.generate({ "error" => { "code" => "forbidden" } }),
-              headers: { "Content-Type" => "application/json" } },
-          )
+        stub_pay(status: 200)
+        stub_request(:post, verb_url("start_rental")).to_return(
+          json_return(200, rental_ok("rt-1")),        # first use succeeds
+          problem_return("forbidden"),                # second use is blocked
+        )
 
         verdict = scenario.call(client, profile)
 
@@ -61,17 +57,8 @@ RSpec.describe Kiosk::Redteam::Scenarios::SpentResourceReuse do
     context "when the first gated action itself fails" do
       it "returns breach: false with diagnostic detail" do
         stub_registers("a")
-        stub_request(:post, "#{BASE_URL}/kiosk/run")
-          .with { |req| JSON.parse(req.body)["name"] == "reserve" }
-          .to_return(status: 200,
-                     body:   JSON.generate({ "value" => { "id" => "res-1" } }),
-                     headers: { "Content-Type" => "application/json" })
-        stub_exec_pay(status: 200)
-        stub_request(:post, "#{BASE_URL}/kiosk/run")
-          .with { |req| JSON.parse(req.body)["name"] == "start_rental" }
-          .to_return(status: 403,
-                     body:   JSON.generate({ "error" => { "code" => "forbidden" } }),
-                     headers: { "Content-Type" => "application/json" })
+        stub_pay(status: 200)
+        stub_action("start_rental", status: 403, code: "forbidden")
 
         verdict = scenario.call(client, profile)
 
@@ -88,42 +75,34 @@ RSpec.describe Kiosk::Redteam::Scenarios::SpentResourceReuse do
   # means the payment gate answered — but A paid, and the first use succeeded —
   # and a 401 means A's token died mid-scenario. Both used to score BLOCKED.
   describe "#call — only a 403 forbidden/rls_denied proves the state gate (K-728)" do
-    def stub_second_use(status, body)
+    def stub_second_use(status, code)
       stub_registers("a")
-      stub_request(:post, "#{BASE_URL}/kiosk/run")
-        .with { |req| JSON.parse(req.body)["name"] == "reserve" }
-        .to_return(status: 200, body: JSON.generate("value" => { "id" => "res-1" }),
-                   headers: { "Content-Type" => "application/json" })
-      stub_exec_pay(status: 200)
-      stub_request(:post, "#{BASE_URL}/kiosk/run")
-        .with { |req| JSON.parse(req.body)["name"] == "start_rental" }
-        .to_return(
-          { status: 200, body: JSON.generate("value" => { "rental_token" => "tok1" }),
-            headers: { "Content-Type" => "application/json" } },
-          { status: status, body: JSON.generate(body),
-            headers: { "Content-Type" => "application/json" } },
-        )
+      stub_pay(status: 200)
+      stub_request(:post, verb_url("start_rental")).to_return(
+        json_return(200, rental_ok("rt-1")),
+        problem_return(code, status: status),
+      )
     end
 
     it "blocks on 403 rls_denied" do
-      stub_second_use(403, "error" => { "code" => "rls_denied" })
+      stub_second_use(403, "rls_denied")
       expect(scenario.call(client, profile).blocked).to be(true)
     end
 
     it "does not block when the second use is answered 402" do
-      stub_second_use(402, "error" => { "code" => "payment_setup_required" })
+      stub_second_use(402, "payment_setup_required")
       verdict = scenario.call(client, profile)
       expect(verdict.blocked).to be(false)
       expect(verdict.detail).to include("want status 403")
     end
 
     it "does not block when the second use is answered 401" do
-      stub_second_use(401, "error" => { "code" => "unauthenticated" })
+      stub_second_use(401, "unauthenticated")
       expect(scenario.call(client, profile).blocked).to be(false)
     end
 
     it "does not block when the second use crashes 500" do
-      stub_second_use(500, "error" => { "code" => "forbidden" })
+      stub_second_use(500, "forbidden")
       expect(scenario.call(client, profile).blocked).to be(false)
     end
   end

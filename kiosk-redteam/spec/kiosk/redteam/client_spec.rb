@@ -29,8 +29,7 @@ RSpec.describe Kiosk::Redteam::Client do
     context "when pow: :skip" do
       it "posts without a pow field" do
         req_stub = stub_request(:post, "#{base_url}/kiosk/auth/register")
-          .to_return(status: 422, body: JSON.generate("error" => { "code" => "pow_required" }),
-                     headers: { "Content-Type" => "application/json" })
+          .to_return(problem_return("pow_required"))
 
         client.register_raw(name: "no-pow", pow_difficulty: 20, pow: :skip)
 
@@ -51,8 +50,7 @@ RSpec.describe Kiosk::Redteam::Client do
         captured_body   = nil
         stub_request(:post, "#{base_url}/kiosk/auth/register")
           .with { |req| captured_header = req.headers["Kiosk-Pow"]; captured_body = JSON.parse(req.body); true }
-          .to_return(status: 422, body: JSON.generate("error" => { "code" => "bad_request" }),
-                     headers: { "Content-Type" => "application/json" })
+          .to_return(problem_return("bad_request"))
 
         client.register_raw(name: "bad-pow-agent", pow_difficulty: 20, pow: "definitely_wrong_proof")
 
@@ -98,8 +96,10 @@ RSpec.describe Kiosk::Redteam::Client do
           .to_return do
             calls += 1
             if calls == 1
-              { status: 402, body: JSON.generate(ok: false, error: { code: "pow_required", challenges: [kat_challenge] }),
-                headers: { "Content-Type" => "application/json" } }
+              # RFC 9457: `challenges` is a TOP-LEVEL extension member of the
+              # problem document — Client#build_register reads it there, not
+              # off a nested `error` object.
+              problem_return("pow_required", challenges: [kat_challenge])
             else
               { status: 201, body: register_body, headers: { "Content-Type" => "application/json" } }
             end
@@ -119,16 +119,14 @@ RSpec.describe Kiosk::Redteam::Client do
 
     context "when the 402 gate carries no solvable challenges" do
       it "does NOT resubmit and surfaces the 402 as a RegistrationError" do
-        # A 402 whose error envelope has no `challenges` array: the client
+        # A 402 problem document with no `challenges` member: the client
         # cannot solve anything, so it must post exactly once (no resubmit)
         # and register! must raise on the still-402 response.
         calls = 0
         stub_request(:post, "#{base_url}/kiosk/auth/register")
           .to_return do
             calls += 1
-            { status: 402,
-              body: JSON.generate(ok: false, error: { code: "pow_required" }),
-              headers: { "Content-Type" => "application/json" } }
+            problem_return("pow_required")
           end
 
         expect {
@@ -155,8 +153,7 @@ RSpec.describe Kiosk::Redteam::Client do
 
     it "raises RegistrationError on non-201" do
       stub_request(:post, "#{base_url}/kiosk/auth/register")
-        .to_return(status: 422, body: JSON.generate("error" => { "code" => "pow_required" }),
-                   headers: { "Content-Type" => "application/json" })
+        .to_return(problem_return("bad_request", status: 422))
 
       expect {
         client.register!(name: "bad-agent", pow: :skip)
@@ -240,7 +237,7 @@ RSpec.describe Kiosk::Redteam::Client do
       captured_req = nil
       stub_request(:post, "#{base_url}/kiosk/agents/kyc")
         .with { |req| captured_req = req; true }
-        .to_return(status: 200, body: JSON.generate("ok" => true), headers: { "Content-Type" => "application/json" })
+        .to_return(json_return(200, "kyc_verified" => true, "attributes" => {}))
 
       resp = client.kyc(principal, attestation_jws: "fake.jws.token")
 
@@ -251,23 +248,57 @@ RSpec.describe Kiosk::Redteam::Client do
   end
 
   # ── query ────────────────────────────────────────────────────────────────
+  #
+  # These two describes are the ONLY place the wire shape of a verb call is
+  # pinned, so they assert the request rather than the answer: the method, the
+  # verb name as a PATH SEGMENT, the channel its arguments travel on, and that
+  # `name` appears nowhere — it was 0.3's multiplexing field and the cutover
+  # deleted the endpoints that read it.
 
   describe "#query" do
     let(:principal) do
       Kiosk::Redteam::Principal.new(agent_id: "a1", user_id: "u1", token: "tok-q", rsa_key: nil)
     end
 
-    it "POSTs to /kiosk/query with the given name and params (flat body)" do
-      captured_body = nil
-      stub_request(:post, "#{base_url}/kiosk/query")
-        .with { |req| captured_body = JSON.parse(req.body); true }
-        .to_return(status: 200, body: JSON.generate("rows" => []), headers: { "Content-Type" => "application/json" })
+    it "GETs /kiosk/<name> with the params in the query string (no body, no name field)" do
+      captured_req = nil
+      stub = stub_request(:get, "#{base_url}/kiosk/my_orders")
+        .with(query: { "restaurant" => "Foo", "limit" => "5" })
+        .with { |req| captured_req = req; true }
+        .to_return(json_return(200, []))
 
-      client.query(principal, name: "my_orders", restaurant: "Foo")
+      client.query(principal, name: "my_orders", restaurant: "Foo", limit: 5)
 
-      expect(captured_body["name"]).to eq("my_orders")
-      expect(captured_body["restaurant"]).to eq("Foo")
-      expect(captured_body).not_to have_key("command")
+      expect(stub).to have_been_requested.once
+      expect(captured_req.method).to eq(:get)
+      expect(captured_req.uri.path).to eq("/kiosk/my_orders")
+      # Every argument is a query-string pair, and the wire carries them as
+      # strings — the origin recovers the declared types (ArgumentDecoder).
+      expect(URI.decode_www_form(captured_req.uri.query).to_h)
+        .to eq("restaurant" => "Foo", "limit" => "5")
+      expect(captured_req.headers["Authorization"]).to eq("Bearer tok-q")
+      # A GET has no body — and there is nowhere left for a `name` to ride.
+      expect(captured_req.body.to_s).to eq("")
+      expect(captured_req.uri.to_s).not_to include("name=")
+      expect(captured_req.uri.path).not_to include("/query")
+    end
+
+    it "GETs the bare verb path when there are no params at all" do
+      stub = stub_request(:get, "#{base_url}/kiosk/my_orders").to_return(json_return(200, []))
+
+      client.query(principal, name: "my_orders")
+
+      expect(stub).to have_been_requested.once
+    end
+
+    it "reads a non-paginating query's BARE ARRAY answer as the body" do
+      stub_request(:get, "#{base_url}/kiosk/my_orders")
+        .to_return(json_return(200, [{ "id" => "r1" }]))
+
+      resp = client.query(principal, name: "my_orders")
+
+      expect(resp.status).to eq(200)
+      expect(resp.body).to eq([{ "id" => "r1" }])
     end
   end
 
@@ -278,17 +309,46 @@ RSpec.describe Kiosk::Redteam::Client do
       Kiosk::Redteam::Principal.new(agent_id: "a1", user_id: "u1", token: "tok-r", rsa_key: nil)
     end
 
-    it "POSTs to /kiosk/run with the given name and args (flat body)" do
+    it "POSTs /kiosk/<name> with the args as the WHOLE body (no name field)" do
+      captured_req = nil
+      stub = stub_request(:post, "#{base_url}/kiosk/place_order")
+        .with { |req| captured_req = req; true }
+        .to_return(json_return(200, "order_id" => "o1"))
+
+      client.run(principal, name: "place_order", quantity: 2, sku: "SK-1")
+
+      expect(stub).to have_been_requested.once
+      expect(captured_req.method).to eq(:post)
+      expect(captured_req.uri.path).to eq("/kiosk/place_order")
+      expect(captured_req.uri.query).to be_nil
+      expect(captured_req.headers["Authorization"]).to eq("Bearer tok-r")
+
+      body = JSON.parse(captured_req.body)
+      # The body IS the arguments — nothing else is in it.
+      expect(body).to eq("quantity" => 2, "sku" => "SK-1")
+      expect(body).not_to have_key("name")
+      expect(body).not_to have_key("command")
+      expect(captured_req.uri.path).not_to include("/run")
+    end
+
+    it "POSTs an empty JSON object when the action takes no arguments" do
       captured_body = nil
-      stub_request(:post, "#{base_url}/kiosk/run")
+      stub_request(:post, "#{base_url}/kiosk/close_tab")
         .with { |req| captured_body = JSON.parse(req.body); true }
-        .to_return(status: 200, body: JSON.generate("value" => {}), headers: { "Content-Type" => "application/json" })
+        .to_return(json_return(200, "closed" => true))
 
-      client.run(principal, name: "place_order", quantity: 2)
+      client.run(principal, name: "close_tab")
 
-      expect(captured_body["name"]).to eq("place_order")
-      expect(captured_body["quantity"]).to eq(2)
-      expect(captured_body).not_to have_key("command")
+      expect(captured_body).to eq({})
+    end
+
+    it "reads an action's own object as the body — there is no envelope" do
+      stub_request(:post, "#{base_url}/kiosk/place_order")
+        .to_return(json_return(200, "order_id" => "o1", "total_cents" => 900))
+
+      resp = client.run(principal, name: "place_order")
+
+      expect(resp.body).to eq("order_id" => "o1", "total_cents" => 900)
     end
   end
 
@@ -304,8 +364,8 @@ RSpec.describe Kiosk::Redteam::Client do
       captured_body = nil
       stub_request(:post, "#{base_url}/kiosk/pay")
         .with { |req| captured_body = JSON.parse(req.body); true }
-        .to_return(status: 200, body: JSON.generate("value" => { "payment_mandate_id" => "pm1" }),
-                   headers: { "Content-Type" => "application/json" })
+        .to_return(json_return(200, "settlement_id" => "stl-1", "psp_reference" => "pi_1",
+                                    "settled_amount_cents" => 100, "currency" => "eur"))
 
       now = Time.now.to_i
       intent = { "id" => "i1", "user_id" => "us1", "scope" => "food", "exp" => now + 600, "iat" => now }

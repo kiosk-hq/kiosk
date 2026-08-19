@@ -28,23 +28,19 @@ RSpec.describe Kiosk::Redteam::Scenarios::PrivilegeSelfSelection do
   end
 
   def stub_register_returning(access_token, status: 201)
-    body = if status == 201
-             { "agent_id" => "a1", "user_id" => "u1", "access_token" => access_token }
-           else
-             { "error" => { "code" => "bad_request" } }
-           end
-    stub_request(:post, "#{BASE_URL}/kiosk/auth/register")
-      .to_return(status: status, body: JSON.generate(body),
-                 headers: { "Content-Type" => "application/json" })
+    ret = if status == 201
+            json_return(201, "agent_id" => "a1", "user_id" => "u1", "access_token" => access_token)
+          else
+            problem_return("bad_request", status: status)
+          end
+    stub_request(:post, "#{BASE_URL}/kiosk/auth/register").to_return(ret)
   end
 
   it "injects the escalated role onto the register wire (attack simulation)" do
     stub = stub_request(:post, "#{BASE_URL}/kiosk/auth/register")
            .with(body: hash_including("role" => "master"))
-           .to_return(status: 201,
-                      body: JSON.generate("agent_id" => "a1", "user_id" => "u1",
-                                          "access_token" => token_with_role("customer")),
-                      headers: { "Content-Type" => "application/json" })
+           .to_return(json_return(201, "agent_id" => "a1", "user_id" => "u1",
+                                       "access_token" => token_with_role("customer")))
 
     scenario.call(client, profile)
     expect(stub).to have_been_requested
@@ -79,19 +75,19 @@ RSpec.describe Kiosk::Redteam::Scenarios::PrivilegeSelfSelection do
       stub_request(:post, "#{BASE_URL}/kiosk/auth/register").to_return(*responses)
     end
 
-    def refused(status, body = {})
-      { status: status, body: JSON.generate(body), headers: { "Content-Type" => "application/json" } }
+    # Every refusal on the auth plane is an RFC 9457 problem document too —
+    # the paths and SUCCESS bodies survived the cutover, the error shape did not.
+    def refused(status, code = nil)
+      problem_return(code || STATUS_DEFAULT_CODE.fetch(status), status: status)
     end
 
     def issued
-      { status:  201,
-        body:    JSON.generate("agent_id" => "a1", "user_id" => "u1",
-                               "access_token" => token_with_role("customer")),
-        headers: { "Content-Type" => "application/json" } }
+      json_return(201, "agent_id" => "a1", "user_id" => "u1",
+                       "access_token" => token_with_role("customer"))
     end
 
     it "returns blocked: true when the CONTROL registration succeeds (no escalation possible)" do
-      register_returns(refused(400, "error" => { "code" => "bad_request" }), issued)
+      register_returns(refused(400), issued)
 
       verdict = scenario.call(client, profile)
 
@@ -100,7 +96,7 @@ RSpec.describe Kiosk::Redteam::Scenarios::PrivilegeSelfSelection do
     end
 
     it "returns blocked: false when the server 404s every path" do
-      register_returns(refused(404, "error" => { "code" => "not_found" }))
+      register_returns(refused(404))
 
       verdict = scenario.call(client, profile)
 
@@ -118,7 +114,7 @@ RSpec.describe Kiosk::Redteam::Scenarios::PrivilegeSelfSelection do
     end
 
     it "returns blocked: false on a 500 without spending a control registration" do
-      stub = register_returns(refused(500, "error" => "boom"))
+      stub = register_returns(refused(500))
 
       verdict = scenario.call(client, profile)
 

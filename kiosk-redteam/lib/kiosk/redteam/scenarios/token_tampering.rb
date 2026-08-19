@@ -46,7 +46,7 @@ module Kiosk
           # is an AUTHENTICATION failure — the request has no identity — so a
           # 403 would mean the token was accepted and then authorized against,
           # and a 402 would mean a toll fired ahead of the signature check.
-          # Both used to score BLOCKED. The `error.code` is deliberately not
+          # Both used to score BLOCKED. The problem `code` is deliberately not
           # pinned: a 401 raised in auth middleware may be rendered before the
           # error envelope is built.
           verdict_from(resp, expect: 401, detail: "tampered token accepted (HTTP #{resp.status})")

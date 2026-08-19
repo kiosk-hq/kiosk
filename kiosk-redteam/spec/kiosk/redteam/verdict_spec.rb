@@ -24,18 +24,15 @@ RSpec.describe "Kiosk::Redteam.blocked?" do
   # "BLOCKED ✓ … (HTTP 402)" for an attack that never executed. Pin all three
   # plus the bare status: none of them is a refusal this predicate can read.
   it "returns false for HTTP 402 pow_required (a toll defers, it does not refuse)" do
-    body = { "error" => { "code" => "pow_required" } }
-    expect(Kiosk::Redteam.blocked?(response(402, body))).to be(false)
+    expect(Kiosk::Redteam.blocked?(response(402, problem("pow_required")))).to be(false)
   end
 
   it "returns false for HTTP 402 payment_setup_required (no card on file is the attacker's gap)" do
-    body = { "error" => { "code" => "payment_setup_required" } }
-    expect(Kiosk::Redteam.blocked?(response(402, body))).to be(false)
+    expect(Kiosk::Redteam.blocked?(response(402, problem("payment_setup_required")))).to be(false)
   end
 
   it "returns false for HTTP 402 payment_failed (the rail declined; every gate had said yes)" do
-    body = { "error" => { "code" => "payment_failed" } }
-    expect(Kiosk::Redteam.blocked?(response(402, body))).to be(false)
+    expect(Kiosk::Redteam.blocked?(response(402, problem("payment_failed")))).to be(false)
   end
 
   it "returns false for a bare HTTP 402 naming no code at all" do
@@ -46,14 +43,13 @@ RSpec.describe "Kiosk::Redteam.blocked?" do
   # status and an envelope that disagree are the least conclusive answer there
   # is, and `pow_required` on a 200 was a block until K-736.
   it "returns false for a 403 whose envelope says payment_failed (status and code disagree)" do
-    body = { "error" => { "code" => "payment_failed" } }
-    expect(Kiosk::Redteam.blocked?(response(403, body))).to be(false)
+    expect(Kiosk::Redteam.blocked?(response(403, problem("payment_failed", status: 403)))).to be(false)
   end
 
   describe ".payment_required_reason" do
     it "names which of the three answered" do
       Kiosk::Redteam::PAYMENT_REQUIRED_CODES.each_key do |code|
-        reason = Kiosk::Redteam.payment_required_reason(response(402, "error" => { "code" => code }))
+        reason = Kiosk::Redteam.payment_required_reason(response(402, problem(code)))
         expect(reason).to include(code.inspect)
         expect(reason).to include("HTTP 402")
       end
@@ -64,7 +60,7 @@ RSpec.describe "Kiosk::Redteam.blocked?" do
     end
 
     it "is nil for anything that is not a 402 answer" do
-      expect(Kiosk::Redteam.payment_required_reason(response(403, "error" => { "code" => "forbidden" }))).to be_nil
+      expect(Kiosk::Redteam.payment_required_reason(response(403, problem("forbidden")))).to be_nil
       expect(Kiosk::Redteam.payment_required_reason(response(200))).to be_nil
     end
   end
@@ -81,7 +77,7 @@ RSpec.describe "Kiosk::Redteam.blocked?" do
 
   # Critical: a server crash must NOT count as 'blocked'.
   it "returns false for HTTP 500 (crash is not a block)" do
-    expect(Kiosk::Redteam.blocked?(response(500, { "error" => "internal server error" }))).to be(false)
+    expect(Kiosk::Redteam.blocked?(response(500, problem("internal_error")))).to be(false)
   end
 
   it "returns false for HTTP 503" do
@@ -92,64 +88,79 @@ RSpec.describe "Kiosk::Redteam.blocked?" do
   # rendering the envelope a crashing authorization filter renders was counted
   # as a block — the exact masquerade the 5xx rule exists to forbid.
   it "returns false for HTTP 500 carrying a recognised denial code (crash-masquerade guard)" do
-    body = { "error" => { "code" => "forbidden" } }
-    expect(Kiosk::Redteam.blocked?(response(500, body))).to be(false)
+    expect(Kiosk::Redteam.blocked?(response(500, problem("forbidden", status: 500)))).to be(false)
   end
 
   it "returns false for HTTP 502 carrying 'rls_denied'" do
-    body = { "error" => { "code" => "rls_denied" } }
-    expect(Kiosk::Redteam.blocked?(response(502, body))).to be(false)
+    expect(Kiosk::Redteam.blocked?(response(502, problem("rls_denied", status: 502)))).to be(false)
   end
 
   # status 0 is the connection-error sentinel: nothing answered, so nothing
   # was enforced, whatever a body claims.
   it "returns false for a connection error (status 0) even with a denial code" do
-    body = { "error" => { "code" => "unauthenticated" } }
-    expect(Kiosk::Redteam.blocked?(response(0, body))).to be(false)
+    expect(Kiosk::Redteam.blocked?(response(0, problem("unauthenticated")))).to be(false)
   end
 
   it "returns false for HTTP 422 (unprocessable entity is not a security block)" do
-    expect(Kiosk::Redteam.blocked?(response(422, { "error" => { "code" => "unprocessable" } }))).to be(false)
+    expect(Kiosk::Redteam.blocked?(response(422, problem("bad_request", status: 422)))).to be(false)
   end
 
   # ── Domain error codes ───────────────────────────────────────────────────
 
   it "returns true for error code 'forbidden' even on HTTP 200" do
-    body = { "error" => { "code" => "forbidden" } }
-    expect(Kiosk::Redteam.blocked?(response(200, body))).to be(true)
+    expect(Kiosk::Redteam.blocked?(response(200, problem("forbidden", status: 200)))).to be(true)
   end
 
   it "returns true for error code 'unauthenticated'" do
-    body = { "error" => { "code" => "unauthenticated" } }
-    expect(Kiosk::Redteam.blocked?(response(200, body))).to be(true)
+    expect(Kiosk::Redteam.blocked?(response(200, problem("unauthenticated", status: 200)))).to be(true)
   end
 
   # pow_required was in BLOCKED_ERROR_CODES until K-736 — so a provider that
   # answered 200 with a toll envelope scored a block for a deferred request.
   it "returns false for error code 'pow_required' (a demanded toll is not a denial)" do
-    body = { "error" => { "code" => "pow_required" } }
-    expect(Kiosk::Redteam.blocked?(response(200, body))).to be(false)
+    expect(Kiosk::Redteam.blocked?(response(200, problem("pow_required", status: 200)))).to be(false)
   end
 
   it "returns true for error code 'rls_denied'" do
-    body = { "error" => { "code" => "rls_denied" } }
-    expect(Kiosk::Redteam.blocked?(response(200, body))).to be(true)
+    expect(Kiosk::Redteam.blocked?(response(200, problem("rls_denied", status: 200)))).to be(true)
   end
 
   # bad_request is intentionally excluded: a 400 validation error is NOT
   # evidence of an auth/authz gate; RegistrationWithoutPow uses its own check.
   it "returns false for error code 'bad_request' (not an auth denial)" do
-    body = { "error" => { "code" => "bad_request" } }
-    expect(Kiosk::Redteam.blocked?(response(200, body))).to be(false)
+    expect(Kiosk::Redteam.blocked?(response(200, problem("bad_request", status: 200)))).to be(false)
   end
 
   it "returns false for an unrecognised domain error code" do
-    body = { "error" => { "code" => "internal_error" } }
-    expect(Kiosk::Redteam.blocked?(response(200, body))).to be(false)
+    expect(Kiosk::Redteam.blocked?(response(200, problem("internal_error", status: 200)))).to be(false)
   end
 
   it "returns false when body is an empty hash (no error code present)" do
     expect(Kiosk::Redteam.blocked?(response(200, {}))).to be(false)
+  end
+
+  # ── The branch point moved with the cutover ──────────────────────────────
+  #
+  # A problem document is FLAT: `code` is a top-level extension member. 0.3's
+  # `{ok:false, error:{code:}}` envelope is not a shape this wire emits any
+  # more, and reading a code out of one would mean this gem scored verdicts off
+  # a body no origin sends — so it must answer nil and the verdict must fall
+  # through to the status.
+  it "reads the code off the problem document itself, not out of a nested envelope" do
+    flat = problem("forbidden", status: 200)
+    expect(Kiosk::Redteam.error_code(response(200, flat))).to eq("forbidden")
+  end
+
+  it "does NOT read a 0.3 `error` envelope (that wire is gone)" do
+    nested = { "ok" => false, "error" => { "code" => "forbidden" } }
+    expect(Kiosk::Redteam.error_code(response(200, nested))).to be_nil
+    expect(Kiosk::Redteam.blocked?(response(200, nested))).to be(false)
+  end
+
+  # A non-paginating query answers a BARE ARRAY — a body that is not a Hash at
+  # all, and the one success shape most likely to reach this predicate.
+  it "answers nil for a bare-array body (a non-paginating query's answer)" do
+    expect(Kiosk::Redteam.error_code(response(200, [{ "id" => "r1" }]))).to be_nil
   end
 
   # ── Verdict struct ───────────────────────────────────────────────────────

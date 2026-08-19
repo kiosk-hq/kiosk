@@ -42,7 +42,8 @@ module Kiosk
   #
   # A Response is "blocked" when:
   #   - HTTP status is 401 or 403  (explicit auth/authz rejection), OR
-  #   - body["error"]["code"] is one of the recognised domain denial codes
+  #   - the problem document's top-level `code` is one of the recognised
+  #     domain denial codes
   #
   # A 5xx or connection error is NOT blocked — a crash cannot masquerade as a
   # successful enforcement gate.  Neither is a 402: see {PAYMENT_REQUIRED_CODES}.
@@ -54,7 +55,7 @@ module Kiosk
     # 402 is deliberately ABSENT (K-736) — see {PAYMENT_REQUIRED_CODES}.
     BLOCKED_STATUSES = [401, 403].freeze
 
-    # The THREE `error.code`s kiosk-server maps onto HTTP 402
+    # The THREE problem-document `code`s kiosk-server maps onto HTTP 402
     # (`Kiosk::Server::Errors::CODES`), each with the reason it cannot be read
     # as "this attack was refused".  A bare 402 names none of them, and the
     # wire contract says so itself: `Errors::STATUS_CODES` deliberately omits
@@ -83,17 +84,21 @@ module Kiosk
     # request, it does not refuse it.
     BLOCKED_ERROR_CODES = %w[forbidden unauthenticated rls_denied].freeze
 
-    # Read `body["error"]["code"]` defensively — the body may not be a Hash at
-    # all, and `body["error"]` may be a plain String rather than an envelope.
+    # Read the problem document's `code` defensively — the body may not be a
+    # Hash at all (a successful query answers a bare ARRAY).
     #
     # @param response [Response]
     # @return [String, nil]
+    # PROTOCOL 0.4: an error is an RFC 9457 problem document and the branch
+    # point is the TOP-LEVEL `code` — a problem document is flat, so there is
+    # no nested `error` object to reach into. The token VALUES are the same
+    # closed vocabulary every verdict in this gem branches on, so nothing
+    # above this seam changed.
     def self.error_code(response)
       body = response.body
       return nil unless body.is_a?(Hash)
 
-      error = body["error"]
-      error.is_a?(Hash) ? error["code"] : nil
+      body["code"]
     end
 
     # Why this answer cannot settle a verdict on its own, or nil when it is not

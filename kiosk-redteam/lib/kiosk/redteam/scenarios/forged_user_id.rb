@@ -17,11 +17,21 @@ module Kiosk
       #
       # Skipped when: profile.forge_action or profile.forge_args is nil.
       class ForgedUserId < Scenario
+        # The argument this scenario injects. It is a constant rather than a
+        # profile field because the ATTACK is "claim another principal", and
+        # `user_id` is the name the protocol gives a principal everywhere it
+        # appears — in an access token's claims, in a mandate, in the session
+        # GUCs. A provider free to rename it could not be attacked by any
+        # generic prober.
+        FORGED_ARG = "user_id"
+
         def initialize
           super(
             name:        "ForgedUserId",
             category:    "authorization",
-            description: "Agent-supplied user_id in run args must be ignored by the server",
+            description: "An agent-supplied user_id must never decide ownership: the server " \
+                         "either refuses the argument outright or ignores it and takes the " \
+                         "principal from the access token",
           )
         end
 
@@ -33,7 +43,7 @@ module Kiosk
           b = register_principal(client, name: "redteam-fui-b", profile:)
 
           base_args   = profile.forge_args.call(client, a, b)
-          forged_args = base_args.merge(user_id: a.user_id)
+          forged_args = base_args.merge(FORGED_ARG.to_sym => a.user_id)
 
           resp = client.run(b, name: profile.forge_action, **forged_args)
 
@@ -45,6 +55,33 @@ module Kiosk
           # method's silence as a pass (K-736).
           stall = payment_required_stall(resp, step: "the forged-user_id #{profile.forge_action} call")
           return stall if stall
+
+          # THE SCHEMA LAYER IS A LEGITIMATE PLACE TO CATCH THIS, and since
+          # protocol 0.4 it is where a conformant origin catches it FIRST.
+          #
+          # §8.1 item 5 makes the operator validate every call against the
+          # verb's declared `input_schema` before the handler runs, and a verb
+          # whose principal comes from the token does not declare a `user_id`
+          # parameter — so an origin publishing `additionalProperties: false`
+          # answers `400 bad_request` NAMING the injected property. That is the
+          # attack refused, at the outermost layer, by a published contract.
+          #
+          # `blocked?` cannot say so and must not be taught to: it excludes
+          # `bad_request` on purpose, because a validation error in general is
+          # not evidence of an auth gate (K-728). What makes THIS 400 evidence
+          # is the one thing a generic predicate cannot check — that the refusal
+          # names the property we injected. So the check lives here, where the
+          # injected name is known, and nowhere else.
+          if resp.status == 400 && Kiosk::Redteam.error_code(resp) == "bad_request" &&
+             refusal_names?(resp, FORGED_ARG)
+            return Verdict.new(
+              blocked: true,
+              skipped: false,
+              status:  resp.status,
+              detail:  "forge_action refused by the declared input contract: 400 bad_request naming " \
+                       "#{FORGED_ARG.inspect} — the principal is not an accepted argument",
+            )
+          end
 
           # If the call was rejected outright, the server caught it — but only
           # an auth/authz refusal is "caught it" (K-728).
@@ -107,14 +144,33 @@ module Kiosk
         # @param response      [Response]
         # @param result_id_key [String]   e.g. "reservation_id", "order_id", "id"
         # @return [String, nil]
+        # True when the refusal's own text names +key+ — the property this
+        # scenario injected. A 400 that names something else is a different
+        # validation failure and must NOT be read as the attack being caught.
+        def refusal_names?(response, key)
+          return false if key.nil? || key.to_s.empty?
+
+          body = response.body
+          return false unless body.is_a?(Hash)
+
+          "#{body["detail"]} #{body["hint"]}".include?(key.to_s)
+        end
+
+        # An action answers its own object, VERBATIM (spec §8.2) — there is no
+        # `value` wrapper to unwrap since the 0.4 cutover retired the envelope.
+        # The `value` shape is still read, because "verbatim" means an operator
+        # is free to render a `value` key of their own, and reading only the
+        # bare shape would break such a provider for no reason; but the bare
+        # object is what every shipped verb answers, and reading only the
+        # WRAPPED one is why this returned nil on every real origin.
         def extract_id(response, result_id_key)
           body = response.body
           return nil unless body.is_a?(Hash)
 
-          value = body["value"]
-          return nil unless value.is_a?(Hash)
+          nested = body["value"]
+          source = nested.is_a?(Hash) && nested.key?(result_id_key) ? nested : body
 
-          v = value[result_id_key]
+          v = source[result_id_key]
           v&.to_s&.empty? == false ? v : nil
         end
       end

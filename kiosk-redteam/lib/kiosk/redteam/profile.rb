@@ -33,7 +33,7 @@ module Kiosk
     #   Defaults to "id".
     #
     # @!attribute result_id_key [String]
-    #   The key in a forge_action response body["value"] that holds the newly
+    #   The key in a forge_action's own response object that holds the newly
     #   created resource's ID.  Often differs from row_id_key because action
     #   responses use provider-specific names (e.g. "reservation_id", "order_id")
     #   while query rows normalise to "id".  Defaults to row_id_key.

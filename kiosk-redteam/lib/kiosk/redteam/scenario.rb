@@ -94,7 +94,7 @@ module Kiosk
       # @param response    [Response]
       # @param expect      [Integer, Array<Integer>, nil] status(es) that count
       #   as a refusal of this attack; nil admits the whole blocked? set.
-      # @param expect_code [String, Array<String>, nil] `body["error"]["code"]`
+      # @param expect_code [String, Array<String>, nil] the problem document's `code`
       #   value(s) that count; nil does not inspect the code.
       # @param detail      [String] extra context to append on breach
       # @return [Verdict]
@@ -202,7 +202,7 @@ module Kiosk
         )
       end
 
-      # Read `body["error"]["code"]` defensively — `body["error"]` may be a
+      # Read the problem document's top-level `code` defensively — a body may be a
       # plain String, and the body itself may not be a Hash at all.
       #
       # @param response [Response]
@@ -274,11 +274,26 @@ module Kiosk
       #
       # @param response [Response]
       # @return [Array<Hash>]
+      # THE TWO SHAPES A 0.4 QUERY ANSWERS, and it matters that both are read
+      # here rather than one (spec §8.2/§8.4):
+      #
+      #   a query that does NOT paginate  ->  a BARE JSON ARRAY of rows
+      #   a query that DOES paginate      ->  {"rows": [...], "next": "<cursor>"}
+      #
+      # Reading only the second is how a scenario scores a VACUOUS PASS: an
+      # ownership check that asks "does A's list contain the row B created"
+      # gets `[]` from every non-paginating query, concludes "not leaked", and
+      # reports BLOCKED for an origin it never actually tested. That is the
+      # exact defect class T-076 found six of, and the 0.4 cutover would have
+      # introduced a seventh — through 0.3 EVERY query answered `{"rows": …}`,
+      # so `body["rows"]` was total and is now the minority case.
       def rows_from(response)
         body = response.body
+        return body if body.is_a?(Array)
         return [] unless body.is_a?(Hash)
 
-        body["rows"] || []
+        rows = body["rows"]
+        rows.is_a?(Array) ? rows : []
       end
     end
   end

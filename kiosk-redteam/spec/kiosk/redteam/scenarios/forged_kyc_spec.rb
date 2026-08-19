@@ -22,7 +22,7 @@ RSpec.describe Kiosk::Redteam::Scenarios::ForgedKyc do
     context "when the server rejects the forged KYC at /kyc (correct — BLOCKED)" do
       it "returns blocked: true" do
         stub_registers("a")
-        stub_kyc(status: 403)
+        stub_kyc(status: 403, code: "forbidden")
 
         verdict = scenario.call(client, profile)
 
@@ -34,13 +34,9 @@ RSpec.describe Kiosk::Redteam::Scenarios::ForgedKyc do
       it "returns blocked: false" do
         stub_registers("a")
         stub_kyc(status: 200)
-        stub_exec_run(status: 200, body: { "value" => { "id" => "res-1" } })
-        stub_exec_pay(status: 200)
-        stub_request(:post, "#{BASE_URL}/kiosk/run")
-          .with { |req| JSON.parse(req.body)["name"] == "start_rental" }
-          .to_return(status: 200,
-                     body:   JSON.generate({ "value" => { "rental_token" => "tok" } }),
-                     headers: { "Content-Type" => "application/json" })
+        stub_pay(status: 200)
+        stub_action("start_rental", status: 200,
+                    body: { "scooter_code" => "SK-001", "rental_token" => "rt-1", "exp" => 4_102_444_800 })
 
         verdict = scenario.call(client, profile)
 
@@ -59,10 +55,9 @@ RSpec.describe Kiosk::Redteam::Scenarios::ForgedKyc do
     %w[pow_required payment_setup_required payment_failed].each do |code|
       it "reports could-not-test on 402 #{code}" do
         stub_registers("a")
-        stub_request(:post, "#{BASE_URL}/kiosk/agents/kyc")
-          .to_return(status: 402, body: JSON.generate("error" => { "code" => code }),
-                     headers: { "Content-Type" => "application/json" })
-        run_stub = stub_exec_run(status: 200, body: { "value" => { "id" => "res-1" } })
+        stub_kyc(status: 402, code: code)
+        pay_stub  = stub_pay(status: 200)
+        gate_stub = stub_action("start_rental", status: 200)
 
         verdict = scenario.call(client, profile)
 
@@ -72,7 +67,8 @@ RSpec.describe Kiosk::Redteam::Scenarios::ForgedKyc do
         expect(verdict.detail).to include("COULD NOT TEST")
         expect(verdict.detail).to include(code.inspect)
         expect(verdict.detail).to include("the forged attestation this scenario submits to /kyc")
-        expect(run_stub).not_to have_been_requested
+        expect(pay_stub).not_to have_been_requested
+        expect(gate_stub).not_to have_been_requested
       end
     end
   end

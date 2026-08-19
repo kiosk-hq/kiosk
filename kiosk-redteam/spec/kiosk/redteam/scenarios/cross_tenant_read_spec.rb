@@ -16,25 +16,24 @@ RSpec.describe Kiosk::Redteam::Scenarios::CrossTenantRead do
     )
   end
 
-  # The scenario now makes TWO queries: A's control query first, then B's
-  # attack query. Stub them in that order.
+  # Both legs are `GET /kiosk/my_orders` — the query name is the PATH SEGMENT
+  # and neither leg carries arguments, so the two are one endpoint answered
+  # twice: A's control query first, then B's attack query.
+  #
+  # (minimal_profile's create_owned is a plain lambda, so nothing here calls an
+  # action; the only wire traffic is register + these two queries.)
   def stub_control_then_attack(control_rows:, attack_rows: nil, attack_status: 200,
-                              attack_body: nil, control_status: 200)
-    control = { status:  control_status,
-                body:    JSON.generate("rows" => control_rows),
-                headers: { "Content-Type" => "application/json" } }
-    attack  = { status:  attack_status,
-                body:    JSON.generate(attack_body || { "rows" => attack_rows || [] }),
-                headers: { "Content-Type" => "application/json" } }
-    stub_request(:post, "#{BASE_URL}/kiosk/query").to_return(control, attack)
+                               attack_code: nil, control_status: 200)
+    stub_request(:get, verb_url("my_orders")).to_return(
+      wire_return(status: control_status, body: page(control_rows)),
+      wire_return(status: attack_status, body: page(attack_rows || []), code: attack_code),
+    )
   end
 
   describe "#call — non-vacuity" do
     context "when the server leaks A's row to B (broken — BREACH)" do
       it "returns blocked: false" do
         stub_registers("a", "b")
-        # create_owned calls run → return owned ref with id "res-1"
-        stub_exec_run(status: 200, body: { "value" => { "id" => "res-1" } })
         # B's query leaks A's row — broken server
         stub_control_then_attack(control_rows: [{ "id" => "res-1", "user_id" => "user-a" }],
                                  attack_rows:  [{ "id" => "res-1", "user_id" => "user-a" }])
@@ -49,7 +48,6 @@ RSpec.describe Kiosk::Redteam::Scenarios::CrossTenantRead do
     context "when the server correctly isolates rows (correct — BLOCKED)" do
       it "returns blocked: true" do
         stub_registers("a", "b")
-        stub_exec_run(status: 200, body: { "value" => { "id" => "res-1" } })
         # A sees A's row; B's query returns B's own rows only — res-1 absent.
         stub_control_then_attack(control_rows: [{ "id" => "res-1", "user_id" => "user-a" }],
                                  attack_rows:  [{ "id" => "res-99", "user_id" => "user-b" }])
@@ -64,7 +62,6 @@ RSpec.describe Kiosk::Redteam::Scenarios::CrossTenantRead do
     context "when B's query returns empty rows and the control holds" do
       it "returns blocked: true" do
         stub_registers("a", "b")
-        stub_exec_run(status: 200, body: { "value" => { "id" => "res-1" } })
         stub_control_then_attack(control_rows: [{ "id" => "res-1" }], attack_rows: [])
 
         verdict = scenario.call(client, profile)
@@ -85,8 +82,7 @@ RSpec.describe Kiosk::Redteam::Scenarios::CrossTenantRead do
     context "when the provider answers EVERY query with [] (no isolation logic)" do
       it "fails the control instead of scoring a pass" do
         stub_registers("a", "b")
-        stub_exec_run(status: 200, body: { "value" => { "id" => "res-1" } })
-        stub_exec_query(rows: [])   # both the control and the attack answer []
+        stub_query("my_orders", rows: [])   # both the control and the attack answer []
 
         verdict = scenario.call(client, profile)
 
@@ -98,10 +94,9 @@ RSpec.describe Kiosk::Redteam::Scenarios::CrossTenantRead do
     context "when row_id_key names no field in the rows (a real leak reads as clean)" do
       it "fails the control instead of scoring a pass" do
         stub_registers("a", "b")
-        stub_exec_run(status: 200, body: { "value" => { "id" => "res-1" } })
         # Both A and B see A's row — a total isolation failure — but under a key
         # the profile does not name, so the leak check can never fire.
-        stub_exec_query(rows: [{ "id" => "res-1" }])
+        stub_query("my_orders", rows: [{ "id" => "res-1" }])
         mismatched = minimal_profile(per_user_query: "my_orders", row_id_key: "order_id")
 
         verdict = scenario.call(client, mismatched)
@@ -115,8 +110,7 @@ RSpec.describe Kiosk::Redteam::Scenarios::CrossTenantRead do
     context "when A's own query is not answered at all" do
       it "fails the control" do
         stub_registers("a", "b")
-        stub_exec_run(status: 200, body: { "value" => { "id" => "res-1" } })
-        stub_exec_query(status: 404, rows: [])
+        stub_query("my_orders", status: 404)
 
         verdict = scenario.call(client, profile)
 
@@ -131,19 +125,18 @@ RSpec.describe Kiosk::Redteam::Scenarios::CrossTenantRead do
   # broke the gem's own "a crash can never mask a breach" invariant.
   describe "#call — B's query must be ANSWERED (K-729)" do
     [
-      [500, "a crash"],
-      [502, "a bad gateway"],
-      [404, "a query name that never resolved"],
-      [402, "a toll that fired before any policy ran"],
-      [403, "a query refused outright to its own principal"],
-    ].each do |status, why|
+      [500, "internal_error", "a crash"],
+      [502, "internal_error", "a bad gateway"],
+      [404, "not_found",      "a query name that never resolved"],
+      [402, "pow_required",   "a toll that fired before any policy ran"],
+      [403, "forbidden",      "a query refused outright to its own principal"],
+    ].each do |status, code, why|
       it "returns blocked: false when B's query answers #{status} (#{why})" do
         stub_registers("a", "b")
-        stub_exec_run(status: 200, body: { "value" => { "id" => "res-1" } })
         stub_control_then_attack(
           control_rows:  [{ "id" => "res-1" }],
           attack_status: status,
-          attack_body:   { "error" => { "code" => "boom" } },
+          attack_code:   code,
         )
 
         verdict = scenario.call(client, profile)

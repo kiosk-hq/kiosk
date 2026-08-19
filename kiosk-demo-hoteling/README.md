@@ -21,10 +21,11 @@ RFC 9457 problem document.
   availability for a stay
 - `GET /kiosk/my_bookings` — this principal's bookings (owner-scoped)
 - `GET /kiosk/search_hotels?...` — paginated search over the ~100-hotel
-  catalogue; the only paginating verb here, so a truncated page answers
-  `{rows, next}` and a complete one the bare array
+  catalogue; the only paginating verb here, and since RFC 8288 it answers the
+  same bare array as the rest — a truncated page says so in a `Link: <…>;
+  rel="next"` header, with `X-Total-Count` carrying the matching total
 - `GET /kiosk/hotel_detail?property_id=` — ONE property in full, as a one-row
-  array (empty when no property has that id)
+  array (a `property_id` no property has is 404 `not_found`)
 - `POST /kiosk/reserve_room` — reserve a room for the principal (creates a TTL hold)
 - `POST /kiosk/payment_setup` — check whether the principal has a saved payment method
 - `POST /kiosk/confirm_booking` — confirm a reserved booking; requires a
@@ -56,7 +57,7 @@ bin/rails demo:browse      # browse-heavy priced-pagination PoW demo — boots w
 bin/rails demo:isolation   # cross-tenant denial (a booking is only yours)
 bin/rails demo:redteam     # adversarial regression battery
 bin/rails demo:schema      # self-discovery over the schema verb
-bin/rails demo:search      # pagination over the ~100-hotel catalogue: a truncated page carries an opaque `next` cursor, echoing it back returns a DISJOINT page, a complete result omits it, and hotel_detail resolves a summary row's id
+bin/rails demo:search      # pagination over the ~100-hotel catalogue: a truncated page carries `Link: …; rel="next"`, following it returns a DISJOINT page, a complete result carries no link, and hotel_detail resolves a summary row's id (404 for one nobody has)
 ```
 
 `bin/rails demo` runs `demo:setup` then `demo:book`.

@@ -68,7 +68,9 @@ class Kiosk::HotelsController < ActionController::API
   # overlapping the requested nights. `RoomType.free_for` is that predicate, and
   # `reserve_room` sells against the same scope, so the two cannot disagree
   # (K-690).
-  description "Check room availability at a property for given dates. Each row carries a " \
+  description "Check room availability at a property for given dates. An EMPTY array means " \
+              "the property is SOLD OUT for those nights; a `property_id` no property has is " \
+              "404 not_found. Each row carries a " \
               "`room_type_id` (pass it to reserve_room as `room_type_id`, along with the " \
               "same `property_id`). nightly_price_cents is EUR cents per night — carts must " \
               "be signed in eur at the operator-quoted total (nights × nightly_price_cents)"
@@ -76,7 +78,8 @@ class Kiosk::HotelsController < ActionController::API
                additionalProperties: false,
                properties: {
                  property_id: { type: "integer",
-                                description: "Property to check — the `property_id` from a properties row." },
+                                description: "Property to check — the `property_id` from a properties row. " \
+                                             "An id no property has is 404 not_found." },
                  check_in:    { type: "string", format: "date",
                                 description: "First night (YYYY-MM-DD)." },
                  check_out:   { type: "string", format: "date",
@@ -86,8 +89,8 @@ class Kiosk::HotelsController < ActionController::API
                required: ["property_id", "check_in", "check_out"]
   # A bare array of the room types with NO live booking overlapping the nights
   # asked for — the OFFER, not the catalogue. Empty means the property is sold
-  # out for those nights, which is an honest answer and the only thing an empty
-  # array means here.
+  # out for those nights, which is an honest answer and, since T-090, the ONLY
+  # thing an empty array means here: an unknown `property_id` is 404.
   output_schema type: "array",
                 description: "Room types free for the requested nights, cheapest first.",
                 items: {
@@ -110,6 +113,16 @@ class Kiosk::HotelsController < ActionController::API
     return render_refusal(refusal) if refusal
 
     dates, refusal = WireArguments.stay_dates(params[:check_in], params[:check_out])
+    return render_refusal(refusal) if refusal
+
+    # T-090 / spec §9.1: `property_id` ADDRESSES a property before anything is
+    # filtered — the room types are this property's, not the aggregator's — so
+    # an id nobody has is `404 not_found` and NOT an empty list. Empty is
+    # reserved for its one honest meaning here: the property exists and is SOLD
+    # OUT for the requested nights. This verb answered `200 []` to both until
+    # today, which is precisely the pair an assistant cannot tell apart, and it
+    # disagreed with `hotel_detail` about the same argument on the same origin.
+    refusal = WireArguments.existing_property(property_id)
     return render_refusal(refusal) if refusal
 
     check_in, check_out = dates
@@ -179,13 +192,15 @@ class Kiosk::HotelsController < ActionController::API
   # ── search_hotels — paginated, multi-parameter search (T-042 / K-452) ────────
   #
   # The reference exemplar for the "~100 hotels would overwhelm an unpaginated
-  # list" case, and the fleet's ONLY paginating verb: this is the one handler that
-  # answers with `render_kiosk_page` instead of a bare array, which is how the
-  # opaque `next` cursor reaches the response at all. 0.4 retired the envelope
-  # but not the page: a TRUNCATED answer is the object `{"rows": …, "next": …}`
-  # and a COMPLETE one is the bare array every other query answers, because
-  # `next` ABSENT is what "last page" means and an array has nowhere to put a
-  # cursor ({Kiosk::Server::Result#to_payload}).
+  # list" case, and the fleet's ONLY paginating verb: this is the one handler
+  # that answers with `render_kiosk_page` instead of `render json:`.
+  #
+  # SINCE T-092 THAT NO LONGER CHANGES THE BODY. Adopting RFC 8288 moved the
+  # opaque cursor into a `Link: <…?cursor=…>; rel="next"` RESPONSE HEADER and
+  # the matching-row count into `X-Total-Count`, so this verb answers the same
+  # BARE ARRAY as `properties`, `availability` and every other query — the
+  # `{"rows": …, "next": …}` object it used to render on a truncated page is
+  # gone from the wire and from the declaration below (spec §8.2/§8.4).
   HOTELING_SEARCH_PAGE = 20  # default page size (assistant may override via `limit`)
   HOTELING_SEARCH_MAX  = 50  # cap so `limit` can't defeat pagination
 
@@ -196,10 +211,12 @@ class Kiosk::HotelsController < ActionController::API
               "neighbourhood (exact area name), max_price_cents (cheapest room ≤ this, " \
               "EUR cents), min_stars (star rating ≥ this), amenity (property must offer " \
               "it). Page size defaults to 20 and is CLAMPED to 1..50 — send `limit` to " \
-              "override it (a value outside that range is clamped, never refused); when " \
-              "the response carries a top-level `next`, more hotels match — echo it back " \
-              "verbatim as `cursor` to fetch the following page, and keep paging until " \
-              "`next` is absent. from_price_cents is EUR cents (carts are signed in eur). " \
+              "override it (a value outside that range is clamped, never refused). The " \
+              "BODY is always a bare array; when more hotels match, the response carries " \
+              "a `Link` header with rel=\"next\" — fetch that URI verbatim for the " \
+              "following page and keep going until there is no such link. X-Total-Count " \
+              "is how many hotels match in all. " \
+              "from_price_cents is EUR cents (carts are signed in eur). " \
               "Each row carries a `property_id`; pass it to hotel_detail as `property_id` " \
               "for the full property (rooms, amenities, address)."
   input_schema type: "object",
@@ -232,14 +249,13 @@ class Kiosk::HotelsController < ActionController::API
                # 20/50 defaults — and, as before, in the handler, which clamps rather
                # than refuses.
                required: []
-  # THE FLEET'S ONLY PAGINATING VERB, and its output_schema is the only one in
-  # the fleet with two branches — because the wire has two spellings for a page
-  # and both are conformant (spec §8.4). A TRUNCATED page is the object
-  # `{rows, next}`; a COMPLETE one is a bare array, because `next` ABSENT is
-  # what "this is the last page" means and an array has nowhere to put a cursor.
-  # An assistant that always pages until `next` is gone reads both correctly;
-  # one that assumed an object would break on the last page, which is exactly
-  # what a declaration is for.
+  # ONE SHAPE, and that is the whole of what T-092 bought here. This used to be
+  # the only `output_schema` in the fleet with two branches — a `oneOf` over
+  # "truncated page = the `{rows, next}` object" and "last page = a bare array"
+  # — because the wire had two spellings for a page. RFC 8288 left it one: the
+  # cursor is a `Link` header, so a truncated page and a complete one are the
+  # SAME array and the declaration says so once. `$defs` is kept because the
+  # row shape is worth naming; the union it was reached through is gone.
   output_schema "$defs": {
                   hotel: {
                     type: "object", additionalProperties: false,
@@ -257,21 +273,10 @@ class Kiosk::HotelsController < ActionController::API
                                  room_type_count currency],
                   },
                 },
-                description: "One page of matching hotels.",
-                oneOf: [
-                  { type: "array",
-                    description: "The last (or only) page: no `next`, so no more hotels match.",
-                    items: { "$ref": "#/$defs/hotel" } },
-                  { type: "object", additionalProperties: false,
-                    description: "A truncated page: more hotels match.",
-                    properties: {
-                      rows: { type: "array", items: { "$ref": "#/$defs/hotel" },
-                              description: "This page's hotels." },
-                      next: { type: "string",
-                              description: "An OPAQUE cursor. Echo it back verbatim as `cursor` for the following page; never parse or construct it." },
-                    },
-                    required: %w[rows next] },
-                ]
+                type: "array",
+                description: "One page of matching hotels — the same array shape whether or not " \
+                             "more match; a `Link` header with rel=\"next\" is what says there are.",
+                items: { "$ref": "#/$defs/hotel" }
   example_params({ neighbourhood: "Beşiktaş", min_stars: 4, max_price_cents: 20000, limit: 20 })
   example_row({
     property_id: 4, name: "Bosphorus Palace", neighbourhood: "Beşiktaş", stars: 5,
@@ -303,7 +308,7 @@ class Kiosk::HotelsController < ActionController::API
       scope = scope.where(Property.from_price_cents.lteq(params[:max_price_cents].to_s.to_i))
     end
 
-    # Fetch limit+1 to detect a following page without a second COUNT query.
+    # Fetch limit+1 to detect a following page without counting the whole set.
     rows = scope.order(Property.arel_table[:stars].desc,
                        Property.from_price_cents.asc,
                        Property.arel_table[:id].asc)
@@ -323,9 +328,15 @@ class Kiosk::HotelsController < ActionController::API
         currency:         "eur" }
     }
 
+    # `total:` is the ONE extra query T-092 asks for, and it is deliberate: the
+    # limit+1 probe above still decides TRUNCATION without a COUNT, but
+    # `X-Total-Count` is a statement about the whole matching set and nothing
+    # in a page of 21 rows can produce it. The alternative the spec forbids is
+    # emitting the page size and calling it the total.
     render_kiosk_page(
       page,
       next_cursor: has_more ? Kiosk::Server::Cursor.encode_offset(offset + limit) : nil,
+      total:       scope.count,
     )
   end
 
@@ -333,8 +344,8 @@ class Kiosk::HotelsController < ActionController::API
   description "Fetch the full detail for ONE hotel by its `property_id` (the same " \
               "`property_id` a search_hotels row carries): name, neighbourhood, stars, " \
               "address, amenities, and its room types (each carries a `room_type_id` for " \
-              "reserve_room) with their nightly rates. Answers a ONE-ROW array; an EMPTY " \
-              "array means no property has that id. This is " \
+              "reserve_room) with their nightly rates. Answers a ONE-ROW array; a " \
+              "`property_id` no property has is 404 not_found, not an empty array. This is " \
               "the \"search returns summaries, fetch detail on demand\" pattern — call it " \
               "for the one or few hotels the user is choosing between, not for the whole " \
               "result set. nightly_price_cents is EUR cents (carts are signed in eur). " \
@@ -354,21 +365,24 @@ class Kiosk::HotelsController < ActionController::API
                },
                required: ["property_id"]
   # A ONE-ROW ARRAY, not a bare object (K-794, fixed at the 0.4 cutover). Spec
-  # §8.2: a query that does not paginate answers a JSON ARRAY of rows — and a
-  # detail-by-id query is still a query. Through slice 3 this verb rendered the
-  # property object itself and DECLARED `type: "object"`, which was the honest
-  # thing to publish about a handler that did that, but it left one verb out of
-  # step with its own fleet: getgrocery's and skooti's `kyc_status` each already
-  # wrap a single result in a one-row array with the comment «this is a query,
-  # and a query answers with rows».
+  # §8.2: a query answers a JSON ARRAY of rows — and a detail-by-id query is
+  # still a query. Through slice 3 this verb rendered the property object itself
+  # and DECLARED `type: "object"`, which was the honest thing to publish about a
+  # handler that did that, but it left one verb out of step with its own fleet:
+  # getgrocery's and skooti's `kyc_status` each already wrap a single result in a
+  # one-row array with the comment «this is a query, and a query answers rows».
   #
-  # The array is not bookkeeping. "No such hotel" now has an answer inside the
-  # contract — the EMPTY array — instead of needing a 404 or a null the schema
-  # would have to admit; and an assistant that reads every query the same way
-  # (iterate the rows) does not need a special case for this one.
+  # THE SHAPE AND THE MISS ARE TWO DIFFERENT QUESTIONS, and T-090 separates
+  # them. K-794 answered both at once — array shape, and an unknown id as the
+  # EMPTY array — and the second half is withdrawn: `property_id` ADDRESSES a
+  # property, so an id nobody has is `404 not_found` (spec §9.1). An empty
+  # one-row array would state that the property exists and merely has no
+  # detail, which is a different and false sentence. The DECLARATION below is
+  # unchanged by that: a 404 is a problem document, not a body this schema
+  # describes, so the array shape K-794 shipped stands exactly as it was.
   output_schema type: "array",
-                description: "ONE property in full, with its room types — a one-row array, " \
-                             "empty when no property has that id.",
+                description: "ONE property in full, with its room types — a one-row array. " \
+                             "A property_id nobody has is 404 not_found, not an empty array.",
                 items: {
                   type: "object",
                   description: "The property.",
@@ -462,19 +476,20 @@ class Kiosk::HotelsController < ActionController::API
                                                                        hint: WireArguments::HINT_PROPERTY_ID)
     return render_refusal(refusal) if refusal
 
-    # `pick`, not `find_by!`: the bang form raises RecordNotFound, which Rails
-    # maps to a 404 the mixin's `rescue_from` floor would render — and since
-    # K-794 an unknown id is not an error on this verb at all, so a raise here
-    # would put back exactly the answer the array shape removed.
+    # `pick`, not `find_by!`: the bang form raises RecordNotFound and the
+    # mixin's `rescue_from` floor would render a 404 with Rails' own message,
+    # which says nothing an assistant can act on. The refusal below is the same
+    # status with this origin's sentence in it.
     prop = Property.where(id: property_id).pick(:id, :name, :neighbourhood, :stars, :address, :amenities)
-    # NO SUCH HOTEL IS THE EMPTY ARRAY, not a 404 (K-794). This verb used to
-    # refuse `not_found` — the only `not_found` hoteling ever produced. On a
-    # query that answers rows, "nothing matched the id you filtered by" is what
-    # an empty result MEANS, and it is the same sentence `availability` already
-    # speaks when a property is sold out. An assistant that iterates the rows
-    # of every query needs no branch for this one, and there is no status to
-    # confuse with the 404 the wire itself answers for an UNREGISTERED VERB.
-    return render json: [] if prop.nil?
+    # NO SUCH HOTEL IS 404 (T-090, spec §9.1). `property_id` ADDRESSES a
+    # property here — it does not filter one — so an empty array would assert
+    # that the property exists and merely has no detail. That is a different
+    # sentence from the one `availability` speaks when a property is genuinely
+    # sold out, and an assistant that cannot tell them apart retries a lookup
+    # that will never succeed. The 404 the wire answers for an UNREGISTERED
+    # VERB is not confusable with this one: that one names the verb and carries
+    # the registry's hint, this one names the id.
+    return render_refusal(WireArguments.property_not_found(property_id)) if prop.nil?
 
     rooms = RoomType.where(property_id: property_id)
     rooms = rooms.free_for(property_id, ci, co) if dated

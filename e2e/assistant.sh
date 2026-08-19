@@ -354,7 +354,10 @@ sch_status=$(curl -sS -o /dev/null -w "%{http_code}" "$SERVER_URL/kiosk/schema")
 sch_headers=$(curl -sS -o /dev/null -D - "$SERVER_URL/kiosk/schema")
 assert "no Authorization header → 200"  "$sch_status" "200"
 assert "…served public, short TTL"      "$(echo "$sch_headers" | grep -ic '^Cache-Control: max-age=300, public')" "1"
-assert "…with a STRONG ETag (no W/)"    "$(echo "$sch_headers" | tr -d '\r' | grep -Ec '^ETag: "[0-9a-f]{32}"$')" "1"
+assert "…with a STRONG ETag (no W/)"    "$(echo "$sch_headers" | tr -d '\r' | grep -Eci '^ETag: "[0-9a-f]{32}"$')" "1"
+# NOT EVEN `Vary: Accept`, which Rails stamps on any negotiated render: this
+# endpoint answers application/json to every caller, so a Vary of any kind
+# splits a CDN's cache for a variance that does not exist.
 assert "…and NO Vary at all"            "$(echo "$sch_headers" | grep -ic '^Vary:')" "0"
 assert "…and never a 402: the toll went with the gate" \
   "$(curl -sS -o /dev/null -w "%{http_code}" "$SERVER_URL/kiosk/schema")" "200"

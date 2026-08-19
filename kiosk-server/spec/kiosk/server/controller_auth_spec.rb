@@ -88,6 +88,58 @@ RSpec.describe "wire-surface controller auth" do
       expect(status).to eq(200)
     end
 
+    # A REAL CLIENT SENDS AN ACCEPT HEADER, AND RAILS REACTS TO IT.
+    # `ActionController::Rendering#_set_vary_header` stamps `Vary: Accept` on
+    # a render whose format was negotiated — which is every render made from a
+    # request carrying a specific `Accept`. It is a sound default and wrong
+    # here: this endpoint answers `application/json` whatever the caller asks
+    # for. Left in place it would split a CDN's cache by Accept string, which
+    # is the same damage `Vary: Authorization` would do, arriving by a
+    # different route. The example above cannot catch it — a bare
+    # `MockRequest` sends no `Accept`.
+    it "emits no Vary even when the request negotiates content" do
+      declare_query("probe")
+
+      env = Rack::MockRequest.env_for("/kiosk/schema", "HTTP_ACCEPT" => "application/json")
+      status, = dispatch(Kiosk::Server::WireController, :schema, env)
+
+      expect(status).to eq(200)
+      expect(last_headers["Vary"]).to be_nil
+      expect(last_headers["Cache-Control"]).to eq("max-age=300, public")
+    end
+
+    # The digest-versioned URL, which is the only one that may be cached long.
+    it "serves ?v=<digest> immutable, and a stale ?v= short-lived" do
+      declare_query("probe")
+      digest = Kiosk::Server::SchemaDocument.digest
+
+      dispatch(Kiosk::Server::WireController, :schema,
+               Rack::MockRequest.env_for("/kiosk/schema?v=#{digest}"))
+      expect(last_headers["Cache-Control"]).to eq("max-age=31536000, public, immutable")
+
+      status, body = dispatch(Kiosk::Server::WireController, :schema,
+                              Rack::MockRequest.env_for("/kiosk/schema?v=deadbeef"))
+      expect(status).to eq(200)
+      expect(body[:queries].map { |q| q[:name] }).to include("probe")
+      expect(last_headers["Cache-Control"]).to eq("max-age=300, public")
+    end
+
+    it "answers 304 to If-None-Match on the current digest" do
+      declare_query("probe")
+      etag = Kiosk::Server::SchemaDocument.etag
+
+      status, = dispatch(Kiosk::Server::WireController, :schema,
+                         Rack::MockRequest.env_for("/kiosk/schema",
+                                                   "HTTP_IF_NONE_MATCH" => etag))
+      expect(status).to eq(304)
+      expect(last_headers["ETag"]).to eq(etag)
+
+      status, = dispatch(Kiosk::Server::WireController, :schema,
+                         Rack::MockRequest.env_for("/kiosk/schema",
+                                                   "HTTP_IF_NONE_MATCH" => %("stale")))
+      expect(status).to eq(200)
+    end
+
     it "returns 401 Unauthenticated (not 500) for an EXPIRED token" do
       token = Kiosk::Server::JwtIssuer.issue(
         claims:   { sub: "u-1", agent_id: "a-1", role: "customer", actor: "agent" },

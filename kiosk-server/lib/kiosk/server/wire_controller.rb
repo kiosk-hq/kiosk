@@ -114,9 +114,22 @@ module Kiosk
           response.headers, etag: etag, immutable: params[:v].to_s == digest
         )
 
-        return head(:not_modified) if if_none_match?(etag)
+        if if_none_match?(etag)
+          head :not_modified
+        else
+          render json: SchemaDocument.json, status: :ok
+        end
 
-        render json: SchemaDocument.json, status: :ok
+        # LAST, and it exists to undo one line of Rails.
+        # `ActionController::Rendering#_set_vary_header` stamps `Vary: Accept`
+        # on any render whose format was negotiated from the request's `Accept`
+        # header — a sound default, and wrong here: this endpoint answers
+        # `application/json` to every caller whatever they ask for, so the
+        # header states a variance that does not exist and splits a shared
+        # cache by Accept string for nothing. It fires only when the header is
+        # BLANK at render time, so it cannot be pre-empted by setting the value
+        # we want, which is none.
+        response.headers.delete("Vary")
       end
 
       # POST <endpoint>/pay

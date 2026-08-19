@@ -218,21 +218,45 @@ module DemoTelemetry
   # per-app override maps concrete action verb names onto ACTION_KINDS so the
   # aggregate reads the same across verticals (e.g. getgrocery's create_order →
   # "ordered", reschedule_delivery → "scheduled"; atablefor's book_table →
-  # "booked"; skooti's reserve → "reserved"). Unknown run-verbs fall back to
+  # "booked"; skooti's reserve → "reserved"). Unknown actions fall back to
   # "ran".
   #
-  # @param path [String] request path (e.g. "/kiosk/run")
-  # @param verb [String, nil] the `name` field of a run/query body
+  # ON THE 0.4 WIRE THE PATH IS THE VERB AND THE METHOD IS THE KIND. Through
+  # 0.3 this read the last path segment (`/query`, `/run`, `/pay`) and, for a
+  # write, dug the verb NAME out of the JSON body — which meant reading and
+  # rewinding `rack.input` before the app ran. Now `GET <mount>/<name>` is a
+  # read and `POST <mount>/<name>` is a write, so both facts are in the request
+  # line and no body is touched at all.
+  #
+  # @param path [String] request path (e.g. "/kiosk/create_order")
+  # @param method [String] the HTTP method
   # @param verb_map [Hash] app override: { "create_order" => "ordered", ... }
   # @return [String, nil]
-  def action_kind_for(path:, verb: nil, verb_map: {})
-    case path
-    when %r{/auth/register\z} then "registered"
-    when %r{/query\z}         then "browsed"
-    when %r{/pay\z}           then "paid"
-    when %r{/run\z}
-      verb_map.fetch(verb.to_s) { "ran" }
+  def action_kind_for(path:, method: "POST", verb_map: {})
+    return "registered" if path.match?(%r{/auth/register\z})
+
+    name = wire_verb_name(path)
+    return nil if name.nil?
+    return "paid" if name == "pay"
+    # `schema` is a catalog read, not an activity: counting it as "browsed"
+    # would inflate the board with every assistant's cold start.
+    return nil if name == "schema"
+
+    method.to_s.upcase == "GET" ? "browsed" : verb_map.fetch(name) { "ran" }
+  end
+
+  # The single path segment under the mount, or nil when the path is not a
+  # verb call. Excludes the auth/oauth/agents planes (two segments), the
+  # mount-relative JWKS and `openapi.json` (a dot is not legal in a verb
+  # name), and anything outside the mount entirely.
+  def wire_verb_name(path)
+    mount = begin
+      Kiosk.configuration.mount_path
+    rescue StandardError
+      "/kiosk"
     end
+    match = path.match(%r{\A#{Regexp.escape(mount.to_s)}/([a-z][a-z0-9_]*)\z})
+    match && match[1]
   end
 end
 
@@ -254,7 +278,7 @@ end
 # cross-app-joinable value is ever persisted.
 class DemoTelemetryMiddleware
   # @param app [Rack app]
-  # @param verb_map [Hash] concrete-verb → generic-kind override for /run
+  # @param verb_map [Hash] concrete-verb → generic-kind override for actions
   def initialize(app, verb_map: {})
     @app = app
     @verb_map = verb_map
@@ -265,21 +289,25 @@ class DemoTelemetryMiddleware
   # BEFORE the app has run, the safe recovery is to hand the request to the app.
   # AFTER it has run, the ONLY safe recovery is the response already in hand:
   # calling the app again does not retry a failed request, it DISPATCHES A
-  # SECOND ONE. On /auth/register that mints a second agent. So `@app.call`
-  # appears exactly twice below, both of them above the single dispatch line,
-  # and nothing under that line may reach it.
+  # SECOND ONE. On /auth/register that mints a second agent. So every
+  # `@app.call` below except one is an EARLY RETURN in the pre-dispatch
+  # region — reached only when the request will not be recorded at all — and
+  # nothing under the single dispatch line may reach one.
   def call(env)
     # ── Before the app runs ───────────────────────────────────────────────
     begin
       return @app.call(env) unless DemoTelemetry.enabled?
 
-      path = env["PATH_INFO"].to_s
-      # Only the four write-ish wire surfaces are candidates; skip everything
-      # else (discovery, JWKS, admin, home) without reading the body.
-      return @app.call(env) unless path.match?(%r{/(auth/register|query|run|pay)\z})
-
-      # Reads (and rewinds) rack.input, so it MUST happen before the app.
-      verb = run_verb(env, path)
+      path   = env["PATH_INFO"].to_s
+      method = env["REQUEST_METHOD"].to_s
+      # Everything the classifier can answer for is decided from the request
+      # LINE — no body is read, on any path. The 0.3 version had to read and
+      # rewind `rack.input` here to find the verb name; the 0.4 wire puts it
+      # in the path.
+      kind = best_effort do
+        DemoTelemetry.action_kind_for(path: path, method: method, verb_map: @verb_map)
+      end
+      return @app.call(env) if kind.nil?
     rescue StandardError => e
       warn "[demo_telemetry] middleware error before dispatch (ignored): #{e.class}: #{e.message}"
       return @app.call(env)
@@ -291,9 +319,6 @@ class DemoTelemetryMiddleware
     # Only record on success (2xx). A 402 pow_required / 403 gate rejection is
     # not a completed action.
     return [status, headers, body] unless status.to_i >= 200 && status.to_i < 300
-
-    kind = best_effort { DemoTelemetry.action_kind_for(path: path, verb: verb, verb_map: @verb_map) }
-    return [status, headers, body] unless kind
 
     # For /auth/register we need the response agent_id, so buffer the body once
     # and hand a re-enumerable copy downstream (safe for Rack). For the other
@@ -337,23 +362,6 @@ class DemoTelemetryMiddleware
     buffered
   ensure
     body.close if body.respond_to?(:close)
-  end
-
-  # Extract the `name` verb from a /run (or /query) JSON body without consuming
-  # the stream for the downstream app (rewind after read).
-  def run_verb(env, path)
-    return nil unless path.end_with?("/run") || path.end_with?("/query")
-
-    input = env["rack.input"]
-    return nil unless input
-
-    raw = input.read
-    input.rewind
-    return nil if raw.nil? || raw.empty?
-
-    JSON.parse(raw)["name"]
-  rescue StandardError
-    nil
   end
 
   # register: distinct-count ref = the freshly minted agent_id (from the

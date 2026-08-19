@@ -26,9 +26,9 @@
 #   • a telemetry failure returns the app's own status/headers/body unchanged;
 #   • the /auth/register buffering hands downstream the SAME BYTES, in a
 #     re-enumerable form, and closes the original body;
-#   • the recording rules themselves: the four-path filter, 2xx-only, the
-#     per-app verb_map, the register/bearer agent refs, and that the request
-#     body is left rewound for the app.
+#   • the recording rules themselves: the 0.4 path/method classifier, 2xx-only,
+#     the per-app verb_map, the register/bearer agent refs, and that the
+#     request body is never read at all.
 # DB-free on purpose: DemoTelemetry.record is stubbed, so this needs neither
 # Postgres nor the telemetry table (getgrocery ships no rspec — same plain-ruby
 # shape as spec/delivery_slots_spec.rb and spec/cashier_order_ref_spec.rb).
@@ -137,8 +137,8 @@ VERB_MAP = {
   "payment_setup"       => "ran",
 }.freeze
 
-def env_for(path, body: nil, bearer: nil)
-  env = { "REQUEST_METHOD" => "POST", "PATH_INFO" => path }
+def env_for(path, method: "POST", body: nil, bearer: nil)
+  env = { "REQUEST_METHOD" => method, "PATH_INFO" => path }
   env["rack.input"] = StringIO.new(body) if body
   env["HTTP_AUTHORIZATION"] = "Bearer #{bearer}" if bearer
   env
@@ -151,9 +151,10 @@ def body_bytes(body)
   out
 end
 
-def run(app, path, body: nil, bearer: nil, verb_map: VERB_MAP)
+def run(app, path, method: "POST", body: nil, bearer: nil, verb_map: VERB_MAP)
   RECORDED.clear
-  DemoTelemetryMiddleware.new(app, verb_map: verb_map).call(env_for(path, body: body, bearer: bearer))
+  DemoTelemetryMiddleware.new(app, verb_map: verb_map)
+                         .call(env_for(path, method: method, body: body, bearer: bearer))
 end
 
 # ═════════════════════════════════════════════════════════════════════════════
@@ -214,7 +215,7 @@ end
 with_exploding_kind_lookup do
   app_body = ChunkedBody.new(["x"])
   app = FakeApp.new { app_body }
-  status, _headers, body = run(app, "/kiosk/run", body: '{"name":"create_order"}')
+  status, _headers, body = run(app, "/kiosk/create_order", body: "{}")
   assert(app.calls == 1 && status == 200 && body.equal?(app_body),
          "a raise while classifying the action dispatches once and returns the app's " \
          "ORIGINAL body object untouched (calls=#{app.calls})")
@@ -263,59 +264,76 @@ puts "\n── the recording rules ──"
 # Master switch.
 ENV["KIOSK_TELEMETRY"] = nil
 app = FakeApp.new
-run(app, "/kiosk/run", body: '{"name":"create_order"}')
+run(app, "/kiosk/create_order", body: "{}")
 assert(app.calls == 1 && RECORDED.empty?,
        "KIOSK_TELEMETRY unset → pure pass-through, nothing recorded")
 ENV["KIOSK_TELEMETRY"] = "1"
 
-# Path filter: only the four write-ish wire surfaces are candidates.
+# Path filter. On the 0.4 wire a verb is ONE lower-case segment under the
+# mount, so the filter is "a legal verb name directly under /kiosk" plus
+# /auth/register — everything else is not an activity.
 [
-  ["/kiosk/orders",            "a non-wire path"],
-  ["/.well-known/kiosk.json",  "discovery"],
-  ["/kiosk/runner",            "a path that merely CONTAINS 'run'"],
-  ["/admin/orders",            "the back-office"],
-].each do |path, what|
+  ["/.well-known/kiosk.json",      "GET",  "root discovery"],
+  ["/admin/orders",                "POST", "the back-office"],
+  ["/kiosk/auth/challenge",        "GET",  "the auth plane (two segments)"],
+  ["/kiosk/oauth/token",           "POST", "the device grant (two segments)"],
+  ["/kiosk/.well-known/jwks.json", "GET",  "the mount-relative JWKS"],
+  ["/kiosk/openapi.json",          "GET",  "the derived description (a dot is not a verb name)"],
+  ["/kiosk/schema",                "GET",  "the catalog — a cold start, not an activity"],
+  ["/kiosk/Catalog",               "GET",  "an upper-case segment, which cannot be a verb name"],
+].each do |path, method, what|
   app = FakeApp.new
-  run(app, path)
-  assert(app.calls == 1 && RECORDED.empty?, "#{what} (#{path}) is dispatched once and records nothing")
+  run(app, path, method: method)
+  assert(app.calls == 1 && RECORDED.empty?,
+         "#{what} (#{method} #{path}) is dispatched once and records nothing")
 end
 
 # 2xx only — a 402 pow_required or a 403 gate rejection is not a completed action.
 [200, 201, 204, 299].each do |code|
   app = FakeApp.new(status: code)
-  run(app, "/kiosk/query", body: '{"name":"catalog"}', bearer: "t")
-  assert(RECORDED.size == 1, "a #{code} /query IS recorded")
+  run(app, "/kiosk/catalog", method: "GET", bearer: "t")
+  assert(RECORDED.size == 1, "a #{code} GET /catalog IS recorded")
 end
 [302, 400, 402, 403, 404, 422, 500].each do |code|
   app = FakeApp.new(status: code)
-  status, = run(app, "/kiosk/query", body: '{"name":"catalog"}', bearer: "t")
-  assert(status == code && RECORDED.empty?, "a #{code} /query is NOT recorded")
+  status, = run(app, "/kiosk/catalog", method: "GET", bearer: "t")
+  assert(status == code && RECORDED.empty?, "a #{code} GET /catalog is NOT recorded")
 end
 
-# The per-app verb map for /run, and the fixed kinds for the other three.
+# The per-app verb map keys on the ACTION NAME, which is now the path segment.
 {
   "create_order"        => "ordered",
   "reschedule_delivery" => "scheduled",
   "payment_setup"       => "ran",
-  "list_orders"         => "ran",   # unmapped verb falls back
-  nil                   => "ran",   # body with no `name`
+  "list_orders"         => "ran",   # unmapped action falls back
 }.each do |verb, kind|
   app = FakeApp.new
-  run(app, "/kiosk/run", body: JSON.generate(verb ? { "name" => verb } : { "x" => 1 }), bearer: "t")
+  run(app, "/kiosk/#{verb}", body: "{}", bearer: "t")
   assert(RECORDED.map { _1[:kind] } == [kind],
-         "/run #{verb.inspect} → #{kind.inspect}, got #{RECORDED.map { _1[:kind] }.inspect}")
-end
-{ "/auth/register" => "registered", "/kiosk/query" => "browsed", "/kiosk/pay" => "paid" }
-  .each do |path, kind|
-  app = FakeApp.new
-  run(app, path, body: "{}", bearer: "t")
-  assert(RECORDED.map { _1[:kind] } == [kind], "#{path} → #{kind.inspect}")
+         "POST /#{verb} → #{kind.inspect}, got #{RECORDED.map { _1[:kind] }.inspect}")
 end
 
-# A demo with NO verb map still records /run as the generic "ran".
+# THE METHOD, NOT THE NAME, DECIDES read-vs-write — the whole point of the 0.4
+# classifier, and the reason no body has to be read to apply it.
 app = FakeApp.new
-run(app, "/kiosk/run", body: '{"name":"create_order"}', bearer: "t", verb_map: {})
-assert(RECORDED.map { _1[:kind] } == ["ran"], "an app with no verb_map records /run as \"ran\"")
+run(app, "/kiosk/catalog", method: "GET", bearer: "t")
+assert(RECORDED.map { _1[:kind] } == ["browsed"], "GET /catalog → \"browsed\"")
+app = FakeApp.new
+run(app, "/kiosk/create_order", method: "GET", bearer: "t")
+assert(RECORDED.map { _1[:kind] } == ["browsed"],
+       "a GET is classified as a read whatever the verb_map says about that name")
+
+{ ["/auth/register", "POST"] => "registered",
+  ["/kiosk/pay", "POST"]     => "paid" }.each do |(path, method), kind|
+  app = FakeApp.new
+  run(app, path, method: method, body: "{}", bearer: "t")
+  assert(RECORDED.map { _1[:kind] } == [kind], "#{method} #{path} → #{kind.inspect}")
+end
+
+# A demo with NO verb map still records an action as the generic "ran".
+app = FakeApp.new
+run(app, "/kiosk/create_order", body: "{}", bearer: "t", verb_map: {})
+assert(RECORDED.map { _1[:kind] } == ["ran"], "an app with no verb_map records an action as \"ran\"")
 
 # ═════════════════════════════════════════════════════════════════════════════
 # Privacy: what identifies the agent
@@ -343,25 +361,31 @@ assert(app.calls == 1 && RECORDED == [{ kind: "paid", agent: nil }],
        "an unauthenticated call records a nil ref rather than raising, got #{RECORDED.inspect}")
 
 # ═════════════════════════════════════════════════════════════════════════════
-# The request body is left exactly as the app expects it
+# THE REQUEST BODY IS NEVER READ
 # ═════════════════════════════════════════════════════════════════════════════
-puts "\n── rack.input is rewound for the app ──"
+puts "\n── the middleware never touches rack.input ──"
 
-body_json = '{"name":"create_order","arguments":{"items":[{"sku":"milk","qty":2}]}}'
+# Through 0.3 the verb name was a BODY field, so this middleware had to read
+# and rewind `rack.input` before the app ran — a peek at every write, one
+# missed rewind away from handing Rails a consumed stream. On the 0.4 wire the
+# name is the path, so the body is not a telemetry input at all.
+body_json = '{"items":[{"sku":"milk","qty":2}]}'
 app = FakeApp.new
-run(app, "/kiosk/run", body: body_json, bearer: "t")
+run(app, "/kiosk/create_order", body: body_json, bearer: "t")
 assert(app.read_bodies == [body_json],
-       "the app still reads the FULL request body after the middleware peeked at the verb")
+       "the app reads the FULL request body from position 0 — the middleware never consumed it")
+assert(RECORDED.map { _1[:kind] } == ["ordered"],
+       "  … and the action was still classified, from the path")
 
 app = FakeApp.new
-run(app, "/kiosk/run", body: "{not json", bearer: "t")
-assert(app.calls == 1 && RECORDED.map { _1[:kind] } == ["ran"],
-       "an unparseable /run body falls back to \"ran\" instead of raising")
+run(app, "/kiosk/create_order", body: "{not json at all", bearer: "t")
+assert(app.calls == 1 && RECORDED.map { _1[:kind] } == ["ordered"],
+       "an unparseable body cannot affect classification — it is never parsed")
 
 app = FakeApp.new
-run(app, "/kiosk/run", bearer: "t")          # no rack.input at all
-assert(app.calls == 1 && RECORDED.map { _1[:kind] } == ["ran"],
-       "a /run with no rack.input is dispatched once and falls back to \"ran\"")
+run(app, "/kiosk/create_order", bearer: "t")   # no rack.input at all
+assert(app.calls == 1 && RECORDED.map { _1[:kind] } == ["ordered"],
+       "a request with no rack.input is dispatched once and still classified")
 
 # ═════════════════════════════════════════════════════════════════════════════
 if FAILURES.empty?

@@ -2,7 +2,7 @@
 
 # Kiosk-demo (hoteling-shape) configuration. Hotel booking with payment gate.
 # No KYC, no hardware unlock. PoW is off by default; with
-# KIOSK_POW_BROWSE_DEMO=1 the browse-heavy `query` verb is priced by request
+# KIOSK_POW_BROWSE_DEMO=1 the browse-heavy QUERY endpoints are priced by request
 # rate with escalating Equihash (n=96 k=5) proofs (see the browse gate below,
 # exercised by demo:browse).
 # Queries: properties, availability, my_bookings, search_hotels, hotel_detail
@@ -72,8 +72,10 @@ if ENV["KIOSK_POW_BROWSE_DEMO"] == "1"
   HOTELING_BROWSE_COUNT = Hash.new(0)  # agent_id => availability queries so far
 
   # Priced-pagination policy: free below the allowance, then proof count rises
-  # with the query rate. Only the `query` verb (browsing) is priced; run/pay
-  # are never gated here.
+  # with the query rate. Only reads are priced — the policy is advertised for
+  # the `:query` POLICY KIND (Executor::VERBS, the coarse kind of a call, not a
+  # wire path), so every `GET /kiosk/<query-name>` is tolled and actions and
+  # `pay` are never gated here.
   class HotelingBrowsePolicy < Kiosk::Reputation::Policy
     def initialize(params)
       @params = params
@@ -127,11 +129,12 @@ Kiosk.configure do |c|
   # in dev/test — the posture lives in config/environments/*.
   c.issuer = Rails.configuration.x.kiosk.issuer
 
-  # UNIFORM-VALIDATION slice-1 (K-479): validate a PRESENT `pow` field against
-  # the normative PoW schema at the wire choke point, so a malformed pow gets a
-  # clear 400 bad_request (with a shape hint) instead of a silent re-issued 402
-  # loop. Needs the json_schemer gem (in the Gemfile). Absent/valid pow paths
-  # unchanged.
+  # UNIFORM-VALIDATION slice-1 (K-479): validate the proof(s) parsed from the
+  # `Kiosk-PoW` request header (ADR-0022) against the normative PoW schema at
+  # the wire choke point, so a malformed proof gets a clear 400 bad_request
+  # (with a shape hint) instead of a silent re-issued 402 loop. There is no
+  # `pow` body field to validate — the header is the only channel. Needs the
+  # json_schemer gem (in the Gemfile). Absent/valid proofs unchanged.
   c.validate_requests = true
 
   # T-068 slice 3: every query/action answer is validated against the

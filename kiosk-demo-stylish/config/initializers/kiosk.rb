@@ -68,11 +68,12 @@ Kiosk.configure do |c|
   # in dev/test — the posture lives in config/environments/*.
   c.issuer = Rails.configuration.x.kiosk.issuer
 
-  # UNIFORM-VALIDATION slice-1 (K-479): validate a PRESENT `pow` field against
-  # the normative PoW schema at the wire choke point, so a malformed pow gets a
-  # clear 400 bad_request (with a shape hint) instead of a silent re-issued 402
-  # loop. Needs the json_schemer gem (in the Gemfile). Absent/valid pow paths
-  # unchanged.
+  # UNIFORM-VALIDATION slice-1 (K-479): validate the proof(s) parsed from the
+  # `Kiosk-PoW` request header (ADR-0022) against the normative PoW schema at
+  # the wire choke point, so a malformed proof gets a clear 400 bad_request
+  # (with a shape hint) instead of a silent re-issued 402 loop. There is no
+  # `pow` body field to validate — the header is the only channel. Needs the
+  # json_schemer gem (in the Gemfile). Absent/valid proofs unchanged.
   c.validate_requests = true
 
   # T-068 slice 3: every query/action answer is validated against the

@@ -38,4 +38,18 @@ Rails.application.routes.draw do
   # /.well-known/api-catalog — RFC 9727 linkset of the live wire endpoints
   # (schema tagged service-desc), served by the same DiscoveryController.
   get "/.well-known/api-catalog",           to: "kiosk/server/discovery#api_catalog"
+
+  # ── The 0.4 per-verb wire (T-068 slice 1) ────────────────────────────────
+  #
+  # One endpoint per registered verb: GET /kiosk/<query-name>,
+  # POST /kiosk/<action-name>. This origin hand-draws its routes rather than
+  # mounting the engine (that IS the escape hatch the engine documents), so
+  # the pair the engine would have drawn is written out here — and, like the
+  # engine's, LAST, so every reserved line above wins by first-match and no
+  # operator verb can shadow `schema`, `query`, `run`, `pay` or the auth
+  # plane.
+  get  "/kiosk/:kiosk_verb", to: "kiosk/server/verb#show",
+       constraints: { kiosk_verb: Kiosk::Server::VerbController::NAME_SEGMENT }
+  post "/kiosk/:kiosk_verb", to: "kiosk/server/verb#create",
+       constraints: { kiosk_verb: Kiosk::Server::VerbController::NAME_SEGMENT }
 end

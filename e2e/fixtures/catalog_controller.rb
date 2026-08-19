@@ -1,7 +1,7 @@
 # frozen_string_literal: true
 
 # The e2e origin's READ surface: the two verbs an assistant reaches with
-# `POST /kiosk/query`. Kiosk ships a MIXIN, not a base class — the superclass
+# `GET /kiosk/<query-name>`. Kiosk ships a MIXIN, not a base class — the superclass
 # is the generated app's own ApplicationController, and `include Kiosk::Query`
 # is the whole contract. Each class-level macro records a declaration and the
 # NEXT `def` claims it, so a method with no macros above it is a helper the
@@ -13,10 +13,13 @@
 # config/initializers/kiosk.rb; without that line the engine has nothing to
 # register from and the origin serves no verbs at all (K-761).
 #
-# NOT ROUTABLE. config/routes.rb draws nothing at this controller: handlers are
-# reached only through the wire, which is where authentication, the registration
-# PoW gate and the GUC-scoped transaction live. A route drawn straight here
-# would bypass all three, and the mixin answers such a request 404.
+# NOT ROUTABLE BY HAND. config/routes.rb draws nothing at this controller by
+# name: handlers are reached only through the wire, which is where
+# authentication, the registration PoW gate and the GUC-scoped transaction
+# live. A route drawn straight here would bypass all three, and the mixin
+# answers such a request 404. What routes.rb DOES draw is the wire's own
+# per-verb pair (`GET /kiosk/:kiosk_verb`), which resolves the name against
+# the registry and reaches these actions through the gates, not around them.
 #
 # The SQL here is deliberately RAW and deliberately unchanged from the
 # registered blocks this file replaces (T-081). `my_appointments` is the

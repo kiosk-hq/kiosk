@@ -93,8 +93,8 @@ claims = JSON.parse(Base64.urlsafe_decode64(seg + "=" * ((4 - seg.length % 4) % 
 results[:bound_user] = claims["sub"] == HUMAN
 agent_id = claims.fetch("agent_id")
 
-# Wire verb as the bound assistant account.
-rc, q = post_json("#{SERVER}/kiosk/query", { name: "my_appointments" }, { "Authorization" => "Bearer #{token}" })
+# Wire verb as the bound assistant account — a query is a GET at its own path.
+rc, q = get_json("#{SERVER}/kiosk/my_appointments", { "Authorization" => "Bearer #{token}" })
 results[:wire_as_bound] = [rc, q["ok"]]
 
 # kiosk-pop login stays the refresh path for the bound key.

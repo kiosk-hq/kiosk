@@ -66,7 +66,7 @@ claims = JSON.parse(Base64.urlsafe_decode64(claims_seg + "=" * ((4 - claims_seg.
 results[:role] = claims["role"]
 
 # ── 3. The PoW-minted token authenticates a real wire verb ──────────────────
-rc_wire, wire = post_json("#{SERVER}/kiosk/query", { name: "salons" }, { "Authorization" => "Bearer #{token}" })
+rc_wire, wire = get_json("#{SERVER}/kiosk/salons", { "Authorization" => "Bearer #{token}" })
 results[:wire_status] = rc_wire
 results[:wire_ok]     = wire["ok"]
 

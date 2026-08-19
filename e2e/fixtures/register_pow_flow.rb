@@ -68,6 +68,9 @@ results[:role] = claims["role"]
 # ── 3. The PoW-minted token authenticates a real wire verb ──────────────────
 rc_wire, wire = get_json("#{SERVER}/kiosk/salons", { "Authorization" => "Bearer #{token}" })
 results[:wire_status] = rc_wire
-results[:wire_ok]     = wire["ok"]
+# 0.4 answers a query with the handler's payload verbatim (T-068 slice 2), so
+# the proof that the wire served this token is that a LIST came back — there
+# is no `ok` flag left to read, and the status line carries success.
+results[:wire_payload_is_array] = wire.is_a?(Array)
 
 puts JSON.generate(results)

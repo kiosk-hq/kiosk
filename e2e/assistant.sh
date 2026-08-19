@@ -3,10 +3,17 @@
 # kiosk-server. Executed as a bash subprocess by e2e/run.sh after server
 # start (not sourced — it runs under its own `set -euo pipefail`).
 #
-# Asserts on response envelopes from the REST wire surface: the 0.4 per-verb
-# endpoints (GET /kiosk/<query-name>, POST /kiosk/<action-name>), /kiosk/pay,
-# and — until the 0.4 cutover slice deletes them — the 0.3 name-dispatch
-# endpoints /kiosk/query and /kiosk/run. Exits non-zero on any failure.
+# Asserts on responses from the REST wire surface: the 0.4 per-verb endpoints
+# (GET /kiosk/<query-name>, POST /kiosk/<action-name>), /kiosk/pay, and —
+# until the 0.4 cutover slice deletes them — the 0.3 name-dispatch endpoints
+# /kiosk/query and /kiosk/run. Exits non-zero on any failure.
+#
+# TWO ANSWER SHAPES ARE ASSERTED HERE, ON PURPOSE (T-068 slice 2). The
+# per-verb endpoints answer the 0.4 shape: the handler's payload VERBATIM on
+# success (a bare array, `{rows, next}` when paginated, the action's own
+# object), an RFC 9457 problem document on an error. `/kiosk/{query,run,
+# schema,pay}` still answer the 0.3 envelope, because the eight demos still
+# read it — those four move at the cutover slice, in one wave with the fleet.
 #
 # Env (all set by run.sh; the pay-flow + DB assertions dereference them
 # under `set -u`, so all are required):
@@ -172,11 +179,23 @@ assert "Kiosk-Min-Client present"     "$(echo "$headers" | grep -i '^Kiosk-Min-C
 
 printf "\n\033[1m=== GET /kiosk/salons ===\033[0m\n"
 
+# The answer IS the handler's payload — `render json: Salon.all` reaches the
+# assistant as a bare JSON array, with no `ok`/`kind` wrapper to unpick.
 r=$(query_call "$ALICE_AGENT_TOKEN" "salons")
-assert "ok: true"                  "$(echo "$r" | jq -r '.ok')"                    "true"
-assert "kind: rows"                "$(echo "$r" | jq -r '.kind')"                  "rows"
-assert "exactly 1 salon"           "$(echo "$r" | jq -r '.rows | length')"         "1"
-assert "salon name is Combette"      "$(echo "$r" | jq -r '.rows[0].name')"          "Combette on Park"
+assert "the body is a bare array"  "$(echo "$r" | jq -r 'type')"                   "array"
+assert "no envelope wrapper"       "$(echo "$r" | jq -r 'if type == "object" then has("ok") else false end')" "false"
+assert "exactly 1 salon"           "$(echo "$r" | jq -r 'length')"                 "1"
+assert "salon name is Combette"      "$(echo "$r" | jq -r '.[0].name')"              "Combette on Park"
+
+# Design §3.3 — the cache policy is response shape, so it is asserted here
+# with the body. Without `Kiosk-PoW` in Vary a private cache keyed on the URL
+# would serve a paid 200 to an unpaid retry.
+cache_headers=$(curl -sS -o /dev/null -D - "$SERVER_URL/kiosk/salons" \
+  -H "Authorization: Bearer $ALICE_AGENT_TOKEN")
+assert "Vary names both request headers" \
+  "$(echo "$cache_headers" | grep -ic '^Vary: Authorization, Kiosk-PoW')" "1"
+assert "a 200 defaults to private, no-store" \
+  "$(echo "$cache_headers" | grep -ic '^Cache-Control: private, no-store')" "1"
 
 # `limit` and `cursor` are RESERVED parameter names (T-070 rule 7): always
 # accepted, never declared. `salons` declares the CLOSED empty object
@@ -192,39 +211,49 @@ assert "reserved limit/cursor accepted → 200" "$status" "200"
 # undeclared parameter. `limit` is accepted because it is reserved, not
 # because nothing is checking.
 r=$(query_call "$ALICE_AGENT_TOKEN" "salons" "nope=1")
-assert "an undeclared parameter → bad_request"  "$(echo "$r" | jq -r '.error.code')" "bad_request"
-assert "…and the refusal names it"              "$(echo "$r" | jq -r '.error.message | test("nope")')" "true"
+assert "an undeclared parameter → bad_request"  "$(echo "$r" | jq -r '.code')" "bad_request"
+assert "…and the refusal names it"              "$(echo "$r" | jq -r '.detail | test("nope")')" "true"
 
 # ─── an action is a POST at its own path ────────────────────────────────
 
 printf "\n\033[1m=== POST /kiosk/book_appointment ===\033[0m\n"
 
 # Get salon id first.
-salon_id=$(query_call "$ALICE_AGENT_TOKEN" "salons" | jq -r '.rows[0].id')
+salon_id=$(query_call "$ALICE_AGENT_TOKEN" "salons" | jq -r '.[0].id')
 
 r=$(action_call "$ALICE_AGENT_TOKEN" "book_appointment" "{\"salon_id\":$salon_id,\"slot\":\"2026-06-15T14:00:00Z\"}")
-assert "ok: true"                  "$(echo "$r" | jq -r '.ok')"                    "true"
-assert "kind: value"               "$(echo "$r" | jq -r '.kind')"                  "value"
-assert "appointment_id returned"   "$(echo "$r" | jq -r '.value.appointment_id | length > 0')" "true"
-assert "salon_id echoed"           "$(echo "$r" | jq -r '.value.salon_id')"        "$salon_id"
-alice_appt_id=$(echo "$r" | jq -r '.value.appointment_id')
+assert "the body is the action's object" "$(echo "$r" | jq -r 'type')"            "object"
+assert "no envelope wrapper"       "$(echo "$r" | jq -r 'has("value")')"           "false"
+assert "appointment_id returned"   "$(echo "$r" | jq -r '.appointment_id | length > 0')" "true"
+assert "salon_id echoed"           "$(echo "$r" | jq -r '.salon_id')"              "$salon_id"
+alice_appt_id=$(echo "$r" | jq -r '.appointment_id')
 
 # Bob books at the same (public) salon so both users own exactly one row.
 r=$(action_call "$BOB_AGENT_TOKEN" "book_appointment" "{\"salon_id\":$salon_id,\"slot\":\"2026-06-16T10:00:00Z\"}")
-assert "bob: ok: true"             "$(echo "$r" | jq -r '.ok')"                    "true"
-bob_appt_id=$(echo "$r" | jq -r '.value.appointment_id')
+assert "bob: booked"               "$(echo "$r" | jq -r '.appointment_id | length > 0')" "true"
+bob_appt_id=$(echo "$r" | jq -r '.appointment_id')
 
 # The HTTP method carries the read/write semantics, so getting them the wrong
-# way round is a 404 that names the method the verb actually wanted.
+# way round is a 405: the resource EXISTS and refuses this method. RFC 9110
+# §15.5.6 makes `Allow` mandatory on one, and the hint names the call to make.
+mna_headers=$(curl -sS -o /tmp/mna_body -D - "$SERVER_URL/kiosk/book_appointment" \
+  -H "Authorization: Bearer $ALICE_AGENT_TOKEN")
 status=$(curl -sS -o /dev/null -w "%{http_code}" "$SERVER_URL/kiosk/book_appointment" \
   -H "Authorization: Bearer $ALICE_AGENT_TOKEN")
-assert "GET at an action's path → 404"  "$status" "404"
-r=$(curl -sS "$SERVER_URL/kiosk/book_appointment" -H "Authorization: Bearer $ALICE_AGENT_TOKEN")
-assert "…and says it is an action"      "$(echo "$r" | jq -r '.error.message | test("is an action")')" "true"
+r=$(cat /tmp/mna_body)
+assert "GET at an action's path → 405"  "$status" "405"
+assert "…carrying Allow: POST"          "$(echo "$mna_headers" | grep -ic '^Allow: POST')" "1"
+assert "…as a problem document"         "$(echo "$mna_headers" | grep -ic '^Content-Type: application/problem+json')" "1"
+assert "…code method_not_allowed"       "$(echo "$r" | jq -r '.code')" "method_not_allowed"
+assert "…type names the same code"      "$(echo "$r" | jq -r '.type')" "https://kiosk.tech/problems/method_not_allowed"
+assert "…and says it is an action"      "$(echo "$r" | jq -r '.detail | test("is an action")')" "true"
 
 status=$(curl -sS -o /dev/null -w "%{http_code}" -X POST "$SERVER_URL/kiosk/salons" \
   -H "Authorization: Bearer $ALICE_AGENT_TOKEN" -H "Content-Type: application/json" -d '{}')
-assert "POST at a query's path → 404"   "$status" "404"
+assert "POST at a query's path → 405"   "$status" "405"
+mna2=$(curl -sS -o /dev/null -D - -X POST "$SERVER_URL/kiosk/salons" \
+  -H "Authorization: Bearer $ALICE_AGENT_TOKEN" -H "Content-Type: application/json" -d '{}')
+assert "…carrying Allow: GET"           "$(echo "$mna2" | grep -ic '^Allow: GET')" "1"
 
 # ─── app-layer per-user isolation (the headline security property) ──────
 # my_appointments filters WHERE user_id = kiosk.current_user_id(), where the
@@ -235,28 +264,35 @@ assert "POST at a query's path → 404"   "$status" "404"
 printf "\n\033[1m=== verify appointment landed + per-user isolation ===\033[0m\n"
 
 alice_appts=$(query_call "$ALICE_AGENT_TOKEN" "my_appointments")
-assert "alice: 1 appointment exists"  "$(echo "$alice_appts" | jq -r '.rows | length')"                                 "1"
-assert "alice: sees her own row"      "$(echo "$alice_appts" | jq -r --arg id "$alice_appt_id" '[.rows[].id] | index($id) != null')" "true"
-assert "alice: does NOT see bob's row" "$(echo "$alice_appts" | jq -r --arg id "$bob_appt_id"   '[.rows[].id] | index($id) == null')" "true"
+assert "alice: 1 appointment exists"  "$(echo "$alice_appts" | jq -r 'length')"                                 "1"
+assert "alice: sees her own row"      "$(echo "$alice_appts" | jq -r --arg id "$alice_appt_id" '[.[].id] | index($id) != null')" "true"
+assert "alice: does NOT see bob's row" "$(echo "$alice_appts" | jq -r --arg id "$bob_appt_id"   '[.[].id] | index($id) == null')" "true"
 
 bob_appts=$(query_call "$BOB_AGENT_TOKEN" "my_appointments")
-assert "bob: 1 appointment exists"    "$(echo "$bob_appts" | jq -r '.rows | length')"                                   "1"
-assert "bob: sees his own row"        "$(echo "$bob_appts" | jq -r --arg id "$bob_appt_id"   '[.rows[].id] | index($id) != null')" "true"
-assert "bob: does NOT see alice's row" "$(echo "$bob_appts" | jq -r --arg id "$alice_appt_id" '[.rows[].id] | index($id) == null')" "true"
+assert "bob: 1 appointment exists"    "$(echo "$bob_appts" | jq -r 'length')"                                   "1"
+assert "bob: sees his own row"        "$(echo "$bob_appts" | jq -r --arg id "$bob_appt_id"   '[.[].id] | index($id) != null')" "true"
+assert "bob: does NOT see alice's row" "$(echo "$bob_appts" | jq -r --arg id "$alice_appt_id" '[.[].id] | index($id) == null')" "true"
 
-# ─── error envelopes ────────────────────────────────────────────────────
+# ─── problem documents (RFC 9457) ───────────────────────────────────────
 
-printf "\n\033[1m=== error envelopes ===\033[0m\n"
+printf "\n\033[1m=== problem documents ===\033[0m\n"
 
-# Unknown query name → NotFound, http 404, code not_found
+# Unknown query name → 404, problem type + code not_found
+nf_headers=$(curl -sS -o /dev/null -D - "$SERVER_URL/kiosk/frobnicate" \
+  -H "Authorization: Bearer $ALICE_AGENT_TOKEN")
 status=$(curl -sS -o /dev/null -w "%{http_code}" "$SERVER_URL/kiosk/frobnicate" \
   -H "Authorization: Bearer $ALICE_AGENT_TOKEN")
 assert "unknown query → 404"        "$status" "404"
+assert "served as problem+json"     "$(echo "$nf_headers" | grep -ic '^Content-Type: application/problem+json')" "1"
+assert "an error is never cached"   "$(echo "$nf_headers" | grep -ic '^Cache-Control: private, no-store')" "1"
 
 r=$(query_call "$ALICE_AGENT_TOKEN" "frobnicate")
-assert "ok: false on bad query"     "$(echo "$r" | jq -r '.ok')"                "false"
-assert "error.code not_found"       "$(echo "$r" | jq -r '.error.code')"        "not_found"
-assert "hint names a real query"    "$(echo "$r" | jq -r '.error.hint | test("salons")')" "true"
+assert "type names the code"        "$(echo "$r" | jq -r '.type')"   "https://kiosk.tech/problems/not_found"
+assert "title is the code's, not the incident's" "$(echo "$r" | jq -r '.title')" "Not found"
+assert "status restates the HTTP status"         "$(echo "$r" | jq -r '.status')" "404"
+assert "code is the branch point"   "$(echo "$r" | jq -r '.code')"   "not_found"
+assert "hint names a real query"    "$(echo "$r" | jq -r '.hint | test("salons")')" "true"
+assert "no ok field survives"       "$(echo "$r" | jq -r 'has("ok")')" "false"
 
 # Unknown action name → NotFound, http 404, code not_found
 status=$(curl -sS -o /dev/null -w "%{http_code}" -X POST "$SERVER_URL/kiosk/nope" \
@@ -295,10 +331,21 @@ printf "\n\033[1m=== the 0.3 wire, still served ===\033[0m\n"
 old=$(exec_call "$ALICE_AGENT_TOKEN" "query" '{"name":"salons"}')
 new=$(query_call "$ALICE_AGENT_TOKEN" "salons")
 assert "POST /kiosk/query still answers"  "$(echo "$old" | jq -r '.ok')" "true"
-assert "both wires agree, byte for byte"  "$(jq -S . <<<"$old")" "$(jq -S . <<<"$new")"
+assert "…still in the 0.3 envelope"       "$(echo "$old" | jq -r '.kind')" "rows"
+# The envelope is now the ONLY difference between the two answers — slice 2
+# ended byte-identity on purpose, and what has to survive is that both wires
+# reach the same handler and carry the same rows.
+assert "both wires carry the same rows"   "$(jq -S '.rows' <<<"$old")" "$(jq -S . <<<"$new")"
 
 old_run=$(exec_call "$ALICE_AGENT_TOKEN" "run" '{"name":"nope"}')
 assert "POST /kiosk/run still answers"    "$(echo "$old_run" | jq -r '.error.code')" "not_found"
+assert "…still the 0.3 error envelope"    "$(echo "$old_run" | jq -r '.ok')" "false"
+
+# `schema` and `pay` keep the envelope too, for the same reason: the eight
+# demos read `.value` off both, and they move in one wave at the cutover.
+old_schema=$(curl -sS "$SERVER_URL/kiosk/schema" -H "Authorization: Bearer $ALICE_AGENT_TOKEN")
+assert "GET /kiosk/schema still enveloped" "$(echo "$old_schema" | jq -r '.kind')" "value"
+assert "…with the catalog under value"     "$(echo "$old_schema" | jq -r '.value.queries | length > 0')" "true"
 
 # ─── JWKS endpoint ──────────────────────────────────────────────────────
 #
@@ -368,7 +415,7 @@ assert "register-pow: 1 challenge issued"      "$(echo "$reg_out" | jq -r '.chal
 assert "register-pow: solve+proof → registered" "$(echo "$reg_out" | jq -r '.with_proof_registered')" "true"
 assert "register-pow: role pinned customer"    "$(echo "$reg_out" | jq -r '.role')"                   "customer"
 assert "register-pow: minted token wire → 200" "$(echo "$reg_out" | jq -r '.wire_status')"            "200"
-assert "register-pow: minted token wire ok"    "$(echo "$reg_out" | jq -r '.wire_ok')"                "true"
+assert "register-pow: wire answered rows"      "$(echo "$reg_out" | jq -r '.wire_payload_is_array')"  "true"
 
 # ─── no-human AP2 pay flow (register → intent → cart → payment mandate → pay → persist) ───
 printf "\n\033[1m=== no-human register → mandate → pay ===\033[0m\n"

@@ -831,7 +831,9 @@ namespace :demo do
       GET /kiosk/schema
 
     Asserts:
-      • schema.verbs is the MODULE set schema/queries/actions/pay (== discovery capabilities) and NOT events
+      • `GET /kiosk/schema` answers 200 with NO Authorization header (public since T-094)
+      • the MODULE set lives in /.well-known/kiosk.json `capabilities` (`verbs` dropped, T-095)
+      • capabilities is the MODULE set schema/queries/actions/pay and NOT events
       • schema.actions includes reserve, start_rental, rent_motorcycle,
         payment_setup with descriptions
 
@@ -907,26 +909,35 @@ namespace :demo do
     puts "\n── Schema assertions ──"
     failures = []
 
-    verbs   = result["schema_verbs"]   || []
-    queries = result["schema_queries"] || []
-    actions = result["schema_actions"] || []
+    queries      = result["schema_queries"] || []
+    actions      = result["schema_actions"] || []
+    capabilities = result["discovery_capabilities"] || []
 
-    # Verbs: the MODULES this origin serves, which since T-068 slice 5 is
-    # exactly what /.well-known/kiosk.json advertises as `capabilities`
-    # (K-740); events absent.
+    # THE SCHEMA CALL WAS MADE WITHOUT A CREDENTIAL (T-094). The flow driver
+    # sends no Authorization header, so this status IS the public-access proof.
+    if result["schema_status"] == 200
+      puts "  ✓  GET /kiosk/schema answered 200 with NO Authorization header"
+    else
+      failures << "unauthenticated GET /kiosk/schema returned #{result["schema_status"].inspect}, want 200"
+      puts "  ✗  unauthenticated GET /kiosk/schema returned #{result["schema_status"].inspect}"
+    end
+
+    # THE MODULE SET, at its one remaining home. It was published twice —
+    # `schema.verbs` and `kiosk.json` `capabilities` — from the same call, so
+    # `verbs` was dropped (T-095) and the property moved here intact.
     %w[schema queries actions pay].each do |v|
-      if verbs.include?(v)
-        puts "  ✓  schema.verbs includes #{v}"
+      if capabilities.include?(v)
+        puts "  ✓  capabilities includes #{v}"
       else
-        failures << "schema.verbs missing #{v} (got #{verbs.inspect})"
-        puts "  ✗  schema.verbs missing #{v}"
+        failures << "capabilities missing #{v} (got #{capabilities.inspect})"
+        puts "  ✗  capabilities missing #{v}"
       end
     end
-    if verbs.include?("events")
-      failures << "schema.verbs must NOT include events (got #{verbs.inspect})"
-      puts "  ✗  schema.verbs must NOT include events"
+    if capabilities.include?("events")
+      failures << "capabilities must NOT include events (got #{capabilities.inspect})"
+      puts "  ✗  capabilities must NOT include events"
     else
-      puts "  ✓  schema.verbs does not include events"
+      puts "  ✓  capabilities does not include events"
     end
 
     # reserve present with a description (reserve is an Action, not a query)

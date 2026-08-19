@@ -70,10 +70,28 @@ _key, reg = equihash_register(
 token = reg.fetch("access_token")
 STDERR.puts "  Registered: user_id=#{reg["user_id"]}"
 
-# ── Call schema (GET /kiosk/schema — REST verb) ──────────────────────────────
+# ── Call schema — UNAUTHENTICATED, and that IS the assertion (T-094) ─────────
+#
+# This call carried a Bearer token until 2026-08-19. `GET <endpoint>/schema` is
+# PUBLIC now: the catalogue holds no per-agent value and no secret, it is
+# derived once at boot and served from memory, so gating it bought nothing.
+# Sending NO Authorization header here is what proves it — a 200 with the
+# catalogue in the body is the whole test, and a regression to the gate would
+# be a 401 the rake task reports.
 
-schema_rc, schema_body = get_json("/kiosk/schema", bearer: token)
+schema_rc, schema_body = get_json("/kiosk/schema")
 abort "schema call failed (#{schema_rc}): #{JSON.generate(schema_body)}" unless schema_rc == 200
+
+# ── /.well-known/kiosk.json — where the MODULE set lives (T-095) ─────────────
+#
+# `schema` published the module set too, as `verbs`, until 2026-08-19 — the
+# same `Array(config.capabilities)` call this document renders, so it was one
+# value under two names rather than two facts. The field is gone; the property
+# it carried is asserted here, at its one remaining home.
+wk_rc, wk = get_json("/.well-known/kiosk.json")
+abort "kiosk.json failed (#{wk_rc})" unless wk_rc == 200
+capabilities = wk.dig("kiosk", "capabilities") || []
+STDERR.puts "  discovery capabilities=#{capabilities.inspect}"
 
 # ── Emit structured JSON for the rake task to assert ────────────────────────
 
@@ -82,8 +100,8 @@ abort "schema call failed (#{schema_rc}): #{JSON.generate(schema_body)}" unless 
 schema_value = schema_body || {}
 
 puts JSON.generate({
-  schema_status:  schema_rc,
-  schema_verbs:   schema_value["verbs"],
-  schema_queries: schema_value["queries"],
-  schema_actions: schema_value["actions"],
+  schema_status:          schema_rc,
+  schema_queries:         schema_value["queries"],
+  schema_actions:         schema_value["actions"],
+  discovery_capabilities: capabilities,
 })

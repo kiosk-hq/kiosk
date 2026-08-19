@@ -29,12 +29,19 @@ module Kiosk
     # {.validate_arguments!}: a verb's own `input_schema` validating the
     # ARGUMENTS of a request to `<endpoint>/<verb-name>`, which is what T-073's
     # «`input_schema` becomes REQUIRED» buys — an executable input contract
-    # rather than a published one. It runs behind the SAME `validate_requests`
-    # flag, on the same lazily-required json_schemer, and it runs on the
-    # COERCED arguments ({ArgumentDecoder}) because json_schemer cannot check a
-    # query string's `"4"` against `{type: "integer"}`. Flipping the flag on by
-    # default — which is what makes K-717's typed 400 fall out of the schema
-    # layer everywhere — is the 0.4 DESCRIPTOR slice, not this one.
+    # rather than a published one. It runs on the COERCED arguments
+    # ({ArgumentDecoder}) because json_schemer cannot check a query string's
+    # `"4"` against `{type: "integer"}`.
+    #
+    # SLICE 3 TOOK IT OUT FROM BEHIND THE FLAG. `validate_arguments!` is now
+    # UNCONDITIONAL on the per-verb wire ({VerbController#arguments_for}):
+    # `input_schema` is REQUIRED on every 0.4 verb and §8.1 item 5 makes the
+    # operator coerce-then-validate before the handler sees an argument, so a
+    # flag-gated check would be non-conformant with the flag off and K-717's
+    # typed 400 would exist on some origins and not others. `validate_requests`
+    # keeps its ORIGINAL job below — the opt-in PoW-shape check on the 0.3 wire
+    # and the auth plane. The verb's ANSWER is checked by the sibling
+    # {ResponseValidation}, behind its own `validate_responses` flag.
     #
     # Still out of scope: response-conformance CI and the vendored-schema
     # sync-check (T-045).

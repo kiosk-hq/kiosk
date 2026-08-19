@@ -159,11 +159,25 @@ module Kiosk
                  parse_body!
                end
 
-        if Kiosk.configuration.validate_requests
-          RequestValidation.validate_arguments!(
-            args, input_schema: descriptor[:input_schema], verb: name
-          )
-        end
+        # UNCONDITIONAL, and that is the point of this slice. `input_schema` is
+        # REQUIRED on every 0.4 verb (T-073 = A) and §8.1 item 5 makes the
+        # operator coerce-then-validate before the handler sees an argument, so
+        # a per-verb endpoint that validated only when a flag was set would be
+        # non-conformant with the flag off — and K-717's typed 400 for an
+        # invalid filter value would fall out of the schema layer on some
+        # origins and not others. `validate_requests` stays what it always was:
+        # the opt-in PoW-SHAPE check on the 0.3 wire and the auth plane.
+        #
+        # The cost, stated rather than hidden: `json_schemer` becomes a
+        # practical requirement for serving 0.4, though it is still lazily
+        # required and still an optional gemspec dependency. An origin without
+        # it gets {Errors::ConfigurationError} naming the gem on the first call
+        # — loud, once, at the top of the log — rather than silently serving an
+        # unvalidated wire. Promoting it to a real runtime dependency belongs to
+        # the cutover slice, which edits every gemspec anyway.
+        RequestValidation.validate_arguments!(
+          args, input_schema: descriptor[:input_schema], verb: name
+        )
 
         args
       end

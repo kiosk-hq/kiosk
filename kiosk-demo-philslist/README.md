@@ -93,9 +93,9 @@ Asserts every attack is BLOCKED (0 BREACH): `CrossTenantRead`, `ForgedUserId`,
 Asserts the schema catalog (queries/actions + descriptions) **and** that the
 advertised `capabilities` do **not** include `pay`, `agents.json` carries no
 payments block, and `agents.txt` carries no `Protocols: ap2` / `Payments:`
-directives. (The `schema` verb's `verbs` field is the fixed four-verb wire
-surface and always lists `pay`; the honest pay-absent signal is the computed
-capability set, which drops `pay` when no `payment_provider` is configured.)
+directives. (Since the 0.4 build the `schema` verb's `verbs` field IS the
+computed capability set rather than a fixed four-verb constant, so both
+self-descriptions drop `pay` together and `demo:schema` asserts they are equal.)
 
 ### Registration PoW (`rake demo:register`)
 

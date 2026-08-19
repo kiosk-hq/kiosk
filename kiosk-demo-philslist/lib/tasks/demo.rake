@@ -392,7 +392,7 @@ namespace :demo do
 
     Boots the server, authenticates a seeded principal, calls GET /kiosk/schema,
     /.well-known/kiosk.json, /agents.json, /agents.txt, and asserts:
-      • schema.verbs includes query/run/schema
+      • schema.verbs is the MODULE set schema/queries/actions (== discovery capabilities)
       • schema.queries includes browse_listings and my_listings
       • schema.actions includes post_listing/edit_listing/close_listing
       • every query/action entry carries a non-empty description
@@ -444,8 +444,9 @@ namespace :demo do
     actions = action_specs.map { |a| a["name"] }
     capabilities = result["discovery_capabilities"] || []
 
-    # schema.verbs: query/run/schema present.
-    %w[query run schema].each do |v|
+    # schema.verbs: the MODULES this origin serves, which since T-068 slice 5
+    # is exactly what discovery advertises as `capabilities` (K-740).
+    %w[schema queries actions].each do |v|
       if verbs.include?(v)
         puts "  ✓  schema.verbs includes #{v}"
       else
@@ -512,7 +513,7 @@ namespace :demo do
     else
       puts "  ✓  discovery capabilities do NOT include `pay` (#{capabilities.inspect}) — not-only-commerce proof"
     end
-    %w[schema query run].each do |cap|
+    %w[schema queries actions].each do |cap|
       if capabilities.include?(cap)
         puts "  ✓  discovery capabilities include #{cap}"
       else

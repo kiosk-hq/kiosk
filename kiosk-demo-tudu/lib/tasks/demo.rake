@@ -325,7 +325,7 @@ namespace :demo do
     actions = action_specs.map { |a| a["name"] }
     capabilities = r["discovery_capabilities"] || []
 
-    %w[query run schema].each { |v| check.call("schema.verbs includes #{v}", verbs.include?(v)) }
+    %w[schema queries actions].each { |v| check.call("schema.verbs includes #{v}", verbs.include?(v)) }
     %w[whoami my_lists list_todos list_members].each { |q| check.call("schema.queries includes #{q}", queries.include?(q)) }
     %w[create_list add_todo complete_todo invite accept_invite remove_member].each { |a| check.call("schema.actions includes #{a}", actions.include?(a)) }
 
@@ -350,7 +350,7 @@ namespace :demo do
 
     # ── NOT-ONLY-COMMERCE: pay absent from the ADVERTISED capability set ──
     check.call("discovery capabilities do NOT include `pay` (#{capabilities.inspect})", !capabilities.include?("pay"))
-    %w[schema query run].each { |c| check.call("discovery capabilities include #{c}", capabilities.include?(c)) }
+    %w[schema queries actions].each { |c| check.call("discovery capabilities include #{c}", capabilities.include?(c)) }
     check.call("agents.json carries NO payments block",                 !r["agents_json_has_payments"])
     check.call("agents.txt carries NO `Protocols: ap2` / `Payments:`",  !r["agents_txt_has_ap2"] && !r["agents_txt_has_payments"])
 

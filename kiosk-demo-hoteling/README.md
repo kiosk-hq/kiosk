@@ -20,7 +20,9 @@ only confirmed once it is paid for). Payment settles through a **stub PSP**
 - `pay` — settle the AP2 mandate chain (intent → cart → payment) via the stub PSP
 - `schema` — self-discovery
 
-Advertised capabilities are `[schema, query, run, pay]`. **Registration is
+Advertised capabilities are `[schema, queries, actions, pay]` — the MODULES
+this origin serves, never the registered verb names (the catalog is Bearer-gated
+behind `GET /kiosk/schema`). **Registration is
 always gated by Equihash proof-of-work** (`registration_pow_count = 1`) — every
 new agent key pays one solve to register. Separately, an **opt-in** browse toll
 (off by default; enable with `KIOSK_POW_BROWSE_DEMO=1`) prices the browse-heavy

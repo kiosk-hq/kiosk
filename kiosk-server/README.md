@@ -48,7 +48,7 @@ Kiosk.configure do |c|
   # "Declaring queries and actions". Without them the origin serves no verbs.
   c.handlers      = %w[Kiosk::CatalogController Kiosk::OrdersController]
   # c.mount_path  = "/kiosk"   # default
-  # c.capabilities = %w[schema query run pay]   # optional override; computed from the registry by default
+  # c.capabilities = %w[schema queries actions pay] # optional override; computed from the registry by default
 end
 ```
 

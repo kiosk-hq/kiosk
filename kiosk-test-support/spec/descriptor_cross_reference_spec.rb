@@ -59,6 +59,8 @@
 # demo) and requires each to be declared by the target verb. Tokens that are
 # plainly prose ("it", "both", "the id") are not param-like and are ignored —
 # the lint is about names that LOOK like params and do not resolve.
+require "fileutils"
+
 RSpec.describe "demo descriptor cross-references" do
   # ── Source-text extraction ────────────────────────────────────────────────
   module DescriptorSource
@@ -245,14 +247,86 @@ RSpec.describe "demo descriptor cross-references" do
       out
     end
 
-    # Every verb a demo publishes: the handler controllers under
-    # app/controllers/kiosk/. ONE list per demo, because a cross-reference
-    # routinely points across the query/action split — atablefor's
-    # `availability` (a query controller) names `book_table` (an action
-    # controller), which is exactly the K-494 drift this lint exists for.
+    # The handler classes a demo DECLARES, read out of the one line the engine
+    # reads: `c.handlers = %w[Kiosk::FooController …]` in config/initializers/kiosk.rb.
+    #
+    # WHY THE DECLARATION AND NOT A GLOB (K-769, K-770). This used to be
+    # `Dir[demo_dir + "/app/controllers/kiosk/**/*.rb"]`, and that was wrong
+    # twice over. It made the lint read a DIFFERENT source than the engine, so
+    # a controller present on disk but missing from `c.handlers` contributed
+    # verbs and cross-references here while serving none on the wire — the
+    # K-766 non-zero guard stayed green on it, because a sibling controller in
+    # the same demo kept the count positive. And it hard-coded the directory
+    # and namespace convention that `handler_registrations.rb` explicitly
+    # refuses to impose ("Kiosk ships a mixin, not a base class … dictating the
+    # DIRECTORY and NAMESPACE is the same imposition one level up"), so a
+    # handler in a `packs/` tree or another engine was invisible to the lint as
+    # both a cross-reference source and a target.
+    #
+    # Resolution is textual because nothing here boots a demo's Rails app: the
+    # class name is matched against every `*.rb` under `app/`, in either the
+    # compact (`class Kiosk::FooController`) or the nested (`module Kiosk` …
+    # `class FooController`) spelling. The convention is gone from the lint —
+    # `app/` is where a Rails app's own code lives, not a Kiosk rule.
+    HANDLERS_DECL = /^[ \t]*[a-z_]+\.handlers[ \t]*=[ \t]*%w\[([^\]]*)\]/
+
+    def declared_handlers(demo_dir)
+      init = File.join(demo_dir, "config/initializers/kiosk.rb")
+      return [] unless File.exist?(init)
+
+      m = File.read(init).match(HANDLERS_DECL)
+      m ? m[1].split : []
+    end
+
+    # Does `src` define `class_name`, in either spelling Ruby allows?
+    def defines?(src, class_name)
+      parts = class_name.split("::")
+      return true if src.match?(/^[ \t]*class[ \t]+#{Regexp.escape(class_name)}\b/)
+
+      nesting = parts[0..-2].map { |p| "module[ \\t]+#{Regexp.escape(p)}\\b" }
+      pattern = (nesting + ["class[ \\t]+#{Regexp.escape(parts.last)}\\b"])
+                .map { |x| "(?=.*^[ \\t]*#{x})" }.join
+      src.match?(Regexp.new(pattern, Regexp::MULTILINE))
+    end
+
+    # A cheap first pass: does this file carry a class-level `description` or
+    # `input_schema` at macro position? Cheap deliberately — {controller_verbs}
+    # walks a file def by def and is priced for the two handlers a demo ships,
+    # not for every model, service and operation under app/.
+    DESCRIPTOR_MACRO = /^[ \t]*(?:description|input_schema)[ \t(]/
+
+    # `c.handlers` resolved to files, plus the two disagreements that must not
+    # exist: a declared class no file defines, and a file carrying descriptor
+    # macros that nothing declares. Memoised per demo — every example below
+    # resolves the same seven trees.
+    def resolve_handlers(demo_dir)
+      (@resolved ||= {})[demo_dir] ||= begin
+        declared = declared_handlers(demo_dir)
+        sources  = Dir[File.join(demo_dir, "app/**/*.rb")].sort
+                      .to_h { |path| [path, File.read(path)] }
+
+        files      = {}
+        unresolved = []
+        declared.each do |name|
+          hit = sources.select { |_path, src| defines?(src, name) }.keys
+          hit.empty? ? unresolved << name : files[name] = hit
+        end
+
+        undeclared = sources.select { |_path, src| src.match?(DESCRIPTOR_MACRO) }.keys -
+                     files.values.flatten
+
+        { declared: declared, files: files, unresolved: unresolved, undeclared: undeclared }
+      end
+    end
+
+    # Every verb a demo publishes, read out of the controllers it DECLARES.
+    # ONE list per demo, because a cross-reference routinely points across the
+    # query/action split — atablefor's `availability` (a query controller)
+    # names `book_table` (an action controller), which is exactly the K-494
+    # drift this lint exists for.
     def demo_verbs(demo_dir)
-      Dir[File.join(demo_dir, "app/controllers/kiosk/**/*.rb")].sort
-         .flat_map { |path| controller_verbs(File.read(path)) }
+      resolve_handlers(demo_dir)[:files].values.flatten.uniq.sort
+        .flat_map { |path| controller_verbs(File.read(path)) }
     end
   end
 
@@ -406,6 +480,87 @@ RSpec.describe "demo descriptor cross-references" do
     expect(dark.keys).to be_empty,
                          "these demos yielded no readable descriptors: #{dark.inspect} — verbs, prose or " \
                          "input_schema moved somewhere this lint does not read"
+  end
+
+  # ── `c.handlers` is the declaration, and it must match the tree (K-769, K-770) ──
+  #
+  # The engine registers exactly the classes named in `c.handlers` and nothing
+  # else: `HandlerRegistrations.reload!` rebuilds the registry from that list,
+  # and `clear!` drops every self-registration first, so eager loading cannot
+  # rescue a controller left out of it. A handler that ships under app/ and is
+  # not declared therefore serves NO verbs — and until this example existed
+  # nothing said so. `engine.rb`'s warning fires only when the list AND both
+  # registries are empty, so a demo declaring one of its two controllers was
+  # silent; `demo:schema` catches an omission only when the dropped controller
+  # owns a verb that demo's HAND-WRITTEN assertion list happens to name, and
+  # stylish names four of its six.
+  #
+  # Both directions fail, because they are different mistakes: a declared class
+  # with no file is a typo in the initializer (the engine would raise at boot),
+  # and a descriptor-carrying file with no declaration is a verb that silently
+  # never reaches the wire.
+  it "declares every handler it ships, and ships every handler it declares" do
+    problems = demo_dirs.filter_map do |dir|
+      r = DescriptorSource.resolve_handlers(dir)
+      next if r[:declared].any? && r[:unresolved].empty? && r[:undeclared].empty?
+
+      [File.basename(dir),
+       { declared: r[:declared], unresolved: r[:unresolved],
+         undeclared: r[:undeclared].map { |f| f.sub("#{dir}/", "") } }]
+    end
+
+    expect(problems).to be_empty,
+                        "c.handlers and the app/ tree disagree: #{problems.to_h.inspect} — " \
+                        "`unresolved` names a class no file under app/ defines (the engine raises " \
+                        "at boot); `undeclared` names a file carrying descriptor macros that " \
+                        "c.handlers does not list, so its verbs never reach the wire"
+  end
+
+  # The resolver must read the DECLARATION and resolve it BY NAME. Built on a
+  # throwaway tree rather than a real demo, because what has to be pinned is
+  # the behaviour on inputs no demo has: a declared class nothing defines, an
+  # undeclared handler, and a handler that is NOT under app/controllers/kiosk/
+  # — the convention K-770 removed. If the resolver ever falls back to globbing
+  # that directory, the second and third expectations here go red.
+  it "resolves handlers by name, anywhere under app/, and reports both disagreements" do
+    require "tmpdir"
+    Dir.mktmpdir do |root|
+      FileUtils.mkdir_p("#{root}/config/initializers")
+      FileUtils.mkdir_p("#{root}/packs/checkout/app/controllers")
+      FileUtils.mkdir_p("#{root}/app/packs")
+      File.write("#{root}/config/initializers/kiosk.rb", <<~RB)
+        Kiosk.configure do |c|
+          c.handlers = %w[Checkout::TillController Kiosk::GhostController]
+        end
+      RB
+      # Declared, and deliberately NOT in app/controllers/kiosk/ — nested
+      # spelling, in a pack. The old glob could not see this file at all.
+      File.write("#{root}/app/packs/till_controller.rb", <<~RB)
+        module Checkout
+          class TillController < ApplicationController
+            include Kiosk::Query
+
+            description "ring up a basket"
+            input_schema type: "object", properties: { basket_id: { type: "string" } }
+            def ring_up = nil
+          end
+        end
+      RB
+      # Ships descriptor macros, declared by nobody: its verbs reach no wire.
+      File.write("#{root}/app/packs/orphan_controller.rb", <<~RB)
+        class Kiosk::OrphanController < ApplicationController
+          description "a verb the engine never registers"
+          input_schema type: "object", properties: { id: { type: "string" } }
+          def orphan = nil
+        end
+      RB
+
+      r = DescriptorSource.resolve_handlers(root)
+      expect(r[:unresolved]).to eq(%w[Kiosk::GhostController])
+      expect(r[:files].keys).to eq(%w[Checkout::TillController])
+      expect(r[:undeclared]).to eq(["#{root}/app/packs/orphan_controller.rb"])
+      expect(DescriptorSource.demo_verbs(root).map { |v| v[:name] }).to eq(%w[ring_up])
+    end
   end
 
   # ── ADR-0023: a description may not carry a parameter list (K-846) ────────

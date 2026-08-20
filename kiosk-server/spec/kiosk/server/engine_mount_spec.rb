@@ -225,4 +225,60 @@ RSpec.describe "mount Kiosk::Server::Engine (the one-line surface)" do
       expect(probe("double_draw", "GET /kiosk/.well-known/jwks.json")["status"]).to eq(200)
     end
   end
+
+  # ── §3.6 ON THE RESPONSES RAILS COMPOSES ITSELF (K-824) ────────────────
+  #
+  # The header stamp is a Rack middleware, and until this finding it was
+  # installed with `config.middleware.use` — appended, i.e. INNERMOST, below
+  # `ActionDispatch::ShowExceptions`. A response manufactured from an exception
+  # therefore never passed through it: a routing 404 under the mount and an
+  # unhandled 500 both left the origin with none of the three headers, while
+  # every controller-rendered refusal on the same origin carried all three.
+  #
+  # These examples are about the middleware's POSITION, which is why they need
+  # a booted app and the full Rack stack; a unit test on HeadersMiddleware
+  # cannot see where it was installed. The two host routes are the blast-radius
+  # half: an engine mounted inside somebody else's application must not stamp
+  # that application's responses, working or broken.
+  context "when Rails composes the response itself (§3.6, K-824)" do
+    def three_headers = %w[kiosk-server-version kiosk-api-version kiosk-min-client]
+
+    def header_names(scenario, request_line)
+      probe(scenario, request_line)["headers"].keys & three_headers
+    end
+
+    it "a routing 404 UNDER the mount carries all three" do
+      res = probe("exceptions", "GET /kiosk/nope/nope")
+      expect(res["status"]).to eq(404)
+      expect(header_names("exceptions", "GET /kiosk/nope/nope")).to match_array(three_headers)
+    end
+
+    it "an unhandled 500 UNDER the mount carries all three" do
+      # Raised by a deliberately broken agent-IdP adapter inside
+      # WireController, whose `rescue_from` covers Errors::Base only — so it
+      # unwinds past every Kiosk seam and Rails renders it.
+      res = probe("exceptions", "POST /kiosk/pay")
+      expect(res["status"]).to eq(500)
+      expect(header_names("exceptions", "POST /kiosk/pay")).to match_array(three_headers)
+    end
+
+    it "the HOST's own route outside the mount carries none — on a 200" do
+      res = probe("exceptions", "GET /outside")
+      expect(res["status"]).to eq(200)
+      expect(res["body"]).to eq("HAND-DRAWN")
+      expect(header_names("exceptions", "GET /outside")).to be_empty
+    end
+
+    it "…and none on the host's own 500, which is the same exception path" do
+      res = probe("exceptions", "GET /outside/boom")
+      expect(res["status"]).to eq(500)
+      expect(header_names("exceptions", "GET /outside/boom")).to be_empty
+    end
+
+    it "…and none on a root-level routing 404" do
+      res = probe("exceptions", "GET /nope")
+      expect(res["status"]).to eq(404)
+      expect(header_names("exceptions", "GET /nope")).to be_empty
+    end
+  end
 end

@@ -60,6 +60,24 @@ Rails.application.routes.draw do
   # path is read as the verb `openapi` in the `json` format and answers 404.
   get "/kiosk/openapi.json",                to: "kiosk/server/open_api#show"
 
+  # ── K-824 probes: the responses RAILS composes, not Kiosk ────────────────
+  #
+  # §3.6 binds every response under the mount "on success and on error alike",
+  # and the two that used to escape it are the two no Kiosk code ever touches:
+  # a routing 404 for a path under the mount that nobody drew (this file draws
+  # none, deliberately — `GET /kiosk/nope/nope` is that probe), and an
+  # unhandled 500. `/kiosk/boom` is the 500, and the two `/operator/*` lines
+  # are its blast-radius control: the SAME exception path outside the mount
+  # must carry none of the three headers, because the engine is installed in
+  # somebody else's application and does not speak for its routes.
+  #
+  # Rack endpoints rather than controllers: there is nothing to hold in a
+  # class, and a fixture controller that only raises would have to be copied
+  # and declared like every other hand-written file.
+  get "/kiosk/boom",      to: ->(_env) { raise "e2e: a deliberate unhandled 500 under the mount" }
+  get "/operator/health", to: ->(_env) { [200, { "content-type" => "text/plain" }, ["ok"]] }
+  get "/operator/boom",   to: ->(_env) { raise "e2e: a deliberate unhandled 500 OUTSIDE the mount" }
+
   # ── The 0.4 per-verb wire (T-068 slice 1) ────────────────────────────────
   #
   # One endpoint per registered verb: GET /kiosk/<query-name>,

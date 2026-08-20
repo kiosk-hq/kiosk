@@ -33,7 +33,9 @@
 # same shipped controller either way.
 #
 # The engine also auto-injects HeadersMiddleware into the host stack
-# (initializer below) — that happens on load, mounted or not.
+# (initializer below) — that happens on load, mounted or not, and it goes
+# OUTSIDE Rails' exception renderers so a routing 404 or an unhandled 500
+# under the mount carries the §3.6 headers too (K-824).
 #
 # The `kiosk:install` generator ships in lib/generators/kiosk/install.
 
@@ -60,9 +62,56 @@ module Kiosk
         end
       end
 
-      # Auto-injects HeadersMiddleware into the host app's stack.
+      # Auto-injects HeadersMiddleware into the host app's stack, OUTSIDE the
+      # exception renderers (K-824).
+      #
+      # It used to be `app.middleware.use`, which APPENDS — the innermost
+      # middleware, directly above the router. That put every response Rails
+      # composes FROM AN EXCEPTION outside it, and §3.6 makes the three
+      # version headers mandatory on "every response served under the
+      # operator's mount path … on success and on error alike". MEASURED on a
+      # booted demo: `POST /kiosk/agents/kyc` on an app that does not draw
+      # that route answered a 404 with none of the three, while the same
+      # origin's `POST /kiosk/auth/login` 400 carried all three — because a
+      # routing 404 never returns THROUGH the appended middleware, it is
+      # manufactured above it. An unhandled 500 has the same shape. Those are
+      # precisely the responses a mis-versioned client is most likely to get:
+      # the handshake exists so a client can decide whether it can speak to
+      # this origin at all, and a 404 for a path its version expects to exist
+      # is the first thing it sees.
+      #
+      # WHY `ActionDispatch::ShowExceptions` IS THE ANCHOR, and not another.
+      # It is the OUTERMOST middleware in Rails' stack that manufactures a
+      # response out of an exception: `DebugExceptions` (the development
+      # diagnostic page) and `ActionableExceptions` sit INSIDE it, and the
+      # `exceptions_app` that renders `public/404.html` / `public/500.html` in
+      # production is called BY it. Insert immediately outside it and every
+      # response the application produces — rendered by a controller, by
+      # DebugExceptions, or by ShowExceptions' own exceptions_app — passes
+      # back out through the stamp. Nothing between it and the router can
+      # bypass it, which is the property that matters: the headers are not
+      # "applied on more paths", they are applied where the stack converges.
+      #
+      # NOT position 0. The layers ABOVE ShowExceptions — `HostAuthorization`
+      # (a 403 for a `Host` this origin does not answer to), `SSL` (the
+      # http→https redirect), `Sendfile`, `Static` — answer BEFORE the
+      # application is reached at all; a request rejected for naming the wrong
+      # origin is not a response this operator's mount served. Staying below
+      # them also keeps this middleware inside `ActionDispatch::Executor`,
+      # where every other application middleware runs.
+      #
+      # NOT `use` with a wider rescue either: rescuing more exceptions inside
+      # the engine would patch paths one at a time and still miss the routing
+      # 404, which raises before any Kiosk code runs.
+      #
+      # A host that DELETES `ActionDispatch::ShowExceptions` from its stack
+      # will fail this insert at boot with Rails' own "No such middleware"
+      # error. That is the honest failure: on such a stack there is no layer
+      # that renders exceptions, so there is nothing to wrap and the operator
+      # has to place this middleware themselves.
       initializer "kiosk-server.middleware" do |app|
-        app.middleware.use Kiosk::Server::HeadersMiddleware
+        app.middleware.insert_before ::ActionDispatch::ShowExceptions,
+                                     Kiosk::Server::HeadersMiddleware
       end
 
       # THE VERBS ARE REGISTERED BY THE ENGINE, not by the operator — the hole

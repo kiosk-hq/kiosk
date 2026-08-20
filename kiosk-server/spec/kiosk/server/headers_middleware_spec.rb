@@ -37,6 +37,44 @@ RSpec.describe Kiosk::Server::HeadersMiddleware do
     end
   end
 
+  # K-824, the half the engine-mount probe found: the stamp must survive a
+  # downstream layer REWRITING the request path. Rails does exactly this —
+  # `ActionDispatch::ShowExceptions#render_exception` sets `PATH_INFO` to
+  # `/404` or `/500` before calling the exceptions app and never restores it —
+  # so a middleware that reads the path after the call sees a path nobody
+  # requested. This is the unit-level statement of the property; the booted
+  # proof is in engine_mount_spec.
+  describe "when a downstream layer rewrites PATH_INFO (Rails' exception apps)" do
+    let(:downstream_app) do
+      lambda do |env|
+        env["PATH_INFO"] = "/500"
+        [500, { "Content-Type" => "text/plain" }, ["boom"]]
+      end
+    end
+
+    it "still stamps: the request's identity was decided before the app ran" do
+      _, headers, _ = call("/kiosk/salons")
+      expect(headers[Kiosk::Protocol::HEADER_API_VERSION]).to eq(Kiosk::Protocol::API_VERSION)
+    end
+
+    context "and the rewrite points INTO the mount path" do
+      # The mirror: a non-Kiosk request whose path is rewritten to look like a
+      # Kiosk one must stay bare, or the guard would be a coin toss rather than
+      # a question about the caller.
+      let(:downstream_app) do
+        lambda do |env|
+          env["PATH_INFO"] = "/kiosk/500"
+          [500, { "Content-Type" => "text/plain" }, ["boom"]]
+        end
+      end
+
+      it "does not earn a stamp" do
+        _, headers, _ = call("/unrelated")
+        expect(headers).not_to have_key(Kiosk::Protocol::HEADER_API_VERSION)
+      end
+    end
+  end
+
   describe "non-kiosk paths" do
     it "passes downstream headers through unchanged on /unrelated" do
       _, headers, _ = call("/unrelated")

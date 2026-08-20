@@ -47,10 +47,12 @@ ALICE_UUID = "00000000-0000-0000-0000-000000000001"
 BOB_UUID   = "00000000-0000-0000-0000-000000000002"
 
 # Distinct agent IDs so isolation_flow runs don't clash with bin/demo sessions.
-# The agent id is a UUID, not a readable slug: `kiosk.action_log.agent_id`,
-# every `kiosk.*_mandates.agent_id` and `kiosk.current_agent_id()` are all typed
+# The agent id is a UUID, not a readable slug: `kiosk.agents.id`, every
+# `kiosk.*_mandates.agent_id` and `kiosk.current_agent_id()` are all typed
 # `uuid` in the canonical schema, so a stub identity carrying anything else is one
-# the shipped tables cannot store (T-088 found it by being the first writer to try).
+# the shipped tables cannot store (K-829; found by the T-088 audit-log writer, which
+# K-828 has since removed — the constraint it exposed is the schema's, not that
+# writer's, and outlives it).
 AGENT_A = "a0000000-0000-0000-0000-000000000001"
 AGENT_B = "a0000000-0000-0000-0000-000000000002"
 TOKEN_A = "agent:u-#{ALICE_UUID}:a-#{AGENT_A}:r-customer"

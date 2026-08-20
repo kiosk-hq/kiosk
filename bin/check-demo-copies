@@ -488,9 +488,6 @@ COPIES = {
   "db/migrate/20260618131458_create_kiosk_identity_tables.rb" => {
     rule: :identical, why: "kiosk:install generator output — agents and identity.",
   },
-  "db/migrate/20260618131459_create_kiosk_actions_log.rb" => {
-    rule: :identical, why: "kiosk:install generator output — the actions log.",
-  },
   "db/migrate/20260618131460_create_kiosk_reservations.rb" => {
     rule: :identical, why: "kiosk:install generator output — reservations (demos that hold stock).",
   },
@@ -680,7 +677,6 @@ GENERATOR_TEMPLATES = {
   },
   "create_kiosk_schema.rb.tt"                => { emits: "create_kiosk_schema.rb" },
   "create_kiosk_identity_tables.rb.tt"       => { emits: "create_kiosk_identity_tables.rb" },
-  "create_kiosk_actions_log.rb.tt"           => { emits: "create_kiosk_actions_log.rb" },
   "create_kiosk_reservations.rb.tt"          => { emits: "create_kiosk_reservations.rb" },
   "create_kiosk_device_authorizations.rb.tt" => { emits: "create_kiosk_device_authorizations.rb" },
   "create_kiosk_mandates.rb.tt" => {

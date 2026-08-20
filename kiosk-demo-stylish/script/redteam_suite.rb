@@ -286,7 +286,7 @@ record(results, "CustomerCalendarStaysOwnScoped",
 # proof: kiosk-test-support spec/stub_user_idp_env_gate_spec.rb (bearer variant).
 self_asserted_staff_forgery = lambda do
   require "kiosk"
-  require File.expand_path("../lib/stub_user_idp", __dir__)
+  require File.expand_path("../app/services/stub_user_idp", __dir__)
 
   # The redteam client boots no Rails app, so provide a controllable Rails.env
   # and a minimal ActiveRecord shim (the dev branch does a staff-row lookup).

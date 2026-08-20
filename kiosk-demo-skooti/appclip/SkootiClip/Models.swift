@@ -29,7 +29,7 @@ import Foundation
 // Alternative delivery paths (same AgentHandoff struct; only from(url:) changes):
 //
 //   (a) URL param — reference path (current stub).
-//       https://skooti.app/unlock?scooter=SK-001&rt=<wire-token>
+//       https://skooti.demo.kiosk.tech/unlock?scooter=SK-001&rt=<wire-token>
 //       Simple, works for demos.  The token is single-use + 15-min lived; exposure
 //       in logs is bounded by that window.
 //
@@ -91,9 +91,11 @@ struct AgentHandoff {
 // injected into Info.plist; here they are plain Swift constants for clarity.
 
 enum Configuration {
-    /// Base URL of the Kiosk provider (kiosk-demo-skooti).
-    /// Change for production: e.g. "https://skooti.app"
-    static let kioskBaseURL = URL(string: "https://skooti.app")!
+    /// Base URL of the Kiosk provider (kiosk-demo-skooti) — the SAME host the
+    /// two entitlements declare and appclip/README.md uses throughout. Point it
+    /// at your own origin for a real deployment; the value here names a host
+    /// this project actually serves rather than an invented one (K-719).
+    static let kioskBaseURL = URL(string: "https://skooti.demo.kiosk.tech")!
 
     // ── DEMO STUB ─────────────────────────────────────────────
     // A hard-coded rental token used when the launch URL does not carry rt=.

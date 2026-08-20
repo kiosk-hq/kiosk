@@ -2,7 +2,7 @@
 //
 // Launch flow:
 //   1. User taps an NFC tag / App Clip Code on a scooter.
-//   2. iOS decodes the URL: https://skooti.app/unlock?scooter=SK-001&rt=<wire-token>
+//   2. iOS decodes the URL: https://skooti.demo.kiosk.tech/unlock?scooter=SK-001&rt=<wire-token>
 //   3. iOS calls onContinueUserActivity with an NSUserActivity whose
 //      webpageURL is the decoded URL.
 //   4. This handler:
@@ -26,7 +26,7 @@
 //
 // Associated Domains entitlement:
 //   The App Clip target's entitlements file must include:
-//     com.apple.developer.associated-domains = ["appclips:skooti.app"]
+//     com.apple.developer.associated-domains = ["appclips:skooti.demo.kiosk.tech"]
 //   (see appclip/README.md for provisioning steps)
 //
 // NSBluetoothAlwaysUsageDescription:
@@ -73,7 +73,7 @@ struct SkootiClipApp: App {
 
         guard let resolved = AgentHandoff.from(url: url) else {
             launchError = "Missing or invalid ?scooter= parameter in launch URL: \(url)\n" +
-                          "Expected: https://skooti.app/unlock?scooter=SK-001&rt=<token>"
+                          "Expected: https://skooti.demo.kiosk.tech/unlock?scooter=SK-001&rt=<token>"
             return
         }
 

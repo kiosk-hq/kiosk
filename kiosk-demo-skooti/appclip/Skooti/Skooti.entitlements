@@ -2,9 +2,17 @@
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
 <dict>
+	<!-- The PRODUCTION launch path only: iOS fetches
+	     https://skooti.demo.kiosk.tech/.well-known/apple-app-site-association and
+	     matches its `appclips` key against this bundle id, so this domain has to
+	     SERVE that file and be paired with a real team id before an NFC tap or an
+	     App Clip Code will launch anything. The demo path in appclip/README.md
+	     (Settings -> Developer -> Local Experiences) bypasses the lookup entirely
+	     and does not consult this key. Named here so the entitlement points at a
+	     host this project can actually serve (K-719). -->
 	<key>com.apple.developer.associated-domains</key>
 	<array>
-		<string>appclips:skooti.app</string>
+		<string>appclips:skooti.demo.kiosk.tech</string>
 	</array>
 </dict>
 </plist>

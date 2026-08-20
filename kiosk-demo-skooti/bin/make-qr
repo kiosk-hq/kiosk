@@ -33,7 +33,7 @@ require "json"
 require "optparse"
 
 DEMO_ROOT   = File.expand_path("..", __dir__)
-LAUNCH_HOST = "https://skooti.app/unlock"
+LAUNCH_HOST = "https://skooti.demo.kiosk.tech/unlock"
 
 # ── Parse CLI args ─────────────────────────────────────────────────────────────
 

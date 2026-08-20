@@ -107,8 +107,11 @@ class DeviseSession
 
   def cookie_header = @cookies.map { |k, v| "#{k}=#{v}" }.join("; ")
 
-  private
-
+  # Send a request this driver built itself, still absorbing Set-Cookie.
+  # PUBLIC because a couple of drivers dial shapes the wrappers above will not
+  # construct on purpose — a GET at an action's path to prove it 405s, a POST
+  # with a deliberately wrong content type. They still belong in the jar.
+  #
   # Absorb Set-Cookie on EVERY response: Rails rotates the session cookie on
   # sign-in, and a jar that only reads the sign-in response goes stale.
   def request(req)
@@ -119,6 +122,8 @@ class DeviseSession
     end
     res
   end
+
+  private
 
   def uri_for(path)
     path.to_s.start_with?("http") ? URI(path) : URI("#{@server}#{path}")

@@ -41,62 +41,26 @@ PASSWORD = ENV.fetch("HOLDER_PASSWORD")
 TOKEN_URL = "#{SERVER}/kiosk/oauth/token"
 GRANT     = "urn:ietf:params:oauth:grant-type:device_code"
 
-# ── tiny HTTP helpers with a cookie jar (the human's browser session) ───────
-COOKIES = {}
+# ── the human's browser session, and the wire helpers built on it ──────────
+#
+# ONE mechanism, shared: lib/devise_session.rb holds the cookie jar, the CSRF
+# read and the sign-in POST for every demo, and bin/check-demo-copies keeps the
+# copies byte-identical. Each driver used to carry its own copy of that jar —
+# five of them, free to drift, exactly the way lib/equihash_register.rb drifted
+# in three of five. These wrappers keep this driver's call sites unchanged.
+require_relative "../lib/devise_session"
 
-def absorb_cookies!(res)
-  Array(res.get_fields("set-cookie")).each do |line|
-    name, value = line.split(";").first.split("=", 2)
-    COOKIES[name] = value
-  end
-end
+SESSION = DeviseSession.new(SERVER)
 
-def cookie_header
-  COOKIES.map { |k, v| "#{k}=#{v}" }.join("; ")
-end
-
-SERVER_URI = URI(SERVER)
-
-def request(req)
-  res = Net::HTTP.new(SERVER_URI.host, SERVER_URI.port).request(req)
-  absorb_cookies!(res)
-  res
-end
-
-def get_html(path)
-  req = Net::HTTP::Get.new(URI("#{SERVER}#{path}"))
-  req["Cookie"] = cookie_header unless COOKIES.empty?
-  request(req)
-end
-
-def post_form(path, form)
-  req = Net::HTTP::Post.new(URI("#{SERVER}#{path}"))
-  req["Cookie"] = cookie_header unless COOKIES.empty?
-  req.set_form_data(form)
-  request(req)
-end
+def request(req) = SESSION.request(req)
+def get_html(path) = SESSION.get_html(path)
+def post_form(path, form) = SESSION.post_form(path, form)
+def csrf_token(html) = SESSION.csrf_token(html)
 
 # session: true sends the human's cookie jar (the Devise session channel);
 # agent calls send only their Bearer header — never the human's cookies.
-def post_json(path, body, headers = {})
-  session = headers.delete(:session)
-  req = Net::HTTP::Post.new(URI("#{SERVER}#{path}"), { "Content-Type" => "application/json" }.merge(headers))
-  req["Cookie"] = cookie_header if session
-  req.body = JSON.generate(body)
-  res = request(req)
-  [res.code.to_i, (JSON.parse(res.body) rescue {})]
-end
-
-def get_json(path, params = {}, headers = {})
-  uri = URI("#{SERVER}#{path}")
-  uri.query = URI.encode_www_form(params) unless params.empty?
-  res = request(Net::HTTP::Get.new(uri, headers))
-  [res.code.to_i, (JSON.parse(res.body) rescue {})]
-end
-
-def csrf_token(html)
-  html[/name="authenticity_token" value="([^"]+)"/, 1]
-end
+def post_json(path, body, headers = {}) = SESSION.post_json(path, body, headers)
+def get_json(path, params = {}, headers = {}) = SESSION.get_json(path, params, headers)
 
 # Fresh possession proof (the same challenge-response JWS as register/login).
 def pop_proof(key, pem)
@@ -113,13 +77,7 @@ end
 results = {}
 
 # ══ The human signs in through the real Devise form ═════════════════════════
-signin = get_html("/users/sign_in")
-abort "sign-in form: #{signin.code}" unless signin.code.to_i == 200
-res = post_form("/users/sign_in",
-                "authenticity_token" => csrf_token(signin.body),
-                "user[email]"        => EMAIL,
-                "user[password]"     => PASSWORD)
-abort "sign-in failed: #{res.code}" unless [302, 303].include?(res.code.to_i)
+SESSION.sign_in!(email: EMAIL, password: PASSWORD)
 results[:human_signed_in] = true
 STDERR.puts "  Human signed in via /users/sign_in (Devise session cookie held)"
 

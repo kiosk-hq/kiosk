@@ -391,7 +391,8 @@ assistant branches on. Three Rails-native moves cover all of it:
 ### The initializer holds configuration, not verbs
 
 There is no second way to declare a verb. `Kiosk::Server::Queries.register(name)
-{ |args| … }` and its `Actions` counterpart were removed in 0.3 (T-081): a block
+{ |args| … }` and its `Actions` counterpart shipped through the 0.3 series and
+were removed in 0.4 (T-081): a block
 in an initializer cannot be reloaded, cannot be reached by your filters,
 `rescue_from` or strong parameters, and taught — in the very file an adopter
 copies — that Rails does not apply to the surface you expose to assistants.

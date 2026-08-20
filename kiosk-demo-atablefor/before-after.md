@@ -309,8 +309,8 @@ end
 This line is load-bearing. The wire reaches a handler through the registry and
 nothing else in the app references these classes, so in development — where
 Rails does not eager-load `app/` — an origin that names none of them serves no
-verbs at all. There is no second way in: `Kiosk::Server::Queries.register` was
-removed in 0.3.
+verbs at all. There is no second way in: `Kiosk::Server::Queries.register`, the block API
+the 0.3 series shipped, was removed in 0.4 and now raises NoMethodError.
 
 **6. No payment adapter**
 

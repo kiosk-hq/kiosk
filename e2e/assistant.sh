@@ -747,10 +747,17 @@ assert "no auth → 401"             "$status" "401"
 status=$(curl -sS -o /dev/null -w "%{http_code}" "$SERVER_URL/kiosk/frobnicate")
 assert "no auth on an unknown name → 401 (no enumeration)" "$status" "401"
 
-# Stub IdP returns nil for unknown token shape → 401
+# An unrecognised credential resolves to no identity → 401.
 status=$(curl -sS -o /dev/null -w "%{http_code}" "$SERVER_URL/kiosk/salons" \
   -H "Authorization: Bearer garbage")
 assert "garbage token → 401"       "$status" "401"
+
+# The self-asserted shape the demos' deleted StubIdp used to believe, naming a
+# SEEDED human and the `owner` role (K-539). It is not a token, it is a
+# sentence; there is no parser left to read it, in any environment (T-104).
+status=$(curl -sS -o /dev/null -w "%{http_code}" "$SERVER_URL/kiosk/salons" \
+  -H "Authorization: Bearer agent:u-$ALICE:a-$ALICE_AGENT:r-owner")
+assert "forged self-asserted bearer → 401" "$status" "401"
 
 # A path that cannot be a verb name never reaches the wire at all — the route
 # constraint leaves it a plain routing 404.

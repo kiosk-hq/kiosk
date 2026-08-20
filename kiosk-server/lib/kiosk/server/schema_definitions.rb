@@ -108,8 +108,24 @@ module Kiosk
       # ─── 003 create_kiosk_actions_log ──────────────────────────────────
 
       # `kiosk.actions` registers known Action names; `kiosk.action_log`
-      # records each invocation with the principal+agent+role. RLS-enabled
-      # by the calling migration so users see only their own.
+      # records each invocation with the principal+agent+role.
+      #
+      # WRITTEN BY {ActionLog}, from the `run` branch of {Executor#call}: one
+      # row per action invocation, success or failure, after the action's own
+      # transaction closes. Until T-088 nothing wrote either table and an
+      # adopter carried an audit surface whose emptiness read as «no actions
+      # were invoked» (K-791); `kiosk.actions` is the FK anchor and is upserted
+      # from the live registry by the same writer.
+      #
+      # NO RLS, and that is deliberate rather than an omission — this comment
+      # used to claim «RLS-enabled by the calling migration so users see only
+      # their own», which no shipped migration has ever done. The log crosses
+      # principals BY DESIGN: it is the operator's oversight surface, a policy
+      # scoping it to `current_user_id()` would hide rows from the operator who
+      # needs to read them, and an audit table a caller's own session could
+      # read is one it could enumerate. The writer opens no {SessionContext},
+      # so rows are written as the connection's own role and a caller's session
+      # can neither suppress nor forge one. See {ActionLog}.
       def actions_log_sql(schema: nil, user_id_type: nil)
         schema      ||= Kiosk.configuration.schema
         user_id_type ||= Kiosk.configuration.user_id_type

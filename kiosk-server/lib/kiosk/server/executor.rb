@@ -1,5 +1,6 @@
 # frozen_string_literal: true
 
+require "kiosk/server/action_log"
 require "kiosk/server/errors"
 require "kiosk/server/response_validation"
 require "kiosk/server/result"
@@ -81,6 +82,12 @@ module Kiosk
 
         if SELF_MANAGED_VERBS.include?(verb)
           dispatch(verb, args, name) # the verb manages its own SessionContext(s)
+        elsif verb == :run
+          audited(name, args) do
+            SessionContext.open(connection: connection, identity: identity) do
+              dispatch(verb, args, name)
+            end
+          end
         else
           SessionContext.open(connection: connection, identity: identity) do
             dispatch(verb, args, name)
@@ -89,6 +96,40 @@ module Kiosk
       end
 
       private
+
+      # THE AUDIT SEAM (T-088). Wraps the `run` branch above and writes one
+      # {ActionLog} row per invocation — `ok` when the handler returned, `error`
+      # when anything raised, and the raise is re-raised untouched either way.
+      #
+      # WHY HERE AND NOWHERE ELSE. This is the one place that sees every action
+      # invocation exactly once. `POST <endpoint>/<action-name>` is the only
+      # route to an action since the 0.4 cutover, and it reaches
+      # {WireController#execute_wire} → `Executor.call(kind: :run)`; a direct
+      # `Executor.call` (an RLS journey, an operator's own script) arrives at
+      # the same line. Putting it in {#verb_run} instead would put it INSIDE
+      # the SessionContext, where a failure's rollback would take the row with
+      # it; putting it in the controller would miss the direct callers and
+      # would sit inside the toll, where nothing has been invoked yet.
+      #
+      # OUTSIDE the SessionContext block, so the row survives a failed action's
+      # ROLLBACK and is written with no GUCs and no `SET LOCAL ROLE` — see
+      # {ActionLog} for why the log sits outside the RLS boundary.
+      def audited(name, args)
+        invoked_at = Time.now
+        result     = yield
+        log(name, args, ActionLog::OK, nil, invoked_at)
+        result
+      rescue StandardError => e
+        log(name, args, ActionLog::ERROR, e, invoked_at)
+        raise
+      end
+
+      def log(name, args, status, error, invoked_at)
+        return unless ActionLog.loggable?(name)
+
+        ActionLog.record(connection: connection, identity: identity, name: name.to_s,
+                         args: args, status: status, error: error, invoked_at: invoked_at)
+      end
 
       def dispatch(verb, args, name = nil)
         case verb

@@ -70,6 +70,16 @@ single-use property the protocol states (kiosk.tech `protocol.md` §15.2, and th
 §16.1 operator profile) no longer holds. An operator running multiple processes
 **MUST** point every one of them at the same spent-id store.
 
+**And you will not find this out by running the system.** A replayed proof is
+not an error: it verifies, it is accepted, the request succeeds. There is no
+exception, no metric, no log line and no failed request — nothing anywhere that
+distinguishes a discounted toll from a paid one. Scaling from one worker to two
+is a routine change that silently stops this origin conforming, which is why the
+requirement is written here rather than left to be noticed. kiosk-server does
+log a `warn` line at boot when a **production** origin has PoW enabled and is
+still on the in-process default; treat that as a reminder, not as a control —
+this section is the control.
+
 A ready one ships in this gem, backed by a single table:
 
 ```ruby

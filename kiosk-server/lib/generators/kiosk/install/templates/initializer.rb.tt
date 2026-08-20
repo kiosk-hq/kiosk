@@ -99,6 +99,34 @@ Kiosk.configure do |c|
   # `kiosk-user-idp-devise` (add `gem "kiosk-user-idp-devise"`):
   #   # c.user_idp = Kiosk::UserIdentityProviders::Devise.new
 
+  # ─── If you run MORE THAN ONE process, read this ─────────────────────
+  # The PoW gate proves a challenge is single-use by remembering spent
+  # challenge ids, and the DEFAULT memory for that is an in-process Hash.
+  # That is correct for exactly one process and for nothing else. Two Puma
+  # workers, two dynos, two pods — or a rolling deploy where the old and the
+  # new process overlap for a minute — each keep their OWN memory, so one
+  # proof is accepted once PER PROCESS and a toll you priced at N proofs is
+  # really worth N times the number of processes.
+  #
+  # WHY THIS IS SPELLED OUT HERE INSTEAD OF LEFT FOR YOU TO NOTICE: you
+  # cannot notice it. A replayed proof is not an error — it verifies, it is
+  # accepted, the request succeeds. There is no exception, no metric, no log
+  # line, no failed request, nothing in any dashboard. An operator who scales
+  # from one worker to two gets no signal at all that their origin stopped
+  # conforming (kiosk.tech `protocol.md` §15.2 and the §16.1 operator
+  # profile), which is why it is written down rather than detected.
+  #
+  # The fix is one table plus one line — both in the kiosk-server README
+  # under "Multi-process deployments". The table is deliberately NOT part of
+  # `bin/rails g kiosk:install`, because a single-process operator does not
+  # need it:
+  #   # c.pow_spent_store = Kiosk::Server::PowSpentStores::ActiveRecord.new
+  #
+  # `c.auth_challenge_store` is in-process for the same reason, but it fails
+  # the OTHER way: a challenge issued by one process is invisible to the one
+  # that gets the register/login, so the handshake breaks LOUDLY and you will
+  # find that one without being told.
+
   # ─── Opt-in: the audit sink ──────────────────────────────────────────
   # Kiosk does NOT keep an audit trail. It OFFERS one: set a callable here
   # and it receives one `Kiosk::Server::ActionEvent` per action invocation —

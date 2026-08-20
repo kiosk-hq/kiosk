@@ -190,6 +190,64 @@ module Kiosk
         ::Rails.logger ? ::Rails.logger.warn(message) : warn(message)
       end
 
+      # ── The shared-spent-store warning (K-752) ────────────────────────────
+      #
+      # A production origin that runs MORE THAN ONE process while keeping the
+      # in-process default spent store is NOT conforming (protocol.md Section
+      # 15.2 + the Section 16.1 operator profile): PoW single-use then holds
+      # PER WORKER, so one proof buys one request per worker.
+      #
+      # THIS IS A WARNING AND DELIBERATELY NOT A REFUSAL (Phil, 2026-08-19,
+      # K-752 option C). A fail-closed boot was rejected on two grounds, both
+      # recorded here so it is not quietly reinstated: it would turn a routine
+      # `WEB_CONCURRENCY` 1→2 into an OUTAGE, and — decisively — a process-count
+      # check CANNOT SEE the case that matters, because on separate machines
+      # (Heroku dynos, k8s replicas) every process boots with a count of one
+      # while the requirement is violated exactly as hard. So there is no
+      # heuristic here at all: the condition is "the default store, in
+      # production, with PoW actually switched on".
+      #
+      # AND THE WARNING IS NOT THE MITIGATION — the DOCUMENTATION is. Phil
+      # accepted this control's weakness openly ("logs are not read, least of
+      # all production warnings"), so the initializer template, the demo
+      # initializers and the README carry the same WHY at greater length. The
+      # reason it has to be written anywhere at all is that the failure is
+      # INVISIBLE BY CONSTRUCTION: a replayed proof leaves no log line, no
+      # metric and no failed request, so an operator who does nothing never
+      # learns they are non-conforming.
+      # The condition is a CLASS METHOD, not inline in the block, for one
+      # reason: an `after_initialize` body is reachable only by booting a real
+      # application in production mode, and a control whose condition cannot be
+      # unit-tested is a control nobody can prove fires. Returns the message,
+      # or nil when this origin has nothing to be warned about.
+      #
+      # @param config [Kiosk::Configuration] normally `Kiosk.configuration`
+      # @param production [Boolean] normally `Rails.env.production?`
+      # @return [String, nil]
+      def self.shared_spent_store_warning(config:, production:)
+        return nil unless production
+        return nil unless config.pow_spent_store.is_a?(Kiosk::Server::PowSpentStore)
+        return nil unless config.reputation_policy || config.registration_pow_count.to_i.positive?
+
+        "[kiosk-server] pow_spent_store is the IN-PROCESS default while PoW is enabled in " \
+          "production. If this origin runs more than one process — Puma workers, several " \
+          "dynos or pods, or a rolling deploy that overlaps — proof single-use holds only " \
+          "per process, so one proof is accepted once PER PROCESS and the toll is silently " \
+          "discounted. Nothing reports it: a replayed proof produces no error, no metric " \
+          "and no log line. Set a SHARED store: c.pow_spent_store = " \
+          "Kiosk::Server::PowSpentStores::ActiveRecord.new — see the kiosk-server README, " \
+          "\"Multi-process deployments\"."
+      end
+
+      config.after_initialize do
+        message = Kiosk::Server::Engine.shared_spent_store_warning(
+          config: Kiosk.configuration, production: ::Rails.env.production?,
+        )
+        next unless message
+
+        ::Rails.logger ? ::Rails.logger.warn(message) : warn(message)
+      end
+
       # Root-relative discovery surface. `routes.append` blocks run when the
       # host's route set is FINALIZED — after config/routes.rb has been
       # drawn — so the mount (and any hand-drawn duplicate, which then wins

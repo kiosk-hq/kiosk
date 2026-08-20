@@ -203,6 +203,26 @@ Kiosk.configure do |c|
   c.registration_pow_count  = 1
   c.registration_pow_params = TUDU_REGISTRATION_POW_PARAMS
   c.pow_secret              = pow_secret
+
+  # ── One process today. Before this origin ever runs two, read this ───────
+  # `pow_spent_store` is left at its IN-PROCESS default here, and that is
+  # correct only because each demo origin runs a SINGLE process. Two Puma
+  # workers, two dynos or two pods — or a rolling deploy where the old and the
+  # new process overlap for a minute — each keep their OWN spent-id set, so
+  # one proof is accepted once PER PROCESS and the toll above is silently
+  # discounted by however many processes are running.
+  #
+  # WHY THIS IS WRITTEN DOWN RATHER THAN DETECTED: a replayed proof is not an
+  # error. It verifies, it is accepted, the request succeeds — no exception,
+  # no metric, no log line, no failed request, nothing in any dashboard. An
+  # operator who scales from one worker to two gets NO signal at all that
+  # their origin stopped conforming (kiosk.tech protocol.md §15.2 and the
+  # §16.1 operator profile). So the remedy is stated, not inferred:
+  #   c.pow_spent_store = Kiosk::Server::PowSpentStores::ActiveRecord.new
+  # plus the one table it needs — see the kiosk-server README, "Multi-process
+  # deployments". kiosk-server also logs a warning at boot in production when
+  # this default is in use with PoW on (K-752), but a warning nobody reads is
+  # not the mitigation; this comment and the README are.
 end
 
 # ── Live-activity telemetry — opt-in, app-layer, privacy-safe ───

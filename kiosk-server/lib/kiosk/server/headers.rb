@@ -90,19 +90,16 @@ module Kiosk
       # here: the wire's own `private, no-store` applies and the operator is
       # TOLD, once per offending response, with the value they sent.
       #
-      # THE LIST IS RFC 9111 §3.5's, WHICH IS ONE LONGER THAN §3.7.3's.
-      # The spec names `public` and `s-maxage`, and says in its own words that
-      # it states the prohibition "rather than relying on the default in
-      # RFC 9111 Section 3.5". That default is: a shared cache MUST NOT reuse a
-      # response to a request carrying `Authorization` UNLESS the response
-      # names one of `public`, `s-maxage` **or `must-revalidate`**. Every verb
-      # request carries `Authorization` (there is no anonymous verb — §3.2), so
-      # those three directives are exactly the set that opens the door, and the
-      # third is as much of a cross-tenant leak as the other two. Blocking it
-      # is stricter than the published sentence and violates nothing in it:
-      # §3.7.4's `MAY` names `private, max-age=N` and nothing else. Whether the
-      # SPEC should name the third is a normative-text question, not this
-      # seam's — filed as K-826.
+      # THE LIST IS RFC 9111 §3.5's, AND SINCE K-826 IT IS ALSO §3.7.3's.
+      # That default is: a shared cache MUST NOT reuse a response to a request
+      # carrying `Authorization` UNLESS the response names one of `public`,
+      # `s-maxage` **or `must-revalidate`**. Every verb request carries
+      # `Authorization` (there is no anonymous verb — §3, point 2), so those
+      # three directives are exactly the set that opens the door, and the third
+      # is as much of a cross-tenant leak as the other two. The spec named only
+      # the first two until K-826 amended both spec files to name all three;
+      # this seam blocked all three before that amendment and is unchanged by
+      # it. `private, max-age=N` remains the one relaxation §3.7.4 allows.
       SHARED_CACHE_DIRECTIVES = /\b(?:public|s-maxage|must-revalidate)\b/i
 
       def self.shared_cacheable?(cache_control)
@@ -112,11 +109,12 @@ module Kiosk
       def self.refuse_shared_cache(value)
         message =
           "[kiosk-server] refused a shared-cache policy on a wire response: " \
-          "Cache-Control: #{value.inspect}. Spec §3.7.3 forbids `public` and " \
-          "`s-maxage` on a verb response, and RFC 9111 §3.5 adds " \
-          "`must-revalidate` to the directives that let a shared cache reuse " \
-          "an answer to an authenticated request — the payload is scoped to " \
-          "one identity, so any of the three would hand it to another caller. " \
+          "Cache-Control: #{value.inspect}. Spec §3.7.3 forbids `public`, " \
+          "`s-maxage` and `must-revalidate` on a verb response — RFC 9111 " \
+          "§3.5 makes those three the directives that let a shared cache " \
+          "reuse an answer to an authenticated request, and the payload is " \
+          "scoped to one identity, so any of them would hand it to another " \
+          "caller. " \
           "Sent `private, no-store` instead; `private, max-age=N` is the " \
           "relaxation §3.7.4 allows."
         logger = ::Rails.logger if defined?(::Rails) && ::Rails.respond_to?(:logger)

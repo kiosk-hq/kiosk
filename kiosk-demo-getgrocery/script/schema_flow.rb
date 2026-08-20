@@ -30,21 +30,12 @@ def get_json(path, bearer: nil)
   [res.code.to_i, (JSON.parse(res.body) rescue {})]
 end
 
-def post_json(path, body, bearer: nil)
-  uri = URI("#{SERVER}#{path}")
-  headers = { "Content-Type" => "application/json" }
-  headers["Authorization"] = "Bearer #{bearer}" if bearer
-  req = Net::HTTP::Post.new(uri, headers)
-  req.body = JSON.generate(body)
-  res = Net::HTTP.new(uri.host, uri.port).request(req)
-  [res.code.to_i, (JSON.parse(res.body) rescue {})]
-end
-
 # ── Register a fresh agent (register PoW solved transparently) ───────────────
 #
-# This file's get_json/post_json take a `bearer:` kwarg, not the (url, body,
-# headers) shape the shared helper drives; give it full-URL adapter lambdas that
-# carry an arbitrary headers hash (the register retry rides the Kiosk-PoW header).
+# This file defines only a `get_json`, and it takes a `bearer:` kwarg and a
+# relative path, not the (url, body, headers) shape the shared helper drives;
+# give it full-URL adapter lambdas that carry an arbitrary headers hash (the
+# register retry rides the Kiosk-PoW header).
 require_relative "equihash_register"
 helper_get = ->(url) {
   uri = URI(url)

@@ -51,25 +51,25 @@ class Kiosk::DiningRoomController < ApplicationController
   #   :date         — restrict to one date (YYYY-MM-DD) among the upcoming seatings
   # The result is small (~5 restaurants × a handful of tables × ≤ a few seatings),
   # so it is NOT paginated.
+  # ADR-0023: semantics only. No argument list, no row-field list, and no
+  # hand-written row→argument mapping — `input_schema` declares what this verb
+  # accepts and what each filter refuses, `output_schema` names every row field
+  # and points the two differently-spelled ones at book_table's own arguments.
   description "List open restaurant tables across the aggregator for the " \
-              "UPCOMING seatings that seat the party (params: party_size; " \
-              "optional neighborhood, time, date filters). Returns one row " \
-              "per open (restaurant, table, seating): restaurant, " \
-              "neighborhood, cuisine, restaurant_id, restaurant_table_id, " \
-              "table_label, capacity, seating_date, seating_time, seating_at, " \
-              "deposit_eur. Pass restaurant_id + restaurant_table_id + date + " \
-              "time + party_size to book_table (all five are required) — the " \
-              "an unserved neighborhood, a non-seating time or a date outside the " \
-              "horizon is refused 400 with the valid values named — an EMPTY array " \
-              "means the seatings you asked for are genuinely sold out. " \
-              "The " \
-              "row field named seating_date is book_table's `date` param, and " \
-              "the row's seating_time is book_table's `time`: same values, " \
-              "different names. Seatings are the current " \
-              "upcoming ones (Europe/Lisbon), never stale; a seating with " \
-              "every table taken is absent (sold out). deposit_eur is the " \
-              "no-show hold in whole EUR (0 = none), settled at the " \
-              "restaurant — no online payment. Small; not paginated."
+              "UPCOMING seatings that can seat the party. One row per open " \
+              "(restaurant, table, seating), and it is the aggregator's whole " \
+              "answer rather than a page of it — so an EMPTY array means what " \
+              "you asked for is genuinely sold out, not that you searched too " \
+              "narrowly. Seatings are the current upcoming ones " \
+              "(Europe/Lisbon), never stale, and one with every table taken is " \
+              "absent. A filter this aggregator cannot serve — an area it does " \
+              "not cover, a slot that is not one of its seatings, a day beyond " \
+              "its horizon — is refused 400 with the servable values named, " \
+              "never silently ignored, so an empty answer and a bad filter are " \
+              "never confusable. Once the human picks a row, `book_table` " \
+              "confirms it; everything it needs is on that row. Any deposit " \
+              "shown is a no-show hold settled at the restaurant — this origin " \
+              "takes no online payment. Small; not paginated."
   input_schema type: "object",
                additionalProperties: false,
                properties: {

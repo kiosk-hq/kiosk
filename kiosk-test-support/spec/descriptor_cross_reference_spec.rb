@@ -1,6 +1,7 @@
 # frozen_string_literal: true
 
-# Descriptor cross-reference lint (K-494).
+# Descriptor prose lint — the ADR-0023 prohibition, plus the K-494
+# cross-reference check for the prose that has not been rewritten yet.
 #
 # A verb description routinely tells the assistant where a row's fields go
 # next — "Pass restaurant_id + restaurant_table_id + date + time to
@@ -11,9 +12,31 @@
 # "seating_date", which is the ROW field name, while book_table's input is
 # `date`).
 #
-# This lint resolves every such cross-reference against the target verb's own
-# declared params, across all seven demos, so that whole class of drift fails
-# the suite instead of an assistant's first call.
+# ── WHAT ADR-0023 DID TO THIS FILE (K-846) ────────────────────────────────
+# ADR-0023 retired the premise. `description` is semantics only; every name,
+# type and constraint lives in `input_schema`/`output_schema`, and its
+# §Consequences says outright that "the per-description lint K-494 asked for is
+# superseded by a structural property … prose stops naming params at all".
+# Checking that a param named in prose EXISTS is checking the correctness of a
+# construct the ADR forbids — green on a violation, by construction.
+#
+# So this file grows the PROHIBITION and keeps the cross-reference resolution
+# only for as long as the prose it reads survives:
+#
+#   * the prohibition (below) fails any description carrying a prose parameter
+#     list — the `params:` shape ADR-0023 §Decision 4 retired, restated in
+#     prose. Fleet-clean at head.
+#   * the cross-reference examples still resolve whatever "pass X to <verb> as
+#     `y`" clauses remain, so the K-494 class cannot regress while they do.
+#     They are green-and-EMPTY once a demo is rewritten, which is correct: an
+#     ADR-0023 description has nothing to resolve. K-852 rewrites the remaining
+#     six demos and widens the prohibition to every param name.
+#
+# Note what is NOT asserted any more: that a demo still HAS cross-references.
+# That floor (one per demo, twelve across the fleet) made ADR-0023 conformance
+# a test failure — rewriting a demo's prose correctly turned this suite red.
+# The property it was really guarding is that the lint can still SEE the
+# descriptors, and that is now asserted directly, on the verbs it extracts.
 #
 # It reads the sources as TEXT (no Rails boot, no DB), the same technique as
 # skill_pin_spec.rb. A demo declares its verbs in ONE place — the class-level
@@ -322,34 +345,73 @@ RSpec.describe "demo descriptor cross-references" do
     expect(demo_dirs).not_to be_empty
   end
 
-  # Non-vacuity guard. The lint is a text matcher; if the descriptors are
-  # reworded into a shape it stops recognising — or MOVED to a file it does not
-  # read — every per-demo example would go green while checking NOTHING. That is
-  # not hypothetical: T-057 walks the verbs out of the initializers and into
-  # handler controllers one demo at a time, and while this lint read only
-  # initializers, each migrated demo silently dropped to zero. philslist and
-  # stylish went first and this floor absorbed them; atablefor — the very demo
-  # K-494 was FOUND on — was the third, and tripped it. Assert the lint still
-  # resolves a substantial body of real cross-references (17 across the seven
-  # demos, the same total as before the migrations started).
-  it "actually resolves cross-references (the lint is not vacuous)" do
-    counts = demo_dirs.to_h do |dir|
-      verbs   = DescriptorSource.demo_verbs(dir)
-      by_name = verbs.to_h { |v| [v[:name], v] }
-      known   = verbs.flat_map { |v| v[:params] }.uniq
-      total   = verbs.sum { |v| self.class.cross_references(v, by_name, known).size }
-      [File.basename(dir), total]
+  # Non-vacuity guard. The lint is a text matcher; if the descriptors MOVE to a
+  # file it does not read, every per-demo example goes green while checking
+  # NOTHING. That is not hypothetical: T-057 walked the verbs out of the
+  # initializers into handler controllers one demo at a time, and while this
+  # lint read only initializers each migrated demo silently dropped to zero.
+  #
+  # K-846 restates the guard on the right property. It used to demand that each
+  # demo still resolve at least one CROSS-REFERENCE, which is a demand that the
+  # prose keep naming params — ADR-0023 forbids that, so writing a description
+  # correctly turned this suite red. What actually has to hold is that the
+  # extractor still SEES each demo's descriptors: verbs, with prose, with
+  # declared inputs. A demo whose descriptions are fully ADR-0023-clean passes
+  # this and resolves zero cross-references, and both are correct.
+  it "actually reads every demo's descriptors (the lint is not vacuous)" do
+    seen = demo_dirs.to_h do |dir|
+      verbs = DescriptorSource.demo_verbs(dir)
+      [File.basename(dir), {
+        verbs:    verbs.size,
+        described: verbs.count { |v| !v[:description].empty? },
+        schemas:  verbs.count { |v| v[:params].any? },
+      }]
     end
 
-    expect(counts.values.sum).to be >= 12,
-                                "the lint resolved only #{counts.values.sum} cross-reference(s) " \
-                                "#{counts.inspect} — it has stopped recognising the descriptors' " \
-                                "\"pass X to <verb>\" shape and is no longer checking anything"
-    # …and no demo may go dark on its own: a zero here is the migration-shaped
-    # failure above, seen one demo before it can hide behind the others' total.
-    expect(counts.reject { |_demo, n| n.positive? }.keys).to be_empty,
-                                                            "these demos resolved ZERO cross-references: " \
-                                                            "#{counts.inspect} — their descriptors moved somewhere this lint does not read"
+    expect(seen.values.sum { |c| c[:verbs] }).to be >= 40,
+                                                 "the extractor found only #{seen.values.sum { |c| c[:verbs] }} " \
+                                                 "verb(s) across the fleet #{seen.inspect} — the descriptors have " \
+                                                 "moved somewhere this lint does not read"
+    dark = seen.reject { |_demo, c| c[:verbs].positive? && c[:described].positive? && c[:schemas].positive? }
+    expect(dark.keys).to be_empty,
+                         "these demos yielded no readable descriptors: #{dark.inspect} — verbs, prose or " \
+                         "input_schema moved somewhere this lint does not read"
+  end
+
+  # ── ADR-0023: a description may not carry a parameter list (K-846) ────────
+  #
+  # `params:` was a first-class descriptor field until ADR-0023 §Decision 4
+  # retired it. Deleting the field did not delete the habit: atablefor kept
+  # writing the same list one layer over, in prose — "(params: restaurant_id,
+  # restaurant_table_id, date, time, party_size)" on `book_table`, "(params:
+  # party_size; optional neighborhood, time, date filters)" on `availability` —
+  # in the very demo the ADR was written about, duplicating an `input_schema`
+  # that already declared all five. `spec/descriptor-house-style.md` §1
+  # prohibits "a field or parameter list, or any param name that input_schema
+  # declares"; this is the mechanical half of that, and the half that catches
+  # the retired field coming back through the prose door.
+  it "no demo description carries a prose parameter list (ADR-0023 §Decision 1/4)" do
+    offenders = demo_dirs.flat_map do |dir|
+      demo = File.basename(dir)
+      DescriptorSource.demo_verbs(dir).filter_map do |verb|
+        m = verb[:description].match(/(\(\s*)?\bparams?\s*:/i)
+        next if m.nil?
+
+        "#{demo} #{verb[:name]}: description writes a parameter list — " \
+          "#{verb[:description][[m.begin(0) - 40, 0].max, 120].inspect}"
+      end
+    end
+
+    expect(offenders).to be_empty, <<~MSG
+      #{offenders.size} description(s) carry a prose parameter list:
+
+      #{offenders.join("\n")}
+
+      ADR-0023 re-scoped `description` to semantics only and retired the
+      `params:` field; restating it in prose is the same duplication one layer
+      over. Every name, type and constraint belongs in `input_schema`, and the
+      row->input mapping belongs in the two schemas' per-property descriptions.
+    MSG
   end
 
   demo_dirs.each do |dir|

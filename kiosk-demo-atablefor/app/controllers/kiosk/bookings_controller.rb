@@ -46,11 +46,18 @@ class Kiosk::BookingsController < ApplicationController
   # index on (restaurant_table_id, seating_at) among confirmed rows means a table
   # already held for that seating is a clean 409 Conflict. No payment — a
   # reservation takes no money (any deposit shown is settled at the restaurant).
+  # ADR-0023: this description says WHAT booking a table means and WHEN it is
+  # refused. It names no argument — `input_schema` below declares all five, and
+  # each one's own description says which availability-row field it comes from.
   description "Book a specific restaurant table for a chosen upcoming " \
-              "seating (params: restaurant_id, restaurant_table_id, date, " \
-              "time, party_size — all from an availability row). Confirms " \
-              "the reservation; a table already taken for that seating, or a " \
-              "seating that has passed, is rejected cleanly."
+              "seating, for the authenticated principal. Confirms the " \
+              "reservation outright: there is no hold to release and nothing " \
+              "is charged here — any deposit an availability row shows is " \
+              "settled at the restaurant. Contention is real and finite, so a " \
+              "table already held for that seating is refused as a clean " \
+              "conflict rather than double-booked, and so is a seating that " \
+              "has already passed. Every value it needs is on the " \
+              "availability row the human picked."
   input_schema type: "object",
                additionalProperties: false,
                properties: {

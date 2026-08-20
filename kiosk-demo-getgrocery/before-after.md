@@ -32,45 +32,84 @@ The reason incumbents stay at discovery is economic, not technical. Grocery reta
 
 ## With Kiosk — getgrocery (`rake demo` output)
 
-getgrocery is a Rails 8 app that speaks Kiosk. The following is representative output of `rake demo` (from `script/getgrocery_flow.rb`), run against the real Stripe adapter in test mode — `psp_reference` is a genuine Stripe test-mode `pi_…` PaymentIntent and settlement is recorded in `kiosk.settlements`:
+getgrocery is a Rails 8 app that speaks Kiosk. Below is the **verbatim** output
+of `rake demo` (which runs `script/getgrocery_flow.rb`) — recorded
+**2026-08-20** against a booted demo, `demo:setup`'s database chatter removed
+and nothing else touched.
+
+**This recording is the secret-free path**, the one CI runs: with no
+`STRIPE_SECRET_KEY` in the environment the task starts a local `stripe-mock`,
+so `psp_reference` is a `stripe-mock` PaymentIntent and `settled_amount_cents`
+is that fixture's constant `0` — which is why the run declines to assert the
+settled amount and says so in an assertion of its own. Set a real `sk_test_…`
+and the identical flow charges Stripe test mode instead; the task prefers a real
+key whenever one is present.
 
 ```
-{"http_register":201,"http_catalog":200,"http_order":200,"http_slots":200,"http_payment_setup":200,"http_pay":200,"http_schedule":200,"http_my_orders":200,"user_id":"a7f3c291-1b2e-4d8a-9cf1-3e507b824f16","agent_id":"b2e94107-3a1c-4f8d-bc2e-91d4a53c7e28","order_id":"d4f81c3e-7b2a-4e9c-af13-62d7b4c8e509","total_cents":847,"scheduled_at":"2026-07-13T08:00:00.000Z","psp_reference":"pi_3Qk9fLR2bkGb2V0T1aX7dZ8p","pay":{"settlement_id":"f1b3e259-8c4d-4a7f-9e12-84b5c7d2a963","psp_reference":"pi_3Qk9fLR2bkGb2V0T1aX7dZ8p","settled_amount_cents":847,"currency":"eur"}}
+  (no STRIPE_SECRET_KEY — running against stripe-mock at http://127.0.0.1:12111, no real charge)
+  (add to /etc/hosts: 127.0.0.1 getgrocery.demo.kiosk.tech -- using 127.0.0.1)
+
+-- Starting getgrocery on http://127.0.0.1:3001 --
+  Server up at http://127.0.0.1:3001
+
+-- Running script/getgrocery_flow.rb --
+  Registered: user_id=4bcb25af-7193-4f05-a3c7-6df64c4948be
+  Catalog: 16 in-stock products (EUR)
+  Ordering: sku=apple-juice, sku=banana, sku=butter-250g
+  delivery_slots (district-less address): http=400 code=bad_request (rejected, as expected)
+  Delivery slot: id=6 18:00–20:00 zone=D02 on 2026-08-20 (2026-08-20T18:00:00+01:00)
+  K-480: create_order on past slot id=1 → http=400 code=bad_request (rejected, as expected)
+  create_order: order_id=1dba3640-c454-499a-b7ed-9b11193a856d total=€8.47 slot_at=2026-08-20T18:00:00+01:00
+  payment_setup: ready
+  pay: settlement_id=95bbacf6-9c43-4163-8ae8-782bdc2af24f psp_reference=pi_RE3z1qccCW0HNt1
+  my_orders: 1 order(s); own order paid=true
+{"http_register":201,"http_catalog":200,"http_slots":200,"http_slots_badzone":400,"slots_badzone_code":"bad_request","http_order":200,"http_payment_setup":200,"http_pay":200,"http_my_orders":200,"user_id":"4bcb25af-7193-4f05-a3c7-6df64c4948be","agent_id":"d835cfcc-c559-4887-a23e-fcf401ea18e5","order_id":"1dba3640-c454-499a-b7ed-9b11193a856d","total_cents":847,"slot_at":"2026-08-20T18:00:00+01:00","chosen_slot_at":"2026-08-20T18:00:00+01:00","slot_date":"2026-08-20","past_slot_check":{"id":1,"http":400,"code":"bad_request"},"paid":true,"psp_reference":"pi_RE3z1qccCW0HNt1","my_orders":[{"order_id":"1dba3640-c454-499a-b7ed-9b11193a856d","status":"paid","total_cents":847,"slot_at":"2026-08-20T17:00:00.000+00:00","address":"42 Camden Street, Dublin 2","paid":true}],"pay":{"settlement_id":"95bbacf6-9c43-4163-8ae8-782bdc2af24f","psp_reference":"pi_RE3z1qccCW0HNt1","settled_amount_cents":0,"currency":"eur"}}
 
 -- Assertions --
   OK  http_register == 201
   OK  http_catalog == 200
   OK  http_order == 200
   OK  http_slots == 200
+  OK  http_slots_badzone == 400
+  OK  slots_badzone_code == bad_request
   OK  http_payment_setup == 200
   OK  http_pay == 200
-  OK  http_schedule == 200
   OK  http_my_orders == 200
-  OK  order_id present (d4f81c3e-7b2a-4e9c-af13-62d7b4c8e509)
-  OK  scheduled_at present (2026-07-13T08:00:00.000Z)
-  OK  pay.settlement_id present (f1b3e259-8c4d-4a7f-9e12-84b5c7d2a963)
-  OK  pay.psp_reference present (pi_3Qk9fLR2bkGb2V0T1aX7dZ8p)
-  OK  pay.settled_amount_cents present (847)
+  OK  order_id present (1dba3640-c454-499a-b7ed-9b11193a856d)
+  OK  slot_at present (2026-08-20T18:00:00+01:00)
+  OK  create_order slot_at == chosen delivery_slot slot_at (2026-08-20T18:00:00+01:00) — no date drift
+  OK  K-480: create_order on past slot id=1 → 400 bad_request (un-bookable window rejected)
+  OK  my_orders own order paid == true
+  OK  pay.settlement_id present (95bbacf6-9c43-4163-8ae8-782bdc2af24f)
+  OK  pay.psp_reference present (pi_RE3z1qccCW0HNt1)
+  OK  pay.settled_amount_cents present (0)
   OK  pay.currency present (eur)
   OK  the settlement is denominated in the operator's own currency (eur)
-  OK  Stripe settled the order's own total (847 eur)
-  OK  psp_reference is a real Stripe PaymentIntent (pi_3Qk9fLR2bkGb2V0T1aX7dZ8p)
-  OK  orders[status=scheduled] count >= 1 (got 1)
+  OK  (settled amount not asserted under stripe-mock — its fixture always reports amount_received=0)
+  OK  psp_reference is a stripe-mock PaymentIntent (pi_RE3z1qccCW0HNt1)
+  OK  orders[slot_at set] count >= 1 (got 1)
   OK  kiosk.settlements >= 1 (got 1)
   OK  order_items count >= 1 (got 3)
-  OK  my_orders contains own order d4f81c3e-7b2a-4e9c-af13-62d7b4c8e509
+  OK  my_orders contains own order 1dba3640-c454-499a-b7ed-9b11193a856d
 
   All assertions passed.
 ```
+
+Two negative controls ride inside the happy path and are the reason the `200`s
+mean anything: a district-less delivery address is refused `400 bad_request`
+before any slot is shown, and `create_order` against a window that has already
+started is refused the same way. Both are wall-clock-dependent — this run was
+recorded late in the Dublin day, so only the 18:00–20:00 window was still
+bookable and slot `1` was available to be refused.
 
 **What the AI assistant did — no human involved at any step:**
 
 1. **Discover** — `GET /.well-known/kiosk.json` returns the GetGrocery issuer and surface.
 2. **Self-register** — generated an RSA-2048 keypair, proved possession of the private key (`GET /kiosk/auth/challenge` → signed the nonce as an origin-bound RS256 JWS → `POST /kiosk/auth/register {public_key:<pem>, signed:<jws>}`) → HTTP 201 → `agent_id`, `user_id`, `access_token`. No existing account. No human login. No OTP. No bot screen.
-3. **Browse catalog** — `GET /kiosk/catalog` returned 15 in-stock products, sorted by name (Milk 1 L and Chocolate Spread 400g are out of stock, so the catalog hides them — see `db/seeds.rb`). This worked example's driver builds the cart from the first three in-stock rows: Apple Juice (349c), Banana (149c), Butter 250g (349c), one of each.
-4. **Query delivery slots** — `GET /kiosk/delivery_slots?date=2026-07-13&delivery_address=42%20Camden%20Street%2C%20Dublin%202` → returned 6 available time slots; the driver picked the first, 08:00–10:00.
-5. **Create order** — `POST /kiosk/create_order {items:[{sku:"apple-juice", qty:1}, {sku:"banana", qty:1}, {sku:"butter-250g", qty:1}], delivery_slot_id:<slot_id>, delivery_address:"42 Camden Street, Dublin 2"}` → HTTP 200, `order_id`, `total_cents:847` (with `total_eur` and `currency`), `slot_at`, and a `pay_hint`. Delivery is part of the order — slot and address are REQUIRED; the assistant composed the full cart (products referenced by `sku`).
-6. **Pay** — signed an AP2 intent mandate (`cap_amount_cents:1047`, `scope:"grocery"`, `iss:<issuer>`) and a cart mandate (`total_amount_cents:847`, `line_items:[{order_id:<order_id>}, {sku:"apple-juice", qty:1, price_cents:349}, {sku:"banana", qty:1, price_cents:149}, {sku:"butter-250g", qty:1, price_cents:349}]` — mirroring the order per the `pay_hint`, bound to the intent via `intent_mandate_id`) as RS256 JWS with the registered keypair, then `POST /kiosk/pay {intent_mandate_jws, cart_mandate_jws, payment_mandate_jws}` → the settlement itself: `{settlement_id, psp_reference, settled_amount_cents:847, currency:"eur"}`.
+3. **Browse catalog** — `GET /kiosk/catalog` returned 16 in-stock products, sorted by name — the 15 groceries plus the age-restricted House Table Red Wine 750ml, which is the row that makes the age-gate beat below work (Milk 1 L and Chocolate Spread 400g are out of stock, so the catalog hides them — see `db/seeds.rb`). This worked example's driver builds the cart from the first three in-stock rows: Apple Juice (349c), Banana (149c), Butter 250g (349c), one of each.
+4. **Query delivery slots** — `GET /kiosk/delivery_slots?date=2026-08-20&delivery_address=42%20Camden%20Street%2C%20Dublin%202` → returned the windows still bookable for that day, each carrying its resolved Dublin zone; the driver picked the first. In the run above that was `delivery_slot_id=6`, 18:00–20:00 in zone D02, because the earlier windows had already started. The driver asks for TODAY on purpose, so the assertion below it catches any drift between the day the slot was shown for and the day `create_order` books.
+5. **Create order** — `POST /kiosk/create_order {items:[{sku:"apple-juice", qty:1}, {sku:"banana", qty:1}, {sku:"butter-250g", qty:1}], delivery_slot_id:6, delivery_date:"2026-08-20", delivery_address:"42 Camden Street, Dublin 2"}` → HTTP 200, `order_id`, `total_cents:847` (with `total_eur:"€8.47"` and `currency`), `slot_at`, and a `pay_hint`. Delivery is part of the order — slot and address are REQUIRED; the assistant composed the full cart (products referenced by `sku`), and passed back the DATE the slot was shown for so the booking cannot drift a day.
+6. **Pay** — signed an AP2 intent mandate (`cap_amount_cents:1047`, `scope:"grocery"`, `iss:<issuer>`) and a cart mandate (`total_amount_cents:847`, `line_items:[{order_id:<order_id>}, {sku:"apple-juice", qty:1, price_cents:349}, {sku:"banana", qty:1, price_cents:149}, {sku:"butter-250g", qty:1, price_cents:349}]` — mirroring the order per the `pay_hint`, bound to the intent via `intent_mandate_id`) as RS256 JWS with the registered keypair, then `POST /kiosk/pay {intent_mandate_jws, cart_mandate_jws, payment_mandate_jws}` → the settlement itself: `{settlement_id, psp_reference, settled_amount_cents, currency:"eur"}`. Against real Stripe the settled amount is the order's own 847; the recording above ran on `stripe-mock`, whose fixture always reports `0`.
 7. **(Optional) Move the delivery** — a PAID order's slot can be changed once via `POST /kiosk/reschedule_delivery {order_id:<order_id>, delivery_slot_id:<new_slot_id>}`. The operator's cashier check ran at capture: currency (EUR), each line against the catalog, and the total were verified before charging.
 
 The database confirmed: one row in `orders` with its delivery slot set (`slot_at`), one row in `kiosk.settlements`.

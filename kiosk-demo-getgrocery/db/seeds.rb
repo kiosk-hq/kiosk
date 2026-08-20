@@ -5,7 +5,10 @@
 #
 # Products are identified to agents by their stable `sku` (never the numeric DB id).
 #
-# In stock: 15 products (Butter 250g is "low": stock=4 ≤ 5).
+# In stock: 16 products — 15 groceries (Butter 250g is "low": stock=4 ≤ 5) plus
+#           the age-restricted House Table Red Wine 750ml below. The closing
+#           `puts` derives these counts; this header is the only place they are
+#           written by hand, so keep the two agreeing.
 # Stock 0  : Milk 1 L, Chocolate Spread 400g — absent from `catalog` (which hides
 #            out-of-stock), so they drive the AI substitution beats by ABSENCE:
 #              • "milk 1 L"        → the assistant sees only Milk 0.5 L → orders 2×.

@@ -3,7 +3,7 @@
 # The provider's public storefront. Its only Kiosk-specific job is to ADVERTISE
 # the agent affordance: a visible "Agents → Kiosk here" hook + a machine-readable
 # <link rel="kiosk"> so an assistant scanning the page discovers it can transact.
-class HomeController < ActionController::Base
+class HomeController < ApplicationController
   def index
     # Live DOMAIN activity counters, rendered server-side on page load (a refresh
     # is enough — no JS polling). These read getgrocery's OWN tables, not

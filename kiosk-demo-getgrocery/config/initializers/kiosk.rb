@@ -32,6 +32,7 @@
 # Rails.configuration.x.kiosk.* and never ENV.
 
 require "kiosk/payment_providers/stripe"
+require "kiosk/user_identity_providers/devise"
 
 ActiveRecord::Migration.include(Kiosk::RLS::DSL)
 
@@ -167,16 +168,13 @@ Kiosk.configure do |c|
   c.skill_sha256 = "f2cab5f4664ac697ce8c9a18582924447ec9097f240bac3e32ca2a8b2bf2cfed"
 
   c.agent_idp = JwtOrStubIdp.new(stub: Rails.env.local? ? StubIdp.new : nil)
-  # The provider's own web-session channel: authenticates the approving
-  # human on the account-binding surfaces (device verify page, link mint,
-  # unlink). A stub because this demo has no human login UI — see
-  # app/services/stub_user_idp.rb for the honest scope; `rake demo:claim` walks
-  # the claim-rebind ceremony through it.
-  # DEV/TEST ONLY (K-555): the stub parses an UNSIGNED, self-asserted
-  # `user:u-<uuid>` bearer into a human identity, so it is wired only under
-  # Rails.env.local?; in production user_idp is nil and the binding surfaces
-  # 401 until a real adapter (kiosk-user-idp-devise) is configured.
-  c.user_idp = Rails.env.local? ? StubUserIdp.new : nil
+  # The provider's own web-session channel (Devise/Warden): authenticates the
+  # approving human on the account-binding surfaces — the device verify page,
+  # link-code mint and unlink. `rake demo:claim` walks the claim-rebind ceremony
+  # through it, signing the shopper in at /users/sign_in first. ONE channel in
+  # every environment: there is no dev-only arm to gate, because there is no
+  # stub left to gate (T-066).
+  c.user_idp = Kiosk::UserIdentityProviders::Devise.new
 
   # Payment provider: real Stripe in test mode (sk_test_…).
   # getgrocery uses SetupIntent card-on-file: card saved once on Stripe's

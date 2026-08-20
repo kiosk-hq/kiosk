@@ -5,9 +5,10 @@
 # Beat 1 — standalone: the assistant self-registers (kiosk-pop, fresh key,
 #   its own synthetic account) and places a grocery order there.
 # Beat 2 — the human says "use MY account": the assistant opens the claim
-#   ceremony with its EXISTING key; the human approves on the verify page
-#   (stub session channel — this demo has no login UI); the possession-proof
-#   poll re-binds the key: agent_id stays, user_id remaps to the human's,
+#   ceremony with its EXISTING key; the human signs in at /users/sign_in and
+#   approves on the verify page over that REAL Devise session; the
+#   possession-proof poll re-binds the key: agent_id stays, user_id remaps to
+#   the human's,
 #   reputation carries. The old standalone order is NOT migrated — domain
 #   rows belong to the provider, and this provider configures no
 #   assistant_claimed hook.
@@ -19,7 +20,8 @@
 #   contrast IS the point of claiming.
 #
 # Usage (invoked by rake demo:claim):
-#   SERVER_URL=… KIOSK_ISSUER=… HUMAN_USER_ID=… bundle exec ruby script/claim_flow.rb
+#   SERVER_URL=… KIOSK_ISSUER=… HUMAN_USER_ID=… HUMAN_EMAIL=… HUMAN_PASSWORD=… \
+#   bundle exec ruby script/claim_flow.rb
 #
 # Prints ONE JSON line on stdout; non-zero exit on any hard failure.
 
@@ -32,10 +34,20 @@ require "openssl"
 require "securerandom"
 require "base64"
 
-SERVER = ENV.fetch("SERVER_URL")
-ISSUER = ENV.fetch("KIOSK_ISSUER")
-HUMAN  = ENV.fetch("HUMAN_USER_ID")   # seeded account holder with a saved card
-USER_SESSION = "user:u-#{HUMAN}"      # StubUserIdp web-session channel
+require_relative "../lib/devise_session"
+
+SERVER   = ENV.fetch("SERVER_URL")
+ISSUER   = ENV.fetch("KIOSK_ISSUER")
+HUMAN    = ENV.fetch("HUMAN_USER_ID")   # seeded account holder with a saved card
+EMAIL    = ENV.fetch("HUMAN_EMAIL")
+PASSWORD = ENV.fetch("HUMAN_PASSWORD")
+
+# The human's browser session — the REAL one. getgrocery used to hand the
+# verify page a self-asserted `user:u-<uuid>` bearer because it shipped no login
+# UI; it ships one now (T-066), so the approving human is a Devise/Warden
+# session like every other demo's, and this driver holds it the way a browser
+# does. The agent's calls below never touch it.
+HUMAN_SESSION = DeviseSession.new(SERVER)
 
 # THE 0.4 WIRE. A query is `GET <endpoint>/<query-name>` with its arguments in
 # the QUERY STRING; an action is `POST <endpoint>/<action-name>` with its
@@ -133,19 +145,22 @@ device_code = da.fetch("device_code")
 user_code   = da.fetch("user_code")
 STDERR.puts "  Claim opened for the SAME key: user_code=#{user_code}"
 
-# The human approves on the verify page: GET first (session + CSRF token if
-# the app enforces forgery protection), then POST the decision.
-verify_uri = URI("#{SERVER}/kiosk/oauth/device/verify?user_code=#{user_code}")
-show = Net::HTTP.new(verify_uri.host, verify_uri.port)
-                .request(Net::HTTP::Get.new(verify_uri, { "Authorization" => USER_SESSION }))
+# The human signs in through the REAL Devise form first — no fixtures, no
+# in-process shortcut — and only then can she see the verify page at all.
+HUMAN_SESSION.sign_in!(email: EMAIL, password: PASSWORD)
+results[:human_signed_in] = true
+STDERR.puts "  Human signed in via /users/sign_in (Devise session cookie held)"
+
+# She approves on the verify page: GET first (the page + its CSRF token), then
+# POST the decision over the same session.
+show = HUMAN_SESSION.get_html("/kiosk/oauth/device/verify?user_code=#{user_code}")
 abort "verify page: #{show.code}" unless show.code.to_i == 200
-cookie = Array(show.get_fields("set-cookie")).map { |c| c.split(";").first }.join("; ")
-csrf   = show.body[/name="authenticity_token" value="([^"]+)"/, 1]
 form = { "user_code" => user_code, "decision" => "approve" }
-form["authenticity_token"] = csrf if csrf
-headers = { "Authorization" => USER_SESSION }
-headers["Cookie"] = cookie unless cookie.empty?
-rc, = post_form("#{SERVER}/kiosk/oauth/device/verify", form, headers)
+if (csrf = HUMAN_SESSION.csrf_token(show.body))
+  form["authenticity_token"] = csrf
+end
+approve = HUMAN_SESSION.post_form("/kiosk/oauth/device/verify", form)
+rc = approve.code.to_i
 results[:approve] = rc
 STDERR.puts "  Human approved on the verify page (#{rc})"
 

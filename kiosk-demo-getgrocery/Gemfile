@@ -9,6 +9,11 @@ gem "puma", ">= 5.0"
 gem "tzinfo-data", platforms: %i[ windows jruby ]
 gem "bootsnap", require: false
 
+# The human shopper signs in with a real Devise session; the Kiosk
+# account-binding surfaces (device verify page, link mint, unlink) authenticate
+# that Warden session through the kiosk-user-idp-devise adapter below.
+gem "devise"
+
 # --- Kiosk ----------------------------------------------------------------
 gem "kiosk-all",        path: "../kiosk-all"
 gem "kiosk-core",       path: "../kiosk-core"
@@ -18,6 +23,7 @@ gem "kiosk-pow-equihash", path: "../kiosk-pow-equihash"
 gem "kiosk-reputation",   path: "../kiosk-reputation"
 gem "kiosk-redteam",      path: "../kiosk-redteam"
 gem "kiosk-pay-stripe",   path: "../kiosk-pay-stripe"
+gem "kiosk-user-idp-devise", path: "../kiosk-user-idp-devise"
 
 # Opt-in request-shape validation (c.validate_requests = true) — kiosk-server
 # lazily requires json_schemer only when the flag is on (UNIFORM-VALIDATION

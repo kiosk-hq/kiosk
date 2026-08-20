@@ -58,8 +58,17 @@ end
 # stripe-mock, which serves the card fixture for that customer.
 HUMAN_ID     = "00000000-0000-0000-0000-000000000042"
 HUMAN_CUS_ID = "cus_getgrocery_saved_card"
+# Demo-only credentials (development database, reset by every demo:setup). The
+# shopper signs in at /users/sign_in with a real Devise session — the channel
+# the account-binding surfaces authenticate now that the stub user-IdP is gone
+# (T-066), and the one `rake demo:claim` drives.
+HUMAN_EMAIL    = "hana@example.com"
+HUMAN_PASSWORD = "getgrocery-demo-password"
 
-User.find_or_create_by!(id: HUMAN_ID)
+User.find_or_create_by!(id: HUMAN_ID) do |u|
+  u.email    = HUMAN_EMAIL
+  u.password = HUMAN_PASSWORD
+end
 StripeCustomer.find_or_create_by!(user_id: HUMAN_ID) do |sc|
   sc.customer_id = HUMAN_CUS_ID
 end

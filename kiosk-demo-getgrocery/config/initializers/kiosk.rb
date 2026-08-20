@@ -31,17 +31,6 @@
 # (K-650/K-700); this file reads the resolved values from
 # Rails.configuration.x.kiosk.* and never ENV.
 
-require Rails.root.join("lib/stub_idp")
-require Rails.root.join("lib/stub_user_idp")
-require Rails.root.join("lib/jwt_or_stub_idp")
-require Rails.root.join("lib/pow_difficulty")
-require Rails.root.join("lib/dublin_zones")
-require Rails.root.join("lib/delivery_slots")
-require Rails.root.join("lib/uuid_check")
-require Rails.root.join("lib/bad_proof_counter")
-require Rails.root.join("lib/validating_payment_provider")
-require Rails.root.join("lib/prove_trust")
-require Rails.root.join("lib/prove_broker_client")
 require "kiosk/payment_providers/stripe"
 
 ActiveRecord::Migration.include(Kiosk::RLS::DSL)
@@ -50,7 +39,7 @@ ActiveRecord::Migration.include(Kiosk::RLS::DSL)
 #
 # A grocery provider can toll the `catalog` query to price anonymous browsing
 # (a metered toll, not a wall). Params follow KIOSK_POW_DIFFICULTY
-# (lib/pow_difficulty.rb): low (default) → n=96 k=5 sub-second; high → n=168 k=7
+# (app/services/pow_difficulty.rb): low (default) → n=96 k=5 sub-second; high → n=168 k=7
 # (~10s / ~1.3 GiB). getgrocery ships low (the flagship stays poke-friendly for
 # the full shop flow); the knob is here for parity. run/pay are never gated.
 EQUIHASH_DEMO_PARAMS = PowDifficulty.params
@@ -75,7 +64,7 @@ if ENV["KIOSK_POW_DEMO"] == "1"
   # sibling). Its ONLY job is to let the local `script/pow_flow.rb` driver
   # print "the server counted MY bad proof"; nothing reads it for policy
   # (`reputation_factors` below is `Factors.empty`). Since K-498's re-decision
-  # it counts PER IDENTITY in sqlite (lib/bad_proof_counter.rb): one abusive
+  # it counts PER IDENTITY in sqlite (app/services/bad_proof_counter.rb): one abusive
   # assistant can no longer inflate anyone else's count, and concurrent server
   # processes no longer fight over one flat file. Two toy aspects REMAIN,
   # deliberately, labelled:
@@ -181,7 +170,7 @@ Kiosk.configure do |c|
   # The provider's own web-session channel: authenticates the approving
   # human on the account-binding surfaces (device verify page, link mint,
   # unlink). A stub because this demo has no human login UI — see
-  # lib/stub_user_idp.rb for the honest scope; `rake demo:claim` walks
+  # app/services/stub_user_idp.rb for the honest scope; `rake demo:claim` walks
   # the claim-rebind ceremony through it.
   # DEV/TEST ONLY (K-555): the stub parses an UNSIGNED, self-asserted
   # `user:u-<uuid>` bearer into a human identity, so it is wired only under
@@ -297,7 +286,6 @@ end
 # GETGROCERY_VERB_MAP maps this vertical's concrete run-verbs onto the generic
 # action kinds so the landing aggregate reads uniformly across demos.
 if ENV["KIOSK_TELEMETRY"] == "1"
-  require Rails.root.join("lib/demo_telemetry")
   GETGROCERY_VERB_MAP = {
     "create_order"        => "ordered",
     "reschedule_delivery" => "scheduled",

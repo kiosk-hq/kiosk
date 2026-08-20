@@ -140,10 +140,10 @@ else
   assert(!drawn, "the route is not drawn at all")
   assert(get.status == 404, "the endpoint is a 404 by absence, got #{get.status}")
   assert(!middleware_wired?, "DemoTelemetryMiddleware is not in the middleware stack")
-  # `defined?(DemoTelemetry)` is not the test: lib/ is an autoload path, so
-  # Zeitwerk registers the constant either way. Whether the FILE ran is.
-  assert($LOADED_FEATURES.none? { |f| f.end_with?("lib/demo_telemetry.rb") },
-         "lib/demo_telemetry.rb is never even loaded — a true no-op")
+  # `defined?(DemoTelemetry)` is not the test: app/services is an autoload-once
+  # path, so Zeitwerk registers the constant either way. Whether the FILE ran is.
+  assert($LOADED_FEATURES.none? { |f| f.end_with?("app/services/demo_telemetry.rb") },
+         "app/services/demo_telemetry.rb is never even loaded — a true no-op")
 end
 
 if FAILURES.empty?

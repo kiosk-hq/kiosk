@@ -1,7 +1,7 @@
 # frozen_string_literal: true
 
 # Standalone (no rails boot, no DB) unit spec for the order-reference shape
-# check — the K-579 guard, `lib/uuid_check.rb`. Run with:
+# check — the K-579 guard, `app/models/uuid_check.rb`. Run with:
 #   bundle exec rake demo:cashier_spec   (or: ruby spec/cashier_order_ref_spec.rb)
 #
 # `UuidCheck` guards the three places an agent-supplied id reaches an `::uuid`
@@ -24,8 +24,8 @@
 require "securerandom"
 require "kiosk/server/errors"
 
-require_relative "../lib/uuid_check"
-require_relative "../lib/validating_payment_provider"
+require_relative "../app/models/uuid_check"
+require_relative "../app/services/validating_payment_provider"
 
 FAILURES = []
 

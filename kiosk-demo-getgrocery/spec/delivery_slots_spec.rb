@@ -14,7 +14,7 @@ require "active_support"
 require "active_support/core_ext/time"
 require "date"
 
-require_relative "../lib/delivery_slots"
+require_relative "../app/models/delivery_slots"
 
 FAILURES = []
 

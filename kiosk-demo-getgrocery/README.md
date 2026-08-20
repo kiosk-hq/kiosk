@@ -31,7 +31,7 @@ rake demo            # setup + shop: no-human register → order (slot+address) 
 | `rake demo:reconcile` | **operator utility, not a gate** (K-616) — it reports rather than asserts, and cannot go red; resolves orders stuck in `paying` from local evidence — settled ones flip to `paid`, the rest are listed as UNRESOLVED with the cart-mandate ids to check at the processor, and are never blind-released (K-578) |
 | `rake demo:rls` | the suite's only RLS *enforcement* proof: with RLS applied as an imperative overlay (the `kiosk-rls` emitter, dogfooded), a raw unscoped `SELECT * FROM orders` inside an enforced session returns only that principal's row, with the owner/superuser session that sees BOTH rows as the negative control |
 | `rake demo:slots_spec` | DB-free unit check of the delivery-slot past-filter across a DST boundary — the same rule `demo:shop` exercises over the wire (K-480) |
-| `rake demo:cashier_spec` | DB-free unit check of the same order-reference shape guard (`lib/uuid_check.rb`): a malformed `order_id` is a clean **400 (`bad_request`)** naming the value, leaks no SQL/PG internals, and never reaches a database at all (K-579) |
+| `rake demo:cashier_spec` | DB-free unit check of the same order-reference shape guard (`app/models/uuid_check.rb`): a malformed `order_id` is a clean **400 (`bad_request`)** naming the value, leaks no SQL/PG internals, and never reaches a database at all (K-579) |
 | `rake demo:telemetry` | the live-activity store round-trips: seeds synthetic events through `DemoTelemetry.record` and asserts the privacy-safe aggregate (the JSON `/demo/activity.json` and the kiosk.tech tile return) comes back populated. The module swallows every error by design, so this is what turns a silently-broken telemetry write into a failure. Writing to the SHARED hosted store needs `KIOSK_TELEMETRY_DB_URL` **and** `SEED_SHARED=1` (K-620) |
 | `rake demo:telemetry_spec` | the other half — the telemetry **request path**, which `demo:telemetry` never touches. The Rack middleware: a telemetry failure never re-dispatches the request (a replayed `/auth/register` would mint a second agent — K-622), and the recording rules hold (2xx only, the request-line classifier — `GET <mount>/<verb>` is a read, `POST <mount>/<verb>` a write, and no body is read on any path — the per-app verb map, the `/auth/register` body-buffering returning the response byte-for-byte, agent refs that never carry the raw bearer). Then `GET /demo/activity.json` under a real boot, twice: with `KIOSK_TELEMETRY=1` it serves counts-only JSON with the tile's CORS + cache headers and `scope=app`/`scope=all` really do select differently; with it unset the route, the middleware and the module are all absent (K-622) |
 
@@ -66,7 +66,7 @@ assertions cannot go ungated and unexplained.
 ## Delivery address is an upfront, deliberate input (ADDRESS-UPFRONT)
 
 `delivery_slots` requires a `delivery_address` and validates it names a
-**served Dublin postal district** (`lib/dublin_zones.rb`): a district-less
+**served Dublin postal district** (`app/models/dublin_zones.rb`): a district-less
 address (`"…, Dublin"` with no `Dublin 2`/`D02`), an out-of-zone district, or a
 non-Dublin city returns a clean **400 (`bad_request`)** whose message says what
 is needed — so an assistant must obtain the address **before** it can even see
@@ -87,7 +87,7 @@ Slot wall-clock times are the **operator's local time**: getgrocery delivers in
 Dublin, so a slot labelled `08:00–10:00` means 08:00 **Europe/Dublin**, and each
 `delivery_slots` row's `slot_at` carries the real offset (`+01:00` in summer IST,
 `+00:00` in winter GMT). The real IANA zone is used — not a fixed offset — so DST
-is handled automatically (`lib/delivery_slots.rb`).
+is handled automatically (`app/models/delivery_slots.rb`).
 
 `delivery_slots` returns only **still-bookable** windows: for **today**, a slot
 whose start has already passed in Dublin is dropped (querying at 11:00 hides
@@ -123,6 +123,6 @@ seeded `stripe_customers` mapping served by the mock's card fixture, so no
 real customer exists to charge.
 
 The human side of the claim ceremony (verify page, link mint, unlink)
-authenticates through a stub web-session channel (`lib/stub_user_idp.rb`) —
+authenticates through a stub web-session channel (`app/services/stub_user_idp.rb`) —
 this demo ships no human login UI. See kiosk-demo-stylish for the same
 ceremony over real Devise sessions.

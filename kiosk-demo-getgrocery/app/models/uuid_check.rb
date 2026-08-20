@@ -23,7 +23,7 @@
 # as the one declared exception, so the divergence stays the one we chose.
 # Each demo is a standalone Rails app with its own Gemfile, so the alternative to
 # a copy is publishing the guard in a shipped gem — a public-API decision, not a
-# fix-wave one. Same arrangement as lib/pow_difficulty.rb and
+# fix-wave one. Same arrangement as app/services/pow_difficulty.rb and
 # lib/equihash_register.rb.
 #
 # K-661: shape recognition below delegates to the `uuid` gem (pinned 2.3.9 —

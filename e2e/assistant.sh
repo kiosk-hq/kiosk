@@ -38,9 +38,17 @@ ALICE="00000000-0000-0000-0000-000000000001"
 BOB="00000000-0000-0000-0000-000000000002"
 
 # Bearer-token shape per stub_idp.rb:
-#   agent:u-<user_uuid>:a-<agent_id>:r-<role>
-ALICE_AGENT_TOKEN="agent:u-$ALICE:a-alice-claude:r-customer"
-BOB_AGENT_TOKEN="agent:u-$BOB:a-bob-chatgpt:r-customer"
+#   agent:u-<user_uuid>:a-<agent_uuid>:r-<role>
+#
+# The agent id is a UUID, not the readable `alice-claude` slug it used to be:
+# `kiosk.action_log.agent_id`, every `kiosk.*_mandates.agent_id` and
+# `kiosk.current_agent_id()` are all typed `uuid` in the canonical schema, so a
+# stub identity carrying anything else is one the shipped tables cannot store.
+# That was latent until T-088 made the audit log the first writer to try it.
+ALICE_AGENT="a0000000-0000-0000-0000-000000000001"
+BOB_AGENT="a0000000-0000-0000-0000-000000000002"
+ALICE_AGENT_TOKEN="agent:u-$ALICE:a-$ALICE_AGENT:r-customer"
+BOB_AGENT_TOKEN="agent:u-$BOB:a-$BOB_AGENT:r-customer"
 
 PASS=0
 FAIL=0

@@ -47,8 +47,14 @@ ALICE_UUID = "00000000-0000-0000-0000-000000000001"
 BOB_UUID   = "00000000-0000-0000-0000-000000000002"
 
 # Distinct agent IDs so isolation_flow runs don't clash with bin/demo sessions.
-TOKEN_A = "agent:u-#{ALICE_UUID}:a-alice-isolation:r-customer"
-TOKEN_B = "agent:u-#{BOB_UUID}:a-bob-isolation:r-customer"
+# The agent id is a UUID, not a readable slug: `kiosk.action_log.agent_id`,
+# every `kiosk.*_mandates.agent_id` and `kiosk.current_agent_id()` are all typed
+# `uuid` in the canonical schema, so a stub identity carrying anything else is one
+# the shipped tables cannot store (T-088 found it by being the first writer to try).
+AGENT_A = "a0000000-0000-0000-0000-000000000001"
+AGENT_B = "a0000000-0000-0000-0000-000000000002"
+TOKEN_A = "agent:u-#{ALICE_UUID}:a-#{AGENT_A}:r-customer"
+TOKEN_B = "agent:u-#{BOB_UUID}:a-#{AGENT_B}:r-customer"
 
 # THE 0.4 WIRE. An action is `POST <endpoint>/<action-name>` with its arguments
 # as the JSON body; a query is `GET <endpoint>/<query-name>` with its arguments

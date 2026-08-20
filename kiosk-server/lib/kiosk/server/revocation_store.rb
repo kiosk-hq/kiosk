@@ -18,10 +18,22 @@ module Kiosk
     # O(1) with no per-token bookkeeping.
     #
     # Strict less-than means a token minted in the SAME wall-clock second as the
-    # revoke is not covered (JWT timestamps are second-resolution). That 1s
-    # window sits inside the ±60s verifier leeway and is not a security
-    # boundary: an attacker able to mint tokens holds the private key, against
-    # which revocation was never the defense.
+    # watermark is not covered (JWT timestamps are second-resolution). That is
+    # REQUIRED by `/auth/revoke` and by the claim rebind, which both hand back a
+    # replacement token minted immediately after stamping: strict `<` is what
+    # lets the replacement survive its own watermark. For those two the residual
+    # second is not a security boundary — the caller holds the private key, and
+    # can mint another token at will, so revocation was never the defense there.
+    #
+    # THAT ARGUMENT DOES NOT TRANSFER to a watermark stamped AGAINST the key
+    # holder (K-835): after `unlink!` the key can no longer log in, so a token
+    # that slips through the same-second gap is the last one it will ever hold
+    # and it keeps working for its full remaining lifetime. A caller revoking
+    # someone ELSE's key and minting no replacement must therefore pass the NEXT
+    # second (`Time.now.to_i + 1`) so the whole second is covered — see
+    # {AccountBinding.unlink!}. The store deliberately stays a dumb comparison:
+    # who is being revoked, and whether a replacement token needs to survive, is
+    # the caller's knowledge, not this class's.
     #
     # Mirrors {PowSpentStore}: Mutex-guarded, pruned opportunistically, and NOT
     # shared across web workers. Multi-process providers MUST override

@@ -75,8 +75,10 @@ module Kiosk
       # Registration-layer revocation (auth.md's second layer): deactivate
       # the binding of `agent_id` — which must belong to `user_id`, so a
       # session can only unlink its OWN assistant accounts. The key's
-      # outstanding tokens stop verifying (watermark revocation) and its
-      # `/auth/login` is denied (`revoked_at` filter). An unlinked key does
+      # outstanding tokens stop verifying (watermark revocation — every one of
+      # them, including one minted in the same wall-clock second; see the
+      # stamp below) and its `/auth/login` is denied (`revoked_at` filter).
+      # An unlinked key does
       # NOT revert to a standalone account — re-register or re-claim to
       # return. Fires the `assistant_unlinked` hook.
       #
@@ -104,9 +106,21 @@ module Kiosk
           )
         end
 
-        # Outstanding tokens die NOW, not at their natural expiry — the
-        # same watermark `/auth/revoke` uses.
-        config.revocation_store&.revoke_all(agent_id, at: Time.now.to_i)
+        # Outstanding tokens die NOW, not at their natural expiry.
+        #
+        # The watermark is stamped at the NEXT second, not this one (K-835).
+        # {RevocationStore} compares `iat < watermark` and JWT timestamps are
+        # second-resolution, so a watermark of `Time.now.to_i` leaves a token
+        # minted in the SAME wall-clock second uncovered — and, because unlink
+        # also 404s `/auth/login`, that token is then the LAST one the key will
+        # ever hold and it keeps full access to the human's account for its
+        # whole remaining lifetime (measured: 3600s). `/auth/revoke` can live
+        # with that ambiguity because it hands the caller a replacement token
+        # that must survive its own watermark; unlink returns no token, so it
+        # has nothing to preserve and simply covers the whole second. That is
+        # what makes spec §6.3 / §15.4 — "an unlinked key's tokens stop
+        # verifying" — literally true rather than true-except-for-one-second.
+        config.revocation_store&.revoke_all(agent_id, at: Time.now.to_i + 1)
         config.assistant_unlinked&.call(agent: agent_id, user_id: user_id)
         { agent_id: agent_id }
       end

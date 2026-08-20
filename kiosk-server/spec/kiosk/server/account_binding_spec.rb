@@ -418,5 +418,40 @@ RSpec.describe Kiosk::Server::AccountBinding do
       expect { described_class.unlink!(agent_id: "", user_id: user_id) }
         .to raise_error(Kiosk::Server::Errors::BadRequest, /agent_id/)
     end
+
+    # K-835. Spec §6.3/§15.4 promise that an unlinked key's tokens STOP
+    # VERIFYING — with no "except one" attached. The store compares
+    # `iat < watermark` on second-resolution JWT timestamps, so a watermark of
+    # `Time.now.to_i` leaves the current second uncovered; because unlink also
+    # 404s `/auth/login`, a token that slips through is the LAST one the key
+    # will ever hold and it works for its full remaining lifetime (measured on
+    # a booted philslist: read + write still 200 at +65s, token lifetime 3600s).
+    # Unlink mints no replacement token, so it can and must cover the whole
+    # second. The two watermarks that DO mint a replacement (`/auth/revoke`,
+    # the claim rebind) keep `Time.now.to_i` on purpose — see RevocationStore.
+    it "stamps the watermark at the NEXT second, so a same-second token is covered too" do
+      route_exec_query(con) { [{ "id" => "agent-1" }] }
+      now = Time.now.to_i
+      allow(Time).to receive(:now).and_return(Time.at(now))
+      stamped = nil
+      allow(Kiosk.configuration.revocation_store)
+        .to receive(:revoke_all) { |_agent, at:| stamped = at }
+
+      described_class.unlink!(agent_id: "agent-1", user_id: user_id)
+
+      expect(stamped).to eq(now + 1)
+    end
+
+    it "revokes a token minted in the same wall-clock second as the unlink" do
+      route_exec_query(con) { [{ "id" => "agent-1" }] }
+      store = Kiosk::Server::RevocationStore.new
+      Kiosk.configure { |c| c.revocation_store = store }
+      now = Time.now.to_i
+
+      # The token the assistant is holding when the human clicks unlink.
+      expect(store.revoked?(agent_id: "agent-1", iat: now)).to be(false)
+      described_class.unlink!(agent_id: "agent-1", user_id: user_id)
+      expect(store.revoked?(agent_id: "agent-1", iat: now)).to be(true)
+    end
   end
 end

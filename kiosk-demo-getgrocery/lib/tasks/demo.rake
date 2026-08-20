@@ -432,9 +432,13 @@ namespace :demo do
     log  = "/tmp/kiosk-getgrocery-claim.log"
     db   = ENV.fetch("KIOSK_GETGROCERY_DB", "kiosk_getgrocery_development")
 
-    # The seeded account holder with the saved card (db/seeds.rb).
-    human_id     = "00000000-0000-0000-0000-000000000042"
-    human_cus_id = "cus_getgrocery_saved_card"
+    # The seeded account holder with the saved card, and her Devise credentials
+    # (db/seeds.rb). The driver signs her in at /users/sign_in before she can
+    # approve anything: since T-066 there is no stub session channel to assert.
+    human_id       = "00000000-0000-0000-0000-000000000042"
+    human_cus_id   = "cus_getgrocery_saved_card"
+    human_email    = "hana@example.com"
+    human_password = "getgrocery-demo-password"
 
     # ── host resolution ────────────────────────────────────────────────
     host = begin
@@ -499,7 +503,8 @@ namespace :demo do
     flow_rb = File.expand_path("../../script/claim_flow.rb", __dir__)
     puts "\n── Running script/claim_flow.rb ──"
     env_str = "SERVER_URL=#{server_url.shellescape} KIOSK_ISSUER=#{kiosk_issuer.shellescape} " \
-              "HUMAN_USER_ID=#{human_id.shellescape}"
+              "HUMAN_USER_ID=#{human_id.shellescape} " \
+              "HUMAN_EMAIL=#{human_email.shellescape} HUMAN_PASSWORD=#{human_password.shellescape}"
     raw = `#{env_str} bundle exec ruby #{flow_rb.shellescape} 2>&1`
     json_line = raw.lines.grep(/^\{/).last
     puts raw.lines.reject { |l| l.start_with?("{") }.join
@@ -513,6 +518,7 @@ namespace :demo do
     check.call("standalone register → 201",                        result["http_register"] == 201)
     check.call("standalone payment_setup → setup_required (no card)", result["standalone_payment_setup"] == [200, "setup_required"])
     check.call("device_authorization carries the RFC 8628 fields",  result["da_fields"] == true)
+    check.call("human signed in through the REAL /users/sign_in form", result["human_signed_in"] == true)
     check.call("human approve on the verify page → 200",            result["approve"] == 200)
     check.call("REBIND: agent_id stable across the claim",          result["agent_id_stable"] == true)
     check.call("REBIND: user_id remapped to the human",             result["rebound_user"] == true)

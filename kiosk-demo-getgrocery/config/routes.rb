@@ -1,7 +1,14 @@
 # frozen_string_literal: true
 
 Rails.application.routes.draw do
+  # Human sign-in (Devise) — the web session that approves assistant links.
+  # The sessions controller is overridden ONLY to answer a JSON-shaped
+  # `DELETE /users/sign_out` with the Kiosk error envelope instead of a bodyless
+  # 401 (K-533); every other Devise behaviour is inherited untouched.
+  devise_for :users, controllers: { sessions: "users/sessions" }
+
   # Human storefront + the agent hook ("Agents → Kiosk here") on the homepage.
+  # Devise needs this as its post-sign-in destination too.
   root "home#index"
 
   # Kiosk wire surface (controllers shipped by kiosk-server).

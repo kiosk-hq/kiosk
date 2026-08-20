@@ -408,7 +408,9 @@ ALTER SEQUENCE public.stripe_customers_id_seq OWNED BY public.stripe_customers.i
 CREATE TABLE public.users (
     id uuid DEFAULT gen_random_uuid() NOT NULL,
     created_at timestamp(6) without time zone NOT NULL,
-    updated_at timestamp(6) without time zone NOT NULL
+    updated_at timestamp(6) without time zone NOT NULL,
+    email character varying,
+    encrypted_password character varying DEFAULT ''::character varying NOT NULL
 );
 
 
@@ -772,6 +774,13 @@ CREATE UNIQUE INDEX index_stripe_customers_on_user_id ON public.stripe_customers
 
 
 --
+-- Name: index_users_on_email; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE UNIQUE INDEX index_users_on_email ON public.users USING btree (email);
+
+
+--
 -- Name: agent_mappings agent_mappings_agent_id_fkey; Type: FK CONSTRAINT; Schema: kiosk; Owner: -
 --
 
@@ -866,6 +875,7 @@ INSERT INTO "schema_migrations" (version) VALUES
 ('20260820130112'),
 ('20260805000002'),
 ('20260805000001'),
+('20260718000001'),
 ('20260630000001'),
 ('20260618131462'),
 ('20260101000000');

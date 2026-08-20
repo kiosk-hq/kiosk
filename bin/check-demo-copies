@@ -300,17 +300,6 @@ COPIES = {
     why:  "Composite IdP: Kiosk-issued JWTs first, StubIdp's synthetic shape as fallback. Per-demo " \
           "prose only.",
   },
-  "app/services/stub_user_idp.rb" => {
-    rule:   :code,
-    except: {
-      "stylish" => "not the same component: stylish authenticates a STAFF human by X-Staff-Session " \
-                   "against the users table (it ships a real Devise UI), where the other three " \
-                   "parse an unsigned `user:u-<uuid>` bearer because they have no human login. " \
-                   "Shares the filename and the Kiosk::Identity return type, nothing else.",
-    },
-    why:  "DEV/TEST user-IdP — the 'provider's own web session' channel the human-approval " \
-          "surfaces authenticate through (K-555).",
-  },
   "app/services/stub_psp.rb" => {
     rule: :code,
     why:  "Controllable payment-provider stub for the pay-path flows. Per-demo prose only.",

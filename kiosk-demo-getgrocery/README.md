@@ -123,6 +123,8 @@ seeded `stripe_customers` mapping served by the mock's card fixture, so no
 real customer exists to charge.
 
 The human side of the claim ceremony (verify page, link mint, unlink)
-authenticates through a stub web-session channel (`app/services/stub_user_idp.rb`) —
-this demo ships no human login UI. See kiosk-demo-stylish for the same
-ceremony over real Devise sessions.
+authenticates through a **real Devise session** — `kiosk-user-idp-devise`
+reading the Warden user, the same channel every other demo uses. The seeded
+shopper `hana@example.com` signs in at `/users/sign_in`, and `demo:claim`
+drives that form rather than asserting a bearer. Assistants never touch this
+channel — kiosk-pop key possession is their only credential.

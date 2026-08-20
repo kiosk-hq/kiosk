@@ -387,7 +387,7 @@ module Kiosk
       # store a MULTI-PROCESS operator must configure so that PoW single-use
       # holds across web workers (K-738).
       #
-      # This is deliberately NOT one of the ten canonical migrations and the
+      # This is deliberately NOT one of the six canonical migrations and the
       # `kiosk:install` generator does not lay it down: the shipped default
       # store is in-process ({PowSpentStore}) and a single-process operator
       # needs no table at all. An operator raising `WEB_CONCURRENCY` above 1

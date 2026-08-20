@@ -155,7 +155,7 @@ assertions cannot go ungated and unexplained.
 
 | Path | What's there |
 |---|---|
-| `db/migrate/` | The pruned canonical kiosk migrations (schema, identity, actions_log, device_authorizations, governance columns) — **no** reservations/mandates/settlements — plus `categories` + `listings` |
+| `db/migrate/` | The canonical `kiosk.*` migrations the install generator emits, unpruned (schema, identity tables, reservations, device_authorizations, mandates, kyc_attributes) — philslist takes no money and gates on no attestation, so the payment and KYC tables sit EMPTY here rather than being edited out — plus `categories` + `listings` |
 | `app/models/{user,category,listing}.rb` | `User` is the account principal and `database_authenticatable`; `Listing.owner_id` is the load-bearing isolation predicate |
 | `config/initializers/kiosk.rb` | `Kiosk.configure` (NO `payment_provider`) — configuration only; it names the two handler controllers, it does not contain them |
 | `app/controllers/kiosk/board_controller.rb` | The `browse_listings` / `my_listings` queries — an ordinary Rails controller with `include Kiosk::Query`, declared with the class-level macros. Not routable: handlers are reached only through the wire |

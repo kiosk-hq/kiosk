@@ -33,7 +33,7 @@ module Kiosk
       #
       # == Why the table is not in the install generator
       #
-      # The ten canonical migrations are what EVERY operator needs. This table
+      # The six canonical migrations are what EVERY operator needs. This table
       # is needed only above `WEB_CONCURRENCY=1`, so it ships as SQL plus this
       # adapter and the operator adds the one-line migration when they scale
       # out. See the kiosk-server README, "Multi-process deployments".

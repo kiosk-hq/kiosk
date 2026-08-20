@@ -143,7 +143,7 @@ In production these are versioned RubyGems. The `kiosk-pay-stripe` adapter swaps
 rails g kiosk:install
 ```
 
-This emits exactly two things: `config/initializers/kiosk.rb` (a `Kiosk.configure` block) and the nine `kiosk.*` schema migrations (the namespace with agents, sessions, actions-log, reservations, device-authorizations, mandate tables, plus the KYC column). Run `bin/rails db:migrate` to apply them.
+This emits exactly two things: `config/initializers/kiosk.rb` (a `Kiosk.configure` block) and the `kiosk.*` schema migrations — the namespace itself, the identity tables (`agents`, `agent_tokens`, `agent_mappings`), `reservations`, `device_authorizations`, the AP2 mandate trail (`intent_mandates`, `cart_mandates`, `payment_mandates`, `settlements`) and `kyc_attributes`, one row per anonymized attribute an attestation granted. Run `bin/rails db:migrate` to apply them.
 
 The generator does **not** touch your routes. `kiosk-server` ships the wire controllers; you mount them yourself. In this demo that block lives in `config/routes.rb`:
 
@@ -433,8 +433,8 @@ end
 This line is load-bearing. The wire reaches a handler through the registry and
 nothing else in the app references these classes, so in development — where
 Rails does not eager-load `app/` — an origin that names none of them serves no
-verbs at all. There is no second way in: `Kiosk::Server::Queries.register` was
-removed in 0.3.
+verbs at all. There is no second way in: `Kiosk::Server::Queries.register`, the block API
+the 0.3 series shipped, was removed in 0.4 and now raises NoMethodError.
 
 **6. Wire a payment-provider adapter**
 

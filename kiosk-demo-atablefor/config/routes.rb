@@ -49,6 +49,13 @@ Rails.application.routes.draw do
   # NO `POST /kiosk/query` or `POST /kiosk/run` — protocol 0.4 deleted the
   # multiplexed pair outright (T-074 = A). Every verb is its own endpoint; the
   # pair that serves them is drawn LAST, at the bottom of this file.
+  # `pay` IS drawn here, and atablefor configures NO payment_provider — the same
+  # unconditional line the engine's own routes drawer lays down, kept so a
+  # hand-mounted host and a mounted engine expose the identical table. It is not
+  # a claim that this origin takes money: discovery drops `pay` from
+  # `capabilities`, `demo:schema` asserts its absence, and the endpoint answers
+  # `403 no payment_provider configured` on the FIRST look — before it asks for
+  # mandates it could never settle (K-800).
   post "/kiosk/pay",                               to: "kiosk/server/wire#pay"
   get  "/kiosk/.well-known/jwks.json",             to: "kiosk/server/jwks#show"
   post "/kiosk/oauth/device_authorization",        to: "kiosk/server/oauth_device_authorization#create"

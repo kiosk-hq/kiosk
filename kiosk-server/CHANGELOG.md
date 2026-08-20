@@ -6,6 +6,8 @@ All notable changes follow [Keep a Changelog](https://keepachangelog.com/en/1.1.
 
 ### Changed
 
+- **A host with no `payment_provider` answers `pay` with the 403 it always promised, before it asks for mandates (K-800).** `pay` is drawn unconditionally by the engine's routes drawer, but `Executor#verb_pay` validated the three mandate arguments ahead of the provider lookup, so an empty POST at a payment-free origin got `400 args.intent_mandate_jws required` — the least informative answer, telling an assistant to sign an AP2 chain that origin could never settle. The provider check now runs first, matching what the route comment and the discovery document have said all along.
+
 - **The u64 index bound is stated inclusively so a double-precision validator cannot refuse a legal proof (K-845).** Written as `exclusiveMaximum: 2**64`, the bound rejected the largest legal index in any reader that parses JSON numbers as IEEE-754 doubles, which rounds `18446744073709551615` onto the excluded `2**64` — a third party validating against the published schema would have refused work the reference accepts. The accepted set is unchanged for an exact-integer reader.
 
 - **A PoW proof whose `nonce.indices` carries an out-of-range index is refused by the shape check with a typed 400 (K-839).** The vendored `pow.schema.json` left `indices.items` unbounded though its description said u64; it now carries `minimum: 0, maximum: 2**64 - 1`, matching what `Kiosk::Pow::Equihash.verify` has enforced since K-540. Before, such a proof cleared validation, consumed its challenge id and came back `403 invalid proof of work` with `on_bad_proof` charged; now it is a `400 bad_request` naming the proof shape, and no challenge is spent.

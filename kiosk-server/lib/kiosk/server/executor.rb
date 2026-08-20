@@ -276,13 +276,21 @@ module Kiosk
       #              the instant the capture returns, so its `my_orders` paid
       #              flag never reads false inside this window (K-544/K-545).
       def verb_pay(args)
-        args         = symbolize(args)
-        raw_intent   = args[:intent_mandate_jws]
-        raw_cart     = args[:cart_mandate_jws]
-        raw_payment  = args[:payment_mandate_jws]
-        raise Errors::BadRequest, "args.intent_mandate_jws required"   if raw_intent.nil?  || raw_intent.to_s.empty?
-        raise Errors::BadRequest, "args.cart_mandate_jws required"     if raw_cart.nil?    || raw_cart.to_s.empty?
-        raise Errors::BadRequest, "args.payment_mandate_jws required"  if raw_payment.nil? || raw_payment.to_s.empty?
+        args = symbolize(args)
+
+        # ── THE ORIGIN ANSWERS BEFORE THE ARGUMENTS DO (K-800) ───────────────
+        # `pay` is drawn on every mounted host, provider or no provider, and
+        # {Engine}'s own route comment promises that a host with no
+        # payment_provider "answers it with the wire's own 403". It did not:
+        # the three mandate guards below ran FIRST, so an empty POST at a
+        # payment-free origin came back `400 args.intent_mandate_jws required`
+        # — an instruction to go and sign three mandates, issued by an origin
+        # that could never settle them. Whether this origin does payments at
+        # all is a fact about the ORIGIN, so it is answered before anything
+        # about the request is looked at, and the least informative answer
+        # stops winning.
+        provider = Kiosk.configuration.payment_provider
+        raise Errors::Forbidden, "no payment_provider configured" if provider.nil?
 
         # Payment is agent-only: the AP2 mandate chain is signed by the agent's
         # payment key. A non-agent principal (e.g. a web/mobile user_idp session,
@@ -293,8 +301,12 @@ module Kiosk
           raise Errors::Forbidden, "payment requires an agent identity (mandates are agent-signed)"
         end
 
-        provider = Kiosk.configuration.payment_provider
-        raise Errors::Forbidden, "no payment_provider configured" if provider.nil?
+        raw_intent   = args[:intent_mandate_jws]
+        raw_cart     = args[:cart_mandate_jws]
+        raw_payment  = args[:payment_mandate_jws]
+        raise Errors::BadRequest, "args.intent_mandate_jws required"   if raw_intent.nil?  || raw_intent.to_s.empty?
+        raise Errors::BadRequest, "args.cart_mandate_jws required"     if raw_cart.nil?    || raw_cart.to_s.empty?
+        raise Errors::BadRequest, "args.payment_mandate_jws required"  if raw_payment.nil? || raw_payment.to_s.empty?
 
         # Pre-check: if the provider knows the principal has no saved payment
         # method, return a clean 402 NOW — before Phase 1 persists anything.

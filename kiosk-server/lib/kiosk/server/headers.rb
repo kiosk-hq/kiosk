@@ -45,7 +45,11 @@ module Kiosk
       #     genuinely identity-independent payload be served
       #     `private, max-age=N`, which is also how an assistant's own cache
       #     saves a toll: a fresh cached response is never re-requested and
-      #     therefore never re-challenged.
+      #     therefore never re-challenged. Reachable from a handler since
+      #     K-823 — {HandlerDispatch} carries the handler's own
+      #     `Cache-Control` out to here.
+      #   * `Cache-Control` NAMING A SHARED CACHE — refused. See
+      #     {.shared_cacheable?} below.
       #
       # @param headers [Hash] the response headers to mutate
       # @param status  [Integer] the HTTP status being rendered
@@ -54,12 +58,69 @@ module Kiosk
         missing = WIRE_VARY.reject { |t| present.any? { |p| p.casecmp?(t) } }
         headers["Vary"] = (present + missing).join(", ")
 
+        operator = headers["Cache-Control"].to_s
         if status.to_i == 402
           headers["Cache-Control"] = "no-store"
-        elsif headers["Cache-Control"].to_s.empty?
+        elsif operator.empty?
+          headers["Cache-Control"] = "private, no-store"
+        elsif shared_cacheable?(operator)
+          refuse_shared_cache(operator)
           headers["Cache-Control"] = "private, no-store"
         end
         headers
+      end
+
+      # §3.7.3, ENFORCED RATHER THAN MERELY UNBREAKABLE (K-823).
+      #
+      # "An operator MUST NOT send `public` or `s-maxage` on a verb response.
+      # Shared caching of an identity-scoped payload is a cross-tenant leak."
+      # Until K-823 nothing enforced this and nothing needed to: the seam
+      # discarded every header a handler set, so the prohibition held by
+      # accident — and §3.7.4's neighbouring `MAY` was unreachable for the same
+      # accident. Now that a handler's `Cache-Control` reaches the wire, the
+      # permission and the prohibition arrive by the same road and the second
+      # has to be a real check.
+      #
+      # IT REFUSES THE VALUE RATHER THAN EDITING IT. Stripping `public` out of
+      # `public, max-age=600` would hand back `private, max-age=600` — a policy
+      # nobody wrote, guessing that a handler which asked for a shared cache
+      # meant a private one of the same length. This seam does not guess
+      # anywhere else (see {HandlerDispatch#wire_error}, which refuses to pick
+      # between two error codes that share a status), so it does not guess
+      # here: the wire's own `private, no-store` applies and the operator is
+      # TOLD, once per offending response, with the value they sent.
+      #
+      # THE LIST IS RFC 9111 §3.5's, WHICH IS ONE LONGER THAN §3.7.3's.
+      # The spec names `public` and `s-maxage`, and says in its own words that
+      # it states the prohibition "rather than relying on the default in
+      # RFC 9111 Section 3.5". That default is: a shared cache MUST NOT reuse a
+      # response to a request carrying `Authorization` UNLESS the response
+      # names one of `public`, `s-maxage` **or `must-revalidate`**. Every verb
+      # request carries `Authorization` (there is no anonymous verb — §3.2), so
+      # those three directives are exactly the set that opens the door, and the
+      # third is as much of a cross-tenant leak as the other two. Blocking it
+      # is stricter than the published sentence and violates nothing in it:
+      # §3.7.4's `MAY` names `private, max-age=N` and nothing else. Whether the
+      # SPEC should name the third is a normative-text question, not this
+      # seam's — filed as K-826.
+      SHARED_CACHE_DIRECTIVES = /\b(?:public|s-maxage|must-revalidate)\b/i
+
+      def self.shared_cacheable?(cache_control)
+        SHARED_CACHE_DIRECTIVES.match?(cache_control.to_s)
+      end
+
+      def self.refuse_shared_cache(value)
+        message =
+          "[kiosk-server] refused a shared-cache policy on a wire response: " \
+          "Cache-Control: #{value.inspect}. Spec §3.7.3 forbids `public` and " \
+          "`s-maxage` on a verb response, and RFC 9111 §3.5 adds " \
+          "`must-revalidate` to the directives that let a shared cache reuse " \
+          "an answer to an authenticated request — the payload is scoped to " \
+          "one identity, so any of the three would hand it to another caller. " \
+          "Sent `private, no-store` instead; `private, max-age=N` is the " \
+          "relaxation §3.7.4 allows."
+        logger = ::Rails.logger if defined?(::Rails) && ::Rails.respond_to?(:logger)
+        logger ? logger.warn(message) : warn(message)
       end
 
       # ── THE WRITTEN EXCEPTION to the policy above (T-094, K-804) ─────────

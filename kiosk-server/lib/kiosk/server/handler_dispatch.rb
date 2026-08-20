@@ -94,12 +94,47 @@ module Kiosk
       #   registered as an anonymous class.
       def controller_name = @controller.is_a?(String) ? @controller : @controller.name
 
+      # ── What the SUB-RESPONSE's headers do (K-823) ───────────────────────
+      #
+      # Exactly one of them survives the seam, and it is named rather than
+      # inferred: `Cache-Control`, on a 2xx. Spec §3.7.4 grants the operator
+      # one permission about a wire response's headers — "the default for a
+      # `200` is `private, no-store`; an operator MAY relax it to `private,
+      # max-age=N` for a genuinely identity-independent payload" — and on the
+      # 0.4 per-verb wire the only code an operator writes is a handler, so a
+      # seam that dropped every sub-response header made that published
+      # permission unreachable by anybody. It read
+      # `status, _headers, body = …` and that underscore WAS the bug.
+      #
+      # WHY THE LIST IS ONE ENTRY AND NOT "EVERYTHING THE HANDLER SET".
+      # The sub-request is BUILT here, not received: {#build_env} copies the
+      # caller's `HTTP_*` headers in, so Rails' own
+      # `ActionController::Rendering#_set_vary_header` stamps `Vary: Accept` on
+      # the handler's render — a header the handler never wrote and that would
+      # be false on the wire, where the answer is JSON whatever the caller
+      # asked for. A blanket copy would import that, plus `Content-Type`,
+      # `ETag` and `Content-Length` computed for a body the wire re-serialises.
+      # So the rule is the spec's rule: the operator gets a say over exactly
+      # what §3.7 gives them a say over.
+      #
+      # 2xx ONLY, and that is §3.7.4's own scope: a non-2xx render does not
+      # return from here at all, it becomes an {Errors::Base} in {#decode},
+      # and a refusal's cache policy belongs to the wire (a 402's `no-store`
+      # is the one directive §3.7.2 says an operator cannot relax).
+      #
+      # §3.7.3's `MUST NOT send public or s-maxage` is NOT enforced here.
+      # It is enforced at the render seam, in {Headers.add_cache_policy}, so
+      # that the one place a wire `Cache-Control` is decided is also the one
+      # place the prohibition is applied — whatever route the value arrived by.
+      PROPAGATED_HEADERS = %w[Cache-Control].freeze
+
       def call(args = {})
         controller = resolve_controller
         gate!(controller)
 
         env = build_env(controller, args)
-        status, _headers, body = controller.action(@method_name).call(env)
+        status, headers, body = controller.action(@method_name).call(env)
+        publish_headers(status, headers)
         payload = decode(status, read_body(body))
 
         env[PAGE_KEY] ? paginate(payload) : payload
@@ -112,6 +147,25 @@ module Kiosk
       end
 
       private
+
+      # Copies {PROPAGATED_HEADERS} out of the sub-response into the sink the
+      # wire opened on {CurrentRequest}. No sink means nobody is serving a wire
+      # request — a direct {Executor} call or an RLS journey test — and then
+      # this is a no-op rather than an error.
+      #
+      # Rack 3 down-cases response header names and ActionDispatch hands back a
+      # case-insensitive `Rack::Headers`, but a controller built on a plain
+      # Hash (specs, Metal) does not, so both spellings are asked for.
+      def publish_headers(status, headers)
+        sink = CurrentRequest.handler_headers
+        return if sink.nil? || headers.nil?
+        return unless status >= 200 && status < 300
+
+        PROPAGATED_HEADERS.each do |name|
+          value = headers[name] || headers[name.downcase]
+          sink[name] = value.to_s unless value.nil? || value.to_s.empty?
+        end
+      end
 
       def resolve_controller
         return @controller unless @controller.is_a?(String)

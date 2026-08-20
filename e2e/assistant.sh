@@ -540,8 +540,30 @@ cache_headers=$(curl -sS -o /dev/null -D - "$SERVER_URL/kiosk/salons" \
   -H "Authorization: Bearer $ALICE_AGENT_TOKEN")
 assert "Vary names both request headers" \
   "$(echo "$cache_headers" | grep -ic '^Vary: Authorization, Kiosk-PoW')" "1"
-assert "a 200 defaults to private, no-store" \
-  "$(echo "$cache_headers" | grep -ic '^Cache-Control: private, no-store')" "1"
+
+# §3.7.4 (matrix SPEC-016), ON A BOOTED ORIGIN — "an operator MAY relax a 200
+# to `private, max-age=N` for a payload that is genuinely identity-independent
+# — a public catalogue, say". `salons` IS that catalogue and its handler now
+# says so; the value reaches the wire only because K-823 stopped the dispatch
+# seam from discarding a handler's response headers, so this line is the proof
+# that a published permission is exercisable rather than decorative.
+#
+# The SPELLING is Rails': ActionDispatch parses `Cache-Control` and regenerates
+# it on commit in its own directive order, so the handler's `private,
+# max-age=60` leaves as `max-age=60, private`. Same directives; RFC 9111 gives
+# their order no meaning.
+assert "a handler MAY relax its own 200 (§3.7.4) — the public catalogue does" \
+  "$(echo "$cache_headers" | grep -ic '^Cache-Control: max-age=60, private')" "1"
+assert "…and never says public or s-maxage while doing it (§3.7.3)" \
+  "$(echo "$cache_headers" | tr -d '\r' | grep -i '^Cache-Control:' | grep -Ec 'public|s-maxage')" "0"
+
+# THE CONTROL, and it is the one that matters: a per-principal payload keeps
+# the default. Without it "the wire honours a handler's Cache-Control" would
+# pass just as well on a build that had stopped applying any policy at all.
+mine_cache_headers=$(curl -sS -o /dev/null -D - "$SERVER_URL/kiosk/my_appointments" \
+  -H "Authorization: Bearer $ALICE_AGENT_TOKEN")
+assert "…while an identity-scoped 200 keeps private, no-store" \
+  "$(echo "$mine_cache_headers" | grep -ic '^Cache-Control: private, no-store')" "1"
 
 # T-092, on the wire rather than in the document. `salons` does not paginate,
 # so its answer is COMPLETE: the wire states the matching total (which for a

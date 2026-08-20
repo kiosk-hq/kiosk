@@ -42,7 +42,7 @@ RSpec.describe Kiosk::Server::VerbController do
 
   # One per-verb request. `action` is :show for a GET, :create for a POST;
   # `kiosk_verb` is the path segment the router would have captured.
-  def call_verb(method, name, query: nil, body: nil, auth: true)
+  def call_verb(method, name, query: nil, body: nil, auth: true, accept: nil)
     path   = "/kiosk/#{name}#{query ? "?#{query}" : ""}"
     action = method == :get ? :show : :create
     opts   = { method: method.to_s.upcase }
@@ -51,6 +51,9 @@ RSpec.describe Kiosk::Server::VerbController do
       opts["CONTENT_TYPE"] = "application/json"
     end
     opts["HTTP_AUTHORIZATION"] = "Bearer #{token}" if auth
+    # Rack::MockRequest sends no `Accept` by default; a real assistant does,
+    # and it is the input Rails' `_set_vary_header` keys off (K-823).
+    opts["HTTP_ACCEPT"] = accept if accept
 
     env = Rack::MockRequest.env_for(path, **opts)
     env["action_dispatch.request.path_parameters"] =
@@ -268,19 +271,34 @@ RSpec.describe Kiosk::Server::VerbController do
     end
 
     it "not even when the handler tried to set a policy of its own" do
-      # The handler's OWN `Cache-Control` never reaches the wire at all:
-      # {HandlerDispatch} discards the sub-response's headers
-      # (`status, _headers, body = …`), so whatever a handler writes here is
-      # replaced by the seam's default. That makes the MUST-NOT unbreakable
-      # from inside a handler — and it also makes §3.7.4's "an operator MAY
-      # relax a 200 to private, max-age=N" unreachable from one, which is a
-      # separate question and is filed as K-823 rather than settled here.
+      # Since K-823 a handler's `Cache-Control` DOES reach the wire (see the
+      # block below), so this is no longer true by accident — the value is
+      # carried out of the sub-dispatch and then REFUSED by
+      # {Headers.add_cache_policy}, which is the only place a wire cache
+      # policy is decided. Refused, not edited: `public, s-maxage=600` does
+      # not become `private, max-age=600`, because nobody wrote that.
       declare_query("salons") do
         response.headers["Cache-Control"] = "public, s-maxage=600"
         render json: [{ id: 1 }]
       end
       call_verb(:get, "salons")
       expect_no_shared_caching(last_headers["Cache-Control"])
+      expect(last_headers["Cache-Control"]).to eq("private, no-store")
+    end
+
+    it "not when only `public` is named, and not when only `s-maxage` is" do
+      # Each directive on its own — a regex that only matched the pair, or
+      # only the exact string the example above sends, would pass that example
+      # and let either half through alone.
+      ["public", "s-maxage=600", "PUBLIC, max-age=30", "max-age=30, s-maxage=90"]
+        .each do |policy|
+          declare_query("salons") do
+            response.headers["Cache-Control"] = policy
+            render json: [{ id: 1 }]
+          end
+          call_verb(:get, "salons")
+          expect(last_headers["Cache-Control"]).to eq("private, no-store"), policy
+        end
     end
 
     it "not on a refusal" do
@@ -296,6 +314,77 @@ RSpec.describe Kiosk::Server::VerbController do
       status, headers, = Kiosk::Server::WireController.action(:schema).call(env)
       expect(status).to eq(200)
       expect(headers["Cache-Control"]).to match(/\bpublic\b/)
+    end
+  end
+
+  # §3.7.4 (matrix SPEC-016), the neighbouring MAY: "the default for a `200`
+  # is `private, no-store`; an operator MAY relax it to `private, max-age=N`
+  # for a genuinely identity-independent payload". K-823: that permission was
+  # UNREACHABLE — {HandlerDispatch} read `status, _headers, body` and dropped
+  # the sub-response's headers, so the only code an operator writes on this
+  # wire could not exercise the only cache permission the spec grants them.
+  # {Headers.add_cache_policy}'s "an operator who has already set one keeps
+  # it" branch was unit-tested and could not be reached through a request.
+  describe "an operator MAY relax a 200's cache policy from a handler (§3.7.4)" do
+    it "keeps `private, max-age=N` the handler set" do
+      declare_query("salons") do
+        response.headers["Cache-Control"] = "private, max-age=600"
+        render json: [{ id: 1 }]
+      end
+      expect(call_verb(:get, "salons").first).to eq(200)
+      # SPELLED THE WAY IT IS EMITTED, not the way the handler wrote it:
+      # ActionDispatch parses `Cache-Control` and REGENERATES it on commit in
+      # its own directive order, so `private, max-age=600` leaves as
+      # `max-age=600, private`. Same directives, and RFC 9111 gives their
+      # order no meaning — {Headers::PUBLIC_SHORT} is written in that order
+      # for the same reason.
+      expect(last_headers["Cache-Control"]).to eq("max-age=600, private")
+    end
+
+    it "and the default still applies to a handler that sets nothing" do
+      declare_query("salons") { render json: [{ id: 1 }] }
+      call_verb(:get, "salons")
+      expect(last_headers["Cache-Control"]).to eq("private, no-store")
+    end
+
+    it "on an ACTION as well as a query" do
+      declare_action("book_appointment") do
+        response.headers["Cache-Control"] = "private, max-age=30"
+        render json: { id: 1 }
+      end
+      expect(call_verb(:post, "book_appointment", body: "{}").first).to eq(200)
+      expect(last_headers["Cache-Control"]).to eq("max-age=30, private")
+    end
+
+    it "NOT on a refusal: a 4xx keeps the wire's own policy" do
+      # §3.7.4 speaks about a `200`, and {HandlerDispatch} only publishes the
+      # sub-response's headers on a 2xx. A handler that renders 403 with a
+      # long freshness would otherwise make its own refusal cacheable.
+      declare_query("salons") do
+        response.headers["Cache-Control"] = "private, max-age=600"
+        render json: { error: { code: "forbidden", message: "no" } }, status: 403
+      end
+      expect(call_verb(:get, "salons").first).to eq(403)
+      expect(last_headers["Cache-Control"]).to eq("private, no-store")
+    end
+
+    # WHY THE PROPAGATION LIST HAS EXACTLY ONE ENTRY, measured rather than
+    # asserted. The sub-request is built from the wire request, `HTTP_ACCEPT`
+    # included, so Rails' own `_set_vary_header` stamps `Vary: Accept` on the
+    # handler's render. A blanket copy of the sub-response's headers would
+    # import that onto the wire, where it is false — the answer is JSON
+    # whatever the caller asked for — and would split a cache by Accept string
+    # for nothing. The first expectation proves Rails really does it; the
+    # second proves the seam does not carry it.
+    it "does not carry the `Vary` Rails synthesises on the sub-render" do
+      seen = nil
+      declare_query("salons") do
+        render json: [{ id: 1 }]
+        seen = response.headers["Vary"]
+      end
+      call_verb(:get, "salons", accept: "application/json")
+      expect(seen).to eq("Accept")
+      expect(last_headers["Vary"]).to eq("Authorization, Kiosk-PoW")
     end
   end
 

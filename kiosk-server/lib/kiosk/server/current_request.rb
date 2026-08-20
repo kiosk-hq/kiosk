@@ -33,9 +33,16 @@ module Kiosk
       # Runs `block` with `identity` / `env` visible to handlers. Restores the
       # previous values (nesting is safe; an inner `with` that omits a value
       # BLANKS it rather than inheriting it — pass it through explicitly).
-      def with(identity: nil, env: nil)
+      #
+      # `handler_headers` is the ONE slot that carries data back UP (K-823):
+      # the caller passes a hash it still holds, {HandlerDispatch} writes the
+      # handler's own response headers into it, and the wire reads it after the
+      # block returns. It is here rather than on {Result} for the same reason
+      # `identity` and `env` are: the registry contract is a plain
+      # `callable.call(args)` and there is no room in it for either direction.
+      def with(identity: nil, env: nil, handler_headers: nil)
         previous = Thread.current[KEY]
-        Thread.current[KEY] = { identity: identity, env: env }
+        Thread.current[KEY] = { identity: identity, env: env, handler_headers: handler_headers }
         yield
       ensure
         Thread.current[KEY] = previous
@@ -47,6 +54,11 @@ module Kiosk
       # @return [Hash, nil] the OUTER Rack env (the wire request), never the
       #   handler sub-request's env.
       def env = current[:env]
+
+      # @return [Hash, nil] the sink the wire wants a handler's own response
+      #   headers written into, or nil when nobody is collecting (a direct
+      #   {Executor} call, an RLS journey test).
+      def handler_headers = current[:handler_headers]
 
       def current = Thread.current[KEY] || EMPTY
     end

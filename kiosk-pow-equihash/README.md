@@ -5,7 +5,7 @@ Memory-hard proof-of-work for Kiosk. Default PoW backend.
 Its job is a **cheap-to-verify metered toll**, not a hardware equaliser.
 Equihash is not ASIC- or GPU-proof — it was ASIC'd on Zcash (Antminer Z9/Z15)
 and GPUs solve it well (the Wagner sort/collide parallelises, and it is
-memory-bandwidth-bound). What it buys the provider is a few-KB, ~17 ms
+memory-bandwidth-bound). What it buys the provider is a few-KB, ~18 ms
 `verify` against a solve that costs the client real time and memory, plus an
 `N×PoW` count knob. Abuse resistance comes from reputation and caps
 (PoW = metered pricing, not a hardware wall).
@@ -15,14 +15,15 @@ memory-bandwidth-bound). What it buys the provider is a few-KB, ~17 ms
 |  | Argon2id | Cuckatoo29 | **Equihash (default)** |
 |---|---|---|---|
 | Verify memory | 64 MiB ⚠️ | ~KB | **~KB** |
-| Verify time | ~ms (1 Argon2id) | 42 SipHash + walk (unbenched) | **~17 ms (128 BLAKE2b, Ruby)** |
+| Verify time | ~ms (1 Argon2id) | 42 SipHash + walk (unbenched) | **~18 ms valid / 0.3 ms wrong (Ruby)** |
 | Lever (solve/verify) | tens× | millions× | **millions×** |
 | Dependencies | argon2 gem (C-ext) | Pure Ruby | **Pure Ruby (0 deps)** |
 | Difficulty tuning | D=0..256 (smooth) | edgebits | **N×PoW (discrete)** |
 
 The one property that actually matters for a gateway is **cheap verify**:
 
-- **Asymmetric verify.** A few KB (and ~17 ms, pure Ruby) to check — the
+- **Asymmetric verify.** A few KB (and ~18 ms, pure Ruby — far less for a
+  wrong proof, see below) to check — the
   memory footprint is the point: Argon2id needs 64 MiB to _verify_, so a flood
   of bad proofs is a DoS on the verifier itself — unacceptable for a
   high-throughput endpoint.
@@ -131,14 +132,25 @@ Kiosk::Pow::Equihash.verify(
 ```
 
 Checks performed (in order):
-1. Exactly 2^k distinct, non-negative indices (no floats)
-2. Global XOR of all 2^k leaf hashes = 0 on n bits
-3. Collision tree — at each level j, every group of 2^(j+1) leaves:
-   - has its **XOR cancel** the top (j+1)×n_div bits (Wagner cancellation), and
-   - is in **canonical order**: the left half's first index < the right half's.
+1. Exactly 2^k distinct non-negative indices below 2^64 (no floats)
+2. Collision tree — at each level j, every group of 2^(j+1) leaves:
+   - is in **canonical order**: the left half's first index < the right half's, and
+   - has its **XOR cancel** the top (j+1)×n_div bits (Wagner cancellation)
+3. Global XOR of all 2^k leaf hashes = 0 on n bits
 
-Verification cost: 128 BLAKE2b-256 hashes → ~17 ms (pure Ruby, a few KB;
-measured median at n=168 k=7). A native verifier would be sub-millisecond.
+Verification cost: **~18 ms for a valid proof** (128 BLAKE2b-256 hashes, pure
+Ruby, a few KB; measured median at n=168 k=7). A native verifier would be
+sub-millisecond.
+
+**A wrong proof costs far less, deliberately.** The list above is also the
+evaluation ORDER, cheapest first, and the leaf hashes are computed one at a
+time as the tree folds — so verification stops at the first tree node that does
+not cancel. Rubbish indices are rejected without a single hash (0.012 ms
+measured); rubbish that is at least well-ordered stops after two hashes
+(0.30 ms). Every one of those used to cost the full 18.7 ms, which mattered
+because `verify` is reachable unauthenticated on `POST /auth/register`: an
+attacker who wants the whole hash loop must now hand over an almost-complete
+solution, against a salt that is fresh per challenge.
 
 ### Verification contract (why it is XOR-cancellation, not prefix-equality)
 
@@ -206,7 +218,7 @@ Python path is an order of magnitude slower. These numbers are the honest-client
 *floor* (slowest participant): a native or GPU solver is faster, since Equihash
 parallelises well — which is exactly why the security story is verify-asymmetry
 + reputation, not hardware parity. A provider that needs faster
-honest solves lowers `n`; the Ruby verifier stays ~17 ms either way.
+honest solves lowers `n`; the Ruby verifier stays ~18 ms either way.
 
 See `solve.py` for the implementation.
 

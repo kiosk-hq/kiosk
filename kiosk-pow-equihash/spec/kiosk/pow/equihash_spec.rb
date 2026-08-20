@@ -354,26 +354,7 @@ RSpec.describe Kiosk::Pow::Equihash do
   describe "production params (n=168, k=7) KAT" do
     let(:prod_salt) { "kiosk-eqx-kat-01".b }
     let(:prod_params) { described_class.params(n: 168, k: 7) }
-    let(:prod_indices) do
-      [
-        35635, 443602, 769922, 2841204, 288650, 2534367, 3711384, 4167287,
-        439322, 3579870, 3884016, 4011474, 1469807, 2859441, 1582951, 2663283,
-        175258, 904564, 2551933, 3478559, 2097074, 2914645, 3026485, 3645933,
-        326539, 3134338, 1410867, 3946408, 1215314, 2610863, 1729482, 2563633,
-        215557, 1365296, 3286033, 3379331, 1092666, 2048436, 1956659, 4083619,
-        327630, 966319, 546923, 3597822, 1019737, 3289324, 2515996, 4102785,
-        352766, 2643465, 2237387, 3118040, 1365775, 3292860, 1484813, 2325158,
-        1130131, 3785225, 1311199, 1689016, 1154546, 2027634, 2238579, 2294173,
-        47664, 1747214, 1924004, 2999276, 2036646, 2481260, 2187884, 3492692,
-        1006856, 1260610, 1570131, 3646554, 1388645, 2876691, 2128978, 2588422,
-        367435, 513091, 3105269, 4005382, 489985, 629292, 2672040, 2928191,
-        367906, 2335214, 761171, 3386820, 681939, 2064865, 1410874, 1730962,
-        219306, 4024412, 1712945, 3300801, 719958, 3009238, 1383878, 2994505,
-        417321, 3362644, 2678745, 2792851, 2071420, 2778845, 2441747, 4028940,
-        220716, 2282797, 1287422, 1739283, 1064154, 3198198, 3579075, 3590378,
-        228235, 2335503, 1297479, 3907179, 1108349, 2972099, 3417182, 3877732
-      ]
-    end
+    let(:prod_indices) { prod_kat_indices }
 
     it "ACCEPT — the frozen reference solution (canonical order)" do
       expect(described_class.verify(
@@ -428,6 +409,134 @@ RSpec.describe Kiosk::Pow::Equihash do
       expect(described_class.verify(
         salt: "x".b, params: big_params, nonce: { indices: indices }
       )).to be(false)
+    end
+  end
+
+  # ─────────────────────────────────────────────────────────────────────
+  # K-540 — a WRONG proof must not cost what a RIGHT one costs
+  #
+  # `.verify` is reachable UNAUTHENTICATED on POST /auth/register (the PoW
+  # gate runs before PopVerifier), so the price of rejecting rubbish is a
+  # security property, not a micro-optimisation. These specs pin WORK DONE —
+  # the number of BLAKE2b calls — rather than wall-clock, which is what keeps
+  # them stable on a loaded CI box. Before the fix every case below cost the
+  # full 128 hashes (measured 18.7 ms, indistinguishable from a valid proof);
+  # any regression back to eager hashing fails here loudly.
+  # ─────────────────────────────────────────────────────────────────────
+
+  describe "cost of rejecting an invalid proof (K-540)" do
+    let(:big_params)  { described_class.params }            # n=168, k=7
+    let(:cost_salt)   { "kiosk-eqx-kat-01".b }              # the frozen KAT salt
+    let(:solution)    { prod_kat_indices }
+
+    # Run `verify` while tallying every leaf hash it asks for. The stub calls
+    # through, so the verdict under test is the real one.
+    def verify_counting(indices, params:, salt:, extra: {})
+      count    = 0
+      original = described_class.method(:blake2b256)
+      described_class.define_singleton_method(:blake2b256) do |data|
+        count += 1
+        original.call(data)
+      end
+      result = described_class.verify(
+        salt: salt, params: params, nonce: { indices: indices }.merge(extra)
+      )
+      [result, count]
+    ensure
+      described_class.singleton_class.send(:remove_method, :blake2b256)
+      described_class.define_singleton_method(:blake2b256, original)
+    end
+
+    def run(indices, extra: {})
+      verify_counting(indices, params: big_params, salt: cost_salt, extra: extra)
+    end
+
+    it "hashes NOTHING when the indices are not in canonical subtree order" do
+      result, count = run((0...128).to_a.shuffle(random: Random.new(7)))
+
+      expect(result).to be(false)
+      expect(count).to eq(0)
+    end
+
+    it "hashes NOTHING when an index is out of u64 range" do
+      indices = (0...128).to_a
+      indices[127] = (1 << 64) + 5   # still the largest ⇒ ordering still holds
+      result, count = run(indices)
+
+      expect(result).to be(false)
+      expect(count).to eq(0)
+    end
+
+    it "hashes NOTHING when count, type or distinctness fails" do
+      expect(run((0...127).to_a).last).to eq(0)
+      expect(run((0...127).to_a + ["x"]).last).to eq(0)
+      expect(run((0...127).to_a + [126]).last).to eq(0)
+    end
+
+    it "hashes NOTHING when header_nonce is not coercible" do
+      expect(run((0...128).to_a, extra: { header_nonce: "abc" }).last).to eq(0)
+    end
+
+    it "stops after ONE sibling pair (2 hashes) on structurally clean rubbish" do
+      # 0..127 ascending passes count, type, range, distinctness AND every
+      # canonical-ordering comparison — only the hashes can reject it.
+      result, count = run((0...128).to_a)
+
+      expect(result).to be(false)
+      expect(count).to eq(2)
+    end
+
+    it "stops after ONE sibling pair on a real solution that was globally sorted" do
+      result, count = run(solution.sort)
+
+      expect(result).to be(false)
+      expect(count).to eq(2)
+    end
+
+    it "still hashes every leaf for a VALID proof (the toll is not weakened)" do
+      result, count = run(solution)
+
+      expect(result).to be(true)
+      expect(count).to eq(128)
+    end
+
+    # The sharpest form of the property: the verifier stops at the first tree
+    # NODE that fails, not merely the first sibling PAIR. Frozen toy fixture
+    # (salt "k540-dfs", n=8 k=3, indices 0..7) whose two level-0 pairs both
+    # cancel their 2 bits while the height-2 node over leaves 0-3 does not
+    # cancel its 4 — so a verifier that checked all of level 0 before any of
+    # level 1 would hash all 8 leaves, and one that folds the tree hashes 4.
+    # That gap is what forces an attacker who wants the full hash loop to
+    # carry an almost-complete solution instead of 2^(k-1) cheap collisions.
+    it "stops at the first failing tree NODE, not the first failing pair" do
+      salt   = "k540-dfs".b
+      params = described_class.params(n: 8, k: 3)
+      leaves = (0...8).map do |i|
+        described_class.blake2b256(salt + [0].pack("V") + [i].pack("Q<")).getbyte(0)
+      end
+
+      # Premises — asserted so the fixture cannot rot into a vacuous pass.
+      expect((leaves[0] ^ leaves[1]) >> 6).to eq(0), "pair (0,1) must cancel 2 bits"
+      expect((leaves[2] ^ leaves[3]) >> 6).to eq(0), "pair (2,3) must cancel 2 bits"
+      expect((leaves[0] ^ leaves[1] ^ leaves[2] ^ leaves[3]) >> 4).not_to eq(0),
+             "the height-2 node must NOT cancel 4 bits"
+
+      result, count = verify_counting((0...8).to_a, params: params, salt: salt)
+
+      expect(result).to be(false)
+      expect(count).to eq(4)
+    end
+
+    it "rejects a valid solution with 2**64 added to an index, without hashing" do
+      # `pack("Q<")` truncates mod 2**64, so without the range bound this proof
+      # would hash identically to the real one and verify — one solution would
+      # become 2**k spendable restatements.
+      mutated = solution.dup
+      mutated[1] += (1 << 64)
+      result, count = run(mutated)
+
+      expect(result).to be(false)
+      expect(count).to eq(0)
     end
   end
 
@@ -513,6 +622,31 @@ RSpec.describe Kiosk::Pow::Equihash do
       expect(ok).to be(true),
         "Ruby verify rejected the solver's live 168/7 output: #{result["indices"].inspect}"
     end
+  end
+
+  # The frozen production-parameter reference solution (salt "kiosk-eqx-kat-01",
+  # n=168 k=7, header_nonce 0), generated 2026-07-09 by solve.py. Indices are in
+  # Zcash-canonical (subtree) order. Shared by the KAT group and the K-540 cost
+  # group so the two can never drift apart.
+  def prod_kat_indices
+    [
+      35635, 443602, 769922, 2841204, 288650, 2534367, 3711384, 4167287,
+      439322, 3579870, 3884016, 4011474, 1469807, 2859441, 1582951, 2663283,
+      175258, 904564, 2551933, 3478559, 2097074, 2914645, 3026485, 3645933,
+      326539, 3134338, 1410867, 3946408, 1215314, 2610863, 1729482, 2563633,
+      215557, 1365296, 3286033, 3379331, 1092666, 2048436, 1956659, 4083619,
+      327630, 966319, 546923, 3597822, 1019737, 3289324, 2515996, 4102785,
+      352766, 2643465, 2237387, 3118040, 1365775, 3292860, 1484813, 2325158,
+      1130131, 3785225, 1311199, 1689016, 1154546, 2027634, 2238579, 2294173,
+      47664, 1747214, 1924004, 2999276, 2036646, 2481260, 2187884, 3492692,
+      1006856, 1260610, 1570131, 3646554, 1388645, 2876691, 2128978, 2588422,
+      367435, 513091, 3105269, 4005382, 489985, 629292, 2672040, 2928191,
+      367906, 2335214, 761171, 3386820, 681939, 2064865, 1410874, 1730962,
+      219306, 4024412, 1712945, 3300801, 719958, 3009238, 1383878, 2994505,
+      417321, 3362644, 2678745, 2792851, 2071420, 2778845, 2441747, 4028940,
+      220716, 2282797, 1287422, 1739283, 1064154, 3198198, 3579075, 3590378,
+      228235, 2335503, 1297479, 3907179, 1108349, 2972099, 3417182, 3877732
+    ]
   end
 
   def find_python_with_blake2b

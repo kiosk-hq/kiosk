@@ -15,9 +15,15 @@ module Kiosk
     #
     # The solver finds 2^k nonces whose BLAKE2b-256(seed ‖ nonce) outputs
     # XOR to zero in the first n bits AND form a valid collision tree
-    # (Wagner's algorithm).  The verifier recomputes 2^k hashes and checks
-    # both conditions — ~17 ms (pure Ruby, 128 BLAKE2b at the default
-    # params), ~KB of memory.
+    # (Wagner's algorithm).  The verifier recomputes up to 2^k hashes and
+    # checks both conditions — ~18 ms for a VALID proof (pure Ruby, 128
+    # BLAKE2b at the default params), ~KB of memory.
+    #
+    # A WRONG proof costs far less: the checks run cheapest-first and the
+    # hashing is lazy, so a proof that fails on structure never hashes at all
+    # and one that fails on its first sibling pair stops after 2 hashes
+    # (~0.3 ms). That gap is deliberate — .verify is reachable
+    # unauthenticated on `POST /auth/register` (K-540).
     #
     # == Wire API
     #
@@ -25,10 +31,11 @@ module Kiosk
     #   { indices: [128 u64 integers in Zcash-canonical tree order] }
     # (canonical order, NOT a global sort — see #verify).
     #
-    # `verify(salt:, params:, nonce:)` recomputes 128 BLAKE2b-256 hashes,
-    # extracts n bits from each, checks the Wagner collision tree (per-level
-    # XOR cancellation + canonical subtree ordering), and verifies the global
-    # XOR = 0.
+    # `verify(salt:, params:, nonce:)` first checks the indices structurally
+    # (count, type, range, distinctness, canonical subtree ordering — no
+    # hashing at all), then recomputes up to 128 BLAKE2b-256 hashes pair by
+    # pair, extracting n bits from each, checking the Wagner collision tree
+    # level by level and finally the global XOR = 0.
     #
     # == No difficulty target
     #
@@ -49,6 +56,12 @@ module Kiosk
       # Default parameters (benchmark-chosen; see .params and bench/).
       DEFAULT_N = 168
       DEFAULT_K = 7
+
+      # Exclusive upper bound on a solution index. The wire type is a u64 and
+      # `pack("Q<")` truncates a larger Integer mod 2**64 instead of raising,
+      # so the bound has to be stated here or `idx` and `idx + 2**64` would be
+      # two distinct indices sharing one hash (K-540 range pre-check).
+      MAX_INDEX = 1 << 64
 
       # Absolute path of the reference Python solver, +solve.py+, as shipped
       # INSIDE this gem's package (it is listed in the gemspec's spec.files).
@@ -208,20 +221,45 @@ module Kiosk
         expected_len = 1 << k  # 2^k
         return false unless indices.length == expected_len
 
-        # Indices must be distinct non-negative integers. Their ORDER is NOT a
-        # global sort — a genuine Wagner solution's canonical order is not
-        # ascending. Ordering is enforced structurally below (Zcash subtree
-        # rule: at each tree node the left half's first index precedes the
-        # right half's), which also rules out trivial reorderings.
+        # Indices must be distinct non-negative integers below 2**64 — the wire
+        # type is a u64 (see the module docstring). Their ORDER is NOT a global
+        # sort — a genuine Wagner solution's canonical order is not ascending;
+        # ordering is enforced structurally in Step 2 (Zcash subtree rule).
         #
         # Reject any element that is not a plain Integer (nil, String, Float,
         # …) rather than coercing — a malformed index means a malformed proof,
         # which must return false, never raise.
-        return false unless indices.all? { |idx| idx.is_a?(Integer) && idx >= 0 }
+        #
+        # The upper bound is not decoration: `pack("Q<")` silently truncates a
+        # bignum mod 2**64, so without it `idx` and `idx + 2**64` hash the same
+        # and one solution could be restated as many (K-540 range pre-check).
+        return false unless indices.all? { |idx| idx.is_a?(Integer) && idx >= 0 && idx < MAX_INDEX }
         return false unless indices.uniq.length == expected_len
 
         n_div = n / (k + 1)  # bits per level: 168/8 = 21
         n_bytes = n / 8       # 21 bytes for 168 bits
+
+        # ── Step 2: canonical subtree ORDERING — the cheapest constraint ──────
+        #
+        # Zcash "algorithm binding": at every tree node the left half's first
+        # index precedes the right half's. It rules out trivial reorderings and
+        # pins one canonical form per solution — and it reads ONLY `indices`
+        # (2^k - 1 integer comparisons, no hashing), so it is hoisted ABOVE
+        # every BLAKE2b. `verify` is reachable UNAUTHENTICATED on
+        # `POST /auth/register`, where a check costing microseconds must never
+        # sit behind one costing milliseconds (K-540).
+        level = 0
+        while level < k
+          group_size = 1 << (level + 1)
+          half       = group_size >> 1
+          base       = 0
+          while base < expected_len
+            return false unless indices[base] < indices[base + half]
+
+            base += group_size
+          end
+          level += 1
+        end
 
         # Build the seed: salt bytes ‖ header_nonce as LE u32 (future-proofing).
         # header_nonce defaults to 0 for now; extensibility point.
@@ -237,53 +275,62 @@ module Kiosk
         end
         seed = salt.b + [hn].pack("V")
 
-        # Step 1: Compute all 2^k hashes and extract n bits as integers.
-        hash_vals = indices.map do |idx|
-          h = blake2b256(seed + [Integer(idx)].pack("Q<"))
-          # Take first n_bytes (21 for n=168), convert to big-endian integer.
-          # byte[0] is most significant → matches "first X bits" semantics.
-          h.byteslice(0, n_bytes).unpack("C*").reduce(0) { |acc, b| (acc << 8) | b }
-        end
-
-        # Step 2: Global XOR must be zero on all n bits.
-        xor_all = hash_vals.reduce(0) { |acc, v| acc ^ v }
-        return false unless xor_all == 0
-
-        # Step 3: Verify the Wagner collision tree (Zcash-canonical).
+        # ── Step 3: hash leaf by leaf, folding the Wagner tree as we go ───────
         #
-        # At level j (0-indexed) the solution splits into groups of 2^(j+1)
-        # leaves. For each group:
+        # All 2^k leaf hashes used to be computed up front and only then
+        # checked, so a proof that was wrong in its very first sibling pair
+        # still cost the whole loop — measured 18.7 ms at n=168 k=7,
+        # INDISTINGUISHABLE from a valid proof, which is what made an
+        # unauthenticated register a CPU lever (K-540).
         #
-        #   (a) the XOR of the group's leaf hashes CANCELS the top (j+1)*n_div
-        #       bits — this is how Wagner works (siblings' XOR zeros the block).
-        #       The leaves do NOT share a common prefix; only their XOR does.
-        #   (b) canonical ordering: the left half's first index precedes the
-        #       right half's (Zcash "algorithm binding" — rules out trivial
-        #       reorderings and pins one canonical form per solution).
+        # Instead, fold the tree left-to-right like a binary counter: each new
+        # leaf hash is merged with the completed node to its left, and every
+        # merge is CHECKED THE MOMENT its inputs exist. A node at height h
+        # covers 2^h leaves and its XOR must cancel the top h*n_div bits —
+        # exactly the per-level rule, evaluated depth-first instead of
+        # level-by-level. So the set of accepted proofs is unchanged; only the
+        # moment of rejection moves.
         #
-        # Applied at every level, (a) is equivalent to the classic
-        # generalized-birthday collision tree; combined with Step 2 (the full
-        # n-bit XOR) it fully constrains the solution.
-        (0...k).each do |level|
-          group_size   = 1 << (level + 1)                   # 2, 4, 8, ..., 2^k
-          num_groups   = expected_len / group_size
-          prefix_bits  = (level + 1) * n_div                # 21, 42, ..., k*21
-          prefix_shift = n - prefix_bits
-          half         = group_size / 2
+        # That moment is the whole point. Verification now stops at the FIRST
+        # node that does not cancel, so the hashes a wrong proof can buy are
+        # bounded by how much of a REAL solution it carries: rubbish dies after
+        # 2 hashes, and to make the verifier hash all 2^k leaves an attacker
+        # must supply an almost-complete Wagner solution — against a salt that
+        # is fresh per challenge. Checking level 0 for every pair first would
+        # only have cost them 2^(k-1) cheap collisions.
+        stack = []  # completed subtrees, left to right: [height, xor]
+        i = 0
+        while i < expected_len
+          node   = leaf_hash(seed, indices[i], n_bytes)
+          height = 0
 
-          num_groups.times do |g|
-            base = g * group_size
-
-            group_xor = 0
-            group_size.times { |i| group_xor ^= hash_vals[base + i] }
-            return false unless (group_xor >> prefix_shift).zero?
-
-            return false unless indices[base] < indices[base + half]
+          # Merge with equal-height left neighbours, checking each new node.
+          while !stack.empty? && stack.last[0] == height
+            node   ^= stack.pop[1]
+            height += 1
+            return false unless (node >> (n - (height * n_div))).zero?
           end
+
+          stack << [height, node]
+          i += 1
         end
 
-        true
+        # ── Step 4: the root must cancel ALL n bits ──────────────────────────
+        #
+        # The merges above cover the top k*n_div bits; n itself may be wider
+        # (n_div is an integer division), so the full-width XOR is still its
+        # own check. At k=0 there is no tree and this is the only one.
+        stack.last[1].zero?
       end
+
+      # One leaf: BLAKE2b-256(seed ‖ LE64(index)), first `n_bytes` bytes read as
+      # a big-endian integer (byte[0] most significant → "first X bits").
+      # Extracted so {.verify} can hash one leaf at a time.
+      def self.leaf_hash(seed, index, n_bytes)
+        blake2b256(seed + [index].pack("Q<"))
+          .byteslice(0, n_bytes).unpack("C*").reduce(0) { |acc, b| (acc << 8) | b }
+      end
+      private_class_method :leaf_hash
     end
   end
 end

@@ -51,6 +51,8 @@ pow_secret = ENV.fetch("KIOSK_POW_SECRET") do
 end
 raise "KIOSK_POW_SECRET must be at least 32 bytes (got #{pow_secret.bytesize}) — generate one with `openssl rand -hex 32`." if pow_secret.bytesize < 32
 
+require "kiosk/user_identity_providers/devise"
+
 Kiosk.configure do |c|
   c.user_model     = "User"
   c.user_id_type   = :uuid
@@ -90,12 +92,12 @@ Kiosk.configure do |c|
   # same kiosk JWTs, so bound assistants authenticate through the JWT path
   # too. One endpoint authenticates both for the e2e suite.
   c.agent_idp = JwtOrStubIdp.new(stub: Rails.env.local? ? StubIdp.new : nil)
-  # The provider's own web-session channel: authenticates the approving
-  # human on the account-binding pages (device verify, link mint, unlink).
-  # DEV/TEST ONLY (K-555): the stub parses an UNSIGNED, self-asserted
-  # `user:u-<uuid>` bearer, so it is wired only under Rails.env.local? (the
-  # e2e harness boots in development); in production user_idp is nil.
-  c.user_idp = Rails.env.local? ? StubUserIdp.new : nil
+  # The provider's own web-session channel (Devise/Warden): authenticates the
+  # approving human on the account-binding pages (device verify, link mint,
+  # unlink). ONE channel in every environment — this is the shipped
+  # kiosk-user-idp-devise adapter reading the request's Warden user, not a
+  # stand-in, so an adopter reading this harness copies a real wiring (T-066).
+  c.user_idp = Kiosk::UserIdentityProviders::Devise.new
 
   c.payment_provider = StubPsp.new
 

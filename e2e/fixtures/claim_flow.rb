@@ -6,10 +6,21 @@
 # Prints a JSON result line on stdout; the shell asserts each field.
 require "jwt"; require "json"; require "net/http"; require "uri"; require "openssl"; require "securerandom"; require "base64"
 
-SERVER = ENV.fetch("SERVER_URL")
-ISSUER = ENV.fetch("KIOSK_ISSUER")
-HUMAN  = ENV.fetch("HUMAN_USER_ID")   # seeded account holder (alice)
-USER_SESSION = "user:u-#{HUMAN}"      # StubUserIdp web-session channel
+# The human half of this ceremony is a REAL browser session (T-066): there is
+# no stub user-IdP left to hand this driver a `user:u-<uuid>` bearer. The
+# cookie-jar-and-CSRF helper is the demos' single copy — reached here rather
+# than duplicated into e2e/fixtures, because an eighth copy of a mechanism is
+# how the seventh one drifts.
+require_relative "../../kiosk-demo-stylish/lib/devise_session"
+
+SERVER   = ENV.fetch("SERVER_URL")
+ISSUER   = ENV.fetch("KIOSK_ISSUER")
+HUMAN    = ENV.fetch("HUMAN_USER_ID")     # seeded account holder (alice)
+EMAIL    = ENV.fetch("HUMAN_EMAIL")
+PASSWORD = ENV.fetch("HUMAN_PASSWORD")
+
+# Alice's browser, signed in once and held for every human-side call below.
+HUMAN_SESSION = DeviseSession.new(SERVER)
 
 def post_json(url, body, headers = {})
   uri = URI(url)
@@ -57,20 +68,19 @@ results[:da_fields] = %w[device_code user_code verification_uri expires_in inter
 rc, tok = post_form(TOKEN_URL, { grant_type: GRANT, device_code: device_code, signed: pop_proof(key, pem) })
 results[:pending] = [rc, tok["error"]]
 
-# The human approves on the verify page: GET first (session cookie + CSRF
-# token when the host app enforces forgery protection), then POST approve.
-verify_uri = URI("#{SERVER}/kiosk/oauth/device/verify?user_code=#{user_code}")
-show = Net::HTTP.new(verify_uri.host, verify_uri.port)
-               .request(Net::HTTP::Get.new(verify_uri, { "Authorization" => USER_SESSION }))
+# The human signs in through the REAL Devise form, then approves on the verify
+# page: GET first (the page + its CSRF token), then POST approve over the same
+# session. A failed sign-in raises, so `signed_in` is never a wish.
+HUMAN_SESSION.sign_in!(email: EMAIL, password: PASSWORD)
+results[:signed_in] = true
+
+show = HUMAN_SESSION.get_html("/kiosk/oauth/device/verify?user_code=#{user_code}")
 abort "verify page: #{show.code}" unless show.code.to_i == 200
-cookie = Array(show.get_fields("set-cookie")).map { |c| c.split(";").first }.join("; ")
-csrf   = show.body[/name="authenticity_token" value="([^"]+)"/, 1]
 form = { user_code: user_code, decision: "approve" }
-form[:authenticity_token] = csrf if csrf
-headers = { "Authorization" => USER_SESSION }
-headers["Cookie"] = cookie unless cookie.empty?
-rc, = post_form("#{SERVER}/kiosk/oauth/device/verify", form, headers)
-results[:approve] = rc
+if (csrf = HUMAN_SESSION.csrf_token(show.body))
+  form[:authenticity_token] = csrf
+end
+results[:approve] = HUMAN_SESSION.post_form("/kiosk/oauth/device/verify", form).code.to_i
 
 # The BIND-POP gate, at the moment it matters: an APPROVED row polled
 # WITHOUT the possession proof is denied (invalid_client) and stays
@@ -106,14 +116,14 @@ results[:login_bound] = rc
 # ── link flow: the human mints a code, a second assistant redeems it ──
 key2 = OpenSSL::PKey::RSA.generate(2048)
 pem2 = key2.public_key.to_pem
-rc, link = post_json("#{SERVER}/kiosk/auth/link", {}, { "Authorization" => USER_SESSION })
+rc, link = HUMAN_SESSION.post_json("/kiosk/auth/link", {}, { session: true })
 results[:link_mint] = rc
 rc, claim = post_json("#{SERVER}/kiosk/auth/claim",
                       { code: link.fetch("link_code", ""), public_key: pem2, signed: pop_proof(key2, pem2) })
 results[:link_claim] = [rc, claim["user_id"] == HUMAN]
 
 # ── unlink the first assistant: registration-layer revocation ──
-rc, = post_json("#{SERVER}/kiosk/auth/unlink", { agent_id: agent_id }, { "Authorization" => USER_SESSION })
+rc, = HUMAN_SESSION.post_json("/kiosk/auth/unlink", { agent_id: agent_id }, { session: true })
 results[:unlink] = rc
 rc, = post_json("#{SERVER}/kiosk/auth/login", { public_key: pem, signed: pop_proof(key, pem) })
 results[:login_after_unlink] = rc

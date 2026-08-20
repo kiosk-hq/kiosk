@@ -140,6 +140,12 @@ gem "kiosk-rls",           path: "$KIOSK_OSS/kiosk-rls"
 gem "kiosk-server",        path: "$KIOSK_OSS/kiosk-server"
 gem "kiosk-reputation",    path: "$KIOSK_OSS/kiosk-reputation"
 gem "kiosk-pow-equihash",  path: "$KIOSK_OSS/kiosk-pow-equihash"
+gem "kiosk-user-idp-devise", path: "$KIOSK_OSS/kiosk-user-idp-devise"
+
+# Devise backs the HUMAN half of the account-binding ceremony. The adapter above
+# only reads the request's Warden user, so the provider's own Devise install is
+# what satisfies it — which is why both lines are here rather than one (T-066).
+gem "devise"
 
 # json_schemer backs `c.validate_requests = true` in the initializer, which is
 # what makes a verb's declared input_schema EXECUTABLE — the arguments of a
@@ -189,6 +195,10 @@ export SOLVE_PY="$KIOSK_OSS/kiosk-pow-equihash/solve.py"
 mkdir -p db/migrate
 ts1="20260101000000"
 cp "$FIXTURES/create_users.rb" "db/migrate/${ts1}_create_users.rb"
+# 1b) The Devise login columns on that same table. Its timestamp must sort
+# AFTER create_users and BEFORE the generator's (which use Time.now).
+ts1b="20260101000001"
+cp "$FIXTURES/add_devise_columns_to_users.rb" "db/migrate/${ts1b}_add_devise_columns_to_users.rb"
 
 # 2) Generator-produced migrations.
 bundle exec rails g kiosk:install --user-id-type=uuid >/dev/null
@@ -217,7 +227,6 @@ cp "$FIXTURES/bookings_controller.rb" app/controllers/kiosk/bookings_controller.
 # (K-502). `rails new --api` does not create app/services either.
 mkdir -p app/services
 cp "$FIXTURES/stub_idp.rb"           app/services/stub_idp.rb
-cp "$FIXTURES/stub_user_idp.rb"      app/services/stub_user_idp.rb
 cp "$FIXTURES/jwt_or_stub_idp.rb"    app/services/jwt_or_stub_idp.rb
 cp "$FIXTURES/stub_psp.rb"           app/services/stub_psp.rb
 # The operator's audit sink (K-828). Kiosk stores no audit trail — it emits one
@@ -225,6 +234,7 @@ cp "$FIXTURES/stub_psp.rb"           app/services/stub_psp.rb
 # this is that callable, written the way an adopter would write it.
 cp "$FIXTURES/demo_audit_sink.rb"    app/services/demo_audit_sink.rb
 cp "$FIXTURES/initializer_kiosk.rb"  config/initializers/kiosk.rb
+cp "$FIXTURES/devise_initializer.rb" config/initializers/devise.rb
 cp "$FIXTURES/routes.rb"             config/routes.rb
 
 # …and app/services is declared an autoload-ONCE path, which is what lets the
@@ -243,6 +253,20 @@ ruby -e '
   line = "#{indent}config.autoload_once_paths << Rails.root.join(\"app/services\").to_s\n"
   File.write(path, src.sub(anchor) { |m| m + line })
 ' || fail "could not declare app/services as an autoload-once path"
+
+# …and the app leaves api_only behind. The account-binding ceremony runs on a
+# real browser session — the human signs in through the Devise form and the
+# verify/link/unlink surfaces read that session cookie — so cookies, session and
+# flash middleware must be present. `rails new --api` turns them off; this is the
+# one line it takes to turn them back on, and an adopter scaffolding from --api
+# needs to see it. The agent-facing wire controllers stay ActionController::API
+# inside kiosk-server and are unaffected.
+ruby -e '
+  path = "config/application.rb"
+  src  = File.read(path)
+  abort "e2e: could not find config.api_only in #{path}" unless src =~ /^\s*config\.api_only\s*=\s*true\s*$/
+  File.write(path, src.sub(/^(\s*)config\.api_only\s*=\s*true\s*$/) { "#{Regexp.last_match(1)}config.api_only = false" })
+' || fail "could not turn api_only off for the Devise session middleware"
 
 ok "fixtures + generator output staged"
 

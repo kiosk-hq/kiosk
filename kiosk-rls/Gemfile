@@ -4,3 +4,11 @@ gemspec
 
 # Local-development override — kiosk-core hasn't shipped to RubyGems yet.
 gem "kiosk-core", path: "../kiosk-core"
+
+# TEST-ONLY Rails. The gem itself has NO Rails runtime dependency (see the
+# gemspec: pure SQL generation, the host provides `#execute`) and that stays
+# true — but `Kiosk::RLS::Railtie` is the thing that puts the migration verbs
+# on `ActiveRecord::Migration`, and the only honest way to assert that is to
+# hand it a real `Rails::Railtie` and a real `ActiveRecord::Migration` (K-504).
+gem "activerecord", "~> 8.1"
+gem "railties",     "~> 8.1"

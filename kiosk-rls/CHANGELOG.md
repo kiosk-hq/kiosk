@@ -13,6 +13,12 @@ All notable changes follow [Keep a Changelog](https://keepachangelog.com/en/1.1.
 
 ### Added
 
+- `Kiosk::RLS::Railtie` — a Rails host gets the five migration verbs on
+  `ActiveRecord::Migration` from the gem itself. The README used to tell the
+  host to write `ActiveRecord::Migration.include(Kiosk::RLS::DSL)` in an
+  initializer; that is an application patching a framework class on a gem's
+  behalf, and it is gone. Non-Rails hosts still include `Kiosk::RLS::DSL`
+  wherever they answer `#execute(sql)`. (K-504)
 - Initial skeleton.
 - `Kiosk::RLS::Policy` value type (Data class): name, action, using, check; action ∈ {select, insert, update, delete, all}.
 - `Kiosk::RLS::Table` mutable builder used inside `enable_rls_on` blocks.
@@ -24,5 +30,4 @@ All notable changes follow [Keep a Changelog](https://keepachangelog.com/en/1.1.
 ### Out of scope for first release
 
 - `rake kiosk:rls:{show,check}` rake tasks (need PG connection — land later).
-- `ActiveRecord::Migration` auto-injection (`require "kiosk/rls/migration"`).
 - Schema-separated view DSL (`bin/rails g kiosk:view` — deferred to v1.1).

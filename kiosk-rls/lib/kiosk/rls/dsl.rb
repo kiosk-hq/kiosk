@@ -7,10 +7,9 @@ require "kiosk/rls/emitter"
 module Kiosk
   module RLS
     # DSL methods callable from any host that provides `#execute(sql_string)`.
-    # In the canonical Rails case the host is `ActiveRecord::Migration`;
-    # include the module manually (`ActiveRecord::Migration.include(
-    # Kiosk::RLS::DSL)`). A `kiosk/rls/migration` auto-injection require is
-    # planned but not yet shipped — see {Kiosk::RLS}.
+    # In the canonical Rails case the host is `ActiveRecord::Migration`, and
+    # {Kiosk::RLS::Railtie} mixes this module in for you — a Rails app writes
+    # no wiring (K-504). Any other host includes it itself; see {Kiosk::RLS}.
     #
     # The four migration verbs (evolving policies):
     #

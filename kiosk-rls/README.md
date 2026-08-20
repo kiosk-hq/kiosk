@@ -69,12 +69,17 @@ gem "kiosk-rls"
 
 ## Rails integration
 
-Opt in manually in `config/initializers/kiosk_rls.rb`:
+Nothing to wire. The gem ships a railtie (`Kiosk::RLS::Railtie`) that adds the
+five migration verbs to `ActiveRecord::Migration` on boot, so a migration can
+call `enable_rls_on` the moment the gem is in your `Gemfile`. Do **not** put
+`ActiveRecord::Migration.include(Kiosk::RLS::DSL)` in an initializer — the gem
+does that itself, and an application patching a framework class on a gem's
+behalf is a load-order bug waiting to happen.
+
+What *is* yours to configure is the role posture, in
+`config/initializers/kiosk.rb`:
 
 ```ruby
-require "kiosk/rls"
-ActiveRecord::Migration.include(Kiosk::RLS::DSL)
-
 Kiosk.configure do |c|
   c.app_role        = "app_role"      # lives in kiosk-core config
   c.system_role     = "system_role"   # added by this gem
@@ -82,7 +87,20 @@ Kiosk.configure do |c|
 end
 ```
 
-A `kiosk/rls/migration` auto-inject path lands later.
+### Outside Rails
+
+The DSL is a plain module and needs only a host that answers
+`#execute(sql_string)` — a Sequel migration, a rake task, a bare script:
+
+```ruby
+require "kiosk/rls"
+
+class ApplyRLS
+  include Kiosk::RLS::DSL
+
+  def execute(sql) = DB.run(sql)
+end
+```
 
 ## Status
 

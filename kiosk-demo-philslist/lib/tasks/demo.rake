@@ -320,6 +320,16 @@ namespace :demo do
       check.call("assistant 2 sees assistant 1's listing (household)", result["a2_sees_listing"] == true)
       check.call("assistant 2 can EDIT the household listing → 200",  result["a2_edit"] == 200)
       check.call("unlink assistant 1 → 200",                         result["unlink"] == 200)
+      # K-835: the TOKEN half of spec §6.3/§15.4, not just the login half —
+      # including a token minted in the same wall-clock second as the unlink,
+      # which used to survive for its full hour. `unlink_same_second` reports
+      # whether the run actually landed inside that aperture; the refusals are
+      # required either way.
+      check.call("assistant 1's held token after unlink → 401",      result["a1_token_after_unlink"] == 401)
+      check.call("assistant 1's same-second token after unlink → 401", result["a1_fresh_token_after_unlink"] == 401)
+      check.call("…and it cannot WRITE either → 401",                result["a1_fresh_token_write_after_unlink"] == 401)
+      check.call("assistant 2's token is untouched → 200",           result["a2_token_still_works"] == 200)
+      puts "  (unlink aperture exercised in the same wall-clock second: #{result["unlink_same_second"]})"
       check.call("assistant 1 login after unlink → 404",             result["login_a1_after_unlink"] == 404)
       check.call("assistant 2 login still works → 200",              result["login_a2_still_works"] == 200)
 

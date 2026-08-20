@@ -167,9 +167,46 @@ rc, = post_json("/kiosk/edit_listing",
 results[:a2_edit] = rc
 STDERR.puts "  Second assistant edited the household listing → #{rc}"
 
-# Unlink the first assistant (session channel) — its login dies, the second's does not.
+# ══ UNLINK: the first assistant's TOKENS die, not just its next login. ══════
+#
+# Spec §6.3 / §15.4: "an unlinked key's tokens stop verifying and /auth/login
+# answers 404". This driver used to assert only the login half, and the token
+# half turned out to have a hole (K-835): the revocation watermark compares
+# `iat < watermark` on second-resolution JWT timestamps, so a token minted in
+# the SAME wall-clock second as the unlink slipped through — and since the key
+# can no longer log in, that token was the last one it would ever hold and kept
+# full access to the human's account for its whole hour. Both halves are pinned
+# here now, and the fresh token below is deliberately aligned to the boundary so
+# this beat exercises the aperture rather than stepping over it.
+#
+# Align to the start of a second, then re-login and unlink back-to-back so the
+# fresh token's `iat` and the unlink instant land in the SAME second.
+proof1 = pop_proof(key, pem)
+sleep(1.0 - (Time.now.to_f % 1.0) + 0.02)
+rc, relogged = post_json("/kiosk/auth/login", { public_key: pem, signed: proof1 })
+token1_fresh = relogged["access_token"].to_s if rc == 200
 rc, = post_json("/kiosk/auth/unlink", { agent_id: agent1 }, { session: true })
 results[:unlink] = rc
+results[:unlink_same_second] = (jwt_claims(token1_fresh)["iat"] == Time.now.to_i) if token1_fresh
+
+# The token assistant 1 was HOLDING when the human unlinked — refused now, not
+# at its natural expiry. Both the long-lived one and the same-second one.
+rc, = get_json("/kiosk/my_listings", {}, { "Authorization" => "Bearer #{token1}" })
+results[:a1_token_after_unlink] = rc
+rc, = get_json("/kiosk/my_listings", {}, { "Authorization" => "Bearer #{token1_fresh}" })
+results[:a1_fresh_token_after_unlink] = rc
+# …and a write, so this is not "reads happen to be gated" (K-835).
+rc, = post_json("/kiosk/edit_listing", { listing_id: listing_id, price_text: "€1" },
+                { "Authorization" => "Bearer #{token1_fresh}" })
+results[:a1_fresh_token_write_after_unlink] = rc
+# Assistant 2, untouched by the unlink, still holds a working token.
+rc, = get_json("/kiosk/my_listings", {}, { "Authorization" => "Bearer #{token2}" })
+results[:a2_token_still_works] = rc
+STDERR.puts "  Assistant 1's tokens after unlink: held=#{results[:a1_token_after_unlink]} " \
+            "same-second=#{results[:a1_fresh_token_after_unlink]} " \
+            "write=#{results[:a1_fresh_token_write_after_unlink]} " \
+            "(aperture exercised: #{results[:unlink_same_second]})"
+
 rc, = post_json("/kiosk/auth/login", { public_key: pem, signed: pop_proof(key, pem) })
 results[:login_a1_after_unlink] = rc
 rc, = post_json("/kiosk/auth/login", { public_key: pem2, signed: pop_proof(key2, pem2) })

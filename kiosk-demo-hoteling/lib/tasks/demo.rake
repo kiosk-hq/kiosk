@@ -734,6 +734,11 @@ namespace :demo do
         an id nobody has is 404 not_found on BOTH hotel_detail and availability
         (T-090: that argument addresses a property, so an empty list would be a
         false statement rather than an empty result).
+      • §9.1's bad-argument rule in ALL THREE branches, which is one
+        discriminator rather than three checks (K-821): an addressed-but-absent
+        `property_id` is 404 (above), a FILTER that matched nothing is 200 with
+        an empty array, and a value outside its declared domain is 400 whose
+        detail NAMES THE VALID VALUES.
 
     Exits 0 if all assertions pass; exits 1 on any miss.
   DESC
@@ -876,6 +881,60 @@ namespace :demo do
                "availability for an unknown id answered " \
                "http=#{result["http_unknown_availability"].inspect} " \
                "code=#{result["unknown_availability_code"].inspect} (want 404 / not_found)")
+
+    # ── §9.1's THREE-WAY BAD-ARGUMENT RULE, ALL THREE BRANCHES (K-821) ──────
+    #
+    # The two checks above are rule 2 («a well-formed IDENTIFIER of a resource
+    # that does not exist is 404»). The rule has three branches and they are ONE
+    # discriminator — «does this argument ADDRESS an entity or FILTER a
+    # collection?» — so any one of them checked alone proves very little: an
+    # origin that answered 404 to every miss, or `200 []` to every miss, would
+    # pass a single-branch check and be exactly the origin an assistant cannot
+    # tell a typo from a sold-out night on. hoteling implements all three and,
+    # until this run, tested none: the comment at
+    # app/operations/operation_result.rb:28 records that the `not_found`
+    # mapping was already REMOVED ONCE and restored, by an edit no test caught.
+    check.call(result["http_empty_filter"] == 200 &&
+               result["empty_filter_is_array"] == true &&
+               result["empty_filter_count"] == 0,
+               "rule 3: a FILTER that matched nothing → 200 with an EMPTY array",
+               "an unsatisfiable filter answered http=#{result["http_empty_filter"].inspect} " \
+               "array=#{result["empty_filter_is_array"].inspect} " \
+               "rows=#{result["empty_filter_count"].inspect} (want 200 / [])")
+    # `== 0`, not `.to_i == 0`: an ABSENT header parses to nil and `nil.to_i`
+    # is 0, so the lenient form passes when the wire says nothing at all.
+    check.call(result["empty_filter_total"] == 0,
+               "…and X-Total-Count says the MATCHING SET is empty, not just this page",
+               "empty filter reported X-Total-Count #{result["empty_filter_total"].inspect} " \
+               "(want the header, carrying 0) — an empty page of a non-empty set, or no " \
+               "header at all, is a different statement")
+    # The control. `0 rows` is also what a broken filter, an unseeded database
+    # or a mis-decoded cursor produces; the same neighbourhood WITHOUT the
+    # impossible price cap must return rows, or the line above proves nothing.
+    check.call(result["control_filter_count"].to_i.positive?,
+               "…control: the same filter without the impossible price returns " \
+               "#{result["control_filter_count"]} rows",
+               "the control search returned #{result["control_filter_count"].inspect} rows — " \
+               "the empty result above cannot be attributed to the price cap")
+
+    check.call(result["http_bad_enum"] == 400 && result["bad_enum_code"] == "bad_request",
+               "rule 1: a value OUTSIDE its declared domain → 400 bad_request",
+               "an out-of-domain neighbourhood answered http=#{result["http_bad_enum"].inspect} " \
+               "code=#{result["bad_enum_code"].inspect} (want 400 / bad_request)")
+    # THE HALF THAT MAKES THE 400 USABLE. §9.1 rule 1 does not stop at the
+    # status: the `detail` or `hint` MUST NAME THE VALID VALUES, because that
+    # sentence is the entire recovery path an assistant has when it guessed a
+    # value wrong — without it the only way back is to refetch the catalogue.
+    check.call(result["bad_enum_names_values"] == true,
+               "…and the refusal NAMES THE VALID VALUES an assistant may retry with",
+               "the 400's detail does not list the accepted neighbourhoods: " \
+               "#{result["bad_enum_detail"].inspect}")
+    # Non-vacuity: a `detail` that merely echoed the request would contain a
+    # neighbourhood name too. It must be listing the DOMAIN, not the input.
+    check.call(result["bad_enum_echoes_bad_value"] == false,
+               "…and it lists the DOMAIN rather than echoing what was sent",
+               "the 400's detail contains the rejected value itself, so 'names the valid " \
+               "values' may be satisfied by an echo: #{result["bad_enum_detail"].inspect}")
 
     if failures.empty?
       puts "\n  All pagination + detail assertions passed."

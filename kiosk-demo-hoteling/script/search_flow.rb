@@ -180,6 +180,48 @@ rc6, p6, _res6 = query_json(
 )
 STDERR.puts "  Availability for an unknown id: HTTP #{rc6}, code=#{p6["code"].inspect}"
 
+# ── 4d. A FILTER that matched nothing → 200 with an EMPTY array (T-090) ────
+# Spec §9.1 rule 3, and the OTHER side of the discriminator 4b/4c just proved.
+# `neighbourhood` and `max_price_cents` FILTER a collection — they do not
+# address an entity — so a combination nothing satisfies is an honest empty
+# result, not a 404: the hotels exist, none of them is under a cent.
+#
+# THE PAIR IS THE TEST. Rule 2 and rule 3 differ only in what the argument DOES
+# («address» vs «filter»), so a run that checked one without the other could
+# not tell a correct origin from one that answers 404 to everything (or `200
+# []` to everything). Both are driven here, on the same origin, in the same
+# run.
+rc7, p7, res7 = query_json("search_hotels",
+  { neighbourhood: "Sultanahmet", max_price_cents: 1 }, bearer: token)
+empty_rows  = page_rows(p7)
+empty_total = total_count(res7)
+STDERR.puts "  Filter matching nothing: HTTP #{rc7}, #{empty_rows.size} rows, " \
+            "X-Total-Count=#{empty_total.inspect}"
+
+# The control for it: DROP the impossible price and the same neighbourhood
+# filter returns rows. Without this, "0 rows" would also be what a broken
+# filter, a bad cursor or an empty seed produces.
+rc8, p8, _res8 = query_json("search_hotels", { neighbourhood: "Sultanahmet" }, bearer: token)
+control_rows = page_rows(p8)
+STDERR.puts "  …control (same neighbourhood, no price cap): HTTP #{rc8}, #{control_rows.size} rows"
+
+# ── 4e. A value OUTSIDE ITS DOMAIN → 400 NAMING THE VALID VALUES (§9.1 r1) ──
+# The third branch of the rule, and the one an assistant recovers from without
+# refetching the catalogue: `neighbourhood` is a declared enum, so a value that
+# is not in it is a malformed REQUEST — not a filter that matched nothing, and
+# not a missing resource. What makes the answer usable is that it lists what
+# would have been accepted.
+rc9, p9, _res9 = query_json("search_hotels", { neighbourhood: "Atlantis" }, bearer: token)
+# `p9` is NOT assumed to be a problem document. An origin that dropped the enum
+# answers 200 with an ARRAY here, and reaching into that with `p9["code"]` would
+# abort this driver with a TypeError — a crash where the rake task wants a
+# reported FAIL. Watched: removing the `enum:` from the descriptor produced
+# exactly that abort before this line existed.
+bad_problem = p9.is_a?(Hash) ? p9 : {}
+bad_detail  = bad_problem["detail"].to_s
+STDERR.puts "  Out-of-domain neighbourhood: HTTP #{rc9}, code=#{bad_problem["code"].inspect}, " \
+            "detail=#{bad_detail.inspect}"
+
 puts JSON.generate(
   http_page1:        rc1,
   http_page2:        rc2,
@@ -204,4 +246,14 @@ puts JSON.generate(
   unknown_detail_code:      p5.is_a?(Hash) ? p5["code"] : nil,
   http_unknown_availability: rc6,
   unknown_availability_code: p6.is_a?(Hash) ? p6["code"] : nil,
+  http_empty_filter:         rc7,
+  empty_filter_is_array:     p7.is_a?(Array),
+  empty_filter_count:        empty_rows.size,
+  empty_filter_total:        empty_total,
+  control_filter_count:      control_rows.size,
+  http_bad_enum:             rc9,
+  bad_enum_code:             bad_problem["code"],
+  bad_enum_detail:           bad_detail,
+  bad_enum_names_values:     %w[Sultanahmet Beyoğlu Kadıköy].all? { |v| bad_detail.include?(v) },
+  bad_enum_echoes_bad_value: bad_detail.include?("Atlantis"),
 )

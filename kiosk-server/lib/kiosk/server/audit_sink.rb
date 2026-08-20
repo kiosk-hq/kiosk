@@ -25,7 +25,8 @@ module Kiosk
     # ── WHY THERE IS NO TABLE BEHIND THIS ────────────────────────────────
     #
     # There was one. `kiosk.actions` / `kiosk.action_log` were canonical
-    # migration 003 and {ActionLog} wrote a row per invocation (T-088).
+    # migration 003 and `Kiosk::Server::ActionLog` (both since deleted) wrote a
+    # row per invocation (T-088).
     # Phil reversed that on 2026-08-20 — «Хранить в БД в рамках kiosk
     # reference impl/demo не будем. Дадим интерфейс для возможности их
     # куда-то выливать по желанию оператора, и на его ответственность по

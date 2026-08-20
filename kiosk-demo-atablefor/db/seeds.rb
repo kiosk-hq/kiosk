@@ -9,39 +9,54 @@
 # app/models/seatings.rb), so it is never stale, yet the tables are FINITE and CAN sell
 # out for a given seating.
 #
-# The script/book_flow.rb / demo:book path self-registers agents via
-# /kiosk/auth/register (proof-of-possession handshake), which inserts a fresh
-# users row — those principals need no seed. The bin/demo walkthrough instead
-# books under one STABLE stub principal (StubIdp token, no PoP round-trip so the
-# tour stays curl-readable). Because `Booking belongs_to :user` (load_defaults
-# 8.1 requires the association), book_table for that stub principal needs a
-# matching users row; seed it here with the same UUID bin/demo's AGENT_TOKEN
-# carries. (stylish seeds its stub users for the identical reason.)
+# NO AGENT IS SEEDED, and since T-104 none can be. An assistant EARNS its
+# principal over the wire at /kiosk/auth/register (the proof-of-possession
+# handshake, Equihash-tolled), which mints its agent row plus a fresh headless
+# users row of its own — that is what satisfies `Booking belongs_to :user`
+# (load_defaults 8.1 requires the association) for script/book_flow.rb,
+# script/isolation_flow.rb and the bin/demo walkthrough alike. There is no
+# self-asserted `agent:u-…:a-…:r-…` bearer left for a driver to write down, and
+# therefore no stub principal to seed a users row for.
 #
-# Two stable stub principals: one for the walkthrough / schema probe, and a
-# second so the redteam battery (script/redteam_suite.rb) can drive a cross-owner probe
-# with two known identities. Both need a users row because
-# `Booking belongs_to :user`.
-
-WALKTHROUGH_STUB_USER_ID = "00000000-0000-0000-0000-000000000001"
-REDTEAM_STUB_USER_ID     = "00000000-0000-0000-0000-000000000002"
-
-# The human diner "Diego" — a real account holder. He signs in through the
-# Devise form (/users/sign_in) and mints a link code so his AI assistant can
-# book on his behalf; the assistant's bookings then tie to this account
-# (demo:binding), and each surfaces on the PUBLIC reservations board under his
-# display name. Given Devise credentials on the walkthrough stub UUID so the
-# seeded principal doubles as the human account holder.
+# What IS seeded is the HUMAN half: real Devise account holders. A diner signs
+# in at /users/sign_in, mints a link code, and an assistant redeems it — from
+# then on that assistant acts for the diner's ACCOUNT and its bookings tie to
+# it (demo:binding), surfacing on the PUBLIC reservations board under the
+# diner's display name.
+#
+# TWO diners, not one, because the adversarial drivers need two DISTINCT
+# account holders on either side of the isolation boundary:
+# script/redteam_suite.rb binds an assistant to each (lib/bound_assistant.rb)
+# and asserts that neither can read or cancel the other's booking. Their UUIDs
+# are stable so a driver — or a psql ground-truth check — can name an account
+# without a lookup.
 # Demo-only credentials (development database, reset by every demo:setup).
-DINER_EMAIL    = "diego@example.com"
-DINER_PASSWORD = "atablefor-demo-password"
-DINER_NAME     = "Diego Marlowe"
-User.find_or_create_by!(id: WALKTHROUGH_STUB_USER_ID) do |u|
+
+DINER_A_ID = "00000000-0000-0000-0000-000000000001"
+DINER_B_ID = "00000000-0000-0000-0000-000000000002"
+DEMO_PASSWORD = "atablefor-demo-password"
+
+# Diego — the headline diner, the one demo:binding walks and the one whose
+# reservation the board shows by name.
+DINER_EMAIL = "diego@example.com"
+DINER_NAME  = "Diego Marlowe"
+User.find_or_create_by!(id: DINER_A_ID) do |u|
   u.email        = DINER_EMAIL
-  u.password     = DINER_PASSWORD
+  u.password     = DEMO_PASSWORD
   u.display_name = DINER_NAME
 end
-User.find_or_create_by!(id: REDTEAM_STUB_USER_ID)
+
+# Bea — the SEPARATE account on the far side of the isolation boundary. She has
+# the same shape as Diego on purpose: the redteam battery's cross-owner probes
+# only mean something if the account it attacks from is as real as the one it
+# attacks.
+SECOND_DINER_EMAIL = "bea@example.com"
+SECOND_DINER_NAME  = "Bea Ferreira"
+User.find_or_create_by!(id: DINER_B_ID) do |u|
+  u.email        = SECOND_DINER_EMAIL
+  u.password     = DEMO_PASSWORD
+  u.display_name = SECOND_DINER_NAME
+end
 
 # The public /reservations board is deliberately EMPTY at rest: it mirrors ONLY
 # real bookings made over the Kiosk wire, so a viewer sees a genuine reservation
@@ -93,7 +108,7 @@ ROSTER.each do |r|
   end
 end
 
-puts "Seeded: Diego (sign-in #{DINER_EMAIL} / #{DINER_PASSWORD}) + redteam stub, " \
+puts "Seeded: diners #{DINER_EMAIL} + #{SECOND_DINER_EMAIL} (sign-in password #{DEMO_PASSWORD}), " \
      "#{Restaurant.count} restaurants across Lisbon, " \
      "#{RestaurantTable.count} physical tables, " \
      "#{Booking.where(status: 'confirmed').count} reservations on the board (empty at rest). " \

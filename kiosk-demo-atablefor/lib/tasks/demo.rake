@@ -1106,6 +1106,9 @@ namespace :demo do
       BLOCKED  RegisterWithoutPoP — register without a signed PoP → not 201
       BLOCKED  MissingAuth        — no Authorization → 401
       BLOCKED  GarbageToken       — unparseable bearer → 401
+      BLOCKED  SelfAssertedTokenForgery — a self-asserted
+                                    `agent:u-…:a-…:r-owner` bearer resolves to
+                                    NO identity → 401, unconditionally (T-104)
       BLOCKED  UnknownQuery       — unregistered query name → 404
       BLOCKED  UnknownAction      — unregistered action name → 404
       BLOCKED  RetiredWire        — the deleted 0.3 POST /kiosk/{query,run} → 404
@@ -1121,10 +1124,21 @@ namespace :demo do
     require "resolv"
     require "json"
     require "net/http"
+    require "shellwords"
     require "uri"
 
     port = ENV.fetch("PORT", "3002")
     log  = "/tmp/kiosk-atablefor-redteam.log"
+
+    # The two SEEDED diners (db/seeds.rb). The battery binds one assistant to
+    # each through the real ceremony (T-104), because the cross-owner beats
+    # need two distinct ACCOUNT HOLDERS — two assistants linked to one diner
+    # would legitimately see each other's bookings. Credentials travel in the
+    # environment rather than sitting in script/redteam_suite.rb, the same way
+    # demo:binding passes the holder's.
+    holder_a_email    = "diego@example.com"
+    holder_b_email    = "bea@example.com"
+    holder_password   = "atablefor-demo-password"
 
     host = begin
       addr = Resolv.getaddress("atablefor.demo.kiosk.tech") rescue ""
@@ -1172,7 +1186,11 @@ namespace :demo do
     suite_rb = File.expand_path("../../script/redteam_suite.rb", __dir__)
     puts "\n── Running script/redteam_suite.rb ──"
 
-    env_str = "SERVER_URL=#{server_url} KIOSK_ISSUER=#{kiosk_issuer}"
+    env_str = "SERVER_URL=#{server_url.shellescape} KIOSK_ISSUER=#{kiosk_issuer.shellescape} " \
+              "HOLDER_A_EMAIL=#{holder_a_email.shellescape} " \
+              "HOLDER_A_PASSWORD=#{holder_password.shellescape} " \
+              "HOLDER_B_EMAIL=#{holder_b_email.shellescape} " \
+              "HOLDER_B_PASSWORD=#{holder_password.shellescape}"
 
     system("#{env_str} bundle exec ruby #{suite_rb}")
     exit_status = $?.exitstatus

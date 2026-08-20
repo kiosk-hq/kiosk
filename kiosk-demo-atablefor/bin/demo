@@ -5,10 +5,14 @@
 # down), or directly when the demo DB is already prepared (rake demo:setup).
 # `rake demo` runs the headline booking (demo:setup + demo:book), not this tour.
 #
-# This tour books one real table under a single stable stub principal
-# (AGENT_TOKEN below); demo:setup seeds its users row so book_table succeeds
-# (Booking belongs_to :user). The book/my_bookings steps ASSERT their results
-# and exit non-zero on any mismatch — a broken showcase fails loudly.
+# This tour books one real table under ONE assistant that EARNS its principal:
+# script/mint_agent_token.rb runs the shipped `/kiosk/auth/register` handshake
+# and prints the kiosk-pop token the engine minted (T-104 — there is no
+# self-asserted bearer a shell script can write down any more). Registration
+# creates that assistant's own account row, so no human and no seeded principal
+# is involved; `Booking belongs_to :user` is satisfied by the row register
+# created. The book/my_bookings steps ASSERT their results and exit non-zero on
+# any mismatch — a broken showcase fails loudly.
 # atablefor takes NO payments: a table reservation needs none.
 
 set -euo pipefail
@@ -16,8 +20,7 @@ set -euo pipefail
 PORT="${KIOSK_DEMO_PORT:-3002}"
 SERVER_URL="http://127.0.0.1:$PORT"
 
-# Stable stub token for the booking tour (no human needed — the no-auth-human path)
-AGENT_TOKEN="agent:u-00000000-0000-0000-0000-000000000001:a-alice-agent:r-customer"
+DEMO_ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 
 # "a table for two tonight at 8" — availability returns the current upcoming
 # seatings (Europe/Lisbon), so the tour reads the seating date/time off a row.
@@ -71,6 +74,22 @@ curl -sf "$SERVER_URL/.well-known/kiosk.json" >/dev/null || {
   echo "server did not become ready — see /tmp/kiosk-atablefor-demo.log" >&2
   exit 1
 }
+
+# ─── the assistant earns its principal ───────────────────────────────
+
+heading "Assistant registers itself: POST /kiosk/auth/register"
+
+# This one step is NOT curl-shaped: the handshake signs a server challenge with
+# a fresh RSA key and pays whatever Equihash toll the operator charges. Ruby
+# does it once, here, and prints the kiosk-pop JWT the ENGINE minted — the only
+# kind of bearer this provider accepts.
+AGENT_TOKEN=$(SERVER_URL="$SERVER_URL" KIOSK_ISSUER="$SERVER_URL" \
+  bundle exec ruby "$DEMO_ROOT/script/mint_agent_token.rb")
+if [[ -z "$AGENT_TOKEN" ]]; then
+  echo "✗ /kiosk/auth/register did not yield a token (handshake output above; server log /tmp/kiosk-atablefor-demo.log)" >&2
+  exit 1
+fi
+say "✓ registered — every call below carries the token the engine issued"
 
 # ─── discovery ───────────────────────────────────────────────────────
 
@@ -160,5 +179,14 @@ say "To add realistic domain resolution:"
 say "  echo \"127.0.0.1 atablefor.demo.kiosk.tech\" | sudo tee -a /etc/hosts"
 say "  KIOSK_ISSUER=https://atablefor.demo.kiosk.tech KIOSK_DEMO_PORT=443 rake demo:walkthrough"
 say ""
-say "Swap StubIdp for production-shape auth:"
-say "  replace lib/jwt_or_stub_idp.rb with kiosk-user-idp-devise (or your IdP)"
+say "Production-shape auth — two DIFFERENT seams, neither replacing the other:"
+say "  • AGENT-IdP (c.agent_idp): nothing to wire, and this demo sets nothing."
+say "    The token above is a kiosk-pop JWT this engine minted at"
+say "    /kiosk/auth/register, verified by the adapter it already ships"
+say "    (Kiosk::Server::AgentIdentityProviders::DefaultAgentIdp). Set"
+say "    c.agent_idp ONLY to front an EXTERNAL agent-identity issuer, by"
+say "    subclassing Kiosk::AgentIdentityProviders::Base — whose one hard"
+say "    constraint is that the agent_id it returns must be a uuid."
+say "  • USER-IdP (c.user_idp): the HUMAN account channel — sign-in, link-code"
+say "    mint, unlink. This demo already runs kiosk-user-idp-devise there;"
+say "    rake demo:binding walks a diner linking their assistant."

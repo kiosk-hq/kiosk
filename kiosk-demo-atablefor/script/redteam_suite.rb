@@ -9,16 +9,20 @@
 # cancels, and the auth/dispatch boundary.
 #
 # Scenarios (each must be BLOCKED):
-#   CrossTenantRead   — Bob's my_bookings must NOT contain Alice's booking
+#   CrossTenantRead   — Bea's my_bookings must NOT contain Diego's booking
 #   ForgedUserId      — a forged user_id on book_table is REFUSED (400
-#                       bad_request naming it), and Bob's legitimate booking
-#                       never surfaces under Alice
-#   CrossOwnerCancel  — Bob cancel_booking on Alice's booking → 403
+#                       bad_request naming it), and Bea's legitimate booking
+#                       never surfaces under Diego
+#   CrossOwnerCancel  — Bea cancel_booking on Diego's booking → 403
 #   MalformedUuidArg  — a junk booking_id on cancel_booking is a typed 400
 #                       with no SQL internals on the wire — never a 500
 #   RegisterWithoutPoP — register with no proof-of-possession JWS → not 201
 #   MissingAuth       — a request with no Authorization → 401
 #   GarbageToken      — an unparseable bearer token → 401
+#   SelfAssertedTokenForgery — a self-asserted `agent:u-…:a-…:r-owner` bearer
+#                       resolves to NO identity → 401, unconditionally and in
+#                       THIS (development) environment (K-539, restated by
+#                       T-104: the cleartext parser is deleted, not gated)
 #   UnknownQuery      — an unregistered query name → 404
 #   UnknownAction     — an unregistered action name → 404
 #   RetiredWire       — the deleted 0.3 `POST /kiosk/{query,run}` answer an
@@ -45,22 +49,52 @@
 require "date"
 require "json"
 require "net/http"
+require "securerandom"
 require "uri"
 
-SERVER = ENV.fetch("SERVER_URL")
+require_relative "../lib/bound_assistant"
 
-ALICE_UUID = "00000000-0000-0000-0000-000000000001"
-BOB_UUID   = "00000000-0000-0000-0000-000000000002"
-# The agent id is a UUID, not a readable slug: `kiosk.agents.id`, every
-# `kiosk.*_mandates.agent_id` and `kiosk.current_agent_id()` are all typed
-# `uuid` in the canonical schema, so a stub identity carrying anything else is one
-# the shipped tables cannot store (K-829; found by the T-088 audit-log writer, which
-# K-828 has since removed — the constraint it exposed is the schema's, not that
-# writer's, and outlives it).
-AGENT_A    = "a0000000-0000-0000-0000-000000000001"
-AGENT_B    = "a0000000-0000-0000-0000-000000000002"
-TOKEN_A    = "agent:u-#{ALICE_UUID}:a-#{AGENT_A}:r-customer"
-TOKEN_B    = "agent:u-#{BOB_UUID}:a-#{AGENT_B}:r-customer"
+SERVER = ENV.fetch("SERVER_URL")
+ISSUER = ENV.fetch("KIOSK_ISSUER", SERVER)
+
+# ── The two principals, EARNED rather than asserted (T-104) ──────────────────
+#
+# This battery used to hand itself both principals by writing them down —
+# `agent:u-<uuid>:a-<uuid>:r-customer` — which a dev-only parser in the demo
+# turned into an authenticated identity at any role it named. That parser is
+# gone: agent auth runs through the engine's own kiosk-pop verifier now, so a
+# string like that authenticates NOTHING (asserted below, as its own beat).
+#
+# So both principals run the full shipped ceremony instead
+# (lib/bound_assistant.rb): Equihash-tolled `/auth/register` → the diner's real
+# Devise sign-in → `/auth/link` → `/auth/claim`. That costs a couple of
+# sub-second proofs and buys the thing this suite is FOR — every cross-owner
+# refusal below is now a refusal between two principals the shipped code
+# issued, at the role IT chose, bound to two accounts a human actually holds.
+#
+# TWO SEEDED HUMANS, not two assistants for one human, and that is the whole
+# point of the boundary: `my_bookings` and `cancel_booking` scope by ACCOUNT,
+# so two assistants linked to one diner would legitimately see each other's
+# bookings and CrossTenantRead would be asserting the opposite of the truth.
+# Diego and Bea are separate account holders (db/seeds.rb); the rake task
+# passes their credentials in the environment.
+#
+# `agent_id` is now MINTED by `/auth/register` and is a uuid because the schema
+# says so: `kiosk.agents.id`, every `kiosk.*_mandates.agent_id` and
+# `kiosk.current_agent_id()` are typed `uuid`, so an identity carrying anything
+# else is one the shipped tables cannot store (K-829/K-830). A driver can no
+# longer choose it at all, which is the strongest form of that guarantee.
+DIEGO = bind_assistant(server: SERVER, issuer: ISSUER,
+                       email:    ENV.fetch("HOLDER_A_EMAIL"),
+                       password: ENV.fetch("HOLDER_A_PASSWORD"))
+BEA   = bind_assistant(server: SERVER, issuer: ISSUER,
+                       email:    ENV.fetch("HOLDER_B_EMAIL"),
+                       password: ENV.fetch("HOLDER_B_PASSWORD"))
+
+DIEGO_UUID = DIEGO.user_id
+BEA_UUID   = BEA.user_id
+TOKEN_A    = DIEGO.token
+TOKEN_B    = BEA.token
 
 def post_json(path, body, headers = {})
   uri = URI("#{SERVER}#{path}")
@@ -108,52 +142,52 @@ def book_slot(token, slot, extra = {})
             bearer(token))
 end
 
-# ── Fixture: Alice books a table (target for cross-owner probes) ──────────────
+# ── Fixture: Diego books a table (target for cross-owner probes) ──────────────
 slot_a = open_slot
-rc, alice_book = book_slot(TOKEN_A, slot_a)
-abort "A book_table failed (#{rc}): #{JSON.generate(alice_book)} — run rake demo:setup" unless rc == 200
-alice_booking_id = alice_book["booking_id"]
-abort "no booking_id from A's booking: #{JSON.generate(alice_book)}" unless alice_booking_id
+rc, diego_book = book_slot(TOKEN_A, slot_a)
+abort "A book_table failed (#{rc}): #{JSON.generate(diego_book)} — run rake demo:setup" unless rc == 200
+diego_booking_id = diego_book["booking_id"]
+abort "no booking_id from A's booking: #{JSON.generate(diego_book)}" unless diego_booking_id
 
-# ── CrossTenantRead — Bob must not see Alice's booking in my_bookings ─────────
+# ── CrossTenantRead — Bea must not see Diego's booking in my_bookings ─────────
 rc, b_mine = get_json("/kiosk/my_bookings", {}, bearer(TOKEN_B))
 b_ids = Array(b_mine).map { |r| r["booking_id"] }
 record(results, "CrossTenantRead",
-       rc == 200 && !b_ids.include?(alice_booking_id),
-       "Bob's my_bookings #{b_ids.inspect} excludes Alice's #{alice_booking_id}")
+       rc == 200 && !b_ids.include?(diego_booking_id),
+       "Bea's my_bookings #{b_ids.inspect} excludes Diego's #{diego_booking_id}")
 
-# ── ForgedUserId — Bob books with a forged user_id (Alice's) ─────────────────
+# ── ForgedUserId — Bea books with a forged user_id (Diego's) ─────────────────
 #
 # THIS BEAT CHANGED SHAPE AT 0.4 AND GOT STRONGER, so it is worth saying what it
 # now proves. Through 0.3 the forged argument was ACCEPTED by the wire and
 # IGNORED by the handler, and the proof was indirect: the created booking did
-# not surface in Alice's my_bookings. On the 0.4 wire `input_schema` is
+# not surface in Diego's my_bookings. On the 0.4 wire `input_schema` is
 # validated on every call and `book_table` declares
 # `additionalProperties: false` — the principal is not one of its inputs — so
 # the forgery is REFUSED before the handler runs, with a typed 400 naming the
 # offending parameter. Both halves are asserted: the wire refuses it, AND
-# nothing belonging to Bob appears under Alice. The refusal writes nothing, so
+# nothing belonging to Bea appears under Diego. The refusal writes nothing, so
 # the seating it named is still free for the legitimate booking below.
 slot_b = open_slot([[slot_a["restaurant_table_id"], slot_a["seating_at"]]])
-rc, forged = book_slot(TOKEN_B, slot_b, user_id: ALICE_UUID)
+rc, forged = book_slot(TOKEN_B, slot_b, user_id: DIEGO_UUID)
 refused = rc == 400 && forged["code"] == "bad_request" && forged["detail"].to_s.include?("user_id")
 
 # And the principal really does come from the token, not from anything the
-# caller sent: Bob's LEGITIMATE booking lands under Bob and never under Alice.
-rc_b, bobs = book_slot(TOKEN_B, slot_b)
-bob_booking_id = bobs["booking_id"]
+# caller sent: Bea's LEGITIMATE booking lands under Bea and never under Diego.
+rc_b, beas = book_slot(TOKEN_B, slot_b)
+bea_booking_id = beas["booking_id"]
 rc_a, a_mine = get_json("/kiosk/my_bookings", {}, bearer(TOKEN_A))
 a_ids = Array(a_mine).map { |r| r["booking_id"] }
 record(results, "ForgedUserId",
-       refused && rc_b == 200 && rc_a == 200 && !a_ids.include?(bob_booking_id),
+       refused && rc_b == 200 && rc_a == 200 && !a_ids.include?(bea_booking_id),
        "forged user_id → #{rc}/#{forged['code'].inspect} (want 400/bad_request naming user_id); " \
-       "Alice's bookings #{a_ids.inspect} exclude Bob's #{bob_booking_id.inspect}")
+       "Diego's bookings #{a_ids.inspect} exclude Bea's #{bea_booking_id.inspect}")
 
-# ── CrossOwnerCancel — Bob cancels Alice's booking → 403 ─────────────────────
+# ── CrossOwnerCancel — Bea cancels Diego's booking → 403 ─────────────────────
 rc, _ = post_json("/kiosk/cancel_booking",
-                  { booking_id: alice_booking_id },
+                  { booking_id: diego_booking_id },
                   bearer(TOKEN_B))
-record(results, "CrossOwnerCancel", rc == 403, "Bob cancel Alice's booking → #{rc} (want 403)")
+record(results, "CrossOwnerCancel", rc == 403, "Bea cancel Diego's booking → #{rc} (want 403)")
 
 # ── MalformedUuidArg — a junk booking_id must be a typed 400, never a 500 ────
 # K-581/K-582: cancel_booking casts its booking_id `::uuid`. Before the
@@ -201,6 +235,44 @@ record(results, "MissingAuth", rc == 401, "unauthenticated request → #{rc} (wa
 # ── GarbageToken — unparseable bearer → 401 ──────────────────────────────────
 rc, _ = get_json("/kiosk/availability", { party_size: 2 }, bearer("not-a-real-token"))
 record(results, "GarbageToken", rc == 401, "garbage token → #{rc} (want 401)")
+
+# ── SelfAssertedTokenForgery (K-539, restated by T-104) ──────────────────────
+# THE BEAT SURVIVES ITS TARGET, AND THAT IS THE POINT OF KEEPING IT. Until
+# T-104 this demo shipped a hand-copied composite agent-IdP whose cleartext
+# fallback parsed `agent:u-…:a-…:r-…` into an identity at whatever role the
+# string named — live wherever `Rails.env.local?`, which is exactly the
+# environment these drivers run in. The sibling suite could therefore only
+# demonstrate the block IN-PROCESS, against a stubbed production `Rails.env`,
+# while asserting that development still ACCEPTED the forgery.
+#
+# The parser is gone rather than gated: agent auth is the engine's own kiosk-pop
+# verifier, which has no cleartext branch to fall back to in any environment. So
+# the assertion is now unconditional and lands over the LIVE WIRE, in the same
+# environment as every other beat here: a self-asserted bearer resolves to NO
+# identity. There is no `Rails.env` anywhere in it.
+#
+# The first probe is the STRONGEST form of the attack rather than the easiest —
+# it names a real account and a real agent (the ones the ceremony above just
+# minted for Diego) and escalates the role to `owner`, so nothing in the string
+# is invented except the claim that it is a credential. The second is the
+# wholly-made-up one. The earned token is the positive control on the same
+# verb, so a 401 above is the forgery being refused and not the surface being
+# down.
+self_asserted = [
+  ["real account + real agent, role escalated to owner",
+   "agent:u-#{DIEGO_UUID}:a-#{DIEGO.agent_id}:r-owner"],
+  ["wholly invented ids",
+   "agent:u-#{SecureRandom.uuid}:a-#{SecureRandom.uuid}:r-owner"],
+].map do |label, token|
+  code, = get_json("/kiosk/availability", { party_size: 2 }, bearer(token))
+  [code == 401, "#{label} → #{code}"]
+end
+rc_auth_ctl, = get_json("/kiosk/availability", { party_size: 2 }, bearer(TOKEN_A))
+record(results, "SelfAssertedTokenForgery",
+       self_asserted.all? { |ok, _| ok } && rc_auth_ctl == 200,
+       "self-asserted `agent:u-…:r-owner` bearer: #{self_asserted.map(&:last).join(', ')} " \
+       "(want 401 each, unconditionally — this IS a development server); " \
+       "CONTROL the earned token → #{rc_auth_ctl} (want 200)")
 
 # ── UnknownQuery — unregistered query name → 404 ─────────────────────────────
 rc, _ = get_json("/kiosk/frobnicate", {}, bearer(TOKEN_A))

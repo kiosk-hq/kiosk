@@ -169,8 +169,9 @@ module Kiosk
           # human under a NEW role is a real change, and a blanket no-op on
           # `bind!` would silently drop it), and the watermark revocation +
           # fresh token still happen, so nothing an assistant can observe on the
-          # wire moved. Whether an idempotent re-bind SHOULD still revoke is
-          # spec-silent and left to Phil — K-787.
+          # wire moved. That an idempotent re-bind STILL revokes is no longer
+          # spec-silent: protocol.md §6.3 says so normatively, and says the
+          # response is indistinguishable from any other rebind's (K-787).
           transition = previous.to_s != user_id.to_s
           # The role remap is a STATEMENT SHAPE, not a value (the same
           # distinction `executor.rb#settled_total_cents` draws about its

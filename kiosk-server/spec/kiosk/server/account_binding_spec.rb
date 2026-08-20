@@ -237,8 +237,11 @@ RSpec.describe Kiosk::Server::AccountBinding do
     # UPDATE still runs (it carries the roles-from-IdP `allowed_roles` remap,
     # which a same-principal ceremony can legitimately change), and the
     # revocation + fresh token are untouched, so nothing an assistant sees on
-    # the wire moved. K-787 carries the spec-silent question of whether an
-    # idempotent re-bind should still revoke.
+    # the wire moved. K-787 settled the once-spec-silent half: protocol.md
+    # §6.3 now says NORMATIVELY that a re-bind to the account a key is already
+    # bound to is idempotent — it still succeeds, still re-issues, and the
+    # previous tokens still stop verifying — so the revocation below is a
+    # conformance assertion, not an implementation detail.
     context "when the key is ALREADY bound to this same human (re-link, K-783)" do
       before do
         route_exec_query(con) do |sql, _binds|
@@ -288,6 +291,19 @@ RSpec.describe Kiosk::Server::AccountBinding do
         same_value.define_singleton_method(:to_s) { uid }
         described_class.bind!(public_key_pem: pem, user_id: same_value)
         expect(fired).to be(false)
+      end
+
+      # protocol.md §6.3 (K-787): "the ceremony still succeeds, still returns a
+      # fresh `access_token`, and the key's previous tokens still stop
+      # verifying". The revocation is the half that is invisible in the
+      # response, so it needs its own beat — dropping `revoke_all` from this
+      # path would leave every other assertion in this context green.
+      it "STILL watermark-revokes the key's earlier tokens (idempotent ⇒ still re-issues)" do
+        expect(Kiosk.configuration.revocation_store)
+          .to receive(:revoke_all).with("agent-known", hash_including(:at))
+
+        result = described_class.bind!(public_key_pem: pem, user_id: user_id)
+        expect(result[:access_token]).to eq("kiosk-pop-jwt")
       end
 
       it "still answers the caller exactly as a rebind does (no new wire semantics)" do

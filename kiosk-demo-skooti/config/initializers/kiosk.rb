@@ -30,12 +30,6 @@ module SkootiUnlockSigningKey
 end
 Kiosk::Configuration.include(SkootiUnlockSigningKey)
 
-# Inject the RLS DSL into ActiveRecord::Migration so that migrations can
-# call `enable_rls_on TABLE do ... end` directly. The kiosk-rls README
-# documents this opt-in; auto-injection from the gem itself lands in a
-# follow-up.
-ActiveRecord::Migration.include(Kiosk::RLS::DSL)
-
 # Registration PoW gate uses Equihash (one PoW = Equihash;
 # the old SHA256 hashcash is gone). PoW is a metered toll, tuned per provider.
 #

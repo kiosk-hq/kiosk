@@ -24,6 +24,36 @@
 # (SET LOCAL ROLE kiosk_getgrocery_app inside SessionContext). FORCE is emitted
 # so the overlay is production-identical.
 
+# ── The railtie did its job (K-504) ──────────────────────────────────────────
+# Until 2026-08-21 this app's config/initializers/kiosk.rb carried
+# `ActiveRecord::Migration.include(Kiosk::RLS::DSL)` — an application patching a
+# framework class on a gem's behalf, hand-copied into four demos. kiosk-rls now
+# injects the five migration verbs from its OWN railtie, so the line is gone
+# from every initializer and nothing in this app wires it.
+#
+# That claim is only true if a real boot actually produces it, and this script
+# IS a real boot — the sole place in the tree where a Rails app with kiosk-rls
+# in its Gemfile is up and can be asked. bin/check-demo-copies asserts the
+# absence of the manual patch statically; this asserts the presence of what
+# replaced it. An abort, never a skip: a silent pass here would leave the
+# absence check certifying a capability nobody has.
+unless ActiveRecord::Migration.include?(Kiosk::RLS::DSL)
+  abort <<~MSG
+      Kiosk::RLS::DSL is NOT on ActiveRecord::Migration after boot.
+
+      kiosk-rls is supposed to inject the migration verbs itself, from
+      Kiosk::RLS::Railtie (lib/kiosk/rls/railtie.rb), which lib/kiosk/rls.rb
+      requires when Rails::Railtie is defined. One of those is broken, or the
+      gem left this app's Gemfile — and every adopter who followed the README
+      now has migrations that raise NoMethodError on `enable_rls_on`.
+
+      Do NOT fix this by putting the include back in config/initializers: that
+      is the K-504 monkey-patch bin/check-demo-copies refuses.
+  MSG
+end
+puts "  Kiosk::RLS::DSL is on ActiveRecord::Migration — injected by the gem's railtie, " \
+     "no wiring in this app (K-504)."
+
 conn = ActiveRecord::Base.connection
 
 # ── Schema USAGE ─────────────────────────────────────────────────────────────

@@ -34,8 +34,6 @@
 require "kiosk/payment_providers/stripe"
 require "kiosk/user_identity_providers/devise"
 
-ActiveRecord::Migration.include(Kiosk::RLS::DSL)
-
 # ── Commerce catalog-toll PoW demo (KIOSK_POW_DEMO=1) ─────────────────────
 #
 # A grocery provider can toll the `catalog` query to price anonymous browsing

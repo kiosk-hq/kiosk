@@ -21,10 +21,6 @@
 
 require "kiosk/user_identity_providers/devise"
 
-# Inject the RLS DSL into ActiveRecord::Migration so that migrations can
-# call `enable_rls_on TABLE do ... end` directly.
-ActiveRecord::Migration.include(Kiosk::RLS::DSL)
-
 # ── Browse-heavy PoW demo (KIOSK_POW_BROWSE_DEMO=1) ───────────────────────
 #
 # Hotel search is browse-heavy: an assistant comparing options runs many

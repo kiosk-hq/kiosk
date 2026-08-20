@@ -176,12 +176,6 @@ when :reputation
   BadProofCounter.reset!(ATABLEFOR_REPUTATION_BAD_PROOF_DB)
 end
 
-# Inject the RLS DSL into ActiveRecord::Migration so migrations can call
-# `enable_rls_on TABLE do ... end` directly. atablefor keeps kiosk-rls wired as
-# the baseline data plane (all 7 demos do); it simply ships no RLS *showcase*
-# task — booking has no apt RLS beat. The kiosk-rls README documents this opt-in.
-ActiveRecord::Migration.include(Kiosk::RLS::DSL)
-
 # ── PoW HMAC secret (K-541/K-650) ───────────────────────────────────────────
 # The HMAC key the engine signs every PoW challenge with. Required in
 # production, stable (non-secret) default in dev/test — that posture lives in

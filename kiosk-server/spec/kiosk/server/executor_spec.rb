@@ -537,6 +537,95 @@ RSpec.describe Kiosk::Server::Executor do
       expect { described_class.call(kind: :pay, args: valid_args, identity: identity, connection: connection) }
         .to raise_error(Kiosk::Server::Errors::Forbidden, /payment_provider/)
     end
+
+    # ── Replay: the mandate chain IS the idempotency key (K-739) ───────────
+    #
+    # `pay` publishes no idempotency header and no idempotency field, and the
+    # spec (protocol.md §11.6) now says why it needs none: the three mandate
+    # `id`s already are one, and an assistant whose `pay` response was lost
+    # retries with the IDENTICAL chain. These examples pin BOTH halves of the
+    # behaviour that claim rests on — the safe path and the unsafe one — at the
+    # only layer where "how many times was the card charged" is observable
+    # without a database.
+    #
+    # The persist helpers run FOR REAL here (the enclosing `before` stubs them;
+    # this context calls them through) against a router that enforces the
+    # constraint the shipped schema declares: `UNIQUE (user_id, mandate_id)` on
+    # each of the three mandate tables. So the 409 is produced by the same
+    # `unique_violation?` remap a real Postgres would trip, not by a stub.
+    context "replayed with the identical mandate chain" do
+      # `[table, mandate_id]` for every mandate row the router has accepted —
+      # the in-memory stand-in for `UNIQUE (user_id, mandate_id)`. One
+      # principal per example, so the mandate id alone is the whole key.
+      let(:inserted) { [] }
+      let(:captures) { [] }
+
+      before do
+        stub_const("ActiveRecord::RecordNotUnique", Class.new(StandardError))
+
+        %i[persist_intent_mandate persist_cart_mandate
+           persist_payment_mandate persist_settlement].each do |helper|
+          allow_any_instance_of(described_class).to receive(helper).and_call_original
+        end
+
+        route_exec_query(connection) do |sql, binds|
+          if sql.include?("INSERT INTO")
+            table = sql[/INSERT INTO \S+\.(\w+)/, 1]
+            key   = [table, binds.first]
+            raise ActiveRecord::RecordNotUnique, "duplicate key value violates unique constraint" \
+              if inserted.include?(key)
+
+            inserted << key
+          end
+          [{ "id" => "row-#{inserted.size}" }]
+        end
+
+        Kiosk.configuration.payment_provider = instance_double("PSP", setup_required?: false)
+        allow(Kiosk.configuration.payment_provider).to receive(:capture) do |cart, **_kwargs|
+          captures << cart.id
+          settlement
+        end
+      end
+
+      # THE ONE-CHARGE ASSERTION. Same args, twice: the second call re-presents
+      # `intent-1`, the row is already there, and the unique violation becomes a
+      # 409 in phase 1 — BEFORE phase 2. The card is charged exactly once.
+      it "charges once and answers 409 conflict the second time" do
+        first = described_class.call(kind: :pay, args: valid_args, identity: identity, connection: connection)
+        expect(first.payload).to include(settlement_id: "row-4")
+
+        expect {
+          described_class.call(kind: :pay, args: valid_args, identity: identity, connection: connection)
+        }.to raise_error(Kiosk::Server::Errors::Conflict, /already processed/) { |e|
+          expect(e.http_status).to eq(409)
+          expect(e.code).to        eq("conflict")
+        }
+
+        expect(captures).to eq(["cart-1"])
+      end
+
+      # THE REACHABLE DOUBLE CHARGE, pinned so nobody has to take §11.6's word
+      # for it. A client that answers a lost response by MINTING A FRESH CHAIN
+      # collides with nothing: new `id`s, new rows, a second capture. Nothing in
+      # the engine can tell this from a genuine second purchase — which is
+      # exactly why the rule "retry the identical chain, never a fresh one"
+      # lives in the spec and in skill.md rather than in the executor.
+      it "charges TWICE when the retry mints a fresh chain (the case §11.6 forbids)" do
+        described_class.call(kind: :pay, args: valid_args, identity: identity, connection: connection)
+
+        remint = ->(mandate, id) { mandate.class.new(**mandate.to_h.merge(id: id)) }
+        intent2 = remint.call(intent, "intent-2")
+        cart2   = Kiosk::Mandate::CartMandate.new(**cart.to_h.merge(id: "cart-2", intent_mandate_id: "intent-2"))
+        pay2    = Kiosk::Mandate::PaymentMandate.new(**payment.to_h.merge(id: "pay-2", cart_mandate_id: "cart-2"))
+        allow(Kiosk::Server::MandateVerifier).to receive(:verify_intent).and_return(intent2)
+        allow(Kiosk::Server::MandateVerifier).to receive(:verify_cart).and_return(cart2)
+        allow(Kiosk::Server::MandateVerifier).to receive(:verify_payment).and_return(pay2)
+
+        described_class.call(kind: :pay, args: valid_args, identity: identity, connection: connection)
+
+        expect(captures).to eq(%w[cart-1 cart-2])
+      end
+    end
   end
 
   # ── The pay path's statements carry BIND PARAMETERS, not spliced values ───

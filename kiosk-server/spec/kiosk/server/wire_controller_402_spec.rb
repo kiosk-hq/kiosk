@@ -124,6 +124,37 @@ RSpec.describe "WireController 402 WWW-Authenticate (W4)" do
       expect(body[:challenges]).to be_an(Array)
       expect(body[:challenges]).not_to be_empty
     end
+
+    # §3.7.5 (matrix SPEC-017), a MUST: the toll gate runs BEFORE the
+    # freshness check, because a `304` is a SERVED response. An origin that
+    # answered `304 Not Modified` to an untolled conditional request would
+    # hand out an unlimited, un-metered "yes, your copy is current" oracle —
+    # exactly the answer the toll exists to charge for — and an assistant that
+    # cached one paid answer could then poll it free forever.
+    #
+    # THE CONTROL IS THE SECOND HALF, and it is what makes this more than "the
+    # conditional headers are ignored everywhere": the SAME `If-None-Match: *`
+    # against `GET <endpoint>/schema`, which is untolled by design, DOES get a
+    # `304`. So the conditional request is understood by this tree; the tolled
+    # plane refuses it on purpose rather than by not implementing it.
+    it "answers 402 to a CONDITIONAL request — the toll runs before freshness" do
+      declare_query("menu") { render json: [] }
+      env = bearer_env("/kiosk/menu", agent_token,
+                       "HTTP_IF_NONE_MATCH"     => "*",
+                       "HTTP_IF_MODIFIED_SINCE" => "Sun, 06 Nov 2044 08:49:37 GMT")
+      env["action_dispatch.request.path_parameters"] =
+        { controller: "kiosk/server/verb", action: "show", kiosk_verb: "menu" }
+      status, _headers, body = Kiosk::Server::VerbController.action(:show).call(env)
+      body.each { |_c| nil }
+
+      expect(status).to eq(402)
+
+      # The control: an untolled endpoint in the same process DOES honour it.
+      sch_status, = Kiosk::Server::WireController.action(:schema).call(
+        Rack::MockRequest.env_for("/kiosk/schema", "HTTP_IF_NONE_MATCH" => "*"),
+      )
+      expect(sch_status).to eq(304)
+    end
   end
 
   # ─── Payment-setup gate → WWW-Authenticate: Payment ────────────────────

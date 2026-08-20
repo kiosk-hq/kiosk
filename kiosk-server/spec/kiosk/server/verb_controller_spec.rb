@@ -155,6 +155,29 @@ RSpec.describe Kiosk::Server::VerbController do
         .to eq(%(<http://example.org/kiosk/listings?limit=1&cursor=#{cursor}>; rel="next"))
     end
 
+    # §8.4 (matrix SPEC-088). RFC 8288 PERMITS a relative target resolved
+    # against the request URI; the spec's SHOULD is that an operator send an
+    # ABSOLUTE one, because an assistant is told to fetch the target VERBATIM
+    # and a verbatim fetch of `?limit=1&cursor=…` is not a fetch of anything.
+    # The example above pins the whole string, which would also catch this —
+    # but only as a side effect of pinning a literal, so the requirement is
+    # asserted here in its own terms: scheme + authority present, and the
+    # target resolves to ITSELF (the definition of an absolute reference).
+    it "sends an ABSOLUTE Link target — fetchable verbatim, no resolution step" do
+      declare_query("listings") do
+        render_kiosk_page([{ id: 1 }], next_cursor: Kiosk::Server::Cursor.encode_offset(20))
+      end
+      call_verb(:get, "listings", query: "limit=1")
+
+      target = last_headers["Link"][/<([^>]*)>/, 1]
+      uri    = URI.parse(target)
+      expect(uri).to be_absolute
+      expect(uri.scheme).to eq("http")
+      expect(uri.host).to   eq("example.org")
+      # An absolute reference is its own resolution against any base.
+      expect(URI.join("http://elsewhere.invalid/deep/path", target).to_s).to eq(target)
+    end
+
     it "replaces an incoming cursor rather than appending a second one" do
       declare_query("listings") do
         render_kiosk_page([{ id: 1 }], next_cursor: Kiosk::Server::Cursor.encode_offset(20))
@@ -213,6 +236,66 @@ RSpec.describe Kiosk::Server::VerbController do
       call_verb(:get, "listings")
       expect(last_headers["Cache-Control"]).to eq("private, no-store")
       expect(last_headers["Vary"]).to eq("Authorization, Kiosk-PoW")
+    end
+  end
+
+  # §3.7.3 (matrix SPEC-013), a MUST-NOT: `public` or `s-maxage` on a verb
+  # response hands an identity-scoped answer to a SHARED cache, which is one
+  # agent reading another agent's rows. The reference has never emitted
+  # either, and that is exactly the kind of fact that stays true until it
+  # quietly does not.
+  #
+  # THE ABSENCE IS ASSERTED ACROSS EVERY STATUS THIS PLANE PRODUCES, because
+  # the directive is written by three different branches of
+  # {Headers.add_cache_policy}: the 200 default, the operator-relaxed 200, and
+  # the forced `no-store` on a 402/4xx.
+  #
+  # AND IT CARRIES ITS OWN POSITIVE CONTROL, in the last example: the SAME
+  # grep run against `GET <endpoint>/schema`, the one endpoint under the mount
+  # that is public on purpose, FINDS `public` there. Without it, "no verb
+  # response says public" would pass just as well on a build where nothing
+  # anywhere could ever say it.
+  describe "no verb response is shared-cacheable (§3.7.3)" do
+    def expect_no_shared_caching(cache_control)
+      expect(cache_control.to_s).not_to match(/\bpublic\b/)
+      expect(cache_control.to_s).not_to match(/\bs-maxage\b/)
+    end
+
+    it "not on a 200" do
+      declare_query("salons") { render json: [{ id: 1 }] }
+      expect(call_verb(:get, "salons").first).to eq(200)
+      expect_no_shared_caching(last_headers["Cache-Control"])
+    end
+
+    it "not even when the handler tried to set a policy of its own" do
+      # The handler's OWN `Cache-Control` never reaches the wire at all:
+      # {HandlerDispatch} discards the sub-response's headers
+      # (`status, _headers, body = …`), so whatever a handler writes here is
+      # replaced by the seam's default. That makes the MUST-NOT unbreakable
+      # from inside a handler — and it also makes §3.7.4's "an operator MAY
+      # relax a 200 to private, max-age=N" unreachable from one, which is a
+      # separate question and is filed as K-823 rather than settled here.
+      declare_query("salons") do
+        response.headers["Cache-Control"] = "public, s-maxage=600"
+        render json: [{ id: 1 }]
+      end
+      call_verb(:get, "salons")
+      expect_no_shared_caching(last_headers["Cache-Control"])
+    end
+
+    it "not on a refusal" do
+      declare_query("salons", input_schema: { type: "object", additionalProperties: false,
+                                              properties: {}, required: [] }) { render json: [] }
+      expect(call_verb(:get, "salons", query: "nope=1").first).to eq(400)
+      expect_no_shared_caching(last_headers["Cache-Control"])
+    end
+
+    it "…while GET <endpoint>/schema, which IS public, says so — the control" do
+      declare_query("salons") { render json: [] }
+      env = Rack::MockRequest.env_for("/kiosk/schema")
+      status, headers, = Kiosk::Server::WireController.action(:schema).call(env)
+      expect(status).to eq(200)
+      expect(headers["Cache-Control"]).to match(/\bpublic\b/)
     end
   end
 
@@ -327,6 +410,16 @@ RSpec.describe Kiosk::Server::VerbController do
       expect(status).to eq(400)
       expect(body[:code]).to   eq("bad_request")
       expect(body[:detail]).to include("time")
+      # §9.1 rule 1 (matrix SPEC-103) is TWO statements, and only the first was
+      # asserted here: the status, AND that the answer NAMES THE VALID VALUES.
+      # The naming half is the whole recovery path — an assistant that guessed
+      # `19:00` can retry correctly from this sentence alone, without re-fetching
+      # the catalogue. Naming only the parameter tells it which argument it got
+      # wrong and nothing about what would have been right.
+      expect(body[:detail]).to include("18:00").and include("20:00")
+      # …and the value it actually sent is NOT among them — a `detail` that
+      # simply echoed the request would satisfy the line above by accident.
+      expect(body[:detail]).not_to include("19:00")
     end
 
     it "still refuses an undeclared parameter under additionalProperties: false" do

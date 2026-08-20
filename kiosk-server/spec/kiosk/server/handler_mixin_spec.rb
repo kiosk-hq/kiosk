@@ -469,6 +469,37 @@ RSpec.describe "Kiosk::Query / Kiosk::Action (the operator mixin)" do
       expect(headers["WWW-Authenticate"]).to eq(%(Payment realm="https://provider.example", method="ap2"))
     end
 
+    it "emits NO WWW-Authenticate on payment_failed — the third 402, which no scheme names" do
+      # Spec §9 (matrix SPEC-099), a MUST-NOT and the one branch of the 402
+      # trio that is right BY CONSTRUCTION: `www_authenticate_for` is a
+      # two-`when` `case` with no `else`, so a stray third branch would put a
+      # challenge on a refusal that has nothing to challenge — an assistant
+      # told to re-authenticate against a card that was simply declined.
+      #
+      # THE POSITIVE CONTROL IS THE TEST ABOVE, on purpose and in this same
+      # file: the identical render path, one code apart, DOES get its header.
+      # Without that pairing an assertion of absence would also pass if the
+      # header were never emitted anywhere. The third member of the trio
+      # (`pow_required`) is controlled in wire_controller_402_spec.rb:74.
+      klass = Class.new(ApplicationController) do
+        include Kiosk::Action
+        description "The card was declined."
+        input_schema type: "object", additionalProperties: false, properties: {}, required: []
+        output_schema true
+        def declined
+          render json: { ok: false, error: { code: "payment_failed", message: "card declined" } },
+                 status: :payment_required
+        end
+      end
+      stub_const("SpecDeclinedController", klass)
+
+      status, problem, headers = post_wire("declined")
+
+      expect(status).to eq(402)
+      expect(problem["code"]).to eq("payment_failed")
+      expect(headers).not_to have_key("WWW-Authenticate")
+    end
+
     it "survives the host app's forgery protection" do
       # Every real Rails app installs protect_from_forgery on ActionController::Base;
       # the sub-dispatch cannot carry a token, so the mixin skips it on include.

@@ -261,6 +261,18 @@ COPIES = {
           "abuser must not inflate anyone else's count), so a copy that drifts could silently " \
           "regrow the shared-counter bug.",
   },
+  "lib/devise_session.rb" => {
+    rule: :identical,
+    why:  "The ONE way a driver obtains a HUMAN principal (T-066). Every demo authenticates its " \
+          "humans with real Devise, so a driver that needs the human half of a ceremony has to " \
+          "hold a real browser session: GET /users/sign_in for the cookie and the CSRF token, " \
+          "POST the credentials, keep the Set-Cookie. That handshake was written out inline in " \
+          "each driver that needed it — five copies of a cookie jar with nothing comparing them, " \
+          "which is precisely how lib/equihash_register.rb drifted in three of five. :identical " \
+          "rather than :code because NOTHING in it is per-demo: it names no port, no persona and " \
+          "no verb, and the `session:` opt-in — the rule that an agent's Bearer call never " \
+          "carries the human's cookies — must be one rule, not seven.",
+  },
   "lib/equihash_register.rb" => {
     rule: :code,
     why:  "The register handshake with the Equihash toll (challenge -> PoP -> 402 -> solve.py -> " \

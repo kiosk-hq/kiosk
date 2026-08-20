@@ -1,11 +1,13 @@
 # frozen_string_literal: true
 
-# The provider's public root page. skooti is api_only, but this controller
-# inherits from ActionController::Base (not ::API) so it can render an HTML
-# landing — the same pattern getgrocery uses. Its job: tell a human/agent
+# The provider's public root page. It inherits from ApplicationController
+# (ActionController::Base, not ::API — the app carries the full middleware
+# stack for the Devise human sessions) so it can render an HTML landing, and
+# so an assistant that JSON-POSTs at a human page gets the K-459 signpost. Its
+# job: tell a human/agent
 # visitor what this demo is, show live DOMAIN activity (real fleet + rental
 # counts), and point at the Kiosk discovery entrypoint + skill.
-class HomeController < ActionController::Base
+class HomeController < ApplicationController
   def index
     # Cheap domain counts, rendered server-side on page load (a refresh is
     # enough — no JS polling). These read skooti's OWN tables, not telemetry.

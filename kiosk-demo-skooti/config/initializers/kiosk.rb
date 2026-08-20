@@ -46,6 +46,7 @@ ActiveRecord::Migration.include(Kiosk::RLS::DSL)
 # Unset = low, so this demo's flows and CI register at the fast params.
 require "kiosk/pow/equihash"
 require "kiosk/reputation"
+require "kiosk/user_identity_providers/devise"
 Kiosk::Reputation::Backends.register(Kiosk::Pow::Equihash::NAME, Kiosk::Pow::Equihash)
 SKOOTI_REGISTRATION_POW_PARAMS = PowDifficulty.params
 
@@ -166,13 +167,11 @@ Kiosk.configure do |c|
   # OAuth device-grant dormant) first,
   # then falls back to StubIdp's bespoke `agent:u-…:a-…:r-…` shape.
   c.agent_idp = JwtOrStubIdp.new(stub: Rails.env.local? ? StubIdp.new : nil)
-  # The web-session channel for the account-binding surfaces (verify
-  # page, link mint, unlink) — see app/services/stub_user_idp.rb for the scope.
-  # DEV/TEST ONLY (K-555): the stub parses an UNSIGNED, self-asserted
-  # `user:u-<uuid>` bearer into a human identity, so it is wired only under
-  # Rails.env.local?; in production user_idp is nil and the binding surfaces
-  # 401 until a real adapter (kiosk-user-idp-devise) is configured.
-  c.user_idp = Rails.env.local? ? StubUserIdp.new : nil
+  # The provider's own web-session channel (Devise/Warden): authenticates the
+  # approving human on the account-binding surfaces — the device verify page,
+  # link-code mint and unlink. ONE channel in every environment: there is no
+  # dev-only arm to gate, because there is no stub left to gate (T-066).
+  c.user_idp = Kiosk::UserIdentityProviders::Devise.new
 
   # Payment provider — stub for the demo; swap in kiosk-pay-stripe for real.
   # The cashier check: ValidatingRentalProvider verifies the agent-signed cart

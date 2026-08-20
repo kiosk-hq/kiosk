@@ -1,0 +1,20 @@
+# frozen_string_literal: true
+
+# Migration 006 — create kiosk.kyc_attributes.
+# ONE ROW per NAMED ANONYMIZED boolean attribute a valid KYC attestation
+# granted an agent (e.g. age_over_18, licence_a). Only the NAMES are stored —
+# never the DOB, licence number, or any underlying document.
+# There is no value column: the grant IS the row, so every gate is an EXISTS
+# and no reader has to decide which spelling of `true` counts.
+# Additive/opt-in: needed only if an Action gates on specific KYC attributes.
+class CreateKioskKycAttributes < ActiveRecord::Migration[ActiveRecord::Migration.current_version]
+  def up
+    execute Kiosk::Server::SchemaDefinitions.kyc_attributes_sql(
+      schema: "kiosk",
+    )
+  end
+
+  def down
+    execute %(DROP TABLE IF EXISTS "kiosk".kyc_attributes)
+  end
+end

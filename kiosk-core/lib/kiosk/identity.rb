@@ -21,6 +21,20 @@ module Kiosk
   # @!attribute [r] agent_id
   #   Present iff `actor == "agent"`. Identifies the specific agent
   #   credential (multi-agent per user).
+  #
+  #   **MUST be a UUID string on a Postgres-backed origin.** This class
+  #   validates only that it is PRESENT — the shape constraint comes from the
+  #   schema, not from here, and it is a hard one: `agents.id`, the
+  #   `agent_id` on `agent_tokens`, `agent_mappings`, `reservations`, the
+  #   three AP2 mandate tables, `kyc_attributes`, and the
+  #   `kiosk.current_agent_id()` SQL helper are all typed `uuid`. Unlike
+  #   {#user_id}, whose type follows `Kiosk.user_id_type`, `agent_id` has NO
+  #   configuration knob. An agent-IdP adapter that returns an Okta-shaped or
+  #   otherwise opaque agent id therefore builds a valid Identity that fails
+  #   later and further down: `pay` cannot settle, the account-binding
+  #   ceremony cannot complete, and any RLS policy calling
+  #   `kiosk.current_agent_id()` raises on the cast. Map a foreign issuer's
+  #   agent identifier onto a local uuid in the adapter (K-830).
   # @!attribute [r] claims
   #   Hash of additional claims from the upstream IdP. Adapter-specific;
   #   Kiosk treats opaque except for the four canonical fields above.

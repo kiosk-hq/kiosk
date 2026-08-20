@@ -11,6 +11,16 @@ module Kiosk
     # JWKS. Fronting an EXTERNAL agent-identity issuer by subclassing this Base
     # is a PLANNED seam — no external `kiosk-agent-idp-*` adapter (Entra Agent
     # ID, Okta Agent Identity, Google Agent Passport, ID-JAG, …) ships yet.
+    #
+    # **THE ONE CONSTRAINT THE SEAM IMPOSES ON AN ADAPTER: the `agent_id` it
+    # puts in a {Kiosk::Identity} must be a UUID string.** {Kiosk::Identity}
+    # itself checks only presence, so a foreign-shaped id constructs cleanly
+    # and fails later — every `agent_id` column in the canonical schema and
+    # the `kiosk.current_agent_id()` SQL helper are typed `uuid`, and there is
+    # no `user_id_type`-style knob for this one. An adapter fronting an
+    # external issuer whose agent identifiers are not uuids MUST map them onto
+    # local uuids (a stable mapping table, or a v5 UUID derived from the
+    # issuer + foreign id) before returning an Identity (K-830).
     class Base
       # Verify an incoming HTTP request into a {Kiosk::Identity}.
       #

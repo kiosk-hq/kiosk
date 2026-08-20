@@ -85,7 +85,12 @@ Kiosk.configure do |c|
   # the tokens the register/login endpoints mint. Set it ONLY to front an
   # external agent-identity issuer by implementing
   # `Kiosk::AgentIdentityProviders::Base` — external agent-IdP adapters are a
-  # planned seam; none ship yet.
+  # planned seam; none ship yet. If you do write one: the `agent_id` your
+  # adapter puts in a `Kiosk::Identity` MUST be a UUID string. Every agent_id
+  # column these migrations create — and the `current_agent_id()` helper RLS
+  # policies call — is typed `uuid`, with no equivalent of `user_id_type` to
+  # widen it, so an opaque external agent identifier has to be mapped onto a
+  # local uuid inside the adapter (K-830).
   #   # c.agent_idp = MyExternalAgentIdp.new   # your Kiosk::AgentIdentityProviders::Base subclass
   #
   # USER-IdP (c.user_idp) — binds a real HUMAN account (and optionally its role)

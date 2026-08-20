@@ -210,6 +210,36 @@ RSpec.describe Kiosk::Server::MandateVerifier do
         .to raise_error(Kiosk::Server::Errors::Forbidden, /currency/)
     end
 
+    # K-741 / LINE-ITEMS-REQUIRED (Phil, 2026-08-16). `line_items` was optional
+    # while the settlement path already depended on it: an assistant could omit
+    # it, pay successfully, and leave the operator holding a settlement it
+    # cannot match to any domain object — a degraded audit and reconciliation
+    # trail with no error raised anywhere. Required now, in the spec table, in
+    # the JSON Schema, and here.
+    it "rejects a cart missing line_items (absent)" do
+      no_items = cart_payload.reject { |k, _| k == :line_items }
+      expect { described_class.verify_cart(raw_jws: sign(no_items), identity: identity, intent: intent) }
+        .to raise_error(Kiosk::Server::Errors::Forbidden, /line_items/)
+    end
+
+    # An explicit null is the same omission spelled differently — a JWS payload
+    # is JSON, and `{"line_items": null}` must not slip past a presence check
+    # written as `key?`.
+    it "rejects a cart whose line_items are explicitly null" do
+      nulled = cart_payload.merge(line_items: nil)
+      expect { described_class.verify_cart(raw_jws: sign(nulled), identity: identity, intent: intent) }
+        .to raise_error(Kiosk::Server::Errors::Forbidden, /line_items/)
+    end
+
+    # The field is typed `array` in mandates.schema.json. A scalar or an object
+    # would reach the demos' `line_items @> …::jsonb` containment guard and the
+    # `my_orders` join as something neither can read.
+    it "rejects a cart whose line_items are not an array" do
+      scalar = cart_payload.merge(line_items: "pizza")
+      expect { described_class.verify_cart(raw_jws: sign(scalar), identity: identity, intent: intent) }
+        .to raise_error(Kiosk::Server::Errors::Forbidden, /line_items must be an array/)
+    end
+
     it "applies the shared decode checks (wrong issuer rejected)" do
       bad = cart_payload.merge(iss: "https://evil.example")
       expect { described_class.verify_cart(raw_jws: sign(bad), identity: identity, intent: intent) }

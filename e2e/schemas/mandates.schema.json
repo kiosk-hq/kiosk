@@ -79,7 +79,8 @@
       "required": [
         "intent_mandate_id",
         "total_amount_cents",
-        "currency"
+        "currency",
+        "line_items"
       ],
       "properties": {
         "intent_mandate_id": {
@@ -97,7 +98,7 @@
         },
         "line_items": {
           "type": "array",
-          "description": "Optional provider-defined line items."
+          "description": "REQUIRED. Provider-defined line items. Required because the settlement and reconciliation path reads them: an operator matching a settlement back to its domain object has nothing to match on without them."
         }
       }
     },

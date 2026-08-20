@@ -87,6 +87,7 @@ module Kiosk
         # 0-cent cart row; reject before any .to_i.
         require_amount!(payload, :total_amount_cents)
         require_currency!(payload)
+        require_line_items!(payload)
 
         cart = Kiosk::Mandate::CartMandate.new(
           id: payload[:id], intent_mandate_id: payload[:intent_mandate_id],
@@ -148,6 +149,52 @@ module Kiosk
         raise Errors::Forbidden.new(
           "mandate #{field} must be a positive integer number of cents",
           hint: "#{field} was #{value.inspect}",
+        )
+      end
+
+      # Reject a cart whose `line_items` are ABSENT or are not an array (K-741).
+      #
+      # `line_items` was OPTIONAL until Phil's `LINE-ITEMS-REQUIRED` decision
+      # (2026-08-16, answering P6 of the third-party review). The reason it
+      # could not stay optional is that the settlement and reconciliation path
+      # READS it and has no fallback: the demos' `my_orders` join and the
+      # `line_items @> …::jsonb` replace-guard (K-544, which the K-545 pay-race
+      # fix stands on) both look inside it. An assistant that omitted it could
+      # legally pay and leave the operator holding a settlement it cannot match
+      # to any domain object — degraded audit and reconciliation with no error
+      # raised anywhere, which is the worst shape a money path can have.
+      #
+      # The alternative the review offered — leave it optional and tell
+      # operators whose reconciliation depends on it to reject the omission
+      # themselves — was explicitly DECLINED: it makes every operator
+      # re-implement the same guard and makes the wire mean different things at
+      # different origins.
+      #
+      # `Errors::Forbidden`, not `BadRequest`, because that is what every other
+      # missing REQUIRED mandate field answers here (`require_amount!`,
+      # `require_currency!`) — a mandate that does not carry what a mandate must
+      # carry is not authorisation, and the assistant learns the same way for
+      # all of them.
+      #
+      # Deliberately NOT checked here: whether an EMPTY array conforms. Making
+      # the field required is what was decided; `minItems` would be a second,
+      # separate normative constraint, and it is filed as K-857 rather than
+      # invented in this method.
+      def require_line_items!(payload)
+        value = payload[:line_items]
+        if value.nil?
+          raise Errors::Forbidden.new(
+            "mandate missing required line_items field",
+            hint: "line_items is a required AP2 cart-mandate field — the settlement trail " \
+                  "is reconciled from it",
+          )
+        end
+
+        return if value.is_a?(Array)
+
+        raise Errors::Forbidden.new(
+          "mandate line_items must be an array",
+          hint: "line_items was #{value.class}",
         )
       end
 

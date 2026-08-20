@@ -1,7 +1,5 @@
 # frozen_string_literal: true
 
-require Rails.root.join("lib/demo_telemetry")
-
 # GET /demo/activity.json — privacy-safe live-activity aggregates.
 #
 # Returns counts ONLY (no agent detail, no PII):

@@ -8,7 +8,7 @@
 # empty once the seed dates passed). The new model separates the STATIC
 # physical table (a restaurant's named table — never stale) from the seating
 # DATETIME, which is computed rollingly relative to NOW in Europe/Lisbon (see
-# lib/seatings.rb). A booking pins the actual seating instant it claimed.
+# app/models/seatings.rb). A booking pins the actual seating instant it claimed.
 #
 # Changes:
 #   - restaurants gains `cuisine` (aggregator filter/context; neighborhood

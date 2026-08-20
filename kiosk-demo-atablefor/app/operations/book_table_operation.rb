@@ -9,7 +9,7 @@
 # argument:
 #   1. every required argument is present and usable
 #   2. the date parses, the time is one of the three seatings, and the seating
-#      has not already started (re-validated against lib/seatings.rb, so an agent
+#      has not already started (re-validated against app/models/seatings.rb, so an agent
 #      cannot book a window `availability` would now hide)
 #   3. the chosen table exists at the chosen restaurant and seats the party
 #   4. the (table, seating) is not already held — guarded TWICE, see below

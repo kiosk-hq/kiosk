@@ -6,7 +6,7 @@
 # The roster is STATIC (restaurants + their named physical tables never go
 # stale). What rolls is the SEATING (date + time): availability computes the
 # upcoming evening seatings relative to NOW in Europe/Lisbon (see
-# lib/seatings.rb), so it is never stale, yet the tables are FINITE and CAN sell
+# app/models/seatings.rb), so it is never stale, yet the tables are FINITE and CAN sell
 # out for a given seating.
 #
 # The script/book_flow.rb / demo:book path self-registers agents via
@@ -22,7 +22,6 @@
 # second so the redteam battery (script/redteam_suite.rb) can drive a cross-owner probe
 # with two known identities. Both need a users row because
 # `Booking belongs_to :user`.
-require Rails.root.join("lib/seatings")
 
 WALKTHROUGH_STUB_USER_ID = "00000000-0000-0000-0000-000000000001"
 REDTEAM_STUB_USER_ID     = "00000000-0000-0000-0000-000000000002"

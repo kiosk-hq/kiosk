@@ -10,7 +10,7 @@
 # A controller declares queries OR actions, never both — the verb it is reached
 # by is a property of the class — so the write half lives next door in
 # Kiosk::BookingsController. The one piece of domain logic BOTH halves need, the
-# rolling upcoming seatings, was already a library module (lib/seatings.rb) and
+# rolling upcoming seatings, was already a library module (app/models/seatings.rb) and
 # never controller code: `availability` offers a seating and `book_table`
 # re-validates against the SAME helper, so the day+time an assistant is shown is
 # exactly the one it can book. atablefor is the first demo whose READ half refuses
@@ -33,7 +33,7 @@ class Kiosk::DiningRoomController < ApplicationController
   # rolling seatings that seat the party. Public (no per-user scoping): any
   # authenticated agent may browse. The upcoming seatings (tonight's 19/20/21 in
   # Europe/Lisbon, past ones filtered, rolling to tomorrow) are computed by
-  # lib/seatings.rb — so availability is NEVER stale. Tables are FINITE: a table
+  # app/models/seatings.rb — so availability is NEVER stale. Tables are FINITE: a table
   # is "open" for a seating only when no CONFIRMED booking already holds it for
   # that exact (table, seating_at); when every table for a seating is taken,
   # availability is legitimately EMPTY for it (honest sell-out).
@@ -298,7 +298,7 @@ class Kiosk::DiningRoomController < ApplicationController
                           # The seating's LOCAL date and time. This was
                           # `to_char(b.seating_at AT TIME ZONE 'Europe/Lisbon', …)`
                           # — the zone spelled a second time, in SQL, where a
-                          # change to lib/seatings.rb could not reach it. It is
+                          # change to app/models/seatings.rb could not reach it. It is
                           # now the same `Seatings.zone` that decides which
                           # seatings exist at all, so the two cannot drift.
                           local = seating_at.in_time_zone(Seatings.zone)

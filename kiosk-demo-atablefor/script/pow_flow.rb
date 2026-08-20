@@ -56,7 +56,7 @@ require_relative "../lib/equihash_register"
 # this driver. It exists so step 5 below can assert the server counted the
 # rejected proof against THIS identity and nobody else's — it is NOT the
 # decayed, durable bad_proof_count a real provider needs.
-require_relative "../lib/bad_proof_counter"
+require_relative "../app/services/bad_proof_counter"
 BAD_PROOF_DB = "/tmp/kiosk-atablefor-bad-proof.sqlite3"
 
 def post_json(url, body, headers = {})

@@ -123,12 +123,20 @@ class Kiosk::OrdersController < ActionController::API
   # `input_schema` closes the object (`additionalProperties: false`) and is
   # validated on every 0.4 call, a forged one is refused with a typed 400 naming
   # it — where 0.3 accepted the argument and silently ignored it.
-  description "Create (or replace) a grocery order for the authenticated principal. " \
-              "Delivery is part of the order: delivery_slot_id and delivery_address are REQUIRED. " \
-              "To pay, sign your AP2 cart mandate in EUR with line_items that mirror the order — " \
-              "one {\"order_id\": <the returned order_id>} entry plus one {\"sku\", \"qty\", \"price_cents\"} " \
-              "entry per item at catalog prices; the operator verifies currency, prices, and total " \
-              "against its catalog before charging (the result carries a pay_hint)"
+  # ADR-0023: the arguments are declared in `input_schema`, and the pay hint —
+  # which spells the expected mandate out in words, entry by entry — is a FIELD
+  # of the answer, declared in `output_schema`. This says what an order IS here.
+  description "Create a grocery order for the authenticated principal, or REPLACE an unpaid one in " \
+              "place — which is how a human changes their mind before any money moves. Delivery is " \
+              "part of the order rather than a later step: this origin will not take an order it " \
+              "cannot deliver, so a window and an address are required to place one. The answer " \
+              "carries the operator's quote and, in words, the exact mandate that quote expects — " \
+              "sign your AP2 cart against it, in this operator's currency, mirroring the order line " \
+              "for line at catalogue prices and naming the order itself. The cashier re-counts every " \
+              "line against its own catalogue before it charges anything, so a cart that disagrees is " \
+              "refused outright rather than partly honoured. Alcohol needs a completed 18+ check " \
+              "first (`request_kyc`), and asking for it without one is refused rather than quietly " \
+              "dropped from the basket."
   input_schema type: "object",
                additionalProperties: false,
                properties: {
@@ -192,14 +200,18 @@ class Kiosk::OrdersController < ActionController::API
 
   # reschedule_delivery — move an ALREADY-PAID order's delivery. See
   # {RescheduleDeliveryOperation}.
-  description "Move an ALREADY-PAID order's delivery to a different slot (and optionally a new address). " \
-              "This REUSES the order's existing payment — do NOT pay again. Just call " \
-              "reschedule_delivery(order_id, delivery_slot_id[, delivery_date[, delivery_address]]) directly; " \
-              "there is no new mandate/settlement to sign. The precondition \"the order must already be paid\" " \
-              "means a settlement for it ALREADY EXISTS (from when you first paid) — it does NOT mean settle " \
-              "now, and re-paying a paid order is rejected (403 order already settled). " \
-              "One reschedule per order — further changes go through the operator. " \
-              "Unpaid orders can't be rescheduled: re-place them instead via create_order with order_id."
+  # ADR-0023: no call signature. The arguments, and which of them are optional,
+  # are declared in `input_schema` below — the literal
+  # `reschedule_delivery(a, b[, c[, d]])` this used to carry is the `params:`
+  # field ADR-0023 §Decision 4 retired, restated one layer over in prose.
+  description "Move an ALREADY-PAID order's delivery to a different window, and optionally to a " \
+              "different address. It REUSES the payment already on that order: there is no new " \
+              "mandate to sign, nothing new to settle, and no second charge — call it directly, and " \
+              "note that re-paying an order that is already settled is refused (403). «Already paid» " \
+              "is a PRECONDITION, not an instruction to settle now: an order nobody has paid for " \
+              "cannot be rescheduled at all, and is replaced in place with `create_order` instead, " \
+              "which stays free until it is paid. One reschedule per order — anything further goes " \
+              "through the operator."
   input_schema type: "object",
                additionalProperties: false,
                properties: {
@@ -240,12 +252,13 @@ class Kiosk::OrdersController < ActionController::API
 
   # request_kyc — open an 18+ verification at the broker. See
   # {RequestKycOperation}.
-  description "Start an 18+ (age_over_18) verification for the authenticated principal — required only to " \
-              "order an age_restricted (alcohol) item. Returns a verification_url to relay to your human to " \
-              "approve (an anonymizing KYC broker confirms the fact and signs it — it never shares the " \
-              "documents) and a request_id. After the human approves, poll `query kyc_status` with the " \
-              "request_id for the signed attestation, submit it to POST /kiosk/agents/kyc, then retry " \
-              "create_order. No pre-shared issuer key needed."
+  description "Start an 18+ verification for the authenticated principal — needed only to order " \
+              "alcohol, and for nothing else on this shelf. The answer carries a broker page to relay " \
+              "to your human: an anonymizing KYC broker confirms the fact and signs an attestation " \
+              "for it, and never hands this operator the documents behind it. Once the human has " \
+              "approved, `kyc_status` is where the signed attestation appears; submit it to " \
+              "`POST <endpoint>/agents/kyc`, then place the order again. No pre-shared issuer key is " \
+              "needed."
   input_schema type: "object", additionalProperties: false, properties: {}, required: []
   output_schema type: "object",
                 description: "The opened verification.",

@@ -179,9 +179,10 @@ class Kiosk::FleetController < ActionController::API
   end
 
   # ── kyc_status — poll a request_kyc verification the caller opened.
-  description "Poll a request_kyc verification by its request_id. Returns {status: \"pending\"} until the " \
-              "human acts; {status: \"approved\", kyc_jws} once approved (submit the kyc_jws to " \
-              "POST /kiosk/agents/kyc, then retry rent_motorcycle); {status: \"declined\"} if declined."
+  description "Poll a verification `request_kyc` opened, until the human has acted on it. Three " \
+              "answers: still waiting; APPROVED, carrying the broker's signed attestation, which you " \
+              "submit to `POST <endpoint>/agents/kyc` before asking for the motorcycle again; and " \
+              "DECLINED, which is terminal."
   input_schema type: "object",
                additionalProperties: false,
                properties: {

@@ -21,7 +21,12 @@ class Kiosk::FrontDeskController < ApplicationController
 
   # salons — full salon catalogue; no per-user scoping, any authenticated
   # principal may browse (mirrors the public SELECT policy previously in RLS).
-  description "Browse the public salon catalogue. Each row carries a `salon_id`; pass it to book_appointment as `salon_id`."
+  # ADR-0023: semantics only — no "pass X to Y as `z`" tail. `output_schema`
+  # names the row's fields and points the identifying one at the verb that takes
+  # it; naming the follow-on VERB here is the sanctioned form.
+  description "Browse the public salon catalogue — every salon this front desk books for, in one " \
+              "answer rather than a page of it. Once the human picks one, `book_appointment` takes it " \
+              "from there."
   # A verb that takes nothing still declares the empty closed object, so "this
   # verb takes no arguments" is a published fact rather than an absence an
   # assistant has to interpret.
@@ -48,9 +53,11 @@ class Kiosk::FrontDeskController < ApplicationController
   # service_menu — the salon's public service menu with EUR prices. Any
   # authenticated principal may read it; an assistant uses it to pick a
   # service_id (and see the € price) before booking.
-  description "Browse the salon's service menu with EUR prices (name, price_cents, price_eur). " \
-              "Takes no parameters and returns the whole menu (small; not paginated); each row carries a " \
-              "`service_id` — pass it to book_appointment as `service_id`, where its EUR price is captured on the booking."
+  description "Browse the salon's service menu, priced. Takes no arguments and returns the WHOLE " \
+              "menu rather than a page of it (small; not paginated), so an empty answer would mean the " \
+              "salon offers nothing at all. Once the human picks a service, `book_appointment` books " \
+              "it and CAPTURES its price on the appointment, so a later price change never re-prices a " \
+              "booking already made."
   input_schema type: "object",
                additionalProperties: false,
                properties: {},
@@ -87,9 +94,10 @@ class Kiosk::FrontDeskController < ApplicationController
   # every row flagged `open: true`. Any authenticated principal (a visitor's
   # assistant) reads it to pick a service to book. Each row carries a `service_id`
   # — pass it to book_appointment to book that service (its EUR price is captured).
-  description "Browse the salon's OPEN services — every menu service is always bookable (evergreen, infinite capacity; the salon never fills up). " \
-              "Takes no parameters. Each row carries a `service_id` and `open: true` — pass the id to " \
-              "book_appointment to book that service (its EUR price is captured on the booking)."
+  description "Browse the salon's OPEN services. Every service on the menu is always bookable — this " \
+              "salon is evergreen and has no finite capacity, so it never fills up and a booking never " \
+              "fails for want of room. Takes no arguments. Once the human picks a row, " \
+              "`book_appointment` books it and captures its price on the appointment."
   input_schema type: "object",
                additionalProperties: false,
                properties: {},

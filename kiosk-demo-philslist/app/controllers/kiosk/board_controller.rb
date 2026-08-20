@@ -24,15 +24,18 @@ class Kiosk::BoardController < ApplicationController
   # ActiveRecord conditions and the keyword search is an Arel `matches` (which
   # is Postgres ILIKE), so the escaping is the adapter's job, not the handler's
   # (K-654).
-  description "Browse the public classifieds board across all sellers. Optional " \
-              "category_slug and keyword filters; status defaults to open and must be " \
-              "open or closed — any other value is refused 400, never silently " \
-              "reinterpreted. All " \
-              "filters are optional and AND together; each row carries a " \
-              "`listing_id` (pass it to edit_listing / close_listing as `listing_id`), " \
-              "title, body, free-form price_text, category_slug, status, and " \
-              "owner_handle. Returns all matching listings (small board; not " \
-              "paginated); prices are free-form text (e.g. \"€300\"), not cents."
+  # ADR-0023: semantics only. The filters, their domains and the default are
+  # declared in `input_schema`; the row's fields, and that a price is free-form
+  # display text rather than an amount, are declared in `output_schema`. What is
+  # left here is what neither can say: what the board IS and what an empty answer
+  # means.
+  description "Browse the public classifieds board across ALL sellers — this is the open board, not " \
+              "the caller's own corner of it. Every filter is optional and they AND together, and a " \
+              "filter value this board cannot serve is refused 400 naming what it will accept, never " \
+              "silently reinterpreted — so an EMPTY array means nothing matched, not that the query " \
+              "was misunderstood. Returns all matching listings rather than a page of them (small " \
+              "board; not paginated). Once the human picks a row, `edit_listing` and `close_listing` " \
+              "act on it, and both are owner-only."
   input_schema type: "object",
                additionalProperties: false,
                properties: {

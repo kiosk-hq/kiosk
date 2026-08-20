@@ -36,8 +36,13 @@ class Kiosk::HotelsController < ActionController::API
   include KioskRefusals
 
   # ── properties — the whole (small) catalogue of hotels, name-ordered.
-  description "Browse all available hotel properties. Each row carries a " \
-              "`property_id`; pass it to availability (and reserve_room) as `property_id`."
+  # ADR-0023: semantics only — no argument names and no "pass X to Y as `z`"
+  # tail. `output_schema` names each field and points the identifying one at the
+  # verbs that take it; naming the follow-on VERB here is the sanctioned form.
+  description "Browse the whole hotel catalogue this origin serves. It is small, so it comes back " \
+              "entire rather than a page at a time — an empty answer would mean this origin lists no " \
+              "hotels at all. Once the human narrows to one, `availability` says which of its room " \
+              "types are still free for the nights they want and `reserve_room` takes the hold."
   # A verb that takes nothing still declares the empty closed object, so "this
   # verb takes no arguments" is a published fact rather than an absence an
   # assistant has to interpret.
@@ -68,12 +73,12 @@ class Kiosk::HotelsController < ActionController::API
   # overlapping the requested nights. `RoomType.free_for` is that predicate, and
   # `reserve_room` sells against the same scope, so the two cannot disagree
   # (K-690).
-  description "Check room availability at a property for given dates. An EMPTY array means " \
-              "the property is SOLD OUT for those nights; a `property_id` no property has is " \
-              "404 not_found. Each row carries a " \
-              "`room_type_id` (pass it to reserve_room as `room_type_id`, along with the " \
-              "same `property_id`). nightly_price_cents is EUR cents per night — carts must " \
-              "be signed in eur at the operator-quoted total (nights × nightly_price_cents)"
+  description "Check which room types are still free at ONE hotel for ONE stay. An EMPTY array " \
+              "means that hotel is SOLD OUT for those nights, not that it has no rooms — and a hotel " \
+              "this origin does not list is 404 not_found rather than an empty answer, so the two are " \
+              "never confusable. Rates are quoted per night in EUR cents, but a cart is signed for " \
+              "the WHOLE stay at the total the operator quotes, which `reserve_room` returns. Once " \
+              "the human picks a room type, `reserve_room` holds it."
   input_schema type: "object",
                additionalProperties: false,
                properties: {
@@ -226,21 +231,23 @@ class Kiosk::HotelsController < ActionController::API
   HOTELING_SEARCH_PAGE = 20  # default page size (assistant may override via `limit`)
   HOTELING_SEARCH_MAX  = 50  # cap so `limit` can't defeat pagination
 
-  description "Search Istanbul hotels with optional filters, returning a paginated " \
-              "page of SUMMARY rows (one row per property, cheapest room's nightly " \
-              "rate). Apply the user's stated constraints as filters; do not fetch " \
-              "the whole catalogue. All filters are optional and AND together: " \
-              "neighbourhood (exact area name), max_price_cents (cheapest room ≤ this, " \
-              "EUR cents), min_stars (star rating ≥ this), amenity (property must offer " \
-              "it). Page size defaults to 20 and is CLAMPED to 1..50 — send `limit` to " \
-              "override it (a value outside that range is clamped, never refused). The " \
-              "BODY is always a bare array; when more hotels match, the response carries " \
-              "a `Link` header with rel=\"next\" — fetch that URI verbatim for the " \
-              "following page and keep going until there is no such link. X-Total-Count " \
-              "is how many hotels match in all. " \
-              "from_price_cents is EUR cents (carts are signed in eur). " \
-              "Each row carries a `property_id`; pass it to hotel_detail as `property_id` " \
-              "for the full property (rooms, amenities, address)."
+  # ADR-0023, and its ONE carve-out. The filters, their domains and what each
+  # one narrows are declared in `input_schema`; the row's fields are in
+  # `output_schema`. What stays in prose is the pagination contract — `limit` and
+  # `cursor` are RESERVED names a verb never declares (spec §8.1 item 6), so
+  # there is no schema for these sentences to duplicate, and a page-size default
+  # and its clamp are facts an assistant must have.
+  description "Search Istanbul hotels, returning a paginated page of SUMMARY rows — one per hotel, " \
+              "priced from its cheapest room. Apply the human's stated constraints as filters so the " \
+              "search NARROWS; do not pull the whole catalogue and sift it yourself. Every filter is " \
+              "optional and they AND together. Page size defaults to 20 and is CLAMPED to 1..50 — " \
+              "send `limit` to override it (a value outside that range is clamped, never refused). " \
+              "The BODY is always a bare array; when more hotels match, the response carries a " \
+              "`Link` header with rel=\"next\" — fetch that URI verbatim for the following page and " \
+              "keep going until there is no such link. X-Total-Count is how many hotels match in " \
+              "all, which is how you tell a short page from the end of the results. Prices are EUR " \
+              "cents; carts are signed in eur. Once the human picks a row, `hotel_detail` returns " \
+              "everything a summary leaves out — the rooms, the amenities, the address."
   input_schema type: "object",
                additionalProperties: false,
                properties: {
@@ -363,19 +370,17 @@ class Kiosk::HotelsController < ActionController::API
   end
 
   # ── hotel_detail — fetch ONE property by id (search→summaries, fetch on demand)
-  description "Fetch the full detail for ONE hotel by its `property_id` (the same " \
-              "`property_id` a search_hotels row carries): name, neighbourhood, stars, " \
-              "address, amenities, and its room types (each carries a `room_type_id` for " \
-              "reserve_room) with their nightly rates. Answers a ONE-ROW array; a " \
-              "`property_id` no property has is 404 not_found, not an empty array. This is " \
-              "the \"search returns summaries, fetch detail on demand\" pattern — call it " \
-              "for the one or few hotels the user is choosing between, not for the whole " \
-              "result set. nightly_price_cents is EUR cents (carts are signed in eur). " \
-              "DATES: pass check_in AND check_out (both, YYYY-MM-DD) to get only the room " \
-              "types still FREE for those nights — the same rule `availability` applies and " \
-              "reserve_room enforces. WITHOUT dates the room_types list is this property's " \
-              "full CATALOGUE, not a statement about what is bookable: a room type listed " \
-              "there may already be taken for your nights, and reserve_room will answer 409."
+  description "Fetch the full record for ONE hotel — the «search returns summaries, fetch detail on " \
+              "demand» half of this origin's read surface. Call it for the one or few hotels the " \
+              "human is choosing between, never across a whole result set. Answers a ONE-ROW array, " \
+              "and a hotel this origin does not list is 404 not_found rather than an empty one, " \
+              "because the argument ADDRESSES a hotel rather than filtering for one. Rates are EUR " \
+              "cents; carts are signed in eur. THE DATES ARE OPTIONAL AND THEY CHANGE WHAT THE ROOM " \
+              "LIST MEANS: give both ends of a stay and the rooms listed are only those still FREE " \
+              "for those nights — the same rule `availability` applies and `reserve_room` enforces. " \
+              "Leave them out and the list is this hotel's full CATALOGUE, which says nothing about " \
+              "what is bookable: a room in it may already be taken for the nights you want, and " \
+              "`reserve_room` will answer 409."
   input_schema type: "object",
                additionalProperties: false,
                properties: {

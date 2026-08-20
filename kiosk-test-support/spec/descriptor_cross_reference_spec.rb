@@ -23,14 +23,19 @@
 # So this file grows the PROHIBITION and keeps the cross-reference resolution
 # only for as long as the prose it reads survives:
 #
-#   * the prohibition (below) fails any description carrying a prose parameter
-#     list — the `params:` shape ADR-0023 §Decision 4 retired, restated in
-#     prose. Fleet-clean at head.
+#   * the `params:` prohibition (below) fails any description carrying a prose
+#     parameter list — the field ADR-0023 §Decision 4 retired, restated in prose.
+#   * the WIDER prohibition beside it (K-852) fails any description that utters a
+#     name some verb's `input_schema` declares, with or without the word
+#     "params". That is §Decision 1 itself, and it is what the fleet violated 31
+#     times while the narrow check read green.
 #   * the cross-reference examples still resolve whatever "pass X to <verb> as
 #     `y`" clauses remain, so the K-494 class cannot regress while they do.
-#     They are green-and-EMPTY once a demo is rewritten, which is correct: an
-#     ADR-0023 description has nothing to resolve. K-852 rewrites the remaining
-#     six demos and widens the prohibition to every param name.
+#     They are green-and-EMPTY on a rewritten demo, which is correct: an
+#     ADR-0023 description has nothing to resolve. They are NOT superseded by
+#     the wider prohibition — that one sees only DECLARED names, and K-494's
+#     live-wire bug was an UNDECLARED one (`seating_date`, a row field routed as
+#     a param). Disjoint halves, both kept.
 #
 # Note what is NOT asserted any more: that a demo still HAS cross-references.
 # That floor (one per demo, twelve across the fleet) made ADR-0023 conformance
@@ -161,9 +166,16 @@ RSpec.describe "demo descriptor cross-references" do
 
       names = []
       pos = 0
-      while (found = brace_body_at(schema_body, "properties", pos))
-        names.concat(top_level_keys(found.first))
-        pos = found.last
+      while (m = schema_body.match(/(?<![a-z_])properties:\s*\{/, pos))
+        body, = brace_body_at(schema_body, "properties", m.begin(0))
+        names.concat(top_level_keys(body)) if body
+        # Keep scanning INSIDE the block just read, not past it (K-852). Jumping
+        # to the closing brace is what made this method's own doc-comment false:
+        # a `properties:` NESTED in the one it had just consumed — `items[].sku`,
+        # the example the comment names — was skipped every time, so a nested
+        # argument name was neither resolvable as a cross-reference target nor
+        # visible to the ADR-0023 prohibition.
+        pos = m.end(0)
       end
       names
     end
@@ -261,6 +273,24 @@ RSpec.describe "demo descriptor cross-references" do
     tokens.uniq.select do |t|
       (t.include?("_") || known_params.include?(t)) &&
         !NON_PARAM_TOKENS.include?(t) && !verb_names.include?(t)
+    end
+  end
+
+  # Every DECLARED param name a description utters, in the order it utters them
+  # (K-852). `declared` is every name any verb of the SAME DEMO declares in an
+  # `input_schema` — the union is the right set because prose names params both
+  # of its own verb ("delivery_slot_id and delivery_address are REQUIRED") and
+  # of the verb it points at ("pass it to cancel_booking as `booking_id`"), and
+  # ADR-0023 §Decision 1 forbids both with one sentence.
+  #
+  # A verb NAME is never an offence — naming the follow-on verb is the sanctioned
+  # form (descriptor-house-style.md §1) — so a token that is also a verb name is
+  # dropped even when some verb declares a param spelled the same way.
+  def self.declared_params_named(description, declared, verb_names)
+    tokens = []
+    description.scan(/(?<![.\w])([a-z][a-z0-9]*(?:_[a-z0-9]+)*)\b/) { tokens << Regexp.last_match(1) }
+    tokens.uniq.select do |t|
+      declared.include?(t) && !NON_PARAM_TOKENS.include?(t) && !verb_names.include?(t)
     end
   end
 
@@ -414,9 +444,81 @@ RSpec.describe "demo descriptor cross-references" do
     MSG
   end
 
+  # ── ADR-0023: a description may not name a DECLARED PARAM at all (K-852) ──
+  #
+  # The example above catches the retired `params:` field coming back through
+  # the prose door. It is the narrow half: `params:` is a SHAPE, and the habit
+  # ADR-0023 actually forbids is stating a NAME the schema already states — with
+  # or without the word "params". Six of the seven demos wrote it both ways at
+  # `bc49a86`: "pass it to cancel_booking as `booking_id`" routes a name across
+  # verbs, "delivery_slot_id and delivery_address are REQUIRED" restates the
+  # verb's own — 16 of the first shape and ~15 of the second, and the lint was
+  # blind to every one.
+  #
+  # So the prohibition is stated on the property §Decision 1 states: a
+  # description may not utter a name that some verb's `input_schema` declares.
+  # The mapping those sentences carried is not lost — it belongs in the two
+  # schemas' per-property descriptions, which is where the atablefor rewrite put
+  # it and where an assistant reads it as a contract rather than as prose.
+  #
+  # WHAT IS NOT AN OFFENCE, and why the set is the union over the demo rather
+  # than each verb's own params:
+  #   * a VERB name — "once the human picks one, `hotel_detail` returns
+  #     everything this row leaves out" is the sanctioned follow-on form;
+  #   * `limit` / `cursor` — RESERVED names a verb never declares (spec §8.1
+  #     item 6), so they are not in `declared` and the house-style carve-out
+  #     that puts the page-size default in prose keeps working with no special
+  #     case here;
+  #   * an OUTPUT field name — this reads `input_schema` only, deliberately (see
+  #     MACRO_NAMES): a row field is not a param, and the cross-reference
+  #     example below is what catches a row field being routed as one.
+  #
+  # NON-VACUITY. This example asserts a violation does NOT exist, so on a clean
+  # fleet it passes while checking nothing IF the extractor has gone blind. That
+  # is guarded once, above, on the right property — the extractor must still SEE
+  # every demo's verbs, prose and input schemas. It is deliberately NOT guarded
+  # by requiring some demo to still carry an offence: that is the trap K-846
+  # removed from this file, where the floor demanded the forbidden construct and
+  # writing a description correctly turned the suite red.
+  it "no demo description names a param some verb declares (ADR-0023 §Decision 1)" do
+    offenders = demo_dirs.flat_map do |dir|
+      demo     = File.basename(dir)
+      verbs    = DescriptorSource.demo_verbs(dir)
+      declared = verbs.flat_map { |v| v[:params] }.uniq
+      names    = verbs.map { |v| v[:name] }
+
+      verbs.flat_map do |verb|
+        named = self.class.declared_params_named(verb[:description], declared, names)
+        next [] if named.empty?
+
+        ["#{demo} #{verb[:name]}: description names declared param(s) #{named.inspect}"]
+      end
+    end
+
+    expect(offenders).to be_empty, <<~MSG
+      #{offenders.size} description(s) name a param the schemas already declare:
+
+      #{offenders.join("\n")}
+
+      ADR-0023 §Decision 1 re-scoped `description` to semantics only: it may not
+      carry "a param name that the schema also carries". Say what the verb MEANS
+      and name the follow-on VERB; leave every argument name to `input_schema`,
+      and put a row->argument mapping in the two schemas' per-property
+      descriptions, where both ends are declared.
+    MSG
+  end
+
   demo_dirs.each do |dir|
     demo = File.basename(dir)
 
+    # Kept alongside the prohibition above rather than retired by it, because the
+    # two catch DISJOINT halves of K-494 (K-852). The prohibition sees only names
+    # some verb DECLARES; the original live-wire bug was the opposite — atablefor
+    # routed `seating_date`, a ROW field no verb declares, into `book_table`'s
+    # `date`. A token like that is invisible to the prohibition and is exactly
+    # what an assistant sends first. On an ADR-0023-clean fleet this example
+    # resolves zero cross-references and passes; that is correct, and the
+    # extractor-sees-the-descriptors guard above is what keeps the zero honest.
     it "#{demo}: every verb description's cross-reference names params the target verb declares" do
       verbs   = DescriptorSource.demo_verbs(dir)
       by_name = verbs.to_h { |v| [v[:name], v] }

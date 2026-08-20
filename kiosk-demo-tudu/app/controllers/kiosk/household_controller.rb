@@ -42,8 +42,13 @@ class Kiosk::HouseholdController < ApplicationController
   # identity at the top of this same request, which is why the description below
   # is unchanged — it names the principal the answer means, not the round-trip
   # it no longer takes.
-  description "Return the authenticated principal: { account_id, agent_id, handle } " \
-              "resolved from the Kiosk GUC (kiosk.current_user_id / current_agent_id)."
+  # ADR-0023: semantics only. The row's three fields and what each MEANS are
+  # declared in `output_schema` below; this says what the verb is FOR.
+  description "Return who this call is authenticated as: the account the operator resolved for the " \
+              "request, the assistant acting on that account's behalf when one is, and the account's " \
+              "human-readable handle. A useful first call for an assistant orienting itself, and the " \
+              "proof that attribution is wired — everything this origin writes is attributed to " \
+              "exactly this pair."
   # A verb that takes nothing still declares the empty closed object, so "this
   # verb takes no arguments" is a published fact rather than an absence an
   # assistant has to interpret.
@@ -75,12 +80,15 @@ class Kiosk::HouseholdController < ApplicationController
   # memberships join. Membership-based, not owner-scoped: the caller sees lists
   # it was invited into as well as its own. Provider-controlled WHERE;
   # un-bypassable (the agent supplies no filter at all).
-  description "List the todo lists the authenticated principal is a member of " \
-              "(owner or member), with the caller's role on each. Membership-based " \
-              "access — includes lists the caller was invited into. Takes no " \
-              "parameters and returns all the caller's lists (small; not paginated); " \
-              "each row carries list_id, title, and the caller's role (owner|member). " \
-              "Pass a list_id to list_todos / add_todo."
+  # ADR-0023: no row-field list and no "pass X to Y" tail. `output_schema` names
+  # every field and points the identifying one at the verbs that take it.
+  description "List the todo lists the authenticated principal can reach. Access here is " \
+              "MEMBERSHIP-based rather than owner-scoped, so a list somebody invited the caller into " \
+              "is listed alongside the caller's own, and each row says which of the two the caller is " \
+              "on it — a distinction that matters, because sharing a list and removing people from it " \
+              "are owner-only. Takes no arguments and returns every reachable list, not a page of them " \
+              "(small; not paginated). Once the human picks one, `list_todos` reads what is on it and " \
+              "`add_todo` puts something new there."
   input_schema type: "object",
                additionalProperties: false,
                properties: {},
@@ -148,9 +156,9 @@ class Kiosk::HouseholdController < ApplicationController
 
   # list_members(list_id) — membership-gated; returns the members + roles so a
   # collaborator can see who else is on the list.
-  description "Return the members of a list the caller is a member of: " \
-              "{ account_id, handle, role }. Forbidden (403) if the caller is " \
-              "not a member of the list."
+  description "Return who else is on a list the caller is a member of, and what each of them may do " \
+              "there — the answer a collaborator needs before it shares the list further or removes " \
+              "anyone from it. Forbidden (403) if the caller is not a member of the list."
   input_schema type: "object",
                additionalProperties: false,
                properties: {

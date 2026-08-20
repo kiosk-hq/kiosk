@@ -26,7 +26,18 @@ class Kiosk::AppointmentsController < ApplicationController
   include Kiosk::Action
   include KioskRefusals
 
-  description "Book a service for the authenticated visitor. Pick a service from the `availability`/`service_menu` query and pass its `service_id` — its name + EUR price are captured on the booking. Every service is always bookable (overbooking allowed; the salon never fills up), so a well-formed booking never fails for lack of capacity. (A bare `salon_id` booking without a service is also accepted — OMIT service_id for that; an unknown service_id is a 400, never a silently service-less booking.) A missing/unknown salon_id, an unparseable slot, or an unknown service_id each return 400 naming what was wrong."
+  # ADR-0023: no argument names and no "pass its `x`" clause. `input_schema`
+  # below declares all three arguments, which is optional, and what each one is
+  # read from; this says what booking MEANS here and where the refusals are.
+  description "Book an appointment for the authenticated visitor. Naming a service is OPTIONAL and " \
+              "the two forms differ in what the appointment records: pick one from the menu and its " \
+              "name and price are CAPTURED on the appointment, or book the salon alone and the " \
+              "appointment carries no price at all. What never happens is the middle — asking for a " \
+              "service this salon does not offer is refused 400, never quietly turned into a " \
+              "service-less booking. Every service is always bookable (this salon overbooks by design " \
+              "and never fills up), so a well-formed booking never fails for want of room; a salon " \
+              "that does not exist, a time that cannot be parsed and a service that is unknown each " \
+              "come back 400 naming what was wrong."
   input_schema type: "object",
                additionalProperties: false,
                properties: {

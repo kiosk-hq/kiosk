@@ -35,13 +35,16 @@ class Kiosk::StorefrontController < ActionController::API
 
   # ── catalog — the public shelf. No per-principal scoping: every
   # authenticated agent browses the same in-stock catalogue.
-  description "Browse in-stock products from the getgrocery catalog (out-of-stock items are hidden). " \
-              "All prices are EUR cents — carts must be signed in eur at these exact prices. " \
-              "Takes no parameters and returns the whole in-stock catalogue (small; not paginated); " \
-              "each row carries the stable `sku` (reference products by sku, never the numeric id), a " \
-              "`low` flag when stock is running out, and an `age_restricted` flag on alcohol — an " \
-              "age_restricted item can only be ORDERED (create_order) by an agent that has completed an " \
-              "18+ anonymized-KYC check (run request_kyc first); non-restricted items need no KYC."
+  # ADR-0023: semantics only. The row's fields, the stable product handle and
+  # the two flags are declared in `output_schema`, each with what it means.
+  description "Browse the getgrocery catalogue. Only what is IN STOCK appears — a sold-out product is " \
+              "absent rather than listed as unavailable — and the whole shelf comes back in one " \
+              "answer rather than a page of it (small; not paginated). Prices are EUR cents and a " \
+              "cart is signed at exactly these, so re-read the shelf before paying rather than " \
+              "trusting a price you cached. Two flags matter to an assistant: one marks a product " \
+              "whose stock is running out, and one marks alcohol — which `create_order` accepts only " \
+              "from an account that has already completed an 18+ anonymized-KYC check, and " \
+              "`request_kyc` is what starts one. Nothing else on this shelf needs a check."
   input_schema type: "object", additionalProperties: false, properties: {}, required: []
   # A bare array — the whole in-stock shelf, name-ordered, not paginated.
   # `low` and `age_restricted` are OPTIONAL by construction: the handler appends
@@ -104,18 +107,15 @@ class Kiosk::StorefrontController < ActionController::API
   # Dublin address. Touches no table at all: the windows are a function of the
   # date and the operator's locale ({DeliverySlots}), and the address is a
   # function of the served districts ({DublinZones}).
-  description "Get available delivery time slots for a date at a Dublin delivery address. " \
-              "delivery_address is REQUIRED and must be an in-zone Dublin address (a postal " \
-              "district — e.g. \"42 Camden Street, Dublin 2\" or an Eircode like \"D02 XY45\"). " \
-              "getgrocery routes by district and delivers only within its served Dublin zones; " \
-              "an out-of-zone or district-less address returns 400 (bad_request) naming what is " \
-              "needed, and so does a `date` before today. An EMPTY array means every window on " \
-              "that (valid) day has already begun — try a later date. " \
-              "Obtain the real address from your human FIRST — the same address is required " \
-              "again at create_order. NOTE: the operator validates format + zone only; it cannot " \
-              "verify a plausible in-zone address is real, so confirm it with your human. " \
-              "Each row carries a `delivery_slot_id` (and its `date`); pass both to create_order " \
-              "as `delivery_slot_id` and `delivery_date`."
+  description "Get the delivery windows still bookable on a chosen day at a chosen Dublin address. " \
+              "getgrocery routes by postal district and delivers only inside the Dublin zones it " \
+              "serves, so an address it cannot place — outside those zones, or with no district in it " \
+              "at all — is refused 400 naming what is needed, and so is a day already gone. An EMPTY " \
+              "array means every window on that (valid) day has already begun: try a later one. Get " \
+              "the REAL address from your human before calling. The operator checks only its FORM and " \
+              "its zone — it cannot tell a plausible in-zone address from a real one — and " \
+              "`create_order` needs the same address again, so an invented one books a delivery to " \
+              "nowhere."
   input_schema type: "object",
                additionalProperties: false,
                properties: {
@@ -264,19 +264,18 @@ class Kiosk::StorefrontController < ActionController::API
   end
 
   # ── kyc_status — poll a request_kyc verification the caller opened.
-  description "Poll a request_kyc verification by its request_id. Returns {status: \"pending\"} until the " \
-              "human acts; {status: \"approved\", kyc_jws} once approved (submit the kyc_jws to " \
-              "POST /kiosk/agents/kyc, then retry create_order); {status: \"declined\"} if declined. " \
-              "kyc_jws is a full compact JWS — a long, single-line, dot-separated token; submit the " \
-              "ENTIRE value from this field, never a truncated console echo. " \
-              "POLLING: while your human completes the verification, re-check every ~5 seconds for the " \
+  description "Poll a verification `request_kyc` opened, until the human has acted on it. Three " \
+              "answers: still waiting; APPROVED, carrying the broker's signed attestation, which you " \
+              "submit to `POST <endpoint>/agents/kyc` before placing the order again; and DECLINED, " \
+              "which is TERMINAL — do not keep polling it, start a fresh verification if the human " \
+              "wants another try. The attestation is a full compact JWS: a long, single-line, " \
+              "dot-separated token, and you submit the ENTIRE value, never a truncated console echo. " \
+              "POLLING: while your human is completing the check, re-check every ~5 seconds for the " \
               "first minute, then every ~15 seconds, and GIVE UP after about 10 minutes — an identity " \
-              "check can legitimately take that long, " \
-              "but if it is still \"pending\" then, stop polling and tell your human it is not done yet " \
-              "rather than polling indefinitely. The request_id stays pollable, so you can re-check later " \
-              "(if the human's verification link has since expired, start a new request_kyc). " \
-              "\"declined\" is TERMINAL: do not keep polling it — start a new request_kyc if the human " \
-              "wants to try again."
+              "check can legitimately take that long, but if it is still waiting by then, stop and " \
+              "tell your human it is not done rather than polling indefinitely. A verification stays " \
+              "pollable, so you can come back to it later; if the human's link has expired since, " \
+              "start a new one."
   input_schema type: "object",
                additionalProperties: false,
                properties: {

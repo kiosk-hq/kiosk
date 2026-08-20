@@ -240,10 +240,10 @@ class Kiosk::StorefrontController < ActionController::API
                         }
   end
 
-  description "Get available delivery time slots for a date at a Dublin delivery address. " \
-              "An out-of-zone address, or a date before today, is a 400 naming what is " \
-              "needed. Each row carries a `delivery_slot_id` and its `date`; pass both to " \
-              "create_order as `delivery_slot_id` and `delivery_date`."
+  description "Get the delivery windows still bookable on a chosen day at a chosen " \
+              "Dublin address. An address this origin cannot place, or a day already " \
+              "gone, is refused 400 naming what is needed. An EMPTY array means every " \
+              "window on that (valid) day has already begun: try a later one."
   input_schema type: "object", additionalProperties: false,
                required: %w[date delivery_address],
                properties: {

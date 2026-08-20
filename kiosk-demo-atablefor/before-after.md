@@ -166,8 +166,10 @@ class Kiosk::DiningRoomController < ApplicationController
     render json: rows
   end
 
-  description "List this principal's table bookings (scoped to the authenticated user). " \
-              "Each row carries a `booking_id`; pass it to cancel_booking as `booking_id`."
+  description "List this principal's table bookings across every restaurant on the " \
+              "aggregator, scoped to the authenticated account and un-filterable by " \
+              "the caller. Cancelled bookings stay listed rather than disappearing. " \
+              "Once the human picks a row, `cancel_booking` calls it off."
   input_schema  type: "object", additionalProperties: false, properties: {}, required: []
   output_schema type: "array",
                 items: {

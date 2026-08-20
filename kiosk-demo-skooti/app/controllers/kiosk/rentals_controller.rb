@@ -116,10 +116,18 @@ class Kiosk::RentalsController < ActionController::API
   # {ReserveOperation}; the principal below is the only thing this controller
   # contributes, and it is read from the identity the wire resolved rather than
   # from arguments, which is what makes a forged `user_id` in the body inert.
-  description "Reserve a scooter by its code for the authenticated principal. " \
-              "To pay, sign your AP2 cart mandate in EUR at the quoted total (price_per_min_cents for the " \
-              "upfront minute) with a line_item that references the returned reservation_id; the operator " \
-              "verifies currency and total against its quote before charging (the result carries a pay_hint)"
+  # ADR-0023: the answer's fields, and the pay hint that spells the expected
+  # mandate out in words, are declared in `output_schema`. This says what a
+  # reservation IS and what it is priced on.
+  description "Hold one fleet vehicle for the authenticated principal. Rentals here are METERED by " \
+              "the minute, so what is settled up front is a single minute at that vehicle's rate — " \
+              "the hold is what the money is for, not the whole ride. The answer carries the " \
+              "operator's quote and, in words, the exact mandate that quote expects: sign your AP2 " \
+              "cart against it, in this operator's currency, at that total, naming this hold. The " \
+              "cashier re-counts both against its own quote before it charges anything, so a cart " \
+              "that disagrees is refused outright rather than partly honoured. Reserving is open to " \
+              "EVERY vehicle, licence-free and licence-required alike — whether you may ride the one " \
+              "you booked is decided later, by the verb that unlocks it."
   input_schema type: "object",
                additionalProperties: false,
                properties: {
@@ -208,11 +216,14 @@ class Kiosk::RentalsController < ActionController::API
   end
 
   # request_kyc — open a verification at the broker. See {RequestKycOperation}.
-  description "Start age≥18 + category-A driving-licence verification for the authenticated principal. " \
-              "Returns a verification_url to relay to your human to approve (an anonymizing KYC broker confirms " \
-              "the facts and signs them — it never shares the documents) and a request_id. After the human " \
-              "approves, poll `query kyc_status` with the request_id for the signed attestation, submit it " \
-              "to POST /kiosk/agents/kyc, then retry rent_motorcycle. No pre-shared issuer key needed."
+  description "Start the age-18-or-over and category-A driving-licence verification for the " \
+              "authenticated principal — needed only to ride a licence-required motorcycle, never for " \
+              "a licence-free scooter. The answer carries a broker page to relay to your human: an " \
+              "anonymizing KYC broker confirms both facts and signs an attestation for them, and " \
+              "never hands this operator the documents behind them. Once the human has approved, " \
+              "`kyc_status` is where the signed attestation appears; submit it to " \
+              "`POST <endpoint>/agents/kyc`, then ask for the motorcycle again. No pre-shared issuer " \
+              "key is needed."
   input_schema type: "object", additionalProperties: false, properties: {}, required: []
   output_schema type: "object",
                 description: "The opened verification.",

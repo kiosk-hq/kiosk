@@ -253,10 +253,14 @@ class Kiosk::DiningRoomController < ApplicationController
   # where user_id matches kiosk.current_user_id(), enforced in the query itself —
   # `owned_by_current_principal` is the ONE place that predicate is written, and
   # Booking records why it stays SQL-side (K-654).
-  description "List this principal's table bookings across all restaurants " \
-              "(scoped to the authenticated user via kiosk.current_user_id()). " \
-              "Each row carries a `booking_id`; pass it to cancel_booking as " \
-              "`booking_id`."
+  # ADR-0023: semantics only. `output_schema` names every field of a row and
+  # points the identifying one at `cancel_booking`; naming the follow-on VERB
+  # here is the sanctioned form, naming its argument is not.
+  description "List this principal's table bookings across every restaurant on the aggregator, " \
+              "scoped to the authenticated account and un-filterable by the caller. Cancelled " \
+              "bookings stay listed rather than disappearing, so a booking that was called off is " \
+              "distinguishable from one that never existed. Once the human picks a row, " \
+              "`cancel_booking` calls it off."
   # A verb that takes nothing still declares the empty closed object, so "this
   # verb takes no arguments" is a published fact rather than an absence an
   # assistant has to interpret.

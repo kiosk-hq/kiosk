@@ -121,10 +121,17 @@ class Kiosk::ReservationsController < ActionController::API
   # guard; the two identity values below are the only things this controller
   # contributes, and both are read from the identity the wire resolved rather than
   # from arguments, which is what makes a forged `user_id` in the body inert.
-  description "Reserve a room for the authenticated principal (creates a TTL hold). " \
-              "To pay, sign your AP2 cart mandate in EUR at the quoted total_cents with a " \
-              "line_item that references the returned booking_id; the operator verifies " \
-              "currency and total against its quote before charging (the result carries a pay_hint)"
+  # ADR-0023: the answer's fields, and the pay hint that spells the expected
+  # mandate out in words, are declared in `output_schema`. This says what a hold
+  # IS and what it costs to let one lapse.
+  description "Hold a room for the authenticated principal. It is a HOLD and not a booking: it " \
+              "expires on its own if nothing is paid for it, and the room-night goes back on sale. " \
+              "The answer carries the operator's QUOTE for the whole stay and, in words, the exact " \
+              "mandate that quote expects — sign your AP2 cart against it, in this operator's " \
+              "currency, at that total, naming this hold. The cashier re-counts both against its own " \
+              "quote before it charges anything, so a cart that disagrees is refused outright rather " \
+              "than partly honoured. Once the charge is through, `confirm_booking` turns the hold " \
+              "into a confirmed stay."
   input_schema type: "object",
                additionalProperties: false,
                properties: {

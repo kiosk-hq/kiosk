@@ -45,11 +45,11 @@ class Kiosk::TodoListsController < ApplicationController
   # answers 400 bad_request naming the parameter. The description says so,
   # because "this argument is ignored" and "this argument is refused" are
   # different instructions to an assistant.
-  description "Create a new todo list owned by the authenticated principal. The " \
-              "caller becomes its owner (an owner membership is created). The owner " \
-              "is the authenticated principal and is not an input: this verb takes " \
-              "`title` and nothing else, so an account_id/owner_id argument is " \
-              "refused (400). Returns { list_id }."
+  description "Create a new todo list for the authenticated principal, who becomes its owner in the " \
+              "same transaction. Ownership is NOT an input: it is taken from the identity the operator " \
+              "resolved, and an argument that tries to name a different owner is REFUSED with a 400 " \
+              "rather than quietly ignored — «this is ignored» and «this is refused» are different " \
+              "instructions to an assistant, and this origin gives the second."
   input_schema type: "object",
                additionalProperties: false,
                properties: {
@@ -74,9 +74,9 @@ class Kiosk::TodoListsController < ApplicationController
   # add_todo(list_id, title) — membership-gated; records the acting agent as
   # created_by_agent_id (attribution: "who added the tent? — Bob's assistant").
   # nil for the human web surface, which has no agent.
-  description "Add a todo to a list the caller is a member of. The acting agent " \
-              "is recorded on the todo (attribution). Forbidden (403) if the caller " \
-              "is not a member. Returns { todo_id }."
+  description "Add a todo to a list the caller is a member of. The acting assistant is recorded on " \
+              "the todo, so a household can see later who put it there — «who added the tent?» is an " \
+              "answerable question on this origin. Forbidden (403) if the caller is not a member."
   input_schema type: "object",
                additionalProperties: false,
                properties: {
@@ -101,8 +101,9 @@ class Kiosk::TodoListsController < ApplicationController
   # complete_todo(todo_id) — membership-gated via the todo's list. One UPDATE
   # scoped to the caller's memberships; zero rows → 403 (probing can't
   # enumerate ids).
-  description "Mark a todo done. Allowed only if the caller is a member of the " \
-              "todo's list; otherwise forbidden (403). Returns { todo_id, done }."
+  description "Mark a todo done. Allowed only if the caller is a member of the list the todo is on; " \
+              "otherwise forbidden (403) — and the refusal reads the same whether the todo belongs to " \
+              "somebody else or does not exist at all, so probing cannot enumerate."
   input_schema type: "object",
                additionalProperties: false,
                properties: {
@@ -126,11 +127,11 @@ class Kiosk::TodoListsController < ApplicationController
   # code; store ONLY its SHA-256 digest; return the plaintext { code, expires_in }
   # ONCE. The code travels human-to-human; the recipient's agent redeems it via
   # accept_invite.
-  description "Owner-only: mint a single-use, 10-minute collaboration code for a " \
-              "list you own. The plaintext code is returned ONCE (only its hash is " \
-              "stored) and is meant to be handed to another person, whose assistant " \
-              "redeems it with accept_invite. Forbidden (403) if you are not the " \
-              "list owner. Returns { code, expires_in }."
+  description "Owner-only: mint a single-use, ten-minute collaboration secret for a list you own. " \
+              "The plaintext is handed back ONCE and never again — this origin stores only its hash — " \
+              "and it is meant to travel person-to-person, out of band, to somebody whose assistant " \
+              "redeems it with `accept_invite` and joins. Forbidden (403) if you are not the list's " \
+              "owner."
   input_schema type: "object",
                additionalProperties: false,
                properties: {
@@ -156,9 +157,10 @@ class Kiosk::TodoListsController < ApplicationController
   # accept_invite(code) — look up by digest; reject foreign/expired/redeemed (403);
   # INSERT a `member` membership for the principal; mark redeemed. A used code
   # fails on the second try (single-use). Returns { list_id, joined: true }.
-  description "Redeem a collaboration code someone shared with you: join their " \
-              "list as a member. The code is single-use and expires; a used, " \
-              "expired, or unknown code is forbidden (403). Returns { list_id, joined }."
+  description "Redeem a collaboration secret somebody shared with you and join their list as a " \
+              "member. It is single-use and short-lived: one that has already been redeemed, one whose " \
+              "ten minutes have run out, and one this origin never minted are all forbidden (403), and " \
+              "all three read the same, so a guesser learns nothing from the refusal."
   input_schema type: "object",
                additionalProperties: false,
                properties: {

@@ -171,8 +171,10 @@ thing.
 class Kiosk::HotelsController < ActionController::API
   include Kiosk::Query
 
-  description "Browse all available hotel properties. Each row carries a " \
-              "`property_id`; pass it to availability (and reserve_room) as `property_id`."
+  description "Browse the whole hotel catalogue this origin serves. It is small, so " \
+              "it comes back entire rather than a page at a time. Once the human " \
+              "narrows to one, `availability` says which of its room types are still " \
+              "free for the nights they want and `reserve_room` takes the hold."
   input_schema  type: "object", additionalProperties: false, properties: {}, required: []
   output_schema type: "array",
                 items: {
@@ -190,9 +192,9 @@ class Kiosk::HotelsController < ActionController::API
                          .map { |id, name, city| { property_id: id, name:, city: } }
   end
 
-  description "Check room availability at a property for given dates. An EMPTY array " \
-              "means the property is SOLD OUT for those nights. Each row carries a " \
-              "`room_type_id`; pass it to reserve_room with the same `property_id`."
+  description "Check which room types are still free at ONE hotel for ONE stay. An " \
+              "EMPTY array means that hotel is SOLD OUT for those nights, not that it " \
+              "has no rooms. Once the human picks a room type, `reserve_room` holds it."
   input_schema type: "object", additionalProperties: false,
                required: %w[property_id check_in check_out],
                properties: {

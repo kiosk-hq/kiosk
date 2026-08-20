@@ -36,10 +36,11 @@ class Kiosk::ListingsController < ApplicationController
   # anyway as the second layer — see {PostListingOperation}, where it and
   # created_by_agent_id (the acting agent, for attribution) are written out at
   # length.
-  description "Post a new classifieds listing owned by the authenticated principal. " \
-              "price_text is free-form display text (e.g. \"€300\" or \"Free\"), not a " \
-              "cents amount. The owner is not an argument — it comes from your " \
-              "access token, and sending an owner_id is refused."
+  description "Post a new classifieds listing owned by the authenticated principal, open from the " \
+              "moment it lands. Ownership is NOT an input: it is taken from the identity the operator " \
+              "resolved, and an argument that tries to name a different owner is REFUSED rather than " \
+              "quietly ignored. This board carries no money — a price here is display text a human " \
+              "reads, never an amount anything can charge against."
   input_schema type: "object",
                additionalProperties: false,
                properties: {

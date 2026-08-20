@@ -106,14 +106,17 @@ RSpec.describe Kiosk::Generators::InstallGenerator do
   end
 
   describe "migrations" do
-    it "creates exactly the ten canonical migrations (001-010)" do
+    it "creates exactly the nine canonical migrations (001-010, 003 retired)" do
       invoke!
-      expect(migrations.size).to eq(10)
+      expect(migrations.size).to eq(9)
       basenames = migrations.map { |p| File.basename(p) }
+      # 003 create_kiosk_actions_log is NOT emitted: K-828 replaced the audit
+      # trail Kiosk stored with one the operator stores (`c.audit_sink`), so
+      # the two tables left the canonical set with their writer.
+      expect(basenames).not_to include(a_string_ending_with("_create_kiosk_actions_log.rb"))
       expect(basenames).to include(
         a_string_ending_with("_create_kiosk_schema.rb"),
         a_string_ending_with("_create_kiosk_identity_tables.rb"),
-        a_string_ending_with("_create_kiosk_actions_log.rb"),
         a_string_ending_with("_create_kiosk_reservations.rb"),
         a_string_ending_with("_create_kiosk_device_authorizations.rb"),
         a_string_ending_with("_create_kiosk_mandates.rb"),
@@ -128,7 +131,7 @@ RSpec.describe Kiosk::Generators::InstallGenerator do
       invoke!
       timestamps = migrations.map { |p| File.basename(p).split("_").first.to_i }
       expect(timestamps).to eq(timestamps.sort)
-      expect(timestamps.uniq.size).to eq(10) # strictly ascending, no collisions
+      expect(timestamps.uniq.size).to eq(9) # strictly ascending, no collisions
     end
 
     describe "001 create_kiosk_schema" do
@@ -180,26 +183,6 @@ RSpec.describe Kiosk::Generators::InstallGenerator do
         agents_idx   = body.index('DROP TABLE IF EXISTS "ksk".agents')
         expect(mappings_idx).to be < tokens_idx
         expect(tokens_idx).to be < agents_idx
-      end
-    end
-
-    describe "003 create_kiosk_actions_log" do
-      let(:file) { migrations.find { |p| p.end_with?("_create_kiosk_actions_log.rb") } }
-
-      it "calls SchemaDefinitions.actions_log_sql with the configured args" do
-        invoke!(%w[--schema=ksk --user-id-type=bigint])
-        body = File.read(file)
-        expect(body).to include("Kiosk::Server::SchemaDefinitions.actions_log_sql(")
-        expect(body).to include('schema:       "ksk"')
-        expect(body).to include("user_id_type: :bigint")
-      end
-
-      it "drops action_log before actions in #down (FK order)" do
-        invoke!(%w[--schema=ksk])
-        body = File.read(file)
-        action_log_idx = body.index('DROP TABLE IF EXISTS "ksk".action_log')
-        actions_idx    = body.index('DROP TABLE IF EXISTS "ksk".actions')
-        expect(action_log_idx).to be < actions_idx
       end
     end
 

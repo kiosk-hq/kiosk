@@ -93,4 +93,29 @@ Kiosk.configure do |c|
   # links from your own frontend. The shipped worked example is
   # `kiosk-user-idp-devise` (add `gem "kiosk-user-idp-devise"`):
   #   # c.user_idp = Kiosk::UserIdentityProviders::Devise.new
+
+  # ─── Opt-in: the audit sink ──────────────────────────────────────────
+  # Kiosk does NOT keep an audit trail. It OFFERS one: set a callable here
+  # and it receives one `Kiosk::Server::ActionEvent` per action invocation —
+  # success and failure alike — with the action name, the {user_id, agent_id}
+  # pair, the role, the actor, the outcome, the error class and message, the
+  # timestamp, and the ARGUMENTS. Unset (the default), nothing is emitted and
+  # Kiosk stores nothing anywhere.
+  #
+  # THE ARGUMENTS ARRIVE IN FULL — whatever your verb takes: an address, a
+  # name, a cart, a booking reference. Kiosk does not redact them for you,
+  # because the retention policy for your customers' data is yours to set,
+  # not Kiosk's to assume. Whatever you write, and wherever you write it,
+  # YOU are the data controller for it: retention, encryption at rest,
+  # access control and deletion requests all land on you.
+  #
+  # If you want the shape without the values, that is one call:
+  #   # c.audit_sink = ->(e) { Rails.logger.info(e.with_arg_types.to_h.to_json) }
+  # Everything, values included — your call, made explicitly:
+  #   # c.audit_sink = ->(e) { AuditRow.create!(**e.to_h) }
+  # Per-field, because only you know which of your fields are hot:
+  #   # c.audit_sink = ->(e) { Siem.record(e.to_h.merge(args: e.args.except(:card_token))) }
+  #
+  # A sink that raises does not fail the action — the error is logged and the
+  # invocation stands.
 end

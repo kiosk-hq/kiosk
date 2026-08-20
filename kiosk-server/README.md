@@ -15,7 +15,8 @@ The full host-side surface is shipped and covered by the gem's own suite (500+ p
 - **PoW gate** — `PowGate` enforces the reputation policy's N×PoW challenge-response (soft dependency on `kiosk-reputation`; zero overhead when no policy is set).
 - **`Kiosk::Server::WellKnown`** — pure-Ruby builder for `/.well-known/kiosk.json`.
 - **`Kiosk::Server::Headers`** + **`HeadersMiddleware`** — Rack middleware that injects `Kiosk-Server-Version`, `Kiosk-API-Version`, `Kiosk-Min-Client` on `/kiosk/*` responses.
-- **`Kiosk::Server::SchemaDefinitions`** — SQL generators for the canonical migrations (schema + helpers, identity tables, actions log, reservations, device authorizations, mandates).
+- **The audit sink** — `c.audit_sink` receives one `Kiosk::Server::ActionEvent` per action invocation, success and failure alike. Kiosk stores nothing itself: default is no sink and no emission. See [The audit sink](#the-audit-sink).
+- **`Kiosk::Server::SchemaDefinitions`** — SQL generators for the canonical migrations (schema + helpers, identity tables, reservations, device authorizations, mandates).
 - **`Kiosk::Server::Engine`** — the Rails engine: one `mount` line draws the full mount-prefixed surface (wire, auth, JWKS, KYC, account binding), installs the root discovery routes when mounted, and auto-injects the headers middleware (see [Mount the routes](#mount-the-routes)).
 - **`Kiosk::Server::ConfigurationExtension`** — adds `mount_path`, `capabilities`, `owner`, `min_client` (and the reputation/PoW slots) to `Kiosk::Configuration`.
 - **`bin/rails g kiosk:install`** — the install generator lays down the initializer and migrations.
@@ -48,6 +49,9 @@ Kiosk.configure do |c|
   # "Declaring queries and actions". Without them the origin serves no verbs.
   c.handlers      = %w[Kiosk::CatalogController Kiosk::OrdersController]
   # c.mount_path  = "/kiosk"   # default
+  # Optional: receive one event per action invocation — see "The audit sink".
+  # Unset by default, and then nothing is emitted and nothing is stored.
+  # c.audit_sink  = ->(event) { AuditRow.create!(**event.to_h) }
   # c.capabilities = %w[schema queries actions pay] # optional override; computed from the registry by default
 end
 ```
@@ -96,6 +100,87 @@ different reason: a challenge issued by one worker is invisible to the worker
 that gets the `register`/`login`, so the handshake fails *closed*. No shared
 adapter ships for it yet — the setter takes any object answering
 `put(public_key_pem, nonce, exp)` / `take(public_key_pem, nonce)`.
+
+
+## The audit sink
+
+**Kiosk does not keep an audit trail. It hands you one and gets out of the way.**
+
+Set a callable and it receives one `Kiosk::Server::ActionEvent` for **every
+action invocation — successful and failed alike**:
+
+```ruby
+# config/initializers/kiosk.rb
+Kiosk.configure do |c|
+  c.audit_sink = ->(event) { AuditRow.create!(**event.to_h) }
+end
+```
+
+**The default is no sink**: nothing is emitted, nothing is built, and Kiosk
+writes nothing to any table of its own. There is no `kiosk.action_log` — an
+earlier release shipped one and it was removed, because an audit trail the
+framework keeps is a retention policy the framework decided for your
+customers' data.
+
+### What the event carries
+
+| field | |
+|---|---|
+| `action` | the action's wire name |
+| `user_id` / `agent_id` | the principal, and the assistant credential that acted (nil when the caller is not an agent) |
+| `role` / `actor` | the active role (may be nil), and `"agent"` \| `"human"` \| `"service"` |
+| `args` | **the arguments exactly as the handler received them** |
+| `status` | `"ok"` or `"error"` |
+| `error_class` / `error_message` | the raised error, untruncated, on the `"error"` branch |
+| `invoked_at` | when the invocation started |
+
+### The arguments arrive unredacted, and the PII is yours
+
+`event.args` is verbatim: the delivery address, the passenger name, the cart,
+the booking reference — whatever your verb takes. **Kiosk does not redact them
+for you, and the moment you write them somewhere you are the data controller
+for whatever they contain** — retention, encryption at rest, access control and
+deletion requests are all yours. That is the deliberate shape of this seam:
+Kiosk gives you the capability and does not pretend to have made your privacy
+decisions for you.
+
+Withholding them is one call, if that is what you want:
+
+```ruby
+# names and JSON types, never values: {"salon_id" => "integer", "slot" => "string"}
+c.audit_sink = ->(e) { Rails.logger.info(e.with_arg_types.to_h.to_json) }
+
+# nothing at all
+c.audit_sink = ->(e) { Siem.record(e.without_args.to_h) }
+
+# per-field, because only you know which of your fields are hot
+c.audit_sink = ->(e) { Siem.record(e.to_h.merge(args: e.args.except(:card_token))) }
+```
+
+### What is emitted, and what is not
+
+Actions only. A **query** is not emitted (it changes nothing, and every read
+would drown the trail). **`pay`** is not emitted — it already writes the far
+richer AP2 mandate trail (`intent_mandates`, `cart_mandates`,
+`payment_mandates`, `settlements`). A **refusal that never reached an action**
+is not emitted: a 401 with no identity, a 404 for an unregistered name, a 405,
+a 400 from argument validation, a 402 from the toll. Nothing was invoked, so
+there is nothing to report — this is an action trail, not a request log. Put a
+Rack middleware in front of the engine if a request log is what you want.
+
+### A sink that raises does not fail the action
+
+The sink is your code and it is called after the action has already succeeded
+or failed. If it raises a `StandardError` the error is logged (`Rails.logger`,
+or `warn` outside Rails) and the invocation stands: a booking that succeeded
+must not come back as a 500 because a broker was down. Emission also happens
+**after** the action's transaction closes, so a slow sink cannot hold a
+database transaction open and a failed action's `ROLLBACK` cannot erase the
+record of it.
+
+Any `#call`-able works — a lambda, or an instance of a class of yours when the
+sink has state. A non-callable is rejected when you configure it, so a typo is
+a boot failure rather than an audit trail that silently was never there.
 
 
 ## Mount the routes

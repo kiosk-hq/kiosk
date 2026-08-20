@@ -1,6 +1,6 @@
 # frozen_string_literal: true
 
-require "kiosk/server/action_log"
+require "kiosk/server/audit_sink"
 require "kiosk/server/errors"
 require "kiosk/server/response_validation"
 require "kiosk/server/result"
@@ -97,9 +97,12 @@ module Kiosk
 
       private
 
-      # THE AUDIT SEAM (T-088). Wraps the `run` branch above and writes one
-      # {ActionLog} row per invocation — `ok` when the handler returned, `error`
-      # when anything raised, and the raise is re-raised untouched either way.
+      # THE AUDIT SEAM. Wraps the `run` branch above and emits ONE
+      # {ActionEvent} per invocation to the operator's `audit_sink` — `ok` when
+      # the handler returned, `error` when anything raised, and the raise is
+      # re-raised untouched either way. With no sink configured nothing is
+      # built and nothing is emitted (K-828, Phil 2026-08-20: Kiosk offers the
+      # interface, the operator owns the data — see {AuditSink}).
       #
       # WHY HERE AND NOWHERE ELSE. This is the one place that sees every action
       # invocation exactly once. `POST <endpoint>/<action-name>` is the only
@@ -107,28 +110,46 @@ module Kiosk
       # {WireController#execute_wire} → `Executor.call(kind: :run)`; a direct
       # `Executor.call` (an RLS journey, an operator's own script) arrives at
       # the same line. Putting it in {#verb_run} instead would put it INSIDE
-      # the SessionContext, where a failure's rollback would take the row with
-      # it; putting it in the controller would miss the direct callers and
-      # would sit inside the toll, where nothing has been invoked yet.
+      # the SessionContext, where a failed action's rollback would take the
+      # emission with it; putting it in the controller would miss the direct
+      # callers and would sit inside the toll, where nothing has been invoked
+      # yet.
       #
-      # OUTSIDE the SessionContext block, so the row survives a failed action's
-      # ROLLBACK and is written with no GUCs and no `SET LOCAL ROLE` — see
-      # {ActionLog} for why the log sits outside the RLS boundary.
+      # OUTSIDE the SessionContext block, deliberately: a sink is somebody
+      # else's code and it must not be able to hold this origin's database
+      # transaction open, and a failed action's ROLLBACK must not erase the
+      # record of what rolled back.
       def audited(name, args)
+        return yield unless AuditSink.configured?
+
         invoked_at = Time.now
-        result     = yield
-        log(name, args, ActionLog::OK, nil, invoked_at)
+        begin
+          result = yield
+        rescue StandardError => e
+          emit(name, args, ActionEvent::ERROR, e, invoked_at)
+          raise
+        end
+        emit(name, args, ActionEvent::OK, nil, invoked_at)
         result
-      rescue StandardError => e
-        log(name, args, ActionLog::ERROR, e, invoked_at)
-        raise
       end
 
-      def log(name, args, status, error, invoked_at)
-        return unless ActionLog.loggable?(name)
+      # An action is what gets audited, so an unregistered name is skipped:
+      # `Actions.fetch` is about to raise a 404 for it and nothing was
+      # invoked. (While the trail was a table this filter was also what
+      # satisfied a foreign key; the FK is gone and the reason is now simply
+      # the definition of «an action invocation».)
+      def emit(name, args, status, error, invoked_at)
+        return if name.nil? || name.to_s.empty?
+        return unless Actions.known.include?(name.to_s)
 
-        ActionLog.record(connection: connection, identity: identity, name: name.to_s,
-                         args: args, status: status, error: error, invoked_at: invoked_at)
+        # `symbolize` because the event must carry the arguments AS THE HANDLER
+        # RECEIVED THEM — {#verb_run} symbolizes its own copy, and a sink that
+        # reached for `event.args[:slot]` on the wire's string keys would find
+        # nothing and never say so.
+        AuditSink.emit(
+          ActionEvent.build(identity: identity, name: name.to_s, args: symbolize(args),
+                            status: status, error: error, invoked_at: invoked_at),
+        )
       end
 
       def dispatch(verb, args, name = nil)

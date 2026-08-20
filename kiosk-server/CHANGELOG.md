@@ -6,7 +6,11 @@ All notable changes follow [Keep a Changelog](https://keepachangelog.com/en/1.1.
 
 ### Added
 
-- **The audit log is written (T-088, K-791).** `Kiosk::Server::ActionLog` records one `<schema>.action_log` row per `run` invocation — success or failure, with the principal, the acting assistant, the role, the actor, the outcome and the error class — satisfying the columns canonical migration 003 has declared for every adopter since 0.1 and that nothing ever wrote. The row is written after the action's own transaction and outside the identity-scoped session, so a rollback cannot erase it and a caller's session cannot suppress or forge one; `args` records argument names and JSON types rather than values unless the operator sets `audit_log_args = :full`. `audit_log` (default on) turns the whole thing off. Reading is operator-side (`ActionLog.recent`) — no wire verb exposes it.
+- **The audit sink — Kiosk offers the trail and stores none of it (K-828).** `c.audit_sink` is a callable an operator sets; it receives one `Kiosk::Server::ActionEvent` per action invocation, success and failure alike, carrying the action name, the `{user_id, agent_id}` pair, the role, the actor, the outcome, the error class and message, the timestamp — and the ARGUMENTS IN FULL, deliberately unredacted, because the retention policy for an operator's customers' data is not Kiosk's to assume. Default is no sink: nothing is emitted and nothing is written anywhere. Redaction is one call (`ActionEvent#with_arg_types`, `#without_args`), a sink that raises is logged and never fails the action, and emission sits outside the action's transaction so a sink cannot hold one open. Replaces the `kiosk.action_log` writer this release briefly shipped.
+
+### Removed
+
+- **`kiosk.actions` and `kiosk.action_log` leave the canonical migration set (K-828).** Canonical migration 003 is retired and the install generator emits nine migrations instead of ten (004-010 keep their ordinals). With the audit trail now the operator's, a shipped migration that creates two audit tables nothing ever fills is exactly the dead schema K-791 objected to. `SchemaDefinitions.actions_log_sql`, the `create_kiosk_actions_log` template and `Kiosk::Server::ActionLog` (with `c.audit_log` / `c.audit_log_args`) are gone rather than deprecated: there are no adopters to carry a shim for, and an existing installation drops the two tables by hand.
 
 ### Changed
 

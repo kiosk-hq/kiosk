@@ -2,12 +2,21 @@
 
 module Kiosk
   module Server
-    # Pure SQL generators for the ten canonical Kiosk migrations.
-    # Migrations 001-010:
+    # Pure SQL generators for the nine canonical Kiosk migrations.
+    # Migrations 001-010, of which 003 is RETIRED:
     #
     #   001 create_kiosk_schema                → schema + four current_*() helpers
     #   002 create_kiosk_identity_tables       → agents, agent_tokens, agent_mappings
-    #   003 create_kiosk_actions_log           → kiosk.actions, kiosk.action_log
+    #   003 — RETIRED 2026-08-20 (K-828). Was create_kiosk_actions_log
+    #       (kiosk.actions, kiosk.action_log). Kiosk no longer stores an audit
+    #       trail at all: it emits one {ActionEvent} per action invocation to
+    #       the operator's `c.audit_sink` and keeps nothing. Phil: «Хранить в
+    #       БД в рамках kiosk reference impl/demo не будем. Дадим интерфейс …
+    #       и на его ответственность по PII.» The ORDINAL is left standing
+    #       rather than renumbered: 004-010 are named by number in shipped
+    #       comments, in CHANGELOG history and in adopters' own notes, and a
+    #       renumber would make every one of those references silently wrong.
+    #       The migrations are ordered by timestamp, not by this list.
     #   004 create_kiosk_reservations          → kiosk.reservations
     #   005 create_kiosk_device_authorizations → kiosk.device_authorizations (RFC 8628 Device Grant)
     #   006 create_kiosk_mandates              → intent_mandates, cart_mandates, payment_mandates, settlements (AP2 trail)
@@ -105,56 +114,15 @@ module Kiosk
         SQL
       end
 
-      # ─── 003 create_kiosk_actions_log ──────────────────────────────────
-
-      # `kiosk.actions` registers known Action names; `kiosk.action_log`
-      # records each invocation with the principal+agent+role.
+      # ─── 003 create_kiosk_actions_log — RETIRED, no generator ──────────
       #
-      # WRITTEN BY {ActionLog}, from the `run` branch of {Executor#call}: one
-      # row per action invocation, success or failure, after the action's own
-      # transaction closes. Until T-088 nothing wrote either table and an
-      # adopter carried an audit surface whose emptiness read as «no actions
-      # were invoked» (K-791); `kiosk.actions` is the FK anchor and is upserted
-      # from the live registry by the same writer.
-      #
-      # NO RLS, and that is deliberate rather than an omission — this comment
-      # used to claim «RLS-enabled by the calling migration so users see only
-      # their own», which no shipped migration has ever done. The log crosses
-      # principals BY DESIGN: it is the operator's oversight surface, a policy
-      # scoping it to `current_user_id()` would hide rows from the operator who
-      # needs to read them, and an audit table a caller's own session could
-      # read is one it could enumerate. The writer opens no {SessionContext},
-      # so rows are written as the connection's own role and a caller's session
-      # can neither suppress nor forge one. See {ActionLog}.
-      def actions_log_sql(schema: nil, user_id_type: nil)
-        schema      ||= Kiosk.configuration.schema
-        user_id_type ||= Kiosk.configuration.user_id_type
-        col_type = user_id_cast(user_id_type)
-
-        <<~SQL.strip
-          CREATE TABLE "#{schema}".actions (
-            name         text PRIMARY KEY,
-            description  text,
-            created_at   timestamptz NOT NULL DEFAULT now()
-          );
-
-          CREATE TABLE "#{schema}".action_log (
-            id            uuid PRIMARY KEY DEFAULT gen_random_uuid(),
-            action_name   text NOT NULL REFERENCES "#{schema}".actions(name),
-            user_id       #{col_type} NOT NULL,
-            agent_id      uuid,
-            role          text NOT NULL,
-            actor         text NOT NULL,
-            args          jsonb NOT NULL DEFAULT '{}'::jsonb,
-            result_status text NOT NULL,
-            error_class   text,
-            error_message text,
-            invoked_at    timestamptz NOT NULL DEFAULT now()
-          );
-          CREATE INDEX idx_action_log_user_id   ON "#{schema}".action_log (user_id, invoked_at DESC);
-          CREATE INDEX idx_action_log_agent_id  ON "#{schema}".action_log (agent_id, invoked_at DESC) WHERE agent_id IS NOT NULL;
-        SQL
-      end
+      # `actions_log_sql` used to emit `kiosk.actions` + `kiosk.action_log`
+      # here. It is GONE, not deprecated: nothing writes those tables since
+      # K-828 reversed the audit trail into an operator-owned sink
+      # ({Kiosk::Server::AuditSink}), and a shipped migration that creates an
+      # audit table nothing ever fills is exactly the defect K-791 filed in
+      # the first place. There are no adopters to carry a compatibility shim
+      # for; an existing installation drops the two tables by hand.
 
       # ─── 004 create_kiosk_reservations ─────────────────────────────────
 

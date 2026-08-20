@@ -10,13 +10,18 @@
 
 set -euo pipefail
 
+APP_ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 PORT="${KIOSK_DEMO_PORT:-3006}"
 SERVER_URL="http://127.0.0.1:$PORT"
-ALICE="00000000-0000-0000-0000-000000000001"
-BOB="00000000-0000-0000-0000-000000000002"
 
-ALICE_TOKEN="agent:u-$ALICE:a-alice-claude:r-customer"
-BOB_TOKEN="agent:u-$BOB:a-bob-chatgpt:r-customer"
+# The seeded human this walkthrough acts for (db/seeds.rb). Her ASSISTANT's
+# token is minted below, after the server is up, by running the real binding
+# ceremony — see the "Binding" heading. Until T-104 this script wrote the
+# bearer down as `agent:u-<uuid>:a-<slug>:r-customer` and a dev-only parser in
+# the demo believed it; that parser is deleted, so the walkthrough now shows
+# the same thing a real assistant does to get a token.
+ALICE_EMAIL="${ALICE_EMAIL:-alice@example.com}"
+DEMO_PASSWORD="${DEMO_PASSWORD:-philslist-demo-password}"
 
 heading() { printf "\n\033[1;36m── %s ──\033[0m\n" "$1"; }
 step()    { printf "\n  \033[1;33m▶\033[0m %s\n" "$1"; }
@@ -47,6 +52,25 @@ q()   { curl -sS "$SERVER_URL/kiosk/$2${3:+?$3}" -H "Authorization: Bearer $1"; 
 run() { curl -sS -X POST "$SERVER_URL/kiosk/$2" -H "Authorization: Bearer $1" \
           -H "Content-Type: application/json" -d "$3"; }
 
+# Bind one assistant to one seeded human and print its access token.
+#
+# There is no shortcut left to take: lib/bound_assistant.rb runs the shipped
+# ceremony over real HTTP — the Equihash-tolled /kiosk/auth/register, the
+# human's own /users/sign_in form, /kiosk/auth/link, /kiosk/auth/claim — and
+# the token that comes back is one this provider minted for a key it saw.
+# ~a second per assistant, most of it the Equihash toll and the RSA keygen.
+#   bind <email>
+bind() {
+  SERVER_URL="$SERVER_URL" KIOSK_ISSUER="$SERVER_URL" \
+  HOLDER_EMAIL="$1" HOLDER_PASSWORD="$DEMO_PASSWORD" \
+    bundle exec ruby -r"$APP_ROOT/lib/bound_assistant" -e '
+      puts bind_assistant(server:   ENV.fetch("SERVER_URL"),
+                          issuer:   ENV.fetch("KIOSK_ISSUER"),
+                          email:    ENV.fetch("HOLDER_EMAIL"),
+                          password: ENV.fetch("HOLDER_PASSWORD")).token
+    '
+}
+
 # ─── boot ────────────────────────────────────────────────────────────
 
 heading "Starting philslist (the demo provider) on port $PORT"
@@ -64,6 +88,23 @@ for _ in $(seq 1 30); do
 done
 curl -sf "$SERVER_URL/.well-known/kiosk.json" >/dev/null \
   || fail "server did not become ready — see /tmp/kiosk-philslist-demo.log"
+
+# ─── binding: the assistants EARN their tokens ────────────────────────
+
+heading "Binding: each assistant earns a token through the real ceremony"
+
+step "Alice's assistant: register (Equihash toll) → Alice signs in → link → claim"
+ALICE_TOKEN="$(bind "$ALICE_EMAIL")"
+[[ -n "$ALICE_TOKEN" ]] || fail "could not bind an assistant for $ALICE_EMAIL"
+say "✓ Alice's assistant holds a kiosk-pop JWT this provider minted"
+
+# Bob is NOT bound here, on purpose. This walkthrough is a single account's tour
+# — browse → post → edit → close — and the cross-owner board it browses comes
+# from the seeds, not from a second live principal. (A `BOB_TOKEN` used to be
+# declared at the top of this file and never read; a written-down string costs
+# nothing, a ceremony costs a real Equihash toll, so the dead one is gone rather
+# than promoted.) Bob's side of the boundary is asserted where it belongs:
+# `rake demo:isolation` and `rake demo:redteam`, which bind him for real.
 
 # ─── discovery: prove there is NO payment ─────────────────────────────
 

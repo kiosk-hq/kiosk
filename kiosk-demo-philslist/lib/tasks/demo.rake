@@ -65,8 +65,9 @@ namespace :demo do
     Adversarial cross-owner isolation test.
 
     Runs demo:setup (clean DB + seed), boots the server, runs script/isolation_flow.rb
-    with the two seeded principals (Alice and Bob), and asserts all cross-owner
-    denial properties:
+    with the two seeded principals (Alice and Bob) — each one EARNED through the
+    shipped binding ceremony, not a token the driver wrote down (T-104) — and
+    asserts all cross-owner denial properties:
 
       Assertion 1 (cross-owner browse): browse_listings returns BOTH owners'
         open listings to Bob (open board — positive control).
@@ -80,17 +81,28 @@ namespace :demo do
       Assertion 5 (the principal is not an input): Bob post_listing with a
         forged owner_id arg (Alice's UUID) → 400 bad_request naming owner_id,
         refused by the published input_schema before the handler runs; and
-        Bob's legitimate listing has DB owner_id == Bob, so ownership comes
-        from the token.
+        Bob's legitimate listing has DB owner_id == Bob and
+        created_by_agent_id == the agent id /auth/register MINTED for Bob, so
+        both ownership and attribution come from the token.
 
     Exits 0 if all assertions hold; exits 1 on failure. A red assertion = a real
     isolation hole: fix the app, not the test.
   DESC
   task isolation: :setup do
     require "json"
+    require "shellwords"
     port = ENV.fetch("PORT", "3006")
     log  = "/tmp/kiosk-philslist-isolation.log"
     db   = "kiosk_philslist_development"
+
+    # The two seeded humans behind the two assistants (db/seeds.rb). Since
+    # T-104 the driver EARNS each principal through the shipped ceremony —
+    # register → the human's Devise sign-in → link → claim — so it needs real
+    # credentials, and they travel as env the way demo:binding's do rather than
+    # as literals inside script/isolation_flow.rb.
+    alice_email   = "alice@example.com"
+    bob_email     = "bob@example.com"
+    demo_password = "philslist-demo-password"
 
     puts "\n── Starting philslist (isolation test) ──"
     server_pid, server_url = philslist_boot_server(log: log, port: port)
@@ -105,7 +117,10 @@ namespace :demo do
 
     flow_rb = File.expand_path("../../script/isolation_flow.rb", __dir__)
     puts "\n── Running script/isolation_flow.rb (adversarial cross-owner) ──"
-    raw = `SERVER_URL=#{server_url} KIOSK_ISSUER=#{server_url} bundle exec ruby #{flow_rb} 2>&1`
+    env = "SERVER_URL=#{server_url.shellescape} KIOSK_ISSUER=#{server_url.shellescape} " \
+          "ALICE_EMAIL=#{alice_email.shellescape} BOB_EMAIL=#{bob_email.shellescape} " \
+          "DEMO_PASSWORD=#{demo_password.shellescape}"
+    raw = `#{env} bundle exec ruby #{flow_rb.shellescape} 2>&1`
     puts raw
 
     begin
@@ -118,6 +133,7 @@ namespace :demo do
     puts "\n── Adversarial isolation assertions ──"
 
     user_id_b        = result["user_id_b"]
+    agent_id_b       = result["agent_id_b"]
     alice_listing_id = result["alice_listing_id"]
     bob_listing_id   = result["bob_listing_id"]
     browse_ids       = result["browse_ids"] || []
@@ -184,6 +200,20 @@ namespace :demo do
     else
       failures << "owner not taken from identity: DB owner_id #{db_owner.inspect}, want Bob #{user_id_b}"
       puts "  x  Assertion 5b FAILED: listing owner_id #{db_owner.inspect} (want Bob #{user_id_b})"
+    end
+
+    # Assertion 5c: ATTRIBUTION comes from the identity too, and the identity is
+    # one the engine minted. `created_by_agent_id` is written from the acting
+    # agent (post_listing_operation.rb) and is unwritable from the wire; the id
+    # it must equal is the uuid `/auth/register` handed this run's assistant.
+    # Before T-104 a driver chose its own agent id, so this column could only
+    # ever agree with the driver's own literal.
+    db_agent = `psql -X -d #{db} -tAc "SELECT created_by_agent_id FROM listings WHERE id = '#{owner_probe_id}'" 2>&1`.strip
+    if db_agent == agent_id_b
+      puts "  OK  Assertion 5c: DB listings.created_by_agent_id == Bob's MINTED agent id (#{agent_id_b})"
+    else
+      failures << "attribution not taken from identity: DB created_by_agent_id #{db_agent.inspect}, want #{agent_id_b.inspect}"
+      puts "  x  Assertion 5c FAILED: created_by_agent_id #{db_agent.inspect} (want #{agent_id_b.inspect})"
     end
 
     if failures.empty?
@@ -372,6 +402,10 @@ namespace :demo do
       BLOCKED  CrossOwnerClose   — Bob close_listing on Alice's listing → 403
       BLOCKED  MissingAuth       — request with no Authorization → 401
       BLOCKED  GarbageToken      — unparseable bearer token → 401
+      BLOCKED  SelfAssertedTokenForgery — a self-asserted
+               `agent:u-…:a-…:r-owner` bearer naming a real account resolves to
+               NO identity (401 on read AND write) in the SAME environment this
+               suite drives, while a genuinely-bound token is answered
       BLOCKED  UnknownQuery      — unregistered query name → 404
       BLOCKED  UnknownAction     — unregistered action name → 404
 
@@ -379,8 +413,16 @@ namespace :demo do
     a real hole — fix the app, not the scenario.
   DESC
   task redteam: :setup do
+    require "shellwords"
     port = ENV.fetch("PORT", "3006")
     log  = "/tmp/kiosk-philslist-redteam.log"
+
+    # The two seeded humans behind the battery's principals (db/seeds.rb): since
+    # T-104 the suite EARNS them through the shipped ceremony instead of writing
+    # tokens down, so it needs credentials, passed as env like demo:binding's.
+    alice_email   = "alice@example.com"
+    bob_email     = "bob@example.com"
+    demo_password = "philslist-demo-password"
 
     puts "\n── Starting philslist (redteam battery) ──"
     server_pid, server_url = philslist_boot_server(log: log, port: port)
@@ -395,7 +437,10 @@ namespace :demo do
 
     suite_rb = File.expand_path("../../script/redteam_suite.rb", __dir__)
     puts "\n── Running script/redteam_suite.rb ──"
-    system("SERVER_URL=#{server_url} KIOSK_ISSUER=#{server_url} bundle exec ruby #{suite_rb}")
+    env = "SERVER_URL=#{server_url.shellescape} KIOSK_ISSUER=#{server_url.shellescape} " \
+          "ALICE_EMAIL=#{alice_email.shellescape} BOB_EMAIL=#{bob_email.shellescape} " \
+          "DEMO_PASSWORD=#{demo_password.shellescape}"
+    system("#{env} bundle exec ruby #{suite_rb.shellescape}")
     exit_status = $?.exitstatus
 
     if exit_status == 0

@@ -1,11 +1,14 @@
 # frozen_string_literal: true
 
 # Seeds the philslist classifieds board:
-#   - two account holders, Alice and Bob, with STABLE UUIDs the assistant
-#     scripts use in `Authorization: Bearer agent:u-<uuid>:a-<agent>:r-<role>`
-#     headers. Both get Devise credentials so the account-binding walkthrough
-#     can sign in through the real /users/sign_in form (Alice approves the
-#     assistant link there). Alice's account is ALSO the HOUSEHOLD account: two
+#   - two account holders, Alice and Bob, with STABLE UUIDs and real Devise
+#     credentials. The credentials are the load-bearing part: since T-104 no
+#     driver can hand itself a principal, so every one of them signs its human
+#     in through the real /users/sign_in form and binds an assistant through the
+#     shipped ceremony (register → link → claim, lib/bound_assistant.rb). The
+#     UUIDs stay stable because the claim REBINDS the assistant onto the human's
+#     account, which is what makes "Alice's rows" mean these ids.
+#     Alice's account is ALSO the HOUSEHOLD account: two
 #     assistants (Alice's and her partner's) bind to it in `demo:binding`, so a
 #     listing either assistant posts is one shared board presence. Bob is a
 #     SEPARATE owner — the cross-owner isolation boundary (`demo:isolation`).

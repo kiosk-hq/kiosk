@@ -17,37 +17,48 @@
 #                      typed 400 with no SQL internals on the wire — never a 500
 #   MissingAuth      — a request with no Authorization → 401
 #   GarbageToken     — an unparseable bearer token → 401
+#   SelfAssertedTokenForgery — a self-asserted `agent:u-…:a-…:r-owner` bearer
+#                      resolves to NO identity, in EVERY environment (K-539 /
+#                      T-104), while a genuinely-bound token is answered
 #   UnknownQuery     — an unregistered query name → 404
 #   UnknownAction    — an unregistered action name → 404
 #   OutOfEnumFilterIsNotSilentlyReinterpreted — a browse_listings `status`
 #                      outside open|closed is a typed 400 naming the two,
 #                      NEVER a 200 answering a different question (T-090)
 #
+# THE TWO PRINCIPALS ARE EARNED, NOT ASSERTED (T-104). Alice and Bob are bound
+# through the shipped ceremony — Equihash-tolled `/auth/register` → the human's
+# real Devise sign-in → `/auth/link` → `/auth/claim` (lib/bound_assistant.rb) —
+# because the dev-only parser that used to turn a written-down
+# `agent:u-…:a-…:r-…` string into an identity at any role is deleted. That is
+# also what promotes the SelfAssertedTokenForgery beat below from an in-process
+# probe under a stubbed production config into an ordinary over-the-wire attack
+# in the SAME environment this suite drives.
+#
 # Usage:
 #   SERVER_URL=http://127.0.0.1:3006 KIOSK_ISSUER=http://127.0.0.1:3006 \
-#   bundle exec ruby script/redteam_suite.rb
+#   ALICE_EMAIL=alice@example.com BOB_EMAIL=bob@example.com \
+#   DEMO_PASSWORD=… bundle exec ruby script/redteam_suite.rb
 #
 # Exits 0 when every scenario is BLOCKED (0 BREACH); exits 1 on any BREACH.
 # A BREACH = a real hole in philslist — fix the app, not the scenario.
 
 require "json"
 require "net/http"
+require "securerandom"
 require "uri"
 
-SERVER = ENV.fetch("SERVER_URL")
+require_relative "../lib/bound_assistant"
 
-ALICE_UUID = "00000000-0000-0000-0000-000000000001"
-BOB_UUID   = "00000000-0000-0000-0000-000000000002"
-# The agent id is a UUID, not a readable slug: `kiosk.agents.id`, every
-# `kiosk.*_mandates.agent_id` and `kiosk.current_agent_id()` are all typed
-# `uuid` in the canonical schema, so a stub identity carrying anything else is one
-# the shipped tables cannot store (K-829; found by the T-088 audit-log writer, which
-# K-828 has since removed — the constraint it exposed is the schema's, not that
-# writer's, and outlives it).
-AGENT_A    = "a0000000-0000-0000-0000-000000000001"
-AGENT_B    = "a0000000-0000-0000-0000-000000000002"
-TOKEN_A    = "agent:u-#{ALICE_UUID}:a-#{AGENT_A}:r-customer"
-TOKEN_B    = "agent:u-#{BOB_UUID}:a-#{AGENT_B}:r-customer"
+SERVER = ENV.fetch("SERVER_URL")
+ISSUER = ENV.fetch("KIOSK_ISSUER", SERVER)
+
+# The seeded humans behind the two assistants (db/seeds.rb). Credentials arrive
+# in the environment from the rake task, the way demo:binding's HOLDER_EMAIL /
+# HOLDER_PASSWORD do — never as literals in a driver.
+ALICE_EMAIL = ENV.fetch("ALICE_EMAIL")
+BOB_EMAIL   = ENV.fetch("BOB_EMAIL")
+PASSWORD    = ENV.fetch("DEMO_PASSWORD")
 
 # THE 0.4 WIRE. An action is `POST <endpoint>/<action-name>` carrying its
 # arguments as the JSON body; a query is `GET <endpoint>/<query-name>` carrying
@@ -78,17 +89,23 @@ def record(results, name, blocked, detail)
   puts "  #{tag}  #{name} — #{detail}"
 end
 
+# ── Fixture: two principals, each EARNED through the shipped ceremony ─────────
+ALICE = bind_assistant(server: SERVER, issuer: ISSUER, email: ALICE_EMAIL, password: PASSWORD)
+BOB   = bind_assistant(server: SERVER, issuer: ISSUER, email: BOB_EMAIL,   password: PASSWORD)
+abort "both assistants bound to the SAME account (#{ALICE.user_id}) — no boundary to attack" \
+  if ALICE.user_id == BOB.user_id
+
 # ── Fixture: Alice posts a listing (target for cross-owner probes) ────────────
 rc, alice_post = post_json("/kiosk/post_listing",
                            { category_slug: "furniture",
                              title: "Redteam target", body: "Alice's listing" },
-                           bearer(TOKEN_A))
+                           ALICE.bearer)
 abort "A post_listing failed (#{rc}): #{JSON.generate(alice_post)} — run rake demo:setup" unless rc == 200
 alice_listing_id = alice_post["listing_id"]
 abort "no listing_id from A's post: #{JSON.generate(alice_post)}" unless alice_listing_id
 
 # ── CrossTenantRead — Bob must not see Alice's listing in my_listings ─────────
-rc, b_mine = get_json("/kiosk/my_listings", {}, bearer(TOKEN_B))
+rc, b_mine = get_json("/kiosk/my_listings", {}, BOB.bearer)
 b_ids = Array(b_mine).map { |r| r["listing_id"] }
 record(results, "CrossTenantRead",
        rc == 200 && !b_ids.include?(alice_listing_id),
@@ -107,17 +124,17 @@ record(results, "CrossTenantRead",
 # nothing belonging to Bob appears under Alice.
 rc, forged = post_json("/kiosk/post_listing",
                        { category_slug: "free",
-                         title: "Forged", body: "should be Bob's", owner_id: ALICE_UUID },
-                       bearer(TOKEN_B))
+                         title: "Forged", body: "should be Bob's", owner_id: ALICE.user_id },
+                       BOB.bearer)
 refused = rc == 400 && forged["code"] == "bad_request" && forged["detail"].to_s.include?("owner_id")
 
 # And the principal really does come from the token, not from anything the
 # caller sent: Bob's LEGITIMATE listing lands under Bob and never under Alice.
 rc_b, bobs = post_json("/kiosk/post_listing",
                        { category_slug: "free", title: "Bob's own", body: "belongs to Bob" },
-                       bearer(TOKEN_B))
+                       BOB.bearer)
 bob_id = bobs["listing_id"]
-rc_a, a_mine = get_json("/kiosk/my_listings", {}, bearer(TOKEN_A))
+rc_a, a_mine = get_json("/kiosk/my_listings", {}, ALICE.bearer)
 a_ids = Array(a_mine).map { |r| r["listing_id"] }
 record(results, "ForgedUserId",
        refused && rc_b == 200 && rc_a == 200 && !a_ids.include?(bob_id),
@@ -127,13 +144,13 @@ record(results, "ForgedUserId",
 # ── CrossOwnerEdit — Bob edits Alice's listing → 403 ─────────────────────────
 rc, _ = post_json("/kiosk/edit_listing",
                   { listing_id: alice_listing_id, price_text: "€1" },
-                  bearer(TOKEN_B))
+                  BOB.bearer)
 record(results, "CrossOwnerEdit", rc == 403, "Bob edit Alice's listing → #{rc} (want 403)")
 
 # ── CrossOwnerClose — Bob closes Alice's listing → 403 ───────────────────────
 rc, _ = post_json("/kiosk/close_listing",
                   { listing_id: alice_listing_id },
-                  bearer(TOKEN_B))
+                  BOB.bearer)
 record(results, "CrossOwnerClose", rc == 403, "Bob close Alice's listing → #{rc} (want 403)")
 
 # ── MalformedUuidArg — a junk listing_id must be a typed 400, never a 500 ────
@@ -149,7 +166,7 @@ SQL_INTERNALS = ["::uuid", "PG::", "22P02", "invalid input syntax"].freeze
 
 uuid_probes = %w[edit_listing close_listing].flat_map do |verb|
   MALFORMED_IDS.map do |junk|
-    rc, body = post_json("/kiosk/#{verb}", { listing_id: junk }, bearer(TOKEN_A))
+    rc, body = post_json("/kiosk/#{verb}", { listing_id: junk }, ALICE.bearer)
     leak = SQL_INTERNALS.find { |needle| JSON.generate(body).include?(needle) }
     ok = rc == 400 && body["code"] == "bad_request" && leak.nil?
     [ok, "#{verb}(#{junk.inspect})→#{rc}/#{body['code'].inspect}#{leak ? " LEAK #{leak}" : ''}"]
@@ -167,12 +184,54 @@ record(results, "MissingAuth", rc == 401, "unauthenticated request → #{rc} (wa
 rc, _ = get_json("/kiosk/browse_listings", {}, bearer("not-a-real-token"))
 record(results, "GarbageToken", rc == 401, "garbage token → #{rc} (want 401)")
 
+# ── SelfAssertedTokenForgery (K-539 / T-104) — OVER THE LIVE WIRE ─────────────
+#
+# THE BEAT CHANGED SHAPE, AND THE CHANGE IS THE POINT. philslist used to compose
+# a hand-copied agent-IdP that parsed a self-asserted, UNSIGNED
+# `agent:u-<user>:a-<agent>:r-<role>` bearer straight into an authenticated
+# identity — at whatever role the string named. It was live in development on
+# purpose (every driver in this repo, including this suite, held itself a
+# principal that way), so the block could only ever be demonstrated IN-PROCESS
+# against a stubbed production Rails.env, and an env gate was the whole defence.
+#
+# There is no such parser any more, in any environment: `c.agent_idp` is unset,
+# so the engine's own DefaultAgentIdp verifies the kiosk-pop JWTs it minted and
+# nothing else. So this is now an ordinary over-the-wire probe in the SAME
+# environment this suite drives, which is a strictly stronger claim than the one
+# an env gate could support.
+#
+# The forged string is deliberately maximal: it names a REAL account (Alice's,
+# read off her genuinely-bound token, so nothing about it is stale), a
+# syntactically valid uuid agent id, and `r-owner` — a role philslist does not
+# even configure (`c.roles = %i[customer]`). It must buy nothing anywhere: not a
+# read, not a write.
+#
+# The positive control is what keeps this honest. A suite where every bearer
+# 401s would pass a refusal-only assertion, so the same verbs are called with
+# Alice's REAL bound token and must be ANSWERED.
+forged_bearer = bearer("agent:u-#{ALICE.user_id}:a-#{SecureRandom.uuid}:r-owner")
+rc_forged_read, = get_json("/kiosk/my_listings", {}, forged_bearer)
+rc_forged_write, = post_json("/kiosk/post_listing",
+                             { category_slug: "free", title: "Self-asserted", body: "must never exist" },
+                             forged_bearer)
+rc_real_read,  = get_json("/kiosk/my_listings", {}, ALICE.bearer)
+rc_real_write, = post_json("/kiosk/post_listing",
+                           { category_slug: "free", title: "Really Alice's", body: "bound token" },
+                           ALICE.bearer)
+record(results, "SelfAssertedTokenForgery",
+       rc_forged_read == 401 && rc_forged_write == 401 &&
+         rc_real_read == 200 && rc_real_write == 200,
+       "self-asserted `agent:u-…:a-…:r-owner` naming a real account → read #{rc_forged_read}, " \
+       "write #{rc_forged_write} (want 401/401: it resolves to NO identity, in THIS environment — " \
+       "no env gate involved); CONTROL Alice's genuinely-bound token → read #{rc_real_read}, " \
+       "write #{rc_real_write} (want 200/200, so the refusal is not vacuous)")
+
 # ── UnknownQuery — unregistered query name → 404 ─────────────────────────────
-rc, _ = get_json("/kiosk/frobnicate", {}, bearer(TOKEN_A))
+rc, _ = get_json("/kiosk/frobnicate", {}, ALICE.bearer)
 record(results, "UnknownQuery", rc == 404, "unknown query → #{rc} (want 404)")
 
 # ── UnknownAction — unregistered action name → 404 ───────────────────────────
-rc, _ = post_json("/kiosk/nope", {}, bearer(TOKEN_A))
+rc, _ = post_json("/kiosk/nope", {}, ALICE.bearer)
 record(results, "UnknownAction", rc == 404, "unknown action → #{rc} (want 404)")
 
 # ── RetiredWire — the deleted 0.3 endpoints are GONE, not tombstoned ─────────
@@ -181,7 +240,7 @@ record(results, "UnknownAction", rc == 404, "unknown action → #{rc} (want 404)
 # answers the ordinary 404 — no privileged endpoint, no compatibility payload,
 # no second conformance surface to attack.
 retired = %w[query run].map do |name|
-  rc, body = post_json("/kiosk/#{name}", { name: "browse_listings" }, bearer(TOKEN_A))
+  rc, body = post_json("/kiosk/#{name}", { name: "browse_listings" }, ALICE.bearer)
   [rc == 404 && body["code"] == "not_found", "#{name}→#{rc}/#{body['code'].inspect}"]
 end
 record(results, "RetiredWire", retired.all? { |ok, _| ok },
@@ -193,7 +252,7 @@ record(results, "RetiredWire", retired.all? { |ok, _| ok },
 # have called correctly.
 uri405 = URI("#{SERVER}/kiosk/post_listing")
 res405 = Net::HTTP.new(uri405.host, uri405.port)
-              .request(Net::HTTP::Get.new(uri405, bearer(TOKEN_A)))
+              .request(Net::HTTP::Get.new(uri405, ALICE.bearer))
 body405 = (JSON.parse(res405.body) rescue {})
 record(results, "MethodMismatch",
        res405.code.to_i == 405 && body405["code"] == "method_not_allowed" &&
@@ -219,9 +278,9 @@ record(results, "MethodMismatch",
 #
 # The positive control is what keeps this honest: `status=closed` must still be
 # ANSWERED (200), or a handler that refused everything would pass.
-rc_bad, bad_status = get_json("/kiosk/browse_listings", { status: "deleted" }, bearer(TOKEN_A))
+rc_bad, bad_status = get_json("/kiosk/browse_listings", { status: "deleted" }, ALICE.bearer)
 detail_bad = bad_status.is_a?(Hash) ? bad_status["detail"].to_s : ""
-rc_ctl, ctl_rows = get_json("/kiosk/browse_listings", { status: "closed" }, bearer(TOKEN_A))
+rc_ctl, ctl_rows = get_json("/kiosk/browse_listings", { status: "closed" }, ALICE.bearer)
 record(results, "OutOfEnumFilterIsNotSilentlyReinterpreted",
        rc_bad == 400 && bad_status["code"] == "bad_request" &&
          detail_bad.include?("open") && detail_bad.include?("closed") &&

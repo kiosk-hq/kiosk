@@ -160,7 +160,8 @@ assertions cannot go ungated and unexplained.
 | `config/initializers/kiosk.rb` | `Kiosk.configure` (NO `payment_provider`) — configuration only; it names the two handler controllers, it does not contain them |
 | `app/controllers/kiosk/board_controller.rb` | The `browse_listings` / `my_listings` queries — an ordinary Rails controller with `include Kiosk::Query`, declared with the class-level macros. Not routable: handlers are reached only through the wire |
 | `app/controllers/kiosk/listings_controller.rb` | The `post_listing` / `edit_listing` / `close_listing` actions — same shape with `include Kiosk::Action`; refusals are plain `render json:, status:` naming a wire error `code`, which the wire carries into the RFC 9457 problem document an assistant branches on |
-| `app/services/stub_idp.rb` / `app/services/jwt_or_stub_idp.rb` | Demo IdP: Kiosk JWTs first, bespoke `agent:u-…:a-…:r-…` fallback. `app/services` is autoloaded ONCE (see `config/application.rb`) so the initializer can name these with no `require` |
+| *(no `c.agent_idp`)* | Deliberate, and the point of the line's absence. An assistant authenticates with the kiosk-pop JWT this engine minted at `/kiosk/auth/register`, `/kiosk/auth/login` or the binding ceremony, verified by the `DefaultAgentIdp` the engine has always shipped as its fallback. The hand-copied `stub_idp.rb` / `jwt_or_stub_idp.rb` pair that used to sit here — and the dev-only `agent:u-…:a-…:r-…` parser it existed to bolt on — are deleted |
+| `lib/bound_assistant.rb` / `lib/devise_session.rb` | The ONE way a driver obtains an AGENT principal and a HUMAN one. Both run the shipped ceremony over real HTTP; both are hand-copied across the demos and held byte-identical by `bin/check-demo-copies` |
 | `script/isolation_flow.rb` / `script/redteam_suite.rb` / `script/schema_flow.rb` / `script/binding_flow.rb` / `script/register_flow.rb` | One-JSON-line flow drivers the rake tasks assert on |
 | `bin/demo` | The browse→post→edit→close walkthrough (POSIX shell, curl-driven) |
 | `lib/tasks/demo.rake` | `rake demo:setup`, `:walkthrough`, `demo`, `:isolation`, `:redteam`, `:schema`, `:binding`, `:register` |
@@ -170,11 +171,18 @@ assertions cannot go ungated and unexplained.
 The demo bakes in shortcuts production operators replace:
 
 - **Synthetic accounts (Alice, Bob)** → your real user table (the demo already
-  gives them real Devise credentials so the binding walkthrough signs in like a
-  person would).
-- **`StubIdp`** (AI-assistant channel) → registered assistants already flow through
-  real Kiosk-issued JWTs; the bespoke fallback shape disappears. The human
-  session channel already runs the real `kiosk-user-idp-devise` adapter.
+  gives them real Devise credentials, and every driver here signs in through the
+  real form like a person would).
+- **The AI-assistant channel** (`c.agent_idp`) is **not** a shortcut here any
+  more: this demo sets nothing, so the engine's own `DefaultAgentIdp` verifies
+  the kiosk-pop JWTs it minted, in every environment. The bespoke
+  `agent:u-…:a-…:r-…` fallback shape — which a dev-only parser turned into an
+  identity at any role it asked for — is deleted. Swap this seam only to front
+  an EXTERNAL agent-identity issuer (Entra Agent ID, Okta, an ID-JAG-style
+  broker), by subclassing `Kiosk::AgentIdentityProviders::Base`; its one hard
+  constraint is that the `agent_id` you return must be a **UUID** (K-830).
+- **The human session channel** (`c.user_idp`) already runs the real
+  `kiosk-user-idp-devise` adapter.
 
 ## License
 

@@ -211,6 +211,11 @@ cp "$FIXTURES/create_salons_and_appointments.rb" \
    "db/migrate/${ts3}_create_salons_and_appointments.rb"
 
 # 4) Models, seeds, stub IdP, initializer, routes.
+# `rails new --api` generates ApplicationController < ActionController::API, and
+# Devise's controllers inherit from it — the sign-in form 500s on `flash`, which
+# ::API does not have. This is the controller half of leaving api_only behind
+# (the middleware half is the config.api_only patch below).
+cp "$FIXTURES/application_controller.rb" app/controllers/application_controller.rb
 cp "$FIXTURES/user.rb"               app/models/user.rb
 cp "$FIXTURES/salon.rb"              app/models/salon.rb
 cp "$FIXTURES/appointment.rb"        app/models/appointment.rb

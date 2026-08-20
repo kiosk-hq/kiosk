@@ -24,16 +24,23 @@ Anti-bot friction compounds this. Behavioral fingerprinting (Cloudflare Turnstil
 
 ## With Kiosk — hoteling (`rake demo` output)
 
-hoteling is a Rails 8.1 app that speaks Kiosk. The following is the recorded output of `rake demo`.
+hoteling is a Rails 8.1 app that speaks Kiosk. Below is the **verbatim** output
+of `rake demo` — recorded **2026-08-20** against a booted demo, `demo:setup`'s
+database chatter removed and nothing else touched. The identifiers are that
+run's; the dates are `Date.today + 30` / `+ 33`, so they move with the day it is
+run.
 
 ```
-  Registered: user_id=<uuid>
-  Properties: 5 found, using id=4 (Bosphorus Palace)
-  Availability: 2 room type(s) available, using id=<id> (Classic, 15000c/night)
-  Reserved: booking_id=<uuid> total=45000c
-  Payment settled: settlement_id=<uuid>
+  (add to /etc/hosts: 127.0.0.1 hoteling.demo.kiosk.tech — using 127.0.0.1)
 
-── Assertions ──
+══ RUN 1: Happy path ══
+  Server up at http://127.0.0.1:3003
+  Registered: user_id=16f146b9-eec8-4f85-871f-29845c94d6dc
+  Properties: 100 found, using property_id=27 (Amber Fatih Residence)
+  Availability: 2 room type(s) available, using room_type_id=63 (Standard, €70.00/night)
+  Reserved: booking_id=dab8db12-40fe-42ee-bf93-8144e983772d total=€210.00
+  Payment settled: settlement_id=b42373ab-204a-4bdf-a0a0-16500f87608f
+{"http_register":201,"http_properties":200,"http_availability":200,"http_reserve_room":200,"http_pay":200,"http_confirm_booking":200,"user_id":"16f146b9-eec8-4f85-871f-29845c94d6dc","agent_id":"069556e1-0d27-4d98-9581-3a5fc3fc566e","booking_id":"dab8db12-40fe-42ee-bf93-8144e983772d","total_cents":21000,"confirm_status":"confirmed","confirmation_code":"d8109a3e-29b9-46d7-b4fc-7a69ce19f786","http_my_bookings":200,"stored_confirmation_code":"d8109a3e-29b9-46d7-b4fc-7a69ce19f786"}
   OK  http_register == 201
   OK  http_properties == 200
   OK  http_availability == 200
@@ -41,22 +48,41 @@ hoteling is a Rails 8.1 app that speaks Kiosk. The following is the recorded out
   OK  http_pay == 200
   OK  http_confirm_booking == 200
   OK  confirm_status == confirmed
-  OK  booking_id present (<uuid>)
+  OK  booking_id present (dab8db12-40fe-42ee-bf93-8144e983772d)
+  OK  confirmation_code round-trips through my_bookings (d8109a3e-29b9-46d7-b4fc-7a69ce19f786)
+  OK  bookings.confirmation_code == the code returned (d8109a3e-29b9-46d7-b4fc-7a69ce19f786)
   OK  bookings[status=confirmed] >= 1 (got 1)
   OK  kiosk.settlements >= 1 (got 1)
   OK  kiosk.reservations[resource_kind=room_booking] >= 1 (got 1)
+  Server stopped.
 
+══ RUN 2: Server-gate negative — SKIP_PAY → 403 ══
+  Server up at http://127.0.0.1:3003
+  Registered: user_id=4433c5b7-75d8-41f0-8456-0262cce99970
+  Properties: 100 found, using property_id=27 (Amber Fatih Residence)
+  Availability: 1 room type(s) available, using room_type_id=64 (Deluxe, €105.00/night)
+  Reserved: booking_id=000b17d2-e21a-44d1-ac13-935e4932591c total=€315.00
+{"http_register":201,"http_properties":200,"http_availability":200,"http_reserve_room":200,"http_pay":null,"http_confirm_booking":403,"user_id":"4433c5b7-75d8-41f0-8456-0262cce99970","agent_id":"4d67ad53-42e8-4a26-bf72-2404b89a0db7","booking_id":"000b17d2-e21a-44d1-ac13-935e4932591c","total_cents":31500,"confirm_status":null,"confirmation_code":null,"http_my_bookings":200,"stored_confirmation_code":null}
+  OK  SKIP_PAY: http_confirm_booking == 403
+  Server stopped.
+
+── Assertions ──
   All assertions passed.
 ```
+
+`rake demo` runs the flow twice on purpose. RUN 2 skips the payment and asks for
+the same confirmation: the server refuses it `403`, which is what makes RUN 1's
+`200` mean something. Run 1 took the first room type; Run 2 sees one fewer,
+because Run 1's booking is holding it.
 
 **What the AI assistant did — no human involved at any step:**
 
 1. **Discover** — `GET /.well-known/kiosk.json` returns the hoteling issuer and surface.
 2. **Self-register** — generated an RSA-2048 keypair, then completed the proof-of-possession handshake: `GET /kiosk/auth/challenge` → signed the challenge as an RS256 JWS (`aud` = the hoteling issuer) → `POST /kiosk/auth/register {public_key:<pem>, signed:<jws>}` → HTTP 201 → `agent_id`, `user_id`, `access_token`. No existing account. No human login. No bot check.
-3. **Browse** — `GET /kiosk/properties` returned 5 hotel properties as a bare JSON array (ordered by name; the flow uses the first, Bosphorus Palace, id=4). `GET /kiosk/availability?property_id=4&check_in=2026-07-28&check_out=2026-07-31` returned available room types with nightly prices (ordered by price; the flow uses the first, Classic).
-4. **Reserve** — `POST /kiosk/reserve_room {property_id:4, room_type_id:<id>, check_in:"2026-07-28", check_out:"2026-07-31"}` → HTTP 200, and the body IS the result: `booking_id:<uuid>` and `total_cents:45000`, plus the quote the cart must be signed against (`currency`, `nights`, `nightly_price_cents`) and a `pay_hint`. A TTL hold was created in `kiosk.reservations`.
-5. **Pay** — signed an AP2 intent mandate (`cap_amount_cents:45100`, `scope:"lodging"`, `iss:<issuer>`) and a cart mandate (`total_amount_cents:45000`, `line_items:[{sku:"Classic", qty:3, booking_id:<uuid>}]`, bound to the intent via `intent_mandate_id`) as RS256 JWS with the registered keypair, then `POST /kiosk/pay {intent_mandate_jws:…, cart_mandate_jws:…, payment_mandate_jws:…}` → `settled_amount_cents:45000`, `ok:true`.
-6. **Confirm** — `POST /kiosk/confirm_booking {booking_id:<uuid>}` → HTTP 200, `status:"confirmed"`, `confirmation_code:<uuid>`. The server verified ownership (Gate 1) and the settled mandate referencing this booking (Gate 2) before confirming. The code is stored on the booking row — it is the reference the guest gives at the desk, and `my_bookings` reports the same one afterwards.
+3. **Browse** — `GET /kiosk/properties` returned 100 hotel properties as a bare JSON array (name-ordered; the flow uses the first, Amber Fatih Residence, `property_id=27`). `GET /kiosk/availability?property_id=27&check_in=2026-09-19&check_out=2026-09-22` returned the room types still free for those nights, with nightly prices (price-ordered; the flow uses the first, Standard at €70.00/night).
+4. **Reserve** — `POST /kiosk/reserve_room {property_id:27, room_type_id:63, check_in:"2026-09-19", check_out:"2026-09-22"}` → HTTP 200, and the body IS the result: `booking_id:"dab8db12-…"` and `total_cents:21000` (3 nights × 7000), plus the quote the cart must be signed against (`currency`, `nights`, `nightly_price_cents`) and a `pay_hint`. A TTL hold was created in `kiosk.reservations`.
+5. **Pay** — signed an AP2 intent mandate (`cap_amount_cents:21100`, `scope:"lodging"`, `iss:<issuer>`) and a cart mandate (`total_amount_cents:21000`, `line_items:[{sku:"Standard", qty:3, price_cents:7000, booking_id:"dab8db12-…"}]`, bound to the intent via `intent_mandate_id`) as RS256 JWS with the registered keypair, then `POST /kiosk/pay {intent_mandate_jws:…, cart_mandate_jws:…, payment_mandate_jws:…}` → HTTP 200 with `settlement_id`, `psp_reference`, `settled_amount_cents:21000` and `currency:"eur"`.
+6. **Confirm** — `POST /kiosk/confirm_booking {booking_id:"dab8db12-…"}` → HTTP 200, `status:"confirmed"`, `confirmation_code:"d8109a3e-…"`. The server verified ownership (Gate 1) and the settled mandate referencing this booking (Gate 2) before confirming. The code is stored on the booking row — it is the reference the guest gives at the desk — and the run asserts it twice: `my_bookings` reports the same code, and so does the `bookings` row itself.
 
 The database confirmed: one row in `bookings` with `status='confirmed'`, one row in `kiosk.settlements`, one row in `kiosk.reservations`.
 

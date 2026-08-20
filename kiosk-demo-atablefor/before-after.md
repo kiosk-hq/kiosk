@@ -112,7 +112,7 @@ whole thing.
 
 ```ruby
 # app/controllers/kiosk/dining_room_controller.rb
-class Kiosk::DiningRoomController < ActionController::API
+class Kiosk::DiningRoomController < ApplicationController
   include Kiosk::Query
   include KioskRefusals   # the app's own concern: renders a refusal result
 
@@ -232,7 +232,7 @@ lists are the shipped ones verbatim.
 
 ```ruby
 # app/controllers/kiosk/bookings_controller.rb
-class Kiosk::BookingsController < ActionController::API
+class Kiosk::BookingsController < ApplicationController
   include Kiosk::Action
   include KioskRefusals   # the app's own concern: turns an Operation result into a render
 

@@ -114,18 +114,21 @@ RSpec.describe Kiosk::Server::SchemaDefinitions do
     end
   end
 
-  describe ".actions_log_sql" do
-    subject(:sql) { described_class.actions_log_sql }
-
-    it "creates `kiosk.actions` registry and `kiosk.action_log` for invocation records" do
-      expect(sql).to include(%(CREATE TABLE "kiosk".actions))
-      expect(sql).to include(%(CREATE TABLE "kiosk".action_log))
+  # 003 create_kiosk_actions_log is RETIRED (K-828, 2026-08-20): Kiosk stores
+  # no audit trail at all — it emits one ActionEvent per invocation to the
+  # operator's `audit_sink` — so the generator that created `kiosk.actions` and
+  # `kiosk.action_log` is gone rather than merely uncalled.
+  describe "the retired actions-log generator" do
+    it "no longer exists" do
+      expect(described_class).not_to respond_to(:actions_log_sql)
     end
 
-    it "records actor + agent_id + role per invocation" do
-      expect(sql).to include("agent_id      uuid")
-      expect(sql).to include("role          text NOT NULL")
-      expect(sql).to include("actor         text NOT NULL")
+    it "is emitted by no other canonical generator" do
+      sql = [described_class.helper_functions_sql, described_class.identity_tables_sql,
+             described_class.reservations_sql, described_class.device_authorizations_sql,
+             described_class.mandates_sql].join("\n")
+      expect(sql).not_to include("action_log")
+      expect(sql).not_to include(%(CREATE TABLE "kiosk".actions))
     end
   end
 

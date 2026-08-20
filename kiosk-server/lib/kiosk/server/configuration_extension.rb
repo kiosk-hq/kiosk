@@ -380,38 +380,45 @@ module Kiosk
         @validate_responses ||= false
       end
 
-      # ── The audit log (T-088) ─────────────────────────────────────────────
+      # ── The audit seam (K-828) ────────────────────────────────────────────
 
-      # When true (the DEFAULT), every `run` invocation writes one row to
-      # `<schema>.action_log` — see {ActionLog} for what lands, when, and why
-      # queries and `pay` do not.
+      # THE AUDIT SINK — a callable the operator sets to receive one
+      # {Kiosk::Server::ActionEvent} per action invocation, success and
+      # failure alike. **Default nil: nothing is emitted and Kiosk stores
+      # nothing.**
       #
-      # ON BY DEFAULT because the table is not optional: canonical migration
-      # 003 lays it down for every adopter, and an audit table that exists and
-      # is never written reads as «no actions were invoked» (K-791). An
-      # operator who keeps their own audit trail, or who has not run migration
-      # 003, sets this false and pays nothing.
-      attr_writer :audit_log
-      def audit_log
-        @audit_log = true if @audit_log.nil?
-        @audit_log
-      end
+      #   c.audit_sink = ->(event) { AuditRow.create!(**event.to_h) }
+      #
+      # Kiosk used to keep this trail itself, in a `kiosk.action_log` table
+      # every adopter installed. Phil reversed that on 2026-08-20 — «Хранить в
+      # БД в рамках kiosk reference impl/demo не будем. Дадим интерфейс для
+      # возможности их куда-то выливать по желанию оператора, и на его
+      # ответственность по PII» — so the tables left the canonical migration
+      # set and this seam replaced them.
+      #
+      # **THE ARGUMENTS ARRIVE IN FULL, AND THAT IS DELIBERATE.**
+      # `event.args` is exactly what the handler received — an address, a
+      # name, a cart, a booking reference. Kiosk does not redact them for you,
+      # because a redaction Kiosk chose would be a retention policy Kiosk
+      # invented for your data. Whatever you write, you are the controller
+      # for. {Kiosk::Server::ActionEvent#with_arg_types} and `#without_args`
+      # make withholding them one call, if that is what you want.
+      #
+      # A sink that raises does NOT fail the action (see
+      # {Kiosk::Server::AuditSink}); a non-callable here is rejected now,
+      # rather than becoming a silently missing audit trail at runtime.
+      #
+      # @return [#call, nil]
+      attr_reader :audit_sink
 
-      # What lands in `action_log.args`. `:keys` (DEFAULT) records argument
-      # NAMES with their JSON TYPES and no values; `:none` records `{}`;
-      # `:full` records them verbatim; a callable `->(args) { … }` returns the
-      # Hash to store.
-      #
-      # THE DEFAULT IS NOT VERBATIM, and that is a security decision rather
-      # than a preference: a verb's arguments carry whatever that verb takes —
-      # an address, a name, a payment reference — and the log is retained
-      # indefinitely, unencrypted, outside RLS. Storing them verbatim by
-      # default would turn one decision about auditing into an undiscussed
-      # decision about PII retention. `:full` is available and is the
-      # operator's to make, explicitly.
-      attr_writer :audit_log_args
-      def audit_log_args
-        @audit_log_args ||= :keys
+      def audit_sink=(value)
+        if !value.nil? && !value.respond_to?(:call)
+          raise ArgumentError,
+                "audit_sink must be callable (a lambda or any object answering #call) " \
+                "or nil to emit nothing, got #{value.class}"
+        end
+
+        @audit_sink = value
       end
 
       # ── PoW challenge-response gate (R2) ──────────────────────────────────

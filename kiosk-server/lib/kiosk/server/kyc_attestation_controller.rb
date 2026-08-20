@@ -69,32 +69,72 @@ module Kiosk
         identity
       end
 
-      # Records verification: stamps kyc_verified_at and persists the NAMED
-      # ANONYMIZED boolean attributes as jsonb. Only the booleans are stored
-      # — the underlying documents never reach this layer. Written together
-      # so a downstream attribute gate and the binary gate stay consistent.
+      # Records verification: stamps `kyc_verified_at` and persists the NAMED
+      # ANONYMIZED attributes the attestation granted, as ROWS in
+      # `<schema>.kyc_attributes` (K-656/T-061 — they were a jsonb column on
+      # the agents row until 2026-08-20). Only the NAMES are stored — the
+      # underlying documents never reach this layer.
+      #
+      # ONE TRANSACTION, and the stamp gates the grants: the UPDATE is filtered
+      # on `revoked_at IS NULL` and RETURNS the id, so a revoked agent stamps
+      # nothing and is granted nothing. Without the gate the FK alone would
+      # happily accept grant rows for an agent this endpoint just refused to
+      # stamp.
+      #
+      # THE GRANT SET IS REPLACED, NOT MERGED — the jsonb column's semantics,
+      # kept deliberately: an attestation states the whole set of facts it
+      # grants, so a later attestation granting fewer of them must take the
+      # others away. That is why the DELETE is unconditional.
+      #
+      # THE SPELLING OF `true` IS JUDGED HERE, IN POSTGRES, ONCE FOR EVERY
+      # OPERATOR. `jsonb_each` + `WHERE value = 'true'::jsonb` inserts a name
+      # only for a value that is the JSON boolean `true`: the STRING `"true"`,
+      # `1`, `"yes"` and `null` are all different jsonb values and none of them
+      # match, so none of them grant. That check used to live on the READ side,
+      # re-implemented per demo as `COALESCE(kyc_attributes ->> 'name',
+      # 'false') = 'true'` because a Ruby comparison would accept one spelling
+      # and refuse the other inside a KYC gate; with the grant stored as a row's
+      # EXISTENCE there is nothing left for a reader to adjudicate, and this is
+      # the one place that still has to. It is deliberately belt-and-braces with
+      # {KycVerifier.verified_attributes}, which drops non-`true` values in Ruby
+      # first: a KYC gate should fail closed twice rather than once.
+      #
+      # `$1::jsonb` carries the SAME hand-written cast, for the same reason, as
+      # `executor.rb#persist_cart_mandate`'s line_items: the argument is JSON
+      # *text* and the cast is what says "parse this, do not store it as a json
+      # string". `$1` is the attesting broker's payload and `$2` is the agent id
+      # off the verified token — the payload is caller-supplied, so it never
+      # reaches the statement text.
       def mark_kyc_verified!(agent_id, attributes: {})
         # `lease_connection`, not `connection` (K-782, following
         # `wire_controller.rb`): `ActiveRecord::Base.connection` is
         # soft-deprecated in Rails 8.1 and RAISES under
         # `permanent_connection_checkout = :disallowed`.
         conn   = ::ActiveRecord::Base.lease_connection
-        schema = Kiosk.configuration.schema
-        # `$1::jsonb` carries the SAME hand-written cast, for the same reason,
-        # as `executor.rb#persist_cart_mandate`'s line_items: the argument is
-        # JSON *text* and the cast is what says "parse this, do not store it as
-        # a json string". A jsonb column holding a string would make every
-        # `->>` attribute gate downstream answer NULL for attributes that ARE
-        # there. `$1` is the attesting broker's payload and `$2` is the agent id
-        # off the verified token — the payload is caller-supplied, so it never
-        # reaches the statement text.
-        conn.exec_query(
-          "UPDATE #{conn.quote_table_name("#{schema}.agents")} " \
-          "SET kyc_verified_at = now(), kyc_attributes = $1::jsonb " \
-          "WHERE id = $2 AND revoked_at IS NULL",
-          "Kiosk KYC attestation",
-          [JSON.generate(attributes), agent_id],
-        )
+        agents = conn.quote_table_name("#{Kiosk.configuration.schema}.agents")
+        attrs  = conn.quote_table_name("#{Kiosk.configuration.schema}.kyc_attributes")
+
+        conn.transaction do
+          stamped = conn.exec_query(
+            "UPDATE #{agents} SET kyc_verified_at = now() " \
+            "WHERE id = $1 AND revoked_at IS NULL RETURNING id",
+            "Kiosk KYC attestation",
+            [agent_id],
+          )
+          unless stamped.to_a.empty?
+            conn.exec_query(
+              "DELETE FROM #{attrs} WHERE agent_id = $1",
+              "Kiosk KYC attributes reset",
+              [agent_id],
+            )
+            conn.exec_query(
+              "INSERT INTO #{attrs} (agent_id, name) " \
+              "SELECT $2, key FROM jsonb_each($1::jsonb) WHERE value = 'true'::jsonb",
+              "Kiosk KYC attributes grant",
+              [JSON.generate(attributes), agent_id],
+            )
+          end
+        end
       end
 
       # RFC 9457 problem document, like every other error on this wire

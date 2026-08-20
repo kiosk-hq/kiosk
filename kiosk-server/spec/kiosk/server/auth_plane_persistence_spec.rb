@@ -310,54 +310,114 @@ RSpec.describe "auth plane persistence (real Postgres)" do
     end
   end
 
-  # ── KYC: the jsonb cast, the one type a fake can never see ───────────────
+  # ── KYC: the grant is a ROW, and the spelling of `true` is Postgres' call ──
 
-  describe "KycAttestationController#mark_kyc_verified! (jsonb)" do
+  describe "KycAttestationController#mark_kyc_verified! (kyc_attributes rows)" do
     let(:agent_id) { Kiosk::Server::AccountBinding.bind!(public_key_pem: pem, user_id: holder)[:agent_id] }
     let(:controller) { Kiosk::Server::KycAttestationController.new }
+    let(:idp) { Kiosk::Server::AgentIdentityProviders::DefaultAgentIdp.new }
 
     def mark(attrs)
       controller.send(:mark_kyc_verified!, agent_id, attributes: attrs)
     end
 
-    # THE jsonb ASSERTION. One extra `to_json` anywhere on this path stores the
-    # attributes as a jsonb STRING; `jsonb_typeof` is the only thing that can
-    # tell you, and every `->>` gate downstream would answer NULL for
-    # attributes that are demonstrably there.
-    it "stores the attributes as a jsonb OBJECT, not a json string" do
-      mark("age_over_18" => true, "licence_a" => false)
+    def granted
+      connection.exec_query(
+        %(SELECT name FROM #{table('kyc_attributes')} WHERE agent_id = $1 ORDER BY name),
+        "auth plane spec", [agent_id],
+      ).to_a.map { |r| r.fetch("name") }
+    end
 
-      expect(value(%(SELECT jsonb_typeof(kyc_attributes) FROM #{table('agents')} WHERE id = $1), [agent_id]))
-        .to eq("object")
-      expect(value(%(SELECT kyc_attributes ->> 'age_over_18' FROM #{table('agents')} WHERE id = $1), [agent_id]))
-        .to eq("true")
-      expect(value(%(SELECT kyc_attributes ->> 'licence_a' FROM #{table('agents')} WHERE id = $1), [agent_id]))
-        .to eq("false")
+    it "writes one row per granted name and stamps kyc_verified_at" do
+      mark("age_over_18" => true, "licence_a" => true)
+
+      expect(granted).to eq(%w[age_over_18 licence_a])
       expect(agent_row(agent_id).fetch("kyc_verified_at")).not_to be_nil
+    end
+
+    # THE FAIL-CLOSED ASSERTION, and the reason this row moved out of a jsonb
+    # column (K-656). A map had to carry a VALUE, and a value has spellings —
+    # so every reader had to pick which ones count, and the two demos pushed
+    # that test into Postgres precisely because a Ruby `== true` would accept
+    # one spelling and silently refuse the other inside a KYC gate. Here the
+    # question is asked ONCE, in Postgres, on the WRITE: only the JSON boolean
+    # `true` becomes a row. `"true"`, `1`, `"yes"`, `null` and `false` are all
+    # different jsonb values and none of them grant anything.
+    it "grants NOTHING for a non-canonical spelling of true" do
+      mark("age_over_18" => "true", "licence_a" => 1, "resident" => "yes",
+           "adult" => nil, "insured" => false)
+
+      expect(granted).to eq([])
+      expect(idp.kyc_attributes(agent_id)).to eq({})
+      expect(idp.kyc_has_attributes?(agent_id, [:age_over_18])).to be(false)
+      # …and the attestation itself still counted: the binary gate is stamped,
+      # only the named grants are withheld. Failing closed is not failing loud.
+      expect(idp.kyc_verified?(agent_id)).to be(true)
+    end
+
+    it "grants only the true-valued names out of a mixed set" do
+      mark("age_over_18" => true, "licence_a" => "true", "licence_b" => false)
+
+      expect(granted).to eq(%w[age_over_18])
+      expect(idp.kyc_has_attributes?(agent_id, %w[age_over_18 licence_a])).to be(false)
     end
 
     it "round-trips through DefaultAgentIdp, which is what the gates read" do
       mark("age_over_18" => true)
-      idp = Kiosk::Server::AgentIdentityProviders::DefaultAgentIdp.new
 
       expect(idp.kyc_verified?(agent_id)).to be(true)
       expect(idp.kyc_attributes(agent_id)).to eq("age_over_18" => true)
       expect(idp.kyc_has_attributes?(agent_id, [:age_over_18])).to be(true)
     end
 
-    it "stores an empty attestation as an empty OBJECT (a bare binary attestation)" do
+    # REPLACE, not merge — the jsonb column's semantics, kept: an attestation
+    # states the WHOLE set of facts it grants, so a later one granting fewer
+    # must take the others away.
+    it "replaces the grant set — a bare binary attestation revokes earlier grants" do
+      mark("age_over_18" => true, "licence_a" => true)
+      expect(granted).to eq(%w[age_over_18 licence_a])
+
       mark({})
-      expect(value(%(SELECT jsonb_typeof(kyc_attributes) FROM #{table('agents')} WHERE id = $1), [agent_id]))
-        .to eq("object")
-      expect(Kiosk::Server::AgentIdentityProviders::DefaultAgentIdp.new.kyc_attributes(agent_id)).to eq({})
+      expect(granted).to eq([])
+      expect(idp.kyc_attributes(agent_id)).to eq({})
+      expect(agent_row(agent_id).fetch("kyc_verified_at")).not_to be_nil
     end
 
-    # A revoked agent is not attestable — the predicate is a bind, and a
-    # quote-bearing agent id is a value that matches nothing rather than SQL.
-    it "touches nothing for a revoked agent" do
+    it "re-attesting the same names does not duplicate rows" do
+      mark("age_over_18" => true)
+      mark("age_over_18" => true)
+
+      expect(granted).to eq(%w[age_over_18])
+    end
+
+    # A revoked agent is not attestable — and the stamp GATES the grants, so a
+    # revoked agent is not grantable either. The FK alone would have accepted
+    # the rows for an agent this endpoint just refused to stamp.
+    it "touches nothing for a revoked agent — neither the stamp nor the grants" do
       Kiosk::Server::AccountBinding.unlink!(agent_id: agent_id, user_id: holder)
       mark("age_over_18" => true)
+
       expect(agent_row(agent_id).fetch("kyc_verified_at")).to be_nil
+      expect(granted).to eq([])
+    end
+
+    # Rows outlive revocation (the agent row does); a GATE must not.
+    it "reads back {} once the agent is revoked, even though the rows survive" do
+      mark("age_over_18" => true)
+      Kiosk::Server::AccountBinding.unlink!(agent_id: agent_id, user_id: holder)
+
+      expect(granted).to eq(%w[age_over_18])
+      expect(idp.kyc_attributes(agent_id)).to eq({})
+      expect(idp.kyc_has_attributes?(agent_id, [:age_over_18])).to be(false)
+    end
+
+    # The FK the migration declares, exercised rather than described.
+    it "cascades the grants away when the agent row is deleted" do
+      mark("age_over_18" => true)
+      connection.exec_query(%(DELETE FROM #{table('agents')} WHERE id = $1),
+                            "auth plane spec", [agent_id])
+
+      expect(granted).to eq([])
     end
   end
 

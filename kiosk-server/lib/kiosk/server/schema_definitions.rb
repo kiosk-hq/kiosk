@@ -23,8 +23,10 @@ module Kiosk
     #   007 add_kyc_verified_at                → kiosk.agents.kyc_verified_at column
     #   008 rebuild_kiosk_device_authorizations → device_authorizations in the
     #       account-binding shape (public_key_pem, kind, hashed user_code)
-    #   009 add_kyc_attributes                  → kiosk.agents.kyc_attributes jsonb
-    #       (named anonymized boolean attributes; additive, opt-in)
+    #   009 create_kiosk_kyc_attributes         → kiosk.kyc_attributes, one ROW
+    #       per named anonymized boolean a valid attestation granted an agent
+    #       (additive, opt-in). Was a `kiosk.agents.kyc_attributes jsonb`
+    #       column until 2026-08-20 (K-656/T-061); the ordinal is unchanged.
     #   010 add_kiosk_agent_governance_columns  → kiosk.agents.spending_cap_cents +
     #       .human_label (per-assistant governance; additive, opt-in)
     #
@@ -314,20 +316,47 @@ module Kiosk
         SQL
       end
 
-      # Adds `kyc_attributes jsonb` to `kiosk.agents` — the set of NAMED
-      # ANONYMIZED boolean attributes a valid KYC attestation granted (e.g.
-      # `{"age_over_18": true, "licence_a": true}`). NULL until the agent
-      # submits an attestation; a bare binary attestation with no attributes
-      # writes `{}`. Only the booleans are stored — never the DOB, licence
-      # number, or any underlying document. Idempotent (ADD COLUMN IF NOT
-      # EXISTS) — safe to re-run. Additive: providers that only need the binary
-      # `kyc_verified_at` gate can skip this migration.
+      # ─── 009 create_kiosk_kyc_attributes ───────────────────────────────
+
+      # `kyc_attributes` — ONE ROW per NAMED ANONYMIZED boolean a valid KYC
+      # attestation granted an agent (`age_over_18`, `licence_a`, ...). Only
+      # the NAMES are stored — never the DOB, licence number, or any underlying
+      # document, which is the anonymized property ADR-0020 exists for.
+      #
+      # A TABLE, not the `agents.kyc_attributes jsonb` column this ordinal
+      # created until 2026-08-20 (decision KYC-ATTRIBUTES-TABLE, Phil
+      # 2026-08-12; K-656/T-061). The ordinal keeps its number for the same
+      # reason 003 kept its own: 004-010 are named by number in shipped
+      # comments and in CHANGELOG history.
+      #
+      # THERE IS NO VALUE COLUMN, AND THAT IS THE POINT. The grant IS the row:
+      # an attribute is granted iff `(agent_id, name)` exists. A jsonb map had
+      # to carry a value, and a value has spellings — JSON `true`, the STRING
+      # `"true"`, `1` — so every reader had to decide which spellings count and
+      # each reader could decide differently (getgrocery and skooti both pushed
+      # that test into Postgres, as `COALESCE(kyc_attributes ->> 'name',
+      # 'false')`, precisely because a Ruby `== true` would accept one spelling
+      # and silently refuse the other inside a KYC gate). With presence as the
+      # grant there is nothing to spell: every gate is an EXISTS, which cannot
+      # return NULL and cannot be fooled by a truthy-but-not-`true` value. The
+      # one place a spelling is still judged is the WRITE — see
+      # {KycAttestationController#mark_kyc_verified!}, which selects the names
+      # to insert with `WHERE value = 'true'::jsonb`, in Postgres, once, for
+      # every operator.
+      #
+      # `ON DELETE CASCADE` from `agents`: a deleted agent takes its grants with
+      # it. Additive: providers that only need the binary `kyc_verified_at` gate
+      # can skip this migration.
       def kyc_attributes_sql(schema: nil)
         schema ||= Kiosk.configuration.schema
 
         <<~SQL.strip
-          ALTER TABLE "#{schema}".agents
-            ADD COLUMN IF NOT EXISTS kyc_attributes jsonb;
+          CREATE TABLE "#{schema}".kyc_attributes (
+            agent_id   uuid NOT NULL REFERENCES "#{schema}".agents(id) ON DELETE CASCADE,
+            name       text NOT NULL,
+            granted_at timestamptz NOT NULL DEFAULT now(),
+            PRIMARY KEY (agent_id, name)
+          );
         SQL
       end
 

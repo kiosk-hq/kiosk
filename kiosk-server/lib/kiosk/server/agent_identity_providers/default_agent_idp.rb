@@ -1,6 +1,5 @@
 # frozen_string_literal: true
 
-require "json"
 require "kiosk/agent_identity_providers/base"
 
 module Kiosk
@@ -62,17 +61,28 @@ module Kiosk
         # granted this agent — a String-keyed hash like
         # `{"age_over_18" => true, "licence_a" => true}`. Empty `{}` when the
         # agent verified with a bare binary attestation, or when no attestation
-        # is on file / the agent is unknown. Only booleans were ever stored —
-        # never the DOB, licence number, or any document (the anonymized point).
+        # is on file / the agent is unknown or revoked. Only the NAMES were ever
+        # stored — never the DOB, licence number, or any document (the
+        # anonymized point).
+        #
+        # Since K-656/T-061 the grants live in `<schema>.kyc_attributes`, one
+        # ROW per granted name, rather than in a jsonb column — so there is no
+        # stored value to parse and no spelling of `true` for this method to
+        # adjudicate. Every returned value is the Ruby `true` this method
+        # synthesises from the row's EXISTENCE, which is what makes a caller's
+        # `== true` (see {#kyc_has_attributes?}) safe rather than lucky.
+        #
+        # The join to `agents` is what keeps a REVOKED agent answering `{}`: the
+        # rows survive revocation (the agent row does), and a gate must not.
         def kyc_attributes(agent_id)
-          row = agents_column("kyc_attributes", agent_id)
-          return {} if row.nil?
-
-          raw = row.fetch("kyc_attributes", nil)
-          return {} if raw.nil?
-
-          parsed = raw.is_a?(String) ? JSON.parse(raw) : raw
-          parsed.is_a?(Hash) ? parsed : {}
+          rows = ::ActiveRecord::Base.lease_connection.exec_query(
+            "SELECT k.name FROM #{schema}.kyc_attributes k " \
+            "JOIN #{schema}.agents a ON a.id = k.agent_id " \
+            "WHERE k.agent_id = $1 AND a.revoked_at IS NULL",
+            "Kiosk agent kyc attributes",
+            [agent_id],
+          )
+          rows.to_a.each_with_object({}) { |row, acc| acc[row["name"]] = true }
         end
 
         # Returns true iff EVERY name in `required` is present-and-true in the
@@ -93,11 +103,13 @@ module Kiosk
           row.fetch("user_id")
         end
 
-        # ONE live-agent lookup for all four callers (K-782). Four copies of the
-        # same statement were four places to forget a `quote`; the private
-        # `def quote` that fed them is gone with them.
+        # ONE live-agent lookup for all three single-column callers (K-782).
+        # Four copies of the same statement were four places to forget a
+        # `quote`; the private `def quote` that fed them is gone with them.
+        # ({#kyc_attributes} is the fourth reader and no longer one of them —
+        # since K-656 it reads a TABLE, not a column on this row.)
         #
-        # `column` is an IDENTIFIER chosen from the four literals above — never
+        # `column` is an IDENTIFIER chosen from the three literals above — never
         # an argument, never caller-reachable — and Postgres cannot bind an
         # identifier anyway. `agent_id` is a VALUE and travels as `$1`. It comes
         # off a verified JWT claim or a row this engine wrote, so it was not

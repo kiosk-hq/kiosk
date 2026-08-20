@@ -89,54 +89,65 @@ RSpec.describe "Kiosk::Server KYC attestation logic (unit)" do
   describe "DefaultAgentIdp KYC attributes" do
     let(:idp) { Kiosk::Server::AgentIdentityProviders::DefaultAgentIdp.new }
 
-    # K-782: the IdP's four agent lookups became ONE bind-parameterised
-    # statement on `lease_connection`, so the fake answers `exec_query` and
-    # offers no `quote` at all — a call to it would now be a NoMethodError,
-    # which is the point.
-    def stub_ar(result)
+    # Since K-656 the grants are ROWS in <schema>.kyc_attributes, one per
+    # granted name, so the fake answers a row LIST of names rather than a
+    # single agents row carrying a jsonb value. The statement is captured so
+    # the join that keeps a revoked agent ungranted stays asserted here and not
+    # only in the real-Postgres spec.
+    def stub_ar(rows)
+      captured = []
       fake_conn = Object.new.tap do |c|
-        rows = result
-        c.define_singleton_method(:exec_query) { |_sql, _name = nil, _binds = []| rows }
+        result = rows
+        c.define_singleton_method(:exec_query) do |sql, _name = nil, _binds = []|
+          captured << sql
+          result
+        end
       end
       ar_base = Class.new { define_singleton_method(:lease_connection) { fake_conn } }
       stub_const("ActiveRecord::Base", ar_base)
+      captured
     end
 
     describe "#kyc_attributes" do
-      it "parses a jsonb String into a hash" do
-        stub_ar([{ "kyc_attributes" => '{"age_over_18":true,"licence_a":true}' }])
+      it "maps one row per granted name onto true" do
+        stub_ar([{ "name" => "age_over_18" }, { "name" => "licence_a" }])
         expect(idp.kyc_attributes(agent_id)).to eq("age_over_18" => true, "licence_a" => true)
       end
 
-      it "passes through an already-parsed hash" do
-        stub_ar([{ "kyc_attributes" => { "age_over_18" => true } }])
-        expect(idp.kyc_attributes(agent_id)).to eq("age_over_18" => true)
-      end
-
-      it "returns {} when the column is null" do
-        stub_ar([{ "kyc_attributes" => nil }])
-        expect(idp.kyc_attributes(agent_id)).to eq({})
-      end
-
-      it "returns {} when the agent is not found" do
+      it "returns {} when the agent has no granted attributes" do
         stub_ar([])
         expect(idp.kyc_attributes(agent_id)).to eq({})
+      end
+
+      it "reads the kyc_attributes table, joined to a LIVE agents row" do
+        captured = stub_ar([])
+        idp.kyc_attributes(agent_id)
+        expect(captured.first).to include("kiosk.kyc_attributes")
+        expect(captured.first).to include("JOIN kiosk.agents")
+        expect(captured.first).to include("revoked_at IS NULL")
+      end
+
+      it "binds the agent id rather than interpolating it" do
+        captured = stub_ar([])
+        idp.kyc_attributes(agent_id)
+        expect(captured.first).to include("$1")
+        expect(captured.first).not_to include(agent_id)
       end
     end
 
     describe "#kyc_has_attributes?" do
-      it "is true when every required attribute is present-and-true" do
-        stub_ar([{ "kyc_attributes" => '{"age_over_18":true,"licence_a":true}' }])
+      it "is true when every required attribute was granted" do
+        stub_ar([{ "name" => "age_over_18" }, { "name" => "licence_a" }])
         expect(idp.kyc_has_attributes?(agent_id, %w[age_over_18 licence_a])).to be true
       end
 
       it "is false when a required attribute is missing" do
-        stub_ar([{ "kyc_attributes" => '{"age_over_18":true}' }])
+        stub_ar([{ "name" => "age_over_18" }])
         expect(idp.kyc_has_attributes?(agent_id, %w[age_over_18 licence_a])).to be false
       end
 
       it "accepts Symbol required names" do
-        stub_ar([{ "kyc_attributes" => '{"age_over_18":true}' }])
+        stub_ar([{ "name" => "age_over_18" }])
         expect(idp.kyc_has_attributes?(agent_id, [:age_over_18])).to be true
       end
     end

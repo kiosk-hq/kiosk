@@ -80,7 +80,15 @@ class Kiosk::CatalogController < ApplicationController
                   required: %w[id salon_id slot],
                 }
   example_params({})
-  example_row({ id: 1, salon_id: 1, slot: "2026-06-15T14:00:00Z" })
+  # A UUID, because `appointments.id` IS a uuid (`create_table :appointments,
+  # id: :uuid`) and the `output_schema` above says so. It published `1` until
+  # 2026-08-20, when e2e/schema_conformance.rb — the first thing ever to check
+  # a descriptor's examples against that descriptor's own schemas (§8.3,
+  # matrix SPEC-084) — refused it on its first run. An assistant that copied
+  # this row verbatim built an integer id for a value the wire never returns
+  # as one. K-825.
+  example_row({ id: "3f1c2d4e-5a6b-4c7d-8e9f-0a1b2c3d4e5f", salon_id: 1,
+                slot: "2026-06-15T14:00:00Z" })
   def my_appointments
     render json: ActiveRecord::Base.connection.execute(
       "SELECT id, salon_id, slot FROM appointments " \

@@ -1,0 +1,81 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://kiosk.tech/spec/schemas/schema-descriptor.schema.json",
+  "$comment": "VENDORED copy of the normative kiosk.tech schema at spec/schemas/schema-descriptor.schema.json. It is here so e2e/schema_conformance.rb can validate this origin's LIVE wire bytes against the PUBLISHED schema with no second checkout and no network fetch (K-822). Identical to the upstream copy as PARSED JSON once this $comment is removed — bin/check-spec-schemas asserts exactly that whenever the umbrella layout puts kiosk.tech next to this repo, and says so rather than pretending when it does not. T-045 tracks the sync-check.",
+  "title": "Kiosk schema descriptor",
+  "description": "The body returned by GET <endpoint>/schema. UNAUTHENTICATED: the catalog is public. It carries the origin's verbs and their contracts and nothing else -- the MODULE set it once duplicated as `verbs` lives in `capabilities` in /.well-known/kiosk.json, which is where an AI assistant reads it. The root is CLOSED: a document carrying `verbs`, or any other key this schema does not declare, is not a conformant catalog.",
+  "type": "object",
+  "required": [
+    "queries",
+    "actions"
+  ],
+  "additionalProperties": false,
+  "properties": {
+    "queries": {
+      "type": "array",
+      "description": "Query descriptors, sorted by name.",
+      "items": {
+        "$ref": "#/$defs/descriptor"
+      }
+    },
+    "actions": {
+      "type": "array",
+      "description": "Action descriptors, sorted by name.",
+      "items": {
+        "$ref": "#/$defs/descriptor"
+      }
+    }
+  },
+  "$defs": {
+    "descriptor": {
+      "type": "object",
+      "required": [
+        "name",
+        "description",
+        "input_schema",
+        "output_schema"
+      ],
+      "properties": {
+        "name": {
+          "type": "string",
+          "pattern": "^[a-z][a-z0-9_]*$",
+          "description": "The verb's wire name, which is also its path segment under `endpoint`. One name is one KIND: a name listed under `queries` must not also appear under `actions`."
+        },
+        "description": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "description": "Human-facing description or null. SEMANTICS live here in prose -- what the verb does, when to reach for it, what the result means. Names, types and constraints do not: an input belongs to input_schema and a result field to output_schema."
+        },
+        "params": {
+          "type": [
+            "object",
+            "null"
+          ],
+          "description": "RETIRED free-form provider-defined hint object (by convention name -> type-hint string), or null. Never a validation contract, and no longer the input contract: publish null, or omit the key. Retained on the wire so descriptors written before the retirement still validate -- an AI assistant MAY read a non-null value as a prose hint for a verb that publishes no input_schema, and MUST prefer input_schema wherever one is published."
+        },
+        "input_schema": {
+          "type": [
+            "object",
+            "boolean"
+          ],
+          "description": "REQUIRED. JSON Schema (draft 2020-12) for THIS verb's inputs: names, required/optional, types, enums, ranges. The AUTHORITATIVE input contract -- the only place a parameter name is declared -- and it wins over any `params` hint or `description` sentence that disagrees. The operator validates a request's arguments against it before the handler runs and answers 400 bad_request naming the offending parameter otherwise. A verb that takes nothing declares the closed empty object."
+        },
+        "output_schema": {
+          "type": [
+            "object",
+            "boolean"
+          ],
+          "description": "REQUIRED. JSON Schema (draft 2020-12) for what this verb RETURNS. With no response envelope, this is the ONLY machine-readable statement of the result shape: what a query's rows look like, or what an action's object contains. A query's is an ARRAY schema whether or not the verb paginates -- a paginated page carries its cursor in an RFC 8288 Link header, not in the body -- so a paginating verb declares one shape, not a two-branch union. It must describe what the verb actually renders -- a success body that does not satisfy it is an operator-side defect, not a permitted variation."
+        },
+        "example_params": {
+          "description": "OPTIONAL example params object an AI assistant can copy verbatim as a starting call for this verb. It ILLUSTRATES input_schema and is not the contract: where the two disagree, the schema is right."
+        },
+        "example_row": {
+          "description": "OPTIONAL example of one result element -- a representative row for a query, or the example return value for an action. It ILLUSTRATES output_schema and is not the contract."
+        }
+      }
+    }
+  }
+}

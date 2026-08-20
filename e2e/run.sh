@@ -288,12 +288,14 @@ ok "server up on http://127.0.0.1:$SERVER_PORT"
 # ─── run the assistant ──────────────────────────────────────────────────
 
 log "run mock AI-assistant test suite"
+PAY_CAPTURE="$TMP_DIR/pay-capture.json"
 if ! SERVER_URL="http://127.0.0.1:$SERVER_PORT" \
        APP_DIR="$PWD" \
        FIXTURES="$FIXTURES" \
        DB_NAME="$DB_NAME" \
        KIOSK_ISSUER="$KIOSK_ISSUER" \
        SOLVE_PY="$SOLVE_PY" \
+       PAY_CAPTURE="$PAY_CAPTURE" \
        bash "$KIOSK_OSS/e2e/assistant.sh"; then
   log "assistant failed — last 80 lines of server log:"
   tail -80 /tmp/kiosk-e2e-server.log
@@ -301,4 +303,26 @@ if ! SERVER_URL="http://127.0.0.1:$SERVER_PORT" \
 fi
 
 ok "all assertions passed"
+
+# ─── the published schemas, against the bytes just served ───────────────────
+#
+# K-822 / spec §16.3 anchor 1. The assistant above asserts field by field, in
+# this harness's own words; this step asserts the SAME responses against the
+# normative JSON Schemas kiosk.tech publishes. The two are different oracles
+# and the second is the one an outside implementer can run: a wire that drifts
+# from the published schema fails here even when every assertion above still
+# passes, which until now nothing could detect. Run from the generated app dir
+# so json_schemer (a kiosk-server runtime dependency) is on the load path, and
+# with the server still up — these are live requests, not a replay.
+log "validate live wire bytes against the published JSON Schemas"
+if ! SERVER_URL="http://127.0.0.1:$SERVER_PORT" \
+       TOKEN="agent:u-00000000-0000-0000-0000-000000000001:a-alice-claude:r-customer" \
+       PAY_CAPTURE="$PAY_CAPTURE" \
+       bundle exec ruby "$KIOSK_OSS/e2e/schema_conformance.rb"; then
+  log "schema conformance failed — last 40 lines of server log:"
+  tail -40 /tmp/kiosk-e2e-server.log
+  exit 1
+fi
+
+ok "live wire bytes conform to the published schemas"
 log "✅ kiosk-oss e2e green"

@@ -1,0 +1,68 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://kiosk.tech/spec/schemas/kyc.schema.json",
+  "$comment": "VENDORED copy of the normative kiosk.tech schema at spec/schemas/kyc.schema.json. It is here so e2e/schema_conformance.rb can validate this origin's LIVE wire bytes against the PUBLISHED schema with no second checkout and no network fetch (K-822). Identical to the upstream copy as PARSED JSON once this $comment is removed — bin/check-spec-schemas asserts exactly that whenever the umbrella layout puts kiosk.tech next to this repo, and says so rather than pretending when it does not. T-045 tracks the sync-check.",
+  "title": "Kiosk KYC attestation",
+  "description": "The decoded JWS payload of a KYC attestation and the POST /kiosk/agents/kyc request body.",
+  "$defs": {
+    "attestation": {
+      "type": "object",
+      "description": "Signed by the KYC provider, verified with its configured public key.",
+      "required": [
+        "sub",
+        "level",
+        "iss",
+        "aud",
+        "exp"
+      ],
+      "properties": {
+        "sub": {
+          "type": "string",
+          "description": "MUST equal the authenticated user_id."
+        },
+        "level": {
+          "const": "verified",
+          "description": "Binary; anything other than \"verified\" is rejected."
+        },
+        "iss": {
+          "type": "string",
+          "description": "MUST equal the provider-configured KYC issuer."
+        },
+        "aud": {
+          "type": "string",
+          "description": "OPERATOR-BINDING. The operator the attestation was minted for. MUST equal the operator's configured kyc_audience (its origin, or a stable handle it declares); the operator rejects any other aud. This stops a claim minted for operator A being replayed to operator B."
+        },
+        "iat": {
+          "type": "integer",
+          "description": "Optional; issued-at timestamp. Not enforced by the verifier."
+        },
+        "exp": {
+          "type": "integer",
+          "description": "REQUIRED; an expired attestation is rejected."
+        },
+        "attributes": {
+          "$ref": "#/$defs/attributes"
+        }
+      }
+    },
+    "attributes": {
+      "type": "object",
+      "description": "OPTIONAL named ANONYMIZED boolean attributes the KYC provider vouches for (e.g. age_over_18, licence_a). Anonymized: the provider learns only these booleans -- never the underlying DOB, licence number, or document. Additive: a bare attestation with no attributes still verifies as binary. Only values that are literally true are honoured; a downstream Action MAY gate on required attribute names and reject with kyc_required (403) when they are not all present-and-true.",
+      "additionalProperties": {
+        "type": "boolean"
+      }
+    },
+    "request": {
+      "type": "object",
+      "required": [
+        "kyc_jws"
+      ],
+      "properties": {
+        "kyc_jws": {
+          "type": "string",
+          "description": "The attestation as a compact RS256 JWS."
+        }
+      }
+    }
+  }
+}

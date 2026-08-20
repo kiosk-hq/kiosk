@@ -107,9 +107,11 @@ For EACH of the 7 apps:
       `sudo caddy add-package github.com/mholt/caddy-ratelimit` (Caddy ≥ 2.7 swaps in a plugin-included
       binary; `xcaddy build --with github.com/mholt/caddy-ratelimit` is the stable equivalent if you compile
       your own) · `sudo systemctl restart caddy` · confirm with `caddy list-modules | grep rate_limit`.
-      A stock Caddy has **no** rate-limiting at all, and `POST /kiosk/auth/register` runs the PoW gate
-      UNAUTHENTICATED — PoW prices the attacker's *solve*, not our *verify* (~19 ms each), so at the shipped
-      `WEB_CONCURRENCY=1` roughly 54 req/s saturate a worker. Nothing in the app substitutes for this.
+      A stock Caddy has **no** rate-limiting at all, and at the shipped `WEB_CONCURRENCY=1` a plain flood of
+      *any* endpoint saturates the single worker. `POST /kiosk/auth/register` runs the PoW gate
+      UNAUTHENTICATED, and PoW prices the attacker's *solve*, never our *verify* — a garbage proof now costs
+      0.30 ms instead of 18.7 ms (K-540, cheapest-first + lazy hashing), so it is no longer the cheapest
+      lever, but nothing in the app bounds the request RATE. Nothing in the app substitutes for this.
       **Acceptable alternative:** a per-IP rate rule on `/kiosk/*` at a CDN/WAF in front of the box — then
       skip the module and leave the Caddy snippet commented. Deploying with **neither** is the one
       unacceptable option. Detail: `deploy/README.md` §"Edge rate-limit — REQUIRED".

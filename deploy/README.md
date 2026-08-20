@@ -203,18 +203,24 @@ sudo systemctl reload caddy
 
 ## Edge rate-limit — REQUIRED (K-540)
 
-**Proof-of-work does not remove the need for a limiter in front of the app; on
-the register path it is the thing being exploited.** `POST /kiosk/auth/register`
-runs the PoW gate **unauthenticated**, before any key verification: anyone can
-take a free 402 challenge and resubmit it with a valid HMAC sig and garbage
-indices, and each submission costs *this box* an Equihash verify (~19 ms
-measured at `n=168 k=7`). PoW prices the attacker's **solve**; it does not price
-our **verify**. At the shipped `WEB_CONCURRENCY=1`, ~54 req/s saturates a
-worker — and a plain flood of any other endpoint does much the same.
+**Proof-of-work does not remove the need for a limiter in front of the app.**
+`POST /kiosk/auth/register` runs the PoW gate **unauthenticated**, before any
+key verification: anyone can take a free 402 challenge and resubmit it with a
+valid HMAC sig and garbage indices. PoW prices the attacker's **solve**; it
+never prices our **verify**.
 
-The app-side half is already shipped (an issued challenge drives at most one
-verify; structural pre-checks run before the hash loop). The operator-side half
-is yours, and there is no app setting that substitutes for it. Pick one:
+The app-side half is shipped and measured (`n=168 k=7`, one box): an issued
+challenge drives at most one verify, and the verifier checks cheapest-first and
+hashes lazily, so a garbage proof costs **0.30 ms** — 0.012 ms if the attacker
+did not even order the indices — instead of the **18.7 ms** it cost when every
+proof paid the full 128-hash loop. A real proof still costs ~18 ms. Worker
+saturation on this path moved from ~54 req/s to ~3.3k req/s.
+
+That lowers the ceiling; it does not remove it. At the shipped
+`WEB_CONCURRENCY=1` a plain flood of *any* endpoint saturates the single worker
+just as well, and only something in front of the app bounds the request RATE.
+The operator-side half is yours, and there is no app setting that substitutes
+for it. Pick one:
 
 - **Caddy module** (what step 4 above does): `caddy add-package
   github.com/mholt/caddy-ratelimit` (Caddy ≥ 2.7 swaps in a plugin-included

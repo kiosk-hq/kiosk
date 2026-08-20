@@ -29,11 +29,14 @@ module Kiosk
     #   3. Parameter re-derivation: the challenge must name the alg/params this
     #      server's live config demands right now, not merely params we once
     #      signed (K-541 — see the `expect:` argument below)
-    #   4. Equihash backend eval (at n=168 k=7: ~16-17 ms + KB of RAM to
-    #      verify — memory is the asymmetry, since SOLVING the same proof
-    #      costs ~1.3 GiB)
+    #   4. Equihash backend eval (at n=168 k=7: ~18 ms + KB of RAM for a VALID
+    #      proof — memory is the asymmetry, since SOLVING the same proof costs
+    #      ~1.3 GiB)
     # A flood of forged, expired or off-spec proofs is rejected at step 1/2/3
-    # without burning a backend evaluation.
+    # without burning a backend evaluation. Cheap-before-expensive holds INSIDE
+    # step 4 too (K-540): the backend checks structure before hashing and folds
+    # the tree as it hashes, so a proof that gets this far and is simply wrong
+    # costs ~0.3 ms, not the full ~18 ms.
     #
     # == Spent-id set
     #

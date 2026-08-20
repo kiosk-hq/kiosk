@@ -24,11 +24,18 @@ module Kiosk
     # the same id is turned away with a fresh re-challenge (402) without a second
     # verify. One issued challenge therefore drives at most one hash-loop verify.
     #
-    # That bounds the cost PER CHALLENGE, not the request RATE — a caller who
-    # keeps taking fresh 402s keeps buying verifies. Bounding the rate is the
-    # operator's half, and it is REQUIRED, not optional: an edge rate-limit in
-    # front of the app (see deploy/Caddyfile and deploy/README.md "Edge
-    # rate-limit"). No setting in this gem substitutes for it.
+    # What each of those verifies COSTS is bounded too: the Equihash verifier
+    # checks cheapest-first and hashes lazily, so a garbage proof stops at the
+    # first tree node that does not cancel — 0.30 ms measured at n=168 k=7,
+    # against ~18 ms for a real proof, where both used to cost the same.
+    #
+    # Both bound the cost PER REQUEST, neither bounds the request RATE — a
+    # caller who keeps taking fresh 402s keeps buying verifies, and at
+    # WEB_CONCURRENCY=1 a plain flood of any endpoint saturates the worker
+    # anyway. Bounding the rate is the operator's half, and it is REQUIRED, not
+    # optional: an edge rate-limit in front of the app (see deploy/Caddyfile and
+    # deploy/README.md "Edge rate-limit"). No setting in this gem substitutes
+    # for it.
     module RegistrationPow
       module_function
 

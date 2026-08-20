@@ -50,15 +50,21 @@
 #
 # `POST /kiosk/auth/register` runs the PoW gate UNAUTHENTICATED, ahead of any
 # key verification: anyone can take a free 402 challenge and resubmit it with a
-# valid HMAC sig but garbage indices, and every such submission costs THIS box
-# an Equihash verify (measured ~19 ms at n=168 k=7). PoW prices the attacker's
-# SOLVE; it does not price our VERIFY — on the register path the toll is the
-# sink, not the shield. At the shipped WEB_CONCURRENCY=1 roughly 54 req/s
-# saturate a worker, and a plain flood of any other endpoint does much the same.
-# The app-side mitigations (one issued challenge drives at most one verify;
-# structural pre-checks before the hash loop) raise the cost per request; only
-# something in FRONT of the app bounds the request RATE. Deploy without one and
-# a single laptop can take the box down.
+# valid HMAC sig but garbage indices. PoW prices the attacker's SOLVE; it never
+# prices our VERIFY.
+#
+# The app-side half is shipped and measured (n=168 k=7, one box): one issued
+# challenge drives at most one verify, and the verifier checks cheapest-first
+# and hashes lazily, so a garbage proof costs 0.30 ms — or 0.012 ms if the
+# attacker did not even order the indices — instead of the 18.7 ms it cost when
+# every proof paid the full 128-hash loop. A real proof still costs ~18 ms.
+# Worker saturation on this path therefore moved from ~54 req/s to ~3.3k req/s.
+#
+# THAT DOES NOT REMOVE THE CEILING, and the conclusion is unchanged: at the
+# shipped WEB_CONCURRENCY=1 a plain flood of ANY endpoint — a 404, the 402
+# issue path itself — saturates the single worker just as well. The app can
+# make each request cheaper; only something in FRONT of the app bounds the
+# request RATE. Deploy without one and a single laptop can take the box down.
 #
 # ── Why the directive ships commented out ────────────────────────────────────
 # `rate_limit` is NOT a stock Caddy directive — it comes from the third-party

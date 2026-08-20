@@ -1204,7 +1204,7 @@ TELEMETRY_WIRING = [
    "config/application.rb does not put app/services in config.autoload_once_paths — the " \
    "reloadable autoloader is set up AFTER config/initializers run, so the initializer's " \
    "DemoTelemetryMiddleware reference would abort the boot with NameError (K-502, was K-624)"],
-  ["config/initializers/kiosk.rb", /middleware\.use\(\s*DemoTelemetryMiddleware/m,
+  ["config/initializers/kiosk.rb", /middleware\.use\(\s*DemoTelemetryMiddleware\b/m,
    "config/initializers/kiosk.rb does not insert DemoTelemetryMiddleware — the module is shipped " \
    "but never records anything"],
 ].freeze

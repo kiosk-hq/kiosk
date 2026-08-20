@@ -308,26 +308,27 @@ smoke_stylish() {
   fi
 
   echo "── Assertion 6: forged human X-Staff-Session → 401 in production (K-555) ──"
-  # stylish's StubUserIdp (the SSO/Okta stand-in) maps a self-asserted
-  # `X-Staff-Session: <user_id>` header to a role-carrying HUMAN identity — so on
-  # the wire it SELF-GRANTS that staff member's role. It is one arm of a composite
-  # user_idp (StubUserIdp first, then real Devise). In production the initializer
-  # drops the stub arm (Devise-only) AND StubUserIdp#verify returns nil unless
-  # Rails.env.local?, so a forged X-Staff-Session naming the SEEDED OWNER resolves
-  # to NO identity and POST /kiosk/auth/link raises 401 — no owner link can be
-  # minted. Before the K-555 fix this returned 201 (a self-granted owner link →
-  # the assistant redeeming it would INHERIT owner scope). This production-config
-  # assertion catches the bug the dev-mode demo:roles/redteam gates (RAILS_ENV=
-  # development, where the stub is intentionally live) structurally cannot.
+  # stylish USED to map a self-asserted `X-Staff-Session: <user_id>` header to a
+  # role-carrying HUMAN identity — the salon's SSO/Okta stand-in, one arm of a
+  # composite user_idp — so on the wire that header SELF-GRANTED a staff role
+  # (before K-555 this returned 201: a self-granted owner link, and the assistant
+  # redeeming it would INHERIT owner scope).
+  #
+  # T-066 deleted the stand-in outright: `c.user_idp` is the Devise adapter alone,
+  # in every environment, and nothing reads that header any more. The assertion is
+  # kept — and it is now stronger than a gate on an env check, because the arm it
+  # guarded does not exist to be re-enabled. It stays here rather than moving into
+  # the redteam battery because this is the PRODUCTION box: the one place that can
+  # say the deployed config, not a local one, refuses.
   SEEDED_OWNER_ID="00000000-0000-0000-0000-0000000000a0"
   staff_code="$(curl -s -o /dev/null -w '%{http_code}' -X POST \
     "${PROXY_HEADERS[@]}" -H "Content-Type: application/json" \
     -H "X-Staff-Session: ${SEEDED_OWNER_ID}" \
     "${BASE}/kiosk/auth/link")"
   if [ "$staff_code" = "401" ]; then
-    pass "forged X-Staff-Session → 401 (role-carrying stub unreachable in production; no self-granted owner link)"
+    pass "forged X-Staff-Session → 401 (no role-carrying stand-in exists; no self-granted owner link)"
   else
-    fail "forged X-Staff-Session expected 401, got $staff_code (K-555: role-carrying human stub reachable in production — staff-role self-grant!)"
+    fail "forged X-Staff-Session expected 401, got $staff_code (K-555: a role-carrying human stand-in is reachable in production — staff-role self-grant!)"
   fi
 
   echo "── Assertion 7: JSON POST at the human sign-in form → 422 + Kiosk error envelope (K-459/K-534) ──"

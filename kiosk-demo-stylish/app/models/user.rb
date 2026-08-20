@@ -12,8 +12,8 @@ class User < ApplicationRecord
 
   # Salon staff carry a role in the provider's own identity system
   # (staff_role: 'owner'). Customers and credential-less assistant accounts
-  # have staff_role NULL. Read by the StubUserIdp so the session identity
-  # carries the staff member's role (roles-from-IdP).
+  # have staff_role NULL. This column IS the role source for roles-from-IdP:
+  # `#kiosk_role` below hands it to the Devise adapter.
   def staff? = staff_role.present?
 
   # roles-from-IdP over the REAL Devise session. The Devise user-IdP adapter
@@ -25,7 +25,8 @@ class User < ApplicationRecord
   # book, no forecast). Map the provider's own `staff_role` onto the kiosk role:
   # staff carry their staff_role ('owner'), everyone else is a 'customer' (the
   # registration default). The result is always one of `Kiosk.configuration.roles`
-  # (%i[customer owner]). This is the Devise-session twin of the read the
-  # StubUserIdp does off `staff_role` — the same role source, both channels.
+  # (%i[customer owner]). Since T-066 this is the ONLY channel: the
+  # `X-Staff-Session` SSO stand-in that read the same column is gone, so this
+  # method is what makes roles-from-IdP work at all.
   def kiosk_role = staff? ? staff_role : "customer"
 end

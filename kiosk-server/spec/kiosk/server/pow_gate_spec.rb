@@ -801,6 +801,42 @@ RSpec.describe Kiosk::Server::PowGate do
       expect(challenges.map { |c| c[:salt] }.uniq.length).to eq(count)
     end
 
+    it "scales the challenge TTL by `count`, so a sequential solver does not lose the first" do
+      # Spec §10 (matrix SPEC-119). Every challenge in a batch expires at
+      # `pow_ttl × count`, NOT at `pow_ttl`: an honest client solving three
+      # memory-hard proofs one after another spends real time on each, and a
+      # flat TTL would expire challenge #1 while it is still working on #3 —
+      # the batch could then never be completed at all, at any speed short of
+      # parallel solving. Implemented at `PowGate.issue_challenges`.
+      #
+      # A DISTINCTIVE ttl (100, not the 300 default) so the assertion reads a
+      # value that could only have come from configuration, and BOTH arms are
+      # measured in the same example: the N-proof batch AND a single-proof
+      # challenge from the same code path. Without the second arm "exp is 300
+      # seconds out" would pass for a gate that had simply been left at its
+      # default and never scaled anything.
+      configure_with_policy(multi_proof_policy, pow_ttl: 100)
+      before_issue = Time.now.to_i
+      batch        = issue_n_challenges
+      after_issue  = Time.now.to_i
+
+      expect(batch.length).to eq(count)
+      batch.each do |ch|
+        expect(ch[:exp]).to be_between(before_issue + (100 * count), after_issue + (100 * count))
+      end
+
+      # The control: one proof, same gate, same ttl — the UNSCALED window.
+      configure_with_policy(always_challenge_policy, pow_ttl: 100)
+      before_single = Time.now.to_i
+      single = catch_error(Kiosk::Server::Errors::PowRequired) do
+        described_class.gate(identity: identity, command: "query", body: { name: "menu" }, pow: nil)
+      end.challenges
+      after_single = Time.now.to_i
+
+      expect(single.length).to eq(1)
+      expect(single.first[:exp]).to be_between(before_single + 100, after_single + 100)
+    end
+
     it "proceeds only when ALL `count` proofs are valid" do
       result = described_class.gate(
         identity: identity, command: "query", body: { name: "menu" },

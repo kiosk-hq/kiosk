@@ -429,39 +429,33 @@ COPIES = {
   },
   "app/operations/operation_result.rb" => {
     rule: :per_demo,
-    why:  "The answer-or-refusal a write Operation returns (T-057/K-654; in all SEVEN operator " \
-          "demos since T-083 — prove registers no wire verbs and correctly has none). The seam is " \
-          "the same everywhere, but its STATUSES map is not shared and must not be: the class's " \
-          "own rule is that a code an app never produces has no business having a mapping, and " \
-          "the seven maps are seven different sets. stylish lists ONE (nothing on that origin " \
-          "ever fills up and its write is caller-scoped by construction, so `bad_request` is the " \
-          "only refusal it can make); tudu and philslist two; atablefor three, ending in " \
-          "`conflict`; skooti and getgrocery four, ending in `kyc_required`; hoteling four, " \
-          "ending in `not_found` — the one map whose contents have moved TWICE, which is the " \
-          "clearest evidence the table belongs per-app. K-794 removed `not_found` when " \
-          "`hotel_detail` started answering an unknown id with an empty array, and T-090's " \
-          "three-way status rule (spec §9.1) put it back: the array SHAPE stays, an id that " \
-          "ADDRESSES a property nobody has is 404 again, and `availability` now speaks the same " \
-          "refusal for the same argument. " \
-          "The skooti/getgrocery pair is the sharpest case for the rule twice over: `kyc_required` and " \
-          "`forbidden` are BOTH 403, so the code is not derivable from the status at all — and " \
-          "the two demos' four codes coincide for entirely unrelated reasons, a gate on alcohol " \
+    why:  "SINCE K-792 THIS FILE IS A SUBCLASS LINE AND A CONSTANT, AND NOTHING ELSE. The shared " \
+          "half — the constructor and the ok/refused/status trio, written out seven times since " \
+          "T-083 — was PROMOTED into kiosk-server as {Kiosk::OperationResult} (Phil, 2026-08-19: a " \
+          "thing that exists in all seven demos belongs in a gem); each demo now declares " \
+          "`class OperationResult < Kiosk::OperationResult` and supplies its own STATUSES. " \
+          "What is left is genuinely per-demo, and the reason is unchanged and unrefuted: a code " \
+          "an app never produces has no business having a mapping, so the seven maps are five " \
+          "different sets. stylish lists ONE (nothing on that origin ever fills up and its write " \
+          "is caller-scoped by construction, so `bad_request` is the only refusal it can make); " \
+          "tudu and philslist two; atablefor three, ending in `conflict`; skooti and getgrocery " \
+          "four, ending in `kyc_required`; hoteling four, ending in `not_found` — the one map " \
+          "whose contents have moved TWICE (K-794 removed `not_found` when `hotel_detail` started " \
+          "answering an unknown id with an empty array; T-090's three-way rule, spec §9.1, put it " \
+          "back). The skooti/getgrocery pair is the sharpest case twice over: `kyc_required` and " \
+          "`forbidden` are BOTH 403, so the code is not derivable from the status at all — and the " \
+          "two demos' four codes coincide for entirely unrelated reasons, a gate on alcohol " \
           "against a gate on a motorcycle, so even the one match today would be a coincidence to " \
-          "enshrine. Making them agree would mean giving each demo mappings for refusals it " \
-          "cannot make, which is the opposite of what the `fetch` in there is for. " \
-          "SEVEN COPIES ARE EVIDENCE, NOT A VERDICT (K-607, and K-792 now carries the question " \
-          "itself): the ~40 lines around STATUSES are written out seven times, which strengthens " \
-          "the \"should this be a gem\" question — and answers it no more than it did at two, " \
-          "three or four, because the part that repeats is the part with no decisions in it " \
-          "(ok/refused/status) while the table, the only thing an operator must think about, is " \
-          "exactly the part that differs. An extraction would ship the constructor and leave " \
-          "STATUSES per-app, and WHERE it would ship to is a public-API decision this check does " \
-          "not pre-empt (rule 2). WHAT THIS DECLARATION DOES NOT DO, said plainly because the " \
-          "count is now the largest in this file: `:per_demo` means NOT COMPARED, so a drift in " \
-          "the shared 40 lines is invisible here. `:code` cannot be used instead — the divergence " \
-          "is in all seven copies, not in one, which is the only shape `except:` records — and " \
-          "closing that gap means either promoting the shared half (the K-792 decision) or " \
-          "teaching this check a partial-compare rule, which is a second undecided question.",
+          "enshrine. " \
+          ":per_demo STILL MEANS NOT COMPARED, AND THAT IS NOW HONEST RATHER THAN A HOLE. The gap " \
+          "this entry used to record — ~40 shared lines nothing held together — is closed because " \
+          "the lines are GONE, not because a rule was added; kiosk-server's own suite guards the " \
+          "one surviving copy. What stops the duplication growing back is the OPERATION_RESULT " \
+          "block at the bottom of this file: every copy must subclass the gem's class, must " \
+          "declare its own STATUSES (the base ships an empty map on purpose), and must define NO " \
+          "methods at all — a file that may hold only a subclass line and a constant has nowhere " \
+          "for uncompared behaviour to hide. Option B as filed on K-792 (teach this check a " \
+          "partial-compare rule) was NOT taken and must not be reinstated as the answer.",
   },
 
   # ── db/migrate — output of kiosk-server's install generator ────────────────
@@ -1215,6 +1209,60 @@ telemetry_demos.each do |demo|
   end
 end
 
+# ── What is LEFT in a per-demo operation_result.rb (K-792) ───────────────────
+#
+# `app/operations/operation_result.rb` is declared :per_demo, and :per_demo
+# means NOT COMPARED. That was a real gap while the file carried ~40 lines of
+# shared constructor: seven copies of code nothing held together. K-792 closed
+# it by PROMOTION, not by a compare rule — the constructor and the
+# ok/refused/status trio now ship once, as Kiosk::OperationResult in
+# kiosk-server, and each demo subclasses it.
+#
+# So this block guards the promotion rather than the file's contents. It asserts
+# the three properties that make "not compared" honest again:
+#
+#   1. the copy actually SUBCLASSES the gem's class — a demo that quietly went
+#      back to a standalone `class OperationResult` would be re-growing the
+#      duplication this closed, and every gate would stay green;
+#   2. it declares its OWN STATUSES — the base ships an empty map on purpose, so
+#      a demo that inherits it silently refuses nothing and only fails at the
+#      moment a refusal is rendered;
+#   3. it defines NO methods at all. That is the property that matters: a file
+#      that may hold only a subclass line and a constant has nowhere for
+#      uncompared behaviour to hide, which is why :per_demo is the right rule
+#      for what is left rather than a hole this check is looking away from.
+OPERATION_RESULT = "app/operations/operation_result.rb"
+
+(dups[OPERATION_RESULT] || {}).each do |demo, path|
+  src = File.read(path)
+
+  unless src.match?(/^class\s+OperationResult\s*<\s*Kiosk::OperationResult\b/)
+    errors << "#{short.(demo)}: #{OPERATION_RESULT} does not subclass Kiosk::OperationResult — the " \
+              "shared half (the constructor and the ok/refused/status trio) lives in kiosk-server " \
+              "since K-792, and a standalone class here re-grows the seven-copy duplication that " \
+              "promotion removed. This file is :per_demo, i.e. NOT compared, so nothing else would " \
+              "notice."
+  end
+
+  unless src.match?(/^\s+STATUSES\s*=/)
+    errors << "#{short.(demo)}: #{OPERATION_RESULT} declares no STATUSES map — Kiosk::OperationResult " \
+              "ships an EMPTY one on purpose (it does not know this app's refusals), so inheriting it " \
+              "means every refusal raises KeyError at render time instead of failing here."
+  end
+
+  defined_methods = Ripper.lex(src).each_cons(3).filter_map do |(_, t1, tok1), (_, t2, _), (_, _, tok3)|
+    next unless t1 == :on_kw && tok1 == "def"
+
+    t2 == :on_sp ? tok3 : nil
+  end
+  next if defined_methods.empty?
+
+  errors << "#{short.(demo)}: #{OPERATION_RESULT} defines #{defined_methods.map(&:inspect).join(', ')} " \
+            "— this file is :per_demo (NOT compared), so it may hold ONLY the subclass line and its " \
+            "own STATUSES map. Behaviour every demo shares goes into Kiosk::OperationResult in " \
+            "kiosk-server (K-792); behaviour one verb needs goes into that verb's Operation."
+end
+
 if errors.empty?
   guarded = COPIES.count { |_, e| e[:rule] != :per_demo }
   tpl_checked = GENERATOR_TEMPLATES.count { |_, e| !e[:not_compared] }
@@ -1224,7 +1272,8 @@ if errors.empty?
        "#{tpl_checked} install-generator templates held against their demo copies " \
        "(#{tpl_drift} with drift pending triage), " \
        "#{MIGRATION_PAIRS.size} cross-demo migration pairs (#{pair_drift} with drift pending triage), " \
-       "telemetry wired in #{(dups['lib/demo_telemetry.rb'] || {}).size} demos"
+       "telemetry wired in #{(dups['lib/demo_telemetry.rb'] || {}).size} demos, " \
+       "OperationResult subclassed from kiosk-server in #{(dups[OPERATION_RESULT] || {}).size} demos"
   exit 0
 end
 

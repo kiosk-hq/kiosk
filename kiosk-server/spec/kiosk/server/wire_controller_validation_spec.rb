@@ -173,6 +173,32 @@ RSpec.describe "Opt-in PoW-shape request validation (slice-1, K-479)" do
       expect(problem[:code]).not_to eq("bad_request")
     end
 
+    # K-839: `indices` items are u64. `pack("Q<")` truncates mod 2**64, so an
+    # out-of-range index is a DIFFERENT spelling of an in-range leaf — the
+    # verifier has refused it since K-540, but the schema described a wider
+    # accepted set than any implementation had, so the shape gate waved it
+    # through to burn a challenge id and a backend eval. It is now refused as
+    # what it is: a malformed proof, 400, before the gate.
+    it "rejects an index at 2**64 with 400 bad_request (u64 upper bound)" do
+      status, _headers, problem = call_with_pow(
+        challenge: valid_challenge, nonce: { indices: [1, 2, 3, 1 << 64] },
+      )
+
+      expect(status).to eq(400)
+      expect(problem[:code]).to eq("bad_request")
+      expect(problem[:code]).not_to eq("pow_required")
+    end
+
+    it "rejects a negative index with 400 bad_request (u64 lower bound)" do
+      status, _headers, problem = call_with_pow(
+        challenge: valid_challenge, nonce: { indices: [1, 2, 3, -1] },
+      )
+
+      expect(status).to eq(400)
+      expect(problem[:code]).to eq("bad_request")
+      expect(problem[:code]).not_to eq("pow_required")
+    end
+
     it "leaves an ABSENT header untouched — the normal 402 challenge path runs (no 400)" do
       # An absent header means the initial request; the gate must still issue the
       # normal pow_required 402. Missing proof is NOT a malformed proof — it must

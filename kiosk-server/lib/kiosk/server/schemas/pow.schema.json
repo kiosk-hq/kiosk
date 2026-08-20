@@ -40,7 +40,7 @@
             "indices": {
               "type": "array",
               "description": "u64 indices in Zcash canonical (subtree/tree) order; NOT a global ascending sort.",
-              "items": { "type": "integer" }
+              "items": { "type": "integer", "minimum": 0, "exclusiveMaximum": 18446744073709551616 }
             },
             "header_nonce": {
               "type": "integer",

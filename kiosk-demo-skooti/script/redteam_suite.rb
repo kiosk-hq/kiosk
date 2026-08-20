@@ -985,58 +985,50 @@ end
 
 self_asserted_beat = self_asserted_token_forgery.call
 
-# ── SelfAssertedUserBearerForgery (K-555) — in-process, PRODUCTION-config ──────
-# The HUMAN sibling of the K-539 agent-stub forgery. skooti's StubUserIdp parses
-# an UNSIGNED, self-asserted `user:u-<uuid>` bearer into a HUMAN identity — the
-# provider's own "web session" channel that authenticates the account-binding
-# surfaces (device verify / link / unlink). This suite drives a server booted in
-# RAILS_ENV=development, where that stub is INTENTIONALLY live (the binding
-# ceremonies can be walked without a real provider login) — so the DEV wire
-# cannot demonstrate the block. This beat instead exercises the REAL shipped
-# StubUserIdp guard in-process against a stubbed PRODUCTION Rails.env: a forged
-# `user:u-…` bearer must resolve to NO identity under production (→ the binding
-# surface raises 401), while development still accepts it (or every driver + the
-# e2e harness break). Unit proof: kiosk-test-support
-# spec/stub_user_idp_env_gate_spec.rb. (skooti boots no skooti smoke; the
-# over-the-wire production 401 for the role-carrying variant is stylish's
-# production-smoke Assertion 6.)
+# ── SelfAssertedUserBearerForgery (K-555 / T-066) — OVER THE LIVE WIRE ────────
+# The HUMAN sibling of the K-539 agent-stub forgery, and it changed shape when
+# the stub it used to attack was deleted.
+#
+# Until T-066 skooti shipped a StubUserIdp that parsed an UNSIGNED, self-asserted
+# `user:u-<uuid>` bearer into a HUMAN identity, live in development so the
+# binding ceremonies could be walked without a real login. The block could only
+# be shown IN-PROCESS, against a stubbed production Rails.env, because the dev
+# wire this suite drives was supposed to accept the forgery.
+#
+# skooti now authenticates humans with real Devise in EVERY environment, so the
+# forgery has no arm to land on and the beat can be what it always should have
+# been: an over-the-wire probe in the SAME environment the drivers run in. A
+# forged `user:u-<uuid>` bearer at the account-binding surface must resolve to
+# no human at all — POST /kiosk/auth/link answers 401 — and the positive control
+# is the real thing: the seeded rider signs in at /users/sign_in and the SAME
+# endpoint answers her.
+require_relative "../lib/devise_session"
+
 self_asserted_user_bearer_forgery = lambda do
-  require "kiosk"
-  services = File.expand_path("../app/services", __dir__)
-  require File.join(services, "stub_user_idp")
-
-  # Reuse the Rails.env shim the K-539 beat installed; define it if this beat
-  # ever runs first.
-  unless defined?(Rails)
-    env_klass = Struct.new(:name) do
-      def local? = %w[development test].include?(name)
-      def to_s = name.to_s
-    end
-    rails = Module.new do
-      class << self
-        attr_accessor :env
-      end
-    end
-    Object.const_set(:Rails, rails)
-    Object.const_set(:RedteamEnvShim, env_klass) unless defined?(RedteamEnvShim)
-  end
-
-  forged = Struct.new(:headers).new(
-    { "Authorization" => "user:u-#{SecureRandom.uuid}" },
+  anon = DeviseSession.new(BASE_URL)
+  rc_forged, = anon.post_json(
+    "/kiosk/auth/link", {}, { "Authorization" => "user:u-#{SecureRandom.uuid}" }
   )
-  idp = StubUserIdp.new
 
-  Rails.env = RedteamEnvShim.new("production")
-  prod_identity = idp.verify(forged)
-  Rails.env = RedteamEnvShim.new("development")
-  dev_identity = idp.verify(forged)
+  # Positive control: the honest channel still works, so a 401 above is the
+  # forgery being refused rather than the surface being broken.
+  rider = DeviseSession.new(BASE_URL)
+                       .sign_in!(email: "ada@example.com", password: "skooti-demo-password")
+  rc_real, = rider.post_json("/kiosk/auth/link", {}, { session: true })
 
-  if prod_identity.nil? && dev_identity && dev_identity.actor.to_s == "human"
-    { blocked: true, detail: "forged self-asserted `user:u-…` human bearer → NO identity under production config (dev harness still accepts it as actor=human)" }
-  elsif prod_identity
-    { blocked: false, detail: "K-555 REGRESSION: forged self-asserted human bearer authenticated under PRODUCTION config as user_id=#{prod_identity.user_id}" }
+  if rc_forged == 401 && [200, 201].include?(rc_real)
+    { blocked: true,
+      detail: "forged self-asserted `user:u-…` human bearer → 401 at /kiosk/auth/link in the " \
+              "SAME env the drivers run in (no stub arm left); the real Devise session mints " \
+              "a link code (#{rc_real}), so the refusal is not vacuous" }
+  elsif rc_forged != 401
+    { blocked: false,
+      detail: "K-555 REGRESSION: forged self-asserted human bearer was accepted at " \
+              "/kiosk/auth/link (HTTP #{rc_forged})" }
   else
-    { blocked: false, detail: "unexpected: development branch rejected the human stub (drivers would break): #{dev_identity.inspect}" }
+    { blocked: false,
+      detail: "unexpected: the REAL Devise session was refused too (HTTP #{rc_real}) — the " \
+              "401 above proves nothing" }
   end
 rescue StandardError => e
   { blocked: false, detail: "beat error: #{e.class}: #{e.message}" }

@@ -289,12 +289,14 @@ namespace :demo do
       puts "  FAIL  K-480: create_order on past slot got #{psc.inspect}"
     end
 
-    # my_orders marks the settled order paid
-    if result["paid"] == true
-      puts "  OK  my_orders own order paid == true"
+    # my_orders marks the settled order paid. K-853: the field is the TRI-state
+    # §11.6 requires (unpaid | pending | paid), not a boolean — `pending` is a
+    # capture whose outcome is unknown and is NOT a settled order.
+    if result["payment_state"] == "paid"
+      puts "  OK  my_orders own order payment_state == paid"
     else
-      failures << "my_orders paid flag expected true, got #{result["paid"].inspect}"
-      puts "  FAIL  my_orders paid flag got #{result["paid"].inspect}"
+      failures << "my_orders payment_state expected \"paid\", got #{result["payment_state"].inspect}"
+      puts "  FAIL  my_orders payment_state got #{result["payment_state"].inspect}"
     end
 
     # THE PAY BODY IS THE SETTLEMENT (0.4). `POST /kiosk/pay` keeps its path,

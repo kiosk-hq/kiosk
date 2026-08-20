@@ -8,7 +8,8 @@
 #                        demo lib (byte-exact wire vector the firmware mirrors)
 #   rake demo:rideflow   boots the server, runs script/rental_flow.rb (no-human full
 #                        rental chain), asserts happy path + all negative gates,
-#                        tears down
+#                        tears down, then runs script/pay_window.rb in-process
+#                        (K-853 capture-anchored paid state)
 #   rake demo:isolation  adversarial cross-tenant + ownership isolation test
 #   rake demo:kyc        named-anonymized-attribute KYC gate proof (age_over_18 +
 #                        licence_a): motorcycle 403→attest→200, scooter stays KYC-free
@@ -38,7 +39,8 @@ namespace :demo do
     sh "bundle exec rails db:drop db:create db:schema:load db:seed"
   end
 
-  desc "Boot the server, run script/rental_flow.rb end-to-end (happy + all negative gates), assert."
+  desc "Boot the server, run script/rental_flow.rb end-to-end (happy + all negative gates), then the " \
+       "in-process capture-window regression (script/pay_window.rb, K-853), assert."
   task :rideflow do
     require "resolv"
     require "net/http"
@@ -48,6 +50,7 @@ namespace :demo do
     require "base64"
     require "jwt"
     require "securerandom"
+    require "shellwords"
 
     $LOAD_PATH.unshift File.expand_path("../", __dir__)
     require "lock_sim"
@@ -481,6 +484,20 @@ namespace :demo do
       end
     else
       puts "  (structure.sql not found — skip RLS check)"
+    end
+
+    # ── The capture→settlement window (K-853 / protocol.md §11.6) ─────────
+    # NO SERVER. The two halves of the window cannot be stood in over HTTP —
+    # holding a capture mid-charge and observing a returned capture with no
+    # settlement row need a controllable PSP and the provider called directly —
+    # so this run is IN-PROCESS against the same database, driving the real
+    # verbs through the registry the wire dispatches to. It rides inside
+    # demo:rideflow rather than becoming its own task because demo:rideflow is
+    # already this demo's pay-path gate.
+    puts "\n══ Capture-anchored paid state (K-853) ══"
+    window_rb = File.expand_path("../../script/pay_window.rb", __dir__)
+    unless system("bundle exec rails runner #{window_rb.shellescape}")
+      failures << "pay_window: capture-window assertions failed (see output above)"
     end
 
     # ── final verdict ─────────────────────────────────────────────────────

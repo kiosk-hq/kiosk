@@ -32,6 +32,44 @@
 #
 # Any mismatch rejects the capture (403 Forbidden); the mandate trail is
 # persisted, nothing is charged.
+#
+# ── Per-reservation serialization and the capture-anchored marker (K-853) ────
+# The engine settles between two short DB transactions with the irreversible PSP
+# capture BETWEEN them (executor P1→P2→P3), and until K-853 the only "paid"
+# marker skooti had was the settlement row written in P3, AFTER the capture.
+# That left two holes, and protocol.md §11.6 now closes both by name:
+#
+#   (a) DOUBLE CAPTURE — two /pay for the same reservation (two distinct chains)
+#       both passed the cashier and both charged the rider for one ride. The
+#       engine's `409 conflict` on a re-presented mandate id does not help: a
+#       FRESH chain collides with nothing.
+#   (b) "NOT PAID" DURING THE WINDOW — between the capture returning and P3
+#       writing the settlement, every skooti read said no settlement exists,
+#       which §11.6 forbids an operator to publish as *not paid*: it is the
+#       answer that licenses an assistant to sign a fresh chain and charge its
+#       human a second time.
+#
+# So the reservation gets a payment lifecycle and this decorator drives it:
+# `unpaid → paying → paid`. The claim is a single conditional UPDATE
+# (`… WHERE payment_status='unpaid' RETURNING …`) — a row-locked, race-free
+# compare-and-set. Once a reservation is `paying`, a second /pay's claim matches
+# zero rows and is refused (closes a); `my_reservations` publishes `pending` for
+# it rather than a bare unpaid (closes b, the in-flight half).
+#
+# On a definitive decline / no-charge failure we RELEASE `paying → unpaid` so a
+# corrected retry can proceed; on an UNKNOWN outcome (a timeout) we deliberately
+# LEAVE it `paying`, so a blind retry cannot double-charge and the state an
+# assistant reads stays *pending* rather than becoming a false "not paid".
+# On success we flip `paying → paid` BEFORE returning to the engine — a hair
+# before P3 — and a failure of that flip must never undo a successful charge, so
+# it is swallowed and P3's settlement row remains the second witness.
+#
+# WHO PAID is recorded with the claim, from the SIGNED cart mandate. skooti's
+# cashier does not check that the payer owns the reservation (see above), so
+# without the payer id the capture-anchored marker could not tell the rental
+# verbs' payment gate whose money it was, and that gate would have had to widen
+# from "a settlement of THIS principal" to "anyone paid" — which the isolation
+# flow exists to prevent.
 class ValidatingRentalProvider
   def initialize(provider, currency:)
     @provider = provider
@@ -39,8 +77,24 @@ class ValidatingRentalProvider
   end
 
   def capture(cart_mandate, payment_method: nil)
-    validate!(cart_mandate)
-    @provider.capture(cart_mandate, payment_method: payment_method)
+    reservation_id = claim_and_validate!(cart_mandate)
+    begin
+      settled = @provider.capture(cart_mandate, payment_method: payment_method)
+    rescue StandardError => e
+      # Release the claim ONLY when we know no money moved (a definitive decline
+      # or a pre-charge SetupRequired). On an UNKNOWN outcome we keep the
+      # reservation `paying` so a lost-response retry reads *pending* and is
+      # refused, rather than reading *unpaid* and charging twice.
+      release_claim_on_failure!(reservation_id, e)
+      raise
+    end
+    # Charge succeeded — mark the reservation terminally paid. The engine's
+    # settlement row (executor P3) is the second witness; this local flip is the
+    # FIRST one and the only one that exists during the window, so a failure
+    # here must NOT undo a successful charge — swallow it and let P3 record the
+    # settlement.
+    mark_paid!(reservation_id)
+    settled
   end
 
   def method_missing(name, *args, **kwargs, &block)
@@ -51,9 +105,22 @@ class ValidatingRentalProvider
     @provider.respond_to?(name, include_private) || super
   end
 
+  # True iff a settlement (capture receipt) references this reservation — the
+  # engine's own "this was charged" marker, written by executor phase 3. It is
+  # the SECOND witness: it lands after the capture, so a false here proves
+  # nothing on its own, which is precisely why the claim above exists.
+  def self.settled?(reservation_id)
+    Settlement.joins(:cart_mandate).merge(CartMandate.referencing(reservation_id)).exists?
+  end
+
   private
 
-  def validate!(cart)
+  # Atomically claim the referenced reservation for payment, then run the
+  # cashier check against it. Returns the reservation_id (String) on success;
+  # raises Forbidden (403) on a cashier rejection — reverting the claim first if
+  # it was taken — or BadRequest (400) when the cart's reservation reference is
+  # not even a uuid (checked before the claim, so there is nothing to revert).
+  def claim_and_validate!(cart)
     unless cart.currency.to_s.downcase == @currency
       deny "cart currency #{cart.currency.inspect} rejected — this operator prices in " \
            "#{@currency.upcase} (the fleet catalog and reserve carry a currency field)"
@@ -81,41 +148,134 @@ class ValidatingRentalProvider
       )
     end
 
-    # Quoted total = this reservation's scooter price_per_min_cents × 1 minute
-    # (the upfront hold reserve/rental_flow settle). Join reservation → scooter
-    # by id; no user_id filter — ownership is a USE-time gate, not the cashier's.
-    conn  = ActiveRecord::Base.connection
-    quote = conn.execute(
-      "SELECT s.price_per_min_cents " \
-      "FROM public.reservations r " \
-      "JOIN public.scooters s ON s.id = r.scooter_id " \
+    conn = ActiveRecord::Base.connection
+
+    # CLAIM: unpaid → paying, race-free compare-and-set (K-853). Winning this
+    # UPDATE is what serializes concurrent /pay for one reservation — only one
+    # caller can flip 'unpaid' — and it is taken BEFORE the cashier check and
+    # before the capture, so a second chain never reaches the PSP at all. The
+    # quoted total comes back with it: this reservation's scooter
+    # price_per_min_cents × 1 minute (the upfront hold reserve/rental_flow
+    # settle). No user_id filter — ownership is a USE-time gate, not the
+    # cashier's.
+    #
+    # RAW SQL, deliberately: the ATOMICITY is the fix, `update_all` has no
+    # RETURNING in Rails 8.1, and an ActiveRecord spelling would be a SELECT then
+    # an UPDATE — which is the race back again. Nothing interpolated is
+    # caller-controlled: the reservation id is through {UuidCheck}, the payer
+    # comes off the SIGNED mandate, and the statuses are literals.
+    claimed = conn.execute(
+      "UPDATE public.reservations r " \
+      "SET payment_status = #{conn.quote(Reservation::PAYING)}, " \
+      "paid_by_user_id = #{conn.quote(cart.user_id.to_s)}::uuid, updated_at = now() " \
+      "FROM public.scooters s " \
       "WHERE r.id = #{conn.quote(reservation_id)}::uuid " \
-      "LIMIT 1"
+      "AND s.id = r.scooter_id " \
+      "AND r.payment_status = #{conn.quote(Reservation::UNPAID)} " \
+      "RETURNING s.price_per_min_cents"
     ).first
-    deny "reservation not found" if quote.nil?
-    quoted = quote["price_per_min_cents"].to_i
 
-    # Internal arithmetic consistency: if any line carries a per-unit price,
-    # the cart's total must equal the sum of qty × price_cents across those
-    # lines. Carts with no priced lines (e.g. the isolation-flow cart) skip
-    # this sub-check and are guarded by the quoted-total check alone.
-    priced = entries.select { |li| li["price_cents"] || li[:price_cents] }
-    unless priced.empty?
-      line_sum = priced.sum do |li|
-        qty   = (li["qty"] || li[:qty]).to_i
-        price = (li["price_cents"] || li[:price_cents]).to_i
-        deny "each priced line needs a positive qty and price_cents" if qty <= 0 || price <= 0
-        qty * price
+    if claimed.nil?
+      # Distinguish "no such reservation" from "not in a payable state", so the
+      # assistant gets an actionable sentence instead of a bare 403.
+      existing = Reservation.where(id: reservation_id).pick(:payment_status)
+      deny "reservation not found" if existing.nil?
+
+      # A `paying` reservation that ALREADY HAS a settlement was charged and only
+      # the local flip was lost (a crash between capture and mark_paid!). The
+      # settlement row is decisive evidence, so heal the marker here — at the
+      # moment it matters — and answer with the truth.
+      if existing == Reservation::PAYING && self.class.settled?(reservation_id)
+        mark_paid!(reservation_id)
+        deny "reservation already paid"
       end
-      unless cart.total_amount_cents.to_i == line_sum
-        deny "cart total #{cart.total_amount_cents} does not equal the sum of its line items #{line_sum}"
+
+      if existing == Reservation::PAYING
+        # Claimed, no settlement: either a pay is genuinely in flight, or one
+        # died at an UNKNOWN outcome and we deliberately kept the claim so a
+        # blind retry cannot double-charge. Say what recovers it, in the
+        # vocabulary §11.6 gave the assistant.
+        deny "reservation #{reservation_id} has a payment in progress — re-read " \
+             "GET <endpoint>/my_reservations: while its payment_state is `pending` the charge may " \
+             "already have gone through, so do NOT sign a fresh mandate chain; only a `paid` or " \
+             "`unpaid` answer is actionable"
       end
+
+      deny "reservation #{reservation_id} is already paid — start_rental / rent_motorcycle is the " \
+           "next step, not a second payment"
     end
 
-    unless cart.total_amount_cents.to_i == quoted
-      deny "cart total #{cart.total_amount_cents} does not equal the operator's quoted rental price " \
-           "#{quoted} — re-read the fleet catalog and reserve's pay_hint"
+    quoted = claimed["price_per_min_cents"].to_i
+
+    # Everything past the claim runs under the `paying` guard; any rejection
+    # must release it (revert to 'unpaid') so a corrected retry can proceed.
+    begin
+      # Internal arithmetic consistency: if any line carries a per-unit price,
+      # the cart's total must equal the sum of qty × price_cents across those
+      # lines. Carts with no priced lines (e.g. the isolation-flow cart) skip
+      # this sub-check and are guarded by the quoted-total check alone.
+      priced = entries.select { |li| li["price_cents"] || li[:price_cents] }
+      unless priced.empty?
+        line_sum = priced.sum do |li|
+          qty   = (li["qty"] || li[:qty]).to_i
+          price = (li["price_cents"] || li[:price_cents]).to_i
+          deny "each priced line needs a positive qty and price_cents" if qty <= 0 || price <= 0
+          qty * price
+        end
+        unless cart.total_amount_cents.to_i == line_sum
+          deny "cart total #{cart.total_amount_cents} does not equal the sum of its line items #{line_sum}"
+        end
+      end
+
+      unless cart.total_amount_cents.to_i == quoted
+        deny "cart total #{cart.total_amount_cents} does not equal the operator's quoted rental price " \
+             "#{quoted} — re-read the fleet catalog and reserve's pay_hint"
+      end
+    rescue StandardError
+      release_claim!(reservation_id) # revert 'paying' → 'unpaid'
+      raise
     end
+
+    reservation_id
+  end
+
+  # Release a claim we know involved NO charge (a definitive decline / setup
+  # required). On an UNKNOWN capture outcome (a non-retryable PaymentFailed) or
+  # any other unexpected error we deliberately do NOT release — leaving the
+  # reservation `paying` is what keeps `my_reservations` answering *pending*
+  # instead of a false "not paid", and what blocks a blind retry.
+  def release_claim_on_failure!(reservation_id, error)
+    return unless reservation_id
+
+    safe = error.is_a?(Kiosk::PaymentProviders::SetupRequired) ||
+           (error.is_a?(Kiosk::PaymentProviders::PaymentFailed) && error.retryable?)
+    release_claim!(reservation_id) if safe
+  end
+
+  # Reverting the claim also clears the payer: nobody paid, so leaving a payer id
+  # on the row would make the rental verbs' payment gate read a claim that was
+  # released as if it were a charge.
+  def release_claim!(reservation_id)
+    set_payment_status(reservation_id, from: Reservation::PAYING, to: Reservation::UNPAID,
+                                       extra: "paid_by_user_id = NULL")
+  end
+
+  def mark_paid!(reservation_id)
+    set_payment_status(reservation_id, from: Reservation::PAYING, to: Reservation::PAID)
+  rescue StandardError
+    # A successful charge is already on its way to the engine's settlement (P3);
+    # a failed local flip must never surface as an error over a paid rental.
+    nil
+  end
+
+  # @param extra [String, nil] a further frozen SET fragment — never a caller value
+  def set_payment_status(reservation_id, from:, to:, extra: nil)
+    conn = ActiveRecord::Base.connection
+    conn.execute(
+      "UPDATE public.reservations SET payment_status = #{conn.quote(to)}, " \
+      "#{extra ? "#{extra}, " : ""}updated_at = now() " \
+      "WHERE id = #{conn.quote(reservation_id.to_s)}::uuid AND payment_status = #{conn.quote(from)}"
+    )
   end
 
   def deny(message)

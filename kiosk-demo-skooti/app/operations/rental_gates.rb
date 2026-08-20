@@ -57,17 +57,53 @@ module RentalGates
   end
 
   # ── Payment ────────────────────────────────────────────────────────────────
-  # A settlement OF THIS PRINCIPAL whose cart references THIS reservation —
-  # which is what stops paying for reservation A and starting rental B. The
-  # JOIN and the jsonb containment are unchanged; what changed is that the
-  # reservation id is a quoted value rather than a fragment.
+  # THIS PRINCIPAL has paid for THIS reservation — which is what stops paying
+  # for reservation A and starting rental B.
+  #
+  # TWO WITNESSES, and the order matters (K-853). The settlement row is the
+  # engine's, written in executor phase 3 — AFTER the irreversible capture. The
+  # `payment_status`/`paid_by_user_id` pair is skooti's own, written by the
+  # cashier the instant the capture RETURNS. protocol.md §11.6 anchors paid
+  # state to the CAPTURE, so the local marker is consulted first: it is the only
+  # witness that exists during the window between the two, and a gate that read
+  # the settlement alone would refuse a rental whose money has already moved —
+  # the refusal that sends an assistant back to sign a fresh chain.
+  #
+  # BOTH witnesses stay PRINCIPAL-SCOPED, which is what keeps this gate about
+  # payment BY THE CALLER rather than payment by anyone: the settlement arm
+  # through `of_current_principal`, the local arm through `paid_by_user_id`.
+  # skooti's cashier deliberately lets B pay for A's reservation (isolation
+  # flow), so "somebody paid" was never the question this gate asks.
+  #
+  # `paid_by_user_id` is compared through Arel and NOT as a hash value:
+  # `where(paid_by_user_id: Arel.sql("kiosk.current_user_id()"))` looks right and
+  # is silently wrong — `Arel.sql` returns a String subclass, so ActiveRecord
+  # binds the FUNCTION TEXT as a uuid value, casts it to NULL and matches no row.
   #
   # @return [OperationResult, nil] a refusal, or nil when the rental is paid for
-  def unsettled(reservation_id)
-    paid = Settlement.of_current_principal
-                     .joins(:cart_mandate)
-                     .merge(CartMandate.referencing(reservation_id))
-    return nil if paid.exists?
+  def payment_refusal(reservation_id)
+    paid_here = Reservation.owned_by_current_principal
+                           .where(id: reservation_id, payment_status: Reservation::PAID)
+                           .where(Reservation.arel_table[:paid_by_user_id]
+                                             .eq(Arel.sql("kiosk.current_user_id()")))
+    settled = Settlement.of_current_principal
+                        .joins(:cart_mandate)
+                        .merge(CartMandate.referencing(reservation_id))
+    return nil if paid_here.exists? || settled.exists?
+
+    # A reservation with a capture OUTSTANDING is neither paid nor unpaid, and
+    # saying "no settlement" about it is what §11.6 forbids. Name the third state
+    # instead, so the assistant waits and reconciles rather than re-minting.
+    pending = Reservation.owned_by_current_principal
+                         .where(id: reservation_id, payment_status: Reservation::PAYING)
+    if pending.exists?
+      return OperationResult.refused(
+        code:    "forbidden",
+        message: "a payment for this reservation is in progress and its outcome is not yet known — " \
+                 "re-read my_reservations and start the rental once its payment_state is `paid`; do " \
+                 "NOT sign a fresh mandate chain while it reads `pending`",
+      )
+    end
 
     OperationResult.refused(code: "forbidden", message: "no settlement for this reservation")
   end

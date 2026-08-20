@@ -84,6 +84,20 @@ class RescheduleDeliveryOperation
                        .joins(:cart_mandate)
                        .merge(CartMandate.referencing(order_id))
       unless paid.exists?
+        # K-853: an order with a capture OUTSTANDING is neither paid nor unpaid,
+        # and telling an assistant "this order is not paid yet" about one is the
+        # sentence protocol.md §11.6 forbids — it is what sends it back to sign a
+        # fresh chain. The claim is owner-scoped (see ValidatingPaymentProvider),
+        # so a `paying` row here is THIS principal's own in-flight charge.
+        if Order.owned_by_current_principal.where(id: order_id, status: Order::PAYING).exists?
+          next OperationResult.refused(
+            code:    "forbidden",
+            message: "a payment for this order is in progress and its outcome is not yet known — " \
+                     "re-read my_orders and reschedule once its payment_state is `paid`; do NOT sign " \
+                     "a fresh mandate chain while it reads `pending`",
+          )
+        end
+
         next OperationResult.refused(
           code:    "forbidden",
           message: "this order is not paid yet — reschedule_delivery only moves an ALREADY-PAID " \

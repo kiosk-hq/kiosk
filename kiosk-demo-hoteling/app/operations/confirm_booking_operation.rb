@@ -44,13 +44,50 @@ class ConfirmBookingOperation
         return OperationResult.refused(code: "forbidden", message: "booking not found or not yours")
       end
 
-      # ── Gate 2: a settlement of THIS principal whose cart references THIS
-      # booking. The JOIN and the jsonb containment are unchanged; what changed
-      # is that the booking id is a quoted value rather than a fragment.
-      paid = Settlement.of_current_principal
-                       .joins(:cart_mandate)
-                       .merge(CartMandate.referencing(booking_id))
-      unless paid.exists?
+      # ── Gate 2: THIS principal has paid for THIS booking ────────────────────
+      # TWO WITNESSES, and the order matters (K-853). The settlement row is the
+      # engine's, written in executor phase 3 — AFTER the irreversible capture.
+      # The `payment_status`/`paid_by_user_id` pair is hoteling's own, written by
+      # the cashier the instant the capture RETURNS. protocol.md §11.6 anchors
+      # paid state to the CAPTURE, so the local marker is consulted first: it is
+      # the only witness that exists during the window between the two, and a
+      # gate that read the settlement alone would refuse a booking whose money
+      # has already moved — the refusal that sends an assistant back to sign a
+      # fresh chain.
+      #
+      # BOTH witnesses stay PRINCIPAL-SCOPED, which is what keeps this gate about
+      # payment BY THE CALLER rather than payment by anyone: the settlement arm
+      # through `of_current_principal`, the local arm through `paid_by_user_id`.
+      # hoteling's cashier deliberately lets B pay for A's booking (isolation
+      # flow), so "somebody paid" was never the question this gate asks.
+      # `paid_by_user_id` is compared through Arel and NOT as a hash value:
+      # `where(paid_by_user_id: Arel.sql("kiosk.current_user_id()"))` looks
+      # right and is silently wrong — `Arel.sql` returns a String subclass, so
+      # ActiveRecord binds the FUNCTION TEXT as a uuid value, casts it to NULL
+      # and matches no row. The predicate has to be built as a node.
+      paid_here = Booking.owned_by_current_principal
+                         .where(id: booking_id, payment_status: Booking::PAID)
+                         .where(Booking.arel_table[:paid_by_user_id]
+                                       .eq(Arel.sql("kiosk.current_user_id()")))
+      settled = Settlement.of_current_principal
+                          .joins(:cart_mandate)
+                          .merge(CartMandate.referencing(booking_id))
+      unless paid_here.exists? || settled.exists?
+        # A booking with a capture OUTSTANDING is neither paid nor unpaid, and
+        # saying "no settlement" about it is what §11.6 forbids. Name the third
+        # state instead, so the assistant waits and reconciles rather than
+        # re-minting.
+        pending = Booking.owned_by_current_principal
+                         .where(id: booking_id, payment_status: Booking::PAYING)
+        if pending.exists?
+          return OperationResult.refused(
+            code:    "forbidden",
+            message: "a payment for this booking is in progress and its outcome is not yet known — " \
+                     "re-read my_bookings and confirm once its payment_state is `paid`; do NOT sign a " \
+                     "fresh mandate chain while it reads `pending`",
+          )
+        end
+
         return OperationResult.refused(code: "forbidden", message: "no settlement for this booking")
       end
 

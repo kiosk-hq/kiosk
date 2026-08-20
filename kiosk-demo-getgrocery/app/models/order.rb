@@ -26,6 +26,15 @@ class Order < ApplicationRecord
   # One reschedule per order; further changes go through the operator.
   ALREADY_SCHEDULED = [SCHEDULED, RESCHEDULED].freeze
 
+  # ── What `my_orders` publishes about money (K-853) ─────────────────────────
+  # The three answers protocol.md §11.6 allows a reconciliation surface to give.
+  # `PENDING` is the third state the spec REQUIRES: a capture has been started
+  # and its outcome is not known, which is neither paid nor not-paid, and which
+  # an assistant must never read as a licence to sign a fresh mandate chain.
+  STATE_UNPAID  = "unpaid"
+  STATE_PENDING = "pending"
+  STATE_PAID    = "paid"
+
   belongs_to :user
   has_many :order_items, dependent: :destroy
 
@@ -110,6 +119,34 @@ class Order < ApplicationRecord
   # paid=false and tempt a double-charging retry.
   def self.paid_flag(settlements)
     arel_table[:status].eq(PAID).or(settling(settlements).arel.exists)
+  end
+
+  # ── The one place "has money moved for this order" is decided (K-853) ──────
+  #
+  # {paid_flag} above closes HALF the window §11.6 cares about — the half after
+  # the capture returns and before the settlement row lands. It does not close
+  # the other half: an order that has been CLAIMED and whose capture has not
+  # come back yet reads `paid_flag = false`, and publishing that as a boolean
+  # said *not paid* about a charge that may already have taken the money. §11.6
+  # forbids exactly that and requires a third state distinct from both, so the
+  # wire's field is a TRI-state and not a flag:
+  #
+  #   paid    — {paid_flag}: the capture returned (`status = 'paid'`) OR a
+  #             settlement row exists. Either witness alone is enough.
+  #   pending — the order is CLAIMED (`paying`) and the capture has not
+  #             resolved. Not paid, not unpaid. An assistant that sees this
+  #             reconciles or stops — it never signs a fresh chain.
+  #   unpaid  — no capture has ever been claimed. This is the ONLY positive,
+  #             unambiguous "not paid" getgrocery publishes, and the only one
+  #             that makes a fresh mandate chain correct.
+  #
+  # @param status [String] the order's own lifecycle column
+  # @param paid [Boolean] {paid_flag} as the SELECT evaluated it for this row
+  def self.payment_state(status, paid)
+    return STATE_PAID    if paid
+    return STATE_PENDING if status == PAYING
+
+    STATE_UNPAID
   end
 
   # The currency a settled cart actually paid in, as a scalar subquery, or NULL

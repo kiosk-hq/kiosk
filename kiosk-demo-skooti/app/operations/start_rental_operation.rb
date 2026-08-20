@@ -75,8 +75,9 @@ class StartRentalOperation
       )
     end
 
-    # ── Gate 2: a settled payment referencing THIS reservation ─────────────
-    refusal = RentalGates.unsettled(reservation_id)
+    # ── Gate 2: THIS principal has PAID for THIS reservation ───────────────
+    # Capture-anchored, not settlement-anchored (K-853) — see RentalGates.
+    refusal = RentalGates.payment_refusal(reservation_id)
     return refusal if refusal
 
     # ── All gates passed: issue the Ed25519 rental token ───────────────────

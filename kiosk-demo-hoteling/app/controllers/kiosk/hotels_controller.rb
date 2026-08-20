@@ -142,12 +142,25 @@ class Kiosk::HotelsController < ActionController::API
   # supplies no filter; the scope is provider-controlled and un-bypassable.
   # `owned_by_current_principal` is the ONE place the identity predicate is
   # written — see Booking for why it stays SQL-side.
+  # ── THE RECONCILIATION SURFACE (K-853) ────────────────────────────────────
+  # This is the "per-user query" protocol.md §11.6 sends an assistant to after a
+  # `pay` whose response it never read, so what it publishes about money is a
+  # normative matter, not a convenience. Until K-853 it published NOTHING about
+  # money: an assistant reconciling a lost `pay` learned only that a booking
+  # existed and was still `reserved`, which is not an answer — and every gate
+  # that DID know about money read the settlement row alone, so it answered "no
+  # settlement" about a booking that had already been charged.
+  #
+  # `payment_state` is the fix and it is a TRI-state on purpose: §11.6 requires
+  # a third answer distinct from paid and not-paid, because "no record" is not
+  # evidence that no money moved. See {Booking.payment_state}.
   description "List this principal's hotel bookings (scoped to authenticated user). " \
-              "Each row carries a `booking_id`; pass it to confirm_booking as `booking_id`. " \
-              "A confirmed row also carries the `confirmation_code` the hotel has on " \
-              "file for it — the reference the guest gives at the desk — so it can be " \
-              "read back at any time, not only in the confirm_booking response. " \
-              "It is null until the booking is confirmed."
+              "This is the query to re-read after a payment whose response never arrived: " \
+              "each row says where that booking stands with the hotel and where its money " \
+              "stands, and a booking whose charge is still outstanding says so rather than " \
+              "reporting itself unpaid. A confirmed row also carries the reference the guest " \
+              "gives at the desk — the hotel's own record of it, readable at any time and not " \
+              "only in the `confirm_booking` answer."
   input_schema type: "object", additionalProperties: false, properties: {}, required: []
   output_schema type: "array",
                 description: "The principal's bookings, newest first.",
@@ -160,11 +173,13 @@ class Kiosk::HotelsController < ActionController::API
                     check_in:          { type: "string", description: "First night, YYYY-MM-DD." },
                     check_out:         { type: "string", description: "Checkout day (exclusive), YYYY-MM-DD." },
                     total_cents:       { type: "integer", description: "EUR cents for the whole stay." },
-                    status:            { type: "string", description: "reserved | confirmed | cancelled." },
+                    status:            { type: "string", description: "The room-night's own state: reserved | confirmed | cancelled. It says nothing about money — payment_state does." },
+                    payment_state:     { type: "string", enum: %w[unpaid pending paid],
+                                         description: "Where this booking's money stands, anchored to the CAPTURE and not to the operator's settlement record. `paid` = the charge went through; there is nothing to retry. `pending` = a capture for this booking has been started and its outcome is not known yet — it may already have taken the money, so do NOT sign a fresh mandate chain: wait and re-read. `unpaid` = no capture has ever been started, and this is the only answer that makes a fresh chain correct." },
                     confirmation_code: { type: %w[string null], description: "The reference the guest gives at the desk. Null until the booking is confirmed; durable afterwards." },
                   },
                   required: %w[booking_id property_id room_type_id check_in check_out
-                               total_cents status confirmation_code],
+                               total_cents status payment_state confirmation_code],
                 }
   def my_bookings
     # `created_at DESC` with no tiebreaker is what this verb has always ordered
@@ -172,12 +187,18 @@ class Kiosk::HotelsController < ActionController::API
     # the same microsecond would be free to swap places between runs, but nothing
     # reachable through the wire can produce them, and adding a tiebreaker here
     # would be a behaviour change smuggled into a conversion.
+    #
+    # The settled flag is a CORRELATED EXISTS over the CALLER's settlements —
+    # one statement for the whole list, not one query per row — and it is only
+    # the second of the two witnesses {Booking.payment_state} weighs.
+    settled_flag = Booking.settled_flag(Settlement.of_current_principal)
     render json: Booking.owned_by_current_principal
                         .order(created_at: :desc)
                         .pluck(:id, :property_id, :room_type_id, :check_in, :check_out,
-                               :total_cents, :status, :confirmation_code)
+                               :total_cents, :status, :payment_status, settled_flag,
+                               :confirmation_code)
                         .map { |id, property_id, room_type_id, check_in, check_out,
-                                total_cents, status, confirmation_code|
+                                total_cents, status, payment_status, settled, confirmation_code|
                           { booking_id:        id,
                             property_id:       property_id,
                             room_type_id:      room_type_id,
@@ -185,6 +206,7 @@ class Kiosk::HotelsController < ActionController::API
                             check_out:         check_out,
                             total_cents:       total_cents,
                             status:            status,
+                            payment_state:     Booking.payment_state(payment_status, settled),
                             confirmation_code: confirmation_code }
                         }
   end

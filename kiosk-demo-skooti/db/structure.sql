@@ -287,7 +287,9 @@ CREATE TABLE public.reservations (
     status character varying DEFAULT 'reserved'::character varying NOT NULL,
     started_at timestamp with time zone,
     created_at timestamp(6) without time zone NOT NULL,
-    updated_at timestamp(6) without time zone NOT NULL
+    updated_at timestamp(6) without time zone NOT NULL,
+    payment_status character varying DEFAULT 'unpaid'::character varying NOT NULL,
+    paid_by_user_id uuid
 );
 
 
@@ -746,6 +748,7 @@ ALTER TABLE ONLY public.reservations
 SET search_path TO "$user", public;
 
 INSERT INTO "schema_migrations" (version) VALUES
+('20260820140001'),
 ('20260820130117'),
 ('20260820130116'),
 ('20260820130115'),

@@ -112,9 +112,24 @@ class Kiosk::FleetController < ActionController::API
   # caller supplies no filter; the scope is provider-controlled and
   # un-bypassable. `owned_by_current_principal` is the ONE place the identity
   # predicate is written — see Reservation for why it stays SQL-side.
-  description "List this principal's scooter reservations (scoped to authenticated user via kiosk.current_user_id()). " \
-              "Each row carries a `reservation_id`; pass it to start_rental / rent_motorcycle as `reservation_id`. " \
-              "Each row also carries the vehicle's `scooter_code` — the same handle scooters_available shows and reserve takes."
+  # ── THE RECONCILIATION SURFACE (K-853) ────────────────────────────────────
+  # This is the "per-user query" protocol.md §11.6 sends an assistant to after a
+  # `pay` whose response it never read, so what it publishes about money is a
+  # normative matter, not a convenience. Until K-853 it published NOTHING about
+  # money: an assistant reconciling a lost `pay` learned only that a reservation
+  # existed and was still `reserved`, which is not an answer — and the rental
+  # verbs' payment gate read the settlement row alone, so it answered "no
+  # settlement" about a ride that had already been charged.
+  #
+  # `payment_state` is the fix and it is a TRI-state on purpose: §11.6 requires
+  # a third answer distinct from paid and not-paid, because "no record" is not
+  # evidence that no money moved. See {Reservation.payment_state}.
+  description "List this principal's fleet reservations (scoped to the authenticated account). " \
+              "This is the query to re-read after a payment whose response never arrived: each row " \
+              "says where that reservation stands with the fleet and where its money stands, and a " \
+              "reservation whose charge is still outstanding says so rather than reporting itself " \
+              "unpaid. Each row also names the vehicle by the same handle the fleet catalog shows, " \
+              "so a rental can be started straight from this answer."
   input_schema type: "object", additionalProperties: false, properties: {}, required: []
   output_schema type: "array",
                 description: "The principal's reservations, newest first.",
@@ -123,9 +138,11 @@ class Kiosk::FleetController < ActionController::API
                   properties: {
                     reservation_id: { type: "string", description: "uuid. Pass to start_rental / rent_motorcycle as `reservation_id`." },
                     scooter_code:   { type: "string", description: "The vehicle's `code` — the same handle scooters_available shows and reserve takes." },
-                    status:         { type: "string", description: "reserved | active." },
+                    status:         { type: "string", description: "The ride's own state: reserved | active. It says nothing about money — payment_state does." },
+                    payment_state:  { type: "string", enum: %w[unpaid pending paid],
+                                      description: "Where this reservation's money stands, anchored to the CAPTURE and not to the operator's settlement record. `paid` = the charge went through; there is nothing to retry. `pending` = a capture for this reservation has been started and its outcome is not known yet — it may already have taken the money, so do NOT sign a fresh mandate chain: wait and re-read. `unpaid` = no capture has ever been started, and this is the only answer that makes a fresh chain correct." },
                   },
-                  required: %w[reservation_id scooter_code status],
+                  required: %w[reservation_id scooter_code status payment_state],
                 }
   def my_reservations
     # The vehicle is identified by its `code`, never by the numeric scooters.id:
@@ -142,13 +159,22 @@ class Kiosk::FleetController < ActionController::API
     #
     # `created_at DESC` with no tiebreaker is what this verb has always ordered
     # by, and it is kept rather than quietly improved.
+    #
+    # The settled flag is a CORRELATED EXISTS over the CALLER's settlements —
+    # one statement for the whole list, not one query per row — and it is only
+    # the second of the two witnesses {Reservation.payment_state} weighs.
     reservations = Reservation.arel_table
+    settled_flag = Reservation.settled_flag(Settlement.of_current_principal)
     render json: Reservation.owned_by_current_principal
                             .joins(:scooter)
                             .order(reservations[:created_at].desc)
-                            .pluck(reservations[:id], Scooter.arel_table[:code], reservations[:status])
-                            .map { |id, scooter_code, status|
-                              { reservation_id: id, scooter_code: scooter_code, status: status }
+                            .pluck(reservations[:id], Scooter.arel_table[:code], reservations[:status],
+                                   reservations[:payment_status], settled_flag)
+                            .map { |id, scooter_code, status, payment_status, settled|
+                              { reservation_id: id,
+                                scooter_code:   scooter_code,
+                                status:         status,
+                                payment_state:  Reservation.payment_state(payment_status, settled) }
                             }
   end
 

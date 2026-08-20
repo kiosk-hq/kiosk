@@ -5,7 +5,8 @@
 #
 #   rake demo:setup      idempotent db:drop / create / schema:load / seed
 #   rake demo:book       boots the server, runs script/hoteling_flow.rb (no-human full
-#                        booking chain), asserts happy path + negative gate
+#                        booking chain), asserts happy path + negative gate, then runs
+#                        script/pay_window.rb in-process (K-853 capture-anchored paid state)
 #   rake demo:isolation  adversarial cross-tenant isolation test
 #   rake demo:redteam    adversarial regression battery (kiosk-redteam)
 #   rake demo:schema     self-discovery proof — verifies the schema verb over HTTP
@@ -27,13 +28,15 @@ namespace :demo do
     end
   end
 
-  desc "Boot the server, run script/hoteling_flow.rb end-to-end (happy + payment-gate negative), assert."
+  desc "Boot the server, run script/hoteling_flow.rb end-to-end (happy + payment-gate negative), then the " \
+       "in-process capture-window regression (script/pay_window.rb, K-853), assert."
   task :book do
     require "resolv"
     require "net/http"
     require "uri"
     require "json"
     require "openssl"
+    require "shellwords"
 
     port = ENV.fetch("PORT", "3003")
     log  = "/tmp/kiosk-hoteling-demo.log"
@@ -222,6 +225,20 @@ namespace :demo do
         failures << "skip_pay: http_confirm_booking expected 403, got #{result["http_confirm_booking"].inspect}"
         puts "  FAIL  SKIP_PAY: expected 403, got #{result["http_confirm_booking"].inspect}"
       end
+    end
+
+    # ── RUN 3: the capture→settlement window (K-853 / protocol.md §11.6) ──
+    # NO SERVER. The two halves of the window cannot be stood in over HTTP —
+    # holding a capture mid-charge and observing a returned capture with no
+    # settlement row need a controllable PSP and the provider called directly —
+    # so this run is IN-PROCESS against the same database, driving the real
+    # verbs through the registry the wire dispatches to. It rides inside
+    # demo:book rather than becoming its own task because demo:book is already
+    # this demo's pay-path gate.
+    puts "\n══ RUN 3: capture-anchored paid state (K-853) ══"
+    window_rb = File.expand_path("../../script/pay_window.rb", __dir__)
+    unless system("bundle exec rails runner #{window_rb.shellescape}")
+      failures << "pay_window: capture-window assertions failed (see output above)"
     end
 
     # ── final verdict ─────────────────────────────────────────────────────

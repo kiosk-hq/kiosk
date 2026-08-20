@@ -63,7 +63,7 @@ key whenever one is present.
   payment_setup: ready
   pay: settlement_id=95bbacf6-9c43-4163-8ae8-782bdc2af24f psp_reference=pi_RE3z1qccCW0HNt1
   my_orders: 1 order(s); own order paid=true
-{"http_register":201,"http_catalog":200,"http_slots":200,"http_slots_badzone":400,"slots_badzone_code":"bad_request","http_order":200,"http_payment_setup":200,"http_pay":200,"http_my_orders":200,"user_id":"4bcb25af-7193-4f05-a3c7-6df64c4948be","agent_id":"d835cfcc-c559-4887-a23e-fcf401ea18e5","order_id":"1dba3640-c454-499a-b7ed-9b11193a856d","total_cents":847,"slot_at":"2026-08-20T18:00:00+01:00","chosen_slot_at":"2026-08-20T18:00:00+01:00","slot_date":"2026-08-20","past_slot_check":{"id":1,"http":400,"code":"bad_request"},"paid":true,"psp_reference":"pi_RE3z1qccCW0HNt1","my_orders":[{"order_id":"1dba3640-c454-499a-b7ed-9b11193a856d","status":"paid","total_cents":847,"slot_at":"2026-08-20T17:00:00.000+00:00","address":"42 Camden Street, Dublin 2","paid":true}],"pay":{"settlement_id":"95bbacf6-9c43-4163-8ae8-782bdc2af24f","psp_reference":"pi_RE3z1qccCW0HNt1","settled_amount_cents":0,"currency":"eur"}}
+{"http_register":201,"http_catalog":200,"http_slots":200,"http_slots_badzone":400,"slots_badzone_code":"bad_request","http_order":200,"http_payment_setup":200,"http_pay":200,"http_my_orders":200,"user_id":"4bcb25af-7193-4f05-a3c7-6df64c4948be","agent_id":"d835cfcc-c559-4887-a23e-fcf401ea18e5","order_id":"1dba3640-c454-499a-b7ed-9b11193a856d","total_cents":847,"slot_at":"2026-08-20T18:00:00+01:00","chosen_slot_at":"2026-08-20T18:00:00+01:00","slot_date":"2026-08-20","past_slot_check":{"id":1,"http":400,"code":"bad_request"},"payment_state":"paid","psp_reference":"pi_RE3z1qccCW0HNt1","my_orders":[{"order_id":"1dba3640-c454-499a-b7ed-9b11193a856d","status":"paid","total_cents":847,"slot_at":"2026-08-20T17:00:00.000+00:00","address":"42 Camden Street, Dublin 2","payment_state":"paid"}],"pay":{"settlement_id":"95bbacf6-9c43-4163-8ae8-782bdc2af24f","psp_reference":"pi_RE3z1qccCW0HNt1","settled_amount_cents":0,"currency":"eur"}}
 
 -- Assertions --
   OK  http_register == 201
@@ -282,38 +282,40 @@ class Kiosk::StorefrontController < ActionController::API
     }
   end
 
-  description "List this principal's orders with delivery slot, address, and a paid flag " \
-              "(scoped to the authenticated user). Each row carries an `order_id`; pass it " \
-              "to reschedule_delivery as `order_id`. Use the `paid` flag as a settlement " \
-              "lookup: after a pay whose response you did not receive, re-read this and " \
-              "retry pay only if the order is still unpaid."
+  description "List this principal's orders with their delivery window, address and where " \
+              "their money stands (scoped to the authenticated account). This is the query " \
+              "to re-read after a payment whose response never arrived: an order whose " \
+              "charge is still outstanding says so rather than reporting itself unpaid."
   input_schema  type: "object", additionalProperties: false, properties: {}, required: []
   output_schema type: "array",
                 items: {
                   type: "object", additionalProperties: false,
-                  properties: { order_id:    { type: "string" },
-                                status:      { type: "string" },
-                                total_cents: { type: "integer" },
-                                slot_at:     { type: %w[string null] },
-                                address:     { type: %w[string null] },
-                                paid:        { type: "boolean" } },
-                  required: %w[order_id status total_cents slot_at address paid],
+                  properties: { order_id:      { type: "string" },
+                                status:        { type: "string" },
+                                total_cents:   { type: "integer" },
+                                slot_at:       { type: %w[string null] },
+                                address:       { type: %w[string null] },
+                                payment_state: { type: "string", enum: %w[unpaid pending paid] } },
+                  required: %w[order_id status total_cents slot_at address payment_state],
                 }
   def my_orders
-    # `paid` is computed over the CALLER's settlements — the same containment
-    # the operator's back office reads over all of them, so the two surfaces are
-    # one behaviour with two authorities rather than two copies of one SQL string.
+    # The paid witness is computed over the CALLER's settlements — the same
+    # containment the operator's back office reads over all of them, so the two
+    # surfaces are one behaviour with two authorities rather than two copies of
+    # one SQL string — and `payment_state` is the one place it becomes the
+    # tri-state protocol.md §11.6 requires: an order mid-capture answers
+    # `pending`, never a bare "not paid".
     render json: Order.owned_by_current_principal
                       .order(created_at: :desc)
                       .pluck(:id, :status, :total_cents, :slot_at, :address,
                              Order.paid_flag(Settlement.of_current_principal))
                       .map { |id, status, total_cents, slot_at, address, paid|
-                        { "order_id"    => id,
-                          "status"      => status,
-                          "total_cents" => total_cents,
-                          "slot_at"     => slot_at&.utc&.getlocal(0),
-                          "address"     => address,
-                          "paid"        => paid }
+                        { "order_id"      => id,
+                          "status"        => status,
+                          "total_cents"   => total_cents,
+                          "slot_at"       => slot_at&.utc&.getlocal(0),
+                          "address"       => address,
+                          "payment_state" => Order.payment_state(status, paid) }
                       }
   end
 end

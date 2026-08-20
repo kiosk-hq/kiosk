@@ -557,6 +557,16 @@ COPIES = {
   "script/register_flow.rb" => {
     rule: :per_demo, why: "THAT demo's register walkthrough.",
   },
+  "script/pay_window.rb" => {
+    rule: :per_demo,
+    why:  "THE SAME INVARIANT over two different products (K-853). Both stand in the " \
+          "capture->settlement window and assert the operator never publishes a bare «not paid» " \
+          "inside it — but hoteling holds a room-night booking under an EXCLUDE constraint and " \
+          "confirms it with a desk code, while skooti holds a metered vehicle rental and activates " \
+          "it with an Ed25519 unlock token. The fixtures, the verbs driven and the terminal " \
+          "assertion differ; only the shape of the proof is shared, and sharing that is what makes " \
+          "the two demos comparable at all.",
+  },
 }.freeze
 
 # ── What is NOT compared, and why (K-629) ────────────────────────────────────

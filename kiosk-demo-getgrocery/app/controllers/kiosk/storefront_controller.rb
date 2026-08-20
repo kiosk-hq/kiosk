@@ -198,7 +198,20 @@ class Kiosk::StorefrontController < ActionController::API
 
   # ── my_orders — per-principal: the caller's OWN orders only. The caller
   # supplies no filter; the scope is provider-controlled and un-bypassable.
-  description "List this principal's orders with delivery slot, address, and a paid flag (scoped to authenticated user via kiosk.current_user_id()). Each row carries an `order_id`; pass it to reschedule_delivery (or create_order to replace an unpaid order) as `order_id`. Use the `paid` flag as a settlement lookup: after a pay whose response you did not receive, re-read my_orders and only retry pay if the order is still unpaid (K-545)."
+  # ── THE RECONCILIATION SURFACE (K-545, K-853) ─────────────────────────────
+  # This is the "per-user query" protocol.md §11.6 sends an assistant to after a
+  # `pay` whose response it never read, so what it publishes about money is a
+  # normative matter, not a convenience. It used to publish a BOOLEAN, and the
+  # description told the assistant to "retry pay only if the order is still
+  # unpaid" — the inference §11.6 removed, because `false` conflated the two
+  # answers that matter: nothing was ever charged, and a charge is outstanding.
+  # The second one is where a fresh mandate chain charges a human twice.
+  description "List this principal's orders with their delivery window, address and where their money " \
+              "stands (scoped to the authenticated account). This is the query to re-read after a " \
+              "payment whose response never arrived: an order whose charge is still outstanding says " \
+              "so rather than reporting itself unpaid, so a lost response can be reconciled instead of " \
+              "guessed at. An order that has not been paid can still be changed in place with " \
+              "`create_order`; a PAID one moves only through `reschedule_delivery`."
   input_schema type: "object", additionalProperties: false, properties: {}, required: []
   # A bare array, newest first. `slot_at` and `address` are the two nullable
   # columns on `orders` and travel as null rather than being dropped, so the
@@ -208,20 +221,23 @@ class Kiosk::StorefrontController < ActionController::API
                 items: {
                   type: "object", additionalProperties: false,
                   properties: {
-                    order_id:    { type: "string", description: "Pass to reschedule_delivery (or to create_order, to replace an unpaid order) as `order_id`." },
-                    status:      { type: "string", description: "The operator's order status." },
-                    total_cents: { type: "integer", description: "EUR cents." },
-                    slot_at:     { type: %w[string null], description: "The booked delivery window's start instant, ISO 8601 with offset, or null." },
-                    address:     { type: %w[string null], description: "The delivery address on the order, or null." },
-                    paid:        { type: "boolean", description: "The settlement lookup: after a pay whose response you did not receive, re-read this and retry pay only if it is still false." },
+                    order_id:      { type: "string", description: "Pass to reschedule_delivery (or to create_order, to replace an unpaid order) as `order_id`." },
+                    status:        { type: "string", description: "The operator's order status — where the BASKET stands (created, paying, paid, rescheduled). Read payment_state for where the money stands." },
+                    total_cents:   { type: "integer", description: "EUR cents." },
+                    slot_at:       { type: %w[string null], description: "The booked delivery window's start instant, ISO 8601 with offset, or null." },
+                    address:       { type: %w[string null], description: "The delivery address on the order, or null." },
+                    payment_state: { type: "string", enum: %w[unpaid pending paid],
+                                     description: "Where this order's money stands, anchored to the CAPTURE and not to the operator's settlement record. `paid` = the charge went through; there is nothing to retry. `pending` = a capture for this order has been started and its outcome is not known yet — it may already have taken the money, so do NOT sign a fresh mandate chain: wait and re-read. `unpaid` = no capture has ever been started, and this is the only answer that makes a fresh chain correct." },
                   },
-                  required: %w[order_id status total_cents slot_at address paid],
+                  required: %w[order_id status total_cents slot_at address payment_state],
                 }
   def my_orders
-    # `paid` is {Order.paid_flag} over the CALLER's settlements — the same
-    # containment the operator's back office reads over ALL of them, which is
-    # what makes the two surfaces one behaviour with two authorities rather than
-    # two copies of one SQL string (see {Order.settling}).
+    # The paid witness is {Order.paid_flag} over the CALLER's settlements — the
+    # same containment the operator's back office reads over ALL of them, which
+    # is what makes the two surfaces one behaviour with two authorities rather
+    # than two copies of one SQL string (see {Order.settling}) — and
+    # {Order.payment_state} is the one place it becomes the tri-state §11.6
+    # requires.
     #
     # `created_at DESC` with no tiebreaker is what this verb has always ordered
     # by, and it is kept rather than quietly improved.
@@ -230,9 +246,9 @@ class Kiosk::StorefrontController < ActionController::API
                       .pluck(:id, :status, :total_cents, :slot_at, :address,
                              Order.paid_flag(Settlement.of_current_principal))
                       .map { |id, status, total_cents, slot_at, address, paid|
-                        { "order_id"    => id,
-                          "status"      => status,
-                          "total_cents" => total_cents,
+                        { "order_id"      => id,
+                          "status"        => status,
+                          "total_cents"   => total_cents,
                           # `pluck` casts a timestamptz to an
                           # ActiveSupport::TimeWithZone, whose JSON rendering of a
                           # UTC instant is "…Z" where the raw driver's Time
@@ -241,9 +257,9 @@ class Kiosk::StorefrontController < ActionController::API
                           # what a field LOOKS like, so the offset form is
                           # restored rather than left to the type that happens to
                           # come back.
-                          "slot_at"     => slot_at&.utc&.getlocal(0),
-                          "address"     => address,
-                          "paid"        => paid }
+                          "slot_at"       => slot_at&.utc&.getlocal(0),
+                          "address"       => address,
+                          "payment_state" => Order.payment_state(status, paid) }
                       }
   end
 

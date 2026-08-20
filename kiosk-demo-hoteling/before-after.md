@@ -223,8 +223,10 @@ class Kiosk::HotelsController < ActionController::API
   end
 
   description "List this principal's hotel bookings (scoped to authenticated user). " \
-              "Each row carries a `booking_id`; pass it to confirm_booking as `booking_id`. " \
-              "A confirmed row also carries the `confirmation_code` the hotel has on file."
+              "This is the query to re-read after a payment whose response never " \
+              "arrived: each row says where that booking stands with the hotel and " \
+              "where its money stands, and a booking whose charge is still outstanding " \
+              "says so rather than reporting itself unpaid."
   input_schema  type: "object", additionalProperties: false, properties: {}, required: []
   output_schema type: "array",
                 items: {
@@ -236,19 +238,24 @@ class Kiosk::HotelsController < ActionController::API
                                 check_out:         { type: "string" },
                                 total_cents:       { type: "integer" },
                                 status:            { type: "string" },
+                                payment_state:     { type: "string", enum: %w[unpaid pending paid] },
                                 confirmation_code: { type: %w[string null] } },
                   required: %w[booking_id property_id room_type_id check_in check_out
-                               total_cents status confirmation_code],
+                               total_cents status payment_state confirmation_code],
                 }
   def my_bookings
+    settled_flag = Booking.settled_flag(Settlement.of_current_principal)
     render json: Booking.owned_by_current_principal
                         .order(created_at: :desc)
                         .pluck(:id, :property_id, :room_type_id, :check_in, :check_out,
-                               :total_cents, :status, :confirmation_code)
+                               :total_cents, :status, :payment_status, settled_flag,
+                               :confirmation_code)
                         .map { |id, property_id, room_type_id, check_in, check_out,
-                                total_cents, status, confirmation_code|
+                                total_cents, status, payment_status, settled, confirmation_code|
                           { booking_id: id, property_id:, room_type_id:, check_in:, check_out:,
-                            total_cents:, status:, confirmation_code: }
+                            total_cents:, status:,
+                            payment_state: Booking.payment_state(payment_status, settled),
+                            confirmation_code: }
                         }
   end
 end

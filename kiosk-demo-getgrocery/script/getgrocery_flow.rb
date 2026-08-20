@@ -7,7 +7,7 @@
 #       → POST create_order (items + delivery slot + in-zone address — delivery
 #         is part of the order) → POST payment_setup (verify "ready") → POST pay
 #         (cart mirrors the order at catalog prices, EUR; off_session → real pi_…)
-#       → GET my_orders (own order present, paid: true)
+#       → GET my_orders (own order present, payment_state: "paid")
 # Runs with KIOSK_TEST_AUTOCARD=1: the adapter simulates a completed SetupIntent,
 # so there is no card-setup step (the live flow uses the real hosted page).
 #
@@ -291,9 +291,13 @@ abort "my_orders failed (#{rc_my}): #{JSON.generate(my_resp)}" unless rc_my == 2
 my_orders = Array(my_resp)
 own = my_orders.find { |o| o["order_id"] == order_id }
 abort "my_orders does not contain own order #{order_id}" if own.nil?
-paid = own["paid"] == true || own["paid"] == "t"
-abort "my_orders own order not marked paid: #{own.inspect}" unless paid
-STDERR.puts "  my_orders: #{my_orders.size} order(s); own order paid=true"
+# K-853: the wire field is a TRI-state (unpaid | pending | paid), not a boolean.
+# `paid` is the only one of the three that means the charge went through; a
+# `pending` here would mean a capture is still outstanding, which is NOT a
+# settled order and must not be read as one.
+payment_state = own["payment_state"]
+abort "my_orders own order not marked paid: #{own.inspect}" unless payment_state == "paid"
+STDERR.puts "  my_orders: #{my_orders.size} order(s); own order payment_state=paid"
 
 # -- Step 8: print ONE JSON line --
 puts JSON.generate(
@@ -315,7 +319,7 @@ puts JSON.generate(
   chosen_slot_at:     chosen_slot_at,
   slot_date:          slot_date,
   past_slot_check:    past_slot_check,
-  paid:               paid,
+  payment_state:      payment_state,
   psp_reference:      psp_ref,
   my_orders:          my_orders,
   pay:                pay_resp,

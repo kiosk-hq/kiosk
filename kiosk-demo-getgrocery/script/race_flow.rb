@@ -115,6 +115,29 @@ def order_row(order_id)
   ).first
 end
 
+# The `payment_state` the WIRE publishes for one order — read through the real
+# `my_orders` query with the GUCs set, not out of the table, because the
+# assertion is about what an assistant is TOLD (K-853).
+def my_order_payment_state(order_id)
+  rows = Kiosk::Server::CurrentRequest.with(identity: identity) do
+    Kiosk::Server::SessionContext.open(connection: ActiveRecord::Base.connection, identity: identity) do
+      Array(Kiosk::Server::Queries.fetch("my_orders").call({}))
+    end
+  end
+  row = rows.find { |r| r["order_id"] == order_id }
+  row && row["payment_state"]
+end
+
+# Settlement rows referencing this order. UNCACHED: `rails runner` wraps the
+# script in the executor, which turns the ActiveRecord query cache on for this
+# connection, and the writes we are watching for happen on OTHER connections —
+# a cached count would re-read its own first answer and manufacture a verdict.
+def settlements_for(order_id)
+  Settlement.uncached do
+    Settlement.joins(:cart_mandate).merge(CartMandate.referencing(order_id)).count
+  end
+end
+
 # A PSP stub whose capture BLOCKS until released, recording the amount it was
 # asked to charge — lets us pin an order in `paying` while we attack it.
 class BlockingPsp
@@ -191,12 +214,34 @@ check(o_after["total_cents"].to_i == CHEAP_PRICE,
 check(swap["order_id"] != order_id,
       "create_order did NOT mutate O — it minted a separate order (#{swap["order_id"]}) instead of rewriting the in-flight one")
 
+# ── K-853 (in-flight half): what my_orders publishes about O RIGHT NOW ───────
+# The capture has STARTED and its outcome is unknown. protocol.md §11.6 forbids
+# this from reading as *not paid*: that is the answer that licenses an assistant
+# to sign a fresh mandate chain and charge its human a second time. It must be
+# the third state, and O must not be missing from the answer either.
+check(settlements_for(order_id).zero?, "no settlement row for O — the capture has not returned")
+state_inflight = my_order_payment_state(order_id)
+check(state_inflight == "pending",
+      "my_orders publishes payment_state=pending for O while its capture is outstanding (got #{state_inflight.inspect})")
+check(state_inflight != "unpaid",
+      "my_orders does NOT publish `unpaid` for an order whose capture may already have taken the money")
+
 blocking.release!
 pay_thread.join
 
 check(blocking.charged_cents == CHEAP_PRICE,
       "the PSP was asked to charge the CHEAP amount (#{blocking.charged_cents}c), never the swapped-in expensive total")
 check(order_row(order_id)["status"] == "paid", "order O settled to `paid` after capture")
+
+# ── K-853 (phase-3 half): capture RETURNED, settlement row not yet written ───
+# The cashier was driven DIRECTLY here, so the engine's executor phase 3 never
+# ran and no settlement row exists for O at all. That is the phase-3 window
+# exactly, and the capture-anchored marker is the only witness there is.
+check(settlements_for(order_id).zero?,
+      "still no settlement row for O — the engine's phase 3 has not run (this IS the window)")
+state_window = my_order_payment_state(order_id)
+check(state_window == "paid",
+      "my_orders publishes payment_state=paid for O on the CAPTURE alone, with zero settlement rows (got #{state_window.inspect})")
 
 puts "\n== K-544 (b): one order captures at most once under N racing /pay =="
 

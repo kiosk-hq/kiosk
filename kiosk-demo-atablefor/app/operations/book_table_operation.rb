@@ -8,9 +8,11 @@
 # and the sequence below is the one the raw handler published, argument by
 # argument:
 #   1. every required argument is present and usable
-#   2. the date parses, the time is one of the three seatings, and the seating
-#      has not already started (re-validated against app/models/seatings.rb, so an agent
-#      cannot book a window `availability` would now hide)
+#   2. the date parses, the time is one of the three seatings, and the (date,
+#      time) pair is one `availability` is CURRENTLY offering — re-validated
+#      against app/models/seatings.rb, so an agent cannot book a window
+#      `availability` would now hide, whether that window is behind the horizon
+#      or beyond it
 #   3. the chosen table exists at the chosen restaurant and seats the party
 #   4. the (table, seating) is not already held — guarded TWICE, see below
 #
@@ -47,8 +49,8 @@ class BookTableOperation
     return refusal if refusal
 
     # The seating instant, from the SAME helper availability used. Reject a seating
-    # that is not one of the current upcoming ones (past / wrong time), so an agent
-    # can't book a window availability would now hide.
+    # that is not one of the current upcoming ones (past / wrong time / beyond the
+    # rolling horizon), so an agent can't book a window availability would now hide.
     parsed_date =
       begin
         Date.iso8601(date)
@@ -63,6 +65,22 @@ class BookTableOperation
         "seating #{date} #{time} has already started — call availability again for the still-bookable seatings",
       )
     end
+
+    # ── K-767: NOT-PAST IS NOT THE SAME AS OFFERED ──────────────────────────
+    # `availability` publishes a ROLLING horizon (tonight + tomorrow, see
+    # {Seatings.upcoming}), and until this guard the only date check here was
+    # "has it started?" — so a well-formed FUTURE date OUTSIDE that horizon
+    # passed every guard and CONFIRMED a booking for a seating `availability`
+    # has never listed and will not list for weeks. `Date.iso8601` also accepts
+    # the BASIC form, so `date: "20261001"` parsed, was not past, and booked.
+    # The refusal comes from the SAME helper `availability` filters its own
+    # `date` argument with, so the two surfaces cannot come to disagree about
+    # what is bookable, and it NAMES the dates that are — which is also what
+    # refuses the basic form: the descriptor advertises YYYY-MM-DD, and that is
+    # the spelling the horizon is published in.
+    _in_horizon, refusal = WireArguments.seating_date(date, Seatings.upcoming)
+    return refusal if refusal
+
     seating_at = Seatings.seating_at(parsed_date, time)
 
     # This `transaction` JOINS the one Kiosk::Server::SessionContext already

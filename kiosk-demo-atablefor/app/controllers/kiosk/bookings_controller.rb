@@ -41,8 +41,10 @@ class Kiosk::BookingsController < ApplicationController
   # book_table — reserve a specific table at a chosen restaurant for a chosen
   # upcoming seating, for the authenticated principal. The (restaurant_id,
   # restaurant_table_id) come from an availability row; the seating is
-  # (date, time). The seating must be one of the CURRENT upcoming seatings (not
-  # past — re-validated against app/models/seatings.rb). Contention is finite: a UNIQUE
+  # (date, time). The seating must be one of the CURRENT upcoming seatings —
+  # neither already started nor beyond the rolling horizon `availability`
+  # offers, re-validated through the same app/models/seatings.rb helper that
+  # filters `availability`'s own `date` argument (K-767). Contention is finite: a UNIQUE
   # index on (restaurant_table_id, seating_at) among confirmed rows means a table
   # already held for that seating is a clean 409 Conflict. No payment — a
   # reservation takes no money (any deposit shown is settled at the restaurant).

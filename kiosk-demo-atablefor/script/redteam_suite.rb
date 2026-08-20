@@ -33,6 +33,11 @@
 #     time, a date or a NEIGHBOURHOOD that does not exist is a typed 400
 #     NAMING the valid values, never a 200 with an empty rows array and never
 #     a 500 (K-717 and T-090, and K-691 before them)
+#   BookOutsideOfferedHorizon — book_table on a well-formed date OUTSIDE the
+#     rolling horizon availability offers is a typed 400 NAMING the bookable
+#     dates, never a confirmed booking for a seating that was never offered;
+#     and the BASIC-form `YYYYMMDD` spelling Date.iso8601 would have accepted
+#     is refused by the declared `format: "date"` before the handler (K-767)
 #
 # THE 0.4 WIRE. A query is `GET <endpoint>/<query-name>` carrying its arguments
 # in the query string; an action is `POST <endpoint>/<action-name>` carrying
@@ -377,6 +382,51 @@ record(results, "InvalidFilterIsNotAnEmptyList",
        "#{invalid_filter_probes.map(&:last).join(', ')}; CONTROL unfiltered → " \
        "#{rc_ctl}/#{(rc_ctl == 200 ? Array(ctl).size : 0)} rows " \
        "(want 400 bad_request naming the valid values for each filter, and a non-empty control)")
+
+# ── BookOutsideOfferedHorizon (K-767) ────────────────────────────────────────
+#
+# THE WRITE SIDE OF THE BEAT ABOVE. `availability` refuses an out-of-horizon
+# `date` filter; `book_table` used to CONFIRM one. Its only date guard asked
+# "has this seating already started?", which a date weeks in the future answers
+# NO to, so a booking was written for a (table, seating) `availability` has
+# never listed and will not list until the rolling window reaches it (K-767).
+#
+# TWO LAYERS ANSWER, AND WHICH ONE IS THE POINT OF THE SECOND PROBE. The
+# out-of-horizon date reaches the handler guard, because no `enum` written at
+# declaration time can name a horizon that rolls forward daily, and the refusal
+# NAMES the bookable dates. The basic-ISO spelling — `20260821` rather than
+# `2026-08-21` — never gets that far: `book_table` declares `format: "date"`
+# and 0.4 validates `input_schema` on every call, so the wire refuses the
+# spelling the descriptor does not advertise before any Ruby runs. It is worth
+# probing anyway: `Date.iso8601` ACCEPTS the basic form, so the handler alone
+# would have parsed it, and this beat is what says the two layers together
+# leave no way in.
+#
+# Both are asserted as a TYPED 400 naming what was wrong — a 500 or a silent
+# success fails either one — and the horizon probe additionally has to name the
+# dates that WOULD work, which is what an assistant recovers from.
+horizon_slot = open_slot
+horizon_probes = [
+  ["date=#{FAR_FUTURE} (valid date, beyond the rolling horizon)", FAR_FUTURE, "upcoming seatings"],
+  ["date=#{Date.today.strftime('%Y%m%d')} (basic ISO-8601 — not the advertised YYYY-MM-DD)",
+   Date.today.strftime("%Y%m%d"), "date"],
+].map do |label, bad_date, named|
+  rc, resp = book_slot(TOKEN_A, horizon_slot, date: bad_date)
+  code   = resp.is_a?(Hash) ? resp["code"] : nil
+  detail = resp.is_a?(Hash) ? resp["detail"].to_s : ""
+  ok = rc == 400 && code == "bad_request" && detail.include?(named)
+  [ok, "#{label} → #{rc}/#{code.inspect}#{ok ? " naming #{named}" : "/#{JSON.generate(resp)[0, 160]}"}"]
+end
+# Positive control: the SAME row, booked with the date availability published,
+# still succeeds — so the beat cannot pass against a book_table that refuses
+# every date.
+rc_horizon_ctl, horizon_ctl = book_slot(TOKEN_A, horizon_slot)
+horizon_control_ok = rc_horizon_ctl == 200 && !horizon_ctl["booking_id"].to_s.empty?
+record(results, "BookOutsideOfferedHorizon",
+       horizon_probes.all? { |ok, _| ok } && horizon_control_ok,
+       "#{horizon_probes.map(&:last).join(', ')}; CONTROL same row at its published date → " \
+       "#{rc_horizon_ctl}/#{horizon_ctl['booking_id'].inspect} " \
+       "(want 400 bad_request naming the horizon for each, and a confirmed control)")
 
 # ── Verdict ──────────────────────────────────────────────────────────────────
 breaches = results.reject { |r| r[:blocked] }

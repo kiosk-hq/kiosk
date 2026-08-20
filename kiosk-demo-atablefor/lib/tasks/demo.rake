@@ -1116,6 +1116,12 @@ namespace :demo do
       BLOCKED  InvalidFilterIsNotAnEmptyList — an availability filter naming a
                                     seating that does not exist is a typed 400
                                     NAMING the valid values, never 200 []
+      BLOCKED  BookOutsideOfferedHorizon — book_table on a date beyond the
+                                    rolling horizon is a typed 400 naming the
+                                    bookable dates, never a confirmed booking
+                                    for a seating availability never offered;
+                                    the basic YYYYMMDD spelling is refused by
+                                    the declared format: date (K-767)
 
     Exits 0 when all scenarios are BLOCKED (0 BREACH); exits 1 on any BREACH.
     A BREACH = a real hole in atablefor — fix the app, not the scenario.

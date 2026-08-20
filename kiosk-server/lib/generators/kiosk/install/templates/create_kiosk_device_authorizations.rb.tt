@@ -1,7 +1,9 @@
 # frozen_string_literal: true
 
-# Migration 005 — kiosk.device_authorizations for the RFC 8628
-# Device Authorization Grant state machine.
+# Migration 004 — kiosk.device_authorizations: the account-binding state
+# machine behind the RFC 8628-shaped claim and link ceremonies, in the shape
+# DeviceAuthorizationStores::ActiveRecord reads and writes (hashed device and
+# user codes, the bound public key, claim vs link).
 class CreateKioskDeviceAuthorizations < ActiveRecord::Migration[ActiveRecord::Migration.current_version]
   def up
     execute Kiosk::Server::SchemaDefinitions.device_authorizations_sql(

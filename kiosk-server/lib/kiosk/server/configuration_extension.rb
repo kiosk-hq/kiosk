@@ -282,7 +282,7 @@ module Kiosk
       # Storage adapter for {Kiosk::Server::DeviceAuthorization} rows (the
       # account-binding ceremony state machine). Lazy default: the durable
       # {DeviceAuthorizationStores::ActiveRecord} store (over
-      # `kiosk.device_authorizations`, migration 008) — the ceremony is
+      # `kiosk.device_authorizations`, migration 004) — the ceremony is
       # cross-process by nature (the human approves in a browser while the
       # agent polls from another process), so an in-memory store cannot serve
       # it. {DeviceAuthorizationStores::InMemory} stays shipped for tests and

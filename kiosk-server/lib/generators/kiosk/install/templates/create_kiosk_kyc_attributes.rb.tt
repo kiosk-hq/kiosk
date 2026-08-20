@@ -1,6 +1,6 @@
 # frozen_string_literal: true
 
-# Migration 009 — create kiosk.kyc_attributes.
+# Migration 006 — create kiosk.kyc_attributes.
 # ONE ROW per NAMED ANONYMIZED boolean attribute a valid KYC attestation
 # granted an agent (e.g. age_over_18, licence_a). Only the NAMES are stored —
 # never the DOB, licence number, or any underlying document.

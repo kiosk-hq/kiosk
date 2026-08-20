@@ -141,7 +141,7 @@ module Kiosk
     #   Infra:
     #   - {Kiosk::Server::Headers}          — composes the three response headers
     #   - {Kiosk::Server::HeadersMiddleware}— Rack middleware that injects them
-    #   - {Kiosk::Server::SchemaDefinitions}— SQL for migrations 001-010
+    #   - {Kiosk::Server::SchemaDefinitions}— SQL for migrations 001-006
     #   - {Kiosk::Server::Engine}           — Rails engine
     #
     #   Account-binding ceremony (the RFC 8628 machinery revived

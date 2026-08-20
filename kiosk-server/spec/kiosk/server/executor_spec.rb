@@ -508,6 +508,31 @@ RSpec.describe Kiosk::Server::Executor do
       }
     end
 
+    # K-851: the UNKNOWN hint used to end "retry only if it is still unpaid" —
+    # which reads a MISSING settlement record as proof that no money moved. It
+    # is not proof: the engine records the settlement in P3, AFTER the capture,
+    # so inside that window an operator's own records show an order that has
+    # already been charged as unpaid. An assistant that took the old sentence
+    # literally re-signed a fresh chain, drew a fresh cart id, drew a fresh PSP
+    # idempotency key, and charged its human twice. protocol.md §11.6 now
+    # requires a POSITIVE "not paid" before re-signing, and this pins the hint
+    # to that rule rather than to "still unpaid".
+    it "tells the agent to retry only on a POSITIVE not-paid, never on a missing record (K-851)" do
+      allow(Kiosk.configuration.payment_provider).to receive(:capture)
+        .and_raise(Kiosk::PaymentProviders::PaymentFailed.new(
+                     "the payment processor could not confirm the charge; its status is unknown",
+                     reason: :processor_unavailable, retryable: false))
+
+      expect {
+        described_class.call(kind: :pay, args: valid_args, identity: identity, connection: connection)
+      }.to raise_error(Kiosk::Server::Errors::PaymentFailed) { |e|
+        expect(e.hint).to     match(/positive .?not paid.?/i)
+        expect(e.hint).to     match(/missing or pending record is not/i)
+        expect(e.hint).to     match(/stop and tell your human/i)
+        expect(e.hint).not_to match(/retry only if it is still unpaid/i)
+      }
+    end
+
     it "raises BadRequest when intent_mandate_jws is missing" do
       expect {
         described_class.call(kind: :pay,
@@ -614,6 +639,71 @@ RSpec.describe Kiosk::Server::Executor do
         described_class.call(kind: :pay, args: valid_args, identity: identity, connection: connection)
 
         remint = ->(mandate, id) { mandate.class.new(**mandate.to_h.merge(id: id)) }
+        intent2 = remint.call(intent, "intent-2")
+        cart2   = Kiosk::Mandate::CartMandate.new(**cart.to_h.merge(id: "cart-2", intent_mandate_id: "intent-2"))
+        pay2    = Kiosk::Mandate::PaymentMandate.new(**payment.to_h.merge(id: "pay-2", cart_mandate_id: "cart-2"))
+        allow(Kiosk::Server::MandateVerifier).to receive(:verify_intent).and_return(intent2)
+        allow(Kiosk::Server::MandateVerifier).to receive(:verify_cart).and_return(cart2)
+        allow(Kiosk::Server::MandateVerifier).to receive(:verify_payment).and_return(pay2)
+
+        described_class.call(kind: :pay, args: valid_args, identity: identity, connection: connection)
+
+        expect(captures).to eq(%w[cart-1 cart-2])
+      end
+
+      # ── K-851: the phase-3 window, walked end to end ────────────────────
+      #
+      # THE MEASURED REPRODUCTION. The capture SUCCEEDS and phase 3 — the
+      # separate transaction that records it — fails. Everything after that is
+      # the algorithm §11.6 prescribes, executed literally:
+      #
+      #   capture ok → persist_settlement raises → the request errors
+      #   → assistant re-presents the IDENTICAL chain (§11.6's MUST)
+      #   → phase 1 unique violation → 409 conflict
+      #   → assistant reconciles: are there settlements for this cart? NO
+      #   → the pre-K-851 §11.6 read that as "confirmed unpaid" and blessed a
+      #     freshly signed chain → fresh cart id → fresh PSP idempotency key
+      #   → SECOND REAL CHARGE for one purchase.
+      #
+      # This example is a CHARACTERIZATION of the engine, not a pin on the fix:
+      # the engine still cannot record a capture it did not survive, and it
+      # never could. What K-851 changed is what may be PUBLISHED about that
+      # state — §11.6 now forbids an operator from answering `not paid` while a
+      # capture may be outstanding and forbids an assistant from re-signing on
+      # anything short of a positive `not paid`, which cuts the arrow between
+      # step 4 and step 5 below. The engine behaviour asserted here is what
+      # makes that rule necessary, so it is worth a test that says so out loud.
+      it "leaves a charge with no settlement row when phase 3 fails, and the reconciling read cannot see it (K-851)" do
+        allow_any_instance_of(described_class).to receive(:persist_settlement)
+          .and_raise(StandardError, "connection reset during settlement insert")
+
+        # 1. Capture succeeds; the settlement insert does not. The caller sees
+        #    an error, and cannot tell it from "nothing happened".
+        expect {
+          described_class.call(kind: :pay, args: valid_args, identity: identity, connection: connection)
+        }.to raise_error(StandardError, /connection reset/)
+        expect(captures).to eq(["cart-1"])
+        expect(inserted.map(&:first)).to include("cart_mandates")
+        expect(inserted.map(&:first)).not_to include("settlements")
+
+        # 2. The assistant does what §11.6 REQUIRES: the identical chain again.
+        expect {
+          described_class.call(kind: :pay, args: valid_args, identity: identity, connection: connection)
+        }.to raise_error(Kiosk::Server::Errors::Conflict, /already processed/) { |e|
+          expect(e.http_status).to eq(409)
+        }
+        expect(captures).to eq(["cart-1"]) # the 409 is raised before any capture
+
+        # 3. It reconciles. Every operator-side record of the money is the
+        #    settlement row, and there is none — so a paid flag derived from
+        #    settlements alone answers "not paid" about a charged cart. That
+        #    false answer is the whole finding.
+        expect(inserted.map(&:first)).not_to include("settlements")
+
+        # 4. Acting on it — the freshly signed chain the old §11.6 called
+        #    correct — charges the human a second time.
+        allow_any_instance_of(described_class).to receive(:persist_settlement).and_call_original
+        remint  = ->(mandate, id) { mandate.class.new(**mandate.to_h.merge(id: id)) }
         intent2 = remint.call(intent, "intent-2")
         cart2   = Kiosk::Mandate::CartMandate.new(**cart.to_h.merge(id: "cart-2", intent_mandate_id: "intent-2"))
         pay2    = Kiosk::Mandate::PaymentMandate.new(**payment.to_h.merge(id: "pay-2", cart_mandate_id: "cart-2"))

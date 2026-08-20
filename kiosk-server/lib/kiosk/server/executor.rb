@@ -262,10 +262,19 @@ module Kiosk
       #       my_orders before any retry, so a lost-response retry can't
       #       double-charge.
       #   P3  record the settlement (fresh GUC-scoped transaction).
-      #       FAIL ⇒ charge + trail exist, payment row missing. The cart row +
-      #              Stripe's cart.id-scoped idempotency key make the charge
-      #              recoverable, but NO reconciliation worker exists yet —
-      #              follow-up. Never a silent double-charge.
+      #       FAIL ⇒ charge + trail exist, settlement row missing. This engine
+      #              has no reconciliation worker, so for the whole of that
+      #              window the ONLY durable record of the money is at the PSP.
+      #       K-851: the danger is not the missing row, it is what an operator
+      #              PUBLISHES about it. "No settlement row" is not "not paid",
+      #              and protocol.md §11.6 now forbids an operator from
+      #              answering a reconciling query with `not paid` while a
+      #              capture may be outstanding, and forbids an assistant from
+      #              re-signing on anything short of a positive `not paid`.
+      #              The pay-hook is where an operator closes it: getgrocery
+      #              claims the order before the capture and flips it to `paid`
+      #              the instant the capture returns, so its `my_orders` paid
+      #              flag never reads false inside this window (K-544/K-545).
       def verb_pay(args)
         args         = symbolize(args)
         raw_intent   = args[:intent_mandate_jws]
@@ -352,8 +361,9 @@ module Kiosk
                      "update the payment method (payment_setup), then retry pay."
                  else
                    "the charge status is UNKNOWN (the processor did not confirm). Do NOT blindly " \
-                     "retry — first check `query my_orders` for this order's paid flag; retry only " \
-                     "if it is still unpaid."
+                     "retry — first check `query my_orders` for this order's paid flag, and retry " \
+                     "ONLY on a positive \"not paid\". A missing or pending record is not a \"not " \
+                     "paid\": if you cannot confirm either way, stop and tell your human."
                  end
           raise Errors::PaymentFailed.new(e.message, hint: hint)
         end

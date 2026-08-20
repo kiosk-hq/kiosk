@@ -889,6 +889,80 @@ assert "db: 1 cart_mandate"           "$(psql -X -d "$DB_NAME" -tAc 'SELECT COUN
 assert "db: 1 payment_mandate"        "$(psql -X -d "$DB_NAME" -tAc 'SELECT COUNT(*) FROM kiosk.payment_mandates')"  "1"
 assert "db: settlement amount 1599"   "$(psql -X -d "$DB_NAME" -tAc 'SELECT settled_amount_cents FROM kiosk.settlements LIMIT 1')" "1599"
 
+# ─── the audit log, read back off a booted origin (T-088 / K-791) ───────
+#
+# Canonical migration 003 has laid `kiosk.actions` and `kiosk.action_log` down
+# for every adopter since 0.1 and nothing ever wrote them. This is the proof
+# that a REAL invocation against a REAL origin lands a REAL row — read straight
+# out of Postgres, not out of a mock — plus the failure branch, plus the two
+# things the log deliberately does NOT record.
+
+printf "\n\033[1m=== the audit log (kiosk.action_log) ===\033[0m\n"
+
+log_count() { psql -X -d "$DB_NAME" -tAc "SELECT COUNT(*) FROM kiosk.action_log $1"; }
+
+# 1. The successful bookings above each landed a row, with the identity the
+#    token carried and the outcome the wire reported.
+assert "audit: the two bookings landed ok rows" \
+  "$(log_count "WHERE action_name = 'book_appointment' AND result_status = 'ok'")" "2"
+assert "audit: the row names the acting assistant, its role and its actor" \
+  "$(psql -X -d "$DB_NAME" -tAc "SELECT COUNT(*) FROM kiosk.action_log WHERE agent_id = '$ALICE_AGENT' AND actor = 'agent' AND role = 'customer'")" "1"
+
+# 2. THE FK ANCHOR. `action_log.action_name` REFERENCES `actions(name)`, and
+#    the registry is in memory — so the writer upserts the anchor from it,
+#    description included, rather than the FK being relaxed.
+assert "audit: kiosk.actions carries the FK anchor" \
+  "$(psql -X -d "$DB_NAME" -tAc "SELECT description IS NOT NULL FROM kiosk.actions WHERE name = 'book_appointment'")" "t"
+
+# 3. ARGUMENT VALUES ARE NOT STORED (the D6 default). `args` holds each
+#    argument's NAME and JSON TYPE; the slot the assistant actually booked is
+#    nowhere in the table.
+assert "audit: args records names and JSON types" \
+  "$(psql -X -d "$DB_NAME" -tAc "SELECT COUNT(*) > 0 FROM kiosk.action_log WHERE args @> '{\"salon_id\":\"integer\",\"slot\":\"string\"}'::jsonb")" "t"
+assert "audit: …and NOT the value that was sent" \
+  "$(psql -X -d "$DB_NAME" -tAc "SELECT COUNT(*) FROM kiosk.action_log WHERE args::text LIKE '%2026-06-15T14:00:00Z%'")" "0"
+
+# 4. A QUERY IS NOT LOGGED. The table is an ACTION log; the many reads this
+#    harness has already made must have left it alone.
+assert "audit: queries are not logged" \
+  "$(log_count "WHERE action_name IN ('salons', 'my_appointments')")" "0"
+
+# 5. THE FAILURE BRANCH. A booking for a salon that does not exist reaches the
+#    handler and raises; the action's own transaction ROLLS BACK and the audit
+#    row must survive it — which is why the write is after the transaction and
+#    not inside it.
+before_fail=$(log_count "WHERE action_name = 'book_appointment'")
+fail_code=$(curl -sS -o /tmp/kiosk-audit-fail.json -w "%{http_code}" -X POST \
+  "$SERVER_URL/kiosk/book_appointment" \
+  -H "Authorization: Bearer $ALICE_AGENT_TOKEN" -H "Content-Type: application/json" \
+  -d '{"salon_id":987654,"slot":"2027-01-01T09:00:00Z"}')
+assert "audit: a booking for a missing salon fails on the wire" \
+  "$([ "$fail_code" -ge 400 ] && echo yes || echo "no($fail_code)")" "yes"
+assert "audit: …and the FAILED invocation was logged too" \
+  "$(psql -X -d "$DB_NAME" -tAc "SELECT COUNT(*) FROM kiosk.action_log WHERE result_status = 'error'")" "1"
+assert "audit: …carrying the error class and message" \
+  "$(psql -X -d "$DB_NAME" -tAc "SELECT COUNT(*) FROM kiosk.action_log WHERE result_status = 'error' AND error_class <> '' AND error_message <> ''")" "1"
+assert "audit: …and nothing was booked for the missing salon" \
+  "$(psql -X -d "$DB_NAME" -tAc "SELECT COUNT(*) FROM appointments WHERE salon_id = 987654")" "0"
+assert "audit: the log grew by exactly that one invocation" \
+  "$(( $(log_count "WHERE action_name = 'book_appointment'") - before_fail ))" "1"
+
+# 6. A REFUSAL THAT NEVER REACHED AN ACTION LEAVES NO ROW. A 405 at an
+#    action's path and a 401 with no token both answer before anything is
+#    invoked, and the table's own NOT NULLs say a row needs an identity AND a
+#    registered name — so this is an ACTION log, not a request log.
+before_refusals=$(log_count "")
+curl -sS -o /dev/null "$SERVER_URL/kiosk/book_appointment" -H "Authorization: Bearer $ALICE_AGENT_TOKEN"
+curl -sS -o /dev/null -X POST "$SERVER_URL/kiosk/book_appointment" -H "Content-Type: application/json" -d '{}'
+curl -sS -o /dev/null -X POST "$SERVER_URL/kiosk/no_such_action" \
+  -H "Authorization: Bearer $ALICE_AGENT_TOKEN" -H "Content-Type: application/json" -d '{}'
+assert "audit: a 405, a 401 and a 404 leave no audit rows" \
+  "$(( $(log_count "") - before_refusals ))" "0"
+
+# 7. `pay` writes the AP2 mandate trail above, not an action_log row — it is
+#    not an Action and its trail is richer than one redacted row could be.
+assert "audit: pay is not in the action log" "$(log_count "WHERE action_name = 'pay'")" "0"
+
 # ─── summary ────────────────────────────────────────────────────────────
 
 printf "\n\033[1m=== summary ===\033[0m\n"

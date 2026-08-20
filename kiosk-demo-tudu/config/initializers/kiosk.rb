@@ -14,10 +14,6 @@
 # in config/environments/{development,test,production}.rb (K-650); this file
 # reads the resolved values from Rails.configuration.x.kiosk.*.
 
-require Rails.root.join("lib/stub_idp")
-require Rails.root.join("lib/jwt_or_stub_idp")
-require Rails.root.join("lib/pow_difficulty")
-require Rails.root.join("lib/uuid_check")
 require "kiosk/user_identity_providers/devise"
 
 # Registration PoW gate — ALWAYS ON. With no payment gate, the registration PoW
@@ -25,7 +21,7 @@ require "kiosk/user_identity_providers/devise"
 # commerce demos price fresh-identity minting with, new meaning. Register is now
 # uniformly tolled on every demo (no per-demo env flag to remember): it activates
 # on code-deploy and can't be forgotten. Params follow KIOSK_POW_DIFFICULTY
-# (lib/pow_difficulty.rb): low (default) → n=96 k=5 sub-second; high → n=168 k=7
+# (app/services/pow_difficulty.rb): low (default) → n=96 k=5 sub-second; high → n=168 k=7
 # (~10s / ~1.3 GiB). Unset = low, so the collab/link/isolation flows and CI stay
 # fast; a deployer can set high to feel the toll. The prerequisites below MUST run
 # unconditionally, else RegistrationPow.gate raises ConfigurationError at register.
@@ -203,7 +199,6 @@ end
 # Off unless KIOSK_TELEMETRY=1. One event per successful wire action via a Rack
 # middleware; aggregate at GET /demo/activity.json. NOT in kiosk-core.
 if ENV["KIOSK_TELEMETRY"] == "1"
-  require Rails.root.join("lib/demo_telemetry")
   TUDU_VERB_MAP = {
     "create_list"    => "ran",
     "add_todo"       => "ran",

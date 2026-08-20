@@ -48,9 +48,21 @@ class ProbeCatalogController < ActionController::API
 end
 
 # A stub distinguishable from the shipped DiscoveryController, so the winner
-# of a double-draw is observable.
+# of a double-draw is observable. `boom` is the operator's own 500 — scenario 4
+# drives it OUTSIDE the mount, where the Kiosk headers must NOT appear.
 class HandDrawnController < ActionController::API
   def hand = render(plain: "HAND-DRAWN")
+  def boom = raise("the operator's own code blew up")
+end
+
+# An agent-IdP that RAISES rather than returning nil. IdentityResolution's
+# contract is "adapters return nil, they do not raise", so this is the shape of
+# a real operator bug: the exception escapes WireController (whose `rescue_from`
+# only covers Errors::Base), unwinds past every Kiosk seam and is rendered by
+# Rails itself. Scenario 4 uses it to produce an unhandled 500 UNDER the mount
+# through the engine's own controller — the second half of K-824.
+class BlowingUpIdp
+  def verify(_request) = raise("agent IdP adapter is broken")
 end
 
 # A Bearer token the bundled kiosk-pop IdP accepts: the probe configured the
@@ -160,5 +172,41 @@ report["double_draw"] = {
   "GET /agents.json"                   => request("GET", "/agents.json"),
   "GET /kiosk/.well-known/jwks.json"   => request("GET", "/kiosk/.well-known/jwks.json"),
 }
+
+# Scenario 4 — THE RESPONSES RAILS COMPOSES ITSELF (K-824). §3.6 binds every
+# response under the mount "on success and on error alike", and the two it used
+# to miss are the two that never return through an appended middleware: a
+# routing 404 for a path the mount does not route, and an unhandled 500. Both
+# are manufactured ABOVE the router by ActionDispatch::ShowExceptions /
+# DebugExceptions, so this scenario is the only place in the suite where the
+# stamp's POSITION in the stack — not its existence — is what is measured.
+#
+# The two host routes are the blast-radius control: the engine is mounted
+# inside somebody else's application, and neither that application's working
+# pages nor its own 500s may be stamped with Kiosk headers.
+Rails.application.routes.draw do
+  get "/outside",      to: "hand_drawn#hand"
+  get "/outside/boom", to: "hand_drawn#boom"
+  mount Kiosk::Server::Engine => "/kiosk"
+end
+
+previous_idp = Kiosk.configuration.agent_idp
+report["exceptions"] = {
+  # No engine route matches — two segments cannot be a verb name, so this
+  # never reaches VerbController and stays a Rails routing 404.
+  "GET /kiosk/nope/nope"  => request("GET", "/kiosk/nope/nope"),
+  # The host's own 200 and the host's own 500, both outside the mount.
+  "GET /outside"          => request("GET", "/outside"),
+  "GET /outside/boom"     => request("GET", "/outside/boom"),
+  # A root-level routing 404: outside the mount, so bare like the rest.
+  "GET /nope"             => request("GET", "/nope"),
+}
+Kiosk.configure { |c| c.agent_idp = BlowingUpIdp.new }
+begin
+  # 500 UNDER the mount, raised inside the engine's own controller.
+  report["exceptions"]["POST /kiosk/pay"] = request("POST", "/kiosk/pay")
+ensure
+  Kiosk.configure { |c| c.agent_idp = previous_idp }
+end
 
 puts JSON.generate(report)

@@ -20,6 +20,8 @@ All notable changes follow [Keep a Changelog](https://keepachangelog.com/en/1.1.
 
 ### Fixed
 
+- **A routing 404 or an unhandled 500 under the mount now carries the version headers the spec makes mandatory (K-824).** The headers middleware was appended to the host stack, so it sat inside Rails' exception renderers and never saw a response Rails composed for itself — leaving exactly the answers a mis-versioned client is most likely to receive with no handshake on them. It is installed outside those renderers now, and reads the request path on the way in, because Rails rewrites it before rendering an error. An operator's own routes outside the mount are still untouched.
+
 - **A provider that configures no `registration_role` can register assistants again (K-788).** Roles are optional by decision (ADR-0011: "registration MUST NOT fail when it is unset"), but the register door and the fresh-key binding branch wrote a literal `NULL` into `agents.allowed_roles`, which the shipped migration declares `NOT NULL` — so both 500'd for exactly the single-role operator the decision protects, while every shipped demo configures a role and never saw it. "No role" is now the empty role set.
 
 ### Security

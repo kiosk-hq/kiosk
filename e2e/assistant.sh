@@ -451,6 +451,44 @@ root_h=$(curl -sS -o /dev/null -D - "$SERVER_URL/.well-known/kiosk.json")
 assert "…while a ROOT discovery surface carries none of them" \
   "$(echo "$root_h" | grep -ic '^Kiosk-\(Server-Version\|API-Version\|Min-Client\):')" "0"
 
+# ─── the responses RAILS composes, not Kiosk (§3.6, K-824) ──────────────
+#
+# The loop above walks routes an operator DREW; every one of them is answered
+# by a Kiosk controller, which stamps the three headers at its own render seam
+# even if the middleware never ran. The class of response it cannot reach is
+# the one no Kiosk code touches: a routing 404 for a path under the mount that
+# nobody drew, and an unhandled 500. Both are manufactured by
+# `ActionDispatch::ShowExceptions` ABOVE the router, so until K-824 — when the
+# middleware was APPENDED, i.e. innermost — they left the origin bare. MEASURED
+# on hoteling before the fix: `POST /kiosk/agents/kyc` on an app that had not
+# drawn that route answered 404 with none of the three, while the same origin's
+# `POST /kiosk/auth/login` 400 carried all of them.
+#
+# These four probes are the whole of it: the two exception responses UNDER the
+# mount must carry all three, and the operator's own routes outside it — a
+# working page and a broken one, so the same exception path is covered on both
+# sides of the boundary — must carry none.
+printf "\n  the responses Rails composes itself:\n"
+kiosk_count() { echo "$1" | grep -ic '^Kiosk-\(Server-Version\|API-Version\|Min-Client\):'; }
+
+r404_h=$(curl -sS -o /dev/null -D - "$SERVER_URL/kiosk/nope/nope")
+assert "a routing 404 UNDER the mount is a 404" \
+  "$(echo "$r404_h" | head -1 | awk '{print $2}')" "404"
+assert "…and carries all three version headers" "$(kiosk_count "$r404_h")" "3"
+
+r500_h=$(curl -sS -o /dev/null -D - "$SERVER_URL/kiosk/boom")
+assert "an unhandled 500 UNDER the mount is a 500" \
+  "$(echo "$r500_h" | head -1 | awk '{print $2}')" "500"
+assert "…and carries all three version headers" "$(kiosk_count "$r500_h")" "3"
+
+host_ok_h=$(curl -sS -o /dev/null -D - "$SERVER_URL/operator/health")
+assert "the OPERATOR's own 200 outside the mount carries none" \
+  "$(kiosk_count "$host_ok_h")" "0"
+
+host_500_h=$(curl -sS -o /dev/null -D - "$SERVER_URL/operator/boom")
+assert "…and neither does the operator's own 500 — same exception path" \
+  "$(kiosk_count "$host_500_h")" "0"
+
 # ─── the handshake VALUES, and the advisory that refuses nothing ────────
 #
 # Spec §3.6 (matrix SPEC-009): `Kiosk-API-Version` is the protocol version at

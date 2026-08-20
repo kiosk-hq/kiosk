@@ -27,6 +27,11 @@
 # which reads the provider's own `staff_role` column. That column, not a header,
 # was always the role source.
 #
+# Usage (invoked by `rake demo:roles`, which supplies the seeded credentials
+# db/seeds.rb owns — do not run standalone without the server):
+#   SERVER_URL=… KIOSK_ISSUER=… OWNER_EMAIL=… CUSTOMER_EMAIL=… DEMO_PASSWORD=… \
+#     bundle exec ruby script/roles_flow.rb
+#
 # Prints ONE JSON line; non-zero exit on any hard failure.
 
 require "date"
@@ -43,12 +48,15 @@ require_relative "../lib/devise_session"
 SERVER = ENV.fetch("SERVER_URL")
 ISSUER = ENV.fetch("KIOSK_ISSUER")
 
-# Seeded principals and their Devise credentials (db/seeds.rb). The owner
+# Seeded principals and their Devise credentials. `db/seeds.rb` owns the
+# values; `demo:roles` hands them over as env, the way every sibling driver
+# gets its credentials (K-838) — a driver that re-types the seeded password
+# turns a seed change into a sign-in failure that names nothing. The owner
 # carries staff_role='owner'; Alice carries none, which is what makes her a
 # customer — the same table, the same form, two roles.
-DEMO_PASSWORD  = "combette-demo-password"
-OWNER_EMAIL    = "owner@combette.example"
-CUSTOMER_EMAIL = "alice@example.com"
+DEMO_PASSWORD  = ENV.fetch("DEMO_PASSWORD")
+OWNER_EMAIL    = ENV.fetch("OWNER_EMAIL")
+CUSTOMER_EMAIL = ENV.fetch("CUSTOMER_EMAIL")
 
 def post_json(path, body, headers = {})
   uri = URI("#{SERVER}#{path}")

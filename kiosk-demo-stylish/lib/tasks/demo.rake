@@ -19,6 +19,18 @@
 # The walkthrough lives in bin/demo (POSIX shell) so it's debuggable
 # without going through Rake.
 
+# The seeded credentials the drivers need, written ONCE (K-712, K-838).
+# `db/seeds.rb` OWNS these values; this file only re-states them so the
+# subprocess drivers can be handed them as env. Four tasks used to re-type the
+# same password literal and two re-typed the owner's address, so a seed change
+# had four places to reach in one file and nothing said so.
+DEMO_CREDENTIALS = {
+  password:    "combette-demo-password",
+  owner_email: "owner@combette.example",
+  alice_email: "alice@example.com",
+  bob_email:   "bob@example.com",
+}.freeze
+
 namespace :demo do
   desc "Create + load schema + seed the demo database (idempotent)."
   task :setup do
@@ -72,9 +84,9 @@ namespace :demo do
     # the human's Devise sign-in → link → claim — so it needs real credentials,
     # and they travel as env the way demo:binding's do rather than as literals
     # inside script/isolation_flow.rb.
-    alice_email   = "alice@example.com"
-    bob_email     = "bob@example.com"
-    demo_password = "combette-demo-password"
+    alice_email   = DEMO_CREDENTIALS[:alice_email]
+    bob_email     = DEMO_CREDENTIALS[:bob_email]
+    demo_password = DEMO_CREDENTIALS[:password]
 
     server_url   = "http://127.0.0.1:#{port}"
     kiosk_issuer = server_url
@@ -321,8 +333,8 @@ namespace :demo do
 
     # The seeded account holder (db/seeds.rb) — Alice approves the link.
     holder_id       = "00000000-0000-0000-0000-000000000001"
-    holder_email    = "alice@example.com"
-    holder_password = "combette-demo-password"
+    holder_email    = DEMO_CREDENTIALS[:alice_email]
+    holder_password = DEMO_CREDENTIALS[:password]
 
     puts "\n── Starting stylish (account-binding walkthrough) on #{server_url} ──"
 
@@ -463,7 +475,13 @@ namespace :demo do
       abort "Server did not become ready — see #{log}" unless ready
       puts "  Server up at #{server_url}"
 
-      env = "SERVER_URL=#{server_url.shellescape} KIOSK_ISSUER=#{kiosk_issuer.shellescape}"
+      # K-838: the driver reads its credentials from env like every sibling
+      # driver does — db/seeds.rb owns them, and a seed change must not leave a
+      # sign-in failure inside script/roles_flow.rb naming nothing.
+      env = "SERVER_URL=#{server_url.shellescape} KIOSK_ISSUER=#{kiosk_issuer.shellescape} " \
+            "OWNER_EMAIL=#{DEMO_CREDENTIALS[:owner_email].shellescape} " \
+            "CUSTOMER_EMAIL=#{DEMO_CREDENTIALS[:alice_email].shellescape} " \
+            "DEMO_PASSWORD=#{DEMO_CREDENTIALS[:password].shellescape}"
       raw = `#{env} bundle exec ruby #{flow_rb.shellescape} 2>&1`
       json_line = raw.lines.grep(/^\{/).last
       puts raw.lines.reject { |l| l.start_with?("{") }.join
@@ -567,10 +585,10 @@ namespace :demo do
     # EARNS its customer principals through the shipped ceremony instead of
     # writing tokens down, so it needs credentials, passed as env the way
     # demo:binding's are.
-    alice_email   = "alice@example.com"
-    bob_email     = "bob@example.com"
-    owner_email   = "owner@combette.example"
-    demo_password = "combette-demo-password"
+    alice_email   = DEMO_CREDENTIALS[:alice_email]
+    bob_email     = DEMO_CREDENTIALS[:bob_email]
+    owner_email   = DEMO_CREDENTIALS[:owner_email]
+    demo_password = DEMO_CREDENTIALS[:password]
 
     puts "\n── Starting stylish (redteam battery) on #{server_url} ──"
 

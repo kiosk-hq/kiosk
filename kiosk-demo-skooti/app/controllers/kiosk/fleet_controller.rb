@@ -179,10 +179,25 @@ class Kiosk::FleetController < ActionController::API
   end
 
   # ── kyc_status — poll a request_kyc verification the caller opened.
+  #
+  # THE CADENCE AND THE GIVE-UP HORIZON ARE PART OF THE CONTRACT (K-477/K-595,
+  # K-606). The wire has no server→assistant push, so completion is learned by
+  # re-polling this verb and nothing else; a descriptor that says "poll until
+  # the human acts" and stops there leaves an agent to invent a loop with no
+  # exit. The schedule below is QUOTED from kiosk.tech/skill.md rather than
+  # invented here, so the two surfaces an assistant reads cannot publish rival
+  # arithmetic, and `demo:schema` asserts that the SERVED descriptor still
+  # carries both numbers.
   description "Poll a verification `request_kyc` opened, until the human has acted on it. Three " \
               "answers: still waiting; APPROVED, carrying the broker's signed attestation, which you " \
               "submit to `POST <endpoint>/agents/kyc` before asking for the motorcycle again; and " \
-              "DECLINED, which is terminal."
+              "DECLINED, which is terminal. " \
+              "POLLING: while your human is completing the check, re-check every ~5 seconds for the " \
+              "first minute, then every ~15 seconds, and GIVE UP after about 10 minutes — an identity " \
+              "check can legitimately take that long, but if it is still waiting by then, stop and " \
+              "tell your human it is not done rather than polling indefinitely. A verification stays " \
+              "pollable, so you can come back to it later; if the human's link has expired since, " \
+              "start a new one."
   input_schema type: "object",
                additionalProperties: false,
                properties: {

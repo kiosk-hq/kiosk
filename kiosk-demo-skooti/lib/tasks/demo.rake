@@ -853,6 +853,7 @@ namespace :demo do
       • capabilities is the MODULE set schema/queries/actions/pay and NOT events
       • schema.actions includes reserve, start_rental, rent_motorcycle,
         payment_setup with descriptions
+      • `payment_setup` and `kyc_status` publish BOTH a backing-off poll cadence and a GIVE UP horizon (K-606)
 
     Exits 0 if all assertions pass; exits 1 on any miss.
   DESC
@@ -1017,6 +1018,53 @@ namespace :demo do
     else
       failures << "schema.queries missing kyc_status (or no description)"
       puts "  ✗  schema.queries missing kyc_status (or no description)"
+    end
+
+    # ── K-606: THE POLL BUDGET IS A PUBLISHED CONTRACT, SO IT IS ASSERTED ─────
+    # The out-of-band verbs below are learned about by RE-POLLING and nothing
+    # else — the wire has no server→assistant push — so K-477/K-595 wrote a
+    # cadence and a give-up horizon into their descriptors and K-605 made them
+    # QUOTE kiosk.tech/skill.md's tiered schedule instead of a rival flat one.
+    # Until this beat nothing that runs read either back: `grep` found the
+    # strings only in the source they were written into, so any later edit could
+    # drop the horizon and every gate stayed green. It is asserted here, on the
+    # SERVED descriptor, because that is the document an assistant reads.
+    #
+    # STRUCTURE, NOT THE MINUTES. Both tiers must be present, the second must be
+    # SLOWER than the first (a tiering that is not one is not a schedule), and a
+    # horizon must be named in minutes. The exact numbers are deliberately NOT
+    # pinned: writing "5" and "15" here would make this file a third place the
+    # schedule lives, which is the divergence K-605 closed by deleting a derived
+    # count rather than recomputing it.
+    poll_tiers   = /re-check every ~(\d+) seconds for the first minute, then every ~(\d+) seconds/
+    poll_horizon = /GIVE UP after about (\d+) minutes?/
+    { actions => ["payment_setup"], queries => ["kyc_status"] }.each do |list, names|
+      names.each do |vname|
+        entry = list.find { |e| e["name"] == vname }
+        if entry.nil?
+          failures << "schema is missing #{vname} — the poll-budget assertion cannot run (K-606)"
+          puts "  FAIL  schema is missing #{vname} (K-606)"
+          next
+        end
+        desc = entry["description"].to_s
+        tiers   = desc.match(poll_tiers)
+        horizon = desc.match(poll_horizon)
+        if tiers.nil?
+          failures << "#{vname} description publishes no poll cadence (K-477/K-605): #{desc.inspect}"
+          puts "  FAIL  #{vname} publishes no poll cadence"
+        elsif tiers[2].to_i <= tiers[1].to_i
+          failures << "#{vname} cadence does not back off: ~#{tiers[1]}s then ~#{tiers[2]}s (K-605)"
+          puts "  FAIL  #{vname} cadence does not back off (~#{tiers[1]}s then ~#{tiers[2]}s)"
+        else
+          puts "  OK    #{vname} publishes a backing-off cadence (~#{tiers[1]}s, then ~#{tiers[2]}s)"
+        end
+        if horizon.nil? || horizon[1].to_i <= 0
+          failures << "#{vname} description publishes no GIVE UP horizon (K-477): #{desc.inspect}"
+          puts "  FAIL  #{vname} publishes no GIVE UP horizon"
+        else
+          puts "  OK    #{vname} publishes a give-up horizon (~#{horizon[1]} minutes)"
+        end
+      end
     end
 
     if failures.empty?

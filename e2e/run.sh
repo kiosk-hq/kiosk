@@ -205,13 +205,34 @@ cp "$FIXTURES/seeds.rb"              db/seeds.rb
 mkdir -p app/controllers/kiosk
 cp "$FIXTURES/catalog_controller.rb"  app/controllers/kiosk/catalog_controller.rb
 cp "$FIXTURES/bookings_controller.rb" app/controllers/kiosk/bookings_controller.rb
-mkdir -p lib
-cp "$FIXTURES/stub_idp.rb"           lib/stub_idp.rb
-cp "$FIXTURES/stub_user_idp.rb"      lib/stub_user_idp.rb
-cp "$FIXTURES/jwt_or_stub_idp.rb"    lib/jwt_or_stub_idp.rb
-cp "$FIXTURES/stub_psp.rb"           lib/stub_psp.rb
+# The four adapter stubs the initializer hands to `Kiosk.configure` are
+# APPLICATION code, so they go under app/ — not into lib/ behind a hand-written
+# `require Rails.root.join("lib/...")`, which is what this harness used to do
+# (K-502). `rails new --api` does not create app/services either.
+mkdir -p app/services
+cp "$FIXTURES/stub_idp.rb"           app/services/stub_idp.rb
+cp "$FIXTURES/stub_user_idp.rb"      app/services/stub_user_idp.rb
+cp "$FIXTURES/jwt_or_stub_idp.rb"    app/services/jwt_or_stub_idp.rb
+cp "$FIXTURES/stub_psp.rb"           app/services/stub_psp.rb
 cp "$FIXTURES/initializer_kiosk.rb"  config/initializers/kiosk.rb
 cp "$FIXTURES/routes.rb"             config/routes.rb
+
+# …and app/services is declared an autoload-ONCE path, which is what lets the
+# initializer name those four with no `require` at all. Rails sets the
+# reloadable autoloader up in its `finisher`, AFTER config/initializers run, so
+# an ordinary autoload path is not resolvable from an initializer — in lib/ or
+# in app/. The once autoloader is set up in `bootstrap`, before them. This is
+# the same line every demo carries, and the harness patches the GENERATED
+# application.rb so an adopter reading run.sh sees the one edit it takes.
+ruby -e '
+  path = "config/application.rb"
+  src  = File.read(path)
+  anchor = /^(\s*)config\.load_defaults .*\n/
+  abort "e2e: could not find config.load_defaults in #{path}" unless src =~ anchor
+  indent = Regexp.last_match(1)
+  line = "#{indent}config.autoload_once_paths << Rails.root.join(\"app/services\").to_s\n"
+  File.write(path, src.sub(anchor) { |m| m + line })
+' || fail "could not declare app/services as an autoload-once path"
 
 ok "fixtures + generator output staged"
 

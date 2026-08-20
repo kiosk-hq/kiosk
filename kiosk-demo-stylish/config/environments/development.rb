@@ -90,9 +90,9 @@ Rails.application.configure do
   config.x.kiosk.test_autocard = ENV["KIOSK_TEST_AUTOCARD"] == "1"
 
   # KYC broker trust — read by whichever demos ship a broker client
-  # (lib/prove_broker_client.rb); inert in the others. No pinned dev broker
-  # key and no default intake secret (K-650): the two-server harnesses and
-  # the KYC rake tasks pin both sides explicitly (ProveBrokerBoot wiring /
+  # (app/services/prove_broker_client.rb); inert in the others. No pinned dev
+  # broker key and no default intake secret (K-650): the two-server harnesses
+  # and the KYC rake tasks pin both sides explicitly (ProveBrokerBoot wiring /
   # the ProveKey public half), so nothing here needs to line up "out of the
   # box". The intake secret is ONE variable named for its role, never for an
   # operator (K-694) — see production.rb for why.

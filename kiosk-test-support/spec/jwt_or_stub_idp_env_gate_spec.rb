@@ -5,7 +5,8 @@ require "kiosk"
 # K-539 regression: the demos' cleartext identity stub must be UNREACHABLE in
 # production.
 #
-# This loads the REAL shipped demo composite IdP (stylish's copy — its `verify`
+# This loads the REAL shipped demo composite IdP (stylish's copy, under
+# app/services since K-502 — its `verify`
 # is byte-identical across all seven demos + the e2e fixture) and drives a
 # forged, self-asserted `agent:u-…:a-…:r-owner` bearer through it under stubbed
 # envs. It proves BOTH halves of the fix:
@@ -13,9 +14,9 @@ require "kiosk"
 #   - development/test → still accepted (or every demo driver + e2e break)
 # The over-the-wire production-config counterpart lives in
 # deploy/production-smoke.sh (Assertion 5) and skooti's script/redteam_suite.rb.
-demo_lib       = File.expand_path("../../kiosk-demo-stylish/lib", __dir__)
-stub_idp_path  = File.join(demo_lib, "stub_idp.rb")
-composite_path = File.join(demo_lib, "jwt_or_stub_idp.rb")
+demo_services  = File.expand_path("../../kiosk-demo-stylish/app/services", __dir__)
+stub_idp_path  = File.join(demo_services, "stub_idp.rb")
+composite_path = File.join(demo_services, "jwt_or_stub_idp.rb")
 have_sources   = File.exist?(stub_idp_path) && File.exist?(composite_path)
 if have_sources
   require stub_idp_path

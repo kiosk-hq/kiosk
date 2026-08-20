@@ -53,7 +53,7 @@ see "Edge rate-limit — REQUIRED" below.) Any other demo is knob-adjustable: se
 
 > **How it wires (WIRED).** All seven demos' initializers read
 > `ENV["KIOSK_POW_DIFFICULTY"]` (`low` default, `high` opt-in) via
-> `lib/pow_difficulty.rb` and set their Equihash params accordingly:
+> `app/services/pow_difficulty.rb` and set their Equihash params accordingly:
 > - **low** → `{n:96,k:5}` — sub-second reference solve, poke-friendly.
 > - **high** → `{n:168,k:7}` — the shipped Equihash default: ~10 s and ~1.3 GiB
 >   per proof on the reference (numpy) solver — a real memory+CPU toll. Verified

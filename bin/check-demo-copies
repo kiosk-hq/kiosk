@@ -4,12 +4,12 @@
 # Cross-demo copy check (K-623, K-607, K-624, K-640).
 #
 # WHY THIS EXISTS. The eight demos are eight standalone Rails apps, so shared
-# application code is not shared at all — it is HAND-COPIED. `lib/demo_telemetry.rb`
+# application code is not shared at all — it is HAND-COPIED. `app/services/demo_telemetry.rb`
 # ships in seven demos, `app/controllers/demo_activity_controller.rb` in seven,
-# `lib/pow_difficulty.rb` in seven, `lib/uuid_check.rb` in six, and eleven
+# `app/services/pow_difficulty.rb` in seven, `app/models/uuid_check.rb` in six, and eleven
 # db/migrate files in up to seven. Nothing checked that the copies still agree.
 #
-# They drift, and the drift is invisible. `lib/demo_telemetry.rb` carried a stale
+# They drift, and the drift is invisible. The telemetry module carried a stale
 # `schedule_delivery` comment in six of its seven copies for weeks — corrected
 # only by accident, when the K-622 fix happened to touch all seven at once. That
 # left the seven byte-identical again, which is a STATE, not a GUARD: the next
@@ -215,13 +215,28 @@ COPIES = {
   },
 
   # ── The telemetry cluster (K-623) ──────────────────────────────────────────
-  "lib/demo_telemetry.rb" => {
+  "app/services/demo_telemetry.rb" => {
     rule: :identical,
     why:  "The live-activity telemetry module. It owns the INSERT column list (which must " \
           "match deploy/telemetry-init.sql), the agent_hash privacy salt, the 10-minute and " \
           "1-hour aggregate windows, and the Rack middleware. Only getgrocery's copy is " \
           "executed by a CI gate (demo:telemetry, demo:telemetry_spec); byte-identity is what " \
           "extends those two gates to the other six copies.",
+  },
+  "app/services/demo_telemetry_record.rb" => {
+    rule: :identical,
+    why:  "The abstract AR class that binds telemetry writes to the SHARED hosted store when " \
+          "KIOSK_TELEMETRY_DB_URL is set — a dedicated pool, so telemetry never contends with " \
+          "request transactions. Split out of demo_telemetry.rb by K-502 so Zeitwerk can reach " \
+          "it by name; held identical for the same reason the module is.",
+  },
+  "app/services/demo_telemetry_middleware.rb" => {
+    rule: :identical,
+    why:  "The Rack middleware — the half that produces every real telemetry event, and the half " \
+          "K-622 (a failed record RE-DISPATCHING the request, minting a second agent at " \
+          "/auth/register) lived in. Split out of demo_telemetry.rb by K-502. Only getgrocery's " \
+          "copy is executed by a CI gate (demo:telemetry_spec); byte-identity is what extends " \
+          "that gate to the other six.",
   },
   "app/controllers/demo_activity_controller.rb" => {
     rule: :identical,
@@ -230,13 +245,15 @@ COPIES = {
           "copy is the only one any gate boots.",
   },
 
-  # ── Shared demo helpers under lib/ ─────────────────────────────────────────
-  "lib/pow_difficulty.rb" => {
+  # ── Shared demo helpers, hand-copied into every demo's app/ (K-502) ────────
+  # They used to live under lib/ and be loaded by hand from the initializer;
+  # the paths moved, the copy-not-symlink arrangement did not.
+  "app/services/pow_difficulty.rb" => {
     rule: :identical,
     why:  "The KIOSK_POW_DIFFICULTY -> Equihash (n, k) map. A demo whose copy drifts advertises " \
           "a toll it does not charge.",
   },
-  "lib/bad_proof_counter.rb" => {
+  "app/services/bad_proof_counter.rb" => {
     rule: :identical,
     why:  "The K-498 PER-IDENTITY bad-proof tally (sqlite, keyed by agent credential id) behind " \
           "the two PoW demos' on_bad_proof wiring — atablefor and getgrocery are the only demos " \
@@ -249,7 +266,7 @@ COPIES = {
     why:  "The register handshake with the Equihash toll (challenge -> PoP -> 402 -> solve.py -> " \
           "retry). Each copy's header names its own demo and port; the handshake must not vary.",
   },
-  "lib/uuid_check.rb" => {
+  "app/models/uuid_check.rb" => {
     rule:   :code,
     except: {
       "getgrocery" => "adds JSON_SCHEMA_PATTERN — the same shape written for JSON Schema, which " \
@@ -262,16 +279,16 @@ COPIES = {
           "instead of a PG::InvalidTextRepresentation 500 that leaks SQL. Each copy's prose names " \
           "the verbs THAT demo casts; the guard itself must be one thing.",
   },
-  "lib/stub_idp.rb" => {
+  "app/services/stub_idp.rb" => {
     rule: :code,
     why:  "DEV/TEST agent-IdP parsing `agent:u-…:a-…:r-…` bearers (K-539). Per-demo prose only.",
   },
-  "lib/jwt_or_stub_idp.rb" => {
+  "app/services/jwt_or_stub_idp.rb" => {
     rule: :code,
     why:  "Composite IdP: Kiosk-issued JWTs first, StubIdp's synthetic shape as fallback. Per-demo " \
           "prose only.",
   },
-  "lib/stub_user_idp.rb" => {
+  "app/services/stub_user_idp.rb" => {
     rule:   :code,
     except: {
       "stylish" => "not the same component: stylish authenticates a STAFF human by X-Staff-Session " \
@@ -282,16 +299,16 @@ COPIES = {
     why:  "DEV/TEST user-IdP — the 'provider's own web session' channel the human-approval " \
           "surfaces authenticate through (K-555).",
   },
-  "lib/stub_psp.rb" => {
+  "app/services/stub_psp.rb" => {
     rule: :code,
     why:  "Controllable payment-provider stub for the pay-path flows. Per-demo prose only.",
   },
-  "lib/prove_broker_client.rb" => {
+  "app/services/prove_broker_client.rb" => {
     rule: :code,
     why:  "The operator -> KYC broker intake leg. Per-demo prose only: the operator id and " \
           "the requested claims arrive as arguments, not as literals.",
   },
-  "lib/prove_trust.rb" => {
+  "app/services/prove_trust.rb" => {
     rule: :per_demo,
     why:  "Per-operator by construction: each copy bakes in its own operator id (getgrocery vs " \
           "skooti) — the cross-operator binding the demo exists to show (K-547). The intake secret " \
@@ -1163,14 +1180,17 @@ end
 # route, its middleware or its require and stay green: the four pieces are only
 # ever exercised together in getgrocery.
 #
-# The `require` is load-bearing and is asserted deliberately (K-624). lib/ is a
-# Zeitwerk autoload path, so requiring a managed file looks redundant — but
-# lib/demo_telemetry.rb declares THREE top-level constants and only
-# `DemoTelemetry` matches its path. `DemoTelemetryMiddleware`, which the
-# initializer names, is unreachable by autoload. Delete the require and the
-# middleware wiring breaks. Whoever eventually extracts this cluster should split
-# the middleware and the record into path-matching files rather than carry the
-# require along.
+# The `require` this block used to assert is GONE (K-502), and the split it asked
+# for is done: the cluster is three path-matching files under app/services, so
+# `DemoTelemetryMiddleware` and `DemoTelemetryRecord` are reachable by autoload
+# under their own names. What replaced the require as the deletable-and-silently-
+# fatal line is the once-path declaration in config/application.rb. Rails sets
+# the RELOADABLE autoloader up in its `finisher`, AFTER config/initializers have
+# run, so the initializer can only name `DemoTelemetryMiddleware` because
+# app/services is in `config.autoload_once_paths`, whose loader `bootstrap` sets
+# up first. Drop that one line and every one of these seven demos aborts at boot
+# with `NameError: uninitialized constant` — so it is asserted here, in the same
+# breath as the middleware insertion it makes possible.
 #
 # Honest scope: this is a static assertion that the four pieces are present, not
 # a boot of the six. Booting seven apps to GET /demo/activity.json is what
@@ -1180,32 +1200,34 @@ TELEMETRY_WIRING = [
    "the GET /demo/activity.json controller is missing"],
   ["config/routes.rb", %r{get\s+"/demo/activity\.json",\s*to:\s*"demo_activity#show"},
    "config/routes.rb does not draw GET /demo/activity.json -> demo_activity#show"],
-  ["config/initializers/kiosk.rb", /require\s+Rails\.root\.join\("lib\/demo_telemetry"\)/,
-   "config/initializers/kiosk.rb does not require lib/demo_telemetry — DemoTelemetryMiddleware " \
-   "does not match its path, so Zeitwerk cannot autoload it and the require is load-bearing (K-624)"],
+  ["config/application.rb", /autoload_once_paths\s*<<\s*Rails\.root\.join\("app\/services"\)/,
+   "config/application.rb does not put app/services in config.autoload_once_paths — the " \
+   "reloadable autoloader is set up AFTER config/initializers run, so the initializer's " \
+   "DemoTelemetryMiddleware reference would abort the boot with NameError (K-502, was K-624)"],
   ["config/initializers/kiosk.rb", /middleware\.use\(\s*DemoTelemetryMiddleware/m,
    "config/initializers/kiosk.rb does not insert DemoTelemetryMiddleware — the module is shipped " \
    "but never records anything"],
 ].freeze
 
-telemetry_demos = (dups["lib/demo_telemetry.rb"] || {}).keys
+telemetry_demos = (dups["app/services/demo_telemetry.rb"] || {}).keys
 (dups["app/controllers/demo_activity_controller.rb"] || {}).each_key do |demo|
   next if telemetry_demos.include?(demo)
 
   errors << "#{short.(demo)}: ships app/controllers/demo_activity_controller.rb but not " \
-            "lib/demo_telemetry.rb — GET /demo/activity.json would 500 on the require"
+            "app/services/demo_telemetry.rb — GET /demo/activity.json would 500 on the " \
+            "missing DemoTelemetry"
 end
 
 telemetry_demos.each do |demo|
   TELEMETRY_WIRING.each do |rel, pattern, message|
     path = File.join(ROOT, demo, rel)
     unless File.exist?(path)
-      errors << "#{short.(demo)}: ships lib/demo_telemetry.rb but #{rel} does not exist — #{message}"
+      errors << "#{short.(demo)}: ships app/services/demo_telemetry.rb but #{rel} does not exist — #{message}"
       next
     end
     next if pattern.nil? || File.read(path).match?(pattern)
 
-    errors << "#{short.(demo)}: ships lib/demo_telemetry.rb but #{message}"
+    errors << "#{short.(demo)}: ships app/services/demo_telemetry.rb but #{message}"
   end
 end
 
@@ -1272,7 +1294,7 @@ if errors.empty?
        "#{tpl_checked} install-generator templates held against their demo copies " \
        "(#{tpl_drift} with drift pending triage), " \
        "#{MIGRATION_PAIRS.size} cross-demo migration pairs (#{pair_drift} with drift pending triage), " \
-       "telemetry wired in #{(dups['lib/demo_telemetry.rb'] || {}).size} demos, " \
+       "telemetry wired in #{(dups['app/services/demo_telemetry.rb'] || {}).size} demos, " \
        "OperationResult subclassed from kiosk-server in #{(dups[OPERATION_RESULT] || {}).size} demos"
   exit 0
 end

@@ -9,11 +9,12 @@
 # and Kiosk::BookingsController (book_appointment) — named in `c.handlers`
 # below, which is how the engine finds them. What is left in this file is
 # configuration, which is what an initializer is for.
-
-require Rails.root.join("lib/stub_idp")
-require Rails.root.join("lib/stub_user_idp")
-require Rails.root.join("lib/jwt_or_stub_idp")
-require Rails.root.join("lib/stub_psp")
+#
+# The four adapter stubs it wires — StubIdp, StubUserIdp, JwtOrStubIdp, StubPsp
+# — are named, not required (K-502). run.sh copies them to app/services and
+# declares that an autoload-ONCE path, which is what makes them resolvable here:
+# Rails sets the reloadable autoloader up AFTER config/initializers run, so a
+# hand-written `require Rails.root.join(...)` was the only alternative.
 
 # Registration PoW gate uses Equihash (one PoW = Equihash). Small demo params
 # (n=96 k=5, matching the demos) keep the register solve well under a second.

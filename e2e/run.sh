@@ -214,6 +214,10 @@ cp "$FIXTURES/stub_idp.rb"           app/services/stub_idp.rb
 cp "$FIXTURES/stub_user_idp.rb"      app/services/stub_user_idp.rb
 cp "$FIXTURES/jwt_or_stub_idp.rb"    app/services/jwt_or_stub_idp.rb
 cp "$FIXTURES/stub_psp.rb"           app/services/stub_psp.rb
+# The operator's audit sink (K-828). Kiosk stores no audit trail — it emits one
+# event per action invocation to whatever callable `c.audit_sink` names, and
+# this is that callable, written the way an adopter would write it.
+cp "$FIXTURES/demo_audit_sink.rb"    app/services/demo_audit_sink.rb
 cp "$FIXTURES/initializer_kiosk.rb"  config/initializers/kiosk.rb
 cp "$FIXTURES/routes.rb"             config/routes.rb
 
@@ -286,6 +290,13 @@ ok "signing key generated"
 
 log "start rails server on port $SERVER_PORT"
 export KIOSK_ISSUER="http://127.0.0.1:$SERVER_PORT"
+# Where the operator's sink writes. Its PRESENCE is what makes the initializer
+# configure a sink at all, so the second boot below (which unsets it) is the
+# default-off proof.
+AUDIT_EVENTS="$TMP_DIR/audit-events.jsonl"
+AUDIT_EVENTS_REDACTED="$TMP_DIR/audit-events-redacted.jsonl"
+export KIOSK_AUDIT_SINK_FILE="$AUDIT_EVENTS"
+export KIOSK_AUDIT_SINK_REDACTED_FILE="$AUDIT_EVENTS_REDACTED"
 bundle exec rails s -p "$SERVER_PORT" -b 127.0.0.1 -e development \
   > /tmp/kiosk-e2e-server.log 2>&1 &
 SERVER_PID=$!
@@ -315,6 +326,8 @@ if ! SERVER_URL="http://127.0.0.1:$SERVER_PORT" \
        FIXTURES="$FIXTURES" \
        DB_NAME="$DB_NAME" \
        KIOSK_ISSUER="$KIOSK_ISSUER" \
+       AUDIT_EVENTS="$AUDIT_EVENTS" \
+       AUDIT_EVENTS_REDACTED="$AUDIT_EVENTS_REDACTED" \
        SOLVE_PY="$SOLVE_PY" \
        PAY_CAPTURE="$PAY_CAPTURE" \
        bash "$KIOSK_OSS/e2e/assistant.sh"; then
@@ -346,4 +359,70 @@ if ! SERVER_URL="http://127.0.0.1:$SERVER_PORT" \
 fi
 
 ok "live wire bytes conform to the published schemas"
+
+# ─── the audit sink is OFF by default (K-828) ───────────────────────────────
+#
+# Everything above ran with `c.audit_sink` SET. The default is nil, and «the
+# default emits nothing» is not a claim a suite can make from the side that has
+# a sink configured — so the origin is restarted with KIOSK_AUDIT_SINK_FILE
+# UNSET, which is what leaves `audit_sink` nil in the initializer, and one real
+# action is driven through it. Nothing may be emitted and nothing may be
+# written: not to the sink's files, not to any table.
+
+log "restart the origin with NO audit sink configured (the default)"
+kill "$SERVER_PID" 2>/dev/null || true
+wait "$SERVER_PID" 2>/dev/null || true
+SERVER_PID=""
+unset KIOSK_AUDIT_SINK_FILE KIOSK_AUDIT_SINK_REDACTED_FILE
+
+events_before=$(wc -l < "$AUDIT_EVENTS" | tr -d ' ')
+redacted_before=$(wc -l < "$AUDIT_EVENTS_REDACTED" | tr -d ' ')
+# Every row in every table of the kiosk schema, counted through query_to_xml so
+# the assertion needs no table list and cannot go stale when one is added.
+kiosk_rows() {
+  psql -X -d "$DB_NAME" -tAc "
+    SELECT COALESCE(SUM(cnt), 0) FROM (
+      SELECT (xpath('/row/cnt/text()',
+                    query_to_xml(format('SELECT count(*) AS cnt FROM %I.%I', schemaname, relname),
+                                 false, true, '')))[1]::text::bigint AS cnt
+      FROM pg_stat_user_tables WHERE schemaname = 'kiosk'
+    ) t"
+}
+rows_before=$(kiosk_rows)
+
+bundle exec rails s -p "$SERVER_PORT" -b 127.0.0.1 -e development \
+  >> /tmp/kiosk-e2e-server.log 2>&1 &
+SERVER_PID=$!
+ready=0
+for i in $(seq 1 30); do
+  if curl -sf "http://127.0.0.1:$SERVER_PORT/.well-known/kiosk.json" >/dev/null 2>&1; then
+    ready=1
+    break
+  fi
+  sleep 1
+done
+[ $ready -eq 1 ] || {
+  tail -50 /tmp/kiosk-e2e-server.log
+  fail "sink-less origin did not become ready (see log above)"
+}
+
+SINKLESS_TOKEN="agent:u-00000000-0000-0000-0000-000000000001:a-a0000000-0000-0000-0000-000000000001:r-customer"
+sinkless_salon=$(curl -sS "http://127.0.0.1:$SERVER_PORT/kiosk/salons" \
+  -H "Authorization: Bearer $SINKLESS_TOKEN" | jq -r '.[0].id')
+sinkless_code=$(curl -sS -o /dev/null -w "%{http_code}" -X POST \
+  "http://127.0.0.1:$SERVER_PORT/kiosk/book_appointment" \
+  -H "Authorization: Bearer $SINKLESS_TOKEN" -H "Content-Type: application/json" \
+  -d "{\"salon_id\":$sinkless_salon,\"slot\":\"2029-03-03T09:00:00Z\"}")
+[ "$sinkless_code" = "200" ] || fail "sink-less origin did not serve the action (got $sinkless_code)"
+
+[ "$(wc -l < "$AUDIT_EVENTS" | tr -d ' ')" = "$events_before" ] \
+  || fail "an origin with NO audit sink still wrote to the sink's file"
+[ "$(wc -l < "$AUDIT_EVENTS_REDACTED" | tr -d ' ')" = "$redacted_before" ] \
+  || fail "an origin with NO audit sink still wrote to the redacted file"
+# The action itself wrote an appointment, in `public`. The kiosk schema must be
+# untouched: no audit row, because there is nowhere for one to go.
+[ "$(kiosk_rows)" = "$rows_before" ] \
+  || fail "an origin with NO audit sink wrote $(( $(kiosk_rows) - rows_before )) row(s) into the kiosk schema"
+ok "no sink configured ⇒ nothing emitted, nothing written to any kiosk table"
+
 log "✅ kiosk-oss e2e green"

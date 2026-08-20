@@ -80,36 +80,6 @@ SET default_tablespace = '';
 SET default_table_access_method = heap;
 
 --
--- Name: action_log; Type: TABLE; Schema: kiosk; Owner: -
---
-
-CREATE TABLE kiosk.action_log (
-    id uuid DEFAULT gen_random_uuid() NOT NULL,
-    action_name text NOT NULL,
-    user_id uuid NOT NULL,
-    agent_id uuid,
-    role text NOT NULL,
-    actor text NOT NULL,
-    args jsonb DEFAULT '{}'::jsonb NOT NULL,
-    result_status text NOT NULL,
-    error_class text,
-    error_message text,
-    invoked_at timestamp with time zone DEFAULT now() NOT NULL
-);
-
-
---
--- Name: actions; Type: TABLE; Schema: kiosk; Owner: -
---
-
-CREATE TABLE kiosk.actions (
-    name text NOT NULL,
-    description text,
-    created_at timestamp with time zone DEFAULT now() NOT NULL
-);
-
-
---
 -- Name: agent_mappings; Type: TABLE; Schema: kiosk; Owner: -
 --
 
@@ -324,22 +294,6 @@ ALTER TABLE ONLY public.restaurants ALTER COLUMN id SET DEFAULT nextval('public.
 
 
 --
--- Name: action_log action_log_pkey; Type: CONSTRAINT; Schema: kiosk; Owner: -
---
-
-ALTER TABLE ONLY kiosk.action_log
-    ADD CONSTRAINT action_log_pkey PRIMARY KEY (id);
-
-
---
--- Name: actions actions_pkey; Type: CONSTRAINT; Schema: kiosk; Owner: -
---
-
-ALTER TABLE ONLY kiosk.actions
-    ADD CONSTRAINT actions_pkey PRIMARY KEY (name);
-
-
---
 -- Name: agent_mappings agent_mappings_pkey; Type: CONSTRAINT; Schema: kiosk; Owner: -
 --
 
@@ -433,20 +387,6 @@ ALTER TABLE ONLY public.schema_migrations
 
 ALTER TABLE ONLY public.users
     ADD CONSTRAINT users_pkey PRIMARY KEY (id);
-
-
---
--- Name: idx_action_log_agent_id; Type: INDEX; Schema: kiosk; Owner: -
---
-
-CREATE INDEX idx_action_log_agent_id ON kiosk.action_log USING btree (agent_id, invoked_at DESC) WHERE (agent_id IS NOT NULL);
-
-
---
--- Name: idx_action_log_user_id; Type: INDEX; Schema: kiosk; Owner: -
---
-
-CREATE INDEX idx_action_log_user_id ON kiosk.action_log USING btree (user_id, invoked_at DESC);
 
 
 --
@@ -562,14 +502,6 @@ CREATE UNIQUE INDEX index_users_on_email ON public.users USING btree (email);
 
 
 --
--- Name: action_log action_log_action_name_fkey; Type: FK CONSTRAINT; Schema: kiosk; Owner: -
---
-
-ALTER TABLE ONLY kiosk.action_log
-    ADD CONSTRAINT action_log_action_name_fkey FOREIGN KEY (action_name) REFERENCES kiosk.actions(name);
-
-
---
 -- Name: agent_mappings agent_mappings_agent_id_fkey; Type: FK CONSTRAINT; Schema: kiosk; Owner: -
 --
 
@@ -640,7 +572,6 @@ INSERT INTO "schema_migrations" (version) VALUES
 ('20260618131462'),
 ('20260618131461'),
 ('20260618131460'),
-('20260618131459'),
 ('20260618131458'),
 ('20260618131457'),
 ('20260101000000');

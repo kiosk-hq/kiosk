@@ -22,6 +22,15 @@ require "uri"
 # standing broker operator in the hosted deploy is a follow-up.
 module ProveBrokerBoot
   BROKER_APP    = File.expand_path("../../kiosk-demo-prove", __dir__)
+  # The broker's DEV/TEST signing key, pinned EXPLICITLY on the broker we boot
+  # rather than left to its env file's default. Two reasons. (1) The pairing
+  # stops being implicit: the driver's redteam beats need to mint a claim the
+  # booted broker's key would have signed, and "both sides happen to fall back
+  # to the same file" is not a pairing a reader can see. (2) The K-673 rule is
+  # unchanged — this is the key whose private half ships in this public repo,
+  # it is TEST scaffolding only, and the broker's production env file still
+  # refuses to boot without a real PROVE_KEY_PEM and has no fallback.
+  SIGNING_KEY_PATH = File.expand_path("../../kiosk-demo-prove/config/dev_prove_key.pem", __dir__)
   BROKER_PORT   = ENV.fetch("KIOSK_PROVE_PORT", "3020")
   SHARED_SECRET = "prove-getgrocery-demo-shared-secret"
   # The `iss` both apps must agree on. Pinned here explicitly on BOTH the broker
@@ -31,6 +40,15 @@ module ProveBrokerBoot
   SHARED_ISSUER = "https://kyc.test.local"
 
   module_function
+
+  # The PEM the booted broker signs with: an explicit PROVE_KEY_PEM if the
+  # caller set one (driving a broker with a real key), else the repo's dev key.
+  def signing_key
+    from_env = ENV["PROVE_KEY_PEM"].to_s
+    return from_env unless from_env.empty?
+
+    File.read(SIGNING_KEY_PATH)
+  end
 
   # Boot the broker for the duration of the block. Yields a hash of the env vars
   # getgrocery + the driver must carry:
@@ -44,6 +62,7 @@ module ProveBrokerBoot
   def with_broker(operator_host:, log: "/tmp/kiosk-prove-broker-getgrocery.log")
     broker_host = "127.0.0.1"
     broker_url  = "http://#{broker_host}:#{BROKER_PORT}"
+    signing_key_pem = signing_key
 
     # ── Set up the broker DB (idempotent) ──────────────────────────────────
     puts "\n── Setting up KYC broker DB (#{BROKER_APP}) ──"
@@ -68,6 +87,8 @@ module ProveBrokerBoot
       # The verification_url the broker hands back must point at the broker's
       # reachable origin (host:port), so the human/driver can approve on it.
       "PROVE_PUBLIC_URL"                     => broker_url,
+      # Pinned, not defaulted — see SIGNING_KEY_PATH.
+      "PROVE_KEY_PEM"                        => signing_key_pem,
     }
     broker_pid = spawn(
       broker_env,
@@ -120,6 +141,13 @@ module ProveBrokerBoot
       "KIOSK_PROVE_OPERATOR_ID"       => "getgrocery",
       # The running broker's OWN public key, fetched above (K-650).
       "KIOSK_PROVE_PUBLIC_KEY_PEM"    => prove_public_pem,
+      # The PRIVATE half the broker was booted with, for the driver's redteam
+      # beats only: they need attestations that are genuinely signed but
+      # deliberately malformed in one respect (a non-canonical boolean
+      # spelling, K-656), which the real broker will never mint. A beat that
+      # signed with its own fresh key would only re-test the signature check
+      # the R1 beat already covers.
+      "KIOSK_PROVE_TEST_SIGNING_KEY_PEM" => signing_key_pem,
     }
 
     begin

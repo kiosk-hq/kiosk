@@ -12,6 +12,12 @@
 class Agent < ApplicationRecord
   self.table_name = "kiosk.agents"
 
+  # The named anonymized attributes a valid attestation granted this agent —
+  # ROWS since K-656, one per granted name, in the engine's own
+  # `kiosk.kyc_attributes` table.
+  has_many :kyc_attributes, class_name: "KycAttribute", inverse_of: :agent,
+                            foreign_key: :agent_id, dependent: nil
+
   # THE acting agent, and only while it is live. Same shape as
   # {Reservation.owned_by_current_principal} and for the same reason: the
   # identity comes from the transaction GUC, read SQL-side, never from Ruby —
@@ -21,41 +27,33 @@ class Agent < ApplicationRecord
     where(arel_table[:id].eq(Arel.sql("kiosk.current_agent_id()"))).where(revoked_at: nil)
   }
 
-  # ONE named anonymized attribute, as `->>` yields it: TEXT, or the string
-  # "false" when the key (or the whole column) is absent.
-  #
-  # THE EXTRACTION STAYS IN SQL, and that is load-bearing rather than
-  # stylistic. `kyc_attributes` is jsonb and the engine stores JSON BOOLEANS
-  # (`{"age_over_18": true}`), so `->> 'age_over_18'` is the text "true" —
-  # and so is a `"true"` STRING, should an issuer ever record one. Reading the
-  # column through ActiveRecord instead would hand back a Ruby `true` for the
-  # first and a `"true"` for the second, and any Ruby comparison then accepts
-  # one spelling and silently refuses the other. Re-implementing `->>` in Ruby
-  # to fix that would be hand-rolling a Postgres operator inside a KYC gate,
-  # which is the K-724 mistake with a new spelling. So the operator stays
-  # Postgres', expressed as Arel (a quoted key, not an interpolated fragment)
-  # rather than as a SQL string.
-  def self.kyc_attribute(name)
-    Arel::Nodes::NamedFunction.new(
-      "COALESCE",
-      [Arel::Nodes::InfixOperation.new("->>", arel_table[:kyc_attributes], Arel::Nodes.build_quoted(name.to_s)),
-       Arel::Nodes.build_quoted("false")],
-    )
-  end
-
   # Does the acting agent carry EVERY named attribute as a granted boolean?
   #
-  # Only booleans a valid, signed attestation granted were ever persisted — a
-  # forged or self-asserted attestation never reaches this column, because the
+  # THE QUESTION IS AN EXISTENCE TEST, AND THAT IS WHAT MAKES IT SAFE. Until
+  # K-656 the grants were a jsonb map on this row and this method had to
+  # extract a VALUE — `COALESCE(kyc_attributes ->> 'age_over_18', 'false')`,
+  # deliberately in Postgres, because the engine stored JSON booleans and a
+  # Ruby comparison would accept one spelling of true and silently refuse the
+  # other. There is no value any more: the grant IS the row, so this counts the
+  # required names that are present and compares the count. Nothing here can
+  # answer NULL, and no spelling of `true` reaches this side at all — the
+  # engine judges that once, on the write, in Postgres (`jsonb_each(...) WHERE
+  # value = 'true'::jsonb`).
+  #
+  # Only names a valid, signed attestation granted were ever written — a forged
+  # or self-asserted attestation never reaches the table, because the
   # /agents/kyc endpoint rejects a bad signature. So this asks about what the
   # engine recorded, not about what the caller claims.
   #
-  # No agent row (revoked, or gone) answers false, exactly as the `.first`-on-
-  # an-empty-result the raw SQL relied on did.
+  # No agent row (revoked, or gone) answers false: `acting` is the subquery the
+  # rows are matched against, so it yields nothing and the count is 0. Asking
+  # for no attributes at all answers false too — a gate that required nothing
+  # would be a gate that passed everyone.
   def self.kyc_granted?(*names)
-    values = acting.pick(*names.map { |name| kyc_attribute(name) })
-    return false if values.nil?
+    required = names.map(&:to_s).uniq
+    return false if required.empty?
 
-    Array(values).all? { |value| value == "true" }
+    KycAttribute.where(agent_id: acting.select(:id), name: required)
+                .distinct.count(:name) == required.size
   end
 end

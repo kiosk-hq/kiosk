@@ -69,7 +69,7 @@ require "json"
 # caught). None of this weakens the real verification path.
 $LOAD_PATH.unshift File.expand_path("../lib", __dir__)
 require "prove_test_issuer"
-require "prove_trust"
+require_relative "../app/services/prove_trust"
 
 BASE_URL   = ENV.fetch("SERVER_URL", "http://127.0.0.1:3004")
 ISSUER     = ENV.fetch("KIOSK_ISSUER", BASE_URL)
@@ -943,9 +943,9 @@ method_mismatch_beat = method_mismatch.call
 # spec/jwt_or_stub_idp_env_gate_spec.rb.
 self_asserted_token_forgery = lambda do
   require "kiosk"
-  lib = File.expand_path("../lib", __dir__)
-  require File.join(lib, "stub_idp")
-  require File.join(lib, "jwt_or_stub_idp")
+  services = File.expand_path("../app/services", __dir__)
+  require File.join(services, "stub_idp")
+  require File.join(services, "jwt_or_stub_idp")
 
   # The redteam client boots no Rails app, so provide a controllable Rails.env.
   unless defined?(Rails)
@@ -1002,8 +1002,8 @@ self_asserted_beat = self_asserted_token_forgery.call
 # production-smoke Assertion 6.)
 self_asserted_user_bearer_forgery = lambda do
   require "kiosk"
-  lib = File.expand_path("../lib", __dir__)
-  require File.join(lib, "stub_user_idp")
+  services = File.expand_path("../app/services", __dir__)
+  require File.join(services, "stub_user_idp")
 
   # Reuse the Rails.env shim the K-539 beat installed; define it if this beat
   # ever runs first.

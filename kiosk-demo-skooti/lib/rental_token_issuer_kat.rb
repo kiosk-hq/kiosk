@@ -61,7 +61,10 @@ unless defined?(Kiosk) && Kiosk.respond_to?(:configuration)
 end
 
 require "dev_unlock_key"
-require "rental_token_issuer"
+# RentalTokenIssuer is app code and lives under app/services since K-502; this
+# KAT runs as bare `ruby lib/rental_token_issuer_kat.rb`, with no Rails and no
+# autoloader, so it names the file itself.
+require File.expand_path("../app/services/rental_token_issuer", __dir__)
 
 module RentalTokenIssuerKAT
   DEV_PUBKEY_HEX  = "b39f3a0333c662d3937684f21c91f7722161f8b0b4f4a79b336b463eb8f570f4"

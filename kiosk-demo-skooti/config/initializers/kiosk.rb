@@ -19,16 +19,6 @@
 
 require "openssl"
 
-require Rails.root.join("lib/stub_idp")
-require Rails.root.join("lib/stub_user_idp")
-require Rails.root.join("lib/jwt_or_stub_idp")
-require Rails.root.join("lib/stub_psp")
-require Rails.root.join("lib/uuid_check")
-require Rails.root.join("lib/validating_rental_provider")
-require Rails.root.join("lib/prove_trust")
-require Rails.root.join("lib/prove_broker_client")
-require Rails.root.join("lib/rental_token_issuer")
-require Rails.root.join("lib/pow_difficulty")
 
 # Ed25519 rental-token signing key holder. The RentalTokenIssuer demo lib
 # reads Kiosk.configuration.unlock_signing_key; the neutral kiosk-server core
@@ -49,7 +39,7 @@ ActiveRecord::Migration.include(Kiosk::RLS::DSL)
 # Registration PoW gate uses Equihash (one PoW = Equihash;
 # the old SHA256 hashcash is gone). PoW is a metered toll, tuned per provider.
 #
-# Params are chosen by KIOSK_POW_DIFFICULTY (lib/pow_difficulty.rb):
+# Params are chosen by KIOSK_POW_DIFFICULTY (app/services/pow_difficulty.rb):
 #   low  (default) → n=96 k=5  — sub-second solve; CI/local stay fast.
 #   high           → n=168 k=7 — genuinely memory+CPU-intensive (~10s / ~1.3 GiB)
 #                    for the hosted deploy, so a poker feels the toll first-hand.
@@ -177,7 +167,7 @@ Kiosk.configure do |c|
   # then falls back to StubIdp's bespoke `agent:u-…:a-…:r-…` shape.
   c.agent_idp = JwtOrStubIdp.new(stub: Rails.env.local? ? StubIdp.new : nil)
   # The web-session channel for the account-binding surfaces (verify
-  # page, link mint, unlink) — see lib/stub_user_idp.rb for the scope.
+  # page, link mint, unlink) — see app/services/stub_user_idp.rb for the scope.
   # DEV/TEST ONLY (K-555): the stub parses an UNSIGNED, self-asserted
   # `user:u-<uuid>` bearer into a human identity, so it is wired only under
   # Rails.env.local?; in production user_idp is nil and the binding surfaces
@@ -238,7 +228,6 @@ end
 # Off unless KIOSK_TELEMETRY=1. One event per successful wire action via a Rack
 # middleware; aggregate at GET /demo/activity.json. NOT in kiosk-core.
 if ENV["KIOSK_TELEMETRY"] == "1"
-  require Rails.root.join("lib/demo_telemetry")
   SKOOTI_VERB_MAP = {
     "reserve"         => "reserved",
     "start_rental"    => "ran",

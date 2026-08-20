@@ -160,7 +160,7 @@ assertions cannot go ungated and unexplained.
 | `config/initializers/kiosk.rb` | `Kiosk.configure` (NO `payment_provider`) — configuration only; it names the two handler controllers, it does not contain them |
 | `app/controllers/kiosk/board_controller.rb` | The `browse_listings` / `my_listings` queries — an ordinary Rails controller with `include Kiosk::Query`, declared with the class-level macros. Not routable: handlers are reached only through the wire |
 | `app/controllers/kiosk/listings_controller.rb` | The `post_listing` / `edit_listing` / `close_listing` actions — same shape with `include Kiosk::Action`; refusals are plain `render json:, status:` naming a wire error `code`, which the wire carries into the RFC 9457 problem document an assistant branches on |
-| `lib/stub_idp.rb` / `lib/jwt_or_stub_idp.rb` | Demo IdP: Kiosk JWTs first, bespoke `agent:u-…:a-…:r-…` fallback |
+| `app/services/stub_idp.rb` / `app/services/jwt_or_stub_idp.rb` | Demo IdP: Kiosk JWTs first, bespoke `agent:u-…:a-…:r-…` fallback. `app/services` is autoloaded ONCE (see `config/application.rb`) so the initializer can name these with no `require` |
 | `script/isolation_flow.rb` / `script/redteam_suite.rb` / `script/schema_flow.rb` / `script/binding_flow.rb` / `script/register_flow.rb` | One-JSON-line flow drivers the rake tasks assert on |
 | `bin/demo` | The browse→post→edit→close walkthrough (POSIX shell, curl-driven) |
 | `lib/tasks/demo.rake` | `rake demo:setup`, `:walkthrough`, `demo`, `:isolation`, `:redteam`, `:schema`, `:binding`, `:register` |

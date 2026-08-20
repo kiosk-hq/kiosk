@@ -380,6 +380,40 @@ module Kiosk
         @validate_responses ||= false
       end
 
+      # ── The audit log (T-088) ─────────────────────────────────────────────
+
+      # When true (the DEFAULT), every `run` invocation writes one row to
+      # `<schema>.action_log` — see {ActionLog} for what lands, when, and why
+      # queries and `pay` do not.
+      #
+      # ON BY DEFAULT because the table is not optional: canonical migration
+      # 003 lays it down for every adopter, and an audit table that exists and
+      # is never written reads as «no actions were invoked» (K-791). An
+      # operator who keeps their own audit trail, or who has not run migration
+      # 003, sets this false and pays nothing.
+      attr_writer :audit_log
+      def audit_log
+        @audit_log = true if @audit_log.nil?
+        @audit_log
+      end
+
+      # What lands in `action_log.args`. `:keys` (DEFAULT) records argument
+      # NAMES with their JSON TYPES and no values; `:none` records `{}`;
+      # `:full` records them verbatim; a callable `->(args) { … }` returns the
+      # Hash to store.
+      #
+      # THE DEFAULT IS NOT VERBATIM, and that is a security decision rather
+      # than a preference: a verb's arguments carry whatever that verb takes —
+      # an address, a name, a payment reference — and the log is retained
+      # indefinitely, unencrypted, outside RLS. Storing them verbatim by
+      # default would turn one decision about auditing into an undiscussed
+      # decision about PII retention. `:full` is available and is the
+      # operator's to make, explicitly.
+      attr_writer :audit_log_args
+      def audit_log_args
+        @audit_log_args ||= :keys
+      end
+
       # ── PoW challenge-response gate (R2) ──────────────────────────────────
 
       # Reputation policy that decides when and how hard to challenge a request.

@@ -37,6 +37,7 @@ require "kiosk/server/result"
 require "kiosk/server/session_context"
 require "kiosk/server/actions"
 require "kiosk/server/queries"
+require "kiosk/server/action_log"
 require "kiosk/server/schema_document"
 require "kiosk/server/current_request"
 require "kiosk/server/handler_dispatch"
@@ -108,6 +109,8 @@ module Kiosk
     #   - {Kiosk::Server::Result}           — success envelope value type
     #   - {Kiosk::Server::Errors}           — exception hierarchy + envelope serialisation
     #   - {Kiosk::Server::SessionContext}   — transaction + four transaction-local GUCs
+    #   - {Kiosk::Server::ActionLog}        — the audit log: one kiosk.action_log row
+    #                                         per action invocation, success or failure
     #
     #   Auth plane (kiosk-pop proof-of-possession — the default IdP):
     #   - {Kiosk::Server::AgentRegistration} — register an agent key (POW-gated)

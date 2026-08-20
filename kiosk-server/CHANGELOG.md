@@ -4,6 +4,10 @@ All notable changes follow [Keep a Changelog](https://keepachangelog.com/en/1.1.
 
 ## [Unreleased]
 
+### Added
+
+- **The audit log is written (T-088, K-791).** `Kiosk::Server::ActionLog` records one `<schema>.action_log` row per `run` invocation — success or failure, with the principal, the acting assistant, the role, the actor, the outcome and the error class — satisfying the columns canonical migration 003 has declared for every adopter since 0.1 and that nothing ever wrote. The row is written after the action's own transaction and outside the identity-scoped session, so a rollback cannot erase it and a caller's session cannot suppress or forge one; `args` records argument names and JSON types rather than values unless the operator sets `audit_log_args = :full`. `audit_log` (default on) turns the whole thing off. Reading is operator-side (`ActionLog.recent`) — no wire verb exposes it.
+
 ### Changed
 
 - **A handler may relax its own `200`'s cache policy, and the wire refuses one that would leak (K-823).** The spec has always let an operator serve an identity-independent payload `private, max-age=N` — that is how an assistant's own cache saves a toll — but the dispatch seam discarded a handler's response headers, so the permission was unreachable by the only code an operator writes; it now carries the handler's `Cache-Control` through, and the render seam refuses (rather than quietly edits) any policy that would let a shared cache hand one identity's rows to another.

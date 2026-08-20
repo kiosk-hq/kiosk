@@ -62,7 +62,13 @@ cleanup() {
     kill "$SERVER_PID" 2>/dev/null || true
     wait "$SERVER_PID" 2>/dev/null || true
   fi
+  # Both databases, not just the one this harness names: `rails db:create`
+  # creates the CURRENT environment's database AND the test one, so every run
+  # also lays down ${DB_NAME}_test (see the database.yml written below). CI
+  # throws the container away and never noticed; on a developer machine the
+  # test halves accumulated one per run (267 of them were swept in T-098).
   psql -d postgres -tAc "DROP DATABASE IF EXISTS $DB_NAME" >/dev/null 2>&1 || true
+  psql -d postgres -tAc "DROP DATABASE IF EXISTS ${DB_NAME}_test" >/dev/null 2>&1 || true
   rm -rf "$TMP_DIR"
 }
 trap cleanup EXIT

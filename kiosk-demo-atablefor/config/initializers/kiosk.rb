@@ -8,19 +8,13 @@
 # atablefor is a restaurant AGGREGATOR across a few Lisbon neighbourhoods
 # (a static roster — see db/seeds.rb). Seatings are ROLLING-CURRENT: the
 # upcoming evening seatings are computed relative to NOW in Europe/Lisbon
-# (lib/seatings.rb), never stale, but the tables are FINITE and CAN sell out
+# (app/models/seatings.rb), never stale, but the tables are FINITE and CAN sell out
 # for a given seating.
 
 # Env posture (ephemeral dev signing key, PoW secret, issuer, test flags) lives
 # in config/environments/{development,test,production}.rb (K-650); this file
 # reads the resolved values from Rails.configuration.x.kiosk.*.
 
-require Rails.root.join("lib/stub_idp")
-require Rails.root.join("lib/jwt_or_stub_idp")
-require Rails.root.join("lib/pow_difficulty")
-require Rails.root.join("lib/seatings")
-require Rails.root.join("lib/uuid_check")
-require Rails.root.join("lib/bad_proof_counter")
 require "kiosk/user_identity_providers/devise"
 
 # ── PoW / Reputation (R2) — activated only when KIOSK_POW_DEMO=1 ──────────
@@ -37,7 +31,7 @@ require "kiosk/user_identity_providers/devise"
 # scripts that mass-claim prime-time 2-tops to resell. PoW prices that at the
 # door — a metered toll per query, tuned per provider, not a hardware wall.
 #
-# Equihash params are chosen by KIOSK_POW_DIFFICULTY (lib/pow_difficulty.rb):
+# Equihash params are chosen by KIOSK_POW_DIFFICULTY (app/services/pow_difficulty.rb):
 #   low  (default) → n=96 k=5  — small, non-toy instance the reference solver
 #                    clears in well under a second; local flows + CI stay fast.
 #   high           → n=168 k=7 — the shipped default (~10s / ~1.3 GiB): a real
@@ -154,7 +148,7 @@ when :demo
   # local `script/pow_flow.rb` driver print "the server counted MY bad proof";
   # nothing reads it for policy (`reputation_factors` below feeds a hardcoded
   # `bad_proof_count: 0`). Since K-498's re-decision it counts PER IDENTITY in
-  # sqlite (lib/bad_proof_counter.rb): one abusive assistant can no longer
+  # sqlite (app/services/bad_proof_counter.rb): one abusive assistant can no longer
   # inflate anyone else's count, and concurrent server processes no longer
   # fight over one flat file. Two toy aspects REMAIN, deliberately, labelled:
   #   · TRUNCATED AT BOOT — a redeploy silently zeroes the accumulated signal;
@@ -408,7 +402,6 @@ end
 # Off unless KIOSK_TELEMETRY=1. One event per successful wire action via a Rack
 # middleware; aggregate at GET /demo/activity.json. NOT in kiosk-core.
 if ENV["KIOSK_TELEMETRY"] == "1"
-  require Rails.root.join("lib/demo_telemetry")
   ATABLEFOR_VERB_MAP = {
     "book_table"     => "booked",
     "cancel_booking" => "cancelled",

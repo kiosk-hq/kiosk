@@ -42,7 +42,7 @@ class Kiosk::BookingsController < ApplicationController
   # upcoming seating, for the authenticated principal. The (restaurant_id,
   # restaurant_table_id) come from an availability row; the seating is
   # (date, time). The seating must be one of the CURRENT upcoming seatings (not
-  # past — re-validated against lib/seatings.rb). Contention is finite: a UNIQUE
+  # past — re-validated against app/models/seatings.rb). Contention is finite: a UNIQUE
   # index on (restaurant_table_id, seating_at) among confirmed rows means a table
   # already held for that seating is a clean 409 Conflict. No payment — a
   # reservation takes no money (any deposit shown is settled at the restaurant).

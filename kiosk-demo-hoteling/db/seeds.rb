@@ -1,8 +1,14 @@
 # frozen_string_literal: true
 
-# Seed hotel properties and room types for the hoteling demo.
-# No human users needed — agents self-register via /kiosk/auth/register
-# (proof-of-possession handshake).
+# Seed hotel properties and room types for the hoteling demo, plus the two
+# human guest accounts.
+#
+# Agents still self-register via /kiosk/auth/register (proof-of-possession
+# handshake) and get their OWN credential-less account row. The two humans here
+# are the other principal: they sign in at /users/sign_in with a real Devise
+# session, which is the channel the account-binding surfaces (device verify
+# page, link mint, unlink) authenticate — there is no stub user-IdP any more
+# (T-066), so without a seeded human those routed surfaces are unreachable.
 #
 # T-042 / K-452 — SCALE. hoteling seeds ~100 coined Istanbul hotels so an
 # unpaginated list would overwhelm an assistant (the "analysis paralysis /
@@ -15,6 +21,24 @@
 
 # AMENITY_POOL is defined in config/initializers/kiosk.rb (loaded at boot) so the
 # search_hotels `amenity` enum and these seeds share one closed vocabulary.
+
+# ── Human guest accounts (Devise credentials) ───────────────────────────────
+# Demo-only credentials (development database, reset by every demo:setup).
+# STABLE UUIDs so a driver can name a guest without a lookup. Ada is the guest
+# who approves an assistant on the verify page; Ben is the SEPARATE account on
+# the far side of the isolation boundary.
+ADA_ID = "00000000-0000-0000-0000-000000000001"
+BEN_ID = "00000000-0000-0000-0000-000000000002"
+DEMO_PASSWORD = "hoteling-demo-password"
+
+User.find_or_create_by!(id: ADA_ID) do |u|
+  u.email    = "ada@example.com"
+  u.password = DEMO_PASSWORD
+end
+User.find_or_create_by!(id: BEN_ID) do |u|
+  u.email    = "ben@example.com"
+  u.password = DEMO_PASSWORD
+end
 
 # ── The five originals (kept, with search columns backfilled) ────────────────
 originals = [
@@ -110,4 +134,5 @@ while Property.count < target_total
 end
 
 puts "Seeded: #{Property.count} properties, #{RoomType.count} room types " \
-     "across #{Property.distinct.count(:neighbourhood)} neighbourhoods"
+     "across #{Property.distinct.count(:neighbourhood)} neighbourhoods, " \
+     "#{User.where.not(email: nil).count} human guest accounts"

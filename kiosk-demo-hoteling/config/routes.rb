@@ -2,14 +2,22 @@
 
 Rails.application.routes.draw do
 
+  # Human sign-in (Devise) — the web session that approves assistant links.
+  # The sessions controller is overridden ONLY to answer a JSON-shaped
+  # `DELETE /users/sign_out` with the Kiosk error envelope instead of a bodyless
+  # 401 (K-533); every other Devise behaviour is inherited untouched.
+  devise_for :users, controllers: { sessions: "users/sessions" }
+
   # Public root page: what this demo is + live DOMAIN activity (booking counts
-  # read from hoteling's own tables) + how an agent pokes the wire. api_only
-  # app, but HomeController inherits ActionController::Base so HTML renders.
+  # read from hoteling's own tables) + how an agent pokes the wire. The app
+  # carries the full middleware stack (Devise sessions), and HomeController
+  # inherits ApplicationController so HTML renders.
+  # Devise needs this as its post-sign-in destination too.
   root "home#index"
 
-  # Account binding: the human half (verify page, link mint, unlink — the
-  # stub user-session channel, see app/services/stub_user_idp.rb) and the agent
-  # half (link-code redeem). Routed so every URL the discovery documents
+  # Account binding: the human half (verify page, link mint, unlink — the real
+  # Devise session channel, kiosk-user-idp-devise) and the agent half
+  # (link-code redeem). Routed so every URL the discovery documents
   # advertise resolves; the walkthrough demos live in stylish
   # (claim + link) and getgrocery (claim-rebind).
   get  "/kiosk/oauth/device/verify",               to: "kiosk/server/device_verify#show"

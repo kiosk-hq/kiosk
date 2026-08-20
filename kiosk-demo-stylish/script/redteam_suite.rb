@@ -21,9 +21,10 @@
 #     answer an ordinary 404: no privileged endpoint, no compatibility payload
 #   MethodMismatch     — a GET at an action's path → 405 method_not_allowed with
 #     `Allow: POST`, never a silent 404
-#   CustomerCannotMintStaffLink — a CUSTOMER (non-staff) session cannot mint an
-#     assistant link over the staff channel; StubUserIdp resolves only staff,
-#     so the mint is rejected outright — owner scope is unreachable from one
+#   CustomerLinkCannotCarryOwnerRole — a CUSTOMER (non-staff) signs in for real
+#     and mints an assistant link; the link is legitimate but the role it
+#     carries is `customer`, because the role is read off the human's own
+#     staff_role — owner scope is unreachable from a customer session
 #   OwnerLinkIgnoresForgedClaimBody — a genuine OWNER link smuggles a wider
 #     role into the claim body; the bound token role comes from the IdP
 #     session, not the body, so the forged role is ignored
@@ -31,11 +32,10 @@
 #     bookings (no whole-book, no forecast) in salon_calendar — the role gate
 #     is provider-controlled and un-bypassable
 #   SelfAssertedStaffSessionForgery — a forged `X-Staff-Session` header naming
-#     the seeded owner resolves to NO identity under a PRODUCTION-config
-#     StubUserIdp (K-555), even though the DEV stub this suite runs against
-#     intentionally self-grants it — proven in-process against a stubbed
-#     Rails.env, since the dev wire this suite drives cannot demonstrate the
-#     block
+#     the seeded owner buys NOTHING over the live wire (K-555 / T-066): the
+#     role-carrying SSO stand-in that read that header is deleted, so the
+#     header reaches no reader and /kiosk/auth/link answers 401 in the SAME
+#     environment this suite drives — no in-process env shim needed any more
 #
 #   UntypedBookingInput — nine bad-input shapes to book_appointment (unparseable
 #     / fuzzy / missing / non-string slot, unknown & missing salon_id, unknown
@@ -76,8 +76,22 @@ TOKEN_A    = "agent:u-#{ALICE_UUID}:a-#{AGENT_A}:r-customer"
 TOKEN_B    = "agent:u-#{BOB_UUID}:a-#{AGENT_B}:r-customer"
 
 # Seeded staff for the roles-from-IdP escalation beats. Only the owner is
-# staff now (no stylist roster); Alice is a plain customer.
-OWNER_ID = "00000000-0000-0000-0000-0000000000a0"
+# staff now (no stylist roster); Alice is a plain customer. Both are ordinary
+# Devise accounts — the same /users/sign_in form, the same users table; what
+# separates them is the `staff_role` column the Devise adapter reads through
+# `User#kiosk_role` (T-066: there is no second, role-carrying channel any more).
+OWNER_ID      = "00000000-0000-0000-0000-0000000000a0"
+OWNER_EMAIL   = "owner@combette.example"
+ALICE_EMAIL   = "alice@example.com"
+DEMO_PASSWORD = "combette-demo-password"
+
+require_relative "../lib/devise_session"
+
+# The owner's browser session, signed in once and reused by the beats below.
+def owner_session
+  @owner_session ||= DeviseSession.new(SERVER)
+                                  .sign_in!(email: OWNER_EMAIL, password: DEMO_PASSWORD)
+end
 
 # THE 0.4 WIRE. An action is `POST <endpoint>/<action-name>` carrying its
 # arguments as the JSON body; a query is `GET <endpoint>/<query-name>` carrying
@@ -107,12 +121,12 @@ def pop_proof(key, pem)
   JWT.encode({ aud: ISSUER, nonce: ch.fetch("challenge"), jti: SecureRandom.uuid, iat: Time.now.to_i }, key, "RS256")
 end
 
-# Mint an owner link over the role-carrying StubUserIdp session
-# (X-Staff-Session), optionally trying to smuggle a wider role in the claim
-# body. Returns [http, claimed_body]. Used to prove the owner scope is only
-# reachable through a genuine owner session, and the claim body cannot widen it.
+# Mint a link over a REAL owner Devise session, optionally trying to smuggle a
+# wider role in the claim body. Returns [http, claimed_body]. Used to prove the
+# owner scope is only reachable through a genuine owner session, and that the
+# claim body cannot widen it.
 def link_as_owner(extra_claim_body = {})
-  rc, link = post_json("/kiosk/auth/link", {}, { "X-Staff-Session" => OWNER_ID })
+  rc, link = owner_session.post_json("/kiosk/auth/link", {}, { session: true })
   return [rc, link] unless rc == 201
 
   key = OpenSSL::PKey::RSA.generate(2048)
@@ -231,14 +245,36 @@ record(results, "MethodMismatch",
 # cannot widen it — the role rides the IdP, and salon_calendar's WHERE is
 # provider-controlled.
 
-# CustomerCannotMintStaffLink — a CUSTOMER (Alice) tries to mint an assistant
-# link over the staff channel (X-Staff-Session naming her). StubUserIdp resolves
-# ONLY staff (staff_role present), so a customer session yields no identity and
-# the mint is REJECTED (not 201). The owner scope is unreachable from a customer.
-rc, _link = post_json("/kiosk/auth/link", {}, { "X-Staff-Session" => ALICE_UUID })
-record(results, "CustomerCannotMintStaffLink",
-       rc != 201,
-       "customer staff-link mint → #{rc} (want NOT 201; non-staff session yields no link)")
+# CustomerLinkCannotCarryOwnerRole — a CUSTOMER (Alice) signs in for real and
+# mints an assistant link. The mint SUCCEEDS: she is a legitimate account holder
+# and linking her own assistant is the product. What she cannot do is carry the
+# owner role into it — the Devise adapter reads `User#kiosk_role`, which returns
+# her (absent) staff_role as "customer", so the assistant she binds inherits
+# `customer` and owner scope stays out of reach.
+#
+# THE BEAT CHANGED SHAPE WITH T-066, and the change is the point: it used to
+# assert the mint was REJECTED, because the staff channel was a separate
+# `X-Staff-Session` stand-in that resolved only staff rows. With one channel for
+# every human, "a customer gets no link" would be wrong — the honest claim is
+# "a customer gets a CUSTOMER link", which is a stronger statement about where
+# the role comes from.
+customer_session = DeviseSession.new(SERVER)
+                                .sign_in!(email: ALICE_EMAIL, password: DEMO_PASSWORD)
+rc_cl, link_cl = customer_session.post_json("/kiosk/auth/link", {}, { session: true })
+cust_role = nil
+if rc_cl == 201
+  ck = OpenSSL::PKey::RSA.generate(2048)
+  cpem = ck.public_key.to_pem
+  _rc, cclaimed = post_json("/kiosk/auth/claim",
+                            { code: link_cl.fetch("link_code"), public_key: cpem,
+                              signed: pop_proof(ck, cpem) })
+  cseg = cclaimed["access_token"].to_s.split(".")[1].to_s
+  cust_role = (JSON.parse(Base64.urlsafe_decode64(cseg + "=" * ((4 - cseg.length % 4) % 4)))["role"] rescue nil)
+end
+record(results, "CustomerLinkCannotCarryOwnerRole",
+       rc_cl == 201 && cust_role == "customer",
+       "customer link mint → #{rc_cl}, bound token role #{cust_role.inspect} " \
+       "(want 201 + \"customer\"; the role is read off the human, never chosen)")
 
 # OwnerLinkIgnoresForgedClaimBody — link a genuine OWNER while smuggling a wider
 # role into the claim body. The bound token must carry `owner` from the IdP, not
@@ -278,68 +314,37 @@ record(results, "CustomerCalendarStaysOwnScoped",
        "customer salon_calendar: #{rows.size} rows #{own_ids.inspect}, excludes B's #{appt_id_b3.inspect} " \
        "(own_only=#{own_only}), forecast_hidden=#{no_forecast}")
 
-# ── SelfAssertedStaffSessionForgery (K-555) — in-process, PRODUCTION-config ────
-# The HUMAN sibling of the K-539 agent-stub forgery. stylish's StubUserIdp maps a
-# self-asserted `X-Staff-Session: <user_id>` header to a role-carrying HUMAN
-# identity (the SSO/Okta stand-in) — so on the wire it SELF-GRANTS a staff role.
-# This suite drives a server booted in RAILS_ENV=development, where that stub is
-# INTENTIONALLY live (demo:roles walks the role-carrying session, and the
-# CustomerCannotMintStaffLink / OwnerLinkIgnoresForgedClaimBody beats above
-# exercise it over the wire) — so the DEV wire cannot demonstrate the block. This
-# beat exercises the REAL shipped StubUserIdp guard in-process against a stubbed
-# PRODUCTION Rails.env: a forged `X-Staff-Session` naming the seeded owner must
-# resolve to NO identity under production (→ POST /kiosk/auth/link raises 401,
-# self-grant impossible), while development still resolves the staff identity.
-# Over-the-wire production proof: deploy/production-smoke.sh Assertion 6. Unit
-# proof: kiosk-test-support spec/stub_user_idp_env_gate_spec.rb (bearer variant).
+# ── SelfAssertedStaffSessionForgery (K-555 / T-066) — OVER THE LIVE WIRE ──────
+# The HUMAN sibling of the K-539 agent-stub forgery, and it changed shape when
+# the stub it attacked was deleted.
+#
+# stylish used to map a self-asserted `X-Staff-Session: <user_id>` header to a
+# role-carrying HUMAN identity — the salon's SSO/Okta stand-in — so on the wire
+# that header SELF-GRANTED a staff role. It was live in development on purpose
+# (demo:roles walked it), which is why the block could only be shown IN-PROCESS
+# against a stubbed production Rails.env.
+#
+# There is no such arm any more, in any environment: `c.user_idp` is the Devise
+# adapter alone, and nothing reads that header. So the beat is now what it
+# should always have been — an over-the-wire probe in the SAME environment this
+# suite drives. A forged `X-Staff-Session` naming the seeded owner must buy
+# NOTHING (401 at /kiosk/auth/link), and the positive control is the real thing:
+# the owner's own Devise session mints a link on that very endpoint.
 self_asserted_staff_forgery = lambda do
-  require "kiosk"
-  require File.expand_path("../app/services/stub_user_idp", __dir__)
+  rc_forged, = post_json("/kiosk/auth/link", {}, { "X-Staff-Session" => OWNER_ID })
+  rc_real, _link = owner_session.post_json("/kiosk/auth/link", {}, { session: true })
 
-  # The redteam client boots no Rails app, so provide a controllable Rails.env
-  # and a minimal ActiveRecord shim (the dev branch does a staff-row lookup).
-  unless defined?(Rails)
-    env_klass = Struct.new(:name) do
-      def local? = %w[development test].include?(name)
-      def to_s = name.to_s
-    end
-    rails = Module.new do
-      class << self
-        attr_accessor :env
-      end
-    end
-    Object.const_set(:Rails, rails)
-    Object.const_set(:RedteamEnvShim, env_klass)
-  end
-  unless defined?(ActiveRecord)
-    Object.const_set(:ActiveRecord, Module.new)
-    base = Class.new do
-      def self.connection
-        @connection ||= Object.new.tap do |c|
-          def c.quote(value) = "'#{value}'"
-          def c.execute(_sql) = [{ "id" => OWNER_ID, "staff_role" => "owner" }]
-        end
-      end
-    end
-    ActiveRecord.const_set(:Base, base)
-  end
-
-  forged = Struct.new(:headers).new({ "X-Staff-Session" => OWNER_ID })
-  idp = StubUserIdp.new
-
-  Rails.env = RedteamEnvShim.new("production")
-  prod_identity = idp.verify(forged)
-  Rails.env = RedteamEnvShim.new("development")
-  dev_identity = idp.verify(forged)
-
-  blocked = prod_identity.nil? && dev_identity && dev_identity.role.to_s == "owner"
+  blocked = rc_forged == 401 && rc_real == 201
   detail =
     if blocked
-      "forged `X-Staff-Session` → NO identity under production config (dev still self-grants role=owner, so the guard — not a broken stub — is what blocks)"
-    elsif prod_identity
-      "K-555 REGRESSION: forged X-Staff-Session self-granted role=#{prod_identity.role} under PRODUCTION config"
+      "forged `X-Staff-Session` naming the owner → 401 at /kiosk/auth/link in the SAME env this " \
+        "suite drives (the role-carrying stand-in is deleted; nothing reads the header); the " \
+        "owner's REAL Devise session still mints (201), so the refusal is not vacuous"
+    elsif rc_forged != 401
+      "K-555 REGRESSION: forged X-Staff-Session was accepted at /kiosk/auth/link (HTTP #{rc_forged})"
     else
-      "unexpected: development branch rejected the staff stub (demo:roles would break): #{dev_identity.inspect}"
+      "unexpected: the owner's REAL Devise session was refused too (HTTP #{rc_real}) — the 401 " \
+        "above proves nothing"
     end
   record(results, "SelfAssertedStaffSessionForgery", blocked, detail)
 rescue StandardError => e

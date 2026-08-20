@@ -27,7 +27,7 @@ Rails.application.routes.draw do
   post "/kiosk/auth/revoke",                        to: "kiosk/server/auth#revoke"
 
   # Account binding: the human half (verify page, link mint, unlink — the
-  # stub user-session channel, see app/services/stub_user_idp.rb) and the agent
+  # real Devise session channel, kiosk-user-idp-devise) and the agent
   # half (link-code redeem). `rake demo:claim` walks the claim-rebind
   # ceremony: an already-registered assistant's key is re-bound to the
   # human's own account.

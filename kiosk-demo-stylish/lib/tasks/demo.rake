@@ -392,22 +392,22 @@ namespace :demo do
   desc <<~DESC
     roles-from-IdP demo (Path A — indirect, via the bound human).
 
-    Boots the server and runs script/roles_flow.rb. A salon OWNER links their
-    assistant over a role-carrying session (the StubUserIdp SSO/Okta
-    stand-in); the assistant INHERITS the owner role and `salon_calendar`
+    Boots the server and runs script/roles_flow.rb. A salon OWNER signs in at
+    /users/sign_in and links their assistant over that REAL Devise session; the
+    assistant INHERITS the owner role — read off the provider's own
+    `staff_role` column through `User#kiosk_role` — and `salon_calendar`
     returns the WHOLE book (every visitor's booking) + a FORECASTED revenue
     total (summed live from the actual bookings' prices). A CUSTOMER who signs
-    in for real inherits the customer role and `salon_calendar` returns ONLY
-    their own bookings and NO forecast. The role is sourced from the provider's
-    IdP at link time, never self-selected by the agent. (No stylist roster —
-    the menu is evergreen and infinite-capacity, so the contrast is
+    in at the same form inherits the customer role and `salon_calendar` returns
+    ONLY their own bookings and NO forecast. The role is sourced from the
+    provider's IdP at link time, never self-selected by the agent. (No stylist
+    roster — the menu is evergreen and infinite-capacity, so the contrast is
     owner=whole-book+forecast vs customer=own-only.)
 
     Asserts (with DB ground-truth on kiosk.agents.allowed_roles):
       • owner-agent allowed_roles == {owner}; token role == owner
       • owner salon_calendar carries a FORECAST summary
-      • REAL DEVISE: owner sign-in → role owner, sees the forecast
-      • REAL DEVISE: customer sign-in → role customer, NO forecast
+      • customer sign-in → role customer, NO forecast
 
     Exits 0 if all hold; exits 1 on failure. A red assertion = a real role
     gate hole: fix the app, not the test.
@@ -472,15 +472,12 @@ namespace :demo do
       # is a live sum of real prices (not a fabricated number).
       check.call("owner salon_calendar carries a FORECAST summary", result["owner_sees_forecast"] == true)
 
-      # ── REAL DEVISE PATH (K-437) — the operator path the hosted demo uses. ──
-      # The stub assertion above passes even with the bug; these fail without
-      # User#kiosk_role, because the Devise adapter would resolve every real
-      # sign-in to roles.first (customer). The role must survive the real
-      # /users/sign_in session, not just the X-Staff-Session stub.
-      check.call("REAL DEVISE: owner sign-in → token role == owner",           result["devise_owner_token_role"] == "owner")
-      check.call("REAL DEVISE: owner salon_calendar carries the FORECAST summary", result["devise_owner_sees_forecast"] == true)
-      check.call("REAL DEVISE: customer sign-in → token role == customer",      result["devise_customer_token_role"] == "customer")
-      check.call("REAL DEVISE: customer salon_calendar has NO forecast (owner-only)", result["devise_customer_sees_forecast"] == false)
+      # ── The K-437 regression, now the ONLY path. Without User#kiosk_role the
+      # Devise adapter resolves every real sign-in to roles.first (customer),
+      # so the owner's token comes back "customer" and the forecast disappears.
+      # There is no second channel left that could pass while this one fails.
+      check.call("customer sign-in → token role == customer",      result["devise_customer_token_role"] == "customer")
+      check.call("customer salon_calendar has NO forecast (owner-only)", result["devise_customer_sees_forecast"] == false)
     ensure
       begin
         Process.kill("TERM", server_pid); Process.wait(server_pid)
@@ -518,8 +515,9 @@ namespace :demo do
                POST /kiosk/run answer an ordinary 404 (no compatibility surface)
       BLOCKED  MethodMismatch   — a GET at an action's path → 405
                method_not_allowed with Allow: POST, never a silent 404
-      BLOCKED  CustomerCannotMintStaffLink — a customer session cannot mint an
-               owner link over the staff channel (non-staff → no link)
+      BLOCKED  CustomerLinkCannotCarryOwnerRole — a customer signs in for real
+               and mints a link; the bound token's role is customer, because
+               the role is read off the human, never chosen
       BLOCKED  OwnerLinkIgnoresForgedClaimBody — an owner-linking assistant
                cannot smuggle a wider role into the claim body; the role comes
                from the IdP session, so the token stays owner

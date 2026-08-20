@@ -80,8 +80,9 @@ Kiosk.configure do |c|
   c.validate_responses = true
   # stylish is dual-audience: VISITORS book a service off the menu (customer),
   # salon STAFF view the forecasted revenue (owner). The owner role is sourced
-  # from the provider's own IdP (roles-from-IdP) — see the StubUserIdp below and
-  # the `salon_calendar` query in Kiosk::FrontDeskController. (No stylist roster
+  # from the provider's own IdP (roles-from-IdP) — see `User#kiosk_role`, the
+  # `c.user_idp` wiring below, and the `salon_calendar` query in
+  # Kiosk::FrontDeskController. (No stylist roster
   # — the menu is evergreen and infinite-capacity, so there is nothing
   # per-stylist to scope.)
   c.roles  = %i[customer owner]
@@ -106,22 +107,22 @@ Kiosk.configure do |c|
   # back to StubIdp's bespoke `agent:u-…:a-…:r-…` shape. One endpoint
   # authenticates both for the demo.
   c.agent_idp = JwtOrStubIdp.new(stub: Rails.env.local? ? StubIdp.new : nil)
-  # The provider's own human-session channels. A composite: the
-  # role-carrying StubUserIdp (the salon SSO/Okta stand-in — an
-  # `X-Staff-Session` header naming a staff member, whose staff_role becomes
-  # the session role; walked by `rake demo:roles`) tried first, then the real
-  # Devise/Warden session (the /users/sign_in cookie that approves links on
-  # the verify page, mints link codes, unlinks, and drives the
-  # manage-assistants page; walked by `rake demo:binding`).
-  # DEV/TEST ONLY (K-555): the StubUserIdp arm maps a self-asserted
-  # `X-Staff-Session` header to a role-carrying human identity (self-grants a
-  # staff role), so it is included ONLY under Rails.env.local?. In production
-  # the composite is Devise-only — the real, production-reachable human channel
-  # is preserved; only the un-signed SSO stand-in is dropped.
-  c.user_idp = CompositeUserIdp.new(
-    *(Rails.env.local? ? [StubUserIdp.new] : []),
-    Kiosk::UserIdentityProviders::Devise.new,
-  )
+  # The provider's own web-session channel (Devise/Warden): the /users/sign_in
+  # cookie that approves links on the verify page, mints link codes, unlinks,
+  # and drives the manage-assistants page. ONE channel in every environment
+  # (T-066): the role-carrying `X-Staff-Session` stand-in that used to sit in
+  # front of it is gone, and with it the composite that existed only to hold
+  # the two.
+  #
+  # ROLES-FROM-IdP SURVIVES THE DELETION, and this is the seam worth reading:
+  # the salon's role never came from the stand-in's header, it came from the
+  # provider's own users table. The Devise adapter asks the User model for
+  # `#kiosk_role`, which returns the staff member's `staff_role` — so an OWNER
+  # who signs in at /users/sign_in mints link codes as `owner`, kiosk-server
+  # captures that role onto the link row (AuthController#link →
+  # LinkCode.mint(requested_role:)), and the assistant that redeems it inherits
+  # it. Walked by `rake demo:roles`.
+  c.user_idp = Kiosk::UserIdentityProviders::Devise.new
   # Where the engine bounces an UNAUTHENTICATED browser visitor to the
   # manage-assistants page (this app's Devise sign-in). The engine stays
   # IdP-neutral, so the sign-in URL is supplied here; without it the page

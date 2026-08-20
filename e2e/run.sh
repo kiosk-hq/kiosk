@@ -337,7 +337,7 @@ ok "all assertions passed"
 # with the server still up — these are live requests, not a replay.
 log "validate live wire bytes against the published JSON Schemas"
 if ! SERVER_URL="http://127.0.0.1:$SERVER_PORT" \
-       TOKEN="agent:u-00000000-0000-0000-0000-000000000001:a-alice-claude:r-customer" \
+       TOKEN="agent:u-00000000-0000-0000-0000-000000000001:a-a0000000-0000-0000-0000-000000000001:r-customer" \
        PAY_CAPTURE="$PAY_CAPTURE" \
        bundle exec ruby "$KIOSK_OSS/e2e/schema_conformance.rb"; then
   log "schema conformance failed — last 40 lines of server log:"

@@ -103,20 +103,31 @@ with no macros above it is a helper the wire cannot see. `input_schema` and
 `output_schema` are REQUIRED on every verb: a declaration missing either raises
 as the class body is read, so the app does not boot.
 
+**The snippet below is ABRIDGED, not invented:** each verb's full prose
+`description` and its per-property `description` lines are elided, and
+`availability`'s row-building body is summarised rather than reproduced. Every
+field name, type and `required` list is the shipped one verbatim — read
+`kiosk-demo-atablefor/app/controllers/kiosk/dining_room_controller.rb` for the
+whole thing.
+
 ```ruby
 # app/controllers/kiosk/dining_room_controller.rb
 class Kiosk::DiningRoomController < ActionController::API
   include Kiosk::Query
+  include KioskRefusals   # the app's own concern: renders a refusal result
 
   description "Find tables still open across all restaurants for the upcoming " \
-              "(rolling, Lisbon-tz) seatings that seat a given party."
+              "(rolling, Lisbon-tz) seatings that seat a given party. Each row " \
+              "carries a `restaurant_id` and a `restaurant_table_id`; pass both " \
+              "to book_table, with the row's `seating_date` and `seating_time` " \
+              "as its `date` and `time`."
   input_schema type: "object", additionalProperties: false,
                required: %w[party_size],
                properties: {
                  party_size:   { type: "integer", minimum: 1 },
                  neighborhood: { type: "string" },
                  date:         { type: "string", format: "date" },
-                 time:         { type: "string" },
+                 time:         { type: "string", enum: Seatings::TIMES },
                }
   output_schema type: "array",
                 items: {
@@ -139,10 +150,24 @@ class Kiosk::DiningRoomController < ActionController::API
                                seating_date seating_time seating_at deposit_eur],
                 }
   def availability
-    render json: Seating.open_for(**availability_params)
+    party_size, refusal = WireArguments.party_size(params[:party_size])
+    return render_refusal(refusal) if refusal
+
+    # BODY SUMMARISED — the shipped file spells out the rolling Europe/Lisbon
+    # seating roster (`Seatings.upcoming`), the typed 400s an unserved
+    # neighbourhood or an out-of-horizon date get instead of a misleading empty
+    # list, the capacity-filtered `RestaurantTable.joins(:restaurant)` catalogue,
+    # and the subtraction of the (table, seating) pairs a confirmed `Booking`
+    # already holds. What it builds is one hash per still-free (table, seating),
+    # and THAT is what has to satisfy the output_schema above:
+    #
+    #   { restaurant:, neighborhood:, cuisine:, restaurant_id:, restaurant_table_id:,
+    #     table_label:, capacity:, seating_date:, seating_time:, seating_at:, deposit_eur: }
+    render json: rows
   end
 
-  description "List the bookings belonging to the authenticated principal."
+  description "List this principal's table bookings (scoped to the authenticated user). " \
+              "Each row carries a `booking_id`; pass it to cancel_booking as `booking_id`."
   input_schema  type: "object", additionalProperties: false, properties: {}, required: []
   output_schema type: "array",
                 items: {
@@ -166,6 +191,30 @@ class Kiosk::DiningRoomController < ActionController::API
                 }
   def my_bookings
     render json: Booking.owned_by_current_principal
+                        .joins(:restaurant, :restaurant_table)
+                        .order(:seating_at)
+                        .pluck("bookings.id", "bookings.restaurant_id", "restaurants.name",
+                               "restaurants.neighborhood", "bookings.restaurant_table_id",
+                               "restaurant_tables.label", "bookings.party_size",
+                               "bookings.status", "bookings.seating_at")
+                        .map { |id, restaurant_id, restaurant, neighborhood,
+                                table_id, table_label, party_size, status, seating_at|
+                          # The seating's LOCAL date and time, from the same
+                          # `Seatings.zone` that decides which seatings exist at
+                          # all — so the two cannot drift.
+                          local = seating_at.in_time_zone(Seatings.zone)
+                          { booking_id:          id,
+                            restaurant_id:       restaurant_id,
+                            restaurant:          restaurant,
+                            neighborhood:        neighborhood,
+                            restaurant_table_id: table_id,
+                            table_label:         table_label,
+                            party_size:          party_size,
+                            status:              status,
+                            seating_date:        local.strftime("%Y-%m-%d"),
+                            seating_time:        local.strftime("%H:%M"),
+                            seating_at:          Booking.publish_instant(seating_at) }
+                        }
   end
 end
 ```
@@ -177,34 +226,58 @@ AI assistants call these by name only, one endpoint per verb (`GET /kiosk/availa
 A controller declares queries OR actions, never both — the verb it is reached by
 is a property of the class.
 
+Abridged the same way as the read snippet above: the prose `description` and the
+per-property `description` lines are elided. Field names, types and `required`
+lists are the shipped ones verbatim.
+
 ```ruby
 # app/controllers/kiosk/bookings_controller.rb
 class Kiosk::BookingsController < ActionController::API
   include Kiosk::Action
+  include KioskRefusals   # the app's own concern: turns an Operation result into a render
 
-  description "Reserve one table at one restaurant for one seating. This is a " \
-              "COMMITMENT, not a quote. No payment is taken."
+  description "Reserve one table at one restaurant for one seating, for the " \
+              "authenticated principal. This is a COMMITMENT, not a quote. No " \
+              "payment is taken. Cancel it with cancel_booking."
   input_schema type: "object", additionalProperties: false,
-               required: %w[restaurant_id restaurant_table_id date time],
+               required: %w[restaurant_id restaurant_table_id date time party_size],
                properties: {
-                 restaurant_id:       { type: "integer" },
-                 restaurant_table_id: { type: "integer" },
+                 restaurant_id:       { type: "integer", minimum: 1 },
+                 restaurant_table_id: { type: "integer", minimum: 1 },
                  date:                { type: "string", format: "date" },
-                 time:                { type: "string" },
+                 time:                { type: "string", pattern: "^[0-2][0-9]:[0-5][0-9]$" },
+                 party_size:          { type: "integer", minimum: 1 },
                }
   output_schema type: "object", additionalProperties: false,
-                properties: { booking_id: { type: "string" },
-                              status:     { type: "string" } },
-                required: %w[booking_id status]
+                properties: { booking_id:          { type: "string" },
+                              restaurant_id:       { type: "integer" },
+                              restaurant_table_id: { type: "integer" },
+                              party_size:          { type: "integer" },
+                              date:                { type: "string" },
+                              time:                { type: "string" },
+                              seating_at:          { type: "string" },
+                              status:              { type: "string" } },
+                required: %w[booking_id restaurant_id restaurant_table_id party_size
+                             date time seating_at status]
   def book_table
-    # A table already held for that seating is a clean 409 (the supply is finite):
+    # The Operation holds the seating re-validation and the INSERT. A table
+    # already held for that seating is a clean 409 (the supply is finite):
+    # render_operation turns the refused result into
     #   render json: { error: { code: "conflict", … } }, status: :conflict
-    booking = BookTable.call(**booking_params)
-    render json: { booking_id: booking.id, status: booking.status }
+    # The principal comes from the identity the wire resolved, never an argument.
+    render_operation BookTableOperation.call(
+      principal_id:        kiosk_identity.user_id,
+      restaurant_id:       params[:restaurant_id],
+      restaurant_table_id: params[:restaurant_table_id],
+      date:                params[:date],
+      time:                params[:time],
+      party_size:          params[:party_size],
+    )
   end
 
-  description "Cancel one of the authenticated principal's own bookings, " \
-              "returning the table to availability."
+  description "Cancel one of the authenticated principal's own table bookings " \
+              "(requires the booking to belong to the principal). Frees the " \
+              "(table, seating)."
   input_schema  type: "object", additionalProperties: false,
                 required: %w[booking_id],
                 properties: { booking_id: { type: "string", format: "uuid" } }
@@ -213,9 +286,10 @@ class Kiosk::BookingsController < ActionController::API
                               status:     { type: "string" } },
                 required: %w[booking_id status]
   def cancel_booking
-    # Owner-scoped: a cross-principal cancel is a clean 403.
-    booking = CancelBooking.call(booking_id: params[:booking_id])
-    render json: { booking_id: booking.id, status: "cancelled" }
+    # Owner-scoped, and the principal is not passed in: the Operation's WHERE
+    # gates on user_id = kiosk.current_user_id(), so a cross-principal cancel is
+    # a clean 403 — the booking is simply not found under the caller's identity.
+    render_operation CancelBookingOperation.call(booking_id: params[:booking_id])
   end
 end
 ```

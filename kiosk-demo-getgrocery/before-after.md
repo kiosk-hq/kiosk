@@ -69,7 +69,7 @@ getgrocery is a Rails 8 app that speaks Kiosk. The following is representative o
 2. **Self-register** — generated an RSA-2048 keypair, proved possession of the private key (`GET /kiosk/auth/challenge` → signed the nonce as an origin-bound RS256 JWS → `POST /kiosk/auth/register {public_key:<pem>, signed:<jws>}`) → HTTP 201 → `agent_id`, `user_id`, `access_token`. No existing account. No human login. No OTP. No bot screen.
 3. **Browse catalog** — `GET /kiosk/catalog` returned 15 in-stock products, sorted by name (Milk 1 L and Chocolate Spread 400g are out of stock, so the catalog hides them — see `db/seeds.rb`). This worked example's driver builds the cart from the first three in-stock rows: Apple Juice (349c), Banana (149c), Butter 250g (349c), one of each.
 4. **Query delivery slots** — `GET /kiosk/delivery_slots?date=2026-07-13&delivery_address=42%20Camden%20Street%2C%20Dublin%202` → returned 6 available time slots; the driver picked the first, 08:00–10:00.
-5. **Create order** — `POST /kiosk/create_order {items:[{sku:"apple-juice", qty:1}, {sku:"banana", qty:1}, {sku:"butter-250g", qty:1}], delivery_slot_id:<slot_id>, delivery_address:"42 Camden Street, Dublin 2"}` → HTTP 200, `order_id`, `total_cents:847`, `slot_at`, and a `pay_hint`. Delivery is part of the order — slot and address are REQUIRED; the assistant composed the full cart (products referenced by `sku`).
+5. **Create order** — `POST /kiosk/create_order {items:[{sku:"apple-juice", qty:1}, {sku:"banana", qty:1}, {sku:"butter-250g", qty:1}], delivery_slot_id:<slot_id>, delivery_address:"42 Camden Street, Dublin 2"}` → HTTP 200, `order_id`, `total_cents:847` (with `total_eur` and `currency`), `slot_at`, and a `pay_hint`. Delivery is part of the order — slot and address are REQUIRED; the assistant composed the full cart (products referenced by `sku`).
 6. **Pay** — signed an AP2 intent mandate (`cap_amount_cents:1047`, `scope:"grocery"`, `iss:<issuer>`) and a cart mandate (`total_amount_cents:847`, `line_items:[{order_id:<order_id>}, {sku:"apple-juice", qty:1, price_cents:349}, {sku:"banana", qty:1, price_cents:149}, {sku:"butter-250g", qty:1, price_cents:349}]` — mirroring the order per the `pay_hint`, bound to the intent via `intent_mandate_id`) as RS256 JWS with the registered keypair, then `POST /kiosk/pay {intent_mandate_jws, cart_mandate_jws, payment_mandate_jws}` → the settlement itself: `{settlement_id, psp_reference, settled_amount_cents:847, currency:"eur"}`.
 7. **(Optional) Move the delivery** — a PAID order's slot can be changed once via `POST /kiosk/reschedule_delivery {order_id:<order_id>, delivery_slot_id:<new_slot_id>}`. The operator's cashier check ran at capture: currency (EUR), each line against the catalog, and the total were verified before charging.
 
@@ -148,68 +148,134 @@ with no macros above it is a helper the wire cannot see. `input_schema` and
 `output_schema` are REQUIRED on every verb: a declaration missing either raises
 as the class body is read, so the app does not boot.
 
+**The snippet below is ABRIDGED, not invented:** it is three of getgrocery's four
+shipped queries (`kyc_status` is left out), with each verb's full prose
+`description` and its per-property `description` lines elided and the argument
+guards left to the shipped file. Every field name, type and `required` list is
+the shipped one verbatim — read
+`kiosk-demo-getgrocery/app/controllers/kiosk/storefront_controller.rb` for the
+whole thing.
+
 ```ruby
 # app/controllers/kiosk/storefront_controller.rb
 class Kiosk::StorefrontController < ActionController::API
   include Kiosk::Query
+  include KioskRefusals   # the app's own concern: renders a refusal result
 
-  description "Browse in-stock products from the catalog. Prices are EUR cents; " \
-              "reference a product by its stable `sku`, never a numeric id."
+  description "Browse in-stock products from the getgrocery catalog (out-of-stock items " \
+              "are hidden). Each row carries the stable `sku` — reference a product by " \
+              "that, never a numeric id — a `low` flag when stock is running out, and an " \
+              "`age_restricted` flag on alcohol, which create_order accepts only after " \
+              "an 18+ check (run request_kyc first)."
   input_schema  type: "object", additionalProperties: false, properties: {}, required: []
+  # `low` and `age_restricted` are optional BY CONSTRUCTION: the handler appends
+  # each only when it is true, so an absent flag means false — which is what
+  # leaving them out of `required` says.
   output_schema type: "array",
                 items: {
                   type: "object", additionalProperties: false,
-                  properties: { sku:         { type: "string" },
-                                name:        { type: "string" },
-                                price_cents: { type: "integer" } },
-                  required: %w[sku name price_cents],
+                  properties: { sku:            { type: "string" },
+                                name:           { type: "string" },
+                                price_cents:    { type: "integer" },
+                                price_eur:      { type: "string" },
+                                currency:       { type: "string" },
+                                low:            { type: "boolean" },
+                                age_restricted: { type: "boolean" } },
+                  required: %w[sku name price_cents price_eur currency],
                 }
   def catalog
+    # The numeric primary key is deliberately NOT selected: a row id no verb
+    # accepts is a dead field that invites the assistant to guess it is some
+    # verb's param. `sku` is the only product handle on the wire.
     render json: Product.in_stock.order(:name)
-                        .pluck(:sku, :name, :price_cents)
-                        .map { |sku, name, price_cents| { sku:, name:, price_cents: } }
+                        .pluck(:sku, :name, :price_cents, :stock, :age_restricted)
+                        .map { |sku, name, price_cents, stock, age_restricted|
+                          row = { "sku"         => sku,
+                                  "name"        => name,
+                                  "price_cents" => price_cents,
+                                  "price_eur"   => Product.format_eur(price_cents),
+                                  "currency"    => "eur" }
+                          row["low"]            = true if Product.low_stock?(stock)
+                          row["age_restricted"] = true if Product.age_restricted?(age_restricted)
+                          row
+                        }
   end
 
-  description "List the delivery slots still open for a date, for an in-zone address."
+  description "Get available delivery time slots for a date at a Dublin delivery address. " \
+              "An out-of-zone address, or a date before today, is a 400 naming what is " \
+              "needed. Each row carries a `delivery_slot_id` and its `date`; pass both to " \
+              "create_order as `delivery_slot_id` and `delivery_date`."
   input_schema type: "object", additionalProperties: false,
-               required: %w[delivery_address],
+               required: %w[date delivery_address],
                properties: {
-                 delivery_address: { type: "string" },
                  date:             { type: "string", format: "date" },
+                 delivery_address: { type: "string" },
                }
   output_schema type: "array",
                 items: {
                   type: "object", additionalProperties: false,
-                  properties: { id:         { type: "integer" },
-                                date:       { type: "string" },
-                                label:      { type: "string" },
-                                start_time: { type: "string" },
-                                end_time:   { type: "string" } },
-                  required: %w[id date label start_time end_time],
+                  properties: { delivery_slot_id: { type: "integer" },
+                                date:             { type: "string" },
+                                slot_at:          { type: "string" },
+                                label:            { type: "string" },
+                                zone:             { type: "string" } },
+                  required: %w[delivery_slot_id date slot_at label zone],
                 }
   def delivery_slots
-    return render_out_of_zone unless DublinZones.serves?(params[:delivery_address])
+    # ADDRESS-UPFRONT: the delivery address is checked BEFORE the date, which is
+    # what forces the assistant to obtain it from its human before it can even
+    # see slots. This verb touches no table at all — the windows are a function
+    # of the date and the operator's locale, the zone a function of the served
+    # districts.
+    zone, refusal = WireArguments.served_zone(params[:delivery_address])
+    return render_refusal(refusal) if refusal
 
-    render json: DeliverySlot.open_on(params[:date])
-                             .select(:id, :date, :label, :start_time, :end_time)
+    date = Date.parse(params[:date])
+    render json: DeliverySlots.bookable_ids(date).map { |slot_id|
+      slot_time = DeliverySlots.slot_at(date, slot_id)
+      hour      = slot_time.hour
+      { "delivery_slot_id" => slot_id,
+        "date"             => date.iso8601,
+        "slot_at"          => slot_time.iso8601,
+        "label"            => "#{hour.to_s.rjust(2, "0")}:00–" \
+                              "#{(hour + DeliverySlots::WINDOW_HOURS).to_s.rjust(2, "0")}:00",
+        "zone"             => zone }
+    }
   end
 
-  description "List the orders belonging to the authenticated principal."
+  description "List this principal's orders with delivery slot, address, and a paid flag " \
+              "(scoped to the authenticated user). Each row carries an `order_id`; pass it " \
+              "to reschedule_delivery as `order_id`. Use the `paid` flag as a settlement " \
+              "lookup: after a pay whose response you did not receive, re-read this and " \
+              "retry pay only if the order is still unpaid."
   input_schema  type: "object", additionalProperties: false, properties: {}, required: []
   output_schema type: "array",
                 items: {
                   type: "object", additionalProperties: false,
-                  properties: { id:          { type: "string", format: "uuid" },
+                  properties: { order_id:    { type: "string" },
                                 status:      { type: "string" },
                                 total_cents: { type: "integer" },
                                 slot_at:     { type: %w[string null] },
                                 address:     { type: %w[string null] },
-                                created_at:  { type: "string" } },
-                  required: %w[id status total_cents slot_at address created_at],
+                                paid:        { type: "boolean" } },
+                  required: %w[order_id status total_cents slot_at address paid],
                 }
   def my_orders
+    # `paid` is computed over the CALLER's settlements — the same containment
+    # the operator's back office reads over all of them, so the two surfaces are
+    # one behaviour with two authorities rather than two copies of one SQL string.
     render json: Order.owned_by_current_principal
-                      .select(:id, :status, :total_cents, :slot_at, :address, :created_at)
+                      .order(created_at: :desc)
+                      .pluck(:id, :status, :total_cents, :slot_at, :address,
+                             Order.paid_flag(Settlement.of_current_principal))
+                      .map { |id, status, total_cents, slot_at, address, paid|
+                        { "order_id"    => id,
+                          "status"      => status,
+                          "total_cents" => total_cents,
+                          "slot_at"     => slot_at&.utc&.getlocal(0),
+                          "address"     => address,
+                          "paid"        => paid }
+                      }
   end
 end
 ```
@@ -226,59 +292,91 @@ not required for Kiosk's isolation model.
 **4. Declare the write verbs next door (with ownership checks)**
 
 A controller declares queries OR actions, never both. `reschedule_delivery` is
-**payment-binding gated** — the server verifies a settled mandate references the
-order before mutating. `create_order` attaches ownership via
+**payment-binding gated** — the Operation behind it verifies a settled mandate
+references the order before mutating. `create_order` attaches ownership via
 `kiosk.current_user_id()` and requires the delivery slot + address up front.
+
+Abridged the same way as the read snippet above: two of getgrocery's four
+shipped actions (`payment_setup` and `request_kyc` are left out), with the prose
+`description` and the per-property `description` lines elided. Field names, types
+and `required` lists are the shipped ones verbatim.
 
 ```ruby
 # app/controllers/kiosk/orders_controller.rb
 class Kiosk::OrdersController < ActionController::API
   include Kiosk::Action
+  include KioskRefusals   # the app's own concern: turns an Operation result into a render
 
-  description "Place an order for the authenticated principal. This RESERVES stock; " \
-              "nothing is charged until the cart is settled with `pay`."
+  description "Create (or replace) a grocery order for the authenticated principal. " \
+              "Delivery is part of the order: a slot and an address are REQUIRED. " \
+              "Nothing is charged until the cart is settled with `pay` — sign it in EUR " \
+              "with line_items that mirror the order (the result carries a pay_hint)."
   input_schema type: "object", additionalProperties: false,
                required: %w[items delivery_slot_id delivery_address],
                properties: {
-                 items: { type: "array", items: {
-                   type: "object", required: %w[sku qty],
+                 items: { type: "array", minItems: 1, items: {
+                   type: "object", additionalProperties: false, required: %w[sku qty],
                    properties: { sku: { type: "string" }, qty: { type: "integer", minimum: 1 } },
                  } },
-                 delivery_slot_id: { type: "integer" },
+                 delivery_slot_id: { type: "integer", minimum: 1, maximum: 6 },
+                 delivery_date:    { type: "string" },
                  delivery_address: { type: "string" },
+                 order_id:         { type: "string", format: "uuid",
+                                     pattern: UuidCheck::JSON_SCHEMA_PATTERN },
                }
   output_schema type: "object", additionalProperties: false,
                 properties: { order_id:    { type: "string" },
                               total_cents: { type: "integer" },
-                              status:      { type: "string" } },
-                required: %w[order_id total_cents status]
+                              total_eur:   { type: "string" },
+                              currency:    { type: "string" },
+                              slot_at:     { type: "string" },
+                              pay_hint:    { type: "string" } },
+                required: %w[order_id total_cents total_eur currency slot_at pay_hint]
   def create_order
-    order = CreateOrder.call(**order_params)   # an Operation, so the back office reuses it
-    render json: { order_id: order.id, total_cents: order.total_cents, status: order.status }
+    # `user_id` is NOT a declared input: the principal comes from the identity
+    # the wire resolved. Since input_schema closes the object and every 0.4 call
+    # is validated against it, a forged one is refused with a typed 400 naming it.
+    render_operation CreateOrderOperation.call(
+      principal_id:     kiosk_identity.user_id,
+      items:            kiosk_plain(params[:items]),
+      delivery_slot_id: params[:delivery_slot_id],
+      delivery_date:    params[:delivery_date],
+      delivery_address: params[:delivery_address],
+      order_id:         params[:order_id],
+    )
   end
 
-  description "Move a PAID order to a different delivery slot. Refuses until the " \
-              "order has been settled."
+  description "Move an ALREADY-PAID order's delivery to a different slot (and optionally " \
+              "a new address). This REUSES the order's existing payment — do NOT pay " \
+              "again. One reschedule per order; an unpaid order is re-placed via " \
+              "create_order with order_id instead."
   input_schema type: "object", additionalProperties: false,
                required: %w[order_id delivery_slot_id],
                properties: {
-                 order_id:         { type: "string", format: "uuid" },
-                 delivery_slot_id: { type: "integer" },
+                 order_id:         { type: "string", format: "uuid",
+                                     pattern: UuidCheck::JSON_SCHEMA_PATTERN },
+                 delivery_slot_id: { type: "integer", minimum: 1, maximum: 6 },
+                 delivery_date:    { type: "string" },
+                 delivery_address: { type: "string" },
                }
+  # No price and no pay_hint, and that absence is the contract: a reschedule
+  # reuses the order's existing payment, so there is no new mandate to sign.
   output_schema type: "object", additionalProperties: false,
                 properties: { order_id:       { type: "string" },
-                              rescheduled_at: { type: "string" },
-                              status:         { type: "string" } },
-                required: %w[order_id rescheduled_at status]
+                              rescheduled_at: { type: "string" } },
+                required: %w[order_id rescheduled_at]
   def reschedule_delivery
-    # A refusal is Rails' idiom, not a Kiosk class — the code travels verbatim:
-    unless Settlement.covers_order?(params[:order_id])
-      return render json: { error: { code: "forbidden", message: "no settlement for this order" } },
-                    status: :forbidden
-    end
-
-    order = RescheduleDelivery.call(**reschedule_params)
-    render json: { order_id: order.id, rescheduled_at: order.slot_at, status: order.status }
+    # The settled-mandate gate lives in the Operation, with the slot move, in one
+    # transaction. A refusal is Rails' idiom, not a Kiosk class: render_operation
+    # turns a refused result into
+    #   render json: { error: { code: "forbidden", … } }, status: :forbidden
+    #   — and the wire carries that `code` verbatim into an RFC 9457 problem document.
+    render_operation RescheduleDeliveryOperation.call(
+      order_id:         params[:order_id],
+      delivery_slot_id: params[:delivery_slot_id],
+      delivery_date:    params[:delivery_date],
+      delivery_address: params[:delivery_address],
+    )
   end
 end
 ```

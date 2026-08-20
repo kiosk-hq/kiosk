@@ -152,7 +152,7 @@ module ProveTestIssuer
   # rake tasks and from the app, so a bare `require "prove_trust"` would depend
   # on whose $LOAD_PATH is in play.
   def prove_trust
-    require File.expand_path("prove_trust", __dir__) unless defined?(::ProveTrust)
+    require File.expand_path("../app/services/prove_trust", __dir__) unless defined?(::ProveTrust)
     ::ProveTrust
   end
 

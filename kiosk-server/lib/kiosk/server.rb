@@ -44,6 +44,7 @@ require "kiosk/server/handler_mixin"
 require "kiosk/server/handler_registrations"
 require "kiosk/action"
 require "kiosk/query"
+require "kiosk/operation_result"
 require "kiosk/server/executor"
 require "kiosk/server/column_spending_cap"
 require "kiosk/server/agent_identity_providers/default_agent_idp"
@@ -101,6 +102,9 @@ module Kiosk
     #   - {Kiosk::Action} / {Kiosk::Query}  — the mixins an operator includes into
     #                                         a controller of their own to declare
     #                                         verbs as ordinary Rails actions
+    #   - {Kiosk::OperationResult}          — answer-or-refusal value object a write
+    #                                         Operation returns; subclass it and
+    #                                         declare your own STATUSES map
     #   - {Kiosk::Server::Result}           — success envelope value type
     #   - {Kiosk::Server::Errors}           — exception hierarchy + envelope serialisation
     #   - {Kiosk::Server::SessionContext}   — transaction + four transaction-local GUCs

@@ -930,54 +930,72 @@ end
 
 method_mismatch_beat = method_mismatch.call
 
-# ── SelfAssertedTokenForgery (K-539) — in-process, PRODUCTION-config ───────────
-# The self-asserted plaintext-bearer forgery. This suite drives a server booted
-# in RAILS_ENV=development (demo:redteam), where the cleartext StubIdp fallback
-# is INTENTIONALLY live so drivers can skip PoP registration — so the DEV wire
-# cannot demonstrate the block. This beat instead exercises the REAL shipped
-# JwtOrStubIdp guard in-process against a stubbed PRODUCTION Rails.env: a forged
-# `agent:u-…:a-…:r-owner` bearer must resolve to NO identity under production
-# (→ the wire raises 401), while the development branch still accepts it (or every
-# driver + the e2e harness break). Over-the-wire production proof: deploy/
-# production-smoke.sh Assertion 5. Unit proof: kiosk-test-support
-# spec/jwt_or_stub_idp_env_gate_spec.rb.
+# ── SelfAssertedTokenForgery (K-539, restated by T-104) — OVER THE LIVE WIRE ──
+# THE BEAT OUTLIVED ITS TARGET, WHICH IS WHY IT IS STILL HERE. It used to be an
+# IN-PROCESS proof about a door that was only shut in production: skooti shipped
+# a hand-copied composite agent-IdP whose cleartext fallback parsed
+# `agent:u-…:a-…:r-…` into an identity at whatever role the string named, and it
+# was INTENTIONALLY live wherever `Rails.env.local?` — which is exactly the
+# environment demo:redteam boots. So the dev wire could not demonstrate the
+# block, and this beat had to stub `Rails.env` to "production", assert NO
+# identity there, and then assert that development still ACCEPTED the forgery,
+# because every driver depended on it doing so.
+#
+# T-104 deleted the parser instead of gating it. Agent auth is the engine's own
+# kiosk-pop verifier now — it has no cleartext branch to fall back to in any
+# environment — and no driver wants one, because they all earn a real token
+# through the shipped ceremony. So the beat becomes what it should always have
+# been, exactly as its human sibling below did at T-066: an over-the-wire probe
+# in the SAME environment the drivers run in, with no `Rails.env` anywhere in
+# it and no environment condition in the verdict. A self-asserted bearer
+# resolves to NO identity, unconditionally.
+#
+# The first probe is the STRONGEST form of the attack rather than the easiest:
+# it names a real account and a real agent — `wire_probe`'s, minted by the
+# shipped registration a few lines above — and escalates the role to `owner`,
+# so nothing in the string is invented except the claim that it is a
+# credential. The second is the wholly-made-up one the old beat used. The
+# positive control is the same verb over the same wire with `wire_probe`'s REAL
+# token, so a 401 above is the forgery being refused rather than the surface
+# being down.
+#
+# Unit proof of the same property, from the other side:
+# kiosk-test-support spec/demo_agent_idp_is_real_spec.rb.
 self_asserted_token_forgery = lambda do
-  require "kiosk"
-  services = File.expand_path("../app/services", __dir__)
-  require File.join(services, "stub_idp")
-  require File.join(services, "jwt_or_stub_idp")
-
-  # The redteam client boots no Rails app, so provide a controllable Rails.env.
-  unless defined?(Rails)
-    env_klass = Struct.new(:name) do
-      def local? = %w[development test].include?(name)
-      def to_s = name.to_s
-    end
-    rails = Module.new do
-      class << self
-        attr_accessor :env
-      end
-    end
-    Object.const_set(:Rails, rails)
-    Object.const_set(:RedteamEnvShim, env_klass)
+  probe = lambda do |token|
+    uri = URI("#{BASE_URL}/kiosk/my_reservations")
+    req = Net::HTTP::Get.new(uri, { "Authorization" => "Bearer #{token}" })
+    Net::HTTP.new(uri.host, uri.port).request(req).code.to_i
   end
 
-  forged = Struct.new(:headers).new(
-    { "Authorization" => "Bearer agent:u-#{SecureRandom.uuid}:a-forged:r-owner" },
-  )
-  idp = JwtOrStubIdp.new(stub: StubIdp.new)
+  forgeries = [
+    ["real account + real agent, role escalated to owner",
+     "agent:u-#{wire_probe.user_id}:a-#{wire_probe.agent_id}:r-owner"],
+    ["wholly invented ids",
+     "agent:u-#{SecureRandom.uuid}:a-#{SecureRandom.uuid}:r-owner"],
+  ].map do |label, token|
+    code = probe.call(token)
+    [code == 401, "#{label} → #{code}"]
+  end
 
-  Rails.env = RedteamEnvShim.new("production")
-  prod_identity = idp.verify(forged)
-  Rails.env = RedteamEnvShim.new("development")
-  dev_identity = idp.verify(forged)
+  control_res, = raw_wire.call(:get, "/kiosk/my_reservations")
+  control_ok   = control_res.code.to_i == 200
 
-  if prod_identity.nil? && dev_identity && dev_identity.role.to_s == "owner"
-    { blocked: true, detail: "forged self-asserted `agent:…:r-owner` bearer → NO identity under production config (dev harness still accepts it)" }
-  elsif prod_identity
-    { blocked: false, detail: "K-539 REGRESSION: forged self-asserted bearer authenticated under PRODUCTION config as role=#{prod_identity.role}" }
+  if forgeries.all? { |ok, _| ok } && control_ok
+    { blocked: true,
+      detail: "self-asserted `agent:u-…:r-owner` bearer resolves to NO identity — " \
+              "#{forgeries.map(&:last).join("; ")} — in the SAME (development) env the " \
+              "drivers run in, with no environment condition in the assertion; the real " \
+              "registered token answers the same verb #{control_res.code}, so the refusal " \
+              "is not vacuous" }
+  elsif !control_ok
+    { blocked: false,
+      detail: "unexpected: the REAL registered token was refused too " \
+              "(HTTP #{control_res.code}) — the 401s above prove nothing" }
   else
-    { blocked: false, detail: "unexpected: development branch rejected the stub (drivers would break): #{dev_identity.inspect}" }
+    { blocked: false,
+      detail: "K-539 REGRESSION: a self-asserted bearer was accepted over the wire — " \
+              "#{forgeries.map(&:last).join("; ")} (want 401 for each)" }
   end
 rescue StandardError => e
   { blocked: false, detail: "beat error: #{e.class}: #{e.message}" }

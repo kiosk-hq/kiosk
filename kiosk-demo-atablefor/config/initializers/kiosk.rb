@@ -251,11 +251,21 @@ Kiosk.configure do |c|
   c.skill_url    = "https://kiosk.tech/skill-v0.4.2.md"
   c.skill_sha256 = "f2cab5f4664ac697ce8c9a18582924447ec9097f240bac3e32ca2a8b2bf2cfed"
 
-  # JwtOrStubIdp tries Kiosk-issued JWTs (kiosk-pop register/login output;
-  # OAuth device-grant dormant) first, then falls back to StubIdp's bespoke
-  # `agent:u-…:a-…:r-…` shape. One endpoint authenticates both for the demo.
-  # Real providers swap in `kiosk-user-idp-devise` (or another adapter).
-  c.agent_idp = JwtOrStubIdp.new(stub: Rails.env.local? ? StubIdp.new : nil)
+  # ── NO c.agent_idp ───────────────────────────────────────────────────────
+  # Deliberate, and the point of the line's absence (T-104). An assistant
+  # authenticates with the kiosk-pop JWT this very engine minted at
+  # `/kiosk/auth/register`, `/auth/login` or the binding ceremony — and the
+  # engine already ships the adapter that verifies its own tokens:
+  # `IdentityResolution.agent_idp` falls back to
+  # `Kiosk::Server::AgentIdentityProviders::DefaultAgentIdp` when nothing is
+  # configured. This demo used to override it with a hand-copied composite that
+  # re-implemented the JWT half (more loosely — it never checked `iss`) in
+  # order to bolt on a dev-only parser turning a self-asserted
+  # `agent:u-…:a-…:r-…` string into an identity at any role. Both are gone.
+  # SET THIS only to front an EXTERNAL agent-identity issuer (Entra Agent ID,
+  # Okta, an ID-JAG-style broker) by subclassing
+  # `Kiosk::AgentIdentityProviders::Base` — whose one hard constraint is that
+  # the `agent_id` you return must be a UUID (K-830).
   # The provider's own web-session channel (Devise/Warden): authenticates the
   # signed-in human diner on the account-binding surfaces — the link-code mint,
   # the device verify page, and unlink. A diner mints a link code here and their

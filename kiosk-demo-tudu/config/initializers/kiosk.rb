@@ -105,11 +105,21 @@ Kiosk.configure do |c|
   # `pay` drops out of `capabilities` and the discovery documents carry no
   # payments block. tudu is a collaborative todo app — it takes no money.
 
-  # JwtOrStubIdp tries Kiosk-issued JWTs (register/login output; the
-  # account-binding token poll mints the same JWTs) first, then falls back to
-  # StubIdp's bespoke `agent:u-…:a-…:r-…` shape. One endpoint authenticates
-  # both for the demo.
-  c.agent_idp = JwtOrStubIdp.new(stub: Rails.env.local? ? StubIdp.new : nil)
+  # ── NO c.agent_idp ───────────────────────────────────────────────────────
+  # Deliberate, and the point of the line's absence (T-104). An assistant
+  # authenticates with the kiosk-pop JWT this very engine minted at
+  # `/kiosk/auth/register`, `/auth/login` or the binding ceremony — and the
+  # engine already ships the adapter that verifies its own tokens:
+  # `IdentityResolution.agent_idp` falls back to
+  # `Kiosk::Server::AgentIdentityProviders::DefaultAgentIdp` when nothing is
+  # configured. This demo used to override it with a hand-copied composite that
+  # re-implemented the JWT half (more loosely — it never checked `iss`) in
+  # order to bolt on a dev-only parser turning a self-asserted
+  # `agent:u-…:a-…:r-…` string into an identity at any role. Both are gone.
+  # SET THIS only to front an EXTERNAL agent-identity issuer (Entra Agent ID,
+  # Okta, an ID-JAG-style broker) by subclassing
+  # `Kiosk::AgentIdentityProviders::Base` — whose one hard constraint is that
+  # the `agent_id` you return must be a UUID (K-830).
   # The provider's own web-session channel (Devise/Warden): authenticates the
   # approving human on the account-binding surfaces — the device verify page,
   # link-code mint, unlink, and the manage-assistants page. Walked by

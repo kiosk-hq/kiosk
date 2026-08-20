@@ -261,6 +261,14 @@ COPIES = {
           "abuser must not inflate anyone else's count), so a copy that drifts could silently " \
           "regrow the shared-counter bug.",
   },
+  "lib/bound_assistant.rb" => {
+    rule: :identical,
+    why:  "The ONE way a driver obtains an AGENT principal (T-104) — the agent-side twin of " \
+          "lib/devise_session.rb, and :identical for the same reason. A driver used to write its " \
+          "own principal down as `agent:u-…:a-…:r-…` and have a dev-only parser believe it; it now " \
+          "runs the shipped ceremony instead (Equihash-tolled register -> the human's link code -> " \
+          "claim), which is one sequence of shipped endpoints and names no port, persona or verb.",
+  },
   "lib/devise_session.rb" => {
     rule: :identical,
     why:  "The ONE way a driver obtains a HUMAN principal (T-066). Every demo authenticates its " \
@@ -290,15 +298,6 @@ COPIES = {
     why:  "Shape guard for uuids that arrive from the wire, so a malformed literal is a typed 400 " \
           "instead of a PG::InvalidTextRepresentation 500 that leaks SQL. Each copy's prose names " \
           "the verbs THAT demo casts; the guard itself must be one thing.",
-  },
-  "app/services/stub_idp.rb" => {
-    rule: :code,
-    why:  "DEV/TEST agent-IdP parsing `agent:u-…:a-…:r-…` bearers (K-539). Per-demo prose only.",
-  },
-  "app/services/jwt_or_stub_idp.rb" => {
-    rule: :code,
-    why:  "Composite IdP: Kiosk-issued JWTs first, StubIdp's synthetic shape as fallback. Per-demo " \
-          "prose only.",
   },
   "app/services/stub_psp.rb" => {
     rule: :code,

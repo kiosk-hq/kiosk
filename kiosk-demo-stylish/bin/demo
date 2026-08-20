@@ -6,17 +6,24 @@
 
 set -euo pipefail
 
+APP_ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 PORT="${KIOSK_DEMO_PORT:-3005}"
 SERVER_URL="http://127.0.0.1:$PORT"
-ALICE="00000000-0000-0000-0000-000000000001"
-BOB="00000000-0000-0000-0000-000000000002"
 
-ALICE_TOKEN="agent:u-$ALICE:a-alice-claude:r-customer"
-BOB_TOKEN="agent:u-$BOB:a-bob-chatgpt:r-customer"
+# The seeded humans this walkthrough acts for (db/seeds.rb). Their ASSISTANTS'
+# tokens are minted below, after the server is up, by running the real binding
+# ceremony — see the "Binding" heading. Until T-104 this script wrote the two
+# bearers down as `agent:u-<uuid>:a-<slug>:r-customer` and a dev-only parser in
+# the demo believed them; that parser is deleted, so the walkthrough now shows
+# the same thing a real assistant does to get a token.
+ALICE_EMAIL="${ALICE_EMAIL:-alice@example.com}"
+BOB_EMAIL="${BOB_EMAIL:-bob@example.com}"
+DEMO_PASSWORD="${DEMO_PASSWORD:-combette-demo-password}"
 
 heading() { printf "\n\033[1;36m── %s ──\033[0m\n" "$1"; }
 step()    { printf "\n  \033[1;33m▶\033[0m %s\n" "$1"; }
 say()     { printf "  %s\n" "$1"; }
+fail()    { printf "\n  \033[1;31m✗ %s\033[0m\n" "$1" >&2; exit 1; }
 
 cleanup() {
   if [[ -n "${SERVER_PID:-}" ]]; then
@@ -42,6 +49,25 @@ q()   { curl -sS "$SERVER_URL/kiosk/$2${3:+?$3}" -H "Authorization: Bearer $1"; 
 run() { curl -sS -X POST "$SERVER_URL/kiosk/$2" -H "Authorization: Bearer $1" \
           -H "Content-Type: application/json" -d "$3"; }
 
+# Bind one assistant to one seeded human and print its access token.
+#
+# There is no shortcut left to take: lib/bound_assistant.rb runs the shipped
+# ceremony over real HTTP — the Equihash-tolled /kiosk/auth/register, the
+# human's own /users/sign_in form, /kiosk/auth/link, /kiosk/auth/claim — and
+# the token that comes back is one this provider minted for a key it saw.
+# ~a second per assistant, most of it the Equihash toll and the RSA keygen.
+#   bind <email>
+bind() {
+  SERVER_URL="$SERVER_URL" KIOSK_ISSUER="$SERVER_URL" \
+  HOLDER_EMAIL="$1" HOLDER_PASSWORD="$DEMO_PASSWORD" \
+    bundle exec ruby -r"$APP_ROOT/lib/bound_assistant" -e '
+      puts bind_assistant(server:   ENV.fetch("SERVER_URL"),
+                          issuer:   ENV.fetch("KIOSK_ISSUER"),
+                          email:    ENV.fetch("HOLDER_EMAIL"),
+                          password: ENV.fetch("HOLDER_PASSWORD")).token
+    '
+}
+
 # ─── boot ────────────────────────────────────────────────────────────
 
 heading "Starting Combette (the demo provider) on port $PORT"
@@ -62,6 +88,20 @@ curl -sf "$SERVER_URL/.well-known/kiosk.json" >/dev/null || {
   echo "server did not become ready — see /tmp/kiosk-demo.log" >&2
   exit 1
 }
+
+# ─── binding: the assistants EARN their tokens ────────────────────────
+
+heading "Binding: each assistant earns a token through the real ceremony"
+
+step "Alice's assistant: register (Equihash toll) → Alice signs in → link → claim"
+ALICE_TOKEN="$(bind "$ALICE_EMAIL")"
+[[ -n "$ALICE_TOKEN" ]] || fail "could not bind an assistant for $ALICE_EMAIL"
+say "✓ Alice's assistant holds a kiosk-pop JWT this provider minted"
+
+step "Bob's assistant: the same ceremony, a separate human and a separate key"
+BOB_TOKEN="$(bind "$BOB_EMAIL")"
+[[ -n "$BOB_TOKEN" ]] || fail "could not bind an assistant for $BOB_EMAIL"
+say "✓ Bob's assistant holds its own token — two accounts, two keys"
 
 # ─── discovery ───────────────────────────────────────────────────────
 
@@ -118,20 +158,26 @@ heading "Demo complete"
 say "Server log:        /tmp/kiosk-demo.log"
 say "DB:                kiosk_stylish_development"
 say ""
-say "Try it yourself (the wire is plain HTTP — curl + jq):"
+say "Try it yourself (the wire is plain HTTP — curl + jq). \$TOKEN is what an"
+say "assistant earns at /kiosk/auth/register + /kiosk/auth/claim — the ceremony"
+say "run at the top of this walkthrough; 'rake demo:binding' walks it step by"
+say "step. It is an ordinary kiosk-pop JWT and it expires, so mint a fresh one."
 say "  a query is a GET at its own endpoint, and the body IS the result:"
 say "    curl -sS $SERVER_URL/kiosk/salons \\"
-say "      -H 'Authorization: Bearer $ALICE_TOKEN' | jq '.'"
+say "      -H \"Authorization: Bearer \$TOKEN\" | jq '.'"
 say "  an action is a POST at its own endpoint, arguments in the JSON body:"
 say "    curl -sS -X POST $SERVER_URL/kiosk/book_appointment \\"
-say "      -H 'Authorization: Bearer $ALICE_TOKEN' \\"
+say "      -H \"Authorization: Bearer \$TOKEN\" \\"
 say "      -H 'Content-Type: application/json' \\"
 say "      -d '{\"salon_id\":1,\"slot\":\"2026-07-01T14:00:00Z\"}' | jq '.'"
 say ""
-say "Swap the demo stubs for production-shape auth (two DIFFERENT seams):"
-say "  • AGENT-IdP (c.agent_idp): registered assistants already flow through real"
-say "    Kiosk-issued JWTs; to front an EXTERNAL agent-identity issuer, implement"
-say "    Kiosk::AgentIdentityProviders::Base (external agent-IdP adapters are a"
-say "    planned seam — none shipped yet)."
-say "  • USER-IdP (c.user_idp): to bind a real HUMAN account/role, set c.user_idp;"
-say "    kiosk-user-idp-devise is the shipped worked example (this demo runs it)."
+say "Neither identity seam is a stub any more — both ran for real above:"
+say "  • AGENT-IdP (c.agent_idp): UNSET, deliberately. The engine's own"
+say "    DefaultAgentIdp verifies the kiosk-pop JWTs it minted at /auth/register"
+say "    and /auth/claim — the tokens the two assistants earned at the start of"
+say "    this run. Set it only to front an EXTERNAL agent-identity issuer, by"
+say "    implementing Kiosk::AgentIdentityProviders::Base (a planned seam —"
+say "    none shipped yet); the agent_id it returns must be a UUID."
+say "  • USER-IdP (c.user_idp): kiosk-user-idp-devise, the shipped worked"
+say "    example, which this demo runs in every environment. Alice and Bob"
+say "    signed in on the real form to approve their assistants."

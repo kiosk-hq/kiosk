@@ -31,6 +31,10 @@
 #   CustomerCalendarStaysOwnScoped — a customer's agent sees only its OWN
 #     bookings (no whole-book, no forecast) in salon_calendar — the role gate
 #     is provider-controlled and un-bypassable
+#   SelfAssertedTokenForgery — the AGENT sibling of the beat below (K-539 /
+#     T-104): a self-asserted `agent:u-…:a-…:r-owner` bearer naming the seeded
+#     owner resolves to NO identity, in EVERY environment, while the OWNER's
+#     genuinely-bound token reaches the whole book and the forecast
 #   SelfAssertedStaffSessionForgery — a forged `X-Staff-Session` header naming
 #     the seeded owner buys NOTHING over the live wire (K-555 / T-066): the
 #     role-carrying SSO stand-in that read that header is deleted, so the
@@ -42,9 +46,20 @@
 #     service_id) are each a typed 400 with no PG internals — never a 500 and
 #     never a silent booking — while a bare and a priced booking still succeed
 #
+# THE TWO CUSTOMER PRINCIPALS ARE EARNED, NOT ASSERTED (T-104). Alice and Bob
+# are bound through the shipped ceremony — Equihash-tolled `/auth/register` →
+# the human's real Devise sign-in → `/auth/link` → `/auth/claim`
+# (lib/bound_assistant.rb) — because the dev-only parser that used to turn a
+# written-down `agent:u-…:a-…:r-…` string into an identity at any role is
+# deleted. That is also what promotes the SelfAssertedTokenForgery beat below
+# from an in-process probe under a stubbed production config into an ordinary
+# over-the-wire attack in the SAME environment this suite drives.
+#
 # Usage:
 #   SERVER_URL=http://127.0.0.1:3005 \
 #   KIOSK_ISSUER=http://127.0.0.1:3005 \
+#   ALICE_EMAIL=alice@example.com BOB_EMAIL=bob@example.com \
+#   OWNER_EMAIL=owner@combette.example DEMO_PASSWORD=… \
 #   bundle exec ruby script/redteam_suite.rb
 #
 # Exits 0 when every scenario is BLOCKED; exits 1 on any BREACH.
@@ -58,34 +73,25 @@ require "openssl"
 require "securerandom"
 require "base64"
 
+require_relative "../lib/bound_assistant"
+require_relative "../lib/devise_session"
+
 SERVER = ENV.fetch("SERVER_URL")
 ISSUER = ENV.fetch("KIOSK_ISSUER", SERVER)
 
-# Pre-seeded principals (see db/seeds.rb). StubIdp parses the token directly.
-ALICE_UUID = "00000000-0000-0000-0000-000000000001"
-BOB_UUID   = "00000000-0000-0000-0000-000000000002"
-# The agent id is a UUID, not a readable slug: `kiosk.agents.id`, every
-# `kiosk.*_mandates.agent_id` and `kiosk.current_agent_id()` are all typed
-# `uuid` in the canonical schema, so a stub identity carrying anything else is one
-# the shipped tables cannot store (K-829; found by the T-088 audit-log writer, which
-# K-828 has since removed — the constraint it exposed is the schema's, not that
-# writer's, and outlives it).
-AGENT_A    = "a0000000-0000-0000-0000-000000000001"
-AGENT_B    = "a0000000-0000-0000-0000-000000000002"
-TOKEN_A    = "agent:u-#{ALICE_UUID}:a-#{AGENT_A}:r-customer"
-TOKEN_B    = "agent:u-#{BOB_UUID}:a-#{AGENT_B}:r-customer"
-
-# Seeded staff for the roles-from-IdP escalation beats. Only the owner is
-# staff now (no stylist roster); Alice is a plain customer. Both are ordinary
-# Devise accounts — the same /users/sign_in form, the same users table; what
-# separates them is the `staff_role` column the Devise adapter reads through
-# `User#kiosk_role` (T-066: there is no second, role-carrying channel any more).
+# The seeded humans this battery drives (db/seeds.rb). Only the owner carries a
+# `staff_role`; Alice and Bob are plain customers. All three are ordinary Devise
+# accounts — the same /users/sign_in form, the same users table; what separates
+# them is the column the Devise adapter reads through `User#kiosk_role` (T-066:
+# there is no second, role-carrying channel any more).
+#
+# Emails and password arrive in the environment from the rake task, the way
+# demo:binding's HOLDER_EMAIL / HOLDER_PASSWORD do — never as literals here.
 OWNER_ID      = "00000000-0000-0000-0000-0000000000a0"
-OWNER_EMAIL   = "owner@combette.example"
-ALICE_EMAIL   = "alice@example.com"
-DEMO_PASSWORD = "combette-demo-password"
-
-require_relative "../lib/devise_session"
+OWNER_EMAIL   = ENV.fetch("OWNER_EMAIL")
+ALICE_EMAIL   = ENV.fetch("ALICE_EMAIL")
+BOB_EMAIL     = ENV.fetch("BOB_EMAIL")
+DEMO_PASSWORD = ENV.fetch("DEMO_PASSWORD")
 
 # The owner's browser session, signed in once and reused by the beats below.
 def owner_session
@@ -142,8 +148,14 @@ def record(results, name, blocked, detail)
   puts "  #{tag}  #{name} — #{detail}"
 end
 
+# ── Fixture: two customer principals, EARNED through the shipped ceremony ─────
+ALICE = bind_assistant(server: SERVER, issuer: ISSUER, email: ALICE_EMAIL, password: DEMO_PASSWORD)
+BOB   = bind_assistant(server: SERVER, issuer: ISSUER, email: BOB_EMAIL,   password: DEMO_PASSWORD)
+abort "both assistants bound to the SAME account (#{ALICE.user_id}) — no boundary to attack" \
+  if ALICE.user_id == BOB.user_id
+
 # ── Fixture: A books an appointment (target for cross-tenant probes) ──────────
-rc, salons = get_json("/kiosk/salons", bearer(TOKEN_A))
+rc, salons = get_json("/kiosk/salons", ALICE.bearer)
 abort "salons query failed (#{rc}): #{JSON.generate(salons)} — run rake demo:setup" unless rc == 200
 salon_id = Array(salons).first&.fetch("salon_id")
 abort "no salons seeded — run rake demo:setup" unless salon_id
@@ -151,13 +163,13 @@ abort "no salons seeded — run rake demo:setup" unless salon_id
 rc, appt_a = post_json(
   "/kiosk/book_appointment",
   { salon_id: salon_id, slot: "2026-10-01T09:00:00Z" },
-  bearer(TOKEN_A),
+  ALICE.bearer,
 )
 abort "A book_appointment failed (#{rc}): #{JSON.generate(appt_a)}" unless rc == 200
 appt_id_a = appt_a["appointment_id"]
 
 # ── CrossTenantRead — B must not see A's appointment ─────────────────────────
-rc, b_appts = get_json("/kiosk/my_appointments", bearer(TOKEN_B))
+rc, b_appts = get_json("/kiosk/my_appointments", BOB.bearer)
 b_ids = Array(b_appts).map { |r| r["id"] }
 record(results, "CrossTenantRead",
        rc == 200 && !b_ids.include?(appt_id_a),
@@ -176,8 +188,8 @@ record(results, "CrossTenantRead",
 # nothing belonging to B appears under A.
 rc, forged = post_json(
   "/kiosk/book_appointment",
-  { salon_id: salon_id, slot: "2026-10-02T09:00:00Z", user_id: ALICE_UUID },
-  bearer(TOKEN_B),
+  { salon_id: salon_id, slot: "2026-10-02T09:00:00Z", user_id: ALICE.user_id },
+  BOB.bearer,
 )
 refused = rc == 400 && forged["code"] == "bad_request" && forged["detail"].to_s.include?("user_id")
 
@@ -186,10 +198,10 @@ refused = rc == 400 && forged["code"] == "bad_request" && forged["detail"].to_s.
 rc_b, bobs = post_json(
   "/kiosk/book_appointment",
   { salon_id: salon_id, slot: "2026-10-02T10:00:00Z" },
-  bearer(TOKEN_B),
+  BOB.bearer,
 )
 appt_id_bob = bobs["appointment_id"]
-rc_a, a_appts = get_json("/kiosk/my_appointments", bearer(TOKEN_A))
+rc_a, a_appts = get_json("/kiosk/my_appointments", ALICE.bearer)
 a_ids = Array(a_appts).map { |r| r["id"] }
 record(results, "ForgedUserId",
        refused && rc_b == 200 && rc_a == 200 && !a_ids.include?(appt_id_bob),
@@ -205,11 +217,11 @@ rc, _ = get_json("/kiosk/salons", bearer("not-a-real-token"))
 record(results, "GarbageToken", rc == 401, "garbage token → #{rc} (want 401)")
 
 # ── UnknownQuery — unregistered query name → 404 ─────────────────────────────
-rc, _ = get_json("/kiosk/frobnicate", bearer(TOKEN_A))
+rc, _ = get_json("/kiosk/frobnicate", ALICE.bearer)
 record(results, "UnknownQuery", rc == 404, "unknown query → #{rc} (want 404)")
 
 # ── UnknownAction — unregistered action name → 404 ───────────────────────────
-rc, _ = post_json("/kiosk/nope", {}, bearer(TOKEN_A))
+rc, _ = post_json("/kiosk/nope", {}, ALICE.bearer)
 record(results, "UnknownAction", rc == 404, "unknown action → #{rc} (want 404)")
 
 # ── RetiredWire — the deleted 0.3 endpoints are GONE, not tombstoned ─────────
@@ -218,7 +230,7 @@ record(results, "UnknownAction", rc == 404, "unknown action → #{rc} (want 404)
 # answers the ordinary 404 — no privileged endpoint, no compatibility payload,
 # no second conformance surface to attack.
 retired = %w[query run].map do |name|
-  rc_r, body_r = post_json("/kiosk/#{name}", { name: "salons" }, bearer(TOKEN_A))
+  rc_r, body_r = post_json("/kiosk/#{name}", { name: "salons" }, ALICE.bearer)
   [rc_r == 404 && body_r["code"] == "not_found", "#{name}→#{rc_r}/#{body_r['code'].inspect}"]
 end
 record(results, "RetiredWire", retired.all? { |ok, _| ok },
@@ -230,7 +242,7 @@ record(results, "RetiredWire", retired.all? { |ok, _| ok },
 # have called correctly.
 uri405 = URI("#{SERVER}/kiosk/book_appointment")
 res405 = Net::HTTP.new(uri405.host, uri405.port)
-                  .request(Net::HTTP::Get.new(uri405, bearer(TOKEN_A)))
+                  .request(Net::HTTP::Get.new(uri405, ALICE.bearer))
 body405 = (JSON.parse(res405.body) rescue {})
 record(results, "MethodMismatch",
        res405.code.to_i == 405 && body405["code"] == "method_not_allowed" &&
@@ -300,11 +312,11 @@ record(results, "OwnerLinkIgnoresForgedClaimBody",
 rc_b3, appt_b3 = post_json(
   "/kiosk/book_appointment",
   { salon_id: salon_id, slot: "2026-10-03T09:00:00Z" },
-  bearer(TOKEN_B),
+  BOB.bearer,
 )
 appt_id_b3 = appt_b3["appointment_id"]
 
-rc, cal = get_json("/kiosk/salon_calendar", bearer(TOKEN_A))
+rc, cal = get_json("/kiosk/salon_calendar", ALICE.bearer)
 rows = Array(cal)
 own_ids     = rows.reject { |r| r["summary"] }.map { |r| r["id"] }
 own_only    = !own_ids.include?(appt_id_b3)
@@ -313,6 +325,49 @@ record(results, "CustomerCalendarStaysOwnScoped",
        rc == 200 && rc_b3 == 200 && own_only && no_forecast,
        "customer salon_calendar: #{rows.size} rows #{own_ids.inspect}, excludes B's #{appt_id_b3.inspect} " \
        "(own_only=#{own_only}), forecast_hidden=#{no_forecast}")
+
+# ── SelfAssertedTokenForgery (K-539 / T-104) — OVER THE LIVE WIRE ─────────────
+#
+# THE BEAT CHANGED SHAPE, AND THE CHANGE IS THE POINT. stylish used to compose a
+# hand-copied agent-IdP that parsed a self-asserted, UNSIGNED
+# `agent:u-<user>:a-<agent>:r-<role>` bearer straight into an authenticated
+# identity — at whatever role the string named, including `owner`. It was live
+# in development on purpose (every driver in this repo, including this suite,
+# held itself a principal that way), so the block could only ever be
+# demonstrated IN-PROCESS against a stubbed production Rails.env, and an env
+# gate was the whole defence.
+#
+# There is no such parser any more, in any environment: `c.agent_idp` is unset,
+# so the engine's own DefaultAgentIdp verifies the kiosk-pop JWTs it minted and
+# nothing else. So this is now an ordinary over-the-wire probe in the SAME
+# environment this suite drives, which is a strictly stronger claim than the one
+# an env gate could support.
+#
+# The forged string is deliberately maximal: it names the seeded SALON OWNER's
+# real account and `r-owner` — a role stylish genuinely configures and genuinely
+# gates on, so this is the exact escalation the parser used to grant. It is
+# aimed at `salon_calendar`, the verb that escalation was worth having.
+#
+# TWO positive controls, because a refusal on its own proves nothing here:
+#   • the OWNER's genuinely-bound token reaches the very scope the forgery
+#     wanted — the whole book, with the forecast row — so the 401 is about the
+#     bearer and not about the endpoint being shut;
+#   • it is reached through the real ceremony, which is the only door left.
+forged_owner_bearer = bearer("agent:u-#{OWNER_ID}:a-#{SecureRandom.uuid}:r-owner")
+rc_forged_cal, = get_json("/kiosk/salon_calendar", forged_owner_bearer)
+rc_forged_book, = post_json("/kiosk/book_appointment",
+                            { salon_id: salon_id, slot: "2026-10-05T09:00:00Z" },
+                            forged_owner_bearer)
+rc_owner_cal, owner_cal = get_json("/kiosk/salon_calendar", bearer(owner_token))
+owner_sees_forecast = Array(owner_cal).any? { |r| r["summary"] == "forecast" }
+record(results, "SelfAssertedTokenForgery",
+       rc_forged_cal == 401 && rc_forged_book == 401 &&
+         rc_owner_cal == 200 && owner_sees_forecast,
+       "self-asserted `agent:u-#{OWNER_ID}:a-…:r-owner` → salon_calendar #{rc_forged_cal}, " \
+       "book_appointment #{rc_forged_book} (want 401/401: it resolves to NO identity, in THIS " \
+       "environment — no env gate involved); CONTROL the owner's GENUINELY-BOUND token → " \
+       "salon_calendar #{rc_owner_cal}, forecast_visible=#{owner_sees_forecast} (want 200/true, so " \
+       "the refusal is about the bearer and not a closed endpoint)")
 
 # ── SelfAssertedStaffSessionForgery (K-555 / T-066) — OVER THE LIVE WIRE ──────
 # The HUMAN sibling of the K-539 agent-stub forgery, and it changed shape when
@@ -396,7 +451,7 @@ bad_failures = []
 BAD_INPUTS.each do |label, args|
   body = args.dup
   body[:salon_id] = salon_id if body[:salon_id] == :seeded
-  rc, resp = post_json("/kiosk/book_appointment", body, bearer(TOKEN_A))
+  rc, resp = post_json("/kiosk/book_appointment", body, ALICE.bearer)
   code = resp.is_a?(Hash) ? resp["code"] : nil
   leak = PG_INTERNALS.find { |needle| JSON.generate(resp).include?(needle) }
   next if rc == 400 && code == "bad_request" && leak.nil?
@@ -410,14 +465,14 @@ end
 # is legitimate and the descriptor promises it; a full booking must still
 # capture the service price the forecast is summed from.
 rc_bare, bare = post_json("/kiosk/book_appointment",
-  { salon_id: salon_id, slot: "2026-10-03T09:00:00Z" }, bearer(TOKEN_A))
+  { salon_id: salon_id, slot: "2026-10-03T09:00:00Z" }, ALICE.bearer)
 bad_failures << "CONTROL bare salon booking → HTTP #{rc_bare} #{JSON.generate(bare)[0, 160]}" unless rc_bare == 200
 
-rc_menu, menu = get_json("/kiosk/service_menu", bearer(TOKEN_A))
+rc_menu, menu = get_json("/kiosk/service_menu", ALICE.bearer)
 service = Array(menu).find { |r| r["price_cents"].to_i.positive? }
 rc_full, full = post_json("/kiosk/book_appointment",
   { salon_id: salon_id, slot: "2026-10-04T09:00:00Z",
-    service_id: service && service["service_id"] }, bearer(TOKEN_A))
+    service_id: service && service["service_id"] }, ALICE.bearer)
 unless rc_menu == 200 && rc_full == 200 && full["price_cents"].to_i == service["price_cents"].to_i
   bad_failures << "CONTROL priced booking → HTTP #{rc_full} price_cents=#{full["price_cents"].inspect} " \
                   "(want #{service && service["price_cents"].inspect})"

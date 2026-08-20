@@ -2,14 +2,17 @@
 
 # Synthetic principals + an evergreen SERVICE MENU for the stylish demo.
 #
-# CUSTOMERS (visitors) — Alice and Bob, with stable UUIDs the assistant scripts
-# use in `Authorization: Bearer agent:u-<uuid>:a-<agent>:r-<role>` headers. Both
-# get Devise credentials so the account-binding walkthrough can sign in through
-# the real /users/sign_in form (Alice approves the assistant link there).
+# CUSTOMERS (visitors) — Alice and Bob, with stable UUIDs and real Devise
+# credentials. The credentials are the load-bearing part: since T-104 no driver
+# can hand itself a principal, so every one of them signs its human in through
+# the real /users/sign_in form and binds an assistant through the shipped
+# ceremony (register → link → claim, lib/bound_assistant.rb). The UUIDs stay
+# stable because the claim REBINDS the assistant onto the human's account,
+# which is what makes "Alice's rows" mean these ids.
 #
 # STAFF — Combette on Park's OWNER (roles-from-IdP): one owner with a
-# `staff_role`. Their assistant, when linked (W5, role-carrying StubUserIdp
-# session), inherits that role so `salon_calendar` gates on it: an owner-linked
+# `staff_role`. Their assistant, when linked over the owner's own Devise
+# session, inherits that role so `salon_calendar` gates on it: an owner-linked
 # assistant sees the whole book (every booking made) plus the FORECAST € total;
 # a customer sees only their own bookings and no forecast.
 #

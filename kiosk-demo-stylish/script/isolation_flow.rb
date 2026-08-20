@@ -25,13 +25,32 @@
 #     behalf of another via book_appointment args. No ownership-denial assertion
 #     applies to this surface. Documented honestly rather than fabricated.
 #
-# StubIdp shape: "agent:u-<uuid>:a-<agent_id>:r-<role>" — no RSA registration
-# needed. Users are pre-seeded by demo:setup (db/seeds.rb).
+# THE TWO PRINCIPALS ARE EARNED, NOT ASSERTED (T-104). This driver used to hand
+# itself both identities by writing them down — `agent:u-<uuid>:a-<uuid>:r-customer`
+# — which a dev-only parser inside the demo's own agent-IdP turned into an
+# authenticated identity at whatever role the string asked for. That parser is
+# deleted and nothing replaced it, so each principal here runs the shipped
+# ceremony instead (lib/bound_assistant.rb: Equihash-tolled `/auth/register` →
+# the human's real Devise sign-in → `/auth/link` → `/auth/claim`). A and B hold
+# SEPARATE Devise sessions because they are separate humans.
+#
+# The claim is a REBIND, which is why the assertions below still read as "A's
+# appointments" and "B's": the headless account `/auth/register` minted is
+# remapped onto the seeded human, so each assistant's `user_id` IS its human's
+# seeded uuid. The `agent_id`, by contrast, is MINTED and cannot be chosen —
+# `kiosk.agents.id`, every `kiosk.*_mandates.agent_id` and
+# `kiosk.current_agent_id()` are typed `uuid` in the canonical schema, so a
+# driver naming its own agent id was naming a shape the shipped tables may not
+# be able to store (K-829/K-830).
+#
+# Users are pre-seeded by demo:setup (db/seeds.rb); the credentials arrive in
+# the environment from the rake task, never as literals here.
 #
 # Usage:
 #   SERVER_URL=http://127.0.0.1:3005 \
 #   KIOSK_ISSUER=http://127.0.0.1:3005 \
-#   bundle exec ruby script/isolation_flow.rb
+#   ALICE_EMAIL=alice@example.com BOB_EMAIL=bob@example.com \
+#   DEMO_PASSWORD=… bundle exec ruby script/isolation_flow.rb
 #
 # Prints ONE JSON line on stdout; non-zero exit on any failure.
 
@@ -39,24 +58,18 @@ require "json"
 require "net/http"
 require "uri"
 
+require_relative "../lib/bound_assistant"
+
 SERVER = ENV.fetch("SERVER_URL")
+ISSUER = ENV.fetch("KIOSK_ISSUER", SERVER)
 
-# Pre-seeded principals (see db/seeds.rb). StubIdp parses the token
-# directly — no RSA key registration needed for the stylish demo shape.
-ALICE_UUID = "00000000-0000-0000-0000-000000000001"
-BOB_UUID   = "00000000-0000-0000-0000-000000000002"
-
-# Distinct agent IDs so isolation_flow runs don't clash with bin/demo sessions.
-# The agent id is a UUID, not a readable slug: `kiosk.agents.id`, every
-# `kiosk.*_mandates.agent_id` and `kiosk.current_agent_id()` are all typed
-# `uuid` in the canonical schema, so a stub identity carrying anything else is one
-# the shipped tables cannot store (K-829; found by the T-088 audit-log writer, which
-# K-828 has since removed — the constraint it exposed is the schema's, not that
-# writer's, and outlives it).
-AGENT_A = "a0000000-0000-0000-0000-000000000001"
-AGENT_B = "a0000000-0000-0000-0000-000000000002"
-TOKEN_A = "agent:u-#{ALICE_UUID}:a-#{AGENT_A}:r-customer"
-TOKEN_B = "agent:u-#{BOB_UUID}:a-#{AGENT_B}:r-customer"
+# The seeded humans behind the two assistants (db/seeds.rb). Emails and password
+# come from the environment — db/seeds.rb owns them and the rake task passes
+# them through, the same way demo:binding passes HOLDER_EMAIL/HOLDER_PASSWORD. A
+# password literal in a driver is a second place for it to be true.
+ALICE_EMAIL = ENV.fetch("ALICE_EMAIL")
+BOB_EMAIL   = ENV.fetch("BOB_EMAIL")
+PASSWORD    = ENV.fetch("DEMO_PASSWORD")
 
 # THE 0.4 WIRE. An action is `POST <endpoint>/<action-name>` with its arguments
 # as the JSON body; a query is `GET <endpoint>/<query-name>` with its arguments
@@ -80,12 +93,26 @@ def get_json(url, params = {}, headers = {})
   [res.code.to_i, (JSON.parse(res.body) rescue {})]
 end
 
+# ── Step 0: two principals, each EARNED through the shipped ceremony ─────────
+alice = bind_assistant(server: SERVER, issuer: ISSUER, email: ALICE_EMAIL, password: PASSWORD)
+bob   = bind_assistant(server: SERVER, issuer: ISSUER, email: BOB_EMAIL,   password: PASSWORD)
+STDERR.puts "  A bound: agent=#{alice.agent_id} user=#{alice.user_id} role=#{alice.claims["role"].inspect}"
+STDERR.puts "  B bound: agent=#{bob.agent_id} user=#{bob.user_id} role=#{bob.claims["role"].inspect}"
+
+# The whole file asserts a boundary BETWEEN two principals. If the ceremony ever
+# handed both assistants the same account the exclusions below would pass while
+# proving nothing, so say so here rather than let a green run lie.
+abort "both assistants bound to the SAME account (#{alice.user_id}) — no boundary to test" \
+  if alice.user_id == bob.user_id
+abort "both assistants share an agent id (#{alice.agent_id}) — registration is not minting" \
+  if alice.agent_id == bob.agent_id
+
 # ── Step 1: Get salon_id from the open catalogue ─────────────────────────────
 # salons query is open-read; any authenticated principal may browse.
 rc, salons_resp = get_json(
   "#{SERVER}/kiosk/salons",
   {},
-  { "Authorization" => "Bearer #{TOKEN_A}" },
+  alice.bearer,
 )
 abort "salons query failed (#{rc}): #{JSON.generate(salons_resp)}" unless rc == 200
 
@@ -101,7 +128,7 @@ rc, appt_a_resp = post_json(
     salon_id: salon_id,
     slot:     "2026-09-01T10:00:00Z",
   },
-  { "Authorization" => "Bearer #{TOKEN_A}" },
+  alice.bearer,
 )
 abort "A book_appointment failed (#{rc}): #{JSON.generate(appt_a_resp)}" unless rc == 200
 
@@ -114,7 +141,7 @@ STDERR.puts "  A booked: appt_id=#{appt_id_a}"
 rc, b_appts_resp = get_json(
   "#{SERVER}/kiosk/my_appointments",
   {},
-  { "Authorization" => "Bearer #{TOKEN_B}" },
+  bob.bearer,
 )
 abort "B my_appointments failed (#{rc}): #{JSON.generate(b_appts_resp)}" unless rc == 200
 
@@ -123,8 +150,10 @@ STDERR.puts "  B my_appointments: #{b_appt_ids.inspect}"
 
 # ── Step 4a: B calls book_appointment with a FORGED user_id arg (Assertion 2a) ─
 #
-# B's Authorization token identifies B (BOB_UUID); the forged arg supplies A's
-# UUID. On the 0.4 wire this is REFUSED before the handler runs:
+# B's Authorization token identifies B; the forged arg supplies A's UUID — read
+# off A's OWN bound token rather than written down here, so the forgery names
+# the account this run actually books under.
+# On the 0.4 wire this is REFUSED before the handler runs:
 # `book_appointment` publishes `additionalProperties: false` and does not
 # declare `user_id` — the principal is not one of its inputs — so the declared
 # input contract answers a typed 400 naming the parameter. (Through 0.3 the
@@ -135,9 +164,9 @@ forged_rc, forged_resp = post_json(
   {
     salon_id: salon_id,
     slot:     "2026-09-02T11:00:00Z",
-    user_id:  ALICE_UUID, # adversarial: B supplies A's user_id in args
+    user_id:  alice.user_id, # adversarial: B supplies A's user_id in args
   },
-  { "Authorization" => "Bearer #{TOKEN_B}" },
+  bob.bearer,
 )
 STDERR.puts "  B book_appointment with a forged user_id → #{forged_rc} #{forged_resp["code"].inspect}"
 
@@ -151,7 +180,7 @@ rc, appt_b_resp = post_json(
     salon_id: salon_id,
     slot:     "2026-09-02T12:00:00Z",
   },
-  { "Authorization" => "Bearer #{TOKEN_B}" },
+  bob.bearer,
 )
 abort "B book_appointment failed (#{rc}): #{JSON.generate(appt_b_resp)}" unless rc == 200
 
@@ -168,7 +197,7 @@ STDERR.puts "  B booked (owner from token): appt_id=#{appt_id_b}"
 rc, b_appts_after_resp = get_json(
   "#{SERVER}/kiosk/my_appointments",
   {},
-  { "Authorization" => "Bearer #{TOKEN_B}" },
+  bob.bearer,
 )
 abort "B my_appointments (after) failed (#{rc}): #{JSON.generate(b_appts_after_resp)}" unless rc == 200
 
@@ -180,7 +209,7 @@ STDERR.puts "  B my_appointments (after own booking): #{b_appt_ids_after.inspect
 rc, a_appts_resp = get_json(
   "#{SERVER}/kiosk/my_appointments",
   {},
-  { "Authorization" => "Bearer #{TOKEN_A}" },
+  alice.bearer,
 )
 abort "A my_appointments (after) failed (#{rc}): #{JSON.generate(a_appts_resp)}" unless rc == 200
 
@@ -189,8 +218,10 @@ STDERR.puts "  A my_appointments (after B's booking): #{a_appt_ids_after.inspect
 
 # ── Output ONE JSON line ──────────────────────────────────────────────────────
 puts JSON.generate(
-  user_id_a:        ALICE_UUID,
-  user_id_b:        BOB_UUID,
+  user_id_a:        alice.user_id,
+  user_id_b:        bob.user_id,
+  agent_id_a:       alice.agent_id,
+  agent_id_b:       bob.agent_id,
   appt_id_a:        appt_id_a,
   appt_id_b:        appt_id_b,
   b_appt_ids:       b_appt_ids,

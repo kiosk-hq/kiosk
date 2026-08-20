@@ -61,10 +61,20 @@ namespace :demo do
   DESC
   task isolation: :setup do
     require "json"
+    require "shellwords"
 
     port = ENV.fetch("PORT", "3005")
     log  = "/tmp/kiosk-stylish-isolation.log"
     db   = "kiosk_stylish_development"
+
+    # The two seeded humans behind the two assistants (db/seeds.rb). Since T-104
+    # the driver EARNS each principal through the shipped ceremony — register →
+    # the human's Devise sign-in → link → claim — so it needs real credentials,
+    # and they travel as env the way demo:binding's do rather than as literals
+    # inside script/isolation_flow.rb.
+    alice_email   = "alice@example.com"
+    bob_email     = "bob@example.com"
+    demo_password = "combette-demo-password"
 
     server_url   = "http://127.0.0.1:#{port}"
     kiosk_issuer = server_url
@@ -111,7 +121,10 @@ namespace :demo do
     # ── run script/isolation_flow.rb ──────────────────────────────────────────
     flow_rb = File.expand_path("../../script/isolation_flow.rb", __dir__)
     puts "\n── Running script/isolation_flow.rb (adversarial cross-tenant) ──"
-    raw = `SERVER_URL=#{server_url} KIOSK_ISSUER=#{kiosk_issuer} bundle exec ruby #{flow_rb} 2>&1`
+    env = "SERVER_URL=#{server_url.shellescape} KIOSK_ISSUER=#{kiosk_issuer.shellescape} " \
+          "ALICE_EMAIL=#{alice_email.shellescape} BOB_EMAIL=#{bob_email.shellescape} " \
+          "DEMO_PASSWORD=#{demo_password.shellescape}"
+    raw = `#{env} bundle exec ruby #{flow_rb.shellescape} 2>&1`
     puts raw
 
     # ── parse JSON output ──────────────────────────────────────────────
@@ -171,6 +184,9 @@ namespace :demo do
     end
 
     # ── Assertion 2c: ownership comes from the TOKEN — DB user_id on aB == B ──
+    # The token is one this provider MINTED for B's assistant (T-104), so this
+    # now says something a written-down bearer could not: the row's owner is the
+    # account the shipped binding ceremony resolved, not a string B chose.
     db_user_id = `psql -X -d #{db} -tAc "SELECT user_id FROM appointments WHERE id = '#{appt_id_b}'" 2>&1`.strip
     if db_user_id == user_id_b
       puts "  OK  Assertion 2c: DB appointments.user_id for aB == user_id_b (#{user_id_b}) — ownership is taken from the identity"
@@ -524,6 +540,14 @@ namespace :demo do
       BLOCKED  CustomerCalendarStaysOwnScoped — a customer's agent sees only its
                own bookings + no forecast in salon_calendar (role gate
                un-bypassable)
+      BLOCKED  SelfAssertedTokenForgery — a self-asserted
+               `agent:u-<owner>:a-…:r-owner` bearer resolves to NO identity
+               (401 at salon_calendar AND book_appointment) in the SAME
+               environment this suite drives, while the owner's
+               genuinely-bound token still reaches the whole book + forecast
+      BLOCKED  SelfAssertedStaffSessionForgery — a forged X-Staff-Session
+               header naming the owner buys nothing; the owner's real Devise
+               session still mints a link
 
     stylish has no payment or KYC surface, so the battery covers only the
     attacks the surface can actually exhibit. Exits 0 when all are BLOCKED;
@@ -531,12 +555,22 @@ namespace :demo do
   DESC
   task redteam: :setup do
     require "net/http"
+    require "shellwords"
     require "uri"
 
     port         = ENV.fetch("PORT", "3005")
     log          = "/tmp/kiosk-stylish-redteam.log"
     server_url   = "http://127.0.0.1:#{port}"
     kiosk_issuer = server_url
+
+    # The seeded humans the battery drives (db/seeds.rb). Since T-104 the suite
+    # EARNS its customer principals through the shipped ceremony instead of
+    # writing tokens down, so it needs credentials, passed as env the way
+    # demo:binding's are.
+    alice_email   = "alice@example.com"
+    bob_email     = "bob@example.com"
+    owner_email   = "owner@combette.example"
+    demo_password = "combette-demo-password"
 
     puts "\n── Starting stylish (redteam battery) on #{server_url} ──"
 
@@ -575,7 +609,10 @@ namespace :demo do
 
     suite_rb = File.expand_path("../../script/redteam_suite.rb", __dir__)
     puts "\n── Running script/redteam_suite.rb ──"
-    system("SERVER_URL=#{server_url} KIOSK_ISSUER=#{kiosk_issuer} bundle exec ruby #{suite_rb}")
+    env = "SERVER_URL=#{server_url.shellescape} KIOSK_ISSUER=#{kiosk_issuer.shellescape} " \
+          "ALICE_EMAIL=#{alice_email.shellescape} BOB_EMAIL=#{bob_email.shellescape} " \
+          "OWNER_EMAIL=#{owner_email.shellescape} DEMO_PASSWORD=#{demo_password.shellescape}"
+    system("#{env} bundle exec ruby #{suite_rb.shellescape}")
     exit_status = $?.exitstatus
 
     if exit_status == 0

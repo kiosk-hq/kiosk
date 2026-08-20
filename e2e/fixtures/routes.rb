@@ -15,6 +15,19 @@ Rails.application.routes.draw do
   get  "/kiosk/.well-known/jwks.json",              to: "kiosk/server/jwks#show"
   post "/kiosk/oauth/device_authorization",        to: "kiosk/server/oauth_device_authorization#create"
   post "/kiosk/oauth/token",                       to: "kiosk/server/oauth_token#create"
+  # KYC attestation. This origin configures no `kyc_public_key`, so it answers
+  # the wire's own refusal rather than an attestation — which is the point of
+  # drawing it here: §3.6 names the KYC endpoint among the routes that MUST
+  # carry the three version headers, and a route this app did not draw was a
+  # clause the harness could not check (it answered Rails' own routing 404,
+  # which escapes the Kiosk middleware entirely — K-824).
+  post "/kiosk/agents/kyc",                        to: "kiosk/server/kyc_attestation#create"
+  # The «Link an assistant» page and its three form posts, drawn for the same
+  # reason: the binding plane §3.6 names is not only the JSON endpoints.
+  get  "/kiosk/auth/assistants",                   to: "kiosk/server/assistants#show"
+  post "/kiosk/auth/assistants/link",              to: "kiosk/server/assistants#link"
+  post "/kiosk/auth/assistants/update",            to: "kiosk/server/assistants#update"
+  post "/kiosk/auth/assistants/unlink",            to: "kiosk/server/assistants#unlink"
 
   # Account binding: the human half (verify page, link mint, unlink — session
   # channel) and the agent half (link-code redeem).

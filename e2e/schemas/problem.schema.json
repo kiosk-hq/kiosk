@@ -1,0 +1,67 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://kiosk.tech/spec/schemas/problem.schema.json",
+  "$comment": "VENDORED copy of the normative kiosk.tech schema at spec/schemas/problem.schema.json. It is here so e2e/schema_conformance.rb can validate this origin's LIVE wire bytes against the PUBLISHED schema with no second checkout and no network fetch (K-822). Identical to the upstream copy as PARSED JSON once this $comment is removed — bin/check-spec-schemas asserts exactly that whenever the umbrella layout puts kiosk.tech next to this repo, and says so rather than pretending when it does not. T-045 tracks the sync-check.",
+  "title": "Kiosk problem document",
+  "description": "Every error response is an RFC 9457 problem document, served as application/problem+json. Success responses carry no wrapper at all -- the body is the verb's result, described by the verb's own output_schema -- so this is the only response schema the protocol defines.",
+  "type": "object",
+  "required": [
+    "type",
+    "title",
+    "status",
+    "code"
+  ],
+  "properties": {
+    "type": {
+      "type": "string",
+      "format": "uri",
+      "description": "RFC 9457 problem type: https://kiosk.tech/problems/<code>, one URI per vocabulary entry. An identifier, not a document locator -- the normative documentation for every code is the error vocabulary in the specification. Clients MUST NOT parse it to recover the code; read `code`.",
+      "pattern": "^https://kiosk\\.tech/problems/[a-z_]+$"
+    },
+    "title": {
+      "type": "string",
+      "description": "RFC 9457 title: a short human-readable summary of the problem TYPE. Constant per type -- it does not change from occurrence to occurrence. The incident-specific sentence is `detail`."
+    },
+    "status": {
+      "type": "integer",
+      "description": "RFC 9457 status: the HTTP status code, restated in the body.",
+      "minimum": 100,
+      "maximum": 599
+    },
+    "detail": {
+      "type": "string",
+      "description": "RFC 9457 detail: the human-readable, incident-specific message. Optional; dropped when there is nothing to say."
+    },
+    "code": {
+      "description": "Extension member, and THE CONTRACT: the closed, stable error vocabulary. An AI assistant branches on this, never on the HTTP status alone (four codes share 403 and three share 402) and never on the presence of a response header.",
+      "enum": [
+        "bad_request",
+        "unauthenticated",
+        "forbidden",
+        "rls_denied",
+        "kyc_required",
+        "spending_cap_exceeded",
+        "not_found",
+        "method_not_allowed",
+        "conflict",
+        "pow_required",
+        "payment_setup_required",
+        "payment_failed",
+        "quota_exceeded",
+        "action_failed",
+        "internal_error"
+      ]
+    },
+    "hint": {
+      "type": "string",
+      "description": "Extension member: an optional remediation pointer (e.g. the known query names on a not_found, the method a verb wanted on a method_not_allowed). On kyc_required and payment_failed it is the field that says what to do next."
+    },
+    "challenges": {
+      "type": "array",
+      "description": "Extension member, present ONLY on pow_required: the list of PoW challenges to solve.",
+      "items": {
+        "$ref": "https://kiosk.tech/spec/schemas/pow.schema.json#/$defs/challenge"
+      }
+    }
+  }
+}

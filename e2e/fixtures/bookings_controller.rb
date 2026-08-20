@@ -34,7 +34,12 @@ class Kiosk::BookingsController < ApplicationController
                 },
                 required: %w[appointment_id salon_id slot]
   example_params({ salon_id: 1, slot: "2026-06-15T14:00:00Z" })
-  example_row({ appointment_id: 1, salon_id: 1, slot: "2026-06-15T14:00:00Z" })
+  # A UUID for the same reason `my_appointments` publishes one: this IS the
+  # same value under its other name, `appointments.id` is a uuid column, and
+  # the declaration above says `type: "string"`. Caught by
+  # e2e/schema_conformance.rb's §8.3 check on its first run — K-825.
+  example_row({ appointment_id: "3f1c2d4e-5a6b-4c7d-8e9f-0a1b2c3d4e5f", salon_id: 1,
+                slot: "2026-06-15T14:00:00Z" })
   def book_appointment
     # Identity is set via Kiosk::Server::SessionContext SET LOCAL —
     # current_user_id() helper returns the principal. ActiveRecord doesn't

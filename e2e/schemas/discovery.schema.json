@@ -1,0 +1,118 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://kiosk.tech/spec/schemas/discovery.schema.json",
+  "$comment": "VENDORED copy of the normative kiosk.tech schema at spec/schemas/discovery.schema.json. It is here so e2e/schema_conformance.rb can validate this origin's LIVE wire bytes against the PUBLISHED schema with no second checkout and no network fetch (K-822). Identical to the upstream copy as PARSED JSON once this $comment is removed — bin/check-spec-schemas asserts exactly that whenever the umbrella layout puts kiosk.tech next to this repo, and says so rather than pretending when it does not. T-045 tracks the sync-check.",
+  "title": "Kiosk discovery document",
+  "description": "The JSON served at GET /.well-known/kiosk.json (Kiosk protocol 0.4).",
+  "type": "object",
+  "required": [
+    "kiosk"
+  ],
+  "properties": {
+    "kiosk": {
+      "type": "object",
+      "required": [
+        "version",
+        "issuer",
+        "endpoint",
+        "capabilities",
+        "schema_url",
+        "auth"
+      ],
+      "properties": {
+        "version": {
+          "type": "string",
+          "description": "Discovery-document FORMAT version (currently \"1.0\"), independent of the protocol version."
+        },
+        "issuer": {
+          "type": "string",
+          "description": "The AP2 mandate iss anchor and the token iss/aud. An absolute https URL."
+        },
+        "endpoint": {
+          "type": "string",
+          "description": "The wire-verb root (base URL + mount path), e.g. https://example.com/kiosk."
+        },
+        "capabilities": {
+          "type": "array",
+          "description": "The MODULES this endpoint serves, from the canonical set, in canonical order. Never the origin's registered verb NAMES -- this document is a POINTER, not a copy of the contract, and the names are published once, in the catalog at `schema_url`. This is also the ONLY place the module set appears: the catalog carried a byte-identical copy as `verbs` until protocol 0.4 dropped it.",
+          "items": {
+            "enum": [
+              "schema",
+              "queries",
+              "actions",
+              "pay"
+            ]
+          },
+          "uniqueItems": true
+        },
+        "schema_url": {
+          "type": "string",
+          "description": "Where to fetch the catalog. It MUST resolve to the same document as GET <endpoint>/schema, which is UNAUTHENTICATED. It MAY carry a cache-busting version parameter; when it does, the operator MUST change it whenever the catalog changes, and MAY then serve that URL immutable for a long time. The bare <endpoint>/schema is a fixed URL whose bytes change, so it may not be cached for longer than this document is."
+        },
+        "min_client": {
+          "type": "string",
+          "description": "Advisory minimum client version (optional)."
+        },
+        "owner": {
+          "type": "object",
+          "description": "Provider-chosen contact info (optional); SHOULD include at least an email."
+        },
+        "auth": {
+          "type": "object",
+          "description": "The kiosk-pop proof-of-possession auth block.",
+          "required": [
+            "kind",
+            "challenge_url",
+            "register_url",
+            "login_url",
+            "revoke_url",
+            "device_authorization_url",
+            "claim_url"
+          ],
+          "properties": {
+            "kind": {
+              "const": "kiosk-pop"
+            },
+            "challenge_url": {
+              "type": "string"
+            },
+            "register_url": {
+              "type": "string"
+            },
+            "login_url": {
+              "type": "string"
+            },
+            "revoke_url": {
+              "type": "string"
+            },
+            "device_authorization_url": {
+              "type": "string"
+            },
+            "claim_url": {
+              "type": "string"
+            }
+          }
+        },
+        "skill": {
+          "type": "object",
+          "description": "Optional pinned skill reference. Omitted entirely when no skill is pinned.",
+          "required": [
+            "url",
+            "sha256"
+          ],
+          "properties": {
+            "url": {
+              "type": "string",
+              "description": "A versioned, immutable skill URL on kiosk.tech (skill-vX.Y.Z.md)."
+            },
+            "sha256": {
+              "type": "string",
+              "description": "Lowercase hex SHA-256 of the skill file content.",
+              "pattern": "^[0-9a-f]{64}$"
+            }
+          }
+        }
+      }
+    }
+  }
+}

@@ -369,6 +369,120 @@ assert "Kiosk-Server-Version present" "$(echo "$headers" | grep -i '^Kiosk-Serve
 assert "Kiosk-API-Version present"    "$(echo "$headers" | grep -i '^Kiosk-API-Version:'    | wc -l | tr -d ' ')" "1"
 assert "Kiosk-Min-Client present"     "$(echo "$headers" | grep -i '^Kiosk-Min-Client:'     | wc -l | tr -d ' ')" "1"
 
+# ON EVERY ROUTE UNDER THE MOUNT, AND ON THE ERROR HALF (spec §3.6).
+#
+# The three assertions above are the ones this harness had, and they covered
+# ONE endpoint on ONE status. §3.6 binds the whole mount — the wire verbs, the
+# auth plane, the binding plane, the KYC endpoint and the mount-relative JWKS —
+# "on success and on error alike", and that is precisely the surface an agent
+# uses the handshake on: a client that must decide whether it can speak to this
+# origin at all reads the version off whatever response it happens to get
+# first, which is very often a refusal.
+#
+# The reference is right BY CONSTRUCTION (HeadersMiddleware stamps every path
+# under the mount, and the render seam stamps again), and by construction is
+# not by test: nothing proved the middleware was actually mounted by the
+# INSTALL GENERATOR in a real app, which is the one thing a unit test on
+# synthetic paths cannot see.
+#
+# Each row is `METHOD PATH [BODY]`. The STATUS is deliberately not asserted —
+# most of these are refusals, several are 4xx, and that is the point: the
+# handshake is unconditional. Bodies are junk on purpose so the error half is
+# what answers.
+printf "\n  every route under the mount, success and error alike:\n"
+mount_routes=$(cat <<'ROUTES'
+GET /kiosk/schema
+GET /kiosk/openapi.json
+GET /kiosk/salons
+GET /kiosk/no_such_verb
+POST /kiosk/salons {}
+POST /kiosk/book_appointment {}
+POST /kiosk/pay {}
+GET /kiosk/auth/challenge
+POST /kiosk/auth/register {}
+POST /kiosk/auth/login {}
+POST /kiosk/auth/revoke {}
+POST /kiosk/auth/link {}
+POST /kiosk/auth/claim {}
+POST /kiosk/auth/unlink {}
+POST /kiosk/oauth/device_authorization {}
+POST /kiosk/oauth/token {}
+POST /kiosk/agents/kyc {}
+GET /kiosk/auth/assistants
+GET /kiosk/.well-known/jwks.json
+ROUTES
+)
+#
+# UNAUTHENTICATED on purpose, every one of them. Two reasons, and the first is
+# that a probe loop must not have side effects: `POST /kiosk/auth/revoke` with
+# ALICE's live token revokes her tokens, and every assertion after this block
+# would then be testing a different agent than it thinks. The second is that a
+# refusal is the response an agent most often reads the version handshake off,
+# so an unauthenticated sweep IS the error half §3.6 names.
+mount_missing=""
+mount_checked=0
+while read -r verb rpath rbody; do
+  [ -z "$verb" ] && continue
+  if [ "$verb" = "GET" ]; then
+    h=$(curl -sS -o /dev/null -D - "$SERVER_URL$rpath")
+  else
+    h=$(curl -sS -o /dev/null -D - -X POST "$SERVER_URL$rpath" \
+          -H "Content-Type: application/json" -d "${rbody:-\{\}}")
+  fi
+  rstatus=$(echo "$h" | head -1 | awk '{print $2}')
+  mount_checked=$((mount_checked + 1))
+  for hdr in Kiosk-Server-Version Kiosk-API-Version Kiosk-Min-Client; do
+    if [ "$(echo "$h" | grep -ic "^$hdr:")" != "1" ]; then
+      mount_missing="$mount_missing $verb$rpath(HTTP $rstatus):$hdr"
+    fi
+  done
+done <<< "$mount_routes"
+assert "all three version headers on all 19 mount routes" "$mount_missing" ""
+# The loop's own control: a `while read` over an empty heredoc reports success
+# for having checked nothing, which is the shape of vacuous pass this harness
+# has already been bitten by.
+assert "…and the route loop actually ran" "$mount_checked" "19"
+
+# THE NEGATIVE HALF (§3.6, matrix SPEC-010): the ROOT-served discovery surfaces
+# sit outside the mount and carry none of the three. It is also the control for
+# the loop above — if `grep -ic` matched everything, or the middleware stamped
+# the whole app, this line would fail.
+root_h=$(curl -sS -o /dev/null -D - "$SERVER_URL/.well-known/kiosk.json")
+assert "…while a ROOT discovery surface carries none of them" \
+  "$(echo "$root_h" | grep -ic '^Kiosk-\(Server-Version\|API-Version\|Min-Client\):')" "0"
+
+# ─── the handshake VALUES, and the advisory that refuses nothing ────────
+#
+# Spec §3.6 (matrix SPEC-009): `Kiosk-API-Version` is the protocol version at
+# MAJOR.MINOR.PATCH, `Kiosk-Server-Version` is implementation-defined and
+# opaque, and `Kiosk-Min-Client` is ADVISORY — "no endpoint rejects on its
+# basis". That last clause is a negative, and a negative about a header the
+# protocol defines only as a RESPONSE: the honest way to test it is to send a
+# client that announces itself as ancient, in every spelling an operator might
+# be tempted to sniff, and prove it is served anyway.
+api_version=$(echo "$headers" | tr -d '\r' | grep -i '^Kiosk-API-Version:' | awk '{print $2}')
+min_client=$(echo "$headers"  | tr -d '\r' | grep -i '^Kiosk-Min-Client:'  | awk '{print $2}')
+assert "Kiosk-API-Version is MAJOR.MINOR.PATCH" \
+  "$(echo "$api_version" | grep -Ec '^[0-9]+\.[0-9]+\.[0-9]+$')" "1"
+assert "Kiosk-Min-Client is a version, and it is advertised" \
+  "$(echo "$min_client" | grep -Ec '^[0-9]+\.[0-9]+')" "1"
+# The advisory negative. `Kiosk-Min-Client` is echoed back BELOW the advertised
+# floor, and two plausible client-version spellings ride along; a serving
+# origin answers 200 to all of it.
+assert "an ancient client is SERVED, not refused — the floor is advisory" \
+  "$(curl -sS -o /dev/null -w '%{http_code}' "$SERVER_URL/kiosk/salons" \
+       -H "Authorization: Bearer $ALICE_AGENT_TOKEN" \
+       -H "Kiosk-Min-Client: 0.0.1" \
+       -H "Kiosk-Client-Version: 0.0.1" \
+       -H "User-Agent: kiosk-agent/0.0.1")" "200"
+# The control that keeps the line above from being "this endpoint answers 200
+# to everything": the SAME request with a bad token is refused, so the 200 is
+# a decision about this caller rather than an open door.
+assert "…while the same request with a bad token is still 401" \
+  "$(curl -sS -o /dev/null -w '%{http_code}' "$SERVER_URL/kiosk/salons" \
+       -H "Authorization: Bearer garbage" \
+       -H "Kiosk-Min-Client: 0.0.1")" "401"
+
 # ─── a query is a GET at its own path ───────────────────────────────────
 
 printf "\n\033[1m=== GET /kiosk/salons ===\033[0m\n"
@@ -690,6 +804,7 @@ assert "register-pow: wire answered rows"      "$(echo "$reg_out" | jq -r '.wire
 printf "\n\033[1m=== no-human register → mandate → pay ===\033[0m\n"
 
 pay_out=$( cd "$APP_DIR" && SERVER_URL="$SERVER_URL" KIOSK_ISSUER="$KIOSK_ISSUER" \
+             PAY_CAPTURE="${PAY_CAPTURE:-}" \
              bundle exec ruby "$FIXTURES/pay_flow.rb" )
 
 assert "pay: http 200"                "$(echo "$pay_out" | jq -r '.http_code')"                       "200"

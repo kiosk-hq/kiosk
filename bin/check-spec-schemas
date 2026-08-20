@@ -1,0 +1,131 @@
+#!/usr/bin/env ruby
+# frozen_string_literal: true
+
+# Vendored-schema drift guard (K-822, the sync-check half of T-045).
+#
+# WHAT BREAKS IF THESE DRIFT
+# --------------------------
+# `e2e/schema_conformance.rb` validates this origin's LIVE wire bytes against
+# the normative JSON Schemas — the thing nothing did until K-822, and the whole
+# point of which is that the code and the PUBLISHED spec are held against each
+# other rather than each against itself. It can only do that against a copy,
+# because the schemas live in the kiosk.tech repo and a merge gate must not
+# depend on a live website. So the copy becomes the new single point of
+# failure: a schema edited on kiosk.tech and not here leaves e2e green while
+# the wire diverges from what implementers actually read, which is exactly the
+# drift the check was written to catch, one level up.
+#
+# THE COPIES
+#
+#   e2e/schemas/*.schema.json                       (five: discovery, problem,
+#                                                    schema-descriptor,
+#                                                    mandates, kyc)
+#   kiosk-server/lib/kiosk/server/schemas/pow.schema.json  (the sixth — vendored
+#                                                    long before this check, for
+#                                                    RequestValidation's own use)
+#
+# WHAT IS COMPARED. The PARSED documents, with the vendored `$comment` (the
+# provenance marker, which upstream does not carry) removed from the local
+# side. Not bytes: the copies are pretty-printed by the tool that made them and
+# a whitespace diff is not a drift. Every published schema must have a copy and
+# every copy must have a published original — a mirror that quietly stopped
+# mirroring one file is the failure mode this exists to prevent.
+#
+# WHERE IT CAN RUN. kiosk.tech is a SEPARATE repo and is not checked out in
+# this repo's CI, so — exactly like `bin/check-solver-pin --offline` — this
+# check runs the comparison when the umbrella layout puts kiosk.tech next to
+# this repo, and SAYS SO and skips when it does not, rather than printing a
+# green line for a comparison it never made.
+#
+# Usage: bin/check-spec-schemas [--spec-dir PATH]
+
+require "json"
+
+REPO = File.expand_path("..", __dir__)
+
+# local vendored copy => basename in the published set
+COPIES = {
+  File.join(REPO, "e2e/schemas/discovery.schema.json")         => "discovery.schema.json",
+  File.join(REPO, "e2e/schemas/problem.schema.json")           => "problem.schema.json",
+  File.join(REPO, "e2e/schemas/schema-descriptor.schema.json") => "schema-descriptor.schema.json",
+  File.join(REPO, "e2e/schemas/mandates.schema.json")          => "mandates.schema.json",
+  File.join(REPO, "e2e/schemas/kyc.schema.json")               => "kyc.schema.json",
+  File.join(REPO, "kiosk-server/lib/kiosk/server/schemas/pow.schema.json") => "pow.schema.json",
+}.freeze
+
+spec_dir = nil
+if (i = ARGV.index("--spec-dir"))
+  spec_dir = ARGV[i + 1]
+end
+spec_dir ||= File.expand_path("../kiosk.tech/spec/schemas", REPO)
+
+failures = []
+
+# ── every vendored copy exists and parses ───────────────────────────────────
+COPIES.each_key do |path|
+  next if File.exist?(path)
+
+  failures << "vendored copy missing: #{path.delete_prefix("#{REPO}/")}"
+end
+
+COPIES.each_key do |path|
+  next unless File.exist?(path)
+
+  begin
+    JSON.parse(File.read(path))
+  rescue JSON::ParserError => e
+    failures << "vendored copy is not valid JSON: #{path.delete_prefix("#{REPO}/")} — #{e.message}"
+  end
+end
+
+unless File.directory?(spec_dir)
+  puts "bin/check-spec-schemas: #{COPIES.size} vendored copies present and parseable."
+  puts "  NOT COMPARED against the published originals — #{spec_dir} is not here."
+  puts "  kiosk.tech is a separate repo; run this from the umbrella checkout (or pass"
+  puts "  --spec-dir) to compare. This is the same split bin/check-solver-pin makes."
+  if failures.empty?
+    exit 0
+  else
+    failures.each { |f| warn "  FAIL #{f}" }
+    exit 1
+  end
+end
+
+# ── the mirror is COMPLETE in both directions ───────────────────────────────
+published = Dir[File.join(spec_dir, "*.schema.json")].map { |p| File.basename(p) }.sort
+vendored  = COPIES.values.sort
+
+(published - vendored).each do |name|
+  failures << "#{name} is published on kiosk.tech and vendored NOWHERE here — " \
+              "e2e/schema_conformance.rb cannot check the wire against it"
+end
+(vendored - published).each do |name|
+  failures << "#{name} is vendored here but no longer published — a copy of a schema " \
+              "that does not exist upstream is a fiction the e2e gate would still enforce"
+end
+
+# ── content ─────────────────────────────────────────────────────────────────
+COPIES.each do |path, name|
+  upstream_path = File.join(spec_dir, name)
+  next unless File.exist?(path) && File.exist?(upstream_path)
+
+  local    = JSON.parse(File.read(path))
+  upstream = JSON.parse(File.read(upstream_path))
+  # The provenance marker is the ONE permitted difference: it says the file is
+  # a copy, which is a true statement the original must not carry.
+  local.delete("$comment")
+  upstream.delete("$comment")
+  next if local == upstream
+
+  failures << "#{name} has DRIFTED from #{upstream_path}. Re-vendor it (keeping the " \
+              "$comment) — do not edit the copy to match some third thing."
+end
+
+if failures.empty?
+  puts "bin/check-spec-schemas: #{COPIES.size} vendored schemas match #{spec_dir}."
+  exit 0
+end
+
+failures.each { |f| warn "  FAIL #{f}" }
+warn "\nbin/check-spec-schemas: #{failures.size} problem(s)."
+exit 1

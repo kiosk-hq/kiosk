@@ -20,7 +20,7 @@ module Kiosk
     #   - db/migrate/<ts+4>_create_kiosk_mandates.rb
     #   - db/migrate/<ts+5>_add_kyc_verified_at_to_kiosk_agents.rb
     #   - db/migrate/<ts+6>_rebuild_kiosk_device_authorizations.rb
-    #   - db/migrate/<ts+7>_add_kyc_attributes_to_kiosk_agents.rb
+    #   - db/migrate/<ts+7>_create_kiosk_kyc_attributes.rb
     #   - db/migrate/<ts+8>_add_kiosk_agent_governance_columns.rb
     #
     # There is no actions-log migration: canonical 003 created
@@ -109,8 +109,8 @@ module Kiosk
       end
 
       def create_kyc_attributes_migration
-        migration_template "add_kyc_attributes_to_kiosk_agents.rb.tt",
-                           "db/migrate/add_kyc_attributes_to_kiosk_agents.rb"
+        migration_template "create_kiosk_kyc_attributes.rb.tt",
+                           "db/migrate/create_kiosk_kyc_attributes.rb"
       end
 
       def create_agent_governance_columns_migration

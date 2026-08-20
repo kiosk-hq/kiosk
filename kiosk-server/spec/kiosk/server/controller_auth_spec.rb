@@ -249,7 +249,16 @@ RSpec.describe "wire-surface controller auth" do
     before do
       log = executed_sql
       fake_conn = Object.new.tap do |conn|
-        conn.define_singleton_method(:exec_query) { |sql, _name = nil, binds = []| log << [sql, binds]; [] }
+        # The attestation write is a TRANSACTION since K-656 (stamp, then reset
+        # and re-grant the attribute ROWS), and its first statement RETURNS the
+        # stamped id — the gate that stops a revoked agent being granted
+        # anything. The fake answers one row for that statement and none for
+        # the rest, so the gate is exercised rather than bypassed.
+        conn.define_singleton_method(:transaction) { |&blk| blk.call }
+        conn.define_singleton_method(:exec_query) do |sql, _name = nil, binds = []|
+          log << [sql, binds]
+          sql.start_with?("UPDATE") ? [{ "id" => binds.first }] : []
+        end
         conn.define_singleton_method(:quote_table_name) { |n| n }
       end
       ar_base = Class.new { define_singleton_method(:lease_connection) { fake_conn } }
@@ -285,12 +294,18 @@ RSpec.describe "wire-surface controller auth" do
       # A bare binary attestation (no `attributes`) verifies and returns the
       # empty attribute set — the anonymized named-attributes surface.
       expect(body).to eq(kyc_verified: true, attributes: {})
-      # The row updated is the one for the CUSTOM idp's identity, and now also
-      # persists the (empty) kyc_attributes jsonb alongside kyc_verified_at.
-      sql, binds = executed_sql.last
-      expect(sql).to include("kyc_attributes = $1::jsonb")
-      expect(sql).to include("WHERE id = $2")
-      expect(binds).to eq(["{}", "a-custom"])
+      # The row stamped is the one for the CUSTOM idp's identity, and the empty
+      # grant set is still WRITTEN — the reset runs even when nothing is
+      # granted, which is what makes a later bare attestation take earlier
+      # grants away.
+      stamp, reset, grant = executed_sql
+      expect(stamp.first).to include("SET kyc_verified_at = now()")
+      expect(stamp.first).to include("WHERE id = $1 AND revoked_at IS NULL RETURNING id")
+      expect(stamp.last).to eq(["a-custom"])
+      expect(reset.first).to include("DELETE FROM kiosk.kyc_attributes WHERE agent_id = $1")
+      expect(reset.last).to eq(["a-custom"])
+      expect(grant.first).to include("INSERT INTO kiosk.kyc_attributes")
+      expect(grant.last).to eq(["{}", "a-custom"])
     end
 
     it "records the named anonymized attributes an attestation carries" do
@@ -310,13 +325,15 @@ RSpec.describe "wire-surface controller auth" do
       # NB: the wire body is String-keyed JSON ({"age_over_18": true}); the
       # dispatch harness re-parses it with symbolize_names, hence Symbol keys here.
       expect(body).to eq(kyc_verified: true, attributes: { age_over_18: true, licence_a: true })
-      # The persisted jsonb carries exactly the granted booleans — never a
-      # document. It arrives as a BIND (K-782), so the payload is in the binds
-      # and NOT in the statement text, and the `::jsonb` cast on the placeholder
-      # is what makes it an object rather than a stored json string
+      # The granted NAMES become rows, and the spelling of `true` is judged in
+      # Postgres: `jsonb_each(...) WHERE value = 'true'::jsonb` grants a name
+      # only for the JSON boolean, never for the string "true" or a number
       # (auth_plane_persistence_spec.rb proves that against a real Postgres).
+      # The payload arrives as a BIND (K-782), so it is in the binds and NOT in
+      # the statement text.
       sql, binds = executed_sql.last
-      expect(sql).to include("kyc_attributes = $1::jsonb")
+      expect(sql).to include("INSERT INTO kiosk.kyc_attributes (agent_id, name)")
+      expect(sql).to include("FROM jsonb_each($1::jsonb) WHERE value = 'true'::jsonb")
       expect(sql).not_to include("age_over_18")
       expect(binds.first).to eq(JSON.generate("age_over_18" => true, "licence_a" => true))
     end

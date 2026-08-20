@@ -4,6 +4,10 @@ All notable changes follow [Keep a Changelog](https://keepachangelog.com/en/1.1.
 
 ## [Unreleased]
 
+### Changed
+
+- **KYC attributes become a TABLE, and the grant becomes a row's existence (K-656/T-061).** The named anonymized booleans an attestation grants no longer live in a `kiosk.agents.kyc_attributes` jsonb map; canonical migration 009 now creates `kiosk.kyc_attributes` — one row per `(agent_id, name)`, no value column at all — and `DefaultAgentIdp#kyc_attributes` / `#kyc_has_attributes?` read it unchanged at the public API. A map had to carry a value and a value has spellings, so every reader had to decide which spellings of `true` count; with presence as the grant a gate is an `EXISTS` that cannot answer NULL and cannot be fooled by a truthy-but-not-`true` value, and the one place a spelling is still judged is the WRITE — `POST /kiosk/agents/kyc` inserts names via `jsonb_each(...) WHERE value = 'true'::jsonb`, in Postgres, once for every operator. The write is one transaction whose stamp gates the grants (a revoked agent is granted nothing) and it REPLACES the set, so a later bare attestation takes earlier grants away.
+
 ### Added
 
 - **The audit sink — Kiosk offers the trail and stores none of it (K-828).** `c.audit_sink` is a callable an operator sets; it receives one `Kiosk::Server::ActionEvent` per action invocation, success and failure alike, carrying the action name, the `{user_id, agent_id}` pair, the role, the actor, the outcome, the error class and message, the timestamp — and the ARGUMENTS IN FULL, deliberately unredacted, because the retention policy for an operator's customers' data is not Kiosk's to assume. Default is no sink: nothing is emitted and nothing is written anywhere. Redaction is one call (`ActionEvent#with_arg_types`, `#without_args`), a sink that raises is logged and never fails the action, and emission sits outside the action's transaction so a sink cannot hold one open. Replaces the `kiosk.action_log` writer this release briefly shipped.

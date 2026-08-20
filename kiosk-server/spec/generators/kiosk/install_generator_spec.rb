@@ -122,7 +122,7 @@ RSpec.describe Kiosk::Generators::InstallGenerator do
         a_string_ending_with("_create_kiosk_mandates.rb"),
         a_string_ending_with("_add_kyc_verified_at_to_kiosk_agents.rb"),
         a_string_ending_with("_rebuild_kiosk_device_authorizations.rb"),
-        a_string_ending_with("_add_kyc_attributes_to_kiosk_agents.rb"),
+        a_string_ending_with("_create_kiosk_kyc_attributes.rb"),
         a_string_ending_with("_add_kiosk_agent_governance_columns.rb"),
       )
     end
@@ -292,8 +292,13 @@ RSpec.describe Kiosk::Generators::InstallGenerator do
       end
     end
 
-    describe "009 add_kyc_attributes_to_kiosk_agents" do
-      let(:file) { migrations.find { |p| p.end_with?("_add_kyc_attributes_to_kiosk_agents.rb") } }
+    # 009 kept its ordinal across K-656: the grants moved from a column on
+    # kiosk.agents to their own kiosk.kyc_attributes table, and 004-010 are
+    # named by number in shipped comments and CHANGELOG history, so the slot
+    # was rewritten rather than renumbered (the same rule 003's retirement
+    # followed).
+    describe "009 create_kiosk_kyc_attributes" do
+      let(:file) { migrations.find { |p| p.end_with?("_create_kiosk_kyc_attributes.rb") } }
 
       it "calls SchemaDefinitions.kyc_attributes_sql with the configured schema" do
         invoke!(%w[--schema=ksk])
@@ -302,16 +307,16 @@ RSpec.describe Kiosk::Generators::InstallGenerator do
         expect(body).to include('schema: "ksk"')
       end
 
-      it "sorts after 007 (the kyc_verified_at column)" do
+      it "sorts after 002 (the agents table its rows reference)" do
         invoke!
-        verified_idx   = migrations.index { |p| p.end_with?("_add_kyc_verified_at_to_kiosk_agents.rb") }
-        attributes_idx = migrations.index { |p| p.end_with?("_add_kyc_attributes_to_kiosk_agents.rb") }
-        expect(attributes_idx).to be > verified_idx
+        identity_idx   = migrations.index { |p| p.end_with?("_create_kiosk_identity_tables.rb") }
+        attributes_idx = migrations.index { |p| p.end_with?("_create_kiosk_kyc_attributes.rb") }
+        expect(attributes_idx).to be > identity_idx
       end
 
-      it "drops the column in #down" do
+      it "drops the TABLE in #down" do
         invoke!(%w[--schema=ksk])
-        expect(File.read(file)).to include("DROP COLUMN IF EXISTS kyc_attributes")
+        expect(File.read(file)).to include('DROP TABLE IF EXISTS "ksk".kyc_attributes')
       end
     end
 

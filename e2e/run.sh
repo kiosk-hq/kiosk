@@ -226,13 +226,16 @@ cp "$FIXTURES/seeds.rb"              db/seeds.rb
 mkdir -p app/controllers/kiosk
 cp "$FIXTURES/catalog_controller.rb"  app/controllers/kiosk/catalog_controller.rb
 cp "$FIXTURES/bookings_controller.rb" app/controllers/kiosk/bookings_controller.rb
-# The four adapter stubs the initializer hands to `Kiosk.configure` are
-# APPLICATION code, so they go under app/ — not into lib/ behind a hand-written
+# The adapters the initializer hands to `Kiosk.configure` are APPLICATION code,
+# so they go under app/ — not into lib/ behind a hand-written
 # `require Rails.root.join("lib/...")`, which is what this harness used to do
 # (K-502). `rails new --api` does not create app/services either.
+#
+# There is no agent-IdP among them any more (T-104): the two that used to be
+# staged here, StubIdp and JwtOrStubIdp, are deleted, and the engine's own
+# DefaultAgentIdp — the adapter that verifies the tokens the engine mints — is
+# what authenticates assistants, with nothing configured.
 mkdir -p app/services
-cp "$FIXTURES/stub_idp.rb"           app/services/stub_idp.rb
-cp "$FIXTURES/jwt_or_stub_idp.rb"    app/services/jwt_or_stub_idp.rb
 cp "$FIXTURES/stub_psp.rb"           app/services/stub_psp.rb
 # The operator's audit sink (K-828). Kiosk stores no audit trail — it emits one
 # event per action invocation to whatever callable `c.audit_sink` names, and
@@ -352,6 +355,32 @@ done
 }
 ok "server up on http://127.0.0.1:$SERVER_PORT"
 
+# ─── mint the two agent principals, by ceremony ─────────────────────────────
+#
+# T-104. The assistant suite used to hand itself its two principals as
+# `agent:u-…:a-…:r-customer` strings that a dev-only parser in the fixture host
+# believed. That parser is deleted, so the suite has to EARN them the way a real
+# assistant does: an Equihash-tolled `/auth/register` (a HEADLESS account), the
+# human's link code minted on a real Devise session, and `/auth/claim` — which
+# rebinds the key to that human and returns the token every assertion below
+# rides. Two of them, one for alice and one for bob, because the isolation
+# assertions need two principals that are genuinely different people.
+log "bind two assistants to the seeded humans (register -> link -> claim)"
+bind_json=$( cd "$PWD" && SERVER_URL="http://127.0.0.1:$SERVER_PORT" \
+               KIOSK_ISSUER="$KIOSK_ISSUER" HUMAN_PASSWORD="e2e-demo-password" \
+               SOLVE_PY="$SOLVE_PY" \
+               bundle exec ruby "$FIXTURES/bind_assistants.rb" ) \
+  || fail "the binding ceremony did not produce two assistants"
+export ALICE_AGENT=$(echo "$bind_json" | jq -r '.alice_agent')
+export ALICE_AGENT_TOKEN=$(echo "$bind_json" | jq -r '.alice_token')
+export BOB_AGENT=$(echo "$bind_json" | jq -r '.bob_agent')
+export BOB_AGENT_TOKEN=$(echo "$bind_json" | jq -r '.bob_token')
+[ -n "$ALICE_AGENT_TOKEN" ] && [ "$ALICE_AGENT_TOKEN" != "null" ] \
+  || fail "no access token for alice's assistant: $bind_json"
+[ -n "$BOB_AGENT_TOKEN" ] && [ "$BOB_AGENT_TOKEN" != "null" ] \
+  || fail "no access token for bob's assistant: $bind_json"
+ok "alice's assistant $ALICE_AGENT and bob's assistant $BOB_AGENT are bound and hold kiosk-pop tokens"
+
 # ─── run the assistant ──────────────────────────────────────────────────
 
 log "run mock AI-assistant test suite"
@@ -361,6 +390,10 @@ if ! SERVER_URL="http://127.0.0.1:$SERVER_PORT" \
        FIXTURES="$FIXTURES" \
        DB_NAME="$DB_NAME" \
        KIOSK_ISSUER="$KIOSK_ISSUER" \
+       ALICE_AGENT="$ALICE_AGENT" \
+       ALICE_AGENT_TOKEN="$ALICE_AGENT_TOKEN" \
+       BOB_AGENT="$BOB_AGENT" \
+       BOB_AGENT_TOKEN="$BOB_AGENT_TOKEN" \
        AUDIT_EVENTS="$AUDIT_EVENTS" \
        AUDIT_EVENTS_REDACTED="$AUDIT_EVENTS_REDACTED" \
        SOLVE_PY="$SOLVE_PY" \
@@ -385,7 +418,7 @@ ok "all assertions passed"
 # with the server still up — these are live requests, not a replay.
 log "validate live wire bytes against the published JSON Schemas"
 if ! SERVER_URL="http://127.0.0.1:$SERVER_PORT" \
-       TOKEN="agent:u-00000000-0000-0000-0000-000000000001:a-a0000000-0000-0000-0000-000000000001:r-customer" \
+       TOKEN="$ALICE_AGENT_TOKEN" \
        PAY_CAPTURE="$PAY_CAPTURE" \
        bundle exec ruby "$KIOSK_OSS/e2e/schema_conformance.rb"; then
   log "schema conformance failed — last 40 lines of server log:"
@@ -441,7 +474,11 @@ done
   fail "sink-less origin did not become ready (see log above)"
 }
 
-SINKLESS_TOKEN="agent:u-00000000-0000-0000-0000-000000000001:a-a0000000-0000-0000-0000-000000000001:r-customer"
+# The SAME token alice's assistant has been using. This restart shares the
+# database and the exported KIOSK_SIGNING_KEY_B64 with the origin above, so the
+# kiosk-pop JWT verifies here too — the agent row and the signing key are what
+# it is checked against, and neither moved.
+SINKLESS_TOKEN="$ALICE_AGENT_TOKEN"
 sinkless_salon=$(curl -sS "http://127.0.0.1:$SERVER_PORT/kiosk/salons" \
   -H "Authorization: Bearer $SINKLESS_TOKEN" | jq -r '.[0].id')
 sinkless_code=$(curl -sS -o /dev/null -w "%{http_code}" -X POST \

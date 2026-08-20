@@ -10,8 +10,11 @@
 # below, which is how the engine finds them. What is left in this file is
 # configuration, which is what an initializer is for.
 #
-# The five adapter stubs it wires — StubIdp, StubUserIdp, JwtOrStubIdp, StubPsp
-# and DemoAuditSink — are named, not required (K-502). run.sh copies them to app/services and
+# The two adapters it wires — StubPsp and DemoAuditSink — are named, not
+# required (K-502). Both agent and human authentication are real now and neither
+# is stubbed: the human's is `kiosk-user-idp-devise` (T-066), the agent's is the
+# engine's own DefaultAgentIdp with no wiring at all (T-104).
+# run.sh copies the two adapters to app/services and
 # declares that an autoload-ONCE path, which is what makes them resolvable here:
 # Rails sets the reloadable autoloader up AFTER config/initializers run, so a
 # hand-written `require Rails.root.join(...)` was the only alternative.

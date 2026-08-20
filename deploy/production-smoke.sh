@@ -283,15 +283,20 @@ smoke_stylish() {
       || fail "signed-in manage page expected 200, got $authed_code"
   fi
 
-  echo "── Assertion 5: forged cleartext identity bearer → 401 in production (K-539) ──"
-  # The demos' StubIdp parses `agent:u-…:a-…:r-…` into an authenticated identity
-  # at ANY role — a dev/test convenience. In production JwtOrStubIdp gates that
-  # fallback behind Rails.env.local?, so a forged self-asserted bearer resolves to
-  # NO identity and the wire raises 401. Before the K-539 fix this returned 200
+  echo "── Assertion 5: forged cleartext identity bearer → 401 (K-539) ──"
+  # A `agent:u-…:a-…:r-…` bearer names a user, an agent and a ROLE, and the demos
+  # once shipped a parser that believed all three — a dev/test convenience gated
+  # behind Rails.env.local?. Before the K-539 fix this probe returned 200
   # (authenticated as a forged owner → cross-tenant read of the public `salons`
-  # query). This is a production-config assertion, so it can catch the bug the
-  # dev-mode CI + demo:redteam gates (which run RAILS_ENV=development, where the
-  # stub is intentionally live) structurally cannot.
+  # query), and the gate is what made it 401 here.
+  #
+  # T-104 deleted the parser outright: assistants authenticate with the kiosk-pop
+  # JWT the engine minted, verified by the engine's own DefaultAgentIdp, and no
+  # demo overrides `c.agent_idp` at all. The assertion is kept — and it is now
+  # stronger than a gate on an env check, because the arm it probes for does not
+  # exist in ANY environment. The dev-mode CI + demo:redteam gates assert the
+  # same refusal now, which they structurally could not while the stub was
+  # intentionally live under RAILS_ENV=development.
   # Protocol 0.4: a query is `GET <endpoint>/<query-name>`. Identity resolves
   # BEFORE the verb is looked up, so this probe is a 401 whether or not the
   # name exists — which is exactly the property being asserted, and also why an
@@ -302,9 +307,9 @@ smoke_stylish() {
     -H "Authorization: Bearer ${FORGED_BEARER}" \
     "${BASE}/kiosk/salons")"
   if [ "$forged_code" = "401" ]; then
-    pass "forged self-asserted bearer → 401 (cleartext stub unreachable in production)"
+    pass "forged self-asserted bearer → 401 (no cleartext parser exists to reach)"
   else
-    fail "forged bearer expected 401, got $forged_code (K-539: cleartext stub reachable in production — cross-tenant auth bypass!)"
+    fail "forged bearer expected 401, got $forged_code (K-539: something is parsing self-asserted bearers — cross-tenant auth bypass!)"
   fi
 
   echo "── Assertion 6: forged human X-Staff-Session → 401 in production (K-555) ──"

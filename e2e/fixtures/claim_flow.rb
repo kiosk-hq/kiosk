@@ -123,8 +123,24 @@ rc, claim = post_json("#{SERVER}/kiosk/auth/claim",
 results[:link_claim] = [rc, claim["user_id"] == HUMAN]
 
 # ── unlink the first assistant: registration-layer revocation ──
+#
+# Spec §6.3/§15.4 promise BOTH halves — "the key's tokens stop verifying AND
+# /auth/login answers 404" — and this driver used to assert only the second,
+# which is how the same-second aperture in the watermark survived unnoticed
+# (K-835). Re-login aligned to a wall-clock second boundary so the fresh token's
+# `iat` lands in the SAME second as the unlink, then assert the refusal.
+proof = pop_proof(key, pem)
+sleep(1.0 - (Time.now.to_f % 1.0) + 0.02)
+rc, fresh = post_json("#{SERVER}/kiosk/auth/login", { public_key: pem, signed: proof })
+fresh_token = rc == 200 ? fresh.fetch("access_token") : token
 rc, = HUMAN_SESSION.post_json("/kiosk/auth/unlink", { agent_id: agent_id }, { session: true })
 results[:unlink] = rc
+
+rc, = get_json("#{SERVER}/kiosk/my_appointments", { "Authorization" => "Bearer #{token}" })
+results[:held_token_after_unlink] = rc
+rc, = get_json("#{SERVER}/kiosk/my_appointments", { "Authorization" => "Bearer #{fresh_token}" })
+results[:same_second_token_after_unlink] = rc
+
 rc, = post_json("#{SERVER}/kiosk/auth/login", { public_key: pem, signed: pop_proof(key, pem) })
 results[:login_after_unlink] = rc
 

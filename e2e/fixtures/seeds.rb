@@ -1,10 +1,12 @@
 # frozen_string_literal: true
 
-# Two synthetic users — Alice and Bob — with stable UUIDs the assistant
-# script uses in `Authorization: Bearer agent:u-<uuid>:a-<agent>:r-<role>`
-# headers. Both carry Devise credentials, because the human half of the
-# account-binding ceremony is a REAL browser session: claim_flow.rb signs
-# Alice in at /users/sign_in and approves the assistant there. One salon.
+# Two synthetic users — Alice and Bob — with stable UUIDs, and Devise
+# credentials for both, because BOTH halves of every ceremony are now real
+# (T-066 for the human, T-104 for the agent). The assistant suite no longer
+# names a principal in a bearer header: run.sh binds one assistant to each of
+# these two humans through the shipped ceremony (register -> link -> claim) and
+# hands the suite the tokens the origin issued. claim_flow.rb signs Alice in at
+# /users/sign_in and approves an assistant there. One salon.
 
 ALICE_ID = "00000000-0000-0000-0000-000000000001"
 BOB_ID   = "00000000-0000-0000-0000-000000000002"

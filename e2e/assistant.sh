@@ -29,6 +29,8 @@
 #   FIXTURES     — path to e2e/fixtures (locates pay_flow.rb)
 #   DB_NAME      — Postgres database for the direct AP2-trail assertions
 #   KIOSK_ISSUER — issuer/audience passed through to pay_flow.rb
+#   ALICE_AGENT / ALICE_AGENT_TOKEN, BOB_AGENT / BOB_AGENT_TOKEN — the two
+#                  agent principals, minted by the binding ceremony (T-104)
 
 set -euo pipefail
 
@@ -37,19 +39,26 @@ SERVER_URL="${SERVER_URL:-http://127.0.0.1:3001}"
 ALICE="00000000-0000-0000-0000-000000000001"
 BOB="00000000-0000-0000-0000-000000000002"
 
-# Bearer-token shape per stub_idp.rb:
-#   agent:u-<user_uuid>:a-<agent_uuid>:r-<role>
+# The two agent principals this suite runs as. They are REAL kiosk-pop JWTs the
+# booted origin issued: run.sh drives e2e/fixtures/bind_assistants.rb through
+# the shipped ceremony (Equihash-tolled register -> the human's link code ->
+# claim) and exports the results here (T-104).
 #
-# The agent id is a UUID, not the readable `alice-claude` slug it used to be:
-# `kiosk.agents.id`, every `kiosk.*_mandates.agent_id` and
-# `kiosk.current_agent_id()` are all typed `uuid` in the canonical schema, so a
-# stub identity carrying anything else is one the shipped tables cannot store.
-# That was latent until T-088's audit-log writer became the first to try it
-# (K-829). K-828 has since removed that writer; the schema constraint remains.
-ALICE_AGENT="a0000000-0000-0000-0000-000000000001"
-BOB_AGENT="a0000000-0000-0000-0000-000000000002"
-ALICE_AGENT_TOKEN="agent:u-$ALICE:a-$ALICE_AGENT:r-customer"
-BOB_AGENT_TOKEN="agent:u-$BOB:a-$BOB_AGENT:r-customer"
+# Until T-104 these four values were written down — two
+# `agent:u-<uuid>:a-<uuid>:r-customer` strings that a dev-only parser in the
+# fixture host turned into authenticated identities at any role (K-539). The
+# parser is deleted; the assertions below are unchanged, because the ceremony
+# ends with the same two principals it used to assert.
+#
+# The agent id is still a UUID — now by construction rather than by convention,
+# because `/auth/register` minted it: `kiosk.agents.id`, every
+# `kiosk.*_mandates.agent_id` and `kiosk.current_agent_id()` are all typed
+# `uuid` in the canonical schema (K-829/K-830), and a caller can no longer
+# choose a shape the shipped tables cannot store.
+ALICE_AGENT="${ALICE_AGENT:?run.sh must export ALICE_AGENT from the binding ceremony}"
+BOB_AGENT="${BOB_AGENT:?run.sh must export BOB_AGENT from the binding ceremony}"
+ALICE_AGENT_TOKEN="${ALICE_AGENT_TOKEN:?run.sh must export ALICE_AGENT_TOKEN}"
+BOB_AGENT_TOKEN="${BOB_AGENT_TOKEN:?run.sh must export BOB_AGENT_TOKEN}"
 
 PASS=0
 FAIL=0
@@ -846,6 +855,10 @@ assert "binding: kiosk-pop login refresh"     "$(echo "$bind_out" | jq -r '.logi
 assert "binding: link-code mint (session)"    "$(echo "$bind_out" | jq -r '.link_mint')"                            "201"
 assert "binding: link-code redeem → human"    "$(echo "$bind_out" | jq -r '.link_claim | map(tostring) | join(":")')" "201:true"
 assert "binding: unlink → 200"                "$(echo "$bind_out" | jq -r '.unlink')"                               "200"
+# K-835: the TOKEN half of the unlink promise, including a token minted in the
+# same wall-clock second as the unlink — which used to survive for its full hour.
+assert "binding: held token dies at unlink"   "$(echo "$bind_out" | jq -r '.held_token_after_unlink')"        "401"
+assert "binding: same-second token dies too"  "$(echo "$bind_out" | jq -r '.same_second_token_after_unlink')" "401"
 assert "binding: login after unlink → 404"    "$(echo "$bind_out" | jq -r '.login_after_unlink')"                   "404"
 
 # ─── register-PoW golden path (402 pow_required → solve Equihash → 201) ──────

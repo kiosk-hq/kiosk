@@ -20,6 +20,8 @@ All notable changes follow [Keep a Changelog](https://keepachangelog.com/en/1.1.
 
 ### Changed
 
+- **`.verify` now has an ANSWER for degenerate `(n, k)` — `false` — instead of a crash or a vacuous accept (K-840).** A negative `k` collapsed `1 << k` to 0, so an EMPTY indices array satisfied the length check and the root step dereferenced an empty stack (`NoMethodError`); `n = 0` (or any `n` below one byte) made every leaf the integer 0, so ANY `2^k` distinct ascending indices verified TRUE — a proof nobody supplied. `n` is now required to be `8..256` (the width a BLAKE2b-256 leaf can actually carry), `k` non-negative, and `n / (k + 1)` at least one bit per level; anything else is a malformed challenge, not an exception and not a solution. Not reachable over the wire — `Challenge.verify` re-derives the parameters from live config before the backend runs — so this is robustness against operator mis-config. The accepted set is unchanged: `n % (k + 1) == 0` is deliberately NOT required, because the hand-computed `(n=8, k=2)` KAT is a real accepted solution with `8 % 3 == 2`.
+
 - Default parameters retuned from n=192, k=7 to **n=168, k=7** after benchmarking: 192/7 measured ~155 s and ~5.4 GiB on the reference solver, too heavy for a consumer laptop; 168/7 lands at p95 ~10 s and ~1.3 GiB.
 - README and docstrings state what the gem actually is — a cheap-to-verify metered toll at ~17 ms and a few KB per verify, priced by the reputation policy's N-proofs knob. The ASIC-/GPU-resistance claims and the microsecond-verify figure are gone: Equihash was ASIC'd on Zcash, and neither claim was supportable.
 - `DEFAULT = true` removed — defaultness is established by registry wiring, not by a constant on this module.

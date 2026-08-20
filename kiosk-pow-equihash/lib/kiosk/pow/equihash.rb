@@ -63,6 +63,18 @@ module Kiosk
       # two distinct indices sharing one hash (K-540 range pre-check).
       MAX_INDEX = 1 << 64
 
+      # Inclusive bounds on `n`, the number of hash bits a solution must cancel.
+      # A leaf is the first `n / 8` bytes of a BLAKE2b-256 digest read as an
+      # integer, so below 8 bits there is nothing to read (every leaf is 0 and
+      # any distinct indices "solve" the challenge) and above 256 bits there is
+      # nothing left to demand (the level shifts exceed the node's width, so
+      # every check passes). Neither is reachable from the wire — parameters are
+      # re-derived from live config before the backend runs — but a verifier
+      # with no answer for its own configuration is how a vacuous accept ships
+      # (K-840).
+      MIN_N = 8
+      MAX_N = 256
+
       # Absolute path of the reference Python solver, +solve.py+, as shipped
       # INSIDE this gem's package (it is listed in the gemspec's spec.files).
       #
@@ -215,8 +227,45 @@ module Kiosk
         indices = nonce[:indices] || nonce["indices"]
         return false if indices.nil? || !indices.is_a?(Array)
 
-        n = Integer(params[:n]  || params["n"]  || DEFAULT_N)
-        k = Integer(params[:k]  || params["k"]  || DEFAULT_K)
+        # ── Step 0: the PARAMETERS themselves (K-840) ────────────────────────
+        #
+        # `params` reaches here from the challenge object, which the operator's
+        # own config minted and `Challenge.verify` re-derived (K-541), so a
+        # degenerate (n, k) is a MISCONFIGURATION and not something a caller can
+        # choose. That is exactly why it needs an answer rather than an
+        # accident: before this block a degenerate k made `.verify` CRASH
+        # (`1 << -5` is 0, so 0 indices "matched", the fold loop never ran and
+        # Step 4 dereferenced an empty stack) and a degenerate n made it return
+        # a vacuous TRUE (`n = 0` → `n_bytes = 0` → every leaf is the integer 0,
+        # so ANY 2^k distinct indices "solve" it). A verifier must never invent
+        # a proof that was not supplied; when it cannot evaluate the question it
+        # answers `false`.
+        #
+        # The bounds are the ones the arithmetic below actually needs, and no
+        # more — every parameter pair this gem, the demos and the specs use
+        # (168/7, 96/5, 200/9, 32/3, 24/2, 8/1, 8/2, 8/3) satisfies them, so the
+        # ACCEPTED SET IS UNCHANGED.
+        return false unless params.is_a?(Hash)
+
+        begin
+          n = Integer(params[:n] || params["n"] || DEFAULT_N)
+          k = Integer(params[:k] || params["k"] || DEFAULT_K)
+        rescue ArgumentError, TypeError
+          return false
+        end
+
+        # k = 0 is legitimate (no tree; Step 4 is then the only check), k < 0 is
+        # not: `1 << k` collapses to 0 and the whole solution disappears.
+        return false if k.negative?
+        # n is read out of a BLAKE2b-256 digest `n / 8` bytes wide, so below 8
+        # there are no bits to read and above 256 there are none left to demand
+        # — both make the level checks pass on anything.
+        return false unless n >= MIN_N && n <= MAX_N
+        # Bits per level. At zero every level check shifts the node clean away
+        # and only the root constraint survives, which is not this algorithm.
+        # Checked BEFORE `1 << k` below, which also bounds k at n - 1.
+        n_div = n / (k + 1)  # bits per level: 168/8 = 21
+        return false unless n_div.positive?
 
         expected_len = 1 << k  # 2^k
         return false unless indices.length == expected_len
@@ -236,7 +285,6 @@ module Kiosk
         return false unless indices.all? { |idx| idx.is_a?(Integer) && idx >= 0 && idx < MAX_INDEX }
         return false unless indices.uniq.length == expected_len
 
-        n_div = n / (k + 1)  # bits per level: 168/8 = 21
         n_bytes = n / 8       # 21 bytes for 168 bits
 
         # ── Step 2: canonical subtree ORDERING — the cheapest constraint ──────

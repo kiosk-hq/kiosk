@@ -377,6 +377,111 @@ RSpec.describe Kiosk::Pow::Equihash do
   end
 
   # ─────────────────────────────────────────────────────────────────────
+  # degenerate PARAMETERS (K-840)
+  #
+  # Not reachable from the wire: `Challenge.verify` re-derives the alg/params
+  # from live config before the backend runs (K-541), so only an operator
+  # mis-config can produce these. That is why each one must have an ANSWER —
+  # `false` — instead of the two accidents this had before: a crash for a
+  # degenerate k, and a VACUOUS TRUE for a degenerate n, which is the worse of
+  # the two because it accepts a proof nobody supplied.
+  #
+  # One example per rejected branch. The accepted set is untouched: the group
+  # below and the two KATs above cover 168/7, 8/2 and k = 0.
+  # ─────────────────────────────────────────────────────────────────────
+
+  describe "degenerate parameters (K-840)" do
+    it "REJECT — negative k (was: NoMethodError on an empty stack)" do
+      # `1 << -5` is 0, so an EMPTY indices array satisfied the length check,
+      # the fold loop never ran, and Step 4 dereferenced `stack.last`.
+      expect(described_class.verify(
+        salt: "x".b, params: { n: 168, k: -5 }, nonce: { indices: [] }
+      )).to be(false)
+    end
+
+    it "REJECT — n = 0 (was: a VACUOUS TRUE for 128 arbitrary indices)" do
+      # `n_bytes = 0` makes every leaf the integer 0, so every XOR cancels and
+      # any 2^k distinct ascending indices were accepted as a solution.
+      expect(described_class.verify(
+        salt: "x".b, params: { n: 0, k: 7 }, nonce: { indices: (0...128).to_a }
+      )).to be(false)
+    end
+
+    it "REJECT — negative n (was: NoMethodError, byteslice(0, -1) is nil)" do
+      expect(described_class.verify(
+        salt: "x".b, params: { n: -8, k: 7 }, nonce: { indices: (0...128).to_a }
+      )).to be(false)
+    end
+
+    it "REJECT — n below one byte (n = 4: same vacuous leaf as n = 0)" do
+      expect(described_class.verify(
+        salt: "x".b, params: { n: 4, k: 7 }, nonce: { indices: (0...128).to_a }
+      )).to be(false)
+    end
+
+    it "REJECT — n wider than the digest (n = 512 > 256 bits of BLAKE2b-256)" do
+      # NOT a regression example — the pre-guard code also answered false for
+      # THESE indices, because the root XOR still had to cancel. What it did
+      # not do is refuse the PARAMETERS: `byteslice` silently hands back the
+      # 32 bytes that exist, so levels 1..6 shift the node clean away and the
+      # tree structure Equihash is named for stops being checked at all. This
+      # pins the answer to the parameters rather than to the proof.
+      expect(described_class.verify(
+        salt: "x".b, params: { n: 512, k: 7 }, nonce: { indices: (0...128).to_a }
+      )).to be(false)
+    end
+
+    it "REJECT — zero bits per level (n = 8, k = 8 ⇒ n_div = 0)" do
+      # Also not a regression example: the old code rejected these particular
+      # indices on the root XOR. But with n_div = 0 EVERY level check shifts
+      # an 8-bit node right by 8 and passes, so the only surviving constraint
+      # is a one-byte collision — a toll a client clears by trying 256 index
+      # sets instead of by running Wagner. The parameters are the defect.
+      expect(described_class.verify(
+        salt: "x".b, params: { n: 8, k: 8 }, nonce: { indices: (0...256).to_a }
+      )).to be(false)
+    end
+
+    it "REJECT — a non-numeric n (was: ArgumentError out of Integer())" do
+      expect(described_class.verify(
+        salt: "x".b, params: { n: "abc", k: 7 }, nonce: { indices: (0...128).to_a }
+      )).to be(false)
+    end
+
+    it "REJECT — params that are not a Hash at all (was: NoMethodError)" do
+      expect(described_class.verify(
+        salt: "x".b, params: nil, nonce: { indices: (0...128).to_a }
+      )).to be(false)
+    end
+
+    it "ACCEPTS k = 0 — no tree, the root check is the only one" do
+      # k = 0 is degenerate but DEFINED, and the fold loop is written for it
+      # ("At k=0 there is no tree and this is the only one"). The guard must
+      # reject k < 0 without taking k = 0 with it, so this is a POSITIVE proof
+      # rather than another `be(false)`: brute-force the one index whose leaf
+      # cancels all 8 bits and watch it verify.
+      salt  = "k0".b
+      seed  = salt + [0].pack("V")
+      index = (0...4096).find do |i|
+        described_class.blake2b256(seed + [i].pack("Q<")).bytes[0].zero?
+      end
+      expect(index).not_to be_nil, "no 8-bit-zero leaf in the first 4096 — widen the search"
+      expect(described_class.verify(
+        salt: salt, params: { n: 8, k: 0 }, nonce: { indices: [index] }
+      )).to be(true)
+    end
+
+    it "ACCEPTS n % (k + 1) != 0 — the hand-computed (n=8, k=2) KAT" do
+      # DELIBERATELY not required. 8 % 3 == 2, and that KAT is a real accepted
+      # solution: a divisibility rule would have narrowed the accepted set,
+      # which a robustness guard must not do.
+      expect(described_class.verify(
+        salt: "kat".b, params: { n: 8, k: 2 }, nonce: { indices: [0, 5, 33, 84] }
+      )).to be(true)
+    end
+  end
+
+  # ─────────────────────────────────────────────────────────────────────
   # default params (n=168, k=7) structural checks
   # ─────────────────────────────────────────────────────────────────────
 

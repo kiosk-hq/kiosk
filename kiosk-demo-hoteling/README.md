@@ -49,6 +49,17 @@ QUERY endpoints after the first few free availability queries — a metered toll
 a wall: an AI assistant pays a few seconds of compute to look deeper, a bulk
 scraper pays linearly and forever.
 
+## The human channel
+
+Hotel bookings are the assistant's story, but the account behind them belongs to
+a person, and the surfaces where that person approves an assistant — the device
+verify page, the link-code mint, the unlink — are authenticated by **real
+Devise** (`kiosk-user-idp-devise` reading the Warden session), not by a stub.
+The seeded guests `ada@example.com` and `ben@example.com` sign in at
+`/users/sign_in`; an assistant that redeems a code one of them mints is bound to
+THAT account and reads only its bookings. Assistants never touch this channel —
+kiosk-pop key possession is their only credential.
+
 ## Running it
 
 Postgres required. From this directory:

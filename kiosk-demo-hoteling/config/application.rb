@@ -26,7 +26,7 @@ module KioskDemoHoteling
     # Please, add to the `ignore` list any other `lib` subdirectories that do
     # not contain `.rb` files, or that should not be reloaded or eager loaded.
     # Common ones are `templates`, `generators`, or `middleware`, for example.
-    config.autoload_lib(ignore: %w[assets tasks equihash_register.rb])
+    config.autoload_lib(ignore: %w[assets tasks equihash_register.rb devise_session.rb])
 
     # app/services holds the objects config/initializers/kiosk.rb HANDS to
     # `Kiosk.configure` at boot — the IdP adapters, the PoW-difficulty policy,
@@ -53,10 +53,13 @@ module KioskDemoHoteling
     # config.time_zone = "Central Time (US & Canada)"
     # config.eager_load_paths << Rails.root.join("extras")
 
-    # Only loads a smaller set of middleware suitable for API only apps.
-    # Middleware like session, flash, cookies can be added back manually.
-    # Skip views, helpers and assets when generating a new resource.
-    config.api_only = true
+    # Full middleware stack (NOT api_only): the account-binding ceremony
+    # runs on real browser sessions — the human signs in through the
+    # Devise form and the verify/link/unlink surfaces read that session
+    # cookie — so cookies, session and flash middleware must be present.
+    # The agent-facing wire controllers stay ActionController::API inside
+    # kiosk-server and are unaffected.
+    config.api_only = false
 
     # Use SQL structure dump so pg_dump captures all schemas (kiosk.*, public.*).
     # schema.rb only introspects the public schema and silently drops the kiosk

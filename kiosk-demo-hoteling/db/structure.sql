@@ -379,7 +379,9 @@ CREATE TABLE public.schema_migrations (
 CREATE TABLE public.users (
     id uuid DEFAULT gen_random_uuid() NOT NULL,
     created_at timestamp(6) without time zone NOT NULL,
-    updated_at timestamp(6) without time zone NOT NULL
+    updated_at timestamp(6) without time zone NOT NULL,
+    email character varying,
+    encrypted_password character varying DEFAULT ''::character varying NOT NULL
 );
 
 
@@ -530,7 +532,7 @@ ALTER TABLE ONLY public.ar_internal_metadata
 --
 
 ALTER TABLE ONLY public.bookings
-    ADD CONSTRAINT bookings_no_overlapping_room_nights EXCLUDE USING gist (room_type_id WITH =, daterange(check_in, check_out) WITH &&) WHERE (((status)::text = ANY ((ARRAY['reserved'::character varying, 'confirmed'::character varying])::text[])));
+    ADD CONSTRAINT bookings_no_overlapping_room_nights EXCLUDE USING gist (room_type_id WITH =, daterange(check_in, check_out) WITH &&) WHERE (((status)::text = ANY (ARRAY[('reserved'::character varying)::text, ('confirmed'::character varying)::text])));
 
 
 --
@@ -742,6 +744,13 @@ CREATE INDEX index_room_types_on_property_id ON public.room_types USING btree (p
 
 
 --
+-- Name: index_users_on_email; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE UNIQUE INDEX index_users_on_email ON public.users USING btree (email);
+
+
+--
 -- Name: agent_mappings agent_mappings_agent_id_fkey; Type: FK CONSTRAINT; Schema: kiosk; Owner: -
 --
 
@@ -845,6 +854,7 @@ INSERT INTO "schema_migrations" (version) VALUES
 ('20260813000002'),
 ('20260813000001'),
 ('20260804000001'),
+('20260718000001'),
 ('20260628000001'),
 ('20260101000000');
 

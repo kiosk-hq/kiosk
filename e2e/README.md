@@ -79,6 +79,7 @@ e2e/
     ├── create_users.rb                     # provider's user table (UUID PK)
     ├── add_devise_columns_to_users.rb      # the human-login columns on that table (email + encrypted_password)
     ├── create_salons_and_appointments.rb   # demo schema (salons + appointments)
+    ├── application_controller.rb           # ActionController::Base (not ::API) — Devise's controllers inherit it and need `flash`
     ├── user.rb, salon.rb, appointment.rb   # ActiveRecord models
     ├── seeds.rb                            # 2 users (Alice + Bob) with Devise credentials, 1 salon
     ├── stub_idp.rb                         # Bearer-token-parsing agent IdP

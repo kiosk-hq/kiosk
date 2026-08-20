@@ -8,7 +8,7 @@
 # every challenge with the shipped Python solver and retries the SAME register
 # body, sending the proof(s) in the Kiosk-PoW request header as raw JSON
 # (ADR-0022). Same mechanism the demos use
-# (kiosk-demo-skooti/lib/equihash_register.rb).
+# (kiosk-demo-skooti/script/equihash_register.rb).
 #
 # Requires: json, jwt, openssl, securerandom, uri, open3 (callers already
 # require most of these). Callers supply get_json/post_json lambdas so the

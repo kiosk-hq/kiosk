@@ -47,7 +47,7 @@ PASSWORD = ENV.fetch("HOLDER_PASSWORD")
 # ONE mechanism, shared: lib/devise_session.rb holds the cookie jar, the CSRF
 # read and the sign-in POST for every demo, and bin/check-demo-copies keeps the
 # copies byte-identical. Each driver used to carry its own copy of that jar —
-# five of them, free to drift, exactly the way lib/equihash_register.rb drifted
+# five of them, free to drift, exactly the way script/equihash_register.rb drifted
 # in three of five. These wrappers keep this driver's call sites unchanged.
 require_relative "../lib/devise_session"
 
@@ -82,7 +82,7 @@ results = {}
 # equihash_register solves the register PoW transparently (register is uniformly
 # tolled) and returns the SAME keypair the later claim/login re-use. Its injected
 # get/post callables take a full URL; tudu's own helpers take a path, so wrap.
-require_relative "../lib/equihash_register"
+require_relative "equihash_register"
 get_url  = ->(url)                 { get_json(url.delete_prefix(SERVER)) }
 post_url = ->(url, body, hdrs = {}) { post_json(url.delete_prefix(SERVER), body, hdrs) }
 key, reg = equihash_register(server: SERVER, issuer: ISSUER, get_json: get_url, post_json: post_url)

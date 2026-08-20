@@ -55,7 +55,7 @@ PASSWORD = ENV.fetch("HOLDER_PASSWORD")
 # ONE mechanism, shared: lib/devise_session.rb holds the cookie jar, the CSRF
 # read and the sign-in POST for every demo, and bin/check-demo-copies keeps the
 # copies byte-identical. Each driver used to carry its own copy of that jar —
-# five of them, free to drift, exactly the way lib/equihash_register.rb drifted
+# five of them, free to drift, exactly the way script/equihash_register.rb drifted
 # in three of five. These wrappers keep this driver's call sites unchanged.
 require_relative "../lib/devise_session"
 
@@ -80,7 +80,7 @@ def pop_proof(key, pem)
   JWT.encode({ aud: ISSUER, nonce: ch.fetch("challenge"), jti: SecureRandom.uuid, iat: Time.now.to_i }, key, "RS256")
 end
 
-require_relative "../lib/equihash_register"
+require_relative "equihash_register"
 
 # The equihash_register helper injects full-URL get/post callables (tudu's own
 # post_json/get_json take a path), so wrap them to accept a full URL. The plain

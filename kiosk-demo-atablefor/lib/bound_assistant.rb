@@ -8,7 +8,10 @@ require "securerandom"
 require "uri"
 
 require_relative "devise_session"
-require_relative "equihash_register"
+# equihash_register moved out of the Rails app load path into the
+# flow-driver home (K-659). This file is flow-only too and belongs
+# beside it; that move is K-856.
+require_relative "../script/equihash_register"
 
 # The ONE way a demo driver obtains an AGENT principal bound to a seeded human.
 #

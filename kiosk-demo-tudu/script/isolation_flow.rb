@@ -64,7 +64,7 @@ end
 
 def bearer(token) = { "Authorization" => "Bearer #{token}" }
 
-require_relative "../lib/equihash_register"
+require_relative "equihash_register"
 
 # The equihash_register helper injects full-URL get/post callables (tudu's own
 # post_json/get_json take a path), so wrap them to accept a full URL.

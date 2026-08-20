@@ -87,7 +87,7 @@ def post_form(url, form)
   [res.code.to_i, res.body.to_s]
 end
 
-require_relative "../lib/equihash_register"
+require_relative "equihash_register"
 
 # Register a fresh agent through the proof-of-possession handshake, solving the
 # Equihash register PoW transparently. Returns [key, agent_id, user_id, token].

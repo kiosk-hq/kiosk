@@ -100,7 +100,7 @@ namespace :demo do
     require_relative "../../lib/prove_test_issuer"
 
     # Registration goes through the SHIPPED helper (K-696), never a local copy:
-    # lib/equihash_register.rb owns the challenge → PoP → 402 → solve → retry
+    # script/equihash_register.rb owns the challenge → PoP → 402 → solve → retry
     # handshake and asks Kiosk::Pow::Equihash.solver_path where solve.py lives,
     # so the gem that packages the solver stays the only thing that knows its
     # location (K-627/K-632). The two hand-rolled copies this replaces named
@@ -109,7 +109,7 @@ namespace :demo do
     # NoMethodError'd on any 402 whose body carried no error.challenges, and one
     # read access_token with no status assertion at all, so a failed register
     # yielded `Bearer ` and the 403 that earned was reported as the expected 403.
-    require_relative "../../lib/equihash_register"
+    require_relative "../../script/equihash_register"
 
     # The transport slots the helper takes: ->(url) and ->(url, body, headers = {}),
     # each returning [status, parsed_body]. The header slot carries Kiosk-PoW on
@@ -735,7 +735,7 @@ namespace :demo do
     require "json"
     require "net/http"
     require "uri"
-    require_relative "../prove_broker_boot"
+    require_relative "../../script/prove_broker_boot"
     require_relative "../prove_test_issuer"
 
     port = ENV.fetch("PORT", "3004")
@@ -1060,7 +1060,7 @@ namespace :demo do
     require "uri"
     require "json"
     require "shellwords"
-    require_relative "../prove_broker_boot"
+    require_relative "../../script/prove_broker_boot"
 
     port = ENV.fetch("PORT", "3004")
     log  = "/tmp/kiosk-skooti-kyc.log"

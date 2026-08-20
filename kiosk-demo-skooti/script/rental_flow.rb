@@ -67,7 +67,7 @@ def get_json(url, headers = {}, params = {})
   [res.code.to_i, (JSON.parse(res.body) rescue {})]
 end
 
-require_relative "../lib/equihash_register"
+require_relative "equihash_register"
 
 # ── Step 1: register (Equihash PoW gate: 1 proof) ───────────────────────────
 

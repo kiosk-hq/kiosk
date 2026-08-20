@@ -82,7 +82,7 @@ def query_json(name, params = {}, headers = {})
   get_json(uri.to_s, headers)
 end
 
-require_relative "../lib/equihash_register"
+require_relative "equihash_register"
 
 # Register a fresh principal through the proof-of-possession handshake, solving
 # the Equihash register PoW transparently. The private key is returned so the

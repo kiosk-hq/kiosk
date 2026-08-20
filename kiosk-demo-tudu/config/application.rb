@@ -26,9 +26,7 @@ module KioskDemoTudu
     # Please, add to the `ignore` list any other `lib` subdirectories that do
     # not contain `.rb` files, or that should not be reloaded or eager loaded.
     # Common ones are `templates`, `generators`, or `middleware`, for example.
-    # equihash_register.rb defines top-level flow-helper methods (no constant),
-    # so it must be ignored or production eager-load raises Zeitwerk::NameError.
-    config.autoload_lib(ignore: %w[assets tasks equihash_register.rb devise_session.rb])
+    config.autoload_lib(ignore: %w[assets tasks devise_session.rb])
 
     # app/services holds the objects config/initializers/kiosk.rb HANDS to
     # `Kiosk.configure` at boot — the IdP adapters, the PoW-difficulty policy,

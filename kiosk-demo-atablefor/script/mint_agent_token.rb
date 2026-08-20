@@ -31,7 +31,7 @@ require "openssl"
 require "securerandom"
 require "uri"
 
-require_relative "../lib/equihash_register"
+require_relative "equihash_register"
 
 SERVER = ENV.fetch("SERVER_URL")
 ISSUER = ENV.fetch("KIOSK_ISSUER", SERVER)

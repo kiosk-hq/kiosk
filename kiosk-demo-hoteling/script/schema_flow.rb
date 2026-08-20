@@ -47,7 +47,7 @@ end
 # the (url, body, headers) shape the shared helper drives; give it full-URL
 # adapter lambdas that carry an arbitrary headers hash (the register retry rides
 # the Kiosk-PoW header).
-require_relative "../lib/equihash_register"
+require_relative "equihash_register"
 
 STDERR.puts "  Registering agent (solving the register PoW if the provider gates it)..."
 

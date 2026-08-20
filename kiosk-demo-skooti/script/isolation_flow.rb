@@ -74,7 +74,7 @@ def get_json(url, headers = {}, params = {})
   [res.code.to_i, (JSON.parse(res.body) rescue {})]
 end
 
-require_relative "../lib/equihash_register"
+require_relative "equihash_register"
 
 # Register a fresh principal through the Equihash-gated /auth/register, then KYC.
 # Returns [user_id, agent_id, token, key].

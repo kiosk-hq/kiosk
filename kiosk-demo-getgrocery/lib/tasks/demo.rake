@@ -1519,7 +1519,7 @@ namespace :demo do
     require "uri"
     require "json"
     require "shellwords"
-    require_relative "../prove_broker_boot"
+    require_relative "../../script/prove_broker_boot"
 
     # The full flow pays for the alcohol order → needs the Stripe adapter to
     # settle. Run against stripe-mock (no key, no real charge) with autocard.

@@ -26,13 +26,11 @@ module KioskDemoSkooti
     # Please, add to the `ignore` list any other `lib` subdirectories that do
     # not contain `.rb` files, or that should not be reloaded or eager loaded.
     # Common ones are `templates`, `generators`, or `middleware`, for example.
-    # Two demo/KAT helper files under lib/ are not autoloadable app classes and
-    # must be ignored, or production eager-load raises Zeitwerk::NameError:
-    #   - equihash_register.rb   : top-level methods (a flow helper), no constant
-    #   - rental_token_issuer_kat.rb : defines RentalTokenIssuerKAT (acronym), which
-    #     Zeitwerk's default inflector would expect as RentalTokenIssuerKat; it is
-    #     required explicitly by the KAT flow, never autoloaded at runtime.
-    config.autoload_lib(ignore: %w[assets tasks equihash_register.rb rental_token_issuer_kat.rb
+    # rental_token_issuer_kat.rb defines RentalTokenIssuerKAT (acronym), which
+    # Zeitwerk's default inflector would expect as RentalTokenIssuerKat; it is
+    # required explicitly by the KAT flow, never autoloaded at runtime, so
+    # production eager-load would otherwise raise Zeitwerk::NameError.
+    config.autoload_lib(ignore: %w[assets tasks rental_token_issuer_kat.rb
                               devise_session.rb bound_assistant.rb])
 
     # app/services holds the objects config/initializers/kiosk.rb HANDS to

@@ -26,7 +26,7 @@ ISSUER = ENV.fetch("KIOSK_ISSUER")
 # kiosk-pow-equihash gem, K-627). The full equihash_register handshake it also
 # defines is deliberately NOT used here: this driver spells out the 402 →
 # solve → resubmit choreography step by step and asserts each status.
-require_relative "../lib/equihash_register"
+require_relative "equihash_register"
 
 def post_json(url, body, headers = {})
   uri = URI(url)

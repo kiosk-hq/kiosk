@@ -57,7 +57,7 @@ end
 # (so the proof can't be relayed to another provider), then register. Register
 # is tolled: the helper solves the Equihash register PoW and resubmits — the
 # SAME private key is returned so it can sign the payment mandates below.
-require_relative "../lib/equihash_register"
+require_relative "equihash_register"
 key, reg = equihash_register(
   server: SERVER, issuer: ISSUER,
   get_json: method(:get_json), post_json: method(:post_json),

@@ -48,7 +48,7 @@ ISSUER = ENV.fetch("KIOSK_ISSUER")
 
 # equihash_solve / equihash_register come from the shared helper; the solver
 # location is Kiosk::Pow::Equihash.solver_path, owned by the gem (K-627).
-require_relative "../lib/equihash_register"
+require_relative "equihash_register"
 
 # The TOY counter the demo initializer's on_bad_proof writes (K-498):
 # PER-IDENTITY in sqlite (one abuser's rejections never appear in anyone

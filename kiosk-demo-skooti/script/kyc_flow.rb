@@ -44,7 +44,7 @@ require "jwt"
 $LOAD_PATH.unshift File.expand_path("../lib", __dir__)
 require "lock_sim"
 require "dev_unlock_key"
-require_relative "../lib/equihash_register"
+require_relative "equihash_register"
 require_relative "../lib/prove_test_issuer"
 
 SERVER = ENV.fetch("SERVER_URL")

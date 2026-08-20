@@ -20,7 +20,7 @@
 # Each demo is a standalone Rails app with its own Gemfile, so the alternative to
 # a copy is publishing the guard in a shipped gem — a public-API decision, not a
 # fix-wave one (K-607). Same arrangement as app/services/pow_difficulty.rb and
-# lib/equihash_register.rb.
+# script/equihash_register.rb.
 #
 # K-661: shape recognition below delegates to the `uuid` gem (pinned 2.3.9 —
 # see the Gemfile comment for why). Its own `UUID.validate` is looser than

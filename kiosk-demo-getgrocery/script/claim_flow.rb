@@ -107,7 +107,7 @@ results = {}
 # The register PoW is solved transparently by the helper; the SAME private key
 # is returned so the claim ceremony (Beat 2) and the payment mandates below can
 # re-prove possession / sign with it.
-require_relative "../lib/equihash_register"
+require_relative "equihash_register"
 key, reg = equihash_register(
   server: SERVER, issuer: ISSUER,
   get_json: method(:get_json), post_json: method(:post_json),

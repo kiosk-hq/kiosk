@@ -55,7 +55,7 @@ end
 # ── Step 1: register (register PoW solved transparently). The SAME private key
 #            is returned so the payment mandates below can be signed with it. ──
 
-require_relative "../lib/equihash_register"
+require_relative "equihash_register"
 key, reg = equihash_register(
   server: SERVER, issuer: ISSUER,
   get_json: method(:get_json), post_json: method(:post_json),

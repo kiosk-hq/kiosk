@@ -120,7 +120,7 @@ end
 
 # Register PoW is solved transparently by the helper; each principal's private
 # key is returned so it can sign its own pay mandates.
-require_relative "../lib/equihash_register"
+require_relative "equihash_register"
 
 # ── Step 1: Register Principal A ─────────────────────────────────────────────
 key_a, reg_a = equihash_register(

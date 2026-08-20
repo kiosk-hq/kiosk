@@ -46,7 +46,7 @@ def get_json(url, params = {}, headers = {})
   [res.code.to_i, (JSON.parse(res.body) rescue {})]
 end
 
-require_relative "../lib/equihash_register"
+require_relative "equihash_register"
 
 # ── Step 1: generate keypair + self-register (no human; register is tolled
 #            with PoW here, and the helper solves it transparently) ───────────

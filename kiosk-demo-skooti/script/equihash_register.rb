@@ -1,12 +1,19 @@
 # frozen_string_literal: true
 
-# Shared registration helper for the hoteling demo flows.
+# Shared registration helper for the skooti demo flows.
 #
 # Registration is gated by ONE Equihash proof (see config/initializers/kiosk.rb).
 # This helper does the full handshake: challenge → sign PoP → register; on a 402
 # it solves every challenge with the shipped Python solver and retries the SAME
 # register body, sending the proof(s) in the Kiosk-PoW request header as raw JSON
 # (ADR-0022). Replaces the old inline SHA256 hashcash.
+#
+# IT LIVES IN script/, NOT IN lib/, AND THAT IS THE POINT (K-659). It is a
+# FLOW-DRIVER helper — its only callers are the scripts in this directory and
+# the demo rake tasks that run them — so it has no business in the Rails
+# application's autoload path. It used to sit in lib/ and be hand-excluded from
+# `config.autoload_lib(ignore: …)` in all seven demos, i.e. loaded by `rails
+# server` and then told not to be; the exclusion is gone because the file is.
 #
 # Requires: json, jwt, net/http, uri, openssl, open3, securerandom (the caller
 # already requires most of these) plus the kiosk-pow-equihash gem, which owns
@@ -29,7 +36,7 @@ end
 
 # Register a fresh agent through the Equihash-gated /auth/register.
 #
-# @param server [String] base URL (e.g. http://localhost:3003)
+# @param server [String] base URL (e.g. http://localhost:3004)
 # @param issuer [String] issuer origin for the PoP `aud` claim
 # @param get_json [#call] ->(url) { [code, body] }
 # @param post_json [#call] ->(url, body, headers = {}) { [code, body] }
@@ -52,10 +59,8 @@ def equihash_register(server:, issuer:, get_json:, post_json:)
   if rc == 402
     # The PoP nonce is NOT consumed on a 402 (the gate runs before the
     # challenge is spent), so we resubmit the SAME signed proof + the PoW.
-    #
-    # The 402 is an RFC 9457 problem document (0.4 moved the auth plane onto
-    # them with the wire): `challenges` is a TOP-LEVEL extension member, not
-    # nested under an `error` object.
+    # The 402 is an RFC 9457 problem document since 0.4: `challenges` is a
+    # TOP-LEVEL extension member, not nested under an `error` object.
     challenges = reg["challenges"]
     abort "402 without challenges[]: #{JSON.generate(reg)}" unless challenges.is_a?(Array) && challenges.any?
     proofs = challenges.map { |c| { challenge: c, nonce: equihash_solve(c) } }

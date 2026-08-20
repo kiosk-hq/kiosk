@@ -11,7 +11,7 @@
 # standing between "a refusal envelope means the same on all seven origins" and
 # a private copy per app that nothing compares. A private `render_operation` in
 # the controller would be the same code with no check on it — which is exactly
-# how `lib/equihash_register.rb` drifted in three of five copies.
+# how `script/equihash_register.rb` drifted in three of five copies.
 #
 # What is shared is split the way tudu, hoteling, skooti and getgrocery split it:
 # the ANSWER (the refusal and its sentence) is {ListingAccess}/{OperationResult},

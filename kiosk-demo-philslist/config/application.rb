@@ -26,8 +26,7 @@ module KioskDemoPhilslist
     # Please, add to the `ignore` list any other `lib` subdirectories that do
     # not contain `.rb` files, or that should not be reloaded or eager loaded.
     # Common ones are `templates`, `generators`, or `middleware`, for example.
-    config.autoload_lib(ignore: %w[assets tasks equihash_register.rb devise_session.rb
-                              bound_assistant.rb])
+    config.autoload_lib(ignore: %w[assets tasks devise_session.rb bound_assistant.rb])
 
     # app/services holds the objects config/initializers/kiosk.rb HANDS to
     # `Kiosk.configure` at boot — the IdP adapters, the PoW-difficulty policy,

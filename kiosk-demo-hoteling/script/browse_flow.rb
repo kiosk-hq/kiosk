@@ -27,7 +27,7 @@ BROWSES = Integer(ENV.fetch("BROWSES", "7"))
 
 # equihash_solve / equihash_register come from the shared helper; the solver
 # location is Kiosk::Pow::Equihash.solver_path, owned by the gem (K-627).
-require_relative "../lib/equihash_register"
+require_relative "equihash_register"
 
 def post_json(url, body, headers = {})
   uri = URI(url)

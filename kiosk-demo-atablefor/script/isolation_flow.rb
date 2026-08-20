@@ -63,7 +63,7 @@ def get_json(url, params = {}, headers = {})
   [res.code.to_i, (JSON.parse(res.body) rescue {})]
 end
 
-require_relative "../lib/equihash_register"
+require_relative "equihash_register"
 
 # Register a fresh agent, solving the register PoW transparently.
 def register(server, issuer)

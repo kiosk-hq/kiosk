@@ -41,7 +41,7 @@ def get_json(path, bearer: nil)
   [res.code.to_i, (JSON.parse(res.body) rescue {})]
 end
 
-require_relative "../lib/equihash_register"  # for equihash_solve
+require_relative "equihash_register"  # for equihash_solve
 
 # ── Register a fresh agent (Equihash PoW gate: 1 proof) ──────────────────────
 

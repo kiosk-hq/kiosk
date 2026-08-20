@@ -20,6 +20,22 @@ require "uri"
 # DEPLOY FOLLOW-UP: getgrocery is allow-listed at the broker only by THIS test
 # harness (via KIOSK_PROVE_GETGROCERY_* env). Registering getgrocery as a
 # standing broker operator in the hosted deploy is a follow-up.
+#
+# IT LIVES IN script/, NOT IN lib/, AND THAT IS THE BINDING CONDITION ON IT
+# (K-663). This is CI/flow-driver harness code — it shells out, spawns a server
+# and polls a port — and Phil's answer to the sibling-path question was one
+# sentence: «Главное чтобы это не грузилось вместе с rails server'ом». In lib/
+# it was inside the Rails autoload path and eager-loaded on every production
+# boot of an app that never calls it. Now it is only ever reached by an explicit
+# require from the demo rake tasks.
+#
+# AND THE LAYOUT ASSUMPTION IS DELIBERATE, NOT AN OVERSIGHT: BROKER_APP below
+# resolves a SIBLING DIRECTORY of this demo, so it works in a checkout of this
+# monorepo and nowhere else. That is accepted (K-663) because the demos are not
+# packaged gems and nothing shipped depends on it — but an external reader
+# should know it is here, and anyone moving a demo directory has to move this
+# with it.
+#
 module ProveBrokerBoot
   BROKER_APP    = File.expand_path("../../kiosk-demo-prove", __dir__)
   # The broker's DEV/TEST signing key, pinned EXPLICITLY on the broker we boot

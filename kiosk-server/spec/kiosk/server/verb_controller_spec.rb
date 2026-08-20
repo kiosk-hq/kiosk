@@ -259,6 +259,12 @@ RSpec.describe Kiosk::Server::VerbController do
   # response says public" would pass just as well on a build where nothing
   # anywhere could ever say it.
   describe "no verb response is shared-cacheable (§3.7.3)" do
+    # The refusal LOGS the value it refused, which is the point of it — but
+    # these examples trigger it on purpose, so the operator warning is silenced
+    # here rather than printed five times into a green suite. That the line is
+    # emitted at all, once, naming the value, is asserted in headers_spec.
+    before { allow(Kiosk::Server::Headers).to receive(:warn) }
+
     def expect_no_shared_caching(cache_control)
       expect(cache_control.to_s).not_to match(/\bpublic\b/)
       expect(cache_control.to_s).not_to match(/\bs-maxage\b/)

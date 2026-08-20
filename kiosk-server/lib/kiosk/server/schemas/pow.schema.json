@@ -40,7 +40,12 @@
             "indices": {
               "type": "array",
               "description": "u64 indices in Zcash canonical (subtree/tree) order; NOT a global ascending sort.",
-              "items": { "type": "integer", "minimum": 0, "exclusiveMaximum": 18446744073709551616 }
+              "items": {
+                "$comment": "The upper bound is stated as an INCLUSIVE `maximum` of 2**64-1, not as `exclusiveMaximum: 2**64` (K-845). A JSON parser that reads numbers as IEEE-754 doubles rounds the largest LEGAL index, 18446744073709551615, up to exactly 2**64 -- an exclusive bound at 2**64 then REFUSES a proof the reference verifier accepts, and a bound that is wrong in the direction of rejecting valid work is the worse failure. An inclusive bound at the largest legal value survives that round-trip. The residual cost, which no JSON Schema can remove, is that such a parser also admits the handful of values between 2**64 and the next representable double; a parser with exact integers admits none of them, and the verifier refuses them all either way.",
+                "type": "integer",
+                "minimum": 0,
+                "maximum": 18446744073709551615
+              }
             },
             "header_nonce": {
               "type": "integer",

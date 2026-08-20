@@ -189,6 +189,24 @@ RSpec.describe "Opt-in PoW-shape request validation (slice-1, K-479)" do
       expect(problem[:code]).not_to eq("pow_required")
     end
 
+    # K-845: and the bound must not eat the LARGEST LEGAL index. The schema
+    # writes the upper bound as an inclusive `maximum: 2**64 - 1` rather than an
+    # exclusive `2**64` so that a double-precision validator — the likely reader
+    # of the PUBLISHED copy on kiosk.tech — cannot round this value onto the
+    # excluded bound and refuse a proof this implementation accepts. Ruby's JSON
+    # parser is exact, so what this pins locally is the accepted SET rather than
+    # the portability: 2**64 - 1 is in it, and a bound edit that shifts by one
+    # takes this line red.
+    it "accepts an index at 2**64 - 1 — the largest legal u64 (passes to the gate)" do
+      status, _headers, problem = call_with_pow(
+        challenge: valid_challenge, nonce: { indices: [1, 2, 3, (1 << 64) - 1] },
+      )
+
+      expect(status).to eq(402)
+      expect(problem[:code]).to eq("pow_required")
+      expect(problem[:code]).not_to eq("bad_request")
+    end
+
     it "rejects a negative index with 400 bad_request (u64 lower bound)" do
       status, _headers, problem = call_with_pow(
         challenge: valid_challenge, nonce: { indices: [1, 2, 3, -1] },

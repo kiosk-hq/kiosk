@@ -4,7 +4,7 @@
 #
 # `status` is a tiny lifecycle rather than a label, and every gate on this
 # origin reads it: `created → paying → paid` is the per-order serialization the
-# pay path claims through (see lib/validating_payment_provider.rb — that claim
+# pay path claims through (see app/services/validating_payment_provider.rb — that claim
 # is what makes a double capture impossible), and `scheduled`/`rescheduled` is
 # where a delivery move leaves it.
 class Order < ApplicationRecord

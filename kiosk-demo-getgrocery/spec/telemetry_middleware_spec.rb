@@ -1,7 +1,7 @@
 # frozen_string_literal: true
 
 # Standalone (no rails boot, no DB, no network) unit spec for
-# `lib/demo_telemetry.rb`'s Rack middleware — `DemoTelemetryMiddleware`. Run:
+# `app/services/demo_telemetry_middleware.rb` — `DemoTelemetryMiddleware`. Run:
 #   bundle exec rake demo:telemetry_spec   (or: ruby spec/telemetry_middleware_spec.rb)
 #
 # WHY THIS EXISTS (K-622). The middleware is what produces every real telemetry
@@ -35,12 +35,16 @@
 
 require "json"
 require "stringio"
-# demo_telemetry.rb declares `class DemoTelemetryRecord < ActiveRecord::Base`
+# demo_telemetry_record.rb declares `class DemoTelemetryRecord < ActiveRecord::Base`
 # at load time. Loading the constant costs ~0.2 s and opens NO connection.
 require "active_record"
 
 ENV["KIOSK_TELEMETRY"] = "1"
-require_relative "../lib/demo_telemetry"
+# Three files since K-502, one per constant, so Zeitwerk can reach each by name
+# under app/services. This driver boots no Rails, so it names them itself.
+require_relative "../app/services/demo_telemetry"
+require_relative "../app/services/demo_telemetry_record"
+require_relative "../app/services/demo_telemetry_middleware"
 
 FAILURES = []
 

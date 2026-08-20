@@ -41,8 +41,7 @@ require "securerandom"
 require "uri"
 require "jwt"
 
-$LOAD_PATH.unshift File.expand_path("../lib", __dir__)
-require "prove_trust"
+require_relative "../app/services/prove_trust"
 
 SERVER = ENV.fetch("SERVER_URL")
 ISSUER = ENV.fetch("KIOSK_ISSUER")

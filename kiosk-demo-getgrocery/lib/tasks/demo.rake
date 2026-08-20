@@ -1444,7 +1444,6 @@ namespace :demo do
     end
 
     ENV["KIOSK_TELEMETRY"] ||= "1"
-    require Rails.root.join("lib/demo_telemetry")
 
     events = (ENV["EVENTS"] || 40).to_i
     agents = (ENV["AGENTS"] || 8).to_i

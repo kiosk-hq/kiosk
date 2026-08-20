@@ -52,7 +52,9 @@ module Kiosk
   module Redteam
     # Canonical set of HTTP statuses that constitute a deliberate block.
     #
-    # 402 is deliberately ABSENT (K-736) — see {PAYMENT_REQUIRED_CODES}.
+    # 402 is deliberately ABSENT (K-736) — see {PAYMENT_REQUIRED_CODES}. That
+    # is unchanged by K-760: the harness now PAYS a PoW toll and re-sends, so a
+    # 402 that still reaches here is one the retry could not settle.
     BLOCKED_STATUSES = [401, 403].freeze
 
     # The THREE problem-document `code`s kiosk-server maps onto HTTP 402
@@ -65,8 +67,9 @@ module Kiosk
     PAYMENT_REQUIRED_CODES = {
       "pow_required" =>
         "a toll was DEMANDED, not a refusal — the request was deferred until a proof is " \
-        "supplied, and this harness solves PoW only during registration " \
-        "(Client#register_raw); #query/#run/#pay never retry, so the attack was never run",
+        "supplied. Since K-760 this harness PAYS that toll on every verb, so seeing this " \
+        "code here means the demand survived a paid retry (or arrived with no challenges " \
+        "to solve); either way the attack itself was never evaluated",
       "payment_setup_required" =>
         "the principal has no payment instrument on file — a gap in the ATTACKER's setup, " \
         "not a decision about the attack",
@@ -117,7 +120,13 @@ module Kiosk
       why = PAYMENT_REQUIRED_CODES[code] ||
             "kiosk-server maps three codes onto 402 — #{PAYMENT_REQUIRED_CODES.keys.join(", ")} — " \
             "and this answer named none of them, so which gate fired (if any did) is unknowable"
-      "HTTP #{response.status} code=#{code.inspect}: #{why}"
+      # K-760: distinguish "the harness does not pay tolls" from "the toll was
+      # paid and demanded AGAIN". The first was a capability gap in this gem and
+      # is gone; the second is the provider's behaviour and an operator needs to
+      # be told which one they are looking at.
+      paid = response.pow_retried ? " [the harness already solved every issued " \
+                                    "challenge and re-sent the identical request once]" : ""
+      "HTTP #{response.status} code=#{code.inspect}:#{paid} #{why}"
     end
 
     # Determine whether a provider response constitutes a successful block.

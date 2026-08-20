@@ -143,11 +143,16 @@ module Kiosk
       # `Kiosk::Server::Errors::CODES` maps three codes onto HTTP 402 and
       # `blocked?` counted all three as "explicit auth/authz rejection".  Two of
       # them are nothing of the sort: `pow_required` says "pay the toll and
-      # retry" — and this harness solves tolls only at registration
-      # ({Client#register_raw}), so `#query`/`#run`/`#pay` never do — while
-      # `payment_setup_required` says the attacker never put a card on file.
-      # Both were printed as `BLOCKED ✓ … (HTTP 402)` for an attack that never
-      # ran.  Demonstrated on a stub transport before the fix.
+      # retry", while `payment_setup_required` says the attacker never put a
+      # card on file.  Both were printed as `BLOCKED ✓ … (HTTP 402)` for an
+      # attack that never ran.  Demonstrated on a stub transport before the fix.
+      #
+      # K-760 closed the half of that which was this harness's own doing:
+      # {Client#with_pow_retry} now solves the toll and re-sends the identical
+      # request ONCE, on every verb and not only on registration.  So a
+      # `pow_required` that still arrives here survived a PAID retry — the
+      # verdict says so, and it is a statement about the provider rather than
+      # about a gap in the harness.
       #
       # The verdict is NOT blocked (a battery cannot claim a proof it did not
       # earn) and NOT skipped (a skip is invisible to `all_blocked?`, so a

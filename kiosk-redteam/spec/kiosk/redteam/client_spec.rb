@@ -391,6 +391,163 @@ RSpec.describe Kiosk::Redteam::Client do
     end
   end
 
+  # ── the 402-PoW retry on a TOLLED VERB (K-760) ────────────────────────────
+  #
+  # Until K-760 the solve-and-resend branch lived inside #register_raw, so
+  # #query/#run/#pay could not pay a toll — and a verb an operator tolls could
+  # therefore not be ATTACKED at all, only stalled around. A toll is a price,
+  # not a refusal (K-736): an attacker pays it, so the harness must too.
+  #
+  # These examples drive the REAL solver against a toy KAT challenge (n=8, k=1)
+  # over a stubbed transport — the same shape the #register! PoW example uses.
+  describe "the 402-PoW retry on a tolled verb (K-760)" do
+    let(:rsa_key)   { OpenSSL::PKey::RSA.generate(2048) }
+    let(:principal) do
+      Kiosk::Redteam::Principal.new(agent_id: "a1", user_id: "u1", token: "tok-t", rsa_key:)
+    end
+
+    # A toy challenge the shipped solver clears in milliseconds.
+    let(:toll) do
+      { "id" => "c1", "alg" => "equihash", "params" => { "n" => 8, "k" => 1 },
+        "salt" => Base64.strict_encode64("kat"), "exp" => 9_999_999_999, "sig" => "x" }
+    end
+
+    # First answer tolls, second answers +then+. Returns the recorded requests.
+    def toll_then(stub, then_return)
+      calls = 0
+      stub.to_return do
+        calls += 1
+        calls == 1 ? problem_return("pow_required", challenges: [toll]) : then_return
+      end
+    end
+
+    it "#query pays the toll and re-sends the IDENTICAL query string" do
+      reqs = []
+      stub = stub_request(:get, "#{base_url}/kiosk/catalog")
+        .with(query: { "city" => "Lisbon" })
+        .with { |req| reqs << req; true }
+      toll_then(stub, json_return(200, [{ "id" => "p1" }]))
+
+      resp = client.query(principal, name: "catalog", city: "Lisbon")
+
+      # The attack RAN: the second answer is the real one.
+      expect(resp.status).to eq(200)
+      expect(resp.body).to eq([{ "id" => "p1" }])
+      expect(reqs.length).to eq(2)
+      # The fingerprint binds to METHOD + verb + args, so the retry must be the
+      # same request — only the header is new.
+      expect(reqs.last.uri.to_s).to eq(reqs.first.uri.to_s)
+      expect(reqs.first.headers["Kiosk-Pow"]).to be_nil
+      proofs = JSON.parse(reqs.last.headers["Kiosk-Pow"])
+      expect(proofs.first["challenge"]).to eq(toll)
+      expect(proofs.first["nonce"]).to include("indices")
+    end
+
+    it "#run pays the toll and re-sends a BYTE-IDENTICAL body" do
+      reqs = []
+      stub = stub_request(:post, "#{base_url}/kiosk/place_order").with { |req| reqs << req; true }
+      toll_then(stub, json_return(200, "order_id" => "o1"))
+
+      resp = client.run(principal, name: "place_order", sku: "SK-1")
+
+      expect(resp.status).to eq(200)
+      expect(reqs.length).to eq(2)
+      expect(reqs.last.body).to eq(reqs.first.body)
+      expect(reqs.last.headers["Kiosk-Pow"]).not_to be_nil
+    end
+
+    it "#pay pays the toll WITHOUT re-signing the mandates" do
+      # The load-bearing detail: re-signing would mint a fresh mandate id and
+      # `iat`, i.e. a DIFFERENT body — so the proof just paid for would bind to
+      # nothing and the provider would re-challenge forever.
+      reqs = []
+      stub = stub_request(:post, "#{base_url}/kiosk/pay").with { |req| reqs << req; true }
+      toll_then(stub, json_return(200, "settlement_id" => "stl-1"))
+
+      now    = Time.now.to_i
+      intent = { "id" => "i1", "user_id" => "us1", "exp" => now + 600, "iat" => now }
+      cart   = { "id" => "c1", "intent_mandate_id" => "i1", "user_id" => "us1",
+                 "total_amount_cents" => 100, "currency" => "eur", "iss" => base_url,
+                 "exp" => now + 600, "iat" => now }
+
+      resp = client.pay(principal, intent:, cart:)
+
+      expect(resp.status).to eq(200)
+      expect(reqs.length).to eq(2)
+      expect(reqs.last.body).to eq(reqs.first.body)
+    end
+
+    it "#pay_raw pays the toll too — a replayed mandate reaches the gate it targets" do
+      reqs = []
+      stub = stub_request(:post, "#{base_url}/kiosk/pay").with { |req| reqs << req; true }
+      toll_then(stub, problem_return("forbidden"))
+
+      resp = client.pay_raw(principal, intent_jws: "i.j.w", cart_jws: "c.j.w", payment_jws: "p.j.w")
+
+      expect(resp.status).to eq(403)
+      expect(reqs.length).to eq(2)
+      expect(reqs.last.body).to eq(reqs.first.body)
+    end
+
+    it "is BOUNDED — one solve per call, never a loop, even when the toll is re-demanded" do
+      reqs = []
+      stub_request(:get, "#{base_url}/kiosk/catalog")
+        .with { |req| reqs << req; true }
+        .to_return { problem_return("pow_required", challenges: [toll]) }
+
+      resp = client.query(principal, name: "catalog")
+
+      expect(reqs.length).to eq(2)          # the initial call + exactly ONE retry
+      expect(resp.status).to eq(402)
+      expect(resp.pow_retried).to be(true)  # and it says the toll WAS paid
+    end
+
+    it "surfaces a could-not-test verdict that says the toll was already paid" do
+      stub_request(:get, "#{base_url}/kiosk/catalog")
+        .to_return { problem_return("pow_required", challenges: [toll]) }
+
+      resp    = client.query(principal, name: "catalog")
+      verdict = Class.new(Kiosk::Redteam::Scenario) {
+        def initialize = super(name: "T", category: "c", description: "d")
+        def verdict(response) = verdict_from(response)
+      }.new.verdict(resp)
+
+      expect(verdict.blocked).to be(false)   # a toll is not a refusal
+      expect(verdict.skipped).to be(false)   # and a skip would hide it from all_blocked?
+      expect(verdict.detail).to include("COULD NOT TEST")
+      expect(verdict.detail).to include("already solved every issued challenge")
+    end
+
+    it "leaves a 402 with NO challenges untouched — that is a PAYMENT 402, not a toll" do
+      reqs = []
+      stub_request(:post, "#{base_url}/kiosk/reschedule")
+        .with { |req| reqs << req; true }
+        .to_return { problem_return("payment_setup_required") }
+
+      resp = client.run(principal, name: "reschedule")
+
+      expect(reqs.length).to eq(1)           # nothing to solve — no retry attempted
+      expect(resp.status).to eq(402)
+      expect(resp.pow_retried).to be(false)
+      expect(Kiosk::Redteam.payment_required_reason(resp)).to include("no payment instrument")
+    end
+
+    it "registration uses the SAME implementation — one solve loop, not two copies" do
+      # The anti-drift assertion: #register_raw no longer owns a private copy of
+      # the retry. If someone re-inlines one here, this fails.
+      source = File.read(
+        File.expand_path("../../../lib/kiosk/redteam/client.rb", __dir__)
+      )
+      # ONE solve loop in the whole file …
+      expect(source.scan(/nonce: equihash_solve\(/).length).to eq(1)
+      expect(source.scan(/def with_pow_retry/).length).to eq(1)
+      # … reached from all FIVE tolled entry points: build_register (register /
+      # register!), query, run, pay, pay_raw. A hand-copied branch would either
+      # push the first count above one or drop this one below five.
+      expect(source.scan(/(?<!def )with_pow_retry\(/).length).to eq(5)
+    end
+  end
+
   # ── Response body parsing ─────────────────────────────────────────────────
 
   describe "Response body" do

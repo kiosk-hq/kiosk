@@ -6,6 +6,8 @@ All notable changes follow [Keep a Changelog](https://keepachangelog.com/en/1.1.
 
 ### Changed
 
+- **A TOLLED VERB CAN NOW BE ATTACKED (K-760).** `#query`, `#run`, `#pay` and `#pay_raw` route their answer through one shared, bounded 402-PoW retry — the same `Client#with_pow_retry` registration uses — instead of leaving the solve branch inlined in `#register_raw` where only registration could reach it. A toll is a price, not a refusal (K-736), so an attacker pays it; a harness that could not pay it could not run the attack at all. Measured against getgrocery with its catalog toll ON (`KIOSK_POW_DEMO=1`): before, the battery ABORTED on its first scenario (`catalog returned empty`) and produced no verdicts; after, 17 BLOCKED / 3 SKIPPED / 0 BREACH, byte-identical to the untolled run. Exactly ONE solve-and-resend per call, never a loop: a re-demanded toll comes back flagged `pow_retried` and reads as a could-not-test verdict that says the toll was already paid, which is a statement about the provider rather than about this gem. The retry re-sends the IDENTICAL request — `#pay` signs its mandates once and reuses the body, because the challenge binds to a fingerprint of method + verb + body and a re-signed mandate would be a different request.
+
 - The client speaks protocol 0.4: `#query` is `GET <endpoint>/<query-name>` with its arguments in the query string, `#run` is `POST <endpoint>/<action-name>` with the arguments as the whole body, and there is no `name` field on the wire. Error codes are read off the top level of an RFC 9457 problem document rather than out of the retired `error` envelope.
 
 ### Fixed

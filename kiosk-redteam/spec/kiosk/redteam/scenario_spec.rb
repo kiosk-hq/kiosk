@@ -40,9 +40,13 @@ RSpec.describe Kiosk::Redteam::Scenario do
   #
   # The permissive path delegated to `blocked?`, which said true for a bare
   # 402 — so a tolled verb printed BLOCKED for an attack the harness never
-  # mounted (it solves PoW only at registration). All three codes kiosk-server
+  # mounted (it solved PoW only at registration). All three codes kiosk-server
   # maps onto 402 now produce the same could-not-test verdict, which names
   # which one answered so the line is not read as a provider hole.
+  #
+  # K-760 then made the harness PAY a PoW toll on every verb, so these stubs
+  # are the answers that survive that retry: they arrive with no `challenges`
+  # to solve, which is exactly what the two payment 402s always look like.
   describe "#verdict_from — HTTP 402 is never a pass on the permissive path (K-736)" do
     {
       "pow_required"           => "a toll was DEMANDED",

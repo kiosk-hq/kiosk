@@ -65,9 +65,14 @@ RSpec.describe Kiosk::Redteam::Scenarios::UnpaidGatedAction do
   # The tolled-verb case, demonstrated on a stub transport before the fix: the
   # gated action answered 402 and the runner printed
   # "BLOCKED ✓ UnpaidGatedAction (HTTP 402)" with all_blocked? true — a pass for
-  # an attack that never executed, because #run has no 402 retry (the harness
-  # solves PoW only in Client#register_raw). Latent in the shipped demos, which
+  # an attack that never executed, because #run had no 402 retry (the harness
+  # solved PoW only in Client#register_raw). Latent in the shipped demos, which
   # answer 403 here; armed the day an operator prices a real verb.
+  #
+  # K-760 gave #run that retry, so a `pow_required` carrying challenges is now
+  # PAID and the attack does run. These stubs carry none — the shape of the two
+  # payment 402s, and of a toll a provider re-demands — so the could-not-test
+  # verdict is still exactly the right answer for them.
   describe "#call — a 402 on the gated action is not a pass (K-736)" do
     def stub_toll(code)
       stub_registers("a")

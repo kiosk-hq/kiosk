@@ -14,7 +14,13 @@ module Kiosk
     # HTTP driver for the Kiosk provider API.
     #
     # Covers the full agent flow:
-    #   register (+ Equihash PoW solving on 402) → kyc → query / run → pay
+    #   register → kyc → query / run → pay
+    #
+    # EVERY tolled step pays its toll. `register`, `query`, `run` and `pay` all
+    # route their answer through {#with_pow_retry}: a `pow_required` 402 is
+    # solved once and the identical request re-sent with the proofs in the
+    # `Kiosk-PoW` header. A toll is a price, not a refusal — an attacker pays
+    # it, so a harness that cannot pay it cannot attack a tolled verb (K-760).
     #
     # Two registration entry points:
     #   - {#register_raw} — always returns a {Response}; use in scenarios that
@@ -106,12 +112,19 @@ module Kiosk
       # no `name` field — the name is the path segment, which is also what the
       # PoW fingerprint binds to.
       #
+      # A tolled query is ATTACKED, not stalled around: a `pow_required` 402 is
+      # answered with one solve-and-resend ({#with_pow_retry}, K-760).
+      #
       # @param principal [Principal]
       # @param name      [String]  query name registered by the provider
       # @param params    [Hash]    additional query parameters
       # @return [Response]
       def query(principal, name:, **params)
-        get_json("/kiosk/#{name}", params: params, bearer: principal.token)
+        path     = "/kiosk/#{name}"
+        response = get_json(path, params: params, bearer: principal.token)
+        with_pow_retry(response) do |pow|
+          get_json(path, params: params, bearer: principal.token, pow: pow)
+        end
       end
 
       # Execute a named action (write).
@@ -119,12 +132,19 @@ module Kiosk
       # PROTOCOL 0.4: an action is `POST <endpoint>/<action-name>` whose body
       # is the arguments and nothing else.
       #
+      # A tolled action is ATTACKED, not stalled around: a `pow_required` 402 is
+      # answered with one solve-and-resend ({#with_pow_retry}, K-760).
+      #
       # @param principal [Principal]
       # @param name      [String] action name registered by the provider
       # @param args      [Hash]   action arguments
       # @return [Response]
       def run(principal, name:, **args)
-        post_json("/kiosk/#{name}", args, bearer: principal.token)
+        path     = "/kiosk/#{name}"
+        response = post_json(path, args, bearer: principal.token)
+        with_pow_retry(response) do |pow|
+          post_json(path, args, bearer: principal.token, pow: pow)
+        end
       end
 
       # Sign and POST a pay command with RS256-signed intent + cart + payment mandates.
@@ -144,15 +164,20 @@ module Kiosk
       # @return [Response]
       def pay(principal, intent:, cart:, payment_method: "pm_demo")
         payment = build_payment_mandate(principal, cart: cart, payment_method: payment_method)
-        post_json(
-          "/kiosk/pay",
-          {
-            intent_mandate_jws:  sign_mandate(principal, intent),
-            cart_mandate_jws:    sign_mandate(principal, cart),
-            payment_mandate_jws: sign_mandate(principal, payment),
-          },
-          bearer: principal.token,
-        )
+        # SIGN ONCE, then reuse the identical body on the PoW retry. The
+        # challenge binds to a fingerprint of METHOD + verb + canonical body
+        # (spec §3.4), and re-signing would mint fresh mandate ids and `iat`s —
+        # a different body, so the proof we just paid for would bind to nothing
+        # and the provider would re-challenge forever.
+        body = {
+          intent_mandate_jws:  sign_mandate(principal, intent),
+          cart_mandate_jws:    sign_mandate(principal, cart),
+          payment_mandate_jws: sign_mandate(principal, payment),
+        }
+        response = post_json("/kiosk/pay", body, bearer: principal.token)
+        with_pow_retry(response) do |pow|
+          post_json("/kiosk/pay", body, bearer: principal.token, pow: pow)
+        end
       end
 
       # Build a payment mandate payload bound to the given cart and principal.
@@ -204,15 +229,15 @@ module Kiosk
       # @param payment_jws [String]    pre-built payment mandate JWS
       # @return [Response]
       def pay_raw(principal, intent_jws:, cart_jws:, payment_jws:)
-        post_json(
-          "/kiosk/pay",
-          {
-            intent_mandate_jws:  intent_jws,
-            cart_mandate_jws:    cart_jws,
-            payment_mandate_jws: payment_jws,
-          },
-          bearer: principal.token,
-        )
+        body = {
+          intent_mandate_jws:  intent_jws,
+          cart_mandate_jws:    cart_jws,
+          payment_mandate_jws: payment_jws,
+        }
+        response = post_json("/kiosk/pay", body, bearer: principal.token)
+        with_pow_retry(response) do |pow|
+          post_json("/kiosk/pay", body, bearer: principal.token, pow: pow)
+        end
       end
 
       private
@@ -249,18 +274,60 @@ module Kiosk
 
         # :solve — post; if the provider gates registration (402 Equihash), solve
         # every challenge and resubmit the SAME signed body, sending the proof(s)
-        # in the Kiosk-PoW request header as raw JSON.
+        # in the Kiosk-PoW request header as raw JSON. Since K-760 that is the
+        # SHARED {#with_pow_retry}, not a branch that lives only here — register
+        # was the only tolled verb this client could pay, which is precisely
+        # what made a tolled query/action unattackable.
         resp = post_json("/kiosk/auth/register", body)
-        if resp.status == 402
-          # RFC 9457: `challenges` is a TOP-LEVEL extension member of the
-          # problem document, not a field of a nested `error` object.
-          challenges = resp.body["challenges"] rescue nil
-          if challenges.is_a?(Array) && challenges.any?
-            proofs = challenges.map { |c| { challenge: c, nonce: equihash_solve(c) } }
-            resp = post_json("/kiosk/auth/register", body, pow: JSON.generate(proofs))
-          end
+        resp = with_pow_retry(resp) do |pow|
+          post_json("/kiosk/auth/register", body, pow: pow)
         end
         [resp, key]
+      end
+
+      # ONE bounded 402-PoW retry: solve every challenge the provider issued and
+      # re-send the IDENTICAL request with the proofs in the `Kiosk-PoW` header.
+      # Shared by registration and by every wire verb (K-760).
+      #
+      # WHY A HARNESS PAYS TOLLS. A `pow_required` 402 is a price, not a refusal
+      # (K-736) — so an attacker pays it, and a harness that cannot pay it
+      # cannot attack a tolled verb AT ALL. Until this method existed the solve
+      # branch lived inside {#build_register}, so the day an operator tolled a
+      # real query or action every scenario touching it went from "tested and
+      # blocked" to "cannot be tested" — total loss of coverage on exactly the
+      # surface the battery exists to exercise.
+      #
+      # BOUNDED BY CONSTRUCTION: exactly one solve-and-resend per call, no
+      # loop. A provider that re-demands the toll gets the second 402 handed
+      # back untouched (flagged `pow_retried`), where
+      # {Scenario#payment_required_stall} turns it into a could-not-test verdict
+      # that says the toll was paid and demanded again — rather than spinning
+      # the harness or, worse, hiding the second demand behind a third solve.
+      #
+      # A 402 carrying NO `challenges` is one of the other two 402s
+      # (`payment_setup_required` / `payment_failed`): nothing to solve, so the
+      # answer is returned unchanged and stalls exactly as it did before.
+      #
+      # `/kiosk/agents/kyc` deliberately has no retry: {PowGate} is called only
+      # from the wire verbs and from registration, so that endpoint cannot
+      # answer `pow_required` — a 402 there is a payment 402 and paying a PoW
+      # toll would not be what it asked for.
+      #
+      # @param response [Response] the provider's first answer
+      # @yieldparam pow [String] raw `Kiosk-PoW` header value (JSON array of proofs)
+      # @yieldreturn [Response] the answer to the re-sent request
+      # @return [Response] the retried answer, or +response+ when there is
+      #   nothing to solve
+      def with_pow_retry(response)
+        return response unless response.status == 402
+
+        # RFC 9457: `challenges` is a TOP-LEVEL extension member of the problem
+        # document, not a field of a nested `error` object.
+        challenges = response.body.is_a?(Hash) ? response.body["challenges"] : nil
+        return response unless challenges.is_a?(Array) && challenges.any?
+
+        proofs = challenges.map { |c| { challenge: c, nonce: equihash_solve(c) } }
+        yield(JSON.generate(proofs)).with(pow_retried: true)
       end
 
       # Fetch a challenge for +pem+ and sign it with the private +key+ — the
@@ -329,12 +396,10 @@ module Kiosk
       # @param bearer [String, nil] Bearer token for Authorization header
       # @param pow    [String, nil] raw Kiosk-PoW header value. A GET has no
       #   body, so the header is the ONLY channel a proof can travel on — which
-      #   is why ADR-0022 moved it there before the wire needed it. Nothing in
-      #   this gem passes it yet: {#query} has no 402 retry, because a tolled
-      #   query is `payment_required_stall`'s job (a toll DEFERS a request, it
-      #   does not refuse it — K-736) and solving one would change what a
-      #   scenario measures. The channel is here because a GET cannot carry a
-      #   proof any other way, so a retry added later has nowhere else to put it.
+      #   is why ADR-0022 moved it there before the wire needed it. {#query} now
+      #   passes it, on the one bounded retry {#with_pow_retry} performs (K-760):
+      #   a toll DEFERS a request rather than refusing it (K-736), and a
+      #   deferred attack that is never re-sent is an attack that was never run.
       def get_json(path, params: {}, bearer: nil, pow: nil)
         uri = URI("#{@base_url}#{path}")
         uri.query = URI.encode_www_form(params) unless params.nil? || params.empty?

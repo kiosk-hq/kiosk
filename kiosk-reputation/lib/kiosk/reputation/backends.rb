@@ -7,6 +7,12 @@ module Kiosk
     # A registered backend need only respond to:
     #   .verify(salt:, params:, nonce:) -> Boolean — verify a submitted proof
     #
+    # It MAY also respond to:
+    #   .valid_params?(params) -> Boolean — could a proof at these parameters
+    #   ever verify? Optional and duck-typed (K-843): a backend that does not
+    #   implement it is simply unconstrained, and {valid_params?} says so by
+    #   answering true.
+    #
     # {Challenge.verify} resolves a backend via {fetch} and calls only its
     # .verify. (Backends also expose a .params helper for building challenge
     # params, but its signature is algorithm-specific — equihash takes (n:, k:),
@@ -47,6 +53,33 @@ module Kiosk
               "Known algorithms: #{known.inspect}. " \
               "Register a backend with Kiosk::Reputation::Backends.register(#{key.inspect}, backend)."
           end
+        end
+
+        # Would a challenge minted at `params` be answerable by the backend
+        # registered for `alg_name`? (K-843)
+        #
+        # The seam a MINTING gate asks before it issues. {Challenge.issue} is
+        # deliberately algorithm-agnostic — it takes any `alg` + `params` Hash
+        # and only HMACs them — so a degenerate difficulty is minted happily and
+        # only discovered when an honest solve fails verification, at which
+        # point the agent is told its correct proof was invalid and the operator
+        # is told nothing. This lets the gate refuse at the right end.
+        #
+        # NEVER INVENTS A REFUSAL. Answers false only when a registered backend
+        # says so itself. An unregistered algorithm, or a backend that does not
+        # implement `.valid_params?`, cannot answer the question — and a seam
+        # that cannot answer must not manufacture a rejection, so both are true.
+        # (An unregistered algorithm is a different misconfiguration; {fetch}
+        # still reports it, with the list of names that ARE registered.)
+        #
+        # @param alg_name [String] name advertised in the challenge
+        # @param params   [Hash]   the algorithm-specific params about to be minted
+        # @return [Boolean]
+        def valid_params?(alg_name, params)
+          backend = @registry[alg_name.to_s]
+          return true unless backend.respond_to?(:valid_params?)
+
+          backend.valid_params?(params)
         end
 
         # @return [Array<String>] sorted list of registered algorithm names

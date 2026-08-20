@@ -46,7 +46,9 @@ module Kiosk
       # @return [void]
       # @raise  [Errors::PowRequired]       (402) when valid proofs are needed
       # @raise  [Errors::Forbidden]         (403) on a bad-faith proof
-      # @raise  [Errors::ConfigurationError] when the gate is on but misconfigured
+      # @raise  [Errors::ConfigurationError] when the gate is on but misconfigured —
+      #   kiosk-reputation absent, `pow_secret` unset, or `registration_pow_params`
+      #   naming a difficulty no proof could satisfy (K-843, raised by {PowGate.enforce})
       def gate(public_key_pem:, pow:, config: Kiosk.configuration)
         count = config.registration_pow_count.to_i
         return if count <= 0

@@ -9,6 +9,7 @@ All notable changes follow [Keep a Changelog](https://keepachangelog.com/en/1.1.
 - `Kiosk::Pow::Equihash` — pure-Ruby Equihash (Biryukov & Khovratovich) verifier, the shipped default Kiosk PoW backend. No runtime dependencies: BLAKE2b-256 is clean-room pure Ruby from the public-domain BLAKE2 spec, and the gem depends on neither `kiosk-core` nor Rails.
 - `Kiosk::Pow::Equihash::NAME = "equihash"` — algorithm identifier for the challenge wire format.
 - `Kiosk::Pow::Equihash.params(n: 168, k: 7)` — challenge params; `DEFAULT_N` / `DEFAULT_K` carry the shipped defaults.
+- `Kiosk::Pow::Equihash.valid_params?(params)` — could a proof at these parameters ever verify? Exactly `verify`'s Step 0 parameter checks, extracted so a gate can refuse to MINT an unsatisfiable challenge instead of issuing one and blaming the client's correct proof (K-843). `verify` calls it, so the accepted set is identical by construction.
 - `Kiosk::Pow::Equihash.verify(salt:, params:, nonce:)` — recomputes the `2^k` BLAKE2b-256 leaf hashes named by the proof's indices, checks their XOR is zero over all `n` bits, and walks the Wagner collision tree (per-level XOR cancellation plus the Zcash-canonical subtree ordering). Difficulty is set by `(n, k)` alone — there is no post-hoc target check.
 - `Kiosk::Pow::Equihash.blake2b256` — public so specs can check it directly against Python `hashlib.blake2b` vectors.
 - `solve.py` — reference Python + numpy solver (a correct full-Wagner implementation, not a tuned miner), with a `--toy` `(n=24, k=3)` mode for tests.

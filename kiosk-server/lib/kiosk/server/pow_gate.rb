@@ -98,7 +98,8 @@ module Kiosk
       # @return [:proceed]  when the request may proceed to {Executor}
       # @raise  [Errors::PowRequired]       (HTTP 402) when a challenge must be solved
       # @raise  [Errors::Forbidden]         (HTTP 403) when a submitted proof is invalid
-      # @raise  [Errors::ConfigurationError] when the policy is set but pow_secret is missing
+      # @raise  [Errors::ConfigurationError] when the policy is set but pow_secret is
+      #   missing, or the difficulty it demands is one no proof could satisfy (K-843)
       def gate(identity:, command:, body:, pow:, method: "POST", verb: nil)
         config = Kiosk.configuration
         policy = config.reputation_policy
@@ -169,7 +170,18 @@ module Kiosk
       # @return [:proceed]
       # @raise  [Errors::PowRequired] (402) when more valid proofs are needed
       # @raise  [Errors::Forbidden]   (403) on a bad-faith (wrong) proof
+      # @raise  [Errors::ConfigurationError] when `spec` names a difficulty the
+      #   registered backend refuses (K-843)
       def enforce(spec:, fingerprint:, pow:, secret:, config:, on_bad_proof:)
+        # ── Is this difficulty answerable at all? (K-843) ─────────────────────
+        # Before anything is minted or verified. `spec` comes from operator
+        # configuration — the policy's `challenge_for`, or
+        # `config.registration_pow_params` — and nothing between here and the
+        # wire re-reads it, so a degenerate `{n: 0}` produces challenges that
+        # every honest solve fails. Refuse at the source instead, the way a
+        # missing `pow_secret` already does.
+        validate_spec_params!(spec)
+
         # ── How many independent proofs must this request carry? ──────────────
         # Equihash has no continuous difficulty dial — escalation is by PROOF
         # COUNT (N×PoW). Each challenge has a distinct salt, so there is no
@@ -366,6 +378,29 @@ module Kiosk
           ttl:                  ttl,
           now:                  Time.now.to_i,
         )
+      end
+
+      # Raise unless the registered backend accepts `spec`'s parameters (K-843).
+      #
+      # {Errors::ConfigurationError}, not a 4xx: no caller chose these values
+      # and no caller can correct them. The message names the two places a
+      # `spec` comes from, because the raise happens inside the gate and the
+      # defect is in the operator's configuration.
+      #
+      # Backends that do not implement `.valid_params?` are unconstrained, and
+      # `Backends.valid_params?` answers true for them — so this method is a
+      # no-op for every backend but equihash today, by design.
+      def validate_spec_params!(spec)
+        alg    = spec[:alg]    || spec["alg"]
+        params = spec[:params] || spec["params"]
+        return if ::Kiosk::Reputation::Backends.valid_params?(alg, params)
+
+        raise Errors::ConfigurationError,
+          "Kiosk::Server: the #{alg.to_s.inspect} proof-of-work backend refuses the configured " \
+          "parameters #{params.inspect} — no proof solved at them could ever verify, so every " \
+          "honest client would be told its correct proof was invalid. Fix the source of the " \
+          "parameters: `c.registration_pow_params` for POST /auth/register, or the `params:` " \
+          "your reputation_policy returns from #challenge_for."
       end
 
       # Number of independent proofs the policy demands for this request.

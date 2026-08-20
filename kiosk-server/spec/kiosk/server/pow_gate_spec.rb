@@ -2,6 +2,7 @@
 
 require "base64"
 require "kiosk/pow"
+require "kiosk/pow/equihash"
 require "kiosk/reputation"
 
 # Integration tests for the PoW challenge-response gate.
@@ -174,6 +175,79 @@ RSpec.describe Kiosk::Server::PowGate do
       expect {
         described_class.gate(identity: identity, command: "query", body: {}, pow: nil)
       }.to raise_error(Kiosk::Server::Errors::ConfigurationError, /pow_secret/)
+    end
+  end
+
+  # ── K-843: a policy may not demand a difficulty no proof could satisfy ─────
+  #
+  # The reputation half of the same guard. `Policy#challenge_for` returns
+  # `params:` freely and Challenge.issue signs whatever it is handed, so a
+  # policy that computes `{n: 0}` mints challenges every honest solve fails —
+  # and the 403 blames the client. Asked at gate time instead, so the operator
+  # who wrote the policy is the one who hears about it.
+  #
+  # Driven with the REAL equihash backend, because the seam is duck-typed:
+  # kiosk-pow (argon2id) does not implement `.valid_params?` and is therefore
+  # unconstrained, which the last example here pins deliberately.
+  describe "configuration guard: the policy's params are unsatisfiable (K-843)" do
+    def policy_returning(params)
+      Class.new(Kiosk::Reputation::Policy) do
+        define_method(:challenge_for) do |identity:, verb:, factors:|
+          { alg: "equihash", params: params }
+        end
+      end.new
+    end
+
+    before { Kiosk::Reputation::Backends.register("equihash", Kiosk::Pow::Equihash) }
+
+    it "raises ConfigurationError naming challenge_for rather than issuing a 402" do
+      configure_with_policy(policy_returning({ n: 0, k: 7 }))
+      expect {
+        described_class.gate(identity: identity, command: "query", body: {}, pow: nil)
+      }.to raise_error(Kiosk::Server::Errors::ConfigurationError, /challenge_for/)
+    end
+
+    it "raises before any challenge is minted" do
+      configure_with_policy(policy_returning({ n: 168, k: -5 }))
+      expect(Kiosk::Reputation::Challenge).not_to receive(:issue)
+      expect {
+        described_class.gate(identity: identity, command: "query", body: {}, pow: nil)
+      }.to raise_error(Kiosk::Server::Errors::ConfigurationError)
+    end
+
+    it "raises on a SUBMITTED proof too — not only on the first, unproven request" do
+      # The check sits at the top of `enforce`, which both entry points share,
+      # so a client that already holds a challenge minted before the misconfig
+      # gets the same operator-facing error rather than a 403 blaming its proof.
+      configure_with_policy(policy_returning({ n: 0, k: 7 }))
+      expect {
+        described_class.gate(identity: identity, command: "query", body: {},
+                             pow: { "challenge" => { "id" => "x", "params" => { "n" => 0, "k" => 7 } },
+                                    "nonce" => { "indices" => [] } })
+      }.to raise_error(Kiosk::Server::Errors::ConfigurationError)
+    end
+
+    it "still issues a 402 at the shipped equihash default — accepted set unchanged" do
+      configure_with_policy(policy_returning(Kiosk::Pow::Equihash.params))
+      expect {
+        described_class.gate(identity: identity, command: "query", body: {}, pow: nil)
+      }.to raise_error(Kiosk::Server::Errors::PowRequired)
+    end
+
+    it "leaves a backend with no .valid_params? unconstrained (argon2id)" do
+      # kiosk-pow answers nothing about its parameters, so the seam must not
+      # answer for it. `{d: 0}` is nonsense to argon2id and this gate does not
+      # pretend to know that — it issues the 402 exactly as before.
+      configure_with_policy(
+        Class.new(Kiosk::Reputation::Policy) do
+          def challenge_for(identity:, verb:, factors:)
+            { alg: "argon2id", params: { d: 0, m: 8 } }
+          end
+        end.new,
+      )
+      expect {
+        described_class.gate(identity: identity, command: "query", body: {}, pow: nil)
+      }.to raise_error(Kiosk::Server::Errors::PowRequired)
     end
   end
 

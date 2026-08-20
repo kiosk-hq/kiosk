@@ -454,6 +454,58 @@ RSpec.describe Kiosk::Pow::Equihash do
       )).to be(false)
     end
 
+    # ── the MINT-time half of the same guard (K-843) ────────────────────────
+    #
+    # `.verify` answering false is closed but late: the operator who configured
+    # `{n: 0}` never hears about it, and the agent is told its correct proof was
+    # invalid. `.valid_params?` is the same predicate asked BEFORE a challenge
+    # is minted, so a gate can refuse at the source. It must answer for exactly
+    # the same set — hence the table rather than a second hand-written list.
+    describe ".valid_params? (K-843)" do
+      rejected = {
+        "negative k"                => { n: 168, k: -5 },
+        "n = 0"                     => { n: 0,   k: 7 },
+        "negative n"                => { n: -8,  k: 7 },
+        "n below one byte"          => { n: 4,   k: 7 },
+        "n wider than the digest"   => { n: 512, k: 7 },
+        "zero bits per level"       => { n: 8,   k: 8 },
+        "a non-numeric n"           => { n: "abc", k: 7 },
+        "params that are not a Hash" => nil,
+      }
+      accepted = {
+        "the shipped default"    => { n: 168, k: 7 },
+        "the KAT parameters"     => { n: 8,   k: 2 },
+        "k = 0"                  => { n: 8,   k: 0 },
+        "string keys off JSON"   => { "n" => 168, "k" => 7 },
+        "string values off JSON" => { n: "168", k: "7" },
+        "an empty Hash (both members default)" => {},
+      }
+
+      rejected.each do |label, params|
+        it "REJECTS #{label}" do
+          expect(described_class.valid_params?(params)).to be(false)
+        end
+      end
+
+      accepted.each do |label, params|
+        it "ACCEPTS #{label}" do
+          expect(described_class.valid_params?(params)).to be(true)
+        end
+      end
+
+      it "agrees with verify's Step 0 on every rejected set — one owner, no drift" do
+        # Step 0 CALLS valid_params?, so this cannot fail without one of them
+        # having been rewritten to stop asking the other. That is the drift the
+        # extraction exists to prevent, and it is the only thing worth pinning
+        # here: a well-formed nonce cannot rescue a refused parameter set.
+        rejected.each_value do |params|
+          expect(described_class.verify(
+            salt: "x".b, params: params, nonce: { indices: (0...128).to_a }
+          )).to be(false)
+        end
+      end
+    end
+
     it "ACCEPTS k = 0 — no tree, the root check is the only one" do
       # k = 0 is degenerate but DEFINED, and the fold loop is written for it
       # ("At k=0 there is no tree and this is the only one"). The guard must

@@ -114,6 +114,66 @@ RSpec.describe Kiosk::Server::RegistrationPow do
     }.to raise_error(Kiosk::Server::Errors::ConfigurationError, /pow_secret/)
   end
 
+  # ── K-843: refuse to MINT a challenge no proof could satisfy ───────────────
+  #
+  # K-840 gave `Equihash.verify` an answer for a degenerate (n, k) — false. That
+  # closes the hole at the wrong end: the challenge is still ISSUED, the client
+  # still burns a real Wagner solve on it, and the 403 it gets back says
+  # "invalid proof of work" about a proof that was correct. The operator, whose
+  # `registration_pow_params` caused it, is told nothing at all. So the gate
+  # asks the backend first, and a difficulty it refuses is a ConfigurationError
+  # naming the setting — exactly the way a missing pow_secret already is.
+  {
+    "n = 0 (every leaf is the integer 0)" => { n: 0, k: 7 },
+    "negative k (the solution disappears)" => { n: 168, k: -5 },
+    "zero bits per level"                  => { n: 8, k: 8 },
+  }.each do |label, bad_params|
+    it "raises ConfigurationError instead of minting a challenge at #{label}" do
+      Kiosk.configure do |c|
+        c.registration_pow_count  = 1
+        c.registration_pow_params = bad_params
+        c.pow_secret              = secret
+      end
+      expect {
+        Kiosk::Server::RegistrationPow.gate(public_key_pem: PEM, pow: nil)
+      }.to raise_error(Kiosk::Server::Errors::ConfigurationError,
+                       /registration_pow_params/)
+    end
+  end
+
+  it "names the algorithm and the offending parameters in the message" do
+    Kiosk.configure do |c|
+      c.registration_pow_count  = 1
+      c.registration_pow_params = { n: 0, k: 7 }
+      c.pow_secret              = secret
+    end
+    expect {
+      Kiosk::Server::RegistrationPow.gate(public_key_pem: PEM, pow: nil)
+    }.to raise_error(Kiosk::Server::Errors::ConfigurationError, /equihash.*n.*0/m)
+  end
+
+  it "does not mint anything — the raise replaces the 402, it does not follow it" do
+    # The point of moving the check to mint time: the client never receives a
+    # challenge it cannot use. PowRequired carries the challenges, so if one
+    # were issued this would raise PowRequired rather than ConfigurationError.
+    Kiosk.configure do |c|
+      c.registration_pow_count  = 1
+      c.registration_pow_params = { n: 0, k: 7 }
+      c.pow_secret              = secret
+    end
+    expect(Kiosk::Reputation::Challenge).not_to receive(:issue)
+    expect {
+      Kiosk::Server::RegistrationPow.gate(public_key_pem: PEM, pow: nil)
+    }.to raise_error(Kiosk::Server::Errors::ConfigurationError)
+  end
+
+  it "still accepts the shipped default parameters — the accepted set is unchanged" do
+    configure(count: 1)
+    expect {
+      Kiosk::Server::RegistrationPow.gate(public_key_pem: PEM, pow: nil)
+    }.to raise_error(Kiosk::Server::Errors::PowRequired)
+  end
+
   # K-540: /auth/register runs this gate UNAUTHENTICATED, BEFORE PopVerifier, so
   # a bad proof must not let one free challenge fuel unlimited garbage-proof
   # verifies. The atomic claim (K-542) consumes the challenge id BEFORE the

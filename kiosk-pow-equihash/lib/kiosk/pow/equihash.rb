@@ -214,6 +214,56 @@ module Kiosk
         { n:, k: }
       end
 
+      # Would a challenge minted at `params` be answerable at all? (K-843)
+      #
+      # This is the MINT-time half of {verify}'s Step 0. Step 0 gives a
+      # degenerate (n, k) an answer — `false` — so a proof solved against it can
+      # never verify. That is closed and loud, but it fails at the wrong end:
+      # the operator who configured `{n: 0}` learns nothing, and the agent is
+      # told "invalid proof of work" for a proof that was correct. A caller that
+      # is about to ISSUE a challenge asks this first and refuses to mint one it
+      # could never accept.
+      #
+      # The predicate is EXACTLY Step 0's parameter checks — Step 0 calls it, so
+      # the two cannot drift and the accepted set is identical by construction.
+      # `{}` is valid: both members default (168/7).
+      #
+      # Reached generically through
+      # `Kiosk::Reputation::Backends.valid_params?("equihash", params)`, which
+      # is why it takes one positional Hash rather than keywords.
+      #
+      # @param params [Hash] as returned by {.params}
+      # @return [Boolean] false iff no proof at these parameters could verify
+      def self.valid_params?(params)
+        n, k = coerce_params(params)
+        return false if n.nil?
+
+        # k = 0 is legitimate (no tree; Step 4 is then the only check), k < 0 is
+        # not: `1 << k` collapses to 0 and the whole solution disappears.
+        return false if k.negative?
+        # n is read out of a BLAKE2b-256 digest `n / 8` bytes wide, so below 8
+        # there are no bits to read and above 256 there are none left to demand
+        # — both make the level checks pass on anything.
+        return false unless n >= MIN_N && n <= MAX_N
+        # Bits per level. At zero every level check shifts the node clean away
+        # and only the root constraint survives, which is not this algorithm.
+        # This also bounds k at n - 1, which is what keeps `1 << k` sane.
+        (n / (k + 1)).positive?
+      end
+
+      # `params` → `[n, k]`, or `[nil, nil]` when it is not a Hash of integers.
+      # Split out so {valid_params?} and {verify}'s Step 0 read the pair the
+      # same way; neither may raise on caller-supplied junk.
+      def self.coerce_params(params)
+        return [nil, nil] unless params.is_a?(Hash)
+
+        [Integer(params[:n] || params["n"] || DEFAULT_N),
+         Integer(params[:k] || params["k"] || DEFAULT_K)]
+      rescue ArgumentError, TypeError
+        [nil, nil]
+      end
+      private_class_method :coerce_params
+
       # Verify an Equihash proof-of-work.
       #
       # @param salt   [String] raw bytes (the provider's per-challenge salt)
@@ -244,28 +294,13 @@ module Kiosk
         # The bounds are the ones the arithmetic below actually needs, and no
         # more — every parameter pair this gem, the demos and the specs use
         # (168/7, 96/5, 200/9, 32/3, 24/2, 8/1, 8/2, 8/3) satisfies them, so the
-        # ACCEPTED SET IS UNCHANGED.
-        return false unless params.is_a?(Hash)
+        # ACCEPTED SET IS UNCHANGED. They live in {valid_params?} so the gate
+        # that MINTS a challenge can ask the same question before issuing one
+        # (K-843) and the two can never disagree.
+        return false unless valid_params?(params)
 
-        begin
-          n = Integer(params[:n] || params["n"] || DEFAULT_N)
-          k = Integer(params[:k] || params["k"] || DEFAULT_K)
-        rescue ArgumentError, TypeError
-          return false
-        end
-
-        # k = 0 is legitimate (no tree; Step 4 is then the only check), k < 0 is
-        # not: `1 << k` collapses to 0 and the whole solution disappears.
-        return false if k.negative?
-        # n is read out of a BLAKE2b-256 digest `n / 8` bytes wide, so below 8
-        # there are no bits to read and above 256 there are none left to demand
-        # — both make the level checks pass on anything.
-        return false unless n >= MIN_N && n <= MAX_N
-        # Bits per level. At zero every level check shifts the node clean away
-        # and only the root constraint survives, which is not this algorithm.
-        # Checked BEFORE `1 << k` below, which also bounds k at n - 1.
+        n, k  = coerce_params(params)
         n_div = n / (k + 1)  # bits per level: 168/8 = 21
-        return false unless n_div.positive?
 
         expected_len = 1 << k  # 2^k
         return false unless indices.length == expected_len

@@ -1,11 +1,14 @@
 # frozen_string_literal: true
 
 # Seeds the tudu collaborative todo app:
-#   - two account holders, Alice and Bob, with STABLE UUIDs the assistant
-#     scripts use in `Authorization: Bearer agent:u-<uuid>:a-<agent>:r-<role>`
-#     headers. Both get Devise credentials so the account-link walkthrough can
-#     sign in through the real /users/sign_in form (Alice approves the assistant
-#     link there).
+#   - two account holders, Alice and Bob, with STABLE UUIDs: the rake tasks
+#     pass Alice's as HOLDER_ID and the public housemate view pins Bob's, so
+#     both survive a reset. They are NOT credentials — an assistant
+#     authenticates with the kiosk-pop JWT the engine mints at
+#     /kiosk/auth/register, /auth/login or the binding ceremony. Both holders
+#     get Devise credentials so the account-link walkthrough can sign in
+#     through the real /users/sign_in form (Alice approves the assistant link
+#     there).
 #   - a SEEDED HOUSEHOLD so collaboration has a concrete starting point and the
 #     public housemate view (/shared) is never empty: a shared list "Flat 3B"
 #     owned by Alice with a couple of tasks, and Bob seeded as a MEMBER (the

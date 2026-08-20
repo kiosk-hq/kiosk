@@ -152,7 +152,6 @@ assertions cannot go ungated and unexplained.
 | `app/controllers/kiosk/todo_lists_controller.rb` | The six actions (`create_list`, `add_todo`, `complete_todo`, `invite`, `accept_invite`, `remove_member`) — same shape with `include Kiosk::Action`; refusals are plain `render json:, status:` naming a wire error code, which the wire renders as the problem document's top-level `code` |
 | `app/models/membership.rb`, `app/controllers/concerns/kiosk_membership_gate.rb` | The membership check both wire halves need: `Membership.reachable?` is the access decision (a predicate, no request in it), the concern is the 400/403 refusal around it |
 | `app/controllers/lists_controller.rb`, `todos_controller.rb` | The human web UI, running the SAME registered actions as the wire (one shared world) |
-| `app/services/stub_idp.rb` / `app/services/jwt_or_stub_idp.rb` | Demo IdP: Kiosk JWTs first, bespoke `agent:u-…:a-…:r-…` fallback |
 | `script/collab_flow.rb` / `script/link_flow.rb` / `script/isolation_flow.rb` / `script/redteam_suite.rb` / `script/schema_flow.rb` | One-JSON-line flow drivers the rake tasks assert on |
 | `lib/tasks/demo.rake` | `rake demo:setup`, `:collab`, `:link`, `:isolation`, `:redteam`, `:schema`, `demo` |
 
@@ -163,9 +162,11 @@ The demo bakes in shortcuts production operators replace:
 - **Synthetic accounts (Alice, Bob)** → your real user table (the demo already
   gives them real Devise credentials so the link walkthrough signs in like a
   person would).
-- **`StubIdp`** (AI-assistant channel) → registered assistants already flow through
-  real Kiosk-issued JWTs; the bespoke fallback shape disappears. The human
-  session channel already runs the real `kiosk-user-idp-devise` adapter.
+- **Nothing in the AI-assistant channel** → there is nothing to replace. This
+  demo configures no `c.agent_idp`, so the engine verifies its own kiosk-pop
+  JWTs through `Kiosk::Server::AgentIdentityProviders::DefaultAgentIdp`; set
+  one only to front an EXTERNAL agent-identity issuer. The human session
+  channel already runs the real `kiosk-user-idp-devise` adapter.
 
 ## License
 

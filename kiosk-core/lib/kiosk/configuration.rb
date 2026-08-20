@@ -33,9 +33,10 @@ module Kiosk
     # kiosk-server uses its bundled kiosk-pop engine
     # (`Kiosk::Server::AgentIdentityProviders::DefaultAgentIdp`) — the same
     # engine whose tokens the built-in register/login/revoke endpoints mint,
-    # so a zero-config install verifies what it issues. Set this to front a
-    # different agent-identity system or to compose (see the demos'
-    # JwtOrStubIdp).
+    # so a zero-config install verifies what it issues. Set this ONLY to front a
+    # different agent-identity system (Entra Agent ID, Okta, an ID-JAG-style
+    # broker) by subclassing {Kiosk::AgentIdentityProviders::Base}. No demo sets
+    # it — the tokens they authenticate are the ones the engine minted (T-104).
     attr_accessor :agent_idp
 
     # Payment PSP adapter instance — captures AP2 cart mandates into PSP

@@ -8,7 +8,8 @@ module Kiosk
     # — is the DEFAULT agent-IdP: it verifies the very tokens the built-in
     # register/login/revoke endpoints mint, so a zero-config install works
     # end-to-end. `Kiosk.configuration.agent_idp` OVERRIDES it (custom
-    # adapter, or a composite like the demos' JwtOrStubIdp).
+    # adapter fronting an external agent-identity issuer). No demo sets it:
+    # the tokens they authenticate are the ones this engine minted (T-104).
     #
     # {.resolve} is the wire chain: the agent IdP first; when it yields no
     # identity (no/foreign credential — adapters return nil, they do not

@@ -33,7 +33,7 @@ module KioskDemoSkooti
     #     Zeitwerk's default inflector would expect as RentalTokenIssuerKat; it is
     #     required explicitly by the KAT flow, never autoloaded at runtime.
     config.autoload_lib(ignore: %w[assets tasks equihash_register.rb rental_token_issuer_kat.rb
-                              devise_session.rb])
+                              devise_session.rb bound_assistant.rb])
 
     # app/services holds the objects config/initializers/kiosk.rb HANDS to
     # `Kiosk.configure` at boot — the IdP adapters, the PoW-difficulty policy,

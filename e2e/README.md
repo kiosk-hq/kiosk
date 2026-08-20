@@ -82,8 +82,7 @@ e2e/
     ├── application_controller.rb           # ActionController::Base (not ::API) — Devise's controllers inherit it and need `flash`
     ├── user.rb, salon.rb, appointment.rb   # ActiveRecord models
     ├── seeds.rb                            # 2 users (Alice + Bob) with Devise credentials, 1 salon
-    ├── stub_idp.rb                         # Bearer-token-parsing agent IdP
-    ├── jwt_or_stub_idp.rb                  # composite IdP: Kiosk-issued JWTs + StubIdp fallback
+    ├── bind_assistants.rb                  # mints the suite's two agent principals by ceremony: register → the human's link code → claim (no agent IdP is staged — the engine's own DefaultAgentIdp verifies the tokens it mints)
     ├── stub_psp.rb                         # deterministic in-process PSP (no real Stripe)
     ├── equihash_register.rb                # shared register helper: challenge → PoP → register; solves the register 402 + retries with the Kiosk-PoW header
     ├── register_pow_flow.rb                # register-PoW driver: no-proof register → 402, solve + re-POST with Kiosk-PoW header → 201, token authenticates a verb

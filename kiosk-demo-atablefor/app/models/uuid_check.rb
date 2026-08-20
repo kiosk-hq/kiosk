@@ -2,13 +2,29 @@
 
 # Shape check for the uuids that arrive from the wire (K-581/K-582).
 #
-# atablefor's SQL builds `'<value>'::uuid` casts from agent-supplied ids — the
-# `booking_id` arg of cancel_booking. Postgres rejects a malformed literal with
-# `PG::InvalidTextRepresentation` (SQLSTATE 22P02), which is not a
-# `Kiosk::Server::Errors::Base` and so escapes the wire controller's rescue as a
-# raw HTTP 500: a CLIENT mistake reported as a server fault, and one that leaks
-# SQL internals ("invalid input syntax for type uuid") to the wire. Callers
-# validate the shape first and raise a typed 4xx instead.
+# atablefor takes an agent-supplied id on the wire — the `booking_id` arg of
+# cancel_booking. Its SQL is ActiveRecord throughout since K-654, so the SECOND
+# mode below is the operative one here.
+#
+# TWO failure modes, and this guard answers both. A malformed id is a CLIENT
+# mistake, and neither of the things that happen without the check reports it
+# as one:
+#
+#   * RAW SQL — an id interpolated into a `'<value>'::uuid` cast makes Postgres
+#     raise `PG::InvalidTextRepresentation` (SQLSTATE 22P02), which is not a
+#     `Kiosk::Server::Errors::Base` and so escapes the wire controller's rescue
+#     as a raw HTTP 500: a client mistake reported as a server fault, and one
+#     that leaks SQL internals ("invalid input syntax for type uuid") to the
+#     wire.
+#   * ACTIVE RECORD (K-654) — the ORM CASTS a malformed literal to NULL rather
+#     than raising, so the owner-scoped query matches nothing and the caller is
+#     REFUSED. That is strictly worse for the agent reading it than the 500: a
+#     wrong 403/404 is indistinguishable from a genuine ownership refusal, so a
+#     caller with a typo'd id is told it does not own a row that never existed.
+#     Moving off raw SQL therefore STRENGTHENS the case for this guard instead
+#     of retiring it (K-772).
+#
+# Callers validate the shape first and raise a typed 4xx instead.
 #
 # Format only — that an id is a well-formed uuid says nothing about whether the
 # row exists or belongs to the caller; the ownership/state SQL still decides that.

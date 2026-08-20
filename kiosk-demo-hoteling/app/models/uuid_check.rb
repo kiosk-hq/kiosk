@@ -2,16 +2,33 @@
 
 # Shape check for the uuids that arrive from the wire (K-581/K-582).
 #
-# hoteling's SQL builds `'<value>'::uuid` casts from agent-supplied ids — the
-# `booking_id` arg of confirm_booking, and the `{"booking_id":…}` entry inside a
-# signed cart mandate's line_items that ValidatingBookingProvider prices at
-# capture. Postgres rejects a malformed literal with
-# `PG::InvalidTextRepresentation` (SQLSTATE 22P02), which is not a
-# `Kiosk::Server::Errors::Base` and so escapes the wire controller's rescue as a
-# raw HTTP 500: a CLIENT mistake reported as a server fault, and on the pay path
-# a 500 is the worst possible answer because an assistant cannot tell it from
-# "the charge may have happened". Callers validate the shape first and raise a
-# typed 4xx instead.
+# hoteling takes agent-supplied ids on the wire — the `booking_id` arg of
+# confirm_booking, and the `{"booking_id":…}` entry inside a signed cart
+# mandate's line_items that ValidatingBookingProvider prices at capture. BOTH
+# modes below are live here: the verb handlers are ActiveRecord since K-654,
+# while app/services/validating_booking_provider.rb still builds `::uuid` casts
+# on the pay path — and there a 500 is the worst possible answer, because an
+# assistant cannot tell it from "the charge may have happened".
+#
+# TWO failure modes, and this guard answers both. A malformed id is a CLIENT
+# mistake, and neither of the things that happen without the check reports it
+# as one:
+#
+#   * RAW SQL — an id interpolated into a `'<value>'::uuid` cast makes Postgres
+#     raise `PG::InvalidTextRepresentation` (SQLSTATE 22P02), which is not a
+#     `Kiosk::Server::Errors::Base` and so escapes the wire controller's rescue
+#     as a raw HTTP 500: a client mistake reported as a server fault, and one
+#     that leaks SQL internals ("invalid input syntax for type uuid") to the
+#     wire.
+#   * ACTIVE RECORD (K-654) — the ORM CASTS a malformed literal to NULL rather
+#     than raising, so the owner-scoped query matches nothing and the caller is
+#     REFUSED. That is strictly worse for the agent reading it than the 500: a
+#     wrong 403/404 is indistinguishable from a genuine ownership refusal, so a
+#     caller with a typo'd id is told it does not own a row that never existed.
+#     Moving off raw SQL therefore STRENGTHENS the case for this guard instead
+#     of retiring it (K-772).
+#
+# Callers validate the shape first and raise a typed 4xx instead.
 #
 # Format only — that an id is a well-formed uuid says nothing about whether the
 # row exists or belongs to the caller; the ownership/state SQL still decides that.

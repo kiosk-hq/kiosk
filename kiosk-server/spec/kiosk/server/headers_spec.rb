@@ -71,5 +71,57 @@ RSpec.describe Kiosk::Server::Headers do
                                                  status: 402)
       expect(headers["Cache-Control"]).to eq("no-store")
     end
+
+    # §3.7.3 (K-823). "Leaves an operator's own alone" stops at the one policy
+    # the spec forbids: a verb payload is scoped to one authenticated identity,
+    # so `public` or `s-maxage` hands it to a shared cache and thence to
+    # another caller. Until a handler's headers could reach this seam at all
+    # the prohibition held by accident; now it is a check.
+    describe "and it REFUSES a shared-cache policy (§3.7.3)" do
+      before { allow(Kiosk::Server::Headers).to receive(:warn) }
+
+      [
+        "public",
+        "public, max-age=600",
+        "PUBLIC",
+        "s-maxage=600",
+        "private, s-maxage=600",
+        "max-age=600, public, immutable",
+        # RFC 9111 §3.5's third door — a shared cache MAY reuse a response to
+        # an `Authorization`-bearing request when it says `must-revalidate`,
+        # and every verb request bears one. §3.7.3's sentence names only the
+        # other two; K-826 asks whether it should name this one too.
+        "max-age=600, must-revalidate",
+      ].each do |policy|
+        it "replaces #{policy.inspect} with the wire's own default" do
+          headers = described_class.add_cache_policy({ "Cache-Control" => policy }, status: 200)
+          expect(headers["Cache-Control"]).to eq("private, no-store")
+        end
+      end
+
+      it "REFUSES rather than EDITS: it does not keep the freshness and drop the word" do
+        # `private, max-age=600` would be a policy nobody wrote — a guess that
+        # a handler asking for a shared cache meant a private one of the same
+        # length. Refusing says what happened; editing hides it.
+        headers = described_class.add_cache_policy({ "Cache-Control" => "public, max-age=600" },
+                                                   status: 200)
+        expect(headers["Cache-Control"]).not_to include("600")
+      end
+
+      it "says so, once, naming the value it refused" do
+        expect(Kiosk::Server::Headers).to receive(:warn)
+          .with(a_string_including("public, max-age=600")).once
+        described_class.add_cache_policy({ "Cache-Control" => "public, max-age=600" }, status: 200)
+      end
+
+      it "leaves a CONFORMANT relaxation alone — the control" do
+        # Without this line "refuses shared caching" would pass just as well on
+        # a build that refused every operator policy, which would delete
+        # §3.7.4's MAY instead of enforcing §3.7.3.
+        headers = described_class.add_cache_policy({ "Cache-Control" => "private, max-age=600" },
+                                                   status: 200)
+        expect(headers["Cache-Control"]).to eq("private, max-age=600")
+      end
+    end
   end
 end

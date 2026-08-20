@@ -226,7 +226,17 @@ module Kiosk
         # the identity lands in `env["kiosk.identity"]` (readable as
         # `kiosk_identity`), and the caller's headers/address are seeded from
         # this env. Block handlers registered the old way ignore both.
-        result = CurrentRequest.with(identity: identity, env: request.env) do
+        #
+        # `handler_headers` is the only thing that travels the other way
+        # (K-823): {HandlerDispatch} writes the handler's own `Cache-Control`
+        # into it, so §3.7.4's "an operator MAY relax a 200 to `private,
+        # max-age=N`" is a permission an operator can actually exercise. It is
+        # applied to the response BEFORE {#render_result}, which is what puts
+        # it in front of {Headers.add_cache_policy} — the seam that keeps an
+        # operator's own policy and, since K-823, refuses a shared-cache one.
+        handler_headers = {}
+        result = CurrentRequest.with(identity: identity, env: request.env,
+                                     handler_headers: handler_headers) do
           Executor.call(
             kind:       command,
             args:       args,
@@ -235,6 +245,7 @@ module Kiosk
             name:       name,
           )
         end
+        handler_headers.each { |header, value| response.headers[header] = value }
 
         render_result(result)
       end

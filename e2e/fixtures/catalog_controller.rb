@@ -54,6 +54,22 @@ class Kiosk::CatalogController < ApplicationController
   example_params({})
   example_row({ id: 1, name: "Combette on Park" })
   def salons
+    # §3.7.4, THE ONE CACHE PERMISSION THE SPEC GIVES AN OPERATOR, exercised
+    # here because this verb is its worked example: "the default for a `200` is
+    # `private, no-store`; an operator MAY relax it to `private, max-age=N` for
+    # a payload that is genuinely identity-independent — a public catalogue,
+    # say". This IS the public catalogue: the WHERE above is provider-
+    # controlled and always true, so every caller gets the same rows and an
+    # assistant that keeps them for a minute is not holding somebody else's
+    # data. It is also how an assistant's own cache saves a toll — a response
+    # still fresh is never re-requested and therefore never re-challenged.
+    #
+    # It reaches the wire only because K-823 fixed the seam: {HandlerDispatch}
+    # used to drop the sub-response's headers, which made this permission
+    # unreachable from the one kind of code an operator writes. `my_appointments`
+    # below sets nothing and keeps `private, no-store` — the control, and the
+    # honest policy for a per-principal payload.
+    response.headers["Cache-Control"] = "private, max-age=60"
     render json: ActiveRecord::Base.connection.execute(
       "SELECT id, name FROM salons ORDER BY id",
     ).to_a

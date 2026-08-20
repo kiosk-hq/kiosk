@@ -60,7 +60,7 @@ RSpec.describe Kiosk::Server::SchemaDefinitions do
 
     it "creates `agents` with NOT NULL user_id FK to the configured user table" do
       expect(sql).to include(%(CREATE TABLE "kiosk".agents))
-      expect(sql).to include("user_id         uuid NOT NULL REFERENCES \"users\"(id)")
+      expect(sql).to include("user_id             uuid NOT NULL REFERENCES \"users\"(id)")
     end
 
     it "creates `agent_tokens` with FK to agents and a unique token_hash" do
@@ -82,7 +82,7 @@ RSpec.describe Kiosk::Server::SchemaDefinitions do
     it "types user_id column against :bigint when configured" do
       Kiosk.configure { |c| c.user_id_type = :bigint }
       out = described_class.identity_tables_sql
-      expect(out).to include("user_id         bigint NOT NULL")
+      expect(out).to include("user_id             bigint NOT NULL")
     end
 
     # DB-level dedupe of the credential, not TOCTOU SELECT-then-INSERT.
@@ -97,30 +97,40 @@ RSpec.describe Kiosk::Server::SchemaDefinitions do
       # revoked key — the index MUST be scoped to revoked_at IS NULL.
       expect(sql).not_to match(/UNIQUE INDEX idx_agents_public_key_live\s+ON "kiosk"\.agents \(public_key\);/)
     end
-  end
 
-  describe ".agent_governance_columns_sql" do
-    subject(:sql) { described_class.agent_governance_columns_sql(schema: "kiosk") }
-
-    it "adds spending_cap_cents + human_label to agents, idempotently" do
-      expect(sql).to include('ALTER TABLE "kiosk".agents')
-      expect(sql).to include("ADD COLUMN IF NOT EXISTS spending_cap_cents bigint")
-      expect(sql).to include("ADD COLUMN IF NOT EXISTS human_label")
+    # Folded in from the three later migrations that used to ALTER them onto
+    # this table (K-646): nullable, free to an operator who never uses them,
+    # and a provider enabling the surface that reads one should not have to
+    # discover it lives in a migration they were told was optional.
+    it "declares kyc_verified_at, spending_cap_cents and human_label on agents" do
+      agents = sql[/CREATE TABLE "kiosk"\.agents.*?\);/m]
+      expect(agents).to include("kyc_verified_at     timestamptz")
+      expect(agents).to include("spending_cap_cents  bigint")
+      expect(agents).to include("human_label         text")
     end
 
-    it "defaults the schema from configuration" do
-      Kiosk.configure { |c| c.schema = "shop" }
-      expect(described_class.agent_governance_columns_sql).to include('"shop".agents')
+    it "emits no ALTER TABLE at all — the create states the whole table" do
+      expect(sql).not_to include("ALTER TABLE")
+      expect(sql).not_to include("ADD COLUMN")
     end
   end
 
-  # 003 create_kiosk_actions_log is RETIRED (K-828, 2026-08-20): Kiosk stores
-  # no audit trail at all — it emits one ActionEvent per invocation to the
-  # operator's `audit_sink` — so the generator that created `kiosk.actions` and
-  # `kiosk.action_log` is gone rather than merely uncalled.
+  # The actions-log generator is GONE (K-828, 2026-08-20): Kiosk stores no
+  # audit trail at all — it emits one ActionEvent per invocation to the
+  # operator's `audit_sink`. K-646 then rebuilt the canonical set from scratch,
+  # so it does not even leave a retired ordinal behind.
   describe "the retired actions-log generator" do
     it "no longer exists" do
       expect(described_class).not_to respond_to(:actions_log_sql)
+    end
+
+    # The three amendment generators K-646 folded away. They are gone rather
+    # than deprecated — a shim would be a second way to build the same schema,
+    # which is precisely the divergence this rebuild exists to end.
+    it "leaves no amendment generator behind either" do
+      expect(described_class).not_to respond_to(:kyc_verified_at_sql)
+      expect(described_class).not_to respond_to(:agent_governance_columns_sql)
+      expect(described_class).not_to respond_to(:rebuild_device_authorizations_sql)
     end
 
     it "is emitted by no other canonical generator" do
@@ -205,12 +215,16 @@ RSpec.describe Kiosk::Server::SchemaDefinitions do
     end
   end
 
-  describe ".rebuild_device_authorizations_sql" do
-    subject(:sql) { described_class.rebuild_device_authorizations_sql }
+  describe ".device_authorizations_sql" do
+    subject(:sql) { described_class.device_authorizations_sql }
 
-    it "recreates the table (lossless: the 005 shape was never written by shipped code)" do
-      expect(sql).to include(%(DROP TABLE IF EXISTS "kiosk".device_authorizations))
+    # ONE create, in the final shape. Until K-646 this table arrived as an 0.1
+    # shape nothing ever wrote plus a `rebuild` that DROPPED and recreated it —
+    # so the generator must not emit a DROP any more, and a re-run that found
+    # one would mean the fold had been undone.
+    it "creates the table outright, with no DROP to undo an earlier shape" do
       expect(sql).to include(%(CREATE TABLE "kiosk".device_authorizations))
+      expect(sql).not_to include("DROP TABLE")
     end
 
     it "stores both codes hashed only (text hex digests, no plaintext user_code)" do
@@ -231,7 +245,7 @@ RSpec.describe Kiosk::Server::SchemaDefinitions do
     end
 
     it "types user_id against the provider's user-id type" do
-      out = described_class.rebuild_device_authorizations_sql(user_id_type: :bigint)
+      out = described_class.device_authorizations_sql(user_id_type: :bigint)
       expect(out).to include("user_id          bigint")
     end
   end

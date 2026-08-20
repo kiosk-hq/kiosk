@@ -8,7 +8,7 @@ module Kiosk
     # {Base} defines the contract; two adapters ship:
     #
     #   - {ActiveRecord} — durable store over the `kiosk.device_authorizations`
-    #     table (schema_definitions migration 008). The DEFAULT whenever
+    #     table (schema_definitions migration 004). The DEFAULT whenever
     #     ActiveRecord is present (the binding ceremony is
     #     cross-process by nature — the human approves in a browser while the
     #     agent polls from another process; an in-memory row can't serve both).
@@ -98,7 +98,7 @@ module Kiosk
       end
 
       # Durable store over the `kiosk.device_authorizations` table
-      # (schema_definitions migration 008). SQL with BIND PARAMETERS through
+      # (schema_definitions migration 004). SQL with BIND PARAMETERS through
       # the host's `::ActiveRecord::Base.lease_connection` — the same access
       # idiom as {AgentRegistration} / {AgentLogin}; no model class, so
       # satellite neutrality holds (Kiosk never defines records over provider

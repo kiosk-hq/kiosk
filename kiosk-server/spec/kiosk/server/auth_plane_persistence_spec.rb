@@ -70,9 +70,7 @@ RSpec.describe "auth plane persistence (real Postgres)" do
                    user_table: AUTH_PLANE_SPEC_USERS,
                  ))
     conn.execute(defs.mandates_sql(schema: AUTH_PLANE_SPEC_SCHEMA, user_id_type: :uuid))
-    conn.execute(defs.kyc_verified_at_sql(schema: AUTH_PLANE_SPEC_SCHEMA))
     conn.execute(defs.kyc_attributes_sql(schema: AUTH_PLANE_SPEC_SCHEMA))
-    conn.execute(defs.agent_governance_columns_sql(schema: AUTH_PLANE_SPEC_SCHEMA))
   end
 
   after(:context) do

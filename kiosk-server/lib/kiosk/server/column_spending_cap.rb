@@ -3,8 +3,8 @@
 module Kiosk
   module Server
     # A ready-made `config.spending_cap` seam that reads the
-    # per-assistant cap from the `agents.spending_cap_cents` column — the column
-    # added by {SchemaDefinitions.agent_governance_columns_sql} and edited by the
+    # per-assistant cap from the `agents.spending_cap_cents` column — declared by
+    # {SchemaDefinitions.identity_tables_sql} (migration 002) and edited by the
     # manage-assistants page. Providers that store caps elsewhere supply their
     # own `(agent_id:) -> Integer | nil` callable instead.
     #

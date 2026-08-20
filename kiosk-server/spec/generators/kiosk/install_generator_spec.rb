@@ -106,32 +106,38 @@ RSpec.describe Kiosk::Generators::InstallGenerator do
   end
 
   describe "migrations" do
-    it "creates exactly the nine canonical migrations (001-010, 003 retired)" do
+    it "creates exactly the six canonical migrations (001-006)" do
       invoke!
-      expect(migrations.size).to eq(9)
+      expect(migrations.size).to eq(6)
       basenames = migrations.map { |p| File.basename(p) }
-      # 003 create_kiosk_actions_log is NOT emitted: K-828 replaced the audit
-      # trail Kiosk stored with one the operator stores (`c.audit_sink`), so
-      # the two tables left the canonical set with their writer.
-      expect(basenames).not_to include(a_string_ending_with("_create_kiosk_actions_log.rb"))
       expect(basenames).to include(
         a_string_ending_with("_create_kiosk_schema.rb"),
         a_string_ending_with("_create_kiosk_identity_tables.rb"),
         a_string_ending_with("_create_kiosk_reservations.rb"),
         a_string_ending_with("_create_kiosk_device_authorizations.rb"),
         a_string_ending_with("_create_kiosk_mandates.rb"),
-        a_string_ending_with("_add_kyc_verified_at_to_kiosk_agents.rb"),
-        a_string_ending_with("_rebuild_kiosk_device_authorizations.rb"),
         a_string_ending_with("_create_kiosk_kyc_attributes.rb"),
-        a_string_ending_with("_add_kiosk_agent_governance_columns.rb"),
       )
     end
 
-    it "orders the migration timestamps in 001 → 010 sequence" do
+    # THE SHAPE, not merely the count (K-646). Every canonical migration is a
+    # `create_`: the set that shipped until 2026-08-20 also carried a `rebuild_`
+    # of a table it had created two files earlier and three `add_*_to_*`
+    # amendments of a table created two files before THAT, so a fresh adopter
+    # ran a history to reach a schema these six state outright. A new amendment
+    # migration is how that grows back, and this is what refuses it.
+    it "emits nothing but `create_` migrations — no rebuilds, no amendments" do
+      invoke!
+      basenames = migrations.map { |p| File.basename(p).sub(/\A\d+_/, "") }
+      expect(basenames).to all(start_with("create_kiosk_"))
+      expect(basenames).not_to include(a_string_starting_with("rebuild_"), a_string_starting_with("add_"))
+    end
+
+    it "orders the migration timestamps in 001 → 006 sequence" do
       invoke!
       timestamps = migrations.map { |p| File.basename(p).split("_").first.to_i }
       expect(timestamps).to eq(timestamps.sort)
-      expect(timestamps.uniq.size).to eq(9) # strictly ascending, no collisions
+      expect(timestamps.uniq.size).to eq(6) # strictly ascending, no collisions
     end
 
     describe "001 create_kiosk_schema" do
@@ -186,7 +192,7 @@ RSpec.describe Kiosk::Generators::InstallGenerator do
       end
     end
 
-    describe "004 create_kiosk_reservations" do
+    describe "003 create_kiosk_reservations" do
       let(:file) { migrations.find { |p| p.end_with?("_create_kiosk_reservations.rb") } }
 
       it "calls SchemaDefinitions.reservations_sql with the configured args" do
@@ -203,7 +209,7 @@ RSpec.describe Kiosk::Generators::InstallGenerator do
       end
     end
 
-    describe "005 create_kiosk_device_authorizations" do
+    describe "004 create_kiosk_device_authorizations" do
       let(:file) { migrations.find { |p| p.end_with?("_create_kiosk_device_authorizations.rb") } }
 
       it "calls SchemaDefinitions.device_authorizations_sql with the configured args" do
@@ -220,7 +226,7 @@ RSpec.describe Kiosk::Generators::InstallGenerator do
       end
     end
 
-    describe "006 create_kiosk_mandates" do
+    describe "005 create_kiosk_mandates" do
       let(:file) { migrations.find { |p| p.end_with?("_create_kiosk_mandates.rb") } }
 
       it "calls SchemaDefinitions.mandates_sql with the configured args" do
@@ -250,54 +256,7 @@ RSpec.describe Kiosk::Generators::InstallGenerator do
       end
     end
 
-    describe "008 rebuild_kiosk_device_authorizations" do
-      let(:file) { migrations.find { |p| p.end_with?("_rebuild_kiosk_device_authorizations.rb") } }
-
-      it "calls SchemaDefinitions.rebuild_device_authorizations_sql with the configured args" do
-        invoke!(%w[--schema=ksk --user-id-type=bigint])
-        body = File.read(file)
-        expect(body).to include("Kiosk::Server::SchemaDefinitions.rebuild_device_authorizations_sql(")
-        expect(body).to include('schema:       "ksk"')
-        expect(body).to include("user_id_type: :bigint")
-      end
-
-      it "sorts after 005 so the rebuild wins" do
-        invoke!
-        create_idx  = migrations.index { |p| p.end_with?("_create_kiosk_device_authorizations.rb") }
-        rebuild_idx = migrations.index { |p| p.end_with?("_rebuild_kiosk_device_authorizations.rb") }
-        expect(rebuild_idx).to be > create_idx
-      end
-
-      it "restores the 005 table shape in #down" do
-        invoke!(%w[--schema=ksk])
-        body = File.read(file)
-        expect(body).to include('DROP TABLE IF EXISTS "ksk".device_authorizations')
-        expect(body).to include("Kiosk::Server::SchemaDefinitions.device_authorizations_sql(")
-      end
-    end
-
-    describe "007 add_kyc_verified_at_to_kiosk_agents" do
-      let(:file) { migrations.find { |p| p.end_with?("_add_kyc_verified_at_to_kiosk_agents.rb") } }
-
-      it "calls SchemaDefinitions.kyc_verified_at_sql with the configured schema" do
-        invoke!(%w[--schema=ksk])
-        body = File.read(file)
-        expect(body).to include("Kiosk::Server::SchemaDefinitions.kyc_verified_at_sql(")
-        expect(body).to include('schema: "ksk"')
-      end
-
-      it "drops the column in #down" do
-        invoke!(%w[--schema=ksk])
-        expect(File.read(file)).to include("DROP COLUMN IF EXISTS kyc_verified_at")
-      end
-    end
-
-    # 009 kept its ordinal across K-656: the grants moved from a column on
-    # kiosk.agents to their own kiosk.kyc_attributes table, and 004-010 are
-    # named by number in shipped comments and CHANGELOG history, so the slot
-    # was rewritten rather than renumbered (the same rule 003's retirement
-    # followed).
-    describe "009 create_kiosk_kyc_attributes" do
+    describe "006 create_kiosk_kyc_attributes" do
       let(:file) { migrations.find { |p| p.end_with?("_create_kiosk_kyc_attributes.rb") } }
 
       it "calls SchemaDefinitions.kyc_attributes_sql with the configured schema" do
@@ -317,31 +276,6 @@ RSpec.describe Kiosk::Generators::InstallGenerator do
       it "drops the TABLE in #down" do
         invoke!(%w[--schema=ksk])
         expect(File.read(file)).to include('DROP TABLE IF EXISTS "ksk".kyc_attributes')
-      end
-    end
-
-    describe "010 add_kiosk_agent_governance_columns" do
-      let(:file) { migrations.find { |p| p.end_with?("_add_kiosk_agent_governance_columns.rb") } }
-
-      it "calls SchemaDefinitions.agent_governance_columns_sql with the configured schema" do
-        invoke!(%w[--schema=ksk])
-        body = File.read(file)
-        expect(body).to include("Kiosk::Server::SchemaDefinitions.agent_governance_columns_sql(")
-        expect(body).to include('schema: "ksk"')
-      end
-
-      it "sorts after 002 (the agents table it alters)" do
-        invoke!
-        identity_idx   = migrations.index { |p| p.end_with?("_create_kiosk_identity_tables.rb") }
-        governance_idx = migrations.index { |p| p.end_with?("_add_kiosk_agent_governance_columns.rb") }
-        expect(governance_idx).to be > identity_idx
-      end
-
-      it "drops both governance columns in #down" do
-        invoke!(%w[--schema=ksk])
-        body = File.read(file)
-        expect(body).to include("DROP COLUMN IF EXISTS spending_cap_cents")
-        expect(body).to include("DROP COLUMN IF EXISTS human_label")
       end
     end
   end

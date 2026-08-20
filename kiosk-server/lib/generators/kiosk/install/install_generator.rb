@@ -18,17 +18,17 @@ module Kiosk
     #   - db/migrate/<ts+2>_create_kiosk_reservations.rb
     #   - db/migrate/<ts+3>_create_kiosk_device_authorizations.rb
     #   - db/migrate/<ts+4>_create_kiosk_mandates.rb
-    #   - db/migrate/<ts+5>_add_kyc_verified_at_to_kiosk_agents.rb
-    #   - db/migrate/<ts+6>_rebuild_kiosk_device_authorizations.rb
-    #   - db/migrate/<ts+7>_create_kiosk_kyc_attributes.rb
-    #   - db/migrate/<ts+8>_add_kiosk_agent_governance_columns.rb
+    #   - db/migrate/<ts+5>_create_kiosk_kyc_attributes.rb
     #
-    # There is no actions-log migration: canonical 003 created
-    # `kiosk.actions` + `kiosk.action_log`, and K-828 (2026-08-20) replaced
-    # the audit trail Kiosk kept with an audit trail the OPERATOR keeps —
-    # `c.audit_sink` receives one {Kiosk::Server::ActionEvent} per action
-    # invocation and Kiosk stores none of it. The migration ordinals 004-010
-    # keep their numbers; 003 is a retired slot (see {SchemaDefinitions}).
+    # SIX `create` migrations and no amendments, since 2026-08-20 (K-646).
+    # The generator used to emit ten ordinals, of which one was retired, one
+    # created a table the next-but-two DROPPED and rebuilt, and three added
+    # columns to a table created two files earlier — so a fresh adopter ran a
+    # migration HISTORY to arrive at a schema the current templates can state
+    # outright. Each amendment is now folded into the `create` it amended and
+    # the set is renumbered 001-006; {Kiosk::Server::SchemaDefinitions} records
+    # the fold, the retirement (K-828's audit tables) and the reference count
+    # that made renumbering safe.
     #
     # Each migration file is a thin wrapper that calls into
     # {Kiosk::Server::SchemaDefinitions} at host-app runtime, so the SQL
@@ -44,7 +44,7 @@ module Kiosk
 
       source_root File.expand_path("templates", __dir__)
 
-      desc "Generate Kiosk initializer and the nine base migrations (001-010; 003 retired)."
+      desc "Generate Kiosk initializer and the six base migrations (001-006)."
 
       class_option :user_table,    type: :string, default: "users",
                                    desc: "Provider's user table name"
@@ -56,7 +56,7 @@ module Kiosk
                                    desc: "GUC namespace prefix used in the session GUC names"
 
       # Rails::Generators::Migration requires a class-level
-      # next_migration_number. We bump a counter so the nine migrations
+      # next_migration_number. We bump a counter so the six migrations
       # created in one invocation get strictly-ascending UTC timestamps
       # (otherwise `db/migrate` glob sort is non-deterministic).
       @migration_counter = 0
@@ -98,24 +98,9 @@ module Kiosk
                            "db/migrate/create_kiosk_mandates.rb"
       end
 
-      def create_kyc_migration
-        migration_template "add_kyc_verified_at_to_kiosk_agents.rb.tt",
-                           "db/migrate/add_kyc_verified_at_to_kiosk_agents.rb"
-      end
-
-      def create_rebuild_device_authorizations_migration
-        migration_template "rebuild_kiosk_device_authorizations.rb.tt",
-                           "db/migrate/rebuild_kiosk_device_authorizations.rb"
-      end
-
       def create_kyc_attributes_migration
         migration_template "create_kiosk_kyc_attributes.rb.tt",
                            "db/migrate/create_kiosk_kyc_attributes.rb"
-      end
-
-      def create_agent_governance_columns_migration
-        migration_template "add_kiosk_agent_governance_columns.rb.tt",
-                           "db/migrate/add_kiosk_agent_governance_columns.rb"
       end
     end
   end

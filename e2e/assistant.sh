@@ -830,11 +830,14 @@ authmd=$(curl -s -o /dev/null -w '%{http_code}' "$SERVER_URL/auth.md")
 assert "binding: /auth.md served"           "$authmd" "200"
 
 bind_out=$( cd "$APP_DIR" && SERVER_URL="$SERVER_URL" KIOSK_ISSUER="$KIOSK_ISSUER" \
-              HUMAN_USER_ID="$ALICE" bundle exec ruby "$FIXTURES/claim_flow.rb" )
+              HUMAN_USER_ID="$ALICE" HUMAN_EMAIL="alice@example.com" \
+              HUMAN_PASSWORD="e2e-demo-password" \
+              bundle exec ruby "$FIXTURES/claim_flow.rb" )
 
 assert "binding: device_authorization fields" "$(echo "$bind_out" | jq -r '.da_fields')"                            "true"
 assert "binding: pending before approval"     "$(echo "$bind_out" | jq -r '.pending | map(tostring) | join(":")')"  "400:authorization_pending"
 assert "binding: poll without proof denied"   "$(echo "$bind_out" | jq -r '.no_pop | map(tostring) | join(":")')"   "401:invalid_client"
+assert "binding: human signed in (real Devise)" "$(echo "$bind_out" | jq -r '.signed_in')"                          "true"
 assert "binding: human approve → 200"         "$(echo "$bind_out" | jq -r '.approve')"                              "200"
 assert "binding: fast poll → slow_down"       "$(echo "$bind_out" | jq -r '.slow_down | map(tostring) | join(":")')" "400:slow_down"
 assert "binding: token bound to the human"    "$(echo "$bind_out" | jq -r '.bound_user')"                           "true"

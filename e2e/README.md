@@ -77,11 +77,11 @@ e2e/
 ├── README.md                               # this file
 └── fixtures/                               # files copied into the generated app
     ├── create_users.rb                     # provider's user table (UUID PK)
+    ├── add_devise_columns_to_users.rb      # the human-login columns on that table (email + encrypted_password)
     ├── create_salons_and_appointments.rb   # demo schema (salons + appointments)
     ├── user.rb, salon.rb, appointment.rb   # ActiveRecord models
-    ├── seeds.rb                            # 2 users (Alice + Bob), 1 salon
+    ├── seeds.rb                            # 2 users (Alice + Bob) with Devise credentials, 1 salon
     ├── stub_idp.rb                         # Bearer-token-parsing agent IdP
-    ├── stub_user_idp.rb                    # dev/test user-IdP: parses `user:u-<uuid>` → human Identity (account-binding pages)
     ├── jwt_or_stub_idp.rb                  # composite IdP: Kiosk-issued JWTs + StubIdp fallback
     ├── stub_psp.rb                         # deterministic in-process PSP (no real Stripe)
     ├── equihash_register.rb                # shared register helper: challenge → PoP → register; solves the register 402 + retries with the Kiosk-PoW header
@@ -90,6 +90,7 @@ e2e/
     ├── claim_flow.rb                       # account-binding claim ceremony: fresh key → verify-page approval → PoP token → bound wire call → link-code redeem → unlink
     ├── catalog_controller.rb               # Kiosk::CatalogController — `include Kiosk::Query`: the salons + my_appointments verbs
     ├── bookings_controller.rb              # Kiosk::BookingsController — `include Kiosk::Action`: the book_appointment verb
+    ├── devise_initializer.rb               # Devise setup (database_authenticatable) — the HUMAN channel the binding pages authenticate
     ├── initializer_kiosk.rb                # Kiosk.configure, including `c.handlers` naming the two controllers above
     └── routes.rb                           # hand-draws /kiosk/schema, /kiosk/pay, /kiosk/openapi.json, /kiosk/auth/{challenge,register,login,revoke,link,claim,unlink}, jwks, oauth/* device + verify routes, the root discovery documents (/agents.{txt,json}, /auth.md, /.well-known/{agent-configuration,kiosk.json,api-catalog}) and — LAST, so every reserved line above wins — the per-verb `GET|POST /kiosk/:kiosk_verb` pair
 ```

@@ -1,6 +1,11 @@
 # frozen_string_literal: true
 
 Rails.application.routes.draw do
+  # Human sign-in (Devise) — the web session the account-binding surfaces
+  # authenticate through kiosk-user-idp-devise. claim_flow.rb drives this very
+  # form; there is no stub session channel to assert instead (T-066).
+  devise_for :users
+
   # Kiosk wire surface (controllers shipped by kiosk-server).
   # REST endpoints — HTTP method carries semantics (GET = read, POST = write).
   get  "/kiosk/schema",                             to: "kiosk/server/wire#schema"

@@ -45,6 +45,7 @@ $LOAD_PATH.unshift File.expand_path("../lib", __dir__)
 require "lock_sim"
 require "dev_unlock_key"
 require_relative "../lib/equihash_register"
+require_relative "../lib/prove_test_issuer"
 
 SERVER = ENV.fetch("SERVER_URL")
 ISSUER = ENV.fetch("KIOSK_ISSUER")
@@ -234,6 +235,32 @@ pay(sc_token, sc_key, sc_user, sc_agent, "SK-001", sc_resv, sc_price)
 rc_sc, _sc_body = run_action(sc_token, "start_rental", { reservation_id: sc_resv })
 STDERR.puts "  start_rental SK-001 (NO KYC submitted at all): http=#{rc_sc}"
 
+# ── PART C: a NON-CANONICAL BOOLEAN SPELLING (K-656) ─────────────────────────
+#
+# The forged-attestation beat (redteam MotorcycleForgedKyc) proves a BAD
+# SIGNATURE grants nothing. This proves the other half: a GENUINELY
+# broker-signed attestation whose booleans are spelled `"true"` (a JSON string)
+# and `1` grants nothing either. It runs against the agent PART A just cleared,
+# so it also proves the write REPLACES the grant set — the motorcycle it
+# unlocked at A6 is refused again, with `kyc_required`.
+#
+# This is the property the grants moved out of a jsonb column for: presence of
+# a row IS the grant, only the JSON boolean `true` writes one, and the gate is
+# an EXISTS with no stored value it could misread.
+
+STDERR.puts "── PART C: non-canonical boolean spelling ──"
+spelling_jws = ProveTestIssuer.attest(
+  user_id: mc_user, attributes: { age_over_18: "true", licence_a: 1 },
+)
+rc_spelling, spelling_body = post_json("#{SERVER}/kiosk/agents/kyc", { kyc_jws: spelling_jws },
+                                       { "Authorization" => "Bearer #{mc_token}" })
+spelling_attrs = spelling_body.is_a?(Hash) ? spelling_body["attributes"] : nil
+STDERR.puts "  \"true\"/1-spelled attestation submit: http=#{rc_spelling} attributes=#{spelling_attrs.inspect} (expect 200 and {})"
+rc_mc_after_spelling, mc_after_spelling_body = run_action(mc_token, "rent_motorcycle",
+                                                          { reservation_id: mc_resv })
+mc_after_spelling_code = mc_after_spelling_body.is_a?(Hash) ? mc_after_spelling_body["code"] : nil
+STDERR.puts "  rent_motorcycle after the string spelling: http=#{rc_mc_after_spelling} code=#{mc_after_spelling_code.inspect} (expect 403 kyc_required)"
+
 # ── print ONE JSON line ──────────────────────────────────────────────────────
 
 puts JSON.generate(
@@ -252,4 +279,8 @@ puts JSON.generate(
   mc_unlocked:                 mc_unlocked,
   http_scooter_rent_no_kyc:    rc_sc,
   scooter_rented_no_kyc:       (rc_sc == 200),
+  http_spelling_kyc_submit:    rc_spelling,
+  spelling_attributes:         spelling_attrs,
+  http_mc_rent_after_spelling: rc_mc_after_spelling,
+  mc_rent_after_spelling_code: mc_after_spelling_code,
 )

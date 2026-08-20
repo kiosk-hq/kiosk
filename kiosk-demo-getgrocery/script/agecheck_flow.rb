@@ -30,6 +30,14 @@
 #     R1  a FORGED age attestation (right issuer/aud, wrong signing key) submitted
 #         to /agents/kyc → 403, so the alcohol create_order stays blocked.
 #     R2  alcohol create_order without any KYC → 403 kyc_required (== A's first).
+#     R3  a GENUINELY SIGNED attestation whose age_over_18 is the STRING "true"
+#         rather than the boolean → /agents/kyc accepts the attestation (the
+#         signature IS the broker's) but grants NOTHING, so the alcohol
+#         create_order goes BACK to 403 even for the agent that was cleared in
+#         PART A. The fail-closed property K-656 moved into the schema: the
+#         grant is a row's existence, and only the JSON boolean `true` writes
+#         one — `"true"`, `1`, `"yes"` are different jsonb values and none of
+#         them grant.
 #
 # Prints ONE JSON line on stdout; non-zero exit on unexpected failures.
 
@@ -243,6 +251,28 @@ STDERR.puts "  forged attestation submit: http=#{rc_forged} (expect 403)"
 rc_rt_alcohol, _ = create_order(rt_token, alcohol_items)
 STDERR.puts "  alcohol create_order after forged KYC: http=#{rc_rt_alcohol} (expect 403 kyc_required)"
 
+# R3: a NON-CANONICAL BOOLEAN SPELLING, signed with the broker's REAL key
+# (K-656). R1 proves a bad signature grants nothing; this proves a GOOD
+# signature carrying `"true"` (a JSON string) instead of `true` grants nothing
+# either. It runs against the PART A agent, which is already cleared — so it
+# also proves the write REPLACES the grant set: the attestation is accepted,
+# nothing is granted, and the alcohol order that succeeded at A4 is refused
+# again. A gate that read a stored VALUE could have called that string true.
+spelling_key_pem = ENV["KIOSK_PROVE_TEST_SIGNING_KEY_PEM"].to_s
+abort "R3 needs KIOSK_PROVE_TEST_SIGNING_KEY_PEM (ProveBrokerBoot wiring)" if spelling_key_pem.empty?
+now = Time.now.to_i
+spelling_jws = JWT.encode(
+  { sub: a_user, level: "verified", iss: ProveTrust.issuer, aud: ProveTrust.operator_id,
+    attributes: { age_over_18: "true" }, iat: now, exp: now + 3600 },
+  OpenSSL::PKey::RSA.new(spelling_key_pem), "RS256",
+)
+rc_spelling, spelling_body = post_json("#{SERVER}/kiosk/agents/kyc", { kyc_jws: spelling_jws },
+                                       { "Authorization" => "Bearer #{a_token}" })
+spelling_attrs = spelling_body.is_a?(Hash) ? spelling_body["attributes"] : nil
+STDERR.puts "  \"true\"-as-a-STRING attestation submit: http=#{rc_spelling} attributes=#{spelling_attrs.inspect} (expect 200 and {})"
+rc_alcohol_after_spelling, _ = create_order(a_token, alcohol_items)
+STDERR.puts "  alcohol create_order after the string spelling: http=#{rc_alcohol_after_spelling} (expect 403 kyc_required)"
+
 # ── print ONE JSON line ────────────────────────────────────────────────────────
 
 puts JSON.generate(
@@ -268,4 +298,7 @@ puts JSON.generate(
   # REDTEAM
   http_forged_kyc_submit:     rc_forged,
   http_alcohol_after_forged:  rc_rt_alcohol,
+  http_spelling_kyc_submit:   rc_spelling,
+  spelling_attributes:        spelling_attrs,
+  http_alcohol_after_spelling: rc_alcohol_after_spelling,
 )

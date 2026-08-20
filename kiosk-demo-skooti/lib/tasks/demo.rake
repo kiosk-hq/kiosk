@@ -1101,8 +1101,16 @@ namespace :demo do
 
       flow_rb = File.expand_path("../../script/kyc_flow.rb", __dir__)
       puts "\n── Running script/kyc_flow.rb (skooti + KYC broker) ──"
+      # KIOSK_PROVE_ISSUER must reach the DRIVER too, not only the server: PART C
+      # mints its own attestation through ProveTestIssuer, whose `iss` is
+      # ProveTrust.issuer — and without this the driver falls back to the
+      # DEPLOYED broker origin while the booted broker stamps the harness's
+      # local one, so a perfectly-signed attestation comes back 403 «issuer
+      # mismatch». getgrocery's demo:agecheck has always passed it; this task
+      # did not, because until PART C nothing in this driver signed anything.
       driver_env = "SERVER_URL=#{server_url} KIOSK_ISSUER=#{kiosk_issuer} " \
-                   "KIOSK_PROVE_BROKER_URL=#{broker[:broker_url]}"
+                   "KIOSK_PROVE_BROKER_URL=#{broker[:broker_url]} " \
+                   "KIOSK_PROVE_ISSUER=#{broker[:wiring]["KIOSK_PROVE_ISSUER"]}"
       raw = `#{driver_env} bundle exec ruby #{flow_rb.shellescape} 2>&1`
       stderr_lines = raw.lines.reject { |l| l.start_with?("{") }
       json_line    = raw.lines.grep(/^\{/).last
@@ -1178,6 +1186,28 @@ namespace :demo do
     else
       failures << "B: scooter start_rental with no KYC expected 200, got #{result["http_scooter_rent_no_kyc"].inspect}/rented=#{result["scooter_rented_no_kyc"].inspect}"
       puts "  FAIL  B  scooter start_rental (no KYC) → #{result["http_scooter_rent_no_kyc"].inspect}/rented=#{result["scooter_rented_no_kyc"].inspect}"
+    end
+
+    # C: THE FAIL-CLOSED BOOLEAN (K-656). A genuinely broker-signed attestation
+    # whose booleans are spelled "true" (a JSON string) and 1 is ACCEPTED as an
+    # attestation and grants NOTHING — so the agent A4 just cleared loses its
+    # clearance and the motorcycle it unlocked is refused again with
+    # kyc_required. Presence of a row is the grant, and only the JSON boolean
+    # writes one; there is no stored value a gate could misread.
+    if result["http_spelling_kyc_submit"] == 200 && (result["spelling_attributes"] || {}).empty?
+      puts "  OK  C1 broker-signed attestation with \"true\"/1 spellings → 200, attributes {} (nothing granted)"
+    else
+      failures << "C1: string/number-spelled attributes expected 200 with {}, got " \
+                  "#{result["http_spelling_kyc_submit"].inspect}/#{result["spelling_attributes"].inspect}"
+      puts "  FAIL  C1 spelled attestation → #{result["http_spelling_kyc_submit"].inspect}/#{result["spelling_attributes"].inspect}"
+    end
+
+    if result["http_mc_rent_after_spelling"] == 403 && result["mc_rent_after_spelling_code"] == "kyc_required"
+      puts "  OK  C2 Gate 0 fails CLOSED on it — rent_motorcycle back to 403 kyc_required for an agent that HAD passed"
+    else
+      failures << "C2: rent_motorcycle after the spelled attestation expected 403 kyc_required, got " \
+                  "#{result["http_mc_rent_after_spelling"].inspect}/#{result["mc_rent_after_spelling_code"].inspect}"
+      puts "  FAIL  C2 rent_motorcycle after spelling → #{result["http_mc_rent_after_spelling"].inspect}/#{result["mc_rent_after_spelling_code"].inspect}"
     end
 
     if failures.empty?

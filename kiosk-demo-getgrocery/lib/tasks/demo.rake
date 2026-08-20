@@ -1584,7 +1584,9 @@ namespace :demo do
       driver_env = "SERVER_URL=#{server_url} KIOSK_ISSUER=#{kiosk_issuer} " \
                    "KIOSK_PROVE_BROKER_URL=#{broker[:broker_url]} " \
                    "KIOSK_PROVE_ISSUER=#{broker[:wiring]["KIOSK_PROVE_ISSUER"]}"
-      raw = `#{driver_env} bundle exec ruby #{flow_rb.shellescape} 2>&1`
+      driver_env_h = { "KIOSK_PROVE_TEST_SIGNING_KEY_PEM" =>
+                         broker[:wiring]["KIOSK_PROVE_TEST_SIGNING_KEY_PEM"] }
+      raw = IO.popen(driver_env_h, "#{driver_env} bundle exec ruby #{flow_rb.shellescape} 2>&1", &:read)
       json_line = raw.lines.grep(/^\{/).last
       puts raw.lines.reject { |l| l.start_with?("{") }.join
       puts json_line if json_line
@@ -1626,6 +1628,15 @@ namespace :demo do
                result["http_forged_kyc_submit"] == 403)
     check.call("R2 alcohol create_order after the forged submit still blocked → 403",
                result["http_alcohol_after_forged"] == 403)
+    # THE FAIL-CLOSED BOOLEAN (K-656). A genuinely broker-signed attestation
+    # whose age_over_18 is the STRING "true" is ACCEPTED as an attestation and
+    # grants NOTHING — so the agent cleared in PART A loses its clearance and
+    # the alcohol order it just paid for is refused on a retry. Presence of a
+    # row is the grant, and only the JSON boolean writes one.
+    check.call("R3 a broker-signed attestation with \"true\" as a STRING grants NO attribute",
+               result["http_spelling_kyc_submit"] == 200 && (result["spelling_attributes"] || {}).empty?)
+    check.call("R3 the alcohol gate fails CLOSED on it — back to 403 for an agent that HAD passed",
+               result["http_alcohol_after_spelling"] == 403)
 
     if failures.empty?
       puts "\n  All age-gate assertions passed."

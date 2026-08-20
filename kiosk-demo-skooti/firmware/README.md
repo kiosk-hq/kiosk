@@ -54,7 +54,7 @@ Scooter    : SK-001
 === Results: 22 passed, 0 failed ===
 ALL PASS
 
---- Ruby <-> C crosscheck ---
+--- Ruby ↔ C crosscheck ---
   Ruby-signed token: kiosk-rental-v1|SK-001|resv-live|...
   C verify result: 1
   MATCH — C verifier accepts Ruby/OpenSSL-signed token ✓

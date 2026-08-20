@@ -22,6 +22,10 @@
 #                      T-104), while a genuinely-bound token is answered
 #   UnknownQuery     — an unregistered query name → 404
 #   UnknownAction    — an unregistered action name → 404
+#   RetiredWire      — the deleted 0.3 `POST /kiosk/{query,run}` answer an
+#                      ordinary 404: no privileged endpoint left to attack
+#   MethodMismatch   — a GET at an action’s path is 405 + `Allow: POST`, never
+#                      a silent 404
 #   OutOfEnumFilterIsNotSilentlyReinterpreted — a browse_listings `status`
 #                      outside open|closed is a typed 400 naming the two,
 #                      NEVER a 200 answering a different question (T-090)

@@ -241,7 +241,7 @@ COPIES = {
   "app/controllers/demo_activity_controller.rb" => {
     rule: :identical,
     why:  "GET /demo/activity.json — the read half of the telemetry surface, and the half " \
-          "kiosk.tech's landing tile calls. Same argument as lib/demo_telemetry.rb: getgrocery's " \
+          "kiosk.tech's landing tile calls. Same argument as app/services/demo_telemetry.rb: getgrocery's " \
           "copy is the only one any gate boots.",
   },
 

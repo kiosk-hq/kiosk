@@ -10,8 +10,8 @@
 # below, which is how the engine finds them. What is left in this file is
 # configuration, which is what an initializer is for.
 #
-# The four adapter stubs it wires — StubIdp, StubUserIdp, JwtOrStubIdp, StubPsp
-# — are named, not required (K-502). run.sh copies them to app/services and
+# The five adapter stubs it wires — StubIdp, StubUserIdp, JwtOrStubIdp, StubPsp
+# and DemoAuditSink — are named, not required (K-502). run.sh copies them to app/services and
 # declares that an autoload-ONCE path, which is what makes them resolvable here:
 # Rails sets the reloadable autoloader up AFTER config/initializers run, so a
 # hand-written `require Rails.root.join(...)` was the only alternative.
@@ -124,4 +124,26 @@ Kiosk.configure do |c|
   # makes this demo's own CI task list a per-verb conformance proof of the
   # descriptors rather than a smoke test.
   c.validate_responses = true
+
+  # ── The audit sink (K-828) ──────────────────────────────────────────────
+  # Kiosk stores no audit trail; it emits one ActionEvent per action
+  # invocation to whatever callable an operator sets here, and stores nothing
+  # itself. THE DEFAULT IS NIL — and this harness proves that too: run.sh
+  # boots a SECOND time with KIOSK_AUDIT_SINK_FILE unset, and then this line
+  # leaves `audit_sink` nil, no event is built, and nothing is written
+  # anywhere.
+  #
+  # DemoAuditSink (app/services/demo_audit_sink.rb) is the OPERATOR's code, not the
+  # engine's: it appends the event to one JSONL file verbatim — arguments and
+  # all, because Kiosk hands them over in full and what happens to them is the
+  # operator's business and the operator's responsibility — and a redacted
+  # copy (`event.with_arg_types`) to a second one, to show that withholding
+  # the values is one call at this seam rather than a policy the engine
+  # imposed.
+  audit_path = ENV["KIOSK_AUDIT_SINK_FILE"]
+  c.audit_sink =
+    audit_path && DemoAuditSink.new(
+      path:          audit_path,
+      redacted_path: ENV.fetch("KIOSK_AUDIT_SINK_REDACTED_FILE"),
+    )
 end

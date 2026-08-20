@@ -41,10 +41,11 @@ BOB="00000000-0000-0000-0000-000000000002"
 #   agent:u-<user_uuid>:a-<agent_uuid>:r-<role>
 #
 # The agent id is a UUID, not the readable `alice-claude` slug it used to be:
-# `kiosk.action_log.agent_id`, every `kiosk.*_mandates.agent_id` and
+# `kiosk.agents.id`, every `kiosk.*_mandates.agent_id` and
 # `kiosk.current_agent_id()` are all typed `uuid` in the canonical schema, so a
 # stub identity carrying anything else is one the shipped tables cannot store.
-# That was latent until T-088 made the audit log the first writer to try it.
+# That was latent until T-088's audit-log writer became the first to try it
+# (K-829). K-828 has since removed that writer; the schema constraint remains.
 ALICE_AGENT="a0000000-0000-0000-0000-000000000001"
 BOB_AGENT="a0000000-0000-0000-0000-000000000002"
 ALICE_AGENT_TOKEN="agent:u-$ALICE:a-$ALICE_AGENT:r-customer"
@@ -889,79 +890,108 @@ assert "db: 1 cart_mandate"           "$(psql -X -d "$DB_NAME" -tAc 'SELECT COUN
 assert "db: 1 payment_mandate"        "$(psql -X -d "$DB_NAME" -tAc 'SELECT COUNT(*) FROM kiosk.payment_mandates')"  "1"
 assert "db: settlement amount 1599"   "$(psql -X -d "$DB_NAME" -tAc 'SELECT settled_amount_cents FROM kiosk.settlements LIMIT 1')" "1599"
 
-# ─── the audit log, read back off a booted origin (T-088 / K-791) ───────
+# ─── the audit sink, read back off a booted origin (K-828) ──────────────
 #
-# Canonical migration 003 has laid `kiosk.actions` and `kiosk.action_log` down
-# for every adopter since 0.1 and nothing ever wrote them. This is the proof
-# that a REAL invocation against a REAL origin lands a REAL row — read straight
-# out of Postgres, not out of a mock — plus the failure branch, plus the two
-# things the log deliberately does NOT record.
+# Kiosk STORES no audit trail — it OFFERS one. `c.audit_sink` is a callable the
+# operator sets, and this origin's is DemoAuditSink (app/services/demo_audit_sink.rb),
+# which appends one JSON line per action invocation to $AUDIT_EVENTS. These are
+# the assertions the 13 `kiosk.action_log` read-backs used to make, moved to
+# where the trail now lives, plus the three the reversal itself needs: the
+# arguments arrive IN FULL, a sink that RAISES does not fail the action, and the
+# two tables are GONE from a freshly migrated origin.
 
-printf "\n\033[1m=== the audit log (kiosk.action_log) ===\033[0m\n"
+printf "\n\033[1m=== the audit sink (c.audit_sink) ===\033[0m\n"
 
-log_count() { psql -X -d "$DB_NAME" -tAc "SELECT COUNT(*) FROM kiosk.action_log $1"; }
+# One line per event; `jq -s` slurps the file into an array so a filter can
+# count. An absent file (nothing ever emitted) reads as an empty array.
+events() { [ -s "$AUDIT_EVENTS" ] && jq -s "$1" "$AUDIT_EVENTS" || echo "0"; }
+event_count() { events "[.[] | select($1)] | length"; }
 
-# 1. The successful bookings above each landed a row, with the identity the
+# 1. The successful bookings above each emitted one event, with the identity the
 #    token carried and the outcome the wire reported.
-assert "audit: the two bookings landed ok rows" \
-  "$(log_count "WHERE action_name = 'book_appointment' AND result_status = 'ok'")" "2"
-assert "audit: the row names the acting assistant, its role and its actor" \
-  "$(psql -X -d "$DB_NAME" -tAc "SELECT COUNT(*) FROM kiosk.action_log WHERE agent_id = '$ALICE_AGENT' AND actor = 'agent' AND role = 'customer'")" "1"
+assert "audit: the two bookings emitted ok events" \
+  "$(event_count '.action == "book_appointment" and .status == "ok"')" "2"
+assert "audit: the event names the acting assistant, its role and its actor" \
+  "$(event_count ".agent_id == \"$ALICE_AGENT\" and .actor == \"agent\" and .role == \"customer\"")" "1"
 
-# 2. THE FK ANCHOR. `action_log.action_name` REFERENCES `actions(name)`, and
-#    the registry is in memory — so the writer upserts the anchor from it,
-#    description included, rather than the FK being relaxed.
-assert "audit: kiosk.actions carries the FK anchor" \
-  "$(psql -X -d "$DB_NAME" -tAc "SELECT description IS NOT NULL FROM kiosk.actions WHERE name = 'book_appointment'")" "t"
+# 2. The invocation's own timestamp travels with it — not the sink's clock.
+assert "audit: the event carries the invocation timestamp" \
+  "$(events '[.[] | select(.invoked_at | test("^20[0-9][0-9]-"))] | length > 0')" "true"
 
-# 3. ARGUMENT VALUES ARE NOT STORED (the D6 default). `args` holds each
-#    argument's NAME and JSON TYPE; the slot the assistant actually booked is
-#    nowhere in the table.
-assert "audit: args records names and JSON types" \
-  "$(psql -X -d "$DB_NAME" -tAc "SELECT COUNT(*) > 0 FROM kiosk.action_log WHERE args @> '{\"salon_id\":\"integer\",\"slot\":\"string\"}'::jsonb")" "t"
-assert "audit: …and NOT the value that was sent" \
-  "$(psql -X -d "$DB_NAME" -tAc "SELECT COUNT(*) FROM kiosk.action_log WHERE args::text LIKE '%2026-06-15T14:00:00Z%'")" "0"
+# 3. THE ARGUMENTS ARRIVE IN FULL. This is the whole point of the reversal: the
+#    slot the assistant actually sent is IN the event, unredacted, because Kiosk
+#    does not decide on an operator's behalf what their retention policy is.
+assert "audit: the arguments arrive IN FULL — values included" \
+  "$(event_count '.args.slot == "2026-06-15T14:00:00Z" and (.args.salon_id | type) == "number"')" "1"
 
-# 4. A QUERY IS NOT LOGGED. The table is an ACTION log; the many reads this
-#    harness has already made must have left it alone.
-assert "audit: queries are not logged" \
-  "$(log_count "WHERE action_name IN ('salons', 'my_appointments')")" "0"
+# 4. …AND REDACTING IS ONE CALL AT THE SEAM. The same events, written a second
+#    time through `event.with_arg_types`: argument names kept, every value
+#    replaced by its JSON type, nothing of the payload left.
+assert "audit: …and event.with_arg_types withholds them in one call" \
+  "$(jq -s '[.[] | select(.args.salon_id == "integer" and .args.slot == "string")] | length > 0' "$AUDIT_EVENTS_REDACTED")" "true"
+assert "audit: …so the redacted copy carries no value that was sent" \
+  "$(grep -c '2026-06-15T14:00:00Z' "$AUDIT_EVENTS_REDACTED" || true)" "0"
 
-# 5. THE FAILURE BRANCH. A booking for a salon that does not exist reaches the
-#    handler and raises; the action's own transaction ROLLS BACK and the audit
-#    row must survive it — which is why the write is after the transaction and
-#    not inside it.
-before_fail=$(log_count "WHERE action_name = 'book_appointment'")
+# 5. A QUERY EMITS NOTHING. This is an ACTION trail; the many reads this harness
+#    has already made must have left it alone.
+assert "audit: queries emit nothing" \
+  "$(event_count '.action == "salons" or .action == "my_appointments"')" "0"
+
+# 6. THE FAILURE BRANCH. A booking for a salon that does not exist reaches the
+#    handler and raises; the action's own transaction ROLLS BACK and the event
+#    must be emitted anyway — which is why the seam sits outside the transaction.
+before_fail=$(event_count '.action == "book_appointment"')
 fail_code=$(curl -sS -o /tmp/kiosk-audit-fail.json -w "%{http_code}" -X POST \
   "$SERVER_URL/kiosk/book_appointment" \
   -H "Authorization: Bearer $ALICE_AGENT_TOKEN" -H "Content-Type: application/json" \
   -d '{"salon_id":987654,"slot":"2027-01-01T09:00:00Z"}')
 assert "audit: a booking for a missing salon fails on the wire" \
   "$([ "$fail_code" -ge 400 ] && echo yes || echo "no($fail_code)")" "yes"
-assert "audit: …and the FAILED invocation was logged too" \
-  "$(psql -X -d "$DB_NAME" -tAc "SELECT COUNT(*) FROM kiosk.action_log WHERE result_status = 'error'")" "1"
+assert "audit: …and the FAILED invocation emitted an event too" \
+  "$(event_count '.status == "error"')" "1"
 assert "audit: …carrying the error class and message" \
-  "$(psql -X -d "$DB_NAME" -tAc "SELECT COUNT(*) FROM kiosk.action_log WHERE result_status = 'error' AND error_class <> '' AND error_message <> ''")" "1"
+  "$(event_count '.status == "error" and (.error_class | length > 0) and (.error_message | length > 0)')" "1"
 assert "audit: …and nothing was booked for the missing salon" \
   "$(psql -X -d "$DB_NAME" -tAc "SELECT COUNT(*) FROM appointments WHERE salon_id = 987654")" "0"
-assert "audit: the log grew by exactly that one invocation" \
-  "$(( $(log_count "WHERE action_name = 'book_appointment'") - before_fail ))" "1"
+assert "audit: the sink saw exactly that one more invocation" \
+  "$(( $(event_count '.action == "book_appointment"') - before_fail ))" "1"
 
-# 6. A REFUSAL THAT NEVER REACHED AN ACTION LEAVES NO ROW. A 405 at an
-#    action's path and a 401 with no token both answer before anything is
-#    invoked, and the table's own NOT NULLs say a row needs an identity AND a
-#    registered name — so this is an ACTION log, not a request log.
-before_refusals=$(log_count "")
+# 7. A REFUSAL THAT NEVER REACHED AN ACTION EMITS NOTHING. A 405 at an action's
+#    path, a 401 with no token and a 404 for an unregistered name all answer
+#    before anything is invoked — so this is an action trail, not a request log.
+before_refusals=$(events 'length')
 curl -sS -o /dev/null "$SERVER_URL/kiosk/book_appointment" -H "Authorization: Bearer $ALICE_AGENT_TOKEN"
 curl -sS -o /dev/null -X POST "$SERVER_URL/kiosk/book_appointment" -H "Content-Type: application/json" -d '{}'
 curl -sS -o /dev/null -X POST "$SERVER_URL/kiosk/no_such_action" \
   -H "Authorization: Bearer $ALICE_AGENT_TOKEN" -H "Content-Type: application/json" -d '{}'
-assert "audit: a 405, a 401 and a 404 leave no audit rows" \
-  "$(( $(log_count "") - before_refusals ))" "0"
+assert "audit: a 405, a 401 and a 404 emit nothing" \
+  "$(( $(events 'length') - before_refusals ))" "0"
 
-# 7. `pay` writes the AP2 mandate trail above, not an action_log row — it is
-#    not an Action and its trail is richer than one redacted row could be.
-assert "audit: pay is not in the action log" "$(log_count "WHERE action_name = 'pay'")" "0"
+# 8. `pay` emits nothing — it is not an Action and it already writes the AP2
+#    mandate trail asserted above, which is richer than one event could be.
+assert "audit: pay emits no event" "$(event_count '.action == "pay"')" "0"
+
+# 9. A SINK THAT RAISES DOES NOT FAIL THE ACTION. DemoAuditSink blows up on one
+#    sentinel slot (its bug, planted on purpose). The booking must still be
+#    served, must still land in the database, and must leave no event behind.
+before_raise=$(events 'length')
+raise_code=$(curl -sS -o /tmp/kiosk-audit-raise.json -w "%{http_code}" -X POST \
+  "$SERVER_URL/kiosk/book_appointment" \
+  -H "Authorization: Bearer $ALICE_AGENT_TOKEN" -H "Content-Type: application/json" \
+  -d "{\"salon_id\":$salon_id,\"slot\":\"2030-01-01T00:00:00Z\"}")
+assert "audit: a RAISING sink does not fail the action" "$raise_code" "200"
+assert "audit: …the booking it choked on really landed" \
+  "$(psql -X -d "$DB_NAME" -tAc "SELECT COUNT(*) FROM appointments WHERE slot = '2030-01-01T00:00:00Z'")" "1"
+assert "audit: …and the sink that raised emitted nothing" \
+  "$(( $(events 'length') - before_raise ))" "0"
+
+# 10. THE TWO TABLES ARE GONE. This origin was built by `rails g kiosk:install`
+#     and migrated from scratch minutes ago, so this is the canonical migration
+#     set speaking: `kiosk.actions` and `kiosk.action_log` are not in it.
+assert "audit: kiosk.action_log does not exist in a freshly migrated origin" \
+  "$(psql -X -d "$DB_NAME" -tAc "SELECT to_regclass('kiosk.action_log') IS NULL")" "t"
+assert "audit: …and neither does kiosk.actions" \
+  "$(psql -X -d "$DB_NAME" -tAc "SELECT to_regclass('kiosk.actions') IS NULL")" "t"
 
 # ─── summary ────────────────────────────────────────────────────────────
 

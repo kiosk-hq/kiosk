@@ -114,10 +114,11 @@ CREATE TABLE kiosk.agents (
     allowed_roles text[] DEFAULT '{}'::text[] NOT NULL,
     public_key text,
     notification_pubkey text,
-    created_at timestamp with time zone DEFAULT now() NOT NULL,
-    revoked_at timestamp with time zone,
+    human_label text,
+    spending_cap_cents bigint,
     kyc_verified_at timestamp with time zone,
-    kyc_attributes jsonb
+    created_at timestamp with time zone DEFAULT now() NOT NULL,
+    revoked_at timestamp with time zone
 );
 
 
@@ -179,6 +180,17 @@ CREATE TABLE kiosk.intent_mandates (
     expires_at timestamp with time zone NOT NULL,
     created_at timestamp with time zone DEFAULT now() NOT NULL,
     raw_jws text NOT NULL
+);
+
+
+--
+-- Name: kyc_attributes; Type: TABLE; Schema: kiosk; Owner: -
+--
+
+CREATE TABLE kiosk.kyc_attributes (
+    agent_id uuid NOT NULL,
+    name text NOT NULL,
+    granted_at timestamp with time zone DEFAULT now() NOT NULL
 );
 
 
@@ -486,6 +498,14 @@ ALTER TABLE ONLY kiosk.intent_mandates
 
 
 --
+-- Name: kyc_attributes kyc_attributes_pkey; Type: CONSTRAINT; Schema: kiosk; Owner: -
+--
+
+ALTER TABLE ONLY kiosk.kyc_attributes
+    ADD CONSTRAINT kyc_attributes_pkey PRIMARY KEY (agent_id, name);
+
+
+--
 -- Name: payment_mandates payment_mandates_pkey; Type: CONSTRAINT; Schema: kiosk; Owner: -
 --
 
@@ -784,6 +804,14 @@ ALTER TABLE ONLY kiosk.cart_mandates
 
 
 --
+-- Name: kyc_attributes kyc_attributes_agent_id_fkey; Type: FK CONSTRAINT; Schema: kiosk; Owner: -
+--
+
+ALTER TABLE ONLY kiosk.kyc_attributes
+    ADD CONSTRAINT kyc_attributes_agent_id_fkey FOREIGN KEY (agent_id) REFERENCES kiosk.agents(id) ON DELETE CASCADE;
+
+
+--
 -- Name: payment_mandates payment_mandates_cart_mandate_id_fkey; Type: FK CONSTRAINT; Schema: kiosk; Owner: -
 --
 
@@ -830,17 +858,15 @@ ALTER TABLE ONLY public.orders
 SET search_path TO "$user", public;
 
 INSERT INTO "schema_migrations" (version) VALUES
-('20260805000004'),
-('20260805000003'),
+('20260820130117'),
+('20260820130116'),
+('20260820130115'),
+('20260820130114'),
+('20260820130113'),
+('20260820130112'),
 ('20260805000002'),
 ('20260805000001'),
-('20260717000001'),
 ('20260630000001'),
-('20260618131463'),
 ('20260618131462'),
-('20260618131461'),
-('20260618131460'),
-('20260618131458'),
-('20260618131457'),
 ('20260101000000');
 

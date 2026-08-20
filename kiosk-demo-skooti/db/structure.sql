@@ -114,10 +114,11 @@ CREATE TABLE kiosk.agents (
     allowed_roles text[] DEFAULT '{}'::text[] NOT NULL,
     public_key text,
     notification_pubkey text,
-    created_at timestamp with time zone DEFAULT now() NOT NULL,
-    revoked_at timestamp with time zone,
+    human_label text,
+    spending_cap_cents bigint,
     kyc_verified_at timestamp with time zone,
-    kyc_attributes jsonb
+    created_at timestamp with time zone DEFAULT now() NOT NULL,
+    revoked_at timestamp with time zone
 );
 
 
@@ -179,6 +180,17 @@ CREATE TABLE kiosk.intent_mandates (
     expires_at timestamp with time zone NOT NULL,
     created_at timestamp with time zone DEFAULT now() NOT NULL,
     raw_jws text NOT NULL
+);
+
+
+--
+-- Name: kyc_attributes; Type: TABLE; Schema: kiosk; Owner: -
+--
+
+CREATE TABLE kiosk.kyc_attributes (
+    agent_id uuid NOT NULL,
+    name text NOT NULL,
+    granted_at timestamp with time zone DEFAULT now() NOT NULL
 );
 
 
@@ -257,10 +269,10 @@ CREATE TABLE public.kyc_verification_requests (
     request_token character varying NOT NULL,
     user_id uuid NOT NULL,
     status character varying DEFAULT 'pending'::character varying NOT NULL,
+    broker_nonce character varying,
     kyc_jws text,
     created_at timestamp(6) without time zone NOT NULL,
-    updated_at timestamp(6) without time zone NOT NULL,
-    broker_nonce character varying
+    updated_at timestamp(6) without time zone NOT NULL
 );
 
 
@@ -407,6 +419,14 @@ ALTER TABLE ONLY kiosk.intent_mandates
 
 ALTER TABLE ONLY kiosk.intent_mandates
     ADD CONSTRAINT intent_mandates_user_id_mandate_id_key UNIQUE (user_id, mandate_id);
+
+
+--
+-- Name: kyc_attributes kyc_attributes_pkey; Type: CONSTRAINT; Schema: kiosk; Owner: -
+--
+
+ALTER TABLE ONLY kiosk.kyc_attributes
+    ADD CONSTRAINT kyc_attributes_pkey PRIMARY KEY (agent_id, name);
 
 
 --
@@ -671,6 +691,14 @@ ALTER TABLE ONLY kiosk.cart_mandates
 
 
 --
+-- Name: kyc_attributes kyc_attributes_agent_id_fkey; Type: FK CONSTRAINT; Schema: kiosk; Owner: -
+--
+
+ALTER TABLE ONLY kiosk.kyc_attributes
+    ADD CONSTRAINT kyc_attributes_agent_id_fkey FOREIGN KEY (agent_id) REFERENCES kiosk.agents(id) ON DELETE CASCADE;
+
+
+--
 -- Name: payment_mandates payment_mandates_cart_mandate_id_fkey; Type: FK CONSTRAINT; Schema: kiosk; Owner: -
 --
 
@@ -709,18 +737,15 @@ ALTER TABLE ONLY public.reservations
 SET search_path TO "$user", public;
 
 INSERT INTO "schema_migrations" (version) VALUES
-('20260804000002'),
+('20260820130117'),
+('20260820130116'),
+('20260820130115'),
+('20260820130114'),
+('20260820130113'),
+('20260820130112'),
 ('20260804000001'),
 ('20260803000001'),
-('20260717000001'),
 ('20260618131466'),
-('20260618131465'),
 ('20260618131464'),
-('20260618131463'),
-('20260618131462'),
-('20260618131461'),
-('20260618131460'),
-('20260618131458'),
-('20260618131457'),
 ('20260101000000');
 

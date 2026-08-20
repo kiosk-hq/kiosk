@@ -379,13 +379,24 @@ COPIES = {
     rule: :code,
     why:  "kiosk.agents — the ENGINE's own table, read by the two demos that gate a verb on an " \
           "anonymized KYC attribute, and shipped with no engine-side reader. The code is one scope " \
-          "(the acting, non-revoked agent, via the `kiosk.current_agent_id()` GUC) plus the `->>` " \
-          "extraction expressed as Arel, and it MUST stay identical: both copies are the same " \
-          "argument about not re-implementing a Postgres operator in Ruby inside a KYC gate " \
-          "(K-724), and a copy that drifted would be one gate reading a granted boolean " \
-          "differently from the other. Only the attributes asked for differ — skooti wants " \
-          "age_over_18 AND licence_a, getgrocery age_over_18 — and those live at the CALL sites, " \
-          "not here, which is why this file can be held identical at all.",
+          "(the acting, non-revoked agent, via the `kiosk.current_agent_id()` GUC) plus the " \
+          "existence test over kiosk.kyc_attributes, and it MUST stay identical: a copy that " \
+          "drifted would be one KYC gate answering a granted attribute differently from the " \
+          "other. Only the attributes asked for differ — skooti wants age_over_18 AND licence_a, " \
+          "getgrocery age_over_18 — and those live at the CALL sites, not here, which is why this " \
+          "file can be held identical at all. Until K-656 the shared code was a `->>` extraction " \
+          "expressed as Arel, kept in Postgres so no Ruby comparison had to pick a spelling of " \
+          "true (K-724); the grants are rows now, so there is no value to extract and the shared " \
+          "argument is smaller, not gone.",
+  },
+  "app/models/kyc_attribute.rb" => {
+    rule: :code,
+    why:  "kiosk.kyc_attributes — the engine's own table (canonical migration 006), one row per " \
+          "named anonymized boolean an attestation granted, and again with no engine-side reader. " \
+          "The class is two lines on purpose: the table has no value column, so the model has " \
+          "nothing to interpret and every gate is an existence test in {Agent.kyc_granted?}. " \
+          "Per-demo prose names that demo's own claim (skooti age_over_18 + licence_a for the " \
+          "motorcycle, getgrocery age_over_18 for alcohol).",
   },
   "app/controllers/concerns/kiosk_refusals.rb" => {
     rule: :code,
@@ -482,37 +493,39 @@ COPIES = {
   # demo that was not regenerated when the engine's schema moved — which is the
   # nastiest drift in this list, because it only surfaces as a runtime column
   # error in whichever demo nobody ran.
-  "db/migrate/20260618131457_create_kiosk_schema.rb" => {
-    rule: :identical, why: "kiosk:install generator output — the engine's own tables.",
+  #
+  # Since K-646 (2026-08-20) all seven operator demos ship the SAME six files at
+  # the SAME timestamps, because they are one `kiosk:install` run copied across:
+  # the fleet IS the generator's output, with no migration history, no per-demo
+  # subset and no renames. That is what lets the paths be declared here at all —
+  # and the GENERATOR_TEMPLATES rule below now enforces the "all seven, byte for
+  # byte, no exceptions" invariant that keeps it true.
+  "db/migrate/20260820130112_create_kiosk_schema.rb" => {
+    rule: :identical, why: "kiosk:install 001 — the schema and the four current_*() helpers.",
   },
-  "db/migrate/20260618131458_create_kiosk_identity_tables.rb" => {
-    rule: :identical, why: "kiosk:install generator output — agents and identity.",
+  "db/migrate/20260820130113_create_kiosk_identity_tables.rb" => {
+    rule: :identical, why: "kiosk:install 002 — agents (with kyc_verified_at, spending_cap_cents " \
+                           "and human_label declared in the CREATE since K-646), agent_tokens, " \
+                           "agent_mappings.",
   },
-  "db/migrate/20260618131460_create_kiosk_reservations.rb" => {
-    rule: :identical, why: "kiosk:install generator output — reservations (demos that hold stock).",
+  "db/migrate/20260820130114_create_kiosk_reservations.rb" => {
+    rule: :identical, why: "kiosk:install 003 — reservations.",
   },
-  "db/migrate/20260618131461_create_kiosk_device_authorizations.rb" => {
-    rule: :identical, why: "kiosk:install generator output — device-authorization grants.",
+  "db/migrate/20260820130115_create_kiosk_device_authorizations.rb" => {
+    rule: :identical, why: "kiosk:install 004 — device_authorizations in the account-binding " \
+                           "shape, created outright (K-646 folded away the rebuild that used to " \
+                           "drop and recreate it).",
   },
-  "db/migrate/20260618131462_create_kiosk_mandates.rb" => {
-    rule: :identical, why: "kiosk:install generator output — payment mandates (the pay demos).",
+  "db/migrate/20260820130116_create_kiosk_mandates.rb" => {
+    rule: :identical, why: "kiosk:install 005 — the AP2 mandate trail.",
   },
-  "db/migrate/20260618131463_add_kyc_verified_at.rb" => {
-    rule: :identical, why: "the KYC timestamp (the broker demos). kiosk:install emits this content " \
-                           "as add_kyc_verified_at_to_kiosk_agents.rb; the demos ship it renamed " \
-                           "and reworded — recorded as drift in GENERATOR_TEMPLATES (K-640).",
-  },
-  "db/migrate/20260717000001_rebuild_kiosk_device_authorizations.rb" => {
-    rule: :identical, why: "kiosk:install generator output — the device-authorization rebuild.",
+  "db/migrate/20260820130117_create_kiosk_kyc_attributes.rb" => {
+    rule: :identical, why: "kiosk:install 006 — kiosk.kyc_attributes, one row per granted " \
+                           "anonymized boolean (K-656; it was a jsonb column on agents before).",
   },
   "db/migrate/20260718000001_add_devise_columns_to_users.rb" => {
-    rule: :identical, why: "Devise columns for the demos that ship a human login.",
-  },
-  "db/migrate/20260718000002_add_kiosk_agent_governance_columns.rb" => {
-    rule: :identical, why: "kiosk:install generator output — the K-436 agent governance columns " \
-                           "(spending_cap_cents + human_label). The four Devise demos wrote it by " \
-                           "hand first; the template was lifted from their proven copies at K-647, " \
-                           "so a fresh install finally emits the columns ColumnSpendingCap reads.",
+    rule: :identical, why: "Devise columns for the demos that ship a human login. NOT generator " \
+                           "output — the demos' own, which is why it keeps its own timestamp.",
   },
   "db/migrate/20260101000000_create_users.rb" => {
     rule: :code,
@@ -625,7 +638,7 @@ SKELETON_NOT_COMPARED = {
   "vendor/.keep" => "Empty placeholder.",
 }.freeze
 
-# ── The engine side of the generator output (K-640) ──────────────────────────
+# ── The engine side of the generator output (K-640, hardened at K-646) ───────
 #
 # The db/migrate entries in COPIES hold the demos' copies in lockstep with each
 # other, which is necessary and not sufficient: `rails g kiosk:install` emits
@@ -636,31 +649,45 @@ SKELETON_NOT_COMPARED = {
 # So every template under GENERATOR_TEMPLATES_DIR is declared here, rendered
 # with plain ERB and the generator's own default options (GENERATOR_DEFAULTS —
 # the values every demo was generated with; the templates' only ERB is
-# `<%= options[:…] %>` substitution), and the render must byte-match every demo
-# copy of that migration. Copies are matched by timestamp-stripped basename,
-# because migration_template stamps each demo's copy with its own UTC timestamp
-# — which is also why four copies (getgrocery's mandates and its two kyc
-# migrations, skooti's kyc_attributes — each at its own timestamp) are
-# INVISIBLE to the sibling rule above: a path shipped by one demo is never a
-# duplicate, so the two add_kyc_attributes copies were compared to NOTHING
-# before this rule.
+# `<%= options[:…] %>` substitution), and the render must byte-match the copy in
+# EVERY ONE of the seven operator demos.
+#
+# ── WHY THERE IS NO WAY TO RECORD AN EXCEPTION ANY MORE ─────────────────────
+#
+# K-640 shipped this rule with two escape hatches: `drift:` (the render and the
+# copies knowingly disagree, pending triage) and `shipped_as:` (the demos ship
+# the migration under another basename). Both were used the day the rule
+# landed, for four clusters, and all four were still sitting there three months
+# later — which is the honest measure of what a recordable exception buys: it
+# converts "the build is red until you propagate" into "the build is green and
+# someone will look at it". Phil's answer to that state was «я вообще не
+# понимаю о чём речь, и почему какие-то шаблоны мандатов расходятся», and then
+# the instruction that removed the divergence outright: delete the demos'
+# migrations and re-emit (K-646).
+#
+# So the hatches are GONE, not merely unused. An entry is `emits:` (compared,
+# byte for byte, in all seven) or `not_compared:` (with the reason and where it
+# is recorded), and there is no third state. A template edit that is not
+# propagated to the demos now reddens the build the day it lands, which is the
+# whole mechanism this file owes the K-646 decision.
+#
+# The all-seven rule is the other half. A per-demo SUBSET is how the fleet
+# drifted in the first place: demos generated at different times shipped
+# different slices of the canonical set (philslist had no mandates, hoteling no
+# governance columns), so "which migrations should this demo have" had no
+# answer a check could hold. Since K-646 the answer is "all of them", and
+# ONE_SET_EVERYWHERE below enforces it: a demo that skips a migration, or a new
+# demo scaffolded from a stale engine, fails here.
 #
 # Entry fields:
-#   emits:        — the basename the generator writes (sans timestamp).
-#   shipped_as:   — the basename the demos actually ship, when that differs
-#                   from emits: (a rename is drift too — recorded, not hidden).
-#   drift:        — the render and the copies KNOWINGLY disagree, pending
-#                   triage: the reason says what differs and why no side was
-#                   picked. The copies must still agree with EACH OTHER
-#                   (comments/whitespace ignored) so the pending state cannot
-#                   rot further, and the entry errors the day the copies match
-#                   the render — a stale exception is a lie, same as `except:`.
+#   emits:        — the basename the generator writes (sans timestamp). The
+#                   render must byte-match this file in all seven demos.
 #   not_compared: — the template's output has a per-demo dimension; the reason
 #                   says where that is recorded.
 #
 # Staleness is checked both ways, per this file's house rule: a template with
-# no entry fails, an entry with no template fails, an emits:/shipped_as:
-# basename no demo ships fails, a drift: whose copies have converged fails.
+# no entry fails, an entry with no template fails, an `emits:` basename no demo
+# ships fails, and a basename not shipped by ALL of them fails.
 GENERATOR_TEMPLATES_DIR = "kiosk-server/lib/generators/kiosk/install/templates"
 
 # The generator's own class_option defaults (install_generator.rb) — the
@@ -668,6 +695,12 @@ GENERATOR_TEMPLATES_DIR = "kiosk-server/lib/generators/kiosk/install/templates"
 GENERATOR_DEFAULTS = {
   schema: "kiosk", user_id_type: "uuid", user_table: "users", guc_namespace: "app",
 }.freeze
+
+# The seven operator demos. kiosk-demo-prove is the KYC BROKER, not an operator:
+# it adopts no Kiosk engine schema at all (its two migrations are its own), so
+# the all-seven rule must not ask it for generator output it has no business
+# carrying.
+NON_OPERATOR_DEMOS = %w[kiosk-demo-prove].freeze
 
 GENERATOR_TEMPLATES = {
   "initializer.rb.tt" => {
@@ -679,47 +712,8 @@ GENERATOR_TEMPLATES = {
   "create_kiosk_identity_tables.rb.tt"       => { emits: "create_kiosk_identity_tables.rb" },
   "create_kiosk_reservations.rb.tt"          => { emits: "create_kiosk_reservations.rb" },
   "create_kiosk_device_authorizations.rb.tt" => { emits: "create_kiosk_device_authorizations.rb" },
-  "create_kiosk_mandates.rb.tt" => {
-    emits: "create_kiosk_mandates.rb",
-    drift: "pending triage (K-640): comment-only — 75a917b reworded the template's header and " \
-           "added the reverse-FK-order note engine-side (the K-137 reopen), and the three " \
-           "byte-identical copies still carry the older prose; the demos got the settlements DROP " \
-           "itself separately (68dab09), so the executable body agrees on both sides. Which side's " \
-           "prose wins is a direction call this check does not make.",
-  },
-  "add_kyc_verified_at_to_kiosk_agents.rb.tt" => {
-    emits:      "add_kyc_verified_at_to_kiosk_agents.rb",
-    shipped_as: "add_kyc_verified_at.rb",
-    drift: "pending triage (K-640): the three copies were never this template's literal output — " \
-           "hand-derived at demo birth with a shorter basename and class (AddKycVerifiedAt), " \
-           "per-demo prose (getgrocery's names its alcohol age-gate), and a one-line " \
-           "kyc_verified_at_sql call against the template's multi-line form. Same column, same " \
-           "SQL, different class name; which side converges is a direction call this check does " \
-           "not make.",
-  },
-  "rebuild_kiosk_device_authorizations.rb.tt" => {
-    emits: "rebuild_kiosk_device_authorizations.rb",
-    drift: "pending triage (K-640): comment-only — both sides dropped the header's ADR reference " \
-           "in the T-011 scrub era but re-wrapped the surviving prose differently (template " \
-           "edited in 0effbcd, the seven byte-identical copies not re-emitted). The executable " \
-           "body agrees on both sides.",
-  },
-  "add_kyc_attributes_to_kiosk_agents.rb.tt" => {
-    emits:      "add_kyc_attributes_to_kiosk_agents.rb",
-    shipped_as: "add_kyc_attributes.rb",
-    drift: "pending triage (K-640): same shape as add_kyc_verified_at above — the two copies " \
-           "carry a shorter basename and class (AddKycAttributes), per-demo prose and a one-line " \
-           "kyc_attributes_sql call. Same column, same SQL, different class name.",
-  },
-  # The direction K-640 left open, taken at K-647: the four Devise demos carried
-  # this migration by hand while kiosk:install emitted nothing, so a fresh
-  # adopter enabling the K-436 spending-cap surface hit missing-column failures
-  # only the demos never saw. The template was lifted verbatim from the demos'
-  # byte-identical copies (schema parameterised), so the render byte-matches
-  # with no drift to record.
-  "add_kiosk_agent_governance_columns.rb.tt" => {
-    emits: "add_kiosk_agent_governance_columns.rb",
-  },
+  "create_kiosk_mandates.rb.tt"              => { emits: "create_kiosk_mandates.rb" },
+  "create_kiosk_kyc_attributes.rb.tt"        => { emits: "create_kiosk_kyc_attributes.rb" },
 }.freeze
 
 # ── Cross-demo singleton pairs (K-648) ───────────────────────────────────────
@@ -742,17 +736,16 @@ GENERATOR_TEMPLATES = {
 #   why:   why two demos share the file at all.
 MIGRATION_PAIRS = {
   "create_kyc_verification_requests.rb" => {
-    rule:  :code,
-    drift: "pending triage (K-648): getgrocery's create_table declares `t.string :broker_nonce` " \
-           "inline (the KYC-broker callback anti-replay nonce) and skooti's does not — skooti adds " \
-           "the identical column in its own " \
-           "20260804000002_add_broker_nonce_to_kyc_verification_requests.rb, so the two TABLES " \
-           "converge while the two create migrations cannot without one demo rewriting shipped " \
-           "history; which side's layout wins is a direction call this check does not make. " \
-           "(Both headers narrate the broker flow since K-668.)",
+    rule: :code,
     why:   "the pending age/licence verification a demo starts at the KYC broker — the table " \
            "behind app/models/kyc_verification_request.rb, whose model copies ARE held in :code " \
-           "lockstep above.",
+           "lockstep above. The pair CONVERGED at K-646: getgrocery declared `broker_nonce` " \
+           "inline while skooti added the identical column in a follow-up migration, which this " \
+           "rule could only record as drift because closing it meant rewriting shipped history — " \
+           "Phil authorised exactly that («сноси существующие kiosk миграции … с их последующими " \
+           "правками»), so skooti's follow-up is deleted and the column is inline in both. Prose " \
+           "still differs per demo (skooti's row carries a licence claim, getgrocery's an age " \
+           "gate), which is why the rule is :code.",
   },
   "add_devise_columns_to_users.rb" => {
     rule: :code,
@@ -870,11 +863,8 @@ if ARGV.include?("--list")
   puts
   puts format("%-44s %-42s %s", "TEMPLATE (kiosk:install)", "EMITS", "STATE")
   GENERATOR_TEMPLATES.sort.each do |name, entry|
-    state = if entry[:not_compared] then "not compared"
-            elsif entry[:drift]     then "drift pending triage"
-            else                         "byte-match"
-            end
-    shipped = (migrations[entry[:shipped_as] || entry[:emits]] || {}).keys
+    state = entry[:not_compared] ? "not compared" : "byte-match, all seven"
+    shipped = (migrations[entry[:emits]] || {}).keys
     puts format("%-44s %-42s %s%s", name, entry[:emits] || "—", state,
                 shipped.empty? ? "" : " (#{shipped.map { |d| d.delete_prefix('kiosk-demo-') }.sort.join(' ')})")
   end
@@ -1019,6 +1009,8 @@ end
             "template any more — drop the entry."
 end
 
+operator_demos = demos.map { |d| File.basename(d) } - NON_OPERATOR_DEMOS
+
 GENERATOR_TEMPLATES.each do |name, entry|
   next unless tpl_files.include?(name)
 
@@ -1032,56 +1024,56 @@ GENERATOR_TEMPLATES.each do |name, entry|
     next
   end
 
-  if entry[:shipped_as] && (migrations[entry[:emits]] || {}).any?
-    errors << "#{name}: `shipped_as: #{entry[:shipped_as]}` recorded a rename, but " \
-              "#{(migrations[entry[:emits]] || {}).keys.map(&short).sort.join(', ')} now ships " \
-              "#{entry[:emits]} directly — the rename is converging; update or drop `shipped_as:`."
-  end
-  shipped_as = entry[:shipped_as] || entry[:emits]
-  copies = migrations[shipped_as] || {}
+  emits  = entry[:emits]
+  copies = migrations[emits] || {}
   if copies.empty?
-    errors << "#{name}: no demo ships a db/migrate copy of #{shipped_as} — if the demos dropped " \
-              "the migration, drop (or `not_compared:`) the entry with the reason; if they " \
-              "renamed it, record the new basename as `shipped_as:`."
+    errors << "#{name}: no demo ships a db/migrate copy of #{emits} — if the demos dropped the " \
+              "migration, drop (or `not_compared:`) the entry with the reason. A RENAME is not a " \
+              "state this check has any more (K-646): the demos ship the generator's own " \
+              "basenames, so a copy under another name is a copy that was not regenerated."
     next
+  end
+
+  # ONE_SET_EVERYWHERE (K-646). Every operator demo ships every canonical
+  # migration, because every operator demo IS one `kiosk:install` run. A demo
+  # missing one is the shape the fleet drifted into before — subsets nobody
+  # could adjudicate — and a NEW demo scaffolded from a stale engine is the
+  # same failure arriving from the other direction.
+  missing = operator_demos - copies.keys
+  unless missing.empty?
+    errors << "#{name}: #{missing.map(&short).sort.join(', ')} #{missing.size == 1 ? 'ships' : 'ship'} " \
+              "no copy of #{emits}, but every operator demo must ship every canonical migration " \
+              "(K-646 — the demos are one `kiosk:install` run, not per-demo subsets). Re-run the " \
+              "generator into #{missing.size == 1 ? 'that demo' : 'those demos'} and commit the " \
+              "output, or — if the migration genuinely left the canonical set — drop the template " \
+              "and this entry together."
+  end
+  extra = copies.keys & NON_OPERATOR_DEMOS
+  unless extra.empty?
+    errors << "#{name}: #{extra.map(&short).sort.join(', ')} ships #{emits}, but it is declared a " \
+              "NON-operator demo (it adopts no Kiosk engine schema). Either it is an operator now " \
+              "— drop it from NON_OPERATOR_DEMOS — or the migration does not belong to it."
   end
 
   rendered = render_template(File.join(ROOT, GENERATOR_TEMPLATES_DIR, name))
   mismatched = copies.reject { |_demo, path| File.read(path) == rendered }
+  next if mismatched.empty?
 
-  if entry[:drift]
-    errors << "#{name}: `drift:` carries no reason" if entry[:drift].to_s.strip.empty?
-    if mismatched.empty?
-      errors << "#{name}: `drift:` is stale — every demo copy of #{shipped_as} now byte-matches " \
-                "the rendered template. Drop the drift entry so the file is guarded."
-    else
-      # The recorded drift covers copies-vs-TEMPLATE only. The copies must
-      # still agree with each other (comments and whitespace aside), so the
-      # pending state cannot quietly grow an executable divergence too.
-      groups = copies.group_by { |_demo, path| code_digest(path) }
-      if groups.size > 1
-        listed = groups.values.map { |g| "[#{g.map { |d, _| short.(d) }.sort.join(',')}]" }.join(" ")
-        errors << "#{name}: the recorded `drift:` covers the copies disagreeing with the template, " \
-                  "not with each other — and ignoring comments and whitespace the copies of " \
-                  "#{shipped_as} group as #{listed}. Propagate whichever is right before the " \
-                  "pending triage rots further."
-      end
-    end
-  elsif mismatched.any?
-    demo, path = mismatched.first
-    a = rendered.lines
-    b = File.read(path).lines
-    i = (0...[a.size, b.size].max).find { |j| a[j] != b[j] }
-    errors << "#{GENERATOR_TEMPLATES_DIR}/#{name}: rendered with the generator's default options " \
-              "it must byte-match every demo copy of #{shipped_as}, and " \
-              "#{mismatched.keys.map(&short).sort.join(', ')} " \
-              "#{mismatched.size == 1 ? 'disagrees' : 'disagree'} (first difference at line " \
-              "#{i + 1}: template renders #{(a[i] || '<nothing>').chomp.strip.inspect}, " \
-              "#{short.(demo)} has #{(b[i] || '<nothing>').chomp.strip.inspect}). The engine's " \
-              "generator output and the demos moved apart — regenerate the demos' copies, or lift " \
-              "the copies' edit back into the template, so they move as ONE change; if the " \
-              "divergence is deliberate, record it as a `drift:` reason in GENERATOR_TEMPLATES."
-  end
+  demo, path = mismatched.first
+  a = rendered.lines
+  b = File.read(path).lines
+  i = (0...[a.size, b.size].max).find { |j| a[j] != b[j] }
+  errors << "#{GENERATOR_TEMPLATES_DIR}/#{name}: rendered with the generator's default options " \
+            "it must byte-match every demo copy of #{emits}, and " \
+            "#{mismatched.keys.map(&short).sort.join(', ')} " \
+            "#{mismatched.size == 1 ? 'disagrees' : 'disagree'} (first difference at line " \
+            "#{i + 1}: template renders #{(a[i] || '<nothing>').chomp.strip.inspect}, " \
+            "#{short.(demo)} has #{(b[i] || '<nothing>').chomp.strip.inspect}). The engine's " \
+            "generator output and the demos moved apart — regenerate the demos' copies, or lift " \
+            "the copies' edit back into the template, so they move as ONE change. There is NO " \
+            "way to record this as a known exception any more (K-646): the four that could be " \
+            "recorded in 2026-08 were all still open three months later, which is what a " \
+            "recordable exception actually buys."
 end
 
 # ── Cross-demo singleton pairs: the migrations neither rule above sees (K-648)
@@ -1091,7 +1083,7 @@ end
 # lockstep rule. Detection first: an undeclared pair fails, so a hand-written
 # migration copied into a second demo at its own timestamp cannot appear
 # silently — the same property the path rule gives paths.
-template_basenames = GENERATOR_TEMPLATES.filter_map { |_name, e| e[:shipped_as] || e[:emits] }
+template_basenames = GENERATOR_TEMPLATES.filter_map { |_name, e| e[:emits] }
 
 migrations.each do |base, copies|
   next if copies.size < 2
@@ -1284,11 +1276,10 @@ end
 if errors.empty?
   guarded = COPIES.count { |_, e| e[:rule] != :per_demo }
   tpl_checked = GENERATOR_TEMPLATES.count { |_, e| !e[:not_compared] }
-  tpl_drift   = GENERATOR_TEMPLATES.count { |_, e| e[:drift] }
   pair_drift  = MIGRATION_PAIRS.count { |_, e| e[:drift] }
   puts "check-demo-copies: OK — #{dups.size} duplicated paths declared, #{guarded} kept in lockstep, " \
-       "#{tpl_checked} install-generator templates held against their demo copies " \
-       "(#{tpl_drift} with drift pending triage), " \
+       "#{tpl_checked} install-generator templates byte-matched against their copies in all " \
+       "#{operator_demos.size} operator demos (no exceptions available), " \
        "#{MIGRATION_PAIRS.size} cross-demo migration pairs (#{pair_drift} with drift pending triage), " \
        "telemetry wired in #{(dups['app/services/demo_telemetry.rb'] || {}).size} demos, " \
        "OperationResult subclassed from kiosk-server in #{(dups[OPERATION_RESULT] || {}).size} demos"

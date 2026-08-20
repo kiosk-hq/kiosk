@@ -18,13 +18,6 @@
 # in config/environments/{development,test,production}.rb (K-650); this file
 # reads the resolved values from Rails.configuration.x.kiosk.*.
 
-require Rails.root.join("lib/stub_idp")
-require Rails.root.join("lib/stub_user_idp")
-require Rails.root.join("lib/jwt_or_stub_idp")
-require Rails.root.join("lib/stub_psp")
-require Rails.root.join("lib/uuid_check")
-require Rails.root.join("lib/validating_booking_provider")
-require Rails.root.join("lib/pow_difficulty")
 
 # Inject the RLS DSL into ActiveRecord::Migration so that migrations can
 # call `enable_rls_on TABLE do ... end` directly.
@@ -44,7 +37,7 @@ ActiveRecord::Migration.include(Kiosk::RLS::DSL)
 #
 # The rate is tracked per agent in-process (demo only — a real provider uses a
 # shared counter / sliding window). EQUIHASH_BROWSE_PARAMS follow
-# KIOSK_POW_DIFFICULTY (lib/pow_difficulty.rb): low (default) → n=96 k=5
+# KIOSK_POW_DIFFICULTY (app/services/pow_difficulty.rb): low (default) → n=96 k=5
 # sub-second; high → n=168 k=7 (~10s / ~1.3 GiB). hoteling ships low; the knob
 # is here for parity across the hosted apps. Unset = low.
 EQUIHASH_BROWSE_PARAMS = PowDifficulty.params
@@ -160,7 +153,7 @@ Kiosk.configure do |c|
 
   c.agent_idp = JwtOrStubIdp.new(stub: Rails.env.local? ? StubIdp.new : nil)
   # The web-session channel for the account-binding surfaces (verify
-  # page, link mint, unlink) — see lib/stub_user_idp.rb for the scope.
+  # page, link mint, unlink) — see app/services/stub_user_idp.rb for the scope.
   # DEV/TEST ONLY (K-555): the stub parses an UNSIGNED, self-asserted
   # `user:u-<uuid>` bearer into a human identity, so it is wired only under
   # Rails.env.local?; in production user_idp is nil and the binding surfaces
@@ -218,7 +211,6 @@ AMENITY_POOL = %w[wifi breakfast pool spa gym parking rooftop_bar
 # Off unless KIOSK_TELEMETRY=1. One event per successful wire action via a Rack
 # middleware; aggregate at GET /demo/activity.json. NOT in kiosk-core.
 if ENV["KIOSK_TELEMETRY"] == "1"
-  require Rails.root.join("lib/demo_telemetry")
   HOTELING_VERB_MAP = {
     "reserve_room"    => "reserved",
     "confirm_booking" => "booked",

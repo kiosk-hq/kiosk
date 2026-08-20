@@ -28,6 +28,23 @@ module KioskDemoHoteling
     # Common ones are `templates`, `generators`, or `middleware`, for example.
     config.autoload_lib(ignore: %w[assets tasks equihash_register.rb])
 
+    # app/services holds the objects config/initializers/kiosk.rb HANDS to
+    # `Kiosk.configure` at boot — the IdP adapters, the PoW-difficulty policy,
+    # the telemetry middleware. Rails sets the RELOADABLE autoloader up in its
+    # `finisher`, i.e. AFTER config/initializers have run, so a constant in a
+    # normal autoload path is simply not resolvable from an initializer; that,
+    # not "lib/ is not autoloaded", is what the hand-written
+    # `require Rails.root.join("lib/...")` lines used to buy (K-502).
+    # `autoload_once_paths` is Rails' own answer: the once autoloader is set up
+    # in `bootstrap`, BEFORE initializers, "so that engines and applications
+    # are able to autoload from these paths during initialization". It also
+    # makes these classes non-reloadable, which is the honest posture for
+    # objects an initializer instantiates once — a reload would swap the class
+    # out from under the instance Kiosk.configuration is already holding.
+    # Request-time code (domain modules, the wire operations) stays reloadable
+    # under app/models, app/operations and app/controllers.
+    config.autoload_once_paths << Rails.root.join("app/services").to_s
+
     # Configuration for the application, engines, and railties goes here.
     #
     # These settings can be overridden in specific environments using the files

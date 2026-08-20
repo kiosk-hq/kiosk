@@ -8,7 +8,7 @@ Rails.application.routes.draw do
   root "home#index"
 
   # Account binding: the human half (verify page, link mint, unlink — the
-  # stub user-session channel, see lib/stub_user_idp.rb) and the agent
+  # stub user-session channel, see app/services/stub_user_idp.rb) and the agent
   # half (link-code redeem). Routed so every URL the discovery documents
   # advertise resolves; the walkthrough demos live in stylish
   # (claim + link) and getgrocery (claim-rebind).

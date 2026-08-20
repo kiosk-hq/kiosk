@@ -54,7 +54,7 @@ hoteling is a Rails 8.1 app that speaks Kiosk. The following is the recorded out
 1. **Discover** — `GET /.well-known/kiosk.json` returns the hoteling issuer and surface.
 2. **Self-register** — generated an RSA-2048 keypair, then completed the proof-of-possession handshake: `GET /kiosk/auth/challenge` → signed the challenge as an RS256 JWS (`aud` = the hoteling issuer) → `POST /kiosk/auth/register {public_key:<pem>, signed:<jws>}` → HTTP 201 → `agent_id`, `user_id`, `access_token`. No existing account. No human login. No bot check.
 3. **Browse** — `GET /kiosk/properties` returned 5 hotel properties as a bare JSON array (ordered by name; the flow uses the first, Bosphorus Palace, id=4). `GET /kiosk/availability?property_id=4&check_in=2026-07-28&check_out=2026-07-31` returned available room types with nightly prices (ordered by price; the flow uses the first, Classic).
-4. **Reserve** — `POST /kiosk/reserve_room {property_id:4, room_type_id:<id>, check_in:"2026-07-28", check_out:"2026-07-31"}` → HTTP 200, and the body IS the result: `booking_id:<uuid>`, `total_cents:45000`. A TTL hold was created in `kiosk.reservations`.
+4. **Reserve** — `POST /kiosk/reserve_room {property_id:4, room_type_id:<id>, check_in:"2026-07-28", check_out:"2026-07-31"}` → HTTP 200, and the body IS the result: `booking_id:<uuid>` and `total_cents:45000`, plus the quote the cart must be signed against (`currency`, `nights`, `nightly_price_cents`) and a `pay_hint`. A TTL hold was created in `kiosk.reservations`.
 5. **Pay** — signed an AP2 intent mandate (`cap_amount_cents:45100`, `scope:"lodging"`, `iss:<issuer>`) and a cart mandate (`total_amount_cents:45000`, `line_items:[{sku:"Classic", qty:3, booking_id:<uuid>}]`, bound to the intent via `intent_mandate_id`) as RS256 JWS with the registered keypair, then `POST /kiosk/pay {intent_mandate_jws:…, cart_mandate_jws:…, payment_mandate_jws:…}` → `settled_amount_cents:45000`, `ok:true`.
 6. **Confirm** — `POST /kiosk/confirm_booking {booking_id:<uuid>}` → HTTP 200, `status:"confirmed"`, `confirmation_code:<uuid>`. The server verified ownership (Gate 1) and the settled mandate referencing this booking (Gate 2) before confirming. The code is stored on the booking row — it is the reference the guest gives at the desk, and `my_bookings` reports the same one afterwards.
 
@@ -132,27 +132,41 @@ with no macros above it is a helper the wire cannot see. `input_schema` and
 `output_schema` are REQUIRED on every verb: a declaration missing either raises
 as the class body is read, so the app does not boot.
 
+**The snippet below is ABRIDGED, not invented:** it is three of hoteling's five
+shipped queries (`search_hotels` and `hotel_detail` are left out), with each
+verb's full prose `description` and its per-property `description` lines elided
+and the argument guards left to the shipped file. Every field name, type and
+`required` list is the shipped one verbatim — read
+`kiosk-demo-hoteling/app/controllers/kiosk/hotels_controller.rb` for the whole
+thing.
+
 ```ruby
 # app/controllers/kiosk/hotels_controller.rb
 class Kiosk::HotelsController < ActionController::API
   include Kiosk::Query
 
-  description "Browse the hotels this operator takes bookings for."
+  description "Browse all available hotel properties. Each row carries a " \
+              "`property_id`; pass it to availability (and reserve_room) as `property_id`."
   input_schema  type: "object", additionalProperties: false, properties: {}, required: []
   output_schema type: "array",
                 items: {
                   type: "object", additionalProperties: false,
-                  properties: { id:   { type: "integer" },
-                                name: { type: "string" },
-                                city: { type: "string" } },
-                  required: %w[id name city],
+                  properties: { property_id: { type: "integer" },
+                                name:        { type: "string" },
+                                city:        { type: "string" } },
+                  required: %w[property_id name city],
                 }
   def properties
+    # `id` becomes `property_id` on the wire: a summary row's id field carries
+    # the SAME name as the param the next verb takes, so the assistant copies
+    # the key straight through instead of guessing they are the same thing.
     render json: Property.order(:name).pluck(:id, :name, :city)
-                         .map { |id, name, city| { id:, name:, city: } }
+                         .map { |id, name, city| { property_id: id, name:, city: } }
   end
 
-  description "Check which room types are free at one hotel for a date range."
+  description "Check room availability at a property for given dates. An EMPTY array " \
+              "means the property is SOLD OUT for those nights. Each row carries a " \
+              "`room_type_id`; pass it to reserve_room with the same `property_id`."
   input_schema type: "object", additionalProperties: false,
                required: %w[property_id check_in check_out],
                properties: {
@@ -163,35 +177,53 @@ class Kiosk::HotelsController < ActionController::API
   output_schema type: "array",
                 items: {
                   type: "object", additionalProperties: false,
-                  properties: { id:                  { type: "integer" },
+                  properties: { room_type_id:        { type: "integer" },
                                 name:                { type: "string" },
-                                nightly_price_cents: { type: "integer" } },
-                  required: %w[id name nightly_price_cents],
+                                nightly_price_cents: { type: "integer" },
+                                currency:            { type: "string" } },
+                  required: %w[room_type_id name nightly_price_cents currency],
                 }
   def availability
-    render json: RoomType.available_at(params[:property_id], params[:check_in], params[:check_out])
-                         .select(:id, :name, :nightly_price_cents)
+    # `free_for` is the availability predicate, and `reserve_room` sells against
+    # the same scope, so the offer and the sale cannot disagree. `currency` rides
+    # on every row so an assistant knows to sign its cart in EUR.
+    render json: RoomType.where(property_id: params[:property_id])
+                         .free_for(params[:property_id], params[:check_in], params[:check_out])
+                         .order(:nightly_price_cents)
+                         .pluck(:id, :name, :nightly_price_cents)
+                         .map { |id, name, cents|
+                           { room_type_id: id, name:, nightly_price_cents: cents, currency: "eur" }
+                         }
   end
 
-  description "List the bookings belonging to the authenticated principal."
+  description "List this principal's hotel bookings (scoped to authenticated user). " \
+              "Each row carries a `booking_id`; pass it to confirm_booking as `booking_id`. " \
+              "A confirmed row also carries the `confirmation_code` the hotel has on file."
   input_schema  type: "object", additionalProperties: false, properties: {}, required: []
   output_schema type: "array",
                 items: {
                   type: "object", additionalProperties: false,
-                  properties: { id:           { type: "string", format: "uuid" },
-                                property_id:  { type: "integer" },
-                                room_type_id: { type: "integer" },
-                                check_in:     { type: "string" },
-                                check_out:    { type: "string" },
-                                total_cents:  { type: "integer" },
-                                status:       { type: "string" } },
-                  required: %w[id property_id room_type_id check_in check_out
-                               total_cents status],
+                  properties: { booking_id:        { type: "string" },
+                                property_id:       { type: "integer" },
+                                room_type_id:      { type: "integer" },
+                                check_in:          { type: "string" },
+                                check_out:         { type: "string" },
+                                total_cents:       { type: "integer" },
+                                status:            { type: "string" },
+                                confirmation_code: { type: %w[string null] } },
+                  required: %w[booking_id property_id room_type_id check_in check_out
+                               total_cents status confirmation_code],
                 }
   def my_bookings
     render json: Booking.owned_by_current_principal
-                        .select(:id, :property_id, :room_type_id, :check_in, :check_out,
-                                :total_cents, :status)
+                        .order(created_at: :desc)
+                        .pluck(:id, :property_id, :room_type_id, :check_in, :check_out,
+                               :total_cents, :status, :confirmation_code)
+                        .map { |id, property_id, room_type_id, check_in, check_out,
+                                total_cents, status, confirmation_code|
+                          { booking_id: id, property_id:, room_type_id:, check_in:, check_out:,
+                            total_cents:, status:, confirmation_code: }
+                        }
   end
 end
 ```
@@ -206,13 +238,20 @@ to read another principal's bookings.
 A controller declares queries OR actions, never both — the verb it is reached by
 is a property of the class.
 
+Abridged the same way as the read snippet above: two of hoteling's three shipped
+actions (`payment_setup` is left out), with the prose `description` and the
+per-property `description` lines elided. Field names, types and `required` lists
+are the shipped ones verbatim.
+
 ```ruby
 # app/controllers/kiosk/reservations_controller.rb
 class Kiosk::ReservationsController < ActionController::API
   include Kiosk::Action
+  include KioskRefusals   # the app's own concern: turns an Operation result into a render
 
-  description "Hold a room for the authenticated principal. Creates a TTL hold, " \
-              "not a confirmed stay — confirm_booking finishes it."
+  description "Reserve a room for the authenticated principal (creates a TTL hold), " \
+              "not a confirmed stay — confirm_booking finishes it. Sign your AP2 cart " \
+              "mandate at the quoted total with a line_item naming the returned booking_id."
   input_schema type: "object", additionalProperties: false,
                required: %w[property_id room_type_id check_in check_out],
                properties: {
@@ -222,16 +261,34 @@ class Kiosk::ReservationsController < ActionController::API
                  check_out:    { type: "string", format: "date" },
                }
   output_schema type: "object", additionalProperties: false,
-                properties: { booking_id:  { type: "string" },
-                              total_cents: { type: "integer" } },
-                required: %w[booking_id total_cents]
+                properties: { booking_id:          { type: "string" },
+                              total_cents:         { type: "integer" },
+                              currency:            { type: "string" },
+                              nights:              { type: "integer" },
+                              nightly_price_cents: { type: "integer" },
+                              pay_hint:            { type: "string" } },
+                required: %w[booking_id total_cents currency nights
+                             nightly_price_cents pay_hint]
   def reserve_room
-    hold = ReserveRoom.call(**reservation_params)   # INSERT booking + kiosk.reservations TTL row
-    render json: { booking_id: hold.booking_id, total_cents: hold.total_cents }
+    # Four lines: read the arguments off the request, hand them to an Operation,
+    # render what it answers. The INSERT + the kiosk.reservations TTL row + the
+    # inventory guard live in app/operations/, so a console or a rake task can
+    # reuse them. The two identity values come from the identity the WIRE
+    # resolved, never from arguments — which is what makes a forged `user_id`
+    # in the body inert.
+    render_operation ReserveRoomOperation.call(
+      principal_id: kiosk_identity.user_id,
+      agent_id:     kiosk_identity.agent_id,
+      property_id:  params[:property_id],
+      room_type_id: params[:room_type_id],
+      check_in:     params[:check_in],
+      check_out:    params[:check_out],
+    )
   end
 
-  description "Confirm a held booking. Requires a settled payment mandate that " \
-              "references this booking, and returns the hotel's confirmation code."
+  description "Confirm a reserved booking (requires a payment mandate referencing this " \
+              "booking). Returns the durable `confirmation_code` the hotel stores against " \
+              "the booking — my_bookings lists the same code afterwards."
   input_schema  type: "object", additionalProperties: false,
                 required: %w[booking_id],
                 properties: { booking_id: { type: "string", format: "uuid" } }
@@ -241,15 +298,17 @@ class Kiosk::ReservationsController < ActionController::API
                               confirmation_code: { type: "string" } },
                 required: %w[booking_id status confirmation_code]
   def confirm_booking
-    # Gate 1: ownership — booking.user_id must equal kiosk.current_user_id() AND status='reserved'
-    # Gate 2: payment  — a settled payment_mandate whose cart line_items @> [{booking_id:}]
-    # A refusal is Rails' idiom, not a Kiosk class:
+    # ConfirmBookingOperation runs both gates inside one transaction:
+    #   Gate 1: ownership — booking.user_id must equal kiosk.current_user_id() AND status='reserved'
+    #   Gate 2: payment  — a settled payment_mandate whose cart line_items @> [{booking_id:}]
+    # The principal is not passed in: both gates express it as a WHERE predicate
+    # over kiosk.current_user_id(), so it is un-forgeable without naming it in
+    # Ruby at all. A refusal is Rails' idiom, not a Kiosk class — render_operation
+    # turns a refused result into
     #   render json: { error: { code: "forbidden", … } }, status: :forbidden
-    #   — the wire turns that into an RFC 9457 problem document whose
+    #   — and the wire turns that into an RFC 9457 problem document whose
     #     top-level `code` is the token an assistant branches on
-    booking = ConfirmBooking.call(booking_id: params[:booking_id])
-    render json: { booking_id: booking.id, status: "confirmed",
-                   confirmation_code: booking.confirmation_code }
+    render_operation ConfirmBookingOperation.call(booking_id: params[:booking_id])
   end
 end
 ```

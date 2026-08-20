@@ -1283,6 +1283,77 @@ OPERATION_RESULT = "app/operations/operation_result.rb"
             "kiosk-server (K-792); behaviour one verb needs goes into that verb's Operation."
 end
 
+# ── No demo initializer patches a Rails framework class (K-504) ──────────────
+#
+# `ActiveRecord::Migration.include(Kiosk::RLS::DSL)` sat in FOUR of these
+# initializers — atablefor, getgrocery, hoteling, skooti — in four hand-written
+# variants, and in the kiosk-rls README as the documented way to adopt the gem.
+# It is an APPLICATION monkey-patching a FRAMEWORK class on a GEM's behalf: the
+# host carries a line it did not author, for a capability it does not own, at a
+# load-order position nothing verifies. kiosk-rls now injects the migration
+# verbs itself, from `Kiosk::RLS::Railtie` — which is the extension point Rails
+# provides for exactly this, and which getgrocery's `demo:rls` proves under a
+# real boot before it applies its overlay.
+#
+# So the patch must not come back, in any demo, for any framework class. This
+# rule is deliberately wider than the one line it was written for: the next
+# `ActionController::Base.include(...)` or `ActiveSupport::TimeZone.prepend(...)`
+# in an initializer is the same mistake with a different constant, and a gem
+# (or a concern in app/) is the answer every time.
+#
+# NOT forbidden: patching a KIOSK class. `Kiosk::Configuration.include(...)` is
+# the gem's own documented extension idiom — kiosk-rls adds `system_role` to the
+# configuration object exactly that way — so skooti extending it with the
+# demo's `unlock_signing_key` accessor is adoption, not a framework patch.
+RAILS_FRAMEWORK_NAMESPACES = %w[
+  ActiveRecord ActiveModel ActiveSupport ActiveJob ActiveStorage
+  ActionController ActionDispatch ActionView ActionMailer ActionCable
+  Rails
+].freeze
+
+FRAMEWORK_PATCH = /
+  ^[ \t]*
+  (?<constant>(?:#{RAILS_FRAMEWORK_NAMESPACES.join("|")})(?:::[A-Za-z0-9_]+)*)
+  \s*\.\s*
+  (?<verb>include|prepend|extend|class_eval|module_eval|define_method|alias_method|remove_method)
+  \b
+/x
+
+initializer_demos = 0
+operator_demos.each do |demo|
+  paths = Dir[File.join(ROOT, demo, "config/initializers", "*.rb")].sort
+  if paths.empty?
+    errors << "#{short.(demo)}: ships no config/initializers/*.rb at all — an operator demo " \
+              "configures Kiosk in one, so either the demo is broken or this check has gone " \
+              "blind to where initializers live (K-504)."
+    next
+  end
+  initializer_demos += 1
+
+  paths.each do |path|
+    rel = path.delete_prefix("#{File.join(ROOT, demo)}/")
+    File.read(path).each_line.with_index(1) do |line, lineno|
+      next if line.lstrip.start_with?("#")
+
+      m = FRAMEWORK_PATCH.match(line)
+      next if m.nil?
+
+      errors << "#{short.(demo)}: #{rel}:#{lineno} calls #{m[:constant]}.#{m[:verb]} — an " \
+                "application must not patch a Rails framework class from its configuration. " \
+                "This is the K-504 shape: the four demos that carried " \
+                "`ActiveRecord::Migration.include(Kiosk::RLS::DSL)` are now served by " \
+                "kiosk-rls's own railtie. Whatever this line adds belongs in a railtie inside " \
+                "the gem that owns the behaviour, or in an ordinary Rails concern under app/."
+    end
+  end
+end
+
+if initializer_demos.zero? && errors.empty?
+  errors << "check-demo-copies: the K-504 framework-patch rule scanned NO initializers — " \
+            "operator_demos is empty or config/initializers/ has moved. A rule that inspects " \
+            "nothing passes everything."
+end
+
 if errors.empty?
   guarded = COPIES.count { |_, e| e[:rule] != :per_demo }
   tpl_checked = GENERATOR_TEMPLATES.count { |_, e| !e[:not_compared] }
@@ -1292,7 +1363,8 @@ if errors.empty?
        "#{operator_demos.size} operator demos (no exceptions available), " \
        "#{MIGRATION_PAIRS.size} cross-demo migration pairs (#{pair_drift} with drift pending triage), " \
        "telemetry wired in #{(dups['app/services/demo_telemetry.rb'] || {}).size} demos, " \
-       "OperationResult subclassed from kiosk-server in #{(dups[OPERATION_RESULT] || {}).size} demos"
+       "OperationResult subclassed from kiosk-server in #{(dups[OPERATION_RESULT] || {}).size} demos, " \
+       "no Rails-framework patching in the initializers of #{initializer_demos} operator demos"
   exit 0
 end
 

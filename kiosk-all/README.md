@@ -27,7 +27,10 @@ That's it for the data plane. Optional pieces you add per stack:
 gem "kiosk-rls"           # opt-in: DB-level RLS defense-in-depth
 ```
 
-See the kiosk-rls README for wiring (`Kiosk::RLS::DSL`, `enable_rls_on`, roles).
+That line is the whole installation: kiosk-rls's railtie puts `enable_rls_on`
+and its siblings on `ActiveRecord::Migration` itself. See the kiosk-rls README
+for the DSL and for the role posture (`app_role`, `system_role`,
+`enforce_db_role`), which is the part you do configure.
 
 ### Test harness — pick one
 

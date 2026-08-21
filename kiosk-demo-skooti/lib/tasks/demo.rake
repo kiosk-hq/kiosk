@@ -24,7 +24,7 @@ namespace :demo do
     # Kiosk.configuration carrier and self-configures its load path, so it must
     # NOT be required into the booted Rails process (where the real
     # Kiosk::Configuration is present). Exit status propagates the pass/fail.
-    sh "ruby #{Rails.root.join('lib/rental_token_issuer_kat.rb')}"
+    sh "ruby #{Rails.root.join('script/rental_token_issuer_kat.rb')}"
   end
 
   desc "Create + load schema + seed the demo database (idempotent)."

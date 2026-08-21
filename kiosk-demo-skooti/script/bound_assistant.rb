@@ -11,11 +11,11 @@ require_relative "devise_session"
 # equihash_register moved out of the Rails app load path into the
 # flow-driver home (K-659). This file is flow-only too and belongs
 # beside it; that move is K-856.
-require_relative "../script/equihash_register"
+require_relative "equihash_register"
 
 # The ONE way a demo driver obtains an AGENT principal bound to a seeded human.
 #
-# This is the agent-side twin of lib/devise_session.rb, and it exists for the
+# This is the agent-side twin of script/devise_session.rb, and it exists for the
 # same reason (T-104, from K-660). Drivers used to hand themselves a principal
 # by writing one down — `agent:u-<uuid>:a-<uuid>:r-customer` — which a dev-only
 # parser in the demo turned into an authenticated identity at any role. That

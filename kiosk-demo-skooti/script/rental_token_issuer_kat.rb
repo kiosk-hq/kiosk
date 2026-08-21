@@ -9,7 +9,7 @@
 # firmware/host_test.c and firmware/skooti_lock.ino must reproduce, plus the
 # issue/verify contract and the domain-separation tag gate.
 #
-# Run it directly (`ruby lib/rental_token_issuer_kat.rb`) or via the wired
+# Run it directly (`ruby script/rental_token_issuer_kat.rb`) or via the wired
 # rake task (`rake demo:kat`). Exit status is nonzero on any failed assertion.
 #
 # Known-answer vector (firmware host-test fixtures — MUST NOT CHANGE, and the
@@ -60,10 +60,11 @@ unless defined?(Kiosk) && Kiosk.respond_to?(:configuration)
   end
 end
 
-require "dev_unlock_key"
-# RentalTokenIssuer is app code and lives under app/services since K-502; this
-# KAT runs as bare `ruby lib/rental_token_issuer_kat.rb`, with no Rails and no
-# autoloader, so it names the file itself.
+# This KAT runs as bare `ruby script/rental_token_issuer_kat.rb`, with no Rails
+# and no autoloader, so it NAMES both files it needs rather than relying on a
+# load path Rails happens to have set up: RentalTokenIssuer is app code and
+# lives under app/services (K-502), DevUnlockKey is still in lib/ (K-861).
+require File.expand_path("../lib/dev_unlock_key", __dir__)
 require File.expand_path("../app/services/rental_token_issuer", __dir__)
 
 module RentalTokenIssuerKAT

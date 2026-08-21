@@ -26,7 +26,7 @@
 #
 # TWO diners, not one, because the adversarial drivers need two DISTINCT
 # account holders on either side of the isolation boundary:
-# script/redteam_suite.rb binds an assistant to each (lib/bound_assistant.rb)
+# script/redteam_suite.rb binds an assistant to each (script/bound_assistant.rb)
 # and asserts that neither can read or cancel the other's booking. Their UUIDs
 # are stable so a driver — or a psql ground-truth check — can name an account
 # without a lookup.

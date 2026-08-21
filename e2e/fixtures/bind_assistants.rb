@@ -17,7 +17,7 @@
 # mechanism is how the seventh one drifts.
 #
 # Prints ONE JSON line: {alice_agent, alice_token, bob_agent, bob_token}.
-require_relative "../../kiosk-demo-stylish/lib/bound_assistant"
+require_relative "../../kiosk-demo-stylish/script/bound_assistant"
 require "json"
 
 SERVER   = ENV.fetch("SERVER_URL")

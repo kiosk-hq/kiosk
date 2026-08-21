@@ -9,7 +9,7 @@ require "openssl"
 #
 # It is a fixed keypair (not per-boot ephemeral) so that:
 #   1. Rental token signatures are stable across process restarts.
-#   2. The known-answer vector (lib/rental_token_issuer_kat.rb) reproduces exactly.
+#   2. The known-answer vector (script/rental_token_issuer_kat.rb) reproduces exactly.
 #   3. The firmware host-test (T3) can hard-code the public key.
 #
 # DEV/TEST ONLY (K-686). The private half ships world-readable in this public
@@ -24,7 +24,7 @@ require "openssl"
 # Rails config (the K-681 trap on prove's ProveKey): its remaining callers are
 # BARE-RUBY drivers with no Rails at all — script/rental_flow.rb and
 # script/kyc_flow.rb provision their LockSim with the dev public half, and
-# lib/rental_token_issuer_kat.rb signs with the dev private half. Reaching for
+# script/rental_token_issuer_kat.rb signs with the dev private half. Reaching for
 # Rails.configuration here would make all three die outside a booted app.
 #
 # DevUnlockKey.private_key         → OpenSSL::PKey::PKey (Ed25519, private)

@@ -43,7 +43,7 @@ require "openssl"
 require "securerandom"
 require "base64"
 
-require_relative "../lib/devise_session"
+require_relative "devise_session"
 
 SERVER = ENV.fetch("SERVER_URL")
 ISSUER = ENV.fetch("KIOSK_ISSUER")

@@ -30,7 +30,7 @@
 # — which a dev-only parser inside the demo's own agent-IdP turned into an
 # authenticated identity at whatever role the string asked for. That parser is
 # deleted and nothing replaced it, so each principal here runs the shipped
-# ceremony instead (lib/bound_assistant.rb: Equihash-tolled `/auth/register` →
+# ceremony instead (script/bound_assistant.rb: Equihash-tolled `/auth/register` →
 # the human's real Devise sign-in → `/auth/link` → `/auth/claim`). A and B hold
 # SEPARATE Devise sessions because they are separate humans.
 #
@@ -58,7 +58,7 @@ require "json"
 require "net/http"
 require "uri"
 
-require_relative "../lib/bound_assistant"
+require_relative "bound_assistant"
 
 SERVER = ENV.fetch("SERVER_URL")
 ISSUER = ENV.fetch("KIOSK_ISSUER", SERVER)

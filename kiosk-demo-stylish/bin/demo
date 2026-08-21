@@ -51,7 +51,7 @@ run() { curl -sS -X POST "$SERVER_URL/kiosk/$2" -H "Authorization: Bearer $1" \
 
 # Bind one assistant to one seeded human and print its access token.
 #
-# There is no shortcut left to take: lib/bound_assistant.rb runs the shipped
+# There is no shortcut left to take: script/bound_assistant.rb runs the shipped
 # ceremony over real HTTP — the Equihash-tolled /kiosk/auth/register, the
 # human's own /users/sign_in form, /kiosk/auth/link, /kiosk/auth/claim — and
 # the token that comes back is one this provider minted for a key it saw.
@@ -60,7 +60,7 @@ run() { curl -sS -X POST "$SERVER_URL/kiosk/$2" -H "Authorization: Bearer $1" \
 bind() {
   SERVER_URL="$SERVER_URL" KIOSK_ISSUER="$SERVER_URL" \
   HOLDER_EMAIL="$1" HOLDER_PASSWORD="$DEMO_PASSWORD" \
-    bundle exec ruby -r"$APP_ROOT/lib/bound_assistant" -e '
+    bundle exec ruby -r"$APP_ROOT/script/bound_assistant" -e '
       puts bind_assistant(server:   ENV.fetch("SERVER_URL"),
                           issuer:   ENV.fetch("KIOSK_ISSUER"),
                           email:    ENV.fetch("HOLDER_EMAIL"),

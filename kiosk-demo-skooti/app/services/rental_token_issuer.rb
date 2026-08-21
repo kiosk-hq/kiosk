@@ -78,7 +78,7 @@ module RentalTokenIssuer
     # Reference-verifier surface: the production unlock path never calls this —
     # the scooter lock (lib/lock_sim.rb / the firmware) does the verification.
     # This Ruby verifier exists solely as the known-answer-vector anchor the KAT
-    # (lib/rental_token_issuer_kat.rb) runs the firmware's expected wire vector
+    # (script/rental_token_issuer_kat.rb) runs the firmware's expected wire vector
     # through, so the byte-exact contract stays cross-checked without the lock.
     #
     # @param token [String] wire token

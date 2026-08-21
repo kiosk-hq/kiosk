@@ -32,7 +32,7 @@
 #
 # THE TWO PRINCIPALS ARE EARNED, NOT ASSERTED (T-104). Alice and Bob are bound
 # through the shipped ceremony — Equihash-tolled `/auth/register` → the human's
-# real Devise sign-in → `/auth/link` → `/auth/claim` (lib/bound_assistant.rb) —
+# real Devise sign-in → `/auth/link` → `/auth/claim` (script/bound_assistant.rb) —
 # because the dev-only parser that used to turn a written-down
 # `agent:u-…:a-…:r-…` string into an identity at any role is deleted. That is
 # also what promotes the SelfAssertedTokenForgery beat below from an in-process
@@ -52,7 +52,7 @@ require "net/http"
 require "securerandom"
 require "uri"
 
-require_relative "../lib/bound_assistant"
+require_relative "bound_assistant"
 
 SERVER = ENV.fetch("SERVER_URL")
 ISSUER = ENV.fetch("KIOSK_ISSUER", SERVER)

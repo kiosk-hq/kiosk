@@ -57,7 +57,7 @@ require "net/http"
 require "securerandom"
 require "uri"
 
-require_relative "../lib/bound_assistant"
+require_relative "bound_assistant"
 
 SERVER = ENV.fetch("SERVER_URL")
 ISSUER = ENV.fetch("KIOSK_ISSUER", SERVER)
@@ -71,7 +71,7 @@ ISSUER = ENV.fetch("KIOSK_ISSUER", SERVER)
 # string like that authenticates NOTHING (asserted below, as its own beat).
 #
 # So both principals run the full shipped ceremony instead
-# (lib/bound_assistant.rb): Equihash-tolled `/auth/register` → the diner's real
+# (script/bound_assistant.rb): Equihash-tolled `/auth/register` → the diner's real
 # Devise sign-in → `/auth/link` → `/auth/claim`. That costs a couple of
 # sub-second proofs and buys the thing this suite is FOR — every cross-owner
 # refusal below is now a refusal between two principals the shipped code

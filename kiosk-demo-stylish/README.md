@@ -93,7 +93,7 @@ assertions cannot go ungated and unexplained.
 | `app/controllers/kiosk/appointments_controller.rb` | The `book_appointment` action — same shape with `include Kiosk::Action`; refusals are plain `render json:, status:` naming a wire error code, which the wire re-renders as an RFC 9457 problem document |
 | `config/initializers/devise.rb` | Minimal Devise setup — the human session that approves assistant links |
 | *(no `c.agent_idp`)* | Deliberate, and the point of the line's absence. An assistant authenticates with the kiosk-pop JWT this engine minted at `/kiosk/auth/register`, `/kiosk/auth/login` or the binding ceremony, verified by the `DefaultAgentIdp` the engine has always shipped as its fallback. The hand-copied `stub_idp.rb` / `jwt_or_stub_idp.rb` pair that used to sit here — and the dev-only `agent:u-…:a-…:r-…` parser it existed to bolt on — are deleted |
-| `lib/bound_assistant.rb` / `lib/devise_session.rb` | The ONE way a driver obtains an AGENT principal and a HUMAN one. Both run the shipped ceremony over real HTTP; both are hand-copied across the demos and held byte-identical by `bin/check-demo-copies` |
+| `script/bound_assistant.rb` / `script/devise_session.rb` | The ONE way a driver obtains an AGENT principal and a HUMAN one. Both run the shipped ceremony over real HTTP; both are hand-copied across the demos and held byte-identical by `bin/check-demo-copies` |
 | `script/binding_flow.rb` | Account-binding driver: claim ceremony over the real Devise session, link-code redeem, unlink |
 | `script/roles_flow.rb` | roles-from-IdP driver: the owner links an assistant + a customer signs in, `salon_calendar` gates on the inherited role |
 | `bin/demo` | The walkthrough — POSIX shell, curl-driven, no Ruby in the loop |

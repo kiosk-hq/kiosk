@@ -1020,7 +1020,7 @@ self_asserted_beat = self_asserted_token_forgery.call
 # no human at all — POST /kiosk/auth/link answers 401 — and the positive control
 # is the real thing: the seeded rider signs in at /users/sign_in and the SAME
 # endpoint answers her.
-require_relative "../lib/devise_session"
+require_relative "devise_session"
 
 self_asserted_user_bearer_forgery = lambda do
   anon = DeviseSession.new(BASE_URL)

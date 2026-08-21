@@ -14,7 +14,7 @@
 # This is the HEADLESS half of the fleet's two principals: registration mints
 # the assistant its own account row, so the tour needs no seeded human and no
 # password. The other half — a human diner linking an assistant to THEIR account
-# — is `rake demo:binding`, and lib/bound_assistant.rb is how a driver runs it.
+# — is `rake demo:binding`, and script/bound_assistant.rb is how a driver runs it.
 #
 # Prints the access token on stdout and NOTHING else, so `$( )` captures a
 # usable header value; aborts non-zero with the server's own answer when the

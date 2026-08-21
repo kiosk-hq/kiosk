@@ -11,7 +11,7 @@ require "jwt"; require "json"; require "net/http"; require "uri"; require "opens
 # cookie-jar-and-CSRF helper is the demos' single copy — reached here rather
 # than duplicated into e2e/fixtures, because an eighth copy of a mechanism is
 # how the seventh one drifts.
-require_relative "../../kiosk-demo-stylish/lib/devise_session"
+require_relative "../../kiosk-demo-stylish/script/devise_session"
 
 SERVER   = ENV.fetch("SERVER_URL")
 ISSUER   = ENV.fetch("KIOSK_ISSUER")

@@ -3,7 +3,19 @@
 A free classifieds board, Kiosk-enabled. This is the demo that proves Kiosk is
 **not only for commerce**: it exercises the full query + action + `schema` +
 identity-binding surface with **no money on the wire at all** — no `pay` verb,
-no PSP adapter, no mandate/settlement tables, no `payment_setup_required` gate.
+no PSP adapter, no `payment_setup_required` gate, and `pay` absent from
+`capabilities`, `agents.json` and `agents.txt`.
+
+The AP2 mandate and settlement TABLES are present and empty, and that is the
+canonical install rather than an oversight. Since the MIGRATIONS-FROM-SCRATCH
+decision every demo runs the same unmodified `rails g kiosk:install` and gets
+the same six migrations, so philslist carries `kiosk.reservations`, the four
+mandate/settlement tables and `kiosk.kyc_attributes` alongside the identity
+ones — `check-demo-copies`'s `ONE_SET_EVERYWHERE` rule makes a per-demo subset
+a build failure, because per-demo subsets are how the fleet drifted before.
+Nothing writes them here: there is no `pay` route and no PSP, so an empty
+`cart_mandates` on this host means what it says.
+
 The same wire contract the commerce demos use for checkout carries a plain
 services/data use here.
 

@@ -27,7 +27,10 @@ Demonstrates:
 - **Attribution in a shared space** — each todo records the AI assistant that added it
   (`created_by_agent_id`): "who added the tent? — Bob's assistant."
 - **`/.well-known/kiosk.json` with `pay` absent** — no `payment_provider`, no
-  `/kiosk/pay` route, no mandate/settlement tables (shared with philslist).
+  `/kiosk/pay` route, no PSP adapter (shared with philslist). The mandate and
+  settlement tables ARE installed and stay empty: every demo runs the same
+  unmodified `kiosk:install`, so the absence of payments here is the absence of
+  a route and a provider, not of schema.
 - **Full human web UI** (NOT api_only) — the tutorial-plain scaffold (lists,
   todos, invite, the manage-assistants page) is the video centerpiece.
 
@@ -145,7 +148,7 @@ assertions cannot go ungated and unexplained.
 
 | Path | What's there |
 |---|---|
-| `db/migrate/` | The pruned canonical kiosk migrations — **no** reservations/mandates/settlements — plus `create_tudu_domain` (lists/memberships/todos/invites) |
+| `db/migrate/` | The canonical kiosk migrations, the full six — every demo ships the identical `kiosk:install` output, so reservations/mandates/settlements are installed here and never written — plus `create_tudu_domain` (lists/memberships/todos/invites) |
 | `app/models/{user,list,membership,todo,invite}.rb` | `User` is the account principal (Devise, reused for headless assistant accounts); `memberships` is the many-to-many access surface |
 | `config/initializers/kiosk.rb` | `Kiosk.configure` (NO `payment_provider`) + the `assistant_creation`/`assistant_claimed` hooks — configuration only; it names the two handler controllers, it does not contain them |
 | `app/controllers/kiosk/household_controller.rb` | The `whoami` / `my_lists` / `list_todos` / `list_members` queries — an ordinary Rails controller with `include Kiosk::Handler`, each declaration marked `kind :query`. Not routable: handlers are reached only through the wire |

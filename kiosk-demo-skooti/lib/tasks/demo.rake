@@ -3,7 +3,7 @@
 # Kiosk demo orchestration for kiosk-demo-skooti (Ed25519 offline token).
 # Tasks:
 #
-#   rake demo:setup      idempotent db:drop / create / migrate / seed
+#   rake demo:setup      idempotent db:drop / create / schema:load / seed
 #   rake demo:kat        DB-free known-answer test for the RentalTokenIssuer
 #                        demo lib (byte-exact wire vector the firmware mirrors)
 #   rake demo:rideflow   boots the server, runs script/rental_flow.rb (no-human full
@@ -333,20 +333,6 @@ namespace :demo do
       end
     end
 
-    # ── RUN 4: C2 — unpaid second reservation → 403 ───────────────────────
-    # A fresh reservation with no payment — Gate 2 must reject.
-    puts "\n══ RUN 4: C2 — unpaid second reservation → 403 ══"
-    boot_server.call do
-      result = run_flow.call("SKIP_PAY" => "1")
-
-      if result["http_start_rental"] == 403
-        puts "  OK  C2 unpaid-reservation: http_start_rental == 403"
-      else
-        failures << "c2_unpaid: http_start_rental expected 403, got #{result["http_start_rental"].inspect}"
-        puts "  FAIL  C2 unpaid-reservation: expected 403, got #{result["http_start_rental"].inspect}"
-      end
-    end
-
     # RUN 5 (C3 — re-start_rental on an already-active reservation) was
     # removed here (K-697): it minted a NEW principal each time and called
     # start_rental on the INNER run's own reservation, so Gate 1's ownership
@@ -359,15 +345,19 @@ namespace :demo do
     # claimed — a spent/active resource cannot be re-activated by the SAME
     # principal — is covered soundly by demo:redteam's
     # Kiosk::Redteam::Scenarios::SpentResourceReuse (script/redteam_suite.rb),
-    # which drives ONE principal against the SAME owned_ref twice. See K-712
-    # for the pre-existing RUN-numbering gap (RUN 3 absent, RUN 4 duplicate
-    # of RUN 2) this leaves unchanged.
+    # which drives ONE principal against the SAME owned_ref twice.
+    #
+    # The RUN numbering it left ragged is closed (K-712d): there had never been
+    # a RUN 3, and RUN 4 ("C2 — unpaid second reservation") was the SAME call
+    # and the SAME assertion as RUN 2 with the label strings changed, so it
+    # bought a second server boot and a second Equihash registration for a
+    # property already proved. The runs below are 1, 2, 3 and contiguous.
 
-    # ── RUN 6: Query-verb assertions — scooters_available + per-user my_reservations ──
+    # ── RUN 3: Query-verb assertions — scooters_available + per-user my_reservations ──
     # Proves: (a) query scooters_available returns SK-001;
     #         (b) query my_reservations after reserve returns exactly the
     #             principal's reservation (app-layer per-user isolation, no RLS).
-    puts "\n══ RUN 6: Query-verb assertions (scooters_available + my_reservations per-user) ══"
+    puts "\n══ RUN 3: Query-verb assertions (scooters_available + my_reservations per-user) ══"
     boot_server.call do
       require "net/http"
       require "openssl"

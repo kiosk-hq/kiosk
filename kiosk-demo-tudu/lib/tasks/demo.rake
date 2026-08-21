@@ -33,7 +33,20 @@ def tudu_boot_server(log:, port:, extra_env: {})
     break if ready
     sleep 1
   end
-  abort "Server did not become ready — see #{log}" unless ready
+  unless ready
+    # K-712e: reap the server WE spawned before leaving. The abort used to fire
+    # here with `pid` known only to this method — every caller registers its
+    # cleanup on the value this method RETURNS, so on a readiness failure the
+    # `rails s` outlived the run and held the port against the next one. The
+    # caller's own `ensure`/`at_exit` cannot help: it never received a pid.
+    begin
+      Process.kill("TERM", pid)
+      Process.wait(pid)
+    rescue Errno::ESRCH, Errno::ECHILD
+      nil
+    end
+    abort "Server did not become ready — see #{log}"
+  end
   puts "  Server up at #{server_url}"
   [pid, server_url]
 end
@@ -81,7 +94,12 @@ namespace :demo do
         env_key: "RAILS_MASTER_KEY", raise_if_missing_key: true,
       ).write("secret_key_base: #{SecureRandom.hex(64)}")
     end
-    sh "bundle exec rails db:drop db:create db:migrate db:seed"
+    # db:schema:load, NOT db:migrate (K-712a): this task's own description and
+    # the comment above both say schema:load, and under
+    # `schema_format = :sql` (config/application.rb) `db:migrate` RE-DUMPS the
+    # tracked db/structure.sql, so running demo:setup dirtied the worktree.
+    # The canonical structure.sql is the source of truth, as in every sibling.
+    sh "bundle exec rails db:drop db:create db:schema:load db:seed"
   end
 end
 

@@ -20,12 +20,12 @@ namespace :demo do
        "IF NOT EXISTS (SELECT FROM pg_roles WHERE rolname = 'app_role') " \
        "THEN CREATE ROLE app_role NOLOGIN; END IF; END \\$\\$;\" >/dev/null"
     sh "psql -d postgres -tAc 'GRANT app_role TO CURRENT_USER' >/dev/null"
-    structure_sql = File.expand_path("../../db/structure.sql", __dir__)
-    if File.exist?(structure_sql)
-      sh "bundle exec rails db:drop db:create db:schema:load db:seed"
-    else
-      sh "bundle exec rails db:drop db:create db:migrate db:seed"
-    end
+    # db:schema:load unconditionally (K-712b): db/structure.sql is TRACKED in
+    # every demo, so the db:migrate arm this used to branch to was unreachable
+    # in every checkout — and under `schema_format = :sql` it would have
+    # re-dumped that tracked file, dirtying the worktree. The canonical
+    # structure.sql is the source of truth.
+    sh "bundle exec rails db:drop db:create db:schema:load db:seed"
   end
 
   desc "Boot the server, run script/hoteling_flow.rb end-to-end (happy + payment-gate negative), then the " \

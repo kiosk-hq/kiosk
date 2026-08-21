@@ -46,9 +46,10 @@ module ProveBrokerBoot
 
   # Boot the broker for the duration of the block. Yields a hash of the env vars
   # skooti + the drivers must carry:
-  #   { broker_url:, skooti_env: {...}, driver_env: {...} }
-  # skooti_env is merged into skooti's server spawn; driver_env into the
-  # flow/redteam driver subprocess.
+  #   { broker_url:, wiring: {...} }
+  # wiring is merged into skooti's server spawn AND the flow/redteam driver env.
+  # (K-712k: this said `skooti_env:` / `driver_env:`, two keys the yield has
+  # never produced. The getgrocery sibling has always documented it correctly.)
   #
   # @param skooti_host [String] the host skooti binds/serves on (for the broker's
   #   callback allow-list AND the callback_url skooti sends at intake).

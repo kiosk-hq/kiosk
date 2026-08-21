@@ -41,9 +41,15 @@ def get_json(path, bearer: nil)
   [res.code.to_i, (JSON.parse(res.body) rescue {})]
 end
 
-require_relative "equihash_register"  # for equihash_solve
-
 # ── Register a fresh agent (Equihash PoW gate: 1 proof) ──────────────────────
+#
+# Only `equihash_solve` is taken from the shared helper; the handshake below is
+# hand-rolled, for the reason both siblings state verbatim (K-712j): this file's
+# get_json/post_json take a `bearer:` kwarg and relative paths, not the
+# (url, body, headers) shape `equihash_register` drives. getgrocery and hoteling
+# answer that by handing the helper full-URL adapter lambdas; this copy inlines
+# the four calls instead, and either is fine — what was missing was saying so.
+require_relative "equihash_register"  # for equihash_solve
 
 key = OpenSSL::PKey::RSA.generate(2048)
 pem = key.public_key.to_pem

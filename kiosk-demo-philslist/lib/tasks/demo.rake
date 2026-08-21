@@ -37,7 +37,20 @@ def philslist_boot_server(log:, port:, extra_env: {})
     break if ready
     sleep 1
   end
-  abort "Server did not become ready — see #{log}" unless ready
+  unless ready
+    # K-712e: reap the server WE spawned before leaving. The abort used to fire
+    # here with `pid` known only to this method — every caller registers its
+    # cleanup on the value this method RETURNS, so on a readiness failure the
+    # `rails s` outlived the run and held the port against the next one. The
+    # caller's own `ensure`/`at_exit` cannot help: it never received a pid.
+    begin
+      Process.kill("TERM", pid)
+      Process.wait(pid)
+    rescue Errno::ESRCH, Errno::ECHILD
+      nil
+    end
+    abort "Server did not become ready — see #{log}"
+  end
   puts "  Server up at #{server_url}"
   [pid, server_url]
 end

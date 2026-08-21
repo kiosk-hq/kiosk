@@ -2,7 +2,7 @@
 
 # Kiosk demo orchestration for kiosk-demo-getgrocery.
 # Tasks:
-#   rake demo:setup      idempotent db:drop / create / migrate / seed
+#   rake demo:setup      idempotent db:drop / create / schema:load / seed
 #   rake demo:shop       boots the server, runs script/getgrocery_flow.rb, asserts happy path
 #   rake demo:claim      claim-rebind walkthrough: a standalone assistant's key is
 #                        re-bound to the human's account, then pays with its saved card
@@ -58,12 +58,12 @@ namespace :demo do
        "IF NOT EXISTS (SELECT FROM pg_roles WHERE rolname = 'app_role') " \
        "THEN CREATE ROLE app_role NOLOGIN; END IF; END \\$\\$;\" >/dev/null"
     sh "psql -d postgres -tAc 'GRANT app_role TO CURRENT_USER' >/dev/null"
-    structure_sql = File.expand_path("../../db/structure.sql", __dir__)
-    if File.exist?(structure_sql)
-      sh "bundle exec rails db:drop db:create db:schema:load db:seed"
-    else
-      sh "bundle exec rails db:drop db:create db:migrate db:seed"
-    end
+    # db:schema:load unconditionally (K-712b): db/structure.sql is TRACKED in
+    # every demo, so the db:migrate arm this used to branch to was unreachable
+    # in every checkout — and under `schema_format = :sql` it would have
+    # re-dumped that tracked file, dirtying the worktree. The canonical
+    # structure.sql is the source of truth.
+    sh "bundle exec rails db:drop db:create db:schema:load db:seed"
   end
 
   desc "DB-free unit spec for the delivery-slot past-filter + Dublin zone (K-480)."
@@ -1290,10 +1290,11 @@ namespace :demo do
     flow_rb      = File.expand_path("../../script/pow_flow.rb", __dir__)
     failures     = []
 
-    # The catalog-toll flow never pays, so a dummy test key is enough to boot the
-    # Stripe adapter (no API call is made). Real key / stripe-mock is only needed
-    # for the payment demos (demo:shop).
-    stripe_key = ENV["STRIPE_SECRET_KEY"].to_s.empty? ? "sk_test_dummy" : ENV["STRIPE_SECRET_KEY"]
+    # K-712c: the ternary that used to stand here re-asked a question already
+    # answered above — ENV["STRIPE_SECRET_KEY"] is filled in before demo:setup
+    # runs, so its "empty" branch was unreachable and the justification was
+    # written out twice.
+    stripe_key = ENV.fetch("STRIPE_SECRET_KEY")
 
     # ONE owner for the toy counter's location (K-711, K-785). The server and
     # the driver are two processes that never meet; this task spawns both, so

@@ -27,6 +27,11 @@ class KycVerificationRequest < ApplicationRecord
   # real state the broker can reach and is listed above; it is not named here
   # because nothing in this app compares against it.
   PENDING, APPROVED = STATUSES
+  # The column is a bare varchar with no CHECK constraint (db/structure.sql), so
+  # until this validation nothing enforced the set the constant names — and a
+  # status outside it silently fails BOTH `kyc_status` branches, leaving a
+  # request that is neither pending nor approved and never resolves (K-712g).
+  validates :status, inclusion: { in: STATUSES }
 
   # ── THE isolation predicate, the {Reservation} one on this table ───────────
   # `kyc_status` is bound to it: an agent only ever sees the status — and the

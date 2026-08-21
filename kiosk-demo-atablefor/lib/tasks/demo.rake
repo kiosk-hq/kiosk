@@ -166,9 +166,12 @@ namespace :demo do
     end
 
     # ── assertions: psql ground truth ──────────────────────────────────
-    # Assert the SPECIFIC booking just made (by id), not DB-wide totals: the
-    # seeds place a couple of existing reservations on the public board, so an
-    # absolute COUNT is seed-dependent. This checks the new row directly.
+    # Assert the SPECIFIC booking just made (by id), not a DB-wide COUNT. The
+    # reason this comment used to give — "the seeds place a couple of existing
+    # reservations on the board" — stopped being true: db/seeds.rb now says the
+    # public board is deliberately EMPTY at rest (K-712f). The rule survives its
+    # old reason. A DB-wide count cannot tell the row THIS run created from one
+    # a previous run left behind, or from a future seed change; the id can.
     db = "kiosk_atablefor_development"
 
     this_booking = `psql -X -d #{db} -tAc "SELECT status FROM bookings WHERE id = '#{booking_id}'" 2>&1`.strip

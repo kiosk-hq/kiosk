@@ -275,7 +275,11 @@ module Kiosk
       # status (handlers) or raise {WireError} / the Rails exception. They
       # survive only because the gem's own protocol internals and the
       # pre-T-057 demo initializers still raise them; QuotaExceeded, which
-      # nothing raised, is already gone (the code stays reserved in {CODES}).
+      # nothing raised, is already gone. The CODE stays in {CODES} and is now
+      # live on the wire — getgrocery and skooti refuse a fourth outstanding
+      # KYC intake with it (K-586) — but through `OperationResult.refused`,
+      # which is the operator-side spelling, so the engine still raises it
+      # nowhere and needs no class for it.
 
       # DUPLICATE of a bare 400. Malformed body, unknown verb, missing
       # required arg.

@@ -253,6 +253,17 @@ module Kiosk
       #   P1  verify + persist the mandate trail (GUC-scoped transaction — no
       #       RLS policy on the mandate tables yet). No external effect yet.
       #                            FAIL ⇒ nothing charged, rows rolled back.
+      #       K-850: a UNIQUE violation here is not automatically a `409`. It
+      #              means "this principal has presented one of these mandate
+      #              ids before", and there are two of those. If the SAME chain
+      #              (all three `raw_jws`, byte for byte) already has a
+      #              SETTLEMENT row, this call is a REPLAY of a completed
+      #              payment and answers `200` with that settlement — the same
+      #              answer the original call gave, which is what `idempotent`
+      #              means. Anything else — a mandate id reused with different
+      #              content, or a chain whose cart was never captured or whose
+      #              capture is still in flight — stays `409 conflict`, BEFORE
+      #              any capture. See {#settled_replay}.
       #   P2  irreversible PSP capture, OUTSIDE any DB transaction, keyed for
       #       idempotency by cart.id. A charge FAILURE (decline / auth-required /
       #       timeout) is translated by the adapter into a PSP-agnostic
@@ -323,6 +334,7 @@ module Kiosk
         # helpers return the SERVER-generated uuid PKs, which thread the FK
         # chain. A unique violation (same signed mandate replayed) rolls the tx
         # back and propagates here, where it becomes a clean 409 Conflict.
+        intent  = nil
         cart    = nil
         cart_row = nil
         payment = nil
@@ -341,9 +353,19 @@ module Kiosk
             persist_payment_mandate(cart_row_id: cart_row, payment: payment)
           end
         rescue StandardError => e
-          raise Errors::Conflict.new("mandate already processed") if unique_violation?(e)
+          raise unless unique_violation?(e)
 
-          raise
+          # K-850. The chain has been seen. Which of the two cases is it?
+          replay = settled_replay(intent: intent, cart: cart, payment: payment)
+          return replay if replay
+
+          raise Errors::Conflict.new(
+            "mandate already processed",
+            hint: "this exact chain has no recorded settlement — it may still be in flight, or " \
+                  "its capture may never have run. Do NOT sign a fresh chain on the strength of " \
+                  "that: reconcile against the operator's own per-user query and re-sign only on " \
+                  "a positive, unambiguous \"not paid\".",
+          )
         end
 
         # Phase 2 — irreversible external capture. OUTSIDE any DB transaction.
@@ -393,6 +415,87 @@ module Kiosk
           settled_amount_cents: settled[:settled_amount_cents],
           currency:             cart.currency,
         })
+      end
+
+      # ─── the settled replay (K-850) ────────────────────────────────────
+
+      # Answers a re-presented chain whose payment ALREADY COMPLETED with the
+      # settlement the first call returned, or `nil` when this is not that case.
+      #
+      # WHY THIS EXISTS. `pay` publishes no idempotency header because the
+      # mandate `id`s are one (protocol.md §11.6), and an assistant whose `pay`
+      # response was lost is REQUIRED to re-send the identical chain. Until
+      # K-850 that duty was rewarded with `409 conflict` and no settlement data
+      # at all: the safe retry was also the uninformative one, and the
+      # assistant had to go and reconcile through a per-user query to learn
+      # whether its own purchase had happened. An error status is not
+      # idempotence — it is a different answer to the same request. So a replay
+      # of a SETTLED chain now returns exactly what the original returned.
+      #
+      # THE BOUNDARY, and it is the whole safety argument. This method answers
+      # only for a chain that is BOTH:
+      #
+      #   IDENTICAL — the stored `raw_jws` of all three mandate rows equals the
+      #     three JWS strings presented now, byte for byte. A mandate `id`
+      #     re-used with DIFFERENT content is a different request wearing an
+      #     old name, and it must not be handed a settlement it did not buy.
+      #   SETTLED — a settlement row exists for that cart mandate. `UNIQUE
+      #     (cart_mandate_id)` makes it the one settlement of that cart.
+      #
+      # Everything else keeps `409 conflict`, raised BEFORE the capture: a
+      # chain still in flight, and a chain whose capture never ran or never
+      # returned. There is no settlement to hand back in either, and re-running
+      # the capture for a re-presented chain is precisely the double charge
+      # §11.6 exists to prevent. Note what this method structurally cannot do:
+      # it returns a Result or nil, and it is reached only from the phase-1
+      # rescue — the capture in phase 2 is below the `return`, so a replay
+      # cannot re-capture, and it writes nothing, so it cannot mint a second
+      # settlement.
+      #
+      # Runs in its own SessionContext: phase 1's transaction was rolled back
+      # by the unique violation, so this needs a live one of its own.
+      #
+      # @return [Result, nil]
+      def settled_replay(intent:, cart:, payment:)
+        return nil if intent.nil? || cart.nil? || payment.nil?
+
+        row = nil
+        SessionContext.open(connection: connection, identity: identity) do
+          row = settlement_for_chain(intent: intent, cart: cart, payment: payment)
+        end
+        return nil if row.nil?
+
+        Result.new(kind: :value, payload: {
+          settlement_id:        row.fetch("id"),
+          psp_reference:        row.fetch("psp_reference"),
+          settled_amount_cents: row.fetch("settled_amount_cents").to_i,
+          currency:             row.fetch("currency"),
+        })
+      end
+
+      # The settlement of THIS EXACT chain, or nil. One statement, all binds:
+      # the three `raw_jws` equalities are the "byte for byte" half of §11.6's
+      # identical-retry rule, expressed where the bytes actually are. Scoped to
+      # the acting principal on every mandate row — the uniqueness the wire
+      # promises is per `user_id`, so the lookup is too.
+      def settlement_for_chain(intent:, cart:, payment:)
+        schema = Kiosk.configuration.schema
+        sql = <<~SQL
+          SELECT s.id, s.psp_reference, s.settled_amount_cents, s.currency
+          FROM #{schema}.settlements s
+          JOIN #{schema}.cart_mandates    c ON c.id = s.cart_mandate_id
+          JOIN #{schema}.intent_mandates  i ON i.id = c.intent_mandate_id
+          JOIN #{schema}.payment_mandates p ON p.cart_mandate_id = c.id
+          WHERE c.user_id = $1 AND i.user_id = $1 AND p.user_id = $1
+            AND c.mandate_id = $2
+            AND c.raw_jws = $3
+            AND i.raw_jws = $4
+            AND p.raw_jws = $5
+          LIMIT 1
+        SQL
+        connection.exec_query(sql, "Kiosk settled replay lookup", [
+          identity.user_id, cart.id, cart.raw_jws, intent.raw_jws, payment.raw_jws,
+        ]).to_a.first
       end
 
       # Inserts the intent-mandate row under the open SessionContext

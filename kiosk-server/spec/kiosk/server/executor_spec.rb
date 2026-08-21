@@ -390,6 +390,11 @@ RSpec.describe Kiosk::Server::Executor do
       stub_const("ActiveRecord::RecordNotUnique", Class.new(StandardError))
       allow_any_instance_of(described_class).to receive(:persist_intent_mandate)
         .and_raise(ActiveRecord::RecordNotUnique.new("dup key"))
+      # K-850: the violation alone no longer decides the answer — the executor
+      # asks whether THIS chain already settled. Here nothing did (the insert
+      # never ran), so the settled-replay lookup finds no row and the 409 the
+      # example is about is the one that reaches the caller.
+      connection.next_exec_result = []
 
       expect { described_class.call(kind: :pay, args: valid_args, identity: identity, connection: connection) }
         .to raise_error(Kiosk::Server::Errors::Conflict) { |e| expect(e.http_status).to eq(409) }
@@ -418,6 +423,7 @@ RSpec.describe Kiosk::Server::Executor do
       stub_const("ActiveRecord::RecordNotUnique", Class.new(StandardError))
       allow_any_instance_of(described_class).to receive(:persist_intent_mandate)
         .and_raise(ActiveRecord::RecordNotUnique.new("dup key"))
+      connection.next_exec_result = [] # no settlement for this chain (K-850)
       provider = Kiosk.configuration.payment_provider
       expect(provider).not_to receive(:capture)
 
@@ -598,6 +604,46 @@ RSpec.describe Kiosk::Server::Executor do
       # principal per example, so the mandate id alone is the whole key.
       let(:inserted) { [] }
       let(:captures) { [] }
+      # The rows those inserts wrote, by table, each as a column=>value hash
+      # plus the server id the statement returned. K-850's replay lookup is a
+      # READ, so a router that answers it has to have kept what was written.
+      let(:stored) { Hash.new { |h, k| h[k] = [] } }
+
+      # The INSERT column order of the four persist helpers, so a recorded row
+      # reads by name instead of by bind index.
+      insert_columns = {
+        "intent_mandates"  => %w[mandate_id user_id agent_id issuer scope cap_amount_cents
+                                 currency expires_at raw_jws],
+        "cart_mandates"    => %w[mandate_id intent_mandate_id user_id agent_id issuer line_items
+                                 total_amount_cents currency expires_at raw_jws],
+        "payment_mandates" => %w[mandate_id cart_mandate_id user_id agent_id issuer payment_method
+                                 amount_cents currency expires_at raw_jws],
+        "settlements"      => %w[cart_mandate_id user_id agent_id issuer psp_reference
+                                 settled_amount_cents currency],
+      }.freeze
+
+      # {Executor#settlement_for_chain}'s meaning, evaluated over the recorded
+      # rows: the cart matched by (user_id, mandate_id, raw_jws), its intent and
+      # payment matched by the FK chain AND their own raw_jws, and finally the
+      # settlement of that cart. Every one of those conjuncts is load-bearing —
+      # drop the raw_jws comparisons and a mandate id re-used with different
+      # content would be handed a settlement it did not buy.
+      def settled_chain_rows(stored, binds)
+        user_id, cart_mandate_id, cart_jws, intent_jws, payment_jws = binds
+
+        cart = stored["cart_mandates"].find do |r|
+          r["mandate_id"] == cart_mandate_id && r["user_id"] == user_id && r["raw_jws"] == cart_jws
+        end
+        return [] if cart.nil?
+        return [] unless stored["intent_mandates"].any? do |r|
+          r["id"] == cart["intent_mandate_id"] && r["user_id"] == user_id && r["raw_jws"] == intent_jws
+        end
+        return [] unless stored["payment_mandates"].any? do |r|
+          r["cart_mandate_id"] == cart["id"] && r["user_id"] == user_id && r["raw_jws"] == payment_jws
+        end
+
+        stored["settlements"].select { |r| r["cart_mandate_id"] == cart["id"] }
+      end
 
       before do
         stub_const("ActiveRecord::RecordNotUnique", Class.new(StandardError))
@@ -615,8 +661,14 @@ RSpec.describe Kiosk::Server::Executor do
               if inserted.include?(key)
 
             inserted << key
+            id = "row-#{inserted.size}"
+            stored[table] << insert_columns.fetch(table).zip(binds).to_h.merge("id" => id)
+            [{ "id" => id }]
+          elsif sql.include?("settlements s")
+            settled_chain_rows(stored, binds)
+          else
+            [{ "id" => "row-#{inserted.size}" }]
           end
-          [{ "id" => "row-#{inserted.size}" }]
         end
 
         Kiosk.configuration.payment_provider = instance_double("PSP", setup_required?: false)
@@ -626,12 +678,46 @@ RSpec.describe Kiosk::Server::Executor do
         end
       end
 
-      # THE ONE-CHARGE ASSERTION. Same args, twice: the second call re-presents
-      # `intent-1`, the row is already there, and the unique violation becomes a
-      # 409 in phase 1 — BEFORE phase 2. The card is charged exactly once.
-      it "charges once and answers 409 conflict the second time" do
+      # THE ONE-CHARGE ASSERTION, and since K-850 also the IDEMPOTENCE one.
+      # Same args, twice: the second call re-presents `intent-1`, the row is
+      # already there, and the unique violation lands in phase 1 — BEFORE phase
+      # 2 — where the executor asks whether THIS chain already settled. It did,
+      # so the replay is answered with the settlement the first call returned.
+      # The card is charged exactly once and no second settlement is minted.
+      it "charges once and replays the ORIGINAL settlement the second time (K-850)" do
         first = described_class.call(kind: :pay, args: valid_args, identity: identity, connection: connection)
         expect(first.payload).to include(settlement_id: "row-4")
+
+        second = described_class.call(kind: :pay, args: valid_args, identity: identity, connection: connection)
+
+        expect(second.kind).to eq(:value)
+        expect(second.payload).to eq(first.payload)
+        expect(captures).to eq(["cart-1"])
+        expect(inserted.count { |table, _| table == "settlements" }).to eq(1)
+      end
+
+      # A `409` on a replay would not have been idempotence — it would have been
+      # a different answer to the same request, and one carrying none of the
+      # settlement facts the assistant is missing. Pinned as its own example so
+      # the regression reads as what it is.
+      it "does not answer a settled replay with an error at all (K-850)" do
+        described_class.call(kind: :pay, args: valid_args, identity: identity, connection: connection)
+
+        expect {
+          described_class.call(kind: :pay, args: valid_args, identity: identity, connection: connection)
+        }.not_to raise_error
+      end
+
+      # THE BOUNDARY. A chain re-presented before anything settled — here the
+      # trail is written and the capture then fails — has no settlement to hand
+      # back, so it keeps `409 conflict`, raised before any capture. The 409 now
+      # means one specific thing: "seen, and NOT settled".
+      it "still answers 409 conflict when the re-presented chain never settled" do
+        allow(Kiosk.configuration.payment_provider).to receive(:capture)
+          .and_raise(Kiosk::PaymentProviders::PaymentFailed.new("declined", retryable: true))
+        expect {
+          described_class.call(kind: :pay, args: valid_args, identity: identity, connection: connection)
+        }.to raise_error(Kiosk::Server::Errors::PaymentFailed)
 
         expect {
           described_class.call(kind: :pay, args: valid_args, identity: identity, connection: connection)
@@ -639,7 +725,21 @@ RSpec.describe Kiosk::Server::Executor do
           expect(e.http_status).to eq(409)
           expect(e.code).to        eq("conflict")
         }
+        expect(inserted.count { |table, _| table == "settlements" }).to eq(0)
+      end
 
+      # AND THE OTHER HALF OF THE BOUNDARY: a settled cart `id` re-presented
+      # with DIFFERENT signed bytes is not this request, so it is not handed
+      # this request's settlement.
+      it "refuses a settled cart id re-presented with different bytes (K-850)" do
+        described_class.call(kind: :pay, args: valid_args, identity: identity, connection: connection)
+        tampered = Kiosk::Mandate::CartMandate.new(**cart.to_h, raw_jws: "cart-jws-TAMPERED")
+        allow(Kiosk::Server::MandateVerifier).to receive(:verify_cart).and_return(tampered)
+        allow(Kiosk::Server::MandateVerifier).to receive(:verify_payment).and_return(payment)
+
+        expect {
+          described_class.call(kind: :pay, args: valid_args, identity: identity, connection: connection)
+        }.to raise_error(Kiosk::Server::Errors::Conflict, /already processed/)
         expect(captures).to eq(["cart-1"])
       end
 

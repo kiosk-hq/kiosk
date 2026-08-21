@@ -350,5 +350,135 @@ RSpec.describe Kiosk::Server::Executor do
           .to eq(0)
       end
     end
+
+    # ── The settled replay (K-850), driven end to end ──────────────────────
+    #
+    # WHY IT IS HERE and not only in executor_spec.rb. The whole behaviour is a
+    # LOOKUP: one statement that joins settlements to the three mandate tables
+    # and compares the stored `raw_jws` of each against the bytes presented
+    # now. A FakeConnection cannot tell you whether that join resolves, whether
+    # the FK columns line up, or whether a uuid bind matches — only a real
+    # Postgres can, which is this file's entire reason to exist. The unique
+    # violation that reaches the rescue here is a REAL one, raised by the real
+    # `UNIQUE (user_id, mandate_id)` in the shipped migration SQL.
+    #
+    # THE DECISION (Phil, 2026-08-21, ADR-0026): a `pay` replaying an
+    # already-SETTLED cart is IDEMPOTENT — it returns the settlement the first
+    # call returned. A re-presented chain that was never captured, or whose
+    # capture is still in flight, keeps `409 conflict` before any capture.
+    describe "a replayed pay (K-850)" do
+      let(:captures) { [] }
+      let(:provider) do
+        psp = instance_double("PSP")
+        allow(psp).to receive(:setup_required?).and_return(false)
+        allow(psp).to receive(:capture) do |charged, **_kwargs|
+          captures << charged.id
+          { psp_reference: "pi_capture_#{captures.size}", settled_amount_cents: charged.total_amount_cents }
+        end
+        psp
+      end
+
+      let(:args) do
+        { intent_mandate_jws:  intent.raw_jws,
+          cart_mandate_jws:    cart.raw_jws,
+          payment_mandate_jws: payment.raw_jws }
+      end
+
+      before do
+        Kiosk.configuration.payment_provider = provider
+        allow(Kiosk::Server::MandateVerifier).to receive(:verify_intent).and_return(intent)
+        allow(Kiosk::Server::MandateVerifier).to receive(:verify_cart).and_return(cart)
+        allow(Kiosk::Server::MandateVerifier).to receive(:verify_payment).and_return(payment)
+      end
+
+      def pay
+        described_class.call(kind: :pay, args: args, identity: identity, connection: connection)
+      end
+
+      def settlement_count
+        value("SELECT count(*) FROM #{table('settlements')}").to_i
+      end
+
+      # THE PIN THE DECISION ASKED FOR: one capture, one settlement row, and
+      # the SECOND call returns the FIRST call's answer field for field.
+      it "answers the identical chain with the ORIGINAL settlement, and captures exactly once" do
+        first = pay
+        second = pay
+
+        expect(second.kind).to eq(:value)
+        expect(second.payload).to eq(first.payload)
+        expect(second.payload[:psp_reference]).to eq("pi_capture_1")
+        expect(captures).to eq([cart.id])   # NOT charged a second time
+        expect(settlement_count).to eq(1)   # NO second settlement minted
+      end
+
+      # The replay is answered from the STORED row, so the settlement id it
+      # hands back is the one the settlements table holds — not a fresh one.
+      it "returns the stored settlement row, not a reconstruction" do
+        first = pay
+        stored = one("SELECT * FROM #{table('settlements')}")
+
+        expect(first.payload[:settlement_id]).to eq(stored["id"])
+        expect(pay.payload[:settlement_id]).to  eq(stored["id"])
+      end
+
+      # THE BOUNDARY THAT DOES NOT MOVE. The trail is persisted and NOTHING was
+      # captured (the phase-1 rows of a call that died before, or during, the
+      # capture). There is no settlement to hand back, and re-running the
+      # capture on a re-presented chain is exactly the double charge §11.6
+      # exists to prevent — so this stays `409`, raised before any capture.
+      it "still answers 409 conflict for a re-presented chain that was never captured" do
+        intent_row = executor.send(:persist_intent_mandate, intent)
+        cart_row   = executor.send(:persist_cart_mandate, cart, intent_row_id: intent_row)
+        executor.send(:persist_payment_mandate, cart_row_id: cart_row, payment: payment)
+
+        expect { pay }.to raise_error(Kiosk::Server::Errors::Conflict, /already processed/) { |e|
+          expect(e.http_status).to eq(409)
+          expect(e.code).to eq("conflict")
+        }
+        expect(captures).to be_empty
+        expect(settlement_count).to eq(0)
+      end
+
+      # Same idea one phase later: the capture RETURNED but phase 3 never
+      # committed. That is K-851's window, and the answer there is unchanged —
+      # the engine has no settlement, so it must not pretend it has one.
+      it "still answers 409 conflict when the capture happened but phase 3 never landed" do
+        allow_any_instance_of(described_class).to receive(:persist_settlement)
+          .and_raise(StandardError, "connection reset during settlement insert")
+        expect { pay }.to raise_error(StandardError, /connection reset/)
+        expect(captures).to eq([cart.id])
+        expect(settlement_count).to eq(0)
+
+        allow_any_instance_of(described_class).to receive(:persist_settlement).and_call_original
+        expect { pay }.to raise_error(Kiosk::Server::Errors::Conflict)
+        expect(captures).to eq([cart.id])
+      end
+
+      # A MANDATE ID RE-USED WITH DIFFERENT CONTENT IS NOT A REPLAY. The cart
+      # `id` is the settled one, the signed bytes are not — so the settlement
+      # this principal already has must NOT be handed to it as the answer to a
+      # different request. The `raw_jws` equality in the lookup is what says so.
+      it "refuses to hand the settlement to a chain whose bytes differ (same id, new content)" do
+        pay
+        forged = Kiosk::Mandate::CartMandate.new(**cart.to_h, raw_jws: "cart-jws-TAMPERED")
+        allow(Kiosk::Server::MandateVerifier).to receive(:verify_cart).and_return(forged)
+
+        expect { pay }.to raise_error(Kiosk::Server::Errors::Conflict, /already processed/)
+        expect(captures).to eq([cart.id])
+        expect(settlement_count).to eq(1)
+      end
+
+      # And the lookup is scoped to the acting principal on every mandate row:
+      # another assistant's user_id sees no settlement of this one's.
+      it "does not answer a DIFFERENT principal with this principal's settlement" do
+        pay
+        stranger = build_identity(user_id: SecureRandom.uuid, agent_id: SecureRandom.uuid)
+        expect(
+          described_class.new(connection: connection, identity: stranger)
+                         .send(:settlement_for_chain, intent: intent, cart: cart, payment: payment),
+        ).to be_nil
+      end
+    end
   end
 end

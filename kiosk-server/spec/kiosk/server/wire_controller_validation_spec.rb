@@ -217,6 +217,42 @@ RSpec.describe "Opt-in PoW-shape request validation (slice-1, K-479)" do
       expect(problem[:code]).not_to eq("pow_required")
     end
 
+    # K-842: the same argument one field across. `header_nonce` is a u32 in both
+    # specs, is folded into the seed with `pack("V")` — which truncates mod
+    # 2**32 rather than raising — and was declared an unbounded integer, so
+    # 0, 2**32 and -(2**32) were three spellings of ONE proof. The verifier now
+    # refuses the out-of-range ones and this gate refuses them earlier, as the
+    # malformed proofs they are.
+    it "rejects a header_nonce at 2**32 with 400 bad_request (u32 upper bound)" do
+      status, _headers, problem = call_with_pow(
+        challenge: valid_challenge, nonce: { indices: [1, 2, 3, 4], header_nonce: 1 << 32 },
+      )
+
+      expect(status).to eq(400)
+      expect(problem[:code]).to eq("bad_request")
+      expect(problem[:code]).not_to eq("pow_required")
+    end
+
+    it "accepts a header_nonce at 2**32 - 1 — the largest legal u32 (passes to the gate)" do
+      status, _headers, problem = call_with_pow(
+        challenge: valid_challenge, nonce: { indices: [1, 2, 3, 4], header_nonce: (1 << 32) - 1 },
+      )
+
+      expect(status).to eq(402)
+      expect(problem[:code]).to eq("pow_required")
+      expect(problem[:code]).not_to eq("bad_request")
+    end
+
+    it "rejects a negative header_nonce with 400 bad_request (u32 lower bound)" do
+      status, _headers, problem = call_with_pow(
+        challenge: valid_challenge, nonce: { indices: [1, 2, 3, 4], header_nonce: -1 },
+      )
+
+      expect(status).to eq(400)
+      expect(problem[:code]).to eq("bad_request")
+      expect(problem[:code]).not_to eq("pow_required")
+    end
+
     it "leaves an ABSENT header untouched — the normal 402 challenge path runs (no 400)" do
       # An absent header means the initial request; the gate must still issue the
       # normal pow_required 402. Missing proof is NOT a malformed proof — it must

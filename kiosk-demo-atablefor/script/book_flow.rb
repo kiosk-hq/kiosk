@@ -51,7 +51,7 @@ require_relative "equihash_register"
 # ── Step 1: generate keypair + self-register (no human; register is tolled
 #            with PoW here, and the helper solves it transparently) ───────────
 
-_key, reg = equihash_register(
+_key, reg, rc_register = equihash_register(
   server: SERVER, issuer: ISSUER,
   get_json: method(:get_json), post_json: method(:post_json),
 )
@@ -107,7 +107,7 @@ booking_rows = Array(mine)
 # ── Step 5: print ONE JSON line ──────────────────────────────────────────────
 
 puts JSON.generate(
-  http_register:  201,
+  http_register:  rc_register,
   user_id:        user_id,
   agent_id:       agent_id,
   date:           date,

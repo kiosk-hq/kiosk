@@ -108,13 +108,12 @@ results = {}
 # is returned so the claim ceremony (Beat 2) and the payment mandates below can
 # re-prove possession / sign with it.
 require_relative "equihash_register"
-key, reg = equihash_register(
+key, reg, rc_register = equihash_register(
   server: SERVER, issuer: ISSUER,
   get_json: method(:get_json), post_json: method(:post_json),
 )
 pem = key.public_key.to_pem
-rc = 201
-results[:http_register]  = rc
+results[:http_register]  = rc_register
 agent_id                 = reg.fetch("agent_id")
 standalone_user_id       = reg.fetch("user_id")
 token                    = reg.fetch("access_token")

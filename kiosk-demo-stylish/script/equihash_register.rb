@@ -41,7 +41,12 @@ end
 # @param get_json [#call] ->(url) { [code, body] }
 # @param post_json [#call] ->(url, body, headers = {}) { [code, body] }
 #   (the header slot carries the Kiosk-PoW proof on the retry)
-# @return [Array(OpenSSL::PKey::RSA, Hash)] the keypair and the register response
+# @return [Array(OpenSSL::PKey::RSA, Hash, Integer)] the keypair, the register
+#   response, and the response CODE. The code is returned (K-707) so a driver
+#   that REPORTS `http_register` reports what the server actually answered
+#   instead of writing `201` down beside a comment explaining why it must be
+#   201 — a rake task cannot "assert" a constant the driver typed. It is the
+#   third element, so the many callers that bind only `key, reg` are unaffected.
 def equihash_register(server:, issuer:, get_json:, post_json:)
   key = OpenSSL::PKey::RSA.generate(2048)
   pem = key.public_key.to_pem
@@ -72,5 +77,5 @@ def equihash_register(server:, issuer:, get_json:, post_json:)
   end
 
   abort "register failed (#{rc}): #{JSON.generate(reg)}" unless rc == 201
-  [key, reg]
+  [key, reg, rc]
 end

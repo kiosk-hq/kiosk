@@ -78,13 +78,15 @@ def post_form(url, form)
   [res.code.to_i, res.body.to_s]
 end
 
-# Register a fresh agent, returning [key, agent_id, user_id, token].
+# Register a fresh agent, returning [key, agent_id, user_id, token, rc].
+# The response CODE is carried out (K-707) so the report below states what the
+# server answered rather than the constant the helper's abort guarantees.
 def register_agent
-  key, reg = equihash_register(
+  key, reg, rc = equihash_register(
     server: SERVER, issuer: ISSUER,
     get_json: method(:get_json), post_json: method(:post_json),
   )
-  [key, reg.fetch("agent_id"), reg.fetch("user_id"), reg.fetch("access_token")]
+  [key, reg.fetch("agent_id"), reg.fetch("user_id"), reg.fetch("access_token"), rc]
 end
 
 # THE 0.4 WIRE. A query is `GET <endpoint>/<query-name>` with its arguments in
@@ -100,7 +102,7 @@ def reserve(token, code)
   rc, rsv = post_json("#{SERVER}/kiosk/reserve", { scooter_code: code },
                       { "Authorization" => "Bearer #{token}" })
   abort "reserve #{code} failed (#{rc}): #{JSON.generate(rsv)}" unless rc == 200
-  [rsv.fetch("reservation_id"), rsv.fetch("price_per_min_cents")]
+  [rsv.fetch("reservation_id"), rsv.fetch("price_per_min_cents"), rc]
 end
 
 # Sign + settle a payment for a reservation (mirrors script/rental_flow.rb's pay step).
@@ -127,6 +129,7 @@ def pay(token, key, user_id, agent_id, code, reservation_id, price_per_min)
                          payment_mandate_jws: JWT.encode(payment, key, "RS256") },
                        { "Authorization" => "Bearer #{token}" })
   abort "pay for #{code} failed (#{rc}): #{JSON.generate(resp)}" unless rc == 200
+  rc
 end
 
 # An action: its name is the PATH SEGMENT, its arguments are the whole body.
@@ -148,11 +151,11 @@ end
 # keypair and obtains a signed attestation by relaying a human-approve link.
 
 STDERR.puts "── PART A: motorcycle (KYC-gated) ──"
-mc_key, mc_agent, mc_user, mc_token = register_agent
+mc_key, mc_agent, mc_user, mc_token, = register_agent
 STDERR.puts "  Registered motorcycle-renter agent #{mc_agent} (own keypair only — no issuer key)"
 
-mc_resv, mc_price = reserve(mc_token, "MC-001")
-pay(mc_token, mc_key, mc_user, mc_agent, "MC-001", mc_resv, mc_price)
+mc_resv, mc_price, rc_mc_reserve = reserve(mc_token, "MC-001")
+rc_mc_pay = pay(mc_token, mc_key, mc_user, mc_agent, "MC-001", mc_resv, mc_price)
 STDERR.puts "  Reserved + paid MC-001 (reservation #{mc_resv})"
 
 # A1: rent_motorcycle WITHOUT KYC → 403 kyc_required (Gate 0 fires first).
@@ -227,8 +230,8 @@ end
 # ── PART B: scooter positive control — NO KYC at all (K-442) ─────────────────
 
 STDERR.puts "── PART B: scooter (positive control — NO KYC) ──"
-sc_key, sc_agent, sc_user, sc_token = register_agent
-sc_resv, sc_price = reserve(sc_token, "SK-001")
+sc_key, sc_agent, sc_user, sc_token, = register_agent
+sc_resv, sc_price, = reserve(sc_token, "SK-001")
 pay(sc_token, sc_key, sc_user, sc_agent, "SK-001", sc_resv, sc_price)
 # NO KYC submitted at all — a fresh agent that has never attested rents a
 # licence-free scooter. Proves start_rental carries NO KYC gate (K-442).
@@ -264,7 +267,12 @@ STDERR.puts "  rent_motorcycle after the string spelling: http=#{rc_mc_after_spe
 # ── print ONE JSON line ──────────────────────────────────────────────────────
 
 puts JSON.generate(
-  http_mc_reserve_paid:        200,
+  # BOTH codes, MEASURED (K-707): this was the constant `200`, while the two
+  # calls it claimed to summarise discarded their response codes entirely — the
+  # aborts inside reserve/pay were the only gate and the reported field could
+  # not have said anything else.
+  http_mc_reserve:             rc_mc_reserve,
+  http_mc_paid:                rc_mc_pay,
   http_mc_rent_no_kyc:         rc_mc_nokyc,
   mc_rent_no_kyc_code:         mc_nokyc_code,
   mc_rent_no_kyc_hint_to_req:  hint_points_to_request_kyc,

@@ -58,7 +58,7 @@ end
 # is tolled: the helper solves the Equihash register PoW and resubmits — the
 # SAME private key is returned so it can sign the payment mandates below.
 require_relative "equihash_register"
-key, reg = equihash_register(
+key, reg, rc_register = equihash_register(
   server: SERVER, issuer: ISSUER,
   get_json: method(:get_json), post_json: method(:post_json),
 )
@@ -301,7 +301,7 @@ STDERR.puts "  my_orders: #{my_orders.size} order(s); own order payment_state=pa
 
 # -- Step 8: print ONE JSON line --
 puts JSON.generate(
-  http_register:      201, # equihash_register aborts unless the server returns 201
+  http_register:      rc_register,
 
   http_catalog:       rc_catalog,
   http_slots:         rc_slots,

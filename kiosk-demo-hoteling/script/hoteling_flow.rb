@@ -56,7 +56,7 @@ end
 #            is returned so the payment mandates below can be signed with it. ──
 
 require_relative "equihash_register"
-key, reg = equihash_register(
+key, reg, rc_register = equihash_register(
   server: SERVER, issuer: ISSUER,
   get_json: method(:get_json), post_json: method(:post_json),
 )
@@ -210,7 +210,7 @@ stored_row = Array(mine_resp).find { |r| r["booking_id"] == booking_id }
 # ── Step 7: print ONE JSON line ───────────────────────────────────────────
 
 puts JSON.generate(
-  http_register:        201, # equihash_register aborts unless the server returns 201
+  http_register:        rc_register,
   http_properties:      rc_props,
   http_availability:    rc_avail,
   http_reserve_room:    rc_rsv,

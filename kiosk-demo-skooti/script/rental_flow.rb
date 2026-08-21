@@ -72,7 +72,7 @@ require_relative "equihash_register"
 # ── Step 1: register (Equihash PoW gate: 1 proof) ───────────────────────────
 
 STDERR.puts "  Registering (solving 1 Equihash PoW)..."
-key, reg = equihash_register(
+key, reg, rc_register = equihash_register(
   server: SERVER, issuer: ISSUER,
   get_json: method(:get_json), post_json: method(:post_json),
 )
@@ -238,7 +238,7 @@ end
 # ── Step 7: print ONE JSON line ──────────────────────────────────────────────
 
 puts JSON.generate(
-  http_register:          201,
+  http_register:          rc_register,
   http_browse:            rc_browse,
   http_reserve:           rc_rsv,
   http_pay:               rc_pay,

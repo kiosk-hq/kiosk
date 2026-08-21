@@ -416,6 +416,39 @@ module Kiosk
         SQL
       end
 
+      # The SHARED auth-challenge table for multi-process operators (K-751) —
+      # the sibling of {.pow_spent_sql}, and not part of the canonical
+      # migration set for the same reason: a single-process operator does not
+      # need it. See the kiosk-server README, "Multi-process deployments".
+      #
+      # `public_key` is the registering/logging-in PEM and it is the PRIMARY
+      # KEY, because the store's contract is "at most one outstanding challenge
+      # per key" — re-issuing overwrites, which the key plus
+      # `ON CONFLICT DO UPDATE` states in ONE statement. `expires_at` mirrors
+      # the challenge TTL; every read carries `expires_at > now()`, so an
+      # expired row can never be taken and the index below serves only
+      # {AuthChallengeStores::ActiveRecord#prune!}.
+      #
+      # NOTE the failure direction, because it is the opposite of `pow_spent`:
+      # an unshared challenge store cannot FIND a nonce another worker issued,
+      # so the handshake fails CLOSED (a rejected, correctly-signed request)
+      # rather than accepting something it should not.
+      def auth_challenge_sql(schema: nil)
+        schema ||= Kiosk.configuration.schema
+
+        <<~SQL.strip
+          CREATE TABLE "#{schema}".auth_challenges (
+            public_key text        PRIMARY KEY,
+            nonce      text        NOT NULL,
+            expires_at timestamptz NOT NULL
+          );
+          -- Supports the TTL sweep only; the PK above is what makes a key's
+          -- outstanding challenge single.
+          CREATE INDEX idx_auth_challenges_expires_at
+            ON "#{schema}".auth_challenges (expires_at);
+        SQL
+      end
+
       # ─── helpers ───────────────────────────────────────────────────────
 
       def user_id_cast(user_id_type)

@@ -107,9 +107,33 @@ read-then-write reintroduces exactly the replay race the gate closes.
 
 `c.auth_challenge_store` is in-process too, and needs the same treatment for a
 different reason: a challenge issued by one worker is invisible to the worker
-that gets the `register`/`login`, so the handshake fails *closed*. No shared
-adapter ships for it yet — the setter takes any object answering
-`put(public_key_pem, nonce, exp)` / `take(public_key_pem, nonce)`.
+that gets the `register`/`login`, so the handshake fails **closed** — a
+correctly-signed request is rejected, and the AI assistant cannot tell that
+apart from a bad key. Above one process it succeeds only when both requests
+land on the same worker.
+
+The same two lines, against the sibling table:
+
+```ruby
+# db/migrate/…_create_kiosk_auth_challenges.rb
+class CreateKioskAuthChallenges < ActiveRecord::Migration[8.1]
+  def up   = execute(Kiosk::Server::SchemaDefinitions.auth_challenge_sql)
+  def down = execute(%(DROP TABLE IF EXISTS "#{Kiosk.configuration.schema}".auth_challenges))
+end
+```
+
+```ruby
+# config/initializers/kiosk.rb
+Kiosk.configure do |c|
+  c.auth_challenge_store = Kiosk::Server::AuthChallengeStores::ActiveRecord.new
+end
+```
+
+Not in `bin/rails g kiosk:install` either, and for the same reason. Any other
+backend works: the contract is `put(public_key_pem, nonce, exp)` /
+`take(public_key_pem, nonce) → Boolean`, and `take` **MUST** be one atomic
+operation (SQL `DELETE … RETURNING`, Redis `GETDEL`) so the store, not the
+application, decides which of two concurrent presentations wins.
 
 
 ## The audit sink

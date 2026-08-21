@@ -488,7 +488,13 @@ module Kiosk
 
       # In-process store binding a public key to its outstanding, single-use
       # auth challenge nonce (the server side of `/auth/challenge`). Override
-      # with a shared-store implementation in multi-process deployments.
+      # with a shared-store implementation in multi-process deployments —
+      # §15.2 requires it, and one ships in this gem (K-751):
+      # {AuthChallengeStores::ActiveRecord}, backed by
+      # {SchemaDefinitions.auth_challenge_sql}. Unshared, the handshake fails
+      # CLOSED: worker B cannot see the nonce worker A issued, so a
+      # correctly-signed `register`/`login` is rejected roughly (N-1)/N of the
+      # time and the AI assistant cannot tell that from a bad key.
       #
       # @return [Kiosk::Server::AuthChallengeStore, #put, #take]
       attr_writer :auth_challenge_store

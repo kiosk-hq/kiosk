@@ -12,8 +12,13 @@ module Kiosk
     # nonce is deleted so it can never be replayed.
     #
     # Mirrors {PowSpentStore}: Mutex-guarded, pruned opportunistically, and NOT
-    # shared across web workers. Multi-process providers MUST override
-    # `Kiosk.configure { |c| c.auth_challenge_store = MyRedisChallengeStore.new }`.
+    # shared across web workers. Multi-process providers MUST override — the
+    # referent implementation ships beside this one (K-751):
+    # `Kiosk.configure { |c| c.auth_challenge_store =
+    # Kiosk::Server::AuthChallengeStores::ActiveRecord.new }`, or any object
+    # answering the two methods below. Unshared, the failure is fail-CLOSED —
+    # worker B cannot find worker A's nonce, so a correctly-signed handshake is
+    # rejected — which is the opposite direction from {PowSpentStore}'s.
     # The interface contract is:
     #
     #   put(public_key_pem, nonce, exp) → void    (exp is a Unix timestamp)

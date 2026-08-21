@@ -45,8 +45,13 @@ class Kiosk::ListingsController < ApplicationController
   input_schema type: "object",
                additionalProperties: false,
                properties: {
+                 # THE `categories` TABLE, not a copy of it (K-922) — same
+                 # proc, same reason, as `browse_listings`: an operator who adds
+                 # a section may post in it without a redeploy, and a caller
+                 # naming one that does not exist is refused 400 naming the
+                 # LIVE list rather than a list frozen at the last deploy.
                  category_slug: { type: "string",
-                                  enum: %w[furniture bikes electronics housing free],
+                                  enum: -> { Category.order(:slug).pluck(:slug) },
                                   description: "The section to post in (see browse_listings)." },
                  title:         { type: "string", description: "Short headline." },
                  body:          { type: "string", description: "The listing description." },

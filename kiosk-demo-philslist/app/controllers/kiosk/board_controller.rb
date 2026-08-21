@@ -21,16 +21,32 @@ class Kiosk::BoardController < ApplicationController
   include Kiosk::Handler
 
   # browse_listings — the OPEN board. Any authenticated principal sees ALL
-  # matching listings across ALL owners (no owner_id filter). Optional
-  # category_slug + keyword filters; `status` defaults to open and is one of
-  # open|closed. No caller value is ever spliced into SQL: the filters are ordinary
-  # ActiveRecord conditions and the keyword search is an Arel `matches` (which
-  # is Postgres ILIKE), so the escaping is the adapter's job, not the handler's
-  # (K-654).
-  # ADR-0023: semantics only. The filters, their domains and the default are
-  # declared in `input_schema`; the row's fields, and that a price is free-form
-  # display text rather than an amount, are declared in `output_schema`. What is
-  # left here is what neither can say: what the board IS and what an empty answer
+  # matching listings across ALL owners (no owner_id filter). Two optional
+  # filters, `category_slug` and `keyword`.
+  #
+  # THERE IS NO `status` FILTER, and its absence is a decision (Phil,
+  # 2026-08-21): «Это из метода `def browse_listings` … В первом он не нужен, и
+  # даже вреден.» This verb IS the open board — a closed listing is off it —
+  # so a caller-facing status knob could only ever ask for something the board
+  # does not serve. "Did my listing sell?" is `my_listings`, a different verb
+  # with an owner-scoped contract, and if it ever needs the filter it declares
+  # its own.
+  #
+  # EVERY CALLER VALUE IS ADAPTER-QUOTED BEFORE IT REACHES THE SQL TEXT, and
+  # that is the honest version of the sentence that used to stand here (K-915).
+  # It claimed no caller value is ever "spliced into SQL"; the value IS spliced
+  # — Arel's `matches` visitor inlines an adapter-quoted literal and `binds` is
+  # empty, because Rails 8.1 disables prepared statements by default. What is
+  # true is that nothing here builds SQL by hand: the filters are ordinary
+  # ActiveRecord conditions, the keyword search is an Arel node, and the
+  # quoting is the adapter's job (K-654). The one thing quoting does NOT do is
+  # neutralise LIKE metacharacters, which is why the keyword is passed through
+  # `sanitize_sql_like` below (K-914).
+  #
+  # ADR-0023: semantics only. The filters and their domains are declared in
+  # `input_schema`; the row's fields, and that a price is free-form display
+  # text rather than an amount, are declared in `output_schema`. What is left
+  # here is what neither can say: what the board IS and what an empty answer
   # means.
   kind :query
   description "Browse the public classifieds board across ALL sellers — this is the open board, not " \
@@ -40,16 +56,21 @@ class Kiosk::BoardController < ApplicationController
               "was misunderstood. Returns all matching listings rather than a page of them (small " \
               "board; not paginated). Once the human picks a row, `edit_listing` and `close_listing` " \
               "act on it, and both are owner-only."
+  # `category_slug`'s domain IS THE `categories` TABLE, so it is declared as a
+  # PROC rather than a literal list (K-922, Phil 2026-08-21). An operator who
+  # adds a section gets a schema that accepts it — and a 400 that names it —
+  # without a restart and without a deploy: the engine calls the proc when the
+  # catalog is served, memoizes it for a minute, and the `?v=` version on
+  # `schema_url` moves with it. Writing `Category.pluck(:slug)` here instead
+  # would run at class-body load, which is `db:create` and `db:migrate` too.
+  # Ordered, so the published enum is byte-stable across boots.
   input_schema type: "object",
                additionalProperties: false,
                properties: {
                  category_slug: { type: "string",
-                                  enum: %w[furniture bikes electronics housing free],
+                                  enum: -> { Category.order(:slug).pluck(:slug) },
                                   description: "Restrict to one category." },
                  keyword:       { type: "string", description: "Case-insensitive match on title or body." },
-                 status:        { type: "string", enum: %w[open closed], default: "open",
-                                  description: "Listing status filter. Omit it for open; any value " \
-                                               "outside the enum is a 400 naming these two." },
                },
                required: []
   output_schema type: "array",
@@ -62,7 +83,7 @@ class Kiosk::BoardController < ApplicationController
                     body:          { type: "string", description: "The listing description." },
                     price_text:    { type: %w[string null], description: "FREE-FORM display text, e.g. \"€300\" or \"Free\" — never a cents amount, and null when the seller gave none." },
                     category_slug: { type: "string", description: "The section it is posted in." },
-                    status:        { type: "string", description: "open | closed." },
+                    status:        { type: "string", description: "Always `open` on this verb — the board carries open listings only." },
                     # NULLABLE, and it took a real 500 from `validate_responses`
                     # to say so. `users.email` is nullable, and a PoW-REGISTERED
                     # assistant's account has none — so every listing posted
@@ -76,7 +97,7 @@ class Kiosk::BoardController < ApplicationController
                   },
                   required: %w[listing_id title body price_text category_slug status owner_handle],
                 }
-  example_params({ category_slug: "bikes", keyword: "road", status: "open" })
+  example_params({ category_slug: "bikes", keyword: "road" })
   example_row({
     listing_id: "9c1d2e3f-4a5b-4c6d-8e7f-0a1b2c3d4e5f", title: "Carbon road bike — €300",
     body: "Lightweight carbon road bike, 54cm, Shimano 105 groupset.",
@@ -84,33 +105,31 @@ class Kiosk::BoardController < ApplicationController
     owner_handle: "alice@example.com",
   })
   def browse_listings
-    # T-090: THE CLAMP IS GONE, and deleting it is the whole fix.
+    # OPEN IS NOT A DEFAULT, IT IS THE BOARD. There is no `status` parameter to
+    # honour (see the note above the declaration), so the scope is the
+    # provider's, not the caller's — the same shape as `my_listings`' owner
+    # scope, one line up the stack.
     #
-    # This used to read `status = "open" unless Listing::STATUSES.include?(status)`,
-    # so `status="deleted"` came back 200 with the OPEN listings — not an empty
-    # list but something worse: a successful-looking answer to a DIFFERENT
-    # QUESTION, with nothing in the response saying the filter had been
-    # discarded. An assistant relaying it told its human "here are the deleted
-    # listings" and was wrong.
-    #
-    # Nothing replaces it, because `status` already DECLARES `enum: [open,
-    # closed]` and since 0.4 `input_schema` is validated on every per-verb call
-    # (spec §8.1 item 5) — so an out-of-enum value never reaches this method:
-    # the schema layer answers `400 bad_request` naming the two it accepts.
-    # That is §9.1's first branch falling out of a declaration rather than a
-    # guard, which is the shape the rule prefers.
-    #
-    # What IS still the handler's job is the DEFAULT. `default: "open"` in the
-    # schema documents the intent; nothing on this wire injects it, so an
-    # ABSENT (or empty) `status` is filled in here.
-    status = params[:status].presence || "open"
-
+    # T-090's lesson survives the removal and now applies to `category_slug`:
+    # a filter value outside its domain must be REFUSED, never quietly
+    # reinterpreted. This method contains no clamp for exactly that reason —
+    # `category_slug` declares its enum and `input_schema` is validated on
+    # every per-verb call (spec §8.1 item 5), so an unknown section is answered
+    # `400 bad_request` naming the live ones before the handler runs.
     board = Listing.joins(:category, :owner)
-                   .where(status: status)
+                   .where(status: "open")
                    .order(created_at: :desc, id: :asc)
     board = board.where(categories: { slug: params[:category_slug].to_s }) if params[:category_slug].present?
     if params[:keyword].present?
-      pattern = "%#{params[:keyword]}%"
+      # `sanitize_sql_like` FIRST, and the surrounding `%` after it (K-914).
+      # Adapter quoting keeps the value inside the literal — this is not an
+      # injection surface — but it does nothing about LIKE's own
+      # metacharacters, so an unescaped `_` was a live single-character
+      # wildcard and an unescaped `%` a live multi-character one. A human
+      # searching for "50% off" got every listing whose title started "50"
+      # instead: a different question, answered confidently, which is the same
+      # failure mode T-090 removed from the status filter.
+      pattern = "%#{Listing.sanitize_sql_like(params[:keyword])}%"
       board = board.where(
         Listing.arel_table[:title].matches(pattern).or(Listing.arel_table[:body].matches(pattern)),
       )

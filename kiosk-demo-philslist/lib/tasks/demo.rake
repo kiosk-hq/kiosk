@@ -415,6 +415,8 @@ namespace :demo do
       BLOCKED  ForgedUserId      — forged owner_id on post_listing refused (400)
       BLOCKED  CrossOwnerEdit    — Bob edit_listing on Alice's listing → 403
       BLOCKED  CrossOwnerClose   — Bob close_listing on Alice's listing → 403
+      BLOCKED  MalformedUuidArg  — a malformed listing_id on edit/close → 400
+               bad_request, with no SQL internals in the message
       BLOCKED  MissingAuth       — request with no Authorization → 401
       BLOCKED  GarbageToken      — unparseable bearer token → 401
       BLOCKED  SelfAssertedTokenForgery — a self-asserted
@@ -423,6 +425,17 @@ namespace :demo do
                suite drives, while a genuinely-bound token is answered
       BLOCKED  UnknownQuery      — unregistered query name → 404
       BLOCKED  UnknownAction     — unregistered action name → 404
+      BLOCKED  RetiredWire       — the deleted 0.3 POST /kiosk/{query,run} are
+               an ordinary 404: no privileged endpoint left to attack
+      BLOCKED  MethodMismatch    — a GET at an action's path is 405 + Allow: POST,
+               never a silent 404
+      BLOCKED  OutOfEnumFilterIsNotSilentlyReinterpreted — a browse_listings
+               `category_slug` outside the LIVE categories table is a typed 400
+               naming the sections that exist, never a 200 answering a
+               different question
+      BLOCKED  LikeMetacharactersAreEscaped — a `_` in `keyword` matches an
+               UNDERSCORE, not any character: LIKE metacharacters are escaped,
+               so a search says what the caller asked
 
     Exits 0 when all are BLOCKED (0 BREACH); exits 1 on any BREACH. A BREACH =
     a real hole — fix the app, not the scenario.

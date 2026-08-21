@@ -83,13 +83,22 @@ are at `/tmp/kiosk-philslist-demo.log`.
 Alice and Bob each post a listing. Then: `browse_listings` returns both owners'
 listings (open board); Bob's `my_listings` excludes Alice's and includes his
 own; **Bob editing or closing Alice's listing → 403**; and a forged `owner_id`
-arg on Bob's `post_listing` is ignored (the created row's DB `owner_id` is Bob).
+arg on Bob's `post_listing` is **refused `400 bad_request` naming `owner_id`**,
+not accepted-and-ignored — the 0.4 schemas are `additionalProperties: false`, so
+the argument never reaches the handler (the legitimate row's DB `owner_id` is
+still Bob, taken from the token).
 
 ### Adversarial battery (`rake demo:redteam`)
 
-Asserts every attack is BLOCKED (0 BREACH): `CrossTenantRead`, `ForgedUserId`,
-`CrossOwnerEdit` (403), `CrossOwnerClose` (403), `MissingAuth` (401),
-`GarbageToken` (401), `UnknownQuery` (404), `UnknownAction` (404).
+Asserts every attack is BLOCKED (0 BREACH) — all fourteen the suite runs, in
+its own order: `CrossTenantRead`, `ForgedUserId` (400), `CrossOwnerEdit` (403),
+`CrossOwnerClose` (403), `MalformedUuidArg` (400, no SQL internals),
+`MissingAuth` (401), `GarbageToken` (401), `SelfAssertedTokenForgery` (401),
+`UnknownQuery` (404), `UnknownAction` (404), `RetiredWire` (404),
+`MethodMismatch` (405 + `Allow: POST`),
+`OutOfEnumFilterIsNotSilentlyReinterpreted` (400 naming the live categories)
+and `LikeMetacharactersAreEscaped` (an `_` in `keyword` matches an underscore,
+not any character).
 
 ### Not-only-commerce proof (`rake demo:schema`)
 

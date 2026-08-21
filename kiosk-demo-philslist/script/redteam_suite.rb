@@ -26,9 +26,10 @@
 #                      ordinary 404: no privileged endpoint left to attack
 #   MethodMismatch   — a GET at an action’s path is 405 + `Allow: POST`, never
 #                      a silent 404
-#   OutOfEnumFilterIsNotSilentlyReinterpreted — a browse_listings `status`
-#                      outside open|closed is a typed 400 naming the two,
-#                      NEVER a 200 answering a different question (T-090)
+#   OutOfEnumFilterIsNotSilentlyReinterpreted — a browse_listings
+#                      `category_slug` outside the LIVE `categories` table is a
+#                      typed 400 naming the sections that exist, NEVER a 200
+#                      answering a different question (T-090, K-922)
 #
 # THE TWO PRINCIPALS ARE EARNED, NOT ASSERTED (T-104). Alice and Bob are bound
 # through the shipped ceremony — Equihash-tolled `/auth/register` → the human's
@@ -264,7 +265,7 @@ record(results, "MethodMismatch",
        "GET an action → #{res405.code}/#{body405['code'].inspect} Allow=#{res405['allow'].inspect} " \
        "(want 405/\"method_not_allowed\"/POST)")
 
-# ── OutOfEnumFilterIsNotSilentlyReinterpreted (T-090) ────────────────────────
+# ── OutOfEnumFilterIsNotSilentlyReinterpreted (T-090, K-922) ─────────────────
 #
 # THE WORST OF THE FOUR CASES T-090's SURVEY FOUND, and the reason it is in the
 # ADVERSARIAL battery rather than in a flow test. `browse_listings` used to run
@@ -275,23 +276,49 @@ record(results, "MethodMismatch",
 # its human "here are the deleted listings" and was confidently wrong, which is
 # a worse failure than any refusal.
 #
-# The clamp is deleted and nothing replaced it: `status` declares
-# `enum: [open, closed]` and `input_schema` is validated on every per-verb call
-# (spec §8.1 item 5), so the schema layer refuses first and NAMES both values —
-# spec §9.1's first branch falling out of a declaration.
+# THE SUBJECT MOVED, THE PROPERTY DID NOT. `status` is not a parameter of this
+# verb any more (Phil, 2026-08-21: on the open board it is «не нужен, и даже
+# вреден»), so the beat now drives the filter that IS there — `category_slug`,
+# whose domain is the LIVE `categories` table, declared as a proc (K-922). That
+# makes this a stronger test than the one it replaces: it asserts the refusal
+# AND that the refusal names the sections the database currently holds, which is
+# the whole point of deriving an enum from data instead of freezing it in code.
 #
-# The positive control is what keeps this honest: `status=closed` must still be
+# The positive control is what keeps it honest: a real section must still be
 # ANSWERED (200), or a handler that refused everything would pass.
-rc_bad, bad_status = get_json("/kiosk/browse_listings", { status: "deleted" }, ALICE.bearer)
+rc_bad, bad_status = get_json("/kiosk/browse_listings", { category_slug: "no-such-section" }, ALICE.bearer)
 detail_bad = bad_status.is_a?(Hash) ? bad_status["detail"].to_s : ""
-rc_ctl, ctl_rows = get_json("/kiosk/browse_listings", { status: "closed" }, ALICE.bearer)
+rc_ctl, ctl_rows = get_json("/kiosk/browse_listings", { category_slug: "bikes" }, ALICE.bearer)
 record(results, "OutOfEnumFilterIsNotSilentlyReinterpreted",
        rc_bad == 400 && bad_status["code"] == "bad_request" &&
-         detail_bad.include?("open") && detail_bad.include?("closed") &&
+         detail_bad.include?("bikes") && detail_bad.include?("housing") &&
          rc_ctl == 200 && ctl_rows.is_a?(Array),
-       "status=deleted → #{rc_bad}/#{bad_status['code'].inspect} detail=#{detail_bad[0, 120].inspect}; " \
-       "CONTROL status=closed → #{rc_ctl}/#{ctl_rows.is_a?(Array) ? "array" : ctl_rows.class} " \
-       "(want 400 bad_request naming open and closed, and an ANSWERED control)")
+       "category_slug=no-such-section → #{rc_bad}/#{bad_status['code'].inspect} " \
+       "detail=#{detail_bad[0, 160].inspect}; " \
+       "CONTROL category_slug=bikes → #{rc_ctl}/#{ctl_rows.is_a?(Array) ? "array" : ctl_rows.class} " \
+       "(want 400 bad_request naming the LIVE categories, and an ANSWERED control)")
+
+# ── LikeMetacharactersAreEscaped (K-914) ─────────────────────────────────────
+#
+# NOT an injection test — record that, because the shape invites the misfiling.
+# Arel's `matches` inlines an ADAPTER-QUOTED literal, so a structural payload
+# lands inside the string with the table intact; that was measured. What was
+# real is that `_` and `%` reached Postgres as LIVE WILDCARDS, so a human
+# searching "50% off" was answered a different question — the same failure the
+# beat above exists for, arriving through the escaping layer instead of a
+# clamp. `sanitize_sql_like` closes it, and the assertion is behavioural: an
+# underscore must match an UNDERSCORE.
+#
+# The control is a keyword that DOES match, so a handler that returned nothing
+# for everything could not pass.
+_, wild_rows = get_json("/kiosk/browse_listings", { keyword: "b_ke" }, ALICE.bearer)
+rc_lit, lit_rows = get_json("/kiosk/browse_listings", { keyword: "bike" }, ALICE.bearer)
+record(results, "LikeMetacharactersAreEscaped",
+       wild_rows.is_a?(Array) && wild_rows.empty? &&
+         rc_lit == 200 && lit_rows.is_a?(Array) && !lit_rows.empty?,
+       "keyword=b_ke → #{wild_rows.is_a?(Array) ? "#{wild_rows.length} rows" : wild_rows.class}; " \
+       "CONTROL keyword=bike → #{rc_lit}/#{lit_rows.is_a?(Array) ? "#{lit_rows.length} rows" : lit_rows.class} " \
+       "(want 0 rows for the escaped wildcard and a non-empty control)")
 
 # ── Verdict ──────────────────────────────────────────────────────────────────
 breaches = results.reject { |r| r[:blocked] }

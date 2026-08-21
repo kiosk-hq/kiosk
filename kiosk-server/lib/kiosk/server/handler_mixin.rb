@@ -49,6 +49,27 @@ module Kiosk
     #                    the method name (a Ruby keyword, or a name that would
     #                    collide with a controller method).
     #
+    # ── A SLOT MAY BE A PROC, for a schema derived from DATA (K-922) ──────
+    # Any part of `input_schema`, `output_schema`, `example_params` or
+    # `example_row` may be a zero-arity proc:
+    #
+    #   input_schema type: "object", additionalProperties: false,
+    #                properties: {
+    #                  category_slug: { type: "string",
+    #                                   enum: -> { Category.pluck(:slug) } },
+    #                }
+    #
+    # Use it when the constraint IS a fact about the operator's rows. Do NOT
+    # write the plain call — `enum: Category.pluck(:slug)` runs while the class
+    # body is read, which is `db:create`, `db:migrate` and `assets:precompile`
+    # too, and it captures a list that then goes stale for the life of the
+    # process. The proc is called when the descriptor is SERVED, memoized, and
+    # re-resolved on a short lifetime, so adding a category publishes itself
+    # without a restart and without a deploy. {Kiosk::Server::SchemaSlots}
+    # carries the mechanism and the concurrency argument. `description`,
+    # `kind` and `wire_name` are NOT resolvable: the first is prose semantics,
+    # the other two are routing facts fixed when the route is drawn.
+    #
     # ── Errors ───────────────────────────────────────────────────────────
     # Rails' idiom, end to end (T-054): `render json:, status:` answers the
     # wire with the status' lone code; a body naming an explicit vocabulary

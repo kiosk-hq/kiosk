@@ -56,6 +56,13 @@ module Kiosk
   # in `Kiosk.configuration.handlers` — that list is how the engine finds it,
   # and since T-081 it is the only way in.
   #
+  # A DESCRIPTOR SLOT MAY BE A PROC when the constraint is a fact about the
+  # operator's data — `enum: -> { Category.pluck(:slug) }`. It is called when
+  # the descriptor is served rather than when the class body is read (which
+  # happens at `db:create` too), memoized, and refreshed on a short lifetime,
+  # so adding a row publishes itself with no restart and no deploy. See
+  # {Kiosk::Server::SchemaSlots}.
+  #
   # A large query result opts into cursor pagination with `render_kiosk_page(rows,
   # next_cursor:, total:)` instead of `render json:`. The BODY is the same bare
   # array either way — the cursor leaves as an RFC 8288 `Link: …; rel="next"`

@@ -128,6 +128,13 @@ module Kiosk
       # of the list is still registered afterwards, by being read; it is
       # development, and every reload, where the omission shows.
       config.to_prepare do
+        # FIRST, and the order matters: {SchemaSlots} latches "this origin has
+        # a data-derived slot" as declarations are read, so it has to be
+        # cleared BEFORE the rebuild below re-reads them. Clearing it after
+        # would throw away the latch the rebuild had just set, and an origin
+        # whose only proc lives in a reloaded class would fall back to
+        # boot-once caching without saying so.
+        Kiosk::Server::SchemaSlots.reset!
         Kiosk::Server::HandlerRegistrations.reload!
         # The catalog `GET <mount>/schema` serves is DERIVED from the registry
         # that line just rebuilt (T-094), so it is invalidated in the same

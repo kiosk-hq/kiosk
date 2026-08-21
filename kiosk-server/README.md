@@ -356,6 +356,28 @@ so the app fails to boot instead of publishing an incomplete contract.
 All of them surface in `GET <mount>/schema`, which is how an assistant discovers
 the surface.
 
+**A schema slot may be a proc, when the constraint is a fact about your data.**
+Any part of `input_schema`, `output_schema`, `example_params` or `example_row`
+may be a zero-arity proc:
+
+```ruby
+input_schema type: "object", additionalProperties: false,
+             properties: {
+               category_slug: { type: "string", enum: -> { Category.pluck(:slug) } },
+             }
+```
+
+Write the proc, not the plain call. `enum: Category.pluck(:slug)` runs while the
+class body is read — which is `db:create`, `db:migrate` and
+`assets:precompile` as well as a serving boot, where there is no table to read —
+and it captures a list that then goes stale for the life of the process. The
+proc is called when the descriptor is SERVED, resolved once and reused for a
+short window, and re-resolved after it: so adding a category publishes itself,
+with no restart and no deploy. The catalog's `?v=` version moves with it, and
+the discovery document republishes the new link within its own minute.
+`description`, `kind` and `wire_name` are not resolvable — the first is prose
+semantics, the other two are routing facts fixed when the route is drawn.
+
 
 ### Two things to know
 

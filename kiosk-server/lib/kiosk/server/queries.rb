@@ -1,6 +1,7 @@
 # frozen_string_literal: true
 
 require "kiosk/server/errors"
+require "kiosk/server/schema_slots"
 
 module Kiosk
   module Server
@@ -61,6 +62,9 @@ module Kiosk
     #
     # `params` — the free-text hint ADR-0023 retired — is not a macro at all.
     module Queries
+      # Which registry a memoized descriptor belongs to ({SchemaSlots}).
+      SCOPE = :query
+
       # Internal entry holding a handler (callable) plus optional discovery metadata.
       # Defined at module scope so reset! can replace @registry without affecting the
       # constant. Not part of the public API — callers always go through fetch/describe/catalog.
@@ -77,6 +81,13 @@ module Kiosk
         # @return [Entry] the recorded entry
         def declare(name, handler, description: nil, input_schema: nil,
                     output_schema: nil, example_params: nil, example_row: nil)
+          # A declaration whose schema slots carry a proc puts this origin on
+          # the resolving path (K-922). STRUCTURAL: it looks for procs, it
+          # never calls one — a class body is read at `db:create` too.
+          SchemaSlots.note_declaration(
+            input_schema: input_schema, output_schema: output_schema,
+            example_params: example_params, example_row: example_row,
+          )
           registry[name.to_s] = Entry.new(
             handler: handler, description: description,
             input_schema: input_schema, output_schema: output_schema,
@@ -114,12 +125,20 @@ module Kiosk
               hint: not_found_hint(name),
             )
           end
-          descriptor = { name: name.to_s, description: entry.description, params: nil }
-          descriptor[:input_schema]   = entry.input_schema   unless entry.input_schema.nil?
-          descriptor[:output_schema]  = entry.output_schema  unless entry.output_schema.nil?
-          descriptor[:example_params] = entry.example_params unless entry.example_params.nil?
-          descriptor[:example_row]    = entry.example_row    unless entry.example_row.nil?
-          descriptor
+          # A slot may be a PROC (K-922) — a schema derived from the operator's
+          # own rows, `enum: -> { Category.pluck(:slug) }`. {SchemaSlots}
+          # resolves it lazily and memoizes it with a lifetime, so an operator
+          # who adds a row does not have to redeploy to publish it, and the
+          # proc is not called on the per-request validation path. With no
+          # proc anywhere on the origin it yields straight through.
+          SchemaSlots.descriptor(SCOPE, name, entry) do
+            descriptor = { name: name.to_s, description: entry.description, params: nil }
+            descriptor[:input_schema]   = entry.input_schema   unless entry.input_schema.nil?
+            descriptor[:output_schema]  = entry.output_schema  unless entry.output_schema.nil?
+            descriptor[:example_params] = entry.example_params unless entry.example_params.nil?
+            descriptor[:example_row]    = entry.example_row    unless entry.example_row.nil?
+            descriptor
+          end
         end
 
         # Returns all registered queries as an Array of descriptor Hashes, sorted by name.

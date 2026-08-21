@@ -4,6 +4,7 @@ require "digest"
 require "json"
 require "kiosk/server/actions"
 require "kiosk/server/queries"
+require "kiosk/server/schema_slots"
 require "kiosk/server/version"
 
 module Kiosk
@@ -44,6 +45,25 @@ module Kiosk
     # stale catalogue. That check is three array reads; the DERIVATION — build
     # every descriptor, serialize, hash — is what happens once.
     #
+    # ── "Once per boot" HAS AN EXCEPTION SINCE K-922, and it is the point ───
+    #
+    # A descriptor slot may be a PROC — `enum: -> { Category.pluck(:slug) }` —
+    # which makes the catalogue a function of the operator's ROWS, not only of
+    # their code. Phil's constraint is that such a change «должен обновляться
+    # динамически, без деплоя»: adding a category must publish itself without
+    # a restart. A memo keyed on the verb NAMES cannot see that change — the
+    # names did not move — so {cache_key} carries {SchemaSlots.epoch} too, and
+    # this document re-derives once per refresh window while any slot is
+    # dynamic. On an origin with no proc anywhere the epoch is a constant `0`
+    # and nothing about the boot-derived memo changes.
+    #
+    # THE DERIVATION IS SYNCHRONISED, for the same reason {SchemaSlots} is: a
+    # dynamic slot means the derivation runs a QUERY, and Puma is
+    # multi-threaded, so an unlocked double-check would run it once per racing
+    # thread. {MUTEX} is taken AFTER {SchemaSlots::MUTEX} is never taken —
+    # this module locks first and calls into that one, never the reverse — so
+    # the two cannot deadlock.
+    #
     # ── The digest is a cache-busting version, not a secret ────────────────
     #
     # It travels two ways: as the strong `ETag` of the response, and as the
@@ -61,6 +81,9 @@ module Kiosk
       # Hex characters of SHA-256 kept. 128 bits: collision-free for a
       # cache-busting version, and short enough to read in a URL.
       DIGEST_LENGTH = 32
+
+      # Guards {derive} and {derive!}. See the header note.
+      MUTEX = Mutex.new
 
       class << self
         # The catalog document, ready to serialize: `{queries:, actions:}`.
@@ -104,8 +127,25 @@ module Kiosk
         # Derive now, discarding any memo. {Engine} calls this at
         # `after_initialize`; a host that builds its registry by some other
         # route may call it too.
+        #
+        # A DYNAMIC SLOT MAY NOT BE RESOLVABLE YET, and that is not an error
+        # here (K-922). `after_initialize` runs on EVERY boot — `db:create`,
+        # `db:migrate` and `assets:precompile` included — and a slot declared
+        # `enum: -> { Category.pluck(:slug) }` has no table to read at the
+        # first two. Deriving eagerly is an optimisation, so when it fails on
+        # an origin that has a proc somewhere, the memo is simply left empty
+        # and the first request pays for it (and raises there, in front of a
+        # caller, if the database is genuinely broken). An origin with NO proc
+        # anywhere cannot hit this: nothing in its derivation touches the
+        # database, so a raise is a real defect and is re-raised.
         def derive!(config: Kiosk.configuration)
-          @memo = build(config)
+          MUTEX.synchronize { @memo = build(config) }
+          self
+        rescue StandardError => error
+          raise unless SchemaSlots.dynamic_declarations?
+
+          @memo = nil
+          deferred_derivation_warning(error)
           self
         end
 
@@ -124,10 +164,20 @@ module Kiosk
         # `to_prepare`, which is the only way a descriptor changes in a
         # running process.
         def derive(config:)
-          key = cache_key(config)
-          return @memo if @memo && @memo[:key] == key
+          key  = cache_key(config)
+          memo = @memo
+          return memo if memo && memo[:key] == key
 
-          @memo = build(config, key: key)
+          MUTEX.synchronize do
+            # RE-READ INSIDE THE LOCK, key included: the epoch may have rolled
+            # while this thread was waiting, and the thread that held the lock
+            # may already have built exactly what this one wants.
+            key  = cache_key(config)
+            memo = @memo
+            next memo if memo && memo[:key] == key
+
+            @memo = build(config, key: key)
+          end
         end
 
         def build(config, key: nil)
@@ -139,8 +189,22 @@ module Kiosk
             json: JSON.generate(document).freeze, digest: digest.freeze }.freeze
         end
 
+        # `SchemaSlots.epoch` is the ONLY member that can move without a code
+        # change, and it is a constant `0` unless some declaration carries a
+        # proc — see the header note.
         def cache_key(config)
-          [config.object_id, Queries.known.sort, Actions.known.sort, Array(config.capabilities)]
+          [config.object_id, Queries.known.sort, Actions.known.sort,
+           Array(config.capabilities), SchemaSlots.epoch]
+        end
+
+        def deferred_derivation_warning(error)
+          message =
+            "[kiosk-server] the schema catalog could not be derived at boot " \
+            "(#{error.class}: #{error.message}). A descriptor slot on this origin is " \
+            "data-derived (a proc), and the data was not reachable — normal during " \
+            "db:create, db:migrate and assets:precompile. It will be derived on first read."
+          logger = ::Rails.logger if defined?(::Rails) && ::Rails.respond_to?(:logger)
+          logger ? logger.info(message) : warn(message)
         end
 
         # EVERYTHING THAT CAN CHANGE THE BYTES A CLIENT WOULD CACHE, and

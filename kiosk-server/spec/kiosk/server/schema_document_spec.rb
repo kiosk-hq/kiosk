@@ -165,4 +165,64 @@ RSpec.describe Kiosk::Server::SchemaDocument do
       expect(described_class.document[:queries].map { |d| d[:name] }).to eq(%w[brunch])
     end
   end
+
+  # ── A DATA-DERIVED SLOT (K-922) ────────────────────────────────────────────
+  #
+  # Phil: «каталог должен обновляться динамически, без деплоя. Было бы глупо
+  # деплоить … для того чтобы опубликовалось новое объявление.» A slot declared
+  # `enum: -> { Category.pluck(:slug) }` makes the catalogue a function of the
+  # operator's ROWS, and the boot memo is keyed on the verb NAMES — which do
+  # not move when a category is added. Without the epoch in {cache_key} the
+  # digest would freeze at boot and a new category would need a RESTART to be
+  # published: the exact failure the decision rules out.
+  describe "when a descriptor slot is data-derived" do
+    it "moves the digest when the derived value changes, with no reset and no restart" do
+      slugs = %w[bikes]
+      Kiosk::Server::SchemaSlots.refresh_seconds = 0
+      declare_query("board", input_schema: {
+                      type: "object", properties: { category: { enum: -> { slugs } } },
+                    })
+      first = digest
+
+      slugs = %w[bikes free] # the operator adds a category
+
+      expect(digest).not_to eq(first)
+      expect(described_class.json).to include('"enum":["bikes","free"]')
+    end
+
+    it "keeps the digest STABLE while the memo window holds" do
+      slugs = %w[bikes]
+      Kiosk::Server::SchemaSlots.refresh_seconds = 3600
+      declare_query("board", input_schema: {
+                      type: "object", properties: { category: { enum: -> { slugs } } },
+                    })
+      first = digest
+      slugs = %w[bikes free]
+
+      expect(digest).to eq(first)
+    end
+
+    # `after_initialize` runs on EVERY boot, `db:create` and `db:migrate`
+    # included, and a proc that reads a table cannot succeed there. Eager
+    # derivation is an optimisation, so it defers rather than taking the boot
+    # down — and the failure is still visible, because `derived?` says so.
+    it "defers derivation instead of failing the boot when the data is unreachable" do
+      declare_query("board", input_schema: {
+                      type: "object", properties: { category: { enum: -> { raise "no table yet" } } },
+                    })
+
+      expect { described_class.derive! }.not_to raise_error
+      expect(described_class.derived?).to be(false)
+    end
+
+    # The other half of that: an origin with NO proc anywhere touches no
+    # database during derivation, so a raise there is a real defect and must
+    # not be swallowed by the rescue above.
+    it "still raises at boot on an origin with no data-derived slot" do
+      declare_query("menu")
+      allow(Kiosk::Server::Queries).to receive(:catalog).and_raise("a real defect")
+
+      expect { described_class.derive! }.to raise_error("a real defect")
+    end
+  end
 end

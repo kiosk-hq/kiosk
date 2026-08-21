@@ -240,6 +240,46 @@ RSpec.describe "mount Kiosk::Server::Engine (the one-line surface)" do
   # cannot see where it was installed. The two host routes are the blast-radius
   # half: an engine mounted inside somebody else's application must not stamp
   # that application's responses, working or broken.
+  # K-749(b). §3 point 6 is a MUST over the WHOLE mount — "the discovery
+  # document's `endpoint`, and everything below it: the four wire verbs, the
+  # auth endpoints, the account-binding endpoints, the KYC endpoint, and the
+  # mount-relative JWKS … on success and on error alike" — and until this
+  # example the only coverage was three `assert` lines in `e2e/assistant.sh`
+  # against ONE endpoint, plus unit examples that drive `HeadersMiddleware`
+  # with synthetic paths rather than the real route set. Neither could tell you
+  # whether the auth, binding, KYC or JWKS routes actually carry the headers.
+  #
+  # This walks the whole mounted surface the probe already dials — every path
+  # the engine draws, whatever each answers — and asserts both halves of the
+  # rule at once: everything under the mount carries all three, and the
+  # ROOT-served discovery documents carry none, because they sit outside the
+  # mount and state their own `min_client` and format `version` instead.
+  context "the three version headers, over the whole mounted surface (§3 point 6)" do
+    def three_headers = %w[kiosk-server-version kiosk-api-version kiosk-min-client]
+
+    it "stamps every path UNDER the mount — success and refusal alike" do
+      under_mount = probe("mounted").select { |line, _| line.start_with?("GET /kiosk", "POST /kiosk") }
+      expect(under_mount.size).to be >= 18 # the drawn surface, not a sample
+
+      under_mount.each do |line, res|
+        expect(res["headers"].keys & three_headers)
+          .to match_array(three_headers), "#{line} answered #{res['status']} without all three headers"
+      end
+    end
+
+    it "leaves the ROOT-served discovery documents bare — they are outside the mount" do
+      outside = probe("mounted").select do |line, res|
+        res.is_a?(Hash) && !line.start_with?("GET /kiosk", "POST /kiosk")
+      end
+      expect(outside.keys).to include("GET /agents.txt", "GET /.well-known/kiosk.json")
+
+      outside.each do |line, res|
+        expect(res["headers"].keys & three_headers)
+          .to be_empty, "#{line} carried a mount-only version header"
+      end
+    end
+  end
+
   context "when Rails composes the response itself (§3.6, K-824)" do
     def three_headers = %w[kiosk-server-version kiosk-api-version kiosk-min-client]
 

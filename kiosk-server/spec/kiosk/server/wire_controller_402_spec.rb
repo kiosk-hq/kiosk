@@ -198,6 +198,58 @@ RSpec.describe "WireController 402 WWW-Authenticate (W4)" do
     end
   end
 
+  # ─── payment_failed → NO WWW-Authenticate ──────────────────────────────
+  #
+  # K-749(a). §9 carries a MUST NOT — an operator MUST NOT emit a
+  # `WWW-Authenticate` header on `payment_failed` — and NOTHING in the tree
+  # asserted it, because nothing asserted the ABSENCE of that header on any
+  # response at all. The behaviour is right BY CONSTRUCTION:
+  # `www_authenticate_for` is a two-`when` `case` with no `else`, so every
+  # other code falls through to nil. That construction is one `else` away from
+  # violating a MUST with the whole suite still green — a diagnostic default, a
+  # rescue that sets a challenge — which is exactly what a by-construction
+  # property needs a test for.
+  #
+  # `payment_failed` is the third 402 and the reason the rule exists: the other
+  # two name a gate the client can act on (solve a proof / set up a card), and
+  # this one names none — the charge was attempted and did not go through, and
+  # there is no scheme to re-present credentials under.
+  describe "the payment_failed 402" do
+    before do
+      # No database: the executor is stubbed to fail the way a PSP decline
+      # reaches the render seam, which is the only part this example is about.
+      ar_base = Class.new do
+        define_singleton_method(:connection)       { Object.new }
+        define_singleton_method(:lease_connection) { Object.new }
+      end
+      stub_const("ActiveRecord::Base", ar_base)
+      allow(Kiosk::Server::Executor).to receive(:call).and_raise(
+        Kiosk::Server::Errors::PaymentFailed.new(
+          "the card was declined", hint: "the human may need to update the payment method",
+        ),
+      )
+    end
+
+    it "carries NO WWW-Authenticate header — no scheme names this gate (§9)" do
+      declare_action("checkout")
+      env = bearer_env("/kiosk/checkout", agent_token, method: "POST",
+                       input: "{}", "CONTENT_TYPE" => "application/json")
+      env["action_dispatch.request.path_parameters"] =
+        { controller: "kiosk/server/verb", action: "create", kiosk_verb: "checkout" }
+      status, headers, raw = Kiosk::Server::VerbController.action(:create).call(env)
+      body = +""
+      raw.each { |chunk| body << chunk }
+      problem = JSON.parse(body, symbolize_names: true)
+
+      expect(status).to eq(402)
+      expect(problem[:code]).to eq("payment_failed")
+      expect(headers.to_h.transform_keys(&:downcase)).not_to have_key("www-authenticate")
+      # The control: the SAME render seam DOES stamp the header for the two
+      # codes that have a scheme, which is asserted above — so this absence is
+      # a decision, not a seam that never emits anything.
+    end
+  end
+
   # ─── non-402 errors carry NO WWW-Authenticate header ───────────────────
   #
   # Dialed at `pay` rather than at `schema`: T-094 made `GET /kiosk/schema`

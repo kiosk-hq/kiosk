@@ -109,11 +109,25 @@ results[:link_mint] = rc
 abort "link mint failed (#{rc}): #{JSON.generate(link)}" unless rc == 201
 
 # ── 3. The SAME key redeems the code → REBIND + assistant_claimed migration ──
-# The rebind watermark-revokes tokens minted STRICTLY before it (JWT iat is
-# second-resolution). Cross a second boundary so the pre-link token, minted
-# above, is unambiguously older than the rebind instant — over a real network
-# these steps span seconds; the sleep just makes the local demo deterministic.
-sleep 1.1
+# Until K-836 there was a `sleep 1.1` here, to CROSS a wall-clock second so the
+# pre-link token was unambiguously older than the rebind instant — the watermark
+# was stamped at the CURRENT second and the store compares a strict
+# `iat < watermark`, so a token minted in the rebind's own second survived it.
+# The driver worked AROUND the gap §6.3 says must not exist ("the key's pre-link
+# tokens MUST stop verifying").
+#
+# It is replaced by its opposite. Align to just AFTER a second boundary, mint
+# one more pre-link token, and claim immediately: the login and the claim then
+# land in the SAME second, which is the case that used to slip through, and (b1)
+# below asserts it dies. The alignment is what makes that deterministic rather
+# than dependent on how long the preceding HTTP calls happened to take — the
+# original steps span seconds on their own, which is why the plain removal of
+# the sleep would have proven nothing.
+sleep(1.0 - (Time.now.to_f % 1.0))
+rc, same_second = post_json("/kiosk/auth/login", { public_key: pem, signed: pop_proof(key, pem) })
+abort "pre-claim login failed (#{rc}): #{JSON.generate(same_second)}" unless rc == 200
+same_second_token = same_second.fetch("access_token")
+
 rc, claimed = post_json("/kiosk/auth/claim",
                         { code: link.fetch("link_code", ""), public_key: pem, signed: pop_proof(key, pem) })
 results[:claim_status]        = rc
@@ -124,11 +138,24 @@ STDERR.puts "  Rebind: agent_id=#{claimed['agent_id']} now user_id=#{claimed['us
 
 # (b) The PRE-LINK token is watermark-revoked by the rebind (principal change ⇒
 #     the agent must re-login) — its next call is rejected 401, not merely empty.
+#     With the sleep gone this now exercises the same-second case (K-836).
 rc, _prelink = get_json("/kiosk/my_lists", {}, bearer(headless_token))
 results[:prelink_status]   = rc
 results[:prelink_revoked]  = rc == 401
 
+# (b1) K-836: and so is the pre-link token minted in the rebind's OWN second.
+#      This is the one the old strict `iat < watermark` let through — it kept
+#      full access to the assistant's pre-link rows for its whole lifetime.
+rc, _same_second = get_json("/kiosk/my_lists", {}, bearer(same_second_token))
+results[:same_second_prelink_status]  = rc
+results[:same_second_prelink_revoked] = rc == 401
+
 # (c) The assistant RE-LOGS IN (fresh token bound to Alice) and sees "Hike".
+#     §6.3 names this as the second way back in, and it happens in the SAME
+#     second as the claim here — so it also pins the other half of K-836: the
+#     watermark that kills the pre-link token must NOT kill the token minted
+#     after it. The engine clamps every mint to the agent's watermark, which is
+#     what makes both true at once.
 rc, relog = post_json("/kiosk/auth/login", { public_key: pem, signed: pop_proof(key, pem) })
 abort "re-login failed (#{rc}): #{JSON.generate(relog)}" unless rc == 200
 new_token = relog.fetch("access_token")

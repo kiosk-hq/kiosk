@@ -194,12 +194,28 @@ module Kiosk
 
           # A rebind is a principal change: the key's pre-link tokens still
           # carried the OLD `sub`, so they must die exactly as `unlink!` does —
-          # "linking makes the agent re-login" holds literally. Same watermark
-          # `/auth/revoke` and `unlink!` use: every token minted strictly BEFORE
-          # this instant stops verifying; the replacement token minted just below
-          # (and any later `/auth/login`) is issued at/after the watermark and
-          # survives the store's strict `iat < watermark` check.
-          config.revocation_store&.revoke_all(agent_id, at: Time.now.to_i)
+          # "linking makes the agent re-login" holds literally, which is what
+          # §6.3's MUST says.
+          #
+          # The watermark is the NEXT second, not this one (K-836, the residue
+          # of K-835). JWT timestamps are second-resolution and the store's
+          # comparison is a strict `iat < watermark`, so a watermark of
+          # `Time.now.to_i` leaves EVERY pre-link token minted in the same
+          # wall-clock second verifying for its full remaining lifetime —
+          # measured 3/3 against a booted demo: a pre-link token whose `iat`
+          # equals the rebind second still authenticated 200 afterwards.
+          #
+          # `unlink!` can simply pass `+1` because it returns no token. A rebind
+          # DOES return one — and §6.3 also names `/auth/login` as the other way
+          # back in, which an assistant may reach for in this very second
+          # (`kiosk-demo-tudu/script/link_flow.rb` does exactly that). Both are
+          # covered without a second rule here: the bundled IdP clamps every
+          # mint to the agent's current watermark, so any token minted after
+          # this line is dated AT the watermark and survives it — the
+          # replacement below, and a later login alike. The invariant lives in
+          # ONE place, {AgentIdentityProviders::DefaultAgentIdp#mint_instant},
+          # rather than in each caller.
+          config.revocation_store&.revoke_all(agent_id, at: Time.now.to_i + 1)
 
           token = issue_token(agent_id, effective_role)
           { agent_id: agent_id, user_id: user_id.to_s, access_token: token, fresh: false }

@@ -36,7 +36,9 @@ module Kiosk
           # Role-less principals get NO role claim — an empty-string
           # claim would round-trip into an unusable Identity.
           claims[:role] = role.to_s unless role.nil? || role.to_s.empty?
-          JwtIssuer.issue(claims: claims, audience: Kiosk.configuration.issuer)
+          JwtIssuer.issue(
+            claims: claims, audience: Kiosk.configuration.issuer, now: mint_instant(agent_id),
+          )
         end
 
         def agent_payment_key(agent_id)
@@ -95,6 +97,52 @@ module Kiosk
         end
 
         private
+
+        # THE MINT INSTANT — never earlier than the agent's revocation
+        # watermark, so this IdP can never hand out a token that is already
+        # revoked (K-836).
+        #
+        # JWT timestamps are second-resolution and {RevocationStore} compares
+        # `iat < watermark`, so "revoke everything for this agent" and "mint a
+        # token for this agent" collide inside one wall-clock second. Both
+        # resolutions of that collision used to be wrong somewhere:
+        #
+        #   * a watermark of `Time.now.to_i` leaves every token minted in that
+        #     second verifying — which is the aperture §6.3's MUST forbids on
+        #     the claim rebind, measured 3/3 on a booted demo;
+        #   * a watermark of `Time.now.to_i + 1` closes it, but then kills the
+        #     NEXT token too, and `/auth/login` in that same second is the
+        #     recovery path §6.3 itself names ("or by re-running /auth/login").
+        #     `kiosk-demo-tudu/script/link_flow.rb` walks exactly that sequence.
+        #
+        # Clamping here resolves both at once and puts the invariant in ONE
+        # place instead of asking each caller to reason about it: a caller
+        # revoking against a key stamps the whole second (`+1`), and any token
+        # minted afterwards — the rebind's own replacement, a later
+        # `/auth/login` — is simply dated at the watermark and survives. A
+        # clamped token is at most one second ahead: inside the verifier's ±60s
+        # leeway, its lifetime unchanged (`exp` moves with `iat`), and these
+        # tokens are verified only by the origin that issued them.
+        #
+        # `/auth/revoke` is untouched: it stamps the CURRENT second, which is
+        # never greater than now, so nothing is clamped and the strict `<`
+        # keeps its replacement alive exactly as before.
+        #
+        # STORE CONTRACT: an operator-supplied `revocation_store` that does not
+        # implement `watermark_for` keeps the old behaviour rather than
+        # crashing at token issuance — the reader is part of the documented
+        # interface (see {RevocationStore}), and a store missing it re-opens
+        # this one-second aperture for its own deployment.
+        def mint_instant(agent_id)
+          now   = Time.now
+          store = Kiosk.configuration.revocation_store
+          return now unless store.respond_to?(:watermark_for)
+
+          watermark = store.watermark_for(agent_id)
+          return now if watermark.nil? || watermark <= now.to_i
+
+          Time.at(watermark)
+        end
 
         def lookup_user_id(agent_id)
           row = agents_column("user_id", agent_id)

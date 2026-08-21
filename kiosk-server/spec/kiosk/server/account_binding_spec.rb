@@ -389,6 +389,62 @@ RSpec.describe Kiosk::Server::AccountBinding do
       expect { verify(fresh) }.not_to raise_error
       expect(verify(fresh)[:sub]).to eq(user_id)
     end
+
+    # K-836 — the same second-resolution aperture K-835 closed on `unlink`,
+    # which was still open HERE, where §6.3 also says MUST ("the key's pre-link
+    # tokens MUST stop verifying, watermark-revoked exactly as unlink revokes").
+    # The example above only proves it for a token minted 10 seconds earlier;
+    # the strict `iat < watermark` comparison let a pre-link token whose `iat`
+    # EQUALS the rebind second keep working for its full remaining lifetime
+    # (measured 3/3 on a booted philslist). Unlike unlink, this caller returns a
+    # replacement token, which is why it cannot just pass `+1` and stop: the
+    # replacement is minted AT the watermark so it survives its own revocation.
+    it "revokes a pre-link token minted in the SAME wall-clock second as the rebind" do
+      frozen = Time.at(Time.now.to_i)
+      allow(Time).to receive(:now).and_return(frozen)
+
+      prelink = Kiosk::Server::JwtIssuer.issue(
+        claims:   { sub: previous_user, agent_id: agent_id, role: "customer", actor: "agent" },
+        audience: "https://demo.example",
+      )
+      expect { verify(prelink) }.not_to raise_error # valid before the rebind
+
+      fresh = described_class.bind!(public_key_pem: pem, user_id: user_id).fetch(:access_token)
+
+      expect { verify(prelink) }.to raise_error(Kiosk::Server::JwtIssuer::RevokedError)
+      # …and the replacement the SAME call returns is still usable, which is the
+      # constraint that rules out unlink's fix being copied here verbatim.
+      expect { verify(fresh) }.not_to raise_error
+      expect(verify(fresh)[:sub]).to eq(user_id)
+    end
+
+    it "stamps the watermark at the NEXT second and dates the replacement token at it" do
+      now = Time.now.to_i
+      allow(Time).to receive(:now).and_return(Time.at(now))
+
+      fresh = described_class.bind!(public_key_pem: pem, user_id: user_id).fetch(:access_token)
+
+      expect(Kiosk.configuration.revocation_store.watermark_for(agent_id)).to eq(now + 1)
+      expect(verify(fresh)[:iat]).to eq(now + 1)
+    end
+
+    # §6.3 offers TWO ways back in after a rebind — the token the claim returns,
+    # "or by re-running `/auth/login`" — and `kiosk-demo-tudu`'s link driver
+    # takes the second one immediately. A `+1` watermark on its own would have
+    # killed that login token for the rest of the same second (traded one
+    # broken MUST for another), which is why the clamp lives in the IdP and not
+    # in this caller: a token minted AFTER a revocation is never born revoked.
+    it "leaves a /auth/login token minted in that same second alive" do
+      now = Time.now.to_i
+      allow(Time).to receive(:now).and_return(Time.at(now))
+
+      described_class.bind!(public_key_pem: pem, user_id: user_id)
+      relogin = Kiosk::Server::AgentIdentityProviders::DefaultAgentIdp.new
+                                                                     .issue(agent_id: agent_id, role: "customer")
+
+      expect { verify(relogin) }.not_to raise_error
+      expect(verify(relogin)[:iat]).to eq(now + 1)
+    end
   end
 
   describe ".unlink!" do
@@ -443,8 +499,10 @@ RSpec.describe Kiosk::Server::AccountBinding do
     # will ever hold and it works for its full remaining lifetime (measured on
     # a booted philslist: read + write still 200 at +65s, token lifetime 3600s).
     # Unlink mints no replacement token, so it can and must cover the whole
-    # second. The two watermarks that DO mint a replacement (`/auth/revoke`,
-    # the claim rebind) keep `Time.now.to_i` on purpose — see RevocationStore.
+    # second. The claim rebind passes the next second too since K-836 — it
+    # returns a replacement, so it dates that token AT the watermark rather than
+    # leaning on the strict `<`. `/auth/revoke` alone keeps `Time.now.to_i`, and
+    # the reason is on RevocationStore: the caller holds the private key there.
     it "stamps the watermark at the NEXT second, so a same-second token is covered too" do
       route_exec_query(con) { [{ "id" => "agent-1" }] }
       now = Time.now.to_i

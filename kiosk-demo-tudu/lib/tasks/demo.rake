@@ -185,6 +185,10 @@ namespace :demo do
       check.call("link code minted (session channel) → 201",        r["link_mint"] == 201)
       check.call("claim rebound the key to Alice (same agent_id)",   r["claim_status"] == 201 && r["claim_rebound_to_holder"] && r["claim_same_agent_id"])
       check.call("pre-link token revoked by the rebind (principal change ⇒ 401)", r["prelink_status"] == 401 && r["prelink_revoked"])
+      # K-836: the same, for a token minted in the rebind's OWN wall-clock
+      # second — the case the strict `iat < watermark` comparison used to let
+      # through, and which the driver used to sidestep with a sleep.
+      check.call("a pre-link token minted in the rebind's own second is revoked too (K-836)", r["same_second_prelink_status"] == 401 && r["same_second_prelink_revoked"])
       check.call("re-login mints a token whose sub is Alice",        r["relogin_sub_is_holder"])
       check.call("re-logged-in agent sees 'Hike' as owner under Alice", r["agent_sees_migrated_list"])
       check.call("Alice's browser session sees 'Hike'",             r["human_sees_migrated_list"])

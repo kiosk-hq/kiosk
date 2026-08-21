@@ -11,7 +11,8 @@ Reproducible end-to-end test of the Kiosk OSS gems. The same script (`run.sh`) r
 - The 0.4 per-verb endpoints (`GET /kiosk/<query-name>`, `POST /kiosk/<action-name>`) and `POST /kiosk/pay` dispatch through `Kiosk::Server::Executor` — a query's arguments ride in the query string, an action's in the JSON body
 - `GET /kiosk/salons` and `GET /kiosk/my_appointments` reach the origin's named queries and answer a bare JSON array of rows (no envelope; a page's cursor is an RFC 8288 `Link` header and its row count `X-Total-Count`)
 - `POST /kiosk/book_appointment` reaches the origin's named Action and answers that handler's own JSON object
-- Handler controllers declared with `include Kiosk::Query` / `Kiosk::Action` and named in `c.handlers` are registered and served in DEVELOPMENT, where nothing eager-loads `app/` (K-761)
+- Handler controllers declared with `include Kiosk::Handler` and named in `c.handlers` are registered and served in DEVELOPMENT, where nothing eager-loads `app/` (K-761)
+- ONE controller serves BOTH kinds: `Kiosk::BookingsController` declares `my_appointments` (`kind :query`, reached by `GET`) and `book_appointment` (`kind :action`, reached by `POST`), and both answer over the wire (K-921)
 - Errors are RFC 9457 problem documents — `application/problem+json`, `type`/`title`/`status`/`code`/`hint`, the branch point a FLAT top-level `code` — with the right HTTP status (unknown verb name → 404 `not_found`, missing/garbage token → 401 `unauthenticated`)
 - The `/kiosk/.well-known/jwks.json` endpoint publishes exactly one RSA/RS256 signing key (kty/use/alg/kid/n/e) and never leaks private parameters (`d`, `p`)
 - The partial UNIQUE index on `kiosk.agents.public_key` (WHERE `revoked_at IS NULL`) rejects a second LIVE row for one key at the DB level while allowing a revoked re-registration
@@ -88,8 +89,8 @@ e2e/
     ├── register_pow_flow.rb                # register-PoW driver: no-proof register → 402, solve + re-POST with Kiosk-PoW header → 201, token authenticates a verb
     ├── pay_flow.rb                         # no-human AP2 pay flow: register → sign mandates → pay
     ├── claim_flow.rb                       # account-binding claim ceremony: fresh key → verify-page approval → PoP token → bound wire call → link-code redeem → unlink
-    ├── catalog_controller.rb               # Kiosk::CatalogController — `include Kiosk::Query`: the salons + my_appointments verbs
-    ├── bookings_controller.rb              # Kiosk::BookingsController — `include Kiosk::Action`: the book_appointment verb
+    ├── catalog_controller.rb               # Kiosk::CatalogController — `include Kiosk::Handler`, `kind :query`: the salons verb
+    ├── bookings_controller.rb              # Kiosk::BookingsController — `include Kiosk::Handler`: the my_appointments QUERY and the book_appointment ACTION in ONE controller (K-921)
     ├── devise_initializer.rb               # Devise setup (database_authenticatable) — the HUMAN channel the binding pages authenticate
     ├── initializer_kiosk.rb                # Kiosk.configure, including `c.handlers` naming the two controllers above
     └── routes.rb                           # hand-draws /kiosk/schema, /kiosk/pay, /kiosk/openapi.json, /kiosk/auth/{challenge,register,login,revoke,link,claim,unlink}, jwks, oauth/* device + verify routes, the root discovery documents (/agents.{txt,json}, /auth.md, /.well-known/{agent-configuration,kiosk.json,api-catalog}) and — LAST, so every reserved line above wins — the per-verb `GET|POST /kiosk/:kiosk_verb` pair

@@ -10,7 +10,7 @@ The full host-side surface is shipped and covered by the gem's own suite (500+ p
 - **Wire-protocol controllers** — `VerbController` serves ONE ENDPOINT PER VERB (`GET <mount>/<query-name>`, `POST <mount>/<action-name>`); `WireController` serves the two reserved endpoints `GET <mount>/schema` and `POST <mount>/pay`; `OpenApiController` serves a derived OpenAPI description of both at `GET <mount>/openapi.json`; `AuthController` runs the register/login proof-of-possession challenge-response (kiosk-pop — the auth story); JWKS backs stateless token verification. (Protocol 0.4 deleted 0.3's multiplexed `POST <mount>/query` and `POST <mount>/run` outright — there is no route left at either path.)
 - **Account binding** — the claim/link ceremonies bind an agent's public key to an existing assistant-account holder's account: OAuth/RFC 8628-shaped device authorization + possession-proof-gated token poll, a session-authenticated verify page and «Link an assistant» page (minimal overridable engine views), link-code mint/redeem, and unlink. Tokens stay kiosk-pop-minted; the durable `DeviceAuthorizationStores::ActiveRecord` store (migration 004) is the default.
 - **`Kiosk::Server::Executor`** — dispatches resolved commands to the host's registered queries and Actions.
-- **`Kiosk::Query` / `Kiosk::Action`** — the mixins an operator includes into a controller of their own to declare verbs as ordinary Rails actions; the engine registers the controllers named in `c.handlers` at boot and after every reload (see [Declaring queries and actions](#declaring-queries-and-actions)).
+- **`Kiosk::Handler`** — the mixin an operator includes into a controller of their own to declare verbs as ordinary Rails actions; each declaration's `kind` says whether it is a query or an action, so one controller may declare both. The engine registers the controllers named in `c.handlers` at boot and after every reload (see [Declaring queries and actions](#declaring-queries-and-actions)).
 - **Agent registration & login** — `AgentRegistration`, `AgentLogin`, `RegistrationPow`, and the pluggable agent-IdP resolve and mint per-agent identities.
 - **PoW gate** — `PowGate` enforces the reputation policy's N×PoW challenge-response (soft dependency on `kiosk-reputation`; zero overhead when no policy is set).
 - **`Kiosk::Server::WellKnown`** — pure-Ruby builder for `/.well-known/kiosk.json`.
@@ -250,18 +250,24 @@ shipped controllers.
 An assistant reaches a provider at ONE ENDPOINT PER VERB: a query is
 `GET <mount>/<query-name>` with its arguments in the query string, an action is
 `POST <mount>/<action-name>` with its arguments in a JSON body. The operator
-decides what those names are and what they mean. `Kiosk::Query` and
-`Kiosk::Action` are the modules that let a controller answer them; the engine
-routes every registered name without a routes-file edit.
+decides what those names are and what they mean. `Kiosk::Handler` is the module
+that lets a controller answer them; the engine routes every registered name
+without a routes-file edit.
 
 Kiosk ships a **mixin, not a base class**. Which superclass a handler controller
 has is your decision; the `include` is the whole contract.
 
+Which verb reaches a handler is a property of the **declaration**, not of the
+class: `kind :query` puts it on `GET`, `kind :action` on `POST`, and one
+controller may declare both — a resource you think of as one thing is one
+controller. Split when your domain splits.
+
 ```ruby
 # app/controllers/kiosk/catalog_controller.rb
 class Kiosk::CatalogController < ApplicationController   # your base class, your call
-  include Kiosk::Query
+  include Kiosk::Handler
 
+  kind :query
   description "Lists what the shop has in stock right now, so the assistant " \
               "can decide what to put in a basket."
   input_schema  type: "object", additionalProperties: false,
@@ -280,8 +286,9 @@ end
 ```ruby
 # app/controllers/kiosk/orders_controller.rb
 class Kiosk::OrdersController < ApplicationController
-  include Kiosk::Action
+  include Kiosk::Handler
 
+  kind :action
   description "Places an order for the assistant's human and reserves the " \
               "chosen delivery window. Nothing is charged until `pay`."
   input_schema  type: "object",
@@ -320,8 +327,8 @@ environment.
 
 Name the classes as **strings**, not constants: the list is re-resolved on each
 reload, and a constant written here is the boot generation of the class, stale
-the moment Rails reloads it. A name that does not resolve, or a class that
-includes neither mixin, fails the boot loudly rather than serving a silent
+the moment Rails reloads it. A name that does not resolve, or a class that does
+not include the mixin, fails the boot loudly rather than serving a silent
 half-catalog. Handlers put in the registry the other way in
 ([the initializer API](#the-initializer-still-exists)) need no entry.
 
@@ -334,6 +341,7 @@ helper methods stay invisible to the wire.
 
 | macro | what it declares |
 | --- | --- |
+| `kind` | **Required.** `:query` (reached by `GET <mount>/<name>`) or `:action` (`POST <mount>/<name>`). A property of the declaration, so one controller may carry both. There is no default: either one would silently pick an HTTP method for you. |
 | `description` | Semantics **only**: what the verb does, how, and what it returns *in meaning*. Never a field list, a type, a required marker or a param name — those live in the schemas (ADR-0023). |
 | `input_schema` | **Required.** JSON Schema for the params. The input contract: every name, type, enum and range — and the wire coerces and validates every call against it. A verb that takes nothing still declares the empty closed object. |
 | `output_schema` | **Required.** JSON Schema for what comes back, so an assistant knows the result shape without a call-and-observe probe — the only machine-readable statement of the answer, now that there is no response envelope. |
@@ -341,9 +349,9 @@ helper methods stay invisible to the wire.
 | `example_row` | A worked example of the result. |
 | `wire_name` | Optional. The name agents call the verb by, when it cannot be the method name. |
 
-The two **Required** rows are enforced at declaration time, not at request time:
-a verb that omits either raises an `ArgumentError` as its class body is read, so
-the app fails to boot instead of publishing an incomplete contract.
+The **Required** rows are enforced at declaration time, not at request time: a
+verb that omits any of them raises an `ArgumentError` as its class body is read,
+so the app fails to boot instead of publishing an incomplete contract.
 
 All of them surface in `GET <mount>/schema`, which is how an assistant discovers
 the surface.

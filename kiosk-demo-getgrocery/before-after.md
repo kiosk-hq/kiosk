@@ -198,9 +198,10 @@ whole thing.
 ```ruby
 # app/controllers/kiosk/storefront_controller.rb
 class Kiosk::StorefrontController < ActionController::API
-  include Kiosk::Query
+  include Kiosk::Handler
   include KioskRefusals   # the app's own concern: renders a refusal result
 
+  kind :query
   description "Browse in-stock products from the getgrocery catalog (out-of-stock items " \
               "are hidden). Each row carries the stable `sku` — reference a product by " \
               "that, never a numeric id — a `low` flag when stock is running out, and an " \
@@ -240,6 +241,7 @@ class Kiosk::StorefrontController < ActionController::API
                         }
   end
 
+  kind :query
   description "Get the delivery windows still bookable on a chosen day at a chosen " \
               "Dublin address. An address this origin cannot place, or a day already " \
               "gone, is refused 400 naming what is needed. An EMPTY array means every " \
@@ -282,6 +284,7 @@ class Kiosk::StorefrontController < ActionController::API
     }
   end
 
+  kind :query
   description "List this principal's orders with their delivery window, address and where " \
               "their money stands (scoped to the authenticated account). This is the query " \
               "to re-read after a payment whose response never arrived: an order whose " \
@@ -332,7 +335,10 @@ not required for Kiosk's isolation model.
 
 **4. Declare the write verbs next door (with ownership checks)**
 
-A controller declares queries OR actions, never both. `reschedule_delivery` is
+The kind of verb is a property of each DECLARATION (`kind :action` below), not
+of the class, so one controller could carry all eight; these stay in two because
+the reads render projections inline and the writes hand off to Operations.
+`reschedule_delivery` is
 **payment-binding gated** — the Operation behind it verifies a settled mandate
 references the order before mutating. `create_order` attaches ownership via
 `kiosk.current_user_id()` and requires the delivery slot + address up front.
@@ -345,9 +351,10 @@ and `required` lists are the shipped ones verbatim.
 ```ruby
 # app/controllers/kiosk/orders_controller.rb
 class Kiosk::OrdersController < ActionController::API
-  include Kiosk::Action
+  include Kiosk::Handler
   include KioskRefusals   # the app's own concern: turns an Operation result into a render
 
+  kind :action
   description "Create (or replace) a grocery order for the authenticated principal. " \
               "Delivery is part of the order: a slot and an address are REQUIRED. " \
               "Nothing is charged until the cart is settled with `pay` — sign it in EUR " \
@@ -387,6 +394,7 @@ class Kiosk::OrdersController < ActionController::API
     )
   end
 
+  kind :action
   description "Move an ALREADY-PAID order's delivery to a different slot (and optionally " \
               "a new address). This REUSES the order's existing payment — do NOT pay " \
               "again. One reschedule per order; an unpaid order is re-placed via " \

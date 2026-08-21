@@ -169,8 +169,9 @@ thing.
 ```ruby
 # app/controllers/kiosk/hotels_controller.rb
 class Kiosk::HotelsController < ActionController::API
-  include Kiosk::Query
+  include Kiosk::Handler
 
+  kind :query
   description "Browse the whole hotel catalogue this origin serves. It is small, so " \
               "it comes back entire rather than a page at a time. Once the human " \
               "narrows to one, `availability` says which of its room types are still " \
@@ -192,6 +193,7 @@ class Kiosk::HotelsController < ActionController::API
                          .map { |id, name, city| { property_id: id, name:, city: } }
   end
 
+  kind :query
   description "Check which room types are still free at ONE hotel for ONE stay. An " \
               "EMPTY array means that hotel is SOLD OUT for those nights, not that it " \
               "has no rooms. Once the human picks a room type, `reserve_room` holds it."
@@ -224,6 +226,7 @@ class Kiosk::HotelsController < ActionController::API
                          }
   end
 
+  kind :query
   description "List this principal's hotel bookings (scoped to authenticated user). " \
               "This is the query to re-read after a payment whose response never " \
               "arrived: each row says where that booking stands with the hotel and " \
@@ -270,8 +273,9 @@ to read another principal's bookings.
 
 **4. Declare the write verbs next door (`reserve_room`, `confirm_booking`)**
 
-A controller declares queries OR actions, never both — the verb it is reached by
-is a property of the class.
+The kind of verb is a property of each DECLARATION (`kind :action` below), not
+of the class, so one controller could carry all eight. These stay in two because
+the reads render projections inline and the writes hand off to Operations.
 
 Abridged the same way as the read snippet above: two of hoteling's three shipped
 actions (`payment_setup` is left out), with the prose `description` and the
@@ -281,9 +285,10 @@ are the shipped ones verbatim.
 ```ruby
 # app/controllers/kiosk/reservations_controller.rb
 class Kiosk::ReservationsController < ActionController::API
-  include Kiosk::Action
+  include Kiosk::Handler
   include KioskRefusals   # the app's own concern: turns an Operation result into a render
 
+  kind :action
   description "Reserve a room for the authenticated principal (creates a TTL hold), " \
               "not a confirmed stay — confirm_booking finishes it. Sign your AP2 cart " \
               "mandate at the quoted total with a line_item naming the returned booking_id."
@@ -321,6 +326,7 @@ class Kiosk::ReservationsController < ActionController::API
     )
   end
 
+  kind :action
   description "Confirm a reserved booking (requires a payment mandate referencing this " \
               "booking). Returns the durable `confirmation_code` the hotel stores against " \
               "the booking — my_bookings lists the same code afterwards."

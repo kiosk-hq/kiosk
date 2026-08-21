@@ -113,9 +113,10 @@ whole thing.
 ```ruby
 # app/controllers/kiosk/dining_room_controller.rb
 class Kiosk::DiningRoomController < ApplicationController
-  include Kiosk::Query
+  include Kiosk::Handler
   include KioskRefusals   # the app's own concern: renders a refusal result
 
+  kind :query
   description "Find tables still open across all restaurants for the upcoming " \
               "(rolling, Lisbon-tz) seatings that seat a given party. Each row " \
               "carries a `restaurant_id` and a `restaurant_table_id`; pass both " \
@@ -166,6 +167,7 @@ class Kiosk::DiningRoomController < ApplicationController
     render json: rows
   end
 
+  kind :query
   description "List this principal's table bookings across every restaurant on the " \
               "aggregator, scoped to the authenticated account and un-filterable by " \
               "the caller. Cancelled bookings stay listed rather than disappearing. " \
@@ -225,8 +227,9 @@ AI assistants call these by name only, one endpoint per verb (`GET /kiosk/availa
 
 **4. Declare the write verbs next door (`book_table`, `cancel_booking`)**
 
-A controller declares queries OR actions, never both — the verb it is reached by
-is a property of the class.
+The kind of verb is a property of each DECLARATION (`kind :action` below), not
+of the class, so one controller could carry all four. These stay in two because
+the reads render projections inline and the writes hand off to Operations.
 
 Abridged the same way as the read snippet above: the prose `description` and the
 per-property `description` lines are elided. Field names, types and `required`
@@ -235,9 +238,10 @@ lists are the shipped ones verbatim.
 ```ruby
 # app/controllers/kiosk/bookings_controller.rb
 class Kiosk::BookingsController < ApplicationController
-  include Kiosk::Action
+  include Kiosk::Handler
   include KioskRefusals   # the app's own concern: turns an Operation result into a render
 
+  kind :action
   description "Reserve one table at one restaurant for one seating, for the " \
               "authenticated principal. This is a COMMITMENT, not a quote. No " \
               "payment is taken. Cancel it with cancel_booking."
@@ -277,6 +281,7 @@ class Kiosk::BookingsController < ApplicationController
     )
   end
 
+  kind :action
   description "Cancel one of the authenticated principal's own table bookings " \
               "(requires the booking to belong to the principal). Frees the " \
               "(table, seating)."

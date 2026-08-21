@@ -50,10 +50,12 @@ the result (no envelope).
 There is **no `pay`**: the advertised capabilities are `[schema, queries, actions]`.
 
 The four verbs are ordinary Rails controllers, not initializer blocks:
-`app/controllers/kiosk/dining_room_controller.rb` holds the two queries
-(`include Kiosk::Query`) and `app/controllers/kiosk/bookings_controller.rb` the
-two actions (`include Kiosk::Action`), each declared with the class-level
-descriptor macros; refusals are plain `render json:, status:` naming a wire
+`app/controllers/kiosk/dining_room_controller.rb` holds the two queries and
+`app/controllers/kiosk/bookings_controller.rb` the two actions — both
+`include Kiosk::Handler`, and each declaration says which verb reaches it with
+`kind :query` / `kind :action`, so the two-file split is this demo's choice
+rather than the framework's. Each is declared with the class-level descriptor
+macros; refusals are plain `render json:, status:` naming a wire
 error `code`, which the wire carries into the RFC 9457 problem document an
 assistant branches on. Every verb's `input_schema` is validated on every call,
 so an undeclared argument is a typed `400` naming it. Neither controller is

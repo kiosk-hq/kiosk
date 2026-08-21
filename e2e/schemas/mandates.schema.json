@@ -98,7 +98,8 @@
         },
         "line_items": {
           "type": "array",
-          "description": "REQUIRED. Provider-defined line items. Required because the settlement and reconciliation path reads them: an operator matching a settlement back to its domain object has nothing to match on without them."
+          "minItems": 1,
+          "description": "REQUIRED, and NON-EMPTY. Provider-defined line items. Required because the settlement and reconciliation path reads them: an operator matching a settlement back to its domain object has nothing to match on without them -- which is exactly as true of an empty array as of an absent field, so presence alone was not the constraint (K-857). A positive `total_amount_cents` with nothing itemised under it is an unitemised charge, which is what a cart mandate exists to prevent."
         }
       }
     },

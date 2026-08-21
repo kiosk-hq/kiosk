@@ -240,6 +240,18 @@ RSpec.describe Kiosk::Server::MandateVerifier do
         .to raise_error(Kiosk::Server::Errors::Forbidden, /line_items must be an array/)
     end
 
+    # K-857 — the question K-741 left open, settled: presence is not the
+    # constraint. `[]` satisfies `required` and every check above while carrying
+    # exactly as much reconciliation value as omission did, and a positive
+    # `total_amount_cents` with nothing itemised under it is an unitemised
+    # charge. §11.2 and `mandates.schema.json` (`minItems: 1`) now say so; this
+    # pins that the verifier refuses the same set they do.
+    it "rejects a cart whose line_items array is EMPTY" do
+      empty = cart_payload.merge(line_items: [])
+      expect { described_class.verify_cart(raw_jws: sign(empty), identity: identity, intent: intent) }
+        .to raise_error(Kiosk::Server::Errors::Forbidden, /line_items must not be empty/)
+    end
+
     it "applies the shared decode checks (wrong issuer rejected)" do
       bad = cart_payload.merge(iss: "https://evil.example")
       expect { described_class.verify_cart(raw_jws: sign(bad), identity: identity, intent: intent) }

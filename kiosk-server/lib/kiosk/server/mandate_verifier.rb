@@ -176,10 +176,13 @@ module Kiosk
       # carry is not authorisation, and the assistant learns the same way for
       # all of them.
       #
-      # Deliberately NOT checked here: whether an EMPTY array conforms. Making
-      # the field required is what was decided; `minItems` would be a second,
-      # separate normative constraint, and it is filed as K-857 rather than
-      # invented in this method.
+      # An EMPTY array does NOT conform (K-857, settling what K-741 left open).
+      # `[]` is present, so it satisfies both the schema's `required` and the
+      # nil-check below, while carrying exactly as much reconciliation value as
+      # omission did — which is the whole defect K-741 was filed against. §11.2
+      # now says so normatively ("MUST carry at least one entry") and
+      # `mandates.schema.json` states `minItems: 1`; this is the same
+      # constraint at the verifier, so the two refuse the same set.
       def require_line_items!(payload)
         value = payload[:line_items]
         if value.nil?
@@ -190,11 +193,19 @@ module Kiosk
           )
         end
 
-        return if value.is_a?(Array)
+        unless value.is_a?(Array)
+          raise Errors::Forbidden.new(
+            "mandate line_items must be an array",
+            hint: "line_items was #{value.class}",
+          )
+        end
+
+        return unless value.empty?
 
         raise Errors::Forbidden.new(
-          "mandate line_items must be an array",
-          hint: "line_items was #{value.class}",
+          "mandate line_items must not be empty",
+          hint: "a cart mandate says WHAT is being bought and the settlement is reconciled " \
+                "from it — an empty array withholds both while a positive total is charged",
         )
       end
 

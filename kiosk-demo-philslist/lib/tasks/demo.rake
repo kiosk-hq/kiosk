@@ -436,6 +436,10 @@ namespace :demo do
       BLOCKED  LikeMetacharactersAreEscaped — a `_` in `keyword` matches an
                UNDERSCORE, not any character: LIKE metacharacters are escaped,
                so a search says what the caller asked
+      BLOCKED  NoSellerPiiOnTheOpenBoard — the cross-owner board names sellers
+               by an opaque `seller-<hex>` pseudonym derived from the account
+               id, carries no account address anywhere in the response, and
+               keeps ONE handle per seller across their listings
 
     Exits 0 when all are BLOCKED (0 BREACH); exits 1 on any BREACH. A BREACH =
     a real hole — fix the app, not the scenario.

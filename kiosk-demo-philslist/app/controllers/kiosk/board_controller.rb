@@ -54,8 +54,10 @@ class Kiosk::BoardController < ApplicationController
               "filter value this board cannot serve is refused 400 naming what it will accept, never " \
               "silently reinterpreted — so an EMPTY array means nothing matched, not that the query " \
               "was misunderstood. Returns all matching listings rather than a page of them (small " \
-              "board; not paginated). Once the human picks a row, `edit_listing` and `close_listing` " \
-              "act on it, and both are owner-only."
+              "board; not paginated). Sellers are named by an opaque, stable pseudonym, never by an " \
+              "address — this operator brokers no messages, so the only way to reach a seller is the " \
+              "contact details they chose to publish in the listing text. Once the human picks a row, " \
+              "`edit_listing` and `close_listing` act on it, and both are owner-only."
   # `category_slug`'s domain IS THE `categories` TABLE, so it is declared as a
   # PROC rather than a literal list (K-922, Phil 2026-08-21). An operator who
   # adds a section gets a schema that accepts it — and a 400 that names it —
@@ -84,16 +86,17 @@ class Kiosk::BoardController < ApplicationController
                     price_text:    { type: %w[string null], description: "FREE-FORM display text, e.g. \"€300\" or \"Free\" — never a cents amount, and null when the seller gave none." },
                     category_slug: { type: "string", description: "The section it is posted in." },
                     status:        { type: "string", description: "Always `open` on this verb — the board carries open listings only." },
-                    # NULLABLE, and it took a real 500 from `validate_responses`
-                    # to say so. `users.email` is nullable, and a PoW-REGISTERED
-                    # assistant's account has none — so every listing posted
-                    # through `demo:register` publishes a null handle. The
-                    # seeded board has emails on every row, which is why no
-                    # flow had ever rendered one and why the first draft of
-                    # this schema said `string`. The check that caught it is the
-                    # whole argument for turning a declaration into an
-                    # assertion.
-                    owner_handle:  { type: %w[string null], description: "The seller's handle, or null for an account with no email on file (a self-registered assistant)." },
+                    # NEVER NULL SINCE K-913, and the nullability went away with
+                    # the leak rather than being separately fixed. This column
+                    # used to be `users.email`, which is nullable — a
+                    # PoW-registered assistant's account has none — so the
+                    # schema said `%w[string null]` and every listing posted
+                    # through `demo:register` published a null seller. It is now
+                    # {User.public_handle}, derived from the account UUID, and
+                    # an account without a UUID cannot own a row: the type is
+                    # `string`, flatly, and an assistant no longer has to
+                    # branch on a null it could do nothing with.
+                    owner_handle:  { type: "string", description: "The seller's PSEUDONYM on this board — stable for one account (so two rows sharing it are the same seller), opaque, and NOT an address: it is derived from the account id and reveals no email, phone or login. There is no verb that turns it back into a person. To reach a seller, use the contact details they chose to put in `body`; a listing with none names no way to contact its seller." },
                   },
                   required: %w[listing_id title body price_text category_slug status owner_handle],
                 }
@@ -102,7 +105,7 @@ class Kiosk::BoardController < ApplicationController
     listing_id: "9c1d2e3f-4a5b-4c6d-8e7f-0a1b2c3d4e5f", title: "Carbon road bike — €300",
     body: "Lightweight carbon road bike, 54cm, Shimano 105 groupset.",
     price_text: "€300", category_slug: "bikes", status: "open",
-    owner_handle: "alice@example.com",
+    owner_handle: "seller-4f2a9c1e3b7d",
   })
   def browse_listings
     # OPEN IS NOT A DEFAULT, IT IS THE BOARD. There is no `status` parameter to
@@ -138,13 +141,24 @@ class Kiosk::BoardController < ApplicationController
     # `pluck` rather than loading models: this is a projection, and naming the
     # columns is what keeps the wire's field names and their order a decision
     # this handler makes rather than a side effect of the schema. One query, no
-    # N+1 — the joins above already carry the category slug and the owner handle.
+    # N+1 — the joins above already carry the category slug and the owner id.
+    #
+    # `users.id`, NEVER `users.email` (K-913). This projection is the whole
+    # exposure: the board is cross-owner by design, so whatever stands in this
+    # column is published to every principal that can authenticate, for every
+    # account that has ever posted. It used to be the login address. The id it
+    # plucks instead does not leave this method either — {User.public_handle}
+    # turns it into the board pseudonym before the row is built, so no internal
+    # identifier reaches the wire in its place. The join stays: it is what
+    # proves the owner row exists, and a listing whose owner vanished should
+    # fall off the board rather than render a handle for nobody.
     render json: board.pluck(
       "listings.id", "listings.title", "listings.body", "listings.price_text",
-      "categories.slug", "listings.status", "users.email",
-    ).map { |id, title, body, price_text, category_slug, row_status, owner_handle|
+      "categories.slug", "listings.status", "users.id",
+    ).map { |id, title, body, price_text, category_slug, row_status, owner_id|
       { listing_id: id, title: title, body: body, price_text: price_text,
-        category_slug: category_slug, status: row_status, owner_handle: owner_handle }
+        category_slug: category_slug, status: row_status,
+        owner_handle: User.public_handle(owner_id) }
     }
   end
 

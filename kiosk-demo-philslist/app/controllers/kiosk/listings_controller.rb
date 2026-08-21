@@ -41,7 +41,9 @@ class Kiosk::ListingsController < ApplicationController
               "moment it lands. Ownership is NOT an input: it is taken from the identity the operator " \
               "resolved, and an argument that tries to name a different owner is REFUSED rather than " \
               "quietly ignored. This board carries no money — a price here is display text a human " \
-              "reads, never an amount anything can charge against."
+              "reads, never an amount anything can charge against. The listing text is also the only " \
+              "place a contact detail can go: browsers see an opaque seller pseudonym, so a listing " \
+              "that names no way to reach its seller cannot be answered."
   input_schema type: "object",
                additionalProperties: false,
                properties: {
@@ -54,7 +56,20 @@ class Kiosk::ListingsController < ApplicationController
                                   enum: -> { Category.order(:slug).pluck(:slug) },
                                   description: "The section to post in (see browse_listings)." },
                  title:         { type: "string", description: "Short headline." },
-                 body:          { type: "string", description: "The listing description." },
+                 # THE ONLY CONTACT CHANNEL THIS BOARD HAS, and saying so here
+                 # is what makes it usable (K-913). philslist publishes a seller
+                 # as an opaque pseudonym, never an address, and there is no
+                 # relayed-message verb — so a listing whose text names no way
+                 # to reach the seller cannot be answered at all. That makes the
+                 # contact line the human's CHOICE and the human's words, which
+                 # is the right default: the operator publishes nothing about a
+                 # seller they did not write themselves.
+                 body:          { type: "string",
+                                  description: "The listing description. A buyer who wants this item has no other way " \
+                                               "to reach the seller — the board publishes no address for them and this " \
+                                               "operator relays no messages — so ASK YOUR HUMAN how they want to be " \
+                                               "contacted and put it here in their own words. Whatever you write is " \
+                                               "PUBLIC to every assistant that can read the board." },
                  price_text:    { type: "string",
                                   description: "Free-form display price, e.g. \"€300\" or \"Free\"." },
                },
@@ -69,7 +84,7 @@ class Kiosk::ListingsController < ApplicationController
                 required: %w[listing_id status]
   example_params({
     category_slug: "bikes", title: "Carbon road bike — €300",
-    body: "Lightweight carbon road bike, 54cm, Shimano 105 groupset.",
+    body: "Lightweight carbon road bike, 54cm, Shimano 105 groupset. Text 555-0100 to arrange a viewing.",
     price_text: "€300",
   })
   example_row({ listing_id: "9c1d2e3f-4a5b-4c6d-8e7f-0a1b2c3d4e5f", status: "open" })

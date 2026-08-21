@@ -27,6 +27,16 @@ Demonstrates:
   listings across all owners — title · category · €price · poster). Classifieds
   are public by nature, so a listing an assistant posts over the wire visibly
   appears here on the next refresh
+- **A cross-owner board that still publishes no PII.** The board is open by
+  design, so its seller column is disclosed to every principal that can
+  authenticate. It carries an opaque `seller-<hex>` pseudonym derived from the
+  account id — never an address — and the same pseudonym on the wire and on the
+  web page. It is **per-seller**, so two listings under one handle are one
+  seller (which is what makes the household visible), and reversible by nobody:
+  there is no verb that turns a handle back into a person. Contact happens
+  through whatever contact detail a seller chose to put in their own listing
+  text, so the operator publishes nothing about a seller they did not write
+  themselves
 - Human↔assistant account binding over real Devise sessions, including the
   **multi-account household** beat: two assistants bound to the SAME account
   (a couple) share one board presence — a listing either posts shows under the
@@ -90,15 +100,17 @@ still Bob, taken from the token).
 
 ### Adversarial battery (`rake demo:redteam`)
 
-Asserts every attack is BLOCKED (0 BREACH) — all fourteen the suite runs, in
+Asserts every attack is BLOCKED (0 BREACH) — all fifteen the suite runs, in
 its own order: `CrossTenantRead`, `ForgedUserId` (400), `CrossOwnerEdit` (403),
 `CrossOwnerClose` (403), `MalformedUuidArg` (400, no SQL internals),
 `MissingAuth` (401), `GarbageToken` (401), `SelfAssertedTokenForgery` (401),
 `UnknownQuery` (404), `UnknownAction` (404), `RetiredWire` (404),
 `MethodMismatch` (405 + `Allow: POST`),
 `OutOfEnumFilterIsNotSilentlyReinterpreted` (400 naming the live categories)
-and `LikeMetacharactersAreEscaped` (an `_` in `keyword` matches an underscore,
-not any character).
+`LikeMetacharactersAreEscaped` (an `_` in `keyword` matches an underscore,
+not any character) and `NoSellerPiiOnTheOpenBoard` (the open board names a
+seller by an opaque `seller-<hex>` pseudonym, carries no account address
+anywhere in the response, and keeps one handle per seller).
 
 ### Not-only-commerce proof (`rake demo:schema`)
 
@@ -182,6 +194,13 @@ The demo bakes in shortcuts production operators replace:
 - **Synthetic accounts (Alice, Bob)** → your real user table (the demo already
   gives them real Devise credentials, and every driver here signs in through the
   real form like a person would).
+- **Contact is unrelayed.** A seller reaches a buyer only by publishing a
+  contact detail in their own listing text — which works, and is how classifieds
+  worked before relays, but it means a seller who wants replies must publish
+  something in the clear. A production board adds an operator-relayed message
+  verb so neither side hands the other an address; that is designed and tracked
+  as T-108, deliberately not built here because a half-built inbox would be a
+  worse demo than an honestly-stated absence.
 - **The AI-assistant channel** (`c.agent_idp`) is **not** a shortcut here any
   more: this demo sets nothing, so the engine's own `DefaultAgentIdp` verifies
   the kiosk-pop JWTs it minted, in every environment. The bespoke

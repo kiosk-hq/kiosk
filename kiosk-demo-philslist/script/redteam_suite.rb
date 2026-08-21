@@ -30,6 +30,9 @@
 #                      `category_slug` outside the LIVE `categories` table is a
 #                      typed 400 naming the sections that exist, NEVER a 200
 #                      answering a different question (T-090, K-922)
+#   NoSellerPiiOnTheOpenBoard — the cross-owner board names sellers by an
+#                      opaque, per-seller pseudonym and carries no account
+#                      address anywhere in the response (K-913)
 #
 # THE TWO PRINCIPALS ARE EARNED, NOT ASSERTED (T-104). Alice and Bob are bound
 # through the shipped ceremony — Equihash-tolled `/auth/register` → the human's
@@ -319,6 +322,55 @@ record(results, "LikeMetacharactersAreEscaped",
        "keyword=b_ke → #{wild_rows.is_a?(Array) ? "#{wild_rows.length} rows" : wild_rows.class}; " \
        "CONTROL keyword=bike → #{rc_lit}/#{lit_rows.is_a?(Array) ? "#{lit_rows.length} rows" : lit_rows.class} " \
        "(want 0 rows for the escaped wildcard and a non-empty control)")
+
+# ── NoSellerPiiOnTheOpenBoard (K-913) ────────────────────────────────────────
+#
+# THE ONE BEAT THAT HAS TO SURVIVE A REFACTOR. `browse_listings` is deliberately
+# cross-owner — every authenticated principal sees every open listing — so
+# whatever the seller column holds is published to anyone who can complete
+# `/auth/register`, for every account that has ever posted. It held
+# `users.email`, which meant a self-registered assistant walked away with the
+# address of every account holder in the seed. The projection is one `pluck`
+# line; nothing but an assertion stops a future edit from putting the column
+# back, which is why this is a battery scenario and not a comment.
+#
+# THE PROBE RUNS AS BOB, deliberately, and reads ALICE's rows: this is exactly
+# the attacker's position — an assistant bound to one account, reading the open
+# board for what it discloses about the others.
+#
+# Three things are asserted, and the second and third are what make the first
+# non-vacuous:
+#   1. NO account address anywhere in the response. Both seeded addresses are
+#      searched for in the RAW BODY, not in `owner_handle` — a leak that moved
+#      to another field, or into a debug key, is the same leak.
+#   2. Every row's `owner_handle` is a `seller-` pseudonym and contains no `@`.
+#      A handler that dropped the field entirely would fail here, so the beat
+#      cannot be passed by publishing nothing.
+#   3. The handle is PER-SELLER: Alice's rows all share ONE handle and Bob's
+#      differs from it. That pins the tradeoff K-913 settled (a buyer can tell
+#      two listings are one seller) so a later switch to a per-listing or
+#      per-request value is caught rather than silently shipped.
+rc_board, board_rows = get_json("/kiosk/browse_listings", {}, BOB.bearer)
+raw_board = JSON.generate(board_rows)
+rows          = board_rows.is_a?(Array) ? board_rows : []
+handles       = rows.map { |r| r["owner_handle"] }
+alice_handle  = rows.find { |r| r["listing_id"] == alice_listing_id }&.fetch("owner_handle", nil)
+bob_handle    = rows.find { |r| r["listing_id"] == bob_id }&.fetch("owner_handle", nil)
+alice_rows    = rows.count { |r| r["owner_handle"] == alice_handle }
+no_addresses  = !raw_board.include?(ALICE_EMAIL) && !raw_board.include?(BOB_EMAIL) && !raw_board.include?("@example.com")
+well_formed   = !handles.empty? && handles.all? { |h| h.is_a?(String) && h.match?(/\Aseller-[0-9a-f]{12}\z/) }
+# Alice's seeded listings AND her redteam target must read under ONE handle
+# (>= 2 rows), and Bob's must not be that handle.
+per_seller    = !alice_handle.nil? && !bob_handle.nil? &&
+                alice_handle != bob_handle && alice_rows >= 2
+record(results, "NoSellerPiiOnTheOpenBoard",
+       rc_board == 200 && no_addresses && well_formed && per_seller,
+       "browse_listings as BOB → #{rc_board}, #{rows.length} rows, " \
+       "#{handles.uniq.length} distinct handles #{handles.uniq.first(3).inspect}; " \
+       "account addresses in body: #{no_addresses ? 'none' : 'FOUND'}; " \
+       "alice=#{alice_handle.inspect} on #{alice_rows} rows, bob=#{bob_handle.inspect} " \
+       "(want 200, no account address anywhere, every handle an opaque " \
+       "`seller-<12 hex>`, and ONE handle covering >= 2 of Alice's rows and not Bob's)")
 
 # ── Verdict ──────────────────────────────────────────────────────────────────
 breaches = results.reject { |r| r[:blocked] }

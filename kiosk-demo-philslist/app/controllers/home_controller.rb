@@ -53,16 +53,20 @@ class HomeController < ApplicationController
 
   helper_method :board_poster_name
 
-  # Public label for a listing's poster: the account's masked email local-part
-  # (philslist accounts carry no display name), else a headless placeholder.
+  # Public label for a listing's poster — THE SAME PSEUDONYM THE WIRE PUBLISHES
+  # (K-913), so the page and `browse_listings` cannot come to disagree about who
+  # a seller is. It used to be a masked email local-part (`al•••`), which is a
+  # thin mask: against a known domain it leaks two characters of a real address
+  # and confirms which addresses hold accounts. {User.public_handle} is derived
+  # from the account UUID and reveals nothing.
+  #
   # Both of Alice's household assistants post under the SAME account, so both of
-  # their listings read under one poster here — the household made visible.
+  # their listings read under one handle here — the household made visible, and
+  # the reason the handle is per-seller rather than per-listing.
   def board_poster_name(listing)
-    email = listing.owner&.email.to_s
-    if email.include?("@")
-      local = email.split("@").first
-      return local.length <= 2 ? local : "#{local[0, 2]}#{'•' * (local.length - 2)}"
-    end
-    "Assistant account"
+    owner = listing.owner
+    return "an unknown account" if owner.nil?
+
+    owner.public_handle
   end
 end

@@ -175,6 +175,25 @@ STDERR.puts "  request_kyc: http=#{rc_req} verification_url=#{verification_url.i
 abort "request_kyc did not return a verification_url (#{rc_req}): #{JSON.generate(req_body)}" \
   if verification_url.nil? || verification_url.empty?
 
+# A2b: THE OUTSTANDING-INTAKE CAP (K-586). Nothing meters this verb — this
+# origin's reputation policy challenges `:query` only and registration costs
+# one proof — so one registration used to buy unlimited broker intakes. Free
+# against a stub, a budget hole behind a PAID issuer. At most three may be
+# PENDING per account: the one opened above plus two more fill the allowance,
+# and the fourth is refused BEFORE the broker is called, which is what makes it
+# a cap rather than an apology. The refusal is an RFC 9457 problem document, so
+# the vocabulary token is the TOP-LEVEL `code`.
+2.times do |i|
+  rc_more, = post_json("#{SERVER}/kiosk/request_kyc", {},
+                       { "Authorization" => "Bearer #{a_token}" })
+  abort "filling the KYC cap failed at #{i + 2}/3 (#{rc_more})" unless rc_more == 200
+end
+rc_capped, capped_body = post_json("#{SERVER}/kiosk/request_kyc", {},
+                                   { "Authorization" => "Bearer #{a_token}" })
+request_kyc_capped_status = rc_capped
+request_kyc_capped_code   = capped_body["code"]
+STDERR.puts "  request_kyc past the cap: http=#{rc_capped} code=#{request_kyc_capped_code.inspect}"
+
 # A3: SIMULATE the human approving on the KYC BROKER page. Derive the broker
 # origin from the verification_url so the driver need not know the broker port.
 approve_uri  = URI(verification_url)
@@ -282,6 +301,8 @@ puts JSON.generate(
   alcohol_no_kyc_hint_to_req: hint_points_to_request_kyc,
   http_request_kyc:           rc_req,
   request_kyc_verification_url: verification_url,
+  http_request_kyc_capped:    request_kyc_capped_status,
+  request_kyc_capped_code:    request_kyc_capped_code,
   http_approve_page:          approve_rc,
   kyc_status:                 kyc_status,
   kyc_jws_relayed:            (!kyc_jws.nil? && !kyc_jws.empty?),

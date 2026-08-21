@@ -1683,6 +1683,12 @@ namespace :demo do
                result["alcohol_no_kyc_hint_to_req"] == true)
     check.call("A2 request_kyc → 200 with a broker verification_url",
                result["http_request_kyc"] == 200 && result["request_kyc_verification_url"].to_s.include?("/verify?request="))
+    # A2b: the OUTSTANDING-INTAKE CAP (K-586). One registration proof bought
+    # unlimited broker intakes — free against a stub, a budget hole behind a
+    # paid issuer. The FOURTH pending request for one account is refused with
+    # the wire's own `quota_exceeded` (429), BEFORE the broker is called.
+    check.call("A2b a fourth PENDING request_kyc → 429 quota_exceeded (per-principal cap)",
+               result["http_request_kyc_capped"] == 429 && result["request_kyc_capped_code"] == "quota_exceeded")
     check.call("A2 human approved broker page → callback landed, kyc_status approved, jws relayed",
                result["http_approve_page"] == 200 && result["kyc_status"] == "approved" && result["kyc_jws_relayed"] == true)
     check.call("A3 relayed kyc_jws accepted at /agents/kyc with {age_over_18}",

@@ -1209,6 +1209,18 @@ namespace :demo do
       failures << "A2: request_kyc expected 200 with a /verify?request= broker url, got #{result["http_request_kyc"].inspect}/#{vurl.inspect}"
       puts "  FAIL  A2 request_kyc → #{result["http_request_kyc"].inspect}/#{vurl.inspect}"
     end
+    # A2b: the OUTSTANDING-INTAKE CAP (K-586). One registration proof bought
+    # unlimited broker intakes — free against a stub, a budget hole behind a
+    # paid issuer, and a licence check is the expensive kind. The FOURTH
+    # pending request for one account is refused with the wire's own
+    # `quota_exceeded` (429), BEFORE the broker is called.
+    if result["http_request_kyc_capped"] == 429 && result["request_kyc_capped_code"] == "quota_exceeded"
+      puts "  OK  A2b a fourth PENDING request_kyc → 429 quota_exceeded (per-principal cap)"
+    else
+      failures << "A2b: fourth pending request_kyc expected 429/quota_exceeded, got #{result["http_request_kyc_capped"].inspect}/#{result["request_kyc_capped_code"].inspect}"
+      puts "  FAIL  A2b fourth PENDING request_kyc → #{result["http_request_kyc_capped"].inspect}/#{result["request_kyc_capped_code"].inspect}"
+    end
+
     if result["http_approve_page"] == 200 && result["kyc_status"] == "approved" && result["kyc_jws_relayed"] == true
       puts "  OK  A2 human approved broker page → callback landed, kyc_status approved, broker-signed jws relayed (no pre-shared key)"
     else

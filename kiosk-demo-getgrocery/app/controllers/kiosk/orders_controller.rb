@@ -258,7 +258,9 @@ class Kiosk::OrdersController < ActionController::API
               "for it, and never hands this operator the documents behind it. Once the human has " \
               "approved, `kyc_status` is where the signed attestation appears; submit it to " \
               "`POST <endpoint>/agents/kyc`, then place the order again. No pre-shared issuer key is " \
-              "needed."
+              "needed. At most three verifications may be pending for one account at a time — a " \
+              "fourth is refused until one of them finishes, and a request that has been approved " \
+              "or declined stops counting, so poll `kyc_status` rather than opening another."
   input_schema type: "object", additionalProperties: false, properties: {}, required: []
   output_schema type: "object",
                 description: "The opened verification.",

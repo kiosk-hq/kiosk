@@ -177,6 +177,22 @@ STDERR.puts "  verification_url=#{verification_url.inspect}"
 abort "request_kyc did not return a verification_url (#{rc_req}): #{JSON.generate(req_body)}" \
   if verification_url.nil? || verification_url.empty?
 
+# A2b: THE OUTSTANDING-INTAKE CAP (K-586). Nothing meters this verb — skooti
+# configures no reputation policy at all and registration costs one proof — so
+# one registration used to buy unlimited broker intakes, and a licence check is
+# the expensive kind to buy. At most three may be PENDING per account: the one
+# opened above plus two more fill the allowance, and the fourth is refused
+# BEFORE the broker is called, which is what makes it a cap rather than an
+# apology. The refusal is an RFC 9457 problem document, so the vocabulary token
+# is the TOP-LEVEL `code`.
+2.times do |i|
+  rc_more, = run_action(mc_token, "request_kyc")
+  abort "filling the KYC cap failed at #{i + 2}/3 (#{rc_more})" unless rc_more == 200
+end
+rc_capped, capped_body = run_action(mc_token, "request_kyc")
+request_kyc_capped_code = capped_body.is_a?(Hash) ? capped_body["code"] : nil
+STDERR.puts "  request_kyc past the cap: http=#{rc_capped} code=#{request_kyc_capped_code.inspect}"
+
 # A3: SIMULATE the human approving on the KYC BROKER page. The
 # verification_url points at the broker; we POST the approve there (the request
 # token is the only credential — no signing key). The broker signs the
@@ -278,6 +294,8 @@ puts JSON.generate(
   mc_rent_no_kyc_hint_to_req:  hint_points_to_request_kyc,
   http_request_kyc:            rc_req,
   request_kyc_verification_url: verification_url,
+  http_request_kyc_capped:     rc_capped,
+  request_kyc_capped_code:     request_kyc_capped_code,
   http_approve_page:           approve_rc,
   kyc_status:                  kyc_status,
   kyc_jws_relayed:             (!kyc_jws.nil? && !kyc_jws.empty?),

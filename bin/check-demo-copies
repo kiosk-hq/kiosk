@@ -467,7 +467,9 @@ COPIES = {
           "different sets. stylish lists ONE (nothing on that origin ever fills up and its write " \
           "is caller-scoped by construction, so `bad_request` is the only refusal it can make); " \
           "tudu and philslist two; atablefor three, ending in `conflict`; skooti and getgrocery " \
-          "four, ending in `kyc_required`; hoteling four, ending in `not_found` — the one map " \
+          "FIVE, ending in `kyc_required` and `quota_exceeded` (K-586's per-principal cap on " \
+          "outstanding broker intakes, the only 429 in the fleet); hoteling four, ending in " \
+          "`not_found` — the one map " \
           "whose contents have moved TWICE (K-794 removed `not_found` when `hotel_detail` started " \
           "answering an unknown id with an empty array; T-090's three-way rule, spec §9.1, put it " \
           "back). The skooti/getgrocery pair is the sharpest case twice over: `kyc_required` and " \

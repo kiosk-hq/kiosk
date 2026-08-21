@@ -27,11 +27,16 @@ class OperationResult < Kiosk::OperationResult
   # forbidden, not_found) plus `kyc_required` — the alcohol age gate.
   # `kyc_required` and `forbidden` are BOTH 403, so the code is not derivable
   # from the status: it is the only thing that tells an assistant "go and get
-  # attested" apart from "this is not yours".
+  # attested" apart from "this is not yours". `quota_exceeded` is the fifth
+  # (K-586) — the per-principal cap on outstanding broker intakes, and the one
+  # refusal on this origin that means "come back later" rather than "no": 429
+  # is the status §9 gives that code, and it is the only one an assistant can
+  # read as temporary without parsing prose.
   STATUSES = {
-    "bad_request"  => :bad_request,
-    "forbidden"    => :forbidden,
-    "not_found"    => :not_found,
-    "kyc_required" => :forbidden,
+    "bad_request"    => :bad_request,
+    "forbidden"      => :forbidden,
+    "not_found"      => :not_found,
+    "kyc_required"   => :forbidden,
+    "quota_exceeded" => :too_many_requests,
   }.freeze
 end

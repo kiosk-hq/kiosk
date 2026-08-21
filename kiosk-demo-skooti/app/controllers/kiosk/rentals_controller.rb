@@ -223,7 +223,10 @@ class Kiosk::RentalsController < ActionController::API
               "never hands this operator the documents behind them. Once the human has approved, " \
               "`kyc_status` is where the signed attestation appears; submit it to " \
               "`POST <endpoint>/agents/kyc`, then ask for the motorcycle again. No pre-shared issuer " \
-              "key is needed."
+              "key is needed. At most three verifications may be pending for one account at a time " \
+              "— a fourth is refused until one of them finishes, and a request that has been " \
+              "approved or declined stops counting, so poll `kyc_status` rather than opening " \
+              "another."
   input_schema type: "object", additionalProperties: false, properties: {}, required: []
   output_schema type: "object",
                 description: "The opened verification.",

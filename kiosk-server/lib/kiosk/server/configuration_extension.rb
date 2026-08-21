@@ -520,11 +520,20 @@ module Kiosk
       end
 
       # Per-agent token-revocation watermark store backing `/auth/revoke`
-      # ("log out other sessions"). Consulted by {JwtIssuer.verify} on every
-      # access-token check. Override with a shared/durable implementation in
-      # multi-process deployments; set to nil to disable revocation enforcement.
+      # ("log out other sessions"), `/auth/unlink` and the claim rebind.
+      # Consulted by {JwtIssuer.verify} on every access-token check. Override
+      # with a shared/durable implementation in multi-process deployments; set
+      # to nil to disable revocation enforcement.
       #
-      # @return [Kiosk::Server::RevocationStore, #revoke_all, #revoked?, nil]
+      # THE INTERFACE IS THREE METHODS, NOT TWO (K-836). `watermark_for` is
+      # read by {AgentIdentityProviders::DefaultAgentIdp} so a token minted in
+      # the same wall-clock second as a revocation is dated AT the watermark
+      # instead of being born already-revoked. An override that omits it keeps
+      # working — the IdP falls back to the clock — but re-opens that
+      # one-second aperture for its own deployment, which §6.3's MUST forbids
+      # on the rebind, so a durable store SHOULD implement all three.
+      #
+      # @return [Kiosk::Server::RevocationStore, #revoke_all, #revoked?, #watermark_for, nil]
       attr_writer :revocation_store
       def revocation_store
         return @revocation_store if defined?(@revocation_store)

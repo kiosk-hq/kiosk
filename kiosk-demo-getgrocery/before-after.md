@@ -336,8 +336,8 @@ not required for Kiosk's isolation model.
 **4. Declare the write verbs next door (with ownership checks)**
 
 The kind of verb is a property of each DECLARATION (`kind :action` below), not
-of the class, so one controller could carry all eight; these stay in two because
-the reads render projections inline and the writes hand off to Operations.
+of the class, so one controller could carry all eight; two is this demo's shape,
+not a rule.
 `reschedule_delivery` is
 **payment-binding gated** — the Operation behind it verifies a settled mandate
 references the order before mutating. `create_order` attaches ownership via

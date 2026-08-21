@@ -16,11 +16,10 @@
 # explicitly leaves the base class to the operator (K-495), and `HomeController`
 # already names its own (`ActionController::Base`, for the HTML landing page).
 #
-# `kind :query` above each declaration is what puts it on `GET` — the kind belongs to the DECLARATION, not to the class (K-921), so ONE
-# controller may declare both. These two stay separate because the halves have
-# different shapes: a query renders a projection inline, an action hands off to
-# an Operation.
-# The five write verbs live next door in
+# `kind :query` above each declaration is what puts it on `GET`; the kind
+# belongs to the DECLARATION, not to the class (K-921), so ONE controller may
+# declare both. Keeping the read and the write halves in separate classes is
+# this demo's shape, not a rule. The five write verbs live next door in
 # Kiosk::RentalsController. What the two halves share is their refusal
 # vocabulary: {WireArguments} (which renders nothing, so the Operations use it
 # too) and {KioskRefusals}.

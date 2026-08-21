@@ -274,8 +274,8 @@ to read another principal's bookings.
 **4. Declare the write verbs next door (`reserve_room`, `confirm_booking`)**
 
 The kind of verb is a property of each DECLARATION (`kind :action` below), not
-of the class, so one controller could carry all eight. These stay in two because
-the reads render projections inline and the writes hand off to Operations.
+of the class, so one controller could carry all eight. Two is this demo's shape,
+not a rule.
 
 Abridged the same way as the read snippet above: two of hoteling's three shipped
 actions (`payment_setup` is left out), with the prose `description` and the

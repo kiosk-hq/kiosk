@@ -228,8 +228,8 @@ AI assistants call these by name only, one endpoint per verb (`GET /kiosk/availa
 **4. Declare the write verbs next door (`book_table`, `cancel_booking`)**
 
 The kind of verb is a property of each DECLARATION (`kind :action` below), not
-of the class, so one controller could carry all four. These stay in two because
-the reads render projections inline and the writes hand off to Operations.
+of the class, so one controller could carry all four. Two is this demo's shape,
+not a rule.
 
 Abridged the same way as the read snippet above: the prose `description` and the
 per-property `description` lines are elided. Field names, types and `required`

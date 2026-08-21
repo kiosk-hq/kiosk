@@ -16,11 +16,10 @@
 # serve — `HomeController` and `Admin::OrdersController` — already name their own
 # (`ActionController::Base`, because they render views).
 #
-# `kind :query` above each declaration is what puts it on `GET` — the kind belongs to the DECLARATION, not to the class (K-921), so ONE
-# controller may declare both. These two stay separate because the halves have
-# different shapes: a query renders a projection inline, an action hands off to
-# an Operation.
-# The four write verbs live next door in
+# `kind :query` above each declaration is what puts it on `GET`; the kind
+# belongs to the DECLARATION, not to the class (K-921), so ONE controller may
+# declare both. Keeping the read and the write halves in separate classes is
+# this demo's shape, not a rule. The four write verbs live next door in
 # Kiosk::OrdersController. What the two halves share is their argument
 # vocabulary: an address is checked against the served Dublin districts by
 # `delivery_slots` here and by both order verbs there, word for word. The shape

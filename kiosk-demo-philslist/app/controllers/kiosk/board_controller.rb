@@ -7,11 +7,10 @@
 # contract. Each class-level macro records a declaration and the NEXT `def`
 # claims it, so a method with no macros above it is a helper the wire cannot see.
 #
-# `kind :query` above each declaration is what puts it on `GET` — the kind belongs to the DECLARATION, not to the class (K-921), so ONE
-# controller may declare both. These two stay separate because the halves have
-# different shapes: a query renders a projection inline, an action hands off to
-# an Operation.
-# The write half lives next door in
+# `kind :query` above each declaration is what puts it on `GET`; the kind
+# belongs to the DECLARATION, not to the class (K-921), so ONE controller may
+# declare both. Keeping the read and the write halves in separate classes is
+# this demo's shape, not a rule. The write half lives next door in
 # Kiosk::ListingsController.
 #
 # NOT ROUTABLE. config/routes.rb draws nothing at this controller: handlers are

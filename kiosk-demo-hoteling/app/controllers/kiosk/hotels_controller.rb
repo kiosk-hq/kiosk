@@ -19,11 +19,10 @@
 # the HTML landing page), and this is the same call one level down. skooti and
 # getgrocery are shaped the same way and should follow.
 #
-# `kind :query` above each declaration is what puts it on `GET` — the kind belongs to the DECLARATION, not to the class (K-921), so ONE
-# controller may declare both. These two stay separate because the halves have
-# different shapes: a query renders a projection inline, an action hands off to
-# an Operation.
-# The write half lives next door in
+# `kind :query` above each declaration is what puts it on `GET`; the kind
+# belongs to the DECLARATION, not to the class (K-921), so ONE controller may
+# declare both. Keeping the read and the write halves in separate classes is
+# this demo's shape, not a rule. The write half lives next door in
 # Kiosk::ReservationsController. What the two halves DO share is their argument
 # vocabulary: `property_id` is taken by two queries and one action,
 # check_in/check_out by two queries and one action. The shape guard for those is

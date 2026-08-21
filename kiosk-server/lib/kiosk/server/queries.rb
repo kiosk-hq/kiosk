@@ -33,22 +33,31 @@ module Kiosk
     #   Kiosk::Server::Queries.describe("menu")  # => { name:, description:, params:, … }
     #   Kiosk::Server::Queries.catalog           # => sorted Array of descriptors
     #
-    # The descriptor fields, all declared as macros on the handler controller
-    # and all OPTIONAL (a descriptor that sets none of them carries name +
-    # description + params only):
+    # The descriptor fields, all declared as macros on the handler controller.
+    # TWO of them are REQUIRED of every verb — `schema-descriptor.schema.json`
+    # lists `input_schema` and `output_schema` in the descriptor's `required`,
+    # protocol.md Section 8.3 says both are REQUIRED, and {HandlerMixin} raises
+    # at class-body load for a declaration missing either (T-073 = A, landed by
+    # T-068; K-598 / K-671 / K-680):
     #   description:    prose semantics — what this verb does and what the result
     #                   MEANS. Never a field list or a type (ADR-0023 / K-500).
-    #   input_schema:   a JSON-Schema object describing this query's INPUTS
-    #                   (required/optional, types, enums, ranges). Under ADR-0023
-    #                   this is THE input contract — every name and type lives
-    #                   here.
-    #   output_schema:  a JSON Schema for the rows this query RETURNS, so an
-    #                   assistant knows the result shape without a
-    #                   call-and-observe probe (ADR-0023 / K-500). Its exact
-    #                   envelope composition is settled when T-050 lands the first one.
-    #   example_params: an example params object an assistant can copy verbatim.
-    #   example_row:    an example of ONE row this query returns, so an assistant
-    #                   learns the result shape without a call-and-observe probe.
+    #   input_schema:   REQUIRED. A JSON-Schema object describing this query's
+    #                   INPUTS (required/optional, types, enums, ranges). THE
+    #                   input contract — every name and type lives here, and the
+    #                   operator validates against it before the handler runs.
+    #                   A query that takes nothing declares the closed empty
+    #                   object, so "takes no arguments" is published rather than
+    #                   inferred from an absence.
+    #   output_schema:  REQUIRED. A JSON Schema for the rows this query RETURNS.
+    #                   With no response envelope since 0.4 this is the ONLY
+    #                   machine-readable statement of the result shape; a query's
+    #                   is an ARRAY schema whether or not it paginates.
+    #   example_params: OPTIONAL. An example params object an assistant can copy
+    #                   verbatim. It ILLUSTRATES input_schema, and loses to it.
+    #   example_row:    OPTIONAL. An example of ONE row this query returns. It
+    #                   ILLUSTRATES output_schema, and loses to it.
+    #
+    # `params` — the free-text hint ADR-0023 retired — is not a macro at all.
     module Queries
       # Internal entry holding a handler (callable) plus optional discovery metadata.
       # Defined at module scope so reset! can replace @registry without affecting the

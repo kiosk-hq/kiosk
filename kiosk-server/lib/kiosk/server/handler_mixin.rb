@@ -28,12 +28,16 @@ module Kiosk
     #   description    — semantics ONLY: what this verb does, how, and what it
     #                    returns IN MEANING. Never a field list, a type, a
     #                    required marker, or a param name (ADR-0023 / K-500).
-    #   input_schema   — JSON Schema for the params. THE input contract: every
-    #                    name, type, enum and range lives here.
-    #   output_schema  — JSON Schema for what comes back, so an assistant knows
-    #                    the result shape without a call-and-observe probe.
-    #   example_params — a params object an assistant can copy verbatim.
-    #   example_row    — a worked example of the result.
+    #   input_schema   — REQUIRED. JSON Schema for the params. THE input
+    #                    contract: every name, type, enum and range lives here.
+    #   output_schema  — REQUIRED. JSON Schema for what comes back, so an
+    #                    assistant knows the result shape without a
+    #                    call-and-observe probe. Both are required of every verb
+    #                    by protocol.md Section 8.3 and by
+    #                    `schema-descriptor.schema.json`, and a declaration
+    #                    missing either RAISES here, at class-body load.
+    #   example_params — OPTIONAL. A params object an assistant can copy verbatim.
+    #   example_row    — OPTIONAL. A worked example of the result.
     #   wire_name      — OPTIONAL. The name agents call it by, when it cannot be
     #                    the method name (a Ruby keyword, or a name that would
     #                    collide with a controller method).

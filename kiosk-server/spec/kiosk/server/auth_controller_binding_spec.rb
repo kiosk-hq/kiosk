@@ -138,6 +138,38 @@ RSpec.describe "AuthController binding endpoints" do
       expect_problem(status, body, http: 401, code: "unauthenticated",
                      detail: /proof signature invalid/)
     end
+
+    # K-855. `AccountBinding.bind!` — which is what `redeem` returns — also
+    # carries `fresh:`, an internal fresh-key-vs-rebind signal that NO published
+    # surface documents (zero hits in protocol.md, specification.html, skill.md
+    # or the schemas) and that §6.2 contradicts by spelling the response out as
+    # {agent_id, user_id, access_token}. It was on the wire on every claim
+    # because the controller rendered the result hash whole. The example above
+    # could not catch it: it stubs a return value that does not have the field.
+    # This one stubs what the service actually returns.
+    it "renders only the three fields §6.2 specifies — bind!'s `fresh` never reaches the wire" do
+      allow(Kiosk::Server::LinkCode).to receive(:redeem).and_return(
+        { agent_id: "a-1", user_id: user_id, access_token: "kiosk-pop-jwt", fresh: false },
+      )
+
+      status, body = dispatch(:claim, body: { code: "c", public_key: "PEM", signed: "jws" })
+      expect(status).to eq(201)
+      expect(body.keys).to contain_exactly(:agent_id, :user_id, :access_token)
+      expect(body).not_to have_key(:fresh)
+    end
+
+    # The same, for the OTHER branch: a FRESH key. §6.3 requires that a rebind
+    # be indistinguishable from any other rebind (K-787); a `fresh` flag is the
+    # field an assistant would reach for to distinguish binds at all, so it must
+    # be absent whichever branch produced the result.
+    it "renders the same three fields for a fresh-key bind" do
+      allow(Kiosk::Server::LinkCode).to receive(:redeem).and_return(
+        { agent_id: "a-2", user_id: user_id, access_token: "kiosk-pop-jwt", fresh: true },
+      )
+
+      _status, body = dispatch(:claim, body: { code: "c", public_key: "PEM", signed: "jws" })
+      expect(body.keys).to contain_exactly(:agent_id, :user_id, :access_token)
+    end
   end
 
   describe "POST /auth/unlink" do

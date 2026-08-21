@@ -137,6 +137,20 @@ module Kiosk
       # REQUIRED (BIND-POP), so a leaked request body alone can never bind
       # a key its holder does not control. Same fresh/rebind semantics as
       # the claim flow; same 201 shape as /auth/register.
+      # The response is an explicit ALLOW-LIST of the three fields
+      # `protocol.md` Section 6.2 specifies, not `bind!`'s return hash rendered
+      # whole. That hash also carries `fresh:` — an internal signal saying
+      # whether the key was newly registered or rebound — which was on the wire
+      # on every claim while no published surface documented it (K-855). It is
+      # withdrawn rather than specified: Section 6.3 requires that an
+      # idempotent re-bind be indistinguishable from any other rebind (K-787),
+      # so a field whose whole purpose is to distinguish binds is one an
+      # assistant would reach for to defeat that, and nothing on the wire needs
+      # it — the assistant already knows whether it had registered before.
+      # Listing the fields also means the next field added to `bind!`'s result
+      # has to be put on the wire deliberately instead of arriving there.
+      CLAIM_RESPONSE_FIELDS = %i[agent_id user_id access_token].freeze
+
       def claim
         body   = parse_body!
         result = LinkCode.redeem(
@@ -144,7 +158,7 @@ module Kiosk
           public_key_pem: body.fetch(:public_key),
           signed:         body.fetch(:signed),
         )
-        respond(result, :created)
+        respond(result.slice(*CLAIM_RESPONSE_FIELDS), :created)
       rescue KeyError => e
         render_error(Errors::BadRequest.new("missing field: #{e.message}"))
       rescue Errors::Base => e

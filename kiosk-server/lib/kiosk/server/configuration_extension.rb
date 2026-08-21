@@ -111,14 +111,16 @@ module Kiosk
         @owner ||= {}
       end
 
-      # Minimum client version this deployment ADVERTISES in
-      # `/.well-known/kiosk.json` (see {WellKnown}). Default:
-      # {Kiosk::Protocol::MIN_CLIENT}. Advisory only: no code compares any
-      # incoming request's client version against it, so a bump is
-      # informational. Note the per-response `Kiosk-Min-Client` header is
-      # NOT driven by this value — {Headers} emits the protocol-level
-      # {Kiosk::Protocol::MIN_CLIENT} constant, so a bumped provider advertises
-      # the new value only in the well-known document, not in the header.
+      # Minimum client version this deployment ADVERTISES — on BOTH surfaces
+      # that carry it: `kiosk.min_client` in `/.well-known/kiosk.json` (see
+      # {WellKnown}) and the per-response `Kiosk-Min-Client` header (see
+      # {Headers}). Default: {Kiosk::Protocol::MIN_CLIENT}. Advisory only: no
+      # code compares any incoming request's client version against it, so a
+      # bump is informational.
+      #
+      # Until K-747 the header ignored this value and emitted the constant, so
+      # a bumped provider advertised the new number in one place and the old
+      # one in the other, with nothing to say which was authoritative.
       attr_writer :min_client
       def min_client
         @min_client ||= Kiosk::Protocol::MIN_CLIENT

@@ -8,10 +8,21 @@ module Kiosk
       # Mutate a Rack headers hash to add the three Kiosk headers.
       # The server version defaults to {Kiosk::Server::VERSION}; callers
       # may override (e.g. tests).
+      #
+      # `Kiosk-Min-Client` is read from `Kiosk.configuration.min_client`, NOT
+      # from the {Kiosk::Protocol::MIN_CLIENT} constant (K-747). Both surfaces
+      # that publish this advisory number are now the same number: the header
+      # here and `kiosk.min_client` in `/.well-known/kiosk.json` ({WellKnown}),
+      # which has always read the settable value. Emitting the constant here
+      # meant an operator who set `c.min_client = "0.5.0"` got a discovery
+      # document saying 0.5.0 and every wire response saying 0.4.0, with
+      # nothing to tell a client which was authoritative — a knob that worked
+      # on one of the two places it is read. The default is unchanged: the
+      # setter itself defaults to the constant.
       def self.add_to(headers, server_version: Kiosk::Server::VERSION)
         headers[Kiosk::Protocol::HEADER_SERVER_VERSION] = server_version
         headers[Kiosk::Protocol::HEADER_API_VERSION]    = Kiosk::Protocol::API_VERSION
-        headers[Kiosk::Protocol::HEADER_MIN_CLIENT]     = Kiosk::Protocol::MIN_CLIENT
+        headers[Kiosk::Protocol::HEADER_MIN_CLIENT]     = Kiosk.configuration.min_client
         headers
       end
 

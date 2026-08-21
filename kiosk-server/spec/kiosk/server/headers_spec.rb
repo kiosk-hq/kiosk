@@ -21,6 +21,24 @@ RSpec.describe Kiosk::Server::Headers do
       headers = {}
       expect(described_class.add_to(headers)).to equal(headers)
     end
+
+    # K-747. The header and `kiosk.min_client` in /.well-known/kiosk.json are
+    # two publications of ONE advisory number, and this one used to ignore the
+    # setter and emit the constant — so an operator who bumped it got 0.5.0 in
+    # the discovery document and 0.4.0 on every wire response, with nothing to
+    # say which was authoritative. `well_known_spec.rb` pins the other half.
+    it "publishes the operator's configured min_client, not the constant" do
+      Kiosk.configure { |c| c.min_client = "0.5.0" }
+
+      expect(described_class.add_to({})[Kiosk::Protocol::HEADER_MIN_CLIENT]).to eq("0.5.0")
+      expect(described_class.add_to({})[Kiosk::Protocol::HEADER_MIN_CLIENT])
+        .to eq(Kiosk.configuration.min_client)
+    end
+
+    it "falls back to the protocol constant when the operator sets nothing" do
+      expect(described_class.add_to({})[Kiosk::Protocol::HEADER_MIN_CLIENT])
+        .to eq(Kiosk::Protocol::MIN_CLIENT)
+    end
   end
 
   describe ".build" do

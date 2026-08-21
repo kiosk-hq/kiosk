@@ -48,7 +48,10 @@
               }
             },
             "header_nonce": {
+              "$comment": "The bound is stated as an INCLUSIVE `maximum` of 2**32-1, matching how `indices` states its own (K-845): 4294967295 is exactly representable as an IEEE-754 double, so it survives any JSON parser, and an inclusive bound never refuses the largest legal value. Without a bound the field is unbounded on the wire while both specs call it a u32 -- and the reference verifier folds it in with `pack(\"V\")`, which truncates mod 2**32 instead of raising, so 0, 2**32 and -(2**32) seed identically and one proof has infinitely many spellings (K-842). The verifier rejects out-of-range values for the same reason; schema and verifier state one bound, not two.",
               "type": "integer",
+              "minimum": 0,
+              "maximum": 4294967295,
               "description": "OPTIONAL u32, default 0. Folded into the PoW seed after the salt bytes as a little-endian u32; an extensibility point (currently always 0). A verifier reconstructs the seed as salt-bytes || header_nonce(LE u32), so a proof solved for a non-zero header_nonce MUST carry it."
             }
           }

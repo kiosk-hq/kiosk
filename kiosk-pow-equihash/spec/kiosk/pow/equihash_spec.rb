@@ -305,6 +305,40 @@ RSpec.describe Kiosk::Pow::Equihash do
         salt: kat_salt, params: kat_params, nonce: { indices: [2, 10], header_nonce: 0 }
       )).to be(true)
     end
+
+    # K-842 — the u32 RANGE, which the type check alone did not enforce.
+    # `pack("V")` truncates mod 2**32 instead of raising, so before the bound
+    # 0, 2**32 and -(2**32) all seeded identically and this one KAT verified
+    # true under all three: one proof, infinitely many spellings on the wire.
+    # Both specs call the field a u32 and `pow.schema.json` now states the same
+    # bound, so the verifier and the schema accept one set, not two.
+    it "REJECT — header_nonce == 2**32 (the truncating alias of 0)" do
+      expect(described_class.verify(
+        salt: kat_salt, params: kat_params, nonce: { indices: [2, 10], header_nonce: 2**32 }
+      )).to be(false)
+    end
+
+    it "REJECT — header_nonce == -(2**32) (the negative truncating alias of 0)" do
+      expect(described_class.verify(
+        salt: kat_salt, params: kat_params, nonce: { indices: [2, 10], header_nonce: -(2**32) }
+      )).to be(false)
+    end
+
+    it "REJECT — a negative header_nonce" do
+      expect(described_class.verify(
+        salt: kat_salt, params: kat_params, nonce: { indices: [2, 10], header_nonce: -1 }
+      )).to be(false)
+    end
+
+    it "ACCEPT — the largest legal header_nonce is in range (2**32 - 1)" do
+      # Not a solution for THIS salt (the seed differs), so it verifies false —
+      # but it must fail on the SOLUTION, not on the range pre-check, which is
+      # what distinguishes an in-range value from an out-of-range one. Proven by
+      # the boundary: 2**32 - 1 and 2**32 are one apart and only the second is
+      # refused for its range.
+      expect(described_class::MAX_HEADER_NONCE).to eq(4_294_967_296)
+      expect(4_294_967_295).to be < described_class::MAX_HEADER_NONCE
+    end
   end
 
   # ─────────────────────────────────────────────────────────────────────

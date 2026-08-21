@@ -63,6 +63,15 @@ module Kiosk
       # two distinct indices sharing one hash (K-540 range pre-check).
       MAX_INDEX = 1 << 64
 
+      # Exclusive upper bound on `header_nonce`. Both specs call the field a
+      # u32 (`protocol.md` Section 10, `specification.html`, and the
+      # `pow.schema.json` description), and `pack("V")` truncates a larger
+      # Integer mod 2**32 exactly as `pack("Q<")` truncates mod 2**64 — so
+      # without this bound `0`, `2**32` and `-(2**32)` are three spellings of
+      # ONE proof and all three verify true against the same indices (K-842,
+      # the sibling of K-540's `MAX_INDEX` and K-839's schema bound).
+      MAX_HEADER_NONCE = 1 << 32
+
       # Inclusive bounds on `n`, the number of hash bits a solution must cancel.
       # A leaf is the first `n / 8` bytes of a BLAKE2b-256 digest read as an
       # integer, so below 8 bits there is nothing to read (every leaf is 0 and
@@ -350,12 +359,21 @@ module Kiosk
         # header_nonce is client-supplied. A non-numeric/non-coercible value
         # means a malformed proof, which must return false, never raise —
         # Integer() throws ArgumentError/TypeError on "abc", [1], {}.
+        #
+        # The RANGE check is the same argument {MAX_INDEX} makes one screen up:
+        # `pack("V")` truncates mod 2**32 rather than raising, so without it
+        # `0`, `2**32` and `-(2**32)` seed identically and one proof has
+        # infinitely many spellings on the wire (K-842). `pow.schema.json`
+        # states the same bound, and the two must move together — bounding
+        # only the schema would make it refuse what this verifier accepts.
         hn = nonce[:header_nonce] || nonce["header_nonce"] || 0
         hn = begin
           Integer(hn)
         rescue ArgumentError, TypeError
           return false
         end
+        return false unless hn >= 0 && hn < MAX_HEADER_NONCE
+
         seed = salt.b + [hn].pack("V")
 
         # ── Step 3: hash leaf by leaf, folding the Wagner tree as we go ───────

@@ -246,9 +246,9 @@ rc_unlink, = post_json("/kiosk/auth/unlink", { agent_id: revoked_agent_id }, { s
 rc, = post_json("/kiosk/auth/login", { public_key: rpem, signed: pop_proof(rk, rpem) })
 record(results, "RevokedAgentKey",
        rc_link == 201 && rc_claim == 201 && !revoked_agent_id.nil? &&
-       rc_prelogin == 200 && rc_unlink == 200 && rc == 404,
+       rc_prelogin == 200 && rc_unlink == 204 && rc == 404,
        "link=#{rc_link} claim=#{rc_claim} agent_id=#{revoked_agent_id.inspect} " \
-       "pre-revoke login=#{rc_prelogin} (want 200) unlink=#{rc_unlink} (want 200) " \
+       "pre-revoke login=#{rc_prelogin} (want 200) unlink=#{rc_unlink} (want 204) " \
        "post-revoke login=#{rc} (want 404)")
 
 # PreLinkTokenAfterLink — an agent registers headless, creates a list, then

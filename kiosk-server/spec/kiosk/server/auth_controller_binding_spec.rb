@@ -173,12 +173,21 @@ RSpec.describe "AuthController binding endpoints" do
   end
 
   describe "POST /auth/unlink" do
-    it "deactivates one of the holder's own bindings" do
+    # 204, EMPTY (K-870). This used to be `200 {ok: true}` — a body no published
+    # surface documented, on an endpoint whose two siblings above ARE documented
+    # in protocol.md §6.2. Phil's answer was K-855's: withdraw the body rather
+    # than specify it after the fact. §6.2 now states the 204, so the status IS
+    # the contract and this example is what pins it.
+    it "deactivates one of the holder's own bindings and answers 204 with no body" do
       allow(Kiosk::Server::AccountBinding).to receive(:unlink!).and_return({ agent_id: "a-1" })
 
       status, body = dispatch(:unlink, body: { agent_id: "a-1" })
-      expect(status).to eq(200)
-      expect(body).to eq(ok: true)
+      expect(status).to eq(204)
+      expect(body).to eq({})
+      expect(last_headers["Content-Type"]).to be_nil
+      # The version handshake still rides on it — §3, point 6 is about every
+      # mount-path response, empty ones included.
+      expect(last_headers["Kiosk-API-Version"]).to eq(Kiosk::Protocol::API_VERSION)
       expect(Kiosk::Server::AccountBinding).to have_received(:unlink!).with(
         agent_id: "a-1", user_id: user_id,
       )

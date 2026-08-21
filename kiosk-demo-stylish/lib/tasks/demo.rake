@@ -385,7 +385,9 @@ namespace :demo do
       check.call("link-code mint (session channel) → 201",         result["link_mint"] == 201)
       check.call("link-code redeem binds to the same account",     result["link_claim"] == [201, true])
       check.call("assistant 2 sees assistant 1's booking (same account)", result["a2_sees_booking"] == true)
-      check.call("unlink assistant 1 → 200",                       result["unlink"] == 200)
+      # 204, not 200: unlink withdrew its undocumented `{ok: true}` body (K-870);
+      # protocol.md §6.2 states the 204 beside link's and claim's responses.
+      check.call("unlink assistant 1 → 204 (no body)",             result["unlink"] == 204)
       check.call("assistant 1 login after unlink → 404",           result["login_a1_after_unlink"] == 404)
       check.call("assistant 2 login still works → 200",            result["login_a2_still_works"] == 200)
 

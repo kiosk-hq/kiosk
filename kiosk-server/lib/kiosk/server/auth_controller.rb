@@ -35,7 +35,7 @@ module Kiosk
     #   POST /kiosk/auth/claim     { code, public_key, signed }
     #                                → 201 { agent_id, user_id, access_token }
     #   POST /kiosk/auth/unlink    (user_idp session, { agent_id })
-    #                                → 200 { ok: true }
+    #                                → 204 No Content
     #
     # `signed` is a compact RS256 JWS (see {PopVerifier}) proving the caller
     # holds the private key — and, via its `aud` claim, binding the proof to
@@ -168,11 +168,33 @@ module Kiosk
       # Registration-layer revocation: the signed-in holder
       # deactivates one of THEIR linked assistant accounts. Token verify
       # and login deny the key from here on.
+      #
+      # ANSWERS `204 No Content` (K-870, Phil 2026-08-21). It used to render
+      # `{ ok: true }` — a body no published surface documented, on an endpoint
+      # whose two siblings ARE documented: `protocol.md` §6.2 spells out
+      # `/auth/link -> {link_code, expires_in}` and `/auth/claim -> 201
+      # {agent_id, user_id, access_token}`, and said nothing at all about what
+      # unlink answers. That is the defect, and it is the same one K-855 fixed
+      # by WITHDRAWING an undocumented field rather than specifying it. The
+      # withdrawal is the cheaper true answer here because nothing read the
+      # body: every caller in the tree — the e2e claim flow, philslist's and
+      # stylish's binding beats, tudu's redteam suite — reads the STATUS.
+      #
+      # Deliberately NOT justified as "§8.2 forbids the `ok` envelope". §8.2 is
+      # scoped to VERB response shape, not to the auth ceremony, so leaning on
+      # it would put a citation into the spec that the spec does not support.
+      # The body being an `ok` flag is a characterisation; the defect is that
+      # it was undocumented.
+      #
+      # 204 is itself a wire fact, so §6.2 now says so beside the siblings.
+      # `Headers.add_to` still runs: the three version-handshake headers ride
+      # on every mount-path response (§3, point 6), empty body or not.
       def unlink
         identity = authenticated_account_holder!
         body     = parse_body!
         AccountBinding.unlink!(agent_id: body.fetch(:agent_id), user_id: identity.user_id)
-        respond({ ok: true }, :ok)
+        Kiosk::Server::Headers.add_to(response.headers)
+        head :no_content
       rescue KeyError => e
         render_error(Errors::BadRequest.new("missing field: #{e.message}"))
       rescue Errors::Base => e

@@ -362,7 +362,9 @@ namespace :demo do
       check.call("link-code redeem binds to the SAME account",       result["link_claim"] == [201, true])
       check.call("assistant 2 sees assistant 1's listing (household)", result["a2_sees_listing"] == true)
       check.call("assistant 2 can EDIT the household listing → 200",  result["a2_edit"] == 200)
-      check.call("unlink assistant 1 → 200",                         result["unlink"] == 200)
+      # 204, not 200: unlink withdrew its undocumented `{ok: true}` body (K-870);
+      # protocol.md §6.2 states the 204 beside link's and claim's responses.
+      check.call("unlink assistant 1 → 204 (no body)",               result["unlink"] == 204)
       # K-835: the TOKEN half of spec §6.3/§15.4, not just the login half —
       # including a token minted in the same wall-clock second as the unlink,
       # which used to survive for its full hour. `unlink_same_second` reports

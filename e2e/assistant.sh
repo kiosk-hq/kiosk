@@ -861,7 +861,9 @@ assert "binding: wire verb as bound account"  "$(echo "$bind_out" | jq -r '.wire
 assert "binding: kiosk-pop login refresh"     "$(echo "$bind_out" | jq -r '.login_bound')"                          "200"
 assert "binding: link-code mint (session)"    "$(echo "$bind_out" | jq -r '.link_mint')"                            "201"
 assert "binding: link-code redeem → human"    "$(echo "$bind_out" | jq -r '.link_claim | map(tostring) | join(":")')" "201:true"
-assert "binding: unlink → 200"                "$(echo "$bind_out" | jq -r '.unlink')"                               "200"
+# 204, not 200 (K-870): the undocumented `{ok: true}` body is withdrawn and
+# protocol.md §6.2 now states what unlink answers, beside its two siblings.
+assert "binding: unlink → 204 (no body)"      "$(echo "$bind_out" | jq -r '.unlink')"                               "204"
 # K-835: the TOKEN half of the unlink promise, including a token minted in the
 # same wall-clock second as the unlink — which used to survive for its full hour.
 assert "binding: held token dies at unlink"   "$(echo "$bind_out" | jq -r '.held_token_after_unlink')"        "401"

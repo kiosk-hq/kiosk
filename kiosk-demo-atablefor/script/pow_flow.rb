@@ -57,7 +57,12 @@ require_relative "equihash_register"
 # rejected proof against THIS identity and nobody else's — it is NOT the
 # decayed, durable bad_proof_count a real provider needs.
 require_relative "../app/services/bad_proof_counter"
-BAD_PROOF_DB = "/tmp/kiosk-atablefor-bad-proof.sqlite3"
+# The path is OWNED by `rake demo:pow`, which exports it to the server it
+# spawns and to this driver (K-711). No default on purpose: this used to be a
+# second hand-typed literal, and a drift between the two copies opened an empty
+# sqlite here, read 0 for every count, and reported the zeros as a pass. A
+# KeyError is the only honest answer when nobody told this process where to look.
+BAD_PROOF_DB = ENV.fetch("KIOSK_BAD_PROOF_DB")
 
 def post_json(url, body, headers = {})
   uri = URI(url)

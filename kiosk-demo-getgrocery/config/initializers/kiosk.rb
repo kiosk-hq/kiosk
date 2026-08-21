@@ -67,14 +67,22 @@ if ENV["KIOSK_POW_DEMO"] == "1"
   # assistant can no longer inflate anyone else's count, and concurrent server
   # processes no longer fight over one flat file. Two toy aspects REMAIN,
   # deliberately, labelled:
-  #   · TRUNCATED AT BOOT — a redeploy silently zeroes the accumulated signal;
   #   · NO TTL — and never resetting is equally wrong: a count that only grows
   #     condemns an identity for something a year old.
   # A production bad-proof count keeps the per-identity keying and adds decay
   # plus durability across restarts (the same gap as the in-process revocation
   # watermark). It must be specified before it is built, not bolted on here.
-  GETGROCERY_BAD_PROOF_DB = "/tmp/kiosk-getgrocery-bad-proof.sqlite3"
-  BadProofCounter.reset!(GETGROCERY_BAD_PROOF_DB)
+  #
+  # WHERE IT LIVES, AND WHO WIPES IT (K-785, K-711). This file is what an
+  # adopter copies, so it may not hardcode a path under /tmp, and it may not
+  # truncate a store AT BOOT — a redeploy would silently zero the accumulated
+  # signal. `rake demo:pow` OWNS the location: it wipes the file for a clean
+  # slate and exports KIOSK_BAD_PROOF_DB to BOTH the server it spawns and the
+  # driver that reads the counts back, so the two processes cannot drift onto
+  # different files and report zero at each other. The default below is only
+  # for a bare `rails s`.
+  GETGROCERY_BAD_PROOF_DB =
+    ENV.fetch("KIOSK_BAD_PROOF_DB") { Rails.root.join("tmp", "bad-proof.sqlite3").to_s }
 
   class GetgroceryCatalogPowPolicy < Kiosk::Reputation::Policy
     def initialize(params)

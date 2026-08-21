@@ -151,14 +151,22 @@ when :demo
   # sqlite (app/services/bad_proof_counter.rb): one abusive assistant can no longer
   # inflate anyone else's count, and concurrent server processes no longer
   # fight over one flat file. Two toy aspects REMAIN, deliberately, labelled:
-  #   · TRUNCATED AT BOOT — a redeploy silently zeroes the accumulated signal;
   #   · NO TTL — and never resetting is equally wrong: a count that only grows
   #     condemns an identity for something a year old.
   # A production bad-proof count keeps the per-identity keying and adds decay
   # plus durability across restarts (the same gap as the in-process revocation
   # watermark). It must be specified before it is built, not bolted on here.
-  ATABLEFOR_BAD_PROOF_DB = "/tmp/kiosk-atablefor-bad-proof.sqlite3"
-  BadProofCounter.reset!(ATABLEFOR_BAD_PROOF_DB)
+  #
+  # WHERE IT LIVES, AND WHO WIPES IT (K-785, K-711). This file is what an
+  # adopter copies, so it may not hardcode a path under /tmp, and it may not
+  # truncate a store AT BOOT — a redeploy would silently zero the accumulated
+  # signal. `rake demo:pow` OWNS the location: it wipes the file for a clean
+  # slate and exports KIOSK_BAD_PROOF_DB to BOTH the server it spawns and the
+  # driver that reads the counts back, so the two processes cannot drift onto
+  # different files and report zero at each other. The default below is only
+  # for a bare `rails s`.
+  ATABLEFOR_BAD_PROOF_DB =
+    ENV.fetch("KIOSK_BAD_PROOF_DB") { Rails.root.join("tmp", "bad-proof.sqlite3").to_s }
 when :reputation
   # Anti-scalping mechanic: a fresh/low-reputation agent pays ESCALATING PoW
   # (N×PoW) to browse prime-time availability, and that cost DROPS as it builds a
@@ -172,8 +180,11 @@ when :reputation
   # factors hardcode `bad_proof_count: 0`, so this store still feeds nothing.
   # Wiring it in now would at least penalize only the offender, but a real
   # signal also needs decay before it becomes policy.
-  ATABLEFOR_REPUTATION_BAD_PROOF_DB = "/tmp/kiosk-atablefor-reputation-bad-proof.sqlite3"
-  BadProofCounter.reset!(ATABLEFOR_REPUTATION_BAD_PROOF_DB)
+  # Same location rule as the :demo branch above (K-785). Nothing asserts these
+  # counts — no driver reads this branch's store — so nothing wipes it either;
+  # the "NO TTL" caveat above is the whole of its behaviour.
+  ATABLEFOR_REPUTATION_BAD_PROOF_DB =
+    ENV.fetch("KIOSK_BAD_PROOF_DB") { Rails.root.join("tmp", "reputation-bad-proof.sqlite3").to_s }
 end
 
 # ── PoW HMAC secret (K-541/K-650) ───────────────────────────────────────────

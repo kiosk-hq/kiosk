@@ -223,9 +223,21 @@ namespace :demo do
 
     puts "\n── Starting atablefor (PoW demo) on #{server_url} ──"
 
+    # ONE owner for the toy counter's location (K-711, K-785). The server and
+    # the driver are two processes that never meet; this task spawns both, so
+    # it is the only place the path can be stated once. Wiped HERE — the beat
+    # asserts exact counts, and the initializer must not truncate a store at
+    # boot in a file an adopter copies.
+    bad_proof_db = File.expand_path("../../tmp/bad-proof.sqlite3", __dir__)
+    require "fileutils"
+    require "shellwords"
+    FileUtils.mkdir_p(File.dirname(bad_proof_db))
+    FileUtils.rm_f(bad_proof_db)
+
     env_vars = {
-      "KIOSK_ISSUER"   => kiosk_issuer,
-      "KIOSK_POW_DEMO" => "1",
+      "KIOSK_ISSUER"        => kiosk_issuer,
+      "KIOSK_POW_DEMO"      => "1",
+      "KIOSK_BAD_PROOF_DB"  => bad_proof_db,
     }
     server_pid = spawn(
       env_vars,
@@ -264,7 +276,9 @@ namespace :demo do
     # Run script/pow_flow.rb.
     flow_rb = File.expand_path("../../script/pow_flow.rb", __dir__)
     puts "\n── Running script/pow_flow.rb ──"
-    raw = `SERVER_URL=#{server_url} KIOSK_ISSUER=#{kiosk_issuer} bundle exec ruby #{flow_rb} 2>&1`
+    env = "SERVER_URL=#{server_url} KIOSK_ISSUER=#{kiosk_issuer} " \
+          "KIOSK_BAD_PROOF_DB=#{bad_proof_db.shellescape}"
+    raw = `#{env} bundle exec ruby #{flow_rb} 2>&1`
     puts raw
 
     begin

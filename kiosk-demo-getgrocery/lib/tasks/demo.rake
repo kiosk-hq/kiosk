@@ -1295,10 +1295,21 @@ namespace :demo do
     # for the payment demos (demo:shop).
     stripe_key = ENV["STRIPE_SECRET_KEY"].to_s.empty? ? "sk_test_dummy" : ENV["STRIPE_SECRET_KEY"]
 
+    # ONE owner for the toy counter's location (K-711, K-785). The server and
+    # the driver are two processes that never meet; this task spawns both, so
+    # it is the only place the path can be stated once. Wiped HERE — the beat
+    # asserts exact counts, and the initializer must not truncate a store at
+    # boot in a file an adopter copies.
+    bad_proof_db = File.expand_path("../../tmp/bad-proof.sqlite3", __dir__)
+    require "fileutils"
+    FileUtils.mkdir_p(File.dirname(bad_proof_db))
+    FileUtils.rm_f(bad_proof_db)
+
     File.truncate(log, 0) if File.exist?(log)
     server_pid = spawn(
       { "KIOSK_ISSUER" => server_url, "KIOSK_POW_DEMO" => "1",
-        "KIOSK_TEST_AUTOCARD" => "1", "STRIPE_SECRET_KEY" => stripe_key },
+        "KIOSK_TEST_AUTOCARD" => "1", "STRIPE_SECRET_KEY" => stripe_key,
+        "KIOSK_BAD_PROOF_DB" => bad_proof_db },
       "bundle exec rails s -p #{port} -b 127.0.0.1 -e development",
       out: log, err: log,
     )
@@ -1316,7 +1327,8 @@ namespace :demo do
       abort "Server did not become ready — see #{log}" unless ready
       puts "  Server up at #{server_url} (catalog PoW active)"
 
-      env = "SERVER_URL=#{server_url.shellescape} KIOSK_ISSUER=#{server_url.shellescape}"
+      env = "SERVER_URL=#{server_url.shellescape} KIOSK_ISSUER=#{server_url.shellescape} " \
+            "KIOSK_BAD_PROOF_DB=#{bad_proof_db.shellescape}"
       raw = `#{env} bundle exec ruby #{flow_rb.shellescape} 2>&1`
       json_line = raw.lines.grep(/^\{/).last
       puts raw.lines.reject { |l| l.start_with?("{") }.join

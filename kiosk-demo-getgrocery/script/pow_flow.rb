@@ -31,7 +31,12 @@ ISSUER = ENV.fetch("KIOSK_ISSUER")
 # The TOY counter the initializer's on_bad_proof writes (K-590/K-498):
 # PER-IDENTITY in sqlite — this driver asserts its own wrong nonce was counted
 # against ITS identity and that an innocent second identity stayed at 0.
-BAD_PROOF_DB = "/tmp/kiosk-getgrocery-bad-proof.sqlite3"
+# The path is OWNED by `rake demo:pow`, which exports it to the server it spawns
+# and to this driver (K-711). No default on purpose: this used to be a second
+# hand-typed literal, and a drift between the two copies opened an empty sqlite
+# here, read 0 for every count, and reported the zeros as a pass. A KeyError is
+# the only honest answer when nobody told this process where to look.
+BAD_PROOF_DB = ENV.fetch("KIOSK_BAD_PROOF_DB")
 
 # equihash_solve / equihash_register come from the shared helper; the solver
 # location is Kiosk::Pow::Equihash.solver_path, owned by the gem (K-627).
@@ -88,8 +93,16 @@ rc_wrong, _ = get_json(CATALOG_URL,
   auth.merge("Kiosk-PoW" => JSON.generate([{ challenge: neg["challenges"].first, nonce: bad }])))
 abort "expected 403 for wrong nonce, got #{rc_wrong}" unless rc_wrong == 403
 # PER-IDENTITY (K-498): the offender's count moved, the innocent one's did not.
+# BOTH halves are asserted here, not just the innocent one (K-707/K-711): the
+# innocent check passes trivially against an EMPTY store, so on its own it
+# cannot tell "the counter is per-identity" from "this driver is reading a file
+# the server never wrote".
 bad_proof_count       = BadProofCounter.count(BAD_PROOF_DB, agent_id)
 other_bad_proof_count = BadProofCounter.count(BAD_PROOF_DB, other_agent_id)
+unless bad_proof_count >= 1
+  abort "expected bad_proof_count >= 1 for the offending identity after a wrong nonce, got #{bad_proof_count} — " \
+        "the server did not count it, or this driver is reading a different store (#{BAD_PROOF_DB})"
+end
 unless other_bad_proof_count.zero?
   abort "expected bad_proof_count == 0 for the innocent identity, got #{other_bad_proof_count} — the counter is not per-identity (K-498)"
 end
@@ -100,13 +113,18 @@ rc_served, served_resp = get_json(CATALOG_URL, auth.merge("Kiosk-PoW" => JSON.ge
 # as one only when the call actually succeeded, so a refusal (a problem document,
 # i.e. a Hash) reaches the abort below verbatim rather than as coerced pairs.
 rows = served_resp.is_a?(Array) ? served_resp : []
-abort "expected 200 + rows, got #{rc_served}: #{JSON.generate(served_resp)}" unless rc_served == 200 && rows.any?
+# DERIVED from the live response, never asserted as a constant (K-707): the
+# rake task checks this field, and a field the driver hardcodes makes that
+# check decorative. atablefor's pow_flow.rb is the shipped counter-example
+# this copies.
+served = rc_served == 200 && rows.any?
+abort "expected 200 + rows, got #{rc_served}: #{JSON.generate(served_resp)}" unless served
 
 puts JSON.generate(
   http_challenge:          rc_challenge,
   http_served_after_solve: rc_served,
   http_wrong_nonce:        rc_wrong,
-  served:                  true,
+  served:                  served,
   proofs_solved:           proofs.size,
   bad_proof_count:         bad_proof_count,
   other_bad_proof_count:   other_bad_proof_count,

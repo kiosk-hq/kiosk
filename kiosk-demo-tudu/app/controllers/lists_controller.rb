@@ -51,7 +51,7 @@ class ListsController < ApplicationController
   # freshly shared list appear.
   def shared
     @housemate_board = housemate_board
-    response.set_header("Link", '<https://kiosk.tech/skill.md>; rel="kiosk"')
+    response.set_header("Link", %(<#{Kiosk.configuration.skill_url}>; rel="kiosk"))
   end
 
   # The three actions below branch on the wire CODE rather than on an exception

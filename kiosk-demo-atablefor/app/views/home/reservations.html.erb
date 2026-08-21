@@ -4,7 +4,13 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Reservations board — atablefor (Lisbon restaurants demo)</title>
-  <link rel="kiosk" href="https://kiosk.tech/skill.md">
+  <!-- Machine-readable affordance: assistants discover the Kiosk surface here.
+       The href is the VERSIONED cut this operator pins, read from
+       Kiosk.configuration.skill_url — the SAME url the `skill` block of
+       /.well-known/kiosk.json carries, never the mutable skill.md alias
+       (K-927). One immutable, hash-pinnable file behind both signals, and
+       one place to re-pin: the initializer. -->
+  <link rel="kiosk" href="<%= Kiosk.configuration.skill_url %>">
   <style>
     :root{--accent:#8a3b1c;--accent2:#ffcf9b;--ink:#2a1a12;--muted:#98847a;--soft:#f7e6da;--line:#eccbb2;--bg:#faf6f2;--ok:#1a6b3c}
     *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}

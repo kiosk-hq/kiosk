@@ -247,6 +247,116 @@ skill_pins.each do |where, url|
             "URL and skill_sha256 move together (ADR-0012)."
 end
 
+# ── Rule E: the OTHER place the cut is advertised — the discovery signal ─────
+#
+# WHY THIS LIVES HERE AND NOT IN ITS OWN SCRIPT. Rule C above already owns
+# "every place a demo names the skill cut", and protocol.md §4.5 made the
+# discovery signal one of those places (K-927, Phil 2026-08-21): the
+# `<link rel="kiosk">` tag and the `Link: <…>; rel="kiosk"` response header MUST
+# name `skill-vMAJOR.MINOR.PATCH.md`, MUST NOT name the mutable `skill.md`
+# alias, and where the origin also publishes a `skill` pin the two MUST name the
+# SAME url. A second `bin/check-*` would put one invariant behind two exit codes
+# and duplicate this file's demo enumeration. kiosk.tech's
+# `bin/check-skill-immutability` cannot hold it either: the demo half of the
+# relink lives in THIS repo, which that guard cannot reach — and a relink site
+# with no guard is how K-923 happened.
+#
+# WHAT IT ASSERTS, and why it is a SHAPE rule rather than a URL rule. Until
+# K-927 all eighteen sites carried the alias as a string literal, and option B
+# as filed would have replaced them with eighteen literals naming the cut —
+# eighteen new places to re-pin on every bump, on top of the eight pins. So the
+# demos DERIVE the value instead: both signals read
+# `Kiosk.configuration.skill_url`, the same accessor `/.well-known/kiosk.json`
+# renders its `skill` block from. The two signals then cannot disagree by
+# construction, and the relink inventory does not grow at all.
+#
+# That is the lesson well_known_spec.rb records about its own copy of the
+# default URL (K-750): "restating it here made a second copy that had to be
+# hand-chased on every skill cut, and it went red exactly that way". A checker
+# comparing eighteen literals would re-introduce the copies it exists to
+# police, so this rule bans the literal and demands the accessor:
+#
+#   E1  no file under `kiosk-demo-*/app/` contains a literal
+#       `https://kiosk.tech/skill…` url. A literal there is a second copy of the
+#       pin, whether it names the alias (the K-927 defect) or a cut (the same
+#       defect one bump later).
+#   E2  every line that EMITS the signal — one carrying `rel="kiosk"` together
+#       with an `href=` or a `set_header` — reads `Kiosk.configuration.skill_url`.
+#       Prose mentioning `<link rel="kiosk">` emits nothing and is left alone.
+#   E3  each operator demo emits BOTH forms: at least one tag under app/views
+#       and at least one header under app/controllers. §4.5 lets an operator
+#       pick either; these seven ship both, and a signal silently lost in a view
+#       rewrite is exactly the drift nothing else here would catch.
+#
+# The operator demos are the ones with a `config/initializers/kiosk.rb` — the
+# set rule C already derives its pins from — so kiosk-demo-prove (the KYC
+# broker, which mounts no Kiosk engine) is excluded without a hardcoded list.
+SIGNAL_ACCESSOR = "Kiosk.configuration.skill_url"
+SKILL_LITERAL   = %r{https://kiosk\.tech/skill[-.][^"'\s)>]*}
+SIGNAL_REL      = /rel=("|&quot;)kiosk\1/
+EMITS           = /href\s*=|set_header/
+
+signal_sites   = []
+operator_demos = initializers.map { |path| File.dirname(File.dirname(File.dirname(path))) }
+
+operator_demos.each do |dir|
+  demo  = File.basename(dir)
+  files = Dir[File.join(dir, "app", "**", "*.{rb,erb}")].sort
+  if files.empty?
+    errors << "#{demo}: no app/**/*.{rb,erb} found, so the discovery signal cannot be checked. " \
+              "This rule must not pass by finding nothing to look at."
+    next
+  end
+
+  tags = 0
+  hdrs = 0
+
+  files.each do |path|
+    rel = path.delete_prefix("#{ROOT}/")
+    File.readlines(path).each_with_index do |line, idx|
+      lineno = idx + 1
+
+      # ── E1 ──
+      if (literal = line[SKILL_LITERAL])
+        errors << "#{rel}:#{lineno}: hardcodes `#{literal}`. The discovery signal names the cut " \
+                  "this operator PINS, and that url has exactly one home — `skill_url` in " \
+                  "config/initializers/kiosk.rb, which `/.well-known/kiosk.json` already renders " \
+                  "its `skill` block from. Read `#{SIGNAL_ACCESSOR}` instead: a literal here is a " \
+                  "second copy to hand-chase on every cut (K-750's lesson, K-927's defect), and " \
+                  "if it names `skill.md` it also violates protocol.md §4.5, which forbids " \
+                  "advertising the mutable alias."
+      end
+
+      next unless line.match?(SIGNAL_REL) && line.match?(EMITS)
+
+      # ── E2 ──
+      unless line.include?(SIGNAL_ACCESSOR)
+        errors << "#{rel}:#{lineno}: emits a `rel=\"kiosk\"` discovery signal whose value does " \
+                  "not come from `#{SIGNAL_ACCESSOR}`. protocol.md §4.5: the href MUST name a " \
+                  "versioned cut and, where the origin publishes a `skill` pin, MUST name the " \
+                  "same url as that pin — which is what reading the accessor guarantees."
+        next
+      end
+
+      in_view = path.include?("/app/views/")
+      in_view ? tags += 1 : hdrs += 1
+      signal_sites << [demo, in_view ? "<link>" : "Link:", "#{rel}:#{lineno}"]
+    end
+  end
+
+  # ── E3 ──
+  if tags.zero?
+    errors << "#{demo}: no `<link rel=\"kiosk\">` tag under app/views reads #{SIGNAL_ACCESSOR}. " \
+              "All seven operator demos advertise the signal in both forms; a tag that " \
+              "disappears in a view rewrite is invisible to every other check in this repo."
+  end
+  next unless hdrs.zero?
+
+  errors << "#{demo}: no `Link: <…>; rel=\"kiosk\"` response header under app/controllers reads " \
+            "#{SIGNAL_ACCESSOR}. The header is the half an assistant that never downloads the " \
+            "page relies on."
+end
+
 # ── --list ───────────────────────────────────────────────────────────────────
 if ARGV.include?("--list")
   puts "protocol  Kiosk::Protocol::API_VERSION = #{api_version}   (series #{SERIES})"
@@ -261,6 +371,9 @@ if ARGV.include?("--list")
   puts
   puts format("%-24s %s", "SKILL PINNED BY", "URL")
   skill_pins.each { |(where, url)| puts format("%-24s %s", where, url) }
+  puts
+  puts format("%-24s %-8s %s", "SIGNAL EMITTED BY", "FORM", "SITE")
+  signal_sites.each { |(demo, form, site)| puts format("%-24s %-8s %s", demo, form, site) }
   # Deliberately falls through to the verdict below rather than exiting here,
   # for the same reason bin/check-gem-packaging's --list does: a mode that
   # returned 1 without printing WHY would be a check that fails silently.
@@ -268,7 +381,9 @@ end
 
 if errors.empty?
   puts "check-version-parity: OK — protocol #{api_version}; #{listing.size} gems, " \
-       "#{constraints.size} inter-gem constraints and #{skill_pins.size} skill pins all on #{SERIES}"
+       "#{constraints.size} inter-gem constraints and #{skill_pins.size} skill pins all on " \
+       "#{SERIES}; #{signal_sites.size} `rel=\"kiosk\"` discovery signals across " \
+       "#{operator_demos.size} operator demos, all derived from #{SIGNAL_ACCESSOR}"
   exit 0
 end
 

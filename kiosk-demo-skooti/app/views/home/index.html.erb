@@ -4,8 +4,13 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>skooti — scooter &amp; motorcycle rental (Kiosk demo)</title>
-  <!-- Machine-readable affordance: assistants discover the Kiosk surface here. -->
-  <link rel="kiosk" href="https://kiosk.tech/skill.md">
+  <!-- Machine-readable affordance: assistants discover the Kiosk surface here.
+       The href is the VERSIONED cut this operator pins, read from
+       Kiosk.configuration.skill_url — the SAME url the `skill` block of
+       /.well-known/kiosk.json carries, never the mutable skill.md alias
+       (K-927). One immutable, hash-pinnable file behind both signals, and
+       one place to re-pin: the initializer. -->
+  <link rel="kiosk" href="<%= Kiosk.configuration.skill_url %>">
   <style>
     :root{--accent:#0e5a8a;--accent2:#8fd0ff;--ink:#12232e;--muted:#7a8b98;--soft:#e2eef7;--line:#dfe8ef;--bg:#f4f7fa}
     *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}

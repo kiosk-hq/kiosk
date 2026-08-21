@@ -485,6 +485,10 @@ namespace :demo do
       • agents.json carries NO payments block
       • agents.txt carries NO `Protocols: ap2` / `Payments:` directives
 
+      • the `<link rel="kiosk">` tag AND the `Link: <…>; rel="kiosk"` header both name
+        a VERSIONED cut — not the mutable `skill.md` alias — and both agree with the
+        `skill` pin in /.well-known/kiosk.json (K-927, protocol.md §4.5)
+
     Exits 0 if all assertions pass; exits 1 on any miss.
   DESC
   task schema: :setup do
@@ -516,6 +520,72 @@ namespace :demo do
 
     puts "\n── Schema + discovery assertions ──"
     failures = []
+
+    # ── K-927: THE DISCOVERY SIGNAL, READ OFF THE WIRE ───────────────────────
+    #
+    # protocol.md §4.5 (Phil, 2026-08-21): an operator that advertises
+    # `rel="kiosk"` MUST point it at a VERSIONED cut
+    # (`https://kiosk.tech/skill-vMAJOR.MINOR.PATCH.md`), MUST NOT point it at
+    # the mutable `skill.md` alias, and — where it also publishes a `skill` pin
+    # — the tag, the header and the pin MUST all name the SAME url.
+    #
+    # ASSERTED HERE, OVER HTTP, AND NOT IN A UNIT TEST, because the defect
+    # K-927 recorded was a SERVED BYTE: the tag is rendered by a view and the
+    # header is set by a controller, so only a real response says what an
+    # assistant scanning this page is actually handed. bin/check-version-parity
+    # holds the SOURCE half (no literal url in app/, read the accessor); this
+    # holds the wire half. The expected url is read from the origin's own
+    # `/.well-known/kiosk.json`, never from a constant here — a second copy of
+    # the pin is the thing both halves exist to prevent.
+    require "net/http"
+    require "uri"
+
+    puts "\n── Discovery-signal assertions (K-927, protocol.md §4.5) ──"
+    versioned_cut = %r{\Ahttps://kiosk\.tech/skill-v\d+\.\d+\.\d+\.md\z}
+    pinned_skill  =
+      begin
+        JSON.parse(Net::HTTP.get(URI("#{server_url}/.well-known/kiosk.json")))
+            .dig("kiosk", "skill", "url")
+      rescue StandardError => e
+        failures << "could not read the kiosk.json skill pin: #{e.class}: #{e.message}"
+        nil
+      end
+
+    advertised = { %(<link rel="kiosk"> tag) => nil, %(Link: <…>; rel="kiosk" header) => nil }
+    %w[/ /listings].each do |page|
+      res = Net::HTTP.get_response(URI("#{server_url}#{page}"))
+      advertised[%(<link rel="kiosk"> tag)] ||=
+        res.body.to_s[/<link\s+rel="kiosk"\s+href="([^"]*)"/, 1]
+      advertised[%(Link: <…>; rel="kiosk" header)] ||=
+        res["Link"].to_s[/<([^>]*)>\s*;\s*rel="kiosk"/, 1]
+    end
+
+    advertised.each do |what, url|
+      if url.nil? || url.empty?
+        failures << "#{what}: absent from #{%w[/ /listings].join(", ")} — §4.5's signal is not served"
+        puts "  ✗  #{what} absent from #{%w[/ /listings].join(", ")}"
+        next
+      end
+
+      if url == "https://kiosk.tech/skill.md"
+        failures << "#{what} names the MUTABLE alias #{url} — §4.5 forbids it (K-927)"
+        puts "  ✗  #{what} names the mutable alias #{url}"
+      elsif versioned_cut.match?(url)
+        puts "  ✓  #{what} names the versioned cut #{url}"
+      else
+        failures << "#{what} names #{url.inspect}, which is not a skill-vX.Y.Z.md cut (§4.5)"
+        puts "  ✗  #{what} names #{url.inspect}, not a versioned cut"
+      end
+
+      next if pinned_skill.nil? || url == pinned_skill
+
+      failures << "#{what} names #{url.inspect} but /.well-known/kiosk.json pins " \
+                  "#{pinned_skill.inspect} — one origin advertises ONE skill (§4.5)"
+      puts "  ✗  #{what} disagrees with the kiosk.json skill pin #{pinned_skill.inspect}"
+    end
+    if pinned_skill && advertised.values.compact.uniq == [pinned_skill]
+      puts "  ✓  both signals and the kiosk.json `skill` pin name one url: #{pinned_skill}"
+    end
 
     query_specs  = result["schema_queries"] || []
     action_specs = result["schema_actions"] || []

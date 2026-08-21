@@ -23,6 +23,10 @@ class HomeController < ApplicationController
     @forecast_eur = Service.format_eur(Appointment.sum(:price_cents))
 
     # Set a Link header too, so a header-only agent finds the skill.
-    response.set_header("Link", '<https://kiosk.tech/skill.md>; rel="kiosk"')
+    # The url is `Kiosk.configuration.skill_url` — the VERSIONED cut this
+    # operator pins, identical to the one `/.well-known/kiosk.json` carries
+    # under `skill`, never the mutable skill.md alias (K-927). Derived rather
+    # than restated so a cut is re-pinned in ONE place, the initializer.
+    response.set_header("Link", %(<#{Kiosk.configuration.skill_url}>; rel="kiosk"))
   end
 end

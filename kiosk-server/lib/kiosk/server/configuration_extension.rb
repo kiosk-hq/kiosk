@@ -30,7 +30,7 @@ module Kiosk
       end
 
       # The handler controllers that declare this origin's wire verbs — the
-      # classes that `include Kiosk::Query` / `include Kiosk::Action`. NAME
+      # classes that `include Kiosk::Handler`. NAME
       # them; Kiosk loads and registers them.
       #
       #   Kiosk.configure do |c|

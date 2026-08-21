@@ -100,7 +100,7 @@ module Kiosk
     # THE TWO RESERVED OPERATIONS ARE THE ONE PLACE THIS RENDERER SPEAKS FOR
     # ITSELF, and it is worth being precise about why that is not the drift
     # the file exists to prevent. `schema` and `pay` are not the OPERATOR's
-    # verbs: no `Kiosk::Query`/`Kiosk::Action` declaration produces them,
+    # verbs: no `Kiosk::Handler` declaration produces them,
     # nobody can register them (they are in
     # {HandlerMixin::RESERVED_NAMES}), and their contract is fixed by the
     # SPECIFICATION — §8.3 for the catalog, §11.3 for the settlement — not by

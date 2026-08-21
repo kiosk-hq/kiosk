@@ -12,9 +12,11 @@ module Kiosk
     # no-agent-SQL property holds regardless of what a handler does.
     #
     # ONE WAY IN (K-495 / T-053 / T-081). A verb is declared by `include
-    # Kiosk::Query` in a controller the operator owns, where class-level macros
+    # Kiosk::Handler` in a controller the operator owns, where class-level macros
     # bind to the next-defined method and the handler is an ordinary controller
-    # action; see {Kiosk::Query}. The operator names those classes in
+    # action; `kind :query` is what puts it HERE rather than in {Actions}, and
+    # the same class may declare both (K-921). See {Kiosk::Handler}. The
+    # operator names those classes in
     # `Kiosk.configuration.handlers` and {HandlerRegistrations} — driven by the
     # engine's `to_prepare` — puts them here. It is what all seven demos, the
     # e2e harness and the install generator use.

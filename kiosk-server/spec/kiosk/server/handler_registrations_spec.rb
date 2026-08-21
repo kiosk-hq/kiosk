@@ -10,8 +10,9 @@
 # these specs. spec_helper resets both registries before each example, so
 # nothing here is registered until the code under test registers it.
 class SpecRegistrationsQueriesController < ApplicationController
-  include Kiosk::Query
+  include Kiosk::Handler
 
+  kind :query
   description "Lists the board."
   input_schema type: "object", additionalProperties: false, properties: {}, required: []
   output_schema true
@@ -21,8 +22,9 @@ class SpecRegistrationsQueriesController < ApplicationController
 end
 
 class SpecRegistrationsActionsController < ApplicationController
-  include Kiosk::Action
+  include Kiosk::Handler
 
+  kind :action
   description "Posts to the board."
   input_schema type: "object", additionalProperties: false, properties: {}, required: []
   output_schema true
@@ -35,8 +37,9 @@ end
 # Zeitwerk reload that dropped a verb. Kept separate so the mutation cannot
 # reach another example under a random seed.
 class SpecRegistrationsDoomedController < ApplicationController
-  include Kiosk::Query
+  include Kiosk::Handler
 
+  kind :query
   description "A verb about to be deleted from its controller."
   input_schema type: "object", additionalProperties: false, properties: {}, required: []
   output_schema true
@@ -113,14 +116,14 @@ RSpec.describe Kiosk::Server::HandlerRegistrations do
                         /handlers names "Kiosk::NoSuchController"/)
     end
 
-    it "refuses a class that includes neither mixin" do
+    it "refuses a class that does not include the mixin" do
       expect { described_class.reload!(%w[ApplicationController]) }
         .to raise_error(Kiosk::Server::Errors::ConfigurationError,
-                        /includes neither Kiosk::Action nor Kiosk::Query/)
+                        /does not include Kiosk::Handler/)
     end
 
     it "refuses an anonymous class — it could not be re-resolved after a reload" do
-      anonymous = Class.new(ApplicationController) { include Kiosk::Query }
+      anonymous = Class.new(ApplicationController) { include Kiosk::Handler }
 
       expect { described_class.reload!([anonymous]) }
         .to raise_error(Kiosk::Server::Errors::ConfigurationError, /anonymous class/)
@@ -129,21 +132,24 @@ RSpec.describe Kiosk::Server::HandlerRegistrations do
 
   # ── ONE NAME, ONE KIND (§3.2) ────────────────────────────────────────────
   #
-  # The collision is between two SEPARATE controller classes — a demo declares
-  # its queries and its actions in different files, and must — so no class body
-  # can see it. This pass has just rebuilt both registries from a cleared
-  # state, which is the first moment the whole surface exists at once.
+  # This is the CROSS-CLASS half: two SEPARATE controller classes cannot see
+  # each other, and this pass has just rebuilt both registries from a cleared
+  # state, which is the first moment the whole surface exists at once. The
+  # SAME-CLASS half — possible only since K-921 — is refused at declaration
+  # time and lives in handler_mixin_spec.rb.
   describe "one name, one kind" do
     it "refuses a name declared as both a query and an action" do
       Object.const_set(:SpecCollidingQueriesController, Class.new(ApplicationController) do
-        include Kiosk::Query
+        include Kiosk::Handler
+        kind :query
         description "A name two kinds want."
         input_schema type: "object"
         output_schema true
         def spec_collide = render(json: [])
       end)
       Object.const_set(:SpecCollidingActionsController, Class.new(ApplicationController) do
-        include Kiosk::Action
+        include Kiosk::Handler
+        kind :action
         description "The same name, the other kind."
         input_schema type: "object"
         output_schema true

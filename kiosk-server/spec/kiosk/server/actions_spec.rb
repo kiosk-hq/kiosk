@@ -1,7 +1,7 @@
 # frozen_string_literal: true
 
 # The write-side registry, exercised the ONE way a verb gets into it (T-081):
-# a controller that includes Kiosk::Action, with class-level macros claimed by
+# a controller that includes Kiosk::Handler and declares `kind :action`, with class-level macros claimed by
 # the next `def`. `declare_action` (spec_helper) builds exactly that. See
 # queries_spec.rb for the read side — the two registries are the same code.
 RSpec.describe Kiosk::Server::Actions do

@@ -1,7 +1,7 @@
 # frozen_string_literal: true
 
 # The read-side registry, exercised the ONE way a verb gets into it (T-081):
-# a controller that includes Kiosk::Query, with class-level macros claimed by
+# a controller that includes Kiosk::Handler and declares `kind :query`, with class-level macros claimed by
 # the next `def`. `declare_query` (spec_helper) builds exactly that.
 #
 # The examples that used to live here for `.register` itself — that it takes a

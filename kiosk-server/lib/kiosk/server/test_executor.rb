@@ -159,7 +159,7 @@ module Kiosk
       # whatever the Action returns.
       #
       # `CurrentRequest.with` makes the scope's identity visible to a handler
-      # registered as a controller action (`include Kiosk::Action`), which reads
+      # registered as a controller action (`kind :action` on a Kiosk::Handler), which reads
       # it as `kiosk_identity`. There is no Rack env here — a journey test is not
       # an HTTP request — so such a handler sees no request headers, exactly as
       # its docstring says.

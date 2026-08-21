@@ -8,7 +8,7 @@ module Kiosk
   # implementation of a write serve both surfaces an operator may have: the
   # Kiosk wire renders `render json:, status:`, a human web controller
   # redirects with a flash. An OperationResult renders nothing, redirects
-  # nothing and knows no HTTP, so the same call works from a {Kiosk::Action}
+  # nothing and knows no HTTP, so the same call works from a {Kiosk::Handler}
   # handler, from a rake task, or from a console.
   #
   #   class PlaceOrder
@@ -51,7 +51,7 @@ module Kiosk
   # It is a frozen plain value object: four attributes, no ActiveRecord, no
   # database, no reach into the host application's models — so it does not
   # engage the constraint that keeps Kiosk neutral toward the host's schema.
-  # It belongs next to {Kiosk::Action} and {Kiosk::Query}, the operator-facing
+  # It belongs next to {Kiosk::Handler}, the operator-facing
   # mixins whose handlers are the things that return it, in the one gem every
   # origin already installs (K-792, T-089).
   class OperationResult

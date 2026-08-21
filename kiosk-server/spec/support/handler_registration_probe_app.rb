@@ -42,12 +42,13 @@ FileUtils.mkdir_p(File.dirname(CONTROLLER))
 # generated verb because the mixin REFUSES a declaration without them — which
 # is exactly what a real operator's controller has to carry.
 SCHEMAS =
+  %(  kind :query\n) +
   %(  input_schema type: "object", additionalProperties: false, properties: {}, required: []\n) +
   %(  output_schema type: "array", items: { type: "object" }\n)
 
 # Generation 1 of the operator's handler controller: two verbs.
 def write_controller(verbs:, browse_description: "Generation 1 description.")
-  body = +"class Kiosk::ProbeController < ActionController::Base\n  include Kiosk::Query\n"
+  body = +"class Kiosk::ProbeController < ActionController::Base\n  include Kiosk::Handler\n"
   if verbs.include?(:browse)
     body << "\n  description #{browse_description.inspect}\n#{SCHEMAS}  def probe_browse\n    render json: []\n  end\n"
   end

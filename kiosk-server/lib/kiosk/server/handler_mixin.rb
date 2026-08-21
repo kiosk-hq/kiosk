@@ -9,9 +9,8 @@ require "kiosk/server/handler_dispatch"
 
 module Kiosk
   module Server
-    # Implementation behind `include Kiosk::Action` / `include Kiosk::Query`.
-    # Operators never name this module — they include one of the two public
-    # ones, which is the whole of the contract:
+    # Implementation behind `include Kiosk::Handler`. Operators never name this
+    # module — they include the public one, which is the whole of the contract:
     #
     #   Kiosk ships a MIXIN, not a base class. Which superclass a handler
     #   controller has is the operator's decision (K-495: "не наследуем.
@@ -25,6 +24,14 @@ module Kiosk
     # with no pending declarations is NOT a verb — the macros are the opt-in, so
     # a controller's helper methods stay invisible to the wire.
     #
+    #   kind           — REQUIRED. `:query` (reached by `GET <mount>/<name>`) or
+    #                    `:action` (`POST <mount>/<name>`). THE single source of
+    #                    truth for which verb reaches this handler, and it is a
+    #                    property of the DECLARATION: one controller may declare
+    #                    both, in any order (K-921). It is required rather than
+    #                    defaulted because either default silently assigns an
+    #                    HTTP method — a write behind `GET` is the expensive
+    #                    direction of that mistake.
     #   description    — semantics ONLY: what this verb does, how, and what it
     #                    returns IN MEANING. Never a field list, a type, a
     #                    required marker, or a param name (ADR-0023 / K-500).
@@ -58,6 +65,21 @@ module Kiosk
     # (description), and there is no third thing. Since T-081 there is no way to
     # set one at all — the registry publishes the retired descriptor slot as
     # null, which is what the spec asks a post-retirement descriptor to do.
+    #
+    # ── The property the two-mixin split used to carry ───────────────────
+    # Until K-921 there were TWO public mixins, `Kiosk::Query` and
+    # `Kiosk::Action`, and a controller included exactly one — so "this class
+    # provably cannot write" was readable off the include. Phil removed the
+    # split (2026-08-21): the same namespace legitimately both answers queries
+    # and performs actions, and forcing the split at class granularity
+    # fragmented a cohesive resource for a reason the domain does not have.
+    #
+    # The property is DEFERRED, not lost. If it is ever wanted it returns as an
+    # OPT-IN controller-level macro — `read_only!` / `query_only!`, refusing an
+    # `action` declaration in the class body and saying so at boot — which is
+    # strictly better: it STATES the guarantee instead of implying it from which
+    # module was included, and only the operators who want it pay for it. That
+    # macro is deliberately not built here; this paragraph is where it goes.
     module HandlerMixin
       KINDS = %i[action query].freeze
 
@@ -104,28 +126,21 @@ module Kiosk
       # to register one rather than serving it.
       REQUIRED_DECLARATIONS = %i[input_schema output_schema].freeze
 
-      # Installs the mixin. Called from Kiosk::Action.included / Kiosk::Query.included.
-      def self.install(base, kind:)
-        raise ArgumentError, "unknown handler kind #{kind.inspect}" unless KINDS.include?(kind)
-
+      # Installs the mixin. Called from Kiosk::Handler.included.
+      def self.install(base)
         unless base.is_a?(Class) && base <= ::ActionController::Metal
           raise ArgumentError,
-            "include Kiosk::#{kind.to_s.capitalize} into a controller class — Kiosk dispatches " \
+            "include Kiosk::Handler into a controller class — Kiosk dispatches " \
             "handlers through Controller.action(…), which needs an ActionController subclass. " \
             "Pick the base class yourself (ApplicationController, ActionController::API, …); " \
             "Kiosk does not impose one."
         end
 
-        installed = base.respond_to?(:kiosk_kind) ? base.kiosk_kind : nil
-        if installed && installed != kind
-          raise ArgumentError,
-            "#{base} already includes Kiosk::#{installed.to_s.capitalize}. A controller declares " \
-            "queries OR actions, never both — the verb it is reached by is a property of the " \
-            "class. Split it in two."
-        end
-        return if installed == kind
+        # Idempotent: an operator's own base class may carry the include and its
+        # subclasses declare verbs, so the same install can arrive twice down one
+        # ancestry. Re-running it would re-register the filters below.
+        return if base.respond_to?(:kiosk_declarations)
 
-        base.instance_variable_set(:@kiosk_kind, kind)
         base.extend(ClassMethods)
         base.include(InstanceMethods)
 
@@ -157,16 +172,21 @@ module Kiosk
       end
 
       module ClassMethods
-        # :action or :query, inherited — so an operator's own base class can
-        # carry the include and its subclasses declare verbs, which is the
-        # shape the generator will scaffold (T-056).
-        def kiosk_kind
-          return @kiosk_kind if defined?(@kiosk_kind) && @kiosk_kind
+        # ── the macros ─────────────────────────────────────────────────
 
-          superclass.respond_to?(:kiosk_kind) ? superclass.kiosk_kind : nil
+        # :query or :action — which HTTP method reaches the next-defined
+        # method. Per DECLARATION, so a controller may carry both.
+        def kind(value)
+          unless KINDS.include?(value)
+            raise ArgumentError,
+              "#{self} declared `kind #{value.inspect}`, which is not a Kiosk verb kind. " \
+              "It is :query (reached by GET #{Kiosk.configuration.mount_path}/<name>) or " \
+              ":action (POST #{Kiosk.configuration.mount_path}/<name>)."
+          end
+
+          kiosk_pending[:kind] = value
         end
 
-        # ── the macros ─────────────────────────────────────────────────
         def description(text)
           kiosk_pending[:description] = text
         end
@@ -205,7 +225,11 @@ module Kiosk
           kiosk_declare(method_name, pending)
         end
 
-        # wire name → declaration, for the verbs declared on THIS class.
+        # wire name → declaration, for the verbs declared on THIS class. ONE
+        # entry per name is the invariant, not an implementation detail: a name
+        # is one path segment and one kind, so a second declaration under the
+        # same name is refused rather than stored (see
+        # {#kiosk_refuse_bad_declaration!}).
         def kiosk_declarations
           @kiosk_declarations ||= {}
         end
@@ -225,14 +249,7 @@ module Kiosk
         end
 
         def kiosk_declare(method_name, pending)
-          kind = kiosk_kind
-          if kind.nil?
-            raise ArgumentError,
-              "#{self} declared a Kiosk verb but includes neither Kiosk::Action nor Kiosk::Query"
-          end
-
           declaration = pending.merge(
-            kind:        kind,
             method_name: method_name.to_s,
             wire_name:   (pending[:wire_name] || method_name).to_s,
           )
@@ -247,6 +264,33 @@ module Kiosk
         def kiosk_refuse_bad_declaration!(declaration)
           name = declaration[:wire_name]
           where = "#{self}##{declaration[:method_name]}"
+
+          if declaration[:kind].nil?
+            raise ArgumentError,
+              "#{where} declares the Kiosk verb #{name.inspect} without a `kind`. Every " \
+              "declaration says which verb reaches it: `kind :query` is served at " \
+              "GET #{Kiosk.configuration.mount_path}/#{name}, `kind :action` at " \
+              "POST #{Kiosk.configuration.mount_path}/#{name}. One controller may declare " \
+              "both — the kind belongs to the declaration, not to the class — so there is " \
+              "no default to fall back on."
+          end
+
+          # ONE NAME, ONE KIND, for the half a single class body can see. The
+          # cross-class half is {HandlerRegistrations.refuse_cross_kind_collisions!},
+          # which is the first moment the whole surface exists at once; this is
+          # the same rule caught earlier, where the operator has both methods in
+          # hand. Before K-921 the case could not arise inside one class.
+          clash = kiosk_declarations[name]
+          if clash && clash[:kind] != declaration[:kind]
+            raise ArgumentError,
+              "#{where} declares #{name.inspect} as a#{declaration[:kind] == :action ? "n" : ""} " \
+              "#{declaration[:kind]}, but ##{clash[:method_name]} on this class already " \
+              "declares it as a#{clash[:kind] == :action ? "n" : ""} #{clash[:kind]}. A verb " \
+              "name is one path segment and one kind: " \
+              "GET #{Kiosk.configuration.mount_path}/#{name} and " \
+              "POST #{Kiosk.configuration.mount_path}/#{name} cannot reach different handlers. " \
+              "Rename one, or give it a `wire_name` of its own."
+          end
 
           unless HandlerMixin::NAME_PATTERN.match?(name)
             raise ArgumentError,

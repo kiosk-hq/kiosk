@@ -20,7 +20,7 @@ Kiosk.configure do |c|
 
   # ─── Handler controllers ─────────────────────────────────────────────
   # The controllers that declare this origin's wire verbs — classes that
-  # `include Kiosk::Query` / `include Kiosk::Action`. NAME them here; the
+  # `include Kiosk::Handler`. NAME them here; the
   # engine loads and registers them once at boot and again after every
   # reload in development.
   #

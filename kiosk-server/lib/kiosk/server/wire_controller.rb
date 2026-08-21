@@ -222,7 +222,7 @@ module Kiosk
 
         # Carry the resolved identity and the wire request down to the handler
         # layer. A handler registered as a controller action (`include
-        # Kiosk::Action`) is dispatched as a Rails sub-request built from these:
+        # Kiosk::Handler`) is dispatched as a Rails sub-request built from these:
         # the identity lands in `env["kiosk.identity"]` (readable as
         # `kiosk_identity`), and the caller's headers/address are seeded from
         # this env. Block handlers registered the old way ignore both.

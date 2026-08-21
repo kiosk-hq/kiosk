@@ -56,7 +56,7 @@ module Kiosk
         # @param handlers [Array<String, Class>] class names (preferred) or classes
         # @return [Array<Class>] the handler classes registered this pass
         # @raise  [Errors::ConfigurationError] on a name that does not resolve,
-        #   or a class that includes neither Kiosk::Action nor Kiosk::Query
+        #   or a class that does not include Kiosk::Handler
         def reload!(handlers = Kiosk.configuration.handlers)
           clear!
           registered = Array(handlers).map { |handler| resolve(handler).kiosk_register! }
@@ -70,11 +70,13 @@ module Kiosk
         # {VerbController} answers for a method mismatch — which is the whole
         # reason that status exists on this wire — could never be right for it.
         #
-        # Checked HERE and not at declaration time on purpose: the collision is
-        # between two SEPARATE controller classes (a demo declares its queries
-        # and its actions in different files, and must), so no single class body
-        # can see it. This pass has just rebuilt both registries from a cleared
-        # state, so it is the first moment the whole surface exists at once.
+        # This is the CROSS-CLASS half. A collision inside ONE class body is
+        # caught earlier, at declaration time, where the operator has both
+        # methods in hand ({HandlerMixin::ClassMethods#kiosk_refuse_bad_declaration!})
+        # — since K-921 a controller may declare both kinds, so that half exists
+        # at all. Two SEPARATE controller classes still cannot see each other,
+        # and this pass has just rebuilt both registries from a cleared state, so
+        # it is the first moment the whole surface exists at once.
         def refuse_cross_kind_collisions!
           both = Actions.known & Queries.known
           return if both.empty?
@@ -114,8 +116,8 @@ module Kiosk
 
           unless klass.respond_to?(:kiosk_register!)
             raise Errors::ConfigurationError,
-              "Kiosk.configuration.handlers names #{name}, which includes neither " \
-              "Kiosk::Action nor Kiosk::Query. Only handler controllers belong in that list."
+              "Kiosk.configuration.handlers names #{name}, which does not include " \
+              "Kiosk::Handler. Only handler controllers belong in that list."
           end
 
           klass

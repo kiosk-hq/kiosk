@@ -193,7 +193,7 @@ RSpec.describe "demo descriptor cross-references" do
     # word that happens to be a result field name ("pass the id to
     # book_appointment") would wrongly become param-like and fail. So the
     # params are read out of the `input_schema` macro and nowhere else.
-    MACRO_NAMES = %w[description input_schema output_schema example_params example_row wire_name].freeze
+    MACRO_NAMES = %w[kind description input_schema output_schema example_params example_row wire_name].freeze
 
     def macro_region(header, macro)
       start = header.index(/^[ \t]*#{macro}[ \t]/)
@@ -538,8 +538,9 @@ RSpec.describe "demo descriptor cross-references" do
       File.write("#{root}/app/packs/till_controller.rb", <<~RB)
         module Checkout
           class TillController < ApplicationController
-            include Kiosk::Query
+            include Kiosk::Handler
 
+            kind :query
             description "ring up a basket"
             input_schema type: "object", properties: { basket_id: { type: "string" } }
             def ring_up = nil

@@ -39,8 +39,9 @@ end
 # needed here: the engine's `to_prepare` rebuild already ran during
 # `initialize!` above, and this probe has no reloader.
 class ProbeCatalogController < ActionController::API
-  include Kiosk::Query
+  include Kiosk::Handler
 
+  kind :query
   description "probe query"
   input_schema type: "object", additionalProperties: false, properties: {}, required: []
   output_schema true

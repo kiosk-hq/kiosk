@@ -44,8 +44,7 @@ require "kiosk/server/current_request"
 require "kiosk/server/handler_dispatch"
 require "kiosk/server/handler_mixin"
 require "kiosk/server/handler_registrations"
-require "kiosk/action"
-require "kiosk/query"
+require "kiosk/handler"
 require "kiosk/operation_result"
 require "kiosk/server/executor"
 require "kiosk/server/column_spending_cap"
@@ -102,9 +101,11 @@ module Kiosk
     #                                         per the T-070/T-087 encoding rule
     #   - {Kiosk::Server::Actions}          — Action registry (name → handler + descriptor)
     #   - {Kiosk::Server::Queries}          — read-side query registry
-    #   - {Kiosk::Action} / {Kiosk::Query}  — the mixins an operator includes into
+    #   - {Kiosk::Handler}                  — the mixin an operator includes into
     #                                         a controller of their own to declare
-    #                                         verbs as ordinary Rails actions
+    #                                         verbs as ordinary Rails actions; each
+    #                                         declaration's `kind` says whether it
+    #                                         is a query or an action
     #   - {Kiosk::OperationResult}          — answer-or-refusal value object a write
     #                                         Operation returns; subclass it and
     #                                         declare your own STATUSES map

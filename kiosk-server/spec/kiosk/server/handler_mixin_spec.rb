@@ -1,6 +1,6 @@
 # frozen_string_literal: true
 
-# `include Kiosk::Query` / `include Kiosk::Action` — the operator-facing seam
+# `include Kiosk::Handler` — the operator-facing seam
 # (T-053, K-495 slice 2).
 #
 # Written from the CONSUMER's side: the controllers below are what an operator
@@ -18,12 +18,15 @@ require "json"
 
 # An operator's OWN base class — the shape K-495 describes and T-056 will
 # scaffold. Kiosk imposes neither this class nor its superclass; it only
-# supplies the module included here.
-class SpecKioskQueriesController < ApplicationController
-  include Kiosk::Query
+# supplies the module included here. It declares no verbs and has no kind of
+# its own: since K-921 the kind is a property of each DECLARATION, so there is
+# nothing for a subclass to inherit but the macros.
+class SpecKioskBaseController < ApplicationController
+  include Kiosk::Handler
 end
 
-class SpecCatalogController < SpecKioskQueriesController
+class SpecCatalogController < SpecKioskBaseController
+  kind :query
   description "Lists what the shop has in stock right now, so the assistant " \
               "can decide what to put in a basket."
   input_schema type: "object", additionalProperties: false,
@@ -39,6 +42,7 @@ class SpecCatalogController < SpecKioskQueriesController
     render json: rows
   end
 
+  kind :query
   description "Lists the caller's own orders, one page at a time."
   input_schema type: "object", additionalProperties: false, properties: {}, required: []
   output_schema true
@@ -47,6 +51,7 @@ class SpecCatalogController < SpecKioskQueriesController
                       next_cursor: Kiosk::Server::Cursor.encode_offset(1))
   end
 
+  kind :query
   description "Reports who the wire says is calling."
   input_schema type: "object", additionalProperties: false, properties: {}, required: []
   output_schema true
@@ -62,8 +67,9 @@ class SpecCatalogController < SpecKioskQueriesController
 end
 
 class SpecOrdersController < ApplicationController
-  include Kiosk::Action
+  include Kiosk::Handler
 
+  kind :action
   description "Places an order for the assistant's human. Nothing is charged " \
               "until the cart is settled with `pay`."
   input_schema type: "object", properties: { items: { type: "array" } }, required: %w[items]
@@ -80,6 +86,7 @@ class SpecOrdersController < ApplicationController
     render json: { order_id: "o-1", item_count: items.size, for: kiosk_identity&.user_id }
   end
 
+  kind :action
   description "Refuses, to show a policy refusal reaching the wire as forbidden."
   input_schema type: "object", additionalProperties: false, properties: {}, required: []
   output_schema true
@@ -87,6 +94,7 @@ class SpecOrdersController < ApplicationController
     render json: { error: "assistants may not cancel every order at once" }, status: :forbidden
   end
 
+  kind :action
   description "Raises the wire error whose code no HTTP status can carry."
   input_schema type: "object", additionalProperties: false, properties: {}, required: []
   output_schema true
@@ -94,6 +102,7 @@ class SpecOrdersController < ApplicationController
     raise Kiosk::Server::Errors::KycRequired, "attestation missing: over_18"
   end
 
+  kind :action
   description "Blows up, to show an unhandled exception is not a silent 200."
   input_schema type: "object", additionalProperties: false, properties: {}, required: []
   output_schema true
@@ -102,14 +111,38 @@ class SpecOrdersController < ApplicationController
   end
 end
 
-RSpec.describe "Kiosk::Query / Kiosk::Action (the operator mixin)" do
+# ONE CONTROLLER, BOTH KINDS (K-921). The read and the write of the same
+# resource sit together and the wire reaches each by its own HTTP method — the
+# thing the retired Kiosk::Query/Kiosk::Action split made impossible to write.
+class SpecBoardController < ApplicationController
+  include Kiosk::Handler
+
+  kind :query
+  description "Browse the board."
+  input_schema type: "object", additionalProperties: false, properties: {}, required: []
+  output_schema true
+  def board_listings
+    render json: [{ "listing_id" => "l-1", "for" => kiosk_identity&.user_id }]
+  end
+
+  kind :action
+  description "Post to the same board this class also reads."
+  input_schema type: "object", additionalProperties: false,
+               properties: { title: { type: "string" } }, required: %w[title]
+  output_schema true
+  def post_to_board
+    render json: { "listing_id" => "l-2", "title" => params[:title] }
+  end
+end
+
+RSpec.describe "Kiosk::Handler (the operator mixin)" do
   let(:identity) { build_identity(user_id: "u-1", agent_id: "a-1") }
   let(:connection) { FakeConnection.new }
 
   # The class bodies above registered as they were read; spec_helper resets the
   # registries before every example, so put them back.
   before do
-    [SpecCatalogController, SpecOrdersController].each(&:kiosk_register!)
+    [SpecCatalogController, SpecOrdersController, SpecBoardController].each(&:kiosk_register!)
   end
 
   # The REAL dispatch path, minus HTTP: exactly what VerbController calls.
@@ -163,9 +196,29 @@ RSpec.describe "Kiosk::Query / Kiosk::Action (the operator mixin)" do
       expect(document[:actions].map { |d| d[:name] }).to include("create_order")
     end
 
-    it "inherits the kind from the operator's own base class" do
-      expect(SpecCatalogController.kiosk_kind).to eq(:query)
-      expect(SpecKioskQueriesController.kiosk_kind).to eq(:query)
+    it "lets an operator's own base class carry the include, subclasses declare" do
+      expect(SpecKioskBaseController.kiosk_declarations).to be_empty
+      expect(SpecCatalogController.kiosk_declarations["catalog"][:kind]).to eq(:query)
+    end
+
+    # ── K-921: one controller, both kinds ────────────────────────────────
+    it "registers a query AND an action declared on the SAME controller" do
+      expect(Kiosk::Server::Queries.known).to include("board_listings")
+      expect(Kiosk::Server::Actions.known).to include("post_to_board")
+      expect(SpecBoardController.kiosk_declarations.transform_values { |d| d[:kind] })
+        .to eq("board_listings" => :query, "post_to_board" => :action)
+    end
+
+    it "re-registers BOTH kinds from one class on every reload" do
+      # `kiosk_register!` is what the engine's to_prepare runs on every reload,
+      # and it now has to route each declaration to its OWN registry rather
+      # than to the one kind the class used to have.
+      Kiosk::Server::Queries.reset!
+      Kiosk::Server::Actions.reset!
+      SpecBoardController.kiosk_register!
+
+      expect(Kiosk::Server::Queries.known).to include("board_listings")
+      expect(Kiosk::Server::Actions.known).to include("post_to_board")
     end
   end
 
@@ -258,7 +311,8 @@ RSpec.describe "Kiosk::Query / Kiosk::Action (the operator mixin)" do
   describe "Rails-native raises (the T-054 rescue_from seam)" do
     it "maps params.require's ParameterMissing to bad_request — no Kiosk classes in the handler" do
       klass = Class.new(ApplicationController) do
-        include Kiosk::Action
+        include Kiosk::Handler
+        kind :action
         description "Requires a param the caller did not send."
         input_schema type: "object", additionalProperties: false, properties: {}, required: []
         output_schema true
@@ -285,7 +339,8 @@ RSpec.describe "Kiosk::Query / Kiosk::Action (the operator mixin)" do
       stub_const("SpecVetoError", Class.new(StandardError))
       ActionDispatch::ExceptionWrapper.rescue_responses["SpecVetoError"] = :forbidden
       klass = Class.new(ApplicationController) do
-        include Kiosk::Action
+        include Kiosk::Handler
+        kind :action
         description "Raises the host's own policy error."
         input_schema type: "object", additionalProperties: false, properties: {}, required: []
         output_schema true
@@ -306,10 +361,11 @@ RSpec.describe "Kiosk::Query / Kiosk::Action (the operator mixin)" do
     it "lets the operator's own rescue_from win over the mixin's floor" do
       stub_const("SpecTeapotError", Class.new(StandardError))
       klass = Class.new(ApplicationController) do
-        include Kiosk::Action
+        include Kiosk::Handler
         rescue_from(SpecTeapotError) do
           render json: { error: "handled by the operator" }, status: :conflict
         end
+        kind :action
         description "Raises an error the operator's own rescue_from handles."
         input_schema type: "object", additionalProperties: false, properties: {}, required: []
         output_schema true
@@ -328,7 +384,8 @@ RSpec.describe "Kiosk::Query / Kiosk::Action (the operator mixin)" do
   describe "rendering an explicit wire code" do
     it "carries a 403 code a bare status cannot name (rls_denied)" do
       klass = Class.new(ApplicationController) do
-        include Kiosk::Query
+        include Kiosk::Handler
+        kind :query
         description "Answers with the RLS denial code, Rails-natively."
         input_schema type: "object", additionalProperties: false, properties: {}, required: []
         output_schema true
@@ -349,7 +406,8 @@ RSpec.describe "Kiosk::Query / Kiosk::Action (the operator mixin)" do
 
     it "carries a SPECIFIC 402 — named by the handler, never guessed by the seam" do
       klass = Class.new(ApplicationController) do
-        include Kiosk::Action
+        include Kiosk::Handler
+        kind :action
         description "Needs a card on file before it can run."
         input_schema type: "object", additionalProperties: false, properties: {}, required: []
         output_schema true
@@ -382,7 +440,7 @@ RSpec.describe "Kiosk::Query / Kiosk::Action (the operator mixin)" do
         c.roles       = %i[customer]
         c.signing_key = Kiosk::Server::SigningKey.generate
       end
-      [SpecCatalogController, SpecOrdersController].each(&:kiosk_register!)
+      [SpecCatalogController, SpecOrdersController, SpecBoardController].each(&:kiosk_register!)
       allow(::ActiveRecord::Base).to receive(:connection).and_return(connection)
       allow(::ActiveRecord::Base).to receive(:lease_connection).and_return(connection)
     end
@@ -433,6 +491,33 @@ RSpec.describe "Kiosk::Query / Kiosk::Action (the operator mixin)" do
       expect(payload).to eq("order_id" => "o-1", "item_count" => 1, "for" => "u-1")
     end
 
+    # ── K-921, over the wire ─────────────────────────────────────────────
+    #
+    # The proof that the split is REMOVED rather than merely unenforced: both
+    # verbs below are declared in ONE class, and each answers on its own HTTP
+    # method through the same VerbController a router reaches.
+    it "serves a query and an action declared on the SAME controller" do
+      status, rows = get_wire("board_listings")
+      expect(status).to eq(200)
+      expect(rows).to eq([{ "listing_id" => "l-1", "for" => "u-1" }])
+
+      status, payload = post_wire("post_to_board", { title: "Carbon road bike" })
+      expect(status).to eq(200)
+      expect(payload).to eq("listing_id" => "l-2", "title" => "Carbon road bike")
+    end
+
+    it "still refuses the wrong method for each of the two, from one class" do
+      status, problem, headers = post_wire("board_listings", {})
+      expect(status).to eq(405)
+      expect(problem["code"]).to eq("method_not_allowed")
+      expect(headers["Allow"]).to eq("GET")
+
+      status, problem, headers = get_wire("post_to_board")
+      expect(status).to eq(405)
+      expect(problem["code"]).to eq("method_not_allowed")
+      expect(headers["Allow"]).to eq("POST")
+    end
+
     it "renders a handler's refusal as a problem document" do
       # `items: []` satisfies the declared input_schema (an array, present) and
       # is refused by the HANDLER's own emptiness guard — so this exercises the
@@ -451,7 +536,8 @@ RSpec.describe "Kiosk::Query / Kiosk::Action (the operator mixin)" do
       # The challenge header is keyed on the wire CODE (T-054), so the
       # Rails-native way of saying a specific 402 loses nothing.
       klass = Class.new(ApplicationController) do
-        include Kiosk::Action
+        include Kiosk::Handler
+        kind :action
         description "Needs a card on file before it can run."
         input_schema type: "object", additionalProperties: false, properties: {}, required: []
         output_schema true
@@ -482,7 +568,8 @@ RSpec.describe "Kiosk::Query / Kiosk::Action (the operator mixin)" do
       # header were never emitted anywhere. The third member of the trio
       # (`pow_required`) is controlled in wire_controller_402_spec.rb:74.
       klass = Class.new(ApplicationController) do
-        include Kiosk::Action
+        include Kiosk::Handler
+        kind :action
         description "The card was declined."
         input_schema type: "object", additionalProperties: false, properties: {}, required: []
         output_schema true
@@ -532,17 +619,52 @@ RSpec.describe "Kiosk::Query / Kiosk::Action (the operator mixin)" do
     end
 
     it "refuses to be included into something that is not a controller" do
-      expect { Class.new { include Kiosk::Query } }
+      expect { Class.new { include Kiosk::Handler } }
         .to raise_error(ArgumentError, /needs an ActionController subclass/)
     end
 
-    it "refuses a controller that would be both a query and an action" do
+    it "refuses a declaration with no kind" do
       expect {
         Class.new(ApplicationController) do
-          include Kiosk::Query
-          include Kiosk::Action
+          include Kiosk::Handler
+          description "Says nothing about which verb reaches it."
+          input_schema type: "object"
+          output_schema true
+          def browse = render(json: [])
         end
-      }.to raise_error(ArgumentError, /queries OR actions, never both/)
+      }.to raise_error(ArgumentError, /without a `kind`/)
+    end
+
+    it "refuses a kind that is neither :query nor :action" do
+      expect {
+        Class.new(ApplicationController) do
+          include Kiosk::Handler
+          kind :mutation
+        end
+      }.to raise_error(ArgumentError, /not a Kiosk verb kind/)
+    end
+
+    # The SAME-CLASS half of one-name-one-kind. It could not arise before
+    # K-921 — a class had one kind — and it is refused where the operator has
+    # both methods in hand. The cross-class half is HandlerRegistrations'.
+    it "refuses one name declared as both kinds on the same class" do
+      expect {
+        Class.new(ApplicationController) do
+          include Kiosk::Handler
+          kind :query
+          description "The read."
+          input_schema type: "object"
+          output_schema true
+          def board = render(json: [])
+
+          kind :action
+          description "The write, under the same name."
+          input_schema type: "object"
+          output_schema true
+          wire_name "board"
+          def board_write = render(json: {})
+        end
+      }.to raise_error(ArgumentError, /already declares it as a query/)
     end
 
     # ── §3.2 + T-073 = A, refused where the mistake is made ──────────────
@@ -554,7 +676,8 @@ RSpec.describe "Kiosk::Query / Kiosk::Action (the operator mixin)" do
     it "refuses a verb name that is not one legal path segment" do
       expect {
         Class.new(ApplicationController) do
-          include Kiosk::Query
+          include Kiosk::Handler
+          kind :query
           description "Shouty."
           input_schema type: "object"
           output_schema true
@@ -567,7 +690,8 @@ RSpec.describe "Kiosk::Query / Kiosk::Action (the operator mixin)" do
     it "refuses a verb name the engine draws itself" do
       expect {
         Class.new(ApplicationController) do
-          include Kiosk::Query
+          include Kiosk::Handler
+          kind :query
           description "Would be shadowed by the wire's own route."
           input_schema type: "object"
           output_schema true
@@ -579,7 +703,8 @@ RSpec.describe "Kiosk::Query / Kiosk::Action (the operator mixin)" do
     it "refuses a declaration with no input_schema" do
       expect {
         Class.new(ApplicationController) do
-          include Kiosk::Query
+          include Kiosk::Handler
+          kind :query
           description "Publishes no input contract."
           output_schema true
           def browse = render(json: [])
@@ -590,7 +715,8 @@ RSpec.describe "Kiosk::Query / Kiosk::Action (the operator mixin)" do
     it "refuses a declaration with no output_schema" do
       expect {
         Class.new(ApplicationController) do
-          include Kiosk::Query
+          include Kiosk::Handler
+          kind :query
           description "Publishes no result contract."
           input_schema type: "object"
           def browse = render(json: [])
@@ -608,7 +734,8 @@ RSpec.describe "Kiosk::Query / Kiosk::Action (the operator mixin)" do
 
     it "404s a verb whose method stopped being a public action" do
       klass = Class.new(ApplicationController) do
-        include Kiosk::Query
+        include Kiosk::Handler
+        kind :query
         description "Goes private."
         input_schema type: "object", additionalProperties: false, properties: {}, required: []
         output_schema true

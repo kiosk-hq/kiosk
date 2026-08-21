@@ -13,8 +13,9 @@ require "json"
 # held in the registry by name and re-resolved on every call, while an anonymous
 # one can only be held directly.
 class SpecReloadableController < ApplicationController
-  include Kiosk::Query
+  include Kiosk::Handler
 
+  kind :query
   description "Lists the shop's stock."
   input_schema type: "object", additionalProperties: false, properties: {}, required: []
   output_schema true
@@ -47,7 +48,8 @@ RSpec.describe Kiosk::Server::HandlerDispatch do
 
       # What Zeitwerk does on a code reload: same constant, new class object.
       reloaded = Class.new(ApplicationController) do
-        include Kiosk::Query
+        include Kiosk::Handler
+        kind :query
         description "The edited handler."
         input_schema type: "object", additionalProperties: false, properties: {}, required: []
         output_schema true
@@ -69,7 +71,8 @@ RSpec.describe Kiosk::Server::HandlerDispatch do
   describe "a handler that does not answer with JSON" do
     it "fails loudly rather than putting HTML on the wire" do
       klass = Class.new(ApplicationController) do
-        include Kiosk::Query
+        include Kiosk::Handler
+        kind :query
         description "Renders HTML, which the wire cannot carry."
         input_schema type: "object", additionalProperties: false, properties: {}, required: []
         output_schema true
@@ -86,7 +89,8 @@ RSpec.describe Kiosk::Server::HandlerDispatch do
       # payment_failed); the seam refuses to pick one. A handler that means a
       # specific 402 raises the Errors class.
       klass = Class.new(ApplicationController) do
-        include Kiosk::Action
+        include Kiosk::Handler
+        kind :action
         description "Renders a bare 402."
         input_schema type: "object", additionalProperties: false, properties: {}, required: []
         output_schema true
@@ -103,7 +107,8 @@ RSpec.describe Kiosk::Server::HandlerDispatch do
       # the seam answers with what the status alone says rather than putting a
       # mislabelled code on the wire.
       klass = Class.new(ApplicationController) do
-        include Kiosk::Query
+        include Kiosk::Handler
+        kind :query
         description "Renders a 402 code on a 403 status."
         input_schema type: "object", additionalProperties: false, properties: {}, required: []
         output_schema true
@@ -120,7 +125,8 @@ RSpec.describe Kiosk::Server::HandlerDispatch do
 
     it "never mistakes an operator's own code field for the wire vocabulary" do
       klass = Class.new(ApplicationController) do
-        include Kiosk::Action
+        include Kiosk::Handler
+        kind :action
         description "Answers a domain refusal with the app's own error code."
         input_schema type: "object", additionalProperties: false, properties: {}, required: []
         output_schema true
@@ -139,7 +145,8 @@ RSpec.describe Kiosk::Server::HandlerDispatch do
 
     it "rejects a page marker with no rows" do
       klass = Class.new(ApplicationController) do
-        include Kiosk::Query
+        include Kiosk::Handler
+        kind :query
         description "Sets the pagination marker by hand and renders the wrong shape."
         input_schema type: "object", additionalProperties: false, properties: {}, required: []
         output_schema true
@@ -158,7 +165,8 @@ RSpec.describe Kiosk::Server::HandlerDispatch do
   describe "outside a wire request" do
     it "runs with no identity and no caller headers (the RLS journey case)" do
       klass = Class.new(ApplicationController) do
-        include Kiosk::Query
+        include Kiosk::Handler
+        kind :query
         description "Reports what it can see."
         input_schema type: "object", additionalProperties: false, properties: {}, required: []
         output_schema true
@@ -175,7 +183,8 @@ RSpec.describe Kiosk::Server::HandlerDispatch do
   describe "an empty answer" do
     it "carries a bodiless 200 through as a nil value" do
       klass = Class.new(ApplicationController) do
-        include Kiosk::Action
+        include Kiosk::Handler
+        kind :action
         description "Acknowledges and returns nothing."
         input_schema type: "object", additionalProperties: false, properties: {}, required: []
         output_schema true

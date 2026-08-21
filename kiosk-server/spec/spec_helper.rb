@@ -24,8 +24,7 @@ RSpec.configure do |config|
 end
 
 # Stand-in for the host application's base controller — the fake
-# `ApplicationController` the Kiosk::Action / Kiosk::Query specs include the
-# mixin into. Kiosk imposes no superclass on operators (K-495: inheritance is
+# `ApplicationController` the Kiosk::Handler specs include the mixin into. Kiosk imposes no superclass on operators (K-495: inheritance is
 # the operator's call), so its own specs must exercise the mixin against a base
 # class it does not own.
 #
@@ -40,7 +39,7 @@ end
 # ── Declaring a verb, the one way there is (T-081) ──────────────────────────
 #
 # A verb reaches the Actions/Queries registry through a controller that
-# includes {Kiosk::Query} / {Kiosk::Action}, where class-level macros are
+# includes {Kiosk::Handler}, where class-level macros — `kind` among them — are
 # claimed by the next `def`. These helpers build exactly that — an anonymous
 # controller on the fake ApplicationController above — so a spec that needs
 # "a registered query named X" gets one through the shipped shape rather than
@@ -61,11 +60,11 @@ end
 # @param body [Proc] the controller action; defaults to an empty render
 # @return [Class] the handler controller, already registered
 def declare_query(name, **macros, &body)
-  declare_verb(Kiosk::Query, name, macros, body || -> { render json: [] })
+  declare_verb(:query, name, macros, body || -> { render json: [] })
 end
 
 def declare_action(name, **macros, &body)
-  declare_verb(Kiosk::Action, name, macros, body || -> { render json: {} })
+  declare_verb(:action, name, macros, body || -> { render json: {} })
 end
 
 # The two REQUIRED declarations (T-073 = A), defaulted so a spec that is not
@@ -87,12 +86,13 @@ DEFAULT_REQUIRED_MACROS = {
   output_schema: true,
 }.freeze
 
-def declare_verb(mixin, name, macros, body)
+def declare_verb(verb_kind, name, macros, body)
   macros = { description: "the #{name} verb" } if macros.empty?
   macros = DEFAULT_REQUIRED_MACROS.merge(macros)
 
   Class.new(ApplicationController) do
-    include mixin
+    include Kiosk::Handler
+    kind verb_kind
     macros.each { |macro, value| public_send(macro, value) }
     define_method(name.to_s, &body)
   end

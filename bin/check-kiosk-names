@@ -98,13 +98,12 @@ end
 #
 # A demo declares its verbs in ONE place: the class-level macro run above each
 # `def` in `app/controllers/kiosk/*.rb` (and the e2e origin's fixtures, which
-# are the same files by another path). The kind comes from the include —
-# `Kiosk::Query` or `Kiosk::Action` — which is a property of the CLASS.
+# are the same files by another path). The kind comes from the `kind` macro in
+# that run — a property of the DECLARATION, not of the class, so one controller
+# may declare both (K-921). A run with no `kind` is not a verb here for the same
+# reason the engine refuses to register one: there is no default to fall back on.
 def verbs_in(source)
-  kind = if source.match?(/include\s+Kiosk::Query\b/)  then :query
-         elsif source.match?(/include\s+Kiosk::Action\b/) then :action
-         end
-  return [] if kind.nil?
+  return [] unless source.match?(/include\s+Kiosk::Handler\b/)
 
   out = []
   previous_end = 0
@@ -117,7 +116,10 @@ def verbs_in(source)
     previous_end = offset
 
     # A `def` with no macro run above it is not a verb — the mixin's own rule.
-    next unless header.match?(/^[ \t]*(?:description|input_schema|output_schema|wire_name)[ \t]/)
+    next unless header.match?(/^[ \t]*(?:kind|description|input_schema|output_schema|wire_name)[ \t]/)
+
+    kind = header[/^[ \t]*kind[ \t]+:(query|action)\b/, 1]&.to_sym
+    next if kind.nil?
 
     wire = header[/^[ \t]*wire_name[ \t]+"([^"]*)"/, 1] || method_name
     out << [wire, kind]

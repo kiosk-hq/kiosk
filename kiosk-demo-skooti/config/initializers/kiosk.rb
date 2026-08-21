@@ -100,8 +100,8 @@ Kiosk.configure do |c|
 
   # ── Where the wire verbs live (T-053 mixin / T-057) ────────────────────────
   # The three queries and five actions are ordinary Rails controllers under
-  # app/controllers/kiosk/ — `include Kiosk::Query` / `include Kiosk::Action`,
-  # class-level macros, plain `render json:`. Nothing about them belongs in an
+  # app/controllers/kiosk/ — `include Kiosk::Handler`, class-level macros (`kind`
+  # says which verb reaches each one), plain `render json:`. Nothing about them belongs in an
   # initializer, and nothing about them is here: this line only NAMES them, and
   # the engine loads and registers them (once in production, again after every
   # reload in development, so an edited/added/removed verb needs no restart).

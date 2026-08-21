@@ -4,18 +4,22 @@
 # `GET /kiosk/<query-name>` — one endpoint per verb (protocol 0.4), arguments in
 # the query string, and the success body IS the rows array. Kiosk ships a MIXIN,
 # not a base class — the superclass is
-# this app's own ApplicationController, and `include Kiosk::Query` is the whole
+# this app's own ApplicationController, and `include Kiosk::Handler` is the whole
 # contract. Each class-level macro records a declaration and the NEXT `def`
 # claims it, so a method with no macros above it is a helper the wire cannot see.
 #
-# A controller declares queries OR actions, never both — the verb it is reached
-# by is a property of the class — so the write half lives next door in
-# Kiosk::TodoListsController. tudu is the demo where that split BITES: the
-# membership guard is called from two queries here and three actions there, so
-# it could belong to neither class. It is split instead: the access DECISION is
-# `Membership.reachable?` (a model method, no request in it) and the HTTP
-# refusal is {KioskMembershipGate} (an ordinary Rails concern, included by both
-# halves). Neither copy of anything is duplicated.
+# `kind :query` above each declaration is what puts it on `GET` — the kind belongs to the DECLARATION, not to the class (K-921), so ONE
+# controller may declare both. These two stay separate because the halves have
+# different shapes: a query renders a projection inline, an action hands off to
+# an Operation.
+# The write half lives next door in
+# Kiosk::TodoListsController, and tudu is the demo that shows why that is a
+# choice worth making on its merits: its membership guard is called from two
+# queries here and three actions there, so it belongs to neither class. The
+# access DECISION is `Membership.reachable?` (a model method, no request in it)
+# and the HTTP refusal is {KioskMembershipGate} (an ordinary Rails concern,
+# included by both halves) — an answer that would still be the right one if all
+# nine verbs sat in a single controller.
 #
 # Access here is MEMBERSHIP-based, not owner-scoped — the whole point of this
 # demo. A list is reachable by every account with a `memberships` row for it,
@@ -26,7 +30,7 @@
 # PoW gate and the GUC-scoped transaction live. A route drawn straight here
 # would bypass all three, and the mixin answers such a request 404.
 class Kiosk::HouseholdController < ApplicationController
-  include Kiosk::Query
+  include Kiosk::Handler
   include KioskMembershipGate
 
   # whoami — the authenticated principal + the acting agent. Handy first call
@@ -44,6 +48,7 @@ class Kiosk::HouseholdController < ApplicationController
   # it no longer takes.
   # ADR-0023: semantics only. The row's three fields and what each MEANS are
   # declared in `output_schema` below; this says what the verb is FOR.
+  kind :query
   description "Return who this call is authenticated as: the account the operator resolved for the " \
               "request, the assistant acting on that account's behalf when one is, and the account's " \
               "human-readable handle. A useful first call for an assistant orienting itself, and the " \
@@ -82,6 +87,7 @@ class Kiosk::HouseholdController < ApplicationController
   # un-bypassable (the agent supplies no filter at all).
   # ADR-0023: no row-field list and no "pass X to Y" tail. `output_schema` names
   # every field and points the identifying one at the verbs that take it.
+  kind :query
   description "List the todo lists the authenticated principal can reach. Access here is " \
               "MEMBERSHIP-based rather than owner-scoped, so a list somebody invited the caller into " \
               "is listed alongside the caller's own, and each row says which of the two the caller is " \
@@ -122,6 +128,7 @@ class Kiosk::HouseholdController < ApplicationController
 
   # list_todos(list_id) — membership-gated: 403 unless the caller is a member.
   # Returns the list's todos with attribution (created_by_agent_id).
+  kind :query
   description "Return the todos on a list the caller is a member of, each with " \
               "its completion state and the agent that added it. Forbidden (403) " \
               "if the caller is not a member of the list."
@@ -156,6 +163,7 @@ class Kiosk::HouseholdController < ApplicationController
 
   # list_members(list_id) — membership-gated; returns the members + roles so a
   # collaborator can see who else is on the list.
+  kind :query
   description "Return who else is on a list the caller is a member of, and what each of them may do " \
               "there — the answer a collaborator needs before it shares the list further or removes " \
               "anyone from it. Forbidden (403) if the caller is not a member of the list."

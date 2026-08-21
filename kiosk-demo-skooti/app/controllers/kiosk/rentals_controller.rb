@@ -4,8 +4,8 @@
 # `POST /kiosk/<action-name>`, one endpoint per verb, arguments as the JSON body
 # (protocol 0.4 deleted the multiplexed `POST /kiosk/run`).
 # Same shape as Kiosk::FleetController — `ActionController::API`
-# plus `include Kiosk::Action` — because a controller declares queries OR
-# actions, never both.
+# plus `include Kiosk::Handler` — with `kind :action` above each declaration,
+# which is what puts it on `POST`.
 #
 # THE FOUR WRITES ARE THREE LINES EACH: read the arguments off the request, hand
 # them to an Operation, render what it answers. That is deliberate. `start_rental`
@@ -36,7 +36,7 @@
 #
 # NOT ROUTABLE — see Kiosk::FleetController.
 class Kiosk::RentalsController < ActionController::API
-  include Kiosk::Action
+  include Kiosk::Handler
   include KioskRefusals
 
   # payment_setup — canonical skill Step 5 runs this unconditionally before
@@ -64,6 +64,7 @@ class Kiosk::RentalsController < ActionController::API
   # (K-492 — a real-Stripe SetupIntent-reuse property). That promise is NOT
   # repeated here: StubPsp mints no setup session at all, so there is nothing to be
   # stable about and claiming it would be a claim about code this demo never runs.
+  kind :action
   description "Check whether the authenticated principal has a saved payment method. " \
               "Returns {status: \"ready\"} when the assistant can proceed to `pay`. " \
               "Returns {status: \"setup_required\", setup_url: \"…\"} when a hosted setup flow " \
@@ -119,6 +120,7 @@ class Kiosk::RentalsController < ActionController::API
   # ADR-0023: the answer's fields, and the pay hint that spells the expected
   # mandate out in words, are declared in `output_schema`. This says what a
   # reservation IS and what it is priced on.
+  kind :action
   description "Hold one fleet vehicle for the authenticated principal. Rentals here are METERED by " \
               "the minute, so what is settled up front is a single minute at that vehicle's rate — " \
               "the hold is what the money is for, not the whole ride. The answer carries the " \
@@ -163,6 +165,7 @@ class Kiosk::RentalsController < ActionController::API
 
   # start_rental — the licence-FREE path. See {StartRentalOperation} for the
   # gates; note that no `scooter_code` is accepted, by design.
+  kind :action
   description "Verify gates (ownership, licence-free vehicle, payment) and issue an Ed25519 offline rental token for a licence-free scooter (no KYC). " \
               "Refuses a KYC-gated motorcycle (needs_licence in scooters_available) — use rent_motorcycle for those"
   input_schema type: "object",
@@ -191,6 +194,7 @@ class Kiosk::RentalsController < ActionController::API
 
   # rent_motorcycle — the KYC-gated path. See {RentMotorcycleOperation}; Gate 0
   # runs before the argument guards and that ordering is published behaviour.
+  kind :action
   description "Rent a combustion-engine motorcycle — KYC-gated on age_over_18 AND licence_a (category-A licence); issues an Ed25519 offline rental token"
   input_schema type: "object",
                additionalProperties: false,
@@ -216,6 +220,7 @@ class Kiosk::RentalsController < ActionController::API
   end
 
   # request_kyc — open a verification at the broker. See {RequestKycOperation}.
+  kind :action
   description "Start the age-18-or-over and category-A driving-licence verification for the " \
               "authenticated principal — needed only to ride a licence-required motorcycle, never for " \
               "a licence-free scooter. The answer carries a broker page to relay to your human: an " \

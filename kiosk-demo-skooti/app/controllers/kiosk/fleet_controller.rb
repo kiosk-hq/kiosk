@@ -4,7 +4,7 @@
 # `GET /kiosk/<query-name>`, one endpoint per verb, arguments in the query
 # string (protocol 0.4 deleted the multiplexed `POST /kiosk/query`). Kiosk
 # ships a MIXIN, not a base class — `include
-# Kiosk::Query` is the whole contract — and each class-level macro records a
+# Kiosk::Handler` is the whole contract — and each class-level macro records a
 # declaration that the NEXT `def` claims, so a method with no macros above it is
 # a helper the wire cannot see.
 #
@@ -16,8 +16,11 @@
 # explicitly leaves the base class to the operator (K-495), and `HomeController`
 # already names its own (`ActionController::Base`, for the HTML landing page).
 #
-# A controller declares queries OR actions, never both — the verb it is reached
-# by is a property of the class — so the five write verbs live next door in
+# `kind :query` above each declaration is what puts it on `GET` — the kind belongs to the DECLARATION, not to the class (K-921), so ONE
+# controller may declare both. These two stay separate because the halves have
+# different shapes: a query renders a projection inline, an action hands off to
+# an Operation.
+# The five write verbs live next door in
 # Kiosk::RentalsController. What the two halves share is their refusal
 # vocabulary: {WireArguments} (which renders nothing, so the Operations use it
 # too) and {KioskRefusals}.
@@ -27,11 +30,12 @@
 # PoW gate and the GUC-scoped transaction live. A route drawn straight here would
 # bypass all three, and the mixin answers such a request 404.
 class Kiosk::FleetController < ActionController::API
-  include Kiosk::Query
+  include Kiosk::Handler
   include KioskRefusals
 
   # ── scooters_available — the public fleet catalogue. No per-principal
   # scoping: every authenticated agent may browse what is available.
+  kind :query
   description "Browse the available fleet — each row carries the vehicle's name and pickup dock/location " \
               "so you can pick one by name or nearest dock. needs_licence flags the KYC-gated combustion " \
               "motorcycle (rent it via rent_motorcycle); licence-free scooters use start_rental. " \
@@ -124,6 +128,7 @@ class Kiosk::FleetController < ActionController::API
   # `payment_state` is the fix and it is a TRI-state on purpose: §11.6 requires
   # a third answer distinct from paid and not-paid, because "no record" is not
   # evidence that no money moved. See {Reservation.payment_state}.
+  kind :query
   description "List this principal's fleet reservations (scoped to the authenticated account). " \
               "This is the query to re-read after a payment whose response never arrived: each row " \
               "says where that reservation stands with the fleet and where its money stands, and a " \
@@ -188,6 +193,7 @@ class Kiosk::FleetController < ActionController::API
   # invented here, so the two surfaces an assistant reads cannot publish rival
   # arithmetic, and `demo:schema` asserts that the SERVED descriptor still
   # carries both numbers.
+  kind :query
   description "Poll a verification `request_kyc` opened, until the human has acted on it. Three " \
               "answers: still waiting; APPROVED, carrying the broker's signed attestation, which you " \
               "submit to `POST <endpoint>/agents/kyc` before asking for the motorcycle again; and " \

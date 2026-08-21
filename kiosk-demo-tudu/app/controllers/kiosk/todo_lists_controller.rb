@@ -5,8 +5,8 @@
 # most of any demo. The arguments ARE the JSON body; there is no `name` field
 # and no multiplexed `/kiosk/run`. Same shape as
 # Kiosk::HouseholdController — this app's own ApplicationController plus
-# `include Kiosk::Action` — because a controller declares queries OR actions,
-# never both.
+# `include Kiosk::Handler` — with `kind :action` above each declaration, which is
+# what puts it on `POST`.
 #
 # EVERY ACTION BELOW IS FOUR LINES: read the arguments off the request, hand
 # them to an Operation, render what it answers. That is deliberate and it is
@@ -34,7 +34,7 @@
 #
 # NOT ROUTABLE — see Kiosk::HouseholdController.
 class Kiosk::TodoListsController < ApplicationController
-  include Kiosk::Action
+  include Kiosk::Handler
   include KioskRefusals
 
   # create_list(title) — INSERT a list owned by the AUTHENTICATED principal and,
@@ -45,6 +45,7 @@ class Kiosk::TodoListsController < ApplicationController
   # answers 400 bad_request naming the parameter. The description says so,
   # because "this argument is ignored" and "this argument is refused" are
   # different instructions to an assistant.
+  kind :action
   description "Create a new todo list for the authenticated principal, who becomes its owner in the " \
               "same transaction. Ownership is NOT an input: it is taken from the identity the operator " \
               "resolved, and an argument that tries to name a different owner is REFUSED with a 400 " \
@@ -74,6 +75,7 @@ class Kiosk::TodoListsController < ApplicationController
   # add_todo(list_id, title) — membership-gated; records the acting agent as
   # created_by_agent_id (attribution: "who added the tent? — Bob's assistant").
   # nil for the human web surface, which has no agent.
+  kind :action
   description "Add a todo to a list the caller is a member of. The acting assistant is recorded on " \
               "the todo, so a household can see later who put it there — «who added the tent?» is an " \
               "answerable question on this origin. Forbidden (403) if the caller is not a member."
@@ -101,6 +103,7 @@ class Kiosk::TodoListsController < ApplicationController
   # complete_todo(todo_id) — membership-gated via the todo's list. One UPDATE
   # scoped to the caller's memberships; zero rows → 403 (probing can't
   # enumerate ids).
+  kind :action
   description "Mark a todo done. Allowed only if the caller is a member of the list the todo is on; " \
               "otherwise forbidden (403) — and the refusal reads the same whether the todo belongs to " \
               "somebody else or does not exist at all, so probing cannot enumerate."
@@ -127,6 +130,7 @@ class Kiosk::TodoListsController < ApplicationController
   # code; store ONLY its SHA-256 digest; return the plaintext { code, expires_in }
   # ONCE. The code travels human-to-human; the recipient's agent redeems it via
   # accept_invite.
+  kind :action
   description "Owner-only: mint a single-use, ten-minute collaboration secret for a list you own. " \
               "The plaintext is handed back ONCE and never again — this origin stores only its hash — " \
               "and it is meant to travel person-to-person, out of band, to somebody whose assistant " \
@@ -157,6 +161,7 @@ class Kiosk::TodoListsController < ApplicationController
   # accept_invite(code) — look up by digest; reject foreign/expired/redeemed (403);
   # INSERT a `member` membership for the principal; mark redeemed. A used code
   # fails on the second try (single-use). Returns { list_id, joined: true }.
+  kind :action
   description "Redeem a collaboration secret somebody shared with you and join their list as a " \
               "member. It is single-use and short-lived: one that has already been redeemed, one whose " \
               "ten minutes have run out, and one this origin never minted are all forbidden (403), and " \
@@ -185,6 +190,7 @@ class Kiosk::TodoListsController < ApplicationController
   # remove_member(list_id, account_id) — OWNER-ONLY. DELETE the target's
   # membership; access is cut instantly. The owner cannot remove the LAST owner
   # (no orphaning the list). Returns { removed: true }.
+  kind :action
   description "Owner-only: remove a member from a list you own — their access is " \
               "cut instantly. You cannot remove the list's last owner. Forbidden " \
               "(403) if you are not the owner. Returns { removed }."

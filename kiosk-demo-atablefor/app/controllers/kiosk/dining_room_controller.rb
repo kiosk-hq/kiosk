@@ -3,12 +3,15 @@
 # atablefor's READ surface: the two verbs an assistant reaches with
 # `GET /kiosk/<query-name>` — one endpoint per verb since 0.4, arguments in the
 # query string. Kiosk ships a MIXIN, not a base class — the superclass is
-# this app's own ApplicationController, and `include Kiosk::Query` is the whole
+# this app's own ApplicationController, and `include Kiosk::Handler` is the whole
 # contract. Each class-level macro records a declaration and the NEXT `def`
 # claims it, so a method with no macros above it is a helper the wire cannot see.
 #
-# A controller declares queries OR actions, never both — the verb it is reached
-# by is a property of the class — so the write half lives next door in
+# `kind :query` above each declaration is what puts it on `GET` — the kind belongs to the DECLARATION, not to the class (K-921), so ONE
+# controller may declare both. These two stay separate because the halves have
+# different shapes: a query renders a projection inline, an action hands off to
+# an Operation.
+# The write half lives next door in
 # Kiosk::BookingsController. The one piece of domain logic BOTH halves need, the
 # rolling upcoming seatings, was already a library module (app/models/seatings.rb) and
 # never controller code: `availability` offers a seating and `book_table`
@@ -26,7 +29,7 @@
 # such a request 404. The per-verb pair at the bottom of routes.rb resolves the
 # name against the registry at request time — it never names this class.
 class Kiosk::DiningRoomController < ApplicationController
-  include Kiosk::Query
+  include Kiosk::Handler
   include KioskRefusals
 
   # availability — open tables ACROSS the restaurant aggregator for the upcoming
@@ -55,6 +58,7 @@ class Kiosk::DiningRoomController < ApplicationController
   # hand-written row→argument mapping — `input_schema` declares what this verb
   # accepts and what each filter refuses, `output_schema` names every row field
   # and points the two differently-spelled ones at book_table's own arguments.
+  kind :query
   description "List open restaurant tables across the aggregator for the " \
               "UPCOMING seatings that can seat the party. One row per open " \
               "(restaurant, table, seating), and it is the aggregator's whole " \
@@ -256,6 +260,7 @@ class Kiosk::DiningRoomController < ApplicationController
   # ADR-0023: semantics only. `output_schema` names every field of a row and
   # points the identifying one at `cancel_booking`; naming the follow-on VERB
   # here is the sanctioned form, naming its argument is not.
+  kind :query
   description "List this principal's table bookings across every restaurant on the aggregator, " \
               "scoped to the authenticated account and un-filterable by the caller. Cancelled " \
               "bookings stay listed rather than disappearing, so a booking that was called off is " \

@@ -3,11 +3,15 @@
 # stylish's READ surface: the five verbs an assistant reaches with
 # `GET /kiosk/<query-name>` — one endpoint each, arguments in the query string.
 # Kiosk ships a MIXIN, not a base class — the superclass is this app's own
-# ApplicationController, and `include Kiosk::Query` is the whole contract. Each class-level macro records a declaration and the NEXT `def`
+# ApplicationController, and `include Kiosk::Handler` is the whole contract. Each
+# class-level macro records a declaration and the NEXT `def`
 # claims it, so a method with no macros above it is a helper the wire cannot see.
 #
-# A controller declares queries OR actions, never both — the verb it is reached
-# by is a property of the class — so the write half lives next door in
+# `kind :query` above each declaration is what puts it on `GET` — the kind belongs to the DECLARATION, not to the class (K-921), so ONE
+# controller may declare both. These two stay separate because the halves have
+# different shapes: a query renders a projection inline, an action hands off to
+# an Operation.
+# The write half lives next door in
 # Kiosk::AppointmentsController. Nothing here is shared with it: the only logic
 # both sides need is EUR formatting, which is a Service model method
 # (Service.format_eur) and was never controller code.
@@ -17,13 +21,14 @@
 # PoW gate and the GUC-scoped transaction live. A route drawn straight here
 # would bypass all three, and the mixin answers such a request 404.
 class Kiosk::FrontDeskController < ApplicationController
-  include Kiosk::Query
+  include Kiosk::Handler
 
   # salons — full salon catalogue; no per-user scoping, any authenticated
   # principal may browse (mirrors the public SELECT policy previously in RLS).
   # ADR-0023: semantics only — no "pass X to Y as `z`" tail. `output_schema`
   # names the row's fields and points the identifying one at the verb that takes
   # it; naming the follow-on VERB here is the sanctioned form.
+  kind :query
   description "Browse the public salon catalogue — every salon this front desk books for, in one " \
               "answer rather than a page of it. Once the human picks one, `book_appointment` takes it " \
               "from there."
@@ -53,6 +58,7 @@ class Kiosk::FrontDeskController < ApplicationController
   # service_menu — the salon's public service menu with EUR prices. Any
   # authenticated principal may read it; an assistant uses it to pick a
   # service_id (and see the € price) before booking.
+  kind :query
   description "Browse the salon's service menu, priced. Takes no arguments and returns the WHOLE " \
               "menu rather than a page of it (small; not paginated), so an empty answer would mean the " \
               "salon offers nothing at all. Once the human picks a service, `book_appointment` books " \
@@ -94,6 +100,7 @@ class Kiosk::FrontDeskController < ApplicationController
   # every row flagged `open: true`. Any authenticated principal (a visitor's
   # assistant) reads it to pick a service to book. Each row carries a `service_id`
   # — pass it to book_appointment to book that service (its EUR price is captured).
+  kind :query
   description "Browse the salon's OPEN services. Every service on the menu is always bookable — this " \
               "salon is evergreen and has no finite capacity, so it never fills up and a booking never " \
               "fails for want of room. Takes no arguments. Once the human picks a row, " \
@@ -142,6 +149,7 @@ class Kiosk::FrontDeskController < ApplicationController
   # provider-controlled and cannot be bypassed by the caller.
   # `owned_by_current_principal` is ONE of the two places this demo writes the
   # identity predicate — see Appointment for why it stays SQL-side (K-654).
+  kind :query
   description "List this principal's appointments (scoped to authenticated user via kiosk.current_user_id())"
   input_schema type: "object", additionalProperties: false, properties: {}, required: []
   # `id`, not `appointment_id`, and that is published behaviour rather than an
@@ -193,6 +201,7 @@ class Kiosk::FrontDeskController < ApplicationController
   # clause BUILT as a Ruby string and spliced into `execute`, which is the exact
   # idiom a reader would copy into a query that does take caller input. The
   # branch now picks between two relations.
+  kind :query
   description "Staff forecast — role-gated: owner sees ALL bookings + a FORECASTED € revenue total (summed from the actual bookings' prices, growing from €0 as visitors book); any other role sees only their own bookings and no forecast (role from the bound human's IdP)"
   input_schema type: "object", additionalProperties: false, properties: {}, required: []
   # TWO ROW SHAPES IN ONE ARRAY, and the discriminator is the field each one

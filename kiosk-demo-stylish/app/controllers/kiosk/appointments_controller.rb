@@ -3,8 +3,8 @@
 # stylish's WRITE surface: the one verb an assistant reaches with
 # `POST /kiosk/book_appointment` — its own endpoint, arguments in the JSON body.
 # Same shape as Kiosk::FrontDeskController — this app's own
-# ApplicationController plus `include Kiosk::Action` — because a controller
-# declares queries OR actions, never both.
+# ApplicationController plus `include Kiosk::Handler` — with `kind :action` above
+# the declaration, which is what puts it on `POST`.
 #
 # Errors are Rails' idiom end to end: the wire's error-code vocabulary is a
 # closed table, not a class hierarchy, so a refusal is an ordinary
@@ -23,12 +23,13 @@
 #
 # NOT ROUTABLE — see Kiosk::FrontDeskController.
 class Kiosk::AppointmentsController < ApplicationController
-  include Kiosk::Action
+  include Kiosk::Handler
   include KioskRefusals
 
   # ADR-0023: no argument names and no "pass its `x`" clause. `input_schema`
   # below declares all three arguments, which is optional, and what each one is
   # read from; this says what booking MEANS here and where the refusals are.
+  kind :action
   description "Book an appointment for the authenticated visitor. Naming a service is OPTIONAL and " \
               "the two forms differ in what the appointment records: pick one from the menu and its " \
               "name and price are CAPTURED on the appointment, or book the salon alone and the " \

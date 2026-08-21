@@ -3,8 +3,8 @@
 # atablefor's WRITE surface: the two verbs an assistant reaches with
 # `POST /kiosk/<action-name>` — one endpoint per verb since 0.4, arguments as
 # the JSON body. Same shape as Kiosk::DiningRoomController — this app's own
-# ApplicationController plus `include Kiosk::Action` — because a controller
-# declares queries OR actions, never both.
+# ApplicationController plus `include Kiosk::Handler` — with `kind :action` above
+# each declaration, which is what puts it on `POST`.
 #
 # THE TWO WRITES ARE A HANDFUL OF LINES EACH: read the arguments off the request,
 # hand them to an Operation, render what it answers (T-083, Phil's 2026-08-17
@@ -35,7 +35,7 @@
 #
 # NOT ROUTABLE — see Kiosk::DiningRoomController.
 class Kiosk::BookingsController < ApplicationController
-  include Kiosk::Action
+  include Kiosk::Handler
   include KioskRefusals
 
   # book_table — reserve a specific table at a chosen restaurant for a chosen
@@ -51,6 +51,7 @@ class Kiosk::BookingsController < ApplicationController
   # ADR-0023: this description says WHAT booking a table means and WHEN it is
   # refused. It names no argument — `input_schema` below declares all five, and
   # each one's own description says which availability-row field it comes from.
+  kind :action
   description "Book a specific restaurant table for a chosen upcoming " \
               "seating, for the authenticated principal. Confirms the " \
               "reservation outright: there is no hold to release and nothing " \
@@ -120,6 +121,7 @@ class Kiosk::BookingsController < ApplicationController
   # WHERE gates on user_id = kiosk.current_user_id(), so a cross-principal cancel
   # on another's booking is a clean 403 (the booking is not found under the
   # caller's identity).
+  kind :action
   description "Cancel one of the authenticated principal's own table bookings " \
               "(requires the booking to belong to the principal). Frees the (table, seating)."
   input_schema type: "object",

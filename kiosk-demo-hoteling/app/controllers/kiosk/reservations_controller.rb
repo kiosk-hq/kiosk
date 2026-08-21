@@ -4,8 +4,8 @@
 # `POST /kiosk/<action-name>`, arguments as the JSON BODY (protocol 0.4 — the
 # multiplexed `POST /kiosk/run` and its `name` field are deleted, not
 # deprecated). Same shape as Kiosk::HotelsController — `ActionController::API`
-# plus `include Kiosk::Action` — because a controller declares queries OR actions,
-# never both.
+# plus `include Kiosk::Handler` — with `kind :action` above each declaration,
+# which is what puts it on `POST`.
 #
 # THE TWO WRITES ARE FOUR LINES EACH: read the arguments off the request, hand
 # them to an Operation, render what it answers. That is deliberate. `reserve_room`
@@ -36,7 +36,7 @@
 #
 # NOT ROUTABLE — see Kiosk::HotelsController.
 class Kiosk::ReservationsController < ActionController::API
-  include Kiosk::Action
+  include Kiosk::Handler
   include KioskRefusals
 
   # payment_setup — canonical skill Step 5 runs this unconditionally before
@@ -64,6 +64,7 @@ class Kiosk::ReservationsController < ActionController::API
   # (K-492 — a real-Stripe SetupIntent-reuse property). That promise is NOT
   # repeated here: StubPsp mints no setup session at all, so there is nothing to be
   # stable about and claiming it would be a claim about code this demo never runs.
+  kind :action
   description "Check whether the authenticated principal has a saved payment method. " \
               "Returns {status: \"ready\"} when the assistant can proceed to `pay`. " \
               "Returns {status: \"setup_required\", setup_url: \"…\"} when a hosted setup flow " \
@@ -124,6 +125,7 @@ class Kiosk::ReservationsController < ActionController::API
   # ADR-0023: the answer's fields, and the pay hint that spells the expected
   # mandate out in words, are declared in `output_schema`. This says what a hold
   # IS and what it costs to let one lapse.
+  kind :action
   description "Hold a room for the authenticated principal. It is a HOLD and not a booking: it " \
               "expires on its own if nothing is paid for it, and the room-night goes back on sale. " \
               "The answer carries the operator's QUOTE for the whole stay and, in words, the exact " \
@@ -176,6 +178,7 @@ class Kiosk::ReservationsController < ActionController::API
   # {ConfirmBookingOperation}; the principal is NOT passed in because both gates
   # express it as a WHERE predicate over `kiosk.current_user_id()`, which is
   # un-forgeable without naming it in Ruby at all.
+  kind :action
   description "Confirm a reserved booking (requires payment mandate referencing this booking). " \
               "Returns the `confirmation_code` the hotel stores against the booking — the " \
               "reference the guest gives at the desk. It is durable: the same code is listed " \

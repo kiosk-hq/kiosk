@@ -3,7 +3,7 @@
 # getgrocery's READ surface: the four verbs an assistant reaches with
 # `GET /kiosk/<query-name>`, arguments in the query string. Kiosk ships a
 # MIXIN, not a base class — `include
-# Kiosk::Query` is the whole contract — and each class-level macro records a
+# Kiosk::Handler` is the whole contract — and each class-level macro records a
 # declaration that the NEXT `def` claims, so a method with no macros above it is
 # a helper the wire cannot see.
 #
@@ -16,8 +16,11 @@
 # serve — `HomeController` and `Admin::OrdersController` — already name their own
 # (`ActionController::Base`, because they render views).
 #
-# A controller declares queries OR actions, never both — the verb it is reached
-# by is a property of the class — so the four write verbs live next door in
+# `kind :query` above each declaration is what puts it on `GET` — the kind belongs to the DECLARATION, not to the class (K-921), so ONE
+# controller may declare both. These two stay separate because the halves have
+# different shapes: a query renders a projection inline, an action hands off to
+# an Operation.
+# The four write verbs live next door in
 # Kiosk::OrdersController. What the two halves share is their argument
 # vocabulary: an address is checked against the served Dublin districts by
 # `delivery_slots` here and by both order verbs there, word for word. The shape
@@ -30,13 +33,14 @@
 # A route drawn straight here would bypass all four, and the mixin answers such a
 # request 404.
 class Kiosk::StorefrontController < ActionController::API
-  include Kiosk::Query
+  include Kiosk::Handler
   include KioskRefusals
 
   # ── catalog — the public shelf. No per-principal scoping: every
   # authenticated agent browses the same in-stock catalogue.
   # ADR-0023: semantics only. The row's fields, the stable product handle and
   # the two flags are declared in `output_schema`, each with what it means.
+  kind :query
   description "Browse the getgrocery catalogue. Only what is IN STOCK appears — a sold-out product is " \
               "absent rather than listed as unavailable — and the whole shelf comes back in one " \
               "answer rather than a page of it (small; not paginated). Prices are EUR cents and a " \
@@ -107,6 +111,7 @@ class Kiosk::StorefrontController < ActionController::API
   # Dublin address. Touches no table at all: the windows are a function of the
   # date and the operator's locale ({DeliverySlots}), and the address is a
   # function of the served districts ({DublinZones}).
+  kind :query
   description "Get the delivery windows still bookable on a chosen day at a chosen Dublin address. " \
               "getgrocery routes by postal district and delivers only inside the Dublin zones it " \
               "serves, so an address it cannot place — outside those zones, or with no district in it " \
@@ -206,6 +211,7 @@ class Kiosk::StorefrontController < ActionController::API
   # unpaid" — the inference §11.6 removed, because `false` conflated the two
   # answers that matter: nothing was ever charged, and a charge is outstanding.
   # The second one is where a fresh mandate chain charges a human twice.
+  kind :query
   description "List this principal's orders with their delivery window, address and where their money " \
               "stands (scoped to the authenticated account). This is the query to re-read after a " \
               "payment whose response never arrived: an order whose charge is still outstanding says " \
@@ -264,6 +270,7 @@ class Kiosk::StorefrontController < ActionController::API
   end
 
   # ── kyc_status — poll a request_kyc verification the caller opened.
+  kind :query
   description "Poll a verification `request_kyc` opened, until the human has acted on it. Three " \
               "answers: still waiting; APPROVED, carrying the broker's signed attestation, which you " \
               "submit to `POST <endpoint>/agents/kyc` before placing the order again; and DECLINED, " \

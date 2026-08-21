@@ -1,13 +1,17 @@
 # frozen_string_literal: true
 
 # philslist's READ surface: the two verbs an assistant reaches with
-# `POST /kiosk/query`. Kiosk ships a MIXIN, not a base class — the superclass is
-# this app's own ApplicationController, and `include Kiosk::Query` is the whole
+# `GET /kiosk/<query-name>`, one endpoint per verb, arguments in the query
+# string. Kiosk ships a MIXIN, not a base class — the superclass is
+# this app's own ApplicationController, and `include Kiosk::Handler` is the whole
 # contract. Each class-level macro records a declaration and the NEXT `def`
 # claims it, so a method with no macros above it is a helper the wire cannot see.
 #
-# A controller declares queries OR actions, never both — the verb it is reached
-# by is a property of the class — so the write half lives next door in
+# `kind :query` above each declaration is what puts it on `GET` — the kind belongs to the DECLARATION, not to the class (K-921), so ONE
+# controller may declare both. These two stay separate because the halves have
+# different shapes: a query renders a projection inline, an action hands off to
+# an Operation.
+# The write half lives next door in
 # Kiosk::ListingsController.
 #
 # NOT ROUTABLE. config/routes.rb draws nothing at this controller: handlers are
@@ -15,7 +19,7 @@
 # PoW gate and the GUC-scoped transaction live. A route drawn straight here
 # would bypass all three, and the mixin answers such a request 404.
 class Kiosk::BoardController < ApplicationController
-  include Kiosk::Query
+  include Kiosk::Handler
 
   # browse_listings — the OPEN board. Any authenticated principal sees ALL
   # matching listings across ALL owners (no owner_id filter). Optional
@@ -29,6 +33,7 @@ class Kiosk::BoardController < ApplicationController
   # display text rather than an amount, are declared in `output_schema`. What is
   # left here is what neither can say: what the board IS and what an empty answer
   # means.
+  kind :query
   description "Browse the public classifieds board across ALL sellers — this is the open board, not " \
               "the caller's own corner of it. Every filter is optional and they AND together, and a " \
               "filter value this board cannot serve is refused 400 naming what it will accept, never " \
@@ -129,6 +134,7 @@ class Kiosk::BoardController < ApplicationController
   # no filter; the scope is provider-controlled and un-bypassable (the saas
   # my_appointments pattern). `owned_by_current_principal` is the ONE place the
   # identity predicate is written — see Listing for why it stays SQL-side.
+  kind :query
   description "List the listings owned by the authenticated principal " \
               "(scoped to kiosk.current_user_id())."
   # A verb that takes nothing still declares the empty closed object, so "this

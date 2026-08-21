@@ -3,8 +3,8 @@
 # getgrocery's WRITE surface: the four verbs an assistant reaches with
 # `POST /kiosk/<action-name>`, arguments as the JSON body. Same shape as
 # Kiosk::StorefrontController —
-# `ActionController::API` plus `include Kiosk::Action` — because a controller
-# declares queries OR actions, never both.
+# `ActionController::API` plus `include Kiosk::Handler` — with `kind :action`
+# above each declaration, which is what puts it on `POST`.
 #
 # THE THREE WRITES ARE A HANDFUL OF LINES EACH: read the arguments off the
 # request, hand them to an Operation, render what it answers. That is deliberate.
@@ -36,7 +36,7 @@
 #
 # NOT ROUTABLE — see Kiosk::StorefrontController.
 class Kiosk::OrdersController < ActionController::API
-  include Kiosk::Action
+  include Kiosk::Handler
   include KioskRefusals
 
   # payment_setup — the card-on-file readiness probe; canonical skill Step 5 runs
@@ -60,6 +60,7 @@ class Kiosk::OrdersController < ActionController::API
   # principal instead of minting a new one, so every poll returns the SAME
   # setup_url — an assistant relaying the newest url can no longer bounce its
   # human off the page they are filling in.
+  kind :action
   description "Check whether the authenticated principal has a saved card on file. " \
               "Returns {status: \"ready\"} if a card is already saved and the assistant can proceed to `pay`. " \
               "Returns {status: \"setup_required\", setup_url: \"…\"} when no card is saved — " \
@@ -126,6 +127,7 @@ class Kiosk::OrdersController < ActionController::API
   # ADR-0023: the arguments are declared in `input_schema`, and the pay hint —
   # which spells the expected mandate out in words, entry by entry — is a FIELD
   # of the answer, declared in `output_schema`. This says what an order IS here.
+  kind :action
   description "Create a grocery order for the authenticated principal, or REPLACE an unpaid one in " \
               "place — which is how a human changes their mind before any money moves. Delivery is " \
               "part of the order rather than a later step: this origin will not take an order it " \
@@ -204,6 +206,7 @@ class Kiosk::OrdersController < ActionController::API
   # are declared in `input_schema` below — the literal
   # `reschedule_delivery(a, b[, c[, d]])` this used to carry is the `params:`
   # field ADR-0023 §Decision 4 retired, restated one layer over in prose.
+  kind :action
   description "Move an ALREADY-PAID order's delivery to a different window, and optionally to a " \
               "different address. It REUSES the payment already on that order: there is no new " \
               "mandate to sign, nothing new to settle, and no second charge — call it directly, and " \
@@ -252,6 +255,7 @@ class Kiosk::OrdersController < ActionController::API
 
   # request_kyc — open an 18+ verification at the broker. See
   # {RequestKycOperation}.
+  kind :action
   description "Start an 18+ verification for the authenticated principal — needed only to order " \
               "alcohol, and for nothing else on this shelf. The answer carries a broker page to relay " \
               "to your human: an anonymizing KYC broker confirms the fact and signs an attestation " \

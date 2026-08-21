@@ -4,7 +4,7 @@
 # `GET /kiosk/<query-name>`, arguments in the QUERY STRING (protocol 0.4 — the
 # multiplexed `POST /kiosk/query` and its `name` field are deleted, not
 # deprecated). Kiosk ships a MIXIN, not a base class — `include
-# Kiosk::Query` is the whole contract — and each class-level macro records a
+# Kiosk::Handler` is the whole contract — and each class-level macro records a
 # declaration that the NEXT `def` claims, so a method with no macros above it is
 # a helper the wire cannot see.
 #
@@ -19,8 +19,11 @@
 # the HTML landing page), and this is the same call one level down. skooti and
 # getgrocery are shaped the same way and should follow.
 #
-# A controller declares queries OR actions, never both — the verb it is reached
-# by is a property of the class — so the write half lives next door in
+# `kind :query` above each declaration is what puts it on `GET` — the kind belongs to the DECLARATION, not to the class (K-921), so ONE
+# controller may declare both. These two stay separate because the halves have
+# different shapes: a query renders a projection inline, an action hands off to
+# an Operation.
+# The write half lives next door in
 # Kiosk::ReservationsController. What the two halves DO share is their argument
 # vocabulary: `property_id` is taken by two queries and one action,
 # check_in/check_out by two queries and one action. The shape guard for those is
@@ -32,13 +35,14 @@
 # PoW gate and the GUC-scoped transaction live. A route drawn straight here would
 # bypass all three, and the mixin answers such a request 404.
 class Kiosk::HotelsController < ActionController::API
-  include Kiosk::Query
+  include Kiosk::Handler
   include KioskRefusals
 
   # ── properties — the whole (small) catalogue of hotels, name-ordered.
   # ADR-0023: semantics only — no argument names and no "pass X to Y as `z`"
   # tail. `output_schema` names each field and points the identifying one at the
   # verbs that take it; naming the follow-on VERB here is the sanctioned form.
+  kind :query
   description "Browse the whole hotel catalogue this origin serves. It is small, so it comes back " \
               "entire rather than a page at a time — an empty answer would mean this origin lists no " \
               "hotels at all. Once the human narrows to one, `availability` says which of its room " \
@@ -73,6 +77,7 @@ class Kiosk::HotelsController < ActionController::API
   # overlapping the requested nights. `RoomType.free_for` is that predicate, and
   # `reserve_room` sells against the same scope, so the two cannot disagree
   # (K-690).
+  kind :query
   description "Check which room types are still free at ONE hotel for ONE stay. An EMPTY array " \
               "means that hotel is SOLD OUT for those nights, not that it has no rooms — and a hotel " \
               "this origin does not list is 404 not_found rather than an empty answer, so the two are " \
@@ -159,6 +164,7 @@ class Kiosk::HotelsController < ActionController::API
   # `payment_state` is the fix and it is a TRI-state on purpose: §11.6 requires
   # a third answer distinct from paid and not-paid, because "no record" is not
   # evidence that no money moved. See {Booking.payment_state}.
+  kind :query
   description "List this principal's hotel bookings (scoped to authenticated user). " \
               "This is the query to re-read after a payment whose response never arrived: " \
               "each row says where that booking stands with the hotel and where its money " \
@@ -237,6 +243,7 @@ class Kiosk::HotelsController < ActionController::API
   # `cursor` are RESERVED names a verb never declares (spec §8.1 item 6), so
   # there is no schema for these sentences to duplicate, and a page-size default
   # and its clamp are facts an assistant must have.
+  kind :query
   description "Search Istanbul hotels, returning a paginated page of SUMMARY rows — one per hotel, " \
               "priced from its cheapest room. Apply the human's stated constraints as filters so the " \
               "search NARROWS; do not pull the whole catalogue and sift it yourself. Every filter is " \
@@ -370,6 +377,7 @@ class Kiosk::HotelsController < ActionController::API
   end
 
   # ── hotel_detail — fetch ONE property by id (search→summaries, fetch on demand)
+  kind :query
   description "Fetch the full record for ONE hotel — the «search returns summaries, fetch detail on " \
               "demand» half of this origin's read surface. Call it for the one or few hotels the " \
               "human is choosing between, never across a whole result set. Answers a ONE-ROW array, " \

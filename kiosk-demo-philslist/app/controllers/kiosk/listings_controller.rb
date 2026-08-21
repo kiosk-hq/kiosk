@@ -1,9 +1,9 @@
 # frozen_string_literal: true
 
 # philslist's WRITE surface: the three verbs an assistant reaches with
-# `POST /kiosk/run`. Same shape as Kiosk::BoardController — this app's own
-# ApplicationController plus `include Kiosk::Action` — because a controller
-# declares queries OR actions, never both.
+# `POST /kiosk/<action-name>`. Same shape as Kiosk::BoardController — this app's
+# own ApplicationController plus `include Kiosk::Handler` — with `kind :action`
+# above each declaration, which is what puts it on `POST`.
 #
 # THE THREE WRITES ARE A HANDFUL OF LINES EACH: read the arguments off the
 # request, hand them to an Operation, render what it answers (T-083, Phil's
@@ -23,7 +23,7 @@
 #
 # NOT ROUTABLE — see Kiosk::BoardController.
 class Kiosk::ListingsController < ApplicationController
-  include Kiosk::Action
+  include Kiosk::Handler
   include KioskRefusals
 
   # post_listing — create a listing under the AUTHENTICATED principal. The
@@ -36,6 +36,7 @@ class Kiosk::ListingsController < ApplicationController
   # anyway as the second layer — see {PostListingOperation}, where it and
   # created_by_agent_id (the acting agent, for attribution) are written out at
   # length.
+  kind :action
   description "Post a new classifieds listing owned by the authenticated principal, open from the " \
               "moment it lands. Ownership is NOT an input: it is taken from the identity the operator " \
               "resolved, and an argument that tries to name a different owner is REFUSED rather than " \
@@ -83,6 +84,7 @@ class Kiosk::ListingsController < ApplicationController
   # `owner_id = kiosk.current_user_id()` against the transaction GUC; zero rows
   # affected → 403 (answer forbidden, not not-found, so cross-owner probing
   # can't enumerate which ids exist). See {EditListingOperation}.
+  kind :action
   description "Edit one of the authenticated principal's own listings " \
               "(owner-only; editing another owner's listing is forbidden)."
   input_schema type: "object",
@@ -121,6 +123,7 @@ class Kiosk::ListingsController < ApplicationController
 
   # close_listing — OWNER-ONLY, same owner-scoped WHERE; zero rows → 403. See
   # {CloseListingOperation}.
+  kind :action
   description "Close one of the authenticated principal's own listings " \
               "(owner-only; closing another owner's listing is forbidden)."
   input_schema type: "object",

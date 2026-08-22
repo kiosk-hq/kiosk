@@ -37,11 +37,15 @@ class Scooter < ApplicationRecord
   # gate may not rest on.
   #
   # Fail-closed BY CONSTRUCTION, in both directions. Only a value Rails
-  # recognises as literally FALSE (false, "f", "false", "0", 0, "") is
-  # licence-free; only one it recognises as literally TRUE is licence-required.
-  # NULL, an unexpected spelling, or a `needs_licence` that stopped being a
-  # boolean column therefore answers `false` to BOTH — so no reading of this
-  # column can ever open both doors, and an ambiguous one opens neither.
+  # recognises as literally FALSE (false, "f", "false", "0", 0) is licence-free;
+  # only one it recognises as literally TRUE is licence-required. NULL, THE
+  # EMPTY STRING, an unexpected spelling, or a `needs_licence` that stopped
+  # being a boolean column therefore answers `false` to BOTH — so no reading of
+  # this column can ever open both doors, and an ambiguous one opens neither.
+  # (`""` used to be listed above as licence-free, on the strength of it being
+  # in Rails' FALSE_VALUES. It is not reached: `Boolean#cast_value` maps `""` to
+  # nil first. `spec/licence_flag_spec.rb`, which pins all of this, is what
+  # measured it.)
   def licence_free?     = licence_flag == false
   def licence_required? = licence_flag == true
 

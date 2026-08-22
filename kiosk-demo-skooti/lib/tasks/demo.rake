@@ -1161,8 +1161,20 @@ namespace :demo do
 
     Exits 0 when all hold; exits 1 on any miss. A red assertion = the KYC gate is
     broken (or leaked onto the scooter path) — fix the app, not the test.
+
+    RUNS spec/licence_flag_spec.rb FIRST (K-724). Beat B above and the redteam
+    battery's MotorcycleViaStartRental both drive the real schema, so they only
+    ever hand the licence gate a real Ruby boolean — the one input on which a
+    fail-OPEN hand-rolled coercion and the correct cast agree. The spec presents
+    the spellings the wire cannot ("TRUE", 1, "yes", NULL) and asserts each one
+    still BLOCKS. It boots nothing and takes no port, so it costs this task a
+    single `rails runner`.
   DESC
   task kyc: :setup do
+    spec = File.expand_path("../../spec/licence_flag_spec.rb", __dir__)
+    puts "\n── K-724 licence-flag fail-closed spec (no server, no port) ──"
+    sh "bundle exec rails runner #{spec}"
+
     require "resolv"
     require "net/http"
     require "uri"

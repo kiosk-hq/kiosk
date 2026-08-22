@@ -16,9 +16,21 @@ memory-bandwidth-bound). What it buys the provider is a few-KB, ~18 ms
 |---|---|---|---|
 | Verify memory | 64 MiB ⚠️ | ~KB | **~KB** |
 | Verify time | ~ms (1 Argon2id) | 42 SipHash + walk (unbenched) | **~18 ms valid / 0.3 ms wrong (Ruby)** |
-| Lever (solve/verify) | tens× | millions× | **millions×** |
+| Lever (solve/verify) | tens× | unbenched | **~530×** (9.6 s / 18 ms) |
 | Dependencies | argon2 gem (C-ext) | Pure Ruby | **Pure Ruby (0 deps)** |
 | Difficulty tuning | D=0..256 (smooth) | edgebits | **N×PoW (discrete)** |
+
+**The lever is measured, not asserted.** `~530×` is this README's own two
+numbers divided: the p50 reference-solver solve at the shipped n=168 k=7
+(~9.6 s, *Performance* below) over a valid proof's verify (~18 ms, *Verify* above);
+p95 solve gives ~570×. It is a cross-language ratio — a numpy solver against a
+pure-Ruby verifier — so read it as the order of magnitude a provider actually
+buys, and note that it moves the WRONG way with a faster solver and the right way
+with a native verifier. It is not millions, it was never millions at any tuning
+this gem has shipped (the retired 192/7 gives ~8600×), and the number matters
+because the lever IS the economic argument for a metered toll (ADR-0007: a price
+on abuse, not a hardware wall). Cuckatoo29's column says `unbenched` for the same
+reason its verify row does: no measurement of it exists here.
 
 The one property that actually matters for a gateway is **cheap verify**:
 

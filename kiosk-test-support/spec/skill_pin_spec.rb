@@ -154,5 +154,63 @@ RSpec.describe "the skill pin" do
                        "immutable skill version"
       end
     end
+
+    # ── The cut the demos pin must TERMINATE its device-code poll (K-871) ────
+    #
+    # The account-binding ceremony is the third out-of-band completion poll,
+    # and it was the one nobody bounded: the cut told an assistant to keep
+    # polling on `authorization_pending`, to back off on `slow_down`, and
+    # nothing else — so a ceremony the human DENIED, or one whose `expires_in`
+    # elapsed, polled forever. Its two siblings were bounded deliberately
+    # (K-477/K-595 wrote the cadence + horizon, K-606 gave them a gate that
+    # reads the SERVED descriptor back off the wire). This ceremony has no
+    # descriptor to read — it is not a catalog verb — so the artefact itself
+    # is where the property can be asserted, and this spec is the one place
+    # that already reads the published bytes.
+    #
+    # THE VOCABULARY IS DERIVED, NEVER LISTED. The engine is the authority on
+    # which OAuth errors a poll can meet, so the expectation reads them out of
+    # `DeviceCodeGrant`'s own `failure(:code, …)` calls. A code added there and
+    # not taught to the skill fails here — which is the D3 drift this guards —
+    # and a hand-kept list in a spec file would have been a second place the
+    # vocabulary lives, the divergence K-605 closed by deleting one.
+    it "the pinned cut names every device-grant error the engine can emit, and a give-up horizon" do
+      grant_source = File.join(
+        monorepo_root, "kiosk-server/lib/kiosk/server/device_code_grant.rb"
+      )
+      expect(File).to exist(grant_source)
+
+      emitted = File.read(grant_source).scan(/failure\(:([a-z_]+)/).flatten.uniq
+      # invalid_request is a malformed CALL (no device_code parameter), not an
+      # outcome of a ceremony in progress: an assistant that sent no
+      # device_code has a bug, not a poll to terminate.
+      emitted -= %w[invalid_request]
+      expect(emitted.size).to be >= 5,
+                              "parsed only #{emitted.size} failure code(s) out of " \
+                              "#{grant_source}; the call shape changed and this expectation is blind"
+
+      url        = pins.values.filter_map { _1[:url] }.uniq.first
+      skill_text = File.read(File.join(site_root, File.basename(url)))
+      # The ceremony's own bullet and its sub-bullets, up to the sibling bullet.
+      section = skill_text[/^- \*\*No code from the human\*\*.*?(?=^- \*\*The human hands you a code)/m]
+      expect(section).not_to be_nil,
+                             "could not locate the claim-ceremony bullet in #{File.basename(url)}"
+
+      missing = emitted.reject { |code| section.include?(code) }
+      expect(missing).to be_empty,
+                         "#{File.basename(url)} teaches the device-code poll without naming " \
+                         "#{missing.join(', ')} — the engine emits #{emitted.sort.join(', ')} " \
+                         "(#{grant_source}), and an error the skill does not name is an error " \
+                         "the assistant loops on"
+
+      expect(section).to match(/GIVE UP/),
+                         "#{File.basename(url)}'s device-code poll states no give-up horizon. " \
+                         "Nothing pushes on approval, so a loop without one runs until the " \
+                         "assistant's budget dies — the card-setup and KYC polls both say where " \
+                         "to stop, and this is the third such poll."
+      expect(section).to match(/TERMINAL/),
+                         "#{File.basename(url)}'s device-code poll marks no outcome TERMINAL, " \
+                         "so a denied or expired ceremony has no stated stop condition."
+    end
   end
 end

@@ -76,7 +76,7 @@ Postgres required. From this directory:
 
 ```
 bin/rails demo:setup       # create + load schema + seed the fleet
-bin/rails demo:rideflow    # the headline: register → KYC → scooters_available → reserve → pay → start_rental → offline unlock (plus the negative gates)
+bin/rails demo:rideflow    # the headline: register → scooters_available → reserve → pay → start_rental → offline unlock (no KYC leg — see demo:kyc; plus the negative gates)
 bin/rails demo:kyc         # the KYC-gated motorcycle path (age_over_18 + licence_a)
 bin/rails demo:isolation   # cross-tenant + cross-scooter denial
 bin/rails demo:redteam     # adversarial regression battery

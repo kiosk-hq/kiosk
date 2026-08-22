@@ -42,6 +42,14 @@ class ListsController < ApplicationController
       done:     Todo.where(done: true).count,
       members:  Membership.count,
     }
+
+    # The SECOND discovery signal on the demo's ROOT (K-944). The
+    # `<link rel="kiosk">` tag rides the layout, so it is on every page; the
+    # header was set only on #shared, which made tudu the one demo whose HOME
+    # page carried a single signal while the fleet claim (K-927) says all seven
+    # carry both. protocol.md §4.5 permits either form — this is about the
+    # claim being true and the fleet being uniform, not about conformance.
+    advertise_kiosk_skill
   end
 
   # GET /shared — the housemate view on its own URL: a public, read-only mirror
@@ -51,7 +59,7 @@ class ListsController < ApplicationController
   # freshly shared list appear.
   def shared
     @housemate_board = housemate_board
-    response.set_header("Link", %(<#{Kiosk.configuration.skill_url}>; rel="kiosk"))
+    advertise_kiosk_skill
   end
 
   # The three actions below branch on the wire CODE rather than on an exception
@@ -107,6 +115,16 @@ class ListsController < ApplicationController
   end
 
   private
+
+  # `Link: <skill-url>; rel="kiosk"` — the response-header half of the discovery
+  # pair. The `<link rel="kiosk">` tag half lives in the layout, so every page
+  # already carries it; this puts the header on the two pages an assistant is
+  # actually pointed at (the root and the public board). Both read
+  # `Kiosk.configuration.skill_url`, so the tag, the header and
+  # /.well-known/kiosk.json cannot come to name different cuts.
+  def advertise_kiosk_skill
+    response.set_header("Link", %(<#{Kiosk.configuration.skill_url}>; rel="kiosk"))
+  end
 
   # The public housemate board: every list Bob (the seeded housemate) can reach,
   # each with its tasks and who shared it. Read directly from tudu's OWN tables —

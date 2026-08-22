@@ -193,7 +193,7 @@ profile = Kiosk::Redteam::Profile.new(
 
   # ── pay_for — MandatePrincipalSwap, MandateReplay, C2, C3, KYC ──────────
   # Exact shapes from script/rental_flow.rb:166-214 (RS256, scope=mobility,
-  # line_items with sku + reservation_id as required by Gate-3).
+  # line_items with sku + reservation_id as required by start_rental Gate 2).
   pay_for: lambda { |_client, principal, owned_ref|
     now       = Time.now.to_i
     intent_id = SecureRandom.uuid

@@ -237,6 +237,21 @@ end
 AMENITY_POOL = %w[wifi breakfast pool spa gym parking rooftop_bar
                   airport_shuttle sea_view pet_friendly restaurant hammam].freeze
 
+# Served-area vocabulary — the districts this operator sells in. Same shape and
+# same reason as AMENITY_POOL: shared by the search_hotels `neighbourhood` filter
+# enum (Kiosk::HotelsController) and the seeds (db/seeds.rb), so a rename or a
+# typo in either place cannot leave a value the filter can never reach.
+#
+# WHY IT IS A CONSTANT AND NOT A K-922 PROC (T-090, K-947). Deriving the enum
+# from `properties.neighbourhood` would narrow it to the districts that HAPPEN to
+# have inventory right now, which collapses "we do not serve that area" (a 400
+# naming the served set) into "no hotel there today" (a 200 []) — a distinction
+# T-090 drew on purpose and `app/operations/operation_result.rb` records. The
+# rule the K-922 sweep settled: derive an enum from a VOCABULARY table, never
+# from a column on an INVENTORY table. This is the vocabulary, written down.
+NEIGHBOURHOOD_POOL = %w[Sultanahmet Beyoğlu Kadıköy Beşiktaş Şişli Fatih
+                        Üsküdar Galata Taksim Ortaköy Bakırköy Nişantaşı].freeze
+
 # ── Live-activity telemetry — opt-in, app-layer, privacy-safe ───
 # Off unless KIOSK_TELEMETRY=1. One event per successful wire action via a Rack
 # middleware; aggregate at GET /demo/activity.json. NOT in kiosk-core.

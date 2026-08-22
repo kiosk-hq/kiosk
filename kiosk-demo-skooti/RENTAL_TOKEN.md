@@ -44,14 +44,15 @@ The left side (everything before the last `.`) is the signed message — UTF-8 b
 Assistant (agent token → Kiosk API)
   │
   ├─ reserve(scooter_code)          → reservation_id
-  ├─ kyc_verify(...)                → KYC gate clears
   ├─ pay(reservation_id)            → payment mandate settled
   │
   └─ start_rental(reservation_id)
        │
-       Gate 1: reservation exists, belongs to this principal, status = 'reserved'
-       Gate 2: agent is KYC-verified (kyc_verified_at NOT NULL)
-       Gate 3: settled payment (settlement record) references THIS reservation_id
+       Gate 1:  reservation exists, belongs to this principal, status = 'reserved'
+       Gate 1b: the reserved vehicle is licence-FREE (K-687) — a motorcycle
+                is refused here and goes through rent_motorcycle, whose Gate 0
+                is the KYC one. start_rental has NO KYC gate (K-442).
+       Gate 2:  settled payment (settlement record) references THIS reservation_id
        │
        All gates pass →
          scooter_code derived server-side from reservation FK (not from client)

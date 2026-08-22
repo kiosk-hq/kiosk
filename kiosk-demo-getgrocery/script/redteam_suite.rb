@@ -25,7 +25,7 @@
 # survives a deletion, or lies about a resource that exists, is an attack
 # surface.
 #
-# Scenarios (18 BLOCKED, 3 SKIPPED):
+# Scenarios (every applicable one must be BLOCKED; the KYC trio SKIPs):
 #   BLOCKED : CrossTenantRead, ForgedUserId, UnpaidGatedAction, SpentResourceReuse,
 #             PayForOtherUseSelf, MandatePrincipalSwap, MandateReplay, TokenTampering,
 #             PrivilegeSelfSelection, WrongCurrencyCart, TamperedPriceCart,

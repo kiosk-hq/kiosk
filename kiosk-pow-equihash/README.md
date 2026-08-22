@@ -75,7 +75,8 @@ The solver allocates one sorted-nonce-table buffer (~1.3 GiB at the default
 params). This buffer can be reused across challenges (same allocation, different
 data). However, the _computational work_ cannot be reused:
 
-- Each challenge has a unique `salt` (random 32 bytes)
+- Each challenge has a unique `salt` (raw random bytes, minted by the
+  challenge issuer — `kiosk-reputation` mints 16, see its README)
 - The seed = `salt ‖ LE32(header_nonce)` is hashed with each nonce
 - Different salt → completely different BLAKE2b-256 outputs
 - The sorted nonce table must be rebuilt from scratch

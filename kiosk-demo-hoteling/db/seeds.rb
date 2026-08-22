@@ -19,8 +19,12 @@
 # keeping these stable is cheap insurance) with their search columns backfilled.
 # All prices are EUR cents (the cashier check rejects any other currency).
 
-# AMENITY_POOL is defined in config/initializers/kiosk.rb (loaded at boot) so the
-# search_hotels `amenity` enum and these seeds share one closed vocabulary.
+# AMENITY_POOL and NEIGHBOURHOOD_POOL are defined in config/initializers/kiosk.rb
+# (loaded at boot) so the search_hotels `amenity` / `neighbourhood` enums and
+# these seeds share one closed vocabulary each. The assertion below is the half
+# a shared constant cannot do on its own: the five hand-written originals name
+# their district as a literal, and a typo there would seed a property no filter
+# value reaches. K-947.
 
 # ── Human guest accounts (Devise credentials) ───────────────────────────────
 # Demo-only credentials (development database, reset by every demo:setup).
@@ -64,6 +68,18 @@ originals = [
     rooms: [["Standard", 10000], ["Suite", 16000]] },
 ]
 
+# ── Seed-time vocabulary check (K-947) ──────────────────────────────────────
+# The five originals above name their district as a literal, so a rename in
+# NEIGHBOURHOOD_POOL — or a typo here — would seed a property that the
+# search_hotels `neighbourhood` filter can never reach, silently. Fail the seed
+# instead: a demo whose data cannot be searched is worse than one that will not
+# load. Same for the amenities, which the originals also spell out by hand.
+stray_areas = originals.map { |h| h[:neighbourhood] } - NEIGHBOURHOOD_POOL
+raise "seeds: district(s) outside NEIGHBOURHOOD_POOL: #{stray_areas.inspect}" if stray_areas.any?
+
+stray_amenities = originals.flat_map { |h| h[:amenities] }.uniq - AMENITY_POOL
+raise "seeds: amenity(ies) outside AMENITY_POOL: #{stray_amenities.inspect}" if stray_amenities.any?
+
 originals.each do |h|
   prop = Property.find_or_create_by!(name: h[:name]) do |p|
     p.city = "Istanbul"
@@ -80,10 +96,7 @@ end
 # pagination proof is stable. Names are coined (no real brands).
 rng = Random.new(4242)
 
-neighbourhoods = [
-  "Sultanahmet", "Beyoğlu", "Kadıköy", "Beşiktaş", "Şişli", "Fatih",
-  "Üsküdar", "Galata", "Taksim", "Ortaköy", "Bakırköy", "Nişantaşı"
-].freeze
+neighbourhoods = NEIGHBOURHOOD_POOL
 
 descriptors = %w[Grand Blue Old City Marmara Golden Pearl Anatolia Levant
                  Meridian Crescent Palm Cedar Ivory Saffron Terrace Garden

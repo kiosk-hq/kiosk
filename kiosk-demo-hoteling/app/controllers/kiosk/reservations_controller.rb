@@ -118,17 +118,19 @@ class Kiosk::ReservationsController < ActionController::API
     end
   end
 
-  # reserve_room — the TTL hold. See {ReserveRoomOperation} for the inventory
+  # reserve_room — the hold. See {ReserveRoomOperation} for the inventory
   # guard; the two identity values below are the only things this controller
   # contributes, and both are read from the identity the wire resolved rather than
   # from arguments, which is what makes a forged `user_id` in the body inert.
   # ADR-0023: the answer's fields, and the pay hint that spells the expected
   # mandate out in words, are declared in `output_schema`. This says what a hold
-  # IS and what it costs to let one lapse.
+  # IS. It deliberately does NOT promise the hold expires on its own: the deadline
+  # is recorded and no sweep enforces it (K-936, see {RoomHold}).
   kind :action
-  description "Hold a room for the authenticated principal. It is a HOLD and not a booking: it " \
-              "expires on its own if nothing is paid for it, and the room-night goes back on sale. " \
-              "The answer carries the operator's QUOTE for the whole stay and, in words, the exact " \
+  description "Hold a room for the authenticated principal. It is a HOLD and not a booking: " \
+              "nothing is charged and no stay is confirmed until you pay and call " \
+              "confirm_booking, and the hold carries a pay-by deadline the operator records " \
+              "against it. The answer carries the operator's QUOTE for the whole stay and, in words, the exact " \
               "mandate that quote expects — sign your AP2 cart against it, in this operator's " \
               "currency, at that total, naming this hold. The cashier re-counts both against its own " \
               "quote before it charges anything, so a cart that disagrees is refused outright rather " \
@@ -152,7 +154,7 @@ class Kiosk::ReservationsController < ActionController::API
                },
                required: ["property_id", "room_type_id", "check_in", "check_out"]
   output_schema type: "object",
-                description: "The TTL hold, and the quote the cart must be signed against.",
+                description: "The hold, and the quote the cart must be signed against.",
                 additionalProperties: false,
                 properties: {
                   booking_id:          { type: "string", description: "uuid. Name it in the cart mandate's line item, and pass it to confirm_booking as `booking_id`." },

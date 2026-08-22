@@ -26,7 +26,10 @@ RFC 9457 problem document.
   rel="next"` header, with `X-Total-Count` carrying the matching total
 - `GET /kiosk/hotel_detail?property_id=` — ONE property in full, as a one-row
   array (a `property_id` no property has is 404 `not_found`)
-- `POST /kiosk/reserve_room` — reserve a room for the principal (creates a TTL hold)
+- `POST /kiosk/reserve_room` — reserve a room for the principal (writes the
+  booking plus the engine's reserve-then-pay row in `kiosk.reservations`,
+  stamped with a 15-minute pay-by deadline — recorded for an operator to act
+  on, not enforced by `confirm_booking`, which gates on ownership + payment)
 - `POST /kiosk/payment_setup` — check whether the principal has a saved payment method
 - `POST /kiosk/confirm_booking` — confirm a reserved booking; requires a
   settled payment whose cart mandate references this booking

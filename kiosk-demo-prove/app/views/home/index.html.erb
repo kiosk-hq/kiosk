@@ -32,9 +32,12 @@
 
   <p class="stub">
     <strong>Not a Kiosk operator.</strong> This broker is an <em>issuer</em>, not
-    a Kiosk site: it exposes none of the four Kiosk verbs, has no agent
-    endpoint, and serves no discovery document. This is a page for a human,
-    reached from a link your assistant relays to you.
+    a Kiosk site: it mounts no Kiosk wire at all &mdash; neither of the two
+    reserved endpoints (<code>GET &lt;endpoint&gt;/schema</code>,
+    <code>POST &lt;endpoint&gt;/pay</code>) and not one per-verb endpoint,
+    because it registers no verb &mdash; and it serves no discovery document.
+    This is a page for a human, reached from a link your assistant relays to
+    you.
   </p>
 
   <p class="stub">

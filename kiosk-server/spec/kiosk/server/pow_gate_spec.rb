@@ -743,7 +743,7 @@ RSpec.describe Kiosk::Server::PowGate do
   end
 
   # ─── K-542: a valid proof is single-use even under concurrency ─────────────
-  # pow_gate.rb used to `spent?` then (after the ~17 ms verify) `mark_spent`,
+  # pow_gate.rb used to `spent?` then (after the ~18 ms verify) `mark_spent`,
   # with no atomic claim in between: M parallel submissions of ONE valid proof
   # all passed `spent?` before any `mark_spent` and all proceeded (a probe saw
   # 20/20). The gate now claims the id atomically BEFORE the verify, so a single

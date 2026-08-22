@@ -80,7 +80,7 @@ because Run 1's booking is holding it.
 1. **Discover** — `GET /.well-known/kiosk.json` returns the hoteling issuer and surface.
 2. **Self-register** — generated an RSA-2048 keypair, then completed the proof-of-possession handshake: `GET /kiosk/auth/challenge` → signed the challenge as an RS256 JWS (`aud` = the hoteling issuer) → `POST /kiosk/auth/register {public_key:<pem>, signed:<jws>}` → HTTP 201 → `agent_id`, `user_id`, `access_token`. No existing account. No human login. No bot check.
 3. **Browse** — `GET /kiosk/properties` returned 100 hotel properties as a bare JSON array (name-ordered; the flow uses the first, Amber Fatih Residence, `property_id=27`). `GET /kiosk/availability?property_id=27&check_in=2026-09-19&check_out=2026-09-22` returned the room types still free for those nights, with nightly prices (price-ordered; the flow uses the first, Standard at €70.00/night).
-4. **Reserve** — `POST /kiosk/reserve_room {property_id:27, room_type_id:63, check_in:"2026-09-19", check_out:"2026-09-22"}` → HTTP 200, and the body IS the result: `booking_id:"dab8db12-…"` and `total_cents:21000` (3 nights × 7000), plus the quote the cart must be signed against (`currency`, `nights`, `nightly_price_cents`) and a `pay_hint`. A TTL hold was created in `kiosk.reservations`.
+4. **Reserve** — `POST /kiosk/reserve_room {property_id:27, room_type_id:63, check_in:"2026-09-19", check_out:"2026-09-22"}` → HTTP 200, and the body IS the result: `booking_id:"dab8db12-…"` and `total_cents:21000` (3 nights × 7000), plus the quote the cart must be signed against (`currency`, `nights`, `nightly_price_cents`) and a `pay_hint`. A hold row was created in `kiosk.reservations`, stamped with a pay-by deadline.
 5. **Pay** — signed an AP2 intent mandate (`cap_amount_cents:21100`, `scope:"lodging"`, `iss:<issuer>`) and a cart mandate (`total_amount_cents:21000`, `line_items:[{sku:"Standard", qty:3, price_cents:7000, booking_id:"dab8db12-…"}]`, bound to the intent via `intent_mandate_id`) as RS256 JWS with the registered keypair, then `POST /kiosk/pay {intent_mandate_jws:…, cart_mandate_jws:…, payment_mandate_jws:…}` → HTTP 200 with `settlement_id`, `psp_reference`, `settled_amount_cents:21000` and `currency:"eur"`.
 6. **Confirm** — `POST /kiosk/confirm_booking {booking_id:"dab8db12-…"}` → HTTP 200, `status:"confirmed"`, `confirmation_code:"d8109a3e-…"`. The server verified ownership (Gate 1) and the settled mandate referencing this booking (Gate 2) before confirming. The code is stored on the booking row — it is the reference the guest gives at the desk — and the run asserts it twice: `my_bookings` reports the same code, and so does the `bookings` row itself.
 
@@ -289,9 +289,7 @@ class Kiosk::ReservationsController < ActionController::API
   include KioskRefusals   # the app's own concern: turns an Operation result into a render
 
   kind :action
-  description "Reserve a room for the authenticated principal (creates a TTL hold), " \
-              "not a confirmed stay — confirm_booking finishes it. Sign your AP2 cart " \
-              "mandate at the quoted total with a line_item naming the returned booking_id."
+  description "…"   # elided — see the shipped file
   input_schema type: "object", additionalProperties: false,
                required: %w[property_id room_type_id check_in check_out],
                properties: {
@@ -311,7 +309,7 @@ class Kiosk::ReservationsController < ActionController::API
                              nightly_price_cents pay_hint]
   def reserve_room
     # Four lines: read the arguments off the request, hand them to an Operation,
-    # render what it answers. The INSERT + the kiosk.reservations TTL row + the
+    # render what it answers. The INSERT + the kiosk.reservations hold row + the
     # inventory guard live in app/operations/, so a console or a rake task can
     # reuse them. The two identity values come from the identity the WIRE
     # resolved, never from arguments — which is what makes a forged `user_id`

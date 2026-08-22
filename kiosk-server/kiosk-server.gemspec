@@ -84,7 +84,7 @@ Gem::Specification.new do |spec|
 
   # ── Rails ──────────────────────────────────────────────────────────────
   # kiosk-server IS a Rails gem: it ships an engine, eleven controllers, an
-  # install generator and nine ActiveRecord migration templates. Until
+  # install generator and six ActiveRecord migration templates. Until
   # 2026-08-11 that dependency was undeclared and satisfied only by accident,
   # because every consumer happens to be a Rails app.
   #

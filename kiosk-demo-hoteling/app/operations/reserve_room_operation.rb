@@ -1,6 +1,6 @@
 # frozen_string_literal: true
 
-# reserve_room — a TTL hold on one room type for one stay, for the authenticated
+# reserve_room — a hold on one room type for one stay, for the authenticated
 # principal: the domain `bookings` row and the engine's `kiosk.reservations` row
 # together, in one transaction.
 #
@@ -25,7 +25,7 @@ class ReserveRoomOperation
   #   authority. Moving the column DEFAULT to `kiosk.current_user_id()` would close
   #   the gap; that is a migration, not part of a handler conversion (the atablefor
   #   note, unchanged).
-  # @param agent_id [String, nil] the ACTING agent, recorded on the TTL hold.
+  # @param agent_id [String, nil] the ACTING agent, recorded on the hold row.
   def self.call(principal_id:, agent_id:, property_id:, room_type_id:, check_in:, check_out:)
     # The four presence checks, in the order the raw handler asked them, so a
     # request missing more than one is still told about the same one first.
@@ -114,14 +114,15 @@ class ReserveRoomOperation
           return already_booked(rt_id, ci, co)
         end
 
-      # The engine's reserve-then-pay TTL row, bound to the booking.
+      # The engine's reserve-then-pay row, bound to the booking, stamped with the
+      # pay-by deadline nothing yet enforces — see {RoomHold} (K-936).
       RoomHold.insert!(
         { user_id:       principal_id,
           agent_id:      agent_id,
           resource_kind: RoomHold::RESOURCE_KIND,
           resource_id:   booking_id,
           args:          {},
-          expires_at:    RoomHold::TTL.from_now },
+          expires_at:    RoomHold::PAY_BY.from_now },
       )
 
       OperationResult.ok({

@@ -9,7 +9,7 @@ Reproducible end-to-end test of the Kiosk OSS gems. The same script (`run.sh`) r
 - `/.well-known/kiosk.json` discovery endpoint returns a valid document
 - Response headers (`Kiosk-Server-Version`, `Kiosk-API-Version`, `Kiosk-Min-Client`) are injected on `/kiosk/*`
 - The 0.4 per-verb endpoints (`GET /kiosk/<query-name>`, `POST /kiosk/<action-name>`) and `POST /kiosk/pay` dispatch through `Kiosk::Server::Executor` — a query's arguments ride in the query string, an action's in the JSON body
-- `GET /kiosk/salons` and `GET /kiosk/my_appointments` reach the origin's named queries and answer a bare JSON array of rows (no envelope; a page's cursor is an RFC 8288 `Link` header and its row count `X-Total-Count`)
+- `GET /kiosk/salons` and `GET /kiosk/my_appointments` reach the origin's named queries and answer a bare JSON array of rows (no envelope), with `X-Total-Count` beside it and NO `Link` header, because the fixture's one-salon dataset is a complete page. That a page's cursor rides in an RFC 8288 `Link` header is asserted only as an OpenAPI DECLARATION here; a truncated page with a live cursor is exercised by the demos (hoteling `demo:search`), not by this fixture
 - `POST /kiosk/book_appointment` reaches the origin's named Action and answers that handler's own JSON object
 - Handler controllers declared with `include Kiosk::Handler` and named in `c.handlers` are registered and served in DEVELOPMENT, where nothing eager-loads `app/` (K-761)
 - ONE controller serves BOTH kinds: `Kiosk::BookingsController` declares `my_appointments` (`kind :query`, reached by `GET`) and `book_appointment` (`kind :action`, reached by `POST`), and both answer over the wire (K-921)
@@ -75,6 +75,9 @@ Output is colour-coded `✓` / `✗` per assertion; exits non-zero on any failur
 e2e/
 ├── run.sh                                  # main script
 ├── assistant.sh                            # the mock AI assistant
+├── schema_conformance.rb                   # the published JSON Schemas run against THIS origin's live wire bytes (K-822)
+├── schemas/                                # vendored copies of the five published normative schemas (`bin/check-spec-schemas` holds them against the originals)
+├── mise.toml                               # pins the Ruby the harness runs on
 ├── README.md                               # this file
 └── fixtures/                               # files copied into the generated app
     ├── create_users.rb                     # provider's user table (UUID PK)
@@ -85,6 +88,7 @@ e2e/
     ├── seeds.rb                            # 2 users (Alice + Bob) with Devise credentials, 1 salon
     ├── bind_assistants.rb                  # mints the suite's two agent principals by ceremony: register → the human's link code → claim (no agent IdP is staged — the engine's own DefaultAgentIdp verifies the tokens it mints)
     ├── stub_psp.rb                         # deterministic in-process PSP (no real Stripe)
+    ├── demo_audit_sink.rb                  # the OPERATOR's `c.audit_sink` callable — Kiosk stores no audit trail (K-828), so the harness writes the one an adopter would
     ├── equihash_register.rb                # shared register helper: challenge → PoP → register; solves the register 402 + retries with the Kiosk-PoW header
     ├── register_pow_flow.rb                # register-PoW driver: no-proof register → 402, solve + re-POST with Kiosk-PoW header → 201, token authenticates a verb
     ├── pay_flow.rb                         # no-human AP2 pay flow: register → sign mandates → pay

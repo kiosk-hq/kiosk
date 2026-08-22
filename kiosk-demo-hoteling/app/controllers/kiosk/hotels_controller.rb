@@ -259,8 +259,7 @@ class Kiosk::HotelsController < ActionController::API
                properties: {
                  neighbourhood: {
                    type: "string",
-                   enum: %w[Sultanahmet Beyoğlu Kadıköy Beşiktaş Şişli Fatih
-                            Üsküdar Galata Taksim Ortaköy Bakırköy Nişantaşı],
+                   enum: NEIGHBOURHOOD_POOL,
                    description: "Exact Istanbul area name.",
                  },
                  max_price_cents: { type: "integer", minimum: 0, description: "Cheapest room ≤ this, EUR cents." },

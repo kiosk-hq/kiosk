@@ -24,6 +24,11 @@ module Kiosk
     # with no pending declarations is NOT a verb — the macros are the opt-in, so
     # a controller's helper methods stay invisible to the wire.
     #
+    #   reach          — OPTIONAL, and the DEFAULT is the strong case. Whose rows
+    #                    this verb may touch: `:principal` (default — only the
+    #                    calling principal's own, which is spec §7.2's absolute
+    #                    requirement), `:published`, `:consented` or `:role`.
+    #                    K-949 / ADR-0028; see the long note below.
     #   kind           — REQUIRED. `:query` (reached by `GET <mount>/<name>`) or
     #                    `:action` (`POST <mount>/<name>`). THE single source of
     #                    truth for which verb reaches this handler, and it is a
@@ -49,6 +54,42 @@ module Kiosk
     #                    the method name (a Ruby keyword, or a name that would
     #                    collide with a controller method).
     #
+    # ── `reach` — WHOSE ROWS A VERB MAY TOUCH (K-949, ADR-0028) ──────────
+    # Spec §7.2 used to say, unconditionally, that every read is scoped to the
+    # authenticated `user_id` and that another `user_id`'s rows are never
+    # readable. Three shipped demos contradicted it BY DESIGN — philslist's open
+    # board, tudu's shared lists, stylish's owner calendar — and all three are
+    # legitimate: data separation is the operator's business logic, and Kiosk's
+    # job is to SUPPLY the means (an identity resolved before dispatch, the four
+    # GUCs, a principal that is never a wire input), not to dictate the model.
+    #
+    # So the default is unchanged and stays absolute, and any DEPARTURE from it
+    # is declared — explicitly, per verb, and published on the wire — rather than
+    # being an implicit consequence of how a handler happens to be written:
+    #
+    #   :principal  DEFAULT. This verb touches only the calling principal's own
+    #               rows, or rows that belong to no principal at all (a catalogue,
+    #               a price list). Declare nothing and you have declared this.
+    #   :published  The operator PUBLISHES these owner-carrying rows to every
+    #               principal, by intent — a classifieds board. Costly by design:
+    #               §7.2 forbids putting an account's login identifier in such a
+    #               row (K-913 is what that sentence is made of).
+    #   :consented  A principal SHARED them, and the authorising artefact is one
+    #               the operator can point at — tudu's single-use invite becomes
+    #               a membership, and the membership is what permits the read.
+    #               The spec calls this the stronger of the two sharing claims.
+    #   :role       The reach depends on the caller's operator-ASSIGNED `role`
+    #               claim — stylish's salon owner sees the whole book, everyone
+    #               else sees their own bookings. A role is never client-requested
+    #               (§5.4), which is what keeps this from being a self-service
+    #               escalation.
+    #
+    # DECLARING A REACH DOES NOT MAKE IT CORRECT — it makes it REVIEWABLE. An
+    # undeclared cross-principal read is a defect whether or not the operator
+    # meant it; that asymmetry is the whole point, because "unless the operator
+    # intends otherwise" would have swallowed §7.2 whole (every leak is intended
+    # from the leaker's side).
+    #
     # ── A SLOT MAY BE A PROC, for a schema derived from DATA (K-922) ──────
     # Any part of `input_schema`, `output_schema`, `example_params` or
     # `example_row` may be a zero-arity proc:
@@ -67,8 +108,11 @@ module Kiosk
     # re-resolved on a short lifetime, so adding a category publishes itself
     # without a restart and without a deploy. {Kiosk::Server::SchemaSlots}
     # carries the mechanism and the concurrency argument. `description`,
-    # `kind` and `wire_name` are NOT resolvable: the first is prose semantics,
-    # the other two are routing facts fixed when the route is drawn.
+    # `kind`, `reach` and `wire_name` are NOT resolvable: the first is prose
+    # semantics, two are routing facts fixed when the route is drawn, and
+    # `reach` is a security claim about the verb — a claim computed from the
+    # operator's rows could change under a caller between the catalog it read
+    # and the call it made.
     #
     # ── Errors ───────────────────────────────────────────────────────────
     # Rails' idiom, end to end (T-054): `render json:, status:` answers the
@@ -103,6 +147,18 @@ module Kiosk
     # macro is deliberately not built here; this paragraph is where it goes.
     module HandlerMixin
       KINDS = %i[action query].freeze
+
+      # The four reaches of spec §7.2, in the order the spec names them. The
+      # first is the DEFAULT and is what a declaration that says nothing means:
+      # an operator gets the absolute per-principal scoping by writing nothing at
+      # all, and pays a line only to depart from it.
+      REACHES = %i[principal published consented role].freeze
+
+      # What an undeclared `reach` means. Not a fallback for a missing
+      # declaration the way `kind` refuses to have one: `kind` silently assigns
+      # an HTTP method and either default is a mistake, while every possible
+      # default here except the strictest would silently widen a verb.
+      DEFAULT_REACH = :principal
 
       # ── §3.2, enforced where the mistake is made ─────────────────────────
       #
@@ -208,6 +264,25 @@ module Kiosk
           kiosk_pending[:kind] = value
         end
 
+        # Whose rows this verb may touch (spec §7.2, ADR-0028). Omit it and the
+        # verb is `:principal` — the absolute case, and the one most operators
+        # want. Declared per DECLARATION, like `kind`, so one controller may hold
+        # an owner-scoped verb and a published one.
+        def reach(value)
+          unless REACHES.include?(value)
+            raise ArgumentError,
+              "#{self} declared `reach #{value.inspect}`, which is not a Kiosk verb reach. " \
+              "It is :principal (the default — only the calling principal's own rows, or rows " \
+              "that belong to no principal), :published (the operator publishes owner-carrying " \
+              "rows to everyone, by intent), :consented (a principal shared them, and the " \
+              "operator can point at the artefact that says so) or :role (the reach follows the " \
+              "caller's operator-assigned role claim). A verb that touches nobody else's rows " \
+              "declares nothing at all."
+          end
+
+          kiosk_pending[:reach] = value
+        end
+
         def description(text)
           kiosk_pending[:description] = text
         end
@@ -273,6 +348,7 @@ module Kiosk
           declaration = pending.merge(
             method_name: method_name.to_s,
             wire_name:   (pending[:wire_name] || method_name).to_s,
+            reach:       pending[:reach] || HandlerMixin::DEFAULT_REACH,
           )
           kiosk_refuse_bad_declaration!(declaration)
           kiosk_declarations[declaration[:wire_name]] = declaration
@@ -351,6 +427,7 @@ module Kiosk
           )
           HandlerMixin.registry_for(declaration[:kind]).declare(
             declaration[:wire_name], handler,
+            reach:          declaration[:reach],
             description:    declaration[:description],
             input_schema:   declaration[:input_schema],
             output_schema:  declaration[:output_schema],

@@ -131,6 +131,39 @@ abort "B my_listings failed (#{rc}): #{JSON.generate(bmine)}" unless rc == 200
 b_my_ids = Array(bmine).map { |r| r["listing_id"] }
 STDERR.puts "  B my_listings ids: #{b_my_ids.inspect}"
 
+# ── Step 3b: the DECLARED reach, read off the SERVED catalog (Assertion 6) ───
+#
+# K-949 / ADR-0028. §7.2's default is absolute — a verb touches only the calling
+# principal's rows — and `browse_listings` departs from it by design. What the
+# spec now requires is that the departure be PUBLISHED, so an assistant and a
+# sweep can tell an open board from a scoping bug. Two halves are collected
+# here and asserted by the rake task:
+#
+#   (a) what the catalog SAYS: `browse_listings` publishes `published`,
+#       `my_listings` publishes `principal`. The catalog is unauthenticated, so
+#       this is read the way any caller would read it — with no token at all.
+#   (b) what the wire DOES: every query the catalog publishes as `principal`
+#       AND that takes no required argument is called as BOB, and none of the
+#       answers may carry Alice's listing. This is the half that cannot be
+#       satisfied by editing a comment. Drop `reach :published` from the board
+#       and `browse_listings` JOINS this probe set, immediately returning
+#       Alice's row under a `principal` claim — which is exactly the defect
+#       K-949 filed, now caught on the live wire.
+rc, catalog = get_json("/kiosk/schema")
+abort "schema failed (#{rc}): #{JSON.generate(catalog)}" unless rc == 200
+reach_by_verb = (Array(catalog["queries"]) + Array(catalog["actions"]))
+                .to_h { |d| [d["name"], d["reach"]] }
+STDERR.puts "  catalog reach: #{reach_by_verb.inspect}"
+
+principal_probe = Array(catalog["queries"]).filter_map { |d|
+  next unless (d["reach"] || "principal") == "principal"
+  next unless Array(d.dig("input_schema", "required")).empty?
+
+  prc, prows = get_json("/kiosk/#{d['name']}", {}, bob.bearer)
+  STDERR.puts "  B #{d['name']} (reach=principal) → #{prc}"
+  [d["name"], prc, JSON.generate(prows)]
+}
+
 # ── Step 4: Bob edit_listing on ALICE's listing → 403 (Assertion 3) ──────────
 edit_rc, edit_body = post_json("/kiosk/edit_listing",
                                { listing_id: alice_listing_id, price_text: "€1" },
@@ -181,6 +214,8 @@ puts JSON.generate(
   alice_listing_id:   alice_listing_id,
   bob_listing_id:     bob_listing_id,
   browse_ids:         browse_ids,
+  reach_by_verb:      reach_by_verb,
+  principal_probe:    principal_probe,
   b_my_ids:           b_my_ids,
   cross_owner_edit:   [edit_rc, edit_body["code"]],
   cross_owner_close:  [close_rc, close_body["code"]],

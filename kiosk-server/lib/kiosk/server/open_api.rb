@@ -583,6 +583,10 @@ module Kiosk
               name:           { type: "string", pattern: HandlerMixin::NAME_PATTERN.source },
               description:    { type: %w[string null],
                                 description: "The verb's SEMANTICS, in prose. Authoritative." },
+              reach:          { type: "string", enum: HandlerMixin::REACHES.map(&:to_s),
+                                description: "Whose rows this verb may touch (spec §7.2). " \
+                                             "`principal` is the default and the norm; the " \
+                                             "other three are declared departures." },
               params:         { type: "null", description: "Retired (spec §8.3); always null." },
               input_schema:   { type: "object",
                                 description: "JSON Schema (draft 2020-12) for this verb's inputs. " \
@@ -592,7 +596,7 @@ module Kiosk
               example_params: { description: "OPTIONAL example inputs." },
               example_row:    { description: "OPTIONAL example of one result element." },
             },
-            required:   %w[name description input_schema output_schema],
+            required:   %w[name description reach input_schema output_schema],
           },
         }
       end

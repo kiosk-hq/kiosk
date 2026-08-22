@@ -342,6 +342,7 @@ helper methods stay invisible to the wire.
 | macro | what it declares |
 | --- | --- |
 | `kind` | **Required.** `:query` (reached by `GET <mount>/<name>`) or `:action` (`POST <mount>/<name>`). A property of the declaration, so one controller may carry both. There is no default: either one would silently pick an HTTP method for you. |
+| `reach` | Optional, and the default is the strong one. Whose rows this verb may touch (spec §7.2): `:principal` (default — only the caller's own, or rows that belong to no principal), `:published`, `:consented` or `:role`. Declare nothing and the verb is held to per-principal scoping absolutely; a departure costs one line and is published on the catalog, so an assistant can tell an open board from a scoping bug. |
 | `description` | Semantics **only**: what the verb does, how, and what it returns *in meaning*. Never a field list, a type, a required marker or a param name — those live in the schemas (ADR-0023). |
 | `input_schema` | **Required.** JSON Schema for the params. The input contract: every name, type, enum and range — and the wire coerces and validates every call against it. A verb that takes nothing still declares the empty closed object. |
 | `output_schema` | **Required.** JSON Schema for what comes back, so an assistant knows the result shape without a call-and-observe probe — the only machine-readable statement of the answer, now that there is no response envelope. |
@@ -375,8 +376,10 @@ proc is called when the descriptor is SERVED, resolved once and reused for a
 short window, and re-resolved after it: so adding a category publishes itself,
 with no restart and no deploy. The catalog's `?v=` version moves with it, and
 the discovery document republishes the new link within its own minute.
-`description`, `kind` and `wire_name` are not resolvable — the first is prose
-semantics, the other two are routing facts fixed when the route is drawn.
+`description`, `kind`, `reach` and `wire_name` are not resolvable — the first is
+prose semantics, two are routing facts fixed when the route is drawn, and
+`reach` is a security claim about the verb: one computed from your rows could
+change under a caller between the catalog it read and the call it made.
 
 
 ### Two things to know

@@ -97,6 +97,15 @@ namespace :demo do
         Bob's legitimate listing has DB owner_id == Bob and
         created_by_agent_id == the agent id /auth/register MINTED for Bob, so
         both ownership and attribution come from the token.
+      Assertion 6 (the departure is DECLARED — K-949/ADR-0028): the open board
+        is a §7.2 departure and must say so on the wire. 6a reads the
+        UNAUTHENTICATED catalog and requires browse_listings to publish
+        `reach: published` and my_listings `reach: principal`. 6b is the half a
+        comment cannot satisfy: every query the catalog publishes as
+        `principal` and that takes no required argument is called AS BOB, and
+        none of the answers may carry Alice's listing — so deleting
+        `reach :published` moves browse_listings into that probe set and fails
+        here with Alice's row in hand.
 
     Exits 0 if all assertions hold; exits 1 on failure. A red assertion = a real
     isolation hole: fix the app, not the test.
@@ -227,6 +236,41 @@ namespace :demo do
     else
       failures << "attribution not taken from identity: DB created_by_agent_id #{db_agent.inspect}, want #{agent_id_b.inspect}"
       puts "  x  Assertion 5c FAILED: created_by_agent_id #{db_agent.inspect} (want #{agent_id_b.inspect})"
+    end
+
+    # Assertion 6a: the catalog PUBLISHES the reach of both board verbs.
+    reach_by_verb = result["reach_by_verb"] || {}
+    want_reach    = { "browse_listings" => "published", "my_listings" => "principal" }
+    got_reach     = reach_by_verb.slice(*want_reach.keys)
+    if got_reach == want_reach
+      puts "  OK  Assertion 6a: the catalog declares browse_listings reach=published, " \
+           "my_listings reach=principal (the §7.2 departure is published, not implied)"
+    else
+      failures << "declared reach is #{got_reach.inspect}, want #{want_reach.inspect}"
+      puts "  x  Assertion 6a FAILED: declared reach #{got_reach.inspect} (want #{want_reach.inspect})"
+    end
+
+    # Assertion 6b: nothing claiming `principal` reach returns Alice's row.
+    #
+    # NON-VACUITY IS ASSERTED, NOT ASSUMED: an empty probe set would make the
+    # loop below pass while checking nothing, which is precisely how a green
+    # isolation report gets manufactured. my_listings is a principal-reach
+    # no-argument query, so the set is never legitimately empty here.
+    probe = result["principal_probe"] || []
+    if probe.empty?
+      failures << "the principal-reach probe set is EMPTY — nothing was checked"
+      puts "  x  Assertion 6b FAILED: no principal-reach verb was probed (vacuous)"
+    else
+      leaked = probe.select { |(_name, prc, body)| prc == 200 && body.to_s.include?(alice_listing_id.to_s) }
+      if leaked.empty?
+        puts "  OK  Assertion 6b: #{probe.length} principal-reach verb(s) probed as Bob " \
+             "(#{probe.map(&:first).join(', ')}); none returned Alice's listing"
+      else
+        failures << "UNDECLARED CROSS-PRINCIPAL READ: #{leaked.map(&:first).join(', ')} " \
+                    "claim reach=principal but returned Alice's listing #{alice_listing_id}"
+        puts "  x  Assertion 6b FAILED: #{leaked.map(&:first).join(', ')} claim principal reach " \
+             "and returned Alice's listing"
+      end
     end
 
     if failures.empty?

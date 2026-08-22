@@ -141,7 +141,7 @@ RSpec.describe Kiosk::Server::Actions do
       described_class.declare("plain", ->(_args) { {} }, description: "Do")
 
       d = described_class.describe("plain")
-      expect(d).to eq({ name: "plain", description: "Do", params: nil })
+      expect(d).to eq({ name: "plain", description: "Do", reach: "principal", params: nil })
       expect(d).not_to have_key(:input_schema)
       expect(d).not_to have_key(:output_schema)
       expect(d).not_to have_key(:example_params)

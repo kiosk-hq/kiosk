@@ -32,6 +32,16 @@ module Kiosk
     # protocol.md Section 8.3 says both are REQUIRED, and {HandlerMixin} raises
     # at class-body load for a declaration missing either (T-073 = A, landed by
     # T-068; K-598 / K-671 / K-680):
+    #   reach:          REQUIRED, and DEFAULTED. Whose rows this verb may touch
+    #                   (spec §7.2, ADR-0028): `principal` (the default and the
+    #                   norm — only the caller's own rows, or rows that belong to
+    #                   no principal), `published`, `consented` or `role`. A
+    #                   declaration that says nothing means `principal`, so the
+    #                   absolute case costs an operator no ceremony and every
+    #                   DEPARTURE from it is a line somebody wrote on purpose.
+    #                   Always published in the descriptor, never omitted: "this
+    #                   verb is scoped to you" is a fact an assistant should read
+    #                   rather than infer from a missing key.
     #   description:    prose semantics — what this verb does, what it CHANGES,
     #                   and what the result MEANS. Never a field list or a type
     #                   (ADR-0023 / K-500).
@@ -57,7 +67,7 @@ module Kiosk
       # Internal entry holding a handler (callable) plus optional discovery metadata.
       # Defined at module scope so reset! can replace @registry without affecting the
       # constant. Not part of the public API — callers always go through fetch/describe/catalog.
-      Entry = Data.define(:handler, :description, :input_schema, :output_schema,
+      Entry = Data.define(:handler, :reach, :description, :input_schema, :output_schema,
                           :example_params, :example_row)
 
       class << self
@@ -68,8 +78,9 @@ module Kiosk
         # @param name [String, Symbol] the wire name
         # @param handler [#call] the {HandlerDispatch} for the declaring method
         # @return [Entry] the recorded entry
-        def declare(name, handler, description: nil, input_schema: nil,
-                    output_schema: nil, example_params: nil, example_row: nil)
+        def declare(name, handler, reach: HandlerMixin::DEFAULT_REACH, description: nil,
+                    input_schema: nil, output_schema: nil, example_params: nil,
+                    example_row: nil)
           # A declaration whose schema slots carry a proc puts this origin on
           # the resolving path (K-922). STRUCTURAL: it looks for procs, it
           # never calls one — a class body is read at `db:create` too.
@@ -78,7 +89,7 @@ module Kiosk
             example_params: example_params, example_row: example_row,
           )
           registry[name.to_s] = Entry.new(
-            handler: handler, description: description,
+            handler: handler, reach: reach, description: description,
             input_schema: input_schema, output_schema: output_schema,
             example_params: example_params, example_row: example_row,
           )
@@ -114,7 +125,8 @@ module Kiosk
           # proc is not called on the per-request validation path. With no
           # proc anywhere on the origin it yields straight through.
           SchemaSlots.descriptor(SCOPE, name, entry) do
-            descriptor = { name: name.to_s, description: entry.description, params: nil }
+            descriptor = { name: name.to_s, description: entry.description,
+                           reach: entry.reach.to_s, params: nil }
             descriptor[:input_schema]   = entry.input_schema   unless entry.input_schema.nil?
             descriptor[:output_schema]  = entry.output_schema  unless entry.output_schema.nil?
             descriptor[:example_params] = entry.example_params unless entry.example_params.nil?

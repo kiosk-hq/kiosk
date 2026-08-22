@@ -243,6 +243,13 @@ namespace :demo do
       • a used/garbage invite code → 403
       • POSITIVE CONTROL: the genuine member DOES see + read the list
       • after remove_member, the member's next read → 403 (access gone)
+      • Assertion 8 (K-949/ADR-0028): the §7.2 DEPARTURE IS DECLARED. 8a reads
+        the unauthenticated catalog and requires my_lists / list_todos /
+        list_members to publish `reach: consented` and whoami `reach:
+        principal`. 8b calls every principal-reach no-argument query AS THE
+        MEMBER — who legitimately reaches the owner's list — and requires that
+        none of them carry that list's id, so deleting a `reach :consented`
+        moves the verb into the probe set and fails here.
   DESC
   task isolation: :setup do
     port = ENV.fetch("PORT", "3007")
@@ -269,6 +276,35 @@ namespace :demo do
     check.call("POSITIVE CONTROL: genuine member reads todos → 200", r["member_reads_todos"] == 200)
     check.call("remove_member → 200",                            r["remove_member_status"] == 200)
     check.call("after removal, member's next read → 403 (access gone)", r["member_after_removal"] == 403)
+
+    # ── Assertion 8a: the catalog PUBLISHES the reach of tudu's four queries ──
+    #
+    # K-949 / ADR-0028. Collaboration is a legitimate authorization model and
+    # the spec no longer forbids it — what it requires is that the model be a
+    # DECLARED property of the verb rather than something a reader has to infer
+    # from a join. `consented` rather than `published` is the stronger of the
+    # two sharing claims and is the true one here: what admits another
+    # account's row is a `memberships` row this operator can produce, minted by
+    # redeeming an invite a human created.
+    want_reach = { "my_lists" => "consented", "list_todos" => "consented",
+                   "list_members" => "consented", "whoami" => "principal" }
+    got_reach  = (r["reach_by_verb"] || {}).slice(*want_reach.keys)
+    check.call("Assertion 8a: the catalog declares #{want_reach.inspect} (got #{got_reach.inspect})",
+               got_reach == want_reach)
+
+    # ── Assertion 8b: nothing claiming `principal` returns the owner's list ──
+    #
+    # NON-VACUITY IS ASSERTED, NOT ASSUMED: an empty probe set would pass this
+    # while checking nothing, which is how a green isolation report gets
+    # manufactured. whoami is a principal-reach no-argument query, so the set is
+    # never legitimately empty.
+    probe = r["principal_probe"] || []
+    check.call("Assertion 8b: the principal-reach probe set is NON-EMPTY (#{probe.map(&:first).inspect})",
+               !probe.empty?)
+    leaked = probe.select { |(_name, prc, body)| prc == 200 && body.to_s.include?(r["list_id"].to_s) }
+    check.call("Assertion 8b: no principal-reach verb returned the owner's list to the member " \
+               "(#{probe.length} probed#{leaked.empty? ? "" : "; LEAKED: #{leaked.map(&:first).join(", ")}"})",
+               !probe.empty? && leaked.empty?)
 
     # The principal is not an input, asserted in two halves.
     #

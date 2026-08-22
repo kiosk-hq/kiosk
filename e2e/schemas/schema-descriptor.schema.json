@@ -32,6 +32,7 @@
       "required": [
         "name",
         "description",
+        "reach",
         "input_schema",
         "output_schema"
       ],
@@ -47,6 +48,16 @@
             "null"
           ],
           "description": "Human-facing description or null. SEMANTICS live here in prose -- what the verb does, when to reach for it, what the result means. Names, types and constraints do not: an input belongs to input_schema and a result field to output_schema."
+        },
+        "reach": {
+          "type": "string",
+          "enum": [
+            "principal",
+            "published",
+            "consented",
+            "role"
+          ],
+          "description": "REQUIRED. Whose rows this verb may touch (Section 7.2). `principal` is the DEFAULT and the norm: this verb touches only the calling principal's own rows, or rows that belong to no principal at all (a catalogue, a price list). The other three are DECLARED DEPARTURES, each naming what authorises the wider reach -- `published`, the operator publishes these owner-carrying rows to every principal by intent (a classifieds board); `consented`, a principal shared them and the operator can point at the artefact that says so (an invite that became a membership) -- the stronger of the two sharing claims; `role`, the reach follows the caller's operator-ASSIGNED `role` claim, which is never client-requested (Section 5.4). Declaring a reach does not make it correct, it makes it reviewable: an UNDECLARED cross-principal read is a defect whether or not the operator intended it. An AI assistant that meets a descriptor with no `reach` MUST read the verb as `principal` and MUST NOT take the absence as licence to assume anything wider."
         },
         "params": {
           "type": [

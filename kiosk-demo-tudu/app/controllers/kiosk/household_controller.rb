@@ -86,7 +86,16 @@ class Kiosk::HouseholdController < ApplicationController
   # un-bypassable (the agent supplies no filter at all).
   # ADR-0023: no row-field list and no "pass X to Y" tail. `output_schema` names
   # every field and points the identifying one at the verbs that take it.
+  # `reach :consented` (K-949, ADR-0028) — and tudu is the demo the STRONGER of
+  # the spec's two sharing claims was written for. A row here may be a list
+  # somebody else owns; what admits it is not tudu's own decision to publish
+  # (that would be `published`) but an act by the human whose data it is — an
+  # owner minted a single-use invite, it travelled person-to-person, and
+  # `accept_invite` turned it into a `memberships` row. The membership IS the
+  # authorising artefact, it is a row this operator can produce on demand, and
+  # every one of the four verbs below reads it rather than an owner column.
   kind :query
+  reach :consented
   description "List the todo lists the authenticated principal can reach. Access here is " \
               "MEMBERSHIP-based rather than owner-scoped, so a list somebody invited the caller into " \
               "is listed alongside the caller's own, and each row says which of the two the caller is " \
@@ -127,7 +136,11 @@ class Kiosk::HouseholdController < ApplicationController
 
   # list_todos(list_id) — membership-gated: 403 unless the caller is a member.
   # Returns the list's todos with attribution (created_by_agent_id).
+  # `reach :consented`, same artefact: a todo on a list somebody else owns is
+  # reachable because a membership says so, and §7.2 form 2 still applies to
+  # everything outside that reach — a non-member gets 403, not a filtered 200.
   kind :query
+  reach :consented
   description "Return the todos on a list the caller is a member of, each with " \
               "its completion state and the agent that added it. Forbidden (403) " \
               "if the caller is not a member of the list."
@@ -162,7 +175,13 @@ class Kiosk::HouseholdController < ApplicationController
 
   # list_members(list_id) — membership-gated; returns the members + roles so a
   # collaborator can see who else is on the list.
+  # `reach :consented` — the most obviously cross-principal verb tudu has: the
+  # rows ARE other accounts. It is the membership that admits them, and the
+  # handle a co-member sees is one the account holder chose to share by joining
+  # a household list, which is exactly the distinction §7.2 draws between this
+  # and `published` (where no such act exists and an address may never appear).
   kind :query
+  reach :consented
   description "Return who else is on a list the caller is a member of, and what each of them may do " \
               "there — the answer a collaborator needs before it shares the list further or removes " \
               "anyone from it. Forbidden (403) if the caller is not a member of the list."

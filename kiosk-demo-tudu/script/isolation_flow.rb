@@ -141,6 +141,37 @@ results[:member_sees_list] = rc == 200 && Array(mem_lists).any? { |r| r["list_id
 rc, = get_json("/kiosk/list_todos", { list_id: list_id }, bearer(member[:token]))
 results[:member_reads_todos] = rc
 
+# ── Assertion 8: the DECLARED reach (K-949 / ADR-0028) ──────────────────────
+#
+# §7.2's default is absolute — a verb touches only the calling principal's rows
+# — and tudu departs from it on purpose: a member reads a list somebody else
+# owns. The spec now requires that departure to be PUBLISHED, so an assistant
+# and a sweep can tell collaboration from a scoping bug. Two halves:
+#
+#   (a) what the catalog SAYS: my_lists / list_todos / list_members publish
+#       `consented`, whoami publishes `principal`. Read with NO token, the way
+#       any caller reads the unauthenticated catalog.
+#   (b) what the wire DOES: every query the catalog publishes as `principal`
+#       and that takes no required argument is called AS THE MEMBER — who
+#       legitimately reaches the owner's list — and none of the answers may
+#       carry that list's id. This runs BEFORE Assertion 7 cuts the Member off,
+#       because after that there is nothing left to leak and the probe would
+#       pass for the wrong reason. Delete `reach :consented` from my_lists and
+#       it joins this probe set carrying the owner's list under a `principal`
+#       claim, which is the K-949 defect caught on the live wire.
+rc, catalog = get_json("/kiosk/schema")
+abort "schema failed (#{rc}): #{JSON.generate(catalog)}" unless rc == 200
+results[:reach_by_verb] = (Array(catalog["queries"]) + Array(catalog["actions"]))
+                          .to_h { |d| [d["name"], d["reach"]] }
+
+results[:principal_probe] = Array(catalog["queries"]).filter_map { |d|
+  next unless (d["reach"] || "principal") == "principal"
+  next unless Array(d.dig("input_schema", "required")).empty?
+
+  prc, prows = get_json("/kiosk/#{d['name']}", {}, bearer(member[:token]))
+  [d["name"], prc, JSON.generate(prows)]
+}
+
 # ── Assertion 7: after remove_member, the Member's next read → 403 ──────────
 rc, rem = post_json("/kiosk/remove_member",
                     { list_id: list_id, account_id: member[:user_id] },

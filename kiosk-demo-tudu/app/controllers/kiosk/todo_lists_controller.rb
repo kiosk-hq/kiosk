@@ -75,7 +75,12 @@ class Kiosk::TodoListsController < ApplicationController
   # add_todo(list_id, title) — membership-gated; records the acting agent as
   # created_by_agent_id (attribution: "who added the tent? — Bob's assistant").
   # nil for the human web surface, which has no agent.
+  # `reach :consented` — §7.2 is about what a verb may AFFECT as much as what it
+  # may read, and this one writes onto a list another account owns. Same
+  # artefact as the read side: the membership permits it, and a non-member is
+  # refused 403 by the same gate.
   kind :action
+  reach :consented
   description "Add a todo to a list the caller is a member of. The acting assistant is recorded on " \
               "the todo, so a household can see later who put it there — «who added the tent?» is an " \
               "answerable question on this origin. Forbidden (403) if the caller is not a member."
@@ -103,7 +108,10 @@ class Kiosk::TodoListsController < ApplicationController
   # complete_todo(todo_id) — membership-gated via the todo's list. One UPDATE
   # scoped to the caller's memberships; zero rows → 403 (probing can't
   # enumerate ids).
+  # `reach :consented` — updates a row on somebody else's list when the caller
+  # is a member of it.
   kind :action
+  reach :consented
   description "Mark a todo done. Allowed only if the caller is a member of the list the todo is on; " \
               "otherwise forbidden (403) — and the refusal reads the same whether the todo belongs to " \
               "somebody else or does not exist at all, so probing cannot enumerate."
@@ -161,7 +169,14 @@ class Kiosk::TodoListsController < ApplicationController
   # accept_invite(code) — look up by digest; reject foreign/expired/redeemed (403);
   # INSERT a `member` membership for the principal; mark redeemed. A used code
   # fails on the second try (single-use). Returns { list_id, joined: true }.
+  # `reach :consented` — THE VERB THAT MINTS THE ARTEFACT EVERY OTHER
+  # `consented` VERB HERE RELIES ON. It reads an invite another account created
+  # and inserts a membership on that account's list, so it is cross-principal in
+  # both directions; and it is the moment the consent becomes a row this
+  # operator can point at, which is what makes the claim `consented` rather than
+  # `published`.
   kind :action
+  reach :consented
   description "Redeem a collaboration secret somebody shared with you and join their list as a " \
               "member. It is single-use and short-lived: one that has already been redeemed, one whose " \
               "ten minutes have run out, and one this origin never minted are all forbidden (403), and " \
@@ -190,7 +205,12 @@ class Kiosk::TodoListsController < ApplicationController
   # remove_member(list_id, account_id) — OWNER-ONLY. DELETE the target's
   # membership; access is cut instantly. The owner cannot remove the LAST owner
   # (no orphaning the list). Returns { removed: true }.
+  # `reach :consented` — deletes a `memberships` row whose `account_id` is
+  # ANOTHER principal's, which the default reach forbids outright. `invite` next
+  # door needs no declaration by contrast: it is owner-only and mints a row on a
+  # list the caller already owns, so it never leaves the principal.
   kind :action
+  reach :consented
   description "Owner-only: remove a member from a list you own — their access is " \
               "cut instantly. You cannot remove the list's last owner. Forbidden " \
               "(403) if you are not the owner. Returns { removed }."

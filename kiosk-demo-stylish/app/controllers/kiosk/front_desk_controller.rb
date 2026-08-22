@@ -200,7 +200,18 @@ class Kiosk::FrontDeskController < ApplicationController
   # clause BUILT as a Ruby string and spliced into `execute`, which is the exact
   # idiom a reader would copy into a query that does take caller input. The
   # branch now picks between two relations.
+  # `reach :role` — the third of ADR-0028's declared departures, and the only
+  # verb in the fleet that carries it. An `owner` reads EVERY principal's
+  # appointments (`Appointment.all`, one line down); every other role reads its
+  # own. Under §7.2's old unconditional wording that was a violation of the
+  # spec's strongest sentence hiding inside a feature; it is now a published
+  # claim about the verb. It is sound only because a role is ASSIGNED by the
+  # operator and is never client-requested (spec §5.4, and this demo's own
+  # `privilege_self_selection` red-team scenario is what proves it) — an origin
+  # that let a caller name its own role would have made this a self-service
+  # escalation instead of an authorization model.
   kind :query
+  reach :role
   description "Staff forecast — role-gated: owner sees ALL bookings + a FORECASTED € revenue total (summed from the actual bookings' prices, growing from €0 as visitors book); any other role sees only their own bookings and no forecast (role from the bound human's IdP)"
   input_schema type: "object", additionalProperties: false, properties: {}, required: []
   # TWO ROW SHAPES IN ONE ARRAY, and the discriminator is the field each one

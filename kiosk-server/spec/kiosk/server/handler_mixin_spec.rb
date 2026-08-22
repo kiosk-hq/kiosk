@@ -135,6 +135,33 @@ class SpecBoardController < ApplicationController
   end
 end
 
+# The three DECLARED DEPARTURES of spec §7.2 (K-949, ADR-0028), one verb each,
+# so the reach vocabulary is exercised here and not only where a demo happens to
+# use it. `:role` in particular has exactly one user in the fleet (stylish's
+# salon_calendar) and would otherwise be a value nothing pins.
+class SpecReachController < SpecKioskBaseController
+  kind :query
+  reach :published
+  description "The open board — every principal's rows, published by the operator on purpose."
+  input_schema type: "object", additionalProperties: false, properties: {}, required: []
+  output_schema true
+  def open_board = render(json: [])
+
+  kind :query
+  reach :consented
+  description "A shared list — reachable because a membership says so."
+  input_schema type: "object", additionalProperties: false, properties: {}, required: []
+  output_schema true
+  def shared_list = render(json: [])
+
+  kind :action
+  reach :role
+  description "The staff book — how far it reaches depends on the caller's operator-assigned role."
+  input_schema type: "object", additionalProperties: false, properties: {}, required: []
+  output_schema true
+  def staff_book = render(json: {})
+end
+
 RSpec.describe "Kiosk::Handler (the operator mixin)" do
   let(:identity) { build_identity(user_id: "u-1", agent_id: "a-1") }
   let(:connection) { FakeConnection.new }
@@ -142,7 +169,8 @@ RSpec.describe "Kiosk::Handler (the operator mixin)" do
   # The class bodies above registered as they were read; spec_helper resets the
   # registries before every example, so put them back.
   before do
-    [SpecCatalogController, SpecOrdersController, SpecBoardController].each(&:kiosk_register!)
+    [SpecCatalogController, SpecOrdersController, SpecBoardController,
+     SpecReachController].each(&:kiosk_register!)
   end
 
   # The REAL dispatch path, minus HTTP: exactly what VerbController calls.
@@ -199,6 +227,35 @@ RSpec.describe "Kiosk::Handler (the operator mixin)" do
     it "lets an operator's own base class carry the include, subclasses declare" do
       expect(SpecKioskBaseController.kiosk_declarations).to be_empty
       expect(SpecCatalogController.kiosk_declarations["catalog"][:kind]).to eq(:query)
+    end
+
+    # ── K-949 / ADR-0028: `reach`, the declared departure from §7.2 ──────
+    it "publishes reach: principal for a verb that declares none — silence is the STRICT claim" do
+      expect(Kiosk::Server::Queries.describe("catalog")[:reach]).to eq("principal")
+      expect(Kiosk::Server::Actions.describe("create_order")[:reach]).to eq("principal")
+    end
+
+    it "publishes each declared departure verbatim on the descriptor" do
+      expect(Kiosk::Server::Queries.describe("open_board")[:reach]).to eq("published")
+      expect(Kiosk::Server::Queries.describe("shared_list")[:reach]).to eq("consented")
+      expect(Kiosk::Server::Actions.describe("staff_book")[:reach]).to eq("role")
+    end
+
+    it "carries reach onto the wire catalog the public `schema` endpoint serves" do
+      document = Kiosk::Server::SchemaDocument.document
+      reaches  = (document[:queries] + document[:actions]).to_h { |d| [d[:name], d[:reach]] }
+
+      expect(reaches).to include("open_board" => "published", "shared_list" => "consented",
+                                 "staff_book" => "role", "catalog" => "principal")
+      # Every descriptor carries one — schema-descriptor.schema.json makes it
+      # REQUIRED, so a verb whose reach were merely omitted would leave the
+      # served catalog non-conformant rather than quietly defaulting.
+      expect(reaches.values).to all(be_a(String))
+    end
+
+    it "keeps reach a property of the DECLARATION, not of the class" do
+      expect(SpecReachController.kiosk_declarations.transform_values { |d| d[:reach] })
+        .to eq("open_board" => :published, "shared_list" => :consented, "staff_book" => :role)
     end
 
     # ── K-921: one controller, both kinds ────────────────────────────────
@@ -642,6 +699,15 @@ RSpec.describe "Kiosk::Handler (the operator mixin)" do
           kind :mutation
         end
       }.to raise_error(ArgumentError, /not a Kiosk verb kind/)
+    end
+
+    it "refuses a reach outside the four the spec names" do
+      expect {
+        Class.new(ApplicationController) do
+          include Kiosk::Handler
+          reach :public
+        end
+      }.to raise_error(ArgumentError, /not a Kiosk verb reach/)
     end
 
     # The SAME-CLASS half of one-name-one-kind. It could not arise before

@@ -169,7 +169,7 @@ RSpec.describe Kiosk::Server::Queries do
       described_class.declare("plain", ->(_args) { [] }, description: "Browse")
 
       d = described_class.describe("plain")
-      expect(d).to eq({ name: "plain", description: "Browse", params: nil })
+      expect(d).to eq({ name: "plain", description: "Browse", reach: "principal", params: nil })
       expect(d).not_to have_key(:input_schema)
       expect(d).not_to have_key(:output_schema)
       expect(d).not_to have_key(:example_params)

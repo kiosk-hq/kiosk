@@ -48,7 +48,20 @@ class Kiosk::BoardController < ApplicationController
   # text rather than an amount, are declared in `output_schema`. What is left
   # here is what neither can say: what the board IS and what an empty answer
   # means.
+  # `reach :published` — THE BOARD IS THE DEPARTURE, AND NOW IT SAYS SO (K-949,
+  # ADR-0028). Spec §7.2's default is absolute: a verb touches only the calling
+  # principal's rows. This one touches every seller's, because an open
+  # classifieds board that showed you only your own listings would not be a
+  # board. Before ADR-0028 that was a silent contradiction of the strongest
+  # sentence in the spec; the declaration makes it a published claim an
+  # assistant, an auditor and `demo:isolation` can all read off the wire. It is
+  # `published` rather than `consented` because nobody consented to anything —
+  # philslist publishes these rows by its own decision, which is the weaker of
+  # the two sharing claims and the one that costs the most: §7.2 forbids an
+  # account's login identifier anywhere in a published row, which is the rule
+  # K-913 is made of and why `owner_handle` is a pseudonym.
   kind :query
+  reach :published
   description "Browse the public classifieds board across ALL sellers — this is the open board, not " \
               "the caller's own corner of it. Every filter is optional and they AND together, and a " \
               "filter value this board cannot serve is refused 400 naming what it will accept, never " \

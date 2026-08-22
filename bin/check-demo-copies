@@ -16,7 +16,7 @@
 # edit that lands in one copy and not the others is exactly as undetectable, and
 # the next one may be executable rather than a comment. `script/equihash_register.rb`
 # is the proof that it need not be a comment — a constant rename reached three of
-# its five copies (dbeeb97) and stopped there, unnoticed, until this check was
+# its five copies (057196e) and stopped there, unnoticed, until this check was
 # written.
 #
 # So this is a CHECK, not a convention: it derives every relative path that

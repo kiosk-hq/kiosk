@@ -606,7 +606,7 @@ RSpec.describe "demo descriptor cross-references" do
   # the prose door. It is the narrow half: `params:` is a SHAPE, and the habit
   # ADR-0023 actually forbids is stating a NAME the schema already states — with
   # or without the word "params". Six of the seven demos wrote it both ways at
-  # `bc49a86`: "pass it to cancel_booking as `booking_id`" routes a name across
+  # `46487fc`: "pass it to cancel_booking as `booking_id`" routes a name across
   # verbs, "delivery_slot_id and delivery_address are REQUIRED" restates the
   # verb's own — 16 of the first shape and ~15 of the second, and the lint was
   # blind to every one.

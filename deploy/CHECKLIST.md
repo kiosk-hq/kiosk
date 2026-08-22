@@ -100,6 +100,21 @@ For EACH of the 7 apps:
       dev/test, add the variable HERE and in `.github/workflows/ci.yml` in the same commit** — these two are one gate
       written twice, and this copy is the one a human types.
 - [ ] `bundle install` · `RAILS_ENV=production bin/rails assets:precompile db:prepare` · `bin/rails demo:setup` (seed).
+- [ ] ⚠ **hoteling only, and ONLY on a database that already holds bookings (K-690/K-718):**
+      `20260813000001_add_booking_overlap_guard` adds an EXCLUDE constraint, and Postgres validates it
+      against existing rows — so it **refuses to apply** while any two live bookings overlap, and the
+      deploy stops there with a constraint error. A fresh box and every `demo:setup` (which rebuilds
+      from `db/structure.sql`) are unaffected. Find the offenders BEFORE deploying, with the
+      constraint's own predicate:
+      ```sql
+      SELECT a.id, b.id, a.room_type_id, a.check_in, a.check_out, b.check_in, b.check_out
+      FROM bookings a JOIN bookings b
+        ON a.room_type_id = b.room_type_id AND a.id < b.id
+       AND daterange(a.check_in, a.check_out) && daterange(b.check_in, b.check_out)
+      WHERE a.status IN ('reserved','confirmed') AND b.status IN ('reserved','confirmed');
+      ```
+      Remedy: cancel or delete one of each overlapping pair (they are demo bookings), then re-run the
+      migration. Do NOT weaken the constraint — selling one room-night twice is the bug it exists to stop.
 - [ ] Enable the systemd unit: `systemctl enable --now kiosk-demo@<app>` (per `deploy/kiosk-demo@.service`, binds 127.0.0.1:<port>).
 
 ## 6. Front with Caddy (auto-TLS)

@@ -73,8 +73,10 @@ universal agent skill is `skill.md` on the same site.
   `__dir__`-relative path resolves inside the package. Adding an asset a gem
   reads at runtime means adding it to `spec.files`.
 - Version parity is a build gate, not prose. The spec (§14.1) binds the
-  protocol, this implementation and the skill to one MAJOR.MINOR — currently
-  0.3 — so `bin/check-version-parity` (its own CI job) asserts every gemspec
+  protocol, this implementation and the skill to one MAJOR.MINOR — read it from
+  `kiosk-core/lib/kiosk/protocol.rb`'s `API_VERSION`, or from the guard's own
+  first line of output, never from this sentence (it was a MINOR stale for the
+  whole of 0.4, K-932) — so `bin/check-version-parity` (its own CI job) asserts every gemspec
   version, every `kiosk-*` inter-gem constraint (`~> <series>.0`) and every
   pinned `skill_url`'s version share that series with
   `Kiosk::Protocol::API_VERSION`. PATCH stays free per gem and per skill cut.

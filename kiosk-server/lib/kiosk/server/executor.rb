@@ -599,11 +599,15 @@ module Kiosk
       end
 
       # True when `error` is a DB unique-constraint violation. Matched by class
-      # NAME, not constant: kiosk-server declares no activerecord/pg dependency
-      # (the host Rails app provides them at call time), so naming
+      # NAME, not constant: this file must not force either constant to LOAD.
+      # `PG` is not a runtime dependency at all (the host app brings the
+      # adapter), and while the gemspec does declare `activerecord`, the gem's
+      # own fast unit env does not require it — so naming
       # ActiveRecord::RecordNotUnique / PG::UniqueViolation directly would raise
-      # NameError in the gem's own unit env. A standard optional-dependency
-      # pattern.
+      # NameError there. A standard optional-dependency pattern. (The earlier
+      # wording claimed kiosk-server declares no activerecord dependency, which
+      # stopped being true when the undeclared-Rails-dependency fix added it —
+      # K-784.)
       def unique_violation?(error)
         %w[ActiveRecord::RecordNotUnique PG::UniqueViolation].include?(error.class.name)
       end

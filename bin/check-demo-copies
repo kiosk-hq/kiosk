@@ -605,11 +605,22 @@ COPIES = {
 # alone differs. Where a reason below says "prove differs", that is what it means.
 SKELETON_NOT_COMPARED = {
   "config/environments/development.rb" =>
-    "Per-demo by construction: atablefor, getgrocery, hoteling and skooti each append their own " \
-    "/etc/hosts domain for `rake demo` (config.hosts << \"<app>.app\", each on its own dev port), " \
-    "philslist/stylish/tudu have no such domain and so no block at all, and prove differs. " \
-    "Every variant is explained by that. Verified at K-629, where the one true drift was found and " \
-    "fixed: hoteling's comment named skooti's host and port.",
+    "NOT compared, and the reason is NOT that the file is trivially per-demo — it is not (K-674/K-720). " \
+    "Two things live here. (1) The HostAuthorization line: atablefor, getgrocery, hoteling and skooti " \
+    "each append their own served domain for `rake demo` (config.hosts << \"<app>.demo.kiosk.tech\", " \
+    "each on its own dev port — the domains are the REAL ones since K-695, not the invented `<app>.app` " \
+    "this entry claimed until K-720), philslist/stylish/tudu have no such domain and so no such line, " \
+    "and prove uses kyc.demo.kiosk.tech. (2) Since K-650 every operator demo also carries a SUBSTANTIVE " \
+    "hand-written kiosk block here — the ephemeral dev signing-key self-provision and the " \
+    "Rails.configuration.x.kiosk.* defaults — which is security-relevant and is deliberately kept " \
+    "TEXTUALLY IDENTICAL across the demos, as each copy's own comment says. Measured at K-674 and " \
+    "again 2026-08-22: philslist, stylish and tudu are byte-identical to each other (one md5 across " \
+    "the three), so \"per-demo by construction\" was false for three of seven. WHAT THIS EXCLUSION " \
+    "COSTS, stated rather than implied: drift in the K-650 block is caught by review, not by this " \
+    "check. Fixing that means a partial-compare rule (compare the file modulo the hosts line), which " \
+    "is the option K-792 declined to add for app/operations/operation_result.rb — so it stays a " \
+    "recorded, priced exclusion. Verified at K-629, where the one true drift was found and fixed: " \
+    "hoteling's comment named skooti's host and port.",
   "config/application.rb" => "Per-demo: the module name IS the demo name.",
   "config/boot.rb" => "Rails generator output, four lines, identical in all eight.",
   "config/environment.rb" => "Rails generator output, five lines, identical in all eight.",

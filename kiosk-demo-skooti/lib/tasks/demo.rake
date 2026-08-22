@@ -716,6 +716,10 @@ namespace :demo do
       BLOCKED  MethodMismatch        — a GET at an action's path (and a POST at a
                                        query's) is 405 method_not_allowed with Allow,
                                        never a silent 404
+      BLOCKED  HostileArgShapes      — boolean/array/object/number on scooter_code,
+                                       reservation_id and request_id → typed 400 (or,
+                                       for an unknown id on a query, 404 not_found),
+                                       never a 500 (K-773)
 
     Exits 0 when all scenarios are BLOCKED; exits 1 on any BREACH.
     A BREACH = a real hole in skooti — fix the app, not the scenario.

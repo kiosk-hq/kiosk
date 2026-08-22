@@ -1142,6 +1142,9 @@ namespace :demo do
       BLOCKED  InflatedTotalCart      — total above the sum of the lines rejected
       BLOCKED  MalformedItemsCart     — a non-array (or non-object-element) `items` is a
                                         typed 400, never a 500 (K-693)
+      BLOCKED  HostileArgShapes       — boolean/array/object/junk on delivery_slot_id,
+                                        delivery_date, delivery_address and order_id →
+                                        typed 400, never a 500 (K-773)
       BLOCKED  RetiredWire            — POST /kiosk/query and POST /kiosk/run answer an
                                         ordinary 404 not_found: the 0.3 pair was DELETED
                                         (T-074 = A), leaving no second conformance surface

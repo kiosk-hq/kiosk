@@ -25,12 +25,12 @@
 # survives a deletion, or lies about a resource that exists, is an attack
 # surface.
 #
-# Scenarios (17 BLOCKED, 3 SKIPPED):
+# Scenarios (18 BLOCKED, 3 SKIPPED):
 #   BLOCKED : CrossTenantRead, ForgedUserId, UnpaidGatedAction, SpentResourceReuse,
 #             PayForOtherUseSelf, MandatePrincipalSwap, MandateReplay, TokenTampering,
 #             PrivilegeSelfSelection, WrongCurrencyCart, TamperedPriceCart,
-#             InflatedTotalCart, MalformedItemsCart, RetiredWire, MethodMismatch,
-#             PastDeliveryDate, RegistrationWithoutPow
+#             InflatedTotalCart, MalformedItemsCart, HostileArgShapes, RetiredWire,
+#             MethodMismatch, PastDeliveryDate, RegistrationWithoutPow
 #   SKIPPED : MissingKyc, ExpiredKyc, ForgedKyc (no KYC)
 #
 # Usage:
@@ -337,6 +337,129 @@ class MalformedItemsCart < Kiosk::Redteam::Scenario
   end
 end
 
+# K-773 — THE STANDING HOSTILE-SHAPE BEAT.
+#
+# K-773 is the finding that Postgres used to do free shape-checking on wire
+# arguments and ActiveRecord does not. getgrocery is the demo where it measured
+# POSITIVE-PLUS-ONE: `order_id` was interpolated into a `::uuid` cast (class
+# one, closed by {UuidCheck}), and `delivery_slot_id` / `qty` were read with a
+# bare `.to_i` that `true`, `false`, an Array and an object all answer with
+# NoMethodError — a `500 action_failed` for an argument the published
+# `input_schema` already declares an integer (class two, closed by reading
+# through `.to_s` first). The row's own bar for closing was that those hostile
+# shapes be re-sent AS A STANDING BEAT rather than from the migration's
+# throwaway harness, and this is that beat. {MalformedItemsCart} already stands
+# for the `items` half (K-693); this one takes the arguments it does not.
+#
+# WHICH LAYER ANSWERS WHAT, measured rather than assumed. `delivery_slot_id`
+# declares `type: "integer", minimum: 1, maximum: 6` and `order_id` declares
+# `format: "uuid"`, so 0.4's `input_schema` validation refuses those shapes
+# BEFORE the handler — for them this beat pins the CONTRACT (typed 400, no 5xx,
+# no wrong answer served as 200) across both layers and goes red if either
+# stops holding, e.g. if a descriptor widened the type or dropped
+# `additionalProperties: false`.
+#
+# `delivery_date` AND `delivery_address` ARE DIFFERENT, and they are why this
+# beat is not merely a schema test: both are declared as a bare
+# `type: "string"`, because neither domain is expressible in JSON Schema — the
+# delivery horizon rolls forward every midnight and the served zone is a list of
+# Dublin districts. Every string reaches getgrocery's OWN guards, so
+# `delivery_date: "nope"` is refused by {WireArguments.delivery_date} and an
+# out-of-zone address by {WireArguments.served_zone}, and nothing but those
+# guards stands behind either.
+class HostileArgShapes < Kiosk::Redteam::Scenario
+  ADDRESS = "2 Redteam Row, Dublin 2"
+
+  # An error body must never carry the runtime's or the database's own
+  # vocabulary: that is the same property {MalformedItemsCart} asserts, and
+  # these probes are the ones most likely to reach a cast.
+  LEAKS = ["NoMethodError", "TypeError", "undefined method", "no implicit conversion",
+           "::uuid", "PG::", "22P02", "invalid input syntax", "ActiveRecord::"].freeze
+
+  # The five families the row names.
+  SHAPES = [true, false, [], {}, [1], { "a" => 1 }, "abc", 1.5].freeze
+
+  def initialize
+    super(
+      name:        "HostileArgShapes",
+      category:    "input",
+      description: "Boolean/array/object/junk arguments on delivery_slot_id, delivery_date, delivery_address and order_id are a typed 400 — never a 500",
+    )
+  end
+
+  def call(client, profile)
+    a         = register_principal(client, name: "redteam-shapes-a", profile:)
+    @failures = []
+    catalog   = client.query(a, name: "catalog").body
+    raise "redteam(getgrocery): empty catalog" unless catalog.is_a?(Array) && catalog.any?
+
+    good_items = [{ sku: catalog.first["sku"], qty: 1 }]
+
+    # ── schema-declared integers and uuids ──────────────────────────────────
+    SHAPES.each do |v|
+      refused "create_order delivery_slot_id=#{v.inspect}",
+              client.run(a, name: "create_order", items: good_items,
+                            delivery_slot_id: v, delivery_address: ADDRESS)
+      refused "reschedule_delivery order_id=#{v.inspect}",
+              client.run(a, name: "reschedule_delivery", order_id: v, delivery_slot_id: 1)
+    end
+    # Out of the declared 1..6 range — the same refusal, from the schema's
+    # `minimum`/`maximum` rather than its `type`.
+    [0, -1, 7, 999].each do |v|
+      refused "create_order delivery_slot_id=#{v.inspect}",
+              client.run(a, name: "create_order", items: good_items,
+                            delivery_slot_id: v, delivery_address: ADDRESS)
+    end
+
+    # ── the two bare strings, where getgrocery's OWN guards are the only
+    # thing standing (see the header) ───────────────────────────────────────
+    # NOT probed: `"[2026-09-01]"` and `"20260101"`. getgrocery's guard uses
+    # `Date.parse` and NOT hoteling's stricter `Date.iso8601` deliberately —
+    # `wire_arguments.rb` records that this verb pair has always scanned a date
+    # out of a loose string, so accepting them is PUBLISHED behaviour and a
+    # probe demanding a 400 would be asserting against the demo's own contract.
+    # Measured, not assumed: `"[2026-09-01]"` answers 200 today.
+    ["nope", "2026-13-45", "0000-01-01", "true"].each do |v|
+      refused "create_order delivery_date=#{v.inspect}",
+              client.run(a, name: "create_order", items: good_items, delivery_slot_id: 1,
+                            delivery_address: ADDRESS, delivery_date: v)
+    end
+    ["", "   ", "1 Main St, Cork", "Dublin 99", "somewhere"].each do |v|
+      refused "create_order delivery_address=#{v.inspect}",
+              client.run(a, name: "create_order", items: good_items,
+                            delivery_slot_id: 1, delivery_address: v)
+    end
+
+    # ── CONTROL ─────────────────────────────────────────────────────────────
+    #
+    # Without it every assertion above could pass vacuously on an origin that
+    # refuses EVERYTHING. A well-formed order must still be placed.
+    control = client.run(a, name: "create_order", items: good_items,
+                            delivery_slot_id: 1, delivery_address: ADDRESS)
+    unless control.status == 200
+      @failures << "CONTROL well-formed create_order → HTTP #{control.status} " \
+                   "#{control.body.inspect[0, 90]} (want 200; the probes above prove nothing " \
+                   "on an origin that refuses everything)"
+    end
+
+    Kiosk::Redteam::Verdict.new(
+      blocked: @failures.empty?, skipped: false, status: 400,
+      detail:  @failures.join(" | "),
+    )
+  end
+
+  private
+
+  def refused(label, resp)
+    doc  = resp.body.is_a?(Hash) ? resp.body : {}
+    leak = LEAKS.find { |needle| JSON.generate(resp.body).include?(needle) }
+    return if resp.status == 400 && doc["code"] == "bad_request" && leak.nil?
+
+    @failures << "#{label} → HTTP #{resp.status} code=#{doc["code"].inspect}" \
+                 "#{leak ? " LEAKS #{leak.inspect}" : ""}"
+  end
+end
+
 # ── The cut itself: two scenarios only expressible after 0.4 ─────────────────
 #
 # Both dial raw paths, so they use Net::HTTP directly rather than the Client's
@@ -496,6 +619,7 @@ scenarios = [
   TamperedPriceCart.new,
   InflatedTotalCart.new,
   MalformedItemsCart.new,   # K-693 — a mis-shaped `items` is a typed 400, never a 500
+  HostileArgShapes.new,     # K-773 — boolean/array/object/junk shapes on the other args → typed 400
   RetiredWire.new,          # T-074 = A — the 0.3 pair is deleted, not tombstoned
   MethodMismatch.new,       # 0.4 — a GET at an action is 405, never a silent 404
   PastDeliveryDate.new,     # T-090 — a past date is a named 400, not an ambiguous 200 []

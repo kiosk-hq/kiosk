@@ -441,6 +441,111 @@ end
 # seven of them, plus the two 0.4-cutover beats (RetiredWire, MethodMismatch).
 # RegistrationWithoutPow: pow_difficulty>0 (Equihash gate on) → always applicable.
 
+# K-773 — THE STANDING HOSTILE-SHAPE BEAT.
+#
+# K-773 is the finding that Postgres used to do free shape-checking on wire
+# arguments and ActiveRecord does not — and skooti is the demo where it measured
+# NEGATIVE: its only cast argument, `reservation_id`, was ALREADY uuid-guarded
+# before the conversion (K-581/K-582's {UuidCheck}, which {MalformedUuidArg}
+# stands for), and its other two wire strings — `scooter_code`, `request_id` —
+# were quoted values with no Postgres cast at all, so nothing was ever doing
+# free type-checking on them. That negative is why this beat is SHORT and why it
+# exists anyway: the row asked for the probes to run against ALL THREE converted
+# demos as a standing beat, and "we reasoned there is no exposure here" is
+# exactly the kind of claim that stops being true without anyone noticing.
+#
+# WHAT IT ADDS OVER {MalformedUuidArg}, which is the beat next door: that one
+# sends malformed uuid STRINGS. This one sends the JSON types a string argument
+# can also arrive as — `true`, an Array, an object, a number, null — on every
+# argument skooti takes, including the two that never had a cast behind them.
+# Those are refused by `input_schema` (`type: "string"`) at head, so the beat
+# pins the CONTRACT across both layers and goes red if a descriptor widens.
+#
+# ONE PROBE REACHES SKOOTI'S OWN CODE: an unknown `scooter_code` is a typed 400
+# from {ReserveOperation}, not a 404 and not a crash — the vehicle handle is a
+# bare `type: "string"` in the descriptor, so every string gets that far.
+class HostileArgShapes < Kiosk::Redteam::Scenario
+  LEAKS = ["::uuid", "PG::", "22P02", "invalid input syntax", "NoMethodError",
+           "TypeError", "undefined method", "ActiveRecord::"].freeze
+
+  # The five families the row names, as a string argument can carry them.
+  SHAPES = [true, false, [], {}, ["SK-001"], { "code" => "SK-001" }, 1, 1.5].freeze
+
+  def initialize
+    super(
+      name:        "HostileArgShapes",
+      category:    "input",
+      description: "Boolean/array/object/number arguments on scooter_code, reservation_id and request_id are a typed 400 — never a 500",
+    )
+  end
+
+  def call(client, profile)
+    a         = register_principal(client, name: "redteam-shapes-a", profile:)
+    @failures = []
+
+    SHAPES.each do |v|
+      refused "reserve scooter_code=#{v.inspect}",
+              client.run(a, name: "reserve", scooter_code: v)
+      refused "start_rental reservation_id=#{v.inspect}",
+              client.run(a, name: "start_rental", reservation_id: v)
+      refused "rent_motorcycle reservation_id=#{v.inspect}",
+              client.run(a, name: "rent_motorcycle", reservation_id: v)
+      # kyc_status is a QUERY, so the wire flattens every one of these to a
+      # STRING before any code sees it — `true` arrives as "true". The honest
+      # assertion is therefore the pair of answers a well-formed-but-unknown
+      # request id may get (a shape 400 or spec §9.1's `404 not_found`), never
+      # a 5xx and never someone else's status served as a 200.
+      absent_or_refused "kyc_status request_id=#{v.inspect}",
+                        client.query(a, name: "kyc_status", request_id: v)
+    end
+
+    # The one that reaches ReserveOperation: a well-typed but unknown handle.
+    refused "reserve scooter_code=\"NO-SUCH-VEHICLE\"",
+            client.run(a, name: "reserve", scooter_code: "NO-SUCH-VEHICLE")
+
+    # ── CONTROL ─────────────────────────────────────────────────────────────
+    #
+    # Without it every assertion above could pass vacuously on an origin that
+    # refuses EVERYTHING. A real vehicle code must still reserve.
+    fleet = client.query(a, name: "scooters_available").body
+    raise "redteam(skooti): empty fleet" unless fleet.is_a?(Array) && fleet.any?
+
+    control = client.run(a, name: "reserve", scooter_code: fleet.first["code"])
+    unless control.status == 200
+      @failures << "CONTROL well-formed reserve → HTTP #{control.status} " \
+                   "#{control.body.inspect[0, 90]} (want 200; the probes above prove nothing " \
+                   "on an origin that refuses everything)"
+    end
+
+    Kiosk::Redteam::Verdict.new(
+      blocked: @failures.empty?, skipped: false, status: 400,
+      detail:  @failures.join(" | "),
+    )
+  end
+
+  private
+
+  def refused(label, resp)
+    doc  = resp.body.is_a?(Hash) ? resp.body : {}
+    leak = LEAKS.find { |needle| JSON.generate(resp.body).include?(needle) }
+    return if resp.status == 400 && doc["code"] == "bad_request" && leak.nil?
+
+    @failures << "#{label} → HTTP #{resp.status} code=#{doc["code"].inspect}" \
+                 "#{leak ? " LEAKS #{leak.inspect}" : ""}"
+  end
+
+  def absent_or_refused(label, resp)
+    doc  = resp.body.is_a?(Hash) ? resp.body : {}
+    leak = LEAKS.find { |needle| JSON.generate(resp.body).include?(needle) }
+    ok   = (resp.status == 400 && doc["code"] == "bad_request") ||
+           (resp.status == 404 && doc["code"] == "not_found")
+    return if ok && leak.nil?
+
+    @failures << "#{label} → HTTP #{resp.status} code=#{doc["code"].inspect}" \
+                 "#{leak ? " LEAKS #{leak.inspect}" : ""} (want 400/bad_request or 404/not_found)"
+  end
+end
+
 scenarios = [
   Kiosk::Redteam::Scenarios::PayForOtherUseSelf.new,     # C2 — headline
   Kiosk::Redteam::Scenarios::SpentResourceReuse.new,     # C3
@@ -466,6 +571,7 @@ scenarios = [
   TamperedPriceCart.new,                                 # cashier check — below quote
   InflatedTotalCart.new,                                 # cashier check — total ≠ line sum
   MalformedUuidArg.new,                                  # K-581/K-582 — junk uuid → typed 400, no 500
+  HostileArgShapes.new,                                  # K-773 — boolean/array/object/number shapes → typed 400
 ]
 
 # ── Expected-applicable assertion ─────────────────────────────────────────────

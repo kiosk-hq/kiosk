@@ -15,6 +15,9 @@
 # Plus one input-shape beat and one inventory beat:
 #   MalformedUuidArg   — a junk booking_id, as an arg AND inside a signed cart,
 #                        is a typed 400 with no SQL internals — never a 500
+#   HostileArgShapes   — every hostile SHAPE (boolean, array, object, junk
+#                        integer, unparseable and out-of-horizon date) on the
+#                        integer and date arguments is a typed 400 too (K-773)
 #   DoubleBookedRoom   — a room-night already held cannot be reserved again by
 #                        anyone, on the same or overlapping dates → 409
 #
@@ -537,6 +540,169 @@ module RawWire
   end
 end
 
+# K-773 — THE STANDING HOSTILE-SHAPE BEAT.
+#
+# K-773 is the finding that Postgres used to do free shape-checking on wire
+# arguments and ActiveRecord does not: `property_id`/`check_in`/`check_out` were
+# interpolated into `::integer`/`::date` casts, so junk RAISED and the handler
+# turned it into a typed refusal, while `where(property_id: "abc")` silently
+# CASTS to `= 0` and `where(property_id: true)` to `= 1` — a wrong answer
+# delivered as success. The guards in `app/operations/wire_arguments.rb` are the
+# fix. The row's own bar for closing was that the hostile shapes be re-sent AS A
+# STANDING BEAT rather than from the migration's throwaway harness, and this is
+# that beat.
+#
+# WHICH LAYER ANSWERS THESE TODAY, measured rather than assumed, because it
+# changes what the beat is worth. Every SHAPE probe below is currently refused
+# by the ENGINE — `input_schema` declares `property_id` an integer and `check_in`
+# a `format: "date"` string, and 0.4 validates both on every call, so a boolean,
+# an array, an object or `"abc"` never reaches the handler at all. So this beat
+# does NOT prove hoteling's own guards fire; it pins the CONTRACT an assistant
+# depends on (a typed 400, no 5xx, no wrong answer served as a 200) across both
+# layers, and it goes red if either one stops holding — an engine that stops
+# validating, or a descriptor that widens a type or drops
+# `additionalProperties: false`.
+#
+# TWO PROBES DO REACH HOTELING'S OWN CODE, and they are here for exactly that
+# reason:
+#   • an unknown `property_id` is `404 not_found` and NOT `200 []` (T-090,
+#     {WireArguments.existing_property}) — the empty list would assert the hotel
+#     exists and merely has no rooms;
+#   • a stay nobody can price is a typed 400 and not a crash (K-968) — found BY
+#     this beat while it was being written: `check_in: "0000-01-01"` is a
+#     well-formed date the schema accepts, and the 739,000-night stay it asks
+#     for overflowed `bookings.total_cents` (a 4-byte integer) with
+#     `ActiveModel::RangeError`, which the wire answered `500 action_failed`.
+class HostileArgShapes < Kiosk::Redteam::Scenario
+  include RawWire
+
+  # An error body must never carry the database's own vocabulary — that is the
+  # K-581/K-582 property, re-asserted here because these probes are the ones
+  # most likely to reach a cast.
+  LEAKS = ["::uuid", "::integer", "::date", "PG::", "22P02", "invalid input syntax",
+           "ActiveRecord::", "ActiveModel::", "RangeError"].freeze
+
+  # Far enough out that nothing here competes with the shared inventory the
+  # other beats draw on — deliberately clear of DoubleBookedRoom's +60..+66
+  # window. Nothing below is expected to succeed, so nothing is consumed either.
+  PROBE_IN  = (Date.today + 80).to_s.freeze
+  PROBE_OUT = (Date.today + 83).to_s.freeze
+
+  # The five families the row names, per argument type.
+  INT_SHAPES  = [true, false, [], {}, [1], { "a" => 1 }, "abc", nil, 1.5, "0x10"].freeze
+  DATE_SHAPES = [true, [], {}, nil, 20260901, "nope", "", "2026-02-30", "09/01/2026",
+                 "2026-09-01'; --", ["2026-09-01"]].freeze
+
+  def initialize
+    super(
+      name:        "HostileArgShapes",
+      category:    "input",
+      description: "Boolean/array/object/junk-integer/unparseable-date arguments are a typed 400 — never a 500, never a wrong answer served as 200",
+    )
+  end
+
+  def call(client, profile)
+    a         = register_principal(client, name: "redteam-shapes", profile:)
+    @failures = []
+    prop, room = live_pair(client, a)
+
+    # ── the ACTION path: real JSON types ────────────────────────────────────
+    INT_SHAPES.each do |v|
+      refused "reserve_room property_id=#{v.inspect}",
+              client.run(a, name: "reserve_room", property_id: v, room_type_id: room,
+                            check_in: PROBE_IN, check_out: PROBE_OUT)
+      refused "reserve_room room_type_id=#{v.inspect}",
+              client.run(a, name: "reserve_room", property_id: prop, room_type_id: v,
+                            check_in: PROBE_IN, check_out: PROBE_OUT)
+    end
+    DATE_SHAPES.each do |v|
+      refused "reserve_room check_in=#{v.inspect}",
+              client.run(a, name: "reserve_room", property_id: prop, room_type_id: room,
+                            check_in: v, check_out: PROBE_OUT)
+    end
+
+    # ── the QUERY path: everything is a string on the wire, so the hostile
+    # shapes an assistant can still express are junk scalars and the two
+    # BRACKET spellings that decode to an Array and a Hash. ─────────────────
+    %w[abc true 0x10].each do |v|
+      refused "availability property_id=#{v.inspect}",
+              client.query(a, name: "availability", property_id: v,
+                              check_in: PROBE_IN, check_out: PROBE_OUT)
+    end
+    ["nope", "", "2026-09-01'; --"].each do |v|
+      refused "availability check_in=#{v.inspect}",
+              client.query(a, name: "availability", property_id: prop,
+                              check_in: v, check_out: PROBE_OUT)
+    end
+    ["check_in%5B%5D", "check_in%5Bx%5D"].each do |bracket|
+      res, doc = raw(a, :get,
+                     "/kiosk/availability?property_id=#{prop}&check_out=#{PROBE_OUT}&#{bracket}=#{PROBE_IN}")
+      note "availability #{bracket}", res.code.to_i, doc
+    end
+
+    # ── the two that reach hoteling's OWN guards ────────────────────────────
+    unknown = client.query(a, name: "availability", property_id: 999_999,
+                              check_in: PROBE_IN, check_out: PROBE_OUT)
+    unless unknown.status == 404 && body_code(unknown) == "not_found"
+      @failures << "T-090 unknown property_id → HTTP #{unknown.status} " \
+                   "code=#{body_code(unknown).inspect} (want 404/not_found; a 200 [] would " \
+                   "assert the hotel exists and merely has no rooms)"
+    end
+
+    refused "reserve_room check_in=\"0000-01-01\" (unpriceable stay, K-968)",
+            client.run(a, name: "reserve_room", property_id: prop, room_type_id: room,
+                          check_in: "0000-01-01", check_out: PROBE_OUT)
+
+    # ── CONTROL ─────────────────────────────────────────────────────────────
+    #
+    # Without it every assertion above could pass vacuously on an origin that
+    # refuses EVERYTHING — a broken bearer, a wrong verb name, a dead handler.
+    # A well-formed call must still answer 200 with a list.
+    control = client.query(a, name: "availability", property_id: prop,
+                              check_in: PROBE_IN, check_out: PROBE_OUT)
+    unless control.status == 200 && control.body.is_a?(Array)
+      @failures << "CONTROL well-formed availability → HTTP #{control.status} " \
+                   "#{control.body.inspect[0, 80]} (want 200 + an array; the shape probes above " \
+                   "prove nothing on an origin that refuses everything)"
+    end
+
+    Kiosk::Redteam::Verdict.new(
+      blocked: @failures.empty?, skipped: false, status: 400,
+      detail:  @failures.join(" | "),
+    )
+  end
+
+  private
+
+  # A property/room-type pair that really exists, so the ONLY thing wrong with
+  # each probe is the shape under test.
+  def live_pair(client, principal)
+    props = client.query(principal, name: "properties").body
+    raise "redteam(hoteling): no properties" unless props.is_a?(Array) && props.any?
+
+    props.each do |p|
+      rows = client.query(principal, name: "availability", property_id: p["property_id"],
+                                     check_in: PROBE_IN, check_out: PROBE_OUT).body
+      return [p["property_id"], rows.first["room_type_id"]] if rows.is_a?(Array) && rows.any?
+    end
+    raise "redteam(hoteling): no availability for #{PROBE_IN}..#{PROBE_OUT}"
+  end
+
+  def body_code(resp) = resp.body.is_a?(Hash) ? resp.body["code"] : nil
+
+  def refused(label, resp)
+    note(label, resp.status, resp.body.is_a?(Hash) ? resp.body : {})
+  end
+
+  def note(label, status, doc)
+    leak = LEAKS.find { |needle| JSON.generate(doc).include?(needle) }
+    return if status == 400 && doc["code"] == "bad_request" && leak.nil?
+
+    @failures << "#{label} → HTTP #{status} code=#{doc["code"].inspect}" \
+                 "#{leak ? " LEAKS #{leak.inspect}" : ""}"
+  end
+end
+
 # The 0.3 multiplexed pair was DELETED, not tombstoned (T-074 = A). `POST
 # /kiosk/query` now reaches the per-verb controller as a verb literally named
 # "query", which nobody registered, so it answers the ordinary 404 — no
@@ -639,6 +805,7 @@ scenarios = [
   TamperedPriceCart.new,                                  # cashier check — below quote
   InflatedTotalCart.new,                                  # cashier check — total ≠ line sum
   MalformedUuidArg.new,                                   # K-581/K-582 — junk uuid → typed 400, no 500
+  HostileArgShapes.new,                                   # K-773 — boolean/array/object/date shapes → typed 400
   DoubleBookedRoom.new,                                   # K-690 — one room-night, one booking
   RetiredWire.new,                                        # T-074 = A — the 0.3 pair is 404, not a shim
   MethodMismatch.new,                                     # 0.4 — wrong method is 405 + Allow, not 404

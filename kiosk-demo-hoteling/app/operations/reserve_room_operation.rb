@@ -60,6 +60,11 @@ class ReserveRoomOperation
     nights      = (co - ci).to_i
     total_cents = nights * nightly_price_cents
 
+    # A stay whose price does not fit the column is refused here, before the
+    # transaction, rather than crashing on INSERT (K-968).
+    refusal = WireArguments.priceable_total(total_cents, nights)
+    return refusal if refusal
+
     # This `transaction` JOINS the one Kiosk::Server::SessionContext already
     # opened around the whole wire request (the GUCs are SET LOCAL in it), so it
     # opens no second transaction and a `return` out of it is an ordinary method

@@ -123,6 +123,37 @@ module WireArguments
     )
   end
 
+  # ── K-968: A STAY NOBODY CAN PRICE IS A 400, NOT A 500 ──────────────────
+  #
+  # Found by K-773's standing hostile-shape probes on the day they were built,
+  # which is the point of having them. `check_in: "0000-01-01"` is a perfectly
+  # well-formed ISO date — `format: "date"` accepts it, {#stay_dates} parses it,
+  # `check_out > check_in` holds — and the 739,000-night stay it asks for prices
+  # at 5,922,168,000 cents. `bookings.total_cents` is a 4-byte `integer`, so the
+  # insert raised `ActiveModel::RangeError` and the wire answered
+  # `500 action_failed`: a crash, for an argument a client simply got wrong.
+  #
+  # THE BOUND IS THE COLUMN'S, NOT A POLICY. This deliberately does not invent a
+  # booking horizon — how far ahead this operator sells, and for how long, is a
+  # product decision nobody has taken and this guard has no business taking. It
+  # refuses exactly what cannot be REPRESENTED, so every stay that used to work
+  # still works and only the ones that used to crash are refused.
+  #
+  # @return [OperationResult, nil] a refusal, or nil when the total fits
+  MAX_TOTAL_CENTS = 2_147_483_647 # PostgreSQL `integer`
+
+  def priceable_total(total_cents, nights)
+    return nil if total_cents <= MAX_TOTAL_CENTS
+
+    OperationResult.refused(
+      code:    "bad_request",
+      message: "a #{nights}-night stay totals #{total_cents} cents, more than this operator can " \
+               "book in one reservation (max #{MAX_TOTAL_CENTS})",
+      hint:    "book a shorter stay — check_in and check_out are the first night and the " \
+               "checkout day, so their distance is the number of nights charged.",
+    )
+  end
+
   # The sentence the raw handlers raised for an absent argument, unchanged. An
   # argument that is PRESENT but null or empty now lands here too: it used to
   # reach Postgres as `''::integer` / `''::date` and come back a 500.

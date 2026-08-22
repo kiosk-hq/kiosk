@@ -459,6 +459,10 @@ namespace :demo do
       BLOCKED  TamperedPriceCart     — below-quote total refused at capture
       BLOCKED  InflatedTotalCart     — total above the line-item sum refused at capture
       BLOCKED  MalformedUuidArg      — junk booking_id → typed 400, no SQL internals, never a 500
+      BLOCKED  HostileArgShapes      — every hostile SHAPE on the integer and date arguments
+                                       (boolean, array, object, junk integer, unparseable
+                                       and out-of-horizon date) → typed 400, never a 500
+                                       and never a wrong answer served as 200 (K-773)
       BLOCKED  DoubleBookedRoom      — a held room-night cannot be re-reserved → 409
       BLOCKED  RetiredWire           — POST /kiosk/query and /kiosk/run are an ordinary 404
                                        (the 0.3 pair was DELETED, not shimmed — T-074 = A)

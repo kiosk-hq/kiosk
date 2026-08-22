@@ -148,8 +148,6 @@ class ValidatingRentalProvider
       )
     end
 
-    conn = ActiveRecord::Base.connection
-
     # CLAIM: unpaid → paying, race-free compare-and-set (K-853). Winning this
     # UPDATE is what serializes concurrent /pay for one reservation — only one
     # caller can flip 'unpaid' — and it is taken BEFORE the cashier check and
@@ -161,19 +159,22 @@ class ValidatingRentalProvider
     #
     # RAW SQL, deliberately: the ATOMICITY is the fix, `update_all` has no
     # RETURNING in Rails 8.1, and an ActiveRecord spelling would be a SELECT then
-    # an UPDATE — which is the race back again. Nothing interpolated is
-    # caller-controlled: the reservation id is through {UuidCheck}, the payer
-    # comes off the SIGNED mandate, and the statuses are literals.
-    claimed = conn.execute(
+    # an UPDATE — which is the race back again. RAW, BUT NOT INTERPOLATED
+    # (K-654): every value is a `$N` bind, so the statement text carries no value
+    # at all and there is no `conn.quote` to forget when this file is copied.
+    # `$3::uuid` casts the bound text exactly as the quoted literal did.
+    claimed = Reservation.lease_connection.exec_query(
       "UPDATE public.reservations r " \
-      "SET payment_status = #{conn.quote(Reservation::PAYING)}, " \
-      "paid_by_user_id = #{conn.quote(cart.user_id.to_s)}::uuid, updated_at = now() " \
+      "SET payment_status = $1, " \
+      "paid_by_user_id = $2::uuid, updated_at = now() " \
       "FROM public.scooters s " \
-      "WHERE r.id = #{conn.quote(reservation_id)}::uuid " \
+      "WHERE r.id = $3::uuid " \
       "AND s.id = r.scooter_id " \
-      "AND r.payment_status = #{conn.quote(Reservation::UNPAID)} " \
-      "RETURNING s.price_per_min_cents"
-    ).first
+      "AND r.payment_status = $4 " \
+      "RETURNING s.price_per_min_cents",
+      "skooti reservation claim",
+      [Reservation::PAYING, cart.user_id.to_s, reservation_id, Reservation::UNPAID]
+    ).to_a.first
 
     if claimed.nil?
       # Distinguish "no such reservation" from "not in a payable state", so the
@@ -257,7 +258,7 @@ class ValidatingRentalProvider
   # released as if it were a charge.
   def release_claim!(reservation_id)
     set_payment_status(reservation_id, from: Reservation::PAYING, to: Reservation::UNPAID,
-                                       extra: "paid_by_user_id = NULL")
+                                       clear_payer: true)
   end
 
   def mark_paid!(reservation_id)
@@ -268,14 +269,28 @@ class ValidatingRentalProvider
     nil
   end
 
-  # @param extra [String, nil] a further frozen SET fragment — never a caller value
-  def set_payment_status(reservation_id, from:, to:, extra: nil)
-    conn = ActiveRecord::Base.connection
-    conn.execute(
-      "UPDATE public.reservations SET payment_status = #{conn.quote(to)}, " \
-      "#{extra ? "#{extra}, " : ""}updated_at = now() " \
-      "WHERE id = #{conn.quote(reservation_id.to_s)}::uuid AND payment_status = #{conn.quote(from)}"
-    )
+  # TWO WHOLE STATEMENTS, NOT ONE STATEMENT PLUS A FRAGMENT (K-654). This used
+  # to take an `extra:` SET fragment and splice it in, which meant no reader ever
+  # saw a complete statement and the file taught fragment-splicing as a
+  # technique. Written out, both are literal text with `$N` binds for every
+  # value, and the ONE difference between them — whether the payer is cleared —
+  # is a boolean at the call site rather than a string a caller could grow.
+  #
+  # @param clear_payer [Boolean] true when reverting a claim: nobody paid, so
+  #   leaving a payer id would make the rental verbs' payment gate read a
+  #   released claim as a charge.
+  def set_payment_status(reservation_id, from:, to:, clear_payer: false)
+    sql =
+      if clear_payer
+        "UPDATE public.reservations SET payment_status = $1, paid_by_user_id = NULL, " \
+        "updated_at = now() WHERE id = $2::uuid AND payment_status = $3"
+      else
+        "UPDATE public.reservations SET payment_status = $1, updated_at = now() " \
+        "WHERE id = $2::uuid AND payment_status = $3"
+      end
+
+    Reservation.lease_connection.exec_update(sql, "skooti reservation status flip",
+                                             [to, reservation_id.to_s, from])
   end
 
   def deny(message)

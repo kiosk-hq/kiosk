@@ -102,15 +102,25 @@ class ValidatingPaymentProvider
   # be a SELECT then an UPDATE and the race would be back. The release and the
   # paid-flip are that claim read backwards and belong beside it: splitting the
   # trio across two idioms would make the one place a reader must see all three
-  # together harder to read, not safer. None of them interpolates anything a
-  # caller controls — the order id is through {UuidCheck} and the statuses are
-  # literals.
+  # together harder to read, not safer.
+  #
+  # …AND WHY EVERY VALUE IN THEM IS NOW A BIND PARAMETER (K-654, second half).
+  # Keeping the statement raw was always the defensible half of that argument;
+  # keeping `conn.quote` was not. The three statements used to read
+  # `SET status = #{conn.quote(to)} … WHERE id = #{conn.quote(order_id)}::uuid`,
+  # which was SAFE — every value went through `quote` — and still wrong to ship,
+  # because a demo is the file a provider copies to build their own origin and
+  # the copy is where the forgotten `quote` lives. `$N` binds keep the atomic
+  # RETURNING statement exactly as it was while putting every value OUT of the
+  # SQL text, so there is no `quote` left to forget. It is the same move
+  # `kiosk-server`'s `executor.rb` made for the pay path, and
+  # `kiosk-test-support/spec/no_interpolated_sql_spec.rb` now fails if any demo
+  # splices a value back in.
   #
   # @param older_than_seconds [Integer] ignore claims young enough to be a pay
   #   that is legitimately still in flight.
   # @return [Hash] { healed: [order_id, …], unresolved: [{order_id:, claimed_at:, cart_mandate_ids:}, …] }
   def self.reconcile_stuck_paying!(older_than_seconds: 900)
-    conn   = ActiveRecord::Base.connection
     orders = Order.arel_table
     stuck  = Order.where(status: Order::PAYING)
                   .where(orders[:updated_at].lt(Time.now.utc - older_than_seconds))
@@ -123,9 +133,10 @@ class ValidatingPaymentProvider
     stuck.each do |id, updated_at|
       order_id = id.to_s
       if settled?(order_id)
-        conn.execute(
+        Order.lease_connection.exec_update(
           "UPDATE orders SET status = 'paid', updated_at = now() " \
-          "WHERE id = #{conn.quote(order_id)}::uuid AND status = 'paying'"
+          "WHERE id = $1::uuid AND status = 'paying'",
+          "getgrocery reconcile heal", [order_id]
         )
         healed << order_id
       else
@@ -200,19 +211,21 @@ class ValidatingPaymentProvider
       )
     end
 
-    conn = ActiveRecord::Base.connection
-
     # CLAIM: created → paying, race-free compare-and-set. Winning this UPDATE is
     # what serializes concurrent /pay (only one can flip 'created') and, together
     # with create_order's FOR UPDATE guard, freezes O's items for the duration of
-    # this payment (K-544).
-    claimed = conn.execute(
+    # this payment (K-544). Both values travel as binds: `$1::uuid` casts the
+    # bound text exactly as the quoted literal did, so a non-uuid is still a
+    # Postgres refusal and not a silent miss — and {UuidCheck} above has already
+    # made that unreachable from the wire.
+    claimed = Order.lease_connection.exec_query(
       "UPDATE orders SET status = 'paying', updated_at = now() " \
-      "WHERE id = #{conn.quote(order_id)}::uuid " \
-      "AND user_id = #{conn.quote(cart.user_id.to_s)}::uuid " \
+      "WHERE id = $1::uuid " \
+      "AND user_id = $2::uuid " \
       "AND status = 'created' " \
-      "RETURNING id, total_cents"
-    ).first
+      "RETURNING id, total_cents",
+      "getgrocery order claim", [order_id, cart.user_id.to_s]
+    ).to_a.first
 
     if claimed.nil?
       # Distinguish "not yours / missing" from "not in a payable state" so the
@@ -314,10 +327,10 @@ class ValidatingPaymentProvider
   end
 
   def set_status(order_id, from:, to:)
-    conn = ActiveRecord::Base.connection
-    conn.execute(
-      "UPDATE orders SET status = #{conn.quote(to)}, updated_at = now() " \
-      "WHERE id = #{conn.quote(order_id.to_s)}::uuid AND status = #{conn.quote(from)}"
+    Order.lease_connection.exec_update(
+      "UPDATE orders SET status = $1, updated_at = now() " \
+      "WHERE id = $2::uuid AND status = $3",
+      "getgrocery order status flip", [to, order_id.to_s, from]
     )
   end
 

@@ -119,10 +119,15 @@ assert(!UuidCheck.valid?(" #{SecureRandom.uuid} ") &&
        "UuidCheck anchors the whole string — padded and multi-line values are rejected")
 
 # A well-formed reference is NOT rejected by the guard — it falls through to the
-# DB boundary (which is absent here, so any error is a connection-level one).
+# persistence boundary, which is absent in this Rails-free process, so whatever
+# comes back is a LOAD-level failure (`Order` is not defined here) rather than a
+# refusal. The assertion is the negative one: not a BadRequest, i.e. the shape
+# check let it past. (Before K-654 moved the claim onto bound parameters this
+# was an ActiveRecord connection error; same boundary, different first missing
+# constant.)
 e = error_from(eur_cart([SecureRandom.uuid]))
 assert(!e.is_a?(Kiosk::Server::Errors::BadRequest),
-       "a canonical uuid passes the guard and reaches the DB layer, got #{e.class}: #{e}")
+       "a canonical uuid passes the guard and reaches the persistence layer, got #{e.class}: #{e}")
 
 if FAILURES.empty?
   puts "\ncashier order-ref K-579 spec: ALL PASS"

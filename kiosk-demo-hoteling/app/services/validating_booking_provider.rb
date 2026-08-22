@@ -139,8 +139,6 @@ class ValidatingBookingProvider
       )
     end
 
-    conn = ActiveRecord::Base.connection
-
     # CLAIM: unpaid → paying, race-free compare-and-set (K-853). Winning this
     # UPDATE is what serializes concurrent /pay for one booking — only one
     # caller can flip 'unpaid' — and it is taken BEFORE the cashier check and
@@ -149,16 +147,19 @@ class ValidatingBookingProvider
     # RAW SQL, deliberately, and for the reason getgrocery's twin gives: the
     # ATOMICITY is the fix, `update_all` has no RETURNING in Rails 8.1, and an
     # ActiveRecord spelling would be a SELECT then an UPDATE — which is the race
-    # back again. Nothing interpolated is caller-controlled: the booking id is
-    # through {UuidCheck}, the payer comes off the SIGNED mandate, and the
-    # statuses are literals.
-    claimed = conn.execute(
-      "UPDATE public.bookings SET payment_status = #{conn.quote(Booking::PAYING)}, " \
-      "paid_by_user_id = #{conn.quote(cart.user_id.to_s)}::uuid, updated_at = now() " \
-      "WHERE id = #{conn.quote(booking_id)}::uuid " \
-      "AND payment_status = #{conn.quote(Booking::UNPAID)} " \
-      "RETURNING total_cents"
-    ).first
+    # back again. RAW, BUT NOT INTERPOLATED (K-654): every value is a `$N` bind,
+    # so the statement text carries no value at all and there is no
+    # `conn.quote` to forget when this file is copied. `$2::uuid` casts the
+    # bound text exactly as the quoted literal did.
+    claimed = Booking.lease_connection.exec_query(
+      "UPDATE public.bookings SET payment_status = $1, " \
+      "paid_by_user_id = $2::uuid, updated_at = now() " \
+      "WHERE id = $3::uuid " \
+      "AND payment_status = $4 " \
+      "RETURNING total_cents",
+      "hoteling booking claim",
+      [Booking::PAYING, cart.user_id.to_s, booking_id, Booking::UNPAID]
+    ).to_a.first
 
     if claimed.nil?
       # Distinguish "no such booking" from "not in a payable state", so the
@@ -241,8 +242,7 @@ class ValidatingBookingProvider
   # on the row would make `confirm_booking`'s Gate 2 read a claim that was
   # released as if it were a charge.
   def release_claim!(booking_id)
-    set_payment_status(booking_id, from: Booking::PAYING, to: Booking::UNPAID,
-                                   extra: "paid_by_user_id = NULL")
+    set_payment_status(booking_id, from: Booking::PAYING, to: Booking::UNPAID, clear_payer: true)
   end
 
   def mark_paid!(booking_id)
@@ -253,14 +253,28 @@ class ValidatingBookingProvider
     nil
   end
 
-  # @param extra [String, nil] a further frozen SET fragment — never a caller value
-  def set_payment_status(booking_id, from:, to:, extra: nil)
-    conn = ActiveRecord::Base.connection
-    conn.execute(
-      "UPDATE public.bookings SET payment_status = #{conn.quote(to)}, " \
-      "#{extra ? "#{extra}, " : ""}updated_at = now() " \
-      "WHERE id = #{conn.quote(booking_id.to_s)}::uuid AND payment_status = #{conn.quote(from)}"
-    )
+  # TWO WHOLE STATEMENTS, NOT ONE STATEMENT PLUS A FRAGMENT (K-654). This used
+  # to take an `extra:` SET fragment and splice it in, which meant no reader
+  # ever saw a complete statement and the file taught fragment-splicing as a
+  # technique. Written out, both are literal text with `$N` binds for every
+  # value, and the ONE difference between them — whether the payer is cleared —
+  # is a boolean at the call site rather than a string a caller could grow.
+  #
+  # @param clear_payer [Boolean] true when reverting a claim: nobody paid, so
+  #   leaving a payer id would make confirm_booking's Gate 2 read a released
+  #   claim as a charge.
+  def set_payment_status(booking_id, from:, to:, clear_payer: false)
+    sql =
+      if clear_payer
+        "UPDATE public.bookings SET payment_status = $1, paid_by_user_id = NULL, updated_at = now() " \
+        "WHERE id = $2::uuid AND payment_status = $3"
+      else
+        "UPDATE public.bookings SET payment_status = $1, updated_at = now() " \
+        "WHERE id = $2::uuid AND payment_status = $3"
+      end
+
+    Booking.lease_connection.exec_update(sql, "hoteling booking status flip",
+                                         [to, booking_id.to_s, from])
   end
 
   def deny(message)

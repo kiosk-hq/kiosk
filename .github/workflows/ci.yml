@@ -138,10 +138,18 @@ jobs:
             # no PoW, no RFC 8628 timing, no key — the same profile as the
             # stylish/philslist walkthroughs already here, ~4 s. It was the one
             # walkthrough no gate reached (K-618). It is NOT redundant with
-            # demo:book: watched fail — point db/seeds.rb's WALKTHROUGH_STUB_USER_ID
-            # at a uuid with no users row and book_table comes back an
-            # ActiveRecord::InvalidForeignKey error envelope, so the tour exits 1
-            # while demo:book, which registers its own agent, stays green.
+            # demo:book, and the reason CHANGED with T-104 (K-837): the tour no
+            # longer leans on a seeded stub principal — that one, and the
+            # self-asserted bearer that named it, are deleted. It now EARNS its
+            # principal by running the shipped /kiosk/auth/register handshake
+            # through script/mint_agent_token.rb (whose only caller it is) and
+            # carries the engine-minted token through a series of `curl -sf`
+            # hops, which is what an adopter's shell script does and what no
+            # Ruby flow driver here does.
+            # Watched fail: break the JWKS route (config/routes.rb:60) or empty
+            # its key set — GET /kiosk/.well-known/jwks.json is fetched by
+            # NOTHING else in this demo, so `curl -sf` returns non-zero, `set
+            # -e` kills the tour, and demo:book stays green.
             # It goes LAST because `task walkthrough: :setup` reseeds, while
             # demo:backoff and demo:book have no prerequisite and live off the
             # job-level demo:setup.
@@ -190,8 +198,11 @@ jobs:
             # no PoW, no Stripe, no network — they only need the job-level
             # demo:setup to have created a database; neither needs the seed and
             # neither reseeds). Between them they are the ONLY executable check
-            # anywhere of lib/demo_telemetry.rb, which is copied byte-for-byte
-            # into all seven operator demos and is best-effort by design:
+            # anywhere of app/services/demo_telemetry.rb — and of
+            # demo_telemetry_record.rb and demo_telemetry_middleware.rb beside
+            # it, the three files K-502 split it into — each copied
+            # byte-for-byte into all seven operator demos and best-effort by
+            # design:
             # DemoTelemetry.record, .aggregates and the middleware each
             # `rescue StandardError` and carry on, so a broken telemetry module
             # does not raise anywhere — it silently records nothing while the
@@ -531,7 +542,7 @@ jobs:
       # Ed25519 key — its dev/test env files resolve
       # `ENV.fetch("KIOSK_UNLOCK_SIGNING_KEY_PEM") { config/dev_unlock_key.pem }`
       # — while the lock simulator the flow drivers provision reads the BAKED
-      # public half straight off that file (lib/dev_unlock_key.rb deliberately
+      # public half straight off that file (script/dev_unlock_key.rb deliberately
       # never consults ENV, because its other callers are bare-Ruby drivers).
       # Signer and verifier drifted apart, every unlock returned false, and
       # demo:rideflow went red on `happy: unlocked expected true, got false`
@@ -635,10 +646,11 @@ jobs:
 
   # The demos are eight standalone Rails apps, so shared application code is not
   # shared — it is HAND-COPIED, and until now nothing checked the copies still
-  # agreed. lib/demo_telemetry.rb carried a stale comment in six of its seven
-  # copies until a fix propagated it by accident (K-623); the solver-path
-  # constant in lib/equihash_register.rb was renamed in three of its five copies
-  # and nobody noticed for three weeks. bin/check-demo-copies makes both of those
+  # agreed. demo_telemetry.rb (then at lib/, now app/services/) carried a stale
+  # comment in six of its seven copies until a fix propagated it by accident
+  # (K-623); the solver-path constant in equihash_register.rb (then at lib/,
+  # now script/) was renamed in three of its five copies and nobody noticed for
+  # three weeks. bin/check-demo-copies makes both of those
   # a red build: every relative path present in two or more demos must be
   # declared identical, identical-modulo-prose, or a deliberate per-demo variant
   # with the reason — and an UNDECLARED duplicate fails too, so a new copy cannot

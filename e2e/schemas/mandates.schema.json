@@ -1,183 +1,73 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://kiosk.tech/spec/schemas/mandates.schema.json",
-  "$comment": "VENDORED copy of the normative kiosk.tech schema at spec/schemas/mandates.schema.json. It is here so e2e/schema_conformance.rb can validate this origin's LIVE wire bytes against the PUBLISHED schema with no second checkout and no network fetch (K-822). Identical to the upstream copy as PARSED JSON once this $comment is removed — bin/check-spec-schemas asserts exactly that whenever the umbrella layout puts kiosk.tech next to this repo, and says so rather than pretending when it does not. T-045 tracks the sync-check.",
   "title": "Kiosk AP2 payment mandates",
   "description": "The decoded JWS payloads of the three AP2 mandates and the POST /kiosk/pay request body. On the wire each mandate is an RS256 compact JWS string; these schemas describe the decoded claim sets.",
   "$defs": {
     "baseClaims": {
       "type": "object",
       "description": "Claims every mandate MUST carry.",
-      "required": [
-        "id",
-        "user_id",
-        "agent_id",
-        "iss",
-        "iat",
-        "exp"
-      ],
+      "required": ["id", "user_id", "agent_id", "iss", "iat", "exp"],
       "properties": {
-        "id": {
-          "type": "string",
-          "description": "Unique mandate id."
-        },
-        "user_id": {
-          "type": "string",
-          "description": "MUST match the authenticated identity (string-compared)."
-        },
-        "agent_id": {
-          "type": "string",
-          "description": "MUST match the authenticated identity (string-compared)."
-        },
-        "iss": {
-          "type": "string",
-          "description": "MUST equal the provider issuer from /.well-known/kiosk.json, verbatim."
-        },
-        "iat": {
-          "type": "integer"
-        },
-        "exp": {
-          "type": "integer",
-          "description": "REQUIRED; a missing or passed exp is rejected."
-        }
+        "id": { "type": "string", "description": "Unique mandate id." },
+        "user_id": { "type": "string", "description": "MUST match the authenticated identity (string-compared)." },
+        "agent_id": { "type": "string", "description": "MUST match the authenticated identity (string-compared)." },
+        "iss": { "type": "string", "description": "MUST equal the provider issuer from /.well-known/kiosk.json, verbatim." },
+        "iat": { "type": "integer" },
+        "exp": { "type": "integer", "description": "REQUIRED; a missing or passed exp is rejected." }
       }
     },
     "intent": {
-      "allOf": [
-        {
-          "$ref": "#/$defs/baseClaims"
-        }
-      ],
+      "allOf": [{ "$ref": "#/$defs/baseClaims" }],
       "type": "object",
-      "required": [
-        "cap_amount_cents",
-        "currency"
-      ],
+      "required": ["cap_amount_cents", "currency"],
       "properties": {
-        "cap_amount_cents": {
-          "type": "integer",
-          "minimum": 1,
-          "description": "Spending cap; REQUIRED (a nil cap is rejected). MUST be positive; a non-positive amount is rejected."
-        },
-        "currency": {
-          "type": "string",
-          "description": "ISO 4217 code; REQUIRED."
-        },
-        "scope": {
-          "type": "string",
-          "description": "Optional provider-defined scope."
-        }
+        "cap_amount_cents": { "type": "integer", "minimum": 1, "description": "Spending cap; REQUIRED (a nil cap is rejected). MUST be positive; a non-positive amount is rejected." },
+        "currency": { "type": "string", "description": "ISO 4217 code; REQUIRED." },
+        "scope": { "type": "string", "description": "Optional provider-defined scope." }
       }
     },
     "cart": {
-      "allOf": [
-        {
-          "$ref": "#/$defs/baseClaims"
-        }
-      ],
+      "allOf": [{ "$ref": "#/$defs/baseClaims" }],
       "type": "object",
-      "required": [
-        "intent_mandate_id",
-        "total_amount_cents",
-        "currency",
-        "line_items"
-      ],
+      "required": ["intent_mandate_id", "total_amount_cents", "currency", "line_items"],
       "properties": {
-        "intent_mandate_id": {
-          "type": "string",
-          "description": "MUST equal the intent mandate id; cart total MUST NOT exceed the intent cap."
-        },
-        "total_amount_cents": {
-          "type": "integer",
-          "minimum": 1,
-          "description": "REQUIRED. MUST be positive; a non-positive amount is rejected."
-        },
-        "currency": {
-          "type": "string",
-          "description": "MUST equal the intent currency."
-        },
-        "line_items": {
-          "type": "array",
-          "minItems": 1,
-          "description": "REQUIRED, and NON-EMPTY. Provider-defined line items. Required because the settlement and reconciliation path reads them: an operator matching a settlement back to its domain object has nothing to match on without them -- which is exactly as true of an empty array as of an absent field, so presence alone was not the constraint (K-857). A positive `total_amount_cents` with nothing itemised under it is an unitemised charge, which is what a cart mandate exists to prevent."
-        }
+        "intent_mandate_id": { "type": "string", "description": "MUST equal the intent mandate id; cart total MUST NOT exceed the intent cap." },
+        "total_amount_cents": { "type": "integer", "minimum": 1, "description": "REQUIRED. MUST be positive; a non-positive amount is rejected." },
+        "currency": { "type": "string", "description": "MUST equal the intent currency." },
+        "line_items": { "type": "array", "minItems": 1, "description": "REQUIRED, and NON-EMPTY. Provider-defined line items. Required because the settlement and reconciliation path reads them: an operator matching a settlement back to its domain object has nothing to match on without them -- which is exactly as true of an empty array as of an absent field, so presence alone was not the constraint (K-857). A positive `total_amount_cents` with nothing itemised under it is an unitemised charge, which is what a cart mandate exists to prevent." }
       }
     },
     "payment": {
-      "allOf": [
-        {
-          "$ref": "#/$defs/baseClaims"
-        }
-      ],
+      "allOf": [{ "$ref": "#/$defs/baseClaims" }],
       "type": "object",
-      "required": [
-        "cart_mandate_id",
-        "amount_cents",
-        "currency"
-      ],
+      "required": ["cart_mandate_id", "amount_cents", "currency"],
       "properties": {
-        "cart_mandate_id": {
-          "type": "string",
-          "description": "MUST equal the cart mandate id."
-        },
-        "amount_cents": {
-          "type": "integer",
-          "minimum": 1,
-          "description": "MUST equal the cart total, same currency. MUST be positive; a non-positive amount is rejected."
-        },
-        "currency": {
-          "type": "string"
-        },
-        "payment_method": {
-          "type": "string",
-          "description": "Optional PSP method identifier (e.g. \"on_file\")."
-        }
+        "cart_mandate_id": { "type": "string", "description": "MUST equal the cart mandate id." },
+        "amount_cents": { "type": "integer", "minimum": 1, "description": "MUST equal the cart total, same currency. MUST be positive; a non-positive amount is rejected." },
+        "currency": { "type": "string" },
+        "payment_method": { "type": "string", "description": "Optional PSP method identifier (e.g. \"on_file\")." }
       }
     },
     "payRequest": {
       "type": "object",
       "description": "The POST /kiosk/pay request body: the three mandates as compact JWS strings.",
-      "required": [
-        "intent_mandate_jws",
-        "cart_mandate_jws",
-        "payment_mandate_jws"
-      ],
+      "required": ["intent_mandate_jws", "cart_mandate_jws", "payment_mandate_jws"],
       "properties": {
-        "intent_mandate_jws": {
-          "type": "string"
-        },
-        "cart_mandate_jws": {
-          "type": "string"
-        },
-        "payment_mandate_jws": {
-          "type": "string"
-        }
+        "intent_mandate_jws": { "type": "string" },
+        "cart_mandate_jws": { "type": "string" },
+        "payment_mandate_jws": { "type": "string" }
       }
     },
     "settlement": {
       "type": "object",
-      "description": "The value of the kind:\"value\" pay response.",
-      "required": [
-        "settlement_id",
-        "psp_reference",
-        "settled_amount_cents",
-        "currency"
-      ],
+      "description": "The pay response body, answered verbatim: there is no envelope, no ok flag and no kind discriminator (protocol.md 8.2, 11.3).",
+      "required": ["settlement_id", "psp_reference", "settled_amount_cents", "currency"],
       "properties": {
-        "settlement_id": {
-          "type": "string"
-        },
-        "psp_reference": {
-          "type": "string"
-        },
-        "settled_amount_cents": {
-          "type": "integer",
-          "minimum": 1,
-          "description": "The captured amount; equals the cart total. MUST be positive: a settlement exists only for a completed capture, and every mandate amount is already positive."
-        },
-        "currency": {
-          "type": "string"
-        }
+        "settlement_id": { "type": "string" },
+        "psp_reference": { "type": "string" },
+        "settled_amount_cents": { "type": "integer", "minimum": 1, "description": "The captured amount; equals the cart total. MUST be positive: a settlement exists only for a completed capture, and every mandate amount is already positive." },
+        "currency": { "type": "string" }
       }
     }
   }

@@ -333,7 +333,57 @@ else
       "captured request/claims/response, so five mandate schemas checked nothing"
 end
 
-# ── 6. kyc.schema.json — vendored, compiled, and honestly not exercised ──────
+# ── 6. the SOLVED PoW proof, against `pow.schema.json#/$defs/proof` (K-849) ──
+#
+# `pow.schema.json` has two halves and only one of them was ever reached from
+# here. The 402 above follows `problem.schema.json`'s cross-file `$ref` into
+# `#/$defs/challenge` — the half the SERVER writes. `#/$defs/proof` is the half
+# the CLIENT writes, and it is where `indices`, its Zcash canonical order and
+# the INCLUSIVE u64 `maximum` (K-839, K-845) live. Those rows were gated by a
+# run that structurally could not have failed on them: their only executable
+# coverage was a kiosk-server unit spec and kiosk.tech's hand-written examples,
+# neither of which sees live bytes.
+#
+# No new solve is needed — the harness already solves a real register toll, and
+# `register_pow_flow.rb` writes the header value the origin ACCEPTED to
+# POW_CAPTURE. The whole array is validated against the ROOT schema too, which
+# is `$ref`d to `#/$defs/powHeader`: that is the one thing asserting the
+# ARRAY-of-proofs presentation of ADR-0022's raw-JSON header.
+pow_capture = ENV["POW_CAPTURE"]
+if pow_capture && !pow_capture.empty? && File.exist?(pow_capture)
+  proofs = JSON.parse(File.read(pow_capture)).fetch("proofs")
+
+  if proofs.is_a?(Array) && !proofs.empty?
+    ok "the register toll fired and its solved proof(s) were kept (#{proofs.length})"
+
+    conforms("the Kiosk-PoW header this origin ACCEPTED", "#{B}/pow.schema.json", proofs) do |hdr|
+      # ONE PAST THE INCLUSIVE u64 BOUND. This is the bound K-845 argued about
+      # and the reason the control is here: a schema that stated the bound
+      # exclusively, or dropped it, would accept this and the check above would
+      # be proving nothing about the range at all.
+      hdr.first["nonce"]["indices"][0] = 18_446_744_073_709_551_616
+      hdr
+    end
+
+    conforms("one solved PoW proof", "#{B}/pow.schema.json", proofs.first,
+             pointer: "#/$defs/proof") do |proof|
+      # `challenge` is REQUIRED beside `nonce`: a proof that did not echo the
+      # challenge back verbatim is unbindable to the request it paid for.
+      proof.delete("challenge")
+      proof
+    end
+  else
+    bad "the register toll fired and its solved proof(s) were kept",
+        "POW_CAPTURE holds #{proofs.inspect} — no proof to validate, so pow.schema.json's " \
+        "`#/$defs/proof` half is again reached by nothing"
+  end
+else
+  bad "the solved PoW proof was validated",
+      "POW_CAPTURE (#{pow_capture.inspect}) is missing — register_pow_flow.rb did not write the " \
+      "accepted Kiosk-PoW header, so `#/$defs/proof` and the u64 index bound checked nothing"
+end
+
+# ── 7. kyc.schema.json — vendored, compiled, and honestly not exercised ──────
 #
 # This origin serves no KYC: the attestation flow is a TWO-SERVER integration
 # and lives in the skooti/getgrocery demos against kiosk-demo-prove. The schema

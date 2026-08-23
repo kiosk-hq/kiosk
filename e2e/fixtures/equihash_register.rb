@@ -40,8 +40,16 @@ end
 # @param get_json  [#call]  ->(url) { [code, body] }
 # @param post_json [#call]  ->(url, body, headers = {}) { [code, body] }
 #   (the header slot carries the Kiosk-PoW proof on the retry)
+# @param on_proofs [#call, nil] called with the proofs array this helper put in
+#   the `Kiosk-PoW` header, AFTER the server accepted them (K-849).  The e2e
+#   schema-conformance block validates those very bytes against
+#   `pow.schema.json#/$defs/proof`, which nothing reached before: the only path
+#   into that schema was `problem.schema.json`'s cross-file `$ref`, and that
+#   lands on `#/$defs/challenge` — the half the SERVER writes.  The half the
+#   CLIENT writes, where `indices` and its u64 bound live, was unvalidated on
+#   the wire.  Not called when the toll never fired.
 # @return [Array(OpenSSL::PKey::RSA, Hash)] the keypair and the 201 register body
-def equihash_register(server:, issuer:, get_json:, post_json:)
+def equihash_register(server:, issuer:, get_json:, post_json:, on_proofs: nil)
   key = OpenSSL::PKey::RSA.generate(2048)
   pem = key.public_key.to_pem
 
@@ -66,6 +74,9 @@ def equihash_register(server:, issuer:, get_json:, post_json:)
     rc, reg = post_json.call(
       "#{server}/kiosk/auth/register", body, { "Kiosk-PoW" => JSON.generate(proofs) }
     )
+    # Only once the server has ACCEPTED them: a proof the origin refused would
+    # prove nothing about the shape the origin requires.
+    on_proofs&.call(proofs) if rc == 201
   end
 
   abort "register failed (#{rc}): #{JSON.generate(reg)}" unless rc == 201

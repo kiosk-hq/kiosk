@@ -170,8 +170,8 @@ Kiosk.configure do |c|
     c.owner = c.owner.merge(pow_difficulty: PowDifficulty.level, pow_notice: notice)
   end
   # Dual-check (skill.md): canonical skill URL + SHA-256 of its content.
-  c.skill_url    = "https://kiosk.tech/skill-v0.4.4.md"
-  c.skill_sha256 = "1960731212c8913e6b3f2b9301f6fe1f31ff6acfe7721d1d5cf765c4d1b5024b"
+  c.skill_url    = "https://kiosk.tech/skill-v0.4.5.md"
+  c.skill_sha256 = "d2ad8442a4c736c5f6fe437bbc0504598bc6653c68cd1bb0278be1b7d9943821"
 
   # ── NO c.agent_idp ───────────────────────────────────────────────────────
   # Deliberate, and the point of the line's absence (T-104). An assistant

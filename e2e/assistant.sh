@@ -884,6 +884,7 @@ printf "\n\033[1m=== register-PoW golden path: no-proof 402 → solve Equihash �
 
 reg_out=$( cd "$APP_DIR" && SERVER_URL="$SERVER_URL" KIOSK_ISSUER="$KIOSK_ISSUER" \
              SOLVE_PY="${SOLVE_PY:?SOLVE_PY must be set by run.sh}" \
+             POW_CAPTURE="${POW_CAPTURE:-}" \
              bundle exec ruby "$FIXTURES/register_pow_flow.rb" )
 
 assert "register-pow: no-proof → 402"          "$(echo "$reg_out" | jq -r '.no_proof_status')"        "402"

@@ -52,11 +52,21 @@ results[:no_proof_code]   = reg_noproof["code"]
 results[:challenges_len]  = Array(reg_noproof["challenges"]).length
 
 # ── 2. Solve the toll + register succeeds (fresh key via the shared helper) ──
+# THE BYTES, KEPT (K-849) — the same discipline `pay_flow.rb` uses for the
+# mandate chain. `POW_CAPTURE` names a file to write the `Kiosk-PoW` header
+# value this origin ACCEPTED, so `e2e/schema_conformance.rb` can validate a
+# real solved proof against the published `pow.schema.json`. Until this
+# existed, `#/$defs/proof` — where `indices`, its Zcash canonical order and the
+# inclusive u64 `maximum` live — had no over-the-wire coverage at all.
 reg_key, reg = equihash_register(
   server:    SERVER,
   issuer:    ISSUER,
   get_json:  ->(url) { get_json(url) },
   post_json: ->(url, body, headers = {}) { post_json(url, body, headers) },
+  on_proofs: ->(proofs) {
+    capture = ENV["POW_CAPTURE"]
+    File.write(capture, JSON.generate(proofs: proofs)) if capture && !capture.empty?
+  },
 )
 token = reg.fetch("access_token")
 results[:with_proof_registered] = !token.to_s.empty?

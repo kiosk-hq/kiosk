@@ -388,6 +388,7 @@ ok "alice's assistant $ALICE_AGENT and bob's assistant $BOB_AGENT are bound and 
 
 log "run mock AI-assistant test suite"
 PAY_CAPTURE="$TMP_DIR/pay-capture.json"
+POW_CAPTURE="$TMP_DIR/pow-capture.json"
 if ! SERVER_URL="http://127.0.0.1:$SERVER_PORT" \
        APP_DIR="$PWD" \
        FIXTURES="$FIXTURES" \
@@ -401,6 +402,7 @@ if ! SERVER_URL="http://127.0.0.1:$SERVER_PORT" \
        AUDIT_EVENTS_REDACTED="$AUDIT_EVENTS_REDACTED" \
        SOLVE_PY="$SOLVE_PY" \
        PAY_CAPTURE="$PAY_CAPTURE" \
+       POW_CAPTURE="$POW_CAPTURE" \
        bash "$KIOSK_OSS/e2e/assistant.sh"; then
   log "assistant failed — last 80 lines of server log:"
   tail -80 /tmp/kiosk-e2e-server.log
@@ -423,6 +425,7 @@ log "validate live wire bytes against the published JSON Schemas"
 if ! SERVER_URL="http://127.0.0.1:$SERVER_PORT" \
        TOKEN="$ALICE_AGENT_TOKEN" \
        PAY_CAPTURE="$PAY_CAPTURE" \
+       POW_CAPTURE="$POW_CAPTURE" \
        bundle exec ruby "$KIOSK_OSS/e2e/schema_conformance.rb"; then
   log "schema conformance failed — last 40 lines of server log:"
   tail -40 /tmp/kiosk-e2e-server.log

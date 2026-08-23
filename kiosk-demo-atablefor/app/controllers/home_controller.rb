@@ -33,9 +33,11 @@ class HomeController < ActionController::Base
   private
 
   # Upcoming confirmed reservations for the public board, spanning ALL
-  # restaurants in the aggregator, joined to the diner's display name (falls
-  # back to a masked local-part if a diner has no name, and to "Assistant guest"
-  # for a headless account with neither). Read-only — the board never mutates
+  # restaurants in the aggregator, joined to the diner's display name and to the
+  # ACCOUNT UUID the pseudonym is derived from when there is no name (K-973).
+  # The login address is deliberately NOT selected: this query feeds a page
+  # anyone can fetch, and a column that never leaves the SELECT cannot be
+  # published by a later reader of it. Read-only — the board never mutates
   # anything. Now onward, soonest first. Times are rendered in Europe/Lisbon (the
   # operator's locale) so the board reads in local wall-clock.
   def upcoming_reservations
@@ -50,7 +52,7 @@ class HomeController < ActionController::Base
         to_char(b.seating_at AT TIME ZONE 'Europe/Lisbon', 'Dy DD Mon')    AS slot_day,
         to_char(b.seating_at AT TIME ZONE 'Europe/Lisbon', 'HH24:MI')      AS slot_time,
         u.display_name                                                     AS diner_name,
-        u.email                                                            AS diner_email
+        u.id                                                               AS diner_account_id
       FROM bookings b
       JOIN restaurant_tables rt ON rt.id = b.restaurant_table_id
       JOIN restaurants r        ON r.id  = b.restaurant_id
@@ -64,17 +66,11 @@ class HomeController < ActionController::Base
 
   helper_method :board_diner_name
 
-  # Public label for a reservation's diner: the seeded display name, else a
-  # masked email local-part, else a headless-assistant placeholder.
+  # Public label for a reservation's diner: the seeded display name, else an
+  # opaque `diner-<hex>` derived from the account uuid. {User.public_name} is
+  # the whole rule and the argument for it lives there — this page is only one
+  # of its readers.
   def board_diner_name(row)
-    name = row["diner_name"].to_s.strip
-    return name unless name.empty?
-
-    email = row["diner_email"].to_s
-    if email.include?("@")
-      local = email.split("@").first
-      return local.length <= 2 ? local : "#{local[0, 2]}#{'•' * (local.length - 2)}"
-    end
-    "Assistant guest"
+    User.public_name(row["diner_name"], row["diner_account_id"])
   end
 end

@@ -136,6 +136,86 @@ RSpec.describe "AssistantsController" do
     expect(row_hashes.user_id).to eq(user_id)
   end
 
+  # roles-from-IdP (ADR-0011 Path A) on the BROWSER path (K-995). The page is
+  # the account-binding link ceremony, so the human's IdP role must reach the
+  # link row exactly as `AuthController#link` puts it there for the JSON
+  # endpoint — otherwise the ceremony's outcome depends on which door the human
+  # walked through. Read out of the STORE, not off a message expectation: what
+  # matters is the row the assistant will redeem.
+  describe "roles-from-IdP on the browser mint (ADR-0011 Path A)" do
+    def minted_row(html)
+      store.find_by_device_code_hash(
+        Kiosk::Server::DeviceAuthorization.hash_device_code(html[%r{<code>([^<]+)</code>}, 1]),
+      )
+    end
+
+    it "stamps the signed-in human's role onto the link row" do
+      Kiosk.configure { |c| c.roles = %i[customer owner] }
+      wire_user_idp(build_identity(actor: "human", agent_id: nil, user_id: user_id, role: "owner"))
+
+      _status, html = dispatch(:link, method: "POST")
+
+      expect(minted_row(html).requested_role).to eq("owner")
+    end
+
+    # No-regression clause of the ADR amendment: a role-less `user_idp` reports
+    # nil and the binding falls back to `registration_role`/absent. `nil` must
+    # stay nil on the row — not the empty string, which `validated_role` would
+    # have to special-case at redeem.
+    it "leaves requested_role nil for a role-less human" do
+      wire_user_idp(build_identity(actor: "human", agent_id: nil, user_id: user_id, role: nil))
+
+      _status, html = dispatch(:link, method: "POST")
+
+      expect(minted_row(html).requested_role).to be_nil
+    end
+
+    # THE REBIND HALF, end to end through the real `LinkCode.redeem` and the
+    # real `AccountBinding.bind!` — the subtler consequence and the one no gate
+    # covered. A nil `requested_role` omits the `allowed_roles` assignment from
+    # the rebind UPDATE entirely, so the agent silently KEEPS its previous role
+    # while its principal changes. Pinned on the SQL because that is where the
+    # remap either happens or does not.
+    it "rebinds a KNOWN key onto the new human's role via a browser-minted code" do
+      Kiosk.configure { |c| c.roles = %i[customer owner] }
+      wire_user_idp(build_identity(actor: "human", agent_id: nil, user_id: user_id, role: "owner"))
+      allow_any_instance_of(Kiosk::Server::AgentIdentityProviders::DefaultAgentIdp)
+        .to receive(:issue).and_return("kiosk-pop-jwt")
+
+      _status, html = dispatch(:link, method: "POST")
+      code = html[%r{<code>([^<]+)</code>}, 1]
+
+      # The redeeming key is already registered under ANOTHER human, at
+      # `customer` — the rebind case.
+      rsa = OpenSSL::PKey::RSA.generate(2048)
+      key_pem = rsa.public_key.to_pem
+      route_exec_query(con) do |sql, _binds|
+        if sql =~ /SELECT/i
+          [{ "id" => "agent-known",
+             "user_id" => "22222222-2222-2222-2222-222222222222",
+             "allowed_roles" => "{customer}" }]
+        else
+          []
+        end
+      end
+      challenge = Kiosk::Server::AuthChallenge.issue(public_key_pem: key_pem)
+      proof = JWT.encode(
+        { aud: "https://provider.example", nonce: challenge[:challenge], jti: SecureRandom.uuid },
+        rsa, "RS256",
+      )
+
+      result = Kiosk::Server::LinkCode.redeem(
+        code: code, public_key_pem: key_pem, signed: proof,
+      )
+
+      expect(result[:agent_id]).to eq("agent-known")   # same key, same agent
+      expect(con.bound(/INSERT/i)).to be_empty         # ...so a rebind, not a fresh key
+      sql, binds = con.bound(/UPDATE/i).first
+      expect(sql).to include("allowed_roles = ARRAY[$3]::text[]")
+      expect(binds).to eq([user_id, "agent-known", "owner"])
+    end
+  end
+
   it "unlinks via AccountBinding and reports it" do
     allow(Kiosk::Server::AccountBinding).to receive(:unlink!).and_return({ agent_id: "agent-1" })
     status, html = dispatch(:unlink, method: "POST", params: { "agent_id" => "agent-1" })

@@ -60,10 +60,35 @@ module Kiosk
         render_page
       end
 
+      # roles-from-IdP (ADR-0011 Path A) on the BROWSER path — the same
+      # capture {AuthController#link} performs for the JSON endpoint, and for
+      # the same reason: this page IS the account-binding link ceremony, so the
+      # role the provider's `user_idp` reports for the signed-in human
+      # (`@identity.role`) belongs on the link row. Both controllers resolve
+      # `@identity` from the SAME `Kiosk.configuration.user_idp&.verify`, so
+      # there is no case where the JSON surface can source a role and this one
+      # cannot; a surface that dropped it made the ceremony's outcome depend on
+      # which door the human walked through, which is the K-437 shape (K-995).
+      #
+      # Both halves of {AccountBinding.bind!} depend on it, and the REBIND half
+      # is the subtler one: a fresh key would merely be provisioned at
+      # `registration_role` (at stylish, an OWNER minting from this page
+      # provisioned a `:customer` assistant), but a rebind with a nil
+      # `requested_role` omits the `allowed_roles` assignment altogether and
+      # the agent KEEPS its previous role while its principal changes —
+      # silently contradicting "the agent adopts the role of the principal it
+      # is now bound to". Passing the role is what makes the remap happen.
+      #
+      # `nil` stays meaningful and is NOT normalized here: a role-less
+      # `user_idp` (or a single-role provider) reports no role, and the binding
+      # then falls back to `registration_role`/absent exactly as before — the
+      # no-regression clause of the ADR amendment. The role is never validated
+      # at mint; `bind!` validates it against `config.roles` at redeem, which
+      # is where the JSON path validates it too.
       def link
         return unless require_account_holder!
 
-        result = LinkCode.mint(user_id: @identity.user_id)
+        result = LinkCode.mint(user_id: @identity.user_id, requested_role: @identity.role)
         @link_code  = result[:link_code]
         @expires_in = result[:expires_in]
         render_page

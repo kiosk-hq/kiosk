@@ -244,8 +244,7 @@ CREATE TABLE kiosk.settlements (
     psp_reference text NOT NULL,
     settled_amount_cents bigint NOT NULL,
     currency text NOT NULL,
-    settled_at timestamp with time zone NOT NULL,
-    raw_jws text NOT NULL
+    settled_at timestamp with time zone NOT NULL
 );
 
 

@@ -258,8 +258,7 @@ CREATE TABLE kiosk.settlements (
     psp_reference text NOT NULL,
     settled_amount_cents bigint NOT NULL,
     currency text NOT NULL,
-    settled_at timestamp with time zone NOT NULL,
-    raw_jws text NOT NULL
+    settled_at timestamp with time zone NOT NULL
 );
 
 
@@ -534,7 +533,7 @@ ALTER TABLE ONLY public.ar_internal_metadata
 --
 
 ALTER TABLE ONLY public.bookings
-    ADD CONSTRAINT bookings_no_overlapping_room_nights EXCLUDE USING gist (room_type_id WITH =, daterange(check_in, check_out) WITH &&) WHERE (((status)::text = ANY (ARRAY[('reserved'::character varying)::text, ('confirmed'::character varying)::text])));
+    ADD CONSTRAINT bookings_no_overlapping_room_nights EXCLUDE USING gist (room_type_id WITH =, daterange(check_in, check_out) WITH &&) WHERE (((status)::text = ANY ((ARRAY['reserved'::character varying, 'confirmed'::character varying])::text[])));
 
 
 --

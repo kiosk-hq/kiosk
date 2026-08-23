@@ -928,8 +928,12 @@ RSpec.describe Kiosk::Server::Executor do
       sql, name, binds = last_statement
 
       expect(name).to eq("Kiosk settlement insert")
-      expect(sql).to  include("VALUES ($1, $2, $3, $4, $5, $6, $7, now(), '')")
+      expect(sql).to  include("VALUES ($1, $2, $3, $4, $5, $6, $7, now())")
       expect(binds).to eq(["cart-row", "u-1", "a-1", "https://demo.example", "pi_1", 1599, "eur"])
+      # K-948: no `raw_jws` column, so no literal `''` trailing the VALUES list.
+      # Asserted on the COLUMN list as well, because a statement that still
+      # named the column while binding nothing would satisfy the line above.
+      expect(sql).not_to include("raw_jws")
     end
 
     # The regression guard the row is actually about: no value — not even a

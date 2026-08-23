@@ -396,9 +396,9 @@ def forge_settlement!(order_id, cart_mandate_id:)
   ).first["id"]
   conn.execute(
     "INSERT INTO kiosk.settlements (cart_mandate_id, user_id, agent_id, issuer, psp_reference, " \
-    "settled_amount_cents, currency, settled_at, raw_jws) " \
+    "settled_amount_cents, currency, settled_at) " \
     "VALUES (#{q(cart_row.to_s)}::uuid, #{q(USER_ID)}::uuid, #{q(AGENT_ID)}::uuid, " \
-    "#{q('https://getgrocery.demo')}, #{q('pi_forged_receipt')}, #{q(CHEAP_PRICE)}, #{q('eur')}, now(), #{q('jws')})"
+    "#{q('https://getgrocery.demo')}, #{q('pi_forged_receipt')}, #{q(CHEAP_PRICE)}, #{q('eur')}, now())"
   )
 end
 

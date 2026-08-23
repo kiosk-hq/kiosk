@@ -248,6 +248,19 @@ module Kiosk
       # plus `settlements` (PSP settlement receipt). Each signed-mandate row
       # carries its original JWS so the chain is auditable end-to-end.
       #
+      # A SETTLEMENT HAS NO `raw_jws`, AND THAT IS THE POINT (K-948). The three
+      # mandate tables each hold one — the assistant signed those, and §11.6's
+      # replay check compares all three byte for byte — but a settlement is a
+      # SERVER-MINTED receipt: nobody signs it, so there is no signature to
+      # store. It shipped until 2026-08-23 as a `text NOT NULL` column that its
+      # only writer set to `''` on every row, which read like the sibling
+      # tables' load-bearing column and was exactly the misreading K-876 found
+      # published («non-repudiation both ways»). An operator counter-signature
+      # would be a new normative protocol element — an ADR, not a column — so
+      # the column goes rather than waiting for a producer. ADR-0002 has said
+      # `settlements` has «no `mandate_id` and no `raw_jws`» since the table
+      # was named; this makes the schema agree with it.
+      #
       # `id` is a SERVER-generated uuid PK (`gen_random_uuid()`) — never
       # supplied by the caller, so one principal cannot pre-occupy or block
       # another's row on these (currently RLS-less) tables. The agent-signed
@@ -324,7 +337,6 @@ module Kiosk
             settled_amount_cents bigint NOT NULL,
             currency             text NOT NULL,
             settled_at           timestamptz NOT NULL,
-            raw_jws              text NOT NULL,
             UNIQUE (cart_mandate_id)
           );
           CREATE INDEX idx_settlements_user_id ON "#{schema}".settlements (user_id);

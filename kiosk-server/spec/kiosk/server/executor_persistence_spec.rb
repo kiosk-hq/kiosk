@@ -303,9 +303,13 @@ RSpec.describe Kiosk::Server::Executor do
         expect(row["psp_reference"]).to        eq(settled[:psp_reference])
         expect(row["settled_amount_cents"]).to eq(1599)
         expect(row["currency"]).to             eq("eur")
-        # Server-minted receipt: no agent JWS to carry.
-        expect(row["raw_jws"]).to eq("")
         expect(row["settled_at"]).not_to be_nil
+        # Server-minted receipt: no agent JWS to carry, so the table has no
+        # column to carry one in (K-948). Asserted on the ROW's keys rather
+        # than on a value, because the previous shape of this assertion —
+        # `row["raw_jws"] == ""` — is exactly what a dropped column would also
+        # satisfy if it were read as a missing key coerced to nil.
+        expect(row.keys).not_to include("raw_jws")
       end
 
       it "enforces one settlement per cart (UNIQUE (cart_mandate_id))" do

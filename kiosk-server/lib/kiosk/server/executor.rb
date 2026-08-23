@@ -581,15 +581,18 @@ module Kiosk
       # PK is SERVER-generated; `cart_mandate_id` references the SERVER cart id
       # returned by phase 1 (`cart_row_id`), so the FK resolves. This is a
       # server-side settlement receipt (no agent-signed id), so there is no
-      # `mandate_id`; `UNIQUE (cart_mandate_id)` is its idempotency anchor.
+      # `mandate_id` and no `raw_jws` either (K-948): nobody signs a settlement,
+      # so there is no signature to store. The signed half of the trail is the
+      # three mandate rows this method's callers have already written.
+      # `UNIQUE (cart_mandate_id)` is its idempotency anchor.
       # Returns the new settlement server id.
       def persist_settlement(cart_row_id:, cart:, settled:)
         schema = Kiosk.configuration.schema
         sql = <<~SQL
           INSERT INTO #{schema}.settlements
             (cart_mandate_id, user_id, agent_id, issuer, psp_reference,
-             settled_amount_cents, currency, settled_at, raw_jws)
-          VALUES ($1, $2, $3, $4, $5, $6, $7, now(), '')
+             settled_amount_cents, currency, settled_at)
+          VALUES ($1, $2, $3, $4, $5, $6, $7, now())
           RETURNING id
         SQL
         insert_returning_id("Kiosk settlement insert", sql, [

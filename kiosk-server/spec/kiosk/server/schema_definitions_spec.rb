@@ -174,7 +174,17 @@ RSpec.describe Kiosk::Server::SchemaDefinitions do
     it "stores money as bigint cents and keeps raw JWS" do
       expect(sql).to include("cap_amount_cents  bigint")
       expect(sql).to include("settled_amount_cents bigint")
-      expect(sql.scan("raw_jws").size).to be >= 3
+      expect(sql.scan("raw_jws").size).to eq(3)
+    end
+
+    # K-948. The three SIGNED mandate tables each carry the JWS the assistant
+    # signed; a settlement is a server-minted receipt nobody signs, so a
+    # `raw_jws` column on it could only ever hold the empty string its one
+    # writer put there. `eq(3)` above and this assertion are the same fact read
+    # from both ends: exactly three, and not on this table.
+    it "gives settlements NO raw_jws column — nobody signs a server-minted receipt" do
+      settlements_table = sql[/CREATE TABLE "kiosk"\.settlements.*?\);/m]
+      expect(settlements_table).not_to match(/^\s*raw_jws\s+\w/)
     end
 
     it "keeps a server-generated uuid PK on every table (never caller-supplied)" do

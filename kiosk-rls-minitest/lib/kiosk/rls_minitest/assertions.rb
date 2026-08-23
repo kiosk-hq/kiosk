@@ -6,7 +6,9 @@ module Kiosk
   module RLSMinitest
     # Minitest assertions for the structured Kiosk error classes. Mixed
     # into `Minitest::Test` (and friends) automatically when the user
-    # `include Kiosk::TestHelpers` — see {Kiosk::RLSMinitest::Integration}.
+    # `include Kiosk::TestHelpers` — the hook that does it lives in
+    # `kiosk/rls_minitest/integration.rb`, which reopens {Kiosk::TestHelpers}
+    # rather than declaring a constant of its own.
     module Assertions
       # Pass when the block raises {Kiosk::TestHelpers::Errors::RLSDenied}.
       def assert_rls_denied(msg = nil, &block)

@@ -96,6 +96,35 @@ def demo_tasks(dir)
   names
 end
 
+# ── Static VERB inventory (K-987) ────────────────────────────────────────────
+#
+# Same disease as the task list above, one shelf over: getgrocery's README opened
+# by naming three queries and three actions where the demo registers four and
+# four, so `kyc_status` — the verb an assistant must poll to clear the alcohol
+# gate — was undocumented in the demo's own README while `demo:agecheck`
+# asserted it. Nothing joined the prose to the registrations, so it rotted the
+# moment a verb was added.
+#
+# A verb is `kind :query` / `kind :action` in `app/controllers/kiosk/*.rb`,
+# followed by the `def <name>` the declaration decorates. A `kind` with no
+# method after it is a HARD ERROR rather than a silent skip, for the same reason
+# an unknown namespace shape is: a parser that fails open is worse than none.
+def demo_verbs(dir)
+  names = []
+  Dir[File.join(dir, "app", "controllers", "kiosk", "*.rb")].sort.each do |file|
+    lines = File.readlines(file, chomp: true)
+    lines.each_with_index do |line, i|
+      next unless line.match?(/^\s*kind :(?:query|action)\s*$/)
+
+      method = lines[(i + 1)..].find { |l| l.match?(/^\s*def \w+/) }
+      abort "#{file}:#{i + 1}: `kind` with no `def` after it — bin/check-ci-tasks cannot name this verb" if method.nil?
+
+      names << method[/^\s*def (\w+)/, 1]
+    end
+  end
+  names
+end
+
 # ── The workflow's own view ──────────────────────────────────────────────────
 workflow = YAML.load_file(WORKFLOW)
 entries  = workflow.dig("jobs", "demos", "strategy", "matrix", "include") or
@@ -197,6 +226,20 @@ tables.each do |demo, table|
               "outside the generated CI-TASKS table — say what it proves in the hand-written task list"
   end
 
+  # ── And is the VERB documented at all? (K-987) ────────────────────────────
+  #
+  # The same presence-only rule for the other inventory a demo README claims to
+  # describe. getgrocery's opening sentence named three queries and three
+  # actions against four and four; `kyc_status` appeared nowhere in the file.
+  # Presence only, never the prose: a reader searching the README for a verb an
+  # assistant can call must find it somewhere.
+  demo_verbs(File.join(ROOT, demo)).each do |v|
+    next if body.match?(/(?<![\w])#{Regexp.escape(v)}(?![\w])/)
+
+    errors << "#{demo}/README.md: the verb `#{v}` is registered in app/controllers/kiosk/ but is never " \
+              "named in the README — an assistant-callable verb the demo's own README does not mention"
+  end
+
   next if current == table
 
   if write
@@ -224,7 +267,7 @@ if (i = ARGV.index("--verify-inventory"))
 end
 
 if errors.empty?
-  puts "check-ci-tasks: OK — every demo: task is either run by CI or opted out with a reason" unless write
+  puts "check-ci-tasks: OK — every demo: task is either run by CI or opted out with a reason, and every registered verb is named in its README" unless write
   exit 0
 end
 

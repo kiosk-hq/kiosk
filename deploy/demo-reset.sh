@@ -7,11 +7,15 @@
 # By default the six NON-getgrocery demos are DROPPED and freshly seeded (they
 # hold only ephemeral "poker" data, so a clean reset is safe and gives the
 # current realistic content with no stale rows — K-464). getgrocery is instead
-# ADDITIVELY re-seeded so its Hermes-verified order f8bc3efb (cited on the
-# landing) survives.
+# ADDITIVELY re-seeded, because it holds the orders REAL third-party assistants
+# placed against this origin — the Hermes-verified order f8bc3efb among them.
+# Those rows are evidence of a run that happened, and seeding cannot reproduce
+# one: a wipe destroys the record permanently rather than refreshing it. No page
+# kiosk.tech serves cites any of these order ids, and this note used to say one
+# did (K-986) -- the reason is the evidence, not a link.
 #
-#   bash demo-reset.sh          # reset the 6; getgrocery additive (keeps the order)
-#   bash demo-reset.sh --all    # ALSO wipe+reseed getgrocery (loses the cited order)
+#   bash demo-reset.sh          # reset the 6; getgrocery additive (keeps the real runs)
+#   bash demo-reset.sh --all    # ALSO wipe+reseed getgrocery (destroys them)
 #
 # The KYC broker (kyc.demo) has no demo content and is left untouched.
 set -uo pipefail

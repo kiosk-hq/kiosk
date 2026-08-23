@@ -214,6 +214,25 @@ semantics are identical to the NVS-backed version.
 
 ---
 
+## Unlocking a flashed board WITHOUT an iPhone
+
+`../bin/ble-unlock` (Python 3, `pip3 install bleak`) writes a rental token
+straight to the lock's unlock characteristic over BLE from a Mac or Linux
+laptop, so the board can be exercised with no App Clip and no Apple account:
+
+```
+../bin/ble-unlock --scooter SK-001 --token "<wire token>"
+../bin/ble-unlock --scooter SK-001 --from-server   # SERVER_URL env; mints via the demo
+```
+
+It is built against the wire contract above (service `4e2a1000-…`,
+characteristic `4e2a1002-…`, UTF-8 token bytes, write-with-response) and is
+**UNVERIFIED until run against a real flashed ESP32-C3** — its own header says
+so, and the table below is where that status is tracked. It was an orphan in the
+tree until K-992; nothing else in the repo named it.
+
+---
+
 ## What is and is not proven here
 
 | Claim | Status |
@@ -228,6 +247,6 @@ semantics are identical to the NVS-backed version.
 | C verifier accepts a freshly Ruby/OpenSSL-signed v2 token | **PROVEN** (`make crosscheck`) |
 | jti_store: insert → seen-again → reject; expired entry pruned → re-insert ok | **PROVEN** (`make test` jti-store tests) |
 | Durable replay prevention across reboot (NVS backend, host-tested semantics) | **PROVEN** on host (in-memory backend); NVS wiring documented in `jti_store.c`, activates on board |
-| BLE GATT advertising + connect + write unlock | **Not yet** — needs board |
+| BLE GATT advertising + connect + write unlock | **Not yet** — needs board (`../bin/ble-unlock` is the no-Apple harness for this row) |
 | GPIO drives relay on valid token | **Not yet** — needs board |
 | App Clip → lock BLE end-to-end | **Not yet** — needs board + Apple account |

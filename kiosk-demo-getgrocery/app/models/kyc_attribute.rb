@@ -1,7 +1,7 @@
 # frozen_string_literal: true
 
 # ONE named anonymized boolean a valid KYC attestation granted an agent, in the
-# ENGINE's own `kiosk.kyc_attributes` table (canonical migration 009). For
+# ENGINE's own `kiosk.kyc_attributes` table (canonical migration 006). For
 # getgrocery that is `age_over_18`, and nothing else: the alcohol age gate on
 # `create_order` is this origin's only KYC-gated verb.
 #

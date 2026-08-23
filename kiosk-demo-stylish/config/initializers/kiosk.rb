@@ -99,8 +99,8 @@ Kiosk.configure do |c|
     c.owner = c.owner.merge(pow_difficulty: PowDifficulty.level, pow_notice: notice)
   end
   # Dual-check (skill.md): canonical skill URL + SHA-256 of its content.
-  c.skill_url    = "https://kiosk.tech/skill-v0.4.6.md"
-  c.skill_sha256 = "e8b67686ccdb7c4ad920a0af1309c76c870a98a4e187710fa43b9f6be5531810"
+  c.skill_url    = "https://kiosk.tech/skill-v0.4.7.md"
+  c.skill_sha256 = "448d6c04ec70b847a1d157d1f9c0ef3a33e6a2cd726782530923df71ae0d7938"
 
   # ── NO c.agent_idp ───────────────────────────────────────────────────────
   # Deliberate, and the point of the line's absence (T-104). An assistant
@@ -139,10 +139,19 @@ Kiosk.configure do |c|
   # would render a bare 401 (MANAGE-PAGE-UNAUTH-UX).
   c.sign_in_path = "/users/sign_in"
 
-  # Per-assistant spending cap: read the cap from
-  # agents.spending_cap_cents (the column edited on the manage-assistants
-  # page). window_days stays default nil = all-time cumulative spend.
-  c.spending_cap = Kiosk::Server::ColumnSpendingCap.new
+  # ── NO spending_cap seam, and the reason is the same as the NO
+  #    payment_provider one ──────────────────────────────────────────────────
+  # `config.spending_cap` is read at exactly one site — `Executor#verb_pay`'s
+  # mandate chain — and since K-800 the provider check runs FIRST, so a `pay`
+  # here is `403 no payment_provider configured` before a cart exists. stylish
+  # configures no payment_provider (this salon takes payment in the chair), so a
+  # seam set here could never be consulted: it was, until K-989 measured it.
+  # What stylish DOES demonstrate is the governance surface above the cap — the
+  # manage-assistants page writes `agents.spending_cap_cents`, which
+  # `demo:binding` asserts end to end — and that is deliberate: a human sets the
+  # policy on the page whether or not this origin is the one that charges.
+  # An origin that both charges and caps sets `c.spending_cap =
+  # Kiosk::Server::ColumnSpendingCap.new` beside its `payment_provider`.
 
   # ── Registration PoW gate — ALWAYS ON (register is uniformly tolled) ──────
   c.registration_pow_count  = 1

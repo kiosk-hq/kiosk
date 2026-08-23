@@ -76,7 +76,7 @@ e2e/
 ├── run.sh                                  # main script
 ├── assistant.sh                            # the mock AI assistant
 ├── schema_conformance.rb                   # the published JSON Schemas run against THIS origin's live wire bytes (K-822)
-├── schemas/                                # vendored copies of the five published normative schemas (`bin/check-spec-schemas` holds them against the originals)
+├── schemas/                                # vendored copies of five of the six published normative schemas (pow.schema.json is vendored in kiosk-server instead; `bin/check-spec-schemas` holds all six against the originals)
 ├── mise.toml                               # pins the Ruby the harness runs on
 ├── README.md                               # this file
 └── fixtures/                               # files copied into the generated app

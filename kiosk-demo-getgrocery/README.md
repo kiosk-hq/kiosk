@@ -2,9 +2,11 @@
 
 Grocery delivery demo operator for Kiosk.
 
-Single implicit store (getgrocery IS the store): catalog / delivery_slots /
-my_orders queries, create_order / reschedule_delivery / payment_setup actions
-(delivery slot + address are part of create_order), real Stripe SetupIntent
+Single implicit store (getgrocery IS the store): `catalog` / `delivery_slots` /
+`my_orders` / `kyc_status` queries, `create_order` / `reschedule_delivery` /
+`payment_setup` / `request_kyc` actions (delivery slot + address are part of
+`create_order`; `request_kyc` starts the 18+ anonymized check the alcohol gate
+needs and `kyc_status` is the verb an assistant polls for its outcome), real Stripe SetupIntent
 card-on-file payments (stripe-mock when no key is set) behind a cashier check
 (the cart must be EUR, mirror the order at catalog prices, and sum correctly),
 and the claim-rebind half of the account-binding ceremony.

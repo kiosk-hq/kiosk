@@ -23,9 +23,18 @@ module Kiosk
         raise NotImplementedError, "#{self.class}#verify must be implemented by the adapter"
       end
 
-      # Optional callback for immediate revocation on satellite/JWT paths.
-      # Default no-op (TTL-based revocation). Override to add a per-request
-      # check of users.locked_at / users.confirmed_at / etc.
+      # An UNUSED EXTENSION POINT, and it says so rather than describing a
+      # callback that never fires (K-990, same close as K-933). It was meant as
+      # the immediate-revocation hook for the satellite/JWT paths — a
+      # per-request check of users.locked_at / users.confirmed_at — but NOTHING
+      # in kiosk-server calls it, so overriding it changes no answer on the
+      # wire. Revocation today is TTL-based plus the per-identity
+      # revoked-before watermark (`/auth/revoke`), and the human side is the
+      # host application's own IdP (Devise's `active_for_authentication?` for
+      # the bundled adapter). Wiring it would be a new per-request query on
+      # every authenticated call, which is a design decision and an ADR, not a
+      # line a fix wave may add; until that happens this stays here as the
+      # named seam a satellite deployment would implement against.
       #
       # @param user_id [String, Integer]
       # @return [Boolean]

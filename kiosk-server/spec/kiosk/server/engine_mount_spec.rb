@@ -241,7 +241,7 @@ RSpec.describe "mount Kiosk::Server::Engine (the one-line surface)" do
   # half: an engine mounted inside somebody else's application must not stamp
   # that application's responses, working or broken.
   # K-749(b). §3 point 6 is a MUST over the WHOLE mount — "the discovery
-  # document's `endpoint`, and everything below it: the four wire verbs, the
+  # document's `endpoint`, and everything below it: every verb endpoint, the
   # auth endpoints, the account-binding endpoints, the KYC endpoint, and the
   # mount-relative JWKS … on success and on error alike" — and until this
   # example the only coverage was three `assert` lines in `e2e/assistant.sh`

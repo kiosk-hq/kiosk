@@ -86,10 +86,14 @@ class Kiosk::AppointmentsController < ApplicationController
   # date nobody would notice. `example_params` is a resolvable slot (see
   # {Kiosk::Server::SchemaSlots}), so the example names a time that is still
   # ahead of whoever is reading the catalog.
-  example_params({ salon_id: 1, service_id: 3, slot: -> { (Time.current + 7.days).utc.change(hour: 14).iso8601 } })
+  #
+  # THE INSTANT ITSELF LIVES IN THE OPERATION (K-972), not here: the same value
+  # is quoted back by the two `slot` refusals as the shape to retry with, and
+  # two spellings of "an instant that works" are two things to keep in step.
+  example_params({ salon_id: 1, service_id: 3, slot: -> { BookAppointmentOperation.example_slot } })
   example_row({
     appointment_id: 1, salon_id: 1,
-    slot: -> { (Time.current + 7.days).utc.change(hour: 14).iso8601 }, service: "Colour",
+    slot: -> { BookAppointmentOperation.example_slot }, service: "Colour",
     currency: "EUR", price_cents: 9000, price_eur: "€90",
   })
   def book_appointment

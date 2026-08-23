@@ -45,13 +45,19 @@ class BookAppointmentOperation
     # "next tuesday" casts to TODAY AT MIDNIGHT and was booked silently — a real
     # appointment, in the past, that the agent never asked for. Parse it here,
     # strictly, and say what shape was wanted.
+    # THE «e.g.» IS COMPUTED, NOT WRITTEN DOWN (K-972). These two sentences are
+    # read by an assistant that is about to retry, so the instant they name has
+    # to be one this operation would ACCEPT — a literal is a hint that turns
+    # into a second refusal on a day nobody notices, and the guard below refuses
+    # anything at or before now. Same instant the catalog's `example_params`
+    # publishes, and for the same reason.
     if slot.blank?
-      return refused("missing field: slot — an ISO 8601 timestamp, e.g. \"2026-10-01T14:00:00Z\"")
+      return refused("missing field: slot — an ISO 8601 timestamp, e.g. #{example_slot.inspect}")
     end
     slot_at = begin
       Time.iso8601(slot.to_s)
     rescue ArgumentError, TypeError
-      return refused("invalid slot #{slot.inspect} — pass an ISO 8601 timestamp, e.g. \"2026-10-01T14:00:00Z\"")
+      return refused("invalid slot #{slot.inspect} — pass an ISO 8601 timestamp, e.g. #{example_slot.inspect}")
     end
 
     # ── K-969: AN APPOINTMENT IN THE PAST IS REFUSED ────────────────────────
@@ -132,6 +138,25 @@ class BookAppointmentOperation
     end
 
     OperationResult.ok(value)
+  end
+
+  # THE ONE INSTANT THIS DEMO PUBLISHES AS AN EXAMPLE (K-969, K-972).
+  #
+  # Read from two places that must not disagree: the catalog, through
+  # `Kiosk::AppointmentsController`'s `example_params`/`example_row` (a
+  # RESOLVABLE slot — see {Kiosk::Server::SchemaSlots}), and the two refusals
+  # above, which an assistant reads when it is about to retry. Both are «here
+  # is a value that works», so both have to name an instant the guard below
+  # would ACCEPT, and a written-down one stops being that on a day nobody
+  # notices.
+  #
+  # A week out at 14:00 UTC: comfortably ahead of NOW from any caller's clock,
+  # and a round wall-clock hour so the example reads like something a human
+  # asked for.
+  #
+  # @return [String] an ISO 8601 instant with an offset, always later than now
+  def self.example_slot
+    (Time.current + 7.days).utc.change(hour: 14).iso8601
   end
 
   # Every refusal this verb can make is a `bad_request` — see

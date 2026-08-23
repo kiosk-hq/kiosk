@@ -171,6 +171,28 @@ module WireArguments
     zone.now.to_date
   end
 
+  # THE CHECK-IN A PUBLISHED EXAMPLE NAMES (K-972): tomorrow, in the property's
+  # own locale.
+  #
+  # A descriptor's `example_params`/`example_row` say «copy this verbatim», and
+  # a calendar literal there ages into a 400 the moment {#past_stay}'s floor
+  # passes it — `hotel_detail` published `check_in: "2026-09-01"`, which this
+  # origin would have started refusing on 1 September with nothing in the tree
+  # to notice. Tomorrow rather than {#today} so the example survives the whole
+  # day it is read on, in any client's timezone.
+  #
+  # Read through a proc from the declaration, never called at class-body load —
+  # see {Kiosk::Server::SchemaSlots}.
+  def example_check_in
+    today + 1
+  end
+
+  # The checkout day a published example names: a three-night stay from
+  # {#example_check_in}, which is what the `example_row` beside it prices.
+  def example_check_out
+    example_check_in + 3
+  end
+
   # @param check_in [Date] the first night asked for
   # @return [OperationResult, nil] a refusal, or nil when the stay is bookable
   def past_stay(check_in)

@@ -148,8 +148,18 @@ class Kiosk::StorefrontController < ActionController::API
                   },
                   required: %w[delivery_slot_id date slot_at label zone],
                 }
-  example_params({ date: "2026-08-10", delivery_address: "42 Camden Street, Dublin 2" })
-  example_row({ delivery_slot_id: 1, date: "2026-08-10", slot_at: "2026-08-10T08:00:00+01:00",
+  # THE DATE IS RESOLVED, NOT WRITTEN DOWN (K-972). A calendar literal here is
+  # an example that ages into a 400: since K-969 a date before today is
+  # REFUSED, so the published «copy this verbatim» params stopped working on a
+  # day nobody would have noticed. `example_params` and `example_row` are
+  # RESOLVABLE slots (see {Kiosk::Server::SchemaSlots}), so both name
+  # {DeliverySlots.example_date} — tomorrow in the operator's own clock, whose
+  # windows are all still bookable when the catalog is read.
+  example_params({ date:             -> { DeliverySlots.example_date.iso8601 },
+                   delivery_address: "42 Camden Street, Dublin 2" })
+  example_row({ delivery_slot_id: 1,
+                date:    -> { DeliverySlots.example_date.iso8601 },
+                slot_at: -> { DeliverySlots.slot_at(DeliverySlots.example_date, 1).iso8601 },
                 label: "08:00–10:00", zone: "D02" })
   def delivery_slots
     # `params.key?` and not `blank?`: this verb asked `params.fetch(:date) { … }`,

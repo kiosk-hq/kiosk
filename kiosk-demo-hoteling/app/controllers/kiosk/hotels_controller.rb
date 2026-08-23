@@ -467,14 +467,27 @@ class Kiosk::HotelsController < ActionController::API
                   required: %w[property_id name neighbourhood stars address amenities currency
                                room_types_scope check_in check_out room_types],
                 }
-  example_params({ property_id: 4, check_in: "2026-09-01", check_out: "2026-09-04" })
+  # THE STAY IS RESOLVED, NOT WRITTEN DOWN (K-972). A calendar literal here is
+  # an example that ages into a 400: since K-969 a `check_in` before today is
+  # REFUSED, so the published «copy this verbatim» params had an expiry date
+  # nothing in the tree was watching. `example_params` and `example_row` are
+  # RESOLVABLE slots (see {Kiosk::Server::SchemaSlots}), so both name
+  # {WireArguments.example_check_in}/{WireArguments.example_check_out}, and the
+  # `room_types_scope` sentence is built from the same two — it is a restatement
+  # of the dates and must never be a second copy of them.
+  example_params({ property_id: 4,
+                   check_in:  -> { WireArguments.example_check_in.iso8601 },
+                   check_out: -> { WireArguments.example_check_out.iso8601 } })
   example_row({
     property_id: 4, name: "Bosphorus Palace", neighbourhood: "Beşiktaş", stars: 5,
     address: "Çırağan Cd. 88, Beşiktaş, Istanbul",
     amenities: %w[wifi breakfast pool spa sea_view airport_shuttle],
     currency: "eur",
-    room_types_scope: "free 2026-09-01..2026-09-04",
-    check_in: "2026-09-01", check_out: "2026-09-04",
+    room_types_scope: -> {
+      "free #{WireArguments.example_check_in.iso8601}..#{WireArguments.example_check_out.iso8601}"
+    },
+    check_in:  -> { WireArguments.example_check_in.iso8601 },
+    check_out: -> { WireArguments.example_check_out.iso8601 },
     room_types: [
       { room_type_id: 7, name: "Classic",   nightly_price_cents: 15000 },
       { room_type_id: 8, name: "Bosphorus", nightly_price_cents: 25000 },

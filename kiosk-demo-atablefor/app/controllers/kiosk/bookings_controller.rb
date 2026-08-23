@@ -95,15 +95,23 @@ class Kiosk::BookingsController < ApplicationController
                 },
                 required: %w[booking_id restaurant_id restaurant_table_id party_size
                              date time seating_at status]
+  # THE SEATING IS RESOLVED, NOT WRITTEN DOWN (K-972). A calendar literal here
+  # is an example that ages into a 400 — a seating that has already passed is
+  # refused, so «copy this verbatim» stopped being true on a day nobody would
+  # have noticed. `example_params` and `example_row` are RESOLVABLE slots (see
+  # {Kiosk::Server::SchemaSlots}), so both name {Seatings.example_date} and
+  # {Seatings.example_time}, and `seating_at` is derived from that same pair
+  # through the same helper `availability` uses — so the three cannot drift.
   example_params({
     restaurant_id: 1, restaurant_table_id: 1,
-    date: "2026-08-08", time: "20:00", party_size: 2,
+    date: -> { Seatings.example_date.iso8601 }, time: Seatings::TIMES[1], party_size: 2,
   })
   example_row({
     booking_id: "b1f2a3c4-5d6e-4f70-8a91-2b3c4d5e6f70",
     restaurant_id: 1, restaurant_table_id: 1, party_size: 2,
-    date: "2026-08-08", time: "20:00",
-    seating_at: "2026-08-08T20:00:00+01:00", status: "confirmed",
+    date: -> { Seatings.example_date.iso8601 }, time: Seatings::TIMES[1],
+    seating_at: -> { Seatings.seating_at(Seatings.example_date, Seatings.example_time).iso8601 },
+    status: "confirmed",
   })
   def book_table
     render_operation BookTableOperation.call(

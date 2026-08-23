@@ -36,6 +36,30 @@ module Seatings
     zone.now
   end
 
+  # THE DAY A PUBLISHED EXAMPLE NAMES (K-972): tomorrow, in the operator's own
+  # locale.
+  #
+  # A descriptor's `example_params`/`example_row` say «copy this verbatim», and
+  # a calendar literal there stops being true on a day nobody notices — this
+  # demo's examples named 2026-08-08, which {past?} had been refusing for a
+  # fortnight. Tomorrow rather than today because ALL THREE of a future day's
+  # seatings are still bookable, while today's example goes wrong at 21:00
+  # Lisbon.
+  #
+  # Read through a proc from the declaration, never called at class-body load —
+  # see {Kiosk::Server::SchemaSlots}.
+  def example_date
+    now.to_date + 1
+  end
+
+  # The seating time a published example names: the MAIN seating, the middle of
+  # {TIMES}. A wall-clock "HH:MM" never ages, so this is a constant and not a
+  # second resolvable slot — it is here so the example and {example_date} are
+  # read from one place.
+  def example_time
+    TIMES[1]
+  end
+
   # A seating's start as a zoned Time in the operator's locale (Lisbon),
   # DST-correct. `time` is one of TIMES ("19:00"). Its .iso8601 carries the real
   # offset (+01:00 summer / +00:00 winter) so an assistant reads an unambiguous

@@ -180,13 +180,21 @@ class Kiosk::OrdersController < ActionController::API
                   pay_hint:    { type: "string", description: "The mandate this order expects, in words." },
                 },
                 required: %w[order_id total_cents total_eur currency slot_at pay_hint]
+  # THE DELIVERY DAY IS RESOLVED, NOT WRITTEN DOWN (K-972) — see
+  # {DeliverySlots.example_date}. A literal here published a `delivery_date`
+  # the operation refuses as past, which is the one thing an example must not
+  # do. `slot_at` is derived from the SAME day and the slot id beside it, so
+  # the two halves of the example cannot drift apart either.
   example_params({
     items: [{ sku: "sourdough-bread", qty: 2 }, { sku: "greek-yogurt", qty: 1 }],
-    delivery_slot_id: 3, delivery_date: "2026-08-10", delivery_address: "42 Camden Street, Dublin 2",
+    delivery_slot_id: 3,
+    delivery_date:    -> { DeliverySlots.example_date.iso8601 },
+    delivery_address: "42 Camden Street, Dublin 2",
   })
   example_row({
     order_id: "e2b1c0d4-5f6a-4b3c-8d2e-1f0a9b8c7d6e", total_cents: 1287,
-    total_eur: "€12.87", currency: "eur", slot_at: "2026-08-10T12:00:00+01:00",
+    total_eur: "€12.87", currency: "eur",
+    slot_at: -> { DeliverySlots.slot_at(DeliverySlots.example_date, 3).iso8601 },
     pay_hint: "pay in EUR with a cart mandate whose line_items mirror this order …",
   })
   def create_order
@@ -240,10 +248,12 @@ class Kiosk::OrdersController < ActionController::API
                   rescheduled_at: { type: "string", description: "The NEW delivery window's start instant, ISO 8601 with offset." },
                 },
                 required: %w[order_id rescheduled_at]
+  # Resolved for {DeliverySlots.example_date}'s reason (K-972): a literal
+  # `delivery_date` here published a reschedule the operation refuses.
   example_params({ order_id: "e2b1c0d4-5f6a-4b3c-8d2e-1f0a9b8c7d6e", delivery_slot_id: 3,
-                   delivery_date: "2026-08-10" })
+                   delivery_date: -> { DeliverySlots.example_date.iso8601 } })
   example_row({ order_id: "e2b1c0d4-5f6a-4b3c-8d2e-1f0a9b8c7d6e",
-                rescheduled_at: "2026-08-10T12:00:00+01:00" })
+                rescheduled_at: -> { DeliverySlots.slot_at(DeliverySlots.example_date, 3).iso8601 } })
   def reschedule_delivery
     render_operation RescheduleDeliveryOperation.call(
       order_id:         params[:order_id],

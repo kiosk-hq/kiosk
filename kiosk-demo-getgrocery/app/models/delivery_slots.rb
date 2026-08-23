@@ -39,6 +39,24 @@ module DeliverySlots
     zone.now
   end
 
+  # THE DAY A PUBLISHED EXAMPLE NAMES (K-972): tomorrow, in the operator's own
+  # locale.
+  #
+  # A descriptor's `example_params`/`example_row` say «copy this verbatim», and
+  # a calendar literal there stops being true on a day nobody notices: since
+  # K-969 a `date` before today is REFUSED, so the published example aged into
+  # a 400. Tomorrow is the right answer rather than today because EVERY window
+  # of a future day is still bookable — today's example would go empty at 18:00
+  # Dublin — and because tomorrow is already what a blank `delivery_date` means
+  # to both write verbs, so an assistant that copies the catalogue gets exactly
+  # what omitting the argument would have given it.
+  #
+  # Read through a proc from the declaration, never called at class-body load —
+  # see {Kiosk::Server::SchemaSlots}.
+  def example_date
+    now.to_date + 1
+  end
+
   # Start-of-slot as a zoned Time in the operator's locale (Europe/Dublin),
   # DST-correct. slot_id is 1..COUNT. Its .iso8601 carries the real offset
   # (+01:00 in summer / +00:00 in winter), so an assistant reads an unambiguous

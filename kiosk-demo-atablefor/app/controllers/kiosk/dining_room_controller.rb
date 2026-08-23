@@ -125,12 +125,17 @@ class Kiosk::DiningRoomController < ApplicationController
                                table_label capacity seating_date seating_time seating_at deposit_eur],
                 }
   example_params({ party_size: 2, neighborhood: "Alfama" })
+  # The seating is RESOLVED, not written down (K-972): this row is what an
+  # assistant carries straight into `book_table`, whose own guard refuses a
+  # seating that has passed, so a calendar literal here published a row that
+  # could not be acted on. See {Seatings.example_date}.
   example_row({
     restaurant: "Tasca do Tejo", neighborhood: "Alfama",
     cuisine: "Portuguese tavern", restaurant_id: 1,
     restaurant_table_id: 1, table_label: "Window 6", capacity: 2,
-    seating_date: "2026-08-08", seating_time: "20:00",
-    seating_at: "2026-08-08T20:00:00+01:00", deposit_eur: 10,
+    seating_date: -> { Seatings.example_date.iso8601 }, seating_time: Seatings::TIMES[1],
+    seating_at: -> { Seatings.seating_at(Seatings.example_date, Seatings.example_time).iso8601 },
+    deposit_eur: 10,
   })
   def availability
     # An ABSENT party_size and a party_size that is present but unusable are two

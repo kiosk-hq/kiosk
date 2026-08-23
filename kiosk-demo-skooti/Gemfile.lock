@@ -298,7 +298,7 @@ GEM
     securerandom (0.4.1)
     simpleidn (0.2.3)
     stringio (3.2.0)
-    stripe (19.3.1)
+    stripe (19.5.0)
       bigdecimal
       logger
     systemu (2.6.5)
@@ -450,7 +450,7 @@ CHECKSUMS
   securerandom (0.4.1) sha256=cc5193d414a4341b6e225f0cb4446aceca8e50d5e1888743fac16987638ea0b1
   simpleidn (0.2.3) sha256=08ce96f03fa1605286be22651ba0fc9c0b2d6272c9b27a260bc88be05b0d2c29
   stringio (3.2.0) sha256=c37cb2e58b4ffbd33fe5cd948c05934af997b36e0b6ca6fdf43afa234cf222e1
-  stripe (19.3.1) sha256=db738acb9df95dcf84f683886556fa8d7ae409d34a92ab8130bbf773828bbb1d
+  stripe (19.5.0) sha256=04d7bf83c65e5021cfc94bac92f2dd95d3843dcd70cac1cb8362757398bf5aaf
   systemu (2.6.5) sha256=01f7d014b1453b28e5781e15c4d7d63fc9221c29b174b7aae5253207a75ab33e
   thor (1.5.0) sha256=e3a9e55fe857e44859ce104a84675ab6e8cd59c650a49106a05f55f136425e73
   timeout (0.6.1) sha256=78f57368a7e7bbadec56971f78a3f5ecbcfb59b7fcbb0a3ed6ddc08a5094accb

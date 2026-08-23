@@ -41,6 +41,20 @@
 #                Not compared; the manifest entry records WHY they differ, so the
 #                next reader does not have to diff seven files to find out.
 #
+# `ships:` is the OTHER declaration a copy set can carry, and it answers a
+# question `except:` cannot: WHICH demos are supposed to have the file at all.
+# The lockstep rule compares whatever copies it finds, so a demo that stops
+# shipping one — or starts — changes the set silently. K-860 and K-883 are why
+# it exists: hoteling's `script/devise_session.rb` and skooti's
+# `script/bound_assistant.rb` sat in the tree with ZERO consumers in their own
+# demo, held byte-identical to six and three copies that were live, and Phil's
+# answer was to delete them. Deleting alone would have left nothing to stop the
+# next wave copying them back, because a re-added byte-identical copy is exactly
+# what the lockstep rule is happy with. So an entry may name its set exactly:
+# a demo that ships the file and is not listed FAILS, and a listed demo that
+# does not ship it FAILS too. Entries without `ships:` are unconstrained — the
+# declaration is for sets somebody has deliberately reasoned about.
+#
 # `except:` is the escape hatch for one copy that legitimately differs from its
 # siblings (getgrocery's uuid_check declares an extra JSON-Schema constant;
 # stylish's stub_user_idp is a DB-backed staff IdP). It is a demo => reason map,
@@ -262,7 +276,14 @@ COPIES = {
           "regrow the shared-counter bug.",
   },
   "script/bound_assistant.rb" => {
-    rule: :identical,
+    rule:  :identical,
+    # THREE, not four (K-883). skooti shipped a fourth copy that no skooti file
+    # required: its five drivers all `require_relative "equihash_register"` and
+    # obtain a HEADLESS agent principal, which is a real difference in what
+    # skooti demonstrates rather than an oversight, and the only cross-demo
+    # consumer (e2e/fixtures/bind_assistants.rb) requires STYLISH's copy. Listed
+    # here so re-adding it fails rather than passing as a byte-identical twin.
+    ships: %w[atablefor philslist stylish],
     why:  "The ONE way a driver obtains an AGENT principal (T-104) — the agent-side twin of " \
           "script/devise_session.rb, and :identical for the same reason. A driver used to write its " \
           "own principal down as `agent:u-…:a-…:r-…` and have a dev-only parser believe it; it now " \
@@ -270,7 +291,13 @@ COPIES = {
           "claim), which is one sequence of shipped endpoints and names no port, persona or verb.",
   },
   "script/devise_session.rb" => {
-    rule: :identical,
+    rule:  :identical,
+    # SIX, not seven (K-860). hoteling shipped a seventh copy no hoteling file
+    # required — its task list is book/isolation/redteam/schema/search/browse
+    # and none of them performs a Devise sign-in — so the "one rule, not seven"
+    # argument below covers the six demos whose drivers actually run it. Listed
+    # here so re-adding it fails rather than passing as a byte-identical twin.
+    ships: %w[atablefor getgrocery philslist skooti stylish tudu],
     why:  "The ONE way a driver obtains a HUMAN principal (T-066). Every demo authenticates its " \
           "humans with real Devise, so a driver that needs the human half of a ceremony has to " \
           "hold a real browser session: GET /users/sign_in for the cookie and the CSRF token, " \
@@ -948,6 +975,27 @@ COPIES.each do |rel, entry|
   end
 
   present = copies.keys.map(&short)
+
+  # ── The declared SET (K-860, K-883) ──────────────────────────────────────
+  # Only for entries that declare one. An unlisted demo shipping the file is a
+  # copy nobody reasoned about — which is how the two consumerless copies got
+  # here — and a listed demo that no longer ships it is the record turning back
+  # into an assumption, the same failure SKELETON_NOT_COMPARED is checked for.
+  if entry[:ships]
+    stray = present - entry[:ships]
+    gone  = entry[:ships] - present
+    unless stray.empty?
+      errors << "#{rel}: #{stray.sort.join(', ')} #{stray.size == 1 ? 'ships' : 'ship'} this file " \
+                "but #{stray.size == 1 ? 'is' : 'are'} not in its declared `ships:` set " \
+                "(#{entry[:ships].sort.join(', ')}). A copy is not free: either give that demo a " \
+                "driver that USES it and add it to `ships:` with the reason, or delete the copy."
+    end
+    unless gone.empty?
+      errors << "#{rel}: `ships:` names #{gone.sort.join(', ')}, which no longer ship#{gone.size == 1 ? 's' : ''} " \
+                "this file — update the declared set."
+    end
+  end
+
   excepted = entry[:except] || {}
   excepted.each do |demo, reason|
     errors << "#{rel}: `except:` reason for #{demo} is blank" if reason.to_s.strip.empty?

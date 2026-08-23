@@ -149,11 +149,14 @@ gem "devise"
 
 # json_schemer backs `c.validate_requests = true` in the initializer, which is
 # what makes a verb's declared input_schema EXECUTABLE — the arguments of a
-# per-verb request are validated against it, not merely published. It is an
-# OPTIONAL dependency of kiosk-server (lazily required only when the flag is
-# on), so a host that turns the flag on adds it to its own Gemfile, exactly as
-# all seven demos do. Without it the flag raises a ConfigurationError naming
-# the gem at the first validation — deliberately fail-loud.
+# per-verb request are validated against it, not merely published. It is a
+# RUNTIME dependency of kiosk-server (`add_dependency`, since 0.4), so
+# Bundler resolves it for any host that depends on the gem; it is named here
+# anyway because this Gemfile is generated for a from-scratch app and naming
+# what the initializer relies on is the point of the file. It is only lazily
+# REQUIRED — the flag being off loads nothing — and a bundle that somehow does
+# not carry it raises a ConfigurationError naming the gem at the first
+# validation, deliberately fail-loud (K-931).
 gem "json_schemer"
 RUBY
 

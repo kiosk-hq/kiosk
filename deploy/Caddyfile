@@ -84,9 +84,15 @@
 #      Confirm:       caddy list-modules | grep rate_limit
 #   2. Uncomment `import ratelimit` in (kioskproxy) AND the whole (ratelimit)
 #      snippet below, then `caddy validate --config /etc/caddy/Caddyfile`.
+#   3. Run `deploy/check-edge-ratelimit.sh` against the INSTALLED file. Step 2
+#      is a manual edit, and skipping it is otherwise silent: Caddy starts,
+#      all eight sites serve, and nothing says the edge is open (K-976).
 #
 # ALTERNATIVE (equally acceptable): a per-IP rate rule on `/kiosk/*` at a CDN /
-# WAF in front of this box. What is NOT acceptable is deploying with neither.
+# WAF in front of this box. What is NOT acceptable is deploying with neither —
+# nor with "probably one of those", which is what an unchecked box is. If you
+# took this route, say so where the check can see it:
+#   KIOSK_EDGE_RATELIMIT=external deploy/check-edge-ratelimit.sh
 #
 # ── HSTS (K-916) ─────────────────────────────────────────────────────────────
 # Every vhost below imports this snippet, so the header is emitted once for the
@@ -114,7 +120,7 @@
 (kioskproxy) {
 	encode zstd gzip
 	header Strict-Transport-Security "max-age=31536000; includeSubDomains"
-	# import ratelimit          # REQUIRED — uncomment once the module is installed (see above)
+	# import ratelimit          # REQUIRED — uncomment once the module is installed, then run deploy/check-edge-ratelimit.sh
 	# Caddy forwards X-Forwarded-For/Proto/Host to the upstream by default.
 	reverse_proxy {args[0]}
 }

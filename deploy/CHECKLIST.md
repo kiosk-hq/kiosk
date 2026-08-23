@@ -148,6 +148,12 @@ For EACH of the 7 apps:
       because `rate_limit` is not a stock directive — a stock binary refuses the WHOLE config
       ("unrecognized directive: rate_limit", verified on Caddy v2.11.2) and then no site serves at all.
       Then `sudo caddy validate --config /etc/caddy/Caddyfile` · `sudo systemctl reload caddy`.
+- [ ] **Prove the edge is limited — do not take the two ticks above on trust (K-976):**
+      `/srv/kiosk/deploy/check-edge-ratelimit.sh` · it reads `/etc/caddy/Caddyfile` and names every vhost
+      that does not reach a `rate_limit` directive, exit 1 if any does. The uncommenting is a manual step
+      and skipping it is otherwise SILENT — the box comes up, all eight sites serve, and nothing anywhere
+      says the register endpoint is unbounded. If you took the CDN/WAF route instead, declare it rather
+      than skipping the tick: `KIOSK_EDGE_RATELIMIT=external /srv/kiosk/deploy/check-edge-ratelimit.sh`.
 - [ ] **HSTS — one `header` line, and it must reach the LIVE Caddyfile too (K-916):** `deploy/Caddyfile`'s
       `(kioskproxy)` snippet emits `Strict-Transport-Security: max-age=31536000; includeSubDomains`, ENABLED
       (unlike the rate-limit above, `header` is a stock directive and needs no module). Without it a client

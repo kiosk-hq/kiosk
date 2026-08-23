@@ -17,6 +17,7 @@ This directory is the *app-side* handoff; DNS + VPS provisioning is the operator
 | `env/<app>.env.example` | Per-app env template (7 demos + `kyc-demo.env.example` for the broker). Copy to `/etc/kiosk-demo/<app>.env`. |
 | `telemetry-init.sql` | The ONE shared live-activity store: `kiosk_demo_telemetry` DB + `kiosk_telemetry` login role + the append-only events table. Only needed if you turn telemetry on — see [Live-activity telemetry](#live-activity-telemetry--wired-opt-in). |
 | `box-prep-2026-08-11.sh` | Run ON THE BOX **before** the first `prod-demo` deploy to an EXISTING box (K-509/K-540): strips the retired `KIOSK_POW_DEMO`/`_REPUTATION_DEMO`/`_BACKOFF_DEMO` flags that current code refuses at boot, and the long-dead `KIOSK_POW_REGISTER_DEMO`, from the hand-maintained `/etc/kiosk-demo/*.env`. A fresh box built from `CHECKLIST.md` needs none of it. |
+| `check-edge-ratelimit.sh` | **Run it on the box after any Caddyfile change.** Reads `/etc/caddy/Caddyfile` and answers whether every proxied vhost actually reaches a `rate_limit` directive, naming the ones that do not. The backstop ships commented (see below), so skipping the runbook step used to be SILENT — the box came up, every site served, and nothing said the edge was open (K-976). `--self-test` proves the check both ways and runs in CI. `KIOSK_EDGE_RATELIMIT=external` is the declared escape hatch for a CDN/WAF in front. |
 | `demo-reset.sh` | Run ON THE BOX to put demo data back to a clean, freshly-seeded state: drops + reseeds the six non-getgrocery demos, additively reseeds getgrocery (keeps the order the landing cites); `--all` wipes getgrocery too. This is the disk-reclaim tool. |
 | `production-smoke.sh` | **Not a deployment tool — do not run it on a deploy host.** A `RAILS_ENV=production` boot smoke for one demo per unique HTML surface (`stylish` \| `prove`), catching the eager-load / proxy-CSRF / assistant-shaped-error classes that dev-mode CI cannot see. CI is its caller. It CREATES AND DROPS `kiosk_<app>_smoke`, so `require_disposable_host()` aborts outright when the box carries deploy markers (`/srv/kiosk`, `/etc/kiosk-demo`, an installed `kiosk-demo@.service`) and otherwise demands `CI` or `KIOSK_SMOKE_I_AM_DISPOSABLE=1` (K-594). |
 | `CHECKLIST.md` | The tick-through version of this runbook — what an operator actually ticks off on deploy day, incl. the recorded skips. |
@@ -184,6 +185,9 @@ sudo cp /srv/kiosk/deploy/Caddyfile /etc/caddy/Caddyfile
 #    /etc/caddy/Caddyfile (they ship commented so a stock binary still boots).
 sudo caddy validate --config /etc/caddy/Caddyfile
 sudo systemctl reload caddy
+#    Then PROVE the edge is actually limited — the uncommenting above is a
+#    manual step and skipping it is otherwise silent (K-976):
+/srv/kiosk/deploy/check-edge-ratelimit.sh
 
 # 5. Housekeeping: NOTHING TO INSTALL. There is no cron and no timer here, and
 #    nothing in this repo reclaims demo ACCOUNTS — on a schedule or otherwise.
@@ -235,9 +239,21 @@ for it. Pick one:
 - **CDN / WAF** in front of the box (Cloudflare et al.) with a per-IP rate rule
   on `/kiosk/*`. Equally acceptable; then leave the Caddy snippet commented.
 
-Deploying with **neither** is the one unacceptable option. Verify afterwards:
-hammer `/kiosk/auth/register` from one IP and confirm you are cut off (429)
-well before the box slows down.
+Deploying with **neither** is the one unacceptable option — and until K-976 it
+was also the *quiet* option, because a box with the snippet still commented
+comes up healthy and says nothing. So verify, in both senses:
+
+```sh
+# cheap, deterministic, run it after every Caddyfile change
+/srv/kiosk/deploy/check-edge-ratelimit.sh          # reads /etc/caddy/Caddyfile
+
+# if you took the CDN/WAF route instead, declare it — the script cannot see it
+KIOSK_EDGE_RATELIMIT=external /srv/kiosk/deploy/check-edge-ratelimit.sh
+```
+
+and then once, live: hammer `/kiosk/auth/register` from one IP and confirm you
+are cut off (429) well before the box slows down. The script proves the config
+says the right thing; only the flood proves the edge does it.
 
 ## Scaling past one worker — shared stores REQUIRED (K-738)
 

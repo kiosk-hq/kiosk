@@ -770,6 +770,35 @@ jobs:
       - name: Hand-copied demo files agree, or the divergence is declared
         run: ./bin/check-demo-copies
 
+  # Does the deploy runbook's edge-rate-limit check still work? (K-976)
+  #
+  # deploy/Caddyfile ships its per-IP backstop COMMENTED, and it has to: a
+  # stock Caddy binary refuses to load a config naming `rate_limit`, so
+  # shipping it enabled would break a default install at boot. That makes
+  # enabling it a manual runbook step, and skipping a manual step was SILENT —
+  # the box came up, all eight sites served, and nothing anywhere said the
+  # register endpoint was unbounded. deploy/check-edge-ratelimit.sh is the loud
+  # half, and an operator-facing script nothing exercises is a script that
+  # rots, so its own --self-test runs here: it asserts the shipped template is
+  # reported UNPROTECTED, the same file with the two blocks uncommented is
+  # reported PROTECTED, a site that proxies past the snippet is caught even
+  # when a rate_limit exists elsewhere in the file, and the declared-external
+  # escape hatch is honoured. Four assertions, no Ruby, no database, ~0.1 s.
+  #
+  # Note the direction: assertion 1 means this job goes RED if anyone ever
+  # uncomments the backstop in the REPO, which is the mistake that would break
+  # every stock install.
+  deploy-edge-ratelimit:
+    name: the deploy edge-rate-limit check works (deploy/check-edge-ratelimit.sh)
+    runs-on: ubuntu-latest
+    # The daily schedule exists for solver-pin-live; don't rebuild the world.
+    if: github.event_name != 'schedule'
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: check-edge-ratelimit self-test
+        run: ./deploy/check-edge-ratelimit.sh --self-test
+
   # What a `gem install` gets is NOT what this repo contains, and until now
   # nothing checked the difference. kiosk-server's spec.files globbed lib/ only,
   # so the three ERB templates under app/views/kiosk/server/ were absent from

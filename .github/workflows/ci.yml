@@ -623,11 +623,41 @@ jobs:
       # transaction_timeout, a v17 param); loading them needs a psql >= 17, and
       # dumping after migrate needs a pg_dump matching the postgres:17 service.
       # Runner images ship an older client inconsistently, so pin 17.
+      #
+      # K-795 — THIS STEP RETRIES, AND IF IT IS RED, RE-RUN IT BEFORE YOU READ
+      # THE DIFF. Every command in it is a network fetch against a host we do
+      # not control (apt.postgresql.org, postgresql.org, the Ubuntu mirrors),
+      # and it has taken main red for a fetch that had nothing to do with the
+      # tree. A red head is then indistinguishable at a glance from a real
+      # regression and burns a pass re-reading a diff that was never at fault,
+      # which erodes the one signal the merge gate depends on. A bounded retry
+      # changes no RESULT — a persistent failure still fails the step on the
+      # third attempt — it only lowers the noise floor. The runner's own "Set
+      # up job" step has failed the same way and is GitHub-internal: nothing
+      # here can retry it, so a red run at THAT step is re-run, not triaged.
+      #
+      # `set -o pipefail` is load-bearing, not tidiness: the default shell is
+      # `bash -e`, so without it a failed `curl` is masked by `tee` exiting 0
+      # and this step writes an EMPTY signing key — which then fails later,
+      # somewhere else, as an apt signature error.
+      #
+      # The same three lines run in the demo-production-smoke and e2e jobs.
+      # They are one fragile fetch written three times; keep them in step.
       - name: Install PostgreSQL 17 client
         run: |
-          sudo sh -c 'echo "deb https://apt.postgresql.org/pub/repos/apt $(lsb_release -cs)-pgdg main" > /etc/apt/sources.list.d/pgdg.list'
-          curl -fsSL https://www.postgresql.org/media/keys/ACCC4CF8.asc | sudo tee /etc/apt/trusted.gpg.d/pgdg.asc >/dev/null
-          sudo apt-get update -qq && sudo apt-get install -y -qq postgresql-client-17
+          set -o pipefail
+          for attempt in 1 2 3; do
+            if sudo sh -c 'echo "deb https://apt.postgresql.org/pub/repos/apt $(lsb_release -cs)-pgdg main" > /etc/apt/sources.list.d/pgdg.list' \
+               && curl -fsSL https://www.postgresql.org/media/keys/ACCC4CF8.asc | sudo tee /etc/apt/trusted.gpg.d/pgdg.asc >/dev/null \
+               && sudo apt-get update -qq \
+               && sudo apt-get install -y -qq postgresql-client-17; then
+              exit 0
+            fi
+            echo "::warning::PostgreSQL 17 client install failed (attempt $attempt of 3) — environment, not the tree; retrying."
+            sleep $((attempt * 10))
+          done
+          echo "::error::PostgreSQL 17 client could not be installed after 3 attempts."
+          exit 1
 
       - name: Set up demo
         working-directory: ${{ matrix.demo }}
@@ -890,11 +920,22 @@ jobs:
 
       # structure.sql is PG17-format (SET transaction_timeout, a v17 param), so
       # db:schema:load needs a psql >= 17 — same reason the demos/e2e jobs pin it.
+      # Retries for the reason written out on the demos job's copy (K-795).
       - name: Install PostgreSQL 17 client
         run: |
-          sudo sh -c 'echo "deb https://apt.postgresql.org/pub/repos/apt $(lsb_release -cs)-pgdg main" > /etc/apt/sources.list.d/pgdg.list'
-          curl -fsSL https://www.postgresql.org/media/keys/ACCC4CF8.asc | sudo tee /etc/apt/trusted.gpg.d/pgdg.asc >/dev/null
-          sudo apt-get update -qq && sudo apt-get install -y -qq postgresql-client-17
+          set -o pipefail
+          for attempt in 1 2 3; do
+            if sudo sh -c 'echo "deb https://apt.postgresql.org/pub/repos/apt $(lsb_release -cs)-pgdg main" > /etc/apt/sources.list.d/pgdg.list' \
+               && curl -fsSL https://www.postgresql.org/media/keys/ACCC4CF8.asc | sudo tee /etc/apt/trusted.gpg.d/pgdg.asc >/dev/null \
+               && sudo apt-get update -qq \
+               && sudo apt-get install -y -qq postgresql-client-17; then
+              exit 0
+            fi
+            echo "::warning::PostgreSQL 17 client install failed (attempt $attempt of 3) — environment, not the tree; retrying."
+            sleep $((attempt * 10))
+          done
+          echo "::error::PostgreSQL 17 client could not be installed after 3 attempts."
+          exit 1
 
       # Boot stylish in production and run the four proxy+browser assertions.
       # The script self-provides SECRET_KEY_BASE + KIOSK_SIGNING_KEY_B64 + the
@@ -1000,11 +1041,22 @@ jobs:
       - name: Install numpy (Equihash solver)
         run: python -m pip install numpy
 
+      # Retries for the reason written out on the demos job's copy (K-795).
       - name: Install PostgreSQL 17 client (PG17-format structure.sql / postgres:17 service)
         run: |
-          sudo sh -c 'echo "deb https://apt.postgresql.org/pub/repos/apt $(lsb_release -cs)-pgdg main" > /etc/apt/sources.list.d/pgdg.list'
-          curl -fsSL https://www.postgresql.org/media/keys/ACCC4CF8.asc | sudo tee /etc/apt/trusted.gpg.d/pgdg.asc >/dev/null
-          sudo apt-get update -qq && sudo apt-get install -y -qq postgresql-client-17
+          set -o pipefail
+          for attempt in 1 2 3; do
+            if sudo sh -c 'echo "deb https://apt.postgresql.org/pub/repos/apt $(lsb_release -cs)-pgdg main" > /etc/apt/sources.list.d/pgdg.list' \
+               && curl -fsSL https://www.postgresql.org/media/keys/ACCC4CF8.asc | sudo tee /etc/apt/trusted.gpg.d/pgdg.asc >/dev/null \
+               && sudo apt-get update -qq \
+               && sudo apt-get install -y -qq postgresql-client-17; then
+              exit 0
+            fi
+            echo "::warning::PostgreSQL 17 client install failed (attempt $attempt of 3) — environment, not the tree; retrying."
+            sleep $((attempt * 10))
+          done
+          echo "::error::PostgreSQL 17 client could not be installed after 3 attempts."
+          exit 1
 
       - name: Run e2e
         run: ./e2e/run.sh

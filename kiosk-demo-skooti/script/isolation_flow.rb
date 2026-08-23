@@ -52,7 +52,7 @@ $LOAD_PATH.unshift File.expand_path("../lib", __dir__)
 # Valid attestations are now minted with the SHARED KYC broker key
 # (ProveTestIssuer, signing with the ProveKey skooti trusts) — the self-hosted
 # StubKyc retired when issuance moved to the broker.
-require "prove_test_issuer"
+require_relative "prove_test_issuer"
 
 SERVER = ENV.fetch("SERVER_URL")
 ISSUER = ENV.fetch("KIOSK_ISSUER")

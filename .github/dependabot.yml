@@ -2,6 +2,12 @@ version: 2
 updates:
 # Monorepo: no Gemfile at "/" — one bundler root per gem/demo (e2e generates
 # its app at runtime and has no checked-in Gemfile).
+#
+# THE LIST MUST MATCH `ls */Gemfile` (K-884). It did not: philslist, tudu and
+# prove were added after this file was written and never appended, so three
+# first-class apps — all three in the CI matrix — silently got no dependency
+# PRs while the comment above claimed one root per demo. `ls */Gemfile | wc -l`
+# is the check; there are 22.
 - package-ecosystem: bundler
   directories:
     - "/kiosk-all"
@@ -9,8 +15,11 @@ updates:
     - "/kiosk-demo-atablefor"
     - "/kiosk-demo-getgrocery"
     - "/kiosk-demo-hoteling"
+    - "/kiosk-demo-philslist"
+    - "/kiosk-demo-prove"
     - "/kiosk-demo-skooti"
     - "/kiosk-demo-stylish"
+    - "/kiosk-demo-tudu"
     - "/kiosk-pay-stripe"
     - "/kiosk-pow"
     - "/kiosk-pow-cuckoo"

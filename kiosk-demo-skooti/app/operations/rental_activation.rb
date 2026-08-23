@@ -6,7 +6,7 @@
 # WHY IT IS FACTORED OUT, and this is the sharpest reason anything in this demo
 # is shared. The bytes {RentalTokenIssuer.issue} signs are a PHYSICAL-DEVICE
 # contract (K-686): the same message layout is reproduced byte-for-byte in
-# lib/lock_sim.rb, firmware/host_test.c and firmware/skooti_lock.ino, and
+# script/lock_sim.rb, firmware/host_test.c and firmware/skooti_lock.ino, and
 # `demo:kat` pins it as a frozen known-answer vector. `start_rental` and
 # `rent_motorcycle` both mint one. Two call sites for that is two places a byte
 # can change — and a change made in one of them signs tokens no provisioned lock

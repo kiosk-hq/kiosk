@@ -32,7 +32,7 @@ require "jwt"
 # self-contained constant carrier — and K-672 turned that into a silent trap:
 # nil key_pem inside skooti's Rails (whose config has no `x.prove`), and
 # `uninitialized constant ProveKey::Rails` in the bare-Ruby drivers. The
-# drivers now resolve their own key (kiosk-demo-skooti/lib/prove_test_issuer.rb
+# drivers now resolve their own key (kiosk-demo-skooti/script/prove_test_issuer.rb
 # reads the SAME config/dev_prove_key.pem, no Rails); #config below makes a
 # repeat of that mistake say so, instead of surfacing as a nil TypeError.
 module ProveKey
@@ -57,7 +57,7 @@ module ProveKey
       It was reached from a process that is not that broker: either no Rails
       at all (a standalone driver), or a DIFFERENT app's Rails, whose config
       has no `x.prove` block. Flow/redteam drivers must NOT load this file —
-      they mint with kiosk-demo-skooti/lib/prove_test_issuer.rb, which reads
+      they mint with kiosk-demo-skooti/script/prove_test_issuer.rb, which reads
       the same config/dev_prove_key.pem without the Rails dependency (K-681).
     MSG
   end

@@ -44,6 +44,17 @@ For EACH of the 7 apps:
       the old mutually-overriding `KIOSK_POW_DEMO` / `KIOSK_POW_REPUTATION_DEMO` / `KIOSK_POW_BACKOFF_DEMO` flags — drop them
       (setting more than one now RAISES at boot). At `high` a fresh visitor pays its reputation count of ~2 proofs (~20 s) at
       first contact, dropping to 1 then a free pass as its bookings confirm (K-517=b). Other modes: `demo` / `backoff` / `off`.
+- [ ] ⚠ **UPGRADING AN EXISTING BOX — run `deploy/box-prep-2026-08-11.sh` BEFORE the first `prod-demo` deploy (K-509/K-540):**
+      ```
+      ssh <deploy-user>@<box> 'sudo bash -s' < reference/deploy/box-prep-2026-08-11.sh
+      ```
+      The `/etc/kiosk-demo/*.env` files are hand-maintained and no repo file drives them, so an env that predates
+      the K-497 flag collapse still sets `KIOSK_POW_DEMO` / `KIOSK_POW_REPUTATION_DEMO` / `KIOSK_POW_BACKOFF_DEMO`,
+      which current code **REFUSES at boot** — deploying first takes that app down. The script drops those and the
+      long-dead `KIOSK_POW_REGISTER_DEMO` (nothing has read it since K-487; register PoW is unconditional via
+      `c.registration_pow_count = 1`). A FRESH box built from this checklist needs none of it — the examples in
+      `deploy/env/` are already clean. Nothing else instructs an operator to run this script, which is why the
+      line is here: the fix has been committed and unrun since 2026-08-11.
 - [ ] **PoW secret (all 7 demos, K-541):** set `KIOSK_POW_SECRET=$(openssl rand -hex 32)` — REQUIRED; the app refuses to boot
       without it outside dev/test (a shipped default would be world-readable in the public repo, letting anyone forge a
       trivial-difficulty challenge and turn PoW off). Must be ≥ 32 bytes.
@@ -137,6 +148,15 @@ For EACH of the 7 apps:
       because `rate_limit` is not a stock directive — a stock binary refuses the WHOLE config
       ("unrecognized directive: rate_limit", verified on Caddy v2.11.2) and then no site serves at all.
       Then `sudo caddy validate --config /etc/caddy/Caddyfile` · `sudo systemctl reload caddy`.
+- [ ] **HSTS — one `header` line, and it must reach the LIVE Caddyfile too (K-916):** `deploy/Caddyfile`'s
+      `(kioskproxy)` snippet emits `Strict-Transport-Security: max-age=31536000; includeSubDomains`, ENABLED
+      (unlike the rate-limit above, `header` is a stock directive and needs no module). Without it a client
+      typing a bare hostname makes its FIRST request in plaintext, before the `:80`→`:443` redirect — the
+      window HSTS exists to close. `config.force_ssl` is deliberately OFF in all eight apps (K-439: Caddy
+      already terminates TLS and redirects, and the apps run with `assume_ssl`), so the edge is the ONLY
+      place this header can come from. **On the current live box the hand-maintained `/etc/caddy/Caddyfile`
+      does not import this snippet** (see the ⚠ below), so add the same `header` line by hand to each demo
+      vhost there. Verify: `curl -sI https://getgrocery.demo.kiosk.tech/ | grep -i strict-transport`.
 - [ ] Verify the limit bites: hammer `/kiosk/auth/register` from one IP and confirm 429 well before the box slows.
 - [ ] ⚠ On the CURRENT live box the `/etc/caddy/Caddyfile` is hand-maintained and also serves other sites —
       do NOT overwrite it with `deploy/Caddyfile` (you would drop the other vhosts). Hand-add the blocks in its

@@ -32,7 +32,7 @@ require "securerandom"
 # Crypto: OpenSSL::PKey Ed25519 — key.sign(nil, message) / key.verify(nil, sig, msg).
 #
 # This exact format is reproduced (byte-identical) in:
-#   - lib/lock_sim.rb            (the software lock simulator)
+#   - script/lock_sim.rb         (the software lock simulator)
 #   - firmware/host_test.c       (the C cross-check host test)
 #   - firmware/skooti_lock.ino   (the ESP32 lock firmware)
 # DO NOT CHANGE without updating all sites and re-recording the known-answer vector.
@@ -76,7 +76,7 @@ module RentalTokenIssuer
     # the message, checks exp >= now.
     #
     # Reference-verifier surface: the production unlock path never calls this —
-    # the scooter lock (lib/lock_sim.rb / the firmware) does the verification.
+    # the scooter lock (script/lock_sim.rb / the firmware) does the verification.
     # This Ruby verifier exists solely as the known-answer-vector anchor the KAT
     # (script/rental_token_issuer_kat.rb) runs the firmware's expected wire vector
     # through, so the byte-exact contract stays cross-checked without the lock.

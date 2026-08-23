@@ -61,7 +61,7 @@
  *
  * This matches:
  *   Ruby server:  RentalTokenIssuer.issue  (kiosk-demo-skooti/lib/rental_token_issuer.rb)
- *   Ruby sim:     LockSim#unlock           (kiosk-demo-skooti/lib/lock_sim.rb)
+ *   Ruby sim:     LockSim#unlock           (kiosk-demo-skooti/script/lock_sim.rb)
  *   C shared:     skooti_verify_token      (firmware/verify.c)
  *   C host test:  host_test.c              (proven by `make test`)
  *

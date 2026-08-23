@@ -53,8 +53,12 @@ namespace :demo do
     require "shellwords"
 
     $LOAD_PATH.unshift File.expand_path("../", __dir__)
-    require "lock_sim"
-    require "dev_unlock_key"
+    # script/, not lib/ (K-861): both are flow-only helpers and moved out of
+    # the app's eager-load set. A BARE `require` used to resolve them off the
+    # load path Rails happens to set up for lib/, which is the implicit
+    # dependency K-856 broke by moving a sibling file.
+    require_relative "../../script/lock_sim"
+    require_relative "../../script/dev_unlock_key"
 
     port = ENV.fetch("PORT", "3004")
     log  = "/tmp/kiosk-skooti-demo.log"
@@ -97,7 +101,7 @@ namespace :demo do
     # This task attests agents with ProveTestIssuer (the ProveKey), so the
     # server must be told to TRUST that key explicitly — skooti no longer
     # ships a pinned dev ProveKey (K-650).
-    require_relative "../../lib/prove_test_issuer"
+    require_relative "../../script/prove_test_issuer"
 
     # Registration goes through the SHIPPED helper (K-696), never a local copy:
     # script/equihash_register.rb owns the challenge → PoP → 402 → solve → retry
@@ -239,20 +243,31 @@ namespace :demo do
       end
 
       # ── psql assertions ────────────────────────────────────────────────
-      res_count = `psql -X -d #{db} -tAc "SELECT COUNT(*) FROM public.reservations WHERE status='active'" 2>&1`.strip
-      if res_count.to_i >= 1
-        puts "  OK  reservations[status=active] >= 1 (got #{res_count})"
+      #
+      # BY ID, NOT BY DB-WIDE COUNT (K-862). `COUNT(*) >= 1` over the whole
+      # table passes on a row a PREVIOUS run left behind, so the beat under
+      # test could stop writing and both assertions would stay green. The
+      # driver already reports the two anchors: this run's `reservation_id`
+      # and the `user_id` of the agent it just registered.
+      this_reservation = happy_result["reservation_id"]
+      res_status = `psql -X -d #{db} -tAc "SELECT status FROM public.reservations WHERE id = '#{this_reservation}'" 2>&1`.strip
+      if res_status == "active"
+        puts "  OK  this run's reservation is active in the DB (id=#{this_reservation})"
       else
-        failures << "happy: reservations[status=active] expected >= 1, got #{res_count.inspect}"
-        puts "  FAIL  reservations[status=active] expected >= 1, got #{res_count.inspect}"
+        failures << "happy: reservations[id=#{this_reservation}].status expected 'active', got #{res_status.inspect}"
+        puts "  FAIL  reservations[id=#{this_reservation}].status — got #{res_status.inspect}"
       end
 
-      pm_count = `psql -X -d #{db} -tAc 'SELECT COUNT(*) FROM kiosk.settlements' 2>&1`.strip
-      if pm_count.to_i >= 1
-        puts "  OK  kiosk.settlements >= 1 (got #{pm_count})"
+      # Settlements carry no reservation_id, so the anchor is the principal:
+      # a fresh agent registers every run, so EXACTLY ONE settlement must
+      # exist under this run's user_id (one pay, one receipt).
+      this_user = happy_result["user_id"]
+      pm_count = `psql -X -d #{db} -tAc "SELECT COUNT(*) FROM kiosk.settlements WHERE user_id = '#{this_user}'" 2>&1`.strip
+      if pm_count.to_i == 1
+        puts "  OK  exactly one kiosk.settlements row for this run's principal (#{this_user})"
       else
-        failures << "happy: kiosk.settlements expected >= 1, got #{pm_count.inspect}"
-        puts "  FAIL  kiosk.settlements expected >= 1, got #{pm_count.inspect}"
+        failures << "happy: kiosk.settlements for user_id=#{this_user} expected 1, got #{pm_count.inspect}"
+        puts "  FAIL  kiosk.settlements for this run's principal — got #{pm_count.inspect}"
       end
 
       # ── Offline-token negatives (lock-sim level) ─────────────────────────
@@ -399,7 +414,7 @@ namespace :demo do
       q_user_id = reg_data.fetch("user_id")
 
       # KYC the agent (valid attestation via ProveTestIssuer — ProveKey-signed).
-      require_relative "../../lib/prove_test_issuer"
+      require_relative "../../script/prove_test_issuer"
       q_att = ProveTestIssuer.attest(user_id: q_user_id)
       q_post.call("/kiosk/agents/kyc", { kyc_jws: q_att }, q_token)
 
@@ -560,7 +575,7 @@ namespace :demo do
     # The isolation driver attests agents with ProveTestIssuer (the ProveKey),
     # so the server must be told to TRUST that key explicitly — skooti no
     # longer ships a pinned dev ProveKey (K-650).
-    require_relative "../../lib/prove_test_issuer"
+    require_relative "../../script/prove_test_issuer"
 
     # ── boot the server ────────────────────────────────────────────────────
     File.truncate(log, 0) if File.exist?(log)
@@ -730,7 +745,7 @@ namespace :demo do
     require "net/http"
     require "uri"
     require_relative "../../script/prove_broker_boot"
-    require_relative "../prove_test_issuer"
+    require_relative "../../script/prove_test_issuer"
 
     port = ENV.fetch("PORT", "3004")
     log  = "/tmp/kiosk-skooti-redteam.log"

@@ -87,8 +87,33 @@
 #
 # ALTERNATIVE (equally acceptable): a per-IP rate rule on `/kiosk/*` at a CDN /
 # WAF in front of this box. What is NOT acceptable is deploying with neither.
+#
+# ── HSTS (K-916) ─────────────────────────────────────────────────────────────
+# Every vhost below imports this snippet, so the header is emitted once for the
+# whole fleet rather than eight times by hand.
+#
+# WHY IT LIVES HERE AND NOT IN THE RAILS APPS. `config.force_ssl` is the Rails
+# way to get HSTS, and it is deliberately OFF in all eight apps: Caddy already
+# terminates TLS and already redirects :80 -> :443, and the apps run behind it
+# with `config.assume_ssl = true` (K-439), so turning force_ssl on would add a
+# SECOND redirect for no gain. What force_ssl was ALSO doing, and what nothing
+# then did, is emit `Strict-Transport-Security` — so until this directive the
+# fleet had no HSTS at all, and a client typing a bare hostname made its FIRST
+# request in plaintext, before the redirect. That first request is the window
+# HSTS exists to close, and it is the only thing this line buys.
+#
+# `header` is a STOCK Caddy directive — unlike `rate_limit` above, it needs no
+# module and therefore ships ENABLED rather than commented.
+#
+# max-age is one year, the value the preload list requires and the value a
+# browser should be willing to remember. `includeSubDomains` covers a
+# sub-subdomain nobody has created yet; there are none, and if one is ever
+# added it must serve TLS. `preload` is deliberately ABSENT: submitting to the
+# browser preload list is irreversible on any useful timescale, and these are
+# demo hosts.
 (kioskproxy) {
 	encode zstd gzip
+	header Strict-Transport-Security "max-age=31536000; includeSubDomains"
 	# import ratelimit          # REQUIRED — uncomment once the module is installed (see above)
 	# Caddy forwards X-Forwarded-For/Proto/Host to the upstream by default.
 	reverse_proxy {args[0]}

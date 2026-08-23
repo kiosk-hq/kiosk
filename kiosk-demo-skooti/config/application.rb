@@ -3,7 +3,10 @@ require_relative "boot"
 require "rails"
 # Pick the frameworks you want:
 require "active_model/railtie"
-require "active_job/railtie"
+# active_job/railtie is NOT loaded (K-885): no demo in the fleet defines a job or
+# enqueues one, and the frameworks this app does not use stay unloaded the same
+# way active_storage/action_mailer/action_mailbox/action_text/action_cable do
+# below. Re-add the require in the same commit that adds the first job class.
 require "active_record/railtie"
 # require "active_storage/engine"
 require "action_controller/railtie"
@@ -26,6 +29,17 @@ module KioskDemoSkooti
     # Please, add to the `ignore` list any other `lib` subdirectories that do
     # not contain `.rb` files, or that should not be reloaded or eager loaded.
     # Common ones are `templates`, `generators`, or `middleware`, for example.
+    #
+    # SINCE K-861 `lib/` HOLDS ONLY `lib/tasks/`, and that is the point: the
+    # three helpers that used to live here — DevUnlockKey, LockSim,
+    # ProveTestIssuer — are FLOW-ONLY (a demo driver and a rake task are their
+    # only callers), yet nothing excluded them, so `rails server` eager-loaded
+    # all three in production, DevUnlockKey included. They now sit in `script/`
+    # beside the drivers that use them and are named by `require_relative`, so
+    # the app no longer carries demo scaffolding into its production image and
+    # no loader has to be guessed at. Same argument as K-856/K-659/K-502 one
+    # demo over. A NEW helper here must earn the app's load path or go to
+    # `script/`.
     config.autoload_lib(ignore: %w[assets tasks])
 
     # app/services holds the objects config/initializers/kiosk.rb HANDS to

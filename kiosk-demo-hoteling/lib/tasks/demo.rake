@@ -189,28 +189,40 @@ namespace :demo do
       end
 
       # ── psql assertions ──────────────────────────────────────────────
-      b_count = `psql -X -d #{db} -tAc "SELECT COUNT(*) FROM public.bookings WHERE status='confirmed'" 2>&1`.strip
-      if b_count.to_i >= 1
-        puts "  OK  bookings[status=confirmed] >= 1 (got #{b_count})"
+      #
+      # EACH ASSERTION NAMES THE ROW THIS RUN CREATED (K-862). They used to be
+      # DB-wide `COUNT(*) >= 1`, which passes on a row a PREVIOUS run left
+      # behind — `demo:setup` is idempotent but nothing forces this task to run
+      # straight after it — so the beat under test could stop writing entirely
+      # and these three would stay green. The ids are already in hand: the
+      # driver reports `booking_id` and its freshly registered `user_id`, and
+      # atablefor's demo.rake has asserted by id since K-712f.
+      this_status = `psql -X -d #{db} -tAc "SELECT status FROM public.bookings WHERE id = '#{booking_id}'" 2>&1`.strip
+      if this_status == "confirmed"
+        puts "  OK  this run's booking is confirmed in the DB (id=#{booking_id})"
       else
-        failures << "happy: bookings[status=confirmed] expected >= 1, got #{b_count.inspect}"
-        puts "  FAIL  bookings[status=confirmed] expected >= 1, got #{b_count.inspect}"
+        failures << "happy: bookings[id=#{booking_id}].status expected 'confirmed', got #{this_status.inspect}"
+        puts "  FAIL  bookings[id=#{booking_id}].status — got #{this_status.inspect}"
       end
 
-      pm_count = `psql -X -d #{db} -tAc 'SELECT COUNT(*) FROM kiosk.settlements' 2>&1`.strip
-      if pm_count.to_i >= 1
-        puts "  OK  kiosk.settlements >= 1 (got #{pm_count})"
+      # Settlements carry no booking_id, so the anchor is the principal: the
+      # driver registers a NEW agent every run, so `user_id` is this run's own
+      # and EXACTLY ONE settlement must exist under it (one pay, one receipt).
+      user_id  = result["user_id"]
+      pm_count = `psql -X -d #{db} -tAc "SELECT COUNT(*) FROM kiosk.settlements WHERE user_id = '#{user_id}'" 2>&1`.strip
+      if pm_count.to_i == 1
+        puts "  OK  exactly one kiosk.settlements row for this run's principal (#{user_id})"
       else
-        failures << "happy: kiosk.settlements expected >= 1, got #{pm_count.inspect}"
-        puts "  FAIL  kiosk.settlements expected >= 1, got #{pm_count.inspect}"
+        failures << "happy: kiosk.settlements for user_id=#{user_id} expected 1, got #{pm_count.inspect}"
+        puts "  FAIL  kiosk.settlements for this run's principal — got #{pm_count.inspect}"
       end
 
-      resv_kiosk_count = `psql -X -d #{db} -tAc "SELECT COUNT(*) FROM kiosk.reservations WHERE resource_kind='room_booking'" 2>&1`.strip
-      if resv_kiosk_count.to_i >= 1
-        puts "  OK  kiosk.reservations[resource_kind=room_booking] >= 1 (got #{resv_kiosk_count})"
+      resv_kiosk_count = `psql -X -d #{db} -tAc "SELECT COUNT(*) FROM kiosk.reservations WHERE resource_kind='room_booking' AND resource_id = '#{booking_id}'" 2>&1`.strip
+      if resv_kiosk_count.to_i == 1
+        puts "  OK  exactly one kiosk.reservations row for THIS booking (#{booking_id})"
       else
-        failures << "happy: kiosk.reservations[resource_kind=room_booking] expected >= 1, got #{resv_kiosk_count.inspect}"
-        puts "  FAIL  kiosk.reservations[resource_kind=room_booking] expected >= 1, got #{resv_kiosk_count.inspect}"
+        failures << "happy: kiosk.reservations[room_booking, #{booking_id}] expected 1, got #{resv_kiosk_count.inspect}"
+        puts "  FAIL  kiosk.reservations for this booking — got #{resv_kiosk_count.inspect}"
       end
     end
 

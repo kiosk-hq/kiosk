@@ -3,7 +3,10 @@ require_relative "boot"
 require "rails"
 # Pick the frameworks you want:
 require "active_model/railtie"
-require "active_job/railtie"
+# active_job/railtie is NOT loaded (K-885): no demo in the fleet defines a job or
+# enqueues one, and the frameworks this app does not use stay unloaded the same
+# way active_storage/action_mailer/action_mailbox/action_text/action_cable do
+# below. Re-add the require in the same commit that adds the first job class.
 require "active_record/railtie"
 # require "active_storage/engine"
 require "action_controller/railtie"

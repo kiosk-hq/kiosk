@@ -44,9 +44,6 @@ Rails.application.configure do
   # Replace the default in-process memory cache store with a durable alternative.
   # config.cache_store = :mem_cache_store
 
-  # Replace the default in-process and non-durable queuing backend for Active Job.
-  # config.active_job.queue_adapter = :resque
-
   # Enable locale fallbacks for I18n (makes lookups for any locale fall back to
   # the I18n.default_locale when a translation cannot be found).
   config.i18n.fallbacks = true
@@ -203,7 +200,7 @@ Rails.application.configure do
     # mint. Requiring the variable (above) closed the SILENT path to that key;
     # this closes the explicit one, which is a plausible reaction to a boot
     # that demands a PEM nobody has generated yet. Same refusal the demo's own
-    # test issuer keeps (lib/prove_test_issuer.rb, where a dev-key fallback
+    # test issuer keeps (script/prove_test_issuer.rb, where a dev-key fallback
     # will not arm under a production env), one layer down.
     #
     # Compared on the PUBLIC half in DER, never on PEM text: one key

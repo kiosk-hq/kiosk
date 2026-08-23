@@ -344,11 +344,6 @@ COPIES = {
     why:  "Each demo's own landing page — a different storefront with different instance " \
           "variables. Shares only the Rails-conventional name.",
   },
-  "app/jobs/application_job.rb" => {
-    rule: :identical,
-    why:  "Untouched Rails skeleton. Identical because nothing has ever needed to edit it; if a " \
-          "demo ever does, this line is where the divergence gets declared.",
-  },
   "app/models/application_record.rb" => {
     rule: :identical,
     why:  "Rails skeleton (primary_abstract_class). Was :code while prove alone carried " \

@@ -114,7 +114,13 @@ class Kiosk::HouseholdController < ApplicationController
                   properties: {
                     list_id: { type: "string", description: "uuid. Pass to list_todos / list_members / add_todo / invite / remove_member as `list_id`." },
                     title:   { type: "string", description: "The list title." },
-                    role:    { enum: %w[owner member], description: "The CALLER's role on this list — `invite` and `remove_member` are owner-only." },
+                    # `Membership::ROLES`, not a literal (K-946): the model VALIDATES
+                    # against that constant, so a fourth role added there would
+                    # otherwise leave both published schemas silently wrong. Not a
+                    # K-922 case and deliberately not a proc — a role vocabulary is
+                    # CODE, fixed at boot, not a table of rows that changes under a
+                    # running process.
+                    role:    { enum: Membership::ROLES, description: "The CALLER's role on this list — `invite` and `remove_member` are owner-only." },
                   },
                   required: %w[list_id title role],
                 }
@@ -200,7 +206,8 @@ class Kiosk::HouseholdController < ApplicationController
                   properties: {
                     account_id: { type: "string", description: "uuid. Pass to remove_member as `account_id`." },
                     handle:     { type: %w[string null], description: "The member's email handle, or null when the account has none." },
-                    role:       { enum: %w[owner member], description: "Their role on this list. The last owner cannot be removed." },
+                    # `Membership::ROLES` — same reason as `my_lists` above (K-946).
+                    role:       { enum: Membership::ROLES, description: "Their role on this list. The last owner cannot be removed." },
                   },
                   required: %w[account_id handle role],
                 }

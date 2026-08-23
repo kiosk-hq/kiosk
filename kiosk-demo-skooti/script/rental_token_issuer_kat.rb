@@ -63,8 +63,9 @@ end
 # This KAT runs as bare `ruby script/rental_token_issuer_kat.rb`, with no Rails
 # and no autoloader, so it NAMES both files it needs rather than relying on a
 # load path Rails happens to have set up: RentalTokenIssuer is app code and
-# lives under app/services (K-502), DevUnlockKey is still in lib/ (K-861).
-require File.expand_path("../lib/dev_unlock_key", __dir__)
+# lives under app/services (K-502); DevUnlockKey is a flow-only helper and now
+# sits beside this driver in script/ (K-861), so it is a plain require_relative.
+require_relative "dev_unlock_key"
 require File.expand_path("../app/services/rental_token_issuer", __dir__)
 
 module RentalTokenIssuerKAT

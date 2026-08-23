@@ -42,10 +42,10 @@ require "uri"
 require "jwt"
 
 $LOAD_PATH.unshift File.expand_path("../lib", __dir__)
-require "lock_sim"
-require "dev_unlock_key"
+require_relative "lock_sim"
+require_relative "dev_unlock_key"
 require_relative "equihash_register"
-require_relative "../lib/prove_test_issuer"
+require_relative "prove_test_issuer"
 
 SERVER = ENV.fetch("SERVER_URL")
 ISSUER = ENV.fetch("KIOSK_ISSUER")

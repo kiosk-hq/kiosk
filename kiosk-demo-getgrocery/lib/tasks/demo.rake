@@ -352,29 +352,39 @@ namespace :demo do
       puts "  FAIL  psp_reference not a pi_… (got #{psp_ref.inspect})"
     end
 
-    # -- assertions: DB row counts --
-    orders_count = `psql -X -d #{db} -tAc "SELECT COUNT(*) FROM orders WHERE slot_at IS NOT NULL" 2>&1`.strip
-    if orders_count.to_i >= 1
-      puts "  OK  orders[slot_at set] count >= 1 (got #{orders_count})"
+    # -- assertions: THIS RUN's rows, named by id (K-862) --
+    #
+    # These were DB-wide `COUNT(*) >= 1`, which passes on a row a PREVIOUS run
+    # left behind: getgrocery's seeds create no orders, but `demo:shop` is not
+    # always run straight after `demo:setup`, so the beat could stop writing
+    # and all three would stay green. The driver reports `order_id` and the
+    # `user_id` of the agent it registered this run; both are anchors.
+    this_order = result["order_id"]
+    this_slot  = `psql -X -d #{db} -tAc "SELECT slot_at IS NOT NULL FROM orders WHERE id = '#{this_order}'" 2>&1`.strip
+    if this_slot == "t"
+      puts "  OK  this run's order has a delivery slot (id=#{this_order})"
     else
-      failures << "orders[slot_at set] COUNT expected >= 1, got #{orders_count.inspect}"
-      puts "  FAIL  orders[slot_at set] COUNT expected >= 1, got #{orders_count.inspect}"
+      failures << "orders[id=#{this_order}].slot_at expected set, got #{this_slot.inspect}"
+      puts "  FAIL  orders[id=#{this_order}].slot_at — got #{this_slot.inspect}"
     end
 
-    pm_count = `psql -X -d #{db} -tAc 'SELECT COUNT(*) FROM kiosk.settlements' 2>&1`.strip
-    if pm_count.to_i >= 1
-      puts "  OK  kiosk.settlements >= 1 (got #{pm_count})"
+    # Settlements carry no order_id, so the anchor is the principal: a fresh
+    # agent registers every run, so EXACTLY ONE settlement must exist under it.
+    this_user = result["user_id"]
+    pm_count = `psql -X -d #{db} -tAc "SELECT COUNT(*) FROM kiosk.settlements WHERE user_id = '#{this_user}'" 2>&1`.strip
+    if pm_count.to_i == 1
+      puts "  OK  exactly one kiosk.settlements row for this run's principal (#{this_user})"
     else
-      failures << "kiosk.settlements COUNT expected >= 1, got #{pm_count.inspect}"
-      puts "  FAIL  kiosk.settlements COUNT expected >= 1, got #{pm_count.inspect}"
+      failures << "kiosk.settlements for user_id=#{this_user} expected 1, got #{pm_count.inspect}"
+      puts "  FAIL  kiosk.settlements for this run's principal — got #{pm_count.inspect}"
     end
 
-    items_count = `psql -X -d #{db} -tAc 'SELECT COUNT(*) FROM order_items' 2>&1`.strip
+    items_count = `psql -X -d #{db} -tAc "SELECT COUNT(*) FROM order_items WHERE order_id = '#{this_order}'" 2>&1`.strip
     if items_count.to_i >= 1
-      puts "  OK  order_items count >= 1 (got #{items_count})"
+      puts "  OK  this run's order has #{items_count} order_items (id=#{this_order})"
     else
-      failures << "order_items COUNT expected >= 1, got #{items_count.inspect}"
-      puts "  FAIL  order_items COUNT expected >= 1, got #{items_count.inspect}"
+      failures << "order_items for order #{this_order} expected >= 1, got #{items_count.inspect}"
+      puts "  FAIL  order_items for this run's order — got #{items_count.inspect}"
     end
 
     # my_orders contains own order_id

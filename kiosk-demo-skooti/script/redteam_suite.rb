@@ -68,7 +68,7 @@ require "json"
 # verification is exercised in isolation (an alg:none/weakened-sig regression is
 # caught). None of this weakens the real verification path.
 $LOAD_PATH.unshift File.expand_path("../lib", __dir__)
-require "prove_test_issuer"
+require_relative "prove_test_issuer"
 require_relative "../app/services/prove_trust"
 
 BASE_URL   = ENV.fetch("SERVER_URL", "http://127.0.0.1:3004")

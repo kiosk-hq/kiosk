@@ -134,7 +134,7 @@ module ProveTestIssuer
       ProveTestIssuer reads #{DEV_KEY_PATH} (or PROVE_KEY_PEM); the broker
       resolves its key in kiosk-demo-prove/config/environments/*.rb. Those two
       must name the same key — see the lockstep note in
-      kiosk-demo-skooti/lib/prove_test_issuer.rb (K-681).
+      kiosk-demo-skooti/script/prove_test_issuer.rb (K-681).
     MSG
   end
 

@@ -30,7 +30,8 @@ module Kiosk
     # stored hashed.
     class DeviceVerifyController < ::ActionController::Base
       # Failed user_code lookups tolerated per session before a 429.
-      # Generous for fat-fingering; hopeless for guessing 32^8 codes.
+      # Generous for fat-fingering; hopeless for guessing one of the
+      # 31^8 ≈ 8.5 × 10^11 codes ({DeviceAuthorization::USER_CODE_ALPHABET}).
       MAX_CODE_ATTEMPTS = 10
 
       # Host app view paths (configured by Rails on ActionController::Base)

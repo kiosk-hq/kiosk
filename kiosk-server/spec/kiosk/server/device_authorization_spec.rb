@@ -57,7 +57,7 @@ RSpec.describe Kiosk::Server::DeviceAuthorization do
       expect(da.respond_to?(:user_code)).to be(false)
     end
 
-    it "produces a Crockford-alphabet user_code of length 8 (no 0/O/1/I/L/U)" do
+    it "produces a user_code of length 8 from the 31-char alphabet (no 0/1/I/L/O)" do
       _plain, plain_user_code, = described_class.generate(client_id: "kiosk-cli")
       expect(plain_user_code.length).to eq(8)
       expect(plain_user_code).to match(/\A[ABCDEFGHJKMNPQRSTUVWXYZ23456789]+\z/)
@@ -102,7 +102,7 @@ RSpec.describe Kiosk::Server::DeviceAuthorization do
       expect(codes.uniq.size).to eq(10)
     end
 
-    it "produces distinct user_codes across calls (32^8 collision space)" do
+    it "produces distinct user_codes across calls (31^8 collision space)" do
       codes = 50.times.map { described_class.generate(client_id: "kiosk-cli")[1] }
       expect(codes.uniq.size).to eq(50)
     end
@@ -138,6 +138,30 @@ RSpec.describe Kiosk::Server::DeviceAuthorization do
                                                      public_key_pem: "PEM")
       expect(user_code.length).to eq(described_class::USER_CODE_LENGTH)
       expect(user_code.chars - alphabet).to be_empty
+    end
+
+    it "yields the 31^8 ~ 8.5 x 10^11 code space the comments publish" do
+      expect(described_class::USER_CODE_LENGTH).to eq(8)
+      space = alphabet.size**described_class::USER_CODE_LENGTH
+      expect(space).to eq(31**8)
+      expect(space / 1e11).to be_within(0.05).of(8.5)
+    end
+
+    # The prose is the thing that drifted, and it drifted at five sites while
+    # the constant stayed right, so the sweep is pinned too: no shipped
+    # comment may call this alphabet Crockford (except to deny it) or quote
+    # the retired 32^8 / "no 0/O/1/I/L/U" figures.
+    it "is described as neither Crockford nor 32^8 anywhere in lib or app" do
+      root = File.expand_path("../../..", __dir__)
+      offenders = Dir.glob("#{root}/{lib,app}/**/*.{rb,erb}").sort.flat_map do |path|
+        File.readlines(path).each_with_index.filter_map do |line, idx|
+          next unless line.match?(%r{32\^8|32\*\*8|no 0/O/1/I/L/U}) ||
+                      (line.include?("Crockford") && !line.include?("NOT Crockford"))
+
+          "#{path.delete_prefix("#{root}/")}:#{idx + 1}"
+        end
+      end
+      expect(offenders).to be_empty
     end
   end
 

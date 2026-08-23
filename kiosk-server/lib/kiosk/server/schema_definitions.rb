@@ -188,10 +188,11 @@ module Kiosk
       # (device_code grant). Read and written by
       # {DeviceAuthorizationStores::ActiveRecord}, the durable store.
       #
-      #   - `user_code_hash` — the human-displayable short code (Crockford
-      #     alphabet, 8 chars, XXXX-XXXX) is stored HASHED ONLY (SHA-256 hex,
-      #     matching `agent_tokens.token_hash`); the plaintext lives only in the
-      #     response to the initiating client and on the verify page.
+      #   - `user_code_hash` — the human-displayable short code (8 chars from
+      #     the 31-char read-aloud-unambiguous alphabet, XXXX-XXXX) is stored
+      #     HASHED ONLY (SHA-256 hex, matching `agent_tokens.token_hash`); the
+      #     plaintext lives only in the response to the initiating client and
+      #     on the verify page.
       #   - `device_code_hash` — SHA-256 hex of the actual device_code, which is
       #     likewise never persisted.
       #   - `public_key_pem` — the key the ceremony binds (BIND-POP proves

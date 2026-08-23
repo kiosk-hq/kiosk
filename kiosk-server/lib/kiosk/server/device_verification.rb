@@ -66,8 +66,9 @@ module Kiosk
       # User-typed codes arrive with the visual `XXXX-XXXX` dash + any
       # ambient whitespace from copy/paste. Storage hashes the raw 8-char
       # form, so normalise before hashing. Case-insensitive because some
-      # keyboards / browsers auto-capitalise; we upcase against the
-      # Crockford alphabet.
+      # keyboards / browsers auto-capitalise; we upcase into the
+      # uppercase-only 31-char code alphabet
+      # ({DeviceAuthorization::USER_CODE_ALPHABET}).
       def normalize_user_code(raw)
         raw.to_s.gsub(/[\s\-]/, "").upcase
       end

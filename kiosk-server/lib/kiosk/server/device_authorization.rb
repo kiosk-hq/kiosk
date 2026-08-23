@@ -25,9 +25,11 @@ module Kiosk
     #   - **device_code**  — long opaque CSPRNG token (~32 bytes base64url).
     #     Returned to the initiating client (claim) or handed to the human
     #     as the link code (link).
-    #   - **user_code**    — 8-char Crockford-alphabet code displayed
-    #     to the human, who types it at the verification URL (claim only).
-    #     Crockford-style (no 0/O/1/I/L/U) avoids confusion at typing.
+    #   - **user_code**    — 8-char code displayed to the human, who
+    #     types it at the verification URL (claim only). Drawn from the
+    #     31-char read-aloud-unambiguous alphabet defined below (A-Z minus
+    #     I/L/O, digits 2-9; U is KEPT) — NOT Crockford base32. See
+    #     {USER_CODE_ALPHABET} for why, and for the 31^8 ≈ 8.5 × 10^11 space.
     #
     # `public_key_pem` carries the key the ceremony will bind (nil for
     # `:link` rows until redeem, and for legacy pre-binding rows); `user_id`
@@ -73,7 +75,8 @@ module Kiosk
       # posture, and the other half of that posture — the verify page's
       # attempt cap (`device_verify_controller.rb`) — lives in the session and
       # so resets on re-authentication. The row's `expires_at` is the hard
-      # bound. `user_code_alphabet_spec` pins the set against this comment.
+      # bound. `spec/kiosk/server/device_authorization_spec.rb` pins the set,
+      # the size and the published space against this comment.
       USER_CODE_ALPHABET = "ABCDEFGHJKMNPQRSTUVWXYZ23456789".chars.freeze
       USER_CODE_LENGTH   = 8
 

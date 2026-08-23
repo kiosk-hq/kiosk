@@ -373,9 +373,8 @@ that never sets `KIOSK_TELEMETRY=1` behaves exactly as before.
 
 This creates the `kiosk_demo_telemetry` DB + `kiosk_telemetry` LOGIN role + the
 append-only `demo_telemetry_events(app, action_kind, agent_hash, at)` table.
-(The apps also create this table idempotently at runtime, so a fresh boot
-against an empty shared DB self-heals — but run the SQL for least-privilege
-grants.)
+Run it BEFORE pointing any app at the store: the apps do not create the table at
+runtime, and an app migration cannot reach a database its app does not own.
 
 **Per-app env** (add to each `env/<app>.env`):
 

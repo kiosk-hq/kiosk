@@ -27,8 +27,8 @@
 #   • with KIOSK_TELEMETRY unset: no route, no middleware, the module not even
 #     loaded — the "pure no-op in CI/local flows" the comments claim.
 #
-# Needs the demo's database (the job-level `demo:setup` in CI). The telemetry
-# table itself is created idempotently by DemoTelemetry.ensure_schema!.
+# Needs the demo's database (the job-level `demo:setup` in CI), which is where
+# the telemetry table's own migration puts it.
 
 require "json"
 require "securerandom"
@@ -70,6 +70,17 @@ end
 
 if telemetry_on
   puts "\n── GET /demo/activity.json with KIOSK_TELEMETRY=1 ──"
+
+  # K-714. The store is provisioned ahead of the request — by this demo's own
+  # migration locally, by deploy/telemetry-init.sql for the shared hosted one —
+  # so nothing here may issue DDL. Watching starts BEFORE the first read: the
+  # schema guard it replaced was process-local, so it fired on the first call a
+  # fresh process made and on no other, and an assertion placed any later would
+  # pass against the very code it exists to rule out.
+  ddl = []
+  ddl_watch = ActiveSupport::Notifications.subscribe("sql.active_record") do |*, payload|
+    ddl << payload[:sql].to_s if payload[:sql].to_s.match?(/\A\s*(CREATE|ALTER|DROP)\b/i)
+  end
 
   assert(middleware_wired?, "DemoTelemetryMiddleware is inserted into the middleware stack")
 
@@ -133,6 +144,11 @@ if telemetry_on
   assert(JSON.parse(get.body)["registered_total"] == probe["registered_total"] &&
          JSON.parse(get.body)["actions_last_hour"] == probe["actions_last_hour"],
          "fetching the aggregate records nothing — the tile cannot inflate its own numbers")
+
+  ActiveSupport::Notifications.unsubscribe(ddl_watch)
+  assert(ddl.empty?,
+         "no DDL anywhere on the read or write path — the table is a migration's, not a " \
+         "request's (K-714); saw #{ddl.map { |s| s[0, 60] }.inspect}")
 else
   puts "\n── GET /demo/activity.json with KIOSK_TELEMETRY unset ──"
 

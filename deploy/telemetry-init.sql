@@ -18,9 +18,10 @@
 --   KIOSK_TELEMETRY_DB_URL=postgres://kiosk_telemetry:<pw>@127.0.0.1/kiosk_demo_telemetry
 --   KIOSK_TELEMETRY_SALT=<a distinct random salt PER APP>   # keeps hashes non-joinable
 --
--- The demos also create this table idempotently at runtime (ensure_schema!), so
--- this file is the canonical/authoritative provisioning for the shared DB and a
--- documented schema; a fresh app boot against an empty shared DB self-heals.
+-- This file is the ONLY provisioning for the shared DB. The apps do not create
+-- the table at runtime, and an app migration cannot reach a database its app
+-- does not own -- so run this BEFORE pointing any app at the store. Against an
+-- unprovisioned store every write is a swallowed error and the tile reads zero.
 
 \set ON_ERROR_STOP on
 

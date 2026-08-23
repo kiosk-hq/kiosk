@@ -261,6 +261,38 @@ CREATE TABLE public.ar_internal_metadata (
 
 
 --
+-- Name: demo_telemetry_events; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.demo_telemetry_events (
+    id bigint NOT NULL,
+    app text NOT NULL,
+    action_kind text NOT NULL,
+    agent_hash text NOT NULL,
+    at timestamp with time zone DEFAULT now() NOT NULL
+);
+
+
+--
+-- Name: demo_telemetry_events_id_seq; Type: SEQUENCE; Schema: public; Owner: -
+--
+
+CREATE SEQUENCE public.demo_telemetry_events_id_seq
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1;
+
+
+--
+-- Name: demo_telemetry_events_id_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: -
+--
+
+ALTER SEQUENCE public.demo_telemetry_events_id_seq OWNED BY public.demo_telemetry_events.id;
+
+
+--
 -- Name: kyc_verification_requests; Type: TABLE; Schema: public; Owner: -
 --
 
@@ -414,6 +446,13 @@ CREATE TABLE public.users (
 
 
 --
+-- Name: demo_telemetry_events id; Type: DEFAULT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.demo_telemetry_events ALTER COLUMN id SET DEFAULT nextval('public.demo_telemetry_events_id_seq'::regclass);
+
+
+--
 -- Name: order_items id; Type: DEFAULT; Schema: public; Owner: -
 --
 
@@ -560,6 +599,14 @@ ALTER TABLE ONLY kiosk.settlements
 
 ALTER TABLE ONLY public.ar_internal_metadata
     ADD CONSTRAINT ar_internal_metadata_pkey PRIMARY KEY (key);
+
+
+--
+-- Name: demo_telemetry_events demo_telemetry_events_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.demo_telemetry_events
+    ADD CONSTRAINT demo_telemetry_events_pkey PRIMARY KEY (id);
 
 
 --
@@ -738,6 +785,20 @@ CREATE INDEX idx_settlements_user_id ON kiosk.settlements USING btree (user_id);
 
 
 --
+-- Name: idx_demo_telemetry_events_app_at; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX idx_demo_telemetry_events_app_at ON public.demo_telemetry_events USING btree (app, at);
+
+
+--
+-- Name: idx_demo_telemetry_events_at; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX idx_demo_telemetry_events_at ON public.demo_telemetry_events USING btree (at);
+
+
+--
 -- Name: index_order_items_on_order_id; Type: INDEX; Schema: public; Owner: -
 --
 
@@ -866,6 +927,7 @@ ALTER TABLE ONLY public.orders
 SET search_path TO "$user", public;
 
 INSERT INTO "schema_migrations" (version) VALUES
+('20260823000001'),
 ('20260820130117'),
 ('20260820130116'),
 ('20260820130115'),

@@ -556,6 +556,15 @@ COPIES = {
     why:  "The demo's own users table, which the engine expects to exist. Two comment variants, " \
           "one schema.",
   },
+  "db/migrate/20260823000001_create_demo_telemetry_events.rb" => {
+    rule:  :identical,
+    ships: %w[atablefor getgrocery hoteling philslist skooti stylish tudu],
+    why:  "The live-activity store, one shape for the seven demos that record into it (K-714 — it " \
+          "used to be CREATE TABLE IF NOT EXISTS issued from the request path). Its shape must also " \
+          "match deploy/telemetry-init.sql, which provisions the SHARED hosted store no app " \
+          "migration can reach; `ships:` is declared because prove records nothing and must not " \
+          "acquire a copy by accident.",
+  },
 
   # ── script/ — the per-demo flow drivers ────────────────────────────────────
   #

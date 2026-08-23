@@ -174,12 +174,23 @@ module Kiosk
             return failure(:invalid_client, e.message)
           end
 
+          # Same atomic single-use claim as {LinkCode.redeem} (K-887): the
+          # `:approved` branch that reached here was decided against the
+          # snapshot read at the top of {.exchange}, so two concurrent polls of
+          # one device_code would otherwise both mint a token. This row always
+          # binds `da.public_key_pem`, fixed when the row was created, so the
+          # race cannot bind a SECOND key the way a link code can -- what it
+          # buys here is that "single-use" means one token, and that both
+          # ceremonies get single-use from the same primitive.
+          if store.claim_consume(da, now: now).nil?
+            return failure(:invalid_grant, "device_code already used")
+          end
+
           result = AccountBinding.bind!(
             public_key_pem: da.public_key_pem,
             user_id:        da.user_id,
             requested_role: da.requested_role,
           )
-          store.update(da.consume(now: now))
 
           response = {
             ok:           true,

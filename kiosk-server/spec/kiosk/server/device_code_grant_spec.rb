@@ -212,6 +212,24 @@ RSpec.describe Kiosk::Server::DeviceCodeGrant do
           expect(exchange(signed: "jws")).to include(ok: false, error: "invalid_grant")
         end
 
+        # K-887 sibling: the `:approved` branch is decided against the snapshot
+        # read at the top of `.exchange`, so two concurrent polls of one
+        # device_code both reached `bind_and_mint`. The atomic claim makes the
+        # loser take the ordinary already-used answer. Deterministic
+        # interleaving: both calls are handed the same pre-race snapshot.
+        it "mints for only ONE of two concurrent polls of the same device_code" do
+          approved = start_result[:da].approve(user_id: user_id)
+          store.update(approved)
+          allow(store).to receive(:find_by_device_code_hash).and_return(approved)
+
+          first  = exchange(signed: "jws")
+          second = exchange(signed: "jws")
+
+          expect(first[:ok]).to be(true)
+          expect(second).to include(ok: false, error: "invalid_grant")
+          expect(Kiosk::Server::AccountBinding).to have_received(:bind!).once
+        end
+
         it "omits scope when no role was requested" do
           bare = described_class.start(client_id: "kiosk-cli", public_key_pem: pem)
           store.update(bare[:da].approve(user_id: user_id))

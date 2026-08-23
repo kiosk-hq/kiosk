@@ -88,6 +88,60 @@ RSpec.describe Kiosk::Server::LinkCode do
       }.to raise_error(Kiosk::Server::Errors::Conflict, /already used/)
     end
 
+    # ── K-887: single-use is decided by the ROW, not by a Ruby check ────────
+    #
+    # The `consumed?` check in `.redeem` reads the snapshot returned by
+    # `find_by_device_code_hash`. Two concurrent redemptions of ONE code both
+    # take that snapshot while it still says `:approved`, so before K-887 both
+    # passed the check and both reached `AccountBinding.bind!` -- with two
+    # DIFFERENT public keys, binding two assistants to the human's account.
+    #
+    # The interleaving is reproduced deterministically rather than with
+    # threads: the store is asked for the row once and both calls are handed
+    # that same pre-race snapshot, which is exactly the state each racing
+    # process holds. Nothing else is stubbed -- the real proof, the real
+    # AuthChallenge and the real atomic claim all run.
+    it "lets only ONE of two concurrent redemptions bind, even with different keys" do
+      stub_binding
+      rsa_b = OpenSSL::PKey::RSA.generate(2048)
+      pem_b = rsa_b.public_key.to_pem
+      proof_a = signed_proof
+      challenge_b = Kiosk::Server::AuthChallenge.issue(public_key_pem: pem_b)
+      proof_b = JWT.encode(
+        { aud: "https://combette.example", nonce: challenge_b[:challenge], jti: SecureRandom.uuid },
+        rsa_b, "RS256",
+      )
+
+      stale = store.find_by_device_code_hash(
+        Kiosk::Server::DeviceAuthorization.hash_device_code(code),
+      )
+      expect(stale).to be_approved
+      allow(store).to receive(:find_by_device_code_hash).and_return(stale)
+
+      described_class.redeem(code: code, public_key_pem: pem, signed: proof_a)
+
+      expect {
+        described_class.redeem(code: code, public_key_pem: pem_b, signed: proof_b)
+      }.to raise_error(Kiosk::Server::Errors::Conflict, /already used/)
+
+      expect(Kiosk::Server::AccountBinding).to have_received(:bind!).once
+      expect(Kiosk::Server::AccountBinding).not_to have_received(:bind!)
+        .with(hash_including(public_key_pem: pem_b.strip))
+    end
+
+    # The claim runs AFTER the proof, so a bad proof must still leave the code
+    # live -- the property the K-887 fix could most easily have broken.
+    it "does not burn the code on a failed possession proof" do
+      stub_binding
+      expect {
+        described_class.redeem(code: code, public_key_pem: pem, signed: "not-a-jwt")
+      }.to raise_error(Kiosk::Server::Errors::Base)
+
+      expect {
+        described_class.redeem(code: code, public_key_pem: pem, signed: signed_proof)
+      }.not_to raise_error
+    end
+
     it "forwards the row's captured requested_role to AccountBinding.bind! (roles-from-IdP)" do
       Kiosk.configure { |c| c.roles = %i[customer owner] }
       stub_binding

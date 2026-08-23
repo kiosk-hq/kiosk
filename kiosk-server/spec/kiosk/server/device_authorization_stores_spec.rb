@@ -92,6 +92,48 @@ RSpec.shared_examples "a device-authorization store" do
     end
   end
 
+  # ── K-887: the atomic single-use claim ──────────────────────────────────
+  #
+  # Run against BOTH adapters, because the whole point is that the guarantee
+  # must not depend on which one is configured: the durable adapter carries it
+  # in the `AND status = 'approved'` predicate, the in-memory one inside its
+  # mutex. A `find` + `update` pair cannot express either.
+  describe "#claim_consume" do
+    it "consumes an approved row and returns it" do
+      da = build_authorization
+      store.create(da)
+      store.update(da.approve(user_id: user_id))
+
+      claimed = store.claim_consume(da.approve(user_id: user_id), now: Time.now)
+
+      expect(claimed).not_to be_nil
+      expect(claimed).to be_consumed
+      expect(store.find_by_device_code_hash(da.device_code_hash)).to be_consumed
+    end
+
+    it "returns nil for the SECOND claim of the same row, given the same pre-race snapshot" do
+      da       = build_authorization
+      store.create(da)
+      approved = da.approve(user_id: user_id)
+      store.update(approved)
+
+      first  = store.claim_consume(approved, now: Time.now)
+      second = store.claim_consume(approved, now: Time.now)
+
+      expect(first).not_to be_nil
+      expect(second).to be_nil
+    end
+
+    it "returns nil for a row that is not approved (denied / expired)" do
+      da = build_authorization
+      store.create(da)
+      store.update(da.deny)
+
+      expect(store.claim_consume(da.approve(user_id: user_id), now: Time.now)).to be_nil
+      expect(store.find_by_device_code_hash(da.device_code_hash)).to be_denied
+    end
+  end
+
   describe "#find_by_device_code_hash" do
     it "returns the row regardless of status (callers check expiry/state themselves)" do
       da = build_authorization
@@ -149,7 +191,7 @@ RSpec.describe Kiosk::Server::DeviceAuthorizationStores do
   describe Kiosk::Server::DeviceAuthorizationStores::Base do
     subject(:base) { described_class.new }
 
-    it "declares the four abstract operations" do
+    it "declares the five abstract operations" do
       expect { base.create(:x) }
         .to raise_error(NotImplementedError)
       expect { base.update(:x) }
@@ -157,6 +199,8 @@ RSpec.describe Kiosk::Server::DeviceAuthorizationStores do
       expect { base.find_by_device_code_hash("h") }
         .to raise_error(NotImplementedError)
       expect { base.find_by_user_code_hash("h") }
+        .to raise_error(NotImplementedError)
+      expect { base.claim_consume(:x) }
         .to raise_error(NotImplementedError)
     end
   end

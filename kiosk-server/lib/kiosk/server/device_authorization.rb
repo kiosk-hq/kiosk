@@ -58,9 +58,22 @@ module Kiosk
       # extension).
       KINDS = %i[claim link].freeze
 
-      # Crockford-style alphabet — 32 unambiguous chars (no 0/O/1/I/L/U).
-      # 32^8 ≈ 1.1 × 10^12 possible codes; brute-force is gated by the
-      # verify page's attempt cap + the row's `expires_at`.
+      # 31 read-aloud-unambiguous chars: A-Z minus I/L/O, digits 2-9 (so no
+      # 0/1 either). 31^8 ≈ 8.5 × 10^11 possible codes.
+      #
+      # NOT Crockford base32, and the comment said so until K-888: Crockford
+      # KEEPS 0 and 1 and drops U, which is the opposite trade on both counts
+      # — it optimises for decoding a string a human typed, while a `user_code`
+      # is read off one screen and typed into another, where 0/O and 1/I/L are
+      # the pairs that actually get confused. U is kept deliberately; dropping
+      # it would buy nothing here and cost 30^8.
+      #
+      # The count is load-bearing, which is why it is now measured rather than
+      # asserted: it is the published justification for the brute-force
+      # posture, and the other half of that posture — the verify page's
+      # attempt cap (`device_verify_controller.rb`) — lives in the session and
+      # so resets on re-authentication. The row's `expires_at` is the hard
+      # bound. `user_code_alphabet_spec` pins the set against this comment.
       USER_CODE_ALPHABET = "ABCDEFGHJKMNPQRSTUVWXYZ23456789".chars.freeze
       USER_CODE_LENGTH   = 8
 

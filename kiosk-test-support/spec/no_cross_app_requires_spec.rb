@@ -137,13 +137,13 @@ RSpec.describe "no demo requires another demo's source into its process (K-683)"
     end
 
     it "FORBIDS an in-process require_relative into another demo" do
-      rel = source("kiosk-demo-skooti/lib/prove_test_issuer.rb",
+      rel = source("kiosk-demo-skooti/script/prove_test_issuer.rb",
                    %(require_relative "../../kiosk-demo-prove/app/services/prove_key"\n))
       expect(xapp_violations([rel]).first).to include("kiosk-demo-skooti", "kiosk-demo-prove")
     end
 
     it "ALLOWS a data-file path read — a PEM is bytes, not code" do
-      rel = source("kiosk-demo-skooti/lib/prove_test_issuer.rb",
+      rel = source("kiosk-demo-skooti/script/prove_test_issuer.rb",
                    %(DEV_KEY_PATH = "../kiosk-demo-prove/config/dev_key.pem"\n))
       expect(xapp_violations([rel])).to be_empty
     end

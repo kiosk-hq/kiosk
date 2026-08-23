@@ -90,12 +90,28 @@ module Kiosk
         payload = PopVerifier.verify!(public_key_pem: pem, signed: signed)
         AuthChallenge.consume!(public_key_pem: pem, nonce: payload.fetch(:nonce))
 
+        # SINGLE-USE IS DECIDED BY THE ROW, NOT BY THE `consumed?` CHECK ABOVE
+        # (K-887). That check is read off the snapshot taken at
+        # `find_by_device_code_hash`, so on its own it lets two concurrent
+        # redemptions of ONE code -- with two DIFFERENT public keys -- both
+        # reach the bind and both attach an assistant to the human's account.
+        # The claim is an atomic conditional consume; the loser gets the same
+        # `409` a serial second redemption gets, which is the signal that tells
+        # the human their code leaked.
+        #
+        # It runs AFTER the proof and BEFORE the bind, and both halves of that
+        # placement are deliberate: after, because a failed proof must leave
+        # the code live for the rightful key holder to retry (the check above
+        # stays as the cheap early answer for the ordinary already-used case);
+        # before, because a bind that races another bind is the harm.
+        claimed = store.claim_consume(da, now: now)
+        raise Errors::Conflict.new("link code already used") if claimed.nil?
+
         result = AccountBinding.bind!(
           public_key_pem: pem,
           user_id:        da.user_id,
           requested_role: da.requested_role,
         )
-        store.update(da.consume(now: now))
 
         { agent_id: result[:agent_id], user_id: result[:user_id], access_token: result[:access_token] }
       end

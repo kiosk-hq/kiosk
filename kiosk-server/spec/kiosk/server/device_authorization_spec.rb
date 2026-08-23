@@ -108,6 +108,39 @@ RSpec.describe Kiosk::Server::DeviceAuthorization do
     end
   end
 
+  # K-888: the comment above USER_CODE_ALPHABET published a character set and
+  # a brute-force space that the constant did not have -- "32 unambiguous
+  # chars (no 0/O/1/I/L/U)", 32^8, against a 31-char string that CONTAINS U.
+  # The count is the load-bearing half of the published brute-force argument
+  # (the other half, the verify page's attempt cap, lives in the session), so
+  # it is pinned here rather than trusted to a comment.
+  describe "USER_CODE_ALPHABET" do
+    subject(:alphabet) { described_class::USER_CODE_ALPHABET }
+
+    it "has exactly 31 characters, the number the comment publishes" do
+      expect(alphabet.size).to eq(31)
+    end
+
+    it "excludes 0/1/I/L/O -- the read-aloud-ambiguous pairs -- and nothing else" do
+      expect(alphabet).not_to include(*%w[0 1 I L O])
+      expected = (("A".."Z").to_a - %w[I L O]) + ("2".."9").to_a
+      expect(alphabet.sort).to eq(expected.sort)
+    end
+
+    it "keeps U, so it is NOT Crockford base32 and must not claim to be" do
+      expect(alphabet).to include("U")
+      crockford = ("0".."9").to_a + (("A".."Z").to_a - %w[I L O U])
+      expect(alphabet.sort).not_to eq(crockford.sort)
+    end
+
+    it "mints codes drawn only from the alphabet, at the documented length" do
+      _device, user_code, = described_class.generate(client_id: "kiosk-cli", kind: :claim,
+                                                     public_key_pem: "PEM")
+      expect(user_code.length).to eq(described_class::USER_CODE_LENGTH)
+      expect(user_code.chars - alphabet).to be_empty
+    end
+  end
+
   describe ".hash_device_code" do
     it "matches the hash baked into a generated row" do
       plain, _user, da = described_class.generate(client_id: "kiosk-cli")

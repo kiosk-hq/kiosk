@@ -26,12 +26,24 @@ module Kiosk
       # Raised by {Base#update} when no row matches the supplied id.
       class NotFoundError < StandardError; end
 
-      # Abstract contract. Adapters implement four operations.
+      # Abstract contract. Adapters implement five operations.
+      #
+      # {#claim_consume} is the single-use gate and it is deliberately NOT
+      # expressible as `find` + `update`: single-use has to be decided BY THE
+      # ROW, in one operation, or two concurrent redemptions of the same code
+      # both pass a check made against a snapshot and both bind (K-887). The
+      # sibling controls in this gem take the same shape and say so in the same
+      # words -- {PowSpentStore#claim} ("NOT a read-then-write, which
+      # reintroduces the very TOCTOU this method closes") and
+      # {AuthChallengeStores::ActiveRecord#take} (one `DELETE ... RETURNING`).
+      # An override that implements it as a read followed by {#update} is a
+      # defect, not a style choice.
       class Base
         def create(_device_authorization);        raise NotImplementedError; end
         def update(_device_authorization);        raise NotImplementedError; end
         def find_by_device_code_hash(_hash);      raise NotImplementedError; end
         def find_by_user_code_hash(_hash);        raise NotImplementedError; end
+        def claim_consume(_device_authorization, now: Time.now); raise NotImplementedError; end
       end
 
       # In-process store. Backed by a Hash keyed by id; lookups iterate.
@@ -73,6 +85,21 @@ module Kiosk
         def find_by_device_code_hash(hash)
           @mutex.synchronize do
             @by_id.values.find { |x| x.device_code_hash == hash }
+          end
+        end
+
+        # Atomic single-use claim (K-887). The status is re-read INSIDE the
+        # mutex, so a caller holding a stale `:approved` snapshot loses the
+        # race rather than overwriting the winner's consume.
+        # @return [DeviceAuthorization, nil] the consumed row, or nil when it
+        #   was no longer `:approved` (already consumed / denied / expired)
+        def claim_consume(da, now: Time.now)
+          @mutex.synchronize do
+            current = @by_id[da.id]
+            raise NotFoundError, "device_authorization #{da.id} not found" if current.nil?
+            return nil unless current.approved?
+
+            @by_id[da.id] = current.consume(now: now)
           end
         end
 
@@ -147,6 +174,27 @@ module Kiosk
           end
 
           da
+        end
+
+        # Atomic single-use claim (K-887). ONE conditional statement: the
+        # `AND status = 'approved'` predicate is what makes the row -- not a
+        # Ruby check against a snapshot -- decide the winner, so two concurrent
+        # redemptions of one link code produce one bind and one `409`.
+        # `'approved'` / `'consumed'` stay literals: they are state names
+        # written in this file, not values anyone supplies.
+        # @return [DeviceAuthorization, nil] the consumed row, or nil when the
+        #   row was no longer `approved` (lost the race, or never eligible)
+        def claim_consume(da, now: Time.now)
+          sql = <<~SQL
+            UPDATE #{table}
+            SET status = 'consumed', consumed_at = $1
+            WHERE id = $2 AND status = 'approved'
+            RETURNING id
+          SQL
+          updated = connection.exec_query(sql, "Kiosk device_authorization claim", [now, da.id]).to_a
+          return nil if updated.empty?
+
+          da.consume(now: now)
         end
 
         def find_by_device_code_hash(hash)

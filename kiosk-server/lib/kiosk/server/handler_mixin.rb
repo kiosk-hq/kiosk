@@ -523,8 +523,9 @@ module Kiosk
             error: {
               code:    "not_found",
               message: "Kiosk handlers are reachable through the Kiosk wire only",
-              hint:    "call POST #{Kiosk.configuration.mount_path}/query or " \
-                       "#{Kiosk.configuration.mount_path}/run with the verb's name",
+              hint:    "call the verb's own route — " \
+                       "GET #{Kiosk.configuration.mount_path}/<query-name> or " \
+                       "POST #{Kiosk.configuration.mount_path}/<action-name>",
             },
           }, status: :not_found
         end

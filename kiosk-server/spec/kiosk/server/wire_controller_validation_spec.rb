@@ -299,7 +299,7 @@ RSpec.describe "Opt-in PoW-shape request validation (slice-1, K-479)" do
     end
   end
 
-  # ── Fail-loud when the optional gem is missing ─────────────────────────────
+  # ── Fail-loud when the RUNTIME dependency is not loadable ──────────────────
   context "when validate_requests is on but json_schemer is not loadable" do
     before do
       Kiosk.configure { |c| c.validate_requests = true }
@@ -312,6 +312,25 @@ RSpec.describe "Opt-in PoW-shape request validation (slice-1, K-479)" do
       expect {
         Kiosk::Server::RequestValidation.validate_proofs!([{ challenge: {}, nonce: {} }])
       }.to raise_error(Kiosk::Server::Errors::ConfigurationError, /json_schemer/)
+    end
+
+    # K-931: the message is the one surface an operator reads at the moment
+    # they are debugging, and it told the retired story — "an OPTIONAL
+    # dependency" — two years after the gemspec made it `add_dependency`.
+    # Pinned against the gemspec rather than against a literal so the two
+    # cannot drift apart again silently.
+    it "does not call the gem optional, because the gemspec declares it a runtime dependency" do
+      spec = Gem::Specification.load(
+        File.expand_path("../../../kiosk-server.gemspec", __dir__),
+      )
+      expect(spec.runtime_dependencies.map(&:name)).to include("json_schemer")
+
+      expect {
+        Kiosk::Server::RequestValidation.validate_proofs!([{ challenge: {}, nonce: {} }])
+      }.to raise_error(Kiosk::Server::Errors::ConfigurationError) { |e|
+        expect(e.message).not_to match(/optional/i)
+        expect(e.message).to match(/RUNTIME dependency/)
+      }
     end
   end
 end

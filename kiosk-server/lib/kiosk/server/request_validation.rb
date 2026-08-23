@@ -172,11 +172,19 @@ module Kiosk
       def require_schemer!
         require "json_schemer"
       rescue LoadError
+        # The message an operator reads while debugging must match the
+        # gemspec (K-931): `json_schemer` has been a RUNTIME dependency since
+        # 0.4 (`add_dependency`, kiosk-server.gemspec), so reaching here does
+        # not mean "you skipped an optional extra" — it means the dependency
+        # that `gem install kiosk-server` resolves is not loadable in this
+        # process, which is a broken install or a pruned bundle.
         raise Errors::ConfigurationError,
           "Kiosk::Server: validate_requests is enabled but the json_schemer gem " \
-          "is not loadable. Add `gem \"json_schemer\"` to your app's Gemfile " \
-          "(it is an OPTIONAL dependency — kiosk-server does not require it unless " \
-          "request validation is turned on)."
+          "is not loadable. It is a RUNTIME dependency of kiosk-server (since 0.4) " \
+          "and should already be in your lockfile — check that the bundle is " \
+          "installed and not pruned (`bundle install`, or `bundle list | grep " \
+          "json_schemer`); add `gem \"json_schemer\"` to your Gemfile only if you " \
+          "load kiosk-server outside Bundler."
       end
 
       # json_schemer wants string keys and JSON-native values; the wire body is

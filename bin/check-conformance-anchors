@@ -1,0 +1,93 @@
+#!/usr/bin/env ruby
+# frozen_string_literal: true
+
+# check-conformance-anchors — the published conformance matrix cites this repo's
+# tests by NAME, and this asserts every one of those names still exists here.
+#
+# WHY THIS EXISTS. The Kiosk conformance matrix maps each normative statement of
+# the protocol to the test that covers it, and it names a test by the text of its
+# `it` / `describe` / `context` label rather than by a line number — a line number
+# rots on any insertion above it, silently, and a reader who follows one lands on
+# an unrelated example and believes it. An anchor cannot rot that way. It fails
+# only when the cited text is genuinely RENAMED, DELETED or DUPLICATED, which is
+# exactly the event worth failing on.
+#
+# But it fails over THERE, in the matrix, and this repository is where the rename
+# happens. So the anchors are published here as `spec/conformance-anchors.tsv`
+# (path + anchor, nothing else) and gated on every push: renaming an example that
+# is cited as evidence reddens the build that renamed it, in the same run,
+# instead of quietly invalidating a citation nobody re-reads.
+#
+# THE RULE. Every anchor in the manifest must occur EXACTLY ONCE in the file
+# beside it. Not "at least once": a copy-pasted example makes a citation
+# ambiguous, and an ambiguous citation is a defect — a reader cannot tell which
+# of two examples was meant.
+#
+# WHEN IT FAILS you have two honest repairs, and which one is right depends on
+# what you were doing:
+#   * the rename was incidental — put the label back, or
+#   * the rename was the point — update the citation that names it and
+#     regenerate this manifest.
+# The manifest is GENERATED, so hand-editing it to make this pass only moves the
+# failure to whoever regenerates it next.
+#
+# Usage: bin/check-conformance-anchors     # exits 0 clean, 1 on any mismatch
+
+ROOT     = File.expand_path("..", __dir__)
+MANIFEST = File.join(ROOT, "spec", "conformance-anchors.tsv")
+
+unless File.file?(MANIFEST)
+  warn "check-conformance-anchors: missing #{MANIFEST}"
+  exit 1
+end
+
+pairs = File.readlines(MANIFEST, chomp: true).filter_map do |line|
+  next if line.start_with?("#") || line.strip.empty?
+
+  rel, anchor = line.split("\t", 2)
+  next if rel.nil? || anchor.nil? || anchor.empty?
+
+  [rel, anchor]
+end
+
+if pairs.empty?
+  warn "check-conformance-anchors: #{MANIFEST} lists no anchors — a manifest that checks nothing " \
+       "reports success for checking nothing, which is the failure this file exists to prevent"
+  exit 1
+end
+
+cache    = {}
+failures = []
+
+pairs.each do |rel, anchor|
+  body = cache.fetch(rel) do
+    path = File.join(ROOT, rel)
+    cache[rel] = File.file?(path) ? File.readlines(path, chomp: true) : nil
+  end
+
+  if body.nil?
+    failures << "#{rel}: no such file — the conformance matrix cites it"
+    next
+  end
+
+  hits = body.each_index.select { |i| body[i].include?(anchor) }
+  case hits.length
+  when 1 then nil
+  when 0 then failures << "#{rel}: anchor NOT FOUND — #{anchor.inspect}"
+  else
+    failures << "#{rel}: anchor is AMBIGUOUS (#{hits.length} matches, lines " \
+                "#{hits.map { |i| i + 1 }.join(', ')}) — #{anchor.inspect}"
+  end
+end
+
+if failures.empty?
+  puts "check-conformance-anchors: OK — #{pairs.length} cited anchors across #{cache.size} files, " \
+       "each occurring exactly once"
+  exit 0
+end
+
+warn "\ncheck-conformance-anchors FAILED:\n"
+failures.each { |f| warn "  x #{f}" }
+warn "\nAn example cited as conformance evidence was renamed, removed or duplicated."
+warn "Restore the label, or update the citation and regenerate spec/conformance-anchors.tsv."
+exit 1

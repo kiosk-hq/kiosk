@@ -737,6 +737,43 @@ jobs:
       - name: Every demo task is either gated or opted out with a reason
         run: ./bin/check-ci-tasks
 
+  # The published conformance matrix cites THIS repo's tests by name, and this
+  # job is what makes a rename that invalidates a citation fail here rather than
+  # somewhere nobody looks (K-1007).
+  #
+  # The matrix maps every normative statement of the protocol to the test that
+  # covers it, and names a test by the text of its `it`/`describe`/`context`
+  # label — line numbers rot silently on any insertion above them, so a reader
+  # following one lands on an unrelated example and believes it. Anchors fail
+  # only on a real rename, deletion or duplication.
+  #
+  # The matrix itself is not in this repository, and the checker that walks it
+  # was run by nothing but a human: one wave renamed a device-authorization
+  # example, invalidated a cited anchor mid-wave, and it was noticed only because
+  # a second process happened to be running the checker at the time. So the
+  # anchors are published here as `spec/conformance-anchors.tsv` — path and
+  # anchor text, no prose — and gated on every push. The generator asserts the
+  # file is current from the other side, so the two cannot drift.
+  #
+  # Stdlib Ruby only: no bundle, no services, no database, ~0.1 s.
+  conformance-anchors:
+    name: cited test names still exist (bin/check-conformance-anchors)
+    runs-on: ubuntu-latest
+    # The daily schedule exists for solver-pin-live; don't rebuild the world.
+    if: github.event_name != 'schedule'
+
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Set up Ruby
+        uses: ruby/setup-ruby@v1
+        with:
+          ruby-version: "4.0.1"
+          bundler-cache: false
+
+      - name: Every anchor the conformance matrix cites occurs exactly once
+        run: ./bin/check-conformance-anchors
+
   # The demos are eight standalone Rails apps, so shared application code is not
   # shared — it is HAND-COPIED, and until now nothing checked the copies still
   # agreed. demo_telemetry.rb (then at lib/, now app/services/) carried a stale

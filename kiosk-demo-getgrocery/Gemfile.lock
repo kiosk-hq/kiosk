@@ -301,7 +301,7 @@ GEM
     sqlite3 (2.9.6-x86_64-linux-gnu)
     sqlite3 (2.9.6-x86_64-linux-musl)
     stringio (3.2.0)
-    stripe (19.3.1)
+    stripe (19.5.0)
       bigdecimal
       logger
     systemu (2.6.5)
@@ -458,7 +458,7 @@ CHECKSUMS
   sqlite3 (2.9.6-x86_64-linux-gnu) sha256=613188ce02f614126ddbc38c5e217ccffd6306d0dcd9adca9764547aa890a634
   sqlite3 (2.9.6-x86_64-linux-musl) sha256=d493b11818a3573387a1d56e1ee8fa00da23a683a7a1cc063e7a0feeed843abf
   stringio (3.2.0) sha256=c37cb2e58b4ffbd33fe5cd948c05934af997b36e0b6ca6fdf43afa234cf222e1
-  stripe (19.3.1) sha256=db738acb9df95dcf84f683886556fa8d7ae409d34a92ab8130bbf773828bbb1d
+  stripe (19.5.0) sha256=04d7bf83c65e5021cfc94bac92f2dd95d3843dcd70cac1cb8362757398bf5aaf
   systemu (2.6.5) sha256=01f7d014b1453b28e5781e15c4d7d63fc9221c29b174b7aae5253207a75ab33e
   thor (1.5.0) sha256=e3a9e55fe857e44859ce104a84675ab6e8cd59c650a49106a05f55f136425e73
   timeout (0.6.1) sha256=78f57368a7e7bbadec56971f78a3f5ecbcfb59b7fcbb0a3ed6ddc08a5094accb

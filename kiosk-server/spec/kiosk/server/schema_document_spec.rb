@@ -202,6 +202,40 @@ RSpec.describe Kiosk::Server::SchemaDocument do
       expect(digest).to eq(first)
     end
 
+    # THE OTHER HALF OF "moves when the value moves", and the one a caller
+    # actually depends on: the epoch is a MEMO key, not a digest input, so an
+    # epoch that rolls while the resolved value is unchanged must produce the
+    # SAME digest. Two documents publish this digest — the `?v=` on the
+    # discovery link and the catalog's own strong ETag — and nothing makes a
+    # client read them in the same 60-second window. If the epoch reached
+    # `digest_inputs`, every consumer comparing the two across a bucket
+    # boundary would see a mismatch caused by nothing (K-974, whose own
+    # analysis assumed exactly that and was wrong).
+    it "keeps the digest UNCHANGED across an epoch roll when the value has not moved" do
+      slugs = %w[bikes]
+      epoch = 1
+      # The epoch is DRIVEN rather than waited for: it is a monotonic clock
+      # read, and a spec that races a 60-second bucket boundary is a spec that
+      # fails on a Tuesday.
+      allow(Kiosk::Server::SchemaSlots).to receive(:epoch) { epoch }
+      Kiosk::Server::SchemaSlots.refresh_seconds = 0 # never reuse a resolved value
+      declare_query("board", input_schema: {
+                      type: "object", properties: { category: { enum: -> { slugs } } },
+                    })
+      first = digest
+
+      epoch = 2 # the memo window rolled; the operator's data did not
+
+      expect(digest).to eq(first)
+
+      # ... and the roll really was rebuilding, not answering from a memo:
+      # move the value under a third epoch and the digest follows.
+      epoch = 3
+      slugs = %w[bikes free]
+
+      expect(digest).not_to eq(first)
+    end
+
     # `after_initialize` runs on EVERY boot, `db:create` and `db:migrate`
     # included, and a proc that reads a table cannot succeed there. Eager
     # derivation is an optimisation, so it defers rather than taking the boot

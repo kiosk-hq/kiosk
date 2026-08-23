@@ -14,6 +14,32 @@
 class Kiosk::BookingsController < ApplicationController
   include Kiosk::Handler
 
+  # THE EXAMPLE SLOT IS RESOLVED, NOT WRITTEN DOWN (K-974). Three declarations
+  # below published `2026-06-15T14:00:00Z` — an instant that was two months in
+  # the past by the time anyone noticed, in a document whose whole promise is
+  # «copy this verbatim». Nothing had been edited; the clock moved, which is
+  # the class K-972 closed across the seven demos and left standing here,
+  # because the guard that enforces it scanned `kiosk-demo-*` only. It scans
+  # this file now too.
+  #
+  # `example_params`, `example_row` and `input_schema` are RESOLVABLE SLOTS
+  # (see {Kiosk::Server::SchemaSlots}), so a zero-arity proc in a declaration
+  # is called when the catalog is READ. A week out at 14:00 UTC: ahead of any
+  # caller's clock, and a round hour so it reads like something a human asked
+  # for. Same shape and same reasoning as stylish's
+  # `BookAppointmentOperation.example_slot`, which this fixture host mirrors.
+  #
+  # WHAT THIS DOES NOT COST, measured rather than assumed: the digest is a
+  # hash of `digest_inputs`, and `SchemaSlots.epoch` is a MEMO key that never
+  # reaches it — so a rolled 60-second bucket rebuilds the document and
+  # produces the SAME `?v=`/ETag while this value is unchanged. Pinned by
+  # kiosk-server's «keeps the digest UNCHANGED across an epoch roll» example.
+  #
+  # @return [String] an ISO 8601 instant, always later than now
+  def self.example_slot
+    (Time.current + 7.days).utc.change(hour: 14).iso8601
+  end
+
   # my_appointments — per-user appointment list scoped by the session GUC.
   # The WHERE is provider-controlled; the agent supplies no user filter.
   # App-layer per-user isolation without RLS: the principal sees only rows
@@ -44,7 +70,7 @@ class Kiosk::BookingsController < ApplicationController
   # this row verbatim built an integer id for a value the wire never returns
   # as one. K-825.
   example_row({ id: "3f1c2d4e-5a6b-4c7d-8e9f-0a1b2c3d4e5f", salon_id: 1,
-                slot: "2026-06-15T14:00:00Z" })
+                slot: -> { example_slot } })
   def my_appointments
     render json: ActiveRecord::Base.connection.execute(
       "SELECT id, salon_id, slot FROM appointments " \
@@ -69,7 +95,7 @@ class Kiosk::BookingsController < ApplicationController
                  salon_id: { type: "integer",
                              description: "The `id` of a row returned by the salons query." },
                  slot:     { type: "string", format: "date-time",
-                             description: "Appointment time as an ISO 8601 timestamp, e.g. 2026-06-15T14:00:00Z." },
+                             description: -> { "Appointment time as an ISO 8601 timestamp, e.g. #{example_slot}." } },
                },
                required: %w[salon_id slot]
   output_schema type: "object",
@@ -81,13 +107,13 @@ class Kiosk::BookingsController < ApplicationController
                   slot:           { type: "string", description: "Appointment time, ISO 8601." },
                 },
                 required: %w[appointment_id salon_id slot]
-  example_params({ salon_id: 1, slot: "2026-06-15T14:00:00Z" })
+  example_params({ salon_id: 1, slot: -> { example_slot } })
   # A UUID for the same reason `my_appointments` publishes one: this IS the
   # same value under its other name, `appointments.id` is a uuid column, and
   # the declaration above says `type: "string"`. Caught by
   # e2e/schema_conformance.rb's §8.3 check on its first run — K-825.
   example_row({ appointment_id: "3f1c2d4e-5a6b-4c7d-8e9f-0a1b2c3d4e5f", salon_id: 1,
-                slot: "2026-06-15T14:00:00Z" })
+                slot: -> { example_slot } })
   def book_appointment
     # Identity is set via Kiosk::Server::SessionContext SET LOCAL —
     # current_user_id() helper returns the principal. ActiveRecord doesn't

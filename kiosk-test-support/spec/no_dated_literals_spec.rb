@@ -46,8 +46,26 @@
 #   * a date that is stale for a reason no clock fixes (a wrong copyright year).
 #   * anything outside the scanned scope below.
 #
-# SCOPE — RUNTIME code only: `app/`, `config/`, and `lib/` minus `lib/tasks/`,
-# the same scope and the same reasoning as `no_interpolated_sql_spec.rb`. The
+# SCOPE — every DEMO's runtime code (`app/`, `config/`, `lib/` minus
+# `lib/tasks/`, the same scope and reasoning as `no_interpolated_sql_spec.rb`)
+# PLUS the e2e fixture host's CONTROLLERS. The second half was added by K-974,
+# and the reason it is not a nicety: the fixture host publishes a real
+# descriptor over a real wire, and its `book_appointment` carried
+# `2026-06-15T14:00:00Z` in three declaration slots — an instant two months in
+# the past — for the whole time this guard was green, because the guard only
+# ever looked at `kiosk-demo-*`. A rule that holds for seven origins and not
+# for the eighth is a rule with a hole in the exact shape of the thing nobody
+# looks at.
+#
+# It is the fixture host's `*_controller.rb` and not all of `e2e/fixtures/`,
+# for the same reason `script/` is excluded above: what remains dated in the
+# rest of that directory is a deliberately fixed SENTINEL —
+# `DemoAuditSink::EXPLODING_SLOT = "2030-01-01T00:00:00Z"`, a value the harness
+# sends to prove a raising sink does not fail the booking. Nothing publishes
+# it and no assistant reads it. Scoping to the descriptor-bearing files keeps
+# the exception list EMPTY, which is the property this guard's header asks for.
+#
+# The
 # `script/` drivers and demo rake tasks are excluded ON PURPOSE and the reason
 # is measured, not assumed: every valid date those files use is ALREADY
 # relative (`CHECK_IN = (Date.today + 30).to_s`, `DBL_IN`, `PROBE_IN`, K-969),
@@ -98,6 +116,12 @@ RSpec.describe "no demo writes a calendar date into runtime code (K-972)" do
       !f.match?(%r{\Akiosk-demo-[a-z0-9_]+/lib/tasks/})
   end.sort.freeze
 
+  # The e2e fixture host's descriptor-bearing files (K-974). Same rule, same
+  # reason, different directory — see the scope note in the header.
+  e2e_tracked, e2e_status = Open3.capture2("git", "-C", DATED_REPO_ROOT, "ls-files", "e2e/fixtures")
+  DATED_E2E_GIT_OK = e2e_status.success?
+  DATED_E2E_FILES  = e2e_tracked.lines(chomp: true).select { |f| f.end_with?("_controller.rb") }.sort.freeze
+
   it "reads the tracked runtime tree (this spec never skips)" do
     expect(DATED_GIT_OK).to be(true), "git ls-files failed in #{DATED_REPO_ROOT}"
     expect(DATED_FILES.size).to be >= 150,
@@ -108,8 +132,17 @@ RSpec.describe "no demo writes a calendar date into runtime code (K-972)" do
     expect(DATED_FILES.map { |f| f[%r{\Akiosk-demo-[a-z0-9_]+}] }.uniq.size).to eq(8)
   end
 
+  it "reads the e2e fixture host's controllers too (K-974)" do
+    expect(DATED_E2E_GIT_OK).to be(true), "git ls-files failed in #{DATED_REPO_ROOT}"
+    # A rename that moved the descriptor-bearing fixtures out of this glob
+    # would otherwise empty the scope and stay green — the exact way this
+    # guard missed `bookings_controller.rb` for as long as it did.
+    expect(DATED_E2E_FILES).to include("e2e/fixtures/bookings_controller.rb")
+    expect(DATED_E2E_FILES.size).to be >= 2
+  end
+
   it "finds no calendar date in any demo's runtime code" do
-    report = DATED_FILES.flat_map do |rel|
+    report = (DATED_FILES + DATED_E2E_FILES).flat_map do |rel|
       dated_violations(File.read(File.join(DATED_REPO_ROOT, rel)))
         .map { |no, src| "#{rel}:#{no}  #{src[0, 110]}" }
     end

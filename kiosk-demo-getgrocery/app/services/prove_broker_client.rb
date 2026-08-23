@@ -4,17 +4,12 @@ require "net/http"
 require "uri"
 require "json"
 
-# ProveBrokerClient — getgrocery's server-to-server client for the KYC
-# broker intake (design §4.1 / §5.1). On POST <endpoint>/request_kyc, getgrocery calls the
-# broker here (NOT the human) to START an age verification, handing the broker
-# getgrocery's callback_url, the SINGLE claim it needs (age_over_18 — NOT a
-# driving licence), and the agent's user_id as the subject the claim must bind
-# to. The broker returns a verification_url getgrocery relays to the agent's
-# human.
-#
-# Authenticated by getgrocery's shared intake secret (the broker refuses
-# arbitrary callers and arbitrary callback hosts). This is the operator→broker
-# leg; the broker→operator leg lands on getgrocery's POST /kyc/callback.
+# ProveBrokerClient — getgrocery's server-to-server client for the KYC broker
+# intake (design §4.1 / §5.1). getgrocery calls the broker here, not the human,
+# and gets back a verification_url to relay. Authenticated by the shared intake
+# secret, so the broker refuses arbitrary callers and arbitrary callback hosts.
+# This is the operator→broker leg; the broker→operator leg lands on
+# POST /kyc/callback.
 module ProveBrokerClient
   module_function
 
@@ -32,19 +27,16 @@ module ProveBrokerClient
       callback_url:     callback_url,
       requested_claims: requested_claims,
       subject_handle:   subject_handle,
-      # The operator-binding audience getgrocery declares — the value its engine
-      # KycVerifier compares the minted claim's `aud` against (c.kyc_audience).
-      # The broker stamps this as `aud`, so a claim minted here is bound to
-      # getgrocery (a claim minted for skooti cannot unlock getgrocery).
+      # The broker stamps this as the claim's `aud`, which the engine's
+      # KycVerifier compares against c.kyc_audience — so a claim minted for
+      # skooti cannot unlock getgrocery.
       audience:         Kiosk.configuration.kyc_audience,
     )
 
-    # The shared intake bearer comes from Rails custom config (K-650): set in
-    # config/environments/*.rb from this operator's own env variable, with NO
+    # The shared intake bearer comes from Rails custom config (K-650), with NO
     # shipped default anywhere (K-547 — a default in a public repo would let
-    # anyone impersonate the operator's intake). The harness pins it on both
-    # sides; a deploy that has not configured it fails HERE, loudly, at the
-    # first request_kyc rather than presenting a guessable token.
+    # anyone impersonate this operator's intake). A deploy that has not
+    # configured it fails HERE, loudly, rather than presenting a guessable token.
     secret = Rails.configuration.x.kiosk.prove_intake_secret
     if secret.to_s.empty?
       raise "KYC broker intake secret is not configured — set KIOSK_PROVE_INTAKE_SECRET to the SAME " \

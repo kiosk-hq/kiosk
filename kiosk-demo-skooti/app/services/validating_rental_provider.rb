@@ -1,75 +1,65 @@
 # frozen_string_literal: true
 
-# The cashier check, as a PSP-adapter decorator: before any capture, verify
-# the agent-signed cart against the OPERATOR'S OWN quote. The wire verifies the
-# mandate chain's internal consistency (cart total == payment amount, one
-# currency across the chain) — it cannot know this operator's currency or the
-# price it quoted for a reservation. The operator must count what lands on the
-# counter:
+# The cashier check, as a PSP-adapter decorator: before any capture, verify the
+# agent-signed cart against the OPERATOR'S OWN quote. The wire checks the mandate
+# chain's internal consistency (cart total == payment amount, one currency
+# throughout); it cannot know this operator's currency or the price it quoted.
+# So the operator counts what lands on the counter:
 #
 #   1. the cart is denominated in the operator's currency (EUR);
 #   2. it references exactly one reservation ({"reservation_id": ...} among the
 #      line_items — see reserve's pay_hint);
-#   3. its total equals the price the operator QUOTED for that reservation AND
-#      — when the cart carries priced line items — the sum of those lines
-#      (internal arithmetic consistency).
+#   3. its total equals the price the operator QUOTED for that reservation AND,
+#      when the cart carries priced line items, the sum of those lines.
 #
-# Skooti rentals are metered per-minute: there is no fixed total_cents stored on
-# the reservation. The quote is derived — the reservation's scooter carries
-# price_per_min_cents, and the pay step settles ONE minute upfront
-# (price_per_min_cents × 1), mirroring reserve/rental_flow. So the quoted total
-# for a reservation is that scooter's price_per_min_cents, read by joining the
-# reservation to its scooter by id (NO user filter — ownership is not checked
-# here).
+# Rentals are metered per-minute, so no fixed total is stored: the quote is
+# derived from the reservation's scooter (price_per_min_cents × the one minute
+# the pay step settles upfront, mirroring reserve/rental_flow), read by joining
+# the reservation to its scooter — no user filter, because ownership is not
+# checked here.
 #
-# This is a MONETARY check only. It deliberately does NOT verify that the
-# reservation belongs to the payer: skooti enforces settlement→reservation
-# ownership at USE time (start_rental / rent_motorcycle Gate-1), and its
-# isolation flow proves that B may pay for A's reservation at the correct price
-# and currency — the settlement is valid, yet Gate-1 still denies B's
-# start_rental. Ownership is not a payment concern here; the counter only
-# checks the money. The KYC gate likewise lives at USE time and is untouched.
+# MONETARY ONLY. It deliberately does not verify that the reservation belongs to
+# the payer: skooti enforces settlement→reservation ownership at USE time
+# (start_rental / rent_motorcycle Gate 1), and the isolation flow proves B may
+# pay for A's reservation at the right price and still be denied start_rental.
+# The KYC gate likewise lives at use time.
 #
 # Any mismatch rejects the capture (403 Forbidden); the mandate trail is
 # persisted, nothing is charged.
 #
 # ── Per-reservation serialization and the capture-anchored marker (K-853) ────
-# The engine settles between two short DB transactions with the irreversible PSP
-# capture BETWEEN them (executor P1→P2→P3), and until K-853 the only "paid"
-# marker skooti had was the settlement row written in P3, AFTER the capture.
-# That left two holes, and protocol.md §11.6 now closes both by name:
+# The engine settles across two short DB transactions with the irreversible PSP
+# capture BETWEEN them (executor P1→P2→P3), so a settlement row written in P3 is
+# too late to close two holes protocol.md §11.6 names:
 #
-#   (a) DOUBLE CAPTURE — two /pay for the same reservation (two distinct chains)
-#       both passed the cashier and both charged the rider for one ride. The
-#       engine's `409 conflict` on a re-presented mandate id does not help: a
-#       FRESH chain collides with nothing.
+#   (a) DOUBLE CAPTURE — two /pay for one reservation over two distinct chains
+#       both pass the cashier and both charge the rider. The engine's `409` on a
+#       re-presented mandate id does not help: a FRESH chain collides with
+#       nothing.
 #   (b) "NOT PAID" DURING THE WINDOW — between the capture returning and P3
-#       writing the settlement, every skooti read said no settlement exists,
-#       which §11.6 forbids an operator to publish as *not paid*: it is the
-#       answer that licenses an assistant to sign a fresh chain and charge its
-#       human a second time.
+#       writing the settlement every read says no settlement exists, which §11.6
+#       forbids publishing as *not paid*: that answer licenses an assistant to
+#       sign a fresh chain and charge its human twice.
 #
-# So the reservation gets a payment lifecycle and this decorator drives it:
-# `unpaid → paying → paid`. The claim is a single conditional UPDATE
+# So the reservation carries a payment lifecycle, `unpaid → paying → paid`, and
+# this decorator drives it. The claim is a single conditional UPDATE
 # (`… WHERE payment_status='unpaid' RETURNING …`) — a row-locked, race-free
 # compare-and-set. Once a reservation is `paying`, a second /pay's claim matches
-# zero rows and is refused (closes a); `my_reservations` publishes `pending` for
-# it rather than a bare unpaid (closes b, the in-flight half).
+# zero rows and is refused (a), and `my_reservations` publishes `pending` rather
+# than a bare unpaid (b).
 #
-# On a definitive decline / no-charge failure we RELEASE `paying → unpaid` so a
-# corrected retry can proceed; on an UNKNOWN outcome (a timeout) we deliberately
-# LEAVE it `paying`, so a blind retry cannot double-charge and the state an
-# assistant reads stays *pending* rather than becoming a false "not paid".
-# On success we flip `paying → paid` BEFORE returning to the engine — a hair
-# before P3 — and a failure of that flip must never undo a successful charge, so
-# it is swallowed and P3's settlement row remains the second witness.
+# On a definitive decline we RELEASE `paying → unpaid` so a corrected retry can
+# proceed; on an UNKNOWN outcome (a timeout) we deliberately LEAVE it `paying`,
+# so a blind retry cannot double-charge and the state an assistant reads stays
+# *pending* rather than a false "not paid". On success we flip `paying → paid`
+# just before returning to the engine, and a failure of that flip must never undo
+# a successful charge, so it is swallowed and P3's settlement row is the second
+# witness.
 #
-# WHO PAID is recorded with the claim, from the SIGNED cart mandate. skooti's
-# cashier does not check that the payer owns the reservation (see above), so
-# without the payer id the capture-anchored marker could not tell the rental
-# verbs' payment gate whose money it was, and that gate would have had to widen
-# from "a settlement of THIS principal" to "anyone paid" — which the isolation
-# flow exists to prevent.
+# WHO PAID is recorded with the claim, from the SIGNED cart mandate: the cashier
+# does not check that the payer owns the reservation, so without the payer id the
+# rental verbs' payment gate would have to widen from "a settlement of THIS
+# principal" to "anyone paid" — which the isolation flow exists to prevent.
 class ValidatingRentalProvider
   def initialize(provider, currency:)
     @provider = provider
@@ -81,18 +71,12 @@ class ValidatingRentalProvider
     begin
       settled = @provider.capture(cart_mandate, payment_method: payment_method)
     rescue StandardError => e
-      # Release the claim ONLY when we know no money moved (a definitive decline
-      # or a pre-charge SetupRequired). On an UNKNOWN outcome we keep the
-      # reservation `paying` so a lost-response retry reads *pending* and is
-      # refused, rather than reading *unpaid* and charging twice.
+      # Release the claim ONLY when we know no money moved.
       release_claim_on_failure!(reservation_id, e)
       raise
     end
-    # Charge succeeded — mark the reservation terminally paid. The engine's
-    # settlement row (executor P3) is the second witness; this local flip is the
-    # FIRST one and the only one that exists during the window, so a failure
-    # here must NOT undo a successful charge — swallow it and let P3 record the
-    # settlement.
+    # The FIRST witness, and the only one that exists during the window before
+    # the engine's settlement row (P3) lands.
     mark_paid!(reservation_id)
     settled
   end
@@ -131,15 +115,14 @@ class ValidatingRentalProvider
     deny "cart line_items must reference exactly one reservation_id (see reserve's pay_hint)" unless refs.size == 1
     reservation_id = refs.first
 
-    # K-581: the reservation_id goes straight into an `::uuid` cast below. A
-    # malformed one made Postgres raise InvalidTextRepresentation, which escaped
-    # as a raw 500 — and on the pay path a 500 is the worst answer there is,
-    # because an assistant cannot tell "your input was wrong" from "the charge
-    # may have gone through". Reject the bad SHAPE up front, before the
-    # connection is even taken — a 400, not the cashier's 403: this is a
-    # malformed argument, not a refusal to serve a well-formed one, and it says
-    # nothing about whether any reservation exists. The message echoes only the
-    # value the agent itself sent — no SQL, no PG error text.
+    # The reservation_id goes straight into an `::uuid` cast below, where a
+    # malformed one raises InvalidTextRepresentation — and on the pay path a 500
+    # is the worst answer there is, because an assistant cannot tell "your input
+    # was wrong" from "the charge may have gone through" (K-581). So the SHAPE is
+    # rejected before a connection is even taken, and as a 400 rather than the
+    # cashier's 403: a malformed argument, not a refusal to serve a well-formed
+    # one, and it says nothing about whether any reservation exists. The message
+    # echoes only what the agent sent — no SQL, no PG error text.
     unless UuidCheck.valid?(reservation_id)
       raise Kiosk::Server::Errors::BadRequest.new(
         "cart line_items reservation_id #{reservation_id.inspect} is not a uuid",
@@ -152,17 +135,14 @@ class ValidatingRentalProvider
     # UPDATE is what serializes concurrent /pay for one reservation — only one
     # caller can flip 'unpaid' — and it is taken BEFORE the cashier check and
     # before the capture, so a second chain never reaches the PSP at all. The
-    # quoted total comes back with it: this reservation's scooter
-    # price_per_min_cents × 1 minute (the upfront hold reserve/rental_flow
-    # settle). No user_id filter — ownership is a USE-time gate, not the
-    # cashier's.
+    # quoted total rides back with it. No user_id filter: ownership is a USE-time
+    # gate, not the cashier's.
     #
-    # RAW SQL, deliberately: the ATOMICITY is the fix, `update_all` has no
+    # Raw SQL, deliberately: the ATOMICITY is the point, `update_all` has no
     # RETURNING in Rails 8.1, and an ActiveRecord spelling would be a SELECT then
-    # an UPDATE — which is the race back again. RAW, BUT NOT INTERPOLATED
-    # (K-654): every value is a `$N` bind, so the statement text carries no value
-    # at all and there is no `conn.quote` to forget when this file is copied.
-    # `$3::uuid` casts the bound text exactly as the quoted literal did.
+    # an UPDATE — the race back again. Raw but NOT interpolated (K-654): every
+    # value is a `$N` bind, so the statement text carries no value at all and
+    # there is no `conn.quote` to forget when this file is copied.
     claimed = Reservation.lease_connection.exec_query(
       "UPDATE public.reservations r " \
       "SET payment_status = $1, " \
@@ -240,11 +220,11 @@ class ValidatingRentalProvider
     reservation_id
   end
 
-  # Release a claim we know involved NO charge (a definitive decline / setup
-  # required). On an UNKNOWN capture outcome (a non-retryable PaymentFailed) or
-  # any other unexpected error we deliberately do NOT release — leaving the
-  # reservation `paying` is what keeps `my_reservations` answering *pending*
-  # instead of a false "not paid", and what blocks a blind retry.
+  # A definitive decline or a pre-charge SetupRequired is the only case where no
+  # money moved. On an UNKNOWN outcome (a non-retryable PaymentFailed, any other
+  # error) we deliberately do NOT release: leaving the reservation `paying` is
+  # what keeps `my_reservations` answering *pending* instead of a false "not
+  # paid", and what blocks a blind retry.
   def release_claim_on_failure!(reservation_id, error)
     return unless reservation_id
 
@@ -253,9 +233,8 @@ class ValidatingRentalProvider
     release_claim!(reservation_id) if safe
   end
 
-  # Reverting the claim also clears the payer: nobody paid, so leaving a payer id
-  # on the row would make the rental verbs' payment gate read a claim that was
-  # released as if it were a charge.
+  # Clears the payer too: nobody paid, and a payer id left on the row would make
+  # the rental verbs' payment gate read a released claim as a charge.
   def release_claim!(reservation_id)
     set_payment_status(reservation_id, from: Reservation::PAYING, to: Reservation::UNPAID,
                                        clear_payer: true)
@@ -269,16 +248,13 @@ class ValidatingRentalProvider
     nil
   end
 
-  # TWO WHOLE STATEMENTS, NOT ONE STATEMENT PLUS A FRAGMENT (K-654). This used
-  # to take an `extra:` SET fragment and splice it in, which meant no reader ever
-  # saw a complete statement and the file taught fragment-splicing as a
-  # technique. Written out, both are literal text with `$N` binds for every
-  # value, and the ONE difference between them — whether the payer is cleared —
-  # is a boolean at the call site rather than a string a caller could grow.
+  # Two WHOLE statements rather than one plus a spliced SET fragment (K-654):
+  # every reader sees a complete statement, both are literal text with `$N` binds
+  # for every value, and the one difference between them — whether the payer is
+  # cleared — is a boolean at the call site rather than a string a caller could
+  # grow.
   #
-  # @param clear_payer [Boolean] true when reverting a claim: nobody paid, so
-  #   leaving a payer id would make the rental verbs' payment gate read a
-  #   released claim as a charge.
+  # @param clear_payer [Boolean] true when reverting a claim.
   def set_payment_status(reservation_id, from:, to:, clear_payer: false)
     sql =
       if clear_payer

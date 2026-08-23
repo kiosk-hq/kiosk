@@ -1,53 +1,34 @@
 # frozen_string_literal: true
 
 # create_list — a new list owned by the authenticated principal, plus the owner
-# membership that makes it reachable, in one transaction.
-#
-# Reached from BOTH surfaces: `POST /kiosk/create_list` (the 0.4 per-verb wire —
-# one endpoint per verb, the arguments ARE the JSON body, no `name` field) and
-# the human web UI's "New list" form. That is the whole reason it is an
-# Operation and not a controller method — before this, the web form reached the
-# wire handler by dispatching a synthetic Rack sub-request at it.
+# membership that makes it reachable, in one transaction. Reached from BOTH
+# surfaces: `POST /kiosk/create_list` and the web UI's "New list" form — which is
+# the whole reason it is an Operation and not a controller method.
 class CreateListOperation
   # @param principal_id [String] the account the wire (or the Devise session)
-  #   resolved. NEVER an argument off the request: this method never reads
-  #   `account_id`/`owner_id`/`id` out of the params, and it can be written that
-  #   way precisely because the value is passed in from the identity. Since 0.4
-  #   a forged one does not even reach here — `create_list` publishes
-  #   `additionalProperties: false` with `title` as its only property, and
-  #   `input_schema` is validated on every call, so the wire answers a typed 400
-  #   naming the offending parameter. That is the outer guard; this is the one
-  #   that would still hold if the schema were ever loosened.
+  #   resolved. NEVER an argument off the request: `account_id`/`owner_id`/`id`
+  #   are never read out of the params, and a forged one does not even reach here
+  #   — `create_list` publishes `additionalProperties: false` with `title` as its
+  #   only property, so the wire answers a typed 400. That is the outer guard;
+  #   this is the one that would still hold if the schema were loosened.
   #
-  #   An INSERT is the one place the principal must be spelled in Ruby. Every
-  #   READ scopes with `Membership.of_current_principal`, which never names the
-  #   principal at all because a WHERE has a predicate to hide it in; an INSERT
-  #   has no predicate, so it must supply the value. Both are un-forgeable for
-  #   the same reason — the identity is resolved from the Rack env the wire
-  #   built, which no request argument can write — but only the first keeps the
-  #   database as the authority. Moving the column DEFAULT to
-  #   `kiosk.current_user_id()` would close the gap; that is a migration, not
-  #   part of a handler conversion (the atablefor note, unchanged).
+  #   An INSERT is the one place the principal must be spelled in Ruby: a READ
+  #   hides it in `Membership.of_current_principal`'s WHERE predicate, an INSERT
+  #   has none. Moving the column DEFAULT to `kiosk.current_user_id()` would keep
+  #   the database the authority; that is a migration.
   def self.call(principal_id:, title:)
     text = title.to_s
     return OperationResult.refused(code: "bad_request", message: "title required") if text.strip.empty?
 
-    # This `transaction` JOINS the one Kiosk::Server::SessionContext already
-    # opened around the request (the GUCs are SET LOCAL in it) — on the wire
-    # path and on the web path alike — so it opens no second transaction. The
-    # list and its owner membership still land together or not at all, which is
-    # the invariant it is written for.
+    # JOINS the transaction Kiosk::Server::SessionContext already opened around
+    # the request (the GUCs are SET LOCAL in it), so it opens no second one. The
+    # list and its owner membership still land together or not at all.
     list_id = List.transaction do
       id = List.insert!({ account_id: principal_id, title: text }, returning: %i[id]).first["id"]
       # `insert!`, NOT `create!`, and the reason is a wire answer rather than
-      # taste. `create!` interposes validations, and `belongs_to :account` is
-      # required by default — so a principal with no `users` row would turn the
-      # `ActiveRecord::InvalidForeignKey` Postgres raises (unmapped in
-      # `rescue_responses`, so re-raised and wrapped `action_failed`/500, which
-      # is what the raw INSERT did) into a `RecordInvalid`, which Rails maps to
-      # 422 and the handler mixin's `rescue_from` floor renders as
-      # `bad_request`. A 500 silently becoming a 400 for an unrelated input is
-      # exactly the class of change this conversion must not make.
+      # taste: `create!` runs `belongs_to :account`'s required-by-default
+      # validation, so a principal with no `users` row would raise RecordInvalid
+      # (422 → `bad_request`) where the InvalidForeignKey Postgres raises is a 500.
       Membership.insert!({ list_id: id, account_id: principal_id, role: Membership::OWNER })
       id
     end

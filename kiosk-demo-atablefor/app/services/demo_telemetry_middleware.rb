@@ -4,15 +4,13 @@ require "digest"
 require "json"
 
 # Rack middleware that records ONE telemetry event per SUCCESSFUL wire action.
-# Inserted into the demo's middleware stack ONLY when KIOSK_TELEMETRY=1 (see
-# the demo's config/initializers). A pass-through otherwise, so CI/local flows
-# are unaffected.
+# Inserted only when KIOSK_TELEMETRY=1 (see the demo's config/initializers),
+# and a pass-through otherwise.
 #
-# Privacy: the agent is identified for distinct-counting by hashing the request
-# Bearer token (a stable per-agent credential) — the token is NEVER stored; on
-# /auth/register (no bearer yet) the response `agent_id` is used. Both go
-# through DemoTelemetry.agent_hash (per-app salted), so no raw id and no
-# cross-app-joinable value is ever persisted.
+# Privacy: the distinct-count ref is a hash of the request Bearer token — the
+# token itself is never stored — or, on /auth/register where there is no bearer
+# yet, of the response `agent_id`. Both go through DemoTelemetry.agent_hash,
+# which salts per app, so nothing persisted is joinable across demos.
 class DemoTelemetryMiddleware
   # @param app [Rack app]
   # @param verb_map [Hash] concrete-verb → generic-kind override for actions
@@ -21,15 +19,13 @@ class DemoTelemetryMiddleware
     @verb_map = verb_map
   end
 
-  # Telemetry must never break a wire action — but "never break it" has TWO
-  # different safe recoveries, and using the wrong one is how K-622 happened.
-  # BEFORE the app has run, the safe recovery is to hand the request to the app.
-  # AFTER it has run, the ONLY safe recovery is the response already in hand:
-  # calling the app again does not retry a failed request, it DISPATCHES A
-  # SECOND ONE. On /auth/register that mints a second agent. So every
-  # `@app.call` below except one is an EARLY RETURN in the pre-dispatch
-  # region — reached only when the request will not be recorded at all — and
-  # nothing under the single dispatch line may reach one.
+  # Telemetry must never break a wire action, and the safe recovery differs on
+  # each side of the dispatch. BEFORE the app runs it is to hand the request to
+  # the app. AFTER it has run the only safe recovery is the response already in
+  # hand: calling the app again does not retry a request, it DISPATCHES A SECOND
+  # ONE, and on /auth/register that mints a second agent (K-622). So every
+  # `@app.call` below except one is an early return in the pre-dispatch region,
+  # and nothing under the single dispatch line may reach one.
   def call(env)
     # ── Before the app runs ───────────────────────────────────────────────
     begin
@@ -37,10 +33,8 @@ class DemoTelemetryMiddleware
 
       path   = env["PATH_INFO"].to_s
       method = env["REQUEST_METHOD"].to_s
-      # Everything the classifier can answer for is decided from the request
-      # LINE — no body is read, on any path. The 0.3 version had to read and
-      # rewind `rack.input` here to find the verb name; the 0.4 wire puts it
-      # in the path.
+      # Everything the classifier needs is in the request LINE; no body is read
+      # on any path.
       kind = best_effort do
         DemoTelemetry.action_kind_for(path: path, method: method, verb_map: @verb_map)
       end
@@ -72,10 +66,10 @@ class DemoTelemetryMiddleware
 
   private
 
-  # Run one piece of telemetry work after the app has already answered. A
-  # failure here is swallowed (the request is not telemetry's to break) and the
-  # caller carries on with the response it is already holding. There is no
-  # "retry" at this point and there must never look like one.
+  # Run one piece of telemetry work after the app has answered. A failure here
+  # is swallowed — the request is not telemetry's to break — and the caller
+  # carries on with the response it already holds. There is no retry at this
+  # point and nothing here may look like one.
   def best_effort
     yield
   rescue StandardError => e
@@ -87,12 +81,9 @@ class DemoTelemetryMiddleware
   # be recovered and a re-enumerable copy handed downstream. Closes the original
   # either way (Rack contract: whoever consumes a body closes it).
   #
-  # Deliberately NOT best_effort. A body that raises mid-enumeration is the
-  # APP's failure, not telemetry's — it would have raised in the server just the
-  # same — and swallowing it here would turn that failure into a silently
-  # TRUNCATED 200, which is worse than the failure it hides. So it propagates.
-  # What must never happen, and what K-622 was, is "recovering" by dispatching
-  # the request again.
+  # Deliberately NOT best_effort: a body that raises mid-enumeration is the
+  # APP's failure, and swallowing it here would turn that into a silently
+  # TRUNCATED 200 — worse than the failure it hides. So it propagates.
   def buffer(body)
     buffered = []
     body.each { |c| buffered << c }
@@ -109,9 +100,8 @@ class DemoTelemetryMiddleware
     nil
   end
 
-  # non-register verbs: a stable per-agent ref = hash of the Bearer token. The
-  # token is hashed here (short) and hashed again (salted per app) in
-  # agent_hash — the raw token is never persisted or passed further.
+  # non-register verbs: a stable per-agent ref = hash of the Bearer token,
+  # hashed again (salted per app) in agent_hash. The raw token never leaves here.
   def bearer_agent_ref(env)
     auth = env["HTTP_AUTHORIZATION"].to_s
     return nil unless auth.start_with?("Bearer ")

@@ -1,54 +1,27 @@
 # frozen_string_literal: true
 
 # THE SHAPE GUARDS atablefor's verbs open with — expressed once, as REFUSALS
-# rather than as rendered responses (the {ListAccess} shape tudu settled, and
-# {WireArguments} on hoteling, skooti and getgrocery).
+# rather than as rendered responses, so both halves of the wire can use them:
+# the query handler directly, the write Operations before they touch a
+# transaction. They are NOT Operations: they write nothing.
 #
-# `party_size` IS THE REASON THIS FILE EXISTS, and it is the one guard on this
-# origin genuinely shared between the two halves of the wire: `availability` (a
-# query) and `book_table` (an action) both refuse a party of zero, with the SAME
-# sentence, because a party size that cannot be shown a table cannot be booked
-# one either. It was written out twice before this conversion — in two controllers
-# that share no superclass but ApplicationController — and two copies of a
-# refusal sentence is two chances for one of them to drift where nobody would
-# notice, since neither surface reads the other.
-#
-# `booking_id` has ONE caller today (`cancel_booking`) and lives here anyway,
-# next to its sibling, because it is the same KIND of thing: the shape a wire
-# argument must have before any predicate is allowed to look at it. Its own
-# reason is K-581/K-582 — the id used to be interpolated into a `::uuid` cast, so
-# POSTGRES was the shape check, and a malformed one raised
-# InvalidTextRepresentation, which is not a Kiosk error and so escaped as a raw
-# 500 leaking "invalid input syntax for type uuid" for what is plainly a client
-# mistake. The guard got MORE load-bearing under ActiveRecord (K-654):
-# `where(id: junk)` does not raise, because ActiveRecord's uuid type quietly
-# casts an unparseable value to NULL, which matches no row — so without the check
-# a typo would be reported as an OWNERSHIP refusal (403) instead of a shape one
-# (400). ActiveRecord does not refuse junk, it CASTS it, and losing the database's
-# refusal is precisely why the guard has to be here. A well-formed but foreign id
-# still gets the 403, so the shape check never softens the ownership answer.
-#
-# These are NOT Operations: they write nothing. Both halves use them — the query
-# handler directly, the write Operations before they touch a transaction — so one
-# malformed-argument sentence serves the whole origin.
+# `party_size` is the one guard on this origin genuinely shared between a query
+# (`availability`) and an action (`book_table`): a party that cannot be shown a
+# table cannot be booked one either, and one sentence for both is one sentence
+# that cannot drift.
 module WireArguments
   module_function
 
   # The party a caller wants seated.
   #
   # RANGE ONLY. Whether the argument was GIVEN is asked separately, by
-  # `availability`, because only that verb distinguishes it: an ABSENT party_size
-  # and a party_size that is present but unusable are two different mistakes and
-  # keep their two different messages there, while `book_table` has always
-  # answered both with this one. Folding presence in here would give book_table a
-  # sentence it never had.
+  # `availability` — the only verb that distinguishes the two, since `book_table`
+  # has always answered an absent party the way it answers a zero one.
   #
-  # Both verbs also declare `party_size` as `{type: "integer", minimum: 1}`, and
-  # since 0.4 that declaration is executed on every call — so on the WIRE the
-  # schema layer refuses a zero party first and this is defence in depth, the
-  # same standing {#seating_time} has. It stays because the Operations call it
-  # directly: {BookTableOperation} is reachable with no descriptor in front of
-  # it, and it must not be able to open a transaction on a party of zero.
+  # The declared `{type: "integer", minimum: 1}` refuses a zero party on the wire
+  # first, so this is defence in depth; it stays because {BookTableOperation} is
+  # reachable with no descriptor in front of it and must not open a transaction
+  # on a party of zero.
   #
   # @return [Array(Integer, nil), Array(nil, OperationResult)]
   def party_size(raw)
@@ -58,53 +31,27 @@ module WireArguments
     [nil, OperationResult.refused(code: "bad_request", message: "party_size must be >= 1")]
   end
 
-  # The sentence `availability` answers for a party_size it was not GIVEN at all
-  # — the one `params.fetch(:party_size) { raise }` used to produce, kept
-  # verbatim. It lives here rather than in the query controller so that BOTH of
-  # that verb's party_size answers are written in the same file as the one it
-  # shares with `book_table`, and so the controller needs no refusal vocabulary of
-  # its own beyond `render_refusal`. `book_table` deliberately does not use it: it
-  # has always answered an absent party the same way it answers a zero one.
-  #
-  # `required: ["party_size"]` says the same thing in the published contract, and
-  # since 0.4 the schema layer answers it first, so this sentence is now the
-  # handler's fallback rather than what an assistant reads.
+  # The sentence `availability` answers for a party_size it was not GIVEN at all.
+  # It lives here so both of that verb's party_size answers sit beside the one it
+  # shares with `book_table`, which uses neither.
   def missing_party_size
     OperationResult.refused(code: "bad_request", message: "missing param: party_size")
   end
 
   # ── K-717: AN INVALID FILTER VALUE IS A TYPED 400, NEVER AN EMPTY LIST ────
   #
-  # Phil's house rule for every filter-shaped query in the fleet, decided
-  # 2026-08-19: «если передан неверный входной параметр, ответ должен быть http
-  # 400 bad request, не пустой список, и должна быть ошибка с описанием».
-  # `availability` used to answer BOTH of these with `200 []`, which from the
-  # assistant's side is indistinguishable from a sold-out night — so an
-  # assistant that typed 18:00 for 19:00 could not tell a typo from a full
-  # house, and the descriptor's own «must be among the upcoming seatings» was
-  # advisory prose nothing enforced.
+  # The house rule for every filter-shaped query in the fleet: a value this
+  # origin cannot serve is refused 400 with the servable ones named, because
+  # `200 []` is indistinguishable from an honest sell-out. The empty list
+  # survives for that honest case only.
   #
-  # THE EMPTY LIST SURVIVES FOR ITS HONEST CASE ONLY: "matched nothing that is
-  # actually available".
-  #
-  # WHICH LAYER ANSWERS, SINCE THE CUTOVER. `time` IS a closed set and IS
-  # declared as an `enum` on the descriptor, which is the better spelling Phil
-  # named (T-073 = C). On the 0.4 per-verb wire — the only wire this origin
-  # serves now that `POST /kiosk/query` and `POST /kiosk/run` are deleted
-  # (T-074 = A) — `input_schema` is validated on EVERY call, so the 400 falls
-  # out of the schema layer before the handler runs: an assistant that sends
-  # `time=18:00` reads ``value at `/time` is not one of: ["19:00", "20:00",
-  # "21:00"]``. {#seating_time} therefore no longer fires on the wire and is
-  # kept as defence in depth — the Operations reach these guards directly,
-  # without a controller or a descriptor in between, and a guard that only
-  # exists in a declaration is not one they can use.
-  #
-  # `date` is the case that still genuinely needs a guard and always will: the
-  # horizon rolls forward every day, so no `enum` written at declaration time
-  # can name it, and `format: "date"` can only say the string is a calendar
-  # date. That is exactly the case K-717 says keeps an explicit guard returning
-  # the SAME typed 400 — and it is the one probe in the redteam battery whose
-  # refusal still comes from this file.
+  # WHICH LAYER ANSWERS. `time` is a closed set, so it is declared as an `enum`
+  # and the schema layer — validated on every 0.4 call — refuses `time=18:00`
+  # before the handler runs; {#seating_time} is kept as defence in depth for the
+  # Operations, which reach these guards with no descriptor in between. `date`
+  # needs a guard and always will: the horizon rolls forward daily, so no `enum`
+  # written at declaration time can name it, and `format: "date"` can only say
+  # the string is a calendar date.
 
   # A seating TIME the roster actually offers.
   #
@@ -121,9 +68,8 @@ module WireArguments
   end
 
   # A seating DATE inside the rolling upcoming horizon. The valid values are
-  # NAMED in the refusal, so an assistant recovers without a second fetch —
-  # the recoverability principle philslist's `post_listing` states, which is
-  # the house position everywhere since K-717.
+  # NAMED in the refusal, so an assistant recovers without a second fetch
+  # (K-717).
   #
   # @return [Array(String, nil), Array(nil, OperationResult)]
   def seating_date(raw, upcoming)
@@ -140,20 +86,14 @@ module WireArguments
 
   # A NEIGHBOURHOOD the aggregator actually serves.
   #
-  # The third argument of `availability`, and the last of its three to get the
-  # K-717 treatment (T-090). `neighborhood="Atlantis"` answered `200 []` — the
-  # same answer as a fully-booked Alfama on a busy Friday — so an assistant
-  # that mistyped a Lisbon district read it as "no tables tonight" and moved
-  # on. The set is DB-DERIVED (five restaurants, and an operator adds one by
-  # inserting a row), so no static `enum` in `input_schema` can name it and
-  # this guard is the only place the refusal can live; it names the served
-  # neighbourhoods exactly as {#seating_time} and {#seating_date} name theirs.
+  # The set is DB-DERIVED — an operator adds one by inserting a restaurant — so
+  # no static `enum` in `input_schema` can name it and this guard is the only
+  # place the refusal can live (T-090). It names the served neighbourhoods
+  # exactly as {#seating_time} and {#seating_date} name theirs.
   #
   # It is a FILTER over a collection in the §9.1 sense, so why not `200 []`?
-  # Because the value is outside its DOMAIN — the aggregator has a closed set
-  # of neighbourhoods and "Atlantis" is not one of them, which is §9.1's first
-  # branch, not its third. The third branch is what a SERVED neighbourhood with
-  # every table taken still gets.
+  # Because the value is outside its DOMAIN, which is §9.1's first branch. The
+  # third branch is what a SERVED neighbourhood with every table taken gets.
   #
   # @return [Array(String, nil), Array(nil, OperationResult)]
   def neighborhood(raw, served)
@@ -169,19 +109,19 @@ module WireArguments
 
   # The booking `cancel_booking` acts on: PRESENT, then shaped like an id.
   #
-  # Two refusals, and the split between them is BEHAVIOUR, not taste. `blank?`
-  # answers the first: an absent key, an explicit `null`, `""`, `"   "` — and
-  # `false`, because `false.blank?` is true — are all "you did not give me one",
-  # which is the sentence this verb has always answered with. Anything else that
-  # is not a uuid is "you gave me the wrong thing", and that sentence names where
-  # a right one comes from.
+  # Two refusals, and the split is BEHAVIOUR. `blank?` answers the first: an
+  # absent key, an explicit `null`, `""`, `"   "` — and `false`, because
+  # `false.blank?` is true — are all "you did not give me one". Anything else
+  # that is not a uuid is "you gave me the wrong thing", and that sentence names
+  # where a right one comes from.
   #
-  # `cancel_booking` declares `booking_id` as a REQUIRED `{type: "string",
-  # format: "uuid"}`, so since 0.4 the schema layer refuses both classes first
-  # (``value at `/booking_id` does not match format: uuid``) and this is defence
-  # in depth. It stays for {CancelBookingOperation}, which is called directly and
-  # must not hand an unparseable id to ActiveRecord — see the K-654 paragraph
-  # above for why losing the database's own refusal is what makes that dangerous.
+  # The declared `format: "uuid"` refuses both classes on the wire first, so this
+  # is defence in depth — but it must stay, because ActiveRecord does not refuse
+  # a malformed uuid, it CASTS it to NULL (K-654): `where(id: junk)` then matches
+  # no row, so {CancelBookingOperation}, which is callable with no descriptor in
+  # front of it, would answer a typo as an OWNERSHIP refusal (403) rather than a
+  # shape one (400). A well-formed but foreign id still gets the 403, so the
+  # shape check never softens the ownership answer.
   #
   # @return [Array(String, nil), Array(nil, OperationResult)]
   def booking_id(raw)

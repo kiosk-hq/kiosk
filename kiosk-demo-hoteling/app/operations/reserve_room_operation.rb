@@ -4,31 +4,18 @@
 # principal: the domain `bookings` row and the engine's `kiosk.reservations` row
 # together, in one transaction.
 #
-# It is an Operation and not a controller method because of what is IN it: the
-# three-part inventory guard (K-690) whose middle part is an INSERT that may
-# raise, wrapped in a transaction. A `render` in the middle of that is what every
-# earlier slice had to reason about; here the transaction answers a VALUE and the
-# controller decides what a value looks like on the wire.
+# An Operation and not a controller method because of what is IN it: a
+# three-part inventory guard (K-690) wrapped in a transaction. The transaction
+# answers a VALUE; the controller decides what a value looks like on the wire.
 class ReserveRoomOperation
-  # @param principal_id [String] the account the wire resolved. NEVER an argument
-  #   off the request: `reserve_room` deliberately IGNORES a forged `user_id` in
-  #   the body, and it can do that precisely because the value is passed in from
-  #   the identity rather than read out of the params (the redteam battery's
-  #   ForgedUserId beat asserts the row lands under the caller).
-  #
-  #   An INSERT is the one place the principal must be spelled in Ruby. Every READ
-  #   scopes with `Booking.owned_by_current_principal`, which never names the
-  #   principal at all because a WHERE has a predicate to hide it in; an INSERT has
-  #   no predicate, so it must supply the value. Both are un-forgeable for the same
-  #   reason — the identity is resolved from the Rack env the wire built, which no
-  #   request argument can write — but only the first keeps the database as the
-  #   authority. Moving the column DEFAULT to `kiosk.current_user_id()` would close
-  #   the gap; that is a migration, not part of a handler conversion (the atablefor
-  #   note, unchanged).
-  # @param agent_id [String, nil] the ACTING agent, recorded on the hold row.
+  # @param principal_id [String] the account the wire resolved — NEVER an
+  #   argument off the request, which is what makes a forged `user_id` in the
+  #   body inert (the redteam battery's ForgedUserId beat asserts it). An INSERT
+  #   is the one place the principal must be spelled in Ruby: every READ hides it
+  #   in a WHERE predicate (`Booking.owned_by_current_principal`), an INSERT has
+  #   none. Moving the column DEFAULT to `kiosk.current_user_id()` would make the
+  #   database the authority; that is a migration, not a handler change.
   def self.call(principal_id:, agent_id:, property_id:, room_type_id:, check_in:, check_out:)
-    # The four presence checks, in the order the raw handler asked them, so a
-    # request missing more than one is still told about the same one first.
     prop_id, refusal = WireArguments.integer(property_id, field: "property_id", hint: WireArguments::HINT_PROPERTY_ID)
     return refusal if refusal
 
@@ -38,17 +25,13 @@ class ReserveRoomOperation
     return WireArguments.missing("check_in")  if check_in.blank?
     return WireArguments.missing("check_out") if check_out.blank?
 
-    # The chosen room type must exist AT the chosen property. `pick` is a
-    # projection of the one column the quote needs, not a loaded model — the raw
-    # SELECT also read `id` and `name` and used neither.
+    # The chosen room type must exist AT the chosen property; `pick` projects the
+    # one column the quote needs rather than loading a model.
     nightly_price_cents = RoomType.where(id: rt_id, property_id: prop_id).pick(:nightly_price_cents)
     if nightly_price_cents.nil?
       return OperationResult.refused(code: "bad_request", message: "room type not found for this property")
     end
 
-    # Parsed AFTER the room-type lookup, which is where the raw handler parsed
-    # them — so a request that is wrong about both is told about the room first,
-    # exactly as before.
     dates, refusal = WireArguments.stay_dates(check_in, check_out)
     return refusal if refusal
 
@@ -57,15 +40,10 @@ class ReserveRoomOperation
       return OperationResult.refused(code: "bad_request", message: "check_out must be after check_in")
     end
 
-    # ── K-969: A ROOM-NIGHT IN THE PAST IS REFUSED, NOT MERELY UNAVAILABLE ──
-    # `availability` already answers nothing for these dates, and this is the
-    # belt to that braces: an assistant may name a date it never read from an
-    # availability response — the finding was filed because `check_in:
-    # "1900-01-01"` answered 200 with a real booking and a real quote. The
-    # refusal comes from the SAME guard the two read verbs use, so the offer and
-    # the sale cannot come to disagree about where the floor is. See
-    # {WireArguments.past_stay} for what «past» means here and why today counts
-    # as bookable.
+    # K-969: the SAME floor the read verbs apply, so the offer and the sale
+    # cannot disagree about it — an assistant may name a date it never read from
+    # an availability response. See {WireArguments.past_stay} for what «past»
+    # means here and why today counts as bookable.
     refusal = WireArguments.past_stay(ci)
     return refusal if refusal
 
@@ -77,37 +55,26 @@ class ReserveRoomOperation
     refusal = WireArguments.priceable_total(total_cents, nights)
     return refusal if refusal
 
-    # This `transaction` JOINS the one Kiosk::Server::SessionContext already
-    # opened around the whole wire request (the GUCs are SET LOCAL in it), so it
-    # opens no second transaction and a `return` out of it is an ordinary method
-    # return, not a non-local exit from a real transaction block.
+    # JOINS the transaction Kiosk::Server::SessionContext already opened around
+    # the whole request (the GUCs are SET LOCAL in it), so this opens no second
+    # one and a `return` out of it is an ordinary method return.
     Booking.transaction do
       # ── Finite inventory: the room-night must still be free (K-690) ─────────
-      # `availability` defines the invariant this action sells against — a room
-      # type is offered only while no live booking overlaps the requested nights
-      # — and both now consult the SAME `Booking.overlapping` scope, so they can
-      # no longer drift apart. Three parts, unchanged: a pre-check that answers a
-      # clean 409 an assistant can act on, a database EXCLUDE constraint that
-      # makes the race unrepresentable, and a rescue that turns the lost race
-      # into that same 409.
+      # Three parts: this pre-check, which answers a clean 409; a database
+      # EXCLUDE constraint that makes the race unrepresentable; and the rescue
+      # below, which turns a lost race into the same 409. The predicate is
+      # `availability`'s own scope, so offer and sale cannot drift apart.
       if Booking.live.where(room_type_id: rt_id).overlapping(ci, co).exists?
         return already_booked(rt_id, ci, co)
       end
 
       booking_id =
         begin
-          # `insert!` and NOT `create!`, deliberately, and the reason is a wire
-          # answer rather than taste. The rescue below depends on WHICH exception
-          # class arrives. `create!` interposes validations, so `belongs_to :user`
-          # (required by default) would turn a principal with no `users` row from
-          # the `ActiveRecord::InvalidForeignKey` Postgres raises — unmapped in
-          # `rescue_responses`, so re-raised and wrapped `action_failed`/500,
-          # which is what the raw INSERT did — into a `RecordInvalid`, which
-          # Rails maps to 422 and the handler mixin's `rescue_from` floor renders
-          # as a 400. A 500 silently becoming a 400 for an unrelated input is
-          # exactly the class of change this conversion must not make. Measured
-          # on this model, not assumed: `insert!` → InvalidForeignKey, `create!`
-          # → RecordInvalid.
+          # `insert!` and NOT `create!`: the rescue below depends on WHICH
+          # exception arrives. `create!` interposes validations, so a principal
+          # with no `users` row would raise `RecordInvalid` (422, rendered 400)
+          # instead of `ActiveRecord::InvalidForeignKey`, which is unmapped and
+          # surfaces as `action_failed`/500. Measured, not assumed.
           Booking.insert!(
             { user_id:      principal_id,
               property_id:  prop_id,
@@ -119,10 +86,8 @@ class ReserveRoomOperation
             returning: %i[id],
           ).first["id"]
         rescue ActiveRecord::ExclusionViolation
-          # Lost the race for the same room-night —
-          # bookings_no_overlapping_room_nights caught it. Same answer as the
-          # pre-check, so a concurrent caller and a slow caller cannot tell the
-          # two apart.
+          # Lost the race — bookings_no_overlapping_room_nights caught it. Same
+          # answer as the pre-check, so the two cases are indistinguishable.
           return already_booked(rt_id, ci, co)
         end
 
@@ -152,8 +117,7 @@ class ReserveRoomOperation
     end
   end
 
-  # Both halves of the double-booking guard answer with the SAME sentence, so an
-  # assistant cannot tell (and need not care) which one caught it.
+  # Both halves of the double-booking guard answer with the SAME sentence.
   def self.already_booked(room_type_id, check_in, check_out)
     OperationResult.refused(
       code:    "conflict",

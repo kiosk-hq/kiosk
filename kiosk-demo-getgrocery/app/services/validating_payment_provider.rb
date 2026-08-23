@@ -1,10 +1,10 @@
 # frozen_string_literal: true
 
-# The cashier check, as a PSP-adapter decorator: before any capture, verify
-# the agent-signed cart against the OPERATOR'S OWN catalog. The wire verifies
-# the mandate chain's internal consistency (cart total == payment amount, one
-# currency across the chain) — it cannot know this shop's prices or currency.
-# The operator must count what lands on the counter:
+# The cashier check, as a PSP-adapter decorator: before any capture, verify the
+# agent-signed cart against the OPERATOR'S OWN catalog. The wire verifies the
+# mandate chain's internal consistency (cart total == payment amount, one
+# currency across the chain) but cannot know this shop's prices, so the operator
+# counts what lands on the counter:
 #
 #   1. the cart is denominated in the operator's currency;
 #   2. it references exactly one of the payer's own, not-yet-settled orders
@@ -15,34 +15,27 @@
 #   4. its total equals both the sum of those lines and the order's total.
 #
 # Any mismatch rejects the capture (403 — or 400 when the order reference is
-# malformed rather than merely wrong); the mandate trail is persisted, nothing
-# is charged.
+# malformed rather than merely wrong); the mandate trail is persisted, nothing is
+# charged.
 #
 # ── Per-order serialization (K-544) ───────────────────────────────────────
-# The engine settles between two short DB transactions with the irreversible
-# PSP capture BETWEEN them (executor P1→P2→P3), and the only "paid" marker is
-# the settlement row written in P3, AFTER capture. On its own that leaves two
-# races open, both of which let a payer be charged for goods they did not sign:
+# The engine settles across two short DB transactions with the irreversible PSP
+# capture BETWEEN them (executor P1→P2→P3), and the only "paid" marker is the
+# settlement row written in P3, AFTER capture. That leaves two races open, both
+# of which let a payer be charged for goods they did not sign:
 #
 #   (a) SWAP — while a /pay for order O is mid-capture, a concurrent
-#       create_order{order_id:O, items:[expensive]} rewrites O's items+total;
-#       the settlement then marks the now-expensive O paid though the cart only
-#       proved (and only charged) the cheap total. Pay €1, get €500.
-#   (b) DOUBLE CAPTURE — two /pay for the same O (two distinct carts) both read
-#       zero settlements and both capture, charging twice under two idempotency
-#       keys.
+#       create_order{order_id:O, items:[expensive]} rewrites O's items+total,
+#       and the settlement marks the now-expensive O paid though the cart only
+#       charged the cheap total. Pay €1, get €500.
+#   (b) DOUBLE CAPTURE — two /pay for the same O both read zero settlements and
+#       both capture, charging twice under two idempotency keys.
 #
-# We close both by giving the order a tiny lifecycle and CLAIMING it atomically
-# before validating/charging: `created → paying → paid`. The claim is a single
-# conditional UPDATE (`… WHERE status='created' RETURNING …`) — a row-locked,
-# race-free compare-and-set. Once O is `paying`:
-#   • a second /pay's claim matches zero rows → rejected (closes b);
-#   • create_order excludes `paying` under `FOR UPDATE`, so it can't mutate O
-#     while a pay is in flight (closes a).
-# On a definitive decline / no-charge failure we release `paying → created` so
-# the human can retry; on an UNKNOWN outcome (timeout) we deliberately LEAVE it
-# `paying` so a blind retry can't double-charge (K-545). On success we flip
-# `paying → paid`.
+# Both close by giving the order a tiny lifecycle — `created → paying → paid` —
+# and CLAIMING it atomically before validating or charging, with one conditional
+# `… WHERE status='created' RETURNING …` UPDATE: a row-locked, race-free
+# compare-and-set. Once O is `paying`, a second /pay's claim matches zero rows
+# (closes b) and create_order excludes `paying` under `FOR UPDATE` (closes a).
 class ValidatingPaymentProvider
   def initialize(provider, currency:)
     @provider = provider
@@ -54,16 +47,11 @@ class ValidatingPaymentProvider
     begin
       settled = @provider.capture(cart_mandate, payment_method: payment_method)
     rescue StandardError => e
-      # Release the claim ONLY when we know no money moved (a definitive decline
-      # or a pre-charge SetupRequired). On an UNKNOWN outcome we keep O `paying`
-      # so a lost-response retry is rejected rather than double-charging (K-545).
       release_claim_on_failure!(order_id, e)
       raise
     end
-    # Charge succeeded — mark O terminally paid. The engine's settlement row
-    # (executor P3) is the authoritative paid marker; this local flip is for an
-    # honest status + to reject any later claim, so a failure here must NOT
-    # undo a successful charge — swallow it and let P3 record the settlement.
+    # The engine's settlement row (executor P3) is the authoritative paid marker;
+    # this local flip only keeps the status honest and rejects a later claim.
     mark_paid!(order_id)
     settled
   end
@@ -78,44 +66,28 @@ class ValidatingPaymentProvider
 
   # ── Stuck-`paying` reconciliation (K-578, LOCAL evidence only) ────────────
   #
-  # A crash (or a failed status flip) between a successful capture and the
-  # paid-flip leaves an order `paying` forever: charged ONCE — the claim makes
-  # double-charging impossible — but unpayable until something reconciles it.
-  # This sweep resolves every case local evidence can prove and REPORTS the rest
-  # instead of guessing:
+  # A crash between a successful capture and the paid-flip leaves an order
+  # `paying` forever: charged ONCE — the claim makes double-charging impossible —
+  # but unpayable until something reconciles it. This sweep resolves what local
+  # evidence can prove and REPORTS the rest instead of guessing:
   #
   #   • settlement row exists  ⇒ the charge is recorded; flip `paying` → `paid`.
-  #   • no settlement row      ⇒ only the PSP knows whether money moved. We do
+  #   • no settlement row      ⇒ only the PSP knows whether money moved, so do
   #     NOT release the claim (that is exactly the blind retry K-545 forbids) and
-  #     we do NOT invent an answer; the order is listed as UNRESOLVED with the
-  #     cart-mandate ids to look up at the processor (the Stripe adapter stamps
-  #     each PaymentIntent with `metadata.cart_mandate_id`).
+  #     do NOT invent an answer; list the order UNRESOLVED with the cart-mandate
+  #     ids to look up at the processor (the Stripe adapter stamps each
+  #     PaymentIntent with `metadata.cart_mandate_id`).
   #
   # Callable from `rake demo:reconcile`. There is NO background worker in this
   # demo, and querying the PSP for the unresolved half is not built.
   #
-  # WHY THE THREE STATUS STATEMENTS BELOW AND IN `claim_and_validate!` STAY RAW
-  # SQL where every READ on this origin became a model call (K-654). The claim is
-  # `UPDATE orders SET status = 'paying' … WHERE status = 'created' RETURNING id,
-  # total_cents` — a compare-and-set whose ATOMICITY is the K-544/K-545 fix, and
-  # `update_all` has no RETURNING in Rails 8.1, so an ActiveRecord spelling would
-  # be a SELECT then an UPDATE and the race would be back. The release and the
-  # paid-flip are that claim read backwards and belong beside it: splitting the
-  # trio across two idioms would make the one place a reader must see all three
-  # together harder to read, not safer.
-  #
-  # …AND WHY EVERY VALUE IN THEM IS NOW A BIND PARAMETER (K-654, second half).
-  # Keeping the statement raw was always the defensible half of that argument;
-  # keeping `conn.quote` was not. The three statements used to read
-  # `SET status = #{conn.quote(to)} … WHERE id = #{conn.quote(order_id)}::uuid`,
-  # which was SAFE — every value went through `quote` — and still wrong to ship,
-  # because a demo is the file a provider copies to build their own origin and
-  # the copy is where the forgotten `quote` lives. `$N` binds keep the atomic
-  # RETURNING statement exactly as it was while putting every value OUT of the
-  # SQL text, so there is no `quote` left to forget. It is the same move
-  # `kiosk-server`'s `executor.rb` made for the pay path, and
-  # `kiosk-test-support/spec/no_interpolated_sql_spec.rb` now fails if any demo
-  # splices a value back in.
+  # THE THREE STATUS STATEMENTS here and in `claim_and_validate!` are RAW SQL
+  # where every READ on this origin is a model call (K-654), because the claim's
+  # ATOMICITY is the K-544/K-545 fix and `update_all` has no RETURNING in Rails
+  # 8.1 — an ActiveRecord spelling would be a SELECT then an UPDATE, and the race
+  # would be back. Every value still travels as a `$N` BIND rather than through
+  # `conn.quote`: a demo is the file a provider copies, and the copy is where a
+  # forgotten `quote` lives (`no_interpolated_sql_spec.rb` enforces it).
   #
   # @param older_than_seconds [Integer] ignore claims young enough to be a pay
   #   that is legitimately still in flight.
@@ -152,24 +124,19 @@ class ValidatingPaymentProvider
   end
 
   # True iff a settlement (capture receipt) references this order — the
-  # authoritative local "this was charged" marker, written by the engine's
-  # executor phase 3.
-  #
-  # ONE CONTAINMENT FOR THE WHOLE ORIGIN (K-654). This used to be a third
-  # hand-written copy of `line_items @> …::jsonb`, next to the two in the
-  # initializer and the one in the back office. It is now
-  # {CartMandate.referencing}, the same scope `create_order`'s K-544 replace
-  # guard and `reschedule_delivery`'s payment gate read — which matters here more
-  # than anywhere, because THIS is the reader the K-545 race fix consults before
-  # deciding whether money has already moved.
+  # authoritative local "this was charged" marker, written by executor phase 3.
+  # {CartMandate.referencing} is ONE containment for the whole origin (K-654),
+  # shared with `create_order`'s replace guard and `reschedule_delivery`'s
+  # payment gate — and it matters most here, because THIS is the reader the K-545
+  # race fix consults before deciding whether money has already moved.
   def self.settled?(order_id)
     Settlement.joins(:cart_mandate).merge(CartMandate.referencing(order_id)).exists?
   end
 
-  # The agent-signed cart-mandate ids that referenced this order. They are
-  # persisted BEFORE the capture (executor phase 1), so they exist even when the
-  # settlement does not — which makes them the handle for looking the charge up
-  # at the processor (`metadata.cart_mandate_id`).
+  # The agent-signed cart-mandate ids that referenced this order. Persisted
+  # BEFORE the capture (executor phase 1), so they exist even when the settlement
+  # does not — which makes them the handle for looking the charge up at the
+  # processor (`metadata.cart_mandate_id`).
   def self.cart_mandate_ids_for(order_id)
     CartMandate.referencing(order_id).order(:created_at).pluck(:mandate_id).map(&:to_s)
   end
@@ -178,11 +145,11 @@ class ValidatingPaymentProvider
 
   def settled?(order_id) = self.class.settled?(order_id)
 
-  # Atomically claim the referenced order for payment, then run the cashier
-  # check against it. Returns the order_id (String) on success; raises
-  # Forbidden (403) on a cashier rejection — reverting the claim first if it was
-  # taken — or BadRequest (400) when the cart's order reference is not even a
-  # uuid (checked before the claim, so there is nothing to revert).
+  # Atomically claim the referenced order for payment, then run the cashier check
+  # against it. Returns the order_id on success; raises Forbidden (403) on a
+  # cashier rejection — reverting the claim first if it was taken — or BadRequest
+  # (400) when the cart's order reference is not even a uuid, which is checked
+  # before the claim so that there is nothing to revert.
   def claim_and_validate!(cart)
     unless cart.currency.to_s.downcase == @currency
       deny "cart currency #{cart.currency.inspect} rejected — this operator prices in " \
@@ -194,15 +161,12 @@ class ValidatingPaymentProvider
     deny "cart line_items must reference exactly one order_id (see create_order's pay_hint)" unless refs.size == 1
     order_id = refs.first
 
-    # K-579: the order_id goes straight into an `::uuid` cast below. A malformed
-    # one made Postgres raise InvalidTextRepresentation, which escaped as a raw
-    # 500 — and on the pay path a 500 is the worst answer there is, because an
-    # assistant cannot tell "your input was wrong" from "the charge may have
-    # gone through". Reject the bad SHAPE up front, before the connection is even
-    # taken — a 400, not the cashier's 403: this is a malformed argument, not a
-    # refusal to serve a well-formed one, and it says nothing about whether any
-    # order exists. The message echoes only the value the agent itself sent — no
-    # SQL, no PG error text.
+    # K-579: the order_id goes straight into an `::uuid` cast below, where a
+    # malformed one makes Postgres raise InvalidTextRepresentation — a raw 500,
+    # and on the pay path a 500 is the worst answer there is, because an
+    # assistant cannot tell "your input was wrong" from "the charge may have gone
+    # through". So reject the SHAPE up front, with a 400 rather than the cashier's
+    # 403: a malformed argument says nothing about whether any order exists.
     unless UuidCheck.valid?(order_id)
       raise Kiosk::Server::Errors::BadRequest.new(
         "cart line_items order_id #{order_id.inspect} is not a uuid",
@@ -212,12 +176,10 @@ class ValidatingPaymentProvider
     end
 
     # CLAIM: created → paying, race-free compare-and-set. Winning this UPDATE is
-    # what serializes concurrent /pay (only one can flip 'created') and, together
-    # with create_order's FOR UPDATE guard, freezes O's items for the duration of
-    # this payment (K-544). Both values travel as binds: `$1::uuid` casts the
-    # bound text exactly as the quoted literal did, so a non-uuid is still a
-    # Postgres refusal and not a silent miss — and {UuidCheck} above has already
-    # made that unreachable from the wire.
+    # what serializes concurrent /pay (only one can flip 'created') and, with
+    # create_order's FOR UPDATE guard, freezes O's items for this payment
+    # (K-544). `$1::uuid` casts the bound text, so a non-uuid is a Postgres
+    # refusal rather than a silent miss.
     claimed = Order.lease_connection.exec_query(
       "UPDATE orders SET status = 'paying', updated_at = now() " \
       "WHERE id = $1::uuid " \
@@ -229,19 +191,15 @@ class ValidatingPaymentProvider
 
     if claimed.nil?
       # Distinguish "not yours / missing" from "not in a payable state" so the
-      # assistant gets an actionable message instead of a bare 403.
-      # A plain read, so a model call: the order id is already through
-      # {UuidCheck} and the payer comes off the SIGNED mandate, never off a
-      # request argument.
+      # assistant gets an actionable message instead of a bare 403. The payer
+      # comes off the SIGNED mandate, never off a request argument.
       existing_status = Order.where(id: order_id, user_id: cart.user_id.to_s).pick(:status)
       deny "order not found or not yours" if existing_status.nil?
 
       # K-578 (local half): a `paying` order that ALREADY HAS a settlement is not
-      # "in progress" — it was charged, and only the local status flip was lost
-      # (a crash, or a failed UPDATE, between capture and mark_paid!). The
-      # settlement row is decisive local evidence, so heal the status here — at
-      # the exact moment it matters — and answer with the truth rather than
-      # parking the payer behind a status that would never move.
+      # "in progress" — it was charged and only the local status flip was lost.
+      # The settlement row is decisive local evidence, so heal the status here
+      # rather than park the payer behind one that would never move.
       if existing_status == Order::PAYING && settled?(order_id)
         mark_paid!(order_id)
         deny "order already settled"
@@ -261,11 +219,11 @@ class ValidatingPaymentProvider
            "paid, rescheduled, or otherwise past the payable state"
     end
 
-    # Everything past the claim runs under the `paying` guard; any rejection
-    # must release it (revert to 'created') so a corrected retry can proceed.
+    # Everything past the claim runs under the `paying` guard, so any rejection
+    # must release it for a corrected retry to be possible.
     begin
-      # Defense-in-depth: a settlement should never exist for an order that was
-      # still 'created', but reject (and don't charge) if one somehow does.
+      # Defense-in-depth: a settlement should never exist for an order still
+      # 'created', but reject — and do not charge — if one somehow does.
       deny "order already settled" if settled?(order_id)
 
       products = Product.arel_table
@@ -302,10 +260,9 @@ class ValidatingPaymentProvider
   end
 
   # Release a claim we know involved NO charge (definitive decline / setup
-  # required). On an UNKNOWN capture outcome (non-retryable PaymentFailed) or any
-  # other unexpected error we deliberately do NOT release — leaving O `paying`
-  # blocks a blind retry that could double-charge (K-545); reconciliation
-  # resolves it out of band.
+  # required). On an UNKNOWN outcome, or any unexpected error, deliberately do
+  # NOT release: leaving O `paying` blocks a blind retry that could double-charge
+  # (K-545), and reconciliation resolves it out of band.
   def release_claim_on_failure!(order_id, error)
     return unless order_id
 
@@ -321,8 +278,8 @@ class ValidatingPaymentProvider
   def mark_paid!(order_id)
     set_status(order_id, from: "paying", to: "paid")
   rescue StandardError
-    # A successful charge is already recorded by the engine settlement (P3); a
-    # failed local status flip must never surface as an error over a paid order.
+    # The engine settlement (P3) already records the charge; a failed local flip
+    # must never surface as an error over a paid order.
     nil
   end
 

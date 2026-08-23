@@ -3,27 +3,18 @@
 # THE SHAPE GUARD every hoteling verb opens with — expressed once, as a REFUSAL
 # rather than as a rendered response (the {ListAccess} shape tudu settled).
 #
-# WHY IT EXISTS AT ALL, and why it grew when the SQL went away. Every one of
-# these arguments used to be interpolated into a `::integer` / `::date` cast, so
-# POSTGRES was the shape check: `property_id: "abc"` raised
-# InvalidTextRepresentation, which is not a Kiosk error and so escaped as a raw
-# 500 with the PG message attached — for what is plainly a client mistake. That
-# was already the K-581/K-582 finding for `booking_id`, and `UuidCheck` was the
-# answer; these are the same finding for the other three argument types.
+# It exists because ActiveRecord does not raise on junk — it CASTS.
+# `where(property_id: "abc")` silently becomes `= 0` and
+# `where(property_id: true)` becomes `= 1`, so without this guard `true` would
+# quietly mean "property 1" rather than being an error. Postgres refused those
+# outright, and recovering that refusal is the job (K-581/K-582 is the same
+# finding for `booking_id`).
 #
-# ActiveRecord does not raise on junk — it CASTS. `where(property_id: "abc")`
-# silently becomes `= 0` and `where(property_id: true)` becomes `= 1`, so
-# without this guard `true` would not be an error at all: it would quietly mean
-# "property 1". Losing the database's refusal is exactly why the guard has to be
-# here, and it is the same argument {ListAccess} makes about uuids.
-#
-# It is NOT an Operation: it writes nothing. Both halves use it — the query
-# handlers directly, the write Operations before they touch a transaction — so
-# one malformed-argument sentence serves the whole origin.
+# NOT an Operation: it writes nothing. Both halves use it — the query handlers
+# directly, the write Operations before they touch a transaction.
 module WireArguments
-  # The two "where do I get one of these" sentences, written once because three
-  # verbs each can produce them: an assistant that mistypes a `property_id` gets
-  # the same pointer from `availability`, `hotel_detail` and `reserve_room`.
+  # The two "where do I get one of these" sentences, written once so
+  # `availability`, `hotel_detail` and `reserve_room` all give the same pointer.
   HINT_PROPERTY_ID  = "Pass the `property_id` from a properties (or search_hotels) row, verbatim."
   HINT_ROOM_TYPE_ID = "Pass the `room_type_id` from an availability row, verbatim."
 
@@ -31,11 +22,9 @@ module WireArguments
 
   # @return [Array(Integer, nil), Array(nil, OperationResult)]
   #
-  # `Integer(str, 10)` and not `.to_i`: `.to_i` answers 0 for "abc" and would
-  # turn a typo into a lookup for a row that does not exist, which is a
-  # DIFFERENT and much quieter wrong answer than a 400. Base 10 is explicit so
-  # "0x10" is refused rather than read as 16. A leading/trailing space is
-  # tolerated because Postgres tolerated it (`' 1 '::integer` is 1).
+  # `Integer(str, 10)` and not `.to_i`: `.to_i` answers 0 for "abc", turning a
+  # typo into a much quieter wrong answer than a 400. Base 10 is explicit so
+  # "0x10" is refused rather than read as 16; surrounding space is tolerated.
   def integer(raw, field:, hint:)
     return [nil, missing(field)] if raw.blank?
 
@@ -58,16 +47,10 @@ module WireArguments
   #
   # @return [Array(Array(Date, Date), nil), Array(nil, OperationResult)]
   #
-  # `Date.iso8601`, not `Date.parse`, and the choice is a wire-parity one rather
-  # than taste. These two values used to reach Postgres RAW, so Postgres' date
-  # parser drew the accept/reject line: it refused `"nope"`, `""`, `"true"`,
-  # `"2026-09-01'; --"` and `["2026-09-01"]`. `Date.parse` accepts the last two
-  # (it scans for a date rather than validating a format) and would turn a
-  # refusal into a booking; `Date.iso8601` refuses all five, which is the same
-  # line Postgres drew and the same one both descriptors state ("date string
-  # YYYY-MM-DD"). `hotel_detail` deliberately keeps its own `Date.parse` — that
-  # verb has always parsed in Ruby, so its answers are not this guard's to
-  # change.
+  # `Date.iso8601`, not `Date.parse`: `Date.parse` SCANS for a date rather than
+  # validating a format, so it accepts `"2026-09-01'; --"` and `["2026-09-01"]`
+  # and would turn a refusal into a booking. `hotel_detail` keeps its own
+  # `Date.parse` — that verb's answers are already published behaviour.
   def stay_dates(check_in, check_out)
     return [nil, missing("check_in")]  if check_in.blank?
     return [nil, missing("check_out")] if check_out.blank?
@@ -79,7 +62,6 @@ module WireArguments
     end
     return [dates, nil] unless dates.nil?
 
-    # The same sentence `hotel_detail` has always used for the same mistake.
     [nil, OperationResult.refused(
       code:    "bad_request",
       message: "invalid check_in/check_out: #{check_in.to_s.inspect}/#{check_out.to_s.inspect} — " \
@@ -89,20 +71,12 @@ module WireArguments
 
   # ── T-090: A `property_id` THAT ADDRESSES NOTHING IS 404, NOT AN EMPTY LIST ──
   #
-  # Spec §9.1's three-way rule, and this is its second branch: an argument that
-  # names a SPECIFIC RESOURCE gets `404 not_found` when the resource does not
-  # exist, because an empty list would assert it exists and merely has no rows.
-  # Two verbs call this — `hotel_detail`, which addresses a property outright,
-  # and `availability`, whose room types belong to that one property — and they
-  # get the SAME sentence from here, which is the whole reason it lives in this
-  # file rather than in either controller. Until today they disagreed: one
-  # answered 404 and the other `200 []` for the same unknown id on the same
-  # origin, which is the pair that made this Phil's call.
-  #
-  # NOT a `bad_request`. The value is well-formed and inside its declared type;
-  # nothing about the request is malformed. What is absent is the thing it
-  # points at, and that distinction is the difference between "fix your call"
-  # and "that hotel is not here".
+  # Spec §9.1's second branch: an argument naming a SPECIFIC RESOURCE gets
+  # `404 not_found` when it does not exist, because an empty list would assert
+  # the resource exists and merely has no rows. `hotel_detail` and `availability`
+  # both address a property, and both get the SAME sentence from here. NOT a
+  # `bad_request`: the value is well-formed and inside its declared type — what
+  # is absent is the thing it points at.
   #
   # @return [OperationResult, nil] a refusal, or nil when the property exists
   def existing_property(property_id)
@@ -111,10 +85,9 @@ module WireArguments
     property_not_found(property_id)
   end
 
-  # The refusal itself, with no lookup. `hotel_detail` has ALREADY established
-  # the property is absent (its own `pick` came back nil), and paying for a
-  # second `SELECT 1` to learn the same thing would be the price of sharing a
-  # sentence. This is how the sentence is shared instead.
+  # The refusal itself, with no lookup: `hotel_detail` has already established
+  # the property is absent (its own `pick` came back nil) and should not pay for
+  # a second `SELECT 1` to share this sentence.
   def property_not_found(property_id)
     OperationResult.refused(
       code:    "not_found",
@@ -125,40 +98,22 @@ module WireArguments
 
   # ── K-969: THERE IS NO ROOM-NIGHT IN THE PAST, SO THERE IS NO OFFER EITHER ──
   #
-  # Phil, 2026-08-23: «there should be zero availability for past dates. Booking
-  # shouldn't be allowed for those.» Both halves come from this one guard, so
-  # the read side and the write side cannot come to disagree about where the
-  # floor is — the same argument {Seatings} settles for atablefor and
-  # {DeliverySlots} for getgrocery.
+  # One floor for the read side and the write side, so they cannot disagree.
+  # What «past» means here:
   #
-  # WHAT «PAST» MEANS HERE, STATED RATHER THAN LEFT TO THE READER:
+  #   * The unit is the DAY — a room-night is sold by the night.
+  #   * The clock is the PROPERTY's, not the caller's. A real IANA zone, so DST
+  #     is handled; do NOT replace it with a fixed offset. An assistant calling
+  #     from UTC-8 at 21:00 is already on hoteling's tomorrow, so reading the
+  #     RUNNER's clock would refuse a stay the hotel will sell.
+  #   * TODAY IS BOOKABLE: a same-day arrival is an ordinary hotel sale, and
+  #     hoteling models no check-in hour, so refusing today would invent a
+  #     cutoff nobody declared.
   #
-  #   * The unit is the DAY, not the instant. A room-night is sold by the night.
-  #   * The clock is the PROPERTY's, not the caller's: hoteling lists Istanbul
-  #     hotels, so "today" is today in Europe/Istanbul. A real IANA zone, so DST
-  #     is handled; do NOT replace with a fixed offset. This matters — an
-  #     assistant calling from UTC-8 at 21:00 is already on hoteling's tomorrow,
-  #     and reading the RUNNER's clock would refuse a stay the hotel will sell.
-  #   * TODAY IS BOOKABLE, and that is a product statement, not an oversight: a
-  #     same-day arrival is an ordinary hotel sale, and hoteling's own check-in
-  #     hour is not modelled anywhere, so refusing today would invent a cutoff
-  #     nobody declared. getgrocery draws the same line for the same reason
-  #     ({WireArguments.past_date} there), and atablefor's rolling horizon
-  #     likewise still offers tonight's not-yet-started seatings. What hoteling
-  #     does NOT have is getgrocery's second, finer guard (`past_slot`) — it has
-  #     no windows within a day to have missed.
-  #
-  # It is spec §9.1's FIRST branch and not its third: a past `check_in` is
-  # outside the verb's DOMAIN, so it is `400 bad_request` naming what IS
-  # acceptable, never `200 []`. The empty array is already spoken for on this
-  # origin and means one thing — the property exists and is SOLD OUT for those
-  # nights — and that is exactly the answer a past date must not be confusable
-  # with, since one of the two is worth retrying and the other never will be.
-  #
-  # WHY THE FLOOR IS NOT A HORIZON. K-968 declined to invent a far end (how far
-  # ahead this operator sells is a product decision nobody has taken) and this
-  # does not take it either. The NEAR end needs no such call: nobody sells a
-  # night that has already happened.
+  # Spec §9.1's FIRST branch: a past `check_in` is outside the verb's DOMAIN, so
+  # `400 bad_request` and never `200 []` — the empty array already means SOLD
+  # OUT, and only one of the two is worth retrying. No FAR end is invented: how
+  # far ahead this operator sells is a decision nobody has taken.
   ZONE_NAME = "Europe/Istanbul"
 
   # The property-locale ActiveSupport::TimeZone (Europe/Istanbul).
@@ -172,17 +127,11 @@ module WireArguments
   end
 
   # THE CHECK-IN A PUBLISHED EXAMPLE NAMES (K-972): tomorrow, in the property's
-  # own locale.
-  #
-  # A descriptor's `example_params`/`example_row` say «copy this verbatim», and
-  # a calendar literal there ages into a 400 the moment {#past_stay}'s floor
-  # passes it — `hotel_detail` published `check_in: "2026-09-01"`, which this
-  # origin would have started refusing on 1 September with nothing in the tree
-  # to notice. Tomorrow rather than {#today} so the example survives the whole
-  # day it is read on, in any client's timezone.
-  #
-  # Read through a proc from the declaration, never called at class-body load —
-  # see {Kiosk::Server::SchemaSlots}.
+  # own locale. A calendar literal in `example_params`/`example_row` says «copy
+  # this verbatim» and ages into a 400 the moment {#past_stay}'s floor passes it;
+  # tomorrow rather than {#today} so the example survives the whole day it is
+  # read on, in any client's timezone. Read through a proc from the declaration,
+  # never called at class-body load — see {Kiosk::Server::SchemaSlots}.
   def example_check_in
     today + 1
   end
@@ -211,19 +160,11 @@ module WireArguments
 
   # ── K-968: A STAY NOBODY CAN PRICE IS A 400, NOT A 500 ──────────────────
   #
-  # Found by K-773's standing hostile-shape probes on the day they were built,
-  # which is the point of having them. `check_in: "0000-01-01"` is a perfectly
-  # well-formed ISO date — `format: "date"` accepts it, {#stay_dates} parses it,
-  # `check_out > check_in` holds — and the 739,000-night stay it asks for prices
-  # at 5,922,168,000 cents. `bookings.total_cents` is a 4-byte `integer`, so the
-  # insert raised `ActiveModel::RangeError` and the wire answered
-  # `500 action_failed`: a crash, for an argument a client simply got wrong.
-  #
-  # THE BOUND IS THE COLUMN'S, NOT A POLICY. This deliberately does not invent a
-  # booking horizon — how far ahead this operator sells, and for how long, is a
-  # product decision nobody has taken and this guard has no business taking. It
-  # refuses exactly what cannot be REPRESENTED, so every stay that used to work
-  # still works and only the ones that used to crash are refused.
+  # A well-formed ISO `check_in` far enough back prices a stay past
+  # `bookings.total_cents`, a 4-byte `integer` — the INSERT then raised
+  # `ActiveModel::RangeError` and the wire answered `500 action_failed` for an
+  # argument a client simply got wrong. THE BOUND IS THE COLUMN'S, NOT A POLICY:
+  # it refuses exactly what cannot be REPRESENTED and invents no booking horizon.
   #
   # @return [OperationResult, nil] a refusal, or nil when the total fits
   MAX_TOTAL_CENTS = 2_147_483_647 # PostgreSQL `integer`
@@ -240,9 +181,7 @@ module WireArguments
     )
   end
 
-  # The sentence the raw handlers raised for an absent argument, unchanged. An
-  # argument that is PRESENT but null or empty now lands here too: it used to
-  # reach Postgres as `''::integer` / `''::date` and come back a 500.
+  # An argument that is absent, or present but null/empty.
   def missing(field)
     OperationResult.refused(code: "bad_request", message: "missing field: #{field}")
   end

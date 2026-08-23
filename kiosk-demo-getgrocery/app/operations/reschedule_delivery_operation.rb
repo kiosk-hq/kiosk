@@ -2,19 +2,12 @@
 
 # reschedule_delivery — move an ALREADY-PAID order's delivery to a different
 # window, and optionally to a new address, REUSING the payment that order
-# already has. There is no new mandate and no second settlement: "the order must
-# already be paid" is a PRECONDITION, not an instruction to settle now.
+# already has. No new mandate and no second settlement: "already paid" is a
+# PRECONDITION, not an instruction to settle now.
 #
-# THE GATES, IN THIS ORDER:
-#   1. the order is named, and named as a uuid                        (K-579)
-#   2. the new window is a real, still-bookable one on its day        (K-470/480)
-#   3. the order exists, belongs to the principal and has not already been
-#      moved — one reschedule per order, further changes go through the operator
-#   4. a settlement OF THIS PRINCIPAL references THIS order
-#
-# Gate 3 answers "no such order", "not yours" and "already rescheduled" with ONE
-# sentence, deliberately: distinguishing them would let a caller enumerate other
-# principals' order ids.
+# Four gates, in the order they are written below. Gate 3 answers "no such
+# order", "not yours" and "already rescheduled" with ONE sentence, deliberately:
+# distinguishing them would let a caller enumerate other principals' order ids.
 class RescheduleDeliveryOperation
   def self.call(order_id:, delivery_slot_id:, delivery_date:, delivery_address:)
     # ── Gate 1: the order is named ─────────────────────────────────────────
@@ -36,9 +29,7 @@ class RescheduleDeliveryOperation
 
     # ── Gate 2: the new window ─────────────────────────────────────────────
     # Same source of truth as delivery_slots and create_order, so the day+time an
-    # assistant saw is the day+time this books. Optional for backward compat →
-    # tomorrow. The past-date sentence is SHORTER than create_order's, and that
-    # is this verb's wording, not a candidate for convergence-by-conversion.
+    # assistant saw is the day+time this books.
     date, refusal = WireArguments.delivery_date(
       delivery_date,
       default:      DeliverySlots.now.to_date + 1,
@@ -52,18 +43,16 @@ class RescheduleDeliveryOperation
     )
     return refusal if refusal
 
-    # One transaction around the two gates and the move, as it was: the payment
-    # gate must not be able to pass for an order that is being moved out from
-    # under it. It joins the SessionContext transaction the wire opened.
+    # One transaction around the two gates and the move — the payment gate must
+    # not pass for an order being moved out from under it. It joins the
+    # SessionContext transaction the wire opened.
     ApplicationRecord.transaction do
-      # ── Gate 3: ownership + state ────────────────────────────────────────
+      # ── Gate 3: it exists, is yours, and has not already moved ───────────
       # `pick` and not `find_by!`: the bang form raises RecordNotFound, which
-      # Rails maps to 404 and the mixin's `rescue_from` floor would render as
+      # Rails maps to 404 and the mixin's `rescue_from` floor renders as
       # `not_found` — telling a prober that the id is unknown, which is the one
-      # thing this refusal is worded to avoid. The ADDRESS comes back with the
-      # id because the raw UPDATE resolved "keep the old address" in SQL
-      # (`COALESCE(NULLIF(:new, ''), address)`) and `update_all` has no way to
-      # write an expression; reading it here is the same decision, one layer up.
+      # thing this refusal is worded to avoid. The ADDRESS is read here because
+      # `update_all` cannot resolve "keep the old one" in SQL.
       order = Order.owned_by_current_principal
                    .reschedulable
                    .where(id: order_id)
@@ -78,17 +67,15 @@ class RescheduleDeliveryOperation
       # ── Gate 4: a settlement of THIS principal for THIS order ────────────
       # The payer must be the caller (`of_current_principal`, the GUC predicate)
       # and the settled cart must name this order ({CartMandate.referencing},
-      # the containment the pay path and the back office share). Paying for order
-      # A does not move order B.
+      # shared with the pay path and the back office): paying for A moves no B.
       paid = Settlement.of_current_principal
                        .joins(:cart_mandate)
                        .merge(CartMandate.referencing(order_id))
       unless paid.exists?
         # K-853: an order with a capture OUTSTANDING is neither paid nor unpaid,
-        # and telling an assistant "this order is not paid yet" about one is the
-        # sentence protocol.md §11.6 forbids — it is what sends it back to sign a
-        # fresh chain. The claim is owner-scoped (see ValidatingPaymentProvider),
-        # so a `paying` row here is THIS principal's own in-flight charge.
+        # and "this order is not paid yet" is the sentence protocol.md §11.6
+        # forbids about one — it sends the assistant back to sign a fresh chain.
+        # The claim is owner-scoped (see ValidatingPaymentProvider).
         if Order.owned_by_current_principal.where(id: order_id, status: Order::PAYING).exists?
           next OperationResult.refused(
             code:    "forbidden",
@@ -117,10 +104,8 @@ class RescheduleDeliveryOperation
            .update_all(
              status:     Order::RESCHEDULED,
              slot_at:    slot_at,
-             # `to_s.presence` and not `presence`: the raw statement wrote
-             # `NULLIF(<the value as text>, '')`, so what decides "was a new
-             # address given" is the TEXT the value renders as, and what gets
-             # stored is that same text.
+             # `to_s.presence` and not `presence`: the TEXT the value renders as
+             # is what decides "was a new address given", and what gets stored.
              address:    delivery_address.to_s.presence || current_address,
              updated_at: Time.current,
            )

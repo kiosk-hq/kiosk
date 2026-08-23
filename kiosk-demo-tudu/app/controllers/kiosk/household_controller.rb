@@ -3,50 +3,27 @@
 # tudu's READ surface: the four verbs an assistant reaches with
 # `GET /kiosk/<query-name>` — one endpoint per verb (protocol 0.4), arguments in
 # the query string, and the success body IS the rows array. Kiosk ships a MIXIN,
-# not a base class — the superclass is
-# this app's own ApplicationController, and `include Kiosk::Handler` is the whole
-# contract. Each class-level macro records a declaration and the NEXT `def`
-# claims it, so a method with no macros above it is a helper the wire cannot see.
-#
-# `kind :query` above each declaration is what puts it on `GET`; the kind
-# belongs to the DECLARATION, not to the class (K-921), so ONE controller may
-# declare both. Keeping the read and the write halves in separate classes is
-# this demo's shape, not a rule. The write half lives next door in
-# Kiosk::TodoListsController, and tudu is the demo that shows why that is a
-# choice worth making on its merits: its membership guard is called from two
-# queries here and three actions there, so it belongs to neither class. The
-# access DECISION is `Membership.reachable?` (a model method, no request in it)
-# and the HTTP refusal is {KioskMembershipGate} (an ordinary Rails concern,
-# included by both halves) — an answer that would still be the right one if all
-# nine verbs sat in a single controller.
+# not a base class: `include Kiosk::Handler` is the whole contract and a macro is
+# claimed by the NEXT `def`, so a method with no macros above it is a helper the
+# wire cannot see. `kind :query` is what puts a declaration on `GET`.
 #
 # Access here is MEMBERSHIP-based, not owner-scoped — the whole point of this
-# demo. A list is reachable by every account with a `memberships` row for it,
-# and a non-member gets 403 rather than 404 so probing can't enumerate ids.
+# demo. A list is reachable by every account with a `memberships` row for it, and
+# a non-member gets 403 rather than 404 so probing can't enumerate ids. The
+# decision is `Membership.reachable?` (no request in it); the HTTP refusal is
+# {KioskMembershipGate}, shared with the write half in Kiosk::TodoListsController.
 #
-# NOT ROUTABLE. config/routes.rb draws nothing at this controller: handlers are
-# reached only through the wire, which is where authentication, the registration
-# PoW gate and the GUC-scoped transaction live. A route drawn straight here
-# would bypass all three, and the mixin answers such a request 404.
+# NOT ROUTABLE: config/routes.rb draws nothing here. Handlers are reached only
+# through the wire, where authentication, the registration PoW gate and the
+# GUC-scoped transaction live; the mixin answers a direct request 404.
 class Kiosk::HouseholdController < ApplicationController
   include Kiosk::Handler
   include KioskMembershipGate
 
-  # whoami — the authenticated principal + the acting agent. Handy first call
-  # for an assistant orienting itself; also proves the attribution wiring.
-  #
-  # Both values come from `kiosk_identity`, the identity the wire resolved for
-  # this request. They used to be two `SELECT` round-trips to the GUCs
-  # (`kiosk.current_user_id()` and the raw `app.current_agent_id` setting)
-  # through a pair of top-level `def`s that monkeypatched Object — the K-701
-  # shape, which existed only because a boot-time `register` block had no other
-  # way to reach request state. A controller action simply HAS it, and the two
-  # sources cannot disagree: SessionContext SET LOCALs those very GUCs FROM this
-  # identity at the top of this same request, which is why the description below
-  # is unchanged — it names the principal the answer means, not the round-trip
-  # it no longer takes.
-  # ADR-0023: semantics only. The row's three fields and what each MEANS are
-  # declared in `output_schema` below; this says what the verb is FOR.
+  # whoami — the authenticated principal + the acting agent. Handy first call for
+  # an assistant orienting itself; also proves the attribution wiring. Both values
+  # come from `kiosk_identity` and cannot disagree with the GUCs: SessionContext
+  # SET LOCALs those FROM this identity at the top of this same request.
   kind :query
   description "Return who this call is authenticated as: the account the operator resolved for the " \
               "request, the assistant acting on that account's behalf when one is, and the display " \
@@ -54,20 +31,13 @@ class Kiosk::HouseholdController < ApplicationController
               "call for an assistant orienting itself, and the proof that attribution is wired — " \
               "everything this origin writes is attributed to exactly this pair."
   # A verb that takes nothing still declares the empty closed object, so "this
-  # verb takes no arguments" is a published fact rather than an absence an
-  # assistant has to interpret.
+  # verb takes no arguments" is a published fact rather than an absence.
   input_schema type: "object", additionalProperties: false, properties: {}, required: []
-  # A ONE-ROW array: this is a query and a query answers with rows. `agent_id`
-  # is null when the principal is a human web session rather than an assistant —
-  # a real state of this demo's own tables, not a defensive null.
-  #
-  # `display_name` is NOT nullable and is NOT an address (K-950). It used to be
-  # `handle`, the account's `users.email`, which was the same column
-  # `list_members` published to co-members; the field name and the value moved
-  # together so nothing is left calling itself a handle while carrying a
-  # credential. {User.public_name} answers a blank name with an opaque
-  # `member-<hex>` over the account UUID, so there is always a string here and
-  # never an address — see the note on that method for why the UUID.
+  # A ONE-ROW array: this is a query and a query answers with rows. `agent_id` is
+  # null when a human web session is calling rather than an assistant — a real
+  # state of this demo's tables, not a defensive null. `display_name` is NOT
+  # nullable and is NEVER an address (K-950): {User.public_name} answers a blank
+  # name with an opaque `member-<hex>` over the account UUID.
   output_schema type: "array",
                 description: "Exactly one row: the authenticated principal.",
                 minItems: 1, maxItems: 1,
@@ -87,28 +57,21 @@ class Kiosk::HouseholdController < ApplicationController
                     "display_name" => User.public_name(User.where(id: account_id).pick(:display_name), account_id) }]
   end
 
-  # my_lists — the lists the caller is a MEMBER of (owner OR member), via the
-  # memberships join. Membership-based, not owner-scoped: the caller sees lists
-  # it was invited into as well as its own. Provider-controlled WHERE;
-  # un-bypassable (the agent supplies no filter at all).
-  # ADR-0023: no row-field list and no "pass X to Y" tail. `output_schema` names
-  # every field and points the identifying one at the verbs that take it.
-  # `reach :consented` (K-949, ADR-0028) — and tudu is the demo the STRONGER of
-  # the spec's two sharing claims was written for. A row here may be a list
-  # somebody else owns; what admits it is not tudu's own decision to publish
-  # (that would be `published`) but an act by the human whose data it is — an
-  # owner minted a single-use invite, it travelled person-to-person, and
-  # `accept_invite` turned it into a `memberships` row. The membership IS the
-  # authorising artefact, it is a row this operator can produce on demand, and
-  # every one of the four verbs below reads it rather than an owner column.
+  # my_lists — the lists the caller is a MEMBER of (owner OR member): a list it
+  # was invited into is listed alongside its own. The agent supplies no filter.
+  #
+  # `reach :consented` (K-949, ADR-0028): a row here may be a list somebody else
+  # owns, and what admits it is an act by the human whose data it is — an owner
+  # minted a single-use invite, `accept_invite` turned it into a `memberships`
+  # row. That row IS the authorising artefact, and every verb below reads it.
   kind :query
   reach :consented
   description "List the todo lists the authenticated principal can reach. Access here is " \
               "MEMBERSHIP-based rather than owner-scoped, so a list somebody invited the caller into " \
               "is listed alongside the caller's own, and each row says which of the two the caller is " \
               "on it — a distinction that matters, because sharing a list and removing people from it " \
-              "are owner-only. Takes no arguments and returns every reachable list, not a page of them " \
-              "(small; not paginated). Once the human picks one, `list_todos` reads what is on it and " \
+              "are owner-only. Takes no arguments and returns every reachable list. " \
+              "Once the human picks one, `list_todos` reads what is on it and " \
               "`add_todo` puts something new there."
   input_schema type: "object",
                additionalProperties: false,
@@ -121,12 +84,9 @@ class Kiosk::HouseholdController < ApplicationController
                   properties: {
                     list_id: { type: "string", description: "uuid. Pass to list_todos / list_members / add_todo / invite / remove_member as `list_id`." },
                     title:   { type: "string", description: "The list title." },
-                    # `Membership::ROLES`, not a literal (K-946): the model VALIDATES
-                    # against that constant, so a fourth role added there would
-                    # otherwise leave both published schemas silently wrong. Not a
-                    # K-922 case and deliberately not a proc — a role vocabulary is
-                    # CODE, fixed at boot, not a table of rows that changes under a
-                    # running process.
+                    # `Membership::ROLES`, not a literal (K-946): the model
+                    # VALIDATES against that constant, so a fourth role added
+                    # there would otherwise leave both published schemas wrong.
                     role:    { enum: Membership::ROLES, description: "The CALLER's role on this list — `invite` and `remove_member` are owner-only." },
                   },
                   required: %w[list_id title role],
@@ -135,23 +95,17 @@ class Kiosk::HouseholdController < ApplicationController
   example_row({
     list_id: "d4e5f6a7-8b9c-4d0e-9f1a-2b3c4d5e6f70", title: "Flat 3B", role: "owner",
   })
-  # The rows themselves are {List.reachable_rows} — a MODEL PROJECTION, because
-  # the human web UI's `/lists` page publishes exactly these rows and used to get
-  # them by dispatching a synthetic Rack sub-request at this very action (T-082).
-  # The wire is for assistants; the page now reads the same projection directly, so
-  # there is one definition of a list row instead of two surfaces to keep in
-  # agreement. The membership predicate inside it is
-  # `Membership.of_current_principal` — a scope, not a Ruby comparison; see the
-  # long note on it for why that one fragment stays SQL.
+  # The rows are {List.reachable_rows} — a MODEL PROJECTION, because the web UI's
+  # `/lists` page publishes exactly these rows (T-082): one definition of a list
+  # row, not two surfaces to keep in agreement. Its membership predicate is
+  # `Membership.of_current_principal`, a scope rather than a Ruby comparison.
   def my_lists
     render json: List.reachable_rows
   end
 
   # list_todos(list_id) — membership-gated: 403 unless the caller is a member.
-  # Returns the list's todos with attribution (created_by_agent_id).
-  # `reach :consented`, same artefact: a todo on a list somebody else owns is
-  # reachable because a membership says so, and §7.2 form 2 still applies to
-  # everything outside that reach — a non-member gets 403, not a filtered 200.
+  # `reach :consented`, same artefact; §7.2 form 2 still applies to everything
+  # outside that reach — a non-member gets 403, not a filtered 200.
   kind :query
   reach :consented
   description "Return the todos on a list the caller is a member of, each with " \
@@ -178,28 +132,20 @@ class Kiosk::HouseholdController < ApplicationController
                   required: %w[todo_id title done created_by_agent_id],
                 }
   # Gate, then {Todo.rows_on} — the projection tudu's `/lists/:id` page renders
-  # too (T-082). Both doors run the SAME gate and then the SAME projection, which
-  # is what stops the page and the verb from drifting apart.
+  # too (T-082): both doors run the same gate and then the same projection.
   def list_todos
     return unless kiosk_membership_gate(params[:list_id])
 
     render json: Todo.rows_on(params[:list_id])
   end
 
-  # list_members(list_id) — membership-gated; returns the members + roles so a
-  # collaborator can see who else is on the list.
-  # `reach :consented` — the most obviously cross-principal verb tudu has: the
-  # rows ARE other accounts. It is the membership that admits them: an owner
-  # minted a single-use invite, it travelled person-to-person, and
-  # `accept_invite` turned it into the row that authorises this read.
+  # list_members(list_id) — membership-gated; the members + roles, so a
+  # collaborator can see who else is on the list. The most obviously
+  # cross-principal verb tudu has: the rows ARE other accounts.
   #
-  # WHAT THE CONSENT DOES NOT BUY (K-950). It buys the roster. It does not buy
-  # the members' LOGIN ADDRESSES, which is what this verb published until the
-  # projection moved to `display_name`. §7.2's prohibition used to hang off
-  # `reach :published` alone, so the spec as written permitted exactly this;
-  # it now binds every reach, `consented` included, for the reason that made
-  # the old scoping wrong — consent to share a list is not consent to publish
-  # an email address.
+  # WHAT THE CONSENT DOES NOT BUY (K-950): the roster, yes; the members' LOGIN
+  # ADDRESSES, no. §7.2's prohibition binds every reach, `consented` included —
+  # consent to share a list is not consent to publish an email address.
   kind :query
   reach :consented
   description "Return who else is on a list the caller is a member of, named the way they show " \

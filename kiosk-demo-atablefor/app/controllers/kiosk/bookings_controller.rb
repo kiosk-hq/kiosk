@@ -3,35 +3,18 @@
 # atablefor's WRITE surface: the two verbs an assistant reaches with
 # `POST /kiosk/<action-name>` — one endpoint per verb since 0.4, arguments as
 # the JSON body. Same shape as Kiosk::DiningRoomController — this app's own
-# ApplicationController plus `include Kiosk::Handler` — with `kind :action` above
-# each declaration, which is what puts it on `POST`.
+# ApplicationController plus `include Kiosk::Handler` — and `kind :action` above
+# each declaration is what puts it on `POST`. Each write reads its arguments,
+# hands them to an Operation and renders what it answers (T-083).
 #
-# THE TWO WRITES ARE A HANDFUL OF LINES EACH: read the arguments off the request,
-# hand them to an Operation, render what it answers (T-083, Phil's 2026-08-17
-# WRITE-OPERATIONS-SEAM decision). That is the fleet's shape, not this demo's
-# invention — `book_table` ends in a transaction whose double-booking guard is in
-# TWO halves, the second of them reached only from inside a `rescue` around an
-# INSERT, and a `render` in the middle of that is what every T-057 slice had to
-# reason about.
+# The wire's error-`code` vocabulary is a closed table, not a class hierarchy,
+# so a refusal is an ordinary `render json:, status:` naming the code, which the
+# wire carries verbatim into the RFC 9457 document's top-level `code`.
+# {KioskRefusals#render_operation} is the one place a refusal becomes a status.
 #
-# Errors are Rails' idiom end to end: the wire's error-`code` vocabulary is a
-# closed table, not a class hierarchy, so a refusal is an ordinary
-# `render json:, status:` naming the code, and the wire carries the code
-# verbatim into the RFC 9457 problem document it answers with (0.4 moved the
-# branch point to the document's TOP-LEVEL `code`; a handler still names it the
-# same way). No
-# Kiosk error classes appear below — the sixteen `Errors::BadRequest` /
-# `Errors::Conflict` / `Errors::Forbidden` raises this file once replaced are now
-# {OperationResult} refusals, and {KioskRefusals#render_operation} is the one
-# place a refusal becomes a status.
-#
-# atablefor advertises NO `pay` verb and configures no payment provider: the
-# `deposit_eur` an availability row carries is a display-only no-show hold
-# settled at the restaurant. So nothing here means a 402 — the wire's three
-# payment/PoW codes share that status and `Errors::STATUS_CODES` deliberately
-# refuses to guess between them, but no refusal below is a 402-class refusal, and
-# the 402 an assistant does meet on this origin comes from the anti-scalping PoW
-# gate upstream of dispatch, not from a handler.
+# No `pay` verb and no payment provider here: a `deposit_eur` is a display-only
+# no-show hold settled at the restaurant, so nothing below is a 402 — the one an
+# assistant can meet on this origin comes from the PoW gate upstream of dispatch.
 #
 # NOT ROUTABLE — see Kiosk::DiningRoomController.
 class Kiosk::BookingsController < ApplicationController
@@ -40,17 +23,14 @@ class Kiosk::BookingsController < ApplicationController
 
   # book_table — reserve a specific table at a chosen restaurant for a chosen
   # upcoming seating, for the authenticated principal. The (restaurant_id,
-  # restaurant_table_id) come from an availability row; the seating is
-  # (date, time). The seating must be one of the CURRENT upcoming seatings —
-  # neither already started nor beyond the rolling horizon `availability`
-  # offers, re-validated through the same app/models/seatings.rb helper that
-  # filters `availability`'s own `date` argument (K-767). Contention is finite: a UNIQUE
-  # index on (restaurant_table_id, seating_at) among confirmed rows means a table
-  # already held for that seating is a clean 409 Conflict. No payment — a
-  # reservation takes no money (any deposit shown is settled at the restaurant).
-  # ADR-0023: this description says WHAT booking a table means and WHEN it is
-  # refused. It names no argument — `input_schema` below declares all five, and
-  # each one's own description says which availability-row field it comes from.
+  # restaurant_table_id) come from an availability row; the (date, time) seating
+  # is re-validated through the same app/models/seatings.rb helper `availability`
+  # filters with, so it must be one of the CURRENT upcoming seatings (K-767).
+  # Contention is finite: a UNIQUE index on (restaurant_table_id, seating_at)
+  # among confirmed rows makes a table already held a clean 409 Conflict. No
+  # payment — any deposit shown is settled at the restaurant.
+  # ADR-0023: the description says WHAT booking means and WHEN it is refused; it
+  # names no argument — `input_schema` below declares all five.
   kind :action
   description "Book a specific restaurant table for a chosen upcoming " \
               "seating, for the authenticated principal. Confirms the " \
@@ -77,9 +57,8 @@ class Kiosk::BookingsController < ApplicationController
                },
                required: ["restaurant_id", "restaurant_table_id", "date", "time", "party_size"]
   # An action answers its own object. The five arguments come back echoed
-  # because a confirmation an assistant can read back to its human has to name
-  # WHAT was booked, not only that something was; `seating_at` is the absolute
-  # instant behind the (date, time) pair.
+  # because a confirmation an assistant reads back to its human has to name WHAT
+  # was booked; `seating_at` is the absolute instant behind the (date, time).
   output_schema type: "object",
                 description: "The confirmed booking.",
                 additionalProperties: false,
@@ -96,12 +75,9 @@ class Kiosk::BookingsController < ApplicationController
                 required: %w[booking_id restaurant_id restaurant_table_id party_size
                              date time seating_at status]
   # THE SEATING IS RESOLVED, NOT WRITTEN DOWN (K-972). A calendar literal here
-  # is an example that ages into a 400 — a seating that has already passed is
-  # refused, so «copy this verbatim» stopped being true on a day nobody would
-  # have noticed. `example_params` and `example_row` are RESOLVABLE slots (see
-  # {Kiosk::Server::SchemaSlots}), so both name {Seatings.example_date} and
-  # {Seatings.example_time}, and `seating_at` is derived from that same pair
-  # through the same helper `availability` uses — so the three cannot drift.
+  # ages into a 400 the day that seating passes, so `example_params` and
+  # `example_row` are RESOLVABLE slots ({Kiosk::Server::SchemaSlots}) naming the
+  # same {Seatings} helpers `availability` uses — the three cannot drift.
   example_params({
     restaurant_id: 1, restaurant_table_id: 1,
     date: -> { Seatings.example_date.iso8601 }, time: Seatings::TIMES[1], party_size: 2,
@@ -126,9 +102,8 @@ class Kiosk::BookingsController < ApplicationController
 
   # cancel_booking — cancel one of the authenticated principal's own bookings,
   # freeing the (table, seating) so it can be booked again. Owner-scoped: the
-  # WHERE gates on user_id = kiosk.current_user_id(), so a cross-principal cancel
-  # on another's booking is a clean 403 (the booking is not found under the
-  # caller's identity).
+  # WHERE gates on `user_id = kiosk.current_user_id()`, so a cross-principal
+  # cancel is a clean 403 — the booking is not found under the caller's identity.
   kind :action
   description "Cancel one of the authenticated principal's own table bookings " \
               "(requires the booking to belong to the principal). Frees the (table, seating)."

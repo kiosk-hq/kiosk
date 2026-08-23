@@ -1,41 +1,26 @@
 # frozen_string_literal: true
 
 # philslist's WRITE surface: the three verbs an assistant reaches with
-# `POST /kiosk/<action-name>`. Same shape as Kiosk::BoardController — this app's
-# own ApplicationController plus `include Kiosk::Handler` — with `kind :action`
-# above each declaration, which is what puts it on `POST`.
+# `POST /kiosk/<action-name>` — same shape as Kiosk::BoardController, `kind
+# :action` above each declaration. NOT ROUTABLE, see that controller.
 #
-# THE THREE WRITES ARE A HANDFUL OF LINES EACH: read the arguments off the
-# request, hand them to an Operation, render what it answers (T-083, Phil's
-# 2026-08-17 WRITE-OPERATIONS-SEAM decision). That is the fleet's shape, not this
-# demo's invention — `post_listing`'s three guards and the two owner-scoped
-# UPDATEs are business decisions, and a `render` in the middle of them is what
-# every T-057 slice had to reason about. Moving them to app/operations/ is also
-# what makes them callable from anywhere: a console, a rake task, a future
-# operator back office.
+# Each write reads its arguments off the request, hands them to an Operation and
+# renders what it answers (T-083); the business decisions live in
+# app/operations/, callable from a console or a rake task as well as the wire.
 #
 # Errors are Rails' idiom end to end: the wire's `error.code` vocabulary is a
 # closed table, not a class hierarchy, so a refusal is an ordinary
-# `render json:, status:` naming the code, and the wire carries it verbatim. No
-# Kiosk error classes appear below — an Operation answers with an
-# {OperationResult} and {KioskRefusals#render_operation} is the one place that
-# becomes a status.
-#
-# NOT ROUTABLE — see Kiosk::BoardController.
+# `render json:, status:` naming the code. {KioskRefusals#render_operation} is
+# the one place an {OperationResult} becomes a status.
 class Kiosk::ListingsController < ApplicationController
   include Kiosk::Handler
   include KioskRefusals
 
-  # post_listing — create a listing under the AUTHENTICATED principal. The
-  # owner is NOT an input: it is read from the identity the wire resolved, and
-  # since 0.4 an agent-supplied `owner_id` does not even reach the handler —
-  # `additionalProperties: false` below plus §8.1 item 5's mandatory argument
-  # validation refuse it with a typed 400 naming the parameter. (Through 0.3 it
-  # was accepted and silently ignored; the description said so, and that
-  # sentence is now false, which is why it moved.) The handler guard survives
-  # anyway as the second layer — see {PostListingOperation}, where it and
-  # created_by_agent_id (the acting agent, for attribution) are written out at
-  # length.
+  # post_listing — create a listing under the AUTHENTICATED principal. The owner
+  # is NOT an input: it is read from the identity the wire resolved, and an
+  # agent-supplied `owner_id` never reaches the handler — `additionalProperties:
+  # false` below plus §8.1 item 5's mandatory argument validation refuse it with
+  # a typed 400 naming the parameter. {PostListingOperation} is the second layer.
   kind :action
   description "Post a new classifieds listing owned by the authenticated principal, open from the " \
               "moment it lands. Ownership is NOT an input: it is taken from the identity the operator " \
@@ -47,23 +32,15 @@ class Kiosk::ListingsController < ApplicationController
   input_schema type: "object",
                additionalProperties: false,
                properties: {
-                 # THE `categories` TABLE, not a copy of it (K-922) — same
-                 # proc, same reason, as `browse_listings`: an operator who adds
-                 # a section may post in it without a redeploy, and a caller
-                 # naming one that does not exist is refused 400 naming the
-                 # LIVE list rather than a list frozen at the last deploy.
+                 # THE `categories` TABLE, not a copy of it (K-922) — same proc
+                 # and same reason as `browse_listings`.
                  category_slug: { type: "string",
                                   enum: -> { Category.order(:slug).pluck(:slug) },
                                   description: "The section to post in (see browse_listings)." },
                  title:         { type: "string", description: "Short headline." },
-                 # THE ONLY CONTACT CHANNEL THIS BOARD HAS, and saying so here
-                 # is what makes it usable (K-913). philslist publishes a seller
-                 # as an opaque pseudonym, never an address, and there is no
-                 # relayed-message verb — so a listing whose text names no way
-                 # to reach the seller cannot be answered at all. That makes the
-                 # contact line the human's CHOICE and the human's words, which
-                 # is the right default: the operator publishes nothing about a
-                 # seller they did not write themselves.
+                 # THE ONLY CONTACT CHANNEL THIS BOARD HAS (K-913): sellers are
+                 # pseudonymous and there is no relayed-message verb, so the
+                 # contact line is the human's choice and the human's words.
                  body:          { type: "string",
                                   description: "The listing description. A buyer who wants this item has no other way " \
                                                "to reach the seller — the board publishes no address for them and this " \
@@ -100,10 +77,9 @@ class Kiosk::ListingsController < ApplicationController
   end
 
   # edit_listing — OWNER-ONLY. The UPDATE is scoped by
-  # `Listing.owned_by_current_principal`, i.e. Postgres still evaluates
+  # `Listing.owned_by_current_principal`, so Postgres evaluates
   # `owner_id = kiosk.current_user_id()` against the transaction GUC; zero rows
-  # affected → 403 (answer forbidden, not not-found, so cross-owner probing
-  # can't enumerate which ids exist). See {EditListingOperation}.
+  # affected → 403, not 404, so ids cannot be enumerated. See {EditListingOperation}.
   kind :action
   description "Edit one of the authenticated principal's own listings " \
               "(owner-only; editing another owner's listing is forbidden)."
@@ -127,14 +103,10 @@ class Kiosk::ListingsController < ApplicationController
                 },
                 required: %w[listing_id updated]
   def edit_listing
-    # An ALLOWLIST, not a loop over caller keys: `permit` is what keeps `status`,
-    # `owner_id` and `created_by_agent_id` unwritable from the wire. It stays
-    # HERE, in the controller, because it is a method on
-    # ActionController::Parameters — the one type on this path an Operation must
-    # not have to know about, the same reason getgrocery unwraps `items` at its
-    # controller. What crosses the seam is a plain attribute hash. Absent keys
-    # arrive ABSENT rather than as nils, which is what preserves "an explicit
-    # null clears price_text" as a distinct instruction.
+    # An ALLOWLIST, not a loop over caller keys: `permit` keeps `status`,
+    # `owner_id` and `created_by_agent_id` unwritable from the wire. Absent keys
+    # arrive ABSENT rather than as nils — that is what keeps "an explicit null
+    # clears price_text" a distinct instruction.
     render_operation EditListingOperation.call(
       listing_id: params[:listing_id],
       changes:    params.permit(:title, :body, :price_text).to_h,

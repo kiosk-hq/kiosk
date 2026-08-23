@@ -26,6 +26,16 @@
 #         {Kiosk::Server::HandlerRegistrations} raises on this at reload, which
 #         needs the app to boot; here it is a text pass over the sources.
 #
+#   (iv)  no `\` line continuation is followed by a blank line. A descriptor's
+#         prose is built by concatenating adjacent string literals across
+#         continued lines, and `\` eats exactly ONE newline: put a blank line in
+#         the middle and the expression ENDS there, the remaining literals become
+#         dangling no-ops, and the verb ships a silently TRUNCATED `description`
+#         to every assistant. Nothing else catches it — it parses, it boots,
+#         `ruby -c` is happy, and the only symptom is prose that stops
+#         mid-sentence on the wire.
+#
+
 # WHAT IT IS NOT. The T-067 design invents this check to catch "declared but
 # unrouted / routed but undeclared". That bug class cannot occur in this
 # implementation at all — the engine resolves a verb name against the registry
@@ -147,7 +157,21 @@ origins.sort.each do |origin, paths|
     end
   end
 
+  # (iv) a continued expression may not be interrupted by a blank line.
+  paths.sort.each do |path|
+    lines = File.readlines(path)
+    lines.each_with_index do |line, index|
+      next unless line.rstrip.end_with?("\\")
+      next unless lines[index + 1] && lines[index + 1].strip.empty?
+
+      errors << "#{origin}: #{File.basename(path)}:#{index + 1} ends in a `\\` continuation " \
+                "followed by a BLANK line — the expression ends there and everything after it " \
+                "is a dangling literal, so whatever prose it was building is truncated on the wire"
+    end
+  end
+
   # (iii) one name, one kind.
+
   by_name = verbs.group_by(&:first)
   by_name.each do |name, entries|
     kinds = entries.map(&:last).uniq
@@ -165,7 +189,9 @@ end
 if errors.empty?
   total = origins.sum { |_origin, paths| paths.sum { |p| verbs_in(File.read(p)).length } }
   puts "check-kiosk-names: OK — #{total} verbs across #{origins.size} origins; " \
-       "#{declared_reserved.length} reserved names match the engine's route table"
+       "#{declared_reserved.length} reserved names match the engine's route table; " \
+       "no continued descriptor prose is cut short by a blank line"
+
   exit 0
 end
 

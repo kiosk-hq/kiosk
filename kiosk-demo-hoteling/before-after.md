@@ -172,8 +172,8 @@ class Kiosk::HotelsController < ActionController::API
   include Kiosk::Handler
 
   kind :query
-  description "Browse the whole hotel catalogue this origin serves. It is small, so " \
-              "it comes back entire rather than a page at a time. Once the human " \
+  description "Browse the whole hotel catalogue this origin serves — an empty answer " \
+              "would mean this origin lists no hotels at all. Once the human " \
               "narrows to one, `availability` says which of its room types are still " \
               "free for the nights they want and `reserve_room` takes the hold."
   input_schema  type: "object", additionalProperties: false, properties: {}, required: []

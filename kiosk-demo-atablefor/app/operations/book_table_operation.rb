@@ -1,38 +1,27 @@
 # frozen_string_literal: true
 
 # book_table — hold ONE physical table at one restaurant for one upcoming
-# seating, for the authenticated principal.
+# seating, for the authenticated principal. No payment: a reservation takes no
+# money, so nothing here can mean a 402.
 #
-# THE GUARDS, IN THIS ORDER, and the order is behaviour rather than tidiness —
-# each one is the answer a caller gets when a later one would also have refused,
-# and the sequence below is the one the raw handler published, argument by
-# argument:
+# THE GUARDS RUN IN THIS ORDER, and the order is behaviour: each one is the
+# answer a caller gets when a later one would also have refused.
 #   1. every required argument is present and usable
 #   2. the date parses, the time is one of the three seatings, and the (date,
 #      time) pair is one `availability` is CURRENTLY offering — re-validated
 #      against app/models/seatings.rb, so an agent cannot book a window
-#      `availability` would now hide, whether that window is behind the horizon
-#      or beyond it
+#      `availability` would now hide
 #   3. the chosen table exists at the chosen restaurant and seats the party
 #   4. the (table, seating) is not already held — guarded TWICE, see below
-#
-# No payment: a reservation takes no money (the `deposit_eur` an availability row
-# carries is a display-only no-show hold settled at the restaurant), so nothing
-# here can mean a 402.
 class BookTableOperation
   # @param principal_id [String] the account the wire resolved. NEVER an
   #   argument off the request.
   #
-  #   An INSERT is the one place the principal must be spelled in Ruby, and K-654
-  #   is where the asymmetry got named rather than papered over: `my_bookings` and
-  #   `cancel_booking` scope with `Booking.owned_by_current_principal`, which
-  #   never names the principal because a WHERE has a predicate to hide it in. An
-  #   INSERT has no predicate, so it must supply the value. Both are un-forgeable
-  #   for the same reason — the identity is resolved from the Rack env the wire
-  #   built, which no request argument can write, and the GUC is set by SET LOCAL
-  #   from that same resolved identity — but only the first keeps the DB as the
-  #   authority. Moving the column's DEFAULT to `kiosk.current_user_id()` would
-  #   close the gap; that is a migration, not part of a handler conversion.
+  #   An INSERT is the one place the principal is spelled in Ruby (K-654): the
+  #   owner-scoped reads hide it in a WHERE (`owned_by_current_principal`), an
+  #   INSERT has no predicate to hide it in. Both are un-forgeable — the identity
+  #   comes from the Rack env the wire built, which no request argument can write
+  #   — but only the WHERE keeps the DB as the authority.
   def self.call(principal_id:, restaurant_id:, restaurant_table_id:, date:, time:, party_size:)
     restaurant_id       = restaurant_id.to_i
     restaurant_table_id = restaurant_table_id.to_i
@@ -43,14 +32,12 @@ class BookTableOperation
     return missing("date")                if date.empty?
     return missing("time")                if time.empty?
 
-    # The one guard `availability` shares, so the two surfaces cannot come to
-    # disagree about what a bookable party is (see {WireArguments.party_size}).
+    # The one guard `availability` shares, so the two surfaces cannot disagree.
     party_size, refusal = WireArguments.party_size(party_size)
     return refusal if refusal
 
-    # The seating instant, from the SAME helper availability used. Reject a seating
-    # that is not one of the current upcoming ones (past / wrong time / beyond the
-    # rolling horizon), so an agent can't book a window availability would now hide.
+    # The seating instant, from the SAME helper availability used: a seating
+    # that is past, at an hour nobody seats at, or beyond the horizon is refused.
     parsed_date =
       begin
         Date.iso8601(date)
@@ -66,29 +53,18 @@ class BookTableOperation
       )
     end
 
-    # ── K-767: NOT-PAST IS NOT THE SAME AS OFFERED ──────────────────────────
-    # `availability` publishes a ROLLING horizon (tonight + tomorrow, see
-    # {Seatings.upcoming}), and until this guard the only date check here was
-    # "has it started?" — so a well-formed FUTURE date OUTSIDE that horizon
-    # passed every guard and CONFIRMED a booking for a seating `availability`
-    # has never listed and will not list for weeks. `Date.iso8601` also accepts
-    # the BASIC form, so `date: "20261001"` parsed, was not past, and booked.
-    # The refusal comes from the SAME helper `availability` filters its own
-    # `date` argument with, so the two surfaces cannot come to disagree about
-    # what is bookable, and it NAMES the dates that are — which is also what
-    # refuses the basic form: the descriptor advertises YYYY-MM-DD, and that is
-    # the spelling the horizon is published in.
+    # NOT PAST IS NOT THE SAME AS OFFERED (K-767): `availability` publishes a
+    # ROLLING horizon, so a well-formed future date outside it must be refused
+    # too — by the SAME helper `availability` filters its own `date` with.
     _in_horizon, refusal = WireArguments.seating_date(date, Seatings.upcoming)
     return refusal if refusal
 
     seating_at = Seatings.seating_at(parsed_date, time)
 
     # This `transaction` JOINS the one Kiosk::Server::SessionContext already
-    # opened around the whole wire request (the GUCs are SET LOCAL in it), so it
-    # opens no second transaction and a `return` out of it is an ordinary method
-    # return, not a non-local exit from a real transaction block.
+    # opened around the whole wire request (the GUCs are SET LOCAL in it), so a
+    # `return` out of it is an ordinary method return, not a non-local exit.
     Booking.transaction do
-      # The chosen table must exist at the chosen restaurant and seat the party.
       unless RestaurantTable.where(id: restaurant_table_id, restaurant_id: restaurant_id)
                             .where(RestaurantTable.arel_table[:capacity].gteq(party_size))
                             .exists?
@@ -98,28 +74,21 @@ class BookTableOperation
       end
 
       # ── The double-booking 409, guarded TWICE ────────────────────────────
-      # First half: is this exact (table, seating) already held? A committed
-      # conflict is answered here, before anything is written.
+      # First half: a COMMITTED conflict, answered before anything is written.
       if Booking.confirmed.where(restaurant_table_id: restaurant_table_id, seating_at: seating_at).exists?
         return already_booked(restaurant_table_id, date, time)
       end
 
       booking =
         begin
-          # Second half, and the authoritative one: the UNIQUE PARTIAL INDEX. The
-          # pre-check above runs at READ COMMITTED, so it cannot see a competing
-          # booking that has not committed yet — under real concurrency the index
-          # is the only thing that can say no.
-          #
-          # `insert!` and NOT `create!`, deliberately. The rescue below depends on
-          # WHICH exception class arrives, and that is exactly what changes when a
-          # raw INSERT becomes a model write: `create!` interposes validations, so
-          # `belongs_to :user` would turn a principal with no `users` row from the
+          # Second half, and the authoritative one: the UNIQUE PARTIAL INDEX.
+          # The pre-check runs at READ COMMITTED and cannot see an uncommitted
+          # competitor, so under concurrency the index is the only thing that
+          # can say no. `insert!` and NOT `create!`, deliberately: the rescue
+          # below depends on WHICH exception arrives, and `create!` would
+          # interpose validations — `belongs_to :user` would turn the
           # `ActiveRecord::InvalidForeignKey` Postgres raises into a
-          # `RecordInvalid` — a different answer on the wire for an unrelated
-          # input. `insert!` is the faithful translation: one INSERT … RETURNING,
-          # the database constraints as the sole authority, `RecordNotUnique`
-          # still raised by the index, timestamps still written.
+          # `RecordInvalid`, a different answer on the wire.
           Booking.insert!(
             { user_id:             principal_id,
               restaurant_id:       restaurant_id,
@@ -130,9 +99,8 @@ class BookTableOperation
             returning: %i[id party_size status],
           ).first
         rescue ActiveRecord::RecordNotUnique
-          # Lost a race for the same (table, seating) — the unique index caught
-          # it. The SAME sentence as the pre-check, so an assistant cannot tell
-          # (and need not care) which half refused.
+          # Lost the race — the unique index caught it. The SAME sentence as the
+          # pre-check, so an assistant cannot tell which half refused.
           return already_booked(restaurant_table_id, date, time)
         end
 
@@ -149,10 +117,8 @@ class BookTableOperation
     end
   end
 
-  # The sentence this verb raised for an argument it was not given, unchanged —
-  # "param" and not "field", which is the wording book_table has always used and
-  # is not this conversion's to normalise (`cancel_booking` next door says
-  # "field"; both are published).
+  # "param", not "field": that is the wording book_table publishes
+  # (`cancel_booking` next door says "field"; both are published as they are).
   def self.missing(param)
     bad_request("missing param: #{param}")
   end
@@ -163,9 +129,8 @@ class BookTableOperation
   end
   private_class_method :bad_request
 
-  # Both halves of the double-booking guard — the pre-check and the unique
-  # partial index that is authoritative under concurrency — answer with the SAME
-  # sentence, so an assistant cannot tell (and need not care) which one caught it.
+  # Both halves of the double-booking guard answer with the SAME sentence, so an
+  # assistant cannot tell (and need not care) which one caught it.
   def self.already_booked(restaurant_table_id, date, time)
     OperationResult.refused(
       code:    "conflict",

@@ -2,34 +2,30 @@
 
 require "sqlite3"
 
-# BadProofCounter — the demo's PER-IDENTITY bad-proof tally (K-498).
+# The demo's PER-IDENTITY bad-proof tally (K-498).
 #
-# The engine calls `on_bad_proof` with the verified agent identity every time
-# a cryptographically invalid PoW proof is submitted; this module counts those
-# rejections PER IDENTITY (keyed by the agent credential id) in a small sqlite
-# database, so one abusive assistant's bad proofs never inflate anyone else's
-# count — «Один плохой клиент — и все остальные страдают» is exactly the bug
-# this replaces (the old storage was ONE flat file shared by every identity,
-# which also made concurrent server processes fight over one read-modify-write
-# cycle; sqlite's single-writer lock + busy_timeout ends that fight).
+# The engine calls `on_bad_proof` with the verified agent identity every time a
+# cryptographically invalid PoW proof arrives; this counts those rejections per
+# identity (keyed by the agent credential id) in a small sqlite database, so one
+# abusive assistant's bad proofs cannot inflate anyone else's count. sqlite's
+# single-writer lock also stops concurrent server processes fighting over one
+# read-modify-write cycle.
 #
-# ⚠ STILL A TOY in two labelled ways (deliberately fine for a demo, wrong for
-# production — see K-498):
+# ⚠ STILL A TOY in two labelled ways — fine for a demo, wrong for production:
 #   · TRUNCATED AT BOOT — reset! wipes the table, so a redeploy zeroes every
-#     accumulated signal (no restore across deploys);
-#   · NO TTL / DECAY — within one boot the count only grows; a real signal
+#     accumulated signal;
+#   · NO TTL / DECAY — within one boot the count only grows, where a real signal
 #     decays over a window so an identity is not condemned forever.
-# A production bad-proof count keeps the per-identity keying built here and
-# adds decay + durability; specify it before building it.
+# A production counter keeps the per-identity keying and adds decay plus
+# durability.
 #
 # Consumers: the demo initializer (reset! at boot, increment on rejection) and
-# the local script/pow_flow.rb driver (count, to assert the server counted —
-# per identity — what the flow submitted).
+# script/pow_flow.rb (count, to assert the server counted what the flow sent).
 module BadProofCounter
   module_function
 
-  # Wipe the store at boot (the labelled boot-truncation toy aspect): the demo
-  # flows assert exact counts, so every server boot starts from zero.
+  # Wipe the store at boot: the demo flows assert exact counts, so every boot
+  # starts from zero.
   def reset!(path)
     with_db(path) { |db| db.execute("DELETE FROM bad_proofs") }
   end

@@ -2,38 +2,26 @@
 
 # stylish's READ surface: the five verbs an assistant reaches with
 # `GET /kiosk/<query-name>` — one endpoint each, arguments in the query string.
-# Kiosk ships a MIXIN, not a base class — the superclass is this app's own
-# ApplicationController, and `include Kiosk::Handler` is the whole contract. Each
-# class-level macro records a declaration and the NEXT `def`
-# claims it, so a method with no macros above it is a helper the wire cannot see.
+# Kiosk ships a MIXIN, not a base class: the superclass is this app's own
+# ApplicationController, `include Kiosk::Handler` is the whole contract, and a
+# macro is claimed by the NEXT `def` — a method with no macros above it is a
+# helper the wire cannot see. `kind :query` puts a declaration on `GET`, and the
+# kind belongs to the DECLARATION, not the class (K-921).
 #
-# `kind :query` above each declaration is what puts it on `GET`; the kind
-# belongs to the DECLARATION, not to the class (K-921), so ONE controller may
-# declare both. Keeping the read and the write halves in separate classes is
-# this demo's shape, not a rule. The write half lives next door in
-# Kiosk::AppointmentsController. Nothing here is shared with it: the only logic
-# both sides need is EUR formatting, which is a Service model method
-# (Service.format_eur) and was never controller code.
-#
-# NOT ROUTABLE. config/routes.rb draws nothing at this controller: handlers are
-# reached only through the wire, which is where authentication, the registration
-# PoW gate and the GUC-scoped transaction live. A route drawn straight here
-# would bypass all three, and the mixin answers such a request 404.
+# NOT ROUTABLE: config/routes.rb draws nothing here. Handlers are reached only
+# through the wire, where authentication, the registration PoW gate and the
+# GUC-scoped transaction live; a route drawn straight here would bypass all
+# three, and the mixin answers such a request 404.
 class Kiosk::FrontDeskController < ApplicationController
   include Kiosk::Handler
 
-  # salons — full salon catalogue; no per-user scoping, any authenticated
-  # principal may browse (mirrors the public SELECT policy previously in RLS).
-  # ADR-0023: semantics only — no "pass X to Y as `z`" tail. `output_schema`
-  # names the row's fields and points the identifying one at the verb that takes
-  # it; naming the follow-on VERB here is the sanctioned form.
+  # salons — the full catalogue; no per-user scoping, any authenticated principal
+  # may browse. ADR-0023: the description carries semantics only.
   kind :query
-  description "Browse the public salon catalogue — every salon this front desk books for, in one " \
-              "answer rather than a page of it. Once the human picks one, `book_appointment` takes it " \
-              "from there."
+  description "Browse the public salon catalogue — every salon this front desk books for. Once the " \
+              "human picks one, `book_appointment` takes it from there."
   # A verb that takes nothing still declares the empty closed object, so "this
-  # verb takes no arguments" is a published fact rather than an absence an
-  # assistant has to interpret.
+  # verb takes no arguments" is a published fact rather than an absence.
   input_schema type: "object", additionalProperties: false, properties: {}, required: []
   output_schema type: "array",
                 description: "The whole salon catalogue.",
@@ -46,20 +34,18 @@ class Kiosk::FrontDeskController < ApplicationController
                   required: %w[salon_id name],
                 }
   def salons
-    # `pluck` rather than loading models: this is a projection, and naming the
-    # columns is what keeps the wire's field names and their order a decision
-    # this handler makes rather than a side effect of the schema (K-654).
+    # `pluck` rather than loading models: naming the columns keeps the wire's
+    # field names and their order a decision this handler makes (K-654).
     render json: Salon.order(:id).pluck(:id, :name).map { |id, name|
       { salon_id: id, name: name }
     }
   end
 
-  # service_menu — the salon's public service menu with EUR prices. Any
-  # authenticated principal may read it; an assistant uses it to pick a
-  # service_id (and see the € price) before booking.
+  # service_menu — the public menu with EUR prices; any authenticated principal
+  # may read it to pick a service_id before booking.
   kind :query
   description "Browse the salon's service menu, priced. Takes no arguments and returns the WHOLE " \
-              "menu rather than a page of it (small; not paginated), so an empty answer would mean the " \
+              "menu, so an empty answer would mean the " \
               "salon offers nothing at all. Once the human picks a service, `book_appointment` books " \
               "it and CAPTURES its price on the appointment, so a later price change never re-prices a " \
               "booking already made."
@@ -93,12 +79,8 @@ class Kiosk::FrontDeskController < ApplicationController
                         }
   end
 
-  # availability — the salon's EVERGREEN availability (K-446). Every service on
-  # the menu is ALWAYS bookable: infinite capacity, overbooking allowed, nothing
-  # to fill up or go stale, no reseed cron. So availability IS the service menu,
-  # every row flagged `open: true`. Any authenticated principal (a visitor's
-  # assistant) reads it to pick a service to book. Each row carries a `service_id`
-  # — pass it to book_appointment to book that service (its EUR price is captured).
+  # availability — EVERGREEN (K-446): capacity is infinite and nothing goes
+  # stale, so availability IS the service menu with every row `open: true`.
   kind :query
   description "Browse the salon's OPEN services. Every service on the menu is always bookable — this " \
               "salon is evergreen and has no finite capacity, so it never fills up and a booking never " \
@@ -108,10 +90,8 @@ class Kiosk::FrontDeskController < ApplicationController
                additionalProperties: false,
                properties: {},
                required: []
-  # The same projection as service_menu under this verb's own field names —
-  # `service` rather than `name`, plus the evergreen `open`. The two verbs stay
-  # separate because their CONTRACTS differ, not their query, and these two
-  # schemas are where that difference is now readable without calling both.
+  # service_menu's projection under this verb's own field names, plus `open`. The
+  # two verbs stay separate because their CONTRACTS differ, not their query.
   output_schema type: "array",
                 description: "Every menu service, always bookable, cheapest first.",
                 items: {
@@ -132,9 +112,6 @@ class Kiosk::FrontDeskController < ApplicationController
     currency: "EUR", price_cents: 9000, price_eur: "€90",
   })
   def availability
-    # Same projection as service_menu, published under this verb's own field
-    # names (`service`, plus the evergreen `open: true`) — the two verbs stay
-    # separate because their CONTRACTS differ, not their query.
     render json: Service.order(:price_cents).pluck(:id, :name, :price_cents)
                         .map { |id, name, price_cents|
                           { service_id: id, service: name, price_cents: price_cents,
@@ -143,18 +120,13 @@ class Kiosk::FrontDeskController < ApplicationController
                         }
   end
 
-  # my_appointments — per-user appointment list scoped by the session GUC.
-  # App-layer isolation: the agent supplies no filter; the scope is
-  # provider-controlled and cannot be bypassed by the caller.
-  # `owned_by_current_principal` is ONE of the two places this demo writes the
-  # identity predicate — see Appointment for why it stays SQL-side (K-654).
+  # my_appointments — scoped by the session GUC: the agent supplies no filter.
+  # `owned_by_current_principal` stays SQL-side — see Appointment (K-654).
   kind :query
   description "List this principal's appointments (scoped to authenticated user via kiosk.current_user_id())"
   input_schema type: "object", additionalProperties: false, properties: {}, required: []
-  # `id`, not `appointment_id`, and that is published behaviour rather than an
-  # inconsistency this declaration gets to tidy away — book_appointment answers
-  # `appointment_id` for the same value. Named here so an assistant reads the
-  # mismatch off the schema instead of meeting it.
+  # `id` here for the value book_appointment calls `appointment_id` — published
+  # behaviour, named in the schema so an assistant reads it rather than meets it.
   output_schema type: "array",
                 description: "The principal's appointments, oldest id first.",
                 items: {
@@ -175,52 +147,31 @@ class Kiosk::FrontDeskController < ApplicationController
                             }
   end
 
-  # salon_calendar — STAFF forecast, role-gated (roles-from-IdP).
-  # Reads kiosk.current_role() (the GUC set from the token's role claim, which a
-  # staff assistant inherited from the bound human's IdP role):
+  # salon_calendar — STAFF forecast, role-gated on kiosk.current_role(), the GUC
+  # set from the token's role claim (the bound human's IdP role):
   #
-  #   owner → the WHOLE book: every booking made so far (across all visitors),
-  #           plus a FORECAST summary — the € revenue SUMMED from those bookings'
-  #           captured prices. Starts at €0 and grows as visitors book.
-  #   any other role (customer, or none) → ONLY their OWN bookings
-  #           (rows WHERE user_id = kiosk.current_user_id()), and NO forecast.
+  #   owner → the WHOLE book, every visitor's bookings, plus a FORECAST summary
+  #           SUMMED from those bookings' captured prices.
+  #   any other role → ONLY their own bookings, and no forecast.
   #
-  # The gate is un-bypassable: an agent can neither self-select `owner` at binding
-  # nor pass a wider filter — the role rides the token (from the bound human's
-  # IdP), not the request args, and the WHERE is provider-controlled. The forecast
-  # is computed live from the real per-booking prices — never a hardcoded number.
+  # Un-bypassable: the role rides the token, not the request args, and the WHERE
+  # is provider-controlled. The gate reads the GUC rather than the mixin's
+  # `kiosk_identity` so the scoping predicate and the branch agree by
+  # construction, and so the query still works outside a wire request (an RLS
+  # journey test), where kiosk_identity is nil but the GUCs are set anyway.
   #
-  # The gate reads the GUC rather than the mixin's `kiosk_identity`, and
-  # deliberately stays that way: the scoping predicate and the branch then agree
-  # by construction, and the query keeps working when it is reached outside a wire
-  # request (an RLS journey test), where kiosk_identity is nil but the four GUCs
-  # are set regardless. K-654 moved the read itself into
-  # `Appointment.current_principal_role` — this handler writes no SQL — and
-  # retired the part that was indefensible: `appt_scope` used to be a WHERE
-  # clause BUILT as a Ruby string and spliced into `execute`, which is the exact
-  # idiom a reader would copy into a query that does take caller input. The
-  # branch now picks between two relations.
-  # `reach :role` — the third of ADR-0028's declared departures, and the only
-  # verb in the fleet that carries it. An `owner` reads EVERY principal's
-  # appointments (`Appointment.all`, one line down); every other role reads its
-  # own. Under §7.2's old unconditional wording that was a violation of the
-  # spec's strongest sentence hiding inside a feature; it is now a published
-  # claim about the verb. It is sound only because a role is ASSIGNED by the
-  # operator and is never client-requested (spec §5.4, and this demo's own
-  # `privilege_self_selection` red-team scenario is what proves it) — an origin
-  # that let a caller name its own role would have made this a self-service
-  # escalation instead of an authorization model.
+  # `reach :role` — ADR-0028's third declared departure and the only verb in the
+  # fleet carrying it: an `owner` reads EVERY principal's appointments. Sound only
+  # because a role is ASSIGNED by the operator and never client-requested
+  # (spec §5.4; the `privilege_self_selection` red-team scenario proves it).
   kind :query
   reach :role
   description "Staff forecast — role-gated: owner sees ALL bookings + a FORECASTED € revenue total (summed from the actual bookings' prices, growing from €0 as visitors book); any other role sees only their own bookings and no forecast (role from the bound human's IdP)"
   input_schema type: "object", additionalProperties: false, properties: {}, required: []
-  # TWO ROW SHAPES IN ONE ARRAY, and the discriminator is the field each one
-  # has that the other does not: a booking carries `kind: "booking"`, the
-  # owner-only trailer carries `summary: "forecast"`. That is what the handler
-  # renders — the forecast is APPENDED to the booking rows rather than sitting
-  # beside them in an envelope — so the schema declares the union rather than
-  # pretending the array is homogeneous. A non-owner never sees the second
-  # shape at all, which is the role gate, not an option of the format.
+  # TWO ROW SHAPES IN ONE ARRAY, discriminated by the field each has that the
+  # other does not: `kind: "booking"` versus `summary: "forecast"`. The forecast
+  # is APPENDED to the bookings rather than sitting beside them in an envelope. A
+  # non-owner never sees the second shape — the role gate, not a format option.
   output_schema type: "array",
                 description: "The bookings this caller may see, slot-ordered; for an owner, a forecast row after them.",
                 items: {
@@ -254,10 +205,8 @@ class Kiosk::FrontDeskController < ApplicationController
   def salon_calendar
     role = Appointment.current_principal_role
 
-    # owner → the whole book; anyone else → only their own bookings.
     book = role == "owner" ? Appointment.all : Appointment.owned_by_current_principal
 
-    # BOOKINGS made so far (accumulate as visitors book — zero at the start).
     # `left_joins` because a bare salon booking carries no service: the row must
     # still appear, with a null service and a null captured price.
     appt_rows = book.left_joins(:service)
@@ -273,9 +222,8 @@ class Kiosk::FrontDeskController < ApplicationController
 
     rows = appt_rows
 
-    # Owner also gets a FORECAST summary: the € revenue summed from the real
-    # per-booking prices. A live figure from real rows — not a fixed number; it is
-    # €0 before any booking and grows with each one.
+    # Owner-only FORECAST: summed live from the real per-booking prices, so it is
+    # €0 before any booking and grows with each one — never a fixed number.
     if role == "owner"
       booked_cents = appt_rows.sum { |r| r[:price_cents].to_i }
       rows += [{

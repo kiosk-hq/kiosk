@@ -1,66 +1,37 @@
 # frozen_string_literal: true
 
-# The cashier check, as a PSP-adapter decorator: before any capture, verify
-# the agent-signed cart against the OPERATOR'S OWN quote. The wire verifies the
-# mandate chain's internal consistency (cart total == payment amount, one
-# currency across the chain) — it cannot know this hotel's currency or the
-# price it quoted for a booking. The operator must count what lands on the
-# counter:
+# The cashier check, as a PSP-adapter decorator: before any capture, verify the
+# agent-signed cart against the OPERATOR'S OWN quote. The wire checks the
+# mandate chain's internal consistency; it cannot know this hotel's currency or
+# the price it quoted. The operator must count what lands on the counter:
 #
 #   1. the cart is denominated in the operator's currency (EUR);
 #   2. it references exactly one booking ({"booking_id": ...} among the
 #      line_items — see reserve_room's pay_hint);
-#   3. its total equals the price the operator QUOTED for that booking
-#      (bookings.total_cents, read by id) AND — when the cart carries priced
-#      line items — the sum of those lines (internal arithmetic consistency).
+#   3. its total equals the price QUOTED for that booking (bookings.total_cents)
+#      AND — when the cart carries priced lines — the sum of those lines.
 #
-# This is a MONETARY check only. It deliberately does NOT verify that the
-# booking belongs to the payer: hoteling enforces settlement→booking ownership
-# at USE time (confirm_booking Gate-1), and its isolation flow proves that B
-# may pay for A's booking at the correct price and currency — the settlement is
-# valid, yet Gate-1 still denies B's confirm_booking. Ownership is not a
-# payment concern here; the counter only checks the money.
-#
-# Any mismatch rejects the capture (403 Forbidden); the mandate trail is
-# persisted, nothing is charged.
+# MONETARY ONLY: it deliberately does not check that the booking belongs to the
+# payer — ownership is confirm_booking's Gate 1, and the isolation flow proves B
+# may pay for A's booking at the right price and still be denied the confirm.
+# Any mismatch rejects the capture (403); the mandate trail is persisted,
+# nothing is charged.
 #
 # ── Per-booking serialization and the capture-anchored marker (K-853) ────────
-# The engine settles between two short DB transactions with the irreversible PSP
-# capture BETWEEN them (executor P1→P2→P3), and until K-853 the only "paid"
-# marker hoteling had was the settlement row written in P3, AFTER the capture.
-# That left two holes, and protocol.md §11.6 now closes both by name:
+# The engine settles with the irreversible PSP capture BETWEEN two short DB
+# transactions (executor P1→P2→P3), so the settlement row written in P3 cannot
+# be the only "paid" marker: two /pay on two distinct chains would both charge,
+# and during the window between capture and P3 every read would say "no
+# settlement" about money that has already moved — the answer protocol.md §11.6
+# forbids, because it licenses an assistant to charge its human twice.
 #
-#   (a) DOUBLE CAPTURE — two /pay for the same booking (two distinct chains)
-#       both passed the cashier and both charged. The engine's `409 conflict` on
-#       a re-presented mandate id does not help: a FRESH chain collides with
-#       nothing.
-#   (b) "NOT PAID" DURING THE WINDOW — between the capture returning and P3
-#       writing the settlement, every hoteling read said no settlement exists,
-#       which §11.6 forbids an operator to publish as *not paid*: it is the
-#       answer that licenses an assistant to sign a fresh chain and charge its
-#       human a second time.
-#
-# So the booking gets a payment lifecycle and this decorator drives it:
-# `unpaid → paying → paid`. The claim is a single conditional UPDATE
-# (`… WHERE payment_status='unpaid' RETURNING …`) — a row-locked, race-free
-# compare-and-set. Once a booking is `paying`, a second /pay's claim matches
-# zero rows and is refused (closes a); `my_bookings` publishes `pending` for it
-# rather than a bare unpaid (closes b, the in-flight half).
-#
-# On a definitive decline / no-charge failure we RELEASE `paying → unpaid` so a
-# corrected retry can proceed; on an UNKNOWN outcome (a timeout) we deliberately
-# LEAVE it `paying`, so a blind retry cannot double-charge and the state an
-# assistant reads stays *pending* rather than becoming a false "not paid".
-# On success we flip `paying → paid` BEFORE returning to the engine — a hair
-# before P3 — and a failure of that flip must never undo a successful charge, so
-# it is swallowed and P3's settlement row remains the second witness.
-#
-# WHO PAID is recorded with the claim, from the SIGNED cart mandate. hoteling's
-# cashier does not check that the payer owns the booking (see above), so without
-# the payer id the capture-anchored marker could not tell `confirm_booking`'s
-# Gate 2 whose money it was, and Gate 2 would have had to widen from "a
-# settlement of THIS principal" to "anyone paid" — which the isolation flow
-# exists to prevent.
+# So the booking carries a lifecycle this decorator drives: `unpaid → paying →
+# paid`. The claim is one conditional UPDATE (`… WHERE payment_status='unpaid'
+# RETURNING …`), a row-locked race-free compare-and-set, so a second /pay matches
+# zero rows and is refused and `my_bookings` publishes `pending`. WHO PAID is
+# recorded with the claim, from the SIGNED cart mandate: without the payer id,
+# confirm_booking's Gate 2 could not tell whose money it was and would have to
+# widen from "a settlement of THIS principal" to "anyone paid".
 class ValidatingBookingProvider
   def initialize(provider, currency:)
     @provider = provider
@@ -72,18 +43,13 @@ class ValidatingBookingProvider
     begin
       settled = @provider.capture(cart_mandate, payment_method: payment_method)
     rescue StandardError => e
-      # Release the claim ONLY when we know no money moved (a definitive decline
-      # or a pre-charge SetupRequired). On an UNKNOWN outcome we keep the booking
-      # `paying` so a lost-response retry reads *pending* and is refused, rather
-      # than reading *unpaid* and charging twice.
+      # Release ONLY when we know no money moved. On an UNKNOWN outcome the
+      # booking stays `paying`, so a blind retry reads *pending* and is refused.
       release_claim_on_failure!(booking_id, e)
       raise
     end
-    # Charge succeeded — mark the booking terminally paid. The engine's
-    # settlement row (executor P3) is the second witness; this local flip is the
-    # FIRST one and the only one that exists during the window, so a failure
-    # here must NOT undo a successful charge — swallow it and let P3 record the
-    # settlement.
+    # Charge succeeded — mark terminally paid. This local flip is the FIRST
+    # witness and the only one during the window; P3's settlement is the second.
     mark_paid!(booking_id)
     settled
   end
@@ -97,9 +63,8 @@ class ValidatingBookingProvider
   end
 
   # True iff a settlement (capture receipt) references this booking — the
-  # engine's own "this was charged" marker, written by executor phase 3. It is
-  # the SECOND witness: it lands after the capture, so a false here proves
-  # nothing on its own, which is precisely why the claim above exists.
+  # engine's own marker, written in executor phase 3. It lands AFTER the
+  # capture, so a false here proves nothing on its own.
   def self.settled?(booking_id)
     Settlement.joins(:cart_mandate).merge(CartMandate.referencing(booking_id)).exists?
   end
@@ -107,10 +72,9 @@ class ValidatingBookingProvider
   private
 
   # Atomically claim the referenced booking for payment, then run the cashier
-  # check against it. Returns the booking_id (String) on success; raises
-  # Forbidden (403) on a cashier rejection — reverting the claim first if it was
-  # taken — or BadRequest (400) when the cart's booking reference is not even a
-  # uuid (checked before the claim, so there is nothing to revert).
+  # check against it. Returns the booking_id (String); raises Forbidden (403) on
+  # a cashier rejection — reverting the claim first if it was taken — or
+  # BadRequest (400) when the cart's booking reference is not even a uuid.
   def claim_and_validate!(cart)
     unless cart.currency.to_s.downcase == @currency
       deny "cart currency #{cart.currency.inspect} rejected — this operator prices in " \
@@ -122,15 +86,11 @@ class ValidatingBookingProvider
     deny "cart line_items must reference exactly one booking_id (see reserve_room's pay_hint)" unless refs.size == 1
     booking_id = refs.first
 
-    # K-581: the booking_id goes straight into an `::uuid` cast below. A
-    # malformed one made Postgres raise InvalidTextRepresentation, which escaped
-    # as a raw 500 — and on the pay path a 500 is the worst answer there is,
-    # because an assistant cannot tell "your input was wrong" from "the charge
-    # may have gone through". Reject the bad SHAPE up front, before the
-    # connection is even taken — a 400, not the cashier's 403: this is a
-    # malformed argument, not a refusal to serve a well-formed one, and it says
-    # nothing about whether any booking exists. The message echoes only the
-    # value the agent itself sent — no SQL, no PG error text.
+    # K-581: the booking_id goes straight into an `::uuid` cast below, where a
+    # malformed one raises InvalidTextRepresentation and escapes as a 500 — the
+    # worst answer on the pay path, since an assistant cannot tell "your input
+    # was wrong" from "the charge may have gone through". A 400 and not the
+    # cashier's 403: this says nothing about whether any booking exists.
     unless UuidCheck.valid?(booking_id)
       raise Kiosk::Server::Errors::BadRequest.new(
         "cart line_items booking_id #{booking_id.inspect} is not a uuid",
@@ -140,17 +100,12 @@ class ValidatingBookingProvider
     end
 
     # CLAIM: unpaid → paying, race-free compare-and-set (K-853). Winning this
-    # UPDATE is what serializes concurrent /pay for one booking — only one
-    # caller can flip 'unpaid' — and it is taken BEFORE the cashier check and
-    # before the capture, so a second chain never reaches the PSP at all.
-    #
-    # RAW SQL, deliberately, and for the reason getgrocery's twin gives: the
-    # ATOMICITY is the fix, `update_all` has no RETURNING in Rails 8.1, and an
-    # ActiveRecord spelling would be a SELECT then an UPDATE — which is the race
-    # back again. RAW, BUT NOT INTERPOLATED (K-654): every value is a `$N` bind,
-    # so the statement text carries no value at all and there is no
-    # `conn.quote` to forget when this file is copied. `$2::uuid` casts the
-    # bound text exactly as the quoted literal did.
+    # UPDATE is what serializes concurrent /pay for one booking, and it is taken
+    # BEFORE the cashier check and before the capture, so a second chain never
+    # reaches the PSP at all. RAW SQL because the ATOMICITY is the fix and
+    # `update_all` has no RETURNING in Rails 8.1 — an ActiveRecord spelling would
+    # be a SELECT then an UPDATE, i.e. the race back again. RAW BUT NOT
+    # INTERPOLATED (K-654): every value is a `$N` bind.
     claimed = Booking.lease_connection.exec_query(
       "UPDATE public.bookings SET payment_status = $1, " \
       "paid_by_user_id = $2::uuid, updated_at = now() " \
@@ -163,25 +118,22 @@ class ValidatingBookingProvider
 
     if claimed.nil?
       # Distinguish "no such booking" from "not in a payable state", so the
-      # assistant gets an actionable sentence instead of a bare 403. NO owner
-      # filter, here or in the claim: this cashier is monetary only (see the
-      # header) and ownership is confirm_booking's Gate 1.
+      # assistant gets an actionable sentence. NO owner filter, here or in the
+      # claim: this cashier is monetary only; ownership is Gate 1's.
       existing = Booking.where(id: booking_id).pick(:payment_status)
       deny "booking not found" if existing.nil?
 
       # A `paying` booking that ALREADY HAS a settlement was charged and only
-      # the local flip was lost (a crash between capture and mark_paid!). The
-      # settlement row is decisive evidence, so heal the marker here — at the
-      # moment it matters — and answer with the truth.
+      # the local flip was lost (a crash between capture and mark_paid!). Heal
+      # the marker here, where it matters, and answer with the truth.
       if existing == Booking::PAYING && self.class.settled?(booking_id)
         mark_paid!(booking_id)
         deny "booking already paid"
       end
 
       if existing == Booking::PAYING
-        # Claimed, no settlement: either a pay is genuinely in flight, or one
-        # died at an UNKNOWN outcome and we deliberately kept the claim so a
-        # blind retry cannot double-charge. Say what recovers it, and say it in
+        # Claimed, no settlement: a pay is in flight, or one died at an UNKNOWN
+        # outcome and the claim was deliberately kept. Say what recovers it, in
         # the vocabulary §11.6 gave the assistant.
         deny "booking #{booking_id} has a payment in progress — re-read GET <endpoint>/my_bookings: " \
              "while its payment_state is `pending` the charge may already have gone through, so do NOT " \
@@ -196,10 +148,9 @@ class ValidatingBookingProvider
     # Everything past the claim runs under the `paying` guard; any rejection
     # must release it (revert to 'unpaid') so a corrected retry can proceed.
     begin
-      # Internal arithmetic consistency: if any line carries a per-unit price,
-      # the cart's total must equal the sum of qty × price_cents across those
-      # lines. Carts that carry no priced lines (e.g. the isolation-flow cart)
-      # skip this sub-check and are guarded by the quoted-total check alone.
+      # Internal arithmetic consistency: if any line carries a per-unit price, the
+      # total must equal the sum of qty × price_cents over those lines. A cart
+      # with no priced lines skips this and rests on the quoted-total check.
       priced = entries.select { |li| li["price_cents"] }
       unless priced.empty?
         line_sum = priced.sum do |li|
@@ -226,10 +177,9 @@ class ValidatingBookingProvider
   end
 
   # Release a claim we know involved NO charge (a definitive decline / setup
-  # required). On an UNKNOWN capture outcome (a non-retryable PaymentFailed) or
-  # any other unexpected error we deliberately do NOT release — leaving the
-  # booking `paying` is what keeps `my_bookings` answering *pending* instead of
-  # a false "not paid", and what blocks a blind retry.
+  # required). On an UNKNOWN outcome (a non-retryable PaymentFailed) or any
+  # unexpected error we deliberately do NOT release: leaving it `paying` is what
+  # keeps `my_bookings` answering *pending* and blocks a blind retry.
   def release_claim_on_failure!(booking_id, error)
     return unless booking_id
 
@@ -238,9 +188,8 @@ class ValidatingBookingProvider
     release_claim!(booking_id) if safe
   end
 
-  # Reverting the claim also clears the payer: nobody paid, so leaving a payer id
-  # on the row would make `confirm_booking`'s Gate 2 read a claim that was
-  # released as if it were a charge.
+  # Reverting also clears the payer: leaving a payer id would make
+  # confirm_booking's Gate 2 read a released claim as a charge.
   def release_claim!(booking_id)
     set_payment_status(booking_id, from: Booking::PAYING, to: Booking::UNPAID, clear_payer: true)
   end
@@ -253,16 +202,13 @@ class ValidatingBookingProvider
     nil
   end
 
-  # TWO WHOLE STATEMENTS, NOT ONE STATEMENT PLUS A FRAGMENT (K-654). This used
-  # to take an `extra:` SET fragment and splice it in, which meant no reader
-  # ever saw a complete statement and the file taught fragment-splicing as a
-  # technique. Written out, both are literal text with `$N` binds for every
-  # value, and the ONE difference between them — whether the payer is cleared —
-  # is a boolean at the call site rather than a string a caller could grow.
+  # TWO WHOLE STATEMENTS, NOT ONE STATEMENT PLUS A FRAGMENT (K-654): both are
+  # literal text with `$N` binds for every value, and the one difference between
+  # them is a boolean at the call site rather than a SET fragment a caller could
+  # grow.
   #
-  # @param clear_payer [Boolean] true when reverting a claim: nobody paid, so
-  #   leaving a payer id would make confirm_booking's Gate 2 read a released
-  #   claim as a charge.
+  # @param clear_payer [Boolean] true when reverting a claim — leaving a payer
+  #   id would make confirm_booking's Gate 2 read it as a charge.
   def set_payment_status(booking_id, from:, to:, clear_payer: false)
     sql =
       if clear_payer

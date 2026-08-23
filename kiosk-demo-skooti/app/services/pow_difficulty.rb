@@ -1,35 +1,23 @@
 # frozen_string_literal: true
 
-# Per-demo PoW difficulty knob.
+# Per-demo PoW difficulty knob: KIOSK_POW_DIFFICULTY picks the Equihash (n, k)
+# a demo's register/browse toll is priced at, so most hosted apps stay
+# poke-friendly while the showcase one makes the DoS shield tangible.
 #
-# Reads ENV["KIOSK_POW_DIFFICULTY"] once and maps it to concrete Equihash
-# (n, k) params so a demo's register/browse PoW can be poke-friendly on most
-# hosted apps but genuinely memory- and CPU-intensive on the showcase one —
-# making the DoS-shield toll TANGIBLE to an HN reader or their agent.
+# Cost is driven by n_div = n/(k+1); kiosk-pow-equihash/bench/README.md has the
+# measured grid.
 #
-# Levels (Equihash cost is driven by n_div = n/(k+1); see
-# kiosk-pow-equihash/bench/README.md for the measured grid):
-#
-#   low  (default) — n=96, k=5  → sub-second reference solve, ~tens of MB.
-#                    Poke-friendly. Local `demo:setup`/CI stay fast; unset
-#                    KIOSK_POW_DIFFICULTY ALWAYS resolves here, so CI never
-#                    pays the heavy toll and never hangs.
-#   high           — n=168, k=7 → the shipped kiosk-pow-equihash default:
-#                    ~10 s p50 / ~1.3 GiB peak on a reference (numpy) solver
-#                    — a real memory+CPU toll a poker feels first-hand. It is
-#                    a per-demo knob ANY operator may set; the HOSTED deploy
-#                    ships high on ATABLEFOR ONLY (the production-grade
-#                    showcase, whose discovery owner block then carries the
-#                    "beware" notice). Every other hosted demo — skooti
-#                    included — runs the low default n=96 k=5. Ground truth:
-#                    deploy/README.md + deploy/env/*.env.example.
-#
-# This helper is OPT-IN and defaults low: a demo that never sets
-# KIOSK_POW_DIFFICULTY=high behaves EXACTLY as before this knob existed.
+#   low  (default) — n=96, k=5. Sub-second reference solve, ~tens of MB.
+#                    Unset or unrecognised ALWAYS lands here, so CI and local
+#                    flows never pay the heavy toll.
+#   high           — n=168, k=7, the shipped kiosk-pow-equihash default:
+#                    ~10 s p50 / ~1.3 GiB peak on a reference numpy solver.
+#                    Any operator may set it; the hosted deploy sets it on
+#                    atablefor alone (deploy/env/*.env.example), and that demo's
+#                    discovery owner block then carries the "beware" notice.
 module PowDifficulty
-  # Equihash params per level. Values, not solvers — the shipped solver
-  # (kiosk-pow-equihash/solve.py) clears both; only the wall-clock/RAM cost
-  # differs.
+  # Params, not solvers: the shipped solver clears both levels; only the
+  # wall-clock and RAM cost differ.
   LEVELS = {
     "low"  => { n: 96,  k: 5 }.freeze,
     "high" => { n: 168, k: 7 }.freeze,
@@ -39,9 +27,8 @@ module PowDifficulty
 
   module_function
 
-  # The active difficulty level ("low" | "high"), from KIOSK_POW_DIFFICULTY.
-  # Anything unrecognised (incl. unset/empty) falls back to "low" — the safe
-  # default that keeps CI and local flows fast.
+  # "low" | "high", from KIOSK_POW_DIFFICULTY. Anything unrecognised, unset
+  # included, falls back to "low".
   def level
     lvl = ENV["KIOSK_POW_DIFFICULTY"].to_s.strip.downcase
     LEVELS.key?(lvl) ? lvl : DEFAULT
@@ -52,14 +39,13 @@ module PowDifficulty
     LEVELS.fetch(level)
   end
 
-  # True when the active level is a genuinely heavy (memory+CPU-intensive)
-  # PoW — the signal that warrants a "beware" banner in discovery.
+  # True when the toll is heavy enough to warrant a "beware" banner in discovery.
   def high?
     level == "high"
   end
 
-  # An honest, human/agent-readable notice for the discovery document's owner
-  # block when the toll is heavy. nil at "low" (no banner — nothing to warn).
+  # The notice for the discovery document's owner block. nil at "low": there is
+  # nothing to warn about.
   def pow_notice
     return nil unless high?
 

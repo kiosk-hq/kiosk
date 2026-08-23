@@ -2,77 +2,49 @@
 
 # atablefor's READ surface: the two verbs an assistant reaches with
 # `GET /kiosk/<query-name>` — one endpoint per verb since 0.4, arguments in the
-# query string. Kiosk ships a MIXIN, not a base class — the superclass is
-# this app's own ApplicationController, and `include Kiosk::Handler` is the whole
+# query string. Kiosk ships a MIXIN, not a base class: the superclass is this
+# app's own ApplicationController and `include Kiosk::Handler` is the whole
 # contract. Each class-level macro records a declaration and the NEXT `def`
-# claims it, so a method with no macros above it is a helper the wire cannot see.
-#
-# `kind :query` above each declaration is what puts it on `GET`; the kind
-# belongs to the DECLARATION, not to the class (K-921), so ONE controller may
-# declare both. Keeping the read and the write halves in separate classes is
-# this demo's shape, not a rule. The write half lives next door in
-# Kiosk::BookingsController. The one piece of domain logic BOTH halves need, the
-# rolling upcoming seatings, was already a library module (app/models/seatings.rb) and
-# never controller code: `availability` offers a seating and `book_table`
-# re-validates against the SAME helper, so the day+time an assistant is shown is
-# exactly the one it can book. atablefor is the first demo whose READ half refuses
-# at all, and since T-083 nothing about a refusal is written twice: the SENTENCE
-# is {WireArguments} (reachable from the write Operations, which render nothing)
-# and the RENDERER is {KioskRefusals}, held identical fleet-wide by
-# bin/check-demo-copies.
+# claims it, so a method with no macros above it is a helper the wire cannot
+# see; `kind :query` is what puts a declaration on `GET`, and the kind belongs
+# to the DECLARATION rather than the class (K-921), so one controller may
+# declare both. Splitting the halves is this demo's shape, not a rule: the
+# writes live in Kiosk::BookingsController, the refusal SENTENCES in
+# {WireArguments} and the RENDERER in {KioskRefusals}, and the rolling upcoming
+# seatings both halves need are a library module (app/models/seatings.rb), so
+# what `availability` offers is exactly what `book_table` accepts.
 #
 # NOT ROUTABLE. config/routes.rb draws nothing at this controller: handlers are
-# reached only through the wire, which is where authentication, the declared
+# reached only through the wire, where authentication, the declared
 # `input_schema`, the anti-scalping PoW toll and the GUC-scoped transaction
-# live. A route drawn straight here would bypass all four, and the mixin answers
-# such a request 404. The per-verb pair at the bottom of routes.rb resolves the
-# name against the registry at request time — it never names this class.
+# live. A route drawn straight here would bypass all four, and the mixin
+# answers such a request 404.
 class Kiosk::DiningRoomController < ApplicationController
   include Kiosk::Handler
   include KioskRefusals
 
-  # availability — open tables ACROSS the restaurant aggregator for the upcoming
-  # rolling seatings that seat the party. Public (no per-user scoping): any
-  # authenticated agent may browse. The upcoming seatings (tonight's 19/20/21 in
-  # Europe/Lisbon, past ones filtered, rolling to tomorrow) are computed by
-  # app/models/seatings.rb — so availability is NEVER stale. Tables are FINITE: a table
-  # is "open" for a seating only when no CONFIRMED booking already holds it for
-  # that exact (table, seating_at); when every table for a seating is taken,
-  # availability is legitimately EMPTY for it (honest sell-out).
+  # availability — open tables ACROSS the aggregator for the upcoming rolling
+  # seatings that seat the party. Public: any authenticated agent may browse, no
+  # per-user scoping. The upcoming seatings (19/20/21 Europe/Lisbon, past ones
+  # filtered, rolling to tomorrow) come from app/models/seatings.rb, so
+  # availability is NEVER stale. Tables are FINITE: a table is "open" for a
+  # seating only when no CONFIRMED booking holds it for that exact
+  # (table, seating_at), so a fully-booked seating is legitimately absent.
   #
-  # Optional filters. No caller value is ever spliced into SQL: they are ordinary
-  # ActiveRecord conditions, so the escaping is the adapter's job and not this
-  # handler's (K-654). What that replaced is worth naming, because it is the
-  # idiom the review calls "the reference pattern the whole ecosystem copies":
-  # `where_nbhd = "AND r.neighborhood = #{conn.quote(nbhd_filter)} "` concatenated
-  # into a SELECT, and an `IN (…)` list BUILT by joining quoted timestamps.
-  #   :party_size   — only tables seating at least this many (used to size the party)
-  #   :neighborhood — restrict to one SERVED Lisbon neighbourhood (e.g. "Alfama");
-  #                   one nobody serves is a 400 naming the served set (T-090)
-  #   :time         — restrict to one seating time ("19:00" | "20:00" | "21:00")
-  #   :date         — restrict to one date (YYYY-MM-DD) among the upcoming seatings
-  # The result is small (~5 restaurants × a handful of tables × ≤ a few seatings),
-  # so it is NOT paginated.
-  # ADR-0023: semantics only. No argument list, no row-field list, and no
-  # hand-written row→argument mapping — `input_schema` declares what this verb
-  # accepts and what each filter refuses, `output_schema` names every row field
-  # and points the two differently-spelled ones at book_table's own arguments.
+  # No caller value is ever spliced into SQL — the filters below are ordinary
+  # ActiveRecord conditions (K-654). The result is small and NOT paginated.
+  # ADR-0023: the description carries semantics only; `input_schema` declares
+  # what each filter accepts and refuses, `output_schema` names every row field.
   kind :query
   description "List open restaurant tables across the aggregator for the " \
               "UPCOMING seatings that can seat the party. One row per open " \
-              "(restaurant, table, seating), and it is the aggregator's whole " \
-              "answer rather than a page of it — so an EMPTY array means what " \
-              "you asked for is genuinely sold out, not that you searched too " \
-              "narrowly. Seatings are the current upcoming ones " \
-              "(Europe/Lisbon), never stale, and one with every table taken is " \
-              "absent. A filter this aggregator cannot serve — an area it does " \
-              "not cover, a slot that is not one of its seatings, a day beyond " \
-              "its horizon — is refused 400 with the servable values named, " \
-              "never silently ignored, so an empty answer and a bad filter are " \
-              "never confusable. Once the human picks a row, `book_table` " \
+              "(restaurant, table, seating), so an EMPTY array means what you " \
+              "asked for is genuinely sold out. Seatings are the current " \
+              "upcoming ones (Europe/Lisbon), never stale, and one with every " \
+              "table taken is absent. Once the human picks a row, `book_table` " \
               "confirms it; everything it needs is on that row. Any deposit " \
               "shown is a no-show hold settled at the restaurant — this origin " \
-              "takes no online payment. Small; not paginated."
+              "takes no online payment."
   input_schema type: "object",
                additionalProperties: false,
                properties: {
@@ -80,29 +52,23 @@ class Kiosk::DiningRoomController < ApplicationController
                                  description: "Number of guests." },
                  # T-090: the served set is DB-derived (an operator adds one by
                  # inserting a restaurant), so it cannot be an `enum` here and
-                 # the handler guard is the only place the refusal can live —
-                 # the same standing `date` has, for the same reason.
+                 # the handler guard is the only place the refusal can live.
                  neighborhood: { type: "string",
                                  description: "Optional Lisbon neighbourhood filter, e.g. \"Alfama\". " \
                                               "Must be one this aggregator serves — an unserved name is " \
                                               "refused with the current ones named." },
-                 # K-717: a CLOSED SET, so it is an `enum` and not a pattern.
-                 # The pattern it replaces accepted "18:00" — a well-formed
-                 # time that is not a seating — and the handler answered it
-                 # with an empty list, which an assistant cannot tell from a
-                 # sold-out night. Declared this way the refusal is the schema
-                 # layer's, uniformly, on every verb that names a closed set.
+                 # K-717: a CLOSED SET, so an `enum` and not a pattern — the
+                 # refusal is then the schema layer's, uniformly, rather than an
+                 # empty list an assistant cannot tell from a sold-out night.
                  time:         { type: "string", enum: Seatings::TIMES,
                                  description: "Optional seating-time filter; one of the seatings this restaurant offers." },
                  date:         { type: "string", format: "date",
                                  description: "Optional date filter, YYYY-MM-DD. Must be among the UPCOMING seatings — the horizon rolls forward daily, so a date outside it is refused with the current ones named." },
                },
                required: ["party_size"]
-  # One row per open (restaurant, table, seating). A bare array: this verb is
-  # small by construction (~5 restaurants × a handful of tables × ≤ a few
-  # seatings) and does not paginate, so there is no `next` and nothing to echo
-  # back. `neighborhood` and `cuisine` are the two nullable columns on
-  # `restaurants`, and they travel as null rather than being dropped.
+  # One row per open (restaurant, table, seating). A bare array: this verb does
+  # not paginate, so there is no `next` and nothing to echo back. `neighborhood`
+  # and `cuisine` are nullable and travel as null rather than being dropped.
   output_schema type: "array",
                 description: "Open (restaurant, table, seating) triples, restaurant name then " \
                              "capacity then table label.",
@@ -127,8 +93,7 @@ class Kiosk::DiningRoomController < ApplicationController
   example_params({ party_size: 2, neighborhood: "Alfama" })
   # The seating is RESOLVED, not written down (K-972): this row is what an
   # assistant carries straight into `book_table`, whose own guard refuses a
-  # seating that has passed, so a calendar literal here published a row that
-  # could not be acted on. See {Seatings.example_date}.
+  # seating that has passed. See {Seatings.example_date}.
   example_row({
     restaurant: "Tasca do Tejo", neighborhood: "Alfama",
     cuisine: "Portuguese tavern", restaurant_id: 1,
@@ -138,32 +103,26 @@ class Kiosk::DiningRoomController < ApplicationController
     deposit_eur: 10,
   })
   def availability
-    # An ABSENT party_size and a party_size that is present but unusable are two
-    # different mistakes and keep their two different messages: the key check is
-    # what the retired `params.fetch(:party_size) { raise }` did, and a present
-    # nil still falls through to the >= 1 refusal below exactly as it did. Both
-    # sentences live in {WireArguments} — the second one because `book_table`
-    # answers with it too, and this half must not be able to drift from that one.
+    # An ABSENT party_size and a present-but-unusable one are two different
+    # mistakes with two different messages. Both sentences live in
+    # {WireArguments} — the second because `book_table` answers with it too, and
+    # the two halves must not drift.
     return render_refusal(WireArguments.missing_party_size) unless params.key?(:party_size)
 
     party_size, refusal = WireArguments.party_size(params[:party_size])
     return render_refusal(refusal) if refusal
 
     # T-090: an unserved neighbourhood is a typed 400 naming the served ones,
-    # not `200 []`. `Restaurant.served_neighborhoods` is the DB-derived set —
-    # the same set the filter below matches against, read once so the refusal
-    # and the query can never name different things.
+    # not `200 []`. `Restaurant.served_neighborhoods` is read once, so the
+    # refusal and the query below can never name different sets.
     nbhd_filter, refusal = WireArguments.neighborhood(params[:neighborhood],
                                                       Restaurant.served_neighborhoods)
     return render_refusal(refusal) if refusal
 
-    # The rolling upcoming seatings (Europe/Lisbon, past filtered, tonight→tomorrow).
     upcoming = Seatings.upcoming
 
-    # K-717: AN INVALID FILTER VALUE IS A TYPED 400 NAMING THE VALID VALUES,
-    # NEVER AN EMPTY LIST. Both refusals live in {WireArguments} — see the long
-    # note there for why `time` is guarded here as well as declared as an
-    # `enum`, and why `date` can only ever be guarded.
+    # K-717: an invalid filter value is a typed 400 NAMING the valid values,
+    # never an empty list. Both refusals live in {WireArguments}.
     time_filter, refusal = WireArguments.seating_time(params[:time])
     return render_refusal(refusal) if refusal
 
@@ -173,21 +132,9 @@ class Kiosk::DiningRoomController < ApplicationController
     seatings = upcoming
     seatings = seatings.select { |_d, t|   t == time_filter } unless time_filter.empty?
     seatings = seatings.select { |d, _t| d.iso8601 == date_filter } unless date_filter.empty?
-    # `return`, and this time it is the RIGHT keyword (K-691). This used to be a
-    # block the registry STORED and the Executor `.call`ed long after the
-    # initializer's frame was gone, so a top-level `return` raised LocalJumpError
-    # — rescued into ActionFailed, i.e. HTTP 500 — and `next []` was the fix. A
-    # controller action is an ordinary method, so `return` returns from it: the
-    # hazard is gone with the block, and the guard is written the plain way.
-    #
-    # WHAT REACHES IT NOW is only the honest case. The two ways an INVALID
-    # filter used to arrive here — a well-formed `time` that is not a seating,
-    # a well-formed `date` past the horizon — are refused above with a typed
-    # 400 (K-717). What is left is a filter naming a seating that EXISTS and
-    # has simply been overtaken: every one of today's remaining seatings can
-    # start while a request is in flight, and then the roster is legitimately
-    # empty for a moment. An empty list is the right answer for that, and only
-    # for that.
+    # Only an HONEST empty reaches here: an invalid `time` or `date` was refused
+    # above with a typed 400 (K-717), so what is left is a seating that exists
+    # and was overtaken while the request was in flight.
     return render(json: []) if seatings.empty?
 
     # Every physical table seating >= party, optionally in one neighbourhood.
@@ -202,23 +149,18 @@ class Kiosk::DiningRoomController < ApplicationController
     catalogue = catalogue.where(restaurants: { neighborhood: nbhd_filter }) unless nbhd_filter.empty?
 
     # `pluck` rather than loading models: this is a projection, and naming the
-    # columns is what keeps the wire's field names and their order a decision
-    # this handler makes rather than a side effect of the schema. One query, no
-    # N+1 — the join above already carries the restaurant's name/neighborhood.
+    # columns keeps the wire's field names and their order this handler's
+    # decision. One query, no N+1 — the join already carries the restaurant.
     tables = catalogue.pluck(
       "restaurant_tables.id", "restaurant_tables.label", "restaurant_tables.capacity",
       "restaurant_tables.deposit_eur", "restaurants.id", "restaurants.name",
       "restaurants.neighborhood", "restaurants.cuisine",
     )
 
-    # Confirmed holds on any of the upcoming seatings — used to subtract taken
-    # (table, seating) pairs so availability sells out honestly. Keyed on the
-    # ABSOLUTE instant (UTC epoch seconds) so the match is timezone-agnostic — the
-    # seating_at column is timestamptz, and Seatings.seating_at is a zoned Lisbon
-    # Time; both reduce to the same epoch, sidestepping session-TZ formatting.
-    # The epoch used to be computed by Postgres (`EXTRACT(EPOCH FROM seating_at)`)
-    # over an `IN (…)` list this method built by joining quoted literals; the
-    # instants are now bound values and `Time#to_i` does the same reduction.
+    # Confirmed holds on the upcoming seatings, subtracted below so availability
+    # sells out honestly. Keyed on the ABSOLUTE instant (UTC epoch seconds) so
+    # the match is timezone-agnostic: `seating_at` is timestamptz and
+    # Seatings.seating_at is a zoned Lisbon Time, and both reduce to one epoch.
     seating_instants = seatings.map { |d, t| Seatings.seating_at(d, t) }
     taken = {}
     unless seating_instants.empty?
@@ -255,29 +197,25 @@ class Kiosk::DiningRoomController < ApplicationController
     render json: rows
   end
 
-  # my_bookings — per-user booking list scoped by the session GUC.
-  # The scope is provider-controlled; the agent supplies no filter. This
-  # demonstrates app-layer per-user isolation: the principal can only see rows
-  # where user_id matches kiosk.current_user_id(), enforced in the query itself —
-  # `owned_by_current_principal` is the ONE place that predicate is written, and
-  # Booking records why it stays SQL-side (K-654).
-  # ADR-0023: semantics only. `output_schema` names every field of a row and
-  # points the identifying one at `cancel_booking`; naming the follow-on VERB
-  # here is the sanctioned form, naming its argument is not.
+  # my_bookings — per-user booking list scoped by the session GUC. The scope is
+  # provider-controlled; the agent supplies no filter. The principal can only
+  # see rows where user_id matches kiosk.current_user_id(), enforced in the
+  # query itself — `owned_by_current_principal` is the ONE place that predicate
+  # is written (K-654).
+  # ADR-0023: semantics only; naming the follow-on VERB in the description is
+  # the sanctioned form, naming its argument is not.
   kind :query
   description "List this principal's table bookings across every restaurant on the aggregator, " \
               "scoped to the authenticated account and un-filterable by the caller. Cancelled " \
               "bookings stay listed rather than disappearing, so a booking that was called off is " \
               "distinguishable from one that never existed. Once the human picks a row, " \
               "`cancel_booking` calls it off."
-  # A verb that takes nothing still declares the empty closed object, so "this
-  # verb takes no arguments" is a published fact rather than an absence an
-  # assistant has to interpret.
+  # A verb that takes nothing still declares the empty closed object, so "takes
+  # no arguments" is a published fact rather than an absence to interpret.
   input_schema type: "object", additionalProperties: false, properties: {}, required: []
   # A bare array, seating-time ordered. `seating_date`/`seating_time` are the
-  # seating's LOCAL (Europe/Lisbon) spelling of the same instant `seating_at`
-  # carries, which is why all three are always present rather than one being
-  # derivable by the assistant.
+  # LOCAL (Europe/Lisbon) spelling of the same instant `seating_at` carries, so
+  # all three are always present rather than one being derivable.
   output_schema type: "array",
                 description: "The principal's bookings, earliest seating first.",
                 items: {
@@ -308,12 +246,9 @@ class Kiosk::DiningRoomController < ApplicationController
                                "bookings.seating_at")
                         .map { |id, restaurant_id, restaurant, neighborhood,
                                  table_id, table_label, party_size, status, seating_at|
-                          # The seating's LOCAL date and time. This was
-                          # `to_char(b.seating_at AT TIME ZONE 'Europe/Lisbon', …)`
-                          # — the zone spelled a second time, in SQL, where a
-                          # change to app/models/seatings.rb could not reach it. It is
-                          # now the same `Seatings.zone` that decides which
-                          # seatings exist at all, so the two cannot drift.
+                          # The seating's LOCAL date and time, from the same
+                          # `Seatings.zone` that decides which seatings exist
+                          # at all, so the two cannot drift.
                           local = seating_at.in_time_zone(Seatings.zone)
                           { booking_id:          id,
                             restaurant_id:       restaurant_id,

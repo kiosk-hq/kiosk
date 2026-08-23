@@ -170,14 +170,28 @@ jobs:
             # Watched fail: drop the `status: "confirmed"` from the
             # reputation_factors count and the curve stays 2 → 2, so "proof count
             # dropped after the first booking" goes red.
-            tasks: demo:backoff demo:book demo:reputation demo:binding demo:isolation demo:redteam demo:schema demo:walkthrough
-            # Tasks deliberately NOT gated, and why. bin/check-ci-tasks fails the
-            # build if a demo: task is in neither this map nor `tasks:` above.
-            ungated:
-              demo:pow: >-
-                the heavy anti-scalping toll — it solves real memory-hard
-                Equihash batteries, not the single sub-second register proof
-                demo:backoff pays. demo:pow is excluded on every demo.
+            # demo:pow was opted out for years as "the heavy anti-scalping
+            # toll... excluded on every demo", and that reason was never
+            # measured (K-790, subsuming K-841). The weight is a property of
+            # KIOSK_POW_DIFFICULTY=high, which the HOSTED deploy sets and which
+            # neither this workflow nor the task exports — the task spawns its
+            # server with KIOSK_POW_DEMO=1 and nothing else, so CI gets the
+            # `low` default (n=96 k=5). MEASURED at head: 2.7 s end to end
+            # INCLUDING its own server boot, i.e. cheaper than demo:book, which
+            # this job already runs. That makes it the third exclusion whose
+            # stated reason described a configuration CI does not use, after
+            # demo:browse (K-617) and demo:link/demo:reputation (K-786).
+            # It is worth the 2.7 s twice over: it is the ONLY beat anywhere
+            # that reaches the flat :demo branch of AtableforDemoPowPolicy and
+            # the c.on_bad_proof penalty counter, and atablefor's ONLY
+            # valid-solve->200 / wrong-nonce->403 pair — the toll this demo
+            # charges at registration was otherwise pinned by no gate at all.
+            # It has no `: :setup` prerequisite, so it sits with demo:backoff
+            # ahead of everything that reseeds.
+            # Watched fail: drop the c.on_bad_proof lambda (initializers/
+            # kiosk.rb:317) and "on_bad_proof penalized: bad_proof_count=1"
+            # goes red with bad_proof_count=0, exit 1.
+            tasks: demo:backoff demo:pow demo:book demo:reputation demo:binding demo:isolation demo:redteam demo:schema demo:walkthrough
           - demo: kiosk-demo-getgrocery
             # demo:agecheck = the alcohol 18+ age-gate (create_order rejects a
             # cart with an age_restricted item unless the agent carries
@@ -279,11 +293,21 @@ jobs:
             # the job-level demo:setup and BEFORE demo:race, which stays last.
             # demo:rls leaves RLS applied to `orders`; demo:race's `: :setup`
             # drops the database, which is what clears it — do not reorder them.
-            tasks: demo:slots_spec demo:cashier_spec demo:telemetry demo:telemetry_spec demo:shop demo:isolation demo:redteam demo:schema demo:agecheck demo:claim demo:rls demo:race
+            # demo:pow carried the same unmeasured "heavy catalog toll"
+            # opt-out as atablefor's, and the same correction applies (K-790):
+            # nothing here exports KIOSK_POW_DIFFICULTY, so CI runs the `low`
+            # default (n=96 k=5). MEASURED at head: 3.7 s end to end INCLUDING
+            # its own reseed and server boot. It is the only task that boots
+            # the KIOSK_POW_DEMO=1 branch of this demo's initializer (:61,
+            # :274) as a walkthrough, and getgrocery's only valid-solve->200 /
+            # wrong-nonce->403 pair on the catalog verb.
+            # It invokes demo:setup, so it RESEEDS: it sits with demo:claim in
+            # the reseeding group, and BEFORE demo:rls, which must stay
+            # immediately ahead of demo:race for the reason below.
+            # Watched fail: drop the c.on_bad_proof lambda (initializers/
+            # kiosk.rb:285) and "on_bad_proof penalized" goes red, exit 1.
+            tasks: demo:slots_spec demo:cashier_spec demo:telemetry demo:telemetry_spec demo:shop demo:isolation demo:redteam demo:schema demo:agecheck demo:claim demo:pow demo:rls demo:race
             ungated:
-              demo:pow: >-
-                the catalog toll — it solves real memory-hard Equihash
-                batteries. demo:pow is excluded on every demo.
               demo:reconcile: >-
                 the operator's MANUAL sweep: on a freshly seeded database it
                 prints "nothing stuck" and exits 0 no matter what the code does,
@@ -297,6 +321,10 @@ jobs:
             # stripe-mock step below) makes demo:setup/demo:schema boot, and
             # demo:shop/isolation/redteam/agecheck self-start the mock process.
             stripe_mock: true
+            # K-844 — see the "Redteam under the PoW toll" step at the end of
+            # this job. getgrocery's KIOSK_POW_DEMO=1 policy tolls EVERY query,
+            # so every scenario in the battery exercises the client's 402 retry.
+            tolled_redteam: KIOSK_POW_DEMO=1
           - demo: kiosk-demo-hoteling
             # demo:search is the T-042/K-452 pagination + opaque-cursor proof
             # over the ~100-hotel catalogue: a full page carries `next`, echoing
@@ -321,6 +349,10 @@ jobs:
             # priced" goes red, exit 1.
             # It goes last with demo:search; both reseed via `: :setup`.
             tasks: demo:book demo:isolation demo:redteam demo:schema demo:search demo:browse
+            # K-844 — hoteling's escalating browse toll charges N>1 proofs in a
+            # single Kiosk-PoW header, which is the multi-proof half of the
+            # retry that getgrocery's flat one-proof toll never reaches.
+            tolled_redteam: KIOSK_POW_BROWSE_DEMO=1
           - demo: kiosk-demo-prove
             # kiosk-demo-prove — the anonymizing KYC broker (an ISSUER, not a Kiosk
             # operator; mounts none of the four verbs). demo:test runs its own
@@ -613,6 +645,37 @@ jobs:
             bin/rails "$task"
             echo "::endgroup::"
           done
+
+      # K-844 — the redteam battery again, this time with the operator's PoW
+      # toll switched ON.
+      #
+      # K-760 gave the redteam client a 402-PoW retry on query/run/pay/pay_raw,
+      # and it was proved by hand on two booted origins and then pinned by
+      # NOTHING on the wire: every listed demo:redteam above boots UNTOLLED, so
+      # the only gate on that retry was kiosk-redteam's own stub examples — the
+      # exact stub-green/wire-broken split that let K-760 sit latent in the
+      # first place. The heavy-PoW opt-out that used to justify the gap was
+      # about a walkthrough's solve cost at the SHIPPED params; this battery
+      # runs at CI's `low` default (n=96 k=5). MEASURED at head, same box, same
+      # seed: getgrocery 9.9 s untolled -> 12.6 s tolled (18 BLOCKED,
+      # 3 SKIPPED, 0 BREACH either way), hoteling 10.6 s -> 14.4 s (19/3/0).
+      #
+      # demo:setup runs first and in its OWN invocation: the battery expects
+      # the seeded state, and the tasks above have moved it (demo:race strands
+      # orders on purpose). Batching the two into one `bin/rails demo:setup
+      # demo:redteam` is the trap this job's other comment names — a task that
+      # exits the process reports success for everything after it.
+      #
+      # Watched fail: make Kiosk::Redteam::Client#query return its first
+      # response instead of routing it through #with_pow_retry (client.rb:122,
+      # :288) and every tolled scenario dies on an unhandled 402 instead of
+      # reaching its expected verdict — red here, still green above.
+      - name: Redteam under the PoW toll (K-844)
+        if: matrix.tolled_redteam
+        working-directory: ${{ matrix.demo }}
+        run: |
+          bin/rails demo:setup
+          env ${{ matrix.tolled_redteam }} bin/rails demo:redteam
 
   # Does CI actually run the tasks the demos define? (K-619)
   #

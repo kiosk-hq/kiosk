@@ -63,7 +63,7 @@ assertions cannot go ungated and unexplained.
 | `demo:redteam` | yes |  |
 | `demo:race` | yes |  |
 | `demo:reconcile` | no | the operator's MANUAL sweep: on a freshly seeded database it prints "nothing stuck" and exits 0 no matter what the code does, and a step that cannot go red is not a gate (K-616). Its logic is gated here anyway, by demo:race's K-578 block, which strands orders first and then sweeps. |
-| `demo:pow` | no | the catalog toll — it solves real memory-hard Equihash batteries. demo:pow is excluded on every demo. |
+| `demo:pow` | yes |  |
 | `demo:rls` | yes |  |
 | `demo:telemetry` | yes |  |
 | `demo:agecheck` | yes |  |

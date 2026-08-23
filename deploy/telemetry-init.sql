@@ -3,7 +3,7 @@
 -- ONE shared database, ONE append-only table, that ALL demos write to (each app
 -- sets KIOSK_TELEMETRY_DB_URL to this DB). The landing tile reads the ALL-apps
 -- aggregate; each demo page reads its own scope. App-layer, opt-in
--- (KIOSK_TELEMETRY=1), privacy-safe — see kiosk-demo-*/lib/demo_telemetry.rb.
+-- (KIOSK_TELEMETRY=1), privacy-safe — see kiosk-demo-*/app/services/demo_telemetry.rb.
 --
 -- Privacy: agent_hash is a PER-APP salted hash used for distinct-counts only —
 -- NOT joinable across apps (no cross-provider tracking), never a raw agent id,

@@ -166,6 +166,18 @@ For EACH of the 7 apps:
 - [ ] **git push-to-deploy** (mirrors narrathon): a bare repo per box with an ISOLATED `post-receive` hook
       (own work-tree/service names/deploy user — never touches `/opt/narrathon`) that checks out `main`,
       `bundle install`, `db:prepare`, **`db:seed`**, and restarts each app's service.
+- [ ] ⚠ **THE HOOK IS NOT IN THIS REPO AND NOTHING BACKS IT UP.** On the live box it is
+      `/srv/kiosk.git/hooks/post-receive` — executable, ~1.2 KB, untracked, present in no repository —
+      and it is the ONLY thing that turns a push into a deploy. Two consequences to act on:
+      (a) **never re-clone or recreate `/srv/kiosk.git`** to realign it with `origin`; that discards the
+      hook and leaves a bare repo that accepts pushes and deploys nothing. Realign with
+      `git push --force-with-lease=main:<current-remote-sha> prod-demo main` INTO the existing repo.
+      (b) **copy the hook off the box before any rebuild** (`scp box:/srv/kiosk.git/hooks/post-receive .`)
+      — a rebuild from this checklist alone has to reconstruct it from the prose above.
+      What it does, as measured on the box: on any push touching `refs/heads/main` it runs
+      `git checkout -f main` into the single work-tree `/srv/kiosk`, then per demo `bundle install`,
+      `rails db:migrate`, `rails db:seed` and `systemctl restart kiosk-demo@<app>` across all 8 units,
+      then `systemctl reload caddy`.
 - [ ] ⚠ **`db:seed` is not optional — omit it and the demos serve empty catalogs.** `db:prepare` seeds only a
       database it has just CREATED, so on every push after the first it is a no-op for content: K-464 records
       live hoteling showing 5 properties instead of 100 and skooti's fleet missing, because the hook ran

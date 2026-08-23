@@ -54,11 +54,22 @@
 #
 # Prints ONE JSON line on stdout; non-zero exit on any failure.
 
+require "date"
 require "json"
 require "net/http"
+require "time"
 require "uri"
 
 require_relative "bound_assistant"
+
+# Slots are COMPUTED (K-969): `book_appointment` refuses an instant that has
+# passed, so a literal here would be a driver that stops working on a date
+# nobody would think to look at. See script/redteam_suite.rb for the same
+# helper and the same reason.
+FUTURE_SLOT = lambda { |n, hour = 10|
+  d = Date.today + 30 + n
+  Time.utc(d.year, d.month, d.day, hour, 0, 0).iso8601
+}
 
 SERVER = ENV.fetch("SERVER_URL")
 ISSUER = ENV.fetch("KIOSK_ISSUER", SERVER)
@@ -126,7 +137,7 @@ rc, appt_a_resp = post_json(
   "#{SERVER}/kiosk/book_appointment",
   {
     salon_id: salon_id,
-    slot:     "2026-09-01T10:00:00Z",
+    slot:     FUTURE_SLOT.call(1),
   },
   alice.bearer,
 )
@@ -163,7 +174,7 @@ forged_rc, forged_resp = post_json(
   "#{SERVER}/kiosk/book_appointment",
   {
     salon_id: salon_id,
-    slot:     "2026-09-02T11:00:00Z",
+    slot:     FUTURE_SLOT.call(2, 11),
     user_id:  alice.user_id, # adversarial: B supplies A's user_id in args
   },
   bob.bearer,
@@ -178,7 +189,7 @@ rc, appt_b_resp = post_json(
   "#{SERVER}/kiosk/book_appointment",
   {
     salon_id: salon_id,
-    slot:     "2026-09-02T12:00:00Z",
+    slot:     FUTURE_SLOT.call(2, 12),
   },
   bob.bearer,
 )

@@ -123,6 +123,70 @@ module WireArguments
     )
   end
 
+  # ── K-969: THERE IS NO ROOM-NIGHT IN THE PAST, SO THERE IS NO OFFER EITHER ──
+  #
+  # Phil, 2026-08-23: «there should be zero availability for past dates. Booking
+  # shouldn't be allowed for those.» Both halves come from this one guard, so
+  # the read side and the write side cannot come to disagree about where the
+  # floor is — the same argument {Seatings} settles for atablefor and
+  # {DeliverySlots} for getgrocery.
+  #
+  # WHAT «PAST» MEANS HERE, STATED RATHER THAN LEFT TO THE READER:
+  #
+  #   * The unit is the DAY, not the instant. A room-night is sold by the night.
+  #   * The clock is the PROPERTY's, not the caller's: hoteling lists Istanbul
+  #     hotels, so "today" is today in Europe/Istanbul. A real IANA zone, so DST
+  #     is handled; do NOT replace with a fixed offset. This matters — an
+  #     assistant calling from UTC-8 at 21:00 is already on hoteling's tomorrow,
+  #     and reading the RUNNER's clock would refuse a stay the hotel will sell.
+  #   * TODAY IS BOOKABLE, and that is a product statement, not an oversight: a
+  #     same-day arrival is an ordinary hotel sale, and hoteling's own check-in
+  #     hour is not modelled anywhere, so refusing today would invent a cutoff
+  #     nobody declared. getgrocery draws the same line for the same reason
+  #     ({WireArguments.past_date} there), and atablefor's rolling horizon
+  #     likewise still offers tonight's not-yet-started seatings. What hoteling
+  #     does NOT have is getgrocery's second, finer guard (`past_slot`) — it has
+  #     no windows within a day to have missed.
+  #
+  # It is spec §9.1's FIRST branch and not its third: a past `check_in` is
+  # outside the verb's DOMAIN, so it is `400 bad_request` naming what IS
+  # acceptable, never `200 []`. The empty array is already spoken for on this
+  # origin and means one thing — the property exists and is SOLD OUT for those
+  # nights — and that is exactly the answer a past date must not be confusable
+  # with, since one of the two is worth retrying and the other never will be.
+  #
+  # WHY THE FLOOR IS NOT A HORIZON. K-968 declined to invent a far end (how far
+  # ahead this operator sells is a product decision nobody has taken) and this
+  # does not take it either. The NEAR end needs no such call: nobody sells a
+  # night that has already happened.
+  ZONE_NAME = "Europe/Istanbul"
+
+  # The property-locale ActiveSupport::TimeZone (Europe/Istanbul).
+  def zone
+    @zone ||= Time.find_zone!(ZONE_NAME)
+  end
+
+  # "Today" in the property's locale — the floor every dated surface reads.
+  def today
+    zone.now.to_date
+  end
+
+  # @param check_in [Date] the first night asked for
+  # @return [OperationResult, nil] a refusal, or nil when the stay is bookable
+  def past_stay(check_in)
+    floor = today
+    return nil if check_in >= floor
+
+    OperationResult.refused(
+      code:    "bad_request",
+      message: "check_in #{check_in.iso8601} is in the past — hoteling sells room-nights from " \
+               "#{floor.iso8601} onwards (Europe/Istanbul)",
+      hint:    "pass #{floor.iso8601} or a later check_in; today IS bookable (a same-day arrival " \
+               "is an ordinary room-night). An EMPTY availability list means the hotel is sold " \
+               "out for those nights, which is a different answer from this one.",
+    )
+  end
+
   # ── K-968: A STAY NOBODY CAN PRICE IS A 400, NOT A 500 ──────────────────
   #
   # Found by K-773's standing hostile-shape probes on the day they were built,

@@ -105,7 +105,14 @@ module WireArguments
         message: "invalid delivery_date: #{raw} — use YYYY-MM-DD from the delivery_slots row you chose",
       )]
     end
-    return [date, nil] unless date < Date.today
+    # ONE CLOCK FOR THE WHOLE ORIGIN (K-969). `Date.today` reads the SERVER
+    # process's zone; {#past_date}, the read side's guard, reads
+    # `DeliverySlots.now` in Europe/Dublin. Both answer the same question — «is
+    # this day already gone?» — and for hours around midnight they answered it
+    # differently, so `delivery_slots` could refuse a day `create_order` still
+    # accepted, or the reverse. The operator's own locale is the authority for
+    # both, because it is the operator who delivers.
+    return [date, nil] unless date < DeliverySlots.now.to_date
 
     [nil, OperationResult.refused(code: "bad_request", message: past_message.call(date))]
   end

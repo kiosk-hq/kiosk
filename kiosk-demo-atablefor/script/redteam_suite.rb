@@ -357,12 +357,33 @@ record(results, "MethodMismatch",
 # DB-DERIVED, so it can never be an `enum` — the refusal comes from
 # {WireArguments.neighborhood} and names the neighbourhoods that exist, exactly
 # as the `date` guard names the horizon.
+#
+# THE NEAR END JOINED THE BEAT UNDER K-969 (Phil, 2026-08-23: «there should be
+# zero availability for past dates»). The horizon has two ends and only the far
+# one was probed: a date BEHIND it is refused by the very same
+# {WireArguments.seating_date} guard, because `Seatings.upcoming` starts at
+# today in Europe/Lisbon and drops today's already-started seatings — so the
+# behaviour was already right and only the assertion was missing. It is added
+# here rather than as a beat of its own because it is literally the same guard
+# answering the same question from the other side.
+#
+# «PAST» ON THIS DEMO IS AN INSTANT, NOT A DAY, and that is a real difference
+# from hoteling and getgrocery: those sell by the DAY (and both count today as
+# bookable), while atablefor sells three named evening SEATINGS, so tonight's
+# 19:00 stops being offered at 19:00 while tonight's 21:00 is still bookable.
+# The floor is therefore "has this seating started?", read in the restaurant's
+# own clock (Europe/Lisbon), and TODAY IS PARTLY BOOKABLE — which is why the
+# probe below uses a date 30 days back rather than today: a probe on today
+# would be a test of the RUNNER's timezone, not of the operator's.
 FAR_FUTURE = (Date.today + 3650).iso8601
+PAST_DATE  = (Date.today - 30).iso8601
 invalid_filter_probes = [
   ["time=18:00 (valid pattern, not a seating)",
    { party_size: 2, time: "18:00" }, %w[19:00 20:00 21:00]],
   ["date=#{FAR_FUTURE} (valid date, past the horizon)",
    { party_size: 2, date: FAR_FUTURE }, ["upcoming seatings"]],
+  ["date=#{PAST_DATE} (valid date, BEHIND the horizon — K-969)",
+   { party_size: 2, date: PAST_DATE }, ["upcoming seatings"]],
   ["neighborhood=Atlantis (well-formed, unserved — T-090)",
    { party_size: 2, neighborhood: "Atlantis" }, ["Alfama"]],
   ["both filters, no overlap",
@@ -408,6 +429,14 @@ record(results, "InvalidFilterIsNotAnEmptyList",
 horizon_slot = open_slot
 horizon_probes = [
   ["date=#{FAR_FUTURE} (valid date, beyond the rolling horizon)", FAR_FUTURE, "upcoming seatings"],
+  # K-969, the near end of the same horizon. The sentence differs from the far
+  # end's on purpose and is not this beat's to normalise: a date behind the
+  # horizon trips `Seatings.past?` FIRST, so the refusal is «seating … has
+  # already started — call availability again for the still-bookable seatings»,
+  # which names where a bookable value comes from rather than listing them. Both
+  # are typed 400s an assistant recovers from, which is what is asserted.
+  ["date=#{PAST_DATE} (valid date, BEHIND the rolling horizon — K-969)",
+   PAST_DATE, "already started"],
   ["date=#{Date.today.strftime('%Y%m%d')} (basic ISO-8601 — not the advertised YYYY-MM-DD)",
    Date.today.strftime("%Y%m%d"), "date"],
 ].map do |label, bad_date, named|

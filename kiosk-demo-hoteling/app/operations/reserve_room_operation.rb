@@ -57,6 +57,18 @@ class ReserveRoomOperation
       return OperationResult.refused(code: "bad_request", message: "check_out must be after check_in")
     end
 
+    # ── K-969: A ROOM-NIGHT IN THE PAST IS REFUSED, NOT MERELY UNAVAILABLE ──
+    # `availability` already answers nothing for these dates, and this is the
+    # belt to that braces: an assistant may name a date it never read from an
+    # availability response — the finding was filed because `check_in:
+    # "1900-01-01"` answered 200 with a real booking and a real quote. The
+    # refusal comes from the SAME guard the two read verbs use, so the offer and
+    # the sale cannot come to disagree about where the floor is. See
+    # {WireArguments.past_stay} for what «past» means here and why today counts
+    # as bookable.
+    refusal = WireArguments.past_stay(ci)
+    return refusal if refusal
+
     nights      = (co - ci).to_i
     total_cents = nights * nightly_price_cents
 

@@ -54,6 +54,37 @@ class BookAppointmentOperation
       return refused("invalid slot #{slot.inspect} — pass an ISO 8601 timestamp, e.g. \"2026-10-01T14:00:00Z\"")
     end
 
+    # ── K-969: AN APPOINTMENT IN THE PAST IS REFUSED ────────────────────────
+    # Phil, 2026-08-23: «there should be zero availability for past dates.
+    # Booking shouldn't be allowed for those.» The guard above already refuses
+    # `"next tuesday"` — but only because it does not PARSE; `"1900-01-01T09:00:00Z"`
+    # parses perfectly and booked a real appointment a century ago, which the
+    # owner's calendar then rendered as an ordinary row.
+    #
+    # WHAT «PAST» MEANS HERE, and why it is not hoteling's or getgrocery's rule.
+    # Those two verbs take a DATE and sell by the day, so their floor is a day
+    # and today counts. This one takes an INSTANT, so its floor is an instant:
+    # a slot at or before NOW has passed, and one later today has not. There is
+    # no operator timezone to name — an ISO 8601 timestamp WITH an offset is an
+    # absolute point and the comparison is exact from any caller's clock. A slot
+    # written WITHOUT an offset is read in the app's own zone (UTC here), which
+    # is `Time.iso8601`'s published behaviour and is why the refusal echoes back
+    # the instant it actually understood.
+    #
+    # THE READ HALF IS VACUOUS ON THIS DEMO, deliberately: `availability` and
+    # `service_menu` publish the SERVICE MENU, not a calendar — this salon
+    # overbooks by design and has no finite windows — so there are no dated rows
+    # for a past date to appear in and nothing for a read guard to filter. Every
+    # slot an assistant proposes here it composed itself, which makes this
+    # refusal the only place the floor can live rather than a second line of
+    # defence.
+    if slot_at <= Time.current
+      return refused(
+        "slot #{slot_at.iso8601} has already passed — book a time in the future " \
+        "(now is #{Time.current.utc.iso8601}); this salon does not record appointments in the past",
+      )
+    end
+
     # The chosen service (its price is captured at book time — the menu can change
     # later; the booked price is what the calendar and forecast report).
     # service_id is OPTIONAL — a bare salon_id booking is legitimate and the

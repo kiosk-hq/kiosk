@@ -80,7 +80,11 @@ class Kiosk::HotelsController < ActionController::API
   description "Check which room types are still free at ONE hotel for ONE stay. An EMPTY array " \
               "means that hotel is SOLD OUT for those nights, not that it has no rooms — and a hotel " \
               "this origin does not list is 404 not_found rather than an empty answer, so the two are " \
-              "never confusable. Rates are quoted per night in EUR cents, but a cart is signed for " \
+              "never confusable. There is no availability in the past either: a stay whose first " \
+              "night has already gone is refused 400 naming the earliest night this hotel sells, " \
+              "read in the property's own clock (Europe/Istanbul); tonight itself IS bookable, " \
+              "because a same-day arrival is an ordinary room-night. " \
+              "Rates are quoted per night in EUR cents, but a cart is signed for " \
               "the WHOLE stay at the total the operator quotes, which `reserve_room` returns. Once " \
               "the human picks a room type, `reserve_room` holds it."
   input_schema type: "object",
@@ -90,7 +94,10 @@ class Kiosk::HotelsController < ActionController::API
                                 description: "Property to check — the `property_id` from a properties row. " \
                                              "An id no property has is 404 not_found." },
                  check_in:    { type: "string", format: "date",
-                                description: "First night (YYYY-MM-DD)." },
+                                description: "First night (YYYY-MM-DD). Today or later, read in the " \
+                                             "property's own clock (Europe/Istanbul) — a date before " \
+                                             "that is refused 400 naming the earliest night, never " \
+                                             "answered with an empty list." },
                  check_out:   { type: "string", format: "date",
                                 description: "Checkout day (YYYY-MM-DD, exclusive) — a checkout day is " \
                                              "the next guest's check-in day." },
@@ -122,6 +129,16 @@ class Kiosk::HotelsController < ActionController::API
     return render_refusal(refusal) if refusal
 
     dates, refusal = WireArguments.stay_dates(params[:check_in], params[:check_out])
+    return render_refusal(refusal) if refusal
+
+    # K-969: ZERO availability for a past date, and the refusal is how it says
+    # so. A past `check_in` is outside this verb's domain (§9.1's first branch),
+    # so it is a named 400 rather than the `[]` that already means SOLD OUT here
+    # — an assistant must never read a bookable room type for a night that has
+    # already happened, and must never mistake "you asked for last month" for
+    # "try another hotel". `reserve_room` refuses the same class from the same
+    # guard, so the offer and the sale agree.
+    refusal = WireArguments.past_stay(dates.first)
     return render_refusal(refusal) if refusal
 
     # T-090 / spec §9.1: `property_id` ADDRESSES a property before anything is
@@ -392,7 +409,8 @@ class Kiosk::HotelsController < ActionController::API
                properties: {
                  property_id: { type: "integer", description: "`property_id` from a search_hotels row." },
                  check_in:    { type: "string", format: "date",
-                                description: "Optional first night (YYYY-MM-DD); pass with check_out to list only free room types." },
+                                description: "Optional first night (YYYY-MM-DD); pass with check_out to list only free room types. " \
+                                             "When passed it must be today or later in the property's clock (Europe/Istanbul)." },
                  check_out:   { type: "string", format: "date",
                                 description: "Optional checkout day (YYYY-MM-DD, exclusive); pass with check_in to list only free room types." },
                },
@@ -503,6 +521,13 @@ class Kiosk::HotelsController < ActionController::API
           code: "bad_request", message: "check_out must be after check_in",
         ))
       end
+      # K-969, and it applies here for the same reason the dates do at all: WITH
+      # dates this verb stops being a catalogue and becomes an availability
+      # statement (`room_types_scope: "free ci..co"`), so a past `check_in`
+      # would publish a free-rooms list for nights nobody can book. Same guard
+      # as `availability` and `reserve_room` — one floor for the origin.
+      refusal = WireArguments.past_stay(ci)
+      return render_refusal(refusal) if refusal
     end
 
     property_id, refusal = WireArguments.integer(params[:property_id], field: "property_id",

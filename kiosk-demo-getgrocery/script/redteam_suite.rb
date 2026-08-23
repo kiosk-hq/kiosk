@@ -566,7 +566,7 @@ class PastDeliveryDate < Kiosk::Redteam::Scenario
     super(
       name:        "PastDeliveryDate",
       category:    "surface",
-      description: "A delivery date before today is a typed 400 naming the earliest bookable day, never 200 []",
+      description: "A delivery date before today is a typed 400 on BOTH delivery_slots and create_order — never 200 [], never an order",
     )
   end
 
@@ -590,14 +590,42 @@ class PastDeliveryDate < Kiosk::Redteam::Scenario
     refused = bad.status == 400 && error_code(bad) == "bad_request" && named
     control = ctl.status == 200 && ctl.body.is_a?(Array) && ctl.body.any?
 
+    # ── THE WRITE HALF (K-969) ──────────────────────────────────────────────
+    # The read side is the primary guarantee — an assistant must never SEE a
+    # window it cannot book — but an assistant may name a date it never read
+    # from a `delivery_slots` response, so the ORDER has to refuse it too. That
+    # is the belt to this beat's braces, and it was already true here
+    # ({WireArguments.delivery_date} refuses `date < Date.today`) while being
+    # pinned only CONDITIONALLY: `getgrocery_flow.rb`'s K-480 probe asserts the
+    # past-WINDOW guard and is a no-op before 08:00 Dublin. This half is
+    # unconditional and is about the past DAY.
+    sku      = (client.query(a, name: "catalog").body.then { |b| b.is_a?(Array) ? b : [] }).first&.dig("sku")
+    order    = client.run(a, name: "create_order", items: [{ sku: sku, qty: 1 }],
+                             delivery_slot_id: 1, delivery_address: ADDRESS, delivery_date: past)
+    o_detail = order.body.is_a?(Hash) ? order.body["detail"].to_s : ""
+    order_refused = order.status == 400 && error_code(order) == "bad_request" &&
+                    o_detail.include?("in the past") && o_detail.match?(/\d{4}-\d{2}-\d{2}/)
+
+    # CONTROL for the write half — the SAME cart at a future date must place an
+    # order, so the refusal above cannot be an unrelated cart or address answer.
+    order_ctl = client.run(a, name: "create_order", items: [{ sku: sku, qty: 1 }],
+                              delivery_slot_id: 1, delivery_address: ADDRESS, delivery_date: future)
+    order_control = order_ctl.status == 200 && order_ctl.body.is_a?(Hash) &&
+                    !order_ctl.body["order_id"].to_s.empty?
+
+    ok = refused && control && order_refused && order_control
     Kiosk::Redteam::Verdict.new(
-      blocked: refused && control,
+      blocked: ok,
       skipped: false,
       status:  bad.status,
-      detail:  refused && control ? "" :
-                 "date=#{past} → #{bad.status}/#{error_code(bad).inspect} detail=#{detail[0, 120].inspect}; " \
-                 "CONTROL date=#{future} → #{ctl.status}/#{ctl.body.is_a?(Array) ? ctl.body.size : 0} rows " \
-                 "(want 400 bad_request naming the earliest bookable date, and a non-empty control)",
+      detail:  ok ? "" :
+                 "delivery_slots date=#{past} → #{bad.status}/#{error_code(bad).inspect} " \
+                 "detail=#{detail[0, 120].inspect}; " \
+                 "CONTROL date=#{future} → #{ctl.status}/#{ctl.body.is_a?(Array) ? ctl.body.size : 0} rows; " \
+                 "create_order delivery_date=#{past} → #{order.status}/#{error_code(order).inspect} " \
+                 "detail=#{o_detail[0, 120].inspect}; " \
+                 "CONTROL create_order delivery_date=#{future} → #{order_ctl.status} " \
+                 "(want 400 bad_request naming the earliest bookable date on BOTH, and both controls answered)",
     )
   end
 end
@@ -622,7 +650,7 @@ scenarios = [
   HostileArgShapes.new,     # K-773 — boolean/array/object/junk shapes on the other args → typed 400
   RetiredWire.new,          # T-074 = A — the 0.3 pair is deleted, not tombstoned
   MethodMismatch.new,       # 0.4 — a GET at an action is 405, never a silent 404
-  PastDeliveryDate.new,     # T-090 — a past date is a named 400, not an ambiguous 200 []
+  PastDeliveryDate.new,     # T-090/K-969 — a past date is a named 400 on the read AND the write side
   # register PoW is ON — a missing/bad register proof must be rejected (runs
   # because pow_difficulty > 0).
   Kiosk::Redteam::Scenarios::RegistrationWithoutPow.new,

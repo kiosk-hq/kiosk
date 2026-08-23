@@ -68,7 +68,7 @@ class CreateOrderOperation
     # caller that saw a slot for a specific day SHOULD pass that day back.
     date, refusal = WireArguments.delivery_date(
       delivery_date,
-      default:      Date.today + 1,
+      default:      DeliverySlots.now.to_date + 1,
       past_message: ->(d) { "delivery_date is in the past: #{d} — choose a current/future delivery slot" },
     )
     return refusal if refusal

@@ -135,7 +135,10 @@ class Kiosk::ReservationsController < ActionController::API
               "currency, at that total, naming this hold. The cashier re-counts both against its own " \
               "quote before it charges anything, so a cart that disagrees is refused outright rather " \
               "than partly honoured. Once the charge is through, `confirm_booking` turns the hold " \
-              "into a confirmed stay."
+              "into a confirmed stay. A stay whose first night has already gone is refused 400 " \
+              "naming the earliest night this operator sells, read in the property's own clock " \
+              "(Europe/Istanbul): there is no room-night in the past to hold, though tonight " \
+              "itself IS bookable."
   input_schema type: "object",
                additionalProperties: false,
                properties: {
@@ -146,7 +149,8 @@ class Kiosk::ReservationsController < ActionController::API
                                  description: "The room type to hold — the `room_type_id` from an " \
                                               "availability row for these same dates." },
                  check_in:     { type: "string", format: "date",
-                                 description: "First night (YYYY-MM-DD)." },
+                                 description: "First night (YYYY-MM-DD). Today or later, read in the " \
+                                              "property's own clock (Europe/Istanbul)." },
                  check_out:    { type: "string", format: "date",
                                  description: "Checkout day (YYYY-MM-DD, exclusive) — a checkout day " \
                                               "is the next guest's check-in day, so it may equal " \

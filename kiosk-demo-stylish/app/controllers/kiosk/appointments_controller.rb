@@ -38,14 +38,18 @@ class Kiosk::AppointmentsController < ApplicationController
               "service-less booking. Every service is always bookable (this salon overbooks by design " \
               "and never fills up), so a well-formed booking never fails for want of room; a salon " \
               "that does not exist, a time that cannot be parsed and a service that is unknown each " \
-              "come back 400 naming what was wrong."
+              "come back 400 naming what was wrong — and so does an appointment time that has " \
+              "already passed: this salon records no booking in the past, so the instant asked " \
+              "for must still be ahead of now."
   input_schema type: "object",
                additionalProperties: false,
                properties: {
                  salon_id:   { type: "integer",
                                description: "Salon id from the salons query." },
                  slot:       { type: "string", format: "date-time",
-                               description: "Appointment time, ISO 8601 timestamp." },
+                               description: "Appointment time, ISO 8601 timestamp. Must be LATER THAN NOW — " \
+                                            "an instant that has passed is refused 400. Carry an offset " \
+                                            "(\"…Z\", \"…+02:00\"); without one it is read in the salon's own clock." },
                  service_id: { type: "integer",
                                description: "Optional service id from availability/service_menu; its EUR price is captured." },
                },
@@ -76,10 +80,16 @@ class Kiosk::AppointmentsController < ApplicationController
       },
       required: %w[appointment_id salon_id slot] },
   ]
-  example_params({ salon_id: 1, service_id: 3, slot: "2026-08-05T14:00:00Z" })
+  # THE SLOT IS RESOLVED, NOT WRITTEN DOWN (K-969). A hard-coded instant is an
+  # example that stops working: since a past slot is now REFUSED, a literal
+  # would age from "copy this verbatim" into "copy this and get a 400" on a
+  # date nobody would notice. `example_params` is a resolvable slot (see
+  # {Kiosk::Server::SchemaSlots}), so the example names a time that is still
+  # ahead of whoever is reading the catalog.
+  example_params({ salon_id: 1, service_id: 3, slot: -> { (Time.current + 7.days).utc.change(hour: 14).iso8601 } })
   example_row({
     appointment_id: 1, salon_id: 1,
-    slot: "2026-08-05T14:00:00Z", service: "Colour",
+    slot: -> { (Time.current + 7.days).utc.change(hour: 14).iso8601 }, service: "Colour",
     currency: "EUR", price_cents: 9000, price_eur: "€90",
   })
   def book_appointment

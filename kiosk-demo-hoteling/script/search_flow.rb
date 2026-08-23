@@ -30,6 +30,7 @@
 #
 # Prints ONE JSON line on stdout; non-zero exit on unexpected HTTP failures.
 
+require "date"
 require "jwt"
 require "json"
 require "net/http"
@@ -173,9 +174,17 @@ STDERR.puts "  Detail for an unknown id: HTTP #{rc5}, code=#{p5["code"].inspect}
 # ── 4c. availability for the SAME unknown id → 404 too (T-090) ─────────────
 # The pair that made this Phil's call: two verbs of one origin used to disagree
 # about the same argument, one answering 404 and the other `200 []`.
+#
+# THE DATES ARE COMPUTED, NOT WRITTEN DOWN (K-969). `availability` now refuses a
+# past `check_in` BEFORE it asks whether the property exists — that ordering is
+# deliberate, an argument outside the verb's domain is answered before a lookup
+# — so a literal date would have turned this 404 assertion into a 400 on the day
+# it went stale, and the failure would have named the wrong thing entirely.
+DETAIL_IN  = (Date.today + 30).iso8601
+DETAIL_OUT = (Date.today + 33).iso8601
 rc6, p6, _res6 = query_json(
   "availability",
-  { property_id: 999_999_999, check_in: "2026-09-01", check_out: "2026-09-03" },
+  { property_id: 999_999_999, check_in: DETAIL_IN, check_out: DETAIL_OUT },
   bearer: token,
 )
 STDERR.puts "  Availability for an unknown id: HTTP #{rc6}, code=#{p6["code"].inspect}"

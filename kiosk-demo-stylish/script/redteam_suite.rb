@@ -41,10 +41,11 @@
 #     header reaches no reader and /kiosk/auth/link answers 401 in the SAME
 #     environment this suite drives — no in-process env shim needed any more
 #
-#   UntypedBookingInput — nine bad-input shapes to book_appointment (unparseable
-#     / fuzzy / missing / non-string slot, unknown & missing salon_id, unknown
-#     service_id) are each a typed 400 with no PG internals — never a 500 and
-#     never a silent booking — while a bare and a priced booking still succeed
+#   UntypedBookingInput — ten bad-input shapes to book_appointment (unparseable
+#     / fuzzy / missing / non-string / PAST slot, unknown & missing salon_id,
+#     unknown service_id) are each a typed 400 with no PG internals — never a
+#     500 and never a silent booking — while a bare and a priced booking still
+#     succeed
 #
 # THE TWO CUSTOMER PRINCIPALS ARE EARNED, NOT ASSERTED (T-104). Alice and Bob
 # are bound through the shipped ceremony — Equihash-tolled `/auth/register` →
@@ -65,8 +66,10 @@
 # Exits 0 when every scenario is BLOCKED; exits 1 on any BREACH.
 # A BREACH = a real hole in stylish — fix the app, not the scenario.
 
+require "date"
 require "json"
 require "net/http"
+require "time"
 require "uri"
 require "jwt"
 require "openssl"
@@ -75,6 +78,25 @@ require "base64"
 
 require_relative "bound_assistant"
 require_relative "devise_session"
+
+# ── Every slot this suite books is COMPUTED, never written down (K-969) ──────
+#
+# Since a slot in the past is refused, a literal instant is a test that expires:
+# the seven positive controls below all named days in October 2026 and would
+# have started failing on the first of them, for a reason having nothing to do
+# with the behaviour under test — the same trap the descriptor's `example_params`
+# was rewritten to avoid. `n` separates the bookings from each other (this salon
+# overbooks by design, so they need not be distinct — they are distinct only so
+# a failure names which control it was).
+#
+# UTC and not the runner's zone, deliberately: an ISO 8601 instant WITH an
+# offset is absolute, so the assertion holds from any caller's clock — which is
+# the whole reason stylish's floor is an instant rather than a day.
+FUTURE_SLOT = lambda { |n, hour = 9|
+  d = Date.today + 30 + n
+  Time.utc(d.year, d.month, d.day, hour, 0, 0).iso8601
+}
+PAST_SLOT = "1900-01-01T09:00:00Z"
 
 SERVER = ENV.fetch("SERVER_URL")
 ISSUER = ENV.fetch("KIOSK_ISSUER", SERVER)
@@ -162,7 +184,7 @@ abort "no salons seeded — run rake demo:setup" unless salon_id
 
 rc, appt_a = post_json(
   "/kiosk/book_appointment",
-  { salon_id: salon_id, slot: "2026-10-01T09:00:00Z" },
+  { salon_id: salon_id, slot: FUTURE_SLOT.call(1) },
   ALICE.bearer,
 )
 abort "A book_appointment failed (#{rc}): #{JSON.generate(appt_a)}" unless rc == 200
@@ -188,7 +210,7 @@ record(results, "CrossTenantRead",
 # nothing belonging to B appears under A.
 rc, forged = post_json(
   "/kiosk/book_appointment",
-  { salon_id: salon_id, slot: "2026-10-02T09:00:00Z", user_id: ALICE.user_id },
+  { salon_id: salon_id, slot: FUTURE_SLOT.call(2), user_id: ALICE.user_id },
   BOB.bearer,
 )
 refused = rc == 400 && forged["code"] == "bad_request" && forged["detail"].to_s.include?("user_id")
@@ -197,7 +219,7 @@ refused = rc == 400 && forged["code"] == "bad_request" && forged["detail"].to_s.
 # caller sent: B's LEGITIMATE booking lands under B and never under A.
 rc_b, bobs = post_json(
   "/kiosk/book_appointment",
-  { salon_id: salon_id, slot: "2026-10-02T10:00:00Z" },
+  { salon_id: salon_id, slot: FUTURE_SLOT.call(2, 10) },
   BOB.bearer,
 )
 appt_id_bob = bobs["appointment_id"]
@@ -311,7 +333,7 @@ record(results, "OwnerLinkIgnoresForgedClaimBody",
 # thing that actually demonstrates scoping.
 rc_b3, appt_b3 = post_json(
   "/kiosk/book_appointment",
-  { salon_id: salon_id, slot: "2026-10-03T09:00:00Z" },
+  { salon_id: salon_id, slot: FUTURE_SLOT.call(3) },
   BOB.bearer,
 )
 appt_id_b3 = appt_b3["appointment_id"]
@@ -356,7 +378,7 @@ record(results, "CustomerCalendarStaysOwnScoped",
 forged_owner_bearer = bearer("agent:u-#{OWNER_ID}:a-#{SecureRandom.uuid}:r-owner")
 rc_forged_cal, = get_json("/kiosk/salon_calendar", forged_owner_bearer)
 rc_forged_book, = post_json("/kiosk/book_appointment",
-                            { salon_id: salon_id, slot: "2026-10-05T09:00:00Z" },
+                            { salon_id: salon_id, slot: FUTURE_SLOT.call(5) },
                             forged_owner_bearer)
 rc_owner_cal, owner_cal = get_json("/kiosk/salon_calendar", bearer(owner_token))
 owner_sees_forecast = Array(owner_cal).any? { |r| r["summary"] == "forecast" }
@@ -441,9 +463,16 @@ BAD_INPUTS = [
   ["missing slot",            { salon_id: :seeded }],
   ["non-string slot",         { salon_id: :seeded, slot: 12345 }],
   ["out-of-range slot",       { salon_id: :seeded, slot: "2026-13-45T99:00:00Z" }],
-  ["unknown salon_id",        { salon_id: 999_999, slot: "2026-10-01T09:00:00Z" }],
-  ["missing salon_id",        { slot: "2026-10-01T09:00:00Z" }],
-  ["unknown service_id",      { salon_id: :seeded, slot: "2026-10-01T09:00:00Z", service_id: 999_999 }],
+  # K-969. A well-formed instant that has PASSED. It parses (so the guard above
+  # never sees it), it is not fuzzy, and until today it booked a real
+  # appointment a century ago that the owner's calendar rendered as an ordinary
+  # row. The other three below carry a FUTURE slot on purpose: each is probing
+  # something OTHER than the time, and a stale literal would have started
+  # refusing them for the wrong reason once this guard existed.
+  ["past slot (well-formed, already gone)", { salon_id: :seeded, slot: PAST_SLOT }],
+  ["unknown salon_id",        { salon_id: 999_999, slot: FUTURE_SLOT.call(1) }],
+  ["missing salon_id",        { slot: FUTURE_SLOT.call(1) }],
+  ["unknown service_id",      { salon_id: :seeded, slot: FUTURE_SLOT.call(1), service_id: 999_999 }],
 ].freeze
 PG_INTERNALS = ["PG::", "NotNullViolation", "RecordInvalid", "DatatypeMismatch", "violates not-null"].freeze
 
@@ -465,13 +494,13 @@ end
 # is legitimate and the descriptor promises it; a full booking must still
 # capture the service price the forecast is summed from.
 rc_bare, bare = post_json("/kiosk/book_appointment",
-  { salon_id: salon_id, slot: "2026-10-03T09:00:00Z" }, ALICE.bearer)
+  { salon_id: salon_id, slot: FUTURE_SLOT.call(3) }, ALICE.bearer)
 bad_failures << "CONTROL bare salon booking → HTTP #{rc_bare} #{JSON.generate(bare)[0, 160]}" unless rc_bare == 200
 
 rc_menu, menu = get_json("/kiosk/service_menu", ALICE.bearer)
 service = Array(menu).find { |r| r["price_cents"].to_i.positive? }
 rc_full, full = post_json("/kiosk/book_appointment",
-  { salon_id: salon_id, slot: "2026-10-04T09:00:00Z",
+  { salon_id: salon_id, slot: FUTURE_SLOT.call(4),
     service_id: service && service["service_id"] }, ALICE.bearer)
 unless rc_menu == 200 && rc_full == 200 && full["price_cents"].to_i == service["price_cents"].to_i
   bad_failures << "CONTROL priced booking → HTTP #{rc_full} price_cents=#{full["price_cents"].inspect} " \

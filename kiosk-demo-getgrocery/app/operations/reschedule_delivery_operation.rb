@@ -41,7 +41,7 @@ class RescheduleDeliveryOperation
     # is this verb's wording, not a candidate for convergence-by-conversion.
     date, refusal = WireArguments.delivery_date(
       delivery_date,
-      default:      Date.today + 1,
+      default:      DeliverySlots.now.to_date + 1,
       past_message: ->(d) { "delivery_date is in the past: #{d}" },
     )
     return refusal if refusal

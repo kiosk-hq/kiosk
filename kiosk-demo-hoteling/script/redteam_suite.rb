@@ -67,7 +67,7 @@ NIGHTS    = 3
 # Helper: iterate all properties to find first available room for CHECK_IN..CHECK_OUT.
 # Multiple scenarios run sequentially against the same DB; earlier scenarios may
 # exhaust room types at one property, so we iterate until availability is found.
-find_available = lambda { |client, principal|
+FIND_AVAILABLE = lambda { |client, principal|
   props_resp = client.query(principal, name: "properties")
   # A non-paginating query answers a BARE ARRAY — the rows themselves.
   all_props  = props_resp.body.is_a?(Array) ? props_resp.body : []
@@ -111,7 +111,7 @@ profile = Kiosk::Redteam::Profile.new(
   # Iterates all properties to avoid exhausting a single property's room types.
   # Returns { id: booking_id, code: room_type_name, total_cents:, nights: }.
   create_owned: lambda { |client, principal|
-    found = find_available.call(client, principal)
+    found = FIND_AVAILABLE.call(client, principal)
     prop  = found[:prop]
     room  = found[:room]
 
@@ -145,7 +145,7 @@ profile = Kiosk::Redteam::Profile.new(
   # either — a 4xx refusal, or a 200 whose row never surfaces under A.)
   forge_action: "reserve_room",
   forge_args:   lambda { |client, principal_a, _principal_b|
-    found = find_available.call(client, principal_a)
+    found = FIND_AVAILABLE.call(client, principal_a)
     prop  = found[:prop]
     room  = found[:room]
 
@@ -649,9 +649,16 @@ class HostileArgShapes < Kiosk::Redteam::Scenario
                    "assert the hotel exists and merely has no rooms)"
     end
 
-    refused "reserve_room check_in=\"0000-01-01\" (unpriceable stay, K-968)",
+    # K-968's unpriceable stay. THE SPAN MOVED TO THE FAR END (K-969): it used to
+    # be `check_in: "0000-01-01"` with a normal check_out, which is now refused
+    # by {WireArguments.past_stay} FIRST — still a typed 400, so this assertion
+    # would have kept passing while never reaching the guard it exists for. A
+    # near check_in with a check_out at the end of the calendar asks the same
+    # question (a stay whose total overflows `bookings.total_cents`) from the
+    # side the past-date floor does not stand on.
+    refused "reserve_room check_out=\"9999-12-31\" (unpriceable stay, K-968)",
             client.run(a, name: "reserve_room", property_id: prop, room_type_id: room,
-                          check_in: "0000-01-01", check_out: PROBE_OUT)
+                          check_in: PROBE_IN, check_out: "9999-12-31")
 
     # ── CONTROL ─────────────────────────────────────────────────────────────
     #
@@ -783,6 +790,123 @@ class MethodMismatch < Kiosk::Redteam::Scenario
   end
 end
 
+# ── K-969: NO AVAILABILITY IN THE PAST, AND NO BOOKING INTO IT ────────────────
+#
+# Phil, 2026-08-23: «there should be zero availability for past dates. Booking
+# shouldn't be allowed for those.» This demo is where the finding was filed:
+# `reserve_room` with `check_in: "1900-01-01"` answered 200 with a real booking
+# and a real quote, and `availability` for those nights listed rooms.
+#
+# BOTH HALVES ARE PROBED, and the second is not redundant. The read side is the
+# primary fix — an assistant must never SEE a room it cannot book — but an
+# assistant may name a date it never read from an availability response, which
+# is exactly how the finding was found. So the sale is guarded too, from the
+# same {WireArguments.past_stay}, and both are asserted here.
+#
+# THE CONTROLS ARE WHAT MAKE IT NON-VACUOUS. A handler that refused EVERY date,
+# or one that answered `[]` to everything, would satisfy the refusals alone. So
+# each probe is paired with the same call at a FUTURE date, which must be
+# answered: rooms listed, and a hold minted.
+#
+# TODAY IS DELIBERATELY NOT PROBED AS A REFUSAL. hoteling's floor is the DAY, in
+# the property's clock (Europe/Istanbul), and today is bookable — a same-day
+# arrival is an ordinary room-night. Probing "today must be accepted" from a
+# runner on an arbitrary clock would be a test of the RUNNER's timezone, not of
+# the operator's, so the beat asserts the two ends that are unambiguous from any
+# clock: a century ago is refused, a month out is answered.
+class PastStay < Kiosk::Redteam::Scenario
+  PAST_IN  = "1900-01-01"
+  PAST_OUT = "1900-01-04"
+  # Its OWN nights, deliberately disjoint from CHECK_IN..CHECK_OUT, so the
+  # control HOLD neither consumes nor depends on the inventory the generic
+  # scenarios share — the same arrangement {DoubleBookedRoom} makes and for the
+  # same reason.
+  CTL_IN  = (Date.today + 90).to_s.freeze
+  CTL_OUT = (Date.today + 93).to_s.freeze
+
+  def initialize
+    super(
+      name:        "PastStay",
+      category:    "surface",
+      description: "A check_in before today is a typed 400 on BOTH availability and reserve_room — never rooms, never a hold",
+    )
+  end
+
+  def call(client, profile)
+    a        = register_principal(client, name: "redteam-paststay-a", profile:)
+    found    = FIND_AVAILABLE.call(client, a)
+    prop_id  = found[:prop]["property_id"]
+    room_id  = found[:room]["room_type_id"]
+    failures = []
+    statuses = []
+
+    # ── Half 1: the READ side. Zero availability for a past date. ───────────
+    past_avail = client.query(a, name: "availability",
+                              property_id: prop_id, check_in: PAST_IN, check_out: PAST_OUT)
+    statuses << past_avail.status
+    rows = past_avail.body.is_a?(Array) ? past_avail.body : []
+    unless refusal?(past_avail)
+      failures << "availability(#{PAST_IN}..#{PAST_OUT}) → HTTP #{past_avail.status} " \
+                  "code=#{error_code(past_avail).inspect} rows=#{rows.size} " \
+                  "(want 400 bad_request naming the earliest bookable night; ZERO rooms either way)"
+    end
+    unless rows.empty?
+      failures << "availability(#{PAST_IN}..#{PAST_OUT}) LISTED #{rows.size} room type(s) — " \
+                  "there is no room-night in the past to offer"
+    end
+
+    # CONTROL for half 1 — a future stay at the same property must still list.
+    ctl_avail = client.query(a, name: "availability",
+                             property_id: prop_id, check_in: CTL_IN, check_out: CTL_OUT)
+    ctl_rows  = ctl_avail.body.is_a?(Array) ? ctl_avail.body : []
+    if ctl_avail.status != 200 || ctl_rows.empty?
+      failures << "CONTROL availability(#{CTL_IN}..#{CTL_OUT}) → HTTP #{ctl_avail.status} " \
+                  "rows=#{ctl_rows.size} (a handler that refused every date would pass the probe above)"
+    end
+
+    # ── Half 2: the WRITE side. A past room-night cannot be held. ───────────
+    past_hold = client.run(a, name: "reserve_room", property_id: prop_id, room_type_id: room_id,
+                                                    check_in: PAST_IN, check_out: PAST_OUT)
+    statuses << past_hold.status
+    unless refusal?(past_hold)
+      failures << "reserve_room(#{PAST_IN}..#{PAST_OUT}) → HTTP #{past_hold.status} " \
+                  "code=#{error_code(past_hold).inspect} body=#{JSON.generate(past_hold.body)[0, 160]} " \
+                  "(want 400 bad_request; a 200 here is a sold room-night from last century)"
+    end
+
+    # CONTROL for half 2 — the same call at a future date must mint a hold, so
+    # the refusal above cannot be an unrelated argument or ownership answer.
+    ctl_room = ctl_rows.first ? ctl_rows.first["room_type_id"] : room_id
+    ctl_hold = client.run(a, name: "reserve_room", property_id: prop_id, room_type_id: ctl_room,
+                                                   check_in: CTL_IN, check_out: CTL_OUT)
+    unless ctl_hold.status == 200
+      failures << "CONTROL reserve_room(#{CTL_IN}..#{CTL_OUT}) → HTTP #{ctl_hold.status} " \
+                  "code=#{error_code(ctl_hold).inspect} (the past-date refusal proves nothing " \
+                  "if this verb refuses these arguments anyway)"
+    end
+
+    Kiosk::Redteam::Verdict.new(
+      blocked: failures.empty?,
+      skipped: false,
+      status:  statuses.find { |st| st != 400 } || 400,
+      detail:  failures.join(" | "),
+    )
+  end
+
+  private
+
+  # The refusal this origin owes for a value outside a verb's domain: spec
+  # §9.1's first branch — 400 `bad_request` NAMING what it accepts. The date in
+  # the sentence is read in the PROPERTY's locale, which is not necessarily the
+  # runner's, so the assertion is "a calendar date is named", never a literal
+  # equal to this machine's `Date.today`.
+  def refusal?(resp)
+    detail = resp.body.is_a?(Hash) ? resp.body["detail"].to_s : ""
+    resp.status == 400 && error_code(resp) == "bad_request" &&
+      detail.include?("in the past") && detail.match?(/\d{4}-\d{2}-\d{2}/)
+  end
+end
+
 # ── Scenario list ─────────────────────────────────────────────────────────────
 #
 # 13 generic + 7 local beats (3 cashier-check + 1 input-shape + 1 inventory +
@@ -809,6 +933,7 @@ scenarios = [
   DoubleBookedRoom.new,                                   # K-690 — one room-night, one booking
   RetiredWire.new,                                        # T-074 = A — the 0.3 pair is 404, not a shim
   MethodMismatch.new,                                     # 0.4 — wrong method is 405 + Allow, not 404
+  PastStay.new,                                           # K-969 — no availability in the past, no booking into it
   Kiosk::Redteam::Scenarios::MissingKyc.new,              # → SKIP (no KYC)
   Kiosk::Redteam::Scenarios::ExpiredKyc.new,              # → SKIP (no KYC)
   Kiosk::Redteam::Scenarios::ForgedKyc.new,               # → SKIP (no KYC)

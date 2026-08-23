@@ -16,6 +16,15 @@ SERVER_URL="http://127.0.0.1:$PORT"
 # bearers down as `agent:u-<uuid>:a-<slug>:r-customer` and a dev-only parser in
 # the demo believed them; that parser is deleted, so the walkthrough now shows
 # the same thing a real assistant does to get a token.
+# The slot this walkthrough books, COMPUTED rather than written down (K-969).
+# `book_appointment` refuses an instant that has already passed, and the literal
+# that used to sit here — 2026-07-01 — was itself in the past, so the
+# walkthrough's headline action would have printed a 400. `date -v` is BSD/macOS
+# and `date -d` is GNU; trying both is the portable idiom and keeps this script
+# free of a Ruby boot just to add thirty days.
+DEMO_SLOT="$(date -u -v+30d '+%Y-%m-%dT14:00:00Z' 2>/dev/null \
+             || date -u -d '+30 days' '+%Y-%m-%dT14:00:00Z')"
+
 ALICE_EMAIL="${ALICE_EMAIL:-alice@example.com}"
 BOB_EMAIL="${BOB_EMAIL:-bob@example.com}"
 DEMO_PASSWORD="${DEMO_PASSWORD:-combette-demo-password}"
@@ -139,7 +148,7 @@ SERVICE_ID=$(q "$ALICE_TOKEN" availability | jq -r '.[0].service_id')
 
 step "POST /kiosk/book_appointment for salon $SALON_ID with service $SERVICE_ID"
 run "$ALICE_TOKEN" book_appointment \
-  "{\"salon_id\":$SALON_ID,\"service_id\":$SERVICE_ID,\"slot\":\"2026-07-01T14:00:00Z\"}" \
+  "{\"salon_id\":$SALON_ID,\"service_id\":$SERVICE_ID,\"slot\":\"$DEMO_SLOT\"}" \
   | jq '.'
 
 # ─── App-layer isolation ─────────────────────────────────────────────
@@ -169,7 +178,8 @@ say "  an action is a POST at its own endpoint, arguments in the JSON body:"
 say "    curl -sS -X POST $SERVER_URL/kiosk/book_appointment \\"
 say "      -H \"Authorization: Bearer \$TOKEN\" \\"
 say "      -H 'Content-Type: application/json' \\"
-say "      -d '{\"salon_id\":1,\"slot\":\"2026-07-01T14:00:00Z\"}' | jq '.'"
+say "      -d '{\"salon_id\":1,\"slot\":\"$DEMO_SLOT\"}' | jq '.'"
+say "      (the slot must be in the FUTURE — a time that has passed is a 400.)"
 say ""
 say "Neither identity seam is a stub any more — both ran for real above:"
 say "  • AGENT-IdP (c.agent_idp): UNSET, deliberately. The engine's own"

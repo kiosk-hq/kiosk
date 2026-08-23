@@ -1,0 +1,49 @@
+<%#
+  tudu's sign-up form — Devise's own view with ONE field added: display_name.
+
+  It is overridden for exactly that reason (K-950). `list_members` publishes the
+  name an account chose, and an account that chose none is published as an
+  opaque `member-<hex>`; tudu is the one demo in the fleet with OPEN
+  registration, so without a field here every real visitor would join a
+  household roster as a hash — and "a name the household recognises" is the
+  whole point of the verb. The alternative, publishing the address they signed
+  up with, is what K-950 removed.
+
+  Everything else is Devise's shipped view unchanged, including its two shared
+  partials, which still resolve out of the gem.
+%>
+<h2>Sign up</h2>
+
+<%= form_for(resource, as: resource_name, url: registration_path(resource_name)) do |f| %>
+  <%= render "devise/shared/error_messages", resource: resource %>
+
+  <div class="field">
+    <p><%= f.label :display_name, "Display name" %></p>
+    <p><em>How your housemates see you on a shared list. Optional — leave it blank and you are named by an opaque handle instead. Never your email address.</em></p>
+    <p><%= f.text_field :display_name, autofocus: true, autocomplete: "nickname" %></p>
+  </div>
+
+  <div class="field">
+    <p><%= f.label :email %></p>
+    <p><%= f.email_field :email, autocomplete: "email" %></p>
+  </div>
+
+  <div class="field">
+    <p><%= f.label :password %></p>
+    <% if @minimum_password_length %>
+      <p><em>(<%= @minimum_password_length %> characters minimum)</em></p>
+    <% end %>
+    <p><%= f.password_field :password, autocomplete: "new-password" %></p>
+  </div>
+
+  <div class="field">
+    <p><%= f.label :password_confirmation %></p>
+    <p><%= f.password_field :password_confirmation, autocomplete: "new-password" %></p>
+  </div>
+
+  <div class="actions">
+    <%= f.submit "Sign up" %>
+  </div>
+<% end %>
+
+<%= render "devise/shared/links" %>

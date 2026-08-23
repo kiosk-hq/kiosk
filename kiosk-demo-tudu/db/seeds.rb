@@ -26,13 +26,22 @@ BOB_ID   = "00000000-0000-0000-0000-000000000002"
 # Demo-only credentials (development database, reset by every demo:setup).
 DEMO_PASSWORD = "tudu-demo-password"
 
+# display_name is what the ROSTER publishes (K-950). `list_members` used to
+# publish `users.email`, so every housemate learned every other housemate's
+# login address; it publishes this column instead, and an account that has
+# chosen no name — every assistant-created principal — gets the opaque
+# `member-<hex>` {User.public_name} derives from its UUID. Seeded here so the
+# demo's own household reads the way a household should ("Alice", "Bob") rather
+# than as two hashes: a name the reader recognises is the point of the verb.
 alice = User.find_or_create_by!(id: ALICE_ID) do |u|
-  u.email    = "alice@example.com"
-  u.password = DEMO_PASSWORD
+  u.email        = "alice@example.com"
+  u.display_name = "Alice"
+  u.password     = DEMO_PASSWORD
 end
 bob = User.find_or_create_by!(id: BOB_ID) do |u|
-  u.email    = "bob@example.com"
-  u.password = DEMO_PASSWORD
+  u.email        = "bob@example.com"
+  u.display_name = "Bob"
+  u.password     = DEMO_PASSWORD
 end
 
 # ── The seeded household: a shared list Alice owns and Bob is a member of ─────
@@ -59,6 +68,8 @@ Membership.find_or_create_by!(list: flat, account: bob)   { |m| m.role = "member
   end
 end
 
-puts "Seeded: 2 account holders (#{ALICE_ID} alice@example.com, #{BOB_ID} bob@example.com; " \
-     "password #{DEMO_PASSWORD}); household \"#{flat.title}\" owned by alice, shared with " \
-     "bob (housemate) — #{flat.todos.count} tasks. The wire flows create their own \"Hike\" lists."
+puts "Seeded: 2 account holders (#{ALICE_ID} alice@example.com as \"#{alice.display_name}\", " \
+     "#{BOB_ID} bob@example.com as \"#{bob.display_name}\"; password #{DEMO_PASSWORD}); household " \
+     "\"#{flat.title}\" owned by alice, shared with bob (housemate) — #{flat.todos.count} tasks. " \
+     "The wire publishes the display names, never the addresses. The wire flows create their own " \
+     "\"Hike\" lists."

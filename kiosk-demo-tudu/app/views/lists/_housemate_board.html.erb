@@ -27,7 +27,7 @@
             <% if list["my_role"] == "owner" %>
               owned by this housemate
             <% else %>
-              shared by <%= board_handle_name(list["owner_handle"]) %>
+              shared by <%= list["owner_name"] %>
             <% end %>
           </div>
           <% if list["tasks"].empty? %>

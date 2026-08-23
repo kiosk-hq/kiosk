@@ -39,11 +39,14 @@ Rails.application.routes.draw do
   post "/kiosk/auth/assistants/unlink",            to: "kiosk/server/assistants#unlink"
   post "/kiosk/auth/assistants/update",            to: "kiosk/server/assistants#update"
 
-  # Human sign-in (Devise) — the web session that approves assistant links.
+  # Human sign-in + sign-up (Devise) — the web session that approves assistant
+  # links, and the open registration tudu alone in the fleet offers.
   # The sessions controller is overridden ONLY to answer a JSON-shaped
   # `DELETE /users/sign_out` with the Kiosk error envelope instead of a bodyless
-  # 401 (K-533); every other Devise behaviour is inherited untouched.
-  devise_for :users, controllers: { sessions: "users/sessions" }
+  # 401 (K-533); the registrations controller ONLY to permit `display_name` on
+  # sign-up (K-950 — the roster publishes that column, never the address). Every
+  # other Devise behaviour is inherited untouched.
+  devise_for :users, controllers: { sessions: "users/sessions", registrations: "users/registrations" }
 
   # ── tudu web UI (the video centerpiece — tutorial-plain scaffold) ──────────
   # A signed-in human sees their lists, opens one to see todos + members, adds

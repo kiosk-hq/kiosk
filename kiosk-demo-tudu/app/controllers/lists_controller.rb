@@ -131,15 +131,23 @@ class ListsController < ApplicationController
   # this is a viewer's read-only window (like atablefor's reservations board),
   # NOT a membership-gated wire query, so it takes no GUC principal and mutates
   # nothing. One list-header row per membership; each carries its tasks and the
-  # owner's handle (the "shared by" attribution). Newest shared list first, so a
-  # freshly created+shared list floats to the top when a viewer refreshes.
+  # owner's DISPLAY NAME (the "shared by" attribution). Newest shared list first,
+  # so a freshly created+shared list floats to the top when a viewer refreshes.
+  #
+  # It used to select `owner_u.email` and mask the local part in the view
+  # (`al•••`), which is how the page and the wire came to disagree about how
+  # much of an address a reader may see — and masking is itself a disclosure (two
+  # characters plus the confirmation that the address holds an account here).
+  # Both surfaces now read the SAME value through {User.public_name}, so there is
+  # one answer to "what is this person called" and no address on either (K-950).
   def housemate_board
     conn = ActiveRecord::Base.connection
     rows = conn.exec_query(<<~SQL, "housemate_board", [HOUSEMATE_ID]).to_a
       SELECT l.id                                        AS list_id,
              l.title                                     AS title,
              m.role                                      AS my_role,
-             owner_u.email                               AS owner_handle,
+             owner_u.display_name                        AS owner_display_name,
+             om.account_id                               AS owner_account_id,
              l.created_at                                AS created_at
         FROM memberships m
         JOIN lists l           ON l.id = m.list_id
@@ -157,7 +165,7 @@ class ListsController < ApplicationController
         "list_id"      => r["list_id"],
         "title"        => r["title"],
         "my_role"      => r["my_role"],
-        "owner_handle" => r["owner_handle"],
+        "owner_name"   => User.public_name(r["owner_display_name"], r["owner_account_id"]),
         "tasks"        => tasks_by_list.fetch(r["list_id"], []),
       }
     end
@@ -177,16 +185,4 @@ class ListsController < ApplicationController
       .to_a.group_by { |t| t["list_id"] }
   end
 
-  helper_method :board_handle_name
-
-  # Public label for an account's email handle: the local-part, masked past the
-  # first two chars so a viewer sees "who" without exposing a full address.
-  # (tudu has no display_name column; the handle IS the email.)
-  def board_handle_name(email)
-    email = email.to_s
-    return "an assistant account" unless email.include?("@")
-
-    local = email.split("@").first
-    local.length <= 2 ? local : "#{local[0, 2]}#{'•' * (local.length - 2)}"
-  end
 end

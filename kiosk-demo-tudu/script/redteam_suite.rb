@@ -30,6 +30,11 @@
 #   RevokedAgentKey       — an unlinked agent's login is denied → 404
 #   PreLinkTokenAfterLink — a token minted before rebind is watermark-revoked by
 #                           the rebind (principal change) → 401
+#   NoLoginAddressOnTheRoster — a co-member's list_members carries display names
+#                           and NO account address anywhere in the body (K-950)
+#   ChosenNameNeverTheAddress — a visitor who signs up with a display name is
+#                           named by it on a roster, never by what they log in
+#                           with (the other end of the same rule)
 #
 # Usage:
 #   SERVER_URL=… KIOSK_ISSUER=… HOLDER_ID=… HOLDER_EMAIL=… HOLDER_PASSWORD=… \
@@ -266,6 +271,152 @@ rc, = post_json("/kiosk/auth/claim", { code: link2["link_code"], public_key: pl[
 rc, = get_json("/kiosk/list_todos", { list_id: pl_list }, bearer(pl[:token]))
 record(results, "PreLinkTokenAfterLink", rc == 401,
        "pre-link token after rebind → #{rc} (want 401 — watermark-revoked)")
+
+# ── NoLoginAddressOnTheRoster (K-950) ────────────────────────────────────────
+#
+# THE BEAT THAT HAS TO SURVIVE A REFACTOR, and tudu's twin of philslist's
+# NoSellerPiiOnTheOpenBoard. `list_members` is the most cross-principal verb
+# tudu has — the rows ARE other accounts — and until K-950 the column it
+# published was `users.email`, so every housemate on a shared list walked away
+# with every other housemate's LOGIN ADDRESS. Consent bought the roster; it
+# never bought the credential, and spec Section 7.2 now says so at EVERY reach
+# rather than only at `published`. The projection is one `pluck` line; nothing
+# but an assertion stops a future edit from putting the column back.
+#
+# THE PROBE RUNS AS AN ASSISTANT BOUND TO ALICE and reads the SEEDED household
+# ("Flat 3B"), because that is the only roster on this origin whose members are
+# HUMANS WITH ADDRESSES — the three fixture agents above are headless accounts
+# with no email at all, so a probe over their list would pass vacuously no
+# matter what the projection did. Alice reading Bob's row is exactly the
+# position the row was filed about: a consented co-member, learning what the
+# verb tells it about the people it already shares a list with.
+#
+# Four things are asserted, and the last three are what make the first
+# non-vacuous:
+#   1. NO account address anywhere in the response — the RAW BODY is searched
+#      for Alice's seeded address and for `@` at all, not just the field that
+#      used to hold it. A leak that moved to another key, or into a debug
+#      field, is the same leak.
+#   2. Every row carries a non-empty `display_name`. A handler that dropped the
+#      field entirely would fail here, so the beat cannot be passed by
+#      publishing nothing.
+#   3. The seeded household still reads as a household — "Alice" and "Bob", the
+#      names those accounts chose. This is the half philslist does NOT have:
+#      an opaque handle would satisfy (1) and (2) and destroy the verb, since
+#      "who added the tent?" is what a roster is for.
+#   4. A HEADLESS account — one that chose no name, which is every
+#      assistant-created principal — is named by an opaque `member-<12 hex>`,
+#      distinct per account. That pins the fallback's shape and its derivation
+#      from the account UUID rather than from anything a reader can enumerate.
+#
+# SESSION is still signed in as Alice from the scenarios above, so the ordinary
+# link/claim/login ceremony is all it takes to stand where an assistant stands.
+pii_rc_link, pii_link = post_json("/kiosk/auth/link", {}, { session: true })
+pii_key = OpenSSL::PKey::RSA.generate(2048)
+pii_pem = pii_key.public_key.to_pem
+pii_rc_claim, = post_json("/kiosk/auth/claim",
+                          { code: pii_link["link_code"], public_key: pii_pem, signed: pop_proof(pii_key, pii_pem) })
+pii_rc_login, pii_login = post_json("/kiosk/auth/login",
+                                    { public_key: pii_pem, signed: pop_proof(pii_key, pii_pem) })
+pii_bearer = bearer(pii_login["access_token"].to_s)
+
+rc_mine, mine = get_json("/kiosk/my_lists", {}, pii_bearer)
+household = Array(mine).find { |r| r["title"] == "Flat 3B" }
+rc_roster, roster = get_json("/kiosk/list_members", { list_id: household && household["list_id"] }, pii_bearer)
+rc_who, who = get_json("/kiosk/whoami", {}, pii_bearer)
+
+# `is_a?(Array)` on every body before indexing it, philslist's rule: a verb that
+# 500s answers with a problem-document HASH, and a beat that assumed an array
+# would die with a TypeError instead of reporting a BREACH. This is not
+# hypothetical here — restoring the old projection makes `list_members` render a
+# payload its own `output_schema` rejects, so the engine answers 500 and this
+# beat must still say WHY.
+raw_roster   = JSON.generate(roster) + JSON.generate(who)
+roster_rows  = roster.is_a?(Array) ? roster : []
+who_rows     = who.is_a?(Array) ? who : []
+roster_names = roster_rows.map { |r| r["display_name"] }
+no_addresses = !raw_roster.include?(EMAIL) && !raw_roster.include?("@")
+named        = roster_rows.length >= 2 &&
+               roster_names.all? { |n| n.is_a?(String) && !n.strip.empty? }
+recognisable = (roster_names & %w[Alice Bob]).sort == %w[Alice Bob]
+
+# The headless half: the fixture agents' own list. Both principals on it
+# registered through /auth/register, so neither has an address OR a chosen name.
+# The outsider is re-invited first, because RevokedMemberAccess above removed
+# the original member — a one-row roster would prove the pseudonym's SHAPE
+# without proving it is per-account, and per-account is half of what makes it a
+# name rather than a constant.
+_, rejoin = post_json("/kiosk/invite", { list_id: list_id }, bearer(owner[:token]))
+post_json("/kiosk/accept_invite", { code: rejoin["code"] }, bearer(outsider[:token]))
+rc_headless, headless = get_json("/kiosk/list_members", { list_id: list_id }, bearer(owner[:token]))
+headless_names = (headless.is_a?(Array) ? headless : []).map { |r| r["display_name"] }
+opaque_ok = headless_names.length >= 2 &&
+            headless_names.all? { |n| n.to_s.match?(/\Amember-[0-9a-f]{12}\z/) } &&
+            headless_names.uniq.length == headless_names.length
+
+record(results, "NoLoginAddressOnTheRoster",
+       pii_rc_link == 201 && pii_rc_claim == 201 && pii_rc_login == 200 &&
+       rc_mine == 200 && rc_roster == 200 && rc_who == 200 && rc_headless == 200 &&
+       no_addresses && named && recognisable && opaque_ok,
+       "link=#{pii_rc_link} claim=#{pii_rc_claim} login=#{pii_rc_login}; " \
+       "list_members on the seeded household as Alice's assistant → #{rc_roster}, " \
+       "#{roster_rows.length} rows named #{roster_names.inspect}; whoami → #{rc_who} " \
+       "#{who_rows.first&.fetch('display_name', nil).inspect}; account addresses in " \
+       "roster+whoami body: #{no_addresses ? 'none' : 'FOUND'}; headless roster → " \
+       "#{rc_headless} #{headless_names.inspect} " \
+       "(want no address anywhere, every row a non-empty display_name, the seeded " \
+       "household reading as Alice+Bob, and each headless account an opaque " \
+       "`member-<12 hex>`)")
+
+# ── ChosenNameNeverTheAddress (K-950) ────────────────────────────────────────
+#
+# The other end of the same rule, and the reason tudu carries a `display_name`
+# field on its sign-up form when atablefor (whose diners are seeded) does not:
+# tudu is the fleet's ONE demo with open registration, so if a visitor cannot
+# name themselves, every real person who joins a household is published as a
+# hash — safe, and useless to the people who invited them. This walks the
+# shipped surfaces end to end: the real Devise form, the real list page.
+#
+# ITS OWN COOKIE JAR, deliberately. SESSION is Alice's browser and the beats
+# above still need it; Devise also refuses a sign-up from an already-signed-in
+# session, so sharing one jar would have made this beat pass for the wrong
+# reason.
+#
+# NOTE WHAT IS *NOT* ASSERTED: that the whole page carries no `@`. The layout
+# greets a signed-in human with their own address, which is a disclosure to its
+# own owner and no disclosure at all. The assertion is scoped to the Members
+# block — the one place a page names OTHER people — which is the same
+# distinction Section 7.2 draws.
+signup       = DeviseSession.new(SERVER)
+chosen_name  = "Cassie Housemate"
+signup_email = "cassie-#{SecureRandom.hex(4)}@example.com"
+signup_form  = signup.get_html("/users/sign_up")
+signup_res   = signup.post_form("/users",
+                                "authenticity_token"          => signup.csrf_token(signup_form.body),
+                                "user[display_name]"          => chosen_name,
+                                "user[email]"                 => signup_email,
+                                "user[password]"              => PASSWORD,
+                                "user[password_confirmation]" => PASSWORD)
+lists_page   = signup.get_html("/lists")
+# The token is read from the NEW-LIST form specifically, not from the first one
+# on the page: the layout renders a `button_to "Sign out"` above the yield, and
+# with per-form CSRF tokens the document's first token is bound to
+# (DELETE, /users/sign_out) and is rejected at (POST, /lists) with a 422.
+new_list_form = lists_page.body.to_s[%r{<form[^>]*action="/lists"[^>]*>.*?</form>}m].to_s
+create_res   = signup.post_form("/lists",
+                                "authenticity_token" => signup.csrf_token(new_list_form),
+                                "title"              => "Cassie's shelf")
+list_page    = signup.get_html(create_res["location"].to_s)
+members_html = list_page.body.to_s[%r{<h2>Members</h2>.*?</ul>}m].to_s
+
+record(results, "ChosenNameNeverTheAddress",
+       signup_form.code.to_i == 200 && [302, 303].include?(signup_res.code.to_i) &&
+       [302, 303].include?(create_res.code.to_i) && list_page.code.to_i == 200 &&
+       members_html.include?(chosen_name) && !members_html.include?("@"),
+       "sign-up form → #{signup_form.code}, sign-up → #{signup_res.code}, " \
+       "create list → #{create_res.code}, list page → #{list_page.code}; members block " \
+       "#{members_html.gsub(/\s+/, ' ').strip.inspect} " \
+       "(want the chosen name #{chosen_name.inspect} there and no address in it)")
 
 # ── Verdict ──────────────────────────────────────────────────────────────────
 breaches = results.reject { |r| r[:blocked] }

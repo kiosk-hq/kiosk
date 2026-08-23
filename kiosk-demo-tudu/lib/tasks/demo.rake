@@ -340,7 +340,10 @@ namespace :demo do
     /kiosk/run are an ordinary 404), MethodMismatch (a GET at an action's path
     is 405 + Allow, never a silent 404), plus tudu beats — InviteCodeReplay
     (403), RevokedMemberAccess (403), RevokedAgentKey (404),
-    PreLinkTokenAfterLink (401).
+    PreLinkTokenAfterLink (401), NoLoginAddressOnTheRoster (a co-member's
+    list_members and whoami carry display names and no account address anywhere
+    in the body) and ChosenNameNeverTheAddress (a visitor who signs up with a
+    display name is named by it on a roster, never by what they log in with).
   DESC
   task redteam: :setup do
     port = ENV.fetch("PORT", "3007")

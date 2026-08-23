@@ -92,7 +92,12 @@ Asserts every attack is BLOCKED (0 BREACH): `CrossTenantRead`, `ForgedUserId`
 tombstone, no second conformance surface), `MethodMismatch` (a `GET` at an
 action's path is `405` + `Allow: POST`, never a silent 404), plus tudu beats —
 `InviteCodeReplay` (403), `RevokedMemberAccess` (403), `RevokedAgentKey` (404),
-`PreLinkTokenAfterLink` (401).
+`PreLinkTokenAfterLink` (401), `NoLoginAddressOnTheRoster` (an assistant bound
+to Alice reads the seeded household's roster: display names only, and no
+account address anywhere in the body — headless accounts read as an opaque
+`member-<hex>` derived from the account UUID, never from an address) and
+`ChosenNameNeverTheAddress` (a visitor signs up with a display name and the
+list page names them by it).
 
 ### Not-only-commerce proof (`rake demo:schema`)
 
@@ -113,7 +118,7 @@ refusal is an RFC 9457 problem document — branch on its top-level `code`.
 | `GET /kiosk/whoami` | `whoami` | The GUC principal + acting AI assistant |
 | `GET /kiosk/my_lists` | `my_lists` | Lists the caller is a member of (owner or member) |
 | `GET /kiosk/list_todos?list_id=…` | `list_todos(list_id)` | A member-list's todos, with attribution |
-| `GET /kiosk/list_members?list_id=…` | `list_members(list_id)` | A member-list's members + roles |
+| `GET /kiosk/list_members?list_id=…` | `list_members(list_id)` | A member-list's members (display names, never login addresses) + roles |
 | `POST /kiosk/create_list` | `create_list(title)` | Create a list; caller becomes owner |
 | `POST /kiosk/add_todo` | `add_todo(list_id, title)` | Add a todo (attributed to the acting AI assistant) |
 | `POST /kiosk/complete_todo` | `complete_todo(todo_id)` | Mark a todo done (member-gated) |

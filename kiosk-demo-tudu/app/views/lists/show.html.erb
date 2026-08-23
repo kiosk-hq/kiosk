@@ -27,7 +27,7 @@
 <h2>Members</h2>
 <ul>
   <% @members.each do |m| %>
-    <li><%= m["handle"] || m["account_id"] %> <span class="role">(<%= m["role"] %>)</span></li>
+    <li><%= m["display_name"] %> <span class="role">(<%= m["role"] %>)</span></li>
   <% end %>
 </ul>
 

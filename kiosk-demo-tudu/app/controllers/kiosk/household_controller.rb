@@ -49,35 +49,42 @@ class Kiosk::HouseholdController < ApplicationController
   # declared in `output_schema` below; this says what the verb is FOR.
   kind :query
   description "Return who this call is authenticated as: the account the operator resolved for the " \
-              "request, the assistant acting on that account's behalf when one is, and the account's " \
-              "human-readable handle. A useful first call for an assistant orienting itself, and the " \
-              "proof that attribution is wired — everything this origin writes is attributed to " \
-              "exactly this pair."
+              "request, the assistant acting on that account's behalf when one is, and the display " \
+              "name that account carries in front of the people it shares lists with. A useful first " \
+              "call for an assistant orienting itself, and the proof that attribution is wired — " \
+              "everything this origin writes is attributed to exactly this pair."
   # A verb that takes nothing still declares the empty closed object, so "this
   # verb takes no arguments" is a published fact rather than an absence an
   # assistant has to interpret.
   input_schema type: "object", additionalProperties: false, properties: {}, required: []
   # A ONE-ROW array: this is a query and a query answers with rows. `agent_id`
-  # is null when the principal is a human web session rather than an assistant,
-  # and `handle` is null when the account has no email on file — both are real
-  # states of this demo's own tables, not defensive nulls.
+  # is null when the principal is a human web session rather than an assistant —
+  # a real state of this demo's own tables, not a defensive null.
+  #
+  # `display_name` is NOT nullable and is NOT an address (K-950). It used to be
+  # `handle`, the account's `users.email`, which was the same column
+  # `list_members` published to co-members; the field name and the value moved
+  # together so nothing is left calling itself a handle while carrying a
+  # credential. {User.public_name} answers a blank name with an opaque
+  # `member-<hex>` over the account UUID, so there is always a string here and
+  # never an address — see the note on that method for why the UUID.
   output_schema type: "array",
                 description: "Exactly one row: the authenticated principal.",
                 minItems: 1, maxItems: 1,
                 items: {
                   type: "object", additionalProperties: false,
                   properties: {
-                    account_id: { type: "string", description: "uuid — the principal, from kiosk.current_user_id(). Pass it to remove_member as `account_id`." },
-                    agent_id:   { type: %w[string null], description: "The acting assistant, or null when a human session is calling." },
-                    handle:     { type: %w[string null], description: "The account's email handle, or null when it has none." },
+                    account_id:   { type: "string", description: "uuid — the principal, from kiosk.current_user_id(). Pass it to remove_member as `account_id`." },
+                    agent_id:     { type: %w[string null], description: "The acting assistant, or null when a human session is calling." },
+                    display_name: { type: "string", description: "The name this account shows to the people it shares lists with — the one it chose, or a stable opaque `member-<hex>` when it has chosen none. Never a login address." },
                   },
-                  required: %w[account_id agent_id handle],
+                  required: %w[account_id agent_id display_name],
                 }
   def whoami
     account_id = kiosk_identity.user_id
-    render json: [{ "account_id" => account_id,
-                    "agent_id"   => kiosk_identity.agent_id,
-                    "handle"     => User.where(id: account_id).pick(:email) }]
+    render json: [{ "account_id"   => account_id,
+                    "agent_id"     => kiosk_identity.agent_id,
+                    "display_name" => User.public_name(User.where(id: account_id).pick(:display_name), account_id) }]
   end
 
   # my_lists — the lists the caller is a MEMBER of (owner OR member), via the
@@ -182,15 +189,23 @@ class Kiosk::HouseholdController < ApplicationController
   # list_members(list_id) — membership-gated; returns the members + roles so a
   # collaborator can see who else is on the list.
   # `reach :consented` — the most obviously cross-principal verb tudu has: the
-  # rows ARE other accounts. It is the membership that admits them, and the
-  # handle a co-member sees is one the account holder chose to share by joining
-  # a household list, which is exactly the distinction §7.2 draws between this
-  # and `published` (where no such act exists and an address may never appear).
+  # rows ARE other accounts. It is the membership that admits them: an owner
+  # minted a single-use invite, it travelled person-to-person, and
+  # `accept_invite` turned it into the row that authorises this read.
+  #
+  # WHAT THE CONSENT DOES NOT BUY (K-950). It buys the roster. It does not buy
+  # the members' LOGIN ADDRESSES, which is what this verb published until the
+  # projection moved to `display_name`. §7.2's prohibition used to hang off
+  # `reach :published` alone, so the spec as written permitted exactly this;
+  # it now binds every reach, `consented` included, for the reason that made
+  # the old scoping wrong — consent to share a list is not consent to publish
+  # an email address.
   kind :query
   reach :consented
-  description "Return who else is on a list the caller is a member of, and what each of them may do " \
-              "there — the answer a collaborator needs before it shares the list further or removes " \
-              "anyone from it. Forbidden (403) if the caller is not a member of the list."
+  description "Return who else is on a list the caller is a member of, named the way they show " \
+              "themselves to the household, and what each of them may do there — the answer a " \
+              "collaborator needs before it shares the list further or removes anyone from it. " \
+              "Forbidden (403) if the caller is not a member of the list."
   input_schema type: "object",
                additionalProperties: false,
                properties: {
@@ -204,12 +219,12 @@ class Kiosk::HouseholdController < ApplicationController
                 items: {
                   type: "object", additionalProperties: false,
                   properties: {
-                    account_id: { type: "string", description: "uuid. Pass to remove_member as `account_id`." },
-                    handle:     { type: %w[string null], description: "The member's email handle, or null when the account has none." },
+                    account_id:   { type: "string", description: "uuid. Pass to remove_member as `account_id`." },
+                    display_name: { type: "string", description: "How this member is named on the list — the name they chose, or a stable opaque `member-<hex>` when they have chosen none (every assistant-created account has). NEVER a login address, and there is no verb that turns it back into one." },
                     # `Membership::ROLES` — same reason as `my_lists` above (K-946).
-                    role:       { enum: Membership::ROLES, description: "Their role on this list. The last owner cannot be removed." },
+                    role:         { enum: Membership::ROLES, description: "Their role on this list. The last owner cannot be removed." },
                   },
-                  required: %w[account_id handle role],
+                  required: %w[account_id display_name role],
                 }
   # Gate, then {Membership.rows_on} — the projection the web page's member list
   # renders too (T-082).

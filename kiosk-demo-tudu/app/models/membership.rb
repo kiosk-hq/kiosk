@@ -83,13 +83,26 @@ class Membership < ApplicationRecord
   # rather than 404. See {List.reachable_rows} for why the shape lives on the
   # model at all.
   #
+  # WHAT IT PUBLISHES ABOUT A PERSON, AND WHAT IT MUST NOT (K-950). This pluck
+  # used to read `User.arel_table[:email]` into the wire field `handle`, so a
+  # co-member walked away with every other member's LOGIN ADDRESS. It reads
+  # `display_name` now, and {User.public_name} turns a blank one into an opaque
+  # `member-<hex>` derived from the account UUID — never from the address. The
+  # rule is not tudu's: spec Section 7.2 forbids a login address in a row about
+  # another account at EVERY reach, `consented` included, because consent to
+  # share a list is not consent to publish an email address. `demo:redteam`'s
+  # NoLoginAddressOnTheRoster beat reads this projection over the wire and fails
+  # on an address appearing ANYWHERE in the body, not merely in this field.
+  #
   # @return [Array<Hash>]
   def self.rows_on(list_id)
     where(list_id: list_id).joins(:account)
       .order(role: :desc, created_at: :asc)
-      .pluck(:account_id, User.arel_table[:email], :role)
-      .map { |account_id, handle, role|
-        { "account_id" => account_id, "handle" => handle, "role" => role }
+      .pluck(:account_id, User.arel_table[:display_name], :role)
+      .map { |account_id, display_name, role|
+        { "account_id"   => account_id,
+          "display_name" => User.public_name(display_name, account_id),
+          "role"         => role }
       }
   end
 end

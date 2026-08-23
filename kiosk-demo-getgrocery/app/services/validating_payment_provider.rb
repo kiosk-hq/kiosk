@@ -190,7 +190,7 @@ class ValidatingPaymentProvider
     end
 
     entries = Array(cart.line_items)
-    refs    = entries.filter_map { |li| li["order_id"] || li[:order_id] }.map(&:to_s).uniq
+    refs    = entries.filter_map { |li| li["order_id"] }.map(&:to_s).uniq
     deny "cart line_items must reference exactly one order_id (see create_order's pay_hint)" unless refs.size == 1
     order_id = refs.first
 
@@ -275,10 +275,10 @@ class ValidatingPaymentProvider
                           .map { |sku, qty, price_cents| [sku.to_s, qty.to_i, price_cents.to_i] }
                           .sort
 
-      presented = entries.reject { |li| li["order_id"] || li[:order_id] }.map do |li|
-        sku   = (li["sku"] || li[:sku]).to_s
-        qty   = (li["qty"] || li[:qty]).to_i
-        price = (li["price_cents"] || li[:price_cents]).to_i
+      presented = entries.reject { |li| li["order_id"] }.map do |li|
+        sku   = li["sku"].to_s
+        qty   = li["qty"].to_i
+        price = li["price_cents"].to_i
         deny "each item line needs sku, qty, and price_cents (catalog price)" if sku.empty? || qty <= 0 || price <= 0
         [sku, qty, price]
       end.sort

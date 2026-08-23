@@ -104,7 +104,12 @@ end
 def cart_for(order_id, id:, sku: CHEAP_SKU, qty: 1, price: CHEAP_PRICE)
   Kiosk::Mandate::CartMandate.new(
     id: id, intent_mandate_id: "intent-#{id}", user_id: USER_ID, agent_id: AGENT_ID,
-    issuer: "https://getgrocery.demo", line_items: [{ order_id: order_id }, { sku: sku, qty: qty, price_cents: price }],
+    issuer: "https://getgrocery.demo",
+    # String keys, matching the wire: a cart arrives as a JWS, and the verifier
+    # symbolises only the top-level claims, so the cashier always reads
+    # line_items with String keys. This driver builds one in-process, so it is
+    # the only place the shape could drift from what production hands over.
+    line_items: [{ "order_id" => order_id }, { "sku" => sku, "qty" => qty, "price_cents" => price }],
     total_amount_cents: qty * price, currency: "eur", expires_at: nil, created_at: nil, raw_jws: "cart-#{id}",
   )
 end

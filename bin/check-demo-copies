@@ -634,7 +634,9 @@ SKELETON_NOT_COMPARED = {
   "config.ru" => "Rails generator output, identical in all eight.",
   "Rakefile" => "Rails generator output, identical in all eight.",
   "Gemfile" => "Per-demo: each pulls only the kiosk gems and adapters it uses.",
-  "Gemfile.lock" => "Resolver output, tracked on purpose; follows the Gemfile.",
+  "Gemfile.lock" =>
+    "Resolver output, tracked on purpose; follows the Gemfile. Its PLATFORMS set IS asserted "\
+    "below - that half is not per-demo (K-962).",
   "README.md" => "Per-demo prose. The task list inside it is asserted by bin/check-ci-tasks.",
   "CHANGELOG.md" => "Per-demo history.",
   "before-after.md" => "Per-demo narrative: that storefront's before/after contrast.",
@@ -1291,6 +1293,57 @@ OPERATION_RESULT = "app/operations/operation_result.rb"
             "kiosk-server (K-792); behaviour one verb needs goes into that verb's Operation."
 end
 
+# -- Every demo lockfile resolves for the SAME platforms (K-962) -------------
+#
+# `Gemfile.lock` is declared NOT COMPARED, and for its resolved-versions half
+# that is right: each demo pulls a different set of kiosk gems and adapters, so
+# the GEM sections legitimately differ. Its `PLATFORMS` section does not.
+#
+# The deploy box is x86_64 linux and every demo is installed there by the same
+# push-to-deploy hook. A lockfile that names fewer platforms than its siblings
+# is not a variant, it is a lockfile that cannot be installed frozen: under
+# `BUNDLE_FROZEN` / `--deployment`, or a bundler that tightens the default, it
+# fails to boot on the box while the others succeed. Before this check,
+# philslist alone declared `arm64-darwin` and nothing else, so every deploy
+# rewrote the tracked file in place and left the production work-tree dirty --
+# which is exactly how it was found, on the box rather than in CI.
+#
+# Deliberately a PARITY rule and not a fixed list: the set changes when bundler
+# or a native gem changes, and pinning the ten names here would turn a routine
+# `bundle lock` into a check edit. What must never happen is one demo drifting
+# away from the rest. Fix a reported drift with
+# `bundle lock --add-platform <missing...>` in the demo named, never by
+# deleting platforms from the others.
+lockfile_platforms = demos.filter_map do |dir|
+  path = File.join(dir, "Gemfile.lock")
+  next unless File.exist?(path)
+
+  section = File.read(path)[/^PLATFORMS\n(.*?)(?:\n\n|\z)/m, 1]
+  [File.basename(dir), section.to_s.split("\n").map(&:strip).reject(&:empty?).sort]
+end.to_h
+
+if lockfile_platforms.size < 2
+  errors << "check-demo-copies: the K-962 lockfile-PLATFORMS rule compared " \
+            "#{lockfile_platforms.size} lockfile(s) - kiosk-demo-*/Gemfile.lock has moved or stopped " \
+            "being tracked. A parity rule with nothing to compare passes everything."
+else
+  majority = lockfile_platforms.values.tally.max_by { |_, n| n }.first
+  lockfile_platforms.each do |demo, platforms|
+    next if platforms == majority
+
+    missing = majority - platforms
+    extra   = platforms - majority
+    detail  = []
+    detail << "missing #{missing.join(', ')}" unless missing.empty?
+    detail << "declares #{extra.join(', ')}, which no sibling does" unless extra.empty?
+    errors << "#{short.(demo)}: Gemfile.lock PLATFORMS differs from the other demos - " \
+              "#{detail.join('; ')}. The deploy box installs all of them the same way, so a short " \
+              "platform list means this demo alone cannot be installed frozen and the deploy has to " \
+              "rewrite the tracked lockfile in place (K-962). Fix with " \
+              "`bundle lock --add-platform #{missing.join(' ')}` in #{demo}, not by shortening the others."
+  end
+end
+
 # ── No demo initializer patches a Rails framework class (K-504) ──────────────
 #
 # `ActiveRecord::Migration.include(Kiosk::RLS::DSL)` sat in FOUR of these
@@ -1372,7 +1425,8 @@ if errors.empty?
        "#{MIGRATION_PAIRS.size} cross-demo migration pairs (#{pair_drift} with drift pending triage), " \
        "telemetry wired in #{(dups['app/services/demo_telemetry.rb'] || {}).size} demos, " \
        "OperationResult subclassed from kiosk-server in #{(dups[OPERATION_RESULT] || {}).size} demos, " \
-       "no Rails-framework patching in the initializers of #{initializer_demos} operator demos"
+       "no Rails-framework patching in the initializers of #{initializer_demos} operator demos, " \
+       "one PLATFORMS set across #{lockfile_platforms.size} demo lockfiles"
   exit 0
 end
 

@@ -127,7 +127,7 @@ class ValidatingRentalProvider
     end
 
     entries = Array(cart.line_items)
-    refs    = entries.filter_map { |li| li["reservation_id"] || li[:reservation_id] }.map(&:to_s).uniq
+    refs    = entries.filter_map { |li| li["reservation_id"] }.map(&:to_s).uniq
     deny "cart line_items must reference exactly one reservation_id (see reserve's pay_hint)" unless refs.size == 1
     reservation_id = refs.first
 
@@ -215,11 +215,11 @@ class ValidatingRentalProvider
       # the cart's total must equal the sum of qty × price_cents across those
       # lines. Carts with no priced lines (e.g. the isolation-flow cart) skip
       # this sub-check and are guarded by the quoted-total check alone.
-      priced = entries.select { |li| li["price_cents"] || li[:price_cents] }
+      priced = entries.select { |li| li["price_cents"] }
       unless priced.empty?
         line_sum = priced.sum do |li|
-          qty   = (li["qty"] || li[:qty]).to_i
-          price = (li["price_cents"] || li[:price_cents]).to_i
+          qty   = li["qty"].to_i
+          price = li["price_cents"].to_i
           deny "each priced line needs a positive qty and price_cents" if qty <= 0 || price <= 0
           qty * price
         end

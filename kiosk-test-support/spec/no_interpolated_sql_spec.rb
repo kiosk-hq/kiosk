@@ -80,12 +80,19 @@ SQLI_KNOWN = {
   # ids themselves travel as binds. A worked example of what this guard wants.
   "kiosk-demo-tudu/app/controllers/lists_controller.rb" => 1,
 }.merge(
-  # DEBT — K-714 owns `demo_telemetry.rb`: it builds its INSERT as a heredoc
-  # with four `conn.quote` splices and interpolates its table-name constant.
+  # ACCEPTED — `demo_telemetry.rb` interpolates its TABLE-NAME constant into
+  # four statements (one INSERT, three SELECTs). That is a schema identifier
+  # this file owns, not a caller value: every value travels as a bind through
+  # `exec_insert`/`exec_query`. K-714 discharged the real debt here — the four
+  # `conn.quote` value splices and the request-path `CREATE TABLE IF NOT
+  # EXISTS` are gone, replaced by a migration — which is why this count fell
+  # from 18 to 4. It is a floor, not a ceiling: the guard fails if it grows
+  # AND if it drains, so removing the last four would fail here too and the
+  # entry must be deleted in the same change.
   # Byte-identical in seven demos (bin/check-demo-copies pins that), so the
   # count is stated once and applied to each copy.
   %w[atablefor getgrocery hoteling philslist skooti stylish tudu].to_h do |demo|
-    ["kiosk-demo-#{demo}/app/services/demo_telemetry.rb", 18]
+    ["kiosk-demo-#{demo}/app/services/demo_telemetry.rb", 4]
   end,
 ).freeze
 

@@ -97,5 +97,6 @@ e2e/
     ├── bookings_controller.rb              # Kiosk::BookingsController — `include Kiosk::Handler`: the my_appointments QUERY and the book_appointment ACTION in ONE controller (K-921)
     ├── devise_initializer.rb               # Devise setup (database_authenticatable) — the HUMAN channel the binding pages authenticate
     ├── initializer_kiosk.rb                # Kiosk.configure, including `c.handlers` naming the two controllers above
+    ├── environment_kiosk.rb                 # SPLICED (not copied) into the generated config/environments/{development,production}.rb, ahead of their closing `end`: the block that resolves the harness's four env inputs and publishes them as `Rails.configuration.x.kiosk.*`, which the initializer above then READS (ENV-CONFIG-PLACEMENT, K-1009). Both files get the same block so KIOSK_POW_SECRET still fails loud outside development
     └── routes.rb                           # hand-draws /kiosk/schema, /kiosk/pay, /kiosk/openapi.json, /kiosk/auth/{challenge,register,login,revoke,link,claim,unlink}, jwks, oauth/* device + verify routes, the root discovery documents (/agents.{txt,json}, /auth.md, /.well-known/{agent-configuration,kiosk.json,api-catalog}) and — LAST, so every reserved line above wins — the per-verb `GET|POST /kiosk/:kiosk_verb` pair
 ```

@@ -65,6 +65,25 @@ Rails.application.configure do
 config.x.kiosk.app_role    = ENV.fetch("KIOSK_APP_ROLE",    "app_role")
 config.x.kiosk.system_role = ENV.fetch("KIOSK_SYSTEM_ROLE", "app_role")
 
+# ── The toy bad-proof counter's store (K-1008) ──────────────────────────
+# WHERE the demo PoW bad-proof counter's sqlite file lives. A filesystem path
+# is per-environment posture rather than a demo mode, so it is resolved here
+# with every other env input and the initializer reads the config, never ENV
+# (ENV-CONFIG-PLACEMENT, Phil 2026-08-12; K-650, K-699). `rake demo:pow` OWNS
+# the location: it wipes the file for a clean slate and exports
+# KIOSK_BAD_PROOF_DB to BOTH the server it spawns and the driver that reads
+# the counts back, so the two processes cannot drift onto different files and
+# report zero at each other; the defaults below are only for a bare `rails s`.
+# TWO keys because atablefor's :demo and :reputation PoW branches keep
+# SEPARATE stores and this file cannot know which branch will run — an
+# explicit KIOSK_BAD_PROOF_DB overrides whichever one is read, which is what
+# demo:pow relies on. Published in all seven demos like every other key in
+# this block (only atablefor and getgrocery carry a bad-proof counter): these
+# blocks are kept identical across the seven, two of them by
+# bin/check-demo-copies.
+config.x.kiosk.bad_proof_db            = ENV.fetch("KIOSK_BAD_PROOF_DB") { Rails.root.join("tmp", "bad-proof.sqlite3").to_s }
+config.x.kiosk.reputation_bad_proof_db = ENV.fetch("KIOSK_BAD_PROOF_DB") { Rails.root.join("tmp", "reputation-bad-proof.sqlite3").to_s }
+
   # Payment-provider credentials (K-700) — read by whichever demos configure a
   # REAL payment adapter, and never looked at by the others. Same relaxed
   # posture as development: a mock base URL implies a mock key, and with neither

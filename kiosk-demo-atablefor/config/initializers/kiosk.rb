@@ -163,10 +163,11 @@ when :demo
   # signal. `rake demo:pow` OWNS the location: it wipes the file for a clean
   # slate and exports KIOSK_BAD_PROOF_DB to BOTH the server it spawns and the
   # driver that reads the counts back, so the two processes cannot drift onto
-  # different files and report zero at each other. The default below is only
-  # for a bare `rails s`.
-  ATABLEFOR_BAD_PROOF_DB =
-    ENV.fetch("KIOSK_BAD_PROOF_DB") { Rails.root.join("tmp", "bad-proof.sqlite3").to_s }
+  # different files and report zero at each other. The PATH ITSELF is resolved
+  # in config/environments/* like every other env input (K-1008,
+  # ENV-CONFIG-PLACEMENT); this file only reads it, and the default over there
+  # is only for a bare `rails s`.
+  ATABLEFOR_BAD_PROOF_DB = Rails.configuration.x.kiosk.bad_proof_db
 when :reputation
   # Anti-scalping mechanic: a fresh/low-reputation agent pays ESCALATING PoW
   # (N×PoW) to browse prime-time availability, and that cost DROPS as it builds a
@@ -183,8 +184,7 @@ when :reputation
   # Same location rule as the :demo branch above (K-785). Nothing asserts these
   # counts — no driver reads this branch's store — so nothing wipes it either;
   # the "NO TTL" caveat above is the whole of its behaviour.
-  ATABLEFOR_REPUTATION_BAD_PROOF_DB =
-    ENV.fetch("KIOSK_BAD_PROOF_DB") { Rails.root.join("tmp", "reputation-bad-proof.sqlite3").to_s }
+  ATABLEFOR_REPUTATION_BAD_PROOF_DB = Rails.configuration.x.kiosk.reputation_bad_proof_db
 end
 
 # ── PoW HMAC secret (K-541/K-650) ───────────────────────────────────────────

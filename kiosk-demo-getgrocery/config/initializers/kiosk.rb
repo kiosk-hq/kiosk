@@ -79,10 +79,11 @@ if ENV["KIOSK_POW_DEMO"] == "1"
   # signal. `rake demo:pow` OWNS the location: it wipes the file for a clean
   # slate and exports KIOSK_BAD_PROOF_DB to BOTH the server it spawns and the
   # driver that reads the counts back, so the two processes cannot drift onto
-  # different files and report zero at each other. The default below is only
-  # for a bare `rails s`.
-  GETGROCERY_BAD_PROOF_DB =
-    ENV.fetch("KIOSK_BAD_PROOF_DB") { Rails.root.join("tmp", "bad-proof.sqlite3").to_s }
+  # different files and report zero at each other. The PATH ITSELF is resolved
+  # in config/environments/* like every other env input (K-1008,
+  # ENV-CONFIG-PLACEMENT); this file only reads it, and the default over there
+  # is only for a bare `rails s`.
+  GETGROCERY_BAD_PROOF_DB = Rails.configuration.x.kiosk.bad_proof_db
 
   class GetgroceryCatalogPowPolicy < Kiosk::Reputation::Policy
     def initialize(params)

@@ -1483,16 +1483,11 @@ FRAMEWORK_PATCH = /
 #
 # ALLOWED names are declared one at a time, each with the row that owns the
 # residue — and an allowance matching nothing is an error, so the list cannot
-# outlive the thing it excuses.
+# outlive the thing it excuses. It is EMPTY since K-1008 landed the last
+# residue it excused (KIOSK_BAD_PROOF_DB); an empty list is the intended
+# resting state, not a gap.
 ENV_FETCH = /\A[^#]*\bENV\.fetch\(\s*"(?<var>[A-Z0-9_]+)"/
-INITIALIZER_ENV_FETCH_ALLOWED = {
-  "KIOSK_BAD_PROOF_DB" =>
-    "K-1008: the toy bad-proof counter's sqlite path, in atablefor (twice) and getgrocery. Same " \
-    "shape as K-699, filed as its own row rather than fixed inline — unlike the role names this " \
-    "one IS set (demo:pow exports it to both the server it spawns and the driver that reads the " \
-    "counts back) and it sits outside `Kiosk.configure`, in the mode branch K-650 carved out. " \
-    "When K-1008 lands, this allowance goes with it.",
-}.freeze
+INITIALIZER_ENV_FETCH_ALLOWED = {}.freeze
 env_fetch_seen = Hash.new(0)
 
 initializer_demos = 0

@@ -117,8 +117,10 @@ Kiosk.configure do |c|
   # role separation in this demo). Set app_role to the same role so the
   # `GRANT TO app_role` statements in `enable_rls_on` are no-ops on a
   # role that already has all privileges via ownership.
-  c.app_role    = ENV.fetch("KIOSK_APP_ROLE",    "app_role")
-  c.system_role = ENV.fetch("KIOSK_SYSTEM_ROLE", "app_role")
+  # ── Postgres role names (K-699/K-650) ────────────────────────────────────
+  # Resolved in config/environments/*, like every other env input; read here.
+  c.app_role    = Rails.configuration.x.kiosk.app_role
+  c.system_role = Rails.configuration.x.kiosk.system_role
 
   # ── Issuer origin (K-510/K-650) ───────────────────────────────────────────
   # This operator's canonical origin — advertised in /.well-known/kiosk.json,

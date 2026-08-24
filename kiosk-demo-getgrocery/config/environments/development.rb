@@ -91,6 +91,18 @@ Rails.application.configure do
   # pins it OFF.
   config.x.kiosk.test_autocard = ENV["KIOSK_TEST_AUTOCARD"] == "1"
 
+# ── Postgres role names (K-699) ─────────────────────────────────────────
+# `app_role` is the non-owner role a request-scoped session drops into when
+# `enforce_db_role` is on; `system_role` is the owner role the engine returns
+# to afterwards. WHICH roles a database actually has is deployment posture
+# rather than a demo mode, so the names are resolved here with every other env
+# input and the initializer reads the config, never ENV (ENV-CONFIG-PLACEMENT,
+# K-650). Nothing in this repo SETS either variable: they are the seam an
+# adopter whose database names its roles differently would use, and this file
+# is where they would name them.
+config.x.kiosk.app_role    = ENV.fetch("KIOSK_APP_ROLE",    "app_role")
+config.x.kiosk.system_role = ENV.fetch("KIOSK_SYSTEM_ROLE", "app_role")
+
   # Payment-provider credentials (K-700). getgrocery is the one demo that wires a
   # REAL payment adapter, and this block is the whole of its out-of-the-box
   # posture — the initializer reads the resolved values and never ENV. With a

@@ -111,8 +111,10 @@ Kiosk.configure do |c|
   c.guc_namespace  = "app"
   c.schema         = "kiosk"
 
-  c.app_role    = ENV.fetch("KIOSK_APP_ROLE",    "app_role")
-  c.system_role = ENV.fetch("KIOSK_SYSTEM_ROLE", "app_role")
+  # ── Postgres role names (K-699/K-650) ────────────────────────────────────
+  # Resolved in config/environments/*, like every other env input; read here.
+  c.app_role    = Rails.configuration.x.kiosk.app_role
+  c.system_role = Rails.configuration.x.kiosk.system_role
 
   # ── RLS enforce gate (demo:rls only) ─────────────────────────────────────
   # When KIOSK_RLS_ENFORCE=1, SessionContext.open appends

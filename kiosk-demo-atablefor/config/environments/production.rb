@@ -114,6 +114,18 @@ Rails.application.configure do
   # here — the live demo runs the real hosted flow. Dev/test honour the flag.
   config.x.kiosk.test_autocard = false
 
+# ── Postgres role names (K-699) ─────────────────────────────────────────
+# `app_role` is the non-owner role a request-scoped session drops into when
+# `enforce_db_role` is on; `system_role` is the owner role the engine returns
+# to afterwards. WHICH roles a database actually has is deployment posture
+# rather than a demo mode, so the names are resolved here with every other env
+# input and the initializer reads the config, never ENV (ENV-CONFIG-PLACEMENT,
+# K-650). Nothing in this repo SETS either variable: they are the seam an
+# adopter whose database names its roles differently would use, and this file
+# is where they would name them.
+config.x.kiosk.app_role    = ENV.fetch("KIOSK_APP_ROLE",    "app_role")
+config.x.kiosk.system_role = ENV.fetch("KIOSK_SYSTEM_ROLE", "app_role")
+
   # Payment-provider credentials (K-700) — REQUIRED by whichever demos configure
   # a REAL payment adapter, and never looked at by the others. Deliberately NO
   # placeholder here, unlike dev and test: a shipped `sk_test_…` placeholder

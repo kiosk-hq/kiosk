@@ -110,8 +110,10 @@ Kiosk.configure do |c|
   c.guc_namespace  = "app"
   c.schema         = "kiosk"
 
-  c.app_role    = ENV.fetch("KIOSK_APP_ROLE",    "app_role")
-  c.system_role = ENV.fetch("KIOSK_SYSTEM_ROLE", "app_role")
+  # ── Postgres role names (K-699/K-650) ────────────────────────────────────
+  # Resolved in config/environments/*, like every other env input; read here.
+  c.app_role    = Rails.configuration.x.kiosk.app_role
+  c.system_role = Rails.configuration.x.kiosk.system_role
 
   # ── Issuer origin (K-510/K-650) ───────────────────────────────────────────
   # This operator's canonical origin — advertised in /.well-known/kiosk.json,

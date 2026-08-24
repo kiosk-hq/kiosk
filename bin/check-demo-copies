@@ -142,6 +142,20 @@ EXTRA_SCANNED = [
 # Rails app generated on its own — the recurring shape described atop
 # SKELETON_NOT_COMPARED. Stated once so six copies of the sentence cannot
 # drift apart.
+# The two demos that carry a KYC surface, and the one reason all four of their
+# KYC files declare `ships:` (K-657). Stated once so four copies of it cannot
+# drift apart, the same way PROVE_SKELETON is.
+KYC_DEMOS = %w[getgrocery skooti].freeze
+KYC_SHIPS =
+  "`ships:` pins the set to getgrocery and skooti deliberately (K-657). Phil has DECIDED that " \
+  "`request_kyc`/`kyc_status` do not belong among an operator's business-logic verbs — " \
+  "`request_kyc` becomes part of the WIRE and the poll query should not exist at all " \
+  "(KYC-WIRE-DIRECTION, 2026-08-12) — and the wire that replaces them is T-062, still unbuilt " \
+  "because its design depends on operator-sent events (T-046). So the shape is frozen where it " \
+  "was reviewed: a THIRD demo growing a copy would spread a surface already decided against, " \
+  "and a copy DISAPPEARING is the T-062 migration itself, which must move this declaration in " \
+  "the same wave rather than let it rot."
+
 PROVE_SKELETON =
   "prove is a smaller API-only Rails app generated on its own; its whole skeleton differs from " \
   "the operator seven (the recurring shape noted atop SKELETON_NOT_COMPARED)"
@@ -332,8 +346,10 @@ COPIES = {
   },
   "app/services/prove_broker_client.rb" => {
     rule: :code,
+    ships: KYC_DEMOS,
     why:  "The operator -> KYC broker intake leg. Per-demo prose only: the operator id and " \
-          "the requested claims arrive as arguments, not as literals.",
+          "the requested claims arrive as arguments, not as literals." \
+          " " + KYC_SHIPS,
   },
   "app/services/prove_trust.rb" => {
     rule: :per_demo,
@@ -362,9 +378,11 @@ COPIES = {
   },
   "app/controllers/kyc_callback_controller.rb" => {
     rule: :code,
+    ships: KYC_DEMOS,
     why:  "POST /kyc/callback — the broker -> operator leg: JWS verify, request correlation, nonce " \
           "echo, and the cross-operator `operator` binding. Per-demo prose only; the operator id " \
-          "is read from configuration.",
+          "is read from configuration." \
+          " " + KYC_SHIPS,
   },
   "app/controllers/home_controller.rb" => {
     rule: :per_demo,
@@ -389,13 +407,15 @@ COPIES = {
   },
   "app/models/kyc_verification_request.rb" => {
     rule: :code,
+    ships: KYC_DEMOS,
     why:  "The pending age/licence verification a demo started at the broker — same class, " \
           "per-demo prose (skooti's row carries a licence claim, getgrocery's an age gate). Both " \
           "copies carry the query scoping their `kyc_status` handler needs: an " \
           "`owned_by_current_principal` scope over a frozen `Arel.sql(\"kiosk.current_user_id()\")` " \
           "literal, plus the status constants that scope's readers name. It was briefly :per_demo " \
           "while T-057 had migrated skooti and not getgrocery and the two genuinely disagreed; the " \
-          "last slice converged them, which is what this entry is now guarding.",
+          "last slice converged them, which is what this entry is now guarding." \
+          " " + KYC_SHIPS,
   },
   "app/models/agent.rb" => {
     rule: :code,
@@ -468,6 +488,7 @@ COPIES = {
   },
   "app/operations/request_kyc_operation.rb" => {
     rule: :per_demo,
+    ships: KYC_DEMOS,
     why:  "The two demos that open a verification at the shared broker. The surrounding call is " \
           "the same shape — intake, store the broker's request_id, hand back its verification_url " \
           "— but the one thing an operator must decide is WHICH CLAIMS to ask for, and that is " \
@@ -475,7 +496,8 @@ COPIES = {
           "unlocking a motorcycle, getgrocery for age_over_18 alone because it is selling a " \
           "bottle of wine. Holding these to :code would compare everything except the decision, " \
           "and asking a grocery for a driving licence is the anti-pattern the KYC demo exists to " \
-          "argue against.",
+          "argue against." \
+          " " + KYC_SHIPS,
   },
   "app/operations/operation_result.rb" => {
     rule: :per_demo,
@@ -1437,6 +1459,42 @@ FRAMEWORK_PATCH = /
   \b
 /x
 
+# ── No demo initializer RESOLVES an env var (K-699, ENV-CONFIG-PLACEMENT) ────
+#
+# Phil decided (DECISIONS-LOG 2026-08-12, ENV-CONFIG-PLACEMENT) that env-var
+# reading, dev/test fallbacks and crash-if-absent fetches live in
+# config/environments/{development,test,production}.rb as Rails custom config
+# (`Rails.configuration.x.kiosk…`), and that initializers and lib files READ
+# that config. K-650 swept the demos for it — and missed a pair, in all seven
+# copies at once: `c.app_role = ENV.fetch("KIOSK_APP_ROLE", "app_role")` and its
+# `system_role` sibling sat inside `Kiosk.configure` for eleven days after the
+# sweep that was supposed to have removed them, because nothing looked.
+#
+# A convention nothing checks survives exactly until the next copy-paste, and
+# these files ARE copy-paste: seven standalone apps whose configuration blocks
+# are hand-propagated. So the rule is mechanical — an `ENV.fetch` in a demo
+# initializer is a RESOLUTION decision (it names the default, or raises when
+# there is none), and resolution belongs to the environment files.
+#
+# Bare `ENV["FLAG"]` reads are NOT caught, and must not be: K-650 carved them
+# out explicitly, because a mode flag (KIOSK_POW_DEMO, KIOSK_TELEMETRY,
+# KIOSK_RLS_ENFORCE) selects a demo MODE rather than a per-environment posture,
+# and there is no default for an environment file to hold.
+#
+# ALLOWED names are declared one at a time, each with the row that owns the
+# residue — and an allowance matching nothing is an error, so the list cannot
+# outlive the thing it excuses.
+ENV_FETCH = /\A[^#]*\bENV\.fetch\(\s*"(?<var>[A-Z0-9_]+)"/
+INITIALIZER_ENV_FETCH_ALLOWED = {
+  "KIOSK_BAD_PROOF_DB" =>
+    "K-1008: the toy bad-proof counter's sqlite path, in atablefor (twice) and getgrocery. Same " \
+    "shape as K-699, filed as its own row rather than fixed inline — unlike the role names this " \
+    "one IS set (demo:pow exports it to both the server it spawns and the driver that reads the " \
+    "counts back) and it sits outside `Kiosk.configure`, in the mode branch K-650 carved out. " \
+    "When K-1008 lands, this allowance goes with it.",
+}.freeze
+env_fetch_seen = Hash.new(0)
+
 initializer_demos = 0
 operator_demos.each do |demo|
   paths = Dir[File.join(ROOT, demo, "config/initializers", "*.rb")].sort
@@ -1453,6 +1511,20 @@ operator_demos.each do |demo|
     File.read(path).each_line.with_index(1) do |line, lineno|
       next if line.lstrip.start_with?("#")
 
+      if (f = ENV_FETCH.match(line))
+        var = f[:var]
+        if INITIALIZER_ENV_FETCH_ALLOWED.key?(var)
+          env_fetch_seen[var] += 1
+        else
+          errors << "#{short.(demo)}: #{rel}:#{lineno} resolves #{var} with ENV.fetch — an " \
+                    "initializer READS resolved configuration, it does not resolve it. Publish " \
+                    "the value from config/environments/{development,test,production}.rb as " \
+                    "`config.x.kiosk.…` and read `Rails.configuration.x.kiosk.…` here " \
+                    "(ENV-CONFIG-PLACEMENT, Phil 2026-08-12; K-650, K-699). A bare ENV[\"FLAG\"] " \
+                    "mode check is fine and is deliberately not caught."
+        end
+      end
+
       m = FRAMEWORK_PATCH.match(line)
       next if m.nil?
 
@@ -1464,6 +1536,14 @@ operator_demos.each do |demo|
                 "the gem that owns the behaviour, or in an ordinary Rails concern under app/."
     end
   end
+end
+
+INITIALIZER_ENV_FETCH_ALLOWED.each_key do |var|
+  next if env_fetch_seen[var].positive?
+
+  errors << "check-demo-copies: INITIALIZER_ENV_FETCH_ALLOWED names #{var}, which no demo " \
+            "initializer resolves any more — the residue it excused is gone, so delete the " \
+            "allowance rather than leave a standing permission nothing needs (K-699)."
 end
 
 if initializer_demos.zero? && errors.empty?
@@ -1482,7 +1562,9 @@ if errors.empty?
        "#{MIGRATION_PAIRS.size} cross-demo migration pairs (#{pair_drift} with drift pending triage), " \
        "telemetry wired in #{(dups['app/services/demo_telemetry.rb'] || {}).size} demos, " \
        "OperationResult subclassed from kiosk-server in #{(dups[OPERATION_RESULT] || {}).size} demos, " \
-       "no Rails-framework patching in the initializers of #{initializer_demos} operator demos, " \
+       "no env resolution and no Rails-framework patching in the initializers of " \
+       "#{initializer_demos} operator demos (#{INITIALIZER_ENV_FETCH_ALLOWED.size} declared " \
+       "ENV.fetch allowance), " \
        "one PLATFORMS set across #{lockfile_platforms.size} demo lockfiles"
   exit 0
 end

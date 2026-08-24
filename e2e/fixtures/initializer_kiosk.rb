@@ -30,30 +30,16 @@ require "kiosk/reputation"
 Kiosk::Reputation::Backends.register(Kiosk::Pow::Equihash::NAME, Kiosk::Pow::Equihash)
 E2E_REGISTRATION_POW_PARAMS = { n: 96, k: 5 }.freeze
 
-# ── PoW HMAC secret — REQUIRED outside development/test (K-541) ────────────
-# pow_secret is the HMAC key the engine signs every PoW challenge with. This
-# repo is PUBLIC, so a shipped fallback would be world-readable: a reader could
-# mint a self-signed challenge at trivial difficulty {n:8,k:1} and forge a proof
-# the server accepts — silently turning proof-of-work OFF. It MUST come from the
-# environment in production and fail LOUD when absent, matching the signing key.
-# The e2e harness boots development, so it keeps a stable (non-secret) default; a
-# too-short secret is rejected everywhere.
-pow_secret = ENV.fetch("KIOSK_POW_SECRET") do
-  unless Rails.env.local?
-    raise <<~MSG
-      KIOSK_POW_SECRET is required outside development/test.
-
-      It is the HMAC key every Kiosk PoW challenge is signed with. This repo is
-      public, so a shipped fallback would be world-readable — anyone could mint a
-      self-signed challenge at trivial difficulty and forge a valid proof,
-      silently turning proof-of-work off. Generate a long random value:
-
-        KIOSK_POW_SECRET=$(openssl rand -hex 32)
-    MSG
-  end
-  "e2e-demo-pow-secret-dev-insecure-default"
-end
-raise "KIOSK_POW_SECRET must be at least 32 bytes (got #{pow_secret.bytesize}) — generate one with `openssl rand -hex 32`." if pow_secret.bytesize < 32
+# ── Where this file's env inputs come from (K-1009) ────────────────────────
+# Nothing below resolves an environment variable. The PoW HMAC secret, the
+# Postgres role names, the issuer and the audit-sink paths are read from ENV
+# and published as `Rails.configuration.x.kiosk.*` by the block run.sh splices
+# into the generated app's config/environments/{development,production}.rb
+# (e2e/fixtures/environment_kiosk.rb) — Phil's ENV-CONFIG-PLACEMENT decision,
+# the same split all seven demos carry, enforced here by
+# bin/check-demo-copies. That file is also where the postures live: the PoW
+# secret's stable dev default and its fail-loud-outside-development raise, and
+# the audit sink's «redacted path required only when a sink path is set».
 
 require "kiosk/user_identity_providers/devise"
 
@@ -74,10 +60,10 @@ Kiosk.configure do |c|
   # kiosk-core attr; `system_role` is not — so this line is why the Gemfile
   # `gem "kiosk-rls"` entry in run.sh is mandatory: dropping the gem makes
   # this call raise NoMethodError at boot.
-  c.app_role    = ENV.fetch("KIOSK_APP_ROLE",    "app_role")
-  c.system_role = ENV.fetch("KIOSK_SYSTEM_ROLE", "app_role")
+  c.app_role    = Rails.configuration.x.kiosk.app_role
+  c.system_role = Rails.configuration.x.kiosk.system_role
 
-  c.issuer = ENV.fetch("KIOSK_ISSUER", "http://localhost:3001")
+  c.issuer = Rails.configuration.x.kiosk.issuer
   c.roles  = %i[customer]
   # Role pinned to every self-registered agent (agents cannot choose their own).
   c.registration_role = :customer
@@ -88,7 +74,7 @@ Kiosk.configure do |c|
   # it with the bundled kiosk-pow-equihash/solve.py). Same mechanism the demos use.
   c.registration_pow_count  = 1
   c.registration_pow_params = E2E_REGISTRATION_POW_PARAMS
-  c.pow_secret              = pow_secret
+  c.pow_secret              = Rails.configuration.x.kiosk.pow_secret
 
   # ── NO c.agent_idp ───────────────────────────────────────────────────────
   # Deliberate, and the point of the line's absence (T-104). An assistant
@@ -155,10 +141,10 @@ Kiosk.configure do |c|
   # copy (`event.with_arg_types`) to a second one, to show that withholding
   # the values is one call at this seam rather than a policy the engine
   # imposed.
-  audit_path = ENV["KIOSK_AUDIT_SINK_FILE"]
+  audit_path = Rails.configuration.x.kiosk.audit_sink_file
   c.audit_sink =
     audit_path && DemoAuditSink.new(
       path:          audit_path,
-      redacted_path: ENV.fetch("KIOSK_AUDIT_SINK_REDACTED_FILE"),
+      redacted_path: Rails.configuration.x.kiosk.audit_sink_redacted_file,
     )
 end

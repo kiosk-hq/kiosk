@@ -279,6 +279,28 @@ ruby -e '
   File.write(path, src.sub(/^(\s*)config\.api_only\s*=\s*true\s*$/) { "#{Regexp.last_match(1)}config.api_only = false" })
 ' || fail "could not turn api_only off for the Devise session middleware"
 
+# …and the harness's env inputs are PUBLISHED from the generated environment
+# files rather than resolved in the initializer. Phil decided (ENV-CONFIG-PLACEMENT,
+# DECISIONS-LOG 2026-08-12) that env-var reading, dev/test fallbacks and
+# crash-if-absent fetches live in config/environments/* as Rails custom config
+# and that initializers READ `Rails.configuration.x.kiosk.*`; all seven demos
+# carry that split, and this harness — which e2e/README presents as the edits
+# an adopter makes — carries it too since K-1009. The variables themselves stay
+# honourable from the outside: this script exports KIOSK_ISSUER and the
+# audit-sink paths before each boot and the block below is what reads them.
+# BOTH files get the SAME block: the harness only ever boots development, but
+# KIOSK_POW_SECRET must still fail loud if the app is booted outside it, which
+# a development-only block could not do.
+KIOSK_ENV_BLOCK="$FIXTURES/environment_kiosk.rb" ruby -e '
+  block = File.read(ENV.fetch("KIOSK_ENV_BLOCK"))
+  %w[development production].each do |env|
+    path = "config/environments/#{env}.rb"
+    src  = File.read(path)
+    abort "e2e: could not find the closing end in #{path}" unless src =~ /\nend\s*\z/
+    File.write(path, src.sub(/\nend\s*\z/, "\n" + block + "end\n"))
+  end
+' || fail "could not publish the Kiosk env inputs into the generated environment files"
+
 ok "fixtures + generator output staged"
 
 # ─── DB setup ───────────────────────────────────────────────────────────

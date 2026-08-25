@@ -153,14 +153,34 @@ class BookTableOperation
   # (measured against this demo's bundle on K-1027). A bare `is_a?(Integer)`
   # here would refuse a body the published descriptor calls valid.
   #
-  # WHICH SENTENCE EACH REFUSAL GETS, and the split is deliberate rather than
-  # incidental: `nil` is what the controller passes for an argument that was not
-  # given, and a zero or negative id was already a `missing` here, so both keep
-  # that wording untouched. The NEW sentence covers exactly the values that used
-  # to be a 500 or a wrong row — a value that WAS given and is not a whole
-  # number. (So a zero id still answers "missing param" rather than the ">= 1"
-  # this sentence promises; that wording predates K-1028 and was left as it is
-  # published rather than widened by a shape fix.)
+  # THREE REFUSALS, ONE PER THING THAT CAN BE WRONG, and the split is behaviour
+  # rather than decoration — an error body an assistant acts on has to say which
+  # of the three it was:
+  #
+  #   * NOT GIVEN — `nil` is what the controller passes for an argument that was
+  #     not given, and that keeps "missing param: …" byte-for-byte;
+  #   * GIVEN, WRONG SHAPE — the values that used to be a 500 or a wrong row;
+  #   * GIVEN, OUT OF RANGE — a `0` or a negative id, which parsed fine and the
+  #     guard has already read.
+  #
+  # THE THIRD ONE ANSWERED "missing param: …" UNTIL K-1030 — a sentence that told
+  # the caller the argument had not been given when it had been, which is the
+  # K-581/K-582 class (an error body that misinforms rather than informs). It
+  # predated K-1028 and that SHAPE fix deliberately left it, so this is the same
+  # defect answered in its own wave. The wording is the one this demo had already
+  # chosen for the identical case one line down: {WireArguments.party_size}
+  # answers a zero party "party_size must be >= 1", and the fleet's other integer
+  # guards split the two cases the same way (getgrocery's `delivery_slot_id`,
+  # hoteling's `integer`).
+  #
+  # NOTHING OBSERVABLE ON THE WIRE MOVED, and that is measured rather than
+  # assumed: both properties are declared `{type: "integer", minimum: 1}`
+  # (`app/controllers/kiosk/bookings_controller.rb:47,:49`) and `input_schema` is
+  # validated on every call, so a body carrying `0` is refused a layer earlier
+  # and no wire caller ever reached this arm. The descriptor-less path — this
+  # class's own `call`, the path the whole guard exists for — is where it was
+  # reachable, and a sentence that is only true while the layer in front of it
+  # holds is not a true sentence.
   #
   # @return [Array(Integer, nil), Array(nil, OperationResult)]
   def self.identifier(name, raw)
@@ -170,7 +190,7 @@ class BookTableOperation
     return [nil, bad_request("#{name} must be a whole number >= 1 — got #{raw.inspect}")] if id.nil?
     return [id, nil] if id >= 1
 
-    [nil, missing(name)]
+    [nil, bad_request("#{name} must be >= 1")]
   end
   private_class_method :identifier
 

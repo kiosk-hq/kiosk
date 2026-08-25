@@ -602,10 +602,21 @@ EXPECTED_SKIP_NAMES = [].freeze
 # ── Run ───────────────────────────────────────────────────────────────────────
 
 puts "\n── skooti redteam battery ──"
-puts "  base_url:       #{BASE_URL}"
-puts "  register gate:  Equihash n=96 k=5 (pow_difficulty>0)"
-puts "  requires_kyc:   true"
-puts "  scenarios:      #{scenarios.size}"
+puts "  base_url:              #{BASE_URL}"
+puts "  register gate:         Equihash n=96 k=5 (pow_difficulty>0)"
+puts "  requires_kyc:          true"
+# K-1033 — SAY WHAT THIS NUMBER COUNTS.  It is `scenarios.size`, i.e. the REGISTRY
+# above, and skooti is the only one of the seven demos that also runs beats OUTSIDE
+# it: the nine one-off lambdas below (`mc_beat` … `self_asserted_user_beat`), which
+# are not `Kiosk::Redteam::Scenario` instances and cannot be registry entries without
+# pretending they are.  getgrocery, hoteling, atablefor, philslist, stylish and tudu
+# push everything through `runner.run(scenarios)`, so their header and their summary
+# agree by construction; skooti's did not, and an unqualified `scenarios: 17` sitting
+# above a `26 BLOCKED` summary in the SAME run read as "nine attacks ran that the
+# header did not admit exist".  Both numbers stay DERIVED — the fix is the labels and
+# the summary's decomposition, never a hand-kept literal, because the count the header
+# would need (how many beats will run) does not exist yet at this point in the file.
+puts "  registered scenarios:  #{scenarios.size} (skooti-local beats run after them; the summary counts both)"
 puts ""
 
 runner  = Kiosk::Redteam::Runner.new(base_url: BASE_URL, profile:)
@@ -1248,10 +1259,16 @@ blocked_count = blocked_results.size + local_beats_blocked
 beat_breach   = all_beats.count { |b| !b[:blocked] }
 
 puts ""
+# K-1033 — print the decomposition, so this total and the header's `registered
+# scenarios` are readable as parts of one sum instead of two numbers that disagree.
+# Both halves are the live counts computed immediately above; nothing here is typed.
 if breach_results.empty? && skipped_results.empty? && beat_breach.zero?
-  puts "  #{blocked_count} BLOCKED, 0 SKIPPED, 0 BREACH — all attacks blocked."
+  puts "  #{blocked_count} BLOCKED (#{blocked_results.size} registered + " \
+       "#{local_beats_blocked} skooti-local), 0 SKIPPED, 0 BREACH — all attacks blocked."
 else
-  puts "  #{blocked_count} BLOCKED, #{skipped_results.size} SKIPPED, #{breach_results.size + beat_breach} BREACH"
+  puts "  #{blocked_count} BLOCKED (#{blocked_results.size} registered + " \
+       "#{local_beats_blocked} skooti-local), #{skipped_results.size} SKIPPED, " \
+       "#{breach_results.size + beat_breach} BREACH"
 end
 
 # ── Expected-applicable check ─────────────────────────────────────────────────

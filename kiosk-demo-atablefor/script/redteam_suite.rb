@@ -38,6 +38,13 @@
 #     dates, never a confirmed booking for a seating that was never offered;
 #     and the BASIC-form `YYYYMMDD` spelling Date.iso8601 would have accepted
 #     is refused by the declared `format: "date"` before the handler (K-767)
+#   HostileArgShapes — boolean/array/object/junk values on book_table's
+#     party_size, restaurant_id, restaurant_table_id, date and time, on
+#     availability's party_size (including the two bracket spellings) and on
+#     cancel_booking's booking_id are a typed 400 with no runtime vocabulary on
+#     the wire — never a 500 and never a wrong answer served as 200 (K-773,
+#     K-1027). The beat's own comment enumerates which layer answers which
+#     argument; it does not claim more than it probes.
 #
 # THE 0.4 WIRE. A query is `GET <endpoint>/<query-name>` carrying its arguments
 # in the query string; an action is `POST <endpoint>/<action-name>` carrying
@@ -456,6 +463,145 @@ record(results, "BookOutsideOfferedHorizon",
        "#{horizon_probes.map(&:last).join(', ')}; CONTROL same row at its published date → " \
        "#{rc_horizon_ctl}/#{horizon_ctl['booking_id'].inspect} " \
        "(want 400 bad_request naming the horizon for each, and a confirmed control)")
+
+# ── HostileArgShapes (K-773, K-1027) ─────────────────────────────────────────
+#
+# THIS BATTERY HAD NO SHAPE BEAT AT ALL UNTIL K-1027, which is why the row was
+# filed against atablefor rather than found here: every `party_size` in the
+# fourteen beats above is the legal `2`. Its siblings have carried one since
+# K-773 (hoteling and getgrocery both), so this is the last of the three ORM
+# demos to get it.
+#
+# WHAT IS PROBED, NAMED RATHER THAN CLAIMED (K-773's 2026-08-25 reopen: a beat
+# whose comment CLAIMS coverage is itself the defect). Exactly these:
+#
+#   book_table      party_size, restaurant_id, restaurant_table_id  (INT_SHAPES)
+#                   date, time                                      (NONSTRING)
+#   availability    party_size  (the junk scalars a query string can express,
+#                                plus the two BRACKET spellings)
+#   cancel_booking  booking_id                                      (NONSTRING)
+#
+# An argument NOT on that list is not covered here — extend the list, never
+# widen the sentence. `availability`'s `neighborhood`/`time`/`date` and
+# `cancel_booking`'s malformed-uuid STRINGS are covered by
+# InvalidFilterIsNotAnEmptyList and MalformedUuidArg above; those two beats send
+# well-formed strings with wrong VALUES, which is the other half of the story
+# and not this one.
+#
+# WHICH LAYER ANSWERS WHICH, MEASURED at head rather than assumed, because it
+# differs per argument and the difference is the whole point of the beat:
+#
+#   * `party_size` — BOTH LAYERS REFUSE EVERY SHAPE BELOW, and that sentence is
+#     only true since K-1027. {WireArguments.party_size} read a bare `raw.to_i`:
+#     `true`, `false`, `[]`, `{}`, `[1]` and `{"a" => 1}` have no `to_i`, so each
+#     was a `NoMethodError` → `500 action_failed`, and `1.5.to_i` is 1, so a
+#     fractional party was SEATED as a party of one. It goes through
+#     {WireArguments.whole_number} now, which is json_schemer's own `integer`
+#     (so `2.0` is still a party of two — measured against this demo's bundle).
+#     WATCHED FAIL, run and restored: drop `party_size`'s declared `type` from
+#     `book_table`'s `input_schema` and these stay 400 off the second layer;
+#     with the pre-K-1027 `.to_i` restored underneath the same mutation they are
+#     a 500 for the six raising shapes and a CONFIRMED BOOKING for `1.5`.
+#     THE SAME MUTATION ON `availability` SAYS SOMETHING ELSE, and it is
+#     recorded rather than smoothed over: drop the type there and the QUERY
+#     decoder stops coercing, so the guard is handed the raw string `"2"` and
+#     refuses a legal party of two — this battery aborts on its first
+#     availability call. The second layer is the schema's `integer` exactly, so
+#     on the query half it is the DECODER that turns the wire's string into one;
+#     independent of the descriptor for `book_table`, downstream of it here.
+#   * `restaurant_id` and `restaurant_table_id` — ONE LAYER, and it is the
+#     declared `{type: "integer", minimum: 1}`. Measured: the second layer is
+#     {BookTableOperation}'s own `restaurant_id.to_i` / `restaurant_table_id.to_i`,
+#     which is the bare `.to_i` `party_size` just stopped being — so for these
+#     two the probes below pin the DESCRIPTOR, and they go red if a schema edit
+#     widens the type or drops `additionalProperties: false`.
+#   * `date` and `time` — the declared `format: "date"` and `enum` answer the
+#     non-string shapes; the handler guards behind them ({WireArguments
+#     .seating_date}, {WireArguments.seating_time}) read through `to_s`, so they
+#     cannot raise but they cannot refuse a shape either.
+#   * `booking_id` — the declared `format: "uuid"` answers first;
+#     {WireArguments.booking_id}'s `blank?`/`UuidCheck` behind it reads every
+#     shape without raising, so this half is two layers for the STRINGS
+#     MalformedUuidArg sends and the schema's alone for the container shapes here.
+#
+# AND THE ERROR BODY MUST NOT CARRY THE RUNTIME'S OWN VOCABULARY: these probes
+# are the ones most likely to reach a cast or a `NoMethodError`, so every
+# response is checked for the leak strings K-581/K-582 named plus the two
+# `NoMethodError` spellings K-773's class-two 500 would have printed.
+SHAPE_LEAKS = ["NoMethodError", "undefined method", "TypeError",
+               "no implicit conversion", "::uuid", "::integer", "::date", "PG::",
+               "22P02", "invalid input syntax", "ActiveRecord::", "ActiveModel::"].freeze
+
+# The five families, per argument type. INT_SHAPES is hoteling's list verbatim,
+# so the three ORM demos probe the same set; NONSTRING drops the values that ARE
+# strings, because a string is what those arguments are declared to be and a
+# wrong-VALUE string is the beat above's business.
+INT_SHAPES = [true, false, [], {}, [1], { "a" => 1 }, "abc", nil, 1.5, "0x10"].freeze
+NONSTRING  = [true, false, [], {}, [1], { "a" => 1 }, nil, 20260826].freeze
+# What a QUERY string can express: everything arrives as a string, so the only
+# hostile shapes left are junk scalars — plus the two bracket spellings, which
+# Rack folds into an Array and a Hash before the decoder ever sees them.
+#
+# `"2.0"` IS ON THIS LIST AND IS NOT ON book_table's, and the asymmetry is the
+# wire's rather than this beat's: a JSON `2.0` is a valid `integer` to
+# json_schemer and books a party of two through the action, while the query
+# decoder's `Integer(v, 10)` refuses the STRING `"2.0"` outright. Measured, and
+# probed here so that it stays measured — the two halves of the wire are allowed
+# to differ, but not silently.
+QUERY_JUNK = ["abc", "true", "1.5", "0x10", "", "2.0"].freeze
+
+def shape_verdict(label, rc, body)
+  raw  = JSON.generate(body)
+  leak = SHAPE_LEAKS.find { |needle| raw.include?(needle) }
+  code = body.is_a?(Hash) ? body["code"] : nil
+  ok   = rc == 400 && code == "bad_request" && leak.nil?
+  [ok, "#{label}→#{rc}/#{code.inspect}#{leak ? " LEAK #{leak}" : ''}"]
+end
+
+shape_slot   = open_slot
+shape_probes = []
+
+INT_SHAPES.each do |v|
+  %i[party_size restaurant_id restaurant_table_id].each do |arg|
+    rc, body = book_slot(TOKEN_A, shape_slot, arg => v)
+    shape_probes << shape_verdict("book_table #{arg}=#{v.inspect}", rc, body)
+  end
+end
+NONSTRING.each do |v|
+  %i[date time].each do |arg|
+    rc, body = book_slot(TOKEN_A, shape_slot, arg => v)
+    shape_probes << shape_verdict("book_table #{arg}=#{v.inspect}", rc, body)
+  end
+  rc, body = post_json("/kiosk/cancel_booking", { booking_id: v }, bearer(TOKEN_A))
+  shape_probes << shape_verdict("cancel_booking booking_id=#{v.inspect}", rc, body)
+end
+QUERY_JUNK.each do |v|
+  rc, body = get_json("/kiosk/availability", { party_size: v }, bearer(TOKEN_A))
+  shape_probes << shape_verdict("availability party_size=#{v.inspect}", rc, body)
+end
+# The bracket spellings, which URI.encode_www_form cannot produce: they are
+# written into the path so Rack's own parser folds them into an Array and a Hash.
+["party_size%5B%5D=2", "party_size%5Bx%5D=2"].each do |bracket|
+  rc, body = get_json("/kiosk/availability?#{bracket}", {}, bearer(TOKEN_A))
+  shape_probes << shape_verdict("availability #{bracket}", rc, body)
+end
+
+# Positive controls, one per verb touched, so the beat cannot pass against an
+# origin that refuses everything: the SAME availability row books at its
+# published values, and the booking it makes cancels.
+rc_shape_book, shape_book = book_slot(TOKEN_A, shape_slot)
+rc_shape_cancel, = post_json("/kiosk/cancel_booking",
+                             { booking_id: shape_book["booking_id"] }, bearer(TOKEN_A))
+rc_shape_avail, shape_avail = get_json("/kiosk/availability", { party_size: 2 }, bearer(TOKEN_A))
+shape_control_ok = rc_shape_book == 200 && !shape_book["booking_id"].to_s.empty? &&
+                   rc_shape_cancel == 200 && rc_shape_avail == 200 && Array(shape_avail).any?
+record(results, "HostileArgShapes",
+       shape_probes.all? { |ok, _| ok } && shape_control_ok,
+       "#{shape_probes.size} probes: #{shape_probes.reject { |ok, _| ok }.map(&:last).join(', ')}" \
+       "#{shape_probes.all? { |ok, _| ok } ? 'all 400/"bad_request", no leak' : ''}; " \
+       "CONTROLS book→#{rc_shape_book} cancel→#{rc_shape_cancel} availability→#{rc_shape_avail}/" \
+       "#{rc_shape_avail == 200 ? Array(shape_avail).size : 0} rows " \
+       "(want a typed 400 for every probe, never a 5xx and never a 200, and three live controls)")
 
 # ── Verdict ──────────────────────────────────────────────────────────────────
 breaches = results.reject { |r| r[:blocked] }

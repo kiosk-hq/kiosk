@@ -1209,6 +1209,14 @@ namespace :demo do
                                     for a seating availability never offered;
                                     the basic YYYYMMDD spelling is refused by
                                     the declared format: date (K-767)
+      BLOCKED  HostileArgShapes   — boolean/array/object/junk values on
+                                    book_table's party_size, restaurant_id,
+                                    restaurant_table_id, date and time, on
+                                    availability's party_size (bracket
+                                    spellings included) and on cancel_booking's
+                                    booking_id are a typed 400 carrying no
+                                    runtime vocabulary — never a 500, never a
+                                    wrong answer served as 200 (K-773, K-1027)
 
     Exits 0 when all scenarios are BLOCKED (0 BREACH); exits 1 on any BREACH.
     A BREACH = a real hole in atablefor — fix the app, not the scenario.

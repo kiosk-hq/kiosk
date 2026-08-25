@@ -209,6 +209,17 @@ class Kiosk::HotelsController < ActionController::API
   HOTELING_SEARCH_PAGE = 20  # default page size (assistant may override via `limit`)
   HOTELING_SEARCH_MAX  = 50  # cap so `limit` can't defeat pagination
 
+  # The «what should I have sent» tails for this verb's three INTEGER arguments
+  # (K-1025). {WireArguments.integer} takes a hint because a refusal that only
+  # says «not an integer» leaves the caller to guess the domain; each of these
+  # names it, and `limit`'s names the clamp so a caller does not read its
+  # refusal as «this page size is too big».
+  HINT_SEARCH_LIMIT     = "`limit` is a whole number of rows, e.g. 20. It is CLAMPED to " \
+                          "1..#{HOTELING_SEARCH_MAX} — an integer outside that range is adjusted, " \
+                          "never refused; this refusal is about the SHAPE."
+  HINT_SEARCH_MIN_STARS = "`min_stars` is a whole number 1..5 — the star rating to floor at."
+  HINT_SEARCH_MAX_PRICE = "`max_price_cents` is a whole number of EUR CENTS, e.g. 20000 for €200."
+
   # ADR-0023, and its ONE carve-out. The filters and the row's fields are
   # declared in the schemas. The page-size default, its clamp and `X-Total-Count`
   # stay in prose because no schema can hold them: `limit` and `cursor` are
@@ -274,10 +285,41 @@ class Kiosk::HotelsController < ActionController::API
     from_price_cents: 15000, currency: "eur", room_type_count: 2,
   })
   def search_hotels
-    # `to_s` before `to_i`, never straight `to_i`: a JSON `true` or `[3]` has no
-    # `to_i` and would raise NoMethodError — a 500 for an off-schema value the
-    # descriptor already forbids.
-    limit = params[:limit].to_s.strip.empty? ? HOTELING_SEARCH_PAGE : params[:limit].to_s.to_i
+    # ── THE THREE INTEGERS THIS VERB READS GO THROUGH THE DEMO'S OWN GUARD ────
+    #
+    # K-1025. They used to read `params[…].to_s.to_i`, and `to_s` before `to_i`
+    # is enough to stop the `NoMethodError` a JSON `true` or `[3]` would raise
+    # on a bare `.to_i` — it is NOT enough to agree with the `{type: "integer"}`
+    # declared in front of them. `.to_i` answers 0 for `"abc"` and 1 for
+    # `"1.5"`, so a junk filter became «no floor at all» or a floor nobody
+    # asked for, silently, and a junk `limit` became the default page size. This
+    # demo already WROTE DOWN its answer to that exact question one file over:
+    # {WireArguments.integer} is `Integer(raw, 10)` with base 10 explicit so
+    # `"0x10"` is refused rather than read as 16, and it is what `property_id`
+    # and `room_type_id` have always used. These three were the only readers of
+    # a declared integer on this surface that bypassed it.
+    #
+    # NOT REACHABLE FROM THE WIRE — said out loud rather than left as a puzzle.
+    # `search_hotels` is `kind :query`, so {Kiosk::Server::ArgumentDecoder} has
+    # already coerced `min_stars` and `max_price_cents` (both declared
+    # `type: "integer"`) and `limit` (a RESERVED name it coerces to integer by
+    # default, spec §8.1 item 6) through the SAME strict `Integer(v, 10)`: a
+    # `1.5`, a `true` or an array is a typed 400 before this method runs. That is
+    # precisely why the second layer had to be fixed rather than left — a layer
+    # that only holds while the layer in front of it holds is not a second layer.
+    #
+    # THE CLAMP IS UNCHANGED, and it is what the description publishes: every
+    # INTEGER `limit` is adjusted into 1..HOTELING_SEARCH_MAX and never refused.
+    # A non-integer is not «a value outside that range» — it is not a page size
+    # at all, and the engine in front of this line already answers it 400.
+    limit = HOTELING_SEARCH_PAGE
+    if params[:limit].present?
+      requested, refusal = WireArguments.integer(params[:limit], field: "limit",
+                                                                 hint: HINT_SEARCH_LIMIT)
+      return render_refusal(refusal) if refusal
+
+      limit = requested
+    end
     limit = HOTELING_SEARCH_PAGE if limit <= 0
     limit = HOTELING_SEARCH_MAX  if limit > HOTELING_SEARCH_MAX
 
@@ -287,12 +329,26 @@ class Kiosk::HotelsController < ActionController::API
     offset = Kiosk::Server::Cursor.decode_offset(params[:cursor])
     offset = 0 if offset.negative?
 
+    # The filters, in the order they have always been applied — a refusal is
+    # raised where the filter is read, so `{min_stars: "abc", max_price_cents:
+    # "abc"}` still answers about `min_stars` first.
     scope = Property.all
     scope = scope.where(neighbourhood: params[:neighbourhood].to_s) if params[:neighbourhood].present?
-    scope = scope.where(Property.arel_table[:stars].gteq(params[:min_stars].to_s.to_i)) if params[:min_stars].present?
+    if params[:min_stars].present?
+      min_stars, refusal = WireArguments.integer(params[:min_stars], field: "min_stars",
+                                                                     hint: HINT_SEARCH_MIN_STARS)
+      return render_refusal(refusal) if refusal
+
+      scope = scope.where(Property.arel_table[:stars].gteq(min_stars))
+    end
     scope = scope.offering(params[:amenity].to_s) if params[:amenity].present?
     if params[:max_price_cents].present?
-      scope = scope.where(Property.from_price_cents.lteq(params[:max_price_cents].to_s.to_i))
+      max_price_cents, refusal = WireArguments.integer(params[:max_price_cents],
+                                                       field: "max_price_cents",
+                                                       hint:  HINT_SEARCH_MAX_PRICE)
+      return render_refusal(refusal) if refusal
+
+      scope = scope.where(Property.from_price_cents.lteq(max_price_cents))
     end
 
     # Fetch limit+1 to detect a following page without counting the whole set.

@@ -405,6 +405,17 @@ class HostileArgShapes < Kiosk::Redteam::Scenario
     good_items = [{ sku: catalog.first["sku"], qty: 1 }]
 
     # ── schema-declared integers and uuids ──────────────────────────────────
+    #
+    # `delivery_slot_id`: BOTH LAYERS REFUSE ALL EIGHT SHAPES BELOW, and that
+    # sentence is only true since K-1025 — the same defect as `qty`'s below, one
+    # argument over. The guard read `raw.to_s.to_i`, and `"1.5".to_i` is 1,
+    # which lands INSIDE the declared 1..6: `1.5` was the one shape the schema
+    # alone refused, and without it in front the handler would have booked a
+    # fractional slot as slot 1. It goes through the same
+    # {WireArguments.whole_number} `qty` uses now, so `2.0` is still slot 2
+    # (json_schemer accepts it) and `1.5` is a 400 from either layer. The
+    # non-vacuity proof is K-1020's: drop `delivery_slot_id`'s declared type
+    # from both verbs' `input_schema` and these stay 400.
     SHAPES.each do |v|
       refused "create_order delivery_slot_id=#{v.inspect}",
               client.run(a, name: "create_order", items: good_items,

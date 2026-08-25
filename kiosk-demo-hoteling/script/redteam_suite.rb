@@ -673,12 +673,27 @@ class HostileArgShapes < Kiosk::Redteam::Scenario
     #
     # Two are declared integers with a range (`min_stars` 1..5,
     # `max_price_cents` >= 0) and two are declared string ENUMS
-    # (`neighbourhood`, `amenity`). All four are read with `.present?` and then
-    # `.to_s.to_i` or a bare `.to_s`, so nothing in the handler distinguishes
-    # junk from a value — the DECLARATION is the whole refusal, which is
-    # precisely why it needs a standing probe. A filter that silently matched
-    # nothing would answer `200 []`: «no hotel is like that» in reply to a
-    # question the origin never understood.
+    # (`neighbourhood`, `amenity`). WHICH LAYER ANSWERS WHICH, named rather than
+    # assumed, because K-1025 changed half of it:
+    #
+    #   * the two INTEGERS are refused on SHAPE twice and on RANGE once, and the
+    #     split is measured rather than assumed. The decoder coerces a query
+    #     string through `Integer(v, 10)` and the handler re-reads it through
+    #     {WireArguments.integer}, which is the same call (K-1025; they used to
+    #     be read with `.to_s.to_i`, so `abc` was a floor of 0 and `1.5` a floor
+    #     of 1 and the DECLARATION was the whole refusal). The RANGE — 1..5,
+    #     >= 0 — is the schema's alone; no handler line re-checks it. WATCHED
+    #     FAIL, run and restored: drop `min_stars`' declared `type` and the four
+    #     SHAPE probes below (`abc`, `true`, `1.5`, `0x10`) stay 400 off the
+    #     second layer, while `0` and `9` answer 200 — `minimum`/`maximum` stop
+    #     applying to a value that is no longer declared a number.
+    #   * the two ENUMS are still one layer: `neighbourhood` and `amenity` are
+    #     read with a bare `.to_s` and fed to a `where`/`offering`, so the
+    #     schema's `enum` is the only thing that refuses an off-list value.
+    #
+    # Which is precisely why all four need a standing probe: a filter that
+    # silently matched nothing would answer `200 []` — «no hotel is like that»
+    # in reply to a question the origin never understood.
     %w[abc true 0 9 1.5 0x10].each do |v|
       refused "search_hotels min_stars=#{v.inspect}",
               client.query(a, name: "search_hotels", min_stars: v)

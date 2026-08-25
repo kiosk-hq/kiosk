@@ -16,9 +16,11 @@
 # String, Integer and Float and by no Array, Hash or boolean, so a hostile shape
 # came back 500 for an argument the published `input_schema` says is an integer.
 # Reading through `to_s` first is the whole fix FOR THE 500 — it is not the whole
-# fix for the guard's own contract, and `items`' `qty` says why (K-1020): a
-# coercion that answers everything also ACCEPTS shapes the schema refuses, which
-# reads as defence in depth while being nothing of the kind.
+# fix for the guard's own contract, and BOTH declared integers on this surface
+# said so (K-1020's `items[].qty`, K-1025's `delivery_slot_id`): a coercion that
+# answers everything also ACCEPTS shapes the schema refuses, which reads as
+# defence in depth while being nothing of the kind. Both now go through
+# {#whole_number}, which is JSON Schema's own `integer` and nothing looser.
 module WireArguments
   # The two "where do I get one of these" tails. Both verbs take an `order_id`
   # but ask for different things — create_order one it may still replace,
@@ -45,16 +47,41 @@ module WireArguments
 
   # The delivery window, 1..DeliverySlots::COUNT.
   #
-  # RANGE ONLY. Whether the argument was GIVEN is asked separately, by each verb:
-  # they word that refusal differently AND ask it at different points in their
-  # sequence — create_order checks slot and address for presence before
-  # validating either, so `{delivery_slot_id: 0, delivery_address: ""}` is
-  # answered about the ADDRESS, and folding presence in here would reorder that.
-  # `raw.to_s.to_i` and not `raw.to_i`: see the header.
+  # SHAPE AND RANGE, in that order. Whether the argument was GIVEN is asked
+  # separately, by each verb: they word that refusal differently AND ask it at
+  # different points in their sequence — create_order checks slot and address
+  # for presence before validating either, so `{delivery_slot_id: 0,
+  # delivery_address: ""}` is answered about the ADDRESS, and folding presence in
+  # here would reorder that.
+  #
+  # THE SHAPE IS THE SCHEMA'S, NOT `.to_i`'s (K-1025 — the sibling of K-1020's
+  # `qty`, and the same defect one argument over). This read `raw.to_s.to_i`,
+  # which is enough to stop the 500s the header describes and NOT enough to
+  # agree with the `{type: "integer", minimum: 1, maximum: 6}` declared in front
+  # of it: `1.5.to_s.to_i` is 1, so a fractional slot came out of this line
+  # INSIDE the declared range — booked as slot 1 rather than refused. Every other
+  # hostile shape (`true`, `false`, `[]`, `{}`, `[1]`, `{"a" => 1}`, `"abc"`)
+  # collapsed to 0 and the range arm below caught it, so `1.5` was the single
+  # value on which this layer disagreed with the one in front of it — which is
+  # exactly as much disagreement as a defence-in-depth layer is allowed to have.
+  # Not reachable on the wire either way: both verbs are `kind :action`, so a
+  # real `1.5` is a JSON number the validator refuses before this line. That is
+  # WHY it had to be fixed rather than left — a layer that only holds while the
+  # layer in front of it holds is not a second layer at all.
+  #
+  # {#whole_number} and not `is_a?(Integer)`: `2.0` is still slot 2 here, because
+  # json_schemer says a JSON `2.0` is a valid `integer` (measured on K-1020).
   #
   # @return [Array(Integer, nil), Array(nil, OperationResult)]
   def delivery_slot_id(raw)
-    slot = raw.to_s.to_i
+    slot = whole_number(raw)
+    if slot.nil?
+      return [nil, OperationResult.refused(
+        code:    "bad_request",
+        message: "delivery_slot_id must be a whole number 1–#{DeliverySlots::COUNT} — " \
+                 "got #{raw.inspect}",
+      )]
+    end
     return [slot, nil] if (1..DeliverySlots::COUNT).cover?(slot)
 
     [nil, OperationResult.refused(

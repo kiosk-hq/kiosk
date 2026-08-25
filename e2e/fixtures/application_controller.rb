@@ -8,8 +8,12 @@
 # session/cookie/flash MIDDLEWARE; this restores the controller half. Both are
 # needed, and this file is the second one.
 #
-# The agent-facing wire controllers are unaffected: they ship their own bases
-# inside kiosk-server (ActionController::API), so nothing an assistant calls
-# gains a cookie jar because a human page needed one.
+# The agent-facing wire controllers inherit THIS class too, and that is by
+# design: Kiosk ships a MIXIN, not a base class (`include Kiosk::Handler` is
+# the whole contract — see Kiosk::CatalogController), so the superclass is
+# whatever the app chooses. Widening it to ::Base therefore DOES reach
+# Kiosk::BookingsController and Kiosk::CatalogController; what an assistant
+# sees is unchanged because the wire answers JSON through the mount's own
+# gates, never through a session (K-1017).
 class ApplicationController < ActionController::Base
 end

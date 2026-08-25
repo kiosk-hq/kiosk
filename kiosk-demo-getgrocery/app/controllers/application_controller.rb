@@ -2,7 +2,10 @@
 
 # Full ActionController::Base (not ::API): Devise's session controllers
 # inherit from here, and the human-facing pages need cookies/flash/CSRF.
-# The Kiosk wire controllers ship their own bases inside kiosk-server.
+# The Kiosk wire controllers get the wire surface from the `Kiosk::Handler`
+# MIXIN, not from a base class in kiosk-server; here Kiosk::StorefrontController and
+# Kiosk::OrdersController subclass ActionController::API and never reach
+# this class (K-1017).
 class ApplicationController < ActionController::Base
   # AGENT-SIGNPOST (K-459). Assistants guess web-app paths. A JSON POST at the
   # human sign-in form (`/users/sign_in`) carries no CSRF token, so Rails' forgery

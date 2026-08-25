@@ -107,8 +107,9 @@ RSpec.describe Kiosk::Server::Headers do
         "max-age=600, public, immutable",
         # RFC 9111 §3.5's third door — a shared cache MAY reuse a response to
         # an `Authorization`-bearing request when it says `must-revalidate`,
-        # and every verb request bears one. §3.7.3's sentence names only the
-        # other two; K-826 asks whether it should name this one too.
+        # and every verb request bears one. §3.7.3 NAMES ALL THREE since K-826
+        # (see the note on SHARED_CACHE_DIRECTIVES in lib/), so this probe is
+        # the third door's and the seam is exactly as strict as the text.
         "max-age=600, must-revalidate",
       ].each do |policy|
         it "replaces #{policy.inspect} with the wire's own default" do

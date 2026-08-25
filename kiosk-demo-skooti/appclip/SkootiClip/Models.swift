@@ -34,7 +34,9 @@ import Foundation
 //       in logs is bounded by that window.
 //
 //   (b) Shared App Group Keychain
-//       The full Skooti app (which ran register → KYC → reserve → pay → start_rental)
+//       The full Skooti app (which ran register → reserve → pay → start_rental;
+//       licence-free scooters have had no KYC leg since K-442 — KYC gates only
+//       the combustion motorcycle, see script/rental_flow.rb)
 //       writes the rental token into a Keychain item in a shared App Group
 //       (e.g. group.app.skooti).  The App Clip reads it on launch.
 //       Both targets must declare the same App Group entitlement.

@@ -1477,11 +1477,11 @@ FRAMEWORK_PATCH = /
 # there is none), and resolution belongs to the environment files.
 #
 # The rule covers the SEVEN demo initializers and the e2e harness fixture
-# (K-1009): `e2e/run.sh` copies e2e/fixtures/initializer_kiosk.rb over the
-# generated app's config/initializers/kiosk.rb, so it is a demo initializer in
-# every sense this rule cares about — and it is a teaching surface besides
-# (e2e/README presents run.sh as the edits an adopter makes), which is exactly
-# where the shape Phil decided against must not be on show. Its env inputs are
+# (K-1009, K-1011): `e2e/run.sh` copies fixtures over the generated app's
+# config/initializers/, so each of them is a demo initializer in every sense
+# these rules care about — and they are a teaching surface besides (e2e/README
+# presents run.sh as the edits an adopter makes), which is exactly where the
+# shape Phil decided against must not be on show. Their env inputs are
 # published from the GENERATED config/environments/{development,production}.rb,
 # which run.sh patches the same way it patches config/application.rb.
 #
@@ -1499,6 +1499,50 @@ ENV_FETCH = /\A[^#]*\bENV\.fetch\(\s*"(?<var>[A-Z0-9_]+)"/
 INITIALIZER_ENV_FETCH_ALLOWED = {}.freeze
 env_fetch_seen = Hash.new(0)
 
+# BOTH RULES, ONE SCANNER (K-1011). The two rules used to be written out twice —
+# once for the demo loop and once for the e2e fixture — and the copy that ran on
+# the fixture carried only the ENV.fetch half, excused in its own comment as a
+# WORDING problem («the K-504 message names a demo»). A message that cannot name
+# a demo wants rewording, not an exemption, so the scan lives here once and the
+# only thing a caller varies is `label` (who owns the file) and `env_hint` (where
+# the resolved value should have been published, which genuinely differs between
+# a demo and the generated app run.sh patches).
+scan_initializer = lambda do |label:, rel:, path:, env_hint:|
+  File.read(path).each_line.with_index(1) do |line, lineno|
+    next if line.lstrip.start_with?("#")
+
+    if (f = ENV_FETCH.match(line))
+      var = f[:var]
+      if INITIALIZER_ENV_FETCH_ALLOWED.key?(var)
+        env_fetch_seen[var] += 1
+      else
+        errors << "#{label}: #{rel}:#{lineno} resolves #{var} with ENV.fetch — an " \
+                  "initializer READS resolved configuration, it does not resolve it. " \
+                  "#{env_hint} A bare ENV[\"FLAG\"] mode check is fine and is " \
+                  "deliberately not caught."
+      end
+    end
+
+    m = FRAMEWORK_PATCH.match(line)
+    next if m.nil?
+
+    errors << "#{label}: #{rel}:#{lineno} calls #{m[:constant]}.#{m[:verb]} — an " \
+              "application must not patch a Rails framework class from its configuration. " \
+              "This is the K-504 shape: the four demos that carried " \
+              "`ActiveRecord::Migration.include(Kiosk::RLS::DSL)` are now served by " \
+              "kiosk-rls's own railtie. Whatever this line adds belongs in a railtie inside " \
+              "the gem that owns the behaviour, or in an ordinary Rails concern under app/."
+  end
+end
+
+DEMO_ENV_HINT = "Publish the value from config/environments/{development,test,production}.rb " \
+                "as `config.x.kiosk.…` and read `Rails.configuration.x.kiosk.…` here " \
+                "(ENV-CONFIG-PLACEMENT, Phil 2026-08-12; K-650, K-699)."
+E2E_ENV_HINT  = "run.sh publishes the harness env inputs into the GENERATED " \
+                "config/environments/{development,production}.rb; read " \
+                "`Rails.configuration.x.kiosk.…` here (ENV-CONFIG-PLACEMENT, Phil 2026-08-12; " \
+                "K-650, K-699, K-1009)."
+
 initializer_demos = 0
 operator_demos.each do |demo|
   paths = Dir[File.join(ROOT, demo, "config/initializers", "*.rb")].sort
@@ -1511,65 +1555,55 @@ operator_demos.each do |demo|
   initializer_demos += 1
 
   paths.each do |path|
-    rel = path.delete_prefix("#{File.join(ROOT, demo)}/")
-    File.read(path).each_line.with_index(1) do |line, lineno|
-      next if line.lstrip.start_with?("#")
-
-      if (f = ENV_FETCH.match(line))
-        var = f[:var]
-        if INITIALIZER_ENV_FETCH_ALLOWED.key?(var)
-          env_fetch_seen[var] += 1
-        else
-          errors << "#{short.(demo)}: #{rel}:#{lineno} resolves #{var} with ENV.fetch — an " \
-                    "initializer READS resolved configuration, it does not resolve it. Publish " \
-                    "the value from config/environments/{development,test,production}.rb as " \
-                    "`config.x.kiosk.…` and read `Rails.configuration.x.kiosk.…` here " \
-                    "(ENV-CONFIG-PLACEMENT, Phil 2026-08-12; K-650, K-699). A bare ENV[\"FLAG\"] " \
-                    "mode check is fine and is deliberately not caught."
-        end
-      end
-
-      m = FRAMEWORK_PATCH.match(line)
-      next if m.nil?
-
-      errors << "#{short.(demo)}: #{rel}:#{lineno} calls #{m[:constant]}.#{m[:verb]} — an " \
-                "application must not patch a Rails framework class from its configuration. " \
-                "This is the K-504 shape: the four demos that carried " \
-                "`ActiveRecord::Migration.include(Kiosk::RLS::DSL)` are now served by " \
-                "kiosk-rls's own railtie. Whatever this line adds belongs in a railtie inside " \
-                "the gem that owns the behaviour, or in an ordinary Rails concern under app/."
-    end
+    scan_initializer.call(label:    short.(demo),
+                          rel:      path.delete_prefix("#{File.join(ROOT, demo)}/"),
+                          path:     path,
+                          env_hint: DEMO_ENV_HINT)
   end
 end
 
-# The EIGHTH initializer, scanned by the same rule (K-1009). Only the ENV.fetch
-# half applies: the fixture is not a demo, so the K-504 framework-patch message
-# (which names a demo) stays with the loop above.
-E2E_INITIALIZER_FIXTURE = "e2e/fixtures/initializer_kiosk.rb"
-e2e_fixture = File.join(ROOT, E2E_INITIALIZER_FIXTURE)
-if File.exist?(e2e_fixture)
-  File.read(e2e_fixture).each_line.with_index(1) do |line, lineno|
-    next if line.lstrip.start_with?("#")
-    next unless (f = ENV_FETCH.match(line))
+# THE EIGHTH INITIALIZER SET, DERIVED FROM run.sh RATHER THAN LISTED (K-1011).
+# K-1009 named ONE fixture by literal path, and `run.sh` installs TWO
+# (initializer_kiosk.rb → kiosk.rb, devise_initializer.rb → devise.rb), so the
+# generated app was the one place an initializer could be exempt by
+# construction. Reading the set out of run.sh means a third copy is scanned the
+# day someone adds it, and that a fixture that moves is reported rather than
+# skipped. BOTH rules run over each, with the K-504 message worded for a file
+# that is not a demo.
+E2E_RUN_SH           = "e2e/run.sh"
+E2E_INITIALIZER_COPY = %r{^\s*cp\s+"\$FIXTURES/(?<fixture>[^"]+)"\s+config/initializers/}
+e2e_initializers     = 0
+run_sh               = File.join(ROOT, E2E_RUN_SH)
 
-    var = f[:var]
-    if INITIALIZER_ENV_FETCH_ALLOWED.key?(var)
-      env_fetch_seen[var] += 1
-    else
-      errors << "e2e: #{E2E_INITIALIZER_FIXTURE}:#{lineno} resolves #{var} with ENV.fetch — an " \
-                "initializer READS resolved configuration, it does not resolve it. run.sh " \
-                "publishes the harness env inputs into the GENERATED " \
-                "config/environments/{development,production}.rb; read " \
-                "`Rails.configuration.x.kiosk.…` here (ENV-CONFIG-PLACEMENT, Phil 2026-08-12; " \
-                "K-650, K-699, K-1009). A bare ENV[\"FLAG\"] mode check is fine and is " \
-                "deliberately not caught."
+if File.exist?(run_sh)
+  fixtures = File.read(run_sh).scan(E2E_INITIALIZER_COPY).flatten.uniq
+  if fixtures.empty?
+    errors << "check-demo-copies: #{E2E_RUN_SH} copies NO fixture into config/initializers/, so " \
+              "this rule scanned NOTHING. Either the harness stopped shipping an initializer — " \
+              "in which case the rule should go with it — or the `cp \"$FIXTURES/…\" " \
+              "config/initializers/…` line it reads has been rewritten and this pattern no " \
+              "longer matches it. A rule that inspects nothing passes everything (K-1011)."
+  end
+
+  fixtures.each do |fixture|
+    rel  = "e2e/fixtures/#{fixture}"
+    path = File.join(ROOT, rel)
+    unless File.exist?(path)
+      errors << "check-demo-copies: #{E2E_RUN_SH} copies #{rel} into config/initializers/ of the " \
+                "generated app, but that file does not exist, so this rule scanned NOTHING for " \
+                "it. Either the fixture moved — run.sh names its new path — or the copy is dead " \
+                "and the line should go (K-1009, K-1011)."
+      next
     end
+
+    e2e_initializers += 1
+    scan_initializer.call(label: "e2e", rel: rel, path: path, env_hint: E2E_ENV_HINT)
   end
 else
-  errors << "check-demo-copies: #{E2E_INITIALIZER_FIXTURE} does not exist, so the K-1009 half of " \
-            "this rule scanned NOTHING. Either the harness fixture moved — point this at its new " \
-            "path — or the e2e harness is gone and the rule should go with it. A rule that " \
-            "inspects nothing passes everything."
+  errors << "check-demo-copies: #{E2E_RUN_SH} does not exist, so the harness half of this rule " \
+            "scanned NOTHING. Either the harness moved — point this at its new path — or the " \
+            "e2e harness is gone and the rule should go with it. A rule that inspects nothing " \
+            "passes everything."
 end
 
 INITIALIZER_ENV_FETCH_ALLOWED.each_key do |var|
@@ -1597,7 +1631,8 @@ if errors.empty?
        "telemetry wired in #{(dups['app/services/demo_telemetry.rb'] || {}).size} demos, " \
        "OperationResult subclassed from kiosk-server in #{(dups[OPERATION_RESULT] || {}).size} demos, " \
        "no env resolution and no Rails-framework patching in the initializers of " \
-       "#{initializer_demos} operator demos, no env resolution in the e2e harness fixture " \
+       "#{initializer_demos} operator demos nor in the #{e2e_initializers} e2e harness " \
+       "initializer fixtures run.sh installs " \
        "(#{INITIALIZER_ENV_FETCH_ALLOWED.size} declared ENV.fetch allowances), " \
        "one PLATFORMS set across #{lockfile_platforms.size} demo lockfiles"
   exit 0

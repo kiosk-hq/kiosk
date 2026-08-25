@@ -30,6 +30,10 @@
 #                      `category_slug` outside the LIVE `categories` table is a
 #                      typed 400 naming the sections that exist, NEVER a 200
 #                      answering a different question (T-090, K-922)
+#   LikeMetacharactersAreEscaped — a browse_listings `keyword` carrying LIKE
+#                      metacharacters matches them LITERALLY: `_` and `%` are
+#                      not live wildcards, so a search is never answered a
+#                      WIDER question than it asked (K-914)
 #   NoSellerPiiOnTheOpenBoard — the cross-owner board names sellers by an
 #                      opaque, per-seller pseudonym and carries no account
 #                      address anywhere in the response (K-913)

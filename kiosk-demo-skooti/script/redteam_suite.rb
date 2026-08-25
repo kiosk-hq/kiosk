@@ -25,9 +25,28 @@
 #   WrongCurrencyCart  — pay own reservation in usd → 403
 #   TamperedPriceCart  — pay below the operator's quoted rental price → 403
 #   InflatedTotalCart  — cart total ≠ sum of its line items → 403
-# Plus one input-shape beat:
+# Plus two input-shape beats:
 #   MalformedUuidArg   — a junk reservation_id, as an arg AND inside a signed
 #                        cart, is a typed 400 with no SQL internals — never a 500
+#   HostileArgShapes   — every hostile SHAPE (boolean/array/object/number) on
+#                        scooter_code, reservation_id and request_id is a typed
+#                        400 too — or a 404 for an unknown id on a query, never
+#                        a 500 (K-773)
+#
+# Two broker beats attack the cross-operator KYC callback:
+#   CrossOperatorClaimReplay — a broker-signed claim addressed to ANOTHER
+#                        operator is rejected at skooti's /kyc/callback
+#   ForgedCallbackNoSig — a callback whose jws is wrong-key (or absent) is
+#                        rejected, so kyc_status stays pending and the agent 403
+#
+# And two forgery beats at the identity boundary, both over the wire in the
+# SAME environment the drivers run in (T-104):
+#   SelfAssertedTokenForgery — a self-asserted `agent:u-…:a-…:r-owner` bearer
+#                        resolves to NO identity (401), while the genuinely
+#                        bound token is still answered
+#   SelfAssertedUserBearerForgery — a forged `user:u-<uuid>` bearer at
+#                        /kiosk/auth/link is 401, while the seeded rider's real
+#                        Devise session is answered
 #
 # And two beats that are only expressible after the 0.4 cutover (T-074 = A):
 #   RetiredWire        — POST /kiosk/query and POST /kiosk/run are an ordinary

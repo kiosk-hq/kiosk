@@ -12,12 +12,15 @@
 #   WrongCurrencyCart  — pay own booking in usd → 403
 #   TamperedPriceCart  — pay below the operator's quoted booking price → 403
 #   InflatedTotalCart  — cart total ≠ sum of its line items → 403
-# Plus one input-shape beat and one inventory beat:
+# Plus two input-shape beats, one date beat and one inventory beat:
 #   MalformedUuidArg   — a junk booking_id, as an arg AND inside a signed cart,
 #                        is a typed 400 with no SQL internals — never a 500
 #   HostileArgShapes   — every hostile SHAPE (boolean, array, object, junk
 #                        integer, unparseable and out-of-horizon date) on the
 #                        integer and date arguments is a typed 400 too (K-773)
+#   PastStay           — a check_in before today is a typed 400 on BOTH
+#                        availability and reserve_room: never rooms, never a
+#                        hold (K-969)
 #   DoubleBookedRoom   — a room-night already held cannot be reserved again by
 #                        anyone, on the same or overlapping dates → 409
 #
@@ -986,11 +989,12 @@ end
 
 # ── Scenario list ─────────────────────────────────────────────────────────────
 #
-# 13 generic + 7 local beats (3 cashier-check + 1 input-shape + 1 inventory +
-# the 2 wire-shape beats the 0.4 cutover made expressible, per the header
-# above); 3 generic (KYC variants) are expected to be skipped. 10 generic + 7
-# local are applicable (RegistrationWithoutPow now runs because register PoW is
-# ON).
+# The generic Kiosk::Redteam battery plus hoteling's own beats (3 cashier-check
+# + 2 input-shape + 1 date + 1 inventory + the 2 wire-shape beats the 0.4
+# cutover made expressible, per the header above). The 3 KYC variants are the
+# only expected skips — RegistrationWithoutPow runs, because register PoW is ON.
+# NO TOTALS ARE WRITTEN DOWN HERE: the run prints `scenarios.size` and the skip
+# count below, and a total written here is a total that rots (K-710).
 
 scenarios = [
   Kiosk::Redteam::Scenarios::PayForOtherUseSelf.new,      # C2 — headline

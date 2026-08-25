@@ -1216,7 +1216,7 @@ namespace :demo do
                                     spellings included) and on cancel_booking's
                                     booking_id are a typed 400 carrying no
                                     runtime vocabulary — never a 500, never a
-                                    wrong answer served as 200 (K-773, K-1027)
+                                    wrong answer served as 200 (K-773, K-1027, K-1028)
 
     Exits 0 when all scenarios are BLOCKED (0 BREACH); exits 1 on any BREACH.
     A BREACH = a real hole in atablefor — fix the app, not the scenario.

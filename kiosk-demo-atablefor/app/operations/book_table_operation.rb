@@ -23,14 +23,16 @@ class BookTableOperation
   #   comes from the Rack env the wire built, which no request argument can write
   #   — but only the WHERE keeps the DB as the authority.
   def self.call(principal_id:, restaurant_id:, restaurant_table_id:, date:, time:, party_size:)
-    restaurant_id       = restaurant_id.to_i
-    restaurant_table_id = restaurant_table_id.to_i
-    date                = date.to_s
-    time                = time.to_s
-    return missing("restaurant_id")       if restaurant_id < 1
-    return missing("restaurant_table_id") if restaurant_table_id < 1
-    return missing("date")                if date.empty?
-    return missing("time")                if time.empty?
+    restaurant_id, refusal = identifier("restaurant_id", restaurant_id)
+    return refusal if refusal
+
+    restaurant_table_id, refusal = identifier("restaurant_table_id", restaurant_table_id)
+    return refusal if refusal
+
+    date = date.to_s
+    time = time.to_s
+    return missing("date") if date.empty?
+    return missing("time") if time.empty?
 
     # The one guard `availability` shares, so the two surfaces cannot disagree.
     party_size, refusal = WireArguments.party_size(party_size)
@@ -123,6 +125,54 @@ class BookTableOperation
     bad_request("missing param: #{param}")
   end
   private_class_method :missing
+
+  # A restaurant or table identifier: SHAPE first, then RANGE — the same two
+  # steps in the same order {WireArguments.party_size} takes, and only since
+  # K-1028 (the two arguments K-1027's fix text did not name, same defect, same
+  # method, one line apart).
+  #
+  # THIS PAIR READ A BARE `.to_i`, and MEASURED on the descriptor-less path —
+  # the only path where either argument is uncoerced, and the path
+  # {WireArguments}' own comment names as its reason to exist — that got two
+  # things wrong at once:
+  #
+  #   * `true`, `false`, `[]`, `{}`, `[1]` and `{"a" => 1}` have no `to_i` AT
+  #     ALL, so each raised `NoMethodError` — a `500 action_failed` for a value
+  #     `input_schema` already forbids;
+  #   * `1.5.to_i` is 1, so a fractional id RESOLVED TO A ROW THE CALLER DID NOT
+  #     NAME. Watched rather than argued: `BookTableOperation.call` with
+  #     `restaurant_id: 1.5, restaurant_table_id: 1` returned a CONFIRMED
+  #     BOOKING at restaurant 1 table 1, and `restaurant_table_id: 1.5` against
+  #     restaurant 2 answered "no such table 1 at restaurant 2" — a refusal
+  #     naming a table nobody asked for. Which of the two a caller met was the
+  #     SEEDED DATA's choice, not the guard's.
+  #
+  # The shape is {WireArguments.whole_number}'s, so it is json_schemer's own
+  # `integer` and nothing looser: `2.0` still resolves to 2, exactly as `.to_i`
+  # did and exactly as the declared `{type: "integer"}` in front of it allows
+  # (measured against this demo's bundle on K-1027). A bare `is_a?(Integer)`
+  # here would refuse a body the published descriptor calls valid.
+  #
+  # WHICH SENTENCE EACH REFUSAL GETS, and the split is deliberate rather than
+  # incidental: `nil` is what the controller passes for an argument that was not
+  # given, and a zero or negative id was already a `missing` here, so both keep
+  # that wording untouched. The NEW sentence covers exactly the values that used
+  # to be a 500 or a wrong row — a value that WAS given and is not a whole
+  # number. (So a zero id still answers "missing param" rather than the ">= 1"
+  # this sentence promises; that wording predates K-1028 and was left as it is
+  # published rather than widened by a shape fix.)
+  #
+  # @return [Array(Integer, nil), Array(nil, OperationResult)]
+  def self.identifier(name, raw)
+    return [nil, missing(name)] if raw.nil?
+
+    id = WireArguments.whole_number(raw)
+    return [nil, bad_request("#{name} must be a whole number >= 1 — got #{raw.inspect}")] if id.nil?
+    return [id, nil] if id >= 1
+
+    [nil, missing(name)]
+  end
+  private_class_method :identifier
 
   def self.bad_request(message)
     OperationResult.refused(code: "bad_request", message: message)

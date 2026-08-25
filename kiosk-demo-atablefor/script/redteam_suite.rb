@@ -43,8 +43,8 @@
 #     availability's party_size (including the two bracket spellings) and on
 #     cancel_booking's booking_id are a typed 400 with no runtime vocabulary on
 #     the wire — never a 500 and never a wrong answer served as 200 (K-773,
-#     K-1027). The beat's own comment enumerates which layer answers which
-#     argument; it does not claim more than it probes.
+#     K-1027, K-1028). The beat's own comment enumerates which layer answers
+#     which argument; it does not claim more than it probes.
 #
 # THE 0.4 WIRE. A query is `GET <endpoint>/<query-name>` carrying its arguments
 # in the query string; an action is `POST <endpoint>/<action-name>` carrying
@@ -464,7 +464,7 @@ record(results, "BookOutsideOfferedHorizon",
        "#{rc_horizon_ctl}/#{horizon_ctl['booking_id'].inspect} " \
        "(want 400 bad_request naming the horizon for each, and a confirmed control)")
 
-# ── HostileArgShapes (K-773, K-1027) ─────────────────────────────────────────
+# ── HostileArgShapes (K-773, K-1027, K-1028) ────────────────────────────────
 #
 # THIS BATTERY HAD NO SHAPE BEAT AT ALL UNTIL K-1027, which is why the row was
 # filed against atablefor rather than found here: every `party_size` in the
@@ -509,12 +509,36 @@ record(results, "BookOutsideOfferedHorizon",
 #     availability call. The second layer is the schema's `integer` exactly, so
 #     on the query half it is the DECODER that turns the wire's string into one;
 #     independent of the descriptor for `book_table`, downstream of it here.
-#   * `restaurant_id` and `restaurant_table_id` — ONE LAYER, and it is the
-#     declared `{type: "integer", minimum: 1}`. Measured: the second layer is
-#     {BookTableOperation}'s own `restaurant_id.to_i` / `restaurant_table_id.to_i`,
-#     which is the bare `.to_i` `party_size` just stopped being — so for these
-#     two the probes below pin the DESCRIPTOR, and they go red if a schema edit
-#     widens the type or drops `additionalProperties: false`.
+#   * `restaurant_id` and `restaurant_table_id` — BOTH LAYERS REFUSE EVERY
+#     SHAPE BELOW, and that sentence is only true since K-1028; until then this
+#     clause said the probes pinned the DESCRIPTOR ALONE, because they did. The
+#     declared `{type: "integer", minimum: 1}` answers first; behind it
+#     {BookTableOperation}'s own `identifier` routes each through
+#     {WireArguments.whole_number} — json_schemer's `integer`, the same one
+#     `party_size` uses, so `2.0` still resolves to 2 — and only then asks
+#     `>= 1`. It read `restaurant_id.to_i` / `restaurant_table_id.to_i`, the
+#     bare `.to_i` `party_size` had just stopped being.
+#     NEITHER ARGUMENT HAS A QUERY HALF, which is the one way this pair differs
+#     from `party_size`: `book_table` is the only verb on this origin that takes
+#     either (`availability` and `my_bookings` only ever RETURN them), so no
+#     {Kiosk::Server::ArgumentDecoder} sits anywhere in their path and this
+#     second layer is independent of the descriptor on both counts.
+#     WATCHED FAIL, run and restored: drop BOTH declared `type`s from
+#     `book_table`'s `input_schema` and all 62 probes stay 400 off the second
+#     layer; with the pre-K-1028 `.to_i` restored underneath the same mutation
+#     TWELVE of them break — the six raising shapes × the two arguments, each a
+#     `500 action_failed` LEAKing `NoMethodError`.
+#     `1.5` DID NOT BREACH UNDER THAT MUTATION AND THE REASON IS RECORDED
+#     RATHER THAN SMOOTHED OVER, because it is the more dangerous half: `.to_i`
+#     turned it into 1, and whether resolving to row 1 is a WRONG BOOKING or a
+#     400 depends on the SEEDED DATA, not on the guard. This beat's slot is not
+#     restaurant 1 table 1, so the mismatch fell out as "no such table 1 at
+#     restaurant 2" — a typed refusal naming a table nobody asked for, which is
+#     why the probes above stayed green on that value. Measured on the
+#     descriptor-less path with the same pre-fix code:
+#     `BookTableOperation.call(restaurant_id: 1.5, restaurant_table_id: 1, …)`
+#     returned a CONFIRMED BOOKING at restaurant 1 table 1. A probe set cannot
+#     pin that half, so the guard has to.
 #   * `date` and `time` — the declared `format: "date"` and `enum` answer the
 #     non-string shapes; the handler guards behind them ({WireArguments
 #     .seating_date}, {WireArguments.seating_time}) read through `to_s`, so they

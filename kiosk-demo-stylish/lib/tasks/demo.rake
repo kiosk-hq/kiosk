@@ -568,6 +568,10 @@ namespace :demo do
       BLOCKED  SelfAssertedStaffSessionForgery — a forged X-Staff-Session
                header naming the owner buys nothing; the owner's real Devise
                session still mints a link
+      BLOCKED  UntypedBookingInput — every hostile or unusable book_appointment
+               body (wrong-typed, past, unknown or missing ids) is a typed 400
+               bad_request with no PG internals on the wire, while the bare and
+               the priced booking still succeed as positive controls
 
     stylish has no payment or KYC surface, so the battery covers only the
     attacks the surface can actually exhibit. Exits 0 when all are BLOCKED;

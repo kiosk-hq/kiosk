@@ -708,9 +708,13 @@ namespace :demo do
   desc <<~DESC
     Adversarial regression battery — kiosk-redteam.
 
-    Boots skooti, runs all 13 Kiosk::Redteam scenarios against the full chain
-    (Equihash PoW n=96 k=5 → KYC → reserve → pay → start_rental) and asserts each attack
-    is BLOCKED:
+    Boots skooti, runs every generic Kiosk::Redteam scenario skooti's surface
+    exposes plus skooti's own beats against the full chain (Equihash PoW n=96
+    k=5 → KYC → reserve → pay → start_rental) and asserts each attack is
+    BLOCKED. The suite prints the count it actually ran; this list names them.
+    No count is kept here on purpose: a count kept here is a count that rots
+    (K-710, and the guard commissioned by T-078 will diff this list against the
+    suite's own registry):
 
       BLOCKED  PayForOtherUseSelf    — C2: B pays for A's reservation, tries start_rental
       BLOCKED  SpentResourceReuse    — C3: re-start_rental on already-active reservation
@@ -724,6 +728,29 @@ namespace :demo do
       BLOCKED  MandateReplay         — B re-submits A's JWS; rejected
       BLOCKED  TokenTampering        — altered JWT claim rejected 401
       BLOCKED  PrivilegeSelfSelection — agent cannot self-assign elevated privilege
+      BLOCKED  WrongCurrencyCart     — pay own reservation in usd at a EUR operator → 403
+      BLOCKED  TamperedPriceCart     — pay below the operator's quoted rental price → 403
+      BLOCKED  InflatedTotalCart     — cart total ≠ the sum of its line items → 403
+      BLOCKED  MalformedUuidArg      — a junk reservation_id, as an arg AND inside a
+                                       signed cart, is a typed 400 with no SQL
+                                       internals — never a 500
+      BLOCKED  HostileArgShapes      — boolean/array/object/number on scooter_code,
+                                       reservation_id and request_id → typed 400 (or,
+                                       for an unknown id on a query, 404 not_found),
+                                       never a 500 (K-773)
+      BLOCKED  MotorcycleForgedKyc   — a forged attestation self-asserting
+                                       {age_over_18, licence_a} leaves the
+                                       attribute-gated rent_motorcycle at 403
+      BLOCKED  MotorcycleViaStartRental — the KYC gate cannot be walked around by VERB:
+                                       reserve(MC-001) → pay → start_rental is refused,
+                                       not answered with an unlock token (K-687)
+      BLOCKED  IssuedKycJwsTheft     — a REAL issuer-signed jws minted for victim B
+                                       cannot be replayed by attacker A; A's
+                                       rent_motorcycle stays 403 (K-440/K-443)
+      BLOCKED  CrossOperatorClaimReplay — a broker-signed claim addressed to ANOTHER
+                                       operator is rejected at skooti's /kyc/callback
+      BLOCKED  ForgedCallbackNoSig   — a /kyc/callback whose jws is wrong-key (or
+                                       absent) is rejected; kyc_status stays pending
       BLOCKED  RetiredWire           — POST /kiosk/query and POST /kiosk/run are an
                                        ordinary 404 not_found: the 0.3 pair was DELETED,
                                        so no privileged endpoint and no second
@@ -731,10 +758,12 @@ namespace :demo do
       BLOCKED  MethodMismatch        — a GET at an action's path (and a POST at a
                                        query's) is 405 method_not_allowed with Allow,
                                        never a silent 404
-      BLOCKED  HostileArgShapes      — boolean/array/object/number on scooter_code,
-                                       reservation_id and request_id → typed 400 (or,
-                                       for an unknown id on a query, 404 not_found),
-                                       never a 500 (K-773)
+      BLOCKED  SelfAssertedTokenForgery — a self-asserted `agent:u-…:a-…:r-owner`
+                                       bearer resolves to NO identity (401), while the
+                                       genuinely-bound token is still answered
+      BLOCKED  SelfAssertedUserBearerForgery — a forged `user:u-<uuid>` bearer at
+                                       /kiosk/auth/link is 401, while the seeded
+                                       rider's real Devise session is answered
 
     Exits 0 when all scenarios are BLOCKED; exits 1 on any BREACH.
     A BREACH = a real hole in skooti — fix the app, not the scenario.

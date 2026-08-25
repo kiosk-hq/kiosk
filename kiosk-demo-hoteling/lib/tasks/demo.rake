@@ -452,9 +452,13 @@ namespace :demo do
   desc <<~DESC
     Adversarial regression battery — kiosk-redteam.
 
-    Boots hoteling, runs the 13 generic Kiosk::Redteam scenarios plus 7 hoteling
-    beats against the chain (register PoW → no KYC → reserve_room → pay →
-    confirm_booking) and asserts each applicable attack is BLOCKED:
+    Boots hoteling, runs the generic Kiosk::Redteam scenarios plus hoteling's
+    own beats against the chain (register PoW → no KYC → reserve_room → pay →
+    confirm_booking) and asserts each applicable attack is BLOCKED. The suite
+    prints the count it actually ran; this list names them. No count is kept
+    here on purpose: a count kept here is a count that rots (K-710, and the
+    guard commissioned by T-078 will diff this list against the suite's own
+    registry):
 
       BLOCKED  PayForOtherUseSelf    — C2: B pays for A's booking, tries confirm_booking
       BLOCKED  SpentResourceReuse    — C3: re-confirm an already-confirmed booking
@@ -480,6 +484,9 @@ namespace :demo do
                                        (the 0.3 pair was DELETED, not shimmed — T-074 = A)
       BLOCKED  MethodMismatch        — a GET at an action's path is 405 method_not_allowed
                                        with Allow:, never a silent 404
+      BLOCKED  PastStay              — a check_in before today is a typed 400 on BOTH
+                                       availability and reserve_room — never rooms,
+                                       never a hold (K-969)
       SKIPPED  MissingKyc            — hoteling has no KYC gate
       SKIPPED  ExpiredKyc            — hoteling has no KYC gate
       SKIPPED  ForgedKyc             — hoteling has no KYC gate

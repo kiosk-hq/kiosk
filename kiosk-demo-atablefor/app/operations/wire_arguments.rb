@@ -14,10 +14,32 @@ module WireArguments
 
   # The party a caller wants seated.
   #
-  # SHAPE AND RANGE, in that order. Whether the argument was GIVEN is asked
-  # separately, by `availability` — the only verb that distinguishes the two,
-  # since `book_table` has always answered an absent party the way it answers a
-  # zero one.
+  # SHAPE AND RANGE, in that order — THREE answers, one per thing that can be
+  # wrong, and they are listed here because two of them are new since K-1027:
+  #
+  #   * ABSENT (`nil`) → the SHAPE sentence, "party_size must be a whole number
+  #     >= 1 — got nil", because {#whole_number} answers nil for a nil;
+  #   * GIVEN, WRONG SHAPE (`1.5`, `"abc"`, `true`, `[]`, `{}`) → the same SHAPE
+  #     sentence with the value echoed;
+  #   * GIVEN, OUT OF RANGE (`0` or a negative) → the RANGE sentence,
+  #     "party_size must be >= 1".
+  #
+  # WHETHER THE ARGUMENT WAS GIVEN AT ALL is a fourth question and this guard
+  # does not answer it — `availability` asks it one layer up, answering
+  # {#missing_party_size} for a missing key before ever reaching here
+  # (`Kiosk::DiningRoomController#availability`). `book_table` does not ask it:
+  # `party_size` is `required` in its `input_schema`, so no wire body can omit
+  # it, and a descriptor-less `BookTableOperation.call(party_size: nil, …)`
+  # lands on the SHAPE arm above. {BookTableOperation.identifier} does carry a
+  # `nil` arm of its own ("missing param: …") because its ids have no such
+  # question-asking verb in front of them.
+  #
+  # THIS PARAGRAPH USED TO SAY THE OPPOSITE, and the correction is K-1032: while
+  # the body read `size = raw.to_i`, `nil.to_i` was 0, so an absent party really
+  # did get the RANGE sentence a zero gets and `availability` really was the only
+  # verb that distinguished the two. K-1027 replaced the coercion with
+  # {#whole_number} and its own shape refusal, which split the two cases apart
+  # and left the sentence about them behind by one commit.
   #
   # The declared `{type: "integer", minimum: 1}` refuses a zero party on the wire
   # first, so this is defence in depth; it stays because {BookTableOperation} is

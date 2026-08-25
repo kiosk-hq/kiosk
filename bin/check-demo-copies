@@ -479,16 +479,32 @@ COPIES = {
   },
   "app/operations/wire_arguments.rb" => {
     rule: :per_demo,
-    why:  "The shape guard a demo's verbs open with (T-057/K-654, fleet-wide since T-083) — same " \
-          "filename, same job, and nothing else in common: the guards ARE the demo's argument " \
-          "vocabulary. hoteling checks integers and an ISO check-in/check-out pair; skooti checks " \
-          "one uuid; getgrocery checks a cart of {sku, qty} objects, a delivery window, a date " \
-          "and a served Dublin district; atablefor checks a party size (the one guard on that " \
-          "origin genuinely shared between a query and an action) and a booking uuid. Sharing " \
-          "them would mean shipping each demo guards for arguments it does not take. tudu and " \
-          "philslist have no copy at all and correctly so — their shared precondition is an " \
-          "ACCESS answer rather than a shape one, so it is named for what it decides " \
-          "(list_access.rb / listing_access.rb) and is a singleton path.",
+    ships: %w[atablefor getgrocery hoteling skooti],
+    why:  "The shape guard a demo's verbs open with (T-057/K-654). The `app/operations/` " \
+          "CONVENTION went fleet-wide in T-083; this FILE did not, and `ships:` above is why that " \
+          "distinction is now an exit code rather than a sentence — K-1031 found the prose here " \
+          "accounting for six demos of eight. Same filename, same job, per-demo body: the guards " \
+          "ARE the demo's argument vocabulary, so sharing them would mean shipping every demo " \
+          "guards for arguments it does not take. hoteling checks integers and an ISO " \
+          "check-in/check-out pair; skooti one uuid; getgrocery a cart of {sku, qty} objects, a " \
+          "delivery window, a date and a served Dublin district; atablefor a party size (the one " \
+          "guard on that origin genuinely shared between a query and an action) and a booking " \
+          "uuid — those are the HEADLINE guards, not the method list, which is longer in every " \
+          "copy. NOT «nothing else in common», which is what this entry claimed until K-1031 " \
+          "measured it: `:per_demo` means the copies are compared to NOTHING, and overlap has " \
+          "grown under that silence — `whole_number/1` is byte-identical in atablefor and " \
+          "getgrocery (K-1027/K-1020) and `missing/1` in getgrocery, hoteling and skooti. Nothing " \
+          "holds any of that in lockstep and nothing in this file can: the lockstep rule's handle " \
+          "is a relative PATH, so a shared METHOD inside a per-demo file sits below its " \
+          "granularity. That gap is T-120's question and is deliberately not pre-empted here, so " \
+          "read this half as a MEASUREMENT rather than a guard. THE FOUR DEMOS WITHOUT A COPY " \
+          "differ in three ways, not one: prove has no app/operations/ at all (the KYC broker, " \
+          "which registers no wire verbs — see NON_OPERATOR_DEMOS); stylish has the directory and " \
+          "guards its two argument shapes INLINE in book_appointment_operation.rb; tudu and " \
+          "philslist put the shape check beside the ACCESS decision it feeds and name the file " \
+          "for that decision (list_access.rb / listing_access.rb), each a singleton path — a uuid " \
+          "IS checked in both, so «an ACCESS answer rather than a shape one» was the wrong reason " \
+          "for the right arrangement.",
   },
   "app/operations/request_kyc_operation.rb" => {
     rule: :per_demo,

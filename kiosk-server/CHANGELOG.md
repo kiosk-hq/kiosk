@@ -20,16 +20,6 @@ All notable changes follow [Keep a Changelog](https://keepachangelog.com/en/1.1.
 
 - **KYC attributes become a TABLE, and the grant becomes a row's existence (K-656/T-061).** The named anonymized booleans an attestation grants no longer live in a `kiosk.agents.kyc_attributes` jsonb map; canonical migration 009 now creates `kiosk.kyc_attributes` — one row per `(agent_id, name)`, no value column at all — and `DefaultAgentIdp#kyc_attributes` / `#kyc_has_attributes?` read it unchanged at the public API. A map had to carry a value and a value has spellings, so every reader had to decide which spellings of `true` count; with presence as the grant a gate is an `EXISTS` that cannot answer NULL and cannot be fooled by a truthy-but-not-`true` value, and the one place a spelling is still judged is the WRITE — `POST /kiosk/agents/kyc` inserts names via `jsonb_each(...) WHERE value = 'true'::jsonb`, in Postgres, once for every operator. The write is one transaction whose stamp gates the grants (a revoked agent is granted nothing) and it REPLACES the set, so a later bare attestation takes earlier grants away.
 
-### Added
-
-- **The audit sink — Kiosk offers the trail and stores none of it (K-828).** `c.audit_sink` is a callable an operator sets; it receives one `Kiosk::Server::ActionEvent` per action invocation, success and failure alike, carrying the action name, the `{user_id, agent_id}` pair, the role, the actor, the outcome, the error class and message, the timestamp — and the ARGUMENTS IN FULL, deliberately unredacted, because the retention policy for an operator's customers' data is not Kiosk's to assume. Default is no sink: nothing is emitted and nothing is written anywhere. Redaction is one call (`ActionEvent#with_arg_types`, `#without_args`), a sink that raises is logged and never fails the action, and emission sits outside the action's transaction so a sink cannot hold one open. Replaces the `kiosk.action_log` writer this release briefly shipped.
-
-### Removed
-
-- **`kiosk.actions` and `kiosk.action_log` leave the canonical migration set (K-828).** Canonical migration 003 is retired and the install generator emits nine migrations instead of ten (004-010 keep their ordinals). With the audit trail now the operator's, a shipped migration that creates two audit tables nothing ever fills is exactly the dead schema K-791 objected to. `SchemaDefinitions.actions_log_sql`, the `create_kiosk_actions_log` template and `Kiosk::Server::ActionLog` (with `c.audit_log` / `c.audit_log_args`) are gone rather than deprecated: there are no adopters to carry a shim for, and an existing installation drops the two tables by hand.
-
-### Changed
-
 - **A handler may relax its own `200`'s cache policy, and the wire refuses one that would leak (K-823).** The spec has always let an operator serve an identity-independent payload `private, max-age=N` — that is how an assistant's own cache saves a toll — but the dispatch seam discarded a handler's response headers, so the permission was unreachable by the only code an operator writes; it now carries the handler's `Cache-Control` through, and the render seam refuses (rather than quietly edits) any policy that would let a shared cache hand one identity's rows to another.
 
 - **The `/auth.md` every operator serves stopped teaching an error contract the wire retired (T-068 slice 7).** Its Errors section described the 0.3 `{ ok: false, error: { code, message, hint } }` envelope; since 0.4 every refusal — the auth plane included — is an RFC 9457 problem document with the code as a flat member. An assistant that believed the document was branching on a field that no longer exists, so the section now shows the document it will actually receive, and a spec pins the shape rather than the prose.
@@ -44,23 +34,70 @@ All notable changes follow [Keep a Changelog](https://keepachangelog.com/en/1.1.
 
 - **The `schema` descriptor drops `verbs` and the module set has ONE home (T-095).** `verbs` rendered the very call `/.well-known/kiosk.json` renders as `capabilities`, so it was one value published twice under two names rather than two facts; `capabilities` is the single spelling, and a client reads it from the discovery document it already fetches first.
 
-### Fixed
+- **Discovery advertises MODULES, and the catalog's `verbs` IS `capabilities`
+  (T-068 slice 5; T-075 = A, K-740, ADR-0025).** `Kiosk.configuration
+  .capabilities` — and therefore `/.well-known/kiosk.json` — now computes
+  `["schema", "queries", "actions", "pay"]` from the same three questions of
+  the same registry it always asked; only the names it emits moved from verbs
+  to modules. `Executor#verb_schema` stops emitting the `VERBS` constant and
+  answers with that same array, so an origin with no payment provider no
+  longer advertises `pay` in one self-description and omits it from the other.
+  `agents.json`'s `x-kiosk` block stops echoing the capability list: it is now
+  `{schema, api_catalog, mount_path, api_version}` — pointers, not a copy of
+  the contract — and `min_client` went with the echo (`kiosk.json` is
+  canonical for it). `/.well-known/api-catalog` maps one link per module.
+  Intent: none of these documents requires a token, and the verb list is
+  deliberately behind one — `GET <endpoint>/schema` and
+  `GET <endpoint>/openapi.json` both demand Bearer, and the per-verb wire
+  answers `401` before `404` so an anonymous prober cannot enumerate names.
+  BREAKING for anything that read the old spellings: the member values change,
+  the field names do not.
 
-- **A routing 404 or an unhandled 500 under the mount now carries the version headers the spec makes mandatory (K-824).** The headers middleware was appended to the host stack, so it sat inside Rails' exception renderers and never saw a response Rails composed for itself — leaving exactly the answers a mis-versioned client is most likely to receive with no handshake on them. It is installed outside those renderers now, and reads the request path on the way in, because Rails rewrites it before rendering an error. An operator's own routes outside the mount are still untouched.
+- **The error taxonomy is the wire contract, not a parallel class hierarchy.**
+  The `error.code` vocabulary now lives in one table, and handlers express
+  errors in Rails' own idiom: a rendered status becomes its wire code, an
+  exception registered in `config.action_dispatch.rescue_responses` is mapped
+  by a single `rescue_from` the mixin installs (the operator's own handlers
+  win over it), and an explicitly rendered vocabulary code — including a
+  specific 402 — travels verbatim. Intent: an operator should never need a
+  Kiosk exception class to say what a bare `render json:, status:` already
+  says; the classes that restated HTTP statuses are deprecated for handler
+  code, and the unused `QuotaExceeded` class is gone (the code stays
+  reserved in the vocabulary).
 
-- **A provider that configures no `registration_role` can register assistants again (K-788).** Roles are optional by decision (ADR-0011: "registration MUST NOT fail when it is unset"), but the register door and the fresh-key binding branch wrote a literal `NULL` into `agents.allowed_roles`, which the shipped migration declares `NOT NULL` — so both 500'd for exactly the single-role operator the decision protects, while every shipped demo configures a role and never saw it. "No role" is now the empty role set.
-
-### Security
-
-- **The identity GUCs are set through bind parameters (K-789).** `SessionContext` built `SET LOCAL <name> = '<value>'` with a hand-rolled quote-doubler — the last value escaped by hand anywhere in the gem, and the one value every predicate and every RLS policy trusts. Postgres takes no binds in `SET`, so the statement is now `SELECT set_config($1, $2, true)`, whose third argument IS `LOCAL`; equivalence (same value in the transaction, gone after COMMIT and after ROLLBACK) is asserted against a real database rather than argued. `SessionContext`'s connection contract moves from `#execute` to `#exec_query`, and `#guc_statements` returns `[sql, binds]` pairs.
-
-- **The pay path writes through bind parameters, not assembled SQL (K-654).** `Executor`'s four `persist_*` helpers and its spending-cap tally were heredocs with every value spliced in through a private `connection.quote` wrapper; they now pass `$1…$N` binds to `exec_query`, so a value can no longer be read as SQL and there is no quote call left to omit. Nothing on the wire changes — this closes the gap between what the engine ships and what it asks operators to do, since the same idiom was removed from all seven demos first. `WireController` also stops calling the Rails-8.1 soft-deprecated `ActiveRecord::Base.connection`, which raises outright under `permanent_connection_checkout = :disallowed`.
-
-### Removed
-
-- **`Kiosk::Server::Queries.register` / `Kiosk::Server::Actions.register` are gone (T-081).** A shipped public API of the 0.3 series is removed with no deprecation shim: an initializer that calls one now raises NoMethodError. A verb is declared one way — a controller that `include`s `Kiosk::Query` / `Kiosk::Action`, named in `c.handlers` — because the second shape could not be reloaded, could not be reached by the host's filters, `rescue_from` or strong parameters, and taught, in the file an adopter copies first, that Rails does not apply to the surface they expose to assistants. The registries' read surface (`fetch`, `describe`, `catalog`, `known`) is unchanged and the wire is byte-identical, including the ADR-0023-retired `params` descriptor slot, which no macro can set and which keeps publishing null.
+- **kiosk-server declares Rails.** New runtime dependencies: `railties`,
+  `actionpack`, `activerecord` and `activesupport`, all `~> 8.1` — the four
+  components the gem references. Deliberately not the `rails` meta-gem: nothing
+  here touches Action Mailer, Action Cable, Active Job, Active Storage, Action
+  Text or Action Mailbox. The engine and the nine controllers no longer hide
+  behind `if defined?(::ActionController::API)` / `if defined?(::Rails::Engine)`
+  — `require "kiosk/server"` defines all ten unconditionally, so a missing
+  framework is a LoadError at require time rather than a NameError at request
+  time. Consequences: `Kiosk.configuration.device_authorization_store` always
+  lazy-defaults to the durable ActiveRecord adapter (it already did in every
+  Rails host), and `TestExecutor` no longer offers an "ActiveRecord absent"
+  error path. Rails < 8.1 is untested and therefore not claimed (K-495, T-052).
+- **PoW proof moves to the `Kiosk-PoW` request header.** `WireController` and
+  `AuthController#register` now read the proof(s) from the `Kiosk-PoW` request
+  header as raw JSON (`HTTP_KIOSK_POW`) instead of a `pow` body field (ADR-0022,
+  K-483). The parser dual-accepts a single proof, a JSON array, repeated header
+  lines (Rack `\n`-joined), or a proxy comma-combined value, flattening all into
+  one proofs list — so the tolled `schema` GET can carry its proof (a GET has no
+  body). The body is now purely verb args (the challenge fingerprint is over the
+  plain body, unchanged on retry); the old body-pow path is removed (no
+  back-compat). A malformed header is a `bad_request` (400) with a hint;
+  `RequestValidation` validates each parsed proof; the 402 keeps its
+  `WWW-Authenticate: Kiosk-PoW` header (completes T-022).
+- **Install-generator honesty.** The `kiosk:install` initializer template no longer advertises a nonexistent `MyCustomAgentIdp`; it now states plainly that the bundled kiosk-pop agent-IdP is the default (zero config), that fronting an external agent-identity issuer means subclassing `Kiosk::AgentIdentityProviders::Base` (a planned seam, none shipped), and that `c.user_idp` binds a human account with `kiosk-user-idp-devise` as the worked example. Template text only — no generated behavior change.
+- **RLS is now opt-in.** kiosk-server no longer depends on or requires
+  `kiosk-rls`. Hosts that want DB-level row enforcement add
+  `gem "kiosk-rls"` themselves (see the kiosk-rls README). Config moves:
+  `schema` and `app_role` now live in kiosk-core's `Kiosk::Configuration`;
+  `enforce_db_role` in kiosk-server's extension. No wire-surface change.
 
 ### Added
+
+- **The audit sink — Kiosk offers the trail and stores none of it (K-828).** `c.audit_sink` is a callable an operator sets; it receives one `Kiosk::Server::ActionEvent` per action invocation, success and failure alike, carrying the action name, the `{user_id, agent_id}` pair, the role, the actor, the outcome, the error class and message, the timestamp — and the ARGUMENTS IN FULL, deliberately unredacted, because the retention policy for an operator's customers' data is not Kiosk's to assume. Default is no sink: nothing is emitted and nothing is written anywhere. Redaction is one call (`ActionEvent#with_arg_types`, `#without_args`), a sink that raises is logged and never fails the action, and emission sits outside the action's transaction so a sink cannot hold one open. Replaces the `kiosk.action_log` writer this release briefly shipped.
 
 - **`Kiosk::OperationResult` — the answer-or-refusal a write returns, so an operator writes the decision and not the plumbing (K-792).** An Operation must be able to REFUSE without knowing whether the answer will be rendered as JSON, redirected with a flash, or read from a console, and the value object that makes that possible had been hand-copied into every demo. It ships once now: subclass it, declare the `error.code` → HTTP status map for the refusals your app actually makes, and nothing else. The map stays yours on purpose — the wire vocabulary is not injective (`kyc_required` and `forbidden` are both 403), so no shared table could infer it, and an unmapped code raises rather than being guessed at.
 
@@ -152,68 +189,23 @@ All notable changes follow [Keep a Changelog](https://keepachangelog.com/en/1.1.
   - `Kiosk.configuration.device_authorization_store` — lazy-default `InMemory`; setter accepts any subclass of `DeviceAuthorizationStores::Base`. `Kiosk.reset!` drops any configured store.
   - Test coverage: 47 new examples (33 on `DeviceAuthorization` + 14 on stores + config integration). Full kiosk-server suite remains green at 222 examples, 0 failures.
 
-### Changed
+### Removed
 
-- **Discovery advertises MODULES, and the catalog's `verbs` IS `capabilities`
-  (T-068 slice 5; T-075 = A, K-740, ADR-0025).** `Kiosk.configuration
-  .capabilities` — and therefore `/.well-known/kiosk.json` — now computes
-  `["schema", "queries", "actions", "pay"]` from the same three questions of
-  the same registry it always asked; only the names it emits moved from verbs
-  to modules. `Executor#verb_schema` stops emitting the `VERBS` constant and
-  answers with that same array, so an origin with no payment provider no
-  longer advertises `pay` in one self-description and omits it from the other.
-  `agents.json`'s `x-kiosk` block stops echoing the capability list: it is now
-  `{schema, api_catalog, mount_path, api_version}` — pointers, not a copy of
-  the contract — and `min_client` went with the echo (`kiosk.json` is
-  canonical for it). `/.well-known/api-catalog` maps one link per module.
-  Intent: none of these documents requires a token, and the verb list is
-  deliberately behind one — `GET <endpoint>/schema` and
-  `GET <endpoint>/openapi.json` both demand Bearer, and the per-verb wire
-  answers `401` before `404` so an anonymous prober cannot enumerate names.
-  BREAKING for anything that read the old spellings: the member values change,
-  the field names do not.
+- **`kiosk.actions` and `kiosk.action_log` leave the canonical migration set (K-828).** Canonical migration 003 is retired and the install generator emits nine migrations instead of ten (004-010 keep their ordinals). With the audit trail now the operator's, a shipped migration that creates two audit tables nothing ever fills is exactly the dead schema K-791 objected to. `SchemaDefinitions.actions_log_sql`, the `create_kiosk_actions_log` template and `Kiosk::Server::ActionLog` (with `c.audit_log` / `c.audit_log_args`) are gone rather than deprecated: there are no adopters to carry a shim for, and an existing installation drops the two tables by hand.
 
-- **The error taxonomy is the wire contract, not a parallel class hierarchy.**
-  The `error.code` vocabulary now lives in one table, and handlers express
-  errors in Rails' own idiom: a rendered status becomes its wire code, an
-  exception registered in `config.action_dispatch.rescue_responses` is mapped
-  by a single `rescue_from` the mixin installs (the operator's own handlers
-  win over it), and an explicitly rendered vocabulary code — including a
-  specific 402 — travels verbatim. Intent: an operator should never need a
-  Kiosk exception class to say what a bare `render json:, status:` already
-  says; the classes that restated HTTP statuses are deprecated for handler
-  code, and the unused `QuotaExceeded` class is gone (the code stays
-  reserved in the vocabulary).
+- **`Kiosk::Server::Queries.register` / `Kiosk::Server::Actions.register` are gone (T-081).** A shipped public API of the 0.3 series is removed with no deprecation shim: an initializer that calls one now raises NoMethodError. A verb is declared one way — a controller that `include`s `Kiosk::Query` / `Kiosk::Action`, named in `c.handlers` — because the second shape could not be reloaded, could not be reached by the host's filters, `rescue_from` or strong parameters, and taught, in the file an adopter copies first, that Rails does not apply to the surface they expose to assistants. The registries' read surface (`fetch`, `describe`, `catalog`, `known`) is unchanged and the wire is byte-identical, including the ADR-0023-retired `params` descriptor slot, which no macro can set and which keeps publishing null.
 
-- **kiosk-server declares Rails.** New runtime dependencies: `railties`,
-  `actionpack`, `activerecord` and `activesupport`, all `~> 8.1` — the four
-  components the gem references. Deliberately not the `rails` meta-gem: nothing
-  here touches Action Mailer, Action Cable, Active Job, Active Storage, Action
-  Text or Action Mailbox. The engine and the nine controllers no longer hide
-  behind `if defined?(::ActionController::API)` / `if defined?(::Rails::Engine)`
-  — `require "kiosk/server"` defines all ten unconditionally, so a missing
-  framework is a LoadError at require time rather than a NameError at request
-  time. Consequences: `Kiosk.configuration.device_authorization_store` always
-  lazy-defaults to the durable ActiveRecord adapter (it already did in every
-  Rails host), and `TestExecutor` no longer offers an "ActiveRecord absent"
-  error path. Rails < 8.1 is untested and therefore not claimed (K-495, T-052).
-- **PoW proof moves to the `Kiosk-PoW` request header.** `WireController` and
-  `AuthController#register` now read the proof(s) from the `Kiosk-PoW` request
-  header as raw JSON (`HTTP_KIOSK_POW`) instead of a `pow` body field (ADR-0022,
-  K-483). The parser dual-accepts a single proof, a JSON array, repeated header
-  lines (Rack `\n`-joined), or a proxy comma-combined value, flattening all into
-  one proofs list — so the tolled `schema` GET can carry its proof (a GET has no
-  body). The body is now purely verb args (the challenge fingerprint is over the
-  plain body, unchanged on retry); the old body-pow path is removed (no
-  back-compat). A malformed header is a `bad_request` (400) with a hint;
-  `RequestValidation` validates each parsed proof; the 402 keeps its
-  `WWW-Authenticate: Kiosk-PoW` header (completes T-022).
-- **Install-generator honesty.** The `kiosk:install` initializer template no longer advertises a nonexistent `MyCustomAgentIdp`; it now states plainly that the bundled kiosk-pop agent-IdP is the default (zero config), that fronting an external agent-identity issuer means subclassing `Kiosk::AgentIdentityProviders::Base` (a planned seam, none shipped), and that `c.user_idp` binds a human account with `kiosk-user-idp-devise` as the worked example. Template text only — no generated behavior change.
-- **RLS is now opt-in.** kiosk-server no longer depends on or requires
-  `kiosk-rls`. Hosts that want DB-level row enforcement add
-  `gem "kiosk-rls"` themselves (see the kiosk-rls README). Config moves:
-  `schema` and `app_role` now live in kiosk-core's `Kiosk::Configuration`;
-  `enforce_db_role` in kiosk-server's extension. No wire-surface change.
+### Fixed
+
+- **A routing 404 or an unhandled 500 under the mount now carries the version headers the spec makes mandatory (K-824).** The headers middleware was appended to the host stack, so it sat inside Rails' exception renderers and never saw a response Rails composed for itself — leaving exactly the answers a mis-versioned client is most likely to receive with no handshake on them. It is installed outside those renderers now, and reads the request path on the way in, because Rails rewrites it before rendering an error. An operator's own routes outside the mount are still untouched.
+
+- **A provider that configures no `registration_role` can register assistants again (K-788).** Roles are optional by decision (ADR-0011: "registration MUST NOT fail when it is unset"), but the register door and the fresh-key binding branch wrote a literal `NULL` into `agents.allowed_roles`, which the shipped migration declares `NOT NULL` — so both 500'd for exactly the single-role operator the decision protects, while every shipped demo configures a role and never saw it. "No role" is now the empty role set.
+
+### Security
+
+- **The identity GUCs are set through bind parameters (K-789).** `SessionContext` built `SET LOCAL <name> = '<value>'` with a hand-rolled quote-doubler — the last value escaped by hand anywhere in the gem, and the one value every predicate and every RLS policy trusts. Postgres takes no binds in `SET`, so the statement is now `SELECT set_config($1, $2, true)`, whose third argument IS `LOCAL`; equivalence (same value in the transaction, gone after COMMIT and after ROLLBACK) is asserted against a real database rather than argued. `SessionContext`'s connection contract moves from `#execute` to `#exec_query`, and `#guc_statements` returns `[sql, binds]` pairs.
+
+- **The pay path writes through bind parameters, not assembled SQL (K-654).** `Executor`'s four `persist_*` helpers and its spending-cap tally were heredocs with every value spliced in through a private `connection.quote` wrapper; they now pass `$1…$N` binds to `exec_query`, so a value can no longer be read as SQL and there is no quote call left to omit. Nothing on the wire changes — this closes the gap between what the engine ships and what it asks operators to do, since the same idiom was removed from all seven demos first. `WireController` also stops calling the Rails-8.1 soft-deprecated `ActiveRecord::Base.connection`, which raises outright under `permanent_connection_checkout = :disallowed`.
 
 ### Out of scope for first release
 

@@ -292,6 +292,41 @@ RSpec.describe "AssistantsController" do
     expect(html).to include("cap: none")
   end
 
+  # K-1014. The editor is rendered unconditionally, and on an origin that wires
+  # no `config.spending_cap` seam the number it saves is read by nothing —
+  # `Executor#enforce_spending_cap!` returns on `seam.nil?` before it looks at
+  # the column, and NO demo in the fleet sets one. The page must say so where it
+  # is rendered; the field keeps submitting, because setting policy on an origin
+  # that may not be the one that charges is deliberate (stylish's initializer).
+  it "says the cap binds NOTHING when the origin wires no spending_cap seam" do
+    Kiosk.configure { |c| c.spending_cap = nil }
+    con.next_exec_result = [
+      { "id" => "agent-1", "public_key" => pem, "created_at" => "2026-07-17 12:00:00+00",
+        "human_label" => "Bot", "spending_cap_cents" => 5000, "settled_cents" => 0 },
+    ]
+    _status, html = dispatch(:show, method: "GET")
+
+    expect(html).to include("nothing")
+    expect(html).to include("ColumnSpendingCap")
+    # …and the control still submits: this is a note, not a disablement.
+    expect(html).to include(%(name="spending_cap_cents"))
+    expect(html).to include("cap: 5000 cents")
+  end
+
+  # THE CONTROL for the example above: with a seam wired the note is absent, so
+  # it cannot pass on a build where the paragraph is unconditional.
+  it "drops the note once a spending_cap seam IS configured — the control" do
+    Kiosk.configure { |c| c.spending_cap = ->(agent_id:) { 5000 } }
+    con.next_exec_result = [
+      { "id" => "agent-1", "public_key" => pem, "created_at" => "2026-07-17 12:00:00+00",
+        "human_label" => "Bot", "spending_cap_cents" => 5000, "settled_cents" => 0 },
+    ]
+    _status, html = dispatch(:show, method: "GET")
+
+    expect(html).not_to include("ColumnSpendingCap")
+    expect(html).to include(%(name="spending_cap_cents"))
+  end
+
   it "shows «cap: disabled» when the cap is zero" do
     con.next_exec_result = [
       { "id" => "agent-1", "public_key" => pem, "created_at" => "2026-07-17 12:00:00+00",

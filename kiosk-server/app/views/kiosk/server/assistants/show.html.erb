@@ -32,6 +32,15 @@
 
   <section>
     <h2>Currently linked</h2>
+    <% unless @spending_cap_enforced %>
+      <p role="note">
+        <strong>Note:</strong> this origin configures no <code>spending_cap</code>
+        seam, so a cap saved below is recorded against the assistant but nothing
+        reads it when a charge is settled. To make it bind, set
+        <code>c.spending_cap = Kiosk::Server::ColumnSpendingCap.new</code> in the
+        Kiosk initializer.
+      </p>
+    <% end %>
     <% if @assistants.empty? %>
       <p>No assistant accounts are linked yet.</p>
     <% else %>

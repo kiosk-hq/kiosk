@@ -172,6 +172,16 @@ module Kiosk
 
       def render_page(status: :ok)
         @assistants = bound_assistants
+        # K-1014. The cap editor below is rendered unconditionally, and on an
+        # origin that wires no `config.spending_cap` seam the number it saves is
+        # stored on the assistant's row and read by nothing: `Executor
+        # #enforce_spending_cap!` returns on `seam.nil?` before it looks at the
+        # column. A control that binds nothing must SAY so where it is rendered,
+        # so the page asks the configuration rather than assuming a seam. The
+        # field still submits — the governance surface (a human setting policy on
+        # an origin that may not be the one that charges) is deliberate, stated in
+        # stylish's initializer, and `demo:binding` drives it end to end.
+        @spending_cap_enforced = !Kiosk.configuration.spending_cap.nil?
         # Forms post to <page>/link, <page>/unlink and <page>/update;
         # recompute the page path so the view works at any mount and after POSTs.
         @page_path = request.path.sub(%r{/(link|unlink|update)\z}, "")

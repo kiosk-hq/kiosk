@@ -348,8 +348,17 @@ end
 # `input_schema` already declares an integer (class two, closed by reading
 # through `.to_s` first). The row's own bar for closing was that those hostile
 # shapes be re-sent AS A STANDING BEAT rather than from the migration's
-# throwaway harness, and this is that beat. {MalformedItemsCart} already stands
-# for the `items` half (K-693); this one takes the arguments it does not.
+# throwaway harness, and this is that beat. {MalformedItemsCart} stands for the
+# `items` CONTAINER (K-693) — a String, a bare Hash, an array of strings, `[]`,
+# absent; this one takes the scalar arguments it does not, AND the `qty` INSIDE
+# a well-formed element, which fell between the two beats until K-773's
+# 2026-08-25 reopen named it: `qty` is half of class two above and
+# `MalformedItemsCart` never varies an element's fields.
+#
+# WHAT IS PROBED, NAMED RATHER THAN CLAIMED. create_order: `items[].qty`,
+# `delivery_slot_id`, `delivery_date`, `delivery_address`. reschedule_delivery:
+# `order_id`. An argument not on that list is not covered here — extend the
+# list, never widen the sentence.
 #
 # WHICH LAYER ANSWERS WHAT, measured rather than assumed. `delivery_slot_id`
 # declares `type: "integer", minimum: 1, maximum: 6` and `order_id` declares
@@ -383,7 +392,7 @@ class HostileArgShapes < Kiosk::Redteam::Scenario
     super(
       name:        "HostileArgShapes",
       category:    "input",
-      description: "Boolean/array/object/junk arguments on delivery_slot_id, delivery_date, delivery_address and order_id are a typed 400 — never a 500",
+      description: "Boolean/array/object/junk values on items[].qty, delivery_slot_id, delivery_date, delivery_address and order_id are a typed 400 — never a 500",
     )
   end
 
@@ -409,6 +418,22 @@ class HostileArgShapes < Kiosk::Redteam::Scenario
       refused "create_order delivery_slot_id=#{v.inspect}",
               client.run(a, name: "create_order", items: good_items,
                             delivery_slot_id: v, delivery_address: ADDRESS)
+    end
+
+    # ── `qty`, INSIDE a well-formed items element ───────────────────────────
+    #
+    # The container is correct in every call here — one element, a real sku —
+    # so the ONLY thing wrong is the element's own `qty`, which is class two of
+    # K-773's finding: `(item[:qty] || 1).to_s.to_i` used to be a bare `.to_i`,
+    # and `true`/`false`/`[]`/`{}` have none, so each was a `500 action_failed`
+    # for a value `input_schema` already declares `{type: "integer", minimum: 1}`.
+    # Both layers must refuse, and note `false` is the one shape ONLY the schema
+    # catches: `(false || 1)` is 1, so the demo guard would read it as qty 1.
+    sku = catalog.first["sku"]
+    (SHAPES + [0, -1]).each do |v|
+      refused "create_order items[0].qty=#{v.inspect}",
+              client.run(a, name: "create_order", items: [{ sku: sku, qty: v }],
+                            delivery_slot_id: 1, delivery_address: ADDRESS)
     end
 
     # ── the two bare strings, where getgrocery's OWN guards are the only

@@ -573,6 +573,23 @@ end
 #     well-formed date the schema accepts, and the 739,000-night stay it asks
 #     for overflowed `bookings.total_cents` (a 4-byte integer) with
 #     `ActiveModel::RangeError`, which the wire answered `500 action_failed`.
+#
+# WHAT IS PROBED, NAMED RATHER THAN CLAIMED (K-773's 2026-08-25 reopen). The
+# beat used to be described as sending the hostile families on «every argument
+# its verbs take», and that was FALSE as written: `check_out` was a frozen
+# constant passed to all eleven call sites and `search_hotels`'s four filters
+# were not touched. The claim is now an enumeration, so it can be checked
+# against this method rather than believed:
+#
+#   reserve_room   property_id, room_type_id  (INT_SHAPES)
+#                  check_in, check_out        (DATE_SHAPES)
+#   availability   property_id, check_in, check_out (the string spellings a
+#                  query can express, plus the two BRACKET spellings)
+#   search_hotels  min_stars, max_price_cents (junk + out-of-range integers)
+#                  neighbourhood, amenity     (off-enum strings)
+#
+# An argument NOT in that list is not covered here — say so by extending the
+# list, never by widening the sentence.
 class HostileArgShapes < Kiosk::Redteam::Scenario
   include RawWire
 
@@ -597,7 +614,7 @@ class HostileArgShapes < Kiosk::Redteam::Scenario
     super(
       name:        "HostileArgShapes",
       category:    "input",
-      description: "Boolean/array/object/junk-integer/unparseable-date arguments are a typed 400 — never a 500, never a wrong answer served as 200",
+      description: "Boolean/array/object/junk-integer/unparseable-date values on reserve_room's four arguments, availability's three and search_hotels' four filters are a typed 400 — never a 500, never a wrong answer served as 200",
     )
   end
 
@@ -619,6 +636,13 @@ class HostileArgShapes < Kiosk::Redteam::Scenario
       refused "reserve_room check_in=#{v.inspect}",
               client.run(a, name: "reserve_room", property_id: prop, room_type_id: room,
                             check_in: v, check_out: PROBE_OUT)
+      # …and the SAME shapes on `check_out`. It used to be a frozen constant on
+      # every call site here, so the second half of the stay was pinned by
+      # nothing: a descriptor that widened `check_out` to an untyped string, or
+      # a guard that stopped parsing it, would have left this beat green.
+      refused "reserve_room check_out=#{v.inspect}",
+              client.run(a, name: "reserve_room", property_id: prop, room_type_id: room,
+                            check_in: PROBE_IN, check_out: v)
     end
 
     # ── the QUERY path: everything is a string on the wire, so the hostile
@@ -634,10 +658,48 @@ class HostileArgShapes < Kiosk::Redteam::Scenario
               client.query(a, name: "availability", property_id: prop,
                               check_in: v, check_out: PROBE_OUT)
     end
+    ["nope", "", "2026-02-30", "09/01/2026"].each do |v|
+      refused "availability check_out=#{v.inspect}",
+              client.query(a, name: "availability", property_id: prop,
+                              check_in: PROBE_IN, check_out: v)
+    end
     ["check_in%5B%5D", "check_in%5Bx%5D"].each do |bracket|
       res, doc = raw(a, :get,
                      "/kiosk/availability?property_id=#{prop}&check_out=#{PROBE_OUT}&#{bracket}=#{PROBE_IN}")
       note "availability #{bracket}", res.code.to_i, doc
+    end
+
+    # ── search_hotels' FILTERS, which no beat probed at all ─────────────────
+    #
+    # Two are declared integers with a range (`min_stars` 1..5,
+    # `max_price_cents` >= 0) and two are declared string ENUMS
+    # (`neighbourhood`, `amenity`). All four are read with `.present?` and then
+    # `.to_s.to_i` or a bare `.to_s`, so nothing in the handler distinguishes
+    # junk from a value — the DECLARATION is the whole refusal, which is
+    # precisely why it needs a standing probe. A filter that silently matched
+    # nothing would answer `200 []`: «no hotel is like that» in reply to a
+    # question the origin never understood.
+    %w[abc true 0 9 1.5 0x10].each do |v|
+      refused "search_hotels min_stars=#{v.inspect}",
+              client.query(a, name: "search_hotels", min_stars: v)
+    end
+    %w[abc true -1 1.5].each do |v|
+      refused "search_hotels max_price_cents=#{v.inspect}",
+              client.query(a, name: "search_hotels", max_price_cents: v)
+    end
+    ["nope", "", "Sultanahmet'; --"].each do |v|
+      refused "search_hotels neighbourhood=#{v.inspect}",
+              client.query(a, name: "search_hotels", neighbourhood: v)
+      refused "search_hotels amenity=#{v.inspect}",
+              client.query(a, name: "search_hotels", amenity: v)
+    end
+
+    # The filters' own CONTROL: a well-formed filter pair must still answer 200
+    # with an array, or the refusals above prove nothing about search_hotels.
+    filtered = client.query(a, name: "search_hotels", min_stars: 1, max_price_cents: 10_000_000)
+    unless filtered.status == 200 && filtered.body.is_a?(Array)
+      @failures << "CONTROL well-formed search_hotels filters → HTTP #{filtered.status} " \
+                   "#{filtered.body.inspect[0, 80]} (want 200 + an array)"
     end
 
     # ── the two that reach hoteling's OWN guards ────────────────────────────

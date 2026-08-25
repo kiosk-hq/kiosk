@@ -14,21 +14,88 @@ module WireArguments
 
   # The party a caller wants seated.
   #
-  # RANGE ONLY. Whether the argument was GIVEN is asked separately, by
-  # `availability` — the only verb that distinguishes the two, since `book_table`
-  # has always answered an absent party the way it answers a zero one.
+  # SHAPE AND RANGE, in that order. Whether the argument was GIVEN is asked
+  # separately, by `availability` — the only verb that distinguishes the two,
+  # since `book_table` has always answered an absent party the way it answers a
+  # zero one.
   #
   # The declared `{type: "integer", minimum: 1}` refuses a zero party on the wire
   # first, so this is defence in depth; it stays because {BookTableOperation} is
   # reachable with no descriptor in front of it and must not open a transaction
   # on a party of zero.
   #
+  # THE SHAPE IS THE SCHEMA'S, NOT `.to_i`'s (K-1027 — getgrocery's K-1020 and
+  # K-1025 defect, one demo over and WEAKER). This line read a bare `raw.to_i`,
+  # and MEASURED over that row's probe set it got two things wrong at once:
+  #
+  #   * `true`, `false`, `[]`, `{}`, `[1]` and `{"a" => 1}` have no `to_i` AT
+  #     ALL, so each raised `NoMethodError` — a `500 action_failed` on the wire
+  #     for a value the published descriptor already forbids;
+  #   * `1.5.to_i` is 1, so a fractional party came out of this line INSIDE the
+  #     declared range and was seated as a party of ONE rather than refused.
+  #
+  # (`"abc"`, `nil` and `"0x10"` were 0 and the range arm below caught them, and
+  # `2.0` was 2 — which it still is, see {#whole_number}.)
+  #
+  # THE COMMENT ABOVE IS WHY THAT HAD TO BE FIXED RATHER THAN NOTED. Nothing on
+  # the wire could reach it: `book_table` is `kind :action`, so its JSON body is
+  # validated against `input_schema` first, and `availability` is `kind :query`,
+  # so {Kiosk::Server::ArgumentDecoder}'s `Integer(v, 10)` refuses a non-integer
+  # spelling before the handler runs. The path this guard SAYS it exists for is
+  # the descriptor-less one — {BookTableOperation} is an ordinary class with an
+  # ordinary `call` — and that is precisely the path on which nothing has
+  # coerced the argument, so it is precisely where a `.to_i` turned a hostile
+  # shape into a 500 and `1.5` into a party of one. A layer that only holds
+  # while the layer in front of it holds is not a second layer at all.
+  #
   # @return [Array(Integer, nil), Array(nil, OperationResult)]
   def party_size(raw)
-    size = raw.to_i
+    size = whole_number(raw)
+    if size.nil?
+      return [nil, OperationResult.refused(
+        code:    "bad_request",
+        message: "party_size must be a whole number >= 1 — got #{raw.inspect}",
+      )]
+    end
     return [size, nil] if size >= 1
 
     [nil, OperationResult.refused(code: "bad_request", message: "party_size must be >= 1")]
+  end
+
+  # JSON Schema's `integer`, in Ruby — and nothing looser.
+  #
+  # NOT `is_a?(Integer)`, and the difference is measured rather than assumed:
+  # draft 2020-12 defines `integer` NUMERICALLY, not by wire type, so
+  # `{"party_size": 2.0}` is a VALID integer and json_schemer accepts it —
+  # re-measured against THIS demo's own bundle (json_schemer 2.5.0) and not
+  # inherited from the sibling row that first measured it (K-1020). A bare class
+  # test here would therefore refuse a call the published schema allows, which is
+  # the one way this guard could get the story wrong in the other direction.
+  # JSON parsing yields Integer or Float and nothing else, so those are the two
+  # cases; every other type — nil, true/false, String, Array, Hash — and every
+  # fractional or non-finite Float is not a party.
+  #
+  # DELIBERATELY THE SAME HELPER getgrocery grew for `qty` and `delivery_slot_id`
+  # (K-1020, K-1025) and deliberately NOT hoteling's `Integer(raw.to_s, 10)`
+  # spelling: that one is for arguments the query decoder has ALREADY turned into
+  # integers, and `party_size` is also reached with no decoder in front of it.
+  #
+  # WHAT THAT COSTS, MEASURED rather than left for the next reader to trip over:
+  # a STRING is not a party, so `availability` works only because its declared
+  # `{type: "integer"}` makes {Kiosk::Server::ArgumentDecoder} coerce
+  # `?party_size=2` to `2` before the handler runs. Drop that declaration and
+  # this guard refuses the legal call along with the hostile ones (watched, and
+  # restored). That is the correct trade for a layer whose whole job is to be
+  # the schema's `integer` and nothing looser — but it means the query half's
+  # second layer sits DOWNSTREAM of the descriptor rather than independent of it,
+  # which the action half's does not.
+  #
+  # @return [Integer, nil] nil when `raw` is not a whole number
+  def whole_number(raw)
+    return raw if raw.is_a?(Integer)
+    return nil unless raw.is_a?(Float) && raw.finite?
+
+    raw == raw.truncate ? raw.truncate : nil
   end
 
   # The sentence `availability` answers for a party_size it was not GIVEN at all.

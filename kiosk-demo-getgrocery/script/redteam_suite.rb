@@ -424,11 +424,21 @@ class HostileArgShapes < Kiosk::Redteam::Scenario
     #
     # The container is correct in every call here — one element, a real sku —
     # so the ONLY thing wrong is the element's own `qty`, which is class two of
-    # K-773's finding: `(item[:qty] || 1).to_s.to_i` used to be a bare `.to_i`,
-    # and `true`/`false`/`[]`/`{}` have none, so each was a `500 action_failed`
-    # for a value `input_schema` already declares `{type: "integer", minimum: 1}`.
-    # Both layers must refuse, and note `false` is the one shape ONLY the schema
-    # catches: `(false || 1)` is 1, so the demo guard would read it as qty 1.
+    # K-773's finding: the guard used to be a bare `.to_i`, and `true`/`false`/
+    # `[]`/`{}` have none, so each was a `500 action_failed` for a value
+    # `input_schema` already declares `{type: "integer", minimum: 1}`.
+    #
+    # BOTH LAYERS REFUSE ALL TEN VALUES BELOW, and that sentence is only true
+    # since K-1020. The guard K-773 left behind read `(item[:qty] || 1).to_s.to_i`
+    # and it agreed with the schema on eight of them: `false` and `1.5` BOTH came
+    # out of it as a legal quantity 1 — `||` reads `false` as absent, and
+    # `"1.5".to_i` is 1 — so the schema alone was refusing those two while the
+    # comment here claimed a second, independent refusal and named only one
+    # exception. `wire_arguments.rb` now mirrors the schema's own `integer`
+    # (whole numbers, `2.0` included, because json_schemer accepts that — measured),
+    # so a 400 here is two refusals rather than one. The non-vacuity proof is
+    # K-773's own mutation: drop `qty`'s declared type from `input_schema` and
+    # these stay 400 instead of booking `false` and `1.5` as one unit.
     sku = catalog.first["sku"]
     (SHAPES + [0, -1]).each do |v|
       refused "create_order items[0].qty=#{v.inspect}",

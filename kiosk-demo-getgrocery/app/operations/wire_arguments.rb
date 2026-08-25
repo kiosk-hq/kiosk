@@ -15,7 +15,10 @@
 # The second class of guard is not about SQL: a bare `.to_i` is answered by every
 # String, Integer and Float and by no Array, Hash or boolean, so a hostile shape
 # came back 500 for an argument the published `input_schema` says is an integer.
-# Reading through `to_s` first is the whole fix.
+# Reading through `to_s` first is the whole fix FOR THE 500 — it is not the whole
+# fix for the guard's own contract, and `items`' `qty` says why (K-1020): a
+# coercion that answers everything also ACCEPTS shapes the schema refuses, which
+# reads as defence in depth while being nothing of the kind.
 module WireArguments
   # The two "where do I get one of these" tails. Both verbs take an `order_id`
   # but ask for different things — create_order one it may still replace,
@@ -157,6 +160,19 @@ module WireArguments
   # `items: {sku: …}` and `items: ["bread"]` become a 400 instead of walking into
   # `.map` / `it[:sku]` and raising a 500 out of the headline action.
   #
+  # `qty` IS AS STRICT HERE AS IN THE SCHEMA, and that is the point (K-1020).
+  # This used to read `(item[:qty] || 1).to_s.to_i`, which stopped the 500s the
+  # header describes but let exactly two shapes through as a legal quantity:
+  # `false`, because `||` reads it as absent and defaults to 1, and `1.5`,
+  # because `"1.5".to_i` is 1. Neither is reachable on the wire — `input_schema`
+  # declares `qty` `{type: "integer", minimum: 1}` and `required`, and it is
+  # validated on every call — so this layer was never the thing refusing them.
+  # That is precisely why it had to be fixed rather than left: a defence-in-depth
+  # layer whose whole claim is «the schema is not the only thing standing here»
+  # is worth nothing if the schema is, in fact, the only thing standing. An
+  # ABSENT `qty` is refused too, for the same reason: the schema requires it, so
+  # a default here would be a second, weaker contract nobody published.
+  #
   # @return [Array(Array<Hash>, nil), Array(nil, OperationResult)]
   def items(raw)
     unless raw.is_a?(Array)
@@ -181,9 +197,15 @@ module WireArguments
       end
 
       sku = item[:sku].to_s
-      qty = (item[:qty] || 1).to_s.to_i
+      qty = whole_number(item[:qty])
       if sku.empty?
         return [nil, OperationResult.refused(code: "bad_request", message: "each item needs a sku")]
+      end
+      if qty.nil?
+        return [nil, OperationResult.refused(
+          code:    "bad_request",
+          message: "qty must be a whole number >= 1 — got #{item[:qty].inspect}",
+        )]
       end
       if qty < 1
         return [nil, OperationResult.refused(code: "bad_request", message: "qty must be >= 1")]
@@ -192,6 +214,25 @@ module WireArguments
       normalised << { sku: sku, qty: qty }
     end
     [normalised, nil]
+  end
+
+  # JSON Schema's `integer`, in Ruby — and nothing looser.
+  #
+  # NOT `is_a?(Integer)`, and the difference is measured rather than assumed:
+  # draft 2020-12 defines `integer` NUMERICALLY, not by wire type, so
+  # `{"qty": 2.0}` is a VALID integer and json_schemer accepts it. A bare class
+  # test here would therefore refuse a call the published schema allows, which
+  # is the one way this guard could get the story wrong in the other direction.
+  # JSON parsing yields Integer or Float and nothing else, so those are the two
+  # cases; every other type — nil, true/false, String, Array, Hash — and every
+  # fractional or non-finite Float is not a quantity.
+  #
+  # @return [Integer, nil] nil when `raw` is not a whole number
+  def whole_number(raw)
+    return raw if raw.is_a?(Integer)
+    return nil unless raw.is_a?(Float) && raw.finite?
+
+    raw == raw.truncate ? raw.truncate : nil
   end
 
   # The sentence every verb here answers a missing argument with.

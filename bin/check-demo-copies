@@ -368,7 +368,11 @@ COPIES = {
   "app/controllers/application_controller.rb" => {
     rule: :code,
     why:  "ActionController::Base (not API) so the human-facing Devise pages get cookies, flash " \
-          "and CSRF. Per-demo prose only.",
+          "and CSRF. Per-demo prose only — and ONE sentence of that prose is checked rather than " \
+          "trusted (K-1021, see the block below): the superclass each copy's header says its " \
+          "`Kiosk::*Controller`s have must be the one those files declare. `:code` compares " \
+          "modulo comments, so without that arm the header is guarded by nothing, which is how " \
+          "K-1017's false «kiosk-server ships their bases» sentence lived in eight copies.",
   },
   "app/controllers/users/sessions_controller.rb" => {
     rule: :identical,
@@ -1372,6 +1376,131 @@ OPERATION_RESULT = "app/operations/operation_result.rb"
             "kiosk-server (K-792); behaviour one verb needs goes into that verb's Operation."
 end
 
+# ── application_controller.rb's PROSE must stay true (K-1021) ────────────────
+#
+# `app/controllers/application_controller.rb` is declared `:code`, and `:code`
+# compares files MODULO COMMENTS — which is the right rule for a file whose
+# header must name its own demo's controllers, and is exactly how one FALSE
+# sentence survived in seven demos plus the e2e fixture at once. Until K-1017
+# read it, every copy said «The Kiosk wire controllers ship their own bases
+# inside kiosk-server». They do not: kiosk-server ships a MIXIN, and each demo's
+# `Kiosk::*Controller` names its own superclass. Eight copies, no gate — because
+# the script's whole rule vocabulary (`:identical`, `:code`, `:per_demo`) is
+# about CODE, so no comment in any copied file was guarded anywhere.
+#
+# The general lesson, recorded once because it outlives this row: `:code` means
+# THE PROSE IS UNGUARDED, so a per-demo comment asserting a fact about the tree
+# needs its own assertion or it rots silently in N copies at once.
+#
+# So this block makes the one load-bearing sentence mechanical. Each copy must
+# carry, in its comments, a sentence of the form
+#
+#     here <Kiosk::AController and Kiosk::BController> subclass <SUPERCLASS>
+#
+# where <SUPERCLASS> is either the literal «THIS class» (meaning
+# ApplicationController, the class the file itself defines) or a constant path
+# such as ActionController::API. Both halves are then checked against the tree,
+# NOT against a list kept here: the controllers are globbed off disk and their
+# superclasses read out of their own `class … < …` lines. A copy that names the
+# wrong controllers, names the wrong superclass, or does not carry the sentence
+# at all fails — and the pre-K-1017 sentence fails on the last of those three,
+# because it named no controller and no superclass.
+#
+# The e2e harness's fixture carried the same sentence and is checked the same
+# way, from `e2e/fixtures/*_controller.rb` — it is not a demo, so no rule above
+# can see it, and it is the eighth copy the false sentence reached.
+PROSE_SUPERCLASS_SENTENCE = /
+  \bhere\s+
+  (?<names>Kiosk::[A-Za-z0-9_]+(?:\s*(?:,|and)\s*Kiosk::[A-Za-z0-9_]+)*)
+  \s+subclass(?:es)?\s+
+  (?<super>THIS\ class|[A-Z][A-Za-z0-9_]*(?:::[A-Za-z0-9_]+)*)
+/x
+
+# Every `class Kiosk::Foo < Bar` the given files declare => "Bar".
+def kiosk_superclasses(paths)
+  paths.each_with_object({}) do |path, acc|
+    File.read(path).scan(/^\s*class\s+(Kiosk::[A-Za-z0-9_:]+)\s*<\s*([A-Za-z0-9_:]+)/) do |name, parent|
+      acc[name] = parent
+    end
+  end
+end
+
+# The file's comments as one line, so a sentence that wraps across `#` lines
+# still reads as a sentence. Ripper rather than a `^\s*#` scan: a `#` inside a
+# string or a regex is not a comment, the same reason `code_digest` uses it.
+def comment_prose(path)
+  Ripper.lex(File.read(path))
+        .select { |(_, type, _)| type == :on_comment }
+        .map { |(_, _, tok)| tok.sub(/\A#+\s?/, "").rstrip }
+        .join(" ")
+        .gsub(/\s+/, " ")
+end
+
+APPLICATION_CONTROLLER = "app/controllers/application_controller.rb"
+
+prose_units = demos.filter_map do |dir|
+  ac = File.join(dir, APPLICATION_CONTROLLER)
+  next unless File.exist?(ac)
+
+  { label: short.(File.basename(dir)), ac: ac, rel: APPLICATION_CONTROLLER,
+    where: "app/controllers/kiosk/",
+    controllers: Dir[File.join(dir, "app/controllers/kiosk/**/*.rb")].sort }
+end
+e2e_ac = File.join(ROOT, "e2e/fixtures/application_controller.rb")
+if File.exist?(e2e_ac)
+  prose_units << { label: "e2e", ac: e2e_ac, rel: "e2e/fixtures/application_controller.rb",
+                   where: "e2e/fixtures/",
+                   controllers: Dir[File.join(ROOT, "e2e/fixtures/*_controller.rb")].sort - [e2e_ac] }
+end
+
+if prose_units.length < 2
+  errors << "check-demo-copies: the K-1021 prose rule found #{prose_units.length} " \
+            "#{APPLICATION_CONTROLLER} copy — the file has moved, and a rule with nothing to " \
+            "read passes everything."
+end
+
+prose_units.each do |unit|
+  label, rel, where = unit[:label], unit[:rel], unit[:where]
+  real = kiosk_superclasses(unit[:controllers])
+  if real.empty?
+    errors << "#{label}: ships #{rel} but no `class Kiosk::…Controller < …` could be read from " \
+              "#{where} — the K-1021 prose rule would pass vacuously here. Fix the glob, do not " \
+              "delete the rule."
+    next
+  end
+
+  expected_super =
+    real.values.uniq == ["ApplicationController"] ? "THIS class" : real.values.uniq.join("/")
+  match = comment_prose(unit[:ac]).match(PROSE_SUPERCLASS_SENTENCE)
+  unless match
+    errors << "#{label}: #{rel} carries no checked superclass sentence. Its comments must say " \
+              "«here #{real.keys.sort.join(' and ')} subclass #{expected_super}» (K-1021). This " \
+              "file is compared `:code`, i.e. modulo comments, so that sentence is the ONLY thing " \
+              "standing between the header and the eight-copy false claim K-1017 found."
+    next
+  end
+
+  named = match[:names].scan(/Kiosk::[A-Za-z0-9_]+/).sort
+  unless named == real.keys.sort
+    errors << "#{label}: #{rel}'s comment names #{named.join(', ')} but #{where} declares " \
+              "#{real.keys.sort.join(', ')} (K-1021). The prose is uncompared by the `:code` rule, " \
+              "so nothing else notices."
+  end
+
+  claimed = match[:super] == "THIS class" ? "ApplicationController" : match[:super]
+  actual  = real.values.uniq
+  if actual.length > 1
+    errors << "#{label}: #{rel}'s comment names ONE superclass (#{claimed}) but its wire " \
+              "controllers declare #{real.map { |k, v| "#{k} < #{v}" }.sort.join(', ')} (K-1021). " \
+              "Split the sentence, or make the superclasses agree."
+  elsif actual.first != claimed
+    errors << "#{label}: #{rel}'s comment says the wire controllers subclass #{claimed}, but they " \
+              "declare `< #{actual.first}` (K-1021). kiosk-server ships a MIXIN and never a base " \
+              "class, so this sentence is the app's own fact about its own tree — and it is " \
+              "compared by nothing else, because the file's rule is `:code`."
+  end
+end
+
 # -- Every demo lockfile resolves for the SAME platforms (K-962) -------------
 #
 # `Gemfile.lock` is declared NOT COMPARED, and for its resolved-versions half
@@ -1634,7 +1763,9 @@ if errors.empty?
        "#{initializer_demos} operator demos nor in the #{e2e_initializers} e2e harness " \
        "initializer fixtures run.sh installs " \
        "(#{INITIALIZER_ENV_FETCH_ALLOWED.size} declared ENV.fetch allowances), " \
-       "one PLATFORMS set across #{lockfile_platforms.size} demo lockfiles"
+       "one PLATFORMS set across #{lockfile_platforms.size} demo lockfiles, " \
+       "application_controller.rb's superclass sentence checked against the tree in " \
+       "#{prose_units.length} copies"
   exit 0
 end
 

@@ -265,9 +265,15 @@ RSpec.describe Kiosk::Server::VerbController do
     # emitted at all, once, naming the value, is asserted in headers_spec.
     before { allow(Kiosk::Server::Headers).to receive(:warn) }
 
+    # All THREE directives §3.7.3 names since K-826, checked one at a time.
+    # `must-revalidate` is RFC 9111 §3.5's third door: a shared cache MAY reuse
+    # a response to an `Authorization`-bearing request that carries it, and
+    # every verb request bears an `Authorization`. A helper that matched only
+    # the first two would pass on a build where the third leaked.
     def expect_no_shared_caching(cache_control)
       expect(cache_control.to_s).not_to match(/\bpublic\b/)
       expect(cache_control.to_s).not_to match(/\bs-maxage\b/)
+      expect(cache_control.to_s).not_to match(/\bmust-revalidate\b/)
     end
 
     it "not on a 200" do
@@ -292,11 +298,12 @@ RSpec.describe Kiosk::Server::VerbController do
       expect(last_headers["Cache-Control"]).to eq("private, no-store")
     end
 
-    it "not when only `public` is named, and not when only `s-maxage` is" do
-      # Each directive on its own — a regex that only matched the pair, or
-      # only the exact string the example above sends, would pass that example
-      # and let either half through alone.
-      ["public", "s-maxage=600", "PUBLIC, max-age=30", "max-age=30, s-maxage=90"]
+    it "not when only `public` is named, nor only `s-maxage`, nor only `must-revalidate`" do
+      # Each of §3.7.3's three directives on its own — a regex that only
+      # matched a pair, or only the exact string the example above sends,
+      # would pass that example and let a single one through alone.
+      ["public", "s-maxage=600", "PUBLIC, max-age=30", "max-age=30, s-maxage=90",
+       "must-revalidate", "max-age=30, must-revalidate"]
         .each do |policy|
           declare_query("salons") do
             response.headers["Cache-Control"] = policy

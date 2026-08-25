@@ -12,7 +12,7 @@
 # publishes as evidence has been renamed or removed: rename it back, or update
 # the citation that names it and regenerate this file.
 #
-# 533 anchors.
+# 537 anchors.
 e2e/assistant.sh	$public_doc is really being read (control token)
 e2e/assistant.sh	?v=<digest> is immutable for a year
 e2e/assistant.sh	GET /kiosk/schema is unenveloped
@@ -306,6 +306,7 @@ kiosk-server/spec/kiosk/server/headers_middleware_spec.rb	respects an overridden
 kiosk-server/spec/kiosk/server/headers_middleware_spec.rb	still stamps: the request's identity was decided before the app ran
 kiosk-server/spec/kiosk/server/headers_spec.rb	ADDS to a Vary the operator already set rather than replacing it
 kiosk-server/spec/kiosk/server/headers_spec.rb	FORCES no-store on a 402 — a single-use challenge is never cacheable
+kiosk-server/spec/kiosk/server/headers_spec.rb	and it REFUSES a shared-cache policy (§3.7.3)
 kiosk-server/spec/kiosk/server/headers_spec.rb	defaults a 200 to private, no-store
 kiosk-server/spec/kiosk/server/headers_spec.rb	does not duplicate a token already present, whatever its case
 kiosk-server/spec/kiosk/server/headers_spec.rb	leaves an operator's own Cache-Control alone — that is how a toll gets cached away
@@ -365,6 +366,9 @@ kiosk-server/spec/kiosk/server/mandate_verifier_spec.rb	rejects a cart missing l
 kiosk-server/spec/kiosk/server/mandate_verifier_spec.rb	rejects a cart missing total_amount_cents (absent, not 0)
 kiosk-server/spec/kiosk/server/mandate_verifier_spec.rb	rejects a cart not bound to the intent
 kiosk-server/spec/kiosk/server/mandate_verifier_spec.rb	rejects a cart priced in a different currency than the intent cap (4999 USD vs 5000 EUR cap)
+kiosk-server/spec/kiosk/server/mandate_verifier_spec.rb	rejects a cart whose line_items are explicitly null
+kiosk-server/spec/kiosk/server/mandate_verifier_spec.rb	rejects a cart whose line_items are not an array
+kiosk-server/spec/kiosk/server/mandate_verifier_spec.rb	rejects a cart whose line_items array is EMPTY
 kiosk-server/spec/kiosk/server/mandate_verifier_spec.rb	rejects a cart whose total exceeds the intent cap
 kiosk-server/spec/kiosk/server/mandate_verifier_spec.rb	rejects a mandate with no exp claim
 kiosk-server/spec/kiosk/server/mandate_verifier_spec.rb	rejects a mandate with no iat claim

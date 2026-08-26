@@ -114,8 +114,15 @@ ROOT = File.expand_path("..", __dir__)
 # Where hand-written demo code lives. Deliberately NOT the Rails skeleton
 # (bin/, config/, public/, Rakefile, config.ru): those are generator output that
 # each demo edits for its own port, host and initializer, and comparing them
-# would drown the signal this check exists for. `lib/tasks/*.rake` is excluded
-# too — per-demo by construction, and already covered by bin/check-ci-tasks.
+# would drown the signal this check exists for. `lib/tasks/*.rake` is outside
+# these roots too: a demo's rake file is that storefront's own tasks, and what
+# CI runs of them is bin/check-ci-tasks's business. That used to be stated as
+# "per-demo by construction, and already covered by bin/check-ci-tasks", and
+# K-1043 made both halves false at once (K-1046): the flow-runner helper it
+# added is byte-identical in six rake files, and check-ci-tasks compares the
+# task INVENTORY, never one demo's rake file against another's. So the file
+# stays uncompared and the CONSTRUCT is declared — see the flow-runner rule
+# below, which is where any future lockstep fragment in lib/tasks/ belongs.
 # What that leaves out, and why, is recorded in SKELETON_NOT_COMPARED below.
 SCAN_ROOTS = ["lib", "app", "script", "db/migrate"].freeze
 
@@ -1517,6 +1524,168 @@ prose_units.each do |unit|
   end
 end
 
+# ── The flow-runner helper: lib/tasks/ is not compared, this construct is (K-1046)
+#
+# `lib/tasks/*.rake` sits outside SCAN_ROOTS, and the reason recorded up there
+# was true when it was written: a demo's rake file IS per-demo, task by task.
+# K-1043 made half of it false in one wave. Closing the flow harness's fail-open
+# — read the child's exit status before parsing its JSON — needed the same fifty
+# lines of comment and `def` in every demo, so the fleet now carries a construct
+# that is byte-identical in SIX rake files and load-bearing in SEVEN, in the one
+# directory nothing compares. bin/check-ci-tasks is not cover: it compares the
+# task INVENTORY (ci.yml against the tasks each demo defines, plus the README
+# table it generates), and never one demo's rake file against another's. So the
+# drift argument this whole check opens with applied verbatim, and to the one
+# construct every operator demo's ability to FAIL now rests on.
+#
+# The FRAGMENT is declared rather than the file, because the rest of the rake
+# file genuinely is per-demo. Each demo names its helper after itself
+# (`hoteling_run_flow`): a rake file's top-level `def` lands on Object, so a
+# generic `run_flow` would be a fleet-wide name defined in a per-demo file. The
+# name is normalised away before comparing, so that prefix stays a convention
+# rather than a hole.
+#
+# TWO THINGS ARE COMPARED, because tudu's helper is deliberately not a copy:
+#
+#   1. THE WHOLE BLOCK — the contiguous comment header plus the `def`, byte-for
+#      byte modulo the helper's name — across every demo not declared a variant.
+#      Prose included, deliberately: that header is the argument for why the
+#      status is read at all, and `:code` would leave it exactly as unguarded as
+#      the sentence K-1017 found repeated, falsely, in eight copies at once.
+#   2. THE TAIL — from the `json_line` assignment to the end of the def —
+#      across EVERY demo, variants included. That is the part that decides
+#      whether a task can fail at all: status read FIRST, abort quoting the
+#      child's own last output line, JSON parsed only after. It is the same
+#      nineteen lines in all seven. A variant may differ in how it BUILDS the
+#      child (tudu takes a server URL and an env hash and calls Open3 in ARGV
+#      form, with no shell); it may not differ in what it does with the child's
+#      status, and a rule that exempted the variant outright would leave the
+#      seventh copy of exactly that code guarded by nothing.
+#
+# `ships:` is the same declaration the COPIES entries carry, for the same reason
+# (K-860, K-883): a demo that grows a helper without being listed fails here
+# rather than becoming an eighth copy nobody reasoned about, and a listed demo
+# that loses one fails too.
+FLOW_RUNNER_REL   = "lib/tasks/demo.rake"
+FLOW_RUNNER_SHIPS = %w[atablefor getgrocery hoteling philslist skooti stylish tudu].freeze
+FLOW_RUNNER_TAIL  = /^\s*json_line\s*=/
+FLOW_RUNNER_VARIANTS = {
+  "tudu" => "tudu's four flow tasks pass a server URL and an extra-env hash rather than a shell " \
+            "env string, so its helper is `(flow_rb, server_url, extra_env)` and calls " \
+            "Open3.capture2e in ARGV form — no shell, nothing to escape, and its header prose " \
+            "says so in its own words. That is a real difference in how the child is BUILT, not " \
+            "drift, and unifying it is explicitly out of scope (K-1046). What the child's status " \
+            "then buys is compared anyway, by the tail rule.",
+}.freeze
+
+# The helper's comment header + `def`, with the demo-specific name normalised
+# away. A rake file's helper is a top-level `def`, so the block runs from the
+# contiguous `#` lines above it down to the first column-0 `end`.
+def flow_runner_block(path, helper)
+  lines = File.readlines(path)
+  di = lines.index { |l| l.start_with?("def #{helper}(") } or return nil
+  ei = (di...lines.size).find { |i| lines[i] == "end\n" } or return nil
+
+  si = di
+  si -= 1 while si.positive? && lines[si - 1].start_with?("#")
+  lines[si..ei].join.gsub(helper, "run_flow")
+end
+
+flow_runner_helpers = demos.filter_map do |dir|
+  demo = short.(File.basename(dir))
+  path = File.join(dir, FLOW_RUNNER_REL)
+  next unless File.exist?(path)
+  next unless File.read(path).include?("def #{demo}_run_flow(")
+
+  [demo, path]
+end.to_h
+
+flow_stray = flow_runner_helpers.keys - FLOW_RUNNER_SHIPS
+flow_gone  = FLOW_RUNNER_SHIPS - flow_runner_helpers.keys
+unless flow_stray.empty?
+  errors << "#{flow_stray.sort.join(', ')}: #{FLOW_RUNNER_REL} defines a `<demo>_run_flow` helper " \
+            "but #{flow_stray.size == 1 ? 'is' : 'are'} not in the flow-runner rule's declared " \
+            "`ships:` set (#{FLOW_RUNNER_SHIPS.join(', ')}). A copy of this helper is not free — " \
+            "add the demo to FLOW_RUNNER_SHIPS in bin/check-demo-copies so its copy is held in " \
+            "lockstep with the others (K-1046)."
+end
+unless flow_gone.empty?
+  errors << "#{flow_gone.sort.join(', ')}: the flow-runner rule names #{flow_gone.size == 1 ? 'it' : 'them'} " \
+            "in FLOW_RUNNER_SHIPS, but #{FLOW_RUNNER_REL} there defines no `<demo>_run_flow` any " \
+            "more. Either the demo stopped driving flows — update the declared set — or its tasks " \
+            "went back to capturing a child without reading its exit status, which is the K-1043 " \
+            "fail-open this helper exists to close."
+end
+
+flow_runner_blocks = {}
+flow_runner_helpers.each do |demo, path|
+  block = flow_runner_block(path, "#{demo}_run_flow")
+  if block.nil? || Ripper.sexp(block).nil?
+    errors << "#{demo}: #{FLOW_RUNNER_REL} defines #{demo}_run_flow but its comment+`def` block " \
+              "could not be read back as valid Ruby — the helper is no longer a top-level `def` " \
+              "closed by a column-0 `end`, so the flow-runner rule compared NOTHING for this demo. " \
+              "Fix the extraction in bin/check-demo-copies, do not drop the rule (K-1046)."
+    next
+  end
+  flow_runner_blocks[demo] = block
+end
+
+if flow_runner_blocks.size < 2
+  errors << "check-demo-copies: the K-1046 flow-runner rule read #{flow_runner_blocks.size} " \
+            "helper#{flow_runner_blocks.size == 1 ? '' : 's'} — the construct has moved out of " \
+            "#{FLOW_RUNNER_REL}, and a lockstep rule with nothing to compare passes everything."
+end
+
+FLOW_RUNNER_VARIANTS.each do |demo, why|
+  errors << "#{demo}: flow-runner `variants:` reason is blank" if why.to_s.strip.empty?
+  next if flow_runner_blocks.key?(demo)
+
+  errors << "#{demo}: declared a flow-runner variant in bin/check-demo-copies, but that demo " \
+            "defines no #{demo}_run_flow — a variant declaration for a helper that is not there " \
+            "is the record turning back into an assumption. Drop the entry (K-1046)."
+end
+
+flow_held = flow_runner_blocks.reject { |demo, _| FLOW_RUNNER_VARIANTS.key?(demo) }
+flow_groups = flow_held.group_by { |_demo, block| block }
+if flow_groups.size > 1
+  listed = flow_groups.values.map { |g| "[#{g.map { |d, _| d }.sort.join(',')}]" }.sort.join(" ")
+  errors << "#{FLOW_RUNNER_REL}: the `<demo>_run_flow` helpers must agree byte-for-byte once the " \
+            "helper's own name is substituted, and they do not: #{listed}. This block is " \
+            "hand-copied into every demo — propagate the edit to all of them, or, if one copy " \
+            "legitimately differs, declare it in FLOW_RUNNER_VARIANTS with the reason (K-1046)."
+elsif flow_groups.size == 1
+  canonical = flow_groups.keys.first
+  FLOW_RUNNER_VARIANTS.each_key do |demo|
+    next unless flow_runner_blocks[demo] == canonical
+
+    errors << "#{demo}: flow-runner `variants:` entry is stale — its helper now matches the other " \
+              "copies byte-for-byte. Drop the entry so the block is held in lockstep like the rest."
+  end
+end
+
+flow_tails = {}
+flow_runner_blocks.each do |demo, block|
+  ti = block.lines.index { |l| l.match?(FLOW_RUNNER_TAIL) }
+  if ti.nil?
+    errors << "#{demo}: #{demo}_run_flow contains no `json_line = ` assignment, so the tail the " \
+              "flow-runner rule exists to compare — status read first, abort quoting the child's " \
+              "last line, JSON parsed only after — was read as NOTHING here (K-1046). Either the " \
+              "helper was rewritten, in which case say so and re-anchor the rule, or it lost the " \
+              "K-1043 fix."
+    next
+  end
+  flow_tails[demo] = block.lines[ti..].join
+end
+
+flow_tail_groups = flow_tails.group_by { |_demo, tail| tail }
+if flow_tail_groups.size > 1
+  listed = flow_tail_groups.values.map { |g| "[#{g.map { |d, _| d }.sort.join(',')}]" }.sort.join(" ")
+  errors << "#{FLOW_RUNNER_REL}: every `<demo>_run_flow` — variants included — must handle the " \
+            "child's exit status with the SAME lines, and they do not: #{listed}. A helper may " \
+            "differ in how it builds the child; what it does with the child's status is the one " \
+            "thing K-1043 closed, and it is the reason a task can fail at all (K-1046)."
+end
+
 # -- Every demo lockfile resolves for the SAME platforms (K-962) -------------
 #
 # `Gemfile.lock` is declared NOT COMPARED, and for its resolved-versions half
@@ -1781,7 +1950,10 @@ if errors.empty?
        "(#{INITIALIZER_ENV_FETCH_ALLOWED.size} declared ENV.fetch allowances), " \
        "one PLATFORMS set across #{lockfile_platforms.size} demo lockfiles, " \
        "application_controller.rb's superclass sentence checked against the tree in " \
-       "#{prose_units.length} copies"
+       "#{prose_units.length} copies, " \
+       "the flow-runner helper held in lockstep across #{flow_held.size} demos " \
+       "(#{FLOW_RUNNER_VARIANTS.size} declared variant#{FLOW_RUNNER_VARIANTS.size == 1 ? '' : 's'}) " \
+       "with its exit-status tail compared in all #{flow_tails.size}"
   exit 0
 end
 

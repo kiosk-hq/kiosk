@@ -789,6 +789,12 @@ jobs:
   # with the reason — and an UNDECLARED duplicate fails too, so a new copy cannot
   # appear silently, which is how six of them got here.
   #
+  # Since K-1046 it also holds ONE FRAGMENT rather than a whole file: the
+  # `<demo>_run_flow` helper K-1043 hand-copied into every demo's
+  # lib/tasks/demo.rake — the directory the path rule does not scan — because a
+  # block that is byte-identical in six rake files is not "per-demo by
+  # construction", and bin/check-ci-tasks only ever compared task INVENTORY.
+  #
   # It is a separate job rather than a step in ci-task-coverage so the two
   # invariants (is every task gated / do the copies agree) fail with their own
   # names. Stdlib Ruby only: no bundle, no services, no database, ~0.2 s.

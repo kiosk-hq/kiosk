@@ -81,7 +81,35 @@ namespace :demo do
 
   desc "Boot the server, run script/hoteling_flow.rb end-to-end (happy + payment-gate negative), then the " \
        "in-process capture-window regression (script/pay_window.rb, K-853), assert."
-  task :book do
+  # `: :setup` IS LOAD-BEARING — it is what makes the headline task runnable
+  # TWICE (K-1044), and it was the one task of the seven here declared without it.
+  #
+  # The consequence was measured, not argued: `demo:setup` 0, `demo:book` 0,
+  # `demo:book` again **1**, aborting at script/hoteling_flow.rb's "availability
+  # returned empty rows". ONE pass consumes the entire inventory the driver can
+  # reach. app/controllers/kiosk/hotels_controller.rb renders
+  # `Property.order(:name)`, so the driver's `props.first` is deterministically
+  # the SAME property every run, and most seeded properties have exactly two room
+  # types; script/hoteling_flow.rb pins check_in = today+30 / check_out =
+  # today+33, so every run asks for the SAME window; and this task drives the flow
+  # TWICE — happy path, then the SKIP_PAY negative — so one invocation takes BOTH
+  # room types for that window.
+  #
+  # The second half is a hold nothing releases. The EXCLUDE constraint
+  # `bookings_no_overlapping_room_nights` counts `reserved` as well as
+  # `confirmed`, and the SKIP_PAY negative leaves its booking `reserved`/unpaid
+  # permanently: app/models/room_hold.rb says outright that `expires_at` is never
+  # read back and that the sweep is the operator's (K-936). That posture is
+  # decided and documented, so this task may not "fix" the repeat by releasing the
+  # hold — and releasing it would not be enough anyway, because the happy path's
+  # own room stays `confirmed` while a run needs TWO free room types.
+  #
+  # So reseeding is the honest remedy, and it is what `isolation`, `redteam`,
+  # `schema`, `search` and `browse` in this file already do. DO NOT delete this as
+  # "redundant with the job-level demo:setup CI runs": CI is green by
+  # construction, and the operator running the headline task a second time is
+  # precisely the case that was broken.
+  task book: :setup do
     require "resolv"
     require "net/http"
     require "uri"

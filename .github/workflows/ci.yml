@@ -331,8 +331,11 @@ jobs:
             # it back as `cursor` returns a DISJOINT page, a complete (filtered)
             # result OMITS `next`, and hotel_detail resolves a summary row's id.
             # No PoW, no RFC 8628 poll timing, no key — ~5 s. It goes LAST
-            # because `task search: :setup` reseeds, while demo:book has no
-            # prerequisite and lives off the job-level demo:setup.
+            # because `task search: :setup` reseeds. So does demo:book now: it
+            # was the one task here without a `: :setup`, living off the
+            # job-level demo:setup, and that is exactly why a second LOCAL
+            # `demo:book` failed on exhausted inventory while this job stayed
+            # green — it never ran the task twice (K-1044).
             # Watched fail: pin the query to `OFFSET 0` (the cursor ignored) and
             # page 2 repeats page 1 — the disjointness assertion goes red.
             #

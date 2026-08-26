@@ -23,10 +23,12 @@ This mirrors the discovery-only ceiling documented for in-chat commerce connecto
 skooti is a Rails app that speaks Kiosk. Below is the **verbatim** RUN 1
 transcript of `rake demo:rideflow` — recorded **2026-08-26** against a booted
 demo, nothing removed and nothing added. The human said *"rent a scooter"* and
-touched nothing until the lock opened. The task runs two further passes this
+touched nothing until the lock opened. The task runs four further beats this
 excerpt leaves out: RUN 2 skips the payment and asks for the same unlock, which
-the server refuses `403` — that is what makes RUN 1's `200` mean something — and
-RUN 3 pins the two query verbs.
+the server refuses `403` — that is what makes RUN 1's `200` mean something; RUN 3
+pins the two query verbs; then two DB-side checks, that no ROW LEVEL SECURITY
+is in play on this demo's own tables, and the capture-anchored paid-state
+regression (K-853).
 
 ```
 ══ RUN 1: Happy path ══

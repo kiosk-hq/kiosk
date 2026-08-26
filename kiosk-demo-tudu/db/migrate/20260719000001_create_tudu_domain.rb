@@ -25,22 +25,6 @@
 # provided instead by the membership EXISTS-check repeated in every query/Action.
 class CreateTuduDomain < ActiveRecord::Migration[ActiveRecord::Migration.current_version]
   def change
-    # users.display_name — THE NAME A ROSTER PUBLISHES (K-950).
-    #
-    # It lives in THIS migration rather than in the shared
-    # add_devise_columns_to_users, which three demos hold byte-identical: the
-    # column is not part of anybody's login, and tudu is the demo that needs it
-    # because tudu is the demo whose verbs name OTHER PEOPLE. atablefor already
-    # ships the same column for the same reason (its public reservations board
-    # names diners), so this is the fleet's shape and not a new one.
-    #
-    # NULLABLE on purpose, and the null is a real state rather than a defensive
-    # one: every assistant-created principal is a headless row with no human
-    # behind it to have chosen anything. {User.public_name} answers that case
-    # with an opaque pseudonym derived from the account UUID — see the long note
-    # there for why the UUID and never the address.
-    add_column :users, :display_name, :string
-
     # A todo list. account_id is the OWNER (users.id). The rebind hook
     # (config.assistant_claimed) re-parents these to a human on account link.
     create_table :lists, id: :uuid do |t|

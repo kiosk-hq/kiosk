@@ -11,7 +11,11 @@
 #                    Unset or unrecognised ALWAYS lands here, so CI and local
 #                    flows never pay the heavy toll.
 #   high           — n=168, k=7, the shipped kiosk-pow-equihash default:
-#                    ~10 s p50 / ~1.3 GiB peak on a reference numpy solver.
+#                    ~1.3 GiB peak, and ~10 s p50 on a reference numpy solver
+#                    MEASURED ON ONE M-SERIES LAPTOP CORE — the only hardware it
+#                    has ever been measured on (kiosk-pow-equihash/bench/
+#                    README.md). The memory figure is essentially
+#                    hardware-independent; the seconds are not.
 #                    Any operator may set it; the hosted deploy sets it on
 #                    atablefor alone (deploy/env/*.env.example), and that demo's
 #                    discovery owner block then carries the "beware" notice.
@@ -52,7 +56,8 @@ module PowDifficulty
     p = params
     "beware: memory- and CPU-intensive proof-of-work — this provider prices " \
       "registration/browsing with Equihash n=#{p[:n]} k=#{p[:k]} " \
-      "(~10s and ~1.3 GiB per proof on a reference solver). This is " \
+      "(~1.3 GiB per proof; ~10 s on a reference numpy solver, measured on " \
+      "one M-series laptop core). This is " \
       "deliberate: the toll is the DoS shield, and it costs the client, not " \
       "the provider. Use the bundled kiosk-pow-equihash solver."
   end

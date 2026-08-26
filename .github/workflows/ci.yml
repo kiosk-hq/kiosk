@@ -969,11 +969,19 @@ jobs:
   #   prove   — the KYC broker's /verify human page (K-462): a distinct
   #             token-capability HTML surface with a form POST and no login,
   #             depending on no kiosk gem. The stylish-only smoke never covered
-  #             it. Booting all seven demos in prod would be heavier CI for
-  #             little marginal signal (the prod-only classes are per-surface).
-  # See deploy/production-smoke.sh; any assertion miss fails the job.
+  #             it.
+  #   tudu    — the housemate board `/shared` and the fleet's only open sign-up
+  #             (K-1085). «One demo per unique surface» rested on «the prod-only
+  #             classes are per-surface, not per-app», and that is false for the
+  #             K-436 class this script was built for: tudu's `/shared` is the
+  #             fleet's only HTML page rendered from a hand-written `exec_query`,
+  #             so its column set is per-APP by construction. It does NOT close
+  #             K-1074 — this script loads structure.sql from zero; that gap is
+  #             check-migration-replay's, in the demos job.
+  # Booting all seven in prod would still be heavier CI for little marginal
+  # signal. See deploy/production-smoke.sh; any assertion miss fails the job.
   demo-production-smoke:
-    name: production-boot smoke (stylish + prove)
+    name: production-boot smoke (stylish + prove + tudu)
     runs-on: ubuntu-latest
     # The daily schedule exists for solver-pin-live; don't rebuild the world.
     if: github.event_name != 'schedule'
@@ -1004,6 +1012,9 @@ jobs:
       # Same for the KYC broker's production database.yml.
       KIOSK_PROVE_DB_USER: postgres
       KIOSK_PROVE_DB_PASSWORD: ""
+      # ...and for tudu's (K-1085).
+      KIOSK_TUDU_DB_USER: postgres
+      KIOSK_TUDU_DB_PASSWORD: ""
       # The smoke DROPS and rebuilds its database (a throwaway `kiosk_<app>_smoke`
       # that no deployment provisions), so it refuses to run unless the caller
       # states the target is disposable — see the safety header in
@@ -1062,6 +1073,13 @@ jobs:
       # rather than 500 — the K-462 gap the stylish-only smoke did not cover.
       - name: Production-boot smoke (KYC broker)
         run: ./deploy/production-smoke.sh prove
+
+      # Boot tudu in production and assert its housemate board (`/shared`) and
+      # its open sign-up render — the hand-written-SQL-projection surface and
+      # the only open Devise registration in the fleet, both among the four
+      # pages the live box answered 500 on (K-1085, K-1074).
+      - name: Production-boot smoke (tudu)
+        run: ./deploy/production-smoke.sh tudu
 
   # Live solver-pin probe (K-528). The Equihash solver exists in four copies
   # that must never diverge — kiosk-pow-equihash/solve.py (source of truth),

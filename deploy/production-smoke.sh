@@ -26,11 +26,12 @@
 # in production, where ShowExceptions/PublicExceptions replace the debug page,
 # so no dev-mode suite or demo rake gate can see a regression of it.
 #
-# COVERAGE (K-462)
-# ----------------
-# One demo per UNIQUE human-facing HTML surface — booting all seven in prod is
-# heavier CI for little marginal signal (the prod-only classes are per-surface,
-# not per-app). Today two surfaces:
+# COVERAGE (K-462, widened by K-1085)
+# ----------------------------------
+# One demo per UNIQUE human-facing HTML surface, PLUS any app whose HTML is
+# rendered from a HAND-WRITTEN SQL projection. Booting all seven in prod would
+# be heavier CI for little marginal signal; booting only two was measurably too
+# few. Today three:
 #
 #   stylish  — Devise sign-in, roles, the manage page. Exercises the exact
 #              surfaces the three original bugs touched (assume_ssl sign-in +
@@ -40,6 +41,42 @@
 #              POST and NO login. Depends on no kiosk gem, seeds no signing key.
 #              Verifies its four lib/ modules eager-load and /verify renders 200
 #              (live form + clean not-recognised) rather than a 500.
+#   tudu     — the housemate board (`/shared`) and the fleet's ONLY open
+#              sign-up. See below for why it is here.
+#
+# WHY THE ROSTER GREW, AND THE PREMISE IT COST (K-1085)
+# ----------------------------------------------------
+# The rule above used to read «one demo per unique human-facing HTML surface»
+# alone, resting on «the prod-only classes are per-surface, not per-app». That
+# premise has a measured counterexample and it is the surface that broke.
+#
+# It holds for THREE of the four classes this script gates — a Zeitwerk
+# eager-load crash (K-422), the assume_ssl/CSRF-Origin rejection (K-439) and the
+# bodyless-error class (K-459/K-532/K-533/K-534) are all properties of a SURFACE
+# SHAPE, and one demo per shape really does cover them. It does NOT hold for the
+# fourth, which is the class this script was built for: K-436, «the code SELECTs
+# something this app's database has not got». That one is per-APP by
+# construction, because the SQL is per-app — and tudu is the fleet's only HTML
+# page rendered from a hand-written `exec_query`
+# (`kiosk-demo-tudu/app/controllers/lists_controller.rb#housemate_board`: a
+# four-table join over memberships/lists/memberships/users with an aliased
+# `owner_u.display_name`). Not one column of that projection is validated by a
+# model, a scope or a structure.sql-derived attribute set. tudu also carries a
+# genuinely unique surface on the first three classes: it is the ONLY demo in
+# the fleet offering open Devise REGISTRATION, with its own
+# Users::RegistrationsController — a second form POST under the K-439 condition,
+# in a controller no other demo eager-loads.
+#
+# WHAT ADDING TUDU DOES NOT BUY, stated here so nobody re-derives it or mistakes
+# this for the fix to K-1074: IT WOULD NOT HAVE CAUGHT K-1074. This script builds
+# its throwaway `_smoke` database with `db:schema:load` out of the tracked
+# `structure.sql` (see the prepare step below) — from zero, where
+# `display_name` is present — so a column that is in the TREE and missing on the
+# BOX is invisible to it, in tudu exactly as in every other demo. That escape is
+# closed before the deploy by `bin/check-migration-replay` (K-1082) and after it
+# by the live post-deploy probe K-1074/K-1075 commission. Three gates, three
+# different halves; K-436 → K-462 already made the mistake of treating one as a
+# substitute for another, which is how the class came back.
 #
 # ─────────────────────────────────────────────────────────────────────────────
 # THIS IS NOT A SCRIPT YOU RUN AGAINST A DEPLOYMENT (K-594)
@@ -79,8 +116,8 @@ set -euo pipefail
 
 DEMO="${1:-stylish}"
 case "$DEMO" in
-  stylish | prove) ;;
-  *) echo "unknown demo '$DEMO' (expected: stylish | prove)"; exit 2 ;;
+  stylish | prove | tudu) ;;
+  *) echo "unknown demo '$DEMO' (expected: stylish | prove | tudu)"; exit 2 ;;
 esac
 
 FAILURES=0
@@ -569,13 +606,183 @@ smoke_prove() {
   fi
 }
 
+# ─────────────────────────────────────────────────────────────────────────────
+# tudu: the housemate board + the fleet's only open sign-up (K-1085). The third
+# surface, and the reason is in the COVERAGE header: `/shared` is the only HTML
+# page in the fleet rendered from a hand-written SQL projection, and
+# `/users/sign_up` is the only open Devise registration. Both are among the four
+# tudu pages that answered HTTP 500 on the live box (K-1074).
+# ─────────────────────────────────────────────────────────────────────────────
+smoke_tudu() {
+  PORT="${PORT:-4141}"
+  HOST="tudu.smoke.local"
+  BASE="http://127.0.0.1:${PORT}"
+  ORIGIN="https://${HOST}"
+  PROXY_HEADERS=(-H "X-Forwarded-Proto: https" -H "Host: ${HOST}")
+  # Same K-439 reproduction as stylish's sign-in: browser https Origin, and
+  # assume_ssl ALONE to make request.base_url https. Used for BOTH of tudu's
+  # form POSTs — sign-in and the open sign-up no other demo has.
+  SIGNIN_HEADERS=(-H "Host: ${HOST}")
+
+  DEMO_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../kiosk-demo-tudu" && pwd)"
+  COOKIES="$(mktemp -t kiosk-smoke-tudu-cookies.XXXXXX)"
+  SERVER_LOG="$(mktemp -t kiosk-smoke-tudu.XXXXXX)"
+  cd "$DEMO_DIR"
+
+  # ── Production env the demo needs (mirrors deploy/env/tudu.env.example) ──
+  export RAILS_ENV=production
+  export SECRET_KEY_BASE="${SECRET_KEY_BASE:-$(ruby -e 'require "securerandom"; print SecureRandom.hex(64)')}"
+  # The production initializer self-provisions neither the signing key nor the
+  # K-541 PoW secret and refuses to boot without them (same as stylish).
+  export KIOSK_SIGNING_KEY_B64="${KIOSK_SIGNING_KEY_B64:-$(ruby -e 'require "openssl"; require "base64"; print Base64.strict_encode64(OpenSSL::PKey::RSA.new(2048).to_pem)')}"
+  export KIOSK_ISSUER="${KIOSK_ISSUER:-$ORIGIN}"
+  export KIOSK_POW_SECRET="${KIOSK_POW_SECRET:-$(ruby -e 'require "securerandom"; print SecureRandom.hex(32)')}"
+  export KIOSK_TUDU_DB_USER="${KIOSK_TUDU_DB_USER:-postgres}"
+  export KIOSK_TUDU_DB_PASSWORD="${KIOSK_TUDU_DB_PASSWORD:-}"
+  # PINNED, not inherited, and a throwaway `_smoke` name rather than the deploy
+  # `kiosk_tudu_production` — see the stylish smoke above (K-583/K-594).
+  export KIOSK_TUDU_DB="kiosk_tudu_smoke"
+
+  SERVER_PID=""
+  cleanup() {
+    [ -n "$SERVER_PID" ] && kill "$SERVER_PID" 2>/dev/null || true
+    [ -n "$SERVER_PID" ] && wait "$SERVER_PID" 2>/dev/null || true
+    rm -f "$COOKIES" "$SERVER_LOG"
+  }
+  trap cleanup EXIT
+
+  echo "── Preparing the throwaway smoke DB ${KIOSK_TUDU_DB} (drop/create/schema:load/seed) ──"
+  # From zero out of structure.sql, exactly as the two smokes above — which is
+  # also precisely what this smoke CANNOT see (K-1074's delivery gap); see the
+  # COVERAGE header.
+  drop_smoke_db "$KIOSK_TUDU_DB" "$KIOSK_TUDU_DB_USER" "$KIOSK_TUDU_DB_PASSWORD"
+  bundle exec rails db:create db:schema:load db:seed >/dev/null
+
+  echo "── Booting tudu in RAILS_ENV=production on ${BASE} (eager_load + assume_ssl) ──"
+  bundle exec rails server -e production -b 127.0.0.1 -p "$PORT" >"$SERVER_LOG" 2>&1 &
+  SERVER_PID=$!
+
+  ready=false
+  for _ in $(seq 1 60); do
+    if ! kill -0 "$SERVER_PID" 2>/dev/null; then
+      echo "!! Server process exited during boot (eager-load crash?). Log:"
+      cat "$SERVER_LOG"
+      exit 1
+    fi
+    code="$(curl -s -o /dev/null -w '%{http_code}' "${PROXY_HEADERS[@]}" "${BASE}/.well-known/kiosk.json" || true)"
+    if [ "$code" = "200" ]; then ready=true; break; fi
+    sleep 1
+  done
+  if [ "$ready" != true ]; then
+    echo "!! Server did not become ready. Log:"; cat "$SERVER_LOG"; exit 1
+  fi
+  echo "  server up"
+
+  echo
+  echo "── Assertion 1: GET / → 200 (eager-load, and the signed-out root renders the board) ──"
+  code="$(curl -s -o /dev/null -w '%{http_code}' "${PROXY_HEADERS[@]}" -H "Accept: text/html" "${BASE}/")"
+  [ "$code" = "200" ] && pass "GET / → 200" || fail "GET / expected 200, got $code"
+
+  echo "── Assertion 2: GET /shared → 200 AND the hand-written projection RESOLVED (K-436 class, K-1085) ──"
+  # The assertion that matters is not the status: it is that the four-table join
+  # in ListsController#housemate_board returned the seeded row WITH the owner's
+  # display name. `shared by Alice` can only be printed if `owner_u.display_name`
+  # resolved — a column no model, scope or structure.sql-derived attribute set
+  # covers, in the only page in the fleet whose SQL is written by hand. A 200
+  # alone would also pass on the empty-board branch, which is the failure mode
+  # this assertion exists to refuse.
+  shared_body="$(curl -s "${PROXY_HEADERS[@]}" -H "Accept: text/html" "${BASE}/shared")"
+  shared_code="$(curl -s -o /dev/null -w '%{http_code}' "${PROXY_HEADERS[@]}" -H "Accept: text/html" "${BASE}/shared")"
+  if [ "$shared_code" = "200" ] && printf '%s' "$shared_body" | grep -q "Flat 3B" \
+     && printf '%s' "$shared_body" | grep -q "shared by Alice"; then
+    pass "GET /shared → 200, board shows the seeded list attributed to its owner"
+  else
+    fail "GET /shared expected 200 with 'Flat 3B' + 'shared by Alice', got $shared_code (K-1085: the hand-written housemate_board projection did not resolve)"
+  fi
+
+  echo "── Assertion 3: GET /users/sign_up → 200 (the fleet's only open registration) ──"
+  code="$(curl -s -o /dev/null -w '%{http_code}' "${PROXY_HEADERS[@]}" -H "Accept: text/html" "${BASE}/users/sign_up")"
+  [ "$code" = "200" ] \
+    && pass "GET /users/sign_up → 200" \
+    || fail "GET /users/sign_up expected 200, got $code (tudu's Users::RegistrationsController is eager-loaded only in production)"
+
+  echo "── Assertion 4: real Devise sign-in behind the proxy (catches assume_ssl/CSRF-Origin, K-439) ──"
+  form="$(curl -s -c "$COOKIES" "${SIGNIN_HEADERS[@]}" -H "Accept: text/html" "${BASE}/users/sign_in")"
+  token="$(printf '%s' "$form" \
+    | grep -o 'name="authenticity_token" value="[^"]*"' \
+    | head -1 | sed 's/.*value="//; s/"$//')"
+  if [ -z "$token" ]; then
+    fail "could not extract CSRF token from sign-in form"
+  else
+    pass "got CSRF token + session cookie"
+    signin_code="$(curl -s -o /dev/null -w '%{http_code}' \
+      -c "$COOKIES" -b "$COOKIES" \
+      "${SIGNIN_HEADERS[@]}" -H "Origin: ${ORIGIN}" \
+      --data-urlencode "authenticity_token=${token}" \
+      --data-urlencode "user[email]=alice@example.com" \
+      --data-urlencode "user[password]=tudu-demo-password" \
+      "${BASE}/users/sign_in")"
+    if [ "$signin_code" = "302" ] || [ "$signin_code" = "303" ]; then
+      pass "sign-in POST → $signin_code (redirect, not 422 forgery)"
+    else
+      fail "sign-in POST expected 302/303 redirect, got $signin_code (422 = CSRF-Origin rejection, K-439)"
+    fi
+    # Signed in, the root switches to the caller's own lists — a DIFFERENT
+    # render path from the signed-out board, and the one a human actually uses.
+    authed_code="$(curl -s -o /dev/null -w '%{http_code}' \
+      -b "$COOKIES" "${SIGNIN_HEADERS[@]}" -H "Accept: text/html" "${BASE}/lists")"
+    [ "$authed_code" = "200" ] \
+      && pass "signed-in /lists → 200" \
+      || fail "signed-in /lists expected 200, got $authed_code"
+  fi
+
+  echo "── Assertion 5: JSON POST at the human sign-in form → 422 + Kiosk error envelope (K-459/K-534) ──"
+  # The wrong-door signpost this app returns to a JSON-dialing assistant. Only
+  # production renders it (dev serves the debug page), and its TEXT is what
+  # K-1088 had to correct in seven copies at once.
+  signpost="$(curl -s -X POST "${PROXY_HEADERS[@]}" \
+    -H "Content-Type: application/json" -H "Accept: application/json" \
+    --data '{"user":{"email":"probe@example.com","password":"probe"}}' \
+    "${BASE}/users/sign_in")"
+  signpost_code="$(curl -s -o /dev/null -w '%{http_code}' -X POST "${PROXY_HEADERS[@]}" \
+    -H "Content-Type: application/json" -H "Accept: application/json" \
+    --data '{"user":{"email":"probe@example.com","password":"probe"}}' \
+    "${BASE}/users/sign_in")"
+  if [ "$signpost_code" = "422" ] && printf '%s' "$signpost" | grep -q "invalid_authenticity_token"; then
+    pass "JSON sign-in POST → 422 + invalid_authenticity_token envelope"
+  else
+    fail "JSON sign-in POST expected 422 + invalid_authenticity_token envelope, got $signpost_code / '$(printf '%s' "$signpost" | head -c 120)' (K-459 signpost regressed to a bodyless error)"
+  fi
+
+  echo "── Assertion 6: unknown path → 404 with a BODY (public/404.html, K-532) ──"
+  notfound_len="$(curl -s -o /dev/null -w '%{size_download}' "${PROXY_HEADERS[@]}" \
+    -H "Accept: text/html" "${BASE}/this-path-does-not-exist")"
+  notfound_code="$(curl -s -o /dev/null -w '%{http_code}' "${PROXY_HEADERS[@]}" \
+    -H "Accept: text/html" "${BASE}/this-path-does-not-exist")"
+  if [ "$notfound_code" = "404" ] && [ "$notfound_len" -gt 0 ]; then
+    pass "unknown path → 404 with ${notfound_len} bytes of body"
+  else
+    fail "unknown path expected 404 with a non-empty body, got $notfound_code / ${notfound_len} bytes (K-532: no public/404.html → bodyless error)"
+  fi
+
+  echo "── Assertion 7: GET /robots.txt and /favicon.ico → 200 statics (T-048) ──"
+  robots_code="$(curl -s -o /dev/null -w '%{http_code}' "${PROXY_HEADERS[@]}" "${BASE}/robots.txt")"
+  favicon_code="$(curl -s -o /dev/null -w '%{http_code}' "${PROXY_HEADERS[@]}" "${BASE}/favicon.ico")"
+  if [ "$robots_code" = "200" ] && [ "$favicon_code" = "200" ]; then
+    pass "GET /robots.txt → 200, GET /favicon.ico → 200"
+  else
+    fail "statics expected 200/200, got robots.txt=$robots_code favicon.ico=$favicon_code (T-048: a missing public/ static puts RoutingError noise back in the journal)"
+  fi
+}
+
 # $DEMO was validated at the top (before the safety gate ran), so this dispatch
 # is total; the catch-all stays as a backstop if a demo is ever added to one
 # case and not the other.
 case "$DEMO" in
   stylish) smoke_stylish ;;
   prove)   smoke_prove ;;
-  *) echo "unknown demo '$DEMO' (expected: stylish | prove)"; exit 2 ;;
+  tudu)    smoke_tudu ;;
+  *) echo "unknown demo '$DEMO' (expected: stylish | prove | tudu)"; exit 2 ;;
 esac
 
 echo

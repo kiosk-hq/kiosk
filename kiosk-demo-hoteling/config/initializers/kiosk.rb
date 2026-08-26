@@ -1,10 +1,27 @@
 # frozen_string_literal: true
 
 # Kiosk-demo (hoteling-shape) configuration. Hotel booking with payment gate.
-# No KYC, no hardware unlock. PoW is off by default; with
-# KIOSK_POW_BROWSE_DEMO=1 the browse-heavy QUERY endpoints are priced by request
-# rate with escalating Equihash proofs, sized by whatever KIOSK_POW_DIFFICULTY
-# selects (see the browse gate below, exercised by demo:browse).
+# No KYC, no hardware unlock. TWO PoW gates run here and their default postures
+# are OPPOSITE: the BROWSE toll is off by default and switched on with
+# KIOSK_POW_BROWSE_DEMO=1, which prices the browse-heavy QUERY endpoints by
+# request rate with escalating Equihash proofs, sized by whatever
+# KIOSK_POW_DIFFICULTY selects (see the browse gate below, exercised by
+# demo:browse); the REGISTRATION gate is ALWAYS ON, with no env flag to set or
+# to forget. Each gate's own section below owns its detail; neither is restated
+# here.
+#
+# NAMING THE GATE IS THE POINT OF THAT SENTENCE (K-1041). It used to make the
+# off-by-default claim about this origin's PoW posture AS A WHOLE, flat out, and
+# only then narrow to the browse flag — and the file contradicts that reading in
+# every place further down where it states the register gate's own posture
+# («ALWAYS ON — POW-VERB-GATING», «ALWAYS ON (register is uniformly tolled)»,
+# «so register-pow works regardless of KIOSK_POW_BROWSE_DEMO»). Those are what
+# the code does: `registration_pow_count` and `registration_pow_params` are
+# assigned inside `Kiosk.configure` and OUTSIDE the
+# `if ENV["KIOSK_POW_BROWSE_DEMO"]` branch, so they take effect with the flag
+# unset. Which gate is off is the first thing a reader learns about a demo's
+# posture, so the claim has to name the gate it is true of. The old phrasing is
+# deliberately not retyped here, so a grep for it finds live claims only.
 #
 # NO (n, k) IS NAMED IN THIS OPENING BLOCK (K-1038, the K-1035 class). This
 # sentence used to state a pair outright, unconditionally, while

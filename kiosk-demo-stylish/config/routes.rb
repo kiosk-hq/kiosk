@@ -2,8 +2,6 @@
 
 Rails.application.routes.draw do
   # Kiosk wire surface (controllers shipped by kiosk-server).
-  # In a follow-up release these will be mounted via the engine's own
-  # routes drawer; for now we wire them manually here.
   get  "/kiosk/schema",                            to: "kiosk/server/wire#schema"
   # NO `POST /kiosk/query` or `POST /kiosk/run` — protocol 0.4 deleted the
   # multiplexed pair outright (T-074 = A). Every verb is its own endpoint; the

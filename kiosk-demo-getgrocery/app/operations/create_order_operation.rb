@@ -4,14 +4,16 @@
 # principal, with its delivery window and address, and quote the total a cart
 # mandate must be signed against.
 #
-# SIX GATES, in the order they are written below, and the order is behaviour
+# SEVEN GATES, in the order they are written below, and the order is behaviour
 # rather than tidiness — each one is the answer a caller gets when a later one
 # would also have refused: the cart's shape (K-693), delivery given and in-zone
 # (K-468), the window still bookable (K-470/480), the skus, the age gate, the
-# replace lock. Gate 5 comes AFTER the sku resolution because it is a fact about
-# the RESOLVED products, and BEFORE the order_id shape check because an
-# un-attested agent should be told to go and get attested rather than told its
-# id is malformed.
+# priceable total (K-1047), the replace lock. Gate 5 comes AFTER the sku
+# resolution because it is a fact about the RESOLVED products, and BEFORE the
+# order_id shape check because an un-attested agent should be told to go and get
+# attested rather than told its id is malformed. Gate 6 can only be asked once
+# gate 4 has resolved the prices — it bounds their SUM — and it is asked BEFORE
+# the replace path so a cart nobody can price never takes a row lock.
 class CreateOrderOperation
   # The anonymized booleans an age-restricted cart demands. Named once, so the
   # gate, its refusal sentence and its hint cannot come to disagree.
@@ -102,6 +104,15 @@ class CreateOrderOperation
       end
 
       total_cents = items.sum { |item| by_sku[item[:sku]][:price_cents].to_i * item[:qty] }
+
+      # ── Gate 6: the cart has to be PRICEABLE (K-1047) ────────────────────
+      # Every `qty` here is one the published descriptor calls valid, and the
+      # SUM is still bounded by `orders.total_cents`. Without this the INSERT
+      # below raised `ActiveModel::RangeError` in Ruby and the wire answered
+      # `500 action_failed` for an argument a client simply got wrong.
+      refusal = WireArguments.priceable_total(total_cents)
+      next refusal if refusal
+
       # The APP clock, not `now()`: `insert_all`/`update_all` type-cast their
       # values and cannot pass an SQL expression through. App and database run on
       # one host here, so it is the same clock `my_orders` then orders by.
@@ -115,7 +126,7 @@ class CreateOrderOperation
         order_id, refusal = WireArguments.order_id(order_id, hint: WireArguments::HINT_ORDER_ID_REPLACE)
         next refusal if refusal
 
-        # ── Gate 6: replaceable, AND held while we replace it (K-544) ──────
+        # ── Gate 7: replaceable, AND held while we replace it (K-544) ──────
         # Two conditions and one lock, and all three ARE the pay-race fix:
         #   · `replaceable` excludes `paying` as well as the terminal states — a
         #     /pay mid-flight has already checked its cart against these items,

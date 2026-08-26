@@ -31,6 +31,49 @@ module WireArguments
 
   module_function
 
+  # PostgreSQL `integer` — the width of BOTH columns one cart can overrun,
+  # `order_items.qty` and `orders.total_cents`, which is why one constant serves
+  # the two bounds below and the descriptor that declares the first of them.
+  #
+  # THE BOUND IS THE COLUMN'S AND NOT A POLICY. That is K-968's rule, taken
+  # from the demo one over that learned it: this refuses exactly what cannot be
+  # REPRESENTED and invents no basket size, so every cart that used to work
+  # still works and only the ones that used to CRASH are refused.
+  MAX_INT4 = 2_147_483_647
+
+  # ── K-1047: A CART NOBODY CAN PRICE IS A 400, NOT A 500 ───────────────────
+  #
+  # Every `qty` the descriptor declares valid is a body the wire ACCEPTS, and
+  # the order's total is `price_cents * qty` summed — which passes
+  # `orders.total_cents` long before any single `qty` reaches its own ceiling:
+  # at the catalogue's cheapest 89-cent row it takes 24_129_030 units, a legal
+  # `order_items.qty`. `Order.insert!` then raised `ActiveModel::RangeError` in
+  # RUBY, before any SQL (`insert_all` type-casts its values), and the executor's
+  # `rescue StandardError` served that as `500 action_failed` — a crash for an
+  # argument a client simply got wrong.
+  #
+  # WHY THIS IS NOT IN `input_schema`, where `qty`'s own ceiling now is: the
+  # bound is on a SUM of the OPERATOR's catalogue prices, and no per-property
+  # JSON Schema keyword can express one. So the published contract splits in
+  # two — the schema declares the half it can (`maximum` on `qty`) and
+  # `create_order`'s own description states this half in words — and this is the
+  # half that has to be a handler refusal. It is asked as soon as the prices are
+  # resolved and BEFORE the replace path, so an unpriceable cart never takes a
+  # row lock.
+  #
+  # @return [OperationResult, nil] a refusal, or nil when the cart can be totalled
+  def priceable_total(total_cents)
+    return nil if total_cents <= MAX_INT4
+
+    OperationResult.refused(
+      code:    "bad_request",
+      message: "this cart totals #{total_cents} cents, more than this operator can put on one " \
+               "order (max #{MAX_INT4})",
+      hint:    "order fewer units, or split the cart across several orders — the total is each " \
+               "line's catalogue price times its qty, summed.",
+    )
+  end
+
   # An order id a verb was given. PRESENCE is the caller's question — the verbs
   # disagree about whether one is required — so this answers only "is it shaped
   # like an id".
@@ -200,6 +243,15 @@ module WireArguments
   # ABSENT `qty` is refused too, for the same reason: the schema requires it, so
   # a default here would be a second, weaker contract nobody published.
   #
+  # BOTH ENDS OF THE DECLARED RANGE, and the upper one is K-1047: `qty` is
+  # `{type: "integer", minimum: 1, maximum: MAX_INT4}`, so this layer carries a
+  # `<= MAX_INT4` arm as well as its `>= 1` one. Leaving it off would have been
+  # exactly the K-1020 defect again — a second layer weaker than the schema in
+  # front of it, on the argument that row was about. What this layer CANNOT
+  # check is the other half of the same bug: the cart's TOTAL, which is not a
+  # fact about any single item. {#priceable_total} answers that one, later,
+  # once the catalogue prices are resolved.
+  #
   # @return [Array(Array<Hash>, nil), Array(nil, OperationResult)]
   def items(raw)
     unless raw.is_a?(Array)
@@ -236,6 +288,12 @@ module WireArguments
       end
       if qty < 1
         return [nil, OperationResult.refused(code: "bad_request", message: "qty must be >= 1")]
+      end
+      if qty > MAX_INT4
+        return [nil, OperationResult.refused(
+          code:    "bad_request",
+          message: "qty must be <= #{MAX_INT4} — got #{qty}",
+        )]
       end
 
       normalised << { sku: sku, qty: qty }

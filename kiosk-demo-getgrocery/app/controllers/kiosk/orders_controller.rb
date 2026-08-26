@@ -111,7 +111,9 @@ class Kiosk::OrdersController < ActionController::API
               "line against its own catalogue before it charges anything, so a cart that disagrees is " \
               "refused outright rather than partly honoured. Alcohol needs a completed 18+ check " \
               "first (`request_kyc`), and asking for it without one is refused rather than quietly " \
-              "dropped from the basket."
+              "dropped from the basket. A cart whose catalogue total is larger than this " \
+              "operator can put on one order is refused outright, naming the maximum, rather " \
+              "than partly taken."
   input_schema type: "object",
                additionalProperties: false,
                properties: {
@@ -122,7 +124,17 @@ class Kiosk::OrdersController < ActionController::API
                      type: "object", additionalProperties: false,
                      properties: {
                        sku: { type: "string", description: "Product sku from the catalog query." },
-                       qty: { type: "integer", minimum: 1, description: "Quantity." },
+                       # K-1047: the ceiling is DECLARED, because a refusal the
+                       # published schema does not predict is its own defect.
+                       # `order_items.qty` is a PostgreSQL `integer`, so this is
+                       # the column's own width and not an invented basket size.
+                       # The cart's TOTAL is bounded too and is NOT expressible
+                       # here — it is a sum of the operator's catalogue prices —
+                       # so the verb description above states that half in words.
+                       qty: { type: "integer", minimum: 1, maximum: WireArguments::MAX_INT4,
+                              description: "Quantity. The order's total — each line's catalogue " \
+                                           "price times its qty, summed — is bounded too; a cart " \
+                                           "too large to price is refused, not partly taken." },
                      },
                      required: ["sku", "qty"],
                    },

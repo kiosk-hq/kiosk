@@ -471,6 +471,47 @@ class HostileArgShapes < Kiosk::Redteam::Scenario
                             delivery_slot_id: 1, delivery_address: ADDRESS)
     end
 
+    # ── MAGNITUDE, the axis every probe above misses (K-1047) ───────────────
+    #
+    # Everything above varies `qty`'s TYPE, and `[0, -1]` sit just under the
+    # declared `minimum: 1`. No probe anywhere in this fleet had ever sent an
+    # integer LARGE enough to matter — which is exactly how a `500
+    # action_failed` for a body the published descriptor calls VALID survived
+    # three hostile-shape waves (K-773, K-1020, K-1025) in this very beat.
+    #
+    # TWO probes, because there are two bounded columns behind one argument and
+    # they give way at different widths. Both numbers are DERIVED from the
+    # catalogue row this run actually got, so a reseed at other prices cannot
+    # quietly make either vacuous:
+    #
+    #   · UNPRICEABLE CART — `qty` is a legal `order_items.qty` (int4) and the
+    #     cart still cannot be TOTALLED: `price_cents * qty` passes
+    #     `orders.total_cents`, also int4. MEASURED on a booted origin before
+    #     the fix, `qty: 30_000_000` of the 89-cent `milk-0.5l` →
+    #     `ActiveModel::RangeError: 2670000000 is out of range …` out of
+    #     `Order.insert!`, served as **HTTP 500 `action_failed`**. The refusal
+    #     it must be instead comes from {WireArguments.priceable_total}, which
+    #     is reached only once the prices are resolved — no schema can express
+    #     a bound on a SUM of other rows' values.
+    #   · UNSTORABLE QUANTITY — `qty` itself past int4, which IS expressible
+    #     per-property and so is refused by the descriptor's own `maximum`
+    #     before the handler runs at all.
+    #
+    # The non-vacuity proof is the K-773/K-1020 mutation, one bound at a time:
+    # drop `maximum` from `qty` in `input_schema` and the second probe reaches
+    # the handler; delete the `priceable_total` call from
+    # {CreateOrderOperation} and the first goes back to 500.
+    price = catalog.first["price_cents"].to_i
+    raise "redteam(getgrocery): catalogue row has no price_cents" unless price.positive?
+
+    max_int4 = 2_147_483_647
+    { "unpriceable cart"     => (max_int4 / price) + 1,
+      "unstorable qty"       => max_int4 + 1 }.each do |why, v|
+      refused "create_order items[0].qty=#{v} (#{why}, K-1047)",
+              client.run(a, name: "create_order", items: [{ sku: sku, qty: v }],
+                            delivery_slot_id: 1, delivery_address: ADDRESS)
+    end
+
     # ── the two bare strings, where getgrocery's OWN guards are the only
     # thing standing (see the header) ───────────────────────────────────────
     # NOT probed: `"[2026-09-01]"` and `"20260101"`. getgrocery's guard uses

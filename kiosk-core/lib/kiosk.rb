@@ -1,7 +1,8 @@
 # frozen_string_literal: true
 
 # kiosk-core — foundation for the Kiosk framework.
-# See https://kiosk.tech and the design spec for full architecture.
+# See https://kiosk.tech and its normative specification
+# (https://kiosk.tech/specification.html) for full architecture.
 
 require "kiosk/version"
 require "kiosk/protocol"

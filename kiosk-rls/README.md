@@ -4,7 +4,7 @@ Optional DB-layer defense-in-depth for [Kiosk](https://kiosk.tech) providers.
 
 ## Security model overview
 
-**RLS is not Kiosk's primary security model.** Kiosk's isolation comes from the sanctioned `query`/`run`/`pay` surface: agents never send raw SQL, named queries enforce app-layer authz, and `kiosk.current_user_id()` GUCs scope per-user reads in Ruby. That surface is sufficient.
+**RLS is not Kiosk's primary security model.** Kiosk's isolation comes from the sanctioned verb surface: agents never send raw SQL, named queries enforce app-layer authz, and `kiosk.current_user_id()` GUCs scope per-user reads in Ruby. That surface is sufficient.
 
 `kiosk-rls` is an **optional** companion for providers who want an additional DB-level row enforcement layer — belt-and-suspenders hardening. Calling `enable_rls_on` is opt-in; not calling it is the default and fully correct.
 

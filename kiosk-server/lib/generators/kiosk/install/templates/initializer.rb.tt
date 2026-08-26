@@ -44,7 +44,7 @@ Kiosk.configure do |c|
   # c.schema = "<%= options[:schema] %>"
 
   # ─── Opt-in: DB-level RLS defense-in-depth ───────────────────────────
-  # Kiosk's isolation comes from the sanctioned query/run/pay surface with
+  # Kiosk's isolation comes from the sanctioned per-verb surface with
   # app-layer authz. Postgres RLS is available as belt-and-suspenders:
   # add `gem "kiosk-rls"`, include Kiosk::RLS::DSL into your migrations,
   # and configure the DB roles (provider creates these — Kiosk does not).

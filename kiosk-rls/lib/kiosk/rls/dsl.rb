@@ -11,13 +11,14 @@ module Kiosk
     # {Kiosk::RLS::Railtie} mixes this module in for you — a Rails app writes
     # no wiring (K-504). Any other host includes it itself; see {Kiosk::RLS}.
     #
-    # The four migration verbs (evolving policies):
+    # The migration verbs (evolving policies) — the list enumerates itself, so
+    # it carries no count above it to fall out of step with an append:
     #
-    #   enable_rls_on(table)                  — full-table RLS turn-on
-    #   add_kiosk_policy_to(table, action)    — single-policy addition
-    #   change_kiosk_policy_on(table, action) — replace-in-place
-    #   remove_kiosk_policy_from(table, ...)  — single-policy removal
-    #   rename_kiosk_policy_on(table, from:, to:)
+    #   enable_rls_on(table)                      — full-table RLS turn-on
+    #   add_kiosk_policy_to(table, action)        — single-policy addition
+    #   change_kiosk_policy_on(table, action)     — replace-in-place
+    #   remove_kiosk_policy_from(table, ...)      — single-policy removal
+    #   rename_kiosk_policy_on(table, from:, to:) — rename in place
     module DSL
       # Wrap a table in RLS: turn it on, GRANT the runtime role, declare
       # policies, attach a mandatory comment.

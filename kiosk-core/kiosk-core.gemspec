@@ -22,9 +22,9 @@ Gem::Specification.new do |spec|
   spec.required_ruby_version = ">= 3.2.0"
 
   spec.metadata["homepage_uri"]     = spec.homepage
-  spec.metadata["source_code_uri"]  = "https://github.com/kiosk-hq/kiosk-core"
-  spec.metadata["changelog_uri"]    = "https://github.com/kiosk-hq/kiosk-core/blob/main/CHANGELOG.md"
-  spec.metadata["bug_tracker_uri"]  = "https://github.com/kiosk-hq/kiosk-core/issues"
+  spec.metadata["source_code_uri"]  = "https://github.com/kiosk-hq/kiosk"
+  spec.metadata["changelog_uri"]    = "https://github.com/kiosk-hq/kiosk/blob/main/kiosk-core/CHANGELOG.md"
+  spec.metadata["bug_tracker_uri"]  = "https://github.com/kiosk-hq/kiosk/issues"
 
   spec.files = Dir.glob("lib/**/*") + %w[README.md LICENSE.txt CHANGELOG.md]
   spec.require_paths = ["lib"]

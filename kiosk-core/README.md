@@ -4,7 +4,7 @@ Core abstractions for the [Kiosk](https://kiosk.tech) framework.
 
 ## What is Kiosk
 
-Kiosk turns a Postgres-backed business app into an agent surface: REST endpoint, multi-agent identity per user, app-layer-authorized data plane with opt-in Postgres RLS defense-in-depth, AP2 mandate trail. Alpha. Apache-2.0.
+Kiosk turns a Postgres-backed business app into an AI-assistant surface: REST endpoint, multi-assistant identity per user, app-layer-authorized data plane with opt-in Postgres RLS defense-in-depth, AP2 mandate trail. Alpha. Apache-2.0.
 
 ## What is kiosk-core
 
@@ -52,4 +52,4 @@ Apache-2.0 — see `LICENSE.txt`.
 
 - [kiosk.tech](https://kiosk.tech) — landing + docs
 - [Specification](https://kiosk.tech/specification.html) — the normative spec
-- [Issue tracker](https://github.com/kiosk-hq/kiosk-core/issues)
+- [Issue tracker](https://github.com/kiosk-hq/kiosk/issues)

@@ -231,7 +231,7 @@ RSpec.describe Kiosk::Server::PowSpentStores do
     it "keys the table on the challenge id, so the PK is the single-use gate" do
       sql = Kiosk::Server::SchemaDefinitions.pow_spent_sql(schema: "kiosk")
 
-      expect(sql).to include(%(CREATE TABLE "kiosk".pow_spent))
+      expect(sql).to include(%(CREATE TABLE IF NOT EXISTS "kiosk".pow_spent))
       expect(sql).to include("id         text        PRIMARY KEY")
       expect(sql).to include("expires_at timestamptz NOT NULL")
     end

@@ -59,18 +59,18 @@ RSpec.describe Kiosk::Server::SchemaDefinitions do
     subject(:sql) { described_class.identity_tables_sql }
 
     it "creates `agents` with NOT NULL user_id FK to the configured user table" do
-      expect(sql).to include(%(CREATE TABLE "kiosk".agents))
+      expect(sql).to include(%(CREATE TABLE IF NOT EXISTS "kiosk".agents))
       expect(sql).to include("user_id             uuid NOT NULL REFERENCES \"users\"(id)")
     end
 
     it "creates `agent_tokens` with FK to agents and a unique token_hash" do
-      expect(sql).to include(%(CREATE TABLE "kiosk".agent_tokens))
+      expect(sql).to include(%(CREATE TABLE IF NOT EXISTS "kiosk".agent_tokens))
       expect(sql).to include(%(REFERENCES "kiosk".agents(id) ON DELETE CASCADE))
-      expect(sql).to include(%(UNIQUE INDEX idx_agent_tokens_hash))
+      expect(sql).to include(%(UNIQUE INDEX IF NOT EXISTS idx_agent_tokens_hash))
     end
 
     it "creates `agent_mappings` for external-IdP subject ↔ local agent linkage" do
-      expect(sql).to include(%(CREATE TABLE "kiosk".agent_mappings))
+      expect(sql).to include(%(CREATE TABLE IF NOT EXISTS "kiosk".agent_mappings))
       expect(sql).to include("PRIMARY KEY (provider, external_id)")
     end
 
@@ -88,14 +88,14 @@ RSpec.describe Kiosk::Server::SchemaDefinitions do
     # DB-level dedupe of the credential, not TOCTOU SELECT-then-INSERT.
     it "adds a PARTIAL unique index on public_key for LIVE (non-revoked) rows only" do
       expect(sql).to match(
-        /CREATE UNIQUE INDEX idx_agents_public_key_live\s+ON "kiosk"\.agents \(public_key\) WHERE revoked_at IS NULL/,
+        /CREATE UNIQUE INDEX IF NOT EXISTS idx_agents_public_key_live\s+ON "kiosk"\.agents \(public_key\) WHERE revoked_at IS NULL/,
       )
     end
 
     it "keeps the public_key uniqueness partial so a revoked key can re-register" do
       # A bare (non-partial) UNIQUE on public_key would block re-registering a
       # revoked key — the index MUST be scoped to revoked_at IS NULL.
-      expect(sql).not_to match(/UNIQUE INDEX idx_agents_public_key_live\s+ON "kiosk"\.agents \(public_key\);/)
+      expect(sql).not_to match(/UNIQUE INDEX IF NOT EXISTS idx_agents_public_key_live\s+ON "kiosk"\.agents \(public_key\);/)
     end
 
     # Folded in from the three later migrations that used to ALTER them onto
@@ -103,15 +103,59 @@ RSpec.describe Kiosk::Server::SchemaDefinitions do
     # and a provider enabling the surface that reads one should not have to
     # discover it lives in a migration they were told was optional.
     it "declares kyc_verified_at, spending_cap_cents and human_label on agents" do
-      agents = sql[/CREATE TABLE "kiosk"\.agents.*?\);/m]
+      agents = sql[/CREATE TABLE IF NOT EXISTS "kiosk"\.agents.*?\);/m]
       expect(agents).to include("kyc_verified_at     timestamptz")
       expect(agents).to include("spending_cap_cents  bigint")
       expect(agents).to include("human_label         text")
     end
 
-    it "emits no ALTER TABLE at all — the create states the whole table" do
-      expect(sql).not_to include("ALTER TABLE")
-      expect(sql).not_to include("ADD COLUMN")
+    # ...and the other half of the same fold (K-1083). Folding three amendment
+    # migrations into the CREATE is lossless only from zero. A database that ran
+    # the pre-2026-08-20 set already HAS an `agents` table and reaches this
+    # migration with whichever subset of the three its vintage amended on —
+    # measured on the structure.sql the fleet's boxes were built from,
+    # human_label and spending_cap_cents were there and kyc_verified_at was not.
+    # The guarded CREATE would step over that table and record itself as
+    # applied, leaving the column the KYC gate SELECTs missing forever.
+    it "repairs a pre-fold agents table rather than stepping over it" do
+      expect(sql).to include(%(ALTER TABLE "kiosk".agents ADD COLUMN IF NOT EXISTS human_label))
+      expect(sql).to include(%(ALTER TABLE "kiosk".agents ADD COLUMN IF NOT EXISTS spending_cap_cents))
+      expect(sql).to include(%(ALTER TABLE "kiosk".agents ADD COLUMN IF NOT EXISTS kyc_verified_at))
+    end
+
+    it "keeps every repair idempotent, so the from-zero path is untouched" do
+      alters = sql.lines.grep(/ALTER TABLE/)
+      expect(alters).not_to be_empty
+      expect(alters).to all(include("ADD COLUMN IF NOT EXISTS"))
+    end
+  end
+
+  # K-1083, and it is a deploy-level contract rather than a style rule. The
+  # 2026-08-20 rebuild renumbered every kiosk-owned migration, so on a database
+  # that already carries the kiosk schema all six re-emitted files read as
+  # PENDING and replay onto tables that exist. Measured: an unguarded CREATE
+  # aborts `db:migrate` one step in with PG::DuplicateTable, stranding every
+  # later migration on that box — including any corrective one. bin/check-
+  # migration-replay is the gate that measures it end to end; this example is
+  # the unit-level tripwire, so a new emitter cannot reintroduce the class
+  # without a red spec.
+  describe "replay safety (K-1083)" do
+    let(:every_emitter) do
+      %i[
+        helper_functions_sql identity_tables_sql reservations_sql
+        device_authorizations_sql mandates_sql kyc_attributes_sql
+        pow_spent_sql auth_challenge_sql
+      ].map { described_class.public_send(_1) }
+    end
+
+    it "guards every CREATE it emits, so a second run against the same database is a no-op" do
+      unguarded = every_emitter.flat_map(&:lines).grep(/^\s*CREATE /).reject do |line|
+        line.include?("IF NOT EXISTS") || line.include?("CREATE OR REPLACE")
+      end
+
+      expect(unguarded).to be_empty,
+                           "these CREATEs abort db:migrate on a database that already has the object, " \
+                           "stranding every later migration:\n#{unguarded.join}"
     end
   end
 
@@ -138,7 +182,7 @@ RSpec.describe Kiosk::Server::SchemaDefinitions do
              described_class.reservations_sql, described_class.device_authorizations_sql,
              described_class.mandates_sql].join("\n")
       expect(sql).not_to include("action_log")
-      expect(sql).not_to include(%(CREATE TABLE "kiosk".actions))
+      expect(sql).not_to include(%(CREATE TABLE IF NOT EXISTS "kiosk".actions))
     end
   end
 
@@ -146,7 +190,7 @@ RSpec.describe Kiosk::Server::SchemaDefinitions do
     subject(:sql) { described_class.reservations_sql }
 
     it "creates `kiosk.reservations` with TTL fields for atomic reserve-then-pay" do
-      expect(sql).to include(%(CREATE TABLE "kiosk".reservations))
+      expect(sql).to include(%(CREATE TABLE IF NOT EXISTS "kiosk".reservations))
       expect(sql).to include("expires_at    timestamptz NOT NULL")
       expect(sql).to include("released_at   timestamptz")
     end
@@ -160,10 +204,10 @@ RSpec.describe Kiosk::Server::SchemaDefinitions do
     subject(:sql) { described_class.mandates_sql(schema: "kiosk", user_id_type: :uuid) }
 
     it "creates the three signed mandate tables and the settlements receipt table" do
-      expect(sql).to include('CREATE TABLE "kiosk".intent_mandates')
-      expect(sql).to include('CREATE TABLE "kiosk".cart_mandates')
-      expect(sql).to include('CREATE TABLE "kiosk".payment_mandates')
-      expect(sql).to include('CREATE TABLE "kiosk".settlements')
+      expect(sql).to include('CREATE TABLE IF NOT EXISTS "kiosk".intent_mandates')
+      expect(sql).to include('CREATE TABLE IF NOT EXISTS "kiosk".cart_mandates')
+      expect(sql).to include('CREATE TABLE IF NOT EXISTS "kiosk".payment_mandates')
+      expect(sql).to include('CREATE TABLE IF NOT EXISTS "kiosk".settlements')
     end
 
     it "links cart→intent, payment→cart, and settlement→cart by FK" do
@@ -183,7 +227,7 @@ RSpec.describe Kiosk::Server::SchemaDefinitions do
     # writer put there. `eq(3)` above and this assertion are the same fact read
     # from both ends: exactly three, and not on this table.
     it "gives settlements NO raw_jws column — nobody signs a server-minted receipt" do
-      settlements_table = sql[/CREATE TABLE "kiosk"\.settlements.*?\);/m]
+      settlements_table = sql[/CREATE TABLE IF NOT EXISTS "kiosk"\.settlements.*?\);/m]
       expect(settlements_table).not_to match(/^\s*raw_jws\s+\w/)
     end
 
@@ -195,7 +239,7 @@ RSpec.describe Kiosk::Server::SchemaDefinitions do
       # intent, cart, and payment_mandates are all agent-signed and carry a signed id;
       # settlements is a server-side PSP receipt with no agent-signed mandate_id.
       expect(sql.scan(/mandate_id +text NOT NULL/).size).to eq(3)
-      settlements_table = sql[/CREATE TABLE "kiosk"\.settlements.*?\);/m]
+      settlements_table = sql[/CREATE TABLE IF NOT EXISTS "kiosk"\.settlements.*?\);/m]
       # No standalone `mandate_id <type>` column on settlements.
       expect(settlements_table).not_to match(/^\s*mandate_id\s+\w/)
     end
@@ -211,7 +255,7 @@ RSpec.describe Kiosk::Server::SchemaDefinitions do
     end
 
     it "the signed payment_mandates table carries mandate_id, payment_method, amount_cents, and UNIQUE(user_id, mandate_id)" do
-      payment_table = sql[/CREATE TABLE "kiosk"\.payment_mandates.*?\);/m]
+      payment_table = sql[/CREATE TABLE IF NOT EXISTS "kiosk"\.payment_mandates.*?\);/m]
       expect(payment_table).to include("mandate_id")
       expect(payment_table).to include("payment_method")
       expect(payment_table).to include("amount_cents")
@@ -219,7 +263,7 @@ RSpec.describe Kiosk::Server::SchemaDefinitions do
     end
 
     it "the settlements table carries psp_reference and settled_amount_cents" do
-      settlements_table = sql[/CREATE TABLE "kiosk"\.settlements.*?\);/m]
+      settlements_table = sql[/CREATE TABLE IF NOT EXISTS "kiosk"\.settlements.*?\);/m]
       expect(settlements_table).to include("psp_reference")
       expect(settlements_table).to include("settled_amount_cents")
     end
@@ -233,7 +277,7 @@ RSpec.describe Kiosk::Server::SchemaDefinitions do
     # so the generator must not emit a DROP any more, and a re-run that found
     # one would mean the fold had been undone.
     it "creates the table outright, with no DROP to undo an earlier shape" do
-      expect(sql).to include(%(CREATE TABLE "kiosk".device_authorizations))
+      expect(sql).to include(%(CREATE TABLE IF NOT EXISTS "kiosk".device_authorizations))
       expect(sql).not_to include("DROP TABLE")
     end
 
@@ -250,7 +294,7 @@ RSpec.describe Kiosk::Server::SchemaDefinitions do
     end
 
     it "enforces device_code uniqueness and pending-only user_code uniqueness" do
-      expect(sql).to include("CREATE UNIQUE INDEX idx_device_authorizations_code_hash")
+      expect(sql).to include("CREATE UNIQUE INDEX IF NOT EXISTS idx_device_authorizations_code_hash")
       expect(sql).to match(/idx_device_authorizations_user_code_pending.*?WHERE status = 'pending'/m)
     end
 

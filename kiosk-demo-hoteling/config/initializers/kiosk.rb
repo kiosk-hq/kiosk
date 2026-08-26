@@ -3,8 +3,20 @@
 # Kiosk-demo (hoteling-shape) configuration. Hotel booking with payment gate.
 # No KYC, no hardware unlock. PoW is off by default; with
 # KIOSK_POW_BROWSE_DEMO=1 the browse-heavy QUERY endpoints are priced by request
-# rate with escalating Equihash (n=96 k=5) proofs (see the browse gate below,
-# exercised by demo:browse).
+# rate with escalating Equihash proofs, sized by whatever KIOSK_POW_DIFFICULTY
+# selects (see the browse gate below, exercised by demo:browse).
+#
+# NO (n, k) IS NAMED IN THIS OPENING BLOCK (K-1038, the K-1035 class). This
+# sentence used to state a pair outright, unconditionally, while
+# `EQUIHASH_BROWSE_PARAMS = PowDifficulty.params` further down reads that pair
+# out of the environment — so `KIOSK_POW_DIFFICULTY=high` made the first thing a
+# reader of this file sees FALSE, with no edit to this tree, and that setting is
+# not hypothetical (deploy/env/atablefor.env.example ships it for a sibling
+# demo). A comment cannot read a value, so the repair is to NAME THE KNOB; the
+# mapping from knob to params stays written out exactly once, beside the
+# constant it governs, and the register half below states which level hoteling
+# ships. The escalation claim itself is untouched and real: it is
+# HOTELING_FREE_BROWSES / HOTELING_RATE_STEP / HOTELING_MAX_PROOFS.
 # Queries: properties, availability, my_bookings, search_hotels, hotel_detail
 # Actions: reserve_room, confirm_booking, payment_setup
 #

@@ -20,12 +20,32 @@ require "kiosk/user_identity_providers/devise"
 # ── PoW / Reputation (R2) — activated only when KIOSK_POW_DEMO=1 ──────────
 #
 # Gate: the Equihash PoW challenge is issued ONLY for the :query verb.
-# The :run verb is left ungated so the existing no-human booking flow
-# (script/book_flow.rb / rake demo:book) continues to pass without any PoW handling.
+# The :run verb is left ungated, so the existing no-human booking flow
+# (script/book_flow.rb / rake demo:book) pays no :query toll. It is not
+# proof-of-work-free: register is a SEPARATE gate and is ALWAYS ON, so the flow
+# solves one Equihash proof on every run. That gate's own section below owns its
+# detail; it is not restated here.
 #
-# The guard is intentional:
-#   - rake demo:book boots the server WITHOUT KIOSK_POW_DEMO=1 → no PoW.
-#   - rake demo:pow  boots the server WITH   KIOSK_POW_DEMO=1 → PoW active.
+# The guard is intentional, and it is about the :query toll ONLY:
+#   - rake demo:book boots the server WITHOUT KIOSK_POW_DEMO=1 → no :query toll.
+#   - rake demo:pow  boots the server WITH   KIOSK_POW_DEMO=1 → :query toll active.
+#
+# WHICH TOLL A SENTENCE IS ABOUT HAS TO BE NAMED (K-1042, the K-1041 class one
+# demo over). These lines used to state outright that the flow and the task
+# involve no proof-of-work at all — an unconditional claim about this origin's
+# posture, made under a header that scopes only the QUERY toll — and both were
+# false about register. The repair shape was already in this file: the `off`
+# entry of the KIOSK_POW_MODE list below ends «Registration PoW (below) stays on
+# regardless», and that clause is exactly what makes the sentence closing that
+# list («demo:book / demo:isolation / demo:redteam / demo:schema and CI stay
+# toll-free») true where these two were not. What the code does:
+# `c.registration_pow_count` and `c.registration_pow_params` are assigned inside
+# `Kiosk.configure` and AFTER the `case ATABLEFOR_POW_MODE` block has ended, so
+# no mode — `off` included — can reach them. And the flow the old sentence named
+# is itself the proof: `script/book_flow.rb` registers through
+# `equihash_register`, whose whole job is the 402 → solve → retry handshake. The
+# old phrasing is deliberately not retyped here, so a grep for it finds live
+# claims only.
 #
 # Reservation-scalping is exactly the abuse a table-booking provider fears:
 # scripts that mass-claim prime-time 2-tops to resell. PoW prices that at the

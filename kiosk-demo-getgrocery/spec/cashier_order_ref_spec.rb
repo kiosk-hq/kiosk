@@ -18,7 +18,12 @@
 #   • the pre-existing 403 cashier rejections (wrong currency, not exactly one
 #     order_id) are unchanged and still ordered ahead of the shape check;
 #   • the accepted shape is exactly the one create_order hands out (every
-#     SecureRandom.uuid, case-insensitively) and nothing looser.
+#     SecureRandom.uuid, case-insensitively) and nothing looser;
+#   • the guard is a GATE and not a formality (K-1061): with a stub `Order`
+#     standing in for the persistence boundary, a canonical uuid ARRIVES there
+#     (bound as `$1` in the claim UPDATE) and a malformed one never does. That
+#     pair goes red if the UuidCheck call is deleted; the negative-only
+#     assertion it replaced stayed green.
 # This is the DB-free test seam for the fix (getgrocery ships no rspec).
 
 require "securerandom"
@@ -118,16 +123,54 @@ assert(!UuidCheck.valid?(" #{SecureRandom.uuid} ") &&
        !UuidCheck.valid?("#{SecureRandom.uuid}\n#{SecureRandom.uuid}"),
        "UuidCheck anchors the whole string — padded and multi-line values are rejected")
 
-# A well-formed reference is NOT rejected by the guard — it falls through to the
-# persistence boundary, which is absent in this Rails-free process, so whatever
-# comes back is a LOAD-level failure (`Order` is not defined here) rather than a
-# refusal. The assertion is the negative one: not a BadRequest, i.e. the shape
-# check let it past. (Before K-654 moved the claim onto bound parameters this
-# was an ActiveRecord connection error; same boundary, different first missing
-# constant.)
-e = error_from(eur_cart([SecureRandom.uuid]))
-assert(!e.is_a?(Kiosk::Server::Errors::BadRequest),
-       "a canonical uuid passes the guard and reaches the persistence layer, got #{e.class}: #{e}")
+# ── The guard is a GATE: what it accepts arrives, what it refuses never does ──
+#
+# Everything above ran with no persistence layer at all, so the accepted path
+# had nowhere to ARRIVE and the only sayable thing about it was the negative
+# "not a BadRequest" — which `nil`, any error raised BEFORE the guard, and a
+# DELETED guard call all satisfy equally (K-1061). So plant the boundary: a
+# stub `Order` in the provider's own namespace, occupying the seam the
+# Rails-only constant occupies at runtime. It records the order_id bound into
+# the claim UPDATE as `$1` and answers "no row claimed", which sends the
+# provider down its order-not-found branch. It is not ActiveRecord, opens no
+# connection and executes no SQL — and it is planted HERE, after the assertion
+# above that the shape check ran with ActiveRecord never loaded.
+class ValidatingPaymentProvider
+  class Order
+    PAYING = "paying"
+    BOUND  = []
+
+    class << self
+      def reset! = BOUND.clear
+      def lease_connection = self
+
+      def exec_query(_sql, _name, binds)
+        BOUND << binds.first
+        [] # zero rows claimed
+      end
+
+      def where(**_conditions) = self
+      def pick(_column)        = nil
+    end
+  end
+end
+
+canonical = SecureRandom.uuid
+ValidatingPaymentProvider::Order.reset!
+e = error_from(eur_cart([canonical]))
+assert(ValidatingPaymentProvider::Order::BOUND == [canonical] &&
+       !e.is_a?(Kiosk::Server::Errors::BadRequest),
+       "a canonical uuid passes the guard and reaches the persistence layer — the claim " \
+       "UPDATE bound it as $1 (#{ValidatingPaymentProvider::Order::BOUND.inspect}); the " \
+       "refusal that comes back is the boundary's, not the guard's (#{e.class})")
+
+ValidatingPaymentProvider::Order.reset!
+e = error_from(eur_cart(["not-a-uuid"]))
+assert(ValidatingPaymentProvider::Order::BOUND.empty? &&
+       e.is_a?(Kiosk::Server::Errors::BadRequest),
+       "… and a malformed one never reaches it: the guard refuses before the claim UPDATE " \
+       "binds anything (bound #{ValidatingPaymentProvider::Order::BOUND.inspect}, " \
+       "got #{e.class}) — delete the UuidCheck call and THIS assertion goes red")
 
 if FAILURES.empty?
   puts "\ncashier order-ref K-579 spec: ALL PASS"

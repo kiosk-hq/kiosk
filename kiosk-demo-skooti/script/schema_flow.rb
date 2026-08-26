@@ -2,8 +2,15 @@
 
 # Self-discovery proof driver — schema verb over HTTP.
 #
-# Registers a fresh agent (Equihash PoW n=96 k=5 — skooti registration
-# gate), calls `schema` (GET /kiosk/schema), prints one JSON line on stdout.
+# Registers a fresh agent through skooti's Equihash-tolled registration gate,
+# calls `schema` (GET /kiosk/schema), prints one JSON line on stdout.
+#
+# NO (n, k) IS NAMED IN THIS COMMENT (K-1035 class). It used to read
+# «Equihash PoW n=96 k=5», which KIOSK_POW_DIFFICULTY=high moves to 168/7
+# without an edit to this tree — a false line reachable by an env var. The
+# register step below prints the pair instead, read off the gate's own 402 —
+# so on an origin whose register toll were switched off there would be no 402,
+# no proof, and nothing here claiming otherwise.
 #
 # Usage (invoked by rake demo:schema — do not run standalone without the server):
 #   SERVER_URL=http://127.0.0.1:3004 \
@@ -61,7 +68,9 @@ pop = JWT.encode(
   key, "RS256",
 )
 
-STDERR.puts "  Registering (solving 1 Equihash PoW)..."
+# No proof COUNT here either: `registration_pow_count` is the server's, and
+# the 402 below reports how many challenges it actually issued.
+STDERR.puts "  Registering..."
 reg_body = { public_key: pem, signed: pop }
 rc, reg  = post_json("/kiosk/auth/register", reg_body)
 if rc == 402
@@ -69,6 +78,20 @@ if rc == 402
   # TOP-LEVEL extension member, not nested under an `error` object.
   challenges = reg["challenges"]
   abort "402 without challenges[]: #{JSON.generate(reg)}" unless challenges.is_a?(Array) && challenges.any?
+
+  # K-1035 class — THE PARAMS ARE READ OFF THE WIRE, NEVER TYPED.  Every
+  # challenge the gate issues carries its own `params`
+  # (Kiosk::Reputation::Challenge.issue → {id:, alg:, params:, salt:, exp:, sig:}),
+  # so this is the (n, k) THIS server demanded of THIS request.  That is
+  # strictly stronger than the driver-env read skooti's redteam header has to
+  # make: it assumes nothing about the harness handing one environment to both
+  # processes, and it follows KIOSK_POW_DIFFICULTY, an operator override, or a
+  # per-identity policy alike.  The alg and the proof COUNT come from the same
+  # place, so nothing on this line can outlive the thing it describes.
+  demanded = challenges.first["params"] || {}
+  STDERR.puts "  402 → solving #{challenges.size} #{challenges.first["alg"]} proof(s) " \
+              "at n=#{demanded["n"]} k=#{demanded["k"]} (server-demanded)"
+
   proofs = challenges.map { |c| { challenge: c, nonce: equihash_solve(c) } }
   rc, reg = post_json("/kiosk/auth/register", reg_body, pow: JSON.generate(proofs))
 end

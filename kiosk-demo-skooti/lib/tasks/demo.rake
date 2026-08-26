@@ -709,9 +709,18 @@ namespace :demo do
     Adversarial regression battery — kiosk-redteam.
 
     Boots skooti, runs every generic Kiosk::Redteam scenario skooti's surface
-    exposes plus skooti's own beats against the full chain (Equihash PoW n=96
-    k=5 → KYC → reserve → pay → start_rental) and asserts each attack is
+    exposes plus skooti's own beats against the full chain (Equihash-tolled
+    register → KYC → reserve → pay → start_rental) and asserts each attack is
     BLOCKED. The suite prints the count it actually ran; this list names them.
+
+    NO (n, k) IS NAMED HERE, and it is NOT derived either (K-1035 class): the
+    register params follow KIOSK_POW_DIFFICULTY, so the literal that used to sit
+    on this line was false the moment an operator set `high` — but a `desc` body
+    is evaluated on EVERY rake/rails task load, so reading the knob here would
+    turn a documentation string into a load-time failure mode (the K-1033
+    argument). Naming the knob is the repair; the suite's own run header prints
+    the live pair.
+
     No count is kept here on purpose: a count kept here is a count that rots
     (K-710, and the guard commissioned by T-078 will diff this list against the
     suite's own registry):
@@ -882,7 +891,10 @@ namespace :demo do
   desc <<~DESC
     Self-discovery proof — verifies the schema verb over HTTP.
 
-    Boots the server, registers a fresh agent (Equihash PoW n=96 k=5), calls:
+    Boots the server, registers a fresh agent through the Equihash register toll
+    (params per KIOSK_POW_DIFFICULTY — not named and not derived here, for the
+    reason demo:redteam's desc gives: a `desc` body runs on every task load.
+    script/schema_flow.rb prints the pair the server demanded), calls:
       GET /kiosk/schema
 
     Asserts:

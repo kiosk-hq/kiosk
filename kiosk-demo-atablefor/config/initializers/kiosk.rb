@@ -17,7 +17,7 @@
 
 require "kiosk/user_identity_providers/devise"
 
-# ── PoW / Reputation (R2) — activated only when KIOSK_POW_DEMO=1 ──────────
+# ── PoW / Reputation (R2) — the :query toll, selected by ATABLEFOR_POW_MODE ──
 #
 # Gate: the Equihash PoW challenge is issued ONLY for the :query verb.
 # The :run verb is left ungated, so the existing no-human booking flow
@@ -46,6 +46,23 @@ require "kiosk/user_identity_providers/devise"
 # `equihash_register`, whose whole job is the 402 → solve → retry handshake. The
 # old phrasing is deliberately not retyped here, so a grep for it finds live
 # claims only.
+#
+# AND THE HEADER ABOVE NAMED AN ALIAS RATHER THAN THE SELECTOR (K-1045 — K-497
+# rot, the third false posture claim in this block and the only one about the
+# toll the header actually scopes). It gave the legacy `demo`-mode env flag as
+# the toll's activation condition, which was true back when three
+# mutually-overriding `if ENV[…]` blocks WERE the mechanism, and has been false
+# since K-497 replaced them with ATABLEFOR_POW_MODE: the mode resolves to
+# `:reputation` in production with no variable set at all, four other switches
+# reach the same toll, and deploy/env/atablefor.env.example ships
+# `KIOSK_POW_MODE=reputation` while setting that flag nowhere — so the header was
+# false in the very environment this repo publishes for its flagship demo. The
+# header now names the SELECTOR, and the mapping from variables to modes stays
+# written out exactly once, at the selector below: re-listing it up here would
+# make it a second copy to keep true, which is the K-1035/K-1038 class this file
+# has already been repaired for twice. getgrocery's equivalent header was
+# measured and is accurate — that demo never got a mode selector — so this is
+# deliberately not swept wider.
 #
 # Reservation-scalping is exactly the abuse a table-booking provider fears:
 # scripts that mass-claim prime-time 2-tops to resell. PoW prices that at the

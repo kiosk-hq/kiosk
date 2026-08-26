@@ -434,13 +434,6 @@ module Kiosk
         SQL
       end
 
-      # Adds the per-assistant governance columns to `kiosk.agents`:
-      #   `spending_cap_cents bigint` — per-assistant spend cap; NULL = unlimited
-      #     (the default), 0 = disabled. Enforced by the pay path via the
-      #     `config.spending_cap` seam ({ColumnSpendingCap} reads this column).
-      #   `human_label text` — a human-friendly name for the manage-assistants page.
-      # Idempotent (ADD COLUMN IF NOT EXISTS) — safe to re-run. Opt-in: a provider
-      # only needs this migration if it enables per-assistant caps/labels.
       # ─── optional: shared PoW spent-id table (NOT a canonical migration) ─
 
       # Table backing {PowSpentStores::ActiveRecord}, the shared spent-id

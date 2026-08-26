@@ -664,6 +664,42 @@ jobs:
           echo "::error::PostgreSQL 17 client could not be installed after 3 attempts."
           exit 1
 
+      # K-1082 — THE ONE GATE THAT DOES NOT BUILD ITS DATABASE FROM ZERO.
+      #
+      # Everything else in this job, and `demo:setup` on the very next line, is
+      # `db:drop db:create db:schema:load db:seed`. That makes production the
+      # only place on earth where `db:migrate` meets a PRE-EXISTING database,
+      # and it has cost twice: K-436 (a page SELECTing columns a demo's
+      # structure.sql lacked -> HTTP 500 in production, CI green) and K-1074
+      # (`add_column :users, :display_name` APPENDED to a migration already
+      # recorded in every deployed schema_migrations -> four HTTP 500s on the
+      # live tudu box for six days, CI green throughout). Both times the gates
+      # requested the very pages that were failing: the blind spot was never the
+      # HTML, it was the SCHEMA.
+      #
+      # This step loads each historical `db/structure.sql` since the fleet was
+      # provisioned, runs `db:migrate` — the deploy's own command — and diffs the
+      # resulting catalog against the tracked structure.sql. It uses its own
+      # scratch databases and restores db/structure.sql afterwards, so its
+      # position relative to demo:setup is free; it is here because it needs the
+      # psql 17 installed above.
+      #
+      # Watched fail, both directions, MEASURED 2026-08-27 on kiosk-demo-tudu:
+      # re-append `add_column :users, :display_name` to
+      # 20260719000001_create_tudu_domain.rb (3a834cc0's exact shape) and it
+      # exits 1 naming `MISSING column|public.users.display_name` on three
+      # vintages; drop the `IF NOT EXISTS` from
+      # Kiosk::Server::SchemaDefinitions' CREATEs and it exits 1 with
+      # `db:migrate` ABORTING at 20260820130113 (PG::DuplicateTable). Clean tree,
+      # all eight demos, 44 replays: exit 0.
+      #
+      # COST: ~4-8 s per demo here (34 s for all eight on one laptop core),
+      # because the bundle and the postgres service are already up and the whole
+      # job is sharded by demo. Cheap enough to run on every push, which is the
+      # point — the defect it catches is only observable after a deploy.
+      - name: Migration replay against an existing database (bin/check-migration-replay)
+        run: ./bin/check-migration-replay ${{ matrix.demo }}
+
       - name: Set up demo
         working-directory: ${{ matrix.demo }}
         run: bin/rails demo:setup

@@ -1,0 +1,372 @@
+#!/usr/bin/env ruby
+# frozen_string_literal: true
+
+# check-migration-replay — run `db:migrate` against a database that ALREADY
+# EXISTS, and diff what comes out against the tracked `db/structure.sql`.
+#
+# WHY THIS EXISTS (K-1082). Every other gate in this repository builds its
+# database FROM ZERO out of `db/structure.sql`: `demo:setup` is `db:drop
+# db:create db:schema:load db:seed` in all eight demos, `production-smoke.sh`
+# says so in as many words, and the only executable `db:migrate` anywhere else
+# in the tree is `e2e/run.sh`'s — against a database `db:create`d on the same
+# command line. So PRODUCTION IS THE ONLY PLACE WHERE `db:migrate` MEETS A
+# PRE-EXISTING DATABASE, and a schema change the deploy path cannot deliver is
+# invisible to 100% of the gates by construction.
+#
+# It has cost twice. K-436: the Manage-assistants page SELECTed governance
+# columns a demo's structure.sql lacked -> HTTP 500 in production, CI green.
+# K-1074: `add_column :users, :display_name` was APPENDED to a migration that
+# had shipped a month earlier and was already recorded in every deployed
+# `schema_migrations`, so the column reached structure.sql and every from-zero
+# database and could never reach the running one -> four HTTP 500s on the live
+# tudu box for six days, CI green throughout. Both times the gates requested the
+# very pages that were failing; the blind spot was never the HTML, it was the
+# SCHEMA. "Curl the page" is the obvious and wrong fix.
+#
+# WHAT IT ASSERTS, in one sentence: for every vintage of a demo's schema that
+# could still be running, replaying HEAD's migrations onto it must SUCCEED and
+# must produce every object the tracked `db/structure.sql` declares.
+#
+#   1. A baseline `db/structure.sql` from history is loaded into a scratch
+#      database — which is exactly how a box's database was born, whether by
+#      `deploy/demo-reset.sh`'s `db:schema:load` or by migrating forward from
+#      one. Its trailing `INSERT INTO "schema_migrations"` comes with it, so the
+#      replay starts from the version ledger that vintage really had.
+#   2. `bin/rails db:migrate` runs against it — the deploy's own command
+#      (`deploy/CHECKLIST.md`, `deploy/README.md`), not an approximation.
+#      A non-zero exit is a failure: that is a deploy aborting.
+#   3. The resulting catalog is compared against a reference database loaded
+#      from the demo's CURRENT `db/structure.sql`.
+#
+# WHY THE CATALOG AND NOT A TEXT DIFF OF THE DUMP. Two differences are expected
+# and are not defects, and a byte-diff of `pg_dump` output cannot tell them from
+# real ones. A replayed table carries its columns in the order the migrations
+# added them, not the order a `CREATE TABLE` states them; and a replayed
+# database's `schema_migrations` legitimately still holds versions whose files
+# were deleted. Comparing named objects — columns with type/nullability/default,
+# indexes, constraints, functions — drops both without hiding anything else.
+#
+# MISSING IS A FAILURE; EXTRA IS A NOTE. The defect class is "the code SELECTs
+# something the deployed database has not got", which is always an ABSENCE. A
+# leftover object — a table whose creating migration was later retired, say —
+# never returns HTTP 500, and it is on every real box forever, so failing on it
+# would only teach people to switch the gate off. Extras are printed; pass
+# `--strict` to fail on them too. One kind of extra is called out separately as
+# a HAZARD rather than a leftover: a column the replay keeps that is NOT NULL
+# with no DEFAULT, because head's INSERTs do not name it and Postgres will
+# refuse every one of them.
+#
+# IDENTITY IS COMPARED STRICTLY, DEFINITION IS COMPARED BY KIND, and the reason
+# is measured rather than cautious. An object that exists under the same name in
+# both databases can still RENDER differently, because `pg_get_constraintdef`
+# prints the expression tree it was given: hoteling's
+# `bookings_no_overlapping_room_nights` comes out as
+# `ANY (ARRAY[('reserved'::character varying)::text, ...])` when Postgres
+# re-parses the dump and as `ANY ((ARRAY['reserved'::character varying, ...])::text[])`
+# when the migration's own DSL builds it — the same constraint, twice, and a
+# strict text compare called it both MISSING and EXTRA in one breath. So a
+# missing NAME always fails; a COLUMN whose type, nullability or default has
+# changed also fails, because that is a real 500 (and information_schema
+# normalises those three, so there is no rendering noise to trip over); an index,
+# constraint or function that differs only in its rendered definition is a note.
+#
+# HOW FAR BACK. Replaying every structure.sql revision ever committed would be
+# slow and would assert something untrue: nothing is running a schema older than
+# the day the boxes were built. The window therefore starts at
+# FLEET_SCHEMA_BASELINE below — the provisioning date recorded by
+# `deploy/box-prep-2026-08-11.sh` — and covers every distinct revision from the
+# state on that date to now. WHEN THE FLEET IS REBUILT FROM SCRATCH (that is
+# what `deploy/demo-reset.sh` does) MOVE THIS DATE FORWARD IN THE SAME CHANGE:
+# it is the one fact this gate cannot measure for itself, and leaving it stale
+# only costs time, while moving it early hides real defects.
+#
+# Usage:
+#   bin/check-migration-replay                      # all demos
+#   bin/check-migration-replay kiosk-demo-tudu      # one demo
+#   bin/check-migration-replay --since 2026-08-20   # narrower window
+#   bin/check-migration-replay --list               # show baselines, run nothing
+#   bin/check-migration-replay --strict             # extras fail too
+#
+# Exits 0 clean, 1 on any aborted replay or missing object. Needs Postgres and a
+# psql >= 17 (the committed structure.sql files are PG17-format), plus each
+# demo's bundle.
+
+require "digest"
+require "fileutils"
+require "open3"
+require "optparse"
+require "shellwords"
+
+ROOT = File.expand_path("..", __dir__)
+
+# The reference fleet's boxes were provisioned on this date
+# (deploy/box-prep-2026-08-11.sh), so no database in service holds a schema
+# older than the tree of that day. See "HOW FAR BACK" above before changing it.
+FLEET_SCHEMA_BASELINE = "2026-08-11"
+
+# Named objects only — never row contents, never physical ordering. Each row is
+# `kind|identity|definition`: the identity is what must EXIST, the definition is
+# what it must look like. See "WHY THE CATALOG AND NOT A TEXT DIFF OF THE DUMP"
+# and "IDENTITY IS COMPARED STRICTLY" above.
+FINGERPRINT_SQL = <<~SQL
+  SELECT 'column|'||table_schema||'.'||table_name||'.'||column_name
+         ||'|'||data_type||' '||is_nullable||' '||coalesce(column_default,'-')
+    FROM information_schema.columns
+   WHERE table_schema NOT IN ('pg_catalog','information_schema')
+  UNION ALL
+  SELECT 'index|'||schemaname||'.'||tablename||'.'||indexname||'|'||indexdef
+    FROM pg_indexes
+   WHERE schemaname NOT IN ('pg_catalog','information_schema')
+  UNION ALL
+  SELECT 'constraint|'||n.nspname||'.'||rel.relname||'.'||con.conname||'|'||pg_get_constraintdef(con.oid)
+    FROM pg_constraint con
+    JOIN pg_class rel ON rel.oid = con.conrelid
+    JOIN pg_namespace n ON n.oid = rel.relnamespace
+   WHERE n.nspname NOT IN ('pg_catalog','information_schema')
+  UNION ALL
+  SELECT 'function|'||n.nspname||'.'||p.proname||'('||pg_get_function_identity_arguments(p.oid)||')'
+         ||'|'||md5(p.prosrc)
+    FROM pg_proc p
+    JOIN pg_namespace n ON n.oid = p.pronamespace
+   WHERE n.nspname NOT IN ('pg_catalog','information_schema')
+  ORDER BY 1;
+SQL
+
+options = { since: FLEET_SCHEMA_BASELINE, strict: false, list: false, verbose: false }
+OptionParser.new do |o|
+  o.banner = "Usage: bin/check-migration-replay [options] [demo ...]"
+  o.on("--since DATE", "oldest schema vintage to replay (default #{FLEET_SCHEMA_BASELINE})") { options[:since] = _1 }
+  o.on("--strict", "fail on objects the replay has that structure.sql has not") { options[:strict] = true }
+  o.on("--list", "list the baselines that would be replayed, and stop") { options[:list] = true }
+  o.on("-v", "--verbose", "print the migrate output of every replay") { options[:verbose] = true }
+end.parse!
+
+demos = ARGV.empty? ? Dir.glob("#{ROOT}/kiosk-demo-*").map { File.basename(_1) }.sort : ARGV
+demos.each do |d|
+  next if File.file?(File.join(ROOT, d, "db", "structure.sql"))
+
+  warn "check-migration-replay: #{d} has no db/structure.sql"
+  exit 1
+end
+
+# ─── plumbing ───────────────────────────────────────────────────────────────
+
+def run(*cmd, chdir: ROOT, env: {})
+  out, status = Open3.capture2e(env, *cmd, chdir: chdir)
+  [out, status.exitstatus]
+end
+
+def git(*args)
+  out, code = run("git", *args)
+  raise "git #{args.join(' ')} failed (#{code}):\n#{out}" unless code.zero?
+
+  out
+end
+
+# -X so a developer's ~/.psqlrc (timing, pagers, \set ECHO) cannot get into the
+# output this gate reads back — the same class of mistake as reading a result
+# out of a stale file.
+def psql(db, *args, stdin: nil)
+  cmd = ["psql", "-X", "-q", "-At", "-v", "ON_ERROR_STOP=1", "-d", db, *args]
+  if stdin
+    out, status = Open3.capture2e(*cmd, "-f", "-", stdin_data: stdin)
+    [out, status.exitstatus]
+  else
+    run(*cmd)
+  end
+end
+
+def recreate_database(name)
+  psql("postgres", "-c", %(DROP DATABASE IF EXISTS "#{name}"))
+  out, code = psql("postgres", "-c", %(CREATE DATABASE "#{name}"))
+  raise "could not create #{name}: #{out}" unless code.zero?
+end
+
+# "kind|identity|definition" -> { "kind|identity" => "definition" }, insertion
+# order preserved so the report reads in catalog order.
+def fingerprint(raw)
+  raw.lines.map(&:chomp).reject(&:empty?).to_h do |line|
+    kind, identity, definition = line.split("|", 3)
+    ["#{kind}|#{identity}", definition.to_s]
+  end
+end
+
+# An extra column that is NOT NULL with no DEFAULT is not a leftover, it is a
+# wall: head's INSERT statements do not name it, so Postgres refuses them.
+def hazard?(key, definition)
+  key.start_with?("column|") && definition.end_with?(" NO -")
+end
+
+def database_url(name)
+  host = ENV.fetch("PGHOST", "localhost")
+  user = ENV["PGUSER"]
+  pass = ENV["PGPASSWORD"]
+  auth = user ? "#{user}#{pass ? ":#{pass}" : ''}@" : ""
+  "postgres://#{auth}#{host}/#{name}"
+end
+
+# Every distinct db/structure.sql this demo has had since the baseline date,
+# plus the one it had ON that date (the newest revision older than it) — that
+# blob is the schema a box provisioned on the baseline day is running.
+def baselines_for(demo, since)
+  path = "#{demo}/db/structure.sql"
+  log  = git("log", "--format=%H %cI", "--", path).lines.map { _1.split(" ", 2) }
+  keep = []
+  log.each do |sha, date|
+    keep << sha
+    break if date[0, 10] < since
+  end
+  keep.reverse.filter_map do |sha|
+    blob = git("show", "#{sha}:#{path}")
+    subject = git("log", "-1", "--format=%h %cs %s", sha).strip
+    { sha: sha, label: subject, blob: blob, digest: Digest::SHA256.hexdigest(blob) }
+  end.uniq { _1[:digest] }
+end
+
+# ─── the check ──────────────────────────────────────────────────────────────
+
+failures = []
+notes    = []
+replays  = 0
+started  = Time.now
+
+demos.each do |demo|
+  structure_path = File.join(ROOT, demo, "db", "structure.sql")
+  tracked        = File.read(structure_path)
+  slug           = demo.sub(/\Akiosk-demo-/, "")
+  scratch        = "kiosk_mrp_#{slug}"
+  reference_db   = "#{scratch}_ref"
+
+  baselines = baselines_for(demo, options[:since])
+  if options[:list]
+    puts "#{demo}: #{baselines.length} baseline(s) since #{options[:since]}"
+    baselines.each { puts "  #{_1[:label]}" }
+    next
+  end
+
+  if baselines.empty?
+    failures << "#{demo}: no db/structure.sql revision since #{options[:since]} — the window " \
+                "excludes every vintage, so this demo is checking nothing"
+    next
+  end
+
+  # The reference: the demo's CURRENT structure.sql, loaded. This is the
+  # "db:schema:load from zero" every other gate uses, and the thing the replay
+  # has to reproduce.
+  recreate_database(reference_db)
+  out, code = psql(reference_db, stdin: tracked)
+  unless code.zero?
+    failures << "#{demo}: the tracked db/structure.sql does not load (#{code}):\n#{out.lines.last(10).join}"
+    next
+  end
+  fingerprint_out, code = psql(reference_db, stdin: FINGERPRINT_SQL)
+  raise "#{demo}: reference fingerprint failed:\n#{fingerprint_out}" unless code.zero?
+
+  reference = fingerprint(fingerprint_out)
+
+  baselines.each do |baseline|
+    replays += 1
+    recreate_database(scratch)
+    out, code = psql(scratch, stdin: baseline[:blob])
+    unless code.zero?
+      failures << "#{demo}: baseline #{baseline[:label]} does not load (#{code}):\n#{out.lines.last(10).join}"
+      next
+    end
+
+    # db:migrate rewrites db/structure.sql on success; put the tracked bytes
+    # back whatever happens, so a failed run cannot leave the tree edited.
+    migrate_out, migrate_code =
+      begin
+        run("bin/rails", "db:migrate",
+            chdir: File.join(ROOT, demo),
+            env: { "DATABASE_URL" => database_url(scratch), "RAILS_ENV" => "development" })
+      ensure
+        File.write(structure_path, tracked)
+      end
+
+    puts migrate_out if options[:verbose]
+
+    unless migrate_code.zero?
+      tail = migrate_out.lines.reject { _1.start_with?("-- execute") }.last(8).join
+      failures << "#{demo}: `db:migrate` ABORTED replaying onto #{baseline[:label]} " \
+                  "(exit #{migrate_code}) — a deploy onto a box of that vintage stops here, and " \
+                  "every later migration is unreachable:\n#{tail}"
+      next
+    end
+
+    fingerprint_out, code = psql(scratch, stdin: FINGERPRINT_SQL)
+    raise "#{demo}: replay fingerprint failed:\n#{fingerprint_out}" unless code.zero?
+
+    replayed = fingerprint(fingerprint_out)
+
+    missing  = reference.keys - replayed.keys
+    extra    = replayed.keys - reference.keys
+    reshaped = (reference.keys & replayed.keys).reject { reference[_1] == replayed[_1] }
+
+    unless missing.empty?
+      failures << "#{demo}: replaying onto #{baseline[:label]} leaves #{missing.length} object(s) " \
+                  "that db/structure.sql declares — the deploy path CANNOT deliver these, so any " \
+                  "code that reads them answers HTTP 500 on a box of that vintage:\n" +
+                  missing.map { "      MISSING  #{_1}  (#{reference[_1]})\n" }.join
+    end
+
+    columns_reshaped = reshaped.select { _1.start_with?("column|") }
+    unless columns_reshaped.empty?
+      failures << "#{demo}: replaying onto #{baseline[:label]} produces #{columns_reshaped.length} " \
+                  "column(s) whose shape is not the one db/structure.sql declares:\n" +
+                  columns_reshaped.map { "      RESHAPED #{_1}\n        replay #{replayed[_1]}\n        tree   #{reference[_1]}\n" }.join
+    end
+
+    rendered = reshaped - columns_reshaped
+    unless rendered.empty?
+      notes << "#{demo}: #{baseline[:label]} — #{rendered.length} object(s) present under the same " \
+               "name but rendered differently (usually the expression tree, not the meaning):\n" +
+               rendered.map { "      RENDERED #{_1}\n        replay #{replayed[_1]}\n        tree   #{reference[_1]}\n" }.join
+    end
+
+    hazards = extra.select { hazard?(_1, replayed[_1]) }
+    unless hazards.empty?
+      message = "#{demo}: #{baseline[:label]} — #{hazards.length} leftover NOT NULL column(s) with no " \
+                "DEFAULT: head's INSERTs do not name them, so every INSERT into that table is refused " \
+                "on a box of that vintage:\n" +
+                hazards.map { "      HAZARD   #{_1}  (#{replayed[_1]})\n" }.join
+      options[:strict] ? failures << message : notes << message
+    end
+
+    leftovers = extra - hazards
+    next if leftovers.empty?
+
+    message = "#{demo}: #{baseline[:label]} — #{leftovers.length} leftover object(s) the replay keeps " \
+              "and structure.sql does not declare (an absence 500s, a leftover does not):\n" +
+              leftovers.map { "      EXTRA    #{_1}\n" }.join
+    options[:strict] ? failures << message : notes << message
+  end
+end
+
+exit 0 if options[:list]
+
+elapsed = (Time.now - started).round(1)
+
+unless notes.empty?
+  puts "\ncheck-migration-replay NOTES (not failures):\n"
+  notes.each { puts "  - #{_1}" }
+end
+
+if failures.empty?
+  puts "check-migration-replay: OK — #{replays} replay(s) across #{demos.length} demo(s), " \
+       "every schema vintage since #{options[:since]} migrates to the tracked structure.sql (#{elapsed}s)"
+  exit 0
+end
+
+warn "\ncheck-migration-replay FAILED:\n"
+failures.each { warn "  x #{_1}" }
+warn <<~WHY
+
+  A migration set that only works FROM ZERO is a migration set the deploy cannot
+  deliver. The repair is a NEW migration file, never an edit to one that has
+  already shipped: a shipped migration is recorded in every deployed
+  `schema_migrations` and will never run again (T-103,
+  MIGRATION-AND-CONFIG-UPGRADE-POLICY). If the replay ABORTED, the emitted DDL is
+  not replay-safe — see Kiosk::Server::SchemaDefinitions.
+WHY
+exit 1

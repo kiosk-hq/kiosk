@@ -2,7 +2,8 @@
 
 # skooti redteam battery
 #
-# Exercises the full skooti chain: Equihash PoW n=96 k=5 → reserve → pay →
+# Exercises the full skooti chain: Equihash PoW (params from KIOSK_POW_DIFFICULTY —
+# low, the default, is n=96 k=5; the run header prints the live pair) → reserve → pay →
 # start_rental (ownership/licence-free-vehicle/payment gates; licence-free
 # scooters are NOT KYC-gated, K-442).  Headline scenarios:
 #   C2  PayForOtherUseSelf  — B pays for A's reservation, B tries start_rental
@@ -89,6 +90,11 @@ require "json"
 $LOAD_PATH.unshift File.expand_path("../lib", __dir__)
 require_relative "prove_test_issuer"
 require_relative "../app/services/prove_trust"
+# K-1035 — the Equihash params printed in the run header below are READ from the same
+# plain module the server initializer reads (`SKOOTI_REGISTRATION_POW_PARAMS`,
+# config/initializers/kiosk.rb:45), never typed. Loadable outside a Rails boot for
+# exactly the reason ProveTrust is: it is ENV-only, with no Rails dependency.
+require_relative "../app/services/pow_difficulty"
 
 BASE_URL   = ENV.fetch("SERVER_URL", "http://127.0.0.1:3004")
 ISSUER     = ENV.fetch("KIOSK_ISSUER", BASE_URL)
@@ -154,7 +160,7 @@ end
 # ── Profile ───────────────────────────────────────────────────────────────────
 
 profile = Kiosk::Redteam::Profile.new(
-  pow_difficulty: 20,     # >0 flips on the /register gate; skooti gates with an Equihash proof (n=96 k=5) and the client solves the real 402 challenge — the numeric value is not an Equihash param
+  pow_difficulty: 20,     # >0 flips on the /register gate; skooti gates with an Equihash proof (params per KIOSK_POW_DIFFICULTY) and the client solves the real 402 challenge — the numeric value is not an Equihash param
   requires_kyc:   true,   # skooti has a KYC verifier — rent_motorcycle is attribute-gated and ExpiredKyc/ForgedKyc exercise /kyc; start_rental itself is NOT KYC-gated (K-442) because it only ever activates licence-free vehicles: since K-687 it REFUSES a needs_licence one instead of quietly unlocking it (MotorcycleViaStartRental)
 
   # ── per-user query — CrossTenantRead ─────────────────────────────────────
@@ -603,8 +609,27 @@ EXPECTED_SKIP_NAMES = [].freeze
 
 puts "\n── skooti redteam battery ──"
 puts "  base_url:              #{BASE_URL}"
-puts "  register gate:         Equihash n=96 k=5 (pow_difficulty>0)"
-puts "  requires_kyc:          true"
+# K-1035 — DERIVE THESE TWO LINES, NEVER TYPE THEM.  Both were hand-kept literals
+# restating things the run already holds, 450 lines above and one file over, so a
+# flipped constructor argument or a changed env left the header announcing the old
+# world while the battery attacked the new one — K-710's rot shape, sitting directly
+# above the number K-1033 had just made honest.  What each half now reads:
+#   • n / k — `PowDifficulty.params`, the SAME plain module the server initializer
+#     reads into `c.registration_pow_params` (config/initializers/kiosk.rb:45), so
+#     KIOSK_POW_DIFFICULTY=high moves the /register gate and this line together
+#     instead of leaving the line claiming 96/5 against a 168/7 server.
+#     SAY WHERE IT COMES FROM: this is the DRIVER's environment, not a fact observed
+#     on the wire — the harness hands one environment to both processes (demo.rake
+#     spawns the server and then this script from it), which is precisely the
+#     arrangement ProveTrust already documents for the issuer.
+#   • pow_difficulty / requires_kyc — the `profile` object itself, i.e. the values
+#     every generic scenario reads to decide whether it is applicable
+#     (RegistrationWithoutPow skips on 0; the KYC trio skips on false).
+pow_params = PowDifficulty.params
+puts "  register gate:         Equihash n=#{pow_params[:n]} k=#{pow_params[:k]} " \
+     "(profile pow_difficulty: #{profile.pow_difficulty} → RegistrationWithoutPow " \
+     "#{profile.pow_difficulty > 0 ? %(applicable) : %(SKIPPED)})"
+puts "  requires_kyc:          #{profile.requires_kyc}"
 # K-1033 — SAY WHAT THIS NUMBER COUNTS.  It is `scenarios.size`, i.e. the REGISTRY
 # above, and skooti is the only one of the seven demos that also runs beats OUTSIDE
 # it: the nine one-off lambdas below (`mc_beat` … `self_asserted_user_beat`), which
@@ -633,7 +658,19 @@ results = runner.run(scenarios)
 # agent mint its own licence and unlock a combustion motorcycle — a real BREACH.
 motorcycle_forged_kyc = lambda do
   client = Kiosk::Redteam::Client.new(base_url: BASE_URL)
-  a = client.register!(name: "redteam-mc-fkyc", pow_difficulty: 20)
+  # K-1035 — NO `pow_difficulty:` HERE, AND NOT IN THE OTHER SIX LOCAL BEATS EITHER.
+  # The kwarg is INERT: `Client#register!` accepts it and `build_register` never reads
+  # it (kiosk-redteam/lib/kiosk/redteam/client.rb:52-57, restated at :253-257), because
+  # PoW is driven entirely off the server’s 402 Equihash challenges. All seven beats
+  # used to type `pow_difficulty: 20` at this call, which READS as a gate being
+  # configured at a call site that configures nothing — so it was dropped rather than
+  # re-derived from the profile, which would have kept the false reading and only
+  # removed the literal. The GENERIC path still threads `profile.pow_difficulty`
+  # (kiosk-redteam/lib/kiosk/redteam/scenario.rb:230): that kwarg is a documented
+  # backwards-compat shim for callers already passing it, and scenarios read the
+  # profile value directly for APPLICABILITY (RegistrationWithoutPow), which is a real
+  # read these beats do not make.
+  a = client.register!(name: "redteam-mc-fkyc")
 
   # Reserve + pay for the motorcycle so ONLY the KYC-attribute gate can be the
   # thing that blocks (isolates Gate 0, exactly like the demo:kyc happy path).
@@ -715,7 +752,7 @@ mc_beat = motorcycle_forged_kyc.call
 # "blocked" would prove nothing about the gate.
 motorcycle_via_start_rental = lambda do
   client = Kiosk::Redteam::Client.new(base_url: BASE_URL)
-  a = client.register!(name: "redteam-mc-verbswap", pow_difficulty: 20)
+  a = client.register!(name: "redteam-mc-verbswap")
 
   # Reserve + pay for a vehicle, and return its reservation_id.
   reserve_and_pay = lambda do |code|
@@ -810,7 +847,7 @@ kyc_jws_theft = lambda do
 
   # Victim B obtains a REAL broker-signed attestation: request_kyc → approve on
   # the broker → broker callback parks the jws → kyc_status returns it.
-  b = client.register!(name: "redteam-kyc-victim-b", pow_difficulty: 20)
+  b = client.register!(name: "redteam-kyc-victim-b")
   req_b = client.run(b, name: "request_kyc")
   raise "redteam(skooti): request_kyc(B) failed (#{req_b.status})" unless req_b.status == 200
   token_b = req_b.body["request_id"]
@@ -828,7 +865,7 @@ kyc_jws_theft = lambda do
   raise "redteam(skooti): kyc_status(B) returned no jws" if victim_jws.nil? || victim_jws.empty?
 
   # Attacker A reserves + pays its OWN motorcycle so ONLY the KYC gate can block.
-  a = client.register!(name: "redteam-kyc-attacker-a", pow_difficulty: 20)
+  a = client.register!(name: "redteam-kyc-attacker-a")
   fleet = client.query(a, name: "scooters_available")
   mc    = Array(fleet.body).find { |r| r["code"] == "MC-001" }
   raise "redteam(skooti): MC-001 not in fleet (theft beat)" unless mc
@@ -883,7 +920,7 @@ theft_beat = kyc_jws_theft.call
 # operator unlock skooti — a real BREACH.
 cross_operator_replay = lambda do
   client = Kiosk::Redteam::Client.new(base_url: BASE_URL)
-  a = client.register!(name: "redteam-xop", pow_difficulty: 20)
+  a = client.register!(name: "redteam-xop")
 
   # Open a real skooti request so the callback correlates to a pending row.
   req = client.run(a, name: "request_kyc")
@@ -951,7 +988,7 @@ xop_beat = cross_operator_replay.call
 # check would let anyone forge a callback and unlock — a real BREACH.
 forged_callback_no_sig = lambda do
   client = Kiosk::Redteam::Client.new(base_url: BASE_URL)
-  a = client.register!(name: "redteam-fcb", pow_difficulty: 20)
+  a = client.register!(name: "redteam-fcb")
 
   req = client.run(a, name: "request_kyc")
   raise "redteam(skooti): request_kyc(fcb) failed (#{req.status})" unless req.status == 200
@@ -994,7 +1031,7 @@ fcb_beat = forged_callback_no_sig.call
 # touches the fleet or the reservations table, so nothing is staged and there is
 # nothing for a second identity to isolate.
 wire_probe = Kiosk::Redteam::Client.new(base_url: BASE_URL)
-                                   .register!(name: "redteam-wire-shape", pow_difficulty: 20)
+                                   .register!(name: "redteam-wire-shape")
 
 # One raw request, bypassing the redteam Client — the whole point is to dial
 # paths and methods the Client will not construct.

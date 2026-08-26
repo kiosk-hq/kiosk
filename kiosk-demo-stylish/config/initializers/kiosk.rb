@@ -1,7 +1,7 @@
 # frozen_string_literal: true
 
 # Kiosk-demo (stylish — Combette-shape) configuration. Concrete values for
-# the salon-booking reference shape: uuid users, JWT-or-stub IdP, five queries
+# the salon-booking reference shape: uuid users, the engine's own agent IdP, five queries
 # and one action, all of them ordinary Rails controllers named below.
 
 # Env posture (ephemeral dev signing key, PoW secret, issuer, test flags) lives

@@ -1,7 +1,7 @@
 # frozen_string_literal: true
 
 # Kiosk-demo (atablefor-shape) configuration. Concrete values for the
-# restaurant table-booking reference shape: uuid users, JWT-or-stub IdP,
+# restaurant table-booking reference shape: uuid users, the engine's own agent IdP,
 # NO payment provider (a reservation takes no money), two queries and two
 # actions, all of them ordinary Rails controllers named below.
 #

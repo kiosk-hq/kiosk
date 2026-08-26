@@ -49,7 +49,7 @@ The script:
 4. Stages the `User` model migration (UUID PK)
 5. Runs `bin/rails g kiosk:install --user-id-type=uuid` (the kiosk-server generator)
 6. Stages the demo migration (`salons` + `appointments`; RLS not used — app-layer isolation via named queries)
-7. Stages models, handler controllers, seeds, stub IdP, initializer, routes
+7. Stages models, handler controllers, seeds, app services, initializer, routes (no agent IdP — the engine's own `DefaultAgentIdp` authenticates assistants, with nothing configured)
 8. `rails db:create db:migrate db:seed`
 9. Starts `rails s` on port 3001 in the background
 10. Runs `assistant.sh` — a series of `curl + jq` calls that assert on the responses

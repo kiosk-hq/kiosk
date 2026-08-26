@@ -213,7 +213,8 @@ ts3=$(ruby -e "puts (Time.now + 60).utc.strftime('%Y%m%d%H%M%S')")
 cp "$FIXTURES/create_salons_and_appointments.rb" \
    "db/migrate/${ts3}_create_salons_and_appointments.rb"
 
-# 4) Models, seeds, stub IdP, initializer, routes.
+# 4) Models, seeds, app services, initializer, routes. No agent IdP is staged
+# (see the T-104 note below).
 # `rails new --api` generates ApplicationController < ActionController::API, and
 # Devise's controllers inherit from it — the sign-in form 500s on `flash`, which
 # ::API does not have. This is the controller half of leaving api_only behind
@@ -280,14 +281,14 @@ ruby -e '
 ' || fail "could not turn api_only off for the Devise session middleware"
 
 # …and the harness's env inputs are PUBLISHED from the generated environment
-# files rather than resolved in the initializer. Phil decided (ENV-CONFIG-PLACEMENT,
-# DECISIONS-LOG 2026-08-12) that env-var reading, dev/test fallbacks and
-# crash-if-absent fetches live in config/environments/* as Rails custom config
-# and that initializers READ `Rails.configuration.x.kiosk.*`; all seven demos
-# carry that split, and this harness — which e2e/README presents as the edits
-# an adopter makes — carries it too since K-1009. The variables themselves stay
-# honourable from the outside: this script exports KIOSK_ISSUER and the
-# audit-sink paths before each boot and the block below is what reads them.
+# files rather than resolved in the initializer. Phil decided on 2026-08-12 that
+# env-var reading, dev/test fallbacks and crash-if-absent fetches live in
+# config/environments/* as Rails custom config and that initializers READ
+# `Rails.configuration.x.kiosk.*`; all seven demos carry that split, and this
+# harness — which e2e/README presents as the edits an adopter makes — carries it
+# too since K-1009. The variables themselves stay honourable from the outside:
+# this script exports KIOSK_ISSUER and the audit-sink paths before each boot and
+# the block below is what reads them.
 # BOTH files get the SAME block: the harness only ever boots development, but
 # KIOSK_POW_SECRET must still fail loud if the app is booted outside it, which
 # a development-only block could not do.

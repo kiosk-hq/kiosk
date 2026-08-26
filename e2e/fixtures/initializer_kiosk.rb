@@ -2,7 +2,8 @@
 
 # E2E-specific Kiosk configuration. Overrides the generator-produced
 # initializer (which has commented-out fields) with concrete values for
-# the demo: synthetic users (uuid), stub IdP, two handler controllers.
+# the demo: synthetic users (uuid), the engine's own agent IdP, two handler
+# controllers.
 #
 # THE VERBS ARE NOT HERE (T-081). They are ordinary Rails controllers under
 # app/controllers/kiosk/ — Kiosk::CatalogController (the salons query) and

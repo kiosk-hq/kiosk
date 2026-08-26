@@ -1,7 +1,7 @@
 # frozen_string_literal: true
 
 # Kiosk-demo (skooti-shape) configuration. Concrete values for the
-# scooter-rental reference shape: uuid users, JWT-or-stub IdP, StubPsp,
+# scooter-rental reference shape: uuid users, the engine's own agent IdP, StubPsp,
 # the KYC broker as the trusted KYC issuer, and the Ed25519 rental-token
 # signing key the physical locks verify against.
 #

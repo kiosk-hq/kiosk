@@ -3,7 +3,7 @@
   # `run.sh` splices this block into the GENERATED app's
   # config/environments/{development,production}.rb, which is where Phil decided
   # env-var reading, dev/test fallbacks and crash-if-absent fetches belong
-  # (DECISIONS-LOG 2026-08-12; K-650, K-699). config/initializers/kiosk.rb then
+  # (decided 2026-08-12; K-650, K-699). config/initializers/kiosk.rb then
   # READS `Rails.configuration.x.kiosk.*` and resolves nothing itself — the same
   # split all seven demos carry, and since K-1009 bin/check-demo-copies enforces
   # it for this harness fixture too. The variables stay honourable from the

@@ -13,7 +13,7 @@
 #       refused here and sent to rent_motorcycle (K-687)
 #   2.  the principal has a settled payment for THIS reservation
 #
-# Licence-free scooters need NO KYC (K-442, DECISIONS-LOG KYC-MODEL) — "ride
+# Licence-free scooters need NO KYC (K-442, decided 2026-08-04) — "ride
 # even if you can't walk yet, just pay the fare". Gate 1b is what keeps that a
 # statement about SCOOTERS.
 #

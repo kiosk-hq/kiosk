@@ -9,9 +9,9 @@ module Kiosk
   module Server
     # Decodes a QUERY's arguments out of the URL query string, per the
     # normative encoding Phil decided in T-070 (option B, 2026-08-17) and
-    # narrowed in T-087 (option A, 2026-08-19). The TODO.md `T-070` row is the
-    # source of truth for that rule until both specs are rewritten in 0.4; the
-    # numbered clauses quoted below are its clauses.
+    # narrowed in T-087 (option A, 2026-08-19). That decision is the source of
+    # truth for the rule until both specs are rewritten in 0.4; the numbered
+    # clauses quoted below are its clauses.
     #
     # ── The rule, and where each half of it lives here ───────────────────
     #

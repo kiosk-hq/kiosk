@@ -20,7 +20,7 @@ module ProveTrust
   # The `iss` the broker signs into every claim; skooti sets c.kyc_issuer to it.
   # Both sides read KIOSK_PROVE_ISSUER and default to the SAME value, so plain
   # `rails s` (no env) and the deploy (one env for both apps) line up. Default is
-  # the registered demo origin (DECISIONS-LOG PROVE-MY-BUILD-FORKS).
+  # the origin the broker is deployed at (decided 2026-08-04).
   def issuer
     ENV.fetch("KIOSK_PROVE_ISSUER", "https://kyc.demo.kiosk.tech")
   end

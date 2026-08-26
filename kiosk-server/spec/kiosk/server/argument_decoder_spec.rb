@@ -1,9 +1,9 @@
 # frozen_string_literal: true
 
 # The 0.4 query-argument encoding, as decided by Phil in T-070 (option B,
-# 2026-08-17) and narrowed in T-087 (option A, 2026-08-19). The TODO.md
-# `T-070` row is the normative text these examples encode until both specs are
-# rewritten; each `describe` below names the clause it covers.
+# 2026-08-17) and narrowed in T-087 (option A, 2026-08-19). That decision is
+# the normative text these examples encode until both specs are rewritten;
+# each `describe` below names the clause it covers.
 #
 # Every example here is a unit example: {Kiosk::Server::ArgumentDecoder} takes
 # a query string and a declaration and returns arguments, with no Rails and no

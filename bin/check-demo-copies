@@ -1775,14 +1775,14 @@ FRAMEWORK_PATCH = /
 
 # ── No demo initializer RESOLVES an env var (K-699, ENV-CONFIG-PLACEMENT) ────
 #
-# Phil decided (DECISIONS-LOG 2026-08-12, ENV-CONFIG-PLACEMENT) that env-var
-# reading, dev/test fallbacks and crash-if-absent fetches live in
-# config/environments/{development,test,production}.rb as Rails custom config
-# (`Rails.configuration.x.kiosk…`), and that initializers and lib files READ
-# that config. K-650 swept the demos for it — and missed a pair, in all seven
-# copies at once: `c.app_role = ENV.fetch("KIOSK_APP_ROLE", "app_role")` and its
-# `system_role` sibling sat inside `Kiosk.configure` for eleven days after the
-# sweep that was supposed to have removed them, because nothing looked.
+# Phil decided on 2026-08-12 that env-var reading, dev/test fallbacks and
+# crash-if-absent fetches live in config/environments/{development,test,production}.rb
+# as Rails custom config (`Rails.configuration.x.kiosk…`), and that initializers
+# and lib files READ that config. K-650 swept the demos for it — and missed a
+# pair, in all seven copies at once: `c.app_role = ENV.fetch("KIOSK_APP_ROLE",
+# "app_role")` and its `system_role` sibling sat inside `Kiosk.configure` for
+# eleven days after the sweep that was supposed to have removed them, because
+# nothing looked.
 #
 # A convention nothing checks survives exactly until the next copy-paste, and
 # these files ARE copy-paste: seven standalone apps whose configuration blocks

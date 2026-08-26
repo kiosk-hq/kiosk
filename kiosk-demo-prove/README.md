@@ -89,10 +89,10 @@ is replaced by a **government identity service** login (an mDL / ISO-18013-5
 mobile driving licence, an EUDI wallet, or a national IdP), from which the broker
 derives the booleans it was asked for. The real broker closes two gaps the stub
 leaves open: it verifies the human **possesses a government account** (the
-account-possession assurance level adopted for now, DECISIONS-LOG
-`KYC-GOVT-IDP-LANDSCAPE`), and later that **the account is actually theirs** — so
-a person cannot lend or share their account to vouch for other people's age or
-licence. The broker↔operator interface (intake → per-request binding → signed
+account-possession assurance level adopted for now, after the 2026-08-04
+government-IdP / mDL landscape research), and later that **the account is
+actually theirs** — so a person cannot lend or share their account to vouch for
+other people's age or licence. The broker↔operator interface (intake → per-request binding → signed
 anonymized callback) is identical, which is why the stub is a faithful proof.
 This production path is **research-gated and provisional**: signed mDL issuance is
 Kiosk v0.5, not earlier; no named government service is claimed as integrated

@@ -125,7 +125,9 @@ jobs:
           - demo: kiosk-demo-atablefor
             # Restaurant table-booking: NO
             # payments — demo:book is the headline ("book a table for 2"),
-            # demo:schema asserts pay ABSENT (capabilities [schema,query,run]).
+            # demo:schema asserts pay ABSENT (capabilities [schema, queries,
+            # actions] — the 0.4 names the engine computes and demo.rake asserts;
+            # `query`/`run` were the retired 0.3 spelling, K-1067).
             # demo:binding is the human-IdP + account-linking beat (a diner links
             # their assistant via the real Devise session, and the assistant's
             # booking ties to the diner's account); unlike the sibling binding

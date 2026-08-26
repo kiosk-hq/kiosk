@@ -1037,8 +1037,18 @@ EXPECTED_SKIP_NAMES = %w[
 
 puts "\n── hoteling redteam battery ──"
 puts "  base_url:       #{BASE_URL}"
-puts "  pow_difficulty: #{profile.pow_difficulty} (register PoW ON)"
-puts "  requires_kyc:   false"
+# K-1035 class — DERIVE BOTH, NEVER TYPE THEM.  `requires_kyc` was a typed
+# `false` sitting directly under a line that already read `profile.pow_difficulty`
+# off the object, so one flipped constructor argument 940 lines up left the banner
+# announcing the opposite of the battery it introduces.  The ON/OFF gloss is
+# derived for the same reason: `1 (register PoW ON)` and `0 (register PoW ON)`
+# were both printable, and only one of them is ever true.
+#
+# These are the values every generic scenario reads to decide whether it is
+# applicable — RegistrationWithoutPow skips on 0, the KYC trio skips on false —
+# so the banner now says exactly what the run below will do.
+puts "  pow_difficulty: #{profile.pow_difficulty} (register PoW #{profile.pow_difficulty.to_i > 0 ? "ON" : "OFF"})"
+puts "  requires_kyc:   #{profile.requires_kyc}"
 puts "  scenarios:      #{scenarios.size} (#{EXPECTED_SKIP_NAMES.size} expected skips)"
 puts ""
 

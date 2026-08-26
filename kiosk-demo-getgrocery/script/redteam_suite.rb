@@ -6,8 +6,11 @@
 # per_user_query : "my_orders"
 # forge_action   : "create_order" (delivery slot + address required)
 # gated_action   : "reschedule_delivery" (ownership + settled payment; one per order)
-# requires_kyc   : false
-# pow_difficulty : 1  (register PoW ON — registration_pow_count=1)
+# requires_kyc / pow_difficulty : NOT RESTATED HERE (K-1035 class). The
+#                  `Profile.new` below is the single copy of both, and the run
+#                  header prints them live; typing them here would make this a
+#                  THIRD copy of a gate posture — the one fact in this file that
+#                  must not be able to disagree with itself.
 #
 # Every capture runs the ValidatingPaymentProvider cashier check: the cart
 # must be EUR, reference the payer's own unsettled order, mirror its items at
@@ -717,8 +720,18 @@ EXPECTED_SKIP_NAMES = %w[
 
 puts "\n── getgrocery redteam battery ──"
 puts "  base_url:       #{BASE_URL}"
-puts "  pow_difficulty: #{profile.pow_difficulty} (register PoW ON)"
-puts "  requires_kyc:   false"
+# K-1035 class — DERIVE BOTH, NEVER TYPE THEM.  `requires_kyc` was a typed
+# `false` sitting directly under a line that already read `profile.pow_difficulty`
+# off the object, so one flipped constructor argument 660 lines up left the banner
+# announcing the opposite of the battery it introduces.  The ON/OFF gloss is
+# derived for the same reason: `1 (register PoW ON)` and `0 (register PoW ON)`
+# were both printable, and only one of them is ever true.
+#
+# These are the values every generic scenario reads to decide whether it is
+# applicable — RegistrationWithoutPow skips on 0, the KYC trio skips on false —
+# so the banner now says exactly what the run below will do.
+puts "  pow_difficulty: #{profile.pow_difficulty} (register PoW #{profile.pow_difficulty.to_i > 0 ? "ON" : "OFF"})"
+puts "  requires_kyc:   #{profile.requires_kyc}"
 puts ""
 
 runner  = Kiosk::Redteam::Runner.new(base_url: BASE_URL, profile:)

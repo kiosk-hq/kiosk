@@ -3,14 +3,22 @@
 # getgrocery redteam battery (P6 corrected surface)
 #
 # Surface: catalog, delivery_slots, my_orders / create_order, reschedule_delivery
-# per_user_query : "my_orders"
-# forge_action   : "create_order" (delivery slot + address required)
-# gated_action   : "reschedule_delivery" (ownership + settled payment; one per order)
-# requires_kyc / pow_difficulty : NOT RESTATED HERE (K-1035 class). The
-#                  `Profile.new` below is the single copy of both, and the run
-#                  header prints them live; typing them here would make this a
-#                  THIRD copy of a gate posture — the one fact in this file that
-#                  must not be able to disagree with itself.
+#
+# THE PROFILE IS NOT MAPPED OUT HERE (K-1040 completing K-1037, the K-1035
+# class). This block used to name the verb bound to each generic role —
+# `per_user_query`, `forge_action`, `gated_action` — above a `requires_kyc` /
+# `pow_difficulty` pair, all five hand-copied from the one `Profile.new` further
+# down in this same file. `Profile.new` is now the single copy of all five: each
+# binding is stated at the constructor, beside the note this map was compressing
+# and beside the `*_args` lambda that shows what the verb actually takes, and
+# the run header prints the gate posture live off the object every scenario
+# reads. Nothing in the deleted map was FALSE — what it could not survive is a
+# RENAME, which is precisely what K-710 has done to a hand-kept list in these
+# suites twice already, and a stale map here would have a reader believe the
+# battery attacks a verb it no longer names. Orientation is not the cost it
+# looks like: six of the seven demo redteam suites carry no such map, hoteling
+# and skooti included — the only other two that build a Profile at all — and
+# they are read from the constructor exactly as this one now is.
 #
 # Every capture runs the ValidatingPaymentProvider cashier check: the cart
 # must be EUR, reference the payer's own unsettled order, mirror its items at
@@ -100,7 +108,9 @@ profile = Kiosk::Redteam::Profile.new(
     }
   },
 
-  # forge_args: returns base args for create_order (user_id injected by ForgedUserId scenario)
+  # forge_args: returns base args for create_order — which needs a delivery slot
+  #             and an in-zone address on top of its items (user_id injected by
+  #             the ForgedUserId scenario, never declared here)
   forge_action: "create_order",
   forge_args: ->(client, _principal_a, _principal_b) {
     # Query the catalog as B to get a valid sku for create_order; the
@@ -123,8 +133,9 @@ profile = Kiosk::Redteam::Profile.new(
     }
   },
 
-  # gated_action: reschedule_delivery (ownership + settled payment; ONE
-  # reschedule per order — the second attempt is the C3 spent-resource beat).
+  # gated_action — gated on ownership + settled payment, and ONE reschedule per
+  # order: the second attempt is the C3 spent-resource beat. (The verb is on the
+  # line below and is not repeated here, K-1040.)
   gated_action: "reschedule_delivery",
   gated_args:   ->(owned_ref) {
     {

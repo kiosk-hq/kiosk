@@ -116,7 +116,7 @@ The database confirmed: one row in `orders` with its delivery slot set (`slot_at
 
 The business outcome: the user said "order groceries from GetGrocery." Their assistant completed the purchase — discovery, registration, catalog browse, order creation (delivery booked as part of the order), payment — without the user touching anything and without the user having an account at GetGrocery beforehand.
 
-The operator outcome: GetGrocery received a real order and a real payment. The customer relationship stays with GetGrocery (the mandate carries the operator's issuer). There is no intermediate platform taking a discovery fee or owning the session.
+The operator outcome: GetGrocery received a real order and a payment settled through the real adapter — against `stripe-mock` in the run above, against Stripe test mode with a real `sk_test_…` key. The customer relationship stays with GetGrocery (the mandate carries the operator's issuer). There is no intermediate platform taking a discovery fee or owning the session.
 
 **This is a demo against a fake operator, settled through the real Stripe adapter in test mode.** The mechanism works. Whether real operators will integrate and whether real users will value this enough to drive adoption are open questions — the demo does not answer them.
 

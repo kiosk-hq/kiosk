@@ -44,7 +44,7 @@ atablefor is a Rails 8.1 app that speaks Kiosk. The following is the recorded ou
 
 **What the AI assistant did — no human involved at any step:**
 
-1. **Discover** — `GET /.well-known/kiosk.json` returns the atablefor issuer and surface. Capabilities are `[schema, query, run]` — no `pay`. A reservation takes no money.
+1. **Discover** — `GET /.well-known/kiosk.json` returns the atablefor issuer and surface. Capabilities are `[schema, queries, actions]` — no `pay`. A reservation takes no money.
 2. **Self-register** — generated an RSA-2048 keypair, proved possession of the private key (`GET /kiosk/auth/challenge` → sign an RS256 JWS `{aud, nonce, jti, iat}` → `POST /kiosk/auth/register {public_key:<pem>, signed:<jws>}`) → HTTP 201 → `agent_id`, `user_id`, `access_token`. No existing account. No human login. No OTP. No bot screen.
 3. **Check availability** — `GET /kiosk/availability?party_size=2` returned open tables **across the restaurant roster** for the current upcoming seatings (computed in Europe/Lisbon, never stale); found a 20:00 2-top. No SQL sent — the AI assistant called an operator-registered named query.
 4. **Book the table** — `POST /kiosk/book_table {restaurant_id:<r>, restaurant_table_id:<t>, date:"<seating date>", time:"20:00", party_size:2}` → HTTP 200, `status:"confirmed"`. The operator confirmed the reservation under the authenticated principal; a table already held for that seating is a clean 409 (finite, can sell out).

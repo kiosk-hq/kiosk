@@ -873,8 +873,16 @@ assert "binding: login after unlink → 404"    "$(echo "$bind_out" | jq -r '.lo
 # ─── register-PoW golden path (402 pow_required → solve Equihash → 201) ──────
 #
 # The DoD-2 leg: the agent golden path registers through a REAL register-time
-# Equihash proof-of-work (registration_pow_count=1, n=96 k=5), not a toll-free
-# shortcut. register_pow_flow.rb proves, in one run: (1) a no-proof register is
+# Equihash proof-of-work, not a toll-free shortcut. HOW MANY proofs and HOW BIG
+# is the app's configuration — `registration_pow_count` and
+# `E2E_REGISTRATION_POW_PARAMS`, both in fixtures/initializer_kiosk.rb — and
+# this comment does not restate either (K-1039, the K-1035 class): the pair was
+# typed here, in the fixture that sets it, and in the register helper, so one
+# hand edit to the constant left two files describing a toll the server no
+# longer charges. The count is asserted from the WIRE by the "1 challenge
+# issued" check below — `challenges_len`, read off the 402 the server actually
+# answered with — which is where a number in this file belongs.
+# register_pow_flow.rb proves, in one run: (1) a no-proof register is
 # REJECTED 402 pow_required with challenges[], (2) solving each challenge with
 # the bundled numpy solver and re-POSTing the SAME body with the proof(s) in the
 # `Kiosk-PoW` request header (ADR-0022 — never a body `pow` field) SUCCEEDS 201,

@@ -2,13 +2,16 @@
 
 # Shared registration helper for the e2e flows.
 #
-# Registration is gated by ONE Equihash proof (see initializer_kiosk.rb:
-# registration_pow_count = 1, params n=96 k=5). This helper does the full
-# handshake: challenge → sign PoP → register; on a 402 pow_required it solves
-# every challenge with the shipped Python solver and retries the SAME register
-# body, sending the proof(s) in the Kiosk-PoW request header as raw JSON
-# (ADR-0022). Same mechanism the demos use
-# (kiosk-demo-skooti/script/equihash_register.rb).
+# Registration is gated by Equihash proofs — how MANY is the app's
+# `registration_pow_count` and how BIG is its `E2E_REGISTRATION_POW_PARAMS`,
+# both set in initializer_kiosk.rb and NEITHER RESTATED HERE (K-1039, the
+# K-1035 class): this helper reads neither, because it takes both off the 402
+# it is answering, so a comment quoting them here could only ever be a second
+# copy of a fact this file does not depend on. It does the full handshake:
+# challenge → sign PoP → register; on a 402 pow_required it solves every
+# challenge with the shipped Python solver and retries the SAME register body,
+# sending the proof(s) in the Kiosk-PoW request header as raw JSON (ADR-0022).
+# Same mechanism the demos use (kiosk-demo-skooti/script/equihash_register.rb).
 #
 # Requires: json, jwt, openssl, securerandom, uri, open3 (callers already
 # require most of these). Callers supply get_json/post_json lambdas so the

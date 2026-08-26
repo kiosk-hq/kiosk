@@ -20,11 +20,22 @@
 # Rails sets the reloadable autoloader up AFTER config/initializers run, so a
 # hand-written `require Rails.root.join(...)` was the only alternative.
 
-# Registration PoW gate uses Equihash (one PoW = Equihash). Small demo params
-# (n=96 k=5, matching the demos) keep the register solve well under a second.
-# PoW is a metered toll, tuned per provider — here it prices bot registration
-# on the e2e golden path so the harness exercises the real 402 → solve → retry
-# handshake, not a toll-free shortcut.
+# Registration PoW gate uses Equihash (one PoW = Equihash). The params are
+# deliberately small — sized to keep the register solve well under a second, the
+# same posture the demos ship at their default difficulty — and
+# E2E_REGISTRATION_POW_PARAMS below is where they are written down. PoW is a
+# metered toll, tuned per provider — here it prices bot registration on the e2e
+# golden path so the harness exercises the real 402 → solve → retry handshake,
+# not a toll-free shortcut.
+#
+# NO (n, k) IS RESTATED IN THIS COMMENT (K-1039, the K-1035 class). It named the
+# pair a few lines above the constant that defines it, and two further files
+# retyped the same pair — three hand-kept copies of one value, which is K-710's
+# rot shape one degree colder than the demos': this harness resolves no
+# difficulty knob at all, so nothing but a hand edit can move the constant, and
+# all three copies were true when they were written. A comment cannot read a
+# value, so the repair is to describe the params and let the constant be the one
+# place they are stated.
 require "kiosk/pow/equihash"
 require "kiosk/reputation"
 Kiosk::Reputation::Backends.register(Kiosk::Pow::Equihash::NAME, Kiosk::Pow::Equihash)

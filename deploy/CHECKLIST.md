@@ -190,6 +190,29 @@ For EACH of the 7 apps:
       `db:prepare` alone. Seeding on every push is safe — every demo's seeds are idempotent-additive (zero
       `delete_all`, verified live on all seven), so a push tops the catalog up and deletes nothing. This is
       also the only thing that re-seeds the catalog; see `deploy/README.md` step 5.
+- [ ] ⚠ **ONE-TIME, AND IT IS THE REPAIR FOR THE LIVE 500s (K-1074, K-1083). `db:migrate` CANNOT FIX THIS —
+      `deploy/demo-reset.sh` CAN.** The boxes' databases were built on 2026-08-11 and migrated forward ever since,
+      and two things happened to them that the migrate path can never deliver:
+      (a) `add_column :users, :display_name` was APPENDED on 2026-08-23 to `20260719000001_create_tudu_domain.rb`,
+      a migration already recorded in every box's `schema_migrations`, so the column reached `db/structure.sql`
+      and every from-zero database and **could not reach the running one** — tudu answers 500 on `/`, `/lists`,
+      `/shared` and `/users/sign_up` because the housemate board SELECTs `owner_u.display_name`;
+      (b) the 2026-08-20 rebuild renumbered every kiosk-owned migration, so all six read as PENDING on those
+      boxes and `db:migrate` **aborts one step in** at `20260820130113` with `PG::DuplicateTable` — measured, by
+      replaying the tudu structure.sql of `267e67b3^`. So the hook's migrate step has been half-completing in
+      silence since 2026-08-20, and no corrective migration numbered after that version can be reached.
+      Head now fixes both in the tree (a new migration file for the column; guarded DDL in
+      `Kiosk::Server::SchemaDefinitions`), but the boxes need their schema rebuilt once:
+      ```
+      ssh ubuntu@kyc.demo.kiosk.tech 'bash /srv/kiosk/deploy/demo-reset.sh'   # AFTER deploying head
+      ```
+      It `db:schema:load db:seed`s exactly the six affected demos and re-seeds getgrocery ADDITIVELY, so the real
+      third-party orders it holds survive (pass `--all` only if you mean to destroy them). Verify with
+      `deploy/production-smoke.sh` plus a plain `curl -sI https://tudu.demo.kiosk.tech/shared` → 200, and get
+      skooti's missing object NAMED from the box (`\d users`) rather than inferred.
+      **Then move `FLEET_SCHEMA_BASELINE` in `bin/check-migration-replay` to today's date in the same change** —
+      that constant is the one fact the gate cannot measure for itself, and a reset is exactly the event that
+      moves it.
 - [ ] ~~Prune cron~~ — **SKIPPED** (Phil, K-593/K-630) and there is nothing to install: this repo ships no
       scheduled housekeeping at all, and nothing in it reclaims demo accounts — no demo ships a retention
       task. **Reclaiming disk is `deploy/demo-reset.sh`, run by hand**; for what covers the catalog

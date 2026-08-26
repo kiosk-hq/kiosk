@@ -18,6 +18,20 @@
 #   bash demo-reset.sh --all    # ALSO wipe+reseed getgrocery (destroys them)
 #
 # The KYC broker (kyc.demo) has no demo content and is left untouched.
+#
+# IT IS ALSO THE SCHEMA REPAIR, NOT ONLY A DATA ONE (K-1074, K-1083), AND THAT
+# IS WHY `db:schema:load` BELOW MATTERS MORE THAN IT LOOKS. A box's database is
+# built once and migrated forward forever, so anything the migrate path cannot
+# deliver is stuck there permanently: a column APPENDED to a migration already
+# recorded in `schema_migrations` never arrives (that is K-1074 — the live tudu
+# 500s), and a renumbered migration set aborts `db:migrate` outright on a
+# database that already holds those tables (K-1083 — measured, PG::DuplicateTable
+# at 20260820130113, one step in, since 2026-08-20). Loading `db/structure.sql`
+# sidesteps both by construction: it rebuilds the schema the tree states rather
+# than replaying the path that cannot reach it. So when `bin/check-migration-
+# replay` names an object the deploy cannot deliver, THIS is the tool — run it
+# after deploying head, and then move that gate's FLEET_SCHEMA_BASELINE forward
+# to the day you ran it.
 set -uo pipefail
 export PATH="/home/ubuntu/.local/bin:/home/ubuntu/.local/share/mise/installs/ruby/4.0.1/bin:$PATH"
 

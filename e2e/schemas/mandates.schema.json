@@ -35,7 +35,7 @@
         "intent_mandate_id": { "type": "string", "description": "MUST equal the intent mandate id; cart total MUST NOT exceed the intent cap." },
         "total_amount_cents": { "type": "integer", "minimum": 1, "description": "REQUIRED. MUST be positive; a non-positive amount is rejected." },
         "currency": { "type": "string", "description": "MUST equal the intent currency." },
-        "line_items": { "type": "array", "minItems": 1, "description": "REQUIRED, and NON-EMPTY. Provider-defined line items. Required because the settlement and reconciliation path reads them: an operator matching a settlement back to its domain object has nothing to match on without them -- which is exactly as true of an empty array as of an absent field, so presence alone was not the constraint (K-857). A positive `total_amount_cents` with nothing itemised under it is an unitemised charge, which is what a cart mandate exists to prevent." }
+        "line_items": { "type": "array", "minItems": 1, "description": "REQUIRED, and NON-EMPTY. Provider-defined line items. Required because the settlement and reconciliation path reads them: an operator matching a settlement back to its domain object has nothing to match on without them -- which is exactly as true of an empty array as of an absent field, so presence alone was not the constraint. A positive `total_amount_cents` with nothing itemised under it is an unitemised charge, which is what a cart mandate exists to prevent." }
       }
     },
     "payment": {

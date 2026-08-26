@@ -1524,6 +1524,52 @@ prose_units.each do |unit|
   end
 end
 
+# ── The wrong-door hint must not name a RETIRED endpoint (K-1088) ────────────
+#
+# The `rescue_from ActionController::InvalidAuthenticityToken` body in these
+# same files is not documentation: it is the LIVE JSON an assistant gets when it
+# dials the human sign-in page — a reader that is by construction lost and has
+# no way to check what it is told. Seven copies told it to fetch
+# `/.well-known/kiosk.json` «for the register/login and schema/query/run/pay
+# endpoints», which is false on both available readings: protocol 0.4 deleted
+# `POST /kiosk/query` and `POST /kiosk/run` outright (T-074 = A — each demo's
+# `routes.rb` says so and five ship a `RetiredWire` redteam beat asserting the
+# plain 404), and `capabilities` has published MODULE names
+# (schema/queries/actions/pay) since T-095. The `:code` rule held all seven
+# identical — identically wrong — and `CHANGELOG.md`'s T-068 slice 7 had already
+# corrected the same string on the human pages and left this one behind, which is
+# the class: a sweep that fixes a file and not its sibling.
+#
+# Read from the CODE, comments stripped, so a comment may quote the retired
+# string to explain why it went while a string literal may not. A blocklist is
+# the right shape here and only here: these are names a protocol MAJOR removed,
+# so the set changes at a protocol bump and nowhere else.
+RETIRED_WIRE_NAMES = %r{schema/quer(?:y|ies)/run/pay|/kiosk/(?:query|run)\b}
+
+# The file with its comments removed. Ripper rather than a `^\s*#` scan, for the
+# reason `code_digest` and `comment_prose` both give: a `#` inside a string or a
+# regex is not a comment.
+def code_source(path)
+  Ripper.lex(File.read(path))
+        .reject { |(_, type, _)| COMMENT_TOKENS.include?(type) }
+        .map { |(_, _, tok)| tok }
+        .join
+end
+
+prose_units.each do |unit|
+  hits = code_source(unit[:ac]).scan(RETIRED_WIRE_NAMES).uniq
+  next if hits.empty?
+
+  errors << "#{unit[:label]}: #{unit[:rel]} names #{hits.map(&:inspect).join(', ')} in CODE — the " \
+            "0.3 wire vocabulary protocol 0.4 deleted (K-1088). `POST /kiosk/query` and `POST " \
+            "/kiosk/run` have no route (T-074 = A) and `capabilities` publishes MODULE names " \
+            "(schema/queries/actions/pay) since T-095, so this string is false however a reader " \
+            "takes it — and it is a LIVE response body, not a comment. Name what " \
+            "/.well-known/kiosk.json carries (the register/login endpoints, the catalog link, the " \
+            "modules this origin serves); do NOT re-enumerate verbs, which would be a third copy " \
+            "of the catalog kiosk.json deliberately stopped publishing."
+end
+
 # ── The flow-runner helper: lib/tasks/ is not compared, this construct is (K-1046)
 #
 # `lib/tasks/*.rake` sits outside SCAN_ROOTS, and the reason recorded up there

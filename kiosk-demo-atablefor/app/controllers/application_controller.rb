@@ -31,9 +31,19 @@ class ApplicationController < ActionController::Base
         code:    "invalid_authenticity_token",
         message: "this is the human sign-in page, not the Kiosk wire — it needs a " \
                  "browser session and a CSRF token from its own form",
+        # NAME WHAT THE DOCUMENT CARRIES, NEVER A VERB LIST (K-1088). This hint
+        # used to say «the register/login and schema/query/run/pay endpoints»,
+        # which is false on both readings: protocol 0.4 deleted `POST
+        # /kiosk/query` and `POST /kiosk/run` outright (T-074 = A — both answer
+        # an ordinary 404, which this app's own redteam beat asserts), and
+        # `capabilities` has published MODULE names (schema/queries/actions/pay)
+        # since T-095. A list here is a third copy of the catalog — kiosk.json
+        # deliberately stopped publishing verb names (T-094/T-095) — so it would
+        # rot the same way. The reader of this body is a JSON-dialing assistant
+        # that has just hit the human sign-in page: it cannot check the hint.
         hint:    "assistants authenticate with their own keypair: GET " \
                  "#{request.base_url}/.well-known/kiosk.json for the register/login " \
-                 "and schema/query/run/pay endpoints",
+                 "endpoints, the catalog link and the modules this origin serves",
       },
     }
   end

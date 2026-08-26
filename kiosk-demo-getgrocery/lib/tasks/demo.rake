@@ -19,6 +19,57 @@
 #   rake demo:reconcile  resolve orders stuck in `paying` from local evidence (K-578)
 #   rake demo            setup + shop (full end-to-end proof)
 
+# ── Flow-driver runner — READ THE CHILD'S EXIT STATUS (K-1043) ────────────────
+#
+# Every flow-driver invocation in this file goes through here, for the one line
+# the shape it replaced did not have: `status.success?`.
+#
+# That shape was a bare backtick capture feeding
+# `JSON.parse(raw.lines.grep(/^\{/).last || raw)`, and it never consulted `$?`.
+# A task's verdict therefore rested entirely on "did a line starting with `{`
+# appear", and two failures fall out of that. It FAILED OPEN: a driver that
+# printed its JSON line and THEN died was reported as a PASS — and that is not
+# hypothetical, kiosk-demo-getgrocery/script/rls_proof.rb prints its summary
+# line before `exit 1` on a breach. And when a driver died BEFORE printing one,
+# the operator's headline was a JSON parse error naming the driver's FIRST line
+# of output, which sends the reader to the wrong file instead of showing the
+# driver's own message.
+#
+# So: status first, and on a non-zero child the abort quotes the child's own
+# last output line. Only then is the JSON parsed. `Open3.capture2e` keeps the
+# merged stdout+stderr interleaving the transcript always had, and hands back
+# the status the backticks threw away.
+#
+# NOT widened to the sibling `psql -X -tAc` probes in this file, deliberately:
+# those capture with `2>&1` into a value that is then COMPARED, so a psql error
+# lands in the string, fails its assertion and goes red. They fail closed.
+def getgrocery_run_flow(flow_rb, env_str = "", env: {}, runner: "ruby")
+  require "open3"
+  require "shellwords"
+
+  label       = File.basename(flow_rb)
+  cmd         = "#{env_str} bundle exec #{runner} #{flow_rb.shellescape}".strip
+  raw, status = Open3.capture2e(env, cmd)
+  json_line   = raw.lines.grep(/^\{/).last
+
+  puts raw.lines.reject { |l| l.start_with?("{") }.join
+  puts json_line if json_line
+  $stdout.flush # so the abort below lands AFTER the transcript, not before it
+
+  unless status.success?
+    last = raw.lines.map(&:chomp).reject { |l| l.strip.empty? || l.start_with?("{") }.last
+    last ||= raw.lines.map(&:chomp).reject { |l| l.strip.empty? }.last # child printed only JSON
+    how  = status.exitstatus ? "exit #{status.exitstatus}" : status.to_s
+    abort "#{label} FAILED (#{how}): #{last || "(no output)"}"
+  end
+
+  begin
+    JSON.parse(json_line || raw)
+  rescue JSON::ParserError => e
+    abort "#{label} did not produce valid JSON: #{e.message}\nOutput:\n#{raw}"
+  end
+end
+
 # Start (or reuse) a local stripe-mock; return its HTTP base URL. The adversarial
 # suites use it so the full pay→settlement→gate flow runs with NO real Stripe
 # (fast, no key, no charges, CI-runnable). demo:shop still uses real Stripe.
@@ -212,14 +263,7 @@ namespace :demo do
     # -- run script/getgrocery_flow.rb --
     puts "\n-- Running script/getgrocery_flow.rb --"
     env_str = "SERVER_URL=#{server_url} KIOSK_ISSUER=#{kiosk_issuer}"
-    raw     = `#{env_str} bundle exec ruby #{flow_rb.shellescape} 2>&1`
-    puts raw
-
-    begin
-      result = JSON.parse(raw.lines.grep(/^\{/).last || raw)
-    rescue JSON::ParserError => e
-      abort "script/getgrocery_flow.rb did not produce valid JSON: #{e.message}\nOutput:\n#{raw}"
-    end
+    result = getgrocery_run_flow(flow_rb, env_str)
 
     # -- assertions: HTTP status --
     puts "\n-- Assertions --"
@@ -517,11 +561,7 @@ namespace :demo do
     env_str = "SERVER_URL=#{server_url.shellescape} KIOSK_ISSUER=#{kiosk_issuer.shellescape} " \
               "HUMAN_USER_ID=#{human_id.shellescape} " \
               "HUMAN_EMAIL=#{human_email.shellescape} HUMAN_PASSWORD=#{human_password.shellescape}"
-    raw = `#{env_str} bundle exec ruby #{flow_rb.shellescape} 2>&1`
-    json_line = raw.lines.grep(/^\{/).last
-    puts raw.lines.reject { |l| l.start_with?("{") }.join
-    puts json_line if json_line
-    result = JSON.parse(json_line || raw) rescue abort("script/claim_flow.rb produced no JSON:\n#{raw}")
+    result = getgrocery_run_flow(flow_rb, env_str)
 
     puts "\n══ Claim-rebind assertions ══"
     check = lambda do |label, ok|
@@ -658,15 +698,7 @@ namespace :demo do
     flow_rb = File.expand_path("../../script/isolation_flow.rb", __dir__)
     puts "\n── Running script/isolation_flow.rb (adversarial cross-tenant + order-ownership) ──"
     env_str = "SERVER_URL=#{server_url} KIOSK_ISSUER=#{kiosk_issuer}"
-    raw     = `#{env_str} bundle exec ruby #{flow_rb.shellescape} 2>&1`
-    puts raw
-
-    # ── parse JSON output ──────────────────────────────────────────────
-    begin
-      result = JSON.parse(raw.lines.grep(/^\{/).last || raw)
-    rescue JSON::ParserError => e
-      abort "script/isolation_flow.rb did not produce valid JSON: #{e.message}\nOutput:\n#{raw}"
-    end
+    result = getgrocery_run_flow(flow_rb, env_str)
 
     user_id_b              = result["user_id_b"]
     order_id_a             = result["order_id_a"]
@@ -851,14 +883,7 @@ namespace :demo do
     flow_rb = File.expand_path("../../script/schema_flow.rb", __dir__)
     puts "\n── Running script/schema_flow.rb ──"
     env_str = "SERVER_URL=#{server_url} KIOSK_ISSUER=#{kiosk_issuer}"
-    raw     = `#{env_str} bundle exec ruby #{flow_rb.shellescape} 2>&1`
-    puts raw
-
-    begin
-      result = JSON.parse(raw.lines.grep(/^\{/).last || raw)
-    rescue JSON::ParserError => e
-      abort "script/schema_flow.rb did not produce valid JSON: #{e.message}\nOutput:\n#{raw}"
-    end
+    result = getgrocery_run_flow(flow_rb, env_str)
 
     puts "\n── Schema assertions ──"
     failures = []
@@ -1414,11 +1439,7 @@ namespace :demo do
 
       env = "SERVER_URL=#{server_url.shellescape} KIOSK_ISSUER=#{server_url.shellescape} " \
             "KIOSK_BAD_PROOF_DB=#{bad_proof_db.shellescape}"
-      raw = `#{env} bundle exec ruby #{flow_rb.shellescape} 2>&1`
-      json_line = raw.lines.grep(/^\{/).last
-      puts raw.lines.reject { |l| l.start_with?("{") }.join
-      puts json_line if json_line
-      result = JSON.parse(json_line || raw) rescue abort("script/pow_flow.rb produced no JSON:\n#{raw}")
+      result = getgrocery_run_flow(flow_rb, env)
 
       puts "\n══ Catalog PoW assertions ══"
       check = lambda do |label, ok|
@@ -1511,15 +1532,8 @@ namespace :demo do
     # ── Step 5: Run the three-way isolation proof (KIOSK_RLS_ENFORCE=1) ─────
     proof_rb = File.expand_path("../../script/rls_proof.rb", __dir__)
     puts "\n── Running RLS isolation proof (KIOSK_RLS_ENFORCE=1) ──"
-    raw = `KIOSK_RLS_ENFORCE=1 bundle exec rails runner #{proof_rb} 2>&1`
-    puts raw
-
     require "json"
-    begin
-      result = JSON.parse(raw.lines.grep(/^\{/).last || raw)
-    rescue JSON::ParserError => e
-      abort "script/rls_proof.rb did not produce valid JSON: #{e.message}\nOutput:\n#{raw}"
-    end
+    result = getgrocery_run_flow(proof_rb, "KIOSK_RLS_ENFORCE=1", runner: "rails runner")
 
     puts "\n── RLS proof assertions ──"
     failures = []
@@ -1739,16 +1753,7 @@ namespace :demo do
                    "KIOSK_PROVE_ISSUER=#{broker[:wiring]["KIOSK_PROVE_ISSUER"]}"
       driver_env_h = { "KIOSK_PROVE_TEST_SIGNING_KEY_PEM" =>
                          broker[:wiring]["KIOSK_PROVE_TEST_SIGNING_KEY_PEM"] }
-      raw = IO.popen(driver_env_h, "#{driver_env} bundle exec ruby #{flow_rb.shellescape} 2>&1", &:read)
-      json_line = raw.lines.grep(/^\{/).last
-      puts raw.lines.reject { |l| l.start_with?("{") }.join
-      puts json_line if json_line
-
-      begin
-        result = JSON.parse(json_line || raw)
-      rescue JSON::ParserError => e
-        abort "script/agecheck_flow.rb did not produce valid JSON: #{e.message}\nOutput:\n#{raw}"
-      end
+      result = getgrocery_run_flow(flow_rb, driver_env, env: driver_env_h)
     end
 
     puts "\n── Age-gate assertions ──"

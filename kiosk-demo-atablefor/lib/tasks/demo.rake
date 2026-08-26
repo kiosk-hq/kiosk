@@ -23,6 +23,57 @@
 # The walkthrough lives in bin/demo (POSIX shell) so it's debuggable without
 # going through Rake.
 
+# ── Flow-driver runner — READ THE CHILD'S EXIT STATUS (K-1043) ────────────────
+#
+# Every flow-driver invocation in this file goes through here, for the one line
+# the shape it replaced did not have: `status.success?`.
+#
+# That shape was a bare backtick capture feeding
+# `JSON.parse(raw.lines.grep(/^\{/).last || raw)`, and it never consulted `$?`.
+# A task's verdict therefore rested entirely on "did a line starting with `{`
+# appear", and two failures fall out of that. It FAILED OPEN: a driver that
+# printed its JSON line and THEN died was reported as a PASS — and that is not
+# hypothetical, kiosk-demo-getgrocery/script/rls_proof.rb prints its summary
+# line before `exit 1` on a breach. And when a driver died BEFORE printing one,
+# the operator's headline was a JSON parse error naming the driver's FIRST line
+# of output, which sends the reader to the wrong file instead of showing the
+# driver's own message.
+#
+# So: status first, and on a non-zero child the abort quotes the child's own
+# last output line. Only then is the JSON parsed. `Open3.capture2e` keeps the
+# merged stdout+stderr interleaving the transcript always had, and hands back
+# the status the backticks threw away.
+#
+# NOT widened to the sibling `psql -X -tAc` probes in this file, deliberately:
+# those capture with `2>&1` into a value that is then COMPARED, so a psql error
+# lands in the string, fails its assertion and goes red. They fail closed.
+def atablefor_run_flow(flow_rb, env_str = "", env: {}, runner: "ruby")
+  require "open3"
+  require "shellwords"
+
+  label       = File.basename(flow_rb)
+  cmd         = "#{env_str} bundle exec #{runner} #{flow_rb.shellescape}".strip
+  raw, status = Open3.capture2e(env, cmd)
+  json_line   = raw.lines.grep(/^\{/).last
+
+  puts raw.lines.reject { |l| l.start_with?("{") }.join
+  puts json_line if json_line
+  $stdout.flush # so the abort below lands AFTER the transcript, not before it
+
+  unless status.success?
+    last = raw.lines.map(&:chomp).reject { |l| l.strip.empty? || l.start_with?("{") }.last
+    last ||= raw.lines.map(&:chomp).reject { |l| l.strip.empty? }.last # child printed only JSON
+    how  = status.exitstatus ? "exit #{status.exitstatus}" : status.to_s
+    abort "#{label} FAILED (#{how}): #{last || "(no output)"}"
+  end
+
+  begin
+    JSON.parse(json_line || raw)
+  rescue JSON::ParserError => e
+    abort "#{label} did not produce valid JSON: #{e.message}\nOutput:\n#{raw}"
+  end
+end
+
 namespace :demo do
   desc "Create + load schema + seed the demo database (idempotent)."
   task :setup do
@@ -118,15 +169,7 @@ namespace :demo do
     # ── run script/book_flow.rb ───────────────────────────────────────────────
     flow_rb = File.expand_path("../../script/book_flow.rb", __dir__)
     puts "\n── Running script/book_flow.rb ──"
-    raw = `SERVER_URL=#{server_url} KIOSK_ISSUER=#{kiosk_issuer} bundle exec ruby #{flow_rb} 2>&1`
-    puts raw
-
-    # ── parse JSON output ──────────────────────────────────────────────
-    begin
-      result = JSON.parse(raw.lines.grep(/^\{/).last || raw)
-    rescue JSON::ParserError => e
-      abort "script/book_flow.rb did not produce valid JSON: #{e.message}\nOutput:\n#{raw}"
-    end
+    result = atablefor_run_flow(flow_rb, "SERVER_URL=#{server_url} KIOSK_ISSUER=#{kiosk_issuer}")
 
     # ── assertions: HTTP + JSON ────────────────────────────────────────
     puts "\n── Assertions ──"
@@ -281,14 +324,7 @@ namespace :demo do
     puts "\n── Running script/pow_flow.rb ──"
     env = "SERVER_URL=#{server_url} KIOSK_ISSUER=#{kiosk_issuer} " \
           "KIOSK_BAD_PROOF_DB=#{bad_proof_db.shellescape}"
-    raw = `#{env} bundle exec ruby #{flow_rb} 2>&1`
-    puts raw
-
-    begin
-      result = JSON.parse(raw.lines.grep(/^\{/).last || raw)
-    rescue JSON::ParserError => e
-      abort "script/pow_flow.rb did not produce valid JSON: #{e.message}\nOutput:\n#{raw}"
-    end
+    result = atablefor_run_flow(flow_rb, env)
 
     # ── Assertions ──
     puts "\n── PoW assertions ──"
@@ -436,14 +472,7 @@ namespace :demo do
     # Run script/reputation_flow.rb.
     flow_rb = File.expand_path("../../script/reputation_flow.rb", __dir__)
     puts "\n── Running script/reputation_flow.rb ──"
-    raw = `SERVER_URL=#{server_url} KIOSK_ISSUER=#{kiosk_issuer} bundle exec ruby #{flow_rb} 2>&1`
-    puts raw
-
-    begin
-      result = JSON.parse(raw.lines.grep(/^\{/).last || raw)
-    rescue JSON::ParserError => e
-      abort "script/reputation_flow.rb did not produce valid JSON: #{e.message}\nOutput:\n#{raw}"
-    end
+    result = atablefor_run_flow(flow_rb, "SERVER_URL=#{server_url} KIOSK_ISSUER=#{kiosk_issuer}")
 
     # ── Assertions ──
     puts "\n── Reputation PoW assertions ──"
@@ -573,14 +602,7 @@ namespace :demo do
 
     flow_rb = File.expand_path("../../script/backoff_flow.rb", __dir__)
     puts "\n── Running script/backoff_flow.rb ──"
-    raw = `SERVER_URL=#{server_url} KIOSK_ISSUER=#{kiosk_issuer} bundle exec ruby #{flow_rb} 2>&1`
-    puts raw
-
-    begin
-      result = JSON.parse(raw.lines.grep(/^\{/).last || raw)
-    rescue JSON::ParserError => e
-      abort "script/backoff_flow.rb did not produce valid JSON: #{e.message}\nOutput:\n#{raw}"
-    end
+    result = atablefor_run_flow(flow_rb, "SERVER_URL=#{server_url} KIOSK_ISSUER=#{kiosk_issuer}")
 
     # ── Assertions ──
     puts "\n── Backoff PoW assertions ──"
@@ -709,14 +731,7 @@ namespace :demo do
       env = "SERVER_URL=#{server_url.shellescape} KIOSK_ISSUER=#{kiosk_issuer.shellescape} " \
             "HOLDER_ID=#{holder_id.shellescape} HOLDER_EMAIL=#{holder_email.shellescape} " \
             "HOLDER_PASSWORD=#{holder_password.shellescape}"
-      raw = `#{env} bundle exec ruby #{flow_rb.shellescape} 2>&1`
-      puts raw
-
-      begin
-        result = JSON.parse(raw.lines.grep(/^\{/).last || raw)
-      rescue JSON::ParserError => e
-        abort "script/binding_flow.rb did not produce valid JSON: #{e.message}\nOutput:\n#{raw}"
-      end
+      result = atablefor_run_flow(flow_rb, env)
 
       puts "\n══ Account-binding assertions ══"
       check = lambda do |label, ok|
@@ -839,14 +854,7 @@ namespace :demo do
 
     flow_rb = File.expand_path("../../script/isolation_flow.rb", __dir__)
     puts "\n── Running script/isolation_flow.rb (adversarial cross-tenant) ──"
-    raw = `SERVER_URL=#{server_url} KIOSK_ISSUER=#{kiosk_issuer} bundle exec ruby #{flow_rb} 2>&1`
-    puts raw
-
-    begin
-      result = JSON.parse(raw.lines.grep(/^\{/).last || raw)
-    rescue JSON::ParserError => e
-      abort "script/isolation_flow.rb did not produce valid JSON: #{e.message}\nOutput:\n#{raw}"
-    end
+    result = atablefor_run_flow(flow_rb, "SERVER_URL=#{server_url} KIOSK_ISSUER=#{kiosk_issuer}")
 
     failures = []
     puts "\n── Adversarial isolation assertions ──"
@@ -998,14 +1006,7 @@ namespace :demo do
 
     flow_rb = File.expand_path("../../script/schema_flow.rb", __dir__)
     puts "\n── Running script/schema_flow.rb ──"
-    raw = `SERVER_URL=#{server_url} KIOSK_ISSUER=#{kiosk_issuer} bundle exec ruby #{flow_rb} 2>&1`
-    puts raw
-
-    begin
-      result = JSON.parse(raw.lines.grep(/^\{/).last || raw)
-    rescue JSON::ParserError => e
-      abort "script/schema_flow.rb did not produce valid JSON: #{e.message}\nOutput:\n#{raw}"
-    end
+    result = atablefor_run_flow(flow_rb, "SERVER_URL=#{server_url} KIOSK_ISSUER=#{kiosk_issuer}")
 
     puts "\n── Schema assertions ──"
     failures = []

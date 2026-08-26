@@ -19,6 +19,57 @@
 # The walkthrough lives in bin/demo (POSIX shell) so it's debuggable
 # without going through Rake.
 
+# ── Flow-driver runner — READ THE CHILD'S EXIT STATUS (K-1043) ────────────────
+#
+# Every flow-driver invocation in this file goes through here, for the one line
+# the shape it replaced did not have: `status.success?`.
+#
+# That shape was a bare backtick capture feeding
+# `JSON.parse(raw.lines.grep(/^\{/).last || raw)`, and it never consulted `$?`.
+# A task's verdict therefore rested entirely on "did a line starting with `{`
+# appear", and two failures fall out of that. It FAILED OPEN: a driver that
+# printed its JSON line and THEN died was reported as a PASS — and that is not
+# hypothetical, kiosk-demo-getgrocery/script/rls_proof.rb prints its summary
+# line before `exit 1` on a breach. And when a driver died BEFORE printing one,
+# the operator's headline was a JSON parse error naming the driver's FIRST line
+# of output, which sends the reader to the wrong file instead of showing the
+# driver's own message.
+#
+# So: status first, and on a non-zero child the abort quotes the child's own
+# last output line. Only then is the JSON parsed. `Open3.capture2e` keeps the
+# merged stdout+stderr interleaving the transcript always had, and hands back
+# the status the backticks threw away.
+#
+# NOT widened to the sibling `psql -X -tAc` probes in this file, deliberately:
+# those capture with `2>&1` into a value that is then COMPARED, so a psql error
+# lands in the string, fails its assertion and goes red. They fail closed.
+def stylish_run_flow(flow_rb, env_str = "", env: {}, runner: "ruby")
+  require "open3"
+  require "shellwords"
+
+  label       = File.basename(flow_rb)
+  cmd         = "#{env_str} bundle exec #{runner} #{flow_rb.shellescape}".strip
+  raw, status = Open3.capture2e(env, cmd)
+  json_line   = raw.lines.grep(/^\{/).last
+
+  puts raw.lines.reject { |l| l.start_with?("{") }.join
+  puts json_line if json_line
+  $stdout.flush # so the abort below lands AFTER the transcript, not before it
+
+  unless status.success?
+    last = raw.lines.map(&:chomp).reject { |l| l.strip.empty? || l.start_with?("{") }.last
+    last ||= raw.lines.map(&:chomp).reject { |l| l.strip.empty? }.last # child printed only JSON
+    how  = status.exitstatus ? "exit #{status.exitstatus}" : status.to_s
+    abort "#{label} FAILED (#{how}): #{last || "(no output)"}"
+  end
+
+  begin
+    JSON.parse(json_line || raw)
+  rescue JSON::ParserError => e
+    abort "#{label} did not produce valid JSON: #{e.message}\nOutput:\n#{raw}"
+  end
+end
+
 # The seeded credentials the drivers need, written ONCE (K-712, K-838).
 # `db/seeds.rb` OWNS these values; this file only re-states them so the
 # subprocess drivers can be handed them as env. Four tasks used to re-type the
@@ -136,15 +187,7 @@ namespace :demo do
     env = "SERVER_URL=#{server_url.shellescape} KIOSK_ISSUER=#{kiosk_issuer.shellescape} " \
           "ALICE_EMAIL=#{alice_email.shellescape} BOB_EMAIL=#{bob_email.shellescape} " \
           "DEMO_PASSWORD=#{demo_password.shellescape}"
-    raw = `#{env} bundle exec ruby #{flow_rb.shellescape} 2>&1`
-    puts raw
-
-    # ── parse JSON output ──────────────────────────────────────────────
-    begin
-      result = JSON.parse(raw.lines.grep(/^\{/).last || raw)
-    rescue JSON::ParserError => e
-      abort "script/isolation_flow.rb did not produce valid JSON: #{e.message}\nOutput:\n#{raw}"
-    end
+    result = stylish_run_flow(flow_rb, env)
 
     failures = []
     puts "\n── Adversarial isolation assertions ──"
@@ -270,11 +313,7 @@ namespace :demo do
       puts "  Server up at #{server_url} (registration PoW active)"
 
       env = "SERVER_URL=#{server_url.shellescape} KIOSK_ISSUER=#{server_url.shellescape}"
-      raw = `#{env} bundle exec ruby #{flow_rb.shellescape} 2>&1`
-      json_line = raw.lines.grep(/^\{/).last
-      puts raw.lines.reject { |l| l.start_with?("{") }.join
-      puts json_line if json_line
-      result = JSON.parse(json_line || raw) rescue abort("script/register_flow.rb produced no JSON:\n#{raw}")
+      result = stylish_run_flow(flow_rb, env)
 
       puts "\n══ Registration PoW assertions ══"
       check = lambda do |label, ok|
@@ -361,11 +400,7 @@ namespace :demo do
       env = "SERVER_URL=#{server_url.shellescape} KIOSK_ISSUER=#{server_url.shellescape} " \
             "HOLDER_ID=#{holder_id.shellescape} HOLDER_EMAIL=#{holder_email.shellescape} " \
             "HOLDER_PASSWORD=#{holder_password.shellescape}"
-      raw = `#{env} bundle exec ruby #{flow_rb.shellescape} 2>&1`
-      json_line = raw.lines.grep(/^\{/).last
-      puts raw.lines.reject { |l| l.start_with?("{") }.join
-      puts json_line if json_line
-      result = JSON.parse(json_line || raw) rescue abort("script/binding_flow.rb produced no JSON:\n#{raw}")
+      result = stylish_run_flow(flow_rb, env)
 
       puts "\n══ Account-binding assertions ══"
       check = lambda do |label, ok|
@@ -484,11 +519,7 @@ namespace :demo do
             "OWNER_EMAIL=#{DEMO_CREDENTIALS[:owner_email].shellescape} " \
             "CUSTOMER_EMAIL=#{DEMO_CREDENTIALS[:alice_email].shellescape} " \
             "DEMO_PASSWORD=#{DEMO_CREDENTIALS[:password].shellescape}"
-      raw = `#{env} bundle exec ruby #{flow_rb.shellescape} 2>&1`
-      json_line = raw.lines.grep(/^\{/).last
-      puts raw.lines.reject { |l| l.start_with?("{") }.join
-      puts json_line if json_line
-      result = JSON.parse(json_line || raw) rescue abort("script/roles_flow.rb produced no JSON:\n#{raw}")
+      result = stylish_run_flow(flow_rb, env)
 
       puts "\n══ roles-from-IdP assertions ══"
       check = lambda do |label, ok|
@@ -718,14 +749,7 @@ namespace :demo do
 
     flow_rb = File.expand_path("../../script/schema_flow.rb", __dir__)
     puts "\n── Running script/schema_flow.rb ──"
-    raw = `SERVER_URL=#{server_url} KIOSK_ISSUER=#{kiosk_issuer} bundle exec ruby #{flow_rb} 2>&1`
-    puts raw
-
-    begin
-      result = JSON.parse(raw.lines.grep(/^\{/).last || raw)
-    rescue JSON::ParserError => e
-      abort "script/schema_flow.rb did not produce valid JSON: #{e.message}\nOutput:\n#{raw}"
-    end
+    result = stylish_run_flow(flow_rb, "SERVER_URL=#{server_url} KIOSK_ISSUER=#{kiosk_issuer}")
 
     puts "\n── Schema assertions ──"
     failures = []

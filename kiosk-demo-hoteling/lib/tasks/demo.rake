@@ -13,6 +13,57 @@
 #   rake demo:browse     browse-heavy priced-pagination PoW demo (KIOSK_POW_BROWSE_DEMO=1)
 #   rake demo            setup + book (full end-to-end proof)
 
+# ── Flow-driver runner — READ THE CHILD'S EXIT STATUS (K-1043) ────────────────
+#
+# Every flow-driver invocation in this file goes through here, for the one line
+# the shape it replaced did not have: `status.success?`.
+#
+# That shape was a bare backtick capture feeding
+# `JSON.parse(raw.lines.grep(/^\{/).last || raw)`, and it never consulted `$?`.
+# A task's verdict therefore rested entirely on "did a line starting with `{`
+# appear", and two failures fall out of that. It FAILED OPEN: a driver that
+# printed its JSON line and THEN died was reported as a PASS — and that is not
+# hypothetical, kiosk-demo-getgrocery/script/rls_proof.rb prints its summary
+# line before `exit 1` on a breach. And when a driver died BEFORE printing one,
+# the operator's headline was a JSON parse error naming the driver's FIRST line
+# of output, which sends the reader to the wrong file instead of showing the
+# driver's own message.
+#
+# So: status first, and on a non-zero child the abort quotes the child's own
+# last output line. Only then is the JSON parsed. `Open3.capture2e` keeps the
+# merged stdout+stderr interleaving the transcript always had, and hands back
+# the status the backticks threw away.
+#
+# NOT widened to the sibling `psql -X -tAc` probes in this file, deliberately:
+# those capture with `2>&1` into a value that is then COMPARED, so a psql error
+# lands in the string, fails its assertion and goes red. They fail closed.
+def hoteling_run_flow(flow_rb, env_str = "", env: {}, runner: "ruby")
+  require "open3"
+  require "shellwords"
+
+  label       = File.basename(flow_rb)
+  cmd         = "#{env_str} bundle exec #{runner} #{flow_rb.shellescape}".strip
+  raw, status = Open3.capture2e(env, cmd)
+  json_line   = raw.lines.grep(/^\{/).last
+
+  puts raw.lines.reject { |l| l.start_with?("{") }.join
+  puts json_line if json_line
+  $stdout.flush # so the abort below lands AFTER the transcript, not before it
+
+  unless status.success?
+    last = raw.lines.map(&:chomp).reject { |l| l.strip.empty? || l.start_with?("{") }.last
+    last ||= raw.lines.map(&:chomp).reject { |l| l.strip.empty? }.last # child printed only JSON
+    how  = status.exitstatus ? "exit #{status.exitstatus}" : status.to_s
+    abort "#{label} FAILED (#{how}): #{last || "(no output)"}"
+  end
+
+  begin
+    JSON.parse(json_line || raw)
+  rescue JSON::ParserError => e
+    abort "#{label} did not produce valid JSON: #{e.message}\nOutput:\n#{raw}"
+  end
+end
+
 namespace :demo do
   desc "Create + load schema + seed the demo database (idempotent)."
   task :setup do
@@ -121,17 +172,7 @@ namespace :demo do
         "KIOSK_ISSUER" => kiosk_issuer,
       }.merge(extra_env)
       env_str = env.map { |k, v| "#{k}=#{v.to_s.shellescape}" }.join(" ")
-      raw = `#{env_str} bundle exec ruby #{flow_rb.shellescape} 2>&1`
-      json_line    = raw.lines.grep(/^\{/).last
-      stderr_lines = raw.lines.reject { |l| l.start_with?("{") }
-      puts stderr_lines.join
-      puts json_line if json_line
-
-      begin
-        JSON.parse(json_line || raw)
-      rescue JSON::ParserError => e
-        abort "script/hoteling_flow.rb did not produce valid JSON: #{e.message}\nOutput:\n#{raw}"
-      end
+      hoteling_run_flow(flow_rb, env_str)
     end
 
     # ── RUN 1: Happy path ─────────────────────────────────────────────────
@@ -356,14 +397,7 @@ namespace :demo do
 
     flow_rb = File.expand_path("../../script/isolation_flow.rb", __dir__)
     puts "\n── Running script/isolation_flow.rb (adversarial cross-tenant) ──"
-    raw = `SERVER_URL=#{server_url} KIOSK_ISSUER=#{kiosk_issuer} bundle exec ruby #{flow_rb} 2>&1`
-    puts raw
-
-    begin
-      result = JSON.parse(raw.lines.grep(/^\{/).last || raw)
-    rescue JSON::ParserError => e
-      abort "script/isolation_flow.rb did not produce valid JSON: #{e.message}\nOutput:\n#{raw}"
-    end
+    result = hoteling_run_flow(flow_rb, "SERVER_URL=#{server_url} KIOSK_ISSUER=#{kiosk_issuer}")
 
     failures = []
     puts "\n── Adversarial isolation assertions ──"
@@ -656,14 +690,7 @@ namespace :demo do
 
     flow_rb = File.expand_path("../../script/schema_flow.rb", __dir__)
     puts "\n── Running script/schema_flow.rb ──"
-    raw = `SERVER_URL=#{server_url} KIOSK_ISSUER=#{kiosk_issuer} bundle exec ruby #{flow_rb} 2>&1`
-    puts raw
-
-    begin
-      result = JSON.parse(raw.lines.grep(/^\{/).last || raw)
-    rescue JSON::ParserError => e
-      abort "script/schema_flow.rb did not produce valid JSON: #{e.message}\nOutput:\n#{raw}"
-    end
+    result = hoteling_run_flow(flow_rb, "SERVER_URL=#{server_url} KIOSK_ISSUER=#{kiosk_issuer}")
 
     puts "\n── Schema assertions ──"
     failures = []
@@ -958,14 +985,7 @@ namespace :demo do
 
     flow_rb = File.expand_path("../../script/search_flow.rb", __dir__)
     puts "\n── Running script/search_flow.rb ──"
-    raw = `SERVER_URL=#{server_url} KIOSK_ISSUER=#{kiosk_issuer} bundle exec ruby #{flow_rb} 2>&1`
-    puts raw
-
-    begin
-      result = JSON.parse(raw.lines.grep(/^\{/).last || raw)
-    rescue JSON::ParserError => e
-      abort "script/search_flow.rb did not produce valid JSON: #{e.message}\nOutput:\n#{raw}"
-    end
+    result = hoteling_run_flow(flow_rb, "SERVER_URL=#{server_url} KIOSK_ISSUER=#{kiosk_issuer}")
 
     puts "\n── Pagination + detail assertions ──"
     failures = []
@@ -1153,11 +1173,7 @@ namespace :demo do
       puts "  Server up at #{server_url} (browse gate active)"
 
       env = "SERVER_URL=#{server_url.shellescape} KIOSK_ISSUER=#{kiosk_issuer.shellescape}"
-      raw = `#{env} bundle exec ruby #{flow_rb.shellescape} 2>&1`
-      json_line = raw.lines.grep(/^\{/).last
-      puts raw.lines.reject { |l| l.start_with?("{") }.join
-      puts json_line if json_line
-      result = JSON.parse(json_line || raw) rescue abort("script/browse_flow.rb produced no JSON:\n#{raw}")
+      result = hoteling_run_flow(flow_rb, env)
 
       puts "\n══ Browse priced-pagination assertions ══"
       puts "  Proof-count curve: #{result["curve"].inspect}"

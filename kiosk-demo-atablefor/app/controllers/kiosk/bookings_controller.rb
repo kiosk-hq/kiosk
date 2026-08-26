@@ -52,7 +52,13 @@ class Kiosk::BookingsController < ApplicationController
                                         description: "The seating_date (YYYY-MM-DD) from the availability row." },
                  time:                { type: "string", pattern: "^[0-2][0-9]:[0-5][0-9]$",
                                         description: "The seating_time HH:MM (24-hour), e.g. \"20:00\"." },
+                 # K-1047: the ceiling is DECLARED, not merely enforced — a
+                 # refusal the published schema does not predict is its own
+                 # defect. It is the width of `bookings.party_size` (and of the
+                 # `restaurant_tables.capacity` this is compared against), so it
+                 # is the column's own bound and not an invented house limit.
                  party_size:          { type: "integer", minimum: 1,
+                                        maximum: WireArguments::MAX_INT4,
                                         description: "Number of guests." },
                },
                required: ["restaurant_id", "restaurant_table_id", "date", "time", "party_size"]

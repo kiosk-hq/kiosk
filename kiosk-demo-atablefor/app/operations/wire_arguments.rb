@@ -12,6 +12,15 @@
 module WireArguments
   module_function
 
+  # PostgreSQL `integer` — the width of `bookings.party_size`, the column a
+  # confirmed party is WRITTEN to, and of `restaurant_tables.capacity`, the
+  # column it is COMPARED against. THE BOUND IS THE COLUMN'S AND NOT A POLICY
+  # (K-968's rule, K-1047's class): it refuses exactly what cannot be
+  # REPRESENTED and invents no house limit on party size, so every party that
+  # used to be seatable still is and only the ones that used to CRASH are
+  # refused.
+  MAX_INT4 = 2_147_483_647
+
   # The party a caller wants seated.
   #
   # SHAPE AND RANGE, in that order — THREE answers, one per thing that can be
@@ -23,6 +32,18 @@ module WireArguments
   #     sentence with the value echoed;
   #   * GIVEN, OUT OF RANGE (`0` or a negative) → the RANGE sentence,
   #     "party_size must be >= 1".
+  #   * GIVEN, TOO LARGE TO STORE (past {MAX_INT4}) → the ceiling sentence, and
+  #     it is K-1047: this arm did not exist and neither did the descriptor's
+  #     `maximum`, so a well-formed `party_size: 2_147_483_648` walked into
+  #     `RestaurantTable.where(capacity.gteq(party_size))` and ActiveRecord
+  #     raised `ActiveModel::RangeError` CASTING the comparison — HTTP 500 for
+  #     an argument a client simply got wrong, on BOTH surfaces at once, with
+  #     the runtime's own class name in the body. Measured on a booted origin,
+  #     and probed by this demo's HostileArgShapes beat so it stays measured.
+  #     NOTE the asymmetry with the two identifiers next door: they reach
+  #     ActiveRecord as EQUALITY predicates, where an out-of-range value is
+  #     answered with zero rows rather than a raise. It is the COMPARISON that
+  #     casts, and `party_size` is the only wire argument that reaches one.
   #
   # WHETHER THE ARGUMENT WAS GIVEN AT ALL is a fourth question and this guard
   # does not answer it — `availability` asks it one layer up, answering
@@ -79,9 +100,17 @@ module WireArguments
         message: "party_size must be a whole number >= 1 — got #{raw.inspect}",
       )]
     end
-    return [size, nil] if size >= 1
+    if size < 1
+      return [nil, OperationResult.refused(code: "bad_request", message: "party_size must be >= 1")]
+    end
+    if size > MAX_INT4
+      return [nil, OperationResult.refused(
+        code:    "bad_request",
+        message: "party_size must be <= #{MAX_INT4} — got #{size}",
+      )]
+    end
 
-    [nil, OperationResult.refused(code: "bad_request", message: "party_size must be >= 1")]
+    [size, nil]
   end
 
   # JSON Schema's `integer`, in Ruby — and nothing looser.

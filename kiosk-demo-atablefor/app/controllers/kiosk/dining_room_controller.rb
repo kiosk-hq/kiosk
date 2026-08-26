@@ -48,7 +48,13 @@ class Kiosk::DiningRoomController < ApplicationController
   input_schema type: "object",
                additionalProperties: false,
                properties: {
+                 # K-1047: the same declared ceiling `book_table` carries —
+                 # a party this verb would SHOW a table for is one that verb can
+                 # book, so the two descriptors have to agree. It is the width of
+                 # `restaurant_tables.capacity`, the column the filter compares
+                 # against, and not an invented house limit.
                  party_size:   { type: "integer", minimum: 1,
+                                 maximum: WireArguments::MAX_INT4,
                                  description: "Number of guests." },
                  # T-090: the served set is DB-derived (an operator adds one by
                  # inserting a restaurant), so it cannot be an `enum` here and

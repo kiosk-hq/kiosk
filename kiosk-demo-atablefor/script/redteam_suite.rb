@@ -610,6 +610,38 @@ end
   shape_probes << shape_verdict("availability #{bracket}", rc, body)
 end
 
+# ── MAGNITUDE, not type — the axis INT_SHAPES does not have (K-1047) ─────────
+#
+# Every value in INT_SHAPES varies an argument's TYPE, and nothing above is an
+# integer too LARGE for the column behind it. That blind spot is exactly what
+# let a sibling demo answer `500 action_failed` for a body its own published
+# descriptor called VALID through three hostile-shape waves, so it is closed
+# here in the same one.
+#
+# MEASURED on a booted origin before the bound was declared: `party_size:
+# 2_147_483_648` passed `{type: "integer", minimum: 1}` (which had no ceiling),
+# passed {WireArguments.party_size} (a whole number >= 1), and reached
+# `RestaurantTable.where(capacity.gteq(party_size))` — `capacity` is a
+# PostgreSQL `integer` — where ActiveRecord raised `ActiveModel::RangeError`
+# CASTING the comparison, on BOTH surfaces that take a party: `book_table`
+# (`book_table_operation.rb`) and `availability`
+# (`dining_room_controller.rb`). Both answered HTTP 500. `party_size` now
+# declares the column's own width as its `maximum`, and the shared guard
+# mirrors it, so both are a typed 400 from the schema layer.
+#
+# THE TWO IDENTIFIERS ARE DELIBERATELY NOT PROBED HERE, AND THAT IS MEASURED
+# RATHER THAN ASSUMED: `restaurant_id` and `restaurant_table_id` reach
+# ActiveRecord as EQUALITY predicates (`where(id: …, restaurant_id: …)`), and an
+# out-of-range value there answers ZERO ROWS instead of raising — so a huge id
+# is already the ordinary "no such table" 400 this suite's other beats cover.
+# Only the `gteq` COMPARISON casts, and `party_size` is the only wire argument
+# that reaches one.
+BEYOND_INT4 = 2_147_483_648 # one past PostgreSQL `integer`
+rc, body = book_slot(TOKEN_A, shape_slot, party_size: BEYOND_INT4)
+shape_probes << shape_verdict("book_table party_size=#{BEYOND_INT4}", rc, body)
+rc, body = get_json("/kiosk/availability", { party_size: BEYOND_INT4 }, bearer(TOKEN_A))
+shape_probes << shape_verdict("availability party_size=#{BEYOND_INT4}", rc, body)
+
 # Positive controls, one per verb touched, so the beat cannot pass against an
 # origin that refuses everything: the SAME availability row books at its
 # published values, and the booking it makes cancels.

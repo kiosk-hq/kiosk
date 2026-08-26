@@ -907,6 +907,7 @@ ALTER TABLE ONLY public.bookings
 SET search_path TO "$user", public;
 
 INSERT INTO "schema_migrations" (version) VALUES
+('20260827000002'),
 ('20260823000001'),
 ('20260820140001'),
 ('20260820130117'),

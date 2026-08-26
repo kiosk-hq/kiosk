@@ -309,6 +309,20 @@ module Kiosk
       # `settlements` has «no `mandate_id` and no `raw_jws`» since the table
       # was named; this makes the schema agree with it.
       #
+      # REMOVING IT FROM THIS `CREATE` WAS ONLY HALF THE CHANGE (K-1086). This
+      # DDL reaches a database that is built FROM ZERO; a database built while
+      # the old CREATE was head still carries `raw_jws text NOT NULL` with no
+      # DEFAULT, head's INSERT does not name it, and Postgres refuses every
+      # settlement INSERT there — permanently, because nothing in this file can
+      # take a column away from a table that already exists. The drop ships as
+      # its own migration,
+      # `db/migrate/20260827000002_drop_kiosk_settlement_raw_jws.rb`, in each of
+      # the seven demos that hold this table. THE RULE IS SYMMETRICAL: a column
+      # REMOVED from this file needs a shipped `DROP` for exactly the reason a
+      # column ADDED needs a shipped `ADD` (T-103 clause (vii); K-1074 is the
+      # additive half of the same delivery gap, and only that half had ever been
+      # written down). `bin/check-migration-replay` is what says it out loud.
+      #
       # `id` is a SERVER-generated uuid PK (`gen_random_uuid()`) — never
       # supplied by the caller, so one principal cannot pre-occupy or block
       # another's row on these (currently RLS-less) tables. The agent-signed

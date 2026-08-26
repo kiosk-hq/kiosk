@@ -927,6 +927,7 @@ ALTER TABLE ONLY public.orders
 SET search_path TO "$user", public;
 
 INSERT INTO "schema_migrations" (version) VALUES
+('20260827000002'),
 ('20260823000001'),
 ('20260820130117'),
 ('20260820130116'),

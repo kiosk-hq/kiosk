@@ -605,6 +605,19 @@ COPIES = {
     why:  "The demo's own users table, which the engine expects to exist. Two comment variants, " \
           "one schema.",
   },
+  "db/migrate/20260827000002_drop_kiosk_settlement_raw_jws.rb" => {
+    rule:  :identical,
+    ships: %w[atablefor getgrocery hoteling philslist skooti stylish tudu],
+    why:  "The DROP that K-948's removal of `kiosk.settlements.raw_jws` never shipped (K-1086). A " \
+          "column taken OUT of the canonical DDL needs a shipped `ALTER TABLE … DROP COLUMN` for " \
+          "exactly the reason a column put IN needs a shipped `ADD` — otherwise it survives, NOT " \
+          "NULL and defaultless, on every database provisioned while the old CREATE was head, and " \
+          "refuses every INSERT head issues. NOT generator output and deliberately not in the " \
+          "install-generator set: `kiosk:install` emits the fresh-install shape, whose CREATE never " \
+          "makes this column, so a new adopter has nothing to drop. `ships:` is declared because " \
+          "prove has no `kiosk.settlements` (it adopts no engine schema) and must not acquire a " \
+          "copy by accident.",
+  },
   "db/migrate/20260823000001_create_demo_telemetry_events.rb" => {
     rule:  :identical,
     ships: %w[atablefor getgrocery hoteling philslist skooti stylish tudu],

@@ -97,7 +97,7 @@ _key2, reg2 = equihash_register(
 )
 other_agent_id = reg2.fetch("agent_id")
 
-# The request we prove. §3.4's fingerprint is
+# The request we prove. The request fingerprint is
 # `SHA256("<METHOD> <verb>\n<canonical args>")` — the HTTP method, the verb name
 # as it appears in the PATH, and the canonical JSON of the arguments — so an
 # identical retry means the same method, the same path AND the same query

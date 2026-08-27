@@ -82,7 +82,8 @@ end
 # number of proofs solved (nil = no challenge — free pass). The proof count is
 # this protocol's difficulty measure (N×PoW).
 #
-# §3.4's fingerprint is `SHA256("<METHOD> <verb>\n<canonical args>")`, so "the
+# The request fingerprint is `SHA256("<METHOD> <verb>\n<canonical args>")`, so
+# "the
 # same request" now means the same METHOD and the same PATH SEGMENT as well as
 # the same arguments. One `send_it` lambda builds every attempt from the same
 # three, which is what makes the retry provably identical to the challenged

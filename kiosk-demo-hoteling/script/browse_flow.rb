@@ -68,7 +68,7 @@ BROWSES.times do |i|
     proofs = challenges.map { |c| { challenge: c, nonce: equihash_solve(c) } }
     # PoW proof rides in the Kiosk-PoW request header as raw JSON (ADR-0022),
     # not the body — the REQUEST LINE and the arguments stay byte-identical so
-    # the §3.4 fingerprint (`SHA256("GET properties\n{}")`) matches on retry.
+    # the request fingerprint (`SHA256("GET properties\n{}")`) matches on retry.
     rc, resp = get_json(BROWSE_URL, auth.merge("Kiosk-PoW" => JSON.generate(proofs)))
     curve << proofs.size
   else

@@ -11,8 +11,14 @@
 #
 # THIS FILE IS A SWEEP'S WATERMARK, NOT A LOCK. Re-record it when a sweep has
 # RE-JUDGED the drifted rows -- never to make a run quiet. Nothing in CI reads
-# it; drift is the normal state between sweeps and a gate on it would have to
-# be switched off the day it was added.
+# these fingerprints AS DRIFT: drift is the normal state between sweeps and a
+# gate on it would have to be switched off the day it was added. What CI does
+# run is `bin/check-conformance-drift --check`, which asks only whether this
+# file is one its own generator could have written -- row form and order, this
+# header, and that every fingerprint re-measures to its recorded value at the
+# commit named below. That never looks at head, so it cannot push the
+# watermark forward. Repair a drifted header with --reheader, which re-renders
+# this block and touches no fingerprint.
 #
 # recorded: 2026-08-27 at 42a41b63 -- sweep-022
 # 574 anchors.

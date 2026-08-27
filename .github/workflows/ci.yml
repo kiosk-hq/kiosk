@@ -815,6 +815,52 @@ jobs:
       - name: Every anchor the conformance matrix cites occurs exactly once
         run: ./bin/check-conformance-anchors
 
+  # `spec/conformance-drift-baseline.tsv` is the anchors manifest's sibling: a
+  # GENERATED file recording each anchored region's fingerprint, so a conformance
+  # sweep can re-judge what MOVED instead of walking ~185 rows blind. It had no
+  # staleness check of any kind, where the manifest has one — and it showed: the
+  # first committed baseline's header read "sampling ~185 rows blind" where its
+  # own committed generator has emitted "sampling the matrix blind" since 918a56f2,
+  # so the file had been produced by a draft that no longer existed and nothing in
+  # the tree could say so.
+  #
+  # THE MANIFEST'S RULE IS NOT THE RULE HERE, deliberately. "Equal to what the
+  # generator would write at head" would force the baseline forward on every
+  # commit and set the sweep interval to zero, which is exactly what the drift
+  # design rejects — the lag IS the signal, and that is why no job runs the drift
+  # REPORT. `--check` asks the other question: could THIS generator have written
+  # THIS file? Row form and `pairs.sort` order, a header byte-equal to what the
+  # generator renders from the file's own recorded values, and every fingerprint
+  # re-measuring to its recorded value AT THE COMMIT THE FILE NAMES. None of that
+  # looks at head, so a baseline three hundred commits behind passes exactly as
+  # well as a fresh one.
+  #
+  # Stdlib Ruby only: no bundle, no services, no database, ~1 s.
+  conformance-drift-baseline:
+    name: the drift baseline is self-consistent (bin/check-conformance-drift --check)
+    runs-on: ubuntu-latest
+    # The daily schedule exists for solver-pin-live; don't rebuild the world.
+    if: github.event_name != 'schedule'
+
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          # --check re-measures every fingerprint at the commit the baseline
+          # names, which is an ANCESTOR of this head — often a long way back,
+          # because the baseline is meant to lag. The default depth-1 checkout
+          # does not have it, and the check would report the recorded ref as
+          # "not a commit in this repository" on every run.
+          fetch-depth: 0
+
+      - name: Set up Ruby
+        uses: ruby/setup-ruby@v1
+        with:
+          ruby-version: "4.0.1"
+          bundler-cache: false
+
+      - name: The generated baseline is one its own generator could have written
+        run: ./bin/check-conformance-drift --check
+
   # The demos are eight standalone Rails apps, so shared application code is not
   # shared — it is HAND-COPIED, and until now nothing checked the copies still
   # agreed. demo_telemetry.rb (then at lib/, now app/services/) carried a stale

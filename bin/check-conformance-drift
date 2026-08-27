@@ -58,13 +58,68 @@
 # recorded sha with it. A baseline of bytes survives that; a baseline of shas
 # does not.
 #
-# IT IS NOT A GATE, AND MUST NOT BECOME ONE. Drift here is the NORMAL state
-# between sweeps: every legitimate refactor of a cited test produces it. A CI job
-# failing on it would have to be silenced immediately, and silencing it means
-# re-recording the baseline in the same commit — which sets the interval to zero
-# and destroys the only signal the tool has. The baseline must advance when a
-# SWEEP has re-judged the rows, never when a commit lands. Hence exit 2 (drift,
-# triage it) is distinct from exit 1 (cannot answer), and no workflow runs this.
+# THE DRIFT REPORT IS NOT A GATE, AND MUST NOT BECOME ONE. Drift here is the
+# NORMAL state between sweeps: every legitimate refactor of a cited test produces
+# it. A CI job failing on it would have to be silenced immediately, and silencing
+# it means re-recording the baseline in the same commit — which sets the interval
+# to zero and destroys the only signal the tool has. The baseline must advance
+# when a SWEEP has re-judged the rows, never when a commit lands. Hence exit 2
+# (drift, triage it) is distinct from exit 1 (cannot answer), and no workflow runs
+# the REPORT.
+#
+# `--check` IS A GATE, AND IT ASKS A DIFFERENT QUESTION (the drift-baseline
+# staleness gap, 2026-08-27). The baseline is a GENERATED file that had no
+# staleness check of any kind, unlike its sibling manifest — `audit/check-
+# conformance-refs.rb` fails when `spec/conformance-anchors.tsv` is not byte-equal
+# to what the exporter would write. MEASURED: the FIRST committed baseline was not
+# byte-reproducible from its own committed generator. Its header read «sampling
+# ~185 rows blind» where the heredoc below has emitted «sampling the matrix blind»
+# since this file's creation commit `918a56f2` — so the committed file had been
+# produced by a draft that no longer existed, and nothing in the tree could say
+# so. A hand-edited fingerprint, a hand-inserted row and a hand-tweaked header all
+# read clean forever for exactly the same reason.
+#
+# THE MANIFEST'S RULE CANNOT BE COPIED HERE, AND COPYING IT WOULD BE THE WRONG
+# FIX. «The baseline must equal what --record would write at head» forces the file
+# forward on every commit and sets the interval to zero — the very thing the
+# paragraph above rejects. The lag IS the signal. So --check asks about FORM and
+# PROVENANCE, and never about head:
+#
+#   * every row is three tab-separated fields, the fingerprint 16 lowercase hex
+#     — which is what `Digest::SHA256.hexdigest(...)[0, 16]` produces — with no
+#     duplicated path+anchor pair, no blank line and no comment below the header,
+#     because --record emits none of those;
+#   * the rows are in `pairs.sort` order, the only order --record can emit;
+#   * the header is BYTE-EQUAL to what `baseline_header` renders from the file's
+#     OWN recorded stamp, ref, label and count — the same method --record writes
+#     it with, so prose drift cannot survive a single run;
+#   * the ref named in `recorded:` is a commit in this repository, and every
+#     fingerprint RE-MEASURES to its recorded value AT THAT COMMIT, using this
+#     file's own `region_at` and `fingerprint`.
+#
+# That last clause is what catches a hand-edited fingerprint, and it is what makes
+# «could THIS generator have written THIS file» a measurement rather than a shape
+# test. It pins the baseline to its own recorded PAST, never to head, so a
+# baseline three hundred commits behind passes exactly as well as a fresh one.
+#
+# ITS LIMITS, because an over-claimed guard is worse than none:
+#   (a) A baseline recorded while a cited file was modified in the working tree
+#       describes bytes that exist in no commit. --record MEASURES that and stamps
+#       it into the `recorded:` line, and --check then reports provenance as
+#       UNVERIFIED instead of pretending; commit first if you want a verifiable
+#       watermark. It is a NOTICE and not a failure, because recording mid-wave is
+#       legitimate and the alternative is a gate that punishes honesty.
+#   (b) It is an ACCIDENT control, not a tamper control. Anyone who can hand-edit
+#       a row can also run --record. That is equally true of the manifest, whose
+#       repair is likewise "re-run the generator".
+#   (c) It says NOTHING about whether the baseline is current. That is the drift
+#       report's question, and deliberately not a gate.
+#
+# THE REPAIR FOR A DRIFTED HEADER IS `--reheader`, NOT `--record`, and that matters
+# more than it looks. If --record were the only repair, then editing one word of
+# the heredoc would force every fingerprint to head and destroy the interval — the
+# gate would be a machine for erasing the signal it guards. `--reheader` re-renders
+# the header block from the file's own recorded values and touches no fingerprint.
 #
 # WHAT IT DOES NOT COVER, stated plainly because an over-claimed guard is worse
 # than none:
@@ -92,13 +147,19 @@
 #   bin/check-conformance-drift --matrix PATH       # …naming the matrix rows affected
 #   bin/check-conformance-drift --record            # re-record the baseline at the current tree
 #   bin/check-conformance-drift --record --label T  # …with a free-text label in its header
+#   bin/check-conformance-drift --check             # is the baseline one THIS generator wrote?
+#   bin/check-conformance-drift --reheader          # re-render its header, touching no fingerprint
 #
-# Exit codes, and they are three on purpose:
+# Exit codes. The REPORT has three on purpose:
 #   0 — every anchored region matches the baseline
 #   2 — some moved: the list is the next sweep's D1 work-list, not a failure
 #   1 — the question could not be answered (missing manifest/baseline/file)
+# `--check` has two, because it IS a gate: 0 the baseline is self-consistent,
+# 1 it is not — 2 is never returned. `--record` and `--reheader`: 0 written,
+# 1 refused, and they say why.
 
 require "digest"
+require "English"
 require "shellwords"
 
 ROOT     = File.expand_path("..", __dir__)
@@ -107,20 +168,26 @@ BASELINE = File.join(ROOT, "spec", "conformance-drift-baseline.tsv")
 
 USAGE = <<~TEXT
   usage: bin/check-conformance-drift [--matrix PATH] [--record [--label TEXT]]
-         0 = no drift, 2 = regions moved (triage), 1 = cannot answer
+         bin/check-conformance-drift --check | --reheader
+         report:   0 = no drift, 2 = regions moved (triage), 1 = cannot answer
+         --check:  0 = the baseline is one this generator could have written, 1 = it is not
 TEXT
 
-record = false
-matrix = nil
-label  = nil
+record   = false
+check    = false
+reheader = false
+matrix   = nil
+label    = nil
 
 argv = ARGV.dup
 until argv.empty?
   arg = argv.shift
   case arg
-  when "--record" then record = true
-  when "--matrix" then matrix = argv.shift
-  when "--label"  then label  = argv.shift
+  when "--record"   then record   = true
+  when "--check"    then check    = true
+  when "--reheader" then reheader = true
+  when "--matrix"   then matrix   = argv.shift
+  when "--label"    then label    = argv.shift
   when "-h", "--help"
     puts USAGE
     exit 0
@@ -131,28 +198,14 @@ until argv.empty?
   end
 end
 
+if [record, check, reheader].count(true) > 1
+  warn "check-conformance-drift: --record, --check and --reheader are three different questions; pass one"
+  warn USAGE
+  exit 1
+end
+
 if matrix && !File.file?(matrix)
   warn "check-conformance-drift: --matrix #{matrix}: no such file"
-  exit 1
-end
-
-unless File.file?(MANIFEST)
-  warn "check-conformance-drift: missing #{MANIFEST} — it is generated with the matrix"
-  exit 1
-end
-
-# ── the manifest: the same path/anchor pairs bin/check-conformance-anchors gates
-pairs = File.readlines(MANIFEST, chomp: true).filter_map do |line|
-  next if line.start_with?("#") || line.strip.empty?
-
-  rel, anchor = line.split("\t", 2)
-  next if rel.nil? || anchor.nil? || anchor.empty?
-
-  [rel, anchor]
-end
-
-if pairs.empty?
-  warn "check-conformance-drift: #{MANIFEST} lists no anchors — nothing to fingerprint"
   exit 1
 end
 
@@ -209,13 +262,46 @@ def measure(rel, anchor)
   [fingerprint(region), "#{region.length} line(s) from :#{hits.first + 1}"]
 end
 
-# ── --record ─────────────────────────────────────────────────────────────────
-if record
-  head = `git -C #{Shellwords.escape(ROOT)} rev-parse --short HEAD 2>/dev/null`.strip
-  head = "unknown" if head.empty?
-  stamp = Time.now.strftime("%Y-%m-%d")
+# ── git, read-only ───────────────────────────────────────────────────────────
+#
+# stderr is deliberately NOT swallowed: a `fatal:` from git is how you find out
+# the question was malformed, and hiding it is how a zero gets manufactured
+# (CLAUDE.md, "Stay inside the workspace").
+def git(*args)
+  out = IO.popen(["git", "-C", ROOT, *args], &:read)
+  [out, $CHILD_STATUS.success?]
+end
 
-  out = +<<~HEAD
+# `git show` hands back the whole blob; File.readlines(chomp: true) does not
+# produce a phantom last element for the trailing newline, so neither does this.
+def blob_lines(text)
+  lines = text.split("\n", -1)
+  lines.pop if lines.last == ""
+  lines
+end
+
+# ── the baseline's FORM: one renderer, one parser, both used by both modes ────
+#
+# --record WRITES the header with baseline_header and --check RE-RENDERS it with
+# the same method from the file's own recorded values. That is the whole
+# mechanism: prose that drifted out of one and not the other cannot survive a
+# single run, which is precisely what happened to the first baseline and what
+# nothing could see.
+RECORDED_RE = /
+  \A\#\srecorded:\s(?<stamp>\S+)\sat\s(?<head>\S+)
+  (?:\s\(working\stree:\s(?<dirty>\d+)\scited\sfile\(s\)\smodified\))?
+  (?:\s--\s(?<label>.*))?\z
+/x
+COUNT_RE       = /\A\# (?<count>\d+) anchors\.\z/
+FINGERPRINT_RE = /\A[0-9a-f]{16}\z/
+
+def recorded_line(stamp, head, dirty, label)
+  dirty_clause = dirty.to_i.positive? ? " (working tree: #{dirty} cited file(s) modified)" : ""
+  "# recorded: #{stamp} at #{head}#{dirty_clause}#{label ? " -- #{label}" : ""}"
+end
+
+def baseline_header(count, stamp, head, dirty, label)
+  <<~HEAD
     # conformance-drift-baseline.tsv -- GENERATED by bin/check-conformance-drift --record.
     # Do not edit by hand.
     #
@@ -229,12 +315,283 @@ if record
     #
     # THIS FILE IS A SWEEP'S WATERMARK, NOT A LOCK. Re-record it when a sweep has
     # RE-JUDGED the drifted rows -- never to make a run quiet. Nothing in CI reads
-    # it; drift is the normal state between sweeps and a gate on it would have to
-    # be switched off the day it was added.
+    # these fingerprints AS DRIFT: drift is the normal state between sweeps and a
+    # gate on it would have to be switched off the day it was added. What CI does
+    # run is `bin/check-conformance-drift --check`, which asks only whether this
+    # file is one its own generator could have written -- row form and order, this
+    # header, and that every fingerprint re-measures to its recorded value at the
+    # commit named below. That never looks at head, so it cannot push the
+    # watermark forward. Repair a drifted header with --reheader, which re-renders
+    # this block and touches no fingerprint.
     #
-    # recorded: #{stamp} at #{head}#{label ? " -- #{label}" : ""}
-    # #{pairs.length} anchors.
+    #{recorded_line(stamp, head, dirty, label)}
+    # #{count} anchors.
   HEAD
+end
+
+# The cited files whose working-tree bytes differ from HEAD. A baseline recorded
+# over any of them fingerprints content that is in no commit, so it cannot be
+# re-measured later; --record records the COUNT rather than refusing, and --check
+# downgrades provenance to a notice when it is non-zero.
+def dirty_cited(rels)
+  return 0 if rels.empty?
+
+  out, ok = git("status", "--porcelain", "--", *rels)
+  return 0 unless ok
+
+  out.lines.count { |l| !l.strip.empty? }
+end
+
+# ── --check / --reheader ─────────────────────────────────────────────────────
+if check || reheader
+  unless File.file?(BASELINE)
+    warn "check-conformance-drift: no baseline at #{BASELINE} — there is nothing to check."
+    warn "Record one with `bin/check-conformance-drift --record`."
+    exit 1
+  end
+
+  raw   = File.read(BASELINE)
+  lines = raw.split("\n", -1)
+  lines.pop if lines.last == ""
+
+  # `parse` defects make the file unreadable as a baseline, so --reheader refuses
+  # on them; `form` and `prov` are what --check adds on top.
+  parse = []
+  form  = []
+  prov  = []
+  notes = []
+
+  parse << "the file does not end in a newline; --record always writes one" unless raw.end_with?("\n")
+
+  header = lines.take_while { |l| l.start_with?("#") }
+  body   = lines.drop(header.length)
+
+  stamp = head = label = count = nil
+  dirty = 0
+
+  if header.length < 2
+    parse << "the header is #{header.length} line(s). --record writes a comment block ending in " \
+             "`# recorded: <date> at <ref>` and `# N anchors.`"
+  else
+    if (m = RECORDED_RE.match(header[-2]))
+      stamp = m[:stamp]
+      head  = m[:head]
+      label = m[:label]
+      dirty = m[:dirty].to_i
+    else
+      parse << "the second-to-last header line is not a recorded-stamp: #{header[-2].inspect}"
+    end
+
+    if (c = COUNT_RE.match(header[-1]))
+      count = c[:count].to_i
+    else
+      parse << "the last header line is not a `# N anchors.` count: #{header[-1].inspect}"
+    end
+  end
+
+  rows = []
+  seen = {}
+  body.each_with_index do |line, i|
+    n = header.length + i + 1
+
+    if line.strip.empty?
+      parse << "line #{n}: blank — --record emits no blank lines, and the reader SKIPS this, so it is invisible content"
+      next
+    end
+    if line.start_with?("#")
+      parse << "line #{n}: a comment below the header — --record emits none, and the reader SKIPS it: #{line.inspect}"
+      next
+    end
+
+    fields = line.split("\t", -1)
+    unless fields.length == 3
+      parse << "line #{n}: #{fields.length} tab-separated field(s), want 3 (path, fingerprint, anchor)"
+      next
+    end
+
+    rel, fp, anchor = fields
+    if rel.empty? || anchor.empty?
+      parse << "line #{n}: empty #{rel.empty? ? 'path' : 'anchor'}"
+      next
+    end
+    unless FINGERPRINT_RE.match?(fp)
+      parse << "line #{n}: #{fp.inspect} is not a fingerprint — `Digest::SHA256.hexdigest(...)[0, 16]` " \
+               "is 16 lowercase hex digits and nothing else"
+      next
+    end
+    if (first = seen[[rel, anchor]])
+      parse << "line #{n}: duplicates line #{first} — --record writes one row per manifest pair"
+      next
+    end
+
+    seen[[rel, anchor]] = n
+    rows << [rel, fp, anchor]
+  end
+
+  keys = rows.map { |rel, _fp, anchor| [rel, anchor] }
+  if keys != keys.sort
+    i = (1...keys.length).find { |k| (keys[k - 1] <=> keys[k]) == 1 }
+    parse << "the rows are not in `pairs.sort` order, which is the only order --record emits: " \
+             "#{keys[i].inspect} follows #{keys[i - 1].inspect}"
+  end
+
+  if count && count != rows.length
+    parse << "the header says #{count} anchors and #{rows.length} row(s) follow. --record writes the " \
+             "MANIFEST's count in the header and one row per MEASURABLE anchor, and it exits 1 when " \
+             "those differ — a baseline in this state was recorded over a red bin/check-conformance-anchors"
+  end
+
+  # ── --reheader: re-render the header, keep every fingerprint ───────────────
+  if reheader
+    unless parse.empty?
+      warn "check-conformance-drift --reheader: refusing — the baseline cannot be read back as one."
+      parse.each { |p| warn "  x #{p}" }
+      warn "--reheader only re-renders the header; it cannot repair the rows. Fix them, or re-record."
+      exit 1
+    end
+
+    was = header.join("\n") + "\n"
+    now = baseline_header(count, stamp, head, dirty, label)
+    File.write(BASELINE, now + rows.map { |rel, fp, anchor| "#{rel}\t#{fp}\t#{anchor}\n" }.join)
+    if was == now
+      puts "check-conformance-drift --reheader: header was already what this generator emits; " \
+           "#{rows.length} row(s) rewritten byte-for-byte."
+    else
+      puts "check-conformance-drift --reheader: header re-rendered (#{was.lines.length} -> " \
+           "#{now.lines.length} line(s)); #{rows.length} fingerprint(s) untouched, still recorded at #{head}."
+    end
+    exit 0
+  end
+
+  # ── the header, byte-for-byte against this generator ───────────────────────
+  if stamp && count
+    want = baseline_header(count, stamp, head, dirty, label)
+    got  = header.join("\n") + "\n"
+    if want != got
+      wl = want.split("\n", -1)
+      gl = got.split("\n", -1)
+      i  = (0...[wl.length, gl.length].max).find { |k| wl[k] != gl[k] }
+      form << "the header is not what this generator emits (first difference at header line #{i + 1}):\n" \
+              "      file:      #{gl[i].inspect}\n" \
+              "      generator: #{wl[i].inspect}\n" \
+              "      Repair with `bin/check-conformance-drift --reheader`, which rewrites the header " \
+              "and no fingerprint. Do NOT --record: that would drag every fingerprint to head."
+    end
+  end
+
+  # ── provenance: every fingerprint re-measures AT THE COMMIT IT NAMES ───────
+  if head.nil?
+    notes << "provenance not checked: the recorded stamp did not parse, so there is no ref to measure at."
+  elsif head == "unknown"
+    prov << "`recorded:` names no commit (`unknown`), which --record writes when git cannot answer. " \
+            "A watermark that names no tree state cannot be verified against one; re-record inside a " \
+            "git checkout."
+  elsif !git("rev-parse", "--verify", "--quiet", "#{head}^{commit}").last
+    prov << "`recorded:` names #{head}, which is not a commit in this repository. The baseline claims " \
+            "to describe a tree that is not here, so nothing can confirm a single fingerprint in it."
+  elsif dirty.positive?
+    notes << "provenance NOT checked: the header records that #{dirty} cited file(s) were modified in the " \
+             "working tree when this baseline was recorded, so its fingerprints describe bytes that exist " \
+             "in no commit. Re-record from a clean tree if you want them verifiable."
+  else
+    at_ref     = {}
+    mismatched = []
+    unmeasured = []
+
+    rows.each do |rel, fp, anchor|
+      lines_at = at_ref.fetch(rel) do
+        text, ok = git("show", "#{head}:#{rel}")
+        at_ref[rel] = ok ? blob_lines(text) : nil
+      end
+
+      if lines_at.nil?
+        unmeasured << "#{rel}  #{anchor.inspect}: no such path at #{head}"
+        next
+      end
+
+      hits = lines_at.each_index.select { |i| lines_at[i].include?(anchor) }
+      unless hits.length == 1
+        unmeasured << "#{rel}  #{anchor.inspect}: " \
+                      "#{hits.empty? ? "anchor absent at #{head}" : "anchor ambiguous at #{head} (#{hits.length} matches)"}"
+        next
+      end
+
+      got = fingerprint(region_at(lines_at, hits.first))
+      mismatched << "#{rel}  #{anchor.inspect}: recorded #{fp}, re-measures #{got} at #{head}" if got != fp
+    end
+
+    unless mismatched.empty?
+      prov << "#{mismatched.length} of #{rows.length} fingerprint(s) do NOT re-measure to their recorded " \
+              "value at #{head}. This generator cannot have produced them from that tree:\n" +
+              mismatched.first(12).map { |m| "      #{m}" }.join("\n") +
+              (mismatched.length > 12 ? "\n      … and #{mismatched.length - 12} more" : "")
+    end
+    unless unmeasured.empty?
+      prov << "#{unmeasured.length} of #{rows.length} row(s) name an anchor that does not resolve uniquely " \
+              "at #{head} — the baseline describes a tree in which its own rows were not measurable:\n" +
+              unmeasured.first(12).map { |m| "      #{m}" }.join("\n") +
+              (unmeasured.length > 12 ? "\n      … and #{unmeasured.length - 12} more" : "")
+    end
+  end
+
+  problems = parse + form + prov
+
+  unless notes.empty?
+    puts "check-conformance-drift --check: NOTICE"
+    notes.each { |n| puts "  - #{n}" }
+    puts
+  end
+
+  unless problems.empty?
+    warn "check-conformance-drift --check: FAIL — #{problems.length} defect(s) in spec/#{File.basename(BASELINE)}."
+    problems.each { |p| warn "  x #{p}" }
+    warn ""
+    warn "This file is GENERATED and nothing else in the tree can tell you it stopped being so."
+    warn "The repairs are: --reheader for the header, --record for the rows (but --record advances"
+    warn "the watermark to head, which is only earned once a sweep has re-judged the drifted rows)."
+    exit 1
+  end
+
+  puts "check-conformance-drift --check: OK — spec/#{File.basename(BASELINE)} is one this generator could have written."
+  puts "  #{rows.length} row(s), recorded #{stamp} at #{head}#{label ? " -- #{label}" : ""}"
+  puts "  rows: 3 fields each, 16-hex fingerprints, no duplicates, in `pairs.sort` order, header count agrees"
+  puts "  header: byte-identical to `baseline_header` re-rendered from this file's own values"
+  if dirty.zero? && head && head != "unknown"
+    puts "  provenance: all #{rows.length} fingerprint(s) re-measure to their recorded value at #{head}"
+  end
+  puts "(This says the baseline is SELF-CONSISTENT. It deliberately says nothing about whether it is"
+  puts "CURRENT — the lag is the drift signal, and a check that demanded head would destroy it.)"
+  exit 0
+end
+
+unless File.file?(MANIFEST)
+  warn "check-conformance-drift: missing #{MANIFEST} — it is generated with the matrix"
+  exit 1
+end
+
+# ── the manifest: the same path/anchor pairs bin/check-conformance-anchors gates
+pairs = File.readlines(MANIFEST, chomp: true).filter_map do |line|
+  next if line.start_with?("#") || line.strip.empty?
+
+  rel, anchor = line.split("\t", 2)
+  next if rel.nil? || anchor.nil? || anchor.empty?
+
+  [rel, anchor]
+end
+
+if pairs.empty?
+  warn "check-conformance-drift: #{MANIFEST} lists no anchors — nothing to fingerprint"
+  exit 1
+end
+
+# ── --record ─────────────────────────────────────────────────────────────────
+if record
+  head = `git -C #{Shellwords.escape(ROOT)} rev-parse --short HEAD 2>/dev/null`.strip
+  head = "unknown" if head.empty?
+  stamp = Time.now.strftime("%Y-%m-%d")
+  dirty = head == "unknown" ? 0 : dirty_cited(pairs.map(&:first).uniq.sort)
+
+  out = +baseline_header(pairs.length, stamp, head, dirty, label)
 
   missing = []
   pairs.sort.each do |rel, anchor|
@@ -248,6 +605,14 @@ if record
 
   File.write(BASELINE, out)
   puts "wrote spec/#{File.basename(BASELINE)} (#{pairs.length - missing.length} of #{pairs.length} anchors, #{stamp} at #{head})"
+
+  if dirty.positive?
+    warn ""
+    warn "check-conformance-drift: NOTICE — #{dirty} cited file(s) differ from #{head} in the working tree,"
+    warn "so these fingerprints describe bytes that are in no commit and `--check` cannot verify them."
+    warn "That is recorded in the header rather than refused; commit the cited files and re-record if you"
+    warn "want a watermark whose provenance is checkable."
+  end
 
   unless missing.empty?
     warn ""

@@ -166,9 +166,12 @@
 # The rule above shipped INSIDE the `if kind == "none"` branch, and K-1099 then
 # took that branch down to a single user — hoteling's illustrative one-line
 # swap. So a rule written because «verbatim … nothing else touched» had been
-# FALSE eight times over fired beside ONE block of twenty-four, and beside none
-# of the four that quote a recorded run — which is exactly where those eight
-# falsehoods had been. MEASURED at head before this change, by re-implementing
+# FALSE eight times over fired beside exactly ONE block — that `derived: none`
+# swap, which is the one declared block this script does NOT check — and beside
+# none of the four that quote a recorded run, which is exactly where those eight
+# falsehoods had been. (The split is printed, not remembered: `--list` prints
+# every DECLARED block and the success line counts the CHECKED ones — 25 and 24
+# when this was written, and both move with the next block anyone declares.) MEASURED at head before this change, by re-implementing
 # the window and the regexes over the four documents: the transcript intros
 # carried ELEVEN completeness promises, NINE matched a `PROMISES` regex, and
 # only SEVEN fell inside the window.
@@ -1345,9 +1348,10 @@ end
     # The promise rule covers BOTH block classes whose checker cannot back a
     # completeness claim: `none`, checked by nothing, and `transcript`, checked
     # by a SUBSET test. It used to sit inside the `none` branch below — i.e.
-    # beside ONE block of twenty-four and beside none of the four that quote a
-    # recorded run, which is where every falsehood K-1062 and K-1063 found had
-    # been. See the K-1106 header section.
+    # beside exactly ONE block — hoteling's `derived: none` swap, the one
+    # declared block this script does not check — and beside none of the four
+    # that quote a recorded run, which is where every falsehood K-1062 and
+    # K-1063 found had been. See the K-1106 header section.
     if %w[none transcript].include?(kind) && (hit = PROMISES.find { |re| block.neighbourhood =~ re })
       why_unbacked = if kind == "none"
                        "the block is declared `derived: none`, so nothing checks it at all"

@@ -592,6 +592,20 @@ namespace :demo do
       BLOCKED  CustomerCalendarStaysOwnScoped — a customer's agent sees only its
                own bookings + no forecast in salon_calendar (role gate
                un-bypassable)
+      BLOCKED  DeviceGrantCannotSelfSelectRole — the claim ceremony's
+               UNAUTHENTICATED opening request may not name a role: `role` and
+               `scope`, declared value or not, answer 400 invalid_request,
+               while the role-less request still opens the ceremony
+      BLOCKED  DeviceGrantRoleComesFromTheApprover — the same endpoints yield
+               `customer` for a customer-approved ceremony (own bookings, no
+               forecast) and `owner` for an owner-approved one (whole book +
+               forecast) — the role is the approver's, never the caller's
+      BLOCKED  DeviceGrantVerifyPageNamesTheAccess — the consent page names the
+               access it is handing over, and names a different one to each
+               human (so a constant string cannot satisfy it)
+      BLOCKED  DeviceGrantRebindCannotEscalate — a key already bound `customer`
+               re-runs the whole ceremony: role stays `customer`, agent_id
+               stable, calendar still own-scoped (the one-ceremony-later hole)
       BLOCKED  SelfAssertedTokenForgery — a self-asserted
                `agent:u-<owner>:a-…:r-owner` bearer resolves to NO identity
                (401 at salon_calendar AND book_appointment) in the SAME

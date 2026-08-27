@@ -32,6 +32,17 @@
 #   CustomerCalendarStaysOwnScoped — a customer's agent sees only its OWN
 #     bookings (no whole-book, no forecast) in salon_calendar — the role gate
 #     is provider-controlled and un-bypassable
+#   DeviceGrantCannotSelfSelectRole — the CLAIM ceremony's unauthenticated
+#     opening request may not name a role: `role`/`scope`, declared value or
+#     not, is 400 invalid_request, while the role-less request still opens
+#   DeviceGrantRoleComesFromTheApprover — the same endpoints yield `customer`
+#     for a customer-approved ceremony (own bookings, no forecast) and `owner`
+#     for an owner-approved one (whole book + forecast): the role is the
+#     approver's, both directions asserted so neither constant would pass
+#   DeviceGrantVerifyPageNamesTheAccess — the consent page names the role it is
+#     handing over, and names a DIFFERENT one to each human
+#   DeviceGrantRebindCannotEscalate — a key already bound `customer` re-runs the
+#     ceremony: the role stays `customer`, agent_id stable, calendar own-scoped
 #   SelfAssertedTokenForgery — the AGENT sibling of the beat below (K-539 /
 #     T-104): a self-asserted `agent:u-…:a-…:r-owner` bearer naming the seeded
 #     owner resolves to NO identity, in EVERY environment, while the OWNER's
@@ -361,6 +372,186 @@ record(results, "CustomerCalendarStaysOwnScoped",
        rc == 200 && rc_b3 == 200 && own_only && no_forecast,
        "customer salon_calendar: #{rows.size} rows #{own_ids.inspect}, excludes B's #{appt_id_b3.inspect} " \
        "(own_only=#{own_only}), forecast_hidden=#{no_forecast}")
+
+# ── the CLAIM ceremony's roles-from-IdP beats (K-1109) ────────────────────────
+#
+# The two beats above cover the LINK direction, and covering only that
+# direction is what let the hole below live at head. The claim direction —
+# RFC 8628, `POST /kiosk/oauth/device_authorization` → the human approves at
+# the verify page → the token poll — used to read `role`/`scope` off THAT
+# FIRST REQUEST, which carries no Cookie and no Authorization, validate it
+# against `config.roles` alone, and bake it into the minted JWT. On this demo
+# (`c.roles = %i[customer owner]`) a stranger's `role=owner`, approved by a
+# plain CUSTOMER who was never shown the word, reached a token whose `role`
+# claim was `owner` and a `salon_calendar` answering with every visitor's
+# bookings plus the owner-only forecast. `role=master` was refused, which is
+# why a suite that probed only an undeclared role would have kept printing
+# BLOCKED: membership of `config.roles` was the entire filter, and
+# `config.roles` says which roles this origin HAS, not who may have them.
+#
+# The role now comes from the approving human's own identity, captured at the
+# verify page (`DeviceVerification.approve(role:)`) exactly as the link
+# direction captures it at mint — so the three beats below are the claim-side
+# mirror of `CustomerLinkCannotCarryOwnerRole` /
+# `OwnerLinkIgnoresForgedClaimBody`, plus the rebind case, which is the one a
+# first-bind-only fix would leave open.
+
+DEVICE_GRANT = "urn:ietf:params:oauth:grant-type:device_code"
+
+# The OAuth half of the ceremony is form-encoded (the spec's one deliberate
+# exception to the Kiosk problem document), so it needs its own poster.
+def oauth_post(path, form)
+  uri = URI("#{SERVER}#{path}")
+  req = Net::HTTP::Post.new(uri)
+  req.set_form_data(form)
+  res = Net::HTTP.new(uri.host, uri.port).request(req)
+  [res.code.to_i, (JSON.parse(res.body) rescue {})]
+end
+
+# Open a claim ceremony, have `session`'s human approve it on the REAL verify
+# page, and poll once with a possession proof. Returns
+# [authorization_http, poll_http, token_or_nil, verify_page_html].
+#
+# It polls ONLY after the approval, so no `sleep` is needed: `slow_down` fires
+# on a SECOND poll of the same device_code inside the advertised interval, and
+# there is no first one here. (`script/binding_flow.rb` sleeps because it
+# deliberately polls once while pending, to show `authorization_pending`.)
+def claim_ceremony(session, key, pem, extra = {})
+  rc, da = oauth_post("/kiosk/oauth/device_authorization",
+                      { "client_id" => "redteam-claim", "public_key" => pem }.merge(extra))
+  return [rc, nil, nil, nil] unless rc == 200
+
+  user_code = da.fetch("user_code")
+  page = session.get_html("/kiosk/oauth/device/verify?user_code=#{user_code}")
+  form = { "user_code" => user_code, "decision" => "approve" }
+  csrf = session.csrf_token(page.body)
+  form["authenticity_token"] = csrf if csrf
+  session.post_form("/kiosk/oauth/device/verify", form)
+
+  rc_poll, tok = oauth_post("/kiosk/oauth/token",
+                            { "grant_type" => DEVICE_GRANT,
+                              "device_code" => da.fetch("device_code"),
+                              "signed" => pop_proof(key, pem) })
+  [rc, rc_poll, (tok["access_token"] if tok.is_a?(Hash)), page.body]
+end
+
+def token_role(token)
+  seg = token.to_s.split(".")[1].to_s
+  JSON.parse(Base64.urlsafe_decode64(seg + "=" * ((4 - seg.length % 4) % 4)))
+rescue StandardError
+  {}
+end
+
+# ── DeviceGrantCannotSelfSelectRole ──────────────────────────────────────────
+# The unauthenticated request that OPENS the ceremony may not name a role, at
+# any value or spelling. The DECLARED values are the ones that matter: an
+# undeclared `master` was refused before this fix too, so a probe using only
+# that would be vacuous.
+self_selection = [
+  ['role=owner (DECLARED here — the escalation itself)', { "role" => "owner" }],
+  ['scope=owner (the OAuth-standard spelling of the same)', { "scope" => "owner" }],
+  ['role=customer (declared, no escalation — still not the client\'s to name)', { "role" => "customer" }],
+  ['role=master (undeclared)', { "role" => "master" }],
+].map do |label, params|
+  fresh = OpenSSL::PKey::RSA.generate(2048)
+  rc, body = oauth_post("/kiosk/oauth/device_authorization",
+                        { "client_id" => "redteam-selfselect",
+                          "public_key" => fresh.public_key.to_pem }.merge(params))
+  [rc == 400 && body["error"] == "invalid_request", "#{label} → #{rc}/#{body['error'].inspect}"]
+end
+
+# CONTROL: the SAME request without the parameter opens the ceremony. Without
+# it, an origin that refused every device_authorization would print BLOCKED.
+control_key = OpenSSL::PKey::RSA.generate(2048)
+rc_ctrl, da_ctrl = oauth_post("/kiosk/oauth/device_authorization",
+                              { "client_id" => "redteam-selfselect",
+                                "public_key" => control_key.public_key.to_pem })
+control_ok = rc_ctrl == 200 && da_ctrl["user_code"].to_s.match?(/\A[A-Z0-9]{4}-[A-Z0-9]{4}\z/)
+record(results, "DeviceGrantCannotSelfSelectRole",
+       self_selection.all? { |ok, _| ok } && control_ok,
+       "#{self_selection.map(&:last).join('; ')}; CONTROL role-less request → #{rc_ctrl} " \
+       "user_code=#{da_ctrl['user_code'].inspect} (want every role/scope 400/invalid_request, " \
+       "and the role-less ceremony still opening)")
+
+# ── DeviceGrantRoleComesFromTheApprover ──────────────────────────────────────
+# Both halves in one beat, because either alone is misreadable: a customer's
+# ceremony must land at `customer` (own bookings, no forecast) AND an owner's
+# ceremony over the SAME endpoints must land at `owner` (whole book +
+# forecast). Without the second, "always customer" would pass; without the
+# first, "always owner" would.
+cust_key  = OpenSSL::PKey::RSA.generate(2048)
+cust_pem  = cust_key.public_key.to_pem
+_rc_a, rc_cust_poll, cust_token, cust_page = claim_ceremony(customer_session, cust_key, cust_pem)
+cust_claim_role = token_role(cust_token)["role"]
+rc_cust_cal, cust_cal = get_json("/kiosk/salon_calendar", bearer(cust_token))
+cust_rows      = Array(cust_cal)
+cust_own_only  = cust_rows.none? { |r| r["id"] == appt_id_b3 }
+cust_noforecast = cust_rows.none? { |r| r["summary"] == "forecast" }
+
+own_key  = OpenSSL::PKey::RSA.generate(2048)
+own_pem  = own_key.public_key.to_pem
+_rc_o, rc_own_poll, own_claim_token, own_page = claim_ceremony(owner_session, own_key, own_pem)
+own_claim_role = token_role(own_claim_token)["role"]
+rc_own_cal, own_cal = get_json("/kiosk/salon_calendar", bearer(own_claim_token))
+own_rows        = Array(own_cal)
+own_sees_others = own_rows.any? { |r| r["id"] == appt_id_b3 }
+own_forecast    = own_rows.any? { |r| r["summary"] == "forecast" }
+
+record(results, "DeviceGrantRoleComesFromTheApprover",
+       rc_cust_poll == 200 && cust_claim_role == "customer" &&
+         rc_cust_cal == 200 && cust_own_only && cust_noforecast &&
+         rc_own_poll == 200 && own_claim_role == "owner" &&
+         rc_own_cal == 200 && own_sees_others && own_forecast,
+       "customer-approved claim → poll #{rc_cust_poll}, token role #{cust_claim_role.inspect}, " \
+       "calendar #{rc_cust_cal} own_only=#{cust_own_only} forecast_hidden=#{cust_noforecast}; " \
+       "CONTROL owner-approved claim over the SAME endpoints → poll #{rc_own_poll}, token role " \
+       "#{own_claim_role.inspect}, calendar #{rc_own_cal} whole_book=#{own_sees_others} " \
+       "forecast=#{own_forecast} (want customer/own-scoped and owner/whole-book — the role is the " \
+       "approver's, never the caller's)")
+
+# ── DeviceGrantVerifyPageNamesTheAccess ──────────────────────────────────────
+# The consent half. An approval given without seeing what it grants is not
+# consent to anything in particular, and this page used to show a fingerprint
+# and a timestamp only — measured, while a `role=owner` ceremony was pending on
+# it. Asserted on BOTH humans' pages and required to DIFFER, so a constant
+# string cannot satisfy it.
+cust_page_names  = cust_page.to_s.include?("Access you are handing it") &&
+                   cust_page.to_s.include?("<code>customer</code>")
+own_page_names   = own_page.to_s.include?("Access you are handing it") &&
+                   own_page.to_s.include?("<code>owner</code>")
+pages_differ     = !cust_page.to_s.include?("<code>owner</code>")
+record(results, "DeviceGrantVerifyPageNamesTheAccess",
+       cust_page_names && own_page_names && pages_differ,
+       "customer's verify page names `customer`: #{cust_page_names}; owner's names `owner`: " \
+       "#{own_page_names}; the customer's page does NOT say owner: #{pages_differ} " \
+       "(want all three — the field is the approver's real role, not a constant)")
+
+# ── DeviceGrantRebindCannotEscalate ──────────────────────────────────────────
+# A fix that only guarded FIRST binding would leave the same escalation one
+# ceremony later: a known key re-running the claim ceremony takes the rebind
+# branch, whose `allowed_roles` REMAP is what the self-selected role used to
+# drive (measured at head: a key bound `customer` came back `owner`, same
+# agent_id). So the same key that is now bound at `customer` runs it again.
+rc_rebind_refused, rebind_refused_body =
+  oauth_post("/kiosk/oauth/device_authorization",
+             { "client_id" => "redteam-rebind", "public_key" => cust_pem, "role" => "owner" })
+_rc_r, rc_rebind_poll, rebind_token, = claim_ceremony(customer_session, cust_key, cust_pem)
+rebind_claims = token_role(rebind_token)
+rebind_role   = rebind_claims["role"]
+rebind_stable = rebind_claims["agent_id"] == token_role(cust_token)["agent_id"]
+rc_rebind_cal, rebind_cal = get_json("/kiosk/salon_calendar", bearer(rebind_token))
+rebind_rows      = Array(rebind_cal)
+rebind_own_only  = rebind_rows.none? { |r| r["id"] == appt_id_b3 }
+rebind_noforecast = rebind_rows.none? { |r| r["summary"] == "forecast" }
+record(results, "DeviceGrantRebindCannotEscalate",
+       rc_rebind_refused == 400 && rebind_refused_body["error"] == "invalid_request" &&
+         rc_rebind_poll == 200 && rebind_role == "customer" && rebind_stable &&
+         rc_rebind_cal == 200 && rebind_own_only && rebind_noforecast,
+       "known key re-runs the ceremony: role=owner → #{rc_rebind_refused}/" \
+       "#{rebind_refused_body['error'].inspect}; the honest re-run → poll #{rc_rebind_poll}, " \
+       "role #{rebind_role.inspect}, agent_id stable=#{rebind_stable}, calendar #{rc_rebind_cal} " \
+       "own_only=#{rebind_own_only} forecast_hidden=#{rebind_noforecast} (want the rebind to stay " \
+       "the approver's role, not one ceremony later\'s escalation)")
 
 # ── SelfAssertedTokenForgery (K-539 / T-104) — OVER THE LIVE WIRE ─────────────
 #

@@ -261,9 +261,10 @@ nothing invented — and the two kinds of elision marker say so on their own
 line. Three things were deleted. (1) Two of the five shipped queries,
 `search_hotels` and `hotel_detail`. (2) Each remaining verb's prose
 `description`, collapsed to a `description "…"   # elided` line, and every
-`description:` key inside a schema. (3) The middle of `availability`'s body, at
-an explicit marker. Everything else — field names, types, `required` lists,
-`enum`s and the guards — is the shipped declaration.
+`description:` key inside a schema. (3) Two of `availability`'s guards, at an
+explicit `GUARDS ELIDED` marker. Everything else — field names, types,
+`required` lists, `enum`s and the guards that remain — is the shipped
+declaration.
 
 <!-- derived: snippet | from: app/controllers/kiosk/hotels_controller.rb | transform: strip_descriptions | abridged: the search_hotels and hotel_detail queries, each remaining verb's prose description, every schema description: key, and availability's guards at a marked line -->
 ```ruby

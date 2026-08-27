@@ -261,9 +261,10 @@ reordering, nothing invented — and the two kinds of elision marker say so on
 their own line. Three things were deleted. (1) One of getgrocery's four shipped
 queries, `kyc_status`. (2) Each remaining verb's prose `description`, collapsed
 to a `description "…"   # elided` line, and every `description:` key inside a
-schema. (3) The middle of `delivery_slots`'s body, at an explicit marker.
-Everything else — field names, types, `required` lists, `enum`s,
-`example_params`, `example_row` and the guards — is the shipped declaration.
+schema. (3) Part of `delivery_slots`'s guards, at an explicit `GUARDS ELIDED`
+marker. Everything else — field names, types, `required` lists, `enum`s,
+`example_params`, `example_row` and the guards that remain — is the shipped
+declaration.
 
 <!-- derived: snippet | from: app/controllers/kiosk/storefront_controller.rb | transform: strip_descriptions | abridged: the kyc_status verb, each remaining verb's prose description, every schema description: key, and delivery_slots' guards at a marked line -->
 ```ruby

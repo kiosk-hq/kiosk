@@ -195,9 +195,9 @@ module Kiosk
         payment = build_payment_mandate(principal, cart: cart, payment_method: payment_method)
         # SIGN ONCE, then reuse the identical body on the PoW retry. The
         # challenge binds to a fingerprint of METHOD + verb + canonical body
-        # (spec §3.4), and re-signing would mint fresh mandate ids and `iat`s —
-        # a different body, so the proof we just paid for would bind to nothing
-        # and the provider would re-challenge forever.
+        # (spec §10, §15.2), and re-signing would mint fresh mandate ids and
+        # `iat`s — a different body, so the proof we just paid for would bind
+        # to nothing and the provider would re-challenge forever.
         body = {
           intent_mandate_jws:  sign_mandate(principal, intent),
           cart_mandate_jws:    sign_mandate(principal, cart),

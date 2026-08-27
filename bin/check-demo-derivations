@@ -150,6 +150,51 @@
 #   delete the honest form along with the dishonest one; what this script does
 #   instead is refuse to let the sentence stand alone.
 #
+# ── AND `abridged:` IS BOUND TO THE RAKE DAG AS FAR AS IT GOES (K-1101) ──────
+#
+# `abridged:` was REQUIRED and never READ: any non-empty phrase satisfied it. So
+# hoteling and getgrocery both declared — and said again in the prose — that the
+# cut above their first quoted line was «demo:setup's db:drop/db:create/
+# db:schema:load/db:seed chatter and nothing else». Measured by running the task:
+# ELEVEN lines for hoteling, of which FIVE are not db chatter (rake's echo of the
+# two `psql` commands that create and grant `app_role`, the `NOTICE`/`LOCATION`
+# pair Postgres answers the grant with, and `[kiosk] WARNING: generated an
+# EPHEMERAL signing key`), and THIRTY-THREE for getgrocery, which adds a
+# `[getgrocery] no STRIPE_SECRET_KEY…` line to the same five. The BOUNDARY claim
+# was exact in both. Only the enumeration was wrong — and a human reading the
+# document is what found it, which is the same sentence the top of this file
+# opens with.
+#
+# THE SPLIT THIS DRAWS, AND WHY. What the cut CONTAINS cannot be checked here at
+# any price: it requires running the task, which design fact 3 refuses (ids and
+# dates move every run, and getgrocery's transcript has a legitimate wall-clock
+# branch). What the cut IS — the output of a task this demo defines and that the
+# quoted task depends on — is a fact about the rake DAG, which is static. So the
+# declaration stops enumerating the lines and NAMES THE TASK, and the naming is
+# held to three things:
+#
+#   * the cited task must be DEFINED in this demo's lib/tasks/*.rake, by the same
+#     two spellings the `task:` field is checked with. Rename it and this fails.
+#   * it must be a declared PREREQUISITE of the quoted `task:`. If the quoted task
+#     never runs it, its output was never in that task's output and calling it an
+#     abridgement is a category error — which is exactly why atablefor, whose
+#     document quotes `demo:book` and prepares the database with a SEPARATE
+#     `rake demo:setup`, correctly declares `abridged: none`.
+#   * and no line of the BLOCK may be one that cited task's own body prints. A
+#     declaration that a task's output was cut, over a block containing it, is the
+#     same contradiction as `abridged: none` beside a marked elision. Note how
+#     narrow this is: `demo:setup`'s repo-produced output is its three `sh "…"`
+#     echoes and nothing else, because `Dropped database`, the psql `NOTICE` and
+#     the seed listing come from Postgres, Rails and db/seeds.rb. It catches a
+#     paste, not a paraphrase.
+#
+# WHAT IS STILL NOT CHECKED, and it is the larger half: that the cut is COMPLETE,
+# that it contains what the prose says, and that nothing was quietly deleted from
+# the MIDDLE of a block. `abridged:` remains a human's signature, and the
+# document's own prose — where the reader-useful detail belongs — remains
+# unbacked. What changed is only that the signature now names something this
+# script can resolve instead of asserting a content list nothing could.
+#
 # ── WHAT THIS DOES **NOT** COVER. Stated plainly, because an over-claimed guard
 # is the defect this class keeps producing and K-1069's block was accepted
 # precisely for declaring its own holes. ────────────────────────────────────
@@ -159,6 +204,10 @@
 #     K-1062 — still passes. Completeness needs a real run, which is what
 #     `abridged:` declares instead of proves, and `abridged: none` is therefore
 #     a HUMAN's assertion this script only keeps consistent with the prose.
+#     K-1101 narrowed this and did not close it: a task NAMED in `abridged:` is
+#     now resolved against the rake DAG and held off the block, so the field can
+#     no longer cite something that does not exist or is never run. What the cut
+#     CONTAINS is still the human's word.
 #   * IT CANNOT PROVE THE LINES ARE IN THE RIGHT ORDER, or that they came from
 #     ONE run. Two lines from mutually exclusive branches both pass.
 #   * IT CANNOT SEE A LINE PRINTED BY A PRODUCER NOBODY DECLARED. `from:` is a
@@ -207,8 +256,18 @@
 # and one demo's block reverted to the `derived: none` hatch, which is the
 # «silently drops the recipe» direction of the same corpus rule.
 #
-# Stdlib only (ripper + json), no bundle, no database, no Rails boot, well under
-# a second on a bare checkout — the same profile as bin/check-demo-copies.
+# K-1101 added four, same discipline: an `abridged:` citing a task no rake file
+# in the demo defines (which is what BOTH false declarations became the moment
+# they were read — `db:drop` is Rails', not the demo's); one citing a real task
+# of the demo that the quoted `task:` does not depend on; one citing a task the
+# quoted task has no prerequisites at all; and a block with two lines of the
+# cited task's own output pasted back into it. And one PROOF-OF-FIRE rather than
+# a plant: restoring either document's pre-K-1101 declaration verbatim reddens
+# this script.
+#
+# Stdlib only (ripper + json + RubyVM::AbstractSyntaxTree, the last only to ask a
+# parser for one rake task's line range instead of guessing it from indentation),
+# no bundle, no database, no Rails boot, well under a second on a bare checkout — the same profile as bin/check-demo-copies.
 #
 # Usage:
 #   bin/check-demo-derivations           # check
@@ -432,6 +491,85 @@ def key_names(src)
     end
   end
   names
+end
+
+# ── `abridged:`, bound to the rake DAG (K-1101) ──────────────────────────────
+
+# A colon-joined lowercase chain — `demo:setup`, `db:schema:load`. That is how a
+# rake task is spelled, and nothing else these declarations say is spelled that
+# way: `description:` and `keys_from:` have a space after the colon, a URL has a
+# slash, and a constant is capitalised.
+ABRIDGED_TASK_RE = /(?<![\w:])[a-z][a-z0-9_]*(?::[a-z][a-z0-9_]*)+(?![\w:])/
+
+# The two spellings a rake task is declared with. Kept as one predicate because
+# the `task:` field and the `abridged:` field must answer "is this task this
+# demo's?" the same way, and two copies of the pair would drift.
+def task_defined_here?(rake_files, short)
+  rake_files.any? { |rf| rake_task_declaration_in(File.read(rf), short) }
+end
+
+def rake_task_declaration_in(body, short)
+  body.lines.each_with_index do |line, idx|
+    next unless line.match?(/\A\s*task\s+:#{Regexp.escape(short)}\b/) ||
+                line.match?(/\A\s*task\s+#{Regexp.escape(short)}:/)
+
+    return [idx + 1, line]
+  end
+  nil
+end
+
+# [file, lineno, line] of the declaration, across the demo's rake files.
+def rake_task_declaration(rake_files, short)
+  rake_files.each do |rf|
+    hit = rake_task_declaration_in(File.read(rf), short)
+    return [rf, hit[0], hit[1]] if hit
+  end
+  nil
+end
+
+# What a task declares as its prerequisites, verbatim: `task x: :y do` and
+# `task x: ["a:b", "c:d"]` both answer here, `task :x do` has none.
+def rake_task_prereq_clause(decl_line)
+  decl_line.to_s[/\A\s*task\s+[a-z0-9_]+:\s*(\S.*?)\s*(?:\bdo\b.*)?\z/, 1]
+end
+
+def prereq_mentions?(clause, full_name)
+  return false if clause.nil?
+
+  short = full_name.split(":").last
+  clause.include?(full_name) || clause.match?(/(?<!\w)#{Regexp.escape(short)}(?!\w)/)
+end
+
+# The source text of a rake task's own body — the parser's line range, not an
+# indentation guess. `nil` when the task is declared without a block
+# (`task demo: [...]`), which prints nothing of its own.
+def rake_task_body_source(rake_files, short)
+  file, lineno, = rake_task_declaration(rake_files, short)
+  return nil if file.nil?
+
+  src = File.read(file)
+  root = begin
+    RubyVM::AbstractSyntaxTree.parse(src)
+  rescue SyntaxError
+    return nil
+  end
+
+  range = nil
+  walk = lambda do |node|
+    return unless node.is_a?(RubyVM::AbstractSyntaxTree::Node)
+
+    if node.type == :ITER && node.first_lineno == lineno
+      call = node.children.first
+      if call.is_a?(RubyVM::AbstractSyntaxTree::Node) && call.children.include?(:task)
+        range = [node.first_lineno, node.last_lineno]
+      end
+    end
+    node.children.each { |c| walk.call(c) }
+  end
+  walk.call(root)
+  return nil if range.nil?
+
+  src.split("\n", -1)[(range[0] - 1)..(range[1] - 1)].join("\n")
 end
 
 def anchor_strength(pattern)
@@ -788,16 +926,54 @@ end
       end
       name = task.split.last.to_s
       short = name.split(":").last
-      defined_here = rake_files.any? do |rf|
-        body = File.read(rf)
-        body.match?(/^\s*task\s+:#{Regexp.escape(short)}\b/) ||
-          body.match?(/^\s*task\s+#{Regexp.escape(short)}:/)
-      end
-      unless defined_here
+      unless task_defined_here?(rake_files, short)
         errors << "#{where}: `task: #{task}` names `#{name}`, which no lib/tasks/*.rake in " \
                   "kiosk-demo-#{demo} defines. The block claims a producer that does not exist."
         next
       end
+
+      # A task NAMED in `abridged:` is resolved against the rake DAG and held off
+      # the block. See the header section on K-1101 for what this does and does
+      # not buy — the cut's CONTENT stays the human's word.
+      broken_abridgement = false
+      abridged.scan(ABRIDGED_TASK_RE).uniq.each do |cited|
+        cited_short = cited.split(":").last
+        unless task_defined_here?(rake_files, cited_short)
+          errors << "#{where}: `abridged:` cites `#{cited}`, which no lib/tasks/*.rake in " \
+                    "kiosk-demo-#{demo} defines. Name the TASK whose output was cut, not the " \
+                    "commands it happens to run — this field is the human's signature on a " \
+                    "completeness claim nothing else can check, so it may only cite something " \
+                    "this script can resolve (K-1101)."
+          broken_abridgement = true
+          next
+        end
+
+        clause = rake_task_prereq_clause(rake_task_declaration(rake_files, short)&.last)
+        unless prereq_mentions?(clause, cited)
+          errors << "#{where}: `abridged:` cites `#{cited}`, but `#{name}` does not declare it as " \
+                    "a prerequisite#{clause ? " (its prerequisites are `#{clause}`)" : ' — it declares none'}. " \
+                    "A task the quoted one never runs contributed nothing to its output, so its " \
+                    "absence is not an abridgement; `abridged: none` is what a separately-prepared " \
+                    "database calls for."
+          broken_abridgement = true
+          next
+        end
+
+        frag = rake_task_body_source(rake_files, cited_short)
+        next if frag.nil?
+
+        cut_pats = Patterns.new([["#{cited}'s own body", frag]])
+        block.body.each_with_index do |line, k|
+          next if line.strip.empty?
+          next unless cut_pats.accounts_for?(line)
+
+          errors << "#{label}:#{block.fence_line + 1 + k}: this line is printed by `#{cited}`, whose " \
+                    "output the declaration says was CUT. The declaration and the block disagree:\n" \
+                    "      #{line.strip[0, 160]}"
+          broken_abridgement = true
+        end
+      end
+      next if broken_abridgement
 
       pats = Patterns.new(froms.map { |f| [f, File.read(File.join(dir, f))] },
                           keys_from.map { |f| [f, File.read(File.join(dir, f))] })

@@ -43,6 +43,17 @@ module Kiosk
     # provider's `user_idp` reports no role, and the binding then falls back to
     # `registration_role`/absent (ADR-0011's no-regression clause).
     #
+    # THE NAME IS A MISNOMER AND IS KEPT DELIBERATELY (K-1126). Nothing
+    # REQUESTS this role. Since K-072 a claim ceremony's opening request is
+    # REFUSED outright if it carries `role` or `scope`, and a `:link` row's
+    # value is read off the minting human's own session — so on both kinds the
+    # column is written BY THE OPERATOR and never by a client. Read it as
+    # `approved_role`. It keeps the spelling because ADR-0011 states its
+    # invariant under that name and because renaming it crosses seven demo
+    # `db/structure.sql` files plus `bin/check-migration-replay`: a migration
+    # wave for a word. Every site that reads or writes it says the same thing,
+    # so the identifier never has to be trusted on its own.
+    #
     # Lifecycle: `:pending → :approved | :denied → :consumed | :expired`.
     # Transitions are non-destructive — each returns a new instance via
     # `Data#with`. Persistence is up to the configured

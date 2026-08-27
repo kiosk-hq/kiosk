@@ -246,6 +246,15 @@ module Kiosk
       #     possession of it before any binding).
       #   - `kind` — `claim` (agent-initiated) or `link` (human-initiated, rows
       #     born pre-approved and already bound to the human).
+      #   - `requested_role` — A MISNOMER, and kept on purpose (K-1126).
+      #     Nothing requests it: on a `claim` row it is written at APPROVAL
+      #     from the approving human's `Identity#role`, on a `link` row at MINT
+      #     from the minting human's own — never by a client, which since K-072
+      #     is refused outright for naming a role. Read it as `approved_role`.
+      #     The spelling stays because ADR-0011 states its invariant under this
+      #     name and because renaming a shipped column means a new migration in
+      #     each of the seven demo `db/structure.sql` files plus a
+      #     `bin/check-migration-replay` pass — a migration wave for a word.
       #
       # Until 2026-08-20 this arrived in two migrations: an 0.1 shape nothing
       # ever wrote, and a `rebuild` that DROPPED and recreated it in this one

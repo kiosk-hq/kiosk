@@ -30,6 +30,14 @@ module Kiosk
       # `:approved` with `user_id` already stamped — the human IS the
       # approval; no verify step follows.
       #
+      # `requested_role:` IS A MISNOMER HERE AND EVERYWHERE (K-1126): nothing
+      # requests it. On a `:link` row it is the MINTING human's own role, read
+      # off their session by the caller ({AuthController#link},
+      # {AssistantsController#link}, both passing `Identity#role`) — the
+      # assistant that later redeems the code supplies nothing and cannot.
+      # Read it as `approved_role`; {DeviceAuthorization} records why the
+      # column keeps the name.
+      #
       # @return [Hash] {link_code:, expires_in:, da:}
       def mint(user_id:,
                requested_role: nil,
@@ -107,6 +115,9 @@ module Kiosk
         claimed = store.claim_consume(da, now: now)
         raise Errors::Conflict.new("link code already used") if claimed.nil?
 
+        # `requested_role:` carries what was stamped at MINT, from the human's
+        # own session — never anything the redeeming assistant sent, which is
+        # why the name is a misnomer kept only for the column (K-1126).
         result = AccountBinding.bind!(
           public_key_pem: pem,
           user_id:        da.user_id,

@@ -28,7 +28,7 @@ This directory is the *app-side* handoff; DNS + VPS provisioning is the operator
 | Demo | Subdomain | Port | PoW difficulty | Stripe (test) |
 |------|-----------|------|----------------|---------------|
 | getgrocery | `getgrocery.demo.kiosk.tech` | 3001 | **low** (~1 s, poke-friendly) | yes |
-| atablefor  | `atablefor.demo.kiosk.tech` | 3002 | **HIGH** (~9–10 s, "beware: intensive PoW") | — (no payment provider) |
+| atablefor  | `atablefor.demo.kiosk.tech` | 3002 | **HIGH** (~9–10 s on an M-series laptop core, "beware: intensive PoW") | — (no payment provider) |
 | hoteling   | `hoteling.demo.kiosk.tech` | 3003 | **low** | — |
 | skooti     | `skooti.demo.kiosk.tech` | 3004 | **low** | — |
 | stylish    | `stylish.demo.kiosk.tech` | 3005 | **low** | — |
@@ -306,7 +306,8 @@ assistant) can read what the origin offers before it registers. Everything else
 proof-of-work, and so may `register`. So the register gate is a memory-hard PoW
 by design, and the "true" one-liner ships a copy-paste **solver**
 (`kiosk-pow-equihash/solve.py`). Hosted difficulty is low (~1 s) on six demos;
-atablefor is intentionally ~9–10 s (you'll feel it — that's the point). Flow:
+atablefor is intentionally ~9–10 s on an M-series laptop core, the only hardware
+the seconds have been measured on (you'll feel it — that's the point). Flow:
 **discover (free) → read the schema (free) → register (solve PoW) → call a verb
 (each MAY toll PoW too)**.
 
@@ -324,7 +325,7 @@ CH=$(curl -s "$BASE/kiosk/auth/challenge")
 
 #    b) solve it with the bundled solver (from kiosk-pow-equihash/):
 #       python3 solve.py  reads the challenge on stdin, prints the proof.
-PROOF=$(echo "$CH" | python3 kiosk-pow-equihash/solve.py)   # ~1 s low / ~9–10 s high (atablefor)
+PROOF=$(echo "$CH" | python3 kiosk-pow-equihash/solve.py)   # ~1 s low / ~9–10 s high on an M-series core (atablefor)
 
 #    c) register (agent key + solved proof) → returns a token
 TOKEN=$(curl -s -X POST "$BASE/kiosk/auth/register" \
@@ -361,7 +362,8 @@ curl -s -X POST "$BASE/kiosk/create_order" \
 > The exact challenge/proof JSON shape is what the demo's `/kiosk/auth/challenge`
 > returns and `solve.py` consumes — publish the copy-paste-exact snippet on each
 > demo landing once the hosted challenge format is pinned. atablefor shows the
-> "beware: memory- and CPU-intensive PoW" banner so pokers expect the ~9–10 s.
+> "beware: memory- and CPU-intensive PoW" banner so pokers expect the ~9–10 s
+> (measured on an M-series laptop core; other hardware differs).
 
 ## Live-activity telemetry — WIRED (opt-in)
 

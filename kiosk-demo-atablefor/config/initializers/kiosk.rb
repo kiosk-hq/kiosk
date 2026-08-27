@@ -82,9 +82,12 @@ require "kiosk/user_identity_providers/devise"
 #
 # atablefor is INTENTIONALLY the ONE demo pinned to high in the hosted deploy
 # (deploy/env/atablefor.env.example ships KIOSK_POW_DIFFICULTY=high). It is the
-# designated production-grade showcase: a poker/scalper feels the real ~9–10 s /
-# ~1.3 GiB anti-reservation-scalping toll first-hand (see the "beware" banner on
-# the demo root page). Every other demo is knob-adjustable but defaults light so
+# designated production-grade showcase: a poker/scalper feels the real
+# anti-reservation-scalping toll first-hand — ~1.3 GiB per proof, and ~9–10 s of
+# it on an M-series laptop core, the only hardware the seconds have been
+# measured on (the GiB is a property of (n=168, k=7), the seconds are not); see
+# the "beware" banner on the demo root page. Every other demo is
+# knob-adjustable but defaults light so
 # CI and quick poking stay fast; unset here still resolves to low.
 EQUIHASH_DEMO_PARAMS = PowDifficulty.params
 

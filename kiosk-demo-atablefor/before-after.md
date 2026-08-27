@@ -110,6 +110,7 @@ gem "kiosk-core",               path: "../kiosk-core"
 gem "kiosk-rls",                path: "../kiosk-rls"
 gem "kiosk-server",             path: "../kiosk-server"
 gem "kiosk-pow-equihash",       path: "../kiosk-pow-equihash"
+gem "kiosk-redteam",            path: "../kiosk-redteam"
 gem "kiosk-reputation",         path: "../kiosk-reputation"
 gem "kiosk-user-idp-devise",    path: "../kiosk-user-idp-devise"
 
@@ -117,12 +118,13 @@ gem "json_schemer"
 ```
 
 Those are this demo's own `Gemfile` lines, verbatim (the `path:` overrides are
-the monorepo checkout; in production they are versioned RubyGems). Not all seven
+the monorepo checkout; in production they are versioned RubyGems). Not all eight
 are the minimum: `kiosk-core` + `kiosk-server` is the engine, `kiosk-pow-equihash`
 and `kiosk-reputation` are what the anti-scalping toll below needs,
-`kiosk-user-idp-devise` is what `demo:binding` needs, `kiosk-rls` is the optional
-Postgres backstop, and `json_schemer` is required only because this origin turns
-`c.validate_requests` on.
+`kiosk-user-idp-devise` is what `demo:binding` needs, `kiosk-redteam` is the
+shared adversarial harness that `script/redteam_suite.rb` drives, `kiosk-rls` is
+the optional Postgres backstop, and `json_schemer` is required only because this
+origin turns `c.validate_requests` on.
 
 **2. Run the generator**
 

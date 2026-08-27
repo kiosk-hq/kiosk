@@ -28,13 +28,13 @@ hoteling is a Rails 8.1 app that speaks Kiosk. Below is the output of
 `bundle exec rake demo` — recorded **2026-08-26**, stdout and stderr as a
 terminal shows them. `rake demo` is `demo:setup` then `demo:book`; the block
 starts at `demo:book`'s FIRST line, so what is cut is the whole of `demo:setup`'s
-output — eleven lines on the machine this was recorded on, and NOT only the
-`db:drop`/`db:create`/`db:schema:load`/`db:seed` chatter. Rake also echoes the
-two `psql` commands that create the `app_role` role and grant it, Postgres
-answers the second of those with a `NOTICE`/`LOCATION` pair when the grant is
-already in place, and the development boot prints `[kiosk] WARNING: generated an
-EPHEMERAL signing key`. Some of that is machine-dependent, which is why the
-declaration below names the TASK rather than listing its lines: run
+output — and that is NOT only the `db:drop`/`db:create`/`db:schema:load`/`db:seed`
+chatter. Rake also echoes the two `psql` commands that create the `app_role` role
+and grant it, Postgres answers the second of those with a `NOTICE`/`LOCATION`
+pair, and the development boot prints `[kiosk] WARNING: generated an EPHEMERAL
+signing key`. How many lines that comes to is a property of the machine — the
+`NOTICE` appears only where the grant is already in place — which is why the
+declaration below names the TASK rather than listing its output: run
 `rake demo:setup` to see yours. From there down it is unedited, all three runs,
 first line to last. The identifiers are that run's; the dates are
 `Date.today + 30` / `+ 33`, so they move with the day it is run.

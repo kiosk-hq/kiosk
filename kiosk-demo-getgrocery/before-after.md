@@ -36,16 +36,17 @@ getgrocery is a Rails 8 app that speaks Kiosk. Below is the output of
 `bundle exec rake demo` (which is `demo:setup` then `demo:shop`, and `demo:shop`
 is what runs `script/getgrocery_flow.rb`) — recorded **2026-08-26**, stdout and
 stderr as a terminal shows them. The block starts at `demo:shop`'s FIRST line,
-so what is cut is the whole of `demo:setup`'s output — thirty-three lines on the
-machine this was recorded on, and NOT only the
+so what is cut is the whole of `demo:setup`'s output — and that is NOT only the
 `db:drop`/`db:create`/`db:schema:load`/`db:seed` chatter and the seed listing it
 ends with. Rake also echoes the two `psql` commands that create the `app_role`
 role and grant it, Postgres answers the second of those with a
-`NOTICE`/`LOCATION` pair when the grant is already in place, and the boot prints
-`[kiosk] WARNING: generated an EPHEMERAL signing key` and a
-`[getgrocery] no STRIPE_SECRET_KEY/STRIPE_MOCK_URL set` line. Some of that is
-machine-dependent, which is why the declaration below names the TASK rather than
-listing its lines: run `rake demo:setup` to see yours. From there down it is
+`NOTICE`/`LOCATION` pair, and the boot prints `[kiosk] WARNING: generated an
+EPHEMERAL signing key` and a `[getgrocery] no STRIPE_SECRET_KEY/STRIPE_MOCK_URL
+set` line. How many lines that comes to is a property of the machine and of the
+environment — the `NOTICE` appears only where the grant is already in place, and
+the Stripe line only where no key is set — which is why the declaration below
+names the TASK rather than listing its output: run `rake demo:setup` to see
+yours. From there down it is
 unedited, first line to last.
 
 **This recording is the secret-free path**, the one CI runs: with no

@@ -8,7 +8,7 @@
 # Every example here is a unit example: {Kiosk::Server::ArgumentDecoder} takes
 # a query string and a declaration and returns arguments, with no Rails and no
 # wire in the way. The wire-level half — that a real `GET <endpoint>/<verb>`
-# reaches it, and that a refusal comes back as a 400 envelope — is
+# reaches it, and that a refusal comes back as a 400 problem document — is
 # `verb_controller_spec.rb`.
 
 RSpec.describe Kiosk::Server::ArgumentDecoder do

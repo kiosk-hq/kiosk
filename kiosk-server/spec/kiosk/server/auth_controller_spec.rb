@@ -229,7 +229,9 @@ RSpec.describe "AuthController auth-surface error branches" do
     # branch covered only missing fields) must render a clean 400, not escape as a 500. A JSON
     # number / object / array field reaches AgentRegistration as an Integer /
     # Hash / Array; `.to_s.strip` coerces it so PopVerifier rejects it as an
-    # invalid key with a 400 envelope instead of NoMethodError-ing on `.strip`.
+    # invalid key with a 400 problem document instead of NoMethodError-ing on
+    # `.strip`. (`expect_problem` above is why the shape is named that way: the
+    # token is the TOP-LEVEL `code`, not `error.code`.)
     it "returns 400 bad_request (not 500) when public_key is a NUMBER" do
       status, body = dispatch(Kiosk::Server::AuthController, :register,
                               post_env("/kiosk/auth/register", JSON.generate(public_key: 12_345, signed: "x")))

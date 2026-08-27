@@ -6,7 +6,7 @@ require "openssl"
 # Unit-covers the business logic BEHIND the KYC attestation endpoint —
 # {KycVerifier.verify} and {DefaultAgentIdp#kyc_verified?} — without a Rails
 # stack. The controller's HTTP dispatch (auth resolution, body parsing,
-# response envelope, agent-only rule) is exercised end-to-end in
+# response shape, agent-only rule) is exercised end-to-end in
 # controller_auth_spec.rb, which loads and dispatches the real controller via
 # ActionController::Metal.
 

@@ -170,7 +170,7 @@ RSpec.describe "DeviceVerifyController" do
       [status, raw, headers]
     end
 
-    it "answers a JSON-bodied POST with the error envelope and a pointer to the wire" do
+    it "answers a JSON-bodied POST with its own wrong-door body and a pointer to the wire" do
       status, body, headers = dispatch_guarded(
         "CONTENT_TYPE" => "application/json", "rack.input" => StringIO.new("{}"),
       )

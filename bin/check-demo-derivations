@@ -346,6 +346,17 @@
 # 0 either side. What still gets through is the swap bullet in the list above,
 # and it is a smaller hole of a class this script already declared.
 #
+# AND THE PRICE, WHICH THIS SECTION DID NOT STATE UNTIL K-1108. Narrowing a
+# guard buys precision with false POSITIVES, and these three rules have one:
+# they can redden a line that is HONEST. A demo that prints a COMPUTED number —
+# a total, a duration, an elapsed count that no declared producer writes as an
+# `:on_int`/`:on_float` literal — fails whenever the frame around it carries
+# fewer than four ALPHANUMERIC characters, which `  OK  #{label} == #{value}`
+# does. Today's corpus pays nothing for that (50 of 50 mutations red, baseline
+# exit 0); the exposure is the NEXT demo. The answer there is to give the frame
+# literal text that identifies the line, or to name the value in a producer —
+# never to put the bar back on punctuation, which is the metric measured broken.
+#
 # ── WHAT THIS DOES **NOT** COVER. Stated plainly, because an over-claimed guard
 # is the defect this class keeps producing and K-1069's block was accepted
 # precisely for declaring its own holes. ────────────────────────────────────
@@ -493,6 +504,13 @@
 # un-numbered «Two of getgrocery's four shipped actions, `payment_setup` and
 # `request_kyc`, are left out» does NOT fire when the field stops naming them,
 # which is the over-claim list's own bullet demonstrated rather than asserted.
+#
+# K-1108 is not a plant but a READING, which is the check its own row asked for:
+# with the published `  OK  http_pay == 200` mutated to `== 201` — the token
+# swap this script cannot see — it exits 0, and the sentence it prints now names
+# that swap in its NOT HELD clause. The message and the over-claim list can be
+# read side by side without one contradicting the other, which is the property
+# the old one-line OK did not have.
 #
 # K-1104 added three plants and a negative control: the « out of …» clause cut
 # off a kept-side declaration, the «… are out» clause cut off another, and
@@ -1264,6 +1282,21 @@ def backticked_identifiers(text)
   text.scan(/`([^`]+)`/).flatten.select { |s| s.match?(BARE_IDENTIFIER_RE) }.uniq
 end
 
+# How many limits WHAT THIS DOES NOT COVER actually lists, COUNTED from this
+# file rather than remembered. The success line points a CI reader at that list
+# (K-1108), and a pointer carrying a stale number is the defect LOOP.md records
+# of a sibling gate: `check-file-inventories.rb` announced «6 work-list(s)»
+# where its code implemented five, for days, at exit 0. It aborts rather than
+# print a zero, because a pointer that has lost its target is a false one.
+def over_claim_limit_count
+  section = File.read(__FILE__)[/^# .. WHAT THIS DOES \*\*NOT\*\* COVER.*?^# EACH CLASS ABOVE WAS PROVEN/m]
+  n = section.to_s.scan(/^#   \* /).size
+  abort "check-demo-derivations: cannot find its own WHAT THIS DOES NOT COVER list — the success " \
+        "message points a CI reader at it, so the pointer may not go stale silently." if n.zero?
+
+  n
+end
+
 # ── Checks ───────────────────────────────────────────────────────────────────
 
 errors = []
@@ -1675,13 +1708,29 @@ if counts[:transcript].zero? && counts[:snippet].zero? && counts[:generator].zer
             "passes everything."
 end
 
+# The success line carries its own SCOPE, because the header's over-claim list
+# is the only place that scope used to live and no CI log carries a header
+# (K-1108). The sentence this replaces — «every line held to a literal its
+# declared producer prints» — is the exact sentence that printed while hoteling's
+# published `  OK  http_pay == 200` had been mutated to `== 500 (charged
+# nothing, refunded twice)` and this script exited 0. A green run must say what
+# it did NOT check where the reader is, not where the author is.
 if errors.empty?
   puts "check-demo-derivations: OK — #{counts[:transcript]} transcript, #{counts[:snippet]} " \
        "snippet and #{counts[:generator]} generator-invocation block(s) across " \
-       "#{(DOCUMENTED_DEMOS & present).size} narrative documents, every line held to a literal its " \
-       "declared producer prints, a line of the file it quotes, or the namespace the named " \
-       "generator answers (#{counts[:json]} JSON summary line(s) key-checked, #{counts[:elision]} " \
-       "marked elision(s), #{counts[:none]} block(s) declared underived with a reason)."
+       "#{(DOCUMENTED_DEMOS & present).size} narrative documents."
+  puts "  HELD: every line is a literal one of its declared producers prints (a frame is read " \
+       "through its captures unless four alphanumerics of its own identify the line), a line of " \
+       "the file it quotes, or the namespace the named generator answers; #{counts[:json]} JSON " \
+       "summary line(s) key-checked; #{counts[:elision]} marked elision(s); #{counts[:none]} " \
+       "block(s) declared underived with a reason; no completeness promise beside a block " \
+       "nothing can back one for."
+  puts "  NOT HELD: JSON VALUES, a SWAP between two tokens the producers both know " \
+       "(`== 200` -> `== 201` passes), line ORDER, single-run provenance, and COMPLETENESS — " \
+       "that no line is missing is the `abridged:` field's claim, signed by a human, and this " \
+       "script only keeps it consistent with the rake DAG and the block. Every limit this script " \
+       "knows of is listed under WHAT THIS DOES NOT COVER at the top of the file " \
+       "(#{over_claim_limit_count} of them); read those before quoting this line."
   exit 0
 end
 

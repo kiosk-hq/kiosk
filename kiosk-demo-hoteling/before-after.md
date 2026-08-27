@@ -29,7 +29,7 @@ hoteling is a Rails 8.1 app that speaks Kiosk. Below is the output of
 terminal shows them. `rake demo` is `demo:setup` then `demo:book`; the block
 starts at `demo:book`'s FIRST line, so everything cut is `demo:setup`'s
 `db:drop`/`db:create`/`db:schema:load`/`db:seed` chatter and nothing else.
-From there down it is unedited, all three runs, last line to last line. The
+From there down it is unedited, all three runs, first line to last. The
 identifiers are that run's; the dates are `Date.today + 30` / `+ 33`, so they
 move with the day it is run.
 

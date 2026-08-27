@@ -1,0 +1,389 @@
+#!/usr/bin/env ruby
+# frozen_string_literal: true
+
+# check-conformance-drift — which cited tests have MOVED since the last sweep.
+#
+# WHY THIS EXISTS (K-1123). `bin/check-conformance-anchors` proves every anchor
+# the conformance matrix cites still RESOLVES — the named `it`/`describe`/
+# `context` label exists, exactly once, in the file beside it. That is a check on
+# the CITATION. It says nothing about the code the citation points at: a cited
+# example can be rewritten line by line, keep its label, and go on resolving
+# while no longer asserting the statement the matrix claims it covers.
+#
+# So the matrix is walked instead — by a human, or an agent with a finite budget,
+# against a work-list of ~185 rows with no change-detection on it. Predictably
+# that samples: the last sweep hand-verified about ten rows, chosen by section
+# recency rather than by what had changed, while 257 commits had landed since the
+# matrix was rebuilt. Nothing was wrong with the judgement; there was simply no
+# way to ask which rows deserved it.
+#
+# Whether an anchored region still ASSERTS its row is a judgement no script can
+# make. Whether it CHANGED is mechanical. This script is the second question and
+# only the second question: it fingerprints each anchored region when a sweep
+# records a baseline, and afterwards lists the anchors — and, given the matrix,
+# the rows — whose region no longer matches. The next sweep re-judges those and
+# can say so with a number instead of a sample.
+#
+# WHAT IS FINGERPRINTED, AND WHY NOT SOMETHING SIMPLER.
+#   * NOT the file's blob sha. One line moved in a 500-line spec would flag every
+#     anchor in it; `well_known_spec.rb` alone carries 33.
+#   * NOT the anchor line alone. That changes only when the label changes, which
+#     is precisely the event `check-conformance-anchors` already fails on — the
+#     fingerprint would duplicate an existing gate and detect nothing new.
+#   * THE ANCHORED REGION: the line the anchor sits on, plus every following line
+#     indented MORE deeply than it (blank lines are carried but do not end the
+#     region; trailing blanks are trimmed). That is the block the label opens,
+#     under both shapes this repo cites — RSpec's `it "…" do … end`, where the
+#     body is indented and the closing `end` sits back at the label's column, and
+#     `e2e/assistant.sh`'s `assert "…" \` with its indented continuation lines.
+#     It is the code the citation offers as evidence, which is the thing whose
+#     change should provoke a re-read.
+#   * AND NO PADDING FLOOR, which was tried first and MEASURED WRONG (2026-08-27,
+#     at the first baseline): 61 of the 537 anchors open nothing and so
+#     fingerprint a single line. Extending those
+#     to a fixed 3-line window looked like the safe bias until the 61 were read:
+#     51 are `e2e/assistant.sh` one-line asserts whose line already carries the
+#     whole assertion INCLUDING the expected value (the anchor is only the label,
+#     so a changed expectation moves the fingerprint), and the file packs 82
+#     anchors two lines apart — so the padding would have coupled each assert to
+#     its neighbours and flagged three rows for every one that changed. The rule
+#     stays "the block the label opens", and where that is one line, one line is
+#     what is fingerprinted.
+# The digest is the first 16 hex of SHA-256 over the region's exact bytes. This
+# detects change; it is not a tamper control and nothing here pretends otherwise.
+#
+# WHY CONTENT AND NOT `git diff <last-sweep-sha>..HEAD`. Content answers in a
+# DIRTY tree, which is where a fix wave lives, and it does not depend on commit
+# identity — this repository's history has been rewritten once already, and every
+# recorded sha with it. A baseline of bytes survives that; a baseline of shas
+# does not.
+#
+# IT IS NOT A GATE, AND MUST NOT BECOME ONE. Drift here is the NORMAL state
+# between sweeps: every legitimate refactor of a cited test produces it. A CI job
+# failing on it would have to be silenced immediately, and silencing it means
+# re-recording the baseline in the same commit — which sets the interval to zero
+# and destroys the only signal the tool has. The baseline must advance when a
+# SWEEP has re-judged the rows, never when a commit lands. Hence exit 2 (drift,
+# triage it) is distinct from exit 1 (cannot answer), and no workflow runs this.
+#
+# WHAT IT DOES NOT COVER, stated plainly because an over-claimed guard is worse
+# than none:
+#   * IT SEES BYTES, NOT MEANING. A cited example can keep every byte and stop
+#     asserting its row because something it CALLS changed — a shared helper, a
+#     `let`, a factory, the implementation under test. Those are invisible here.
+#     A clean run is not evidence the matrix is true; it is evidence about where
+#     the text moved.
+#   * IT SEES THE REGION, NOT THE FILE. Moving a `before` hook, a `let` or a
+#     `subject` OUTSIDE the anchored block changes the example's behaviour and
+#     not its fingerprint. The sharpest case of this is an anchor that names a
+#     COMMENT whose subject is the code BELOW it at the same indentation: the
+#     region is then the comment alone and the code it describes is invisible.
+#     Measured at the baseline: three anchors of 537 have that shape.
+#   * IT OVER-REPORTS ON PURPOSE. A re-indentation or a comment tweak inside the
+#     region reads as drift. For a triage tool that is the right bias: a false
+#     positive costs a glance, a false negative costs a certified stale row.
+#   * IT INHERITS THE MANIFEST'S SCOPE. Only anchors exported to
+#     `spec/conformance-anchors.tsv` are covered — citations into other repos are
+#     not in it and are not seen here.
+#
+# Usage (stdlib only, no bundle, no database, no network):
+#   bin/check-conformance-drift                     # report drift against the baseline
+#   bin/check-conformance-drift --matrix PATH       # …naming the matrix rows affected
+#   bin/check-conformance-drift --record            # re-record the baseline at the current tree
+#   bin/check-conformance-drift --record --label T  # …with a free-text label in its header
+#
+# Exit codes, and they are three on purpose:
+#   0 — every anchored region matches the baseline
+#   2 — some moved: the list is the next sweep's D1 work-list, not a failure
+#   1 — the question could not be answered (missing manifest/baseline/file)
+
+require "digest"
+
+ROOT     = File.expand_path("..", __dir__)
+MANIFEST = File.join(ROOT, "spec", "conformance-anchors.tsv")
+BASELINE = File.join(ROOT, "spec", "conformance-drift-baseline.tsv")
+
+USAGE = <<~TEXT
+  usage: bin/check-conformance-drift [--matrix PATH] [--record [--label TEXT]]
+         0 = no drift, 2 = regions moved (triage), 1 = cannot answer
+TEXT
+
+record = false
+matrix = nil
+label  = nil
+
+argv = ARGV.dup
+until argv.empty?
+  arg = argv.shift
+  case arg
+  when "--record" then record = true
+  when "--matrix" then matrix = argv.shift
+  when "--label"  then label  = argv.shift
+  when "-h", "--help"
+    puts USAGE
+    exit 0
+  else
+    warn "check-conformance-drift: unknown argument #{arg.inspect}"
+    warn USAGE
+    exit 1
+  end
+end
+
+if matrix && !File.file?(matrix)
+  warn "check-conformance-drift: --matrix #{matrix}: no such file"
+  exit 1
+end
+
+unless File.file?(MANIFEST)
+  warn "check-conformance-drift: missing #{MANIFEST} — it is generated with the matrix"
+  exit 1
+end
+
+# ── the manifest: the same path/anchor pairs bin/check-conformance-anchors gates
+pairs = File.readlines(MANIFEST, chomp: true).filter_map do |line|
+  next if line.start_with?("#") || line.strip.empty?
+
+  rel, anchor = line.split("\t", 2)
+  next if rel.nil? || anchor.nil? || anchor.empty?
+
+  [rel, anchor]
+end
+
+if pairs.empty?
+  warn "check-conformance-drift: #{MANIFEST} lists no anchors — nothing to fingerprint"
+  exit 1
+end
+
+# ── the anchored region ──────────────────────────────────────────────────────
+@bodies = {}
+
+def body_of(rel)
+  @bodies.fetch(rel) do
+    path = File.join(ROOT, rel)
+    @bodies[rel] = File.file?(path) ? File.readlines(path, chomp: true) : nil
+  end
+end
+
+def indent_of(line)
+  line[/\A[ \t]*/].length
+end
+
+# The line the anchor sits on, plus every following line indented more deeply
+# than it. Blank lines ride along but never end the region, and trailing blanks
+# are trimmed by only ever advancing `last` onto a non-blank line.
+def region_at(body, idx)
+  base = indent_of(body[idx])
+  last = idx
+  j    = idx + 1
+  while j < body.length
+    line = body[j]
+    unless line.strip.empty?
+      break if indent_of(line) <= base
+
+      last = j
+    end
+    j += 1
+  end
+  body[idx..last]
+end
+
+def fingerprint(lines)
+  Digest::SHA256.hexdigest(lines.join("\n"))[0, 16]
+end
+
+# `nil` fingerprint = the region could not be taken; the reason rides with it.
+def measure(rel, anchor)
+  body = body_of(rel)
+  return [nil, "file is gone"] if body.nil?
+
+  hits = body.each_index.select { |i| body[i].include?(anchor) }
+  case hits.length
+  when 1 then nil
+  when 0 then return [nil, "anchor no longer occurs in the file"]
+  else        return [nil, "anchor is ambiguous (#{hits.length} matches)"]
+  end
+
+  region = region_at(body, hits.first)
+  [fingerprint(region), "#{region.length} line(s) from :#{hits.first + 1}"]
+end
+
+# ── --record ─────────────────────────────────────────────────────────────────
+if record
+  head = `git -C #{ROOT.gsub("'", "'\\''")} rev-parse --short HEAD 2>/dev/null`.strip
+  head = "unknown" if head.empty?
+  stamp = Time.now.strftime("%Y-%m-%d")
+
+  out = +<<~HEAD
+    # conformance-drift-baseline.tsv -- GENERATED by bin/check-conformance-drift --record.
+    # Do not edit by hand.
+    #
+    # One `path<TAB>fingerprint<TAB>anchor` row per anchor in
+    # spec/conformance-anchors.tsv. The fingerprint is the first 16 hex of
+    # SHA-256 over the ANCHORED REGION -- the line the anchor sits on plus every
+    # following line indented more deeply than it, which is the block that label
+    # opens. `bin/check-conformance-drift` re-measures and lists what moved, so a
+    # conformance sweep can re-judge the rows whose evidence changed instead of
+    # sampling the matrix blind.
+    #
+    # THIS FILE IS A SWEEP'S WATERMARK, NOT A LOCK. Re-record it when a sweep has
+    # RE-JUDGED the drifted rows -- never to make a run quiet. Nothing in CI reads
+    # it; drift is the normal state between sweeps and a gate on it would have to
+    # be switched off the day it was added.
+    #
+    # recorded: #{stamp} at #{head}#{label ? " -- #{label}" : ""}
+    # #{pairs.length} anchors.
+  HEAD
+
+  missing = []
+  pairs.sort.each do |rel, anchor|
+    fp, why = measure(rel, anchor)
+    if fp.nil?
+      missing << "#{rel}: #{why} -- #{anchor.inspect}"
+      next
+    end
+    out << "#{rel}\t#{fp}\t#{anchor}\n"
+  end
+
+  File.write(BASELINE, out)
+  puts "wrote spec/#{File.basename(BASELINE)} (#{pairs.length - missing.length} of #{pairs.length} anchors, #{stamp} at #{head})"
+
+  unless missing.empty?
+    warn ""
+    warn "check-conformance-drift: #{missing.length} anchor(s) could not be measured and are NOT in the baseline."
+    warn "bin/check-conformance-anchors is the gate for this; it should be red too."
+    missing.each { |m| warn "  x #{m}" }
+    exit 1
+  end
+  exit 0
+end
+
+# ── the report ───────────────────────────────────────────────────────────────
+unless File.file?(BASELINE)
+  warn "check-conformance-drift: no baseline at #{BASELINE}"
+  warn "Record one with `bin/check-conformance-drift --record`; until then there is"
+  warn "nothing to compare against and this cannot answer the question."
+  exit 1
+end
+
+baseline = {}
+recorded = nil
+File.readlines(BASELINE, chomp: true).each do |line|
+  recorded ||= line[/\A#\s*recorded:\s*(.+)\z/, 1]
+  next if line.start_with?("#") || line.strip.empty?
+
+  rel, fp, anchor = line.split("\t", 3)
+  next if rel.nil? || fp.nil? || anchor.nil? || anchor.empty?
+
+  baseline[[rel, anchor]] = fp
+end
+
+if baseline.empty?
+  warn "check-conformance-drift: #{BASELINE} holds no fingerprints"
+  exit 1
+end
+
+# ── optional: name the matrix rows, so the output is a work-list ─────────────
+#
+# The manifest carries no row ids -- deliberately: it is published in this repo
+# and the matrix is not. Given the matrix, its rows are mapped onto the anchors
+# here. The resolver mirrors the exporter's (`ks/` abbreviates kiosk-server's
+# spec dir, a bare `e2e` means e2e/assistant.sh); citations into other repos are
+# not in the manifest and are skipped.
+PATH_TOKEN = %r{(?:ks/|e2e/|kiosk-[a-z0-9-]+/|kiosk\.tech/)[A-Za-z0-9_][A-Za-z0-9_./-]*\.(?:rb|sh|erb|rake|md|json|yml|yaml|html)}
+ANCHOR_RE  = %r{@"((?:[^"\\]|\\.)*)"}
+CITATION   = %r{(?<path>#{PATH_TOKEN}|(?<![A-Za-z0-9_/.-])e2e)(?<anchors>(?:#{ANCHOR_RE})+)}
+
+rows_for = Hash.new { |h, k| h[k] = [] }
+if matrix
+  File.readlines(matrix, chomp: true).each do |line|
+    row = line[/\A- (SPEC-\d+[a-z]?)/, 1]
+    next if row.nil?
+
+    line.scan(CITATION) do
+      m = Regexp.last_match
+      path = m[:path]
+      next if path.start_with?("kiosk.tech/")
+
+      rel = path == "e2e" ? "e2e/assistant.sh" : path.sub(%r{\Aks/}, "kiosk-server/spec/kiosk/server/")
+      m[:anchors].scan(ANCHOR_RE) do
+        anchor = Regexp.last_match(1).gsub('\\"', '"').gsub("\\\\", "\\")
+        list = rows_for[[rel, anchor]]
+        list << row unless list.include?(row)
+      end
+    end
+  end
+end
+
+moved   = []
+fresh   = []
+broken  = []
+same    = 0
+
+pairs.sort.each do |rel, anchor|
+  was = baseline[[rel, anchor]]
+  fp, why = measure(rel, anchor)
+
+  if fp.nil?
+    broken << [rel, anchor, why]
+  elsif was.nil?
+    fresh << [rel, anchor, fp, why]
+  elsif was == fp
+    same += 1
+  else
+    moved << [rel, anchor, was, fp, why]
+  end
+end
+
+retired = baseline.keys.reject { |k| pairs.include?(k) }
+
+def label_for(rows_for, rel, anchor)
+  rows = rows_for[[rel, anchor]]
+  rows.empty? ? "" : "#{rows.join(', ')}  "
+end
+
+def report(title, entries, rows_for)
+  return if entries.empty?
+
+  puts
+  puts title
+  entries.group_by { |e| e[0] }.each do |rel, group|
+    puts "  #{rel}"
+    group.each do |entry|
+      _rel, anchor, *rest = entry
+      puts "    #{label_for(rows_for, rel, anchor)}#{anchor.inspect}"
+      puts "      #{rest.compact.join('  ')}"
+    end
+  end
+end
+
+total = pairs.length
+puts "check-conformance-drift: #{total} anchors, baseline recorded #{recorded || '(unstamped)'}"
+puts "  unchanged #{same}   moved #{moved.length}   new #{fresh.length}   unmeasurable #{broken.length}" \
+     "#{retired.empty? ? '' : "   retired #{retired.length}"}"
+puts "  matrix rows named from #{matrix}" if matrix
+puts "  (no --matrix given: anchors only, no SPEC row ids)" unless matrix
+
+report("MOVED — the anchored region changed since the baseline; re-judge these rows:",
+       moved.map { |rel, anchor, was, now, why| [rel, anchor, "#{was} -> #{now}", why] }, rows_for)
+report("NEW — cited since the baseline was recorded, never judged against it:",
+       fresh.map { |rel, anchor, fp, why| [rel, anchor, fp, why] }, rows_for)
+report("UNMEASURABLE — bin/check-conformance-anchors is the gate for these:",
+       broken.map { |rel, anchor, why| [rel, anchor, why, nil] }, rows_for)
+
+unless retired.empty?
+  puts
+  puts "RETIRED — in the baseline, no longer cited by the matrix (informational):"
+  retired.sort.each { |rel, anchor| puts "  #{rel}  #{anchor.inspect}" }
+end
+
+if moved.empty? && fresh.empty? && broken.empty?
+  puts
+  puts "No anchored region has moved. (This says where the text is unchanged. It does NOT"
+  puts "say the tests still assert their rows — see the header for what this cannot see.)"
+  exit 0
+end
+
+puts
+puts "#{moved.length + fresh.length + broken.length} anchor(s) need re-judging. This is a TRIAGE LIST, not a failure:"
+puts "walk them, then re-record the baseline with --record so the next sweep starts from here."
+exit 2

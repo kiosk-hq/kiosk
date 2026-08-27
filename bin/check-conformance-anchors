@@ -23,6 +23,13 @@
 # ambiguous, and an ambiguous citation is a defect — a reader cannot tell which
 # of two examples was meant.
 #
+# WHAT IT DELIBERATELY DOES NOT ASK is whether the example still ASSERTS the
+# statement that cites it. An anchored test can be rewritten line by line, keep
+# its label, and pass here forever. Whether the anchored CODE has moved is the
+# sibling question, and `bin/check-conformance-drift` answers it — as a triage
+# list for the next conformance sweep, not as a gate, for the reason its own
+# header gives. Neither script judges the assertion; that is what a sweep is for.
+#
 # WHEN IT FAILS you have two honest repairs, and which one is right depends on
 # what you were doing:
 #   * the rename was incidental — put the label back, or

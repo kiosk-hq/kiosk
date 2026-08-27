@@ -40,9 +40,9 @@ RSpec.describe "Kiosk::Redteam.blocked?" do
   end
 
   # The three codes disqualify a response whatever status carries them: a
-  # status and an envelope that disagree are the least conclusive answer there
+  # status and a `code` that disagree are the least conclusive answer there
   # is, and `pow_required` on a 200 was a block until K-736.
-  it "returns false for a 403 whose envelope says payment_failed (status and code disagree)" do
+  it "returns false for a 403 whose problem document says payment_failed (status and code disagree)" do
     expect(Kiosk::Redteam.blocked?(response(403, problem("payment_failed", status: 403)))).to be(false)
   end
 

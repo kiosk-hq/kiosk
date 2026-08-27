@@ -107,7 +107,7 @@ module Kiosk
     # Why this answer cannot settle a verdict on its own, or nil when it is not
     # a payment-required answer at all.
     #
-    # Triggered by HTTP 402 whatever the envelope says, and by any of
+    # Triggered by HTTP 402 whatever the body says, and by any of
     # {PAYMENT_REQUIRED_CODES} whatever the status says — a response whose
     # status and code disagree is the least conclusive of all.
     #

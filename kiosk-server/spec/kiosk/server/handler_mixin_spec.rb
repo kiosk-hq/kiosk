@@ -755,7 +755,7 @@ RSpec.describe "Kiosk::Handler (the operator mixin)" do
       }.to raise_error(ArgumentError, /already declares it as a query/)
     end
 
-    # ── §3.2 + T-073 = A, refused where the mistake is made ──────────────
+    # ── spec §8.1/§8.3 + T-073 = A, refused where the mistake is made ────
     #
     # All four raise at CLASS-BODY LOAD, so an operator meets them at boot with
     # the class and the method in hand — not as a verb that turns out to be

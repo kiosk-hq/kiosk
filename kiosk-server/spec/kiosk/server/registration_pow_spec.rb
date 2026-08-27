@@ -32,7 +32,7 @@ RSpec.describe Kiosk::Server::RegistrationPow do
   end
 
   # A KAT challenge bound to the register fingerprint, exactly what the gate
-  # itself emits. Since the 0.4 cutover that fingerprint is §3.4's
+  # itself emits. Since the 0.4 cutover that fingerprint is
   # SHA256("<METHOD> <verb>\n<canonical args>") — here `POST auth/register`
   # over the public key being registered.
   def kat_challenge(id:, pem: PEM)
@@ -83,10 +83,10 @@ RSpec.describe Kiosk::Server::RegistrationPow do
     }.to raise_error(Kiosk::Server::Errors::PowRequired)
   end
 
-  # §3.4 binds the toll to the CALL, not only to its arguments: the registration
-  # challenge is minted for `POST auth/register`, so a challenge carrying the
-  # same public key under any other method/verb pair is not spendable here even
-  # though its HMAC is genuinely ours.
+  # The request fingerprint binds the toll to the CALL, not only to its
+  # arguments: the registration challenge is minted for `POST auth/register`,
+  # so a challenge carrying the same public key under any other method/verb
+  # pair is not spendable here even though its HMAC is genuinely ours.
   it "binds proofs to POST auth/register (the same key under another call re-challenges)" do
     configure(count: 1)
     elsewhere_fp = Kiosk::Server::PowGate.request_fingerprint(

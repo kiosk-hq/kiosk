@@ -93,7 +93,7 @@ RSpec.describe "Kiosk-PoW header path (ADR-0022)" do
   end
 
   # A real gate-signed challenge for the exact call the controller will
-  # fingerprint — §3.4's `"<METHOD> <verb>\n<canonical args>"`.
+  # fingerprint — the digest over `"<METHOD> <verb>\n<canonical args>"`.
   def issue_challenge(command:, method:, verb:, body: {})
     Kiosk::Server::PowGate.gate(identity: fake_identity, command: command,
                                 method: method, verb: verb, body: body, pow: nil)
@@ -178,9 +178,10 @@ RSpec.describe "Kiosk-PoW header path (ADR-0022)" do
 
   # ── the controller feeds METHOD and PATH SEGMENT to the fingerprint ────────
   #
-  # These are the controller-level half of the §3.4 binding proved against the
-  # gate in pow_gate_spec: the wire name the endpoint tolls under is the PATH
-  # SEGMENT it was reached by, and the method is the request's own.
+  # These are the controller-level half of the request-fingerprint binding
+  # proved against the gate in pow_gate_spec: the wire name the endpoint tolls
+  # under is the PATH SEGMENT it was reached by, and the method is the
+  # request's own.
 
   it "does NOT accept a catalog proof on another query's endpoint" do
     status, _headers, problem =

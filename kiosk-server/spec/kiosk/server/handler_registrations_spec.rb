@@ -130,7 +130,7 @@ RSpec.describe Kiosk::Server::HandlerRegistrations do
     end
   end
 
-  # ── ONE NAME, ONE KIND (§3.2) ────────────────────────────────────────────
+  # ── ONE NAME, ONE KIND (spec §8.3) ───────────────────────────────────────
   #
   # This is the CROSS-CLASS half: two SEPARATE controller classes cannot see
   # each other, and this pass has just rebuilt both registries from a cleared

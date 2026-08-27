@@ -52,8 +52,8 @@ RSpec.describe "PowGate × equihash (real backend, real gate)" do
 
   # The call under test, as a router reaches it on the 0.4 wire:
   # `GET <endpoint>/catalog?q=milk`. `command:` is the gate/POLICY verb the
-  # policy branches on; `method:`/`verb:` are the two halves §3.4's fingerprint
-  # binds to alongside the arguments.
+  # policy branches on; `method:`/`verb:` are the two halves the request
+  # fingerprint binds to alongside the arguments.
   ARGS = { q: "milk" }.freeze
 
   # Drive the gate for that call. `command:` stays the POLICY verb; any of the
@@ -128,11 +128,12 @@ RSpec.describe "PowGate × equihash (real backend, real gate)" do
 
   # ── fingerprint binding, through the real crypto ─────────────────────────
   #
-  # §3.4 hashes "<METHOD> <verb>\n<canonical args>", so a proof solved for
-  # `GET catalog?q=milk` is spendable on that call and on nothing else. Each
-  # example below mints its challenge for THAT call and submits it against a
-  # request differing in exactly ONE of the three inputs; the N=1 example above
-  # is the matching control that shows the proof itself is good.
+  # The request fingerprint hashes "<METHOD> <verb>\n<canonical args>", so a
+  # proof solved for `GET catalog?q=milk` is spendable on that call and on
+  # nothing else. Each example below mints its challenge for THAT call and
+  # submits it against a request differing in exactly ONE of the three inputs;
+  # the N=1 example above is the matching control that shows the proof itself
+  # is good.
   describe "a valid proof submitted against a DIFFERENT request" do
     it "re-challenges when the ARGUMENTS differ" do
       proof = { challenge: kat_challenge(id: "c1"), nonce: KAT_NONCE }

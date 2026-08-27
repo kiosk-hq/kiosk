@@ -230,8 +230,8 @@ RSpec.describe Kiosk::Server::VerbController do
       expect(last_headers["X-Total-Count"]).to be_nil
     end
 
-    # §3.3 rule 3/4: a page is a per-caller answer. Nothing about adopting a
-    # cacheable-looking `Link` header may relax that.
+    # Spec §3.7.3/§3.7.4: a page is a per-caller answer. Nothing about adopting
+    # a cacheable-looking `Link` header may relax that.
     it "is still private, no-store — a page is never shared-cacheable" do
       declare_query("listings") do
         render_kiosk_page([{ id: 1 }], next_cursor: Kiosk::Server::Cursor.encode_offset(20))
@@ -632,7 +632,7 @@ RSpec.describe Kiosk::Server::VerbController do
       expect(body).to eq(queued: 1)
     end
 
-    it "fingerprints a call from the METHOD and the PATH SEGMENT (§3.4), not from a body field" do
+    it "fingerprints a call from the METHOD and the PATH SEGMENT, not from a body field" do
       # 0.3 could not say this: every read was multiplexed through one POST,
       # so the method was a constant and the verb name had to be smuggled back
       # INTO the arguments to reach the digest. Reproducing that digest byte

@@ -69,7 +69,7 @@ RSpec.describe Kiosk::Server::PowGate do
   # Issue the challenge from the gate — extract from the PowRequired exception.
   #
   # `command` is the gate/POLICY verb the policy branches on; `method` and
-  # `verb` are what §3.4's fingerprint binds to and default exactly as
+  # `verb` are what the request fingerprint binds to and default exactly as
   # {PowGate.gate} defaults them (POST, and the command as the wire name), so a
   # caller that only cares about the policy verb passes neither.
   def issue_challenge_via_gate(command: "query", body: { name: "menu" },
@@ -82,7 +82,7 @@ RSpec.describe Kiosk::Server::PowGate do
 
   # ─── request_fingerprint ──────────────────────────────────────────────────
 
-  # ─── the §3.4 digest: SHA256("<METHOD> <verb>\n<canonical args>") ─────────
+  # ─── the request fingerprint: SHA256("<METHOD> <verb>\n<canonical args>") ─
   #
   # 0.3 hashed `"<command>\n<body>"`: with every read multiplexed through
   # `POST <endpoint>/query` the method was a constant and the verb name only
@@ -431,11 +431,11 @@ RSpec.describe Kiosk::Server::PowGate do
 
     # ── proof bound to a DIFFERENT request (fingerprint mismatch) → re-challenge
     #
-    # The sig covers §3.4's digest, so a genuinely solved proof is spendable on
-    # ONE call and nothing else. All three halves of that digest are exercised
-    # here — the method and the verb became bindable only at the 0.4 cutover —
-    # and the control example at the end proves the three refusals are not
-    # passing for some trivial reason.
+    # The sig covers the request fingerprint, so a genuinely solved proof is
+    # spendable on ONE call and nothing else. All three halves of that digest
+    # are exercised here — the method and the verb became bindable only at the
+    # 0.4 cutover — and the control example at the end proves the three
+    # refusals are not passing for some trivial reason.
 
     describe "proof issued for a different request" do
       # `GET catalog?q=milk`, the call every example below mints its proof for.

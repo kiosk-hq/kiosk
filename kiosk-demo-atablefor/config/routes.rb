@@ -5,9 +5,13 @@ Rails.application.routes.draw do
   # Human diner sign-in (Devise) — the web session that mints the link code a
   # diner uses to bind their AI assistant to their restaurant account. Walked
   # end-to-end by `rake demo:binding`. The sessions controller is overridden
-  # ONLY to answer a JSON-shaped `DELETE /users/sign_out` with the Kiosk error
-  # envelope instead of a bodyless 401 (K-533); every other Devise behaviour is
-  # inherited untouched.
+  # ONLY to answer a JSON-shaped `DELETE /users/sign_out` with a JSON courtesy
+  # body pointing at the wire, instead of a bodyless 401 (K-533). NOT «the Kiosk
+  # error envelope», which is what this comment used to call it: that phrase
+  # names the wire CONTRACT, and the wire's is a FLAT RFC 9457 problem document
+  # served as `application/problem+json` (K-1092) — see
+  # `app/controllers/users/sessions_controller.rb`, which says the same thing at
+  # the render site. Every other Devise behaviour is inherited untouched.
   devise_for :users, controllers: { sessions: "users/sessions" }
 
   # Public root page: what this demo is + the assistant-facing "point your AI
@@ -43,6 +47,7 @@ Rails.application.routes.draw do
   post "/kiosk/auth/assistants/unlink",            to: "kiosk/server/assistants#unlink"
   post "/kiosk/auth/assistants/update",            to: "kiosk/server/assistants#update"
   # Kiosk wire surface (controllers shipped by kiosk-server).
+  # REST endpoints: one per verb, HTTP method = semantics.
   get  "/kiosk/schema",                            to: "kiosk/server/wire#schema"
   # NO `POST /kiosk/query` or `POST /kiosk/run` — protocol 0.4 deleted the
   # multiplexed pair outright (T-074 = A). Every verb is its own endpoint; the

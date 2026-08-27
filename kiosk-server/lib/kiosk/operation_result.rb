@@ -19,15 +19,17 @@ module Kiosk
   #     end
   #   end
   #
-  # A refusal carries the wire's `error.code` STRING rather than an exception
-  # class: the code table is the contract, not a hierarchy. Both surfaces
+  # A refusal carries the wire's `code` STRING — the flat top-level member of
+  # the problem document, which `error.code` is only the HANDLER-side spelling
+  # of (K-1095) — rather than an exception class: the code table is the
+  # contract, not a hierarchy. Both surfaces
   # branch on that string — a handler maps it to an HTTP status, a web
   # controller decides between a flash and a re-raise — and neither can be
   # surprised by a class it has never heard of.
   #
   # == The one thing you must supply: STATUSES
   #
-  # Subclass this and declare the `error.code` → Rails status symbol map for
+  # Subclass this and declare the wire `code` → Rails status symbol map for
   # the refusals YOUR app actually makes:
   #
   #   class OperationResult < Kiosk::OperationResult
@@ -66,7 +68,7 @@ module Kiosk
     #   serve both readers.
     attr_reader :value
 
-    # @return [String, nil] the wire `error.code`, on a refusal. nil on success.
+    # @return [String, nil] the wire `code`, on a refusal. nil on success.
     attr_reader :code
 
     # @return [String, nil] the human sentence the refusal carries.
@@ -79,7 +81,7 @@ module Kiosk
     # @return [OperationResult] a success.
     def self.ok(value) = new(value: value)
 
-    # @param code [String] one of the wire's `error.code` values, and one your
+    # @param code [String] one of the wire's `code` values, and one your
     #   subclass's STATUSES maps.
     # @param message [String] the sentence the caller sees.
     # @param hint [String, nil] dropped from the rendered refusal when nil.

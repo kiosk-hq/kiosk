@@ -117,7 +117,9 @@ module Kiosk
     # ── Errors ───────────────────────────────────────────────────────────
     # Rails' idiom, end to end (T-054): `render json:, status:` answers the
     # wire with the status' lone code; a body naming an explicit vocabulary
-    # `error.code` (a 403 `rls_denied`, a SPECIFIC 402) travels verbatim; and
+    # `error.code` (a 403 `rls_denied`, a SPECIFIC 402) — the HANDLER-side
+    # spelling, since what TRAVELS is the flat top-level `code` (K-1095) —
+    # travels verbatim; and
     # a raise Rails knows a status for — `params.require`, RecordNotFound,
     # anything in `config.action_dispatch.rescue_responses` — is mapped by
     # the one `rescue_from` this include installs

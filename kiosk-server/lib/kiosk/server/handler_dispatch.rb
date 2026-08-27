@@ -36,7 +36,9 @@ module Kiosk
     # ── Errors (T-054: the wire contract, consumed Rails-natively) ───────
     # A handler that renders a non-2xx answers the wire like this:
     #
-    #   * the body names an explicit vocabulary `error.code` whose canonical
+    #   * the body names an explicit vocabulary `error.code` — the HANDLER-side
+    #     spelling, since what TRAVELS is the flat top-level `code` (K-1095) —
+    #     whose canonical
     #     status ({Errors::CODES}) matches the rendered status → that code
     #     travels verbatim, extra envelope fields (`challenges`, …) included.
     #     This is how a plain `render json:, status:` says `rls_denied`, or a

@@ -8,7 +8,7 @@
 # renders what it answers (T-083); the business decisions live in
 # app/operations/, callable from a console or a rake task as well as the wire.
 #
-# Errors are Rails' idiom end to end: the wire's `error.code` vocabulary is a
+# Errors are Rails' idiom end to end: the wire's `code` vocabulary is a
 # closed table, not a class hierarchy, so a refusal is an ordinary
 # `render json:, status:` naming the code. {KioskRefusals#render_operation} is
 # the one place an {OperationResult} becomes a status.

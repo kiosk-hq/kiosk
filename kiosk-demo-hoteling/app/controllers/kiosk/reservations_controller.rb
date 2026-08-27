@@ -11,7 +11,7 @@
 # a COALESCE'd UPDATE, neither of which wants a `render` in the middle.
 # `payment_setup` stays HERE because it writes nothing.
 #
-# Errors are Rails' idiom end to end: the wire's `error.code` vocabulary is a
+# Errors are Rails' idiom end to end: the wire's `code` vocabulary is a
 # closed table, not a class hierarchy, so a refusal is an ordinary `render json:,
 # status:`. An Operation answers with an {OperationResult} and
 # {KioskRefusals#render_operation} is the one place that becomes a status.

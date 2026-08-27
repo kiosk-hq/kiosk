@@ -4,9 +4,11 @@ module Kiosk
   module Server
     # THE WIRE ERROR CONTRACT (T-054, K-495 sub-decision 4).
     #
-    # The taxonomy is the closed, stable `error.code` VOCABULARY the spec's
+    # The taxonomy is the closed, stable `code` VOCABULARY the spec's
     # "Error vocabulary" section publishes — {CODES}, a table, because the
-    # contract is data: an assistant branches on the code string, and a code
+    # contract is data: an assistant branches on the FLAT top-level `code` of
+    # the problem document, which `error.code` is only the HANDLER-side
+    # spelling of (K-1095). A code
     # exists precisely where an HTTP status alone cannot carry the meaning
     # (four codes share 403, three share 402). It is NOT a class hierarchy
     # mirroring Rails/HTTP: handler controllers express errors in Rails'
@@ -31,7 +33,10 @@ module Kiosk
     # is where that is decided — and HTTP_STATUS; both MUST agree with {CODES},
     # and the suite asserts it.
     module Errors
-      # `error.code` → canonical HTTP status. The closed vocabulary: these
+      # `code` → canonical HTTP status. `code`, not `error.code`: the keys of
+      # this table are the problem document's flat top-level member, which is
+      # what the paragraph four lines above already says and what this comment
+      # contradicted until K-1095. The closed vocabulary: these
       # fifteen codes ARE the spec's "Error vocabulary" table — narrative
       # (specification.html), formal (protocol.md §9) and `problem.schema.json`
       # all carry the same fifteen, `payment_failed` among them since

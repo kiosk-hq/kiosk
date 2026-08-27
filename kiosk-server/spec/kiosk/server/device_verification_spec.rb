@@ -77,36 +77,36 @@ RSpec.describe Kiosk::Server::DeviceVerification do
   describe ".approve" do
     it "transitions a pending row to approved with the user_id set" do
       code, = fresh
-      approved = described_class.approve(user_code: code, user_id: user_id)
+      approved = described_class.approve(user_code: code, user_id: user_id, role: nil)
       expect(approved).to be_approved
       expect(approved.user_id).to eq(user_id)
     end
 
     it "accepts the display form (XXXX-XXXX) at the boundary" do
       code, = fresh
-      approved = described_class.approve(user_code: display(code), user_id: user_id)
+      approved = described_class.approve(user_code: display(code), user_id: user_id, role: nil)
       expect(approved).to be_approved
     end
 
     it "raises CodeNotFoundError when no pending row matches" do
       expect {
-        described_class.approve(user_code: "NOPECODE", user_id: user_id)
+        described_class.approve(user_code: "NOPECODE", user_id: user_id, role: nil)
       }.to raise_error(described_class::CodeNotFoundError, /user_code/)
     end
 
     it "raises CodeNotFoundError when the row has already been approved" do
       code, = fresh
-      described_class.approve(user_code: code, user_id: user_id)
+      described_class.approve(user_code: code, user_id: user_id, role: nil)
       expect {
-        described_class.approve(user_code: code, user_id: user_id)
+        described_class.approve(user_code: code, user_id: user_id, role: nil)
       }.to raise_error(described_class::CodeNotFoundError)
     end
 
     it "raises ArgumentError when user_id is blank" do
       code, = fresh
-      expect { described_class.approve(user_code: code, user_id: nil) }
+      expect { described_class.approve(user_code: code, user_id: nil, role: nil) }
         .to raise_error(ArgumentError, /user_id/)
-      expect { described_class.approve(user_code: code, user_id: "") }
+      expect { described_class.approve(user_code: code, user_id: "", role: nil) }
         .to raise_error(ArgumentError, /user_id/)
     end
 
@@ -128,6 +128,29 @@ RSpec.describe Kiosk::Server::DeviceVerification do
       code, da = fresh
       described_class.approve(user_code: code, user_id: user_id, role: nil)
       expect(store.find_by_device_code_hash(da.device_code_hash).requested_role).to be_nil
+    end
+
+    # ── K-1127: naming the role is mandatory, holding one is not ───────────
+    #
+    # The module's own header invites a provider to drive a bespoke consent
+    # page from these helpers, and `role:` used to default to nil — so such a
+    # host produced role-less bindings by omission, indistinguishably from an
+    # origin that deliberately reports no role. The keyword is required now;
+    # the example above is what makes "and nil is still a legal answer" a
+    # measured claim rather than a promise in a comment.
+    it "REQUIRES role: to be named — a bespoke consent page cannot omit it" do
+      code, = fresh
+      expect { described_class.approve(user_code: code, user_id: user_id) }
+        .to raise_error(ArgumentError, /role/)
+    end
+
+    # The keyword being required must not have quietly become "a role is
+    # required": an origin whose user_idp reports none still binds.
+    it "still accepts an explicit nil, and the row is still reachable afterwards" do
+      code, da = fresh
+      expect { described_class.approve(user_code: code, user_id: user_id, role: nil) }
+        .not_to raise_error
+      expect(store.find_by_device_code_hash(da.device_code_hash)).to be_approved
     end
   end
 

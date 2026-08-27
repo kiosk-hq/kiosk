@@ -13,7 +13,8 @@ module Kiosk
     #                                pending rows are visible
     #   .approve(user_code:, user_id:, role:) — transition pending →
     #                                approved, capturing the approving
-    #                                human's principal AND their role
+    #                                human's principal AND their role.
+    #                                `role:` is REQUIRED — see below
     #   .deny(user_code:)           — transition pending → denied
     #
     # Codes are stored hashed only: the typed code is normalised, hashed
@@ -25,6 +26,16 @@ module Kiosk
     # ships as {DeviceVerifyController} + minimal overridable engine views
     # (Devise-style batteries); a provider may also call these helpers from
     # its own controller for a fully bespoke page.
+    #
+    # THAT INVITATION IS WHY `.approve` HAS NO DEFAULT FOR `role:` (K-1127).
+    # A host that takes it up is writing the ONE step of the ceremony where an
+    # authenticated human is present, and the role of the binding is decided
+    # there or nowhere. While the keyword defaulted to `nil`, a bespoke page
+    # that simply did not know about it produced role-less bindings silently —
+    # the caller could not tell the omission from a deliberate "this approver
+    # holds no role", and neither could the row. Naming it is now mandatory;
+    # passing `nil` is still legal and still means the second of those two,
+    # which is what an origin with a role-less `user_idp` genuinely reports.
     module DeviceVerification
       # Raised when the user_code does not resolve to a pending row.
       # Distinct from {DeviceAuthorization::StateError} which signals a
@@ -54,10 +65,26 @@ module Kiosk
       # link row at mint. The claim row was created by an UNAUTHENTICATED
       # request and carries no role of its own, so this call is the only place
       # a claim ceremony can acquire one, and a bound assistant can therefore
-      # never carry more than its approver holds. A caller that passes nothing
-      # leaves the row role-less, which binds at `registration_role`/absent
-      # exactly as before.
-      def approve(user_code:, user_id:, role: nil,
+      # never carry more than its approver holds.
+      #
+      # IT IS REQUIRED, AND IT STILL ACCEPTS `nil` (K-1127). The two are not in
+      # tension: what is mandatory is SAYING what the approver holds, not that
+      # they hold something. `role: nil` is the honest answer for an origin
+      # whose `user_idp` reports no role, and it leaves the row role-less —
+      # binding at `registration_role`/absent exactly as before, which is
+      # ADR-0011's no-regression clause and is unchanged here. What is gone is
+      # the third possibility: a caller who never considered the question and
+      # got the role-less binding by default.
+      #
+      # Nothing in this repo relied on the old default. Its one engine caller
+      # ({DeviceVerifyController}) has always passed the approving identity's
+      # role, and the OTHER role-less `approve` — the one {LinkCode.mint}
+      # calls without a role, legitimately, because a link row is minted BY the
+      # human and already carries theirs — is {DeviceAuthorization#approve},
+      # a different method on the value object. This module never sees a
+      # `:link` row at all: {LinkCode.mint} stores its row already `:approved`,
+      # and {.find_pending} returns only `:pending` ones.
+      def approve(user_code:, user_id:, role:,
                   store: Kiosk.configuration.device_authorization_store)
         raise ArgumentError, "user_id required" if user_id.nil? || user_id.to_s.empty?
 

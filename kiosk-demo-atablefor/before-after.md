@@ -437,7 +437,7 @@ Handlers are plain Rails actions: your filters, your `rescue_from`, your `params
 
 **5. Name the controllers in the initializer**
 
-<!-- derived: snippet | from: config/initializers/kiosk.rb | abridged: the handler-naming lines only, out of a ~60-line Kiosk.configure block -->
+<!-- derived: snippet | from: config/initializers/kiosk.rb | abridged: the handler-naming lines only, out of the whole Kiosk.configure block -->
 ```ruby
 Kiosk.configure do |c|
   c.handlers = %w[Kiosk::DiningRoomController Kiosk::BookingsController]

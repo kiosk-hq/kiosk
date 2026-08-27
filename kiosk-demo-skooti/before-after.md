@@ -26,11 +26,12 @@ demo, nothing removed and nothing added. The human said *"rent a scooter"* and
 touched nothing until the lock opened. The task runs four further beats this
 excerpt leaves out: RUN 2 skips the payment and asks for the same unlock, which
 the server refuses `403` — that is what makes RUN 1's `200` mean something; RUN 3
-pins the two query verbs; then two DB-side checks, that no ROW LEVEL SECURITY
-is in play on this demo's own tables, and the capture-anchored paid-state
-regression (K-853).
+pins the two query verbs; then a structure check that no ROW LEVEL SECURITY is
+in play on this demo's own tables — read off the generated `db/structure.sql`,
+which is what that beat's own output names — and the capture-anchored paid-state
+regression (K-853), which does run against the database.
 
-<!-- derived: transcript | task: bundle exec rake demo:rideflow | from: lib/tasks/demo.rake, script/rental_flow.rb, script/equihash_register.rb, script/lock_sim.rb | keys_from: app/controllers/kiosk/fleet_controller.rb, app/controllers/kiosk/rentals_controller.rb | abridged: RUN 1 and the offline-token negatives; the task's four later beats are named in the prose above -->
+<!-- derived: transcript | task: bundle exec rake demo:rideflow | from: lib/tasks/demo.rake, script/rental_flow.rb, script/equihash_register.rb, script/lock_sim.rb | keys_from: app/controllers/kiosk/fleet_controller.rb, app/controllers/kiosk/rentals_controller.rb | abridged: above the first line quoted, the /etc/hosts hint the task prints when the demo host does not resolve; below the last, RUN 2 (the SKIP_PAY 403), RUN 3 (the query verbs), the structure check, the capture-anchored paid-state run, and the Assertions banner with its All assertions passed. line -->
 ```
 ══ RUN 1: Happy path ══
   Server up at http://127.0.0.1:3004

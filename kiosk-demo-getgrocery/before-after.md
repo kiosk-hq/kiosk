@@ -633,7 +633,7 @@ These are the lines the two named files actually carry, verbatim:
                                      (config.x.kiosk.stripe_mock_url ? "sk_test_mock" : nil)
 ```
 
-<!-- derived: snippet | from: config/initializers/kiosk.rb | abridged: the issuer and payment-provider lines only, out of the Kiosk.configure block -->
+<!-- derived: snippet | from: config/initializers/kiosk.rb | abridged: only the issuer line, the Stripe key lookup with its mock-base branch and its blank guard, and the payment-provider call down to where the quote stops, out of the Kiosk.configure block -->
 ```ruby
 # config/initializers/kiosk.rb — the initializer reads the resolved values
   c.issuer = Rails.configuration.x.kiosk.issuer

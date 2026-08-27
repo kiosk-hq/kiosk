@@ -270,6 +270,38 @@
 # word escapes the check entirely, which is exactly what skooti's transcript
 # did (K-1103 instance 1).
 #
+# ── AND A NUMBERED CUT LIST IS HELD TO THE FIELD BESIDE IT (K-1107) ─────────
+#
+# `abridged:` is the half of the pair this script reads; the paragraph three
+# lines above it is the half a READER reads. Nothing tied the two together, and
+# in two of K-1103's five instances the PARAGRAPH WAS RIGHT WHILE THE FIELD WAS
+# WRONG — the worse direction of the two, because the field is the half with a
+# checker. So: when that paragraph enumerates the cut as NUMBERED sentences
+# («Three things were deleted. (1) … (2) … (3) …»), every backticked BARE
+# IDENTIFIER inside those numbered sentences must appear in the field.
+#
+# MEASURED against the pre-K-1103 tree, extracted with `git archive fca7c1d1^`
+# into a scratch directory so no working tree was touched: the rule flags
+# hoteling's declaration on `search_hotels`, `hotel_detail` and `availability`
+# — i.e. it catches K-1103 instance (2) mechanically, where a human found it.
+# Run at head it has exactly ONE live hit, hoteling's `availability` again,
+# which is a vagueness rather than a falsehood («one verb's guards at a marked
+# line» where the prose names the verb) and is repaired in the same wave.
+#
+# SENTENCE-SCOPED, AND THAT IS THE WHOLE DESIGN — measured, not argued. The
+# naive whole-paragraph form false-positives on THREE of the corpus's five
+# enumerating paragraphs, because each of the three ends in a KEPT clause —
+# «Everything else — field names, types, `required` lists, `enum`s …» — whose
+# backticks name what STAYED. Reading a kept list as a cut list is how a check
+# like this gets switched off, so the items are scoped to their `(N)` sentence
+# and the paragraph's other backticks are ignored on purpose.
+#
+# IT IS A NAME-OVERLAP CHECK AND NOTHING MORE. Its limits are in the over-claim
+# list and they are real: it cannot tell whether either half is right, it is
+# blind to any cut the prose does not backtick, and it says nothing about the
+# corpus's OTHER enumerating shape — the un-numbered «N of M shipped actions …
+# are left out», which is what K-1103 instance (3) was.
+#
 # ── AND A FRAME'S LITERAL MUST IDENTIFY THE LINE, NOT MERELY EXIST (K-1105) ──
 #
 # A frame with enough literal text of its own is matched WITHOUT reading its
@@ -383,6 +415,14 @@
 #     the strongest completeness claim in these four files, matching nothing.
 #     A promise phrased in words nobody has used yet passes, and the rule is
 #     therefore a ratchet on known shapes rather than a bound on the class.
+#   * THE CUT-ENUMERATION RULE (K-1107) IS NAME OVERLAP, NOT TRUTH. It fires
+#     only where the paragraph before a declaration enumerates the cut in TWO OR
+#     MORE numbered sentences, and asks only that each backticked bare
+#     identifier in them also appear in `abridged:`. It cannot tell whether the
+#     prose is right, whether the field is right, or whether they describe the
+#     same thing in different words; it is blind to any cut the prose does not
+#     backtick; and it does not fire at all on the corpus's un-numbered shape
+#     («N of M shipped actions … are left out»), which two declarations use.
 #   * IT SAYS NOTHING ELSE ABOUT THE PROSE. Whether the paragraphs around a block
 #     are true is K-1069's question (cross-demo agreement, in check-demo-copies)
 #     and claims.md's.
@@ -442,6 +482,17 @@
 # `derived: none` wording. The standing control is the corpus itself — FIVE
 # snippet blocks carry «nothing else altered» and the tree is green, because the
 # rule deliberately does not sweep the class whose promise is largely backed.
+#
+# K-1107 added two plants and two controls. PROOF-OF-FIRE: hoteling's pre-fix
+# `abridged:` restored verbatim reddens, naming `availability`. A plant: drop
+# `kyc_status` from getgrocery's field and it reddens naming it. The control
+# pair is what proves the scoping rather than the rule — a new backticked
+# `planted_kept_name` added to the KEPT clause («Everything else — field names,
+# types, `required` lists …») stays GREEN, and the SAME name moved into
+# numbered item (2) reddens. And a declared-limit control: getgrocery's
+# un-numbered «Two of getgrocery's four shipped actions, `payment_setup` and
+# `request_kyc`, are left out» does NOT fire when the field stops naming them,
+# which is the over-claim list's own bullet demonstrated rather than asserted.
 #
 # K-1104 added three plants and a negative control: the « out of …» clause cut
 # off a kept-side declaration, the «… are out» clause cut off another, and
@@ -1059,7 +1110,8 @@ end
 
 # ── Document parsing ─────────────────────────────────────────────────────────
 
-Block = Struct.new(:fence_line, :info, :body, :decl, :decl_line, :neighbourhood, keyword_init: true)
+Block = Struct.new(:fence_line, :info, :body, :decl, :decl_line, :neighbourhood,
+                   :preceding_paragraph, keyword_init: true)
 
 DECL_RE = /\A<!--\s*derived:\s*(.*?)\s*-->\z/
 
@@ -1102,6 +1154,7 @@ def parse_document(path)
       decl: decl, decl_line: decl_line && decl_line + 1,
       neighbourhood: [promise_window_before(lines, decl_line || i),
                       paragraph_after(lines, j)].join("\n"),
+      preceding_paragraph: paragraph_before(lines, decl_line || i),
     )
     i = j + 1
   end
@@ -1155,6 +1208,60 @@ def promise_window_before(lines, idx)
   k = idx - 1
   k -= 1 while k >= 0 && !promise_window_boundary?(lines[k])
   lines[(k + 1)...idx].to_a.join("\n")
+end
+
+# ── A NUMBERED CUT LIST, AND THE NAMES IN IT (K-1107) ────────────────────────
+#
+# `abridged:` is the half of the pair this script reads; the paragraph three
+# lines above it is the half a reader reads. In two of K-1103's five instances
+# the PARAGRAPH WAS RIGHT WHILE THE FIELD WAS WRONG — the worse direction,
+# because the field is the half with a checker. So when that paragraph
+# enumerates the cut as NUMBERED sentences, every backticked bare identifier in
+# those sentences must appear in the field.
+#
+# SENTENCE-SCOPED, AND THAT IS THE WHOLE DESIGN. Measured rather than argued:
+# the naive whole-paragraph form false-positives on THREE of the corpus's five
+# enumerating paragraphs, because each one ends in a KEPT clause — «Everything
+# else — field names, types, `required` lists, `enum`s …» — whose backticks name
+# what STAYED. Scoping to the `(N)` sentences leaves exactly one live hit at
+# head, and that hit is real.
+
+# A backticked span that is a bare identifier: `kyc_status`, `description`,
+# `description:`. Deliberately NOT `description "…"   # elided` or `BODY
+# ELIDED` — those are prose, and a field is not expected to echo them verbatim.
+BARE_IDENTIFIER_RE = /\A[A-Za-z_][A-Za-z0-9_]*:?\z/
+
+# Sentences, backtick-aware, because the corpus writes `db:schema:load` and
+# `Date.today + 30` mid-sentence and a `.` inside backticks ends nothing.
+def sentences(text)
+  flat = text.tr("\n", " ")
+  out = []
+  buf = +""
+  in_code = false
+  flat.each_char.with_index do |c, i|
+    buf << c
+    in_code = !in_code if c == "`"
+    next unless c == "." && !in_code
+
+    nxt = flat[i + 1]
+    next unless nxt.nil? || nxt.match?(/\s/)
+
+    out << buf.strip
+    buf = +""
+  end
+  out << buf.strip
+  out.reject(&:empty?)
+end
+
+# The `(N)` sentences of a paragraph that enumerates a cut. TWO are required:
+# a single stray `(1)` is a parenthesis, not an enumeration.
+def enumerated_cut_items(paragraph)
+  items = sentences(paragraph).select { |s| s.match?(/\A\(\d+\)\s/) }
+  items.length >= 2 ? items : []
+end
+
+def backticked_identifiers(text)
+  text.scan(/`([^`]+)`/).flatten.select { |s| s.match?(BARE_IDENTIFIER_RE) }.uniq
 end
 
 # ── Checks ───────────────────────────────────────────────────────────────────
@@ -1333,6 +1440,24 @@ end
                 "canonical sense) or add the universe: «… only, out of X», «… only; Y are out» " \
                 "(K-1104). This is a SHAPE check and knows nothing about whether the universe " \
                 "named is the right one."
+    end
+
+    # The paragraph above a declaration and the declaration itself describe the
+    # same cut, and only one of the two has ever had a checker. When the
+    # paragraph enumerates the cut in numbered sentences, the two are held
+    # together BY NAME (K-1107).
+    cut_items = enumerated_cut_items(block.preceding_paragraph.to_s)
+    unless cut_items.empty?
+      unnamed = backticked_identifiers(cut_items.join(" "))
+                .reject { |id| abridged.match?(/(?<![A-Za-z0-9_])#{Regexp.escape(id)}/) }
+      unless unnamed.empty?
+        errors << "#{where}: the paragraph above this block enumerates the cut and names " \
+                  "#{unnamed.join(', ')}, which `abridged: #{abridged}` does not. Both describe " \
+                  "the same cut and this script reads only the declaration, so a field that omits " \
+                  "what the prose enumerates leaves the CHECKED half saying less than the " \
+                  "unchecked one — which is the direction two of K-1103's five instances ran " \
+                  "(K-1107). NAME-OVERLAP only: it cannot tell whether either half is right."
+      end
     end
 
     if kind == "transcript"

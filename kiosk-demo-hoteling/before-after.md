@@ -265,7 +265,7 @@ line. Three things were deleted. (1) Two of the five shipped queries,
 an explicit marker. Everything else — field names, types, `required` lists,
 `enum`s and the guards — is the shipped declaration.
 
-<!-- derived: snippet | from: app/controllers/kiosk/hotels_controller.rb | transform: strip_descriptions | abridged: the search_hotels and hotel_detail queries, each remaining verb's prose description, every schema description: key, and one verb's guards at a marked line -->
+<!-- derived: snippet | from: app/controllers/kiosk/hotels_controller.rb | transform: strip_descriptions | abridged: the search_hotels and hotel_detail queries, each remaining verb's prose description, every schema description: key, and availability's guards at a marked line -->
 ```ruby
 # app/controllers/kiosk/hotels_controller.rb
 class Kiosk::HotelsController < ActionController::API

@@ -51,8 +51,9 @@ module Kiosk
     module PowGate
       module_function
 
-      # Compute the request fingerprint used for challenge binding — spec
-      # design §3.4:
+      # Compute the request fingerprint used for challenge binding. The spec
+      # requires every challenge to be request-bound (§10, §15.2) and leaves the
+      # digest itself to the operator; this is the one the engine computes:
       #
       #     SHA256("<METHOD> <verb>\n<canonical args>")
       #
@@ -89,7 +90,7 @@ module Kiosk
       #   `Policy#challenge_for` branch on, and it is NOT what the fingerprint
       #   binds to
       # @param method   [String]          the HTTP request method — half of the
-      #   §3.4 fingerprint
+      #   request fingerprint
       # @param verb     [String, Symbol]  the WIRE verb name (the path segment)
       #   — the other half
       # @param body     [Hash, nil]       the verb args (the proof rides in the header, never here)

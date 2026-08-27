@@ -47,7 +47,7 @@ module Kiosk
     # pair rather than the verbs — the origin's surface is read off
     # `GET <endpoint>/schema`, which is what the skill already teaches.
     #
-    # ── Order of the gates, and why it is not §3.5's ─────────────────────
+    # ── Order of the gates, and why it is not the first draft's ──────────
     #
     #   1. identity            401  IdentityResolution
     #   2. the verb exists     404  the registry (with the name-hint)
@@ -55,14 +55,16 @@ module Kiosk
     #   3. the arguments       400  ArgumentDecoder + the declared input_schema
     #   4. the toll            402  PowGate, via WireController#execute_wire
     #
-    # Design §3.5 lists the declared-verb check BEFORE authentication. This
-    # order is the one that ships, and the reason is now ORDINARY GATE ORDER
-    # rather than a security defence — which is a change of justification, not
-    # of behaviour, and it is written down because the old reason is dead.
+    # The 0.4 wire was first drafted with the declared-verb check BEFORE
+    # authentication. This order is the one that ships, and the reason is now
+    # ORDINARY GATE ORDER rather than a security defence — which is a change of
+    # justification, not of behaviour, and it is written down because the old
+    # reason is dead.
     #
-    # IT WAS an anti-enumeration measure: §3.5's order answers an anonymous
-    # probe 404 for a name that does not exist and 401 for one that does, which
-    # is an enumeration oracle, and the catalogue was behind a Bearer token.
+    # IT WAS an anti-enumeration measure: checking the verb first answers an
+    # anonymous probe 404 for a name that does not exist and 401 for one that
+    # does, which is an enumeration oracle, and the catalogue was behind a
+    # Bearer token.
     # BOTH halves of that are gone (2026-08-19). `GET <endpoint>/schema` is
     # PUBLIC (T-094) and `/.well-known/api-catalog` hyperlinks every verb
     # unauthenticated (T-093), so the complete list is one anonymous GET away
@@ -87,7 +89,7 @@ module Kiosk
     # is the name resolution, the method fork and the argument channel —
     # nothing about how a response is written.
     class VerbController < WireController
-      # A verb name (design §3.2). Also the route constraint, so a path that
+      # A verb name (spec §8.1). Also the route constraint, so a path that
       # cannot be a verb name never reaches this controller and stays a routing
       # 404 — `/kiosk/Foo`, `/kiosk/foo-bar`, `/kiosk/9lives`.
       NAME_SEGMENT = /[a-z][a-z0-9_]*/

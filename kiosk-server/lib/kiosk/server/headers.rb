@@ -31,7 +31,7 @@ module Kiosk
         add_to({}, server_version: server_version)
       end
 
-      # The `Vary` a wire response MUST carry (design §3.3 rule 1, T-068
+      # The `Vary` a wire response MUST carry (spec §3.7.1, T-068
       # slice 2). Two request headers change the answer and neither is in the
       # URL: `Authorization` (every wire response is identity-scoped) and
       # `Kiosk-PoW` (a tolled 200 and its 402 differ ONLY by this header).

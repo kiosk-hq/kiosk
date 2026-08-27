@@ -1,7 +1,7 @@
 #!/usr/bin/env ruby
 # frozen_string_literal: true
 
-# Kiosk verb-name check (T-068 slice 3, design §3.2).
+# Kiosk verb-name check (T-068 slice 3; the rule is spec §8.1 / §8.3).
 #
 # WHY THIS EXISTS. On the 0.4 wire a verb name IS a path segment, so three
 # properties that used to be cosmetic are now load-bearing:

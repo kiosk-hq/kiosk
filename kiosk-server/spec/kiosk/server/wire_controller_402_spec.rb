@@ -114,7 +114,7 @@ RSpec.describe "WireController 402 WWW-Authenticate (W4)" do
       expect(status).to eq(402)
       expect(headers["WWW-Authenticate"]).to eq('Kiosk-PoW realm="https://demo.example"')
       expect(headers["Content-Type"]).to include("application/problem+json")
-      # Rule 2 of design §3.3: a single-use challenge is never cacheable, and
+      # Spec §3.7.2: a single-use challenge is never cacheable, and
       # `no-store` is the one directive an operator cannot relax.
       expect(headers["Cache-Control"]).to eq("no-store")
       expect(headers["Vary"]).to eq("Authorization, Kiosk-PoW")

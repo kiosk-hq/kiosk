@@ -109,7 +109,7 @@ RSpec.describe "Kiosk::Server::Engine routes" do
     end
 
     it "lets EVERY reserved-plane route win by first-match" do
-      # This IS design §3.2's reserved-word rule, enforced by Rails' own
+      # This IS spec §8.3's reserved-name rule, enforced by Rails' own
       # route ordering rather than by a hand-kept literal list: the per-verb
       # pair is drawn last, so an operator who declares a verb called
       # `schema` or `pay` cannot shadow the wire — the wire answers, and the

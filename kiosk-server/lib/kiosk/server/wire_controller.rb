@@ -340,9 +340,9 @@ module Kiosk
       #     total, which is worse than saying nothing.
       #
       # Not cached, and that needs no special case: {Headers.add_cache_policy}
-      # already puts `private, no-store` on every verb response (design §3.3
-      # rule 4), so a page cannot be served to a second caller, and §3.3 rule 3
-      # forbids `public`/`s-maxage` on this plane outright. The CDN story T-094
+      # already puts `private, no-store` on every verb response (spec §3.7.4),
+      # so a page cannot be served to a second caller, and §3.7.3 forbids
+      # `public`/`s-maxage` on this plane outright. The CDN story T-094
       # shipped is for `GET <endpoint>/schema` alone.
       def add_pagination_headers(result)
         return unless result.kind == :rows
@@ -449,7 +449,7 @@ module Kiosk
 
       # The ONE place a wire response is written. Everything both wires must
       # carry regardless of body shape lives here: the three version-handshake
-      # headers, the cache policy (design §3.3 — `Vary: Authorization,
+      # headers, the cache policy (spec §3.7 — `Vary: Authorization,
       # Kiosk-PoW` on every wire response, `no-store` on a 402), the RFC 7235
       # challenge that de-overloads the two 402 gates, and any header the
       # error itself requires (`Allow` on a 405, RFC 9110 §15.5.6).

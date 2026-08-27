@@ -7,7 +7,7 @@
 # end-to-end with the real shipped solver. One JSON line on stdout.
 #
 # THE 0.4 WIRE. `catalog` is a QUERY, so it is `GET /kiosk/catalog` with no
-# arguments — the toll's §3.4 fingerprint is now SHA256("GET catalog\n{}"),
+# arguments — the toll's request fingerprint is now SHA256("GET catalog\n{}"),
 # which is why every call below dials the SAME url with the SAME (empty) query
 # string: the challenge binds to the exact request. The proof still rides in the
 # `Kiosk-PoW` request HEADER (ADR-0022), which is what lets a GET carry one at

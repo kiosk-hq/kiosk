@@ -553,7 +553,7 @@ assert "no envelope wrapper"       "$(echo "$r" | jq -r 'if type == "object" the
 assert "exactly 1 salon"           "$(echo "$r" | jq -r 'length')"                 "1"
 assert "salon name is Combette"      "$(echo "$r" | jq -r '.[0].name')"              "Combette on Park"
 
-# Design §3.3 — the cache policy is response shape, so it is asserted here
+# Spec §3.7.1 — the cache policy is response shape, so it is asserted here
 # with the body. Without `Kiosk-PoW` in Vary a private cache keyed on the URL
 # would serve a paid 200 to an unpaid retry.
 cache_headers=$(curl -sS -o /dev/null -D - "$SERVER_URL/kiosk/salons" \

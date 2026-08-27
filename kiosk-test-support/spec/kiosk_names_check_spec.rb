@@ -1,6 +1,6 @@
 # frozen_string_literal: true
 
-# `bin/check-kiosk-names` runs in CI (T-068 slice 3, design §3.2).
+# `bin/check-kiosk-names` runs in CI (T-068 slice 3; the rule is spec §8.1 / §8.3).
 #
 # The check itself is a standalone script — no Rails, no database, a second to
 # run — and its three assertions are described in its own header. This spec is

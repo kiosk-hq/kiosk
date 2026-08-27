@@ -64,7 +64,7 @@ RSpec.describe Kiosk::Server::VerbController do
 
   # Returns [status, parsed body, headers] — the headers matter now: the media
   # type is half of what makes a problem document one, and the cache policy is
-  # response shape (design §3.3).
+  # response shape (spec §3.7).
   def dispatch(controller, action, env)
     status, headers, body = controller.action(action).call(env)
     raw = +""
@@ -105,8 +105,8 @@ RSpec.describe Kiosk::Server::VerbController do
     end
 
     it "answers 401 before it will say whether the verb exists" do
-      # Design §3.5 lists the declared-verb check BEFORE authentication;
-      # this controller resolves identity first, so an unauthenticated probe
+      # The 0.4 wire was first drafted with the declared-verb check BEFORE
+      # authentication; this controller resolves identity first, so an unauthenticated probe
       # cannot tell a registered name from an unregistered one. That is
       # ordinary gate ORDER, not an anti-enumeration defence — spec §4.2 and
       # {VerbController}'s own comment record that warrant as RETIRED, because

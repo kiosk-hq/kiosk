@@ -52,7 +52,7 @@ RSpec.describe Kiosk::Server::Headers do
     end
   end
 
-  # Design §3.3, landed with the response shape (T-068 slice 2). Not in
+  # Spec §3.7, landed with the response shape (T-068 slice 2). Not in
   # HeadersMiddleware on purpose: that covers every path under the mount,
   # including the deliberately public, long-lived `/kiosk/.well-known/
   # jwks.json`, where `Vary: Authorization` would be both a lie and a

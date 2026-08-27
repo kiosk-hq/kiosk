@@ -12,7 +12,7 @@
 # publishes as evidence has been renamed or removed: rename it back, or update
 # the citation that names it and regenerate this file.
 #
-# 574 anchors.
+# 575 anchors.
 e2e/assistant.sh	$public_doc is really being read (control token)
 e2e/assistant.sh	?v=<digest> is immutable for a year
 e2e/assistant.sh	GET /kiosk/schema is unenveloped
@@ -108,8 +108,9 @@ kiosk-demo-atablefor/app/controllers/home_controller.rb	def reservations
 kiosk-demo-atablefor/app/views/home/index.html.erb	The href is the VERSIONED cut this operator pins, read from
 kiosk-demo-hoteling/app/operations/wire_arguments.rb	def existing_property
 kiosk-demo-hoteling/app/operations/wire_arguments.rb	def property_not_found
-kiosk-demo-hoteling/app/operations/wire_arguments.rb	def stay_dates
+kiosk-demo-hoteling/lib/tasks/demo.rake	availability for the SAME unknown id → 404 not_found (the two verbs agree)
 kiosk-demo-hoteling/lib/tasks/demo.rake	check.call(result["empty_filter_total"] == 0
+kiosk-demo-hoteling/lib/tasks/demo.rake	hotel_detail for an id nobody has → 404 not_found
 kiosk-demo-hoteling/lib/tasks/demo.rake	rule 1: a value OUTSIDE its declared domain → 400 bad_request
 kiosk-demo-hoteling/lib/tasks/demo.rake	rule 3: a FILTER that matched nothing → 200 with an EMPTY array
 kiosk-demo-hoteling/lib/tasks/demo.rake	…and it lists the DOMAIN rather than echoing what was sent

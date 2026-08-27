@@ -20,8 +20,8 @@
 # watermark forward. Repair a drifted header with --reheader, which re-renders
 # this block and touches no fingerprint.
 #
-# recorded: 2026-08-27 at 42a41b63 -- sweep-022
-# 574 anchors.
+# recorded: 2026-08-27 at 8210dcfb -- sweep-022-k1142
+# 575 anchors.
 e2e/assistant.sh	f9dc523d4a428d91	$public_doc is really being read (control token)
 e2e/assistant.sh	52a16a65def7b005	?v=<digest> is immutable for a year
 e2e/assistant.sh	0731d564311068f6	GET /kiosk/schema is unenveloped
@@ -117,8 +117,9 @@ kiosk-demo-atablefor/app/controllers/home_controller.rb	e0c84228969a0be8	def res
 kiosk-demo-atablefor/app/views/home/index.html.erb	202945c715920bc0	The href is the VERSIONED cut this operator pins, read from
 kiosk-demo-hoteling/app/operations/wire_arguments.rb	bd4fe4e554f411b6	def existing_property
 kiosk-demo-hoteling/app/operations/wire_arguments.rb	c7c9bab409031c82	def property_not_found
-kiosk-demo-hoteling/app/operations/wire_arguments.rb	2d56ff0499b5bcf7	def stay_dates
+kiosk-demo-hoteling/lib/tasks/demo.rake	dcf8619f8ce94b66	availability for the SAME unknown id → 404 not_found (the two verbs agree)
 kiosk-demo-hoteling/lib/tasks/demo.rake	e30d22abb04f580b	check.call(result["empty_filter_total"] == 0
+kiosk-demo-hoteling/lib/tasks/demo.rake	6b9e0ed6923514d3	hotel_detail for an id nobody has → 404 not_found
 kiosk-demo-hoteling/lib/tasks/demo.rake	b0891c2b303d5e55	rule 1: a value OUTSIDE its declared domain → 400 bad_request
 kiosk-demo-hoteling/lib/tasks/demo.rake	a5d63104d6b115b8	rule 3: a FILTER that matched nothing → 200 with an EMPTY array
 kiosk-demo-hoteling/lib/tasks/demo.rake	67baa10def6dca28	…and it lists the DOMAIN rather than echoing what was sent

@@ -1606,8 +1606,10 @@ prose_units.each do |unit|
   next if hits.empty?
 
   errors << "#{unit[:label]}: #{unit[:rel]} names #{hits.map(&:inspect).join(', ')} in CODE — the " \
-            "0.3 wire vocabulary protocol 0.4 deleted (K-1088). `POST /kiosk/query` and `POST " \
-            "/kiosk/run` have no route (T-074 = A) and `capabilities` publishes MODULE names " \
+            "0.3 wire vocabulary protocol 0.4 deleted (K-1088). No DEDICATED route is drawn " \
+            "for `query` or `run` (T-074 = A): both names fall through to the per-verb pair and " \
+            "answer the ordinary `404 not_found` problem document, hint and all, that any " \
+            "unregistered verb name gets (K-1112). `capabilities` publishes MODULE names " \
             "(schema/queries/actions/pay) since T-095, so this string is false however a reader " \
             "takes it — and it is a LIVE response body, not a comment. Name what " \
             "/.well-known/kiosk.json carries (the register/login endpoints, the catalog link, the " \
@@ -1670,8 +1672,10 @@ demos.each do |dir|
     next if hits.empty?
 
     errors << "#{label}: #{rel} names #{hits.map(&:inspect).join(', ')} in the file, which is SERVED whole — " \
-              "retired 0.3 vocabulary (K-1090). `POST /kiosk/query` and `POST /kiosk/run` have " \
-              "no route (T-074 = A), `capabilities` publishes MODULE names since T-095, and an " \
+              "retired 0.3 vocabulary (K-1090). No DEDICATED route is drawn for `query` or " \
+              "`run` (T-074 = A): both names fall through to the per-verb pair and answer the " \
+              "ordinary `404 not_found` problem document, hint and all, that any unregistered " \
+              "verb name gets (K-1112). `capabilities` publishes MODULE names since T-095, and an " \
               "error is a FLAT RFC 9457 problem document under `application/problem+json`, not " \
               "an «envelope» (K-808). PublicExceptions serves this page to every assistant that " \
               "guesses a path, so it cannot check what it is told. Name what " \

@@ -162,8 +162,28 @@ class Kiosk::FrontDeskController < ApplicationController
   #
   # `reach :role` — ADR-0028's third declared departure and the only verb in the
   # fleet carrying it: an `owner` reads EVERY principal's appointments. Sound only
-  # because a role is ASSIGNED by the operator and never client-requested
-  # (spec §5.4; the `privilege_self_selection` red-team scenario proves it).
+  # because a role is ASSIGNED by the operator and never client-requested.
+  #
+  # THE CITATION HERE USED TO BE FALSE, AND IT MATTERED (K-1109). It named
+  # kiosk-redteam's `privilege_self_selection` scenario as the proof — a
+  # scenario that injects a role into `POST /auth/register` and nowhere else.
+  # The binding ceremonies are the other way in, and one of them was open: the
+  # RFC 8628 claim flow read `role`/`scope` off its UNAUTHENTICATED opening
+  # request, so `role=owner` reached this verb through a customer's approval
+  # while `rake demo:redteam` printed «all 14 scenarios BLOCKED». A citation
+  # to a test that does not test the claim is worse than none — it is what
+  # stopped anyone looking.
+  #
+  # What holds it now, and each of these is a beat of `rake demo:redteam` in
+  # THIS demo (script/redteam_suite.rb), against the live wire:
+  #   • registration  — kiosk-redteam's `PrivilegeSelfSelection`, the original
+  #     and still-correct scenario for `/auth/register`;
+  #   • claim         — `DeviceGrantCannotSelfSelectRole` /
+  #     `DeviceGrantRoleComesFromTheApprover` / `DeviceGrantRebindCannotEscalate`;
+  #   • link          — `CustomerLinkCannotCarryOwnerRole` /
+  #     `OwnerLinkIgnoresForgedClaimBody`;
+  #   • the token     — `SelfAssertedTokenForgery`;
+  #   • the session   — `SelfAssertedStaffSessionForgery`.
   kind :query
   reach :role
   description "Staff forecast — role-gated: owner sees ALL bookings + a FORECASTED € revenue total (summed from the actual bookings' prices, growing from €0 as visitors book); any other role sees only their own bookings and no forecast (role from the bound human's IdP)"

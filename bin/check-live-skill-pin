@@ -1,0 +1,350 @@
+#!/usr/bin/env ruby
+# frozen_string_literal: true
+
+# check-live-skill-pin — does the DEPLOYED fleet serve the skill cut this tree
+# ships? A MANUAL TRIAGE TOOL. It is deliberately NOT a CI job; read the next
+# section before wiring it into one.
+#
+# WHY THIS EXISTS (K-1075). Every operator's `/.well-known/kiosk.json` carries a
+# `kiosk.skill` block — a URL naming one immutable `skill-vX.Y.Z.md` and the
+# sha256 an assistant is told to verify before following it. That pin is the
+# only instruction an assistant ever gets about HOW to speak this wire, and it
+# is baked into each demo's initializer, so it moves only when a deploy carries
+# a new commit to the box. Between a skill cut and the next deploy the fleet
+# therefore serves an OLDER cut than the repo ships, and nothing anywhere says
+# so: the served pin is internally consistent (the sha really is that file's
+# sha), the dual-check an assistant runs PASSES, and the drift is silent by
+# construction.
+#
+# It was found by hand. K-1075 was filed after someone curled all seven origins
+# and noticed they answered `skill-v0.4.5.md` while head shipped `skill-v0.4.7`
+# — three cuts of behavioural instruction, including the paragraph that first
+# tells an assistant `reach` exists, absent from what the fleet points at. That
+# is a question a script can ask in two seconds, and this is that script.
+#
+# MEASURED WHEN THIS WAS WRITTEN (2026-08-27, --network, all seven origins
+# answering HTTP 200 on discovery while tudu's and skooti's human pages were
+# still 500): every one of the seven serves `skill-v0.4.5.md`
+# (d2ad8442a4c7…) where the tree ships `skill-v0.4.8.md` (885828cf7d7e…) —
+# three cuts behind, exit 1. That is K-1075's hand-run finding, now
+# mechanically reproducible. WATCHED, both directions, same run: with tudu's
+# initializer temporarily repinned to v0.4.5, tudu's live row turned `ok` while
+# the other six stayed FAIL and the tree-side cross-check went FAIL on the
+# diverged pin — so the comparison is a comparison and not a constant.
+#
+# WHY IT IS NOT A CI JOB, AND MUST NOT BECOME ONE.
+# It measures the LIVE fleet against the WORKING TREE, and those two are
+# supposed to differ: every commit that cuts a skill makes this red, and it
+# stays red — correctly — until someone deploys. A gate that is red on a clean
+# tree gets switched off, and a switched-off gate is worth less than no gate
+# (the same reasoning that kept `check-conformance-drift` a report rather than
+# a gate, K-1123). So this answers a question a HUMAN asks at deploy time:
+# "is the fleet still serving what we shipped?" — it does not answer "is the
+# tree correct", which is what CI is for.
+#
+# WHAT IT DOES NOT COVER, stated because an over-claimed guard is how a blind
+# spot survives:
+#   * NOT the tree-side agreement of the pins. That `skill_sha256` equals the
+#     sha256 of the file `skill_url` names is `kiosk-test-support/spec/
+#     skill_pin_spec.rb`; that every demo and the engine default share the
+#     protocol's MAJOR.MINOR is `bin/check-version-parity`. Both are real CI
+#     gates and neither is repeated here — the offline half below only resolves
+#     the expectation and refuses to proceed on an ambiguous one.
+#   * NOT whether kiosk.tech actually SERVES the cut the fleet points at. That
+#     is `bin/check-solver-pin --network`'s side of the world (it fetches the
+#     published skill and the solver it pins).
+#   * NOT the human pages. Discovery is a separate surface and answers 200 on
+#     origins whose HTML is 500 — measured on this fleet, 2026-08-27, while
+#     K-1074's outage was live. That is why this reads ONLY
+#     `/.well-known/kiosk.json` and reports a pin from any origin that serves
+#     one, however sick the rest of the app is.
+#
+# WHAT IT READS
+#   * The origins: the per-demo map in `deploy/README.md`. Not a list in here —
+#     a list in here is the thing that rots. A demo is a Kiosk OPERATOR (and so
+#     probed) iff it has `config/initializers/kiosk.rb`; that is what excludes
+#     the KYC broker, which serves `kyc.demo.kiosk.tech`, depends on no kiosk
+#     gem and publishes no discovery document at all. The parser FAILS CLOSED:
+#     every demo with a kiosk initializer must get a host out of the table, so
+#     a renamed subdomain is an error here rather than an origin silently
+#     dropped from the sweep.
+#   * The expectation: each demo's own `skill_url` + `skill_sha256`, which is
+#     what a deploy of HEAD would put on that box. In the umbrella layout it is
+#     ALSO cross-checked against the newest `../kiosk.tech/skill-v*.md` on disk
+#     and that file's real sha256; outside it (public CI clones this repo alone)
+#     that cross-check is skipped and says so.
+#
+# EXIT CODES
+#   0  every probed origin serves exactly the pin this tree ships
+#   1  drift, an origin that could not be measured, or an ambiguous expectation
+#   2  usage
+#
+# Usage: bin/check-live-skill-pin [--offline | --network | --all]
+#
+#   --offline  (default)  no network. Resolves the origins and the pin a deploy
+#                         of HEAD would serve, and says what it did not probe.
+#                         The default is offline on purpose: every Ruby script
+#                         in this directory is run WITH NO ARGUMENTS by
+#                         `audit/check-script-warnings.rb`, and that sweep must
+#                         stay network-free.
+#   --network             probe the fleet. This is the mode the tool is for.
+#   --all                 both.
+
+require "digest"
+require "json"
+require "net/http"
+require "uri"
+
+ROOT           = File.expand_path("..", __dir__)
+DEPLOY_README  = File.join(ROOT, "deploy", "README.md")
+SERVER_DEFAULT = File.join(ROOT, "kiosk-server", "lib", "kiosk", "server", "configuration_extension.rb")
+# Umbrella layout only: the parent of this repo also holds the kiosk.tech
+# checkout. Public CI clones this repo alone, so its absence is normal.
+SITE_ROOT      = File.expand_path("../kiosk.tech", ROOT)
+HOST_RE        = /\A[a-z0-9-]+\.demo\.kiosk\.tech\z/
+
+FAILURES = []
+SKIPS    = []
+
+def pass(msg)  = puts("  ok:   #{msg}")
+def fail!(msg) = (FAILURES << msg) && puts("  FAIL: #{msg}")
+def skip!(msg) = (SKIPS << msg) && puts("  SKIP: #{msg}")
+
+def short(sha) = sha.to_s[0, 12]
+
+# ── The origins, derived from deploy/README.md's per-demo map ────────────────
+def hosts_from_readme
+  return {} unless File.file?(DEPLOY_README)
+
+  File.readlines(DEPLOY_README, chomp: true).each_with_object({}) do |line, acc|
+    next unless line.start_with?("|")
+
+    cells = line.split("|").map(&:strip)
+    next if cells.length < 3
+
+    name = cells[1][/\A[a-z0-9_]+/]
+    host = cells[2].delete("`").strip
+    next if name.nil? || !host.match?(HOST_RE)
+
+    acc[name] = host
+  end
+end
+
+# A demo is a Kiosk operator iff it configures the engine.
+def operator_dirs
+  Dir.glob(File.join(ROOT, "kiosk-demo-*", "config", "initializers", "kiosk.rb")).sort
+end
+
+def demo_pin(initializer)
+  src = File.read(initializer)
+  [src[/^\s*c\.skill_url\s*=\s*"([^"]+)"/, 1], src[/^\s*c\.skill_sha256\s*=\s*"([^"]+)"/, 1]]
+end
+
+def engine_default_url
+  return nil unless File.file?(SERVER_DEFAULT)
+
+  File.read(SERVER_DEFAULT)[/@skill_url\s*\|\|=\s*"([^"]+)"/, 1]
+end
+
+def cut_version(url) = url.to_s[%r{skill-v(\d+(?:\.\d+)*)\.md}, 1]
+
+# Every cut on disk, oldest first. Empty outside the umbrella layout.
+def cuts_on_disk
+  Dir.glob(File.join(SITE_ROOT, "skill-v*.md"))
+     .filter_map { |p| (v = cut_version(File.basename(p))) && [Gem::Version.new(v), p] }
+     .sort_by(&:first)
+end
+
+# GET with retries. A transient blip must not read as drift, so "could not
+# reach it" and "reached it and the pin is wrong" are different answers.
+def fetch_json(url, attempts: 3)
+  last = nil
+  attempts.times do |i|
+    sleep(2**i) if i.positive?
+    begin
+      uri  = URI(url)
+      http = Net::HTTP.new(uri.host, uri.port)
+      http.use_ssl      = uri.scheme == "https"
+      http.open_timeout = 10
+      http.read_timeout = 15
+      res = http.request(Net::HTTP::Get.new(uri))
+      if res.is_a?(Net::HTTPOK)
+        begin
+          return [JSON.parse(res.body), nil]
+        rescue JSON::ParserError => e
+          return [nil, "HTTP 200 but the body is not JSON (#{e.class})"]
+        end
+      end
+      last = "HTTP #{res.code}"
+    rescue StandardError => e
+      last = "#{e.class}: #{e.message}"
+    end
+  end
+  [nil, "unreachable after #{attempts} attempts (#{last})"]
+end
+
+# ── Offline: the origins, and the pin a deploy of HEAD would serve ───────────
+#
+# Returns {demo => {host:, url:, sha256:}} — the work-list --network probes.
+# Returns {} when the expectation is ambiguous, because probing against an
+# expectation nobody can state is worse than not probing.
+def resolve_expectation
+  puts "── Tree: the origins, and the pin a deploy of HEAD would serve ──"
+
+  hosts = hosts_from_readme
+  fail! "deploy/README.md: no `*.demo.kiosk.tech` rows found — the per-demo map is the " \
+        "origin list and it did not parse" if hosts.empty?
+
+  expected = {}
+  operator_dirs.each do |initializer|
+    demo = File.basename(File.expand_path("../../..", initializer)).sub("kiosk-demo-", "")
+    host = hosts[demo]
+    if host.nil?
+      fail! "kiosk-demo-#{demo} configures the engine but deploy/README.md maps no " \
+            "`*.demo.kiosk.tech` host to it — an operator that cannot be probed is not a " \
+            "skipped row, it is an unmeasured one"
+      next
+    end
+
+    url, sha = demo_pin(initializer)
+    if url.nil? || sha.nil?
+      fail! "kiosk-demo-#{demo}/config/initializers/kiosk.rb: no `c.skill_url`/`c.skill_sha256` " \
+            "pair — cannot say what that box is meant to serve"
+      next
+    end
+    expected[demo] = { host: host, url: url, sha256: sha }
+  end
+
+  if expected.empty?
+    fail! "no probeable operator origin resolved"
+    return {}
+  end
+
+  pins = expected.values.map { |e| [e[:url], e[:sha256]] }.uniq
+  if pins.length == 1
+    pass "#{expected.size} operator origin(s), all pinning #{File.basename(pins[0][0])} " \
+         "(#{short(pins[0][1])}…): #{expected.keys.sort.join(', ')}"
+  else
+    # Not a failure: demos are allowed to diverge in principle, and each is
+    # compared against ITS OWN pin below. It is worth saying out loud, though.
+    pass "#{expected.size} operator origin(s), pinning #{pins.length} DIFFERENT cuts: " \
+         "#{expected.map { |d, e| "#{d}→#{File.basename(e[:url])}" }.sort.join(', ')}"
+  end
+
+  default = engine_default_url
+  if default.nil?
+    fail! "kiosk-server/lib/kiosk/server/configuration_extension.rb: no `@skill_url ||= \"…\"` — " \
+          "the default a demo inherits when it pins nothing cannot be read"
+  elsif pins.length == 1 && default != pins[0][0]
+    pass "kiosk-server default is #{File.basename(default)}; the demos override it with " \
+         "#{File.basename(pins[0][0])} (an override is normal — `check-version-parity` owns " \
+         "whether the two may differ)"
+  else
+    pass "kiosk-server default skill_url is #{File.basename(default.to_s)}"
+  end
+
+  cuts = cuts_on_disk
+  if cuts.empty?
+    skip! "no ../kiosk.tech checkout beside this repo — the pins above are not cross-checked " \
+          "against the newest cut on disk (normal in a public CI clone)"
+  else
+    newest_path = cuts.last[1]
+    newest_sha  = Digest::SHA256.hexdigest(File.binread(newest_path))
+    pins.each do |url, sha|
+      if File.basename(url) == File.basename(newest_path) && sha == newest_sha
+        pass "#{File.basename(url)} is the newest of #{cuts.length} cut(s) in ../kiosk.tech and " \
+             "its sha256 is #{short(newest_sha)}… — the expectation is unambiguous"
+      else
+        fail! "the demos pin #{File.basename(url)} (#{short(sha)}…) but the newest cut on disk " \
+              "is #{File.basename(newest_path)} (#{short(newest_sha)}…) — a skill edit ends in a " \
+              "version bump and relinking is part of it; fix the tree before asking what the " \
+              "fleet serves"
+      end
+    end
+  end
+
+  expected
+end
+
+# ── Network: what the fleet actually serves ──────────────────────────────────
+def check_live(expected)
+  puts
+  puts "── Live: /.well-known/kiosk.json on each origin ──"
+
+  if expected.empty?
+    fail! "nothing probed — the expectation did not resolve (see above)"
+    return
+  end
+
+  cuts = cuts_on_disk
+  by_name = cuts.to_h { |_v, p| [File.basename(p), p] }
+
+  expected.keys.sort.each do |demo|
+    e   = expected[demo]
+    url = "https://#{e[:host]}/.well-known/kiosk.json"
+    doc, err = fetch_json(url)
+    if err
+      fail! "#{demo} (#{e[:host]}): #{err} — NOT a pass; the pin on that box is unmeasured"
+      next
+    end
+
+    skill = doc.dig("kiosk", "skill")
+    if skill.nil?
+      fail! "#{demo} (#{e[:host]}): serves a discovery document with NO `kiosk.skill` block — " \
+            "an assistant is told nothing about which wire to speak"
+      next
+    end
+
+    served_url = skill["url"].to_s
+    served_sha = skill["sha256"].to_s
+    if served_url == e[:url] && served_sha == e[:sha256]
+      pass "#{demo} (#{e[:host]}): #{File.basename(served_url)} (#{short(served_sha)}…) — current"
+      next
+    end
+
+    detail = []
+    if (local = by_name[File.basename(served_url)])
+      local_sha = Digest::SHA256.hexdigest(File.binread(local))
+      detail << if local_sha == served_sha
+                  "the served pin is INTERNALLY CONSISTENT (that sha really is that cut's) — " \
+                  "old, not corrupt, so an assistant's dual-check passes and nothing warns it"
+                else
+                  "and the served sha256 is NOT that cut's sha256 (#{short(local_sha)}… on disk) " \
+                  "— an assistant following this pin REFUSES the file"
+                end
+      served_v = Gem::Version.new(cut_version(served_url).to_s)
+      behind   = cuts.count { |v, _p| v > served_v }
+      detail << "#{behind} cut(s) newer exist in ../kiosk.tech" if behind.positive?
+    elsif !cuts.empty?
+      detail << "no such cut in ../kiosk.tech — the fleet points at a file this tree does not have"
+    end
+
+    fail! "#{demo} (#{e[:host]}): serves #{File.basename(served_url)} (#{short(served_sha)}…), " \
+          "this tree ships #{File.basename(e[:url])} (#{short(e[:sha256])}…)" \
+          "#{detail.empty? ? '' : "; #{detail.join('; ')}"}"
+  end
+end
+
+mode = ARGV[0] || "--offline"
+unless ["--offline", "--network", "--all"].include?(mode)
+  warn "usage: #{$PROGRAM_NAME} [--offline | --network | --all]"
+  exit 2
+end
+
+expectation = resolve_expectation
+check_live(expectation) if ["--network", "--all"].include?(mode)
+
+puts
+if mode == "--offline"
+  puts "(no origin probed — this mode reads the tree only; pass --network or --all)"
+end
+SKIPS.each { puts "skipped: #{_1}" }
+if FAILURES.empty?
+  puts "check-live-skill-pin: OK (#{mode}) — no drift"
+  exit 0
+else
+  puts "x check-live-skill-pin (#{mode}): #{FAILURES.size} finding(s) — the fleet is not serving " \
+       "what this tree ships, or an origin could not be measured. THE FIX IS A DEPLOY, not a tree " \
+       "edit: nothing here may be changed to chase the fleet (K-1075)."
+  exit 1
+end

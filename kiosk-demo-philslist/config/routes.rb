@@ -2,6 +2,7 @@
 
 Rails.application.routes.draw do
   # Kiosk wire surface (controllers shipped by kiosk-server).
+  # REST endpoints: one per verb, HTTP method = semantics.
   get  "/kiosk/schema",                            to: "kiosk/server/wire#schema"
   # NO `POST /kiosk/query` or `POST /kiosk/run` — protocol 0.4 deleted the
   # multiplexed pair outright (T-074 = A). Every verb is its own endpoint; the

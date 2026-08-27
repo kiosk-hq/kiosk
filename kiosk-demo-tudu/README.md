@@ -88,8 +88,10 @@ Asserts every attack is BLOCKED (0 BREACH): `CrossTenantRead`, `ForgedUserId`
 (the forged `account_id` is refused `400`, not accepted-and-ignored),
 `MalformedUuidArg` (400, no SQL internals), `MissingAuth` (401), `GarbageToken`
 (401), `UnknownQuery` (404), `UnknownAction` (404), `RetiredWire` (the deleted
-0.3 `POST /kiosk/query` and `POST /kiosk/run` are an ordinary 404 — no
-tombstone, no second conformance surface), `MethodMismatch` (a `GET` at an
+0.3 `POST /kiosk/query` and `POST /kiosk/run` are the ordinary 404 an
+authenticated caller gets, and `401 unauthenticated` without a bearer, since
+auth precedes verb dispatch — no tombstone, no second conformance surface),
+`MethodMismatch` (a `GET` at an
 action's path is `405` + `Allow: POST`, never a silent 404), plus tudu beats —
 `InviteCodeReplay` (403), `RevokedMemberAccess` (403), `RevokedAgentKey` (404),
 `PreLinkTokenAfterLink` (401), `NoLoginAddressOnTheRoster` (an assistant bound

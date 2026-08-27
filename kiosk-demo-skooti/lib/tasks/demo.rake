@@ -793,10 +793,11 @@ namespace :demo do
                                        operator is rejected at skooti's /kyc/callback
       BLOCKED  ForgedCallbackNoSig   — a /kyc/callback whose jws is wrong-key (or
                                        absent) is rejected; kyc_status stays pending
-      BLOCKED  RetiredWire           — POST /kiosk/query and POST /kiosk/run are an
-                                       ordinary 404 not_found: the 0.3 pair was DELETED,
-                                       so no privileged endpoint and no second
-                                       conformance surface remain
+      BLOCKED  RetiredWire           — POST /kiosk/query and POST /kiosk/run are the
+                                       ordinary 404 not_found an authenticated caller gets,
+                                       and 401 unauthenticated without a bearer: the 0.3
+                                       pair was DELETED, so no privileged endpoint and no
+                                       second conformance surface remain
       BLOCKED  MethodMismatch        — a GET at an action's path (and a POST at a
                                        query's) is 405 method_not_allowed with Allow,
                                        never a silent 404

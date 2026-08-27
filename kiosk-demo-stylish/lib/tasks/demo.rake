@@ -579,7 +579,8 @@ namespace :demo do
       BLOCKED  UnknownQuery     — unregistered query name → 404
       BLOCKED  UnknownAction    — unregistered action name → 404
       BLOCKED  RetiredWire      — the deleted 0.3 POST /kiosk/query and
-               POST /kiosk/run answer an ordinary 404 (no compatibility surface)
+               POST /kiosk/run answer the ordinary 404 an authenticated caller
+               gets, 401 without a bearer (no compatibility surface either way)
       BLOCKED  MethodMismatch   — a GET at an action's path → 405
                method_not_allowed with Allow: POST, never a silent 404
       BLOCKED  CustomerLinkCannotCarryOwnerRole — a customer signs in for real

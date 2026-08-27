@@ -6,7 +6,9 @@
 # Asserts on responses from the REST wire surface: the 0.4 per-verb endpoints
 # (GET /kiosk/<query-name>, POST /kiosk/<action-name>), /kiosk/pay, and the
 # two public catalogue documents (/kiosk/schema, /kiosk/openapi.json). The 0.3
-# name-dispatch endpoints are gone and are asserted to answer an ordinary 404.
+# name-dispatch endpoints are gone and are asserted to answer the ordinary 404
+# an authenticated caller gets — and 401 without a bearer, since auth precedes
+# verb dispatch (K-1094).
 # Exits non-zero on any failure.
 #
 # ONE ANSWER SHAPE (T-074 = A, the cutover; narrowed further by T-092). Every
@@ -772,6 +774,14 @@ assert "a non-verb-shaped path → 404" "$status" "404"
 # registered — so it answers the ordinary `not_found`, exactly as any other
 # unregistered name does. That is the assertion: not that the old endpoint is
 # special-cased, but that it is not special at all.
+#
+# WITH a bearer, that is. `resolve_identity!` runs BEFORE the registry lookup,
+# so an unauthenticated caller never reaches the 404 and is answered `401
+# unauthenticated` — which is the SAME answer any unregistered name gives it,
+# and therefore the same assertion one level earlier. Every retired-wire probe
+# in the tree dialled authenticated, so the prose around them stated the 404
+# flatly and was wrong for the anonymous case (K-1094); both are probed here
+# now.
 
 printf "\n\033[1m=== the 0.3 wire is gone ===\033[0m\n"
 
@@ -785,6 +795,13 @@ for retired in query run; do
   assert "POST /kiosk/$retired → 404"        "$code" "404"
   assert "…as an ordinary not_found"         "$(echo "$body" | jq -r '.code')" "not_found"
   assert "…with no 0.3 envelope residue"     "$(echo "$body" | jq -r 'has("ok") or has("error")')" "false"
+
+  anon_body=$(curl -sS -X POST "$SERVER_URL/kiosk/$retired" \
+           -H "Content-Type: application/json" -d '{"name":"salons"}')
+  anon_code=$(curl -sS -o /dev/null -w "%{http_code}" -X POST "$SERVER_URL/kiosk/$retired" \
+           -H "Content-Type: application/json" -d '{"name":"salons"}')
+  assert "POST /kiosk/$retired unauthenticated → 401" "$anon_code" "401"
+  assert "…as unauthenticated, not not_found"         "$(echo "$anon_body" | jq -r '.code')" "unauthenticated"
 done
 
 # `schema` answers the payload VERBATIM now — it moved off the envelope with

@@ -370,7 +370,8 @@ namespace :demo do
     (the forged account_id is now REFUSED 400, not accepted-and-ignored),
     MalformedUuidArg (400), MissingAuth (401), GarbageToken (401), UnknownQuery
     (404), UnknownAction (404), RetiredWire (the deleted 0.3 /kiosk/query and
-    /kiosk/run are an ordinary 404), MethodMismatch (a GET at an action's path
+    /kiosk/run are the ordinary 404 an authenticated caller gets, and 401
+    without a bearer — auth precedes verb dispatch), MethodMismatch (a GET at an action's path
     is 405 + Allow, never a silent 404), plus tudu beats — InviteCodeReplay
     (403), RevokedMemberAccess (403), RevokedAgentKey (404),
     PreLinkTokenAfterLink (401), NoLoginAddressOnTheRoster (a co-member's

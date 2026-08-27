@@ -1180,8 +1180,10 @@ namespace :demo do
       BLOCKED  HostileArgShapes       — boolean/array/object/junk on delivery_slot_id,
                                         delivery_date, delivery_address and order_id →
                                         typed 400, never a 500 (K-773)
-      BLOCKED  RetiredWire            — POST /kiosk/query and POST /kiosk/run answer an
-                                        ordinary 404 not_found: the 0.3 pair was DELETED
+      BLOCKED  RetiredWire            — POST /kiosk/query and POST /kiosk/run answer the
+                                        ordinary 404 not_found an AUTHENTICATED caller gets,
+                                        and 401 unauthenticated without a bearer (auth
+                                        precedes verb dispatch); the 0.3 pair was DELETED
                                         (T-074 = A), leaving no second conformance surface
       BLOCKED  MethodMismatch         — a GET at an action's path answers 405
                                         method_not_allowed with Allow: POST, never a silent

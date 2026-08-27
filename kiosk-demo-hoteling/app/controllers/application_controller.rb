@@ -51,7 +51,9 @@ class ApplicationController < ActionController::Base
         # used to say «the register/login and schema/query/run/pay endpoints»,
         # which is false on both readings: protocol 0.4 deleted `POST
         # /kiosk/query` and `POST /kiosk/run` outright (T-074 = A — both answer
-        # an ordinary 404, which this app's own redteam beat asserts), and
+        # the ordinary 404 an AUTHENTICATED caller gets, and 401 without a
+        # bearer, since auth precedes verb dispatch; this app's own redteam beat
+        # asserts both — K-1094), and
         # `capabilities` has published MODULE names (schema/queries/actions/pay)
         # since T-095. A list here is a third copy of the catalog — kiosk.json
         # deliberately stopped publishing verb names (T-094/T-095) — so it would

@@ -505,8 +505,9 @@ namespace :demo do
                suite drives, while a genuinely-bound token is answered
       BLOCKED  UnknownQuery      — unregistered query name → 404
       BLOCKED  UnknownAction     — unregistered action name → 404
-      BLOCKED  RetiredWire       — the deleted 0.3 POST /kiosk/{query,run} are
-               an ordinary 404: no privileged endpoint left to attack
+      BLOCKED  RetiredWire       — the deleted 0.3 POST /kiosk/{query,run} are the
+               ordinary 404 an authenticated caller gets, 401 without a bearer:
+               no privileged endpoint left to attack either way
       BLOCKED  MethodMismatch    — a GET at an action's path is 405 + Allow: POST,
                never a silent 404
       BLOCKED  OutOfEnumFilterIsNotSilentlyReinterpreted — a browse_listings

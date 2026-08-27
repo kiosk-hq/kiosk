@@ -50,10 +50,13 @@
 #                        Devise session is answered
 #
 # And two beats that are only expressible after the 0.4 cutover (T-074 = A):
-#   RetiredWire        — POST /kiosk/query and POST /kiosk/run are an ordinary
-#                        404 / not_found: the multiplexed pair was DELETED, so
-#                        there is no privileged endpoint left, no compatibility
-#                        payload, and no second conformance surface to attack.
+#   RetiredWire        — POST /kiosk/query and POST /kiosk/run are the ordinary
+#                        404 / not_found an AUTHENTICATED caller gets, and
+#                        401 / unauthenticated without a bearer (auth precedes
+#                        verb dispatch; both are probed): the multiplexed pair
+#                        was DELETED, so there is no privileged endpoint left,
+#                        no compatibility payload, and no second conformance
+#                        surface to attack.
 #   MethodMismatch     — a GET at an action's path is 405 / method_not_allowed
 #                        with `Allow: POST`, never a silent 404 an assistant
 #                        would read as "this operator cannot do that".
@@ -1035,11 +1038,16 @@ wire_probe = Kiosk::Redteam::Client.new(base_url: BASE_URL)
 
 # One raw request, bypassing the redteam Client — the whole point is to dial
 # paths and methods the Client will not construct.
-raw_wire = lambda do |method, path, body = nil|
-  uri = URI("#{BASE_URL}#{path}")
-  req = (method == :get ? Net::HTTP::Get : Net::HTTP::Post)
-          .new(uri, { "Content-Type" => "application/json",
-                      "Authorization" => "Bearer #{wire_probe.token}" })
+#
+# `bearer: false` is the ANONYMOUS probe (K-1094) and asks a different question,
+# not a weaker version of the same one: the wire resolves the caller BEFORE it
+# looks the verb up, so an unauthenticated request at a retired path is answered
+# 401 and never reaches the registry lookup that produces the 404.
+raw_wire = lambda do |method, path, body = nil, bearer: true|
+  uri     = URI("#{BASE_URL}#{path}")
+  headers = { "Content-Type" => "application/json" }
+  headers["Authorization"] = "Bearer #{wire_probe.token}" if bearer
+  req = (method == :get ? Net::HTTP::Get : Net::HTTP::Post).new(uri, headers)
   req.body = JSON.generate(body) if body
   res = Net::HTTP.new(uri.host, uri.port).request(req)
   [res, (JSON.parse(res.body) rescue {})]
@@ -1047,26 +1055,43 @@ end
 
 # RetiredWire — `POST /kiosk/query` and `POST /kiosk/run` are DELETED, not
 # tombstoned. They now reach the per-verb controller as verbs literally named
-# "query" and "run", which nobody registered, so they answer the ordinary 404:
-# no privileged endpoint left, no compatibility payload that would keep the 0.3
-# argument channel alive, and no second conformance surface to attack. A
+# "query" and "run", which nobody registered, so they answer the ordinary 404 an
+# AUTHENTICATED caller gets: no privileged endpoint left, no compatibility
+# payload that would keep the 0.3 argument channel alive, and no second
+# conformance surface to attack.
+#
+# BOTH CALLERS ARE PROBED, and that is the whole point of the qualifier above
+# (K-1094). `VerbController#serve` resolves the identity BEFORE it looks the
+# verb up, so a caller with no bearer never reaches the registry lookup that
+# produces the 404 — it is answered 401 `unauthenticated`, exactly as it would
+# be at any other name. Every retired-wire beat in the fleet dialled WITH a
+# bearer, so seven suites' prose said the 404 flatly while nothing anywhere
+# tested the anonymous case the sentence was wrong about.
+#
+# A
 # deprecation shim here would be exactly that second surface — and it is the one
 # an attacker would reach for, because it took the verb name from the BODY.
 retired_wire = lambda do
-  probes = %w[query run].map do |name|
-    res, body = raw_wire.call(:post, "/kiosk/#{name}", { name: "scooters_available" })
-    [res.code.to_i == 404 && body["code"] == "not_found",
-     "POST /kiosk/#{name} → #{res.code}/#{body["code"].inspect}"]
+  probes = %w[query run].flat_map do |name|
+    [[true, 404, "not_found", ""], [false, 401, "unauthenticated", " (anon)"]]
+      .map do |bearer, want_status, want_code, tag|
+      res, body = raw_wire.call(:post, "/kiosk/#{name}", { name: "scooters_available" },
+                                bearer: bearer)
+      [res.code.to_i == want_status && body["code"] == want_code,
+       "POST /kiosk/#{name}#{tag} → #{res.code}/#{body["code"].inspect} " \
+       "(want #{want_status}/#{want_code.inspect})"]
+    end
   end
 
   if probes.all? { |ok, _| ok }
     { blocked: true,
       detail:  "the 0.3 multiplexed pair is gone: #{probes.map(&:last).join(", ")} " \
-               "(an ordinary not_found, with no compatibility payload)" }
+               "(an ordinary not_found to an authenticated caller, 401 to anyone else, " \
+               "with no compatibility payload)" }
   else
     { blocked: false,
-      detail:  "a retired 0.3 endpoint still answers: #{probes.map(&:last).join(", ")} " \
-               "(want 404/\"not_found\" for both)" }
+      detail:  "a retired 0.3 endpoint answers the wrong thing: " \
+               "#{probes.reject { |ok, _| ok }.map(&:last).join(", ")}" }
   end
 end
 

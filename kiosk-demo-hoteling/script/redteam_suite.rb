@@ -25,10 +25,13 @@
 #                        anyone, on the same or overlapping dates → 409
 #
 # And two beats that are only expressible after the 0.4 cutover (T-074 = A):
-#   RetiredWire        — POST /kiosk/query and POST /kiosk/run are an ordinary
-#                        404 / not_found: the multiplexed pair was DELETED, so
-#                        there is no privileged endpoint left, no compatibility
-#                        payload, and no second conformance surface to attack.
+#   RetiredWire        — POST /kiosk/query and POST /kiosk/run are the ordinary
+#                        404 / not_found an AUTHENTICATED caller gets, and
+#                        401 / unauthenticated without a bearer (auth precedes
+#                        verb dispatch; both are probed): the multiplexed pair
+#                        was DELETED, so there is no privileged endpoint left,
+#                        no compatibility payload, and no second conformance
+#                        surface to attack.
 #   MethodMismatch     — a GET at an action's path is 405 / method_not_allowed
 #                        with `Allow: POST`, never a silent 404 an assistant
 #                        would read as "this operator cannot do that".
@@ -530,13 +533,17 @@ end
 # not what any handler does.
 module RawWire
   # One raw request under the given principal's bearer.
+  #
+  # A NIL principal is the ANONYMOUS probe (K-1094) and is a different question,
+  # not a degenerate case of the same one: the wire resolves the caller BEFORE it
+  # looks the verb up, so what an unauthenticated request gets at a retired path
+  # is 401, never the 404 an authenticated one gets.
   # @return [Array(Net::HTTPResponse, Hash)] the response and its parsed body
   def raw(principal, method, path, body = nil)
-    uri = URI("#{BASE_URL}#{path}")
-    req = (method == :get ? Net::HTTP::Get : Net::HTTP::Post).new(
-      uri, { "Content-Type" => "application/json",
-             "Authorization" => "Bearer #{principal.token}" },
-    )
+    uri     = URI("#{BASE_URL}#{path}")
+    headers = { "Content-Type" => "application/json" }
+    headers["Authorization"] = "Bearer #{principal.token}" if principal
+    req = (method == :get ? Net::HTTP::Get : Net::HTTP::Post).new(uri, headers)
     req.body = JSON.generate(body) if body
     res = Net::HTTP.new(uri.host, uri.port).request(req)
     [res, (JSON.parse(res.body) rescue {})]
@@ -792,9 +799,20 @@ end
 
 # The 0.3 multiplexed pair was DELETED, not tombstoned (T-074 = A). `POST
 # /kiosk/query` now reaches the per-verb controller as a verb literally named
-# "query", which nobody registered, so it answers the ordinary 404 — no
-# privileged endpoint left, no compatibility payload keeping the 0.3 argument
-# channel alive, and no second conformance surface to attack. A deprecation shim
+# "query", which nobody registered, so it answers the ordinary 404 an
+# AUTHENTICATED caller gets — no privileged endpoint left, no compatibility
+# payload keeping the 0.3 argument channel alive, and no second conformance
+# surface to attack.
+#
+# BOTH CALLERS ARE PROBED, and that is the whole point of the qualifier above
+# (K-1094). `VerbController#serve` resolves the identity BEFORE it looks the
+# verb up, so a caller with no bearer never reaches the registry lookup that
+# produces the 404 — it is answered 401 `unauthenticated`, exactly as it would
+# be at any other name. Every retired-wire beat in the fleet dialled WITH a
+# bearer, so seven suites' prose said the 404 flatly while nothing anywhere
+# tested the anonymous case the sentence was wrong about.
+#
+# A deprecation shim
 # here is exactly what an attacker would reach for, because it took the verb
 # name from the BODY, where no route constraint and no input_schema could see it.
 class RetiredWire < Kiosk::Redteam::Scenario
@@ -804,26 +822,32 @@ class RetiredWire < Kiosk::Redteam::Scenario
     super(
       name:        "RetiredWire",
       category:    "wire",
-      description: "The retired 0.3 endpoints POST /kiosk/query and POST /kiosk/run must be an ordinary 404, not a compatibility surface",
+      description: "The retired 0.3 endpoints POST /kiosk/query and POST /kiosk/run must be the " \
+                   "ordinary 404 an authenticated caller gets — and 401 without a bearer — never a " \
+                   "compatibility surface",
     )
   end
 
   def call(client, profile)
     a = register_principal(client, name: "redteam-retired-wire", profile:)
 
-    probes = %w[query run].map do |name|
-      res, body = raw(a, :post, "/kiosk/#{name}", { name: "properties" })
-      [res.code.to_i == 404 && body["code"] == "not_found",
-       "POST /kiosk/#{name} → #{res.code}/#{body["code"].inspect}"]
+    probes = %w[query run].flat_map do |name|
+      [[a, 404, "not_found", ""], [nil, 401, "unauthenticated", " (anon)"]]
+        .map do |principal, want_status, want_code, tag|
+        res, body = raw(principal, :post, "/kiosk/#{name}", { name: "properties" })
+        [res.code.to_i == want_status && body["code"] == want_code,
+         "POST /kiosk/#{name}#{tag} → #{res.code}/#{body["code"].inspect} " \
+         "(want #{want_status}/#{want_code.inspect})"]
+      end
     end
 
     Kiosk::Redteam::Verdict.new(
       blocked: probes.all? { |ok, _| ok },
       skipped: false,
       status:  404,
-      detail:  probes.all? { |ok, _| ok } ? "" : "a retired 0.3 endpoint still answers: " \
-                                                 "#{probes.map(&:last).join(", ")} " \
-                                                 "(want 404/\"not_found\" for both)",
+      detail:  probes.all? { |ok, _| ok } ? "" : "a retired 0.3 endpoint answers the wrong " \
+                                                 "thing: " \
+                                                 "#{probes.reject { |ok, _| ok }.map(&:last).join(", ")}",
     )
   end
 end

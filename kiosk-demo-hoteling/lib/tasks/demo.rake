@@ -542,7 +542,8 @@ namespace :demo do
                                        and out-of-horizon date) → typed 400, never a 500
                                        and never a wrong answer served as 200 (K-773)
       BLOCKED  DoubleBookedRoom      — a held room-night cannot be re-reserved → 409
-      BLOCKED  RetiredWire           — POST /kiosk/query and /kiosk/run are an ordinary 404
+      BLOCKED  RetiredWire           — POST /kiosk/query and /kiosk/run are the ordinary 404
+                                       an authenticated caller gets, 401 without a bearer
                                        (the 0.3 pair was DELETED, not shimmed — T-074 = A)
       BLOCKED  MethodMismatch        — a GET at an action's path is 405 method_not_allowed
                                        with Allow:, never a silent 404

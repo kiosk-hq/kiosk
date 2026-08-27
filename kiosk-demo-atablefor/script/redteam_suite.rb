@@ -25,8 +25,9 @@
 #                       T-104: the cleartext parser is deleted, not gated)
 #   UnknownQuery      — an unregistered query name → 404
 #   UnknownAction     — an unregistered action name → 404
-#   RetiredWire       — the deleted 0.3 `POST /kiosk/{query,run}` answer an
-#                       ordinary 404: no privileged endpoint left to attack
+#   RetiredWire       — the deleted 0.3 `POST /kiosk/{query,run}` answer the
+#                       ordinary 404 an authenticated caller gets, and 401
+#                       without a bearer; no privileged endpoint left to attack
 #   MethodMismatch    — a GET at an action's path is 405 + `Allow: POST`, never
 #                       a silent 404
 #   InvalidFilterIsNotAnEmptyList — an availability filter naming a seating
@@ -297,14 +298,27 @@ record(results, "UnknownAction", rc == 404, "unknown action → #{rc} (want 404)
 # ── RetiredWire — the deleted 0.3 endpoints are GONE, not tombstoned ─────────
 # T-074 = A was a hard cut. `POST /kiosk/query` now reaches the per-verb
 # controller as a verb literally named "query", which nobody registered, so it
-# answers the ordinary 404 — no privileged endpoint, no compatibility payload,
-# no second conformance surface to attack.
+# answers the ordinary 404 an AUTHENTICATED caller gets — no privileged
+# endpoint, no compatibility payload, no second conformance surface to attack.
+#
+# BOTH CALLERS ARE PROBED, and that is the whole point of the qualifier above
+# (K-1094). `VerbController#serve` resolves the identity BEFORE it looks the
+# verb up, so a caller with no bearer never reaches the registry lookup that
+# produces the 404 — it is answered 401 `unauthenticated`, exactly as it would
+# be at any other name. Every retired-wire beat in the fleet dialled WITH a
+# bearer, so seven suites' prose said the 404 flatly while nothing anywhere
+# tested the anonymous case the sentence was wrong about.
 retired = %w[query run].map do |name|
   rc, body = post_json("/kiosk/#{name}", { name: "availability", party_size: 2 }, bearer(TOKEN_A))
   [rc == 404 && body["code"] == "not_found", "#{name}→#{rc}/#{body['code'].inspect}"]
 end
-record(results, "RetiredWire", retired.all? { |ok, _| ok },
-       "0.3 endpoints #{retired.map(&:last).join(', ')} (want 404/\"not_found\")")
+retired_anon = %w[query run].map do |name|
+  rc, body = post_json("/kiosk/#{name}", { name: "availability", party_size: 2 })
+  [rc == 401 && body["code"] == "unauthenticated", "#{name}(anon)→#{rc}/#{body['code'].inspect}"]
+end
+record(results, "RetiredWire", (retired + retired_anon).all? { |ok, _| ok },
+       "0.3 endpoints #{(retired + retired_anon).map(&:last).join(', ')} " \
+       "(want 404/\"not_found\" with a bearer, 401/\"unauthenticated\" without)")
 
 # ── MethodMismatch — a GET at an action's path is 405, never a silent 404 ────
 # The resource EXISTS; answering 404 would be a lie about it, and a caller that

@@ -571,9 +571,17 @@ end
 # second conformance surface is somewhere an attacker looks for the gate the
 # first one has. T-074 = A was a HARD CUT: `POST /kiosk/query` and
 # `POST /kiosk/run` now reach the per-verb controller as verbs literally named
-# "query" and "run", which nobody registered, so they answer the ordinary 404 —
-# no privileged endpoint left, no compatibility payload, no tombstone naming a
-# replacement an attacker could probe.
+# "query" and "run", which nobody registered, so they answer the ordinary 404 an
+# AUTHENTICATED caller gets — no privileged endpoint left, no compatibility
+# payload, no tombstone naming a replacement an attacker could probe.
+#
+# BOTH CALLERS ARE PROBED, and that is the whole point of the qualifier above
+# (K-1094). `VerbController#serve` resolves the identity BEFORE it looks the
+# verb up, so a caller with no bearer never reaches the registry lookup that
+# produces the 404 — it is answered 401 `unauthenticated`, exactly as it would
+# be at any other name. Every retired-wire beat in the fleet dialled WITH a
+# bearer, so seven suites' prose said the 404 flatly while nothing anywhere
+# tested the anonymous case the sentence was wrong about.
 class RetiredWire < Kiosk::Redteam::Scenario
   RETIRED = %w[query run].freeze
 
@@ -581,21 +589,28 @@ class RetiredWire < Kiosk::Redteam::Scenario
     super(
       name:        "RetiredWire",
       category:    "surface",
-      description: "The deleted 0.3 multiplexed endpoints are GONE — an ordinary 404, not a tombstone",
+      description: "The deleted 0.3 multiplexed endpoints are GONE — the ordinary 404 an " \
+                   "authenticated caller gets, 401 without a bearer, not a tombstone",
     )
   end
 
   def call(client, profile)
-    a       = register_principal(client, name: "redteam-retired-a", profile:)
-    results = RETIRED.map do |name|
-      uri = URI("#{BASE_URL}/kiosk/#{name}")
-      req = Net::HTTP::Post.new(uri, "Content-Type" => "application/json",
-                                     "Authorization" => "Bearer #{a.token}")
-      req.body = JSON.generate(name: "catalog")
-      res  = Net::HTTP.new(uri.host, uri.port).request(req)
-      body = (JSON.parse(res.body) rescue {})
-      [res.code.to_i == 404 && body["code"] == "not_found",
-       "POST /kiosk/#{name} → #{res.code}/#{body["code"].inspect}"]
+    a = register_principal(client, name: "redteam-retired-a", profile:)
+
+    results = RETIRED.flat_map do |name|
+      [[a.token, 404, "not_found", ""], [nil, 401, "unauthenticated", " (anon)"]]
+        .map do |token, want_status, want_code, tag|
+        uri     = URI("#{BASE_URL}/kiosk/#{name}")
+        headers = { "Content-Type" => "application/json" }
+        headers["Authorization"] = "Bearer #{token}" if token
+        req = Net::HTTP::Post.new(uri, headers)
+        req.body = JSON.generate(name: "catalog")
+        res  = Net::HTTP.new(uri.host, uri.port).request(req)
+        body = (JSON.parse(res.body) rescue {})
+        [res.code.to_i == want_status && body["code"] == want_code,
+         "POST /kiosk/#{name}#{tag} → #{res.code}/#{body["code"].inspect} " \
+         "(want #{want_status}/#{want_code.inspect})"]
+      end
     end
 
     Kiosk::Redteam::Verdict.new(
@@ -603,8 +618,8 @@ class RetiredWire < Kiosk::Redteam::Scenario
       skipped: false,
       status:  404,
       detail:  results.all? { |ok, _| ok } ? "" :
-                 "0.3 endpoints still answer: #{results.map(&:last).join(", ")} " \
-                 "(want 404/\"not_found\")",
+                 "a retired 0.3 endpoint answers the wrong thing: " \
+                 "#{results.reject { |ok, _| ok }.map(&:last).join(", ")}",
     )
   end
 end

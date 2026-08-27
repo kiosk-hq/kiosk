@@ -1557,7 +1557,11 @@ end
 # string to explain why it went while a string literal may not. A blocklist is
 # the right shape here and only here: these are names a protocol MAJOR removed,
 # so the set changes at a protocol bump and nowhere else.
-RETIRED_WIRE_NAMES = %r{schema/quer(?:y|ies)/run/pay|/kiosk/(?:query|run)\b}
+# The separator class is `[\s,/]+` and not a literal `/`: code spelled the list
+# "schema/query/run/pay" and PROSE spells it "schema, query, run, pay", possibly
+# across a line break. A pattern that knew only the slashes read the static pages
+# as clean for a day (K-1090).
+RETIRED_WIRE_NAMES = %r{schema[\s,/]+quer(?:y|ies)[\s,/]+run[\s,/]+pay|/kiosk/(?:query|run)\b}
 
 # The file with its comments removed. Ripper rather than a `^\s*#` scan, for the
 # reason `code_digest` and `comment_prose` both give: a `#` inside a string or a
@@ -1581,6 +1585,80 @@ prose_units.each do |unit|
             "/.well-known/kiosk.json carries (the register/login endpoints, the catalog link, the " \
             "modules this origin serves); do NOT re-enumerate verbs, which would be a third copy " \
             "of the catalog kiosk.json deliberately stopped publishing."
+end
+
+# ── The SAME ban on the THREE STATIC PAGES, which is where it survived (K-1090)
+#
+# The three `public/*.html` pages are held byte-identical across the operator
+# seven a few hundred lines above — and byte-identity only guarantees the seven
+# copies are WRONG TOGETHER. The check above reads the CSRF rescue body and
+# stops there, so the identical enumeration K-1088 deleted from that body stayed
+# LIVE in `public/404.html` of all seven: «Fetch /.well-known/kiosk.json for the
+# endpoints it actually serves — register/login, schema, query, run, pay».
+#
+# That page is the one with the wider reach of the two: PublicExceptions serves
+# it for EVERY unrouted path, which is why this file's own `why:` for it calls it
+# «the answer an assistant guessing web-app paths hits most often», where the
+# CSRF body is reached only after a JSON-dialing caller has already hit a human
+# form. And the class had ALREADY been swept once — `CHANGELOG.md`'s T-068 slice
+# 7 corrected 422.html and 500.html and left 404.html behind — so this is the
+# third survivor of one class. A check that reads only Ruby cannot see that.
+#
+# Two retired vocabularies are refused here, both deleted by a protocol MAJOR:
+#
+#   * RETIRED_WIRE_NAMES — the 0.3 verb list, for the reason stated above it.
+#   * RETIRED_ERROR_SHAPE — the word «envelope». 0.4 answers a FLAT RFC 9457
+#     problem document served as `application/problem+json`, whose top-level
+#     `code` is the branch point (K-808, T-074 = A); «envelope» is the word the
+#     deleted `{ok:false, error:{…}}` shape owned. The engine's own auth.md was
+#     corrected by T-068 slice 7 and kiosk-server's suite PINS the phrase out
+#     (`well_known_spec.rb`: `expect(body).not_to match(/JSON envelope/)`) — all
+#     three static pages kept it, so they described RFC 9457 in the vocabulary of
+#     the thing RFC 9457 replaced, on the surface least able to check.
+#
+# THE WHOLE FILE IS JUDGED, COMMENTS INCLUDED — and that is the one place this
+# rule differs from the Ruby one above, which strips comments so a comment may
+# quote the retired string to explain why it went. It cannot here: an HTML
+# comment in a static page IS served, byte for byte, to whoever fetched the page.
+# MEASURED — `curl` at an unrouted path on a booted demo returns the header
+# comment along with the body, so a comment quoting the dead verb list would hand
+# that list to the very reader the fix exists to protect. The header comments on
+# these three pages therefore describe what the sentence used to say WITHOUT
+# reproducing it. prove is scanned too — its pages are the declared exception to
+# byte-IDENTITY, never an exception to what is true.
+STATIC_SIGNPOST_PAGES = %w[public/404.html public/422.html public/500.html].freeze
+RETIRED_ERROR_SHAPE = /envelope/i
+
+static_pages = 0
+demos.each do |dir|
+  label = short.(File.basename(dir))
+  STATIC_SIGNPOST_PAGES.each do |rel|
+    path = File.join(dir, rel)
+    next unless File.exist?(path)
+
+    static_pages += 1
+    body = File.read(path)
+    hits = (body.scan(RETIRED_WIRE_NAMES) + body.scan(RETIRED_ERROR_SHAPE)).uniq
+    next if hits.empty?
+
+    errors << "#{label}: #{rel} names #{hits.map(&:inspect).join(', ')} in the file, which is SERVED whole — " \
+              "retired 0.3 vocabulary (K-1090). `POST /kiosk/query` and `POST /kiosk/run` have " \
+              "no route (T-074 = A), `capabilities` publishes MODULE names since T-095, and an " \
+              "error is a FLAT RFC 9457 problem document under `application/problem+json`, not " \
+              "an «envelope» (K-808). PublicExceptions serves this page to every assistant that " \
+              "guesses a path, so it cannot check what it is told. Name what " \
+              "/.well-known/kiosk.json carries (the register/login endpoints, the catalog link, " \
+              "the modules this origin serves) and enumerate no verbs; say " \
+              "`application/problem+json` and point at the top-level `code`."
+  end
+end
+
+expected_static = demos.size * STATIC_SIGNPOST_PAGES.size
+if static_pages != expected_static
+  errors << "check-demo-copies: the K-1090 static-page rule read #{static_pages} of " \
+            "#{expected_static} pages (#{demos.size} demos x #{STATIC_SIGNPOST_PAGES.size}) — a " \
+            "demo is missing one of #{STATIC_SIGNPOST_PAGES.join(', ')}, which is the K-532 " \
+            "bodyless-error class itself, and a rule with nothing to read passes everything."
 end
 
 # ── The flow-runner helper: lib/tasks/ is not compared, this construct is (K-1046)
@@ -2010,6 +2088,8 @@ if errors.empty?
        "one PLATFORMS set across #{lockfile_platforms.size} demo lockfiles, " \
        "application_controller.rb's superclass sentence checked against the tree in " \
        "#{prose_units.length} copies, " \
+       "no retired 0.3 wire or error-shape vocabulary in the served body of " \
+       "#{static_pages} static signpost pages, " \
        "the flow-runner helper held in lockstep across #{flow_held.size} demos " \
        "(#{FLOW_RUNNER_VARIANTS.size} declared variant#{FLOW_RUNNER_VARIANTS.size == 1 ? '' : 's'}) " \
        "with its exit-status tail compared in all #{flow_tails.size}"

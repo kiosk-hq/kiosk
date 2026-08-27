@@ -5,6 +5,25 @@
   a BODYLESS response — text/html, Content-Length: 0 — and an assistant that
   guessed a web-app path (POST /bookings, POST /api/register) gets nothing to
   act on. Static, so it cannot interpolate anything: keep every link relative.
+
+  NAME WHAT THE CATALOG CARRIES, NEVER A VERB LIST (K-1090). The note below used
+  to end by enumerating 0.3 wire endpoints. Protocol 0.4 deleted two of them
+  outright (T-074 = A — each app's own RetiredWire redteam beat asserts the
+  ordinary 404 an authenticated caller gets) and `capabilities` has published
+  MODULE names since T-095, so the list was false on both readings a lost
+  assistant can take. It was also a third copy of a catalog kiosk.json
+  deliberately stopped publishing (T-094/T-095), so it would have rotted again:
+  the wording below is K-1088's, which names what the document CARRIES.
+
+  The same sentence described the answer with the word the retired 0.3
+  {"ok":false, …} wrapper owned. An error is now a FLAT RFC 9457 problem
+  document served as application/problem+json whose top-level `code` is the
+  branch point — the fact <base>/auth.md teaches, and kiosk-server's suite pins
+  the retired word out of that document (T-068 slice 7).
+
+  So nothing here may name a retired 0.3 endpoint or call the error shape by its
+  retired name — and bin/check-demo-copies reads the WHOLE file, comments
+  included, because every byte of a static page is served to whoever fetched it.
 -->
 <html lang="en">
   <head>
@@ -28,9 +47,11 @@
         <strong>If you are an AI assistant:</strong> this provider's machine
         surface is not guessable from web-app paths. Fetch
         <a href="/.well-known/kiosk.json"><code>/.well-known/kiosk.json</code></a>
-        for the endpoints it actually serves — register/login, schema, query,
-        run, pay — and drive those instead. Every one of them answers with a
-        JSON envelope, including its errors.
+        for the register/login endpoints, the catalog link and the modules this
+        origin serves, and drive those instead. They answer JSON; an error is an
+        RFC 9457 problem document served as
+        <code>application/problem+json</code>, and the value to branch on is its
+        top-level <code>code</code>.
       </p>
       <p><a href="/">Back to the home page</a></p>
     </main>

@@ -4,6 +4,16 @@
   unhandled exception in production. WITHOUT it the response is BODYLESS
   (text/html, Content-Length: 0), so neither a human nor an assistant can tell a
   server fault from an empty answer. Static: no interpolation, relative links.
+
+  THE WIRE'S ERRORS ARE RFC 9457 PROBLEM DOCUMENTS (K-1090). The note below used
+  to say the machine surface reports its failures as a JSON wrapper with an error
+  code — the vocabulary of the retired 0.3 error shape, deleted with the
+  endpoints that served it (K-808, T-074 = A). A wire failure is a FLAT RFC 9457
+  problem document served as application/problem+json, whose top-level `code`
+  (here `internal_error`) is the branch point. Corrected in lockstep with
+  404.html and 422.html, which carried the same retired word.
+  bin/check-demo-copies reads the WHOLE file, comments included, because every
+  byte of a static page is served to whoever fetched it.
 -->
 <html lang="en">
   <head>
@@ -31,7 +41,9 @@
         provider's side, not a rejection of your request — retrying is
         reasonable, re-registering is not. The machine surface is listed in
         <a href="/.well-known/kiosk.json"><code>/.well-known/kiosk.json</code></a>
-        and reports its own failures as a JSON envelope with an error code.
+        and reports its own failures as an RFC 9457 problem document served as
+        <code>application/problem+json</code>, whose top-level <code>code</code>
+        names the failure.
       </p>
       <p><a href="/">Back to the home page</a></p>
     </main>

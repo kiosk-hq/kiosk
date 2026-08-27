@@ -6,11 +6,22 @@
   it raises ActionController::InvalidAuthenticityToken from a before_action
   INSIDE the controller. So where a demo ships the K-459 signpost (an
   ApplicationController that rescues that exception — the Devise demos), a
-  JSON-shaped caller is answered THERE with the Kiosk error envelope and never
+  JSON-shaped caller is answered THERE with a JSON error body and never
   arrives here; this page is what the signpost RE-RAISES (browser-shaped
   requests), plus every 422 in a demo that ships no signpost at all. WITHOUT
   this file the response is BODYLESS (text/html, Content-Length: 0). Static:
   keep every link relative.
+
+  THE WIRE'S ERRORS ARE RFC 9457 PROBLEM DOCUMENTS (K-1090). The note below used
+  to promise a JSON wrapper "including their errors", in the vocabulary of the
+  retired 0.3 error shape — deleted with the endpoints that served it (K-808,
+  T-074 = A). An error on the wire is a FLAT RFC 9457 problem document served as
+  application/problem+json, and the branch point is its top-level `code`,
+  exactly as <base>/auth.md teaches. T-068 slice 7 corrected this page's
+  endpoint list and left the retired word standing, which is the class K-1090
+  records; 404.html and 500.html carried it too and move in the same wave.
+  bin/check-demo-copies reads the WHOLE file, comments included, because every
+  byte of a static page is served to whoever fetched it.
 -->
 <html lang="en">
   <head>
@@ -39,7 +50,9 @@
         the machine surface. Fetch
         <a href="/.well-known/kiosk.json"><code>/.well-known/kiosk.json</code></a>
         and authenticate with your own keypair against the endpoints listed
-        there; they answer with a JSON envelope, including their errors.
+        there; they answer JSON, and an error is an RFC 9457 problem document
+        served as <code>application/problem+json</code> whose top-level
+        <code>code</code> is the value to branch on.
       </p>
       <p><a href="/">Back to the home page</a></p>
     </main>

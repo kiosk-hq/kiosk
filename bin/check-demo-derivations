@@ -308,7 +308,26 @@ def generator_namespace_from_source(body)
   parts.join(":").sub(/_generator\z/, "").sub(/:generators:/, ":")
 end
 
-WILD = " WILD "
+# The marker a `#{…}` interpolation leaves behind in a line pattern.
+#
+# IT USED TO BE A RAW NUL BYTE — `"\x00WILD\x00"` with the byte itself in the
+# source — chosen because NUL is the one byte that cannot appear in the Markdown
+# this guards. The byte made THIS FILE binary to grep: `command grep -n
+# GENERATOR_BLOCK_DEMOS bin/check-demo-derivations` printed one line, «Binary
+# file … matches», and EXITED 0. A session grepping its own guard for a constant
+# therefore got a success code and no evidence — and neither of the workspace's
+# two standing greps-lie rules fires on it, because it reproduces under
+# `/usr/bin/grep` and because the exit code is 0 with a REAL match (T-128).
+#
+# U+FFFF instead, written as an ASCII escape so this file is plain ASCII and
+# stays greppable. It cannot collide with quoted content, for a reason STRONGER
+# than NUL's was: U+FFFF is a permanent noncharacter — Unicode guarantees it is
+# never assigned and it is not valid in interchange text — whereas NUL was
+# reachable from an ordinary producer literal through `unescape`'s own `\0`
+# mapping just below. And the reason is CHECKED rather than trusted:
+# `line_patterns` aborts if an unescaped literal ever contains it, so a
+# collision is a loud failure instead of a silently mis-split pattern.
+WILD = "\uFFFF"
 
 ESCAPES = { "n" => "\n", "t" => "\t", "s" => " ", "r" => "\r", "e" => "\e",
             "0" => "\0", "a" => "\a", "b" => "\b", "f" => "\f", "v" => "\v" }.freeze
@@ -324,14 +343,16 @@ def unescape(str)
   end
 end
 
-# Every string literal in `path`, as line patterns with `#{…}` replaced by WILD.
+# Every string literal in `src`, as line patterns with `#{…}` replaced by WILD.
+# `src` is source TEXT rather than a path so that the caller keeps a label for it;
+# the label is what the collision abort below names.
 #
 # ADJACENT LITERALS ARE MERGED. `"a" \` newline `"b"` is one Ruby string and is
 # how nearly every long assertion message in these demos is written; Ripper
 # reports it as two literals, and treating it as two would leave the check
 # unable to see the very lines K-1062 recorded.
-def line_patterns(path)
-  toks = Ripper.lex(File.read(path))
+def line_patterns(src, label)
+  toks = Ripper.lex(src)
   out  = []
   buf  = nil
   depth = 0
@@ -361,7 +382,15 @@ def line_patterns(path)
         buf = +""
       end
     when :on_tstring_content
-      buf << unescape(tok) if buf
+      next unless buf
+
+      text = unescape(tok)
+      if text.include?(WILD)
+        abort "check-demo-derivations: a string literal in #{label} contains U+FFFF, the character " \
+              "line patterns use to mark a `\#{}` interpolation. The marker must be one no producer " \
+              "can emit; choose another rather than letting this literal be split at it."
+      end
+      buf << text
     when :on_embexpr_beg
       if buf
         buf << WILD
@@ -385,10 +414,10 @@ end
 # Deliberately NOT every `:on_ident`: a local variable is not a published field
 # name, and admitting one would let any identifier anywhere in the producer
 # legitimise any key.
-def key_names(path)
+def key_names(src)
   names = Set.new
   symbol = false
-  Ripper.lex(File.read(path)).each do |(_pos, type, tok, _state)|
+  Ripper.lex(src).each do |(_pos, type, tok, _state)|
     case type
     when :on_label then names << tok.chomp(":")
     when :on_symbeg then symbol = true
@@ -422,8 +451,9 @@ end
 MAX_DEPTH = 3
 
 class Patterns
-  def initialize(paths, key_paths = [])
-    pats   = paths.flat_map { |p| line_patterns(p) }.uniq
+  # `sources` and `key_sources` are `[label, source-text]` pairs.
+  def initialize(sources, key_sources = [])
+    pats   = sources.flat_map { |(label, src)| line_patterns(src, label) }.uniq
     @exact = Set.new(pats.reject { |p| p.include?(WILD) }.map(&:rstrip).reject(&:empty?))
     framed = pats.select { |p| p.include?(WILD) }
     # A frame matched WITHOUT checking its wildcards needs real literal text of
@@ -433,7 +463,7 @@ class Patterns
     # arbitrary prose. That distinction is the whole reason there are two lists.
     @loose = framed.select { |p| anchor_strength(p) >= 4 }.map { |p| pattern_regex(p, capture: false) }
     @tight = framed.select { |p| anchor_strength(p) >= 1 }.map { |p| pattern_regex(p, capture: true) }
-    @keys  = (paths + key_paths).flat_map { |p| key_names(p).to_a }.to_set
+    @keys  = (sources + key_sources).flat_map { |(_label, src)| key_names(src).to_a }.to_set
     @memo  = {}
   end
 
@@ -769,8 +799,8 @@ end
         next
       end
 
-      pats = Patterns.new(froms.map { |f| File.join(dir, f) },
-                          keys_from.map { |f| File.join(dir, f) })
+      pats = Patterns.new(froms.map { |f| [f, File.read(File.join(dir, f))] },
+                          keys_from.map { |f| [f, File.read(File.join(dir, f))] })
       block.body.each_with_index do |line, k|
         next if line.strip.empty?
 

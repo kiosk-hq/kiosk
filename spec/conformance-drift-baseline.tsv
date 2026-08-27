@@ -20,8 +20,8 @@
 # watermark forward. Repair a drifted header with --reheader, which re-renders
 # this block and touches no fingerprint.
 #
-# recorded: 2026-08-27 at 8210dcfb -- sweep-022-k1142
-# 575 anchors.
+# recorded: 2026-08-27 at d5717910 -- k1145
+# 574 anchors.
 e2e/assistant.sh	f9dc523d4a428d91	$public_doc is really being read (control token)
 e2e/assistant.sh	52a16a65def7b005	?v=<digest> is immutable for a year
 e2e/assistant.sh	0731d564311068f6	GET /kiosk/schema is unenveloped
@@ -280,7 +280,6 @@ kiosk-server/spec/kiosk/server/discovery_controller_spec.rb	476f6d480386f9cf	ser
 kiosk-server/spec/kiosk/server/engine_mount_spec.rb	8891ec012aefd504	a routing 404 UNDER the mount carries all three
 kiosk-server/spec/kiosk/server/engine_mount_spec.rb	182467a6ea997ea2	an unhandled 500 UNDER the mount carries all three
 kiosk-server/spec/kiosk/server/engine_mount_spec.rb	c7ba319b4eb7d4e0	leaves the ROOT-served discovery documents bare — they are outside the mount
-kiosk-server/spec/kiosk/server/engine_mount_spec.rb	a9c1bffdd23b3e3d	paths only the engine draws still resolve through the mount
 kiosk-server/spec/kiosk/server/engine_mount_spec.rb	5841b332bd723afe	stamps every path UNDER the mount — success and refusal alike
 kiosk-server/spec/kiosk/server/engine_mount_spec.rb	99a0c3c33d9f886f	the HOST's own route outside the mount carries none — on a 200
 kiosk-server/spec/kiosk/server/engine_mount_spec.rb	097e7f6792816fa3	…and none on a root-level routing 404

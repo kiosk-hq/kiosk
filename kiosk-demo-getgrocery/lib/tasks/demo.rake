@@ -1172,6 +1172,9 @@ namespace :demo do
       BLOCKED  MandateReplay          — B re-submits A's signed mandate JWS; rejected
       BLOCKED  TokenTampering         — altered JWT (claim flipped) rejected 401
       BLOCKED  PrivilegeSelfSelection — agent cannot self-assign elevated privilege
+      BLOCKED  DeviceGrantRoleSelfSelection — the binding ceremony's unauthenticated
+                                        opening request refuses `role`/`scope`, at a
+                                        DECLARED value as well as an invented one (K-072)
       BLOCKED  WrongCurrencyCart      — usd cart at a EUR operator rejected at capture
       BLOCKED  TamperedPriceCart      — line price differing from the catalog rejected
       BLOCKED  InflatedTotalCart      — total above the sum of the lines rejected

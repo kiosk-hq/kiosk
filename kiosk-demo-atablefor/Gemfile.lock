@@ -16,6 +16,14 @@ PATH
     kiosk-pow-equihash (0.4.0)
 
 PATH
+  remote: ../kiosk-redteam
+  specs:
+    kiosk-redteam (0.4.0)
+      base64
+      jwt (>= 2.0, < 4.0)
+      kiosk-pow-equihash (~> 0.4.0)
+
+PATH
   remote: ../kiosk-reputation
   specs:
     kiosk-reputation (0.4.0)
@@ -324,6 +332,7 @@ DEPENDENCIES
   kiosk-all!
   kiosk-core!
   kiosk-pow-equihash!
+  kiosk-redteam!
   kiosk-reputation!
   kiosk-rls!
   kiosk-server!
@@ -373,6 +382,7 @@ CHECKSUMS
   kiosk-all (0.4.0)
   kiosk-core (0.4.0)
   kiosk-pow-equihash (0.4.0)
+  kiosk-redteam (0.4.0)
   kiosk-reputation (0.4.0)
   kiosk-rls (0.4.0)
   kiosk-server (0.4.0)

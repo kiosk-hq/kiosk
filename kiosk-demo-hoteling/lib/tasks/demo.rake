@@ -532,6 +532,9 @@ namespace :demo do
       BLOCKED  MandateReplay         — B re-submits A's JWS; rejected
       BLOCKED  TokenTampering        — altered JWT claim rejected 401
       BLOCKED  PrivilegeSelfSelection — client-chosen registration role ignored (server-pinned)
+      BLOCKED  DeviceGrantRoleSelfSelection — the binding ceremony's unauthenticated
+                                       opening request refuses `role`/`scope`, at a
+                                       DECLARED value as well as an invented one (K-072)
       BLOCKED  RegistrationWithoutPow — register without a proof rejected (register PoW is ON)
       BLOCKED  WrongCurrencyCart     — usd cart at a EUR operator refused at capture
       BLOCKED  TamperedPriceCart     — below-quote total refused at capture

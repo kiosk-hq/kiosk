@@ -46,6 +46,10 @@
 #     the wire — never a 500 and never a wrong answer served as 200 (K-773,
 #     K-1027, K-1028). The beat's own comment enumerates which layer answers
 #     which argument; it does not claim more than it probes.
+#   DeviceGrantRoleSelfSelection (from `kiosk-redteam`, shared by every demo) —
+#     the account-binding claim ceremony's UNAUTHENTICATED opening request
+#     refuses `role`/`scope` at a DECLARED value as well as an invented one,
+#     while the role-less request still opens the ceremony (K-072, K-1128)
 #
 # THE 0.4 WIRE. A query is `GET <endpoint>/<query-name>` carrying its arguments
 # in the query string; an action is `POST <endpoint>/<action-name>` carrying
@@ -672,6 +676,41 @@ record(results, "HostileArgShapes",
        "CONTROLS book→#{rc_shape_book} cancel→#{rc_shape_cancel} availability→#{rc_shape_avail}/" \
        "#{rc_shape_avail == 200 ? Array(shape_avail).size : 0} rows " \
        "(want a typed 400 for every probe, never a 5xx and never a 200, and three live controls)")
+
+# ── DeviceGrantRoleSelfSelection — the SHARED framework beat (K-1128) ────────
+#
+# The one beat in this file that is NOT hand-rolled: it comes from
+# `kiosk-redteam`, so every demo runs the SAME assertion about the
+# account-binding claim ceremony and a demo cannot be left out of it by
+# forgetting to copy a block.
+#
+# It exists because the coverage that was supposed to catch K-072 rested on a
+# condition nobody re-measured: the shared `PrivilegeSelfSelection` scenario
+# probes `/auth/register` only, and the ceremony beats written when K-072 was
+# fixed lived in ONE demo's suite. The other six were safe purely because each
+# declares a single role — which is exactly the mitigation the ledger row had
+# priced K-072 on, and which expired unnoticed the day a demo declared a
+# second one.
+#
+# `declared_roles` names what `config/initializers/kiosk.rb` declares here. The
+# scenario ALSO derives a declared role from the wire (the `role` claim of a
+# token this origin mints at registration), so a stale list weakens the probe
+# rather than emptying it — an invented role was refused by the vulnerable code
+# too, which is why a probe that names only one cannot fail.
+require "kiosk/redteam"
+
+device_grant_beat    = Kiosk::Redteam::Scenarios::DeviceGrantRoleSelfSelection.new
+device_grant_verdict = device_grant_beat.call(
+  Kiosk::Redteam::Client.new(base_url: SERVER),
+  Kiosk::Redteam::Profile.new(pow_difficulty: 1, declared_roles: %w[customer]),
+)
+# A SKIP is recorded as a breach here on purpose: this origin declares a role,
+# so "could not test" is a failure of the harness rather than a property of the
+# provider, and a silent third state is what let the last one hide.
+record(results, device_grant_beat.name, device_grant_verdict.blocked,
+       device_grant_verdict.skipped ? "SKIPPED, which this origin must never do — " \
+                                      "#{device_grant_verdict.detail}"
+                                    : device_grant_verdict.detail)
 
 # ── Verdict ──────────────────────────────────────────────────────────────────
 breaches = results.reject { |r| r[:blocked] }

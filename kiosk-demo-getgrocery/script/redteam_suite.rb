@@ -66,6 +66,15 @@ profile = Kiosk::Redteam::Profile.new(
   # challenges); only "> 0" matters here.
   pow_difficulty: 1,
   requires_kyc:   false,
+
+  # ── declared_roles — DeviceGrantRoleSelfSelection ────────────────────────
+  # `Kiosk.configuration.roles` for this origin (config/initializers/kiosk.rb).
+  # The claim ceremony's beat must name a role this origin ACTUALLY declares:
+  # an invented one was refused by the vulnerable code too, which is how a
+  # green battery sat on top of K-072 for nineteen days. The scenario also
+  # derives one off the wire, so a stale list here weakens the probe rather
+  # than emptying it.
+  declared_roles: %w[customer],
   per_user_query: "my_orders",
 
   # result_id_key: create_order's response body IS the order object, so the key
@@ -759,6 +768,11 @@ scenarios = [
   Kiosk::Redteam::Scenarios::MandateReplay.new,
   Kiosk::Redteam::Scenarios::TokenTampering.new,
   Kiosk::Redteam::Scenarios::PrivilegeSelfSelection.new,
+  # The CLAIM-ceremony sibling of the line above: PrivilegeSelfSelection covers
+  # `/auth/register`, where the role was never client-readable; this covers the
+  # door that WAS open (K-072) — the unauthenticated `device_authorization`
+  # request that opens the account-binding ceremony.
+  Kiosk::Redteam::Scenarios::DeviceGrantRoleSelfSelection.new,
   WrongCurrencyCart.new,
   TamperedPriceCart.new,
   InflatedTotalCart.new,

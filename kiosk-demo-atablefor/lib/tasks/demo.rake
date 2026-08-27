@@ -1218,6 +1218,12 @@ namespace :demo do
                                     booking_id are a typed 400 carrying no
                                     runtime vocabulary — never a 500, never a
                                     wrong answer served as 200 (K-773, K-1027, K-1028)
+      BLOCKED  DeviceGrantRoleSelfSelection — the shared kiosk-redteam beat:
+                                    the binding ceremony's unauthenticated
+                                    opening request refuses `role`/`scope` at a
+                                    DECLARED value as well as an invented one,
+                                    and the role-less request still opens it
+                                    (K-072, K-1128)
 
     Exits 0 when all scenarios are BLOCKED (0 BREACH); exits 1 on any BREACH.
     A BREACH = a real hole in atablefor — fix the app, not the scenario.

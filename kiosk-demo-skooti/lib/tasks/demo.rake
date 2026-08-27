@@ -770,6 +770,9 @@ namespace :demo do
       BLOCKED  MandateReplay         — B re-submits A's JWS; rejected
       BLOCKED  TokenTampering        — altered JWT claim rejected 401
       BLOCKED  PrivilegeSelfSelection — agent cannot self-assign elevated privilege
+      BLOCKED  DeviceGrantRoleSelfSelection — the binding ceremony's unauthenticated
+                                       opening request refuses `role`/`scope`, at a
+                                       DECLARED value as well as an invented one (K-072)
       BLOCKED  WrongCurrencyCart     — pay own reservation in usd at a EUR operator → 403
       BLOCKED  TamperedPriceCart     — pay below the operator's quoted rental price → 403
       BLOCKED  InflatedTotalCart     — cart total ≠ the sum of its line items → 403

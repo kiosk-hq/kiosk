@@ -521,6 +521,10 @@ namespace :demo do
                by an opaque `seller-<hex>` pseudonym derived from the account
                id, carries no account address anywhere in the response, and
                keeps ONE handle per seller across their listings
+      BLOCKED  DeviceGrantRoleSelfSelection — the shared kiosk-redteam beat:
+               the binding ceremony's unauthenticated opening request refuses
+               `role`/`scope` at a DECLARED value as well as an invented one,
+               and the role-less request still opens it (K-072, K-1128)
 
     Exits 0 when all are BLOCKED (0 BREACH); exits 1 on any BREACH. A BREACH =
     a real hole — fix the app, not the scenario.

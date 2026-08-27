@@ -166,6 +166,15 @@ profile = Kiosk::Redteam::Profile.new(
   pow_difficulty: 20,     # >0 flips on the /register gate; skooti gates with an Equihash proof (params per KIOSK_POW_DIFFICULTY) and the client solves the real 402 challenge — the numeric value is not an Equihash param
   requires_kyc:   true,   # skooti has a KYC verifier — rent_motorcycle is attribute-gated and ExpiredKyc/ForgedKyc exercise /kyc; start_rental itself is NOT KYC-gated (K-442) because it only ever activates licence-free vehicles: since K-687 it REFUSES a needs_licence one instead of quietly unlocking it (MotorcycleViaStartRental)
 
+  # ── declared_roles — DeviceGrantRoleSelfSelection ────────────────────────
+  # `Kiosk.configuration.roles` for this origin (config/initializers/kiosk.rb).
+  # The claim ceremony's beat must name a role this origin ACTUALLY declares:
+  # an invented one was refused by the vulnerable code too, which is how a
+  # green battery sat on top of K-072 for nineteen days. The scenario also
+  # derives one off the wire, so a stale list here weakens the probe rather
+  # than emptying it.
+  declared_roles: %w[customer],
+
   # ── per-user query — CrossTenantRead ─────────────────────────────────────
   per_user_query: "my_reservations",
 
@@ -595,6 +604,11 @@ scenarios = [
   Kiosk::Redteam::Scenarios::MandateReplay.new,
   Kiosk::Redteam::Scenarios::TokenTampering.new,
   Kiosk::Redteam::Scenarios::PrivilegeSelfSelection.new,
+  # The CLAIM-ceremony sibling of the line above: PrivilegeSelfSelection covers
+  # `/auth/register`, where the role was never client-readable; this covers the
+  # door that WAS open (K-072) — the unauthenticated `device_authorization`
+  # request that opens the account-binding ceremony.
+  Kiosk::Redteam::Scenarios::DeviceGrantRoleSelfSelection.new,
   WrongCurrencyCart.new,                                 # cashier check — currency
   TamperedPriceCart.new,                                 # cashier check — below quote
   InflatedTotalCart.new,                                 # cashier check — total ≠ line sum

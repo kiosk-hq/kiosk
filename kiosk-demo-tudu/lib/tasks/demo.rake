@@ -378,6 +378,10 @@ namespace :demo do
     list_members and whoami carry display names and no account address anywhere
     in the body) and ChosenNameNeverTheAddress (a visitor who signs up with a
     display name is named by it on a roster, never by what they log in with).
+    Plus DeviceGrantRoleSelfSelection, the shared kiosk-redteam beat: the
+    account-binding ceremony's unauthenticated opening request refuses
+    `role`/`scope` at a DECLARED value as well as an invented one, while the
+    role-less request still opens it (K-072, K-1128).
   DESC
   task redteam: :setup do
     port = ENV.fetch("PORT", "3007")

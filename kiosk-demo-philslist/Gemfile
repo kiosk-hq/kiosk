@@ -28,6 +28,11 @@ gem "kiosk-core",               path: "../kiosk-core"
 gem "kiosk-rls",                path: "../kiosk-rls"
 gem "kiosk-server",             path: "../kiosk-server"
 gem "kiosk-pow-equihash",       path: "../kiosk-pow-equihash"
+# The shared adversarial harness. `script/redteam_suite.rb` runs its
+# DeviceGrantRoleSelfSelection scenario, so every demo asserts the SAME thing
+# about the account-binding claim ceremony (K-1128) instead of each one
+# hand-rolling it or, as six of seven did, not asserting it at all.
+gem "kiosk-redteam",            path: "../kiosk-redteam"
 gem "kiosk-reputation",         path: "../kiosk-reputation"
 gem "kiosk-user-idp-devise",    path: "../kiosk-user-idp-devise"
 

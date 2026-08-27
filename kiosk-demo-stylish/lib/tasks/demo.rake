@@ -618,6 +618,9 @@ namespace :demo do
                body (wrong-typed, past, unknown or missing ids) is a typed 400
                bad_request with no PG internals on the wire, while the bare and
                the priced booking still succeed as positive controls
+      BLOCKED  DeviceGrantRoleSelfSelection — the same assertion as the first
+               Device-grant beat above, but taken from `kiosk-redteam` so every
+               demo runs it rather than this one alone (K-1128)
 
     stylish has no payment or KYC surface, so the battery covers only the
     attacks the surface can actually exhibit. Exits 0 when all are BLOCKED;

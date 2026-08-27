@@ -867,6 +867,14 @@ bind_out=$( cd "$APP_DIR" && SERVER_URL="$SERVER_URL" KIOSK_ISSUER="$KIOSK_ISSUE
               HUMAN_PASSWORD="e2e-demo-password" \
               bundle exec ruby "$FIXTURES/claim_flow.rb" )
 
+# THE ROLE IS NOT THE CALLER'S TO NAME (K-072, asserted here by K-1129).
+# `role=customer` is the probe with teeth: `customer` is what THIS origin
+# declares, and a declared value was honoured by the vulnerable engine while an
+# undeclared one (`owner`) was refused — so a harness probing only the invented
+# role would have passed straight over the escalation.
+assert "binding: role/scope refused on the opening request" \
+  "$(echo "$bind_out" | jq -r '.role_refused | join(" ")')" \
+  "role=customer:400:invalid_request scope=customer:400:invalid_request role=owner:400:invalid_request json-role=customer:400:invalid_request"
 assert "binding: device_authorization fields" "$(echo "$bind_out" | jq -r '.da_fields')"                            "true"
 assert "binding: pending before approval"     "$(echo "$bind_out" | jq -r '.pending | map(tostring) | join(":")')"  "400:authorization_pending"
 assert "binding: poll without proof denied"   "$(echo "$bind_out" | jq -r '.no_pop | map(tostring) | join(":")')"   "401:invalid_client"
@@ -874,6 +882,10 @@ assert "binding: human signed in (real Devise)" "$(echo "$bind_out" | jq -r '.si
 assert "binding: human approve → 200"         "$(echo "$bind_out" | jq -r '.approve')"                              "200"
 assert "binding: fast poll → slow_down"       "$(echo "$bind_out" | jq -r '.slow_down | map(tostring) | join(":")')" "400:slow_down"
 assert "binding: token bound to the human"    "$(echo "$bind_out" | jq -r '.bound_user')"                           "true"
+# The minted token carries the APPROVER's role — this origin's one declared
+# role, resolved by kiosk-user-idp-devise from Alice's session — and not a value
+# the unauthenticated opening request supplied.
+assert "binding: token role is the approver's" "$(echo "$bind_out" | jq -r '.token_role')"                          "customer"
 assert "binding: wire verb as bound account"  "$(echo "$bind_out" | jq -r '.wire_as_bound | map(tostring) | join(":")')" "200:true"
 assert "binding: kiosk-pop login refresh"     "$(echo "$bind_out" | jq -r '.login_bound')"                          "200"
 assert "binding: link-code mint (session)"    "$(echo "$bind_out" | jq -r '.link_mint')"                            "201"

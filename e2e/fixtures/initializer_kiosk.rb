@@ -76,6 +76,24 @@ Kiosk.configure do |c|
   c.system_role = Rails.configuration.x.kiosk.system_role
 
   c.issuer = Rails.configuration.x.kiosk.issuer
+  # ONE ROLE, AND THE HARNESS ASSERTS THE BINDING CEREMONY WITH ONE (K-1129).
+  #
+  # A second declared role was considered and deliberately not added. It would
+  # buy the claim-ceremony assertion in `fixtures/claim_flow.rb` a DISTINCTION
+  # ("the token came back `customer`, not `owner`") on top of the equality it
+  # asserts today — but only if something here actually SOURCED the second role
+  # and something GATED on it: a `#kiosk_role` on the User model, a staff column
+  # to read it from, a staff human in the seeds, and a query that answers
+  # differently per role. Without all four the extra role is a declaration
+  # nothing produces and nothing consumes, and this harness is a walkthrough an
+  # adopter copies — an inert role would teach that `c.roles` is decoration.
+  # With all four it is a second copy of `kiosk-demo-stylish`, which exists and
+  # proves exactly that (`demo:roles`, and four binding beats in its redteam
+  # suite). So the roles-from-IdP demonstration stays in the demo that is built
+  # for it, and the assertion here is the one that does NOT need a second role:
+  # the ceremony's unauthenticated opening request refuses `role`/`scope` — at
+  # the DECLARED value as much as an invented one — and the minted token carries
+  # the approving human's role rather than anything the caller sent.
   c.roles  = %i[customer]
   # Role pinned to every self-registered agent (agents cannot choose their own).
   c.registration_role = :customer

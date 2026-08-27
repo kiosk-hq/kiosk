@@ -58,6 +58,32 @@ results   = {}
 # ── claim ceremony: the agent brings a FRESH key ──
 key = OpenSSL::PKey::RSA.generate(2048)
 pem = key.public_key.to_pem
+
+# THE OPENING REQUEST MAY NOT NAME A ROLE (K-072, covered here by K-1129).
+#
+# This request is UNAUTHENTICATED — no Cookie, no Authorization — so anything it
+# carries is an assertion by a stranger. The engine used to read `role` (or its
+# OAuth spelling `scope`) off it and bake the value into the JWT the poll
+# returns, with membership of `config.roles` as the only filter; the role now
+# comes from the approving human and the parameter is REFUSED rather than
+# ignored.
+#
+# THE DECLARED VALUE IS THE ONE THAT MATTERS. An UNDECLARED role (`owner` here —
+# this origin declares only `customer`) was refused by the vulnerable code too,
+# so a probe using only that cannot fail. `role=customer` is the probe with
+# teeth: it answered 200 before the fix, on this very fixture. Both transports
+# are probed because the controller reads `params[:role]`, which Rails fills
+# from a form body and a JSON body alike — a guard on one would not be a guard.
+role_probes = [%w[role customer], %w[scope customer], %w[role owner]].map do |param, value|
+  code, body = post_form("#{SERVER}/kiosk/oauth/device_authorization",
+                         { "client_id" => "e2e-claim-flow", "public_key" => pem, param => value })
+  "#{param}=#{value}:#{code}:#{body["error"]}"
+end
+code, body = post_json("#{SERVER}/kiosk/oauth/device_authorization",
+                       { client_id: "e2e-claim-flow", public_key: pem, role: "customer" })
+role_probes << "json-role=customer:#{code}:#{body["error"]}"
+results[:role_refused] = role_probes
+
 rc, da = post_json("#{SERVER}/kiosk/oauth/device_authorization", { client_id: "e2e-claim-flow", public_key: pem })
 abort "device_authorization failed: #{rc} #{da}" unless rc == 200
 device_code = da.fetch("device_code")
@@ -101,6 +127,13 @@ token = tok.fetch("access_token")
 seg = token.split(".")[1]
 claims = JSON.parse(Base64.urlsafe_decode64(seg + "=" * ((4 - seg.length % 4) % 4)))
 results[:bound_user] = claims["sub"] == HUMAN
+# The role the binding carries is the APPROVER's, read from this origin's
+# identity system when Alice approved — never anything the caller sent. Alice's
+# User model defines no `#kiosk_role`, so kiosk-user-idp-devise answers the
+# first declared role; that this origin declares exactly one is why the
+# assertion is an equality rather than a distinction (see the note beside
+# `c.roles` in fixtures/initializer_kiosk.rb).
+results[:token_role] = claims["role"]
 agent_id = claims.fetch("agent_id")
 
 # Wire verb as the bound assistant account — a query is a GET at its own path.

@@ -24,10 +24,32 @@
 # in a way nobody declared. "Someone must remember to propagate the edit" becomes
 # "CI notices when they did not". Same shape, and the same reason, as
 # bin/check-ci-tasks (K-619) — this is a SIBLING rather than a new mode of that
-# script because the two answer different questions from different inputs: that
+# script because the two answer different questions from DIFFERENT INPUTS: that
 # one compares ci.yml against each demo's rake tasks, this one compares demo
-# files against each other, and folding them together would put two unrelated
-# invariants behind one exit code and one --write contract.
+# files against each other, and bin/check-demo-derivations (K-1051) compares one
+# demo's narrative document against THAT SAME demo's own producers.
+#
+# THE INPUT IS THE BOUNDARY, AND IT IS THE ONLY ONE (K-1096). That sentence used
+# to end «folding them together would put two unrelated invariants behind one
+# exit code and one --write contract», and the reason does not survive its own
+# file. MEASURED from the `# ── … ──` banners below: this script now enforces
+# SEVENTEEN independent invariants behind exactly one exit code and one --write
+# contract. Read as a rule about COUNT, the sentence argued for splitting this
+# file seventeen ways. It was never about count.
+#
+# The seventeen share the manifest, the discovery pass and the normalisation, so
+# seventeen scripts would re-declare the demo corpus seventeen times — which is
+# precisely the drift this file exists to stop. What a sibling may not share is
+# its INPUT: a script that compares two different pairs of things cannot tell a
+# reader which pair disagreed, and no amount of output formatting fixes that,
+# whereas a second invariant over the SAME corpus costs nothing but a section.
+#
+# The cost of holding seventeen behind one exit code is real and is not argued
+# away here: CI cannot distinguish a failing prose claim from a failing
+# migration pair without reading the output, and `--write` can rewrite copies
+# for a reason the operator did not intend. If that becomes the thing that
+# hurts, the split is a T- with a PENDING: clause — a behavioural change to a
+# CI gate — and not a header edit.
 #
 # THE RULE IT ENFORCES. Every relative path found in >= 2 demos must appear in
 # the COPIES manifest below with a rule and a reason:

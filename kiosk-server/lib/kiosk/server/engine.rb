@@ -299,11 +299,17 @@ module Kiosk
         # the discovery document's `endpoint`.
         #
         # `POST query` and `POST run` — 0.3's multiplexed pair — are GONE
-        # (T-074 = A, the hard cut). Not tombstoned, not 404-with-a-hint:
-        # there is no route, so an origin serving 0.4 has exactly ONE wire
-        # surface and exactly one conformance surface. A caller still speaking
-        # 0.3 gets a routing 404 with no Kiosk body, which is the honest
-        # answer — that endpoint does not exist here.
+        # (T-074 = A, the hard cut). No DEDICATED route is drawn for either
+        # name and no tombstone stands in for one, so an origin serving 0.4
+        # has exactly ONE wire surface and exactly one conformance surface.
+        # What a caller still speaking 0.3 actually meets is the constrained
+        # per-verb pair at the bottom of this table (`NAME_SEGMENT` matches
+        # both names): `404 not_found` as an `application/problem+json`
+        # document whose `hint` names the verbs this origin DOES register —
+        # the same answer any unregistered name gets, which is the honest
+        # one, because `query` and `run` are now just names nobody declared
+        # here (K-1112; `engine_routes_spec.rb` and `verb_controller_spec.rb`
+        # assert both halves).
         get  "schema", to: "wire#schema"
         post "pay",    to: "wire#pay"
 

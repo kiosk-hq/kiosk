@@ -18,8 +18,12 @@ module Kiosk
     # so `curl -H "Authorization: Bearer …" https://…/kiosk/catalog` is the
     # whole invocation, and the HTTP method carries the read/write semantics
     # the retired 0.3 wire spelled out in a `name` field. Since the cutover
-    # this is the ONLY way to reach an operator verb: `POST <endpoint>/query`
-    # and `POST <endpoint>/run` have no route (T-074 = A).
+    # this is the ONLY way to reach an operator verb, `POST <endpoint>/query`
+    # and `POST <endpoint>/run` included (T-074 = A): no dedicated route is
+    # drawn for either name, so both fall through to the per-verb pair below
+    # and answer `404 not_found` — an ordinary problem document whose `hint`
+    # names the registered verbs — because nobody declared a verb called
+    # `query` or `run` (K-1112).
     #
     # ── Where the routes come from, and the design delta it carries ──────
     #

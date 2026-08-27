@@ -768,7 +768,7 @@ assert "a non-verb-shaped path → 404" "$status" "404"
 
 # ─── the 0.3 wire is GONE (T-074 = A) ───────────────────────────────────
 #
-# A hard cut: no route, no tombstone, no 404 hint payload naming the retired
+# A hard cut: no dedicated route, no tombstone, no 404 hint payload naming the retired
 # endpoints, no second conformance surface. `POST /kiosk/query` now reaches the
 # PER-VERB controller as a verb literally named `query`, which nobody
 # registered — so it answers the ordinary `not_found`, exactly as any other

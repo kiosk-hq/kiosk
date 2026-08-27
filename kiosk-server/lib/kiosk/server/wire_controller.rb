@@ -32,8 +32,11 @@ module Kiosk
     # Every OTHER verb is one endpoint per verb, served by {VerbController},
     # which subclasses this one. `POST <endpoint>/query` and
     # `POST <endpoint>/run` — 0.3's multiplexed pair — were DELETED at the 0.4
-    # cutover (T-074 = A). There is no route left, no tombstone and no hint
-    # payload: one wire, one conformance surface.
+    # cutover (T-074 = A): no dedicated route is drawn for either name and no
+    # tombstone stands in for one, so both fall through to {VerbController}
+    # and answer the ordinary `404 not_found` problem document — hint and all
+    # — that any unregistered verb name gets (K-1112). One wire, one
+    # conformance surface.
     #
     # Wire response (JSON): success is the handler's payload VERBATIM
     # ({Result#to_payload}), error is an RFC 9457 problem document

@@ -76,9 +76,9 @@
 # HOW FAR BACK. Replaying every structure.sql revision ever committed would be
 # slow and would assert something untrue: nothing is running a schema older than
 # the day the boxes were built. The window therefore starts at
-# FLEET_SCHEMA_BASELINE below — the provisioning date recorded by
-# `deploy/box-prep-2026-08-11.sh` — and covers every distinct revision from the
-# state on that date to now. WHEN THE FLEET IS REBUILT FROM SCRATCH (that is
+# FLEET_SCHEMA_BASELINE below — the day the fleet was last rebuilt from scratch
+# (`deploy/demo-reset.sh`, 2026-08-28 at head 2e4a767d) — and covers every
+# distinct revision from the state on that date to now. WHEN THE FLEET IS REBUILT FROM SCRATCH (that is
 # what `deploy/demo-reset.sh` does) MOVE THIS DATE FORWARD IN THE SAME CHANGE:
 # it is the one fact this gate cannot measure for itself, and leaving it stale
 # only costs time, while moving it early hides real defects.
@@ -102,10 +102,12 @@ require "shellwords"
 
 ROOT = File.expand_path("..", __dir__)
 
-# The reference fleet's boxes were provisioned on this date
-# (deploy/box-prep-2026-08-11.sh), so no database in service holds a schema
-# older than the tree of that day. See "HOW FAR BACK" above before changing it.
-FLEET_SCHEMA_BASELINE = "2026-08-11"
+# The reference fleet was last rebuilt from scratch on this date —
+# deploy/demo-reset.sh reloaded every box from the head tree (2e4a767d) — so no
+# database in service holds a schema older than the tree of that day. It was
+# first provisioned 2026-08-11 (deploy/box-prep-2026-08-11.sh); the reset resets
+# this window. See "HOW FAR BACK" above before changing it.
+FLEET_SCHEMA_BASELINE = "2026-08-28"
 
 # Named objects only — never row contents, never physical ordering. Each row is
 # `kind|identity|definition`: the identity is what must EXIST, the definition is

@@ -69,9 +69,9 @@
 #
 # `--check` IS A GATE, AND IT ASKS A DIFFERENT QUESTION (the drift-baseline
 # staleness gap, 2026-08-27). The baseline is a GENERATED file that had no
-# staleness check of any kind, unlike its sibling manifest — `audit/check-
-# conformance-refs.rb` fails when `spec/conformance-anchors.tsv` is not byte-equal
-# to what the exporter would write. MEASURED: the FIRST committed baseline was not
+# staleness check of any kind, unlike its sibling manifest: a companion gate
+# rejects `spec/conformance-anchors.tsv` whenever it is not byte-equal to what
+# the exporter would write. MEASURED: the FIRST committed baseline was not
 # byte-reproducible from its own committed generator. Its header read «sampling
 # ~185 rows blind» where the heredoc below has emitted «sampling the matrix blind»
 # since this file's creation commit `918a56f2` — so the committed file had been

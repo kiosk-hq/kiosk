@@ -9,8 +9,8 @@
 # byte of it against anything. bin/check-demo-copies:SKELETON_NOT_COMPARED names
 # the file only to EXCLUDE it («per-demo narrative: that storefront's
 # before/after contrast»), and unlike the README entry beside it, that exclusion
-# carried no pointer to a checker of its own. bin/check-ci-tasks and
-# audit/check-file-inventories.rb never mention it.
+# carried no pointer to a checker of its own. bin/check-ci-tasks never mentions
+# it, and neither does the gate that guards hand-kept file inventories.
 #
 # The cost was measured, not assumed. Ten ledger rows live in these four files
 # (K-1053..K-1057, K-1062..K-1066, and K-774/K-778/K-812/K-817/K-818/K-832/K-1036
@@ -436,7 +436,7 @@
 #     («N of M shipped actions … are left out»), which two declarations use.
 #   * IT SAYS NOTHING ELSE ABOUT THE PROSE. Whether the paragraphs around a block
 #     are true is K-1069's question (cross-demo agreement, in check-demo-copies)
-#     and claims.md's.
+#     and the claims-versus-behaviour audit's.
 #
 # EACH CLASS ABOVE WAS PROVEN BY A PLANT — break it, watch this go red, put it
 # back from a file copy. Twelve of them, all exit 1 and all restored to exit 0:
@@ -1284,9 +1284,9 @@ end
 
 # How many limits WHAT THIS DOES NOT COVER actually lists, COUNTED from this
 # file rather than remembered. The success line points a CI reader at that list
-# (K-1108), and a pointer carrying a stale number is the defect LOOP.md records
-# of a sibling gate: `check-file-inventories.rb` announced «6 work-list(s)»
-# where its code implemented five, for days, at exit 0. It aborts rather than
+# (K-1108), and a pointer carrying a stale number is a defect a sibling
+# inventory gate has already shipped: it announced «6 work-list(s)» where its
+# code implemented five, for days, at exit 0. It aborts rather than
 # print a zero, because a pointer that has lost its target is a false one.
 def over_claim_limit_count
   section = File.read(__FILE__)[/^# .. WHAT THIS DOES \*\*NOT\*\* COVER.*?^# EACH CLASS ABOVE WAS PROVEN/m]

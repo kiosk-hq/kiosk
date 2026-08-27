@@ -156,7 +156,7 @@ module Kiosk
           raise UniqueConstraintError, e.message
         end
 
-        # `requested_role` IS IN THE SET LIST, and it has to be (K-1109). It
+        # `requested_role` IS IN THE SET LIST, and it has to be (K-072). It
         # used to be absent because the column was written once, at INSERT: a
         # claim row carried whatever role the opening request asked for, and a
         # link row carried the minting human's, so nothing ever changed it

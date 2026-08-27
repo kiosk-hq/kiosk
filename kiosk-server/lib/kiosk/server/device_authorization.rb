@@ -36,7 +36,7 @@ module Kiosk
     # is stamped at approval (claim) or creation (link).
     #
     # `requested_role` is, on BOTH kinds, the role of the HUMAN this row
-    # belongs to — never a role a client asked for (K-1109). A `:link` row
+    # belongs to — never a role a client asked for (K-072). A `:link` row
     # carries it from creation ({LinkCode.mint} reads `Identity#role` off the
     # minting session); a `:claim` row is born WITHOUT one and receives it at
     # {#approve}, from the identity of whoever approves. `nil` means the
@@ -189,7 +189,7 @@ module Kiosk
       # `user_id` — and, on a `:claim` row, their ROLE.
       #
       # `role:` is where a claim ceremony's `requested_role` comes from
-      # (K-1109). A `:claim` row is born role-less because the request that
+      # (K-072). A `:claim` row is born role-less because the request that
       # opens it is unauthenticated; the role is captured HERE, at the one
       # moment an authenticated human is present, from `user_idp`'s
       # `Identity#role`. A `:link` row travels the other way — it is minted BY

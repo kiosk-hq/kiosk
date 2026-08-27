@@ -21,7 +21,7 @@ module Kiosk
     #     reputation carries over untouched (no whitewash, no inherited
     #     trust). When the ceremony carries a `requested_role` (roles-from-
     #     IdP, Path A: the NEW human's own role, which is the only role either
-    #     ceremony can carry — K-1109), `allowed_roles` is REMAPPED to
+    #     ceremony can carry — K-072), `allowed_roles` is REMAPPED to
     #     it — the agent adopts the role of the principal it is now bound to,
     #     the same "adopt the new principal's context" rule reputation-carry
     #     follows; a role-less ceremony leaves `allowed_roles` untouched. The
@@ -41,7 +41,7 @@ module Kiosk
       # `public_key_pem` has been proven (BIND-POP).
       #
       # `requested_role:` IS NEVER A CLIENT'S ROLE, on either ceremony
-      # (K-1109). Both callers read it off the row, and both rows got it from
+      # (K-072). Both callers read it off the row, and both rows got it from
       # a HUMAN's `Identity#role`: the link row at mint ({LinkCode.mint}, over
       # the minting session), the claim row at approval
       # ({DeviceVerification.approve}, over the approving session). The

@@ -62,7 +62,7 @@ module Kiosk
       # so only well-formed RSA-2048+ keys reach here.
       #
       # THERE IS NO `requested_role:` HERE, AND ITS ABSENCE IS THE CONTROL
-      # (K-1109). A `:claim` row is born ROLE-LESS, always: the request that
+      # (K-072). A `:claim` row is born ROLE-LESS, always: the request that
       # opens the ceremony is unauthenticated, so nothing it says about a role
       # is evidence of anything. The row's `requested_role` is stamped later,
       # by {DeviceVerification.approve}, from the APPROVING HUMAN's own

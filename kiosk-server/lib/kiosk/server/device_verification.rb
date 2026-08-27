@@ -49,7 +49,7 @@ module Kiosk
       # pending row matches.
       #
       # `role:` IS THE CLAIM CEREMONY'S ROLE SOURCE (ADR-0011 amendment;
-      # K-1109). Pass `user_idp`'s `Identity#role` for the human whose session
+      # K-072). Pass `user_idp`'s `Identity#role` for the human whose session
       # is approving — the same value {AuthController#link} captures onto a
       # link row at mint. The claim row was created by an UNAUTHENTICATED
       # request and carries no role of its own, so this call is the only place

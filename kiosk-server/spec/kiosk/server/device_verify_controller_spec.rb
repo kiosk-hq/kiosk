@@ -86,7 +86,7 @@ RSpec.describe "DeviceVerifyController" do
 
   # ── INFORMED CONSENT: the panel names the access being handed over ───────
   #
-  # K-1109's second half. The ceremony's role is the approver's own, so the
+  # K-072's second half. The ceremony's role is the approver's own, so the
   # page can and must say which one — an approval given without seeing it is
   # not consent to anything in particular, and that is exactly the state the
   # page was in when a `role=owner` ceremony rendered a fingerprint and a
@@ -133,7 +133,7 @@ RSpec.describe "DeviceVerifyController" do
     expect(reloaded.user_id).to eq(user_id)
   end
 
-  # THE FIX ITSELF (K-1109). The role on the row is the SESSION holder's, and
+  # THE FIX ITSELF (K-072). The role on the row is the SESSION holder's, and
   # it is the only role a claim ceremony can end up with: the authorization
   # request that created this row refuses to carry one.
   it "approve stamps the SESSION holder's ROLE on the row" do

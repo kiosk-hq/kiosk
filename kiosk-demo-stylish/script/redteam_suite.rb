@@ -373,7 +373,7 @@ record(results, "CustomerCalendarStaysOwnScoped",
        "customer salon_calendar: #{rows.size} rows #{own_ids.inspect}, excludes B's #{appt_id_b3.inspect} " \
        "(own_only=#{own_only}), forecast_hidden=#{no_forecast}")
 
-# ── the CLAIM ceremony's roles-from-IdP beats (K-1109) ────────────────────────
+# ── the CLAIM ceremony's roles-from-IdP beats (K-072) ────────────────────────
 #
 # The two beats above cover the LINK direction, and covering only that
 # direction is what let the hole below live at head. The claim direction —

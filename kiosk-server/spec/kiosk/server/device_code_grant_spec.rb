@@ -31,7 +31,7 @@ RSpec.describe Kiosk::Server::DeviceCodeGrant do
       expect(result[:da]).to be_claim
     end
 
-    # K-1109. `.start` takes no role and the row carries none: a claim
+    # K-072. `.start` takes no role and the row carries none: a claim
     # ceremony's role is stamped at APPROVAL, from the approving human's
     # identity, so there is no opening through which an unauthenticated caller
     # could name one.
@@ -142,7 +142,7 @@ RSpec.describe Kiosk::Server::DeviceCodeGrant do
     end
 
     context "BIND-POP on an approved row" do
-      # The role reaches the row the ONLY way it can since K-1109: through the
+      # The role reaches the row the ONLY way it can since K-072: through the
       # approval, from the approving human's identity. `.start` accepted a
       # `requested_role:` here until then, which is what a client could set.
       before do

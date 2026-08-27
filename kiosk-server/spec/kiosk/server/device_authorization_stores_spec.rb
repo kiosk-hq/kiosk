@@ -91,7 +91,7 @@ RSpec.shared_examples "a device-authorization store" do
         .to raise_error(Kiosk::Server::DeviceAuthorizationStores::NotFoundError, /not found/)
     end
 
-    # K-1109. `requested_role` is written MID-LIFE now, not only at INSERT: a
+    # K-072. `requested_role` is written MID-LIFE now, not only at INSERT: a
     # claim row is born role-less and receives the approving human's role at
     # `approve`. The durable adapter's UPDATE listed four columns and this was
     # not one of them, so on Postgres the approval persisted and the role went

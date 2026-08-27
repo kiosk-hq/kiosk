@@ -55,7 +55,7 @@ module Kiosk
         #
         # This request is UNAUTHENTICATED — anyone holding a keypair can send
         # it — so anything it carries is an assertion by a stranger. Until
-        # K-1109 the `role`/`scope` parameter was read from HERE, written onto
+        # K-072 the `role`/`scope` parameter was read from HERE, written onto
         # the row, and baked into the JWT the poll returns; the only filter was
         # membership of `config.roles`. On an origin declaring more than one
         # role that is a privilege-escalation primitive with no authenticated

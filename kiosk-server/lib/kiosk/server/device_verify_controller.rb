@@ -32,10 +32,10 @@ module Kiosk
     # single-use, short-TTL and stored hashed.
     #
     # THE ROLE IS CAPTURED HERE, AND DISCLOSED HERE (ADR-0011 amendment;
-    # K-1109). `@identity.role` — the provider's own answer for the human
+    # K-072). `@identity.role` — the provider's own answer for the human
     # whose session this is — is both what the panel names and what
     # {DeviceVerification.approve} stamps onto the row, so the human reads the
-    # very value the token will carry. Before K-1109 the row's role came from
+    # very value the token will carry. Before K-072 the row's role came from
     # the unauthenticated request that opened the ceremony and this page
     # mentioned no role at all: an approver could hand over `owner` while the
     # page showed a fingerprint and a timestamp. One field could have been

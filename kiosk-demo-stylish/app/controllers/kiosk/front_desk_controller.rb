@@ -164,7 +164,7 @@ class Kiosk::FrontDeskController < ApplicationController
   # fleet carrying it: an `owner` reads EVERY principal's appointments. Sound only
   # because a role is ASSIGNED by the operator and never client-requested.
   #
-  # THE CITATION HERE USED TO BE FALSE, AND IT MATTERED (K-1109). It named
+  # THE CITATION HERE USED TO BE FALSE, AND IT MATTERED (K-072). It named
   # kiosk-redteam's `privilege_self_selection` scenario as the proof — a
   # scenario that injects a role into `POST /auth/register` and nowhere else.
   # The binding ceremonies are the other way in, and one of them was open: the

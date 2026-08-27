@@ -110,7 +110,7 @@ RSpec.describe Kiosk::Server::DeviceVerification do
         .to raise_error(ArgumentError, /user_id/)
     end
 
-    # ── the approval IS the role source (ADR-0011 amendment; K-1109) ───────
+    # ── the approval IS the role source (ADR-0011 amendment; K-072) ───────
     it "stamps the approving human's role onto the row, and PERSISTS it" do
       code, da = fresh
       expect(da.requested_role).to be_nil

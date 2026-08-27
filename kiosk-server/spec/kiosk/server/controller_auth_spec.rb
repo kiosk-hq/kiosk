@@ -453,7 +453,7 @@ RSpec.describe "wire-surface controller auth" do
     end
   end
 
-  # ─── a client-chosen role is REFUSED, not validated (K-1109) ─────
+  # ─── a client-chosen role is REFUSED, not validated (K-072) ─────
   #
   # This block used to be called "requested_role validation" and asserted that
   # a role outside `config.roles` was rejected — which is exactly the shape

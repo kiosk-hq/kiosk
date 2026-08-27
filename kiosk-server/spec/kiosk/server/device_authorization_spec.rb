@@ -229,7 +229,7 @@ RSpec.describe Kiosk::Server::DeviceAuthorization do
           .to raise_error(ArgumentError, /user_id/)
       end
 
-      # ── the role travels with the approval (K-1109) ──────────────────────
+      # ── the role travels with the approval (K-072) ──────────────────────
       #
       # A `:claim` row is born role-less (its opening request is
       # unauthenticated and refuses to carry a role), so `role:` here is the

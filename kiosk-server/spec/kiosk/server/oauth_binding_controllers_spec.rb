@@ -83,7 +83,7 @@ RSpec.describe "OAuth binding controllers" do
       expect(body[:error_description]).to match(/client_id/)
     end
 
-    # K-1109. The ceremony's role is the APPROVING HUMAN's, captured at the
+    # K-072. The ceremony's role is the APPROVING HUMAN's, captured at the
     # verify page — so this unauthenticated request has no business carrying
     # one, at any value. It used to accept any member of `config.roles`, which
     # on a multi-role origin let a stranger open a ceremony for `owner`.
@@ -191,7 +191,7 @@ RSpec.describe "OAuth binding controllers" do
       )
     end
 
-    # K-1109 END TO END OVER THE CONTROLLERS. The role that reaches `bind!` is
+    # K-072 END TO END OVER THE CONTROLLERS. The role that reaches `bind!` is
     # the one the APPROVER carried, and it reaches it even though the opening
     # request said nothing (it cannot). The `scope` echoed back is that same
     # granted role.

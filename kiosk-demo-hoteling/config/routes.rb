@@ -4,8 +4,9 @@ Rails.application.routes.draw do
 
   # Human sign-in (Devise) — the web session that approves assistant links.
   # The sessions controller is overridden ONLY to answer a JSON-shaped
-  # `DELETE /users/sign_out` with the Kiosk error envelope instead of a bodyless
-  # 401 (K-533); every other Devise behaviour is inherited untouched.
+  # `DELETE /users/sign_out` with a JSON courtesy body — deliberately NOT the
+  # wire's RFC 9457 problem document, see the controller (K-1092) — instead of
+  # a bodyless 401 (K-533); every other Devise behaviour is inherited untouched.
   devise_for :users, controllers: { sessions: "users/sessions" }
 
   # Public root page: what this demo is + live DOMAIN activity (booking counts

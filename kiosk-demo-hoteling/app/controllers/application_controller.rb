@@ -12,8 +12,23 @@ class ApplicationController < ActionController::Base
   # check raises ActionController::InvalidAuthenticityToken — INSIDE the
   # controller, in a before_action, which is why the handler below is what sees
   # it first, in production as anywhere else. Prose written for a human is not a
-  # result an assistant can branch on, so a JSON-shaped caller gets the Kiosk
-  # error envelope with a pointer to the wire.
+  # result an assistant can branch on, so a JSON-shaped caller gets a JSON body
+  # with a pointer to the wire.
+  #
+  # THAT BODY IS DELIBERATELY NOT THE WIRE'S SHAPE, and this comment used to
+  # call it «the Kiosk error envelope» — a phrase that names the wire CONTRACT,
+  # and is false twice over (K-1092). The wire answers FLAT RFC 9457 problem
+  # documents served as `application/problem+json`, whose top-level `code` is
+  # the branch point; `{ok:false, error:{…}}` is the 0.3 shape, deleted with the
+  # endpoints that served it (K-808, T-074 = A). What is rendered below is a
+  # COURTESY to a caller that dialed the wrong door — a human sign-in page is not
+  # a wire verb — rather than a contract anything parses, and its `error.code` is
+  # non-wire for the same reason: this endpoint must not borrow a code from the
+  # spec's closed error table. kiosk-server's own signposts render the same
+  # shape and record the same choice (assistants_controller.rb,
+  # device_verify_controller.rb); a demo is read AS the reference
+  # implementation, so it has to say so rather than leave a reader to infer a
+  # contract from a courtesy.
   #
   # Everything else is re-raised untouched, and only THEN leaves the controller:
   # in production ShowExceptions falls through to PublicExceptions, which serves

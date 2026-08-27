@@ -665,14 +665,36 @@ RSpec.describe "Kiosk::Handler (the operator mixin)" do
   end
 
   describe "guards" do
-    it "404s a request that did not come through the Kiosk wire" do
+    it "404s a request that did not come through the Kiosk wire, as a problem document" do
+      # THE BODY IS CLIENT-FACING (K-1092). The guard returns early under
+      # sub-dispatch, so what it renders is never re-wrapped by the Executor: it
+      # goes straight to whoever dialed a route an operator drew at a handler
+      # controller. It used to answer the 0.3 `{ok:false, error:{…}}` envelope —
+      # deleted with the endpoints that served it (K-808, T-074 = A) — which made
+      # it the last shipped body emitting that shape to a client. Contrast
+      # `kiosk_rescue_to_wire`, which keeps the nested shape ON PURPOSE: that one
+      # is the internal sub-dispatch protocol between a handler and
+      # HandlerDispatch, and the Executor re-wraps it before anything sees it.
       env = Rack::MockRequest.env_for("https://provider.example/catalog", method: "POST")
-      status, _headers, body = SpecCatalogController.action(:catalog).call(env)
+      status, headers, body = SpecCatalogController.action(:catalog).call(env)
       raw = +""
       body.each { |chunk| raw << chunk }
+      problem      = JSON.parse(raw)
+      content_type = headers.find { |k, _| k.to_s.downcase == "content-type" }&.last
 
       expect(status).to eq(404)
-      expect(JSON.parse(raw).dig("error", "message")).to match(/Kiosk wire only/)
+      expect(content_type).to start_with(Kiosk::Server::Errors::PROBLEM_CONTENT_TYPE)
+      expect(problem).to include(
+        "type"   => "https://kiosk.tech/problems/not_found",
+        "title"  => "Not found",
+        "status" => 404,
+        "code"   => "not_found",
+      )
+      expect(problem["detail"]).to match(/Kiosk wire only/)
+      expect(problem["hint"]).to match(%r{<query-name>})
+      # FLAT: neither of the two members the retired envelope owned survives.
+      expect(problem.keys).not_to include("ok")
+      expect(problem.keys).not_to include("error")
     end
 
     it "refuses to be included into something that is not a controller" do

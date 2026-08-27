@@ -384,7 +384,9 @@ COPIES = {
   "app/controllers/users/sessions_controller.rb" => {
     rule: :identical,
     why:  "The K-533 sign-OUT signpost: Devise answers a session-less DELETE with a zero-byte " \
-          "401 claiming to be JSON, and this hands the caller the Kiosk error envelope instead. " \
+          "401 claiming to be JSON, and this hands the caller a JSON courtesy body instead — " \
+          "deliberately NOT the wire's RFC 9457 problem document, which is what «the Kiosk " \
+          "error envelope» used to claim it was (K-1092). " \
           "The four Devise demos must give an agent the SAME answer.",
   },
   "app/controllers/kyc_callback_controller.rb" => {

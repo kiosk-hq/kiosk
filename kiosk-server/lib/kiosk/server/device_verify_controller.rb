@@ -45,8 +45,12 @@ module Kiosk
       # in production Rails answers with the host's generic error material —
       # a static public/422.html, a bare status echo, or (on a host with no
       # error page) a bodyless 422 — never a pointer to the wire. Answer a
-      # JSON-shaped caller with the Kiosk error envelope + a pointer to the
-      # wire; re-raise for browsers so real CSRF failures still fail.
+      # JSON-shaped caller with the courtesy body below + a pointer to the
+      # wire; re-raise for browsers so real CSRF failures still fail. NOT «the
+      # Kiosk error envelope», which is what this comment used to call it: that
+      # names the wire CONTRACT, and the wire's is a flat RFC 9457 problem
+      # document (K-1092). {#wrong_door_envelope} below records why this page
+      # deliberately does not borrow it.
       rescue_from ::ActionController::InvalidAuthenticityToken do |error|
         raise error unless json_request?
 

@@ -40,8 +40,9 @@ Rails.application.routes.draw do
   # Human sign-in + sign-up (Devise) — the web session that approves assistant
   # links, and the open registration tudu alone in the fleet offers.
   # The sessions controller is overridden ONLY to answer a JSON-shaped
-  # `DELETE /users/sign_out` with the Kiosk error envelope instead of a bodyless
-  # 401 (K-533); the registrations controller ONLY to permit `display_name` on
+  # `DELETE /users/sign_out` with a JSON courtesy body — deliberately NOT the
+  # wire's RFC 9457 problem document, see the controller (K-1092) — instead of
+  # a bodyless 401 (K-533); the registrations controller ONLY to permit `display_name` on
   # sign-up (K-950 — the roster publishes that column, never the address). Every
   # other Devise behaviour is inherited untouched.
   devise_for :users, controllers: { sessions: "users/sessions", registrations: "users/registrations" }

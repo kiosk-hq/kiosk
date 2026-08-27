@@ -515,19 +515,36 @@ module Kiosk
         # live. A route drawn straight at one would bypass all three, so it 404s
         # — the same answer the operator's app gives for any other path it does
         # not serve.
+        #
+        # THE BODY IS A FLAT RFC 9457 PROBLEM DOCUMENT (K-1092), built by
+        # {Errors::NotFound} itself so it cannot drift from the one the wire
+        # renders. This render is CLIENT-FACING and nothing re-wraps it: the
+        # guard returns early under sub-dispatch, so it only ever fires on a
+        # route the operator drew straight at a handler controller, where there
+        # is a machine on the other end and no human page in sight. It answered
+        # the 0.3 `{ok:false, error:{…}}` envelope until K-1092 — deleted with
+        # the endpoints that served it (K-808, T-074 = A) — which made it the
+        # last shipped body emitting that shape to a client.
+        #
+        # NOT the same call as {#kiosk_rescue_to_wire} above, which keeps the
+        # nested shape ON PURPOSE: that one is the internal sub-dispatch
+        # protocol between a handler and {HandlerDispatch}, whose `error.code`
+        # vocabulary and extra envelope fields the Executor decodes and re-wraps
+        # before anything reaches a client. Flattening it would change the seam,
+        # not the wire.
         def kiosk_require_wire_dispatch!
           return if request.env.key?(HandlerDispatch::DISPATCH_KEY)
 
-          render json: {
-            ok:    false,
-            error: {
-              code:    "not_found",
-              message: "Kiosk handlers are reachable through the Kiosk wire only",
-              hint:    "call the verb's own route — " \
-                       "GET #{Kiosk.configuration.mount_path}/<query-name> or " \
-                       "POST #{Kiosk.configuration.mount_path}/<action-name>",
-            },
-          }, status: :not_found
+          problem = Kiosk::Server::Errors::NotFound.new(
+            "Kiosk handlers are reachable through the Kiosk wire only",
+            hint: "call the verb's own route — " \
+                  "GET #{Kiosk.configuration.mount_path}/<query-name> or " \
+                  "POST #{Kiosk.configuration.mount_path}/<action-name>",
+          ).to_problem
+
+          render json:         problem,
+                 status:       :not_found,
+                 content_type: Kiosk::Server::Errors::PROBLEM_CONTENT_TYPE
         end
       end
     end

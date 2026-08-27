@@ -8,9 +8,18 @@ module Users
   # → respond_to_on_destroy(non_navigational_status: :unauthorized)). For a
   # JSON-shaped caller that is a 401 carrying `Content-Type: application/json`
   # and ZERO bytes — a content type promising JSON with nothing to parse, which
-  # is less actionable than an honest HTML error. Hand that caller the Kiosk
-  # error envelope instead, with the same pointer to the wire the sign-in
-  # signpost gives.
+  # is less actionable than an honest HTML error. Hand that caller a JSON body
+  # instead, with the same pointer to the wire the sign-in signpost gives.
+  #
+  # NOT «the Kiosk error envelope», which is what this comment used to call it
+  # (K-1092): that phrase names the wire CONTRACT, and the wire's contract is a
+  # FLAT RFC 9457 problem document served as `application/problem+json` — the
+  # `{ok:false, error:{…}}` shape below is 0.3's, deleted with the endpoints
+  # that served it (K-808, T-074 = A). `/users/sign_out` is a browser page, not
+  # a wire verb, so this body is a COURTESY to a caller that dialed the wrong
+  # door rather than a contract anything parses, and its `error.code` is
+  # deliberately non-wire. kiosk-server's own wrong-door signposts render the
+  # same shape and record the same choice.
   #
   # Everything else is Devise's behaviour untouched: browsers (navigational
   # formats) still get the redirect + flash, and a REAL sign-out still answers

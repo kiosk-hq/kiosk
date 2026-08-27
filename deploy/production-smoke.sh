@@ -373,7 +373,7 @@ smoke_stylish() {
     fail "forged X-Staff-Session expected 401, got $staff_code (K-555: a role-carrying human stand-in is reachable in production — staff-role self-grant!)"
   fi
 
-  echo "── Assertion 7: JSON POST at the human sign-in form → 422 + Kiosk error envelope (K-459/K-534) ──"
+  echo "── Assertion 7: JSON POST at the human sign-in form → 422 + the wrong-door JSON body (K-459/K-534) ──"
   # The DEMO half of the K-459 agent-signpost had no gate: the engine half is
   # pinned by rspec, but each demo's own ApplicationController rescue was only
   # ever exercised by a human-shaped POST here (assertion 4). A regression puts
@@ -388,23 +388,24 @@ smoke_stylish() {
     --data '{"user":{"email":"probe@example.com","password":"probe"}}' \
     "${BASE}/users/sign_in")"
   if [ "$signpost_code" = "422" ] && printf '%s' "$signpost" | grep -q "invalid_authenticity_token"; then
-    pass "JSON sign-in POST → 422 + invalid_authenticity_token envelope"
+    pass "JSON sign-in POST → 422 + invalid_authenticity_token body"
   else
-    fail "JSON sign-in POST expected 422 + invalid_authenticity_token envelope, got $signpost_code / '$(printf '%s' "$signpost" | head -c 120)' (K-459 signpost regressed to a bodyless error)"
+    fail "JSON sign-in POST expected 422 + invalid_authenticity_token body, got $signpost_code / '$(printf '%s' "$signpost" | head -c 120)' (K-459 signpost regressed to a bodyless error)"
   fi
 
-  echo "── Assertion 8: JSON DELETE /users/sign_out → 401 + Kiosk error envelope (K-533) ──"
+  echo "── Assertion 8: JSON DELETE /users/sign_out → 401 + the wrong-door JSON body (K-533) ──"
   # Devise answers a session-less sign-out with `head :unauthorized`: 401,
   # Content-Type: application/json, ZERO bytes — a content type promising JSON
   # with nothing to parse. Users::SessionsController hands JSON-shaped callers
-  # the envelope instead; navigational and 204 paths stay Devise's.
+  # that courtesy body instead; navigational and 204 paths stay Devise's. It is
+  # NOT the wire's RFC 9457 problem document and does not claim to be (K-1092).
   signout="$(curl -s -X DELETE "${PROXY_HEADERS[@]}" -H "Accept: application/json" "${BASE}/users/sign_out")"
   signout_code="$(curl -s -o /dev/null -w '%{http_code}' -X DELETE "${PROXY_HEADERS[@]}" \
     -H "Accept: application/json" "${BASE}/users/sign_out")"
   if [ "$signout_code" = "401" ] && printf '%s' "$signout" | grep -q "not_signed_in"; then
-    pass "JSON sign-out DELETE → 401 + not_signed_in envelope (not a bodyless 401)"
+    pass "JSON sign-out DELETE → 401 + not_signed_in body (not a bodyless 401)"
   else
-    fail "JSON sign-out DELETE expected 401 + not_signed_in envelope, got $signout_code / '$(printf '%s' "$signout" | head -c 120)' (K-533)"
+    fail "JSON sign-out DELETE expected 401 + not_signed_in body, got $signout_code / '$(printf '%s' "$signout" | head -c 120)' (K-533)"
   fi
 
   echo "── Assertion 9: unknown path → 404 with a BODY (public/404.html, K-532) ──"
@@ -736,7 +737,7 @@ smoke_tudu() {
       || fail "signed-in /lists expected 200, got $authed_code"
   fi
 
-  echo "── Assertion 5: JSON POST at the human sign-in form → 422 + Kiosk error envelope (K-459/K-534) ──"
+  echo "── Assertion 5: JSON POST at the human sign-in form → 422 + the wrong-door JSON body (K-459/K-534) ──"
   # The wrong-door signpost this app returns to a JSON-dialing assistant. Only
   # production renders it (dev serves the debug page), and its TEXT is what
   # K-1088 had to correct in seven copies at once.
@@ -749,9 +750,9 @@ smoke_tudu() {
     --data '{"user":{"email":"probe@example.com","password":"probe"}}' \
     "${BASE}/users/sign_in")"
   if [ "$signpost_code" = "422" ] && printf '%s' "$signpost" | grep -q "invalid_authenticity_token"; then
-    pass "JSON sign-in POST → 422 + invalid_authenticity_token envelope"
+    pass "JSON sign-in POST → 422 + invalid_authenticity_token body"
   else
-    fail "JSON sign-in POST expected 422 + invalid_authenticity_token envelope, got $signpost_code / '$(printf '%s' "$signpost" | head -c 120)' (K-459 signpost regressed to a bodyless error)"
+    fail "JSON sign-in POST expected 422 + invalid_authenticity_token body, got $signpost_code / '$(printf '%s' "$signpost" | head -c 120)' (K-459 signpost regressed to a bodyless error)"
   fi
 
   echo "── Assertion 6: unknown path → 404 with a BODY (public/404.html, K-532) ──"

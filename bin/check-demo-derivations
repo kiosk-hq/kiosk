@@ -78,7 +78,11 @@
 #       resolves `puts "  OK    #{msg}"` against the `msg` literal two hundred
 #       lines away, without the frame's `.*?` swallowing arbitrary prose;
 #   (c) it is a JSON object — the driver's summary line — and every key at every
-#       depth is a name some producer names. Its NESTED keys are the handler's,
+#       depth is a name some producer names. This branch is EXCLUSIVE: a line
+#       that parses as a JSON object is checked here and nowhere else, because
+#       when it fell through to (a)/(b) first a thin frame elsewhere in the
+#       producer matched the whole line and a planted key rename went green.
+#       Its NESTED keys are the handler's,
 #       not the driver's (the driver splices a response object in whole), so a
 #       transcript may name the handler in `keys_from:`. That is a SEPARATE list
 #       on purpose: those files are consulted for key names only and their
@@ -168,6 +172,17 @@
 #   * IT SAYS NOTHING ELSE ABOUT THE PROSE. Whether the paragraphs around a block
 #     are true is K-1069's question (cross-demo agreement, in check-demo-copies)
 #     and claims.md's.
+#
+# EACH CLASS ABOVE WAS PROVEN BY A PLANT — break it, watch this go red, put it
+# back from a file copy. Twelve of them, all exit 1 and all restored to exit 0:
+# a block with its declaration deleted; a transcript line carrying a word the
+# task does not print; a renamed top-level and a renamed NESTED JSON key; a
+# snippet line whose value was changed; a document comment with no elision
+# marker; `abridged: none` on a block that has one; a `transform:` no line
+# needs; a `from:` naming a file that moved; a `task:` naming a rake task that
+# does not exist; a completeness promise beside a `derived: none` block; and a
+# demo dropped from DOCUMENTED_DEMOS while it still ships the document. The
+# third of those is why (c) is exclusive: it PASSED before that ordering fix.
 #
 # Stdlib only (ripper + json), no bundle, no database, no Rails boot, well under
 # a second on a bare checkout — the same profile as bin/check-demo-copies.
@@ -284,16 +299,26 @@ def line_patterns(path)
   out
 end
 
-# Key names a producer NAMES: `foo:` labels, `:foo` symbols and bare-identifier
-# string literals. The JSON summary line's keys are checked against this.
+# Key names a producer NAMES: `foo:` labels, `:foo` symbols and identifier-shaped
+# string literals — the three ways a key is written where a JSON body is built.
+# Deliberately NOT every `:on_ident`: a local variable is not a published field
+# name, and admitting one would let any identifier anywhere in the producer
+# legitimise any key.
 def key_names(path)
   names = Set.new
+  symbol = false
   Ripper.lex(File.read(path)).each do |(_pos, type, tok, _state)|
     case type
-    when :on_label      then names << tok.chomp(":")
-    when :on_ident, :on_const then names << tok
+    when :on_label then names << tok.chomp(":")
+    when :on_symbeg then symbol = true
+    when :on_ident, :on_const
+      names << tok if symbol
+      symbol = false
     when :on_tstring_content
       names << tok if tok.match?(/\A[a-z_][a-z0-9_]*\z/i)
+      symbol = false
+    else
+      symbol = false if type != :on_sp
     end
   end
   names
@@ -613,35 +638,41 @@ end
         next if line.strip.empty?
 
         lineno = block.fence_line + 1 + k
-        next if pats.accounts_for?(line)
 
-        if line.strip.start_with?("{") && line.strip.end_with?("}")
-          begin
-            obj = JSON.parse(line.strip)
-          rescue JSON::ParserError
-            obj = nil
-          end
-          if obj.is_a?(Hash)
-            unknown_keys = []
-            walk = lambda do |node|
-              case node
-              when Hash then node.each { |kk, vv| unknown_keys << kk unless pats.key?(kk); walk.call(vv) }
-              when Array then node.each { |vv| walk.call(vv) }
+        # A JSON object line goes through the KEY rule and nowhere else. It used
+        # to fall through to the literal rule first, and a thin frame elsewhere
+        # in the producer would match the whole line — a planted key rename went
+        # green that way, which is the exact defect this rule exists to catch.
+        obj = if line.strip.start_with?("{") && line.strip.end_with?("}")
+                begin
+                  JSON.parse(line.strip)
+                rescue JSON::ParserError
+                  nil
+                end
               end
+
+        if obj.is_a?(Hash)
+          unknown_keys = []
+          walk = lambda do |node|
+            case node
+            when Hash then node.each { |kk, vv| unknown_keys << kk unless pats.key?(kk); walk.call(vv) }
+            when Array then node.each { |vv| walk.call(vv) }
             end
-            walk.call(obj)
-            if unknown_keys.empty?
-              counts[:json] += 1
-              next
-            end
-            errors << "#{label}:#{lineno}: the JSON summary line carries key(s) " \
-                      "#{unknown_keys.uniq.join(', ')} that no file in `from:` or " \
-                      "`keys_from:` names. A published summary naming a field the driver stopped " \
-                      "emitting is K-1053 exactly; a nested key belongs to the handler that " \
-                      "serialises it, so name that handler in `keys_from:`."
+          end
+          walk.call(obj)
+          if unknown_keys.empty?
+            counts[:json] += 1
             next
           end
+          errors << "#{label}:#{lineno}: the JSON summary line carries key(s) " \
+                    "#{unknown_keys.uniq.join(', ')} that no file in `from:` or " \
+                    "`keys_from:` names. A published summary naming a field the driver stopped " \
+                    "emitting is K-1053 exactly; a nested key belongs to the handler that " \
+                    "serialises it, so name that handler in `keys_from:`."
+          next
         end
+
+        next if pats.accounts_for?(line)
 
         errors << "#{label}:#{lineno}: this line is not a line `#{task}` prints — no string " \
                   "literal in #{froms.join(', ')} produces it:\n      #{line.strip[0, 160]}"

@@ -684,14 +684,32 @@ jobs:
       # position relative to demo:setup is free; it is here because it needs the
       # psql 17 installed above.
       #
-      # Watched fail, both directions, MEASURED 2026-08-27 on kiosk-demo-tudu:
-      # re-append `add_column :users, :display_name` to
-      # 20260719000001_create_tudu_domain.rb (3a834cc0's exact shape) and it
-      # exits 1 naming `MISSING column|public.users.display_name` on three
-      # vintages; drop the `IF NOT EXISTS` from
-      # Kiosk::Server::SchemaDefinitions' CREATEs and it exits 1 with
-      # `db:migrate` ABORTING at 20260820130113 (PG::DuplicateTable). Clean tree,
-      # all eight demos, 44 replays: exit 0.
+      # Watched fail, both directions, RE-MEASURED 2026-08-27 (evening) on
+      # kiosk-demo-tudu — and the recipe changed, because the FIRST version of
+      # this block had gone dead. Re-appending `add_column :users, :display_name`
+      # to 20260719000001_create_tudu_domain.rb (3a834cc0's exact shape) now
+      # exits 0: the K-1074 repair, 20260827000001_add_display_name_to_users.rb,
+      # supplies that column on every vintage, so an edit upstream of it changes
+      # nothing observable. A dead watched-fail recipe reads exactly like a gate
+      # that has gone vacuous, so it is corrected here rather than left standing.
+      #
+      # What still fires is that repair's ABSENCE plus K-1074's own defect one
+      # migration over: DELETE 20260827000001_add_display_name_to_users.rb and
+      # append `t.string :display_name` to the long-shipped, already-recorded
+      # 20260718000001_add_devise_columns_to_users.rb — exit 1, naming
+      # `MISSING column|public.users.display_name` on FOUR vintages (c79aceb8,
+      # 32ce96b1, 267e67b3, 209db0f8). Other direction unchanged and re-measured:
+      # drop the `IF NOT EXISTS` from Kiosk::Server::SchemaDefinitions' CREATEs
+      # and it exits 1 with `db:migrate` ABORTING inside
+      # 20260820130113_create_kiosk_identity_tables.rb, where an unguarded CREATE
+      # meets a table the vintage already has.
+      #
+      # Clean tree, all eight demos: exit 0 over 52 replays as of today. That
+      # count grows with every new structure.sql vintage — it read 44 when this
+      # block was first written — so the number to trust is the one the script
+      # prints, not the one written here. Put a planted mutation back from a file
+      # copy, never `git checkout -- <path>`: during a fix wave that restores to
+      # HEAD and takes uncommitted work with it.
       #
       # COST: ~4-8 s per demo here (34 s for all eight on one laptop core),
       # because the bundle and the postgres service are already up and the whole

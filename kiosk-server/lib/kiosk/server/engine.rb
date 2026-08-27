@@ -370,8 +370,8 @@ module Kiosk
         # descriptors from it. See {VerbController} for why the engine draws
         # these rather than the operator.
         #
-        # DRAWN LAST, and that placement is the design's reserved-word rule
-        # (§3.2) enforced by Rails' own first-match: every route above owns
+        # DRAWN LAST, and that placement is spec §8.3's reserved-name rule
+        # enforced by Rails' own first-match: every route above owns
         # its first path segment, so an operator who declares a verb called
         # `schema` or `pay` cannot shadow the wire — the wire answers. A
         # declaration-time REFUSAL of such a name (so the operator learns at

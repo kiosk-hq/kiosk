@@ -162,7 +162,7 @@ module Kiosk
       # default here except the strictest would silently widen a verb.
       DEFAULT_REACH = :principal
 
-      # ── §3.2, enforced where the mistake is made ─────────────────────────
+      # ── spec §8.1 / §8.3, enforced where the mistake is made ─────────────
       #
       # A verb name is ONE path segment on the 0.4 wire, so the three rules the
       # spec states about names are properties a DECLARATION either has or does
@@ -357,9 +357,9 @@ module Kiosk
           kiosk_register_one(declaration)
         end
 
-        # §3.2's name rules and T-073's required descriptor fields, raised at
-        # DECLARATION time so the operator meets them at boot with the class and
-        # the method in hand.
+        # The name rules of spec §8.1 / §8.3 and T-073's required descriptor
+        # fields, raised at DECLARATION time so the operator meets them at boot
+        # with the class and the method in hand.
         def kiosk_refuse_bad_declaration!(declaration)
           name = declaration[:wire_name]
           where = "#{self}##{declaration[:method_name]}"

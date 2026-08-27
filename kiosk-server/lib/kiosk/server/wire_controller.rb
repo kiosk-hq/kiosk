@@ -179,11 +179,11 @@ module Kiosk
       end
 
       # `pay`, the one reserved endpoint left on this path. Its wire NAME is
-      # its command name, so the name travels to the fingerprint exactly as a
-      # per-verb call's does and §3.4's `"<METHOD> <verb>"` formula needs no
-      # special case. (`schema` shared this path until T-094 made it public;
-      # it resolves no identity and pays no toll, so it has nothing left to
-      # share.)
+      # its command name, so the name travels to the request fingerprint
+      # exactly as a per-verb call's does and its `"<METHOD> <verb>"` half
+      # needs no special case. (`schema` shared this path until T-094 made it
+      # public; it resolves no identity and pays no toll, so it has nothing
+      # left to share.)
       def run_command(command)
         # parse_body! runs inside the action, so the rescue_from above covers
         # it: a malformed body raises Errors::BadRequest, which must render a
@@ -210,7 +210,9 @@ module Kiosk
       # @param name [String] the WIRE name — the path segment. `pay` passes its
       #   own; a per-verb call passes the registered verb.
       def execute_wire(command:, args:, identity:, name:)
-        # §3.4's fingerprint: SHA256("<METHOD> <verb>\n<canonical args>").
+        # The request fingerprint: SHA256("<METHOD> <verb>\n<canonical args>").
+        # The spec requires every challenge to be request-bound (§10, §15.2)
+        # and leaves the digest itself to the operator; this is the engine's.
         #
         # It binds a challenge to the exact call — the HTTP method, the verb
         # name as it appears in the path, and the canonical JSON of the
@@ -268,7 +270,7 @@ module Kiosk
       #   because `reputation_factors` and `Policy#challenge_for` both take it
       #   as `verb:` and every shipped policy branches on those three symbols
       # @param name [String] the WIRE verb name, as it appears in the path —
-      #   half of §3.4's fingerprint, with the request method
+      #   half of the request fingerprint, with the request method
       # @param body [Hash] the arguments the fingerprint binds to
       def toll!(identity:, command:, name:, body:)
         # Read the submitted proof(s) from the `Kiosk-PoW` request HEADER

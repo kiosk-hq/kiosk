@@ -64,8 +64,8 @@ module Kiosk
           registered
         end
 
-        # ONE NAME, ONE KIND (§3.2). A name that is both a query and an action
-        # is a path with two meanings: `GET <endpoint>/<name>` and
+        # ONE NAME, ONE KIND (spec §8.3). A name that is both a query and an
+        # action is a path with two meanings: `GET <endpoint>/<name>` and
         # `POST <endpoint>/<name>` would reach different handlers, and the 405
         # {VerbController} answers for a method mismatch — which is the whole
         # reason that status exists on this wire — could never be right for it.

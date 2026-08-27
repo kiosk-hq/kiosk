@@ -544,7 +544,7 @@ the 0.3 series shipped, was removed in 0.4 and now raises NoMethodError.
 These are the two lines this demo's own `config/initializers/kiosk.rb` carries,
 verbatim (they sit inside its `Kiosk.configure do |c|` block, ~60 lines apart):
 
-<!-- derived: snippet | from: config/initializers/kiosk.rb | abridged: the issuer and payment-provider lines only, ~60 lines apart in the Kiosk.configure block -->
+<!-- derived: snippet | from: config/initializers/kiosk.rb | abridged: the issuer and payment-provider lines only, out of the Kiosk.configure block that holds them ~60 lines apart -->
 ```ruby
 # config/initializers/kiosk.rb
   c.issuer = Rails.configuration.x.kiosk.issuer

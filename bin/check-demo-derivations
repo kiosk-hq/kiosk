@@ -201,6 +201,31 @@
 # unbacked. What changed is only that the signature now names something this
 # script can resolve instead of asserting a content list nothing could.
 #
+# ── AND `abridged:` NAMES THE CUT, OR NAMES THE KEPT SET **AND ITS UNIVERSE**
+#    (K-1104) ────────────────────────────────────────────────────────────────
+#
+# This script's own error text used to tell an author the field is «`none`, or
+# a phrase naming what was LEFT OUT», and the corpus it guards did not agree
+# with it: of 21 declarations, six are cut-side, eleven are kept-side («X only,
+# out of Y», «X only; Y are out») and four are transcripts. The majority form
+# was the one the guidance did not describe, so an author following the message
+# wrote one shape and an author following the documents wrote the other.
+#
+# Nothing here was FALSE — a kept-side declaration with an explicit universe
+# determines the complement exactly as well as a cut-side one does — so the
+# ruling picks the sense by the field's PURPOSE rather than by the count. The
+# cut is what the reader cannot see; describing it is the job. The kept sense
+# is therefore admissible, but only WITH the universe, because that is the
+# thing that makes the complement derivable. The eleven kept-side declarations
+# already satisfy that and were not rewritten.
+#
+# `KEPT_SIDE_RE` / `UNIVERSE_RE` carry as much of that as a script can: a
+# declaration that has said «only» has committed to the kept sense out loud
+# and must then name what it was only-of. Its limits are in the over-claim
+# list, and they are real — a kept-side declaration that simply avoids the
+# word escapes the check entirely, which is exactly what skooti's transcript
+# did (K-1103 instance 1).
+#
 # ── AND A FRAME'S LITERAL MUST IDENTIFY THE LINE, NOT MERELY EXIST (K-1105) ──
 #
 # A frame with enough literal text of its own is matched WITHOUT reading its
@@ -292,6 +317,14 @@
 #     bin/check-demo-copies, which binds it to the generator's own source.
 #   * THE SNIPPET CHECK IS SET MEMBERSHIP, so it cannot see a reordering, a
 #     duplication, or a deletion — only a line that is in no version of the file.
+#   * THE `abridged:` UNIVERSE RULE IS A SHAPE CHECK. It fires on the word
+#     «only» and asks for an «out of …» / «… are out» clause beside it; it
+#     cannot tell whether the universe named is the right one, cannot tell
+#     whether the kept set named is what the block actually quotes, and — the
+#     one that matters most — does not fire at all on a kept-side declaration
+#     that avoids the word. Every instance K-1103 recorded was found by a human
+#     reading the document against the file, which is how every defect in this
+#     class has ever been found.
 #   * IT DOES NOT ADJUDICATE WHETHER A COMPLETENESS PROMISE IS TRUE. Membership
 #     backs «every line quoted here is a real line», never «no line is missing»,
 #     so a document may still promise more than this script can see — which is
@@ -342,6 +375,15 @@
 # published-line mutation `  OK  http_pay == 500 (charged nothing, refunded
 # twice)`), and so is the bare `  OK  http_pay == 500`, which is the one that
 # reaches a value.
+#
+# K-1104 added three plants and a negative control: the « out of …» clause cut
+# off a kept-side declaration, the «… are out» clause cut off another, and
+# hoteling's issuer/payment-provider pair restored to its pre-K-1104 spelling
+# («… only, ~60 lines apart in the Kiosk.configure block» — TRUE, and legal
+# under the ruling since it does name the universe, but not in a shape a script
+# can read, so it was reworded rather than exempted). All three red; a cut-side
+# declaration lengthened without the word «only» stays green, which is the
+# control that keeps the rule from being «the word `only` is banned».
 #
 # Stdlib only (ripper + json + RubyVM::AbstractSyntaxTree, the last only to ask a
 # parser for one rake task's line range instead of guessing it from indentation),
@@ -640,6 +682,22 @@ end
 # way: `description:` and `keys_from:` have a space after the colon, a URL has a
 # slash, and a constant is capitalised.
 ABRIDGED_TASK_RE = /(?<![\w:])[a-z][a-z0-9_]*(?::[a-z][a-z0-9_]*)+(?![\w:])/
+
+# ── `abridged:` MEANS THE CUT, AND THE KEPT SENSE NEEDS A UNIVERSE (K-1104) ──
+#
+# The field's job is to describe what the reader CANNOT see, so the CUT sense
+# is canonical. A phrase naming what was KEPT determines the complement just as
+# exactly — but only when it also names the universe the kept lines came out
+# of. «the two stripe lines only, out of the whole environment file» passes;
+# «RUN 1 and the offline-token negatives» does not, and that was skooti's
+# transcript for as long as the document existed.
+#
+# This pair of regexes is the mechanical half of that ruling and is a SHAPE
+# check, not a truth check — see the over-claim list. A declaration that says
+# «only» has committed to the kept sense out loud; it must then say what it was
+# only-of.
+KEPT_SIDE_RE = /(?<![\w-])only(?![\w-])/i
+UNIVERSE_RE  = /(?<![\w-])out\s+of(?![\w-])|(?<![\w-])(?:are|is)\s+out(?![\w-])/i
 
 # The two spellings a rake task is declared with. Kept as one predicate because
 # the `task:` field and the `abridged:` field must answer "is this task this
@@ -1137,10 +1195,24 @@ end
 
     abridged = block.decl["abridged"].to_s
     if abridged.empty?
-      errors << "#{where}: `abridged:` is required — `none`, or a phrase naming what was left out. " \
-                "Abridgement must be DECLARED in a form this check reads; every prose promise of " \
-                "the «nothing else touched» kind in these four documents was false (K-1062/K-1063)."
+      errors << "#{where}: `abridged:` is required. Say what was CUT — that is the field's job, " \
+                "because the cut is the part a reader cannot see; `none` when nothing was. A " \
+                "phrase naming what was KEPT is admissible only when it ALSO names the universe " \
+                "those lines came out of («the two stripe lines only, out of the whole " \
+                "environment file»), because that and only that lets a reader compute the " \
+                "complement (K-1104). Abridgement must be DECLARED in a form this check reads; " \
+                "every prose promise of the «nothing else touched» kind in these four documents " \
+                "was false (K-1062/K-1063)."
       next
+    end
+
+    if abridged.match?(KEPT_SIDE_RE) && !abridged.match?(UNIVERSE_RE)
+      errors << "#{where}: `abridged: #{abridged}` says what was KEPT — it says «only» — without " \
+                "naming the universe those lines were kept OUT OF, so a reader cannot compute " \
+                "what was cut, which is the field's one job. Either state the cut directly (the " \
+                "canonical sense) or add the universe: «… only, out of X», «… only; Y are out» " \
+                "(K-1104). This is a SHAPE check and knows nothing about whether the universe " \
+                "named is the right one."
     end
 
     if kind == "transcript"

@@ -80,10 +80,16 @@
 #
 #   (a) a pattern matches it whole;
 #   (b) a pattern matches it whole as a FRAME and every wildcard it captured is
-#       itself accounted for — empty, a single whitespace-free token (an id, a
-#       number, a URL, a path), or a pattern in its own right. This is what
-#       resolves `puts "  OK    #{msg}"` against the `msg` literal two hundred
-#       lines away, without the frame's `.*?` swallowing arbitrary prose;
+#       itself accounted for — empty, a number one of the producers writes as a
+#       numeric literal, a whitespace-free word one of them can print, or a
+#       pattern in its own right. This is what resolves `puts "  OK    #{msg}"`
+#       against the `msg` literal two hundred lines away, without the frame's
+#       `.*?` swallowing arbitrary prose;
+#   (b') a frame with enough IDENTIFYING literal text of its own is matched
+#       without reading its captures at all, because at that point the literal
+#       is doing the work — but even there, no capture may swallow the literal
+#       that terminates it. What counts as identifying, and what a capture is
+#       allowed to be, is the K-1105 section below.
 #   (c) it is a JSON object — the driver's summary line — and every key at every
 #       depth is a name some producer names. This branch is EXCLUSIVE: a line
 #       that parses as a JSON object is checked here and nowhere else, because
@@ -195,6 +201,50 @@
 # unbacked. What changed is only that the signature now names something this
 # script can resolve instead of asserting a content list nothing could.
 #
+# ── AND A FRAME'S LITERAL MUST IDENTIFY THE LINE, NOT MERELY EXIST (K-1105) ──
+#
+# A frame with enough literal text of its own is matched WITHOUT reading its
+# wildcards — that shortcut is what lets `Properties: #{n} found, using
+# property_id=#{id} (#{name})` account for a line carrying a hotel name this
+# script cannot possibly predict. The bar was four non-whitespace literal
+# characters, and `puts "  OK  #{label} == #{expected}"` clears it with `OK`
+# and `==`. That frame prints TWENTY of the twenty-six published
+# `  OK  … == …` verdict lines — the lines that say whether the payment, the
+# booking and the unlock worked — so for as long as this script has existed
+# those twenty were held to their punctuation and nothing else. MEASURED on a
+# published line, not on a plant: hoteling's `  OK  http_pay == 200` mutated
+# to `  OK  http_pay == 500 (charged nothing, refunded twice)` exited 0, and
+# this script printed «every line held to a literal its declared producer
+# prints» while it did. PRE-EXISTING and proven so: the same mutation was run
+# against the guard AND the documents as they stood at e8606563, extracted
+# with `git archive` into a scratch directory, and passed there too.
+#
+# THREE CHANGES, EACH THE SMALLEST ONE ITS OBSERVATION SUPPORTS.
+#
+#   * The bar counts ALPHANUMERICS. Punctuation is the scaffolding every line
+#     of a shape shares; it cannot identify WHICH line this is. The number 4
+#     is untouched, because the metric was the defect. `  OK  <W> == <W>` is
+#     an anchor of 2 under it and falls to the checked path.
+#   * A capture that is a BARE NUMBER must be a number one of the declared
+#     producers writes as a numeric literal. This is the only rule here that
+#     reaches a VALUE, and it is why `== 500` now fails where `== 200` passes.
+#   * Any other whitespace-free capture must be a word one of them can PRINT
+#     (string-literal text, symbol names, numerals — not identifiers, not
+#     comments). This is a vocabulary check, not a truth check, and it is what
+#     refuses an invented `http_paaaay` or a `confirm_status == cancelled`.
+#
+# And one repair to the unchecked path itself: a lazy `.*?` still backtracks
+# over a literal it was meant to stop at, so a frame ending in a wildcard
+# matched its own published line with prose appended after the closing
+# bracket. `no_capture_swallows_its_terminator?` refuses that.
+#
+# THE PROOF IS THE PUBLISHED CORPUS, NOT A SAMPLE. Every one of the 26 lines
+# was mutated in place, one at a time, in both a value form and a prose form
+# (50 mutations); before these changes 47 went red and 3 stayed green, after
+# them 50 go red, and the tree is restored from file copies and green at exit
+# 0 either side. What still gets through is the swap bullet in the list above,
+# and it is a smaller hole of a class this script already declared.
+#
 # ── WHAT THIS DOES **NOT** COVER. Stated plainly, because an over-claimed guard
 # is the defect this class keeps producing and K-1069's block was accepted
 # precisely for declaring its own holes. ────────────────────────────────────
@@ -213,10 +263,23 @@
 #   * IT CANNOT SEE A LINE PRINTED BY A PRODUCER NOBODY DECLARED. `from:` is a
 #     human's list; a line that came from an undeclared file simply fails, and a
 #     wrong line that happens to match a declared file's literal simply passes.
+#   * AND SINCE K-1105 THAT SAME HOLE EXISTS ONE SIZE SMALLER, AT THE TOKEN.
+#     The capture rules are VOCABULARIES, not value sets: they refuse a number
+#     or a word the producers cannot say, and accept any that they can. So a
+#     SWAP between two of the producer's own tokens passes — measured at head,
+#     all four of `  OK  http_pay == 200` → `== 201`, → `== 403`,
+#     `http_pay` → `http_availability`, and getgrocery's
+#     `slots_badzone_code == bad_request` → `== not_found` exit 0. Reaching
+#     those needs the ARGUMENTS of the call that printed the line, not the
+#     file's vocabulary, and that is dataflow this script does not do.
 #   * A LINE WITH NO LITERAL TEXT AT ALL — `puts x` — is invisible to the
 #     transcript check unless it is JSON. Its content is unconstrained.
 #   * THE JSON RULE CHECKS KEYS, NEVER VALUES. `"http_pay":200` and
-#     `"http_pay":500` are equally acceptable here.
+#     `"http_pay":500` are equally acceptable here. Note the asymmetry K-1105
+#     leaves behind: the plain assertion line `  OK  http_pay == 500` now
+#     FAILS, while the same claim inside the JSON summary line still passes.
+#     Values there are unconstrained because a summary line's values are the
+#     run's own — ids, timestamps, amounts — and nothing static bounds them.
 #   * `derived: none` IS AN UNCHECKED ESCAPE HATCH. It demands a `why:` and
 #     nothing more, exactly as `:per_demo` does in bin/check-demo-copies. K-1099
 #     took three of its four users away — the `rails g kiosk:install` fence,
@@ -264,6 +327,21 @@
 # cited task's own output pasted back into it. And one PROOF-OF-FIRE rather than
 # a plant: restoring either document's pre-K-1101 declaration verbatim reddens
 # this script.
+#
+# K-1105 replaced the plant with the sharper instrument the class had been
+# missing: a MUTATION of a line already published. All 26 `  OK  … == …`
+# verdict lines in the corpus (getgrocery 11, hoteling 9, skooti 6) were
+# mutated in place one at a time, each in a value form (a number, or the
+# verdict word, swapped for one the producers never name) and a prose form
+# (« (charged nothing, refunded twice)» appended) — 50 mutations, each
+# restored from a file copy before the next. BEFORE: 47 red, 3 green — two
+# verdict-word swaps and one appended-prose line. AFTER: 50 red, with the
+# tree green at exit 0 either side of the run. The three plants the ledger
+# row was filed with are red too (`  OK  http_register == 418 teapot`,
+# `  OK  totally_made_up_verb == 999 utterly invented prose`, and the
+# published-line mutation `  OK  http_pay == 500 (charged nothing, refunded
+# twice)`), and so is the bare `  OK  http_pay == 500`, which is the one that
+# reaches a value.
 #
 # Stdlib only (ripper + json + RubyVM::AbstractSyntaxTree, the last only to ask a
 # parser for one rake task's line range instead of guessing it from indentation),
@@ -493,6 +571,68 @@ def key_names(src)
   names
 end
 
+# ── WHAT A WILDCARD IS ALLOWED TO HAVE CAPTURED (K-1105) ─────────────────────
+#
+# A frame's wildcard stands for a value the producer computed, and until K-1105
+# any whitespace-free capture was waved through on the argument that ids, URLs
+# and ports vary per run and cannot be predicted. True of those — and false of
+# the two things the corpus's verdict lines actually interpolate, which is what
+# made `  OK  http_pay == 500` and `  OK  http_paaaay == 200` acceptable. So a
+# whitespace-free capture is now held to what its producers can SAY, in two
+# vocabularies of different strength.
+
+# A capture that is nothing but a number. `1_000` and a leading `+` are Ruby
+# spellings a transcript could carry, so they are normalized rather than
+# rejected; anything with a unit, a separator or a sign glued to other text
+# (`27c`, `08:00`, `id=27`) is not a bare number and takes the token rule
+# below instead.
+NUMERIC_TOKEN = /\A[+-]?\d[\d_]*(?:\.\d+)?\z/
+
+def normalize_number(tok)
+  tok.sub(/\A\+/, "").delete("_")
+end
+
+# THE NUMBERS A PRODUCER NAMES — its own integer and float literals, and
+# nothing else. Not the numbers inside its message strings, and this is the
+# sharp end of the rule rather than an oversight: hoteling's demo.rake prints
+# a red-team table containing the words «never a 500», so a pool built from
+# string text would have named 500 and the mutation this rule exists to catch
+# would have gone green (measured — it did, before this narrowing). A number a
+# producer can only print as part of a fixed sentence needs no place here,
+# because a line carrying it matches through that sentence's own literal.
+def numeric_literals(src)
+  nums = Set.new
+  Ripper.lex(src).each do |(_pos, type, tok, _state)|
+    nums << normalize_number(tok) if %i[on_int on_float].include?(type)
+  end
+  nums
+end
+
+# THE WORDS A PRODUCER CAN PRINT — every whitespace-free run inside a string
+# literal, plus symbol names and numerals. Weaker than the numeric pool on
+# purpose: this is a vocabulary, not a value set, and its job is only to
+# refuse text the producer has no way to emit at all (`http_paaaay`,
+# `cancelled`). Deliberately NOT identifiers and NOT comment words — `ok` is a
+# local variable in three of these rake files and admitting locals would have
+# legitimised `slots_badzone_code == ok`, measured.
+def printable_tokens(src)
+  toks = Set.new
+  symbol = false
+  Ripper.lex(src).each do |(_pos, type, tok, _state)|
+    case type
+    when :on_tstring_content then tok.split(/\s+/).each { |w| toks << w unless w.empty? }
+    when :on_int, :on_float  then toks << normalize_number(tok)
+    when :on_symbeg          then symbol = true
+    when :on_ident, :on_const
+      toks << tok if symbol
+      symbol = false
+    else
+      symbol = false if type != :on_sp
+    end
+  end
+  toks
+end
+
 # ── `abridged:`, bound to the rake DAG (K-1101) ──────────────────────────────
 
 # A colon-joined lowercase chain — `demo:setup`, `db:schema:load`. That is how a
@@ -572,8 +712,40 @@ def rake_task_body_source(rake_files, short)
   src.split("\n", -1)[(range[0] - 1)..(range[1] - 1)].join("\n")
 end
 
+# LITERAL TEXT AT ALL — the bar for a frame whose captures ARE checked, where
+# anything non-empty is enough because the `.*?` cannot then swallow prose.
 def anchor_strength(pattern)
   pattern.split(WILD, -1).sum { |part| part.gsub(/\s/, "").length }
+end
+
+# IDENTIFYING literal text — the bar for a frame matched WITHOUT reading its
+# captures, where the literal is the only thing between this check and a
+# rubber stamp. Punctuation is not identifying: it is the scaffolding every
+# line of a given shape shares, so it says nothing about WHICH line this is.
+#
+# That distinction is K-1105, and the corpus supplies the counter-example.
+# `puts "  OK  #{label} == #{expected}"` — the frame behind twenty of the
+# twenty-six published `OK … == …` verdict lines, i.e. the lines that state
+# whether the payment, the booking and the unlock worked — has four non-space
+# literal characters, `OK` and `==`. It therefore cleared a bar of 4 on the
+# UNCHECKED path and both of its wildcards went unread. Measured before the
+# fix: hoteling's own `  OK  http_pay == 200` mutated to `  OK  http_pay ==
+# 500 (charged nothing, refunded twice)` exited 0, and so did an invented
+# `  OK  totally_made_up_verb == 999 utterly invented prose`.
+#
+# Counting only alphanumerics leaves that frame the anchor it always really
+# had — `OK`, i.e. 2 — so it falls to the checked path, where the prose
+# capture must resolve to a literal and does not.
+#
+# THE THRESHOLD IS UNCHANGED AT 4 BECAUSE THE METRIC WAS THE DEFECT, NOT THE
+# NUMBER. Measured at head, every frame this corpus legitimately needs on the
+# unchecked path names something — `Ordering:` 8, `Bearer` 6, `intent-` 6,
+# `/kiosk/` 5, `Properties: … found, using property_id=… ` 33 — and the whole
+# corpus stays green with punctuation discounted. (Raising the OLD metric
+# instead was measured too: green to 9, red at 10, where `Ordering: #{list}`
+# drops out. That is a number with nothing behind it but today's corpus.)
+def anchor_identity(pattern)
+  pattern.split(WILD, -1).sum { |part| part.gsub(/[^[:alnum:]]/, "").length }
 end
 
 def pattern_regex(pattern, capture:)
@@ -599,9 +771,22 @@ class Patterns
     # stamp. A frame whose wildcards ARE checked can be as thin as `"  OK  "` —
     # the capture has to resolve to a literal, so the `.*?` cannot swallow
     # arbitrary prose. That distinction is the whole reason there are two lists.
-    @loose = framed.select { |p| anchor_strength(p) >= 4 }.map { |p| pattern_regex(p, capture: false) }
+    #
+    # The two lists therefore measure the anchor DIFFERENTLY, which is K-1105:
+    # the unchecked list wants identifying text and punctuation is not it, while
+    # the checked list only needs the frame to be a frame at all. The unchecked
+    # list also keeps its literal SEGMENTS, so that a match can be held to the
+    # one rule that survives not reading the captures — see
+    # `no_capture_swallows_its_terminator?`.
+    @loose = framed.select { |p| anchor_identity(p) >= 4 }.map { |p| [pattern_regex(p, capture: true), p.split(WILD, -1)] }
     @tight = framed.select { |p| anchor_strength(p) >= 1 }.map { |p| pattern_regex(p, capture: true) }
     @keys  = (sources + key_sources).flat_map { |(_label, src)| key_names(src).to_a }.to_set
+    # THE TWO CAPTURE VOCABULARIES (K-1105). `key_sources` are excluded from both
+    # for the same reason their literals never join the line patterns: a handler
+    # is consulted for field NAMES only, and folding a large file's constants in
+    # would legitimise any number and any word at all.
+    @nums = sources.flat_map { |(_label, src)| numeric_literals(src).to_a }.to_set
+    @toks = sources.flat_map { |(_label, src)| printable_tokens(src).to_a }.to_set
     @memo  = {}
   end
 
@@ -616,7 +801,7 @@ class Patterns
     return @memo[key] if @memo.key?(key)
 
     @memo[key] = false # cut recursion on a cycle
-    ok = @loose.any? { |re| re.match?(line) } ||
+    ok = @loose.any? { |(re, parts)| (m = re.match(line)) && no_capture_swallows_its_terminator?(m, parts) } ||
          @tight.any? do |re|
            m = re.match(line)
            m && m.captures.all? { |c| capture_ok?(c, depth) }
@@ -624,13 +809,53 @@ class Patterns
     @memo[key] = ok
   end
 
-  # A wildcard's captured text stands on its own when it is empty or a single
-  # whitespace-free token (an id, a number, a URL, a path). Anything with a
-  # space in it is prose, and prose must come from a literal.
+  # THE ONE RULE THAT SURVIVES NOT READING THE CAPTURES: a frame's literal
+  # scaffolding must appear where the frame says it does. `.*?` is lazy, but
+  # backtracking will still make it eat a literal it was supposed to stop at
+  # when that is the only way to reach `\z` — so hoteling's
+  # `  OK  bookings.confirmation_code == the code returned (#{code})` matched
+  # its own published line with ` (charged nothing, refunded twice)` appended,
+  # the last of the fifty published-line mutations to stay green. Requiring
+  # each capture not to contain the literal that terminates it is what a reader
+  # already assumes lazy matching means, and it costs the corpus nothing.
+  def no_capture_swallows_its_terminator?(match, parts)
+    match.captures.each_with_index.none? do |cap, i|
+      lit = parts[i + 1].to_s
+      !lit.empty? && cap.to_s.include?(lit)
+    end
+  end
+
+  # A wildcard's captured text stands on its own when it is empty, or a single
+  # whitespace-free token that is not a bare number (an id, a URL, a path, a
+  # port, a code). Anything with a space in it is prose, and prose must come
+  # from a literal.
+  #
+  # A BARE NUMBER IS THE ONE TOKEN CLASS HELD TO THE PRODUCER (K-1105). Every
+  # other whitespace-free token genuinely varies per run — a UUID, a `pi_…`
+  # reference, a timestamp, a port — and pinning those is what design fact 3
+  # refuses. A number in a verdict line is not that: it IS the result, and
+  # `  OK  http_pay == 500` says the payment failed. Held to the numeric
+  # literals of the declared producers, that line fails — hoteling's five
+  # producers name 21 distinct integers and 500 is not among them — where the
+  # published `== 200` passes. This is the only rule in the transcript check
+  # that reaches a VALUE rather than a shape, and it reaches exactly as far as
+  # the producers' own numerals; the over-claim list says what that leaves.
+  #
+  # Any OTHER whitespace-free capture is held to the weaker `@toks` vocabulary
+  # — it must at least be a word one of the declared producers can print. A
+  # UUID, a `pi_…` reference or a port is not in it and would fail, which is
+  # why this rule only ever fires on a frame thin enough to reach the checked
+  # path: every frame in this corpus that interpolates a run-varying id names
+  # enough around it to be matched whole on the unchecked path instead.
   def capture_ok?(text, depth)
     t = text.strip
     return true if t.empty?
-    return true if t !~ /\s/
+
+    if t !~ /\s/
+      return @nums.include?(normalize_number(t)) if t.match?(NUMERIC_TOKEN)
+
+      return @toks.include?(t)
+    end
 
     accounts_for?(t, depth + 1)
   end

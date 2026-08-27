@@ -65,8 +65,9 @@ require "kiosk/user_identity_providers/devise"
 # The rate is tracked per agent in-process (demo only — a real provider uses a
 # shared counter / sliding window). EQUIHASH_BROWSE_PARAMS follow
 # KIOSK_POW_DIFFICULTY (app/services/pow_difficulty.rb): low (default) → n=96 k=5
-# sub-second; high → n=168 k=7 (~10s / ~1.3 GiB). hoteling ships low; the knob
-# is here for parity across the hosted apps. Unset = low.
+# sub-second; high → n=168 k=7 (~1.3 GiB per proof, and ~10s on the reference
+# numpy solver as measured on one M-series laptop core). hoteling ships low; the
+# knob is here for parity across the hosted apps. Unset = low.
 EQUIHASH_BROWSE_PARAMS = PowDifficulty.params
 HOTELING_FREE_BROWSES  = 3    # first N availability queries are free
 HOTELING_RATE_STEP     = 2    # +1 proof per this many queries beyond the free tier

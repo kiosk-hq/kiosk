@@ -71,9 +71,12 @@ require "kiosk/user_identity_providers/devise"
 # Equihash params are chosen by KIOSK_POW_DIFFICULTY (app/services/pow_difficulty.rb):
 #   low  (default) → n=96 k=5  — small, non-toy instance the reference solver
 #                    clears in well under a second; local flows + CI stay fast.
-#   high           → n=168 k=7 — the shipped default (~10s / ~1.3 GiB): a real
-#                    memory+CPU toll for the hosted deploy so a scalper feels
-#                    the anti-scalping cost first-hand. Unset = low.
+#   high           → n=168 k=7 — the shipped default: ~1.3 GiB per proof, and
+#                    ~10s on the reference numpy solver as measured on one
+#                    M-series laptop core (the GiB is a property of the params;
+#                    the seconds are that machine class). A real memory+CPU toll
+#                    for the hosted deploy so a scalper feels the anti-scalping
+#                    cost first-hand. Unset = low.
 # Both the :query toll (KIOSK_POW_DEMO) and the anti-scalping reputation gate
 # (KIOSK_POW_REPUTATION_DEMO) inherit this level.
 #

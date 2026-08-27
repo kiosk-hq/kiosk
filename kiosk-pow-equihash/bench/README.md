@@ -27,7 +27,8 @@ python3 bench/bench.py --grid 168,7 --samples 5
 | 192 | 7 | 24 | 1/1 | 154.8 | 154.8 | 5377 | prior default — far over budget |
 
 **Chosen: n=168, k=7** — the largest params fully inside the ≤30 s / 1–2 GiB
-budget (p95 ~10 s, ~1.3 GiB). 176/7 keeps the time but breaches the 2 GiB memory
+budget (p95 ~10 s on the Apple M-series laptop the grid above names, ~1.3 GiB).
+176/7 keeps the time but breaches the 2 GiB memory
 ceiling; 192/7 (the old default) is ~155 s and ~5.4 GiB — unusable on a laptop.
 
 ## Caveats (be honest about what this is)

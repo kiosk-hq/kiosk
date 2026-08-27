@@ -52,7 +52,9 @@ provider's own machine pays on every request.
 
 Default: **n=168, k=7** — benchmark-chosen (see [bench/](bench/README.md)):
 the largest params whose reference numpy solve stays under a ~30 s / 1–2 GiB
-consumer-laptop budget (p95 ~10 s, ~1.3 GiB peak). Cost is driven by
+consumer-laptop budget (p95 ~10 s on one M-series laptop core — the only
+hardware the seconds have ever been measured on; the ~1.3 GiB peak is a
+property of (n, k), not of the host). Cost is driven by
 `n_div = n/(k+1)`.
 
 | Param | **n=168, k=7 (default)** | old n=192, k=7 | Zcash (n=200, k=9) | Toy (n=24, k=3) |
@@ -60,7 +62,7 @@ consumer-laptop budget (p95 ~10 s, ~1.3 GiB peak). Cost is driven by
 | n_div = n/(k+1) | **21** | 24 | 20 | 6 |
 | Nonces generated | **2^22 ≈ 4.2M** | 2^25 ≈ 33.5M | 2^21 ≈ 2M | 2^7 = 128 |
 | Nonces in proof | **2^7 = 128** | 128 | 2^9 = 512 | 2^3 = 8 |
-| Reference solve (numpy) | **~10 s, ~1.3 GiB** | ~155 s, ~5.4 GiB | — | instant |
+| Reference solve (numpy, one M-series laptop core) | **~10 s, ~1.3 GiB** | ~155 s, ~5.4 GiB | — | instant |
 | Verify cost | **128 BLAKE2b** | 128 BLAKE2b | 512 BLAKE2b | 8 BLAKE2b |
 
 192/7 (the previous default) measured ~155 s and ~5.4 GiB on the reference

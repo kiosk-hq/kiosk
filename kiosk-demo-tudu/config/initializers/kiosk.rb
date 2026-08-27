@@ -22,7 +22,8 @@ require "kiosk/user_identity_providers/devise"
 # uniformly tolled on every demo (no per-demo env flag to remember): it activates
 # on code-deploy and can't be forgotten. Params follow KIOSK_POW_DIFFICULTY
 # (app/services/pow_difficulty.rb): low (default) → n=96 k=5 sub-second; high → n=168 k=7
-# (~10s / ~1.3 GiB). Unset = low, so the collab/link/isolation flows and CI stay
+# (~1.3 GiB per proof, and ~10s on the reference numpy solver as measured on one
+# M-series laptop core). Unset = low, so the collab/link/isolation flows and CI stay
 # fast; a deployer can set high to feel the toll. The prerequisites below MUST run
 # unconditionally, else RegistrationPow.gate raises ConfigurationError at register.
 TUDU_REGISTRATION_POW_PARAMS = PowDifficulty.params

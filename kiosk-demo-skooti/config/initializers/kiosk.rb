@@ -35,8 +35,10 @@ Kiosk::Configuration.include(SkootiUnlockSigningKey)
 #
 # Params are chosen by KIOSK_POW_DIFFICULTY (app/services/pow_difficulty.rb):
 #   low  (default) → n=96 k=5  — sub-second solve; CI/local stay fast.
-#   high           → n=168 k=7 — genuinely memory+CPU-intensive (~10s / ~1.3 GiB)
-#                    for the hosted deploy, so a poker feels the toll first-hand.
+#   high           → n=168 k=7 — genuinely memory+CPU-intensive (~1.3 GiB per
+#                    proof, and ~10s on the reference numpy solver as measured
+#                    on one M-series laptop core) for the hosted deploy, so a
+#                    poker feels the toll first-hand.
 # Unset = low, so this demo's flows and CI register at the fast params.
 require "kiosk/pow/equihash"
 require "kiosk/reputation"

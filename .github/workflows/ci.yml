@@ -1145,6 +1145,14 @@ jobs:
         working-directory: kiosk-demo-prove
         run: bundle install
 
+      # tudu was added to this job by K-1085 without its own bundle install, so
+      # a fresh runner booted it against uninstalled gems (GemNotFound) — the
+      # K-681 local-green-≠-runner-green shape, one step below the stylish/prove
+      # pair. This step is that missing install (K-1156).
+      - name: Install tudu dependencies
+        working-directory: kiosk-demo-tudu
+        run: bundle install
+
       # structure.sql is PG17-format (SET transaction_timeout, a v17 param), so
       # db:schema:load needs a psql >= 17 — same reason the demos/e2e jobs pin it.
       # Retries for the reason written out on the demos job's copy (K-795).

@@ -139,9 +139,14 @@
 # BACKED by something mechanical rather than trusted. Three rules, and note what
 # they deliberately are NOT:
 #
-#   * A promise in the paragraph immediately before or after a block declared
-#     `derived: none` is an ERROR. That block is checked by nothing, so dressing
-#     it as verbatim is the one case where the prose is the ONLY guarantee.
+#   * A promise in the window beside a block declared `derived: none` OR
+#     `derived: transcript` is an ERROR. `none` is checked by nothing, so
+#     dressing it as verbatim is the case where the prose is the ONLY guarantee.
+#     `transcript` is checked by a SUBSET test, which is the same hole in a
+#     different shape: membership backs «every line here is a line the task
+#     prints» and cannot reach «first line to last», «the whole output» or «all
+#     three runs». See the K-1106 section for why the second half of that
+#     sentence was missing for as long as the rule existed.
 #   * `abridged: none` and a `transform:`, or `abridged: none` and a marked
 #     elision inside the block, are a CONTRADICTION between the declaration and
 #     the block, and fail.
@@ -155,6 +160,45 @@
 #   `strip_descriptions` below makes it checkable. Banning the sentence would
 #   delete the honest form along with the dishonest one; what this script does
 #   instead is refuse to let the sentence stand alone.
+#
+# ── AND THE PROMISE RULE NOW COVERS THE CLASS IT WAS WRITTEN FOR (K-1106) ────
+#
+# The rule above shipped INSIDE the `if kind == "none"` branch, and K-1099 then
+# took that branch down to a single user — hoteling's illustrative one-line
+# swap. So a rule written because «verbatim … nothing else touched» had been
+# FALSE eight times over fired beside ONE block of twenty-four, and beside none
+# of the four that quote a recorded run — which is exactly where those eight
+# falsehoods had been. MEASURED at head before this change, by re-implementing
+# the window and the regexes over the four documents: the transcript intros
+# carried ELEVEN completeness promises, NINE matched a `PROMISES` regex, and
+# only SEVEN fell inside the window.
+#
+# TWO INDEPENDENT HOLES, BOTH CLOSED HERE.
+#
+#   1. THE CLASS. `transcript` now fails on a promise exactly as `none` does.
+#      A transcript check is set membership and no amount of membership backs a
+#      completeness claim — K-1062's hoteling block was missing an ENTIRE RUN
+#      the task prints, and every line it did quote was genuine, so the check
+#      that exists would have passed it. The four intros were rewritten into the
+#      K-1062 repair wave's qualified shape: each says what the mechanism does
+#      hold (every line is one a declared producer prints, and a line they
+#      cannot print reddens the tree) and hands completeness back to `abridged:`,
+#      naming it there as a human's signature.
+#   2. THE WINDOW. getgrocery scored ZERO promise hits, and not because it made
+#      no promise: «unedited, first line to last» sat TWO paragraphs above its
+#      declaration, behind «**This recording is the secret-free path**», and
+#      `paragraph_before` takes one. `promise_window_before` takes the whole
+#      INTRO instead — see its own comment for why widening is safe for THIS
+#      rule and would not be for a rule that reads the prose as a description.
+#
+# WHAT WAS NOT DONE, AND WHY. The rule was NOT extended to `snippet`, where the
+# other thirteen promise hits live. Those are the weaker case and sweeping them
+# in unread would be the over-claim this section is about: a snippet's «every
+# line is that file's with its `description` cut out and nothing else altered»
+# is largely BACKED, because membership gives the first clause and the declared
+# `strip_descriptions` transform makes the second checkable. That qualified form
+# is what the repair wave deliberately wrote, and banning the phrase would
+# delete the honest sentence along with the dishonest one.
 #
 # ── AND `abridged:` IS BOUND TO THE RAKE DAG AS FAR AS IT GOES (K-1101) ──────
 #
@@ -328,7 +372,17 @@
 #   * IT DOES NOT ADJUDICATE WHETHER A COMPLETENESS PROMISE IS TRUE. Membership
 #     backs «every line quoted here is a real line», never «no line is missing»,
 #     so a document may still promise more than this script can see — which is
-#     why `abridged:` is a DECLARATION a human signs, not a proof.
+#     why `abridged:` is a DECLARATION a human signs, not a proof. Since K-1106
+#     it does REFUSE the promise beside the two block classes nothing can back
+#     one for (`none`, `transcript`), and that is a phrase ban, not a truth
+#     test: it says such a sentence may not be published there, never that the
+#     sentence was false.
+#   * AND `PROMISES` IS A VOCABULARY, NOT A CLASSIFIER. Eight regexes, every one
+#     of them added because a document in this corpus said that exact thing —
+#     two of them (K-1106) only after a re-measurement found «all three runs»,
+#     the strongest completeness claim in these four files, matching nothing.
+#     A promise phrased in words nobody has used yet passes, and the rule is
+#     therefore a ratchet on known shapes rather than a bound on the class.
 #   * IT SAYS NOTHING ELSE ABOUT THE PROSE. Whether the paragraphs around a block
 #     are true is K-1069's question (cross-demo agreement, in check-demo-copies)
 #     and claims.md's.
@@ -375,6 +429,19 @@
 # published-line mutation `  OK  http_pay == 500 (charged nothing, refunded
 # twice)`), and so is the bare `  OK  http_pay == 500`, which is the one that
 # reaches a value.
+#
+# K-1106 added four plants and a standing control, all restored from file
+# copies, tree green at exit 0 either side. Each of the three re-planted
+# promises is a sentence this corpus PUBLISHED until this wave: getgrocery's
+# «unedited, first line to last» put back THREE paragraphs above its declaration
+# (red — which is the window fix proving itself, since the old window saw
+# nothing two paragraphs out); hoteling's «all three runs» (red, quoting the
+# phrase, which matched no regex before this wave); atablefor's «none of its
+# chatter is in here» (red, same). Fourth, the rule the hoist could have broken:
+# a `verbatim` beside hoteling's `derived: none` block still fails with the
+# `derived: none` wording. The standing control is the corpus itself — FIVE
+# snippet blocks carry «nothing else altered» and the tree is green, because the
+# rule deliberately does not sweep the class whose promise is largely backed.
 #
 # K-1104 added three plants and a negative control: the « out of …» clause cut
 # off a kept-side declaration, the «… are out» clause cut off another, and
@@ -425,6 +492,15 @@ PROMISES = [
   /\bverbatim\b/i,
   /first\s+line\s+to\s+last/i,
   /\bthe\s+\*?\*?whole\*?\*?\s+output\b/i,
+  # The two the corpus taught us late (K-1106). «all three runs» is the
+  # strongest completeness claim in these four documents and matched nothing;
+  # «none of its chatter is in here» is the same claim wearing its negative
+  # face, an assertion about what the block does NOT contain, which membership
+  # cannot reach either. Both were added because a document said them, which is
+  # the honest account of how the six above got here too — this list is a
+  # VOCABULARY, not a classifier, and the over-claim list says so.
+  /\ball\s+(?:\w+\s+)?runs\b/i,
+  /\bnone\s+of\s+\S+[^.]{0,60}?\bis\s+in\s+here\b/i,
 ].freeze
 
 TRANSFORMS = %w[strip_descriptions dedent].freeze
@@ -1024,7 +1100,8 @@ def parse_document(path)
     blocks << Block.new(
       fence_line: i + 1, info: info, body: lines[(i + 1)...j],
       decl: decl, decl_line: decl_line && decl_line + 1,
-      neighbourhood: [paragraph_before(lines, decl_line || i), paragraph_after(lines, j)].join("\n"),
+      neighbourhood: [promise_window_before(lines, decl_line || i),
+                      paragraph_after(lines, j)].join("\n"),
     )
     i = j + 1
   end
@@ -1049,6 +1126,35 @@ def paragraph_after(lines, idx)
   start = k
   k += 1 while k < lines.length && !lines[k].strip.empty? && !lines[k].start_with?("```")
   lines[start...k].to_a.join("\n")
+end
+
+# ── What «beside» means for the PROMISE rule, and why it is WIDER (K-1106) ───
+#
+# `paragraph_before` above takes ONE paragraph, and getgrocery's «unedited,
+# first line to last» sits TWO above its declaration, behind «**This recording
+# is the secret-free path**». So the promise rule scored ZERO on the document
+# whose promise is as unbacked as any other in the corpus.
+#
+# The promise window is therefore the INTRO: every line from the nearest
+# preceding heading, horizontal rule or fenced block down to the declaration.
+# That is deliberately the wide window `paragraph_before`'s own comment argues
+# against — and the argument does not reach this rule. It is about a check that
+# READS the prose as a description of THIS block, where attributing one block's
+# sentence to another makes the check answer about the wrong thing. This rule
+# reads nothing: it asks only whether an unbackable sentence stands near a block
+# nothing can back it for. The worst a mis-attribution can do here is demand
+# that a sentence be qualified, and that demand is right wherever the sentence
+# sits. MEASURED at head: the wider window adds `verbatim` beside all three
+# `derived: generator` blocks, reaching back over the Gemfile snippet's
+# commentary; the rule does not fire on `generator`, so it costs nothing today.
+def promise_window_boundary?(line)
+  line.start_with?("```") || line.start_with?("#") || line.strip.match?(/\A-{3,}\z/)
+end
+
+def promise_window_before(lines, idx)
+  k = idx - 1
+  k -= 1 while k >= 0 && !promise_window_boundary?(lines[k])
+  lines[(k + 1)...idx].to_a.join("\n")
 end
 
 # ── Checks ───────────────────────────────────────────────────────────────────
@@ -1096,17 +1202,31 @@ end
       errors << "#{where}: unknown key(s) #{unknown.join(', ')} in the derivation declaration."
     end
 
+    # The promise rule covers BOTH block classes whose checker cannot back a
+    # completeness claim: `none`, checked by nothing, and `transcript`, checked
+    # by a SUBSET test. It used to sit inside the `none` branch below — i.e.
+    # beside ONE block of twenty-four and beside none of the four that quote a
+    # recorded run, which is where every falsehood K-1062 and K-1063 found had
+    # been. See the K-1106 header section.
+    if %w[none transcript].include?(kind) && (hit = PROMISES.find { |re| block.neighbourhood =~ re })
+      why_unbacked = if kind == "none"
+                       "the block is declared `derived: none`, so nothing checks it at all"
+                     else
+                       "a transcript is checked by MEMBERSHIP, which backs «every line here is a " \
+                       "line the task prints» and can never back a completeness claim — K-1062's " \
+                       "hoteling block was missing an ENTIRE RUN the task prints and every line " \
+                       "it did quote was genuine"
+                     end
+      errors << "#{where}: the prose beside this block promises completeness " \
+                "(#{block.neighbourhood[hit].inspect}) while #{why_unbacked}. Say what the " \
+                "mechanism DOES hold and leave completeness to the `abridged:` field, which is a " \
+                "human's signature and says so — or drop the sentence (K-1106)."
+    end
+
     if kind == "none"
       if block.decl["why"].to_s.empty?
         errors << "#{where}: `derived: none` needs a `why:` — an undeclared exemption is the one " \
                   "thing this check cannot see through, so it must at least be argued for."
-      end
-      if (hit = PROMISES.find { |re| block.neighbourhood =~ re })
-        errors << "#{where}: the prose beside this block promises completeness " \
-                  "(#{block.neighbourhood[hit].inspect}) while the block is declared " \
-                  "`derived: none`, so nothing checks it. A promise no mechanism backs is the " \
-                  "shape K-1062 and K-1063 found false eight times over — either derive the " \
-                  "block from a producer or drop the promise."
       end
       counts[:none] += 1
       puts "  none       #{where}  (#{block.decl['why']})" if listing

@@ -35,8 +35,12 @@ pair, and the development boot prints `[kiosk] WARNING: generated an EPHEMERAL
 signing key`. How many lines that comes to is a property of the machine — the
 `NOTICE` appears only where the grant is already in place — which is why the
 declaration below names the TASK rather than listing its output: run
-`rake demo:setup` to see yours. From there down it is unedited, all three runs,
-first line to last. The identifiers are that run's; the dates are
+`rake demo:setup` to see yours. From there down, `bin/check-demo-derivations`
+holds every line in the block to a string literal one of the declared producers
+prints. That is a subset test: it cannot show that no line is MISSING, so the
+three `══ RUN …` banners below are the block's own evidence of the ground it
+covers, and everything past that is the `abridged:` field's claim and a human's
+signature. The identifiers are that run's; the dates are
 `Date.today + 30` / `+ 33`, so they move with the day it is run.
 
 <!-- derived: transcript | task: bundle exec rake demo | from: lib/tasks/demo.rake, script/hoteling_flow.rb, script/equihash_register.rb, script/pay_window.rb, config/environments/development.rb | keys_from: app/controllers/kiosk/hotels_controller.rb, app/controllers/kiosk/reservations_controller.rb | abridged: everything demo:setup prints, above the first line quoted -->

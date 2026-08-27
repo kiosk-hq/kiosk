@@ -26,11 +26,16 @@ The reason incumbents stay at discovery is economic, not technical. A reservatio
 
 ## With Kiosk — atablefor (`rake demo:book` output)
 
-atablefor is a Rails 8.1 app that speaks Kiosk. Below is the **whole** output of
-`bundle exec rake demo:book` — recorded **2026-08-26** on a database prepared by
-`rake demo:setup` (a separate task, so none of its chatter is in here). Nothing
-is removed and nothing is added: this is the task's own stdout, first line to
-last. The identifiers and the seating dates are that run's — the seatings roll
+atablefor is a Rails 8.1 app that speaks Kiosk. Below is recorded stdout from
+`bundle exec rake demo:book` — **2026-08-26**, on a database prepared by
+`rake demo:setup`, which `demo:book` does not declare as a prerequisite and so
+never runs; that is why the declaration below reads `abridged: none`. What holds
+the block is `bin/check-demo-derivations`: every line in it must be a line one
+of the declared producers prints, and a line they cannot print reddens the tree.
+That is a membership test, and membership runs one way only — it cannot show
+that no line is MISSING. So «the task's own stdout, start to finish» is the
+`abridged:` field's claim and a human's signature, not something this repository
+proves. The identifiers and the seating dates are that run's — the seatings roll
 forward daily, so they move with the day it is run — and the `/etc/hosts` line
 appears because this machine has no entry for the demo host, which is the
 branch the task takes on any checkout that has not added one.

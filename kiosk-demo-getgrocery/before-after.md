@@ -46,8 +46,11 @@ set` line. How many lines that comes to is a property of the machine and of the
 environment — the `NOTICE` appears only where the grant is already in place, and
 the Stripe line only where no key is set — which is why the declaration below
 names the TASK rather than listing its output: run `rake demo:setup` to see
-yours. From there down it is
-unedited, first line to last.
+yours. From there down, `bin/check-demo-derivations` holds every line in the
+block to a string literal one of the declared producers prints. That is a subset
+test: it cannot show that no line is MISSING, so «the recording runs on to the
+task's last line» is the `abridged:` field's claim and a human's signature,
+not this script's.
 
 **This recording is the secret-free path**, the one CI runs: with no
 `STRIPE_SECRET_KEY` in the environment the task starts a local `stripe-mock`,

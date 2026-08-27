@@ -20,10 +20,13 @@ This mirrors the discovery-only ceiling documented for in-chat commerce connecto
 
 ## With Kiosk — skooti (`rake demo:rideflow` output)
 
-skooti is a Rails app that speaks Kiosk. Below is the **verbatim** RUN 1
-transcript of `rake demo:rideflow` — recorded **2026-08-26** against a booted
-demo, nothing removed and nothing added. The human said *"rent a scooter"* and
-touched nothing until the lock opened. The task runs four further beats this
+skooti is a Rails app that speaks Kiosk. Below is the RUN 1 section of a
+`rake demo:rideflow` recording — **2026-08-26**, against a booted demo.
+`bin/check-demo-derivations` holds every line in it to a string literal one of
+the declared producers prints; that is a subset test, so what was taken off the
+top and the bottom is the `abridged:` field's claim and a human's signature,
+not this script's. The human said *"rent a scooter"* and touched nothing until
+the lock opened. The task runs four further beats this
 excerpt leaves out: RUN 2 skips the payment and asks for the same unlock, which
 the server refuses `403` — that is what makes RUN 1's `200` mean something; RUN 3
 pins the two query verbs; then a structure check that no ROW LEVEL SECURITY is

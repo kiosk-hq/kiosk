@@ -88,6 +88,35 @@ module Kiosk
         )
       end
 
+      # ── Account binding: the claim ceremony's opening request ─────────────
+
+      # POST <endpoint>/oauth/device_authorization — RFC 8628 §3.1, the
+      # UNAUTHENTICATED request that opens the CLAIM half of the account-binding
+      # ceremony. It carries no Cookie and no Authorization header, so anything
+      # in it is an assertion by a stranger; that is what makes it worth
+      # attacking, and it is why {Scenarios::DeviceGrantRoleSelfSelection}
+      # exists.
+      #
+      # Form-encoded, not JSON: the OAuth half of the ceremony is the spec's one
+      # deliberate exception to the Kiosk problem document, so it cannot go
+      # through {#post_json} and the answer is an OAuth `{error,
+      # error_description}` object rather than a `code`-carrying problem
+      # document. {Kiosk::Redteam.blocked?} therefore says nothing useful about
+      # these answers — a scenario here names the status and the `error` value
+      # it demands.
+      #
+      # @param client_id  [String] identifier of the calling client
+      # @param public_key [String] PEM of the RSA key the ceremony would bind
+      # @param extra      [Hash]   additional form fields. THE ADVERSARIAL
+      #   CHANNEL: `role:` / `scope:` are what K-072 read a client-chosen role
+      #   out of, and the engine now refuses both.
+      # @return [Response] status + parsed JSON body
+      def device_authorization(client_id:, public_key:, **extra)
+        form = { "client_id" => client_id, "public_key" => public_key }
+        extra.each { |k, v| form[k.to_s] = v }
+        post_form("/kiosk/oauth/device_authorization", form)
+      end
+
       # ── KYC ───────────────────────────────────────────────────────────────
 
       # Submit a KYC attestation JWS for the given principal.
@@ -356,6 +385,33 @@ module Kiosk
         parsed = JSON.parse(out)
         raise "equihash solve.py error: #{parsed["error"]}" if parsed.key?("error")
         { "indices" => parsed.fetch("indices"), "header_nonce" => parsed.fetch("header_nonce") }
+      end
+
+      # POST a FORM-ENCODED body to the given path; returns a {Response}.
+      #
+      # Only the OAuth endpoints of the binding ceremony speak this content
+      # type — every Kiosk verb is JSON. Kept beside {#post_json} rather than
+      # folded into it because the two differ in what a caller may conclude
+      # from the answer, not merely in how the body is serialised: this one
+      # answers RFC 6749 `{error, error_description}`, which carries no Kiosk
+      # `code` for {Kiosk::Redteam.blocked?} to branch on.
+      #
+      # @param path [String] URL path (including leading slash)
+      # @param form [Hash{String => String}] form fields
+      # @return [Response]
+      def post_form(path, form)
+        uri = URI("#{@base_url}#{path}")
+        req = Net::HTTP::Post.new(uri)
+        req.set_form_data(form)
+        res = Net::HTTP.new(uri.host, uri.port).request(req)
+
+        parsed = begin
+          JSON.parse(res.body)
+        rescue JSON::ParserError
+          {}
+        end
+
+        Response.new(status: res.code.to_i, body: parsed)
       end
 
       # POST JSON to the given path; returns a {Response}.

@@ -18,6 +18,22 @@ module Kiosk
     #   the server's 402 challenges — this integer does not encode leading-zero
     #   bits). 0 means no PoW is required; {RegistrationWithoutPow} is skipped.
     #
+    # @!attribute declared_roles [Array<String>]
+    #   The roles this origin DECLARES (`Kiosk.configuration.roles`), as
+    #   strings. Read by {Scenarios::DeviceGrantRoleSelfSelection}, which must
+    #   name a role the origin actually has: an UNDECLARED role was refused by
+    #   the vulnerable code too, so a probe that only injects `role: "master"`
+    #   cannot fail and prints BLOCKED against a live escalation. That is not
+    #   hypothetical — it is exactly what {PrivilegeSelfSelection} did while
+    #   K-072 was open.
+    #
+    #   Empty is legal and costs nothing: that scenario ALSO derives a declared
+    #   role from the wire (the `role` claim of a token this origin itself
+    #   mints at registration), so the probe set is never vacuous even when this
+    #   list is stale or absent. Supply it anyway when the origin declares more
+    #   than one role — the registration role is only ever ONE of them, and the
+    #   escalation K-072 was about is precisely a SECOND, more privileged one.
+    #
     # @!attribute requires_kyc [Boolean]
     #   Whether the provider's gated action requires a prior KYC attestation.
     #   When false, all KYC scenarios ({MissingKyc}, {ExpiredKyc}, {ForgedKyc})
@@ -91,6 +107,7 @@ module Kiosk
     #   nil when the provider does not use KYC.
     class Profile
       attr_reader :pow_difficulty,
+                  :declared_roles,
                   :requires_kyc,
                   :per_user_query,
                   :row_id_key,
@@ -107,6 +124,7 @@ module Kiosk
 
       def initialize(
         pow_difficulty: 0,
+        declared_roles: [],
         requires_kyc: false,
         per_user_query: nil,
         row_id_key: "id",
@@ -122,6 +140,7 @@ module Kiosk
         kyc_forged: nil
       )
         @pow_difficulty = pow_difficulty
+        @declared_roles = Array(declared_roles).map(&:to_s).reject(&:empty?).uniq
         @requires_kyc   = requires_kyc
         @per_user_query = per_user_query
         @row_id_key     = row_id_key

@@ -261,7 +261,7 @@ kiosk-server/spec/kiosk/server/errors_spec.rb	carries the method the verb DOES a
 kiosk-server/spec/kiosk/server/errors_spec.rb	carries the vocabulary code TWICE: as the type URI and as the branch point
 kiosk-server/spec/kiosk/server/errors_spec.rb	drops a nil hint and never emits `instance`
 kiosk-server/spec/kiosk/server/errors_spec.rb	each agrees with the CODES table on both code and status
-kiosk-server/spec/kiosk/server/errors_spec.rb	is exactly the spec's closed error.code table
+kiosk-server/spec/kiosk/server/errors_spec.rb	is exactly the spec's closed `code` table
 kiosk-server/spec/kiosk/server/errors_spec.rb	maps every status to a vocabulary code
 kiosk-server/spec/kiosk/server/errors_spec.rb	mints one problem type URI per code and nothing else
 kiosk-server/spec/kiosk/server/errors_spec.rb	names every code in TITLES — a problem document without a title is not one

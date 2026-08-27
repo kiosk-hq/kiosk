@@ -2,7 +2,7 @@
 
 RSpec.describe Kiosk::Server::Errors do
   describe "CODES — the wire vocabulary" do
-    it "is exactly the spec's closed error.code table" do
+    it "is exactly the spec's closed `code` table" do
       expect(described_class::CODES).to eq(
         "bad_request"            => 400,
         "unauthenticated"        => 401,

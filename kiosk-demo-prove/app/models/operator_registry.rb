@@ -2,9 +2,9 @@
 
 require "uri"
 
-# OperatorRegistry — the broker's intake trust model (design §4.7). The broker only
+# OperatorRegistry — the broker's intake trust model. The broker only
 # serves operators it has been configured with. This is what refuses arbitrary
-# callers and arbitrary callback_urls (the SSRF / open-relay guard §4.7): the
+# callers and arbitrary callback_urls (the SSRF / open-relay guard): the
 # broker NEVER POSTs a callback to a URL a caller supplied free-form — it POSTs
 # only to a pre-registered operator's callback host, and only when the caller
 # presents that operator's shared bearer secret.
@@ -34,7 +34,8 @@ require "uri"
 #                   at intake matches).
 #
 # Production shape: OAuth client-credentials / mTLS instead of a shared secret,
-# and a registration handshake instead of a static table (design §8.1 / Q1).
+# and a registration handshake instead of a static table. The static table is a
+# DEMO simplification — the smallest thing that still shows the trust model.
 module OperatorRegistry
   module_function
 
@@ -49,7 +50,7 @@ module OperatorRegistry
   end
 
   # True when the given callback_url targets the operator's pre-registered
-  # callback host (the SSRF / open-relay guard — §4.7). A caller cannot make the
+  # callback host (the SSRF / open-relay guard). A caller cannot make the
   # broker POST to an arbitrary host.
   def callback_allowed?(operator, callback_url)
     return false if callback_url.to_s.empty?

@@ -847,7 +847,7 @@ mc_verbswap_beat = motorcycle_via_start_rental.call
 
 # ── skooti-local beat: issued-jws cannot be stolen across agents ──────
 #
-# The broker (design §4.5) signs a claim for the request's OWN subject. This beat
+# The broker signs a claim for the request's OWN subject. This beat
 # proves an ISSUED, VALID broker jws cannot be lifted onto a DIFFERENT agent:
 # victim B opens request_kyc (skooti calls the broker), the human approves B's
 # request on the BROKER page, the broker POSTs the signed claim to skooti's
@@ -858,7 +858,7 @@ mc_verbswap_beat = motorcycle_via_start_rental.call
 # mismatch) → A's attributes are never granted → A's rent_motorcycle stays 403
 # kyc_required. A bug that dropped the sub check would let any agent replay
 # someone else's licence — a real BREACH. (Broker-minted now; the sub-binding
-# defense is identical — design §5.5.)
+# defense is identical.)
 kyc_jws_theft = lambda do
   client = Kiosk::Redteam::Client.new(base_url: BASE_URL)
 
@@ -925,7 +925,7 @@ theft_beat = kyc_jws_theft.call
 
 # ── broker beat: a claim minted for a DIFFERENT operator is rejected ──────────
 #
-# Cross-operator replay defense (design §4.4 / §5.5), enforced at the DEMO LAYER
+# Cross-operator replay defense, enforced at the DEMO LAYER
 # in skooti's callback (the engine attestation/wire is unchanged). A claim the
 # broker minted addressed to operator "other-operator" (aud/operator) must be
 # rejected when POSTed to skooti's /kyc/callback — skooti only accepts claims
@@ -996,7 +996,7 @@ xop_beat = cross_operator_replay.call
 
 # ── broker beat: an unsigned / wrong-key callback is rejected ─────────────────
 #
-# Callback authenticity (design §4.8 / §5.5): skooti's /kyc/callback verifies the
+# Callback authenticity: skooti's /kyc/callback verifies the
 # jws against the trusted ProveKey. A callback whose jws is signed by the WRONG
 # key (trusted issuer, bad signature) — or is missing entirely — must be
 # rejected, so a forged callback cannot stamp a claim. We open a real skooti

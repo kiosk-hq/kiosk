@@ -5,7 +5,7 @@
 # (b) the boolean attribute name the minted claim carries (the name the
 # operator's gate reads, e.g. rent_motorcycle checks age_over_18 + licence_a).
 #
-# The broker is a SHARED issuer (design §1.1): skooti asks for
+# The broker is a SHARED issuer: skooti asks for
 # ["age_over_18","licence_category:A"]; a future alcohol demo would ask for
 # ["age_over_18"] only; a betting demo ["age_over_21"]. Each operator asks for
 # exactly the claims it needs; the catalog is the union the broker can answer.

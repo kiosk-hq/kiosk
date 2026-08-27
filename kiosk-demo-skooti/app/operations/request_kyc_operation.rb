@@ -1,7 +1,7 @@
 # frozen_string_literal: true
 
 # request_kyc — start a verification at the KYC broker that an EXTERNAL agent
-# can COMPLETE without any pre-shared issuer key (K-440/K-443, design §5.1).
+# can COMPLETE without any pre-shared issuer key (K-440/K-443).
 #
 # skooti hosts no issuer: it calls the shared broker's intake server-to-server
 # with its own callback_url, the claims it needs and the agent's user_id as the

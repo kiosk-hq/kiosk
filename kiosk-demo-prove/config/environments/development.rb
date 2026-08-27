@@ -43,7 +43,7 @@ Rails.application.configure do
   config.x.prove.getgrocery_secret = ENV["KIOSK_PROVE_GETGROCERY_SECRET"]
 
   # The ONLY host the broker will POST each operator's callback to (the
-  # SSRF / open-relay guard, design §4.7). Non-secret: the harnesses pin the
+  # SSRF / open-relay guard). Non-secret: the harnesses pin the
   # operator's real host; loopback serves any hand-driven local intake.
   config.x.prove.skooti_callback_host     = ENV.fetch("KIOSK_PROVE_SKOOTI_CALLBACK_HOST", "127.0.0.1")
   config.x.prove.getgrocery_callback_host = ENV.fetch("KIOSK_PROVE_GETGROCERY_CALLBACK_HOST", "127.0.0.1")

@@ -7,7 +7,8 @@ require "jwt"
 # TRUSTS once (skooti sets c.kyc_public_key = ProveKey.public_key). The broker
 # signs every anonymized claim with it, and the operator's
 # Kiosk::Server::KycVerifier accepts it because this broker is its configured
-# c.kyc_issuer. Broker compromise = trust root (design §4 residual risk).
+# c.kyc_issuer. Broker compromise = trust root — the residual risk a shared
+# issuer carries by construction.
 #
 # The key is configured per environment (K-672/K-673, read in
 # config/environments/*.rb into Rails.configuration.x.prove.key_pem):

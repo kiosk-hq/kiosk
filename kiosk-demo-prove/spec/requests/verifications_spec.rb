@@ -4,7 +4,7 @@ require "spec_helper"
 require "jwt"
 require "openssl"
 
-# Exercises the broker's security model (design §4) end to end over HTTP:
+# Exercises the broker's security model end to end over HTTP:
 # intake auth + allow-list, unguessable capability, single-use, TTL, the signed
 # anonymized per-request/operator/subject claim, and the SSRF/open-relay guard.
 RSpec.describe "KYC broker (kiosk-demo-prove)", type: :request do
@@ -192,7 +192,7 @@ RSpec.describe "KYC broker (kiosk-demo-prove)", type: :request do
     end
 
     # The catalog is the UNION the shared issuer can answer, not the set the
-    # demos happen to use (design §1.1). `age_over_21` is the entry no shipped
+    # demos happen to use. `age_over_21` is the entry no shipped
     # operator requests; asking for it must work exactly like the ones that do,
     # question page included — that is what makes it an extension point rather
     # than dead surface (K-599).

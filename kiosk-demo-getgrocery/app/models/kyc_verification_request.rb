@@ -1,7 +1,7 @@
 # frozen_string_literal: true
 
-# A pending age-verification getgrocery started at the KYC broker (design
-# §5). request_kyc calls the broker's intake for the SINGLE claim getgrocery
+# A pending age-verification getgrocery started at the KYC broker.
+# request_kyc calls the broker's intake for the SINGLE claim getgrocery
 # needs — age_over_18 — and stores the BROKER's request_id here as
 # `request_token`, plus the broker's per-request `broker_nonce`. The agent
 # relays the broker's verification_url to a human; on approve the broker POSTs

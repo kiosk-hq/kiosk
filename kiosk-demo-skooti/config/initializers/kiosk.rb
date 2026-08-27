@@ -219,7 +219,7 @@ Kiosk.configure do |c|
 
   # KYC attestation verifier — trusts the KYC broker (the shared
   # anonymizing KYC issuer). skooti no longer hosts its own issuer: it configures
-  # the broker as its kyc_issuer + kyc_public_key ONCE (design §5.3) and asks the
+  # the broker as its kyc_issuer + kyc_public_key ONCE and asks the
   # broker for exactly the claims it needs (age_over_18 + licence_a). The issuer
   # identity comes from ProveTrust; the broker PUBLIC KEY comes from
   # Rails.configuration.x.kiosk (config/environments — K-650): the harness/rake

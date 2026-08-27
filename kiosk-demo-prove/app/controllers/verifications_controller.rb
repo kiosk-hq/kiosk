@@ -2,32 +2,32 @@
 
 require "securerandom"
 
-# The broker's three legs (design §4):
+# The broker's three legs:
 #
 #   POST /verifications  — INTAKE (operator → broker, server-to-server). The
 #     operator authenticates with its shared bearer secret, names the requested
 #     claims, its callback_url, and the subject_handle the claim must bind to.
 #     The broker mints an unguessable 256-bit request_id + nonce, stores a
 #     pending prove_requests row, and returns a verification_url. A confirmer
-#     CANNOT reach this — only an operator initiates (§4.1).
+#     CANNOT reach this — only an operator initiates.
 #
 #   GET  /verify?request=<id>  — the human verification page. The request_id in
 #     the URL is the ONLY credential (no sign-in — demo stub). Shows the yes/no
-#     questions for the requested claims (§4.2).
+#     questions for the requested claims.
 #
 #   POST /verify  — the human's decision. On approve, the broker mints a SIGNED,
 #     ANONYMIZED claim bound to (subject + operator + request), flips the row to
-#     confirmed (single-use), and POSTs it to the operator's callback (§4.3/4.8).
+#     confirmed (single-use), and POSTs it to the operator's callback.
 #
 #   GET  /prove_key.pem — the ProveKey public PEM operators pin (convenience).
 #
 # CSRF is disabled: the intake is a server-to-server JSON call authenticated by
 # the bearer secret, and the verify page's credential is the unguessable request
-# token itself (a real broker would authenticate the human via a govt IdP — §7).
+# token itself (a real broker would authenticate the human via a govt IdP).
 class VerificationsController < ActionController::Base
   protect_from_forgery with: :null_session
 
-  # 15-minute TTL for a verification request (design §4.1).
+  # 15-minute TTL for a verification request.
   REQUEST_TTL = 15 * 60
 
   # ── INTAKE: operator → broker ────────────────────────────────────────────
@@ -58,7 +58,7 @@ class VerificationsController < ActionController::Base
         :bad_request,
       )
     end
-    # SSRF / open-relay guard (§4.7): the callback_url MUST target the operator's
+    # SSRF / open-relay guard: the callback_url MUST target the operator's
     # pre-registered host. The broker never POSTs to a free-form URL.
     unless OperatorRegistry.callback_allowed?(operator, callback_url)
       return render_json(
@@ -104,9 +104,9 @@ class VerificationsController < ActionController::Base
         verification_url: verification_url_for(request_id),
         status:           "pending",
         # The broker returns the per-request nonce to the operator at intake so
-        # the operator can check the eventual callback echoes it (anti-replay,
-        # design §4.8). The nonce is a callback-correlation secret shared
-        # operator↔broker, NOT exposed on the human verification page.
+        # the operator can check the eventual callback echoes it (anti-replay).
+        # The nonce is a callback-correlation secret shared operator↔broker,
+        # NOT exposed on the human verification page.
         nonce:            nonce,
         expires_at:       (Time.current + REQUEST_TTL).utc.iso8601,
       },
@@ -238,7 +238,7 @@ class VerificationsController < ActionController::Base
     ProveRequest.find_by(request_id: token)
   end
 
-  # ── intake auth: shared bearer secret + operator allow-list (§4.7) ────────
+  # ── intake auth: shared bearer secret + operator allow-list ──────────────
   def authenticate_operator!
     operator = OperatorRegistry.authenticate(operator_id: operator_id_param, secret: bearer_token)
     if operator.nil?

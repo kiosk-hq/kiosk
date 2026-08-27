@@ -1,7 +1,7 @@
 # frozen_string_literal: true
 
-# A pending age+licence verification skooti started at the KYC broker (design
-# §5). `request_kyc` calls the broker's intake for the claims the motorcycle
+# A pending age+licence verification skooti started at the KYC broker.
+# `request_kyc` calls the broker's intake for the claims the motorcycle
 # gate needs — `age_over_18` + `licence_a` (contrast getgrocery's single
 # age_over_18 for the alcohol gate) — and stores the BROKER's request_id here
 # as `request_token`, plus the broker's per-request `broker_nonce`. The agent

@@ -43,7 +43,7 @@ Rails.application.routes.draw do
   post "/kiosk/auth/revoke",                        to: "kiosk/server/auth#revoke"
   post "/kiosk/agents/kyc",                        to: "kiosk/server/kyc_attestation#create"
 
-  # KYC broker callback (design §5.2) — the broker → operator leg. `run
+  # KYC broker callback — the broker → operator leg. `run
   # request_kyc` calls the broker's intake with THIS callback; on the human's
   # approve, the broker POSTs the signed anonymized {age_over_18, licence_a}
   # claim here. skooti verifies it against the trusted ProveKey, checks the

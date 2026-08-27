@@ -4,7 +4,7 @@ require "net/http"
 require "uri"
 require "json"
 
-# CallbackPoster — the broker → operator leg (design §4.8). On the human's
+# CallbackPoster — the broker → operator leg. On the human's
 # approve, the broker mints the signed anonymized claim and POSTs it to the
 # request's callback_url as `{ request_id, kyc_jws, nonce }` — a compact JWS and
 # an echo of the request's nonce.

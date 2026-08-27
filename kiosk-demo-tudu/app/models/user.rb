@@ -5,7 +5,7 @@ require "digest"
 # The account principal: ONE table for both human account holders and headless
 # assistant-created principals — no separate "user" surface. The
 # physical table stays `users` so the framework identity wiring matches every
-# other demo; the "account" in the design doc is this row.
+# other demo; "account" throughout this demo means this row.
 # `kiosk.current_user_id()` resolves to this table's `id`.
 #
 # Human account holders sign in with email + password (the Devise session that

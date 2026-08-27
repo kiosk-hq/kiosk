@@ -2,8 +2,8 @@
 
 require "jwt"
 
-# POST /kyc/callback — the broker → operator leg (design §4.8 / §5.2). The broker
-# POSTs the signed anonymized claim here once the human approves. skooti:
+# POST /kyc/callback — the broker → operator leg. The broker POSTs the signed
+# anonymized claim here once the human approves. skooti:
 #
 #   1. verifies the JWS against the trusted ProveKey (c.kyc_public_key) with the
 #      same RS256 + iss + level + exp checks the engine KycVerifier applies;

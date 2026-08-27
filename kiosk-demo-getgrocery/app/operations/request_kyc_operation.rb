@@ -1,7 +1,7 @@
 # frozen_string_literal: true
 
 # request_kyc — start an 18+ verification at the KYC broker that an EXTERNAL
-# agent can COMPLETE without any pre-shared issuer key (design §5.1).
+# agent can COMPLETE without any pre-shared issuer key.
 #
 # getgrocery hosts no issuer of its own: it calls the shared broker's intake
 # server-to-server and stores what comes back — the request_id as this row's

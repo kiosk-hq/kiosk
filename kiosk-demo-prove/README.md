@@ -47,7 +47,7 @@ The minted `kyc_jws` payload (the shape the operator's `KycVerifier` accepts):
   "attributes": { "age_over_18": true, "licence_a": true }, "iat": …, "exp": … }
 ```
 
-## Security model (design §4)
+## Security model
 
 - **Operator-driven initiation.** A request row can only be created by an
   authenticated operator; a confirmer cannot create one.

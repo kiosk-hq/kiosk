@@ -5,7 +5,7 @@ require "uri"
 require "json"
 
 # ProveBrokerClient — getgrocery's server-to-server client for the KYC broker
-# intake (design §4.1 / §5.1). getgrocery calls the broker here, not the human,
+# intake. getgrocery calls the broker here, not the human,
 # and gets back a verification_url to relay. Authenticated by the shared intake
 # secret, so the broker refuses arbitrary callers and arbitrary callback hosts.
 # This is the operator→broker leg; the broker→operator leg lands on

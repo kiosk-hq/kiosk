@@ -31,7 +31,7 @@ Rails.application.configure do
   config.x.prove.getgrocery_secret = ENV["KIOSK_PROVE_GETGROCERY_SECRET"]
 
   # The ONLY host the broker will POST each operator's callback to (the
-  # SSRF / open-relay guard, design §4.7). No loopback default here: unset
+  # SSRF / open-relay guard). No loopback default here: unset
   # means NO callback destination is allow-listed for that operator, so its
   # intakes are refused (403) instead of the broker POSTing to its own
   # loopback services. The deploy sets the operator's real host (CHECKLIST

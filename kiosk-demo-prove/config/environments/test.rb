@@ -22,7 +22,7 @@ Rails.application.configure do
   config.x.prove.skooti_secret     = ENV.fetch("KIOSK_PROVE_SKOOTI_SECRET", "prove-skooti-test-intake-secret")
   config.x.prove.getgrocery_secret = ENV.fetch("KIOSK_PROVE_GETGROCERY_SECRET", "prove-getgrocery-test-intake-secret")
 
-  # Callback allow-list hosts (SSRF guard §4.7): the specs' callback_urls
+  # Callback allow-list hosts (SSRF guard): the specs' callback_urls
   # point at loopback, matching this default.
   config.x.prove.skooti_callback_host     = ENV.fetch("KIOSK_PROVE_SKOOTI_CALLBACK_HOST", "127.0.0.1")
   config.x.prove.getgrocery_callback_host = ENV.fetch("KIOSK_PROVE_GETGROCERY_CALLBACK_HOST", "127.0.0.1")

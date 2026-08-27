@@ -1,7 +1,7 @@
 # frozen_string_literal: true
 
-# prove_requests — one row per verification the broker is asked to run (design
-# §4.1). An OPERATOR creates a row at intake (a confirmer CANNOT — the row's
+# prove_requests — one row per verification the broker is asked to run.
+# An OPERATOR creates a row at intake (a confirmer CANNOT — the row's
 # unguessable request_id is minted here and handed only into the agent→human
 # channel). The human's yes/no flips it to confirmed/declined ONCE (single-use);
 # an expired row is un-confirmable.

@@ -40,8 +40,8 @@
 #     change should provoke a re-read.
 #   * AND NO PADDING FLOOR, which was tried first and MEASURED WRONG (2026-08-27,
 #     at the first baseline): 61 of the 537 anchors open nothing and so
-#     fingerprint a single line. Extending those
-#     to a fixed 3-line window looked like the safe bias until the 61 were read:
+#     fingerprint a single line. Extending those to a fixed 3-line window looked
+#     like the safe bias until the 61 were actually read:
 #     51 are `e2e/assistant.sh` one-line asserts whose line already carries the
 #     whole assertion INCLUDING the expected value (the anchor is only the label,
 #     so a changed expectation moves the fingerprint), and the file packs 82
@@ -78,7 +78,8 @@
 #     not its fingerprint. The sharpest case of this is an anchor that names a
 #     COMMENT whose subject is the code BELOW it at the same indentation: the
 #     region is then the comment alone and the code it describes is invisible.
-#     Measured at the baseline: three anchors of 537 have that shape.
+#     Measured at the first baseline: three anchors of 537 fingerprint a comment
+#     line and nothing else.
 #   * IT OVER-REPORTS ON PURPOSE. A re-indentation or a comment tweak inside the
 #     region reads as drift. For a triage tool that is the right bias: a false
 #     positive costs a glance, a false negative costs a certified stale row.
@@ -98,6 +99,7 @@
 #   1 — the question could not be answered (missing manifest/baseline/file)
 
 require "digest"
+require "shellwords"
 
 ROOT     = File.expand_path("..", __dir__)
 MANIFEST = File.join(ROOT, "spec", "conformance-anchors.tsv")
@@ -209,7 +211,7 @@ end
 
 # ── --record ─────────────────────────────────────────────────────────────────
 if record
-  head = `git -C #{ROOT.gsub("'", "'\\''")} rev-parse --short HEAD 2>/dev/null`.strip
+  head = `git -C #{Shellwords.escape(ROOT)} rev-parse --short HEAD 2>/dev/null`.strip
   head = "unknown" if head.empty?
   stamp = Time.now.strftime("%Y-%m-%d")
 

@@ -35,6 +35,7 @@ forward daily, so they move with the day it is run — and the `/etc/hosts` line
 appears because this machine has no entry for the demo host, which is the
 branch the task takes on any checkout that has not added one.
 
+<!-- derived: transcript | task: bundle exec rake demo:book | from: lib/tasks/demo.rake, script/book_flow.rb, script/equihash_register.rb | keys_from: app/controllers/kiosk/dining_room_controller.rb, app/controllers/kiosk/bookings_controller.rb | abridged: none -->
 ```
   add to /etc/hosts:  127.0.0.1 atablefor.demo.kiosk.tech
 
@@ -96,6 +97,7 @@ The delta between "today's reservation platform" and "atablefor" is an operator-
 
 **1. Add the Kiosk satellite gems**
 
+<!-- derived: snippet | from: Gemfile | abridged: the kiosk gem lines and json_schemer only; the Rails/Postgres/dev-group lines around them are out -->
 ```ruby
 # Gemfile
 gem "kiosk-all",                path: "../kiosk-all"
@@ -119,6 +121,7 @@ Postgres backstop, and `json_schemer` is required only because this origin turns
 
 **2. Run the generator**
 
+<!-- derived: none | why: the generator invocation an adopter types — a command, not output this repo produces -->
 ```
 rails g kiosk:install
 ```
@@ -148,6 +151,7 @@ neither changes what the verb accepts or answers. (2) The middle of
 field names, types, `required` lists, `minimum`/`maximum` bounds,
 `example_params`, `example_row` and the guards — is the shipped declaration.
 
+<!-- derived: snippet | from: app/controllers/kiosk/dining_room_controller.rb | transform: strip_descriptions | abridged: each verb's prose description, every schema description: key, and availability's body at a marked BODY ELIDED line -->
 ```ruby
 # app/controllers/kiosk/dining_room_controller.rb
 class Kiosk::DiningRoomController < ApplicationController
@@ -317,6 +321,7 @@ as the read snippet: every line is that file's with its `description` cut out
 and nothing else altered, and the two `description "…"   # elided` markers say
 so. Nothing else is left out — both write verbs fit whole.
 
+<!-- derived: snippet | from: app/controllers/kiosk/bookings_controller.rb | transform: strip_descriptions | abridged: both verbs' prose descriptions and every schema description: key -->
 ```ruby
 # app/controllers/kiosk/bookings_controller.rb
 class Kiosk::BookingsController < ApplicationController
@@ -432,6 +437,7 @@ Handlers are plain Rails actions: your filters, your `rescue_from`, your `params
 
 **5. Name the controllers in the initializer**
 
+<!-- derived: snippet | from: config/initializers/kiosk.rb | abridged: the handler-naming lines only, out of a ~60-line Kiosk.configure block -->
 ```ruby
 Kiosk.configure do |c|
   c.handlers = %w[Kiosk::DiningRoomController Kiosk::BookingsController]

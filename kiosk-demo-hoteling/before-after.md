@@ -33,6 +33,7 @@ From there down it is unedited, all three runs, last line to last line. The
 identifiers are that run's; the dates are `Date.today + 30` / `+ 33`, so they
 move with the day it is run.
 
+<!-- derived: transcript | task: bundle exec rake demo | from: lib/tasks/demo.rake, script/hoteling_flow.rb, script/equihash_register.rb, script/pay_window.rb, config/environments/development.rb | keys_from: app/controllers/kiosk/hotels_controller.rb, app/controllers/kiosk/reservations_controller.rb | abridged: demo:setup's db:drop/db:create/db:schema:load/db:seed chatter, above the first line quoted -->
 ```
   (add to /etc/hosts: 127.0.0.1 hoteling.demo.kiosk.tech — using 127.0.0.1)
 
@@ -144,6 +145,7 @@ The delta between "today's Booking.com" and "hoteling" is an operator-side integ
 
 **1. Add the Kiosk satellite gems**
 
+<!-- derived: snippet | from: Gemfile | abridged: the kiosk gem lines and json_schemer only; the Rails/Postgres/dev-group lines around them are out -->
 ```ruby
 # Gemfile
 gem "kiosk-all",                path: "../kiosk-all"
@@ -170,6 +172,7 @@ payments; this demo does not carry it, and uses a stub PSP instead.
 
 **2. Run the generator**
 
+<!-- derived: none | why: the generator invocation an adopter types — a command, not output this repo produces -->
 ```
 rails g kiosk:install
 ```
@@ -183,6 +186,7 @@ Only that file's own comments are trimmed, plus the three lines that have
 nothing to do with Kiosk (`devise_for`, `root`, and a telemetry route drawn only
 under `KIOSK_TELEMETRY=1`).
 
+<!-- derived: snippet | from: config/routes.rb | transform: dedent | abridged: the Kiosk wire lines only, quoted without the routes.draw indent; this demo's own devise/root/admin routes and every comment are out -->
 ```ruby
 # config/routes.rb — the wire surface, hand-drawn.
 get  "/kiosk/oauth/device/verify",               to: "kiosk/server/device_verify#show"
@@ -251,6 +255,7 @@ line. Three things were deleted. (1) Two of the five shipped queries,
 an explicit marker. Everything else — field names, types, `required` lists,
 `enum`s and the guards — is the shipped declaration.
 
+<!-- derived: snippet | from: app/controllers/kiosk/hotels_controller.rb | transform: strip_descriptions | abridged: each verb's prose description, every schema description: key, and one verb's guards at a marked line -->
 ```ruby
 # app/controllers/kiosk/hotels_controller.rb
 class Kiosk::HotelsController < ActionController::API
@@ -416,6 +421,7 @@ say so. One of hoteling's three
 shipped actions, `payment_setup`, is left out; the other two are here whole,
 bodies included.
 
+<!-- derived: snippet | from: app/controllers/kiosk/reservations_controller.rb | transform: strip_descriptions | abridged: both verbs' prose descriptions and every schema description: key -->
 ```ruby
 # app/controllers/kiosk/reservations_controller.rb
 class Kiosk::ReservationsController < ActionController::API
@@ -514,6 +520,7 @@ on.
 
 **5. Name the controllers in the initializer**
 
+<!-- derived: snippet | from: config/initializers/kiosk.rb | abridged: the handler-naming lines only, out of the Kiosk.configure block -->
 ```ruby
 Kiosk.configure do |c|
   c.handlers = %w[Kiosk::HotelsController Kiosk::ReservationsController]
@@ -531,6 +538,7 @@ the 0.3 series shipped, was removed in 0.4 and now raises NoMethodError.
 These are the two lines this demo's own `config/initializers/kiosk.rb` carries,
 verbatim (they sit inside its `Kiosk.configure do |c|` block, ~60 lines apart):
 
+<!-- derived: snippet | from: config/initializers/kiosk.rb | abridged: the issuer and payment-provider lines only, ~60 lines apart in the Kiosk.configure block -->
 ```ruby
 # config/initializers/kiosk.rb
   c.issuer = Rails.configuration.x.kiosk.issuer
@@ -547,6 +555,7 @@ operator's own quote — currency EUR, a single booking reference, and the total
 hoteling quoted for that booking — BEFORE anything is captured. Swapping in real
 payments is one line and touches no other code:
 
+<!-- derived: none | why: an illustrative one-line swap — no file in this repo carries it, and the prose beside it says so -->
 ```ruby
   c.payment_provider = Kiosk::PaymentProviders::Stripe.new(api_key: ENV["STRIPE_SECRET_KEY"])
 ```

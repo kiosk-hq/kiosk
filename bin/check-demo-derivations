@@ -1,0 +1,757 @@
+#!/usr/bin/env ruby
+# frozen_string_literal: true
+
+# Per-demo NARRATIVE derivation check (K-1051).
+#
+# WHY THIS EXISTS. `kiosk-demo-*/before-after.md` is a PUBLISHED per-demo
+# surface — four documents, ~1780 lines, quoting recorded transcripts and
+# shipped source at length — and until this script nothing compared a single
+# byte of it against anything. bin/check-demo-copies:SKELETON_NOT_COMPARED names
+# the file only to EXCLUDE it («per-demo narrative: that storefront's
+# before/after contrast»), and unlike the README entry beside it, that exclusion
+# carried no pointer to a checker of its own. bin/check-ci-tasks and
+# audit/check-file-inventories.rb never mention it.
+#
+# The cost was measured, not assumed. Ten ledger rows live in these four files
+# (K-1053..K-1057, K-1062..K-1066, and K-774/K-778/K-812/K-817/K-818/K-832/K-1036
+# before them) and EVERY ONE was found by a human eye reading the documents in
+# one sitting — never by a gate. K-1062 is the shape that matters: getgrocery
+# and hoteling published transcript blocks under an explicit «verbatim … nothing
+# else touched» guarantee that contained five and three assertion strings the
+# tasks no longer print, omitted getgrocery's trailing `Server stopped.`, and in
+# hoteling's case omitted an entire RUN the task prints.
+#
+# WHY IT IS A SEPARATE SCRIPT, AND NOT A SECTION OF bin/check-demo-copies
+# (K-1096). That file's own header states the boundary it holds: bin/check-ci-tasks
+# is a SIBLING rather than a mode of it «because the two answer different
+# questions from different inputs: that one compares ci.yml against each demo's
+# rake tasks, this one compares demo files against each other». The boundary is
+# the comparison INPUT. This check's input is a THIRD pair — one demo's document
+# against THAT SAME DEMO's own producers — so it is a third sibling by the very
+# rule that kept the first two apart. (The cross-demo half of the narrative
+# class, where the input IS demo-against-demo, is correctly in check-demo-copies
+# already: the K-1069 framework-prose block.)
+#
+# ── THE THREE DESIGN FACTS THIS IS BUILT ON, each bought by a repair ──────────
+#
+# 1. A BLOCK MUST NAME ITS PRODUCER MACHINE-READABLY. The four documents named
+#    theirs in prose, four different ways; prose parsing rots. So every fenced
+#    block carries an HTML comment on the line immediately above it:
+#
+#      <!-- derived: transcript | task: bundle exec rake demo:book
+#           | from: lib/tasks/demo.rake, script/book_flow.rb | abridged: none -->
+#      <!-- derived: snippet | from: app/controllers/kiosk/x_controller.rb
+#           | transform: strip_descriptions | abridged: two marked elisions -->
+#      <!-- derived: none | why: the generator invocation an adopter types -->
+#
+#    A fenced block with no declaration FAILS. That is the property that matters
+#    most: a new block cannot appear silently, the same way a new duplicated path
+#    cannot in bin/check-demo-copies.
+#
+# 2. TWO BLOCK CLASSES, TWO CHECKS — one check cannot serve both.
+#    TRANSCRIPT: «every line is a line the named task prints».
+#    SNIPPET:    «every line is a line of that file, modulo the declared
+#                 transformation».
+#
+# 3. LINE MEMBERSHIP, NOT EQUALITY, AND NEVER REGENERATION. UUIDs, settlement
+#    ids, `pi_…` references, ports and dates change every run, so a guard cannot
+#    diff a block against a fresh run — and worse, getgrocery's transcript has
+#    two legitimate shapes depending on the Dublin hour (the K-480 past-slot
+#    control is a no-op after the last slot of the day), so a guard that
+#    REGENERATES flaps where one checking membership does not. This check never
+#    boots Rails, never touches a database and never runs a demo.
+#
+# ── HOW THE TRANSCRIPT CHECK WORKS ───────────────────────────────────────────
+#
+# Ripper lexes each declared producer and every string literal in it becomes a
+# LINE PATTERN: literal text with `#{…}` interpolations replaced by a wildcard,
+# split on newlines, adjacent `"a" \ "b"` literals merged (that shape is how
+# most long assertion messages are written, and treating the halves as two
+# patterns would make the check useless on exactly the lines K-1062 was about).
+#
+# A transcript line is ACCOUNTED FOR when one of these holds:
+#
+#   (a) a pattern matches it whole;
+#   (b) a pattern matches it whole as a FRAME and every wildcard it captured is
+#       itself accounted for — empty, a single whitespace-free token (an id, a
+#       number, a URL, a path), or a pattern in its own right. This is what
+#       resolves `puts "  OK    #{msg}"` against the `msg` literal two hundred
+#       lines away, without the frame's `.*?` swallowing arbitrary prose;
+#   (c) it is a JSON object — the driver's summary line — and every key at every
+#       depth is a name some producer names. Its NESTED keys are the handler's,
+#       not the driver's (the driver splices a response object in whole), so a
+#       transcript may name the handler in `keys_from:`. That is a SEPARATE list
+#       on purpose: those files are consulted for key names only and their
+#       literals never join the line-pattern set, because a controller is large
+#       and folding it in would blunt the line check this exists for.
+#
+# Anything else is an error quoting the line. A doc line carrying a message the
+# task no longer prints is exactly case (b) failing, which is all five stale
+# getgrocery strings and all three hoteling ones.
+#
+# ── HOW THE SNIPPET CHECK WORKS ──────────────────────────────────────────────
+#
+# Every line must be a member of the UNION of the source's raw lines and the
+# lines of each DECLARED transformation of that source. The transformations are
+# EXECUTABLE, not prose:
+#
+#   strip_descriptions — deletes each verb's prose `description` call (leaving
+#                        the marker line the documents already use) and every
+#                        `description:` key inside a schema, reattaching what
+#                        followed it. This is the transformation the four
+#                        documents describe in prose; here it is a function.
+#   dedent             — the source's own indentation is not required to
+#                        survive quoting (config/routes.rb is quoted without the
+#                        `routes.draw do` indent). Compares lstripped.
+#
+# The document's OWN comments inside a snippet are permitted only through the
+# marked-elision shape the repair wave introduced:
+#
+#   # ── <WHAT> ELIDED HERE (this comment is the document's, not the file's) ──
+#
+# followed by a run of comment lines. A document comment that is not introduced
+# by that exact marker is an error, because it is indistinguishable from a line
+# the reader will take as shipped code.
+#
+# ── AND THE PROSE-PROMISE RULE ───────────────────────────────────────────────
+#
+# ABRIDGEMENT MUST BE DECLARED IN A FORM THIS SCRIPT READS, NOT PROMISED IN
+# PROSE. Every «nothing else touched» / «nothing removed and nothing added» /
+# «unedited» / «verbatim» promise in these four documents was FALSE when K-1062
+# and K-1063 read them — so the promise is exactly the sentence that must be
+# BACKED by something mechanical rather than trusted. Three rules, and note what
+# they deliberately are NOT:
+#
+#   * A promise in the paragraph immediately before or after a block declared
+#     `derived: none` is an ERROR. That block is checked by nothing, so dressing
+#     it as verbatim is the one case where the prose is the ONLY guarantee.
+#   * `abridged: none` and a `transform:`, or `abridged: none` and a marked
+#     elision inside the block, are a CONTRADICTION between the declaration and
+#     the block, and fail.
+#   * A declared `transform:` that no line in the block needs is DECORATION and
+#     fails — a transformation is declared because it was applied, and one
+#     nobody applied is a promise again.
+#
+#   They are NOT a ban on the phrases. A qualified promise — «every line is that
+#   file's with its `description` cut out and nothing else altered» — is what the
+#   K-1062 repair wave deliberately wrote, and it is TRUE precisely because
+#   `strip_descriptions` below makes it checkable. Banning the sentence would
+#   delete the honest form along with the dishonest one; what this script does
+#   instead is refuse to let the sentence stand alone.
+#
+# ── WHAT THIS DOES **NOT** COVER. Stated plainly, because an over-claimed guard
+# is the defect this class keeps producing and K-1069's block was accepted
+# precisely for declaring its own holes. ────────────────────────────────────
+#
+#   * IT CANNOT PROVE A TRANSCRIPT IS COMPLETE. Membership is a SUBSET test. A
+#     block that silently drops an entire RUN the task prints — which is half of
+#     K-1062 — still passes. Completeness needs a real run, which is what
+#     `abridged:` declares instead of proves, and `abridged: none` is therefore
+#     a HUMAN's assertion this script only keeps consistent with the prose.
+#   * IT CANNOT PROVE THE LINES ARE IN THE RIGHT ORDER, or that they came from
+#     ONE run. Two lines from mutually exclusive branches both pass.
+#   * IT CANNOT SEE A LINE PRINTED BY A PRODUCER NOBODY DECLARED. `from:` is a
+#     human's list; a line that came from an undeclared file simply fails, and a
+#     wrong line that happens to match a declared file's literal simply passes.
+#   * A LINE WITH NO LITERAL TEXT AT ALL — `puts x` — is invisible to the
+#     transcript check unless it is JSON. Its content is unconstrained.
+#   * THE JSON RULE CHECKS KEYS, NEVER VALUES. `"http_pay":200` and
+#     `"http_pay":500` are equally acceptable here.
+#   * `derived: none` IS AN UNCHECKED ESCAPE HATCH. It demands a `why:` and
+#     nothing more, exactly as `:per_demo` does in bin/check-demo-copies.
+#   * THE SNIPPET CHECK IS SET MEMBERSHIP, so it cannot see a reordering, a
+#     duplication, or a deletion — only a line that is in no version of the file.
+#   * IT DOES NOT ADJUDICATE WHETHER A COMPLETENESS PROMISE IS TRUE. Membership
+#     backs «every line quoted here is a real line», never «no line is missing»,
+#     so a document may still promise more than this script can see — which is
+#     why `abridged:` is a DECLARATION a human signs, not a proof.
+#   * IT SAYS NOTHING ELSE ABOUT THE PROSE. Whether the paragraphs around a block
+#     are true is K-1069's question (cross-demo agreement, in check-demo-copies)
+#     and claims.md's.
+#
+# Stdlib only (ripper + json), no bundle, no database, no Rails boot, well under
+# a second on a bare checkout — the same profile as bin/check-demo-copies.
+#
+# Usage:
+#   bin/check-demo-derivations           # check
+#   bin/check-demo-derivations --list    # print every declared block
+
+require "json"
+require "ripper"
+require "set"
+
+ROOT = File.expand_path("..", __dir__)
+DOC  = "before-after.md"
+
+# The corpus, declared rather than discovered, for the same reason `ships:` is
+# declared in bin/check-demo-copies: a demo that grows a narrative document, or
+# drops one, changes the set with nothing noticing. prove has none — it is the
+# API-only broker, it tells no storefront story.
+DOCUMENTED_DEMOS = %w[atablefor getgrocery hoteling skooti].freeze
+
+# The one shape a document's own comment may take inside a quoted snippet.
+ELISION_MARKER = /\A\s*#\s*──\s+.+\s+ELIDED HERE \(this comment is the document's, not the file's\)\s+──\s*\z/
+
+# What `strip_descriptions` leaves where a `description` call was. The four
+# documents already use this exact line; it is here because the transformation
+# has to be executable, and this is the executable half of it.
+ELIDED_DESCRIPTION = 'description "…"   # elided — see the shipped file'
+
+# Completeness promises. These are the sentences K-1062 and K-1063 found false;
+# they are not banned outright (see the header — the repair wave's qualified
+# forms are true and checkable), but a block that this script does not check may
+# not carry one in the paragraph on either side of it.
+PROMISES = [
+  /nothing\s+else\s+(?:is\s+)?(?:touched|altered|left\s+out|removed|added)/i,
+  /nothing\s+(?:is\s+)?removed\s+and\s+nothing\s+(?:is\s+)?added/i,
+  /\bunedited\b/i,
+  /\bverbatim\b/i,
+  /first\s+line\s+to\s+last/i,
+  /\bthe\s+\*?\*?whole\*?\*?\s+output\b/i,
+].freeze
+
+TRANSFORMS = %w[strip_descriptions dedent].freeze
+
+WILD = " WILD "
+
+ESCAPES = { "n" => "\n", "t" => "\t", "s" => " ", "r" => "\r", "e" => "\e",
+            "0" => "\0", "a" => "\a", "b" => "\b", "f" => "\f", "v" => "\v" }.freeze
+
+def unescape(str)
+  str.gsub(/\\(u\{[0-9a-fA-F ]+\}|u[0-9a-fA-F]{4}|.)/m) do
+    c = Regexp.last_match(1)
+    if ESCAPES.key?(c)             then ESCAPES[c]
+    elsif c.start_with?("u{")      then c[2..-2].split.map { |h| h.to_i(16) }.pack("U*")
+    elsif c.start_with?("u")       then [c[1..].to_i(16)].pack("U")
+    else                                c
+    end
+  end
+end
+
+# Every string literal in `path`, as line patterns with `#{…}` replaced by WILD.
+#
+# ADJACENT LITERALS ARE MERGED. `"a" \` newline `"b"` is one Ruby string and is
+# how nearly every long assertion message in these demos is written; Ripper
+# reports it as two literals, and treating it as two would leave the check
+# unable to see the very lines K-1062 recorded.
+def line_patterns(path)
+  toks = Ripper.lex(File.read(path))
+  out  = []
+  buf  = nil
+  depth = 0
+  gap = false
+
+  flush = lambda do
+    next if buf.nil?
+    out.concat(buf.split("\n", -1))
+    buf = nil
+  end
+
+  toks.each do |(_pos, type, tok, _state)|
+    if depth.positive?
+      case type
+      when :on_embexpr_beg, :on_lbrace then depth += 1
+      when :on_embexpr_end, :on_rbrace then depth -= 1
+      end
+      next
+    end
+
+    case type
+    when :on_tstring_beg, :on_heredoc_beg, :on_words_beg, :on_qwords_beg, :on_regexp_beg
+      if buf && gap
+        gap = false          # adjacent literal: keep accumulating into `buf`
+      else
+        flush.call
+        buf = +""
+      end
+    when :on_tstring_content
+      buf << unescape(tok) if buf
+    when :on_embexpr_beg
+      if buf
+        buf << WILD
+        depth = 1
+      end
+    when :on_tstring_end, :on_heredoc_end, :on_regexp_end
+      gap = true if buf
+    when :on_sp
+      nil                    # spaces and `\`-continued newlines do not break adjacency
+    else
+      flush.call if gap
+      gap = false
+    end
+  end
+  flush.call
+  out
+end
+
+# Key names a producer NAMES: `foo:` labels, `:foo` symbols and bare-identifier
+# string literals. The JSON summary line's keys are checked against this.
+def key_names(path)
+  names = Set.new
+  Ripper.lex(File.read(path)).each do |(_pos, type, tok, _state)|
+    case type
+    when :on_label      then names << tok.chomp(":")
+    when :on_ident, :on_const then names << tok
+    when :on_tstring_content
+      names << tok if tok.match?(/\A[a-z_][a-z0-9_]*\z/i)
+    end
+  end
+  names
+end
+
+def anchor_strength(pattern)
+  pattern.split(WILD, -1).sum { |part| part.gsub(/\s/, "").length }
+end
+
+def pattern_regex(pattern, capture:)
+  parts = pattern.split(WILD, -1).map { |p| Regexp.escape(p) }
+  glue  = capture ? "(.*?)" : ".*?"
+  Regexp.new("\\A#{parts.join(glue)}\\z", Regexp::MULTILINE)
+end
+
+# How deep the frame composition may go. `puts "  OK    #{msg}"` with `msg`
+# itself built as `"… (got #{x})"` is two levels, and that is the deepest shape
+# these four demos use; the limit is what keeps a 500-pattern corpus from
+# exploring its own cross product.
+MAX_DEPTH = 3
+
+class Patterns
+  def initialize(paths, key_paths = [])
+    pats   = paths.flat_map { |p| line_patterns(p) }.uniq
+    @exact = Set.new(pats.reject { |p| p.include?(WILD) }.map(&:rstrip).reject(&:empty?))
+    framed = pats.select { |p| p.include?(WILD) }
+    # A frame matched WITHOUT checking its wildcards needs real literal text of
+    # its own: `"#{a}#{b}"` matches everything and would make this a rubber
+    # stamp. A frame whose wildcards ARE checked can be as thin as `"  OK  "` —
+    # the capture has to resolve to a literal, so the `.*?` cannot swallow
+    # arbitrary prose. That distinction is the whole reason there are two lists.
+    @loose = framed.select { |p| anchor_strength(p) >= 4 }.map { |p| pattern_regex(p, capture: false) }
+    @tight = framed.select { |p| anchor_strength(p) >= 1 }.map { |p| pattern_regex(p, capture: true) }
+    @keys  = (paths + key_paths).flat_map { |p| key_names(p).to_a }.to_set
+    @memo  = {}
+  end
+
+  def key?(name) = @keys.include?(name)
+
+  def accounts_for?(line, depth = 0)
+    line = line.rstrip
+    return true if @exact.include?(line)
+    return false if depth >= MAX_DEPTH
+
+    key = [line, depth]
+    return @memo[key] if @memo.key?(key)
+
+    @memo[key] = false # cut recursion on a cycle
+    ok = @loose.any? { |re| re.match?(line) } ||
+         @tight.any? do |re|
+           m = re.match(line)
+           m && m.captures.all? { |c| capture_ok?(c, depth) }
+         end
+    @memo[key] = ok
+  end
+
+  # A wildcard's captured text stands on its own when it is empty or a single
+  # whitespace-free token (an id, a number, a URL, a path). Anything with a
+  # space in it is prose, and prose must come from a literal.
+  def capture_ok?(text, depth)
+    t = text.strip
+    return true if t.empty?
+    return true if t !~ /\s/
+
+    accounts_for?(t, depth + 1)
+  end
+end
+
+# ── The declared, EXECUTABLE transformations ─────────────────────────────────
+
+# Index just past the end of a (possibly `\`-continued) string literal starting
+# at or after `lines[li][ci]`, plus whatever follows it on that final line.
+def scan_string_value(lines, li, ci)
+  i = li
+  col = ci
+  loop do
+    s = lines[i] or return [li, ""]
+    q = s.index(/["']/, col) or return [i, ""]
+    quote = s[q]
+    j = q + 1
+    j += 1 while j < s.length && !(s[j] == quote && s[j - 1] != "\\")
+    tail = s[(j + 1)..] || ""
+    return [i, tail] unless tail.rstrip.end_with?("\\")
+
+    i += 1
+    col = 0
+  end
+end
+
+def strip_descriptions(src)
+  lines = src.split("\n", -1)
+  out = []
+  i = 0
+  while i < lines.length
+    line = lines[i]
+
+    if (m = line.match(/\A(\s*)description\s+["']/))
+      last, = scan_string_value(lines, i, m[1].length + "description".length)
+      out << "#{m[1]}#{ELIDED_DESCRIPTION}"
+      i = last + 1
+      next
+    end
+
+    if (k = line.index(/(?<![\w:])description:\s/))
+      pre = line[0...k]
+      last, tail = scan_string_value(lines, i, k + "description:".length)
+      tail = tail.sub(/\A\s*,/, ",")
+      if pre.strip.empty?
+        out << (out.pop || "").rstrip.sub(/,\z/, "") + tail
+      else
+        out << pre.rstrip.sub(/,\z/, "") + tail
+      end
+      i = last + 1
+      next
+    end
+
+    out << line
+    i += 1
+  end
+  out
+end
+
+def transformed_lines(src, name)
+  case name
+  when "strip_descriptions" then strip_descriptions(src)
+  when "dedent"             then src.split("\n", -1).map(&:lstrip)
+  else raise ArgumentError, name
+  end
+end
+
+# ── Document parsing ─────────────────────────────────────────────────────────
+
+Block = Struct.new(:fence_line, :info, :body, :decl, :decl_line, :neighbourhood, keyword_init: true)
+
+DECL_RE = /\A<!--\s*derived:\s*(.*?)\s*-->\z/
+
+def parse_declaration(text)
+  fields = {}
+  text.split("|").each_with_index do |part, idx|
+    if idx.zero?
+      fields["derived"] = part.strip
+      next
+    end
+    k, v = part.split(":", 2)
+    next if v.nil?
+
+    fields[k.strip] = v.strip
+  end
+  fields
+end
+
+def parse_document(path)
+  lines = File.readlines(path, chomp: true)
+  blocks = []
+  prose_from = 0
+  i = 0
+  while i < lines.length
+    unless lines[i].start_with?("```")
+      i += 1
+      next
+    end
+
+    info = lines[i][3..].to_s.strip
+    j = i + 1
+    j += 1 while j < lines.length && !lines[j].start_with?("```")
+    decl_line = nil
+    decl = nil
+    if i.positive? && (m = DECL_RE.match(lines[i - 1].strip))
+      decl_line = i - 1
+      decl = parse_declaration(m[1])
+    end
+    blocks << Block.new(
+      fence_line: i + 1, info: info, body: lines[(i + 1)...j],
+      decl: decl, decl_line: decl_line && decl_line + 1,
+      neighbourhood: [paragraph_before(lines, decl_line || i), paragraph_after(lines, j)].join("\n"),
+    )
+    i = j + 1
+  end
+  blocks
+end
+
+# The ONE paragraph on each side of a block — the prose that introduces it and
+# the prose that comments on it. Deliberately not "everything since the previous
+# block": the gap between two blocks belongs to both of them, so a wider window
+# attributes one document's sentence to a block it was never about.
+def paragraph_before(lines, idx)
+  k = idx - 1
+  k -= 1 while k >= 0 && lines[k].strip.empty?
+  stop = k
+  k -= 1 while k >= 0 && !lines[k].strip.empty?
+  lines[(k + 1)..stop].to_a.join("\n")
+end
+
+def paragraph_after(lines, idx)
+  k = idx + 1
+  k += 1 while k < lines.length && lines[k].strip.empty?
+  start = k
+  k += 1 while k < lines.length && !lines[k].strip.empty? && !lines[k].start_with?("```")
+  lines[start...k].to_a.join("\n")
+end
+
+# ── Checks ───────────────────────────────────────────────────────────────────
+
+errors = []
+listing = ARGV.include?("--list")
+counts = Hash.new(0)
+
+present = Dir.glob(File.join(ROOT, "kiosk-demo-*", DOC)).map { |p| File.basename(File.dirname(p)).sub("kiosk-demo-", "") }.sort
+undeclared = present - DOCUMENTED_DEMOS
+missing = DOCUMENTED_DEMOS - present
+undeclared.each do |demo|
+  errors << "check-demo-derivations: kiosk-demo-#{demo}/#{DOC} exists but #{demo} is not in " \
+            "DOCUMENTED_DEMOS. A demo that grows a narrative document joins the corpus by being " \
+            "declared, never by being discovered — the same reason `ships:` is declared in " \
+            "bin/check-demo-copies."
+end
+missing.each do |demo|
+  errors << "check-demo-derivations: #{demo} is in DOCUMENTED_DEMOS but ships no #{DOC}. Delete the " \
+            "entry or restore the document; a corpus that silently shrinks checks nothing."
+end
+
+(DOCUMENTED_DEMOS & present).each do |demo|
+  dir = File.join(ROOT, "kiosk-demo-#{demo}")
+  doc = File.join(dir, DOC)
+  label = "kiosk-demo-#{demo}/#{DOC}"
+  rake_files = Dir.glob(File.join(dir, "lib/tasks/*.rake"))
+
+  parse_document(doc).each do |block|
+    where = "#{label}:#{block.fence_line}"
+
+    if block.decl.nil?
+      errors << "#{where}: fenced block with no `<!-- derived: … -->` declaration on the line above " \
+                "it. Every block in a narrative document must name its producer machine-readably " \
+                "(`transcript`, `snippet`) or be declared `none` with a reason — a block nobody " \
+                "declared is a block nobody checks, which is how ~30 defects reached these four " \
+                "documents (K-1051)."
+      next
+    end
+
+    kind = block.decl["derived"]
+    unknown = block.decl.keys - %w[derived task from keys_from transform abridged why]
+    unless unknown.empty?
+      errors << "#{where}: unknown key(s) #{unknown.join(', ')} in the derivation declaration."
+    end
+
+    if kind == "none"
+      if block.decl["why"].to_s.empty?
+        errors << "#{where}: `derived: none` needs a `why:` — an undeclared exemption is the one " \
+                  "thing this check cannot see through, so it must at least be argued for."
+      end
+      if (hit = PROMISES.find { |re| block.neighbourhood =~ re })
+        errors << "#{where}: the prose beside this block promises completeness " \
+                  "(#{block.neighbourhood[hit].inspect}) while the block is declared " \
+                  "`derived: none`, so nothing checks it. A promise no mechanism backs is the " \
+                  "shape K-1062 and K-1063 found false eight times over — either derive the " \
+                  "block from a producer or drop the promise."
+      end
+      counts[:none] += 1
+      puts "  none       #{where}  (#{block.decl['why']})" if listing
+      next
+    end
+
+    unless %w[transcript snippet].include?(kind)
+      errors << "#{where}: `derived: #{kind}` is not one of transcript, snippet, none."
+      next
+    end
+
+    froms = block.decl["from"].to_s.split(",").map(&:strip).reject(&:empty?)
+    if froms.empty?
+      errors << "#{where}: `derived: #{kind}` needs a `from:` naming the producer file(s), " \
+                "demo-relative."
+      next
+    end
+    keys_from = block.decl["keys_from"].to_s.split(",").map(&:strip).reject(&:empty?)
+    if !keys_from.empty? && kind != "transcript"
+      errors << "#{where}: `keys_from:` is a transcript-only declaration — it names the handlers " \
+                "whose field names appear in the driver's JSON summary line."
+      next
+    end
+    absent = (froms + keys_from).reject { |f| File.file?(File.join(dir, f)) }
+    unless absent.empty?
+      errors << "#{where}: `from:`/`keys_from:` names #{absent.join(', ')}, which kiosk-demo-#{demo} " \
+                "does not ship. A producer that moved leaves the block quoting nothing."
+      next
+    end
+
+    abridged = block.decl["abridged"].to_s
+    if abridged.empty?
+      errors << "#{where}: `abridged:` is required — `none`, or a phrase naming what was left out. " \
+                "Abridgement must be DECLARED in a form this check reads; every prose promise of " \
+                "the «nothing else touched» kind in these four documents was false (K-1062/K-1063)."
+      next
+    end
+
+    if kind == "transcript"
+      task = block.decl["task"].to_s
+      if task.empty?
+        errors << "#{where}: `derived: transcript` needs a `task:` naming the command that printed it."
+        next
+      end
+      name = task.split.last.to_s
+      short = name.split(":").last
+      defined_here = rake_files.any? do |rf|
+        body = File.read(rf)
+        body.match?(/^\s*task\s+:#{Regexp.escape(short)}\b/) ||
+          body.match?(/^\s*task\s+#{Regexp.escape(short)}:/)
+      end
+      unless defined_here
+        errors << "#{where}: `task: #{task}` names `#{name}`, which no lib/tasks/*.rake in " \
+                  "kiosk-demo-#{demo} defines. The block claims a producer that does not exist."
+        next
+      end
+
+      pats = Patterns.new(froms.map { |f| File.join(dir, f) },
+                          keys_from.map { |f| File.join(dir, f) })
+      block.body.each_with_index do |line, k|
+        next if line.strip.empty?
+
+        lineno = block.fence_line + 1 + k
+        next if pats.accounts_for?(line)
+
+        if line.strip.start_with?("{") && line.strip.end_with?("}")
+          begin
+            obj = JSON.parse(line.strip)
+          rescue JSON::ParserError
+            obj = nil
+          end
+          if obj.is_a?(Hash)
+            unknown_keys = []
+            walk = lambda do |node|
+              case node
+              when Hash then node.each { |kk, vv| unknown_keys << kk unless pats.key?(kk); walk.call(vv) }
+              when Array then node.each { |vv| walk.call(vv) }
+              end
+            end
+            walk.call(obj)
+            if unknown_keys.empty?
+              counts[:json] += 1
+              next
+            end
+            errors << "#{label}:#{lineno}: the JSON summary line carries key(s) " \
+                      "#{unknown_keys.uniq.join(', ')} that no file in `from:` or " \
+                      "`keys_from:` names. A published summary naming a field the driver stopped " \
+                      "emitting is K-1053 exactly; a nested key belongs to the handler that " \
+                      "serialises it, so name that handler in `keys_from:`."
+            next
+          end
+        end
+
+        errors << "#{label}:#{lineno}: this line is not a line `#{task}` prints — no string " \
+                  "literal in #{froms.join(', ')} produces it:\n      #{line.strip[0, 160]}"
+      end
+      counts[:transcript] += 1
+      puts "  transcript #{where}  #{task}  <- #{froms.join(' ')}" if listing
+    else
+      src_path = File.join(dir, froms.first)
+      if froms.length > 1
+        errors << "#{where}: `derived: snippet` takes exactly one `from:` — a snippet quotes ONE " \
+                  "file, and a union of files is not a thing a reader can go and check."
+        next
+      end
+
+      transforms = block.decl["transform"].to_s.split(",").map(&:strip).reject { |t| t.empty? || t == "none" }
+      bad = transforms - TRANSFORMS
+      unless bad.empty?
+        errors << "#{where}: transform(s) #{bad.join(', ')} are not implemented here. The declared " \
+                  "transformation has to be EXECUTABLE; #{TRANSFORMS.join(', ')} are."
+        next
+      end
+
+      if abridged == "none" && !transforms.empty?
+        errors << "#{where}: `abridged: none` beside `transform: #{transforms.join(', ')}`. A " \
+                  "transformation IS an abridgement — say what it takes out."
+      end
+
+      src = File.read(src_path)
+      raw_lines = Set.new(src.split("\n", -1).map(&:rstrip))
+      allowed = raw_lines.dup
+      transforms.each { |t| transformed_lines(src, t).each { |l| allowed << l.rstrip } }
+      lstripped = Set.new(allowed.map(&:lstrip)) if transforms.include?("dedent")
+      needed_transform = false
+
+      # The first line may be the conventional `# <path>` banner. It is prose,
+      # not a line of the file — but it must name the file the declaration does.
+      body = block.body
+      if (m = body.first.to_s.match(%r{\A#\s*([A-Za-z0-9_./-]+)}))
+        if m[1] == froms.first
+          body = body[1..]
+        else
+          errors << "#{where}: the block's opening banner names #{m[1]} while the declaration says " \
+                    "`from: #{froms.first}`. One of the two is wrong and a reader cannot tell which."
+          body = body[1..]
+        end
+      end
+
+      in_note = false
+      body.each_with_index do |line, k|
+        lineno = block.fence_line + (block.body.length - body.length) + 1 + k
+        if line =~ ELISION_MARKER
+          if abridged == "none"
+            errors << "#{label}:#{lineno}: a marked elision inside a block declared " \
+                      "`abridged: none`. The declaration and the block disagree."
+          end
+          in_note = true
+          counts[:elision] += 1
+          next
+        end
+        if in_note
+          next if line.strip.start_with?("#")
+
+          in_note = false
+        end
+        next if line.strip.empty?
+        if allowed.include?(line.rstrip) || lstripped&.include?(line.lstrip.rstrip)
+          needed_transform ||= !raw_lines.include?(line.rstrip)
+          next
+        end
+
+        if line.strip.start_with?("#") && !src.include?(line.strip)
+          errors << "#{label}:#{lineno}: a comment line that is not in #{froms.first} and is not " \
+                    "introduced by the marked-elision line. A document comment a reader cannot " \
+                    "tell from shipped code is the whole reason that marker exists:\n" \
+                    "      #{line.strip[0, 160]}"
+          next
+        end
+
+        errors << "#{label}:#{lineno}: this line is in no version of #{froms.first} " \
+                  "(raw#{transforms.empty? ? '' : " or #{transforms.join('/')}"}):\n" \
+                  "      #{line.strip[0, 160]}"
+      end
+      if !transforms.empty? && !needed_transform
+        errors << "#{where}: `transform: #{transforms.join(', ')}` is declared but no line in the " \
+                  "block needs it — every quoted line is already in the raw file. A transformation " \
+                  "is declared because it was APPLIED; a decorative one is a prose promise again."
+      end
+      counts[:snippet] += 1
+      puts "  snippet    #{where}  #{froms.first}#{transforms.empty? ? '' : "  [#{transforms.join(' ')}]"}" if listing
+    end
+  end
+end
+
+if counts[:transcript].zero? && counts[:snippet].zero? && errors.empty?
+  errors << "check-demo-derivations: found NO declared blocks at all. A rule that inspects nothing " \
+            "passes everything."
+end
+
+if errors.empty?
+  puts "check-demo-derivations: OK — #{counts[:transcript]} transcript and #{counts[:snippet]} " \
+       "snippet blocks across #{(DOCUMENTED_DEMOS & present).size} narrative documents, every line " \
+       "held to a literal its declared producer prints or a line of the file it quotes " \
+       "(#{counts[:json]} JSON summary line(s) key-checked, #{counts[:elision]} marked elision(s), " \
+       "#{counts[:none]} block(s) declared underived with a reason)."
+  exit 0
+end
+
+warn "\ncheck-demo-derivations FAILED:\n"
+errors.each { |e| warn "  ✗ #{e}" }
+warn "\nEvery fenced block in a kiosk-demo-*/before-after.md must declare its producer in an " \
+     "`<!-- derived: … -->` comment, and every line in it must be a line that producer prints or " \
+     "a line of the file it quotes. Abridgement is DECLARED, never promised in prose."
+exit 1

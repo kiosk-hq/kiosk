@@ -854,6 +854,41 @@ jobs:
       - name: Hand-copied demo files agree, or the divergence is declared
         run: ./bin/check-demo-copies
 
+  # Is every fenced block in a demo's before-after.md a line its own producer
+  # actually prints? (K-1051)
+  #
+  # The four kiosk-demo-*/before-after.md are a PUBLISHED per-demo surface and
+  # nothing compared a byte of them against anything: bin/check-demo-copies
+  # names the file only to EXCLUDE it from the lockstep comparison, and unlike
+  # the README entry beside it that exclusion pointed at no checker of its own.
+  # Ten ledger rows accumulated there (K-1053..K-1057, K-1062..K-1066) and every
+  # one was found by a human eye rather than a gate — including transcript
+  # blocks published under a «verbatim» guarantee that carried five and three
+  # assertion strings their tasks no longer print.
+  #
+  # A separate job rather than a step in demo-file-sync, for the reason that
+  # script's own header gives for keeping bin/check-ci-tasks separate: the
+  # boundary between these checks is the comparison INPUT, and this one compares
+  # a demo's document against THAT demo's own producers, not demo against demo.
+  # Stdlib Ruby only: no bundle, no services, no database, ~0.2 s.
+  demo-narrative-derivation:
+    name: demo narratives derive from their producers (bin/check-demo-derivations)
+    runs-on: ubuntu-latest
+    # The daily schedule exists for solver-pin-live; don't rebuild the world.
+    if: github.event_name != 'schedule'
+
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Set up Ruby
+        uses: ruby/setup-ruby@v1
+        with:
+          ruby-version: "4.0.1"
+          bundler-cache: false
+
+      - name: Every quoted transcript line and snippet line derives from its declared producer
+        run: ./bin/check-demo-derivations
+
   # Does the deploy runbook's edge-rate-limit check still work? (K-976)
   #
   # deploy/Caddyfile ships its per-IP backstop COMMENTED, and it has to: a

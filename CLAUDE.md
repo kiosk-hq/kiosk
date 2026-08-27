@@ -65,6 +65,17 @@ universal agent skill is `skill.md` on the same site.
   with no per-demo dimension (the T-048 statics, the three error pages,
   `puma.rb`, `environments/{test,production}.rb`) ARE declared in the manifest,
   `:identical` with prove as the stated exception (K-643).
+- The four `kiosk-demo-*/before-after.md` are a PUBLISHED narrative and every
+  fenced block in them DERIVES from something in the same demo, declared in a
+  comment above the fence: `<!-- derived: transcript | task: … | from: … |
+  abridged: … -->` or `<!-- derived: snippet | from: … | transform: … |
+  abridged: … -->`, or `derived: none` with a reason. `bin/check-demo-derivations`
+  (its own CI job) then holds every transcript line to a string literal the named
+  task actually prints and every snippet line to a line of the file it quotes
+  under the declared transformation — membership, never regeneration, so ids and
+  dates and wall-clock branches do not flap it. Editing one of those documents,
+  or renaming a `puts` in a flow driver or rake task, means running it. Its
+  header states what it cannot see; read that before trusting a green run.
 - **A migration that has shipped is never edited — a change arrives as a NEW
   file.** `db/migrate/` is not source you can refactor: every file in it is
   already recorded in the `schema_migrations` of every deployed database, and

@@ -30,6 +30,7 @@ pins the two query verbs; then two DB-side checks, that no ROW LEVEL SECURITY
 is in play on this demo's own tables, and the capture-anchored paid-state
 regression (K-853).
 
+<!-- derived: transcript | task: bundle exec rake demo:rideflow | from: lib/tasks/demo.rake, script/rental_flow.rb, script/equihash_register.rb, script/lock_sim.rb | keys_from: app/controllers/kiosk/fleet_controller.rb, app/controllers/kiosk/rentals_controller.rb | abridged: RUN 1 and the offline-token negatives; the task's four later beats are named in the prose above -->
 ```
 ══ RUN 1: Happy path ══
   Server up at http://127.0.0.1:3004

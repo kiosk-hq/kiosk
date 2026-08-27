@@ -48,6 +48,7 @@ settled amount and says so in an assertion of its own. Set a real `sk_test_…`
 and the identical flow charges Stripe test mode instead; the task prefers a real
 key whenever one is present.
 
+<!-- derived: transcript | task: bundle exec rake demo | from: lib/tasks/demo.rake, script/getgrocery_flow.rb, script/equihash_register.rb | keys_from: app/controllers/kiosk/storefront_controller.rb, app/controllers/kiosk/orders_controller.rb | abridged: demo:setup's db:drop/db:create/db:schema:load/db:seed chatter, above the first line quoted -->
 ```
   (no STRIPE_SECRET_KEY — running against stripe-mock at http://127.0.0.1:12111, no real charge)
   (add to /etc/hosts: 127.0.0.1 getgrocery.demo.kiosk.tech -- using 127.0.0.1)
@@ -138,6 +139,7 @@ The delta between "today's Instacart" and "getgrocery" is an operator-side integ
 
 **1. Add the Kiosk satellite gems**
 
+<!-- derived: snippet | from: Gemfile | abridged: the kiosk gem lines and json_schemer only; the Rails/Postgres/dev-group lines around them are out -->
 ```ruby
 # Gemfile
 gem "kiosk-all",        path: "../kiosk-all"
@@ -165,6 +167,7 @@ Postgres backstop, and `json_schemer` is required only because this origin turns
 
 **2. Run the generator**
 
+<!-- derived: none | why: the generator invocation an adopter types — a command, not output this repo produces -->
 ```
 rails g kiosk:install
 ```
@@ -179,6 +182,7 @@ Kiosk wire (`devise_for`, `root`, this demo's own `/kyc/callback` and
 `/admin/orders`, a `/payment/return` landing page and a telemetry route drawn
 only under `KIOSK_TELEMETRY=1`).
 
+<!-- derived: snippet | from: config/routes.rb | transform: dedent | abridged: the Kiosk wire lines only, quoted without the routes.draw indent; this demo's own devise/root/admin/telemetry routes and every comment are out -->
 ```ruby
 # config/routes.rb — the wire surface, hand-drawn.
 get  "/kiosk/schema",                            to: "kiosk/server/wire#schema"
@@ -249,6 +253,7 @@ schema. (3) The middle of `delivery_slots`'s body, at an explicit marker.
 Everything else — field names, types, `required` lists, `enum`s,
 `example_params`, `example_row` and the guards — is the shipped declaration.
 
+<!-- derived: snippet | from: app/controllers/kiosk/storefront_controller.rb | transform: strip_descriptions | abridged: the kyc_status verb, each remaining verb's prose description, every schema description: key, and delivery_slots' guards at a marked line -->
 ```ruby
 # app/controllers/kiosk/storefront_controller.rb
 class Kiosk::StorefrontController < ActionController::API
@@ -470,6 +475,7 @@ so. Two of getgrocery's four shipped
 actions, `payment_setup` and `request_kyc`, are left out; the other two are here
 whole, bodies included.
 
+<!-- derived: snippet | from: app/controllers/kiosk/orders_controller.rb | transform: strip_descriptions | abridged: the payment_setup and request_kyc verbs, and both remaining verbs' prose descriptions -->
 ```ruby
 # app/controllers/kiosk/orders_controller.rb
 class Kiosk::OrdersController < ActionController::API
@@ -593,6 +599,7 @@ end
 
 **5. Name the controllers in the initializer**
 
+<!-- derived: snippet | from: config/initializers/kiosk.rb | abridged: the handler-naming lines only, out of the Kiosk.configure block -->
 ```ruby
 Kiosk.configure do |c|
   c.handlers = %w[Kiosk::StorefrontController Kiosk::OrdersController]
@@ -609,6 +616,7 @@ the 0.3 series shipped, was removed in 0.4 and now raises NoMethodError.
 
 These are the lines the two named files actually carry, verbatim:
 
+<!-- derived: snippet | from: config/environments/production.rb | abridged: the two stripe lines only, out of the whole environment file -->
 ```ruby
 # config/environments/production.rb — ENV is read per environment, once
   config.x.kiosk.stripe_mock_url   = ENV["STRIPE_MOCK_URL"].presence
@@ -616,6 +624,7 @@ These are the lines the two named files actually carry, verbatim:
                                      (config.x.kiosk.stripe_mock_url ? "sk_test_mock" : nil)
 ```
 
+<!-- derived: snippet | from: config/initializers/kiosk.rb | abridged: the issuer and payment-provider lines only, out of the Kiosk.configure block -->
 ```ruby
 # config/initializers/kiosk.rb — the initializer reads the resolved values
   c.issuer = Rails.configuration.x.kiosk.issuer

@@ -739,7 +739,11 @@ SKELETON_NOT_COMPARED = {
     "below - that half is not per-demo (K-962).",
   "README.md" => "Per-demo prose. The task list inside it is asserted by bin/check-ci-tasks.",
   "CHANGELOG.md" => "Per-demo history.",
-  "before-after.md" => "Per-demo narrative: that storefront's before/after contrast.",
+  "before-after.md" =>
+    "Per-demo narrative: that storefront's before/after contrast. Its framework PROSE is compared " \
+    "across demos by the K-1069 block below; its fenced blocks are held to the producers they " \
+    "declare by bin/check-demo-derivations (K-1051), which is a sibling of this script for the " \
+    "reason the header gives - it compares one demo's document against THAT demo's own files.",
   "db/seeds.rb" => "Per-demo catalog — the whole point of each demo.",
   "db/structure.sql" =>
     "Generated from the migrations, which this check DOES compare byte-for-byte; comparing the " \
@@ -2202,9 +2206,10 @@ end
 #   * A PARAPHRASE IN VOCABULARY NO `topic:` MATCHES IS INVISIBLE. That is the
 #     residual hole and it does not close: the topic regexes are as wide as their
 #     authors made them.
-#   * FENCED BLOCKS ARE EXCLUDED from `before-after.md`. They are K-1051's
-#     territory — a transcript or a snippet has a producer to derive from — and
-#     checking them here would double-count the easy half and dilute this one.
+#   * FENCED BLOCKS ARE EXCLUDED from `before-after.md`. They are
+#     bin/check-demo-derivations's territory (K-1051) — a transcript or a
+#     snippet has a producer to derive from — and checking them here would
+#     double-count the easy half and dilute this one.
 #
 # prove ships no corpus document of its own that makes framework claims: it is
 # the smaller API-only broker (PROVE_SKELETON above), it has no `before-after.md`

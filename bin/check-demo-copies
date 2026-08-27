@@ -2129,6 +2129,344 @@ if initializer_demos.zero? && errors.empty?
             "nothing passes everything."
 end
 
+# ── Cross-demo PROSE about the FRAMEWORK (K-1069) ────────────────────────────
+#
+# WHAT WENT WRONG, and it is the only reason this block exists. Three shapes,
+# all from the K-1062..K-1066 wave, every one found by a human eye reading four
+# documents in one sitting:
+#
+#   (a) THE SAME FACTUAL SENTENCE IN N DEMOS, TRUE IN SOME AND FALSE IN OTHERS.
+#       K-1064: hoteling's «a follow-up release will mount these via the engine's
+#       own routes drawer» beside getgrocery's «Mounting the engine draws all of
+#       this in one line» — one framework fact, two documents shipping side by
+#       side, one of them stale. K-1068 was the same sentence in six
+#       `config/routes.rb`. K-1065's PoW leg was the same shape with the truth
+#       and the falsehood swapped between demos.
+#   (b) ONE DOCUMENT CONTRADICTING ITSELF. skooti's before-after asserted a KYC
+#       registration gate in its opening and its closing paragraph that its own
+#       shipped-gate list denied in the middle (K-1065). Two documents were not
+#       even needed.
+#   (c) A CLAIM ABOUT THE FRAMEWORK THAT WAS FALSE AT THE SOURCE. The routes
+#       drawer again: the demos promised it as future work while
+#       `kiosk-server/lib/kiosk/server/engine.rb` had shipped both drawers.
+#
+# WHY THIS IS NOT K-1051's GUARD, and the argument is MECHANISM rather than
+# scope. K-1051 commissions a DERIVATION guard: a fenced block must equal what
+# its named producer prints. Prose ABOUT THE FRAMEWORK has no producer to derive
+# from, so that guard, fully built and green, would have caught none of (a), (b)
+# or (c). The oracle here is cross-document AGREEMENT plus a binding to the
+# framework file that makes the claim true.
+#
+# WHAT THIS BLOCK DOES. It declares a CORPUS — the per-demo documents every rule
+# above leaves uncompared (`before-after.md`, declared per-demo at
+# SKELETON_NOT_COMPARED with no checker of its own until now; `config/routes.rb`,
+# declared per-demo there too and compared above only for its telemetry route) —
+# and a manifest of FRAMEWORK CLAIMS over it. Each claim carries up to five
+# declarations, and each one answers a different one of the three shapes:
+#
+#   text:    a sentence that must appear VERBATIM (whitespace-normalised) in
+#            every document listed in `ships:`. This is the (a) detector for
+#            copies: the five `config/routes.rb` that were one line short of
+#            getgrocery's and hoteling's would have failed here.
+#   topic:   a regex naming the SUBJECT. Where it matches a corpus document,
+#            `must:` has to match too. This is the (a) detector for PARAPHRASES,
+#            which `text:` structurally cannot see — hoteling's stale sentence
+#            and getgrocery's current one are not copies of each other, they are
+#            two different texts about one fact, and only a topic can pair them.
+#   forbids: regexes that may not match ANY corpus document. This is the (b)
+#            detector, and it is honest about its limit: it finds contradictions
+#            SOMEBODY DECLARED, never contradictions in general.
+#   source:  a framework file + a regex that must match it. This is the (c)
+#            detector. It fires when the producer stops saying the thing the
+#            demos say about it.
+#   ships:   which demos must carry the claim at all, the same declaration and
+#            the same reason as `ships:` in COPIES above — a demo that silently
+#            drops the subject, or grows it, changes the set with nothing
+#            noticing.
+#
+# WHAT THIS BLOCK DOES **NOT** DO. Stated plainly, because an over-claimed guard
+# is the defect this class keeps producing:
+#
+#   * IT CANNOT TELL WHICH OF TWO VARIANTS IS TRUE. It forces ONE text and binds
+#     it to a source; choosing the text stays a human act. A corpus declared
+#     around a false sentence enforces the false sentence in seven demos.
+#   * IT CANNOT SEE AN UNDECLARED SELF-CONTRADICTION. skooti's KYC pair is caught
+#     because a `forbids:` entry names it, not because anything here understands
+#     KYC. A new contradiction, on a new subject, is invisible until someone
+#     declares it — exactly as a new duplicated path is invisible to the lockstep
+#     rule until it appears in a second demo.
+#   * `source:` PROVES THE FRAMEWORK STILL SAYS IT, NOT THAT THE FRAMEWORK DOES
+#     IT. Every binding below is aimed at CODE (a `routes` call, the absence of a
+#     method, the absence of a token in a file) rather than at a comment, because
+#     a comment satisfying a comment is a tautology — but it is still a proxy.
+#   * A PARAPHRASE IN VOCABULARY NO `topic:` MATCHES IS INVISIBLE. That is the
+#     residual hole and it does not close: the topic regexes are as wide as their
+#     authors made them.
+#   * FENCED BLOCKS ARE EXCLUDED from `before-after.md`. They are K-1051's
+#     territory — a transcript or a snippet has a producer to derive from — and
+#     checking them here would double-count the easy half and dilute this one.
+#
+# prove ships no corpus document of its own that makes framework claims: it is
+# the smaller API-only broker (PROVE_SKELETON above), it has no `before-after.md`
+# at all, and its `config/routes.rb` carries none of the operator wire-surface
+# prose. It is excluded by `ships:`, not by an exception.
+FRAMEWORK_CORPUS_RUBY = ["config/routes.rb"].freeze
+FRAMEWORK_CORPUS_TEXT = ["before-after.md"].freeze
+OPERATOR_SEVEN = %w[atablefor getgrocery hoteling philslist skooti stylish tudu].freeze
+BEFORE_AFTER_FOUR = %w[atablefor getgrocery hoteling skooti].freeze
+
+FRAMEWORK_CLAIMS = {
+  "wire-surface-is-the-engine's" => {
+    doc:   "config/routes.rb",
+    text:  "Kiosk wire surface (controllers shipped by kiosk-server).",
+    ships: OPERATOR_SEVEN + ["e2e"],
+    why:   "The one sentence that tells a reader the routes below are NOT this app's code. Eight " \
+           "hand-drawn copies of one framework fact; nothing compared them before this block.",
+  },
+  "one-endpoint-per-verb" => {
+    doc:   "config/routes.rb",
+    text:  "REST endpoints: one per verb, HTTP method = semantics.",
+    ships: OPERATOR_SEVEN,
+    source: { file: "kiosk-server/lib/kiosk/server/engine.rb",
+              must: %r{get\s+"/:kiosk_verb".*?\n.*?post\s+"/:kiosk_verb"}m },
+    why:   "K-1069's DEMONSTRATED instance, and the reason this block was commissioned. Measured " \
+           "at 4b347592: getgrocery and hoteling carried this line, the other five did not — one " \
+           "framework fact at two texts, produced by a fix wave that moved one copy and left the " \
+           "others. The e2e fixture is deliberately out: it draws a two-verb fixture wire, not a " \
+           "storefront's, and says so in its own header.",
+  },
+  "no-multiplexed-pair" => {
+    doc:   "config/routes.rb",
+    text:  "NO `POST /kiosk/query` or `POST /kiosk/run` — protocol 0.4 deleted the multiplexed " \
+           "pair outright (T-074 = A). Every verb is its own endpoint; the pair that serves them " \
+           "is drawn LAST, at the bottom of this file.",
+    ships: OPERATOR_SEVEN,
+    source: { file: "kiosk-core/lib/kiosk/protocol.rb", must: /T-074 = A/ },
+    why:   "The retired-wire fact, in the file an integrator copies. Seven copies of a sentence " \
+           "about the PROTOCOL, held to the protocol constant's own record of the deletion.",
+  },
+  "mount-is-the-escape-hatch" => {
+    doc:   "config/routes.rb",
+    text:  "hand-draws its routes rather than mounting the engine (that IS the escape hatch the " \
+           "engine documents)",
+    ships: OPERATOR_SEVEN + ["e2e"],
+    source: { file: "kiosk-server/lib/kiosk/server/engine.rb", must: /app\.routes\.append/ },
+    why:   "The sentence K-1068 put in all eight files to REPLACE the false «in a follow-up " \
+           "release these will be mounted». It is the positive form of the claim, so it is what " \
+           "must be present; the false form is banned by `routes-drawer-is-not-future-work` below.",
+  },
+  "routes-drawer-is-not-future-work" => {
+    doc:     :all,
+    forbids: [
+      /follow-?up release[^.]{0,200}(?:mount|routes drawer)/i,
+      /(?:mount|routes drawer)[^.]{0,200}(?:will be|lands? in|in a) follow-?up release/i,
+    ],
+    source:  { file: "kiosk-server/lib/kiosk/server/engine.rb", must: /^\s*routes do\s*$/ },
+    why:     "K-1064 + K-1068, the row's shape (a) and shape (c) at once: six `config/routes.rb` " \
+             "and three `before-after.md` promised the engine's routes drawer as future work " \
+             "while `engine.rb` had shipped BOTH drawers — the root-relative discovery block and " \
+             "the mount-prefixed one. A ban rather than a required sentence, because the defect " \
+             "was a sentence that should not exist anywhere rather than one missing somewhere.",
+  },
+  "mount-draws-the-table-today" => {
+    doc:   "before-after.md",
+    topic: /mount(?:ing|s|ed)?\s+the\s+engine|routes\s+drawer|what\s+the\s+mount\s+installs/i,
+    must:  /mount\w*\s+the\s+engine\s+(?:draws|would\s+draw)/i,
+    ships: %w[getgrocery hoteling skooti],
+    source: { file: "kiosk-server/lib/kiosk/server/engine.rb", must: /^\s*routes do\s*$/ },
+    why:   "The PARAPHRASE half of K-1064, and the one leg `text:` structurally cannot carry: the " \
+           "three documents state this fact in three different sentences, so nothing compares " \
+           "them. `topic:` pairs them by SUBJECT and `must:` pins the tense — the mount draws the " \
+           "table now, or would draw it, never will draw it. atablefor is deliberately out of " \
+           "`ships:`: its recipe says «you mount them yourself» and never claims what the mount " \
+           "draws, so the topic does not fire — and if it ever starts making the claim, it fires " \
+           "and is checked like the other three.",
+  },
+  "generator-does-not-touch-routes" => {
+    doc:   "before-after.md",
+    topic: /rails g kiosk:install|Run the generator/i,
+    must:  /generator does \*\*not\*\* touch your routes/,
+    ships: BEFORE_AFTER_FOUR,
+    source: { file: "kiosk-server/lib/generators/kiosk/install/install_generator.rb",
+              must_not: /routes/i },
+    why:   "K-1066's class: what `rails g kiosk:install` emits, stated in four documents and " \
+           "produced by one generator. The source binding is the strong half — the generator's " \
+           "own code must contain no mention of routes at all, so the day it grows a route " \
+           "injection this claim fails in all four documents at once instead of rotting in them.",
+  },
+  "registration-is-tolled" => {
+    doc:   "before-after.md",
+    text:  "Kiosk-PoW",
+    ships: BEFORE_AFTER_FOUR,
+    source: { file: "kiosk-server/lib/kiosk/server/pow_gate.rb", must: /Kiosk-PoW/ },
+    why:   "K-1065's PoW leg: the register chain was written WITHOUT its toll in hoteling and " \
+           "getgrocery while skooti and atablefor had it right — a defect filed at two demos and " \
+           "true of two others, found only because a fixer grepped past its row's site list. The " \
+           "header name is the cheapest thing that cannot be described away: a recipe that walks " \
+           "registration and never names `Kiosk-PoW` has left the toll out.",
+  },
+  "kyc-is-not-a-registration-gate" => {
+    doc:     :all,
+    forbids: [
+      /(?:registration|register|bot-?wall)[^.]{0,140}(?:PoW|proof-of-work)\s*(?:\+|and)\s*KYC/i,
+      /(?:PoW|proof-of-work)\s*(?:\+|and)\s*KYC[^.]{0,140}(?:registration|register|bot-?wall)/i,
+      /(?:hasn't|has not|hasn’t) paid the PoW and passed KYC/i,
+    ],
+    source:  { file: "kiosk-server/lib/kiosk/server/auth_controller.rb", must_not: /kyc/i },
+    why:     "K-1069's shape (b), verbatim: skooti's before-after asserted a KYC registration gate " \
+             "in its opening honesty note and its closing «what this does not require» paragraph " \
+             "while the shipped-gate list in the SAME document said KYC gates `rent_motorcycle` " \
+             "and nothing else. One document, two sections, no second demo needed. The source " \
+             "binding is what makes the ban true rather than stylistic: the register endpoint's " \
+             "whole controller contains no KYC token, so nothing on the registration path can " \
+             "consult an attestation. NOTE THE LIMIT this entry exists to illustrate — it catches " \
+             "this contradiction because it is DECLARED, not because anything here reasons.",
+  },
+}.freeze
+
+# The corpus documents, as {label => {rel => normalised text}}. Ruby files go
+# through Ripper — a routes.rb sentence WRAPS across `#` lines, and the same
+# single-line blindness is how «the Kiosk error envelope» hid in
+# atablefor/config/routes.rb from every grep for that phrase (K-1090). Markdown
+# is read whole with fenced blocks dropped (K-1051's territory, see above).
+def framework_prose_ruby(path)
+  Ripper.lex(File.read(path))
+        .select { |(_, type, _)| type == :on_comment }
+        .map { |(_, _, tok)| tok.sub(/\A#+\s?/, "").rstrip }
+        .join(" ")
+        .gsub(/\s+/, " ")
+end
+
+def framework_prose_text(path)
+  keep, fence = [], false
+  File.foreach(path) do |line|
+    if line.start_with?("```")
+      fence = !fence
+      next
+    end
+    keep << line unless fence
+  end
+  keep.join.gsub(/\s+/, " ")
+end
+
+corpus = {}
+demos.each do |dir|
+  label = short.(File.basename(dir))
+  FRAMEWORK_CORPUS_RUBY.each do |rel|
+    p = File.join(dir, rel)
+    (corpus[label] ||= {})[rel] = framework_prose_ruby(p) if File.exist?(p)
+  end
+  FRAMEWORK_CORPUS_TEXT.each do |rel|
+    p = File.join(dir, rel)
+    (corpus[label] ||= {})[rel] = framework_prose_text(p) if File.exist?(p)
+  end
+end
+e2e_routes = File.join(ROOT, "e2e/fixtures/routes.rb")
+(corpus["e2e"] ||= {})["config/routes.rb"] = framework_prose_ruby(e2e_routes) if File.exist?(e2e_routes)
+
+# A rule with nothing to read passes everything (the K-1021 lesson, and the
+# reason the static-signpost block above counts its pages). These two numbers
+# are the corpus, asserted rather than assumed.
+routes_read = corpus.count { |_, d| d.key?("config/routes.rb") }
+ba_read     = corpus.count { |_, d| d.key?("before-after.md") }
+if routes_read != OPERATOR_SEVEN.length + 2 # + prove + the e2e fixture
+  errors << "check-demo-copies: the K-1069 corpus read #{routes_read} config/routes.rb, expected " \
+            "#{OPERATOR_SEVEN.length + 2} (seven operator demos + prove + e2e/fixtures). A corpus " \
+            "that lost a document passes vacuously for it."
+end
+if ba_read != BEFORE_AFTER_FOUR.length
+  errors << "check-demo-copies: the K-1069 corpus read #{ba_read} before-after.md, expected " \
+            "#{BEFORE_AFTER_FOUR.length} (#{BEFORE_AFTER_FOUR.join(', ')}). A new one must be " \
+            "declared here, because every framework sentence in it is otherwise uncompared."
+end
+
+framework_claim_checks = 0
+FRAMEWORK_CLAIMS.each do |id, claim|
+  # (c) THE SOURCE BINDING, checked first: a claim whose producer stopped saying
+  # it is wrong in every document at once, and saying WHICH is more useful than
+  # N identical per-demo failures.
+  if (src = claim[:source])
+    path = File.join(ROOT, src[:file])
+    if !File.exist?(path)
+      errors << "K-1069 claim `#{id}`: its source #{src[:file]} does not exist. The claim is " \
+                "unbound — re-point it or delete it, do not leave it asserting about nothing."
+    else
+      body = File.read(path)
+      framework_claim_checks += 1
+      if src[:must] && body !~ src[:must]
+        errors << "K-1069 claim `#{id}`: #{src[:file]} no longer matches #{src[:must].inspect}. " \
+                  "The demos say this about the framework and the framework stopped saying it — " \
+                  "which is exactly how the routes-drawer promise outlived the drawer (K-1068)."
+      end
+      if src[:must_not] && body =~ src[:must_not]
+        errors << "K-1069 claim `#{id}`: #{src[:file]} now matches #{src[:must_not].inspect}, " \
+                  "which the claim asserts it does not. Every corpus document repeating this " \
+                  "claim is now false; fix the claim and the documents in one wave."
+      end
+    end
+  end
+
+  # (b) THE DECLARED CONTRADICTIONS.
+  Array(claim[:forbids]).each do |banned|
+    corpus.each do |label, docs|
+      docs.each do |rel, text|
+        next unless (m = text.match(banned))
+
+        framework_claim_checks += 1
+        errors << "#{label}: #{rel} says «#{m[0][0, 140]}», which K-1069 claim `#{id}` forbids. " \
+                  "#{claim[:why]}"
+      end
+    end
+  end
+
+  # (a) THE COPIES and THE PARAPHRASES.
+  next unless claim[:ships]
+
+  doc = claim[:doc]
+  next if doc == :all
+
+  claim[:ships].each do |label|
+    text = corpus.dig(label, doc)
+    if text.nil?
+      errors << "#{label}: K-1069 claim `#{id}` names it in `ships:` but it ships no #{doc}. " \
+                "Either the demo stopped shipping the document or the declaration is stale."
+      next
+    end
+    framework_claim_checks += 1
+
+    if claim[:text] && !text.include?(claim[:text])
+      errors << "#{label}: #{doc} does not carry K-1069 claim `#{id}` verbatim. It must say " \
+                "«#{claim[:text][0, 120]}#{claim[:text].length > 120 ? '…' : ''}». #{claim[:why]}"
+    end
+
+    if claim[:topic] && text =~ claim[:topic] && text !~ claim[:must]
+      errors << "#{label}: #{doc} raises K-1069 claim `#{id}`'s subject (#{claim[:topic].inspect}) " \
+                "but does not state it as #{claim[:must].inspect}. #{claim[:why]}"
+    elsif claim[:topic] && text !~ claim[:topic]
+      errors << "#{label}: #{doc} is in `ships:` for K-1069 claim `#{id}` but never raises its " \
+                "subject. A demo that drops a framework claim changes the set silently — the same " \
+                "reason `ships:` exists in COPIES above."
+    end
+  end
+
+  # A demo NOT in `ships:` that raises the topic anyway is the K-1064 shape: the
+  # claim appearing somewhere nobody declared it, in whatever tense that copy
+  # happened to be written in.
+  next unless claim[:topic]
+
+  (corpus.keys - claim[:ships]).each do |label|
+    text = corpus.dig(label, doc)
+    next unless text && text =~ claim[:topic]
+
+    framework_claim_checks += 1
+    next if text =~ claim[:must]
+
+    errors << "#{label}: #{doc} raises K-1069 claim `#{id}`'s subject without being declared in " \
+              "`ships:`, and does not state it as #{claim[:must].inspect}. Add it to `ships:` if " \
+              "the claim belongs there; a new copy of a framework claim may not appear silently."
+  end
+end
+
 if errors.empty?
   guarded = COPIES.count { |_, e| e[:rule] != :per_demo }
   tpl_checked = GENERATOR_TEMPLATES.count { |_, e| !e[:not_compared] }
@@ -2150,6 +2488,8 @@ if errors.empty?
        "#{static_pages} static signpost pages, " \
        "#{env_cites} source-path cite(s) in #{env_templates} deploy/env templates resolved " \
        "against their own demo, " \
+       "#{framework_claim_checks} cross-demo framework-prose assertions over " \
+       "#{FRAMEWORK_CLAIMS.size} declared claims in #{corpus.size} demo document sets, " \
        "the flow-runner helper held in lockstep across #{flow_held.size} demos " \
        "(#{FLOW_RUNNER_VARIANTS.size} declared variant#{FLOW_RUNNER_VARIANTS.size == 1 ? '' : 's'}) " \
        "with its exit-status tail compared in all #{flow_tails.size}"

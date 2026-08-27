@@ -42,16 +42,23 @@
 #           | from: lib/tasks/demo.rake, script/book_flow.rb | abridged: none -->
 #      <!-- derived: snippet | from: app/controllers/kiosk/x_controller.rb
 #           | transform: strip_descriptions | abridged: two marked elisions -->
-#      <!-- derived: none | why: the generator invocation an adopter types -->
+#      <!-- derived: generator
+#           | from: kiosk-server/lib/generators/kiosk/install/install_generator.rb -->
+#      <!-- derived: none | why: an illustrative one-line swap no file here carries -->
 #
 #    A fenced block with no declaration FAILS. That is the property that matters
 #    most: a new block cannot appear silently, the same way a new duplicated path
 #    cannot in bin/check-demo-copies.
 #
-# 2. TWO BLOCK CLASSES, TWO CHECKS — one check cannot serve both.
+# 2. THREE BLOCK CLASSES, THREE CHECKS — one check cannot serve them.
 #    TRANSCRIPT: «every line is a line the named task prints».
 #    SNIPPET:    «every line is a line of that file, modulo the declared
 #                 transformation».
+#    GENERATOR:  «every line invokes the namespace the named generator answers»,
+#                 where that namespace is DERIVED twice — from the generator's
+#                 path and from its class nesting — and the two must agree
+#                 (K-1099, which found one invocation exempted as
+#                 `derived: none` in three documents at once).
 #
 # 3. LINE MEMBERSHIP, NOT EQUALITY, AND NEVER REGENERATION. UUIDs, settlement
 #    ids, `pi_…` references, ports and dates change every run, so a guard cannot
@@ -162,7 +169,15 @@
 #   * THE JSON RULE CHECKS KEYS, NEVER VALUES. `"http_pay":200` and
 #     `"http_pay":500` are equally acceptable here.
 #   * `derived: none` IS AN UNCHECKED ESCAPE HATCH. It demands a `why:` and
-#     nothing more, exactly as `:per_demo` does in bin/check-demo-copies.
+#     nothing more, exactly as `:per_demo` does in bin/check-demo-copies. K-1099
+#     took three of its four users away — the `rails g kiosk:install` fence,
+#     which is now `derived: generator` — leaving ONE: hoteling's illustrative
+#     one-line swap, which genuinely has no producer in this repository.
+#   * `derived: generator` CHECKS THE NAMESPACE, NOT THE EFFECT. It proves that
+#     an adopter typing this line reaches the generator the block names; it says
+#     nothing about what that generator then emits. The prose beside the fence
+#     («this emits exactly two things …») is K-1069's territory, in
+#     bin/check-demo-copies, which binds it to the generator's own source.
 #   * THE SNIPPET CHECK IS SET MEMBERSHIP, so it cannot see a reordering, a
 #     duplication, or a deletion — only a line that is in no version of the file.
 #   * IT DOES NOT ADJUDICATE WHETHER A COMPLETENESS PROMISE IS TRUE. Membership
@@ -183,6 +198,14 @@
 # does not exist; a completeness promise beside a `derived: none` block; and a
 # demo dropped from DOCUMENTED_DEMOS while it still ships the document. The
 # third of those is why (c) is exclusive: it PASSED before that ordering fix.
+# K-1099 added five more, same discipline: a generator fence drifted to
+# `rails g kiosk:setup` (fails in that document alone); the generator's own
+# directory renamed (fails in all three at once, which is the property the
+# `derived: none` hatch did not have); the generator's class nesting renamed
+# while its path stayed (path and class then derive different namespaces); a
+# demo dropped from GENERATOR_BLOCK_DEMOS while it still declares the block;
+# and one demo's block reverted to the `derived: none` hatch, which is the
+# «silently drops the recipe» direction of the same corpus rule.
 #
 # Stdlib only (ripper + json), no bundle, no database, no Rails boot, well under
 # a second on a bare checkout — the same profile as bin/check-demo-copies.
@@ -226,6 +249,64 @@ PROMISES = [
 ].freeze
 
 TRANSFORMS = %w[strip_descriptions dedent].freeze
+
+# ── `derived: generator` — a COMMAND, bound to the generator that answers it
+#    (K-1099) ────────────────────────────────────────────────────────────────
+#
+# Three of the four `derived: none` hatches were the SAME fenced block —
+# `rails g kiosk:install`, byte-identical (md5 15a40864170e18899d5ea98c2fdf0632)
+# in atablefor, getgrocery and hoteling — i.e. a CROSS-DEMO fact spelled as an
+# exemption repeated once per document. Nothing would have noticed one of them
+# drifting to `rails g kiosk:setup`, nor the generator being renamed under all
+# three at once.
+#
+# Cross-demo agreement is the WEAK oracle here: three identical copies of a
+# wrong command agree perfectly. The strong one is that `kiosk:install` is not a
+# fact about the demos at all — it is the generator's own PATH. Rails resolves
+# an invocation to `lib/generators/<ns>/<name>/<name>_generator.rb`, and derives
+# the same namespace a second time from the class nesting inside that file
+# (`Kiosk::Generators::InstallGenerator` → thor's `kiosk:generators:install_generator`
+# → `_generator` stripped → `:generators:` collapsed → `kiosk:install`). So the
+# block is checked against BOTH derivations, which must agree with each other
+# and with every line of the block. Rename the directory, the file, or the
+# class, and all three documents fail in the same run.
+#
+# It is STATIC — no Rails boot, no bundle, no database, the same profile as the
+# rest of this script. Booting Rails to ask the real generator lookup would be
+# the only stronger check and it is not affordable here; what the static pair
+# cannot see is a generator that is found under this namespace but does
+# something other than what the prose beside the block says it emits (that
+# sentence is K-1069's territory, in bin/check-demo-copies).
+#
+# `ships:`-style corpus declaration, same reason as DOCUMENTED_DEMOS above: a
+# demo that silently drops the adoption recipe changes the set with nothing
+# noticing. skooti ships no recipe section — its document declares one block in
+# total — so it is excluded BY DECLARATION, not by an exception.
+GENERATOR_BLOCK_DEMOS = %w[atablefor getgrocery hoteling].freeze
+
+GENERATOR_PATH_RE = %r{(?:\A|/)lib/generators/(?<ns>[a-z0-9_]+)/(?<name>[a-z0-9_]+)/\k<name>_generator\.rb\z}
+
+# The runner spellings an adopter may reasonably type. Deliberately a closed
+# list: the point is that the NAMESPACE is derived, not that any command shape
+# is waved through.
+GENERATOR_RUNNERS = ["rails", "bin/rails", "bundle exec rails"].freeze
+GENERATOR_VERBS   = %w[g generate].freeze
+
+def generator_invocations(namespace)
+  GENERATOR_RUNNERS.product(GENERATOR_VERBS).map { |runner, verb| "#{runner} #{verb} #{namespace}" }
+end
+
+# Rails::Generators::Base.namespace, reproduced from the source text rather than
+# by loading it: thor's namespace of the class nesting, with a trailing
+# `_generator` stripped and a `:generators:` segment collapsed.
+def generator_namespace_from_source(body)
+  mods  = body.scan(/^\s*module\s+([A-Z][A-Za-z0-9_]*)\s*$/).flatten
+  klass = body[/^\s*class\s+([A-Z][A-Za-z0-9_]*Generator)\s*<\s*(?:::)?Rails::Generators::(?:Base|NamedBase)\b/, 1]
+  return nil if klass.nil?
+
+  parts = (mods + [klass]).map { |c| c.gsub(/([a-z\d])([A-Z])/, '\1_\2').downcase }
+  parts.join(":").sub(/_generator\z/, "").sub(/:generators:/, ":")
+end
 
 WILD = " WILD "
 
@@ -473,7 +554,6 @@ end
 def parse_document(path)
   lines = File.readlines(path, chomp: true)
   blocks = []
-  prose_from = 0
   i = 0
   while i < lines.length
     unless lines[i].start_with?("```")
@@ -525,6 +605,7 @@ end
 errors = []
 listing = ARGV.include?("--list")
 counts = Hash.new(0)
+generator_blocks = Hash.new(0)
 
 present = Dir.glob(File.join(ROOT, "kiosk-demo-*", DOC)).map { |p| File.basename(File.dirname(p)).sub("kiosk-demo-", "") }.sort
 undeclared = present - DOCUMENTED_DEMOS
@@ -581,8 +662,64 @@ end
       next
     end
 
+    # A COMMAND an adopter types is not output this repo produces, which is why
+    # these three blocks sat under `derived: none` — but the command's namespace
+    # IS produced here, by the generator that answers it. See the header block
+    # at GENERATOR_BLOCK_DEMOS for why cross-demo agreement is the weaker oracle.
+    if kind == "generator"
+      generator_blocks[demo] += 1
+      rel = block.decl["from"].to_s.strip
+      if rel.empty?
+        errors << "#{where}: `derived: generator` needs a `from:` naming the generator that answers " \
+                  "the invocation. It is REPO-relative, unlike a transcript's or a snippet's — this " \
+                  "producer lives in the engine gem rather than in the demo, which is the whole " \
+                  "point of the binding."
+        next
+      end
+      src = File.join(ROOT, rel)
+      unless File.file?(src)
+        errors << "#{where}: `from: #{rel}` names no file in this repository. The block quotes an " \
+                  "invocation with nothing to answer it."
+        next
+      end
+      m = GENERATOR_PATH_RE.match(rel)
+      if m.nil?
+        errors << "#{where}: `from: #{rel}` is not a Rails generator path " \
+                  "(`…/lib/generators/<ns>/<name>/<name>_generator.rb`), so no namespace can be " \
+                  "derived from it and there is nothing to hold the invocation to."
+        next
+      end
+      namespace  = "#{m[:ns]}:#{m[:name]}"
+      from_class = generator_namespace_from_source(File.read(src))
+      if from_class.nil?
+        errors << "#{where}: #{rel} defines no `class …Generator < Rails::Generators::Base` " \
+                  "(or NamedBase), so it is not a generator and cannot answer `#{namespace}`."
+        next
+      end
+      if from_class != namespace
+        errors << "#{where}: #{rel} derives `#{namespace}` from its PATH but `#{from_class}` from " \
+                  "its class nesting. Rails resolves an invocation by both; while they disagree, " \
+                  "one of the two is what an adopter typing this block's command actually gets."
+        next
+      end
+      accepted = generator_invocations(namespace)
+      block.body.each_with_index do |line, k|
+        next if line.strip.empty?
+
+        lineno = block.fence_line + 1 + k
+        next if accepted.include?(line.strip.gsub(/\s+/, " "))
+
+        errors << "#{label}:#{lineno}: this line does not invoke `#{namespace}`, the namespace " \
+                  "#{rel} answers — accepted spellings are #{accepted.join(', ')}:\n      " \
+                  "#{line.strip[0, 160]}"
+      end
+      counts[:generator] += 1
+      puts "  generator  #{where}  #{namespace}  <- #{rel}" if listing
+      next
+    end
+
     unless %w[transcript snippet].include?(kind)
-      errors << "#{where}: `derived: #{kind}` is not one of transcript, snippet, none."
+      errors << "#{where}: `derived: #{kind}` is not one of transcript, snippet, generator, none."
       next
     end
 
@@ -766,17 +903,37 @@ end
   end
 end
 
-if counts[:transcript].zero? && counts[:snippet].zero? && errors.empty?
+# The adoption recipe is a CROSS-DEMO section, so its presence is declared, not
+# discovered — a demo that drops it, or grows one nobody declared, changes the
+# set with nothing noticing (K-1099, and the same argument as DOCUMENTED_DEMOS).
+(DOCUMENTED_DEMOS & present).each do |demo|
+  want = GENERATOR_BLOCK_DEMOS.include?(demo) ? 1 : 0
+  got  = generator_blocks[demo]
+  next if got == want
+
+  errors << if want == 1
+              "kiosk-demo-#{demo}/#{DOC}: declares #{got} `derived: generator` block(s), expected 1. " \
+              "#{demo} is in GENERATOR_BLOCK_DEMOS, so its adoption recipe must show the generator " \
+              "invocation and that invocation must be bound to the generator that answers it."
+            else
+              "kiosk-demo-#{demo}/#{DOC}: declares #{got} `derived: generator` block(s) but #{demo} " \
+              "is not in GENERATOR_BLOCK_DEMOS. A new copy of a cross-demo command may not appear " \
+              "silently — declare it there."
+            end
+end
+
+if counts[:transcript].zero? && counts[:snippet].zero? && counts[:generator].zero? && errors.empty?
   errors << "check-demo-derivations: found NO declared blocks at all. A rule that inspects nothing " \
             "passes everything."
 end
 
 if errors.empty?
-  puts "check-demo-derivations: OK — #{counts[:transcript]} transcript and #{counts[:snippet]} " \
-       "snippet blocks across #{(DOCUMENTED_DEMOS & present).size} narrative documents, every line " \
-       "held to a literal its declared producer prints or a line of the file it quotes " \
-       "(#{counts[:json]} JSON summary line(s) key-checked, #{counts[:elision]} marked elision(s), " \
-       "#{counts[:none]} block(s) declared underived with a reason)."
+  puts "check-demo-derivations: OK — #{counts[:transcript]} transcript, #{counts[:snippet]} " \
+       "snippet and #{counts[:generator]} generator-invocation block(s) across " \
+       "#{(DOCUMENTED_DEMOS & present).size} narrative documents, every line held to a literal its " \
+       "declared producer prints, a line of the file it quotes, or the namespace the named " \
+       "generator answers (#{counts[:json]} JSON summary line(s) key-checked, #{counts[:elision]} " \
+       "marked elision(s), #{counts[:none]} block(s) declared underived with a reason)."
   exit 0
 end
 

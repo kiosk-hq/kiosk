@@ -172,7 +172,7 @@ payments; this demo does not carry it, and uses a stub PSP instead.
 
 **2. Run the generator**
 
-<!-- derived: none | why: the generator invocation an adopter types — a command, not output this repo produces -->
+<!-- derived: generator | from: kiosk-server/lib/generators/kiosk/install/install_generator.rb | why: a command an adopter types, held to the namespace that generator answers — derived from its path and again from its class nesting, so a rename fails here rather than rotting in three documents at once (K-1099) -->
 ```
 rails g kiosk:install
 ```

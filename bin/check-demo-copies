@@ -1663,6 +1663,62 @@ if static_pages != expected_static
             "bodyless-error class itself, and a rule with nothing to read passes everything."
 end
 
+# ── A deploy/env template may not cite a path that is not there (K-1093) ─────
+#
+# Six templates told an operator the PoW difficulty knob was «wired via
+# `lib/pow_difficulty.rb`». No demo has ever had a file at that path: it is
+# `app/services/pow_difficulty.rb` in all seven, and `deploy/README.md` — the
+# runbook shipped in the same directory — said so correctly the whole time. So
+# the two disagreed about a path, and the templates are the file an operator
+# actually opens while editing values. The stale bootsnap caches still on disk
+# in each demo's `tmp/` name the OLD location, which is what this was: a cite
+# that was true once and rotted silently when the file moved. It is the SECOND
+# time a `deploy/` document has been found citing a path nobody verified
+# (`CHANGELOG.md`, 2026-07-21, same directory), which is what makes it a rule
+# rather than a fix.
+#
+# `skooti.env.example` is the shape to PREFER and needs no rule at all — it
+# names the constant (`registration_pow_params = PowDifficulty.params`), and a
+# constant does not rot when a file moves. But a template that DOES cite a path
+# must cite one that exists in the demo it configures, which is derived from the
+# template's own filename rather than listed here. Only cites containing a `/`
+# are read: a bare `production.rb` names a file without saying where it lives,
+# and this rule will not guess for it.
+ENV_TEMPLATE_DIR  = "deploy/env"
+ENV_TEMPLATE_CITE = %r{(?<![\w./-])(?!/)[a-z][A-Za-z0-9_.-]*(?:/[A-Za-z0-9_.-]+)+\.(?:rb|yml|yaml|erb)\b}
+
+env_templates = 0
+env_cites     = 0
+Dir[File.join(ROOT, ENV_TEMPLATE_DIR, "*.env.example")].sort.each do |tpl|
+  stem = File.basename(tpl, ".env.example")
+  demo = File.join(ROOT, "kiosk-demo-#{stem}")
+  # kyc-demo.env.example configures the prove broker under a name of its own and
+  # has no `kiosk-demo-<stem>` to resolve against; skipping it is deliberate and
+  # is why the count below is asserted rather than assumed.
+  next unless File.directory?(demo)
+
+  env_templates += 1
+  File.readlines(tpl).each_with_index do |line, i|
+    line.scan(ENV_TEMPLATE_CITE).each do |cite|
+      env_cites += 1
+      next if File.exist?(File.join(demo, cite))
+
+      errors << "#{ENV_TEMPLATE_DIR}/#{File.basename(tpl)}:#{i + 1}: cites `#{cite}`, which does " \
+                "not exist in kiosk-demo-#{stem} (K-1093). A shipped template is what an operator " \
+                "opens while editing values, so a path in it is followed — name the CONSTANT " \
+                "instead, the way skooti.env.example does, since a constant does not rot when a " \
+                "file moves; or cite the path the demo actually has."
+    end
+  end
+end
+
+if env_templates.zero? || env_cites.zero?
+  errors << "check-demo-copies: the K-1093 template-cite rule read #{env_templates} template(s) " \
+            "and #{env_cites} path cite(s) — either #{ENV_TEMPLATE_DIR}/ moved, the templates no " \
+            "longer share a stem with their demo directory, or the cite pattern stopped matching. " \
+            "A rule that inspects nothing passes everything."
+end
+
 # ── The flow-runner helper: lib/tasks/ is not compared, this construct is (K-1046)
 #
 # `lib/tasks/*.rake` sits outside SCAN_ROOTS, and the reason recorded up there
@@ -2092,6 +2148,8 @@ if errors.empty?
        "#{prose_units.length} copies, " \
        "no retired 0.3 wire or error-shape vocabulary in the served body of " \
        "#{static_pages} static signpost pages, " \
+       "#{env_cites} source-path cite(s) in #{env_templates} deploy/env templates resolved " \
+       "against their own demo, " \
        "the flow-runner helper held in lockstep across #{flow_held.size} demos " \
        "(#{FLOW_RUNNER_VARIANTS.size} declared variant#{FLOW_RUNNER_VARIANTS.size == 1 ? '' : 's'}) " \
        "with its exit-status tail compared in all #{flow_tails.size}"

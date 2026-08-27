@@ -228,6 +228,42 @@ RSpec.describe Kiosk::Server::DeviceAuthorization do
         expect { pending.approve(user_id: nil) }
           .to raise_error(ArgumentError, /user_id/)
       end
+
+      # ── the role travels with the approval (K-1109) ──────────────────────
+      #
+      # A `:claim` row is born role-less (its opening request is
+      # unauthenticated and refuses to carry a role), so `role:` here is the
+      # ONLY way a claim ceremony acquires one — from the approving human's
+      # `Identity#role`.
+      it "stamps the approving human's role onto a role-less row" do
+        fresh = described_class.generate(client_id: "kiosk-cli").last
+        expect(fresh.requested_role).to be_nil
+
+        approved = fresh.approve(user_id: user_id, role: "owner")
+        expect(approved.requested_role).to eq("owner")
+      end
+
+      it "normalises a symbol role to a String" do
+        fresh = described_class.generate(client_id: "kiosk-cli").last
+        expect(fresh.approve(user_id: user_id, role: :owner).requested_role).to eq("owner")
+      end
+
+      # A `:link` row travels the other way: the human MINTS it, so its role is
+      # already on the row and `LinkCode.mint` approves with no `role:`. nil
+      # therefore means "nothing new to stamp", never "clear what is there" —
+      # an unconditional overwrite here would silently delete every link
+      # ceremony's captured role.
+      it "leaves an already-captured role alone when approved with no role" do
+        link = described_class.generate(
+          client_id: "kiosk-link", kind: :link, requested_role: "owner",
+        ).last
+        expect(link.approve(user_id: user_id).requested_role).to eq("owner")
+      end
+
+      it "leaves the row role-less when neither side supplies one" do
+        fresh = described_class.generate(client_id: "kiosk-cli").last
+        expect(fresh.approve(user_id: user_id).requested_role).to be_nil
+      end
     end
 
     describe "#deny" do

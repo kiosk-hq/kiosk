@@ -83,10 +83,50 @@ RSpec.describe "OAuth binding controllers" do
       expect(body[:error_description]).to match(/client_id/)
     end
 
-    it "rejects an undeclared role" do
+    # K-1109. The ceremony's role is the APPROVING HUMAN's, captured at the
+    # verify page — so this unauthenticated request has no business carrying
+    # one, at any value. It used to accept any member of `config.roles`, which
+    # on a multi-role origin let a stranger open a ceremony for `owner`.
+    #
+    # Both spellings and BOTH KINDS of value are probed: an undeclared role
+    # (which the old code also refused, for the wrong reason) and a DECLARED
+    # one (which it accepted, and which is the actual escalation). A test that
+    # only sent `role=root` would still pass against the vulnerable code.
+    it "refuses a client-supplied role — even one this provider declares" do
+      status, body = start!("client_id" => "assistant", "public_key" => pem, "role" => "customer")
+      expect(status).to eq(400)
+      expect(body[:error]).to eq("invalid_request")
+      expect(body[:error_description]).to match(/role is not accepted here/)
+      expect(body[:error_description]).to match(/does not choose its own role/)
+    end
+
+    it "refuses an undeclared role the same way — the value is never consulted" do
       status, body = start!("client_id" => "assistant", "public_key" => pem, "role" => "root")
       expect(status).to eq(400)
-      expect(body[:error_description]).to match(/unknown role/)
+      expect(body[:error_description]).to match(/role is not accepted here/)
+    end
+
+    it "refuses the OAuth-standard `scope` spelling too" do
+      status, body = start!("client_id" => "assistant", "public_key" => pem, "scope" => "owner")
+      expect(status).to eq(400)
+      expect(body[:error_description]).to match(/scope is not accepted here/)
+    end
+
+    it "tolerates an EMPTY role/scope — an empty value asserts nothing" do
+      status, = start!(
+        "client_id" => "assistant", "public_key" => pem, "role" => "", "scope" => "",
+      )
+      expect(status).to eq(200)
+    end
+
+    it "opens the ceremony with a ROLE-LESS row — the role is stamped at approval" do
+      status, body = start!("client_id" => "assistant", "public_key" => pem)
+      expect(status).to eq(200)
+
+      row = store.find_by_device_code_hash(
+        Kiosk::Server::DeviceAuthorization.hash_device_code(body[:device_code]),
+      )
+      expect(row.requested_role).to be_nil
     end
   end
 
@@ -148,6 +188,37 @@ RSpec.describe "OAuth binding controllers" do
       expect(body[:token_type]).to eq("Bearer")
       expect(Kiosk::Server::AccountBinding).to have_received(:bind!).with(
         public_key_pem: pem.strip, user_id: user_id, requested_role: nil,
+      )
+    end
+
+    # K-1109 END TO END OVER THE CONTROLLERS. The role that reaches `bind!` is
+    # the one the APPROVER carried, and it reaches it even though the opening
+    # request said nothing (it cannot). The `scope` echoed back is that same
+    # granted role.
+    it "forwards the APPROVING human's role to bind! and echoes it as the granted scope" do
+      Kiosk.configure { |c| c.roles = %i[customer owner] }
+      start = Kiosk::Server::DeviceCodeGrant.start(client_id: "assistant", public_key_pem: pem)
+      Kiosk::Server::DeviceVerification.approve(
+        user_code: start[:user_code], user_id: user_id, role: "owner", store: store,
+      )
+      Kiosk::Server::DeviceCodeGrant.reset_poll_registry!
+
+      challenge = Kiosk::Server::AuthChallenge.issue(public_key_pem: pem.strip)
+      signed = JWT.encode(
+        { aud: "https://provider.example", nonce: challenge[:challenge], jti: SecureRandom.uuid },
+        rsa, "RS256",
+      )
+      allow(Kiosk::Server::AccountBinding).to receive(:bind!).and_return(
+        { agent_id: "a-1", user_id: user_id, access_token: "kiosk-pop-jwt", fresh: true },
+      )
+
+      status, body = token!(
+        "grant_type" => grant, "device_code" => start[:device_code], "signed" => signed,
+      )
+      expect(status).to eq(200)
+      expect(body[:scope]).to eq("owner")
+      expect(Kiosk::Server::AccountBinding).to have_received(:bind!).with(
+        public_key_pem: pem.strip, user_id: user_id, requested_role: "owner",
       )
     end
   end

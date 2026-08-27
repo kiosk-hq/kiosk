@@ -11,7 +11,9 @@ module Kiosk
     #   .find_pending(user_code:) — lookup by user_code with the visual
     #                                XXXX-XXXX dash stripped; only
     #                                pending rows are visible
-    #   .approve(user_code:, user_id:) — transition pending → approved
+    #   .approve(user_code:, user_id:, role:) — transition pending →
+    #                                approved, capturing the approving
+    #                                human's principal AND their role
     #   .deny(user_code:)           — transition pending → denied
     #
     # Codes are stored hashed only: the typed code is normalised, hashed
@@ -43,16 +45,26 @@ module Kiosk
       end
 
       # Transition pending → approved, stamping the approving account
-      # holder's user_id. Raises {CodeNotFoundError} when no pending row
-      # matches.
-      def approve(user_code:, user_id:,
+      # holder's user_id AND their role. Raises {CodeNotFoundError} when no
+      # pending row matches.
+      #
+      # `role:` IS THE CLAIM CEREMONY'S ROLE SOURCE (ADR-0011 amendment;
+      # K-1109). Pass `user_idp`'s `Identity#role` for the human whose session
+      # is approving — the same value {AuthController#link} captures onto a
+      # link row at mint. The claim row was created by an UNAUTHENTICATED
+      # request and carries no role of its own, so this call is the only place
+      # a claim ceremony can acquire one, and a bound assistant can therefore
+      # never carry more than its approver holds. A caller that passes nothing
+      # leaves the row role-less, which binds at `registration_role`/absent
+      # exactly as before.
+      def approve(user_code:, user_id:, role: nil,
                   store: Kiosk.configuration.device_authorization_store)
         raise ArgumentError, "user_id required" if user_id.nil? || user_id.to_s.empty?
 
         da = find_pending(user_code: user_code, store: store)
         raise CodeNotFoundError, "user_code does not match any pending authorization" if da.nil?
 
-        store.update(da.approve(user_id: user_id))
+        store.update(da.approve(user_id: user_id, role: role))
       end
 
       # Transition pending → denied.

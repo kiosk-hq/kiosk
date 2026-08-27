@@ -109,6 +109,26 @@ RSpec.describe Kiosk::Server::DeviceVerification do
       expect { described_class.approve(user_code: code, user_id: "") }
         .to raise_error(ArgumentError, /user_id/)
     end
+
+    # ── the approval IS the role source (ADR-0011 amendment; K-1109) ───────
+    it "stamps the approving human's role onto the row, and PERSISTS it" do
+      code, da = fresh
+      expect(da.requested_role).to be_nil
+
+      approved = described_class.approve(user_code: code, user_id: user_id, role: "owner")
+      expect(approved.requested_role).to eq("owner")
+
+      # Read back through the store: the value the token poll will consult is
+      # the persisted one, not the object this call happened to return.
+      reloaded = store.find_by_device_code_hash(da.device_code_hash)
+      expect(reloaded.requested_role).to eq("owner")
+    end
+
+    it "leaves the row role-less when the provider's user_idp reports no role" do
+      code, da = fresh
+      described_class.approve(user_code: code, user_id: user_id, role: nil)
+      expect(store.find_by_device_code_hash(da.device_code_hash).requested_role).to be_nil
+    end
   end
 
   describe ".deny" do

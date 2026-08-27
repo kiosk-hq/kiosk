@@ -84,6 +84,35 @@ RSpec.describe "DeviceVerifyController" do
     expect(html).to include(%(value="deny"))
   end
 
+  # ── INFORMED CONSENT: the panel names the access being handed over ───────
+  #
+  # K-1109's second half. The ceremony's role is the approver's own, so the
+  # page can and must say which one — an approval given without seeing it is
+  # not consent to anything in particular, and that is exactly the state the
+  # page was in when a `role=owner` ceremony rendered a fingerprint and a
+  # timestamp and nothing else.
+  it "names the role the approval hands over" do
+    Kiosk.configure { |c| c.roles = %i[customer owner] }
+    wire_user_idp(build_identity(actor: "human", agent_id: nil, user_id: user_id, role: "owner"))
+    start = start_claim
+
+    status, html = dispatch(:show, method: "GET", params: { "user_code" => start[:user_code] })
+    expect(status).to eq(200)
+    expect(html).to include("Access you are handing it")
+    expect(html).to include("owner")
+  end
+
+  it "says so plainly when the provider gives the approver no role" do
+    wire_user_idp(build_identity(actor: "human", agent_id: nil, user_id: user_id, role: nil))
+    start = start_claim
+
+    _status, html = dispatch(:show, method: "GET", params: { "user_code" => start[:user_code] })
+    expect(html).to include("Access you are handing it")
+    # A short phrase on purpose: the template hard-wraps, so a longer literal
+    # would be asserting the line breaks rather than the sentence.
+    expect(html).to include("no separate access")
+  end
+
   it "reports an unknown code without leaking whether it ever existed" do
     status, html = dispatch(:show, method: "GET", params: { "user_code" => "WDJB-MJHT" })
     expect(status).to eq(200)
@@ -102,6 +131,36 @@ RSpec.describe "DeviceVerifyController" do
     reloaded = store.find_by_device_code_hash(start[:da].device_code_hash)
     expect(reloaded).to be_approved
     expect(reloaded.user_id).to eq(user_id)
+  end
+
+  # THE FIX ITSELF (K-1109). The role on the row is the SESSION holder's, and
+  # it is the only role a claim ceremony can end up with: the authorization
+  # request that created this row refuses to carry one.
+  it "approve stamps the SESSION holder's ROLE on the row" do
+    Kiosk.configure { |c| c.roles = %i[customer owner] }
+    wire_user_idp(build_identity(actor: "human", agent_id: nil, user_id: user_id, role: "owner"))
+    start = start_claim
+    expect(start[:da].requested_role).to be_nil
+
+    dispatch(
+      :create, method: "POST",
+      params: { "user_code" => start[:user_code], "decision" => "approve" },
+    )
+
+    expect(store.find_by_device_code_hash(start[:da].device_code_hash).requested_role)
+      .to eq("owner")
+  end
+
+  it "approve leaves the row role-less when the session holder has no role" do
+    wire_user_idp(build_identity(actor: "human", agent_id: nil, user_id: user_id, role: nil))
+    start = start_claim
+
+    dispatch(
+      :create, method: "POST",
+      params: { "user_code" => start[:user_code], "decision" => "approve" },
+    )
+
+    expect(store.find_by_device_code_hash(start[:da].device_code_hash).requested_role).to be_nil
   end
 
   it "deny marks the row denied" do

@@ -35,6 +35,14 @@ module Kiosk
     # `:link` rows until redeem, and for legacy pre-binding rows); `user_id`
     # is stamped at approval (claim) or creation (link).
     #
+    # `requested_role` is, on BOTH kinds, the role of the HUMAN this row
+    # belongs to — never a role a client asked for (K-1109). A `:link` row
+    # carries it from creation ({LinkCode.mint} reads `Identity#role` off the
+    # minting session); a `:claim` row is born WITHOUT one and receives it at
+    # {#approve}, from the identity of whoever approves. `nil` means the
+    # provider's `user_idp` reports no role, and the binding then falls back to
+    # `registration_role`/absent (ADR-0011's no-regression clause).
+    #
     # Lifecycle: `:pending → :approved | :denied → :consumed | :expired`.
     # Transitions are non-destructive — each returns a new instance via
     # `Data#with`. Persistence is up to the configured
@@ -177,11 +185,23 @@ module Kiosk
         now >= expires_at
       end
 
-      def approve(user_id:)
+      # Approve a pending row, stamping the approving account holder's
+      # `user_id` — and, on a `:claim` row, their ROLE.
+      #
+      # `role:` is where a claim ceremony's `requested_role` comes from
+      # (K-1109). A `:claim` row is born role-less because the request that
+      # opens it is unauthenticated; the role is captured HERE, at the one
+      # moment an authenticated human is present, from `user_idp`'s
+      # `Identity#role`. A `:link` row travels the other way — it is minted BY
+      # the human, so {LinkCode.mint} already put their role on it via
+      # {.generate} and calls this with no `role:` — hence the fallback to the
+      # value already on the row rather than an unconditional overwrite: nil
+      # means "nothing new to stamp", never "clear it".
+      def approve(user_id:, role: nil)
         raise StateError, "cannot approve a #{status} authorization" unless pending?
         raise ArgumentError, "user_id required" if user_id.nil?
 
-        with(status: :approved, user_id: user_id)
+        with(status: :approved, user_id: user_id, requested_role: role&.to_s || requested_role)
       end
 
       def deny

@@ -90,6 +90,22 @@ RSpec.shared_examples "a device-authorization store" do
       expect { store.update(build_authorization) }
         .to raise_error(Kiosk::Server::DeviceAuthorizationStores::NotFoundError, /not found/)
     end
+
+    # K-1109. `requested_role` is written MID-LIFE now, not only at INSERT: a
+    # claim row is born role-less and receives the approving human's role at
+    # `approve`. The durable adapter's UPDATE listed four columns and this was
+    # not one of them, so on Postgres the approval persisted and the role went
+    # nowhere — every claim-bound assistant would have silently fallen back to
+    # `registration_role`. The in-memory adapter swaps the whole value object
+    # and never had the gap, which is why this belongs in the SHARED contract:
+    # a store that is only exercised in memory hides exactly this class of bug.
+    it "persists a role stamped at approval (not only at insert)" do
+      da = build_authorization(requested_role: nil)
+      store.create(da)
+      store.update(da.approve(user_id: user_id, role: "owner"))
+
+      expect(store.find_by_device_code_hash(da.device_code_hash).requested_role).to eq("owner")
+    end
   end
 
   # ── K-887: the atomic single-use claim ──────────────────────────────────

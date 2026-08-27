@@ -14,11 +14,27 @@
       Approve only if you started this yourself and the fingerprint below
       matches the one your assistant shows you.
     </p>
+    <%# The access line is a CONSENT field, not decoration (K-1109). What the
+        assistant ends up able to do is decided by the role stamped here, off
+        the signed-in human's own identity — so the human approving the link
+        is shown the same value the token will carry. It is not something the
+        assistant asked for; the request that opened this ceremony is
+        unauthenticated and refuses to carry a role at all. %>
     <dl>
       <dt>Key fingerprint</dt>
       <dd><code><%= @fingerprint %></code></dd>
       <dt>Requested at</dt>
       <dd><%= @authorization.created_at.utc %></dd>
+      <dt>Access you are handing it</dt>
+      <dd>
+        <% if @role %>
+          It will act as you, with your own <code><%= @role %></code> access at
+          this site — the assistant does not get to ask for any other.
+        <% else %>
+          It will act as you. This site gives your account no separate access
+          level, so the assistant gets the same access you have.
+        <% end %>
+      </dd>
     </dl>
     <form action="<%= request.path %>" method="post">
       <input type="hidden" name="authenticity_token" value="<%= form_authenticity_token %>">

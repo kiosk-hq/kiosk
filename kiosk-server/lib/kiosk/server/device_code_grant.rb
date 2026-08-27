@@ -19,7 +19,8 @@ module Kiosk
     # account (auth.md "User Claimed"). The request carries the agent's
     # public key; the human approves the `user_code` on the provider's
     # session-authenticated verify page, and {DeviceVerification.approve}
-    # attaches the authorization to THAT `user_id`. The poll then proves
+    # attaches the authorization to THAT `user_id` — and to that human's own
+    # ROLE, which is the only place a bound assistant's role comes from. The poll then proves
     # possession of the key (BIND-POP) and {AccountBinding.bind!} creates the
     # durable key→account link — fresh key registers a linked assistant
     # account, known key rebinds with its reputation carried over. The token
@@ -60,12 +61,21 @@ module Kiosk
       # caller (controller) has already run {PopVerifier.load_public_key}
       # so only well-formed RSA-2048+ keys reach here.
       #
+      # THERE IS NO `requested_role:` HERE, AND ITS ABSENCE IS THE CONTROL
+      # (K-1109). A `:claim` row is born ROLE-LESS, always: the request that
+      # opens the ceremony is unauthenticated, so nothing it says about a role
+      # is evidence of anything. The row's `requested_role` is stamped later,
+      # by {DeviceVerification.approve}, from the APPROVING HUMAN's own
+      # `Identity#role` — ADR-0011's roles-from-IdP, the same source the link
+      # direction reads at mint. Taking the parameter away is what makes "the
+      # agent never self-selects" a property of the code path rather than a
+      # validation someone has to remember to run.
+      #
       # @return [Hash] {device_code:, user_code:, expires_in:, interval:, da:}
       #   `user_code` is the display form (XXXX-XXXX); only its hash is
       #   persisted.
       def start(client_id:,
                 public_key_pem:,
-                requested_role: nil,
                 store: Kiosk.configuration.device_authorization_store,
                 expires_in: DeviceAuthorization::DEFAULT_EXPIRES_IN,
                 now: Time.now)
@@ -73,7 +83,6 @@ module Kiosk
           client_id:      client_id,
           kind:           :claim,
           public_key_pem: public_key_pem.to_s.strip,
-          requested_role: requested_role,
           expires_in:     expires_in,
           now:            now,
         )
@@ -186,6 +195,12 @@ module Kiosk
             return failure(:invalid_grant, "device_code already used")
           end
 
+          # `da.requested_role` is the APPROVING HUMAN's role, stamped onto the
+          # row by {DeviceVerification.approve} — never anything the polling
+          # client sent (the authorization request refuses `role`/`scope`
+          # outright). `nil` when this provider's `user_idp` reports no role,
+          # and {AccountBinding.bind!} then falls back to `registration_role`
+          # exactly as before.
           result = AccountBinding.bind!(
             public_key_pem: da.public_key_pem,
             user_id:        da.user_id,
@@ -198,6 +213,9 @@ module Kiosk
             token_type:   "Bearer",
             expires_in:   JwtIssuer::DEFAULT_EXPIRES_IN,
           }
+          # RFC 6749 §5.1 `scope`: the scope actually GRANTED. It is the role the
+          # approving human holds, which is the only scope this ceremony can
+          # produce — never an echo of a requested one, because none is accepted.
           response[:scope] = da.requested_role if da.requested_role
           response
         end

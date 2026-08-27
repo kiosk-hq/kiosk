@@ -17,8 +17,9 @@ module Kiosk
     #   public_key   required — PEM of the RSA-2048+ key the ceremony
     #                 will bind; the token poll must later prove
     #                 possession of it (BIND-POP)
-    #   scope        optional — synonym for `role`; OAuth-standard name
-    #   role         optional — Kiosk extension; alias for `scope`
+    #
+    # There is NO third parameter. `role` and `scope` are REFUSED with
+    # `400 invalid_request` rather than ignored — see {#create}.
     #
     # Response 200 (RFC 8628 §3.2):
     #   {
@@ -50,17 +51,41 @@ module Kiosk
           return render_oauth_error(:invalid_request, e.message, status: 400)
         end
 
-        requested_role = (params[:role] || params[:scope])&.to_s
-        requested_role = nil if requested_role && requested_role.empty?
-
-        # The requested role is CLIENT-chosen and ends up in the minted JWT,
-        # so it must be validated against the provider's declared roles
-        # (role assignment is provider-owned —
-        # a client must never smuggle an arbitrary role claim).
-        if requested_role && !Kiosk.configuration.roles.map(&:to_s).include?(requested_role)
+        # THE AGENT NEVER SELF-SELECTS ITS ROLE (ADR-0011 amendment; K-072).
+        #
+        # This request is UNAUTHENTICATED — anyone holding a keypair can send
+        # it — so anything it carries is an assertion by a stranger. Until
+        # K-1109 the `role`/`scope` parameter was read from HERE, written onto
+        # the row, and baked into the JWT the poll returns; the only filter was
+        # membership of `config.roles`. On an origin declaring more than one
+        # role that is a privilege-escalation primitive with no authenticated
+        # step behind it: at `kiosk-demo-stylish` (`%i[customer owner]`) a
+        # stranger's `role=owner` reached a token whose `role` claim was
+        # `owner`, and the approving human — a plain customer — was never shown
+        # the word. `config.roles` is a DECLARATION of the roles this origin
+        # has, not a grant of them to whoever asks.
+        #
+        # The role is now sourced where ADR-0011 puts it: from the APPROVING
+        # HUMAN's own identity, captured by {DeviceVerification.approve} off
+        # `user_idp`'s `Identity#role` at the verify page — the same capture
+        # {AuthController#link} already performed for the link direction, so
+        # both halves of the binding ceremony read the role from the same
+        # place and a ceremony can never mint a privilege its approver does
+        # not hold.
+        #
+        # REFUSED, NOT IGNORED. A silently dropped parameter leaves the caller
+        # believing it got what it asked for, and leaves the next reader of
+        # this file unable to tell a deliberate drop from a bug — the same
+        # reasoning protocol.md §7.1(2) applies to a verb that names its own
+        # principal ("the conforming answer is 400 naming that parameter, not
+        # a silently ignored argument"). An EMPTY value is tolerated: it
+        # asserts nothing.
+        if (offending = %i[role scope].find { |name| !params[name].to_s.empty? })
           return render_oauth_error(
             :invalid_request,
-            "unknown role #{requested_role.inspect} — not among this provider's roles",
+            "#{offending} is not accepted here — an assistant does not choose its own role. " \
+            "The role of a bound assistant is the approving account holder's own role, " \
+            "read from this provider's identity system when they approve at the verify page.",
             status: 400,
           )
         end
@@ -68,7 +93,6 @@ module Kiosk
         result = DeviceCodeGrant.start(
           client_id:      client_id,
           public_key_pem: public_key,
-          requested_role: requested_role,
         )
 
         Kiosk::Server::Headers.add_to(response.headers)

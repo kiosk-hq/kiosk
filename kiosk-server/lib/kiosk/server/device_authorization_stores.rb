@@ -156,18 +156,32 @@ module Kiosk
           raise UniqueConstraintError, e.message
         end
 
+        # `requested_role` IS IN THE SET LIST, and it has to be (K-1109). It
+        # used to be absent because the column was written once, at INSERT: a
+        # claim row carried whatever role the opening request asked for, and a
+        # link row carried the minting human's, so nothing ever changed it
+        # afterwards. Since the claim ceremony's role is captured at APPROVAL
+        # instead — from the approving human's `Identity#role` — `approve` is
+        # exactly a mid-life write to this column, and a store that dropped it
+        # would persist the approval while silently discarding the role, so
+        # every claim-bound assistant on a durable store would fall back to
+        # `registration_role`. The in-memory adapter replaces the whole value
+        # object and never had the gap, which is precisely why this is the
+        # adapter where such a bug hides from a unit suite.
         def update(da)
           sql = <<~SQL
             UPDATE #{table}
             SET public_key_pem = $1,
                 status         = $2,
                 user_id        = $3,
-                consumed_at    = $4
-            WHERE id = $5
+                consumed_at    = $4,
+                requested_role = $5
+            WHERE id = $6
             RETURNING id
           SQL
           updated = connection.exec_query(sql, "Kiosk device_authorization update", [
-            da.public_key_pem, da.status.to_s, da.user_id, da.consumed_at, da.id,
+            da.public_key_pem, da.status.to_s, da.user_id, da.consumed_at,
+            da.requested_role, da.id,
           ]).to_a
           if updated.empty?
             raise NotFoundError, "device_authorization #{da.id} not found"

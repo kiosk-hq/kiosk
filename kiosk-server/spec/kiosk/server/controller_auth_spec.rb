@@ -453,8 +453,16 @@ RSpec.describe "wire-surface controller auth" do
     end
   end
 
-  # ─── client-chosen requested_role is validated against roles ─────
-  describe "OauthDeviceAuthorizationController requested_role validation" do
+  # ─── a client-chosen role is REFUSED, not validated (K-1109) ─────
+  #
+  # This block used to be called "requested_role validation" and asserted that
+  # a role outside `config.roles` was rejected — which is exactly the shape
+  # that let `role=owner` through on `kiosk-demo-stylish`, whose declared roles
+  # are `%i[customer owner]`. `config.roles` says which roles this origin HAS,
+  # not which ones an unauthenticated caller may have. The role now comes from
+  # the approving human (`DeviceVerification.approve`), so the parameter has no
+  # legitimate sender and is refused whatever it says.
+  describe "OauthDeviceAuthorizationController rejects a client-chosen role" do
     let(:public_key) { OpenSSL::PKey::RSA.generate(2048).public_key.to_pem }
 
     before do
@@ -479,7 +487,7 @@ RSpec.describe "wire-surface controller auth" do
       )
       expect(status).to eq(400)
       expect(body[:error]).to eq("invalid_request")
-      expect(body[:error_description]).to include("superadmin")
+      expect(body[:error_description]).to include("role is not accepted here")
     end
 
     it "rejects an unknown role passed via the OAuth-standard scope param" do
@@ -491,14 +499,17 @@ RSpec.describe "wire-surface controller auth" do
       expect(body[:error]).to eq("invalid_request")
     end
 
-    it "accepts a configured role" do
+    # THE ESCALATION ITSELF. A DECLARED role is the value that used to be
+    # honoured all the way into the JWT; refusing an undeclared one was never
+    # the control it looked like.
+    it "rejects a role the provider DOES declare — the escalation, not a typo" do
       status, body = dispatch(
         Kiosk::Server::OauthDeviceAuthorizationController, :create,
         device_authorization_env("client_id" => "kiosk-cli", "role" => "customer"),
       )
-      expect(status).to eq(200)
-      expect(body[:device_code]).to be_a(String)
-      expect(body[:user_code]).to match(/\A[A-Z0-9]{4}-[A-Z0-9]{4}\z/)
+      expect(status).to eq(400)
+      expect(body[:error]).to eq("invalid_request")
+      expect(body[:error_description]).to include("does not choose its own role")
     end
 
     it "accepts a role-less request (role stays absent)" do

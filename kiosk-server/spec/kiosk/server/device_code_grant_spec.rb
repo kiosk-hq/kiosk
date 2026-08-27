@@ -19,9 +19,7 @@ RSpec.describe Kiosk::Server::DeviceCodeGrant do
 
   describe ".start" do
     it "creates a pending :claim row and returns the full /oauth/device_authorization payload" do
-      result = described_class.start(
-        client_id: "kiosk-cli", public_key_pem: pem, requested_role: "customer",
-      )
+      result = described_class.start(client_id: "kiosk-cli", public_key_pem: pem)
 
       expect(result.keys).to include(:device_code, :user_code, :expires_in, :interval, :da)
       expect(result[:device_code]).to be_a(String)
@@ -31,6 +29,18 @@ RSpec.describe Kiosk::Server::DeviceCodeGrant do
       expect(store.size).to eq(1)
       expect(result[:da]).to be_pending
       expect(result[:da]).to be_claim
+    end
+
+    # K-1109. `.start` takes no role and the row carries none: a claim
+    # ceremony's role is stamped at APPROVAL, from the approving human's
+    # identity, so there is no opening through which an unauthenticated caller
+    # could name one.
+    it "creates the row ROLE-LESS and accepts no role parameter" do
+      result = described_class.start(client_id: "kiosk-cli", public_key_pem: pem)
+      expect(result[:da].requested_role).to be_nil
+
+      expect { described_class.start(client_id: "kiosk-cli", public_key_pem: pem, requested_role: "owner") }
+        .to raise_error(ArgumentError, /unknown keyword: :requested_role/)
     end
 
     it "binds the presented public key to the row (normalised)" do
@@ -52,7 +62,7 @@ RSpec.describe Kiosk::Server::DeviceCodeGrant do
 
   describe ".exchange" do
     let(:start_result) {
-      described_class.start(client_id: "kiosk-cli", public_key_pem: pem, requested_role: "customer")
+      described_class.start(client_id: "kiosk-cli", public_key_pem: pem)
     }
     let(:device_code) { start_result[:device_code] }
 
@@ -132,9 +142,12 @@ RSpec.describe Kiosk::Server::DeviceCodeGrant do
     end
 
     context "BIND-POP on an approved row" do
+      # The role reaches the row the ONLY way it can since K-1109: through the
+      # approval, from the approving human's identity. `.start` accepted a
+      # `requested_role:` here until then, which is what a client could set.
       before do
         start_result
-        store.update(start_result[:da].approve(user_id: user_id))
+        store.update(start_result[:da].approve(user_id: user_id, role: "customer"))
       end
 
       it "returns invalid_client when the poll carries no signed proof — row NOT consumed" do
@@ -230,7 +243,7 @@ RSpec.describe Kiosk::Server::DeviceCodeGrant do
           expect(Kiosk::Server::AccountBinding).to have_received(:bind!).once
         end
 
-        it "omits scope when no role was requested" do
+        it "omits scope when the approving human carries no role" do
           bare = described_class.start(client_id: "kiosk-cli", public_key_pem: pem)
           store.update(bare[:da].approve(user_id: user_id))
 

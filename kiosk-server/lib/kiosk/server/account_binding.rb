@@ -20,7 +20,8 @@ module Kiosk
     #     `agents.user_id` remaps to the human's, and the identity's
     #     reputation carries over untouched (no whitewash, no inherited
     #     trust). When the ceremony carries a `requested_role` (roles-from-
-    #     IdP, Path A: the new human's role), `allowed_roles` is REMAPPED to
+    #     IdP, Path A: the NEW human's own role, which is the only role either
+    #     ceremony can carry — K-1109), `allowed_roles` is REMAPPED to
     #     it — the agent adopts the role of the principal it is now bound to,
     #     the same "adopt the new principal's context" rule reputation-carry
     #     follows; a role-less ceremony leaves `allowed_roles` untouched. The
@@ -38,6 +39,16 @@ module Kiosk
       # Create or remap the key→account binding and mint a standard
       # kiosk-pop access token for it. Call ONLY after possession of
       # `public_key_pem` has been proven (BIND-POP).
+      #
+      # `requested_role:` IS NEVER A CLIENT'S ROLE, on either ceremony
+      # (K-1109). Both callers read it off the row, and both rows got it from
+      # a HUMAN's `Identity#role`: the link row at mint ({LinkCode.mint}, over
+      # the minting session), the claim row at approval
+      # ({DeviceVerification.approve}, over the approving session). The
+      # `config.roles` membership check in {.validated_role} below is a
+      # backstop against a provider whose `user_idp` returns something it
+      # never declared — not the gate that keeps an assistant from choosing,
+      # which is the absence of any wire parameter feeding this.
       #
       # @return [Hash] { agent_id:, user_id:, access_token:, fresh: }
       def bind!(public_key_pem:, user_id:, requested_role: nil)

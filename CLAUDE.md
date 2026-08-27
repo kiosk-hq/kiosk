@@ -83,21 +83,24 @@ universal agent skill is `skill.md` on the same site.
   `db/structure.sql` and every from-zero database — every gate, every laptop —
   and **can never reach a running one**. That is not a hypothetical: `3a834cc0`
   appended `add_column :users, :display_name` to a tudu migration that had
-  shipped a month earlier, and the live box answered HTTP 500 on four pages for
-  six days while CI stayed green on all of them (K-1074). The commit's own
-  comment reasoned itself into it *while citing atablefor*, which had made the
-  identical change correctly in a new file — so "a careful author will notice"
-  is exactly the control that failed. Renumbering counts as editing: `267e67b3`
-  re-emitted the kiosk set under new timestamps and every deploy since has
-  ABORTED its migrate step one step in (K-1083). Pre-1.0 the set may still be
-  collapsed, and that was the last time (T-103,
-  MIGRATION-AND-CONFIG-UPGRADE-POLICY); at 1.0 `db/migrate/` freezes and becomes
-  append-only. The gate is `bin/check-migration-replay` (its own step in the
-  demos job): it loads each historical `db/structure.sql` since the fleet was
-  provisioned, runs `db:migrate` against it, and diffs the catalog against the
-  tracked one — the only place in this repo where `db:migrate` meets a database
-  that already exists. When it fails, the repair is a new migration file, and on
-  the boxes it is `deploy/demo-reset.sh`.
+  shipped a month earlier, and the live box answered HTTP 500 on four pages
+  while CI stayed green on all of them (K-1074). In the tree the defect stood
+  four days — `3a834cc0` (2026-08-23) to `86c89923` (2026-08-27); on the box it
+  is STILL OPEN, because a correction reaches a running database only on a
+  redeploy, and how long those pages have been 500 is not measurable from this
+  side at all. The commit's own comment reasoned itself into it *while citing
+  atablefor*, which had made the identical change correctly in a new file — so
+  "a careful author will notice" is exactly the control that failed.
+  Renumbering counts as editing: `267e67b3` re-emitted the kiosk set under new
+  timestamps and every deploy since has ABORTED its migrate step one step in
+  (K-1083). Pre-1.0 the set may still be collapsed, and that was the last time
+  (T-103, MIGRATION-AND-CONFIG-UPGRADE-POLICY); at 1.0 `db/migrate/` freezes
+  and becomes append-only. The gate is `bin/check-migration-replay` (its own
+  step in the demos job): it loads each historical `db/structure.sql` since the
+  fleet was provisioned, runs `db:migrate` against it, and diffs the catalog
+  against the tracked one — the only place in this repo where `db:migrate`
+  meets a database that already exists. When it fails, the repair is a new
+  migration file, and on the boxes it is `deploy/demo-reset.sh`.
 - The gems are meant to be installable, but every consumer here uses `path:`,
   which reads the working tree — so a file missing from `spec.files` is
   invisible locally and fatal from RubyGems. `bin/check-gem-packaging` (its own

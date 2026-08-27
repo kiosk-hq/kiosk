@@ -673,9 +673,13 @@ jobs:
       # structure.sql lacked -> HTTP 500 in production, CI green) and K-1074
       # (`add_column :users, :display_name` APPENDED to a migration already
       # recorded in every deployed schema_migrations -> four HTTP 500s on the
-      # live tudu box for six days, CI green throughout). Both times the gates
-      # requested the very pages that were failing: the blind spot was never the
-      # HTML, it was the SCHEMA.
+      # live tudu box, CI green throughout). That outage is measured in the
+      # TREE as four days -- 3a834cc0 (2026-08-23) appended the column,
+      # 86c89923 (2026-08-27) moved it to a new file -- while the box-side
+      # duration is not knowable from here and is NOT CLOSED: the boxes still
+      # answer 500 until a redeploy carries the repair to them. Both times the
+      # gates requested the very pages that were failing: the blind spot was
+      # never the HTML, it was the SCHEMA.
       #
       # This step loads each historical `db/structure.sql` since the fleet was
       # provisioned, runs `db:migrate` — the deploy's own command — and diffs the

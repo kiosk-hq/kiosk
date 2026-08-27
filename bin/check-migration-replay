@@ -19,9 +19,12 @@
 # had shipped a month earlier and was already recorded in every deployed
 # `schema_migrations`, so the column reached structure.sql and every from-zero
 # database and could never reach the running one -> four HTTP 500s on the live
-# tudu box for six days, CI green throughout. Both times the gates requested the
-# very pages that were failing; the blind spot was never the HTML, it was the
-# SCHEMA. "Curl the page" is the obvious and wrong fix.
+# tudu box, CI green throughout. The defect stood four days in the TREE
+# (`3a834cc0`..`86c89923`); how long the box has served those 500s is not
+# knowable from here, and the outage is not over -- the repair only reaches a
+# box on a redeploy. Both times the gates requested the very pages that were
+# failing; the blind spot was never the HTML, it was the SCHEMA. "Curl the
+# page" is the obvious and wrong fix.
 #
 # WHAT IT ASSERTS, in one sentence: for every vintage of a demo's schema that
 # could still be running, replaying HEAD's migrations onto it must SUCCEED and

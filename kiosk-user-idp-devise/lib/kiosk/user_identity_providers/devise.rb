@@ -113,6 +113,27 @@ module Kiosk
       #   1. `user.kiosk_role` (provider opt-in customisation)
       #   2. first symbol in `Kiosk.configuration.roles` (default)
       #   3. raise ConfigurationError (no roles configured)
+      #
+      # STEP 1 IS VERBATIM, AND THAT INCLUDES `nil` (K-1124). If the model
+      # defines the method at all, its answer IS the role — there is no
+      # fall-through to step 2 for a nil, and adding one would be a behaviour
+      # change in the WRONG direction: `roles.first` is a declaration order,
+      # not a privilege order, so an origin declaring `%i[owner customer]`
+      # would have nil silently promoted to `owner`.
+      #
+      # Know what a nil then costs, because it is not local to this method. The
+      # role this returns rides `Identity#role` into the account-binding
+      # ceremony, and `Kiosk::Server::AccountBinding.rebind`'s no-regression
+      # clause (ADR-0011) leaves an agent's `allowed_roles` UNTOUCHED when the
+      # ceremony carries no role — so on an origin with more than one declared
+      # role, a `#kiosk_role` that can answer nil lets an agent already at the
+      # privileged role keep it while being rebound to a human who holds none.
+      # No shipped model in this repo does that (`kiosk-test-support`'s
+      # `demo_roles_are_total_spec.rb` is the gate on it), and the example below
+      # pins the verbatim return so the hazard is measured rather than assumed.
+      # A host writing `#kiosk_role` should make it TOTAL: return the
+      # least-privileged declared role rather than nil, the way
+      # `kiosk-demo-stylish`'s does.
       def role_for(user)
         return user.kiosk_role if user.respond_to?(:kiosk_role)
 

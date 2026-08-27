@@ -76,6 +76,28 @@ RSpec.describe Kiosk::UserIdentityProviders::Devise do
 
         expect(adapter.verify(request).role).to eq("customer")
       end
+
+      # ── K-1124: #kiosk_role is returned VERBATIM, nil included ────────────
+      #
+      # Not an oversight and not a wish: this pins the ONE condition that
+      # re-arms the rebind-retains-the-role branch in
+      # `Kiosk::Server::AccountBinding` (ADR-0011's no-regression clause). A
+      # model that defines the method OWNS the answer — there is no
+      # fall-through to `roles.first` for a nil, because `roles.first` is a
+      # declaration order rather than a privilege order and promoting nil to it
+      # could HAND OUT the privileged role on an origin that declares it first.
+      #
+      # So the hazard is real and it is the host's to close: a `#kiosk_role`
+      # must be TOTAL. `kiosk-demo-stylish`'s is, and
+      # `kiosk-test-support/spec/demo_roles_are_total_spec.rb` fails the build
+      # if a demo grows one whose nil-ness nobody reasoned about.
+      it "returns NO role when #kiosk_role answers nil, even with roles declared" do
+        Kiosk.configure { |c| c.roles = %i[owner customer] }
+        user    = FakeUser.new(id: user_id, kiosk_role: nil)
+        request = FakeRequest.new(current_user: user)
+
+        expect(adapter.verify(request).role).to be_nil
+      end
     end
 
     context "Kiosk.configuration.user_id_column" do

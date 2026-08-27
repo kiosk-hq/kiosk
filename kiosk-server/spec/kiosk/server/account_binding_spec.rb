@@ -214,6 +214,51 @@ RSpec.describe Kiosk::Server::AccountBinding do
       expect(con.all_sql).not_to match(/allowed_roles\s*=/i)
     end
 
+    # ── K-1124: what the clause above COSTS, pinned so it cannot move by
+    # accident ───────────────────────────────────────────────────────────────
+    #
+    # "Leaves allowed_roles untouched" is ADR-0011's explicit no-regression
+    # clause and it is not being changed here. But read it on a MULTI-ROLE
+    # origin and it says something sharper than "single-role providers keep
+    # today's behavior": an agent already carrying the privileged role, rebound
+    # to a DIFFERENT human who has none, keeps the privilege while `sub` becomes
+    # that human's. The example below is a CHARACTERIZATION — it asserts what
+    # the engine does, not what it ought to do — so that any future change to
+    # this branch is a deliberate edit to a red test rather than a silent one.
+    #
+    # WHY IT IS NOT A LIVE HOLE, AND WHERE THAT SAFETY ACTUALLY LIVES. Post-K-072
+    # a `:claim` row can only be role-less if the approving human's IdP reports
+    # no role, and a `:link` row carries the minter's role by construction. In
+    # this fleet every ceremony therefore carries one — but that is a property of
+    # the HOST's user model, not of the engine and not even of the shipped Devise
+    # adapter, whose `#role_for` returns `user.kiosk_role` VERBATIM and will hand
+    # back whatever that method answers, `nil` included
+    # (`kiosk-user-idp-devise`'s own suite pins that, deliberately). A host whose
+    # `#kiosk_role` can answer nil re-arms this branch on the day it declares a
+    # second role.
+    it "KEEPS a privileged role across a change of principal when the ceremony carries none" do
+      Kiosk.configure { |c| c.roles = %i[customer owner] }
+      route_exec_query(con) do |sql, _binds|
+        sql =~ /SELECT/i ? [{ "id" => "agent-known", "user_id" => previous_user,
+                              "allowed_roles" => "{owner}" }] : []
+      end
+      idp = Kiosk::Server::AgentIdentityProviders::DefaultAgentIdp
+      minted = nil
+      allow_any_instance_of(idp).to receive(:issue) do |_instance, agent_id:, role:|
+        minted = [agent_id, role]
+        "kiosk-pop-jwt"
+      end
+
+      result = described_class.bind!(public_key_pem: pem, user_id: user_id, requested_role: nil)
+
+      # The principal moved...
+      expect(result[:user_id]).to eq(user_id)
+      expect(con.bound(/UPDATE/i).first.last).to eq([user_id, "agent-known"])
+      # ...and the role did not.
+      expect(con.all_sql).not_to match(/allowed_roles\s*=/i)
+      expect(minted).to eq(["agent-known", "owner"])
+    end
+
     # A rebind is a principal change, so — like
     # unlink! — it watermark-revokes the key's pre-link tokens.
     it "watermark-revokes the key's pre-link tokens (principal change ⇒ re-login)" do

@@ -152,6 +152,30 @@ module Kiosk
         # to. A role-less ceremony (`requested_role` nil) leaves the existing
         # `allowed_roles` untouched, so single-role / no-IdP providers keep
         # today's behavior with no regression.
+        #
+        # THE INVARIANT THAT MAKES THE RETENTION SAFE IS NOT IN THIS FILE
+        # (K-1124). Read the clause above on an origin declaring more than one
+        # role and it says: an agent already carrying the privileged role,
+        # rebound to a DIFFERENT human who holds none, KEEPS the privilege
+        # while `sub` becomes that human's. Nothing here prevents that — the
+        # branch is ADR-0011's no-regression clause and deliberately does not.
+        #
+        # What prevents it is upstream, and it is worth stating because it is
+        # the kind of precondition that expires quietly: post-K-072 a `:claim`
+        # row acquires its role from the approving human at the verify page and
+        # a `:link` row from its minter, so `requested_role` is nil here ONLY
+        # when the configured `user_idp` reported no role for a signed-in
+        # human. That is a property of the HOST's identity system, not of this
+        # engine and not even of the shipped Devise adapter, whose `#role_for`
+        # hands back `user.kiosk_role` verbatim — `nil` included. A host whose
+        # `#kiosk_role` can answer nil re-arms this branch the day it declares a
+        # second role, and no gate in the engine would notice.
+        #
+        # Pinned rather than argued: `account_binding_spec.rb` characterises the
+        # retention on a two-role config, `kiosk-user-idp-devise`'s suite pins
+        # the verbatim return, and `kiosk-test-support`'s
+        # `demo_roles_are_total_spec.rb` fails the build if any demo grows a
+        # `#kiosk_role` whose nil-ness nobody has reasoned about.
         def rebind(conn, config, existing, user_id, requested_role = nil)
           agent_id = existing.fetch("id")
           previous = existing.fetch("user_id")

@@ -136,7 +136,7 @@
           <li>Registers itself with a proof-of-possession handshake (creates its own account).</li>
           <li>Calls <code style="font-size:13px">query availability</code>, then <code style="font-size:13px">run book_table</code> — the reservation is confirmed.</li>
         </ol>
-        <p class="note">⚠ This demo runs <strong>production-grade proof-of-work</strong> (~9–10&nbsp;s per register) on purpose — so you can feel the real anti-scalping toll first-hand. The other Kiosk demos are tuned light (sub-second) for quick poking.</p>
+        <p class="note">⚠ This demo runs <strong>production-grade proof-of-work</strong> (~9–10&nbsp;s per register on an M-series laptop core) on purpose — so you can feel the real anti-scalping toll first-hand. The other Kiosk demos are tuned light (sub-second) for quick poking.</p>
         <div class="linkbox">
           <strong>Link a booking to a real diner account.</strong> A diner signs in at <a href="/users/sign_in">Staff login</a> (demo login below), opens <a href="/kiosk/auth/assistants">Manage&nbsp;assistants</a> and mints a one-time link code. Hand that code to the assistant — it redeems the code over the wire, and its bookings then appear on the <a href="/reservations">reservations board</a> under that diner's name.
           <div class="cred">Demo login: <code>diego@example.com</code> &nbsp;/&nbsp; <code>atablefor-demo-password</code></div>
@@ -159,7 +159,7 @@
           <span class="chip">🔗 Human↔assistant linking</span>
           <span class="chip">Viewable reservations board</span>
           <span class="chip">No payment (EUR holds only)</span>
-          <span class="chip">Production-grade PoW (~10&nbsp;s)</span>
+          <span class="chip">Production-grade PoW (~10&nbsp;s, M-series core)</span>
         </div>
         <div class="links">
           <a href="https://github.com/kiosk-hq/kiosk/tree/main/kiosk-demo-atablefor">▶ Source on GitHub</a>

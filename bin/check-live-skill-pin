@@ -83,10 +83,10 @@
 #
 #   --offline  (default)  no network. Resolves the origins and the pin a deploy
 #                         of HEAD would serve, and says what it did not probe.
-#                         The default is offline on purpose: every Ruby script
-#                         in this directory is run WITH NO ARGUMENTS by
-#                         `audit/check-script-warnings.rb`, and that sweep must
-#                         stay network-free.
+#                         The default is offline on purpose: the workspace's
+#                         gate-script warning sweep re-runs every Ruby script in
+#                         this directory under `ruby -w` WITH NO ARGUMENTS, so
+#                         the no-argument mode must stay network-free.
 #   --network             probe the fleet. This is the mode the tool is for.
 #   --all                 both.
 

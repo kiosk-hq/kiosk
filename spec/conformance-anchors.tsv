@@ -12,7 +12,7 @@
 # publishes as evidence has been renamed or removed: rename it back, or update
 # the citation that names it and regenerate this file.
 #
-# 537 anchors.
+# 574 anchors.
 e2e/assistant.sh	$public_doc is really being read (control token)
 e2e/assistant.sh	?v=<digest> is immutable for a year
 e2e/assistant.sh	GET /kiosk/schema is unenveloped
@@ -20,17 +20,21 @@ e2e/assistant.sh	GET an action → 405
 e2e/assistant.sh	GET at an action's path → 405
 e2e/assistant.sh	If-None-Match on the digest → 304
 e2e/assistant.sh	Kiosk-API-Version is MAJOR.MINOR.PATCH
+e2e/assistant.sh	Kiosk-API-Version present
 e2e/assistant.sh	Kiosk-Min-Client is a version, and it is advertised
 e2e/assistant.sh	Kiosk-Min-Client present
+e2e/assistant.sh	Kiosk-Server-Version present
 e2e/assistant.sh	POST /kiosk/$retired → 404
 e2e/assistant.sh	Vary names both request headers
 e2e/assistant.sh	X-Total-Count is not dressed up as a standard
 e2e/assistant.sh	a COMPLETE answer carries X-Total-Count
+e2e/assistant.sh	a routing 404 UNDER the mount is a 404
 e2e/assistant.sh	agents.txt Protocols: ap2
 e2e/assistant.sh	alice: 1 appointment exists
 e2e/assistant.sh	all three version headers on all 19 mount routes
 e2e/assistant.sh	an action declares no pagination headers
 e2e/assistant.sh	an ancient client is SERVED, not refused — the floor is advisory
+e2e/assistant.sh	an unhandled 500 UNDER the mount is a 500
 e2e/assistant.sh	api-catalog advertises it as a service-desc
 e2e/assistant.sh	api-catalog hyperlinks $verb_name, unauthenticated
 e2e/assistant.sh	assert "no Authorization header → 200"  "$oa_anon" "200"
@@ -50,7 +54,9 @@ e2e/assistant.sh	binding: link-code redeem → human
 e2e/assistant.sh	binding: login after unlink → 404
 e2e/assistant.sh	binding: pending before approval
 e2e/assistant.sh	binding: poll without proof denied
+e2e/assistant.sh	binding: role/scope refused on the opening request
 e2e/assistant.sh	binding: token bound to the human
+e2e/assistant.sh	binding: token role is the approver's
 e2e/assistant.sh	binding: wire verb as bound account
 e2e/assistant.sh	code is the branch point
 e2e/assistant.sh	declares OpenAPI 3.1
@@ -76,6 +82,7 @@ e2e/assistant.sh	reserved limit/cursor accepted → 200
 e2e/assistant.sh	schema publishes {queries, actions} and nothing else
 e2e/assistant.sh	served as problem+json
 e2e/assistant.sh	status restates the HTTP status
+e2e/assistant.sh	the OPERATOR's own 200 outside the mount carries none
 e2e/assistant.sh	the body is a bare array
 e2e/assistant.sh	the body is the action's object
 e2e/assistant.sh	the descriptor's description travels verbatim
@@ -89,6 +96,7 @@ e2e/assistant.sh	…an action is advertised POST
 e2e/assistant.sh	…and NO Link header, because there is no next page
 e2e/assistant.sh	…and kiosk.json itself expires quickly
 e2e/assistant.sh	…and links the catalog at its versioned url
+e2e/assistant.sh	…and neither does the operator's own 500 — same exception path
 e2e/assistant.sh	…and never a 402: the toll went with the gate
 e2e/assistant.sh	…and the module set lives in kiosk.json alone
 e2e/assistant.sh	…and the route loop actually ran
@@ -114,7 +122,19 @@ kiosk-demo-philslist/lib/tasks/demo.rake	Assertion 6b: #{probe.length} principal
 kiosk-demo-philslist/script/redteam_suite.rb	record(results, "NoSellerPiiOnTheOpenBoard",
 kiosk-demo-skooti/app/operations/rent_motorcycle_operation.rb	#   0. KYC attributes: age_over_18 AND licence_a  → 403 kyc_required if unmet
 kiosk-demo-skooti/app/operations/rent_motorcycle_operation.rb	def self
+kiosk-demo-skooti/app/operations/rental_gates.rb	def payment_refusal
+kiosk-demo-skooti/script/pay_window.rb	an untouched reservation publishes payment_state=unpaid — the one answer that makes a fresh
+kiosk-demo-skooti/script/pay_window.rb	my_reservations does NOT publish `unpaid` for a reservation whose capture may already have
+kiosk-demo-skooti/script/pay_window.rb	my_reservations publishes payment_state=paid on the CAPTURE alone, with zero settlement rows
+kiosk-demo-skooti/script/pay_window.rb	my_reservations publishes payment_state=pending while the capture is outstanding
+kiosk-demo-skooti/script/pay_window.rb	start_rental does NOT answer «no settlement for this reservation» about an in-flight charge
+kiosk-demo-skooti/script/pay_window.rb	start_rental issues the rental token on the capture-anchored witness alone, no settlement row
+kiosk-demo-skooti/script/pay_window.rb	start_rental names the outstanding capture instead of answering «no settlement»
 kiosk-demo-skooti/script/redteam_suite.rb	# gate runs FIRST, so an un-KYC'd principal gets 403 kyc_required and the uuid
+kiosk-demo-stylish/script/redteam_suite.rb	record(results, "DeviceGrantCannotSelfSelectRole",
+kiosk-demo-stylish/script/redteam_suite.rb	record(results, "DeviceGrantRebindCannotEscalate",
+kiosk-demo-stylish/script/redteam_suite.rb	record(results, "DeviceGrantRoleComesFromTheApprover",
+kiosk-demo-stylish/script/redteam_suite.rb	record(results, "DeviceGrantVerifyPageNamesTheAccess",
 kiosk-demo-tudu/lib/tasks/demo.rake	Assertion 8a: the catalog declares
 kiosk-demo-tudu/lib/tasks/demo.rake	Assertion 8b: no principal-reach verb returned
 kiosk-demo-tudu/script/redteam_suite.rb	record(results, "ChosenNameNeverTheAddress",
@@ -235,15 +255,26 @@ kiosk-server/spec/kiosk/server/device_authorization_spec.rb	returns [plain_devic
 kiosk-server/spec/kiosk/server/device_authorization_spec.rb	starts in :pending status with no user_id and no consumed_at
 kiosk-server/spec/kiosk/server/device_verify_controller_spec.rb	401s a visitor with no provider session (sign in first)
 kiosk-server/spec/kiosk/server/device_verify_controller_spec.rb	401s when no user_idp is configured at all
+kiosk-server/spec/kiosk/server/device_verify_controller_spec.rb	approve leaves the row role-less when the session holder has no role
+kiosk-server/spec/kiosk/server/device_verify_controller_spec.rb	approve stamps the SESSION holder's ROLE on the row
 kiosk-server/spec/kiosk/server/device_verify_controller_spec.rb	approve stamps the SESSION holder's user_id on the row
 kiosk-server/spec/kiosk/server/device_verify_controller_spec.rb	caps failed code attempts per session (429 after the limit)
+kiosk-server/spec/kiosk/server/device_verify_controller_spec.rb	names the role the approval hands over
+kiosk-server/spec/kiosk/server/device_verify_controller_spec.rb	says so plainly when the provider gives the approver no role
 kiosk-server/spec/kiosk/server/device_verify_controller_spec.rb	shows the consent panel with key fingerprint and requested-at for a live code
 kiosk-server/spec/kiosk/server/discovery_controller_spec.rb	GET /agents.txt
 kiosk-server/spec/kiosk/server/discovery_controller_spec.rb	emits no Vary on any of the six, negotiated or not
 kiosk-server/spec/kiosk/server/discovery_controller_spec.rb	returns 200 application/json byte-identical to WellKnown.build_json
 kiosk-server/spec/kiosk/server/discovery_controller_spec.rb	returns 200 application/linkset+json (RFC 9727) with a non-empty item list
 kiosk-server/spec/kiosk/server/discovery_controller_spec.rb	serves the three pointer documents public, one minute
+kiosk-server/spec/kiosk/server/engine_mount_spec.rb	a routing 404 UNDER the mount carries all three
+kiosk-server/spec/kiosk/server/engine_mount_spec.rb	an unhandled 500 UNDER the mount carries all three
+kiosk-server/spec/kiosk/server/engine_mount_spec.rb	leaves the ROOT-served discovery documents bare — they are outside the mount
 kiosk-server/spec/kiosk/server/engine_mount_spec.rb	paths only the engine draws still resolve through the mount
+kiosk-server/spec/kiosk/server/engine_mount_spec.rb	stamps every path UNDER the mount — success and refusal alike
+kiosk-server/spec/kiosk/server/engine_mount_spec.rb	the HOST's own route outside the mount carries none — on a 200
+kiosk-server/spec/kiosk/server/engine_mount_spec.rb	…and none on a root-level routing 404
+kiosk-server/spec/kiosk/server/engine_mount_spec.rb	…and none on the host's own 500, which is the same exception path
 kiosk-server/spec/kiosk/server/engine_routes_spec.rb	draws GET <name> at the query half and POST <name> at the action half
 kiosk-server/spec/kiosk/server/engine_routes_spec.rb	draws JWKS under the mount
 kiosk-server/spec/kiosk/server/engine_routes_spec.rb	draws NO /query and NO /run: the 0.3 multiplexed pair is gone (T-074 = A)
@@ -328,9 +359,12 @@ kiosk-server/spec/kiosk/server/jwt_issuer_spec.rb	rejects a wrong audience
 kiosk-server/spec/kiosk/server/jwt_issuer_spec.rb	rejects an expired token
 kiosk-server/spec/kiosk/server/jwt_issuer_spec.rb	round-trips an issued token and returns symbol-keyed claims
 kiosk-server/spec/kiosk/server/kyc_attestation_controller_spec.rb	#kyc_attributes
+kiosk-server/spec/kiosk/server/kyc_attestation_controller_spec.rb	maps one row per granted name onto true
+kiosk-server/spec/kiosk/server/kyc_attestation_controller_spec.rb	reads the kyc_attributes table, joined to a LIVE agents row
 kiosk-server/spec/kiosk/server/kyc_attestation_controller_spec.rb	returns true when kyc_verified_at is not null
 kiosk-server/spec/kiosk/server/kyc_attestation_controller_spec.rb	verifies a valid attestation and returns claims
 kiosk-server/spec/kiosk/server/kyc_schema_spec.rb	accepts explicit schema override
+kiosk-server/spec/kiosk/server/kyc_schema_spec.rb	declares no value column at all — presence of the row IS the grant
 kiosk-server/spec/kiosk/server/kyc_verifier_spec.rb	I1: raises Errors::Forbidden when level is missing entirely
 kiosk-server/spec/kiosk/server/kyc_verifier_spec.rb	I1: raises Errors::Forbidden when level is not 'verified' (e.g. 'pending')
 kiosk-server/spec/kiosk/server/kyc_verifier_spec.rb	I2: raises Errors::Forbidden when exp claim is absent
@@ -384,6 +418,9 @@ kiosk-server/spec/kiosk/server/mandate_verifier_spec.rb	rejects when user_id in 
 kiosk-server/spec/kiosk/server/mandate_verifier_spec.rb	returns a CartMandate bound to the intent with total within cap
 kiosk-server/spec/kiosk/server/mandate_verifier_spec.rb	returns a PaymentMandate for a valid signed JWS bound to the cart
 kiosk-server/spec/kiosk/server/mandate_verifier_spec.rb	returns an IntentMandate for a valid agent-signed JWS
+kiosk-server/spec/kiosk/server/oauth_binding_controllers_spec.rb	refuses a client-supplied role — even one this provider declares
+kiosk-server/spec/kiosk/server/oauth_binding_controllers_spec.rb	refuses an undeclared role the same way — the value is never consulted
+kiosk-server/spec/kiosk/server/oauth_binding_controllers_spec.rb	refuses the OAuth-standard `scope` spelling too
 kiosk-server/spec/kiosk/server/open_api_controller_spec.rb	answers 304 to If-None-Match on its own ETag
 kiosk-server/spec/kiosk/server/open_api_controller_spec.rb	answers the derived document to a caller with NO credential
 kiosk-server/spec/kiosk/server/open_api_controller_spec.rb	carries the PUBLIC cache policy and a strong ETag

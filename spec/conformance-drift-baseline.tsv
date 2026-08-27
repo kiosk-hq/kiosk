@@ -7,15 +7,15 @@
 # following line indented more deeply than it, which is the block that label
 # opens. `bin/check-conformance-drift` re-measures and lists what moved, so a
 # conformance sweep can re-judge the rows whose evidence changed instead of
-# sampling ~185 rows blind.
+# sampling the matrix blind.
 #
 # THIS FILE IS A SWEEP'S WATERMARK, NOT A LOCK. Re-record it when a sweep has
 # RE-JUDGED the drifted rows -- never to make a run quiet. Nothing in CI reads
 # it; drift is the normal state between sweeps and a gate on it would have to
 # be switched off the day it was added.
 #
-# recorded: 2026-08-27 at 0fc5acef -- K-1123 initial baseline (sweep-021)
-# 537 anchors.
+# recorded: 2026-08-27 at 42a41b63 -- sweep-022
+# 574 anchors.
 e2e/assistant.sh	f9dc523d4a428d91	$public_doc is really being read (control token)
 e2e/assistant.sh	52a16a65def7b005	?v=<digest> is immutable for a year
 e2e/assistant.sh	0731d564311068f6	GET /kiosk/schema is unenveloped
@@ -23,17 +23,21 @@ e2e/assistant.sh	d08f704fb9117cd3	GET an action → 405
 e2e/assistant.sh	f6b390050e638ef1	GET at an action's path → 405
 e2e/assistant.sh	0e42a2b846f5fe80	If-None-Match on the digest → 304
 e2e/assistant.sh	2cb1d4a638ff83d5	Kiosk-API-Version is MAJOR.MINOR.PATCH
+e2e/assistant.sh	0c6e61a6e86b5b4a	Kiosk-API-Version present
 e2e/assistant.sh	bc7d2b93abf90689	Kiosk-Min-Client is a version, and it is advertised
 e2e/assistant.sh	a6b6c17e5d494b55	Kiosk-Min-Client present
+e2e/assistant.sh	87deaf53b2cad295	Kiosk-Server-Version present
 e2e/assistant.sh	0490ecd5c699fa44	POST /kiosk/$retired → 404
 e2e/assistant.sh	e5048b00948f1293	Vary names both request headers
 e2e/assistant.sh	df0d94a1b986f270	X-Total-Count is not dressed up as a standard
 e2e/assistant.sh	4cd879b78cb0c183	a COMPLETE answer carries X-Total-Count
+e2e/assistant.sh	3f173be1e2e5e6d4	a routing 404 UNDER the mount is a 404
 e2e/assistant.sh	738da0416039b544	agents.txt Protocols: ap2
 e2e/assistant.sh	27623ecc0e894ec5	alice: 1 appointment exists
 e2e/assistant.sh	8828ef7892c3b853	all three version headers on all 19 mount routes
 e2e/assistant.sh	cde0ddb3a718eb34	an action declares no pagination headers
 e2e/assistant.sh	3414347124974678	an ancient client is SERVED, not refused — the floor is advisory
+e2e/assistant.sh	495ef79de3304b32	an unhandled 500 UNDER the mount is a 500
 e2e/assistant.sh	ed89efb6f3b589b6	api-catalog advertises it as a service-desc
 e2e/assistant.sh	0a416c3fbc34fac4	api-catalog hyperlinks $verb_name, unauthenticated
 e2e/assistant.sh	92d4c091191b4943	assert "no Authorization header → 200"  "$oa_anon" "200"
@@ -53,7 +57,9 @@ e2e/assistant.sh	e42229805575dd27	binding: link-code redeem → human
 e2e/assistant.sh	cbd9d7971a07e188	binding: login after unlink → 404
 e2e/assistant.sh	54ad1edd79a08dfa	binding: pending before approval
 e2e/assistant.sh	331bdc8120102cc0	binding: poll without proof denied
+e2e/assistant.sh	0358f39ad1c38d12	binding: role/scope refused on the opening request
 e2e/assistant.sh	2a1b3270ce906612	binding: token bound to the human
+e2e/assistant.sh	5f5e9e3953bd6731	binding: token role is the approver's
 e2e/assistant.sh	4eb6f08faf943420	binding: wire verb as bound account
 e2e/assistant.sh	e99aede408bef43f	code is the branch point
 e2e/assistant.sh	ed6b1367f15e3dc1	declares OpenAPI 3.1
@@ -79,6 +85,7 @@ e2e/assistant.sh	5227abc963e74bf4	reserved limit/cursor accepted → 200
 e2e/assistant.sh	0c6932c1c6dfda08	schema publishes {queries, actions} and nothing else
 e2e/assistant.sh	3841ff31365a05f5	served as problem+json
 e2e/assistant.sh	1384235396ac8b9b	status restates the HTTP status
+e2e/assistant.sh	5faf8b659059c918	the OPERATOR's own 200 outside the mount carries none
 e2e/assistant.sh	bd4514200645ffd1	the body is a bare array
 e2e/assistant.sh	62baa4b1702a1abb	the body is the action's object
 e2e/assistant.sh	ca77b6e308979ec0	the descriptor's description travels verbatim
@@ -92,6 +99,7 @@ e2e/assistant.sh	2260fca65574498f	…an action is advertised POST
 e2e/assistant.sh	89ed2eaaaec56fa7	…and NO Link header, because there is no next page
 e2e/assistant.sh	1aec2e6ba0769424	…and kiosk.json itself expires quickly
 e2e/assistant.sh	29b59cbcac7e5cd4	…and links the catalog at its versioned url
+e2e/assistant.sh	efb81ff034c053fb	…and neither does the operator's own 500 — same exception path
 e2e/assistant.sh	69e443dba65ee078	…and never a 402: the toll went with the gate
 e2e/assistant.sh	2eea990187664411	…and the module set lives in kiosk.json alone
 e2e/assistant.sh	651f65938444bd59	…and the route loop actually ran
@@ -117,7 +125,19 @@ kiosk-demo-philslist/lib/tasks/demo.rake	0df171bed15d6312	Assertion 6b: #{probe.
 kiosk-demo-philslist/script/redteam_suite.rb	0a1a5e686a7aae9c	record(results, "NoSellerPiiOnTheOpenBoard",
 kiosk-demo-skooti/app/operations/rent_motorcycle_operation.rb	495f2a20950de6b4	#   0. KYC attributes: age_over_18 AND licence_a  → 403 kyc_required if unmet
 kiosk-demo-skooti/app/operations/rent_motorcycle_operation.rb	590d40f5c1bda04f	def self
+kiosk-demo-skooti/app/operations/rental_gates.rb	d3b269dced4fd614	def payment_refusal
+kiosk-demo-skooti/script/pay_window.rb	c1574a6b5dfd7f3d	an untouched reservation publishes payment_state=unpaid — the one answer that makes a fresh
+kiosk-demo-skooti/script/pay_window.rb	73ad5d63ab7afbcd	my_reservations does NOT publish `unpaid` for a reservation whose capture may already have
+kiosk-demo-skooti/script/pay_window.rb	aeb1e455774d014a	my_reservations publishes payment_state=paid on the CAPTURE alone, with zero settlement rows
+kiosk-demo-skooti/script/pay_window.rb	92b2f8aab05e4761	my_reservations publishes payment_state=pending while the capture is outstanding
+kiosk-demo-skooti/script/pay_window.rb	509af03693140846	start_rental does NOT answer «no settlement for this reservation» about an in-flight charge
+kiosk-demo-skooti/script/pay_window.rb	1c71d6ed7906270b	start_rental issues the rental token on the capture-anchored witness alone, no settlement row
+kiosk-demo-skooti/script/pay_window.rb	47101aab8d755211	start_rental names the outstanding capture instead of answering «no settlement»
 kiosk-demo-skooti/script/redteam_suite.rb	12e909eda254c83d	# gate runs FIRST, so an un-KYC'd principal gets 403 kyc_required and the uuid
+kiosk-demo-stylish/script/redteam_suite.rb	dfd1e1b509c99539	record(results, "DeviceGrantCannotSelfSelectRole",
+kiosk-demo-stylish/script/redteam_suite.rb	83543d08af77f2a4	record(results, "DeviceGrantRebindCannotEscalate",
+kiosk-demo-stylish/script/redteam_suite.rb	188069f72b63e915	record(results, "DeviceGrantRoleComesFromTheApprover",
+kiosk-demo-stylish/script/redteam_suite.rb	7973c79058530871	record(results, "DeviceGrantVerifyPageNamesTheAccess",
 kiosk-demo-tudu/lib/tasks/demo.rake	2d8e548f969e1ef0	Assertion 8a: the catalog declares
 kiosk-demo-tudu/lib/tasks/demo.rake	92b615178b423f66	Assertion 8b: no principal-reach verb returned
 kiosk-demo-tudu/script/redteam_suite.rb	274c4a7ee69cb819	record(results, "ChosenNameNeverTheAddress",
@@ -238,15 +258,26 @@ kiosk-server/spec/kiosk/server/device_authorization_spec.rb	e4cdb2e617e75107	ret
 kiosk-server/spec/kiosk/server/device_authorization_spec.rb	ea24834c555e6222	starts in :pending status with no user_id and no consumed_at
 kiosk-server/spec/kiosk/server/device_verify_controller_spec.rb	0b6718e0119e422c	401s a visitor with no provider session (sign in first)
 kiosk-server/spec/kiosk/server/device_verify_controller_spec.rb	7cf9a08323589108	401s when no user_idp is configured at all
+kiosk-server/spec/kiosk/server/device_verify_controller_spec.rb	3b8e8bb50321106e	approve leaves the row role-less when the session holder has no role
+kiosk-server/spec/kiosk/server/device_verify_controller_spec.rb	9baa0f4b97fc13d1	approve stamps the SESSION holder's ROLE on the row
 kiosk-server/spec/kiosk/server/device_verify_controller_spec.rb	7326a9a8ea632c5b	approve stamps the SESSION holder's user_id on the row
 kiosk-server/spec/kiosk/server/device_verify_controller_spec.rb	69a190970a2858f0	caps failed code attempts per session (429 after the limit)
+kiosk-server/spec/kiosk/server/device_verify_controller_spec.rb	a5e8dfea314ae351	names the role the approval hands over
+kiosk-server/spec/kiosk/server/device_verify_controller_spec.rb	b189eeb19c79f685	says so plainly when the provider gives the approver no role
 kiosk-server/spec/kiosk/server/device_verify_controller_spec.rb	3d98a3dba2df39f1	shows the consent panel with key fingerprint and requested-at for a live code
 kiosk-server/spec/kiosk/server/discovery_controller_spec.rb	b8517b8643b01217	GET /agents.txt
 kiosk-server/spec/kiosk/server/discovery_controller_spec.rb	263b862c5720a0b5	emits no Vary on any of the six, negotiated or not
 kiosk-server/spec/kiosk/server/discovery_controller_spec.rb	30782f34975ea667	returns 200 application/json byte-identical to WellKnown.build_json
 kiosk-server/spec/kiosk/server/discovery_controller_spec.rb	1769d6be53ccb2b1	returns 200 application/linkset+json (RFC 9727) with a non-empty item list
 kiosk-server/spec/kiosk/server/discovery_controller_spec.rb	476f6d480386f9cf	serves the three pointer documents public, one minute
+kiosk-server/spec/kiosk/server/engine_mount_spec.rb	8891ec012aefd504	a routing 404 UNDER the mount carries all three
+kiosk-server/spec/kiosk/server/engine_mount_spec.rb	182467a6ea997ea2	an unhandled 500 UNDER the mount carries all three
+kiosk-server/spec/kiosk/server/engine_mount_spec.rb	c7ba319b4eb7d4e0	leaves the ROOT-served discovery documents bare — they are outside the mount
 kiosk-server/spec/kiosk/server/engine_mount_spec.rb	a9c1bffdd23b3e3d	paths only the engine draws still resolve through the mount
+kiosk-server/spec/kiosk/server/engine_mount_spec.rb	5841b332bd723afe	stamps every path UNDER the mount — success and refusal alike
+kiosk-server/spec/kiosk/server/engine_mount_spec.rb	99a0c3c33d9f886f	the HOST's own route outside the mount carries none — on a 200
+kiosk-server/spec/kiosk/server/engine_mount_spec.rb	097e7f6792816fa3	…and none on a root-level routing 404
+kiosk-server/spec/kiosk/server/engine_mount_spec.rb	e90bc8f8370af3e6	…and none on the host's own 500, which is the same exception path
 kiosk-server/spec/kiosk/server/engine_routes_spec.rb	414982925bd1abc4	draws GET <name> at the query half and POST <name> at the action half
 kiosk-server/spec/kiosk/server/engine_routes_spec.rb	9fae982c3bd804da	draws JWKS under the mount
 kiosk-server/spec/kiosk/server/engine_routes_spec.rb	1112d0ae0b55cb09	draws NO /query and NO /run: the 0.3 multiplexed pair is gone (T-074 = A)
@@ -331,9 +362,12 @@ kiosk-server/spec/kiosk/server/jwt_issuer_spec.rb	a54853307764a171	rejects a wro
 kiosk-server/spec/kiosk/server/jwt_issuer_spec.rb	6e45cca086b5ec43	rejects an expired token
 kiosk-server/spec/kiosk/server/jwt_issuer_spec.rb	992b409b6f5602ca	round-trips an issued token and returns symbol-keyed claims
 kiosk-server/spec/kiosk/server/kyc_attestation_controller_spec.rb	aa00914a7fb63e26	#kyc_attributes
+kiosk-server/spec/kiosk/server/kyc_attestation_controller_spec.rb	563ca7dac8a5712b	maps one row per granted name onto true
+kiosk-server/spec/kiosk/server/kyc_attestation_controller_spec.rb	ca808df2a4e6833e	reads the kyc_attributes table, joined to a LIVE agents row
 kiosk-server/spec/kiosk/server/kyc_attestation_controller_spec.rb	87681fbbcf946331	returns true when kyc_verified_at is not null
 kiosk-server/spec/kiosk/server/kyc_attestation_controller_spec.rb	dceab49391f2193f	verifies a valid attestation and returns claims
 kiosk-server/spec/kiosk/server/kyc_schema_spec.rb	3349244dd3b52adc	accepts explicit schema override
+kiosk-server/spec/kiosk/server/kyc_schema_spec.rb	2ecb2ea2ec21da8d	declares no value column at all — presence of the row IS the grant
 kiosk-server/spec/kiosk/server/kyc_verifier_spec.rb	51f0ddfd2092d7e5	I1: raises Errors::Forbidden when level is missing entirely
 kiosk-server/spec/kiosk/server/kyc_verifier_spec.rb	1fd1234019a674a1	I1: raises Errors::Forbidden when level is not 'verified' (e.g. 'pending')
 kiosk-server/spec/kiosk/server/kyc_verifier_spec.rb	8d17b69128a5be12	I2: raises Errors::Forbidden when exp claim is absent
@@ -387,6 +421,9 @@ kiosk-server/spec/kiosk/server/mandate_verifier_spec.rb	85c9a7fe2f174b50	rejects
 kiosk-server/spec/kiosk/server/mandate_verifier_spec.rb	2d12783b72e256a3	returns a CartMandate bound to the intent with total within cap
 kiosk-server/spec/kiosk/server/mandate_verifier_spec.rb	43b10ecec11237ba	returns a PaymentMandate for a valid signed JWS bound to the cart
 kiosk-server/spec/kiosk/server/mandate_verifier_spec.rb	09d46de3c18d0835	returns an IntentMandate for a valid agent-signed JWS
+kiosk-server/spec/kiosk/server/oauth_binding_controllers_spec.rb	b5211118a4a7bdba	refuses a client-supplied role — even one this provider declares
+kiosk-server/spec/kiosk/server/oauth_binding_controllers_spec.rb	2b703368c1a3da30	refuses an undeclared role the same way — the value is never consulted
+kiosk-server/spec/kiosk/server/oauth_binding_controllers_spec.rb	1f1371db4a8a1cd5	refuses the OAuth-standard `scope` spelling too
 kiosk-server/spec/kiosk/server/open_api_controller_spec.rb	fe1ef17f2a5cd269	answers 304 to If-None-Match on its own ETag
 kiosk-server/spec/kiosk/server/open_api_controller_spec.rb	d9d013ecda629551	answers the derived document to a caller with NO credential
 kiosk-server/spec/kiosk/server/open_api_controller_spec.rb	dc388daaa947e319	carries the PUBLIC cache policy and a strong ETag

@@ -118,8 +118,23 @@ ok "PG role 'app_role' present"
 
 log "rails new $APP_NAME in $TMP_DIR"
 cd "$TMP_DIR"
+# The generator's output is noise on success and the ONLY diagnosis on failure,
+# so it goes to a per-invocation log whose tail the fail branch prints (K-1091) —
+# the shape deploy/production-smoke.sh and deploy/demo-reset.sh already use. It is
+# deliberately NOT the re-run-with-output shape used for `db:create db:migrate
+# db:seed` below: that step is safe to repeat, whereas re-running `rails new` over
+# a half-generated app hits Thor's file-collision prompt and would hang a CI run
+# instead of diagnosing it. Discarding both streams was what left the `cd` on the
+# next line to fail on a directory that was never created, so the run died on the
+# symptom and never printed the cause.
+GEN_LOG="$(mktemp -t kiosk-e2e-rails-new.XXXXXX)"
 rails new "$APP_NAME" --skip-bundle -d postgresql --skip-test --api --skip-git \
-  >/dev/null 2>&1
+  >"$GEN_LOG" 2>&1 || {
+    printf '  ---- last 30 lines of %s ----\n' "$GEN_LOG"
+    tail -n 30 "$GEN_LOG" | sed 's/^/  | /'
+    fail "rails new failed (full output stays at $GEN_LOG)"
+  }
+rm -f "$GEN_LOG"
 cd "$APP_NAME"
 ok "$APP_NAME generated"
 
@@ -321,12 +336,20 @@ ok "schema + seeds applied"
 # TOCTOU SELECT-then-INSERT. A revoked row for the same key is allowed.
 log "assert DB-level uniqueness on kiosk.agents.public_key (live rows)"
 REGISTER_DUP_KEY="register-dup-$$"
-psql -d "$DB_NAME" -v ON_ERROR_STOP=1 -qtA >/dev/null 2>&1 <<SQL || fail "live-key uniqueness setup insert failed"
+# STDOUT only. `-qtA` prints row counts nobody reads, but ON_ERROR_STOP reports
+# the constraint name, a missing pgcrypto or a typo in the SQL below on STDERR —
+# and the one-sentence `fail` message cannot reconstruct any of them, so stderr
+# is let through (K-1091). Costs no noise on the success path: there is none.
+psql -d "$DB_NAME" -v ON_ERROR_STOP=1 -qtA >/dev/null <<SQL || fail "live-key uniqueness setup insert failed"
   INSERT INTO users (id, created_at, updated_at) VALUES (gen_random_uuid(), now(), now());
   INSERT INTO kiosk.agents (user_id, allowed_roles, public_key)
     SELECT id, ARRAY['customer']::text[], '$REGISTER_DUP_KEY' FROM users LIMIT 1;
 SQL
 # Second LIVE insert of the same key must be REJECTED by the unique index.
+# THE ONE PLACE `2>&1` IS CORRECT AND MUST STAY (K-1091): this is the NEGATIVE
+# CONTROL, so Postgres's unique-violation message is what SUCCESS looks like —
+# printing it would make a passing run read as broken. Do not "fix" this line to
+# match the two around it, which discard a diagnostic instead of an expectation.
 if psql -d "$DB_NAME" -v ON_ERROR_STOP=1 -qtA >/dev/null 2>&1 <<SQL
   INSERT INTO kiosk.agents (user_id, allowed_roles, public_key)
     SELECT id, ARRAY['customer']::text[], '$REGISTER_DUP_KEY' FROM users LIMIT 1;
@@ -335,7 +358,9 @@ then
   fail "a SECOND live agent row with the same public_key was accepted (unique index missing)"
 fi
 # A revoked row for the same key IS allowed (partial index skips revoked rows).
-psql -d "$DB_NAME" -v ON_ERROR_STOP=1 -qtA >/dev/null 2>&1 <<SQL || fail "revoked-key re-insert wrongly rejected"
+# stderr let through for the same reason as the setup insert above (K-1091): if
+# the partial index is wrong, Postgres NAMES it and "wrongly rejected" does not.
+psql -d "$DB_NAME" -v ON_ERROR_STOP=1 -qtA >/dev/null <<SQL || fail "revoked-key re-insert wrongly rejected"
   INSERT INTO kiosk.agents (user_id, allowed_roles, public_key, revoked_at)
     SELECT id, ARRAY['customer']::text[], '$REGISTER_DUP_KEY', now() FROM users LIMIT 1;
 SQL

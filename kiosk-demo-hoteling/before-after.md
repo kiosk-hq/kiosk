@@ -27,13 +27,19 @@ Anti-bot friction compounds this. Behavioral fingerprinting (Cloudflare Turnstil
 hoteling is a Rails 8.1 app that speaks Kiosk. Below is the output of
 `bundle exec rake demo` — recorded **2026-08-26**, stdout and stderr as a
 terminal shows them. `rake demo` is `demo:setup` then `demo:book`; the block
-starts at `demo:book`'s FIRST line, so everything cut is `demo:setup`'s
-`db:drop`/`db:create`/`db:schema:load`/`db:seed` chatter and nothing else.
-From there down it is unedited, all three runs, first line to last. The
-identifiers are that run's; the dates are `Date.today + 30` / `+ 33`, so they
-move with the day it is run.
+starts at `demo:book`'s FIRST line, so what is cut is the whole of `demo:setup`'s
+output — eleven lines on the machine this was recorded on, and NOT only the
+`db:drop`/`db:create`/`db:schema:load`/`db:seed` chatter. Rake also echoes the
+two `psql` commands that create the `app_role` role and grant it, Postgres
+answers the second of those with a `NOTICE`/`LOCATION` pair when the grant is
+already in place, and the development boot prints `[kiosk] WARNING: generated an
+EPHEMERAL signing key`. Some of that is machine-dependent, which is why the
+declaration below names the TASK rather than listing its lines: run
+`rake demo:setup` to see yours. From there down it is unedited, all three runs,
+first line to last. The identifiers are that run's; the dates are
+`Date.today + 30` / `+ 33`, so they move with the day it is run.
 
-<!-- derived: transcript | task: bundle exec rake demo | from: lib/tasks/demo.rake, script/hoteling_flow.rb, script/equihash_register.rb, script/pay_window.rb, config/environments/development.rb | keys_from: app/controllers/kiosk/hotels_controller.rb, app/controllers/kiosk/reservations_controller.rb | abridged: demo:setup's db:drop/db:create/db:schema:load/db:seed chatter, above the first line quoted -->
+<!-- derived: transcript | task: bundle exec rake demo | from: lib/tasks/demo.rake, script/hoteling_flow.rb, script/equihash_register.rb, script/pay_window.rb, config/environments/development.rb | keys_from: app/controllers/kiosk/hotels_controller.rb, app/controllers/kiosk/reservations_controller.rb | abridged: everything demo:setup prints, above the first line quoted -->
 ```
   (add to /etc/hosts: 127.0.0.1 hoteling.demo.kiosk.tech — using 127.0.0.1)
 

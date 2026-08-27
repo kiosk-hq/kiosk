@@ -36,9 +36,17 @@ getgrocery is a Rails 8 app that speaks Kiosk. Below is the output of
 `bundle exec rake demo` (which is `demo:setup` then `demo:shop`, and `demo:shop`
 is what runs `script/getgrocery_flow.rb`) — recorded **2026-08-26**, stdout and
 stderr as a terminal shows them. The block starts at `demo:shop`'s FIRST line,
-so everything cut is `demo:setup`'s `db:drop`/`db:create`/`db:schema:load`/
-`db:seed` chatter and nothing else. From there down it is unedited, first line
-to last.
+so what is cut is the whole of `demo:setup`'s output — thirty-three lines on the
+machine this was recorded on, and NOT only the
+`db:drop`/`db:create`/`db:schema:load`/`db:seed` chatter and the seed listing it
+ends with. Rake also echoes the two `psql` commands that create the `app_role`
+role and grant it, Postgres answers the second of those with a
+`NOTICE`/`LOCATION` pair when the grant is already in place, and the boot prints
+`[kiosk] WARNING: generated an EPHEMERAL signing key` and a
+`[getgrocery] no STRIPE_SECRET_KEY/STRIPE_MOCK_URL set` line. Some of that is
+machine-dependent, which is why the declaration below names the TASK rather than
+listing its lines: run `rake demo:setup` to see yours. From there down it is
+unedited, first line to last.
 
 **This recording is the secret-free path**, the one CI runs: with no
 `STRIPE_SECRET_KEY` in the environment the task starts a local `stripe-mock`,
@@ -48,7 +56,7 @@ settled amount and says so in an assertion of its own. Set a real `sk_test_…`
 and the identical flow charges Stripe test mode instead; the task prefers a real
 key whenever one is present.
 
-<!-- derived: transcript | task: bundle exec rake demo | from: lib/tasks/demo.rake, script/getgrocery_flow.rb, script/equihash_register.rb | keys_from: app/controllers/kiosk/storefront_controller.rb, app/controllers/kiosk/orders_controller.rb | abridged: demo:setup's db:drop/db:create/db:schema:load/db:seed chatter, above the first line quoted -->
+<!-- derived: transcript | task: bundle exec rake demo | from: lib/tasks/demo.rake, script/getgrocery_flow.rb, script/equihash_register.rb | keys_from: app/controllers/kiosk/storefront_controller.rb, app/controllers/kiosk/orders_controller.rb | abridged: everything demo:setup prints, above the first line quoted -->
 ```
   (no STRIPE_SECRET_KEY — running against stripe-mock at http://127.0.0.1:12111, no real charge)
   (add to /etc/hosts: 127.0.0.1 getgrocery.demo.kiosk.tech -- using 127.0.0.1)

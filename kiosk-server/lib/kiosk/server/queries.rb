@@ -179,10 +179,10 @@ module Kiosk
 
         # Recovery hint for an unknown query name. Names the registered query
         # names (sorted, capped at MAX_HINT_NAMES + "…" so a large surface can't
-        # bloat the envelope) and always points at the schema verb, so an
-        # assistant that mistyped a name (`listings` for `browse_listings`) can
-        # self-correct WITHOUT a schema round-trip. The names are already public
-        # via GET .../schema, so listing them here leaks nothing new.
+        # bloat the problem document) and always points at the schema verb, so
+        # an assistant that mistyped a name (`listings` for `browse_listings`)
+        # can self-correct WITHOUT a schema round-trip. The names are already
+        # public via GET .../schema, so listing them here leaks nothing new.
         def not_found_hint(name)
           Errors.unknown_name_hint(name, "query", registry.keys.sort)
         end

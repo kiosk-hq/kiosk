@@ -110,8 +110,12 @@ module Kiosk
     #   - {Kiosk::OperationResult}          — answer-or-refusal value object a write
     #                                         Operation returns; subclass it and
     #                                         declare your own STATUSES map
-    #   - {Kiosk::Server::Result}           — success envelope value type
-    #   - {Kiosk::Server::Errors}           — exception hierarchy + envelope serialisation
+    #   - {Kiosk::Server::Result}           — success payload value type (it
+    #                                         renders {Result#to_payload}; the
+    #                                         0.3 envelope it used to render is
+    #                                         gone, T-074 = A)
+    #   - {Kiosk::Server::Errors}           — exception hierarchy + RFC 9457
+    #                                         problem-document serialisation
     #   - {Kiosk::Server::SessionContext}   — transaction + four transaction-local GUCs
     #   - {Kiosk::Server::ActionEvent}      — one action invocation, as the
     #                                         operator's audit sink receives it

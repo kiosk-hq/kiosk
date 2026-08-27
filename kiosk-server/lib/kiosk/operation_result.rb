@@ -82,7 +82,7 @@ module Kiosk
     # @param code [String] one of the wire's `error.code` values, and one your
     #   subclass's STATUSES maps.
     # @param message [String] the sentence the caller sees.
-    # @param hint [String, nil] dropped from the envelope when nil.
+    # @param hint [String, nil] dropped from the rendered refusal when nil.
     # @return [OperationResult] a refusal.
     def self.refused(code:, message:, hint: nil) = new(code: code, message: message, hint: hint)
 

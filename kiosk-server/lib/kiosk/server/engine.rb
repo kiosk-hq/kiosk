@@ -332,7 +332,7 @@ module Kiosk
 
         # KYC attestation. Unconditional for the same reason as `pay`: with
         # no kyc_public_key configured the verifier rejects with the wire's
-        # 403 envelope, and hosts that never advertise KYC lose nothing.
+        # 403 problem document, and hosts that never advertise KYC lose nothing.
         post "agents/kyc", to: "kyc_attestation#create"
 
         # Claim flow (agent-initiated; auth.md "User Claimed") — the

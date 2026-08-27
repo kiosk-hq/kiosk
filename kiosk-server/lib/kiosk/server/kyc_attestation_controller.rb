@@ -18,7 +18,8 @@ module Kiosk
     #
     # Request body: { "kyc_jws": "<compact JWS>" }
     # Success (200): { "kyc_verified": true }
-    # Failure (400/401/403): error envelope from Kiosk::Server::Errors — 400
+    # Failure (400/401/403): an RFC 9457 problem document raised from
+    # Kiosk::Server::Errors and served as `application/problem+json` — 400
     # for a missing/malformed/non-object JSON body or a missing kyc_jws field
     # 401 for a missing/invalid agent token, 403 for a failed KYC
     # verification.

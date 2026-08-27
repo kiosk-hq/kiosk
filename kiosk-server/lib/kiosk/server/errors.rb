@@ -26,8 +26,10 @@ module Kiosk
     #     only for the gem's own pre-T-054 internals and the demo
     #     initializers T-057 migrates.
     #
-    # Each subclass declares CODE (the envelope's `error.code`) and
-    # HTTP_STATUS; both MUST agree with {CODES}, and the suite asserts it.
+    # Each subclass declares CODE — the problem document's TOP-LEVEL `code`,
+    # not `error.code`: a problem document is flat, and {Base#to_problem} below
+    # is where that is decided — and HTTP_STATUS; both MUST agree with {CODES},
+    # and the suite asserts it.
     module Errors
       # `error.code` → canonical HTTP status. The closed vocabulary: these
       # fifteen codes ARE the spec's "Error vocabulary" table — narrative
@@ -142,7 +144,7 @@ module Kiosk
         429 => "quota_exceeded",
       }.freeze
       # Cap on how many registered names a not-found hint enumerates before it
-      # truncates with "…". Keeps the error envelope small on a large surface
+      # truncates with "…". Keeps the problem document small on a large surface
       # while still naming enough for an assistant to spot a near-miss typo.
       MAX_HINT_NAMES = 20
       # Plural of each wire-name kind, for the hint below. Only reachable when
@@ -440,9 +442,10 @@ module Kiosk
           @challenges = challenges
         end
 
-        # Embed the challenges in the answer — envelope or problem document,
-        # whichever the endpoint serves — so the client can solve them
-        # without a second round-trip.
+        # Embed the challenges in the answer — a top-level extension member of
+        # the problem document, which is the only error shape any endpoint has
+        # served since the cutover — so the client can solve them without a
+        # second round-trip.
         def extensions = { challenges: challenges }
       end
 

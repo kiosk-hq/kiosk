@@ -1,18 +1,30 @@
 # conformance-anchors.tsv -- GENERATED. Do not edit by hand.
 #
-# One `path<TAB>anchor` pair per citation that the Kiosk conformance matrix
-# makes against this repository. The matrix maps every normative statement of
-# the protocol to the test that covers it, and it cites a test by the text of
-# its `it` / `describe` / `context` label rather than by a line number, so a
-# citation fails on a rename, a deletion or a duplication and cannot rot from
-# renumbering.
+# One `path<TAB>anchor` pair per citation that the Kiosk convergence matrices
+# make against this repository. There are two of them: the CONFORMANCE matrix,
+# which maps every normative statement of the protocol to the test that covers
+# it, and the CLAIMS matrix, which maps every public factual claim -- landing
+# page, launch post, shipped READMEs -- to the behaviour that backs it. Both
+# cite by the TEXT of the line they point at (an `it` / `describe` / `context`
+# label, a constant, a rake task, a sentence of a README) rather than by a line
+# number, so a citation fails on a rename, a deletion or a duplication and
+# cannot rot from renumbering.
 #
 # `bin/check-conformance-anchors` asserts that each anchor below occurs
-# EXACTLY ONCE in the file beside it. If it fails, an example this repository
+# EXACTLY ONCE in the file beside it. If it fails, something this repository
 # publishes as evidence has been renamed or removed: rename it back, or update
 # the citation that names it and regenerate this file.
 #
-# 643 anchors.
+# Every pair below is a fact about this repository's own files, and that is all
+# that leaves the matrices: which row cites which pair, what it claims and how
+# it is rated stay where the matrices live.
+#
+# 842 anchors.
+README.md	Apache-2.0 for every gem in this repo.
+ROADMAP.md	**MPP as a settlement adapter.**
+deploy/README.md	## Per-demo map
+deploy/env/atablefor.env.example	KIOSK_POW_DIFFICULTY=high
+deploy/env/getgrocery.env.example	KIOSK_POW_DIFFICULTY=low
 e2e/assistant.sh	"$(curl -sS -o /dev/null -D - -H 'Accept: application/json' "$SERVER_URL/.well-known/kiosk.json" | grep -ic '^Vary:')" "0"
 e2e/assistant.sh	"$(echo "$apc_headers" | grep -ic '^Vary:')" "0"
 e2e/assistant.sh	$public_doc is really being read (control token)
@@ -28,6 +40,7 @@ e2e/assistant.sh	Kiosk-Min-Client is a version, and it is advertised
 e2e/assistant.sh	Kiosk-Min-Client present
 e2e/assistant.sh	Kiosk-Server-Version present
 e2e/assistant.sh	POST /kiosk/$retired → 404
+e2e/assistant.sh	POST at a query's path → 405
 e2e/assistant.sh	Vary names both request headers
 e2e/assistant.sh	X-Total-Count is not dressed up as a standard
 e2e/assistant.sh	a COMPLETE answer carries X-Total-Count
@@ -122,11 +135,14 @@ e2e/assistant.sh	…and neither does the operator's own 500 — same exception p
 e2e/assistant.sh	…and never a 402: the toll went with the gate
 e2e/assistant.sh	…and the module set lives in kiosk.json alone
 e2e/assistant.sh	…and the route loop actually ran
+e2e/assistant.sh	…as an ordinary not_found
 e2e/assistant.sh	…public, one minute at the bare path
 e2e/assistant.sh	…the catalog is the body itself
 e2e/assistant.sh	…while a ROOT discovery surface carries none of them
 e2e/assistant.sh	…while an identity-scoped 200 keeps private, no-store
 e2e/assistant.sh	…while the same request with a bad token is still 401
+e2e/fixtures/pay_flow.rb	pay_request = { intent_mandate_jws: JWT.encode(intent, key,
+e2e/fixtures/pay_flow.rb	trail (intent → cart → payment) bound to that principal, and pays
 e2e/schema_conformance.rb	GET /.well-known/kiosk.json
 e2e/schema_conformance.rb	GET /kiosk/schema
 e2e/schema_conformance.rb	and the same schema REFUSES a broken copy of those very bytes
@@ -137,33 +153,109 @@ e2e/schema_conformance.rb	the #{defn} mandate's claims
 e2e/schema_conformance.rb	the Kiosk-PoW header this origin ACCEPTED
 e2e/schema_conformance.rb	the pay REQUEST body
 e2e/schema_conformance.rb	the settlement this origin answered
+kiosk-all/kiosk-all.gemspec	spec.add_dependency "kiosk-core",   "~> 0.4.0"
+kiosk-all/kiosk-all.gemspec	spec.add_dependency "kiosk-server", "~> 0.4.0"
+kiosk-core/lib/kiosk/protocol.rb	API_VERSION = "0.4.0"
 kiosk-demo-atablefor/app/controllers/home_controller.rb	def index
 kiosk-demo-atablefor/app/controllers/home_controller.rb	def reservations
+kiosk-demo-atablefor/app/controllers/kiosk/bookings_controller.rb	def book_table
+kiosk-demo-atablefor/app/controllers/kiosk/bookings_controller.rb	def cancel_booking
+kiosk-demo-atablefor/app/services/pow_difficulty.rb	"high" => { n: 168, k: 7 }.freeze,
+kiosk-demo-atablefor/app/services/pow_difficulty.rb	"low"  => { n: 96,  k: 5 }.freeze,
+kiosk-demo-atablefor/app/services/pow_difficulty.rb	LEVELS = {
 kiosk-demo-atablefor/app/views/home/index.html.erb	The href is the VERSIONED cut this operator pins, read from
+kiosk-demo-atablefor/config/initializers/kiosk.rb	# ── NO payment_provider ──────────────────────────────────────────────────
+kiosk-demo-atablefor/config/initializers/kiosk.rb	Factors: REAL DB lookup
 kiosk-demo-atablefor/lib/tasks/demo.rake	names the MUTABLE alias
+kiosk-demo-atablefor/lib/tasks/demo.rake	task :book do
+kiosk-demo-atablefor/lib/tasks/demo.rake	task :reputation do
+kiosk-demo-atablefor/lib/tasks/demo.rake	task binding: :setup do
 kiosk-demo-atablefor/lib/tasks/demo.rake	which is not a skill-vX.Y.Z.md cut (§4.5)
 kiosk-demo-atablefor/lib/tasks/demo.rake	── Discovery-signal assertions (K-927, protocol.md §4.5) ──
+kiosk-demo-getgrocery/app/controllers/home_controller.rb	response.set_header("Link", %(<#{Kiosk.configuration.skill_url}>; rel="kiosk"))
+kiosk-demo-getgrocery/app/controllers/kiosk/storefront_controller.rb	def catalog
+kiosk-demo-getgrocery/app/controllers/kiosk/storefront_controller.rb	def delivery_slots
+kiosk-demo-getgrocery/app/controllers/kiosk/storefront_controller.rb	def my_orders
+kiosk-demo-getgrocery/app/models/product.rb	def self.age_restricted?(value)
+kiosk-demo-getgrocery/app/operations/create_order_operation.rb	REQUIRED_KYC_ATTRIBUTES = %w[age_over_18].freeze
+kiosk-demo-getgrocery/app/operations/create_order_operation.rb	if restricted && !Agent.kyc_granted?(*REQUIRED_KYC_ATTRIBUTES)
+kiosk-demo-getgrocery/app/operations/reschedule_delivery_operation.rb	Gate 4: a settlement of THIS principal for THIS order
+kiosk-demo-getgrocery/app/operations/reschedule_delivery_operation.rb	this order is not paid yet — reschedule_delivery only moves an ALREADY-PAID
+kiosk-demo-getgrocery/app/views/home/index.html.erb	<link rel="kiosk" href="<%= Kiosk.configuration.skill_url %>">
+kiosk-demo-getgrocery/before-after.md	Every current personal AI assistant
+kiosk-demo-getgrocery/before-after.md	recorded **2026-08-26**
+kiosk-demo-getgrocery/config/initializers/kiosk.rb	Kiosk::PaymentProviders::Stripe.new(
+kiosk-demo-getgrocery/config/initializers/kiosk.rb	c.payment_provider = ValidatingPaymentProvider.new(
+kiosk-demo-getgrocery/config/routes.rb	get  "/auth.md",                                 to: "kiosk/server/discovery#auth_md"
+kiosk-demo-getgrocery/config/routes.rb	get  "/kiosk/auth/challenge",
+kiosk-demo-getgrocery/config/routes.rb	get "/.well-known/agent-configuration",   to: "kiosk/server/discovery#agent_configuration"
+kiosk-demo-getgrocery/config/routes.rb	get "/.well-known/api-catalog",           to: "kiosk/server/discovery#api_catalog"
+kiosk-demo-getgrocery/config/routes.rb	get "/.well-known/kiosk.json",            to: "kiosk/server/discovery#kiosk_json"
+kiosk-demo-getgrocery/config/routes.rb	get "/agents.json",                       to: "kiosk/server/discovery#agents_json"
+kiosk-demo-getgrocery/config/routes.rb	get "/agents.txt",                        to: "kiosk/server/discovery#agents_txt"
+kiosk-demo-getgrocery/config/routes.rb	post "/kiosk/agents/kyc",                        to: "kiosk/server/kyc_attestation#create"
+kiosk-demo-getgrocery/config/routes.rb	post "/kiosk/auth/register",
+kiosk-demo-getgrocery/db/migrate/20260630000001_create_stripe_customers.rb	create_table :stripe_customers do
+kiosk-demo-getgrocery/lib/tasks/demo.rake	psp_reference expected /^pi_/
+kiosk-demo-getgrocery/lib/tasks/demo.rake	task :claim do
+kiosk-demo-getgrocery/lib/tasks/demo.rake	task :shop do
+kiosk-demo-getgrocery/lib/tasks/demo.rake	task agecheck: :setup do
+kiosk-demo-getgrocery/lib/tasks/demo.rake	task demo: ["demo:setup", "demo:shop"]
+kiosk-demo-getgrocery/lib/tasks/demo.rake	task isolation: :setup do
+kiosk-demo-getgrocery/script/getgrocery_flow.rb	Prints ONE JSON line on stdout
+kiosk-demo-getgrocery/script/getgrocery_flow.rb	Step 3: query delivery_slots
+kiosk-demo-getgrocery/script/getgrocery_flow.rb	Step 4: create_order
+kiosk-demo-getgrocery/script/getgrocery_flow.rb	Step 5: payment_setup (verify card is on file before paying)
+kiosk-demo-getgrocery/script/getgrocery_flow.rb	no card-setup step here. This runs with KIOSK_TEST_AUTOCARD=1
+kiosk-demo-getgrocery/script/getgrocery_flow.rb	pay: psp_reference expected 'pi_…' (real Stripe)
+kiosk-demo-hoteling/app/operations/confirm_booking_operation.rb	Gate 2: THIS principal has paid for THIS booking
+kiosk-demo-hoteling/app/operations/confirm_booking_operation.rb	no settlement for this booking
 kiosk-demo-hoteling/app/operations/wire_arguments.rb	def existing_property
 kiosk-demo-hoteling/app/operations/wire_arguments.rb	def property_not_found
+kiosk-demo-hoteling/config/initializers/kiosk.rb	c.payment_provider = ValidatingBookingProvider.new(StubPsp.new, currency: "eur")
 kiosk-demo-hoteling/lib/tasks/demo.rake	availability for the SAME unknown id → 404 not_found (the two verbs agree)
 kiosk-demo-hoteling/lib/tasks/demo.rake	check.call(result["empty_filter_total"] == 0
 kiosk-demo-hoteling/lib/tasks/demo.rake	hotel_detail for an id nobody has → 404 not_found
 kiosk-demo-hoteling/lib/tasks/demo.rake	rule 1: a value OUTSIDE its declared domain → 400 bad_request
 kiosk-demo-hoteling/lib/tasks/demo.rake	rule 3: a FILTER that matched nothing → 200 with an EMPTY array
+kiosk-demo-hoteling/lib/tasks/demo.rake	task book: :setup do
 kiosk-demo-hoteling/lib/tasks/demo.rake	…and it lists the DOMAIN rather than echoing what was sent
 kiosk-demo-hoteling/lib/tasks/demo.rake	…and the refusal NAMES THE VALID VALUES an assistant may retry with
 kiosk-demo-hoteling/lib/tasks/demo.rake	…control: the same filter without the impossible price returns
+kiosk-demo-hoteling/script/redteam_suite.rb	Kiosk::Redteam::Scenarios::UnpaidGatedAction.new,
+kiosk-demo-philslist/config/initializers/kiosk.rb	# ── NO payment_provider ──────────────────────────────────────────────────
 kiosk-demo-philslist/lib/tasks/demo.rake	Assertion 5a: forged owner_id
 kiosk-demo-philslist/lib/tasks/demo.rake	Assertion 5b: DB listings.owner_id == Bob
 kiosk-demo-philslist/lib/tasks/demo.rake	Assertion 6a: the catalog declares browse_listings
 kiosk-demo-philslist/lib/tasks/demo.rake	Assertion 6b: #{probe.length} principal-reach verb(s) probed as Bob
+kiosk-demo-philslist/lib/tasks/demo.rake	failures << "agents.json carries a payments block — must be absent for a payment-less provider"
+kiosk-demo-philslist/lib/tasks/demo.rake	failures << "agents.txt carries AP2/Payments directives — must be absent"
+kiosk-demo-philslist/lib/tasks/demo.rake	failures << "discovery capabilities advertise `pay` (got #{capabilities.inspect}) — philslist takes no payments"
+kiosk-demo-philslist/lib/tasks/demo.rake	failures << "unauthenticated GET /kiosk/schema returned #{result["schema_status"].inspect}, want 200"
+kiosk-demo-philslist/lib/tasks/demo.rake	task schema: :setup do
 kiosk-demo-philslist/script/redteam_suite.rb	record(results, "NoSellerPiiOnTheOpenBoard",
+kiosk-demo-prove/README.md	"attributes": { "age_over_18": true, "licence_a": true }, "iat": …, "exp": … }
+kiosk-demo-prove/README.md	## The three legs
+kiosk-demo-prove/app/controllers/verifications_controller.rb	attributes = ClaimCatalog.attributes_for(prove_request.requested_claims)
+kiosk-demo-prove/app/services/prove_key.rb	def mint(subject:, operator:, attributes:, request_id:, nonce:, audience: nil, ttl: 3600)
+kiosk-demo-prove/lib/tasks/demo.rake	task :test do
 kiosk-demo-skooti/app/operations/rent_motorcycle_operation.rb	#   0. KYC attributes: age_over_18 AND licence_a  → 403 kyc_required if unmet
+kiosk-demo-skooti/app/operations/rent_motorcycle_operation.rb	REQUIRED_KYC_ATTRIBUTES = %w[age_over_18 licence_a].freeze
 kiosk-demo-skooti/app/operations/rent_motorcycle_operation.rb	def self
+kiosk-demo-skooti/app/operations/rent_motorcycle_operation.rb	unless Agent.kyc_granted?(*REQUIRED_KYC_ATTRIBUTES)
 kiosk-demo-skooti/app/operations/rental_gates.rb	def payment_refusal
+kiosk-demo-skooti/app/operations/request_kyc_operation.rb	REQUESTED_CLAIMS = %w[age_over_18 licence_category:A].freeze
+kiosk-demo-skooti/config/initializers/kiosk.rb	c.kyc_audience  = ProveTrust.operator_id
+kiosk-demo-skooti/config/initializers/kiosk.rb	c.kyc_issuer    = ProveTrust.issuer
+kiosk-demo-skooti/config/initializers/kiosk.rb	c.payment_provider = ValidatingRentalProvider.new(StubPsp.new, currency: "eur")
+kiosk-demo-skooti/config/initializers/kiosk.rb	c.registration_pow_count  = 1
+kiosk-demo-skooti/config/routes.rb	post "/kiosk/agents/kyc",                        to: "kiosk/server/kyc_attestation#create"
 kiosk-demo-skooti/lib/tasks/demo.rake	A1 403 hint points to request_kyc (agent can discover the path)
 kiosk-demo-skooti/lib/tasks/demo.rake	A1 rent_motorcycle without KYC → 403 kyc_required
 kiosk-demo-skooti/lib/tasks/demo.rake	C2 Gate 0 fails CLOSED on it — rent_motorcycle back to 403 kyc_required for an agent that HAD passed
+kiosk-demo-skooti/lib/tasks/demo.rake	task :kat do
+kiosk-demo-skooti/lib/tasks/demo.rake	task :rideflow do
+kiosk-demo-skooti/lib/tasks/demo.rake	task kyc: :setup do
 kiosk-demo-skooti/script/pay_window.rb	an untouched reservation publishes payment_state=unpaid — the one answer that makes a fresh
 kiosk-demo-skooti/script/pay_window.rb	my_reservations does NOT publish `unpaid` for a reservation whose capture may already have
 kiosk-demo-skooti/script/pay_window.rb	my_reservations publishes payment_state=paid on the CAPTURE alone, with zero settlement rows
@@ -171,15 +263,44 @@ kiosk-demo-skooti/script/pay_window.rb	my_reservations publishes payment_state=p
 kiosk-demo-skooti/script/pay_window.rb	start_rental does NOT answer «no settlement for this reservation» about an in-flight charge
 kiosk-demo-skooti/script/pay_window.rb	start_rental issues the rental token on the capture-anchored witness alone, no settlement row
 kiosk-demo-skooti/script/pay_window.rb	start_rental names the outstanding capture instead of answering «no settlement»
+kiosk-demo-skooti/script/rental_flow.rb	Issued by start_rental as an offline, self-verifying unlock credential.
+kiosk-demo-skooti/script/rental_flow.rb	Step 6: LockSim offline verify
+kiosk-demo-stylish/bin/demo	run an Action
+kiosk-demo-stylish/lib/tasks/demo.rake	DB kiosk.agents.spending_cap_cents for assistant 1 == 12345
+kiosk-demo-stylish/lib/tasks/demo.rake	DB owner-agent allowed_roles == {owner} (inherited from IdP)
+kiosk-demo-stylish/lib/tasks/demo.rake	assistant 2 sees assistant 1's booking (same account)
+kiosk-demo-stylish/lib/tasks/demo.rake	check.call("DB owner-agent allowed_roles == {owner} (inherited from IdP)", owner_roles == "{owner}")
+kiosk-demo-stylish/lib/tasks/demo.rake	check.call("customer sign-in → token role == customer",      result["devise_customer_token_role"] == "customer")
+kiosk-demo-stylish/lib/tasks/demo.rake	check.call("owner salon_calendar carries a FORECAST summary", result["owner_sees_forecast"] == true)
+kiosk-demo-stylish/lib/tasks/demo.rake	human signed in via the real Devise form
+kiosk-demo-stylish/lib/tasks/demo.rake	re-rendered page shows the saved cap + label
+kiosk-demo-stylish/lib/tasks/demo.rake	result["devise_customer_token_role"] ==
+kiosk-demo-stylish/lib/tasks/demo.rake	result["owner_sees_forecast"] == true
+kiosk-demo-stylish/lib/tasks/demo.rake	set spending cap via the manage page → 200
+kiosk-demo-stylish/lib/tasks/demo.rake	task :walkthrough do
+kiosk-demo-stylish/lib/tasks/demo.rake	task binding: :setup do
+kiosk-demo-stylish/lib/tasks/demo.rake	task roles: :setup do
 kiosk-demo-stylish/script/redteam_suite.rb	record(results, "DeviceGrantCannotSelfSelectRole",
 kiosk-demo-stylish/script/redteam_suite.rb	record(results, "DeviceGrantRebindCannotEscalate",
 kiosk-demo-stylish/script/redteam_suite.rb	record(results, "DeviceGrantRoleComesFromTheApprover",
 kiosk-demo-stylish/script/redteam_suite.rb	record(results, "DeviceGrantVerifyPageNamesTheAccess",
+kiosk-demo-tudu/app/operations/list_access.rb	return nil if Membership.reachable?(list_id, require_owner: require_owner)
 kiosk-demo-tudu/lib/tasks/demo.rake	Assertion 8a: the catalog declares
 kiosk-demo-tudu/lib/tasks/demo.rake	Assertion 8b: no principal-reach verb returned
+kiosk-demo-tudu/lib/tasks/demo.rake	check.call("agents.json carries NO payments block",                 !r["agents_json_has_payments"])
+kiosk-demo-tudu/lib/tasks/demo.rake	check.call("agents.txt carries NO `Protocols: ap2` / `Payments:`",  !r["agents_txt_has_ap2"] && !r["agents_txt_has_payments"])
+kiosk-demo-tudu/lib/tasks/demo.rake	check.call("discovery capabilities do NOT include `pay` (#{capabilities.inspect})", !capabilities.include?("pay"))
+kiosk-demo-tudu/lib/tasks/demo.rake	task collab: :setup do
+kiosk-demo-tudu/lib/tasks/demo.rake	task schema: :setup do
 kiosk-demo-tudu/script/redteam_suite.rb	record(results, "ChosenNameNeverTheAddress",
 kiosk-demo-tudu/script/redteam_suite.rb	record(results, "NoLoginAddressOnTheRoster",
+kiosk-pay-stripe/lib/kiosk/payment_providers/stripe.rb	ENV.fetch("STRIPE_SECRET_KEY", nil)
+kiosk-pay-stripe/lib/kiosk/payment_providers/stripe.rb	def initialize(api_key: nil, test_payment_method: "pm_card_visa",
+kiosk-pay-stripe/lib/kiosk/payment_providers/stripe.rb	def saved_method?(user_id:)
+kiosk-pay-stripe/lib/kiosk/payment_providers/stripe.rb	def setup_required?(user_id:)
+kiosk-pay-stripe/lib/kiosk/payment_providers/stripe.rb	def setup_url(user_id:)
 kiosk-pay-stripe/lib/kiosk/payment_providers/stripe.rb	idempotency_key:
+kiosk-pay-stripe/lib/kiosk/payment_providers/stripe.rb	off_session:    true,
 kiosk-pay-stripe/spec/kiosk/payment_providers/stripe_spec.rb	#capture
 kiosk-pay-stripe/spec/kiosk/payment_providers/stripe_spec.rb	#setup_required?
 kiosk-pay-stripe/spec/kiosk/payment_providers/stripe_spec.rb	charges the customer's default saved card off_session when no explicit pm is given
@@ -191,6 +312,10 @@ kiosk-pay-stripe/spec/kiosk/payment_providers/stripe_spec.rb	returns true when t
 kiosk-pay-stripe/spec/kiosk/payment_providers/stripe_spec.rb	returns true when the resolver returns nil (principal has no Customer yet)
 kiosk-pay-stripe/spec/kiosk/payment_providers/stripe_spec.rb	translates a Stripe::CardError (declined) into a RETRYABLE PaymentFailed with a safe message
 kiosk-pay-stripe/spec/kiosk/payment_providers/stripe_spec.rb	translates a non-card Stripe error (timeout/connectivity) into a NON-retryable PaymentFailed (unknown outcome)
+kiosk-pow-equihash/README.md	(PoW = metered pricing, not a hardware wall).
+kiosk-pow-equihash/README.md	Its job is a **cheap-to-verify metered toll**, not a hardware equaliser.
+kiosk-pow-equihash/README.md	Verification cost: **~18 ms for a valid proof**
+kiosk-pow-equihash/README.md	memory-bandwidth-bound). What it buys the provider is a few-KB, ~18 ms
 kiosk-pow-equihash/spec/kiosk/pow/equihash_spec.rb	ACCEPT — header_nonce=0 same as default
 kiosk-pow-equihash/spec/kiosk/pow/equihash_spec.rb	ACCEPT — valid k=2 KAT (n=24, canonical/tree order)
 kiosk-pow-equihash/spec/kiosk/pow/equihash_spec.rb	ACCEPT — valid k=3 KAT (n=32, canonical/tree order)
@@ -206,6 +331,12 @@ kiosk-pow-equihash/spec/kiosk/pow/equihash_spec.rb	are the benchmark-chosen defa
 kiosk-pow-equihash/spec/kiosk/pow/equihash_spec.rb	describe "default params (n=168, k=7)"
 kiosk-pow-equihash/spec/kiosk/pow/equihash_spec.rb	production params (n=168, k=7) KAT
 kiosk-pow-equihash/spec/kiosk/pow/equihash_spec.rb	returns n:168, k:7 by default
+kiosk-pow-equihash/spec/readme_lever_spec.rb	README's own benchmarks give, or state that it is unbenched.
+kiosk-redteam/lib/kiosk/redteam/scenarios/privilege_self_selection.rb	class PrivilegeSelfSelection < Scenario
+kiosk-reputation/lib/kiosk/reputation/policies/rate_and_reputation.rb	base_count:                 1,
+kiosk-reputation/lib/kiosk/reputation/policies/rate_and_reputation.rb	count_max:                  10,
+kiosk-reputation/lib/kiosk/reputation/policies/rate_and_reputation.rb	return nil if proven?(purchases) && low_rate?(rate) && bad_proofs.zero?
+kiosk-reputation/lib/kiosk/reputation/policies/rate_and_reputation.rb	unproven_count_bonus:       1,
 kiosk-reputation/spec/kiosk/reputation/backoff_store_spec.rb	consuming one key does not affect another
 kiosk-reputation/spec/kiosk/reputation/policies/backoff_spec.rb	falls back to user_id when agent_id is nil
 kiosk-reputation/spec/kiosk/reputation/policies/backoff_spec.rb	grants are per-identity (agent-2's solve does not free agent-1)
@@ -220,7 +351,75 @@ kiosk-reputation/spec/kiosk/reputation/policies/rate_and_reputation_spec.rb	esca
 kiosk-reputation/spec/kiosk/reputation/policies/rate_and_reputation_spec.rb	floors count at count_min (1)
 kiosk-reputation/spec/kiosk/reputation/policies/rate_and_reputation_spec.rb	issues an :equihash challenge (argon2id is legacy)
 kiosk-reputation/spec/kiosk/reputation/policies/rate_and_reputation_spec.rb	returns nil for a proven, low-rate, clean principal
+kiosk-server/LICENSE.txt	Version 2.0, January 2004
+kiosk-server/lib/generators/kiosk/install/install_generator.rb	desc "Generate Kiosk initializer and the six base migrations (001-006)."
+kiosk-server/lib/generators/kiosk/install/install_generator.rb	migration_template "create_kiosk_kyc_attributes.rb.tt",
+kiosk-server/lib/generators/kiosk/install/install_generator.rb	migration_template "create_kiosk_schema.rb.tt",
+kiosk-server/lib/kiosk/server/account_binding.rb	effective_role = new_role
+kiosk-server/lib/kiosk/server/assistants_controller.rb	class AssistantsController < ::ActionController::Base
+kiosk-server/lib/kiosk/server/auth_controller.rb	LinkCode.mint(user_id: identity.user_id, requested_role: identity.role)
+kiosk-server/lib/kiosk/server/auth_controller.rb	def link
+kiosk-server/lib/kiosk/server/auth_controller.rb	pow    = PowGate.proofs_from_header(
+kiosk-server/lib/kiosk/server/column_spending_cap.rb	class ColumnSpendingCap
+kiosk-server/lib/kiosk/server/configuration_extension.rb	def default_signing_key
+kiosk-server/lib/kiosk/server/configuration_extension.rb	encoded = ENV["KIOSK_SIGNING_KEY_B64"]
+kiosk-server/lib/kiosk/server/configuration_extension.rb	pem = ENV["KIOSK_SIGNING_KEY_PEM"]
+kiosk-server/lib/kiosk/server/discovery_controller.rb	class DiscoveryController < ::ActionController::API
+kiosk-server/lib/kiosk/server/engine.rb	get  "/:kiosk_verb", to: "verb#show",
+kiosk-server/lib/kiosk/server/engine.rb	get  "oauth/device/verify",        to: "device_verify#show"
+kiosk-server/lib/kiosk/server/engine.rb	get  "schema", to: "wire#schema"
+kiosk-server/lib/kiosk/server/engine.rb	get "/.well-known/api-catalog",
+kiosk-server/lib/kiosk/server/engine.rb	get "/.well-known/kiosk.json",          to: "kiosk/server/discovery#kiosk_json"
+kiosk-server/lib/kiosk/server/engine.rb	get "/agents.txt",  to: "kiosk/server/discovery#agents_txt"
+kiosk-server/lib/kiosk/server/engine.rb	get "openapi.json", to: "open_api#show"
+kiosk-server/lib/kiosk/server/engine.rb	post "/:kiosk_verb", to: "verb#create",
+kiosk-server/lib/kiosk/server/errors.rb	"pow_required"           => 402,
+kiosk-server/lib/kiosk/server/errors.rb	"spending_cap_exceeded"  => 403,
+kiosk-server/lib/kiosk/server/errors.rb	CODE        = "spending_cap_exceeded"
+kiosk-server/lib/kiosk/server/errors.rb	PROBLEM_CONTENT_TYPE = "application/problem+json"
+kiosk-server/lib/kiosk/server/errors.rb	PROBLEM_TYPE_BASE = "https://kiosk.tech/problems/"
+kiosk-server/lib/kiosk/server/errors.rb	TITLES = {
+kiosk-server/lib/kiosk/server/errors.rb	class PowRequired < Base
+kiosk-server/lib/kiosk/server/executor.rb	def enforce_spending_cap!(cart)
+kiosk-server/lib/kiosk/server/handler_mixin.rb	RESERVED_NAMES = %w[agents auth oauth pay schema].freeze
+kiosk-server/lib/kiosk/server/handler_mixin.rb	base.rescue_from(StandardError, with: :kiosk_rescue_to_wire)
+kiosk-server/lib/kiosk/server/kyc_attestation_controller.rb	class KycAttestationController < ::ActionController::API
+kiosk-server/lib/kiosk/server/kyc_verifier.rb	def verified_attributes(raw)
+kiosk-server/lib/kiosk/server/kyc_verifier.rb	def verify(raw_jws:, identity:)
+kiosk-server/lib/kiosk/server/kyc_verifier.rb	if payload[:aud].to_s != config.kyc_audience.to_s
+kiosk-server/lib/kiosk/server/link_code.rb	def mint(user_id:,
+kiosk-server/lib/kiosk/server/pop_verifier.rb	issuer = Kiosk.configuration.issuer
+kiosk-server/lib/kiosk/server/pop_verifier.rb	required_claims: %w[aud nonce jti]
+kiosk-server/lib/kiosk/server/pow_gate.rb	def enforce(spec:, fingerprint:, pow:, secret:, config:, on_bad_proof:)
+kiosk-server/lib/kiosk/server/pow_gate.rb	def issue_challenges(count, spec, fp, secret, config)
 kiosk-server/lib/kiosk/server/pow_gate.rb	def pow_count
+kiosk-server/lib/kiosk/server/pow_gate.rb	def proofs_from_header(raw)
+kiosk-server/lib/kiosk/server/queries.rb	convention the provider upholds (the registry does not enforce it)
+kiosk-server/lib/kiosk/server/registration_pow.rb	def gate(public_key_pem:, pow:, config: Kiosk.configuration)
+kiosk-server/lib/kiosk/server/schema_definitions.rb	.current_user_id() RETURNS 
+kiosk-server/lib/kiosk/server/schema_definitions.rb	agent_mappings (
+kiosk-server/lib/kiosk/server/schema_definitions.rb	def helper_functions_sql(schema: nil, guc_namespace: nil, user_id_type: nil)
+kiosk-server/lib/kiosk/server/schema_definitions.rb	def kyc_attributes_sql(schema: nil)
+kiosk-server/lib/kiosk/server/schema_definitions.rb	spending_cap_cents  bigint,
+kiosk-server/lib/kiosk/server/verb_controller.rb	class VerbController < WireController
+kiosk-server/lib/kiosk/server/verb_controller.rb	def serve(command)
+kiosk-server/lib/kiosk/server/verb_controller.rb	descriptor = descriptor_for!(command, name)
+kiosk-server/lib/kiosk/server/verb_controller.rb	the reserved plane above wins
+kiosk-server/lib/kiosk/server/well_known.rb	**Identity assertion (ID-JAG)** — not supported (planned).
+kiosk-server/lib/kiosk/server/well_known.rb	AGENTS_STANDARD = "https://agents-txt.com/standard"
+kiosk-server/lib/kiosk/server/well_known.rb	def self.agent_configuration(base_url:, config: Kiosk.configuration)
+kiosk-server/lib/kiosk/server/well_known.rb	def self.agents_json(base_url:, config: Kiosk.configuration)
+kiosk-server/lib/kiosk/server/well_known.rb	def self.agents_txt(base_url:, config: Kiosk.configuration)
+kiosk-server/lib/kiosk/server/well_known.rb	def self.api_catalog(base_url:, config: Kiosk.configuration)
+kiosk-server/lib/kiosk/server/well_known.rb	def self.auth_md(base_url:, config: Kiosk.configuration)
+kiosk-server/lib/kiosk/server/well_known.rb	def self.build(base_url:, config: Kiosk.configuration)
+kiosk-server/lib/kiosk/server/wire_controller.rb	PowGate.gate(
+kiosk-server/lib/kiosk/server/wire_controller.rb	Wire response (JSON): success is the handler's payload VERBATIM
+kiosk-server/lib/kiosk/server/wire_controller.rb	def render_wire_error(error)
+kiosk-server/lib/kiosk/server/wire_controller.rb	def schema
+kiosk-server/lib/kiosk/server/wire_controller.rb	pow = PowGate.proofs_from_header(
+kiosk-server/lib/kiosk/server/wire_controller.rb	rescue_from ::ActionDispatch::Http::Parameters::ParseError do |error|
+kiosk-server/lib/kiosk/server/wire_controller.rb	rescue_from Errors::Base, with: :render_wire_error
 kiosk-server/spec/kiosk/server/account_binding_spec.rb	does not fire assistant_claimed for a fresh key (nothing was re-bound)
 kiosk-server/spec/kiosk/server/account_binding_spec.rb	fires assistant_claimed(agent:, previous_user_id:, user_id:)
 kiosk-server/spec/kiosk/server/account_binding_spec.rb	registers a linked assistant account under the holder's user_id
@@ -316,7 +515,10 @@ kiosk-server/spec/kiosk/server/device_verify_controller_spec.rb	names the role t
 kiosk-server/spec/kiosk/server/device_verify_controller_spec.rb	says so plainly when the provider gives the approver no role
 kiosk-server/spec/kiosk/server/device_verify_controller_spec.rb	shows the consent panel with key fingerprint and requested-at for a live code
 kiosk-server/spec/kiosk/server/discovery_controller_spec.rb	GET /agents.txt
+kiosk-server/spec/kiosk/server/discovery_controller_spec.rb	describe "GET /agents.txt" do
 kiosk-server/spec/kiosk/server/discovery_controller_spec.rb	emits no Vary on any of the six, negotiated or not
+kiosk-server/spec/kiosk/server/discovery_controller_spec.rb	it "returns 200 application/json byte-identical to WellKnown.build_json" do
+kiosk-server/spec/kiosk/server/discovery_controller_spec.rb	it "serves the three pointer documents public, one minute" do
 kiosk-server/spec/kiosk/server/discovery_controller_spec.rb	returns 200 application/json byte-identical to WellKnown.build_json
 kiosk-server/spec/kiosk/server/discovery_controller_spec.rb	returns 200 application/linkset+json (RFC 9727) with a non-empty item list
 kiosk-server/spec/kiosk/server/discovery_controller_spec.rb	serves the three pointer documents public, one minute
@@ -344,6 +546,7 @@ kiosk-server/spec/kiosk/server/errors_spec.rb	carries the method the verb DOES a
 kiosk-server/spec/kiosk/server/errors_spec.rb	carries the vocabulary code TWICE: as the type URI and as the branch point
 kiosk-server/spec/kiosk/server/errors_spec.rb	drops a nil hint and never emits `instance`
 kiosk-server/spec/kiosk/server/errors_spec.rb	each agrees with the CODES table on both code and status
+kiosk-server/spec/kiosk/server/errors_spec.rb	every Kiosk::Server::Errors::* subclass rescues as Base
 kiosk-server/spec/kiosk/server/errors_spec.rb	is exactly the spec's closed `code` table
 kiosk-server/spec/kiosk/server/errors_spec.rb	maps every status to a vocabulary code
 kiosk-server/spec/kiosk/server/errors_spec.rb	mints one problem type URI per code and nothing else
@@ -554,6 +757,7 @@ kiosk-server/spec/kiosk/server/revocation_store_spec.rb	keeps tokens issued at o
 kiosk-server/spec/kiosk/server/revocation_store_spec.rb	only moves the watermark forward — a later revoke never un-revokes
 kiosk-server/spec/kiosk/server/revocation_store_spec.rb	prunes watermarks older than the retention window
 kiosk-server/spec/kiosk/server/revocation_store_spec.rb	revokes tokens issued strictly before the watermark
+kiosk-server/spec/kiosk/server/schema_definitions_spec.rb	defines all four current_*() helpers
 kiosk-server/spec/kiosk/server/schema_document_spec.rb	answers an origin with nothing registered, rather than refusing
 kiosk-server/spec/kiosk/server/schema_document_spec.rb	does not republish the module set the discovery document owns
 kiosk-server/spec/kiosk/server/schema_document_spec.rb	is 32 lowercase hex characters
@@ -653,6 +857,8 @@ kiosk-test-support/spec/descriptor_required_fields_spec.rb	#{origin}: every verb
 kiosk-test-support/spec/descriptor_required_fields_spec.rb	sees the whole fleet (the lint is not vacuous)
 kiosk-test-support/spec/skill_pin_spec.rb	#{demo} pins the sha256 of the published skill version file
 kiosk-test-support/spec/skill_pin_spec.rb	is the same published cut in kiosk-server's default and in every demo
+kiosk-test-support/spec/skill_pin_spec.rb	it "is the same published cut in kiosk-server's default and in every demo" do
+kiosk-test-support/spec/skill_pin_spec.rb	it "kiosk-server's default names a published file, the same one the demos pin" do
 kiosk-test-support/spec/skill_pin_spec.rb	kiosk-server's default names a published file, the same one the demos pin
 kiosk-test-support/spec/skill_pin_spec.rb	reads kiosk-server's default skill_url
 kiosk-test-support/spec/verb_reach_spec.rb	the reviewed inventory is exactly what the fleet declares

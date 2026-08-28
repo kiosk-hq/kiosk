@@ -8,8 +8,8 @@ Apache-2.0 monorepo for [Kiosk](https://kiosk.tech) — the framework that turns
 are not comparable and the columns are named apart below.** The gems carry **API
 stability**: `alpha` is pre-v1.0 — the surface may still change between releases —
 which is the same thing each gem's own README says about itself. The demos carry
-**deployment**: `active` means the entry is gated on every CI run and, for the eight
-demo apps, live at its own subdomain. A demo being `active` says nothing about how
+**deployment**: `active` means the demo is gated on every CI run and live at its
+own subdomain. A demo being `active` says nothing about how
 settled the `alpha` engine underneath it is.
 
 ### Core framework
@@ -60,7 +60,11 @@ See `kiosk-pow-equihash/README.md` for the full comparison and rationale.
 | `kiosk-demo-philslist` | Classifieds board — non-commerce (no payments) | active |
 | `kiosk-demo-tudu` | Collaborative todo — non-commerce (no payments) | active |
 | `kiosk-demo-prove` | anonymizing KYC broker (deploys at `kyc.demo.kiosk.tech`) — an ISSUER, not a Kiosk operator (no verbs) | active |
-| `e2e` | End-to-end test fixtures, stub PSP, AI-assistant pay flow | active |
+
+**`e2e/` is not in that table, because it is not a ninth provider.** It is the
+end-to-end test harness — fixtures, a stub PSP and the AI-assistant pay flow —
+so it serves no vertical and deploys nowhere. It runs as a CI gate
+(`./e2e/run.sh`) and nothing else.
 
 Each demo exposes a set of `rake demo:*` tasks. Not all of them are CI gates —
 some are heavy or timing-sensitive local showcases. Which is which is stated in

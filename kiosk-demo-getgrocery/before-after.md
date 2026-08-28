@@ -684,4 +684,4 @@ See `script/getgrocery_flow.rb` in this directory for the full worked example.
 
 ---
 
-*Validation research: primary evidence from live connector probes (Uber Eats, Booking.com) plus independent verification of OpenAI Instant Checkout walkback, Amazon v. Perplexity injunction, and Google Universal Cart, all as of 2026-06-22.*
+*Validation research: primary evidence from live connector probes (Uber Eats, Booking.com) plus independent verification of OpenAI Instant Checkout walkback, Amazon v. Perplexity injunction, and Google Universal Cart, all as of 2026-06-22 — except the litigation, which moved and is restated rather than left to the date stamp: the Amazon v. Perplexity preliminary injunction was VACATED by the Ninth Circuit on 2026-08-04 (No. 26-1444), holding that a user who tasks an agent is the one who "accessed" the site, while expressly leaving contract claims open. A date stamp says when a finding was true, not that it stopped being true, and that is not enough for a pending case.*

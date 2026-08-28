@@ -112,7 +112,7 @@ still Bob, taken from the token).
 
 ### Adversarial battery (`rake demo:redteam`)
 
-Asserts every attack is BLOCKED (0 BREACH) — all fifteen the suite runs, in
+Asserts every attack is BLOCKED (0 BREACH) — every scenario the suite runs, in
 its own order: `CrossTenantRead`, `ForgedUserId` (400), `CrossOwnerEdit` (403),
 `CrossOwnerClose` (403), `MalformedUuidArg` (400, no SQL internals),
 `MissingAuth` (401), `GarbageToken` (401), `SelfAssertedTokenForgery` (401),
@@ -122,7 +122,13 @@ its own order: `CrossTenantRead`, `ForgedUserId` (400), `CrossOwnerEdit` (403),
 `LikeMetacharactersAreEscaped` (an `_` in `keyword` matches an underscore,
 not any character) and `NoSellerPiiOnTheOpenBoard` (the open board names a
 seller by an opaque `seller-<hex>` pseudonym, carries no account address
-anywhere in the response, and keeps one handle per seller).
+anywhere in the response, and keeps one handle per seller). Last comes the one
+beat this file does not hand-roll: `DeviceGrantRoleSelfSelection`, shared from
+`kiosk-redteam` by every demo — the account-binding claim ceremony's
+unauthenticated opening request must refuse a `role` at a value this origin
+DECLARES as firmly as an invented one, and a SKIP is scored as a breach here
+because this origin declares a role (K-072, K-1128). The task prints the count
+it actually ran; that number is the length of this list.
 
 ### Not-only-commerce proof (`rake demo:schema`)
 

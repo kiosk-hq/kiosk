@@ -500,17 +500,35 @@ class Kiosk::HotelsController < ActionController::API
       ))
     end
     if dated
-      # `Date.parse`, NOT {WireArguments.stay_dates}'s stricter `Date.iso8601`:
-      # what this verb accepts is already published behaviour. Converging the two
-      # is worth doing as a decision, not as a side effect.
-      ci, co = begin
-        [Date.parse(ci_raw), Date.parse(co_raw)]
-      rescue ArgumentError, TypeError
-        return render_refusal(OperationResult.refused(
-          code:    "bad_request",
-          message: "invalid check_in/check_out: #{ci_raw.inspect}/#{co_raw.inspect} — use YYYY-MM-DD",
-        ))
-      end
+      # CONVERGED ON {WireArguments.stay_dates} (K-1234). This kept its own
+      # `Date.parse` on the argument that what the verb accepts is «already
+      # published behaviour», and deferred the convergence as a decision. K-1230
+      # then narrowed `stay_dates` to `\A\d{4}-\d{2}-\d{2}\z`, leaving ONE demo
+      # with two date guards that disagreed about what a date is while carrying
+      # the SAME refusal sentence.
+      #
+      # THE DECISION, and the measurement that settles it. Documenting the
+      # looseness the way getgrocery does was the other option offered, and it is
+      # not available here: `Date.parse` SCANS rather than validates, so
+      # `"x2026-09-01x"`, `"2026-09-01'; --"` and `["2026-09-01"].to_s` all parse;
+      # `"09/01/2026"` is read as 9 January, not the 1 September an assistant
+      # sending it means; and `"Tue"`, `"sep"` and `"1st"` are COMPLETED FROM
+      # TODAY'S CLOCK. There is no set to name — the accepted set depends on the
+      # day the call is made.
+      #
+      # And the «published behaviour» that argument protected is the DESCRIPTOR
+      # above, which declares `format: "date"` on both arguments. Measured
+      # against this demo's own json_schemer 2.5.0, the only spelling that
+      # REACHES this line through the wire is YYYY-MM-DD naming a real day —
+      # `"20260901"`, `"2026-244"`, `"09/01/2026"` and `"2026-02-30"` are all
+      # refused before the handler runs — and this controller is NOT ROUTABLE by
+      # any other path (see the class header). So converging changes what this
+      # verb accepts by nothing an assistant can observe, and it makes the
+      # sentence below and the guard above it say the same thing.
+      dates, refusal = WireArguments.stay_dates(ci_raw, co_raw)
+      return render_refusal(refusal) if refusal
+
+      ci, co = dates
       unless co > ci
         return render_refusal(OperationResult.refused(
           code: "bad_request", message: "check_out must be after check_in",

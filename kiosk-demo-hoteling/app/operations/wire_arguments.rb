@@ -112,8 +112,11 @@ module WireArguments
   #
   # `Date.iso8601`, not `Date.parse`: `Date.parse` SCANS for a date rather than
   # validating a format, so it accepts `"2026-09-01'; --"` and `["2026-09-01"]`
-  # and would turn a refusal into a booking. `hotel_detail` keeps its own
-  # `Date.parse` — that verb's answers are already published behaviour.
+  # and would turn a refusal into a booking. This is now the demo's ONE date
+  # guard: `hotel_detail` used to keep its own `Date.parse` on the ground that
+  # its answers were already published behaviour, and K-1234 converged it here —
+  # what that verb PUBLISHES is `format: "date"` on both arguments, which is this
+  # spelling and nothing else.
   #
   # AND `Date.iso8601` IS NOT THE FORMAT THE REFUSAL NAMES (K-1230). ISO 8601 is
   # a family, and MEASURED, every one of these parses to 2026-09-01:

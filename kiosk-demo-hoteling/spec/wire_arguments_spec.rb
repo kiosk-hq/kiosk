@@ -254,8 +254,9 @@ assert(refusal_of(pair).nil? && value_of(pair).eql?(-2_147_483_649),
 #
 # `Date.parse` SCANS for a date rather than validating a format, so it accepts
 # `"2026-09-01'; --"` and `["2026-09-01"]` — and would turn a refusal into a
-# booking. This guard is the strict one; `hotel_detail` keeps its own `Date.parse`
-# because that verb's looseness is already published behaviour.
+# booking. It is also the demo's ONLY date guard since K-1234: `hotel_detail`
+# used to keep its own `Date.parse` and now calls this one, so a spelling
+# accepted for a stay is accepted for a room list too.
 #
 # AND THE ACCEPTED SET IS NOW THE ONE THE REFUSAL NAMES (K-1230). It was not:
 # `Date.iso8601` is a FAMILY, and `"20260901"`, `"2026-09-01T10:00:00Z"`,

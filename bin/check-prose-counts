@@ -57,29 +57,42 @@
 # paragraph away is not near enough, however few characters away it is, and the
 # self-test plants exactly that case and requires the guard to stay RED.
 #
-# WHAT IS GATED AND WHAT IS ONLY REPORTED, with the numbers that decided it.
-# RE-MEASURED at head 2026-08-28, over `git ls-files`, with the countable-noun
-# vocabulary below: 83 counts in Markdown, environment templates, Rake task
-# descriptions and gemspec `summary`/`description` strings, against 468 in Ruby
-# COMMENTS. Those four classes are gated -- they are what a reader of this
+# WHAT IS GATED AND WHAT IS ONLY REPORTED. Four classes are gated -- Markdown,
+# environment templates, Rake task descriptions and gemspec
+# `summary`/`description` strings -- because they are what a reader of this
 # repository, an operator running `rake -T` and a stranger on a RubyGems page
-# are shown -- and they cost 72 allow entries, 39 of which carry a `from:`
-# command and are therefore MEASURED rather than excused.
+# are shown. Ruby COMMENTS are reported instead, for the reason two paragraphs
+# down.
+#
+# THE SIZE OF EITHER HALF IS NOT WRITTEN HERE, AND THAT IS THE POINT (K-1242).
+# How many counts each class holds, how long the allow file is and how much of
+# it is MEASURED rather than merely excused are printed by EVERY RUN, derived
+# from the tree in front of it -- `gated:`, `declarations run:`, the allow-file
+# line and `REPORTED, NOT GATED:`. They used to be typed into this paragraph,
+# where they drifted twice inside one week, because a numeral in a Ruby comment
+# is the exact class this guard REPORTS rather than gates: nothing in the
+# repository could ever have caught them. A guard whose own header carries
+# hand-typed counts about its own corpus is the defect it exists to find, so the
+# numerals are gone and the run is the answer. Do not put them back.
 #
 # THE GEMSPEC CLASS, AND WHAT ADDING A CLASS ACTUALLY BUYS (T-144). It is the
 # cheapest slice of the ungated half and it was chosen for the surface rather
 # than for the volume: a gem's `summary`/`description` IS its RubyGems landing
 # page, the first and often only page a stranger reads, and K-1217 found a false
-# claim on exactly that surface. MEASURED when it was added: 14 gemspecs, 101
-# published sentences, 13288 characters, 36 cardinal tokens inside them -- of
-# which the noun vocabulary gates exactly ONE, `two reserved endpoints` in
-# kiosk-server, now elided. The other 35 are version numbers, HTTP status codes,
-# parameter names (`n=168, k=7`) and hash widths (`BLAKE2b-256`), which the
-# digit rules below correctly refuse to read as quantities. So the class costs
-# no allow entries at all today, and the honest summary is that it moved the
-# gated total from 83 to 84 and the repair moved it back to 83. Its value is
+# claim on exactly that surface. What T-144 measured when it was added, kept
+# here as a DATED RECORD of that wave and not as a live figure: of the cardinal
+# tokens inside the published gemspec strings the noun vocabulary reached
+# exactly one, `two reserved endpoints` in kiosk-server, since elided; the rest
+# were version numbers, HTTP status codes, parameter names (`n=168, k=7`) and
+# hash widths (`BLAKE2b-256`), which the digit rules below correctly refuse to
+# read as quantities. K-1241 then found the vocabulary one noun short of the
+# class it had just added -- `policies`, and `backends` beside it -- so
+# kiosk-reputation's «Ships two configurable example policies» was reaching
+# NEITHER the gated set NOR the printed broad residue, which needs the plural to
+# sit immediately after the cardinal. Both nouns are in the vocabulary now and
+# that claim is gated, by a `from:` command rather than an excuse. Its value is
 # forward-looking: the next hand-typed count written onto a gem's landing page
-# is now a red build.
+# is a red build.
 #
 # ONE THING THAT DOES NOT WORK THERE, and it changes which repair is available:
 # A MARKER CANNOT BE WRITTEN INTO PUBLISHED GEMSPEC TEXT. `summary` and
@@ -97,7 +110,8 @@
 # `kiosk.tech`, the twin-digest discipline `check-publication-paths` uses).
 #
 # The comments are reported and not gated, and that is a measurement rather than
-# a preference: gating the 468 of them needs 468 allow entries, nearly all of which
+# a preference: gating them needs one allow entry per comment -- the run prints
+# how many that is -- nearly all of which
 # would say the same thing -- that an engineering comment enumerating what it is
 # describing ("in two or more demos", "behind three gates") is ordinary English
 # and not a claim about a countable population -- and an allow-file that large
@@ -175,7 +189,7 @@ WORD_VALUE = {
 NOUNS = %w[
   actions apps arguments assertions batteries beats checks columns controllers copies cuts
   demos descriptors documents endpoints entries examples fields files gates gems guards
-  handlers headings initializers jobs migrations operators pins proofs queries repos
+  backends handlers headings initializers jobs migrations operators pins policies proofs queries repos
   repositories rows scenarios sections sites specs tables tasks templates verbs
 ].freeze
 # <<< VOCABULARY -- END
@@ -733,6 +747,14 @@ def report(result, quiet:)
          "sentence, #{s[:excused_allowed]} in #{ALLOW_FILE}"
     puts "  declarations run: #{s[:declarations] + result[:allow].count { |a| a[:command] }} " \
          "(#{s[:declarations_ok]} agreed with their command)"
+    # K-1242: this line and the three around it are the guard's description of
+    # its own corpus. They live here, derived on every run, rather than in the
+    # header, where they were hand-typed numerals in a Ruby comment -- the class
+    # this guard reports rather than gates, so nothing could ever catch them
+    # drifting, and they twice did.
+    puts "  #{ALLOW_FILE}: #{result[:allow].length} entry(ies), " \
+         "#{result[:allow].count { |a| a[:command] }} carrying a `from:` command and therefore " \
+         "MEASURED rather than excused"
     puts "  REPORTED, NOT GATED: #{s[:reported_hits]} count(s) in source comments; " \
          "#{s[:broad_residue]} cardinal-plus-plural hit(s) the noun vocabulary does not reach"
   end

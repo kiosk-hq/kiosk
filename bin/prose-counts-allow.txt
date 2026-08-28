@@ -110,4 +110,5 @@ kiosk-demo-stylish/README.md ¦ four beats ¦ the four scenario classes are name
 kiosk-demo-stylish/README.md ¦ two files ¦ from: git ls-files 'kiosk-demo-stylish/app/controllers/kiosk/*.rb' | wc -l ¦ the handler controllers, which is what the sentence says need not have been two.
 kiosk-demo-tudu/README.md ¦ 404 beats ¦ not a count: the numeral is an HTTP status in a list of refusals, and the noun sits three words further along the same joined sentence.
 kiosk-demo-tudu/README.md ¦ two files ¦ from: git ls-files 'kiosk-demo-tudu/app/controllers/kiosk/*.rb' | wc -l ¦ the handler controllers, which is what the sentence says need not have been two.
+kiosk-reputation/kiosk-reputation.gemspec ¦ two policies ¦ from: git ls-files 'kiosk-reputation/lib/kiosk/reputation/policies/*.rb' | wc -l ¦ the shipped example policies, named one by one in the two sentences that follow it on the RubyGems page. A marker cannot be written into published gemspec text, so this is the only form the declaration can take (K-1241).
 kiosk-reputation/README.md ¦ one proofs ¦ not a count: "a single proof ... or as an array of N proofs" is a shape, and the numeral belongs to the singular case.

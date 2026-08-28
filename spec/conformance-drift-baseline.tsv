@@ -20,7 +20,7 @@
 # watermark forward. Repair a drifted header with --reheader, which re-renders
 # this block and touches no fingerprint.
 #
-# recorded: 2026-08-27 at d5717910 -- k1145
+# recorded: 2026-08-28 at 2faecebf
 # 574 anchors.
 e2e/assistant.sh	f9dc523d4a428d91	$public_doc is really being read (control token)
 e2e/assistant.sh	52a16a65def7b005	?v=<digest> is immutable for a year
@@ -290,9 +290,9 @@ kiosk-server/spec/kiosk/server/engine_routes_spec.rb	1112d0ae0b55cb09	draws NO /
 kiosk-server/spec/kiosk/server/engine_routes_spec.rb	e50f4643cbfdd39b	draws the KYC attestation endpoint
 kiosk-server/spec/kiosk/server/engine_routes_spec.rb	ce0d476c46ab9fe5	draws the two RESERVED wire endpoints — and the wire has no others
 kiosk-server/spec/kiosk/server/engine_routes_spec.rb	2e3e7e52a54fb7c4	leaves a path that cannot be a verb name a routing 404
-kiosk-server/spec/kiosk/server/engine_routes_spec.rb	e2889e16af22ca3b	lets EVERY reserved-plane route win by first-match
+kiosk-server/spec/kiosk/server/engine_routes_spec.rb	c0aa7d57aa2c5142	lets EVERY reserved-plane route win by first-match
 kiosk-server/spec/kiosk/server/engine_routes_spec.rb	429c9f0d4f6fef37	reserves exactly the first segments it draws — and `query`/`run` left both
-kiosk-server/spec/kiosk/server/engine_routes_spec.rb	ee73d917b3c3e4aa	the per-verb wire
+kiosk-server/spec/kiosk/server/engine_routes_spec.rb	4af3aaddfc9d99dc	the per-verb wire
 kiosk-server/spec/kiosk/server/errors_spec.rb	1271ac5e9efefef8	#to_problem — the 0.4 error shape (RFC 9457)
 kiosk-server/spec/kiosk/server/errors_spec.rb	d9a9d5ef6a5c580c	#{klass.name.split('::').last} → code=#{code.inspect} http=#{http_status}
 kiosk-server/spec/kiosk/server/errors_spec.rb	729ad69c70e41ac8	carries a handler's own extra fields through
@@ -476,7 +476,7 @@ kiosk-server/spec/kiosk/server/pow_gate_spec.rb	e45f13f97e540f24	re-issues a fre
 kiosk-server/spec/kiosk/server/pow_gate_spec.rb	7592347be5a74818	renders the documented forbidden problem document, carrying the hint
 kiosk-server/spec/kiosk/server/pow_gate_spec.rb	201c460d3cf4d9b1	scales the challenge TTL by `count`, so a sequential solver does not lose the first
 kiosk-server/spec/kiosk/server/pow_gate_spec.rb	cdaae854e51866fc	verifies for the identical method + verb + args (the control)
-kiosk-server/spec/kiosk/server/pow_gate_spec.rb	5adf535fed6fc4ff	with a policy that always challenges
+kiosk-server/spec/kiosk/server/pow_gate_spec.rb	2887ec1e7a37566c	with a policy that always challenges
 kiosk-server/spec/kiosk/server/pow_spent_stores_spec.rb	041fe24d7353cf9f	does NOT hold single-use across independent instances
 kiosk-server/spec/kiosk/server/pow_spent_stores_spec.rb	dd5b3fa47ec948ff	is idempotent and visible to a second instance
 kiosk-server/spec/kiosk/server/pow_spent_stores_spec.rb	ea0ca734e51687f9	keys the table on the challenge id, so the PK is the single-use gate
@@ -511,10 +511,10 @@ kiosk-server/spec/kiosk/server/schema_document_spec.rb	f7e0055b07ffcdca	does not
 kiosk-server/spec/kiosk/server/schema_document_spec.rb	3a3c45996f297ce2	is 32 lowercase hex characters
 kiosk-server/spec/kiosk/server/schema_document_spec.rb	206edad158625ca2	is exactly {queries, actions} — sorted descriptors, and NO `verbs`
 kiosk-server/spec/kiosk/server/schema_document_spec.rb	4a9dfd1c336b7580	is the digest, quoted, and STRONG — no `W/` prefix
-kiosk-server/spec/kiosk/server/verb_controller_spec.rb	3c68ecc2af0231bd	a query is a GET at its own path
+kiosk-server/spec/kiosk/server/verb_controller_spec.rb	37d9502e674420a9	a query is a GET at its own path
 kiosk-server/spec/kiosk/server/verb_controller_spec.rb	464baa139cfe6441	accepts limit and cursor on a verb that declares neither, with a CLOSED schema
 kiosk-server/spec/kiosk/server/verb_controller_spec.rb	d13fc578888ff55a	an action is a POST at its own path
-kiosk-server/spec/kiosk/server/verb_controller_spec.rb	c75e5f6bf77be991	answers 401 before it will say whether the verb exists
+kiosk-server/spec/kiosk/server/verb_controller_spec.rb	36b62c41733a1d85	answers 401 before it will say whether the verb exists
 kiosk-server/spec/kiosk/server/verb_controller_spec.rb	70859fb31c4ad157	answers POST <endpoint>/query as the VERB named `query` — 404, nobody registered one
 kiosk-server/spec/kiosk/server/verb_controller_spec.rb	f57d62269e4301b5	answers POST <endpoint>/run the same way — one unregistered name among others
 kiosk-server/spec/kiosk/server/verb_controller_spec.rb	682c8c14dffa700f	answers a GET at an ACTION's name 405, with Allow: POST
@@ -574,7 +574,7 @@ kiosk-server/spec/kiosk/server/well_known_spec.rb	26086d812b3a2427	tags the one 
 kiosk-server/spec/kiosk/server/well_known_spec.rb	13ddf89b69edc783	tags the schema endpoint as the machine-readable service-desc
 kiosk-server/spec/kiosk/server/well_known_spec.rb	0c801fd362d2198c	wraps everything under a top-level `kiosk` key
 kiosk-server/spec/kiosk/server/wire_controller_402_spec.rb	30609ea1538598fb	answers 402 to a CONDITIONAL request — the toll runs before freshness
-kiosk-server/spec/kiosk/server/wire_controller_402_spec.rb	3980d40e5971f2cc	answers a per-verb GET the same gate as a problem document, uncacheable
+kiosk-server/spec/kiosk/server/wire_controller_402_spec.rb	816d19204d04eaa5	answers a per-verb GET the same gate as a problem document, uncacheable
 kiosk-server/spec/kiosk/server/wire_controller_402_spec.rb	9f679f5af8c6f2f9	carries WWW-Authenticate: Kiosk-PoW AND the challenges, on the reserved POST pay
 kiosk-server/spec/kiosk/server/wire_controller_402_spec.rb	104e392a712470fe	carries WWW-Authenticate: Payment ... method=\
 kiosk-server/spec/kiosk/server/wire_controller_pow_header_spec.rb	02607ebc40202e35	accepts a JSON-array Kiosk-PoW header (proceeds)

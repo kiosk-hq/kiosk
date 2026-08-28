@@ -397,8 +397,9 @@ references a handler controller, so an origin that names none of them serves
 path answers 404, and `/.well-known/kiosk.json` advertises
 `"capabilities": []` (they are computed from the live registry). `c.handlers` is
 what closes that: the engine registers the listed classes in both load modes and
-rebuilds them on every reload. When neither the list nor the initializer API has
-put anything in the registry, the gem says so on the log at boot.
+rebuilds them on every reload. When the list is empty and eager loading has put
+nothing in the registry either, the gem says so on the log at boot — and the
+only remedy it names is `c.handlers`, because there is no other way in.
 
 
 ### What you get inside a handler

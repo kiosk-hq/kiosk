@@ -20,8 +20,10 @@
 # watermark forward. Repair a drifted header with --reheader, which re-renders
 # this block and touches no fingerprint.
 #
-# recorded: 2026-08-28 at d1e8e137
-# 1574 anchors.
+# recorded: 2026-08-28 at 5505e220
+# 1587 anchors.
+.github/workflows/ci.yml	6018aa9658a15f18	name: kiosk OSS end-to-end
+.github/workflows/ci.yml	cd63b8cec8954ef0	run: ./e2e/run.sh
 CHANGELOG.md	4570005aad48e6ba	Surfaced by a live hosted Hermes run. (K-437)
 CHANGELOG.md	ab88745a8a9ff044	surfaced by the first live Hermes run, which paid successfully but whose order could never show paid or be scheduled
 CLAUDE.md	107dd0a90a04c1fe	demo Rails apps (`kiosk-demo-*` — seven operators plus the `kiosk-demo-prove`
@@ -40,6 +42,14 @@ README.md	b07db411a8c3ab9d	multi-assistant identity per user
 README.md	007d886004e83fb9	| `kiosk-pay-stripe` | PSP adapter — Stripe, AP2 mandate trail | alpha |
 README.md	4ddff6dda11dd4a1	| `kiosk-rls` | Opt-in RLS DSL + migration helpers (`rake kiosk:rls:{show,check}` planned, lands in a follow-up) | alpha |
 ROADMAP.md	a5836896bde82598	**MPP as a settlement adapter.**
+deploy/Caddyfile	10cb71c5bcdec3da	atablefor.demo.kiosk.tech {
+deploy/Caddyfile	aed3d85fef818329	getgrocery.demo.kiosk.tech {
+deploy/Caddyfile	daa67467d812c94b	hoteling.demo.kiosk.tech {
+deploy/Caddyfile	dea8a8cd3e8e1077	kyc.demo.kiosk.tech {
+deploy/Caddyfile	fbc3c5420ca88171	philslist.demo.kiosk.tech {
+deploy/Caddyfile	b5af299fa1e67839	skooti.demo.kiosk.tech {
+deploy/Caddyfile	0157b74950d44896	stylish.demo.kiosk.tech {
+deploy/Caddyfile	a48363d8d99e26d2	tudu.demo.kiosk.tech {
 deploy/README.md	fe6c7f8919b3af5e	## Per-demo map
 deploy/README.md	06618e86a7fea4ff	**PoW difficulty is a feature**: ALL seven demos honor the
 deploy/README.md	57c9a3e77dd56360	**The KYC broker is the odd one out**: the gem dir is `kiosk-demo-prove` but it serves
@@ -578,6 +588,7 @@ kiosk-demo-skooti/script/rental_flow.rb	0f8996e5043b4ae1	# Flow: register (PoW) 
 kiosk-demo-skooti/script/rental_flow.rb	851c52a52291ea44	# ── Step 2: (no KYC) ─────────────────────────────────────────────────────────
 kiosk-demo-skooti/script/rental_flow.rb	2a152c83d0115a9c	Issued by start_rental as an offline, self-verifying unlock credential.
 kiosk-demo-skooti/script/rental_flow.rb	f155f17e6e9921a7	Step 6: LockSim offline verify
+kiosk-demo-stylish/Gemfile	63c394298fb1dd6d	gem "kiosk-rls",
 kiosk-demo-stylish/README.md	6f82b8a0ddb61065	- **Roles from a configured IdP** — stylish has two entrances: a **visitor** books a service off the menu, and
 kiosk-demo-stylish/README.md	19b1f9bb76958c78	- **The AGENT-IdP seam** (`c.agent_idp`) is **not** a shortcut here any more: this demo sets **nothing**
 kiosk-demo-stylish/README.md	223ae174b5aafda1	- A `book_appointment` Action + an `availability`/`service_menu` query — an **evergreen service menu**: a smal
@@ -732,6 +743,7 @@ kiosk-pow-cuckoo/README.md	4055dd3f020ce2f6	**This gem ships the VERIFIER only.*
 kiosk-pow-cuckoo/README.md	0dc06fe6a34144a5	- **Equihash** (`kiosk-pow-equihash`) is the shipped default.
 kiosk-pow-cuckoo/README.md	f30036bd108e1dda	> **Shelved / optional.** The shipped default PoW backend is
 kiosk-pow-cuckoo/README.md	b84b7bac546abef9	validated against Grin's Cuckatoo29 L=42 known-answer test vector.
+kiosk-pow-cuckoo/Rakefile	a36c36bdc0c1e6d0	task :solve_parity do
 kiosk-pow-cuckoo/lib/kiosk/pow/cuckoo.rb	a4726ca2ae66abf8	      NAME = "cuckatoo"
 kiosk-pow-cuckoo/spec/kiosk/pow/cuckoo_spec.rb	3f446b208bd45f91	  # taken directly from Grin's CI test suite (cuckatoo29 constant).
 kiosk-pow-equihash/README.md	4eebc551c8555cca	## Solver (Python + numpy)
@@ -813,6 +825,7 @@ kiosk-pow/README.md	61fbc59491e38287	## Cross-implementation parity check
 kiosk-pow/README.md	41f5ef1359b27f66	> **Retired / optional.** The shipped default PoW backend is
 kiosk-pow/README.md	eef680478c0b9f20	Both sides produce byte-identical Argon2id digests (verified by `rake parity`).
 kiosk-pow/README.md	4e2958558a87e653	Computes the same Argon2id digest in Ruby and Python, asserts hex-equal, then
+kiosk-pow/Rakefile	40b80abbbae9ee77	task :parity do
 kiosk-redteam/README.md	2f3ee66401e2f514	Adversarial regression harness for [Kiosk](https://kiosk.tech) providers — it
 kiosk-redteam/README.md	31c52b5f46869d3c	attack is correctly blocked.
 kiosk-redteam/README.md	5cbd677af81e11c1	drives hostile HTTP scenarios against a running Kiosk origin and asserts each

@@ -33,18 +33,19 @@
 # to end «folding them together would put two unrelated invariants behind one
 # exit code and one --write contract», and the reason does not survive its own
 # file. MEASURED from the `# ── … ──` banners below: this script now enforces
-# SEVENTEEN independent invariants behind exactly one exit code and one --write
-# contract. Read as a rule about COUNT, the sentence argued for splitting this
-# file seventeen ways. It was never about count.
+# EIGHTEEN independent invariants behind exactly one exit code and one --write
+# contract — seventeen when that sentence was written, plus T-120's fragment
+# rule. Read as a rule about COUNT, the sentence argued for splitting this file
+# eighteen ways. It was never about count.
 #
-# The seventeen share the manifest, the discovery pass and the normalisation, so
-# seventeen scripts would re-declare the demo corpus seventeen times — which is
+# The eighteen share the manifest, the discovery pass and the normalisation, so
+# eighteen scripts would re-declare the demo corpus eighteen times — which is
 # precisely the drift this file exists to stop. What a sibling may not share is
 # its INPUT: a script that compares two different pairs of things cannot tell a
 # reader which pair disagreed, and no amount of output formatting fixes that,
 # whereas a second invariant over the SAME corpus costs nothing but a section.
 #
-# The cost of holding seventeen behind one exit code is real and is not argued
+# The cost of holding eighteen behind one exit code is real and is not argued
 # away here: CI cannot distinguish a failing prose claim from a failing
 # migration pair without reading the output, and `--write` can rewrite copies
 # for a reason the operator did not intend. If that becomes the thing that

@@ -185,6 +185,27 @@ module WireArguments
     )]
   end
 
+  # The "currently …" tail both DB-DERIVED refusals end in, and the reason it is
+  # a method rather than a `join` at each site (K-1231).
+  #
+  # `[].join(", ")` is `""`, so the sentence came to rest as «… is not one this
+  # aggregator serves — currently » — a promise of a set with nothing after it,
+  # which is WORSE than no clause at all: an assistant parsing the refusal for
+  # the values it may retry with gets an empty promise rather than an absence.
+  # And the empty set is not a corner: an origin with no restaurants, or none
+  # with an upcoming seating, is exactly the state a fresh operator install is
+  # in, so this is the FIRST refusal a new operator's assistant sees.
+  #
+  # "none" rather than dropping the clause, because the two say different things.
+  # Dropping it leaves the assistant unable to tell "there is a set and I am not
+  # in it" from "there is no set"; "none" says the second, and says that
+  # retrying with another value is pointless.
+  #
+  # @return [String]
+  def served_list(values)
+    values.empty? ? "none" : values.join(", ")
+  end
+
   # A seating DATE inside the rolling upcoming horizon. The valid values are
   # NAMED in the refusal, so an assistant recovers without a second fetch
   # (K-717).
@@ -198,7 +219,7 @@ module WireArguments
     [nil, OperationResult.refused(
       code:    "bad_request",
       message: "date #{date.inspect} is not among the upcoming seatings — " \
-               "currently #{dates.join(", ")}",
+               "currently #{served_list(dates)}",
     )]
   end
 
@@ -221,7 +242,7 @@ module WireArguments
     [nil, OperationResult.refused(
       code:    "bad_request",
       message: "neighborhood #{value.inspect} is not one this aggregator serves — " \
-               "currently #{served.join(", ")}",
+               "currently #{served_list(served)}",
     )]
   end
 

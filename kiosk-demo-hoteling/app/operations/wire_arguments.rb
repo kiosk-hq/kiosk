@@ -114,15 +114,39 @@ module WireArguments
   # validating a format, so it accepts `"2026-09-01'; --"` and `["2026-09-01"]`
   # and would turn a refusal into a booking. `hotel_detail` keeps its own
   # `Date.parse` — that verb's answers are already published behaviour.
+  #
+  # AND `Date.iso8601` IS NOT THE FORMAT THE REFUSAL NAMES (K-1230). ISO 8601 is
+  # a family, and MEASURED, every one of these parses to 2026-09-01:
+  # `"20260901"` (basic), `"2026-09-01T10:00:00Z"` (datetime), `"2026-W36-2"`
+  # (week date) and `"2026-244"` (ordinal date) — five spellings where the
+  # sentence below names one, on the descriptor-less `ReserveRoomOperation` path
+  # where no JSON Schema narrows the input first and that sentence is the only
+  # thing telling an assistant what this operator takes.
+  #
+  # The sibling getgrocery documents its `Date.parse` looseness in code instead
+  # of narrowing it, and says why: on that verb pair the looseness is already
+  # PUBLISHED BEHAVIOUR. Here it is not — it is a side effect of the method
+  # picked for strictness — and two of the five spellings are worse than merely
+  # undocumented: `"2026-09-01T10:00:00Z"` silently DISCARDS a time an assistant
+  # may have meant as the check-in hour, and a week or ordinal date resolves to a
+  # day no human reading the booking would recognise. So the guard narrows to the
+  # published spelling rather than the sentence growing to name four more.
+  # `Date.iso8601` still runs behind the format check, because it is what refuses
+  # `"2026-02-30"` and `"2026-13-01"` — a well-shaped date that is not a day.
+  STAY_DATE = /\A\d{4}-\d{2}-\d{2}\z/
+
   def stay_dates(check_in, check_out)
     return [nil, missing("check_in")]  if check_in.blank?
     return [nil, missing("check_out")] if check_out.blank?
 
-    dates = begin
-      [Date.iso8601(check_in.to_s), Date.iso8601(check_out.to_s)]
-    rescue ArgumentError, TypeError
-      nil
-    end
+    dates =
+      if [check_in, check_out].all? { STAY_DATE.match?(_1.to_s) }
+        begin
+          [Date.iso8601(check_in.to_s), Date.iso8601(check_out.to_s)]
+        rescue ArgumentError, TypeError
+          nil
+        end
+      end
     return [dates, nil] unless dates.nil?
 
     [nil, OperationResult.refused(

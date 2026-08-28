@@ -256,17 +256,27 @@ assert(refusal_of(pair).nil? && value_of(pair).eql?(-2_147_483_649),
 # `"2026-09-01'; --"` and `["2026-09-01"]` — and would turn a refusal into a
 # booking. This guard is the strict one; `hotel_detail` keeps its own `Date.parse`
 # because that verb's looseness is already published behaviour.
+#
+# AND THE ACCEPTED SET IS NOW THE ONE THE REFUSAL NAMES (K-1230). It was not:
+# `Date.iso8601` is a FAMILY, and `"20260901"`, `"2026-09-01T10:00:00Z"`,
+# `"2026-W36-2"` and `"2026-244"` all parsed to 2026-09-01 where the sentence
+# said "use YYYY-MM-DD" — four undocumented spellings on the descriptor-less
+# `ReserveRoomOperation` path, two of which resolve to a day nobody reading the
+# booking would recognise and one of which silently discards a time. This spec
+# used to assert that looseness as published behaviour; it now asserts the
+# narrowing, and the four spellings are in the refusal battery below.
 puts "\n── stay_dates: the strict parse, and both missing halves ──"
-[["2026-09-01", "2026-09-04"], ["20260901", "2026-09-04"], ["2026-09-01T10:00:00Z", "2026-09-04"]]
-  .each do |ci, co|
+[["2026-09-01", "2026-09-04"]].each do |ci, co|
   pair = guard("stay_dates(#{ci.inspect}, #{co.inspect})") { WireArguments.stay_dates(ci, co) }
   assert(refusal_of(pair).nil? && value_of(pair) == [Date.new(2026, 9, 1), Date.new(2026, 9, 4)],
-         "stay_dates(#{ci.inspect}, #{co.inspect}) → two Dates — ISO basic and an ISO datetime " \
-         "are `Date.iso8601` forms, which is published behaviour here, got #{value_of(pair).inspect}")
+         "stay_dates(#{ci.inspect}, #{co.inspect}) → two Dates — YYYY-MM-DD is the ONE spelling " \
+         "this guard takes, and the one its refusal names, got #{value_of(pair).inspect}")
 end
 
+# `Date.iso8601` still runs behind the format check: it is what refuses a
+# well-shaped date that is not a DAY (`"2026-02-30"`, `"2026-13-01"`).
 ["2026-09-01'; --", ["2026-09-01"], "2026-9-1", "2026-02-30", "2026-13-01", 42, "tomorrow",
- "01/09/2026"].each do |bad|
+ "01/09/2026", "20260901", "2026-09-01T10:00:00Z", "2026-W36-2", "2026-244"].each do |bad|
   pair    = guard("stay_dates(#{bad.inspect})") { WireArguments.stay_dates(bad, "2026-09-04") }
   refusal = refusal_of(pair)
   assert_typed_400(refusal, "stay_dates(#{bad.inspect}, ok)")

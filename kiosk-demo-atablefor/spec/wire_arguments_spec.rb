@@ -275,6 +275,15 @@ end
 assert(WireArguments.seating_date("nope", UPCOMING)[1].message.scan("2026-09-01").size == 1,
        "a day with two seatings is named once in the refusal, not once per seating")
 
+# AN EMPTY ROSTER NAMES THE ABSENCE (K-1231). `[].join(", ")` is `""`, so this
+# sentence used to end «— currently » — a promise of a set with nothing after it.
+# An origin with no upcoming seatings is the state a fresh install is in, so this
+# is the first refusal a new operator's assistant would have read.
+assert(WireArguments.seating_date("2026-09-01", [])[1].message ==
+       "date \"2026-09-01\" is not among the upcoming seatings — currently none",
+       "an empty roster says «currently none», not «currently »: " \
+       "#{WireArguments.seating_date("2026-09-01", [])[1].message.inspect}")
+
 # ── 6. neighborhood/2 — a DB-derived set, held at arm's length ───────────────
 #
 # An operator adds a neighbourhood by inserting a restaurant, so no static `enum`
@@ -309,6 +318,13 @@ end
 assert(WireArguments.neighborhood("alfama", SERVED)[1].is_a?(OperationResult),
        "the match is EXACT, not case-folded — the value goes into a `where` and Postgres would " \
        "not fold it either")
+
+# THE SAME EMPTY-SET TAIL, on the other DB-derived refusal (K-1231). An origin
+# with no restaurants serves no neighbourhoods, and that is a fresh install.
+assert(WireArguments.neighborhood("Alfama", [])[1].message ==
+       "neighborhood \"Alfama\" is not one this aggregator serves — currently none",
+       "an empty served set says «currently none», not «currently »: " \
+       "#{WireArguments.neighborhood("Alfama", [])[1].message.inspect}")
 
 # ── 7. booking_id/1 — PRESENT, then shaped like an id (K-581/K-582, K-654) ───
 #

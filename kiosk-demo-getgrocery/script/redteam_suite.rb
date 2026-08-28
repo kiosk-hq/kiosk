@@ -333,10 +333,17 @@ class MalformedItemsCart < Kiosk::Redteam::Scenario
       resp = client.run(a, name: "create_order", **args)
       statuses << resp.status
       code = resp.body.is_a?(Hash) ? resp.body["code"] : nil
-      leak = RUBY_INTERNALS.find { |needle| JSON.generate(resp.body).include?(needle) }
-      next if resp.status == 400 && code == "bad_request" && leak.nil?
+      # THE SCAN IS TOLD WHAT THIS PROBE SENT (T-121). {WireArguments.items}
+      # names the element it rejected — `each item must be a {sku, qty} object
+      # — got String ("sourdough-bread")` — so the bytes scanned for
+      # RUBY_INTERNALS are partly the probe's own, and a cart whose sku spelled
+      # `TypeError` would be reported as a BREACH on its own echo, under a
+      # runner whose prose says a BREACH means "fix the app, not the scenario".
+      scan = Kiosk::Redteam::LeakScan.scan(resp.body, RUBY_INTERNALS, supplied: args)
+      next if resp.status == 400 && code == "bad_request" && !scan.leak?
 
-      failures << "items #{label} → HTTP #{resp.status} code=#{code.inspect}#{leak ? " LEAKS #{leak.inspect}" : ""}"
+      failures << "items #{label} → HTTP #{resp.status} code=#{code.inspect}" \
+                  "#{scan.leak ? " LEAKS #{scan.leak.inspect}" : ""}#{scan.note}"
     end
 
     # CONTROL — a well-formed cart must still place an order. Without it every
@@ -442,16 +449,19 @@ class HostileArgShapes < Kiosk::Redteam::Scenario
     SHAPES.each do |v|
       refused "create_order delivery_slot_id=#{v.inspect}",
               client.run(a, name: "create_order", items: good_items,
-                            delivery_slot_id: v, delivery_address: ADDRESS)
+                            delivery_slot_id: v, delivery_address: ADDRESS),
+              supplied: v
       refused "reschedule_delivery order_id=#{v.inspect}",
-              client.run(a, name: "reschedule_delivery", order_id: v, delivery_slot_id: 1)
+              client.run(a, name: "reschedule_delivery", order_id: v, delivery_slot_id: 1),
+              supplied: v
     end
     # Out of the declared 1..6 range — the same refusal, from the schema's
     # `minimum`/`maximum` rather than its `type`.
     [0, -1, 7, 999].each do |v|
       refused "create_order delivery_slot_id=#{v.inspect}",
               client.run(a, name: "create_order", items: good_items,
-                            delivery_slot_id: v, delivery_address: ADDRESS)
+                            delivery_slot_id: v, delivery_address: ADDRESS),
+              supplied: v
     end
 
     # ── `qty`, INSIDE a well-formed items element ───────────────────────────
@@ -477,7 +487,8 @@ class HostileArgShapes < Kiosk::Redteam::Scenario
     (SHAPES + [0, -1]).each do |v|
       refused "create_order items[0].qty=#{v.inspect}",
               client.run(a, name: "create_order", items: [{ sku: sku, qty: v }],
-                            delivery_slot_id: 1, delivery_address: ADDRESS)
+                            delivery_slot_id: 1, delivery_address: ADDRESS),
+              supplied: { sku: sku, qty: v }
     end
 
     # ── MAGNITUDE, the axis every probe above misses (K-1047) ───────────────
@@ -518,7 +529,8 @@ class HostileArgShapes < Kiosk::Redteam::Scenario
       "unstorable qty"       => max_int4 + 1 }.each do |why, v|
       refused "create_order items[0].qty=#{v} (#{why}, K-1047)",
               client.run(a, name: "create_order", items: [{ sku: sku, qty: v }],
-                            delivery_slot_id: 1, delivery_address: ADDRESS)
+                            delivery_slot_id: 1, delivery_address: ADDRESS),
+              supplied: { sku: sku, qty: v }
     end
 
     # ── the two bare strings, where getgrocery's OWN guards are the only
@@ -532,12 +544,14 @@ class HostileArgShapes < Kiosk::Redteam::Scenario
     ["nope", "2026-13-45", "0000-01-01", "true"].each do |v|
       refused "create_order delivery_date=#{v.inspect}",
               client.run(a, name: "create_order", items: good_items, delivery_slot_id: 1,
-                            delivery_address: ADDRESS, delivery_date: v)
+                            delivery_address: ADDRESS, delivery_date: v),
+              supplied: v
     end
     ["", "   ", "1 Main St, Cork", "Dublin 99", "somewhere"].each do |v|
       refused "create_order delivery_address=#{v.inspect}",
               client.run(a, name: "create_order", items: good_items,
-                            delivery_slot_id: 1, delivery_address: v)
+                            delivery_slot_id: 1, delivery_address: v),
+              supplied: v
     end
 
     # ── CONTROL ─────────────────────────────────────────────────────────────
@@ -560,13 +574,21 @@ class HostileArgShapes < Kiosk::Redteam::Scenario
 
   private
 
-  def refused(label, resp)
+  # `supplied:` is what this probe put on the wire, and it is what stops the
+  # leak assertion being decided by the attacker (T-121). getgrocery names the
+  # value it got — `invalid delivery_date: nope`, `qty must be a whole number
+  # >= 1 — got …` — so the bytes scanned for LEAKS are partly the probe's own,
+  # and a `delivery_address` spelling `PG::` would otherwise be reported as a
+  # BREACH on its own echo, under a runner whose prose says a BREACH means "fix
+  # the app, not the scenario". The default is nil, which is the pre-fix oracle
+  # exactly: forgetting to declare risks a FALSE BREACH, never a missed leak.
+  def refused(label, resp, supplied: nil)
     doc  = resp.body.is_a?(Hash) ? resp.body : {}
-    leak = LEAKS.find { |needle| JSON.generate(resp.body).include?(needle) }
-    return if resp.status == 400 && doc["code"] == "bad_request" && leak.nil?
+    scan = Kiosk::Redteam::LeakScan.scan(resp.body, LEAKS, supplied: supplied)
+    return if resp.status == 400 && doc["code"] == "bad_request" && !scan.leak?
 
     @failures << "#{label} → HTTP #{resp.status} code=#{doc["code"].inspect}" \
-                 "#{leak ? " LEAKS #{leak.inspect}" : ""}"
+                 "#{scan.leak ? " LEAKS #{scan.leak.inspect}" : ""}#{scan.note}"
   end
 end
 

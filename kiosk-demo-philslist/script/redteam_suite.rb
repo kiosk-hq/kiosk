@@ -65,6 +65,12 @@ require "net/http"
 require "securerandom"
 require "uri"
 
+# The shared harness. Required HERE rather than beside the one framework beat
+# further down, because {Kiosk::Redteam::LeakScan} — the oracle every leak
+# assertion in this file now asks — is needed from the first hostile-input beat
+# onwards (T-121).
+require "kiosk/redteam"
+
 require_relative "bound_assistant"
 
 SERVER = ENV.fetch("SERVER_URL")
@@ -181,12 +187,23 @@ record(results, "CrossOwnerClose", rc == 403, "Bob close Alice's listing → #{r
 MALFORMED_IDS = ["not-a-uuid", "1; DROP TABLE listings", "", "  "].freeze
 SQL_INTERNALS = ["::uuid", "PG::", "22P02", "invalid input syntax"].freeze
 
+# THE SCAN IS TOLD WHAT THIS PROBE SENT (T-121). philslist answers a bad
+# argument by NAMING the value it got — `listing_id "…" is not a uuid`, and
+# `unknown category_slug …` on the write path — so the bytes searched for
+# SQL_INTERNALS are partly the probe's own. Without `supplied:` a junk id
+# spelling `PG::` would be reported as a BREACH on its own echo, under a runner
+# whose prose says a BREACH means "fix the app, not the scenario".
+# {Kiosk::Redteam::LeakScan} discounts a needle only where those exact bytes lie
+# inside one contiguous run the probe supplied — not a blind `gsub`, which could
+# erase a real leak instead.
 uuid_probes = %w[edit_listing close_listing].flat_map do |verb|
   MALFORMED_IDS.map do |junk|
-    rc, body = post_json("/kiosk/#{verb}", { listing_id: junk }, ALICE.bearer)
-    leak = SQL_INTERNALS.find { |needle| JSON.generate(body).include?(needle) }
-    ok = rc == 400 && body["code"] == "bad_request" && leak.nil?
-    [ok, "#{verb}(#{junk.inspect})→#{rc}/#{body['code'].inspect}#{leak ? " LEAK #{leak}" : ''}"]
+    args     = { listing_id: junk }
+    rc, body = post_json("/kiosk/#{verb}", args, ALICE.bearer)
+    scan = Kiosk::Redteam::LeakScan.scan(body, SQL_INTERNALS, supplied: args)
+    ok = rc == 400 && body["code"] == "bad_request" && !scan.leak?
+    [ok, "#{verb}(#{junk.inspect})→#{rc}/#{body['code'].inspect}" \
+         "#{scan.leak ? " LEAK #{scan.leak}" : ''}#{scan.note}"]
   end
 end
 record(results, "MalformedUuidArg", uuid_probes.all? { |ok, _| ok },
@@ -414,8 +431,6 @@ record(results, "NoSellerPiiOnTheOpenBoard",
 # token this origin mints at registration), so a stale list weakens the probe
 # rather than emptying it — an invented role was refused by the vulnerable code
 # too, which is why a probe that names only one cannot fail.
-require "kiosk/redteam"
-
 device_grant_beat    = Kiosk::Redteam::Scenarios::DeviceGrantRoleSelfSelection.new
 device_grant_verdict = device_grant_beat.call(
   Kiosk::Redteam::Client.new(base_url: SERVER),

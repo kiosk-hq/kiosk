@@ -342,9 +342,9 @@ class MalformedUuidArg < Kiosk::Redteam::Scenario
 
     MALFORMED.each do |junk|
       check(failures, statuses, "confirm_booking(#{junk.inspect})",
-            client.run(a, name: "confirm_booking", booking_id: junk))
+            client.run(a, name: "confirm_booking", booking_id: junk), supplied: junk)
       check(failures, statuses, "pay cart booking_id=#{junk.inspect}",
-            pay_with_ref(client, a, junk))
+            pay_with_ref(client, a, junk), supplied: junk)
     end
 
     # CONTROL — without it the pay assertion above could pass vacuously: any 400
@@ -369,13 +369,22 @@ class MalformedUuidArg < Kiosk::Redteam::Scenario
 
   private
 
-  def check(failures, statuses, label, resp)
+  # `supplied:` is what this probe put on the wire, and it is what stops the
+  # leak assertion being decided by the attacker (T-121). hoteling answers a
+  # bad `booking_id` by naming it back, so the bytes scanned for SQL_INTERNALS
+  # are partly the probe's own; a junk id spelling `PG::` would otherwise be
+  # reported as a BREACH on its own echo, under a runner whose prose says a
+  # BREACH means "fix the app, not the scenario". The default is nil, which is
+  # the pre-fix oracle exactly: forgetting to declare risks a FALSE BREACH,
+  # never a missed leak.
+  def check(failures, statuses, label, resp, supplied: nil)
     statuses << resp.status
-    leak = SQL_INTERNALS.find { |needle| JSON.generate(resp.body).include?(needle) }
+    scan = Kiosk::Redteam::LeakScan.scan(resp.body, SQL_INTERNALS, supplied: supplied)
     code = resp.body.is_a?(Hash) ? resp.body["code"] : nil
-    return if resp.status == 400 && code == "bad_request" && leak.nil?
+    return if resp.status == 400 && code == "bad_request" && !scan.leak?
 
-    failures << "#{label} → HTTP #{resp.status} code=#{code.inspect}#{leak ? " LEAKS #{leak.inspect}" : ""}"
+    failures << "#{label} → HTTP #{resp.status} code=#{code.inspect}" \
+                "#{scan.leak ? " LEAKS #{scan.leak.inspect}" : ""}#{scan.note}"
   end
 
   # Deliberately reserves NOTHING: the shape guard runs before the cashier takes
@@ -647,22 +656,26 @@ class HostileArgShapes < Kiosk::Redteam::Scenario
     INT_SHAPES.each do |v|
       refused "reserve_room property_id=#{v.inspect}",
               client.run(a, name: "reserve_room", property_id: v, room_type_id: room,
-                            check_in: PROBE_IN, check_out: PROBE_OUT)
+                            check_in: PROBE_IN, check_out: PROBE_OUT),
+              supplied: v
       refused "reserve_room room_type_id=#{v.inspect}",
               client.run(a, name: "reserve_room", property_id: prop, room_type_id: v,
-                            check_in: PROBE_IN, check_out: PROBE_OUT)
+                            check_in: PROBE_IN, check_out: PROBE_OUT),
+              supplied: v
     end
     DATE_SHAPES.each do |v|
       refused "reserve_room check_in=#{v.inspect}",
               client.run(a, name: "reserve_room", property_id: prop, room_type_id: room,
-                            check_in: v, check_out: PROBE_OUT)
+                            check_in: v, check_out: PROBE_OUT),
+              supplied: v
       # …and the SAME shapes on `check_out`. It used to be a frozen constant on
       # every call site here, so the second half of the stay was pinned by
       # nothing: a descriptor that widened `check_out` to an untyped string, or
       # a guard that stopped parsing it, would have left this beat green.
       refused "reserve_room check_out=#{v.inspect}",
               client.run(a, name: "reserve_room", property_id: prop, room_type_id: room,
-                            check_in: PROBE_IN, check_out: v)
+                            check_in: PROBE_IN, check_out: v),
+              supplied: v
     end
 
     # ── the QUERY path: everything is a string on the wire, so the hostile
@@ -671,22 +684,25 @@ class HostileArgShapes < Kiosk::Redteam::Scenario
     %w[abc true 0x10].each do |v|
       refused "availability property_id=#{v.inspect}",
               client.query(a, name: "availability", property_id: v,
-                              check_in: PROBE_IN, check_out: PROBE_OUT)
+                              check_in: PROBE_IN, check_out: PROBE_OUT),
+              supplied: v
     end
     ["nope", "", "2026-09-01'; --"].each do |v|
       refused "availability check_in=#{v.inspect}",
               client.query(a, name: "availability", property_id: prop,
-                              check_in: v, check_out: PROBE_OUT)
+                              check_in: v, check_out: PROBE_OUT),
+              supplied: v
     end
     ["nope", "", "2026-02-30", "09/01/2026"].each do |v|
       refused "availability check_out=#{v.inspect}",
               client.query(a, name: "availability", property_id: prop,
-                              check_in: PROBE_IN, check_out: v)
+                              check_in: PROBE_IN, check_out: v),
+              supplied: v
     end
     ["check_in%5B%5D", "check_in%5Bx%5D"].each do |bracket|
       res, doc = raw(a, :get,
                      "/kiosk/availability?property_id=#{prop}&check_out=#{PROBE_OUT}&#{bracket}=#{PROBE_IN}")
-      note "availability #{bracket}", res.code.to_i, doc
+      note "availability #{bracket}", res.code.to_i, doc, supplied: [bracket, PROBE_IN]
     end
 
     # ── search_hotels' FILTERS, which no beat probed at all ─────────────────
@@ -732,17 +748,17 @@ class HostileArgShapes < Kiosk::Redteam::Scenario
     beyond_int4 = 2_147_483_648 # one past PostgreSQL `integer`
     %W[abc true 0 9 1.5 0x10 #{beyond_int4}].each do |v|
       refused "search_hotels min_stars=#{v.inspect}",
-              client.query(a, name: "search_hotels", min_stars: v)
+              client.query(a, name: "search_hotels", min_stars: v), supplied: v
     end
     %W[abc true -1 1.5 #{beyond_int4}].each do |v|
       refused "search_hotels max_price_cents=#{v.inspect}",
-              client.query(a, name: "search_hotels", max_price_cents: v)
+              client.query(a, name: "search_hotels", max_price_cents: v), supplied: v
     end
     ["nope", "", "Sultanahmet'; --"].each do |v|
       refused "search_hotels neighbourhood=#{v.inspect}",
-              client.query(a, name: "search_hotels", neighbourhood: v)
+              client.query(a, name: "search_hotels", neighbourhood: v), supplied: v
       refused "search_hotels amenity=#{v.inspect}",
-              client.query(a, name: "search_hotels", amenity: v)
+              client.query(a, name: "search_hotels", amenity: v), supplied: v
     end
 
     # The filters' own CONTROL: a well-formed filter pair must still answer 200
@@ -771,7 +787,8 @@ class HostileArgShapes < Kiosk::Redteam::Scenario
     # side the past-date floor does not stand on.
     refused "reserve_room check_out=\"9999-12-31\" (unpriceable stay, K-968)",
             client.run(a, name: "reserve_room", property_id: prop, room_type_id: room,
-                          check_in: PROBE_IN, check_out: "9999-12-31")
+                          check_in: PROBE_IN, check_out: "9999-12-31"),
+            supplied: "9999-12-31"
 
     # ── CONTROL ─────────────────────────────────────────────────────────────
     #
@@ -810,16 +827,25 @@ class HostileArgShapes < Kiosk::Redteam::Scenario
 
   def body_code(resp) = resp.body.is_a?(Hash) ? resp.body["code"] : nil
 
-  def refused(label, resp)
-    note(label, resp.status, resp.body.is_a?(Hash) ? resp.body : {})
+  def refused(label, resp, supplied: nil)
+    note(label, resp.status, resp.body.is_a?(Hash) ? resp.body : {}, supplied: supplied)
   end
 
-  def note(label, status, doc)
-    leak = LEAKS.find { |needle| JSON.generate(doc).include?(needle) }
-    return if status == 400 && doc["code"] == "bad_request" && leak.nil?
+  # `supplied:` is what this probe put on the wire, and it is what stops the
+  # leak assertion being decided by the attacker (T-121). hoteling names the
+  # value it got in most of these refusals — `property_id "abc" is not an
+  # integer`, `invalid check_in/check_out: …` — so the bytes scanned for LEAKS
+  # are partly the probe's own, and a value spelling `PG::` would otherwise be
+  # reported as a BREACH on its own echo, under a runner whose prose says a
+  # BREACH means "fix the app, not the scenario". The default is nil, which is
+  # the pre-fix oracle exactly: forgetting to declare risks a FALSE BREACH,
+  # never a missed leak.
+  def note(label, status, doc, supplied: nil)
+    scan = Kiosk::Redteam::LeakScan.scan(doc, LEAKS, supplied: supplied)
+    return if status == 400 && doc["code"] == "bad_request" && !scan.leak?
 
     @failures << "#{label} → HTTP #{status} code=#{doc["code"].inspect}" \
-                 "#{leak ? " LEAKS #{leak.inspect}" : ""}"
+                 "#{scan.leak ? " LEAKS #{scan.leak.inspect}" : ""}#{scan.note}"
   end
 end
 

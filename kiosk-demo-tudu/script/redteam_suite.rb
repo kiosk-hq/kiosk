@@ -54,6 +54,12 @@ require "uri"
 require "openssl"
 require "securerandom"
 
+# The shared harness. Required HERE rather than beside the one framework beat
+# further down, because {Kiosk::Redteam::LeakScan} — the oracle every leak
+# assertion in this file now asks — is needed from the first hostile-input beat
+# onwards (T-121).
+require "kiosk/redteam"
+
 SERVER   = ENV.fetch("SERVER_URL")
 ISSUER   = ENV.fetch("KIOSK_ISSUER")
 HOLDER   = ENV.fetch("HOLDER_ID")
@@ -178,9 +184,18 @@ uuid_probes = MALFORMED_IDS.flat_map do |junk|
      "remove_member"],
   ].map do |probe, verb|
     rc, resp = probe.call
-    leak = SQL_INTERNALS.find { |needle| JSON.generate(resp).include?(needle) }
-    ok = rc == 400 && resp["code"] == "bad_request" && leak.nil?
-    [ok, "#{verb}(#{junk.inspect})→#{rc}/#{resp['code'].inspect}#{leak ? " LEAK #{leak}" : ''}"]
+    # THE SCAN IS TOLD WHAT THIS PROBE SENT (T-121). tudu answers a bad id by
+    # NAMING it back (`list_id "…" is not a uuid`), so the bytes searched for
+    # SQL_INTERNALS are partly the probe's own; without `supplied:` a junk id
+    # spelling `PG::` would be reported as a BREACH on its own echo, under a
+    # runner whose prose says a BREACH means "fix the app, not the scenario".
+    # {Kiosk::Redteam::LeakScan} discounts a needle only where those exact bytes
+    # lie inside one contiguous run the probe supplied — not a blind `gsub`,
+    # which could erase a real leak instead.
+    scan = Kiosk::Redteam::LeakScan.scan(resp, SQL_INTERNALS, supplied: junk)
+    ok = rc == 400 && resp["code"] == "bad_request" && !scan.leak?
+    [ok, "#{verb}(#{junk.inspect})→#{rc}/#{resp['code'].inspect}" \
+         "#{scan.leak ? " LEAK #{scan.leak}" : ''}#{scan.note}"]
   end
 end
 record(results, "MalformedUuidArg", uuid_probes.all? { |ok, _| ok },
@@ -456,8 +471,6 @@ record(results, "ChosenNameNeverTheAddress",
 # token this origin mints at registration), so a stale list weakens the probe
 # rather than emptying it — an invented role was refused by the vulnerable code
 # too, which is why a probe that names only one cannot fail.
-require "kiosk/redteam"
-
 device_grant_beat    = Kiosk::Redteam::Scenarios::DeviceGrantRoleSelfSelection.new
 device_grant_verdict = device_grant_beat.call(
   Kiosk::Redteam::Client.new(base_url: SERVER),

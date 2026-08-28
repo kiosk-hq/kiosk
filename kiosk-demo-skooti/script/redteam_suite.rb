@@ -32,7 +32,9 @@
 #   HostileArgShapes   — every hostile SHAPE (boolean/array/object/number) on
 #                        scooter_code, reservation_id and request_id is a typed
 #                        400 too — or a 404 for an unknown id on a query, never
-#                        a 500 (K-773)
+#                        a 500 (K-773). It also carries a control on its own
+#                        ORACLE (T-121): a scooter_code spelling three of the
+#                        leak strings must be BLOCKED, not a BREACH on its echo
 #
 # Two broker beats attack the cross-operator KYC callback:
 #   CrossOperatorClaimReplay — a broker-signed claim addressed to ANOTHER
@@ -414,11 +416,11 @@ class MalformedUuidArg < Kiosk::Redteam::Scenario
 
     MALFORMED.each do |junk|
       check(failures, statuses, "start_rental(#{junk.inspect})",
-            client.run(a, name: "start_rental", reservation_id: junk))
+            client.run(a, name: "start_rental", reservation_id: junk), supplied: junk)
       check(failures, statuses, "rent_motorcycle(#{junk.inspect})",
-            client.run(a, name: "rent_motorcycle", reservation_id: junk))
+            client.run(a, name: "rent_motorcycle", reservation_id: junk), supplied: junk)
       check(failures, statuses, "pay cart reservation_id=#{junk.inspect}",
-            pay_with_ref(client, a, junk))
+            pay_with_ref(client, a, junk), supplied: junk)
     end
 
     # CONTROL — without it the pay assertion above could pass vacuously: any 400
@@ -443,13 +445,22 @@ class MalformedUuidArg < Kiosk::Redteam::Scenario
 
   private
 
-  def check(failures, statuses, label, resp)
+  # `supplied:` is what this probe put on the wire, and it is what stops the
+  # leak assertion being decided by the attacker (T-121). skooti names the value
+  # it got — `reservation_id "…" is not a uuid` — so the bytes scanned for
+  # SQL_INTERNALS are partly the probe's own, and a junk id spelling `PG::`
+  # would otherwise be reported as a BREACH on its own echo, under a runner
+  # whose prose says a BREACH means "fix the app, not the scenario". The
+  # default is nil, which is the pre-fix oracle exactly: forgetting to declare
+  # risks a FALSE BREACH, never a missed leak.
+  def check(failures, statuses, label, resp, supplied: nil)
     statuses << resp.status
-    leak = SQL_INTERNALS.find { |needle| JSON.generate(resp.body).include?(needle) }
+    scan = Kiosk::Redteam::LeakScan.scan(resp.body, SQL_INTERNALS, supplied: supplied)
     code = resp.body.is_a?(Hash) ? resp.body["code"] : nil
-    return if resp.status == 400 && code == "bad_request" && leak.nil?
+    return if resp.status == 400 && code == "bad_request" && !scan.leak?
 
-    failures << "#{label} → HTTP #{resp.status} code=#{code.inspect}#{leak ? " LEAKS #{leak.inspect}" : ""}"
+    failures << "#{label} → HTTP #{resp.status} code=#{code.inspect}" \
+                "#{scan.leak ? " LEAKS #{scan.leak.inspect}" : ""}#{scan.note}"
   end
 
   # Deliberately reserves NOTHING: the shape guard runs before the cashier takes
@@ -522,23 +533,55 @@ class HostileArgShapes < Kiosk::Redteam::Scenario
 
     SHAPES.each do |v|
       refused "reserve scooter_code=#{v.inspect}",
-              client.run(a, name: "reserve", scooter_code: v)
+              client.run(a, name: "reserve", scooter_code: v), supplied: v
       refused "start_rental reservation_id=#{v.inspect}",
-              client.run(a, name: "start_rental", reservation_id: v)
+              client.run(a, name: "start_rental", reservation_id: v), supplied: v
       refused "rent_motorcycle reservation_id=#{v.inspect}",
-              client.run(a, name: "rent_motorcycle", reservation_id: v)
+              client.run(a, name: "rent_motorcycle", reservation_id: v), supplied: v
       # kyc_status is a QUERY, so the wire flattens every one of these to a
       # STRING before any code sees it — `true` arrives as "true". The honest
       # assertion is therefore the pair of answers a well-formed-but-unknown
       # request id may get (a shape 400 or spec §9.1's `404 not_found`), never
       # a 5xx and never someone else's status served as a 200.
       absent_or_refused "kyc_status request_id=#{v.inspect}",
-                        client.query(a, name: "kyc_status", request_id: v)
+                        client.query(a, name: "kyc_status", request_id: v), supplied: v
     end
 
     # The one that reaches ReserveOperation: a well-typed but unknown handle.
     refused "reserve scooter_code=\"NO-SUCH-VEHICLE\"",
-            client.run(a, name: "reserve", scooter_code: "NO-SUCH-VEHICLE")
+            client.run(a, name: "reserve", scooter_code: "NO-SUCH-VEHICLE"),
+            supplied: "NO-SUCH-VEHICLE"
+
+    # ── NEGATIVE CONTROL FOR THE ORACLE ITSELF (T-121) ────────────────────────
+    #
+    # Every probe above asserts something about skooti. This one asserts
+    # something about the ASSERTION: that a needle reaching the wire ONLY
+    # because the probe put it there is not reported as a breach. Without it
+    # the `supplied:` threading is untested, and a later "simplification" back
+    # to `LEAKS.find { |n| JSON.generate(resp.body).include?(n) }` would pass
+    # every other probe in this file.
+    #
+    # `scooter_code` is the right argument and the choice is measured, not
+    # convenient: it is a bare `{type: "string"}` because the fleet's handles
+    # are DB-derived, so json_schemer cannot refuse it and the value reaches
+    # {ReserveOperation}, whose refusal NAMES it back. `reservation_id`
+    # declares `format: "uuid"` and is answered by the descriptor, whose
+    # message names the POINTER rather than the value — a needle sent there
+    # never reaches the body and the control would be vacuous.
+    #
+    # WATCHED FAIL, run and restored: drop `supplied:` from this one call and
+    # this probe alone goes red, reporting `LEAKS "PG::"` — a false BREACH on a
+    # demo with no hole in it, under a runner that says to fix the app.
+    echo_control = "PG:: 22P02 invalid input syntax"
+    echo_resp    = client.run(a, name: "reserve", scooter_code: echo_control)
+    refused "reserve scooter_code=<a value spelling three LEAKS> (oracle control)",
+            echo_resp, supplied: echo_control
+    # VACUITY GUARD, the same one every other control here carries: the probe
+    # proves nothing unless the refusal really did echo the value back.
+    unless JSON.generate(echo_resp.body).include?(echo_control)
+      @failures << "CONTROL VACUOUS: reserve did not echo the scooter_code it refused, so the " \
+                   "oracle was never asked to tell an echo from a leak (T-121)"
+    end
 
     # ── CONTROL ─────────────────────────────────────────────────────────────
     #
@@ -562,24 +605,34 @@ class HostileArgShapes < Kiosk::Redteam::Scenario
 
   private
 
-  def refused(label, resp)
+  # `supplied:` is what this probe put on the wire, and it is what stops the
+  # leak assertion being decided by the attacker (T-121). `scooter_code` is a
+  # bare `{type: "string"}` — the fleet's handles are DB-derived — so every
+  # string reaches {ReserveOperation}, whose refusal reads `scooter not found:
+  # <the value>`. Without this declaration a probe whose handle spelled `PG::`
+  # would be reported as a BREACH on its own echo, under a runner whose prose
+  # says a BREACH means "fix the app, not the scenario". The default is nil,
+  # which is the pre-fix oracle exactly: forgetting to declare risks a FALSE
+  # BREACH, never a missed leak.
+  def refused(label, resp, supplied: nil)
     doc  = resp.body.is_a?(Hash) ? resp.body : {}
-    leak = LEAKS.find { |needle| JSON.generate(resp.body).include?(needle) }
-    return if resp.status == 400 && doc["code"] == "bad_request" && leak.nil?
+    scan = Kiosk::Redteam::LeakScan.scan(resp.body, LEAKS, supplied: supplied)
+    return if resp.status == 400 && doc["code"] == "bad_request" && !scan.leak?
 
     @failures << "#{label} → HTTP #{resp.status} code=#{doc["code"].inspect}" \
-                 "#{leak ? " LEAKS #{leak.inspect}" : ""}"
+                 "#{scan.leak ? " LEAKS #{scan.leak.inspect}" : ""}#{scan.note}"
   end
 
-  def absent_or_refused(label, resp)
+  def absent_or_refused(label, resp, supplied: nil)
     doc  = resp.body.is_a?(Hash) ? resp.body : {}
-    leak = LEAKS.find { |needle| JSON.generate(resp.body).include?(needle) }
+    scan = Kiosk::Redteam::LeakScan.scan(resp.body, LEAKS, supplied: supplied)
     ok   = (resp.status == 400 && doc["code"] == "bad_request") ||
            (resp.status == 404 && doc["code"] == "not_found")
-    return if ok && leak.nil?
+    return if ok && !scan.leak?
 
     @failures << "#{label} → HTTP #{resp.status} code=#{doc["code"].inspect}" \
-                 "#{leak ? " LEAKS #{leak.inspect}" : ""} (want 400/bad_request or 404/not_found)"
+                 "#{scan.leak ? " LEAKS #{scan.leak.inspect}" : ""}#{scan.note} " \
+                 "(want 400/bad_request or 404/not_found)"
   end
 end
 

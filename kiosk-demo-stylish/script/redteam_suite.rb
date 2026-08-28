@@ -93,6 +93,12 @@ require "openssl"
 require "securerandom"
 require "base64"
 
+# The shared harness. Required HERE rather than beside the one framework beat
+# further down, because {Kiosk::Redteam::LeakScan} — the oracle every leak
+# assertion in this file now asks — is needed from the first hostile-input beat
+# onwards (T-121).
+require "kiosk/redteam"
+
 require_relative "bound_assistant"
 require_relative "devise_session"
 
@@ -692,11 +698,22 @@ BAD_INPUTS.each do |label, args|
   body[:salon_id] = salon_id if body[:salon_id] == :seeded
   rc, resp = post_json("/kiosk/book_appointment", body, ALICE.bearer)
   code = resp.is_a?(Hash) ? resp["code"] : nil
-  leak = PG_INTERNALS.find { |needle| JSON.generate(resp).include?(needle) }
-  next if rc == 400 && code == "bad_request" && leak.nil?
+  # THE SCAN IS TOLD WHAT THIS PROBE SENT (T-121). `salon_id` is a bare
+  # `{type: "integer"}` and `slot` a bare `{type: "string"}` — the bookable
+  # instants are a rolling calendar no JSON Schema can name — so hostile values
+  # reach stylish's own guards, whose refusals name what they got. The bytes
+  # searched for PG_INTERNALS are therefore partly the probe's own, and without
+  # `supplied:` a slot spelling `PG::` would be reported as a BREACH on its own
+  # echo, under a runner whose prose says a BREACH means "fix the app, not the
+  # scenario". {Kiosk::Redteam::LeakScan} discounts a needle only where those
+  # exact bytes lie inside one contiguous run the probe supplied — not a blind
+  # `gsub`, which could erase a real leak instead.
+  scan = Kiosk::Redteam::LeakScan.scan(resp, PG_INTERNALS, supplied: body)
+  next if rc == 400 && code == "bad_request" && !scan.leak?
 
   bad_failures << "#{label} → HTTP #{rc} code=#{code.inspect}" \
-                  "#{leak ? " LEAKS #{leak.inspect}" : ""}#{rc == 200 ? " (SILENTLY BOOKED)" : ""}"
+                  "#{scan.leak ? " LEAKS #{scan.leak.inspect}" : ""}#{scan.note}" \
+                  "#{rc == 200 ? " (SILENTLY BOOKED)" : ""}"
 end
 
 # POSITIVE CONTROLS — without them the block above would pass against a handler
@@ -740,8 +757,6 @@ record(results, "UntypedBookingInput", bad_failures.empty?,
 # token this origin mints at registration), so a stale list weakens the probe
 # rather than emptying it — an invented role was refused by the vulnerable code
 # too, which is why a probe that names only one cannot fail.
-require "kiosk/redteam"
-
 device_grant_beat    = Kiosk::Redteam::Scenarios::DeviceGrantRoleSelfSelection.new
 device_grant_verdict = device_grant_beat.call(
   Kiosk::Redteam::Client.new(base_url: SERVER),

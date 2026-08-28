@@ -45,7 +45,9 @@
 #     cancel_booking's booking_id are a typed 400 with no runtime vocabulary on
 #     the wire — never a 500 and never a wrong answer served as 200 (K-773,
 #     K-1027, K-1028). The beat's own comment enumerates which layer answers
-#     which argument; it does not claim more than it probes.
+#     which argument; it does not claim more than it probes. It ALSO carries a
+#     control on its own oracle (T-121): a neighborhood value that spells three
+#     of the leak strings must be BLOCKED, never a BREACH on its own echo.
 #   DeviceGrantRoleSelfSelection (from `kiosk-redteam`, shared by every demo) —
 #     the account-binding claim ceremony's UNAUTHENTICATED opening request
 #     refuses `role`/`scope` at a DECLARED value as well as an invented one,
@@ -68,6 +70,12 @@ require "json"
 require "net/http"
 require "securerandom"
 require "uri"
+
+# The shared harness. Required HERE rather than beside the one framework beat
+# further down, because {Kiosk::Redteam::LeakScan} — the oracle every leak
+# assertion in this file now asks — is needed from the first hostile-input beat
+# onwards (T-121).
+require "kiosk/redteam"
 
 require_relative "bound_assistant"
 
@@ -224,13 +232,22 @@ record(results, "CrossOwnerCancel", rc == 403, "Bea cancel Diego's booking → #
 MALFORMED_IDS = ["not-a-uuid", "1; DROP TABLE bookings", "", "  "].freeze
 SQL_INTERNALS = ["::uuid", "PG::", "22P02", "invalid input syntax"].freeze
 
+# THE SCAN IS TOLD WHAT THIS PROBE SENT (T-121). atablefor answers a bad
+# argument by NAMING the value it got, so the bytes searched for SQL_INTERNALS
+# are partly the probe's own; without the `supplied:` declaration a probe whose
+# junk id spelled `PG::` would be reported as a BREACH on its own echo, under a
+# runner whose own prose says a BREACH means "fix the app, not the scenario".
+# {Kiosk::Redteam::LeakScan} discounts a needle only where those exact bytes lie
+# inside one contiguous run the probe supplied — see the gem for why that is not
+# a `gsub`.
 def uuid_guard_verdict(path, body_for)
   MALFORMED_IDS.map do |junk|
-    rc, body = post_json(path, body_for.call(junk), bearer(TOKEN_A))
-    raw = JSON.generate(body)
-    leak = SQL_INTERNALS.find { |needle| raw.include?(needle) }
-    ok = rc == 400 && body["code"] == "bad_request" && leak.nil?
-    [ok, "#{junk.inspect}→#{rc}/#{body['code'].inspect}#{leak ? " LEAK #{leak}" : ''}"]
+    args     = body_for.call(junk)
+    rc, body = post_json(path, args, bearer(TOKEN_A))
+    scan = Kiosk::Redteam::LeakScan.scan(body, SQL_INTERNALS, supplied: args)
+    ok = rc == 400 && body["code"] == "bad_request" && !scan.leak?
+    [ok, "#{junk.inspect}→#{rc}/#{body['code'].inspect}" \
+         "#{scan.leak ? " LEAK #{scan.leak}" : ''}#{scan.note}"]
   end
 end
 
@@ -592,12 +609,15 @@ NONSTRING  = [true, false, [], {}, [1], { "a" => 1 }, nil, 20260826].freeze
 # to differ, but not silently.
 QUERY_JUNK = ["abc", "true", "1.5", "0x10", "", "2.0"].freeze
 
-def shape_verdict(label, rc, body)
-  raw  = JSON.generate(body)
-  leak = SHAPE_LEAKS.find { |needle| raw.include?(needle) }
+# `supplied:` is what this probe put on the wire, and it is what stops the
+# assertion being decided by the attacker (T-121) — see {uuid_guard_verdict}'s
+# note above. It defaults to nil, which is the pre-fix oracle exactly: a beat
+# that forgets to declare risks a FALSE BREACH, never a missed leak.
+def shape_verdict(label, rc, body, supplied: nil)
+  scan = Kiosk::Redteam::LeakScan.scan(body, SHAPE_LEAKS, supplied: supplied)
   code = body.is_a?(Hash) ? body["code"] : nil
-  ok   = rc == 400 && code == "bad_request" && leak.nil?
-  [ok, "#{label}→#{rc}/#{code.inspect}#{leak ? " LEAK #{leak}" : ''}"]
+  ok   = rc == 400 && code == "bad_request" && !scan.leak?
+  [ok, "#{label}→#{rc}/#{code.inspect}#{scan.leak ? " LEAK #{scan.leak}" : ''}#{scan.note}"]
 end
 
 shape_slot   = open_slot
@@ -606,26 +626,26 @@ shape_probes = []
 INT_SHAPES.each do |v|
   %i[party_size restaurant_id restaurant_table_id].each do |arg|
     rc, body = book_slot(TOKEN_A, shape_slot, arg => v)
-    shape_probes << shape_verdict("book_table #{arg}=#{v.inspect}", rc, body)
+    shape_probes << shape_verdict("book_table #{arg}=#{v.inspect}", rc, body, supplied: { arg => v })
   end
 end
 NONSTRING.each do |v|
   %i[date time].each do |arg|
     rc, body = book_slot(TOKEN_A, shape_slot, arg => v)
-    shape_probes << shape_verdict("book_table #{arg}=#{v.inspect}", rc, body)
+    shape_probes << shape_verdict("book_table #{arg}=#{v.inspect}", rc, body, supplied: { arg => v })
   end
   rc, body = post_json("/kiosk/cancel_booking", { booking_id: v }, bearer(TOKEN_A))
-  shape_probes << shape_verdict("cancel_booking booking_id=#{v.inspect}", rc, body)
+  shape_probes << shape_verdict("cancel_booking booking_id=#{v.inspect}", rc, body, supplied: { booking_id: v })
 end
 QUERY_JUNK.each do |v|
   rc, body = get_json("/kiosk/availability", { party_size: v }, bearer(TOKEN_A))
-  shape_probes << shape_verdict("availability party_size=#{v.inspect}", rc, body)
+  shape_probes << shape_verdict("availability party_size=#{v.inspect}", rc, body, supplied: { party_size: v })
 end
 # The bracket spellings, which URI.encode_www_form cannot produce: they are
 # written into the path so Rack's own parser folds them into an Array and a Hash.
 ["party_size%5B%5D=2", "party_size%5Bx%5D=2"].each do |bracket|
   rc, body = get_json("/kiosk/availability?#{bracket}", {}, bearer(TOKEN_A))
-  shape_probes << shape_verdict("availability #{bracket}", rc, body)
+  shape_probes << shape_verdict("availability #{bracket}", rc, body, supplied: bracket)
 end
 
 # ── MAGNITUDE, not type — the axis INT_SHAPES does not have (K-1047) ─────────
@@ -656,9 +676,48 @@ end
 # that reaches one.
 BEYOND_INT4 = 2_147_483_648 # one past PostgreSQL `integer`
 rc, body = book_slot(TOKEN_A, shape_slot, party_size: BEYOND_INT4)
-shape_probes << shape_verdict("book_table party_size=#{BEYOND_INT4}", rc, body)
+shape_probes << shape_verdict("book_table party_size=#{BEYOND_INT4}", rc, body, supplied: { party_size: BEYOND_INT4 })
 rc, body = get_json("/kiosk/availability", { party_size: BEYOND_INT4 }, bearer(TOKEN_A))
-shape_probes << shape_verdict("availability party_size=#{BEYOND_INT4}", rc, body)
+shape_probes << shape_verdict("availability party_size=#{BEYOND_INT4}", rc, body, supplied: { party_size: BEYOND_INT4 })
+
+# ── NEGATIVE CONTROL FOR THE ORACLE ITSELF (T-121) ──────────────────────────
+#
+# Every probe above asserts something about atablefor. This one asserts
+# something about the ASSERTION: that a needle reaching the wire ONLY because
+# the probe put it there is not reported as a breach. Without it the fix above
+# is untested, and a later "simplification" back to
+# `SHAPE_LEAKS.find { |n| raw.include?(n) }` would pass every other probe in
+# this file.
+#
+# `neighborhood` is the right argument and the choice is measured, not
+# convenient: it is declared a bare `{type: "string"}` because the served set is
+# DB-derived (T-090), so json_schemer cannot refuse it and the value reaches
+# {WireArguments.neighborhood}, whose refusal NAMES it back. The two arguments
+# whose refusals also echo — `party_size` and the two identifiers — are answered
+# by the descriptor first, and json_schemer's message names the POINTER rather
+# than the value, so a needle sent there never reaches the body at all and the
+# control would be vacuous.
+#
+# WATCHED FAIL, run and restored: drop `supplied:` from this one call and this
+# probe alone goes red, reporting `LEAK PG::` — the false BREACH, on a demo with
+# no hole in it, under the header line that tells the reader to fix the app.
+ECHO_CONTROL = "PG::22P02 invalid input syntax"
+rc_echo, body_echo = get_json("/kiosk/availability",
+                              { party_size: 2, neighborhood: ECHO_CONTROL }, bearer(TOKEN_A))
+ok_echo, detail_echo = shape_verdict(
+  "availability neighborhood=<a value spelling three SHAPE_LEAKS> (oracle control)",
+  rc_echo, body_echo, supplied: { party_size: 2, neighborhood: ECHO_CONTROL }
+)
+# VACUITY GUARD, the same one every other control in this file carries: the
+# probe proves nothing unless the refusal really did echo the value back. If
+# this demo ever stops naming the value it got, this says so rather than
+# passing quietly on a question that was never asked.
+unless JSON.generate(body_echo).include?(ECHO_CONTROL)
+  ok_echo = false
+  detail_echo += " [CONTROL VACUOUS: the refusal did not echo the value, so the " \
+                 "oracle was never asked to tell an echo from a leak]"
+end
+shape_probes << [ok_echo, detail_echo]
 
 # Positive controls, one per verb touched, so the beat cannot pass against an
 # origin that refuses everything: the SAME availability row books at its
@@ -697,8 +756,6 @@ record(results, "HostileArgShapes",
 # token this origin mints at registration), so a stale list weakens the probe
 # rather than emptying it — an invented role was refused by the vulnerable code
 # too, which is why a probe that names only one cannot fail.
-require "kiosk/redteam"
-
 device_grant_beat    = Kiosk::Redteam::Scenarios::DeviceGrantRoleSelfSelection.new
 device_grant_verdict = device_grant_beat.call(
   Kiosk::Redteam::Client.new(base_url: SERVER),

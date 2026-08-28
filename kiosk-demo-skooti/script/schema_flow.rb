@@ -5,9 +5,13 @@
 # Registers a fresh agent through skooti's Equihash-tolled registration gate,
 # calls `schema` (GET /kiosk/schema), prints one JSON line on stdout.
 #
-# NO (n, k) IS NAMED IN THIS COMMENT (K-1035 class). It used to read
-# «Equihash PoW n=96 k=5», which KIOSK_POW_DIFFICULTY=high moves to 168/7
-# without an edit to this tree — a false line reachable by an env var. The
+# NO (n, k) IS NAMED IN THIS COMMENT (K-1035 class), AND THAT NOW INCLUDES THE
+# PAIR IT USED TO NAME. It used to state one difficulty level's literal pair,
+# which KIOSK_POW_DIFFICULTY moves to the other level's without an edit to this
+# tree — a false line reachable by an env var. `app/services/pow_difficulty.rb`
+# is where a level's numbers live; quoting either pair back here, even in the
+# past tense inside guillemets, puts it in the way of a grep for live claims and
+# is the one thing this comment exists to say nobody should do. The
 # register step below prints the pair instead, read off the gate's own 402 —
 # so on an origin whose register toll were switched off there would be no 402,
 # no proof, and nothing here claiming otherwise.

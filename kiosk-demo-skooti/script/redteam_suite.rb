@@ -2,8 +2,9 @@
 
 # skooti redteam battery
 #
-# Exercises the full skooti chain: Equihash PoW (params from KIOSK_POW_DIFFICULTY —
-# low, the default, is n=96 k=5; the run header prints the live pair) → reserve → pay →
+# Exercises the full skooti chain: Equihash PoW (params from KIOSK_POW_DIFFICULTY,
+# resolved in app/services/pow_difficulty.rb; the run header prints the live pair
+# rather than this comment naming one) → reserve → pay →
 # start_rental (ownership/licence-free-vehicle/payment gates; licence-free
 # scooters are NOT KYC-gated, K-442).  Headline scenarios:
 #   C2  PayForOtherUseSelf  — B pays for A's reservation, B tries start_rental
@@ -687,7 +688,9 @@ puts "  base_url:              #{BASE_URL}"
 #   • n / k — `PowDifficulty.params`, the SAME plain module the server initializer
 #     reads into `c.registration_pow_params` (config/initializers/kiosk.rb:45), so
 #     KIOSK_POW_DIFFICULTY=high moves the /register gate and this line together
-#     instead of leaving the line claiming 96/5 against a 168/7 server.
+#     instead of leaving the line claiming one level's pair against a server
+#     that is serving the other's — and no pair is retyped here to illustrate it,
+#     for the same reason.
 #     SAY WHERE IT COMES FROM: this is the DRIVER's environment, not a fact observed
 #     on the wire — the harness hands one environment to both processes (demo.rake
 #     spawns the server and then this script from it), which is precisely the

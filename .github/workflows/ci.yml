@@ -205,11 +205,24 @@ jobs:
             prove_broker: kiosk-demo-prove
             # ORDER MATTERS at both ends of this list.
             #
-            # FIRST — the two DB-free unit specs (~0.5 s each, no server, no
+            # FIRST — the three DB-free unit specs (~0.5 s each, no server, no
             # Postgres, no PoW): they fail in under a second on the cheapest
             # possible signal.
             #   demo:slots_spec   K-480 delivery-slot past-filter across DST.
             #   demo:cashier_spec K-579 order-reference shape guard.
+            #   demo:wire_args_spec T-116 — the WHOLE WireArguments module, the
+            #     gate every verb opens with. 314 assertions over the pure
+            #     guards: K-1020's `whole_number` table, K-1025's shape-vs-range
+            #     split on `delivery_slot_id`, the K-693/K-1047 cart and both
+            #     ends of `qty`'s declared range, `order_id`, `delivery_date`
+            #     read off the ORIGIN's clock (K-969), and the §9.1 domain
+            #     refusals. Until it existed the only executable coverage of any
+            #     of them was demo:redteam, which needs a booted origin, a
+            #     seeded database and a live Equihash toll.
+            #     Watched fail: restore the pre-K-1020 coercions (`qty =
+            #     (item[:qty] || 1).to_s.to_i`, `slot = raw.to_s.to_i`) and drop
+            #     the K-1047 `qty > MAX_INT4` arm — 25 assertions go red and the
+            #     task exits 1.
             # The two telemetry tasks ride with them (~2 s together, no server,
             # no PoW, no Stripe, no network — they only need the job-level
             # demo:setup to have created a database; neither needs the seed and
@@ -308,7 +321,7 @@ jobs:
             # immediately ahead of demo:race for the reason below.
             # Watched fail: drop the c.on_bad_proof lambda (initializers/
             # kiosk.rb:285) and "on_bad_proof penalized" goes red, exit 1.
-            tasks: demo:slots_spec demo:cashier_spec demo:telemetry demo:telemetry_spec demo:shop demo:isolation demo:redteam demo:schema demo:agecheck demo:claim demo:pow demo:rls demo:race
+            tasks: demo:slots_spec demo:cashier_spec demo:wire_args_spec demo:telemetry demo:telemetry_spec demo:shop demo:isolation demo:redteam demo:schema demo:agecheck demo:claim demo:pow demo:rls demo:race
             ungated:
               demo:reconcile: >-
                 the operator's MANUAL sweep: on a freshly seeded database it

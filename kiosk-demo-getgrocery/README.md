@@ -20,9 +20,9 @@ rake demo            # setup + shop: no-human register → order (slot+address) 
 ```
 
 `spec/` here is NOT an RSpec suite — this demo ships no rspec at all (only
-`kiosk-demo-prove` does). The four files under `spec/` are standalone Ruby
+`kiosk-demo-prove` does). The five files under `spec/` are standalone Ruby
 assertion scripts; run them through the `demo:slots_spec` / `demo:cashier_spec` /
-`demo:telemetry_spec` tasks below, which is exactly how CI runs them. Typing
+`demo:wire_args_spec` / `demo:telemetry_spec` tasks below, which is exactly how CI runs them. Typing
 `bundle exec rspec` will find no runner (K-721).
 
 | Task | What it proves |
@@ -40,6 +40,7 @@ assertion scripts; run them through the `demo:slots_spec` / `demo:cashier_spec` 
 | `rake demo:rls` | the suite's only RLS *enforcement* proof: with RLS applied as an imperative overlay (the `kiosk-rls` emitter, dogfooded), a raw unscoped `SELECT * FROM orders` inside an enforced session returns only that principal's row, with the owner/superuser session that sees BOTH rows as the negative control |
 | `rake demo:slots_spec` | DB-free unit check of the delivery-slot past-filter across a DST boundary — the same rule `demo:shop` exercises over the wire (K-480) |
 | `rake demo:cashier_spec` | DB-free unit check of the same order-reference shape guard (`app/models/uuid_check.rb`): a malformed `order_id` is a clean **400 (`bad_request`)** naming the value, leaks no SQL/PG internals, and never reaches a database at all (K-579) |
+| `rake demo:wire_args_spec` | DB-free unit check of `app/operations/wire_arguments.rb`, the shape guard every verb opens with — the module that decides whether a hostile wire argument becomes a typed **400 (`bad_request`)** or a booked order. It asserts the TYPE and the SHAPE of each refusal, not merely that one happened: JSON Schema `integer` semantics for `whole_number` (a `2.0` IS one, a `"1"` is not — K-1020), the SHAPE sentence and the RANGE sentence held apart on `delivery_slot_id` (K-1025), the cart guard and both ends of `qty`’s declared range (K-693/K-1047), `order_id`, `delivery_date` read off the ORIGIN’s clock and never `Date.today` (K-969), and the §9.1 domain refusals. Nothing raises, and it runs with ActiveRecord never loaded (T-116) |
 | `rake demo:telemetry` | the live-activity store round-trips: seeds synthetic events through `DemoTelemetry.record` and asserts the privacy-safe aggregate (the JSON `/demo/activity.json` and the kiosk.tech tile return) comes back populated. The module swallows every error by design, so this is what turns a silently-broken telemetry write into a failure. Writing to the SHARED hosted store needs `KIOSK_TELEMETRY_DB_URL` **and** `SEED_SHARED=1` (K-620) |
 | `rake demo:telemetry_spec` | the other half — the telemetry **request path**, which `demo:telemetry` never touches. The Rack middleware: a telemetry failure never re-dispatches the request (a replayed `/auth/register` would mint a second agent — K-622), and the recording rules hold (2xx only, the request-line classifier — `GET <mount>/<verb>` is a read, `POST <mount>/<verb>` a write, and no body is read on any path — the per-app verb map, the `/auth/register` body-buffering returning the response byte-for-byte, agent refs that never carry the raw bearer). Then `GET /demo/activity.json` under a real boot, twice: with `KIOSK_TELEMETRY=1` it serves counts-only JSON with the tile's CORS + cache headers and `scope=app`/`scope=all` really do select differently; with it unset the route, the middleware and the module are all absent (K-622) |
 
@@ -57,6 +58,7 @@ assertions cannot go ungated and unexplained.
 | `demo:setup` | yes — the job's own setup step |  |
 | `demo:slots_spec` | yes |  |
 | `demo:cashier_spec` | yes |  |
+| `demo:wire_args_spec` | yes |  |
 | `demo:telemetry_spec` | yes |  |
 | `demo:shop` | yes |  |
 | `demo:claim` | yes |  |

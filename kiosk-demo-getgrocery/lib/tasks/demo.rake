@@ -14,6 +14,9 @@
 #   rake demo:pow        commerce catalog-toll PoW demo (catalog 402 → solve → 200)
 #   rake demo:slots_spec DB-free unit spec for the delivery-slot past-filter (K-480)
 #   rake demo:cashier_spec DB-free unit spec for the order-ref uuid shape check (K-579)
+#   rake demo:wire_args_spec DB-free unit spec for the whole WireArguments shape
+#                        guard — the module that decides whether a hostile wire
+#                        argument is a typed 400 or a booked order (T-116)
 #   rake demo:race       pay-path regression: concurrency (K-544) + typed 4xx (K-579)
 #                        + stuck-`paying` self-heal (K-578)
 #   rake demo:reconcile  resolve orders stuck in `paying` from local evidence (K-578)
@@ -128,6 +131,13 @@ namespace :demo do
   task :cashier_spec do
     spec = File.expand_path("../../spec/cashier_order_ref_spec.rb", __dir__)
     puts "\n── cashier K-579 order-ref shape spec (no DB) ──"
+    sh "ruby #{spec}"
+  end
+
+  desc "DB-free unit spec for the WireArguments shape guards — every verb's first gate (T-116)."
+  task :wire_args_spec do
+    spec = File.expand_path("../../spec/wire_arguments_spec.rb", __dir__)
+    puts "\n── WireArguments shape-guard spec (no boot, no DB) ──"
     sh "ruby #{spec}"
   end
 

@@ -311,7 +311,9 @@ namespace :demo do
          "(KIOSK_POW_DIFFICULTY=#{pow_level}#{pow_level == PowDifficulty::DEFAULT ? ", the default" : ""})"
     if PowDifficulty.high?
       puts "  These are the SHIPPED parameters — the toll a real operator charges. " \
-           "Expect ~10 s and ~1.3 GiB per proof; this flow solves four."
+           "Expect ~10 s and ~1.3 GiB per proof from the reference solver — that " \
+           "GiB is its table, not a floor these params impose on every solver. " \
+           "This flow solves four."
     else
       puts "  TOY parameters. The shipped kiosk-pow-equihash default is n=168 k=7 — " \
            "re-run with KIOSK_POW_DIFFICULTY=high to pay the real toll."

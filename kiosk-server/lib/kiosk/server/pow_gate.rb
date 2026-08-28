@@ -31,7 +31,10 @@ module Kiosk
     #      signed (K-541 — see the `expect:` argument below)
     #   4. Equihash backend eval (at n=168 k=7: ~18 ms + KB of RAM for a VALID
     #      proof — memory is the asymmetry, since SOLVING the same proof costs
-    #      ~1.3 GiB)
+    #      the reference numpy solver ~1.3 GiB. That is THAT solver's
+    #      sorted-nonce table, not a floor (n=168, k=7) imposes on every
+    #      solver — a memory-optimised solver trades the table for time,
+    #      which is how Equihash 200/9's real footprint fell to ~144 MB.)
     # A flood of forged, expired or off-spec proofs is rejected at step 1/2/3
     # without burning a backend evaluation. Cheap-before-expensive holds INSIDE
     # step 4 too (K-540): the backend checks structure before hashing and folds

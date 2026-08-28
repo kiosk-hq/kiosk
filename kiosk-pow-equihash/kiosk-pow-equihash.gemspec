@@ -7,7 +7,7 @@ Gem::Specification.new do |spec|
   spec.version = Kiosk::Pow::Equihash::VERSION
   spec.authors = ["Phil Pirozhkov"]
   spec.email   = ["hello@fili.pp.ru"]
-  spec.summary = "Equihash memory-hard PoW backend for Kiosk (default n=168, k=7; ~17 ms verify, ~1.3 GiB solve)"
+  spec.summary = "Equihash memory-hard PoW backend for Kiosk (default n=168, k=7; ~17 ms to verify, ~1.3 GiB for the reference solver to solve)"
   spec.description = <<~DESC
     kiosk-pow-equihash is the shipped default proof-of-work backend for the
     Kiosk framework: a pure-Ruby Equihash (Biryukov & Khovratovich birthday-

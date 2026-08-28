@@ -37,7 +37,9 @@ For EACH of the 7 apps:
       every assistant proof is checked against — a wrong value rejects every assistant with "proof audience mismatch"
       rather than failing loudly at boot.
 - [ ] **PoW:** all 7 demos honor `KIOSK_POW_DIFFICULTY` (low default, high opt-in). Ship `high` for **atablefor** only
-      (n=168/k=7, ~1.3 GiB and ~9–10 s on one M-series laptop core, "beware" banner) — the production-grade showcase;
+      (n=168/k=7, ~1.3 GiB and ~9–10 s on one M-series laptop core — the GiB is the
+      reference solver's table, not a floor those params impose on every solver;
+      "beware" banner) — the production-grade showcase;
       `low` (or unset) for the other six
       (fast, poke-friendly; each still knob-adjustable to `high`).
 - [ ] **PoW mode (atablefor, K-497):** the flagship advertises the **reputation** anti-scalping policy — its env ships

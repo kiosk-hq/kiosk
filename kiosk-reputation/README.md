@@ -389,9 +389,13 @@ end
 - **The provider mandates the algorithm.** Clients comply or are denied — do
   not add a negotiation path.
 - **Verify is cheap; the solve is the cost.** Equihash verify is a few ms + KB
-  (memory is the asymmetry: KB to verify vs ~1.3 GiB to solve), so
-  the gate can check every request — only *challenge* on suspicion/rate, since
-  each challenge costs the client a real solve.
+  (memory is the asymmetry: a few KB to verify, against a solve the reference
+  numpy solver runs in ~1.3 GiB at n=168 k=7 — that is THAT solver's
+  sorted-nonce table, not a floor those params impose on every solver, since a
+  memory-optimised solver trades the table for time, which is how Equihash
+  200/9's real footprint fell to ~144 MB), so the gate can check every request
+  — only *challenge* on suspicion/rate, since each challenge costs the client a
+  real solve.
 - **`Policies::RateAndReputation` is an example.** Its thresholds and
   proof-count curve are opinionated defaults, not recommendations. Providers
   replace it with a domain-specific policy.

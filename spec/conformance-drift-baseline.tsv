@@ -20,8 +20,8 @@
 # watermark forward. Repair a drifted header with --reheader, which re-renders
 # this block and touches no fingerprint.
 #
-# recorded: 2026-08-28 at 617bf241
-# 632 anchors.
+# recorded: 2026-08-28 at 78cd37a1
+# 633 anchors.
 e2e/assistant.sh	7e10b403edbedbeb	"$(curl -sS -o /dev/null -D - -H 'Accept: application/json' "$SERVER_URL/.well-known/kiosk.json" | grep -ic '^Vary:')" "0"
 e2e/assistant.sh	32ea9a773eca7bad	"$(echo "$apc_headers" | grep -ic '^Vary:')" "0"
 e2e/assistant.sh	f9dc523d4a428d91	$public_doc is really being read (control token)
@@ -169,6 +169,7 @@ kiosk-demo-skooti/app/operations/rent_motorcycle_operation.rb	590d40f5c1bda04f	d
 kiosk-demo-skooti/app/operations/rental_gates.rb	d3b269dced4fd614	def payment_refusal
 kiosk-demo-skooti/lib/tasks/demo.rake	6e0bf44decaffaed	A1 403 hint points to request_kyc (agent can discover the path)
 kiosk-demo-skooti/lib/tasks/demo.rake	94a21c36bb772ca9	A1 rent_motorcycle without KYC → 403 kyc_required
+kiosk-demo-skooti/lib/tasks/demo.rake	21e2ba24ac647123	C2 Gate 0 fails CLOSED on it — rent_motorcycle back to 403 kyc_required for an agent that HAD passed
 kiosk-demo-skooti/script/pay_window.rb	c1574a6b5dfd7f3d	an untouched reservation publishes payment_state=unpaid — the one answer that makes a fresh
 kiosk-demo-skooti/script/pay_window.rb	73ad5d63ab7afbcd	my_reservations does NOT publish `unpaid` for a reservation whose capture may already have
 kiosk-demo-skooti/script/pay_window.rb	aeb1e455774d014a	my_reservations publishes payment_state=paid on the CAPTURE alone, with zero settlement rows

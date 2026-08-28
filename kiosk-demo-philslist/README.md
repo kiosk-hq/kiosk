@@ -13,6 +13,14 @@ the same migrations, so philslist carries `kiosk.reservations`, the four
 mandate/settlement tables and `kiosk.kyc_attributes` alongside the identity
 ones — `check-demo-copies`'s `ONE_SET_EVERYWHERE` rule makes a per-demo subset
 a build failure, because per-demo subsets are how the fleet drifted before.
+Those six are not the whole of `db/migrate/`, and the difference is intent
+rather than drift: a kiosk schema change that lands AFTER install arrives as a
+NEW migration and never as an edit to one that has already shipped, so the fleet
+also carries `20260827000002_drop_kiosk_settlement_raw_jws` at the same
+timestamp in all seven operator demos. A reader diffing this directory against a
+fresh `rails g kiosk:install` should expect the generator's six PLUS whatever
+post-install kiosk migrations the fleet has taken since — the same set
+everywhere, held there by the same rule.
 Nothing writes them here: there is no `pay` route and no PSP, so an empty
 `cart_mandates` on this host means what it says.
 
@@ -194,7 +202,7 @@ assertions cannot go ungated and unexplained.
 
 | Path | What's there |
 |---|---|
-| `db/migrate/` | The canonical `kiosk.*` migrations the install generator emits, unpruned (schema, identity tables, reservations, device_authorizations, mandates, kyc_attributes) — philslist takes no money and gates on no attestation, so the payment and KYC tables sit EMPTY here rather than being edited out — plus `categories` + `listings` |
+| `db/migrate/` | The six canonical `kiosk.*` migrations the install generator emits, unpruned (schema, identity tables, reservations, device_authorizations, mandates, kyc_attributes) — philslist takes no money and gates on no attestation, so the payment and KYC tables sit EMPTY here rather than being edited out — plus the post-install kiosk migrations the whole fleet carries (today `drop_kiosk_settlement_raw_jws`; see above), plus `categories` + `listings` |
 | `app/models/{user,category,listing}.rb` | `User` is the account principal and `database_authenticatable`; `Listing.owner_id` is the load-bearing isolation predicate |
 | `config/initializers/kiosk.rb` | `Kiosk.configure` (NO `payment_provider`) — configuration only; it names the two handler controllers, it does not contain them |
 | `app/controllers/kiosk/board_controller.rb` | The `browse_listings` / `my_listings` queries — an ordinary Rails controller with `include Kiosk::Handler`, each declaration marked `kind :query`. Not routable: handlers are reached only through the wire |

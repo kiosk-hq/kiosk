@@ -155,7 +155,7 @@ assertions cannot go ungated and unexplained.
 
 | Path | What's there |
 |---|---|
-| `db/migrate/` | The canonical kiosk migrations, the full `kiosk:install` set — every demo ships that output unmodified, so reservations/mandates/settlements are installed here and never written — plus `create_tudu_domain` (lists/memberships/todos/invites) |
+| `db/migrate/` | The canonical kiosk migrations: the full six-file `kiosk:install` set — every demo ships that output unmodified, so reservations/mandates/settlements are installed here and never written — plus the post-install kiosk migrations the whole fleet carries at identical timestamps (today `drop_kiosk_settlement_raw_jws`; a kiosk schema change after install arrives as a NEW file, never as an edit to a shipped one), plus `create_tudu_domain` (lists/memberships/todos/invites) |
 | `app/models/{user,list,membership,todo,invite}.rb` | `User` is the account principal (Devise, reused for headless assistant accounts); `memberships` is the many-to-many access surface |
 | `config/initializers/kiosk.rb` | `Kiosk.configure` (NO `payment_provider`) + the `assistant_creation`/`assistant_claimed` hooks — configuration only; it names the two handler controllers, it does not contain them |
 | `app/controllers/kiosk/household_controller.rb` | The `whoami` / `my_lists` / `list_todos` / `list_members` queries — an ordinary Rails controller with `include Kiosk::Handler`, each declaration marked `kind :query`. Not routable: handlers are reached only through the wire |

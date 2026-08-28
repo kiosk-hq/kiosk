@@ -73,6 +73,9 @@ assertions cannot go ungated and unexplained.
 | `demo:agecheck` | yes |  |
 <!-- CI-TASKS:END -->
 
+See `before-after.md` for why AI assistants stall at grocery delivery today and
+what this demo proves.
+
 ## Delivery address is an upfront, deliberate input (ADDRESS-UPFRONT)
 
 `delivery_slots` requires a `delivery_address` and validates it names a

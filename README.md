@@ -62,6 +62,19 @@ own CI job and fails the build when a `demo:` task is neither gated nor recorded
 with the reason it is not — or when a task the demo defines is not named in that
 README's own hand-written list of what each task proves.
 
+**Four of the demos — `atablefor`, `getgrocery`, `hoteling`, `skooti` — also
+carry a `before-after.md`**: a long-form contrast between what an AI assistant
+can do at that provider today and what the same errand looks like once Kiosk is
+installed, followed by the operator-side adoption recipe. Four rather than all
+eight is deliberate and it is machine-held there. The long form is expensive to
+keep honest: every fenced block in it must declare the rake task or source file
+it came from, and `bin/check-demo-derivations` (its own CI job) then holds each
+transcript line to a literal that task actually prints and each snippet line to
+a line of the file it quotes. `bin/check-demo-copies` asserts the set is exactly
+those four, so a fifth cannot appear — or a fourth vanish — unannounced. The
+rest say it shorter: `philslist` carries an inline **Before / after** section in
+its README; `stylish` and `tudu` carry neither.
+
 The demos are standalone Rails apps, so a helper two of them need is COPIED, not
 shared. `bin/check-demo-copies` — its own CI job too — declares every
 hand-written Ruby file that exists in more than one demo, plus `.gitignore`, as

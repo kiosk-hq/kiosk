@@ -1981,13 +1981,22 @@ end
 # different bodies is a thing a reader should be told about once rather than
 # discover by diffing.
 #
-# SCOPE IS ONE PATH ON PURPOSE. Sixteen paths are `:per_demo` and the same
-# measurement over all of them finds 39 shared-unit groups — mostly the flow
-# drivers' `post_json`/`get_json` HTTP helpers, which is a real finding and a
-# different one (a shared TEST harness, not shared shipped code). Declaring 39
-# units with 39 reasoned `why:` lines is not this row's work and would be a
-# manifest nobody read. FRAGMENT_PATHS is where the next one gets added, with
-# its reason.
+# SCOPE IS ONE PATH ON PURPOSE, and the number that says why is measured with
+# THIS extractor and stated with its reading, because two readings of it differ
+# by a factor of three. Sixteen paths are `:per_demo`. Running the code below
+# over all sixteen finds **100 unit NAMES shared by two or more copies** — which
+# is what the discovery rule would demand a `why:` line for, since it fires on a
+# shared NAME whatever the bodies do. The narrower reading, «shared name AND
+# byte-identical body once comments are normalised», is 38 — and neither is a
+# reason to widen the path list today. Fifteen of the sixteen paths contribute,
+# and the mass of both counts is in the FLOW DRIVERS' HTTP helpers
+# (`script/redteam_suite.rb` 25 names, `script/pay_window.rb` 19,
+# `script/binding_flow.rb` 16) — a shared TEST harness rather than shared
+# shipped code, which is a real finding and a different one from this row's.
+# A hundred declarations with a hundred reasoned `why:` lines is a manifest
+# nobody would read, and a manifest nobody reads is how «declared» stops meaning
+# «reasoned about». FRAGMENT_PATHS is where the next path gets added, with the
+# reason its units are worth holding.
 FRAGMENT_PATHS = %w[app/operations/wire_arguments.rb].freeze
 
 FRAGMENTS = {

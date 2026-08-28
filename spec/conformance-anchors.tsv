@@ -19,7 +19,7 @@
 # that leaves the matrices: which row cites which pair, what it claims and how
 # it is rated stay where the matrices live.
 #
-# 1587 anchors.
+# 1589 anchors.
 .github/workflows/ci.yml	name: kiosk OSS end-to-end
 .github/workflows/ci.yml	run: ./e2e/run.sh
 CHANGELOG.md	Surfaced by a live hosted Hermes run. (K-437)
@@ -418,14 +418,16 @@ kiosk-demo-getgrocery/script/getgrocery_flow.rb	no card-setup step here. This ru
 kiosk-demo-getgrocery/script/getgrocery_flow.rb	pay: psp_reference expected 'pi_…' (real Stripe)
 kiosk-demo-getgrocery/script/getgrocery_flow.rb	unless missing_ids.empty?
 kiosk-demo-getgrocery/script/redteam_suite.rb	      name:        "WrongCurrencyCart",
+kiosk-demo-getgrocery/script/redteam_suite.rb	  # Applicable — must be BLOCKED
+kiosk-demo-getgrocery/script/redteam_suite.rb	  # Not applicable — must SKIP (no KYC)
 kiosk-demo-getgrocery/script/redteam_suite.rb	  # register PoW is ON (registration_pow_count=1): a positive difficulty makes
 kiosk-demo-getgrocery/script/redteam_suite.rb	  # stripe-mock, so the adapter auto-provisions a test card at capture and the
 kiosk-demo-getgrocery/script/redteam_suite.rb	  Kiosk::Redteam::Scenarios::CrossTenantRead.new,
 kiosk-demo-getgrocery/script/redteam_suite.rb	  PastDeliveryDate.new,     # T-090/K-969 — a past date is a named 400 on the read AND the write side
 kiosk-demo-getgrocery/script/redteam_suite.rb	  puts "  #{blocked_results.size} BLOCKED, #{skipped_results.size} SKIPPED, 0 BREACH — all attacks blocked."
-kiosk-demo-getgrocery/script/redteam_suite.rb	#   SKIPPED : MissingKyc, ExpiredKyc, ForgedKyc (no KYC)
-kiosk-demo-getgrocery/script/redteam_suite.rb	# Scenarios (every applicable one must be BLOCKED; the KYC trio SKIPs):
+kiosk-demo-getgrocery/script/redteam_suite.rb	# THE SCENARIO LIST IS NOT RE-TYPED HERE EITHER (K-1239)
 kiosk-demo-getgrocery/script/redteam_suite.rb	EXPECTED_SKIP_NAMES = %w[
+kiosk-demo-getgrocery/script/redteam_suite.rb	KYC trio must SKIP (no KYC here). The membership is
 kiosk-demo-getgrocery/script/redteam_suite.rb	class WrongCurrencyCart < Kiosk::Redteam::Scenario
 kiosk-demo-hoteling/README.md	  stamped with a 15-minute pay-by deadline — recorded for an operator to act
 kiosk-demo-hoteling/README.md	Advertised capabilities are `[schema, queries, actions, pay]` — the MODULES

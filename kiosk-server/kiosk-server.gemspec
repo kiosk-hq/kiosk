@@ -11,7 +11,7 @@ Gem::Specification.new do |spec|
     kiosk-server is the host-side surface for Kiosk. The full surface ships:
 
       - The controllers — the per-verb wire (GET <endpoint>/<query-name>,
-        POST <endpoint>/<action-name>) and the two reserved endpoints
+        POST <endpoint>/<action-name>) and the reserved endpoints
         (/kiosk/schema, /kiosk/pay), a derived OpenAPI description of both,
         the register/login proof-of-possession auth plane, JWKS, the KYC
         attestation endpoint, agents.txt / agents.json / kiosk.json

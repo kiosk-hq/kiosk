@@ -28,7 +28,7 @@ deploy/CHECKLIST.md ¦ seven demos ¦ from: git ls-files 'kiosk-demo-*/config/in
 deploy/CHECKLIST.md ¦ 7 demos ¦ from: git ls-files 'kiosk-demo-*/config/initializers/kiosk.rb' | wc -l ¦ same population as the line above, written in digits by the checklist's own style.
 deploy/CHECKLIST.md ¦ 8 apps ¦ from: git ls-files 'deploy/env/*.env.example' | wc -l ¦ everything deployed to the box: the operator demos plus the broker, one environment template each.
 deploy/CHECKLIST.md ¦ eight apps ¦ from: git ls-files 'deploy/env/*.env.example' | wc -l ¦ same population as the line above, spelled out.
-deploy/CHECKLIST.md ¦ 7 apps ¦ the per-app environment section covers the demo apps only; nothing in the tree separates "demo app" from "app" as a file set, so this is left unmeasured rather than given a command that would agree by accident.
+deploy/CHECKLIST.md ¦ 7 apps ¦ from: git ls-files 'kiosk-demo-*/config/initializers/kiosk.rb' | wc -l ¦ §4 is the per-app env for the OPERATOR demos only — the KYC broker has its own §4b and mounts no Kiosk wire, so it has no initializer and is not in this population. The earlier reason here said the tree could not separate "demo app" from "app"; it can, and this is the same command the sibling entries use (T-144).
 deploy/CHECKLIST.md ¦ 2 proofs ¦ the reputation schedule's first-contact cost, a property of the difficulty curve at run time and not a population any file list can count.
 
 deploy/README.md ¦ 7 demos ¦ from: git ls-files 'kiosk-demo-*/config/initializers/kiosk.rb' | wc -l ¦ the operator demos, one database and one login role each.

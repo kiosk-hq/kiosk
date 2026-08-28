@@ -58,15 +58,46 @@
 # self-test plants exactly that case and requires the guard to stay RED.
 #
 # WHAT IS GATED AND WHAT IS ONLY REPORTED, with the numbers that decided it.
-# MEASURED at head, over `git ls-files`, with the countable-noun vocabulary
-# below: 83 counts in Markdown, environment templates and Rake task
-# descriptions, against 465 in Ruby COMMENTS. The first three classes are
-# gated -- they are what a reader of this repository and an operator running
-# `rake -T` are shown -- and they cost 72 allow entries, 38 of which carry a
-# `from:` command and are therefore MEASURED rather than excused.
+# RE-MEASURED at head 2026-08-28, over `git ls-files`, with the countable-noun
+# vocabulary below: 83 counts in Markdown, environment templates, Rake task
+# descriptions and gemspec `summary`/`description` strings, against 468 in Ruby
+# COMMENTS. Those four classes are gated -- they are what a reader of this
+# repository, an operator running `rake -T` and a stranger on a RubyGems page
+# are shown -- and they cost 72 allow entries, 39 of which carry a `from:`
+# command and are therefore MEASURED rather than excused.
+#
+# THE GEMSPEC CLASS, AND WHAT ADDING A CLASS ACTUALLY BUYS (T-144). It is the
+# cheapest slice of the ungated half and it was chosen for the surface rather
+# than for the volume: a gem's `summary`/`description` IS its RubyGems landing
+# page, the first and often only page a stranger reads, and K-1217 found a false
+# claim on exactly that surface. MEASURED when it was added: 14 gemspecs, 101
+# published sentences, 13288 characters, 36 cardinal tokens inside them -- of
+# which the noun vocabulary gates exactly ONE, `two reserved endpoints` in
+# kiosk-server, now elided. The other 35 are version numbers, HTTP status codes,
+# parameter names (`n=168, k=7`) and hash widths (`BLAKE2b-256`), which the
+# digit rules below correctly refuse to read as quantities. So the class costs
+# no allow entries at all today, and the honest summary is that it moved the
+# gated total from 83 to 84 and the repair moved it back to 83. Its value is
+# forward-looking: the next hand-typed count written onto a gem's landing page
+# is now a red build.
+#
+# ONE THING THAT DOES NOT WORK THERE, and it changes which repair is available:
+# A MARKER CANNOT BE WRITTEN INTO PUBLISHED GEMSPEC TEXT. `summary` and
+# `description` are strings, so a `<!-- count: … -->` or a bare `count: … ¦
+# from: …` inside them would SHIP to the RubyGems page. The declaration arm is
+# therefore unavailable in this class, and the two honest repairs are to elide
+# the count (preferred -- the enumeration beside it usually carries the same
+# information) or to add an allow entry, with a `from:` command when one exists.
+# A `#` comment in the gemspec is reported like any other Ruby comment and does
+# NOT declare anything in the published strings, on purpose: it is not what the
+# reader of the page sees.
+#
+# STILL UNREACHED, so nobody reads the split as complete: `kiosk.tech/` and the
+# private repo, which would need this script run there too (and, for
+# `kiosk.tech`, the twin-digest discipline `check-publication-paths` uses).
 #
 # The comments are reported and not gated, and that is a measurement rather than
-# a preference: gating 465 sites needs 465 allow entries, nearly all of which
+# a preference: gating the 468 of them needs 468 allow entries, nearly all of which
 # would say the same thing -- that an engineering comment enumerating what it is
 # describing ("in two or more demos", "behind three gates") is ordinary English
 # and not a claim about a countable population -- and an allow-file that large
@@ -192,15 +223,23 @@ BARE_MARKER = /\Acount:\s*(\d+)\s*¦\s*from:\s*(.+?)\s*\z/.freeze
 #              GATED, and read as comment prose rather than as Markdown.
 #   :tasks     A Rake `desc` string -- what `rake -T` prints to an operator, so
 #              it is prose the tool itself publishes. GATED.
+#   :gemspec   A gemspec's `summary` and `description` STRINGS -- the RubyGems
+#              landing page, which is the first and often only page a stranger
+#              reads about a gem, and the surface K-1217 found a false count on.
+#              GATED (T-144). Its COMMENTS are reported like any other Ruby
+#              file's, so the split inside the file is the same split the table
+#              makes across files: what the gem PUBLISHES is gated, what its
+#              maintainer writes to the next maintainer is reported.
 #   :comments  Ruby comment blocks -- commentary for a reader of the source, in
 #              which an enumeration in the same breath is ordinary. REPORTED.
 def classify(rel)
   base = File.basename(rel)
   return nil if base == "CHANGELOG.md"   # append-only: an old entry records the tree AS IT WAS
   return nil if base == "CLAUDE.md"      # removed whole at publication; not shipped content
-  return :prose if rel.end_with?(".md")
-  return :env   if base.end_with?(".env.example")
-  return :code  if rel.end_with?(".rb", ".rake", ".gemspec")
+  return :prose   if rel.end_with?(".md")
+  return :env     if base.end_with?(".env.example")
+  return :gemspec if rel.end_with?(".gemspec")
+  return :code    if rel.end_with?(".rb", ".rake")
 
   nil
 end
@@ -267,6 +306,26 @@ ARMS = [
         The tree ships three files, and this sentence is well inside three hundred
         characters of the marker above it without being the sentence it declares.
       MD
+    },
+  },
+  {
+    id: "PC-7",
+    reports: "PC-4",
+    what: "an undeclared count in a gemspec's `summary` -- the one-line string RubyGems shows " \
+          "at the top of the gem's page (T-144)",
+    plant: lambda { |dir|
+      path = File.join(dir, "fixture.gemspec")
+      File.write(path, File.read(path).sub('shipping two demos', 'shipping five demos'))
+    },
+  },
+  {
+    id: "PC-8",
+    reports: "PC-4",
+    what: "an undeclared count in a gemspec's `description` HEREDOC, wrapped over two lines so " \
+          "the join is what finds it and not a line scan (T-144)",
+    plant: lambda { |dir|
+      path = File.join(dir, "fixture.gemspec")
+      File.write(path, File.read(path).sub("names three\n    gates", "names nine\n    gates"))
     },
   },
 ].freeze
@@ -343,6 +402,68 @@ def code_units(text)
   end
   comments << buf
   [split_sentences(comments), split_sentences(descs)]
+end
+
+# A gemspec, split into what it PUBLISHES and what it merely says (T-144).
+#
+# The published half is `summary` and `description` -- the two strings RubyGems
+# renders as the gem's landing page. Both spellings this repository uses are
+# read: a one-line double-quoted string (every `summary` here) and a squiggly
+# heredoc (every `description` here), plus adjacent-string continuation, because
+# a gemspec that grows a `"..." \` continuation must not silently drop out of
+# the corpus. The heredoc BODY is dedented and joined the way Markdown
+# paragraphs are, so a sentence wrapped over five lines is one string when it is
+# judged -- which is the wrapped-sentence trap K-1202 and K-1217 both fell into.
+#
+# Returns [gated, reported] exactly like `code_units`, and the reported half IS
+# `code_units`' comment half: a `#` line in a gemspec is a note to the next
+# maintainer and is no more a published claim than one in any other .rb file.
+GEMSPEC_FIELD   = /\A\s*\w+\.(?:summary|description)\s*=\s*(.*)\z/.freeze
+GEMSPEC_HEREDOC = /\A<<[-~]?["']?([A-Za-z_]+)["']?\s*\z/.freeze
+def gemspec_units(text)
+  published = []
+  lines     = text.lines.map(&:chomp)
+  i         = 0
+  while i < lines.length
+    field = GEMSPEC_FIELD.match(lines[i])
+    unless field
+      i += 1
+      next
+    end
+    rhs = field[1].strip
+    if (heredoc = GEMSPEC_HEREDOC.match(rhs))
+      term = heredoc[1]
+      body = []
+      i += 1
+      i += 1 while i < lines.length && lines[i].strip != term && (body << lines[i])
+      # Joined into paragraphs on blank lines and list bullets, like prose_units:
+      # the unit of judgement is a sentence, never a line.
+      buf = +""
+      body.each do |line|
+        s = line.strip
+        if s.empty? || s =~ /\A(?:[-*+]|\d+\.)\s/
+          published << buf
+          buf = +""
+          s = s.sub(/\A(?:[-*+]|\d+\.)\s+/, "")
+        end
+        buf << " " << s
+      end
+      published << buf
+    else
+      # A quoted string, possibly continued over `\`-joined adjacent literals.
+      buf = +""
+      loop do
+        rhs.scan(/"((?:[^"\\]|\\.)*)"/) { buf << " " << Regexp.last_match(1) }
+        break unless rhs.end_with?("\\") && i + 1 < lines.length
+
+        i += 1
+        rhs = lines[i].strip
+      end
+      published << buf
+    end
+    i += 1
+  end
+  [split_sentences(published), code_units(text).first]
 end
 
 def cardinal_value(token)
@@ -504,12 +625,20 @@ def scan(root)
 
     gated, reported =
       case kind
-      when :prose then [prose_units(text), []]
-      when :env   then [code_units(text).first, []]
+      when :prose   then [prose_units(text), []]
+      when :env     then [code_units(text).first, []]
+      when :gemspec then gemspec_units(text)
       else
         c, d = code_units(text)
         [d, c]
       end
+
+    # Per-class tallies, read by the self-test's non-vacuity arm. A file class
+    # whose extractor silently returns nothing looks EXACTLY like a class with
+    # nothing to say, and exits 0 forever -- the failure this workspace keeps
+    # paying for. So the arm asks each class for a subject in the real tree.
+    stats[:"files_#{kind}"] += 1
+    stats[:gemspec_units] += gated.length if kind == :gemspec
 
     reported.each do |s|
       stats[:reported_hits] += hits_in(s.gsub(MARKER_FULL, " ")).length
@@ -675,7 +804,26 @@ GREEN = {
                      "files in it.\n",
   # An excused count, with the entry that excuses it below.
   "docs/allowed.md" => "The upstream standard defines seven sections, which are not ours to count.\n",
-  ALLOW_FILE => "docs/allowed.md ¦ seven sections ¦ someone else's document; nothing here re-derives it.\n",
+  # A gemspec, carrying a count in BOTH published spellings -- the one-line
+  # `summary` string and the `description` heredoc, the second wrapped over two
+  # lines so the join is exercised -- and a count in a COMMENT, which must stay
+  # reported rather than gated. The two published ones are excused by allow
+  # entries, because a marker cannot be written into published gemspec text
+  # without shipping the marker to the RubyGems page (see the header).
+  "fixture.gemspec" => <<~SPEC,
+    # This comment mentions four gems and must NOT be gated.
+    Gem::Specification.new do |spec|
+      spec.name = "fixture"
+      spec.summary = "A fixture gem shipping two demos"
+      spec.description = <<~DESC
+        The published description names three
+        gates, wrapped across a line break.
+      DESC
+    end
+  SPEC
+  ALLOW_FILE => "docs/allowed.md ¦ seven sections ¦ someone else's document; nothing here re-derives it.\n" \
+                "fixture.gemspec ¦ two demos ¦ the summary's own count, excused so the green tree stays green.\n" \
+                "fixture.gemspec ¦ three gates ¦ the description's own count, wrapped over two lines.\n",
 }.freeze
 # <<< GREEN FIXTURES -- END
 
@@ -784,8 +932,28 @@ def run_self_test
   end
   total_decl = s[:declarations] + result[:allow].count { |a| a[:command] }
   failures << "the real tree ran #{total_decl} declared command(s) -- the declaration arm is vacuous" if total_decl < 1
+
+  # Every declared file class must have a subject here. A class whose extractor
+  # returns nothing is a class that has been switched off, and it reads as
+  # coverage forever -- so it fails instead.
+  %i[prose env gemspec code].each do |kind|
+    next if s[:"files_#{kind}"].to_i.positive?
+
+    failures << "the real tree read NO :#{kind} file at all. A file class with no subject is a " \
+                "class that has been switched off, and it exits 0 forever."
+  end
+  if s[:gemspec_units].to_i < 20
+    failures << "the gemspec class extracted #{s[:gemspec_units].to_i} published sentence(s) from " \
+                "#{s[:files_gemspec].to_i} gemspec(s). The `summary`/`description` extractor has " \
+                "stopped reading the strings it exists for -- most likely a spelling this repo " \
+                "started using (an interpolated string, a constant, a different heredoc form) " \
+                "that the two patterns do not match (T-144)."
+  end
   puts "  real tree: #{s[:files]} file(s), #{s[:gated_hits]} gated count(s), #{total_decl} declared " \
        "command(s) -- non-vacuous"
+  puts "  real tree: every file class has a subject -- prose #{s[:files_prose].to_i}, env " \
+       "#{s[:files_env].to_i}, gemspec #{s[:files_gemspec].to_i} (#{s[:gemspec_units].to_i} published " \
+       "sentence(s)), code #{s[:files_code].to_i}"
 
   status = report(result, quiet: true)
   failures << "the guard is not green over this repository (exit #{status})" unless status.zero?

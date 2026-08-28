@@ -70,11 +70,11 @@ gem "kiosk-rls"
 ## Rails integration
 
 Nothing to wire. The gem ships a railtie (`Kiosk::RLS::Railtie`) that adds the
-five migration verbs to `ActiveRecord::Migration` on boot, so a migration can
-call `enable_rls_on` the moment the gem is in your `Gemfile`. Do **not** put
-`ActiveRecord::Migration.include(Kiosk::RLS::DSL)` in an initializer — the gem
-does that itself, and an application patching a framework class on a gem's
-behalf is a load-order bug waiting to happen.
+migration verbs used above to `ActiveRecord::Migration` on boot, so a
+migration can call `enable_rls_on` the moment the gem is in your `Gemfile`. Do
+**not** put `ActiveRecord::Migration.include(Kiosk::RLS::DSL)` in an
+initializer — the gem does that itself, and an application patching a
+framework class on a gem's behalf is a load-order bug waiting to happen.
 
 What *is* yours to configure is the role posture, in
 `config/initializers/kiosk.rb`:

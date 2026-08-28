@@ -308,9 +308,11 @@ assistant) can read what the origin offers before it registers. Everything else
 — every query, every action, `pay` — needs a Bearer token and MAY toll
 proof-of-work, and so may `register`. So the register gate is a memory-hard PoW
 by design, and the "true" one-liner ships a copy-paste **solver**
-(`kiosk-pow-equihash/solve.py`). Hosted difficulty is low (~1 s) on six demos;
-atablefor is intentionally ~9–10 s on an M-series laptop core, the only hardware
-the seconds have been measured on (you'll feel it — that's the point). Flow:
+(`kiosk-pow-equihash/solve.py`). Hosted difficulty is
+`KIOSK_POW_DIFFICULTY=low` (~1 s) in every `deploy/env/*.env.example` but
+atablefor's, which is intentionally ~9–10 s on an M-series laptop core, the
+only hardware the seconds have been measured on (you'll feel it — that's the
+point). Flow:
 **discover (free) → read the schema (free) → register (solve PoW) → call a verb
 (each MAY toll PoW too)**.
 

@@ -1407,11 +1407,17 @@ namespace :demo do
 
       KIOSK_POW_DIFFICULTY=high bundle exec rake demo:pow
 
-    Budget ~10 s and ~1.3 GiB of RSS PER PROOF (bench/README.md, measured on one
-    M-series laptop core), and this flow solves four. The task prints the (n, k)
-    it actually ran at and ASSERTS it against the challenge the server issued,
-    so a recording can never leave a viewer guessing which toll they watched
-    being paid (T-110).
+    Budget ~10 s and ~1.3 GiB of RSS PER PROOF from the reference solver
+    (bench/README.md, measured on one M-series laptop core) — that gibibyte is
+    that solver's sorted-nonce table, not a floor these params impose on every
+    solver. The flow pays that toll MORE THAN ONCE: registration is tolled too,
+    and script/equihash_register.rb solves it transparently for each identity
+    the flow mints. So the run COUNTS every solve and prints the total beside
+    its verdict instead of promising a number typed here — this sentence used
+    to say "four", and the run it describes solves three (K-1221). The task
+    prints the (n, k) it actually ran at and ASSERTS it against the challenge
+    the server issued, so a recording can never leave a viewer guessing which
+    toll they watched being paid (T-110).
 
     Requires python3 + numpy.
   DESC
@@ -1494,7 +1500,8 @@ namespace :demo do
         puts "  These are the SHIPPED parameters — the toll a real operator charges. " \
              "Expect ~10 s and ~1.3 GiB per proof from the reference solver — that " \
              "GiB is its table, not a floor these params impose on every solver. " \
-             "This flow solves four."
+             "The flow solves MORE than one proof — registration is tolled too — " \
+             "and the count it actually paid is printed beside the verdict (K-1221)."
       else
         puts "  TOY parameters. The shipped kiosk-pow-equihash default is n=168 k=7 — " \
              "re-run with KIOSK_POW_DIFFICULTY=high to pay the real toll."
@@ -1519,6 +1526,20 @@ namespace :demo do
       check.call("toll served at n=#{pow_params[:n]} k=#{pow_params[:k]} (the wire's own params, " \
                  "not this task's read); got n=#{served_params["n"].inspect} k=#{served_params["k"].inspect}",
                  served_params["n"].to_i == pow_params[:n] && served_params["k"].to_i == pow_params[:k])
+      # HOW MANY PROOFS THIS RUN ACTUALLY PAID FOR (K-1221), counted by the driver
+      # where the solver runs rather than typed here. This task's prose used to
+      # promise "four" while the driver reported one: it counted only the tolled
+      # catalog query's challenges and not the registration proof
+      # `equihash_register` solves transparently for each identity the flow mints.
+      # It is the number a viewer multiplies by the per-proof budget to size a
+      # recording, so it is ASSERTED — a printed total that does not equal its own
+      # two parts is a counter that has come loose from what it counts.
+      solved     = result["proofs_solved"].to_i
+      reg_proofs = result["registration_proofs_solved"].to_i
+      qry_proofs = result["tolled_query_proofs"].to_i
+      check.call("proofs solved this run: #{solved} (#{reg_proofs} at registration, " \
+                 "#{qry_proofs} at the tolled catalog query) — multiply by the per-proof budget",
+                 solved.positive? && solved == reg_proofs + qry_proofs)
       check.call("catalog challenged (402)",         result["http_challenge"] == 402)
       check.call("served after solve (200 + rows)",  result["served"] == true && result["catalog_rows"].to_i >= 1)
       check.call("wrong nonce rejected (403)",       result["http_wrong_nonce"] == 403)

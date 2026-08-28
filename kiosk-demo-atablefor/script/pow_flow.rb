@@ -57,6 +57,27 @@ ISSUER = ENV.fetch("KIOSK_ISSUER")
 # location is Kiosk::Pow::Equihash.solver_path, owned by the gem (K-627).
 require_relative "equihash_register"
 
+# EVERY SOLVE THIS FLOW PAYS FOR, COUNTED WHERE THE SOLVER ACTUALLY RUNS (K-1221).
+#
+# `proofs_solved` used to be `proofs.size` — the challenges THIS file holds, i.e.
+# the tolled query's only — and reported 1 for a run that shells out to solve.py
+# three times, because `equihash_register` pays the registration toll
+# transparently for each identity the flow mints. That is not a cosmetic
+# undercount: it is the number a viewer multiplies by the per-proof budget to
+# size a recording, and both demos' rake prose had drifted to a hand-typed
+# "four" against it.
+#
+# The counter wraps the helper's `equihash_solve` HERE, in the per-demo driver,
+# rather than inside `script/equihash_register.rb` — that file is held in
+# lockstep across seven demos by bin/check-demo-copies, and none of the other
+# six needs a counter.
+POW_SOLVES = { total: 0 }
+alias equihash_solve_uncounted equihash_solve
+def equihash_solve(challenge)
+  POW_SOLVES[:total] += 1
+  equihash_solve_uncounted(challenge)
+end
+
 # The TOY counter the demo initializer's on_bad_proof writes (K-498):
 # PER-IDENTITY in sqlite (one abuser's rejections never appear in anyone
 # else's count), but still truncated at boot, no TTL, and read by nothing but
@@ -103,6 +124,11 @@ _key2, reg2 = equihash_register(
   get_json: method(:get_json), post_json: method(:post_json),
 )
 other_agent_id = reg2.fetch("agent_id")
+
+# Everything solved so far was a REGISTRATION toll: this is a snapshot of the
+# counter, not a subtraction, so it stays right if the gate's per-identity
+# proof count ever moves off `c.registration_pow_count = 1`.
+registration_proofs = POW_SOLVES[:total]
 
 # The request we prove. The request fingerprint is
 # `SHA256("<METHOD> <verb>\n<canonical args>")` — the HTTP method, the verb name
@@ -177,17 +203,22 @@ end
 # ── Output one JSON line ────────────────────────────────────────────────────
 
 puts JSON.generate(
-  http_challenge:          rc_challenge,
-  http_served_after_solve: rc_served,
-  http_wrong_nonce:        rc_wrong,
-  served:                  served,
-  proofs_solved:           proofs.size,
-  bad_proof_count:         bad_proof_count,
-  other_bad_proof_count:   other_bad_proof_count,
-  availability_rows:       rows.size,
+  http_challenge:             rc_challenge,
+  http_served_after_solve:    rc_served,
+  http_wrong_nonce:           rc_wrong,
+  served:                     served,
+  # EVERY solve the flow performed, register included (K-1221) — the count the
+  # rake task prints and asserts, and the one a recording's runtime follows from.
+  # The tolled query's own share is broken out beside it.
+  proofs_solved:              POW_SOLVES[:total],
+  registration_proofs_solved: registration_proofs,
+  tolled_query_proofs:        proofs.size,
+  bad_proof_count:            bad_proof_count,
+  other_bad_proof_count:      other_bad_proof_count,
+  availability_rows:          rows.size,
   # THE PARAMETERS THE WIRE ACTUALLY SERVED (T-110), so `rake demo:pow`'s
   # verdict can assert which toll was paid instead of printing what it hoped
   # for. Read off the challenge rather than from config: it follows an operator
   # override or a per-identity policy that a config read cannot see.
-  challenge_params:        challenges.first["params"],
+  challenge_params:           challenges.first["params"],
 )

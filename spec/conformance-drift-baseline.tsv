@@ -20,8 +20,8 @@
 # watermark forward. Repair a drifted header with --reheader, which re-renders
 # this block and touches no fingerprint.
 #
-# recorded: 2026-08-28 at f6a95151
-# 611 anchors.
+# recorded: 2026-08-28 at 617bf241
+# 632 anchors.
 e2e/assistant.sh	7e10b403edbedbeb	"$(curl -sS -o /dev/null -D - -H 'Accept: application/json' "$SERVER_URL/.well-known/kiosk.json" | grep -ic '^Vary:')" "0"
 e2e/assistant.sh	32ea9a773eca7bad	"$(echo "$apc_headers" | grep -ic '^Vary:')" "0"
 e2e/assistant.sh	f9dc523d4a428d91	$public_doc is really being read (control token)
@@ -45,12 +45,14 @@ e2e/assistant.sh	3f173be1e2e5e6d4	a routing 404 UNDER the mount is a 404
 e2e/assistant.sh	738da0416039b544	agents.txt Protocols: ap2
 e2e/assistant.sh	27623ecc0e894ec5	alice: 1 appointment exists
 e2e/assistant.sh	e78676291551400a	alice: does NOT see bob's row
+e2e/assistant.sh	02b6ca6cf2c18c64	alice: sees her own row
 e2e/assistant.sh	8828ef7892c3b853	all three version headers on all 19 mount routes
 e2e/assistant.sh	cde0ddb3a718eb34	an action declares no pagination headers
 e2e/assistant.sh	3414347124974678	an ancient client is SERVED, not refused — the floor is advisory
 e2e/assistant.sh	495ef79de3304b32	an unhandled 500 UNDER the mount is a 500
 e2e/assistant.sh	ed89efb6f3b589b6	api-catalog advertises it as a service-desc
 e2e/assistant.sh	0a416c3fbc34fac4	api-catalog hyperlinks $verb_name, unauthenticated
+e2e/assistant.sh	e11c6988d2261b05	appointment_id returned
 e2e/assistant.sh	92d4c091191b4943	assert "no Authorization header → 200"  "$oa_anon" "200"
 e2e/assistant.sh	0e49e161b51f30b4	assert "no Authorization header → 200"  "$sch_status" "200"
 e2e/assistant.sh	8162f19f3c75904b	assert "no envelope wrapper"       "$(echo "$r" | jq -r 'has("value")')"           "false"
@@ -134,6 +136,13 @@ e2e/assistant.sh	f047baf98c83c9b2	…the catalog is the body itself
 e2e/assistant.sh	f616315f74fab8eb	…while a ROOT discovery surface carries none of them
 e2e/assistant.sh	b993275ea6622f13	…while an identity-scoped 200 keeps private, no-store
 e2e/assistant.sh	387cf424f11b420f	…while the same request with a bad token is still 401
+e2e/schema_conformance.rb	95f3c3e5b829561f	GET /.well-known/kiosk.json
+e2e/schema_conformance.rb	a919e7231bf0e04c	GET /kiosk/schema
+e2e/schema_conformance.rb	852a9ec4f000cd05	and the same schema REFUSES a broken copy of those very bytes
+e2e/schema_conformance.rb	50fbcfc0c7048b7b	example_params satisfies its own input_schema
+e2e/schema_conformance.rb	c9936a1f1b23196e	example_row satisfies its own output_schema
+e2e/schema_conformance.rb	24b3e620bb972912	published examples (the loop is not empty)
+e2e/schema_conformance.rb	20f833377d225b00	the Kiosk-PoW header this origin ACCEPTED
 kiosk-demo-atablefor/app/controllers/home_controller.rb	41b6be8a099ddb63	def index
 kiosk-demo-atablefor/app/controllers/home_controller.rb	e0c84228969a0be8	def reservations
 kiosk-demo-atablefor/app/views/home/index.html.erb	202945c715920bc0	The href is the VERSIONED cut this operator pins, read from
@@ -202,6 +211,10 @@ kiosk-pow-equihash/spec/kiosk/pow/equihash_spec.rb	f7c6f3ea1d7ef349	are the benc
 kiosk-pow-equihash/spec/kiosk/pow/equihash_spec.rb	ea0c49862f750684	describe "default params (n=168, k=7)"
 kiosk-pow-equihash/spec/kiosk/pow/equihash_spec.rb	368db7d0fdfd4fe1	production params (n=168, k=7) KAT
 kiosk-pow-equihash/spec/kiosk/pow/equihash_spec.rb	2be7cf5b840b40fd	returns n:168, k:7 by default
+kiosk-reputation/spec/kiosk/reputation/backoff_store_spec.rb	aa2eff7b6d8ae745	consuming one key does not affect another
+kiosk-reputation/spec/kiosk/reputation/policies/backoff_spec.rb	7738614171db8fce	falls back to user_id when agent_id is nil
+kiosk-reputation/spec/kiosk/reputation/policies/backoff_spec.rb	f1323e432d963125	grants are per-identity (agent-2's solve does not free agent-1)
+kiosk-reputation/spec/kiosk/reputation/policies/backoff_spec.rb	c69d75dba32ec459	keys a Kiosk::Identity-shaped object by agent_id when present
 kiosk-reputation/spec/kiosk/reputation/policies/rate_and_reputation_spec.rb	01733f71f6a7d28b	adds the unproven bonus ONLY at zero purchases, not merely below the proven threshold
 kiosk-reputation/spec/kiosk/reputation/policies/rate_and_reputation_spec.rb	5829d44795781323	caps count at count_max (10) even with extreme inputs
 kiosk-reputation/spec/kiosk/reputation/policies/rate_and_reputation_spec.rb	83a5c459133cd5d9	carries equihash (n, k) params
@@ -224,7 +237,11 @@ kiosk-server/spec/kiosk/server/actions_spec.rb	75ad30d2d64729f9	carries the decl
 kiosk-server/spec/kiosk/server/actions_spec.rb	5904987547b3a9cd	carries the declared schemas and examples into the descriptor
 kiosk-server/spec/kiosk/server/actions_spec.rb	58d765b00caecd31	leaves description nil when the verb opted in with another macro
 kiosk-server/spec/kiosk/server/actions_spec.rb	e1ac5b5c9b639604	returns all descriptors sorted by name
+kiosk-server/spec/kiosk/server/agent_identity_providers/default_agent_idp_spec.rb	fff1742d09a4a9cc	carries the `actor` claim through verification into the resolved Identity
+kiosk-server/spec/kiosk/server/agent_identity_providers/default_agent_idp_spec.rb	5037581a1884819b	keeps an earlier token valid after a second is minted for the same agent
 kiosk-server/spec/kiosk/server/agent_identity_providers/default_agent_idp_spec.rb	4ab3c55acd77791a	omits the role claim entirely when role is nil
+kiosk-server/spec/kiosk/server/agent_identity_providers/default_agent_idp_spec.rb	66033afe960590bd	revokes both at once when the agent's watermark passes them
+kiosk-server/spec/kiosk/server/agent_identity_providers/default_agent_idp_spec.rb	42635e07983098dc	stamps an `actor` claim of `agent` on every token it mints, role or no role
 kiosk-server/spec/kiosk/server/agent_login_spec.rb	85999bef874a7af7	mints a fresh token for a known key and provisions nothing
 kiosk-server/spec/kiosk/server/agent_login_spec.rb	9931088277e2be90	proves possession and burns the challenge before the lookup
 kiosk-server/spec/kiosk/server/agent_login_spec.rb	220884cbca691b1f	raises NotFound for an unregistered key (no silent new account)
@@ -386,12 +403,16 @@ kiosk-server/spec/kiosk/server/jwks_spec.rb	cf039ca273a7b660	preserves order for
 kiosk-server/spec/kiosk/server/jwks_spec.rb	1f9381bb7ad832d6	produces JSON that's parseable and contains only the public JWK fields
 kiosk-server/spec/kiosk/server/jwks_spec.rb	aa93e91d49546d50	returns a single-key JWKS for one input
 kiosk-server/spec/kiosk/server/jwt_issuer_spec.rb	2c1c8c67f5a80be0	accepts a token issued after the revocation watermark (fresh login survives)
+kiosk-server/spec/kiosk/server/jwt_issuer_spec.rb	ad1a6fd632851184	accepts the issuer when supplied and matching
 kiosk-server/spec/kiosk/server/jwt_issuer_spec.rb	f41220fd0d2eaa70	defaults to a one-hour lifetime
 kiosk-server/spec/kiosk/server/jwt_issuer_spec.rb	6b5d6b7fcef1505f	honours an `expires_in` override
 kiosk-server/spec/kiosk/server/jwt_issuer_spec.rb	61e7112755bf58c9	produces a JWT carrying the supplied claims and the standard time bounds
 kiosk-server/spec/kiosk/server/jwt_issuer_spec.rb	731582b67393d26d	rejects a token signed by a key not in the JWKS
 kiosk-server/spec/kiosk/server/jwt_issuer_spec.rb	f34239618e5f157a	rejects a token whose agent has been revoked as of now
+kiosk-server/spec/kiosk/server/jwt_issuer_spec.rb	a54853307764a171	rejects a wrong audience
 kiosk-server/spec/kiosk/server/jwt_issuer_spec.rb	6e45cca086b5ec43	rejects an expired token
+kiosk-server/spec/kiosk/server/jwt_issuer_spec.rb	992b409b6f5602ca	round-trips an issued token and returns symbol-keyed claims
+kiosk-server/spec/kiosk/server/jwt_issuer_spec.rb	be009427a0741064	stamps `nbf` at the issue instant — equal to `iat`, inside the lifetime
 kiosk-server/spec/kiosk/server/kyc_attestation_controller_spec.rb	aa00914a7fb63e26	#kyc_attributes
 kiosk-server/spec/kiosk/server/kyc_attestation_controller_spec.rb	563ca7dac8a5712b	maps one row per granted name onto true
 kiosk-server/spec/kiosk/server/kyc_attestation_controller_spec.rb	ca808df2a4e6833e	reads the kyc_attributes table, joined to a LIVE agents row

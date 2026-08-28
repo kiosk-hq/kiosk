@@ -4,9 +4,17 @@ Apache-2.0 monorepo for [Kiosk](https://kiosk.tech) — the framework that turns
 
 ## Layout
 
+**The gem tables and the demo table are scored on DIFFERENT axes, so their values
+are not comparable and the columns are named apart below.** The gems carry **API
+stability**: `alpha` is pre-v1.0 — the surface may still change between releases —
+which is the same thing each gem's own README says about itself. The demos carry
+**deployment**: `active` means the entry is gated on every CI run and, for the eight
+demo apps, live at its own subdomain. A demo being `active` says nothing about how
+settled the `alpha` engine underneath it is.
+
 ### Core framework
 
-| Gem | Purpose | Status |
+| Gem | Purpose | API stability |
 |---|---|---|
 | `kiosk-core` | Value types, abstract bases, GUC constants, configuration. No Rails dep. | alpha |
 | `kiosk-rls` | Opt-in RLS DSL + migration helpers (`rake kiosk:rls:{show,check}` planned, lands in a follow-up) | alpha |
@@ -16,7 +24,7 @@ Apache-2.0 monorepo for [Kiosk](https://kiosk.tech) — the framework that turns
 
 ### Plugins & adapters
 
-| Gem | Purpose | Status |
+| Gem | Purpose | API stability |
 |---|---|---|
 | `kiosk-rls-rspec` | RSpec journey-test helpers for RLS policies | alpha |
 | `kiosk-rls-minitest` | Minitest journey-test helpers for RLS policies | alpha |
@@ -35,14 +43,14 @@ See `kiosk-pow-equihash/README.md` for the full comparison and rationale.
 
 ### Reputation & security
 
-| Gem | Purpose | Status |
+| Gem | Purpose | API stability |
 |---|---|---|
 | `kiosk-reputation` | Customer reputation factors + bad-proof signal | alpha |
 | `kiosk-redteam` | Red-team scenarios, adversarial test harness | alpha |
 
 ### Demo providers
 
-| Demo | Vertical | Status |
+| Demo | Vertical | Deployment |
 |---|---|---|
 | `kiosk-demo-getgrocery` | Grocery delivery | active |
 | `kiosk-demo-atablefor` | Restaurant table-booking — non-commerce (no payments) | active |

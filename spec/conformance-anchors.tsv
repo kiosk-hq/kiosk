@@ -19,7 +19,9 @@
 # that leaves the matrices: which row cites which pair, what it claims and how
 # it is rated stay where the matrices live.
 #
-# 1574 anchors.
+# 1587 anchors.
+.github/workflows/ci.yml	name: kiosk OSS end-to-end
+.github/workflows/ci.yml	run: ./e2e/run.sh
 CHANGELOG.md	Surfaced by a live hosted Hermes run. (K-437)
 CHANGELOG.md	surfaced by the first live Hermes run, which paid successfully but whose order could never show paid or be scheduled
 CLAUDE.md	demo Rails apps (`kiosk-demo-*` — seven operators plus the `kiosk-demo-prove`
@@ -38,6 +40,14 @@ README.md	multi-assistant identity per user
 README.md	| `kiosk-pay-stripe` | PSP adapter — Stripe, AP2 mandate trail | alpha |
 README.md	| `kiosk-rls` | Opt-in RLS DSL + migration helpers (`rake kiosk:rls:{show,check}` planned, lands in a follow-up) | alpha |
 ROADMAP.md	**MPP as a settlement adapter.**
+deploy/Caddyfile	atablefor.demo.kiosk.tech {
+deploy/Caddyfile	getgrocery.demo.kiosk.tech {
+deploy/Caddyfile	hoteling.demo.kiosk.tech {
+deploy/Caddyfile	kyc.demo.kiosk.tech {
+deploy/Caddyfile	philslist.demo.kiosk.tech {
+deploy/Caddyfile	skooti.demo.kiosk.tech {
+deploy/Caddyfile	stylish.demo.kiosk.tech {
+deploy/Caddyfile	tudu.demo.kiosk.tech {
 deploy/README.md	## Per-demo map
 deploy/README.md	**PoW difficulty is a feature**: ALL seven demos honor the
 deploy/README.md	**The KYC broker is the odd one out**: the gem dir is `kiosk-demo-prove` but it serves
@@ -576,6 +586,7 @@ kiosk-demo-skooti/script/rental_flow.rb	# Flow: register (PoW) → scooters_avai
 kiosk-demo-skooti/script/rental_flow.rb	# ── Step 2: (no KYC) ─────────────────────────────────────────────────────────
 kiosk-demo-skooti/script/rental_flow.rb	Issued by start_rental as an offline, self-verifying unlock credential.
 kiosk-demo-skooti/script/rental_flow.rb	Step 6: LockSim offline verify
+kiosk-demo-stylish/Gemfile	gem "kiosk-rls",
 kiosk-demo-stylish/README.md	- **Roles from a configured IdP** — stylish has two entrances: a **visitor** books a service off the menu, and
 kiosk-demo-stylish/README.md	- **The AGENT-IdP seam** (`c.agent_idp`) is **not** a shortcut here any more: this demo sets **nothing**
 kiosk-demo-stylish/README.md	- A `book_appointment` Action + an `availability`/`service_menu` query — an **evergreen service menu**: a smal
@@ -730,6 +741,7 @@ kiosk-pow-cuckoo/README.md	**This gem ships the VERIFIER only.**  The verifier i
 kiosk-pow-cuckoo/README.md	- **Equihash** (`kiosk-pow-equihash`) is the shipped default.
 kiosk-pow-cuckoo/README.md	> **Shelved / optional.** The shipped default PoW backend is
 kiosk-pow-cuckoo/README.md	validated against Grin's Cuckatoo29 L=42 known-answer test vector.
+kiosk-pow-cuckoo/Rakefile	task :solve_parity do
 kiosk-pow-cuckoo/lib/kiosk/pow/cuckoo.rb	      NAME = "cuckatoo"
 kiosk-pow-cuckoo/spec/kiosk/pow/cuckoo_spec.rb	  # taken directly from Grin's CI test suite (cuckatoo29 constant).
 kiosk-pow-equihash/README.md	## Solver (Python + numpy)
@@ -811,6 +823,7 @@ kiosk-pow/README.md	## Cross-implementation parity check
 kiosk-pow/README.md	> **Retired / optional.** The shipped default PoW backend is
 kiosk-pow/README.md	Both sides produce byte-identical Argon2id digests (verified by `rake parity`).
 kiosk-pow/README.md	Computes the same Argon2id digest in Ruby and Python, asserts hex-equal, then
+kiosk-pow/Rakefile	task :parity do
 kiosk-redteam/README.md	Adversarial regression harness for [Kiosk](https://kiosk.tech) providers — it
 kiosk-redteam/README.md	attack is correctly blocked.
 kiosk-redteam/README.md	drives hostile HTTP scenarios against a running Kiosk origin and asserts each

@@ -68,6 +68,7 @@ kiosk-pop key possession is their only credential.
 Postgres required. From this directory:
 
 ```
+bin/rails demo:wire_args_spec # DB-free unit spec (no boot, no Postgres, no toll) for the WireArguments shape guard every verb opens with: the integer parse and its T-125 magnitude ceiling, stay_dates' strict ISO parse, past_stay and the published examples against a frozen property clock, priceable_total, and the 404-not-400 split for a property nobody has
 bin/rails demo:setup       # create + load schema + seed the properties and rooms
 bin/rails demo:book        # the headline: register → availability → reserve_room → pay → confirm_booking (plus the payment-gate negative)
 bin/rails demo:browse      # browse-heavy priced-pagination PoW demo — boots with the browse gate active (KIOSK_POW_BROWSE_DEMO=1); depth is priced, not banned
@@ -77,10 +78,14 @@ bin/rails demo:schema      # self-discovery over the schema verb
 bin/rails demo:search      # pagination over the ~100-hotel catalogue: a truncated page carries `Link: …; rel="next"`, following it returns a DISJOINT page, a complete result carries no link, and hotel_detail resolves a summary row's id (404 for one nobody has)
 ```
 
-**Every task above reseeds first.** Each of the tasks above except `demo:setup` itself declares `: :setup`, so
+**Every task above that touches the database reseeds first.** Each of them except
+`demo:setup` itself declares `: :setup`, so
 running any of them DROPS and recreates `kiosk_hoteling_development` before it
 starts — nothing you left in the database survives a run, and that is what makes
-each of them repeatable. `demo:book` was the one exception, and it was not
+each of them repeatable. `demo:wire_args_spec` is outside that sentence entirely:
+it boots nothing, opens no connection and declares no prerequisite — it is a bare
+`ruby spec/wire_arguments_spec.rb` over pure functions, which is the whole reason
+it exists (T-137). `demo:book` was the one exception, and it was not
 repeatable: the driver always picks the same property for the same three nights
 and books it twice (happy path, then the payment-gate negative), so one pass took
 that property's whole inventory — the negative's unpaid hold is never released,
@@ -100,6 +105,7 @@ assertions cannot go ungated and unexplained.
 
 | Task | Runs in CI | Why not |
 |---|---|---|
+| `demo:wire_args_spec` | yes |  |
 | `demo:setup` | yes — the job's own setup step |  |
 | `demo:book` | yes |  |
 | `demo:isolation` | yes |  |

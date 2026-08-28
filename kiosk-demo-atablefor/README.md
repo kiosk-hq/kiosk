@@ -68,6 +68,7 @@ controllers in `c.handlers`, it does not contain them.
 Postgres required. From this directory:
 
 ```
+bin/rails demo:wire_args_spec # DB-free unit spec (no boot, no Postgres, no toll) for the WireArguments shape guards every verb opens with: party_size's shape/floor/int4-ceiling sentences, the whole_number table, the seating-time, seating-date and neighbourhood domain refusals, and booking_id's blank-vs-malformed split
 bin/rails demo:setup       # create + load schema + seed the Lisbon restaurant roster, their tables, and diners
 bin/rails demo:book        # the headline: register → availability → book_table(party 2) → my_bookings
 bin/rails demo:binding     # a diner signs in (Devise), links their assistant, and its booking ties to the diner
@@ -96,6 +97,7 @@ assertions cannot go ungated and unexplained.
 
 | Task | Runs in CI | Why not |
 |---|---|---|
+| `demo:wire_args_spec` | yes |  |
 | `demo:setup` | yes — the job's own setup step |  |
 | `demo:walkthrough` | yes |  |
 | `demo:book` | yes |  |

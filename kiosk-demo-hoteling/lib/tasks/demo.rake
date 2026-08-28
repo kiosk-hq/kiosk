@@ -4,6 +4,10 @@
 # Tasks:
 #
 #   rake demo:setup      idempotent db:drop / create / schema:load / seed
+#   rake demo:wire_args_spec DB-free unit spec for the WireArguments shape guard —
+#                        the gate every verb opens with, and the only executable
+#                        coverage of it that needs no origin, no database and no
+#                        Equihash toll (T-137)
 #   rake demo:book       boots the server, runs script/hoteling_flow.rb (no-human full
 #                        booking chain), asserts happy path + negative gate, then runs
 #                        script/pay_window.rb in-process (K-853 capture-anchored paid state)
@@ -65,6 +69,13 @@ def hoteling_run_flow(flow_rb, env_str = "", env: {}, runner: "ruby")
 end
 
 namespace :demo do
+  desc "DB-free unit spec for the WireArguments shape guards — every verb's first gate (T-137)."
+  task :wire_args_spec do
+    spec = File.expand_path("../../spec/wire_arguments_spec.rb", __dir__)
+    puts "\n── WireArguments shape-guard spec (no boot, no DB) ──"
+    sh "ruby #{spec}"
+  end
+
   desc "Create + load schema + seed the demo database (idempotent)."
   task :setup do
     sh "psql -d postgres -tAc \"DO \\$\\$ BEGIN " \

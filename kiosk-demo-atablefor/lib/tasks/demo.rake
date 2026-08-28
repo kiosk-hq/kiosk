@@ -3,6 +3,10 @@
 # Kiosk demo orchestration (atablefor — restaurant table-booking). Tasks:
 #
 #   rake demo:setup        idempotent db:drop / create / schema:load / seed
+#   rake demo:wire_args_spec DB-free unit spec for the WireArguments shape guards —
+#                          party_size, whole_number, the two filter guards and
+#                          booking_id, with no origin, no database and no toll
+#                          (T-137)
 #   rake demo:walkthrough  boots the server, runs a curl-driven showcase, tears down
 #   rake demo:book         boots the server, runs script/book_flow.rb (no-human table booking),
 #                          asserts the confirmed booking, tears down
@@ -76,6 +80,13 @@ def atablefor_run_flow(flow_rb, env_str = "", env: {}, runner: "ruby")
 end
 
 namespace :demo do
+  desc "DB-free unit spec for the WireArguments shape guards — every verb's first gate (T-137)."
+  task :wire_args_spec do
+    spec = File.expand_path("../../spec/wire_arguments_spec.rb", __dir__)
+    puts "\n── WireArguments shape-guard spec (no boot, no DB) ──"
+    sh "ruby #{spec}"
+  end
+
   desc "Create + load schema + seed the demo database (idempotent)."
   task :setup do
     sh "psql -d postgres -tAc \"DO \\$\\$ BEGIN " \

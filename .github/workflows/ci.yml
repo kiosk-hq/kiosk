@@ -196,7 +196,22 @@ jobs:
             # Watched fail: drop the c.on_bad_proof lambda (initializers/
             # kiosk.rb:317) and "on_bad_proof penalized: bad_proof_count=1"
             # goes red with bad_proof_count=0, exit 1.
-            tasks: demo:backoff demo:pow demo:book demo:reputation demo:binding demo:isolation demo:redteam demo:schema demo:walkthrough
+            # demo:wire_args_spec goes FIRST — it is the only task in this job
+            # that needs no server, no Postgres and no PoW (~0.4 s, a bare
+            # `ruby spec/wire_arguments_spec.rb`), so the cheapest signal fails
+            # first. 255 assertions over the pure guards: the `whole_number`
+            # table K-1027 was filed for, `party_size`'s three separate
+            # sentences (shape / floor / K-1047's int4 ceiling), `seating_time`
+            # and `seating_date` and `neighborhood` — each answering a value
+            # outside its domain with the servable set NAMED (K-717) — and
+            # `booking_id`'s blank-vs-malformed split. Until it existed the only
+            # executable coverage of ANY of them was demo:redteam, which needs a
+            # booted origin, a seeded database and a live Equihash toll (T-137).
+            # Watched fail: restore the pre-K-1027 coercion (`size = raw.to_i`)
+            # and drop the `size > MAX_INT4` arm — 31 assertions go red, four of
+            # them the NoMethodError raises K-1027 was filed for (`true.to_i`,
+            # `false.to_i`, `[].to_i`), and the task exits 1.
+            tasks: demo:wire_args_spec demo:backoff demo:pow demo:book demo:reputation demo:binding demo:isolation demo:redteam demo:schema demo:walkthrough
           - demo: kiosk-demo-getgrocery
             # demo:agecheck = the alcohol 18+ age-gate (create_order rejects a
             # cart with an age_restricted item unless the agent carries
@@ -372,7 +387,23 @@ jobs:
             # BROWSES=7 and the curve stays [0,0,0,0,0,0,0] — "browsing never got
             # priced" goes red, exit 1.
             # It goes last with demo:search; both reseed via `: :setup`.
-            tasks: demo:book demo:isolation demo:redteam demo:schema demo:search demo:browse
+            # demo:wire_args_spec goes FIRST, and it is the only task in this
+            # job that needs no server, no Postgres and no PoW (~0.4 s, a bare
+            # `ruby spec/wire_arguments_spec.rb`). Hoteling shipped no `spec/`
+            # at all until T-137, so every other task here paid for a booted
+            # origin, a seeded database and a live toll to reach a set of pure
+            # functions. 195 assertions: {WireArguments.integer}'s shape arm and
+            # the `max:` arm T-125 added (plus the two omissions T-125 reasoned
+            # about — `limit`/`property_id`/`room_type_id` pass no ceiling, and
+            # there is no `min:` — asserted rather than believed), `stay_dates`'
+            # strict `Date.iso8601` and the SQLi tail `Date.parse` would have
+            # booked, `past_stay` and `example_check_in`/`example_check_out`
+            # against a FROZEN property clock (K-969, K-972), `priceable_total`
+            # (K-968) and the 404-not-400 split `property_not_found` carries.
+            # Watched fail: restore the pre-guard coercion (`Integer(raw.to_s
+            # .strip, 10)` → `raw.to_s.to_i`) and drop the `max:` arm — 15
+            # assertions go red and the task exits 1.
+            tasks: demo:wire_args_spec demo:book demo:isolation demo:redteam demo:schema demo:search demo:browse
             # K-844 — hoteling's escalating browse toll charges N>1 proofs in a
             # single Kiosk-PoW header, which is the multi-proof half of the
             # retry that getgrocery's flat one-proof toll never reaches.

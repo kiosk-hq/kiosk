@@ -159,8 +159,17 @@ SCAN_ROOTS = ["lib", "app", "script", "db/migrate"].freeze
 # statics), or when the single copy that legitimately differs is carried by the
 # entry's `except:` map — the six skeleton paths where prove, the API-only
 # broker generated on its own, is the sole outlier (K-643).
+#
+# THE THIRD REASON, and it is the one `spec/` arrives under (T-137): a path can
+# be here simply because SCAN_ROOTS cannot see the directory it lives in, so the
+# manifest is the ONLY thing that knows the copies exist. `spec/` is not a scan
+# root and three demos now ship `spec/wire_arguments_spec.rb`; without this line
+# the repo's own rule — «a NEW duplicate fails the build until it is declared» —
+# would have been silently untrue for it, which is the same shape as a `:per_demo`
+# file whose shared methods nothing compares (T-120).
 EXTRA_SCANNED = [
   ".gitignore",
+  "spec/wire_arguments_spec.rb",
   "public/robots.txt",
   "public/favicon.ico",
   "public/404.html",
@@ -197,6 +206,21 @@ PROVE_SKELETON =
 # ── The manifest ─────────────────────────────────────────────────────────────
 COPIES = {
   # ── Outside the scan roots, compared anyway (K-629, T-048, K-643) ──────────
+  "spec/wire_arguments_spec.rb" => {
+    rule:  :per_demo,
+    ships: %w[atablefor getgrocery hoteling],
+    why:   "The DB-free unit spec for each demo's WireArguments (T-116 wrote getgrocery's, T-137 " \
+           "copied the harness into the other two). `:per_demo` because the ASSERTIONS cannot be " \
+           "shared: they name each demo's own guards, sentences and columns — `party_size` and a " \
+           "seating roster here, a cart and a Dublin delivery clock there, an Istanbul room-night " \
+           "floor in the third — and a lockstep rule would demand three different files be one. " \
+           "What IS shared is the HARNESS the three copied on purpose (`assert`, `guard`, " \
+           "`assert_typed_400`, `refusal_of`, `value_of`, and the FAILURES/exit tail), and nothing " \
+           "compares those today: `spec/` is outside FRAGMENT_PATHS, so T-120's unit rule does not " \
+           "reach here. That is deliberately left as the next candidate rather than taken in the " \
+           "wave that created the second and third copies — declaring the PATH is what makes the " \
+           "copies visible at all, and the visibility is the half that was missing.",
+  },
   ".gitignore" => {
     rule: :identical,
     why:  "A skeleton file with no per-demo dimension: nothing in a .gitignore is per-port, " \

@@ -329,8 +329,7 @@ Name the classes as **strings**, not constants: the list is re-resolved on each
 reload, and a constant written here is the boot generation of the class, stale
 the moment Rails reloads it. A name that does not resolve, or a class that does
 not include the mixin, fails the boot loudly rather than serving a silent
-half-catalog. Handlers put in the registry the other way in
-([the initializer API](#the-initializer-still-exists)) need no entry.
+half-catalog.
 
 
 ### What the macros do

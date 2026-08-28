@@ -12,7 +12,7 @@
 # publishes as evidence has been renamed or removed: rename it back, or update
 # the citation that names it and regenerate this file.
 #
-# 632 anchors.
+# 633 anchors.
 e2e/assistant.sh	"$(curl -sS -o /dev/null -D - -H 'Accept: application/json' "$SERVER_URL/.well-known/kiosk.json" | grep -ic '^Vary:')" "0"
 e2e/assistant.sh	"$(echo "$apc_headers" | grep -ic '^Vary:')" "0"
 e2e/assistant.sh	$public_doc is really being read (control token)
@@ -160,6 +160,7 @@ kiosk-demo-skooti/app/operations/rent_motorcycle_operation.rb	def self
 kiosk-demo-skooti/app/operations/rental_gates.rb	def payment_refusal
 kiosk-demo-skooti/lib/tasks/demo.rake	A1 403 hint points to request_kyc (agent can discover the path)
 kiosk-demo-skooti/lib/tasks/demo.rake	A1 rent_motorcycle without KYC → 403 kyc_required
+kiosk-demo-skooti/lib/tasks/demo.rake	C2 Gate 0 fails CLOSED on it — rent_motorcycle back to 403 kyc_required for an agent that HAD passed
 kiosk-demo-skooti/script/pay_window.rb	an untouched reservation publishes payment_state=unpaid — the one answer that makes a fresh
 kiosk-demo-skooti/script/pay_window.rb	my_reservations does NOT publish `unpaid` for a reservation whose capture may already have
 kiosk-demo-skooti/script/pay_window.rb	my_reservations publishes payment_state=paid on the CAPTURE alone, with zero settlement rows

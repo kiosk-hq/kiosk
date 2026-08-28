@@ -20,8 +20,8 @@
 # watermark forward. Repair a drifted header with --reheader, which re-renders
 # this block and touches no fingerprint.
 #
-# recorded: 2026-08-28 at 5505e220
-# 1587 anchors.
+# recorded: 2026-08-28 at ed049467
+# 1589 anchors.
 .github/workflows/ci.yml	6018aa9658a15f18	name: kiosk OSS end-to-end
 .github/workflows/ci.yml	cd63b8cec8954ef0	run: ./e2e/run.sh
 CHANGELOG.md	4570005aad48e6ba	Surfaced by a live hosted Hermes run. (K-437)
@@ -420,14 +420,16 @@ kiosk-demo-getgrocery/script/getgrocery_flow.rb	348ad39794cc034e	no card-setup s
 kiosk-demo-getgrocery/script/getgrocery_flow.rb	00a3d059512f672c	pay: psp_reference expected 'pi_…' (real Stripe)
 kiosk-demo-getgrocery/script/getgrocery_flow.rb	34dfc6e238f87f99	unless missing_ids.empty?
 kiosk-demo-getgrocery/script/redteam_suite.rb	7a8d3716ac39159c	      name:        "WrongCurrencyCart",
+kiosk-demo-getgrocery/script/redteam_suite.rb	1c24392f9d3e319f	  # Applicable — must be BLOCKED
+kiosk-demo-getgrocery/script/redteam_suite.rb	6a7854f239745c43	  # Not applicable — must SKIP (no KYC)
 kiosk-demo-getgrocery/script/redteam_suite.rb	a800ffdb68bd4ed2	  # register PoW is ON (registration_pow_count=1): a positive difficulty makes
 kiosk-demo-getgrocery/script/redteam_suite.rb	3240e2a7251caca7	  # stripe-mock, so the adapter auto-provisions a test card at capture and the
 kiosk-demo-getgrocery/script/redteam_suite.rb	d4ab4169afe601fc	  Kiosk::Redteam::Scenarios::CrossTenantRead.new,
 kiosk-demo-getgrocery/script/redteam_suite.rb	34502e8a32e94b7d	  PastDeliveryDate.new,     # T-090/K-969 — a past date is a named 400 on the read AND the write side
 kiosk-demo-getgrocery/script/redteam_suite.rb	f612500b09335b30	  puts "  #{blocked_results.size} BLOCKED, #{skipped_results.size} SKIPPED, 0 BREACH — all attacks blocked."
-kiosk-demo-getgrocery/script/redteam_suite.rb	acda7634f8297a7d	#   SKIPPED : MissingKyc, ExpiredKyc, ForgedKyc (no KYC)
-kiosk-demo-getgrocery/script/redteam_suite.rb	b569a590c1652470	# Scenarios (every applicable one must be BLOCKED; the KYC trio SKIPs):
+kiosk-demo-getgrocery/script/redteam_suite.rb	be88b0c26bac6cf7	# THE SCENARIO LIST IS NOT RE-TYPED HERE EITHER (K-1239)
 kiosk-demo-getgrocery/script/redteam_suite.rb	6174c6c7ad9881bb	EXPECTED_SKIP_NAMES = %w[
+kiosk-demo-getgrocery/script/redteam_suite.rb	14619ef8cf3d625b	KYC trio must SKIP (no KYC here). The membership is
 kiosk-demo-getgrocery/script/redteam_suite.rb	e51f1d84ab87ce25	class WrongCurrencyCart < Kiosk::Redteam::Scenario
 kiosk-demo-hoteling/README.md	2b66cd139eda8f90	  stamped with a 15-minute pay-by deadline — recorded for an operator to act
 kiosk-demo-hoteling/README.md	3c33884461557395	Advertised capabilities are `[schema, queries, actions, pay]` — the MODULES

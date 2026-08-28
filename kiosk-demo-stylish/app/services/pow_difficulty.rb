@@ -14,8 +14,11 @@
 #                    ~1.3 GiB peak, and ~10 s p50 on a reference numpy solver
 #                    MEASURED ON ONE M-SERIES LAPTOP CORE — the only hardware it
 #                    has ever been measured on (kiosk-pow-equihash/bench/
-#                    README.md). The memory figure is essentially
-#                    hardware-independent; the seconds are not.
+#                    README.md). That peak is THAT solver's sorted-nonce
+#                    table, so it does not vary with the host — but it is not
+#                    a floor these params impose on every solver either: a
+#                    memory-optimised solver trades the table for time. The
+#                    seconds are that machine class.
 #                    Any operator may set it; the hosted deploy sets it on
 #                    atablefor alone (deploy/env/*.env.example), and that demo's
 #                    discovery owner block then carries the "beware" notice.

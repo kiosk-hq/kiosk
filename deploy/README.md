@@ -59,9 +59,12 @@ see "Edge rate-limit — REQUIRED" below.) Any other demo is knob-adjustable: se
 > - **low** → `{n:96,k:5}` — sub-second reference solve, poke-friendly.
 > - **high** → `{n:168,k:7}` — the shipped Equihash default: ~1.3 GiB and ~10 s
 >   per proof on the reference (numpy) solver, the seconds measured on one
->   M-series laptop core and on no other hardware (the ~1.3 GiB is a property of
->   (n=168, k=7), not of the host) — a real memory+CPU toll. Verified to clear
->   (measured 8.9–9.5 s on that same machine) end-to-end.
+>   M-series laptop core and on no other hardware (the ~1.3 GiB is THAT
+>   solver's sorted-nonce table, not a floor `(n=168, k=7)` imposes on every
+>   implementation — a memory-optimised solver trades the table for time,
+>   which is how Equihash 200/9's real footprint fell to ~144 MB) — a real
+>   memory+CPU toll. Verified to clear (measured 8.9–9.5 s on that same
+>   machine) end-to-end.
 >
 > **Unset ⇒ low**, so local `demo:setup`/CI never pay the heavy toll and never
 > hang — the high params are the hosted-deploy setting only. When `high`, the

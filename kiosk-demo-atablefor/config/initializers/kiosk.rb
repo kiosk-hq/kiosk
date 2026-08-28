@@ -73,8 +73,11 @@ require "kiosk/user_identity_providers/devise"
 #                    clears in well under a second; local flows + CI stay fast.
 #   high           → n=168 k=7 — the shipped default: ~1.3 GiB per proof, and
 #                    ~10s on the reference numpy solver as measured on one
-#                    M-series laptop core (the GiB is a property of the params;
-#                    the seconds are that machine class). A real memory+CPU toll
+#                    M-series laptop core (the GiB is that solver's
+#                    sorted-nonce table, not a floor those params impose on
+#                    every solver — a memory-optimised solver trades it for
+#                    time; the seconds are that machine class). A real
+#                    memory+CPU toll
 #                    for the hosted deploy so a scalper feels the anti-scalping
 #                    cost first-hand. Unset = low.
 # Both the :query toll (KIOSK_POW_DEMO) and the anti-scalping reputation gate

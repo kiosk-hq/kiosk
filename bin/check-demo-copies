@@ -214,12 +214,14 @@ COPIES = {
            "shared: they name each demo's own guards, sentences and columns — `party_size` and a " \
            "seating roster here, a cart and a Dublin delivery clock there, an Istanbul room-night " \
            "floor in the third — and a lockstep rule would demand three different files be one. " \
-           "What IS shared is the HARNESS the three copied on purpose (`assert`, `guard`, " \
-           "`assert_typed_400`, `refusal_of`, `value_of`, and the FAILURES/exit tail), and nothing " \
-           "compares those today: `spec/` is outside FRAGMENT_PATHS, so T-120's unit rule does not " \
-           "reach here. That is deliberately left as the next candidate rather than taken in the " \
-           "wave that created the second and third copies — declaring the PATH is what makes the " \
-           "copies visible at all, and the visibility is the half that was missing.",
+           "What IS shared is the HARNESS the three copied on purpose, and since T-145 it is HELD " \
+           "rather than merely visible: this path is in FRAGMENT_PATHS below and every unit shared " \
+           "by two or more copies is declared there — `assert`, `guard`, `assert_typed_400`, " \
+           "`refusal_of`, `value_of`, `FAILURES` and `MAX` with `:code` semantics, plus each demo's " \
+           "own fixture `DAY` as `:per_demo`. EIGHT units, where T-145 counted five: `FAILURES`, " \
+           "`MAX` and `DAY` are shared too, and the discovery rule named all three by hand the " \
+           "moment the path was added, which is the whole reason that rule exists. hoteling's 404 " \
+           "arm stays its own helper and is compared to nothing, correctly — no sibling has one.",
   },
   ".gitignore" => {
     rule: :identical,
@@ -2005,23 +2007,98 @@ end
 # different bodies is a thing a reader should be told about once rather than
 # discover by diffing.
 #
-# SCOPE IS ONE PATH ON PURPOSE, and the number that says why is measured with
-# THIS extractor and stated with its reading, because two readings of it differ
-# by a factor of three. Sixteen paths are `:per_demo`. Running the code below
-# over all sixteen finds **100 unit NAMES shared by two or more copies** — which
-# is what the discovery rule would demand a `why:` line for, since it fires on a
-# shared NAME whatever the bodies do. The narrower reading, «shared name AND
-# byte-identical body once comments are normalised», is 38 — and neither is a
-# reason to widen the path list today. Fifteen of the sixteen paths contribute,
-# and the mass of both counts is in the FLOW DRIVERS' HTTP helpers
-# (`script/redteam_suite.rb` 25 names, `script/pay_window.rb` 19,
-# `script/binding_flow.rb` 16) — a shared TEST harness rather than shared
-# shipped code, which is a real finding and a different one from this row's.
-# A hundred declarations with a hundred reasoned `why:` lines is a manifest
+# WHICH PATHS ARE IN, AND THE RULE THE NEXT ONE IS JUDGED BY (T-136, T-145).
+# Seventeen manifest paths are `:per_demo`. Running the extractor below over all
+# seventeen at head finds **110 unit NAMES shared by two or more copies**, of
+# which **71** also have identical bodies once comments and whitespace are
+# normalised away. Both readings are stated because they answer different
+# questions: discovery fires on a shared NAME whatever the bodies do, and only
+# the narrower number is what a lockstep rule can actually hold. Re-measured for
+# T-136 with the extractor above — the 100/38 this paragraph carried before is
+# not reproducible at head under either reading, nor under a third (55) that also
+# requires the unit to exist in every copy of its path; the tree moved, and the
+# extractor stopped dropping a name's second definition.
+#
+# THE FIRST QUESTION WAS NOT «WHICH UNITS» BUT «IS THE MANIFEST ENTRY RIGHT»,
+# because a fragment rule on a path that should have been compared WHOLE
+# entrenches the wrong granularity — and the rule below deliberately errors on a
+# `:code` path for exactly that reason. MEASURED, and the answer is no for the
+# two entries that looked likeliest: `script/pay_window.rb` normalises to 194
+# lines in hoteling and 181 in skooti with only 100 in common (a 198-line
+# unified diff), and `script/binding_flow.rb` to 69 / 125 / 119 lines across
+# atablefor / philslist / stylish. Their UNITS agree; their beats — the
+# fixtures, the verbs driven, the terminal assertion — do not, which is what
+# those `:per_demo` entries already say. The entries stand.
+#
+# THE CRITERION FOR TAKING A PATH, applied to each one below and written down so
+# the next one is judged the same way: take it when every unit shared by two or
+# more copies is either identical, or differs for a reason that belongs to the
+# DEMO — its own vocabulary, its own fixture, its own operator identity. Leave it
+# when a shared name differs only by HARNESS GENERATION, because a `:per_demo`
+# fragment entry would then record an accident as a decision, and the convergence
+# that ought to happen instead (T-119) would arrive as a red build demanding a
+# dozen re-declarations.
+#
+# TAKEN, shared/identical at head: `script/binding_flow.rb` 16/16,
+# `script/pay_window.rb` 19/15 (the four that differ are `reserve!`,
+# `payment_state`, `cart_for` and `settlements_for` — booking_id against
+# reservation_id, a room-night against a scooter-minute),
+# `spec/wire_arguments_spec.rb` 8/7 (T-145; the odd one is each demo's own
+# fixture DAY), `script/pow_flow.rb` 7/6, `script/prove_broker_boot.rb` 5/3,
+# `script/register_flow.rb` 4/4.
+#
+# LEFT ALONE, and this is where the largest single group is:
+# `script/redteam_suite.rb` shares 25 names across seven copies and only 6 have
+# identical bodies. Its `get_json` — and `script/isolation_flow.rb`'s — has SIX
+# distinct bodies over seven demos; `script/schema_flow.rb`'s has three. That is
+# T-119's finding (the two redteam harnesses are a rewrite apart), and nineteen
+# `:per_demo` fragments would freeze the split into this manifest. The 6
+# identical units in that file ARE worth holding and cannot be reached without
+# declaring the other 19, because discovery is all-or-nothing per path — so the
+# honest order is T-119 first, after which the path becomes cheap. Same reading
+# for `script/isolation_flow.rb` (8/4) and `script/schema_flow.rb` (3/2).
+#
+# A hundred declarations with a hundred reasoned `why:` lines is still a manifest
 # nobody would read, and a manifest nobody reads is how «declared» stops meaning
-# «reasoned about». FRAGMENT_PATHS is where the next path gets added, with the
-# reason its units are worth holding.
-FRAGMENT_PATHS = %w[app/operations/wire_arguments.rb].freeze
+# «reasoned about». The criterion above is what keeps this at 63 entries rather
+# than 110, and it is a judgement about VALUE — not a budget.
+FRAGMENT_PATHS = %w[
+  app/operations/wire_arguments.rb
+  spec/wire_arguments_spec.rb
+  script/binding_flow.rb
+  script/pay_window.rb
+  script/pow_flow.rb
+  script/prove_broker_boot.rb
+  script/register_flow.rb
+].freeze
+
+# The demo sets and the reasons several fragment entries share, stated once so N
+# copies of a sentence cannot drift apart — the same device as KYC_SHIPS and
+# PROVE_SKELETON above.
+BINDING_DEMOS  = %w[atablefor philslist stylish].freeze
+DEVICE_GRANT   = %w[philslist stylish].freeze
+PAY_WINDOW     = %w[hoteling skooti].freeze
+SPEC_HARNESS   = %w[atablefor getgrocery hoteling].freeze
+
+DRIVER_ENV =
+  "The driver's half of a contract whose other half is already held: `demo.rake` invokes every " \
+  "flow with `SERVER_URL=… KIOSK_ISSUER=…` on the command line, and the flow-runner rule above " \
+  "keeps that invocation in lockstep. Here the copies must `fetch` the same NAME with NO default. " \
+  "A copy that renames the variable, or that grows a fallback, stops failing loudly on a mis-wired " \
+  "task and quietly drives whatever happens to be listening on that port instead."
+
+DEVISE_DELEGATION =
+  "One line of the façade these drivers put over {DeviseSession} — the class " \
+  "`script/devise_session.rb` holds `:identical` in six demos (T-066, K-860). The class being " \
+  "identical is worth nothing if a driver stops routing through it: these delegations are the only " \
+  "place the human's cookie jar, CSRF read and sign-in POST are reached from, so a copy that " \
+  "inlines its own Net::HTTP call here is precisely the drift the file-level rule cannot see."
+
+WIRE_PAIR =
+  "One of the HTTP helpers the driver opens with, answering the `[status, parsed_body]` pair every " \
+  "assertion below it reads. On its own it is four lines; what makes it worth holding is that the " \
+  "pair must MEAN the same thing in each copy — a one-sided edit here does not break the demo it " \
+  "lands in, it changes what a sibling demo's assertions are testing."
 
 FRAGMENTS = {
   "app/operations/wire_arguments.rb#MAX_INT4" => {
@@ -2072,6 +2149,403 @@ FRAGMENTS = {
            "other's to word. If these two ever converge byte-for-byte this entry fails as stale, " \
            "which is the right prompt to ask whether they should be one thing.",
   },
+
+  # ── spec/wire_arguments_spec.rb — atablefor, getgrocery, hoteling (T-145) ──
+  #
+  # The DB-free harness T-116 wrote and T-137 copied twice. The ASSERTIONS are
+  # each demo's own and the file stays `:per_demo`; what the three copied on
+  # purpose is the seven units below, and until this entry they were compared to
+  # nothing at all.
+  "spec/wire_arguments_spec.rb#FAILURES" => {
+    rule:  :code,
+    ships: SPEC_HARNESS,
+    why:   "The accumulator that makes this a SPEC rather than a script: every failed assertion " \
+           "lands here and the tail exits non-zero on a non-empty list. A copy that collected " \
+           "failures and forgot to exit on them would print FAIL lines under a green task, which " \
+           "is the one failure mode a DB-free proof must not have.",
+  },
+  "spec/wire_arguments_spec.rb#assert" => {
+    rule:  :code,
+    ships: SPEC_HARNESS,
+    why:   "The assertion primitive — OK/FAIL on one line each, the failing message pushed to " \
+           "FAILURES. Three demos read their coverage off this format; a copy that words it " \
+           "differently makes three task logs stop being comparable at a glance.",
+  },
+  "spec/wire_arguments_spec.rb#guard" => {
+    rule:  :code,
+    ships: SPEC_HARNESS,
+    why:   "The reason a RAISE is a recorded failure and not a dead run: it rescues " \
+           "StandardError and NoMethodError around one labelled assertion and files the class and " \
+           "message as a FAILURE. T-137 measured what this buys — atablefor's watched fail turned " \
+           "four NoMethodErrors (the K-1027 class) into four named failures instead of aborting " \
+           "the file at the first one, which is what a bare script would have done.",
+  },
+  "spec/wire_arguments_spec.rb#assert_typed_400" => {
+    rule:  :code,
+    ships: SPEC_HARNESS,
+    why:   "The shape of a refusal, asserted identically in three demos: an OperationResult (not a " \
+           "raise, not nil), not ok?, `code == \"bad_request\"` and `status == :bad_request`. That " \
+           "triple is the wire contract a descriptor-less call is refused with, so the three copies " \
+           "asserting it in the same words is the point rather than a coincidence. hoteling's " \
+           "404 arm is a SEPARATE helper for exactly this reason — it is that demo's own answer " \
+           "and does not belong in a unit the other two share.",
+  },
+  "spec/wire_arguments_spec.rb#refusal_of" => {
+    rule:  :code,
+    ships: SPEC_HARNESS,
+    why:   "Half of the pair-or-refusal convention every guard in these modules answers with: a " \
+           "guard returns either `[value, nil]` or a refusal, and the spec reads one side with " \
+           "this and the other with {value_of}. Both are one line and both must agree, or a spec " \
+           "asserts on the wrong element of the pair and passes.",
+  },
+  "spec/wire_arguments_spec.rb#value_of" => {
+    rule:  :code,
+    ships: SPEC_HARNESS,
+    why:   "The other half of {refusal_of}'s convention — the accepted value, or nil when the call " \
+           "was refused. Stated as its own unit because the two are edited together and mean " \
+           "nothing apart.",
+  },
+  "spec/wire_arguments_spec.rb#MAX" => {
+    rule:  :code,
+    ships: SPEC_HARNESS,
+    why:   "`WireArguments::MAX_INT4`, read from the module under test rather than re-typed — the " \
+           "spec-side twin of the MAX_INT4 entry above. A copy that hard-codes 2_147_483_647 here " \
+           "would keep passing after the guard it tests moved, which is the whole reason the bound " \
+           "is read from the code in all three.",
+  },
+  "spec/wire_arguments_spec.rb#DAY" => {
+    rule:  :per_demo,
+    ships: %w[getgrocery hoteling],
+    why:   "SAME NAME, EACH DEMO'S OWN FIXTURE DATE — getgrocery's 2026-08-07 is a Friday its " \
+           "delivery-window roster is seeded around, hoteling's 2026-03-15 an arbitrary stay date " \
+           "in a demo whose calendar carries no weekday meaning. Declared so a reader is told once " \
+           "instead of diffing; if they ever converge this entry fails, which is the right prompt " \
+           "to ask whether one date can serve both rosters.",
+  },
+
+  # ── script/binding_flow.rb — atablefor, philslist, stylish (T-136) ─────────
+  #
+  # All sixteen shared units are identical, which makes this the clearest case in
+  # the fleet: everything these three drivers share IS the harness, and
+  # everything they do with it — Diego's table, a philslist listing, a stylish
+  # appointment — is top-level code the `:per_demo` file entry covers.
+  "script/binding_flow.rb#SERVER" => { rule: :code, ships: BINDING_DEMOS, why: DRIVER_ENV },
+  "script/binding_flow.rb#ISSUER" => {
+    rule:  :code,
+    ships: BINDING_DEMOS,
+    why:   DRIVER_ENV + " `KIOSK_ISSUER` is also the `aud` {pop_proof} signs the possession proof " \
+           "for, so a copy that drifts here mints a JWS its own origin refuses.",
+  },
+  "script/binding_flow.rb#HOLDER" => {
+    rule:  :code,
+    ships: BINDING_DEMOS,
+    why:   "The seeded human the binding attaches the assistant to, `fetch`ed from `HOLDER_ID` " \
+           "under the same task-to-driver contract as SERVER and ISSUER (all three demos' " \
+           "`demo:binding` passes HOLDER_ID/HOLDER_EMAIL/HOLDER_PASSWORD). It is also the id the " \
+           "load-bearing assertion compares the written row's user_id against, so a driver reading " \
+           "a different variable would assert against nobody.",
+  },
+  "script/binding_flow.rb#EMAIL" => {
+    rule:  :code,
+    ships: BINDING_DEMOS,
+    why:   "The same human's sign-in address, `fetch`ed from `HOLDER_EMAIL`. EMAIL and PASSWORD are " \
+           "the pair the REAL Devise form is driven with — no fixture, no in-process shortcut — " \
+           "which is what makes the binding beat evidence rather than a mock.",
+  },
+  "script/binding_flow.rb#PASSWORD" => {
+    rule:  :code,
+    ships: BINDING_DEMOS,
+    why:   "The other half of EMAIL's pair, from `HOLDER_PASSWORD`, with no default for the same " \
+           "reason: a driver that invented a password would fail at the sign-in POST with a " \
+           "message about credentials instead of about its own wiring.",
+  },
+  "script/binding_flow.rb#SESSION" => {
+    rule:  :code,
+    ships: BINDING_DEMOS,
+    why:   "The single construction of {DeviseSession} each driver builds its human channel from. " \
+           "One line, and the one that decides whether the six delegations below reach the shared " \
+           "class or a local re-implementation. " + DEVISE_DELEGATION,
+  },
+  "script/binding_flow.rb#request"    => { rule: :code, ships: BINDING_DEMOS, why: DEVISE_DELEGATION },
+  "script/binding_flow.rb#get_html"   => { rule: :code, ships: BINDING_DEMOS, why: DEVISE_DELEGATION },
+  "script/binding_flow.rb#post_form"  => { rule: :code, ships: BINDING_DEMOS, why: DEVISE_DELEGATION },
+  "script/binding_flow.rb#csrf_token" => { rule: :code, ships: BINDING_DEMOS, why: DEVISE_DELEGATION },
+  "script/binding_flow.rb#post_json"  => {
+    rule:  :code,
+    ships: BINDING_DEMOS,
+    why:   DEVISE_DELEGATION + " This one carries the extra half of the argument the file's own " \
+           "header makes: the AGENT calls go through the same object but send only a Bearer " \
+           "header, never the human's cookies, and that separation is what the delegation's " \
+           "signature encodes.",
+  },
+  "script/binding_flow.rb#get_json"   => { rule: :code, ships: BINDING_DEMOS, why: DEVISE_DELEGATION },
+  "script/binding_flow.rb#pop_proof" => {
+    rule:  :code,
+    ships: BINDING_DEMOS,
+    why:   "The possession proof, in three identical copies: GET the challenge for this public " \
+           "key, abort LOUDLY on anything but 200 rather than sign a nil nonce, then RS256-sign " \
+           "{aud, nonce, jti, iat}. It is the register/login handshake the spec defines, driven " \
+           "here with a FRESH key so the claim beat proves a first-contact bind. A copy that " \
+           "dropped the `aud`, reused the jti or stopped aborting would still print a passing " \
+           "binding beat while proving something weaker.",
+  },
+  "script/binding_flow.rb#TOKEN_URL" => {
+    rule:  :code,
+    ships: DEVICE_GRANT,
+    why:   "`\#{SERVER}/kiosk/oauth/token` — the token endpoint of the device-grant beat the two " \
+           "demos that still drive that path share. atablefor has no copy: its binding beat ends " \
+           "at the link/claim ceremony.",
+  },
+  "script/binding_flow.rb#GRANT" => {
+    rule:  :code,
+    ships: DEVICE_GRANT,
+    why:   "RFC 8628's device_code grant URN, quoted verbatim. A typo in either copy is refused as " \
+           "an unsupported grant type, which reads like a server bug rather than a driver typo — " \
+           "so the two spellings agreeing is worth an entry on a one-line constant.",
+  },
+  "script/binding_flow.rb#jwt_claims" => {
+    rule:  :code,
+    ships: DEVICE_GRANT,
+    why:   "Reads the granted token's claims out of its middle segment with no key and no " \
+           "verification — deliberately, because the driver is asserting on what the ORIGIN put " \
+           "in the token, not on whether it validates. The padding arithmetic is the part worth " \
+           "holding: urlsafe_decode64 is strict, so a copy that drops it fails on three quarters " \
+           "of all tokens and passes on the rest.",
+  },
+
+  # ── script/pay_window.rb — hoteling, skooti (T-136, K-853) ─────────────────
+  #
+  # The manifest entry above says these two drivers prove THE SAME INVARIANT over
+  # two different products. That is exactly a fragment shape: the proof machinery
+  # is copied and the product is not, and the four units that differ are the four
+  # places the product enters.
+  "script/pay_window.rb#FAILURES" => {
+    rule:  :code,
+    ships: PAY_WINDOW,
+    why:   "The failure accumulator this driver's exit code is computed from — same role as the " \
+           "spec harness's, in a driver that runs against a live origin.",
+  },
+  "script/pay_window.rb#check" => {
+    rule:  :code,
+    ships: PAY_WINDOW,
+    why:   "The assertion primitive both windows are asserted with. Holding it is what makes the " \
+           "two demos' OK/FAIL logs the same document, which is the K-853 claim: one invariant, " \
+           "two products.",
+  },
+  "script/pay_window.rb#USER_ID" => {
+    rule:  :code,
+    ships: PAY_WINDOW,
+    why:   "The fixed uuid the in-process identity is built from. Shared with AGENT_ID and " \
+           "deliberately constant rather than seeded: the window beat races its own writes, so a " \
+           "generated principal would make a failure unreproducible from the log.",
+  },
+  "script/pay_window.rb#AGENT_ID" => {
+    rule:  :code,
+    ships: PAY_WINDOW,
+    why:   "The assistant half of USER_ID's pair, same reasoning. The two constants together are " \
+           "the whole principal these drivers act as.",
+  },
+  "script/pay_window.rb#identity" => {
+    rule:  :code,
+    ships: PAY_WINDOW,
+    why:   "{Kiosk::Identity} with role customer and actor agent — the identity every verb call " \
+           "below runs under. It is the one place the driver decides WHO is calling, and both " \
+           "demos must decide it the same way or their windows are not comparable.",
+  },
+  "script/pay_window.rb#call_verb" => {
+    rule:  :code,
+    ships: PAY_WINDOW,
+    why:   "The in-process call path: {Kiosk::Server::CurrentRequest} around " \
+           "{Kiosk::Server::SessionContext} around a registry fetch. This is the driver's whole " \
+           "claim to be exercising the SHIPPED authorization path rather than the model layer — a " \
+           "copy that opened the session differently, or skipped one of the two, would still run " \
+           "and would stop proving it.",
+  },
+  "script/pay_window.rb#verb_error" => {
+    rule:  :code,
+    ships: PAY_WINDOW,
+    why:   "The same call, returning the raised error instead of the value, so a REFUSAL can be " \
+           "asserted on. Both windows need it for the negative arm.",
+  },
+  "script/pay_window.rb#OBSERVED" => {
+    rule:  :code,
+    ships: PAY_WINDOW,
+    why:   "The per-id log of every payment_state this driver ever saw. The terminal assertion is " \
+           "over this history, not over the final read: the invariant is that a bare «not paid» is " \
+           "never PUBLISHED inside the window, which cannot be tested by looking only at the end.",
+  },
+  "script/pay_window.rb#wait_until" => {
+    rule:  :code,
+    ships: PAY_WINDOW,
+    why:   "The poll both windows widen their race with. The load-bearing line is the " \
+           "`ActiveSupport::Dependencies.interlock.permit_concurrent_loads` around the sleep — " \
+           "without it the waiting thread holds the load interlock and the thread it is waiting " \
+           "for cannot proceed, so the beat deadlocks instead of failing. A copy that simplified " \
+           "it to `sleep` would hang one demo and not the other.",
+  },
+  "script/pay_window.rb#initialize" => {
+    rule:  :code,
+    ships: PAY_WINDOW,
+    why:   "BOTH PSP stubs' constructors — BlockingPsp's Queue gate and CountingPsp's mutex and " \
+           "counter — because a unit is every definition of that name in the file (see the " \
+           "extractor above; this path is the reason that changed). The two stubs are the " \
+           "instrument the window is measured with, and they are byte-identical across the two " \
+           "demos today.",
+  },
+  "script/pay_window.rb#capture" => {
+    rule:  :code,
+    ships: PAY_WINDOW,
+    why:   "Both stubs' capture: the blocking one parks on the gate until the beat releases it, " \
+           "the counting one increments under a mutex and dawdles 50 ms to widen the window. " \
+           "Between them they ARE the experiment — a copy that stopped blocking, or stopped " \
+           "counting, would report a green window that never opened.",
+  },
+  "script/pay_window.rb#release!" => {
+    rule:  :code,
+    ships: PAY_WINDOW,
+    why:   "The other end of BlockingPsp's gate. One line, and the line that decides when the " \
+           "window closes.",
+  },
+  "script/pay_window.rb#setup_required?" => {
+    rule:  :code,
+    ships: PAY_WINDOW,
+    why:   "Both stubs answer false: these drivers assert about the capture->settlement window, " \
+           "never about a SetupIntent, and a stub that demanded setup would refuse before the " \
+           "window opened.",
+  },
+  "script/pay_window.rb#count" => {
+    rule:  :code,
+    ships: PAY_WINDOW,
+    why:   "CountingPsp's reader, synchronised on the same mutex its increment takes. The terminal " \
+           "assertion of the race arm is `count == 1`, so an unsynchronised read here would make " \
+           "the strongest beat in both demos flaky in the direction of passing.",
+  },
+  "script/pay_window.rb#RACERS" => {
+    rule:  :code,
+    ships: PAY_WINDOW,
+    why:   "How many concurrent pays the race arm launches: five, or one fewer than the connection " \
+           "pool, whichever is smaller — and the driver aborts below 2. Bounding it by the POOL " \
+           "rather than by a literal is what stops the beat failing as a checkout timeout on a " \
+           "smaller machine and being read as a lost race.",
+  },
+  "script/pay_window.rb#reserve!" => {
+    rule:  :per_demo,
+    ships: PAY_WINDOW,
+    why:   "SAME NAME, THE DEMO'S OWN PRODUCT: hoteling reserves a room-night span " \
+           "(property, room type, check-in/check-out) held under an EXCLUDE constraint; skooti " \
+           "reserves one scooter by code. Neither call is the other's to make.",
+  },
+  "script/pay_window.rb#payment_state" => {
+    rule:  :per_demo,
+    ships: PAY_WINDOW,
+    why:   "Same question, each demo's own row vocabulary — `booking_id` off my_bookings against " \
+           "`reservation_id` off my_reservations. The body is otherwise line-for-line the same, " \
+           "which is the honest state to declare: converging them would mean one demo naming the " \
+           "other's column.",
+  },
+  "script/pay_window.rb#cart_for" => {
+    rule:  :per_demo,
+    ships: PAY_WINDOW,
+    why:   "The cart mandate each demo signs its window with: hoteling's line items are a " \
+           "booking_id and a `room-night` sku priced per night, skooti's a reservation_id and the " \
+           "scooter's own code priced per minute, and the issuer is each demo's own origin. The " \
+           "SHAPE is shared and the contents cannot be.",
+  },
+  "script/pay_window.rb#settlements_for" => {
+    rule:  :per_demo,
+    ships: PAY_WINDOW,
+    why:   "The uncached settlement count for one row, through CartMandate.referencing — whose " \
+           "jsonb containment key is the demo's own line-item field, which is exactly why " \
+           "`app/models/cart_mandate.rb` is `:per_demo` above. Same shape, different key, one " \
+           "argument name apart.",
+  },
+
+  # ── script/pow_flow.rb — atablefor, getgrocery (T-136) ─────────────────────
+  "script/pow_flow.rb#SERVER" => { rule: :code, ships: %w[atablefor getgrocery], why: DRIVER_ENV },
+  "script/pow_flow.rb#ISSUER" => { rule: :code, ships: %w[atablefor getgrocery], why: DRIVER_ENV },
+  "script/pow_flow.rb#POW_SOLVES" => {
+    rule:  :code,
+    ships: %w[atablefor getgrocery],
+    why:   "The counter K-1221 added when two READMEs promised «four proofs» and the flow reported " \
+           "one: the number in the demo's output is now derived from the solves it actually " \
+           "performed. Both copies must count the same way or the two demos publish numbers that " \
+           "cannot be compared.",
+  },
+  "script/pow_flow.rb#equihash_solve" => {
+    rule:  :code,
+    ships: %w[atablefor getgrocery],
+    why:   "The counting wrapper around the aliased original — alias, then redefine to increment " \
+           "POW_SOLVES and delegate. The alias-and-wrap IS the mechanism: a copy that solved " \
+           "without incrementing would report a total quietly too low, which is the exact defect " \
+           "K-1221 was filed for.",
+  },
+  "script/pow_flow.rb#BAD_PROOF_DB" => {
+    rule:  :code,
+    ships: %w[atablefor getgrocery],
+    why:   "The path to the bad-proof counter's sqlite file, OWNED by `rake demo:pow` and exported " \
+           "to both the spawned server and this driver (K-711), `fetch`ed with no default on " \
+           "purpose: a drift between the two spellings once opened an empty database here, read 0 " \
+           "for every count, and reported the zeros as a pass.",
+  },
+  "script/pow_flow.rb#post_json" => { rule: :code, ships: %w[atablefor getgrocery], why: WIRE_PAIR },
+  "script/pow_flow.rb#get_json" => {
+    rule:  :per_demo,
+    ships: %w[atablefor getgrocery],
+    why:   "SAME NAME, TWO SIGNATURES, because the two demos toll different surfaces: atablefor's " \
+           "takes a `params` hash — its tolled read is a QUERY with arguments — while getgrocery " \
+           "tolls the catalog and passes headers only. Declared rather than converged: adding an " \
+           "unused params arm to getgrocery's copy would be shipping a parameter no call makes.",
+  },
+
+  # ── script/prove_broker_boot.rb — getgrocery, skooti (T-136) ───────────────
+  "script/prove_broker_boot.rb#BROKER_APP" => {
+    rule:  :code,
+    ships: KYC_DEMOS,
+    why:   "The relative path to `kiosk-demo-prove`, the ONE broker both KYC demos boot. Two " \
+           "operators pointing at two different checkouts of the broker is the failure this " \
+           "one-line constant prevents, and it is invisible until the second demo is run.",
+  },
+  "script/prove_broker_boot.rb#BROKER_PORT" => {
+    rule:  :code,
+    ships: KYC_DEMOS,
+    why:   "3020 unless overridden — and it MUST be the same number in both, because the broker " \
+           "the two demos boot is the same app and the callbacks are addressed to that port.",
+  },
+  "script/prove_broker_boot.rb#SHARED_ISSUER" => {
+    rule:  :code,
+    ships: KYC_DEMOS,
+    why:   "The issuer both operators verify the broker's attestations against, and the value the " \
+           "broker is booted with. It is a THREE-way agreement — two operators and one broker — " \
+           "held here for the two copies that can drift; a mismatch fails as an invalid signature, " \
+           "which reads like a crypto bug rather than a wiring one.",
+  },
+  "script/prove_broker_boot.rb#SHARED_SECRET" => {
+    rule:  :per_demo,
+    ships: KYC_DEMOS,
+    why:   "SAME NAME, EACH OPERATOR'S OWN INTAKE SECRET — `prove-getgrocery-demo-shared-secret` " \
+           "against `prove-skooti-demo-shared-secret`. The whole point of the intake secret is " \
+           "that it is per-operator: two operators sharing one would let either replay the " \
+           "other's intake, which is the arrangement this demo pair exists to argue against.",
+  },
+  "script/prove_broker_boot.rb#with_broker" => {
+    rule:  :per_demo,
+    ships: KYC_DEMOS,
+    why:   "SAME NAME, EACH OPERATOR'S OWN WIRING, and the copies are close enough that the " \
+           "differences are worth naming: the callback env var is per-operator " \
+           "(KIOSK_PROVE_GETGROCERY_CALLBACK_HOST against …SKOOTI…), `KIOSK_PROVE_OPERATOR_ID` " \
+           "differs, the keyword argument is named for the operator (`operator_host:` against " \
+           "`skooti_host:`), the log path differs, and getgrocery's copy additionally generates " \
+           "and passes a test signing key. Everything else — the DB setup, the spawn, the " \
+           "at_exit stop, the 40-second readiness poll — is line-for-line the same, so this is a " \
+           "convergence candidate rather than a settled variant, and if the two ever agree this " \
+           "entry fails and asks the question.",
+  },
+
+  # ── script/register_flow.rb — philslist, stylish (T-136) ───────────────────
+  "script/register_flow.rb#SERVER"    => { rule: :code, ships: DEVICE_GRANT, why: DRIVER_ENV },
+  "script/register_flow.rb#ISSUER"    => { rule: :code, ships: DEVICE_GRANT, why: DRIVER_ENV },
+  "script/register_flow.rb#post_json" => { rule: :code, ships: DEVICE_GRANT, why: WIRE_PAIR },
+  "script/register_flow.rb#get_json"  => { rule: :code, ships: DEVICE_GRANT, why: WIRE_PAIR },
 }.freeze
 
 # One unit = EVERY `def` of that name in the file (endless or not, singleton or

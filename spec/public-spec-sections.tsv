@@ -9,7 +9,7 @@
 # offline. When both repositories are checked out side by side the same script
 # re-derives them and fails on any disagreement, so the copy cannot drift.
 #
-# source sha256: e4efe05bbefaa8fb7c86e9bc8bd08bffb9746e64881148433389942dd3ccb0e7
+# source sha256: 510caa2ed1115c1b38098edcf84546e4fc7fbf821bd381e82193657ed05f2fe3
 # sections: 124
 1	16
 1.1	18
@@ -129,9 +129,9 @@
 16.1.6	1858
 16.1.7	1864
 16.1.8	1872
-16.2	1880
-16.3	1906
-16.3.1	1910
-16.3.2	1912
-17	1922
-18	1938
+16.2	1890
+16.3	1916
+16.3.1	1920
+16.3.2	1922
+17	1932
+18	1948

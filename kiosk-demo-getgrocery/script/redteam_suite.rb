@@ -36,13 +36,28 @@
 # survives a deletion, or lies about a resource that exists, is an attack
 # surface.
 #
-# Scenarios (every applicable one must be BLOCKED; the KYC trio SKIPs):
-#   BLOCKED : CrossTenantRead, ForgedUserId, UnpaidGatedAction, SpentResourceReuse,
-#             PayForOtherUseSelf, MandatePrincipalSwap, MandateReplay, TokenTampering,
-#             PrivilegeSelfSelection, WrongCurrencyCart, TamperedPriceCart,
-#             InflatedTotalCart, MalformedItemsCart, HostileArgShapes, RetiredWire,
-#             MethodMismatch, PastDeliveryDate, RegistrationWithoutPow
-#   SKIPPED : MissingKyc, ExpiredKyc, ForgedKyc (no KYC)
+# THE SCENARIO LIST IS NOT RE-TYPED HERE EITHER (K-1239) — the same repair the
+# paragraph above records for the profile map (K-1040), for the same reason, in
+# the same file. The rule is: every APPLICABLE scenario must be BLOCKED and the
+# KYC trio must SKIP (no KYC here). The membership is `scenarios = [` further
+# down, which is the single copy.
+#
+# This block used to enumerate the applicable ones by name, and it had already
+# gone stale in precisely the way a hand-kept list does. The array registers
+# `DeviceGrantRoleSelfSelection` — the shared, framework-side claim-ceremony
+# beat every demo runs (K-072, K-1128), the ONE beat here that is not local to
+# this suite — and the enumeration never learned of it, so the header advertised
+# eighteen applicable attacks where the battery runs nineteen. NOTHING WENT RED,
+# and that is the point: the run's totals are COMPUTED from the array, so no run
+# ever disagreed with itself; only the comment was wrong, and only a reader was
+# misled. K-1183 found the identical defect in philslist's README, the same beat
+# omitted from the same kind of list, and repaired it by eliding the numeral; that
+# it recurred here is why this list is DELETED rather than corrected.
+#
+# Read the membership off the array. Each entry there carries the finding it was
+# written for, which is more than this list ever said, and `EXPECTED_SKIP_NAMES`
+# beside it is what ASSERTS the applicable/skip split — so a silently disabled
+# gate fails the run, where a stale comment could only mislead a reader.
 #
 # Usage:
 #   SERVER_URL=http://127.0.0.1:3001 KIOSK_ISSUER=http://127.0.0.1:3001 \

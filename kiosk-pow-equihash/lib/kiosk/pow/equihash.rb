@@ -9,8 +9,10 @@ module Kiosk
     # Birthday-collision PoW (Biryukov & Khovratovich, 2016).
     # Default parameters: (n=168, k=7) → ~1.3 GiB peak, and ~10s on the
     # reference numpy solver as measured on one M-series laptop core and no
-    # other hardware; the GiB is a property of (n, k), the seconds are not
-    # (see bench/). Equihash is NOT ASIC- or GPU-proof — its role here is a
+    # other hardware; the GiB is that solver's table, not a floor (n, k)
+    # imposes on every implementation -- a memory-optimised solver trades it
+    # for time, which is how 200/9's real footprint fell to ~144 MB (see
+    # bench/). Equihash is NOT ASIC- or GPU-proof — its role here is a
     # cheap-to-verify metered toll, not a hardware equaliser.
     #
     # == Algorithm
@@ -213,8 +215,9 @@ module Kiosk
       # Default (n=168, k=7): chosen by the parameter sweep in bench/ — the
       # largest params whose reference numpy solve stays under a ~30s / 1-2 GiB
       # consumer-laptop budget (p95 ~10s on one M-series laptop core, the only
-      # hardware the seconds have been measured on; the ~1.3 GiB peak is a
-      # property of (n, k), not of the host). n_div = n/(k+1) = 21
+      # hardware the seconds have been measured on; the ~1.3 GiB peak is
+      # THIS solver's table, not a floor (n, k) imposes on every
+      # implementation). n_div = n/(k+1) = 21
       # drives cost; n must be a multiple of 8 and n_div must not exceed 24. See
       # bench/README.md for the measured grid. Providers tune
       # ("N ∝ cost of serving the verb"): raise n for a heavier toll, raise the

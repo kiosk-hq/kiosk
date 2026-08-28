@@ -53,9 +53,11 @@ provider's own machine pays on every request.
 Default: **n=168, k=7** — benchmark-chosen (see [bench/](bench/README.md)):
 the largest params whose reference numpy solve stays under a ~30 s / 1–2 GiB
 consumer-laptop budget (p95 ~10 s on one M-series laptop core — the only
-hardware the seconds have ever been measured on; the ~1.3 GiB peak is a
-property of (n, k), not of the host). Cost is driven by
-`n_div = n/(k+1)`.
+hardware the seconds have ever been measured on; the ~1.3 GiB peak is THIS
+solver's sorted-nonce table, not the host's — and not a floor `(n, k)`
+imposes on every implementation, since a memory-optimised solver trades the
+table for time, which is precisely how Equihash 200/9's real footprint fell
+to ~144 MB and made it ASIC-able). Cost is driven by `n_div = n/(k+1)`.
 
 | Param | **n=168, k=7 (default)** | old n=192, k=7 | Zcash (n=200, k=9) | Toy (n=24, k=3) |
 |---|---|---|---|---|

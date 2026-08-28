@@ -85,7 +85,8 @@ require "kiosk/user_identity_providers/devise"
 # designated production-grade showcase: a poker/scalper feels the real
 # anti-reservation-scalping toll first-hand — ~1.3 GiB per proof, and ~9–10 s of
 # it on an M-series laptop core, the only hardware the seconds have been
-# measured on (the GiB is a property of (n=168, k=7), the seconds are not); see
+# measured on (the GiB is the reference solver's table at (n=168, k=7), not a
+# floor those params impose on every solver; the seconds are not either); see
 # the "beware" banner on the demo root page. Every other demo is
 # knob-adjustable but defaults light so
 # CI and quick poking stay fast; unset here still resolves to low.

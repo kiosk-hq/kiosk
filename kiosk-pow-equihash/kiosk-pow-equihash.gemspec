@@ -25,8 +25,9 @@ Gem::Specification.new do |spec|
     Default parameters are n=168, k=7, chosen by the benchmark in bench/: the
     largest params whose reference solve stays inside a consumer-laptop budget
     (p95 ~10 s on one M-series laptop core, the only hardware the seconds have
-    ever been measured on; the ~1.3 GiB peak is a property of (n, k), not of the
-    host) while verify costs 128 BLAKE2b evaluations —
+    ever been measured on; the ~1.3 GiB peak is THIS solver's table, not the
+    host's -- and not a floor (n, k) imposes on every implementation, since a
+    memory-optimised solver trades it for time) while verify costs 128 BLAKE2b evaluations —
     ~17 ms and a few KB in pure Ruby. That asymmetry is the point: the gem
     prices a request, it does not equalise hardware. Equihash is neither ASIC-
     nor GPU-proof (it was ASIC'd on Zcash); abuse resistance comes from the

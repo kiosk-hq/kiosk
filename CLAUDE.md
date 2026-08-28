@@ -53,6 +53,12 @@ universal agent skill is `skill.md` on the same site.
   those are compared) or `:per_demo`, with a reason; editing one copy of a
   lockstep file means editing all of them, and a NEW duplicate fails the build
   until it is declared. Copy a file between demos → add it to that manifest.
+  `:per_demo` says the FILE is not compared; it does not exempt what is inside
+  it. Individual methods and constants shared across copies of a `:per_demo`
+  path are declared in the same script's `FRAGMENTS` manifest and compared with
+  `:code` semantics (T-120), and a unit name appearing in two or more copies of
+  a declared path fails the build until it is declared — so copy a METHOD
+  between demos → declare it there, or give the second copy its own name.
   The `db/migrate` copies are ALSO held against the engine's install-generator
   `.rb.tt` templates (rendered with the generator's defaults, byte-matched), so
   editing a template in kiosk-server without regenerating the demos — or

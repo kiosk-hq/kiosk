@@ -60,8 +60,12 @@
 #                stripping, so a `#` inside a string or regex is not a comment.
 #                MAGIC comments are the exception and are compared (K-628).
 #   :per_demo  — a genuine per-demo implementation that shares only a filename.
-#                Not compared; the manifest entry records WHY they differ, so the
-#                next reader does not have to diff seven files to find out.
+#                The FILE is not compared; the manifest entry records WHY they
+#                differ, so the next reader does not have to diff seven files to
+#                find out. A path here may still have individual METHODS and
+#                CONSTANTS held in lockstep — see the T-120 fragment rule below,
+#                which exists because «not compared» was letting shared units
+#                grow inside these files with nothing watching them.
 #
 # `ships:` is the OTHER declaration a copy set can carry, and it answers a
 # question `except:` cannot: WHICH demos are supposed to have the file at all.
@@ -524,11 +528,15 @@ COPIES = {
           "copy. NOT «nothing else in common», which is what this entry claimed until K-1031 " \
           "measured it: `:per_demo` means the copies are compared to NOTHING, and overlap has " \
           "grown under that silence — `whole_number/1` is byte-identical in atablefor and " \
-          "getgrocery (K-1027/K-1020) and `missing/1` in getgrocery, hoteling and skooti. Nothing " \
-          "holds any of that in lockstep and nothing in this file can: the lockstep rule's handle " \
-          "is a relative PATH, so a shared METHOD inside a per-demo file sits below its " \
-          "granularity. That gap is T-120's question and is deliberately not pre-empted here, so " \
-          "read this half as a MEASUREMENT rather than a guard. THE FOUR DEMOS WITHOUT A COPY " \
+          "getgrocery (K-1027/K-1020), `missing/1` in getgrocery, hoteling and skooti, and " \
+          "`MAX_INT4` in atablefor, getgrocery and hoteling since T-125. THAT OVERLAP IS NOW " \
+          "GUARDED, and by a rule one level down rather than by widening this one: the lockstep " \
+          "rule's handle is a relative PATH, so a shared METHOD inside a per-demo file sits below " \
+          "its granularity, and T-120's answer is the FRAGMENT rule further down this file — every " \
+          "unit name appearing in two or more copies of a declared `:per_demo` path must be " \
+          "declared there and is then compared with `:code` semantics. `:per_demo` on THIS line " \
+          "still means what it says: the FILE is not compared, and it should not be. THE FOUR " \
+          "DEMOS WITHOUT A COPY " \
           "differ in three ways, not one: prove has no app/operations/ at all (the KYC broker, " \
           "which registers no wire verbs — see NON_OPERATOR_DEMOS); stylish has the directory and " \
           "guards its two argument shapes INLINE in book_appointment_operation.rb; tudu and " \
@@ -911,15 +919,19 @@ MIGRATION_PAIRS = {
 # indentation and hash alignment while leaving string and heredoc content alone.
 COMMENT_TOKENS = %i[on_comment on_embdoc on_embdoc_beg on_embdoc_end].freeze
 
-def code_digest(path)
-  src = File.read(path)
+# The `:code` normalisation, over a STRING rather than a file — so the fragment
+# rule (T-120) compares a `def` with exactly the semantics `:code` compares a
+# whole file with, rather than growing a second normaliser next to this one.
+def code_norm(src)
   body = Ripper.lex(src).filter_map do |(_pos, type, tok)|
     next if COMMENT_TOKENS.include?(type)
 
     type == :on_sp ? " " : tok
   end.join
-  Digest::SHA256.hexdigest(body.lines.map(&:strip).reject(&:empty?).join("\n"))
+  body.lines.map(&:strip).reject(&:empty?).join("\n")
 end
+
+def code_digest(path) = Digest::SHA256.hexdigest(code_norm(File.read(path)))
 
 def byte_digest(path) = Digest::SHA256.file(path).hexdigest
 
@@ -1911,6 +1923,264 @@ if flow_tail_groups.size > 1
             "thing K-1043 closed, and it is the reason a task can fail at all (K-1046)."
 end
 
+# ── A shared UNIT inside a `:per_demo` file (T-120) ──────────────────────────
+#
+# The lockstep rule's handle is a relative PATH, so a method shared by two demos
+# inside a file the manifest calls `:per_demo` — which this file's own header
+# defines as «Not compared» — sits BELOW its granularity and is compared to
+# nothing. That is not hypothetical and it is not new: `whole_number/1` is
+# byte-identical in atablefor and getgrocery (K-1027/K-1020) and `missing/1` in
+# getgrocery, hoteling and skooti, five hand-copies across two methods, all
+# inside `app/operations/wire_arguments.rb`, which is `:per_demo` for a good
+# reason — the guards ARE each demo's argument vocabulary, and sharing the FILE
+# would mean shipping every demo guards for arguments it does not take.
+#
+# WHY THIS SHAPE AND NOT THE OTHER TWO T-120 NAMED.
+#
+#   * PROMOTING the shared half into the gem the fleet already reaches for
+#     (Phil's rule, T-089/K-792) is the right answer for a thing with a public
+#     contract, and the wrong one here: `whole_number` is a four-line predicate
+#     and `missing` is a three-line sentence, and putting either behind a gem
+#     boundary buys a versioned public API, a CHANGELOG entry and a release for
+#     each future word of a refusal message — while the copies stop being
+#     readable next to the guard that calls them, which is most of their value.
+#     This file's own header already says the promotion of UuidCheck and
+#     DemoTelemetry is a public-API decision (K-607, K-495/K-502) that it must
+#     not pre-empt; the same restraint applies twice as hard one level down.
+#   * DECLARING the set as a known duplicate with a reason buys detection of a
+#     THIRD copy and nothing else — the one-sided edit, which is the entire
+#     class this script exists for, stays exactly as undetectable as it was.
+#
+# So the unit is DECLARED and COMPARED, the way the K-1046 flow-runner rule
+# already declares and compares a fragment inside another uncompared file. Two
+# things it takes from that rule and one it does not:
+#
+#   * TAKES the `ships:` declaration (K-860, K-883) and the two-directional
+#     staleness check, so a demo growing a copy fails rather than becoming a
+#     fourth copy nobody reasoned about, and a demo losing one fails too.
+#   * TAKES the loud-failure-on-unreadable rule: a unit the extractor cannot
+#     read back as valid Ruby is an ERROR, never a silent skip, because a
+#     lockstep rule with nothing to compare passes everything.
+#   * DOES NOT take «compare the prose too». The flow-runner block is ONE
+#     construct with ONE argument written above it, so its header is part of
+#     what is copied. These units are the opposite: each copy's prose is that
+#     demo's own reasoning about its own arguments — atablefor's `whole_number`
+#     explains a party, getgrocery's a quantity, and both are correct. So the
+#     comparison is `:code`, the manifest's own «identical once comments and
+#     whitespace are normalised away», applied one level down through the same
+#     {code_norm}.
+#
+# DISCOVERY, not just declaration, and that is the half that makes this a check
+# rather than a list: every unit name that appears in TWO OR MORE copies of a
+# declared path must be in FRAGMENTS. A new shared method cannot appear
+# silently, which is the property the file-level manifest has and the reason six
+# of those copies were found at all. It is also why `priceable_total` is
+# declared `:per_demo` below rather than left out — getgrocery's takes a total,
+# hoteling's takes a total AND the nights it spans, and a shared NAME with
+# different bodies is a thing a reader should be told about once rather than
+# discover by diffing.
+#
+# SCOPE IS ONE PATH ON PURPOSE. Sixteen paths are `:per_demo` and the same
+# measurement over all of them finds 39 shared-unit groups — mostly the flow
+# drivers' `post_json`/`get_json` HTTP helpers, which is a real finding and a
+# different one (a shared TEST harness, not shared shipped code). Declaring 39
+# units with 39 reasoned `why:` lines is not this row's work and would be a
+# manifest nobody read. FRAGMENT_PATHS is where the next one gets added, with
+# its reason.
+FRAGMENT_PATHS = %w[app/operations/wire_arguments.rb].freeze
+
+FRAGMENTS = {
+  "app/operations/wire_arguments.rb#MAX_INT4" => {
+    rule:  :code,
+    ships: %w[atablefor getgrocery hoteling],
+    why:   "PostgreSQL `integer`, 2_147_483_647 — the width of the column each demo's guard " \
+           "refuses on behalf of (`bookings.party_size`/`restaurant_tables.capacity`, " \
+           "`order_items.qty`/`orders.total_cents`, `properties.stars`/`bookings.total_cents`). " \
+           "It is the same NUMBER for the same REASON in all three, and K-968's rule — the bound " \
+           "is the column's and not a policy — is what makes that a shared fact rather than three " \
+           "coincidences. hoteling's copy is the newest (T-125) and folded in the " \
+           "`MAX_TOTAL_CENTS` it used to carry under its own name; holding the three in lockstep " \
+           "is what stops the next demo inventing a fourth spelling of int4.",
+  },
+  "app/operations/wire_arguments.rb#missing" => {
+    rule:  :code,
+    ships: %w[getgrocery hoteling skooti],
+    why:   "`missing field: <name>` — the sentence every verb in those three answers an absent " \
+           "argument with, and the one an assistant's error handling matches on. atablefor is " \
+           "deliberately NOT here: it words the same refusal `missing param: party_size` in " \
+           "{missing_party_size}, for the one verb that asks the question, so it has no method of " \
+           "this name to hold. That difference is real and predates this rule; what this rule " \
+           "stops is a FOURTH wording appearing inside the three that already agree.",
+  },
+  "app/operations/wire_arguments.rb#whole_number" => {
+    rule:  :code,
+    ships: %w[atablefor getgrocery],
+    why:   "JSON Schema draft 2020-12's `integer`, in Ruby — NOT `is_a?(Integer)`, because the " \
+           "keyword is defined NUMERICALLY and json_schemer accepts a `2.0` (measured on K-1020 " \
+           "and re-measured against atablefor's own bundle on K-1027). Both demos need it for the " \
+           "same reason: an Operation reachable with no descriptor in front of it must not be " \
+           "LOOSER than the schema that is normally there, and must not be stricter either. That " \
+           "second half is the one a one-sided edit would break silently — a copy that grew an " \
+           "`is_a?(Integer)` test would refuse a call the published schema allows, in one demo, " \
+           "with nothing to say so. hoteling and skooti do not ship it: hoteling's integers arrive " \
+           "as query strings already coerced by the decoder, so its guard is `Integer(str, 10)`, " \
+           "and skooti takes no wire integer at all.",
+  },
+  "app/operations/wire_arguments.rb#priceable_total" => {
+    rule:  :per_demo,
+    ships: %w[getgrocery hoteling],
+    why:   "SAME NAME, DIFFERENT QUESTION, and declared so a reader is told once instead of " \
+           "diffing. Both answer «this total cannot be stored in a 4-byte column» (K-968, " \
+           "K-1047), but getgrocery's takes `(total_cents)` and names a CART the caller can split " \
+           "across orders, while hoteling's takes `(total_cents, nights)` and names the SPAN — " \
+           "because there the total is `nightly_price * nights` and the recoverable advice is " \
+           "«book a shorter stay», which no cart sentence can give. Neither refusal is the " \
+           "other's to word. If these two ever converge byte-for-byte this entry fails as stale, " \
+           "which is the right prompt to ask whether they should be one thing.",
+  },
+}.freeze
+
+# One unit = one `def` (endless or not, singleton or not) or one constant
+# assignment, taken from its first line and GROWN until Ripper can parse it.
+#
+# Growing rather than matching a column-0 `end` (the flow-runner rule's handle)
+# because these live inside a `module … end` at an indentation the next file may
+# not share, and because a `def foo = expr` has no `end` at all. The parse is
+# the terminator AND the validity check in one: a fragment that never parses is
+# reported rather than silently dropped.
+FRAGMENT_START = /\A\s*(?:def\s+(?:self\.)?([a-z_][A-Za-z0-9_]*[?!=]?)|([A-Z][A-Za-z0-9_]*)\s*=[^=~>])/
+FRAGMENT_MAX_LINES = 200
+
+def fragment_units(path)
+  lines = File.readlines(path)
+  units = {}
+  unreadable = []
+  lines.each_index do |i|
+    m = lines[i].match(FRAGMENT_START) or next
+
+    name = m[1] || m[2]
+    next if units.key?(name)
+
+    src = (i...[i + FRAGMENT_MAX_LINES, lines.size].min).lazy
+                                                        .map { |j| lines[i..j].join }
+                                                        .find { |cand| !Ripper.sexp(cand).nil? }
+    src ? units[name] = src : unreadable << "#{name} (line #{i + 1})"
+  end
+  [units, unreadable]
+end
+
+fragment_sources = Hash.new { |h, k| h[k] = {} } # "path#unit" => demo => source
+FRAGMENT_PATHS.each do |rel|
+  entry = COPIES[rel]
+  if entry.nil?
+    errors << "check-demo-copies: FRAGMENT_PATHS names #{rel}, which has no COPIES entry — the " \
+              "fragment rule reaches inside a file the manifest does not know about (T-120)."
+    next
+  end
+  unless entry[:rule] == :per_demo
+    errors << "check-demo-copies: FRAGMENT_PATHS names #{rel}, but the manifest now compares it " \
+              "whole (`rule: #{entry[:rule].inspect}`), so every unit inside it is already held. " \
+              "Drop it from FRAGMENT_PATHS rather than checking the same bytes twice (T-120)."
+    next
+  end
+
+  demos.each do |dir|
+    demo = short.(File.basename(dir))
+    path = File.join(dir, rel)
+    next unless File.exist?(path)
+
+    units, unreadable = fragment_units(path)
+    unless unreadable.empty?
+      errors << "#{demo}: #{rel} — the fragment rule could not read #{unreadable.join(', ')} back " \
+                "as valid Ruby within #{FRAGMENT_MAX_LINES} lines, so it compared NOTHING for " \
+                "#{unreadable.size == 1 ? 'that unit' : 'those units'}. Fix the extraction in " \
+                "bin/check-demo-copies, do not drop the rule (T-120)."
+    end
+    units.each { |name, src| fragment_sources["#{rel}##{name}"][demo] = code_norm(src) }
+  end
+end
+
+# DISCOVERY: a unit in two or more copies must be declared. This is the property
+# the file-level manifest has, one level down.
+fragment_sources.each do |id, per_demo|
+  next if per_demo.size < 2
+  next if FRAGMENTS.key?(id)
+
+  errors << "#{id}: shared by #{per_demo.keys.sort.join(', ')} inside a `:per_demo` file, and " \
+            "undeclared. `:per_demo` means the copies are compared to NOTHING, so a method that " \
+            "has quietly become shared drifts exactly the way `schedule_delivery` and " \
+            "equihash_register.rb's constant did. Declare it in FRAGMENTS in bin/check-demo-copies " \
+            "with its `ships:` set and the reason the copies exist (T-120)."
+end
+
+fragment_comparisons = 0
+FRAGMENTS.each do |id, entry|
+  rel = id.split("#").first
+  unless FRAGMENT_PATHS.include?(rel)
+    errors << "#{id}: declared in FRAGMENTS, but #{rel} is not in FRAGMENT_PATHS, so nothing ever " \
+              "looks for it. Add the path or drop the entry (T-120)."
+    next
+  end
+  errors << "#{id}: FRAGMENTS `why:` is blank" if entry[:why].to_s.strip.empty?
+
+  per_demo = fragment_sources[id]
+  if per_demo.size < 2
+    errors << "#{id}: declared in FRAGMENTS, but it now exists in " \
+              "#{per_demo.empty? ? 'no demo' : "only #{per_demo.keys.first}"} — a lockstep entry " \
+              "for a unit that is no longer shared is the record turning back into an assumption. " \
+              "Drop it (T-120)."
+    next
+  end
+
+  stray = per_demo.keys.sort - entry[:ships]
+  gone  = entry[:ships] - per_demo.keys
+  unless stray.empty?
+    errors << "#{stray.join(', ')}: defines #{id} but #{stray.size == 1 ? 'is' : 'are'} not in " \
+              "that entry's `ships:` set (#{entry[:ships].join(', ')}). A copy of a shared unit is " \
+              "not free — add the demo so its copy is held with the others, or give the copy its " \
+              "own name (T-120)."
+  end
+  unless gone.empty?
+    errors << "#{gone.join(', ')}: named in #{id}'s `ships:`, but #{rel} there defines no " \
+              "`#{id.split('#').last}` any more. Either the demo stopped needing it — update the " \
+              "declared set — or the unit was renamed in one copy, which is the drift this rule " \
+              "exists for (T-120)."
+  end
+
+  held   = per_demo.select { |demo, _| entry[:ships].include?(demo) }
+  next if held.size < 2
+
+  fragment_comparisons += held.size
+  groups = held.group_by { |_demo, src| src }
+  case entry[:rule]
+  when :code
+    next if groups.size == 1
+
+    listed = groups.values.map { |g| "[#{g.map { |d, _| d }.sort.join(',')}]" }.sort.join(" ")
+    errors << "#{id}: the copies must agree once comments and whitespace are normalised away, and " \
+              "they do not: #{listed}. This unit is hand-copied into #{held.size} demos — " \
+              "propagate the edit to all of them, or, if one copy legitimately differs, give it a " \
+              "different NAME and say why, because a shared name with different behaviour is what " \
+              "makes the next reader trust the wrong copy (T-120)."
+  when :per_demo
+    next if groups.size > 1
+
+    errors << "#{id}: declared `:per_demo` — a shared NAME with genuinely different bodies — but " \
+              "its #{held.size} copies now agree byte-for-byte once comments are normalised away. " \
+              "Either they converged, in which case declare it `:code` and hold them there, or " \
+              "one copy lost what made it different (T-120)."
+  else
+    errors << "#{id}: unknown `rule: #{entry[:rule].inspect}` — the fragment rule understands " \
+              ":code and :per_demo only (T-120)."
+  end
+end
+
+if FRAGMENTS.any? && fragment_comparisons.zero?
+  errors << "check-demo-copies: the T-120 fragment rule declares #{FRAGMENTS.size} unit(s) and " \
+            "compared NONE of them — the units have moved out of #{FRAGMENT_PATHS.join(', ')}, and " \
+            "a lockstep rule with nothing to compare passes everything."
+end
+
 # -- Every demo lockfile resolves for the SAME platforms (K-962) -------------
 #
 # `Gemfile.lock` is declared NOT COMPARED, and for its resolved-versions half
@@ -2523,7 +2793,11 @@ if errors.empty?
        "#{FRAMEWORK_CLAIMS.size} declared claims in #{corpus.size} demo document sets, " \
        "the flow-runner helper held in lockstep across #{flow_held.size} demos " \
        "(#{FLOW_RUNNER_VARIANTS.size} declared variant#{FLOW_RUNNER_VARIANTS.size == 1 ? '' : 's'}) " \
-       "with its exit-status tail compared in all #{flow_tails.size}"
+       "with its exit-status tail compared in all #{flow_tails.size}, " \
+       "#{fragment_comparisons} shared-unit cop#{fragment_comparisons == 1 ? 'y' : 'ies'} declared " \
+       "in #{FRAGMENTS.size} unit(s) inside #{FRAGMENT_PATHS.size} `:per_demo` file(s) " \
+       "(#{FRAGMENTS.count { |_, e| e[:rule] == :code }} held in lockstep, the rest declared " \
+       "same-name-different-body)"
   exit 0
 end
 

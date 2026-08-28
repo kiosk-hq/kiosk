@@ -49,7 +49,7 @@ the result (no envelope).
 
 There is **no `pay`**: the advertised capabilities are `[schema, queries, actions]`.
 
-The four verbs are ordinary Rails controllers, not initializer blocks:
+The verbs above are ordinary Rails controllers, not initializer blocks:
 `app/controllers/kiosk/dining_room_controller.rb` holds the two queries and
 `app/controllers/kiosk/bookings_controller.rb` the two actions — both
 `include Kiosk::Handler`, and each declaration says which verb reaches it with

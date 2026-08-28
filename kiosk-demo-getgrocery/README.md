@@ -20,7 +20,7 @@ rake demo            # setup + shop: no-human register → order (slot+address) 
 ```
 
 `spec/` here is NOT an RSpec suite — this demo ships no rspec at all (only
-`kiosk-demo-prove` does). The five files under `spec/` are standalone Ruby
+`kiosk-demo-prove` does). The files under `spec/` are standalone Ruby
 assertion scripts; run them through the `demo:slots_spec` / `demo:cashier_spec` /
 `demo:wire_args_spec` / `demo:telemetry_spec` tasks below, which is exactly how CI runs them. Typing
 `bundle exec rspec` will find no runner (K-721).

@@ -9,7 +9,7 @@ no PSP adapter, no `payment_setup_required` gate, and `pay` absent from
 The AP2 mandate and settlement TABLES are present and empty, and that is the
 canonical install rather than an oversight. Since the MIGRATIONS-FROM-SCRATCH
 decision every demo runs the same unmodified `rails g kiosk:install` and gets
-the same six migrations, so philslist carries `kiosk.reservations`, the four
+the same migrations, so philslist carries `kiosk.reservations`, the four
 mandate/settlement tables and `kiosk.kyc_attributes` alongside the identity
 ones — `check-demo-copies`'s `ONE_SET_EVERYWHERE` rule makes a per-demo subset
 a build failure, because per-demo subsets are how the fleet drifted before.

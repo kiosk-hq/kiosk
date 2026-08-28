@@ -89,8 +89,8 @@ file by file, with its reason, in the same script.
 Everything in this repo consumes the gems by `path:`, which serves the working
 tree — so nothing here can tell a file that EXISTS from a file that is
 PACKAGED, and kiosk-server shipped without its view templates for exactly that
-reason. `bin/check-gem-packaging` — its own CI job as well — builds all 14 gems
-and reads the file list back out of the built `.gem`. It fails when a tracked
+reason. `bin/check-gem-packaging` — its own CI job as well — builds every `*.gemspec` in
+this repo and reads the file list back out of the built `.gem`. It fails when a tracked
 file is neither in the package nor declared development scaffolding with the
 reason, and when packaged Ruby resolves a `__dir__`-relative path to something
 the package does not contain. Adding a non-`lib/` file a gem needs at runtime

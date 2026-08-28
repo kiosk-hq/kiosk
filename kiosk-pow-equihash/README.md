@@ -205,7 +205,7 @@ consumers shell out to (the `kiosk-redteam` client uses it):
 
 ```ruby
 Kiosk::Pow::Equihash.solver_path
-# => "/.../gems/kiosk-pow-equihash-0.3.0/solve.py"
+# => "/.../gems/kiosk-pow-equihash-<installed version>/solve.py"
 Open3.capture2("python3", Kiosk::Pow::Equihash.solver_path, challenge_json)
 ```
 

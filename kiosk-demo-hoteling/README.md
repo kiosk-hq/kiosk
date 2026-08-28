@@ -77,7 +77,7 @@ bin/rails demo:schema      # self-discovery over the schema verb
 bin/rails demo:search      # pagination over the ~100-hotel catalogue: a truncated page carries `Link: …; rel="next"`, following it returns a DISJOINT page, a complete result carries no link, and hotel_detail resolves a summary row's id (404 for one nobody has)
 ```
 
-**Every task above reseeds first.** Each of the six declares `: :setup`, so
+**Every task above reseeds first.** Each of the tasks above except `demo:setup` itself declares `: :setup`, so
 running any of them DROPS and recreates `kiosk_hoteling_development` before it
 starts — nothing you left in the database survives a run, and that is what makes
 each of them repeatable. `demo:book` was the one exception, and it was not

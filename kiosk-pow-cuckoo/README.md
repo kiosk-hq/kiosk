@@ -48,7 +48,7 @@ The verifier is validated against Grin's Cuckatoo29 CI test vector:
 - `edgebits=29`, header = 80 zero bytes keyed with `nonce=20`, `proofsize=42`
 - 42-cycle accepted; five categories of bad inputs rejected
 
-Run: `bundle exec rspec` — 35+ examples, all green.
+Run: `bundle exec rspec` — all green.
 
 ## API
 

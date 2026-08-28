@@ -10,7 +10,7 @@ Gem::Specification.new do |spec|
   spec.description   = <<~DESC
     kiosk-server is the host-side surface for Kiosk. The full surface ships:
 
-      - Eleven controllers — the per-verb wire (GET <endpoint>/<query-name>,
+      - The controllers — the per-verb wire (GET <endpoint>/<query-name>,
         POST <endpoint>/<action-name>) and the two reserved endpoints
         (/kiosk/schema, /kiosk/pay), a derived OpenAPI description of both,
         the register/login proof-of-possession auth plane, JWKS, the KYC
@@ -83,8 +83,9 @@ Gem::Specification.new do |spec|
   spec.add_dependency "json_schemer", ">= 2.3", "< 3.0"
 
   # ── Rails ──────────────────────────────────────────────────────────────
-  # kiosk-server IS a Rails gem: it ships an engine, eleven controllers, an
-  # install generator and six ActiveRecord migration templates. Until
+  # kiosk-server IS a Rails gem: it ships an engine, the wire/auth/discovery
+  # controllers, an install generator and the canonical ActiveRecord migration
+  # templates (lib/generators/kiosk/install/templates). Until
   # 2026-08-11 that dependency was undeclared and satisfied only by accident,
   # because every consumer happens to be a Rails app.
   #

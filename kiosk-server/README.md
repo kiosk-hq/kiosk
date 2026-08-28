@@ -5,7 +5,8 @@ The Kiosk Rails engine — host-side surface for [Kiosk](https://kiosk.tech).
 
 ## What's in this release
 
-The full host-side surface is shipped and covered by the gem's own suite (500+ passing specs):
+The full host-side surface is shipped and covered by the gem's own suite
+(`bundle exec rspec` in this directory runs it and prints how many examples that is):
 
 - **Wire-protocol controllers** — `VerbController` serves ONE ENDPOINT PER VERB (`GET <mount>/<query-name>`, `POST <mount>/<action-name>`); `WireController` serves the two reserved endpoints `GET <mount>/schema` and `POST <mount>/pay`; `OpenApiController` serves a derived OpenAPI description of both at `GET <mount>/openapi.json`; `AuthController` runs the register/login proof-of-possession challenge-response (kiosk-pop — the auth story); JWKS backs stateless token verification. (Protocol 0.4 deleted 0.3's multiplexed `POST <mount>/query` and `POST <mount>/run` outright — no dedicated route is drawn for either name and no tombstone stands in for one, so both fall through to `VerbController` and answer the same `404 not_found` problem document any unregistered verb name gets.)
 - **Account binding** — the claim/link ceremonies bind an agent's public key to an existing assistant-account holder's account: OAuth/RFC 8628-shaped device authorization + possession-proof-gated token poll, a session-authenticated verify page and «Link an assistant» page (minimal overridable engine views), link-code mint/redeem, and unlink. Tokens stay kiosk-pop-minted; the durable `DeviceAuthorizationStores::ActiveRecord` store (migration 004) is the default.

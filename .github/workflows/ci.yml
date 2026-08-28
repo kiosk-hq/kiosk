@@ -883,6 +883,47 @@ jobs:
       - name: The generated baseline is one its own generator could have written
         run: ./bin/check-conformance-drift --check
 
+  # This repository is published out of a larger private workspace, and a
+  # shipped line that cites something from that workspace is a dangling pointer
+  # for every reader who will ever hold the repo. The class has now been caught
+  # five times (K-1049, K-1148, K-1149, K-1153, K-1154) and never once by the
+  # commit that introduced it: the only thing that asked the question lived
+  # outside both published repos and ran only when a periodic sweep ran. K-1154
+  # was 80 citation sites across live gem and demo code, shipping for weeks.
+  #
+  # bin/check-publication-paths asks it here instead, over `git ls-files`, so a
+  # PR that adds one is red before it merges. Its --self-test is a step of its
+  # own rather than a convention: the failure mode of a scan aimed at the wrong
+  # tree is an empty file set, which exits 0 and reads exactly like a clean
+  # repository, so the guard proves it is red on a plant of every pattern it
+  # carries and non-vacuous over this tree before its green run means anything.
+  #
+  # The same file, byte for byte, is the kiosk.tech repo's guard. Nothing across
+  # two repositories can enforce that, so each copy digests its own body against
+  # a recorded value and reddens here when it is edited without the twin.
+  #
+  # Stdlib Ruby only: no bundle, no services, no database, ~10 s for both steps.
+  publication-paths:
+    name: nothing shipped cites what does not ship (bin/check-publication-paths)
+    runs-on: ubuntu-latest
+    # The daily schedule exists for solver-pin-live; don't rebuild the world.
+    if: github.event_name != 'schedule'
+
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Set up Ruby
+        uses: ruby/setup-ruby@v1
+        with:
+          ruby-version: "4.0.1"
+          bundler-cache: false
+
+      - name: The guard is red on a plant of every pattern, and non-vacuous here
+        run: ./bin/check-publication-paths --self-test
+
+      - name: No shipped line cites material that does not ship with this repo
+        run: ./bin/check-publication-paths
+
   # The demos are eight standalone Rails apps, so shared application code is not
   # shared — it is HAND-COPIED, and until now nothing checked the copies still
   # agreed. demo_telemetry.rb (then at lib/, now app/services/) carried a stale

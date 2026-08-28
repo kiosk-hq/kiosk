@@ -1,0 +1,767 @@
+#!/usr/bin/env ruby
+# frozen_string_literal: true
+
+# check-publication-paths -- the introducing-commit gate for publication leaks
+# (T-133; the class caught late five times as K-1049, K-1148, K-1149, K-1153,
+# K-1154).
+#
+# TWO REPOSITORIES ARE PUBLISHED FROM A LARGER PRIVATE WORKSPACE. `reference`
+# and `kiosk.tech` go out to readers who will hold ONLY those two repositories:
+# a Rubygems reader with the gem, an implementer porting from the site. The
+# workspace they were developed in -- its process notes, its internal
+# specification drafts, its issue ledger, the maintainer's laptop paths -- does
+# not travel with them. So a shipped line that POINTS AT one of those is a
+# dangling pointer for every reader who will ever have the file, and a shipped
+# section citation that resolves to nothing is the same defect wearing a number.
+#
+# WHAT THIS REPOSITORY IS ALLOWED TO SAY ABOUT ITS OWN PUBLICATION RULES, which
+# is the question that had to be settled before this file could exist at all.
+# The rule is: NAME A THING TO FORBID IT, NEVER TO POINT AT IT. Stating "a
+# shipped file may not carry a path under the workspace directories listed
+# below" is self-contained -- a reader who cannot resolve such a path loses
+# nothing by learning that it may not appear, and a prohibition that will not
+# spell what it prohibits cannot be checked. Citing one as authority ("see
+# <private file>:49 for why") is the defect itself: it sends the reader
+# somewhere they cannot go. Everything this file forbids is therefore spelled
+# out, ONCE, inside the PATTERN TABLE below, and this file is scanned like any
+# other file OUTSIDE its two declared blocks, so a token that escapes them
+# reddens the run (allow-list entry AL-6). That is also why no prose here cites
+# a workspace document by name or by path: the
+# reasons are restated in full instead, so this file is readable by the people
+# who will actually receive it.
+#
+# WHAT IT CHECKS. Three arms, all over `git ls-files` in the repository the
+# script lives in -- what ships is what git carries, so the working tree is not
+# the question, and the run must happen INSIDE each repository: a pathspec
+# aimed at a sibling directory from one level up matches nothing and exits like
+# a clean tree, which is how a whole repository once read as leak-free.
+#
+#   SEC   Every bare section citation (`§3`, `§3.7`, `§3.7.4`) must resolve
+#         to a section that EXISTS in the published protocol specification.
+#   PM    No shipped line may carry a private-workspace path, a
+#         private-workspace file name, or a citation of a superseded internal
+#         draft.
+#   ABS   No shipped line may carry a developer-machine absolute path.
+#
+# WHAT THE SEC ARM CANNOT SEE, stated here because an over-claimed gate is worse
+# than none. Number resolution is NECESSARY and NOT SUFFICIENT. A citation may
+# resolve numerically and still mean a different document entirely: the
+# published protocol numbers its section 3 as a LIST, so `§3.2` is a real point
+# of a real section, and an internal draft with its own section 3 produces
+# citations that this arm passes and a human reader would catch. Twenty-six such
+# citations survived a repair wave for exactly this reason. This arm removes the
+# half that IS mechanical -- a number that resolves to nothing is a certain
+# defect -- and it does not pretend to the other half.
+#
+# WHERE THE PUBLISHED SECTION NUMBERS COME FROM. `spec/protocol.md` is the only
+# published document that NUMBERS its sections (the narrative specification page
+# uses prose headings), so it is the index. A repository that ships it reads it
+# directly. A repository that does not gets a generated index committed beside
+# its other spec manifests, refreshed with `--record-sections` whenever both
+# repositories are checked out side by side, and re-derived and compared on
+# every such run so the copy cannot drift unnoticed. With neither available the
+# script FAILS rather than skipping the arm: a gate that quietly stops asking
+# its main question is the failure this whole file exists to prevent.
+#
+# THE TWIN. This script is BYTE-IDENTICAL in both published repositories, and
+# that is the single-source rule: there is no shared library between two
+# separate repositories, so the copy IS the mechanism. Two checks hold it:
+# every run re-digests its own body and compares it to TWIN_DIGEST below, so
+# editing one copy without going through the procedure reddens that
+# repository's own CI at the introducing commit; and when the sibling
+# repository is checked out beside this one, the two files are compared byte for
+# byte. The PROCEDURE for changing this script is therefore: edit it, run
+# `--record-twin`, copy the whole file over the twin, run both. Single-repository
+# CI can only ever see the first half -- no repository can know what another
+# holds -- and that limit is structural, not an oversight.
+#
+# USAGE
+#   bin/check-publication-paths                # check this repository, exit 0/1
+#   bin/check-publication-paths --self-test    # prove it is red on a plant, then green here
+#   bin/check-publication-paths --record-sections   # refresh the vendored section index
+#   bin/check-publication-paths --record-twin       # refresh TWIN_DIGEST after an edit
+#
+# Stdlib only: no bundle, no services, no database, no network.
+
+require "digest"
+require "open3"
+require "fileutils"
+require "rbconfig"
+require "tmpdir"
+
+# Realpath on both, and REPO derived from it: the self-test runs a copy of this
+# file out of a temporary directory, and on macOS that path is a symlink, so an
+# expand_path/`__dir__` mix computes a relative path that never matches and
+# silently switches the self-scan off.
+SELF_PATH = File.realpath(__FILE__)
+REPO      = File.dirname(File.dirname(SELF_PATH))
+SELF_REL  = SELF_PATH.delete_prefix("#{REPO}/")
+
+# Recorded by --record-twin over this file's own bytes with the TWIN_DIGEST
+# assignment blanked. Both published copies carry the same value; a mismatch
+# means this copy was edited and the twin has not been brought along.
+TWIN_DIGEST = "27ee48cfd1a7ab02afd8153bf60d601361a3e85946f5328e42c469e5a3614a0c"
+
+SIBLING_REPOS   = %w[kiosk.tech reference].freeze
+SPEC_SOURCE_REL = "spec/protocol.md"
+SECTIONS_TSV    = File.join(REPO, "spec", "public-spec-sections.tsv")
+
+# >>> PATTERN TABLE -- BEGIN
+#
+# Every token this gate forbids is spelled here and NOWHERE ELSE in this file.
+# `example` is a violating fixture the self-test injects, so a pattern added
+# without a way to demonstrate it cannot be added at all. A two-element example
+# is a violation SPLIT ACROSS TWO LINES that neither line carries alone -- the
+# wrapped form a line-based scan is blind to by construction.
+PATTERNS = [
+  {
+    id: "PM-1",
+    what: "a path under a private workspace directory",
+    re: %r{(^|[^A-Za-z0-9._/-])(meta|audit)/},
+    repair: "state the requirement inline, or cite a document that ships with this repository",
+    example: ["# the full procedure is written up under audit/ rather than here"],
+  },
+  {
+    id: "PM-2",
+    what: "a private workspace file named where a reader cannot resolve it",
+    re: /DECISIONS-(LOG|PENDING)|t011-scrub|check-(conformance-refs|file-inventories|ledger-format)|convergence-iteration|run-convergence|findings(-archive)?\.md|TODO\.md|claims\.md|conformance\.md|LOOP\.md|RESUME\.md/,
+    repair: "restate the reason in full here; the file being cited ships nowhere, with or without its directory",
+    example: ["# adjudicated in DECISIONS-LOG, see the entry for this class"],
+  },
+  {
+    id: "PM-3",
+    what: "a path under a private notes tree",
+    re: %r{docs/research/20[0-9]{2}|docs/architecture/payment-model},
+    repair: "restate the reason inline, or cite the published specification instead",
+    example: ["# rationale: docs/architecture/payment-model.md"],
+  },
+  {
+    id: "PM-4",
+    what: "a citation of a superseded internal specification draft",
+    re: /[Dd]esign[- ][Ss]pec|[Dd]esign §|[Dd]esign doc|superpowers\/specs\/|[0-9]{4}-[0-9]{2}-[0-9]{2}-[a-z0-9-]*-design/,
+    repair: "cite the published specification section that carries the same rule, or state the rule inline",
+    example: ["# The verb-name rules are the ones stated in the design",
+              "# doc, which is where the whole list lives."],
+  },
+  {
+    id: "ABS-1",
+    what: "a developer-machine absolute path",
+    re: %r{/Users/[A-Za-z0-9_.-]+/},
+    repair: "make the path relative to the repository root, or take it from the environment",
+    example: ["  root = \"/Users/someone/source/kiosk\""],
+  },
+].freeze
+# <<< PATTERN TABLE -- END
+
+# ALLOW-LIST. One id per exemption, each with the reason it was granted, because
+# an exemption nobody can audit is how a gate gets switched off within a week.
+# Every run prints how many findings each entry suppressed, so an entry that has
+# stopped carrying weight is visible rather than assumed.
+ALLOW = [
+  {
+    id: "AL-1",
+    scope: "CLAUDE.md, at any depth",
+    arms: :all,
+    why: "these files are development-time instructions for the working copy and are removed WHOLE " \
+         "when the repository is published, so their contents are not shipped content. Rewording a " \
+         "line inside one lowers a count and changes what ships by zero bytes.",
+    match: ->(path, _line) { File.basename(path) == "CLAUDE.md" },
+  },
+  {
+    id: "AL-2",
+    scope: "CHANGELOG.md, at any depth",
+    arms: :all,
+    why: "a changelog entry is an append-only record of the tree AS IT WAS. Sections get renumbered " \
+         "and documents get superseded, so an old entry can carry a citation that no longer resolves " \
+         "-- and the only conformant repair would be a new commit saying the old one was wrong, which " \
+         "is not a repair. This project does not rewrite published history, so these lines stay.",
+    match: ->(path, _line) { File.basename(path) == "CHANGELOG.md" },
+  },
+  {
+    id: "AL-3",
+    scope: "a section citation whose sentence names an external standard first",
+    arms: :sec,
+    why: "`RFC 9110 §15.5.6` and `OAS 3.1 §4.8.21.1` cite someone else's numbering and must not be " \
+         "resolved against ours. Applied over the TWO-LINE JOIN as well: the standard's name and the " \
+         "section it introduces are routinely split by a wrapped comment, and a per-line form of this " \
+         "exemption is defeated by the wrap -- two such citations ship here today.",
+    match: nil,
+  },
+  {
+    id: "AL-4",
+    scope: "a section marker that is part of an identifier (`ADR-0023 §Decision 4`)",
+    arms: :sec,
+    why: "an identifier followed by a section marker names a part of THAT document, not of the " \
+         "protocol. Also applied over the two-line join, because the identifier and the marker wrap " \
+         "apart in practice.",
+    match: nil,
+  },
+  {
+    id: "AL-5",
+    scope: "published skill cuts (`skill-v*.md`)",
+    arms: :sec,
+    why: "a published cut is a frozen artefact whose digest operators pin; this repository says so " \
+         "normatively. Editing one silently invalidates every pin taken against the old bytes, so a " \
+         "defect in a cut is repaired in the NEXT cut and never in place. The mutable alias is NOT " \
+         "exempt: catching it there is the point.",
+    match: ->(path, _line) { File.basename(path).start_with?("skill-v") && path.end_with?(".md") },
+  },
+  {
+    id: "AL-6",
+    scope: "this script's own PATTERN TABLE and SELF-TEST FIXTURES blocks",
+    arms: :all,
+    why: "the forbidden tokens have to be spelled somewhere for anything to be checkable. They are " \
+         "spelled in those two blocks and the SELF-SCAN below asserts they appear nowhere else in " \
+         "this file -- so this is a bounded, checked exemption rather than a file-level pass. If a " \
+         "block marker goes missing the whole file is scanned again and this run turns red.",
+    match: nil,
+  },
+].freeze
+
+def allow_entry(id)
+  ALLOW.find { |a| a[:id] == id } || raise("unknown allow-list id #{id}")
+end
+
+# ── the published section index ───────────────────────────────────────────────
+
+# Sections of a numbered markdown specification: `## 3. Title` and `### 3.7
+# Title` give 3 and 3.7, and ORDERED LIST items inside a section give the rest.
+# The published protocol numbers section 3, section 14 and several others as
+# lists, so a heading-only index would report `§3.7.4` as dangling when it is
+# item 7's fourth sub-item.
+def sections_from(path)
+  found  = {}
+  head   = nil
+  stack  = []
+  fenced = false
+  File.readlines(path, chomp: true).each_with_index do |line, i|
+    fenced = !fenced if line.start_with?("```")
+    next if fenced
+
+    if (m = line.match(/\A\#{2,4}\s+(\d+(?:\.\d+)*)\.?\s+\S/))
+      head  = m[1].split(".")
+      stack = []
+      found[head.join(".")] = i + 1
+      next
+    end
+    next if line.start_with?("#") || head.nil?
+
+    next unless (m = line.match(/\A(\s*)(\d+)\.\s+\S/))
+
+    indent = m[1].length
+    stack.pop while !stack.empty? && stack.last[0] >= indent
+    base = stack.empty? ? head : stack.last[1]
+    item = base + [m[2]]
+    found[item.join(".")] = i + 1
+    stack.push([indent, item])
+  end
+  found
+end
+
+def live_spec_source
+  local = File.join(REPO, SPEC_SOURCE_REL)
+  return local if File.file?(local)
+
+  sibling = SIBLING_REPOS.map { |r| File.join(File.dirname(REPO), r, SPEC_SOURCE_REL) }
+                         .find { |p| File.file?(p) }
+  sibling
+end
+
+def read_sections_tsv
+  index = {}
+  File.readlines(SECTIONS_TSV, chomp: true).each do |line|
+    next if line.empty? || line.start_with?("#")
+
+    num, where = line.split("\t", 2)
+    index[num] = where.to_i
+  end
+  index
+end
+
+def render_sections_tsv(index, source)
+  out = +""
+  out << "# public-spec-sections.tsv -- GENERATED by bin/check-publication-paths --record-sections.\n"
+  out << "# Do not edit by hand.\n"
+  out << "#\n"
+  out << "# One `section<TAB>line` row per numbered section of the published protocol\n"
+  out << "# specification -- headings AND ordered-list items, because that document numbers\n"
+  out << "# several of its sections as lists and a heading-only index reports their points\n"
+  out << "# as dangling. This repository does not ship that document, so the numbers are\n"
+  out << "# vendored here for `bin/check-publication-paths` to resolve citations against\n"
+  out << "# offline. When both repositories are checked out side by side the same script\n"
+  out << "# re-derives them and fails on any disagreement, so the copy cannot drift.\n"
+  out << "#\n"
+  out << "# source sha256: #{Digest::SHA256.file(source).hexdigest}\n"
+  out << "# sections: #{index.size}\n"
+  index.keys.sort_by { |k| k.split(".").map(&:to_i) }.each { |k| out << "#{k}\t#{index[k]}\n" }
+  out
+end
+
+# ── scanning ─────────────────────────────────────────────────────────────────
+
+def tracked_files(root)
+  out, err, status = Open3.capture3("git", "-C", root, "ls-files", "-z")
+  raise "git ls-files failed in #{root}: #{err}" unless status.success?
+
+  out.split("\0").reject(&:empty?)
+end
+
+def readable_text(abs)
+  bytes = File.binread(abs)
+  return nil if bytes.include?("\0")
+
+  text = bytes.force_encoding(Encoding::UTF_8)
+  text.valid_encoding? ? text : nil
+rescue SystemCallError
+  nil
+end
+
+CONTINUATION = /\A\s*(?:\#+|\/\/+|\*+|--|<%\#)?\s*/.freeze
+CITE         = /§(\d+(?:\.\d+)*)/.freeze
+
+def joins_with_previous(prev_line, line)
+  return [] if prev_line.nil?
+
+  cont = line.sub(CONTINUATION, "")
+  head = prev_line.sub(/\s+\z/, "")
+  ["#{head} #{cont}", "#{head}#{cont}"]
+end
+
+# The two declared blocks of this file, as line ranges. Absent markers mean no
+# exemption at all, which is the fail-safe direction.
+def self_exempt_ranges
+  ranges = []
+  open   = nil
+  File.readlines(SELF_PATH, chomp: true).each_with_index do |line, i|
+    # Matched by shape, not by substring: a detector written with the marker
+    # text in it detects ITSELF and opens a range at its own line.
+    m = line.match(/\A#\s+(>>>|<<<)\s+.*--\s+(BEGIN|END)\s*\z/)
+    next if m.nil?
+
+    open = i + 1 if m[2] == "BEGIN"
+    if m[2] == "END" && open
+      ranges << (open..(i + 1))
+      open = nil
+    end
+  end
+  ranges
+end
+
+def scan_repo(index, index_note)
+  findings   = []
+  suppressed = Hash.new(0)
+  cites      = 0
+  files      = 0
+  self_ranges = self_exempt_ranges
+
+  tracked_files(REPO).each do |rel|
+    abs = File.join(REPO, rel)
+    next unless File.file?(abs)
+
+    text = readable_text(abs)
+    next if text.nil?
+
+    files += 1
+    path_allow = ALLOW.select { |a| a[:match] && a[:match].call(rel, nil) }
+    lines = text.lines.map { |l| l.chomp("\n") }
+
+    lines.each_with_index do |line, i|
+      lineno = i + 1
+      if rel == SELF_REL && self_ranges.any? { |r| r.cover?(lineno) }
+        suppressed["AL-6"] += 1 if PATTERNS.any? { |p| line =~ p[:re] } || line.include?("§")
+        next
+      end
+
+      prev = i.zero? ? nil : lines[i - 1]
+      pair = joins_with_previous(prev, line)
+
+      PATTERNS.each do |pat|
+        hit_line = line =~ pat[:re]
+        hit_pair = !hit_line && prev && prev !~ pat[:re] && pair.any? { |j| j =~ pat[:re] }
+        next unless hit_line || hit_pair
+
+        skipped = path_allow.find { |a| a[:arms] == :all }
+        if skipped
+          suppressed[skipped[:id]] += 1
+          next
+        end
+        findings << {
+          path: rel, line: lineno, id: pat[:id], what: pat[:what], repair: pat[:repair],
+          text: (hit_pair ? "#{prev.strip} / #{line.strip}" : line.strip),
+          wrapped: !hit_line,
+        }
+      end
+
+      pos = 0
+      while (m = line.match(CITE, pos))
+        pos = m.end(0)
+        num = m[1]
+
+        skipped = path_allow.find { |a| a[:arms] == :all || a[:arms] == :sec }
+        if skipped
+          suppressed[skipped[:id]] += 1
+          next
+        end
+        cites += 1
+
+        # What comes BEFORE the marker, on the line and on each join with the
+        # preceding one -- a citation is written "RFC 9110 §15.5.6", so the
+        # attribution is to the left of it, and requiring that is tighter than
+        # asking whether the standard is named anywhere on the line.
+        befores = [line[0, m.begin(0)]]
+        pair.each do |j|
+          at = j.index("§#{num}")
+          befores << j[0, at] if at
+        end
+
+        # ...unless the citation is ATTRIBUTED TO OURS right where it is made.
+        # Without this the join arm is measurably wider than the exemption it
+        # implements: three live sites read `... RFC 8628 ...` on one line and
+        # `(spec §9)` on the next, and the join handed the external standard's
+        # exemption to a citation of ours. Measured at head: 43 same-line and 7
+        # join-only exemptions before this clause, 4 join-only after -- and the
+        # 4 are the real wrapped ones, including the two the wrap was found on.
+        ours = befores.any? { |b| b =~ /\b(?:specs?|specification|protocol)\b[^§]{0,24}\z/i }
+        if !ours && befores.any? { |b| b =~ /\b(?:RFC|OAS|OpenAPI)\b/ }
+          suppressed["AL-3"] += 1
+          next
+        end
+        if befores.any? { |b| b =~ /(?:ADR|K|T)-\d+\s*\z/ }
+          suppressed["AL-4"] += 1
+          next
+        end
+        next if index.key?(num)
+
+        findings << {
+          path: rel, line: lineno, id: "SEC-1",
+          what: "the citation of section #{num} resolves to nothing in the published specification",
+          repair: "cite the section that carries the rule, name the external standard the number " \
+                  "belongs to, or state the rule inline",
+          text: line.strip, wrapped: false,
+        }
+      end
+    end
+  end
+
+  [findings, suppressed, files, cites, index_note]
+end
+
+# ── the twin ─────────────────────────────────────────────────────────────────
+
+DIGEST_LINE = /\ATWIN_DIGEST = ".*"\n\z/.freeze
+
+def twin_body(path)
+  File.readlines(path).map { |l| l =~ DIGEST_LINE ? "TWIN_DIGEST = \"\"\n" : l }.join
+end
+
+def twin_digest(path)
+  Digest::SHA256.hexdigest(twin_body(path))
+end
+
+def sibling_twin_path
+  SIBLING_REPOS.map { |r| File.join(File.dirname(REPO), r, "bin", File.basename(SELF_PATH)) }
+               .reject { |p| File.file?(p) && File.realpath(p) == SELF_PATH }
+               .find { |p| File.file?(p) }
+end
+
+# ── modes ────────────────────────────────────────────────────────────────────
+
+def resolve_index
+  live   = live_spec_source
+  ships  = File.file?(File.join(REPO, SPEC_SOURCE_REL))
+  have   = File.file?(SECTIONS_TSV)
+
+  if live && ships
+    [sections_from(live), "read directly from #{SPEC_SOURCE_REL} (this repository publishes it)"]
+  elsif live && have
+    derived  = sections_from(live)
+    vendored = read_sections_tsv
+    if derived.keys.sort != vendored.keys.sort
+      only_live = (derived.keys - vendored.keys).sort
+      only_tsv  = (vendored.keys - derived.keys).sort
+      warn "check-publication-paths: FAIL -- the vendored section index has drifted from the"
+      warn "published specification. Re-record it with `bin/check-publication-paths --record-sections`."
+      warn "  published but not vendored: #{only_live.join(', ')}" unless only_live.empty?
+      warn "  vendored but not published: #{only_tsv.join(', ')}" unless only_tsv.empty?
+      exit 1
+    end
+    [derived, "vendored in #{SECTIONS_TSV.delete_prefix("#{REPO}/")}, re-derived and confirmed " \
+              "against the published specification next door"]
+  elsif have
+    [read_sections_tsv, "vendored in #{SECTIONS_TSV.delete_prefix("#{REPO}/")} " \
+                        "(the published specification is not checked out here, so it was not re-derived)"]
+  elsif live
+    [sections_from(live), "read from #{live}"]
+  else
+    warn "check-publication-paths: FAIL -- no published section index is available. This repository"
+    warn "neither ships #{SPEC_SOURCE_REL} nor carries a vendored index, and the sibling repository is"
+    warn "not checked out beside it, so the section arm cannot ask its question. A gate that quietly"
+    warn "stops asking is worse than no gate: record an index with --record-sections, or check the"
+    warn "sibling repository out next to this one."
+    exit 1
+  end
+end
+
+def run_check(quiet: false)
+  digest = twin_digest(SELF_PATH)
+  if digest != TWIN_DIGEST
+    warn "check-publication-paths: FAIL -- this copy's body digest is #{digest[0, 16]}... but"
+    warn "TWIN_DIGEST records #{TWIN_DIGEST[0, 16]}.... This script is byte-identical in both"
+    warn "published repositories and that copy IS the single-source rule. Finish the procedure:"
+    warn "  1. bin/check-publication-paths --record-twin"
+    warn "  2. copy this whole file over the twin in the sibling repository"
+    warn "  3. run both"
+    exit 1
+  end
+
+  twin = sibling_twin_path
+  if twin && File.binread(twin) != File.binread(SELF_PATH)
+    warn "check-publication-paths: FAIL -- the twin at #{twin} is not byte-identical to this copy."
+    warn "Copy this file over it (or the other way round, if the edit was made there) and run both."
+    exit 1
+  end
+
+  index, note = resolve_index
+  findings, suppressed, files, cites, _ = scan_repo(index, note)
+
+  unless quiet
+    puts "check-publication-paths: #{files} tracked text file(s), #{cites} section citation(s) " \
+         "resolved against #{index.size} published section number(s)"
+    puts "  section index: #{note}"
+    puts "  twin: #{twin ? "byte-identical to #{twin}" : 'sibling repository not checked out here, ' \
+                                                          'body digest matches TWIN_DIGEST only'}"
+    ALLOW.each do |a|
+      n = suppressed[a[:id]]
+      puts format("  %-5s %-62s suppressed %d", a[:id], a[:scope], n)
+    end
+  end
+
+  if findings.empty?
+    unless quiet
+      puts
+      puts "check-publication-paths: OK -- nothing shipped here points at material that does not " \
+           "ship with it."
+      puts "(A resolving section number is NOT a correct one: this cannot tell which document a " \
+           "citation MEANT. See the header.)"
+    end
+    return 0
+  end
+
+  $stdout.flush
+  warn ""
+  warn "check-publication-paths: FAIL -- #{findings.length} line(s) point at material a reader of " \
+       "this repository will not have."
+  findings.sort_by { |f| [f[:path], f[:line]] }.each do |f|
+    warn "  #{f[:path]}:#{f[:line]}: [#{f[:id]}] #{f[:what]}#{f[:wrapped] ? ' (wrapped over two lines)' : ''}"
+    warn "      #{f[:text]}"
+    warn "      repair: #{f[:repair]}"
+  end
+  1
+end
+
+def run_record_sections
+  live = live_spec_source
+  if live.nil?
+    warn "check-publication-paths: FAIL -- cannot record a section index: the published protocol"
+    warn "specification is neither in this repository nor in a sibling checkout beside it."
+    exit 1
+  end
+  index = sections_from(live)
+  File.write(SECTIONS_TSV, render_sections_tsv(index, live))
+  puts "wrote #{SECTIONS_TSV.delete_prefix("#{REPO}/")} (#{index.size} sections, from #{live})"
+  0
+end
+
+def run_record_twin
+  digest = twin_digest(SELF_PATH)
+  body   = File.readlines(SELF_PATH)
+               .map { |l| l =~ DIGEST_LINE ? "TWIN_DIGEST = \"#{digest}\"\n" : l }.join
+  File.write(SELF_PATH, body)
+  puts "recorded TWIN_DIGEST #{digest}"
+  puts "NOW COPY THIS WHOLE FILE over the twin in the sibling repository and run both -- the two"
+  puts "copies are byte-identical by rule, and nothing else enforces it across repositories."
+  0
+end
+
+# ── self-test ────────────────────────────────────────────────────────────────
+#
+# PROVING NON-VACUITY IS HALF THE POINT. A pathspec that matches nothing exits
+# non-zero and looks exactly like a clean tree; the same shape read a whole
+# repository as leak-free once already. So the self-test asserts both
+# directions: a planted violation of EVERY pattern in the table is caught by id,
+# every exempt shape is NOT caught, and the real run over this repository
+# reports a file count and a citation count that are both non-zero.
+
+# >>> SELF-TEST FIXTURES -- BEGIN
+#
+# Shapes that must NOT fire. Each is a real form that ships here today.
+GREEN_FIXTURES = {
+  "lib/rfc_same_line.rb" => [
+    "# RFC 9110 §15.5.6 makes `Allow` mandatory on a 405.",
+  ],
+  "lib/rfc_wrapped.rb" => [
+    "# way round is a 405: the resource EXISTS and refuses this method. RFC 9110",
+    "# §15.5.6 makes `Allow` mandatory on one, and the hint names the call to make.",
+  ],
+  "lib/oas_wrapped.rb" => [
+    "# The Header Object is a Parameter Object MINUS `name` and `in` (OAS 3.1",
+    "# §4.8.21.1): the map key names the header.",
+  ],
+  "lib/identifier_wrapped.rb" => [
+    "  # {RescheduleDeliveryOperation}. No call signature in the prose: ADR-0023",
+    "  # §12.9 puts the arguments, and which are optional, in `input_schema`.",
+  ],
+  "lib/public_cites.rb" => [
+    "# §3.6 binds the whole mount; §3.7.4 relaxes a 200; §5.5, §6.3, §8.1, §8.3,",
+    "# §10, §15.2 and §15.4 all resolve and are correct.",
+  ],
+  "lib/sibling_repo.rb" => [
+    "# The normative text is kiosk.tech/specification.html and kiosk.tech/spec/protocol.md §8.3;",
+    "# the harness lives at reference/e2e/run.sh.",
+  ],
+  # The two blanket-exempt files carry EVERY forbidden shape at once, and they
+  # take them from the table rather than re-spelling them: a fixture that
+  # re-types a pattern's text drifts from it, and re-typing is also what puts a
+  # second copy of each forbidden token in this file for a cross-repository
+  # inventory to report. `§99.9` resolves to nothing, so each of these two is
+  # green only because its entry suppressed both the pattern arms AND the
+  # section arm.
+  "CHANGELOG.md" => ["- an entry recording, in §99.9 of a vintage since renumbered, that:"] +
+                    PATTERNS.flat_map { |pat| pat[:example] },
+  "CLAUDE.md" => ["Stripped whole at publish; also cites §99.9. Everything below goes with it:"] +
+                 PATTERNS.flat_map { |pat| pat[:example] },
+}.freeze
+
+# Shapes that MUST fire, beyond the one example each table entry carries.
+RED_EXTRA = {
+  "SEC-1" => ["lib/dangling.rb", ["# per §99.9 the wire is additive"]],
+}.freeze
+# <<< SELF-TEST FIXTURES -- END
+
+def plant(dir, rel, lines)
+  abs = File.join(dir, rel)
+  FileUtils.mkdir_p(File.dirname(abs))
+  File.write(abs, "#{lines.join("\n")}\n")
+end
+
+def build_fixture_repo(dir)
+  Dir.mkdir(File.join(dir, "bin"))
+  FileUtils.mkdir_p(File.join(dir, "spec"))
+  File.write(File.join(dir, "bin", File.basename(SELF_PATH)), File.binread(SELF_PATH))
+  File.chmod(0o755, File.join(dir, "bin", File.basename(SELF_PATH)))
+  if File.file?(SECTIONS_TSV)
+    File.write(File.join(dir, "spec", "public-spec-sections.tsv"), File.binread(SECTIONS_TSV))
+  else
+    File.write(File.join(dir, SPEC_SOURCE_REL), File.binread(File.join(REPO, SPEC_SOURCE_REL)))
+  end
+  GREEN_FIXTURES.each { |rel, lines| plant(dir, rel, lines) }
+  _, err, st = Open3.capture3("git", "-C", dir, "init", "-q")
+  raise "git init failed: #{err}" unless st.success?
+end
+
+def stage(dir)
+  _, err, st = Open3.capture3("git", "-C", dir, "add", "-A")
+  raise "git add failed: #{err}" unless st.success?
+end
+
+def run_guard_in(dir)
+  Open3.capture3(RbConfig.ruby, File.join(dir, "bin", File.basename(SELF_PATH)))
+end
+
+def run_self_test
+  failures = []
+  Dir.mktmpdir("check-publication-paths") do |dir|
+    build_fixture_repo(dir)
+    stage(dir)
+
+    out, err, st = run_guard_in(dir)
+    if st.exitstatus.zero?
+      puts "  green tree: exit 0 with every exempt shape present -- OK"
+    else
+      failures << "the green fixture tree should exit 0; it exited #{st.exitstatus}\n#{out}#{err}"
+    end
+    unless out.include?("section citation(s)")
+      failures << "the guard printed no citation count, so non-vacuity cannot be read off it"
+    end
+
+    # A green fixture must be green BECAUSE of its exemption and not by luck.
+    # Every exempt fixture cites a number that does NOT resolve, so if an
+    # exemption stopped firing the tree would redden -- and reading the
+    # per-entry suppression counts back says WHICH entry did the work.
+    counted = out.scan(/^\s+(AL-\d)\s+.*suppressed (\d+)\s*$/).to_h { |id, n| [id, n.to_i] }
+    { "AL-1" => 1, "AL-2" => 1, "AL-3" => 3, "AL-4" => 1 }.each do |id, want|
+      got = counted[id].to_i
+      if got < want
+        failures << "#{id} suppressed #{got} on the fixture tree, expected at least #{want} -- its " \
+                    "fixture is passing for some reason other than the exemption"
+      else
+        puts "  fixture tree: #{id} did the work #{got} time(s) -- OK"
+      end
+    end
+
+    cases = PATTERNS.map { |p| [p[:id], "lib/plant_#{p[:id].downcase.tr('-', '_')}.rb", p[:example]] }
+    cases += RED_EXTRA.map { |id, (rel, lines)| [id, rel, lines] }
+
+    cases.each do |id, rel, lines|
+      plant(dir, rel, lines)
+      stage(dir)
+      out2, err2, st2 = run_guard_in(dir)
+      combined = "#{out2}#{err2}"
+      if st2.exitstatus.zero?
+        failures << "planting #{id} in #{rel} did not turn the guard red"
+      elsif !combined.include?("#{rel}:")
+        failures << "#{id} fired but did not name #{rel}:\n#{combined}"
+      elsif !combined.include?("[#{id}]")
+        failures << "#{id} fired on #{rel} but was not reported under its own id:\n#{combined}"
+      else
+        wrapped = lines.length > 1 ? " (wrapped over two lines)" : ""
+        puts "  plant #{id} in #{rel}#{wrapped}: exit #{st2.exitstatus}, reported by id -- OK"
+      end
+      File.delete(File.join(dir, rel))
+      stage(dir)
+    end
+
+    _, _, st3 = run_guard_in(dir)
+    failures << "the fixture tree did not return to exit 0 after the plants were removed" unless st3.exitstatus.zero?
+  end
+
+  # NON-VACUITY over the REAL tree. A guard whose file set is empty exits 0 and
+  # reads exactly like a clean repository.
+  index, note = resolve_index
+  _, _, files, cites, _ = scan_repo(index, note)
+  failures << "the real tree scanned #{files} files -- the file set is empty or nearly so" if files < 50
+  failures << "the real tree examined #{cites} section citations -- the section arm is vacuous here" if cites < 1
+  puts "  real tree: #{files} tracked text file(s), #{cites} section citation(s) examined -- non-vacuous"
+
+  status = run_check(quiet: true)
+  failures << "the guard is not green over this repository (exit #{status})" unless status.zero?
+  puts "  real tree: check exits #{status}"
+
+  if failures.empty?
+    puts
+    puts "check-publication-paths --self-test: OK -- red on every planted violation, green on every " \
+         "exempt shape, and non-vacuous over this repository."
+    return 0
+  end
+
+  $stdout.flush
+  warn ""
+  warn "check-publication-paths --self-test: FAIL"
+  failures.each { |f| warn "  #{f}" }
+  1
+end
+
+# ── entry point ──────────────────────────────────────────────────────────────
+
+mode = ARGV[0]
+code =
+  case mode
+  when nil            then run_check
+  when "--self-test"  then run_self_test
+  when "--record-sections" then run_record_sections
+  when "--record-twin"     then run_record_twin
+  else
+    warn "usage: check-publication-paths [--self-test|--record-sections|--record-twin]"
+    2
+  end
+exit code

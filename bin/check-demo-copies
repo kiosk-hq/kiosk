@@ -2074,33 +2074,48 @@ FRAGMENTS = {
   },
 }.freeze
 
-# One unit = one `def` (endless or not, singleton or not) or one constant
-# assignment, taken from its first line and GROWN until Ripper can parse it.
+# One unit = EVERY `def` of that name in the file (endless or not, singleton or
+# not), or every assignment to that constant — each taken from its first line and
+# GROWN until Ripper can parse it, then concatenated in file order.
 #
 # Growing rather than matching a column-0 `end` (the flow-runner rule's handle)
 # because these live inside a `module … end` at an indentation the next file may
 # not share, and because a `def foo = expr` has no `end` at all. The parse is
 # the terminator AND the validity check in one: a fragment that never parses is
 # reported rather than silently dropped.
+#
+# EVERY definition and not the FIRST, and that is a silent hole closed rather
+# than a refinement (T-136). This rule was written against
+# `app/operations/wire_arguments.rb` — one module, where a name occurs once — and
+# it kept the first definition and dropped the rest without saying so.
+# `script/pay_window.rb` has TWO PSP stubs, BlockingPsp and CountingPsp, and both
+# define `initialize`, `capture` and `setup_required?`: the moment that path
+# joined FRAGMENT_PATHS the summary would have counted three units as held while
+# three definitions were compared to NOTHING, inside the driver whose whole
+# subject is a payment window. Concatenating keeps the handle a bare NAME, so
+# every declaration already written stays valid, and makes the comparison cover
+# the file — a copy that edits its SECOND `capture`, or that reorders the two
+# classes, now fails. It also corrects a MEASUREMENT: taken before this change,
+# `script/redteam_suite.rb` read `initialize` and `call` as identical across
+# getgrocery, hoteling and skooti, when one copy defines each of them NINE times
+# and only the first was ever compared.
 FRAGMENT_START = /\A\s*(?:def\s+(?:self\.)?([a-z_][A-Za-z0-9_]*[?!=]?)|([A-Z][A-Za-z0-9_]*)\s*=[^=~>])/
 FRAGMENT_MAX_LINES = 200
 
 def fragment_units(path)
   lines = File.readlines(path)
-  units = {}
+  units = Hash.new { |h, k| h[k] = +"" }
   unreadable = []
   lines.each_index do |i|
     m = lines[i].match(FRAGMENT_START) or next
 
     name = m[1] || m[2]
-    next if units.key?(name)
-
     src = (i...[i + FRAGMENT_MAX_LINES, lines.size].min).lazy
                                                         .map { |j| lines[i..j].join }
                                                         .find { |cand| !Ripper.sexp(cand).nil? }
-    src ? units[name] = src : unreadable << "#{name} (line #{i + 1})"
+    src ? units[name] << src : unreadable << "#{name} (line #{i + 1})"
   end
-  [units, unreadable]
+  [units.to_h, unreadable]
 end
 
 fragment_sources = Hash.new { |h, k| h[k] = {} } # "path#unit" => demo => source

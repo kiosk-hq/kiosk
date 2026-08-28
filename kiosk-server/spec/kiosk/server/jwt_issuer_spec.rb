@@ -42,6 +42,29 @@ RSpec.describe Kiosk::Server::JwtIssuer do
       expect(payload["jti"]).to match(/\A[0-9a-f-]+\z/) # UUID
     end
 
+    # SPEC-043 lists `nbf` among the claims every access token carries, and until
+    # K-1160 NOTHING in the tree asserted it — `\bnbf\b` matched zero spec lines
+    # in the whole repository. The claim is stamped from the SAME instant as
+    # `iat`, and that equality is the assertion rather than mere presence: an
+    # `nbf` ahead of `iat` would open a window in which a token this issuer has
+    # just minted is refused by this issuer's own verifier, and a presence check
+    # cannot see that.
+    it "stamps `nbf` at the issue instant — equal to `iat`, inside the lifetime" do
+      now   = Time.utc(2026, 6, 10, 12, 0, 0)
+      token = described_class.issue(
+        claims:   { sub: "user-1" },
+        audience: audience,
+        now:      now,
+      )
+      payload, = ::JWT.decode(token, key.rsa.public_key, true,
+                              algorithms: ["RS256"], verify_expiration: false)
+
+      expect(payload["nbf"]).to be_a(Integer)
+      expect(payload["nbf"]).to eq(now.to_i)
+      expect(payload["nbf"]).to eq(payload["iat"])
+      expect(payload["nbf"]).to be < payload["exp"]
+    end
+
     it "defaults to a one-hour lifetime" do
       now = Time.utc(2026, 6, 10, 12, 0, 0)
       token = described_class.issue(

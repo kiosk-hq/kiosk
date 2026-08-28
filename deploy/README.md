@@ -1,7 +1,7 @@
 # Kiosk hosted live demos — deploy runbook
 
 Runbook for hosting the 7 Kiosk demo Rails apps **plus the KYC broker**
-— 8 apps — on **one small VPS**, one **Postgres** cluster (DB-per-app), fronted
+— 8 apps <!-- count: 8 ¦ from: git ls-files 'deploy/env/*.env.example' | wc -l --> — on **one small VPS**, one **Postgres** cluster (DB-per-app), fronted
 by **Caddy** (auto-TLS), each app a loopback **Puma** under **systemd** — sized
 to survive an HN stampede.
 
@@ -53,7 +53,9 @@ tangible first-hand. (The toll prices abuse; it is not by itself a DoS shield �
 see "Edge rate-limit — REQUIRED" below.) Any other demo is knob-adjustable: set
 `KIOSK_POW_DIFFICULTY=high` on it too to feel its own toll.
 
-> **How it wires (WIRED).** All seven demos' initializers read
+> **How it wires (WIRED).** All seven demos'
+> <!-- count: 7 ¦ from: git ls-files 'kiosk-demo-*/app/services/pow_difficulty.rb' | wc -l -->
+> initializers read
 > `ENV["KIOSK_POW_DIFFICULTY"]` (`low` default, `high` opt-in) via
 > `app/services/pow_difficulty.rb` and set their Equihash params accordingly:
 > - **low** → `{n:96,k:5}` — sub-second reference solve, poke-friendly.
@@ -373,7 +375,7 @@ curl -s -X POST "$BASE/kiosk/create_order" \
 ## Live-activity telemetry — WIRED (opt-in)
 
 Aggregate, privacy-safe **live-activity counters** are now wired into all seven
-demos (app-layer, NOT kiosk-core — satellite neutrality). Off by default; a demo
+demos <!-- count: 7 ¦ from: git ls-files 'kiosk-demo-*/app/services/demo_telemetry.rb' | wc -l --> (app-layer, NOT kiosk-core — satellite neutrality). Off by default; a demo
 that never sets `KIOSK_TELEMETRY=1` behaves exactly as before.
 
 **Shared store.** Provision the one shared DB once:

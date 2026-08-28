@@ -1164,6 +1164,56 @@ jobs:
       - name: One subsection per kind per release, and every changelog declared
         run: ./bin/check-changelog
 
+  # A count typed into prose is a claim with no owner: true the day it is
+  # written, and nothing notices when the thing it counts changes. K-1202 elided
+  # twelve of them; K-1205 — a different wave in the same session — re-typed
+  # four, one in the file K-1202 had just repaired; K-1221 then found one that
+  # was not merely unguarded but WRONG, telling an operator the proof-of-work
+  # flow solves four proofs where the run solves one. Every one was found by a
+  # human eye, weeks late, because nothing in this repository reads a numeral.
+  #
+  # bin/check-prose-counts reads them. A count may carry a marker naming the
+  # command that re-derives it — `<!-- count: N ¦ from: … -->` — and every
+  # declared command is RUN and compared, printing both numbers on a mismatch.
+  # Beside that it censuses shipped prose (Markdown, environment templates, Rake
+  # task descriptions) newline-normalised, because a line-based scan cannot see a
+  # wrapped sentence and that blindness cost two repair waves a site each; a
+  # count that is neither declared nor allow-listed with a reason fails.
+  #
+  # Attribution is scoped to the SENTENCE, never to a character window, and that
+  # is K-1222: the sweep this inherits used ±320 characters and certified a
+  # defective sentence because an unrelated «Requires python3 + numpy.» line fell
+  # inside it, while that sentence's byte-identical twin failed the same test.
+  # The --self-test plants a marker 146 characters from the count it claims and
+  # requires the guard to stay red, so that lesson is executable rather than
+  # remembered.
+  #
+  # Ruby COMMENTS are reported and not gated — 465 hits against 83 gated, and an
+  # allow-file with 465 entries stops being read. The number is printed on every
+  # run so the ungated half stays visible. Stdlib Ruby only: no bundle, no
+  # services, no database, ~1 s for both steps; the declared commands are
+  # `git ls-files`, `grep` and `sed` over this checkout.
+  prose-counts:
+    name: counts in prose re-derive (bin/check-prose-counts)
+    runs-on: ubuntu-latest
+    # The daily schedule exists for solver-pin-live; don't rebuild the world.
+    if: github.event_name != 'schedule'
+
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Set up Ruby
+        uses: ruby/setup-ruby@v1
+        with:
+          ruby-version: "4.0.1"
+          bundler-cache: false
+
+      - name: The guard is red on a plant of every arm, and non-vacuous here
+        run: ./bin/check-prose-counts --self-test
+
+      - name: Every declared count agrees with the command that re-derives it
+        run: ./bin/check-prose-counts
+
   # Production-boot smoke — the guard for the prod-only bug class that the
   # dev-mode gems/demos/e2e jobs are all blind to. Three shipped bugs (K-422
   # eager-load Zeitwerk crash, K-436 missing governance columns → manage-page

@@ -1,0 +1,113 @@
+# prose-counts-allow.txt -- the counts in shipped prose that bin/check-prose-counts
+# does not require an inline marker for. One line per (file, count) pair:
+#
+#   <path> ¦ <cardinal> <noun> ¦ [from: <command> ¦] <one-line reason>
+#
+# THE KEY CARRIES THE NUMBER. Change "seven demos" to "eight demos" and this
+# entry stops matching: the run then goes red from both ends at once -- an
+# unexcused count in the prose AND an allow entry that matched nothing -- which
+# is the property that makes this a record rather than a mute button. An entry
+# covers every occurrence of that pair in that file, and the run prints how many
+# each one covered.
+#
+# `from:` IS NOT AN EXCUSE, IT IS A MEASUREMENT. When present, the command is run
+# from the repository root and its last numeric line must equal the number in the
+# key, exactly as an inline marker is. Prefer it: an entry with a command cannot
+# rot, and an entry with only a reason can. The commands run under `/bin/sh`, so
+# `grep` is the real `/usr/bin/grep` over the working tree and `git ls-files` is
+# what git tracks -- two different file sets, chosen per entry.
+#
+# Reason-only entries are for numerals that count nothing this repository can
+# re-derive: a figure from someone else's document, a number inside a standard's
+# name, a quantity the sentence itself enumerates in full, or a constant that
+# belongs to a different artefact.
+
+README.md ¦ four demos ¦ from: git ls-files 'kiosk-demo-*/before-after.md' | wc -l ¦ the demos carrying the long-form contrast document; the sentence names all four.
+
+deploy/CHECKLIST.md ¦ seven demos ¦ from: git ls-files 'kiosk-demo-*/config/initializers/kiosk.rb' | wc -l ¦ the operator demos, i.e. every demo that mounts the Kiosk wire; the KYC broker mounts none and has no initializer.
+deploy/CHECKLIST.md ¦ 7 demos ¦ from: git ls-files 'kiosk-demo-*/config/initializers/kiosk.rb' | wc -l ¦ same population as the line above, written in digits by the checklist's own style.
+deploy/CHECKLIST.md ¦ 8 apps ¦ from: git ls-files 'deploy/env/*.env.example' | wc -l ¦ everything deployed to the box: the operator demos plus the broker, one environment template each.
+deploy/CHECKLIST.md ¦ eight apps ¦ from: git ls-files 'deploy/env/*.env.example' | wc -l ¦ same population as the line above, spelled out.
+deploy/CHECKLIST.md ¦ 7 apps ¦ the per-app environment section covers the demo apps only; nothing in the tree separates "demo app" from "app" as a file set, so this is left unmeasured rather than given a command that would agree by accident.
+deploy/CHECKLIST.md ¦ 2 proofs ¦ the reputation schedule's first-contact cost, a property of the difficulty curve at run time and not a population any file list can count.
+
+deploy/README.md ¦ 7 demos ¦ from: git ls-files 'kiosk-demo-*/config/initializers/kiosk.rb' | wc -l ¦ the operator demos, one database and one login role each.
+deploy/README.md ¦ six demos ¦ from: git ls-files 'kiosk-demo-*/config/initializers/kiosk.rb' | grep -v getgrocery | wc -l ¦ the reset script reseeds every operator demo except getgrocery, which is reseeded additively.
+deploy/README.md ¦ two documents ¦ the two catalogue documents are named in full in the same sentence, so the numeral adds no claim the sentence does not already carry.
+
+deploy/env/atablefor.env.example ¦ 2 proofs ¦ the reputation schedule's first-contact cost, same figure and same reason as the checklist entry above.
+
+e2e/README.md ¦ four tables ¦ the database tables a settled mandate trail writes; the sentence enumerates them and no file list counts rows of a schema.
+
+kiosk-all/README.md ¦ two gems ¦ from: grep -c add_dependency kiosk-all/kiosk-all.gemspec ¦ the runtime dependencies this umbrella gem declares, which is what the sentence is about.
+
+kiosk-demo-atablefor/README.md ¦ two actions ¦ from: cat kiosk-demo-atablefor/app/controllers/kiosk/*.rb | grep -c '^  kind :action' ¦ the actions this demo declares; the sentence names the controller each lives in.
+
+kiosk-demo-getgrocery/README.md ¦ 3 scenarios ¦ the cashier-check trio inside one red-team battery; the sentence names all three and the battery's own run prints its totals.
+kiosk-demo-getgrocery/before-after.md ¦ four queries ¦ from: cat kiosk-demo-getgrocery/app/controllers/kiosk/*.rb | grep -c '^  kind :query' ¦ the queries this demo declares.
+kiosk-demo-getgrocery/before-after.md ¦ four actions ¦ from: cat kiosk-demo-getgrocery/app/controllers/kiosk/*.rb | grep -c '^  kind :action' ¦ the actions this demo declares.
+kiosk-demo-getgrocery/before-after.md ¦ three rows ¦ how many catalogue rows the worked example's driver puts in the cart; a property of that driver's run, which the document quotes in full beside it.
+
+kiosk-demo-hoteling/before-after.md ¦ three actions ¦ from: cat kiosk-demo-hoteling/app/controllers/kiosk/*.rb | grep -c '^  kind :action' ¦ the actions this demo declares.
+
+kiosk-demo-philslist/README.md ¦ seven demos ¦ from: git ls-files 'kiosk-demo-*/config/initializers/kiosk.rb' | wc -l ¦ the operator demos, every one of which took the post-install migration this paragraph is about.
+kiosk-demo-philslist/README.md ¦ three endpoints ¦ from: cat kiosk-demo-philslist/app/controllers/kiosk/*.rb | grep -c '^  kind :action' ¦ one endpoint per action verb, which is what the lifecycle walk uses.
+kiosk-demo-philslist/README.md ¦ two controllers ¦ from: git ls-files 'kiosk-demo-philslist/app/controllers/kiosk/*.rb' | wc -l ¦ the handler controllers the initializer names.
+
+kiosk-demo-prove/README.md ¦ two endpoints ¦ the two reserved endpoints of the wire are named in full in the same sentence; the point being made is that this demo mounts neither.
+
+kiosk-demo-skooti/README.md ¦ three gates ¦ the gates are enumerated in the same sentence, and they are conditions in one method rather than a countable file set.
+kiosk-demo-skooti/before-after.md ¦ three gates ¦ same three conditions, enumerated in full in the same sentence.
+kiosk-demo-skooti/before-after.md ¦ two controllers ¦ from: git ls-files 'kiosk-demo-skooti/app/controllers/kiosk/*.rb' | wc -l ¦ the handler controllers this demo declares its verbs in.
+kiosk-demo-skooti/before-after.md ¦ three queries ¦ from: cat kiosk-demo-skooti/app/controllers/kiosk/*.rb | grep -c '^  kind :query' ¦ the queries this demo declares.
+kiosk-demo-skooti/before-after.md ¦ five actions ¦ from: cat kiosk-demo-skooti/app/controllers/kiosk/*.rb | grep -c '^  kind :action' ¦ the actions this demo declares.
+kiosk-demo-skooti/RENTAL_TOKEN.md ¦ 64 entries ¦ from: sed -n 's/^#define JTI_STORE_SIZE //p' kiosk-demo-skooti/firmware/jti_store.h ¦ the firmware replay store's capacity, read off the header that defines it.
+kiosk-demo-skooti/appclip/README.md ¦ 64 entries ¦ from: sed -n 's/^#define JTI_STORE_SIZE //p' kiosk-demo-skooti/firmware/jti_store.h ¦ the same firmware constant, quoted in the app-clip status table.
+kiosk-demo-skooti/firmware/README.md ¦ 64 entries ¦ from: sed -n 's/^#define JTI_STORE_SIZE //p' kiosk-demo-skooti/firmware/jti_store.h ¦ the same firmware constant, in the document that belongs to it.
+
+kiosk-demo-stylish/README.md ¦ four sections ¦ how many sections the walkthrough script prints; the four are listed immediately below the sentence and the run prints them.
+kiosk-demo-stylish/README.md ¦ two controllers ¦ from: git ls-files 'kiosk-demo-stylish/app/controllers/kiosk/*.rb' | wc -l ¦ the handler controllers the initializer names.
+
+kiosk-demo-tudu/README.md ¦ one verbs ¦ not a count: "not one of the verbs in the table above" is a negation, and the numeral counts nothing.
+kiosk-demo-tudu/README.md ¦ two controllers ¦ from: git ls-files 'kiosk-demo-tudu/app/controllers/kiosk/*.rb' | wc -l ¦ the handler controllers the initializer names.
+kiosk-demo-tudu/README.md ¦ six actions ¦ from: grep -c '^  kind :action' kiosk-demo-tudu/app/controllers/kiosk/todo_lists_controller.rb ¦ the actions this controller declares, which the sentence then names one by one.
+
+kiosk-pow-equihash/README.md ¦ 10 proofs ¦ an illustrative quotation of what a challenge tells a client, not a count of anything in this repository.
+
+kiosk-server/README.md ¦ two endpoints ¦ the two reserved endpoints are named in full in the same sentence, and they are routes of this engine rather than a file set.
+
+kiosk-server/lib/generators/kiosk/install/install_generator.rb ¦ six migrations ¦ from: git ls-files 'kiosk-server/lib/generators/kiosk/install/templates/create_kiosk_*.rb.tt' | wc -l ¦ the schema migrations this generator emits; the description is what `rake -T` prints to an adopter.
+
+deploy/CHECKLIST.md ¦ six demos ¦ from: git ls-files 'kiosk-demo-*/config/initializers/kiosk.rb' | grep -v skooti | wc -l ¦ the operator demos other than skooti, which is the only one with firmware locks.
+deploy/CHECKLIST.md ¦ three demos ¦ how many demos one eager-load defect took down in a past deployment; a fact about that day, not a population of this tree.
+deploy/CHECKLIST.md ¦ eight sites ¦ from: git ls-files 'deploy/env/*.env.example' | wc -l ¦ one served site per deployed app, template for template.
+deploy/README.md ¦ seven demos ¦ from: git ls-files 'kiosk-demo-*/app/services/pow_difficulty.rb' | wc -l ¦ the demos that honour the difficulty knob, counted by the service that reads it.
+deploy/README.md ¦ 8 apps ¦ from: git ls-files 'deploy/env/*.env.example' | wc -l ¦ everything provisioned on the box, one environment template each.
+deploy/README.md ¦ three documents ¦ the always-free documents are named in full in the same sentence; they are routes of the engine rather than a file set.
+deploy/env/getgrocery.env.example ¦ eight apps ¦ from: git ls-files 'deploy/env/*.env.example' | wc -l ¦ the Puma sizing paragraph's population, one template per app.
+deploy/env/getgrocery.env.example ¦ seven demos ¦ from: git ls-files 'kiosk-demo-*/config/initializers/kiosk.rb' | wc -l ¦ the operator demos, every one of which reads the same role-named variable.
+deploy/env/skooti.env.example ¦ seven demos ¦ from: git ls-files 'kiosk-demo-*/config/initializers/kiosk.rb' | wc -l ¦ the same sentence and the same population as the getgrocery template.
+kiosk-all/README.md ¦ five gems ¦ a hypothetical bundle the paragraph argues against; those gems are named in the sentence and several are not in this tree at all.
+kiosk-demo-atablefor/README.md ¦ two queries ¦ from: cat kiosk-demo-atablefor/app/controllers/kiosk/*.rb | grep -c '^  kind :query' ¦ the queries this demo declares.
+kiosk-demo-atablefor/README.md ¦ two controllers ¦ from: git ls-files 'kiosk-demo-atablefor/app/controllers/kiosk/*.rb' | wc -l ¦ the handler controllers the initializer names.
+kiosk-demo-atablefor/before-after.md ¦ 2 proofs ¦ the reputation schedule's first-contact cost at this demo's difficulty, a run-time curve rather than a file set.
+kiosk-demo-getgrocery/before-after.md ¦ two initializers ¦ not a count of initializers: the numeral counts the two artefacts the install generator emits, and the noun is part of the file path naming one of them.
+kiosk-demo-getgrocery/before-after.md ¦ two files ¦ the two files are named in the sentence immediately before this one, and the block below quotes both in full.
+kiosk-demo-hoteling/before-after.md ¦ two initializers ¦ same generator sentence, same reason, as the getgrocery entry above.
+kiosk-demo-hoteling/before-after.md ¦ three beats ¦ how many beats this demo's rake task runs; the task prints them and the document quotes the run.
+kiosk-demo-hoteling/before-after.md ¦ five queries ¦ from: cat kiosk-demo-hoteling/app/controllers/kiosk/*.rb | grep -c '^  kind :query' ¦ the queries this demo declares.
+kiosk-demo-philslist/README.md ¦ four tables ¦ the tables the install generator's schema creates; the migrations are counted elsewhere in this file and the tables are named in the paragraph.
+kiosk-demo-philslist/README.md ¦ two fields ¦ the two descriptor fields are named in the same sentence, and the point being made is that one of them was dropped.
+kiosk-demo-philslist/README.md ¦ two files ¦ from: git ls-files 'kiosk-demo-philslist/app/controllers/kiosk/*.rb' | wc -l ¦ the handler controllers, which is what the sentence says need not have been two.
+kiosk-demo-skooti/README.md ¦ two endpoints ¦ the two reserved endpoints of the wire are named in full in the same sentence.
+kiosk-demo-skooti/before-after.md ¦ four beats ¦ how many further beats the task runs beyond the excerpt; the task prints them and the document quotes the run.
+kiosk-demo-skooti/before-after.md ¦ 3 pins ¦ not a count: "RUN 3" is a label in a quoted run and "pins" is the verb of that sentence.
+kiosk-demo-skooti/before-after.md ¦ two verbs ¦ the two query verbs that one beat of the run exercises, which is a subset of this demo's three and is named in the sentence.
+kiosk-demo-skooti/before-after.md ¦ two initializers ¦ same generator sentence, same reason, as the getgrocery entry above.
+kiosk-demo-skooti/firmware/README.md ¦ 22 assertions ¦ the assertion total the firmware's own host test prints; it belongs to that binary's output and no file list counts it.
+kiosk-demo-stylish/README.md ¦ 14 scenarios ¦ a quotation of what the battery PRINTED while a live escalation went unreported; the sentence is about that output being wrong, so the number must not move with the tree.
+kiosk-demo-stylish/README.md ¦ four beats ¦ the four scenario classes are named one by one in the same sentence.
+kiosk-demo-stylish/README.md ¦ two files ¦ from: git ls-files 'kiosk-demo-stylish/app/controllers/kiosk/*.rb' | wc -l ¦ the handler controllers, which is what the sentence says need not have been two.
+kiosk-demo-tudu/README.md ¦ 404 beats ¦ not a count: the numeral is an HTTP status in a list of refusals, and the noun sits three words further along the same joined sentence.
+kiosk-demo-tudu/README.md ¦ two files ¦ from: git ls-files 'kiosk-demo-tudu/app/controllers/kiosk/*.rb' | wc -l ¦ the handler controllers, which is what the sentence says need not have been two.
+kiosk-reputation/README.md ¦ one proofs ¦ not a count: "a single proof ... or as an array of N proofs" is a shape, and the numeral belongs to the singular case.

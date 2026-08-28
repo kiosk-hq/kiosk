@@ -1,0 +1,820 @@
+#!/usr/bin/env ruby
+# frozen_string_literal: true
+
+# check-prose-counts -- hand-typed counts in shipped prose, gated against a
+# command that re-derives them (T-143; the class is K-1202, K-1205, K-1221).
+#
+# WHY, from what actually happened rather than from principle. A count typed
+# into prose is a claim with no owner: it is true on the day it is written and
+# nothing anywhere notices when the thing it counts changes. K-1202 elided
+# twelve such counts; K-1205 -- a different wave in the SAME session -- re-typed
+# four of them, one in the very file K-1202 had just repaired. K-1221 then found
+# one that was not merely unguarded but WRONG: two demos told an operator their
+# proof-of-work flow solves four proofs while the run reports one. Nothing in
+# this repository reads a numeral in prose, so every one of those was found by a
+# human eye, weeks late, and the two waves that fought each other could both
+# believe they were right.
+#
+# TWO HALVES, and only the first is a promise about truth.
+#
+# (a) DECLARATION. A count may carry a marker naming the command that
+#     re-derives it:
+#
+#       <!-- count: 6 ¦ from: git ls-files 'a/b/create_*.rb.tt' | wc -l -->
+#
+#     and in a Ruby comment or an environment template, the same payload after
+#     the comment character:
+#
+#       # count: 6 ¦ from: git ls-files 'a/b/create_*.rb.tt' | wc -l
+#
+#     ONE separator, the broken bar, exactly once; everything after `from:` is
+#     the command, verbatim, pipes and all. Every declared command is run from
+#     the repository root, its last numeric line compared against the declared
+#     count, and a mismatch fails printing BOTH numbers. It CHECKS CONSISTENCY,
+#     NEVER TRUTH: a command that measures the wrong thing agrees with a count
+#     that means nothing, and this gate will call that green forever.
+#
+# (b) CENSUS. A whole-file NEWLINE-NORMALISED scan for a cardinal -- word or
+#     digit -- standing in front of a countable noun. Newline-normalised because
+#     a line-based grep cannot see a WRAPPED sentence, and that is not a
+#     hypothetical: two separate repair waves missed a site each for exactly
+#     that reason, and one of them was a whole paragraph of a deployment runbook.
+#     Lines are joined into paragraphs first, then split into sentences, and
+#     every judgement below is made inside ONE SENTENCE.
+#
+# ATTRIBUTION IS SCOPED TO THE SENTENCE, AND THAT IS THE WHOLE OF K-1222.
+# The sweep this guard inherits judged whether a figure was attributed by taking
+# a ±320-character window around it and looking for a token that would do the
+# attributing. It certified a defective sentence because an unrelated line --
+# "Requires python3 + numpy." -- happened to fall inside the window, while that
+# sentence's BYTE-IDENTICAL TWIN in the sibling demo failed the same test. One
+# defect read as clean and its twin read as defective, on the same criterion, in
+# the same wave. A proximity window scores a token's DISTANCE and never whether
+# that token is doing the work. So a marker here declares the counts in the
+# SENTENCE IT IS WRITTEN IN and in no other -- put it inside the sentence, or on
+# the line immediately above it with no blank line between, which is the same
+# paragraph and therefore the same sentence once the joining is done. A marker a
+# paragraph away is not near enough, however few characters away it is, and the
+# self-test plants exactly that case and requires the guard to stay RED.
+#
+# WHAT IS GATED AND WHAT IS ONLY REPORTED, with the numbers that decided it.
+# MEASURED at head, over `git ls-files`, with the countable-noun vocabulary
+# below: 83 counts in Markdown, environment templates and Rake task
+# descriptions, against 465 in Ruby COMMENTS. The first three classes are
+# gated -- they are what a reader of this repository and an operator running
+# `rake -T` are shown -- and they cost 72 allow entries, 38 of which carry a
+# `from:` command and are therefore MEASURED rather than excused.
+#
+# The comments are reported and not gated, and that is a measurement rather than
+# a preference: gating 465 sites needs 465 allow entries, nearly all of which
+# would say the same thing -- that an engineering comment enumerating what it is
+# describing ("in two or more demos", "behind three gates") is ordinary English
+# and not a claim about a countable population -- and an allow-file that large
+# stops being read, which is exactly how a gate becomes a green light. So the
+# number is PRINTED on every run instead, beside the count of hits the noun
+# vocabulary does not reach at all, and moving a file class from reported to
+# gated is one line in the class table plus the allow entries someone actually
+# wrote. A guard that is green because its allow-file swallowed everything is
+# the failure this split exists to avoid.
+#
+# WHAT IT WOULD NOT CATCH. This list is the header's most useful paragraph, so
+# nothing here is overtrusted:
+#
+#   * A declared command that measures the WRONG THING. Consistency, not truth.
+#   * A count with no numeral -- "all of them", "each of the tasks above",
+#     "both". Nothing here can see those.
+#   * A numeral that is right beside an enumeration whose MEMBERS are wrong:
+#     "the four demos -- a, b, c, d" where d is not one. The count is checked;
+#     the list beside it is not.
+#   * MEASUREMENTS rather than counts -- "~1.3 GiB", "~10 s". Those are a
+#     different class needing a different instrument, and pretending this one
+#     covers them is how the class above got certified empty.
+#   * The countable-noun vocabulary is a hand-kept list and is therefore this
+#     guard's main blind spot. To keep the blind spot MEASURED rather than
+#     assumed, every run also reports how many cardinal-plus-plural-noun hits
+#     the vocabulary does NOT gate, so the residue is a number on every run.
+#   * Prose inside string literals other than a Rake `desc`, and files whose
+#     extension matches no declared class. Both are counted and printed.
+#   * Allow-file rot: a recorded reason that has quietly stopped being true. An
+#     entry that matches nothing fails, and an entry may carry its own `from:`
+#     command, which is run and compared exactly like an inline marker -- so the
+#     entries that CAN be held to a measurement are held to one.
+#
+# RUNNING DECLARED COMMANDS is running content out of tracked files. That is the
+# same trust boundary as this repository's Rakefiles and its other checks, and
+# CI already executes all of them; a reader who does not trust this tree should
+# not be running its scripts at all.
+#
+# USAGE
+#   bin/check-prose-counts              # check this repository, exit 0/1
+#   bin/check-prose-counts --list       # every census hit with its sentence
+#   bin/check-prose-counts --self-test  # prove it is red on a plant of every arm
+#
+# Stdlib only: no bundle, no services, no database, no network.
+
+require "open3"
+require "fileutils"
+require "rbconfig"
+require "tmpdir"
+
+SELF_PATH  = File.realpath(__FILE__)
+REPO       = File.dirname(File.dirname(SELF_PATH))
+ALLOW_FILE = "bin/prose-counts-allow.txt"
+
+# >>> VOCABULARY -- BEGIN
+#
+# The cardinals, and the countable nouns a cardinal in front of one makes a
+# COUNT rather than ordinary English. Declared here, in one place, because this
+# vocabulary is the guard's reach: nothing outside it is gated, and the run
+# prints how much it left ungated.
+CARDINAL_WORDS = %w[
+  one two three four five six seven eight nine ten eleven twelve thirteen fourteen fifteen
+  sixteen seventeen eighteen nineteen twenty thirty forty fifty sixty seventy eighty ninety
+  hundred thousand
+].freeze
+
+WORD_VALUE = {
+  "one" => 1, "two" => 2, "three" => 3, "four" => 4, "five" => 5, "six" => 6, "seven" => 7,
+  "eight" => 8, "nine" => 9, "ten" => 10, "eleven" => 11, "twelve" => 12, "thirteen" => 13,
+  "fourteen" => 14, "fifteen" => 15, "sixteen" => 16, "seventeen" => 17, "eighteen" => 18,
+  "nineteen" => 19, "twenty" => 20, "thirty" => 30, "forty" => 40, "fifty" => 50, "sixty" => 60,
+  "seventy" => 70, "eighty" => 80, "ninety" => 90, "hundred" => 100, "thousand" => 1000
+}.freeze
+
+NOUNS = %w[
+  actions apps arguments assertions batteries beats checks columns controllers copies cuts
+  demos descriptors documents endpoints entries examples fields files gates gems guards
+  handlers headings initializers jobs migrations operators pins proofs queries repos
+  repositories rows scenarios sections sites specs tables tasks templates verbs
+].freeze
+# <<< VOCABULARY -- END
+
+CARD_ALT = "#{CARDINAL_WORDS.join('|')}"
+CARDINAL = /(?:#{CARD_ALT})(?:-(?:#{CARD_ALT}))?|\d{1,6}/i.freeze
+CARD_AT  = /\b(#{CARDINAL})\b\+?/i.freeze
+# How many words after the cardinal the noun may sit: "four shipped queries" is
+# a count, and so is "four of the demos". Written as a WORD WINDOW inside one
+# sentence rather than a character window, and the difference is the whole of
+# K-1222 -- see the header.
+NOUN_WITHIN = 3
+# The broader shape the vocabulary does not gate: a cardinal in front of any
+# plural-looking word. Reported so the blind spot is a number, not a belief.
+BROAD    = /\b(?:#{CARD_ALT})\b\s+([a-z][a-z-]{3,})\b/i.freeze
+BROAD_STOP = %w[is was has does its this thus less plus his as us gas bus yes vs].freeze
+
+MARKER = /count:\s*(\d+)\s*¦\s*from:\s*(.+?)\s*(?:-->|\z)/.freeze
+# Every HTML comment, delimiters included, lifted OUT of a sentence before the
+# adjacency test -- markers are parsed from the raw sentence first, so nothing is
+# lost. Two reasons. A marker written between the numeral and the noun it
+# declares -- `all seven <!-- … --> demos` -- would otherwise HIDE the count
+# instead of declaring it (measured: it happened on the first marker written by
+# hand). And a comment is a directive to a machine rather than prose to a
+# reader: this repository's demo documents carry `<!-- derived: … -->` blocks
+# whose own words were being censused as if a reader saw them. Without that a marker written between the numeral
+# and the noun it declares -- `all seven <!-- … --> demos` -- HIDES the count
+# instead of declaring it, and the census silently loses a site. Measured while
+# seeding this guard: it happened on the first marker written by hand.
+MARKER_FULL = /<!--.*?-->/m.freeze
+# A marker written after a comment character has no closing delimiter, so it is
+# given one while the line boundary is still known. Otherwise the "up to `-->`"
+# rule runs to the end of the joined paragraph and swallows whatever follows.
+BARE_MARKER = /\Acount:\s*(\d+)\s*¦\s*from:\s*(.+?)\s*\z/.freeze
+
+# >>> FILE CLASSES -- BEGIN
+#
+# Which tracked files are read, and as what. A file matching no class is out of
+# scope and is counted in the run's own output, so "the corpus is what I think
+# it is" stays a measurement.
+#
+#   :prose     Markdown -- what a reader of this repository is shown. GATED.
+#   :env       An environment template's `#` commentary -- what a deployer reads
+#              before switching a knob on, which is the reader K-1217 was about.
+#              GATED, and read as comment prose rather than as Markdown.
+#   :tasks     A Rake `desc` string -- what `rake -T` prints to an operator, so
+#              it is prose the tool itself publishes. GATED.
+#   :comments  Ruby comment blocks -- commentary for a reader of the source, in
+#              which an enumeration in the same breath is ordinary. REPORTED.
+def classify(rel)
+  base = File.basename(rel)
+  return nil if base == "CHANGELOG.md"   # append-only: an old entry records the tree AS IT WAS
+  return nil if base == "CLAUDE.md"      # removed whole at publication; not shipped content
+  return :prose if rel.end_with?(".md")
+  return :env   if base.end_with?(".env.example")
+  return :code  if rel.end_with?(".rb", ".rake", ".gemspec")
+
+  nil
+end
+# <<< FILE CLASSES -- END
+
+# >>> ARM TABLE -- BEGIN
+#
+# Every failure this gate can report, with the shape that produces it. `plant`
+# is what the self-test does to a throwaway repository to make that arm fire, so
+# an arm with no way to demonstrate it cannot be added.
+ARMS = [
+  {
+    id: "PC-1",
+    what: "a declared count disagrees with the command that is supposed to re-derive it",
+    plant: lambda { |dir|
+      File.write(File.join(dir, "docs/declared.md"),
+                 "The tree carries <!-- count: 9 ¦ from: git ls-files 'lib/*.rb' | wc -l --> " \
+                 "nine files today.\n")
+    },
+  },
+  {
+    id: "PC-2",
+    what: "a declared command failed, or printed nothing that could be read as a number",
+    plant: lambda { |dir|
+      File.write(File.join(dir, "docs/broken.md"),
+                 "The tree carries <!-- count: 3 ¦ from: git ls-files 'lib/*.rb' | no-such-command --> " \
+                 "three files today.\n")
+    },
+  },
+  {
+    id: "PC-3",
+    what: "a marker that does not parse as `count: N ¦ from: <command>`",
+    plant: lambda { |dir|
+      File.write(File.join(dir, "docs/malformed.md"),
+                 "The tree carries <!-- count: three ¦ from: git ls-files --> three files today.\n")
+    },
+  },
+  {
+    id: "PC-4",
+    what: "a count in shipped prose that nothing re-derives and nothing has excused",
+    plant: lambda { |dir|
+      File.write(File.join(dir, "docs/undeclared.md"), "This repository ships four gems.\n")
+    },
+  },
+  {
+    id: "PC-5",
+    what: "an allow entry that matched nothing -- the sentence it excused is gone or its count moved",
+    plant: lambda { |dir|
+      File.write(File.join(dir, ALLOW_FILE),
+                 "#{File.read(File.join(dir, ALLOW_FILE))}docs/prose.md ¦ twelve demos ¦ " \
+                 "an entry whose sentence does not exist.\n")
+    },
+  },
+  {
+    id: "PC-6",
+    reports: "PC-4",
+    what: "a marker one sentence away from the count it claims to declare (K-1222: a window " \
+          "scores distance, never whether the token is doing the work)",
+    plant: lambda { |dir|
+      File.write(File.join(dir, "docs/window.md"), <<~MD)
+        <!-- count: 3 ¦ from: git ls-files 'lib/*.rb' | wc -l -->
+        This paragraph is about something else entirely and carries no count at all.
+
+        The tree ships three files, and this sentence is well inside three hundred
+        characters of the marker above it without being the sentence it declares.
+      MD
+    },
+  },
+].freeze
+# <<< ARM TABLE -- END
+
+# ── normalisation ────────────────────────────────────────────────────────────
+
+def split_sentences(units)
+  units.flat_map { |u| u.gsub(/\s+/, " ").strip.split(/(?<=[.!?])\s+(?=[A-Z(«"'`])/) }
+       .reject(&:empty?)
+end
+
+# Markdown, joined into paragraphs. A blank line, a heading, a list item, a
+# table row and a fence all END the unit; everything else is a continuation, so
+# a sentence that wraps over four lines is one string by the time it is judged.
+# Fenced blocks are skipped: they are program output and command lines, not
+# prose, and their numbers belong to whatever produced them. The fence is
+# recognised ANYWHERE on the line rather than only at its start, because a
+# checklist writes `**Do this:** ``` cmd` on one line and a start-anchored
+# detector reads the whole block that follows as prose -- measured, it turned an
+# HTTP status inside a command block into "502 demos".
+def prose_units(text)
+  units = []
+  buf   = +""
+  fence = nil
+  text.lines.map(&:chomp).each do |line|
+    if (m = line.match(/(`{3,}|~{3,})/))
+      marker = m[1][0]
+      if fence.nil? then fence = marker
+      elsif fence == marker then fence = nil
+      end
+      units << buf
+      buf = +""
+      next
+    end
+    next if fence
+
+    s = line.sub(/\A\s*>+\s?/, "")
+    if s.strip.empty? || s =~ /\A\s{0,3}\#{1,6}\s/ || s =~ /\A\s*(?:[-*+]|\d+\.)\s/ || s =~ /\A\s*\|/
+      units << buf
+      buf = +""
+      s = s.sub(/\A\s{0,3}\#+\s*/, "").sub(/\A\s*(?:[-*+]|\d+\.)\s+/, "")
+    end
+    buf << " " << s
+  end
+  units << buf
+  split_sentences(units)
+end
+
+# Ruby: comment runs are joined the same way, and a `desc "…"` is a unit of its
+# own. Returned separately because one is gated and the other is reported.
+def code_units(text)
+  comments = []
+  descs    = []
+  buf      = +""
+  text.lines.map(&:chomp).each do |line|
+    if (m = line.match(%r{\A\s*(?:\#+|//+|--)\s?(.*)\z}))
+      body = m[1]
+      body = "<!-- count: #{Regexp.last_match(1)} ¦ from: #{Regexp.last_match(2)} -->" if body.strip =~ BARE_MARKER
+      if body.strip.empty? || body =~ /\A\s*(?:[-*+]|\d+\.)\s/
+        comments << buf
+        buf = +""
+        body = body.sub(/\A\s*(?:[-*+]|\d+\.)\s+/, "")
+      end
+      buf << " " << body
+    elsif (m = line.match(/\A\s*desc\s+"([^"]*)"/))
+      comments << buf
+      buf = +""
+      descs << m[1]
+    else
+      comments << buf
+      buf = +""
+    end
+  end
+  comments << buf
+  [split_sentences(comments), split_sentences(descs)]
+end
+
+def cardinal_value(token)
+  t = token.downcase
+  return t.to_i if t =~ /\A\d+\z/
+
+  t.split("-").sum { |w| WORD_VALUE.fetch(w, 0) }
+end
+
+# A digit is a count only when it is not part of something else. MEASURED while
+# seeding this guard: without these four rules the census reported `K-694` as
+# "694 demos", `T-095` as "095 fields", `RFC 9457` as "9457 documents", `0.4` as
+# "4 endpoints" and a backticked `400` as "404 beats" -- five false positives in
+# one pass, every one of them an identifier, a status code or a version rather
+# than a quantity. Cardinal WORDS need none of this; only digits do.
+NOT_A_COUNT_BEFORE = %r{(?:[-./`\d–—]|[=:]\s*)\z}.freeze
+NAMES_A_NUMBER     = /\b(?:RFC|ADR|HTTP|ISO|SHA|v|K|T|§|status|code|port|version)[\s-]*\z/i.freeze
+# What may follow a digit and mean it is not a quantity: a decimal or dotted
+# version, a range, a possessive verb ("502'd three demos"), a hyphenated
+# compound ("a 2-top"), or a bare parenthesis around it ("`UnknownAction` (404)").
+NOT_A_COUNT_AFTER = /\A(?:\.\d|[–—]\s*\d|'|-[A-Za-z])/.freeze
+
+def digit_in_context?(sentence, at, token)
+  return false unless token =~ /\A\d+\z/
+
+  pre  = sentence[0, at]
+  post = sentence[at + token.length, 3].to_s
+  return true if pre =~ NOT_A_COUNT_BEFORE || pre =~ NAMES_A_NUMBER
+  return true if post =~ NOT_A_COUNT_AFTER
+  return true if pre.end_with?("(") && post.start_with?(")")
+
+  false
+end
+
+def hits_in(sentence)
+  found = []
+  sentence.scan(CARD_AT) do
+    m = Regexp.last_match
+    next if digit_in_context?(sentence, m.begin(0), m[1])
+
+    words = sentence[m.end(0), 80].to_s.scan(/[A-Za-z][A-Za-z-]*/).first(NOUN_WITHIN)
+    idx   = words.index { |w| NOUNS.include?(w.downcase) }
+    next if idx.nil?
+
+    noun = words[idx].downcase
+    found << { token: m[1], noun: noun, key: "#{m[1].downcase} #{noun}", value: cardinal_value(m[1]) }
+  end
+  found
+end
+
+def broad_hits_in(sentence)
+  n = 0
+  sentence.scan(BROAD) do
+    w = Regexp.last_match(1).downcase
+    n += 1 if w.end_with?("s") && !BROAD_STOP.include?(w) && !NOUNS.include?(w)
+  end
+  n
+end
+
+# ── declarations ─────────────────────────────────────────────────────────────
+
+def markers_in(sentence)
+  sentence.to_enum(:scan, MARKER).map { Regexp.last_match }
+          .map { |m| { count: m[1].to_i, command: m[2].strip } }
+end
+
+def run_command(root, command)
+  out, err, st = Open3.capture3("/bin/sh", "-c", command, chdir: root)
+  return [nil, "exited #{st.exitstatus}: #{err.strip.split("\n").first}"] unless st.success?
+
+  line = out.lines.map(&:strip).reject(&:empty?).last
+  return [nil, "printed nothing"] if line.nil?
+  return [nil, "printed #{line.inspect}, which is not a number"] unless line =~ /\A\d+\z/
+
+  [line.to_i, nil]
+end
+
+# ── the allow file ───────────────────────────────────────────────────────────
+#
+# `<path> ¦ <cardinal> <noun> ¦ [from: <command> ¦] <one-line reason>`
+#
+# The KEY is the path plus the numeral as written and the noun -- so changing
+# the count changes the key, the entry stops matching, and the run goes red from
+# both ends at once: an unexcused hit AND a stale entry. That is the property
+# that makes this an allow file rather than a mute button.
+def load_allow(root)
+  path = File.join(root, ALLOW_FILE)
+  return [[], []] unless File.file?(path)
+
+  entries = []
+  errors  = []
+  File.readlines(path, chomp: true).each_with_index do |line, i|
+    next if line.strip.empty? || line.strip.start_with?("#")
+
+    parts = line.split("¦").map(&:strip)
+    if parts.length < 3
+      errors << "#{ALLOW_FILE}:#{i + 1}: expected `path ¦ cardinal noun ¦ reason`"
+      next
+    end
+    file, key = parts[0], parts[1].downcase
+    rest = parts[2..]
+    command = nil
+    if rest.first.to_s.start_with?("from:")
+      command = rest.shift.sub(/\Afrom:\s*/, "")
+      # A command may itself contain the separator, so anything up to the last
+      # field is part of it.
+      command = ([command] + rest[0..-2]).join(" ¦ ") if rest.length > 1
+      rest = [rest.last]
+    end
+    reason = rest.join(" ").strip
+    if reason.empty?
+      errors << "#{ALLOW_FILE}:#{i + 1}: entry carries no reason"
+      next
+    end
+    entries << { line: i + 1, path: file, key: key, command: command, reason: reason, used: 0 }
+  end
+  [entries, errors]
+end
+
+# ── the scan ─────────────────────────────────────────────────────────────────
+
+def tracked(root)
+  out, err, status = Open3.capture3("git", "-C", root, "ls-files", "-z")
+  raise "git ls-files failed in #{root}: #{err}" unless status.success?
+
+  out.split("\0").reject(&:empty?)
+end
+
+def readable_text(abs)
+  bytes = File.binread(abs)
+  return nil if bytes.include?("\0")
+
+  text = bytes.force_encoding(Encoding::UTF_8)
+  text.valid_encoding? ? text : nil
+rescue SystemCallError
+  nil
+end
+
+def scan(root)
+  allow, findings = load_allow(root)
+  findings = findings.map { |e| { path: ALLOW_FILE, id: "PC-5", what: e } }
+
+  stats = Hash.new(0)
+  listing = []
+
+  tracked(root).each do |rel|
+    abs = File.join(root, rel)
+    next unless File.file?(abs)
+
+    text = readable_text(abs)
+    next if text.nil?
+
+    kind = classify(rel)
+    if kind.nil?
+      stats[:out_of_scope] += 1
+      next
+    end
+    stats[:files] += 1
+
+    gated, reported =
+      case kind
+      when :prose then [prose_units(text), []]
+      when :env   then [code_units(text).first, []]
+      else
+        c, d = code_units(text)
+        [d, c]
+      end
+
+    reported.each do |s|
+      stats[:reported_hits] += hits_in(s.gsub(MARKER_FULL, " ")).length
+    end
+
+    gated.each do |sentence|
+      marks = markers_in(sentence)
+      stats[:declarations] += marks.length
+      stats[:broad_residue] += broad_hits_in(sentence.gsub(MARKER_FULL, " "))
+
+      marks.each do |mark|
+        got, why = run_command(root, mark[:command])
+        if got.nil?
+          findings << { path: rel, id: "PC-2", what: "the declared command #{mark[:command].inspect} " \
+                                                    "#{why}", extra: sentence }
+        elsif got != mark[:count]
+          findings << { path: rel, id: "PC-1",
+                        what: "declared #{mark[:count]}, but `#{mark[:command]}` says #{got}",
+                        extra: sentence }
+        else
+          stats[:declarations_ok] += 1
+        end
+      end
+
+      # A marker that did not parse is a marker that declares nothing, and the
+      # count beside it would then be excused by nobody -- but a half-written
+      # marker reads to a human as a declaration, so it fails on its own.
+      sentence.scan(/count:\s*[^¦\n]{0,40}(?:¦|-->)/) do
+        frag = Regexp.last_match(0)
+        next if marks.any? { |m| frag.include?(m[:count].to_s) }
+
+        findings << { path: rel, id: "PC-3", what: "a marker that does not parse: #{frag.strip}",
+                      extra: sentence }
+      end
+
+      hits_in(sentence.gsub(MARKER_FULL, " ")).each do |hit|
+        stats[:gated_hits] += 1
+        state = "undeclared"
+        if marks.any? { |m| m[:count] == hit[:value] }
+          stats[:excused_declared] += 1
+          state = "declared"
+        else
+          entry = allow.find { |a| a[:path] == rel && a[:key] == hit[:key] }
+          if entry
+            entry[:used] += 1
+            stats[:excused_allowed] += 1
+            state = "allowed"
+          else
+            findings << { path: rel, id: "PC-4",
+                          what: "`#{hit[:key]}` is neither declared in its own sentence nor " \
+                                "in #{ALLOW_FILE}",
+                          extra: sentence }
+          end
+        end
+        listing << [rel, hit[:key], state, sentence]
+      end
+    end
+  end
+
+  allow.each do |entry|
+    next unless entry[:command]
+
+    got, why = run_command(root, entry[:command])
+    if got.nil?
+      findings << { path: ALLOW_FILE, id: "PC-2",
+                    what: "line #{entry[:line]}: the declared command #{entry[:command].inspect} #{why}" }
+    elsif got != cardinal_value(entry[:key].split.first)
+      findings << { path: ALLOW_FILE, id: "PC-1",
+                    what: "line #{entry[:line]}: `#{entry[:key]}` but `#{entry[:command]}` says #{got}" }
+    else
+      stats[:declarations_ok] += 1
+    end
+  end
+
+  allow.each do |entry|
+    next if entry[:used].positive?
+
+    findings << { path: ALLOW_FILE, id: "PC-5",
+                  what: "line #{entry[:line]}: `#{entry[:path]} ¦ #{entry[:key]}` matched nothing" }
+  end
+
+  { findings: findings, stats: stats, allow: allow, listing: listing }
+end
+
+# ── modes ────────────────────────────────────────────────────────────────────
+
+def report(result, quiet:)
+  s = result[:stats]
+  unless quiet
+    puts "check-prose-counts: #{s[:files]} file(s) in a declared class, #{s[:out_of_scope]} out of scope"
+    puts "  gated: #{s[:gated_hits]} count(s) -- #{s[:excused_declared]} declared in their own " \
+         "sentence, #{s[:excused_allowed]} in #{ALLOW_FILE}"
+    puts "  declarations run: #{s[:declarations] + result[:allow].count { |a| a[:command] }} " \
+         "(#{s[:declarations_ok]} agreed with their command)"
+    puts "  REPORTED, NOT GATED: #{s[:reported_hits]} count(s) in source comments; " \
+         "#{s[:broad_residue]} cardinal-plus-plural hit(s) the noun vocabulary does not reach"
+  end
+
+  if result[:findings].empty?
+    unless quiet
+      puts
+      puts "check-prose-counts: OK -- every count in shipped prose is re-derivable or declared " \
+           "excused, and every declared command agrees with the number beside it."
+      puts "(Consistency, never truth. See the header for the six things this cannot catch.)"
+    end
+    return 0
+  end
+
+  $stdout.flush
+  warn ""
+  warn "check-prose-counts: FAIL -- #{result[:findings].length} count(s) nothing re-derives."
+  result[:findings].sort_by { |f| [f[:path], f[:id]] }.each do |f|
+    warn "  #{f[:path]}: [#{f[:id]}] #{f[:what]}"
+    warn "      #{f[:extra][0, 160]}" if f[:extra]
+  end
+  warn ""
+  warn "  Repair, in order of preference: elide the count; or declare it with a marker IN ITS OWN"
+  warn "  SENTENCE -- <!-- count: N ¦ from: <command> --> ; or add a line to #{ALLOW_FILE} with a"
+  warn "  one-line reason, and a `from:` command if one exists."
+  1
+end
+
+def run_check(quiet: false)
+  report(scan(REPO), quiet: quiet)
+end
+
+def run_list
+  result = scan(REPO)
+  result[:listing].each { |rel, key, state, sentence| puts "#{rel}\t#{key}\t#{state}\t#{sentence}" }
+  0
+end
+
+# ── self-test ────────────────────────────────────────────────────────────────
+#
+# A census whose file set came out empty exits 0 and reads exactly like a clean
+# tree, so this proves the guard red on a plant of every arm -- including the
+# window plant, which is the one that would pass under the instrument this guard
+# replaces -- and then measures the real tree for non-vacuity.
+
+# >>> GREEN FIXTURES -- BEGIN
+GREEN = {
+  "lib/a.rb" => "# In this demo three gems are wired, which is ordinary commentary.\nA = 1\n",
+  "lib/b.rb" => "B = 2\n",
+  "lib/c.rb" => "C = 3\n",
+  # A count declared in its own sentence, and the same count wrapped over four
+  # lines so the join is exercised rather than assumed.
+  "docs/prose.md" => <<~MD,
+    # A document
+
+    The tree carries <!-- count: 3 ¦ from: git ls-files 'lib/*.rb' | wc -l --> three files
+    today, and this sentence wraps so that no single line of it holds both the numeral and
+    the noun it counts, which is the shape a line-based scan cannot
+    see at all.
+
+    ```
+    ## Not a heading and five demos in here are not a count.
+    ```
+  MD
+  # A marker written BETWEEN the numeral and the noun it declares. It must still
+  # be seen as a count and still be excused by its own marker: a marker that
+  # hides a site is worse than no marker, and this is the shape that does it.
+  "docs/split.md" => "This tree has three <!-- count: 3 ¦ from: git ls-files 'lib/*.rb' | wc -l --> " \
+                     "files in it.\n",
+  # An excused count, with the entry that excuses it below.
+  "docs/allowed.md" => "The upstream standard defines seven sections, which are not ours to count.\n",
+  ALLOW_FILE => "docs/allowed.md ¦ seven sections ¦ someone else's document; nothing here re-derives it.\n",
+}.freeze
+# <<< GREEN FIXTURES -- END
+
+def build_fixture(dir)
+  FileUtils.mkdir_p(File.join(dir, "bin"))
+  script = File.join(dir, "bin", File.basename(SELF_PATH))
+  File.write(script, File.binread(SELF_PATH))
+  File.chmod(0o755, script)
+  GREEN.each do |rel, body|
+    abs = File.join(dir, rel)
+    FileUtils.mkdir_p(File.dirname(abs))
+    File.write(abs, body)
+  end
+  _, err, st = Open3.capture3("git", "-C", dir, "init", "-q")
+  raise "git init failed: #{err}" unless st.success?
+end
+
+def stage(dir)
+  _, err, st = Open3.capture3("git", "-C", dir, "add", "-A")
+  raise "git add failed: #{err}" unless st.success?
+end
+
+def run_guard_in(dir)
+  Open3.capture3(RbConfig.ruby, File.join(dir, "bin", File.basename(SELF_PATH)))
+end
+
+def self_test_fixture(failures)
+  Dir.mktmpdir("check-prose-counts") do |dir|
+    build_fixture(dir)
+    stage(dir)
+
+    out, err, st = run_guard_in(dir)
+    if st.exitstatus.zero?
+      puts "  green tree: exit 0 -- a declared count, a wrapped sentence, an allow entry, a fence -- OK"
+    else
+      failures << "the green fixture tree should exit 0; it exited #{st.exitstatus}\n#{out}#{err}"
+    end
+    unless out.include?("2 declared in their own sentence")
+      failures << "the green tree did not excuse BOTH declared counts -- the wrapped one and the " \
+                  "one whose marker splits the numeral from its noun -- through the DECLARATION " \
+                  "arm:\n#{out}"
+    end
+
+    keep = GREEN.keys.to_h { |rel| [rel, File.binread(File.join(dir, rel))] }
+
+    ARMS.each do |arm|
+      arm[:plant].call(dir)
+      stage(dir)
+      out2, err2, st2 = run_guard_in(dir)
+      combined = "#{out2}#{err2}"
+      if st2.exitstatus.zero?
+        failures << "planting #{arm[:id]} did not turn the guard red"
+      elsif !combined.include?("[#{arm[:reports] || arm[:id]}]")
+        failures << "#{arm[:id]}'s plant fired, but not under #{arm[:reports] || arm[:id]}:\n#{combined}"
+      else
+        puts "  plant #{arm[:id]}: exit #{st2.exitstatus}, reported by id -- OK"
+      end
+
+      Dir.glob(File.join(dir, "**", "*"), File::FNM_DOTMATCH).each do |abs|
+        next unless File.file?(abs)
+
+        rel = abs.delete_prefix("#{dir}/")
+        next if rel.start_with?(".git/", "bin/check-")
+        next if keep.key?(rel)
+
+        File.delete(abs)
+      end
+      keep.each { |rel, body| File.write(File.join(dir, rel), body) }
+      stage(dir)
+    end
+
+    # The window plant deserves its own assertion rather than only an exit code:
+    # what makes it a regression test for K-1222 is that the marker IS within a
+    # few hundred characters, so a distance-scoring instrument passes it.
+    ARMS.find { |a| a[:id] == "PC-6" }[:plant].call(dir)
+    stage(dir)
+    out3, err3, _ = run_guard_in(dir)
+    body = File.read(File.join(dir, "docs/window.md"))
+    gap  = body.index("three files") - body.index("count: 3")
+    if gap > 320
+      failures << "the window fixture put the marker #{gap} characters away; it must be INSIDE the " \
+                  "window the old instrument used, or it proves nothing"
+    elsif !"#{out3}#{err3}".include?("[PC-4]")
+      failures << "the window fixture did not report the undeclared count:\n#{out3}#{err3}"
+    else
+      puts "  window fixture: marker #{gap} characters away, one sentence out -- still red -- OK"
+    end
+    keep.each { |rel, b| File.write(File.join(dir, rel), b) }
+    Dir.glob(File.join(dir, "docs", "*")).each { |f| File.delete(f) unless keep.key?(f.delete_prefix("#{dir}/")) }
+    stage(dir)
+
+    _, _, st4 = run_guard_in(dir)
+    failures << "the fixture tree did not return to exit 0 after the plants" unless st4.exitstatus.zero?
+  end
+end
+
+def run_self_test
+  failures = []
+  self_test_fixture(failures)
+
+  result = scan(REPO)
+  s = result[:stats]
+  failures << "the real tree read #{s[:files]} file(s) -- the corpus is empty or nearly so" if s[:files] < 30
+  if s[:gated_hits] < 20
+    failures << "the real tree found #{s[:gated_hits]} gated count(s) -- the census is vacuous here"
+  end
+  total_decl = s[:declarations] + result[:allow].count { |a| a[:command] }
+  failures << "the real tree ran #{total_decl} declared command(s) -- the declaration arm is vacuous" if total_decl < 1
+  puts "  real tree: #{s[:files]} file(s), #{s[:gated_hits]} gated count(s), #{total_decl} declared " \
+       "command(s) -- non-vacuous"
+
+  status = report(result, quiet: true)
+  failures << "the guard is not green over this repository (exit #{status})" unless status.zero?
+  puts "  real tree: check exits #{status}"
+
+  if failures.empty?
+    puts
+    puts "check-prose-counts --self-test: OK -- red on a plant of every arm including a marker one " \
+         "sentence away and well inside the old proximity window, green on a wrapped declared " \
+         "sentence, and non-vacuous over this repository."
+    return 0
+  end
+
+  $stdout.flush
+  warn ""
+  warn "check-prose-counts --self-test: FAIL"
+  failures.each { |f| warn "  #{f}" }
+  1
+end
+
+# ── entry point ──────────────────────────────────────────────────────────────
+
+code =
+  case ARGV[0]
+  when nil           then run_check
+  when "--list"      then run_list
+  when "--self-test" then run_self_test
+  else
+    warn "usage: check-prose-counts [--list|--self-test]"
+    2
+  end
+exit code

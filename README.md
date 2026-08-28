@@ -48,7 +48,7 @@ See `kiosk-pow-equihash/README.md` for the full comparison and rationale.
 | `kiosk-demo-atablefor` | Restaurant table-booking — non-commerce (no payments) | active |
 | `kiosk-demo-hoteling` | Hotel booking | active |
 | `kiosk-demo-skooti` | Scooter rental | active |
-| `kiosk-demo-stylish` | Salon/appointment booking (Combette on Park) | alpha |
+| `kiosk-demo-stylish` | Salon/appointment booking (Combette on Park) — non-commerce (no payments) | active |
 | `kiosk-demo-philslist` | Classifieds board — non-commerce (no payments) | active |
 | `kiosk-demo-tudu` | Collaborative todo — non-commerce (no payments) | active |
 | `kiosk-demo-prove` | anonymizing KYC broker (deploys at `kyc.demo.kiosk.tech`) — an ISSUER, not a Kiosk operator (no verbs) | active |

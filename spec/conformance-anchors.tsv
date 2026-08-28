@@ -12,7 +12,7 @@
 # publishes as evidence has been renamed or removed: rename it back, or update
 # the citation that names it and regenerate this file.
 #
-# 611 anchors.
+# 632 anchors.
 e2e/assistant.sh	"$(curl -sS -o /dev/null -D - -H 'Accept: application/json' "$SERVER_URL/.well-known/kiosk.json" | grep -ic '^Vary:')" "0"
 e2e/assistant.sh	"$(echo "$apc_headers" | grep -ic '^Vary:')" "0"
 e2e/assistant.sh	$public_doc is really being read (control token)
@@ -36,12 +36,14 @@ e2e/assistant.sh	a routing 404 UNDER the mount is a 404
 e2e/assistant.sh	agents.txt Protocols: ap2
 e2e/assistant.sh	alice: 1 appointment exists
 e2e/assistant.sh	alice: does NOT see bob's row
+e2e/assistant.sh	alice: sees her own row
 e2e/assistant.sh	all three version headers on all 19 mount routes
 e2e/assistant.sh	an action declares no pagination headers
 e2e/assistant.sh	an ancient client is SERVED, not refused — the floor is advisory
 e2e/assistant.sh	an unhandled 500 UNDER the mount is a 500
 e2e/assistant.sh	api-catalog advertises it as a service-desc
 e2e/assistant.sh	api-catalog hyperlinks $verb_name, unauthenticated
+e2e/assistant.sh	appointment_id returned
 e2e/assistant.sh	assert "no Authorization header → 200"  "$oa_anon" "200"
 e2e/assistant.sh	assert "no Authorization header → 200"  "$sch_status" "200"
 e2e/assistant.sh	assert "no envelope wrapper"       "$(echo "$r" | jq -r 'has("value")')"           "false"
@@ -125,6 +127,13 @@ e2e/assistant.sh	…the catalog is the body itself
 e2e/assistant.sh	…while a ROOT discovery surface carries none of them
 e2e/assistant.sh	…while an identity-scoped 200 keeps private, no-store
 e2e/assistant.sh	…while the same request with a bad token is still 401
+e2e/schema_conformance.rb	GET /.well-known/kiosk.json
+e2e/schema_conformance.rb	GET /kiosk/schema
+e2e/schema_conformance.rb	and the same schema REFUSES a broken copy of those very bytes
+e2e/schema_conformance.rb	example_params satisfies its own input_schema
+e2e/schema_conformance.rb	example_row satisfies its own output_schema
+e2e/schema_conformance.rb	published examples (the loop is not empty)
+e2e/schema_conformance.rb	the Kiosk-PoW header this origin ACCEPTED
 kiosk-demo-atablefor/app/controllers/home_controller.rb	def index
 kiosk-demo-atablefor/app/controllers/home_controller.rb	def reservations
 kiosk-demo-atablefor/app/views/home/index.html.erb	The href is the VERSIONED cut this operator pins, read from
@@ -193,6 +202,10 @@ kiosk-pow-equihash/spec/kiosk/pow/equihash_spec.rb	are the benchmark-chosen defa
 kiosk-pow-equihash/spec/kiosk/pow/equihash_spec.rb	describe "default params (n=168, k=7)"
 kiosk-pow-equihash/spec/kiosk/pow/equihash_spec.rb	production params (n=168, k=7) KAT
 kiosk-pow-equihash/spec/kiosk/pow/equihash_spec.rb	returns n:168, k:7 by default
+kiosk-reputation/spec/kiosk/reputation/backoff_store_spec.rb	consuming one key does not affect another
+kiosk-reputation/spec/kiosk/reputation/policies/backoff_spec.rb	falls back to user_id when agent_id is nil
+kiosk-reputation/spec/kiosk/reputation/policies/backoff_spec.rb	grants are per-identity (agent-2's solve does not free agent-1)
+kiosk-reputation/spec/kiosk/reputation/policies/backoff_spec.rb	keys a Kiosk::Identity-shaped object by agent_id when present
 kiosk-reputation/spec/kiosk/reputation/policies/rate_and_reputation_spec.rb	adds the unproven bonus ONLY at zero purchases, not merely below the proven threshold
 kiosk-reputation/spec/kiosk/reputation/policies/rate_and_reputation_spec.rb	caps count at count_max (10) even with extreme inputs
 kiosk-reputation/spec/kiosk/reputation/policies/rate_and_reputation_spec.rb	carries equihash (n, k) params
@@ -215,7 +228,11 @@ kiosk-server/spec/kiosk/server/actions_spec.rb	carries the declared description 
 kiosk-server/spec/kiosk/server/actions_spec.rb	carries the declared schemas and examples into the descriptor
 kiosk-server/spec/kiosk/server/actions_spec.rb	leaves description nil when the verb opted in with another macro
 kiosk-server/spec/kiosk/server/actions_spec.rb	returns all descriptors sorted by name
+kiosk-server/spec/kiosk/server/agent_identity_providers/default_agent_idp_spec.rb	carries the `actor` claim through verification into the resolved Identity
+kiosk-server/spec/kiosk/server/agent_identity_providers/default_agent_idp_spec.rb	keeps an earlier token valid after a second is minted for the same agent
 kiosk-server/spec/kiosk/server/agent_identity_providers/default_agent_idp_spec.rb	omits the role claim entirely when role is nil
+kiosk-server/spec/kiosk/server/agent_identity_providers/default_agent_idp_spec.rb	revokes both at once when the agent's watermark passes them
+kiosk-server/spec/kiosk/server/agent_identity_providers/default_agent_idp_spec.rb	stamps an `actor` claim of `agent` on every token it mints, role or no role
 kiosk-server/spec/kiosk/server/agent_login_spec.rb	mints a fresh token for a known key and provisions nothing
 kiosk-server/spec/kiosk/server/agent_login_spec.rb	proves possession and burns the challenge before the lookup
 kiosk-server/spec/kiosk/server/agent_login_spec.rb	raises NotFound for an unregistered key (no silent new account)
@@ -377,12 +394,16 @@ kiosk-server/spec/kiosk/server/jwks_spec.rb	preserves order for multi-key rotati
 kiosk-server/spec/kiosk/server/jwks_spec.rb	produces JSON that's parseable and contains only the public JWK fields
 kiosk-server/spec/kiosk/server/jwks_spec.rb	returns a single-key JWKS for one input
 kiosk-server/spec/kiosk/server/jwt_issuer_spec.rb	accepts a token issued after the revocation watermark (fresh login survives)
+kiosk-server/spec/kiosk/server/jwt_issuer_spec.rb	accepts the issuer when supplied and matching
 kiosk-server/spec/kiosk/server/jwt_issuer_spec.rb	defaults to a one-hour lifetime
 kiosk-server/spec/kiosk/server/jwt_issuer_spec.rb	honours an `expires_in` override
 kiosk-server/spec/kiosk/server/jwt_issuer_spec.rb	produces a JWT carrying the supplied claims and the standard time bounds
 kiosk-server/spec/kiosk/server/jwt_issuer_spec.rb	rejects a token signed by a key not in the JWKS
 kiosk-server/spec/kiosk/server/jwt_issuer_spec.rb	rejects a token whose agent has been revoked as of now
+kiosk-server/spec/kiosk/server/jwt_issuer_spec.rb	rejects a wrong audience
 kiosk-server/spec/kiosk/server/jwt_issuer_spec.rb	rejects an expired token
+kiosk-server/spec/kiosk/server/jwt_issuer_spec.rb	round-trips an issued token and returns symbol-keyed claims
+kiosk-server/spec/kiosk/server/jwt_issuer_spec.rb	stamps `nbf` at the issue instant — equal to `iat`, inside the lifetime
 kiosk-server/spec/kiosk/server/kyc_attestation_controller_spec.rb	#kyc_attributes
 kiosk-server/spec/kiosk/server/kyc_attestation_controller_spec.rb	maps one row per granted name onto true
 kiosk-server/spec/kiosk/server/kyc_attestation_controller_spec.rb	reads the kyc_attributes table, joined to a LIVE agents row

@@ -63,6 +63,18 @@
 # script FAILS rather than skipping the arm: a gate that quietly stops asking
 # its main question is the failure this whole file exists to prevent.
 #
+# THAT RE-DERIVATION COMPARES THE SECTION NUMBERS **AND** THE RECORDED SOURCE
+# DIGEST, and the second half is here because its absence was a live defect. The
+# vendored index stores a sha256 of the document it was derived from, and for
+# months the comparison read the SECTION NUMBERS ONLY. So a repair wave that
+# added no heading and removed none -- same count, same keys -- moved a hundred
+# line offsets and changed the source digest with the comparison silent
+# throughout, and the index went on resolving citations against a snapshot of a
+# document that no longer existed. The digest was already STORED; declining to
+# compare it made this gate answer a NARROWER question than its reader believed
+# it asked, which is the same shape as the pathspec that matches nothing. Both
+# halves now fail, with the same repair: `--record-sections`.
+#
 # THE TWIN. This script is BYTE-IDENTICAL in both published repositories, and
 # that is the single-source rule: there is no shared library between two
 # separate repositories, so the copy IS the mechanism. Two checks hold it:
@@ -100,7 +112,7 @@ SELF_REL  = SELF_PATH.delete_prefix("#{REPO}/")
 # Recorded by --record-twin over this file's own bytes with the TWIN_DIGEST
 # assignment blanked. Both published copies carry the same value; a mismatch
 # means this copy was edited and the twin has not been brought along.
-TWIN_DIGEST = "99b4f92c57a2cf311e7686b292ac536c220ff9a4c5b3fb6cf0fd9af0f24526d9"
+TWIN_DIGEST = "75a28cc5688b4256ea71af43547f0531284a327f896f67be46ed6a15d896103c"
 
 SIBLING_REPOS   = %w[kiosk.tech reference].freeze
 SPEC_SOURCE_REL = "spec/protocol.md"
@@ -282,6 +294,20 @@ def read_sections_tsv
     index[num] = where.to_i
   end
   index
+end
+
+SOURCE_DIGEST_LINE = /\A#\s*source sha256:\s*([0-9a-f]{64})\s*\z/.freeze
+
+# The digest of the document the vendored index was derived from, recorded in its
+# own header by --record-sections. `nil` when no header line carries one: an index
+# written by hand, or by a vintage of this script that did not record it, is drift
+# under another name and is reported rather than waved through.
+def read_sections_tsv_source_digest
+  File.foreach(SECTIONS_TSV) do |line|
+    m = SOURCE_DIGEST_LINE.match(line.chomp)
+    return m[1] if m
+  end
+  nil
 end
 
 def render_sections_tsv(index, source)
@@ -521,8 +547,22 @@ def resolve_index
       warn "  vendored but not published: #{only_tsv.join(', ')}" unless only_tsv.empty?
       exit 1
     end
+    recorded = read_sections_tsv_source_digest
+    actual   = Digest::SHA256.file(live).hexdigest
+    if recorded != actual
+      warn "check-publication-paths: FAIL -- the vendored section index was derived from a DIFFERENT"
+      warn "revision of the published specification than the one checked out beside this repository."
+      warn "Re-record it with `bin/check-publication-paths --record-sections`."
+      warn "  recorded source sha256: #{recorded || '(none -- this index carries no source digest)'}"
+      warn "  actual   source sha256: #{actual}"
+      warn "The section NUMBERS still agree, which is why this is asked separately: a wave that adds"
+      warn "and removes no heading still moves the line offsets under them, and an index resolving"
+      warn "citations against a snapshot of a document that no longer exists is stale whether or not"
+      warn "its keys have noticed yet."
+      exit 1
+    end
     [derived, "vendored in #{SECTIONS_TSV.delete_prefix("#{REPO}/")}, re-derived and confirmed " \
-              "against the published specification next door"]
+              "against the published specification next door -- section numbers and source digest"]
   elsif have
     [read_sections_tsv, "vendored in #{SECTIONS_TSV.delete_prefix("#{REPO}/")} " \
                         "(the published specification is not checked out here, so it was not re-derived)"]
@@ -727,6 +767,76 @@ def run_guard_in(dir)
   Open3.capture3(RbConfig.ruby, File.join(dir, "bin", File.basename(SELF_PATH)))
 end
 
+# THE VENDORED-INDEX ARMS, which the fixture tree above cannot reach: it carries
+# the index with NO published specification beside it, so the guard takes the
+# branch that has nothing to re-derive against and neither comparison runs. This
+# builds the other shape -- a repository that vendors the index, checked out next
+# to one that publishes the specification -- and proves the half that used to be
+# missing: RED when the recorded source digest is stale AND EVERY SECTION NUMBER
+# STILL AGREES, which is exactly the drift that went unseen, and green again the
+# moment the digest is restored.
+#
+# The stand-in specification is generated to carry EXACTLY the section numbers
+# this repository resolves against today, for two reasons: the key half of the
+# comparison then agrees by construction, so a red run can only be the digest;
+# and every section this script cites about ITSELF still resolves inside the
+# fixture, so the tree is green for the reason claimed rather than by luck.
+def run_index_self_test(index)
+  failures = []
+  Dir.mktmpdir("check-publication-paths-index") do |root|
+    repo = File.join(root, SIBLING_REPOS.last)
+    live = File.join(root, SIBLING_REPOS.first, SPEC_SOURCE_REL)
+    FileUtils.mkdir_p(File.dirname(live))
+    FileUtils.mkdir_p(File.join(repo, "bin"))
+    FileUtils.mkdir_p(File.join(repo, "spec"))
+    File.write(live, index.keys.sort_by { |k| k.split(".").map(&:to_i) }
+                          .map { |k| "## #{k}. Section #{k}\n\nProse.\n\n" }.join)
+
+    script = File.join(repo, "bin", File.basename(SELF_PATH))
+    File.write(script, File.binread(SELF_PATH))
+    File.chmod(0o755, script)
+
+    tsv_path = File.join(repo, "spec", "public-spec-sections.tsv")
+    tsv      = render_sections_tsv(sections_from(live), live)
+    File.write(tsv_path, tsv)
+    plant(repo, "lib/cites.rb", ["# The scope is §1.1 and the notation §1.3."])
+
+    _, err, st = Open3.capture3("git", "-C", repo, "init", "-q")
+    raise "git init failed: #{err}" unless st.success?
+    stage(repo)
+
+    out1, err1, st1 = run_guard_in(repo)
+    if st1.exitstatus.zero?
+      puts "  vendored index: keys agree and the recorded source digest matches -- exit 0 -- OK"
+    else
+      failures << "the vendored-index fixture should exit 0 when the recorded digest matches; it " \
+                  "exited #{st1.exitstatus}\n#{out1}#{err1}"
+    end
+
+    File.write(tsv_path, tsv.sub(/^# source sha256: .*$/, "# source sha256: #{'0' * 64}"))
+    stage(repo)
+    out2, err2, st2 = run_guard_in(repo)
+    combined = "#{out2}#{err2}"
+    if st2.exitstatus.zero?
+      failures << "a stale source digest with EVERY section number unchanged did not turn the guard " \
+                  "red -- the index comparison is back to keys only"
+    elsif !combined.include?("--record-sections")
+      failures << "the stale-digest failure did not name --record-sections as the repair:\n#{combined}"
+    else
+      puts "  vendored index: source digest staled, keys UNTOUCHED -- exit #{st2.exitstatus}, repair " \
+           "named -- OK"
+    end
+
+    File.write(tsv_path, tsv)
+    stage(repo)
+    _, _, st3 = run_guard_in(repo)
+    unless st3.exitstatus.zero?
+      failures << "the vendored-index fixture did not return to exit 0 after the digest was restored"
+    end
+  end
+  failures
+end
+
 def run_self_test
   failures = []
   Dir.mktmpdir("check-publication-paths") do |dir|
@@ -792,6 +902,8 @@ def run_self_test
   failures << "the real tree examined #{cites} section citations -- the section arm is vacuous here" if cites < 1
   puts "  real tree: #{files} tracked text file(s), #{cites} section citation(s) examined -- non-vacuous"
 
+  failures.concat(run_index_self_test(index))
+
   status = run_check(quiet: true)
   failures << "the guard is not green over this repository (exit #{status})" unless status.zero?
   puts "  real tree: check exits #{status}"
@@ -799,7 +911,8 @@ def run_self_test
   if failures.empty?
     puts
     puts "check-publication-paths --self-test: OK -- red on every planted violation, green on every " \
-         "exempt shape, and non-vacuous over this repository."
+         "exempt shape, red on a vendored index whose source digest has gone stale with its keys " \
+         "intact, and non-vacuous over this repository."
     return 0
   end
 
